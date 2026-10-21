@@ -1,0 +1,65 @@
+{
+  "conf": {
+    "to_check": "À vérifier",
+    "new": "Nouvelle",
+    "no_answer": "Pas de réponse",
+    "busy": "Occupé",
+    "callback": "À rappeler",
+    "postponed": "Reportée",
+    "no_stock": "Confirmée sans stock",
+    "confirmed": "Confirmée",
+    "cancelled": "Annulée",
+    "duplicate": "Doublon",
+    "wrong_number": "Faux numéro",
+    "fake": "Fausse commande"
+  },
+  "follow": {
+    "to_prepare": "À préparer",
+    "prepared": "Préparée",
+    "shipped": "Expédiée",
+    "out_for_delivery": "En livraison",
+    "failed": "Reportée / échec",
+    "alert": "Alerte",
+    "in_exchange": "En échange",
+    "delivered": "Livrée",
+    "returning": "Retour en cours",
+    "returned": "Retournée",
+    "exchanged": "Échangée",
+    "lost": "Perdue",
+    "cancelled": "Annulée"
+  },
+  "channel": {
+    "site": "Site",
+    "facebook": "Facebook",
+    "instagram": "Instagram",
+    "tiktok": "TikTok",
+    "appel": "Appel",
+    "whatsapp": "WhatsApp",
+    "autre": "Autre"
+  },
+  "cancelReason": {
+    "price": "Prix trop cher",
+    "fee": "Frais de livraison trop chers",
+    "elsewhere": "A commandé ailleurs",
+    "not_ordered": "N'a pas commandé",
+    "too_long": "Délai trop long",
+    "changed_mind": "Changé d'avis",
+    "other": "Autre"
+  },
+  "failReason": {
+    "absent": "Client absent",
+    "no_answer": "Ne répond pas",
+    "postponed_by_client": "Reporté par le client",
+    "address": "Adresse introuvable",
+    "no_money": "Client pas prêt (argent)",
+    "other": "Autre"
+  },
+  "returnReason": {
+    "refused": "Refusé par le client",
+    "unreachable": "Injoignable",
+    "mismatch": "Produit ne correspond pas",
+    "wrong_address": "Adresse fausse",
+    "cancelled_by_client": "Annulé par le client",
+    "other": "Autre"
+  }
+}

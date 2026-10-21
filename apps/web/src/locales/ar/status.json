@@ -1,0 +1,65 @@
+{
+  "conf": {
+    "to_check": "للتحقق",
+    "new": "جديدة",
+    "no_answer": "لا يرد",
+    "busy": "مشغول",
+    "callback": "إعادة الاتصال",
+    "postponed": "مؤجَّلة",
+    "no_stock": "مؤكَّدة دون مخزون",
+    "confirmed": "مؤكَّدة",
+    "cancelled": "ملغاة",
+    "duplicate": "مكرَّرة",
+    "wrong_number": "رقم خاطئ",
+    "fake": "طلب وهمي"
+  },
+  "follow": {
+    "to_prepare": "للتحضير",
+    "prepared": "محضَّرة",
+    "shipped": "مُرسَلة",
+    "out_for_delivery": "قيد التوصيل",
+    "failed": "مؤجَّلة / فشل",
+    "alert": "تنبيه",
+    "in_exchange": "قيد الاستبدال",
+    "delivered": "مُسلَّمة",
+    "returning": "قيد الإرجاع",
+    "returned": "مُرجَعة",
+    "exchanged": "مُستبدَلة",
+    "lost": "ضائعة",
+    "cancelled": "ملغاة"
+  },
+  "channel": {
+    "site": "الموقع",
+    "facebook": "فيسبوك",
+    "instagram": "إنستغرام",
+    "tiktok": "تيك توك",
+    "appel": "مكالمة",
+    "whatsapp": "واتساب",
+    "autre": "أخرى"
+  },
+  "cancelReason": {
+    "price": "السعر مرتفع",
+    "fee": "رسوم التوصيل مرتفعة",
+    "elsewhere": "طلب من مكان آخر",
+    "not_ordered": "لم يطلب",
+    "too_long": "المدة طويلة",
+    "changed_mind": "غيّر رأيه",
+    "other": "أخرى"
+  },
+  "failReason": {
+    "absent": "الزبون غائب",
+    "no_answer": "لا يرد",
+    "postponed_by_client": "أجّله الزبون",
+    "address": "العنوان غير موجود",
+    "no_money": "الزبون غير جاهز (المال)",
+    "other": "أخرى"
+  },
+  "returnReason": {
+    "refused": "رفضه الزبون",
+    "unreachable": "لا يمكن الوصول إليه",
+    "mismatch": "المنتج غير مطابق",
+    "wrong_address": "عنوان خاطئ",
+    "cancelled_by_client": "ألغاه الزبون",
+    "other": "أخرى"
+  }
+}

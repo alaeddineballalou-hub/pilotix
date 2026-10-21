@@ -1,0 +1,43 @@
+/* Additions on top of the original stylesheet: Arabic (right-to-left), the top-bar search list,
+   the modal frame and a few React-specific bits. Uses the original colour tokens only. */
+
+.ltr { direction: ltr; unicode-bidi: isolate; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.nowrap { flex-wrap: nowrap !important; white-space: nowrap; }
+
+/* Arabic: Cairo font and a mirrored layout */
+:root[lang="ar"] { --f: "Cairo", "Inter", system-ui, sans-serif; --f-display: "Cairo", "Poppins", system-ui, sans-serif; }
+:root[lang="ar"] body, :root[lang="ar"] button, :root[lang="ar"] input, :root[lang="ar"] select, :root[lang="ar"] textarea { font-family: var(--f); }
+[dir="rtl"] .side { border-right: 0; border-left: 1px solid var(--line); }
+[dir="rtl"] .tbl th, [dir="rtl"] .tbl td { text-align: right; }
+[dir="rtl"] .tbl td.num, [dir="rtl"] .tbl th.num { text-align: left; }
+[dir="rtl"] .nav-count { margin-left: 0; margin-right: auto; }
+[dir="rtl"] .topbar .icon-btn:last-child { margin-left: 0; margin-right: auto; }
+[dir="rtl"] .bjm-ar { transform: scaleX(-1); display: inline-block; }
+[dir="rtl"] .kpi.t-warn { box-shadow: inset -3px 0 0 var(--px-orange, #F7A823); }
+@media (max-width: 900px) {
+  [dir="rtl"] .side { left: auto; right: 0; transform: translateX(105%); }
+  [dir="rtl"] body.nav-open .side { transform: none; }
+}
+
+/* top-bar search results */
+.pxs { position: relative; }
+.pxs-res:not([hidden]) { position: absolute; z-index: 30; inset-inline-start: 0; top: calc(100% + 6px); width: min(460px, 92vw); display: flex; flex-direction: column; padding: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgb(15 26 46 / .18); }
+.pxs-it { display: block; width: 100%; text-align: start; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); cursor: pointer; font: inherit; }
+.pxs-it.on, .pxs-it:hover { background: var(--sky-soft); }
+
+/* modal frame (the original used one global container) */
+.modal-wrap .modal { width: min(560px, 100%); }
+.modal-wrap .modal.wide { width: min(980px, 100%); }
+
+/* KPI used as a button / tab */
+button.kpi { border: 1px solid var(--line); background: var(--surface); color: inherit; }
+button.kpi.on { box-shadow: 0 0 0 2px var(--navy); }
+.kpi .l { display: flex; gap: 4px; align-items: center; }
+
+/* toasts stack */
+.toast.ok { background: var(--ok); color: #fff; }
+.toast.bad { background: var(--coral); color: #fff; }
+
+/* loading screen of the demo database */
+.boot { min-height: 100vh; display: grid; place-items: center; text-align: center; color: var(--muted); }

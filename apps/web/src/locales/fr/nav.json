@@ -1,0 +1,29 @@
+{
+  "menu": "Menu",
+  "accueil": "Accueil",
+  "dashboard": "Dashboard",
+  "commandes": "Commandes",
+  "confirmation": "Confirmation",
+  "depot": "Dépôt",
+  "suivi": "Suivi",
+  "scanner": "Scanner",
+  "sav": "SAV",
+  "tournee": "Ma tournée",
+  "produits": "Produits & stock",
+  "clients": "Clients",
+  "publicite": "Publicité",
+  "caisse": "Caisse",
+  "livraison": "Sociétés de livraison",
+  "utilisateurs": "Utilisateurs",
+  "management": "Management",
+  "reglages": "Réglages",
+  "livrees": "Livrées",
+  "retournees": "Retournées",
+  "sub": {
+    "confirmation": "Confirmation",
+    "depot": "Dépôt",
+    "suivi": "Suivi",
+    "livrees": "Livré",
+    "annulees": "Annulé"
+  }
+}

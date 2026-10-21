@@ -1,0 +1,11 @@
+{
+  "tagline": "Gestion des commandes",
+  "email": "Email",
+  "password": "Mot de passe",
+  "submit": "Se connecter",
+  "server": "Adresse du serveur",
+  "serverHint": "Fournie par votre administrateur",
+  "error": "Email ou mot de passe incorrect",
+  "demo": "Démo",
+  "demoText": "entrez avec un compte d’essai (données fictives, rien n’est envoyé) :"
+}

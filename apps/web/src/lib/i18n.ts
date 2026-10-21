@@ -1,46 +1,37 @@
 import type { Language } from '@pilotix/shared';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import ar from '../locales/ar.json';
-import en from '../locales/en.json';
-import fr from '../locales/fr.json';
 import { store } from './store';
 
+// Every feature keeps its own translation files: locales/<lang>/<feature>.json → t('<feature>:key') or t('<feature>.key').
+const files = import.meta.glob('../locales/*/*.json', { eager: true }) as Record<string, { default: Record<string, unknown> }>;
+const resources: Record<string, { translation: Record<string, unknown> }> = { fr: { translation: {} }, en: { translation: {} }, ar: { translation: {} } };
+for (const [path, mod] of Object.entries(files)) {
+  const m = path.match(/locales\/(\w+)\/([\w-]+)\.json$/);
+  if (!m) continue;
+  const [, lang, ns] = m;
+  resources[lang] ??= { translation: {} };
+  resources[lang].translation[ns] = mod.default;
+}
+
 const saved = store.get('lang') as Language | null;
-const guess: Language = saved ?? (navigator.language.startsWith('ar') ? 'ar' : navigator.language.startsWith('en') ? 'en' : 'fr');
+const initial: Language = saved ?? 'fr';
 
 i18n.use(initReactI18next).init({
-  resources: { fr: { translation: fr }, en: { translation: en }, ar: { translation: ar } },
-  lng: guess,
+  resources,
+  lng: initial,
   fallbackLng: 'fr',
   interpolation: { escapeValue: false },
+  returnNull: false,
 });
 
-/** Arabic flips the whole page right-to-left; numbers and phones keep their direction (see .ltr in CSS). */
+/** Arabic flips the page right-to-left. Numbers, phones and references keep their direction (class "ltr"). */
 export function applyLanguage(lang: Language) {
   document.documentElement.lang = lang;
   document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
   store.set('lang', lang);
   if (i18n.language !== lang) i18n.changeLanguage(lang);
 }
-applyLanguage(guess);
-
-const locales: Record<Language, string> = { fr: 'fr-DZ', en: 'en-GB', ar: 'ar-DZ' };
-
-/** Dinars with spaces as thousands separators, Western digits in every language (as used on Algerian receipts). */
-export function formatDZD(value: number, lang: Language): string {
-  const n = new Intl.NumberFormat(locales[lang], { maximumFractionDigits: 0, numberingSystem: 'latn' } as Intl.NumberFormatOptions).format(value);
-  return i18n.t('common.dzd', { value: n });
-}
-
-export function formatDate(iso: string, lang: Language, withTime = true): string {
-  return new Intl.DateTimeFormat(locales[lang], {
-    day: '2-digit',
-    month: 'short',
-    ...(withTime ? { hour: '2-digit', minute: '2-digit' } : {}),
-    timeZone: 'Africa/Algiers',
-    numberingSystem: 'latn',
-  } as Intl.DateTimeFormatOptions).format(new Date(iso));
-}
+applyLanguage(initial);
 
 export default i18n;
