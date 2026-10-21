@@ -23,7 +23,18 @@
     "lateSub": "tickets not delivered for more than 2 days",
     "livres": "Delivered in 7 days",
     "livresSub": "average delay {{v}}",
-    "noAvg": "none this week"
+    "noAvg": "none this week",
+    "attenteLate_one": "{{count}} waiting over 48 h",
+    "attenteLate_other": "{{count}} waiting over 48 h",
+    "depotReturns_one": "incl. {{count}} return to scan",
+    "depotReturns_other": "incl. {{count}} returns to scan",
+    "livresAll": "Delivered",
+    "livres7_one": "{{count}} in 7 days",
+    "livres7_other": "{{count}} in 7 days",
+    "annules": "Cancelled",
+    "annulesSub": "closed without delivery",
+    "annulesRetour_one": "incl. {{count}} returned parcel",
+    "annulesRetour_other": "incl. {{count}} returned parcels"
   },
   "tabs": {
     "todo": "To handle",

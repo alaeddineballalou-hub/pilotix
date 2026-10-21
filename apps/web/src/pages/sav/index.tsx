@@ -45,6 +45,7 @@ export function Sav({ sub }: PageProps) {
   const kp = useRpc('sav.kpis', {}, { refetchInterval: 60_000 });
   const list = useRpc('sav.list', { view: apiView, q: deb || undefined });
   const k = kp.data;
+  const stageCount = (v: View): number | undefined => (k && (v === 'attente' || v === 'depot' || v === 'livraison' || v === 'livres' || v === 'annules') ? k[v] : undefined);
   const closeNew = () => {
     setCreating(false);
     if (view === 'nouveau') location.hash = '#/sav/tickets';
@@ -52,7 +53,7 @@ export function Sav({ sub }: PageProps) {
 
   return (
     <>
-      <StageBar flow={false} current={view} items={VIEWS.map((v) => ({ key: v, label: t(`sav.views.${v}`), href: `#/sav/${v}` }))} />
+      <StageBar flow={false} current={view} items={VIEWS.map((v) => ({ key: v, label: t(`sav.views.${v}`), href: `#/sav/${v}`, count: stageCount(v) }))} />
       <div className="bjt">
         <div className="card">
           <div className="card-head">
@@ -65,32 +66,38 @@ export function Sav({ sub }: PageProps) {
             </button>
           </div>
         </div>
-        <div className="kpis">
-          <a className={`kpi${k?.attente ? ' t-bad' : ''}`} href="#/sav/attente">
+        {/* the ticket's road: En attente → Au dépôt → En livraison → Livré / Annulé (a return always comes back to the depot first) */}
+        <div className="px-sav-flow">
+          <a className={`kpi${k?.attente ? ' t-bad' : ''}${view === 'attente' ? ' on' : ''}`} href="#/sav/attente">
             <span className="l">{t('sav.k.attente')}</span>
             <span className="v ltr">{k?.attente ?? '—'}</span>
-            <span className="s">{t('sav.k.attenteSub')}</span>
+            <span className="s">{k?.attenteLate ? t('sav.k.attenteLate', { count: k.attenteLate }) : t('sav.k.attenteSub')}</span>
           </a>
-          <a className="kpi" href="#/sav/depot">
+          <span className="px-sav-ar" aria-hidden="true">›</span>
+          <a className={`kpi${view === 'depot' ? ' on' : ''}`} href="#/sav/depot">
             <span className="l">{t('sav.k.depot')}</span>
             <span className="v ltr">{k?.depot ?? '—'}</span>
-            <span className="s">{t('sav.k.depotSub')}</span>
+            <span className="s">{k?.returning ? t('sav.k.depotReturns', { count: k.returning }) : t('sav.k.depotSub')}</span>
           </a>
-          <a className="kpi" href="#/sav/livraison">
+          <span className="px-sav-ar" aria-hidden="true">›</span>
+          <a className={`kpi${view === 'livraison' ? ' on' : ''}`} href="#/sav/livraison">
             <span className="l">{t('sav.k.livraison')}</span>
             <span className="v ltr">{k?.livraison ?? '—'}</span>
             <span className="s">{t('sav.k.livraisonSub')}</span>
           </a>
-          <a className={`kpi${k?.late ? ' t-bad' : ''}`} href="#/sav/tickets">
-            <span className="l">{t('sav.k.late')}</span>
-            <span className="v ltr">{k?.late ?? '—'}</span>
-            <span className="s">{t('sav.k.lateSub')}</span>
-          </a>
-          <a className="kpi t-ok" href="#/sav/livres">
-            <span className="l">{t('sav.k.livres')}</span>
-            <span className="v ltr">{k?.livres7 ?? '—'}</span>
-            <span className="s">{k?.avgMs ? t('sav.k.livresSub', { v: dur(k.avgMs) }) : t('sav.k.noAvg')}</span>
-          </a>
+          <span className="px-sav-ar" aria-hidden="true">›</span>
+          <div className="px-sav-end">
+            <a className={`kpi t-ok${view === 'livres' ? ' on' : ''}`} href="#/sav/livres">
+              <span className="l">{t('sav.k.livresAll')}</span>
+              <span className="v ltr">{k?.livres ?? '—'}</span>
+              <span className="s">{t('sav.k.livres7', { count: k?.livres7 ?? 0 })}{k?.avgMs ? ` · ${t('sav.k.livresSub', { v: dur(k.avgMs) })}` : ''}</span>
+            </a>
+            <a className={`kpi${k?.annules ? ' t-bad' : ''}${view === 'annules' ? ' on' : ''}`} href="#/sav/annules">
+              <span className="l">{t('sav.k.annules')}</span>
+              <span className="v ltr">{k?.annules ?? '—'}</span>
+              <span className="s">{k?.annulesRetour ? t('sav.k.annulesRetour', { count: k.annulesRetour }) : t('sav.k.annulesSub')}</span>
+            </a>
+          </div>
         </div>
         {view === 'stats' ? (
           <SavStats />

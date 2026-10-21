@@ -23,7 +23,18 @@
     "lateSub": "tickets pas encore livrés depuis plus de 2 jours",
     "livres": "Livrés en 7 jours",
     "livresSub": "délai moyen {{v}}",
-    "noAvg": "aucun cette semaine"
+    "noAvg": "aucun cette semaine",
+    "attenteLate_one": "dont {{count}} depuis plus de 48 h",
+    "attenteLate_other": "dont {{count}} depuis plus de 48 h",
+    "depotReturns_one": "dont {{count}} retour à scanner",
+    "depotReturns_other": "dont {{count}} retours à scanner",
+    "livresAll": "Livrés",
+    "livres7_one": "{{count}} en 7 jours",
+    "livres7_other": "{{count}} en 7 jours",
+    "annules": "Annulés",
+    "annulesSub": "ticket clos sans livraison",
+    "annulesRetour_one": "dont {{count}} colis retourné",
+    "annulesRetour_other": "dont {{count}} colis retournés"
   },
   "tabs": {
     "todo": "À traiter",

@@ -89,3 +89,39 @@ test('payroll: agents get no commission on ticket parcels', async () => {
   const counted = (p.agents ?? []).reduce((s: number, a: any) => s + a.count, 0);
   assert.ok(counted <= delivered);
 });
+
+test('ticket flow: En attente → Au dépôt → En livraison → Livré, and a return goes back to the depot then Annulé once scanned', async () => {
+  const suivi = await as(EMAILS.suivi);
+  const admin = await as(EMAILS.admin);
+  const inView = async (view: string, id: number) => ((await call('sav.list', suivi, { view, pageSize: 500 })) as any).rows.some((t: any) => t.id === id);
+  const fresh = async (orderId: number) => (await call('sav.create', suivi, { orderId, type: 'defect', details: 'test flux' })) as any;
+  const delivered = (await db.query(`SELECT o.id FROM orders o JOIN order_items i ON i.order_id = o.id WHERE NOT o.is_exchange AND o.follow_status = 'delivered' AND i.variant_id IS NOT NULL ORDER BY o.id LIMIT 2`)).map((r: any) => Number(r.id));
+  for (const [k, orderId] of delivered.entries()) {
+    const t = await fresh(orderId);
+    assert.ok(await inView('attente', t.id));
+    const g: any = await call('sav.get', suivi, { id: t.id });
+    const ex: any = await call('sav.exchange', suivi, { id: t.id, kind: 'same', lines: [{ itemId: g.order.items[0].id, qty: 1 }], deliveryFee: 300 });
+    const pid = ex.order.id;
+    assert.ok(await inView('depot', t.id), 'at the depot');
+    await call('orders.setFollow', admin, { ids: [pid], status: 'prepared' });
+    await call('orders.setFollow', admin, { ids: [pid], status: 'shipped' });
+    assert.ok(await inView('livraison', t.id), 'on the road');
+    if (k === 0) {
+      await call('orders.setFollow', admin, { ids: [pid], status: 'delivered' });
+      const after: any = await call('sav.get', suivi, { id: t.id });
+      assert.equal(after.ticket.status, 'resolved');
+      assert.ok(await inView('livres', t.id));
+    } else {
+      await call('orders.setFollow', admin, { ids: [pid], status: 'returning' });
+      assert.ok(await inView('depot', t.id), 'a return goes back to the depot');
+      assert.ok(!(await inView('annules', t.id)));
+      const scan: any = await call('depot.scan', admin, { orderId: pid, mode: 'back' });
+      assert.equal(scan.kind, 'ok', scan.why);
+      const after: any = await call('sav.get', suivi, { id: t.id });
+      assert.equal(after.ticket.status, 'closed');
+      assert.ok(await inView('annules', t.id));
+      const list: any = await call('orders.list', admin, { follow: ['returned'], pageSize: 3000 });
+      assert.ok(!list.rows.some((o: any) => o.id === pid), 'not in order returns');
+    }
+  }
+});
