@@ -83,7 +83,7 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
         {items.map((n) =>
           n.children ? (
             <div key={n.id} className={`nav-group open bjcn ${ordersPages.includes(page) ? 'bjcn-on in' : ''}`} data-grp={n.id}>
-              <a href="#/commandes" className={`nav-item nav-group-head ${page === 'commandes' && (!sub || sub === 'tout') ? 'on' : ''}`}>
+              <a href="#/commandes" className="nav-item nav-group-head" aria-current={page === 'commandes' && (!sub || sub === 'tout') ? 'page' : undefined} style={page === 'commandes' && (!sub || sub === 'tout') ? { color: 'var(--navy)', fontWeight: 800 } : undefined}>
                 <Icon name={n.icon} className="ic" />
                 <span>{t(`nav.${n.id}`)}</span>
               </a>
