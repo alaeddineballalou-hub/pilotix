@@ -1,0 +1,62 @@
+{
+  "title": "Depot",
+  "stage": { "preparer": "Preparing", "prepares": "Dispatching", "dispatchees": "Dispatched", "enlivraison": "Out for delivery", "retours": "Returns / Exchanges" },
+  "picking": {
+    "title": "Quantities to prepare",
+    "print": "Print the sheet",
+    "product": "Product",
+    "toPrepare": "To prepare",
+    "prepared": "Already prepared",
+    "orders": "Orders",
+    "stock": "Depot stock",
+    "missing": "missing {{n}}",
+    "empty": "Nothing to prepare.",
+    "sheetTitle": "To prepare — {{date}}",
+    "qty": "Qty",
+    "done": "Prepared"
+  },
+  "lists": {
+    "preparer": "Orders to prepare",
+    "prepares": "Dispatching: assigned, ready to leave",
+    "dispatchees": "Dispatched: handed over, waiting for the courier or the driver",
+    "enlivraison": "Out for delivery: picked up, on the way to the customer",
+    "returning": "Returns on the way back to the depot",
+    "exchange": "Exchanges in progress at the customer (the old product will come back)"
+  },
+  "help": {
+    "dispatchees": "Parcels scanned and handed over. They leave this list as soon as the courier or the driver changes their status (picked up, out for delivery, delivered…). Those that stay must be checked: orange = more than 24 h, red = more than 48 h without news.",
+    "enlivraison": "Parcels picked up by the courier or the driver, on the way to the customer. They leave this list when delivered, in alert or returning. Orange = 4 days, red = 7 days or more."
+  },
+  "filters": { "search": "Search", "searchPh": "Name, phone, ref. PX…, tracking no.", "company": "Courier", "wilaya": "Wilaya", "all": "All", "noCompany": "Not chosen yet" },
+  "cols": {
+    "order": "Order", "client": "Customer", "address": "Address", "products": "Products", "total": "Total", "conf": "Confirmation", "follow": "Delivery",
+    "company": "Courier", "agent": "Agent", "handedSince": "Handed over", "leftSince": "Left", "status": "Status"
+  },
+  "empty": "No orders with these filters.",
+  "results_one": "{{count}} result",
+  "results_other": "{{count}} results",
+  "selectAll": "Select all",
+  "select": "Select",
+  "markPrepared": "Prepared",
+  "markPreparedDone_one": "{{count}} order prepared",
+  "markPreparedDone_other": "{{count}} orders prepared",
+  "setCompany": "Courier…",
+  "companySet": "Courier saved",
+  "remove": "Remove",
+  "removeTitle": "Remove the courier: goes back to Preparing",
+  "removed": "{{ref}}: back to “To prepare”",
+  "lessThanHour": "less than 1 h",
+  "hours": "{{n}} h",
+  "days": "{{n}} d",
+  "today": "today",
+  "receive": {
+    "title": "Receive a return",
+    "help": "Stock is put back automatically when the parcel is marked “Received at the depot”.",
+    "ph": "Scan or type the ref. PX…, the tracking no. or the phone",
+    "search": "Search",
+    "button": "Received at the depot",
+    "already": "Already received",
+    "done": "{{ref}}: return received, stock put back",
+    "none": "No order found."
+  }
+}

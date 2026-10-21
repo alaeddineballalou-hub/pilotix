@@ -1,0 +1,79 @@
+{
+  "title": "Dépôt",
+  "stage": { "preparer": "En préparation", "prepares": "En dispatch", "dispatchees": "Dispatchées", "enlivraison": "En livraison", "retours": "Retours / Échanges" },
+  "picking": {
+    "title": "Quantités à préparer",
+    "print": "Imprimer la feuille",
+    "product": "Produit",
+    "toPrepare": "À préparer",
+    "prepared": "Déjà préparé",
+    "orders": "Commandes",
+    "stock": "Stock dépôt",
+    "missing": "manque {{n}}",
+    "empty": "Rien à préparer.",
+    "sheetTitle": "À préparer — {{date}}",
+    "qty": "Qté",
+    "done": "Préparé"
+  },
+  "lists": {
+    "preparer": "Commandes à préparer",
+    "prepares": "En dispatch : assignées, prêtes à partir",
+    "dispatchees": "Dispatchées : remises, en attente de la société ou du livreur",
+    "enlivraison": "En livraison : pris en charge, en route vers le client",
+    "returning": "Retours en route vers le dépôt",
+    "exchange": "Échanges en cours chez le client (l’ancien produit va revenir)"
+  },
+  "help": {
+    "dispatchees": "Colis scannés et remis. Ils quittent cette liste dès que la société ou le livreur change leur statut (pris en charge, en livraison, livré…). Ceux qui restent sont à vérifier : orange = plus de 24 h, rouge = plus de 48 h sans nouvelle.",
+    "enlivraison": "Colis pris en charge par la société ou le livreur, en route vers le client. Ils quittent cette liste quand ils sont livrés, en alerte ou en retour. Orange = 4 jours, rouge = 7 jours ou plus."
+  },
+  "filters": {
+    "search": "Recherche",
+    "searchPh": "Nom, téléphone, réf. PX…, n° de suivi",
+    "company": "Société",
+    "wilaya": "Wilaya",
+    "all": "Toutes",
+    "noCompany": "Pas encore choisie"
+  },
+  "cols": {
+    "order": "Commande",
+    "client": "Client",
+    "address": "Adresse",
+    "products": "Produits",
+    "total": "Total",
+    "conf": "Confirmation",
+    "follow": "Livraison",
+    "company": "Société",
+    "agent": "Agent",
+    "handedSince": "Remis depuis",
+    "leftSince": "Parti depuis",
+    "status": "Statut"
+  },
+  "empty": "Aucune commande avec ces filtres.",
+  "results_one": "{{count}} résultat",
+  "results_other": "{{count}} résultats",
+  "selectAll": "Tout sélectionner",
+  "select": "Sélectionner",
+  "markPrepared": "Préparée",
+  "markPreparedDone_one": "{{count}} commande préparée",
+  "markPreparedDone_other": "{{count}} commandes préparées",
+  "setCompany": "Société…",
+  "companySet": "Société enregistrée",
+  "remove": "Retirer",
+  "removeTitle": "Retirer la société : revient dans Préparer",
+  "removed": "{{ref}} : revient dans « À préparer »",
+  "lessThanHour": "moins d’1 h",
+  "hours": "{{n}} h",
+  "days": "{{n}} j",
+  "today": "aujourd’hui",
+  "receive": {
+    "title": "Réceptionner un retour",
+    "help": "Le stock est remis automatiquement quand le colis est marqué « Reçu au dépôt ».",
+    "ph": "Scanner ou taper la réf. PX…, le n° de suivi ou le téléphone",
+    "search": "Chercher",
+    "button": "Reçu au dépôt",
+    "already": "Déjà reçu",
+    "done": "{{ref}} : retour reçu, stock remis",
+    "none": "Aucune commande trouvée."
+  }
+}
