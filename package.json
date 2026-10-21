@@ -1,0 +1,20 @@
+{
+  "name": "pilotix",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pilotix — website, Android and iOS app (Capacitor)",
+  "scripts": {
+    "serve": "npx serve www",
+    "sync": "npx cap sync",
+    "android": "npx cap open android",
+    "ios": "npx cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0"
+  }
+}
