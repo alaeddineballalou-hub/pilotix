@@ -1,0 +1,338 @@
+// Réglages: Boutique · Dépôts · Commandes du site web (webhook) · Mise à jour automatique des colis (cron) · Meta Ads.
+import { communesOf } from '@pilotix/shared';
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { backend } from '../../lib/backend';
+import { when } from '../../lib/format';
+import { useAction, useRpc } from '../../lib/query';
+import { Card, ErrorBox, Field, Help, Loading, copyText } from '../../ui/kit';
+import { Modal } from '../../ui/modal';
+import { toast } from '../../ui/toast';
+import { ConfirmButton, intOf, WilayaOptions } from './bits';
+import { publicBase, SAMPLE_ORDER } from './Canaux';
+
+export function ReglagesPage() {
+  const q = useRpc('admin.settings.get', {});
+  if (q.isLoading) return <Loading />;
+  if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
+  const s = q.data!;
+  return (
+    <div className="settings-grid">
+      <ShopCard s={s} />
+      <DepotsCard />
+      <WebCard webKey={s.webhook.key} />
+      <CronCard cronKey={s.cron.key} last={s.lastSync} />
+      <MetaCard meta={s.meta} />
+    </div>
+  );
+}
+
+type S = NonNullable<ReturnType<typeof useRpc<'admin.settings.get'>>['data']>;
+
+function ShopCard({ s }: { s: S }) {
+  const { t } = useTranslation();
+  const companies = useRpc('admin.companies', {});
+  const [v, setV] = useState({ name: s.shop.name, from: s.shop.fromWilayaId, company: s.shop.defaultCompanyId, tpl: s.shop.whatsappTemplate, cancel: String(s.calls.cancelAfterNoAnswer) });
+  const save = useAction('admin.shop.save', { success: t('admin.settings.saved') });
+  return (
+    <div className="card">
+      <h2>{t('admin.settings.shop')}</h2>
+      <label className="field">
+        <span className="lab">
+          {t('admin.settings.shopName')}
+          <Help text={t('admin.settings.shopNameHelp')} />
+        </span>
+        <input value={v.name} maxLength={80} onChange={(e) => setV({ ...v, name: e.target.value })} />
+      </label>
+      <Field label={t('admin.settings.fromWilaya')}>
+        <select value={v.from} onChange={(e) => setV({ ...v, from: Number(e.target.value) })}>
+          <WilayaOptions />
+        </select>
+      </Field>
+      <label className="field">
+        <span className="lab">
+          {t('admin.settings.defaultCompany')}
+          <Help text={t('admin.settings.defaultCompanyHelp')} />
+        </span>
+        <select value={v.company ?? ''} onChange={(e) => setV({ ...v, company: e.target.value ? Number(e.target.value) : null })}>
+          <option value="">{t('admin.settings.none')}</option>
+          {companies.data?.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="field">
+        <span className="lab">
+          {t('admin.settings.autoCancel')}
+          <Help text={t('admin.settings.autoCancelHelp')} />
+        </span>
+        <input type="number" min={0} max={30} step={1} value={v.cancel} onChange={(e) => setV({ ...v, cancel: e.target.value })} />
+      </label>
+      <label className="field">
+        <span className="lab">
+          {t('admin.settings.whatsapp')}
+          <Help text={t('admin.settings.whatsappHelp')} />
+        </span>
+        <textarea rows={2} maxLength={500} value={v.tpl} onChange={(e) => setV({ ...v, tpl: e.target.value })} />
+      </label>
+      <div className="row end">
+        <button
+          className="btn primary"
+          disabled={save.isPending || !v.name.trim()}
+          onClick={() => save.mutate({ name: v.name.trim(), fromWilayaId: v.from, defaultCompanyId: v.company, whatsappTemplate: v.tpl.trim(), cancelAfterNoAnswer: Math.min(30, intOf(v.cancel)) })}
+        >
+          {t('admin.settings.save')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface Wh {
+  id: number;
+  name: string;
+  wilayaId: number;
+  commune: string;
+  address: string;
+  isDefault: boolean;
+  active: boolean;
+}
+
+function DepotsCard() {
+  const { t } = useTranslation();
+  const q = useRpc('admin.warehouses.list', {});
+  const [edit, setEdit] = useState<Wh | 'new' | null>(null);
+  return (
+    <Card
+      title={t('admin.settings.depots')}
+      help={t('admin.settings.depotsHelp')}
+      actions={
+        <button className="btn" onClick={() => setEdit('new')}>
+          {t('admin.settings.addDepot')}
+        </button>
+      }
+    >
+      {q.isLoading ? (
+        <Loading />
+      ) : q.error ? (
+        <ErrorBox error={q.error} onRetry={() => q.refetch()} />
+      ) : (
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>{t('admin.settings.colDepot')}</th>
+                <th>{t('admin.settings.colCommune')}</th>
+                <th>{t('admin.settings.colState')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {q.data?.map((w) => (
+                <tr key={w.id} className="clickable" tabIndex={0} onClick={() => setEdit(w)} onKeyDown={(e) => e.key === 'Enter' && setEdit(w)}>
+                  <td data-l={t('admin.settings.colDepot')}>
+                    <b>{w.name}</b>
+                    {w.isDefault && <span className="chip">{t('admin.settings.isDefault')}</span>}
+                  </td>
+                  <td data-l={t('admin.settings.colCommune')}>{w.commune || '—'}</td>
+                  <td data-l={t('admin.settings.colState')}>
+                    <span className={`badge t-${w.active ? 'ok' : 'off'}`}>{w.active ? t('admin.settings.active') : t('admin.settings.inactive')}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {edit && <DepotForm w={edit === 'new' ? null : edit} onClose={() => setEdit(null)} />}
+    </Card>
+  );
+}
+
+function DepotForm({ w, onClose }: { w: Wh | null; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [v, setV] = useState({ name: w?.name ?? '', wilayaId: w?.wilayaId ?? 16, commune: w?.commune ?? '', address: w?.address ?? '', isDefault: w?.isDefault ?? false, active: w?.active ?? true });
+  const save = useAction('admin.warehouses.save', { success: t('admin.settings.saved'), onDone: onClose });
+  const del = useAction('admin.warehouses.delete', { success: t('admin.settings.depotDeleted'), onDone: onClose });
+  const communes = communesOf(v.wilayaId);
+  return (
+    <Modal
+      title={w ? t('admin.settings.depotEdit', { name: w.name }) : t('admin.settings.depotNew')}
+      onClose={onClose}
+      footer={
+        <>
+          {w && !w.isDefault && (
+            <ConfirmButton className="btn ghost danger" question={t('admin.settings.depotDeleteConfirm')} onConfirm={() => del.mutate({ id: w.id })}>
+              {t('admin.settings.depotDelete')}
+            </ConfirmButton>
+          )}
+          <span className="grow" />
+          <button className="btn" onClick={onClose}>
+            {t('admin.cancel')}
+          </button>
+          <button className="btn primary" disabled={!v.name.trim() || save.isPending} onClick={() => save.mutate({ id: w?.id, ...v, name: v.name.trim() })}>
+            {t('common.save')}
+          </button>
+        </>
+      }
+    >
+      <div className="grid2">
+        <Field label={t('admin.settings.depotName')}>
+          <input value={v.name} maxLength={80} onChange={(e) => setV({ ...v, name: e.target.value })} />
+        </Field>
+        <Field label={t('admin.settings.wilaya')}>
+          <select value={v.wilayaId} onChange={(e) => setV({ ...v, wilayaId: Number(e.target.value), commune: '' })}>
+            <WilayaOptions />
+          </select>
+        </Field>
+        <Field label={t('admin.settings.commune')}>
+          <input list="px-wh-communes" value={v.commune} maxLength={120} onChange={(e) => setV({ ...v, commune: e.target.value })} />
+          <datalist id="px-wh-communes">
+            {communes.map((c) => (
+              <option key={c[1]} value={c[1]} />
+            ))}
+          </datalist>
+        </Field>
+        <Field label={t('admin.settings.address')}>
+          <input value={v.address} maxLength={300} onChange={(e) => setV({ ...v, address: e.target.value })} />
+        </Field>
+      </div>
+      <div className="row" style={{ gap: 18, flexWrap: 'wrap' }}>
+        <label className="row nowrap" style={{ gap: 6 }}>
+          <input type="checkbox" checked={v.isDefault} disabled={w?.isDefault} onChange={(e) => setV({ ...v, isDefault: e.target.checked, active: e.target.checked ? true : v.active })} />
+          {t('admin.settings.makeDefault')}
+        </label>
+        <label className="row nowrap" style={{ gap: 6 }}>
+          <input type="checkbox" checked={v.active} disabled={v.isDefault} onChange={(e) => setV({ ...v, active: e.target.checked })} />
+          {t('admin.settings.depotActive')}
+        </label>
+      </div>
+    </Modal>
+  );
+}
+
+function WebCard({ webKey }: { webKey: string }) {
+  const { t } = useTranslation();
+  const [show, setShow] = useState(false);
+  const [key, setKey] = useState(webKey);
+  useEffect(() => setKey(webKey), [webKey]);
+  const rotate = useAction('admin.webhook.rotate', { success: t('admin.settings.rotated'), onDone: (r) => setKey(r.key) });
+  const sim = useAction('admin.webhook.simulate', { success: (r) => t('admin.settings.simulated', { ref: r.ref }) });
+  const url = `${publicBase()}/api/hooks/orders/site`;
+  const copy = async (s: string) => {
+    await copyText(s);
+    toast(t('admin.settings.copied'), 'ok');
+  };
+  return (
+    <div className="card">
+      <h2>{t('admin.settings.web')}</h2>
+      <button className="btn primary" disabled={sim.isPending} onClick={() => sim.mutate({})}>
+        {t('admin.settings.simulate')}
+      </button>
+      <p className="muted small">{t('admin.settings.webHelp')}</p>
+      <div className="field">
+        <span className="lab">{t('admin.settings.address_')}</span>
+        <div className="secret-box">
+          <code className="ltr">{url}</code>
+          <button className="btn small" onClick={() => copy(url)}>
+            {t('admin.settings.copy')}
+          </button>
+        </div>
+      </div>
+      <div className="field">
+        <span className="lab">{t('admin.settings.key')}</span>
+        <div className="secret-box">
+          {key ? <code className="ltr">{show ? key : `${key.slice(0, 4)}••••••••••••`}</code> : <span className="muted small">{t('admin.settings.noKey')}</span>}
+          {key && (
+            <>
+              <button className="btn small" onClick={() => setShow(!show)}>
+                {show ? t('admin.settings.hideKey') : t('admin.settings.showKey')}
+              </button>
+              <button className="btn small" onClick={() => copy(`${url}?key=${encodeURIComponent(key)}`)}>
+                {t('admin.settings.copyFull')}
+              </button>
+            </>
+          )}
+          <ConfirmButton className="btn small danger" question={t('admin.settings.rotateConfirm')} onConfirm={() => rotate.mutate({})}>
+            {t('admin.settings.rotate')}
+          </ConfirmButton>
+        </div>
+      </div>
+      <details>
+        <summary>{t('admin.settings.sample')}</summary>
+        <pre className="code ltr">{JSON.stringify(SAMPLE_ORDER, null, 2)}</pre>
+        <p className="muted small">{t('admin.settings.sampleNote')}</p>
+      </details>
+    </div>
+  );
+}
+
+function CronCard({ cronKey, last }: { cronKey: string; last: { at: string; checked: number; changed: number } | null }) {
+  const { t } = useTranslation();
+  const [key, setKey] = useState(cronKey);
+  useEffect(() => setKey(cronKey), [cronKey]);
+  const rotate = useAction('admin.cron.rotate', { success: t('admin.settings.rotated'), onDone: (r) => setKey(r.key) });
+  const code = `# Pilotix : mise à jour des colis toutes les 30 min de 7 h à 22 h (heure d’Algérie)\nCRON_TZ=Africa/Algiers\n*/30 7-22 * * * curl -fsS -X POST "${publicBase()}/api/hooks/cron?key=${key || 'CLE'}" >/dev/null`;
+  return (
+    <Card title={t('admin.settings.cron')} help={t('admin.settings.cronHelp')}>
+      {last ? <div className="okbox">{t('admin.settings.lastSync', { when: when(last.at), checked: last.checked, changed: last.changed })}</div> : <p className="muted small">{t('admin.settings.noSync')}</p>}
+      <details>
+        <summary>{t('admin.settings.cronSetup')}</summary>
+        <p className="muted small">{t('admin.settings.cronSetupHelp')}</p>
+        <pre className="code ltr">{code}</pre>
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          <button
+            className="btn"
+            onClick={async () => {
+              await copyText(code);
+              toast(t('admin.settings.copied'), 'ok');
+            }}
+          >
+            {t('admin.settings.cronCopy')}
+          </button>
+          <ConfirmButton className="btn small danger" question={t('admin.settings.rotateConfirm')} onConfirm={() => rotate.mutate({})}>
+            {t('admin.settings.rotate')}
+          </ConfirmButton>
+        </div>
+      </details>
+    </Card>
+  );
+}
+
+function MetaCard({ meta }: { meta: { adAccountId: string; connected: boolean } }) {
+  const { t } = useTranslation();
+  const [acc, setAcc] = useState(meta.adAccountId);
+  const [token, setToken] = useState('');
+  const save = useAction('admin.meta.save', {
+    success: (r) => (r.test?.ok && r.test.name ? t('admin.settings.metaTestOk', { name: r.test.name }) : t('admin.settings.metaSaved')),
+    onDone: (r) => {
+      setToken('');
+      if (r.test && !r.test.ok) toast(r.test.message ?? 'Meta', 'bad');
+    },
+  });
+  const disc = useAction('admin.meta.disconnect', { success: t('admin.settings.metaDisconnected') });
+  return (
+    <Card title={t('admin.settings.meta')} help={t('admin.settings.metaHelp')}>
+      {meta.connected ? <div className="okbox">{t('admin.settings.metaConnected')}</div> : <div className="warnbox">{t('admin.settings.metaNot')}</div>}
+      <Field label={t('admin.settings.metaAccount')}>
+        <input className="ltr" value={acc} inputMode="numeric" placeholder="act_1234567890" onChange={(e) => setAcc(e.target.value)} autoComplete="off" />
+      </Field>
+      <Field label={t('admin.settings.metaToken')}>
+        {/* write-only: the stored token is never sent back to the app */}
+        <input className="ltr" type="password" value={token} placeholder={meta.connected ? t('admin.settings.metaTokenKeep') : 'EAAG…'} onChange={(e) => setToken(e.target.value)} autoComplete="new-password" />
+      </Field>
+      {backend.kind === 'demo' && <p className="muted small">{t('admin.settings.metaDemo')}</p>}
+      <div className="row end" style={{ gap: 8 }}>
+        {meta.connected && (
+          <ConfirmButton className="btn ghost danger" question={t('admin.settings.metaDisconnectConfirm')} onConfirm={() => disc.mutate({})}>
+            {t('admin.settings.metaDisconnect')}
+          </ConfirmButton>
+        )}
+        <button className="btn primary" disabled={!acc.trim() || (!meta.connected && !token.trim()) || save.isPending} onClick={() => save.mutate({ adAccountId: acc.trim(), token: token.trim() || undefined })}>
+          {t('admin.settings.metaSave')}
+        </button>
+      </div>
+    </Card>
+  );
+}

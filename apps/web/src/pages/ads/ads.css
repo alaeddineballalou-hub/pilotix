@@ -1,0 +1,17 @@
+/* Publicité: small additions on top of the original #ads styles. */
+#ads.view { display: flex; flex-direction: column; gap: 16px; }
+#ads .fxrow { display: flex; gap: 6px; align-items: center; }
+#ads .fxrow input { min-width: 0; flex: 1; }
+#ads td.neg { color: var(--coral); }
+#ads .kpi.net.loss { background: var(--coral); border-color: var(--coral); }
+#ads .kpi.wide { grid-column: span 2; }
+#ads .diag-list { margin: 0; padding-inline-start: 1.1rem; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+#ads .ad-bar { display: block; height: 8px; border-radius: 999px; background: var(--navy); opacity: .75; min-width: 2px; }
+#ads .ad-spark { display: flex; align-items: flex-end; gap: 2px; height: 90px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+#ads .ad-spark span { flex: 1; background: var(--navy); border-radius: 3px 3px 0 0; opacity: .8; min-width: 2px; }
+#ads .card-head h2 .bjq { margin-inline-start: 6px; }
+@media (max-width: 760px) {
+  #ads .kpi.wide { grid-column: 1 / -1; }
+  #ads table th:nth-child(3):empty, #ads td[aria-hidden='true'] { display: none; }
+}
+#ads .ad-refresh { height: 40px; align-self: end; }
