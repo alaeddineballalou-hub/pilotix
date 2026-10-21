@@ -254,3 +254,21 @@ button.kpi.on { box-shadow: 0 0 0 2px var(--navy); }
   .px-sav-ar { display: none; }
   .px-sav-end { grid-column: 1 / -1; grid-template-rows: none; grid-template-columns: 1fr 1fr; }
 }
+
+/* Folded sidebar (computer): only parent items. "Commandes" becomes a normal pressable item (orange when one of its pages is open);
+   its stages (Confirmation, Dépôt, Suivi, Livré, Annulé) move into a bar under the header. Open sidebar: unchanged. */
+.px-grp-bar { display: none; }
+@media (min-width: 901px) {
+  .px-folded .side .nav-group.bjcn .nav-sub { display: none !important; }
+  .px-folded .side .nav-group.bjcn .nav-group-head { cursor: pointer; border-radius: 12px; }
+  .px-folded .side .nav-group.bjcn .nav-group-head:hover { background: rgba(255,255,255,.08) !important; color: #fff !important; }
+  .px-folded .side .nav-group.bjcn.bjcn-on .nav-group-head { background: var(--px-orange) !important; color: var(--px-on-orange) !important; }
+  .px-folded .side .nav-group.bjcn.bjcn-on .nav-group-head .ic { color: var(--px-on-orange) !important; }
+  .px-folded .px-grp-bar { display: block; }
+  .px-grp-bar .bjm-bar { background: var(--px-navy); border-color: transparent; }
+  .px-grp-bar .bjm-p { color: rgba(255,255,255,.75); }
+  .px-grp-bar .bjm-p:hover { background: rgba(255,255,255,.1); color: #fff; }
+  .px-grp-bar .bjm-p .bjm-n { background: rgba(255,255,255,.16); color: #fff; }
+  .px-grp-bar .bjm-p.on { background: var(--px-orange) !important; color: var(--px-on-orange) !important; }
+  .px-grp-bar .bjm-p.on .bjm-n { background: var(--px-on-orange); color: #fff; }
+}
