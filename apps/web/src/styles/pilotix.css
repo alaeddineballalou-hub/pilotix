@@ -46,3 +46,6 @@ button.kpi.on { box-shadow: 0 0 0 2px var(--navy); }
 
 /* loading screen of the demo database */
 .boot { min-height: 100vh; display: grid; place-items: center; text-align: center; color: var(--muted); }
+
+/* Sub-page tabs: the original listed them in the menu on desktop; here they stay visible at the top of the page. */
+@media (min-width: 901px) { .bjm-bar:not(.flow) { display: flex !important; } }
