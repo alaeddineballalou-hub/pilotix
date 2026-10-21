@@ -14,6 +14,7 @@ export function Prix() {
   const { t } = useTranslation();
   const q = useRpc('admin.fees.get', {});
   const [cur, setCur] = useState<string | null>(null);
+  const [savTab, setSavTab] = useState(false);
   const [form, setForm] = useState<'new' | 'rename' | null>(null);
   const [prods, setProds] = useState(false);
   const createFirst = useAction('admin.fees.saveGrid', { success: t('admin.fees.saved') });
@@ -57,18 +58,29 @@ export function Prix() {
         {head}
         <div className="bjg-tabs" role="tablist">
           {names.map((g) => (
-            <button key={g} type="button" role="tab" aria-selected={g === name} className={`bjg-tab ${g === name ? 'on' : ''}`} onClick={() => setCur(g)}>
+            <button key={g} type="button" role="tab" aria-selected={!savTab && g === name} className={`bjg-tab ${!savTab && g === name ? 'on' : ''}`} onClick={() => (setCur(g), setSavTab(false))}>
               <span>
                 {g} {g === q.data!.defaultGrid && <span className="bjg-def">{t('admin.fees.default')}</span>}
               </span>
               <small>{t('admin.fees.products', { count: countOf(g) })}</small>
             </button>
           ))}
+          <button type="button" role="tab" aria-selected={savTab} className={`bjg-tab px-sav-tab ${savTab ? 'on' : ''}`} onClick={() => setSavTab(true)}>
+            <span>{t('admin.fees.savTab')}</span>
+            <small>{t('admin.fees.savTabSub')}</small>
+          </button>
           <button type="button" className="bjg-tab bjg-add" onClick={() => setForm('new')}>
             {t('admin.fees.add')}
           </button>
         </div>
-        <GridEditor key={name} name={name} grid={grids[name]} isDefault={name === q.data!.defaultGrid} onRename={() => setForm('rename')} onProducts={() => setProds(true)} onDeleted={() => setCur(null)} />
+        {savTab ? (
+          <>
+            <p className="muted small" style={{ margin: '0 0 10px' }}>{t('admin.fees.savHelp')}</p>
+            <GridEditor key="__sav" name={t('admin.fees.savTab')} grid={q.data!.savFees ?? {}} isDefault={false} sav onRename={() => {}} onProducts={() => {}} onDeleted={() => {}} />
+          </>
+        ) : (
+          <GridEditor key={name} name={name} grid={grids[name]} isDefault={name === q.data!.defaultGrid} onRename={() => setForm('rename')} onProducts={() => setProds(true)} onDeleted={() => setCur(null)} />
+        )}
       </div>
       {form && <GridForm mode={form} name={name} names={names} onClose={() => setForm(null)} onDone={(n) => setCur(n)} />}
       {prods && <ProductsForm name={name} products={products} defaultGrid={q.data!.defaultGrid} onClose={() => setProds(false)} />}
@@ -76,7 +88,7 @@ export function Prix() {
   );
 }
 
-function GridEditor({ name, grid, isDefault, onRename, onProducts, onDeleted }: { name: string; grid: Grid; isDefault: boolean; onRename: () => void; onProducts: () => void; onDeleted: () => void }) {
+function GridEditor({ name, grid, isDefault, sav, onRename, onProducts, onDeleted }: { name: string; grid: Grid; isDefault: boolean; sav?: boolean; onRename: () => void; onProducts: () => void; onDeleted: () => void }) {
   const { t } = useTranslation();
   const [rows, setRows] = useState<Record<string, { home: string; desk: string }>>({});
   const [q, setQ] = useState('');
@@ -87,6 +99,7 @@ function GridEditor({ name, grid, isDefault, onRename, onProducts, onDeleted }: 
     setRows(r);
   }, [grid]);
   const save = useAction('admin.fees.saveGrid', { success: t('admin.fees.saved') });
+  const saveSav = useAction('admin.fees.saveSav', { success: t('admin.fees.saved') });
   const setDef = useAction('admin.fees.setDefault', { success: t('admin.fees.saved') });
   const del = useAction('admin.fees.deleteGrid', { success: t('admin.fees.deleted'), onDone: onDeleted });
   const shown = useMemo(() => {
@@ -96,7 +109,8 @@ function GridEditor({ name, grid, isDefault, onRename, onProducts, onDeleted }: 
   const submit = () => {
     const out: Grid = {};
     for (const [w, r] of Object.entries(rows)) if (r.home !== '' || r.desk !== '') out[w] = { home: intOf(r.home), desk: intOf(r.desk) };
-    save.mutate({ name, oldName: name, rows: out });
+    if (sav) saveSav.mutate({ rows: out });
+    else save.mutate({ name, oldName: name, rows: out });
   };
   const shift = () => {
     const d = Math.round(Number(delta) || 0);
@@ -106,7 +120,7 @@ function GridEditor({ name, grid, isDefault, onRename, onProducts, onDeleted }: 
   };
   return (
     <>
-      <div className="row" style={{ flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+      <div className="row" style={{ flexWrap: 'wrap', gap: 8, marginBottom: 10, display: sav ? 'none' : undefined }}>
         <button className="btn small" onClick={onProducts}>
           {t('admin.fees.productsTitle', { name })}
         </button>
@@ -160,7 +174,7 @@ function GridEditor({ name, grid, isDefault, onRename, onProducts, onDeleted }: 
         </table>
       </div>
       <div className="row end" style={{ marginTop: 10 }}>
-        <button className="btn primary" disabled={save.isPending} onClick={submit}>
+        <button className="btn primary" disabled={save.isPending || saveSav.isPending} onClick={submit}>
           {t('admin.fees.save')}
         </button>
       </div>

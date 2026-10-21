@@ -5,10 +5,11 @@ import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
 import { da, fromLocalInput, toLocalInput, when, wilaya } from '../../lib/format';
-import { openOrder, openOrderForm } from '../../lib/modals';
+import { closeModal, openOrder, openOrderForm } from '../../lib/modals';
+import { startTicketFor } from '../sav/NewTicket';
 import { useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
-import { ErrorBox, Field, Icon, Loading, StatusBadge } from '../../ui/kit';
+import { ErrorBox, Field, Icon, Loading, StatusBadge, TicketTag } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { confLabel, printOrder, telHref, waHref } from './shared';
 import './orders.css';
@@ -254,15 +255,19 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
     );
   if (has('confirmation', 'suivi') && ['delivered', 'exchanged'].includes(o.followStatus ?? ''))
     actions.push(
-      <button key="ex" className="btn small" onClick={() => openOrderForm({ exchangeOf: o.id, onSaved: (id) => openOrder(id) })}>
+      <button key="ex" className="btn small" onClick={() => (closeModal(), startTicketFor(o.id))}>
         {t('orders.card.exchange')}
       </button>,
     );
   if (o.isExchange)
     actions.push(
-      <span key="exc" className="chip">
-        {t('orders.card.exchangeOf', { ref: o.originalOrderId ? `#${o.originalOrderId}` : '' })}
-      </span>,
+      o.savRef ? (
+        <TicketTag key="exc" savRef={o.savRef} />
+      ) : (
+        <span key="exc" className="chip">
+          {t('orders.card.exchangeOf', { ref: o.originalOrderId ? `#${o.originalOrderId}` : '' })}
+        </span>
+      ),
     );
   actions.push(
     <button key="print" className="btn small" onClick={() => printOrder(t, o, look.data?.shopName ?? '')}>

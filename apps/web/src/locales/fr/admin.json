@@ -91,7 +91,13 @@
     "yes": "Oui, continuer"
   },
   "status": {
-    "groups": { "confirmation": "Confirmation", "depot": "Dépôt", "suivi": "Suivi", "livraison": "Livraison", "sav": "SAV" },
+    "groups": {
+      "confirmation": "Confirmation",
+      "depot": "Dépôt",
+      "suivi": "Suivi",
+      "livraison": "Livraison",
+      "sav": "SAV"
+    },
     "title": {
       "confirmation": "Statuts de la confirmation",
       "depot": "Statuts du dépôt",
@@ -121,7 +127,14 @@
     "down": "Descendre",
     "custom": "ajouté",
     "note": "Un statut ajouté « se comporte comme » un statut d’origine : par exemple « Client hésite » se comporte comme « À rappeler » (la commande reste dans la liste à rappeler, avec le nouveau nom).",
-    "tones": { "info": "Bleu", "ok": "Vert", "mid": "Jaune", "warn": "Orange", "bad": "Rouge", "off": "Gris" },
+    "tones": {
+      "info": "Bleu",
+      "ok": "Vert",
+      "mid": "Jaune",
+      "warn": "Orange",
+      "bad": "Rouge",
+      "off": "Gris"
+    },
     "formNew": "Nouveau statut · {{group}}",
     "formEdit": "Modifier « {{name}} »",
     "name": "Nom",
@@ -145,7 +158,11 @@
     "cancelHelp": "0 = jamais",
     "tries": "Tentatives par commande",
     "slot": "Créneau {{name}} (heures)",
-    "slots": { "morning": "Matin", "midday": "Midi", "evening": "Soir" },
+    "slots": {
+      "morning": "Matin",
+      "midday": "Midi",
+      "evening": "Soir"
+    },
     "to": "à",
     "start": "{{name}} début",
     "end": "{{name}} fin",
@@ -154,7 +171,13 @@
   },
   "pay": {
     "intro": "La paie se calcule toute seule avec les commandes : confirmées puis livrées pour les agents, livrées de l’équipe pour les managers, livrées pour le suivi, préparées pour le dépôt, livrées (léger / lourd) pour les livreurs.",
-    "tabs": { "agents": "Agents", "managers": "Agent managers", "suivi": "Suivi", "depot": "Dépôt", "livreurs": "Livreurs" },
+    "tabs": {
+      "agents": "Agents",
+      "managers": "Agent managers",
+      "suivi": "Suivi",
+      "depot": "Dépôt",
+      "livreurs": "Livreurs"
+    },
     "paidOn": {
       "agents": "Payé sur : les commandes qu’il a confirmées et qui sont livrées. Les comptes avec le rôle « Confirmation » apparaissent tout seuls.",
       "managers": "Payé sur : les commandes livrées des agents de son équipe (Dashboard → Confirmation → équipes).",
@@ -235,7 +258,13 @@
       "heavy": "{{qty}} lourds × {{rate}}"
     },
     "nothing": "Rien ce mois-ci",
-    "csv": { "category": "Catégorie", "person": "Personne", "count": "Commandes", "detail": "Détail", "pay": "À payer (DA)" }
+    "csv": {
+      "category": "Catégorie",
+      "person": "Personne",
+      "count": "Commandes",
+      "detail": "Détail",
+      "pay": "À payer (DA)"
+    }
   },
   "fees": {
     "title": "Prix de livraison (client)",
@@ -274,7 +303,10 @@
     "productsSave": "Enregistrer les produits",
     "productsSaved": "Produits enregistrés",
     "usesOther": "prix : {{name}}",
-    "noProducts": "Aucun produit."
+    "noProducts": "Aucun produit.",
+    "savTab": "Tickets SAV",
+    "savTabSub": "prix des échanges",
+    "savHelp": "Prix de livraison payé par le client pour un échange SAV, par wilaya. Il est proposé sur chaque ticket et reste modifiable au moment de l’échange."
   },
   "channels": {
     "addTitle": "Ajouter un canal",
@@ -283,7 +315,16 @@
     "soon": "Bientôt",
     "soonTip": "Bientôt disponible",
     "addTip": "Ajouter un canal {{name}}",
-    "kinds": { "sheets": "Google Sheets", "woocommerce": "WooCommerce", "shopify": "Shopify", "youcan": "YouCan", "lightfunnels": "Lightfunnels", "api": "API", "connector": "Connecteur", "tiktok": "TikTok Leads" },
+    "kinds": {
+      "sheets": "Google Sheets",
+      "woocommerce": "WooCommerce",
+      "shopify": "Shopify",
+      "youcan": "YouCan",
+      "lightfunnels": "Lightfunnels",
+      "api": "API",
+      "connector": "Connecteur",
+      "tiktok": "TikTok Leads"
+    },
     "listTitle": "Canaux de vente",
     "listHelp": "Chaque canal envoie ses commandes dans Confirmation. Boutiques et API : elles envoient chaque commande au webhook. Actif éteint = le canal n’apporte plus de commandes. SKU obligatoire = une ligne sans SKU connu est refusée.",
     "search": "Rechercher un canal",

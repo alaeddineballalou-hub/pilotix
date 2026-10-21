@@ -8,7 +8,7 @@ import { openOrder, openOrderForm } from '../lib/modals';
 import { useAction, useRpc } from '../lib/query';
 import { useSession } from '../lib/session';
 import { store } from '../lib/store';
-import { Field, Icon } from '../ui/kit';
+import { Field, Icon, TicketTag } from '../ui/kit';
 import { Modal } from '../ui/modal';
 import { canSee, NAV } from './nav';
 
@@ -28,20 +28,22 @@ export function useMenuCounts() {
     const c = q.data;
     if (!c) return {} as Record<string, number>;
     const sum = (o: Record<string, number>, keys: string[]) => keys.reduce((s, k) => s + (o[k] ?? 0), 0);
+    // SAV ticket parcels are not orders, but the depot, scanner, livreurs and caisse handle them too
+    const tk = c.tickets ?? { toShip: 0, prepared: 0, onRoad: 0, uncashed: 0 };
     return {
       conf: sum(c.conf, CONF_TODO),
       new: c.conf.new ?? 0,
       attente: sum(c.conf, CONF_TODO.filter((k) => k !== 'new')),
       confirmees: sum(c.conf, ['confirmed', 'no_stock']),
-      depot: sum(c.follow, ['to_prepare', 'prepared']),
+      depot: sum(c.follow, ['to_prepare', 'prepared']) + tk.toShip,
       suivi: sum(c.follow, ['alert']),
       delivered: c.follow.delivered ?? 0,
       cancelled: sum(c.conf, CONF_DONE_BAD) + (c.follow.returned ?? 0),
       sav: c.sav,
-      uncashed: c.uncashed,
+      uncashed: c.uncashed + tk.uncashed,
       late: c.lateCalls,
-      toShip: c.follow.prepared ?? 0,
-      onRoad: sum(c.follow, ['shipped', 'out_for_delivery', 'failed']),
+      toShip: (c.follow.prepared ?? 0) + tk.prepared,
+      onRoad: sum(c.follow, ['shipped', 'out_for_delivery', 'failed']) + tk.onRoad,
       lowStock: (c as { lowStock?: number }).lowStock ?? 0,
     } as Record<string, number>;
   }, [q.data]);
@@ -264,7 +266,7 @@ function GlobalSearch() {
     const id = setTimeout(() => setDebounced(q.trim()), 250);
     return () => clearTimeout(id);
   }, [q]);
-  const res = useRpc('orders.list', { q: debounced, pageSize: 8 }, { enabled: debounced.length >= 2 });
+  const res = useRpc('orders.list', { q: debounced, pageSize: 8, tickets: 'include' }, { enabled: debounced.length >= 2 });
   const rows = debounced.length >= 2 ? res.data?.rows ?? [] : [];
   useEffect(() => {
     const close = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
@@ -304,7 +306,7 @@ function GlobalSearch() {
           {rows.length === 0 && <div className="muted small" style={{ padding: 10 }}>{res.isFetching ? t('common.loading') : t('shell.noResult')}</div>}
           {rows.map((o, i) => (
             <button key={o.id} type="button" role="option" aria-selected={i === sel} className={`pxs-it ${i === sel ? 'on' : ''}`} onMouseDown={(e) => e.preventDefault()} onClick={() => go(o.id)}>
-              <b className="ltr">{o.ref}</b> {o.customerName} <span className="muted ltr">{o.phone}</span>
+              <b className="ltr">{o.ref}</b> <TicketTag savRef={o.savRef} /> {o.customerName} <span className="muted ltr">{o.phone}</span>
               <span className="muted small"> · {when(o.createdAt)}</span>
             </button>
           ))}

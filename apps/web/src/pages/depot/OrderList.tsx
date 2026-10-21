@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { da, wilaya, when } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
-import { BulkBar, Card, ErrorBox, Loading, StatusBadge } from '../../ui/kit';
+import { BulkBar, Card, ErrorBox, Loading, StatusBadge, TicketTag } from '../../ui/kit';
 
 export interface ExtraCol {
   label: string;
@@ -67,6 +67,7 @@ export function DepotOrderList({
     dir: 'asc',
     page,
     pageSize,
+    tickets: 'include',
   });
   useEffect(() => setPage(1), [dq, company, wil]);
   const rows = list.data?.rows ?? [];
@@ -162,7 +163,7 @@ export function DepotOrderList({
                     <input type="checkbox" aria-label={t('depot.select')} checked={sel.has(o.id)} onChange={() => toggle(o.id)} />
                   </td>
                   <td data-l={t('depot.cols.order')}>
-                    <b className="ltr">{o.ref}</b>
+                    <b className="ltr">{o.ref}</b> <TicketTag savRef={o.savRef} />
                     <small>{when(o.createdAt)}</small>
                   </td>
                   <td data-l={t('depot.cols.client')}>

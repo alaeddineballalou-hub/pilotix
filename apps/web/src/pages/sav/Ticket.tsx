@@ -31,7 +31,7 @@ export function TicketModal({ id, onClose }: { id: number; onClose: () => void }
       </Modal>
     );
   const { ticket: x, order, exchange, parts } = q.data;
-  if (exch && order) return <ExchangeModal ticketId={x.id} ticketRef={x.ref} order={order} parts={parts} onBack={() => setExch(false)} onClose={onClose} />;
+  if (exch && order) return <ExchangeModal ticketId={x.id} ticketRef={x.ref} order={order} parts={parts} suggestedFee={q.data?.suggestedFee ?? 0} onBack={() => setExch(false)} onClose={onClose} />;
 
   const openT = x.status === 'open' || x.status === 'progress';
   const st = status ?? x.status;
@@ -191,7 +191,7 @@ interface LineState {
 }
 
 /** Exchange: lines concerned, how each is replaced, parts, delivery paid → order straight to the depot. */
-function ExchangeModal({ ticketId, ticketRef, order, parts, onBack, onClose }: { ticketId: number; ticketRef: string; order: Order; parts: Record<number, { name: string; max?: number }[]>; onBack: () => void; onClose: () => void }) {
+function ExchangeModal({ ticketId, ticketRef, order, parts, suggestedFee, onBack, onClose }: { ticketId: number; ticketRef: string; order: Order; parts: Record<number, { name: string; max?: number }[]>; suggestedFee: number; onBack: () => void; onClose: () => void }) {
   const { t } = useTranslation();
   const items = order.items.filter((i) => i.id).map((i) => ({ ...i, id: i.id as number }));
   const cat = useRpc('sav.catalog', {}).data ?? [];
@@ -199,7 +199,8 @@ function ExchangeModal({ ticketId, ticketRef, order, parts, onBack, onClose }: {
   const [lines, setLines] = useState<Record<number, LineState>>(() => Object.fromEntries(items.map((i) => [i.id, { on: items.length === 1, qty: i.qty, variantId: null }])));
   const [partSel, setPartSel] = useState<Record<string, number>>({});
   const [freePart, setFreePart] = useState('');
-  const [fee, setFee] = useState(0);
+  // pre-filled from the SAV tariff (Management › Prix › Tickets SAV), can be changed here
+  const [fee, setFee] = useState(suggestedFee);
   const [note, setNote] = useState('');
   const [err, setErr] = useState('');
   const ex = useAction('sav.exchange', {
@@ -346,6 +347,7 @@ function ExchangeModal({ ticketId, ticketRef, order, parts, onBack, onClose }: {
           <label className="field">
             <span className="lab">{t('sav.ex.fee')}</span>
             <input type="number" min={0} step={50} value={fee} className="ltr" onChange={(e) => setFee(Math.max(0, Number(e.target.value) || 0))} />
+            <small className="muted">{fee === suggestedFee ? t('sav.ex.feeTariff') : t('sav.ex.feeChanged', { v: da(suggestedFee) })}</small>
           </label>
           <label className="field">
             <span className="lab">{t('sav.ex.note')}</span>

@@ -26,8 +26,9 @@ const ORDER_COLS = `o.*,
      'variantTitle', i.variant_title, 'qty', i.qty, 'unitPrice', i.unit_price, 'purchasePrice', i.purchase_price, 'isUpsell', i.is_upsell) ORDER BY i.id), '[]')
    FROM order_items i WHERE i.order_id = o.id) AS items_json,
   ag.name AS agent_name, co.name AS company_name, lv.name AS livreur_name,
+  CASE WHEN o.is_exchange THEN (SELECT k.ref FROM complaints k WHERE k.exchange_order_id = o.id ORDER BY k.id DESC LIMIT 1) END AS sav_ref,
   c.blacklisted AS c_blacklisted, c.delivered AS c_delivered, c.returned AS c_returned,
-  EXISTS (SELECT 1 FROM orders d WHERE d.phone = o.phone AND d.id <> o.id AND d.conf_status = ANY('{to_check,new,no_answer,busy,callback,postponed,confirmed,no_stock}')
+  EXISTS (SELECT 1 FROM sales d WHERE d.phone = o.phone AND d.id <> o.id AND d.conf_status = ANY('{to_check,new,no_answer,busy,callback,postponed,confirmed,no_stock}')
           AND (d.follow_status IS NULL OR d.follow_status IN ('to_prepare','prepared')) AND d.created_at > o.created_at - interval '15 days') AS possible_dup`;
 
 const ORDER_FROM = `FROM orders o
@@ -79,6 +80,7 @@ export function toOrder(r: any): Order {
     deliveryNote: r.delivery_note,
     internalNote: r.internal_note,
     isExchange: r.is_exchange,
+    savRef: r.sav_ref ?? null,
     originalOrderId: numOrNull(r.original_order_id),
     hasUpsell: r.has_upsell,
     preparedAt: isoOrNull(r.prepared_at),
@@ -140,6 +142,8 @@ export const ListInput = z.object({
   channel: z.enum(SALES_CHANNELS).optional(),
   cashed: z.boolean().optional(),
   isExchange: z.boolean().optional(),
+  /** SAV ticket parcels: left out of order lists unless asked for (the depot and livreurs see both) */
+  tickets: z.enum(['exclude', 'include', 'only']).optional(),
   subStatus: z.string().max(40).optional(),
   /** only these orders (selection export / print) */
   ids: z.array(id).max(3000).optional(),
@@ -175,6 +179,8 @@ export async function listOrders(ctx: Ctx, f: ListInput): Promise<Page<Order>> {
   if (f.channel) w.add('o.channel = ?', f.channel);
   if (f.cashed !== undefined) w.add('o.cashed = ?', f.cashed);
   if (f.isExchange !== undefined) w.add('o.is_exchange = ?', f.isExchange);
+  else if ((f.tickets ?? 'exclude') === 'exclude' && !f.ids?.length) w.add('NOT o.is_exchange');
+  else if (f.tickets === 'only') w.add('o.is_exchange');
   if (f.subStatus) w.add('o.sub_status = ?', f.subStatus);
   if (f.ids?.length) w.add('o.id = ANY(?)', f.ids);
   if (f.from) w.add(`o.${f.dateField} >= ?`, f.from);
@@ -492,22 +498,34 @@ export async function orderCounts(ctx: Ctx) {
   const own = onlyOwnDeliveries(ctx);
   const me = ctx.session.profile.id;
   const conf = await ctx.db.query<{ k: string; n: number }>(
-    `SELECT conf_status AS k, count(*)::int AS n FROM orders ${own ? 'WHERE livreur_id = $1' : ''} GROUP BY 1`,
+    `SELECT conf_status AS k, count(*)::int AS n FROM sales ${own ? 'WHERE livreur_id = $1' : ''} GROUP BY 1`,
     own ? [me] : [],
   );
   const follow = await ctx.db.query<{ k: string; n: number }>(
-    `SELECT follow_status AS k, count(*)::int AS n FROM orders WHERE follow_status IS NOT NULL ${own ? 'AND livreur_id = $1' : ''} GROUP BY 1`,
+    `SELECT follow_status AS k, count(*)::int AS n FROM sales WHERE follow_status IS NOT NULL ${own ? 'AND livreur_id = $1' : ''} GROUP BY 1`,
     own ? [me] : [],
   );
   const lateCalls = num(
-    (await ctx.db.query(`SELECT count(*)::int AS n FROM orders WHERE conf_status = ANY($1) AND next_call_at IS NOT NULL AND next_call_at <= now()`, [CONF_TODO]))[0]?.n,
+    (await ctx.db.query(`SELECT count(*)::int AS n FROM sales WHERE conf_status = ANY($1) AND next_call_at IS NOT NULL AND next_call_at <= now()`, [CONF_TODO]))[0]?.n,
   );
   const sav = num((await ctx.db.query(`SELECT count(*)::int AS n FROM complaints WHERE status IN ('open','progress')`))[0]?.n);
-  const uncashed = num((await ctx.db.query(`SELECT count(*)::int AS n FROM orders WHERE follow_status='delivered' AND NOT cashed`))[0]?.n);
-  const subs = await ctx.db.query<{ k: string; n: number }>(`SELECT sub_status AS k, count(*)::int AS n FROM orders WHERE sub_status IS NOT NULL GROUP BY 1`);
+  const uncashed = num((await ctx.db.query(`SELECT count(*)::int AS n FROM sales WHERE follow_status='delivered' AND NOT cashed`))[0]?.n);
+  const subs = await ctx.db.query<{ k: string; n: number }>(`SELECT sub_status AS k, count(*)::int AS n FROM sales WHERE sub_status IS NOT NULL GROUP BY 1`);
   const lowStock = num((await ctx.db.query(`SELECT count(*)::int AS n FROM stock WHERE alert_qty > 0 AND qty <= alert_qty`))[0]?.n);
+  // SAV ticket parcels have their own counts (depot work, on the road, money not yet cashed)
+  const tk = (
+    await ctx.db.query(
+      `SELECT count(*) FILTER (WHERE follow_status IN ('to_prepare','prepared'))::int AS to_ship,
+              count(*) FILTER (WHERE follow_status = 'prepared')::int AS prepared,
+              count(*) FILTER (WHERE follow_status IN ('shipped','out_for_delivery','failed','alert','in_exchange'))::int AS on_road,
+              count(*) FILTER (WHERE follow_status = 'delivered' AND NOT cashed AND total > 0)::int AS uncashed
+       FROM ticket_parcels ${own ? 'WHERE livreur_id = $1' : ''}`,
+      own ? [me] : [],
+    )
+  )[0];
+  const tickets = { toShip: num(tk?.to_ship), prepared: num(tk?.prepared), onRoad: num(tk?.on_road), uncashed: num(tk?.uncashed) };
   const toObj = (rows: { k: string; n: number }[]) => Object.fromEntries(rows.map((r) => [r.k, num(r.n)]));
-  return { conf: toObj(conf), follow: toObj(follow), sub: toObj(subs), lateCalls, sav, uncashed, lowStock, all: num((await ctx.db.query('SELECT count(*)::int n FROM orders'))[0]?.n) };
+  return { conf: toObj(conf), follow: toObj(follow), sub: toObj(subs), lateCalls, sav, uncashed, tickets, lowStock, all: num((await ctx.db.query('SELECT count(*)::int n FROM sales'))[0]?.n) };
 }
 
 // ---------------------------------------------------------------- order form, fees and the delivered report
@@ -656,56 +674,60 @@ function orderExtraProcs() {
     }),
 
     /** "Bilan des livraisons": delivered in the period, cashed or not, courier fees, returns, net to receive — total and per company. */
-    'orders.deliveredReport': proc(['suivi', 'depot'], z.object({ from: dateStr, to: dateStr }), async (ctx, i) => {
-      const R = await companyRules(ctx.db);
-      const base = `FROM orders o LEFT JOIN delivery_companies co ON co.id = o.company_id`;
-      const D = await ctx.db.query(`SELECT ${FEE_COLS} ${base} WHERE o.follow_status = 'delivered' AND o.delivered_at >= $1 AND o.delivered_at < $2`, [i.from, i.to]);
-      const B = await ctx.db.query(
-        `SELECT ${FEE_COLS} ${base} WHERE o.follow_status IN ('returning','returned') AND coalesce(o.returned_at, o.updated_at) >= $1 AND coalesce(o.returned_at, o.updated_at) < $2`,
-        [i.from, i.to],
-      );
-      type Agg = { companyId: number | null; name: string; kind: string | null; n: number; amount: number; cashed: number; cashedN: number; uncashed: number; uncashedN: number; fees: number; overweight: number; returns: number; returnFees: number; returnOverweight: number; netToReceive: number; noTariff: number };
-      const empty = (companyId: number | null, name: string, kind: string | null): Agg => ({ companyId, name, kind, n: 0, amount: 0, cashed: 0, cashedN: 0, uncashed: 0, uncashedN: 0, fees: 0, overweight: 0, returns: 0, returnFees: 0, returnOverweight: 0, netToReceive: 0, noTariff: 0 });
-      const M = new Map<number, Agg>();
-      const T = empty(null, 'Total', null);
-      const noRule = new Set<string>();
-      const g = (o: any) => {
-        const k = num(o.company_id);
-        if (!M.has(k)) M.set(k, empty(o.company_id ? k : null, o.company ?? 'Sans société', o.company_kind ?? null));
-        return M.get(k)!;
-      };
-      for (const o of D) {
-        const x = parcelFees(o, R);
-        const v = num(o.total);
-        for (const z of [g(o), T]) {
-          z.n++;
-          z.amount += v;
-          z.fees += x.liv;
-          z.overweight += x.extra;
-          if (o.cashed) {
-            z.cashed += v;
-            z.cashedN++;
-          } else {
-            z.uncashed += v;
-            z.uncashedN++;
-            z.netToReceive += v - x.liv - x.extra;
-          }
-          if (!x.fromTariff && o.company_id) z.noTariff++;
-        }
-        if (o.company_id && !(R.over.get(num(o.company_id))?.perKg)) noRule.add(o.company ?? '—');
-      }
-      for (const o of B) {
-        const x = parcelFees(o, R);
-        for (const z of [g(o), T]) {
-          z.returns++;
-          z.returnFees += x.ret;
-          z.returnOverweight += x.extraRet;
-          z.netToReceive -= x.ret + x.extraRet;
-        }
-      }
-      return { total: T, companies: [...M.values()].sort((a, b) => b.amount - a.amount), noOverweightRule: [...noRule] };
-    }),
+    'orders.deliveredReport': proc(['suivi', 'depot'], z.object({ from: dateStr, to: dateStr }), (ctx, i) => deliveredReport(ctx, i)),
   };
+}
+
+/** "Bilan des livraisons": delivered in the period, cashed or not, courier fees, returns, net to receive — total and per company.
+ * Orders and SAV ticket parcels are counted apart (`sales` / `ticket_parcels`). */
+export async function deliveredReport(ctx: Ctx, i: { from: string; to: string }, view: 'sales' | 'ticket_parcels' = 'sales') {
+  const R = await companyRules(ctx.db);
+  const base = `FROM ${view} o LEFT JOIN delivery_companies co ON co.id = o.company_id`;
+  const D = await ctx.db.query(`SELECT ${FEE_COLS} ${base} WHERE o.follow_status = 'delivered' AND o.delivered_at >= $1 AND o.delivered_at < $2`, [i.from, i.to]);
+  const B = await ctx.db.query(
+    `SELECT ${FEE_COLS} ${base} WHERE o.follow_status IN ('returning','returned') AND coalesce(o.returned_at, o.updated_at) >= $1 AND coalesce(o.returned_at, o.updated_at) < $2`,
+    [i.from, i.to],
+  );
+  type Agg = { companyId: number | null; name: string; kind: string | null; n: number; amount: number; cashed: number; cashedN: number; uncashed: number; uncashedN: number; fees: number; overweight: number; returns: number; returnFees: number; returnOverweight: number; netToReceive: number; noTariff: number };
+  const empty = (companyId: number | null, name: string, kind: string | null): Agg => ({ companyId, name, kind, n: 0, amount: 0, cashed: 0, cashedN: 0, uncashed: 0, uncashedN: 0, fees: 0, overweight: 0, returns: 0, returnFees: 0, returnOverweight: 0, netToReceive: 0, noTariff: 0 });
+  const M = new Map<number, Agg>();
+  const T = empty(null, 'Total', null);
+  const noRule = new Set<string>();
+  const g = (o: any) => {
+    const k = num(o.company_id);
+    if (!M.has(k)) M.set(k, empty(o.company_id ? k : null, o.company ?? 'Sans société', o.company_kind ?? null));
+    return M.get(k)!;
+  };
+  for (const o of D) {
+    const x = parcelFees(o, R);
+    const v = num(o.total);
+    for (const z of [g(o), T]) {
+      z.n++;
+      z.amount += v;
+      z.fees += x.liv;
+      z.overweight += x.extra;
+      if (o.cashed) {
+        z.cashed += v;
+        z.cashedN++;
+      } else {
+        z.uncashed += v;
+        z.uncashedN++;
+        z.netToReceive += v - x.liv - x.extra;
+      }
+      if (!x.fromTariff && o.company_id) z.noTariff++;
+    }
+    if (o.company_id && !(R.over.get(num(o.company_id))?.perKg)) noRule.add(o.company ?? '—');
+  }
+  for (const o of B) {
+    const x = parcelFees(o, R);
+    for (const z of [g(o), T]) {
+      z.returns++;
+      z.returnFees += x.ret;
+      z.returnOverweight += x.extraRet;
+      z.netToReceive -= x.ret + x.extraRet;
+    }
+  }
+  return { total: T, companies: [...M.values()].sort((a, b) => b.amount - a.amount), noOverweightRule: [...noRule] };
 }
 
 // ---------------------------------------------------------------- the procedures

@@ -252,7 +252,7 @@ function sortRound(list: Order[], endWilayaId: number | null, endCommune: string
 
 async function tournee(ctx: Ctx, livreurId: number) {
   const route = (await ctx.db.query('SELECT end_wilaya_id, end_commune FROM livreur_routes WHERE profile_id=$1', [livreurId]))[0];
-  const list = (await listOrders(ctx, { livreurId, follow: ['to_prepare', 'prepared', 'shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange'], pageSize: 1000, page: 1, sort: 'updated_at', dir: 'desc', dateField: 'created_at' })).rows;
+  const list = (await listOrders(ctx, { livreurId, follow: ['to_prepare', 'prepared', 'shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange'], pageSize: 1000, page: 1, sort: 'updated_at', dir: 'desc', dateField: 'created_at', tickets: 'include' })).rows;
   const toDeliver = sortRound(list.filter((o) => !TO_SHIP.includes(o.followStatus!)), numOrNull(route?.end_wilaya_id), route?.end_commune ?? null);
   const pickup = list.filter((o) => TO_SHIP.includes(o.followStatus!));
   const today = await ctx.db.query(
@@ -547,7 +547,7 @@ export const deliveryProcs = {
     const shop = await getSetting(ctx.db, 'shop');
     if (i.companyId && !isLivreurOnly(ctx.session)) {
       const c = await companyOr404(ctx.db, i.companyId);
-      const rows = (await listOrders(ctx, { companyId: c.id, follow: ['prepared', 'shipped', 'out_for_delivery', 'failed', 'alert'], pageSize: 1000, page: 1, sort: 'wilaya_id', dir: 'asc', dateField: 'created_at' })).rows;
+      const rows = (await listOrders(ctx, { companyId: c.id, follow: ['prepared', 'shipped', 'out_for_delivery', 'failed', 'alert'], pageSize: 1000, page: 1, sort: 'wilaya_id', dir: 'asc', dateField: 'created_at', tickets: 'include' })).rows;
       const own = c.kind === 'own';
       const list = own ? rows : rows.filter((o) => o.tracking || o.followStatus === 'prepared');
       return { shop: shop.name, title: `Feuille de route · ${c.name}`, who: c.name, phone: c.phone, date: new Date(ctx.now()).toISOString(), orders: list, total: list.reduce((s, o) => s + o.total, 0) };

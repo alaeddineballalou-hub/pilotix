@@ -85,5 +85,12 @@
     "isNotCashed": "Not cashed",
     "inHandTitle": "Parcels in hand",
     "noneInHand": "No parcel in hand right now."
+  },
+  "tickets": {
+    "title": "SAV tickets — to receive",
+    "help": "Money from SAV exchange parcels (delivery fees and price differences) is kept apart from order money. Free exchanges are not listed here.",
+    "empty": "No ticket money to receive.",
+    "groupTitle": "Tickets · {{name}} — {{count}} parcels",
+    "badge": "SAV tickets"
   }
 }

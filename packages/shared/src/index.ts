@@ -221,6 +221,8 @@ export interface Order {
   deliveryNote: string | null;
   internalNote: string | null;
   isExchange: boolean;
+  /** SAV ticket this parcel belongs to (exchange parcels are tickets, not orders) */
+  savRef: string | null;
   originalOrderId: number | null;
   hasUpsell: boolean;
   preparedAt: string | null;

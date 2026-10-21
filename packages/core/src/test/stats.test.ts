@@ -15,7 +15,7 @@ before(async () => {
 test('stats.now: counts match the orders table; money only for admin', async () => {
   const admin = await as(EMAILS.admin);
   const r: any = await call('stats.now', admin, {});
-  const n = (await db.query(`SELECT count(*)::int AS n FROM orders WHERE follow_status = 'to_prepare'`))[0].n;
+  const n = (await db.query(`SELECT count(*)::int AS n FROM sales WHERE follow_status = 'to_prepare'`))[0].n;
   assert.equal(r.toPrepare, n);
   assert.ok(r.moneyDue !== null && r.moneyDue >= 0);
   const conf = await as(EMAILS.conf);

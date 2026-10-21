@@ -6,7 +6,8 @@ import type { Order, Page } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
-import { addEvent, createOrder, getOrder } from './orders';
+import { addEvent, createOrder, deliveredReport, getOrder } from './orders';
+import { savFee } from '../settings';
 
 const id = z.number().int().positive();
 const SAV_ROLES = ['confirmation', 'suivi', 'depot'] as const;
@@ -105,7 +106,7 @@ function viewWhere(w: Where, v: SavView) {
       w.add(ACTIVE);
       break;
     case 'attente':
-      w.add(`${ACTIVE} AND (ex.id IS NULL OR ex.follow_status IS NULL OR ex.follow_status = 'cancelled')`);
+      w.add(`${ACTIVE} AND (ex.id IS NULL OR ex.follow_status IS NULL OR ex.follow_status IN ('cancelled','returning','returned'))`);
       break;
     case 'depot':
       w.add(`${ACTIVE} AND ${AT_DEPOT}`);
@@ -168,7 +169,7 @@ export async function savKpis(ctx: Ctx) {
   const r = (
     await ctx.db.query(
       `SELECT
-         count(*) FILTER (WHERE ${ACTIVE} AND (ex.id IS NULL OR ex.follow_status IS NULL OR ex.follow_status = 'cancelled'))::int AS attente,
+         count(*) FILTER (WHERE ${ACTIVE} AND (ex.id IS NULL OR ex.follow_status IS NULL OR ex.follow_status IN ('cancelled','returning','returned')))::int AS attente,
          count(*) FILTER (WHERE ${ACTIVE} AND ${AT_DEPOT})::int AS depot,
          count(*) FILTER (WHERE ${ACTIVE} AND ${ON_ROAD})::int AS livraison,
          count(*) FILTER (WHERE ${ACTIVE} AND c.created_at < now() - interval '48 hours')::int AS late,
@@ -336,15 +337,91 @@ export async function findOrders(ctx: Ctx, q: string, limit = 8, extra?: (w: Whe
   if (digits.length >= 4 && digits.length === q.replace(/[\s+.-]/g, '').length) w.add(`(o.phone LIKE '%' || ? || '%' OR o.phone2 LIKE '%' || ? || '%' OR o.tracking ILIKE '%' || ? || '%')`, digits.slice(-9), digits.slice(-9), digits);
   else w.add(`(upper(o.ref) LIKE upper(?) || '%' OR o.tracking ILIKE ? || '%' OR o.customer_name ILIKE '%' || ? || '%')`, q.trim(), q.trim(), q.trim());
   extra?.(w);
-  const rows = await ctx.db.query(`SELECT o.id FROM orders o ${w.sql} ORDER BY o.created_at DESC LIMIT ${w.p(limit)}`, w.params);
+  const rows = await ctx.db.query(`SELECT o.id FROM sales o ${w.sql} ORDER BY o.created_at DESC LIMIT ${w.p(limit)}`, w.params);
   const out: Order[] = [];
   for (const r of rows) out.push(await getOrder(ctx, num(r.id)));
   return out;
 }
 
+
+const dateStr = z.string().min(10).max(40);
+
+/** SAV statistics, apart from orders: tickets (created, delivered, cancelled), their parcels (delivery rate, returns) and their money. */
+export async function savStats(ctx: Ctx, from: string, to: string) {
+  await settleDelivered(ctx.db, ctx.session.profile.id);
+  const t = (
+    await ctx.db.query(
+      `SELECT count(*) FILTER (WHERE c.created_at >= $1 AND c.created_at < $2)::int AS created,
+              count(*) FILTER (WHERE c.status = 'resolved' AND c.resolved_at >= $1 AND c.resolved_at < $2)::int AS delivered,
+              count(*) FILTER (WHERE c.status = 'closed' AND COALESCE(c.resolved_at, c.updated_at) >= $1 AND COALESCE(c.resolved_at, c.updated_at) < $2)::int AS cancelled,
+              count(*) FILTER (WHERE ${ACTIVE})::int AS open,
+              avg(extract(epoch FROM (c.resolved_at - c.created_at))) FILTER (WHERE c.status = 'resolved' AND c.resolved_at >= $1 AND c.resolved_at < $2) AS avg_s
+       FROM complaints c`,
+      [from, to],
+    )
+  )[0];
+  const byType = await ctx.db.query(`SELECT type AS k, count(*)::int AS n FROM complaints WHERE created_at >= $1 AND created_at < $2 GROUP BY 1 ORDER BY 2 DESC`, [from, to]);
+  const byKind = await ctx.db.query(
+    `SELECT COALESCE(c.exchange_kind, 'none') AS k, count(*)::int AS n FROM complaints c WHERE c.created_at >= $1 AND c.created_at < $2 GROUP BY 1 ORDER BY 2 DESC`,
+    [from, to],
+  );
+  const p = (
+    await ctx.db.query(
+      `SELECT count(*) FILTER (WHERE shipped_at >= $1 AND shipped_at < $2)::int AS shipped,
+              count(*) FILTER (WHERE follow_status = 'delivered' AND delivered_at >= $1 AND delivered_at < $2)::int AS delivered,
+              count(*) FILTER (WHERE follow_status IN ('returning','returned') AND COALESCE(returned_at, updated_at) >= $1 AND COALESCE(returned_at, updated_at) < $2)::int AS returned,
+              count(*) FILTER (WHERE follow_status = 'cancelled' AND updated_at >= $1 AND updated_at < $2)::int AS cancelled,
+              count(*) FILTER (WHERE follow_status IN ('to_prepare','prepared'))::int AS at_depot,
+              count(*) FILTER (WHERE follow_status IN ('shipped','out_for_delivery','failed','alert','in_exchange'))::int AS on_road,
+              COALESCE(sum(delivery_fee) FILTER (WHERE follow_status = 'delivered' AND delivered_at >= $1 AND delivered_at < $2), 0)::bigint AS fees_paid,
+              COALESCE(sum(subtotal) FILTER (WHERE follow_status = 'delivered' AND delivered_at >= $1 AND delivered_at < $2), 0)::bigint AS diff_paid,
+              count(*) FILTER (WHERE follow_status = 'delivered' AND delivered_at >= $1 AND delivered_at < $2 AND total = 0)::int AS free
+       FROM ticket_parcels`,
+      [from, to],
+    )
+  )[0];
+  const money = await deliveredReport(ctx, { from, to }, 'ticket_parcels');
+  const delivered = num(p.delivered);
+  const returned = num(p.returned);
+  return {
+    tickets: {
+      created: num(t.created),
+      delivered: num(t.delivered),
+      cancelled: num(t.cancelled),
+      open: num(t.open),
+      avgMs: t.avg_s === null || t.avg_s === undefined ? null : Math.round(Number(t.avg_s) * 1000),
+    },
+    byType: byType.map((r: any) => ({ key: r.k as string, n: num(r.n) })),
+    byKind: byKind.map((r: any) => ({ key: r.k as string, n: num(r.n) })),
+    parcels: {
+      shipped: num(p.shipped),
+      delivered,
+      returned,
+      cancelled: num(p.cancelled),
+      atDepot: num(p.at_depot),
+      onRoad: num(p.on_road),
+      deliveryRate: delivered + returned ? delivered / (delivered + returned) : null,
+      free: num(p.free),
+    },
+    money: {
+      collected: money.total.amount,
+      feesPaid: num(p.fees_paid),
+      diffPaid: num(p.diff_paid),
+      courierFees: money.total.fees + money.total.overweight,
+      returnFees: money.total.returnFees + money.total.returnOverweight,
+      cashed: money.total.cashed,
+      uncashed: money.total.uncashed,
+      netToReceive: money.total.netToReceive,
+      result: money.total.amount - (money.total.fees + money.total.overweight) - (money.total.returnFees + money.total.returnOverweight),
+    },
+    companies: money.companies.map((c) => ({ companyId: c.companyId, name: c.name, delivered: c.n, returns: c.returns, amount: c.amount, fees: c.fees + c.overweight + c.returnFees + c.returnOverweight })),
+  };
+}
+
 export const savProcs = {
   'sav.list': proc([...SAV_ROLES], ListInput, (ctx, f) => listTickets(ctx, f)),
   'sav.kpis': proc([...SAV_ROLES], z.object({}), (ctx) => savKpis(ctx)),
+  'sav.stats': proc([...SAV_ROLES, 'agent_manager', 'vendeur'], z.object({ from: dateStr, to: dateStr }), (ctx, i) => savStats(ctx, i.from, i.to)),
 
   'sav.get': proc([...SAV_ROLES], z.object({ id }), async (ctx, { id }) => {
     const t = await getTicket(ctx.db, id);
@@ -357,6 +434,8 @@ export const savProcs = {
       ticket: t,
       order,
       exchange,
+      /** SAV tariff for the customer's wilaya (pre-filled on the exchange, editable) */
+      suggestedFee: order ? (await savFee(ctx.db, order.wilayaId, order.isStopdesk)) ?? 0 : 0,
       parts: Object.fromEntries(parts.map((p: any) => [num(p.id), ((typeof p.parts === 'string' ? JSON.parse(p.parts) : p.parts) ?? []) as { name: string; max?: number }[]])),
     };
   }),

@@ -494,7 +494,7 @@ export function PreviewModal({ company, onClose }: { company: Company; onClose: 
   const [orderId, setOrderId] = useState<number | undefined>();
   const q = useRpc('delivery.preview', { companyId: company.id, orderId });
   const find = async () => {
-    const r = await rpc('orders.list', { q: ref.trim(), pageSize: 1 });
+    const r = await rpc('orders.list', { q: ref.trim(), pageSize: 1, tickets: 'include' });
     if (r.rows[0]) setOrderId(r.rows[0].id);
     else toast(t('livraison.preview.notFound'), 'bad');
   };

@@ -109,17 +109,19 @@ export async function computePayroll(db: Db, ym: string) {
   };
 
   const delivered = await db.query(
-    `SELECT o.id, o.agent_id, o.total, o.has_upsell, o.created_by, o.livreur_id, o.follow_agent_id,
+    `SELECT o.id, o.agent_id, o.total, o.has_upsell, o.created_by, o.livreur_id, o.follow_agent_id, o.is_exchange,
             (SELECT e.user_id FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'delivered' ORDER BY e.at DESC LIMIT 1) AS deliverer,
             (SELECT COALESCE(sum(i.qty * p.weight_kg), 0) FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = o.id) AS weight
      FROM orders o
      WHERE o.delivered_at >= $1 AND o.delivered_at < $2 AND o.follow_status IN ('delivered','exchanged')`,
     [from, to],
   );
+  // SAV ticket parcels are not sales: no commission for agents, managers or suivi (the depot and livreurs are still paid for the work)
+  const sales = delivered.filter((o: any) => !o.is_exchange);
 
   // agents
   const ag = new Map<number, { above: number; below: number; upsell: number; form: number }>();
-  for (const o of delivered) {
+  for (const o of sales) {
     const a = o.agent_id === null ? null : num(o.agent_id);
     if (a === null || !has(a, 'confirmation')) continue;
     const r = ag.get(a) ?? { above: 0, below: 0, upsell: 0, form: 0 };
@@ -147,7 +149,7 @@ export async function computePayroll(db: Db, ym: string) {
   for (const t of teams) {
     if (!t.managerId) continue;
     const set = new Set(t.agentIds);
-    const n = delivered.filter((o: any) => o.agent_id !== null && set.has(num(o.agent_id))).length;
+    const n = sales.filter((o: any) => o.agent_id !== null && set.has(num(o.agent_id))).length;
     const existing = managers.find((m) => m.id === t.managerId);
     if (existing) {
       existing.count += n;
@@ -163,7 +165,7 @@ export async function computePayroll(db: Db, ym: string) {
 
   // suivi
   const su = new Map<number, number>();
-  for (const o of delivered) {
+  for (const o of sales) {
     const who = o.follow_agent_id !== null ? num(o.follow_agent_id) : o.deliverer !== null ? num(o.deliverer) : null;
     if (who === null || !has(who, 'suivi')) continue;
     su.set(who, (su.get(who) ?? 0) + 1);
@@ -390,6 +392,7 @@ export const adminProcs = {
     return {
       grids: await getSetting(ctx.db, 'clientFees'),
       defaultGrid: await getSetting(ctx.db, 'defaultFeeGrid'),
+      savFees: await getSetting(ctx.db, 'savFees'),
       products: products.map((p: any) => ({ id: num(p.id), name: p.name as string, sku: p.sku as string, feeGrid: (p.fee_grid as string | null) ?? null, active: !!p.active, weightKg: Number(p.weight_kg) })),
     };
   }),
@@ -418,6 +421,14 @@ export const adminProcs = {
       return { ok: true };
     },
   ),
+  /** The SAV tickets' own delivery tariff (wilaya → { home, desk }). */
+  'admin.fees.saveSav': proc([], z.object({ rows: z.record(z.string().regex(/^\d{1,2}$/), FeeRow) }), async (ctx, i) => {
+    const full: Record<string, { home: number; desk: number }> = {};
+    for (const k of Object.keys(i.rows)) if (Number(k) < 1 || Number(k) > 69) throw bad('Wilaya invalide');
+    for (let w = 1; w <= 69; w++) if (i.rows[String(w)]) full[String(w)] = i.rows[String(w)];
+    await setSetting(ctx.db, 'savFees', full, me(ctx));
+    return { ok: true };
+  }),
   'admin.fees.deleteGrid': proc([], z.object({ name: GridName }), async (ctx, i) => {
     const grids = { ...(await getSetting(ctx.db, 'clientFees')) };
     if (!grids[i.name]) throw notFound('Prix introuvable');

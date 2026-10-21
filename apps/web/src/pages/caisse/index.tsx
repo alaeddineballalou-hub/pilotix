@@ -5,7 +5,7 @@ import { downloadCsv } from '../../lib/files';
 import { da, dateTime, n, wilayaName, when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { openOrder } from '../../lib/modals';
-import { Empty, ErrorBox, Help, Kpi, Kpis, Loading } from '../../ui/kit';
+import { Empty, ErrorBox, Help, Kpi, Kpis, Loading, TicketTag } from '../../ui/kit';
 import type { PageProps } from '../registry';
 import { LivreursCash } from './LivreursCash';
 
@@ -49,6 +49,7 @@ function Due() {
   if (q.isLoading) return <Loading />;
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   const groups = q.data?.groups ?? [];
+  const tk = q.data?.tickets;
   return (
     <div>
       <div className="card">
@@ -69,11 +70,33 @@ function Due() {
       {groups.map((g) => (
         <GroupCard key={g.key} g={g} />
       ))}
+      {/* SAV tickets: their money is a separate line, never mixed with orders */}
+      <div className="card px-tk-card">
+        <div className="card-head">
+          <h2>
+            {t('caisse.tickets.title')}
+            <Help text={t('caisse.tickets.help')} label={t('caisse.tickets.title')} />
+          </h2>
+          <b className="ltr">{da(tk?.total ?? 0)}</b>
+        </div>
+        {!tk?.groups.length ? (
+          <Empty>{t('caisse.tickets.empty')}</Empty>
+        ) : (
+          <Kpis>
+            {tk.groups.map((g) => (
+              <Kpi key={g.key} label={g.name} value={da(g.net)} sub={t('caisse.due.kpiSub', { count: g.count, amount: da(g.collected) })} onClick={() => document.getElementById(`cash-${g.key}`)?.scrollIntoView({ behavior: 'smooth' })} />
+            ))}
+          </Kpis>
+        )}
+      </div>
+      {tk?.groups.map((g) => (
+        <GroupCard key={g.key} g={g} ticket />
+      ))}
     </div>
   );
 }
 
-function GroupCard({ g }: { g: Group }) {
+function GroupCard({ g, ticket }: { g: Group; ticket?: boolean }) {
   const { t } = useTranslation();
   const [sel, setSel] = useState<Set<number>>(new Set());
   const [confirm, setConfirm] = useState(false);
@@ -88,7 +111,7 @@ function GroupCard({ g }: { g: Group }) {
   return (
     <div className="card" id={`cash-${g.key}`}>
       <div className="card-head">
-        <h2>{t('caisse.due.groupTitle', { name: g.name, count: g.count })}</h2>
+        <h2>{t(ticket ? 'caisse.tickets.groupTitle' : 'caisse.due.groupTitle', { name: g.name, count: g.count })}</h2>
         <div className="row">
           <b className="ltr">{chosen.length ? `${n(chosen.length)} · ${da(sum)}` : ''}</b>
           <button className="btn ok" disabled={!chosen.length} onClick={() => setConfirm(true)}>
@@ -143,7 +166,7 @@ function GroupCard({ g }: { g: Group }) {
                   />
                 </td>
                 <td data-l={t('caisse.col.order')} className="clickable" onClick={() => openOrder(o.id)}>
-                  <b className="ltr">{o.ref}</b>
+                  <b className="ltr">{o.ref}</b> <TicketTag savRef={o.savRef} />
                   {o.tracking && <small className="ltr">{o.tracking}</small>}
                 </td>
                 <td data-l={t('caisse.col.delivered')}>{when(o.deliveredAt)}</td>
@@ -214,7 +237,7 @@ function Done() {
                   <td colSpan={5} data-l="">
                     <div className="row" style={{ justifyContent: 'space-between' }}>
                       <span>
-                        <b>{h.name}</b> · {dateTime(h.at)} · {t('caisse.done.summary', { count: h.orders.length, amount: da(h.net) })}
+                        {h.tickets && <span className="px-ticket">{t('caisse.tickets.badge')}</span>} <b>{h.name}</b> · {dateTime(h.at)} · {t('caisse.done.summary', { count: h.orders.length, amount: da(h.net) })}
                         {h.fees > 0 && <span className="muted small"> ({t('caisse.done.fees', { amount: da(h.fees) })})</span>}
                       </span>
                       {ask === h.id ? (
@@ -239,7 +262,7 @@ function Done() {
                   <tr key={o.id} className="clickable" onClick={() => openOrder(o.id)}>
                     <td data-l={t('caisse.col.receivedAt')}>{when(h.at)}</td>
                     <td data-l={t('caisse.col.order')}>
-                      <b className="ltr">{o.ref}</b>
+                      <b className="ltr">{o.ref}</b> <TicketTag savRef={o.savRef} />
                       {o.tracking && <small className="ltr">{o.tracking}</small>}
                     </td>
                     <td data-l={t('caisse.col.company')}>{h.name}</td>
