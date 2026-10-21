@@ -1,35 +1,90 @@
-name: Build Pilotix (web, Android, iOS)
+name: Pilotix CI
 
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 jobs:
-  web:
-    name: Website (GitHub Pages)
+  server:
+    name: Server (build + database + end-to-end test)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: pilotix
+          POSTGRES_USER: pilotix
+          POSTGRES_PASSWORD: pilotix_ci
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U pilotix" --health-interval 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    env:
+      DATABASE_URL: postgres://pilotix:pilotix_ci@localhost:5432/pilotix
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-only-secret-0123456789abcdefghijklmnop
+      SEED_ADMIN_EMAIL: admin@pilotix.dz
+      SEED_ADMIN_PASSWORD: ci-admin-password-123
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm run build -w @pilotix/shared
+      - run: npm run build -w @pilotix/server
+      - run: npm run db:migrate
+      - run: npm run db:seed
+      - name: Start server
+        run: |
+          node apps/server/dist/main.js > server.log 2>&1 &
+          for i in $(seq 1 30); do curl -fs http://localhost:3000/api/health && break; sleep 1; done
+      - name: End-to-end test
+        run: bash scripts/smoke-test.sh
+      - if: failure()
+        run: cat server.log
+
+  web:
+    name: Web app (typecheck + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Build for GitHub Pages
+        run: npm run build -w @pilotix/web
+        env:
+          VITE_BASE: /pilotix/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/web/dist
+
+  pages:
+    name: Website (GitHub Pages)
+    if: github.ref == 'refs/heads/main'
+    needs: web
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-        continue-on-error: true
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: www
       - id: deploy
         uses: actions/deploy-pages@v4
-        continue-on-error: true
 
   android:
     name: Android APK
+    needs: web
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,36 +95,44 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - run: npm install
-      - run: npx cap add android
-      - run: npx cap sync android
+      - run: npm install --no-audit --no-fund
+      - run: npm run build -w @pilotix/web
+      - name: Create and sync Android project
+        working-directory: apps/web
+        run: |
+          [ -d android ] || npx cap add android
+          npx cap sync android
       - name: Build debug APK
-        working-directory: android
+        working-directory: apps/web/android
         run: ./gradlew assembleDebug
       - uses: actions/upload-artifact@v4
         with:
           name: pilotix-android-debug-apk
-          path: android/app/build/outputs/apk/debug/*.apk
+          path: apps/web/android/app/build/outputs/apk/debug/*.apk
 
   ios:
     name: iOS (simulator build)
+    needs: web
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
-      - run: npx cap add ios
-      - run: npx cap sync ios
+      - run: npm install --no-audit --no-fund
+      - run: npm run build -w @pilotix/web
+      - name: Create and sync iOS project
+        working-directory: apps/web
+        run: |
+          [ -d ios ] || npx cap add ios
+          npx cap sync ios
       - name: Build for iOS simulator (unsigned)
-        working-directory: ios/App
+        working-directory: apps/web/ios/App
         run: |
           if [ -d App.xcworkspace ]; then TARGET="-workspace App.xcworkspace"; else TARGET="-project App.xcodeproj"; fi
-          xcodebuild $TARGET -scheme App -configuration Debug -sdk iphonesimulator \
-            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+          xcodebuild $TARGET -scheme App -configuration Debug -sdk iphonesimulator -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
           cd build/Build/Products/Debug-iphonesimulator && zip -r ../../../../pilotix-ios-simulator.zip App.app
       - uses: actions/upload-artifact@v4
         with:
           name: pilotix-ios-simulator-app
-          path: ios/App/pilotix-ios-simulator.zip
+          path: apps/web/ios/App/pilotix-ios-simulator.zip

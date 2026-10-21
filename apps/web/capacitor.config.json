@@ -1,5 +1,6 @@
 {
   "appId": "com.pilotix.app",
   "appName": "Pilotix",
-  "webDir": "www"
+  "webDir": "dist",
+  "backgroundColor": "#1B2A47"
 }

@@ -1,20 +1,22 @@
 {
   "name": "pilotix",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "Pilotix — website, Android and iOS app (Capacitor)",
+  "description": "Pilotix — order management for cash-on-delivery e-commerce in Algeria (web, Android, iOS)",
+  "workspaces": [
+    "packages/shared",
+    "apps/server",
+    "apps/web"
+  ],
   "scripts": {
-    "serve": "npx serve www",
-    "sync": "npx cap sync",
-    "android": "npx cap open android",
-    "ios": "npx cap open ios"
+    "build": "npm run build -w @pilotix/shared && npm run build -w @pilotix/server && npm run build -w @pilotix/web",
+    "typecheck": "npm run build -w @pilotix/shared && npm run typecheck -w @pilotix/server && npm run typecheck -w @pilotix/web",
+    "dev:server": "npm run dev -w @pilotix/server",
+    "dev:web": "npm run dev -w @pilotix/web",
+    "db:migrate": "npm run migrate -w @pilotix/server",
+    "db:seed": "npm run seed -w @pilotix/server"
   },
-  "dependencies": {
-    "@capacitor/android": "^7.0.0",
-    "@capacitor/core": "^7.0.0",
-    "@capacitor/ios": "^7.0.0"
-  },
-  "devDependencies": {
-    "@capacitor/cli": "^7.0.0"
+  "engines": {
+    "node": ">=20"
   }
 }

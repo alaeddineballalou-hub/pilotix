@@ -1,0 +1,35 @@
+{
+  "app": { "tagline": "Order management" },
+  "nav": { "dashboard": "Dashboard", "orders": "Orders", "products": "Products", "team": "Team", "settings": "Settings", "logout": "Log out", "menu": "Menu" },
+  "login": {
+    "email": "Email", "password": "Password", "submit": "Log in", "server": "Server address",
+    "serverHint": "Given by your administrator", "error": "Wrong email or password", "noServer": "Server unreachable. Check the server address."
+  },
+  "net": { "offline": "Offline — your actions will be sent when the network is back", "syncing": "Syncing… {{count}} action(s)", "synced": "Everything is synced" },
+  "status": {
+    "new": "New", "confirmed": "Confirmed", "callback": "Call back", "no_answer": "No answer", "postponed": "Postponed",
+    "cancelled": "Cancelled", "duplicate": "Duplicate", "assigned": "Assigned", "shipped": "Shipped", "delivered": "Delivered",
+    "returning": "Returning", "returned": "Returned"
+  },
+  "orders": {
+    "title": "Orders", "search": "Phone, name, reference or tracking", "all": "All", "callbacksDue": "Overdue callbacks",
+    "count": "{{count}} order(s)", "empty": "No orders", "new": "New order", "reference": "Ref.", "customer": "Customer",
+    "phone": "Phone", "wilaya": "Wilaya", "commune": "Commune", "address": "Address", "total": "Total", "date": "Date",
+    "statusCol": "Status", "actions": "Actions", "call": "Call", "duplicate": "Possible duplicate", "history": "History",
+    "delivered": "{{count}} delivered", "returned": "{{count}} returned", "callbackAt": "Call back on", "note": "Note",
+    "setStatus": "Change status", "save": "Save", "cancel": "Cancel", "items": "Products", "quantity": "Qty",
+    "deliveryFee": "Delivery fee", "discount": "Discount", "addItem": "Add a product", "create": "Create order",
+    "livreur": "Livreur", "tracking": "Tracking no.", "attempts": "{{count}} attempt(s)", "queued": "Saved offline",
+    "close": "Close", "loadMore": "Load more"
+  },
+  "dashboard": {
+    "title": "Dashboard", "today": "Today", "created": "New", "confirmed": "Confirmed", "delivered": "Delivered",
+    "returned": "Returned", "confirmationRate": "Confirmation rate", "deliveryRate": "Delivery rate",
+    "revenue": "Delivered revenue (30 d)", "byStatus": "Orders by status (last 30 days)"
+  },
+  "products": { "title": "Products", "name": "Name", "sku": "SKU", "price": "Price", "cost": "Cost", "stock": "Stock", "variants": "Variants", "new": "New product", "lowStock": "Low stock" },
+  "team": { "title": "Team", "online": "Online", "idle": "Idle", "offline": "Offline", "roles": "Roles" },
+  "roles": { "admin": "Administrator", "manager": "Manager", "confirmation": "Confirmation", "agent": "Agent", "suivi": "Follow-up", "depot": "Depot", "livreur": "Livreur" },
+  "settings": { "title": "Settings", "language": "Language", "theme": "Theme", "light": "Light", "dark": "Dark", "system": "System", "server": "Server" },
+  "common": { "loading": "Loading…", "error": "Something went wrong", "retry": "Retry", "dzd": "{{value}} DZD" }
+}
