@@ -1,0 +1,13 @@
+/* Dashboard / Accueil (stats feature): the few things the original stylesheet does not cover. */
+.bji-silver { color: #9aa3ad; }
+.bji-bronze { color: #c47a2c; }
+.px-dperiod { margin: 0; min-width: 190px; }
+.px-dperiod select { width: 100%; }
+.bjt-team .tbl td.num small, .bjt .tbl td.num small { display: block; font-size: 11.5px; color: var(--muted); font-weight: 500; margin-top: 2px; }
+.bjt-pi { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.bjt-pi small { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.bjt-pi .bjt-ps { font-size: 12.5px; font-weight: 800; }
+.bjt-pt { font-weight: 700; color: var(--ink) !important; }
+.bjt-body { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
+.bjt .row.end, .card .row.end { justify-content: flex-end; margin-top: 12px; }
+@media (max-width: 760px) { .px-dperiod { min-width: 0; width: 100%; } }
