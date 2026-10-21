@@ -8,7 +8,7 @@ import { openOrder, openOrderForm } from '../lib/modals';
 import { useAction, useRpc } from '../lib/query';
 import { useSession } from '../lib/session';
 import { store } from '../lib/store';
-import { Field, Icon, TicketTag } from '../ui/kit';
+import { Field, Icon, StageBar, TicketTag } from '../ui/kit';
 import { Modal } from '../ui/modal';
 import { canSee, NAV } from './nav';
 
@@ -112,6 +112,7 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
 
   const items = NAV.filter((n) => !n.hidden && canSee(n, roles, isAdmin));
   const ordersPages = ['commandes', 'confirmation', 'depot', 'suivi', 'livrees', 'retournees'];
+  const grpItem = items.find((n) => n.children);
   const theme = store.get('theme') as Theme;
 
   return (
@@ -246,6 +247,16 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
           </Suspense>
         )}
         <main id="page" className="page">
+          {/* Folded sidebar: only the parent items stay in the menu; the Commandes stages move into a bar under the header. */}
+          {folded && grpItem && ordersPages.includes(page) && (
+            <div className="px-grp-bar">
+              <StageBar
+                flow={false}
+                current={page === 'commandes' ? (sub === 'livrees' || sub === 'annulees' ? sub : '') : page}
+                items={grpItem.children!.filter((c) => (c.id === 'confirmation' ? has('confirmation') : c.id === 'depot' ? has('depot') : c.id === 'suivi' ? has('suivi') : true)).map((c) => ({ key: c.id, label: t(`nav.sub.${c.id}`), href: c.href, count: c.count ? counts[c.count] : undefined }))}
+              />
+            </div>
+          )}
           {children}
         </main>
       </div>
