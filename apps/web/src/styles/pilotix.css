@@ -49,3 +49,39 @@ button.kpi.on { box-shadow: 0 0 0 2px var(--navy); }
 
 /* Sub-page tabs: the original listed them in the menu on desktop; here they stay visible at the top of the page. */
 @media (min-width: 901px) { .bjm-bar:not(.flow) { display: flex !important; } }
+
+/* ---- Sidebar: the logo folds / unfolds it; folded = icons only, the logo becomes the "p" icon ---- */
+.side::before { display: none !important; }
+.px-logo-btn { flex: none; display: flex; align-items: center; height: 46px; margin: 2px 4px 14px; padding: 0 8px; border: 0; border-radius: 12px; background: transparent; cursor: pointer; }
+.px-logo-btn:hover { background: var(--sky-soft); }
+.px-logo-btn:focus-visible { outline: 2px solid var(--px-orange, #F7A823); outline-offset: 2px; }
+.px-logo-full { display: block; width: 110px; height: 34px; background: var(--px-logo) no-repeat left center / auto 34px; }
+.px-logo-icon { display: none; width: 36px; height: 36px; border-radius: 10px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 1000'%3E%3Crect x='0' y='0' width='1000' height='1000' rx='224' fill='%231B2A47'/%3E%3Cg transform='translate%28215%2C720%29 scale%280.80%29'%3E%3Cpath d='M405 566Q474 566 530.0 531.0Q586 496 618.5 431.0Q651 366 651 280Q651 194 618.5 128.5Q586 63 530.0 27.5Q474 -8 405 -8Q347 -8 302.5 16.0Q258 40 233 78V-266H62V558H233V479Q258 518 302.0 542.0Q346 566 405 566ZM354 417Q303 417 267.5 380.0Q232 343 232 279Q232 215 267.5 178.0Q303 141 354 141Q405 141 441.0 178.5Q477 216 477 280Q477 344 441.5 380.5Q406 417 354 417Z' transform='scale%281%2C-1%29' fill='%23FFFFFF' stroke='%23FFFFFF' stroke-width='30' stroke-linejoin='round'/%3E%3C/g%3E%3Ccircle cx='790' cy='215' r='88' fill='%23F7A823'/%3E%3C/svg%3E") no-repeat center / contain; }
+[dir="rtl"] .px-logo-full { background-position: right center; }
+.nav-item .px-sub-ic { display: none; }
+.side .nav-item { position: relative; }
+.shell { transition: grid-template-columns .2s ease; }
+
+@media (min-width: 901px) {
+  .shell.px-folded { --side: 76px; }
+  .px-folded .side { padding-left: 8px; padding-right: 8px; overflow-x: hidden; }
+  .px-folded .px-logo-btn { justify-content: center; padding: 0; margin-inline: 0; }
+  .px-folded .px-logo-full { display: none; }
+  .px-folded .px-logo-icon { display: block; }
+  .px-folded .nav-item { justify-content: center; padding-left: 0; padding-right: 0; padding-top: 12px; padding-bottom: 8px; gap: 0; }
+  .px-folded .nav-item .bji.ic, .px-folded .nav-item .bji.px-sub-ic { position: relative; z-index: 0; }
+  .px-folded .nav-item .nav-l { display: none; }
+  .px-folded .nav-item .ic, .px-folded .nav-item .px-sub-ic { display: inline-flex; width: 20px; height: 20px; margin: 0; }
+  .px-folded .nav-sub { padding: 0 !important; margin: 0 !important; border: 0 !important; gap: 2px; }
+  .px-folded .nav-sub-item { padding-top: 9px; padding-bottom: 9px; }
+  /* counts become a small badge on the icon */
+  .px-folded .nav-item .nav-count { position: absolute; top: 0; right: auto; left: calc(50% + 3px); margin: 0; min-width: 18px; height: 17px; padding: 0 4px; font-size: 10px; box-shadow: 0 0 0 2px var(--surface); }
+  [dir="rtl"] .px-folded .nav-item .nav-count { left: auto; right: calc(50% + 3px); }
+  .px-folded .me { padding: 10px 0; text-align: center; }
+  .px-folded .me-name { font-size: 0; }
+  .px-folded .me-name::first-letter { font-size: 15px; }
+  .px-folded .me-roles, .px-folded .me-actions .linkish:first-child { display: none; }
+  .px-folded .me-actions { justify-content: center; }
+  .px-folded .me-actions .linkish { font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) { .shell { transition: none; } }

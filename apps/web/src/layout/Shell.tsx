@@ -39,8 +39,34 @@ export function useMenuCounts() {
       cancelled: sum(c.conf, CONF_DONE_BAD) + (c.follow.returned ?? 0),
       sav: c.sav,
       uncashed: c.uncashed,
+      late: c.lateCalls,
+      toShip: c.follow.prepared ?? 0,
+      onRoad: sum(c.follow, ['shipped', 'out_for_delivery', 'failed']),
+      lowStock: (c as { lowStock?: number }).lowStock ?? 0,
     } as Record<string, number>;
   }, [q.data]);
+}
+
+/** Icons for the Commandes stages (shown when the sidebar is folded). */
+const SUB_ICON: Record<string, string> = { confirmation: 'phone', depot: 'package', suivi: 'route', livrees: 'checkcircle', annulees: 'xcircle' };
+/** Live count shown on each menu item: [count key, colour]. */
+const ITEM_COUNT: Record<string, [string, string]> = {
+  accueil: ['new', 'nc-n'],
+  dashboard: ['late', 'nc-a'],
+  scanner: ['toShip', 'nc-n'],
+  sav: ['sav', 'nc-a'],
+  tournee: ['onRoad', 'nc-n'],
+  produits: ['lowStock', 'nc-a'],
+  caisse: ['uncashed', 'nc-c'],
+  livraison: ['toShip', 'nc-n'],
+};
+
+function Count({ v, tone }: { v: number; tone: string }) {
+  return (
+    <span className={`nav-count ${tone} ${v === 0 ? 'zero' : ''}`} title={String(v)}>
+      {compact(v)}
+    </span>
+  );
 }
 
 export function Shell({ page, sub, children }: { page: string; sub?: string; children: ReactNode }) {
@@ -49,6 +75,15 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
   const [navOpen, setNavOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
   const counts = useMenuCounts();
+  const [folded, setFolded] = useState(() => store.get('sidebar') === 'folded');
+  const toggleFold = () => {
+    // On a phone the logo just closes the menu; on a computer it folds / unfolds the sidebar.
+    if (window.matchMedia('(max-width: 900px)').matches) return setNavOpen(false);
+    setFolded((f) => {
+      store.set('sidebar', f ? null : 'folded');
+      return !f;
+    });
+  };
   const roles = session!.roles;
   const isAdmin = session!.isAdmin;
 
@@ -78,14 +113,26 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
   const theme = store.get('theme') as Theme;
 
   return (
-    <div className="shell">
+    <div className={`shell ${folded ? 'px-folded' : ''}`}>
       <nav className="side" id="side" aria-label={t('nav.menu')}>
+        <button
+          type="button"
+          className="px-logo-btn"
+          onClick={toggleFold}
+          aria-expanded={!folded}
+          aria-controls="side"
+          title={folded ? t('shell.unfold') : t('shell.fold')}
+          aria-label={folded ? t('shell.unfold') : t('shell.fold')}
+        >
+          <span className="px-logo-full" aria-hidden="true" />
+          <span className="px-logo-icon" aria-hidden="true" />
+        </button>
         {items.map((n) =>
           n.children ? (
             <div key={n.id} className={`nav-group open bjcn ${ordersPages.includes(page) ? 'bjcn-on in' : ''}`} data-grp={n.id}>
-              <a href="#/commandes" className="nav-item nav-group-head" aria-current={page === 'commandes' && (!sub || sub === 'tout') ? 'page' : undefined} style={page === 'commandes' && (!sub || sub === 'tout') ? { color: 'var(--navy)', fontWeight: 800 } : undefined}>
+              <a href="#/commandes" className="nav-item nav-group-head" title={t(`nav.${n.id}`)} aria-current={page === 'commandes' && (!sub || sub === 'tout') ? 'page' : undefined} style={page === 'commandes' && (!sub || sub === 'tout') ? { color: 'var(--navy)', fontWeight: 800 } : undefined}>
                 <Icon name={n.icon} className="ic" />
-                <span>{t(`nav.${n.id}`)}</span>
+                <span className="nav-l">{t(`nav.${n.id}`)}</span>
               </a>
               <div className="nav-sub" style={{ display: 'flex' }}>
                 {n.children
@@ -94,23 +141,20 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
                     const on = c.id === page || (page === 'commandes' && sub === c.id);
                     const v = c.count ? counts[c.count] : undefined;
                     return (
-                      <a key={c.id} href={c.href} className={`nav-item nav-sub-item ${on ? 'on' : ''}`} aria-current={on ? 'page' : undefined}>
-                        <span>{t(`nav.sub.${c.id}`)}</span>
-                        {v !== undefined && (
-                          <span className={`nav-count ${v === 0 ? 'zero' : ''}`} title={`${v}`}>
-                            {compact(v)}
-                          </span>
-                        )}
+                      <a key={c.id} href={c.href} className={`nav-item nav-sub-item ${on ? 'on' : ''}`} aria-current={on ? 'page' : undefined} title={`${t(`nav.sub.${c.id}`)}${v !== undefined ? ` · ${v}` : ''}`}>
+                        <Icon name={SUB_ICON[c.id] ?? 'list'} className="ic px-sub-ic" />
+                        <span className="nav-l">{t(`nav.sub.${c.id}`)}</span>
+                        {v !== undefined && <Count v={v} tone={c.id === 'confirmation' ? 'nc-n' : c.id === 'annulees' ? '' : c.id === 'livrees' ? 'nc-c' : 'nc-a'} />}
                       </a>
                     );
                   })}
               </div>
             </div>
           ) : (
-            <a key={n.id} href={`#/${n.id}`} className={`nav-item ${page === n.id ? 'on' : ''}`} data-page={n.id} aria-current={page === n.id ? 'page' : undefined}>
+            <a key={n.id} href={`#/${n.id}`} className={`nav-item ${page === n.id ? 'on' : ''}`} data-page={n.id} aria-current={page === n.id ? 'page' : undefined} title={`${t(`nav.${n.id}`)}${ITEM_COUNT[n.id] && counts[ITEM_COUNT[n.id][0]] !== undefined ? ` · ${counts[ITEM_COUNT[n.id][0]]}` : ''}`}>
               <Icon name={n.icon} className="ic" />
-              <span>{t(`nav.${n.id}`)}</span>
-              {n.id === 'sav' && counts.sav > 0 && <span className="nav-count nc-a">{compact(counts.sav)}</span>}
+              <span className="nav-l">{t(`nav.${n.id}`)}</span>
+              {ITEM_COUNT[n.id] && counts[ITEM_COUNT[n.id][0]] !== undefined && <Count v={counts[ITEM_COUNT[n.id][0]]} tone={ITEM_COUNT[n.id][1]} />}
             </a>
           ),
         )}

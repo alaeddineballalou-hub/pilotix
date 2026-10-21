@@ -13,5 +13,7 @@
   "currentPassword": "كلمة المرور الحالية",
   "newPassword": "كلمة المرور الجديدة",
   "passwordHint": "8 أحرف على الأقل",
-  "passwordChanged": "تم تغيير كلمة المرور"
+  "passwordChanged": "تم تغيير كلمة المرور",
+  "fold": "طيّ القائمة",
+  "unfold": "توسيع القائمة"
 }
