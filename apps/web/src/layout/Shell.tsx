@@ -200,9 +200,15 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
           </span>
           {has('confirmation', 'suivi', 'depot') && <GlobalSearch />}
           {has('confirmation', 'suivi', 'depot') && (
-            <button type="button" className="btn primary pxs-new" title={t('orders.new')} onClick={() => openOrderForm()}>
-              +<span className="pxs-t"> {t('orders.new')}</span>
-            </button>
+            page === 'sav' ? (
+              <button type="button" className="btn primary pxs-new" title={t('sav.new').replace(/^\+\s*/, '')} onClick={() => (location.hash = '#/sav/nouveau')}>
+                +<span className="pxs-t"> {t('sav.new').replace(/^\+\s*/, '')}</span>
+              </button>
+            ) : (
+              <button type="button" className="btn primary pxs-new" title={t('orders.new')} onClick={() => openOrderForm()}>
+                +<span className="pxs-t"> {t('orders.new')}</span>
+              </button>
+            )
           )}
           <select
             className="icon-btn"
