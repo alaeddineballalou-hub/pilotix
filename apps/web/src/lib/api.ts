@@ -69,7 +69,7 @@ export interface OrderQuery {
   sort?: string;
 }
 
-export const api = {
+const real = {
   login: (email: string, password: string) => request<{ token: string; user: User }>('POST', '/auth/login', { email, password }),
   me: () => request<User>('GET', '/auth/me'),
   setMyLanguage: (language: string) => request<User>('PATCH', '/users/me', { language }),
@@ -84,3 +84,27 @@ export const api = {
   users: () => request<(User & { lastSeenAt: string | null })[]>('GET', '/users'),
   dashboard: () => request<DashboardStats>('GET', '/dashboard'),
 };
+
+// ---------------------------------------------------------------- demo mode (sample data, no server)
+type DemoModule = typeof import('./demo');
+let demo: DemoModule | null = null;
+export const demoAvailable = import.meta.env.VITE_DEMO === '1';
+export const isDemo = () => demo !== null;
+
+/** Switches the app to sample data and logs in as the demo user with that id. */
+export async function enterDemo(userId: number) {
+  demo = await import('./demo');
+  store.set('demo', String(userId));
+  return demo.demoLogin(userId);
+}
+export function exitDemo() {
+  demo = null;
+  store.set('demo', null);
+}
+export const savedDemoUser = () => (demoAvailable ? Number(store.get('demo')) || null : null);
+export const demoPresence = () => demo?.demoPresence ?? {};
+
+type Api = typeof real;
+export const api = Object.fromEntries(
+  Object.keys(real).map((k) => [k, (...args: unknown[]) => ((demo ? demo.demoApi : real) as any)[k](...args)]),
+) as Api;

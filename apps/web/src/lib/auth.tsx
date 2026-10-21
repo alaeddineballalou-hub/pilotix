@@ -1,7 +1,7 @@
 import type { Language, Role, User } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
-import { api, getToken, setOnUnauthorized, setToken } from './api';
+import { api, enterDemo, exitDemo, getToken, isDemo, savedDemoUser, setOnUnauthorized, setToken } from './api';
 import { applyLanguage } from './i18n';
 import { connectLive, disconnectLive } from './live';
 import { store } from './store';
@@ -10,6 +10,7 @@ interface AuthState {
   user: User | null;
   ready: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginDemo: (userId: number) => Promise<void>;
   logout: () => void;
   setLanguage: (l: Language) => void;
   can: (...roles: Role[]) => boolean;
@@ -30,6 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   const logout = useCallback(() => {
+    if (isDemo()) exitDemo();
     setToken(null);
     store.set('user', null);
     setUser(null);
@@ -39,6 +41,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setOnUnauthorized(logout);
+    const demoUser = savedDemoUser();
+    if (demoUser) {
+      enterDemo(demoUser)
+        .then(({ user: u }) => setUser(u))
+        .finally(() => setReady(true));
+      return;
+    }
     const token = getToken();
     if (!token) {
       setReady(true);
@@ -66,17 +75,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     connectLive(token, qc);
   };
 
+  const loginDemo = async (userId: number) => {
+    const { user: u } = await enterDemo(userId);
+    setUser(u);
+  };
+
   const setLanguage = (l: Language) => {
     applyLanguage(l);
     if (user) {
       const u = { ...user, language: l };
       setUser(u);
-      store.set('user', JSON.stringify(u));
+      if (!isDemo()) store.set('user', JSON.stringify(u));
       api.setMyLanguage(l).catch(() => {});
     }
   };
 
   const can = (...roles: Role[]) => !!user && (user.roles.includes('admin') || roles.some((r) => user.roles.includes(r)));
 
-  return <Ctx.Provider value={{ user, ready, login, logout, setLanguage, can }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, ready, login, loginDemo, logout, setLanguage, can }}>{children}</Ctx.Provider>;
 }

@@ -2,14 +2,15 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ErrorBox, Loading } from '../components/ui';
-import { api } from '../lib/api';
+import { api, demoPresence, isDemo } from '../lib/api';
 import { onPresence, Presence } from '../lib/live';
 
 export function Team() {
   const { t } = useTranslation();
   const users = useQuery({ queryKey: ['users'], queryFn: api.users });
-  const [presence, setPresence] = useState<Presence>({});
+  const [presence, setPresence] = useState<Presence>(() => (isDemo() ? demoPresence() : {}));
   useEffect(() => {
+    if (isDemo()) return;
     const off = onPresence(setPresence);
     return () => {
       off();

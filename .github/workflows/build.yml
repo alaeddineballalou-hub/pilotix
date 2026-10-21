@@ -63,9 +63,37 @@ jobs:
         run: npm run build -w @pilotix/web
         env:
           VITE_BASE: /pilotix/
+          VITE_DEMO: '1'
       - uses: actions/upload-pages-artifact@v3
         with:
           path: apps/web/dist
+
+  artifact:
+    name: Demo preview (single page for Claude)
+    if: github.ref == 'refs/heads/main'
+    needs: web
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm run build:artifact -w @pilotix/web
+        env:
+          VITE_DEMO: '1'
+      - name: Publish to the artifact-build branch
+        run: |
+          mkdir -p /tmp/out && cp apps/web/dist-artifact/index.html /tmp/out/pilotix-demo.html
+          cd /tmp/out
+          git init -q -b artifact-build
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pilotix-demo.html
+          git commit -qm "Demo preview from ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" artifact-build
 
   pages:
     name: Website (GitHub Pages)
