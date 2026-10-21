@@ -227,3 +227,7 @@ button.kpi.on { box-shadow: 0 0 0 2px var(--navy); }
   .topbar { border-bottom: 0 !important; }
 }
 @media (max-width: 900px) { .px-side-head { margin-bottom: 6px !important; } }
+
+/* The logo is the only fold control: no separate arrow. */
+.px-fold-arrow { display: none !important; }
+@media (min-width: 901px) { .px-side-head .px-logo-btn { cursor: pointer; } }
