@@ -1,0 +1,31 @@
+{
+  "title": "Customers",
+  "search": "Name or phone…",
+  "onlyBlack": "Blacklist only",
+  "black": "BLACKLIST",
+  "empty": "No customer found.",
+  "col": {
+    "client": "Customer",
+    "phone": "Phone",
+    "wilaya": "Wilaya",
+    "orders": "Orders",
+    "delivered": "Delivered",
+    "returned": "Returns",
+    "last": "Last",
+    "order": "Order",
+    "products": "Products",
+    "total": "Total",
+    "conf": "Confirmation",
+    "follow": "Delivery"
+  },
+  "inBlack": "Blacklisted",
+  "inBlackReason": "Blacklisted: {{reason}}",
+  "summary": "{{orders}} order(s) · {{delivered}} delivered · {{returned}} return(s) · {{cancelled}} cancelled",
+  "noOrders": "No orders.",
+  "toBlack": "Add to blacklist",
+  "confirmBlack": "Confirm blacklist",
+  "unblack": "Remove from blacklist",
+  "reason": "Reason (optional)",
+  "reasonPh": "e.g. refuses parcels",
+  "updated": "Blacklist updated"
+}

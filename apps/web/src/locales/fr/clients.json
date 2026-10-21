@@ -1,0 +1,31 @@
+{
+  "title": "Clients",
+  "search": "Nom ou téléphone…",
+  "onlyBlack": "Liste noire seulement",
+  "black": "LISTE NOIRE",
+  "empty": "Aucun client trouvé.",
+  "col": {
+    "client": "Client",
+    "phone": "Téléphone",
+    "wilaya": "Wilaya",
+    "orders": "Commandes",
+    "delivered": "Livrées",
+    "returned": "Retours",
+    "last": "Dernière",
+    "order": "Commande",
+    "products": "Produits",
+    "total": "Total",
+    "conf": "Confirmation",
+    "follow": "Livraison"
+  },
+  "inBlack": "En liste noire",
+  "inBlackReason": "En liste noire : {{reason}}",
+  "summary": "{{orders}} commande(s) · {{delivered}} livrée(s) · {{returned}} retour(s) · {{cancelled}} annulée(s)",
+  "noOrders": "Aucune commande.",
+  "toBlack": "Mettre en liste noire",
+  "confirmBlack": "Confirmer la liste noire",
+  "unblack": "Retirer de la liste noire",
+  "reason": "Raison (optionnel)",
+  "reasonPh": "ex. refuse les colis",
+  "updated": "Liste noire mise à jour"
+}

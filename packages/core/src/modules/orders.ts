@@ -141,6 +141,8 @@ export const ListInput = z.object({
   cashed: z.boolean().optional(),
   isExchange: z.boolean().optional(),
   subStatus: z.string().max(40).optional(),
+  /** only these orders (selection export / print) */
+  ids: z.array(id).max(3000).optional(),
   dateField: z.enum(['created_at', 'confirmed_at', 'shipped_at', 'delivered_at', 'returned_at', 'updated_at']).default('created_at'),
   from: dateStr.optional(),
   to: dateStr.optional(),
@@ -174,6 +176,7 @@ export async function listOrders(ctx: Ctx, f: ListInput): Promise<Page<Order>> {
   if (f.cashed !== undefined) w.add('o.cashed = ?', f.cashed);
   if (f.isExchange !== undefined) w.add('o.is_exchange = ?', f.isExchange);
   if (f.subStatus) w.add('o.sub_status = ?', f.subStatus);
+  if (f.ids?.length) w.add('o.id = ANY(?)', f.ids);
   if (f.from) w.add(`o.${f.dateField} >= ?`, f.from);
   if (f.to) w.add(`o.${f.dateField} < ?`, f.to);
   if (f.q?.trim()) {
@@ -227,7 +230,7 @@ export const OrderInput = z.object({
 export type OrderInput = z.infer<typeof OrderInput>;
 
 /** Prices the items from the catalog; returns lines, subtotal and the maximum allowed discount. */
-async function priceItems(db: Db, items: z.infer<typeof ItemInput>[]) {
+async function priceItems(db: Db, items: z.infer<typeof ItemInput>[], freePrice = false) {
   const pids = [...new Set(items.map((i) => i.productId))];
   const prods = await db.query('SELECT id, name, price, cost, fixed_price, max_discount, active, fee_grid, weight_kg FROM products WHERE id = ANY($1)', [pids]);
   const vids = items.map((i) => i.variantId).filter((v): v is number => !!v);
@@ -244,7 +247,8 @@ async function priceItems(db: Db, items: z.infer<typeof ItemInput>[]) {
     const v: any = i.variantId ? V.get(i.variantId) : null;
     if (i.variantId && (!v || num(v.product_id) !== i.productId)) throw bad(`Variante inconnue pour ${p.name}`);
     const listPrice = v?.price ?? p.price;
-    const unit = p.fixed_price || i.unitPrice === undefined ? listPrice : i.unitPrice;
+    // An exchange may be priced freely (often 0: the customer only pays the delivery).
+    const unit = i.unitPrice === undefined || (p.fixed_price && !freePrice) ? listPrice : i.unitPrice;
     if (p.max_discount === null) unlimited = true;
     else maxDiscount += num(p.max_discount) * i.qty;
     weight += Number(p.weight_kg) * i.qty;
@@ -279,7 +283,7 @@ export async function createOrder(ctx: Ctx, input: OrderInput, db: Db = ctx.db):
   const me = ctx.session.profile.id;
 
   const order = await db.tx(async (tx) => {
-    const priced = await priceItems(tx, input.items);
+    const priced = await priceItems(tx, input.items, input.isExchange);
     if (input.discount > priced.maxDiscount) throw bad(`Remise trop élevée (maximum ${priced.maxDiscount} DA)`);
     const fee = input.deliveryFee ?? (await deliveryFeeFor(tx, input.wilayaId, input.isStopdesk, priced.grid, priced.weight));
     const total = priced.subtotal - input.discount + fee;
@@ -334,7 +338,7 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
     let subtotal = num(cur.subtotal);
     let maxDiscount = Infinity;
     if (input.items) {
-      const priced = await priceItems(tx, input.items);
+      const priced = await priceItems(tx, input.items, !!cur.is_exchange);
       await tx.query('DELETE FROM order_items WHERE order_id = $1', [input.id]);
       await insertItems(tx, input.id, priced.lines);
       subtotal = priced.subtotal;
@@ -505,8 +509,207 @@ export async function orderCounts(ctx: Ctx) {
   return { conf: toObj(conf), follow: toObj(follow), sub: toObj(subs), lateCalls, sav, uncashed, all: num((await ctx.db.query('SELECT count(*)::int n FROM orders'))[0]?.n) };
 }
 
+// ---------------------------------------------------------------- order form, fees and the delivered report
+/** Courier cost of one delivered / returned parcel: the company's price for the wilaya (home or desk) + overweight. */
+interface CompanyRule {
+  home: number | null;
+  desk: number | null;
+  ret: number | null;
+  freeKg: number;
+  perKg: number;
+  onReturn: boolean;
+}
+async function companyRules(db: Db): Promise<{ fees: Map<string, CompanyRule>; over: Map<number, { freeKg: number; perKg: number; onReturn: boolean }> }> {
+  const comps = await db.query('SELECT id, config FROM delivery_companies');
+  const over = new Map<number, { freeKg: number; perKg: number; onReturn: boolean }>();
+  for (const c of comps) {
+    const cfg = typeof c.config === 'string' ? JSON.parse(c.config) : c.config ?? {};
+    const w = cfg.overweight ?? cfg.weight ?? {};
+    over.set(num(c.id), { freeKg: Number(w.freeKg ?? w.free_kg ?? 0) || 0, perKg: Number(w.perKg ?? w.per_kg ?? 0) || 0, onReturn: w.onReturn !== false && w.on_return !== false });
+  }
+  const fees = new Map<string, CompanyRule>();
+  for (const f of await db.query('SELECT company_id, wilaya_id, home, desk, return_fee FROM delivery_fees')) {
+    const o = over.get(num(f.company_id)) ?? { freeKg: 0, perKg: 0, onReturn: true };
+    fees.set(`${num(f.company_id)}:${num(f.wilaya_id)}`, { home: num(f.home), desk: num(f.desk), ret: num(f.return_fee), ...o });
+  }
+  return { fees, over };
+}
+function parcelFees(o: any, R: Awaited<ReturnType<typeof companyRules>>) {
+  if (!o.company_id) return { liv: 0, ret: 0, extra: 0, extraRet: 0, kg: Number(o.kg) || 0, fromTariff: false };
+  const f = R.fees.get(`${num(o.company_id)}:${num(o.wilaya_id)}`);
+  const rule = R.over.get(num(o.company_id)) ?? { freeKg: 0, perKg: 0, onReturn: true };
+  const base = f ? (o.is_stopdesk ? f.desk : f.home) : null;
+  const liv = base ?? (num(o.delivery_cost) || num(o.delivery_fee));
+  const kg = Number(o.kg) || 0;
+  const over = rule.perKg > 0 && kg > rule.freeKg ? Math.ceil(kg - rule.freeKg - 1e-9) : 0;
+  const extra = over * rule.perKg;
+  return { liv, ret: f?.ret ?? 0, extra, extraRet: rule.onReturn ? extra : 0, kg, fromTariff: base !== null };
+}
+const FEE_COLS = `o.id, o.ref, o.total, o.delivery_fee, o.delivery_cost, o.company_id, o.wilaya_id, o.is_stopdesk, o.cashed, co.name AS company, co.kind AS company_kind,
+  (SELECT coalesce(sum(p.weight_kg * i.qty), 0) FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = o.id) AS kg`;
+
+function orderExtraProcs() {
+  return {
+    /** Everything the order form needs: products (variants, stock, packs, linked), companies, stop desks, settings. */
+    'orders.formData': proc(['confirmation', 'suivi', 'depot'], z.object({}), async (ctx) => {
+      const prods = await ctx.db.query('SELECT id, name, sku, price, fixed_price, max_discount, packs, linked, active, is_service, fee_grid, weight_kg FROM products ORDER BY name');
+      const vars = await ctx.db.query(
+        `SELECT v.id, v.product_id, v.title, v.sku, v.price, v.active,
+           coalesce((SELECT sum(s.qty) FROM stock s WHERE s.variant_id = v.id), 0) AS qty,
+           coalesce((SELECT sum(i.qty) FROM order_items i JOIN orders o ON o.id = i.order_id
+                     WHERE i.variant_id = v.id AND o.conf_status IN ('confirmed','no_stock') AND o.follow_status IN ('to_prepare','prepared')), 0) AS reserved
+         FROM product_variants v ORDER BY v.product_id, v.id`,
+      );
+      const byP = new Map<number, any[]>();
+      for (const v of vars) {
+        const pid = num(v.product_id);
+        if (!byP.has(pid)) byP.set(pid, []);
+        byP.get(pid)!.push({ id: num(v.id), title: v.title, sku: v.sku, price: numOrNull(v.price), active: v.active, stock: num(v.qty) - num(v.reserved) });
+      }
+      const parse = (x: any) => (typeof x === 'string' ? JSON.parse(x) : x ?? []);
+      const products = prods.map((p: any) => ({
+        id: num(p.id), name: p.name, sku: p.sku, price: num(p.price), fixedPrice: !!p.fixed_price, maxDiscount: numOrNull(p.max_discount),
+        packs: parse(p.packs).map((k: any) => ({ qty: num(k.qty), price: num(k.price) })) as { qty: number; price: number }[], linked: ((p.linked ?? []) as unknown[]).map(num), active: !!p.active, isService: !!p.is_service,
+        variants: (byP.get(num(p.id)) ?? []) as { id: number; title: string; sku: string; price: number | null; active: boolean; stock: number }[],
+      }));
+      const companies = (await ctx.db.query('SELECT id, name, kind, active FROM delivery_companies ORDER BY name')).map((c: any) => ({ id: num(c.id), name: c.name, kind: c.kind, active: !!c.active }));
+      const stopdesks = (await ctx.db.query('SELECT id, company_id, wilaya_id, commune, name, address FROM stopdesks ORDER BY name')).map((d: any) => ({
+        id: num(d.id), companyId: num(d.company_id), wilayaId: num(d.wilaya_id), commune: d.commune, name: d.name, address: d.address,
+      }));
+      const shop = await getSetting(ctx.db, 'shop');
+      return { products, companies, stopdesks, defaultCompanyId: shop.defaultCompanyId ?? null };
+    }),
+
+    /** Small lists used by the order screens: delivery companies (with kind) and the shop name / WhatsApp template. */
+    'orders.lookups': proc(null, z.object({}), async (ctx) => {
+      const companies = (await ctx.db.query('SELECT id, name, kind, active FROM delivery_companies ORDER BY name')).map((c: any) => ({ id: num(c.id), name: c.name as string, kind: c.kind as string, active: !!c.active }));
+      const shop = await getSetting(ctx.db, 'shop');
+      return { companies, shopName: shop.name, whatsappTemplate: shop.whatsappTemplate, defaultCompanyId: shop.defaultCompanyId ?? null };
+    }),
+
+    /**
+     * Delivery price the customer pays (client price grid of the products, the highest one, + weight above the limit),
+     * whether the company serves the wilaya, and the maximum discount for these products.
+     */
+    'orders.quote': proc(
+      ['confirmation', 'suivi', 'depot'],
+      z.object({ wilayaId: z.number().int().min(1).max(69).nullable(), isStopdesk: z.boolean().default(false), companyId: id.nullable().optional(), items: z.array(z.object({ productId: id, qty: z.number().int().min(1).max(999) })).max(50).default([]) }),
+      async (ctx, i) => {
+        const pids = [...new Set(i.items.map((x) => x.productId))];
+        const prods = pids.length ? await ctx.db.query('SELECT id, fee_grid, weight_kg, max_discount FROM products WHERE id = ANY($1)', [pids]) : [];
+        const P = new Map(prods.map((p: any) => [num(p.id), p]));
+        let weight = 0;
+        let maxDiscount = 0;
+        let unlimited = false;
+        for (const it of i.items) {
+          const p: any = P.get(it.productId);
+          if (!p) continue;
+          weight += Number(p.weight_kg) * it.qty;
+          if (p.max_discount === null) unlimited = true;
+          else maxDiscount += num(p.max_discount) * it.qty;
+        }
+        let fee: number | null = null;
+        let grid: string | null = null;
+        if (i.wilayaId) {
+          const grids = [...new Set([...P.values()].map((p: any) => p.fee_grid as string | null))];
+          if (!grids.length) grids.push(null);
+          for (const g of grids) {
+            const f = await clientFee(ctx.db, i.wilayaId, i.isStopdesk, g);
+            if (f !== null && (fee === null || f > fee)) {
+              fee = f;
+              grid = g ?? (await getSetting(ctx.db, 'defaultFeeGrid'));
+            }
+          }
+          if (fee !== null) {
+            const wf = await getSetting(ctx.db, 'weightFees');
+            if (weight > wf.fromKg) fee += Math.ceil(weight - wf.fromKg) * wf.perKg;
+          }
+        }
+        let served = true;
+        const companyId = i.companyId ?? (await getSetting(ctx.db, 'shop')).defaultCompanyId ?? null;
+        let companyName: string | null = null;
+        if (companyId && i.wilayaId) {
+          const co = (await ctx.db.query('SELECT name, kind FROM delivery_companies WHERE id = $1', [companyId]))[0];
+          companyName = co?.name ?? null;
+          if (co && co.kind !== 'own' && co.kind !== 'manual') {
+            const any = num((await ctx.db.query('SELECT count(*)::int AS n FROM delivery_fees WHERE company_id = $1', [companyId]))[0]?.n);
+            const f = (await ctx.db.query('SELECT home, desk FROM delivery_fees WHERE company_id = $1 AND wilaya_id = $2', [companyId, i.wilayaId]))[0];
+            if (any > 0) served = !!f && (i.isStopdesk ? num(f.desk) > 0 : num(f.home) > 0);
+          }
+        }
+        return { fee, grid, weight: Math.round(weight * 10) / 10, maxDiscount: unlimited ? null : maxDiscount, served, companyId, companyName };
+      },
+    ),
+
+    /** What the courier charges for these parcels (column "Frais société"). */
+    'orders.companyFees': proc(['confirmation', 'suivi', 'depot'], z.object({ ids: z.array(id).max(500) }), async (ctx, { ids }) => {
+      if (!ids.length) return {} as Record<string, { fee: number; extra: number; kg: number; fromTariff: boolean }>;
+      const R = await companyRules(ctx.db);
+      const rows = await ctx.db.query(`SELECT ${FEE_COLS} FROM orders o LEFT JOIN delivery_companies co ON co.id = o.company_id WHERE o.id = ANY($1)`, [ids]);
+      const out: Record<string, { fee: number; extra: number; kg: number; fromTariff: boolean }> = {};
+      for (const o of rows) {
+        const x = parcelFees(o, R);
+        out[String(num(o.id))] = { fee: o.company_id ? x.liv + x.extra : 0, extra: x.extra, kg: Math.round(x.kg * 10) / 10, fromTariff: x.fromTariff };
+      }
+      return out;
+    }),
+
+    /** "Bilan des livraisons": delivered in the period, cashed or not, courier fees, returns, net to receive — total and per company. */
+    'orders.deliveredReport': proc(['suivi', 'depot'], z.object({ from: dateStr, to: dateStr }), async (ctx, i) => {
+      const R = await companyRules(ctx.db);
+      const base = `FROM orders o LEFT JOIN delivery_companies co ON co.id = o.company_id`;
+      const D = await ctx.db.query(`SELECT ${FEE_COLS} ${base} WHERE o.follow_status = 'delivered' AND o.delivered_at >= $1 AND o.delivered_at < $2`, [i.from, i.to]);
+      const B = await ctx.db.query(
+        `SELECT ${FEE_COLS} ${base} WHERE o.follow_status IN ('returning','returned') AND coalesce(o.returned_at, o.updated_at) >= $1 AND coalesce(o.returned_at, o.updated_at) < $2`,
+        [i.from, i.to],
+      );
+      type Agg = { companyId: number | null; name: string; kind: string | null; n: number; amount: number; cashed: number; cashedN: number; uncashed: number; uncashedN: number; fees: number; overweight: number; returns: number; returnFees: number; returnOverweight: number; netToReceive: number; noTariff: number };
+      const empty = (companyId: number | null, name: string, kind: string | null): Agg => ({ companyId, name, kind, n: 0, amount: 0, cashed: 0, cashedN: 0, uncashed: 0, uncashedN: 0, fees: 0, overweight: 0, returns: 0, returnFees: 0, returnOverweight: 0, netToReceive: 0, noTariff: 0 });
+      const M = new Map<number, Agg>();
+      const T = empty(null, 'Total', null);
+      const noRule = new Set<string>();
+      const g = (o: any) => {
+        const k = num(o.company_id);
+        if (!M.has(k)) M.set(k, empty(o.company_id ? k : null, o.company ?? 'Sans société', o.company_kind ?? null));
+        return M.get(k)!;
+      };
+      for (const o of D) {
+        const x = parcelFees(o, R);
+        const v = num(o.total);
+        for (const z of [g(o), T]) {
+          z.n++;
+          z.amount += v;
+          z.fees += x.liv;
+          z.overweight += x.extra;
+          if (o.cashed) {
+            z.cashed += v;
+            z.cashedN++;
+          } else {
+            z.uncashed += v;
+            z.uncashedN++;
+            z.netToReceive += v - x.liv - x.extra;
+          }
+          if (!x.fromTariff && o.company_id) z.noTariff++;
+        }
+        if (o.company_id && !(R.over.get(num(o.company_id))?.perKg)) noRule.add(o.company ?? '—');
+      }
+      for (const o of B) {
+        const x = parcelFees(o, R);
+        for (const z of [g(o), T]) {
+          z.returns++;
+          z.returnFees += x.ret;
+          z.returnOverweight += x.extraRet;
+          z.netToReceive -= x.ret + x.extraRet;
+        }
+      }
+      return { total: T, companies: [...M.values()].sort((a, b) => b.amount - a.amount), noOverweightRule: [...noRule] };
+    }),
+  };
+}
+
 // ---------------------------------------------------------------- the procedures
 export const ordersProcs = {
+  ...orderExtraProcs(),
   'orders.list': proc(null, ListInput, (ctx, f) => listOrders(ctx, f)),
   'orders.counts': proc(null, z.object({}), (ctx) => orderCounts(ctx)),
   'orders.get': proc(null, z.object({ id }), (ctx, { id }) => getOrder(ctx, id)),
