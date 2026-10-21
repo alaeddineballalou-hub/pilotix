@@ -1,0 +1,3 @@
+/* Confirmation dialogs: the shared .modal frame is a <div>, the original stylesheet only styles dialog.modal. */
+.modal-wrap .modal.conf-modal { background: var(--surface); color: var(--ink); border-radius: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, .35); overflow: hidden; }
+.modal-wrap .modal.conf-modal .modal-foot { padding: 10px 16px 14px; }

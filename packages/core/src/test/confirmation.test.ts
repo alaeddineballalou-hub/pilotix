@@ -1,0 +1,119 @@
+// Confirmation queue: lists, deadlines, banner, statistics and their role checks.
+import assert from 'node:assert/strict';
+import { before, test } from 'node:test';
+import { DEFAULT_CALL_SETTINGS } from '@pilotix/shared';
+import { call, Ctx, Db } from '../index';
+import { computeDue, kfRange } from '../modules/confirmation';
+import { EMAILS, setup } from './harness';
+
+let db: Db;
+let as: (email: string) => Promise<Ctx>;
+
+before(async () => {
+  ({ db, as } = await setup(300));
+});
+
+test('confirmation.list returns only the statuses of the sub-page, with default sorts', async () => {
+  const ctx = await as(EMAILS.conf);
+  const nv: any = await call('confirmation.list', ctx, { sub: 'nouvelles', pageSize: 100 });
+  for (const o of nv.rows) assert.equal(o.confStatus, 'new');
+  for (let k = 1; k < nv.rows.length; k++) assert.ok(nv.rows[k - 1].createdAt >= nv.rows[k].createdAt, 'newest first');
+  const at: any = await call('confirmation.list', ctx, { sub: 'attente', pageSize: 100 });
+  for (const o of at.rows) assert.ok(['to_check', 'no_answer', 'busy', 'callback', 'postponed'].includes(o.confStatus));
+  const cf: any = await call('confirmation.list', ctx, { sub: 'confirmees', pageSize: 20 });
+  for (const o of cf.rows) assert.ok(['confirmed', 'no_stock'].includes(o.confStatus));
+  assert.ok(Array.isArray(cf.rows[0].skus) && cf.rows[0].skus.length > 0);
+  // a new order has a first-call deadline
+  if (nv.rows.length) assert.equal(nv.rows[0].deadline.m, 'first');
+  await assert.rejects(call('confirmation.list', ctx, { sub: 'nouvelles', status: 'confirmed' }), /Statut/);
+  const counts: any = await call('confirmation.counts', ctx, {});
+  assert.equal(counts.nouvelles, nv.total);
+  assert.equal(counts.attente, at.total);
+});
+
+test('filters: agent "none", wilaya, search', async () => {
+  const ctx = await as(EMAILS.admin);
+  const none: any = await call('confirmation.list', ctx, { sub: 'nouvelles', agentId: 'none', pageSize: 100 });
+  for (const o of none.rows) assert.equal(o.agentId, null);
+  const any: any = await call('confirmation.list', ctx, { sub: 'confirmees', pageSize: 1 });
+  const w = any.rows[0].wilayaId;
+  const byW: any = await call('confirmation.list', ctx, { sub: 'confirmees', wilayaId: w, pageSize: 50 });
+  for (const o of byW.rows) assert.equal(o.wilayaId, w);
+  const byRef: any = await call('confirmation.list', ctx, { sub: 'confirmees', q: any.rows[0].ref });
+  assert.equal(byRef.rows[0].id, any.rows[0].id);
+});
+
+test('first-call deadlines: newest first, +pace per newer order, night counts from 9h', () => {
+  const s = DEFAULT_CALL_SETTINGS;
+  // 10:00 Algiers = 09:00 UTC
+  const day = Date.UTC(2026, 9, 21);
+  const at = (h: number, m = 0) => day + (h - 1) * 3_600_000 + m * 60_000;
+  const row = (id: number, t: number, extra: Partial<any> = {}) => ({ id, ref: 'PX' + id, name: 'X', agentId: 7, createdAt: t, start: t, attempts: 0, nextCallAt: null, lastCallAt: null, status: 'new' as const, ...extra });
+  const due = computeDue([row(1, at(10, 0)), row(2, at(10, 1)), row(3, at(2, 0))], s, at(10, 2));
+  assert.equal(due.get(2)!.at, at(10, 16), 'newest: 15 min');
+  assert.equal(due.get(1)!.at, at(10, 20), 'one newer ahead: +5 min');
+  // the night order starts at 9h, two newer orders ahead
+  assert.equal(due.get(3)!.at, at(9, 25));
+  assert.equal(due.get(3)!.kind, 'first_late');
+  // a callback date in the future is "later"
+  const cb = computeDue([row(4, at(8), { attempts: 1, nextCallAt: new Date(at(15)).toISOString() })], s, at(10));
+  assert.equal(cb.get(4)!.kind, 'later');
+  assert.equal(cb.get(4)!.deadline!.m, 'start');
+});
+
+test('period ranges follow Algiers days', () => {
+  const now = Date.UTC(2026, 9, 21, 22, 30); // 23:30 in Algiers
+  const r = kfRange(now, { per: 'today' });
+  assert.equal(new Date(r.a).toISOString(), '2026-10-20T23:00:00.000Z');
+  assert.equal(r.b - r.a, 86_400_000);
+  const c = kfRange(now, { per: 'custom', from: '2026-10-01', to: '2026-10-03' });
+  assert.equal(c.b - c.a, 3 * 86_400_000);
+});
+
+test('statistics: managers only, numbers add up', async () => {
+  const agent = await as(EMAILS.conf);
+  await assert.rejects(call('confirmation.firstCall', agent, {}), /Accès refusé/);
+  await assert.rejects(call('confirmation.enCours', agent, {}), /Accès refusé/);
+  const mgr = await as(EMAILS.manager);
+  const fc: any = await call('confirmation.firstCall', mgr, { per: '30' });
+  assert.equal(fc.buckets.reduce((a: number, b: number) => a + b, 0), fc.called);
+  assert.ok(fc.onTime <= fc.called);
+  const pr: any = await call('confirmation.period', mgr, { per: '30' });
+  assert.ok(pr.received >= pr.confirmed + pr.cancelled);
+  assert.ok(pr.rate === null || (pr.rate >= 0 && pr.rate <= 100));
+  const ec: any = await call('confirmation.enCours', mgr, { per: '30' });
+  assert.equal(ec.byAgent.reduce((s: number, a: any) => s + a.n, 0), ec.count);
+  const cf: any = await call('confirmation.confirmed', mgr, { per: '30' });
+  assert.equal(cf.byAgent.reduce((s: number, a: any) => s + a.n, 0), cf.confirmed);
+  assert.ok(cf.upsellOrders <= cf.confirmed);
+  const dl: any = await call('confirmation.delivery', mgr, { per: '30' });
+  assert.ok(dl.delivered <= dl.confirmed);
+});
+
+test('Tentative 02 sets no_answer with two attempts; block blacklists the customer', async () => {
+  const ctx = await as(EMAILS.conf);
+  const nv: any = await call('confirmation.list', ctx, { sub: 'nouvelles', pageSize: 2 });
+  const o = nv.rows[0];
+  await call('confirmation.setTry', ctx, { ids: [o.id], n: 2 });
+  const cur: any = await call('orders.get', ctx, { id: o.id });
+  assert.equal(cur.confStatus, 'no_answer');
+  assert.equal(cur.attempts, 2);
+  await call('confirmation.block', ctx, { ids: [o.id] });
+  const c = (await db.query('SELECT blacklisted FROM customers WHERE id = $1', [cur.customerId]))[0];
+  assert.equal(c.blacklisted, true);
+  // refused for a depot user
+  const depot = await as(EMAILS.depot);
+  await assert.rejects(call('confirmation.block', depot, { ids: [o.id] }), /Accès refusé/);
+});
+
+test('banner counts the agent orders and gives the next one', async () => {
+  const ctx = await as(EMAILS.conf);
+  const b: any = await call('confirmation.banner', ctx, {});
+  for (const k of ['late', 'now', 'fresh', 'night', 'firstLate']) assert.equal(typeof b[k], 'number');
+  if (b.fresh + b.now + b.late + b.night > 0) assert.ok(b.next && b.next.ref.startsWith('PX'));
+  const m: any = await call('confirmation.meta', ctx, {});
+  assert.ok(m.agents.length >= 3);
+  assert.equal(m.manager, false);
+  const mine: any = await call('confirmation.mine', ctx, {});
+  assert.equal(typeof mine.due, 'number');
+});

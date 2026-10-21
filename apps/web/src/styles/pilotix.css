@@ -29,6 +29,11 @@
 /* modal frame (the original used one global container) */
 .modal-wrap .modal { width: min(560px, 100%); }
 .modal-wrap .modal.wide { width: min(980px, 100%); }
+.modal-wrap .modal { background: var(--surface); color: var(--ink); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.35); overflow: hidden; }
+.modal-wrap .modal .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.modal-wrap .modal .modal-head h2 { margin: 0; }
+.modal-wrap .modal .modal-body { padding: 16px; }
+.modal-wrap .modal .modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--line); }
 
 /* KPI used as a button / tab */
 button.kpi { border: 1px solid var(--line); background: var(--surface); color: inherit; }
