@@ -114,6 +114,11 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
 
   return (
     <div className={`shell ${folded ? 'px-folded' : ''}`}>
+      <button type="button" className="px-fold-arrow" onClick={toggleFold} aria-expanded={!folded} aria-controls="side" title={folded ? t('shell.unfold') : t('shell.fold')} aria-label={folded ? t('shell.unfold') : t('shell.fold')}>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="m15 6-6 6 6 6" />
+        </svg>
+      </button>
       <nav className="side" id="side" aria-label={t('nav.menu')}>
         <div className="px-side-head">
           <a
@@ -137,11 +142,6 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
               </svg>
             </span>
           </a>
-          <button type="button" className="px-fold-arrow" onClick={toggleFold} aria-expanded={!folded} aria-controls="side" title={t('shell.fold')} aria-label={t('shell.fold')}>
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="m15 6-6 6 6 6" />
-            </svg>
-          </button>
         </div>
         {items.map((n) =>
           n.children ? (

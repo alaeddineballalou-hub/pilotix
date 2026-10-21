@@ -171,3 +171,35 @@ button.kpi.on { box-shadow: 0 0 0 2px var(--navy); }
   .px-folded .px-logo-btn:hover .px-logo-open, .px-folded .px-logo-btn:focus-visible .px-logo-open { display: grid; background: rgba(255,255,255,.12); }
   .px-folded .px-logo-btn:hover { background: transparent; }
 }
+
+/* Fold arrow v3: brand badge (orange circle, navy chevron) on the sidebar edge, just below the header. Always visible on desktop. */
+.px-fold-arrow {
+  position: fixed !important; z-index: 40;
+  top: 73px; inset-inline-start: calc(var(--side) - 15px);
+  display: inline-grid !important; place-items: center;
+  width: 30px; height: 30px; padding: 0; border-radius: 50%;
+  background: var(--px-orange) !important; color: var(--px-navy) !important;
+  border: 3px solid var(--px-navy) !important;
+  box-shadow: 0 4px 12px rgba(27, 42, 71, .28) !important;
+  cursor: pointer; transition: inset-inline-start .2s ease, transform .15s ease, background .15s ease;
+}
+.px-fold-arrow:hover { background: #ffb93d !important; transform: scale(1.08); }
+.px-fold-arrow:active { background: var(--px-orange) !important; color: var(--px-navy) !important; transform: scale(.95); }
+.px-fold-arrow:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.px-fold-arrow svg { transition: transform .2s ease; }
+.px-folded .px-fold-arrow svg { transform: rotate(180deg); }
+[dir="rtl"] .px-fold-arrow svg { transform: scaleX(-1); }
+[dir="rtl"] .px-folded .px-fold-arrow svg { transform: none; }
+@media (min-width: 901px) { .px-folded .px-fold-arrow { display: inline-grid !important; } }
+@media (max-width: 900px) { .px-fold-arrow { display: none !important; } }
+
+/* One navy band on top: the sidebar's logo area has exactly the header's height, so the logo (and the folded "p") sits centred in it. */
+@media (min-width: 901px) {
+  .shell { --px-hdr: 60px; }
+  .topbar { height: var(--px-hdr); min-height: var(--px-hdr); box-sizing: border-box; padding-block: 0 !important; border-bottom: 1px solid rgba(255,255,255,.08) !important; }
+  .side { padding-top: 0 !important; }
+  .px-side-head { height: var(--px-hdr) !important; margin: 0 0 14px !important; box-sizing: border-box; border-bottom: 1px solid rgba(255,255,255,.08); align-items: center; }
+  .px-side-head .px-logo-btn { height: 46px; }
+  .px-folded .px-side-head { justify-content: center; margin-inline: -8px !important; padding: 0; }
+  .px-fold-arrow { top: calc(var(--px-hdr) + 14px) !important; }
+}
