@@ -1,15 +1,22 @@
 import { LANGUAGES, Language } from '@pilotix/shared';
 import { FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ApiError, serverUrl, setServerUrl } from '../lib/api';
+import { ApiError, demoAvailable, serverUrl, setServerUrl } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { applyLanguage } from '../lib/i18n';
+
+const DEMO_USERS: { role: 'admin' | 'agent' | 'depot' | 'livreur'; id: number }[] = [
+  { role: 'admin', id: 1 },
+  { role: 'agent', id: 4 },
+  { role: 'depot', id: 7 },
+  { role: 'livreur', id: 8 },
+];
 
 const langLabel: Record<Language, string> = { fr: 'Français', en: 'English', ar: 'العربية' };
 
 export function Login() {
   const { t, i18n } = useTranslation();
-  const { login } = useAuth();
+  const { login, loginDemo } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [server, setServer] = useState(serverUrl());
@@ -61,6 +68,19 @@ export function Login() {
         <button className="btn primary" disabled={busy}>
           {t('login.submit')}
         </button>
+        {demoAvailable && (
+          <div className="demo-box">
+            <b>{t('demo.title')}</b>
+            <span className="small muted">{t('demo.hint')}</span>
+            <div className="row">
+              {DEMO_USERS.map((d) => (
+                <button type="button" key={d.id} className="btn small" onClick={() => loginDemo(d.id)}>
+                  {t(`roles.${d.role}`)}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </form>
     </div>
   );

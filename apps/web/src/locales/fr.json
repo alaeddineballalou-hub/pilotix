@@ -1,35 +1,143 @@
 {
-  "app": { "tagline": "Gestion des commandes" },
-  "nav": { "dashboard": "Tableau de bord", "orders": "Commandes", "products": "Produits", "team": "Équipe", "settings": "Paramètres", "logout": "Se déconnecter", "menu": "Menu" },
-  "login": {
-    "email": "Email", "password": "Mot de passe", "submit": "Se connecter", "server": "Adresse du serveur",
-    "serverHint": "Fournie par votre administrateur", "error": "Email ou mot de passe incorrect", "noServer": "Serveur injoignable. Vérifiez l'adresse du serveur."
+  "app": {
+    "tagline": "Gestion des commandes"
   },
-  "net": { "offline": "Hors ligne — vos actions seront envoyées au retour du réseau", "syncing": "Synchronisation… {{count}} action(s)", "synced": "Tout est synchronisé" },
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "orders": "Commandes",
+    "products": "Produits",
+    "team": "Équipe",
+    "settings": "Paramètres",
+    "logout": "Se déconnecter",
+    "menu": "Menu"
+  },
+  "login": {
+    "email": "Email",
+    "password": "Mot de passe",
+    "submit": "Se connecter",
+    "server": "Adresse du serveur",
+    "serverHint": "Fournie par votre administrateur",
+    "error": "Email ou mot de passe incorrect",
+    "noServer": "Serveur injoignable. Vérifiez l'adresse du serveur."
+  },
+  "net": {
+    "offline": "Hors ligne — vos actions seront envoyées au retour du réseau",
+    "syncing": "Synchronisation… {{count}} action(s)",
+    "synced": "Tout est synchronisé"
+  },
   "status": {
-    "new": "Nouvelle", "confirmed": "Confirmée", "callback": "Rappeler", "no_answer": "Injoignable", "postponed": "Reportée",
-    "cancelled": "Annulée", "duplicate": "Doublon", "assigned": "Assignée", "shipped": "Expédiée", "delivered": "Livrée",
-    "returning": "Retour en cours", "returned": "Retournée"
+    "new": "Nouvelle",
+    "confirmed": "Confirmée",
+    "callback": "Rappeler",
+    "no_answer": "Injoignable",
+    "postponed": "Reportée",
+    "cancelled": "Annulée",
+    "duplicate": "Doublon",
+    "assigned": "Assignée",
+    "shipped": "Expédiée",
+    "delivered": "Livrée",
+    "returning": "Retour en cours",
+    "returned": "Retournée"
   },
   "orders": {
-    "title": "Commandes", "search": "Téléphone, nom, référence ou suivi", "all": "Toutes", "callbacksDue": "Rappels en retard",
-    "count": "{{count}} commande(s)", "empty": "Aucune commande", "new": "Nouvelle commande", "reference": "Réf.", "customer": "Client",
-    "phone": "Téléphone", "wilaya": "Wilaya", "commune": "Commune", "address": "Adresse", "total": "Total", "date": "Date",
-    "statusCol": "Statut", "actions": "Actions", "call": "Appeler", "duplicate": "Doublon possible", "history": "Historique",
-    "delivered": "{{count}} livrée(s)", "returned": "{{count}} retour(s)", "callbackAt": "Rappeler le", "note": "Note",
-    "setStatus": "Changer le statut", "save": "Enregistrer", "cancel": "Annuler", "items": "Produits", "quantity": "Qté",
-    "deliveryFee": "Frais de livraison", "discount": "Remise", "addItem": "Ajouter un produit", "create": "Créer la commande",
-    "livreur": "Livreur", "tracking": "N° de suivi", "attempts": "{{count}} tentative(s)", "queued": "Enregistré hors ligne",
-    "close": "Fermer", "loadMore": "Charger plus"
+    "title": "Commandes",
+    "search": "Téléphone, nom, référence ou suivi",
+    "all": "Toutes",
+    "callbacksDue": "Rappels en retard",
+    "count": "{{count}} commande(s)",
+    "empty": "Aucune commande",
+    "new": "Nouvelle commande",
+    "reference": "Réf.",
+    "customer": "Client",
+    "phone": "Téléphone",
+    "wilaya": "Wilaya",
+    "commune": "Commune",
+    "address": "Adresse",
+    "total": "Total",
+    "date": "Date",
+    "statusCol": "Statut",
+    "actions": "Actions",
+    "call": "Appeler",
+    "duplicate": "Doublon possible",
+    "history": "Historique",
+    "delivered": "{{count}} livrée(s)",
+    "returned": "{{count}} retour(s)",
+    "callbackAt": "Rappeler le",
+    "note": "Note",
+    "setStatus": "Changer le statut",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "items": "Produits",
+    "quantity": "Qté",
+    "deliveryFee": "Frais de livraison",
+    "discount": "Remise",
+    "addItem": "Ajouter un produit",
+    "create": "Créer la commande",
+    "livreur": "Livreur",
+    "tracking": "N° de suivi",
+    "attempts": "{{count}} tentative(s)",
+    "queued": "Enregistré hors ligne",
+    "close": "Fermer",
+    "loadMore": "Charger plus"
   },
   "dashboard": {
-    "title": "Tableau de bord", "today": "Aujourd'hui", "created": "Nouvelles", "confirmed": "Confirmées", "delivered": "Livrées",
-    "returned": "Retours", "confirmationRate": "Taux de confirmation", "deliveryRate": "Taux de livraison",
-    "revenue": "Chiffre livré (30 j)", "byStatus": "Commandes par statut (30 derniers jours)"
+    "title": "Tableau de bord",
+    "today": "Aujourd'hui",
+    "created": "Nouvelles",
+    "confirmed": "Confirmées",
+    "delivered": "Livrées",
+    "returned": "Retours",
+    "confirmationRate": "Taux de confirmation",
+    "deliveryRate": "Taux de livraison",
+    "revenue": "Chiffre livré (30 j)",
+    "byStatus": "Commandes par statut (30 derniers jours)"
   },
-  "products": { "title": "Produits", "name": "Nom", "sku": "Référence", "price": "Prix", "cost": "Coût", "stock": "Stock", "variants": "Variantes", "new": "Nouveau produit", "lowStock": "Stock bas" },
-  "team": { "title": "Équipe", "online": "En ligne", "idle": "Inactif", "offline": "Hors ligne", "roles": "Rôles" },
-  "roles": { "admin": "Administrateur", "manager": "Manager", "confirmation": "Confirmation", "agent": "Agent", "suivi": "Suivi", "depot": "Dépôt", "livreur": "Livreur" },
-  "settings": { "title": "Paramètres", "language": "Langue", "theme": "Thème", "light": "Clair", "dark": "Sombre", "system": "Système", "server": "Serveur" },
-  "common": { "loading": "Chargement…", "error": "Une erreur est survenue", "retry": "Réessayer", "dzd": "{{value}} DA" }
+  "products": {
+    "title": "Produits",
+    "name": "Nom",
+    "sku": "Référence",
+    "price": "Prix",
+    "cost": "Coût",
+    "stock": "Stock",
+    "variants": "Variantes",
+    "new": "Nouveau produit",
+    "lowStock": "Stock bas"
+  },
+  "team": {
+    "title": "Équipe",
+    "online": "En ligne",
+    "idle": "Inactif",
+    "offline": "Hors ligne",
+    "roles": "Rôles"
+  },
+  "roles": {
+    "admin": "Administrateur",
+    "manager": "Manager",
+    "confirmation": "Confirmation",
+    "agent": "Agent",
+    "suivi": "Suivi",
+    "depot": "Dépôt",
+    "livreur": "Livreur"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "language": "Langue",
+    "theme": "Thème",
+    "light": "Clair",
+    "dark": "Sombre",
+    "system": "Système",
+    "server": "Serveur"
+  },
+  "common": {
+    "loading": "Chargement…",
+    "error": "Une erreur est survenue",
+    "retry": "Réessayer",
+    "dzd": "{{value}} DA"
+  },
+  "demo": {
+    "title": "Essayer la démo",
+    "hint": "Données fictives, aucun serveur nécessaire. Choisissez un rôle :",
+    "banner": "Mode démo — toutes les données sont fictives et rien n’est enregistré",
+    "or": "ou"
+  }
 }

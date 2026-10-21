@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { isDemo } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useNetwork } from '../lib/offline';
 import { Icon } from './ui';
@@ -49,6 +50,7 @@ export function Layout() {
           <span className="logo" role="img" aria-label="Pilotix" />
           <h1 className="grow">{title}</h1>
         </header>
+        {isDemo() && <div className="banner demo">{t('demo.banner')}</div>}
         {!net.online && <div className="banner off">{t('net.offline')}</div>}
         {net.online && net.pending > 0 && <div className="banner sync">{t('net.syncing', { count: net.pending })}</div>}
         <main className="page">

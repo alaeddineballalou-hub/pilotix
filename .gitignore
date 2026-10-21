@@ -5,3 +5,4 @@ dist/
 apps/web/android/
 apps/web/ios/
 .DS_Store
+dist-artifact/
