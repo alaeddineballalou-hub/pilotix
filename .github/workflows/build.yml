@@ -112,6 +112,8 @@ jobs:
 
   ios:
     name: iOS (simulator build)
+    # Mac runners are not always available on this account: run it from Actions → "Run workflow".
+    if: github.event_name == 'workflow_dispatch'
     needs: web
     runs-on: macos-latest
     steps:
