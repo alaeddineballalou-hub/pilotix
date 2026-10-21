@@ -1,14 +1,15 @@
 {
   "name": "@pilotix/server",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "ts-node --transpile-only src/main.ts",
     "start": "node dist/main.js",
-    "migrate": "node dist/db/migrate.js",
-    "seed": "node dist/db/seed.js"
+    "migrate": "node dist/migrate.js",
+    "seed": "node dist/migrate.js seed",
+    "seed:demo": "node dist/migrate.js demo"
   },
   "dependencies": {
     "@nestjs/common": "10.4.15",
@@ -18,7 +19,6 @@
     "@nestjs/platform-socket.io": "10.4.15",
     "@nestjs/websockets": "10.4.15",
     "@pilotix/shared": "2.0.0",
-    "bcryptjs": "2.4.3",
     "bullmq": "5.34.0",
     "ioredis": "5.4.1",
     "pg": "8.13.1",
