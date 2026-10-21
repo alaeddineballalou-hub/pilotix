@@ -2,9 +2,10 @@
   "name": "pilotix",
   "version": "2.0.0",
   "private": true,
-  "description": "Pilotix — order management for cash-on-delivery e-commerce in Algeria (web, Android, iOS)",
+  "description": "Pilotix \u2014 order management for cash-on-delivery e-commerce in Algeria (web, Android, iOS)",
   "workspaces": [
     "packages/shared",
+    "packages/core",
     "apps/server",
     "apps/web"
   ],

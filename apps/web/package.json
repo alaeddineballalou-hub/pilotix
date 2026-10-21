@@ -25,7 +25,13 @@
     "react-dom": "18.3.1",
     "react-i18next": "15.1.1",
     "react-router-dom": "6.28.0",
-    "socket.io-client": "4.8.1"
+    "socket.io-client": "4.8.1",
+    "@pilotix/core": "3.0.0",
+    "@electric-sql/pglite": "0.2.17",
+    "bcryptjs": "2.4.3",
+    "zod": "3.23.8",
+    "@zxing/browser": "0.1.5",
+    "@zxing/library": "0.21.3"
   },
   "devDependencies": {
     "@capacitor/cli": "7.2.0",
@@ -34,6 +40,7 @@
     "@vitejs/plugin-react": "4.3.3",
     "typescript": "5.6.3",
     "vite": "5.4.11",
-    "vite-plugin-singlefile": "2.0.3"
+    "vite-plugin-singlefile": "2.0.3",
+    "@types/bcryptjs": "2.4.6"
   }
 }
