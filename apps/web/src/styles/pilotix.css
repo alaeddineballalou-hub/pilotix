@@ -231,3 +231,11 @@ button.kpi.on { box-shadow: 0 0 0 2px var(--navy); }
 /* The logo is the only fold control: no separate arrow. */
 .px-fold-arrow { display: none !important; }
 @media (min-width: 901px) { .px-side-head .px-logo-btn { cursor: pointer; } }
+
+/* SAV tickets: their parcels carry a "Ticket SAV-0003" tag wherever they appear next to orders (depot, tournée, caisse, search). */
+.px-ticket { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 800; white-space: nowrap; vertical-align: middle;
+  background: color-mix(in srgb, var(--px-orange, #F7A823) 18%, transparent); color: #8a5a00; border: 1px solid color-mix(in srgb, var(--px-orange, #F7A823) 55%, transparent); }
+[data-theme="dark"] .px-ticket { color: #ffd27a; }
+.px-tk-card { border-inline-start: 4px solid var(--px-orange, #F7A823) !important; }
+.bjg-tab.px-sav-tab { border-color: color-mix(in srgb, var(--px-orange, #F7A823) 60%, transparent); }
+.bjg-tab.px-sav-tab.on { border-color: var(--px-orange, #F7A823); background: color-mix(in srgb, var(--px-orange, #F7A823) 12%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--px-orange, #F7A823) 30%, transparent); }

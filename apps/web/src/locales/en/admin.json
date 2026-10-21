@@ -91,7 +91,13 @@
     "yes": "Yes, continue"
   },
   "status": {
-    "groups": { "confirmation": "Confirmation", "depot": "Warehouse", "suivi": "Tracking", "livraison": "Delivery", "sav": "After-sales" },
+    "groups": {
+      "confirmation": "Confirmation",
+      "depot": "Warehouse",
+      "suivi": "Tracking",
+      "livraison": "Delivery",
+      "sav": "After-sales"
+    },
     "title": {
       "confirmation": "Confirmation statuses",
       "depot": "Warehouse statuses",
@@ -121,7 +127,14 @@
     "down": "Move down",
     "custom": "added",
     "note": "An added status \"behaves like\" an original status: e.g. \"Customer hesitates\" behaves like \"Call back\" (the order stays in the call-back list, with the new name).",
-    "tones": { "info": "Blue", "ok": "Green", "mid": "Yellow", "warn": "Orange", "bad": "Red", "off": "Grey" },
+    "tones": {
+      "info": "Blue",
+      "ok": "Green",
+      "mid": "Yellow",
+      "warn": "Orange",
+      "bad": "Red",
+      "off": "Grey"
+    },
     "formNew": "New status · {{group}}",
     "formEdit": "Edit \"{{name}}\"",
     "name": "Name",
@@ -145,7 +158,11 @@
     "cancelHelp": "0 = never",
     "tries": "Tries per order",
     "slot": "{{name}} slot (hours)",
-    "slots": { "morning": "Morning", "midday": "Midday", "evening": "Evening" },
+    "slots": {
+      "morning": "Morning",
+      "midday": "Midday",
+      "evening": "Evening"
+    },
     "to": "to",
     "start": "{{name}} start",
     "end": "{{name}} end",
@@ -154,7 +171,13 @@
   },
   "pay": {
     "intro": "Pay is computed from the orders: confirmed then delivered for agents, delivered team orders for managers, delivered for tracking, prepared for the warehouse, delivered (light / heavy) for riders.",
-    "tabs": { "agents": "Agents", "managers": "Agent managers", "suivi": "Tracking", "depot": "Warehouse", "livreurs": "Riders" },
+    "tabs": {
+      "agents": "Agents",
+      "managers": "Agent managers",
+      "suivi": "Tracking",
+      "depot": "Warehouse",
+      "livreurs": "Riders"
+    },
     "paidOn": {
       "agents": "Paid on: orders they confirmed that were delivered. Accounts with the \"Confirmation\" role appear automatically.",
       "managers": "Paid on: delivered orders of their team's agents (Dashboard → Confirmation → teams).",
@@ -235,7 +258,13 @@
       "heavy": "{{qty}} heavy × {{rate}}"
     },
     "nothing": "Nothing this month",
-    "csv": { "category": "Category", "person": "Person", "count": "Orders", "detail": "Detail", "pay": "To pay (DA)" }
+    "csv": {
+      "category": "Category",
+      "person": "Person",
+      "count": "Orders",
+      "detail": "Detail",
+      "pay": "To pay (DA)"
+    }
   },
   "fees": {
     "title": "Delivery prices (customer)",
@@ -274,7 +303,10 @@
     "productsSave": "Save products",
     "productsSaved": "Products saved",
     "usesOther": "price: {{name}}",
-    "noProducts": "No products."
+    "noProducts": "No products.",
+    "savTab": "SAV tickets",
+    "savTabSub": "exchange prices",
+    "savHelp": "Delivery price the customer pays for a SAV exchange, per wilaya. It is suggested on every ticket and can still be changed when the exchange is made."
   },
   "channels": {
     "addTitle": "Add a channel",
@@ -283,7 +315,16 @@
     "soon": "Soon",
     "soonTip": "Coming soon",
     "addTip": "Add a {{name}} channel",
-    "kinds": { "sheets": "Google Sheets", "woocommerce": "WooCommerce", "shopify": "Shopify", "youcan": "YouCan", "lightfunnels": "Lightfunnels", "api": "API", "connector": "Connector", "tiktok": "TikTok Leads" },
+    "kinds": {
+      "sheets": "Google Sheets",
+      "woocommerce": "WooCommerce",
+      "shopify": "Shopify",
+      "youcan": "YouCan",
+      "lightfunnels": "Lightfunnels",
+      "api": "API",
+      "connector": "Connector",
+      "tiktok": "TikTok Leads"
+    },
     "listTitle": "Sales channels",
     "listHelp": "Each channel sends its orders to Confirmation. Shops and APIs send each order to the webhook. Active off = the channel no longer brings orders. SKU required = a line without a known SKU is refused.",
     "search": "Search a channel",

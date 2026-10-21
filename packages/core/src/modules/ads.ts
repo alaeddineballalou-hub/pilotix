@@ -165,7 +165,7 @@ async function ordersOf(db: Db, productIds: number[], from: string, to: string) 
             (SELECT COALESCE(sum(i.qty * i.purchase_price), 0) FROM order_items i WHERE i.order_id = o.id) AS achat,
             (SELECT COALESCE(sum(i.qty), 0) FROM order_items i WHERE i.order_id = o.id) AS qty,
             COALESCE((SELECT df.return_fee FROM delivery_fees df WHERE df.company_id = o.company_id AND df.wilaya_id = o.wilaya_id), 0) AS return_fee
-     FROM orders o JOIN firsts f ON f.order_id = o.id
+     FROM sales o JOIN firsts f ON f.order_id = o.id
      WHERE f.product_id = ANY($1) AND o.created_at >= $2 AND o.created_at < $3 AND o.conf_status <> 'duplicate'`,
     [productIds, dayStart(from), dayStart(addDays(to, 1))],
   );

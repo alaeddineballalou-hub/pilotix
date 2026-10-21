@@ -36,10 +36,14 @@ export interface CashOrder {
   /** livreur's share for this parcel (own livreurs) */
   share: number;
   heavy: boolean;
+  /** SAV ticket parcel (its money is kept apart from orders) */
+  ticket: boolean;
+  savRef: string | null;
 }
 
 const COLS = `o.id, o.ref, o.tracking, o.delivered_at, o.customer_name, o.phone, o.wilaya_id, o.commune, o.total, o.delivery_cost, o.company_id,
-  o.livreur_id, o.cashed, o.cashed_at, o.handover_id, o.follow_status, o.address, c.name AS company_name, c.kind AS company_kind, lv.name AS livreur_name,
+  o.livreur_id, o.cashed, o.cashed_at, o.handover_id, o.follow_status, o.address, o.is_exchange,
+  CASE WHEN o.is_exchange THEN (SELECT k.ref FROM complaints k WHERE k.exchange_order_id = o.id ORDER BY k.id DESC LIMIT 1) END AS sav_ref, c.name AS company_name, c.kind AS company_kind, lv.name AS livreur_name,
   (SELECT string_agg(i.qty || ' × ' || i.name || CASE WHEN i.variant_title <> '' THEN ' (' || i.variant_title || ')' ELSE '' END, ' + ' ORDER BY i.id)
      FROM order_items i WHERE i.order_id = o.id) AS products,
   (SELECT coalesce(max(p.weight_kg), 0) FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = o.id) AS max_kg`;
@@ -77,6 +81,8 @@ function toCash(r: any, pay: Pay): CashOrder {
     handoverId: numOrNull(r.handover_id),
     share,
     heavy,
+    ticket: !!r.is_exchange,
+    savRef: r.sav_ref ?? null,
   };
 }
 
@@ -95,7 +101,7 @@ async function receive(ctx: Ctx, orderIds: number[], note: string | null, livreu
     if (notDelivered) throw bad(`${notDelivered.ref} n’est pas livrée`);
     const groups = new Map<string, CashOrder[]>();
     for (const r of rows) {
-      const k = r.livreurId ? `l${r.livreurId}` : `c${r.companyId ?? 0}`;
+      const k = `${r.ticket ? 't' : ''}${r.livreurId ? `l${r.livreurId}` : `c${r.companyId ?? 0}`}`;
       groups.set(k, [...(groups.get(k) ?? []), r]);
     }
     for (const list of groups.values()) {
@@ -222,21 +228,34 @@ export const cashProcs = {
   'cash.due': proc([], z.object({}), async (ctx) => {
     const pay = await payOf(ctx.db);
     const rows = (await ctx.db.query(`SELECT ${COLS} ${FROM} WHERE o.follow_status = 'delivered' AND NOT o.cashed ORDER BY o.delivered_at ASC NULLS FIRST, o.id`)).map((r: any) => toCash(r, pay));
-    const groups = new Map<string, { key: string; companyId: number | null; livreurId: number | null; name: string; kind: string | null; orders: CashOrder[] }>();
-    for (const o of rows) {
-      const key = o.livreurId ? `l${o.livreurId}` : `c${o.companyId ?? 0}`;
-      if (!groups.has(key))
-        groups.set(key, { key, companyId: o.companyId, livreurId: o.livreurId, name: o.livreurId ? `${o.livreurName ?? '?'}${o.companyName ? ` · ${o.companyName}` : ''}` : o.companyName ?? 'Sans société', kind: o.companyKind, orders: [] });
-      groups.get(key)!.orders.push(o);
-    }
-    const list = [...groups.values()].map((g) => ({
-      ...g,
-      count: g.orders.length,
-      collected: g.orders.reduce((s, o) => s + o.total, 0),
-      net: g.orders.reduce((s, o) => s + o.net, 0),
-    }));
-    list.sort((a, b) => b.net - a.net);
-    return { groups: list, total: list.reduce((s, g) => s + g.net, 0), count: rows.length };
+    // orders and SAV tickets are counted apart: a ticket parcel with nothing to collect (free exchange) is not money to receive
+    const build = (list: CashOrder[], prefix: string) => {
+      const groups = new Map<string, { key: string; companyId: number | null; livreurId: number | null; name: string; kind: string | null; orders: CashOrder[] }>();
+      for (const o of list) {
+        const key = `${prefix}${o.livreurId ? `l${o.livreurId}` : `c${o.companyId ?? 0}`}`;
+        if (!groups.has(key))
+          groups.set(key, { key, companyId: o.companyId, livreurId: o.livreurId, name: o.livreurId ? `${o.livreurName ?? '?'}${o.companyName ? ` · ${o.companyName}` : ''}` : o.companyName ?? 'Sans société', kind: o.companyKind, orders: [] });
+        groups.get(key)!.orders.push(o);
+      }
+      const out = [...groups.values()].map((g) => ({
+        ...g,
+        count: g.orders.length,
+        collected: g.orders.reduce((s, o) => s + o.total, 0),
+        net: g.orders.reduce((s, o) => s + o.net, 0),
+      }));
+      out.sort((a, b) => b.net - a.net);
+      return out;
+    };
+    const orders = rows.filter((o) => !o.ticket);
+    const tickets = rows.filter((o) => o.ticket && o.total > 0);
+    const groups = build(orders, '');
+    const ticketGroups = build(tickets, 't');
+    return {
+      groups,
+      total: groups.reduce((s, g) => s + g.net, 0),
+      count: orders.length,
+      tickets: { groups: ticketGroups, total: ticketGroups.reduce((s, g) => s + g.net, 0), count: tickets.length },
+    };
   }),
 
   /** "Argent reçu": one versement per company / livreur, orders marked cashed. */
@@ -269,6 +288,7 @@ export const cashProcs = {
       net: num(h.net),
       note: (h.note ?? null) as string | null,
       orders: orders.filter((o) => (h.orders ?? []).map(num).includes(o.id)),
+      tickets: orders.some((o) => (h.orders ?? []).map(num).includes(o.id)) && orders.filter((o) => (h.orders ?? []).map(num).includes(o.id)).every((o) => o.ticket),
     }));
   }),
 

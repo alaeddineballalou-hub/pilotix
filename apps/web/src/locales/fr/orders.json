@@ -316,7 +316,7 @@
     "note": "Note",
     "blacklist": "Liste noire",
     "unblacklist": "Retirer de la liste noire",
-    "exchange": "Créer un échange",
+    "exchange": "Ticket SAV (échange)",
     "print": "Imprimer",
     "exchangeOf": "échange de {{ref}}",
     "client": "Client",

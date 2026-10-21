@@ -9,6 +9,13 @@ import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { useStaff } from './staff';
 
+/** Order to start the next new ticket with (set by "Ticket SAV" on an order card, read once). */
+let pendingOrder: { id: number; wish: string } | null = null;
+export function startTicketFor(orderId: number, wish = 'exchange') {
+  pendingOrder = { id: orderId, wish };
+  location.hash = '#/sav/nouveau';
+}
+
 /** "Nouveau ticket SAV": find the order (or none), type, wish, details, responsable. */
 export function NewTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: number) => void }) {
   const { t } = useTranslation();
@@ -29,6 +36,17 @@ export function NewTicketModal({ onClose, onCreated }: { onClose: () => void; on
     const h = setTimeout(() => setDeb(q.trim()), 250);
     return () => clearTimeout(h);
   }, [q]);
+  const [preId] = useState(() => {
+    const p = pendingOrder;
+    pendingOrder = null;
+    if (p) setTimeout(() => setWish(p.wish), 0);
+    return p?.id ?? null;
+  });
+  const pre = useRpc('orders.get', { id: preId ?? 0 }, { enabled: !!preId });
+  useEffect(() => {
+    if (pre.data && !pick) setPick(pre.data);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pre.data]);
   const found = useRpc('sav.findOrder', { q: deb }, { enabled: deb.length >= 2 && !pick });
   const create = useAction('sav.create', {
     onDone: (r) => {

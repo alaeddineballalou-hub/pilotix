@@ -85,5 +85,12 @@
     "isNotCashed": "Non encaissé",
     "inHandTitle": "Colis en main",
     "noneInHand": "Aucun colis en main en ce moment."
+  },
+  "tickets": {
+    "title": "Tickets SAV — à recevoir",
+    "help": "L’argent des colis d’échange SAV (frais de livraison et différences de prix) est séparé de celui des commandes. Les échanges gratuits n’apparaissent pas ici.",
+    "empty": "Aucun argent de ticket à recevoir.",
+    "groupTitle": "Tickets · {{name}} — {{count}} colis",
+    "badge": "Tickets SAV"
   }
 }

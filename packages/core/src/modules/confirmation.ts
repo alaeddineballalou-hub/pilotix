@@ -59,7 +59,7 @@ export function workStart(t: number, s: CallSettings): number {
 async function loadTodo(db: Db): Promise<TodoRow[]> {
   const rows = await db.query(
     `SELECT id, ref, customer_name, agent_id, created_at, assigned_at, attempts, next_call_at, last_call_at, conf_status
-       FROM orders WHERE conf_status = ANY($1)`,
+       FROM sales WHERE conf_status = ANY($1)`,
     [CONF_TODO],
   );
   return rows.map((r: any) => {
@@ -249,7 +249,7 @@ async function firstCall(ctx: Ctx, i: KfInput) {
   const calls = await getSetting(ctx.db, 'calls');
   const R = kfRange(now, i);
   const made = await ctx.db.query(
-    `SELECT id, ref, customer_name, created_at, assigned_at, agent_id, conf_status FROM orders
+    `SELECT id, ref, customer_name, created_at, assigned_at, agent_id, conf_status FROM sales
       WHERE (created_at >= $1 AND created_at < $2) OR conf_status IN ('new','to_check')`,
     [isoT(R.a - DAY), isoT(R.b)],
   );
@@ -314,7 +314,7 @@ async function firstCall(ctx: Ctx, i: KfInput) {
 async function periodNew(ctx: Ctx, i: KfInput) {
   const R = kfRange(ctx.now(), i);
   const col = i.basis === 'updated' ? 'updated_at' : 'created_at';
-  const O = await ctx.db.query(`SELECT id, conf_status, attempts, agent_id, total FROM orders WHERE ${col} >= $1 AND ${col} < $2`, [isoT(R.a), isoT(R.b)]);
+  const O = await ctx.db.query(`SELECT id, conf_status, attempts, agent_id, total FROM sales WHERE ${col} >= $1 AND ${col} < $2`, [isoT(R.a), isoT(R.b)]);
   const news = O.filter((o: any) => o.conf_status === 'new' || o.conf_status === 'to_check');
   const called = O.filter((o: any) => num(o.attempts) > 0 || !['new', 'to_check'].includes(o.conf_status));
   const conf = O.filter((o: any) => o.conf_status === 'confirmed').length;
@@ -340,7 +340,7 @@ const BACK = ['returning', 'returned', 'lost'];
 async function deliveryPerf(ctx: Ctx, i: KfInput & { on: 'created' | 'confirmed' }) {
   const R = kfRange(ctx.now(), i);
   const col = i.on === 'confirmed' && i.basis === 'updated' ? 'confirmed_at' : 'created_at';
-  const O = await ctx.db.query(`SELECT total, follow_status FROM orders WHERE conf_status = 'confirmed' AND ${col} >= $1 AND ${col} < $2`, [isoT(R.a), isoT(R.b)]);
+  const O = await ctx.db.query(`SELECT total, follow_status FROM sales WHERE conf_status = 'confirmed' AND ${col} >= $1 AND ${col} < $2`, [isoT(R.a), isoT(R.b)]);
   const f = (L: string[]) => O.filter((o: any) => L.includes(o.follow_status));
   const val = (L: any[]) => L.reduce((s: number, o: any) => s + num(o.total), 0);
   const ok = f(OK);
@@ -366,19 +366,19 @@ async function enCours(ctx: Ctx, i: KfInput) {
   const col = upd ? 'updated_at' : 'created_at';
   const ST = ['no_answer', 'busy', 'callback', 'postponed'];
   const O = await ctx.db.query(
-    `SELECT id, ref, conf_status, attempts, next_call_at, agent_id, created_at, total FROM orders WHERE conf_status = ANY($1) AND ${col} >= $2 AND ${col} < $3`,
+    `SELECT id, ref, conf_status, attempts, next_call_at, agent_id, created_at, total FROM sales WHERE conf_status = ANY($1) AND ${col} >= $2 AND ${col} < $3`,
     [ST, isoT(R.a), isoT(R.b)],
   );
   const rec = num(
-    (await ctx.db.query(`SELECT count(*)::int AS n FROM orders WHERE conf_status = 'confirmed' AND attempts >= 2 AND ${upd ? 'confirmed_at' : 'created_at'} >= $1 AND ${upd ? 'confirmed_at' : 'created_at'} < $2`, [isoT(R.a), isoT(R.b)]))[0]?.n,
+    (await ctx.db.query(`SELECT count(*)::int AS n FROM sales WHERE conf_status = 'confirmed' AND attempts >= 2 AND ${upd ? 'confirmed_at' : 'created_at'} >= $1 AND ${upd ? 'confirmed_at' : 'created_at'} < $2`, [isoT(R.a), isoT(R.b)]))[0]?.n,
   );
   const lost = num(
     (
       await ctx.db.query(
         upd
-          ? `SELECT count(*)::int AS n FROM orders o WHERE o.conf_status = 'cancelled' AND o.attempts >= 2 AND EXISTS
+          ? `SELECT count(*)::int AS n FROM sales o WHERE o.conf_status = 'cancelled' AND o.attempts >= 2 AND EXISTS
                (SELECT 1 FROM order_events e WHERE e.order_id = o.id AND e.kind = 'conf_status' AND e.to_value = 'cancelled' AND e.at >= $1 AND e.at < $2)`
-          : `SELECT count(*)::int AS n FROM orders WHERE conf_status = 'cancelled' AND attempts >= 2 AND created_at >= $1 AND created_at < $2`,
+          : `SELECT count(*)::int AS n FROM sales WHERE conf_status = 'cancelled' AND attempts >= 2 AND created_at >= $1 AND created_at < $2`,
         [isoT(R.a), isoT(R.b)],
       )
     )[0]?.n,
@@ -424,16 +424,16 @@ async function confirmedKpis(ctx: Ctx, i: KfInput) {
   const upd = i.basis === 'updated';
   const cc = upd ? 'confirmed_at' : 'created_at';
   const O = await ctx.db.query(
-    `SELECT id, total, agent_id, created_at, confirmed_at, has_upsell FROM orders WHERE conf_status = 'confirmed' AND ${cc} >= $1 AND ${cc} < $2`,
+    `SELECT id, total, agent_id, created_at, confirmed_at, has_upsell FROM sales WHERE conf_status = 'confirmed' AND ${cc} >= $1 AND ${cc} < $2`,
     [isoT(R.a), isoT(R.b)],
   );
   const X = num(
     (
       await ctx.db.query(
         upd
-          ? `SELECT count(*)::int AS n FROM orders o WHERE o.conf_status = ANY($3) AND EXISTS
+          ? `SELECT count(*)::int AS n FROM sales o WHERE o.conf_status = ANY($3) AND EXISTS
               (SELECT 1 FROM order_events e WHERE e.order_id = o.id AND e.kind = 'conf_status' AND e.to_value = o.conf_status AND e.at >= $1 AND e.at < $2)`
-          : `SELECT count(*)::int AS n FROM orders WHERE conf_status = ANY($3) AND created_at >= $1 AND created_at < $2`,
+          : `SELECT count(*)::int AS n FROM sales WHERE conf_status = ANY($3) AND created_at >= $1 AND created_at < $2`,
         [isoT(R.a), isoT(R.b), CANCELLED_LIKE],
       )
     )[0]?.n,
@@ -546,7 +546,7 @@ export const confirmationProcs = {
 
   /** Counts of the stage bar. */
   'confirmation.counts': proc(['confirmation'], z.object({}), async (ctx) => {
-    const rows = await ctx.db.query(`SELECT conf_status AS k, count(*)::int AS n FROM orders GROUP BY 1`);
+    const rows = await ctx.db.query(`SELECT conf_status AS k, count(*)::int AS n FROM sales GROUP BY 1`);
     const by = Object.fromEntries(rows.map((r: any) => [r.k, num(r.n)]));
     const sum = (s: readonly string[]) => s.reduce((t, k) => t + (by[k] ?? 0), 0);
     return { nouvelles: sum(CONF_SUBS.nouvelles), attente: sum(CONF_SUBS.attente), confirmees: sum(CONF_SUBS.confirmees), terminees: sum(CONF_SUBS.terminees) };
@@ -589,7 +589,7 @@ export const confirmationProcs = {
 
   /** Blacklists the customers of these orders ("Bloquer le client"). */
   'confirmation.block': proc(['confirmation'], z.object({ ids, reason: z.string().max(200).nullable().optional() }), async (ctx, i) => {
-    const rows = await ctx.db.query('SELECT DISTINCT customer_id FROM orders WHERE id = ANY($1)', [i.ids]);
+    const rows = await ctx.db.query('SELECT DISTINCT customer_id FROM sales WHERE id = ANY($1)', [i.ids]);
     const cids = rows.map((r: any) => num(r.customer_id));
     if (cids.length) await ctx.db.query('UPDATE customers SET blacklisted = true, blacklist_reason = COALESCE($2, blacklist_reason) WHERE id = ANY($1)', [cids, i.reason ?? null]);
     ctx.emit({ type: 'orders' });
@@ -612,7 +612,7 @@ export const confirmationProcs = {
            count(*) FILTER (WHERE conf_status = ANY($1) AND (next_call_at IS NULL OR next_call_at <= now()))::int AS due,
            count(*) FILTER (WHERE conf_status = ANY($1) AND next_call_at > now())::int AS later,
            count(*) FILTER (WHERE conf_status = 'confirmed' AND agent_id = $2 AND confirmed_at >= $3)::int AS confirmed
-         FROM orders`,
+         FROM sales`,
         [CONF_TODO, me, day],
       )
     )[0];

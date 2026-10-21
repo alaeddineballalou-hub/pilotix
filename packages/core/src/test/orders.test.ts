@@ -92,7 +92,7 @@ test('orders.deliveredReport and companyFees add up', async () => {
   assert.ok(r.total.n > 0);
   assert.equal(r.total.n, r.companies.reduce((s: number, c: any) => s + c.n, 0));
   assert.equal(r.total.amount, r.total.cashed + r.total.uncashed);
-  const n = (await db.query(`SELECT count(*)::int AS n FROM orders WHERE follow_status='delivered' AND delivered_at >= $1 AND delivered_at < $2`, [from, to]))[0].n;
+  const n = (await db.query(`SELECT count(*)::int AS n FROM sales WHERE follow_status='delivered' AND delivered_at >= $1 AND delivered_at < $2`, [from, to]))[0].n;
   assert.equal(r.total.n, Number(n));
   const ids = (await db.query(`SELECT id FROM orders WHERE follow_status='delivered' AND company_id IS NOT NULL LIMIT 5`)).map((x: any) => Number(x.id));
   const fees: any = await call('orders.companyFees', ctx, { ids });

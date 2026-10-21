@@ -6,9 +6,10 @@ import { useRpc } from '../../lib/query';
 import { Empty, ErrorBox, Help, Icon, Loading, StageBar, StatusBadge } from '../../ui/kit';
 import type { PageProps } from '../registry';
 import { NewTicketModal } from './NewTicket';
+import { SavStats } from './Stats';
 import { TicketModal } from './Ticket';
 
-const VIEWS = ['tickets', 'nouveau', 'attente', 'depot', 'livraison', 'livres', 'annules'] as const;
+const VIEWS = ['tickets', 'nouveau', 'attente', 'depot', 'livraison', 'livres', 'annules', 'stats'] as const;
 type View = (typeof VIEWS)[number];
 export function Sav({ sub }: PageProps) {
   const { t } = useTranslation();
@@ -40,7 +41,7 @@ export function Sav({ sub }: PageProps) {
       /* private mode */
     }
   };
-  const apiView = view === 'tickets' || view === 'nouveau' ? tab : view;
+  const apiView = view === 'tickets' || view === 'nouveau' || view === 'stats' ? tab : view;
   const kp = useRpc('sav.kpis', {}, { refetchInterval: 60_000 });
   const list = useRpc('sav.list', { view: apiView, q: deb || undefined });
   const k = kp.data;
@@ -91,6 +92,9 @@ export function Sav({ sub }: PageProps) {
             <span className="s">{k?.avgMs ? t('sav.k.livresSub', { v: dur(k.avgMs) }) : t('sav.k.noAvg')}</span>
           </a>
         </div>
+        {view === 'stats' ? (
+          <SavStats />
+        ) : (
         <div className="card">
           {(view === 'tickets' || view === 'nouveau') && (
             <div className="tabs" role="tablist">
@@ -179,6 +183,7 @@ export function Sav({ sub }: PageProps) {
             </div>
           )}
         </div>
+        )}
       </div>
       {creating && <NewTicketModal onClose={closeNew} onCreated={(id) => (closeNew(), setOpen(id))} />}
       {open && <TicketModal id={open} onClose={() => setOpen(null)} />}

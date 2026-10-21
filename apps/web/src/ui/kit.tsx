@@ -37,6 +37,13 @@ export function Icon({ name, className = '' }: { name: IconName; className?: str
 }
 
 // ---------------------------------------------------------------- statuses
+/** "Ticket SAV-0003": an exchange parcel belongs to a SAV ticket, not to the orders. */
+export function TicketTag({ savRef }: { savRef: string | null | undefined }) {
+  const { t } = useTranslation();
+  if (!savRef) return null;
+  return <span className="px-ticket ltr">{t('sav.tag', { ref: savRef })}</span>;
+}
+
 export function StatusBadge({ kind, status }: { kind: 'conf' | 'follow' | 'sav'; status: string | null | undefined }) {
   const { t } = useTranslation();
   if (!status) return <span className="muted">—</span>;

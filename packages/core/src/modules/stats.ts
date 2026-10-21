@@ -157,7 +157,7 @@ async function confirmationStats(ctx: Ctx, input: z.infer<typeof TeamsInput>) {
     input.dateType === 'created'
       ? (
           await ctx.db.query(
-            `SELECT id, agent_id AS uid, conf_status, follow_status, created_at, COALESCE(assigned_at, created_at) AS start FROM orders
+            `SELECT id, agent_id AS uid, conf_status, follow_status, created_at, COALESCE(assigned_at, created_at) AS start FROM sales
              WHERE created_at >= $1 AND created_at < $2 AND agent_id IS NOT NULL`,
             [from, to],
           )
@@ -166,7 +166,7 @@ async function confirmationStats(ctx: Ctx, input: z.infer<typeof TeamsInput>) {
           await ctx.db.query(
             `SELECT o.id, e.user_id AS uid, o.conf_status, o.follow_status, o.created_at, COALESCE(o.assigned_at, o.created_at) AS start
              FROM (SELECT DISTINCT ON (order_id) order_id, user_id FROM order_events WHERE kind = 'conf_status' AND at >= $1 AND at < $2 AND user_id IS NOT NULL ORDER BY order_id, at DESC) e
-             JOIN orders o ON o.id = e.order_id`,
+             JOIN sales o ON o.id = e.order_id`,
             [from, to],
           )
         ).map((r: any) => ({ id: num(r.id), uid: num(r.uid), conf: r.conf_status, follow: r.follow_status, created: Date.parse(r.created_at), start: Date.parse(r.start) }));
@@ -183,10 +183,10 @@ async function confirmationStats(ctx: Ctx, input: z.infer<typeof TeamsInput>) {
   const live = await ctx.db.query(
     `SELECT agent_id AS uid, count(*) FILTER (WHERE conf_status = ANY($1))::int AS todo,
             count(*) FILTER (WHERE conf_status IN ('callback','postponed') AND next_call_at < $2)::int AS late
-     FROM orders WHERE agent_id IS NOT NULL GROUP BY agent_id`,
+     FROM sales WHERE agent_id IS NOT NULL GROUP BY agent_id`,
     [CONF_TODO, isoNow(ctx)],
   );
-  const unassigned = num((await ctx.db.query(`SELECT count(*)::int AS n FROM orders WHERE agent_id IS NULL AND conf_status = 'new'`))[0]?.n);
+  const unassigned = num((await ctx.db.query(`SELECT count(*)::int AS n FROM sales WHERE agent_id IS NULL AND conf_status = 'new'`))[0]?.n);
 
   // First call: the first status change after arrival / assignment.
   const firstRows = counted.length
@@ -310,7 +310,7 @@ async function livreursStats(ctx: Ctx, i: z.infer<typeof LivInput>) {
            count(*) FILTER (WHERE o.cashed AND o.cashed_at >= $1 AND o.cashed_at < $2)::int AS cashed_n,
            COALESCE(sum(o.total) FILTER (WHERE o.cashed AND o.cashed_at >= $1 AND o.cashed_at < $2),0)::bigint AS cashed,
            COALESCE(sum(o.delivery_cost) FILTER (WHERE o.follow_status = 'delivered' AND NOT o.cashed),0)::bigint AS uncashed_cost
-         FROM orders o LEFT JOIN w ON w.order_id = o.id
+         FROM sales o LEFT JOIN w ON w.order_id = o.id
          WHERE ${key} IS NOT NULL GROUP BY ${key}`,
         [i.from, i.to, late, old, FOLLOW_ON_ROAD, pay.heavyFromKg],
       );
@@ -389,7 +389,7 @@ export const statsProcs = {
           count(*) FILTER (WHERE follow_status IN ('failed','alert'))::int AS failed,
           count(*) FILTER (WHERE follow_status = 'delivered' AND NOT cashed)::int AS due_n,
           COALESCE(sum(total) FILTER (WHERE follow_status = 'delivered' AND NOT cashed), 0)::bigint AS due
-         FROM orders`,
+         FROM sales`,
         [CONF_TODO, now, FOLLOW_ON_ROAD],
       )
     )[0];
@@ -412,18 +412,18 @@ export const statsProcs = {
     const r = (
       await ctx.db.query(
         `SELECT
-          (SELECT count(*) FROM orders WHERE created_at >= $1 AND created_at < $2)::int AS received,
-          (SELECT count(*) FROM orders WHERE created_at >= $1 AND created_at < $2 AND conf_status = ANY($3))::int AS received_todo,
-          (SELECT count(*) FROM orders WHERE confirmed_at >= $1 AND confirmed_at < $2)::int AS confirmed,
-          (SELECT count(DISTINCT e.order_id) FROM order_events e JOIN orders o ON o.id = e.order_id
+          (SELECT count(*) FROM sales WHERE created_at >= $1 AND created_at < $2)::int AS received,
+          (SELECT count(*) FROM sales WHERE created_at >= $1 AND created_at < $2 AND conf_status = ANY($3))::int AS received_todo,
+          (SELECT count(*) FROM sales WHERE confirmed_at >= $1 AND confirmed_at < $2)::int AS confirmed,
+          (SELECT count(DISTINCT e.order_id) FROM order_events e JOIN sales o ON o.id = e.order_id
              WHERE e.kind = 'conf_status' AND e.at >= $1 AND e.at < $2 AND e.to_value = ANY($4) AND o.conf_status = ANY($4))::int AS cancelled,
-          (SELECT count(*) FROM orders WHERE shipped_at >= $1 AND shipped_at < $2)::int AS shipped,
-          (SELECT count(*) FROM orders WHERE shipped_at >= $1 AND shipped_at < $2 AND follow_status = ANY($5))::int AS shipped_road,
-          (SELECT count(*) FROM orders WHERE delivered_at >= $1 AND delivered_at < $2 AND follow_status IN ('delivered','exchanged'))::int AS delivered,
+          (SELECT count(*) FROM sales WHERE shipped_at >= $1 AND shipped_at < $2)::int AS shipped,
+          (SELECT count(*) FROM sales WHERE shipped_at >= $1 AND shipped_at < $2 AND follow_status = ANY($5))::int AS shipped_road,
+          (SELECT count(*) FROM sales WHERE delivered_at >= $1 AND delivered_at < $2 AND follow_status IN ('delivered','exchanged'))::int AS delivered,
           (SELECT count(DISTINCT e.order_id) FROM order_events e WHERE e.kind = 'follow_status' AND e.at >= $1 AND e.at < $2 AND e.to_value IN ('returning','returned'))::int AS returns,
-          (SELECT count(*) FROM orders WHERE returned_at >= $1 AND returned_at < $2)::int AS returned,
-          (SELECT COALESCE(sum(total),0) FROM orders WHERE delivered_at >= $1 AND delivered_at < $2 AND follow_status IN ('delivered','exchanged'))::bigint AS cash,
-          (SELECT COALESCE(sum(subtotal - discount),0) FROM orders WHERE delivered_at >= $1 AND delivered_at < $2 AND follow_status IN ('delivered','exchanged'))::bigint AS cash_products`,
+          (SELECT count(*) FROM sales WHERE returned_at >= $1 AND returned_at < $2)::int AS returned,
+          (SELECT COALESCE(sum(total),0) FROM sales WHERE delivered_at >= $1 AND delivered_at < $2 AND follow_status IN ('delivered','exchanged'))::bigint AS cash,
+          (SELECT COALESCE(sum(subtotal - discount),0) FROM sales WHERE delivered_at >= $1 AND delivered_at < $2 AND follow_status IN ('delivered','exchanged'))::bigint AS cash_products`,
         [from, to, CONF_TODO, CONF_DONE_BAD, FOLLOW_ON_ROAD],
       )
     )[0];
@@ -458,7 +458,7 @@ export const statsProcs = {
        d AS (SELECT agent_id AS user_id,
                     count(*) FILTER (WHERE delivered_at >= $1 AND delivered_at < $2 AND follow_status IN ('delivered','exchanged'))::int AS delivered,
                     count(*) FILTER (WHERE returned_at >= $1 AND returned_at < $2)::int AS returned
-             FROM orders WHERE agent_id IS NOT NULL GROUP BY agent_id)
+             FROM sales WHERE agent_id IS NOT NULL GROUP BY agent_id)
        SELECT p.id, p.name, COALESCE(t.treated,0) AS treated, COALESCE(t.confirmed,0) AS confirmed, COALESCE(t.lost,0) AS lost,
               COALESCE(d.delivered,0) AS delivered, COALESCE(d.returned,0) AS returned
        FROM profiles p LEFT JOIN t ON t.user_id = p.id LEFT JOIN d ON d.user_id = p.id
@@ -504,7 +504,7 @@ export const statsProcs = {
              CASE WHEN p.last_seen_at > $2::timestamptz - interval '3 minutes' THEN p.presence ELSE 'offline' END AS live,
              (SELECT count(*) FROM order_events e WHERE e.user_id = p.id AND e.kind = 'conf_status' AND e.at >= $3)::int AS calls,
              (SELECT max(at) FROM order_events e WHERE e.user_id = p.id AND e.kind IN ('conf_status','call')) AS last_call,
-             (SELECT ref FROM orders o WHERE o.locked_by = p.id AND o.locked_until > $2 ORDER BY o.locked_until DESC LIMIT 1) AS on_order
+             (SELECT ref FROM sales o WHERE o.locked_by = p.id AND o.locked_until > $2 ORDER BY o.locked_until DESC LIMIT 1) AS on_order
            FROM profiles p WHERE p.id = ANY($1) AND p.active`,
           [ids, nowIso, dayStart],
         )
@@ -598,7 +598,7 @@ export const statsProcs = {
     const calls = await getSetting(ctx.db, 'calls');
     const visibleAgents = [...new Set(teams.flatMap((t) => t.agentIds))];
     const waiting = visibleAgents.length
-      ? await ctx.db.query(`SELECT agent_id, created_at, COALESCE(assigned_at, created_at) AS start FROM orders WHERE conf_status IN ('new','to_check') AND attempts = 0 AND agent_id = ANY($1)`, [visibleAgents])
+      ? await ctx.db.query(`SELECT agent_id, created_at, COALESCE(assigned_at, created_at) AS start FROM sales WHERE conf_status IN ('new','to_check') AND attempts = 0 AND agent_id = ANY($1)`, [visibleAgents])
       : [];
     const lateFirst = waiting.filter((r: any) => {
       const due = nextDue({ createdAt: new Date(r.start).toISOString(), attempts: 0, nextCallAt: null, done: false }, calls, now);
@@ -665,12 +665,12 @@ export const statsProcs = {
                 count(*) FILTER (WHERE follow_status = 'out_for_delivery')::int AS out,
                 count(*) FILTER (WHERE follow_status = 'returning')::int AS returning,
                 count(*) FILTER (WHERE shipped_at >= $1 AND shipped_at < $2)::int AS shipped
-         FROM orders`,
+         FROM sales`,
         [from, to],
       )
     )[0];
     const delays = (
-      await ctx.db.query(`SELECT extract(epoch FROM (shipped_at - confirmed_at)) * 1000 AS ms FROM orders WHERE shipped_at >= $1 AND shipped_at < $2 AND confirmed_at IS NOT NULL AND shipped_at > confirmed_at`, [from, to])
+      await ctx.db.query(`SELECT extract(epoch FROM (shipped_at - confirmed_at)) * 1000 AS ms FROM sales WHERE shipped_at >= $1 AND shipped_at < $2 AND confirmed_at IS NOT NULL AND shipped_at > confirmed_at`, [from, to])
     ).map((x: any) => Number(x.ms));
     const people = await ctx.db.query(
       `SELECT e.user_id, p.name,
@@ -705,7 +705,7 @@ export const statsProcs = {
                 count(*) FILTER (WHERE follow_status = 'returning')::int AS returning,
                 count(*) FILTER (WHERE delivered_at >= $1 AND delivered_at < $2 AND follow_status IN ('delivered','exchanged'))::int AS delivered,
                 count(*) FILTER (WHERE returned_at >= $1 AND returned_at < $2 AND follow_status = 'returned')::int AS returned
-         FROM orders`,
+         FROM sales`,
         [from, to, FOLLOW_ON_ROAD],
       )
     )[0];
@@ -713,7 +713,7 @@ export const statsProcs = {
       `SELECT o.follow_agent_id AS id, p.name,
               count(*) FILTER (WHERE o.delivered_at >= $1 AND o.delivered_at < $2 AND o.follow_status IN ('delivered','exchanged'))::int AS delivered,
               count(*) FILTER (WHERE o.returned_at >= $1 AND o.returned_at < $2 AND o.follow_status = 'returned')::int AS returned
-       FROM orders o LEFT JOIN profiles p ON p.id = o.follow_agent_id
+       FROM sales o LEFT JOIN profiles p ON p.id = o.follow_agent_id
        WHERE (o.delivered_at >= $1 AND o.delivered_at < $2) OR (o.returned_at >= $1 AND o.returned_at < $2)
        GROUP BY o.follow_agent_id, p.name ORDER BY delivered DESC`,
       [from, to],

@@ -23,11 +23,11 @@ export interface CustomerRow {
 
 // Counts come from the orders themselves (always right, even after edits / merges).
 const COLS = `c.*,
-  (SELECT count(*)::int FROM orders o WHERE o.customer_id = c.id) AS n_orders,
-  (SELECT count(*)::int FROM orders o WHERE o.customer_id = c.id AND o.follow_status IN ('delivered','exchanged')) AS n_delivered,
-  (SELECT count(*)::int FROM orders o WHERE o.customer_id = c.id AND o.follow_status IN ('returning','returned')) AS n_returned,
-  (SELECT count(*)::int FROM orders o WHERE o.customer_id = c.id AND o.conf_status = ANY('{${CONF_DONE_BAD.join(',')}}')) AS n_cancelled,
-  (SELECT max(o.created_at) FROM orders o WHERE o.customer_id = c.id) AS last_at`;
+  (SELECT count(*)::int FROM sales o WHERE o.customer_id = c.id) AS n_orders,
+  (SELECT count(*)::int FROM sales o WHERE o.customer_id = c.id AND o.follow_status IN ('delivered','exchanged')) AS n_delivered,
+  (SELECT count(*)::int FROM sales o WHERE o.customer_id = c.id AND o.follow_status IN ('returning','returned')) AS n_returned,
+  (SELECT count(*)::int FROM sales o WHERE o.customer_id = c.id AND o.conf_status = ANY('{${CONF_DONE_BAD.join(',')}}')) AS n_cancelled,
+  (SELECT max(o.created_at) FROM sales o WHERE o.customer_id = c.id) AS last_at`;
 
 const toCustomer = (r: any): CustomerRow => ({
   id: num(r.id),
@@ -83,7 +83,7 @@ export const customersProcs = {
     const orders = await ctx.db.query(
       `SELECT o.id, o.ref, o.created_at, o.total, o.conf_status, o.follow_status, o.attempts,
          (SELECT string_agg(i.qty || ' × ' || i.name || CASE WHEN i.variant_title <> '' THEN ' ' || i.variant_title ELSE '' END, ' · ' ORDER BY i.id) FROM order_items i WHERE i.order_id = o.id) AS items_text
-       FROM orders o WHERE o.customer_id = $1 OR o.phone = $2 ORDER BY o.created_at DESC LIMIT 100`,
+       FROM sales o WHERE o.customer_id = $1 OR o.phone = $2 ORDER BY o.created_at DESC LIMIT 100`,
       [r.id, r.phone],
     );
     return {
@@ -110,7 +110,7 @@ export const customersProcs = {
       )[0];
       if (!r) throw notFound('Client introuvable');
       // Leave a trace on their open orders (visible in the order history).
-      const open = await ctx.db.query(`SELECT id FROM orders WHERE customer_id = $1 AND (follow_status IS NULL OR follow_status IN ('to_prepare','prepared')) AND conf_status <> ALL($2)`, [r.id, CONF_DONE_BAD]);
+      const open = await ctx.db.query(`SELECT id FROM sales WHERE customer_id = $1 AND (follow_status IS NULL OR follow_status IN ('to_prepare','prepared')) AND conf_status <> ALL($2)`, [r.id, CONF_DONE_BAD]);
       for (const o of open) await addEvent(ctx.db, num(o.id), ctx.session.profile.id, 'note', null, 'event', i.on ? `Client mis en liste noire${i.reason ? ` : ${i.reason}` : ''}` : 'Client retiré de la liste noire');
       ctx.emit({ type: 'orders' });
       return { ok: true, id: num(r.id), blacklisted: i.on };

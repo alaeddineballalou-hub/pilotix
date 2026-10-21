@@ -80,7 +80,7 @@ export async function suiviCounts(ctx: Ctx) {
          count(*) FILTER (WHERE follow_status = 'delivered' AND delivered_at >= $1)::int AS livres,
          count(*) FILTER (WHERE follow_status = 'returning')::int AS returning,
          count(*) FILTER (WHERE follow_status = 'cancelled' AND sub_status = 'annule_swappe')::int AS swapped
-       FROM orders WHERE follow_status IS NOT NULL`,
+       FROM sales WHERE follow_status IS NOT NULL`,
       [d30],
     )
   )[0];
@@ -107,7 +107,7 @@ async function swapCandidates(ctx: Ctx, fromId: number, q?: string) {
   } else {
     // confirmed orders still at the depot that ask for one of the parcel's products
     const ids = await ctx.db.query(
-      `SELECT DISTINCT o.id FROM orders o JOIN order_items i ON i.order_id = o.id
+      `SELECT DISTINCT o.id FROM sales o JOIN order_items i ON i.order_id = o.id
        WHERE o.conf_status = 'confirmed' AND (o.follow_status IS NULL OR o.follow_status IN ('to_prepare','prepared')) AND o.shipped_at IS NULL
          AND o.id <> $1 AND i.product_id = ANY($2) LIMIT 150`,
       [fromId, [...products]],

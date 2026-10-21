@@ -7,7 +7,7 @@ import { rpc } from '../../lib/backend';
 import { da } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
-import { Empty, ErrorBox, Icon, Kpi, Kpis, Loading } from '../../ui/kit';
+import { Empty, ErrorBox, Icon, Kpi, Kpis, Loading, TicketTag } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { printRouteSheet } from '../livraison/print';
 import type { PageProps } from '../registry';
@@ -107,6 +107,7 @@ function ParcelCard({ o, shop, actions }: { o: Order; shop: { name: string; what
     <div className={`card ${actions && focus ? 'focus-card' : ''}`}>
       <div className="ord-head">
         <b className="ltr">{o.ref}</b>
+        <TicketTag savRef={o.savRef} />
         <span className={`badge t-${FOLLOW_TONE[o.followStatus!] ?? 'off'}`}>{t(`status.follow.${o.followStatus}`)}</span>
         <span className="grow" />
         <b className="ltr">{da(o.total)}</b>

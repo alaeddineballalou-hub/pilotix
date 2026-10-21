@@ -8,6 +8,8 @@ export interface SettingsMap {
   /** Client delivery price grids: name → wilaya → { home, desk } */
   clientFees: Record<string, Record<string, { home: number; desk: number }>>;
   defaultFeeGrid: string;
+  /** SAV tickets' own delivery price per wilaya (suggested on each exchange, editable there) */
+  savFees: Record<string, { home: number; desk: number }>;
   /** Extra fee per kg above `fromKg`. */
   weightFees: { fromKg: number; perKg: number };
   /** Renamed / recolored / custom statuses. */
@@ -32,6 +34,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   calls: DEFAULT_CALL_SETTINGS,
   clientFees: {},
   defaultFeeGrid: 'Standard',
+  savFees: {},
   weightFees: { fromKg: 5, perKg: 50 },
   statusLabels: {},
   customStatuses: [],
@@ -70,6 +73,13 @@ export async function clientFee(db: Db, wilayaId: number, stopdesk: boolean, gri
   const fees = await getSetting(db, 'clientFees');
   const name = grid || (await getSetting(db, 'defaultFeeGrid'));
   const row = fees[name]?.[String(wilayaId)];
+  if (!row) return null;
+  return stopdesk ? row.desk : row.home;
+}
+
+/** SAV delivery price for a wilaya (null when the SAV tariff has no price there). */
+export async function savFee(db: Db, wilayaId: number, stopdesk: boolean): Promise<number | null> {
+  const row = (await getSetting(db, 'savFees'))[String(wilayaId)];
   if (!row) return null;
   return stopdesk ? row.desk : row.home;
 }
