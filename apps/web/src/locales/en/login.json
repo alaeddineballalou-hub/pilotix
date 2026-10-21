@@ -1,0 +1,11 @@
+{
+  "tagline": "Order management",
+  "email": "Email",
+  "password": "Password",
+  "submit": "Log in",
+  "server": "Server address",
+  "serverHint": "Given by your administrator",
+  "error": "Wrong email or password",
+  "demo": "Demo",
+  "demoText": "log in with a test account (invented data, nothing is sent):"
+}

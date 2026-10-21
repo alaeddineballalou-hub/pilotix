@@ -1,0 +1,10 @@
+{
+  "admin": "Administrateur",
+  "vendeur": "Vendeur (propriétaire)",
+  "agent_manager": "Agent manager",
+  "confirmation": "Confirmation",
+  "suivi": "Suivi",
+  "depot": "Dépôt",
+  "livreur": "Livreur",
+  "marketer": "Marketeur"
+}

@@ -1,0 +1,303 @@
+import { CONF_DONE_BAD, CONF_TODO, Language, LANGUAGES, normalizePhone } from '@pilotix/shared';
+import { lazy, ReactNode, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { backend, rpc } from '../lib/backend';
+import { compact, when } from '../lib/format';
+import { applyLanguage } from '../lib/i18n';
+import { openOrder, openOrderForm } from '../lib/modals';
+import { useAction, useRpc } from '../lib/query';
+import { useSession } from '../lib/session';
+import { store } from '../lib/store';
+import { Field, Icon } from '../ui/kit';
+import { Modal } from '../ui/modal';
+import { canSee, NAV } from './nav';
+
+const AgentBanner = lazy(() => import('../pages/confirmation/AgentBanner').then((m) => ({ default: m.AgentBanner })));
+
+type Theme = 'light' | 'dark' | null;
+export function applyTheme(t: Theme) {
+  if (t) document.documentElement.setAttribute('data-theme', t);
+  else document.documentElement.removeAttribute('data-theme');
+  store.set('theme', t);
+}
+
+/** Menu counts, refreshed every minute and on live updates. */
+export function useMenuCounts() {
+  const q = useRpc('orders.counts', {}, { refetchInterval: 60_000 });
+  return useMemo(() => {
+    const c = q.data;
+    if (!c) return {} as Record<string, number>;
+    const sum = (o: Record<string, number>, keys: string[]) => keys.reduce((s, k) => s + (o[k] ?? 0), 0);
+    return {
+      conf: sum(c.conf, CONF_TODO),
+      new: c.conf.new ?? 0,
+      attente: sum(c.conf, CONF_TODO.filter((k) => k !== 'new')),
+      confirmees: sum(c.conf, ['confirmed', 'no_stock']),
+      depot: sum(c.follow, ['to_prepare', 'prepared']),
+      suivi: sum(c.follow, ['alert']),
+      delivered: c.follow.delivered ?? 0,
+      cancelled: sum(c.conf, CONF_DONE_BAD) + (c.follow.returned ?? 0),
+      sav: c.sav,
+      uncashed: c.uncashed,
+    } as Record<string, number>;
+  }, [q.data]);
+}
+
+export function Shell({ page, sub, children }: { page: string; sub?: string; children: ReactNode }) {
+  const { t, i18n } = useTranslation();
+  const { session, logout, has } = useSession();
+  const [navOpen, setNavOpen] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
+  const counts = useMenuCounts();
+  const roles = session!.roles;
+  const isAdmin = session!.isAdmin;
+
+  // Presence heartbeat, every minute (online / idle after 5 min without activity).
+  useEffect(() => {
+    let last = Date.now();
+    const act = () => (last = Date.now());
+    window.addEventListener('pointerdown', act);
+    window.addEventListener('keydown', act);
+    const beat = () => rpc('me.seen', { presence: Date.now() - last > 5 * 60_000 ? 'idle' : 'online' }).catch(() => {});
+    beat();
+    const id = window.setInterval(beat, 60_000);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener('pointerdown', act);
+      window.removeEventListener('keydown', act);
+    };
+  }, []);
+
+  useEffect(() => setNavOpen(false), [page, sub]);
+  useEffect(() => {
+    document.body.classList.toggle('nav-open', navOpen);
+  }, [navOpen]);
+
+  const items = NAV.filter((n) => !n.hidden && canSee(n, roles, isAdmin));
+  const ordersPages = ['commandes', 'confirmation', 'depot', 'suivi', 'livrees', 'retournees'];
+  const theme = store.get('theme') as Theme;
+
+  return (
+    <div className="shell">
+      <nav className="side" id="side" aria-label={t('nav.menu')}>
+        {items.map((n) =>
+          n.children ? (
+            <div key={n.id} className={`nav-group open bjcn ${ordersPages.includes(page) ? 'bjcn-on in' : ''}`} data-grp={n.id}>
+              <a href="#/commandes" className={`nav-item nav-group-head ${page === 'commandes' && (!sub || sub === 'tout') ? 'on' : ''}`}>
+                <Icon name={n.icon} className="ic" />
+                <span>{t(`nav.${n.id}`)}</span>
+              </a>
+              <div className="nav-sub" style={{ display: 'flex' }}>
+                {n.children
+                  .filter((c) => (c.id === 'confirmation' ? has('confirmation') : c.id === 'depot' ? has('depot') : c.id === 'suivi' ? has('suivi') : true))
+                  .map((c) => {
+                    const on = c.id === page || (page === 'commandes' && sub === c.id);
+                    const v = c.count ? counts[c.count] : undefined;
+                    return (
+                      <a key={c.id} href={c.href} className={`nav-item nav-sub-item ${on ? 'on' : ''}`} aria-current={on ? 'page' : undefined}>
+                        <span>{t(`nav.sub.${c.id}`)}</span>
+                        {v !== undefined && (
+                          <span className={`nav-count ${v === 0 ? 'zero' : ''}`} title={`${v}`}>
+                            {compact(v)}
+                          </span>
+                        )}
+                      </a>
+                    );
+                  })}
+              </div>
+            </div>
+          ) : (
+            <a key={n.id} href={`#/${n.id}`} className={`nav-item ${page === n.id ? 'on' : ''}`} data-page={n.id} aria-current={page === n.id ? 'page' : undefined}>
+              <Icon name={n.icon} className="ic" />
+              <span>{t(`nav.${n.id}`)}</span>
+              {n.id === 'sav' && counts.sav > 0 && <span className="nav-count nc-a">{compact(counts.sav)}</span>}
+            </a>
+          ),
+        )}
+        <div className="me">
+          <div className="me-name">{session!.profile.name}</div>
+          <div className="me-roles">{session!.profile.roles.map((r) => t(`roles.${r}`)).join(' · ')}</div>
+          <div className="me-actions">
+            <button className="linkish" onClick={() => setPwOpen(true)}>
+              {t('shell.password')}
+            </button>
+            <button className="linkish" onClick={logout}>
+              {t('shell.logout')}
+            </button>
+          </div>
+        </div>
+      </nav>
+      <div className="scrim" onClick={() => setNavOpen(false)} />
+      <div className="content">
+        {backend.kind === 'demo' && (
+          <div className="demo-bar">
+            <span>
+              <b>{t('shell.demo')}</b> · {t('shell.demoText')}
+            </span>
+            <button className="linkish" onClick={logout}>
+              {t('shell.switchAccount')}
+            </button>
+            <button
+              className="linkish"
+              onClick={() => {
+                logout();
+                location.reload();
+              }}
+            >
+              {t('shell.resetDemo')}
+            </button>
+          </div>
+        )}
+        <header className="topbar">
+          <button className="icon-btn menu-btn" aria-label={t('nav.menu')} onClick={() => setNavOpen(!navOpen)}>
+            <Icon name="menu" />
+          </button>
+          <a className="brand" href="#/accueil" aria-label="Pilotix">
+            Pilotix
+          </a>
+          <span id="page-title" className="page-title">
+            {t(`nav.${page}`, { defaultValue: '' })}
+          </span>
+          {has('confirmation', 'suivi', 'depot') && <GlobalSearch />}
+          {has('confirmation', 'suivi', 'depot') && (
+            <button type="button" className="btn primary pxs-new" title={t('orders.new')} onClick={() => openOrderForm()}>
+              +<span className="pxs-t"> {t('orders.new')}</span>
+            </button>
+          )}
+          <select
+            className="icon-btn"
+            aria-label={t('shell.language')}
+            value={i18n.language}
+            onChange={(e) => {
+              applyLanguage(e.target.value as Language);
+              rpc('me.language', { language: e.target.value as Language }).catch(() => {});
+            }}
+            style={{ width: 'auto', padding: '0 6px', fontWeight: 700 }}
+          >
+            {LANGUAGES.map((l) => (
+              <option key={l} value={l}>
+                {l.toUpperCase()}
+              </option>
+            ))}
+          </select>
+          <button
+            className="icon-btn theme-btn"
+            aria-label={t('shell.theme')}
+            title={t('shell.theme')}
+            onClick={() => {
+              const dark = document.documentElement.getAttribute('data-theme') === 'dark' || (!theme && matchMedia('(prefers-color-scheme: dark)').matches);
+              applyTheme(dark ? 'light' : 'dark');
+            }}
+          >
+            <Icon name="moon" />
+          </button>
+        </header>
+        {has('confirmation') && !isAdmin && (
+          <Suspense fallback={null}>
+            <AgentBanner />
+          </Suspense>
+        )}
+        <main id="page" className="page">
+          {children}
+        </main>
+      </div>
+      {pwOpen && <PasswordModal onClose={() => setPwOpen(false)} />}
+    </div>
+  );
+}
+
+/** Top bar search: BJ…/PX…, phone, name, tracking — with a keyboard list. */
+function GlobalSearch() {
+  const { t } = useTranslation();
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const [sel, setSel] = useState(0);
+  const [debounced, setDebounced] = useState('');
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(q.trim()), 250);
+    return () => clearTimeout(id);
+  }, [q]);
+  const res = useRpc('orders.list', { q: debounced, pageSize: 8 }, { enabled: debounced.length >= 2 });
+  const rows = debounced.length >= 2 ? res.data?.rows ?? [] : [];
+  useEffect(() => {
+    const close = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, []);
+  const go = (id: number) => {
+    setOpen(false);
+    setQ('');
+    openOrder(id);
+  };
+  return (
+    <div className="pxs" ref={box}>
+      <Icon name="search" />
+      <input
+        type="search"
+        className="pxs-in"
+        placeholder={t('shell.search')}
+        aria-label={t('shell.search')}
+        autoComplete="off"
+        value={q}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setOpen(true);
+          setSel(0);
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') setSel((s) => Math.min(rows.length - 1, s + 1));
+          else if (e.key === 'ArrowUp') setSel((s) => Math.max(0, s - 1));
+          else if (e.key === 'Enter' && rows[sel]) go(rows[sel].id);
+          else if (e.key === 'Escape') setOpen(false);
+        }}
+      />
+      {open && debounced.length >= 2 && (
+        <div className="pxs-res" role="listbox">
+          {rows.length === 0 && <div className="muted small" style={{ padding: 10 }}>{res.isFetching ? t('common.loading') : t('shell.noResult')}</div>}
+          {rows.map((o, i) => (
+            <button key={o.id} type="button" role="option" aria-selected={i === sel} className={`pxs-it ${i === sel ? 'on' : ''}`} onMouseDown={(e) => e.preventDefault()} onClick={() => go(o.id)}>
+              <b className="ltr">{o.ref}</b> {o.customerName} <span className="muted ltr">{o.phone}</span>
+              <span className="muted small"> · {when(o.createdAt)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PasswordModal({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
+  const [cur, setCur] = useState('');
+  const [next, setNext] = useState('');
+  const save = useAction('me.password', { success: t('shell.passwordChanged'), onDone: onClose });
+  return (
+    <Modal
+      title={t('shell.changePassword')}
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>
+            {t('common.cancel')}
+          </button>
+          <button className="btn primary" disabled={next.length < 8 || save.isPending} onClick={() => save.mutate({ current: cur, next })}>
+            {t('common.save')}
+          </button>
+        </>
+      }
+    >
+      <div className="grid2" style={{ display: 'grid', gap: 12 }}>
+        <Field label={t('shell.currentPassword')}>
+          <input id="pw-cur" type="password" autoComplete="current-password" value={cur} onChange={(e) => setCur(e.target.value)} />
+        </Field>
+        <Field label={t('shell.newPassword')} hint={t('shell.passwordHint')}>
+          <input id="pw-new" type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} />
+        </Field>
+      </div>
+    </Modal>
+  );
+}
+
+export { normalizePhone };

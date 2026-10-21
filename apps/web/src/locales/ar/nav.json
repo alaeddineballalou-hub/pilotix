@@ -1,0 +1,29 @@
+{
+  "menu": "القائمة",
+  "accueil": "الرئيسية",
+  "dashboard": "لوحة التحكم",
+  "commandes": "الطلبات",
+  "confirmation": "التأكيد",
+  "depot": "المستودع",
+  "suivi": "المتابعة",
+  "scanner": "الماسح",
+  "sav": "خدمة ما بعد البيع",
+  "tournee": "جولتي",
+  "produits": "المنتجات والمخزون",
+  "clients": "الزبائن",
+  "publicite": "الإشهار",
+  "caisse": "الصندوق",
+  "livraison": "شركات التوصيل",
+  "utilisateurs": "المستخدمون",
+  "management": "الإدارة",
+  "reglages": "الإعدادات",
+  "livrees": "المُسلَّمة",
+  "retournees": "المُرجَعة",
+  "sub": {
+    "confirmation": "التأكيد",
+    "depot": "المستودع",
+    "suivi": "المتابعة",
+    "livrees": "مُسلَّم",
+    "annulees": "ملغى"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "menu": "Menu",
+  "accueil": "Home",
+  "dashboard": "Dashboard",
+  "commandes": "Orders",
+  "confirmation": "Confirmation",
+  "depot": "Depot",
+  "suivi": "Follow-up",
+  "scanner": "Scanner",
+  "sav": "After-sales",
+  "tournee": "My round",
+  "produits": "Products & stock",
+  "clients": "Customers",
+  "publicite": "Advertising",
+  "caisse": "Cash",
+  "livraison": "Delivery companies",
+  "utilisateurs": "Users",
+  "management": "Management",
+  "reglages": "Settings",
+  "livrees": "Delivered",
+  "retournees": "Returned",
+  "sub": {
+    "confirmation": "Confirmation",
+    "depot": "Depot",
+    "suivi": "Follow-up",
+    "livrees": "Delivered",
+    "annulees": "Cancelled"
+  }
+}

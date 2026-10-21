@@ -1,0 +1,17 @@
+{
+  "password": "Password",
+  "logout": "Log out",
+  "demo": "Demo",
+  "demoText": "sample data kept in this browser · delivery companies simulated",
+  "switchAccount": "Switch account",
+  "resetDemo": "Reset the demo",
+  "search": "Search: PX…, phone, name, tracking",
+  "noResult": "No order found",
+  "theme": "Light / dark theme",
+  "language": "Language",
+  "changePassword": "Change my password",
+  "currentPassword": "Current password",
+  "newPassword": "New password",
+  "passwordHint": "At least 8 characters",
+  "passwordChanged": "Password changed"
+}

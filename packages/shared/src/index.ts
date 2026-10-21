@@ -1,67 +1,106 @@
-// Shared types and rules used by both the Pilotix server and the app.
+// Pilotix — rules and types shared by the core, the server and the app.
+// Mirrors the original Pilotix model: two status tracks per order (confirmation, then livraison).
 
-export const ROLES = ['admin', 'manager', 'confirmation', 'agent', 'suivi', 'depot', 'livreur'] as const;
+export * from './timers';
+export * from './geo';
+export * from './demo';
+
+// ---------------------------------------------------------------- roles
+export const ROLES = ['admin', 'vendeur', 'agent_manager', 'confirmation', 'suivi', 'depot', 'livreur', 'marketer'] as const;
 export type Role = (typeof ROLES)[number];
+
+/** Roles that bring other roles with them. */
+export const ROLE_INCLUDES: Partial<Record<Role, Role[]>> = {
+  vendeur: ['confirmation', 'suivi', 'depot', 'marketer'],
+  agent_manager: ['confirmation'],
+};
+
+/** All roles a user effectively has (own roles + what they include). */
+export function expandRoles(roles: Role[]): Role[] {
+  const out = new Set<Role>(roles);
+  for (const r of roles) for (const x of ROLE_INCLUDES[r] ?? []) out.add(x);
+  return [...out];
+}
 
 export const LANGUAGES = ['fr', 'en', 'ar'] as const;
 export type Language = (typeof LANGUAGES)[number];
 
-export const ORDER_STATUSES = [
-  'new',
-  'confirmed',
-  'callback',
-  'no_answer',
-  'postponed',
-  'cancelled',
-  'duplicate',
-  'assigned',
-  'shipped',
-  'delivered',
-  'returning',
-  'returned',
+// ---------------------------------------------------------------- order statuses
+export type Tone = 'ok' | 'bad' | 'warn' | 'info' | 'mid' | 'off';
+
+export const CONF_STATUSES = [
+  'to_check', 'new', 'no_answer', 'busy', 'callback', 'postponed',
+  'no_stock', 'confirmed', 'cancelled', 'duplicate', 'wrong_number', 'fake',
 ] as const;
-export type OrderStatus = (typeof ORDER_STATUSES)[number];
+export type ConfStatus = (typeof CONF_STATUSES)[number];
 
-/** Which statuses an order may move to from each status. */
-export const STATUS_FLOW: Record<OrderStatus, OrderStatus[]> = {
-  new: ['confirmed', 'callback', 'no_answer', 'postponed', 'cancelled', 'duplicate'],
-  callback: ['confirmed', 'callback', 'no_answer', 'postponed', 'cancelled'],
-  no_answer: ['confirmed', 'callback', 'no_answer', 'postponed', 'cancelled'],
-  postponed: ['confirmed', 'callback', 'no_answer', 'postponed', 'cancelled'],
-  confirmed: ['assigned', 'cancelled'],
-  assigned: ['shipped', 'confirmed', 'cancelled'],
-  shipped: ['delivered', 'returning'],
-  returning: ['returned', 'delivered'],
-  delivered: [],
-  returned: [],
-  cancelled: ['new'],
-  duplicate: ['new'],
+export const CONF_TONE: Record<ConfStatus, Tone> = {
+  to_check: 'warn', new: 'info', no_answer: 'mid', busy: 'mid', callback: 'mid', postponed: 'mid',
+  no_stock: 'warn', confirmed: 'ok', cancelled: 'bad', duplicate: 'off', wrong_number: 'bad', fake: 'bad',
+};
+/** Statuses still waiting in the call queue. */
+export const CONF_TODO: ConfStatus[] = ['to_check', 'new', 'no_answer', 'busy', 'callback', 'postponed'];
+export const CONF_DONE_BAD: ConfStatus[] = ['cancelled', 'duplicate', 'wrong_number', 'fake'];
+/** Statuses that need a date for the next call. */
+export const CONF_NEEDS_DATE: ConfStatus[] = ['callback', 'postponed'];
+/** Statuses that need a reason. */
+export const CONF_NEEDS_REASON: ConfStatus[] = ['cancelled', 'fake', 'wrong_number'];
+
+export const FOLLOW_STATUSES = [
+  'to_prepare', 'prepared', 'shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange',
+  'delivered', 'returning', 'returned', 'exchanged', 'lost', 'cancelled',
+] as const;
+export type FollowStatus = (typeof FOLLOW_STATUSES)[number];
+
+export const FOLLOW_TONE: Record<FollowStatus, Tone> = {
+  to_prepare: 'info', prepared: 'info', shipped: 'mid', out_for_delivery: 'mid', failed: 'warn', alert: 'bad',
+  in_exchange: 'mid', delivered: 'ok', returning: 'bad', returned: 'bad', exchanged: 'off', lost: 'bad', cancelled: 'off',
+};
+/** Parcels still with the courier. */
+export const FOLLOW_ON_ROAD: FollowStatus[] = ['shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange'];
+export const FOLLOW_FINAL: FollowStatus[] = ['delivered', 'returned', 'exchanged', 'lost', 'cancelled'];
+
+/** Which delivery statuses each role may set (admin and suivi: all). */
+export const FOLLOW_BY_ROLE: Partial<Record<Role, FollowStatus[]>> = {
+  depot: ['to_prepare', 'prepared', 'shipped', 'returned'],
+  livreur: ['out_for_delivery', 'delivered', 'failed', 'returning'],
 };
 
-/** Which roles may set an order to a given status. Admin and manager may set any. */
-export const STATUS_ROLES: Record<OrderStatus, Role[]> = {
-  new: ['admin', 'manager'],
-  confirmed: ['admin', 'manager', 'confirmation', 'agent'],
-  callback: ['admin', 'manager', 'confirmation', 'agent'],
-  no_answer: ['admin', 'manager', 'confirmation', 'agent'],
-  postponed: ['admin', 'manager', 'confirmation', 'agent'],
-  cancelled: ['admin', 'manager', 'confirmation', 'agent'],
-  duplicate: ['admin', 'manager', 'confirmation', 'agent'],
-  assigned: ['admin', 'manager', 'depot'],
-  shipped: ['admin', 'manager', 'depot', 'livreur'],
-  delivered: ['admin', 'manager', 'suivi', 'livreur'],
-  returning: ['admin', 'manager', 'suivi', 'livreur'],
-  returned: ['admin', 'manager', 'suivi', 'depot'],
-};
-
-export function canSetStatus(roles: Role[], from: OrderStatus, to: OrderStatus): boolean {
-  if (!STATUS_FLOW[from].includes(to)) return false;
-  return roles.some((r) => STATUS_ROLES[to].includes(r));
+export function canSetFollow(roles: Role[], to: FollowStatus): boolean {
+  const r = expandRoles(roles);
+  if (r.includes('admin') || r.includes('suivi')) return true;
+  return r.some((x) => FOLLOW_BY_ROLE[x]?.includes(to));
+}
+export function canSetConf(roles: Role[]): boolean {
+  const r = expandRoles(roles);
+  return r.includes('admin') || r.includes('confirmation');
 }
 
+/** Products can no longer be changed once the parcel has left. */
+export const FOLLOW_LOCKED: FollowStatus[] = ['shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange', 'delivered', 'returning', 'returned', 'exchanged', 'lost'];
+
+// ---------------------------------------------------------------- reasons and lists
+export const CANCEL_REASONS = ['price', 'fee', 'elsewhere', 'not_ordered', 'too_long', 'changed_mind', 'other'] as const;
+export const FAIL_REASONS = ['absent', 'no_answer', 'postponed_by_client', 'address', 'no_money', 'other'] as const;
+export const RETURN_REASONS = ['refused', 'unreachable', 'mismatch', 'wrong_address', 'cancelled_by_client', 'other'] as const;
+export const SALES_CHANNELS = ['site', 'facebook', 'instagram', 'tiktok', 'appel', 'whatsapp', 'autre'] as const;
+export type SalesChannel = (typeof SALES_CHANNELS)[number];
+
+export const COURIER_KINDS = ['own', 'zr', 'zr_legacy', 'yalidine', 'ecotrack', 'noest', 'custom', 'manual'] as const;
+export type CourierKind = (typeof COURIER_KINDS)[number];
+
+// ---------------------------------------------------------------- SAV
+export const SAV_TYPES = ['defect', 'missing', 'wrong', 'late', 'notdelivered', 'refund', 'exchange', 'help', 'other'] as const;
+export const SAV_WISHES = ['exchange', 'refund', 'part', 'repair', 'info'] as const;
+export const SAV_STATUSES = ['open', 'progress', 'resolved', 'closed'] as const;
+export type SavStatus = (typeof SAV_STATUSES)[number];
+export const SAV_TONE: Record<SavStatus, Tone> = { open: 'bad', progress: 'mid', resolved: 'ok', closed: 'off' };
+export const EXCHANGE_KINDS = ['same', 'variant', 'other_product', 'parts'] as const;
+
+// ---------------------------------------------------------------- phone and money
 /**
- * Normalizes an Algerian phone number to the local 10-digit form (0XXXXXXXXX).
- * Accepts +213, 00213, 213 and spaces/dashes. Returns null when it is not a valid number.
+ * Normalizes an Algerian phone number to 0XXXXXXXXX. Accepts +213, 00213, 213, spaces and dashes.
+ * Returns null when it is not a valid Algerian number.
  */
 export function normalizePhone(input: string): string | null {
   let d = (input || '').replace(/[^\d+]/g, '');
@@ -69,93 +108,214 @@ export function normalizePhone(input: string): string | null {
   else if (d.startsWith('00213')) d = '0' + d.slice(5);
   else if (d.startsWith('213') && d.length === 12) d = '0' + d.slice(3);
   d = d.replace(/\D/g, '');
-  if (/^0[5-7]\d{8}$/.test(d)) return d; // mobile: Mobilis 06, Djezzy 07, Ooredoo 05
-  if (/^0[2-4]\d{7}$/.test(d)) return d; // landline
+  if (d.length === 9 && /^[5-7]/.test(d)) d = '0' + d;
+  if (/^0[5-7]\d{8}$/.test(d)) return d;
+  if (/^0[2-4]\d{7}$/.test(d)) return d;
   return null;
 }
+/** 0661234567 → 213661234567 (for WhatsApp links). */
+export const phoneIntl = (p: string) => '213' + p.replace(/^0/, '');
 
-/** Money is stored as whole dinars (integers), never floats. */
-export type DZD = number;
+// ---------------------------------------------------------------- data types
+export interface Profile {
+  id: number;
+  name: string;
+  email: string;
+  phone: string | null;
+  roles: Role[];
+  language: Language;
+  active: boolean;
+  lastSeenAt: string | null;
+  livreurCompanyId?: number | null;
+}
 
-export interface OrderItem {
+export interface Session {
+  profile: Profile;
+  roles: Role[]; // expanded
+  isAdmin: boolean;
+}
+
+export interface Variant {
+  id: number;
   productId: number;
-  variant?: string | null;
-  quantity: number;
-  unitPrice: DZD;
+  title: string; // '' for a product without variants
+  sku: string;
+  price: number | null; // null = product price
+  active: boolean;
 }
 
-export interface Order {
-  id: number;
-  reference: string;
-  createdAt: string;
-  updatedAt: string;
-  status: OrderStatus;
-  customerName: string;
-  phone: string;
-  wilaya: number;
-  commune: string;
-  address: string;
-  items: OrderItem[];
-  deliveryFee: DZD;
-  discount: DZD;
-  total: DZD;
-  note?: string | null;
-  agentId?: number | null;
-  livreurId?: number | null;
-  callbackAt?: string | null;
-  tracking?: string | null;
-  attempts: number;
-  version: number;
-  /** Another open order exists for the same phone. */
-  possibleDuplicate?: boolean;
-  /** Customer history: delivered and returned orders. */
-  customerDelivered?: number;
-  customerReturned?: number;
-}
-
-export const OPEN_STATUSES: OrderStatus[] = ['new', 'callback', 'no_answer', 'postponed', 'confirmed', 'assigned'];
-
-export interface OrderEvent {
-  id: number;
-  orderId: number;
-  userId: number | null;
-  userName: string | null;
-  type: 'created' | 'status' | 'edit' | 'call' | 'note';
-  fromValue: string | null;
-  toValue: string | null;
-  note: string | null;
-  createdAt: string;
-}
-
-/** An action made on the phone, possibly while offline, replayed when back online. */
-export interface OfflineAction {
-  clientId: string;
-  orderId: number;
-  kind: 'status' | 'call' | 'note';
-  status?: OrderStatus;
-  note?: string;
-  callbackAt?: string | null;
-  at: string;
+export interface Pack {
+  qty: number;
+  price: number;
 }
 
 export interface Product {
   id: number;
   name: string;
   sku: string;
-  price: DZD;
-  cost: DZD;
-  variants: string[];
-  stock: number;
+  price: number;
+  cost: number;
+  weightKg: number;
+  photo: string | null;
+  isService: boolean;
+  active: boolean;
+  fixedPrice: boolean;
+  maxDiscount: number | null;
+  packs: Pack[];
+  linked: number[];
+  feeGrid: string | null;
+  variants: Variant[];
+}
+
+export interface OrderItem {
+  id?: number;
+  productId: number;
+  variantId: number | null;
+  name: string;
+  variantTitle: string;
+  qty: number;
+  unitPrice: number;
+  purchasePrice: number;
+  isUpsell: boolean;
+}
+
+export interface Order {
+  id: number;
+  ref: string;
+  createdAt: string;
+  createdBy: number | null;
+  customerId: number;
+  customerName: string;
+  phone: string;
+  phone2: string | null;
+  wilayaId: number;
+  commune: string;
+  address: string;
+  isStopdesk: boolean;
+  stopdeskId: number | null;
+  channel: SalesChannel;
+  source: string | null;
+  utm: Record<string, string> | null;
+  confStatus: ConfStatus;
+  agentId: number | null;
+  attempts: number;
+  lastCallAt: string | null;
+  nextCallAt: string | null;
+  confirmedAt: string | null;
+  followStatus: FollowStatus | null;
+  followAgentId: number | null;
+  companyId: number | null;
+  warehouseId: number | null;
+  livreurId: number | null;
+  tracking: string | null;
+  extStatus: string | null;
+  deliveryAttempts: number;
+  subtotal: number;
+  deliveryFee: number;
+  discount: number;
+  total: number;
+  deliveryCost: number;
+  cashed: boolean;
+  cashedAt: string | null;
+  customerNote: string | null;
+  deliveryNote: string | null;
+  internalNote: string | null;
+  isExchange: boolean;
+  originalOrderId: number | null;
+  hasUpsell: boolean;
+  preparedAt: string | null;
+  shippedAt: string | null;
+  deliveredAt: string | null;
+  returnedAt: string | null;
+  updatedAt: string;
+  version: number;
+  items: OrderItem[];
+  // computed
+  possibleDuplicate?: boolean;
+  blacklisted?: boolean;
+  customerDelivered?: number;
+  customerReturned?: number;
+  agentName?: string | null;
+  companyName?: string | null;
+  livreurName?: string | null;
+  subStatus?: string | null;
+}
+
+export interface OrderEvent {
+  id: number;
+  orderId: number;
+  at: string;
+  userId: number | null;
+  userName: string | null;
+  kind: 'created' | 'conf_status' | 'follow_status' | 'note' | 'call' | 'edit' | 'assign' | 'company' | 'cashed' | 'sub_status' | 'chat';
+  fromValue: string | null;
+  toValue: string | null;
+  note: string | null;
+}
+
+export interface Customer {
+  id: number;
+  name: string;
+  phone: string;
+  wilayaId: number | null;
+  blacklisted: boolean;
+  orders: number;
+  delivered: number;
+  returned: number;
+  lastOrderAt: string | null;
+}
+
+export interface Company {
+  id: number;
+  name: string;
+  kind: CourierKind;
+  active: boolean;
+  hasKeys: boolean;
+  toShip?: number;
+  onRoad?: number;
+}
+
+export interface Warehouse {
+  id: number;
+  name: string;
+  wilayaId: number;
+  commune: string;
+  address: string;
+  isDefault: boolean;
   active: boolean;
 }
 
-export interface User {
+export interface StockRow {
+  variantId: number;
+  productId: number;
+  productName: string;
+  variantTitle: string;
+  sku: string;
+  warehouseId: number;
+  warehouseName: string;
+  qty: number;
+  reserved: number;
+  available: number;
+  alertQty: number;
+  cost: number;
+}
+
+export interface Complaint {
   id: number;
-  name: string;
-  email: string;
-  roles: Role[];
-  language: Language;
-  active: boolean;
+  ref: string;
+  orderId: number | null;
+  orderRef: string | null;
+  customerName: string | null;
+  phone: string | null;
+  type: (typeof SAV_TYPES)[number];
+  wish: (typeof SAV_WISHES)[number];
+  details: string;
+  status: SavStatus;
+  assignedTo: number | null;
+  assignedName: string | null;
+  exchangeOrderId: number | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Page<T> {
@@ -165,24 +325,7 @@ export interface Page<T> {
   pageSize: number;
 }
 
-export interface DashboardStats {
-  today: { created: number; confirmed: number; delivered: number; returned: number };
-  byStatus: Partial<Record<OrderStatus, number>>;
-  confirmationRate: number;
-  deliveryRate: number;
-  revenueDelivered: DZD;
-}
-
-/** Live events sent over WebSockets. */
-export type LiveEvent =
-  | { type: 'order.created'; order: Order }
-  | { type: 'order.updated'; order: Order }
-  | { type: 'presence'; userId: number; state: 'online' | 'idle' | 'offline' };
-
-/**
- * The 69 wilayas of Algeria, numbered by official code (index + 1).
- * 59–69 were named by presidential decree n° 26-206 of 25 May 2026.
- */
+/** The 69 wilayas (code = index + 1). 59–69 named by decree n° 26-206 of 25 May 2026. */
 export const WILAYAS: string[] = [
   'Adrar', 'Chlef', 'Laghouat', 'Oum El Bouaghi', 'Batna', 'Béjaïa', 'Biskra', 'Béchar', 'Blida', 'Bouira',
   'Tamanrasset', 'Tébessa', 'Tlemcen', 'Tiaret', 'Tizi Ouzou', 'Alger', 'Djelfa', 'Jijel', 'Sétif', 'Saïda',
@@ -193,3 +336,4 @@ export const WILAYAS: string[] = [
   'Aflou', 'Barika', 'El Kantara', 'Bir El Ater', 'El Aricha', 'Ksar Chellala', 'Aïn Ouessara', 'Messaad',
   'Ksar El Boukhari', 'Bou Saâda', 'El Abiodh Sidi Cheikh',
 ];
+export const wilayaLabel = (id: number | null | undefined) => (id ? `${String(id).padStart(2, '0')} · ${WILAYAS[id - 1] ?? '?'}` : '—');

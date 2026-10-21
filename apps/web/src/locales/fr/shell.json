@@ -1,0 +1,17 @@
+{
+  "password": "Mot de passe",
+  "logout": "Déconnexion",
+  "demo": "Démo",
+  "demoText": "données d’exemple gardées dans ce navigateur · sociétés de livraison simulées",
+  "switchAccount": "Changer de compte",
+  "resetDemo": "Remettre la démo à zéro",
+  "search": "Rechercher : PX…, téléphone, nom, suivi",
+  "noResult": "Aucune commande trouvée",
+  "theme": "Thème clair / sombre",
+  "language": "Langue",
+  "changePassword": "Changer mon mot de passe",
+  "currentPassword": "Mot de passe actuel",
+  "newPassword": "Nouveau mot de passe",
+  "passwordHint": "8 caractères minimum",
+  "passwordChanged": "Mot de passe changé"
+}

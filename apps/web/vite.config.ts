@@ -1,21 +1,28 @@
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
-import { viteSingleFile } from 'vite-plugin-singlefile';
 
-// VITE_BASE: "/pilotix/" for GitHub Pages, "./" (default) for the phone apps.
-// --mode artifact: one self-contained HTML file (the demo preview published as a Claude artifact).
+const src = (p: string) => fileURLToPath(new URL(p, import.meta.url));
+
+// Modes:
+//   default   — the real app (server); VITE_DEMO=1 adds the demo accounts on the login screen
+//   artifact  — the preview published in Claude: demo only, relative paths, files next to the page
 export default defineConfig(({ mode }) => ({
   base: mode === 'artifact' ? './' : process.env.VITE_BASE || './',
-  plugins: mode === 'artifact' ? [react(), viteSingleFile()] : [react()],
+  define: mode === 'artifact' ? { 'import.meta.env.VITE_DEMO_ONLY': JSON.stringify('1'), 'import.meta.env.VITE_DEMO': JSON.stringify('1') } : {},
+  plugins: [react()],
   resolve: {
-    alias: { '@pilotix/shared': fileURLToPath(new URL('../../packages/shared/src/index.ts', import.meta.url)) },
+    alias: [
+      { find: /^@pilotix\/shared$/, replacement: src('../../packages/shared/src/index.ts') },
+      { find: /^@pilotix\/core$/, replacement: src('../../packages/core/src/index.ts') },
+    ],
   },
+  optimizeDeps: { exclude: ['@electric-sql/pglite'] },
+  worker: { format: 'es' },
   build: {
-    target: 'es2020',
+    target: 'es2022',
     sourcemap: false,
-    chunkSizeWarningLimit: 900,
+    chunkSizeWarningLimit: 1500,
     outDir: mode === 'artifact' ? 'dist-artifact' : 'dist',
-    assetsInlineLimit: mode === 'artifact' ? 100_000_000 : 4096,
   },
 }));
