@@ -115,18 +115,34 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
   return (
     <div className={`shell ${folded ? 'px-folded' : ''}`}>
       <nav className="side" id="side" aria-label={t('nav.menu')}>
-        <button
-          type="button"
-          className="px-logo-btn"
-          onClick={toggleFold}
-          aria-expanded={!folded}
-          aria-controls="side"
-          title={folded ? t('shell.unfold') : t('shell.fold')}
-          aria-label={folded ? t('shell.unfold') : t('shell.fold')}
-        >
-          <span className="px-logo-full" aria-hidden="true" />
-          <span className="px-logo-icon" aria-hidden="true" />
-        </button>
+        <div className="px-side-head">
+          <a
+            href="#/accueil"
+            className="px-logo-btn"
+            aria-label={folded ? t('shell.unfold') : 'Pilotix — Accueil'}
+            title={folded ? t('shell.unfold') : undefined}
+            onClick={(e) => {
+              // Folded: the "p" opens the sidebar (it shows an arrow on hover).
+              if (folded && !window.matchMedia('(max-width: 900px)').matches) {
+                e.preventDefault();
+                toggleFold();
+              }
+            }}
+          >
+            <span className="px-logo-full" aria-hidden="true" />
+            <span className="px-logo-icon" aria-hidden="true" />
+            <span className="px-logo-open" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m9 6 6 6-6 6" />
+              </svg>
+            </span>
+          </a>
+          <button type="button" className="px-fold-arrow" onClick={toggleFold} aria-expanded={!folded} aria-controls="side" title={t('shell.fold')} aria-label={t('shell.fold')}>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="m15 6-6 6 6 6" />
+            </svg>
+          </button>
+        </div>
         {items.map((n) =>
           n.children ? (
             <div key={n.id} className={`nav-group open bjcn ${ordersPages.includes(page) ? 'bjcn-on in' : ''}`} data-grp={n.id}>
@@ -173,27 +189,8 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
       </nav>
       <div className="scrim" onClick={() => setNavOpen(false)} />
       <div className="content">
-        {backend.kind === 'demo' && (
-          <div className="demo-bar">
-            <span>
-              <b>{t('shell.demo')}</b> · {t('shell.demoText')}
-            </span>
-            <button className="linkish" onClick={logout}>
-              {t('shell.switchAccount')}
-            </button>
-            <button
-              className="linkish"
-              onClick={() => {
-                logout();
-                location.reload();
-              }}
-            >
-              {t('shell.resetDemo')}
-            </button>
-          </div>
-        )}
         <header className="topbar">
-          <button className="icon-btn menu-btn" aria-label={t('nav.menu')} onClick={() => setNavOpen(!navOpen)}>
+          <button className="icon-btn menu-btn px-fold-btn" aria-label={folded ? t('shell.unfold') : t('nav.menu')} title={folded ? t('shell.unfold') : t('shell.fold')} aria-expanded={!folded} onClick={() => (window.matchMedia('(max-width: 900px)').matches ? setNavOpen(!navOpen) : toggleFold())}>
             <Icon name="menu" />
           </button>
           <a className="brand" href="#/accueil" aria-label="Pilotix">
