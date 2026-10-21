@@ -203,3 +203,27 @@ button.kpi.on { box-shadow: 0 0 0 2px var(--navy); }
   .px-folded .px-side-head { justify-content: center; margin-inline: -8px !important; padding: 0; }
   .px-fold-arrow { top: calc(var(--px-hdr) + 14px) !important; }
 }
+
+/* Sidebar: the logo band stays fixed; only the menu below it scrolls, with a slim scrollbar built into the navy panel (no white system gutter). */
+.side { overflow: hidden !important; display: flex; flex-direction: column; gap: 0 !important; }
+.px-side-head { flex: none; position: relative; z-index: 2; background: var(--px-navy); }
+.px-side-scroll {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column; gap: 2px;
+  margin-inline-end: -6px; padding-inline-end: 6px; padding-bottom: 12px;
+  overscroll-behavior: contain;
+  scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.22) transparent;
+}
+.px-side-scroll::-webkit-scrollbar { width: 6px; }
+.px-side-scroll::-webkit-scrollbar-track { background: transparent; }
+.px-side-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,.22); border-radius: 999px; }
+.px-side-scroll:hover { scrollbar-color: var(--px-orange) transparent; }
+.px-side-scroll::-webkit-scrollbar-thumb:hover, .px-side-scroll:hover::-webkit-scrollbar-thumb { background: var(--px-orange); }
+.px-side-scroll .me { margin-top: auto; }
+/* No gap or divider between the logo band and the menu. */
+@media (min-width: 901px) {
+  .px-side-head { margin-bottom: 0 !important; border-bottom: 0 !important; }
+  .px-side-scroll { padding-top: 4px; }
+  .topbar { border-bottom: 0 !important; }
+}
+@media (max-width: 900px) { .px-side-head { margin-bottom: 6px !important; } }
