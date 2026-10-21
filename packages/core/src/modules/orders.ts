@@ -19,6 +19,7 @@ import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, Ctx, forbidden, hasRole, notFound, proc } from '../rpc';
 import { clientFee, getSetting } from '../settings';
+import { settleTickets } from './tickets';
 
 // ---------------------------------------------------------------- reading
 const ORDER_COLS = `o.*,
@@ -489,6 +490,8 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>) {
       changed.push(oid);
     }
   });
+  // SAV ticket parcels: delivered → ticket Livré, returned (scanned at the depot) → ticket Annulé
+  if (['delivered', 'exchanged', 'returned'].includes(input.status) && (await settleTickets(ctx.db, me))) ctx.emit({ type: 'sav' });
   ctx.emit({ type: 'orders' });
   return { changed };
 }

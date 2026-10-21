@@ -446,7 +446,8 @@ export async function scanRules(ctx: Ctx, o: Order, code: string, mode: ScanMode
   const bad_ = (why: string, fix?: string): ScanResult => ({ kind: 'bad', code, order: o, why, fix });
   const f = o.followStatus;
   if (mode === 'back') {
-    if (o.isExchange) return scanRules(ctx, o, code, 'exchange');
+    // a ticket parcel that came back undelivered is a return; a delivered one brings the old product back
+    if (o.isExchange) return scanRules(ctx, o, code, f === 'returning' ? 'return' : 'exchange');
     if (f && ['delivered', 'exchanged', 'in_exchange'].includes(f)) {
       const x = await ctx.db.query('SELECT id FROM orders WHERE original_order_id = $1 LIMIT 1', [o.id]);
       if (x[0]) return scanRules(ctx, o, code, 'exchange');

@@ -239,3 +239,18 @@ button.kpi.on { box-shadow: 0 0 0 2px var(--navy); }
 .px-tk-card { border-inline-start: 4px solid var(--px-orange, #F7A823) !important; }
 .bjg-tab.px-sav-tab { border-color: color-mix(in srgb, var(--px-orange, #F7A823) 60%, transparent); }
 .bjg-tab.px-sav-tab.on { border-color: var(--px-orange, #F7A823); background: color-mix(in srgb, var(--px-orange, #F7A823) 12%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--px-orange, #F7A823) 30%, transparent); }
+
+/* SAV: the ticket's road, En attente › Au dépôt › En livraison › Livrés / Annulés */
+.px-sav-flow { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1.15fr); align-items: stretch; gap: 8px; }
+.px-sav-flow .kpi { text-decoration: none; min-width: 0; }
+.px-sav-flow .kpi.on { box-shadow: 0 0 0 3px var(--px-orange, #F7A823); }
+.px-sav-ar { align-self: center; font-size: 26px; font-weight: 900; color: var(--muted); opacity: .6; }
+[dir="rtl"] .px-sav-ar { transform: scaleX(-1); }
+.px-sav-end { display: grid; grid-template-rows: 1fr 1fr; gap: 8px; }
+.px-sav-end .kpi { padding-block: 8px; }
+.px-sav-end .kpi .v { font-size: 22px; }
+@media (max-width: 760px) {
+  .px-sav-flow { grid-template-columns: 1fr 1fr; }
+  .px-sav-ar { display: none; }
+  .px-sav-end { grid-column: 1 / -1; grid-template-rows: none; grid-template-columns: 1fr 1fr; }
+}

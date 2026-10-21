@@ -8,6 +8,7 @@ import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
 import { addEvent, createOrder, deliveredReport, getOrder } from './orders';
 import { savFee } from '../settings';
+import { settleTickets } from './tickets';
 
 const id = z.number().int().positive();
 const SAV_ROLES = ['confirmation', 'suivi', 'depot'] as const;
@@ -84,21 +85,11 @@ function toTicket(r: any): SavTicket {
 }
 
 const ACTIVE = `c.status IN ('open','progress')`;
-const AT_DEPOT = `ex.follow_status IN ('to_prepare','prepared')`;
+// a parcel coming back ("Retour en cours") always goes back to the depot, where it is scanned
+const AT_DEPOT = `ex.follow_status IN ('to_prepare','prepared','returning')`;
 const ON_ROAD = `ex.follow_status IN ('shipped','out_for_delivery','failed','alert','in_exchange')`;
 
-/** Tickets whose exchange order was delivered become "Livré" by themselves. */
-async function settleDelivered(db: Db, userId: number | null) {
-  const rows = await db.query(
-    `SELECT c.id, c.notes, ex.ref FROM complaints c JOIN orders ex ON ex.id = c.exchange_order_id
-     WHERE ${ACTIVE} AND ex.follow_status IN ('delivered','exchanged')`,
-  );
-  for (const r of rows) {
-    const notes = typeof r.notes === 'string' ? JSON.parse(r.notes) : r.notes ?? [];
-    notes.push({ at: new Date().toISOString(), userId, text: `Échange ${r.ref} livré au client`, status: 'resolved' });
-    await db.query(`UPDATE complaints SET status='resolved', resolved_at=now(), updated_at=now(), notes=$2 WHERE id=$1`, [r.id, JSON.stringify(notes)]);
-  }
-}
+const settleDelivered = (db: Db, userId: number | null) => settleTickets(db, userId);
 
 function viewWhere(w: Where, v: SavView) {
   switch (v) {
@@ -106,7 +97,7 @@ function viewWhere(w: Where, v: SavView) {
       w.add(ACTIVE);
       break;
     case 'attente':
-      w.add(`${ACTIVE} AND (ex.id IS NULL OR ex.follow_status IS NULL OR ex.follow_status IN ('cancelled','returning','returned'))`);
+      w.add(`${ACTIVE} AND (ex.id IS NULL OR ex.follow_status IS NULL OR ex.follow_status = 'cancelled')`);
       break;
     case 'depot':
       w.add(`${ACTIVE} AND ${AT_DEPOT}`);
@@ -169,7 +160,10 @@ export async function savKpis(ctx: Ctx) {
   const r = (
     await ctx.db.query(
       `SELECT
-         count(*) FILTER (WHERE ${ACTIVE} AND (ex.id IS NULL OR ex.follow_status IS NULL OR ex.follow_status IN ('cancelled','returning','returned')))::int AS attente,
+         count(*) FILTER (WHERE ${ACTIVE} AND (ex.id IS NULL OR ex.follow_status IS NULL OR ex.follow_status = 'cancelled'))::int AS attente,
+         count(*) FILTER (WHERE ${ACTIVE} AND (ex.id IS NULL OR ex.follow_status IS NULL OR ex.follow_status = 'cancelled') AND c.created_at < now() - interval '48 hours')::int AS attente_late,
+         count(*) FILTER (WHERE ${ACTIVE} AND ex.follow_status = 'returning')::int AS returning,
+         count(*) FILTER (WHERE c.status = 'closed' AND ex.follow_status = 'returned')::int AS annules_retour,
          count(*) FILTER (WHERE ${ACTIVE} AND ${AT_DEPOT})::int AS depot,
          count(*) FILTER (WHERE ${ACTIVE} AND ${ON_ROAD})::int AS livraison,
          count(*) FILTER (WHERE ${ACTIVE} AND c.created_at < now() - interval '48 hours')::int AS late,
@@ -185,6 +179,9 @@ export async function savKpis(ctx: Ctx) {
     depot: num(r.depot),
     livraison: num(r.livraison),
     late: num(r.late),
+    attenteLate: num(r.attente_late),
+    returning: num(r.returning),
+    annulesRetour: num(r.annules_retour),
     livres7: num(r.livres7),
     avgMs: r.avg_s === null || r.avg_s === undefined ? null : Math.round(Number(r.avg_s) * 1000),
     livres: num(r.livres),
