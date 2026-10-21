@@ -1,0 +1,23 @@
+{
+  "name": "pilotix",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Pilotix \u2014 order management for cash-on-delivery e-commerce in Algeria (web, Android, iOS)",
+  "workspaces": [
+    "packages/shared",
+    "packages/core",
+    "apps/server",
+    "apps/web"
+  ],
+  "scripts": {
+    "build": "npm run build -w @pilotix/shared && npm run build -w @pilotix/server && npm run build -w @pilotix/web",
+    "typecheck": "npm run build -w @pilotix/shared && npm run typecheck -w @pilotix/server && npm run typecheck -w @pilotix/web",
+    "dev:server": "npm run dev -w @pilotix/server",
+    "dev:web": "npm run dev -w @pilotix/web",
+    "db:migrate": "npm run migrate -w @pilotix/server",
+    "db:seed": "npm run seed -w @pilotix/server"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
