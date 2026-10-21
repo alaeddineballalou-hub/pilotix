@@ -143,6 +143,7 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
             </span>
           </a>
         </div>
+        <div className="px-side-scroll">
         {items.map((n) =>
           n.children ? (
             <div key={n.id} className={`nav-group open bjcn ${ordersPages.includes(page) ? 'bjcn-on in' : ''}`} data-grp={n.id}>
@@ -185,6 +186,7 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
               {t('shell.logout')}
             </button>
           </div>
+        </div>
         </div>
       </nav>
       <div className="scrim" onClick={() => setNavOpen(false)} />
