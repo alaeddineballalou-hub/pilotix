@@ -24,5 +24,11 @@ export default defineConfig(({ mode }) => ({
     sourcemap: false,
     chunkSizeWarningLimit: 1500,
     outDir: mode === 'artifact' ? 'dist-artifact' : 'dist',
+    rollupOptions: {
+      output: {
+        // The artifact host serves a fixed list of file types: PostgreSQL's data bundle ships as ".wasm" (bytes unchanged).
+        assetFileNames: (a: { name?: string }) => (a.name?.endsWith('.data') ? 'assets/[name]-[hash].pgdata.wasm' : 'assets/[name]-[hash][extname]'),
+      },
+    },
   },
 }));
