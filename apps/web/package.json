@@ -9,7 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview",
     "cap:sync": "cap sync",
-    "build:artifact": "tsc -p tsconfig.json --noEmit && vite build --mode artifact && node ../../scripts/artifact-page.mjs dist-artifact/index.html"
+    "build:artifact": "tsc -p tsconfig.json --noEmit && vite build --mode artifact"
   },
   "dependencies": {
     "@capacitor/android": "7.2.0",
@@ -40,7 +40,6 @@
     "@vitejs/plugin-react": "4.3.3",
     "typescript": "5.6.3",
     "vite": "5.4.11",
-    "vite-plugin-singlefile": "2.0.3",
     "@types/bcryptjs": "2.4.6"
   }
 }
