@@ -505,8 +505,9 @@ export async function orderCounts(ctx: Ctx) {
   const sav = num((await ctx.db.query(`SELECT count(*)::int AS n FROM complaints WHERE status IN ('open','progress')`))[0]?.n);
   const uncashed = num((await ctx.db.query(`SELECT count(*)::int AS n FROM orders WHERE follow_status='delivered' AND NOT cashed`))[0]?.n);
   const subs = await ctx.db.query<{ k: string; n: number }>(`SELECT sub_status AS k, count(*)::int AS n FROM orders WHERE sub_status IS NOT NULL GROUP BY 1`);
+  const lowStock = num((await ctx.db.query(`SELECT count(*)::int AS n FROM stock WHERE alert_qty > 0 AND qty <= alert_qty`))[0]?.n);
   const toObj = (rows: { k: string; n: number }[]) => Object.fromEntries(rows.map((r) => [r.k, num(r.n)]));
-  return { conf: toObj(conf), follow: toObj(follow), sub: toObj(subs), lateCalls, sav, uncashed, all: num((await ctx.db.query('SELECT count(*)::int n FROM orders'))[0]?.n) };
+  return { conf: toObj(conf), follow: toObj(follow), sub: toObj(subs), lateCalls, sav, uncashed, lowStock, all: num((await ctx.db.query('SELECT count(*)::int n FROM orders'))[0]?.n) };
 }
 
 // ---------------------------------------------------------------- order form, fees and the delivered report

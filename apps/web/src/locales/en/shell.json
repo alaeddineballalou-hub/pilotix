@@ -13,5 +13,7 @@
   "currentPassword": "Current password",
   "newPassword": "New password",
   "passwordHint": "At least 8 characters",
-  "passwordChanged": "Password changed"
+  "passwordChanged": "Password changed",
+  "fold": "Fold the menu",
+  "unfold": "Unfold the menu"
 }
