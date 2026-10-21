@@ -114,21 +114,18 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
 
   return (
     <div className={`shell ${folded ? 'px-folded' : ''}`}>
-      <button type="button" className="px-fold-arrow" onClick={toggleFold} aria-expanded={!folded} aria-controls="side" title={folded ? t('shell.unfold') : t('shell.fold')} aria-label={folded ? t('shell.unfold') : t('shell.fold')}>
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="m15 6-6 6 6 6" />
-        </svg>
-      </button>
       <nav className="side" id="side" aria-label={t('nav.menu')}>
         <div className="px-side-head">
           <a
             href="#/accueil"
             className="px-logo-btn"
-            aria-label={folded ? t('shell.unfold') : 'Pilotix — Accueil'}
-            title={folded ? t('shell.unfold') : undefined}
+            aria-label={folded ? t('shell.unfold') : t('shell.fold')}
+            aria-expanded={!folded}
+            aria-controls="side"
+            title={folded ? t('shell.unfold') : t('shell.fold')}
             onClick={(e) => {
-              // Folded: the "p" opens the sidebar (it shows an arrow on hover).
-              if (folded && !window.matchMedia('(max-width: 900px)').matches) {
+              // Desktop: the logo opens and closes the sidebar (folded "p" shows an arrow on hover).
+              if (!window.matchMedia('(max-width: 900px)').matches) {
                 e.preventDefault();
                 toggleFold();
               }
