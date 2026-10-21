@@ -1,0 +1,35 @@
+# Local development: PostgreSQL + Redis + Pilotix server.
+# Start:  docker compose up -d   then   npm run db:migrate && npm run db:seed
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: pilotix
+      POSTGRES_USER: pilotix
+      POSTGRES_PASSWORD: pilotix_dev_only
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pilotix"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["127.0.0.1:6379:6379"]
+
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    env_file: apps/server/.env.example
+    environment:
+      DATABASE_URL: postgres://pilotix:pilotix_dev_only@postgres:5432/pilotix
+      REDIS_URL: redis://redis:6379
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+
+volumes:
+  pgdata:

@@ -1,7 +1,7 @@
 node_modules/
-android/app/build/
-android/.gradle/
-android/build/
-ios/App/Pods/
-ios/App/build/
+dist/
+.env
+*.log
+apps/web/android/
+apps/web/ios/
 .DS_Store
