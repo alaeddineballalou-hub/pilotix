@@ -12,7 +12,7 @@
   .topbar .px-hdr-lang, .topbar .px-hdr-theme { display: none !important; }
   .px-me-phone { display: block; }
   .topbar .px-me { order: 6; margin-inline-start: 0; }
-  .topbar .px-me-t, .topbar .px-me-btn .px-me-ch { display: none; }
+  .topbar .px-me-btn .px-me-t, .topbar .px-me-btn .px-me-ch { display: none; }
   .topbar .page-title { font-size: 15px; }
 }
 
@@ -66,3 +66,11 @@ html, body { overflow-x: clip; }
 
 /* ---- tracking numbers in tight columns: shortened with … rather than cut mid-character (full number on hover and copy) ---- */
 .tbl.px-fixed td .px-copy { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-inline: 0; }
+
+/* ---- phones: buttons big enough for a finger (≈ 36 px) ---- */
+@media (max-width: 560px) {
+  .px-ph-i { width: 36px !important; height: 36px !important; }
+  .btn.small { min-height: 36px; }
+  .icon-btn.qic, .qrowacts .icon-btn { width: 36px; height: 36px; }
+  .px-copy { padding-block: 6px; }
+}
