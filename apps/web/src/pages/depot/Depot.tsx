@@ -51,16 +51,21 @@ export function Depot({ sub }: PageProps) {
 
 // ---------------------------------------------------------------- En préparation
 /**
- * "Quantité à acheter": a small foldable table of the products that are missing for the orders
- * (available < 0) or that reached their minimum stock (available ≤ alert quantity).
+ * "Quantité à acheter": a small foldable table of the variants that are missing for the orders
+ * (available < 0), under their minimum stock (available < alert quantity) or exactly at it.
  */
 function ToBuy() {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const q = useRpc('catalog.stock', { missingOnly: true });
-  const rows = (q.data ?? []).filter((r) => r.available < 0 || (r.alertQty > 0 && r.available <= r.alertQty));
+  // missing for the orders, or under / at the minimum; sorted by product, then variant (16, 20, 24… in natural order)
+  const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+  const rows = (q.data ?? [])
+    .filter((r) => r.available < 0 || (r.alertQty > 0 && r.available <= r.alertQty))
+    .sort((a, b) => byName(a.productName, b.productName) || byName(a.variantTitle ?? '', b.variantTitle ?? '') || byName(a.warehouseName, b.warehouseName));
   const missing = rows.filter((r) => r.available < 0).length;
-  const low = rows.length - missing;
+  const under = rows.filter((r) => r.available >= 0 && r.available < r.alertQty).length;
+  const atMin = rows.length - missing - under;
   const depots = new Set(rows.map((r) => r.warehouseId)).size > 1;
   return (
     <Card
@@ -73,7 +78,8 @@ function ToBuy() {
         q.data && (
           <>
             {missing > 0 && <span className="badge t-bad">{t('depot.toBuy.missingN', { count: missing })}</span>}{' '}
-            {low > 0 && <span className="badge t-warn">{t('depot.toBuy.lowN', { count: low })}</span>}
+            {under > 0 && <span className="badge t-warn">{t('depot.toBuy.underN', { count: under })}</span>}{' '}
+            {atMin > 0 && <span className="badge t-info">{t('depot.toBuy.lowN', { count: atMin })}</span>}
             {!rows.length && <span className="badge t-ok">✓ {t('depot.toBuy.none')}</span>}
           </>
         )
@@ -97,6 +103,7 @@ function ToBuy() {
               <thead>
                 <tr>
                   <th className="wide">{t('depot.picking.product')}</th>
+                  <th>{t('depot.toBuy.variant')}</th>
                   <th className="num">{t('depot.toBuy.stock')}</th>
                   <th className="num">{t('depot.toBuy.reserved')}</th>
                   <th className="num">{t('depot.toBuy.min')}</th>
@@ -105,13 +112,18 @@ function ToBuy() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
+                {rows.map((r, i) => {
                   const miss = r.available < 0;
+                  const below = !miss && r.available < r.alertQty;
                   const buy = Math.max(0, r.alertQty - r.available);
+                  const same = i > 0 && rows[i - 1].productId === r.productId;
                   return (
                     <tr key={`${r.variantId}-${r.warehouseId}`}>
                       <td className="wide px-cw" data-l={t('depot.picking.product')}>
-                        <div className="px-clamp">{r.variantTitle ? `${r.productName} ${r.variantTitle}` : r.productName}</div>
+                        <div className={`px-clamp ${same ? 'muted' : ''}`}>{same ? r.productName : <b>{r.productName}</b>}</div>
+                      </td>
+                      <td data-l={t('depot.toBuy.variant')}>
+                        {r.variantTitle || '—'}
                         {depots && <small>{r.warehouseName}</small>}
                       </td>
                       <td className="num ltr" data-l={t('depot.toBuy.stock')}>
@@ -127,7 +139,9 @@ function ToBuy() {
                         <b className="ltr">{n(buy)}</b>
                       </td>
                       <td data-l={t('depot.toBuy.state')}>
-                        <span className={`badge ${miss ? 't-bad' : 't-warn'}`}>{miss ? t('depot.toBuy.missing', { n: -r.available }) : t('depot.toBuy.atMin')}</span>
+                        <span className={`badge ${miss ? 't-bad' : below ? 't-warn' : 't-info'}`}>
+                          {miss ? t('depot.toBuy.missing', { n: -r.available }) : below ? t('depot.toBuy.under', { n: r.alertQty - r.available }) : t('depot.toBuy.atMin')}
+                        </span>
                       </td>
                     </tr>
                   );

@@ -84,6 +84,10 @@
     "none": "Aucune commande trouvée."
   },
   "toBuy": {
+    "variant": "Variante",
+    "under": "sous le minimum (−{{n}})",
+    "underN_one": "{{count}} sous le minimum",
+    "underN_other": "{{count}} sous le minimum",
     "title": "Quantité à acheter",
     "show": "Afficher",
     "hide": "Masquer",

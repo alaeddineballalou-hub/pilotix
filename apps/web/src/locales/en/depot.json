@@ -84,6 +84,10 @@
     "none": "No order found."
   },
   "toBuy": {
+    "variant": "Variant",
+    "under": "under minimum (−{{n}})",
+    "underN_one": "{{count}} under minimum",
+    "underN_other": "{{count}} under minimum",
     "title": "Quantity to buy",
     "show": "Show",
     "hide": "Hide",
