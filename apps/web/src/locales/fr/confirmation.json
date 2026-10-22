@@ -451,7 +451,15 @@
     "pickTitle": "Bureaux · {{w}}",
     "pickSub": "{{n}} bureaux dans cette wilaya",
     "searchPh": "Chercher un bureau, une commune, une société…",
-    "none": "Aucun bureau pour cette wilaya."
+    "none": "Aucun bureau pour cette wilaya.",
+    "wilaya": "Wilaya",
+    "commune": "Commune",
+    "pickCommune": "Choisir la commune",
+    "needCommune": "Choisissez la commune de livraison.",
+    "wilTitle": "Wilaya de livraison",
+    "comTitle": "Communes · {{w}}",
+    "searchWil": "Chercher : nom ou numéro…",
+    "searchCom": "Chercher une commune…"
   },
   "d6": {
     "cart": "Panier",
