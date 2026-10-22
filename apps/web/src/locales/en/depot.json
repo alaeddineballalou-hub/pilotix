@@ -168,6 +168,7 @@
     "untickAll": "Untick all",
     "partner": "Delivery partner",
     "send_one": "Send to dispatch · {{count}}",
-    "send_other": "Send to dispatch · {{count}}"
+    "send_other": "Send to dispatch · {{count}}",
+    "stage": "Preparation"
   }
 }
