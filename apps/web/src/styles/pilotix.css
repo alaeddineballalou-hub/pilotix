@@ -467,13 +467,24 @@ html:not([data-theme="dark"]) .px-folded .side .nav-count { box-shadow: 0 0 0 2p
 html:not([data-theme="dark"]) .tab.on b, html:not([data-theme="dark"]) .tab[aria-selected="true"] b { background: #FFFFFF !important; color: #C2650A !important; border-radius: 999px; padding: 0 6px; }
 }
 
-/* Nouvelles › Statistiques: a "?" on each number, in the brand (orange gradient badge, navy explanation bubble) */
-.px-st-grid .kpi .l { display: flex; align-items: flex-start; justify-content: center; gap: 6px; }
-.px-st-grid .kpi .bjq { flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 999px; cursor: pointer;
-  background: linear-gradient(135deg, #F7A823, #E8730C); color: #fff; box-shadow: 0 2px 6px rgba(232,115,12,.35); transition: transform .15s; }
-.px-st-grid .kpi .bjq:hover, .px-st-grid .kpi .bjq[aria-expanded="true"] { transform: scale(1.12); }
-.px-st-grid .kpi .bjq .bji svg { width: 13px; height: 13px; stroke-width: 2.6; }
-.px-st-grid .kpi .bjq .bjcc { inset-inline-start: auto !important; inset-inline-end: -8px; top: 130% !important; z-index: 20; text-align: start; color: #fff !important;
-  background: var(--px-navy, #1B2A47) !important; border: 0 !important; border-radius: 12px !important; padding: 10px 12px !important; box-shadow: 0 12px 28px rgba(20,30,50,.25) !important; }
-.px-st-grid .kpi .bjq .bjcc::before { content: ''; position: absolute; top: -6px; inset-inline-end: 12px; width: 12px; height: 12px; background: var(--px-navy, #1B2A47); transform: rotate(45deg); border-radius: 2px; }
-.px-st-grid .kpi { overflow: visible; }
+
+/* "?" help: a small brand badge everywhere; the note is one floating bubble (portal), readable, never clipped */
+.px-help { display: inline-grid; place-items: center; flex: none; width: 18px; height: 18px; margin-inline-start: 6px; border-radius: 999px; vertical-align: middle; cursor: help;
+  background: var(--sky-soft); color: #C2650A; border: 1px solid color-mix(in srgb, #F28C1B 35%, transparent); transition: background .15s, color .15s, transform .15s, box-shadow .15s; }
+.px-help:hover, .px-help:focus-visible, .px-help[aria-expanded="true"] { background: linear-gradient(135deg, #F7A823, #E8730C); color: #fff; border-color: transparent; box-shadow: 0 3px 10px rgba(232,115,12,.35); transform: translateY(-1px); outline: none; }
+.px-help svg { display: block; }
+.px-tip { position: fixed; z-index: 1000; width: max-content; max-width: min(300px, calc(100vw - 16px)); padding: 12px 14px; border-radius: 12px;
+  background: #1B2A47; color: #fff; font-size: 13px; font-weight: 500; line-height: 1.5; text-align: start; white-space: normal; letter-spacing: 0; text-transform: none;
+  box-shadow: 0 16px 36px rgba(15,26,46,.28); pointer-events: auto; animation: pxTip .14s ease-out; }
+.px-tip::before { content: ''; position: absolute; top: -5px; left: calc(var(--ax) - 6px); width: 12px; height: 12px; background: #1B2A47; transform: rotate(45deg); border-radius: 2px; }
+.px-tip.above::before { top: auto; bottom: -5px; }
+.px-tip-t { display: block; margin-bottom: 4px; color: #FBC877; font-size: 12px; font-weight: 800; }
+@keyframes pxTip { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+
+/* small "?" pinned in the top corner of every number box, the same place in every box of the app */
+.px-help { width: 15px; height: 15px; }
+.px-help svg { width: 9px; height: 9px; }
+.kpi { position: relative; }
+.kpi .l { display: block; }
+.kpi .l .px-help { position: absolute; top: 8px; inset-inline-end: 8px; margin: 0; width: 15px; height: 15px; }
+.kpi:has(.px-help) .l { padding-inline: 14px; }
