@@ -77,7 +77,7 @@
     "phone": "Téléphone",
     "wilaya": "Wilaya",
     "commune": "Commune",
-    "agent": "Agent",
+    "agent": "Agent confirmation",
     "total": "Total",
     "time": "Temps passé",
     "created": "Créée le",
@@ -88,7 +88,8 @@
     "stock": "Disponibilité",
     "desk": "Stopdesk",
     "passed": "Statuts passés",
-    "variant": "Variante"
+    "variant": "Variante",
+    "fagent": "Agent suivi"
   },
   "f": {
     "wilaya": "Wilaya",

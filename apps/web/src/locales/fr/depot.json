@@ -1,6 +1,12 @@
 {
   "title": "Dépôt",
-  "stage": { "preparer": "En préparation", "prepares": "En dispatch", "dispatchees": "Dispatchées", "enlivraison": "En livraison", "retours": "Retours / Échanges" },
+  "stage": {
+    "preparer": "En préparation",
+    "prepares": "En dispatch",
+    "dispatchees": "Dispatchées",
+    "enlivraison": "En livraison",
+    "retours": "Retours / Échanges"
+  },
   "picking": {
     "title": "Quantités à préparer",
     "print": "Imprimer la feuille",
@@ -47,7 +53,8 @@
     "agent": "Agent",
     "handedSince": "Remis depuis",
     "leftSince": "Parti depuis",
-    "status": "Statut"
+    "status": "Statut",
+    "variant": "Variante"
   },
   "empty": "Aucune commande avec ces filtres.",
   "results_one": "{{count}} résultat",
@@ -76,7 +83,33 @@
     "done": "{{ref}} : retour reçu, stock remis",
     "none": "Aucune commande trouvée."
   },
-  "toBuy": { "title": "Quantité à acheter", "show": "Afficher", "hide": "Masquer", "stock": "Stock", "reserved": "Commandes", "min": "Minimum", "buy": "À acheter", "state": "État", "missing": "manque {{n}}", "atMin": "minimum atteint", "missingN_one": "{{count}} manquant", "missingN_other": "{{count}} manquants", "lowN_one": "{{count}} au minimum", "lowN_other": "{{count}} au minimum", "none": "Rien à acheter" },
-  "toDispatch": { "partner": "Partenaire de livraison…", "button": "Envoyer au dispatch", "done_one": "{{count}} commande envoyée au dispatch", "done_other": "{{count}} commandes envoyées au dispatch" },
-  "dispatchSheet": { "title": "Feuille de préparation — commandes en dispatch", "sheetTitle": "Feuille de préparation — {{date}}", "empty": "Aucune commande en dispatch.", "total": "Total" }
+  "toBuy": {
+    "title": "Quantité à acheter",
+    "show": "Afficher",
+    "hide": "Masquer",
+    "stock": "Stock",
+    "reserved": "Commandes",
+    "min": "Minimum",
+    "buy": "À acheter",
+    "state": "État",
+    "missing": "manque {{n}}",
+    "atMin": "minimum atteint",
+    "missingN_one": "{{count}} manquant",
+    "missingN_other": "{{count}} manquants",
+    "lowN_one": "{{count}} au minimum",
+    "lowN_other": "{{count}} au minimum",
+    "none": "Rien à acheter"
+  },
+  "toDispatch": {
+    "partner": "Partenaire de livraison…",
+    "button": "Envoyer au dispatch",
+    "done_one": "{{count}} commande envoyée au dispatch",
+    "done_other": "{{count}} commandes envoyées au dispatch"
+  },
+  "dispatchSheet": {
+    "title": "Feuille de préparation — commandes en dispatch",
+    "sheetTitle": "Feuille de préparation — {{date}}",
+    "empty": "Aucune commande en dispatch.",
+    "total": "Total"
+  }
 }

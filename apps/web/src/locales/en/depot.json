@@ -1,6 +1,12 @@
 {
   "title": "Depot",
-  "stage": { "preparer": "Preparing", "prepares": "Dispatching", "dispatchees": "Dispatched", "enlivraison": "Out for delivery", "retours": "Returns / Exchanges" },
+  "stage": {
+    "preparer": "Preparing",
+    "prepares": "Dispatching",
+    "dispatchees": "Dispatched",
+    "enlivraison": "Out for delivery",
+    "retours": "Returns / Exchanges"
+  },
   "picking": {
     "title": "Quantities to prepare",
     "print": "Print the sheet",
@@ -27,10 +33,28 @@
     "dispatchees": "Parcels scanned and handed over. They leave this list as soon as the courier or the driver changes their status (picked up, out for delivery, delivered…). Those that stay must be checked: orange = more than 24 h, red = more than 48 h without news.",
     "enlivraison": "Parcels picked up by the courier or the driver, on the way to the customer. They leave this list when delivered, in alert or returning. Orange = 4 days, red = 7 days or more."
   },
-  "filters": { "search": "Search", "searchPh": "Name, phone, ref. PX…, tracking no.", "company": "Courier", "wilaya": "Wilaya", "all": "All", "noCompany": "Not chosen yet" },
+  "filters": {
+    "search": "Search",
+    "searchPh": "Name, phone, ref. PX…, tracking no.",
+    "company": "Courier",
+    "wilaya": "Wilaya",
+    "all": "All",
+    "noCompany": "Not chosen yet"
+  },
   "cols": {
-    "order": "Order", "client": "Customer", "address": "Address", "products": "Products", "total": "Total", "conf": "Confirmation", "follow": "Delivery",
-    "company": "Courier", "agent": "Agent", "handedSince": "Handed over", "leftSince": "Left", "status": "Status"
+    "order": "Order",
+    "client": "Customer",
+    "address": "Address",
+    "products": "Products",
+    "total": "Total",
+    "conf": "Confirmation",
+    "follow": "Delivery",
+    "company": "Courier",
+    "agent": "Agent",
+    "handedSince": "Handed over",
+    "leftSince": "Left",
+    "status": "Status",
+    "variant": "Variant"
   },
   "empty": "No orders with these filters.",
   "results_one": "{{count}} result",
@@ -59,7 +83,33 @@
     "done": "{{ref}}: return received, stock put back",
     "none": "No order found."
   },
-  "toBuy": { "title": "Quantity to buy", "show": "Show", "hide": "Hide", "stock": "Stock", "reserved": "Orders", "min": "Minimum", "buy": "To buy", "state": "State", "missing": "missing {{n}}", "atMin": "minimum reached", "missingN_one": "{{count}} missing", "missingN_other": "{{count}} missing", "lowN_one": "{{count}} at minimum", "lowN_other": "{{count}} at minimum", "none": "Nothing to buy" },
-  "toDispatch": { "partner": "Delivery partner…", "button": "Send to dispatch", "done_one": "{{count}} order sent to dispatch", "done_other": "{{count}} orders sent to dispatch" },
-  "dispatchSheet": { "title": "Picking sheet — orders in dispatch", "sheetTitle": "Picking sheet — {{date}}", "empty": "No order in dispatch.", "total": "Total" }
+  "toBuy": {
+    "title": "Quantity to buy",
+    "show": "Show",
+    "hide": "Hide",
+    "stock": "Stock",
+    "reserved": "Orders",
+    "min": "Minimum",
+    "buy": "To buy",
+    "state": "State",
+    "missing": "missing {{n}}",
+    "atMin": "minimum reached",
+    "missingN_one": "{{count}} missing",
+    "missingN_other": "{{count}} missing",
+    "lowN_one": "{{count}} at minimum",
+    "lowN_other": "{{count}} at minimum",
+    "none": "Nothing to buy"
+  },
+  "toDispatch": {
+    "partner": "Delivery partner…",
+    "button": "Send to dispatch",
+    "done_one": "{{count}} order sent to dispatch",
+    "done_other": "{{count}} orders sent to dispatch"
+  },
+  "dispatchSheet": {
+    "title": "Picking sheet — orders in dispatch",
+    "sheetTitle": "Picking sheet — {{date}}",
+    "empty": "No order in dispatch.",
+    "total": "Total"
+  }
 }

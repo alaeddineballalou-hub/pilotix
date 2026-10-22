@@ -9,8 +9,8 @@ import { confLabel } from './shared';
 import { namesOf, variantsOf } from '../../lib/items';
 
 /** Built-in columns, in the original order. */
-export type OrderColumn = 'order' | 'client' | 'address' | 'products' | 'variant' | 'total' | 'conf' | 'follow' | 'company' | 'agent' | 'phone' | 'wilaya' | 'since';
-export const DEFAULT_COLUMNS: OrderColumn[] = ['order', 'client', 'address', 'products', 'variant', 'total', 'conf', 'follow', 'company', 'agent'];
+export type OrderColumn = 'order' | 'client' | 'address' | 'products' | 'variant' | 'total' | 'conf' | 'follow' | 'company' | 'agent' | 'fagent' | 'phone' | 'wilaya' | 'since';
+export const DEFAULT_COLUMNS: OrderColumn[] = ['order', 'client', 'address', 'products', 'variant', 'total', 'conf', 'follow', 'company', 'agent', 'fagent'];
 
 /** Column → orders.list sort key (when sortable). */
 const SORT_KEY: Partial<Record<OrderColumn, OrderSort>> = {
@@ -77,7 +77,7 @@ export function OrderTable(p: OrderTableProps) {
   const label: Record<OrderColumn, string> = useMemo(
     () => ({
       order: t('orders.col.order'), client: t('orders.col.client'), address: t('orders.col.address'), products: t('orders.col.products'), variant: t('orders.col.variant'), total: t('orders.col.total'),
-      conf: t('orders.col.conf'), follow: t('orders.col.follow'), company: t('orders.col.company'), agent: t('orders.col.agent'), phone: t('orders.col.phone'),
+      conf: t('orders.col.conf'), follow: t('orders.col.follow'), company: t('orders.col.company'), agent: t('orders.col.agent'), fagent: t('orders.col.fagent'), phone: t('orders.col.phone'),
       wilaya: t('orders.col.wilaya'), since: t('orders.col.since'),
     }),
     [t],
@@ -85,7 +85,7 @@ export function OrderTable(p: OrderTableProps) {
   const isNum = (c: OrderColumn) => c === 'total';
   const th = (c: OrderColumn) => {
     const k = SORT_KEY[c];
-    const cls = c === 'products' ? 'wide' : c === 'agent' ? 'hide-m' : undefined;
+    const cls = c === 'products' ? 'wide' : c === 'agent' || c === 'fagent' ? 'hide-m' : undefined;
     if (k && p.onSort && p.sort)
       return (
         <SortTh key={c} k={k} sort={p.sort} dir={p.dir ?? 'desc'} onSort={sortBy} num={isNum(c)}>
@@ -180,6 +180,12 @@ export function OrderTable(p: OrderTableProps) {
         return (
           <td key={c} className="hide-m" data-l={label[c]}>
             {o.agentName ?? '—'}
+          </td>
+        );
+      case 'fagent':
+        return (
+          <td key={c} className="hide-m" data-l={label[c]}>
+            {o.followAgentName ?? '—'}
           </td>
         );
       case 'since':

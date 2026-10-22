@@ -192,12 +192,13 @@ function SearchOrders() {
                     <th>{t('suivi.col.client')}</th>
                     <th>{t('suivi.col.address')}</th>
                     <th className="wide">{t('suivi.col.products')}</th>
-            <th>{t('suivi.col.variant')}</th>
+                    <th>{t('suivi.col.variant')}</th>
                     <th className="num">{t('suivi.col.total')}</th>
                     <th>{t('suivi.col.conf')}</th>
+                    <th>{t('suivi.col.agent')}</th>
+                    <th>{t('suivi.col.fagent')}</th>
                     <th>{t('suivi.col.delivery')}</th>
                     <th>{t('suivi.col.company')}</th>
-                    <th className="hide-m">{t('suivi.rec.f.agent')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -227,15 +228,14 @@ function SearchOrders() {
                       <td data-l={t('suivi.col.conf')}>
                         <StatusBadge kind="conf" status={o.confStatus} />
                       </td>
+                      <td data-l={t('suivi.col.agent')}>{o.agentName ?? '—'}</td>
+                      <td data-l={t('suivi.col.fagent')}>{o.followAgentName ?? '—'}</td>
                       <td data-l={t('suivi.col.delivery')}>
                         <StatusBadge kind="follow" status={o.followStatus} />
                       </td>
                       <td data-l={t('suivi.col.company')}>
                         {o.companyName || '—'}
                         <small className="ltr">{o.tracking || ''}</small>
-                      </td>
-                      <td className="hide-m" data-l={t('suivi.rec.f.agent')}>
-                        {o.agentName || '—'}
                       </td>
                     </tr>
                   ))}

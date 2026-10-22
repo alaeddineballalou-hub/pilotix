@@ -238,6 +238,7 @@ export interface Order {
   customerDelivered?: number;
   customerReturned?: number;
   agentName?: string | null;
+  followAgentName?: string | null;
   companyName?: string | null;
   livreurName?: string | null;
   subStatus?: string | null;

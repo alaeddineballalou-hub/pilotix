@@ -46,7 +46,9 @@
     "total": "Total",
     "conf": "Confirmation",
     "company": "Courier",
-    "variant": "Variant"
+    "variant": "Variant",
+    "agent": "Confirmation agent",
+    "fagent": "Follow-up agent"
   },
   "days": "{{n}} d",
   "act": {

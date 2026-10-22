@@ -66,13 +66,14 @@
     "conf": "Confirmation",
     "follow": "Livraison",
     "company": "Société",
-    "agent": "Agent",
+    "agent": "Agent confirmation",
     "fee": "Frais société",
     "cashed": "Encaissé",
     "phone": "Téléphone",
     "wilaya": "Wilaya",
     "since": "Depuis",
-    "variant": "Variante"
+    "variant": "Variante",
+    "fagent": "Agent suivi"
   },
   "flag": {
     "dup": "DOUBLON ?",

@@ -46,7 +46,9 @@
     "total": "Total",
     "conf": "Confirmation",
     "company": "Société",
-    "variant": "Variante"
+    "variant": "Variante",
+    "agent": "Agent confirmation",
+    "fagent": "Agent suivi"
   },
   "days": "{{n}} j",
   "act": {

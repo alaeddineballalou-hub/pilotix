@@ -6,6 +6,8 @@ const iso = (t: number) => new Date(t).toISOString();
 
 /** Suivi demo data: courier alert reasons, alerts already treated, claims sent to couriers and livreurs. */
 export async function seed(db: Db, users: Record<string, number>, now: number): Promise<void> {
+  // the suivi agent who follows each shipped parcel (most of them; the newest ones are not taken yet)
+  await db.query(`UPDATE orders SET follow_agent_id = $1 WHERE shipped_at IS NOT NULL AND follow_agent_id IS NULL AND id % 5 <> 0`, [users.suivi]);
   // why each parcel is in alert: the note of its "alert" event (what the courier or the livreur said)
   const alerts = await db.query(`SELECT id FROM orders WHERE follow_status = 'alert' ORDER BY id`);
   for (const [k, o] of alerts.entries()) {

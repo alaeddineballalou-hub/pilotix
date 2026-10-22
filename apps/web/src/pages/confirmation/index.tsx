@@ -24,7 +24,7 @@ import { useStatusChange } from './StatusDialog';
 
 type Row = NonNullable<ReturnType<typeof useList>['data']>['rows'][number];
 type SortKey = 'created_at' | 'confirmed_at' | 'next_call_at' | 'total' | 'customer_name';
-type ColKey = 'source' | 'tracking' | 'creator' | 'channel' | 'product' | 'variant' | 'sku' | 'name' | 'phone' | 'wilaya' | 'commune' | 'agent' | 'total' | 'time' | 'created' | 'stock' | 'desk' | 'passed' | 'confirmed' | 'follow' | 'next' | 'status';
+type ColKey = 'source' | 'tracking' | 'creator' | 'channel' | 'product' | 'variant' | 'sku' | 'name' | 'phone' | 'wilaya' | 'commune' | 'agent' | 'fagent' | 'total' | 'time' | 'created' | 'stock' | 'desk' | 'passed' | 'confirmed' | 'follow' | 'next' | 'status';
 interface Filters {
   wilayaId?: number;
   agentId?: number | 'none';
@@ -53,6 +53,7 @@ const columnsOf = (sub: Sub): { k: ColKey; sort?: SortKey }[] => [
   { k: 'wilaya' },
   { k: 'commune' },
   { k: 'agent' },
+  { k: 'fagent' },
   { k: 'total', sort: 'total' },
   { k: 'time', sort: 'created_at' },
   { k: 'created', sort: 'created_at' },
@@ -265,6 +266,8 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
         ) : (
           <span className="muted">—</span>
         );
+      case 'fagent':
+        return r.followAgentName ? <span className="badge t-info">{r.followAgentName}</span> : <span className="muted">—</span>;
       case 'total':
         return <span className="ltr">{da(r.total)}</span>;
       case 'time':
