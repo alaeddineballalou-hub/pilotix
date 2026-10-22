@@ -966,8 +966,6 @@ html body .qtbl > thead > tr > th[data-col="status"] { text-align: center !impor
 html body .qtbl td.px-c-status { text-align: center !important; }
 
 /* ===== open order, layout C: cart + delivery on the left, decision panel on the right ===== */
-html body .qd3.qd5.qd6 { grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; }
-@media (max-width: 1000px) { html body .qd3.qd5.qd6 { grid-template-columns: minmax(0, 1fr); } }
 .qd6-left { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .qd6-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 2px 10px rgba(20, 30, 50, .05); }
 .qd6-h { display: flex; align-items: center; gap: 8px; padding: 14px 16px 10px; font-size: 11.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
@@ -1107,15 +1105,6 @@ html body .qd6-var.on .bji { transform: rotate(180deg); }
 .qd6-add .qd2-add-in:focus { border-color: #F7A823 !important; border-style: solid !important; box-shadow: 0 0 0 3px color-mix(in srgb, #F7A823 18%, transparent) !important; outline: none; }
 
 /* ===== notes card above the cart: origin note, courier note, team note ===== */
-.qd6-notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-@media (max-width: 760px) { .qd6-notes { grid-template-columns: minmax(0, 1fr); } }
-.qd6-note { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; margin: 0; }
-.qd6-note + .qd6-note { border-inline-start: 1px solid var(--line); }
-@media (max-width: 760px) { .qd6-note + .qd6-note { border-inline-start: 0; border-top: 1px solid var(--line); } }
-.qd6-nh { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-.qd6-nh .bji { width: 13px; height: 13px; color: #F28B1E; }
-html body .qd6-note textarea { width: 100%; min-height: 44px; resize: vertical; padding: 7px 10px !important; border: 1px solid var(--line) !important; border-radius: 9px !important; font: inherit; font-size: 13px !important; line-height: 1.4; background: var(--surface); color: var(--ink); }
-html body .qd6-note textarea:focus { outline: none; border-color: #F7A823 !important; box-shadow: 0 0 0 3px color-mix(in srgb, #F7A823 18%, transparent); }
 /* delivery price inside the Livraison card */
 .qd6-fee { display: flex; align-items: center; gap: 8px; }
 .qd6-fee .qd6-lab { font-size: 12.5px; font-weight: 700; color: var(--muted); }
@@ -1128,3 +1117,81 @@ html body .qd6-note textarea:focus { outline: none; border-color: #F7A823 !impor
 .qd6-minus { font-weight: 800; color: var(--muted); }
 /* the bureau menu is as wide as the Livraison card */
 .pxf-desk { border-top: 3px solid #F7A823; }
+
+/* ===== open order: one grid that reflows by the panel's own width =====
+   wide: notes / cart / livraison on the left, summary on the right, as tall as the left column
+   medium: cart across the top, livraison and summary side by side, equal height
+   small: everything under each other */
+html body .qd3.qd5.qd6 { display: block !important; container: qd6 / inline-size; }
+.qd6-left { display: contents; }
+.qd6-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 340px; grid-template-areas: "notes rail" "cart rail" "deliv rail"; grid-template-rows: auto auto 1fr; }
+.qd6-grid > .qd6-left > .qd6-notes { grid-area: notes; }
+.qd6-grid > .qd6-left > .qd6-card:not(.qd6-notes):not(.qd6-deliv) { grid-area: cart; }
+.qd6-grid > .qd6-left > .qd6-deliv { grid-area: deliv; align-self: stretch; align-content: flex-start; }
+.qd6-grid > .qd6-rail { grid-area: rail; position: static; align-self: stretch; }
+@container qd6 (max-width: 900px) {
+  .qd6-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "notes notes" "cart cart" "deliv rail"; grid-template-rows: auto; }
+  .qd6-grid > .qd6-left > .qd6-deliv { align-self: stretch; align-content: flex-start; }
+  .qd6-deliv .qd5-seg { width: 100%; }
+}
+@container qd6 (max-width: 620px) {
+  .qd6-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "notes" "cart" "deliv" "rail"; }
+}
+.qd6-fill { flex: 1; min-height: 0; }
+
+/* summary: every line in its own box, amounts lined up on one edge */
+.qd6-rail .qd5-sum { gap: 8px; }
+.qd6-rail .qd5-sum > div { min-height: 46px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--bg-soft, #faf7f1); }
+[data-theme="dark"] .qd6-rail .qd5-sum > div { background: rgba(255, 255, 255, .03); }
+.qd6-rail .qd5-sum dt { font-size: 13px; }
+.qd6-rail .qd5-sum dd { font-size: 14.5px; font-weight: 800; text-align: end; white-space: nowrap; }
+.qd6-rail .qd6-disc { transition: border-color .15s, box-shadow .15s; }
+.qd6-rail .qd6-disc:focus-within { border-color: #F7A823; box-shadow: 0 0 0 3px rgba(247, 168, 35, .18); }
+.qd6-rail .qd6-disc.over { border-color: #e74c3c; }
+.qd6-rail .qd6-disc.over dt small { color: #c0392b; font-weight: 800; }
+.qd6-dv { display: inline-flex; align-items: baseline; justify-content: flex-end; gap: .28em; cursor: text; }
+.qd6-dv .qd6-minus { color: #F28B1E; }
+.qd6-rail .qd6-dv input { height: auto !important; min-height: 0 !important; padding: 0 !important; border: 0 !important; border-bottom: 1.5px dashed #F7A823 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; font: inherit; font-size: 14.5px; font-weight: 800; color: var(--ink); text-align: end; -moz-appearance: textfield; }
+.qd6-dv input::-webkit-outer-spin-button, .qd6-dv input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.qd6-dv input:focus { outline: none; }
+.qd6-unit { font-weight: 800; }
+.qd6-rail .qd5-sum .qd5-total { min-height: 58px; padding: 10px 14px; border: 0; background: linear-gradient(135deg, #1B2A47, #26385e); }
+.qd6-rail .qd5-sum .qd5-total dt, .qd6-rail .qd5-sum .qd5-total dd { color: #fff; }
+.qd6-rail .qd5-sum .qd5-total dd { color: #F7A823; }
+.qd6-rail .qd6-dv input, .qd6-fee .qd6-dv input { min-width: 2ch; max-width: 9ch; }
+/* delivery price: the same box as the summary lines, label left, amount right */
+.qd6-fee { flex: 1 1 100%; justify-content: space-between; min-height: 46px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--bg-soft, #faf7f1); flex-wrap: wrap; }
+[data-theme="dark"] .qd6-fee { background: rgba(255, 255, 255, .03); }
+.qd6-fee:focus-within { border-color: #F7A823; box-shadow: 0 0 0 3px rgba(247, 168, 35, .18); }
+.qd6-fee .qd6-lab { font-size: 13px; }
+.qd6-fee .qd2-gf { order: 3; flex-basis: 100%; text-align: end; }
+html body .qd6-fee .qd6-dv input { height: auto !important; min-height: 0 !important; padding: 0 !important; border: 0 !important; border-bottom: 1.5px dashed #F7A823 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; font: inherit; font-size: 14.5px; font-weight: 800; color: var(--ink); text-align: end; -moz-appearance: textfield; }
+.qd6-fee .qd6-dv { font-size: 14.5px; font-weight: 800; }
+/* dark: the total keeps its navy box but lifted off the navy card, with our orange edge */
+[data-theme="dark"] .qd6-rail .qd5-sum .qd5-total { background: linear-gradient(135deg, #2a3d66, #33497a); box-shadow: inset 0 0 0 1px rgba(247, 168, 35, .55); }
+/* the amount field is exactly as wide as its digits, so the dashed line sits under the number only */
+html body .qd6-dv input { width: calc(var(--w, 3) * 1ch + 2px) !important; min-width: 1.2ch !important; max-width: 10ch !important; flex: none; }
+/* phone: product name on its own line, stock / quantity / price under it */
+@container qd6 (max-width: 620px) {
+  .qd6-line { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+  .qd6-line > .qd6-pn { flex: 1 1 calc(100% - 44px - 30px - 24px); }
+  .qd6-line > .qd6-rm { order: 1; }
+  .qd6-line > :not(.qd6-thumb):not(.qd6-pn):not(.qd6-rm) { order: 2; }
+  .qd6-line > .qd2-qty { margin-inline-start: 56px; }
+  .qd6-line > .qd6-price { margin-inline-start: auto; }
+}
+/* notes: one card, three tabs (origine / livreur / équipe), one text area */
+html body .qd6-notes { display: block; padding: 12px 16px 16px; }
+.qd6-ntabs { display: inline-flex; gap: 4px; padding: 4px; margin-bottom: 10px; border-radius: 12px; background: var(--sky-soft, #eef2f8); }
+[data-theme="dark"] .qd6-ntabs { background: rgba(255, 255, 255, .05); }
+.qd6-ntabs button { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px; border: 0; border-radius: 9px; background: none; font: inherit; font-size: 13px; font-weight: 700; color: var(--muted); cursor: pointer; }
+.qd6-ntabs button .bji { width: 15px; height: 15px; }
+.qd6-ntabs button:hover { color: var(--ink); }
+.qd6-ntabs button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 4px rgba(20, 30, 50, .12); }
+.qd6-ntabs button.on .bji { color: #F28B1E; }
+[data-theme="dark"] .qd6-ntabs button.on { background: #2a3d66; }
+.qd6-ndot { width: 7px; height: 7px; border-radius: 50%; background: #F28B1E; }
+html body .qd6-ntext { display: block; width: 100%; height: 72px; min-height: 72px; resize: vertical; padding: 10px 12px !important; border: 1px solid var(--line) !important; border-radius: 11px !important; background: var(--bg-soft, #faf7f1) !important; font: inherit; font-size: 13.5px !important; line-height: 1.45; color: var(--ink); }
+[data-theme="dark"] .qd6-ntext { background: rgba(255, 255, 255, .03) !important; }
+html body .qd6-ntext:focus { outline: none; border-color: #F7A823 !important; box-shadow: 0 0 0 3px rgba(247, 168, 35, .18); }
+@container qd6 (max-width: 620px) { .qd6-ntabs { display: flex; } .qd6-ntabs button { flex: 1; justify-content: center; padding: 0 6px; } }
