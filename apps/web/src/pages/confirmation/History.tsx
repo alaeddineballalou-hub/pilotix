@@ -103,12 +103,14 @@ export function PhoneCell({ order }: { order: { id: number; ref: string; phone: 
   return (
     <span className="px-ph" onClick={(e) => e.stopPropagation()}>
       <span className="qph ltr">{order.phone}</span>
-      <a className="px-ph-i" href={telHref(order.phone)} aria-label={t('confirmation.callNum', { p: order.phone })} title={t('confirmation.call')} onClick={() => rpc('orders.logCall', { id: order.id }).catch(() => {})}>
-        <Icon name="phone" />
-      </a>
-      <button type="button" ref={setBtn} className={`px-ph-i ${open ? 'on' : ''}`} aria-haspopup="menu" aria-expanded={open} aria-label={t('confirmation.msgNum', { p: order.phone })} title={t('confirmation.message')} onClick={() => setOpen((v) => !v)}>
-        <Icon name="message" />
-      </button>
+      <span className="px-ph-acts">
+        <a className="px-ph-i" href={telHref(order.phone)} aria-label={t('confirmation.callNum', { p: order.phone })} title={t('confirmation.call')} onClick={() => rpc('orders.logCall', { id: order.id }).catch(() => {})}>
+          <Icon name="phone" />
+        </a>
+        <button type="button" ref={setBtn} className={`px-ph-i ${open ? 'on' : ''}`} aria-haspopup="menu" aria-expanded={open} aria-label={t('confirmation.msgNum', { p: order.phone })} title={t('confirmation.message')} onClick={() => setOpen((v) => !v)}>
+          <Icon name="message" />
+        </button>
+      </span>
       {open && btn && <MsgMenu order={order} anchor={btn} onClose={() => setOpen(false)} />}
     </span>
   );

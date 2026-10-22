@@ -160,6 +160,7 @@
   },
   "cd": {
     "wait": "slot in {{d}}",
+    "waitShort": "in {{d}}",
     "waitTitle": "The next attempt starts in {{d}}",
     "lateTitle": "Late by {{d}}",
     "firstTitle": "Time left for the first call: {{d}}",

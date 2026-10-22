@@ -140,7 +140,8 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
   const cols = order.filter((k) => visible.has(k));
   const drag = colDrag(order, setOrder);
   // column widths: each user's own
-  const rs = useResizable(tc.widths, tc.setWidths, t('common.resizeCol'));
+  const wkeys: string[] = [...cols, ...(actions ? ['_act'] : [])];
+  const rs = useResizable(tc.widths, tc.setWidths, t('common.resizeCol'), wkeys);
   const [dens, setDens] = useDensity();
   const cell = (o: Order, k: SCol): ReactNode => {
     switch (k) {
@@ -220,13 +221,13 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
       {!rows.length ? (
         <Empty>{empty}</Empty>
       ) : (
-        <div className={`tbl-wrap px-d-${dens}`}>
-          <table className={`tbl${rs.fixed ? ' px-fixed' : ''}`} style={rs.tableStyle([...cols, ...(actions ? ['_act'] : [])])}>
-            {rs.cols([...cols, ...(actions ? ['_act'] : [])])}
+        <div className={`tbl-wrap px-d-${dens}`} ref={rs.wrapRef}>
+          <table className={`tbl${rs.fixed ? ' px-fixed' : ''}`} style={rs.tableStyle()}>
+            {rs.cols()}
             <thead>
               <tr>
                 {cols.map((k) => (
-                  <th key={k} {...drag(k)} title={t('common.dragCol')} className={`px-drag ${k === 'product' ? 'wide' : k === 'since' ? 'num' : ''}`}>
+                  <th key={k} {...drag(k)} title={t('common.dragCol')} className={`px-drag px-c-${k} ${k === 'product' ? 'wide' : k === 'since' ? 'num' : ''}`}>
                     {label[k]}
                     {rs.handle(k)}
                   </th>
@@ -238,7 +239,7 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
               {rows.map((o) => (
                 <tr key={o.id} className="clickable" onClick={() => openOrder(o.id)}>
                   {cols.map((k) => (
-                    <td key={k} data-l={label[k]} className={k === 'product' ? 'wide px-cw' : k === 'since' ? 'num' : undefined}>
+                    <td key={k} data-l={label[k]} className={`px-c-${k}${k === 'product' ? ' wide px-cw' : k === 'since' ? ' num' : ''}`}>
                       {cell(o, k)}
                     </td>
                   ))}

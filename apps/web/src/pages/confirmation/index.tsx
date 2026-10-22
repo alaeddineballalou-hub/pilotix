@@ -156,8 +156,8 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   const cols = order.map((k) => COLS.find((c) => c.k === k)!).filter((c) => c && visible.has(c.k));
   const drag = colDrag(order, setOrder);
   // column widths: each user's own
-  const rs = useResizable(tc.widths, tc.setWidths, t('common.resizeCol'));
   const wkeys = ['_exp', '_ck', ...cols.map((c) => c.k), '_act'];
+  const rs = useResizable(tc.widths, tc.setWidths, t('common.resizeCol'), wkeys);
   const [dens, setDens] = useDensity();
   const selected = rows.filter((r) => sel.has(r.id));
   const nFilters = Object.values(f).filter((v) => v !== undefined && v !== '').length;
@@ -280,7 +280,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
       case 'total':
         return <span className="ltr">{da(r.total)}</span>;
       case 'chrono':
-        return r.deadline ? <Countdown d={r.deadline} /> : <span className="muted">—</span>;
+        return r.deadline ? <Countdown d={r.deadline} short /> : <span className="muted">—</span>;
       case 'time':
         return <Spent iso={r.createdAt} />;
       case 'created':
@@ -565,9 +565,9 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
           <Loading />
         ) : (
           <>
-            <div className="tbl-wrap">
-              <table className={`tbl qtbl${rs.fixed ? ' px-fixed' : ''}`} style={rs.tableStyle(wkeys)}>
-                {rs.cols(wkeys)}
+            <div className="tbl-wrap" ref={rs.wrapRef}>
+              <table className={`tbl qtbl${rs.fixed ? ' px-fixed' : ''}`} style={rs.tableStyle()}>
+                {rs.cols()}
                 <thead>
                   <tr>
                     <th className="ck" data-col="_exp">

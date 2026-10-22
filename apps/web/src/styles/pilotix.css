@@ -710,6 +710,7 @@ html body .qcard .qacts .qa-info > .linkish { display: inline-flex; align-items:
 
 /* ===== phone with its small call / WhatsApp icons ===== */
 .px-ph { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.px-ph-acts { display: inline-flex; align-items: center; gap: 6px; }
 .px-ph-i { width: 26px; height: 26px; flex: none; display: inline-grid; place-items: center; border-radius: 8px; color: var(--q-ink, #1B2A47); background: var(--sky-soft, #eef2f8); text-decoration: none; transition: background .15s, color .15s; }
 .px-ph-i .bji { width: 14px; height: 14px; vertical-align: 0; }
 .px-ph-i:hover { background: var(--q-accent, #F7A823); color: #fff; }
@@ -1363,3 +1364,28 @@ html body .px-rz-start::after { inset-inline-start: 1px; }
 .tbl thead th:hover > .px-rz::after { background: #cfd5df; }
 [data-theme="dark"] .tbl thead th:hover > .px-rz::after { background: rgba(255, 255, 255, .25); }
 html body .px-rz:hover::after, html body .px-rz.on::after { top: 10%; bottom: 10%; background: #F7A823 !important; }
+/* the table keeps the card's width: text wraps in its column instead of widening the table */
+html body .tbl.px-fixed > tbody > tr:not(.qdetail) > td { white-space: normal; overflow-wrap: normal; word-break: normal; padding-inline: 6px !important; }
+/* headers go onto a second line rather than being cut (the arrow stays beside the last word) */
+html body .tbl.px-fixed > thead > tr > th { white-space: normal; line-height: 1.25; text-overflow: clip; padding-inline: 6px !important; }
+html body .tbl.px-fixed > thead .qsort-btn { max-width: 100%; }
+/* the small columns that are never resized (expand, tick box, row buttons): tight, sized to what they hold */
+html body .tbl.px-fixed > thead > tr > th[data-col^="_"], html body .tbl.px-fixed > tbody > tr:not(.qdetail) > td.ck, html body .tbl.px-fixed > tbody > tr:not(.qdetail) > td.qact { padding-inline: 4px !important; }
+html body .tbl.px-fixed td.qact .qrowacts { gap: 6px; }
+/* timers and amounts stay on one line */
+html body .tbl.px-fixed > tbody > tr:not(.qdetail) > td.px-c-chrono, html body .tbl.px-fixed > tbody > tr:not(.qdetail) > td.px-c-total { white-space: nowrap; }
+/* "créneau dans …": the waiting pill goes onto two lines rather than being cut */
+html body .tbl.px-fixed td.px-c-chrono .bj-cd.wait { display: inline-block; max-width: 100%; white-space: normal; text-align: center; line-height: 1.3; padding: 3px 8px; border-radius: 10px; }
+html body .tbl.px-fixed td.px-c-chrono .bj-cd.wait .bji { vertical-align: -2px; margin-inline-end: 3px; }
+/* product and variant: two lines at most, in the column's width */
+html body .qtbl.px-fixed td.px-c-variant .px-clamp, html body .qtbl.px-fixed td.px-c-product .px-clamp { width: auto; max-width: 100%; }
+/* phone: the call / message buttons go under the number (together) when the column is narrow */
+html body .tbl.px-fixed .px-ph { flex-wrap: wrap; row-gap: 4px; white-space: normal; }
+html body .tbl.px-fixed .px-ph .qph { white-space: nowrap; }
+/* status: the pill fills its column; a status longer than the column ends with "…" */
+html body .qtbl.px-fixed td.px-c-status select.qst.qst-pill { min-width: 0; max-width: 100%; width: 100%; text-overflow: ellipsis; padding: 0 24px 0 10px !important; background-position: calc(100% - 13px) 52%, calc(100% - 8px) 52% !important; }
+/* agents: a long name ends with "…" so the remove button stays in view */
+html body .tbl.px-fixed td.px-c-agent .row, html body .tbl.px-fixed td.px-c-fagent .row { max-width: 100%; gap: 4px; }
+html body .tbl.px-fixed td.px-c-agent .row > .badge, html body .tbl.px-fixed td.px-c-fagent .row > .badge { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; line-height: 22px; }
+/* Suivi: row buttons that do not fit the column go onto a second line */
+html body .tbl.px-fixed .row.nowrap.px-sv-acts { flex-wrap: wrap !important; justify-content: flex-end; row-gap: 6px; }

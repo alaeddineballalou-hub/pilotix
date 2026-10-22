@@ -39,7 +39,8 @@ export interface Deadline {
 }
 
 /** The `.bj-cd` chip: ok (green), soon (< 5 min, blinking), late (coral, "+…"), wait (grey, next slot). */
-export function Countdown({ d }: { d: Deadline }) {
+/** `short`: in the table, the waiting pill says "dans 2 h 43" (the title keeps the whole sentence). */
+export function Countdown({ d, short }: { d: Deadline; short?: boolean }) {
   const { t } = useTranslation();
   const now = useNow();
   let mode = d.m;
@@ -53,7 +54,7 @@ export function Countdown({ d }: { d: Deadline }) {
     const txt = cdText(left);
     return (
       <span className="bj-cd wait" title={t('confirmation.cd.waitTitle', { d: txt })}>
-        <Icon name="hourglass" /> {t('confirmation.cd.wait', { d: txt })}
+        <Icon name="hourglass" /> {t(short ? 'confirmation.cd.waitShort' : 'confirmation.cd.wait', { d: `\u2066${txt.replace(/ /g, '\u00a0')}\u2069` })}
       </span>
     );
   }
