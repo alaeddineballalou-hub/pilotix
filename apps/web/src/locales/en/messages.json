@@ -67,6 +67,8 @@
     "help": "Talk to {{name}} like a customer. It uses your real products, stock and delivery fees. Orders are only simulated.",
     "demoPreview": "Preview: these answers come from a demo seller. On your server, with the AI key, Claude answers.",
     "demoNoKey": "Demo answers: add the AI key in Settings so {{name}} answers with Claude.",
+    "inPage": "In this page, {{name}} answers with Claude (your Claude account), with its real instructions, the demo's products and delivery fees, and the Darija check. A reply often takes 20 to 60 seconds.",
+    "typing": "{{name}} is writing… {{s}} s",
     "quick": [
       "Salam, ch7al la poussette ?",
       "Livraison l Oran ch7al ?",
