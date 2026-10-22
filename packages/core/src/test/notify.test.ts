@@ -689,3 +689,24 @@ test('review: an answer is the customer’s first message after the delivery mes
   assert.equal(after.reply, null);
   assert.equal(after.replied_at, null);
 });
+
+test('review: no sales follow-up to a customer who answered a delivery message', async () => {
+  const conf = await as(EMAILS.conf);
+  const o = await newOrder(conf, { confirm: true });
+  await call('orders.setFollow', await as(EMAILS.suivi), { ids: [o.id], status: 'shipped' });
+  const log: { action: string; args: any }[] = [];
+  const server = fakeServer(log);
+  const admin = await as(EMAILS.admin, server);
+  const g: any = await call('dellal.settings.get', admin, {});
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, followUpHours: 3, secrets: { ai: 'sk-ant-test-notify' } });
+  const r: any = await call('dellal.receive', admin, { channel: 'whatsapp', externalId: '213' + o.phone.slice(1), text: 'Merci', messageId: `wamid.in.f${o.id}` });
+  await call('dellal.answer', admin, { id: r.conversationId });
+  // 4 hours later, the conversation ends with Dellal's answer: still no follow-up for it
+  await db.query(`UPDATE conv_messages SET created_at = created_at - interval '4 hours' WHERE conversation_id = $1`, [r.conversationId]);
+  await db.query(`UPDATE conversations SET last_message_at = now() - interval '4 hours', last_customer_at = now() - interval '4 hours' WHERE id = $1`, [r.conversationId]);
+  await call('dellal.followUps', admin, {});
+  // (without the rule, Dellal would write a sales follow-up here and mark the conversation followed up)
+  assert.equal((await db.query(`SELECT followed_up FROM conversations WHERE id = $1`, [r.conversationId]))[0].followed_up, false);
+  await db.query(`UPDATE settings SET value = value || '{"enabled":false}'::jsonb WHERE key = 'dellal'`);
+  await db.query(`DELETE FROM settings WHERE key = 'secret_dellal_ai_key'`);
+});
