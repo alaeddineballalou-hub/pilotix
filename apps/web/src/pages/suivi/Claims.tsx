@@ -24,7 +24,7 @@ interface Target {
 }
 
 /** Who receives the claim of an order: its courier's claim desk, or our own livreur. */
-function useTarget(o: Order | null, toLivreur: boolean) {
+export function useTarget(o: Order | null, toLivreur: boolean) {
   const c = useRpc('suivi.contacts', {}).data;
   if (!o || !c) return { target: null as Target | null, shop: c?.shopName ?? '', own: false };
   const comp = c.companies.find((x: ClaimCompany) => x.id === o.companyId);

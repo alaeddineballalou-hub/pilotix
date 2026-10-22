@@ -20,6 +20,8 @@ import { colDrag, ColumnMenu, DensitySwitch, useDensity, useResizable, useTableC
 import { HistoryButton, PhoneCell } from '../confirmation/History';
 import { store } from '../../lib/store';
 import { CopyCode } from '../../ui/CopyCode';
+import { useIsPhone } from '../../lib/useMedia';
+import { ParcelAction, ParcelCards, ParcelPage } from './PhoneSuivi';
 
 const LIST_TABS = ['alertes', 'traites', 'livres', 'annules', 'swap'] as const;
 type ListTab = (typeof LIST_TABS)[number];
@@ -272,6 +274,9 @@ function List({ tab }: { tab: ListTab }) {
   const q = useRpc('suivi.list', { tab });
   const [dlg, setDlg] = useState<Dialog>(null);
   const act = useAction('suivi.act');
+  // phones: journey cards; a tap opens the parcel full screen
+  const phone = useIsPhone();
+  const [openId, setOpenId] = useState<number | null>(null);
   const run = (o: Order, action: 'cancel' | 'delivered' | 'realert') =>
     act.mutate({ id: o.id, action }, { onSuccess: () => toast(t(`suivi.msg.${action === 'cancel' ? 'cancelled' : action}`, { ref: o.ref }), 'ok') });
 
@@ -316,7 +321,53 @@ function List({ tab }: { tab: ListTab }) {
         <h2>{tab === 'swap' ? t('suivi.toSwap') : t(`suivi.tabs.${tab}`)}</h2>
         <span className="muted small">{q.data ? t('suivi.parcels', { count: q.data.rows.length }) : ''}</span>
       </div>
-      {q.isLoading ? <Loading /> : q.error ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> : <ParcelTable rows={q.data?.rows ?? []} extra={extra} actions={actions} empty={t(`suivi.empty.${tab}`)} />}
+      {q.isLoading ? (
+        <Loading />
+      ) : q.error ? (
+        <ErrorBox error={q.error} onRetry={() => q.refetch()} />
+      ) : phone ? (
+        (() => {
+          const rows = q.data?.rows ?? [];
+          const cur = rows.find((r) => r.id === openId) ?? null;
+          const phoneActions = (o: Order): ParcelAction[] => {
+            const claim: ParcelAction = { key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: extra[o.id]?.companyKind === 'own' }) };
+            if (tab === 'alertes')
+              return [{ key: 'treat', label: t('suivi.ph.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) }, claim, { key: 'cancel', label: t('suivi.ph.cancel'), tone: 'bad', run: () => setDlg({ kind: 'cancel', o }) }];
+            if (tab === 'traites')
+              return [
+                { key: 'deliv', label: t('suivi.ph.deliv'), tone: 'ok', run: () => run(o, 'delivered') },
+                claim,
+                { key: 'realert', label: t('suivi.ph.realert'), run: () => run(o, 'realert') },
+                { key: 'cancelled', label: t('suivi.ph.cancelled'), tone: 'bad', run: () => run(o, 'cancel') },
+              ];
+            if (tab === 'swap') return [{ key: 'swap', label: t('suivi.act.swap'), tone: 'main', run: () => setDlg({ kind: 'swap', o }) }, claim];
+            return [claim];
+          };
+          return (
+            <>
+              <ParcelCards rows={rows} extra={extra} reasonOf={reasonOf} empty={t(`suivi.empty.${tab}`)} onOpen={setOpenId} />
+              {tab === 'alertes' && rows.length > 0 && (
+                <button type="button" className="pxp-next" onClick={() => setOpenId(rows[0].id)}>
+                  {t('suivi.ph.next')}
+                  <Icon name="chevr" />
+                </button>
+              )}
+              {cur && (
+                <ParcelPage
+                  o={cur}
+                  x={extra[cur.id]}
+                  reason={reasonOf(cur, extra[cur.id])}
+                  actions={phoneActions(cur)}
+                  onClaim={() => setDlg({ kind: 'claim', o: cur, toLivreur: extra[cur.id]?.companyKind === 'own' })}
+                  onClose={() => setOpenId(null)}
+                />
+              )}
+            </>
+          );
+        })()
+      ) : (
+        <ParcelTable rows={q.data?.rows ?? []} extra={extra} actions={actions} empty={t(`suivi.empty.${tab}`)} />
+      )}
       {dlg?.kind === 'treat' && <TreatModal o={dlg.o} reason={reasonOf(dlg.o, extra[dlg.o.id])} onClose={() => setDlg(null)} />}
       {dlg?.kind === 'cancel' && (
         <ConfirmModal
