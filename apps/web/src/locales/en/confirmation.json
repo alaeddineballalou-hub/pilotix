@@ -1,13 +1,28 @@
 {
-  "sub": { "nouvelles": "New", "attente": "In progress", "confirmees": "Confirmed", "terminees": "Closed" },
-  "title": { "nouvelles": "New orders", "attente": "In progress", "confirmees": "Confirmed", "terminees": "Closed" },
+  "sub": {
+    "nouvelles": "New",
+    "attente": "In progress",
+    "confirmees": "Confirmed",
+    "terminees": "Closed"
+  },
+  "title": {
+    "nouvelles": "New orders",
+    "attente": "In progress",
+    "confirmees": "Confirmed",
+    "terminees": "Closed"
+  },
   "help": {
     "nouvelles": "Orders nobody has called yet, newest at the top (last in, first called). Click a row (or ›) to see the details, “Call” to handle it.",
     "attente": "Orders already called but not confirmed yet: to check, no answer, busy, call back, postponed.",
     "confirmees": "Confirmed orders (and confirmed without stock), newest first, with where their delivery stands.",
     "terminees": "Orders closed without confirmation: duplicates, wrong numbers and fake orders. They leave the call queue as soon as the agent picks this status."
   },
-  "empty": { "nouvelles": "No new order.", "attente": "No order in progress.", "confirmees": "No confirmed order.", "terminees": "No closed order." },
+  "empty": {
+    "nouvelles": "No new order.",
+    "attente": "No order in progress.",
+    "confirmees": "No confirmed order.",
+    "terminees": "No closed order."
+  },
   "newOrder": "New order",
   "next": "Next order →",
   "searchPh": "Ref., customer name, phone, tracking no.…",
@@ -51,14 +66,34 @@
     "back": "Back"
   },
   "col": {
-    "order": "Order", "source": "UTM source", "tracking": "Tracking no.", "creator": "Created by", "channel": "Channel", "product": "Product", "sku": "SKU",
-    "name": "Customer", "phone": "Phone", "wilaya": "Wilaya", "commune": "Commune", "agent": "Agent", "total": "Total", "time": "Time spent",
-    "created": "Created", "confirmed": "Confirmed", "follow": "Delivery", "next": "Next call", "status": "Status"
+    "order": "Order",
+    "source": "UTM source",
+    "tracking": "Tracking no.",
+    "creator": "Created by",
+    "channel": "Channel",
+    "product": "Product",
+    "sku": "SKU",
+    "name": "Customer",
+    "phone": "Phone",
+    "wilaya": "Wilaya",
+    "commune": "Commune",
+    "agent": "Agent",
+    "total": "Total",
+    "time": "Time spent",
+    "created": "Created",
+    "confirmed": "Confirmed",
+    "follow": "Delivery",
+    "next": "Next call",
+    "status": "Status"
   },
   "f": {
     "wilaya": "Wilaya",
     "allF": "All",
-    "allSt": { "attente": "All in progress", "confirmees": "All confirmed", "terminees": "All closed" },
+    "allSt": {
+      "attente": "All in progress",
+      "confirmees": "All confirmed",
+      "terminees": "All closed"
+    },
     "clear": "Clear filters"
   },
   "tb": {
@@ -80,9 +115,27 @@
     "done": "{{n}} customer(s) blocked"
   },
   "csv": {
-    "ref": "Ref", "created": "Created", "client": "Customer", "phone": "Phone", "phone2": "Phone 2", "wilaya": "Wilaya", "commune": "Commune", "address": "Address",
-    "desk": "Stop desk", "products": "Products", "pieces": "Pieces", "productsDa": "Products DA", "feeDa": "Delivery DA", "discount": "Discount", "totalDa": "Total DA",
-    "conf": "Confirmation", "follow": "Delivery", "company": "Company", "tracking": "Tracking", "agent": "Agent", "deliveryNote": "Courier note"
+    "ref": "Ref",
+    "created": "Created",
+    "client": "Customer",
+    "phone": "Phone",
+    "phone2": "Phone 2",
+    "wilaya": "Wilaya",
+    "commune": "Commune",
+    "address": "Address",
+    "desk": "Stop desk",
+    "products": "Products",
+    "pieces": "Pieces",
+    "productsDa": "Products DA",
+    "feeDa": "Delivery DA",
+    "discount": "Discount",
+    "totalDa": "Total DA",
+    "conf": "Confirmation",
+    "follow": "Delivery",
+    "company": "Company",
+    "tracking": "Tracking",
+    "agent": "Agent",
+    "deliveryNote": "Courier note"
   },
   "cd": {
     "wait": "slot in {{d}}",
@@ -91,7 +144,11 @@
     "firstTitle": "Time left for the first call: {{d}}",
     "slotTitle": "Time left in the slot: {{d}}"
   },
-  "slot": { "morning": "Morning", "midday": "Midday", "evening": "Evening" },
+  "slot": {
+    "morning": "Morning",
+    "midday": "Midday",
+    "evening": "Evening"
+  },
   "banner": {
     "late": "Late calls",
     "night": "Night orders",
@@ -117,7 +174,14 @@
     "viewConf": "Confirmation rate",
     "viewDeliv": "Delivery performance"
   },
-  "per": { "today": "Today", "yesterday": "Yesterday", "7": "7 days", "30": "30 days", "month": "This month", "custom": "Dates…" },
+  "per": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "7": "7 days",
+    "30": "30 days",
+    "month": "This month",
+    "custom": "Dates…"
+  },
   "fc": {
     "title": "First call speed",
     "help": "What matters here: call every new order as fast as possible. Delay = from assignment (or arrival) to the first call; at night it counts from 9 am. On time = within {{first}} min, +5 min per newer order to call before it (newest first).",
@@ -210,7 +274,12 @@
     "rate": "Recovery rate",
     "rateHelp": "Recovered divided by (recovered + lost). Lost = cancelled after at least 2 calls. Green from 60 %, orange 40–59 %, red below.",
     "rateSub": "{{r}} recovered · {{l}} lost",
-    "st": { "no_answer": "No answer", "busy": "Busy", "callback": "Callback asked", "postponed": "Postponed" },
+    "st": {
+      "no_answer": "No answer",
+      "busy": "Busy",
+      "callback": "Callback asked",
+      "postponed": "Postponed"
+    },
     "colDue": "To call back",
     "colMany": "3 calls +",
     "empty": "No order in progress for the period 🎉"
@@ -270,7 +339,11 @@
     "add": "Add a product",
     "addPh": "+ Add a product: type the name, colour or SKU…",
     "inOrder": "already in the order (+1)",
-    "note": { "client": "Customer", "delivery": "Courier", "internal": "Internal" }
+    "note": {
+      "client": "Customer",
+      "delivery": "Courier",
+      "internal": "Internal"
+    }
   },
   "focus": {
     "title": "Confirmation",
@@ -290,5 +363,22 @@
     "clientNote": "Customer note: {{note}}",
     "release": "Release (leave it to another agent)",
     "history": "See history"
+  },
+  "nv": {
+    "title": "New orders",
+    "help": "The road of the orders received in the period: called, confirmed, then delivered. Below, what is left to call right now.",
+    "recv": "Received",
+    "called": "Called",
+    "calledLeft": "{{p}} % · {{n}} still to call",
+    "calledAll": "all called",
+    "confirmed": "Confirmed",
+    "confirmedSub": "rate {{r}} · {{c}} cancelled",
+    "delivered": "Delivered",
+    "deliveredSub": "rate {{r}} · {{b}} returns · {{w}} in progress",
+    "now": "Now",
+    "toCall": "To call",
+    "late": "Late",
+    "onTime": "First call on time",
+    "median": "Median delay"
   }
 }
