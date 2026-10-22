@@ -116,3 +116,10 @@
 
 /* phones: the list's table tools are for big screens */
 @media (max-width: 760px) { .bjsv-kpis { display: none !important; } }
+
+/* messages sent to the customer in the history: neutral, three lines at most; red stays for the alerts */
+.pxs-tl q.m { background: #F6F1EA; color: var(--ink); font-weight: 500; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+/* the alert's name under the journey line may take two lines */
+.pxs-jt span { white-space: normal; line-height: 1.2; overflow-wrap: anywhere; }
+/* dialogs (Traiter, Réclamation, Annuler…) open above the full-screen parcel and order */
+body:has(.pxs-page) .modal-wrap, body:has(.pxp-order) .modal-wrap { z-index: 90 !important; }
