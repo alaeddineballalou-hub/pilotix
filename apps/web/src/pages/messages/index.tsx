@@ -140,15 +140,24 @@ function Inbox({ selected }: { selected: number | null }) {
   );
 }
 
-function Bubbles({ messages, name }: { messages: { id: number; role: string; body: string; userName: string | null; sendError: string | null; at: string; meta: any }[]; name: string }) {
+function Bubbles({
+  messages,
+  name,
+  pending,
+}: {
+  messages: { id: number; role: string; body: string; userName: string | null; sendError: string | null; at: string; meta: any }[];
+  name: string;
+  /** the customer's message while Dellal is still answering (tester) */
+  pending?: string | null;
+}) {
   const { t } = useTranslation();
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     box.current?.scrollTo({ top: box.current.scrollHeight });
-  }, [messages.length]);
+  }, [messages.length, pending]);
   return (
     <div className="bjr-msgs" ref={box} aria-live="polite">
-      {!messages.length && <span className="muted small">{t('messages.thread.empty')}</span>}
+      {!messages.length && !pending && <span className="muted small">{t('messages.thread.empty')}</span>}
       {messages.map((m) =>
         m.role === 'tool' ? (
           <span key={m.id} className="dl-tool ltr">
@@ -166,6 +175,32 @@ function Bubbles({ messages, name }: { messages: { id: number; role: string; bod
           </div>
         ),
       )}
+      {pending && (
+        <>
+          <div className="bjr-m">
+            <span className="bjr-who">{t('messages.thread.customer')}</span>
+            <span className="bjr-b">{pending}</span>
+          </div>
+          <Typing name={name} />
+        </>
+      )}
+    </div>
+  );
+}
+
+/** "Dellal écrit… 12 s" while the answer is on its way. */
+function Typing({ name }: { name: string }) {
+  const { t } = useTranslation();
+  const [s, setS] = useState(0);
+  useEffect(() => {
+    const t0 = Date.now();
+    const id = window.setInterval(() => setS(Math.round((Date.now() - t0) / 1000)), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  return (
+    <div className="bjr-m mine dl-agent">
+      <span className="bjr-who">{name}</span>
+      <span className="bjr-b muted">{t('messages.tester.typing', { name, s })}</span>
     </div>
   );
 }
@@ -283,13 +318,27 @@ function Tester() {
   const { t } = useTranslation();
   const [data, setData] = useState<{ messages: any[]; demo: boolean } | null>(null);
   const [body, setBody] = useState('');
-  const send = useAction('dellal.test', { silent: false, onDone: (r) => (setData(r), setBody('')) });
+  const [pending, setPending] = useState<string | null>(null);
+  const send = useAction('dellal.test', { silent: false, onDone: (r) => (setData(r), setPending(null)) });
   const init = useRpc('dellal.test', {});
   const st = useRpc('dellal.inbox', { limit: 1 });
   const shown = data ?? init.data ?? null;
   const name = st.data?.name ?? 'Dellal';
   const quick = t('messages.tester.quick', { returnObjects: true }) as string[];
-  const submit = (text = body) => text.trim() && send.mutate({ body: text.trim() });
+  // show the customer's message at once (an answer from Claude can take a while); give the text back if it failed
+  useEffect(() => {
+    if (!send.isPending && pending) {
+      if (send.isError) setBody(pending);
+      setPending(null);
+    }
+  }, [send.isPending]); // eslint-disable-line react-hooks/exhaustive-deps
+  const submit = (text = body) => {
+    const v = text.trim();
+    if (!v || send.isPending) return;
+    setPending(v);
+    setBody('');
+    send.mutate({ body: v });
+  };
   return (
     <Card
       title={t('messages.tester.title', { name })}
@@ -301,8 +350,13 @@ function Tester() {
     >
       <p className="muted small">{t('messages.tester.help', { name })}</p>
       {shown?.demo && <div className="warnbox" style={{ margin: '8px 0' }}>{t(backend.kind === 'demo' ? 'messages.tester.demoPreview' : 'messages.tester.demoNoKey', { name })}</div>}
+      {shown && !shown.demo && backend.kind === 'demo' && (
+        <div className="okbox" style={{ margin: '8px 0', fontWeight: 500 }}>
+          {t('messages.tester.inPage', { name })}
+        </div>
+      )}
       <div className="dl-tester">
-        {init.isLoading ? <Loading /> : <Bubbles messages={shown?.messages ?? []} name={name} />}
+        {init.isLoading ? <Loading /> : <Bubbles messages={shown?.messages ?? []} name={name} pending={pending} />}
         <div className="bjr-cmp">
           <div className="bjr-qr">
             {quick.map((x) => (

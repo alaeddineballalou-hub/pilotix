@@ -29,7 +29,23 @@ export interface Ctx {
   emit: (e: LiveEvent) => void;
   /** Server-only abilities (courier APIs, Meta). Missing in the browser preview. */
   server?: ServerHooks;
+  /**
+   * Dellal's AI when it runs inside the page (the Pilotix preview opened in Claude): Claude answers through the page, with
+   * no API key, and runs Dellal's tools itself through `runTool` (the same tool code as on the server). Only that preview
+   * sets it; on the server, Dellal uses `server.dellal`.
+   */
+  dellalAi?: DellalPageAi;
 }
+
+/** One answer from the page's Claude. Tools run inside the call through `runTool`, so the answer is the final text. */
+export type DellalPageAi = (req: {
+  model: string;
+  system: string;
+  messages: { role: 'user' | 'assistant'; content: any }[];
+  tools: readonly { name: string; description: string; input_schema: unknown }[];
+  max_tokens: number;
+  runTool: (name: string, input: any) => Promise<any>;
+}) => Promise<{ content: { type: 'text'; text: string }[]; stop_reason: string; usage?: { input_tokens: number; output_tokens: number } }>;
 
 export interface ServerHooks {
   courier: (action: string, args: unknown, ctx: Ctx) => Promise<unknown>;
