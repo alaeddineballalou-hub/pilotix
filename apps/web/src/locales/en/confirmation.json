@@ -527,5 +527,40 @@
     "pickStatus": "Pick a new status first",
     "feeLocked": "Delivery grid price (wilaya, home or bureau). Only the discount can be changed."
   },
-  "noNext": "No more orders in this list"
+  "noNext": "No more orders in this list",
+  "ek": {
+    "datesNote": "The first 3 numbers are live (the whole En cours tab). The dates apply to the 3 rates and the table, by status change.",
+    "due": "To call back now",
+    "dueHelp": "Orders in the En cours tab whose callback time has passed, or with no time set: call them now.",
+    "dueSub": "of {{n}} in progress",
+    "late": "Late callbacks",
+    "lateHelp": "Forgotten callbacks: more than 30 minutes past the planned time. This number should stay at 0.",
+    "lateSub": "oldest waiting {{d}} · {{ref}}",
+    "lateNone": "no forgotten callback",
+    "value": "Value at stake",
+    "valueHelp": "Total in DA of the orders in the En cours tab: the money waiting to be confirmed.",
+    "valueSub": "{{n}} orders to confirm",
+    "conf": "Confirmation rate",
+    "confHelp": "On the chosen dates: confirmed ÷ (confirmed + cancelled by the customer). Fake orders, duplicates and wrong numbers are not counted. Green from 60 %.",
+    "confSub": "{{c}} confirmed · {{x}} cancelled",
+    "rec": "Recovery rate",
+    "recHelp": "Orders confirmed after 2 calls or more, divided by (recovered + cancelled after 2 calls or more). This is where follow-up pays. Green from 60 %.",
+    "recSub": "{{r}} recovered · {{l}} lost",
+    "full": "Complete attempts",
+    "fullHelp": "Share of cancellations made after at least 3 calls. Target 100 %: no order is cancelled before 3 attempts.",
+    "fullSub": "{{c}} of {{n}} cancellations after 3 calls",
+    "fullNone": "no cancellation",
+    "byAgent": "By agent · best first",
+    "empty": "No order in progress or handled on the period",
+    "legend": "Green: target reached · Orange: watch · Red: below target.",
+    "col": {
+      "agent": "Agent",
+      "n": "In progress",
+      "due": "To call back",
+      "late": "Late",
+      "conf": "Confirmation",
+      "rec": "Recovery",
+      "full": "Complete attempts"
+    }
+  }
 }

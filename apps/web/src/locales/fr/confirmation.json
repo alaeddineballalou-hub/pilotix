@@ -527,5 +527,40 @@
     "pickStatus": "Choisissez d’abord un nouveau statut",
     "feeLocked": "Prix de la grille de livraison (wilaya, domicile ou bureau). Seule la remise peut être modifiée."
   },
-  "noNext": "Plus de commande dans cette liste"
+  "noNext": "Plus de commande dans cette liste",
+  "ek": {
+    "datesNote": "Les 3 premiers chiffres sont en direct (tout l’onglet En cours). Les dates s’appliquent aux 3 taux et au tableau, selon le changement de statut.",
+    "due": "À rappeler maintenant",
+    "dueHelp": "Commandes de l’onglet En cours dont l’heure de rappel est passée, ou sans heure prévue : à appeler tout de suite.",
+    "dueSub": "sur {{n}} en cours",
+    "late": "Rappels en retard",
+    "lateHelp": "Rappels oubliés : l’heure prévue est dépassée de plus de 30 minutes. Ce chiffre doit rester à 0.",
+    "lateSub": "le plus ancien attend depuis {{d}} · {{ref}}",
+    "lateNone": "aucun rappel oublié",
+    "value": "Valeur en jeu",
+    "valueHelp": "Total en DA des commandes de l’onglet En cours : l’argent qui attend d’être confirmé.",
+    "valueSub": "{{n}} commandes à confirmer",
+    "conf": "Taux de confirmation",
+    "confHelp": "Sur les dates choisies : confirmées ÷ (confirmées + annulées par le client). Les fausses commandes, doublons et faux numéros ne comptent pas. Vert à partir de 60 %.",
+    "confSub": "{{c}} confirmées · {{x}} annulées",
+    "rec": "Taux de récupération",
+    "recHelp": "Commandes confirmées après 2 appels ou plus, divisées par (récupérées + annulées après 2 appels ou plus). C’est là que la relance paie. Vert à partir de 60 %.",
+    "recSub": "{{r}} récupérées · {{l}} perdues",
+    "full": "Tentatives complètes",
+    "fullHelp": "Part des annulations faites après au moins 3 appels. Objectif 100 % : aucune commande n’est annulée avant 3 tentatives.",
+    "fullSub": "{{c}} annulations sur {{n}} après 3 appels",
+    "fullNone": "aucune annulation",
+    "byAgent": "Par agent · du meilleur au plus faible",
+    "empty": "Aucune commande en cours ni traitée sur la période",
+    "legend": "Vert : objectif atteint · Orange : à surveiller · Rouge : sous l’objectif.",
+    "col": {
+      "agent": "Agent",
+      "n": "En cours",
+      "due": "À rappeler",
+      "late": "En retard",
+      "conf": "Confirmation",
+      "rec": "Récupération",
+      "full": "Tentatives complètes"
+    }
+  }
 }
