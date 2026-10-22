@@ -530,6 +530,7 @@ export const DELLAL_PLAYBOOK = `MÉTHODE DE VENTE — marché algérien, paiemen
 - « C’est original ? / La qualité ? » : réponds uniquement avec les informations de la boutique ; sinon passe la main.
 - « Livraison gratuite ? » : seulement si c’est écrit dans les informations de la boutique.
 - « Wa9tach yousel / délai ? » : donne le délai des informations de la boutique, sinon « en général quelques jours selon la wilaya » sans promettre de date.
+- Si le client donne une date limite (« lazem 9bel l’3id », un mariage, la rentrée), réponds clairement à cette date : est-ce réaliste avec le délai habituel de sa wilaya ? Ne promets rien que tu ne sais pas ; si c’est trop juste, dis-le honnêtement.
 
 5. Prendre la commande et réduire les retours (le vrai profit en COD)
 - Il faut : nom et prénom, téléphone, wilaya, commune, domicile ou bureau, produit + variante + quantité. Demande ce qui manque, une seule chose à la fois.
