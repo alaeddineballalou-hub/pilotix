@@ -565,7 +565,7 @@ export const confirmationProcs = {
 
   /** Counts of the stage bar. */
   /** Column presets: everyone reads them; only an admin adds or deletes; a saved preset is never changed. */
-  'confirmation.colPresets': proc(['confirmation'], z.object({}), async (ctx) => getSetting(ctx.db, 'colPresets')),
+  'confirmation.colPresets': proc(null, z.object({}), async (ctx) => getSetting(ctx.db, 'colPresets')),
   'confirmation.addColPreset': proc(['confirmation'], z.object({ name: z.string().trim().min(1).max(40), cols: z.array(z.string().max(30)).min(1).max(40) }), async (ctx, i) => {
     if (!ctx.session.isAdmin) throw forbidden();
     const list = await getSetting(ctx.db, 'colPresets');
@@ -580,6 +580,15 @@ export const confirmationProcs = {
     const list = await getSetting(ctx.db, 'colPresets');
     await setSetting(ctx.db, 'colPresets', list.filter((p) => p.id !== id), ctx.session.profile.id);
     return { ok: true };
+  }),
+  /** For every screen: names of users and delivery companies (to write order history in words), and the WhatsApp message. */
+  'orders.uiMeta': proc(null, z.object({}), async (ctx) => {
+    const [shop, people, companies] = await Promise.all([getSetting(ctx.db, 'shop'), ctx.db.query('SELECT id, name FROM profiles'), ctx.db.query('SELECT id, name FROM delivery_companies')]);
+    return {
+      shopName: shop.name,
+      whatsappTemplate: shop.whatsappTemplate,
+      names: Object.fromEntries([...people.map((p: any) => [String(p.id), p.name as string]), ...companies.map((c: any) => [`c${c.id}`, c.name as string])]) as Record<string, string>,
+    };
   }),
   'confirmation.counts': proc(['confirmation'], z.object({}), async (ctx) => {
     const rows = await ctx.db.query(`SELECT conf_status AS k, count(*)::int AS n FROM sales GROUP BY 1`);

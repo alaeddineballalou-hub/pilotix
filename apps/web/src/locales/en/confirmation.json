@@ -87,7 +87,7 @@
     "status": "Status",
     "stock": "Availability",
     "desk": "Stopdesk",
-    "passed": "Statuses passed",
+    "passed": "History",
     "variant": "Variant",
     "fagent": "Follow-up agent"
   },
@@ -409,5 +409,11 @@
     "apply": "Show the columns of {{name}}",
     "by": "by {{by}}",
     "cols": "Columns"
+  },
+  "hist": {
+    "title": "History of {{ref}}",
+    "none": "Nothing yet.",
+    "open": "See the history of {{ref}}",
+    "see": "See"
   }
 }

@@ -13,6 +13,8 @@ import { store } from '../../lib/store';
 import { ErrorBox, Field, Help, Icon, Loading, Pager, SortTh, StageBar, StatusBadge, StatusSelect } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
+import { ColumnMenu } from '../../ui/ColumnMenu';
+import { HistoryButton, PhoneCell } from './History';
 import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import type { PageProps } from '../registry';
 import { Countdown, useNow } from './Countdown';
@@ -140,29 +142,6 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
     setF((cur) => ({ ...cur, ...p }));
     setPage(1);
   };
-  const presets = useRpc('confirmation.colPresets', {}, { staleTime: 60_000 });
-  const [pName, setPName] = useState('');
-  const addPreset = async () => {
-    const name = pName.trim();
-    if (!name) return;
-    try {
-      await rpc('confirmation.addColPreset', { name, cols: COLS.filter((c) => visible.has(c.k)).map((c) => c.k) });
-      setPName('');
-      toast(t('confirmation.presets.saved', { name }), 'ok');
-      presets.refetch();
-    } catch (e: any) {
-      toast(e.message, 'bad');
-    }
-  };
-  const delPreset = async (id: string) => {
-    try {
-      await rpc('confirmation.deleteColPreset', { id });
-      toast(t('confirmation.presets.deleted'), 'ok');
-      presets.refetch();
-    } catch (e: any) {
-      toast(e.message, 'bad');
-    }
-  };
   const saveCols = (s: Set<ColKey>) => {
     setVisible(s);
     store.set(colsKey, JSON.stringify([...s]));
@@ -257,7 +236,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
           </>
         );
       case 'phone':
-        return <span className="qph ltr">{r.phone}</span>;
+        return <PhoneCell order={r} />;
       case 'wilaya':
         return wilayaName(r.wilayaId);
       case 'commune':
@@ -288,14 +267,19 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
       case 'desk':
         return r.isStopdesk ? <span className="badge t-info">{t('confirmation.desk')}</span> : <span className="muted">{t('confirmation.home')}</span>;
       case 'passed':
-        return r.passed.length ? (
-          <span className="px-passed">
-            {r.passed.map((s, k) => (
-              <StatusBadge key={k} kind="conf" status={s} />
-            ))}
-          </span>
-        ) : (
-          <span className="muted">—</span>
+        return (
+          <HistoryButton orderId={r.id} refLabel={r.ref} className="px-histcell" title={t('confirmation.hist.open', { ref: r.ref })}>
+            <Icon name="history" />
+            {r.passed.length ? (
+              <span className="px-passed">
+                {r.passed.map((s, k) => (
+                  <StatusBadge key={k} kind="conf" status={s} />
+                ))}
+              </span>
+            ) : (
+              <span className="muted">{t('confirmation.hist.see')}</span>
+            )}
+          </HistoryButton>
         );
       case 'confirmed':
         return when(r.confirmedAt);
@@ -399,77 +383,17 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
               <span className="px-qb-tx">{t('common.filters')}</span>
               {nFilters ? <b className="px-qb-n">{nFilters}</b> : null}
             </button>
-            <span className="px-qpop-wrap">
-              <button type="button" className={`px-qb ${panel === 'c' ? 'on' : ''}`} aria-expanded={panel === 'c'} title={`${t('common.columns')} (${visible.size}/${COLS.length})`} aria-label={t('common.columns')} onClick={() => setPanel(panel === 'c' ? null : 'c')}>
-                <Icon name="columns" />
-              </button>
-              {panel === 'c' && (
-                <div className="px-qpop" role="dialog" aria-label={t('common.columns')}>
-                  <div className="px-pre">
-                    <div className="px-pre-h">{t('confirmation.presets.title')}</div>
-                    {(presets.data ?? []).length === 0 && <div className="px-pre-none">{t('confirmation.presets.none')}</div>}
-                    {(presets.data ?? []).map((p) => {
-                      const keep = p.cols.filter((k) => COLS.some((c) => c.k === k)) as ColKey[];
-                      const on = keep.length > 0 && keep.length === visible.size && keep.every((k) => visible.has(k));
-                      return (
-                        <div key={p.id} className={`px-pre-it ${on ? 'on' : ''}`}>
-                          <button type="button" className="px-pre-go" title={t('confirmation.presets.locked')} aria-label={t('confirmation.presets.apply', { name: p.name })} disabled={!keep.length} onClick={() => saveCols(new Set(keep))}>
-                            <Icon name="lock" />
-                            <span>{p.name}</span>
-                            <small>{keep.length}</small>
-                          </button>
-                          {session?.isAdmin && (
-                            <button type="button" className="px-pre-del" title={t('confirmation.presets.del', { name: p.name })} aria-label={t('confirmation.presets.del', { name: p.name })} onClick={() => delPreset(p.id)}>
-                              <Icon name="trash" />
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {session?.isAdmin && (
-                      <form
-                        className="px-pre-new"
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          addPreset();
-                        }}
-                      >
-                        <input value={pName} maxLength={40} placeholder={t('confirmation.presets.name')} aria-label={t('confirmation.presets.saveAs')} title={t('confirmation.presets.saveAs')} onChange={(e) => setPName(e.target.value)} />
-                        <button type="submit" className="btn small primary" disabled={!pName.trim() || !visible.size}>
-                          {t('confirmation.presets.save')}
-                        </button>
-                      </form>
-                    )}
-                  </div>
-                  <div className="px-pre-h">{t('confirmation.presets.cols')}</div>
-                  {COLS.map((c) => (
-                    <label key={c.k} className="px-qpop-it">
-                      <span>{colLabel(c.k)}</span>
-                      <input
-                        type="checkbox"
-                        checked={visible.has(c.k)}
-                        onChange={(e) => {
-                          const s2 = new Set(visible);
-                          if (e.target.checked) s2.add(c.k);
-                          else s2.delete(c.k);
-                          saveCols(s2);
-                        }}
-                      />
-                    </label>
-                  ))}
-                  <button
-                    type="button"
-                    className="btn small ghost"
-                    onClick={() => {
-                      setVisible(new Set(COLS.map((c) => c.k)));
-                      store.set(colsKey, null);
-                    }}
-                  >
-                    {t('common.showAll')}
-                  </button>
-                </div>
-              )}
-            </span>
+            <ColumnMenu
+              cols={COLS.map((c) => ({ k: c.k, label: colLabel(c.k) }))}
+              visible={visible}
+              onChange={saveCols}
+              onReset={() => {
+                setVisible(new Set(COLS.map((c) => c.k)));
+                store.set(colsKey, null);
+              }}
+              open={panel === 'c'}
+              onToggle={() => setPanel(panel === 'c' ? null : 'c')}
+            />
             <button type="button" className="px-qb" title={t('common.export')} aria-label={t('common.export')} onClick={doExport}>
               <Icon name="download" />
             </button>
@@ -615,12 +539,9 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                           ))}
                           <td className="qact" data-l="">
                             <div className="qrowacts">
-                              <a className="qo" href={telHref(r.phone)} aria-label={t('confirmation.callNum', { p: r.phone })} title={t('confirmation.call')} onClick={() => rpc('orders.logCall', { id: r.id }).catch(() => {})}>
-                                <Icon name="phone" />
-                              </a>
-                              <a className="qo" href={wa(r)} target="_blank" rel="noopener" aria-label={t('confirmation.msgNum', { p: r.phone })} title={t('confirmation.message')}>
-                                <Icon name="message" />
-                              </a>
+                              <HistoryButton orderId={r.id} refLabel={r.ref} className="qo qo-hist" title={t('confirmation.hist.open', { ref: r.ref })}>
+                                <Icon name="history" />
+                              </HistoryButton>
                               <button type="button" className="qo qo-edit" aria-label={t('confirmation.editRef', { ref: r.ref })} title={t('confirmation.edit')} onClick={() => openOrderForm({ orderId: r.id, onSaved: () => qc.invalidateQueries() })}>
                                 <Icon name="pencil" />
                               </button>

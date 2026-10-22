@@ -16,6 +16,9 @@ import { NewClaimModal } from './Claims';
 import { Reclamation } from './Reclamation';
 import { SwapModal, SwapResult, SwapSheetModal } from './Swap';
 import './suivi.css';
+import { ColumnMenu } from '../../ui/ColumnMenu';
+import { HistoryButton, PhoneCell } from '../confirmation/History';
+import { store } from '../../lib/store';
 
 const LIST_TABS = ['alertes', 'traites', 'livres', 'annules', 'swap'] as const;
 type ListTab = (typeof LIST_TABS)[number];
@@ -115,77 +118,128 @@ type Extra = { companyKind: string | null; livreurPhone: string | null; alertRea
 /** What the courier or the livreur said: the alert note while in alert, else the courier's own status. */
 const reasonOf = (o: Order, x?: Extra) => (o.followStatus === 'alert' ? x?.alertReason || o.extStatus : o.extStatus);
 
-/** The table shared by every Suivi list (same columns as the original). */
+/** Suivi columns. Keys shared with Confirmation, so one saved preset works in both. */
+type SCol = 'order' | 'name' | 'phone' | 'wilaya' | 'product' | 'variant' | 'tracking' | 'follow' | 'agent' | 'fagent' | 'since' | 'passed' | 'status';
+const SCOLS: SCol[] = ['order', 'name', 'phone', 'wilaya', 'product', 'variant', 'tracking', 'follow', 'agent', 'fagent', 'since', 'passed', 'status'];
+const SDEFAULT: SCol[] = ['order', 'name', 'phone', 'wilaya', 'product', 'variant', 'follow', 'agent', 'fagent', 'since', 'passed', 'status'];
+const SKEY = 'suivi-cols';
+
+/** The table shared by every Suivi list, with the column menu and the shared presets. */
 export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[]; actions?: (o: Order) => ReactNode; empty: string; extra?: Record<number, Extra> }) {
   const { t } = useTranslation();
-  if (!rows.length) return <Empty>{empty}</Empty>;
+  const [visible, setVisible] = useState<Set<SCol>>(() => {
+    const saved = store.json<SCol[] | null>(SKEY, null);
+    return new Set(saved?.filter((k) => SCOLS.includes(k)) ?? SDEFAULT);
+  });
+  const [menu, setMenu] = useState(false);
+  const label: Record<SCol, string> = {
+    order: t('suivi.col.order'), name: t('suivi.col.client'), phone: t('suivi.col.phone'), wilaya: t('suivi.col.wilaya'), product: t('suivi.col.products'), variant: t('suivi.col.variant'),
+    tracking: t('suivi.col.tracking'), follow: t('suivi.col.delivery'), agent: t('suivi.col.agent'), fagent: t('suivi.col.fagent'), since: t('suivi.col.since'), passed: t('confirmation.col.passed'), status: t('suivi.col.status'),
+  };
+  const save = (s: Set<SCol>) => (setVisible(s), store.set(SKEY, JSON.stringify([...s])));
+  const cols = SCOLS.filter((k) => visible.has(k));
+  const cell = (o: Order, k: SCol): ReactNode => {
+    switch (k) {
+      case 'order':
+        return (
+          <>
+            <b className="ltr">{o.ref}</b>
+            <small>{when(o.createdAt)}</small>
+          </>
+        );
+      case 'name':
+        return o.customerName;
+      case 'phone':
+        return <PhoneCell order={o} />;
+      case 'wilaya':
+        return (
+          <>
+            {wilayaName(o.wilayaId)}
+            <small>{o.commune}</small>
+          </>
+        );
+      case 'product':
+        return <div className="px-clamp">{namesOf(o.items)}</div>;
+      case 'variant':
+        return <div className="px-clamp">{variantsOf(o.items)}</div>;
+      case 'tracking':
+        return trackOf(o) ? <span className="ltr">{trackOf(o)}</span> : '—';
+      case 'follow':
+        return (
+          <>
+            {o.companyName || o.livreurName || '—'}
+            <small>
+              <span className="ltr">{trackOf(o)}</span>
+              {reasonOf(o, extra[o.id]) ? ` · ${reasonOf(o, extra[o.id])}` : ''}
+            </small>
+          </>
+        );
+      case 'agent':
+        return o.agentName ?? '—';
+      case 'fagent':
+        return o.followAgentName ?? '—';
+      case 'since': {
+        const d = daysSince(o.shippedAt);
+        return d === null ? '—' : <span className={`badge ${d >= 10 ? 't-bad' : d >= 5 ? 't-warn' : 't-info'} ltr`}>{t('suivi.days', { n: d })}</span>;
+      }
+      case 'passed':
+        return (
+          <HistoryButton orderId={o.id} refLabel={o.ref} className="px-histcell" title={t('confirmation.hist.open', { ref: o.ref })}>
+            <Icon name="history" />
+            <span className="muted">{t('confirmation.hist.see')}</span>
+          </HistoryButton>
+        );
+      case 'status':
+        return <StatusBadge kind="follow" status={o.followStatus} />;
+    }
+  };
   return (
-    <div className="tbl-wrap">
-      <table className="tbl">
-        <thead>
-          <tr>
-            <th>{t('suivi.col.order')}</th>
-            <th>{t('suivi.col.client')}</th>
-            <th>{t('suivi.col.wilaya')}</th>
-            <th className="wide">{t('suivi.col.products')}</th>
-            <th>{t('suivi.col.variant')}</th>
-            <th>{t('suivi.col.delivery')}</th>
-            <th>{t('suivi.col.agent')}</th>
-            <th>{t('suivi.col.fagent')}</th>
-            <th className="num">{t('suivi.col.since')}</th>
-            <th>{t('suivi.col.status')}</th>
-            {actions && <th />}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((o) => {
-            const d = daysSince(o.shippedAt);
-            return (
-              <tr key={o.id} className="clickable" onClick={() => openOrder(o.id)}>
-                <td data-l={t('suivi.col.order')}>
-                  <b className="ltr">{o.ref}</b>
-                  <small>{when(o.createdAt)}</small>
-                </td>
-                <td data-l={t('suivi.col.client')}>
-                  {o.customerName}
-                  <small className="ltr">{o.phone}</small>
-                </td>
-                <td data-l={t('suivi.col.wilaya')}>
-                  {wilayaName(o.wilayaId)}
-                  <small>{o.commune}</small>
-                </td>
-                <td className="wide px-cw" data-l={t('suivi.col.products')}>
-                  <div className="px-clamp">{namesOf(o.items)}</div>
-                </td>
-                <td data-l={t('suivi.col.variant')}>
-                  <div className="px-clamp">{variantsOf(o.items)}</div>
-                </td>
-                <td data-l={t('suivi.col.delivery')}>
-                  {o.companyName || o.livreurName || '—'}
-                  <small>
-                    <span className="ltr">{trackOf(o)}</span>
-                    {reasonOf(o, extra[o.id]) ? ` · ${reasonOf(o, extra[o.id])}` : ''}
-                  </small>
-                </td>
-                <td data-l={t('suivi.col.agent')}>{o.agentName ?? '—'}</td>
-                <td data-l={t('suivi.col.fagent')}>{o.followAgentName ?? '—'}</td>
-                <td className="num" data-l={t('suivi.col.since')}>
-                  {d === null ? '—' : <span className={`badge ${d >= 10 ? 't-bad' : d >= 5 ? 't-warn' : 't-info'} ltr`}>{t('suivi.days', { n: d })}</span>}
-                </td>
-                <td data-l={t('suivi.col.status')}>
-                  <StatusBadge kind="follow" status={o.followStatus} />
-                </td>
-                {actions && (
-                  <td data-l="" onClick={(e) => e.stopPropagation()}>
-                    {actions(o)}
-                  </td>
-                )}
+    <>
+      <div className="px-scols">
+        <ColumnMenu
+          cols={SCOLS.map((k) => ({ k, label: label[k] }))}
+          visible={visible}
+          onChange={save}
+          onReset={() => (setVisible(new Set(SCOLS)), store.set(SKEY, null))}
+          open={menu}
+          onToggle={() => setMenu((v) => !v)}
+        />
+      </div>
+      {!rows.length ? (
+        <Empty>{empty}</Empty>
+      ) : (
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead>
+              <tr>
+                {cols.map((k) => (
+                  <th key={k} className={k === 'product' ? 'wide' : k === 'since' ? 'num' : undefined}>
+                    {label[k]}
+                  </th>
+                ))}
+                {actions && <th />}
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+            </thead>
+            <tbody>
+              {rows.map((o) => (
+                <tr key={o.id} className="clickable" onClick={() => openOrder(o.id)}>
+                  {cols.map((k) => (
+                    <td key={k} data-l={label[k]} className={k === 'product' ? 'wide px-cw' : k === 'since' ? 'num' : undefined}>
+                      {cell(o, k)}
+                    </td>
+                  ))}
+                  {actions && (
+                    <td data-l="" onClick={(e) => e.stopPropagation()}>
+                      {actions(o)}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
   );
 }
 
