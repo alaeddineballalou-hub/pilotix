@@ -14,6 +14,7 @@ import { toast } from '../../ui/toast';
 import { confLabel, printOrder, telHref, waHref } from './shared';
 import './orders.css';
 import { trackOf } from '../../lib/items';
+import { CopyCode } from '../../ui/CopyCode';
 
 /** Courier kinds with an API (send / label / status / cancel go through the delivery procedures). */
 export const API_KINDS = ['zr', 'zr_legacy', 'yalidine', 'ecotrack', 'noest', 'custom'];
@@ -378,7 +379,7 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
           )}
           <dt>{t('orders.card.tracking')}</dt>
           <dd>
-            <span className="ltr">{trackOf(o) || '—'}</span>
+            <CopyCode code={trackOf(o)} />
           </dd>
           {o.extStatus && (
             <>

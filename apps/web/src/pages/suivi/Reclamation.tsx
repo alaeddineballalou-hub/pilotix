@@ -8,6 +8,7 @@ import { Empty, ErrorBox, Icon, Loading, Pager, StatusBadge } from '../../ui/kit
 import { ClaimsPanel } from './Claims';
 import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import { productsText } from './common';
+import { CopyCode } from '../../ui/CopyCode';
 
 type RTab = 'search' | 'companies' | 'livreurs';
 
@@ -234,7 +235,7 @@ function SearchOrders() {
                         <StatusBadge kind="follow" status={o.followStatus} />
                       </td>
                       <td data-l={t('suivi.col.tracking')}>
-                        {trackOf(o) ? <span className="ltr">{trackOf(o)}</span> : '—'}
+                        <CopyCode code={trackOf(o)} />
                       </td>
                     </tr>
                   ))}
