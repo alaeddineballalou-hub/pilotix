@@ -547,7 +547,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                             />
                           </td>
                           {cols.map((c) => (
-                            <td key={c.k} data-l={colLabel(c.k)} className={c.k === 'total' ? 'num' : c.k === 'product' || c.k === 'status' ? 'wide px-cw' : undefined}>
+                            <td key={c.k} data-l={colLabel(c.k)} className={`px-c-${c.k} ${c.k === 'total' ? 'num' : c.k === 'product' ? 'wide px-cw' : ''}`}>
                               {cell(r, c.k)}
                             </td>
                           ))}

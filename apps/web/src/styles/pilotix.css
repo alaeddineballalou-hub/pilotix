@@ -951,3 +951,13 @@ html body .qrowacts { gap: 4px; justify-content: flex-start; }
 /* the open row panel stays inside the visible part of a wide table (it does not scroll away to the right) */
 html body .qcard .tbl-wrap { container-type: inline-size; }
 html body tr.qdetail > td > .qd3.qd5 { position: sticky; inset-inline-start: 12px; width: min(1180px, calc(100cqi - 36px)) !important; max-width: min(1180px, calc(100cqi - 36px)) !important; min-width: 0 !important; box-sizing: border-box; }
+
+/* ===== order lists: every column as wide as its content; Produit takes the space left; the status button fills its column ===== */
+html body .qtbl > thead > tr > th, html body .qtbl > tbody > tr:not(.qdetail) > td { width: 1%; white-space: nowrap; }
+html body .qtbl > tbody > tr:not(.qdetail) > td.px-c-product, html body .qtbl > thead > tr > th[data-col="product"] { width: auto; white-space: normal; min-width: 180px; }
+html body .qtbl > tbody > tr > td.px-c-product .px-clamp { max-width: 340px; }
+html body .qtbl td.px-c-variant .px-clamp { width: max-content; max-width: 200px; white-space: normal; }
+html body .qtbl td.px-c-passed .px-passed { flex-wrap: nowrap; }
+html body .qtbl td.px-c-status { padding-inline: 8px !important; }
+html body .qtbl td.px-c-status .qst-pill { min-width: 150px; width: 100%; justify-content: space-between; text-align: start; }
+html body .qtbl td.qact .qo { width: 42px; }
