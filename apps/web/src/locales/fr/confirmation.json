@@ -87,7 +87,8 @@
     "status": "Statut",
     "stock": "Disponibilité",
     "desk": "Stopdesk",
-    "passed": "Statuts passés"
+    "passed": "Statuts passés",
+    "variant": "Variante"
   },
   "f": {
     "wilaya": "Wilaya",
@@ -393,5 +394,19 @@
     "onTime": "Parmi les commandes dont le 1er appel a été fait entre les dates choisies : la part appelée dans le délai ({{first}} min, +5 min par commande plus récente). Bon au-dessus de 80 %.",
     "median": "Temps entre l’arrivée (ou l’assignation) d’une commande et son 1er appel : la moitié des commandes a été appelée plus vite que ce temps. Les heures de nuit ne comptent pas.",
     "under5": "Part des commandes appelées pour la 1re fois moins de 5 minutes après leur arrivée, entre les dates choisies. Plus c’est haut, plus le client est joint pendant qu’il est encore motivé."
+  },
+  "presets": {
+    "title": "Préréglages",
+    "none": "Aucun préréglage pour l’instant.",
+    "save": "Enregistrer",
+    "name": "Nom du préréglage",
+    "saveAs": "Enregistrer ces colonnes comme préréglage",
+    "locked": "Verrouillé : personne ne peut le modifier",
+    "del": "Supprimer le préréglage {{name}}",
+    "saved": "Préréglage « {{name}} » enregistré",
+    "deleted": "Préréglage supprimé",
+    "apply": "Afficher les colonnes de {{name}}",
+    "by": "par {{by}}",
+    "cols": "Colonnes"
   }
 }

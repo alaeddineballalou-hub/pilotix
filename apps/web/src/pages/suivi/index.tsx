@@ -11,6 +11,7 @@ import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import type { PageProps } from '../registry';
 import { ConfirmModal, daysSince, productsText } from './common';
+import { namesOf, variantsOf } from '../../lib/items';
 import { NewClaimModal } from './Claims';
 import { Reclamation } from './Reclamation';
 import { SwapModal, SwapResult, SwapSheetModal } from './Swap';
@@ -127,6 +128,7 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
             <th>{t('suivi.col.client')}</th>
             <th>{t('suivi.col.wilaya')}</th>
             <th className="wide">{t('suivi.col.products')}</th>
+            <th>{t('suivi.col.variant')}</th>
             <th>{t('suivi.col.delivery')}</th>
             <th className="num">{t('suivi.col.since')}</th>
             <th>{t('suivi.col.status')}</th>
@@ -151,7 +153,10 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
                   <small>{o.commune}</small>
                 </td>
                 <td className="wide px-cw" data-l={t('suivi.col.products')}>
-                  <div className="px-clamp">{productsText(o)}</div>
+                  <div className="px-clamp">{namesOf(o.items)}</div>
+                </td>
+                <td data-l={t('suivi.col.variant')}>
+                  <div className="px-clamp">{variantsOf(o.items)}</div>
                 </td>
                 <td data-l={t('suivi.col.delivery')}>
                   {o.companyName || o.livreurName || '—'}

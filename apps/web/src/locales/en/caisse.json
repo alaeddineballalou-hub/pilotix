@@ -22,7 +22,8 @@
     "net": "Net",
     "receivedAt": "Received on",
     "company": "Company",
-    "amount": "Amount"
+    "amount": "Amount",
+    "variant": "Variant"
   },
   "due": {
     "title": "To receive",

@@ -87,7 +87,8 @@
     "status": "Status",
     "stock": "Availability",
     "desk": "Stopdesk",
-    "passed": "Statuses passed"
+    "passed": "Statuses passed",
+    "variant": "Variant"
   },
   "f": {
     "wilaya": "Wilaya",
@@ -393,5 +394,19 @@
     "onTime": "Among orders whose first call was made between the chosen dates: the share called within the deadline ({{first}} min, +5 min per newer order). Good above 80 %.",
     "median": "Time from an order’s arrival (or assignment) to its first call: half of the orders were called faster than this. Night hours do not count.",
     "under5": "Share of orders called for the first time less than 5 minutes after arriving, between the chosen dates. The higher, the more customers are reached while still keen."
+  },
+  "presets": {
+    "title": "Presets",
+    "none": "No presets yet.",
+    "save": "Save",
+    "name": "Preset name",
+    "saveAs": "Save these columns as a preset",
+    "locked": "Locked: nobody can change it",
+    "del": "Delete preset {{name}}",
+    "saved": "Preset “{{name}}” saved",
+    "deleted": "Preset deleted",
+    "apply": "Show the columns of {{name}}",
+    "by": "by {{by}}",
+    "cols": "Columns"
   }
 }
