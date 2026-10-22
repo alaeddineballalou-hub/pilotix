@@ -502,5 +502,6 @@
     "fee": "Delivery price",
     "maxDisc": "max {{v}}",
     "discTooBig": "Discount too high: maximum {{v}}."
-  }
+  },
+  "noNext": "No more orders in this list"
 }

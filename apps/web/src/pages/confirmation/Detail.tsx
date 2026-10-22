@@ -33,7 +33,8 @@ const norm = (s: string) =>
     .replace(/[̀-ͯ]/g, '');
 const key = (L: Line[]) => JSON.stringify(L.map((l) => [l.variantId, l.productId, l.qty, l.unitPrice, l.isUpsell]));
 
-export function Detail({ order }: { order: Order }) {
+/** onDone: called after a status change, Confirmer or Enregistrer worked, so the list can move on to the next order. */
+export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) => void }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const cat = useCatalog();
@@ -171,6 +172,7 @@ export function Detail({ order }: { order: Order }) {
       await fn();
       toast(okMsg, tone);
       qc.invalidateQueries();
+      onDone?.(order.id);
       return true;
     } catch (e: any) {
       setErr(e.message);
