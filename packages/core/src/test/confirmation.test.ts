@@ -17,14 +17,24 @@ test('confirmation.list returns only the statuses of the sub-page, with default 
   const ctx = await as(EMAILS.conf);
   const nv: any = await call('confirmation.list', ctx, { sub: 'nouvelles', pageSize: 100 });
   for (const o of nv.rows) assert.equal(o.confStatus, 'new');
-  for (let k = 1; k < nv.rows.length; k++) assert.ok(nv.rows[k - 1].createdAt >= nv.rows[k].createdAt, 'newest first');
+  // default: the most urgent call countdown first (late ones at the top)
+  const key = (o: any) => (o.deadline ? (o.deadline.m === 'start' ? o.deadline.e ?? o.deadline.t : o.deadline.t) : Infinity);
+  for (let k = 1; k < nv.rows.length; k++) assert.ok(key(nv.rows[k - 1]) <= key(nv.rows[k]), 'most urgent first');
+  // newest first when asked
+  const nw: any = await call('confirmation.list', ctx, { sub: 'nouvelles', sort: 'created_at', dir: 'desc', pageSize: 100 });
+  for (let k = 1; k < nw.rows.length; k++) assert.ok(nw.rows[k - 1].createdAt >= nw.rows[k].createdAt, 'newest first');
+  // paging by countdown keeps the same order across pages
+  const p1: any = await call('confirmation.list', ctx, { sub: 'nouvelles', pageSize: 5, page: 1 });
+  const p2: any = await call('confirmation.list', ctx, { sub: 'nouvelles', pageSize: 5, page: 2 });
+  assert.deepEqual([...p1.rows, ...p2.rows].map((o: any) => o.id), nv.rows.slice(0, 10).map((o: any) => o.id));
+  assert.equal(p2.page, 2);
   const at: any = await call('confirmation.list', ctx, { sub: 'attente', pageSize: 100 });
   for (const o of at.rows) assert.ok(['to_check', 'no_answer', 'busy', 'callback', 'postponed'].includes(o.confStatus));
   const cf: any = await call('confirmation.list', ctx, { sub: 'confirmees', pageSize: 20 });
   for (const o of cf.rows) assert.ok(['confirmed', 'no_stock'].includes(o.confStatus));
   assert.ok(Array.isArray(cf.rows[0].skus) && cf.rows[0].skus.length > 0);
   // a new order has a first-call deadline
-  if (nv.rows.length) assert.equal(nv.rows[0].deadline.m, 'first');
+  if (nw.rows.length) assert.equal(nw.rows[0].deadline.m, 'first');
   await assert.rejects(call('confirmation.list', ctx, { sub: 'nouvelles', status: 'confirmed' }), /Statut/);
   const counts: any = await call('confirmation.counts', ctx, {});
   assert.equal(counts.nouvelles, nv.total);

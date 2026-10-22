@@ -122,8 +122,14 @@ export function ColumnMenu<K extends string>({ cols, visible, onChange, onReset,
 /** Column order kept per list (new columns go at the end). */
 export function useColumnOrder<K extends string>(key: string, all: K[]): [K[], (o: K[]) => void] {
   const fix = (o: K[] | null) => {
-    const keep = (o ?? []).filter((k) => all.includes(k));
-    return [...keep, ...all.filter((k) => !keep.includes(k))];
+    const out = (o ?? []).filter((k) => all.includes(k));
+    // a column added later goes before the column that follows it by default
+    all.forEach((k, i) => {
+      if (out.includes(k)) return;
+      const after = all.slice(i + 1).find((x) => out.includes(x));
+      out.splice(after ? out.indexOf(after) : out.length, 0, k);
+    });
+    return out;
   };
   const [order, setOrder] = useState<K[]>(() => fix(store.json<K[] | null>(key, null)));
   const fixed = fix(order);
