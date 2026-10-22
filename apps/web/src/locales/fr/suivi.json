@@ -263,5 +263,7 @@
       "agent": "Agent"
     },
     "newOrder": "+ Nouvelle commande"
-  }
+  },
+  "removeAgent": "Retirer l’agent suivi",
+  "agentRemoved": "{{ref}} : agent suivi retiré"
 }

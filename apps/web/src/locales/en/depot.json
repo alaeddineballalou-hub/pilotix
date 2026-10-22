@@ -115,5 +115,7 @@
     "sheetTitle": "Picking sheet — {{date}}",
     "empty": "No order in dispatch.",
     "total": "Total"
-  }
+  },
+  "removePartner": "Remove the delivery partner",
+  "partnerRemoved": "Delivery partner removed"
 }

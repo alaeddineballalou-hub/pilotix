@@ -4,7 +4,9 @@ import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, when, wilaya, wilayaName } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
-import { BulkBar, Empty, Loading, Pager, SortTh, StatusBadge } from '../../ui/kit';
+import { BulkBar, Empty, Loading, Pager, RemovableChip, SortTh, StatusBadge } from '../../ui/kit';
+import { useAction } from '../../lib/query';
+import { useSession } from '../../lib/session';
 import { confLabel } from './shared';
 import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import { CopyCode } from '../../ui/CopyCode';
@@ -53,6 +55,11 @@ export interface OrderTableProps {
 
 export function OrderTable(p: OrderTableProps) {
   const { t } = useTranslation();
+  const { has } = useSession();
+  const canAgent = has('agent_manager', 'vendeur');
+  const canFollow = has('suivi');
+  const unAgent = useAction('orders.assignAgent', { success: t('confirmation.unassigned', { n: 1 }) });
+  const unFollow = useAction('suivi.unassign', { success: (o) => t('suivi.agentRemoved', { ref: o.ref }) });
   const cols = p.columns ?? DEFAULT_COLUMNS;
   const [sel, setSel] = useState<Map<number, Order>>(new Map());
   useEffect(() => setSel(new Map()), [p.resetKey]);
@@ -179,13 +186,13 @@ export function OrderTable(p: OrderTableProps) {
       case 'agent':
         return (
           <td key={c} className="hide-m" data-l={label[c]}>
-            {o.agentName ?? '—'}
+            <RemovableChip name={o.agentName} removeLabel={t('confirmation.removeAgent')} disabled={unAgent.isPending} onRemove={canAgent ? () => unAgent.mutate({ ids: [o.id], agentId: null }) : undefined} />
           </td>
         );
       case 'fagent':
         return (
           <td key={c} className="hide-m" data-l={label[c]}>
-            {o.followAgentName ?? '—'}
+            <RemovableChip name={o.followAgentName} removeLabel={t('suivi.removeAgent')} disabled={unFollow.isPending} onRemove={canFollow ? () => unFollow.mutate({ id: o.id }) : undefined} />
           </td>
         );
       case 'since':

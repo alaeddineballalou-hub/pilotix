@@ -66,5 +66,6 @@
   "dragCol": "Drag to move the column",
   "back": "Back",
   "noResults": "No results",
-  "resizeCol": "Drag to set the width · double-click: automatic width"
+  "resizeCol": "Drag to set the width · double-click: automatic width",
+  "remove": "Remove"
 }

@@ -7,7 +7,7 @@ import { escapeHtml, printHtml } from '../../lib/files';
 import { da, dateOnly, n } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
-import { Card, Empty, ErrorBox, Icon, Loading, StatusBadge } from '../../ui/kit';
+import { Card, Empty, ErrorBox, Loading, StatusBadge } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import type { PageProps } from '../registry';
 import { DepotOrderList, itemsLine } from './OrderList';
@@ -338,7 +338,6 @@ function DispatchSheet() {
 
 function Prepares() {
   const { t } = useTranslation();
-  const un = useAction('depot.unassign', { success: (o) => t('depot.removed', { ref: o.ref }) });
   return (
     <>
       <DispatchSheet />
@@ -348,11 +347,6 @@ function Prepares() {
         follow={['prepared']}
         sort="updated_at"
         bulk={(ids, clear) => <CompanyBulk ids={ids} done={clear} />}
-        actions={(o) => (
-          <button type="button" className="btn small ghost bjd-un" title={t('depot.removeTitle')} disabled={un.isPending} onClick={() => un.mutate({ id: o.id })}>
-            <Icon name="unlink" /> {t('depot.remove')}
-          </button>
-        )}
       />
     </>
   );

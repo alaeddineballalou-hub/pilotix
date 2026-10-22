@@ -1429,3 +1429,17 @@ html body .px-qhead .btn.px-qnew:hover { border-color: #F7A823; color: #C97A0E; 
 .px-edge.l svg { transform: scaleX(-1); }
 [data-theme="dark"] .px-edge { box-shadow: 0 6px 16px rgba(0, 0, 0, .45), 0 0 0 3px rgba(27, 42, 71, .95); }
 @media (prefers-reduced-motion: reduce) { .px-edge { transition: none; } }
+
+/* Removable name chip: the name; on hover it turns red and says "Retirer", a click removes it. */
+.px-rmchip, .px-rmchip-s { max-width: 150px; }
+.px-rmchip-s { overflow: hidden; text-overflow: ellipsis; display: inline-block; line-height: 22px; }
+.px-rmchip { display: inline-grid; align-items: center; border: 1px solid transparent; cursor: pointer; font: inherit; font-size: 12px; font-weight: 800; transition: background .12s, color .12s, border-color .12s; }
+.px-rmchip > span { grid-area: 1 / 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
+.px-rmchip-x { visibility: hidden; }
+.px-rmchip:hover:not(:disabled), .px-rmchip:focus-visible { background: var(--coral-soft); color: var(--coral); border-color: color-mix(in srgb, var(--coral) 40%, transparent); }
+.px-rmchip:hover:not(:disabled) .px-rmchip-n, .px-rmchip:focus-visible .px-rmchip-n { visibility: hidden; }
+.px-rmchip:hover:not(:disabled) .px-rmchip-x, .px-rmchip:focus-visible .px-rmchip-x { visibility: visible; }
+.px-rmchip:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
+.px-rmchip:disabled { opacity: .6; cursor: progress; }
+/* Phones have no hover: show a small ✕ after the name instead. */
+@media (hover: none) { .px-rmchip { display: inline-flex; gap: 6px; } .px-rmchip > span { grid-area: auto; } .px-rmchip-x { display: none; } .px-rmchip::after { content: '✕'; color: var(--coral); } }

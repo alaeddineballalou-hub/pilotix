@@ -10,7 +10,7 @@ import { openOrderForm } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { store } from '../../lib/store';
-import { ErrorBox, Field, Help, Icon, Loading, Pager, SortTh, StageBar, StatusBadge, StatusSelect } from '../../ui/kit';
+import { ErrorBox, Field, Help, Icon, Loading, Pager, RemovableChip, SortTh, StageBar, StatusBadge, StatusSelect } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { colDrag, ColumnMenu, DensitySwitch, useDensity, useResizable, useTableColumns } from '../../ui/ColumnMenu';
@@ -263,20 +263,9 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
       case 'commune':
         return r.commune || '—';
       case 'agent':
-        return r.agentId ? (
-          <span className="row nowrap">
-            <span className="badge t-info">{r.agentName ?? '—'}</span>
-            {manager && (
-              <button type="button" className="icon-btn qic qrm" aria-label={t('confirmation.removeAgentOf', { ref: r.ref })} title={t('confirmation.removeAgent')} onClick={(e) => (e.stopPropagation(), assign([r], null))}>
-                −
-              </button>
-            )}
-          </span>
-        ) : (
-          <span className="muted">—</span>
-        );
+        return r.agentId ? <RemovableChip name={r.agentName ?? '—'} removeLabel={t('confirmation.removeAgent')} onRemove={manager ? () => assign([r], null) : undefined} /> : <span className="muted">—</span>;
       case 'fagent':
-        return r.followAgentName ? <span className="badge t-info">{r.followAgentName}</span> : <span className="muted">—</span>;
+        return <RemovableChip name={r.followAgentName} />;
       case 'total':
         return <span className="ltr">{da(r.total)}</span>;
       case 'chrono':

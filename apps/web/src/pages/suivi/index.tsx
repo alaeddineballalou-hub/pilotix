@@ -6,7 +6,7 @@ import { rpc } from '../../lib/backend';
 import { when, wilayaName } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
-import { Empty, ErrorBox, Icon, Loading, StatusBadge } from '../../ui/kit';
+import { Empty, ErrorBox, Icon, Loading, RemovableChip, StatusBadge } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import type { PageProps } from '../registry';
@@ -128,6 +128,7 @@ const SKEY = 'suivi-cols';
 /** The table shared by every Suivi list, with the column menu and the shared presets. */
 export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[]; actions?: (o: Order) => ReactNode; empty: string; extra?: Record<number, Extra> }) {
   const { t } = useTranslation();
+  const unFollow = useAction('suivi.unassign', { success: (o) => t('suivi.agentRemoved', { ref: o.ref }) });
   // columns saved with the account; a chosen preset is used by every list until the columns are changed by hand
   const tc = useTableColumns<SCol>('suivi', SCOLS, { defaults: SDEFAULT, legacy: () => ({ cols: store.json<SCol[] | null>(SKEY, null), order: store.json<SCol[] | null>('suivi-order', null) }) });
   const visible = tc.visible;
@@ -180,9 +181,9 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
           </>
         );
       case 'agent':
-        return o.agentName ?? '—';
+        return <RemovableChip name={o.agentName} />;
       case 'fagent':
-        return o.followAgentName ?? '—';
+        return <RemovableChip name={o.followAgentName} removeLabel={t('suivi.removeAgent')} disabled={unFollow.isPending} onRemove={() => unFollow.mutate({ id: o.id })} />;
       case 'since': {
         const d = daysSince(o.shippedAt);
         return d === null ? '—' : <span className={`badge ${d >= 10 ? 't-bad' : d >= 5 ? 't-warn' : 't-info'} ltr`}>{t('suivi.days', { n: d })}</span>;
