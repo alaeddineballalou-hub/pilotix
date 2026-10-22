@@ -26,7 +26,7 @@ const ORDER_COLS = `o.*,
   (SELECT coalesce(json_agg(json_build_object('id', i.id, 'productId', i.product_id, 'variantId', i.variant_id, 'name', i.name,
      'variantTitle', i.variant_title, 'qty', i.qty, 'unitPrice', i.unit_price, 'purchasePrice', i.purchase_price, 'isUpsell', i.is_upsell) ORDER BY i.id), '[]')
    FROM order_items i WHERE i.order_id = o.id) AS items_json,
-  ag.name AS agent_name, co.name AS company_name, lv.name AS livreur_name,
+  ag.name AS agent_name, fa.name AS follow_agent_name, co.name AS company_name, lv.name AS livreur_name,
   CASE WHEN o.is_exchange THEN (SELECT k.ref FROM complaints k WHERE k.exchange_order_id = o.id ORDER BY k.id DESC LIMIT 1) END AS sav_ref,
   c.blacklisted AS c_blacklisted, c.delivered AS c_delivered, c.returned AS c_returned,
   EXISTS (SELECT 1 FROM sales d WHERE d.phone = o.phone AND d.id <> o.id AND d.conf_status = ANY('{to_check,new,no_answer,busy,callback,postponed,confirmed,no_stock}')
@@ -35,6 +35,7 @@ const ORDER_COLS = `o.*,
 const ORDER_FROM = `FROM orders o
   JOIN customers c ON c.id = o.customer_id
   LEFT JOIN profiles ag ON ag.id = o.agent_id
+  LEFT JOIN profiles fa ON fa.id = o.follow_agent_id
   LEFT JOIN profiles lv ON lv.id = o.livreur_id
   LEFT JOIN delivery_companies co ON co.id = o.company_id`;
 
@@ -95,6 +96,7 @@ export function toOrder(r: any): Order {
     customerDelivered: r.c_delivered ?? undefined,
     customerReturned: r.c_returned ?? undefined,
     agentName: r.agent_name ?? null,
+    followAgentName: r.follow_agent_name ?? null,
     companyName: r.company_name ?? null,
     livreurName: r.livreur_name ?? null,
     subStatus: r.sub_status ?? null,

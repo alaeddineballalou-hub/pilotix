@@ -6,6 +6,7 @@ import { da, wilaya, when } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
 import { BulkBar, Card, ErrorBox, Loading, StatusBadge, TicketTag } from '../../ui/kit';
+import { namesOf, variantsOf } from '../../lib/items';
 
 export interface ExtraCol {
   label: string;
@@ -136,6 +137,7 @@ export function DepotOrderList({
                 <th>{t('depot.cols.client')}</th>
                 <th>{t('depot.cols.address')}</th>
                 <th className="wide">{t('depot.cols.products')}</th>
+                <th>{t('depot.cols.variant')}</th>
                 <th className="num">{t('depot.cols.total')}</th>
                 <th>{t('depot.cols.conf')}</th>
                 <th>{t('depot.cols.follow')}</th>
@@ -175,7 +177,10 @@ export function DepotOrderList({
                     <small>{o.commune}</small>
                   </td>
                   <td className="wide px-cw" data-l={t('depot.cols.products')}>
-                    <div className="px-clamp">{itemsLine(o)}</div>
+                    <div className="px-clamp">{namesOf(o.items)}</div>
+                  </td>
+                  <td data-l={t('depot.cols.variant')}>
+                    <div className="px-clamp">{variantsOf(o.items)}</div>
                   </td>
                   <td className="num ltr" data-l={t('depot.cols.total')}>
                     {da(o.total)}

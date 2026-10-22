@@ -130,6 +130,8 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
             <th className="wide">{t('suivi.col.products')}</th>
             <th>{t('suivi.col.variant')}</th>
             <th>{t('suivi.col.delivery')}</th>
+            <th>{t('suivi.col.agent')}</th>
+            <th>{t('suivi.col.fagent')}</th>
             <th className="num">{t('suivi.col.since')}</th>
             <th>{t('suivi.col.status')}</th>
             {actions && <th />}
@@ -165,6 +167,8 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
                     {reasonOf(o, extra[o.id]) ? ` · ${reasonOf(o, extra[o.id])}` : ''}
                   </small>
                 </td>
+                <td data-l={t('suivi.col.agent')}>{o.agentName ?? '—'}</td>
+                <td data-l={t('suivi.col.fagent')}>{o.followAgentName ?? '—'}</td>
                 <td className="num" data-l={t('suivi.col.since')}>
                   {d === null ? '—' : <span className={`badge ${d >= 10 ? 't-bad' : d >= 5 ? 't-warn' : 't-info'} ltr`}>{t('suivi.days', { n: d })}</span>}
                 </td>

@@ -66,13 +66,14 @@
     "conf": "Confirmation",
     "follow": "Delivery",
     "company": "Company",
-    "agent": "Agent",
+    "agent": "Confirmation agent",
     "fee": "Courier fee",
     "cashed": "Cashed",
     "phone": "Phone",
     "wilaya": "Wilaya",
     "since": "Since",
-    "variant": "Variant"
+    "variant": "Variant",
+    "fagent": "Follow-up agent"
   },
   "flag": {
     "dup": "DUPLICATE?",
