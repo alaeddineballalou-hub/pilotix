@@ -211,6 +211,8 @@ test('the sales playbook reaches the AI; a pack quantity gets the pack price, a 
   const r: any = await call('dellal.receive', sys, { channel: 'whatsapp', externalId: '213555123456', text: 'nheb 2', messageId: 'wamid.pack' });
   await call('dellal.answer', sys, { id: r.conversationId });
   assert.match(system, /MÉTHODE DE VENTE/);
+  assert.match(system, /Découverte : comprendre le client avant de vendre/);
+  assert.match(system, /Augmenter le panier intelligemment/);
   assert.match(system, /1 million/);
   assert.match(system, /packs : 2 pour 15000 DA/);
   assert.match(system, /un conseiller l’appellera aussi pour confirmer/);
