@@ -33,15 +33,42 @@ test('the demo keeps column presets and screen choices across a rebuilt database
   const p: any = await call('confirmation.addColPreset', admin, { name: 'Appels', cols: ['order', 'name', 'phone'] });
   await call('me.setUi', conf, { key: 'cols.active', value: { id: p.id, at: 1 } });
   const keep = JSON.parse(JSON.stringify(await demoSnapshot(a.db)));
+  assert.equal(keep.colPresetActive.id, p.id);
   // a new demo database (as after a reload) gets them back
   const b = await setup(20);
   await demoRestore(b.db, keep);
   const presets: any = await call('confirmation.colPresets', await b.as(EMAILS.conf), {});
   assert.deepEqual(presets.map((x: any) => x.name), ['Appels']);
+  assert.equal(((await call('confirmation.colActive', await b.as(EMAILS.conf), {})) as any).id, p.id);
   assert.equal(((await call('me.ui', await b.as(EMAILS.conf), {})) as any)['cols.active'].id, p.id);
   assert.deepEqual(await call('me.ui', await b.as(EMAILS.conf2), {}), {});
   // bad data is ignored
   await demoRestore(b.db, { colPresets: [{ nope: 1 }] as any, ui: { [EMAILS.conf]: 'x' as any } });
   assert.deepEqual(await call('confirmation.colPresets', await b.as(EMAILS.conf), {}), []);
   await demoRestore(b.db, null);
+});
+
+test('a preset saved by an admin is used by every team; only an admin changes it', async () => {
+  const { as } = await setup(20);
+  const admin = await as(EMAILS.admin);
+  const conf = await as(EMAILS.conf);
+  const mgr = await as(EMAILS.manager);
+  assert.equal(await call('confirmation.colActive', conf, {}), null);
+  const p1: any = await call('confirmation.addColPreset', admin, { name: 'Appels', cols: ['order', 'name', 'phone'] });
+  // saving it puts it in use for everyone
+  assert.equal(((await call('confirmation.colActive', conf, {})) as any).id, p1.id);
+  const p2: any = await call('confirmation.addColPreset', admin, { name: 'Suivi court', cols: ['order', 'status'] });
+  assert.equal(((await call('confirmation.colActive', mgr, {})) as any).id, p2.id);
+  // an admin can choose another one or none; nobody else can
+  await call('confirmation.setColActive', admin, { id: p1.id });
+  assert.equal(((await call('confirmation.colActive', conf, {})) as any).id, p1.id);
+  await assert.rejects(call('confirmation.setColActive', conf, { id: p2.id }), /refus/i);
+  await assert.rejects(call('confirmation.setColActive', mgr, { id: null }), /refus/i);
+  await assert.rejects(call('confirmation.setColActive', admin, { id: 'nope' }), /introuvable/);
+  // deleting the preset in use goes back to the default columns
+  await call('confirmation.deleteColPreset', admin, { id: p1.id });
+  assert.equal(await call('confirmation.colActive', conf, {}), null);
+  await call('confirmation.setColActive', admin, { id: p2.id });
+  await call('confirmation.setColActive', admin, { id: null });
+  assert.equal(await call('confirmation.colActive', conf, {}), null);
 });

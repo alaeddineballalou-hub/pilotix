@@ -1333,3 +1333,23 @@ html body .qd6-fee.ro { cursor: default; }
 html body .qd6-fee.ro:hover { border-color: var(--line); }
 .qd6-feev { display: inline-flex; align-items: center; gap: 7px; font-size: 14.5px; font-weight: 800; color: var(--ink); }
 .qd6-feev .bji { width: 13px; height: 13px; color: var(--muted); }
+/* column width: a handle on each header's edge (each user's own width) */
+.tbl thead th.px-drag { position: relative; }
+.px-rz { position: absolute; top: 0; bottom: 0; inset-inline-end: -4px; width: 9px; z-index: 2; cursor: col-resize; touch-action: none; }
+.px-rz::after { content: ''; position: absolute; top: 22%; bottom: 22%; inset-inline-start: 4px; width: 2px; border-radius: 2px; background: transparent; transition: background .12s; }
+.tbl thead th:hover .px-rz::after { background: var(--line); }
+.px-rz:hover::after, .px-rz.on::after { top: 8%; bottom: 8%; background: #F7A823 !important; }
+body.px-resizing, body.px-resizing * { cursor: col-resize !important; user-select: none !important; }
+.tbl thead th.px-w { overflow: hidden; text-overflow: ellipsis; }
+/* the column menu for users who can only reorder */
+.px-pre-note { margin: 4px 2px 6px; padding: 8px 10px; border-radius: 9px; background: var(--sky-soft, #eef2f8); color: var(--muted); font-size: 12px; line-height: 1.4; }
+[data-theme="dark"] .px-pre-note { background: rgba(255, 255, 255, .05); }
+.px-pre-go:disabled { cursor: default; }
+.px-pre-it.on .px-pre-go:disabled { opacity: 1; }
+.px-qpop-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+/* resized columns: the table keeps every width; text that does not fit ends with "…" */
+.tbl.px-fixed > thead > tr > th, .tbl.px-fixed > tbody > tr:not(.qdetail) > td { overflow: hidden; text-overflow: ellipsis; }
+.tbl.px-fixed > tbody > tr.qdetail > td { overflow: visible; }
+@media (max-width: 760px) { .tbl.px-fixed { table-layout: auto !important; width: auto !important; } .tbl.px-fixed > colgroup { display: none; } }
+/* the "Copié" bubble drawn above the page */
+.px-copied.px-copied-fixed { position: fixed; bottom: auto; transform: translate(-50%, calc(-100% - 6px)); z-index: 2147483000; }

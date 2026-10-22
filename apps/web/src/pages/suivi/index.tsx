@@ -16,7 +16,7 @@ import { NewClaimModal } from './Claims';
 import { Reclamation } from './Reclamation';
 import { SwapModal, SwapResult, SwapSheetModal } from './Swap';
 import './suivi.css';
-import { colDrag, ColumnMenu, DensitySwitch, useDensity, useTableColumns } from '../../ui/ColumnMenu';
+import { colDrag, ColumnMenu, DensitySwitch, useDensity, useResizable, useTableColumns } from '../../ui/ColumnMenu';
 import { HistoryButton, PhoneCell } from '../confirmation/History';
 import { store } from '../../lib/store';
 import { CopyCode } from '../../ui/CopyCode';
@@ -139,6 +139,8 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
   const { order, setOrder } = tc;
   const cols = order.filter((k) => visible.has(k));
   const drag = colDrag(order, setOrder);
+  // column widths: each user's own
+  const rs = useResizable(tc.widths, tc.setWidths, t('common.resizeCol'));
   const [dens, setDens] = useDensity();
   const cell = (o: Order, k: SCol): ReactNode => {
     switch (k) {
@@ -208,6 +210,9 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
           onReset={tc.reset}
           presetId={tc.presetId}
           onPreset={tc.applyPreset}
+          locked={tc.locked}
+          widthsSet={Object.keys(tc.widths).length > 0}
+          onResetWidths={tc.resetWidths}
           open={menu}
           onToggle={() => setMenu((v) => !v)}
         />
@@ -216,15 +221,17 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
         <Empty>{empty}</Empty>
       ) : (
         <div className={`tbl-wrap px-d-${dens}`}>
-          <table className="tbl">
+          <table className={`tbl${rs.fixed ? ' px-fixed' : ''}`} style={rs.tableStyle([...cols, ...(actions ? ['_act'] : [])])}>
+            {rs.cols([...cols, ...(actions ? ['_act'] : [])])}
             <thead>
               <tr>
                 {cols.map((k) => (
                   <th key={k} {...drag(k)} title={t('common.dragCol')} className={`px-drag ${k === 'product' ? 'wide' : k === 'since' ? 'num' : ''}`}>
                     {label[k]}
+                    {rs.handle(k)}
                   </th>
                 ))}
-                {actions && <th />}
+                {actions && <th data-col="_act" />}
               </tr>
             </thead>
             <tbody>

@@ -607,13 +607,25 @@ export const confirmationProcs = {
     if (list.length >= 30) throw bad('30 préréglages au maximum');
     const preset = { id: `p${ctx.now().toString(36)}`, name: i.name, cols: [...new Set(i.cols)], by: ctx.session.profile.name, at: new Date(ctx.now()).toISOString() };
     await setSetting(ctx.db, 'colPresets', [...list, preset], ctx.session.profile.id);
+    // a saved preset is used by every team at once
+    await setSetting(ctx.db, 'colPresetActive', { id: preset.id, at: ctx.now(), by: ctx.session.profile.name }, ctx.session.profile.id);
     return preset;
   }),
   'confirmation.deleteColPreset': proc(['confirmation'], z.object({ id: z.string().max(40) }), async (ctx, { id }) => {
     if (!ctx.session.isAdmin) throw forbidden();
     const list = await getSetting(ctx.db, 'colPresets');
     await setSetting(ctx.db, 'colPresets', list.filter((p) => p.id !== id), ctx.session.profile.id);
+    if ((await getSetting(ctx.db, 'colPresetActive'))?.id === id) await setSetting(ctx.db, 'colPresetActive', null, ctx.session.profile.id);
     return { ok: true };
+  }),
+  /** The preset every team uses (null: the default columns). Everyone reads it; only an admin sets it. */
+  'confirmation.colActive': proc(null, z.object({}), async (ctx) => getSetting(ctx.db, 'colPresetActive')),
+  'confirmation.setColActive': proc(null, z.object({ id: z.string().max(40).nullable() }), async (ctx, { id }) => {
+    if (!ctx.session.isAdmin) throw forbidden();
+    if (id && !(await getSetting(ctx.db, 'colPresets')).some((p) => p.id === id)) throw bad('Préréglage introuvable');
+    const v = id ? { id, at: ctx.now(), by: ctx.session.profile.name } : null;
+    await setSetting(ctx.db, 'colPresetActive', v, ctx.session.profile.id);
+    return v;
   }),
   /** For every screen: names of users and delivery companies (to write order history in words), and the WhatsApp message. */
   'orders.uiMeta': proc(null, z.object({}), async (ctx) => {
