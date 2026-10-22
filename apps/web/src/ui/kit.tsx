@@ -173,18 +173,50 @@ export function Kpis({ children }: { children: ReactNode }) {
   return <div className="kpis">{children}</div>;
 }
 
-export function Kpi({ label, value, sub, tone, onClick, active, big, help }: { label: ReactNode; value: ReactNode; sub?: ReactNode; tone?: Tone; onClick?: () => void; active?: boolean; big?: boolean; help?: string }) {
-  const cls = `kpi${tone ? ` t-${tone}` : ''}${big ? ' big' : ''}${active ? ' on' : ''}${onClick ? ' clickable' : ''}`;
+/** Small brand icon in the top corner of a number box. */
+export function KpiIcon({ name }: { name?: string }) {
+  return name ? (
+    <span className="kpi-ic" aria-hidden="true">
+      <Icon name={name} />
+    </span>
+  ) : null;
+}
+
+/** ▲ / ▼ change against the previous period (green when it goes the good way). */
+export function Trend({ v, goodDown, pts }: { v: number | null | undefined; goodDown?: boolean; pts?: boolean }) {
+  const { t } = useTranslation();
+  if (v === null || v === undefined || !isFinite(v)) return null;
+  const up = v > 0;
+  const flat = Math.abs(v) < 0.0005;
+  const good = flat ? null : up !== !!goodDown;
+  const txt = pts ? `${Math.abs(v * 100).toFixed(1).replace('.', ',')} pts` : `${Math.round(Math.abs(v) * 100)} %`;
+  return (
+    <span className={`kpi-tr ${good === null ? '' : good ? 'good' : 'bad'}`} title={t('common.vsPrev')}>
+      {flat ? '=' : up ? '▲' : '▼'} {txt}
+    </span>
+  );
+}
+
+export function Kpi({ label, value, sub, tone, onClick, active, big, help, icon, trend, href }: { label: ReactNode; value: ReactNode; sub?: ReactNode; tone?: Tone; onClick?: () => void; active?: boolean; big?: boolean; help?: string; icon?: string; trend?: ReactNode; href?: string }) {
+  const cls = `kpi${tone ? ` t-${tone}` : ''}${big ? ' big' : ''}${active ? ' on' : ''}${onClick || href ? ' clickable' : ''}`;
   const body = (
     <>
+      <KpiIcon name={icon} />
       <span className="l">
         {label}
         {help && <Help text={help} />}
       </span>
       <span className="v ltr">{value}</span>
+      {trend}
       {sub !== undefined && <span className="s">{sub}</span>}
     </>
   );
+  if (href)
+    return (
+      <a className={cls} href={href}>
+        {body}
+      </a>
+    );
   return onClick ? (
     <button type="button" className={cls} onClick={onClick} aria-pressed={active} style={{ textAlign: 'start', font: 'inherit', cursor: 'pointer' }}>
       {body}

@@ -488,3 +488,69 @@ html:not([data-theme="dark"]) .tab.on b, html:not([data-theme="dark"]) .tab[aria
 .kpi .l { display: block; }
 .kpi .l .px-help { position: absolute; top: 8px; inset-inline-end: 8px; margin: 0; width: 15px; height: 15px; }
 .kpi:has(.px-help) .l { padding-inline: 14px; }
+
+/* every number box looks alike: title on a two-line band, the number on its own line, the description under it, all centred */
+.kpi { display: grid !important; grid-template-rows: auto auto 1fr; justify-items: center; align-items: start; text-align: center; gap: 4px !important; padding: 14px 16px !important; }
+.kpi .l { width: 100%; min-height: 2.6em; display: flex !important; align-items: center; justify-content: center; text-align: center; font-size: 12.5px; font-weight: 700; line-height: 1.3; color: var(--muted); }
+.kpi .v { width: 100%; text-align: center; line-height: 1.15; }
+.kpi .s { width: 100%; text-align: center; font-size: 12px; line-height: 1.4; color: var(--muted); }
+.kpi.t-warn:not(.px-zero) { box-shadow: none; }
+/* same height for every part, then the whole block centred in the box (tall boxes too) */
+.kpi { grid-template-rows: auto auto auto !important; align-content: center; }
+.kpi .s { min-height: 2.8em; }
+.kpi .s:empty { min-height: 0; }
+.kpi .v { white-space: nowrap; font-size: clamp(20px, 1.9vw, 30px); }
+.kpi { container-type: inline-size; }
+.kpi .v { font-size: clamp(18px, 10cqi, 30px) !important; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+/* content block truly centred in the card, top and bottom */
+.kpi { align-content: center !important; justify-content: center; }
+.kpi .l, .kpi .s { min-height: 0 !important; }
+/* one padding for every box, and the title + number + description block centred in the middle of the box */
+.kpi { padding: 18px 16px !important; align-content: center !important; justify-content: center; gap: 6px !important; }
+.kpi .l, .kpi .s { min-height: 0 !important; }
+.kpi .l { padding-inline: 18px; }
+.kpi .l { padding-inline: 0; }
+.kpi:has(.px-help) .l { padding-inline: 18px; }
+.kpi .v { font-size: clamp(20px, 11cqi, 30px) !important; }
+
+/* ===== Number boxes, one design everywhere =====
+   same height, same padding · small brand icon in the corner · title on one line · one number size (full amounts)
+   · white box, the state shown by a thin top line and the number colour (red only when there is something to do)
+   · ▲/▼ trend · the whole box opens its list */
+.kpi { position: relative; min-height: 136px; padding: 18px 16px 16px !important; background: var(--surface) !important; border: 1px solid var(--line) !important; box-shadow: 0 1px 2px rgba(31,38,51,.04) !important;
+  display: grid !important; grid-template-rows: auto auto auto auto; align-content: center; justify-items: center; gap: 4px !important; text-align: center; overflow: hidden; }
+.kpi::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: transparent; }
+.kpi.t-bad:not(.px-zero)::before { background: var(--coral); }
+.kpi.t-warn:not(.px-zero)::before { background: #F28C1B; }
+.kpi.t-bad, .kpi.t-warn, .kpi.t-ok, .kpi.t-info, .kpi.on, .px-st-grid .kpi:first-child { background: var(--surface) !important; border-color: var(--line) !important; box-shadow: 0 1px 2px rgba(31,38,51,.04) !important; }
+.kpi .l { width: 100%; min-height: 0 !important; padding-inline: 26px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block !important; font-size: 13px; font-weight: 700; color: var(--muted); }
+.kpi .l .px-help, .kpi .l .bjt-q { position: static !important; display: inline-grid; margin-inline-start: 5px; vertical-align: -2px; width: 14px !important; height: 14px !important; background: transparent; border: 1px solid var(--line); color: var(--muted); box-shadow: none; }
+.kpi .l .px-help:hover, .kpi .l .px-help[aria-expanded="true"] { background: #F28C1B; color: #fff; border-color: #F28C1B; }
+.kpi .l .px-help svg { width: 8px; height: 8px; }
+.kpi .v { font-size: 26px !important; font-weight: 900; line-height: 1.15; white-space: nowrap; overflow: visible; text-overflow: clip; max-width: none; }
+.kpi .s { min-height: 0 !important; font-size: 12px; color: var(--muted); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.kpi-ic { position: absolute; top: 10px; inset-inline-start: 10px; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: var(--sky-soft); color: #E8730C; }
+.kpi-ic .bji { width: 14px; height: 14px; }
+.kpi-tr { font-size: 11.5px; font-weight: 800; color: var(--muted); }
+.kpi-tr.good { color: var(--ok); } .kpi-tr.bad { color: var(--coral); }
+a.kpi, .kpi.clickable { cursor: pointer; transition: box-shadow .15s, transform .15s, border-color .15s; text-decoration: none; }
+a.kpi:hover, .kpi.clickable:hover { border-color: color-mix(in srgb, #F28C1B 45%, var(--line)) !important; box-shadow: 0 8px 22px rgba(31,38,51,.10) !important; transform: translateY(-1px); }
+.kpi.on { border-color: #F28C1B !important; box-shadow: 0 0 0 2px color-mix(in srgb, #F28C1B 30%, transparent) !important; }
+.px-sav-flow { align-items: center; }
+.px-sav-flow > .kpi, .px-sav-end > .kpi { min-height: 136px; height: 136px; }
+.px-sav-end { grid-template-rows: none; }
+@media (max-width: 760px) { .kpi { min-height: 120px; padding: 16px 10px 12px !important; } .kpi .v { font-size: 21px !important; } .px-sav-flow > .kpi, .px-sav-end > .kpi { height: auto; } }
+/* corrections: white boxes in every theme layer, icon centred above the title, fixed SAV box height */
+html .kpi.t-bad, html .kpi.t-warn, html .kpi.t-ok, html .kpi.t-info, html .kpi.on, html .px-st-grid .kpi:first-child, html .kpi.t-bad:not(.px-zero) { background: var(--surface) !important; border-color: var(--line) !important; }
+html .kpi.t-bad:not(.px-zero) { box-shadow: 0 1px 2px rgba(31,38,51,.04) !important; }
+.kpi-ic { position: static; margin: 0 auto 2px; width: 30px; height: 30px; border-radius: 10px; }
+.kpi .l { padding-inline: 4px !important; }
+.kpi { grid-template-rows: auto auto auto auto auto !important; }
+.px-sav-flow .kpi { height: 136px !important; min-height: 136px !important; padding-block: 12px !important; }
+.px-sav-end { gap: 8px; }
+html body .px-st-grid .kpi.kpi:first-child, html body .kpi.kpi.on { background: var(--surface) !important; border-color: var(--line) !important; }
+html body .kpi.kpi.on { border-color: #F28C1B !important; }
+/* SAV: five equal boxes on one row — En attente › Au dépôt › En livraison › Livrés · Annulés */
+.px-sav-flow { grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr) minmax(0,1fr) !important; align-items: stretch !important; }
+.px-sav-end { display: contents !important; }
+@media (max-width: 760px) { .px-sav-flow { grid-template-columns: 1fr 1fr !important; } }

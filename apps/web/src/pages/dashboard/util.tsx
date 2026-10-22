@@ -4,6 +4,7 @@ import { ReactNode, useState } from 'react';
 import { periodRange, Period } from '../../lib/format';
 import { store } from '../../lib/store';
 import i18n from '../../lib/i18n';
+import { KpiIcon } from '../../ui/kit';
 
 const DAY = 86_400_000;
 const ALG = 3_600_000;
@@ -65,11 +66,12 @@ export const timeTone = (r: number | null | undefined): Tone | undefined => (r =
 export const delivTone = (r: number | null | undefined, badge = false): Tone | undefined => (r === null || r === undefined ? undefined : r < 0.5 ? 'bad' : r < 0.7 ? (badge ? 'mid' : 'warn') : 'ok');
 
 // ---------------------------------------------------------------- KPI box (original markup: .kpi .l .v .s, link or block, "?" popup)
-export function KpiBox({ label, value, sub, tone, href, help, zero, className = '' }: { label: ReactNode; value: ReactNode; sub?: ReactNode; tone?: Tone; href?: string; help?: string; zero?: boolean; className?: string }) {
+export function KpiBox({ label, value, sub, tone, href, help, zero, className = '', icon, trend }: { label: ReactNode; value: ReactNode; sub?: ReactNode; tone?: Tone; href?: string; help?: string; zero?: boolean; className?: string; icon?: string; trend?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const cls = `kpi${help ? ' bjt-k' : ''}${tone ? ` t-${tone}` : ''}${zero ? ' px-zero' : ''} ${className}`.trim();
   const body = (
     <>
+      <KpiIcon name={icon} />
       <span className={`l${help ? ' bjt-kl' : ''}`}>
         {label}
         {help && (
@@ -90,6 +92,7 @@ export function KpiBox({ label, value, sub, tone, href, help, zero, className = 
         )}
       </span>
       <span className="v ltr">{value}</span>
+      {trend}
       {sub !== undefined && <span className="s">{sub}</span>}
       {help && (
         <div className="bjt-pop" role="tooltip" hidden={!open}>
