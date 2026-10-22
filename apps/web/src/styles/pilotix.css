@@ -1198,3 +1198,8 @@ html body .qd6-ntext:focus { outline: none; border-color: #F7A823 !important; bo
 /* editable amounts: no underline; the box itself shows it can be edited (pointer + orange edge on hover) */
 .qd6-rail .qd6-disc:hover, .qd6-fee:hover { border-color: #F7A823; }
 .qd6-rail .qd6-disc, .qd6-fee { cursor: text; }
+/* editable amounts look like a field: white pill, thin border, small orange pencil; the digits stay on the same edge as the lines above */
+.qd6-dv.ed { align-items: center; gap: 5px; padding: 4px 9px; margin-inline-end: -10px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); box-shadow: inset 0 1px 2px rgba(20, 30, 50, .06); transition: border-color .15s; }
+[data-theme="dark"] .qd6-dv.ed { background: rgba(255, 255, 255, .06); }
+.qd6-dv.ed .bji { width: 13px; height: 13px; color: #F28B1E; flex: none; }
+.qd6-rail .qd6-disc:hover .qd6-dv.ed, .qd6-fee:hover .qd6-dv.ed, .qd6-dv.ed:focus-within { border-color: #F7A823; }
