@@ -338,6 +338,27 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
     }
   };
 
+  /** Opens one order in the table and brings it under the header; the others close. */
+  const openOnly = (id: number | null) => {
+    setOpen(id === null ? new Set() : new Set([id]));
+    if (id === null) return;
+    setTimeout(() => {
+      const tr = document.querySelector(`tr[data-oid="${id}"]`);
+      if (tr) window.scrollTo({ top: tr.getBoundingClientRect().top + window.scrollY - 76, behavior: 'smooth' });
+    }, 60);
+  };
+  /** The order after this one in the table (or the first one), opened in place. */
+  const goNext = (fromId?: number) => {
+    const i = fromId === undefined ? -1 : rows.findIndex((r) => r.id === fromId);
+    const rest = rows.filter((r) => r.id !== fromId);
+    const nx = (i >= 0 ? rows.slice(i + 1).find((r) => r.id !== fromId) : undefined) ?? (fromId === undefined ? rows[0] : rest[0]);
+    if (!nx) {
+      openOnly(null);
+      toast(t('confirmation.noNext'), 'ok');
+      return;
+    }
+    openOnly(nx.id);
+  };
   const toggleOpen = (id: number) => setOpen((s) => (s.has(id) ? (s.delete(id), new Set(s)) : new Set(s).add(id)));
   const allOn = rows.length > 0 && rows.every((r) => sel.has(r.id));
   const canNext = (sub === 'nouvelles' || sub === 'attente') && has('confirmation');
@@ -353,7 +374,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
           </h2>
           <div className="row">
             {canNext && focus === null && (
-              <button type="button" className="btn" onClick={() => setFocus('ask')}>
+              <button type="button" className="btn" onClick={() => goNext([...open].pop())}>
                 {t('confirmation.next')}
               </button>
             )}
@@ -603,7 +624,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                         {op && (
                           <tr className="qdetail">
                             <td colSpan={cols.length + 3} className="wide">
-                              <Detail order={r} />
+                              <Detail order={r} onDone={goNext} />
                             </td>
                           </tr>
                         )}
