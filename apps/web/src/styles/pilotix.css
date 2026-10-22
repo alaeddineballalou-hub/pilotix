@@ -280,20 +280,22 @@ button.kpi.on { box-shadow: 0 0 0 2px var(--navy); }
 @media (min-width: 901px) { .px-folded .px-chev { display: none; } }
 .side .nav-group.bjcn .nav-sub.px-sub-closed { display: none !important; }
 
-/* Confirmation › Nouvelles: one card, Reçues › Appelées › Confirmées › Livrées, and a small "Maintenant" strip */
-.px-flow { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr); align-items: stretch; gap: 8px; }
-.px-flow .kpi { min-width: 0; }
-.px-flow-ar { align-self: center; font-size: 26px; font-weight: 900; color: var(--muted); opacity: .6; }
-[dir="rtl"] .px-flow-ar { transform: scaleX(-1); }
-.px-now { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
-.px-now-c { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; background: var(--raise, #f4f6fa); border: 1px solid var(--line); color: var(--ink); }
-.px-now-c b { font-size: 15px; }
-.px-now-c small { color: var(--muted); font-weight: 600; }
-.px-now-c.ok b { color: var(--ok); }
-.px-now-c.warn { background: var(--warn-soft); } .px-now-c.warn b { color: var(--warn); }
-.px-now-c.bad { background: var(--coral-soft); border-color: color-mix(in srgb, var(--coral) 40%, transparent); } .px-now-c.bad b { color: var(--coral); }
-@media (max-width: 760px) { .px-flow { grid-template-columns: 1fr 1fr; } .px-flow-ar { display: none; } }
-/* the "Statistiques / Masquer" bar and the Nouvelles card are one card */
-.px-kff:has(.px-nv):not(.folded) { gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r, 12px); box-shadow: 0 2px 10px rgba(20,30,50,.06); overflow: hidden; }
-.px-kff:has(.px-nv):not(.folded) .px-kff-btn { border: 0; border-radius: 0; border-bottom: 1px solid var(--line); }
-.px-kff:has(.px-nv):not(.folded) .px-nv { border: 0 !important; box-shadow: none !important; border-radius: 0 !important; margin: 0; }
+/* Confirmation › Nouvelles › Statistiques: one card, fold arrow in the header, date filters under it, six numbers */
+.px-st { padding: 0 !important; overflow: hidden; }
+.px-st-head { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 18px; border: 0; background: transparent; font: inherit; color: var(--ink); cursor: pointer; text-align: start; }
+.px-st-head:hover { background: var(--raise, #f4f6fa); }
+.px-st-t { font-family: var(--f-display); font-weight: 800; font-size: 17px; }
+.px-st-ch { margin-inline-start: auto; flex: none; width: 32px; height: 32px; padding: 7px; border-radius: 999px; background: var(--px-navy, #1B2A47); color: #fff; transition: background .15s; }
+.px-st-head:hover .px-st-ch { background: var(--px-orange, #F7A823); color: var(--px-navy, #1B2A47); }
+.px-st-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 18px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--raise, #f7f8fb); }
+.px-seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
+.px-seg button { border: 0; background: transparent; padding: 6px 12px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 700; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.px-seg button:hover { color: var(--ink); background: var(--sky-soft); }
+.px-seg button.on { background: var(--px-orange, #F7A823); color: var(--px-navy, #1B2A47); }
+.px-st-dates { display: inline-flex; align-items: center; gap: 6px; }
+.px-st-dates input { width: auto; height: 34px; }
+.px-st-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 16px 18px 18px; }
+.px-st-grid .kpi { min-width: 0; }
+@media (min-width: 1200px) { .px-st-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .px-st-grid { grid-template-columns: 1fr 1fr; gap: 8px; } .px-st-filters { padding: 10px 12px; } .px-seg { overflow-x: auto; flex-wrap: nowrap; max-width: 100%; } }
+@media (max-width: 760px) { .px-st-dates { display: flex; width: 100%; } .px-st-dates input { flex: 1 1 0; min-width: 0; } }

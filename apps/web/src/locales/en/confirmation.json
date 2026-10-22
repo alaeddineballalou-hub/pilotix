@@ -169,7 +169,7 @@
     "title": "Statistics",
     "basis": "By date",
     "created": "Creation date",
-    "updated": "Update date",
+    "updated": "Status change",
     "view": "Indicators",
     "viewConf": "Confirmation rate",
     "viewDeliv": "Delivery performance"
@@ -363,22 +363,5 @@
     "clientNote": "Customer note: {{note}}",
     "release": "Release (leave it to another agent)",
     "history": "See history"
-  },
-  "nv": {
-    "title": "New orders",
-    "help": "The road of the orders received in the period: called, confirmed, then delivered. Below, what is left to call right now.",
-    "recv": "Received",
-    "called": "Called",
-    "calledLeft": "{{p}} % · {{n}} still to call",
-    "calledAll": "all called",
-    "confirmed": "Confirmed",
-    "confirmedSub": "rate {{r}} · {{c}} cancelled",
-    "delivered": "Delivered",
-    "deliveredSub": "rate {{r}} · {{b}} returns · {{w}} in progress",
-    "now": "Now",
-    "toCall": "To call",
-    "late": "Late",
-    "onTime": "First call on time",
-    "median": "Median delay"
   }
 }

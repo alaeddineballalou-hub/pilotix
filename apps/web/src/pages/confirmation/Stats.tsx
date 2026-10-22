@@ -21,6 +21,7 @@ export function StatsSection({ sub }: { sub: Sub }) {
     saveKf(k);
   };
   if (sub === 'terminees') return null;
+  if (sub === 'nouvelles') return <NouvellesStats kf={kf} setKf={setKf} open={open} setOpen={(o) => (setOpen(o), store.set('px-kff', o ? '1' : '0'))} />;
   return (
     <section className={`px-kff ${open ? '' : 'folded'}`}>
       <button
@@ -38,7 +39,6 @@ export function StatsSection({ sub }: { sub: Sub }) {
       </button>
       {open && (
         <div className="px-kff-body">
-          {sub === 'nouvelles' && <NouvellesCard kf={kf} setKf={setKf} />}
           {sub === 'attente' && <EnCoursCard kf={kf} setKf={setKf} />}
           {sub === 'confirmees' && <ConfirmedCard kf={kf} setKf={setKf} />}
         </div>
@@ -93,77 +93,92 @@ function Head({ title, help, children }: { title: string; help: string; children
 
 const perLabel = (t: (k: string) => string, kf: Kf) => (kf.per === 'custom' ? (kf.from === kf.to ? kf.from : `${kf.from} → ${kf.to}`) : t(`confirmation.per.${kf.per}`));
 
-// ---------------------------------------------------------------- Nouvelles: one card, the order's road
-/** Reçues › Appelées › Confirmées › Livrées for the period, and a small "now" strip for the calls to make. */
-function NouvellesCard({ kf, setKf }: { kf: Kf; setKf: (k: Kf) => void }) {
+// ---------------------------------------------------------------- Nouvelles: one foldable card
+const PERS = ['today', 'yesterday', '7', '30', 'month', 'custom'] as const;
+
+/** Nouvelles › Statistiques: one card with a fold arrow, the date filters under its header, and six numbers. */
+function NouvellesStats({ kf, setKf, open, setOpen }: { kf: Kf; setKf: (k: Kf) => void; open: boolean; setOpen: (o: boolean) => void }) {
   const { t } = useTranslation();
-  const inp = kfInput(kf);
-  const p = useRpc('confirmation.period', inp, { refetchInterval: 60_000 });
-  const f = useRpc('confirmation.firstCall', inp, { refetchInterval: 30_000 });
-  const d = useRpc('confirmation.delivery', { ...inp, on: 'created' }, { refetchInterval: 60_000 });
-  const P = p.data;
-  const F = f.data;
-  const D = d.data;
-  const err = p.error || f.error || d.error;
-  const onTime = F && F.called ? Math.round((F.onTime * 100) / F.called) : null;
-  const fm = F?.firstMinutes ?? 15;
+  const q = useRpc('confirmation.firstCall', kfInput(kf), { refetchInterval: 30_000, enabled: open });
+  const now = useNow();
+  const D = q.data;
+  const set = (p: Partial<Kf>) => setKf({ ...kf, ...p });
+  const fm = D?.firstMinutes ?? 15;
+  const onTime = D && D.called ? Math.round((D.onTime * 100) / D.called) : null;
+  const f5 = D && D.called ? Math.round((D.under5 * 100) / D.called) : null;
+  const age = D?.oldest ? Math.max(0, now - Date.parse(D.oldest.since)) : null;
+  const med = D?.medianMin ?? null;
   return (
-    <div className="card bjfc px-nv">
-      <Head title={t('confirmation.nv.title')} help={t('confirmation.nv.help')}>
-        <KfBar kf={kf} setKf={setKf} noView />
-      </Head>
-      {err ? (
-        <ErrorBox error={err} onRetry={() => (p.refetch(), f.refetch(), d.refetch())} />
-      ) : !P || !F || !D ? (
-        <Loading />
-      ) : (
+    <section className={`card px-st ${open ? '' : 'folded'}`}>
+      <button type="button" className="px-st-head" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span className="px-st-t">{t('confirmation.stats.title')}</span>
+        {open && (
+          <span className="bjfc-live">
+            <i />
+            {t('confirmation.fc.live')}
+          </span>
+        )}
+        <svg className="px-st-ch" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d={open ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} />
+        </svg>
+      </button>
+      {open && (
         <>
-          <div className="px-flow">
-            <Kpi label={t('confirmation.nv.recv')} value={n(P.received)} sub={`${perLabel(t, kf)} · ${da(P.value)}`} />
-            <span className="px-flow-ar" aria-hidden="true">›</span>
-            <Kpi
-              tone={P.notCalled ? 'warn' : undefined}
-              label={t('confirmation.nv.called')}
-              value={n(P.called)}
-              sub={P.notCalled ? t('confirmation.nv.calledLeft', { p: P.calledPct ?? 0, n: P.notCalled }) : t('confirmation.nv.calledAll')}
-            />
-            <span className="px-flow-ar" aria-hidden="true">›</span>
-            <Kpi
-              tone={tone3(P.rate, 60, 40)}
-              label={t('confirmation.nv.confirmed')}
-              value={n(P.confirmed)}
-              sub={t('confirmation.nv.confirmedSub', { r: pctTxt(P.rate), c: P.cancelled })}
-            />
-            <span className="px-flow-ar" aria-hidden="true">›</span>
-            <Kpi
-              tone={tone3(D.rate, 75, 60)}
-              label={t('confirmation.nv.delivered')}
-              value={n(D.delivered)}
-              sub={t('confirmation.nv.deliveredSub', { r: pctTxt(D.rate), b: D.back, w: D.depot + D.route })}
-            />
+          <div className="px-st-filters">
+            <div className="px-seg" role="group" aria-label={t('common.period')}>
+              {PERS.map((p) => (
+                <button key={p} type="button" className={kf.per === p ? 'on' : ''} aria-pressed={kf.per === p} onClick={() => set({ per: p })}>
+                  {t(`confirmation.per.${p}`)}
+                </button>
+              ))}
+            </div>
+            <div className="px-seg" role="group" aria-label={t('confirmation.stats.basis')}>
+              {(['created', 'updated'] as const).map((b) => (
+                <button key={b} type="button" className={kf.basis === b ? 'on' : ''} aria-pressed={kf.basis === b} onClick={() => set({ basis: b })}>
+                  {t(`confirmation.stats.${b}`)}
+                </button>
+              ))}
+            </div>
+            {kf.per === 'custom' && (
+              <span className="px-st-dates">
+                <input type="date" value={kf.from} aria-label={t('common.from')} onChange={(e) => set({ from: e.target.value })} />
+                <span className="muted">→</span>
+                <input type="date" value={kf.to} aria-label={t('common.to')} onChange={(e) => set({ to: e.target.value })} />
+              </span>
+            )}
           </div>
-          <div className="px-now">
-            <span className="bjfc-live">
-              <i />
-              {t('confirmation.nv.now')}
-            </span>
-            <span className={`px-now-c ${F.waiting ? 'warn' : 'ok'}`}>
-              {t('confirmation.nv.toCall')} <b className="ltr">{n(F.waiting)}</b>
-              {F.waitingNoAgent ? <small> · {t('confirmation.fc.noAgent', { n: F.waitingNoAgent })}</small> : null}
-            </span>
-            <span className={`px-now-c ${F.late ? 'bad' : 'ok'}`}>
-              {t('confirmation.nv.late')} <b className="ltr">{n(F.late)}</b>
-            </span>
-            <span className={`px-now-c ${onTime === null ? '' : onTime >= 80 ? 'ok' : onTime >= 70 ? 'warn' : 'bad'}`} title={t('confirmation.fc.help', { first: fm })}>
-              {t('confirmation.nv.onTime')} <b className="ltr">{pctTxt(onTime)}</b>
-            </span>
-            <span className="px-now-c">
-              {t('confirmation.nv.median')} <b className="ltr">{F.medianMin === null ? '—' : dur(F.medianMin * 60_000)}</b>
-            </span>
-          </div>
+          {q.error ? (
+            <ErrorBox error={q.error} onRetry={() => q.refetch()} />
+          ) : !D ? (
+            <Loading />
+          ) : (
+            <div className="px-st-grid">
+              <Kpi
+                tone={D.waiting ? 'warn' : 'ok'}
+                label={t('confirmation.fc.waiting')}
+                value={n(D.waiting)}
+                sub={D.waiting ? (D.waitingNoAgent ? t('confirmation.fc.noAgent', { n: D.waitingNoAgent }) : t('confirmation.fc.allAssigned')) : t('confirmation.fc.nobody')}
+              />
+              <Kpi tone={D.late ? 'bad' : 'ok'} label={t('confirmation.fc.lateNow')} value={n(D.late)} sub={D.late ? t('confirmation.fc.lateSub') : t('confirmation.fc.noLate')} />
+              <Kpi
+                tone={age === null ? 'ok' : age > fm * 60_000 ? 'bad' : age > fm * 30_000 ? 'warn' : 'ok'}
+                label={t('confirmation.fc.oldest')}
+                value={age === null ? '—' : dur(age)}
+                sub={D.oldest ? `${D.oldest.ref} · ${D.oldest.name}` : t('confirmation.fc.nobody')}
+              />
+              <Kpi tone={tone3(onTime, 80, 70)} label={t('confirmation.fc.onTime')} value={pctTxt(onTime)} sub={D.called ? t('confirmation.fc.onTimeSub', { ok: D.onTime, n: D.called }) : t('confirmation.fc.noneCalled')} />
+              <Kpi
+                tone={med === null ? undefined : med <= fm ? 'ok' : med <= fm * 2 ? 'warn' : 'bad'}
+                label={t('confirmation.fc.median')}
+                value={med === null ? '—' : dur(med * 60_000)}
+                sub={D.called ? t('confirmation.fc.medianSub') : perLabel(t, kf)}
+              />
+              <Kpi tone={tone3(f5, 50, 25)} label={t('confirmation.fc.under5')} value={pctTxt(f5)} sub={D.called ? t('confirmation.fc.under5Sub') : perLabel(t, kf)} />
+            </div>
+          )}
         </>
       )}
-    </div>
+    </section>
   );
 }
 

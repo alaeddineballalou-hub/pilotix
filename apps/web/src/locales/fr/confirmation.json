@@ -169,7 +169,7 @@
     "title": "Statistiques",
     "basis": "Selon la date",
     "created": "Date de création",
-    "updated": "Date de mise à jour",
+    "updated": "Changement de statut",
     "view": "Indicateurs",
     "viewConf": "Taux de confirmation",
     "viewDeliv": "Performance de livraison"
@@ -363,22 +363,5 @@
     "clientNote": "Note du client : {{note}}",
     "release": "Relâcher (la laisser à un autre agent)",
     "history": "Voir l’historique"
-  },
-  "nv": {
-    "title": "Nouvelles commandes",
-    "help": "Le chemin des commandes reçues sur la période : appelées, confirmées, puis livrées. En bas, ce qu’il reste à appeler maintenant.",
-    "recv": "Reçues",
-    "called": "Appelées",
-    "calledLeft": "{{p}} % · {{n}} encore à appeler",
-    "calledAll": "toutes appelées",
-    "confirmed": "Confirmées",
-    "confirmedSub": "taux {{r}} · {{c}} annulées",
-    "delivered": "Livrées",
-    "deliveredSub": "taux {{r}} · {{b}} retours · {{w}} en cours",
-    "now": "Maintenant",
-    "toCall": "À appeler",
-    "late": "En retard",
-    "onTime": "1er appel à temps",
-    "median": "Délai médian"
   }
 }
