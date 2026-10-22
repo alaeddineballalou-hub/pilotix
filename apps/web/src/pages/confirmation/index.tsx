@@ -308,7 +308,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
     <>
       {focus !== null && <Focus initialId={focus === 'ask' ? null : focus} onClose={() => setFocus(null)} />}
       <div className="card qcard">
-        <div className="card-head">
+        <div className="card-head px-qhead">
           <h2>
             {title} <span className={`badge t-${SUB_TONE[sub]} ltr`}>{n(list.data?.total ?? 0)}</span>
             <Help text={t(`confirmation.help.${sub}`)} label={title} />
@@ -357,7 +357,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
           <div className="px-qbtns">
             <button type="button" className={`px-qb px-qb-l ${panel === 'f' || nFilters ? 'on' : ''}`} aria-expanded={panel === 'f'} onClick={() => setPanel(panel === 'f' ? null : 'f')}>
               <Icon name="filter" />
-              {t('common.filters')}
+              <span className="px-qb-tx">{t('common.filters')}</span>
               {nFilters ? <b className="px-qb-n">{nFilters}</b> : null}
             </button>
             <span className="px-qpop-wrap">
@@ -685,7 +685,7 @@ function Toolbar(p: {
   const tipOne = t('confirmation.tb.tipOne');
   return (
     <div className="qacts" role="toolbar" aria-label={t('confirmation.tb.label')}>
-      <span className="muted small qa-info">
+      <span className={`qa-info ${nSel ? 'on' : ''}`}>
         {nSel ? t('confirmation.tb.selected', { count: nSel }) : t('confirmation.tb.none')}
         {nSel > 0 && (
           <button type="button" className="linkish" onClick={p.onClear}>
@@ -693,95 +693,99 @@ function Toolbar(p: {
           </button>
         )}
       </span>
-      <button type="button" className="btn small qa-btn" disabled={!one} title={one ? undefined : tipOne} onClick={p.onDuplicate}>
-        <span className="qa-ic">
-          <Icon name="copy" />
-        </span>
-        {t('confirmation.tb.duplicate')}
-      </button>
-      {one ? (
-        <a className="btn small qa-btn" href={p.waHref(one)} target="_blank" rel="noopener">
+      <span className="qa-grp">
+        {p.manager && (
+          <label className={`btn small qa-btn qa-wrap ${none ? 'is-dis' : ''}`} title={none ? tip : t('confirmation.tb.assign')}>
+            <span className="qa-ic">
+              <Icon name="userplus" />
+            </span>
+            <select
+              className="qa-sel"
+              aria-label={t('confirmation.tb.assign')}
+              disabled={none}
+              value=""
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                if (v) p.onAssign(p.rows, v);
+              }}
+            >
+              <option value="">{t('confirmation.tb.assign')}</option>
+              {p.agents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {p.manager && (
+          <button type="button" className="btn small qa-btn qa-danger" aria-label={t('confirmation.tb.removeAgent')} disabled={none || !p.rows.some((r) => r.agentId)} title={none ? tip : t('confirmation.tb.removeAgent')} onClick={() => p.onAssign(p.rows, null)}>
+            <span className="qa-ic">
+              <Icon name="userminus" />
+            </span>
+            <span className="qa-tx">{t('confirmation.tb.removeAgent')}</span>
+          </button>
+        )}
+        <label className={`btn small qa-btn qa-wrap ${none ? 'is-dis' : ''}`} title={none ? tip : t('confirmation.tb.status')}>
           <span className="qa-ic">
-            <Icon name="message" />
-          </span>
-          {t('confirmation.tb.send')}
-        </a>
-      ) : (
-        <button type="button" className="btn small qa-btn" disabled title={tipOne}>
-          <span className="qa-ic">
-            <Icon name="message" />
-          </span>
-          {t('confirmation.tb.send')}
-        </button>
-      )}
-      {p.manager && (
-        <label className={`btn small qa-btn qa-wrap ${none ? 'is-dis' : ''}`}>
-          <span className="qa-ic">
-            <Icon name="userplus" />
+            <Icon name="checkcircle" />
           </span>
           <select
             className="qa-sel"
-            aria-label={t('confirmation.tb.assign')}
+            aria-label={t('confirmation.tb.status')}
             disabled={none}
-            title={none ? tip : undefined}
             value=""
             onChange={(e) => {
-              const v = Number(e.target.value);
-              if (v) p.onAssign(p.rows, v);
+              if (e.target.value) p.onStatus(e.target.value as StatusChoice);
             }}
           >
-            <option value="">{t('confirmation.tb.assign')}</option>
-            {p.agents.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
+            <option value="">{t('confirmation.tb.status')}</option>
+            {BULK_CHOICES.map((c) => (
+              <option key={c} value={c}>
+                {choiceLabel(t, c)}
               </option>
             ))}
           </select>
         </label>
-      )}
-      {p.manager && (
-        <button type="button" className="btn small qa-btn qa-danger" disabled={none || !p.rows.some((r) => r.agentId)} title={none ? tip : undefined} onClick={() => p.onAssign(p.rows, null)}>
+      </span>
+      <span className="qa-grp">
+        <button type="button" className="btn small qa-btn" aria-label={t('confirmation.tb.duplicate')} disabled={!one} title={one ? t('confirmation.tb.duplicate') : tipOne} onClick={p.onDuplicate}>
           <span className="qa-ic">
-            <Icon name="userminus" />
+            <Icon name="copy" />
           </span>
-          {t('confirmation.tb.removeAgent')}
+          <span className="qa-tx">{t('confirmation.tb.duplicate')}</span>
         </button>
-      )}
-      <label className={`btn small qa-btn qa-wrap ${none ? 'is-dis' : ''}`}>
-        <span className="qa-ic">
-          <Icon name="checkcircle" />
-        </span>
-        <select
-          className="qa-sel"
-          aria-label={t('confirmation.tb.status')}
-          disabled={none}
-          title={none ? tip : undefined}
-          value=""
-          onChange={(e) => {
-            if (e.target.value) p.onStatus(e.target.value as StatusChoice);
-          }}
-        >
-          <option value="">{t('confirmation.tb.status')}</option>
-          {BULK_CHOICES.map((c) => (
-            <option key={c} value={c}>
-              {choiceLabel(t, c)}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button type="button" className="btn small qa-btn" disabled={none} title={none ? tip : undefined} onClick={p.onBlock}>
-        <span className="qa-ic">
-          <Icon name="ban" />
-        </span>
-        {t('confirmation.tb.block')}
-      </button>
+        {one ? (
+          <a className="btn small qa-btn" aria-label={t('confirmation.tb.send')} title={t('confirmation.tb.send')} href={p.waHref(one)} target="_blank" rel="noopener">
+            <span className="qa-ic">
+              <Icon name="message" />
+            </span>
+            <span className="qa-tx">{t('confirmation.tb.send')}</span>
+          </a>
+        ) : (
+          <button type="button" className="btn small qa-btn" aria-label={t('confirmation.tb.send')} disabled title={tipOne}>
+            <span className="qa-ic">
+              <Icon name="message" />
+            </span>
+            <span className="qa-tx">{t('confirmation.tb.send')}</span>
+          </button>
+        )}
+        <button type="button" className="btn small qa-btn" aria-label={t('confirmation.tb.block')} disabled={none} title={none ? tip : t('confirmation.tb.block')} onClick={p.onBlock}>
+          <span className="qa-ic">
+            <Icon name="ban" />
+          </span>
+          <span className="qa-tx">{t('confirmation.tb.block')}</span>
+        </button>
+      </span>
       {p.onDelete && (
-        <button type="button" className="btn small qa-btn qa-del" disabled={none} title={none ? tip : undefined} onClick={p.onDelete}>
-          <span className="qa-ic">
-            <Icon name="trash" />
-          </span>
-          {t('confirmation.tb.delete')}
-        </button>
+        <span className="qa-grp qa-end">
+          <button type="button" className="btn small qa-btn qa-del" aria-label={t('confirmation.tb.delete')} disabled={none} title={none ? tip : t('confirmation.tb.delete')} onClick={p.onDelete}>
+            <span className="qa-ic">
+              <Icon name="trash" />
+            </span>
+            <span className="qa-tx">{t('confirmation.tb.delete')}</span>
+          </button>
+        </span>
       )}
     </div>
   );

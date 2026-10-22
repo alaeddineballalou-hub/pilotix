@@ -621,3 +621,59 @@ html body .kpi .v { font-size: clamp(18px, 15cqi, 28px) !important; }
 .kpis:has(> :nth-child(7):last-child) { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
 @media (min-width: 1600px) { .kpis:has(> :nth-child(7):last-child) { grid-template-columns: repeat(7, minmax(0, 1fr)) !important; } }
 @media (max-width: 900px) { .kpis:has(> :nth-child(7):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+
+/* ===== action bar: one line, grouped (selection › agent › status › order tools › delete at the far end) ===== */
+.qcard { container: qcard / inline-size; }
+html body .qcard .qacts { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-start; gap: 10px; padding: 0 0 12px; margin: 0; background: none; border: 0; box-shadow: none; }
+html body .qcard .qacts .qa-info { display: inline-flex; align-items: center; gap: 8px; margin: 0; white-space: nowrap; font-size: 12.5px; font-weight: 700; color: var(--muted); padding: 0 12px; height: 36px; border-radius: 999px; background: var(--sky-soft, #eef2f8); }
+html body .qcard .qacts .qa-info.on { background: color-mix(in srgb, var(--q-accent) 16%, transparent); color: var(--q-ink); }
+.qcard .qa-grp { display: inline-flex; align-items: center; gap: 6px; flex: none; padding-inline-start: 10px; border-inline-start: 1px solid var(--q-btn-line); }
+.qcard .qa-info + .qa-grp { border: 0; padding: 0; margin-inline-start: auto; }
+.qcard .qa-grp.qa-end { padding-inline-start: 10px; }
+html body .qcard .qa-btn { height: 36px; white-space: nowrap; justify-content: center; gap: 7px; margin: 0; }
+.qcard .qa-btn .qa-ic { width: 16px; height: 16px; flex: none; }
+.qcard .qa-btn .qa-ic .bji { width: 16px; height: 16px; vertical-align: 0; }
+.qcard .qa-wrap .qa-sel { border: 0 !important; background-color: transparent !important; box-shadow: none !important; padding-block: 0 !important; height: 34px; font: inherit; font-weight: 700; color: inherit; cursor: pointer; max-width: 190px; }
+/* not enough room: plain buttons become icon squares (name in the tooltip) */
+@container qcard (max-width: 1240px) {
+  .qcard .qa-btn:has(.qa-tx) { width: 36px; padding: 0 !important; }
+  .qcard .qa-btn .qa-tx { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+@container qcard (max-width: 700px) {
+  html body .qcard .qacts { flex-wrap: wrap; row-gap: 10px; }
+  html body .qcard .qacts .qa-info { flex: 1 0 100%; justify-content: center; }
+  .qcard .qa-info + .qa-grp { margin-inline-start: 0; }
+  .qcard .qa-wrap .qa-sel { max-width: 130px; }
+}
+
+/* ===== row-open arrow: only the arrow inside the circle, always dead centre ===== */
+html body .qtbl td.qexp .icon-btn .bji, html body .qexp .icon-btn .bji { display: none !important; }
+html body .qtbl td.qexp .icon-btn::after { margin: 0; display: block; }
+html body .qtbl td.qexp { vertical-align: middle !important; }
+html body .qtbl td.qexp .icon-btn[aria-expanded="true"] { background: var(--q-accent, var(--orange)) !important; border-color: var(--q-accent, var(--orange)) !important; color: #fff !important; }
+
+/* ===== order list on phone ===== */
+@container qcard (max-width: 700px) {
+  /* actions: the two menus share the first line, the small buttons and delete the second */
+  .qcard .qa-grp { flex-wrap: wrap; border: 0 !important; padding: 0 !important; margin: 0 !important; }
+  .qcard .qa-info + .qa-grp { flex: 1 0 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+  .qcard .qa-info + .qa-grp > .qa-wrap { min-width: 0; padding: 0 10px; }
+  .qcard .qa-info + .qa-grp > .qa-wrap:last-child { grid-column: 1 / -1; }
+  .qcard .qa-wrap .qa-sel { max-width: none; width: 100%; min-width: 0; text-overflow: ellipsis; }
+  html body .qcard .qacts { justify-content: space-between; }
+}
+@media (max-width: 760px) {
+  /* header: the two buttons side by side */
+  .px-qhead > .row { display: flex; flex-wrap: nowrap; gap: 8px; width: 100%; }
+  .px-qhead > .row > .btn { flex: 1 1 0; min-width: 0; padding-inline: 10px; font-size: 13px; white-space: normal; line-height: 1.2; }
+  /* tools: one line, filters as an icon */
+  .px-qbtns { flex-wrap: nowrap !important; justify-content: space-between !important; gap: 4px !important; }
+  .px-qb-tx { display: none; }
+  .px-qb, .px-qb-l { min-width: 38px; height: 38px; padding: 0 8px; }
+  .px-qrange { font-size: 12px; padding: 0 2px; white-space: nowrap; }
+  /* order card: arrow + tick box together in the top corner, the order number takes the full first line */
+  html body .qtbl tr { padding-top: 12px; }
+  html body .qtbl td.qexp { position: absolute !important; top: 8px; right: 42px; left: auto; width: auto; }
+  html body .qtbl td.ck:not(.qexp) { top: 12px; }
+  html body .qtbl tbody tr > td:nth-child(3) { grid-column: 1 / -1; padding-inline-end: 88px; }
+}
