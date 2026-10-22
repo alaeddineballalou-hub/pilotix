@@ -10,7 +10,9 @@
   "sav": "After-sales",
   "tournee": "My round",
   "produits": "Products & stock",
-  "messages": "Messages",
+  "pilotai": "Pilot AI",
+  "messages": "Message AI agent",
+  "cm": "CM AI agent",
   "clients": "Customers",
   "marketing": "Marketing",
   "publicite": "Advertising",
@@ -26,7 +28,9 @@
     "depot": "Depot",
     "suivi": "Follow-up",
     "livrees": "Delivered",
-    "annulees": "Cancelled"
+    "annulees": "Cancelled",
+    "messages": "Message AI agent",
+    "cm": "CM AI agent"
   },
   "profil": "My profile",
   "marketer": "Marketer"

@@ -145,14 +145,19 @@ async function getConv(db: Db, id: number): Promise<Conversation> {
   return toConv(r);
 }
 
-async function addMessage(db: Db, convId: number, m: { role: ConvMessage['role']; body: string; userId?: number | null; externalId?: string | null; meta?: unknown; sendError?: string | null }) {
+async function addMessage(
+  db: Db,
+  convId: number,
+  m: { role: ConvMessage['role']; body: string; userId?: number | null; externalId?: string | null; meta?: unknown; sendError?: string | null; /** a public comment: not a message, no unread / follow-up */ quiet?: boolean },
+) {
   const r = await db.query(
     `INSERT INTO conv_messages (conversation_id, role, body, user_id, external_id, meta, send_error) VALUES ($1,$2,$3,$4,$5,$6,$7)
      ON CONFLICT DO NOTHING RETURNING id`,
     [convId, m.role, m.body, m.userId ?? null, m.externalId ?? null, m.meta === undefined ? null : JSON.stringify(m.meta), m.sendError ?? null],
   );
   if (!r[0]) return null; // duplicate (same channel message delivered twice)
-  if (m.role !== 'tool') {
+  if (m.quiet) await db.query(`UPDATE conversations SET last_message_at = now(), last_preview = $2 WHERE id = $1`, [convId, m.body.slice(0, 140)]);
+  else if (m.role !== 'tool') {
     await db.query(
       `UPDATE conversations SET last_message_at = now(), last_preview = $2,
          last_customer_at = CASE WHEN $3 = 'customer' THEN now() ELSE last_customer_at END,
@@ -203,8 +208,54 @@ export async function receiveMessage(ctx: Ctx, m: z.infer<typeof IncomingInput>)
   return out;
 }
 
+/**
+ * CM AI agent: the private message sent to someone who commented a post opens (or continues) their conversation here,
+ * with the comment as their first words, so Dellal knows what they asked when they answer.
+ */
+export async function conversationFromComment(
+  ctx: Ctx,
+  c: {
+    channel: 'messenger' | 'instagram';
+    externalId: string;
+    accountId?: string | null;
+    name?: string | null;
+    source: string;
+    comment: string;
+    post?: string | null;
+    reply: string;
+    meta?: Record<string, unknown>;
+    /** a person of the team wrote the private message */
+    staffId?: number | null;
+    /** …and keeps the conversation (Dellal pauses); otherwise Dellal answers when the customer writes back */
+    takeOver?: boolean;
+  },
+): Promise<number> {
+  const id = await ctx.db.tx(async (tx) => {
+    const r = (
+      await tx.query(
+        `INSERT INTO conversations (channel, external_id, account_id, customer_name, source) VALUES ($1,$2,$3,$4,$5)
+         ON CONFLICT (channel, external_id) DO UPDATE SET
+           customer_name = COALESCE(conversations.customer_name, EXCLUDED.customer_name),
+           account_id = COALESCE(EXCLUDED.account_id, conversations.account_id),
+           source = COALESCE(conversations.source, EXCLUDED.source)
+         RETURNING id`,
+        [c.channel, c.externalId, c.accountId ?? null, c.name ?? null, c.source.slice(0, 200)],
+      )
+    )[0];
+    const cid = num(r.id);
+    await addMessage(tx, cid, { role: 'customer', body: c.comment, meta: { comment: { post: c.post ?? null } }, quiet: true });
+    if (c.staffId) {
+      await addMessage(tx, cid, { role: 'staff', body: c.reply, userId: c.staffId, meta: { cm: true } });
+      if (c.takeOver) await tx.query(`UPDATE conversations SET mode = 'human', assigned_to = $2 WHERE id = $1`, [cid, c.staffId]);
+    } else await addMessage(tx, cid, { role: 'agent', body: c.reply, meta: { cm: true, ...(c.meta ?? {}) } });
+    return cid;
+  });
+  ctx.emit({ type: 'chat', data: { dellal: id } });
+  return id;
+}
+
 /** Algeria is UTC+1 all year. */
-const algeriaHour = (t: number) => (new Date(t).getUTCHours() + 1) % 24;
+export const algeriaHour = (t: number) => (new Date(t).getUTCHours() + 1) % 24;
 
 /** Whether Dellal should answer this conversation now. */
 export async function shouldAnswer(ctx: Ctx, convId: number): Promise<{ ok: boolean; why?: string }> {
@@ -219,7 +270,7 @@ export async function shouldAnswer(ctx: Ctx, convId: number): Promise<{ ok: bool
 }
 
 // ---------------------------------------------------------------- what Dellal knows
-const strip = (s: string) =>
+export const strip = (s: string) =>
   s
     .toLowerCase()
     .normalize('NFD')
@@ -244,7 +295,7 @@ export function findPlace(text: string): { wilayaId: number; wilaya: string; com
   return null;
 }
 
-interface ProductInfo {
+export interface ProductInfo {
   product_id: number;
   name: string;
   price: number;
@@ -302,7 +353,7 @@ export async function searchProducts(db: Db, query?: string | null, limit = 8): 
   }));
 }
 
-async function deliveryFee(db: Db, input: { wilaya?: string | number; commune?: string; stopdesk?: boolean }) {
+export async function deliveryFee(db: Db, input: { wilaya?: string | number; commune?: string; stopdesk?: boolean }) {
   const place = findPlace(String(input.wilaya ?? '')) ?? (input.commune ? findPlace(input.commune) : null);
   if (!place) return { error: 'Wilaya introuvable : demande la wilaya au client (nom ou numéro).' };
   const home = await clientFee(db, place.wilayaId, false);
@@ -603,11 +654,13 @@ type AiMsg = { role: 'user' | 'assistant'; content: any };
 
 /** The conversation as the AI sees it: customer = user, Dellal and staff = assistant (merged, starting with the user). */
 async function history(db: Db, convId: number): Promise<AiMsg[]> {
-  const rows = (await db.query(`SELECT role, body FROM conv_messages WHERE conversation_id = $1 AND role <> 'tool' ORDER BY id DESC LIMIT 40`, [convId])).reverse();
+  const rows = (await db.query(`SELECT role, body, meta FROM conv_messages WHERE conversation_id = $1 AND role <> 'tool' ORDER BY id DESC LIMIT 40`, [convId])).reverse();
   const out: AiMsg[] = [];
   for (const r of rows) {
     const role = r.role === 'customer' ? 'user' : 'assistant';
-    const text = r.role === 'staff' ? `[équipe] ${r.body}` : r.body;
+    // a conversation opened from a comment starts with the public comment, then the private message of the CM AI agent
+    const post = r.meta?.comment ? String(r.meta.comment.post ?? '').slice(0, 120) : '';
+    const text = r.role === 'staff' ? `[équipe] ${r.body}` : r.meta?.comment ? `[commentaire public sous la publication${post ? ` « ${post} »` : ''}] ${r.body}` : r.body;
     const last = out[out.length - 1];
     if (last && last.role === role) last.content += `\n${text}`;
     else out.push({ role, content: text });
@@ -620,7 +673,7 @@ export interface AiRequest {
   model: string;
   system: string;
   messages: AiMsg[];
-  tools: typeof DELLAL_TOOLS;
+  tools: readonly { name: string; description: string; input_schema: unknown }[];
   max_tokens: number;
 }
 export interface AiResponse {
@@ -677,36 +730,16 @@ export async function runAgent(ctx: Ctx, convId: number, opts: { followUp?: bool
   }
   let reply = texts.join('\n\n').trim() || null;
   // Algerian Darija check: words of another dialect, wrong phrases, the shop's banned list → one rewrite, then a safe fix.
-  let darija: { issues: DarijaIssue[]; rewritten: boolean; left: DarijaIssue[] } | null = null;
+  let darija: DarijaReport | null = null;
   if (reply && useAi) {
     const avoid = parseAvoid(s.darijaAvoid);
     const customer = (await ctx.db.query(`SELECT body FROM conv_messages WHERE conversation_id = $1 AND role = 'customer' ORDER BY id DESC LIMIT 30`, [convId])).map((r: any) => r.body).join('\n');
-    const found = checkDarija(reply, { customer, avoid });
-    if (found.length) {
-      // spelling (q → 9, 5 → kh) is fixed directly; other dialects and wrong phrases get one rewrite
-      const spelling = found.filter((i) => i.dialect === 'orthographe');
-      const issues = found.filter((i) => i.dialect !== 'orthographe');
-      const serious = (t: string) => checkDarija(t, { customer, avoid }).filter((i) => i.dialect !== 'orthographe').length;
-      let fixed = spelling.length ? fixDarija(reply, spelling, avoid) : reply;
-      let rewritten = false;
-      if (issues.length) {
-        try {
-          const res = await complete({ model: s.model, system: DARIJA_FIXER_SYSTEM, messages: [{ role: 'user', content: darijaRewritePrompt(fixed, issues) }], tools: [] as unknown as typeof DELLAL_TOOLS, max_tokens: 1024 });
-          usage = { input_tokens: usage.input_tokens + num(res.usage?.input_tokens), output_tokens: usage.output_tokens + num(res.usage?.output_tokens) };
-          const t = res.content.map((b) => (b.type === 'text' ? b.text : '')).join('').trim().replace(/^[«"]\s*|\s*[»"]$/g, '');
-          if (t && serious(t) < issues.length) {
-            fixed = t;
-            rewritten = true;
-          }
-        } catch {
-          /* keep the safe fix below */
-        }
-      }
-      const left = checkDarija(fixed, { customer, avoid });
-      if (left.length) fixed = fixDarija(fixed, left, avoid);
-      darija = { issues: found, rewritten, left: checkDarija(fixed, { customer, avoid }) };
-      reply = fixed;
-      await addMessage(ctx.db, convId, { role: 'tool', body: `darija → ${found.map((i) => i.found).join(', ')} corrigé`, meta: { tool: 'darija', ...darija } });
+    const p = await polishDarija(complete, s.model, reply, { customer, avoid });
+    usage = { input_tokens: usage.input_tokens + p.usage.input_tokens, output_tokens: usage.output_tokens + p.usage.output_tokens };
+    if (p.darija) {
+      darija = p.darija;
+      reply = p.text;
+      await addMessage(ctx.db, convId, { role: 'tool', body: `darija → ${p.darija.issues.map((i) => i.found).join(', ')} corrigé`, meta: { tool: 'darija', ...darija } });
     }
   }
   if (reply) {
@@ -726,6 +759,56 @@ export async function runAgent(ctx: Ctx, convId: number, opts: { followUp?: bool
 }
 
 const rawConv = async (db: Db, id: number) => (await db.query('SELECT * FROM conversations WHERE id = $1', [id]))[0];
+
+export type Complete = (req: AiRequest) => Promise<AiResponse>;
+export interface DarijaReport {
+  issues: DarijaIssue[];
+  rewritten: boolean;
+  left: DarijaIssue[];
+}
+
+/**
+ * The Algerian Darija check on a reply before it is sent (Dellal and the CM AI agent): spelling (q → 9, 5 → kh) is fixed
+ * directly; words of another dialect, wrong phrases and the shop's banned list get one AI rewrite, then a safe mechanical
+ * fix for what is left. Words the customer wrote himself are allowed.
+ */
+export async function polishDarija(
+  complete: Complete,
+  model: string,
+  reply: string,
+  opts: { customer: string; avoid: { term: string; use?: string }[] },
+): Promise<{ text: string; darija: DarijaReport | null; usage: { input_tokens: number; output_tokens: number } }> {
+  const { customer, avoid } = opts;
+  const usage = { input_tokens: 0, output_tokens: 0 };
+  const found = checkDarija(reply, { customer, avoid });
+  if (!found.length) return { text: reply, darija: null, usage };
+  const spelling = found.filter((i) => i.dialect === 'orthographe');
+  const issues = found.filter((i) => i.dialect !== 'orthographe');
+  const serious = (t: string) => checkDarija(t, { customer, avoid }).filter((i) => i.dialect !== 'orthographe').length;
+  let fixed = spelling.length ? fixDarija(reply, spelling, avoid) : reply;
+  let rewritten = false;
+  if (issues.length) {
+    try {
+      const res = await complete({ model, system: DARIJA_FIXER_SYSTEM, messages: [{ role: 'user', content: darijaRewritePrompt(fixed, issues) }], tools: [], max_tokens: 1024 });
+      usage.input_tokens += num(res.usage?.input_tokens);
+      usage.output_tokens += num(res.usage?.output_tokens);
+      const t = res.content
+        .map((b) => (b.type === 'text' ? b.text : ''))
+        .join('')
+        .trim()
+        .replace(/^[«"]\s*|\s*[»"]$/g, '');
+      if (t && serious(t) < issues.length) {
+        fixed = t;
+        rewritten = true;
+      }
+    } catch {
+      /* keep the safe fix below */
+    }
+  }
+  const left = checkDarija(fixed, { customer, avoid });
+  if (left.length) fixed = fixDarija(fixed, left, avoid);
+  return { text: fixed, darija: { issues: found, rewritten, left: checkDarija(fixed, { customer, avoid }) }, usage };
+}
 
 function toolLine(name: string, input: any, out: any): string {
   if (out?.error) return `${name} → ${out.error}`;

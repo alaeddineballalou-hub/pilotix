@@ -37,5 +37,22 @@ echo "→ website webhook"
 SKU=$(rpc "$ADMIN" orders.get "{\"id\":$OID}" >/dev/null; echo PX-POU-1)
 curl -fsS -X POST "$API/hooks/orders/site?key=demo-webhook-key" -H 'Content-Type: application/json' \
   -d "{\"name\":\"Client Site\",\"phone\":\"0770112233\",\"wilaya\":31,\"commune\":\"Oran\",\"items\":[{\"sku\":\"$SKU\",\"qty\":1}]}" | grep -q '"ok":true'
+echo "→ grouped action names";       rpc "$ADMIN" dellal.settings.get | grep -q '"verifyToken"'; rpc "$ADMIN" cm.settings.get | grep -q '"replyPublic"'
+echo "→ Meta comment webhook (CM AI agent): signed only, answered after the shop's delay"
+SECRET=smoke-app-secret
+merge() { node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const o=JSON.parse(s).settings;console.log(JSON.stringify(Object.assign(o,JSON.parse(process.argv[1]))))})" "$1"; }
+rpc "$ADMIN" dellal.settings.save "$(rpc "$ADMIN" dellal.settings.get | merge "{\"secrets\":{\"appSecret\":\"$SECRET\"}}")" >/dev/null
+rpc "$ADMIN" cm.settings.save "$(rpc "$ADMIN" cm.settings.get | merge '{"enabled":true,"delaySec":0}')" >/dev/null
+BODY='{"object":"page","entry":[{"id":"111","time":1,"changes":[{"field":"feed","value":{"item":"comment","verb":"add","comment_id":"999_smoke1","post_id":"111_999","parent_id":"111_999","message":"ch7al la poussette ?","from":{"id":"5551","name":"Smoke Test"},"created_time":1}}]}]}'
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/hooks/meta" -H 'Content-Type: application/json' --data-binary "$BODY")" = 401 ]
+SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/^.*= //')
+curl -fsS -X POST "$API/hooks/meta" -H 'Content-Type: application/json' -H "x-hub-signature-256: sha256=$SIG" --data-binary "$BODY" | grep -q '"received":1'
+# the demo page has no page token: the agent ran and the comment waits for a person, with the error
+ST=new
+for i in $(seq 1 30); do
+  ST=$(rpc "$CONF" cm.feed '{"tab":"all"}' | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const c=JSON.parse(s).rows.find(r=>r.externalId==='999_smoke1');console.log(c?c.status:'none')})")
+  [ "$ST" != new ] && [ "$ST" != none ] && break; sleep 0.5
+done
+[ "$ST" = error ]
 echo "→ cron needs its key";         [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/hooks/cron?key=x")" = 401 ]
 echo "✅ All server checks passed"

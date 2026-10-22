@@ -10,7 +10,7 @@ import { useSession } from '../lib/session';
 import { store } from '../lib/store';
 import { Field, Icon, StageBar, TicketTag } from '../ui/kit';
 import { Modal } from '../ui/modal';
-import { canSee, NAV } from './nav';
+import { canSee, canSeeChild, NAV, NavItem } from './nav';
 import { AccountMenu } from './AccountMenu';
 
 const AgentBanner = lazy(() => import('../pages/confirmation/AgentBanner').then((m) => ({ default: m.AgentBanner })));
@@ -46,12 +46,12 @@ export function useMenuCounts() {
       toShip: (c.follow.prepared ?? 0) + tk.prepared,
       onRoad: sum(c.follow, ['shipped', 'out_for_delivery', 'failed']) + tk.onRoad,
       lowStock: (c as { lowStock?: number }).lowStock ?? 0,
+      msgs: c.ai?.messages ?? 0,
+      cm: c.ai?.cm ?? 0,
     } as Record<string, number>;
   }, [q.data]);
 }
 
-/** Icons for the Commandes stages (shown when the sidebar is folded). */
-const SUB_ICON: Record<string, string> = { confirmation: 'phone', depot: 'package', suivi: 'route', livrees: 'checkcircle', annulees: 'xcircle' };
 /** Live count shown on each menu item: [count key, colour]. */
 const ITEM_COUNT: Record<string, [string, string]> = {
   accueil: ['new', 'nc-n'],
@@ -112,13 +112,20 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
   }, [navOpen]);
 
   const items = NAV.filter((n) => !n.hidden && canSee(n, roles, isAdmin));
-  const ordersPages = ['commandes', 'confirmation', 'depot', 'suivi', 'livrees', 'retournees'];
-  const grpItem = items.find((n) => n.children);
-  const [grpOpen, setGrpOpen] = useState(() => store.get('cmdgrp') !== 'closed');
-  const toggleGrp = () =>
+  /** a group's children this user sees */
+  const kids = (n: NavItem) => (n.children ?? []).filter((c) => canSeeChild(c, roles, isAdmin));
+  /** the group of the page on screen: its children show in a bar under the header when the sidebar is folded */
+  const curGrp = items.find((n) => n.children && n.pages?.includes(page));
+  /** the child of a group shown as current */
+  const childOn = (n: NavItem, id: string) => id === page || (page === n.id && sub === id);
+  // each group remembers whether it is open (Commandes keeps its old key)
+  const grpKey = (id: string) => (id === 'commandes' ? 'cmdgrp' : `grp-${id}`);
+  const [grpOpen, setGrpOpen] = useState<Record<string, boolean>>(() => Object.fromEntries(NAV.filter((n) => n.children).map((n) => [n.id, store.get(grpKey(n.id)) !== 'closed'])));
+  const toggleGrp = (id: string) =>
     setGrpOpen((o) => {
-      store.set('cmdgrp', o ? 'closed' : 'open');
-      return !o;
+      const next = !(o[id] ?? true);
+      store.set(grpKey(id), next ? 'open' : 'closed');
+      return { ...o, [id]: next };
     });
   const theme = store.get('theme') as Theme;
 
@@ -153,41 +160,39 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
         <div className="px-side-scroll">
         {items.map((n) =>
           n.children ? (
-            <div key={n.id} className={`nav-group open bjcn ${ordersPages.includes(page) ? 'bjcn-on in' : ''}`} data-grp={n.id}>
+            <div key={n.id} className={`nav-group open bjcn ${n.pages?.includes(page) ? 'bjcn-on in' : ''}`} data-grp={n.id}>
               <a
-                href="#/commandes"
+                href={n.href ?? kids(n)[0]?.href ?? '#/'}
                 className="nav-item nav-group-head"
                 title={t(`nav.${n.id}`)}
-                aria-current={page === 'commandes' && (!sub || sub === 'tout') ? 'page' : undefined}
-                aria-expanded={folded ? undefined : grpOpen}
+                aria-current={page === n.id && (!sub || sub === 'tout') ? 'page' : undefined}
+                aria-expanded={folded ? undefined : grpOpen[n.id] !== false}
                 onClick={(e) => {
-                  // open sidebar (or phone menu): the parent only shows / hides its stages; folded: it opens the Commandes page
+                  // open sidebar (or phone menu): the parent only shows / hides its children; folded: it opens the group's page
                   if (!folded || window.matchMedia('(max-width: 900px)').matches) {
                     e.preventDefault();
-                    toggleGrp();
+                    toggleGrp(n.id);
                   }
                 }}
               >
                 <Icon name={n.icon} className="ic" />
                 <span className="nav-l">{t(`nav.${n.id}`)}</span>
                 <svg className="px-chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d={grpOpen ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} />
+                  <path d={grpOpen[n.id] !== false ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} />
                 </svg>
               </a>
-              <div className={`nav-sub${grpOpen ? '' : ' px-sub-closed'}`} style={{ display: 'flex' }}>
-                {n.children
-                  .filter((c) => (c.id === 'confirmation' ? has('confirmation') : c.id === 'depot' ? has('depot') : c.id === 'suivi' ? has('suivi') : true))
-                  .map((c) => {
-                    const on = c.id === page || (page === 'commandes' && sub === c.id);
-                    const v = c.count ? counts[c.count] : undefined;
-                    return (
-                      <a key={c.id} href={c.href} className={`nav-item nav-sub-item ${on ? 'on' : ''}`} aria-current={on ? 'page' : undefined} title={`${t(`nav.sub.${c.id}`)}${v !== undefined ? ` · ${v}` : ''}`}>
-                        <Icon name={SUB_ICON[c.id] ?? 'list'} className="ic px-sub-ic" />
-                        <span className="nav-l">{t(`nav.sub.${c.id}`)}</span>
-                        {v !== undefined && <Count v={v} tone={c.id === 'confirmation' ? 'nc-n' : c.id === 'annulees' ? '' : c.id === 'livrees' ? 'nc-c' : 'nc-a'} />}
-                      </a>
-                    );
-                  })}
+              <div className={`nav-sub${grpOpen[n.id] !== false ? '' : ' px-sub-closed'}`} style={{ display: 'flex' }}>
+                {kids(n).map((c) => {
+                  const on = childOn(n, c.id);
+                  const v = c.count ? counts[c.count] : undefined;
+                  return (
+                    <a key={c.id} href={c.href} className={`nav-item nav-sub-item ${on ? 'on' : ''}`} aria-current={on ? 'page' : undefined} title={`${t(`nav.sub.${c.id}`)}${v !== undefined ? ` · ${v}` : ''}`}>
+                      <Icon name={c.icon ?? 'list'} className="ic px-sub-ic" />
+                      <span className="nav-l">{t(`nav.sub.${c.id}`)}</span>
+                      {v !== undefined && <Count v={v} tone={c.tone ?? 'nc-a'} />}
+                    </a>
+                  );
+                })}
               </div>
             </div>
           ) : (
@@ -264,13 +269,13 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
           </Suspense>
         )}
         <main id="page" className="page">
-          {/* Folded sidebar: only the parent items stay in the menu; the Commandes stages move into a bar under the header. */}
-          {folded && grpItem && ordersPages.includes(page) && (
+          {/* Folded sidebar: only the parent items stay in the menu; a group's children move into a bar under the header. */}
+          {folded && curGrp && (
             <div className="px-grp-bar">
               <StageBar
                 flow={false}
-                current={page === 'commandes' ? (sub === 'livrees' || sub === 'annulees' ? sub : '') : page}
-                items={grpItem.children!.filter((c) => (c.id === 'confirmation' ? has('confirmation') : c.id === 'depot' ? has('depot') : c.id === 'suivi' ? has('suivi') : true)).map((c) => ({ key: c.id, label: t(`nav.sub.${c.id}`), href: c.href, count: c.count ? counts[c.count] : undefined }))}
+                current={kids(curGrp).find((c) => childOn(curGrp, c.id))?.id ?? ''}
+                items={kids(curGrp).map((c) => ({ key: c.id, label: t(`nav.sub.${c.id}`), href: c.href, count: c.count ? counts[c.count] : undefined }))}
               />
             </div>
           )}
