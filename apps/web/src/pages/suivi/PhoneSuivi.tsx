@@ -148,7 +148,7 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Ord
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const key = (e: KeyboardEvent) => e.key === 'Escape' && !document.querySelector('dialog[open]') && closeRef.current();
+    const key = (e: KeyboardEvent) => e.key === 'Escape' && !document.querySelector('dialog[open], .modal-wrap') && closeRef.current();
     const back = () => closeRef.current();
     history.pushState({ pxsParcel: 1 }, '');
     window.addEventListener('keydown', key);
@@ -334,7 +334,7 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Ord
                       {when(e.at)}
                       {!isNote && e.userName ? ` · ${e.userName}` : ''}
                     </small>
-                    {e.note && <q className={isNote ? 'n' : ''}>{e.note}</q>}
+                    {e.note && <q className={isNote ? 'n' : bad ? '' : 'm'}>{e.note}</q>}
                   </li>
                 );
               })}
