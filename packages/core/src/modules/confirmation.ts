@@ -411,63 +411,98 @@ async function deliveryPerf(ctx: Ctx, i: KfInput & { on: 'created' | 'confirmed'
   };
 }
 
+/**
+ * En cours › Statistiques.
+ * Live block (no dates): every order of the En cours tab, so the numbers match the tab count.
+ * Period block (dates + basis): what the team turned into results — confirmation, recovery, complete attempts.
+ */
 async function enCours(ctx: Ctx, i: KfInput) {
   const now = ctx.now();
   const R = kfRange(now, i);
   const upd = i.basis === 'updated';
-  const col = upd ? 'updated_at' : 'created_at';
-  const ST = ['no_answer', 'busy', 'callback', 'postponed'];
-  const O = await ctx.db.query(
-    `SELECT id, ref, conf_status, attempts, next_call_at, agent_id, created_at, total FROM sales WHERE conf_status = ANY($1) AND ${col} >= $2 AND ${col} < $3`,
-    [ST, isoT(R.a), isoT(R.b)],
-  );
-  const rec = num(
-    (await ctx.db.query(`SELECT count(*)::int AS n FROM sales WHERE conf_status = 'confirmed' AND attempts >= 2 AND ${upd ? 'confirmed_at' : 'created_at'} >= $1 AND ${upd ? 'confirmed_at' : 'created_at'} < $2`, [isoT(R.a), isoT(R.b)]))[0]?.n,
-  );
-  const lost = num(
-    (
-      await ctx.db.query(
-        upd
-          ? `SELECT count(*)::int AS n FROM sales o WHERE o.conf_status = 'cancelled' AND o.attempts >= 2 AND EXISTS
-               (SELECT 1 FROM order_events e WHERE e.order_id = o.id AND e.kind = 'conf_status' AND e.to_value = 'cancelled' AND e.at >= $1 AND e.at < $2)`
-          : `SELECT count(*)::int AS n FROM sales WHERE conf_status = 'cancelled' AND attempts >= 2 AND created_at >= $1 AND created_at < $2`,
-        [isoT(R.a), isoT(R.b)],
-      )
-    )[0]?.n,
+  const ST = [...CONF_SUBS.attente] as string[];
+  const O = await ctx.db.query(`SELECT id, ref, conf_status, attempts, next_call_at, agent_id, created_at, total FROM sales WHERE conf_status = ANY($1)`, [ST]);
+  // orders settled on the period: confirmed, or cancelled by the client (not fake / duplicate / wrong number)
+  const S = await ctx.db.query(
+    upd
+      ? `SELECT o.agent_id, o.conf_status, o.attempts FROM sales o WHERE (o.conf_status = 'confirmed' AND o.confirmed_at >= $1 AND o.confirmed_at < $2)
+           OR (o.conf_status = 'cancelled' AND EXISTS (SELECT 1 FROM order_events e WHERE e.order_id = o.id AND e.kind = 'conf_status' AND e.to_value = 'cancelled' AND e.at >= $1 AND e.at < $2))`
+      : `SELECT agent_id, conf_status, attempts FROM sales WHERE conf_status IN ('confirmed', 'cancelled') AND created_at >= $1 AND created_at < $2`,
+    [isoT(R.a), isoT(R.b)],
   );
   const nx = (o: any) => (o.next_call_at ? Date.parse(iso(o.next_call_at)) : null);
   const isDue = (o: any) => nx(o) === null || nx(o)! <= now;
   const isLate = (o: any) => nx(o) !== null && nx(o)! < now - 30 * MIN;
   const late = O.filter(isLate).sort((a: any, b: any) => nx(a)! - nx(b)!);
   const later = O.filter((o: any) => nx(o) !== null && nx(o)! > now).sort((a: any, b: any) => nx(a)! - nx(b)!);
+  const oldest = [...O].sort((a: any, b: any) => Date.parse(iso(a.created_at)) - Date.parse(iso(b.created_at)))[0];
   const who = await names(ctx.db);
-  const M = new Map<string, { agentId: number | null; name: string | null; n: number; due: number; late: number; many: number }>();
+  type Row = { agentId: number | null; name: string | null; n: number; value: number; due: number; late: number; many: number; confirmed: number; cancelled: number; recovered: number; lost: number; complete: number };
+  const M = new Map<string, Row>();
+  const row = (agentId: unknown): Row => {
+    const k = String(agentId ?? '');
+    if (!M.has(k)) M.set(k, { agentId: numOrNull(agentId), name: agentId ? who.get(num(agentId)) ?? '—' : null, n: 0, value: 0, due: 0, late: 0, many: 0, confirmed: 0, cancelled: 0, recovered: 0, lost: 0, complete: 0 });
+    return M.get(k)!;
+  };
   for (const o of O) {
-    const k = String(o.agent_id ?? '');
-    if (!M.has(k)) M.set(k, { agentId: numOrNull(o.agent_id), name: o.agent_id ? who.get(num(o.agent_id)) ?? '—' : null, n: 0, due: 0, late: 0, many: 0 });
-    const v = M.get(k)!;
+    const v = row(o.agent_id);
     v.n++;
+    v.value += num(o.total);
     if (isDue(o)) v.due++;
     if (isLate(o)) v.late++;
     if (num(o.attempts) >= 3) v.many++;
   }
+  for (const o of S) {
+    const v = row(o.agent_id);
+    const a = num(o.attempts);
+    if (o.conf_status === 'confirmed') {
+      v.confirmed++;
+      if (a >= 2) v.recovered++;
+    } else {
+      v.cancelled++;
+      if (a >= 2) v.lost++;
+      if (a >= 3) v.complete++;
+    }
+  }
+  const rates = (v: Omit<Row, 'agentId' | 'name'>) => ({
+    confRate: pc(v.confirmed, v.confirmed + v.cancelled),
+    recoveryRate: pc(v.recovered, v.recovered + v.lost),
+    completeRate: pc(v.complete, v.cancelled),
+  });
+  const tot = [...M.values()].reduce(
+    (t, v) => {
+      for (const k of ['n', 'value', 'due', 'late', 'many', 'confirmed', 'cancelled', 'recovered', 'lost', 'complete'] as const) t[k] += v[k];
+      return t;
+    },
+    { n: 0, value: 0, due: 0, late: 0, many: 0, confirmed: 0, cancelled: 0, recovered: 0, lost: 0, complete: 0 },
+  );
+  const byAgent = [...M.values()]
+    .map((v) => ({ ...v, ...rates(v) }))
+    // best first: confirmation rate, then fewer late callbacks
+    .sort((a, b) => (b.confRate ?? -1) - (a.confRate ?? -1) || a.late - b.late || b.n - a.n);
   return {
+    // live
     count: O.length,
-    value: O.reduce((s: number, o: any) => s + num(o.total), 0),
-    dueNow: O.filter(isDue).length,
+    value: tot.value,
+    dueNow: tot.due,
     late: late.length,
     lateOldest: late[0] ? { ref: late[0].ref, since: iso(late[0].next_call_at) } : null,
     later: later.length,
     nextLater: later[0] ? { ref: later[0].ref, at: iso(later[0].next_call_at) } : null,
+    oldest: oldest ? { ref: oldest.ref, since: iso(oldest.created_at), attempts: num(oldest.attempts), agent: oldest.agent_id ? who.get(num(oldest.agent_id)) ?? '—' : null } : null,
     noAgent: O.filter((o: any) => !o.agent_id).length,
     avgAttempts: O.length ? O.reduce((s: number, o: any) => s + num(o.attempts), 0) / O.length : null,
-    many: O.filter((o: any) => num(o.attempts) >= 3).length,
+    many: tot.many,
     old: O.filter((o: any) => now - Date.parse(iso(o.created_at)) > 48 * 3_600_000).length,
-    recovered: rec,
-    lost,
-    recoveryRate: pc(rec, rec + lost),
     byStatus: Object.fromEntries(ST.map((s) => [s, O.filter((o: any) => o.conf_status === s).length])),
-    byAgent: [...M.values()].sort((a, b) => b.late - a.late || b.due - a.due || b.n - a.n),
+    // period
+    confirmed: tot.confirmed,
+    cancelled: tot.cancelled,
+    recovered: tot.recovered,
+    lost: tot.lost,
+    complete: tot.complete,
+    ...rates(tot),
+    byAgent,
   };
 }
 
