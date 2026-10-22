@@ -5,7 +5,7 @@ Source: the original single-file app (/home/claude/ref/legacy.html). Hash routin
 
 ## 1. Navigation (final layout)
 Menu shown: Accueil · Dashboard · Commandes{Confirmation, Dépôt, Suivi, Livré, Annulé (with counts)} · Scanner · SAV · Ma tournée (livreur) ·
-Produits & stock · Clients · Publicité (marketer) · Caisse (admin) · Sociétés de livraison (admin) · Utilisateurs (admin) · Management (admin) · Réglages (admin).
+Produits & stock · Clients · Marketing{Publicité, Marketer} (marketer) · Caisse (admin) · Sociétés de livraison (admin) · Utilisateurs (admin) · Management (admin) · Réglages (admin).
 Sub-pages appear as a stage bar at the top of the page (`.bjm-bar`, flow with › for Confirmation and Dépôt).
 
 | id | Label | Roles | Sub-pages |
@@ -22,7 +22,7 @@ Sub-pages appear as a stage bar at the top of the page (`.bjm-bar`, flow with �
 | tournee | Ma tournée | livreur | – |
 | produits | Produits & stock | depot | stock, produits, mouvements |
 | clients | Clients | confirmation, suivi | – |
-| publicite | Publicité | marketer | – |
+| marketing | Marketing | marketer | publicite "Publicité", marketer "Marketer" (old #/publicite opens Marketing › Publicité) |
 | caisse | Caisse | admin | due "À recevoir", done "Déjà reçu" |
 | livraison | Sociétés de livraison | admin | societes "Sociétés & tarifs", api "API Integration", livreurs |
 | utilisateurs | Utilisateurs | admin | roles, admins, vendeurs, agents, marketeurs, managers "Agent managers" |
@@ -155,6 +155,14 @@ Search "Nom ou téléphone…", "Liste noire seulement"; columns Client (+LISTE 
 Header period Du/Au, product filter, USD→DZD rate per month. KPIs Dépense pub, Commandes reçues / livrées, Coût par commande / par livrée, Bénéfice net après pub.
 Sections: Résultats par produit, Ad sets, Meta jour par jour, Pubs de cet ad set, Bénéfice réel · ligne par ligne, Mois par mois (closes), "Quel produit vend cet ad set ?".
 Diagnostics: Augmenter le budget, Couper, Hook faible, Fatigue des vidéos, Audience épuisée, La page ne convertit pas.
+
+### Marketing › Marketer (from the BabyJoy DZ "Marketeurs" tab)
+Paiement des marketeurs: each ad set is judged on its whole life (6 months): its share of the product's orders (by Meta purchases), net profit
+after Meta, delivery, confirmation and returns, "notre part" = net ÷ product margin. Réussi when notre part ≥ seuil (30 %) or net ≥ N × the
+marketer's price (3); judged once stopped and its parcels arrived (≤ 5 % open). KPIs À payer, Déjà payé, Taux de réussite, Coût marketeur par
+ad set, Bénéfice net des ad sets, En cours. Owner: assign marketers (one by one, all unassigned, or selection), result by hand, price per
+marketer, rules, pay / cancel a payment. Product page and ad set page (Meta day by day, 30-day orders, ads with hook / hold / LPV / conversion).
+A marketer sees his own ad sets, read only.
 
 ### Caisse (admin)
 "À recevoir": delivered uncashed grouped by company (Commande, Livrée, Client, Produits, Payé par le client, Net), check → "Argent reçu", Exporter. "Déjà reçu": Reçu le, Commande, Société, Client, Montant.

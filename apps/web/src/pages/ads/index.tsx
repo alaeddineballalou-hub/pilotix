@@ -7,9 +7,22 @@ import { da, n, pct, when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { store } from '../../lib/store';
-import { Empty, ErrorBox, Help, Loading } from '../../ui/kit';
+import { Empty, ErrorBox, Help, Loading, StageBar } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
+import { Marketer } from './Marketer';
 import './ads.css';
+
+/** Marketing: Publicité (Meta spend face to the real orders) and Marketer (paying marketers per ad set). */
+export function Marketing({ sub, rest }: PageProps) {
+  const { t } = useTranslation();
+  const cur = sub === 'marketer' ? 'marketer' : 'publicite';
+  return (
+    <>
+      <StageBar flow={false} current={cur} items={(['publicite', 'marketer'] as const).map((k) => ({ key: k, label: t(`nav.${k}`), href: `#/marketing/${k}` }))} />
+      {cur === 'marketer' ? <Marketer rest={rest} /> : <Publicite />}
+    </>
+  );
+}
 
 type PeriodKey = 'today' | 'yesterday' | 'thisweek' | 'lastweek' | 'month' | 'lastmonth' | 'custom';
 const PERIODS: PeriodKey[] = ['today', 'yesterday', 'thisweek', 'lastweek', 'month', 'lastmonth', 'custom'];
@@ -43,7 +56,7 @@ const dz = (v: number | null | undefined) => (v === null || v === undefined || !
 const monthLabel = (ym: string, lang: string) => new Date(ym + '-15T00:00:00Z').toLocaleDateString(lang === 'ar' ? 'ar-DZ' : lang, { month: 'long', year: 'numeric' });
 const dayLabel = (d: string, lang: string) => new Date(d + 'T12:00:00Z').toLocaleDateString(lang === 'ar' ? 'ar-DZ' : lang, { weekday: 'short', day: 'numeric', month: 'short' });
 
-export function Publicite(_: PageProps) {
+export function Publicite(_: Partial<PageProps> = {}) {
   const { t, i18n } = useTranslation();
   const { has } = useSession();
   const owner = has('vendeur');
