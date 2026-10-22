@@ -369,12 +369,12 @@ const COL_MIN = 64;
 /** Widest a column can be made (px). */
 const COL_MAX = 600;
 const MIN_W: Record<string, number> = {
-  order: 92, source: 76, tracking: 96, creator: 76, channel: 76, product: 90, sku: 76, chrono: 96, name: 92, phone: 100, wilaya: 92, commune: 92,
+  order: 92, source: 76, tracking: 96, creator: 76, channel: 76, product: 90, sku: 76, chrono: 96, name: 92, phone: 104, wilaya: 92, commune: 92,
   agent: 98, fagent: 92, total: 84, time: 88, created: 84, stock: 72, desk: 72, passed: 76, confirmed: 84, follow: 96, next: 88, status: 128, since: 72,
 };
 /** Each column's comfortable width (px): used when the card has room; with less room, every column gives up the same part of its spare width. */
 const NAT_W: Record<string, number> = {
-  order: 100, source: 100, tracking: 130, creator: 96, channel: 92, product: 210, variant: 130, sku: 120, chrono: 110, name: 150, phone: 166,
+  order: 100, source: 100, tracking: 130, creator: 96, channel: 92, product: 210, variant: 130, sku: 120, chrono: 110, name: 150, phone: 170,
   wilaya: 110, commune: 110, agent: 112, fagent: 104, total: 100, time: 118, created: 132, stock: 98, desk: 92, passed: 98, confirmed: 132,
   follow: 130, next: 130, status: 140, since: 96,
 };
@@ -382,7 +382,9 @@ const NAT_W: Record<string, number> = {
  * Smallest a column may get when the card is short of room (px; otherwise 80% of its minimum): long values then end with "…".
  * Never narrower than its header's longest word. Below that, the table scrolls sideways.
  */
-const HARD_W: Record<string, number> = { phone: 100, chrono: 94, total: 84, status: 108, order: 84 };
+const HARD_W: Record<string, number> = { phone: 104, chrono: 94, total: 84, status: 108, order: 84 };
+/** Columns showing a pill, a badge or buttons: their size does not follow the row size (compact, normal, large). The widths above are for normal rows (14 px text). */
+const PILL_K = new Set(['status', 'chrono', 'agent', 'fagent', 'stock', 'desk', 'since', 'phone']);
 /** Text columns: on a wide screen they get the room left over. */
 const TEXT_K = new Set(['product', 'variant', 'name', 'wilaya', 'commune', 'source', 'creator', 'follow']);
 /** Width of the small columns that are never resized (expand, tick box, row buttons) until their content is measured (px). */
@@ -425,8 +427,8 @@ function readWidths(stored: Record<string, number>) {
 }
 
 /** Default widths: every column at its comfortable width, all of them closer to their minimum when the card is short of room; extra room goes to the text columns. */
-function defaults(data: string[], mins: number[], area: number) {
-  const nats = data.map((k, i) => Math.max(mins[i], NAT_W[k] ?? 120));
+function defaults(data: string[], mins: number[], comfy: number[], area: number) {
+  const nats = comfy.map((n, i) => Math.max(mins[i], n));
   const sMin = sum(mins);
   const sNat = sum(nats);
   if (area <= sMin) return mins.slice();
@@ -466,7 +468,7 @@ function settle(want: number[], mins: number[], area: number) {
  * saved as shares of the table, so they fit any screen. `keys`: every column in display order, with the small fixed ones
  * ('_exp', '_ck', '_act'), which keep the width of their content. A card too narrow for every column at its minimum scrolls sideways.
  */
-export function useResizable(stored: Record<string, number>, save: (m: Record<string, number> | null) => void, label: string, keys: string[]) {
+export function useResizable(stored: Record<string, number>, save: (m: Record<string, number> | null) => void, label: string, keys: string[], dens = '') {
   const [wrap, setWrap] = useState<HTMLElement | null>(null);
   const [cw, setCw] = useState(0);
   useLayoutEffect(() => {
@@ -480,8 +482,9 @@ export function useResizable(stored: Record<string, number>, save: (m: Record<st
   const data = keys.filter((k) => !k.startsWith('_'));
   const fixedKeys = keys.filter((k) => k.startsWith('_'));
 
-  // measured when the columns, the language or the rows change: the fixed columns' content and each header's longest word
-  const [meas, setMeas] = useState<{ fixed: Record<string, number>; head: Record<string, number> }>({ fixed: {}, head: {} });
+  // measured when the columns, the language, the row size or the rows change: the fixed columns' content, each header's
+  // longest word, and the rows' text size (`fr`: 1 for normal rows)
+  const [meas, setMeas] = useState<{ fixed: Record<string, number>; head: Record<string, number>; fr: number }>({ fixed: {}, head: {}, fr: 1 });
   const sig = useRef('');
   const [, remeasure] = useReducer((x: number) => x + 1, 0);
   useEffect(() => {
@@ -499,7 +502,8 @@ export function useResizable(stored: Record<string, number>, save: (m: Record<st
     const table = wrap?.querySelector<HTMLTableElement>(':scope > table');
     if (!table) return;
     const rows = Array.from(table.tBodies[0]?.rows ?? []).filter((r) => !r.classList.contains('qdetail'));
-    const s = `${keys.join(',')}|${label}|${rows.length}|${(rows[0]?.textContent ?? '').slice(0, 80)}`;
+    const fs = parseFloat(getComputedStyle(rows[0]?.cells[0] ?? table).fontSize) || 14;
+    const s = `${keys.join(',')}|${label}|${dens}|${fs}|${rows.length}|${(rows[0]?.textContent ?? '').slice(0, 80)}`;
     if (s === sig.current) return;
     sig.current = s;
     const fixed: Record<string, number> = {};
@@ -517,11 +521,13 @@ export function useResizable(stored: Record<string, number>, save: (m: Record<st
       if (fx) fixed[k] = Math.max(fixed[k] ?? 0, w);
       else head[k] = w + 2;
     });
-    const next = { fixed, head };
+    const next = { fixed, head, fr: Math.round((fs / 14) * 1000) / 1000 };
     setMeas((o) => (JSON.stringify(o) === JSON.stringify(next) ? o : next));
   });
 
-  const minOf = (k: string) => Math.max(MIN_W[k] ?? COL_MIN, meas.head[k] ?? 0);
+  /** text grows and shrinks with the row size; pills and buttons keep theirs */
+  const sz = (k: string, w: number) => Math.round(PILL_K.has(k) ? w : w * meas.fr);
+  const minOf = (k: string) => Math.max(sz(k, MIN_W[k] ?? COL_MIN), meas.head[k] ?? 0);
   /** a small fixed column keeps the width of its content, up to 30% of the card (wider row buttons go onto two lines) */
   const fixedW = (k: string, width: number) => Math.min(meas.fixed[k] ?? FIXED_W[k] ?? 60, Math.max(120, Math.round(width * 0.3)));
   const saved = readWidths(stored);
@@ -534,11 +540,11 @@ export function useResizable(stored: Record<string, number>, save: (m: Record<st
   const layout = (width: number) => {
     const avail = width - sum(fixedKeys.map((k) => fixedW(k, width)));
     const soft = data.map(minOf);
-    const hard = data.map((k, i) => Math.max(meas.head[k] ?? 0, Math.min(soft[i], HARD_W[k] ?? Math.round((MIN_W[k] ?? COL_MIN) * 0.8))));
+    const hard = data.map((k, i) => Math.max(meas.head[k] ?? 0, Math.min(soft[i], sz(k, HARD_W[k] ?? (MIN_W[k] ?? COL_MIN) * 0.8))));
     let mins = soft;
     if (avail < sum(soft)) {
       const t = Math.min(1, Math.max(0, (avail - sum(hard)) / (sum(soft) - sum(hard) || 1)));
-      mins = soft.map((m, i) => Math.round(hard[i] + (m - hard[i]) * t));
+      mins = soft.map((m, i) => Math.floor(hard[i] + (m - hard[i]) * t));
     }
     const area = Math.max(avail, sum(mins));
     let want: number[];
@@ -549,7 +555,13 @@ export function useResizable(stored: Record<string, number>, save: (m: Record<st
       const f = data.map((k) => (saved[k] > 0 ? saved[k] : avg));
       const s = sum(f) || 1;
       want = f.map((x) => (x / s) * area);
-    } else want = defaults(data, mins, area);
+    } else
+      want = defaults(
+        data,
+        mins,
+        data.map((k) => sz(k, NAT_W[k] ?? 120)),
+        area,
+      );
     const r = settle(want, mins, area).map((w) => Math.round(w));
     // whole pixels that still add up to the area
     const diff = Math.round(area) - sum(r);

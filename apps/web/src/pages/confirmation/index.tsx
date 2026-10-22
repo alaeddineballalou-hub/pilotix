@@ -157,8 +157,8 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   const drag = colDrag(order, setOrder);
   // column widths: each user's own
   const wkeys = ['_exp', '_ck', ...cols.map((c) => c.k), '_act'];
-  const rs = useResizable(tc.widths, tc.setWidths, t('common.resizeCol'), wkeys);
   const [dens, setDens] = useDensity();
+  const rs = useResizable(tc.widths, tc.setWidths, t('common.resizeCol'), wkeys, dens);
   const selected = rows.filter((r) => sel.has(r.id));
   const nFilters = Object.values(f).filter((v) => v !== undefined && v !== '').length;
   const shop = meta.data?.shopName ?? 'Pilotix';
