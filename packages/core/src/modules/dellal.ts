@@ -937,6 +937,8 @@ export async function runFollowUps(ctx: Ctx): Promise<{ sent: number }> {
        AND c.last_customer_at > now() - interval '23 hours'
        AND c.last_message_at < now() - make_interval(hours => $1)
        AND (SELECT role FROM conv_messages m WHERE m.conversation_id = c.id AND m.role <> 'tool' ORDER BY id DESC LIMIT 1) = 'agent'
+       -- a customer answering a delivery message (Delivery AI agent) already ordered: no sales follow-up
+       AND NOT EXISTS (SELECT 1 FROM conv_messages m WHERE m.conversation_id = c.id AND m.meta ? 'notify')
      LIMIT 50`,
     [s.followUpHours],
   );
