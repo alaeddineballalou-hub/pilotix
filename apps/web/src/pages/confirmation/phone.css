@@ -40,13 +40,20 @@
 /* ---- the editor in phone mode: one column — customer, delivery, products, offers, totals, notes ---- */
 .qd6.qd6-ph .qd6-grid { display: flex !important; flex-direction: column; gap: 10px; }
 .qd6.qd6-ph .qd6-left, .qd6.qd6-ph .qd6-right { display: contents !important; }
+/* notes first (what the customer wrote, for the livreur, for the team), then the customer, delivery, products, offers, totals */
+.qd6.qd6-ph .qd6-notes { order: 0; }
 .qd6.qd6-ph .qd6-client { order: 1; }
 .qd6.qd6-ph .qd6-deliv { order: 2; }
 .qd6.qd6-ph .qd6-left > section.qd6-card:not(.qd6-notes):not(.qd6-related) { order: 3; }
 .qd6.qd6-ph .qd6-related { order: 4; }
 .qd6.qd6-ph .qd6-rail { order: 5; position: static !important; }
-.qd6.qd6-ph .qd6-notes { order: 6; }
-.qd6.qd6-ph .qd6-card, .qd6.qd6-ph .qd6-rail { padding: 12px !important; border-radius: 14px; }
+/* every card the same width: the whole screen minus the 12 px margins */
+.qd6.qd6-ph .qd6-grid { align-items: stretch !important; }
+.qd6.qd6-ph .qd6-grid > *, .qd6.qd6-ph .qd6-left > *, .qd6.qd6-ph .qd6-right > * { width: 100% !important; max-width: 100% !important; min-width: 0 !important; margin: 0 !important; box-sizing: border-box; align-self: stretch !important; }
+.qd6.qd6-ph .qd6-card, .qd6.qd6-ph .qd6-rail { padding: 14px !important; border-radius: 14px; }
+/* Pilotix: white cards with a light border; the totals keep their orange frame */
+.qd6.qd6-ph .qd6-card { border: 1px solid var(--line) !important; background: var(--surface); box-shadow: 0 1px 2px rgba(27, 42, 71, .04); }
+.qd6.qd6-ph .qd6-rail { border: 2px solid #F7A823 !important; box-shadow: 0 6px 22px rgba(242, 139, 30, .12); }
 .qd6-flds { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
 .qd6-fld { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); min-width: 0; }
 .qd6-fld.wide { grid-column: 1 / -1; }
