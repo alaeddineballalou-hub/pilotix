@@ -1,0 +1,28 @@
+name: Change preview (for Claude)
+# Builds the in-browser demo from a preview/* branch so a change can be looked at before it reaches main.
+on:
+  push:
+    branches: ['preview/**']
+concurrency:
+  group: preview-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm run build:artifact -w @pilotix/web
+      - name: Publish to the artifact-preview branch
+        run: |
+          cp -r apps/web/dist-artifact /tmp/out && cd /tmp/out
+          git init -q -b artifact-preview
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -qm "Change preview from ${GITHUB_SHA::7} (${GITHUB_REF_NAME})"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" artifact-preview
