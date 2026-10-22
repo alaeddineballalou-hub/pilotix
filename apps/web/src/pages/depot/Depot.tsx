@@ -14,6 +14,8 @@ import { DepotOrderList, itemsLine } from './OrderList';
 import { ScanCard } from './ScanCard';
 import { trackOf } from '../../lib/items';
 import { CopyCode } from '../../ui/CopyCode';
+import { useIsPhone } from '../../lib/useMedia';
+import { PhonePrep } from './PhonePrep';
 
 const STAGES = ['preparer', 'prepares', 'dispatchees', 'enlivraison', 'retours'] as const;
 type Stage = (typeof STAGES)[number];
@@ -23,6 +25,8 @@ export function Depot({ sub }: PageProps) {
   const stage: Stage = (STAGES as readonly string[]).includes(sub ?? '') ? (sub as Stage) : 'preparer';
   const counts = useRpc('depot.counts', {}, { refetchInterval: 60_000 });
   const c = counts.data;
+  // phones: the first stage is products first (pick), then the orders that have everything (pack, partner, dispatch)
+  const phone = useIsPhone();
   return (
     <>
       <nav className="bjm-bar flow" aria-label={t('depot.title')} data-g="depot">
@@ -40,8 +44,8 @@ export function Depot({ sub }: PageProps) {
           </span>
         ))}
       </nav>
-      <Card title={t(`depot.stage.${stage}`)} />
-      {stage === 'preparer' && <Preparer />}
+      {!(phone && stage === 'preparer') && <Card title={t(`depot.stage.${stage}`)} />}
+      {stage === 'preparer' && (phone ? <PhonePrep /> : <Preparer />)}
       {stage === 'prepares' && <Prepares />}
       {stage === 'dispatchees' && <Dispatchees />}
       {stage === 'enlivraison' && <EnLivraison />}
@@ -179,7 +183,7 @@ function CompanyBulk({ ids, done }: { ids: number[]; done: () => void }) {
 }
 
 /** Assign a delivery partner to the orders, then push them to "En dispatch". */
-function useToDispatch() {
+export function useToDispatch() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
