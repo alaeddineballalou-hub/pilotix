@@ -32,6 +32,7 @@ const VIEW: Record<Stage, 'attente' | 'depot' | 'livraison' | 'satisfaction' | '
 const TYPE_ICON: Record<string, string> = { defect: 'wrench', missing: 'boxminus', wrong: 'shirt', late: 'timer', notdelivered: 'truck', refund: 'coins', exchange: 'swap', help: 'help', other: 'chat' };
 export const FACES = ['', 'frown', 'meh', 'smile', 'laugh'];
 const DELIVERED = ['delivered', 'exchanged'];
+const ON_ROAD = ['shipped', 'out_for_delivery', 'alert', 'failed', 'in_exchange'];
 const LATE_MS = 48 * 3_600_000;
 const store = {
   get: (k: string) => {
@@ -373,14 +374,16 @@ function CallFlow({ onClose, onOpen }: { onClose: () => void; onOpen: (id: numbe
     if (pre.data && !order) setOrder(pre.data);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pre.data]);
-  const found = useRpc('sav.findOrder', { q: deb }, { enabled: deb.length >= 2 && !order && !without });
+  const found = useRpc('sav.findOrder', { q: deb, deliveredFirst: true }, { enabled: deb.length >= 2 && !order && !without });
   const digits = deb.replace(/\D/g, '');
   const openT = useRpc('sav.list', { view: 'todo', q: digits.length >= 6 ? digits : order?.phone ?? '' }, { enabled: digits.length >= 6 || !!order?.phone });
   const already = (openT.data?.rows ?? []).filter((x) => !order || x.orderId === order.id || x.phone === order.phone);
   const step = order || without ? 2 : 1;
 
   const delivered = (found.data ?? []).filter((o) => DELIVERED.includes(o.followStatus ?? ''));
-  const notYet = (found.data ?? []).filter((o) => !DELIVERED.includes(o.followStatus ?? ''));
+  // on the road: no SAV before delivery, it is a réclamation in Suivi; not shipped yet: only counted
+  const notYet = (found.data ?? []).filter((o) => ON_ROAD.includes(o.followStatus ?? ''));
+  const notShipped = (found.data ?? []).length - delivered.length - notYet.length;
   const toClaim = (o: Order) => {
     try {
       sessionStorage.setItem('px-rec-q', o.ref);
@@ -460,8 +463,11 @@ function CallFlow({ onClose, onOpen }: { onClose: () => void; onOpen: (id: numbe
               <p className="pxv-help">{t('sav.ph.findHelp')}</p>
             ) : found.isFetching && !found.data ? (
               <Loading />
-            ) : !found.data?.length ? (
-              <p className="pxv-help">{t('sav.form.noOrder')}</p>
+            ) : !delivered.length && !notYet.length ? (
+              <p className="pxv-help">
+                {t('sav.form.noOrder')}
+                {notShipped > 0 ? ` ${t('sav.ph.notShipped', { count: notShipped })}` : ''}
+              </p>
             ) : (
               <>
                 {delivered.length > 0 && <div className="pxv-lbl">{t('sav.ph.delivered', { count: delivered.length })}</div>}
@@ -492,7 +498,7 @@ function CallFlow({ onClose, onOpen }: { onClose: () => void; onOpen: (id: numbe
                         <span className="ltr">{o.ref}</span> · {o.customerName}
                       </b>
                       <small>
-                        {o.followStatus ? t(`status.follow.${o.followStatus}`) : t(`status.conf.${o.confStatus}`)} · {t('sav.ph.notPaid')}
+                        {t(`status.follow.${o.followStatus}`)} · {o.companyName || o.livreurName || ''} · {t('sav.ph.notPaid')}
                       </small>
                     </span>
                     <span className="pxv-go">
@@ -500,6 +506,7 @@ function CallFlow({ onClose, onOpen }: { onClose: () => void; onOpen: (id: numbe
                     </span>
                   </button>
                 ))}
+                {notShipped > 0 && <p className="pxv-help">{t('sav.ph.notShipped', { count: notShipped })}</p>}
               </>
             )}
             {already.length > 0 && (

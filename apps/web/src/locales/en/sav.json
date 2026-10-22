@@ -318,7 +318,9 @@
     "otherFee": "Other…",
     "takeBack": "The courier brings the new item and takes the old one back.",
     "partsStay": "Only the parts leave; the item stays with the customer.",
-    "sendDepot": "Send to the depot"
+    "sendDepot": "Send to the depot",
+    "notShipped_one": "{{count}} other order not shipped yet (no after-sales).",
+    "notShipped_other": "{{count}} other orders not shipped yet (no after-sales)."
   },
   "sat": {
     "1": "Unhappy",
