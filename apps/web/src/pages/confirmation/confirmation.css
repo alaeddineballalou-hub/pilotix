@@ -2,8 +2,5 @@
 .modal-wrap .modal.conf-modal { background: var(--surface); color: var(--ink); border-radius: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, .35); overflow: hidden; }
 .modal-wrap .modal.conf-modal .modal-foot { padding: 10px 16px 14px; }
 
-/* En cours › Statistiques: agent table under the KPI grid */
-.px-ek-agents { padding: 0 18px 18px; }
-.px-ek-agents h3 { margin: 4px 0 10px; font-size: 15px; }
-.px-ek-agents p { margin: 8px 0 0; }
-@media (max-width: 760px) { .px-ek-agents { padding: 0 12px 12px; } }
+/* En cours › Statistiques */
+.px-ek-legend { margin: 8px 0 0; }
