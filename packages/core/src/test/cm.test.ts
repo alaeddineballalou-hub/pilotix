@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db, ServerHooks } from '../index';
 import { parseMetaComments } from '../dellal-server';
-import { CM_LINES, guard, langOf } from '../modules/cm';
+import { CM_LINES, guard, langOf, phoneOf } from '../modules/cm';
 import { checkDarija } from '../modules/darija';
 import { EMAILS, setup } from './harness';
 
@@ -15,7 +15,7 @@ before(async () => {
 });
 
 /** A fake server: the AI answers with a scripted list, and every Meta action is recorded. */
-function fakeServer(script: any[], log: { action: string; args: any }[], opts: { failPublic?: boolean } = {}): ServerHooks {
+function fakeServer(script: any[], log: { action: string; args: any }[], opts: { failPublic?: boolean; failPrivate?: boolean } = {}): ServerHooks {
   return {
     courier: async () => ({}),
     meta: async () => ({}),
@@ -31,7 +31,10 @@ function fakeServer(script: any[], log: { action: string; args: any }[], opts: {
         if (opts.failPublic) throw new Error('Facebook : permission manquante');
         return { id: `reply-${args.commentId}` };
       }
-      if (action === 'cmPrivate') return { recipientId: `psid-${args.commentId}`, messageId: 'm_x' };
+      if (action === 'cmPrivate') {
+        if (opts.failPrivate) throw new Error('Instagram : la personne n’accepte pas les messages');
+        return { recipientId: `psid-${args.commentId}`, messageId: 'm_x' };
+      }
       if (action === 'cmPost') return { caption: null, permalink: null };
       return { ok: true };
     },
@@ -84,12 +87,18 @@ test('demo comments: answered, private messages, hidden spam and phone, a compla
   assert.match(phone.privateReply, /Blida/);
   const complaint = by(/wsalni walou/);
   assert.equal(complaint.status, 'handoff');
-  assert.equal(complaint.hidden, false, 'a complaint is never hidden');
+  assert.equal(complaint.hidden, false, 'a complaint is not hidden');
+  // an angry customer who insults: hidden (vulgar), but it reaches the team with a private message
+  const rude = by(/nsabin/);
+  assert.equal(rude.status, 'handoff');
+  assert.equal(rude.hidden, true);
+  assert.equal(rude.intent, 'complaint');
+  assert.ok(rude.privateReply);
   assert.equal(by(/Machallah/).publicReply, CM_LINES.thanks.dz);
   assert.equal(by(/^Amina Boudiaf$/).status, 'ignored');
   const arabic = by(/لوهران/);
   assert.match(arabic.privateReply, /التوصيل لـ وهران: \d+ دج للدار/);
-  assert.equal(f.counts.todo, 5, '4 new + the complaint waiting for a person');
+  assert.equal(f.counts.todo, 6, '4 new + 2 complaints waiting for a person');
   // the private messages opened conversations in Message AI agent: the comment first, then the CM AI agent's message
   const c: any = await call('dellal.conversation', conf, { id: price.conversationId });
   assert.equal(c.conversation.channel, 'messenger');
@@ -109,7 +118,7 @@ test('demo comments: answered, private messages, hidden spam and phone, a compla
   assert.equal(results.replied, 1);
   // the menu counts
   const counts: any = await call('orders.counts', conf, {});
-  assert.equal(counts.ai.cm, 5);
+  assert.equal(counts.ai.cm, 6);
   assert.ok(counts.ai.messages >= 1);
 });
 
@@ -262,6 +271,121 @@ test('guardrails: no price in public, one private message per person and post, p
   assert.equal(out.status, 'hidden');
 });
 
+test('a complaint always reaches the team: with a link it stays visible, with insults it is hidden', async () => {
+  await enableAi();
+  await cmSave({ enabled: true, hideSpam: true, hidePhones: true, sendPrivate: true, replyPublic: true });
+  const sys = await as(
+    EMAILS.admin,
+    fakeServer(
+      [
+        ai({ intent: 'spam', hide: true, reason: 'lien' }),
+        ai({ intent: 'complaint', hide: false, public_reply: 'Smhoulna 🙏', private_reply: 'Ab3toulna le numéro', reason: 'réclamation' }),
+      ],
+      [],
+    ),
+  );
+  // the AI said "spam", but the rules see a complaint first: never decided by rule, and a link alone does not hide it
+  const a: any = await call('cm.receive', sys, comment('arnaque, voir le suivi sur yalidine.com, ma wsalni walou'));
+  const outA: any = await call('cm.run', sys, { id: a.commentId });
+  assert.equal(outA.by, 'ai');
+  const b: any = await call('cm.receive', sys, comment('Nassabin ! ma wsalni walou, 9a7ba'));
+  const outB: any = await call('cm.run', sys, { id: b.commentId });
+  assert.equal(outB.status, 'handoff');
+  const row = (await db.query('SELECT * FROM cm_comments WHERE id = $1', [b.commentId]))[0];
+  assert.equal(row.hidden, true, 'vulgar: hidden');
+  assert.equal(row.public_reply, null, 'no public answer under a hidden comment');
+  assert.equal(row.private_sent, true, 'the customer still gets a private message');
+});
+
+test('a private message that fails: no "answered in private" in public, and the comment stays to handle', async () => {
+  await enableAi();
+  await cmSave({ enabled: true });
+  const log: any[] = [];
+  const sys = await as(EMAILS.admin, fakeServer([ai({ intent: 'price', public_reply: 'Jawbnakom f privé 📩', private_reply: 'Salam 👋 12 900 DA', reason: 'prix' })], log, { failPrivate: true }));
+  const r: any = await call('cm.receive', sys, comment('ch7al ?'));
+  const out: any = await call('cm.run', sys, { id: r.commentId });
+  assert.equal(out.status, 'error');
+  const reply = log.find((l) => l.action === 'cmReply');
+  assert.equal(reply.args.text, CM_LINES.writeUs.dz);
+  const row = (await db.query('SELECT * FROM cm_comments WHERE id = $1', [r.commentId]))[0];
+  assert.equal(row.private_sent, false);
+  assert.match(row.send_error, /Message privé/);
+  // answering again only does what is missing: the public reply is not posted twice
+  const again: any[] = [];
+  const conf = await as(EMAILS.conf, fakeServer([ai({ intent: 'price', public_reply: 'Jawbnakom f privé 📩', private_reply: 'Salam 👋', reason: 'prix' })], again));
+  const second: any = await call('cm.answer', conf, { id: r.commentId });
+  assert.equal(second.status, 'answered');
+  assert.deepEqual(
+    again.map((l) => l.action),
+    ['cmPrivate'],
+  );
+});
+
+test('two comments of one person at the same time: one private message', async () => {
+  await enableAi();
+  await cmSave({ enabled: true });
+  const log: any[] = [];
+  const slow = (j: any) => () => new Promise((res) => setTimeout(() => res(ai(j)), 30));
+  const sys = await as(
+    EMAILS.admin,
+    fakeServer(
+      [slow({ intent: 'price', public_reply: 'Jawbnakom f privé 📩', private_reply: 'Salam 1', reason: 'prix' }), slow({ intent: 'price', public_reply: 'Jawbnakom f privé 📩', private_reply: 'Salam 2', reason: 'prix' })],
+      log,
+    ),
+  );
+  const a: any = await call('cm.receive', sys, { ...comment('ch7al ?'), authorId: 'twice' });
+  const b: any = await call('cm.receive', sys, { ...comment('ch7al la rose ?'), authorId: 'twice' });
+  await Promise.all([call('cm.run', sys, { id: a.commentId }), call('cm.run', sys, { id: b.commentId })]);
+  assert.equal(log.filter((l) => l.action === 'cmPrivate').length, 1);
+});
+
+test('the AI keeps failing: tried again, then left to a person', async () => {
+  await enableAi();
+  await cmSave({ enabled: true });
+  const boom = () => {
+    throw new Error('IA (Anthropic) limite les demandes pour l’instant.');
+  };
+  const sys = await as(EMAILS.admin, fakeServer([boom, boom, boom], []));
+  const r: any = await call('cm.receive', sys, comment('prix ?'));
+  for (let i = 0; i < 3; i++) await assert.rejects(call('cm.run', sys, { id: r.commentId }), /limite/);
+  const row = (await db.query('SELECT status, send_error FROM cm_comments WHERE id = $1', [r.commentId]))[0];
+  assert.equal(row.status, 'error');
+  assert.match(row.send_error, /limite/);
+});
+
+test('public replies never carry a price (when private), a phone number or a link; numbers in Arabic digits too', () => {
+  const f: any = { channel: 'facebook', phone: null, alreadyPrivate: false, alreadyPublic: false, tooOld: false, lang: 'dz', body: 'ch7al ?' };
+  const s: any = { replyPublic: true, showPrice: false, sendPrivate: true, hideSpam: true, hidePhones: true, banned: '' };
+  for (const pub of ['b 12 900 ✅', 'Prix : 12900', 'b melyoun w 290', 'السعر ١٢٩٠٠ دج', 'Appelez le 0555 12 34 56', 'Appelez le ٠٥٥٥١٢٣٤٥٦', 'Fixe : 021 23 45 67', 'Voir boutique.fr']) {
+    const d = guard({ intent: 'price', hide: false, publicReply: pub, privateReply: 'Salam 👋', handoff: false, reason: '' }, f, s);
+    assert.equal(d.publicReply, CM_LINES.privateDone.dz, pub);
+  }
+  // a phone number written in Arabic digits, or a landline, is found in the comment
+  assert.equal(phoneOf('nheb wahda ٠٦٦١٢٣٤٥٦٧'), '0661234567');
+  assert.equal(phoneOf('fixe 021 23 45 67 Alger'), '021234567');
+  // tagged friends do not decide the language
+  assert.equal(langOf('Amina Benali شحال السعر'), 'ar');
+  assert.equal(langOf('@ines شحال'), 'ar');
+  assert.equal(langOf('Salam, ch7al ?'), 'dz');
+});
+
+test('the sweep: channels turned off wait without blocking the others', async () => {
+  await enableAi();
+  await cmSave({ enabled: true, delaySec: 0, nightReplies: true, channels: { facebook: true, instagram: false, tiktok: false } });
+  const old = new Date(Date.now() - 10 * 60_000).toISOString();
+  const sys = await as(EMAILS.admin, fakeServer([], []));
+  for (let i = 0; i < 31; i++) {
+    const r: any = await call('cm.receive', sys, { ...comment(`ig ${i} prix ?`), channel: 'instagram', postId: 'IGMEDIA' });
+    await db.query('UPDATE cm_comments SET created_at = $2 WHERE id = $1', [r.commentId, old]);
+  }
+  const fb: any = await call('cm.receive', sys, comment('fb prix ?'));
+  await db.query('UPDATE cm_comments SET created_at = $2 WHERE id = $1', [fb.commentId, new Date(Date.now() - 5 * 60_000).toISOString()]);
+  await call('cm.sweep', sys, {});
+  const row = (await db.query('SELECT status FROM cm_comments WHERE id = $1', [fb.commentId]))[0];
+  assert.notEqual(row.status, 'new');
+  await cmSave({ channels: { facebook: true, instagram: true, tiktok: false } });
+});
+
 test('the shop’s settings change the decision', () => {
   const f: any = { channel: 'facebook', phone: null, alreadyPrivate: false, alreadyPublic: false, tooOld: false, lang: 'fr' };
   const s: any = { replyPublic: true, showPrice: true, sendPrivate: false, hideSpam: false, hidePhones: false };
@@ -399,24 +523,33 @@ test('tester, posts and results', async () => {
 
 test('a person answers, writes in private, hides, ignores', async () => {
   const conf = await as(EMAILS.conf);
-  const f: any = await call('cm.feed', conf, { tab: 'todo' });
-  const c = f.rows.find((x: any) => x.status === 'new' && x.channel === 'facebook');
-  await call('cm.reply', conf, { id: c.id, body: 'Jawbnakom f privé 📩' });
-  await call('cm.private', conf, { id: c.id, body: 'Salam, la chaise b 8 900 DA.' });
-  let row: any = ((await call('cm.feed', conf, { tab: 'all' })) as any).rows.find((x: any) => x.id === c.id);
+  const sys = await as(EMAILS.admin);
+  const fresh = async (text: string) => ((await call('cm.receive', sys, comment(text))) as any).commentId as number;
+  const id = await fresh('Prix svp');
+  await call('cm.reply', conf, { id, body: 'Jawbnakom f privé 📩' });
+  await call('cm.private', conf, { id, body: 'Salam, la chaise b 8 900 DA.' });
+  let row: any = ((await call('cm.feed', conf, { tab: 'all' })) as any).rows.find((x: any) => x.id === id);
   assert.equal(row.status, 'answered');
   assert.equal(row.by, 'team');
   assert.equal(row.handledBy, 'Samira');
   const conv: any = await call('dellal.conversation', conf, { id: row.conversationId });
-  assert.equal(conv.conversation.mode, 'human', 'a person wrote: Dellal pauses on this conversation');
+  assert.equal(conv.conversation.mode, 'human', 'a seller wrote: Dellal pauses on this conversation');
   assert.equal(conv.messages[1].role, 'staff');
-  await assert.rejects(call('cm.private', conf, { id: c.id, body: 'encore' }), /déjà parti/);
-  await call('cm.hide', conf, { id: c.id, hidden: true });
-  row = ((await call('cm.feed', conf, { tab: 'hidden' })) as any).rows.find((x: any) => x.id === c.id);
+  await assert.rejects(call('cm.private', conf, { id, body: 'encore' }), /déjà parti/);
+  // a marketer writes in private: Dellal keeps the conversation (marketers do not open Message AI agent)
+  const mkId = await fresh('kayen livraison ?');
+  const sentMk: any = await call('cm.private', await as(EMAILS.marketer), { id: mkId, body: 'Salam, nchoufou m3akom.' });
+  assert.equal(((await db.query('SELECT mode FROM conversations WHERE id = $1', [sentMk.conversationId]))[0]).mode, 'ai');
+  await call('cm.hide', conf, { id, hidden: true });
+  row = ((await call('cm.feed', conf, { tab: 'hidden' })) as any).rows.find((x: any) => x.id === id);
   assert.equal(row.hidden, true);
-  await call('cm.hide', conf, { id: c.id, hidden: false });
-  const other = ((await call('cm.feed', conf, { tab: 'todo' })) as any).rows[0];
-  await call('cm.ignore', conf, { id: other.id });
-  assert.equal(((await call('cm.feed', conf, { tab: 'all' })) as any).rows.find((x: any) => x.id === other.id).status, 'ignored');
+  await call('cm.hide', conf, { id, hidden: false });
+  const other = await fresh('hmm');
+  await call('cm.ignore', conf, { id: other });
+  assert.equal(((await call('cm.feed', conf, { tab: 'all' })) as any).rows.find((x: any) => x.id === other).status, 'ignored');
+  // a complaint settled by a person: marked as handled
+  const done = await fresh('ma wsalni walou');
+  await call('cm.ignore', conf, { id: done, done: true });
+  assert.equal(((await call('cm.feed', conf, { tab: 'all' })) as any).rows.find((x: any) => x.id === done).status, 'answered');
 });
 

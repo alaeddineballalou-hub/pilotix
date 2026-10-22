@@ -6,7 +6,7 @@
 import { COMMUNES, normalizePhone, WILAYAS_AR } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
-import { bad, Ctx, notFound, proc } from '../rpc';
+import { bad, Ctx, hasRole, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
 import { getRaw, setRaw } from './admin';
 import { DELLAL_DARIJA, parseAvoid } from './darija';
@@ -232,17 +232,23 @@ export async function receiveComment(ctx: Ctx, m: z.infer<typeof IncomingComment
 }
 
 // ---------------------------------------------------------------- what the agent sees
-const PHONE_RE = /(?:\+?213|0)\s?[5-7](?:[\s.-]?\d){8}/;
+/** ٠١٢… and ۰۱۲… written as 012… (customers and the AI may write numbers in Arabic digits). */
+const latinDigits = (t: string) => t.replace(/[\u0660-\u0669]/g, (c) => String(c.charCodeAt(0) - 0x0660)).replace(/[\u06F0-\u06F9]/g, (c) => String(c.charCodeAt(0) - 0x06f0));
+/** Algerian mobile (05/06/07 + 8 digits) or landline (02/03/04 + 7 digits) numbers. */
+const PHONE_RE = /(?:\+?213|0)\s?(?:[5-7](?:[\s.-]?\d){8}|[2-4](?:[\s.-]?\d){7})(?!\d)/;
 const phoneIn = (t: string) => {
-  const m = t.match(PHONE_RE);
+  const m = latinDigits(t).match(PHONE_RE);
   return m ? normalizePhone(m[0]) || null : null;
 };
-const URL_RE = /(https?:\/\/|www\.|wa\.me\/|t\.me\/|bit\.ly\/|(?<![\p{L}\p{N}@])[a-z0-9-]{2,}\.(?:com|net|org|dz|shop|store|link|ly|me|io|co|site|online)(?![\p{L}\p{N}]))/iu;
+/** The phone number left in a comment, if any (mobile or landline, Latin or Arabic digits). */
+export const phoneOf = phoneIn;
+const URL_RE =
+  /(https?:\/\/|www\.|wa\.me\/|t\.me\/|bit\.ly\/|(?<![\p{L}\p{N}@])[a-z0-9-]{2,}\.(?:com|net|org|dz|fr|info|biz|xyz|app|top|live|club|shop|store|link|ly|me|io|co|site|online|vip|pro|tv|ma|tn|cc)(?![\p{L}\p{N}]))/iu;
 /** Words that make a comment hidden at once (Algerian Darija, Arabic, French). The shop adds its own in Réglages. */
 const INSULTS = [
   'nik', 'nikmok', 'nikmk', 'nikamok', 'nik mok', 'zebi', 'zbi', 'zebbi', 'zeb', '9ahba', '9a7ba', 'qahba', 'qa7ba', 'kahba', 'ka7ba',
   'tahan', 'ta7an', 'zamel', 'zemel', 'manyak', 'mnayek', 'mniyek', 'khra', 'weld l9a7ba', 'wlid l9ahba',
-  'pute', 'putain', 'salope', 'salaud', 'connard', 'connasse', 'enculé', 'encule', 'fdp', 'ntm', 'nique', 'batard', 'bâtard',
+  'pute', 'putain', 'salope', 'salaud', 'connard', 'connasse', 'enculé', 'encule', 'fdp', 'ntm', 'batard', 'bâtard',
   'قحبة', 'قحبه', 'زبي', 'نيك', 'نيكمك', 'طحان', 'زامل', 'منيك', 'خرا', 'ولد الحرام', 'تفو',
 ];
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
@@ -254,9 +260,11 @@ export type Lang = 'ar' | 'dz' | 'fr';
 const DZ_WORDS = /(^|[^a-z])(wach|wesh|kayen|kayna|kayn|makach|nheb|n7ab|n7eb|bghit|rani|rak|raki|khouya|khoya|khti|slm|salam|chhal|ch7al|che7al|bezzaf|mlih|saha|ta3|ida|kifach|win|lazem|tani|ghir|bessah|nta|nti|mazal|wela|walou|men|w|wsalni|wsal|wsel|commandit|hiya|howa|rahi|raho|bach|kima|ga3|lyoum|ghodwa|chouf|choufou|sel3a|ndir|nchri|nheb)([^a-z]|$)/;
 /** The language and script of a comment: Arabic letters, Darija in Latin letters (arabizi), or French. */
 export function langOf(t: string): Lang {
-  const ar = (t.match(/[\u0600-\u06FF]/g) ?? []).length;
-  const lat = (t.match(/[a-z]/gi) ?? []).length;
-  if (ar > lat) return 'ar';
+  // a tagged friend ("Amina Benali شحال السعر", "@ines شحال") is not the language of the comment
+  const words = t.split(/\s+/).filter((w) => w && !w.startsWith('@'));
+  const ar = words.filter((w) => /[\u0600-\u06FF]/.test(w)).length;
+  const lat = words.filter((w) => /[a-z]/i.test(w) && !/^[A-ZÀ-Þ][a-zà-ÿ'’-]*[.,!?]*$/.test(w)).length;
+  if (ar && ar >= lat) return 'ar';
   const s = strip(t);
   // arabizi: 3, 7, 9 written inside words (ch7al, 3la, 9bel), not units or ordinals (3kg, 2eme)
   const arabizi = s
@@ -486,24 +494,32 @@ function demoDecision(f: CmFacts): CmDecision {
   return d({ intent: f.body.trim().split(/\s+/).length <= 3 ? 'tag' : 'other', reason: 'Rien à répondre (tag, nom ou remarque)' });
 }
 
-/** Obvious cases, decided without AI: links of other sites, insults and the shop's banned words, emojis alone. */
-function preFilter(f: CmFacts, s: CmSettings): CmDecision | null {
-  const t = f.body;
-  const none = { publicReply: '', privateReply: '', handoff: false };
-  if (URL_RE.test(t)) return { ...none, intent: 'spam', hide: true, reason: 'Lien vers un autre site ou une autre page' };
-  if (INSULT_RE.test(t)) return { ...none, intent: 'insult', hide: true, reason: 'Insulte ou vulgarité' };
-  const banned = wordsRe(
-    s.banned
+/** The shop's own words that hide a comment (Réglages), one per line. */
+const bannedRe = (s: CmSettings) =>
+  wordsRe(
+    String(s.banned ?? '')
       .split('\n')
       .map((x) => x.trim())
       .filter((x) => x.length >= 2),
   );
-  if (banned?.test(t)) return { ...none, intent: 'spam', hide: true, reason: 'Mot interdit par la boutique' };
+/** Insults, vulgarity or the shop's banned words. */
+const vulgar = (t: string, s: CmSettings) => INSULT_RE.test(t ?? '') || !!bannedRe(s)?.test(t ?? '');
+
+/** Obvious cases, decided without AI: links of other sites, insults and the shop's banned words, emojis alone. */
+function preFilter(f: CmFacts, s: CmSettings): CmDecision | null {
+  const t = f.body;
+  const none = { publicReply: '', privateReply: '', handoff: false };
+  // an angry customer may insult or paste a tracking link: the AI (or the demo rules) handles it as a complaint, for the team
+  if (COMPLAINT_W.test(t)) return null;
+  if (URL_RE.test(t)) return { ...none, intent: 'spam', hide: true, reason: 'Lien vers un autre site ou une autre page' };
+  if (INSULT_RE.test(t)) return { ...none, intent: 'insult', hide: true, reason: 'Insulte ou vulgarité' };
+  if (bannedRe(s)?.test(t)) return { ...none, intent: 'spam', hide: true, reason: 'Mot interdit par la boutique' };
   if (EMOJI_ONLY.test(t.trim())) return { ...none, intent: 'praise', hide: false, reason: 'Emoji seul' };
   return null;
 }
 
-const PRICE_RE = /\d[\d\s.,]*\s*(?:da|dzd|dinars?|دج|د\.ج|دينار)(?![\p{L}])|\d+\s*(?:alf|alef|ألف|الف)(?![\p{L}])/iu;
+/** A price in a reply: an amount in DA, a number of 4 digits or more (12 900, 12900), thousands or millions said in words. */
+const PRICE_RE = /\d[\d\s.,]*\s*(?:da|dzd|dinars?|دج|د\.ج|دينار)(?![\p{L}])|\d{1,3}(?:[\s.,\u00a0\u202f]\d{3})+|\d{4,}|(?<![\p{L}])(?:alf|alef|melyoun|mlyoun|malyoun|million|ألف|الف|مليون|ملاين)(?![\p{L}])/iu;
 const SAYS_PRIVATE = /(jawb|répondu|repondu|answered|replied|envoy|b3at|جاوب|ردينا|بعثنا|بعتنا)/i;
 
 /** The shop's settings and Meta's rules, applied to whatever the AI (or the rules) decided. */
@@ -515,24 +531,27 @@ export function guard(input: CmDecision, f: CmFacts, s: CmSettings): CmDecision 
       .replace(/^[«"\s]+|[»"\s]+$/g, '')
       .trim()
       .slice(0, max);
-  d.publicReply = clean(d.publicReply, 300).replace(new RegExp(PHONE_RE.source, 'g'), '').replace(new RegExp(URL_RE.source, 'giu'), '').trim();
+  d.publicReply = clean(d.publicReply, 300);
   d.privateReply = clean(d.privateReply, 1000);
   d.reason = clean(d.reason, 300);
   d.handoff = !!d.handoff;
+  const rude = vulgar(f.body, s);
   if (d.intent === 'spam' || d.intent === 'insult') {
     d.publicReply = '';
     d.privateReply = '';
-    if (s.hideSpam) d.hide = true;
   }
-  // a phone number is hidden (competitors copy them); otherwise a complaint is never hidden: people would see the shop
-  // hiding unhappy customers
-  if (f.phone && s.hidePhones) d.hide = true;
-  else if (d.intent === 'complaint') d.hide = false;
-  if (d.hide && !((d.intent === 'spam' || d.intent === 'insult') && s.hideSpam) && !(f.phone && s.hidePhones)) d.hide = false;
+  // what may be hidden: spam and insults, a phone number (competitors copy them), and a complaint only when it is vulgar —
+  // otherwise people would see the shop hiding unhappy customers. A complaint always goes to the team.
+  if (d.intent === 'complaint') d.handoff = true;
+  const mayHide = ((d.intent === 'spam' || d.intent === 'insult' || (d.intent === 'complaint' && rude)) && s.hideSpam) || (!!f.phone && s.hidePhones);
+  d.hide = mayHide && (d.hide || (!!f.phone && s.hidePhones) || ((d.intent === 'spam' || d.intent === 'insult' || rude) && s.hideSpam));
   // Meta allows one private message per comment, within 7 days; and only once per person per post here
   if (!s.sendPrivate || f.alreadyPrivate || f.tooOld || f.channel === 'tiktok') d.privateReply = '';
   if (!s.replyPublic || d.hide || f.alreadyPublic) d.publicReply = '';
-  if (d.publicReply && !s.showPrice && PRICE_RE.test(d.publicReply)) d.publicReply = d.privateReply ? CM_LINES.privateDone[f.lang] : f.alreadyPrivate ? CM_LINES.already[f.lang] : CM_LINES.writeUs[f.lang];
+  // a public reply never shows a phone number or a link, nor a price when the shop keeps prices private
+  const pub = latinDigits(d.publicReply);
+  if (d.publicReply && (PHONE_RE.test(pub) || URL_RE.test(pub) || (!s.showPrice && PRICE_RE.test(pub))))
+    d.publicReply = d.privateReply ? CM_LINES.privateDone[f.lang] : f.alreadyPrivate ? CM_LINES.already[f.lang] : CM_LINES.writeUs[f.lang];
   // "answered in private" while no private message will go: ask them to write instead
   if (d.publicReply && !d.privateReply && !f.alreadyPrivate && SAYS_PRIVATE.test(d.publicReply)) d.publicReply = CM_LINES.writeUs[f.lang];
   return d;
@@ -656,7 +675,8 @@ export async function decide(ctx: Ctx, f: CmFacts, s: CmSettings): Promise<CmRun
     d[k] = p.text;
     darija[k === 'publicReply' ? 'public' : 'private'] = p.darija;
   }
-  return { decision: d, by: 'ai', model: inPage ? 'claude (page)' : ds.model, usage, darija };
+  // the rewrite must not bring back what the guard took out
+  return { decision: guard(d, f, s), by: 'ai', model: inPage ? 'claude (page)' : ds.model, usage, darija };
 }
 
 // ---------------------------------------------------------------- acting
@@ -671,7 +691,7 @@ async function metaAct(ctx: Ctx, row: any, action: 'cmReply' | 'cmPrivate' | 'cm
 }
 
 /** Opens (or continues) the commenter's conversation in Message AI agent with the private message. */
-async function openConversation(ctx: Ctx, row: any, text: string, recipientId: string | null, extra: { meta?: Record<string, unknown>; staffId?: number }) {
+async function openConversation(ctx: Ctx, row: any, text: string, recipientId: string | null, extra: { meta?: Record<string, unknown>; staffId?: number; takeOver?: boolean }) {
   const ext = recipientId ?? (ctx.server?.dellal ? `comment:${row.external_id}` : `cm-${row.author_id ?? row.external_id}`);
   return conversationFromComment(ctx, {
     channel: row.channel === 'instagram' ? 'instagram' : 'messenger',
@@ -684,7 +704,28 @@ async function openConversation(ctx: Ctx, row: any, text: string, recipientId: s
     reply: text,
     meta: extra.meta,
     staffId: extra.staffId,
+    takeOver: extra.takeOver,
   });
+}
+
+/**
+ * One comment at a time per person in this server: two comments of the same person (the timer, the sweep and a click can
+ * meet) must not both get a private message. The second one sees the first one's private message as already sent.
+ */
+const authorQueue = new Map<string, Promise<void>>();
+async function oneAtATime<T>(key: string | null, fn: () => Promise<T>): Promise<T> {
+  if (!key) return fn();
+  const prev = authorQueue.get(key) ?? Promise.resolve();
+  let done!: () => void;
+  const mine = prev.then(() => new Promise<void>((r) => (done = r)));
+  authorQueue.set(key, mine);
+  await prev;
+  try {
+    return await fn();
+  } finally {
+    done();
+    if (authorQueue.get(key) === mine) authorQueue.delete(key);
+  }
 }
 
 /** Runs the agent on one comment: decides, hides / writes in private / answers in public, and records it. */
@@ -722,78 +763,95 @@ export async function answerComment(ctx: Ctx, id: number, opts: { force?: boolea
     }
   }
   try {
-    const f = await gatherFacts(ctx, {
-      id,
-      channel: row.channel,
-      body: row.body,
-      authorId: row.author_id,
-      authorName: row.author_name,
-      postId: numOrNull(row.post_id),
-      parentExternalId: row.parent_external_id,
-      createdAt: iso(row.created_at),
-      privateSent: !!row.private_sent,
-      publicReplyId: row.public_reply_id,
-    });
-    const run = await decide(ctx, f, s);
-    const d = run.decision;
-    const errors: string[] = [];
-    let hidden = !!row.hidden;
-    let privateSent = false;
-    let convId: number | null = null;
-    let publicId: string | null = null;
-    if (d.hide && !hidden) {
-      try {
-        await metaAct(ctx, row, 'cmHide', { hidden: true });
-        hidden = true;
-      } catch (e) {
-        errors.push(`Masquer : ${errText(e)}`);
-      }
-    }
-    if (d.privateReply) {
-      try {
-        const r = await metaAct(ctx, row, 'cmPrivate', { text: d.privateReply });
-        privateSent = true;
-        convId = await openConversation(ctx, row, d.privateReply, r?.recipientId ?? null, { meta: { by: run.by, demo: run.by !== 'ai', model: run.model, usage: run.usage, ...(run.darija.private ? { darija: run.darija.private } : {}) } });
-      } catch (e) {
-        errors.push(`Message privé : ${errText(e)}`);
-      }
-    }
-    if (d.publicReply) {
-      try {
-        const r = await metaAct(ctx, row, 'cmReply', { text: d.publicReply });
-        publicId = r?.id ? String(r.id) : `sent-${id}`;
-      } catch (e) {
-        errors.push(`Réponse publique : ${errText(e)}`);
-      }
-    }
-    const tried = (d.hide && !row.hidden ? 1 : 0) + (d.privateReply ? 1 : 0) + (d.publicReply ? 1 : 0);
-    const status: CmStatus =
-      tried && errors.length === tried ? 'error' : d.handoff ? 'handoff' : (d.intent === 'spam' || d.intent === 'insult') && hidden ? 'hidden' : !tried ? 'ignored' : 'answered';
-    await ctx.db.query(
-      `UPDATE cm_comments SET status = $2, intent = $3, public_reply = COALESCE($4, public_reply), public_reply_id = COALESCE($5, public_reply_id),
-         private_reply = COALESCE($6, private_reply), private_sent = private_sent OR $7, hidden = $8, conversation_id = COALESCE($9, conversation_id),
-         phone = COALESCE(phone, $10), reason = $11, send_error = $12, handled_at = now(), handled_by = NULL, claimed_at = NULL, meta = $13
-       WHERE id = $1`,
-      [
+    return await oneAtATime(row.author_id ? `${row.channel}:${row.author_id}` : null, async () => {
+      // read again inside the queue: another comment of this person may just have got its private message
+      const fresh = await rawComment(ctx.db, id);
+      const f = await gatherFacts(ctx, {
         id,
-        status,
-        d.intent,
-        publicId ? d.publicReply : null,
-        publicId,
-        privateSent ? d.privateReply : null,
-        privateSent,
-        hidden,
-        convId,
-        f.phone,
-        d.reason || null,
-        errors.length ? errors.join(' · ') : null,
-        JSON.stringify({ by: run.by, model: run.model, usage: run.usage, darija: run.darija, decision: d }),
-      ],
-    );
-    ctx.emit({ type: 'chat', data: { cm: id } });
-    return { status, decision: d, by: run.by };
+        channel: row.channel,
+        body: row.body,
+        authorId: row.author_id,
+        authorName: row.author_name,
+        postId: numOrNull(row.post_id),
+        parentExternalId: row.parent_external_id,
+        createdAt: iso(row.created_at),
+        privateSent: !!fresh.private_sent,
+        publicReplyId: fresh.public_reply_id,
+      });
+      const run = await decide(ctx, f, s);
+      const d = { ...run.decision };
+      const errors: string[] = [];
+      let hidden = !!fresh.hidden;
+      let privateSent = false;
+      let convId: number | null = null;
+      let publicId: string | null = null;
+      let tried = 0;
+      if (d.hide && !hidden) {
+        tried++;
+        try {
+          await metaAct(ctx, row, 'cmHide', { hidden: true });
+          hidden = true;
+        } catch (e) {
+          errors.push(`Masquer : ${errText(e)}`);
+        }
+      }
+      if (d.privateReply) {
+        tried++;
+        try {
+          const r = await metaAct(ctx, row, 'cmPrivate', { text: d.privateReply });
+          privateSent = true;
+          convId = await openConversation(ctx, row, d.privateReply, r?.recipientId ?? null, {
+            meta: { by: run.by, demo: run.by !== 'ai', model: run.model, usage: run.usage, ...(run.darija.private ? { darija: run.darija.private } : {}) },
+          });
+        } catch (e) {
+          errors.push(`Message privé : ${errText(e)}`);
+          // never say "answered in private" when the private message did not go: ask them to write instead
+          if (d.publicReply && SAYS_PRIVATE.test(d.publicReply)) d.publicReply = CM_LINES.writeUs[f.lang];
+        }
+      }
+      if (d.publicReply) {
+        tried++;
+        try {
+          const r = await metaAct(ctx, row, 'cmReply', { text: d.publicReply });
+          publicId = r?.id ? String(r.id) : `sent-${id}`;
+        } catch (e) {
+          errors.push(`Réponse publique : ${errText(e)}`);
+        }
+      }
+      // anything that failed stays in "À traiter" with its error (answering again only redoes what is missing)
+      const status: CmStatus = errors.length ? 'error' : d.handoff ? 'handoff' : (d.intent === 'spam' || d.intent === 'insult') && hidden ? 'hidden' : !tried ? 'ignored' : 'answered';
+      await ctx.db.query(
+        `UPDATE cm_comments SET status = $2, intent = $3, public_reply = COALESCE($4, public_reply), public_reply_id = COALESCE($5, public_reply_id),
+           private_reply = COALESCE($6, private_reply), private_sent = private_sent OR $7, hidden = $8, conversation_id = COALESCE($9, conversation_id),
+           phone = COALESCE(phone, $10), reason = $11, send_error = $12, handled_at = now(), handled_by = NULL, claimed_at = NULL, meta = $13
+         WHERE id = $1`,
+        [
+          id,
+          status,
+          d.intent,
+          publicId ? d.publicReply : null,
+          publicId,
+          privateSent ? d.privateReply : null,
+          privateSent,
+          hidden,
+          convId,
+          f.phone,
+          d.reason || null,
+          errors.length ? errors.join(' · ') : null,
+          JSON.stringify({ by: run.by, model: run.model, usage: run.usage, darija: run.darija, decision: d }),
+        ],
+      );
+      ctx.emit({ type: 'chat', data: { cm: id } });
+      return { status, decision: d, by: run.by };
+    });
   } catch (e) {
-    await release();
+    // the AI or the database failed: try again later (the sweep), and after 3 failures leave it to a person
+    const attempts = num(row.meta?.attempts) + 1;
+    await ctx.db.query(
+      `UPDATE cm_comments SET claimed_at = NULL, meta = COALESCE(meta, '{}'::jsonb) || $2::jsonb,
+         status = CASE WHEN $3 THEN 'error' ELSE status END, send_error = CASE WHEN $3 THEN $4 ELSE send_error END WHERE id = $1`,
+      [id, JSON.stringify({ attempts }), attempts >= 3, errText(e)],
+    );
     throw e;
   }
 }
@@ -802,10 +860,15 @@ export async function answerComment(ctx: Ctx, id: number, opts: { force?: boolea
 export async function sweepComments(ctx: Ctx): Promise<{ answered: number }> {
   const s = await cmSettings(ctx.db);
   if (!s.enabled) return { answered: 0 };
+  const h = algeriaHour(ctx.now());
+  if (!s.nightReplies && (h >= 23 || h < 8)) return { answered: 0 };
+  // only the channels that are on (comments of a channel turned off wait, without blocking the others); newest first
+  const channels = CM_CHANNELS.filter((c) => s.channels[c]);
   const rows = await ctx.db.query(
-    `SELECT id FROM cm_comments WHERE status = 'new' AND created_at < now() - make_interval(secs => $1) AND created_at > now() - interval '3 days'
-       AND (claimed_at IS NULL OR claimed_at < now() - interval '10 minutes') ORDER BY id LIMIT 30`,
-    [s.delaySec + 90],
+    `SELECT id FROM cm_comments WHERE status = 'new' AND channel = ANY($2) AND created_at < now() - make_interval(secs => $1)
+       AND created_at > now() - interval '3 days' AND (claimed_at IS NULL OR claimed_at < now() - interval '10 minutes')
+     ORDER BY created_at DESC LIMIT 30`,
+    [s.delaySec + 90, channels],
   );
   let answered = 0;
   for (const r of rows) {
@@ -926,7 +989,8 @@ export const cmProcs = {
     let convId: number | null = null;
     try {
       const r = await metaAct(ctx, row, 'cmPrivate', { text: i.body });
-      convId = await openConversation(ctx, row, i.body, r?.recipientId ?? null, { staffId: me(ctx) });
+      // a seller keeps the conversation; a marketer's message leaves it to Dellal (marketers do not open Message AI agent)
+      convId = await openConversation(ctx, row, i.body, r?.recipientId ?? null, { staffId: me(ctx), takeOver: hasRole(ctx.session, 'confirmation') });
     } catch (e) {
       sendError = errText(e);
     }

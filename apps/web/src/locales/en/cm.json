@@ -84,7 +84,8 @@
     "ignore": "Ignore",
     "createOrder": "Create the order",
     "orderNote": "Comment: {{text}}",
-    "done": "Mark as handled"
+    "done": "Mark as handled",
+    "hiddenRude": "Insults: hidden. The complaint went to the team."
   },
   "posts": {
     "title": "Posts and ads",
@@ -180,7 +181,7 @@
     "sendPrivate": "Write privately to people who ask",
     "sendPrivateHint": "One message per comment, within 7 days (Meta's rule). The conversation opens in Message AI agent, where Dellal goes on selling.",
     "hideSpam": "Hide spam and insults",
-    "hideSpamHint": "Links of other pages, competitors, vulgarity. Hidden: the person and their friends still see it, others do not. A complaint is never hidden.",
+    "hideSpamHint": "Links of other pages, competitors, vulgarity. Hidden: the person and their friends still see it, others do not. A complaint always goes to the team and is hidden only when it contains insults.",
     "hidePhones": "Hide phone numbers",
     "hidePhonesHint": "Competitors copy numbers left in comments: the comment is hidden and the person gets a private message.",
     "nightReplies": "Answer at night (11 pm – 8 am)",
@@ -216,6 +217,8 @@
     "verifyToken": "Verify token",
     "fields": "Meta permissions: pages_manage_engagement, pages_read_user_content, pages_messaging, instagram_manage_comments, instagram_manage_messages.",
     "demo": "Preview: these are the demo's settings, nothing is sent to Meta.",
-    "save": "Save"
+    "save": "Save",
+    "appSecret": "Meta app secret",
+    "appSecretNone": "Required: without it, comments are not handled (Message AI agent › Settings)"
   }
 }
