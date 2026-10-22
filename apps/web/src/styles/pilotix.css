@@ -961,3 +961,6 @@ html body .qtbl td.px-c-passed .px-passed { flex-wrap: nowrap; }
 html body .qtbl td.px-c-status { padding-inline: 8px !important; }
 html body .qtbl td.px-c-status .qst-pill { min-width: 150px; width: 100%; justify-content: space-between; text-align: start; }
 html body .qtbl td.qact .qo { width: 42px; }
+/* the "Statut" title sits centred above its status button */
+html body .qtbl > thead > tr > th[data-col="status"] { text-align: center !important; padding-inline: 8px !important; }
+html body .qtbl td.px-c-status { text-align: center !important; }
