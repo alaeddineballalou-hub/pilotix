@@ -1,7 +1,8 @@
 # Pilotix
 
 Order management for cash-on-delivery e-commerce teams in Algeria: confirmation calls, depot, delivery follow-up, couriers,
-after-sales, livreurs, cash, stock, customers, advertising results and team pay — on the **web**, **Android** and **iOS**.
+after-sales, livreurs, cash, stock, customers, advertising results, team pay and **Dellal**, an AI sales agent that answers
+WhatsApp, Messenger, Instagram and TikTok and takes orders — on the **web**, **Android** and **iOS**.
 Pilotix runs on its own: its own server, database and accounts.
 
 **Languages:** Français · English · العربية (right-to-left).
@@ -53,6 +54,15 @@ SEED_ADMIN_PASSWORD='choose-a-strong-one' npm run db:seed
 npm run dev:server                                     # API on http://localhost:3000
 npm run dev:web                                        # app on http://localhost:5173
 ```
+
+### Dellal (AI sales agent)
+
+Menu **Messages**: one inbox for WhatsApp, Messenger, Instagram and TikTok. Dellal answers with your real products, stock and
+delivery fees, takes the order (→ Confirmation › Nouvelles, or straight to Confirmée) and hands the conversation to a person
+for complaints, wholesale, or anything it is unsure about. Setup in Messages › Réglages (admin): the Anthropic API key, then
+in your Meta app the webhook `https://<server>/api/hooks/meta` with the verify token shown there, the app secret, the WhatsApp
+phone number ID + token and the page token. Follow-ups run every 15 minutes (needs `REDIS_URL`). Without a key, and in the
+demo, a rule-based demo seller answers so the whole flow can be tried in Messages › Tester.
 
 Try it with the demo shop instead: `npm run seed:demo -w @pilotix/server` on an empty database
 (accounts `admin@demo.pilotix.dz`, `samira@demo.pilotix.dz`… password `demo-pilotix`), or open the preview / the website and pick a demo account.
