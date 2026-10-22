@@ -1203,3 +1203,60 @@ html body .qd6-ntext:focus { outline: none; border-color: #F7A823 !important; bo
 [data-theme="dark"] .qd6-dv.ed { background: rgba(255, 255, 255, .06); }
 .qd6-dv.ed .bji { width: 13px; height: 13px; color: #F28B1E; flex: none; }
 .qd6-rail .qd6-disc:hover .qd6-dv.ed, .qd6-fee:hover .qd6-dv.ed, .qd6-dv.ed:focus-within { border-color: #F7A823; }
+/* Enregistrer always in view, beside Changer le statut */
+.qd6-row2 { display: flex; gap: 8px; align-items: stretch; }
+.qd6-row2 > .qd6-dd { flex: 1; min-width: 0; }
+.qd6-row2 .qd6-ddb { padding: 0 12px; gap: 8px; }
+.qd6-savebtn { flex: none; height: 46px; display: inline-flex; align-items: center; gap: 7px; padding: 0 14px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--muted); font: inherit; font-size: 14px; font-weight: 800; cursor: not-allowed; }
+.qd6-savebtn .bji { width: 17px; height: 17px; }
+.qd6-savebtn.on { cursor: pointer; border-color: #F7A823; background: #fff4e2; color: #1B2A47; box-shadow: 0 0 0 3px rgba(247, 168, 35, .16); }
+.qd6-savebtn.on .bji { color: #F28B1E; }
+.qd6-savebtn.on:hover { background: #ffe9c6; }
+[data-theme="dark"] .qd6-savebtn.on { background: rgba(247, 168, 35, .14); color: #fff; }
+@container qd6 (min-width: 621px) and (max-width: 760px) { .qd6-row2 { flex-direction: column; } }
+
+/* ===== open order, layout C2: products on the left (notes, panier, related products), livraison and a compact summary on the right, one action bar across the bottom ===== */
+html body .qd6-grid { grid-template-columns: minmax(0, 1fr) 390px; grid-template-areas: "left right"; grid-template-rows: auto; align-items: start; }
+html body .qd6-grid > .qd6-left { display: flex; flex-direction: column; gap: 16px; min-width: 0; grid-area: left; }
+.qd6-right { grid-area: right; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+html body .qd6-right > .qd6-deliv { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px 16px 16px; }
+html body .qd6-right .qd6-deliv .qd5-seg { width: 100%; }
+html body .qd6-right .qd6-desk { min-width: 0; flex: none; }
+html body .qd6-right .qd6-fee { flex: none; }
+.qd6-related .qd6-chips { padding: 0 16px 16px; }
+/* compact summary */
+html body .qd6-right .qd6-rail { position: static; gap: 10px; padding: 12px; border-width: 1.5px; }
+html body .qd6-right .qd6-rail .qd5-sum { gap: 6px; }
+html body .qd6-right .qd6-rail .qd5-sum > div { min-height: 38px; padding: 6px 12px; }
+html body .qd6-right .qd6-rail .qd5-sum dt { font-size: 12.5px; }
+html body .qd6-right .qd6-rail .qd5-sum dd { font-size: 14px; }
+html body .qd6-right .qd6-rail .qd5-sum .qd5-total { min-height: 48px; }
+html body .qd6-right .qd6-rail .qd5-total dd { font-size: 19px; }
+/* the action bar */
+.qd6-bar { display: flex; align-items: center; gap: 10px; margin-top: 16px; padding: 12px 14px; border-radius: 14px; background: var(--surface); border: 2px solid #F7A823; box-shadow: 0 6px 22px rgba(242, 139, 30, .12); }
+.qd6-bl { flex: 1; min-width: 0; display: flex; }
+.qd6-bl .qd6-dirty { display: inline-flex; }
+.qd6-bar > .qd6-dd { flex: none; width: 270px; }
+.qd6-bar .qd6-ddb { white-space: nowrap; }
+.qd6-bar .qd6-savebtn { height: 46px; }
+.qd6-bar .qd6-cta { flex: none; height: 46px; padding: 0 22px; white-space: nowrap; }
+@container qd6 (max-width: 900px) {
+  html body .qd6-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "left" "right"; }
+  .qd6-right { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: stretch; }
+}
+@container qd6 (max-width: 620px) {
+  .qd6-right { grid-template-columns: minmax(0, 1fr); }
+  .qd6-bar { flex-direction: column; align-items: stretch; }
+  .qd6-bar > * { width: 100% !important; justify-content: center; }
+  .qd6-bar .qd6-cta { order: -1; }
+  .qd6-bl { order: 5; justify-content: center; }
+}
+@container qd6 (min-width: 621px) and (max-width: 900px) {
+  .qd6-bar { flex-wrap: wrap; }
+  .qd6-bl { flex: 1 1 100%; }
+  .qd6-bl:empty { display: none; }
+  .qd6-bar > .qd6-dd, .qd6-bar .qd6-savebtn, .qd6-bar .qd6-cta { flex: 1 1 0; width: auto; justify-content: center; }
+}
+.qd6-bl:empty { display: none; }
+.qd6-bar .qd6-savebtn { justify-content: center; }
+[data-theme="dark"] .qd6-save { color: #5fd38d; }
