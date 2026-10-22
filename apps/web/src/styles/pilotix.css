@@ -769,4 +769,4 @@ small.px-copy-wrap { display: inline-flex; }
 /* Historique button: same look as Edit (orange square, navy icon) */
 html body .qo.qo-hist { background: #F7A823; color: #1B2A47; border: 0; }
 html body .qo.qo-hist:hover { filter: brightness(1.06); border: 0; }
-html body .qo.qo-hist.on { background: #1B2A47; color: #F7A823; }
+html body .qo.qo-hist.on, html body .qo.qo-hist.on:hover { background: #F7A823; color: #1B2A47; box-shadow: 0 0 0 3px color-mix(in srgb, #F7A823 40%, transparent); }
