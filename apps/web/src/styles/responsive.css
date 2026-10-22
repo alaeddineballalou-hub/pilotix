@@ -16,6 +16,14 @@
   .topbar .page-title { font-size: 15px; }
 }
 
+/* ---- the page name in the header stays on one line ("Message AI agent" wrapped in two at 1024–1280 px);
+        on a small computer the account button keeps only its round initial to leave the name its room ---- */
+@media (min-width: 901px) { .topbar .page-title { flex: 0 0 auto; max-width: 38%; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
+@media (min-width: 901px) and (max-width: 1279px) {
+  .topbar .px-me-btn .px-me-t, .topbar .px-me-btn .px-me-ch { display: none; }
+  .topbar .px-me-btn { padding: 3px; height: auto; }
+}
+
 /* ---- row actions: never hidden behind the table's sideways scroll, never wrapped ---- */
 .px-act .btn, .px-act select { white-space: nowrap; }
 @media (min-width: 761px) {

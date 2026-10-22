@@ -102,7 +102,6 @@
     "how": "Comment ça marche",
     "howHelp": "Chaque changement de statut d’une commande envoie au plus un message : une seule fois par commande pour « reçue », « confirmée », « expédiée », « annulée » et « livrée », une fois par jour au plus pour les autres. Un message qui attend la fin de la nuit est remplacé si la commande avance entre-temps.",
     "flowLabel": "Le parcours d’une commande",
-    "or": "ou",
     "step1": "1. WhatsApp",
     "step1Hint": "Depuis le numéro de Message AI agent, avec un texte validé par WhatsApp.",
     "step2": "2. SMS",
@@ -137,7 +136,8 @@
     "metaNote": "Un texte modifié doit être validé à nouveau par WhatsApp (bouton « Envoyer les textes à WhatsApp ») ; en attendant, il part par SMS.",
     "default": "Texte par défaut",
     "cancel": "Annuler",
-    "saveText": "Enregistrer le texte"
+    "saveText": "Enregistrer le texte",
+    "onTheWay": "En chemin, selon le cas :"
   },
   "var": {
     "nom": "Prénom du client",
@@ -177,9 +177,6 @@
   },
   "results": {
     "title": "Résultats",
-    "period": "Période",
-    "days_one": "24 dernières heures",
-    "days_other": "{{count}} derniers jours",
     "sent": "Messages envoyés",
     "split": "WhatsApp {{wa}} · SMS {{sms}} · à la main {{hand}}",
     "read": "Lus sur WhatsApp",

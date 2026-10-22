@@ -15,7 +15,6 @@
     "test": "Test"
   },
   "mode": {
-    "ai": "AI",
     "human": "Team",
     "handoff": "To take over"
   },
@@ -30,7 +29,8 @@
     "channel": "Channel",
     "allChannels": "All channels",
     "empty": "No conversation yet.",
-    "pick": "Pick a conversation."
+    "pick": "Pick a conversation.",
+    "pickHint": "Messages from WhatsApp, Messenger, Instagram and TikTok arrive here."
   },
   "thread": {
     "customer": "Customer",
@@ -41,12 +41,15 @@
     "giveBack": "Give back to {{name}}",
     "answered": "{{name}} answered the customer",
     "modeSaved": "Saved",
-    "handoff": "To take over: {{reason}}",
     "write": "Write to the customer…",
-    "writePause": "Write to the customer ({{name}} pauses)…",
     "send": "Send",
     "back": "Back",
-    "comment": "comment"
+    "comment": "comment",
+    "modeAi": "{{name}} answers this customer.",
+    "modeHuman": "You answer this customer: {{name}} is paused here.",
+    "handoffBar": "{{name}} hands over to you: {{reason}}",
+    "info": "Customer details",
+    "modeAiHint": "If you write, it pauses."
   },
   "side": {
     "customer": "Customer",
@@ -78,9 +81,6 @@
   },
   "results": {
     "title": "{{name}}'s results",
-    "period": "Period",
-    "days_one": "Last 24 h",
-    "days_other": "Last {{count}} days",
     "conversations": "Conversations",
     "messages": "{{a}} received · {{b}} sent",
     "orders": "Orders taken by {{name}}",

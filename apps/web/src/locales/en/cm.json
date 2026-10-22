@@ -54,8 +54,6 @@
     "post": "Post",
     "allPosts": "All posts",
     "empty": "No comments here.",
-    "bulk_one": "Let CM AI answer the new comment",
-    "bulk_other": "Let CM AI answer the {{count}} new ones",
     "bulkRun": "CM AI is answering… {{done}}/{{count}}",
     "bulkDone_one": "{{count}} comment handled",
     "bulkDone_other": "{{count}} comments handled",
@@ -85,7 +83,10 @@
     "createOrder": "Create the order",
     "orderNote": "Comment: {{text}}",
     "done": "Mark as handled",
-    "hiddenRude": "Insults: hidden. The complaint went to the team."
+    "hiddenRude": "Insults: hidden. The complaint went to the team.",
+    "bulkWaiting_one": "{{count}} new comment is waiting for an answer",
+    "bulkWaiting_other": "{{count}} new comments are waiting for an answer",
+    "bulkGo": "Let CM AI answer"
   },
   "posts": {
     "title": "Posts and ads",
@@ -143,13 +144,11 @@
     },
     "product": "Product",
     "place": "Place",
-    "phone": "Phone"
+    "phone": "Phone",
+    "empty": "Write a comment, then “{{run}}”: what the CM AI agent would do shows here."
   },
   "results": {
     "title": "CM AI agent results",
-    "period": "Period",
-    "days_one": "Last 24 h",
-    "days_other": "Last {{count}} days",
     "total": "Comments",
     "todo_one": "{{count}} to handle",
     "todo_other": "{{count}} to handle",

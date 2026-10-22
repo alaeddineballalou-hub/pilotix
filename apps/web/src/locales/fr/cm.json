@@ -54,8 +54,6 @@
     "post": "Publication",
     "allPosts": "Toutes les publications",
     "empty": "Aucun commentaire ici.",
-    "bulk_one": "Laisser CM AI répondre au nouveau commentaire",
-    "bulk_other": "Laisser CM AI répondre aux {{count}} nouveaux",
     "bulkRun": "CM AI répond… {{done}}/{{count}}",
     "bulkDone_one": "{{count}} commentaire traité",
     "bulkDone_other": "{{count}} commentaires traités",
@@ -85,7 +83,10 @@
     "createOrder": "Créer la commande",
     "orderNote": "Commentaire : {{text}}",
     "done": "Marquer comme traité",
-    "hiddenRude": "Insultes : masqué. La réclamation est passée à l’équipe."
+    "hiddenRude": "Insultes : masqué. La réclamation est passée à l’équipe.",
+    "bulkWaiting_one": "{{count}} nouveau commentaire attend une réponse",
+    "bulkWaiting_other": "{{count}} nouveaux commentaires attendent une réponse",
+    "bulkGo": "Laisser CM AI répondre"
   },
   "posts": {
     "title": "Publications et publicités",
@@ -143,13 +144,11 @@
     },
     "product": "Produit",
     "place": "Lieu",
-    "phone": "Téléphone"
+    "phone": "Téléphone",
+    "empty": "Écrivez un commentaire puis « {{run}} » : ce que le CM AI agent ferait s’affiche ici."
   },
   "results": {
     "title": "Résultats du CM AI agent",
-    "period": "Période",
-    "days_one": "Dernières 24 h",
-    "days_other": "{{count}} derniers jours",
     "total": "Commentaires",
     "todo_one": "{{count}} à traiter",
     "todo_other": "{{count}} à traiter",

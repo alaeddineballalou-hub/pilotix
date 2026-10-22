@@ -1,0 +1,26 @@
+{
+  "on": "Actif",
+  "off": "En pause",
+  "turnOn": "L’activer dans Réglages",
+  "sections": "Sections de {{name}}",
+  "period": "Période",
+  "periodShort": {
+    "1": "24 h",
+    "7": "7 j",
+    "30": "30 j",
+    "90": "90 j"
+  },
+  "periodLong_one": "Dernières 24 h",
+  "periodLong_other": "{{count}} derniers jours",
+  "unsaved": "Modifications non enregistrées",
+  "allSaved": "Tout est enregistré",
+  "saving": "Enregistrement…",
+  "filters": "Filtres",
+  "try": "Essayez un message de client",
+  "test": "Test",
+  "about": {
+    "messages": "Répond à vos clients en message et prend leurs commandes.",
+    "cm": "Répond aux commentaires de vos publications et masque le spam.",
+    "notify": "Prévient chaque client par WhatsApp ou SMS à chaque étape."
+  }
+}
