@@ -51,6 +51,7 @@ export function Detail({ order }: { order: Order }) {
   const [nOrigin, setNOrigin] = useState(order.customerNote ?? '');
   const [nLivreur, setNLivreur] = useState(order.deliveryNote ?? '');
   const [nTeam, setNTeam] = useState(order.internalNote ?? '');
+  const [noteTab, setNoteTab] = useState<'origin' | 'livreur' | 'team'>('origin');
   useEffect(() => {
     setDisc(order.discount);
     setNOrigin(order.customerNote ?? '');
@@ -182,23 +183,41 @@ export function Detail({ order }: { order: Order }) {
 
   return (
     <div className="qd2-main qd3 qd5 qd6">
+      <div className="qd6-grid">
       <div className="qd6-left">
         <section className="qd6-card qd6-notes" aria-label={t('confirmation.d6.notes')}>
-          {(
-            [
+          {(() => {
+            const notes = [
               ['origin', 'message', nOrigin, setNOrigin],
               ['livreur', 'truck', nLivreur, setNLivreur],
               ['team', 'users', nTeam, setNTeam],
-            ] as const
-          ).map(([k, icon, v, set]) => (
-            <label key={k} className="qd6-note">
-              <span className="qd6-nh">
-                <Icon name={icon} />
-                {t(`confirmation.d6.note.${k}`)}
-              </span>
-              <textarea rows={2} value={v} maxLength={1000} placeholder={t(`confirmation.d6.notePh.${k}`)} onChange={(e) => set(e.target.value)} />
-            </label>
-          ))}
+            ] as const;
+            const cur = notes.find((x) => x[0] === noteTab) ?? notes[0];
+            return (
+              <>
+                <div className="qd6-ntabs" role="tablist">
+                  {notes.map(([k, icon, v]) => (
+                    <button key={k} type="button" role="tab" id={`qd6-nt-${order.id}-${k}`} aria-selected={k === cur[0]} className={k === cur[0] ? 'on' : ''} onClick={() => setNoteTab(k)}>
+                      <Icon name={icon} />
+                      {t(`confirmation.d6.note.${k}`)}
+                      {v.trim() && <span className="qd6-ndot" aria-label="•" />}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  key={cur[0]}
+                  className="qd6-ntext"
+                  role="tabpanel"
+                  aria-labelledby={`qd6-nt-${order.id}-${cur[0]}`}
+                  rows={3}
+                  value={cur[2]}
+                  maxLength={1000}
+                  placeholder={t(`confirmation.d6.notePh.${cur[0]}`)}
+                  onChange={(e) => cur[3](e.target.value)}
+                />
+              </>
+            );
+          })()}
         </section>
         <section className="qd6-card">
           <div className="qd6-h">
@@ -362,9 +381,9 @@ export function Detail({ order }: { order: Order }) {
           )}
           <div className="qd6-fee">
             <span className="qd6-lab">{t('confirmation.d6.fee')}</span>
-            <label className="qd4-fv ltr">
-              <input type="number" min={0} className="qd2-p" aria-label={t('confirmation.d.fee')} disabled={!editable} value={fee} onChange={(e) => setFee(Math.max(0, Math.round(Number(e.target.value) || 0)))} />
-              <b>DA</b>
+            <label className="qd6-dv ltr">
+              <input type="number" min={0} style={{ ['--w' as string]: String(fee).length }} aria-label={t('confirmation.d.fee')} disabled={!editable} value={fee} onChange={(e) => setFee(Math.max(0, Math.round(Number(e.target.value) || 0)))} />
+              <span className="qd6-unit">{da(0).replace(/^[\d\s\u00a0\u202f]+/, '')}</span>
             </label>
             {modeFee.data?.fee != null && modeFee.data.fee !== fee && editable && (
               <button type="button" className="linkish qd2-gf" onClick={() => setFee(modeFee.data!.fee!)}>
@@ -384,16 +403,16 @@ export function Detail({ order }: { order: Order }) {
             <dt>{desk ? t('confirmation.d6.feeDesk') : t('confirmation.d6.feeHome')}</dt>
             <dd className="ltr">{da(fee)}</dd>
           </div>
-          <div className="qd6-disc">
+          <div className={`qd6-disc${disc > maxDisc ? ' over' : ''}`}>
             <dt>
               {t('confirmation.d.discount')}
-              <small className={disc > maxDisc ? 'over' : ''}>{t('confirmation.d6.maxDisc', { v: da(maxDisc) })}</small>
+              <small>{t('confirmation.d6.maxDisc', { v: da(maxDisc) })}</small>
             </dt>
             <dd>
-              <label className="qd4-fv ltr">
+              <label className="qd6-dv ltr">
                 <span className="qd6-minus">−</span>
-                <input type="number" min={0} max={maxDisc} step={50} className="qd2-p" aria-label={t('confirmation.d.discount')} disabled={!editable} value={disc} onChange={(e) => setDisc(Math.max(0, Math.round(Number(e.target.value) || 0)))} />
-                <b>DA</b>
+                <input type="number" min={0} max={maxDisc} step={50} style={{ ['--w' as string]: String(disc).length }} aria-label={t('confirmation.d.discount')} disabled={!editable} value={disc} onChange={(e) => setDisc(Math.max(0, Math.round(Number(e.target.value) || 0)))} />
+                <span className="qd6-unit">{da(0).replace(/^[\d\s\u00a0\u202f]+/, '')}</span>
               </label>
             </dd>
           </div>
@@ -409,6 +428,7 @@ export function Detail({ order }: { order: Order }) {
           </div>
         )}
         {err && <p className="form-err">{err}</p>}
+        <div className="qd6-fill" aria-hidden="true" />
         {order.confStatus !== 'confirmed' && (
           <>
             <button type="button" className="qd6-cta" disabled={busy || !editable} onClick={confirm}>
@@ -445,6 +465,7 @@ export function Detail({ order }: { order: Order }) {
         )}
         <StatusMenu order={order} busy={busy} run={run} />
       </aside>
+      </div>
       {picker && opts.data && (
         <DeskMenu
           anchor={deskRef}
