@@ -27,7 +27,7 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
 
   // a few recent shipped parcels go to NOEST
   await db.query(
-    `UPDATE orders SET company_id = $1, tracking = 'NST-' || (200000 + id) WHERE id IN (
+    `UPDATE orders SET company_id = $1, tracking = ref WHERE id IN (
        SELECT id FROM orders WHERE company_id = $2 AND follow_status = ANY($3) ORDER BY id DESC LIMIT 6)`,
     [noest, yal, FOLLOW_ON_ROAD],
   );

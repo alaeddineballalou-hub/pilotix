@@ -63,7 +63,7 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
          VALUES ($1,$2,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'sav','confirmed',$3,$2,$12,$13,$14,0,$15,$15,$16,true,$17,$18,$19,$19,$20,$21,$22,$23,$24) RETURNING id`,
         [ref, at, users.suivi, o.customer_id, o.customer_name, o.phone, o.wilaya_id, o.commune, o.address, o.is_stopdesk, o.channel, follow, o.company_id, o.warehouse_id,
           fee, paid ? Math.round(fee * 0.7) : num(o.delivery_cost ?? 0), o.id, `SAV ${t.ref} — ${kind === 'variant' ? 'Autre couleur / taille' : kind === 'parts' ? 'Pièces seulement' : 'Même article (neuf)'}`,
-          left, left ? `ECH-${200000 + num(o.id)}` : null,
+          left, left ? ref : null,
           follow === 'delivered' ? end : null, follow === 'returned' ? end : null, follow === 'delivered' && k % 3 === 0, follow === 'delivered' && k % 3 === 0 ? end : null],
       )
     )[0];

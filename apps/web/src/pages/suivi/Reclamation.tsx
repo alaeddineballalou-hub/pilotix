@@ -198,7 +198,7 @@ function SearchOrders() {
                     <th>{t('suivi.col.agent')}</th>
                     <th>{t('suivi.col.fagent')}</th>
                     <th>{t('suivi.col.delivery')}</th>
-                    <th>{t('suivi.col.company')}</th>
+                    <th>{t('suivi.col.tracking')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -233,9 +233,8 @@ function SearchOrders() {
                       <td data-l={t('suivi.col.delivery')}>
                         <StatusBadge kind="follow" status={o.followStatus} />
                       </td>
-                      <td data-l={t('suivi.col.company')}>
-                        {o.companyName || '—'}
-                        <small className="ltr">{o.tracking || ''}</small>
+                      <td data-l={t('suivi.col.tracking')}>
+                        {o.tracking ? <span className="ltr">{o.tracking}</span> : '—'}
                       </td>
                     </tr>
                   ))}

@@ -48,7 +48,8 @@
     "company": "Courier",
     "variant": "Variant",
     "agent": "Confirmation agent",
-    "fagent": "Follow-up agent"
+    "fagent": "Follow-up agent",
+    "tracking": "Tracking no."
   },
   "days": "{{n}} d",
   "act": {

@@ -77,7 +77,7 @@ export function OrderTable(p: OrderTableProps) {
   const label: Record<OrderColumn, string> = useMemo(
     () => ({
       order: t('orders.col.order'), client: t('orders.col.client'), address: t('orders.col.address'), products: t('orders.col.products'), variant: t('orders.col.variant'), total: t('orders.col.total'),
-      conf: t('orders.col.conf'), follow: t('orders.col.follow'), company: t('orders.col.company'), agent: t('orders.col.agent'), fagent: t('orders.col.fagent'), phone: t('orders.col.phone'),
+      conf: t('orders.col.conf'), follow: t('orders.col.follow'), company: t('orders.col.tracking'), agent: t('orders.col.agent'), fagent: t('orders.col.fagent'), phone: t('orders.col.phone'),
       wilaya: t('orders.col.wilaya'), since: t('orders.col.since'),
     }),
     [t],
@@ -172,8 +172,7 @@ export function OrderTable(p: OrderTableProps) {
       case 'company':
         return (
           <td key={c} data-l={label[c]}>
-            {o.companyName ?? '—'}
-            {o.tracking && <small className="ltr">{o.tracking}</small>}
+            {o.tracking ? <span className="ltr">{o.tracking}</span> : '—'}
           </td>
         );
       case 'agent':
