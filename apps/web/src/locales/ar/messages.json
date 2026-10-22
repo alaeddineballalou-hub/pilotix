@@ -151,6 +151,15 @@
     "save": "حفظ",
     "afterH_two": "بعد ساعتين",
     "afterH_few": "بعد {{count}} ساعات",
-    "afterH_many": "بعد {{count}} ساعة"
+    "afterH_many": "بعد {{count}} ساعة",
+    "darija": "دارجة المتجر",
+    "darijaHelp": "قبل كل إرسال، يراجع {{name}} رسالته: الكلمات المغربية والتونسية والليبية والمصرية والمشرقية، والعبارات الخاطئة، وقائمتك الممنوعة تُصحَّح تلقائيًا.",
+    "darijaIntro": "اطلب من بائع جزائري في فريقك ملء هاتين القائمتين: هذا ما يجعل دارجة {{name}} طبيعية حقًا.",
+    "darijaPrefer": "عبارات للاستعمال",
+    "darijaPreferHint": "عبارة في كل سطر، كما تكتبونها لزبائنكم.",
+    "darijaPreferPh": "Mar7ba bik / biki\nSaha khouya / khti\nTkhalles ki testalem\nBla mziya",
+    "darijaAvoid": "كلمات لا تُكتب أبدًا",
+    "darijaAvoidHint": "كلمة في كل سطر. ضع الكلمة الصحيحة بعد سهم: « frero → khouya ».",
+    "darijaAvoidPh": "frero → khouya\nhabibti → khti"
   }
 }

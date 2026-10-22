@@ -145,6 +145,15 @@
     "tiktokHelp": "TikTok ouvre sa messagerie seulement aux comptes business approuvés. Une fois l’accès obtenu (ou via un outil relais), envoyez les messages à cette adresse.",
     "tiktokUrl": "Adresse pour TikTok",
     "demo": "Démo : les canaux ne reçoivent pas de vrais messages.",
-    "save": "Enregistrer"
+    "save": "Enregistrer",
+    "darija": "Darija de la boutique",
+    "darijaHelp": "Avant chaque envoi, {{name}} vérifie son message : les mots marocains, tunisiens, libyens, égyptiens ou du Moyen-Orient, les tournures fausses et votre liste interdite sont corrigés automatiquement.",
+    "darijaIntro": "Faites remplir ces deux listes par un vendeur algérien de l’équipe : c’est ce qui rend la darija de {{name}} vraiment naturelle.",
+    "darijaPrefer": "Expressions à utiliser",
+    "darijaPreferHint": "Une par ligne : vos formules, comme vous les écrivez à vos clients.",
+    "darijaPreferPh": "Mar7ba bik / biki\nSaha khouya / khti\nTkhalles ki testalem\nBla mziya",
+    "darijaAvoid": "Mots à ne jamais écrire",
+    "darijaAvoidHint": "Un par ligne. Mettez le bon mot après une flèche : « frero → khouya ».",
+    "darijaAvoidPh": "frero → khouya\nhabibti → khti"
   }
 }
