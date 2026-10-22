@@ -422,7 +422,13 @@
     "deleted": "Préréglage supprimé",
     "apply": "Afficher les colonnes de {{name}}",
     "by": "par {{by}}",
-    "cols": "Colonnes"
+    "cols": "Colonnes",
+    "savedAll": "Préréglage « {{name}} » enregistré et utilisé par toutes les équipes",
+    "applyAll": "Utiliser ce préréglage pour toutes les équipes",
+    "byAdmin": "Choisi par l’administrateur",
+    "lockedNote": "Les colonnes affichées sont choisies par l’administrateur pour toutes les équipes. Vous pouvez changer leur ordre (glisser) et leur largeur (bord de l’en-tête).",
+    "colsOrder": "Ordre des colonnes",
+    "resetWidths": "Largeurs automatiques"
   },
   "hist": {
     "title": "Historique de {{ref}}",

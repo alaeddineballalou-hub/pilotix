@@ -13,7 +13,7 @@ import { store } from '../../lib/store';
 import { ErrorBox, Field, Help, Icon, Loading, Pager, SortTh, StageBar, StatusBadge, StatusSelect } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
-import { colDrag, ColumnMenu, DensitySwitch, useDensity, useTableColumns } from '../../ui/ColumnMenu';
+import { colDrag, ColumnMenu, DensitySwitch, useDensity, useResizable, useTableColumns } from '../../ui/ColumnMenu';
 import { HistoryButton, PhoneCell } from './History';
 import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import type { PageProps } from '../registry';
@@ -155,6 +155,9 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   const { order, setOrder } = tc;
   const cols = order.map((k) => COLS.find((c) => c.k === k)!).filter((c) => c && visible.has(c.k));
   const drag = colDrag(order, setOrder);
+  // column widths: each user's own
+  const rs = useResizable(tc.widths, tc.setWidths, t('common.resizeCol'));
+  const wkeys = ['_exp', '_ck', ...cols.map((c) => c.k), '_act'];
   const [dens, setDens] = useDensity();
   const selected = rows.filter((r) => sel.has(r.id));
   const nFilters = Object.values(f).filter((v) => v !== undefined && v !== '').length;
@@ -441,6 +444,9 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
               onReset={tc.reset}
               presetId={tc.presetId}
               onPreset={tc.applyPreset}
+              locked={tc.locked}
+              widthsSet={Object.keys(tc.widths).length > 0}
+              onResetWidths={tc.resetWidths}
               open={panel === 'c'}
               onToggle={() => setPanel(panel === 'c' ? null : 'c')}
             />
@@ -560,27 +566,29 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
         ) : (
           <>
             <div className="tbl-wrap">
-              <table className="tbl qtbl">
+              <table className={`tbl qtbl${rs.fixed ? ' px-fixed' : ''}`} style={rs.tableStyle(wkeys)}>
+                {rs.cols(wkeys)}
                 <thead>
                   <tr>
-                    <th className="ck">
+                    <th className="ck" data-col="_exp">
                       <span className="sr-only">{t('confirmation.detail')}</span>
                     </th>
-                    <th className="ck">
+                    <th className="ck" data-col="_ck">
                       <input type="checkbox" aria-label={t('confirmation.selectAll')} checked={allOn} onChange={(e) => setSel(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set())} />
                     </th>
                     {cols.map((c) =>
                       c.sort ? (
-                        <SortTh key={c.k} k={c.sort} sort={sort} dir={dir} onSort={onSort} num={c.k === 'total'} extra={{ ...drag(c.k), title: t('common.dragCol'), className: 'px-drag' }}>
+                        <SortTh key={c.k} k={c.sort} sort={sort} dir={dir} onSort={onSort} num={c.k === 'total'} extra={{ ...drag(c.k), title: t('common.dragCol'), className: 'px-drag' }} after={rs.handle(c.k)}>
                           {colLabel(c.k)}
                         </SortTh>
                       ) : (
                         <th key={c.k} {...drag(c.k)} title={t('common.dragCol')} className={`px-drag ${c.k === 'total' ? 'num' : ''}`}>
                           {colLabel(c.k)}
+                          {rs.handle(c.k)}
                         </th>
                       ),
                     )}
-                    <th />
+                    <th data-col="_act" />
                   </tr>
                 </thead>
                 <tbody>

@@ -65,5 +65,6 @@
   },
   "dragCol": "Glissez pour déplacer la colonne",
   "back": "Retour",
-  "noResults": "Aucun résultat"
+  "noResults": "Aucun résultat",
+  "resizeCol": "Glissez pour régler la largeur · double-clic : largeur automatique"
 }

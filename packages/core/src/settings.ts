@@ -31,6 +31,8 @@ export interface SettingsMap {
   goals: { monthlyRevenue: number };
   /** Order-list column presets: saved by an admin, shared with everyone, never edited (only deleted by an admin) */
   colPresets: { id: string; name: string; cols: string[]; by: string; at: string }[];
+  /** The preset every team uses (set by an admin; only an admin changes the columns) */
+  colPresetActive: { id: string; at: number; by: string } | null;
 }
 
 export const DEFAULT_SETTINGS: SettingsMap = {
@@ -56,6 +58,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   meta: { adAccountId: '', hasToken: false },
   goals: { monthlyRevenue: 3_000_000 },
   colPresets: [],
+  colPresetActive: null,
 };
 
 export async function getSetting<K extends keyof SettingsMap>(db: Db, key: K): Promise<SettingsMap[K]> {

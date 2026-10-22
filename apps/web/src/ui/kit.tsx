@@ -366,7 +366,7 @@ export function Pager({ page, pageSize, total, onPage, onSize, sizes = [20, 50, 
 }
 
 /** Sortable column header with the ↕ ▲ ▼ arrows of the original app. */
-export function SortTh<K extends string>({ k, sort, dir, onSort, children, num, extra }: { k: K; sort: K; dir: 'asc' | 'desc'; onSort: (k: K) => void; children: ReactNode; num?: boolean; extra?: React.ThHTMLAttributes<HTMLTableCellElement> & Record<string, unknown> }) {
+export function SortTh<K extends string>({ k, sort, dir, onSort, children, num, extra, after }: { k: K; sort: K; dir: 'asc' | 'desc'; onSort: (k: K) => void; children: ReactNode; num?: boolean; extra?: React.ThHTMLAttributes<HTMLTableCellElement> & Record<string, unknown>; after?: ReactNode }) {
   const on = sort === k;
   return (
     <th {...extra} className={`${num ? 'num ' : ''}qsort ${(extra?.className as string) ?? ''}`} aria-sort={on ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
@@ -376,6 +376,7 @@ export function SortTh<K extends string>({ k, sort, dir, onSort, children, num, 
           {on ? (dir === 'asc' ? '▲' : '▼') : '↕'}
         </span>
       </button>
+      {after}
     </th>
   );
 }

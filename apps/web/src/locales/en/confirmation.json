@@ -422,7 +422,13 @@
     "deleted": "Preset deleted",
     "apply": "Show the columns of {{name}}",
     "by": "by {{by}}",
-    "cols": "Columns"
+    "cols": "Columns",
+    "savedAll": "Preset “{{name}}” saved and used by every team",
+    "applyAll": "Use this preset for every team",
+    "byAdmin": "Chosen by the admin",
+    "lockedNote": "The columns shown are chosen by the admin for every team. You can change their order (drag) and width (header edge).",
+    "colsOrder": "Column order",
+    "resetWidths": "Automatic widths"
   },
   "hist": {
     "title": "History of {{ref}}",
