@@ -214,7 +214,12 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
           </span>
           {has('confirmation', 'suivi', 'depot') && <GlobalSearch />}
           {has('confirmation', 'suivi', 'depot') && (
-            page === 'sav' ? (
+            page === 'confirmation' && (!sub || sub === 'nouvelles' || sub === 'attente') && has('confirmation') ? (
+              <button type="button" className="btn primary pxs-new pxs-next" title={t('confirmation.next').replace(/\s*[→←]\s*$/, '')} onClick={() => window.dispatchEvent(new Event('px:next-order'))}>
+                <span className="pxs-t">{t('confirmation.next').replace(/\s*[→←]\s*$/, '')}</span>
+                <Icon name="chevr" className="pxs-ar" />
+              </button>
+            ) : page === 'sav' ? (
               <button type="button" className="btn primary pxs-new" title={t('sav.new').replace(/^\+\s*/, '')} onClick={() => (location.hash = '#/sav/nouveau')}>
                 +<span className="pxs-t"> {t('sav.new').replace(/^\+\s*/, '')}</span>
               </button>

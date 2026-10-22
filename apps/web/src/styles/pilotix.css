@@ -1307,3 +1307,7 @@ html body .bj-cd.soon { background: #fdeaea; color: #c0392b; }
 html body .qtbl td.px-c-chrono { white-space: nowrap; }
 html body .qtbl td.px-c-chrono .bj-cd { margin-top: 0; }
 .qd6-savebtn:disabled { cursor: not-allowed; } html body .qd6-savebtn.on:not(:disabled) { cursor: pointer; }
+/* header "Commande suivante": text then an arrow (only the arrow on small screens) */
+.topbar .pxs-next { display: inline-flex; align-items: center; gap: 6px; }
+.topbar .pxs-next .pxs-ar { width: 18px; height: 18px; }
+html[dir="rtl"] .topbar .pxs-next .pxs-ar svg { transform: scaleX(-1); }
