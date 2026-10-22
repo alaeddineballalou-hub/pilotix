@@ -1,7 +1,7 @@
 // Confirmation: Nouvelles › En cours › Confirmées (+ Terminées). Same screens as the original app.
 import { SALES_CHANNELS, SalesChannel, WILAYAS } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { Fragment, ReactNode, useEffect, useMemo, useState } from 'react';
+import { Fragment, ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
 import { downloadCsv } from '../../lib/files';
@@ -683,8 +683,24 @@ function Toolbar(p: {
   const none = nSel === 0;
   const tip = t('confirmation.tb.tipNone');
   const tipOne = t('confirmation.tb.tipOne');
+  // the bar measures itself: when the labels don't fit on one line, the small buttons become icons
+  const barRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const check = () => {
+      el.classList.remove('qa-compact', 'qa-two');
+      const over = () => el.scrollWidth > el.clientWidth + 1;
+      if (over()) el.classList.add('qa-compact');
+      if (over()) el.classList.add('qa-two');
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [nSel, p.manager, !!p.onDelete]);
   return (
-    <div className="qacts" role="toolbar" aria-label={t('confirmation.tb.label')}>
+    <div ref={barRef} className="qacts" role="toolbar" aria-label={t('confirmation.tb.label')}>
       <span className={`qa-info ${nSel ? 'on' : ''}`}>
         {nSel ? t('confirmation.tb.selected', { count: nSel }) : t('confirmation.tb.none')}
         {nSel > 0 && (
