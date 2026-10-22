@@ -1,9 +1,10 @@
-import { DragEvent, useState } from 'react';
+import { DragEvent, useMemo, useState } from 'react';
 import { store } from '../lib/store';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../lib/backend';
 import { useRpc } from '../lib/query';
 import { useSession } from '../lib/session';
+import { useUiPrefs } from '../lib/ui';
 import { Icon } from './kit';
 import { toast } from './toast';
 
@@ -11,8 +12,12 @@ import { toast } from './toast';
  * Column picker with the shared, locked presets. The same presets show in Confirmation and Suivi:
  * a preset keeps the columns a table has and ignores the others.
  */
-export function ColumnMenu<K extends string>({ cols, visible, onChange, onReset, open, onToggle, order, onOrder }: {
+export function ColumnMenu<K extends string>({ cols, visible, onChange, onReset, open, onToggle, order, onOrder, presetId, onPreset }: {
   cols: { k: K; label: string }[];
+  /** the preset in use for this list (it stays until the user changes the columns) */
+  presetId?: string | null;
+  /** choosing a preset: saved with the account and used by every list */
+  onPreset?: (id: string) => void;
   visible: Set<K>;
   onChange: (s: Set<K>) => void;
   onReset: () => void;
@@ -62,10 +67,10 @@ export function ColumnMenu<K extends string>({ cols, visible, onChange, onReset,
             {(presets.data ?? []).length === 0 && <div className="px-pre-none">{t('confirmation.presets.none')}</div>}
             {(presets.data ?? []).map((p) => {
               const keep = p.cols.filter(has);
-              const on = keep.length > 0 && keep.length === visible.size && keep.every((k) => visible.has(k));
+              const on = onPreset ? presetId === p.id : keep.length > 0 && keep.length === visible.size && keep.every((k) => visible.has(k));
               return (
                 <div key={p.id} className={`px-pre-it ${on ? 'on' : ''}`}>
-                  <button type="button" className="px-pre-go" title={t('confirmation.presets.locked')} aria-label={t('confirmation.presets.apply', { name: p.name })} disabled={!keep.length} onClick={() => (onChange(new Set(keep)), order && onOrder?.([...keep, ...order.filter((k) => !keep.includes(k))]))}>
+                  <button type="button" className="px-pre-go" title={t('confirmation.presets.locked')} aria-label={t('confirmation.presets.apply', { name: p.name })} disabled={!keep.length} onClick={() => (onPreset ? onPreset(p.id) : (onChange(new Set(keep)), order && onOrder?.([...keep, ...order.filter((k) => !keep.includes(k))])))}>
                     <Icon name="lock" />
                     <span>{p.name}</span>
                     <small>{keep.length}</small>
@@ -117,6 +122,50 @@ export function ColumnMenu<K extends string>({ cols, visible, onChange, onReset,
       )}
     </span>
   );
+}
+
+/** Puts columns added later in their place (before the column that follows them by default). */
+function fixOrder<K extends string>(o: readonly K[] | null | undefined, all: readonly K[]): K[] {
+  const out = (o ?? []).filter((k) => all.includes(k));
+  all.forEach((k, i) => {
+    if (out.includes(k)) return;
+    const after = all.slice(i + 1).find((x) => out.includes(x));
+    out.splice(after ? out.indexOf(after) : out.length, 0, k);
+  });
+  return out;
+}
+
+/**
+ * The columns of one list, saved with the account (so they stay after a reload and on every device).
+ * Choosing a preset applies it to every list (each keeps the columns it has) until the columns are changed by hand;
+ * a change by hand only concerns that list. The newest of the two wins.
+ */
+export function useTableColumns<K extends string>(table: string, all: K[], opts: { defaults?: K[]; legacy?: () => { cols?: K[] | null; order?: K[] | null } | null } = {}) {
+  const prefs = useUiPrefs();
+  const presets = useRpc('confirmation.colPresets', {}, { staleTime: 60_000 });
+  const defaults = opts.defaults ?? all;
+  const saved = prefs.get<{ cols: K[]; order: K[]; at: number }>(`cols.t.${table}`);
+  // choices made before they were saved with the account (this browser only)
+  const legacy = useMemo(() => (saved ? null : opts.legacy?.() ?? null), [table, !!saved]); // eslint-disable-line react-hooks/exhaustive-deps
+  const own = saved ?? (legacy && (legacy.cols || legacy.order) ? { cols: legacy.cols ?? defaults, order: legacy.order ?? all, at: 0 } : null);
+  const active = prefs.get<{ id: string; at: number }>('cols.active');
+  const preset = active ? presets.data?.find((p) => p.id === active.id) : undefined;
+  const keep = preset ? (preset.cols.filter((k) => all.includes(k as K)) as K[]) : [];
+  const usePreset = !!preset && keep.length > 0 && (!own || active!.at >= own.at);
+  const base = fixOrder(own?.order, all);
+  const order = usePreset ? [...keep, ...base.filter((k) => !keep.includes(k))] : base;
+  const visible = new Set<K>(usePreset ? keep : own ? own.cols.filter((k) => all.includes(k)) : defaults);
+  const saveOwn = (cols: K[], o: K[]) => prefs.set(`cols.t.${table}`, { cols, order: o, at: Date.now() });
+  return {
+    visible,
+    order,
+    presetId: usePreset ? preset!.id : null,
+    setVisible: (s: Set<K>) => saveOwn(order.filter((k) => s.has(k)), order),
+    setOrder: (o: K[]) => saveOwn(order.filter((k) => visible.has(k)), o),
+    /** "Tout afficher" */
+    reset: () => saveOwn([...all], order),
+    applyPreset: (id: string) => prefs.set('cols.active', { id, at: Date.now() }),
+  };
 }
 
 /** Column order kept per list (new columns go at the end). */

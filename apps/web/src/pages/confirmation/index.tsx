@@ -13,7 +13,7 @@ import { store } from '../../lib/store';
 import { ErrorBox, Field, Help, Icon, Loading, Pager, SortTh, StageBar, StatusBadge, StatusSelect } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
-import { colDrag, ColumnMenu, DensitySwitch, useColumnOrder, useDensity } from '../../ui/ColumnMenu';
+import { colDrag, ColumnMenu, DensitySwitch, useDensity, useTableColumns } from '../../ui/ColumnMenu';
 import { HistoryButton, PhoneCell } from './History';
 import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import type { PageProps } from '../registry';
@@ -113,16 +113,20 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   const catalog = useRpc('confirmation.catalog', {}, { staleTime: 5 * 60_000 });
   const COLS = useMemo(() => columnsOf(sub), [sub]);
   const colsKey = `conf-cols3-${sub}`;
-  const [visible, setVisible] = useState<Set<ColKey>>(() => {
-    const saved = store.json<ColKey[] | null>(colsKey, null);
-    if (!saved) return new Set(COLS.map((c) => c.k));
-    // the Chrono column came later: show it once in saved column choices
-    if (COLS.some((c) => c.k === 'chrono') && !saved.includes('chrono') && !store.get(`${colsKey}-chrono`)) {
-      store.set(`${colsKey}-chrono`, '1');
-      return new Set([...saved, 'chrono' as ColKey]);
-    }
-    return new Set(saved);
-  });
+  // columns saved with the account; a chosen preset is used by every list until the columns are changed by hand
+  const tc = useTableColumns<ColKey>(
+    `conf-${sub}`,
+    COLS.map((c) => c.k),
+    {
+      legacy: () => {
+        let cols = store.json<ColKey[] | null>(colsKey, null);
+        // the Chrono column came later: show it in older column choices (unless it was hidden since)
+        if (cols && COLS.some((c) => c.k === 'chrono') && !cols.includes('chrono') && !store.get(`${colsKey}-chrono`)) cols = [...cols, 'chrono'];
+        return { cols, order: store.json<ColKey[] | null>(`conf-order-${sub}`, null) };
+      },
+    },
+  );
+  const visible = tc.visible;
   const [q, setQ] = useState('');
   const [qd, setQd] = useState('');
   const [f, setF] = useState<Filters>({});
@@ -148,7 +152,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
     setSel((s) => new Set([...s].filter((x) => ids.has(x))));
   }, [list.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [order, setOrder] = useColumnOrder(`conf-order-${sub}`, COLS.map((c) => c.k));
+  const { order, setOrder } = tc;
   const cols = order.map((k) => COLS.find((c) => c.k === k)!).filter((c) => c && visible.has(c.k));
   const drag = colDrag(order, setOrder);
   const [dens, setDens] = useDensity();
@@ -160,10 +164,6 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   const setFilter = (p: Partial<Filters>) => {
     setF((cur) => ({ ...cur, ...p }));
     setPage(1);
-  };
-  const saveCols = (s: Set<ColKey>) => {
-    setVisible(s);
-    store.set(colsKey, JSON.stringify([...s]));
   };
   const onSort = (k: SortKey) => {
     setSort((cur) => (cur.sort === k ? { sort: k, dir: cur.dir === 'asc' ? 'desc' : 'asc' } : { sort: k, dir: k === 'total' ? 'desc' : 'asc' }));
@@ -437,11 +437,10 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
               onOrder={setOrder}
               cols={COLS.map((c) => ({ k: c.k, label: colLabel(c.k) }))}
               visible={visible}
-              onChange={saveCols}
-              onReset={() => {
-                setVisible(new Set(COLS.map((c) => c.k)));
-                store.set(colsKey, null);
-              }}
+              onChange={tc.setVisible}
+              onReset={tc.reset}
+              presetId={tc.presetId}
+              onPreset={tc.applyPreset}
               open={panel === 'c'}
               onToggle={() => setPanel(panel === 'c' ? null : 'c')}
             />

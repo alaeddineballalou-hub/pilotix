@@ -8,6 +8,8 @@ export * from './settings';
 export { seedDemo, seedBase } from './seed';
 export { login, hashPassword, profileById } from './modules/users';
 export { pgliteDb } from './pglite';
+export { demoSnapshot, demoRestore } from './demoKeep';
+export type { DemoKeep } from './demoKeep';
 export type { PGliteLike } from './pglite';
 
 export { REGISTRY };
