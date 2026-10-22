@@ -1151,7 +1151,7 @@ html body .qd3.qd5.qd6 { display: block !important; container: qd6 / inline-size
 .qd6-rail .qd6-disc.over dt small { color: #c0392b; font-weight: 800; }
 .qd6-dv { display: inline-flex; align-items: baseline; justify-content: flex-end; gap: .28em; cursor: text; }
 .qd6-dv .qd6-minus { color: #F28B1E; }
-.qd6-rail .qd6-dv input { height: auto !important; min-height: 0 !important; padding: 0 !important; border: 0 !important; border-bottom: 1.5px dashed #F7A823 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; font: inherit; font-size: 14.5px; font-weight: 800; color: var(--ink); text-align: end; -moz-appearance: textfield; }
+.qd6-rail .qd6-dv input { height: auto !important; min-height: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; font: inherit; font-size: 14.5px; font-weight: 800; color: var(--ink); text-align: end; -moz-appearance: textfield; }
 .qd6-dv input::-webkit-outer-spin-button, .qd6-dv input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .qd6-dv input:focus { outline: none; }
 .qd6-unit { font-weight: 800; }
@@ -1165,7 +1165,7 @@ html body .qd3.qd5.qd6 { display: block !important; container: qd6 / inline-size
 .qd6-fee:focus-within { border-color: #F7A823; box-shadow: 0 0 0 3px rgba(247, 168, 35, .18); }
 .qd6-fee .qd6-lab { font-size: 13px; }
 .qd6-fee .qd2-gf { order: 3; flex-basis: 100%; text-align: end; }
-html body .qd6-fee .qd6-dv input { height: auto !important; min-height: 0 !important; padding: 0 !important; border: 0 !important; border-bottom: 1.5px dashed #F7A823 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; font: inherit; font-size: 14.5px; font-weight: 800; color: var(--ink); text-align: end; -moz-appearance: textfield; }
+html body .qd6-fee .qd6-dv input { height: auto !important; min-height: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; font: inherit; font-size: 14.5px; font-weight: 800; color: var(--ink); text-align: end; -moz-appearance: textfield; }
 .qd6-fee .qd6-dv { font-size: 14.5px; font-weight: 800; }
 /* dark: the total keeps its navy box but lifted off the navy card, with our orange edge */
 [data-theme="dark"] .qd6-rail .qd5-sum .qd5-total { background: linear-gradient(135deg, #2a3d66, #33497a); box-shadow: inset 0 0 0 1px rgba(247, 168, 35, .55); }
@@ -1195,3 +1195,6 @@ html body .qd6-ntext { display: block; width: 100%; height: 72px; min-height: 72
 [data-theme="dark"] .qd6-ntext { background: rgba(255, 255, 255, .03) !important; }
 html body .qd6-ntext:focus { outline: none; border-color: #F7A823 !important; box-shadow: 0 0 0 3px rgba(247, 168, 35, .18); }
 @container qd6 (max-width: 620px) { .qd6-ntabs { display: flex; } .qd6-ntabs button { flex: 1; justify-content: center; padding: 0 6px; } }
+/* editable amounts: no underline; the box itself shows it can be edited (pointer + orange edge on hover) */
+.qd6-rail .qd6-disc:hover, .qd6-fee:hover { border-color: #F7A823; }
+.qd6-rail .qd6-disc, .qd6-fee { cursor: text; }
