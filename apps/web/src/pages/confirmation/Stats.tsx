@@ -23,7 +23,6 @@ export function StatsSection({ sub }: { sub: Sub }) {
   if (sub === 'terminees' || sub === 'livrees') return null;
   const fold = (o: boolean) => (setOpen(o), store.set('px-kff', o ? '1' : '0'));
   if (sub === 'nouvelles') return <NouvellesStats kf={kf} setKf={setKf} open={open} setOpen={fold} />;
-  if (sub === 'attente') return <EnCoursStats kf={kf} setKf={setKf} open={open} setOpen={fold} />;
   return (
     <section className={`px-kff ${open ? '' : 'folded'}`}>
       <button
@@ -41,6 +40,7 @@ export function StatsSection({ sub }: { sub: Sub }) {
       </button>
       {open && (
         <div className="px-kff-body">
+          {sub === 'attente' && <EnCoursCard kf={kf} setKf={setKf} />}
           {sub === 'confirmees' && <ConfirmedCard kf={kf} setKf={setKf} />}
         </div>
       )}
@@ -175,159 +175,123 @@ function NouvellesStats({ kf, setKf, open, setOpen }: { kf: Kf; setKf: (k: Kf) =
   );
 }
 
-// ---------------------------------------------------------------- En cours: one foldable card
+// ---------------------------------------------------------------- En cours: one card, like Confirmées
 /**
- * En cours › Statistiques. Three live numbers (every order of the tab, no dates) say what to do now;
- * three period numbers (the chosen dates, by status change) say how well the team turns calls into results;
- * the table ranks the agents, best first.
+ * En cours › Statistiques. Same card and dropdowns as Confirmées (period, date type, indicator).
+ * "À traiter maintenant" is live (every order of the tab, whatever the dates); "Performance" and the
+ * agent table follow the dropdowns; "Performance de livraison" shows what became of the confirmed orders.
  */
-function EnCoursStats({ kf, setKf, open, setOpen }: { kf: Kf; setKf: (k: Kf) => void; open: boolean; setOpen: (o: boolean) => void }) {
+function EnCoursCard({ kf, setKf }: { kf: Kf; setKf: (k: Kf) => void }) {
   const { t } = useTranslation();
-  const today = new Date(Date.now() + 3_600_000).toISOString().slice(0, 10);
-  const from = kf.from || today;
-  const to = kf.to || today;
-  const q = useRpc('confirmation.enCours', { per: 'custom', basis: 'updated', from, to }, { refetchInterval: 30_000, enabled: open });
+  const q = useRpc('confirmation.enCours', kfInput(kf), { refetchInterval: 30_000, enabled: kf.view === 'conf' });
   const now = useNow();
   const D = q.data;
-  const set = (p: Partial<Kf>) => setKf({ ...kf, ...p });
-  const lateAge = D?.lateOldest ? Math.max(0, now - Date.parse(D.lateOldest.since)) : null;
-  const badge = (p: number | null, ok: number, warn: number) => <span className={`badge t-${tone3(p, ok, warn) ?? 'off'} ltr`}>{pctTxt(p)}</span>;
   const L = (k: string) => t(`confirmation.ek.col.${k}`);
+  const badge = (p: number | null, ok: number, warn: number) => <span className={`badge t-${tone3(p, ok, warn) ?? 'off'} ltr`}>{pctTxt(p)}</span>;
+  let body: ReactNode = <Loading />;
+  if (kf.view === 'deliv') body = <DelivBody kf={kf} on="confirmed" />;
+  else if (q.error) body = <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
+  else if (D) {
+    const lateAge = D.lateOldest ? Math.max(0, now - Date.parse(D.lateOldest.since)) : null;
+    const nextIn = D.nextLater ? Math.max(0, Date.parse(D.nextLater.at) - now) : null;
+    const early = Math.max(0, D.cancelled - D.complete);
+    body = (
+      <div>
+        <div className="bjec-sec">{t('confirmation.ek.secLive')}</div>
+        <div className="kpis">
+          <Kpi tone={D.dueNow ? 'warn' : undefined} label={t('confirmation.ek.due')} help={t('confirmation.ek.dueHelp')} value={n(D.dueNow)} sub={t('confirmation.ek.dueSub', { n: D.count })} />
+          <Kpi
+            tone={D.late ? 'bad' : undefined}
+            label={t('confirmation.ek.late')}
+            help={t('confirmation.ek.lateHelp')}
+            value={n(D.late)}
+            sub={D.lateOldest && lateAge !== null ? t('confirmation.ek.lateSub', { d: dur(lateAge), ref: D.lateOldest.ref }) : t('confirmation.ek.lateNone')}
+          />
+          <Kpi
+            label={t('confirmation.ek.later')}
+            help={t('confirmation.ek.laterHelp')}
+            value={n(D.later)}
+            sub={D.nextLater && nextIn !== null ? t('confirmation.ek.laterSub', { d: dur(nextIn), ref: D.nextLater.ref }) : t('confirmation.ek.laterNone')}
+          />
+          <Kpi label={t('confirmation.ek.value')} help={t('confirmation.ek.valueHelp')} value={da(D.value)} sub={t('confirmation.ek.valueSub', { n: D.count })} />
+        </div>
+        <div className="bjec-sec">
+          {t('confirmation.ek.secPerf')} · {perLabel(t, kf)}
+        </div>
+        <div className="kpis">
+          <Kpi tone={tone3(D.confRate, 60, 40)} label={t('confirmation.ek.conf')} help={t('confirmation.ek.confHelp')} value={pctTxt(D.confRate)} sub={t('confirmation.ek.confSub', { c: D.confirmed, x: D.cancelled })} />
+          <Kpi tone={tone3(D.recoveryRate, 60, 40)} label={t('confirmation.ek.rec')} help={t('confirmation.ek.recHelp')} value={pctTxt(D.recoveryRate)} sub={t('confirmation.ek.recSub', { r: D.recovered, l: D.lost })} />
+          <Kpi
+            tone={tone3(D.completeRate, 100, 80)}
+            label={t('confirmation.ek.full')}
+            help={t('confirmation.ek.fullHelp')}
+            value={pctTxt(D.completeRate)}
+            sub={D.cancelled ? t('confirmation.ek.fullSub', { c: D.complete, n: D.cancelled }) : t('confirmation.ek.fullNone')}
+          />
+          <Kpi tone={early ? 'bad' : D.cancelled ? 'ok' : undefined} label={t('confirmation.ek.early')} help={t('confirmation.ek.earlyHelp')} value={n(early)} sub={t('confirmation.ek.earlySub')} />
+        </div>
+        <h3>{t('confirmation.ek.byAgent')}</h3>
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>{L('agent')}</th>
+                <th className="num">{L('n')}</th>
+                <th className="num">{L('due')}</th>
+                <th className="num">{L('late')}</th>
+                <th className="num">{L('conf')}</th>
+                <th className="num">{L('rec')}</th>
+                <th className="num">{L('full')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {D.byAgent.length ? (
+                D.byAgent.map((a) => (
+                  <tr key={a.agentId ?? 0}>
+                    <td data-l={L('agent')}>
+                      <b>{a.name ?? t('confirmation.noAgent')}</b>
+                    </td>
+                    <td className="num ltr" data-l={L('n')}>
+                      {n(a.n)}
+                    </td>
+                    <td className="num ltr" data-l={L('due')}>
+                      {a.due ? <b>{n(a.due)}</b> : '0'}
+                    </td>
+                    <td className="num" data-l={L('late')}>
+                      <span className={`badge t-${a.late ? 'bad' : 'off'} ltr`}>{n(a.late)}</span>
+                    </td>
+                    <td className="num" data-l={L('conf')}>
+                      {badge(a.confRate, 60, 40)}
+                    </td>
+                    <td className="num" data-l={L('rec')}>
+                      {badge(a.recoveryRate, 60, 40)}
+                    </td>
+                    <td className="num" data-l={L('full')}>
+                      {badge(a.completeRate, 100, 80)}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={7} className="empty">
+                    {t('confirmation.ek.empty')}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <p className="muted small px-ek-legend">{t('confirmation.ek.legend')}</p>
+      </div>
+    );
+  }
   return (
-    <section className={`card px-st ${open ? '' : 'folded'}`}>
-      <button type="button" className="px-st-head" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <span className="px-st-t">{t('confirmation.stats.title')}</span>
-        {open && (
-          <span className="bjfc-live">
-            <i />
-            {t('confirmation.fc.live')}
-          </span>
-        )}
-        <svg className="px-st-ch" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d={open ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} />
-        </svg>
-      </button>
-      {open && (
-        <>
-          <div className="px-st-filters">
-            <span className="px-st-dates">
-              <input type="date" value={from} max={to} aria-label={t('common.from')} onChange={(e) => set({ per: 'custom', from: e.target.value || today })} />
-              <span className="muted">→</span>
-              <input type="date" value={to} min={from} aria-label={t('common.to')} onChange={(e) => set({ per: 'custom', to: e.target.value || today })} />
-            </span>
-            <span className="muted small">{t('confirmation.ek.datesNote')}</span>
-          </div>
-          {q.error ? (
-            <ErrorBox error={q.error} onRetry={() => q.refetch()} />
-          ) : !D ? (
-            <Loading />
-          ) : (
-            <>
-              <div className="px-st-grid">
-                <Kpi
-                  tone={D.dueNow ? 'warn' : undefined}
-                  icon="phone"
-                  label={t('confirmation.ek.due')}
-                  help={t('confirmation.ek.dueHelp')}
-                  value={n(D.dueNow)}
-                  sub={t('confirmation.ek.dueSub', { n: D.count })}
-                />
-                <Kpi
-                  tone={D.late ? 'bad' : undefined}
-                  icon="alert"
-                  label={t('confirmation.ek.late')}
-                  help={t('confirmation.ek.lateHelp')}
-                  value={n(D.late)}
-                  sub={D.lateOldest && lateAge !== null ? t('confirmation.ek.lateSub', { d: dur(lateAge), ref: D.lateOldest.ref }) : t('confirmation.ek.lateNone')}
-                />
-                <Kpi icon="wallet" label={t('confirmation.ek.value')} help={t('confirmation.ek.valueHelp')} value={da(D.value)} sub={t('confirmation.ek.valueSub', { n: D.count })} />
-                <Kpi
-                  tone={tone3(D.confRate, 60, 40)}
-                  icon="check"
-                  rate={D.confRate === null ? null : D.confRate / 100}
-                  label={t('confirmation.ek.conf')}
-                  help={t('confirmation.ek.confHelp')}
-                  value={pctTxt(D.confRate)}
-                  sub={t('confirmation.ek.confSub', { c: D.confirmed, x: D.cancelled })}
-                />
-                <Kpi
-                  tone={tone3(D.recoveryRate, 60, 40)}
-                  icon="refresh"
-                  rate={D.recoveryRate === null ? null : D.recoveryRate / 100}
-                  label={t('confirmation.ek.rec')}
-                  help={t('confirmation.ek.recHelp')}
-                  value={pctTxt(D.recoveryRate)}
-                  sub={t('confirmation.ek.recSub', { r: D.recovered, l: D.lost })}
-                />
-                <Kpi
-                  tone={tone3(D.completeRate, 100, 80)}
-                  icon="checkcircle"
-                  rate={D.completeRate === null ? null : D.completeRate / 100}
-                  label={t('confirmation.ek.full')}
-                  help={t('confirmation.ek.fullHelp')}
-                  value={pctTxt(D.completeRate)}
-                  sub={D.cancelled ? t('confirmation.ek.fullSub', { c: D.complete, n: D.cancelled }) : t('confirmation.ek.fullNone')}
-                />
-              </div>
-              <div className="px-ek-agents">
-                <h3>{t('confirmation.ek.byAgent')}</h3>
-                <div className="tbl-wrap">
-                  <table className="tbl">
-                    <thead>
-                      <tr>
-                        <th>{L('agent')}</th>
-                        <th className="num">{L('n')}</th>
-                        <th className="num">{L('due')}</th>
-                        <th className="num">{L('late')}</th>
-                        <th className="num">{L('conf')}</th>
-                        <th className="num">{L('rec')}</th>
-                        <th className="num">{L('full')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {D.byAgent.length ? (
-                        D.byAgent.map((a) => (
-                          <tr key={a.agentId ?? 0}>
-                            <td data-l={L('agent')}>
-                              <b>{a.name ?? t('confirmation.noAgent')}</b>
-                            </td>
-                            <td className="num ltr" data-l={L('n')}>
-                              {n(a.n)}
-                            </td>
-                            <td className="num ltr" data-l={L('due')}>
-                              {a.due ? <b>{n(a.due)}</b> : '0'}
-                            </td>
-                            <td className="num" data-l={L('late')}>
-                              <span className={`badge t-${a.late ? 'bad' : 'off'} ltr`}>{n(a.late)}</span>
-                            </td>
-                            <td className="num" data-l={L('conf')}>
-                              {badge(a.confRate, 60, 40)}
-                            </td>
-                            <td className="num" data-l={L('rec')}>
-                              {badge(a.recoveryRate, 60, 40)}
-                            </td>
-                            <td className="num" data-l={L('full')}>
-                              {badge(a.completeRate, 100, 80)}
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={7} className="empty">
-                            {t('confirmation.ek.empty')}
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="muted small">{t('confirmation.ek.legend')}</p>
-              </div>
-            </>
-          )}
-        </>
-      )}
-    </section>
+    <div className="card bjkfc bjek">
+      <Head title={t('confirmation.ek.title')} help={t('confirmation.ek.help')}>
+        <KfBar kf={kf} setKf={setKf} />
+      </Head>
+      {body}
+    </div>
   );
 }
 
