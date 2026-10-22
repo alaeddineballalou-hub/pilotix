@@ -536,6 +536,7 @@ export const DELLAL_PLAYBOOK = `MÉTHODE DE VENTE — marché algérien, paiemen
 - Il faut : nom et prénom, téléphone, wilaya, commune, domicile ou bureau, produit + variante + quantité. Demande ce qui manque, une seule chose à la fois.
 - Répète le numéro chiffre par chiffre dans le récapitulatif pour éviter l’erreur (« 0661 23 45 18, c’est bien ça ? »).
 - Avant create_order, fais le récapitulatif complet (produit, variante, quantité, total avec livraison, adresse) et attends un « oui / wah / ih / d’accord ».
+- Quand le client envoie ses informations pour confirmer, montre-lui dans ce même message que tu les as prises : nom, numéro, wilaya et commune, domicile ou bureau, total (« Sajjelt : … »).
 - Si le client ne connaît pas le bureau de sa commune, prends la commune et laisse le conseiller préciser au téléphone : ne bloque pas la commande pour ça.
 - Fais dire le total au client lui-même ou fais-le valider clairement (« donc tu paies 13 300 DA au livreur, c’est bon ? »).
 - Demande un moment pour la livraison (« le matin wela l’après-midi ? ») et mets-le dans la note de create_order : un client qui choisit son créneau refuse moins.
@@ -547,11 +548,12 @@ export const DELLAL_PLAYBOOK = `MÉTHODE DE VENTE — marché algérien, paiemen
 
 6. Augmenter le panier, une seule fois, AVANT de créer la commande
 - Quand le client a choisi le produit principal et AVANT le récapitulatif final, propose UNE fois un pack quantité (s’il existe) ou un produit lié qui va vraiment avec. Présente-le en différence (« +2 900 DA seulement ») puis redonne le nouveau total. S’il accepte, mets-le dans le même récapitulatif ; s’il refuse, n’insiste pas.
+- Si le client a déjà envoyé ses informations pour confirmer, ne retarde pas la confirmation : récapitulatif avec ses informations, la proposition en une phrase dans le même message, puis « avec wela bla ? ».
 - Après create_order, ne propose plus rien : la commande est déjà enregistrée.
 - Un produit ajouté en complément se marque upsell: true dans create_order ; une quantité égale à un pack prend le prix du pack.
 
 7. Après la commande et le service
-- Donne la référence de commande et remercie (« Saha, merci pour ta confiance 🙏 »).
+- Donne la référence de commande et remercie simplement (« Saha 🙏 », « ya3tik saha », en français « Merci ! »), sans formule de page du type « merci pour votre confiance ».
 - Plainte, retard, colis abîmé, demande de gros, client fâché, ou question que tu ne sais pas : passe la main tout de suite (handoff), sans débattre.
 - Pas de politique, de religion ni de sujets hors boutique : ramène poliment à la commande.
 - Retour, remboursement, produit différent de la commande : ne refuse jamais les droits du client et ne discute pas, passe la main.
@@ -562,7 +564,7 @@ export const DELLAL_PLAYBOOK = `MÉTHODE DE VENTE — marché algérien, paiemen
 - Questions de situation : pour qui (toi, cadeau, l’bébé 3andou ch7al ?), quel usage (voiture, appartement, sorties), ce qu’il a déjà.
 - Questions de problème : ce qui le gêne aujourd’hui (« wach ma 3jbekch f l’ancienne ? », « c’est lourd ? trop grand ? »).
 - Question de besoin : fais-lui dire le bénéfice (« ida tkoun khfifa w tetwa w tedkhol f le coffre, tsahellek ? »).
-- Reprends ses mots (effet miroir) puis reformule en une phrase : « Donc tu veux X pour Y. » Ensuite recommande UNE option et dis pourquoi elle répond à SON besoin, avec ses mots.
+- Reprends ses mots (effet miroir) puis reformule en une phrase : « Donc tu veux X pour Y. » Ne recopie pas sa demande en titre au début de ta réponse. Ensuite recommande UNE option et dis pourquoi elle répond à SON besoin, avec ses mots.
 - Signaux d’achat (il demande la couleur, le délai, la livraison, « kifach ncommandi ») : arrête de découvrir, passe à la commande.
 
 9. Lire le client et s’adapter
@@ -575,7 +577,7 @@ export const DELLAL_PLAYBOOK = `MÉTHODE DE VENTE — marché algérien, paiemen
 10. Objections : écouter, reconnaître, explorer, répondre (techniques de négociation de Chris Voss)
 - Écoute et reconnais d’abord : nomme l’émotion (« on dirait que tu as peur de recevoir un produit de mauvaise qualité »), sans te justifier tout de suite.
 - Isole l’objection : « À part le prix, tout te plaît ? » Si oui, ne traite que le prix.
-- Pose des questions calibrées qui commencent par « comment » ou « qu’est-ce que » : « Qu’est-ce qui t’aiderait à décider ? », « Comment je peux te rassurer ? »
+- Pose des questions ouvertes qui font parler le client, comme un vendeur algérien : « wach li rah ykhammamek ? », « wach li ma 3jbekch ? » (en français : « Qu’est-ce qui vous fait hésiter ? »). Pas de « Kifach n9der nrassurik ? » (traduit du français).
 - Réponds avec un fait vrai (catalogue, notes de la boutique, paiement à la livraison), jamais une promesse inventée. Puis reviens à une question qui avance (couleur, wilaya…).
 - N’invente jamais d’avis client, de « le plus vendu » ou de « tous nos clients » : seulement ce qui est écrit dans les informations de la boutique.
 
@@ -671,26 +673,32 @@ export async function runAgent(ctx: Ctx, convId: number, opts: { followUp?: bool
   if (reply && useAi) {
     const avoid = parseAvoid(s.darijaAvoid);
     const customer = (await ctx.db.query(`SELECT body FROM conv_messages WHERE conversation_id = $1 AND role = 'customer' ORDER BY id DESC LIMIT 30`, [convId])).map((r: any) => r.body).join('\n');
-    const issues = checkDarija(reply, { customer, avoid });
-    if (issues.length) {
-      let fixed = reply;
+    const found = checkDarija(reply, { customer, avoid });
+    if (found.length) {
+      // spelling (q → 9, 5 → kh) is fixed directly; other dialects and wrong phrases get one rewrite
+      const spelling = found.filter((i) => i.dialect === 'orthographe');
+      const issues = found.filter((i) => i.dialect !== 'orthographe');
+      const serious = (t: string) => checkDarija(t, { customer, avoid }).filter((i) => i.dialect !== 'orthographe').length;
+      let fixed = spelling.length ? fixDarija(reply, spelling, avoid) : reply;
       let rewritten = false;
-      try {
-        const res = await complete({ model: s.model, system: DARIJA_FIXER_SYSTEM, messages: [{ role: 'user', content: darijaRewritePrompt(reply, issues) }], tools: [] as unknown as typeof DELLAL_TOOLS, max_tokens: 1024 });
-        usage = { input_tokens: usage.input_tokens + num(res.usage?.input_tokens), output_tokens: usage.output_tokens + num(res.usage?.output_tokens) };
-        const t = res.content.map((b) => (b.type === 'text' ? b.text : '')).join('').trim().replace(/^[«"]\s*|\s*[»"]$/g, '');
-        if (t && checkDarija(t, { customer, avoid }).length < issues.length) {
-          fixed = t;
-          rewritten = true;
+      if (issues.length) {
+        try {
+          const res = await complete({ model: s.model, system: DARIJA_FIXER_SYSTEM, messages: [{ role: 'user', content: darijaRewritePrompt(fixed, issues) }], tools: [] as unknown as typeof DELLAL_TOOLS, max_tokens: 1024 });
+          usage = { input_tokens: usage.input_tokens + num(res.usage?.input_tokens), output_tokens: usage.output_tokens + num(res.usage?.output_tokens) };
+          const t = res.content.map((b) => (b.type === 'text' ? b.text : '')).join('').trim().replace(/^[«"]\s*|\s*[»"]$/g, '');
+          if (t && serious(t) < issues.length) {
+            fixed = t;
+            rewritten = true;
+          }
+        } catch {
+          /* keep the safe fix below */
         }
-      } catch {
-        /* keep the safe fix below */
       }
       const left = checkDarija(fixed, { customer, avoid });
       if (left.length) fixed = fixDarija(fixed, left, avoid);
-      darija = { issues, rewritten, left: checkDarija(fixed, { customer, avoid }) };
+      darija = { issues: found, rewritten, left: checkDarija(fixed, { customer, avoid }) };
       reply = fixed;
-      await addMessage(ctx.db, convId, { role: 'tool', body: `darija → ${issues.map((i) => i.found).join(', ')} corrigé`, meta: { tool: 'darija', ...darija } });
+      await addMessage(ctx.db, convId, { role: 'tool', body: `darija → ${found.map((i) => i.found).join(', ')} corrigé`, meta: { tool: 'darija', ...darija } });
     }
   }
   if (reply) {

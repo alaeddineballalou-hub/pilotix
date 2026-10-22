@@ -3,7 +3,7 @@
 // own "never write" list. A word the customer used himself is allowed (Dellal may mirror the customer).
 // The lists are conservative: a word shared with any Algerian region is NOT here (bezzaf, bghit, kifach, mlih, saha…).
 
-export type Dialect = 'maroc' | 'tunisie' | 'libye' | 'egypte' | 'golfe-levant' | 'regional' | 'faux' | 'boutique';
+export type Dialect = 'maroc' | 'tunisie' | 'libye' | 'egypte' | 'golfe-levant' | 'regional' | 'faux' | 'orthographe' | 'boutique';
 
 export interface DarijaRule {
   id: string;
@@ -70,7 +70,7 @@ export const DARIJA_RULES: DarijaRule[] = [
   { id: 'dyal', words: ['dyal', 'dial', 'dyali', 'dyalek', 'dyalk', 'ديال', 'ديالي', 'ديالك'], dialect: 'regional', use: 'ta3 (تاع) : ta3i, ta3ek' },
   { id: 'achmen', words: ['achmen', 'achmn', 'ach men', 'آش من', 'اشمن'], dialect: 'regional', use: 'wach men (واش من)', replace: 'wach men' },
   { id: 'achkoun', words: ['achkoun', 'achkon'], dialect: 'regional', use: 'chkoun (شكون) pour « qui », wach men pour « lequel »' },
-  { id: 'makaynch', words: ['makaynch', 'makaynche', 'ماكاينش'], dialect: 'regional', use: 'makach (ماكاش)', replace: 'makach' },
+  { id: 'makaynch', words: ['makaynch', 'makaynche', 'ma kaynch', 'ma kaynech', 'ماكاينش', 'ما كاينش'], dialect: 'regional', use: 'makach (ماكاش)', replace: 'makach' },
   { id: 'ktir', words: ['ktir', 'kteer', 'kthir', 'كتير'], dialect: 'regional', use: 'bezzaf (بزاف)', replace: 'bezzaf' },
   { id: 'mezyan', words: ['mzyan', 'mezyan', 'mziane', 'mezian', 'مزيان'], dialect: 'regional', use: 'mlih (مليح)', replace: 'mlih' },
   { id: 'tawa', words: ['tawa', 'taw'], dialect: 'regional', use: 'dorka (دركا)', replace: 'dorka' },
@@ -79,7 +79,7 @@ export const DARIJA_RULES: DarijaRule[] = [
   { id: 'ma3andek-7a9', words: ['ma3andek 7a9', 'ma3andek l7a9', 'ma 3andek 7a9', 'ma 3andek l7a9', 'ma3ndek 7a9', 'ما عندكش الحق', 'ماعندكش الحق'], dialect: 'faux', use: '3andek l7a9 (= tu as raison)', replace: '3andek l7a9' },
   { id: 'mrid', words: ['mrid', 'مريض'], dialect: 'faux', use: '(« mrid » = malade : ne pas l’utiliser pour parler au client)' },
   { id: 'familier', words: ['habibti', '3omri', '3mri', 'ya ghzala', 'zella', 'louza', 'bomba', 'حبيبتي', 'عمري'], dialect: 'faux', use: 'khti / madame (trop intime ou déplacé pour un vendeur)' },
-  { id: 'calque', words: ['nrecommandilek', 'nrecommandilkom', 'nrecommandilk', 'nrassurik', 'nrassurek', 'nwasslek m3a', 'ghaliban', 'يتصل بيك', 'يتصلو بيك', 'نتصل بيك', 'عزيزي العميل', 'عميلنا العزيز', 'نشكركم على ثقتكم', 'غالبا'], dialect: 'faux', use: 'tournure traduite : nanse7ek b… / rani hna ida 3andek ay question / nkhalli wa7ed men l’équipe y3ayetlek / normalement / يعيطلك' },
+  { id: 'calque', words: ['nrecommandilek', 'nrecommandilkom', 'nrecommandilk', 'nrassurik', 'nrassurek', 'nwasslek m3a', 'ghaliban', 'يتصل بيك', 'يتصلو بيك', 'نتصل بيك', 'عزيزي العميل', 'عميلنا العزيز', 'نشكركم على ثقتكم', 'غالبا'], dialect: 'faux', use: 'tournure traduite : nanse7ek b… / ida 7abit tsa9si 3la kach 7aja, rani hna / nkhalli wa7ed men l’équipe y3ayetlek / normalement / يعيطلك' },
   { id: 'politique', words: ['yetnahaw ga3', 'hogra', 'harraga', 'zawali', 'يتنحاو ڨاع', 'يتنحاو قاع', 'حقرة', 'حراڨة', 'زوالي'], dialect: 'faux', use: '(pas de politique ni de misère dans une conversation de vente)' },
 ];
 
@@ -91,9 +91,22 @@ const DIALECT_NAME: Record<Dialect, string> = {
   'golfe-levant': 'Golfe / Levant',
   regional: 'pas la forme la plus algérienne',
   faux: 'faux ou déplacé',
+  orthographe: 'orthographe : 9 pour ق, kh pour خ',
   boutique: 'interdit par la boutique',
 };
 export const dialectName = (d: Dialect) => DIALECT_NAME[d];
+
+/**
+ * One spelling per message: in Algerian chat ق is written 9 and خ is written kh, and Dellal's guide keeps to that.
+ * A reply mixing "tqdri" with "9bel" reads careless, so these forms are normalised before sending (no rewrite needed).
+ */
+export const SPELLING: Record<string, string> = {
+  nqder: 'n9der', nqdar: 'n9der', tqder: 't9der', tqdar: 't9der', tqdri: 't9dri', tqedri: 't9dri', yqder: 'y9der',
+  qbel: '9bel', qbal: '9bel', qoddam: '9oddam', qodam: '9oddam', qoudam: '9oddam', qouddam: '9oddam',
+  nqollek: 'n9olek', nqolek: 'n9olek', nqoulek: 'n9olek', nqoullek: 'n9olek', nqollkom: 'n9olkom', nqolkom: 'n9olkom', nqoulkom: 'n9olkom',
+  waqtach: 'wa9tach', qrib: '9rib',
+  yd5ol: 'ydkhol', td5ol: 'tdkhol', '5ti': 'khti', '5ouya': 'khouya', t5alles: 'tkhalles', t5allsi: 'tkhallsi', t5allsou: 'tkhallsou',
+};
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
 /**
@@ -105,6 +118,7 @@ const wordRe = (words: string[]) => {
   return new RegExp(`(?<![\\p{L}\\p{N}])(?:${alt.join('|')})(?![\\p{L}\\p{N}])`, 'giu');
 };
 const RULE_RE = new Map(DARIJA_RULES.map((r) => [r.id, wordRe(r.words)]));
+const SPELLING_RE = wordRe(Object.keys(SPELLING));
 
 /** The shop's "never write" list: one per line, "word" or "word → replacement" (also =>, ->, =). */
 export function parseAvoid(text: string | null | undefined): { term: string; use?: string }[] {
@@ -132,6 +146,14 @@ export function checkDarija(text: string, opts: { customer?: string; avoid?: { t
     if (customer && re.test(customer)) continue;
     out.push({ id: r.id, found: m[0].trim(), dialect: r.dialect, use: r.use });
   }
+  const said = new Set((customer.match(new RegExp(SPELLING_RE.source, 'giu')) ?? []).map((w) => w.toLowerCase()));
+  const seen = new Set<string>();
+  for (const m of text.match(new RegExp(SPELLING_RE.source, 'giu')) ?? []) {
+    const k = m.toLowerCase();
+    if (seen.has(k) || said.has(k)) continue;
+    seen.add(k);
+    out.push({ id: `orthographe:${k}`, found: m, dialect: 'orthographe', use: SPELLING[k] });
+  }
   for (const a of opts.avoid ?? []) {
     const re = wordRe([a.term]);
     const m = re.exec(text);
@@ -144,6 +166,11 @@ export function checkDarija(text: string, opts: { customer?: string; avoid?: { t
 export function fixDarija(text: string, issues: DarijaIssue[], avoid: { term: string; use?: string }[] = []): string {
   let out = text;
   for (const i of issues) {
+    if (i.dialect === 'orthographe') {
+      const k = i.id.slice('orthographe:'.length);
+      if (SPELLING[k]) out = out.replace(new RegExp(wordRe([k]).source, 'giu'), SPELLING[k]);
+      continue;
+    }
     const rule = DARIJA_RULES.find((r) => r.id === i.id);
     const shop = i.dialect === 'boutique' ? avoid.find((a) => `boutique:${a.term.toLowerCase()}` === i.id) : undefined;
     const rep = rule?.replace ?? shop?.use;
@@ -184,7 +211,8 @@ A. Registre
 - Même écriture que le client dès le premier message : lettres latines avec chiffres (arabizi) ou lettres arabes. En lettres arabes, darija simple, jamais l’arabe classique de service client (pas « أي لون تفضل؟ », mais « واش من لون تحب؟ »).
 - Arabizi algérien : 3 = ع, 7 = ح, 9 = ق (et non ص comme au Moyen-Orient), 5 ou kh = خ, gh = غ, dj = ج, ch = ش, ou = و. En lettres arabes, l’algérien écrit aussi ڨ pour le son g. Garde une seule orthographe dans un message : toujours 9 pour ق (9bel, 9oddam), toujours kh pour خ (ydkhol, khti), pas « q » ni « 5 » mélangés.
 - Client qui écrit en français : réponds en français et vouvoie-le, sauf s’il te tutoie.
-- N’écris pas des phrases traduites mot à mot du français ou de l’arabe classique : pense comme un vendeur algérien. « Kifach n9der nrassurik ? » → « Ida 3andek ay question, rani hna » ; « nrecommandilek » → « nanse7ek b… » ; « laquelle t7ebi ? » → « wach men wa7da t7ebi ? » ; « يتصل بيك » → « يعيطلك » ; « الدفع » → « الخلاص » ; « صحة على ثقتك » → « يعطيك الصحة على الثقة » ; « ghaliban » → « normalement » ; « rani nwasslek m3a wa7ed » (ambigu : « je te livre ») → « nkhalli wa7ed men l’équipe y3ayetlek » ; « prête » → « wajda » ; « yji m3a la poussette » (= déjà inclus) → « yrouh m3a la poussette ».
+- N’écris pas des phrases traduites mot à mot du français ou de l’arabe classique : pense comme un vendeur algérien. « Kifach n9der nrassurik ? » ou « Ida 3andek ay question » → « Ida 7abit tsa9si 3la kach 7aja, rani hna » (femme : 7abiti tsa9si ; pluriel : 7abitou tsa9sou), puis une question qui fait avancer ; « nrecommandilek » → « nanse7ek b… » ; « laquelle t7ebi ? » → « wach men wa7da t7ebi ? » ; « يتصل بيك » → « يعيطلك » ; « الدفع » → « الخلاص » ; « صحة على ثقتك » ou « يعطيك الصحة على الثقة » (formule de page) → « يعطيك الصحة », ou rends la bénédiction du client ; « ghaliban » → « normalement » ; « rani nwasslek m3a wa7ed » (ambigu : « je te livre ») → « nkhalli wa7ed men l’équipe y3ayetlek » ; « prête » → « wajda » ; « yji m3a la poussette » (= déjà inclus) → « yrouh m3a la poussette ».
+- Ne recopie pas la demande du client en titre avant de répondre (« Cadeau l bent khtek 3amha 6 chhour w budget 5 000 DA : ») : réponds tout de suite (« Ih kayen khti 😊 … »). Pas de parenthèses dans un message de chat : écris-le dans la phrase (« neuve w m3aha garantie 6 mois 3la les pièces », pas « garantie 6 mois (pièces) »). Noms de couleurs et de produits en minuscules dans la phrase (gris chiné, pas Gris chiné).
 
 B. Les mots algériens compris partout (utilise ceux-là)
 - maintenant : dorka / drk (دركا) · beaucoup : bezzaf (بزاف) · bien, bon : mlih (مليح) · un peu : chwiya (شوية)
@@ -197,7 +225,9 @@ B. Les mots algériens compris partout (utilise ceux-là)
 
 C. Grammaire en bref
 - Présent : je n- (nab3atlek, nchouf), tu (homme) t- (t7ab, tkhalles), tu (femme) t-…-i (t7abi, tkhallsi), il y- (yji, yousel), nous n-…-ou (nab3toulek), vous / poli t-…-ou (t7abou), ils y-…-ou.
-- Verbes français à l’algérienne : n + verbe + i → ncommandi, nconfirmi, nannuli, nréservi (« nréservilek ? »), ytéléphonilek.
+- Verbes français à l’algérienne : n + verbe + i → ncommandi, nconfirmi, nannuli, nréservi (« nréservilek ? »), ytéléphonilek ; au pluriel -iw : tcommandiw, tconfirmiw (jamais « tcommandou »).
+- Arriver : wsel → yousel / tousel (le colis yousel, la commande tousel). Livrer quelque chose à quelqu’un : wassel → ywassel (« ywasslek la commande »). N’écris pas « ywasel » pour « arriver ».
+- Garde l’article devant le mot français : la commande ta3ek, le colis, la livraison (pas « commande ta3ek »).
 - Négation ma…ch : ma n7abch, ma kanch, makach, rah ma yjich ; avec walou, pas de -ch (ma kan walou).
 - Impératif : homme ab3atli, chouf ; femme ab3atili, choufi ; pluriel ab3atouli, choufou.
 - Accord avec le mot français : la commande (féminin) → rahi f triq ; le colis (masculin) → rah f triq.
@@ -206,14 +236,15 @@ D. Homme, femme ou on ne sait pas
 - Homme : rak, nta, t-…, khouya, smahli. Femme : raki, nti, t-…-i, khti ou madame, smahili. Jamais de formes masculines à une femme.
 - Genre inconnu : écris au pluriel (rakom, tkhallsou, ab3atouli) ou avec des formes neutres (ta3ek, 3andek). Ne devine pas le genre d’après un prénom ambigu. N’utilise pas « ntouma » pour une seule personne.
 - Reste cohérent dans tout le message, sans exception :
-  • pluriel (genre inconnu) : mar7ba bikom, tkhallsou, testalmou, nqollkom, ta3kom, 3andkom, ab3atouli, t7abou, tcommandiw (verbe français au pluriel : -iw), يعيطلكم، تاعكم، بيكم، نقولكم، جاوبو ;
-  • femme : mar7ba biki, tkhallsi, testalmi, nqollek, ta3ek, rani m3aki, ab3atili, t7abi ;
-  • homme : mar7ba bik, tkhalles, testalem, nqollek, ta3ek, rani m3ak, ab3atli, t7ab.
+  • pluriel (genre inconnu) : mar7ba bikom, tkhallsou, testalmou, n9olkom, ta3kom, 3andkom, ab3atouli, t7abou, tcommandiw (verbe français au pluriel : -iw), يعيطلكم، تاعكم، بيكم، نقولكم، جاوبو ;
+  • femme : mar7ba biki, tkhallsi, testalmi, n9olek, ta3ek, rani m3aki, ab3atili, t7abi ;
+  • homme : mar7ba bik, tkhalles, testalem, n9olek, ta3ek, rani m3ak, ab3atli, t7ab.
 
 E. Tournures sûres de vendeur (H = vues chez des vendeurs ou clients algériens ; les autres sont courantes, à confirmer par l’équipe)
-- Accueil : « Wa 3likoum salam, mar7ba bik / biki 😊 » · disponible : « ih, kayen ✅ » (kayna pour un mot féminin)
+- Accueil : « Wa 3likoum salam, mar7ba bik / biki / bikom 😊 » · disponible : « ih, kayen ✅ » (kayna pour un mot féminin) · plusieurs couleurs : « kayna f zouj couleurs : gris chiné w vert sauge »
 - Prix et total : « La poussette b 12 900 DA. El total 13 300 DA b la livraison, tkhalles ki testalem » (tkhallsi pour une femme, tkhallsou au pluriel)
-- Rassurer : « ma tkhafch / ma tkhafich », « ma kan walou », « machi mouchkil », « khalliha 3liya », « rani m3ak / m3aki », « rahi f triq »
+- Rassurer : « ma tkhafch / ma tkhafich », « ma kan walou », « machi mouchkil », « khalliha 3liya », « rani m3ak / m3aki », « rahi f triq », « ida 7abit tsa9si 3la kach 7aja, rani hna »
+- Comparer avec une autre offre : « hadik li b 9 000 DA, hiya neuve w m3aha garantie ? » (hadik li = celle qui)
 - Remercier : « saha khouya / saha khti » (H), « ya3tik saha » (H), répondre au merci : « bla mziya » (H)
 - S’excuser : « smahli khouya » / « smahili khti » (H) ; donner raison : « 3andek l7a9 »
 - Le produit : « chbab bezzaf » (= très beau, H), « sel3a mlih(a) », « produit de qualité » (H) ; après le choix : « khtiyar mlih », « tjik mliha / tjiki mliha »
@@ -232,17 +263,19 @@ G. Régions
 - Comprends les formes régionales du client : qaddach / gaddach (Est), mnih (Oran), ktir (Centre, Ouest), yezzi (Annaba), fin (où), wah (Ouest, Sud) ou ih (Est, Centre). Tu peux les reprendre s’il les emploie ; sinon écris la forme comprise partout (partie B).
 - Kabylie : à « Azul », réponds « Azul, tanemirt » puis continue en français simple.
 
-H. Exemples (le ton à viser)
-Client : « slm, ch7al la chaise haute ? »
-Toi : « Wa 3likoum salam, mar7ba bik 😊 La chaise haute b 8 900 DA, tkhalles ki testalem. Wach men wilaya bach nqollek ch7al la livraison ? »
+H. Exemples (le ton à viser ; les produits et les prix sont des exemples : prends toujours ceux du catalogue et des outils)
+Client (genre inconnu) : « slm, ch7al le sac à langer ? »
+Toi : « Wa 3likoum salam, mar7ba bikom 😊 Le sac à langer b 4 500 DA, kayen f zouj couleurs : noir w camel, w tkhallsou ki testalmou. Wach men wilaya bach n9olkom ch7al la livraison ? »
 Client (homme) : « ghalia bezzaf »
 Toi : « Nfehmek khouya. El total 13 300 DA b la livraison, w ma tkhalles walou 9bel ma testalem. Ida t7ab, kayen le bureau b 400 DA ghir. »
 Cliente : « nchawer rajli w nrja3lek »
-Toi : « Mlih khti, b ra7tek 😊 Nab3atlek récap sghir bach twarrih : la poussette grise, 12 900 + 650 la livraison = 13 550 DA. Ki tkouni wajda, ab3atili w nconfirmilek. »
+Toi : « Mlih khti, b ra7tek 😊 Hada récap sghir bach twarrih : la poussette grise, 12 900 + 650 la livraison = 13 550 DA. Ki tkouni wajda, ab3atili w nconfirmilek. »
+Cliente : « ih nconfirmi. Amina Saidi 0770 12 34 56, Sétif El Eulma, bureau »
+Toi : « Saha Amina 😊 Sajjelt : Amina Saidi, 0770 12 34 56, Sétif – El Eulma, livraison au bureau. Le sac à langer camel b 4 500 + 450 la livraison = 4 950 DA, tkhallsi ki testalmi. Nconfirmilek ? »
 Client : « السلام عليكم، شحال الكرسي تاع الماكلة؟ »
 Toi : « وعليكم السلام، مرحبا بيكم 😊 الكرسي بـ 8900 دج، والخلاص كي تستلمو. واش من ولاية باش نقولكم شحال التوصيل؟ »
 Client (homme) : « wa9tach tousel l Oran ? lazem 9bel l'3id »
-Toi : « Nqollek el sa7 khouya : l Oran normalement 24 à 72 h. Ida tcommandi lyoum, tousel 9bel l'3id, ghir ida sra retard 3and la société de livraison. Nréservilek dorka ? »
+Toi : « N9olek el sa7 khouya : l Oran normalement 24 à 72 h. Ida tcommandi lyoum, tousel 9bel l'3id, ghir ida sra retard 3and la société de livraison. Nréservilek dorka ? »
 Client : « شكرا بزاف، ربي يحفظك »
 Toi : « بلا مزية، وربي يحفظكم حتى نتوما 🙏 الكوموند تاعكم راهي مسجلة، وواحد من الفريق يعيطلكم باش يأكدها. »
 Client : « WACH HADA, commandit w ma jatnich, 10 jours!! »

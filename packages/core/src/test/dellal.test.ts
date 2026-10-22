@@ -253,6 +253,13 @@ test('darija checker: other dialects and wrong phrases are caught; clean Algeria
   const t = 'Saha khoya, daba nab3atlek';
   assert.equal(fixDarija(t, checkDarija(t, { avoid }), avoid), 'Saha khouya, dorka nab3atlek');
   assert.equal(fixDarija('Smahli, ma3andek 7a9 tghdab', checkDarija('Smahli, ma3andek 7a9 tghdab')), 'Smahli, 3andek l7a9 tghdab');
+  // one spelling per message: q → 9 and 5 → kh, fixed without changing anything else
+  const sp = 'Tqdri tchoufi le colis qoddam le livreur 9bel ma tkhallsi, yd5ol f budget.';
+  assert.deepEqual(ids(sp), ['orthographe:tqdri', 'orthographe:qoddam', 'orthographe:yd5ol']);
+  assert.equal(fixDarija(sp, checkDarija(sp)), 't9dri tchoufi le colis 9oddam le livreur 9bel ma tkhallsi, ydkhol f budget.');
+  assert.deepEqual(ids('qbel ma tkhalles', { customer: 'qbel ma nkhalles ?' }), [], 'the customer wrote it that way: mirroring is fine');
+  assert.deepEqual(ids('Question : la qualité, quand ?'), [], 'French words with q are not touched');
+  assert.deepEqual(ids('le beige ma kaynch'), ['makaynch']);
 });
 
 test('a reply in another dialect is rewritten in Algerian Darija before it is sent; the shop list is in the instructions', async () => {
@@ -293,4 +300,12 @@ test('a reply in another dialect is rewritten in Algerian Darija before it is se
   const r2: any = await call('dellal.receive', sys2, { channel: 'whatsapp', externalId: '213661909091', text: 'wach sra ?', messageId: 'wamid.darija2' });
   const out2: any = await call('dellal.answer', sys2, { id: r2.conversationId });
   assert.equal(out2.reply, 'Smahli, 3andek l7a9, dorka nchouf.');
+
+  // a spelling slip alone is fixed directly: no second AI call
+  let calls = 0;
+  const sys3 = await as(EMAILS.admin, fakeServer([() => (calls++, { content: [{ type: 'text', text: 'Ma tkhafich khti, tqdri tchoufi le colis qoddam le livreur.' }], stop_reason: 'end_turn' }), () => (calls++, { content: [{ type: 'text', text: 'X' }], stop_reason: 'end_turn' })], []));
+  const r3: any = await call('dellal.receive', sys3, { channel: 'whatsapp', externalId: '213661909092', text: 'nkhaf ma yjinich', messageId: 'wamid.darija3' });
+  const out3: any = await call('dellal.answer', sys3, { id: r3.conversationId });
+  assert.equal(out3.reply, 'Ma tkhafich khti, t9dri tchoufi le colis 9oddam le livreur.');
+  assert.equal(calls, 1);
 });
