@@ -94,3 +94,8 @@
   .ov-fun-g { min-height: 170px; }
   .ov-fun-c b { font-size: 15px; }
 }
+.ov-head { flex-wrap: wrap; justify-content: flex-start; }
+.ov-grow { flex: 1; }
+.ov-dates { display: inline-flex; align-items: center; gap: 6px; }
+.ov-dates input { width: auto; height: 38px; border-radius: 10px; }
+@media (max-width: 760px) { .ov-dates { width: 100%; } .ov-dates input { flex: 1; min-width: 0; } }
