@@ -6,7 +6,8 @@ import { when } from '../../lib/format';
 import { rpc } from '../../lib/backend';
 import { useRpc } from '../../lib/query';
 import { telHref, waHref } from './shared';
-import { Icon } from '../../ui/kit';
+import { copyText, Icon } from '../../ui/kit';
+import { toast } from '../../ui/toast';
 import { eventText } from '../orders/OrderCard';
 
 /** The order's history in a small floating tab: what happened, when, and who did it (newest first). */
@@ -94,21 +95,77 @@ export function HistoryButton({ orderId, refLabel, className, children, title }:
   );
 }
 
-/** The phone number with two small icons beside it: call (logged on the order) and WhatsApp. */
+/** The phone number with two small icons beside it: call (logged on the order) and message (asks SMS or WhatsApp). */
 export function PhoneCell({ order }: { order: { id: number; ref: string; phone: string; customerName: string } }) {
   const { t } = useTranslation();
-  const meta = useRpc('orders.uiMeta', {}, { staleTime: 5 * 60_000 });
-  const tpl = meta.data?.whatsappTemplate ?? 'Bonjour {nom}, ici {boutique} à propos de votre commande {ref}.';
-  const wa = waHref(order.phone, tpl, { nom: order.customerName, boutique: meta.data?.shopName ?? 'Pilotix', ref: order.ref });
+  const [btn, setBtn] = useState<HTMLButtonElement | null>(null);
+  const [open, setOpen] = useState(false);
   return (
     <span className="px-ph" onClick={(e) => e.stopPropagation()}>
       <span className="qph ltr">{order.phone}</span>
       <a className="px-ph-i" href={telHref(order.phone)} aria-label={t('confirmation.callNum', { p: order.phone })} title={t('confirmation.call')} onClick={() => rpc('orders.logCall', { id: order.id }).catch(() => {})}>
         <Icon name="phone" />
       </a>
-      <a className="px-ph-i wa" href={wa} target="_blank" rel="noopener" aria-label={t('confirmation.msgNum', { p: order.phone })} title={t('confirmation.message')}>
+      <button type="button" ref={setBtn} className={`px-ph-i ${open ? 'on' : ''}`} aria-haspopup="menu" aria-expanded={open} aria-label={t('confirmation.msgNum', { p: order.phone })} title={t('confirmation.message')} onClick={() => setOpen((v) => !v)}>
         <Icon name="message" />
-      </a>
+      </button>
+      {open && btn && <MsgMenu order={order} anchor={btn} onClose={() => setOpen(false)} />}
     </span>
+  );
+}
+
+/** Small menu under the message icon: SMS or WhatsApp. The ready message is copied, then the app opens with it filled in. */
+function MsgMenu({ order, anchor, onClose }: { order: { ref: string; phone: string; customerName: string }; anchor: HTMLElement; onClose: () => void }) {
+  const { t } = useTranslation();
+  const meta = useRpc('orders.uiMeta', {}, { staleTime: 5 * 60_000 });
+  const box = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: -9999, left: -9999 });
+  const tpl = meta.data?.whatsappTemplate ?? 'Bonjour {nom}, ici {boutique} à propos de votre commande {ref}.';
+  const vars = { nom: order.customerName, boutique: meta.data?.shopName ?? 'Pilotix', ref: order.ref };
+  const text = tpl.replace(/\{(nom|boutique|ref)\}/g, (_, k: 'nom' | 'boutique' | 'ref') => vars[k]);
+  useLayoutEffect(() => {
+    const a = anchor.getBoundingClientRect();
+    const w = box.current?.offsetWidth ?? 260;
+    const h = box.current?.offsetHeight ?? 150;
+    const top = a.bottom + 6 + h > window.innerHeight - 8 ? a.top - h - 6 : a.bottom + 6;
+    setPos({ top: Math.max(8, top), left: Math.min(Math.max(8, a.left + a.width / 2 - w / 2), window.innerWidth - w - 8) });
+  }, [anchor]);
+  useEffect(() => {
+    const down = (e: MouseEvent) => !box.current?.contains(e.target as Node) && !anchor.contains(e.target as Node) && onClose();
+    const key = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    document.addEventListener('mousedown', down);
+    document.addEventListener('keydown', key);
+    return () => (document.removeEventListener('mousedown', down), document.removeEventListener('keydown', key));
+  }, [anchor, onClose]);
+  const go = async (href: string) => {
+    const ok = await copyText(text);
+    if (ok) toast(t('confirmation.msg.copied'), 'ok');
+    window.open(href, '_blank', 'noopener');
+    onClose();
+  };
+  return createPortal(
+    <div ref={box} className="px-msg" role="menu" aria-label={t('confirmation.message')} style={{ top: pos.top, left: pos.left }}>
+      <div className="px-msg-h">{t('confirmation.msg.how')}</div>
+      <button type="button" role="menuitem" className="px-msg-it" onClick={() => go(`sms:${order.phone}?body=${encodeURIComponent(text)}`)}>
+        <span className="px-msg-ic sms">
+          <Icon name="message" />
+        </span>
+        <span>
+          <b>{t('confirmation.msg.sms')}</b>
+          <small>{t('confirmation.msg.smsSub')}</small>
+        </span>
+      </button>
+      <button type="button" role="menuitem" className="px-msg-it" onClick={() => go(waHref(order.phone, tpl, vars))}>
+        <span className="px-msg-ic wa">
+          <Icon name="whatsapp" />
+        </span>
+        <span>
+          <b>WhatsApp</b>
+          <small>{t('confirmation.msg.waSub')}</small>
+        </span>
+      </button>
+      <div className="px-msg-txt">{text}</div>
+    </div>,
+    document.body,
   );
 }

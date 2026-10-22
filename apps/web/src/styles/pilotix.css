@@ -743,3 +743,17 @@ html body .qcard .qacts .qa-info > .linkish { display: inline-flex; align-items:
 /* Suivi: the column menu above the table, on the right */
 .px-scols { display: flex; justify-content: flex-end; margin: 0 0 8px; }
 .px-scols .px-qpop { z-index: 40; }
+/* message menu: SMS or WhatsApp, with the ready message */
+.px-ph-i { border: 0; cursor: pointer; font: inherit; }
+.px-ph-i.on { background: var(--q-accent, #F7A823); color: #fff; }
+.px-msg { position: fixed; z-index: 2147482000; width: 260px; padding: 8px; border-radius: 14px; background: var(--surface, #fff); color: var(--ink); border: 1px solid var(--q-btn-line, #e3e7ef); box-shadow: 0 16px 40px rgba(20,30,50,.22); }
+.px-msg-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 4px 8px 6px; }
+.px-msg-it { width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px; border: 0; border-radius: 10px; background: none; font: inherit; color: inherit; text-align: start; cursor: pointer; }
+.px-msg-it:hover, .px-msg-it:focus-visible { background: var(--sky-soft, #eef2f8); outline: none; }
+.px-msg-it b { display: block; font-size: 13.5px; }
+.px-msg-it small { display: block; font-size: 11.5px; color: var(--muted); }
+.px-msg-ic { width: 32px; height: 32px; flex: none; display: inline-grid; place-items: center; border-radius: 9px; color: #fff; }
+.px-msg-ic .bji { width: 16px; height: 16px; vertical-align: 0; }
+.px-msg-ic.sms { background: var(--px-navy, #1B2A47); }
+.px-msg-ic.wa { background: #25D366; }
+.px-msg-txt { margin: 6px 4px 2px; padding: 8px 10px; border-radius: 10px; background: var(--sky-soft, #eef2f8); font-size: 12px; line-height: 1.4; color: var(--muted); }
