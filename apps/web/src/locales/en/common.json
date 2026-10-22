@@ -63,5 +63,6 @@
     "m": "Normal rows",
     "l": "Large rows"
   },
-  "dragCol": "Drag to move the column"
+  "dragCol": "Drag to move the column",
+  "back": "Back"
 }

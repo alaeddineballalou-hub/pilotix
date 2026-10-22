@@ -444,5 +444,41 @@
     "pickSub": "{{n}} bureaus in this wilaya",
     "searchPh": "Search a bureau, commune, company…",
     "none": "No bureau in this wilaya."
+  },
+  "d6": {
+    "cart": "Cart",
+    "nProducts_one": "{{count}} product",
+    "nProducts_other": "{{count}} products",
+    "offer": "Offer the customer",
+    "pack": "Pack {{n}} ×",
+    "often": "often bought with",
+    "inStock": "Available · {{n}}",
+    "outStock": "Out of stock · {{n}} left",
+    "noDesk": "Choose the bureau where the customer will pick up the parcel.",
+    "feeDesk": "Delivery · bureau",
+    "feeHome": "Delivery · home",
+    "decision": "Decision",
+    "warn": "{{names}} out of stock: check with the depot before confirming.",
+    "confirm": "Confirm the order",
+    "hint": "Confirming also saves the cart and the delivery.",
+    "confirmed": "{{ref}} confirmed",
+    "change": "Change status",
+    "attempt": "attempt {{n}}",
+    "callback": "Call back",
+    "dateHour": "date and time",
+    "date": "date",
+    "reason": "reason",
+    "reasonReq": "Reason (required)",
+    "callWhen": "Call the customer back on",
+    "postWhen": "The customer wants delivery on",
+    "detail": "Add detail if needed…",
+    "noteOpt": "Note (optional)…",
+    "postTo": "Postpone to {{d}}",
+    "callAt": "Schedule the call",
+    "ask": {
+      "cancelled": "Cancel the order",
+      "postponed": "Postpone the order",
+      "callback": "Call the customer back"
+    }
   }
 }

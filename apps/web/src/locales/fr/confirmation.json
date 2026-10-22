@@ -444,5 +444,41 @@
     "pickSub": "{{n}} bureaux dans cette wilaya",
     "searchPh": "Chercher un bureau, une commune, une société…",
     "none": "Aucun bureau pour cette wilaya."
+  },
+  "d6": {
+    "cart": "Panier",
+    "nProducts_one": "{{count}} produit",
+    "nProducts_other": "{{count}} produits",
+    "offer": "Proposer au client",
+    "pack": "Pack {{n}} ×",
+    "often": "souvent pris avec",
+    "inStock": "Disponible · {{n}}",
+    "outStock": "Rupture · {{n}} en stock",
+    "noDesk": "Choisissez le bureau où le client viendra chercher son colis.",
+    "feeDesk": "Livraison · bureau",
+    "feeHome": "Livraison · domicile",
+    "decision": "Décision",
+    "warn": "{{names}} en rupture : vérifiez avec le dépôt avant de confirmer.",
+    "confirm": "Confirmer la commande",
+    "hint": "Confirmer enregistre aussi le panier et la livraison.",
+    "confirmed": "{{ref}} confirmée",
+    "change": "Changer le statut",
+    "attempt": "tentative {{n}}",
+    "callback": "Rappel",
+    "dateHour": "date et heure",
+    "date": "date",
+    "reason": "motif",
+    "reasonReq": "Motif (obligatoire)",
+    "callWhen": "Rappeler le client le",
+    "postWhen": "Le client veut être livré le",
+    "detail": "Précisez si besoin…",
+    "noteOpt": "Note (facultatif)…",
+    "postTo": "Reporter au {{d}}",
+    "callAt": "Programmer le rappel",
+    "ask": {
+      "cancelled": "Annuler la commande",
+      "postponed": "Reporter la commande",
+      "callback": "Rappeler le client"
+    }
   }
 }

@@ -63,5 +63,6 @@
     "m": "Lignes normales",
     "l": "Grandes lignes"
   },
-  "dragCol": "Glissez pour déplacer la colonne"
+  "dragCol": "Glissez pour déplacer la colonne",
+  "back": "Retour"
 }
