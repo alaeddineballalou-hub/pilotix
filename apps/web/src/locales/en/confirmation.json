@@ -309,7 +309,7 @@
   },
   "cf": {
     "title": "Confirmed orders",
-    "help": "Confirmed in the period, by order creation date or by confirmation date (update). Upsell = orders with a product added during the call or a quantity pack.",
+    "help": "Confirmed in the period, by order creation date or by confirmation date (update). Upsell, counted automatically: what the customer pays above their original order (more pieces, a pack, a product added or a dearer one), less any discount added. A pack the customer chose by themselves does not count.",
     "sec": "Confirmation",
     "confirmed": "Confirmed",
     "rateSub": "{{n}} cancelled in the same period",
@@ -319,7 +319,7 @@
     "leadSub": "median",
     "upsell": "Upsell",
     "upOrders": "Orders with upsell",
-    "upOrdersSub": "product added or pack during the call",
+    "upOrdersSub": "more than the original order, counted automatically",
     "upRate": "Upsell rate",
     "upRateSub": "of confirmed orders",
     "upValue": "Upsell revenue",
@@ -525,7 +525,9 @@
     "chronoHint": "Chrono: time spent on this order since it was opened",
     "chrono": "Chrono",
     "pickStatus": "Pick a new status first",
-    "feeLocked": "Delivery grid price (wilaya, home or bureau). Only the discount can be changed."
+    "feeLocked": "Delivery grid price (wilaya, home or bureau). Only the discount can be changed.",
+    "upsell": "Upsell",
+    "upsellHint": "Counted automatically: what the customer pays above their original order (more pieces, a pack, a product added or a dearer one), less any discount added. Another colour at the same price does not count."
   },
   "noNext": "No more orders in this list",
   "ek": {

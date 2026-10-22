@@ -309,7 +309,7 @@
   },
   "cf": {
     "title": "Commandes confirmées",
-    "help": "Confirmées sur la période, par date de création de la commande ou par date de confirmation (mise à jour). Upsell = commandes avec un produit ajouté en plus pendant l’appel ou un pack quantité.",
+    "help": "Confirmées sur la période, par date de création de la commande ou par date de confirmation (mise à jour). Upsell, compté automatiquement : ce que le client paie en plus de sa commande d’origine (pièces en plus, pack, produit ajouté ou plus cher), moins la remise ajoutée. Un pack choisi par le client lui-même ne compte pas.",
     "sec": "Confirmation",
     "confirmed": "Confirmées",
     "rateSub": "{{n}} annulées sur la même période",
@@ -319,7 +319,7 @@
     "leadSub": "médiane",
     "upsell": "Upsell",
     "upOrders": "Commandes avec upsell",
-    "upOrdersSub": "produit ajouté ou pack pendant l’appel",
+    "upOrdersSub": "plus que la commande d’origine, compté automatiquement",
     "upRate": "Taux d’upsell",
     "upRateSub": "des commandes confirmées",
     "upValue": "CA upsell",
@@ -525,7 +525,9 @@
     "chronoHint": "Chrono : temps passé sur cette commande depuis son ouverture",
     "chrono": "Chrono",
     "pickStatus": "Choisissez d’abord un nouveau statut",
-    "feeLocked": "Prix de la grille de livraison (wilaya, domicile ou bureau). Seule la remise peut être modifiée."
+    "feeLocked": "Prix de la grille de livraison (wilaya, domicile ou bureau). Seule la remise peut être modifiée.",
+    "upsell": "Upsell",
+    "upsellHint": "Compté automatiquement : ce que le client paie en plus de sa commande d’origine (pièces en plus, pack, produit ajouté ou plus cher), moins la remise ajoutée. Changer de couleur au même prix ne compte pas."
   },
   "noNext": "Plus de commande dans cette liste",
   "ek": {

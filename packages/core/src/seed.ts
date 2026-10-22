@@ -1,6 +1,7 @@
 // Base data (every install) and demo data (preview only). All demo people, phones and orders are invented.
 import { CONF_TODO, ConfStatus, FollowStatus } from '@pilotix/shared';
 import { Db, num } from './db';
+import { UPSELL_BACKFILL } from './migrations/020_upsell';
 import { hashPassword } from './modules/users';
 import { DEFAULT_SETTINGS, setSetting } from './settings';
 import { seed as seed_orders } from './seeds/orders';
@@ -339,6 +340,8 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number } =
   await seed_ads(db, users, now);
   await seed_dellal(db, users, now);
   await seed_cm(db, users, now);
+  // every demo order (written straight into the database) keeps what the customer first ordered: the upsell is counted against it
+  for (const q of UPSELL_BACKFILL) await db.query(q);
 
   return { users, orders: N, todo: CONF_TODO.length };
 }
