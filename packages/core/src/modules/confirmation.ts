@@ -3,8 +3,8 @@
 import { algiersDayStart, CallSettings, CONF_STATUSES, CONF_TODO, ConfStatus, nextDue, Order, slotAt } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
-import { bad, Ctx, hasRole, proc } from '../rpc';
-import { clientFee, getSetting } from '../settings';
+import { bad, Ctx, forbidden, hasRole, proc } from '../rpc';
+import { clientFee, getSetting, setSetting } from '../settings';
 import { ConfInput, getOrder, ListInput, listOrders, setConf } from './orders';
 
 // ---------------------------------------------------------------- sub-pages
@@ -564,6 +564,23 @@ export const confirmationProcs = {
   }),
 
   /** Counts of the stage bar. */
+  /** Column presets: everyone reads them; only an admin adds or deletes; a saved preset is never changed. */
+  'confirmation.colPresets': proc(['confirmation'], z.object({}), async (ctx) => getSetting(ctx.db, 'colPresets')),
+  'confirmation.addColPreset': proc(['confirmation'], z.object({ name: z.string().trim().min(1).max(40), cols: z.array(z.string().max(30)).min(1).max(40) }), async (ctx, i) => {
+    if (!ctx.session.isAdmin) throw forbidden();
+    const list = await getSetting(ctx.db, 'colPresets');
+    if (list.some((p) => p.name.toLowerCase() === i.name.toLowerCase())) throw bad('Un préréglage porte déjà ce nom');
+    if (list.length >= 30) throw bad('30 préréglages au maximum');
+    const preset = { id: `p${ctx.now().toString(36)}`, name: i.name, cols: [...new Set(i.cols)], by: ctx.session.profile.name, at: new Date(ctx.now()).toISOString() };
+    await setSetting(ctx.db, 'colPresets', [...list, preset], ctx.session.profile.id);
+    return preset;
+  }),
+  'confirmation.deleteColPreset': proc(['confirmation'], z.object({ id: z.string().max(40) }), async (ctx, { id }) => {
+    if (!ctx.session.isAdmin) throw forbidden();
+    const list = await getSetting(ctx.db, 'colPresets');
+    await setSetting(ctx.db, 'colPresets', list.filter((p) => p.id !== id), ctx.session.profile.id);
+    return { ok: true };
+  }),
   'confirmation.counts': proc(['confirmation'], z.object({}), async (ctx) => {
     const rows = await ctx.db.query(`SELECT conf_status AS k, count(*)::int AS n FROM sales GROUP BY 1`);
     const by = Object.fromEntries(rows.map((r: any) => [r.k, num(r.n)]));

@@ -82,14 +82,15 @@ export const customersProcs = {
     if (!r) throw notFound('Client introuvable');
     const orders = await ctx.db.query(
       `SELECT o.id, o.ref, o.created_at, o.total, o.conf_status, o.follow_status, o.attempts,
-         (SELECT string_agg(i.qty || ' × ' || i.name || CASE WHEN i.variant_title <> '' THEN ' ' || i.variant_title ELSE '' END, ' · ' ORDER BY i.id) FROM order_items i WHERE i.order_id = o.id) AS items_text
+         (SELECT string_agg(CASE WHEN i.qty > 1 THEN i.qty || ' × ' ELSE '' END || i.name, ' · ' ORDER BY i.id) FROM order_items i WHERE i.order_id = o.id) AS items_text,
+         (SELECT CASE WHEN bool_or(i.variant_title <> '') THEN string_agg(CASE WHEN i.variant_title <> '' THEN i.variant_title ELSE '—' END, ' · ' ORDER BY i.id) END FROM order_items i WHERE i.order_id = o.id) AS variants_text
        FROM sales o WHERE o.customer_id = $1 OR o.phone = $2 ORDER BY o.created_at DESC LIMIT 100`,
       [r.id, r.phone],
     );
     return {
       customer: toCustomer(r),
       orders: orders.map((o: any) => ({
-        id: num(o.id), ref: o.ref, createdAt: iso(o.created_at), total: num(o.total), confStatus: o.conf_status, followStatus: o.follow_status ?? null, attempts: num(o.attempts), itemsText: o.items_text ?? '',
+        id: num(o.id), ref: o.ref, createdAt: iso(o.created_at), total: num(o.total), confStatus: o.conf_status, followStatus: o.follow_status ?? null, attempts: num(o.attempts), itemsText: o.items_text ?? '', variantsText: o.variants_text ?? '',
       })),
     };
   }),

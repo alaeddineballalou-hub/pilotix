@@ -5,11 +5,12 @@ import { useTranslation } from 'react-i18next';
 import { da, when, wilaya, wilayaName } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { BulkBar, Empty, Loading, Pager, SortTh, StatusBadge } from '../../ui/kit';
-import { confLabel, itemsText } from './shared';
+import { confLabel } from './shared';
+import { namesOf, variantsOf } from '../../lib/items';
 
 /** Built-in columns, in the original order. */
-export type OrderColumn = 'order' | 'client' | 'address' | 'products' | 'total' | 'conf' | 'follow' | 'company' | 'agent' | 'phone' | 'wilaya' | 'since';
-export const DEFAULT_COLUMNS: OrderColumn[] = ['order', 'client', 'address', 'products', 'total', 'conf', 'follow', 'company', 'agent'];
+export type OrderColumn = 'order' | 'client' | 'address' | 'products' | 'variant' | 'total' | 'conf' | 'follow' | 'company' | 'agent' | 'phone' | 'wilaya' | 'since';
+export const DEFAULT_COLUMNS: OrderColumn[] = ['order', 'client', 'address', 'products', 'variant', 'total', 'conf', 'follow', 'company', 'agent'];
 
 /** Column → orders.list sort key (when sortable). */
 const SORT_KEY: Partial<Record<OrderColumn, OrderSort>> = {
@@ -75,7 +76,7 @@ export function OrderTable(p: OrderTableProps) {
 
   const label: Record<OrderColumn, string> = useMemo(
     () => ({
-      order: t('orders.col.order'), client: t('orders.col.client'), address: t('orders.col.address'), products: t('orders.col.products'), total: t('orders.col.total'),
+      order: t('orders.col.order'), client: t('orders.col.client'), address: t('orders.col.address'), products: t('orders.col.products'), variant: t('orders.col.variant'), total: t('orders.col.total'),
       conf: t('orders.col.conf'), follow: t('orders.col.follow'), company: t('orders.col.company'), agent: t('orders.col.agent'), phone: t('orders.col.phone'),
       wilaya: t('orders.col.wilaya'), since: t('orders.col.since'),
     }),
@@ -140,7 +141,13 @@ export function OrderTable(p: OrderTableProps) {
       case 'products':
         return (
           <td key={c} className="wide px-cw" data-l={label[c]}>
-            <div className="px-clamp">{itemsText(o)}</div>
+            <div className="px-clamp">{namesOf(o.items, ' · ')}</div>
+          </td>
+        );
+      case 'variant':
+        return (
+          <td key={c} data-l={label[c]}>
+            <div className="px-clamp">{variantsOf(o.items, ' · ')}</div>
           </td>
         );
       case 'total':

@@ -105,8 +105,8 @@ function GroupCard({ g, ticket }: { g: Group; ticket?: boolean }) {
   const sum = chosen.reduce((s, o) => s + o.net, 0);
   const csv = () =>
     downloadCsv(`caisse-${g.name.replace(/[^\w-]+/g, '_')}`, [
-      [t('caisse.col.order'), t('caisse.col.tracking'), t('caisse.col.delivered'), t('caisse.col.customer'), t('caisse.col.phone'), t('caisse.col.wilaya'), t('caisse.col.commune'), t('caisse.col.products'), t('caisse.col.paid'), t('caisse.col.fee'), t('caisse.col.net')],
-      ...(chosen.length ? chosen : g.orders).map((o) => [o.ref, o.tracking, dateTime(o.deliveredAt), o.customerName, o.phone, wilayaName(o.wilayaId), o.commune, o.products, o.total, o.deliveryCost, o.net]),
+      [t('caisse.col.order'), t('caisse.col.tracking'), t('caisse.col.delivered'), t('caisse.col.customer'), t('caisse.col.phone'), t('caisse.col.wilaya'), t('caisse.col.commune'), t('caisse.col.products'), t('caisse.col.variant'), t('caisse.col.paid'), t('caisse.col.fee'), t('caisse.col.net')],
+      ...(chosen.length ? chosen : g.orders).map((o) => [o.ref, o.tracking, dateTime(o.deliveredAt), o.customerName, o.phone, wilayaName(o.wilayaId), o.commune, o.products, o.variants, o.total, o.deliveryCost, o.net]),
     ]);
   return (
     <div className="card" id={`cash-${g.key}`}>
@@ -146,6 +146,7 @@ function GroupCard({ g, ticket }: { g: Group; ticket?: boolean }) {
               <th>{t('caisse.col.delivered')}</th>
               <th>{t('caisse.col.customer')}</th>
               <th className="wide">{t('caisse.col.products')}</th>
+                  <th>{t('caisse.col.variant')}</th>
               <th className="num">{t('caisse.col.paid')}</th>
               <th className="num">{t('caisse.col.net')}</th>
             </tr>
@@ -178,6 +179,9 @@ function GroupCard({ g, ticket }: { g: Group; ticket?: boolean }) {
                 </td>
                 <td className="wide px-cw" data-l={t('caisse.col.products')}>
                   <div className="px-clamp">{o.products}</div>
+                </td>
+                <td data-l={t('caisse.col.variant')}>
+                  <div className="px-clamp">{o.variants || '—'}</div>
                 </td>
                 <td className="num" data-l={t('caisse.col.paid')}>
                   {da(o.total)}

@@ -133,3 +133,18 @@ test('list rows carry stock availability and statuses passed; admin can delete o
   const shipped = (await db.query(`SELECT id FROM orders WHERE follow_status = 'shipped' LIMIT 1`))[0];
   await assert.rejects(call('orders.delete', admin, { ids: [Number(shipped.id)] }), /dépôt ou en livraison/);
 });
+
+test('column presets: admin adds and deletes, others only read, names are unique, no edit', async () => {
+  const { as } = await setup(20);
+  const admin = await as(EMAILS.admin);
+  const conf = await as(EMAILS.conf);
+  const p: any = await call('confirmation.addColPreset', admin, { name: 'Appels', cols: ['name', 'phone', 'phone', 'wilaya'] });
+  assert.deepEqual(p.cols, ['name', 'phone', 'wilaya']);
+  await assert.rejects(call('confirmation.addColPreset', admin, { name: 'appels', cols: ['name'] }), /nom/);
+  await assert.rejects(call('confirmation.addColPreset', conf, { name: 'X', cols: ['name'] }), /refus/i);
+  const seen: any = await call('confirmation.colPresets', conf, {});
+  assert.equal(seen.length, 1);
+  await assert.rejects(call('confirmation.deleteColPreset', conf, { id: p.id }), /refus/i);
+  await call('confirmation.deleteColPreset', admin, { id: p.id });
+  assert.equal(((await call('confirmation.colPresets', conf, {})) as any).length, 0);
+});

@@ -22,6 +22,7 @@ export interface CashOrder {
   wilayaId: number;
   commune: string;
   products: string;
+  variants: string;
   total: number;
   deliveryCost: number;
   net: number;
@@ -44,8 +45,10 @@ export interface CashOrder {
 const COLS = `o.id, o.ref, o.tracking, o.delivered_at, o.customer_name, o.phone, o.wilaya_id, o.commune, o.total, o.delivery_cost, o.company_id,
   o.livreur_id, o.cashed, o.cashed_at, o.handover_id, o.follow_status, o.address, o.is_exchange,
   CASE WHEN o.is_exchange THEN (SELECT k.ref FROM complaints k WHERE k.exchange_order_id = o.id ORDER BY k.id DESC LIMIT 1) END AS sav_ref, c.name AS company_name, c.kind AS company_kind, lv.name AS livreur_name,
-  (SELECT string_agg(i.qty || ' × ' || i.name || CASE WHEN i.variant_title <> '' THEN ' (' || i.variant_title || ')' ELSE '' END, ' + ' ORDER BY i.id)
+  (SELECT string_agg(CASE WHEN i.qty > 1 THEN i.qty || ' × ' ELSE '' END || i.name, ' + ' ORDER BY i.id)
      FROM order_items i WHERE i.order_id = o.id) AS products,
+  (SELECT CASE WHEN bool_or(i.variant_title <> '') THEN string_agg(CASE WHEN i.variant_title <> '' THEN i.variant_title ELSE '—' END, ' + ' ORDER BY i.id) END
+     FROM order_items i WHERE i.order_id = o.id) AS variants,
   (SELECT coalesce(max(p.weight_kg), 0) FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = o.id) AS max_kg`;
 const FROM = `FROM orders o LEFT JOIN delivery_companies c ON c.id = o.company_id LEFT JOIN profiles lv ON lv.id = o.livreur_id`;
 
@@ -68,6 +71,7 @@ function toCash(r: any, pay: Pay): CashOrder {
     wilayaId: num(r.wilaya_id),
     commune: r.commune ?? '',
     products: r.products ?? '',
+    variants: r.variants ?? '',
     total,
     deliveryCost: cost,
     net: total - cost,

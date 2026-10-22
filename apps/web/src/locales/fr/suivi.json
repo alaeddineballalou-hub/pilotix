@@ -45,7 +45,8 @@
     "address": "Adresse",
     "total": "Total",
     "conf": "Confirmation",
-    "company": "Société"
+    "company": "Société",
+    "variant": "Variante"
   },
   "days": "{{n}} j",
   "act": {

@@ -165,6 +165,7 @@ function History({ id, onClose }: { id: number; onClose: () => void }) {
                   <tr>
                     <th>{t('clients.col.order')}</th>
                     <th className="wide">{t('clients.col.products')}</th>
+                    <th>{t('clients.col.variant')}</th>
                     <th className="num">{t('clients.col.total')}</th>
                     <th>{t('clients.col.conf')}</th>
                     <th>{t('clients.col.follow')}</th>
@@ -187,6 +188,7 @@ function History({ id, onClose }: { id: number; onClose: () => void }) {
                       <td className="wide" data-l={t('clients.col.products')}>
                         {o.itemsText}
                       </td>
+                      <td data-l={t('clients.col.variant')}>{o.variantsText || '—'}</td>
                       <td className="num ltr" data-l={t('clients.col.total')}>
                         {da(o.total)}
                       </td>

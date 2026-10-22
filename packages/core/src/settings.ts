@@ -29,6 +29,8 @@ export interface SettingsMap {
   meta: { adAccountId: string; hasToken: boolean };
   /** Dashboard goals (admin): delivered revenue per month */
   goals: { monthlyRevenue: number };
+  /** Order-list column presets: saved by an admin, shared with everyone, never edited (only deleted by an admin) */
+  colPresets: { id: string; name: string; cols: string[]; by: string; at: string }[];
 }
 
 export const DEFAULT_SETTINGS: SettingsMap = {
@@ -53,6 +55,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   cron: { key: '' },
   meta: { adAccountId: '', hasToken: false },
   goals: { monthlyRevenue: 3_000_000 },
+  colPresets: [],
 };
 
 export async function getSetting<K extends keyof SettingsMap>(db: Db, key: K): Promise<SettingsMap[K]> {

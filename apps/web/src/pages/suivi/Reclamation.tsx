@@ -6,6 +6,7 @@ import { openOrder, openOrderForm } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
 import { Empty, ErrorBox, Icon, Loading, Pager, StatusBadge } from '../../ui/kit';
 import { ClaimsPanel } from './Claims';
+import { namesOf, variantsOf } from '../../lib/items';
 import { productsText } from './common';
 
 type RTab = 'search' | 'companies' | 'livreurs';
@@ -191,6 +192,7 @@ function SearchOrders() {
                     <th>{t('suivi.col.client')}</th>
                     <th>{t('suivi.col.address')}</th>
                     <th className="wide">{t('suivi.col.products')}</th>
+            <th>{t('suivi.col.variant')}</th>
                     <th className="num">{t('suivi.col.total')}</th>
                     <th>{t('suivi.col.conf')}</th>
                     <th>{t('suivi.col.delivery')}</th>
@@ -214,7 +216,10 @@ function SearchOrders() {
                         <small>{o.commune}</small>
                       </td>
                       <td className="wide px-cw" data-l={t('suivi.col.products')}>
-                        <div className="px-clamp">{productsText(o)}</div>
+                        <div className="px-clamp">{namesOf(o.items)}</div>
+                      </td>
+                      <td data-l={t('suivi.col.variant')}>
+                        <div className="px-clamp">{variantsOf(o.items)}</div>
                       </td>
                       <td className="num ltr" data-l={t('suivi.col.total')}>
                         {da(o.total)}

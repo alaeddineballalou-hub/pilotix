@@ -16,7 +16,8 @@
     "products": "Products",
     "total": "Total",
     "conf": "Confirmation",
-    "follow": "Delivery"
+    "follow": "Delivery",
+    "variant": "Variant"
   },
   "inBlack": "Blacklisted",
   "inBlackReason": "Blacklisted: {{reason}}",

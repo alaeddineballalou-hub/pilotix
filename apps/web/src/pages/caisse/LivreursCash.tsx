@@ -164,6 +164,7 @@ export function LivreursCash({ livreurId: fixed }: { livreurId?: number }) {
                   <th>{t('caisse.col.order')}</th>
                   <th>{t('caisse.col.customer')}</th>
                   <th className="wide">{t('caisse.col.products')}</th>
+                  <th>{t('caisse.col.variant')}</th>
                   {!one && <th>{t('caisse.lv.livreur')}</th>}
                   <th className="num">{t('caisse.col.amount')}</th>
                   <th className="num">{self ? t('caisse.lv.yourShare') : t('caisse.lv.share')}</th>
@@ -200,6 +201,9 @@ export function LivreursCash({ livreurId: fixed }: { livreurId?: number }) {
                     <td className="wide px-cw" data-l={t('caisse.col.products')}>
                       <div className="px-clamp">{o.products}</div>
                     </td>
+                    <td data-l={t('caisse.col.variant')}>
+                      <div className="px-clamp">{o.variants || '—'}</div>
+                    </td>
                     {!one && <td data-l={t('caisse.lv.livreur')}>{o.livreurName}</td>}
                     <td className="num" data-l={t('caisse.col.amount')}>
                       {da(o.total)}
@@ -235,6 +239,7 @@ export function LivreursCash({ livreurId: fixed }: { livreurId?: number }) {
                   <th>{t('caisse.col.order')}</th>
                   <th>{t('caisse.col.customer')}</th>
                   <th className="wide">{t('caisse.col.products')}</th>
+                  <th>{t('caisse.col.variant')}</th>
                   {!one && <th>{t('caisse.lv.livreur')}</th>}
                   <th className="num">{t('caisse.col.amount')}</th>
                 </tr>
@@ -253,6 +258,9 @@ export function LivreursCash({ livreurId: fixed }: { livreurId?: number }) {
                     </td>
                     <td className="wide px-cw" data-l={t('caisse.col.products')}>
                       <div className="px-clamp">{o.products}</div>
+                    </td>
+                    <td data-l={t('caisse.col.variant')}>
+                      <div className="px-clamp">{o.variants || '—'}</div>
                     </td>
                     {!one && <td data-l={t('caisse.lv.livreur')}>{o.livreurName}</td>}
                     <td className="num" data-l={t('caisse.col.amount')}>

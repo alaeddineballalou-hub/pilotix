@@ -29,6 +29,7 @@ const EXTRA: Record<string, string> = {
   columns: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9M15 21V9"/>',
   chevl: '<path d="m15 18-6-6 6-6"/>',
   chevr: '<path d="m9 18 6-6-6-6"/>',
+  lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
 };
 const ALL = { ...(icons as Record<string, string>), ...EXTRA };
 export type IconName = keyof typeof ALL | string;

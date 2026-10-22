@@ -71,7 +71,8 @@
     "cashed": "Encaissé",
     "phone": "Téléphone",
     "wilaya": "Wilaya",
-    "since": "Depuis"
+    "since": "Depuis",
+    "variant": "Variante"
   },
   "flag": {
     "dup": "DOUBLON ?",

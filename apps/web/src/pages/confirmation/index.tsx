@@ -13,6 +13,7 @@ import { store } from '../../lib/store';
 import { ErrorBox, Field, Help, Icon, Loading, Pager, SortTh, StageBar, StatusBadge, StatusSelect } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
+import { namesOf, variantsOf } from '../../lib/items';
 import type { PageProps } from '../registry';
 import { Countdown, useNow } from './Countdown';
 import { Detail } from './Detail';
@@ -23,7 +24,7 @@ import { useStatusChange } from './StatusDialog';
 
 type Row = NonNullable<ReturnType<typeof useList>['data']>['rows'][number];
 type SortKey = 'created_at' | 'confirmed_at' | 'next_call_at' | 'total' | 'customer_name';
-type ColKey = 'source' | 'tracking' | 'creator' | 'channel' | 'product' | 'sku' | 'name' | 'phone' | 'wilaya' | 'commune' | 'agent' | 'total' | 'time' | 'created' | 'stock' | 'desk' | 'passed' | 'confirmed' | 'follow' | 'next' | 'status';
+type ColKey = 'source' | 'tracking' | 'creator' | 'channel' | 'product' | 'variant' | 'sku' | 'name' | 'phone' | 'wilaya' | 'commune' | 'agent' | 'total' | 'time' | 'created' | 'stock' | 'desk' | 'passed' | 'confirmed' | 'follow' | 'next' | 'status';
 interface Filters {
   wilayaId?: number;
   agentId?: number | 'none';
@@ -45,6 +46,7 @@ const columnsOf = (sub: Sub): { k: ColKey; sort?: SortKey }[] => [
   { k: 'creator' },
   { k: 'channel' },
   { k: 'product' },
+  { k: 'variant' },
   { k: 'sku' },
   { k: 'name', sort: 'customer_name' },
   { k: 'phone' },
@@ -99,7 +101,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   const manager = has('agent_manager', 'vendeur');
   const meta = useRpc('confirmation.meta', {}, { staleTime: 5 * 60_000 });
   const COLS = useMemo(() => columnsOf(sub), [sub]);
-  const colsKey = `conf-cols-${sub}`;
+  const colsKey = `conf-cols2-${sub}`;
   const [visible, setVisible] = useState<Set<ColKey>>(() => new Set(store.json<ColKey[] | null>(colsKey, null) ?? COLS.map((c) => c.k)));
   const [q, setQ] = useState('');
   const [qd, setQd] = useState('');
@@ -135,6 +137,29 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   const setFilter = (p: Partial<Filters>) => {
     setF((cur) => ({ ...cur, ...p }));
     setPage(1);
+  };
+  const presets = useRpc('confirmation.colPresets', {}, { staleTime: 60_000 });
+  const [pName, setPName] = useState('');
+  const addPreset = async () => {
+    const name = pName.trim();
+    if (!name) return;
+    try {
+      await rpc('confirmation.addColPreset', { name, cols: COLS.filter((c) => visible.has(c.k)).map((c) => c.k) });
+      setPName('');
+      toast(t('confirmation.presets.saved', { name }), 'ok');
+      presets.refetch();
+    } catch (e: any) {
+      toast(e.message, 'bad');
+    }
+  };
+  const delPreset = async (id: string) => {
+    try {
+      await rpc('confirmation.deleteColPreset', { id });
+      toast(t('confirmation.presets.deleted'), 'ok');
+      presets.refetch();
+    } catch (e: any) {
+      toast(e.message, 'bad');
+    }
   };
   const saveCols = (s: Set<ColKey>) => {
     setVisible(s);
@@ -206,9 +231,11 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
       case 'product':
         return (
           <div className="px-clamp">
-            <div className="qprod">{r.items.map((i) => `${i.qty > 1 ? `${i.qty} × ` : ''}${i.name}${i.variantTitle ? ` · ${i.variantTitle}` : ''}`).join(' + ') || '—'}</div>
+            <div className="qprod">{namesOf(r.items)}</div>
           </div>
         );
+      case 'variant':
+        return <div className="px-clamp">{variantsOf(r.items)}</div>;
       case 'sku':
         return r.skus.join(', ') || '—';
       case 'name':
@@ -366,6 +393,43 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
               </button>
               {panel === 'c' && (
                 <div className="px-qpop" role="dialog" aria-label={t('common.columns')}>
+                  <div className="px-pre">
+                    <div className="px-pre-h">{t('confirmation.presets.title')}</div>
+                    {(presets.data ?? []).length === 0 && <div className="px-pre-none">{t('confirmation.presets.none')}</div>}
+                    {(presets.data ?? []).map((p) => {
+                      const keep = p.cols.filter((k) => COLS.some((c) => c.k === k)) as ColKey[];
+                      const on = keep.length > 0 && keep.length === visible.size && keep.every((k) => visible.has(k));
+                      return (
+                        <div key={p.id} className={`px-pre-it ${on ? 'on' : ''}`}>
+                          <button type="button" className="px-pre-go" title={t('confirmation.presets.locked')} aria-label={t('confirmation.presets.apply', { name: p.name })} disabled={!keep.length} onClick={() => saveCols(new Set(keep))}>
+                            <Icon name="lock" />
+                            <span>{p.name}</span>
+                            <small>{keep.length}</small>
+                          </button>
+                          {session?.isAdmin && (
+                            <button type="button" className="px-pre-del" title={t('confirmation.presets.del', { name: p.name })} aria-label={t('confirmation.presets.del', { name: p.name })} onClick={() => delPreset(p.id)}>
+                              <Icon name="trash" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {session?.isAdmin && (
+                      <form
+                        className="px-pre-new"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          addPreset();
+                        }}
+                      >
+                        <input value={pName} maxLength={40} placeholder={t('confirmation.presets.name')} aria-label={t('confirmation.presets.saveAs')} title={t('confirmation.presets.saveAs')} onChange={(e) => setPName(e.target.value)} />
+                        <button type="submit" className="btn small primary" disabled={!pName.trim() || !visible.size}>
+                          {t('confirmation.presets.save')}
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                  <div className="px-pre-h">{t('confirmation.presets.cols')}</div>
                   {COLS.map((c) => (
                     <label key={c.k} className="px-qpop-it">
                       <span>{colLabel(c.k)}</span>

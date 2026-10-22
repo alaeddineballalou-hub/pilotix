@@ -71,7 +71,8 @@
     "cashed": "Cashed",
     "phone": "Phone",
     "wilaya": "Wilaya",
-    "since": "Since"
+    "since": "Since",
+    "variant": "Variant"
   },
   "flag": {
     "dup": "DUPLICATE?",

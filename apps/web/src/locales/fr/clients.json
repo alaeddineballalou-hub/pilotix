@@ -16,7 +16,8 @@
     "products": "Produits",
     "total": "Total",
     "conf": "Confirmation",
-    "follow": "Livraison"
+    "follow": "Livraison",
+    "variant": "Variante"
   },
   "inBlack": "En liste noire",
   "inBlackReason": "En liste noire : {{reason}}",
