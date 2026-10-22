@@ -38,12 +38,7 @@ export function StatsSection({ sub }: { sub: Sub }) {
       </button>
       {open && (
         <div className="px-kff-body">
-          {sub === 'nouvelles' && (
-            <>
-              <FirstCallCard kf={kf} setKf={setKf} />
-              <PeriodCard kf={kf} setKf={setKf} />
-            </>
-          )}
+          {sub === 'nouvelles' && <NouvellesCard kf={kf} setKf={setKf} />}
           {sub === 'attente' && <EnCoursCard kf={kf} setKf={setKf} />}
           {sub === 'confirmees' && <ConfirmedCard kf={kf} setKf={setKf} />}
         </div>
@@ -53,7 +48,7 @@ export function StatsSection({ sub }: { sub: Sub }) {
 }
 
 /** Period / date type / indicator selects (".bjkf"). */
-function KfBar({ kf, setKf }: { kf: Kf; setKf: (k: Kf) => void }) {
+function KfBar({ kf, setKf, noView }: { kf: Kf; setKf: (k: Kf) => void; noView?: boolean }) {
   const { t } = useTranslation();
   const set = (p: Partial<Kf>) => setKf({ ...kf, ...p });
   return (
@@ -76,10 +71,10 @@ function KfBar({ kf, setKf }: { kf: Kf; setKf: (k: Kf) => void }) {
         <option value="created">{t('confirmation.stats.created')}</option>
         <option value="updated">{t('confirmation.stats.updated')}</option>
       </select>
-      <select aria-label={t('confirmation.stats.view')} className="bjkf-sel bjkf-view" value={kf.view} onChange={(e) => set({ view: e.target.value as Kf['view'] })}>
+      {!noView && <select aria-label={t('confirmation.stats.view')} className="bjkf-sel bjkf-view" value={kf.view} onChange={(e) => set({ view: e.target.value as Kf['view'] })}>
         <option value="conf">{t('confirmation.stats.viewConf')}</option>
         <option value="deliv">{t('confirmation.stats.viewDeliv')}</option>
-      </select>
+      </select>}
     </div>
   );
 }
@@ -97,6 +92,80 @@ function Head({ title, help, children }: { title: string; help: string; children
 }
 
 const perLabel = (t: (k: string) => string, kf: Kf) => (kf.per === 'custom' ? (kf.from === kf.to ? kf.from : `${kf.from} → ${kf.to}`) : t(`confirmation.per.${kf.per}`));
+
+// ---------------------------------------------------------------- Nouvelles: one card, the order's road
+/** Reçues › Appelées › Confirmées › Livrées for the period, and a small "now" strip for the calls to make. */
+function NouvellesCard({ kf, setKf }: { kf: Kf; setKf: (k: Kf) => void }) {
+  const { t } = useTranslation();
+  const inp = kfInput(kf);
+  const p = useRpc('confirmation.period', inp, { refetchInterval: 60_000 });
+  const f = useRpc('confirmation.firstCall', inp, { refetchInterval: 30_000 });
+  const d = useRpc('confirmation.delivery', { ...inp, on: 'created' }, { refetchInterval: 60_000 });
+  const P = p.data;
+  const F = f.data;
+  const D = d.data;
+  const err = p.error || f.error || d.error;
+  const onTime = F && F.called ? Math.round((F.onTime * 100) / F.called) : null;
+  const fm = F?.firstMinutes ?? 15;
+  return (
+    <div className="card bjfc px-nv">
+      <Head title={t('confirmation.nv.title')} help={t('confirmation.nv.help')}>
+        <KfBar kf={kf} setKf={setKf} noView />
+      </Head>
+      {err ? (
+        <ErrorBox error={err} onRetry={() => (p.refetch(), f.refetch(), d.refetch())} />
+      ) : !P || !F || !D ? (
+        <Loading />
+      ) : (
+        <>
+          <div className="px-flow">
+            <Kpi label={t('confirmation.nv.recv')} value={n(P.received)} sub={`${perLabel(t, kf)} · ${da(P.value)}`} />
+            <span className="px-flow-ar" aria-hidden="true">›</span>
+            <Kpi
+              tone={P.notCalled ? 'warn' : undefined}
+              label={t('confirmation.nv.called')}
+              value={n(P.called)}
+              sub={P.notCalled ? t('confirmation.nv.calledLeft', { p: P.calledPct ?? 0, n: P.notCalled }) : t('confirmation.nv.calledAll')}
+            />
+            <span className="px-flow-ar" aria-hidden="true">›</span>
+            <Kpi
+              tone={tone3(P.rate, 60, 40)}
+              label={t('confirmation.nv.confirmed')}
+              value={n(P.confirmed)}
+              sub={t('confirmation.nv.confirmedSub', { r: pctTxt(P.rate), c: P.cancelled })}
+            />
+            <span className="px-flow-ar" aria-hidden="true">›</span>
+            <Kpi
+              tone={tone3(D.rate, 75, 60)}
+              label={t('confirmation.nv.delivered')}
+              value={n(D.delivered)}
+              sub={t('confirmation.nv.deliveredSub', { r: pctTxt(D.rate), b: D.back, w: D.depot + D.route })}
+            />
+          </div>
+          <div className="px-now">
+            <span className="bjfc-live">
+              <i />
+              {t('confirmation.nv.now')}
+            </span>
+            <span className={`px-now-c ${F.waiting ? 'warn' : 'ok'}`}>
+              {t('confirmation.nv.toCall')} <b className="ltr">{n(F.waiting)}</b>
+              {F.waitingNoAgent ? <small> · {t('confirmation.fc.noAgent', { n: F.waitingNoAgent })}</small> : null}
+            </span>
+            <span className={`px-now-c ${F.late ? 'bad' : 'ok'}`}>
+              {t('confirmation.nv.late')} <b className="ltr">{n(F.late)}</b>
+            </span>
+            <span className={`px-now-c ${onTime === null ? '' : onTime >= 80 ? 'ok' : onTime >= 70 ? 'warn' : 'bad'}`} title={t('confirmation.fc.help', { first: fm })}>
+              {t('confirmation.nv.onTime')} <b className="ltr">{pctTxt(onTime)}</b>
+            </span>
+            <span className="px-now-c">
+              {t('confirmation.nv.median')} <b className="ltr">{F.medianMin === null ? '—' : dur(F.medianMin * 60_000)}</b>
+            </span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------- Nouvelles
 function FirstCallCard({ kf, setKf }: { kf: Kf; setKf: (k: Kf) => void }) {

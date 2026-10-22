@@ -1,13 +1,28 @@
 {
-  "sub": { "nouvelles": "Nouvelles", "attente": "En cours", "confirmees": "Confirmées", "terminees": "Terminées" },
-  "title": { "nouvelles": "Nouvelles commandes", "attente": "En cours", "confirmees": "Confirmées", "terminees": "Terminées" },
+  "sub": {
+    "nouvelles": "Nouvelles",
+    "attente": "En cours",
+    "confirmees": "Confirmées",
+    "terminees": "Terminées"
+  },
+  "title": {
+    "nouvelles": "Nouvelles commandes",
+    "attente": "En cours",
+    "confirmees": "Confirmées",
+    "terminees": "Terminées"
+  },
   "help": {
     "nouvelles": "Commandes reçues que personne n’a encore appelées, les plus récentes en haut (dernière arrivée, première appelée). Cliquez sur une ligne (ou ›) pour voir le détail, sur « Appeler » pour la traiter.",
     "attente": "Commandes déjà appelées mais pas encore confirmées : à vérifier, pas de réponse, occupé, à rappeler, reportées.",
     "confirmees": "Commandes confirmées (et confirmées sans stock), les plus récentes d’abord, avec où en est leur livraison.",
     "terminees": "Commandes closes sans confirmation : doublons, faux numéros et fausses commandes. Elles quittent la file d’appel et arrivent ici dès que l’agent choisit ce statut."
   },
-  "empty": { "nouvelles": "Aucune nouvelle commande.", "attente": "Aucune commande en cours.", "confirmees": "Aucune commande confirmée.", "terminees": "Aucune commande terminée." },
+  "empty": {
+    "nouvelles": "Aucune nouvelle commande.",
+    "attente": "Aucune commande en cours.",
+    "confirmees": "Aucune commande confirmée.",
+    "terminees": "Aucune commande terminée."
+  },
   "newOrder": "Nouvelle commande",
   "next": "Commande suivante →",
   "searchPh": "Réf., nom du client, téléphone, n° de suivi…",
@@ -51,14 +66,34 @@
     "back": "Retour"
   },
   "col": {
-    "order": "Commande", "source": "Source UTM", "tracking": "N° de suivi", "creator": "Créée par", "channel": "Canal", "product": "Produit", "sku": "SKU",
-    "name": "Client", "phone": "Téléphone", "wilaya": "Wilaya", "commune": "Commune", "agent": "Agent", "total": "Total", "time": "Temps passé",
-    "created": "Créée le", "confirmed": "Confirmée le", "follow": "Livraison", "next": "Prochain appel", "status": "Statut"
+    "order": "Commande",
+    "source": "Source UTM",
+    "tracking": "N° de suivi",
+    "creator": "Créée par",
+    "channel": "Canal",
+    "product": "Produit",
+    "sku": "SKU",
+    "name": "Client",
+    "phone": "Téléphone",
+    "wilaya": "Wilaya",
+    "commune": "Commune",
+    "agent": "Agent",
+    "total": "Total",
+    "time": "Temps passé",
+    "created": "Créée le",
+    "confirmed": "Confirmée le",
+    "follow": "Livraison",
+    "next": "Prochain appel",
+    "status": "Statut"
   },
   "f": {
     "wilaya": "Wilaya",
     "allF": "Toutes",
-    "allSt": { "attente": "Tous en cours", "confirmees": "Toutes les confirmées", "terminees": "Toutes les terminées" },
+    "allSt": {
+      "attente": "Tous en cours",
+      "confirmees": "Toutes les confirmées",
+      "terminees": "Toutes les terminées"
+    },
     "clear": "Effacer les filtres"
   },
   "tb": {
@@ -80,9 +115,27 @@
     "done": "{{n}} client(s) bloqué(s)"
   },
   "csv": {
-    "ref": "Réf", "created": "Créée", "client": "Client", "phone": "Téléphone", "phone2": "Téléphone 2", "wilaya": "Wilaya", "commune": "Commune", "address": "Adresse",
-    "desk": "Stop desk", "products": "Produits", "pieces": "Pièces", "productsDa": "Produits DA", "feeDa": "Livraison DA", "discount": "Remise", "totalDa": "Total DA",
-    "conf": "Confirmation", "follow": "Livraison", "company": "Société", "tracking": "Suivi", "agent": "Agent", "deliveryNote": "Note livreur"
+    "ref": "Réf",
+    "created": "Créée",
+    "client": "Client",
+    "phone": "Téléphone",
+    "phone2": "Téléphone 2",
+    "wilaya": "Wilaya",
+    "commune": "Commune",
+    "address": "Adresse",
+    "desk": "Stop desk",
+    "products": "Produits",
+    "pieces": "Pièces",
+    "productsDa": "Produits DA",
+    "feeDa": "Livraison DA",
+    "discount": "Remise",
+    "totalDa": "Total DA",
+    "conf": "Confirmation",
+    "follow": "Livraison",
+    "company": "Société",
+    "tracking": "Suivi",
+    "agent": "Agent",
+    "deliveryNote": "Note livreur"
   },
   "cd": {
     "wait": "créneau dans {{d}}",
@@ -91,7 +144,11 @@
     "firstTitle": "Temps restant pour le 1er appel : {{d}}",
     "slotTitle": "Temps restant dans le créneau : {{d}}"
   },
-  "slot": { "morning": "Matin", "midday": "Midi", "evening": "Soir" },
+  "slot": {
+    "morning": "Matin",
+    "midday": "Midi",
+    "evening": "Soir"
+  },
   "banner": {
     "late": "Appels en retard",
     "night": "Commandes de la nuit",
@@ -117,7 +174,14 @@
     "viewConf": "Taux de confirmation",
     "viewDeliv": "Performance de livraison"
   },
-  "per": { "today": "Aujourd’hui", "yesterday": "Hier", "7": "7 jours", "30": "30 jours", "month": "Ce mois", "custom": "Dates…" },
+  "per": {
+    "today": "Aujourd’hui",
+    "yesterday": "Hier",
+    "7": "7 jours",
+    "30": "30 jours",
+    "month": "Ce mois",
+    "custom": "Dates…"
+  },
   "fc": {
     "title": "Rapidité du 1er appel",
     "help": "Ce qui compte ici : appeler chaque nouvelle commande le plus vite possible. Délai = de l’assignation (ou de l’arrivée) jusqu’au 1er appel ; la nuit compte à partir de 9 h. À temps = dans les {{first}} min, +5 min par commande plus récente à appeler avant (la plus récente d’abord).",
@@ -210,7 +274,12 @@
     "rate": "Taux de récupération",
     "rateHelp": "Récupérées divisées par (récupérées + perdues). Perdues = annulées après au moins 2 appels. Vert à partir de 60 %, orange de 40 à 59 %, rouge en dessous.",
     "rateSub": "{{r}} récupérées · {{l}} perdues",
-    "st": { "no_answer": "Pas de réponse", "busy": "Occupé", "callback": "Rappel demandé", "postponed": "Reportée" },
+    "st": {
+      "no_answer": "Pas de réponse",
+      "busy": "Occupé",
+      "callback": "Rappel demandé",
+      "postponed": "Reportée"
+    },
     "colDue": "À rappeler",
     "colMany": "3 appels +",
     "empty": "Aucune commande en cours sur la période 🎉"
@@ -270,7 +339,11 @@
     "add": "Ajouter un produit",
     "addPh": "+ Ajouter un produit : tapez le nom, la couleur ou le SKU…",
     "inOrder": "déjà dans la commande (+1)",
-    "note": { "client": "Client", "delivery": "Livreur", "internal": "Interne" }
+    "note": {
+      "client": "Client",
+      "delivery": "Livreur",
+      "internal": "Interne"
+    }
   },
   "focus": {
     "title": "Confirmation",
@@ -290,5 +363,22 @@
     "clientNote": "Note du client : {{note}}",
     "release": "Relâcher (la laisser à un autre agent)",
     "history": "Voir l’historique"
+  },
+  "nv": {
+    "title": "Nouvelles commandes",
+    "help": "Le chemin des commandes reçues sur la période : appelées, confirmées, puis livrées. En bas, ce qu’il reste à appeler maintenant.",
+    "recv": "Reçues",
+    "called": "Appelées",
+    "calledLeft": "{{p}} % · {{n}} encore à appeler",
+    "calledAll": "toutes appelées",
+    "confirmed": "Confirmées",
+    "confirmedSub": "taux {{r}} · {{c}} annulées",
+    "delivered": "Livrées",
+    "deliveredSub": "taux {{r}} · {{b}} retours · {{w}} en cours",
+    "now": "Maintenant",
+    "toCall": "À appeler",
+    "late": "En retard",
+    "onTime": "1er appel à temps",
+    "median": "Délai médian"
   }
 }
