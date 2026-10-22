@@ -35,7 +35,8 @@ const norm = (s: string) =>
 const key = (L: Line[]) => JSON.stringify(L.map((l) => [l.variantId, l.productId, l.qty, l.unitPrice, l.isUpsell]));
 
 /** onDone: called after a status change, Confirmer or Enregistrer worked, so the list can move on to the next order. */
-export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) => void }) {
+/** phone: the order full screen on a phone — the customer first (name, phones, address editable), then delivery, products, the totals, and the Statut / Confirmer bar. */
+export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: number) => void; phone?: boolean }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const cat = useCatalog();
@@ -59,6 +60,11 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
   const [nOrigin, setNOrigin] = useState(order.customerNote ?? '');
   const [nLivreur, setNLivreur] = useState(order.deliveryNote ?? '');
   const [nTeam, setNTeam] = useState(order.internalNote ?? '');
+  /** the customer (phone mode): name, phones, address */
+  const [cName, setCName] = useState(order.customerName);
+  const [cPhone, setCPhone] = useState(order.phone);
+  const [cPhone2, setCPhone2] = useState(order.phone2 ?? '');
+  const [cAddr, setCAddr] = useState(order.address ?? '');
   const [noteTab, setNoteTab] = useState<'origin' | 'livreur' | 'team'>('origin');
   /** the status picked in "Changer le statut": applied only with Enregistrer */
   const [pend, setPend] = useState<Pend | null>(null);
@@ -71,6 +77,12 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
     setNLivreur(order.deliveryNote ?? '');
     setNTeam(order.internalNote ?? '');
   }, [order.discount, order.customerNote, order.deliveryNote, order.internalNote]);
+  useEffect(() => {
+    setCName(order.customerName);
+    setCPhone(order.phone);
+    setCPhone2(order.phone2 ?? '');
+    setCAddr(order.address ?? '');
+  }, [order.customerName, order.phone, order.phone2, order.address]);
   const [modeTouched, setModeTouched] = useState(false);
   const opts = useRpc('confirmation.deskOptions', { wilayaId: wil }, { staleTime: 5 * 60_000 });
   const modeFee = useRpc('confirmation.gridFee', { id: order.id, isStopdesk: desk, ...(wil !== order.wilayaId ? { wilayaId: wil } : {}) }, { staleTime: 60_000 });
@@ -95,7 +107,8 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
   // prices are not typed in here: products keep their catalog / pack price and delivery its grid price; only the remise changes
   const notesChanged = nOrigin !== (order.customerNote ?? '') || nLivreur !== (order.deliveryNote ?? '') || nTeam !== (order.internalNote ?? '');
   const geoChanged = wil !== order.wilayaId || com !== (order.commune ?? '');
-  const dirty = key(L) !== key(initial) || fee !== order.deliveryFee || disc !== order.discount || notesChanged || geoChanged || desk !== order.isStopdesk || (desk && deskId !== order.stopdeskId);
+  const clientChanged = cName.trim() !== order.customerName || cPhone.trim() !== order.phone || cPhone2.trim() !== (order.phone2 ?? '') || cAddr.trim() !== (order.address ?? '');
+  const dirty = key(L) !== key(initial) || fee !== order.deliveryFee || disc !== order.discount || notesChanged || geoChanged || clientChanged || desk !== order.isStopdesk || (desk && deskId !== order.stopdeskId);
   /** another wilaya: pick its commune, forget a bureau of the old one, and take that wilaya's price from the grid */
   const pickWilaya = (w: number) => {
     setGeoPick(null);
@@ -187,7 +200,8 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
       if (disc > maxDisc) return setErr(t('confirmation.d6.discTooBig', { v: da(maxDisc) })), false;
       const notes = notesChanged ? { customerNote: nOrigin.trim() || null, deliveryNote: nLivreur.trim() || null, internalNote: nTeam.trim() || null } : {};
       const geo = geoChanged ? { wilayaId: wil, commune: com } : {};
-      await rpc('orders.update', { id: order.id, version: order.version, deliveryFee: fee, discount: disc, ...notes, ...geo, ...mode, ...(key(L) !== key(initial) ? { items: cartBody } : {}) });
+      const client = clientChanged ? { customerName: cName.trim(), phone: cPhone.trim(), phone2: cPhone2.trim() || null, address: cAddr.trim() } : {};
+      await rpc('orders.update', { id: order.id, version: order.version, deliveryFee: fee, discount: disc, ...notes, ...geo, ...client, ...mode, ...(key(L) !== key(initial) ? { items: cartBody } : {}) });
       return true;
     } catch (e: any) {
       setErr(e.message);
@@ -214,8 +228,27 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
   const confirm = () => run(() => rpc('orders.setConf', { ids: [order.id], status: 'confirmed' }), t('confirmation.d6.confirmed', { ref: order.ref }));
 
   return (
-    <div className="qd2-main qd3 qd5 qd6">
+    <div className={`qd2-main qd3 qd5 qd6${phone ? ' qd6-ph' : ''}`}>
       <div className="qd6-grid">
+      {phone && (
+        <section className="qd6-card qd6-client" aria-label={t('confirmation.ph.client')}>
+          <div className="qd6-h">{t('confirmation.ph.client')}</div>
+          <div className="qd6-flds">
+            <label className="qd6-fld">
+              <small>{t('confirmation.ph.name')}</small>
+              <input value={cName} maxLength={120} disabled={!editable} onChange={(e) => setCName(e.target.value)} />
+            </label>
+            <label className="qd6-fld">
+              <small>{t('confirmation.ph.phone')}</small>
+              <input className="ltr" type="tel" inputMode="tel" value={cPhone} maxLength={20} disabled={!editable} onChange={(e) => setCPhone(e.target.value)} />
+            </label>
+            <label className="qd6-fld wide">
+              <small>{t('confirmation.ph.phone2')}</small>
+              <input className="ltr" type="tel" inputMode="tel" value={cPhone2} maxLength={20} placeholder={t('confirmation.ph.addPhone')} disabled={!editable} onChange={(e) => setCPhone2(e.target.value)} />
+            </label>
+          </div>
+        </section>
+      )}
       <div className="qd6-left">
         <section className="qd6-card qd6-notes" aria-label={t('confirmation.d6.notes')}>
           {(() => {
@@ -431,6 +464,12 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
               )}
             </div>
           )}
+          {phone && !desk && (
+            <label className="qd6-fld wide qd6-addr">
+              <small>{t('confirmation.ph.address')}</small>
+              <input value={cAddr} maxLength={300} disabled={!editable} onChange={(e) => setCAddr(e.target.value)} />
+            </label>
+          )}
           <div className="qd6-fee ro" title={t('confirmation.d6.feeLocked')}>
             <span className="qd6-lab">{t('confirmation.d6.fee')}</span>
             <span className="qd6-feev ltr">
@@ -506,6 +545,10 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
                 setNOrigin(order.customerNote ?? '');
                 setNLivreur(order.deliveryNote ?? '');
                 setNTeam(order.internalNote ?? '');
+                setCName(order.customerName);
+                setCPhone(order.phone);
+                setCPhone2(order.phone2 ?? '');
+                setCAddr(order.address ?? '');
                 setPend(null);
                 setErr('');
               }}
@@ -516,7 +559,7 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
         )}
         </div>
         <StatusMenu order={order} busy={busy} pending={pend} onPick={setPend} />
-        <button
+        {(!phone || canSave || order.confStatus === 'confirmed') && <button
           type="button"
           className={`qd6-savebtn ${canSave ? 'on' : ''}`}
           disabled={busy || !canSave}
@@ -525,8 +568,8 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
         >
           <Icon name="check" />
           {t('common.save')}
-        </button>
-        {order.confStatus !== 'confirmed' && (
+        </button>}
+        {order.confStatus !== 'confirmed' && !(phone && canSave) && (
           <>
             <button type="button" className="qd6-cta" disabled={busy || !editable} title={t('confirmation.d6.hint')} onClick={confirm}>
               <Icon name="checkcircle" />

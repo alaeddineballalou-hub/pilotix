@@ -1,0 +1,65 @@
+/* ===== Confirmation on phones: compact cards (option 1); a tap opens the whole order full screen (A),
+   with the totals and the Statut / Confirmer bar at the bottom (B). ===== */
+
+/* ---- the list ---- */
+.pxp-sum { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 10px; }
+.pxp-list { list-style: none; margin: 0; padding: 0 0 84px; display: flex; flex-direction: column; gap: 10px; }
+.pxp-empty { padding: 28px 8px; text-align: center; }
+.pxp-card { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.pxp-card:active { background: #FFF8F0; }
+.pxp-card:focus-visible { outline: 2px solid #F7A823; outline-offset: 2px; }
+.pxp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.pxp-top { display: flex; align-items: center; gap: 8px; }
+.pxp-name { flex: 1; min-width: 0; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pxp-meta { font-size: 12.5px; color: var(--muted); }
+.pxp-meta b { color: var(--ink); }
+.pxp-prod { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pxp-st { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+.pxp-st small { color: var(--muted); font-size: 11.5px; }
+.pxp-call { flex: none; width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: #1F9D57; color: #fff !important; text-decoration: none; }
+.pxp-call .bji, .pxp-call svg { width: 20px; height: 20px; }
+.pxp-call:active { filter: brightness(.92); }
+.pxp-next { position: fixed; z-index: 30; left: 12px; right: 12px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); height: 54px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(135deg, #F7A823, #F28B1E); color: #fff; font: inherit; font-size: 16px; font-weight: 800; box-shadow: 0 10px 24px rgba(242, 139, 30, .4); cursor: pointer; }
+.pxp-next .bji { width: 18px; height: 18px; }
+/* the table's tools (columns, row size, selection) are for big screens */
+@media (max-width: 760px) { .qcard .px-qnext, .qcard .qacts { display: none !important; } }
+
+/* ---- the opened order, full screen ---- */
+.pxp-order { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; background: var(--bg); }
+.pxp-oh { flex: none; display: flex; align-items: center; gap: 8px; padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 10px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.pxp-back { flex: none; width: 36px; height: 36px; border: 0; background: none; display: grid; place-items: center; color: var(--ink); cursor: pointer; }
+[dir="rtl"] .pxp-back .bji { transform: scaleX(-1); }
+.pxp-ot { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.pxp-ot b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pxp-ot small { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pxp-call.big { width: 42px; height: 42px; border-radius: 12px; }
+.pxp-wa { flex: none; width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: #25D366; color: #fff !important; }
+.pxp-wa .bji { width: 20px; height: 20px; }
+.pxp-ob { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px 12px 120px; overscroll-behavior: contain; }
+
+/* ---- the editor in phone mode: one column — customer, delivery, products, offers, totals, notes ---- */
+.qd6.qd6-ph .qd6-grid { display: flex !important; flex-direction: column; gap: 10px; }
+.qd6.qd6-ph .qd6-left, .qd6.qd6-ph .qd6-right { display: contents !important; }
+.qd6.qd6-ph .qd6-client { order: 1; }
+.qd6.qd6-ph .qd6-deliv { order: 2; }
+.qd6.qd6-ph .qd6-left > section.qd6-card:not(.qd6-notes):not(.qd6-related) { order: 3; }
+.qd6.qd6-ph .qd6-related { order: 4; }
+.qd6.qd6-ph .qd6-rail { order: 5; position: static !important; }
+.qd6.qd6-ph .qd6-notes { order: 6; }
+.qd6.qd6-ph .qd6-card, .qd6.qd6-ph .qd6-rail { padding: 12px !important; border-radius: 14px; }
+.qd6-flds { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.qd6-fld { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); min-width: 0; }
+.qd6-fld.wide { grid-column: 1 / -1; }
+.qd6-fld small { font-size: 10.5px; font-weight: 700; color: var(--muted); }
+.qd6-fld input { border: 0 !important; padding: 0 !important; height: 24px; min-height: 0 !important; background: none !important; font: inherit; font-size: 15px; font-weight: 600; color: var(--ink); box-shadow: none !important; width: 100%; }
+.qd6-fld:focus-within { border-color: #F7A823; box-shadow: 0 0 0 3px rgba(247, 168, 35, .18); }
+.qd6-addr { margin-top: 8px; }
+
+/* the bar: Statut ▾ + Confirmer la commande, fixed at the bottom of the screen */
+.qd6.qd6-ph .qd6-bar { position: fixed; z-index: 61; left: 0; right: 0; bottom: 0; margin: 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; box-shadow: 0 -6px 18px rgba(27, 42, 71, .08); padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px)); flex-wrap: wrap; gap: 8px; background: var(--surface); }
+.qd6.qd6-ph .qd6-bl { flex: 1 1 100%; }
+.qd6.qd6-ph .qd6-bl:empty { display: none; }
+.qd6.qd6-ph .qd6-bar > :not(.qd6-bl) { height: 50px; }
+.qd6.qd6-ph .qd6-bar .qd6-cta, .qd6.qd6-ph .qd6-bar .qd6-savebtn { flex: 2 1 0; padding: 0 12px; font-size: 15px; }
+.qd6.qd6-ph .qd6-bar .qd6-cta { background: #1F9D57; color: #fff; box-shadow: 0 6px 16px rgba(31, 157, 87, .3); }
+.qd6.qd6-ph .qd6-bar > :not(.qd6-bl):not(.qd6-cta):not(.qd6-savebtn) { flex: 1 1 0; min-width: 0; }
