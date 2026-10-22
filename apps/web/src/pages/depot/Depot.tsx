@@ -38,7 +38,7 @@ export function Depot({ sub }: PageProps) {
               </span>
             )}
             <a className={`bjm-p ${stage === k ? 'on' : ''} ${k === 'retours' ? 'end' : ''}`} href={`#/depot/${k}`} aria-current={stage === k ? 'page' : undefined}>
-              <span className="bjm-l">{t(`depot.stage.${k}`)}</span>
+              <span className="bjm-l">{phone && k === 'preparer' ? t('depot.ph.stage') : t(`depot.stage.${k}`)}</span>
               {c && <b className="bjm-n ltr">{c[k]}</b>}
             </a>
           </span>

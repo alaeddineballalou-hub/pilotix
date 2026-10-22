@@ -168,6 +168,7 @@
     "untickAll": "Tout décocher",
     "partner": "Partenaire de livraison",
     "send_one": "Envoyer au dispatch · {{count}}",
-    "send_other": "Envoyer au dispatch · {{count}}"
+    "send_other": "Envoyer au dispatch · {{count}}",
+    "stage": "Préparation"
   }
 }
