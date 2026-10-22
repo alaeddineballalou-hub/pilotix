@@ -107,7 +107,7 @@ function StockTab() {
                   <td className="num ltr" data-l={t('produits.stock.cost')}>
                     {da(r.cost)}
                   </td>
-                  <td data-l="">
+                  <td className="px-act px-act-many" data-l="">
                     <div className="row nowrap">
                       <button className="btn small" onClick={() => setDlg({ kind: 'entry', row: r })}>
                         {t('produits.stock.entry')}

@@ -1,0 +1,68 @@
+/* ===== Pilotix on every screen: phone (≤ 560 px), tablet (≤ 900 px), desktop =====
+   Loaded after pilotix.css, so these rules win without !important where possible. */
+
+/* ---- account menu: language + dark mode, shown only where the header has no room for them ---- */
+.px-me-phone { display: none; }
+.px-me-lang { display: flex; align-items: center; gap: 6px; padding: 6px 10px; color: var(--muted); }
+.px-me-lang button { flex: 1; height: 34px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; }
+.px-me-lang button.on { background: var(--navy); border-color: var(--navy); color: var(--on-navy, #fff); }
+
+@media (max-width: 900px) {
+  /* header: one line — menu, logo, page name, main action, account; the search goes on the second line */
+  .topbar .px-hdr-lang, .topbar .px-hdr-theme { display: none !important; }
+  .px-me-phone { display: block; }
+  .topbar .px-me { order: 6; margin-inline-start: 0; }
+  .topbar .px-me-t, .topbar .px-me-btn .px-me-ch { display: none; }
+  .topbar .page-title { font-size: 15px; }
+}
+
+/* ---- row actions: never hidden behind the table's sideways scroll, never wrapped ---- */
+.px-act .btn, .px-act select { white-space: nowrap; }
+@media (min-width: 761px) {
+  .tbl th.px-act, .tbl td.px-act { position: sticky; inset-inline-end: 0; z-index: 1; background: var(--surface); box-shadow: -1px 0 0 var(--line); }
+  [dir="rtl"] .tbl th.px-act, [dir="rtl"] .tbl td.px-act { box-shadow: 1px 0 0 var(--line); }
+}
+@media (max-width: 760px) {
+  /* card rows on phones: the action takes the whole width at the bottom of the card */
+  .tbl td.px-act { grid-column: 1 / -1; }
+  .tbl td.px-act > .btn, .tbl td.px-act > select { width: 100%; justify-content: center; min-height: 40px; }
+}
+
+/* ---- tables become cards under 760 px: undo the desktop "shrink to content" cell width (it collapsed cells to a few px) ---- */
+@media (max-width: 760px) {
+  html body .tbl > tbody > tr:not(.qdetail) > td,
+  html body .qtbl > tbody > tr:not(.qdetail) > td { width: auto !important; min-width: 0; max-width: none; white-space: normal; overflow: visible; }
+  html body .qtbl > tbody > tr:not(.qdetail) > td.ck { width: auto !important; }
+}
+
+/* ---- the page itself never scrolls sideways; wide tables scroll inside their own box ---- */
+html, body { overflow-x: clip; }
+
+/* ---- number boxes ---- */
+/* 5 boxes: one row of 5 when there is room, never 4 + 1 alone */
+@media (min-width: 640px) { .kpis:has(> :nth-child(5):last-child) { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; } }
+@media (max-width: 560px) {
+  /* phones: two boxes per row instead of one tall column */
+  .kpis, .kpis:has(> :nth-child(5):last-child), .kpis:has(> :nth-child(7):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px !important; }
+  html body .kpi.kpi { padding: 12px !important; }
+  html body .kpi .l { font-size: 12.5px; }
+  html body .kpi .s { font-size: 11.5px; }
+  .kpi-go { display: none; }
+}
+
+/* ---- many row buttons (stock): they wrap instead of being cut ---- */
+.tbl td.px-act-many .row.nowrap { flex-wrap: wrap; gap: 6px; }
+@media (min-width: 761px) { .tbl td.px-act-many { position: static; box-shadow: none; } }
+@media (max-width: 760px) {
+  .tbl td.px-act-many .row.nowrap > .btn { flex: 1 1 calc(50% - 6px); width: auto; justify-content: center; min-height: 38px; }
+}
+
+/* ---- tab rows on phones scroll sideways instead of cutting the last tab ---- */
+@media (max-width: 760px) {
+  .tabs { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs > * { flex: none; }
+}
+
+/* ---- tracking numbers in tight columns: shortened with … rather than cut mid-character (full number on hover and copy) ---- */
+.tbl.px-fixed td .px-copy { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-inline: 0; }

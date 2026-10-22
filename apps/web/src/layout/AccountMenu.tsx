@@ -5,7 +5,8 @@ import { Avatar } from '../pages/profil/Avatar';
 import { Icon } from '../ui/kit';
 
 /** The signed-in account at the right of the header (moved from the sidebar): picture, name and role; the menu opens my profile pages and signs out. */
-export function AccountMenu({ session, onLogout }: { session: Session; onLogout: () => void }) {
+/** On phones the header has no room for the language and theme buttons: they are in this menu instead (lang / onTheme). */
+export function AccountMenu({ session, onLogout, lang, onTheme }: { session: Session; onLogout: () => void; lang?: { value: string; options: string[]; onChange: (l: string) => void }; onTheme?: () => void }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -52,6 +53,22 @@ export function AccountMenu({ session, onLogout }: { session: Session; onLogout:
           {item('settings', t('profil.tSettings'), () => go('parametres'))}
           {item('gift', t('profil.tRef'), () => go('parrainage'))}
           {item('lock', t('profil.pwd'), () => go('securite'))}
+          {(lang || onTheme) && (
+            <div className="px-me-phone">
+              <hr />
+              {lang && (
+                <div className="px-me-lang" role="group" aria-label={t('shell.language')}>
+                  <Icon name="globe" />
+                  {lang.options.map((l) => (
+                    <button key={l} type="button" className={l === lang.value ? 'on' : ''} aria-pressed={l === lang.value} onClick={() => lang.onChange(l)}>
+                      {l.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {onTheme && item('moon', t('shell.theme'), () => onTheme())}
+            </div>
+          )}
           <hr />
           {item('logout', t('shell.logout'), () => (setOpen(false), onLogout()), 'px-me-out')}
         </div>

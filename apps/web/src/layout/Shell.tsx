@@ -235,7 +235,7 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
             )
           )}
           <select
-            className="icon-btn"
+            className="icon-btn px-hdr-lang"
             aria-label={t('shell.language')}
             value={i18n.language}
             onChange={(e) => {
@@ -251,7 +251,7 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
             ))}
           </select>
           <button
-            className="icon-btn theme-btn"
+            className="icon-btn theme-btn px-hdr-theme"
             aria-label={t('shell.theme')}
             title={t('shell.theme')}
             onClick={() => {
@@ -261,7 +261,22 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
           >
             <Icon name="moon" />
           </button>
-          <AccountMenu session={session!} onLogout={logout} />
+          <AccountMenu
+            session={session!}
+            onLogout={logout}
+            lang={{
+              value: i18n.language,
+              options: [...LANGUAGES],
+              onChange: (l) => {
+                applyLanguage(l as Language);
+                rpc('me.language', { language: l as Language }).catch(() => {});
+              },
+            }}
+            onTheme={() => {
+              const dark = document.documentElement.getAttribute('data-theme') === 'dark' || (!theme && matchMedia('(prefers-color-scheme: dark)').matches);
+              applyTheme(dark ? 'light' : 'dark');
+            }}
+          />
         </header>
         {has('confirmation') && !isAdmin && (
           <Suspense fallback={null}>
