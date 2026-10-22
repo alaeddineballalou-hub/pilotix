@@ -4,7 +4,8 @@ import { store } from '../../lib/store';
 import { toLocalInput } from '../../lib/format';
 
 export type Sub = 'nouvelles' | 'attente' | 'confirmees' | 'livrees' | 'terminees';
-export const SUBS: Sub[] = ['nouvelles', 'attente', 'confirmees', 'livrees', 'terminees'];
+/** no Livrées tab in Confirmation (removed on request) */
+export const SUBS: Sub[] = ['nouvelles', 'attente', 'confirmees', 'terminees'];
 export const SUB_STATUSES: Record<Sub, ConfStatus[]> = {
   nouvelles: ['new'],
   attente: ['to_check', 'no_answer', 'busy', 'callback', 'postponed'],

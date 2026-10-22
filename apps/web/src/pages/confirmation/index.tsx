@@ -92,7 +92,6 @@ export function Confirmation({ sub: rawSub, rest }: PageProps) {
     { key: 'nouvelles', label: t('confirmation.sub.nouvelles'), href: '#/confirmation/nouvelles', count: c?.nouvelles },
     { key: 'attente', label: t('confirmation.sub.attente'), href: '#/confirmation/attente', count: c?.attente },
     { key: 'confirmees', label: t('confirmation.sub.confirmees'), href: '#/confirmation/confirmees', count: c?.confirmees },
-    { key: 'livrees', label: t('confirmation.sub.livrees'), href: '#/confirmation/livrees', count: c?.livrees },
     ...(sub === 'terminees' ? [{ key: 'terminees', label: t('confirmation.sub.terminees'), href: '#/confirmation/terminees', count: c?.terminees }] : []),
   ];
   const focusId = rest?.[0] ? Number(rest[0]) : null;

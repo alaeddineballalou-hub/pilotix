@@ -36,7 +36,7 @@ export const NAV: NavItem[] = [
       { id: 'annulees', href: '#/commandes/annulees', count: 'cancelled' },
     ],
   },
-  { id: 'confirmation', icon: 'phone', roles: ['confirmation'], subs: ['nouvelles', 'attente', 'confirmees', 'livrees', 'terminees'], flow: true, hidden: true },
+  { id: 'confirmation', icon: 'phone', roles: ['confirmation'], subs: ['nouvelles', 'attente', 'confirmees', 'terminees'], flow: true, hidden: true },
   { id: 'depot', icon: 'package', roles: ['depot'], subs: ['preparer', 'prepares', 'dispatchees', 'enlivraison', 'retours'], flow: true, hidden: true },
   { id: 'suivi', icon: 'route', roles: ['suivi'], subs: ['alertes', 'traites', 'livres', 'annules', 'reclamation', 'swap'], hidden: true },
   { id: 'scanner', icon: 'scanbar', roles: ['depot'] },
