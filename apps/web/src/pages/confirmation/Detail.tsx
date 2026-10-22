@@ -381,7 +381,8 @@ export function Detail({ order }: { order: Order }) {
           )}
           <div className="qd6-fee">
             <span className="qd6-lab">{t('confirmation.d6.fee')}</span>
-            <label className="qd6-dv ltr">
+            <label className={`qd6-dv ltr${editable ? ' ed' : ''}`}>
+                {editable && <Icon name="pencil" />}
               <input type="number" min={0} style={{ ['--w' as string]: String(fee).length }} aria-label={t('confirmation.d.fee')} disabled={!editable} value={fee} onChange={(e) => setFee(Math.max(0, Math.round(Number(e.target.value) || 0)))} />
               <span className="qd6-unit">{da(0).replace(/^[\d\s\u00a0\u202f]+/, '')}</span>
             </label>
@@ -409,7 +410,8 @@ export function Detail({ order }: { order: Order }) {
               <small>{t('confirmation.d6.maxDisc', { v: da(maxDisc) })}</small>
             </dt>
             <dd>
-              <label className="qd6-dv ltr">
+              <label className={`qd6-dv ltr${editable ? ' ed' : ''}`}>
+                {editable && <Icon name="pencil" />}
                 <span className="qd6-minus">−</span>
                 <input type="number" min={0} max={maxDisc} step={50} style={{ ['--w' as string]: String(disc).length }} aria-label={t('confirmation.d.discount')} disabled={!editable} value={disc} onChange={(e) => setDisc(Math.max(0, Math.round(Number(e.target.value) || 0)))} />
                 <span className="qd6-unit">{da(0).replace(/^[\d\s\u00a0\u202f]+/, '')}</span>
