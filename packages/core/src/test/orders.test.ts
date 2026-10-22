@@ -126,3 +126,13 @@ test('every order has its own unique Pilotix tracking number, made at creation (
   const found: any = await call('orders.list', ctx, { q: o.ownTracking.toLowerCase() });
   assert.equal(found.rows[0]?.id, o.id);
 });
+
+test('changing only the discount is still capped by the products of the order', async () => {
+  const ctx = await as(EMAILS.conf);
+  const d: any = await call('orders.formData', ctx, {});
+  const p = d.products.find((x: any) => x.maxDiscount !== null && x.maxDiscount > 0);
+  const o: any = await call('orders.create', ctx, { customerName: 'Remise Test', phone: '0555000333', wilayaId: 16, commune: 'Kouba', items: [{ productId: p.id, variantId: p.variants[0]?.id, qty: 1 }] });
+  await assert.rejects(call('orders.update', ctx, { id: o.id, discount: p.maxDiscount + 1 }), /Remise trop élevée/);
+  const ok: any = await call('orders.update', ctx, { id: o.id, discount: p.maxDiscount });
+  assert.equal(ok.discount, p.maxDiscount);
+});

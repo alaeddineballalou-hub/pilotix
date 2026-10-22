@@ -480,6 +480,20 @@
       "postponed": "Postpone the order",
       "callback": "Call the customer back"
     },
-    "allProducts": "All products"
+    "allProducts": "All products",
+    "notes": "Notes",
+    "note": {
+      "origin": "Origin note",
+      "livreur": "Courier note",
+      "team": "Team note"
+    },
+    "notePh": {
+      "origin": "What the customer wrote when ordering…",
+      "livreur": "For the courier: floor, landmark, time…",
+      "team": "For the team only…"
+    },
+    "fee": "Delivery price",
+    "maxDisc": "max {{v}}",
+    "discTooBig": "Discount too high: maximum {{v}}."
   }
 }
