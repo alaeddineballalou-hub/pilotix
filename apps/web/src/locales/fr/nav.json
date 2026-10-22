@@ -12,6 +12,7 @@
   "produits": "Produits & stock",
   "messages": "Messages",
   "clients": "Clients",
+  "marketing": "Marketing",
   "publicite": "Publicité",
   "caisse": "Caisse",
   "livraison": "Sociétés de livraison",
@@ -27,5 +28,6 @@
     "livrees": "Livré",
     "annulees": "Annulé"
   },
-  "profil": "Mon profil"
+  "profil": "Mon profil",
+  "marketer": "Marketer"
 }

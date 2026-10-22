@@ -12,6 +12,7 @@
   "produits": "المنتجات والمخزون",
   "messages": "الرسائل",
   "clients": "الزبائن",
+  "marketing": "التسويق",
   "publicite": "الإشهار",
   "caisse": "الصندوق",
   "livraison": "شركات التوصيل",
@@ -27,5 +28,6 @@
     "livrees": "مُسلَّم",
     "annulees": "ملغى"
   },
-  "profil": "ملفي الشخصي"
+  "profil": "ملفي الشخصي",
+  "marketer": "المسوّق"
 }
