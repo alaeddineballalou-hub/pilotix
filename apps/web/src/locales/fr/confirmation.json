@@ -502,7 +502,12 @@
     "fee": "Prix de livraison",
     "maxDisc": "max {{v}}",
     "discTooBig": "Remise trop élevée : maximum {{v}}.",
-    "nothing": "Rien à enregistrer"
+    "nothing": "Rien à enregistrer",
+    "noOffer": "Aucun pack ni produit lié pour ce panier.",
+    "age": "Reçue",
+    "ageHint": "Temps passé depuis l’arrivée de la commande",
+    "chronoHint": "Chrono : temps passé sur cette commande depuis son ouverture",
+    "chrono": "Chrono"
   },
   "noNext": "Plus de commande dans cette liste"
 }
