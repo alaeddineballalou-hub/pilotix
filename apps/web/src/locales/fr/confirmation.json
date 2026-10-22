@@ -582,5 +582,17 @@
     "hint": "Cliquez sur le 1er jour, puis sur le dernier",
     "cancel": "Annuler",
     "apply": "Appliquer"
+  },
+  "ph": {
+    "client": "Client",
+    "name": "Nom",
+    "phone": "Téléphone",
+    "phone2": "2e téléphone",
+    "addPhone": "+ ajouter un numéro",
+    "address": "Adresse",
+    "late": "{{n}} en retard",
+    "queue": "{{n}} à traiter",
+    "next": "Commande suivante",
+    "empty": "Aucune commande ici."
   }
 }

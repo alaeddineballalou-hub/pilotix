@@ -20,6 +20,8 @@ import type { PageProps } from '../registry';
 import { Countdown, useNow } from './Countdown';
 import { Detail } from './Detail';
 import { Focus } from './Focus';
+import { useIsPhone } from '../../lib/useMedia';
+import { PhoneCards, PhoneOrder } from './PhoneList';
 import { BULK_CHOICES, choiceLabel, currentLabel, ROW_CHOICES, StatusChoice, Sub, SUB_STATUSES, SUB_TONE, SUBS, telHref, toneOf, waHref } from './shared';
 import { StatsSection } from './Stats';
 import { useStatusChange } from './StatusDialog';
@@ -95,16 +97,19 @@ export function Confirmation({ sub: rawSub, rest }: PageProps) {
     ...(sub === 'terminees' ? [{ key: 'terminees', label: t('confirmation.sub.terminees'), href: '#/confirmation/terminees', count: c?.terminees }] : []),
   ];
   const focusId = rest?.[0] ? Number(rest[0]) : null;
+  // phones: the queue comes first; the big statistics stay on tablets and computers
+  const phone = useIsPhone();
   return (
     <>
       <StageBar items={items} current={sub} />
-      {manager && <StatsSection sub={sub} />}
+      {manager && !phone && <StatsSection sub={sub} />}
       <Queue key={sub} sub={sub} focusId={focusId} />
     </>
   );
 }
 
 function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
+  const phone = useIsPhone();
   const { t } = useTranslation();
   const { has } = useSession();
   const qc = useQueryClient();
@@ -561,6 +566,31 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
           <Loading />
         ) : (
           <>
+            {phone ? (
+              <>
+                {(() => {
+                  const now = Date.now();
+                  const late = rows.filter((r) => r.deadline && r.deadline.t < now).length;
+                  return (
+                    <div className="pxp-sum">
+                      {late > 0 && <span className="badge t-bad">{t('confirmation.ph.late', { n: late })}</span>}
+                      <span className="badge t-warn">{t('confirmation.ph.queue', { n: list.data.total })}</span>
+                    </div>
+                  );
+                })()}
+                <PhoneCards rows={rows} empty={t('confirmation.ph.empty')} onOpen={(id) => setOpen(new Set([id]))} />
+                {canNext && rows.length > 0 && (
+                  <button type="button" className="pxp-next" onClick={() => goNext([...open].pop())}>
+                    {t('confirmation.ph.next')}
+                    <Icon name="chevr" />
+                  </button>
+                )}
+                {(() => {
+                  const cur = rows.find((r) => open.has(r.id));
+                  return cur ? <PhoneOrder order={cur} wa={wa(cur)} onClose={() => setOpen(new Set())} onDone={goNext} /> : null;
+                })()}
+              </>
+            ) : (
             <div className="tbl-wrap" ref={rs.wrapRef}>
               <table className={`tbl qtbl${rs.fixed ? ' px-fixed' : ''}`} style={rs.tableStyle()}>
                 {rs.cols()}
@@ -649,6 +679,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                 </tbody>
               </table>
             </div>
+            )}
             <Pager
               page={page}
               pageSize={size}
