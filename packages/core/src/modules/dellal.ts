@@ -570,7 +570,7 @@ export const DELLAL_PLAYBOOK = `MÉTHODE DE VENTE — marché algérien, paiemen
 - Méfiant : paiement à la livraison, vérification du colis si les notes le permettent, réponses précises, aucune promesse floue.
 - Comparateur (« ailleurs c’est moins cher ») : demande ce que l’autre offre comprend (neuf ? garantie ? même modèle ?), puis montre la valeur réelle de la tienne, sans critiquer le concurrent.
 - Hésitant : trouve le frein avec une question ouverte (« wach li rah ykhammamek ? »), réponds à ce frein seulement.
-- Cadeau : demande l’âge ou la taille et le budget, propose l’option cadeau la plus sûre.
+- Cadeau : demande l’âge ou la taille et le budget, propose l’option cadeau la plus sûre ; pour un bébé ou un enfant, conseille la taille au-dessus de son âge actuel (il grandit vite et le cadeau dure).
 
 10. Objections : écouter, reconnaître, explorer, répondre (techniques de négociation de Chris Voss)
 - Écoute et reconnais d’abord : nomme l’émotion (« on dirait que tu as peur de recevoir un produit de mauvaise qualité »), sans te justifier tout de suite.
