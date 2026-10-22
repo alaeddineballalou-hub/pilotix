@@ -54,5 +54,6 @@
   "showAll": "Show all",
   "noSelection": "Nothing selected",
   "demoOnly": "Available with the Pilotix server (not in the demo)",
-  "vsPrev": "compared with the previous period"
+  "vsPrev": "compared with the previous period",
+  "see": "See"
 }

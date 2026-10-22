@@ -68,5 +68,13 @@
       "rate": "Taux",
       "uncashed": "À encaisser"
     }
-  }
+  },
+  "vs": {
+    "today": "vs hier",
+    "yesterday": "vs avant-hier",
+    "7d": "vs 7 j avant",
+    "30d": "vs 30 j avant",
+    "month": "vs mois dernier"
+  },
+  "vsLong": "▲ ▼ {{vs}}"
 }

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { dur, when } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
-import { Empty, ErrorBox, Help, Icon, KpiIcon, Loading, StageBar, StatusBadge } from '../../ui/kit';
+import { Empty, ErrorBox, Help, Icon, KpiBody, Loading, StageBar, StatusBadge } from '../../ui/kit';
 import type { PageProps } from '../registry';
 import { NewTicketModal } from './NewTicket';
 import { SavStats } from './Stats';
@@ -69,39 +69,24 @@ export function Sav({ sub }: PageProps) {
         {/* the ticket's road: En attente → Au dépôt → En livraison → Livré / Annulé (a return always comes back to the depot first) */}
         <div className="px-sav-flow">
           <a className={`kpi${k?.attente ? ' t-bad' : ''}${view === 'attente' ? ' on' : ''}`} href="#/sav/attente">
-            <KpiIcon name="hourglass" />
-            <span className="l">{t('sav.k.attente')}</span>
-            <span className="v ltr">{k?.attente ?? '—'}</span>
-            <span className="s">{k?.attenteLate ? t('sav.k.attenteLate', { count: k.attenteLate }) : t('sav.k.attenteSub')}</span>
+            <KpiBody icon="hourglass" alert={!!k?.attente} label={t('sav.k.attente')} value={k?.attente ?? '—'} sub={k?.attenteLate ? t('sav.k.attenteLate', { count: k.attenteLate }) : t('sav.k.attenteSub')} go />
           </a>
           <span className="px-sav-ar" aria-hidden="true">›</span>
           <a className={`kpi${view === 'depot' ? ' on' : ''}`} href="#/sav/depot">
-            <KpiIcon name="package" />
-            <span className="l">{t('sav.k.depot')}</span>
-            <span className="v ltr">{k?.depot ?? '—'}</span>
-            <span className="s">{k?.returning ? t('sav.k.depotReturns', { count: k.returning }) : t('sav.k.depotSub')}</span>
+            <KpiBody icon="package" label={t('sav.k.depot')} value={k?.depot ?? '—'} sub={k?.returning ? t('sav.k.depotReturns', { count: k.returning }) : t('sav.k.depotSub')} go />
           </a>
           <span className="px-sav-ar" aria-hidden="true">›</span>
           <a className={`kpi${view === 'livraison' ? ' on' : ''}`} href="#/sav/livraison">
-            <KpiIcon name="truck" />
-            <span className="l">{t('sav.k.livraison')}</span>
-            <span className="v ltr">{k?.livraison ?? '—'}</span>
-            <span className="s">{t('sav.k.livraisonSub')}</span>
+            <KpiBody icon="truck" label={t('sav.k.livraison')} value={k?.livraison ?? '—'} sub={t('sav.k.livraisonSub')} go />
           </a>
           <span className="px-sav-ar" aria-hidden="true">›</span>
           <div className="px-sav-end">
             <a className={`kpi t-ok${view === 'livres' ? ' on' : ''}`} href="#/sav/livres">
-            <KpiIcon name="checkcircle" />
-              <span className="l">{t('sav.k.livresAll')}</span>
-              <span className="v ltr">{k?.livres ?? '—'}</span>
-              <span className="s">{t('sav.k.livres7', { count: k?.livres7 ?? 0 })}{k?.avgMs ? ` · ${t('sav.k.livresSub', { v: dur(k.avgMs) })}` : ''}</span>
-            </a>
+            <KpiBody icon="checkcircle" label={t('sav.k.livresAll')} value={k?.livres ?? '—'} sub={`${t('sav.k.livres7', { count: k?.livres7 ?? 0 })}${k?.avgMs ? ` · ${t('sav.k.livresSub', { v: dur(k.avgMs) })}` : ''}`} go />
+          </a>
             <a className={`kpi${k?.annules ? ' t-bad' : ''}${view === 'annules' ? ' on' : ''}`} href="#/sav/annules">
-            <KpiIcon name="xcircle" />
-              <span className="l">{t('sav.k.annules')}</span>
-              <span className="v ltr">{k?.annules ?? '—'}</span>
-              <span className="s">{k?.annulesRetour ? t('sav.k.annulesRetour', { count: k.annulesRetour }) : t('sav.k.annulesSub')}</span>
-            </a>
+            <KpiBody icon="xcircle" alert={!!k?.annules} label={t('sav.k.annules')} value={k?.annules ?? '—'} sub={k?.annulesRetour ? t('sav.k.annulesRetour', { count: k.annulesRetour }) : t('sav.k.annulesSub')} go />
+          </a>
           </div>
         </div>
         {view === 'stats' ? (
