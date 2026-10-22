@@ -186,3 +186,37 @@ test('places, Meta webhook parsing and message splitting', () => {
   assert.equal(parts.length, 2);
   assert.ok(parts.every((p) => p.length <= 1900));
 });
+
+test('the sales playbook reaches the AI; a pack quantity gets the pack price, a linked product is marked upsell', async () => {
+  const p = (await db.query(`SELECT p.id, v.id AS vid FROM products p JOIN product_variants v ON v.product_id = p.id WHERE p.active AND NOT p.is_service AND p.max_discount IS NOT NULL ORDER BY p.id LIMIT 1`))[0];
+  const other = (await db.query(`SELECT p.id, v.id AS vid FROM products p JOIN product_variants v ON v.product_id = p.id WHERE p.active AND NOT p.is_service AND p.id <> $1 ORDER BY p.id LIMIT 1`, [p.id]))[0];
+  await db.query(`UPDATE products SET packs = '[{"qty":2,"price":15000}]', linked = $2, fixed_price = false WHERE id = $1`, [p.id, [other.id]]);
+  const wid = (await db.query('SELECT id FROM warehouses ORDER BY is_default DESC, id LIMIT 1'))[0].id;
+  for (const v of [p.vid, other.vid]) await db.query(`INSERT INTO stock (variant_id, warehouse_id, qty) VALUES ($1,$2,50) ON CONFLICT (variant_id, warehouse_id) DO UPDATE SET qty = stock.qty + 50`, [v, wid]);
+  const admin = await as(EMAILS.admin);
+  const g: any = await call('dellal.settings.get', admin, {});
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, nightReplies: true, secrets: {} });
+  let system = '';
+  const server = fakeServer(
+    [
+      (req: any) => {
+        system = req.system;
+        return { content: [{ type: 'tool_use', id: 't1', name: 'create_order', input: { customer_name: 'Lina H', phone: '0555 12 34 56', wilaya: '9', commune: 'Boufarik', items: [{ product_id: Number(p.id), variant_id: Number(p.vid), qty: 2 }, { product_id: Number(other.id), variant_id: Number(other.vid), qty: 1, upsell: true }] } }], stop_reason: 'tool_use' };
+      },
+      { content: [{ type: 'text', text: 'Saha !' }], stop_reason: 'end_turn' },
+    ],
+    [],
+  );
+  const sys = await as(EMAILS.admin, server);
+  const r: any = await call('dellal.receive', sys, { channel: 'whatsapp', externalId: '213555123456', text: 'nheb 2', messageId: 'wamid.pack' });
+  await call('dellal.answer', sys, { id: r.conversationId });
+  assert.match(system, /MÉTHODE DE VENTE/);
+  assert.match(system, /1 million/);
+  assert.match(system, /packs : 2 pour 15000 DA/);
+  assert.match(system, /un conseiller l’appellera aussi pour confirmer/);
+  const o = (await db.query('SELECT id FROM orders WHERE conversation_id = $1', [r.conversationId]))[0];
+  const items = await db.query('SELECT product_id, qty, unit_price, is_upsell FROM order_items WHERE order_id = $1 ORDER BY id', [o.id]);
+  assert.equal(Number(items[0].unit_price), 7500);
+  assert.equal(items[0].is_upsell, false);
+  assert.equal(items[1].is_upsell, true);
+});
