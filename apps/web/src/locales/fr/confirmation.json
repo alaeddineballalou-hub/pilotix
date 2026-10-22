@@ -529,7 +529,10 @@
   },
   "noNext": "Plus de commande dans cette liste",
   "ek": {
-    "datesNote": "Les 3 premiers chiffres sont en direct (tout l’onglet En cours). Les dates s’appliquent aux 3 taux et au tableau, selon le changement de statut.",
+    "title": "Commandes en cours",
+    "help": "« À traiter maintenant » est en direct : toutes les commandes de l’onglet En cours, quelles que soient les dates. « Performance » et le tableau suivent la période et le type de date choisis. Performance de livraison : ce que sont devenues les commandes confirmées.",
+    "secLive": "À traiter maintenant · en direct",
+    "secPerf": "Performance",
     "due": "À rappeler maintenant",
     "dueHelp": "Commandes de l’onglet En cours dont l’heure de rappel est passée, ou sans heure prévue : à appeler tout de suite.",
     "dueSub": "sur {{n}} en cours",
@@ -537,6 +540,10 @@
     "lateHelp": "Rappels oubliés : l’heure prévue est dépassée de plus de 30 minutes. Ce chiffre doit rester à 0.",
     "lateSub": "le plus ancien attend depuis {{d}} · {{ref}}",
     "lateNone": "aucun rappel oublié",
+    "later": "Rappels programmés",
+    "laterHelp": "Commandes avec un rappel prévu plus tard (le client a demandé d’être rappelé). En dessous, le prochain rappel.",
+    "laterSub": "prochain dans {{d}} · {{ref}}",
+    "laterNone": "aucun rappel prévu",
     "value": "Valeur en jeu",
     "valueHelp": "Total en DA des commandes de l’onglet En cours : l’argent qui attend d’être confirmé.",
     "valueSub": "{{n}} commandes à confirmer",
@@ -550,6 +557,9 @@
     "fullHelp": "Part des annulations faites après au moins 3 appels. Objectif 100 % : aucune commande n’est annulée avant 3 tentatives.",
     "fullSub": "{{c}} annulations sur {{n}} après 3 appels",
     "fullNone": "aucune annulation",
+    "early": "Annulées trop tôt",
+    "earlyHelp": "Annulations faites avant 3 appels sur la période. Chacune est une vente peut-être perdue : à revoir avec l’agent. Objectif 0.",
+    "earlySub": "moins de 3 appels : à revoir avec l’agent",
     "byAgent": "Par agent · du meilleur au plus faible",
     "empty": "Aucune commande en cours ni traitée sur la période",
     "legend": "Vert : objectif atteint · Orange : à surveiller · Rouge : sous l’objectif.",
@@ -562,5 +572,13 @@
       "rec": "Récupération",
       "full": "Tentatives complètes"
     }
+  },
+  "dr": {
+    "title": "Choisir la période",
+    "prev": "Mois précédent",
+    "next": "Mois suivant",
+    "hint": "Cliquez sur le 1er jour, puis sur le dernier",
+    "cancel": "Annuler",
+    "apply": "Appliquer"
   }
 }

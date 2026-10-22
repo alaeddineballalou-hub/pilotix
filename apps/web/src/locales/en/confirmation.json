@@ -529,7 +529,10 @@
   },
   "noNext": "No more orders in this list",
   "ek": {
-    "datesNote": "The first 3 numbers are live (the whole En cours tab). The dates apply to the 3 rates and the table, by status change.",
+    "title": "Orders in progress",
+    "help": "“To handle now” is live: every order of the En cours tab, whatever the dates. “Performance” and the table follow the chosen period and date type. Delivery performance: what became of the confirmed orders.",
+    "secLive": "To handle now · live",
+    "secPerf": "Performance",
     "due": "To call back now",
     "dueHelp": "Orders in the En cours tab whose callback time has passed, or with no time set: call them now.",
     "dueSub": "of {{n}} in progress",
@@ -537,6 +540,10 @@
     "lateHelp": "Forgotten callbacks: more than 30 minutes past the planned time. This number should stay at 0.",
     "lateSub": "oldest waiting {{d}} · {{ref}}",
     "lateNone": "no forgotten callback",
+    "later": "Scheduled callbacks",
+    "laterHelp": "Orders with a callback planned later (the customer asked to be called back). Below, the next callback.",
+    "laterSub": "next in {{d}} · {{ref}}",
+    "laterNone": "no callback planned",
     "value": "Value at stake",
     "valueHelp": "Total in DA of the orders in the En cours tab: the money waiting to be confirmed.",
     "valueSub": "{{n}} orders to confirm",
@@ -550,6 +557,9 @@
     "fullHelp": "Share of cancellations made after at least 3 calls. Target 100 %: no order is cancelled before 3 attempts.",
     "fullSub": "{{c}} of {{n}} cancellations after 3 calls",
     "fullNone": "no cancellation",
+    "early": "Cancelled too early",
+    "earlyHelp": "Cancellations made before 3 calls on the period. Each one may be a lost sale: review it with the agent. Target 0.",
+    "earlySub": "fewer than 3 calls: review with the agent",
     "byAgent": "By agent · best first",
     "empty": "No order in progress or handled on the period",
     "legend": "Green: target reached · Orange: watch · Red: below target.",
@@ -562,5 +572,13 @@
       "rec": "Recovery",
       "full": "Complete attempts"
     }
+  },
+  "dr": {
+    "title": "Choose the period",
+    "prev": "Previous month",
+    "next": "Next month",
+    "hint": "Click the first day, then the last one",
+    "cancel": "Cancel",
+    "apply": "Apply"
   }
 }
