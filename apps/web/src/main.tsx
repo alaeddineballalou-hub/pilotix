@@ -15,6 +15,7 @@ import { Toasts } from './ui/toast';
 import { installEdgeScroll } from './ui/edgeScroll';
 import './styles/legacy.css';
 import './styles/pilotix.css';
+import './styles/responsive.css';
 
 applyTheme(store.get('theme') as 'light' | 'dark' | null);
 installEdgeScroll();

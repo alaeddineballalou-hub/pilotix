@@ -151,7 +151,7 @@ export function DepotOrderList({
                     {c.label}
                   </th>
                 ))}
-                {actions && <th />}
+                {actions && <th className="px-act" />}
               </tr>
             </thead>
             <tbody>
@@ -212,7 +212,7 @@ export function DepotOrderList({
                     </td>
                   ))}
                   {actions && (
-                    <td data-l="" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-act" data-l="" onClick={(e) => e.stopPropagation()}>
                       {actions(o)}
                     </td>
                   )}
