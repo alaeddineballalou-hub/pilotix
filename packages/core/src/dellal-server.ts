@@ -64,7 +64,8 @@ async function complete(ctx: Ctx, req: AiRequest): Promise<AiResponse> {
   if (!key) throw new AppError('bad_request', 'Clé API de l’IA manquante (Messages › Réglages).');
   // Dellal's instructions are long and identical for every message of a conversation: cache them (tools + system),
   // so each following message is billed mostly at the cached rate.
-  const body = { ...req, system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }] };
+  const { tools, ...rest } = req;
+  const body = { ...rest, ...(tools?.length ? { tools } : {}), system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }] };
   const data = await postJson(ANTHROPIC, body, { 'x-api-key': key, 'anthropic-version': '2023-06-01' }, 'IA (Anthropic)');
   return { content: data.content ?? [], stop_reason: data.stop_reason ?? 'end_turn', usage: data.usage };
 }
