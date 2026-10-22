@@ -141,8 +141,8 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
   const drag = colDrag(order, setOrder);
   // column widths: each user's own
   const wkeys: string[] = [...cols, ...(actions ? ['_act'] : [])];
-  const rs = useResizable(tc.widths, tc.setWidths, t('common.resizeCol'), wkeys);
   const [dens, setDens] = useDensity();
+  const rs = useResizable(tc.widths, tc.setWidths, t('common.resizeCol'), wkeys, dens);
   const cell = (o: Order, k: SCol): ReactNode => {
     switch (k) {
       case 'order':
