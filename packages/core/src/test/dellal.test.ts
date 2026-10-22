@@ -301,6 +301,37 @@ test('a reply in another dialect is rewritten in Algerian Darija before it is se
   const out2: any = await call('dellal.answer', sys2, { id: r2.conversationId });
   assert.equal(out2.reply, 'Smahli, 3andek l7a9, dorka nchouf.');
 
+  // in the Pilotix preview opened in Claude, the page's Claude answers: no key, it runs the same tools, the Darija check applies
+  const reqs: any[] = [];
+  const page = async (req: any) => {
+    reqs.push(req);
+    if (!req.tools.length) {
+      const m = String(req.messages[0].content).match(/«\n([\s\S]*?)\n»/);
+      return { content: [{ type: 'text' as const, text: (m ? m[1] : '').replace('Wakha', 'D’accord') }], stop_reason: 'end_turn' };
+    }
+    const found = await req.runTool('search_products', { query: 'poussette' });
+    const fee = await req.runTool('delivery_fee', { wilaya: 'Oran' });
+    assert.ok(found.products.length > 0 && fee.home_delivery > 0);
+    return { content: [{ type: 'text' as const, text: `Wakha khouya, la poussette b 12 900 DA, w l Oran ${fee.home_delivery} DA la livraison. tqdar tchouf le colis qoddam le livreur.` }], stop_reason: 'end_turn' };
+  };
+  const inPage = { ...(await as(EMAILS.admin)), dellalAi: page };
+  const first: any = await call('dellal.test', inPage, { reset: true });
+  assert.equal(first.demo, false, 'no "demo answers" notice when the page can use Claude');
+  const r4: any = await call('dellal.test', inPage, { body: 'ch7al la poussette l Oran ?' });
+  assert.equal(r4.demo, false);
+  assert.equal(reqs.length, 2, 'one answer, one Darija rewrite');
+  assert.equal(reqs[0].tools.length, 4);
+  assert.equal(typeof reqs[0].runTool, 'function');
+  assert.match(reqs[0].system, /DARIJA ALGÉRIENNE/);
+  assert.equal(reqs[1].tools.length, 0);
+  const lastAgent = r4.messages.filter((m: any) => m.role === 'agent').pop();
+  assert.equal(lastAgent.body, 'D’accord khouya, la poussette b 12 900 DA, w l Oran 650 DA la livraison. t9der tchouf le colis 9oddam le livreur.');
+  assert.equal(lastAgent.meta.model, 'claude (page)');
+  const lines = r4.messages.filter((m: any) => m.role === 'tool').map((m: any) => m.body);
+  assert.ok(lines.some((l: string) => l.startsWith('search_products "poussette"')));
+  assert.ok(lines.some((l: string) => l.startsWith('delivery_fee Oran')));
+  assert.ok(lines.some((l: string) => l.startsWith('darija →')));
+
   // a spelling slip alone is fixed directly: no second AI call
   let calls = 0;
   const sys3 = await as(EMAILS.admin, fakeServer([() => (calls++, { content: [{ type: 'text', text: 'Ma tkhafich khti, tqdri tchoufi le colis qoddam le livreur.' }], stop_reason: 'end_turn' }), () => (calls++, { content: [{ type: 'text', text: 'X' }], stop_reason: 'end_turn' })], []));

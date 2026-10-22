@@ -641,13 +641,25 @@ export async function runAgent(ctx: Ctx, convId: number, opts: { followUp?: bool
   if (opts.followUp) messages.push({ role: 'user', content: '(Note système : le client n’a pas répondu. Envoie une seule relance courte.)' });
   if (!messages.length) return { reply: null, handoff: false, orderRef: null, demo: false, skipped: 'Aucun message' };
   const system = await systemPrompt(ctx, conv, s, !!opts.followUp);
-  const useAi = !!ctx.server?.dellal && !!(await dellalSecret(ctx.db, 'ai'));
-  const complete = (req: AiRequest): Promise<AiResponse> => (useAi ? (ctx.server!.dellal!('complete', req, ctx) as Promise<AiResponse>) : demoBrain(ctx, req));
+  // in the Pilotix preview opened in Claude, the page's Claude answers (no key); on the server, Claude through the API key
+  const inPage = !ctx.server?.dellal && ctx.dellalAi ? ctx.dellalAi : null;
+  const useAi = !!inPage || (!!ctx.server?.dellal && !!(await dellalSecret(ctx.db, 'ai')));
 
   const texts: string[] = [];
   let handoff = false;
   let orderRef: string | null = null;
   let usage = { input_tokens: 0, output_tokens: 0 };
+  /** One tool call, the same on every path: run it, note handoff / order, and log it in the conversation. */
+  const runTool = async (name: string, input: any) => {
+    const out = await execTool({ ctx, conv, settings: s, test }, name, input);
+    if (name === 'handoff') handoff = true;
+    if (name === 'create_order' && out?.ok) orderRef = out.ref;
+    await addMessage(ctx.db, convId, { role: 'tool', body: toolLine(name, input, out), meta: { tool: name, input, result: out } });
+    conv = await getConv(ctx.db, convId);
+    return out;
+  };
+  const complete = (req: AiRequest): Promise<AiResponse> =>
+    inPage ? (inPage({ ...req, runTool }) as Promise<AiResponse>) : useAi ? (ctx.server!.dellal!('complete', req, ctx) as Promise<AiResponse>) : demoBrain(ctx, req);
   for (let round = 0; round < 6; round++) {
     const res = await complete({ model: s.model, system, messages, tools: DELLAL_TOOLS, max_tokens: 1024 });
     usage = { input_tokens: usage.input_tokens + num(res.usage?.input_tokens), output_tokens: usage.output_tokens + num(res.usage?.output_tokens) };
@@ -657,15 +669,11 @@ export async function runAgent(ctx: Ctx, convId: number, opts: { followUp?: bool
     messages.push({ role: 'assistant', content: res.content });
     const results: any[] = [];
     for (const u of uses) {
-      const out = await execTool({ ctx, conv, settings: s, test }, u.name, u.input);
-      if (u.name === 'handoff') handoff = true;
-      if (u.name === 'create_order' && out?.ok) orderRef = out.ref;
-      await addMessage(ctx.db, convId, { role: 'tool', body: toolLine(u.name, u.input, out), meta: { tool: u.name, input: u.input, result: out } });
+      const out = await runTool(u.name, u.input);
       results.push({ type: 'tool_result', tool_use_id: u.id, content: JSON.stringify(out).slice(0, 12_000), is_error: !!out?.error });
     }
     messages.push({ role: 'user', content: results });
     texts.length = 0; // only the text after the last tool round is sent
-    conv = await getConv(ctx.db, convId);
   }
   let reply = texts.join('\n\n').trim() || null;
   // Algerian Darija check: words of another dialect, wrong phrases, the shop's banned list → one rewrite, then a safe fix.
@@ -710,7 +718,7 @@ export async function runAgent(ctx: Ctx, convId: number, opts: { followUp?: bool
         sendError = e?.message ?? 'Envoi impossible';
       }
     }
-    await addMessage(ctx.db, convId, { role: 'agent', body: reply, meta: { usage, demo: !useAi, model: useAi ? s.model : null, ...(darija ? { darija } : {}) }, sendError });
+    await addMessage(ctx.db, convId, { role: 'agent', body: reply, meta: { usage, demo: !useAi, model: inPage ? 'claude (page)' : useAi ? s.model : null, ...(darija ? { darija } : {}) }, sendError });
   }
   if (opts.followUp) await ctx.db.query('UPDATE conversations SET followed_up = true WHERE id = $1', [convId]);
   ctx.emit({ type: 'chat', data: { dellal: convId } });
@@ -948,7 +956,7 @@ export const dellalProcs = {
       await addMessage(ctx.db, cid, { role: 'customer', body: i.body });
       out = await runAgent(ctx, cid);
     }
-    return { conversationId: cid, messages: await messagesOf(ctx.db, cid), demo: out ? out.demo : !(ctx.server?.dellal && (await dellalSecret(ctx.db, 'ai'))) };
+    return { conversationId: cid, messages: await messagesOf(ctx.db, cid), demo: out ? out.demo : !((!ctx.server?.dellal && ctx.dellalAi) || (ctx.server?.dellal && (await dellalSecret(ctx.db, 'ai')))) };
   }),
 
   /** Dellal's results over the last N days. */

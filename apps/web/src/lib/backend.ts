@@ -1,6 +1,7 @@
 import type { REGISTRY } from '@pilotix/core';
 import type { Session } from '@pilotix/shared';
 import type { z } from 'zod';
+import { pageAi } from './dellal-page-ai';
 import { store } from './store';
 
 // ---------------------------------------------------------------- typed actions
@@ -122,6 +123,7 @@ class DemoBackend implements Backend {
   progress: (msg: string) => void = () => {};
 
   private boot() {
+    void pageAi(); // start talking to Claude early when the preview is opened in Claude
     if (!this.ready)
       this.ready = (async () => {
         this.progress('Démarrage de la base de démonstration…');
@@ -167,8 +169,10 @@ class DemoBackend implements Backend {
     const { core, db } = await this.boot();
     if (!this.session) throw new ApiError(401, 'Session expirée');
     const s = this.session;
+    // Dellal answers with Claude when the preview is opened in Claude (see dellal-page-ai.ts)
+    const dellalAi = String(name).startsWith('dellal.') ? await pageAi() : null;
     try {
-      const out = (await core.call(name as string, { db, session: s, now: () => Date.now(), emit: (e) => setTimeout(() => this.listeners.forEach((l) => l(e)), 0) }, input)) as Out<N>;
+      const out = (await core.call(name as string, { db, session: s, now: () => Date.now(), emit: (e) => setTimeout(() => this.listeners.forEach((l) => l(e)), 0), ...(dellalAi ? { dellalAi } : {}) }, input)) as Out<N>;
       if (DEMO_KEEP.has(name as string)) await core.demoSnapshot(db).then((k) => store.set('demo-keep', JSON.stringify(k))).catch(() => {});
       return out;
     } catch (e: any) {
