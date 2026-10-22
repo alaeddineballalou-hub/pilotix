@@ -113,6 +113,12 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
   const items = NAV.filter((n) => !n.hidden && canSee(n, roles, isAdmin));
   const ordersPages = ['commandes', 'confirmation', 'depot', 'suivi', 'livrees', 'retournees'];
   const grpItem = items.find((n) => n.children);
+  const [grpOpen, setGrpOpen] = useState(() => store.get('cmdgrp') !== 'closed');
+  const toggleGrp = () =>
+    setGrpOpen((o) => {
+      store.set('cmdgrp', o ? 'closed' : 'open');
+      return !o;
+    });
   const theme = store.get('theme') as Theme;
 
   return (
@@ -147,11 +153,27 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
         {items.map((n) =>
           n.children ? (
             <div key={n.id} className={`nav-group open bjcn ${ordersPages.includes(page) ? 'bjcn-on in' : ''}`} data-grp={n.id}>
-              <a href="#/commandes" className="nav-item nav-group-head" title={t(`nav.${n.id}`)} aria-current={page === 'commandes' && (!sub || sub === 'tout') ? 'page' : undefined} style={page === 'commandes' && (!sub || sub === 'tout') ? { color: 'var(--navy)', fontWeight: 800 } : undefined}>
+              <a
+                href="#/commandes"
+                className="nav-item nav-group-head"
+                title={t(`nav.${n.id}`)}
+                aria-current={page === 'commandes' && (!sub || sub === 'tout') ? 'page' : undefined}
+                aria-expanded={folded ? undefined : grpOpen}
+                onClick={(e) => {
+                  // open sidebar (or phone menu): the parent only shows / hides its stages; folded: it opens the Commandes page
+                  if (!folded || window.matchMedia('(max-width: 900px)').matches) {
+                    e.preventDefault();
+                    toggleGrp();
+                  }
+                }}
+              >
                 <Icon name={n.icon} className="ic" />
                 <span className="nav-l">{t(`nav.${n.id}`)}</span>
+                <svg className="px-chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d={grpOpen ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} />
+                </svg>
               </a>
-              <div className="nav-sub" style={{ display: 'flex' }}>
+              <div className={`nav-sub${grpOpen ? '' : ' px-sub-closed'}`} style={{ display: 'flex' }}>
                 {n.children
                   .filter((c) => (c.id === 'confirmation' ? has('confirmation') : c.id === 'depot' ? has('depot') : c.id === 'suivi' ? has('suivi') : true))
                   .map((c) => {
