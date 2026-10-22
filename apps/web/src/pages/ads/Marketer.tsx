@@ -519,8 +519,8 @@ function GroupRow({ d, g, open, sel, toggle, name, onToggle }: { d: Overview; g:
           <input type="checkbox" checked={nSel === L.length} ref={(el) => el && (el.indeterminate = nSel > 0 && nSel < L.length)} onChange={(e) => toggle(L.map((a) => a.id), e.target.checked)} aria-label={t('marketer.selectGroup', { name: g.label })} />
         </td>
       )}
-      <td className="mk-gres">
-        {(['ok', 'run', 'ko'] as const).map((k) => !!c[k] && <span key={k} className={`mk-gst st-${k}`}>{t(`marketer.gst.${k}`, { count: c[k] })}</span>)}
+      <td>
+        <div className="mk-gres">{(['ok', 'run', 'ko'] as const).map((k) => !!c[k] && <span key={k} className={`mk-gst st-${k}`}>{t(`marketer.gst.${k}`, { count: c[k] })}</span>)}</div>
       </td>
       <td className="mk-prod mk-gname">
         <button type="button" className="mk-gtog" aria-expanded={open} aria-label={open ? t('marketer.close') : t('marketer.openHere')} onClick={onToggle}>
