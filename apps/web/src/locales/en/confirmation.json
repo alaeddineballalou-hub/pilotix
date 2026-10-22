@@ -508,7 +508,8 @@
     "age": "In",
     "ageHint": "Time since the order came in",
     "chronoHint": "Chrono: time spent on this order since it was opened",
-    "chrono": "Chrono"
+    "chrono": "Chrono",
+    "pickStatus": "Pick a new status first"
   },
   "noNext": "No more orders in this list"
 }

@@ -508,7 +508,8 @@
     "age": "Reçue",
     "ageHint": "Temps passé depuis l’arrivée de la commande",
     "chronoHint": "Chrono : temps passé sur cette commande depuis son ouverture",
-    "chrono": "Chrono"
+    "chrono": "Chrono",
+    "pickStatus": "Choisissez d’abord un nouveau statut"
   },
   "noNext": "Plus de commande dans cette liste"
 }
