@@ -22,6 +22,7 @@ import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, Ctx, forbidden, hasRole, notFound, proc } from '../rpc';
 import { clientFee, getSetting } from '../settings';
+import { notifyContext, onConfChange, onFollowChange, onOrderCreated, sendInPreview } from './notify';
 import { settleTickets } from './tickets';
 
 // ---------------------------------------------------------------- reading
@@ -311,7 +312,7 @@ async function insertItems(db: Db, orderId: number, lines: OrderItem[]) {
   }
 }
 
-export async function createOrder(ctx: Ctx, input: OrderInput, db: Db = ctx.db): Promise<Order> {
+export async function createOrder(ctx: Ctx, input: OrderInput, db: Db = ctx.db, opts: { /** taken in this Message AI agent conversation */ conversationId?: number | null } = {}): Promise<Order> {
   const phone = normalizePhone(input.phone);
   if (!phone) throw bad('Numéro de téléphone algérien invalide');
   const phone2 = input.phone2 ? normalizePhone(input.phone2) : null;
@@ -343,20 +344,22 @@ export async function createOrder(ctx: Ctx, input: OrderInput, db: Db = ctx.db):
       await tx.query(
         `INSERT INTO orders (ref, created_by, customer_id, customer_name, phone, phone2, wilaya_id, commune, address, is_stopdesk, stopdesk_id, channel, source, utm,
            conf_status, agent_id, assigned_at, confirmed_at, follow_status, company_id, warehouse_id, subtotal, delivery_fee, discount, total,
-           customer_note, delivery_note, internal_note, is_exchange, original_order_id, has_upsell, upsell_value, orig_items, orig_discount)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34) RETURNING id`,
+           customer_note, delivery_note, internal_note, is_exchange, original_order_id, has_upsell, upsell_value, orig_items, orig_discount, conversation_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35) RETURNING id`,
         [ref, me, cust.id, input.customerName, phone, phone2, input.wilayaId, input.commune, input.address, input.isStopdesk, input.stopdeskId ?? null,
           input.channel, input.source ?? null, input.utm ? JSON.stringify(input.utm) : null,
           conf, input.confirm ? me : null, input.confirm ? new Date(ctx.now()).toISOString() : null, input.confirm ? new Date(ctx.now()).toISOString() : null,
           input.confirm ? 'to_prepare' : null, defCompany, wh?.id ?? null, priced.subtotal, fee, input.discount, total,
           input.customerNote ?? null, input.deliveryNote ?? null, input.internalNote ?? null, input.isExchange, input.originalOrderId ?? null,
-          up.value > 0, up.value, JSON.stringify(orig), input.discount],
+          up.value > 0, up.value, JSON.stringify(orig), input.discount, opts.conversationId ?? null],
       )
     )[0];
     const oid = num(row.id);
     await insertItems(tx, oid, lines);
     await addEvent(tx, oid, me, 'created', null, conf, input.isExchange ? `Échange de la commande #${input.originalOrderId}` : null);
     if (input.confirm) await addEvent(tx, oid, me, 'follow_status', null, 'to_prepare');
+    // Delivery AI agent: "we received your order" (or "confirmed")
+    await onOrderCreated(tx, { id: oid, phone, conf_status: conf, is_exchange: input.isExchange }, ctx.now());
     return getOrder(ctx, oid, tx);
   });
   ctx.emit({ type: 'orders' });
@@ -456,8 +459,9 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
   const changed: number[] = [];
   await ctx.db.tx(async (tx) => {
     if (await alreadyApplied(tx, input.clientId, me)) return;
+    const notify = await notifyContext(tx);
     for (const oid of input.ids) {
-      const cur = (await tx.query('SELECT id, conf_status, follow_status, attempts, agent_id FROM orders WHERE id = $1 FOR UPDATE', [oid]))[0];
+      const cur = (await tx.query('SELECT id, conf_status, follow_status, attempts, agent_id, phone, is_exchange FROM orders WHERE id = $1 FOR UPDATE', [oid]))[0];
       if (!cur) continue;
       if (cur.follow_status && !['to_prepare', 'prepared', 'cancelled'].includes(cur.follow_status) && input.status !== 'confirmed')
         throw bad('Commande déjà expédiée : changez plutôt le statut de livraison');
@@ -486,9 +490,11 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
       );
       await addEvent(tx, oid, me, 'conf_status', cur.conf_status, status, [input.reason, note].filter(Boolean).join(' — ') || null);
       if (confirmed && !cur.follow_status) await addEvent(tx, oid, me, 'follow_status', null, 'to_prepare');
+      await onConfChange(tx, notify, cur, cur.conf_status, status, ctx.now());
       changed.push(oid);
     }
   });
+  await sendInPreview(ctx);
   ctx.emit({ type: 'orders' });
   return { changed };
 }
@@ -512,6 +518,7 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>) {
   const changed: number[] = [];
   await ctx.db.tx(async (tx) => {
     if (await alreadyApplied(tx, input.clientId, me)) return;
+    const notify = await notifyContext(tx);
     for (const oid of input.ids) {
       const cur = (await tx.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [oid]))[0];
       if (!cur) continue;
@@ -548,11 +555,14 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>) {
       if (to === 'delivered' && from !== 'delivered') await tx.query('UPDATE customers SET delivered = delivered + 1 WHERE id = $1', [cur.customer_id]);
       if (to === 'returned' && from !== 'returned') await tx.query('UPDATE customers SET returned = returned + 1 WHERE id = $1', [cur.customer_id]);
       await addEvent(tx, oid, me, 'follow_status', from, to, [input.reason, input.note].filter(Boolean).join(' — ') || null);
+      // Delivery AI agent: shipped, with the livreur, at the desk, failed attempt, cancelled by the livreur, delivered
+      await onFollowChange(tx, notify, cur, from, to, ctx.now());
       changed.push(oid);
     }
   });
   // SAV ticket parcels: delivered → ticket Livré, returned (scanned at the depot) → ticket Annulé
   if (['delivered', 'exchanged', 'returned'].includes(input.status) && (await settleTickets(ctx.db, me))) ctx.emit({ type: 'sav' });
+  await sendInPreview(ctx);
   ctx.emit({ type: 'orders' });
   return { changed };
 }
@@ -588,14 +598,16 @@ export async function orderCounts(ctx: Ctx) {
     )
   )[0];
   const tickets = { toShip: num(tk?.to_ship), prepared: num(tk?.prepared), onRoad: num(tk?.on_road), uncashed: num(tk?.uncashed) };
-  // Pilot AI: conversations waiting for a person or unread (Message AI agent), comments still to handle (CM AI agent)
+  // Pilot AI: conversations waiting for a person or unread (Message AI agent), comments still to handle (CM AI agent),
+  // delivery messages to send by hand or that failed in the last 3 days (Delivery AI agent)
   const aiRow = (
     await ctx.db.query(
       `SELECT (SELECT count(*) FROM conversations WHERE channel <> 'test' AND (mode = 'handoff' OR unread > 0))::int AS msgs,
-              (SELECT count(*) FROM cm_comments WHERE status IN ('new','handoff','error'))::int AS cm`,
+              (SELECT count(*) FROM cm_comments WHERE status IN ('new','handoff','error'))::int AS cm,
+              (SELECT count(*) FROM notifications WHERE status = 'manual' OR (status = 'failed' AND created_at > now() - interval '3 days'))::int AS notify`,
     )
   )[0];
-  const ai = { messages: num(aiRow?.msgs), cm: num(aiRow?.cm) };
+  const ai = { messages: num(aiRow?.msgs), cm: num(aiRow?.cm), notify: num(aiRow?.notify) };
   const toObj = (rows: { k: string; n: number }[]) => Object.fromEntries(rows.map((r) => [r.k, num(r.n)]));
   return { conf: toObj(conf), follow: toObj(follow), sub: toObj(subs), lateCalls, sav, uncashed, tickets, lowStock, ai, all: num((await ctx.db.query('SELECT count(*)::int n FROM sales'))[0]?.n) };
 }
@@ -819,7 +831,11 @@ export const ordersProcs = {
     );
   }),
   // the upsell is always counted by Pilotix: a mark sent by a screen is not taken (only Dellal, inside, marks what it sold in addition)
-  'orders.create': proc(['confirmation', 'suivi', 'depot'], OrderInput, (ctx, i) => createOrder(ctx, { ...i, items: i.items.map((x) => ({ ...x, isUpsell: false })) })),
+  'orders.create': proc(['confirmation', 'suivi', 'depot'], OrderInput, async (ctx, i) => {
+    const o = await createOrder(ctx, { ...i, items: i.items.map((x) => ({ ...x, isUpsell: false })) });
+    await sendInPreview(ctx);
+    return o;
+  }),
   'orders.update': proc(['confirmation', 'suivi', 'depot'], UpdateInput, (ctx, i) => updateOrder(ctx, i)),
   'orders.setConf': proc(['confirmation'], ConfInput, (ctx, i) => setConf(ctx, i)),
   'orders.setFollow': proc(['suivi', 'depot', 'livreur'], FollowInput, (ctx, i) => setFollow(ctx, i)),
@@ -930,6 +946,7 @@ export const ordersProcs = {
       });
       out.push(copy.id);
     }
+    await sendInPreview(ctx);
     return { ids: out };
   }),
 

@@ -61,19 +61,22 @@ export const NAV: NavItem[] = [
   { id: 'sav', icon: 'headset', roles: ['confirmation', 'suivi', 'depot'], subs: ['tickets', 'nouveau', 'attente', 'depot', 'livraison', 'livres', 'annules', 'stats'] },
   { id: 'tournee', icon: 'navigation', roles: ['livreur'], onlyIf: (r) => r.includes('livreur') },
   { id: 'produits', icon: 'layers', roles: ['depot'], subs: ['stock', 'produits', 'mouvements'] },
-  // Pilot AI: the AI agents. Message AI agent (Dellal) sells in the inbox, CM AI agent answers the comments.
+  // Pilot AI: the AI agents. Message AI agent (Dellal) sells in the inbox, CM AI agent answers the comments,
+  // Delivery AI agent tells each customer where their order is (WhatsApp, SMS).
   {
     id: 'pilotai',
     icon: 'sparkles',
-    roles: ['confirmation', 'marketer'],
-    pages: ['messages', 'cm'],
+    roles: ['confirmation', 'marketer', 'suivi'],
+    pages: ['messages', 'cm', 'notify'],
     children: [
       { id: 'messages', href: '#/messages', count: 'msgs', tone: 'nc-a', icon: 'chat', roles: ['confirmation'] },
       { id: 'cm', href: '#/cm', count: 'cm', tone: 'nc-a', icon: 'comments', roles: ['confirmation', 'marketer'] },
+      { id: 'notify', href: '#/notify', count: 'notify', tone: 'nc-a', icon: 'truck', roles: ['confirmation', 'suivi'] },
     ],
   },
   { id: 'messages', icon: 'chat', roles: ['confirmation'], hidden: true },
   { id: 'cm', icon: 'comments', roles: ['confirmation', 'marketer'], hidden: true },
+  { id: 'notify', icon: 'truck', roles: ['confirmation', 'suivi'], hidden: true },
   { id: 'clients', icon: 'users', roles: ['confirmation', 'suivi'] },
   { id: 'marketing', icon: 'megaphone', roles: ['marketer'], subs: ['publicite', 'marketer'] },
   { id: 'caisse', icon: 'wallet', roles: [], subs: ['due', 'done', 'livreurs'] },

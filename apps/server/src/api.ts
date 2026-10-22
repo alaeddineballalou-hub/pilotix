@@ -232,9 +232,38 @@ class ApiController {
       new Logger('CM').warn('comments ignored: add the Meta app secret (Message AI agent › Réglages) so webhooks are signed');
       comments = [];
     }
+    // Delivery AI agent: what became of its WhatsApp messages (delivered, read, failed → SMS). A "failed" sends an SMS:
+    // only from a webhook signed with the Meta app secret (without it, the 1-hour fallback still works)
+    let statuses: any[] = m?.parseWhatsAppStatuses ? m.parseWhatsAppStatuses(body) : [];
+    if (statuses.length && !secret) {
+      new Logger('Delivery AI').warn('WhatsApp statuses ignored: add the Meta app secret (Message AI agent › Réglages) so webhooks are signed');
+      statuses = [];
+    }
     void this.handleIncoming(list);
     void this.handleComments(comments);
-    return { ok: true, received: list.length + comments.length };
+    void this.handleStatuses(statuses);
+    return { ok: true, received: list.length + comments.length + statuses.length };
+  }
+
+  /** Delivery AI agent: the SMS gateway's reports (sent, delivered, failed) and the customers' SMS answers. Key in ?key=. */
+  @Public()
+  @Post('hooks/sms')
+  async smsHook(@Query('key') key: string, @Body() body: any) {
+    const session = await this.core.systemSession();
+    const r: any = await this.core.call('notify.hookKey', session, {});
+    const want = String(r?.hookKey ?? '');
+    const got = String(key ?? '');
+    if (!want || got.length !== want.length || !timingSafeEqual(Buffer.from(got), Buffer.from(want))) throw new core.AppError('unauthorized', 'Clé invalide');
+    const m = optionalDellal();
+    const ev = m?.parseSmsEvent ? m.parseSmsEvent(body) : null;
+    if (!ev) return { ok: true, ignored: true };
+    return this.core.call('notify.smsEvent', session, ev);
+  }
+
+  private async handleStatuses(list: any[]) {
+    if (!list.length) return;
+    const session = await this.core.systemSession();
+    for (const st of list) await this.core.call('notify.waStatus', session, st).catch((e) => new Logger('Delivery AI').warn(`status ${st?.id}: ${e?.message ?? e}`));
   }
 
   /** TikTok messages (from TikTok's business messaging or a bridge): { user_id, name?, text, message_id? }. Key = Dellal verify token. */
@@ -303,6 +332,7 @@ class ApiController {
     if (!ck || key !== ck) throw new core.AppError('unauthorized', 'Clé cron invalide');
     const session = await this.core.systemSession();
     void this.core.call('cm.sweep', session, {}).catch(() => null); // comments the CM AI agent has not answered yet (in the background)
+    void this.core.call('notify.run', session, {}).catch(() => null); // Delivery AI agent: messages due (in the background)
     return this.core.call('delivery.sync', session, {}).catch((e) => ({ ok: false, message: e.message }));
   }
 }

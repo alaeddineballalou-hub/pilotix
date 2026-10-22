@@ -17,6 +17,7 @@ import { seed as seed_admin } from './seeds/admin';
 import { seed as seed_ads } from './seeds/ads';
 import { seed as seed_dellal } from './seeds/dellal';
 import { seed as seed_cm } from './seeds/cm';
+import { seed as seed_notify } from './seeds/notify';
 
 /** First admin + one warehouse. Used by the real server on first start. */
 export async function seedBase(db: Db, admin: { email: string; password: string; name?: string }) {
@@ -342,6 +343,7 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number } =
   await seed_cm(db, users, now);
   // every demo order (written straight into the database) keeps what the customer first ordered: the upsell is counted against it
   for (const q of UPSELL_BACKFILL) await db.query(q);
+  await seed_notify(db, users, now);
 
   return { users, orders: N, todo: CONF_TODO.length };
 }

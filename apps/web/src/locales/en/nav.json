@@ -13,6 +13,7 @@
   "pilotai": "Pilot AI",
   "messages": "Message AI agent",
   "cm": "CM AI agent",
+  "notify": "Delivery AI agent",
   "clients": "Customers",
   "marketing": "Marketing",
   "publicite": "Advertising",
@@ -30,7 +31,8 @@
     "livrees": "Delivered",
     "annulees": "Cancelled",
     "messages": "Message AI agent",
-    "cm": "CM AI agent"
+    "cm": "CM AI agent",
+    "notify": "Delivery AI agent"
   },
   "profil": "My profile",
   "marketer": "Marketer"

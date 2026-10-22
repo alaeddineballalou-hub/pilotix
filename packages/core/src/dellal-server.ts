@@ -1,25 +1,32 @@
 // Dellal on the server — SERVER ONLY (loaded as '@pilotix/core/dist/dellal-server', called through ctx.server.dellal).
-// Calls the AI (Anthropic Messages API) and sends messages to WhatsApp (Cloud API), Messenger and Instagram (Graph API).
-// Keys are read from the settings table (written by dellal.settings.save) and never leave the server.
+// Calls the AI (Anthropic Messages API) and sends messages to WhatsApp (Cloud API), Messenger and Instagram (Graph API);
+// for Delivery AI agent, WhatsApp templates and SMS (SMS Gateway for Android, or any HTTP SMS service).
+// Keys are read from the settings table (written by dellal.settings.save / notify.settings.save) and never leave the server.
 import { AppError, Ctx } from './rpc';
 import { AiRequest, AiResponse, DellalChannel, dellalSecret } from './modules/dellal';
+import { NOTIFY_SMS_SECRET, notifySettings } from './modules/notify';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
 const ANTHROPIC = 'https://api.anthropic.com/v1/messages';
 
-async function postJson(url: string, body: unknown, headers: Record<string, string>, who: string, method: 'POST' | 'GET' = 'POST'): Promise<any> {
+async function postJson(url: string, body: unknown, headers: Record<string, string>, who: string, method: 'POST' | 'GET' = 'POST', timeoutMs = 30_000): Promise<any> {
   let res: Response;
+  // a service that hangs must not hold the sending job (or the courier sync that shares its worker)
+  const signal = AbortSignal.timeout(timeoutMs);
   try {
-    res = await fetch(url, method === 'GET' ? { headers: { Accept: 'application/json', ...headers } } : { method, headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...headers }, body: JSON.stringify(body) });
+    res = await fetch(url, method === 'GET' ? { headers: { Accept: 'application/json', ...headers }, signal } : { method, headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...headers }, body: JSON.stringify(body), signal });
   } catch {
     throw new AppError('bad_request', `${who} injoignable. Réessayez plus tard.`);
   }
   const data: any = await res.json().catch(() => ({}));
   if (!res.ok || data?.error) {
-    const m = data?.error?.message ?? res.statusText;
-    if (res.status === 401 || data?.error?.code === 190) throw new AppError('bad_request', `${who} : clé ou jeton refusé (${m}). Vérifiez Messages › Réglages.`);
-    if (res.status === 429) throw new AppError('conflict', `${who} limite les demandes pour l’instant.`);
-    throw new AppError('bad_request', `${who} : ${m}`);
+    const e = data?.error;
+    const m = (typeof e === 'string' ? e : e?.error_user_msg ?? e?.message) ?? data?.message ?? res.statusText;
+    // Meta's error code travels with the error (Delivery AI agent decides: try again, or SMS)
+    const fail = (code: AppError['code'], text: string) => Object.assign(new AppError(code, text), { metaCode: typeof e?.code === 'number' ? e.code : null, status: res.status });
+    if (res.status === 401 || e?.code === 190) throw fail('bad_request', `${who} : clé ou jeton refusé (${m}). Vérifiez les réglages.`);
+    if (res.status === 429) throw fail('conflict', `${who} limite les demandes pour l’instant.`);
+    throw fail('bad_request', `${who} : ${m}`);
   }
   return data;
 }
@@ -66,7 +73,7 @@ async function complete(ctx: Ctx, req: AiRequest): Promise<AiResponse> {
   // so each following message is billed mostly at the cached rate.
   const { tools, ...rest } = req;
   const body = { ...rest, ...(tools?.length ? { tools } : {}), system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }] };
-  const data = await postJson(ANTHROPIC, body, { 'x-api-key': key, 'anthropic-version': '2023-06-01' }, 'IA (Anthropic)');
+  const data = await postJson(ANTHROPIC, body, { 'x-api-key': key, 'anthropic-version': '2023-06-01' }, 'IA (Anthropic)', 'POST', 180_000);
   return { content: data.content ?? [], stop_reason: data.stop_reason ?? 'end_turn', usage: data.usage };
 }
 
@@ -113,15 +120,103 @@ async function cmPost(ctx: Ctx, a: CmArgs) {
   return { caption: (r?.caption ?? r?.message ?? null) as string | null, permalink: (r?.permalink ?? r?.permalink_url ?? null) as string | null };
 }
 
+// ---------------------------------------------------------------- Delivery AI agent: WhatsApp templates, SMS
+async function waNumber(ctx: Ctx): Promise<{ token: string; phoneId: string }> {
+  const token = await dellalSecret(ctx.db, 'waToken');
+  const phoneId = (await ctx.db.query(`SELECT value->>'whatsappPhoneId' AS v FROM settings WHERE key = 'dellal'`))[0]?.v;
+  if (!token || !phoneId) throw new AppError('bad_request', 'WhatsApp n’est pas connecté (Message AI agent › Réglages : jeton et ID du numéro).');
+  return { token, phoneId };
+}
+
+/** A message from an approved template (the only kind a business may send first): { to: '2136…', name, lang, params }. */
+async function waTemplate(ctx: Ctx, a: { to: string; name: string; lang: string; params: string[] }) {
+  const { token, phoneId } = await waNumber(ctx);
+  const template = {
+    name: a.name,
+    language: { code: a.lang },
+    ...(a.params.length ? { components: [{ type: 'body', parameters: a.params.map((t) => ({ type: 'text', text: String(t).slice(0, 1000) })) }] } : {}),
+  };
+  const r = await postJson(`${GRAPH}/${phoneId}/messages`, { messaging_product: 'whatsapp', recipient_type: 'individual', to: a.to, type: 'template', template }, { Authorization: `Bearer ${token}` }, 'WhatsApp');
+  return { id: r?.messages?.[0]?.id ? String(r.messages[0].id) : null };
+}
+
+/** The account's templates and their approval (APPROVED, PENDING, REJECTED, PAUSED, DISABLED). */
+async function waTemplates(ctx: Ctx, a: { wabaId: string }) {
+  const { token } = await waNumber(ctx);
+  const out: { name: string; status: string; language: string; reason: string | null }[] = [];
+  let url: string | null = `${GRAPH}/${enc(a.wabaId)}/message_templates?fields=name,status,language,rejected_reason&limit=100`;
+  for (let page = 0; url && page < 10; page++) {
+    const r: any = await postJson(url, null, { Authorization: `Bearer ${token}` }, 'WhatsApp', 'GET');
+    for (const t of Array.isArray(r?.data) ? r.data : [])
+      out.push({ name: String(t.name), status: String(t.status), language: String(t.language), reason: t.rejected_reason && t.rejected_reason !== 'NONE' ? String(t.rejected_reason) : null });
+    url = typeof r?.paging?.next === 'string' ? r.paging.next : null;
+  }
+  return out;
+}
+
+/** Sends a text to Meta for approval as a Utility template (order updates). */
+async function waCreateTemplate(ctx: Ctx, a: { wabaId: string; name: string; lang: string; body: string; example: string[] }) {
+  const { token } = await waNumber(ctx);
+  const component = { type: 'BODY', text: a.body, ...(a.example.length ? { example: { body_text: [a.example] } } : {}) };
+  const r = await postJson(`${GRAPH}/${enc(a.wabaId)}/message_templates`, { name: a.name, language: a.lang, category: 'UTILITY', components: [component] }, { Authorization: `Bearer ${token}` }, 'WhatsApp');
+  return { id: r?.id ? String(r.id) : null, status: r?.status ? String(r.status) : 'PENDING' };
+}
+
+/** SMS Gateway for Android: the cloud (api.sms-gate.app) or a private server, or the phone itself on the local network. */
+async function smsGateway(ctx: Ctx) {
+  const s = await notifySettings(ctx.db);
+  const secret = String((await ctx.db.query(`SELECT value FROM settings WHERE key = $1`, [NOTIFY_SMS_SECRET]))[0]?.value ?? '');
+  const base = (s.smsUrl || 'https://api.sms-gate.app').replace(/\/+$/, '');
+  const local = /:8080$/.test(base) || /^https?:\/\/(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|127\.)/.test(base);
+  return { s, secret, base, local };
+}
+const plus213 = (p: string) => '+213' + String(p).replace(/^0/, '');
+
+async function sms(ctx: Ctx, a: { to: string; text: string; validUntil?: string | null }) {
+  const { s, secret, base, local } = await smsGateway(ctx);
+  if (s.smsProvider === 'android') {
+    if (!s.smsUser || !secret) throw new AppError('bad_request', 'SMS : identifiant ou mot de passe de SMS Gateway manquant (Delivery AI agent › Réglages).');
+    const auth = `Basic ${Buffer.from(`${s.smsUser}:${secret}`).toString('base64')}`;
+    // an SMS the phone could not send in time (offline) expires instead of leaving in the night
+    const body = { textMessage: { text: a.text }, phoneNumbers: [plus213(a.to)], ...(a.validUntil ? { validUntil: a.validUntil.replace(/\.\d{3}Z$/, 'Z') } : {}) };
+    const r = await postJson(`${base}${local ? '/message' : '/3rdparty/v1/messages'}`, body, { Authorization: auth }, 'SMS Gateway');
+    return { id: r?.id ? String(r.id) : null, status: r?.state ? String(r.state) : null };
+  }
+  // any HTTP SMS service: POST { to, text } (and the token as Bearer)
+  if (!s.smsUrl) throw new AppError('bad_request', 'SMS : adresse du service manquante (Delivery AI agent › Réglages).');
+  const r = await postJson(s.smsUrl, { to: plus213(a.to), text: a.text }, secret ? { Authorization: `Bearer ${secret}` } : {}, 'Service SMS');
+  const id = r?.id ?? r?.messageId ?? r?.message_id ?? null;
+  return { id: id === null ? null : String(id), status: null };
+}
+
+/** Points the gateway's reports (sent, delivered, failed) and the customers' SMS answers to this server. */
+async function smsHooks(ctx: Ctx, a: { url: string }) {
+  const { s, secret, base, local } = await smsGateway(ctx);
+  if (!s.smsUser || !secret) throw new AppError('bad_request', 'SMS : identifiant ou mot de passe de SMS Gateway manquant (Delivery AI agent › Réglages).');
+  const auth = { Authorization: `Basic ${Buffer.from(`${s.smsUser}:${secret}`).toString('base64')}` };
+  const path = `${base}${local ? '/webhooks' : '/3rdparty/v1/webhooks'}`;
+  const have: any[] = await postJson(path, null, auth, 'SMS Gateway', 'GET').catch(() => []);
+  const events = ['sms:sent', 'sms:delivered', 'sms:failed', 'sms:received'];
+  for (const event of events)
+    if (!(Array.isArray(have) ? have : []).some((h) => h?.url === a.url && h?.event === event)) await postJson(path, { url: a.url, event }, auth, 'SMS Gateway');
+  return { ok: true, events };
+}
+
 /**
  *  - 'complete' → AiRequest: one call to the AI
  *  - 'send'     → { channel, externalId, accountId, text }: sends a message to the customer
  *  - 'ping'     → checks the AI key
  *  - 'cmReply' / 'cmPrivate' / 'cmHide' / 'cmPost' → the CM AI agent's actions on comments
+ *  - 'waTemplate' / 'waTemplates' / 'waCreateTemplate' / 'sms' / 'smsHooks' → Delivery AI agent
  */
 export async function runDellal(action: string, args: unknown, ctx: Ctx): Promise<unknown> {
   if (action === 'complete') return complete(ctx, args as AiRequest);
   if (action === 'send') return send(ctx, args as any);
+  if (action === 'waTemplate') return waTemplate(ctx, args as any);
+  if (action === 'waTemplates') return waTemplates(ctx, args as any);
+  if (action === 'waCreateTemplate') return waCreateTemplate(ctx, args as any);
+  if (action === 'sms') return sms(ctx, args as any);
+  if (action === 'smsHooks') return smsHooks(ctx, args as any);
   if (action === 'cmReply') return cmReply(ctx, args as CmArgs);
   if (action === 'cmPrivate') return cmPrivate(ctx, args as CmArgs);
   if (action === 'cmHide') return cmHide(ctx, args as CmArgs);
@@ -210,6 +305,42 @@ export function parseMetaWebhook(body: any): Incoming[] {
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------- delivery statuses (Delivery AI agent)
+/** WhatsApp message statuses in a Meta webhook (sent, delivered, read, failed with its error). */
+export function parseWhatsAppStatuses(body: any): { id: string; status: string; code: number | null; title: string | null }[] {
+  const out: { id: string; status: string; code: number | null; title: string | null }[] = [];
+  if (body?.object !== 'whatsapp_business_account') return out;
+  for (const entry of Array.isArray(body?.entry) ? body.entry : [])
+    for (const ch of Array.isArray(entry?.changes) ? entry.changes : [])
+      for (const st of Array.isArray(ch?.value?.statuses) ? ch.value.statuses : []) {
+        if (!st?.id || !st?.status) continue;
+        const err = Array.isArray(st.errors) ? st.errors[0] : null;
+        out.push({
+          id: String(st.id),
+          status: String(st.status),
+          code: typeof err?.code === 'number' ? err.code : null,
+          title: err ? String(err.error_data?.details ?? err.title ?? err.message ?? '').slice(0, 300) || null : null,
+        });
+      }
+  return out;
+}
+
+/** An SMS gateway webhook: SMS Gateway for Android's envelope, or a plain { event, id, phone, text, reason }. */
+export function parseSmsEvent(body: any): { event: 'sent' | 'delivered' | 'failed' | 'received'; id: string | null; phone: string | null; text: string | null; reason: string | null } | null {
+  const raw = String(body?.event ?? '').toLowerCase();
+  const p = body?.payload && typeof body.payload === 'object' ? body.payload : body;
+  const event = raw.replace(/^sms:/, '');
+  if (!['sent', 'delivered', 'failed', 'received'].includes(event)) return null;
+  const s = (v: unknown) => (v === undefined || v === null || v === '' ? null : String(v));
+  return {
+    event: event as 'sent' | 'delivered' | 'failed' | 'received',
+    id: s(p?.messageId ?? p?.id ?? p?.message_id),
+    phone: s(event === 'received' ? p?.sender ?? p?.phoneNumber ?? p?.phone ?? p?.from : p?.recipient ?? p?.phoneNumber ?? p?.phone),
+    text: s(p?.message ?? p?.text)?.slice(0, 2000) ?? null,
+    reason: s(p?.reason)?.slice(0, 300) ?? null,
+  };
 }
 
 // ---------------------------------------------------------------- incoming comments (CM AI agent)
