@@ -22,10 +22,10 @@ const Ym = z.string().regex(/^\d{4}-\d{2}$/);
 const SYNC_KEY = 'ads_last_sync';
 const SYNC_EVERY_MS = 30 * 60_000;
 
-const isOwner = (ctx: Ctx) => hasRole(ctx.session, 'vendeur');
+export const isOwner = (ctx: Ctx) => hasRole(ctx.session, 'vendeur');
 /** Algiers midnight of a YYYY-MM-DD day, as ISO (UTC+1). */
-const dayStart = (d: string) => new Date(Date.parse(d + 'T00:00:00Z') - 3_600_000).toISOString();
-const addDays = (d: string, n: number) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86_400_000).toISOString().slice(0, 10);
+export const dayStart = (d: string) => new Date(Date.parse(d + 'T00:00:00Z') - 3_600_000).toISOString();
+export const addDays = (d: string, n: number) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86_400_000).toISOString().slice(0, 10);
 /** Dates are selected as text (day::text) so no time zone can shift them. */
 const dayStr = (v: unknown) => String(v).slice(0, 10);
 const div = (a: number, b: number) => (b ? a / b : null);
@@ -116,7 +116,7 @@ async function visibleAdsets(ctx: Ctx, marketerId?: number | null): Promise<Adse
 }
 
 /** DZD per USD for each month (latest earlier rate when a month has none). */
-async function fxTable(db: Db): Promise<(ym: string) => number | null> {
+export async function fxTable(db: Db): Promise<(ym: string) => number | null> {
   const rows = (await db.query('SELECT ym, rate FROM fx_rates ORDER BY ym')).map((r: any) => ({ ym: String(r.ym), rate: Number(r.rate) }));
   return (ym: string) => {
     let best: number | null = null;
@@ -137,7 +137,7 @@ export interface DayRow {
   video3s: number;
   thruplays: number;
 }
-async function insights(db: Db, ids: string[], from: string, to: string): Promise<DayRow[]> {
+export async function insights(db: Db, ids: string[], from: string, to: string): Promise<DayRow[]> {
   if (!ids.length) return [];
   const rows = await db.query('SELECT *, day::text AS dtext FROM ad_insights WHERE adset_id = ANY($1) AND day BETWEEN $2 AND $3 ORDER BY day', [ids, from, to]);
   return rows.map((r: any) => ({
@@ -155,7 +155,7 @@ async function insights(db: Db, ids: string[], from: string, to: string): Promis
 }
 
 /** Orders by their first product, for some products, created in [from, to] (Algiers days). */
-async function ordersOf(db: Db, productIds: number[], from: string, to: string) {
+export async function ordersOf(db: Db, productIds: number[], from: string, to: string) {
   if (!productIds.length) return [];
   return db.query(
     `WITH firsts AS (
@@ -189,7 +189,7 @@ export interface Money {
 }
 
 /** Profit of a set of orders, line by line (the original "Bénéfice réel · ligne par ligne"). share = fraction counted (marketer share). */
-async function moneyOf(db: Db, orders: any[], pubDzd: number, share = 1): Promise<Money> {
+export async function moneyOf(db: Db, orders: any[], pubDzd: number, share = 1): Promise<Money> {
   const plans = await getSetting(db, 'payPlans');
   let n = 0, d = 0, r = 0, enRoute = 0, qty = 0, rev = 0, achat = 0, liv = 0, conf = 0, ret = 0;
   for (const o of orders) {
@@ -246,7 +246,7 @@ export interface Diag {
   /** measured values used by the rule (for the explanation shown in the page) */
   v: Record<string, number | null>;
 }
-const sumDays = (rows: DayRow[]) =>
+export const sumDays = (rows: DayRow[]) =>
   rows.reduce(
     (s, r) => ({ spend: s.spend + r.spendCents / 100, imp: s.imp + r.impressions, reach: s.reach + r.reach, clicks: s.clicks + r.clicks, lpv: s.lpv + r.lpv, pur: s.pur + r.purchases, v3: s.v3 + r.video3s, tp: s.tp + r.thruplays }),
     { spend: 0, imp: 0, reach: 0, clicks: 0, lpv: 0, pur: 0, v3: 0, tp: 0 },
@@ -543,6 +543,8 @@ export const adsProcs = {
           hook: a.is_video && life.v3 ? div(life.v3, life.imp) : null,
           hold: a.is_video && life.v3 ? div(life.tp, life.v3) : null,
           ctr: div(life.clicks, life.imp),
+          lpvRate: div(life.lpv, life.clicks),
+          conv: div(life.pur, life.lpv),
           advice: adAdvice(life, week, !!a.is_video, adsetCpa),
         };
       }),

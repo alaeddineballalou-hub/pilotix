@@ -95,4 +95,44 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - k, 1)).toISOString().slice(0, 7);
   };
   await db.query('INSERT INTO fx_rates (ym, rate) VALUES ($1, 246), ($2, 248), ($3, 244) ON CONFLICT (ym) DO NOTHING', [ym(1), ym(2), ym(3)]);
+
+  // Marketing › Marketer: three ad sets already stopped (one good, one bad, one with no marketer yet) so results can be judged,
+  // and the marketer's price per successful ad set.
+  const pous = num((await db.query("SELECT product_ids[1] AS p FROM adsets WHERE id = '120200001'"))[0]?.p);
+  await db.query(
+    `INSERT INTO adsets (id, name, campaign, product_ids, marketer_id, status) VALUES
+      ('120200006','Poussette — avis mamans','Bébé confort',$1,$4,'PAUSED'),
+      ('120200007','Lit parapluie — test large','Bébé confort',$2,$4,'ARCHIVED'),
+      ('120200008','Biberon — anti-colique BID CAP','Puériculture',$3,NULL,'PAUSED')
+     ON CONFLICT (id) DO NOTHING`,
+    [[pous], [lit], [bib], users.marketer],
+  );
+  const stopped: Record<string, { usd: number; cpm: number; ctr: number; hook: number; cvr: number; ad: string }> = {
+    '120200006': { usd: 9, cpm: 1.9, ctr: 0.024, hook: 0.36, cvr: 0.05, ad: 'Vidéo témoignage maman' },
+    '120200007': { usd: 26, cpm: 2.8, ctr: 0.011, hook: 0.17, cvr: 0.012, ad: 'Vidéo lit montage' },
+    '120200008': { usd: 8, cpm: 1.7, ctr: 0.02, hook: 0.31, cvr: 0.04, ad: 'Vidéo anti-colique courte' },
+  };
+  const sRows: unknown[][] = [];
+  const aRows: unknown[][] = [];
+  let an = 50;
+  for (const [id, p] of Object.entries(stopped)) {
+    const adId = `12021000${an++}`;
+    await db.query(`INSERT INTO ads (id, adset_id, name, status, is_video) VALUES ($1,$2,$3,'PAUSED',true) ON CONFLICT (id) DO NOTHING`, [adId, id, p.ad]);
+    for (let k = 56; k >= 33; k--) {
+      const usd = p.usd * (0.8 + rnd() * 0.4);
+      const imp = Math.round((usd / p.cpm) * 1000);
+      const reach = Math.round(imp / 1.6);
+      const clicks = Math.round(imp * p.ctr);
+      const lpv = Math.round(clicks * 0.78);
+      const pur = Math.round(lpv * p.cvr * (0.8 + rnd() * 0.4));
+      const v3 = Math.round(imp * p.hook);
+      const tp = Math.round(v3 * 0.26);
+      const r = [dayOf(k), id, Math.round(usd * 100), imp, reach, clicks, lpv, pur, v3, tp];
+      sRows.push(r);
+      aRows.push([r[0], adId, ...r.slice(1)]);
+    }
+  }
+  await put('ad_insights', ['day', 'adset_id', 'spend_cents', 'impressions', 'reach', 'clicks', 'lpv', 'purchases', 'video_3s', 'thruplays'], sRows, 'ON CONFLICT (day, adset_id) DO NOTHING');
+  await put('ad_daily', ['day', 'ad_id', 'adset_id', 'spend_cents', 'impressions', 'reach', 'clicks', 'lpv', 'purchases', 'video_3s', 'thruplays'], aRows, 'ON CONFLICT (day, ad_id) DO NOTHING');
+  await db.query('INSERT INTO marketer_prices (profile_id, price) VALUES ($1, 15000) ON CONFLICT (profile_id) DO NOTHING', [users.marketer]);
 }

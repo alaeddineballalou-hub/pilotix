@@ -1,7 +1,7 @@
 # Pilotix
 
 Order management for cash-on-delivery e-commerce teams in Algeria: confirmation calls, depot, delivery follow-up, couriers,
-after-sales, livreurs, cash, stock, customers, advertising results, team pay and **Dellal**, an AI sales agent that answers
+after-sales, livreurs, cash, stock, customers, marketing (advertising results and marketer pay per ad set), team pay and **Dellal**, an AI sales agent that answers
 WhatsApp, Messenger, Instagram and TikTok and takes orders — on the **web**, **Android** and **iOS**.
 Pilotix runs on its own: its own server, database and accounts.
 
@@ -32,13 +32,13 @@ the web build, the website (GitHub Pages, with the demo), the Android APK and th
 | Role | Can |
 |---|---|
 | Administrateur | everything, including users, couriers, prices, settings, cash |
-| Vendeur (propriétaire) | orders, confirmation, suivi, stock, customers, advertising (no users / settings) |
+| Vendeur (propriétaire) | orders, confirmation, suivi, stock, customers, marketing (no users / settings) |
 | Agent manager | what an agent does + team supervision and dashboard |
 | Confirmation | call customers, confirm orders |
 | Suivi | follow parcels, alerts, claims, swaps |
 | Dépôt | prepare, ship, receive returns, stock |
 | Livreur | own round: delivered / failed / return, chat with the shop |
-| Marketeur | own ad sets and their real profit |
+| Marketeur | own ad sets, their real profit and what they are paid (Marketing) |
 
 ## Run it locally
 

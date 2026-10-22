@@ -45,7 +45,7 @@ export const NAV: NavItem[] = [
   { id: 'produits', icon: 'layers', roles: ['depot'], subs: ['stock', 'produits', 'mouvements'] },
   { id: 'messages', icon: 'chat', roles: ['confirmation'] },
   { id: 'clients', icon: 'users', roles: ['confirmation', 'suivi'] },
-  { id: 'publicite', icon: 'megaphone', roles: ['marketer'] },
+  { id: 'marketing', icon: 'megaphone', roles: ['marketer'], subs: ['publicite', 'marketer'] },
   { id: 'caisse', icon: 'wallet', roles: [], subs: ['due', 'done', 'livreurs'] },
   { id: 'livraison', icon: 'truck', roles: [], subs: ['societes', 'api', 'livreurs'] },
   { id: 'utilisateurs', icon: 'usercog', roles: [], subs: ['roles', 'admins', 'vendeurs', 'agents', 'marketeurs', 'managers'] },
