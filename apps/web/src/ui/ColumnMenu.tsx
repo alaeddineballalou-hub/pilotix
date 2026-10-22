@@ -370,7 +370,7 @@ const COL_MIN = 64;
 const COL_MAX = 600;
 const MIN_W: Record<string, number> = {
   order: 92, source: 76, tracking: 96, creator: 76, channel: 76, product: 90, sku: 76, chrono: 96, name: 92, phone: 104, wilaya: 92, commune: 92,
-  agent: 98, fagent: 92, total: 84, time: 88, created: 84, stock: 72, desk: 72, passed: 76, confirmed: 84, follow: 96, next: 88, status: 128, since: 72,
+  agent: 106, fagent: 106, total: 84, time: 88, created: 84, stock: 72, desk: 72, passed: 76, confirmed: 84, follow: 96, next: 88, status: 128, since: 72,
 };
 /** Each column's comfortable width (px): used when the card has room; with less room, every column gives up the same part of its spare width. */
 const NAT_W: Record<string, number> = {
@@ -382,7 +382,8 @@ const NAT_W: Record<string, number> = {
  * Smallest a column may get when the card is short of room (px; otherwise 80% of its minimum): long values then end with "…".
  * Never narrower than its header's longest word. Below that, the table scrolls sideways.
  */
-const HARD_W: Record<string, number> = { phone: 104, chrono: 94, total: 84, status: 108, order: 84 };
+// agent / fagent: the name chip turns into « ✕ Retirer » on hover, which needs this room.
+const HARD_W: Record<string, number> = { phone: 104, chrono: 94, total: 84, status: 108, order: 84, agent: 104, fagent: 104 };
 /** Columns showing a pill, a badge or buttons: their size does not follow the row size (compact, normal, large). The widths above are for normal rows (14 px text). */
 const PILL_K = new Set(['status', 'chrono', 'agent', 'fagent', 'stock', 'desk', 'since', 'phone']);
 /** Text columns: on a wide screen they get the room left over. */
