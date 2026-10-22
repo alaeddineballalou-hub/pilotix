@@ -1,8 +1,8 @@
 // Confirmation queue: lists, deadlines, banner, statistics and their role checks.
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
-import { DEFAULT_CALL_SETTINGS } from '@pilotix/shared';
-import { call, Ctx, Db } from '../index';
+import { communesOf, DEFAULT_CALL_SETTINGS } from '@pilotix/shared';
+import { call, clientFee, Ctx, Db } from '../index';
 import { computeDue, kfRange } from '../modules/confirmation';
 import { EMAILS, setup } from './harness';
 
@@ -179,4 +179,22 @@ test('delivery choice: bureaus of a wilaya with who delivers, bureau needs a sto
   assert.equal(home.stopdeskId, null);
   const cat: any = await call('confirmation.catalog', conf, {});
   assert.ok(cat.some((p: any) => p.variants.some((v: any) => typeof v.stock === 'number')));
+});
+
+test('an agent changes the wilaya and commune of an order; the grid price follows the wilaya chosen', async () => {
+  const { db, as } = await setup(60);
+  const conf = await as(EMAILS.conf);
+  const nv: any = await call('confirmation.list', conf, { sub: 'nouvelles', pageSize: 5 });
+  const o = nv.rows[0];
+  const to = o.wilayaId === 31 ? 16 : 31;
+  const grid = (await db.query('SELECT fee_grid FROM products WHERE id = $1', [o.items[0].productId]))[0]?.fee_grid ?? null;
+  const g: any = await call('confirmation.gridFee', conf, { id: o.id, isStopdesk: false, wilayaId: to });
+  assert.equal(g.fee, await clientFee(db, to, false, grid));
+  const now: any = await call('confirmation.gridFee', conf, { id: o.id, isStopdesk: false });
+  assert.equal(now.fee, await clientFee(db, o.wilayaId, false, grid));
+  const commune = communesOf(to)[0][1];
+  const up: any = await call('orders.update', conf, { id: o.id, version: o.version, wilayaId: to, commune, deliveryFee: g.fee });
+  assert.equal(up.wilayaId, to);
+  assert.equal(up.commune, commune);
+  assert.equal(up.deliveryFee, g.fee);
 });

@@ -657,10 +657,11 @@ export const confirmationProcs = {
   }),
 
   /** Delivery price from the client grid for this order's wilaya / delivery type / first product. */
-  'confirmation.gridFee': proc(['confirmation'], z.object({ id, isStopdesk: z.boolean().optional() }), async (ctx, { id, isStopdesk }) => {
+  /** The grid price of an order's delivery; `wilayaId` / `isStopdesk` give the price for another choice before it is saved. */
+  'confirmation.gridFee': proc(['confirmation'], z.object({ id, isStopdesk: z.boolean().optional(), wilayaId: z.number().int().min(1).max(69).optional() }), async (ctx, { id, isStopdesk, wilayaId }) => {
     const o = await getOrder(ctx, id);
     const grid = o.items[0] ? (await ctx.db.query('SELECT fee_grid FROM products WHERE id = $1', [o.items[0].productId]))[0]?.fee_grid : null;
-    return { fee: await clientFee(ctx.db, o.wilayaId, isStopdesk ?? o.isStopdesk, grid) };
+    return { fee: await clientFee(ctx.db, wilayaId ?? o.wilayaId, isStopdesk ?? o.isStopdesk, grid) };
   }),
 
   /**

@@ -451,7 +451,15 @@
     "pickTitle": "Bureaus · {{w}}",
     "pickSub": "{{n}} bureaus in this wilaya",
     "searchPh": "Search a bureau, commune, company…",
-    "none": "No bureau in this wilaya."
+    "none": "No bureau in this wilaya.",
+    "wilaya": "Wilaya",
+    "commune": "Commune",
+    "pickCommune": "Pick the commune",
+    "needCommune": "Pick the delivery commune.",
+    "wilTitle": "Delivery wilaya",
+    "comTitle": "Communes · {{w}}",
+    "searchWil": "Search: name or number…",
+    "searchCom": "Search a commune…"
   },
   "d6": {
     "cart": "Cart",

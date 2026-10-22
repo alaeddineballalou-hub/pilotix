@@ -1,6 +1,6 @@
 // The open row of the queue (".qdetail"): notes, products (variant / qty / price), add a product,
 // delivery price and total, packs and linked products, save bar. Saved with orders.update (version check).
-import { CANCEL_REASONS, FOLLOW_LOCKED, Order } from '@pilotix/shared';
+import { CANCEL_REASONS, communesOf, FOLLOW_LOCKED, Order, WILAYAS, WILAYAS_AR } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { rpc } from '../../lib/backend';
 import { defaultNext } from './shared';
@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { da, fromLocalInput, wilayaName } from '../../lib/format';
+import i18n from '../../lib/i18n';
 import { Icon, Loading, StatusBadge } from '../../ui/kit';
 import { Float } from '../../ui/Float';
 import { toast } from '../../ui/toast';
@@ -46,6 +47,12 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
   const [desk, setDesk] = useState(order.isStopdesk);
   const [deskId, setDeskId] = useState<number | null>(order.stopdeskId);
   const [picker, setPicker] = useState(false);
+  /** the delivery wilaya and commune (the agent can correct them) */
+  const [wil, setWil] = useState(order.wilayaId);
+  const [com, setCom] = useState(order.commune ?? '');
+  const [geoPick, setGeoPick] = useState<null | 'wil' | 'com'>(null);
+  const wilRef = useRef<HTMLButtonElement>(null);
+  const comRef = useRef<HTMLButtonElement>(null);
   const [busy, setBusy] = useState(false);
   const deskRef = useRef<HTMLElement>(null);
   const [disc, setDisc] = useState(order.discount);
@@ -65,16 +72,18 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
     setNTeam(order.internalNote ?? '');
   }, [order.discount, order.customerNote, order.deliveryNote, order.internalNote]);
   const [modeTouched, setModeTouched] = useState(false);
-  const opts = useRpc('confirmation.deskOptions', { wilayaId: order.wilayaId }, { staleTime: 5 * 60_000 });
-  const modeFee = useRpc('confirmation.gridFee', { id: order.id, isStopdesk: desk }, { staleTime: 60_000 });
+  const opts = useRpc('confirmation.deskOptions', { wilayaId: wil }, { staleTime: 5 * 60_000 });
+  const modeFee = useRpc('confirmation.gridFee', { id: order.id, isStopdesk: desk, ...(wil !== order.wilayaId ? { wilayaId: wil } : {}) }, { staleTime: 60_000 });
   useEffect(() => {
     setL(initial);
     setFee(order.deliveryFee);
     setDesk(order.isStopdesk);
     setDeskId(order.stopdeskId);
+    setWil(order.wilayaId);
+    setCom(order.commune ?? '');
     setModeTouched(false);
     setErr('');
-  }, [initial, order.deliveryFee, order.isStopdesk, order.stopdeskId]);
+  }, [initial, order.deliveryFee, order.isStopdesk, order.stopdeskId, order.wilayaId, order.commune]);
   // switching Domicile / Bureau puts that type's price from the grid
   useEffect(() => {
     if (modeTouched && modeFee.data?.fee != null) setFee(modeFee.data.fee);
@@ -85,7 +94,19 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
   const editable = !(order.followStatus && FOLLOW_LOCKED.includes(order.followStatus)) && !order.shippedAt;
   const lockedPrice = !order.isExchange;
   const notesChanged = nOrigin !== (order.customerNote ?? '') || nLivreur !== (order.deliveryNote ?? '') || nTeam !== (order.internalNote ?? '');
-  const dirty = key(L) !== key(initial) || fee !== order.deliveryFee || disc !== order.discount || notesChanged || desk !== order.isStopdesk || (desk && deskId !== order.stopdeskId);
+  const geoChanged = wil !== order.wilayaId || com !== (order.commune ?? '');
+  const dirty = key(L) !== key(initial) || fee !== order.deliveryFee || disc !== order.discount || notesChanged || geoChanged || desk !== order.isStopdesk || (desk && deskId !== order.stopdeskId);
+  /** another wilaya: pick its commune, forget a bureau of the old one, and take that wilaya's price from the grid */
+  const pickWilaya = (w: number) => {
+    setGeoPick(null);
+    if (w === wil) return;
+    setWil(w);
+    setCom('');
+    if (desk) setDeskId(null);
+    setModeTouched(true);
+    setErr('');
+    setTimeout(() => setGeoPick('com'), 0);
+  };
   const chosen = opts.data?.desks.find((d) => d.id === deskId) ?? null;
   const company = opts.data?.companies.find((c) => c.id === (chosen?.companyId ?? order.companyId)) ?? null;
   // can it be delivered? Bureau: the chosen bureau's company serves it. Domicile: the order's company (or any active one) delivers here.
@@ -157,12 +178,14 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
   const saveFirst = async (): Promise<boolean> => {
     if (!L.length) return setErr(t('confirmation.d.keepOne')), false;
     if (desk && !deskId) return setErr(t('confirmation.dl.needDesk')), setPicker(true), false;
+    if (geoChanged && !desk && !com) return setErr(t('confirmation.dl.needCommune')), setGeoPick('com'), false;
     if (!dirty) return true;
     const mode = desk !== order.isStopdesk || (desk && deskId !== order.stopdeskId) ? { isStopdesk: desk, stopdeskId: desk ? deskId : null, ...(desk && chosen ? { companyId: chosen.companyId } : {}) } : {};
     try {
       if (disc > maxDisc) return setErr(t('confirmation.d6.discTooBig', { v: da(maxDisc) })), false;
       const notes = notesChanged ? { customerNote: nOrigin.trim() || null, deliveryNote: nLivreur.trim() || null, internalNote: nTeam.trim() || null } : {};
-      await rpc('orders.update', { id: order.id, version: order.version, deliveryFee: fee, discount: disc, ...notes, ...mode, ...(key(L) !== key(initial) ? { items: cartBody } : {}) });
+      const geo = geoChanged ? { wilayaId: wil, commune: com } : {};
+      await rpc('orders.update', { id: order.id, version: order.version, deliveryFee: fee, discount: disc, ...notes, ...geo, ...mode, ...(key(L) !== key(initial) ? { items: cartBody } : {}) });
       return true;
     } catch (e: any) {
       setErr(e.message);
@@ -361,11 +384,25 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
               {t('confirmation.d.desk')}
             </button>
           </div>
+          <div className="qd6-geo">
+            <button type="button" ref={wilRef} className={`qd6-pick${geoPick === 'wil' ? ' on' : ''}`} disabled={!editable} aria-haspopup="listbox" aria-expanded={geoPick === 'wil'} onClick={() => setGeoPick(geoPick === 'wil' ? null : 'wil')}>
+              <small>{t('confirmation.dl.wilaya')}</small>
+              <b className="ltr-n">
+                {String(wil).padStart(2, '0')} · {wilayaName(wil)}
+              </b>
+              {editable && <Icon name="chevron" />}
+            </button>
+            <button type="button" ref={comRef} className={`qd6-pick${com ? '' : ' miss'}${geoPick === 'com' ? ' on' : ''}`} disabled={!editable} aria-haspopup="listbox" aria-expanded={geoPick === 'com'} onClick={() => setGeoPick(geoPick === 'com' ? null : 'com')}>
+              <small>{t('confirmation.dl.commune')}</small>
+              <b>{com ? communeName(wil, com) : t('confirmation.dl.pickCommune')}</b>
+              {editable && <Icon name="chevron" />}
+            </button>
+          </div>
           {desk ? (
             chosen ? (
               <div className="qd6-desk click" role="button" tabIndex={editable ? 0 : -1} onClick={() => editable && setPicker((o) => !o)} onKeyDown={(e) => e.key === 'Enter' && editable && setPicker(true)}>
                 <span>
-                  <b>{chosen.name}</b> <small>· {[chosen.address, chosen.commune || wilayaName(order.wilayaId)].filter(Boolean).join(' · ')}</small>
+                  <b>{chosen.name}</b> <small>· {[chosen.address, chosen.commune || wilayaName(wil)].filter(Boolean).join(' · ')}</small>
                 </span>
                 <span className={`qd5-served mini ${chosen.served ? 'ok' : 'bad'}`}>
                   <i />
@@ -382,7 +419,7 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
           ) : (
             <div className="qd6-desk">
               <span>
-                <b>{wilayaName(order.wilayaId)}</b> <small>· {[order.commune, company?.name].filter(Boolean).join(' · ')}</small>
+                <b>{company?.name ?? t('confirmation.d.home')}</b> {order.address ? <small>· {order.address}</small> : null}
               </span>
               {served !== null && (
                 <span className={`qd5-served mini ${served ? 'ok' : 'bad'}`}>
@@ -458,6 +495,8 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
                 setFee(order.deliveryFee);
                 setDesk(order.isStopdesk);
                 setDeskId(order.stopdeskId);
+                setWil(order.wilayaId);
+                setCom(order.commune ?? '');
                 setDisc(order.discount);
                 setNOrigin(order.customerNote ?? '');
                 setNLivreur(order.deliveryNote ?? '');
@@ -491,10 +530,32 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
           </>
         )}
       </div>
+      {geoPick === 'wil' && (
+        <PickList
+          anchor={wilRef}
+          title={t('confirmation.dl.wilTitle')}
+          searchPh={t('confirmation.dl.searchWil')}
+          items={WILAYAS.map((name, i) => ({ value: i + 1, label: `${String(i + 1).padStart(2, '0')} · ${wilayaName(i + 1)}`, hay: `${i + 1} ${String(i + 1).padStart(2, '0')} ${name} ${WILAYAS_AR[i + 1] ?? ''}` }))}
+          current={wil}
+          onPick={(v) => pickWilaya(Number(v))}
+          onClose={() => setGeoPick(null)}
+        />
+      )}
+      {geoPick === 'com' && (
+        <PickList
+          anchor={comRef}
+          title={t('confirmation.dl.comTitle', { w: wilayaName(wil) })}
+          searchPh={t('confirmation.dl.searchCom')}
+          items={communesOf(wil).map((c) => ({ value: c[1], label: i18n.language === 'ar' ? c[2] || c[1] : c[1], hay: `${c[1]} ${c[2]}` }))}
+          current={com}
+          onPick={(v) => (setCom(String(v)), setGeoPick(null), setErr(''))}
+          onClose={() => setGeoPick(null)}
+        />
+      )}
       {picker && opts.data && (
         <DeskMenu
           anchor={deskRef}
-          wilaya={wilayaName(order.wilayaId)}
+          wilaya={wilayaName(wil)}
           desks={opts.data.desks}
           current={deskId}
           onPick={(id) => {
@@ -811,6 +872,53 @@ function VariantMenu({ product, value, lines, lineIndex, disabled, onPick }: { p
 type Desk = { id: number; companyId: number; companyName: string; name: string; commune: string; address: string; served: boolean };
 
 /** The bureaus of the wilaya, in a menu right under the bureau box: search, grouped by company, green when it delivers, red when not. */
+/** A commune shown in the screen language (the order keeps its French name). */
+function communeName(wilayaId: number, fr: string) {
+  if (i18n.language !== 'ar') return fr;
+  return communesOf(wilayaId).find((c) => c[1] === fr)?.[2] || fr;
+}
+
+/** Our own list menu (wilaya, commune): search on top, the current one marked and brought into view. */
+function PickList({ anchor, title, searchPh, items, current, onPick, onClose }: { anchor: React.RefObject<HTMLElement>; title: string; searchPh: string; items: { value: string | number; label: string; hay: string }[]; current: string | number; onPick: (v: string | number) => void; onClose: () => void }) {
+  const [q, setQ] = useState('');
+  const box = useRef<HTMLDivElement>(null);
+  const words = norm(q).trim().split(/\s+/).filter(Boolean);
+  const list = items.filter((it) => words.every((w) => norm(it.hay).includes(w)));
+  useEffect(() => {
+    box.current?.querySelector('.cur')?.scrollIntoView({ block: 'center' });
+  }, []);
+  return (
+    <Float anchor={anchor} onClose={onClose} className="pxf-desk pxf-geo" minWidth={300} maxHeight={420}>
+      <div className="pxf-head">
+        <b>{title}</b>
+        <input
+          type="search"
+          className="pxf-q"
+          placeholder={searchPh}
+          aria-label={searchPh}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && list[0]) onPick(list[0].value);
+          }}
+          autoFocus
+        />
+      </div>
+      <div role="listbox" aria-label={title} ref={box}>
+        {list.length === 0 && <p className="pxf-none">{i18n.t('common.noResults')}</p>}
+        {list.map((it) => (
+          <button key={String(it.value)} type="button" role="option" aria-selected={it.value === current} className={`pxf-it ${it.value === current ? 'cur' : ''}`} onClick={() => onPick(it.value)}>
+            <span className="pxf-main">
+              <b>{it.label}</b>
+            </span>
+            {it.value === current && <Icon name="check" />}
+          </button>
+        ))}
+      </div>
+    </Float>
+  );
+}
+
 function DeskMenu({ anchor, wilaya, desks, current, onPick, onClose }: { anchor: React.RefObject<HTMLElement>; wilaya: string; desks: Desk[]; current: number | null; onPick: (id: number) => void; onClose: () => void }) {
   const { t } = useTranslation();
   const [q, setQ] = useState('');
