@@ -272,3 +272,10 @@ button.kpi.on { box-shadow: 0 0 0 2px var(--navy); }
   .px-grp-bar .bjm-p.on { background: var(--px-orange) !important; color: var(--px-on-orange) !important; }
   .px-grp-bar .bjm-p.on .bjm-n { background: var(--px-on-orange); color: #fff; }
 }
+
+/* Open sidebar: "Commandes" shows / hides its stages, with a ˅ / ˄ arrow. */
+.side .nav-group.bjcn .nav-group-head { cursor: pointer !important; }
+.side .nav-group.bjcn .nav-group-head:hover { background: rgba(255,255,255,.08) !important; color: #fff !important; }
+.px-chev { margin-inline-start: auto; flex: none; opacity: .8; }
+@media (min-width: 901px) { .px-folded .px-chev { display: none; } }
+.side .nav-group.bjcn .nav-sub.px-sub-closed { display: none !important; }
