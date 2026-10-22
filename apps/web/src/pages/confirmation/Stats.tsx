@@ -125,20 +125,20 @@ function NouvellesStats({ kf, setKf, open, setOpen }: { kf: Kf; setKf: (k: Kf) =
       {open && (
         <>
           <div className="px-st-filters">
-            <div className="px-seg" role="group" aria-label={t('common.period')}>
+            <select className="px-st-sel" aria-label={t('common.period')} value={kf.per} onChange={(e) => set({ per: e.target.value as Kf['per'] })}>
               {PERS.map((p) => (
-                <button key={p} type="button" className={kf.per === p ? 'on' : ''} aria-pressed={kf.per === p} onClick={() => set({ per: p })}>
+                <option key={p} value={p}>
                   {t(`confirmation.per.${p}`)}
-                </button>
+                </option>
               ))}
-            </div>
-            <div className="px-seg" role="group" aria-label={t('confirmation.stats.basis')}>
+            </select>
+            <select className="px-st-sel" aria-label={t('confirmation.stats.basis')} value={kf.basis} onChange={(e) => set({ basis: e.target.value as Kf['basis'] })}>
               {(['created', 'updated'] as const).map((b) => (
-                <button key={b} type="button" className={kf.basis === b ? 'on' : ''} aria-pressed={kf.basis === b} onClick={() => set({ basis: b })}>
+                <option key={b} value={b}>
                   {t(`confirmation.stats.${b}`)}
-                </button>
+                </option>
               ))}
-            </div>
+            </select>
             {kf.per === 'custom' && (
               <span className="px-st-dates">
                 <input type="date" value={kf.from} aria-label={t('common.from')} onChange={(e) => set({ from: e.target.value })} />

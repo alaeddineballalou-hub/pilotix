@@ -299,3 +299,5 @@ button.kpi.on { box-shadow: 0 0 0 2px var(--navy); }
 @media (min-width: 1200px) { .px-st-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .px-st-grid { grid-template-columns: 1fr 1fr; gap: 8px; } .px-st-filters { padding: 10px 12px; } .px-seg { overflow-x: auto; flex-wrap: nowrap; max-width: 100%; } }
 @media (max-width: 760px) { .px-st-dates { display: flex; width: 100%; } .px-st-dates input { flex: 1 1 0; min-width: 0; } }
+.px-st-sel { width: auto !important; min-width: 170px; height: 36px; font-weight: 700; border-radius: 10px; }
+@media (max-width: 760px) { .px-st-sel { flex: 1 1 140px; min-width: 0; } }
