@@ -13,7 +13,13 @@ import { settleTickets } from './tickets';
 const id = z.number().int().positive();
 const SAV_ROLES = ['confirmation', 'suivi', 'depot'] as const;
 
-export const SAV_VIEWS = ['todo', 'all', 'attente', 'depot', 'livraison', 'livres', 'annules'] as const;
+export const SAV_VIEWS = ['todo', 'all', 'attente', 'depot', 'livraison', 'livres', 'annules', 'satisfaction', 'termines'] as const;
+/** How the customer felt: 1 Pas content · 2 Moyen · 3 Content · 4 Très content (1 and 2 come with the reason). */
+export const SAV_SETTLE = ['explain', 'gesture', 'changed', 'other'] as const;
+const SETTLE_FR: Record<string, string> = { explain: 'Explication / conseil', gesture: 'Geste commercial', changed: 'Le client a changé d’avis', other: 'Autre' };
+const SAT_FR = ['', 'Pas content', 'Moyen', 'Content', 'Très content'];
+/** after this many calls without an answer, the ticket stops asking */
+export const SAT_MAX_TRIES = 3;
 export type SavView = (typeof SAV_VIEWS)[number];
 
 export interface SavNote {
@@ -47,6 +53,13 @@ export interface SavTicket {
   createdAt: string;
   updatedAt: string;
   resolvedAt: string | null;
+  /** 'phone': settled during the call, no parcel */
+  resolution: string | null;
+  settleReason: string | null;
+  satisfaction: number | null;
+  satisfactionNote: string | null;
+  satisfactionAt: string | null;
+  satTries: number;
 }
 
 const SELECT = `SELECT c.*, o.ref AS order_ref, ex.ref AS exchange_ref, ex.follow_status AS exchange_follow, a.name AS assigned_name, cb.name AS created_by_name
@@ -81,6 +94,12 @@ function toTicket(r: any): SavTicket {
     createdAt: iso(r.created_at),
     updatedAt: iso(r.updated_at),
     resolvedAt: isoOrNull(r.resolved_at),
+    resolution: r.resolution ?? null,
+    settleReason: r.settle_reason ?? null,
+    satisfaction: numOrNull(r.satisfaction),
+    satisfactionNote: r.satisfaction_note ?? null,
+    satisfactionAt: isoOrNull(r.satisfaction_at),
+    satTries: num(r.sat_tries ?? 0),
   };
 }
 
@@ -88,6 +107,11 @@ const ACTIVE = `c.status IN ('open','progress')`;
 // a parcel coming back ("Retour en cours") always goes back to the depot, where it is scanned
 const AT_DEPOT = `ex.follow_status IN ('to_prepare','prepared','returning')`;
 const ON_ROAD = `ex.follow_status IN ('shipped','out_for_delivery','failed','alert','in_exchange')`;
+
+// delivered tickets whose customer has not been asked yet how it went
+// (tickets finished more than 30 days ago are not asked any more)
+const SAT_WAIT = `c.status = 'resolved' AND c.satisfaction IS NULL AND c.sat_tries < ${SAT_MAX_TRIES} AND c.resolved_at >= now() - interval '30 days'`;
+const DONE = `(c.status = 'closed' OR (c.status = 'resolved' AND NOT (${SAT_WAIT})))`;
 
 const settleDelivered = (db: Db, userId: number | null) => settleTickets(db, userId);
 
@@ -111,6 +135,12 @@ function viewWhere(w: Where, v: SavView) {
     case 'annules':
       w.add(`c.status = 'closed'`);
       break;
+    case 'satisfaction':
+      w.add(SAT_WAIT);
+      break;
+    case 'termines':
+      w.add(DONE);
+      break;
     case 'all':
       break;
   }
@@ -121,10 +151,13 @@ const ListInput = z.object({
   q: z.string().max(100).optional(),
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(1).max(500).default(100),
+  /** me: the tickets I am responsible for · none: nobody's yet */
+  owner: z.enum(['all', 'me', 'none']).default('all'),
 });
 
-async function listTickets(ctx: Ctx, f: z.infer<typeof ListInput>): Promise<Page<SavTicket> & { counts: { todo: number; all: number } }> {
+async function listTickets(ctx: Ctx, f: z.infer<typeof ListInput>): Promise<Page<SavTicket> & { counts: { todo: number; all: number; mine: number; nobody: number; view: number } }> {
   await settleDelivered(ctx.db, ctx.session.profile.id);
+  const me = ctx.session.profile.id;
   const w = new Where();
   viewWhere(w, f.view);
   if (f.q?.trim()) {
@@ -134,13 +167,17 @@ async function listTickets(ctx: Ctx, f: z.infer<typeof ListInput>): Promise<Page
     else w.add(`(c.ref ILIKE '%' || ? || '%' OR upper(o.ref) = upper(?) OR c.customer_name ILIKE '%' || ? || '%' OR o.tracking = ? OR upper(o.own_tracking) = upper(?))`, q, q, q, q, q);
   }
   const from = `FROM complaints c LEFT JOIN orders o ON o.id = c.order_id LEFT JOIN orders ex ON ex.id = c.exchange_order_id`;
+  // Moi / Personne / Tous, counted on the same view and search
+  const oc = (await ctx.db.query(`SELECT count(*)::int AS n, count(*) FILTER (WHERE c.assigned_to = ${Number(me)})::int AS mine, count(*) FILTER (WHERE c.assigned_to IS NULL)::int AS nobody ${from} ${w.sql}`, w.params))[0];
+  if (f.owner === 'me') w.add('c.assigned_to = ?', me);
+  if (f.owner === 'none') w.add('c.assigned_to IS NULL');
   const total = num((await ctx.db.query(`SELECT count(*)::int AS n ${from} ${w.sql}`, w.params))[0]?.n);
   const lim = w.p(f.pageSize);
   const off = w.p((f.page - 1) * f.pageSize);
-  const order = f.view === 'livres' || f.view === 'annules' ? 'c.updated_at DESC' : 'c.created_at DESC';
+  const order = f.view === 'livres' || f.view === 'annules' || f.view === 'termines' ? 'c.updated_at DESC' : f.view === 'satisfaction' ? 'c.resolved_at ASC NULLS LAST' : 'c.created_at DESC';
   const rows = await ctx.db.query(`${SELECT} ${w.sql} ORDER BY ${order}, c.id DESC LIMIT ${lim} OFFSET ${off}`, w.params);
   const c = (await ctx.db.query(`SELECT count(*) FILTER (WHERE ${ACTIVE})::int AS todo, count(*)::int AS all FROM complaints c`))[0];
-  return { rows: rows.map(toTicket), total, page: f.page, pageSize: f.pageSize, counts: { todo: num(c.todo), all: num(c.all) } };
+  return { rows: rows.map(toTicket), total, page: f.page, pageSize: f.pageSize, counts: { todo: num(c.todo), all: num(c.all), mine: num(oc.mine), nobody: num(oc.nobody), view: num(oc.n) } };
 }
 
 export async function getTicket(db: Db, tid: number): Promise<SavTicket> {
@@ -170,7 +207,9 @@ export async function savKpis(ctx: Ctx) {
          count(*) FILTER (WHERE c.status = 'resolved' AND c.resolved_at >= now() - interval '7 days')::int AS livres7,
          avg(extract(epoch FROM (c.resolved_at - c.created_at))) FILTER (WHERE c.status = 'resolved' AND c.resolved_at >= now() - interval '7 days') AS avg_s,
          count(*) FILTER (WHERE c.status = 'closed')::int AS annules,
-         count(*) FILTER (WHERE c.status = 'resolved')::int AS livres
+         count(*) FILTER (WHERE c.status = 'resolved')::int AS livres,
+         count(*) FILTER (WHERE ${SAT_WAIT})::int AS satisfaction,
+         count(*) FILTER (WHERE ${DONE})::int AS termines
        FROM complaints c LEFT JOIN orders ex ON ex.id = c.exchange_order_id`,
     )
   )[0];
@@ -186,6 +225,8 @@ export async function savKpis(ctx: Ctx) {
     avgMs: r.avg_s === null || r.avg_s === undefined ? null : Math.round(Number(r.avg_s) * 1000),
     livres: num(r.livres),
     annules: num(r.annules),
+    satisfaction: num(r.satisfaction),
+    termines: num(r.termines),
   };
 }
 
@@ -207,7 +248,30 @@ const CreateInput = z.object({
   wish: z.enum(SAV_WISHES).nullable().optional(),
   details: z.string().max(2000).default(''),
   assignedTo: id.nullable().optional(),
+  /** settled during the call: no parcel, the ticket is born finished */
+  settle: z
+    .object({ reason: z.enum(SAV_SETTLE), note: z.string().trim().max(1000).default(''), satisfaction: z.number().int().min(1).max(4), satisfactionNote: z.string().trim().max(1000).default('') })
+    .optional(),
 });
+
+const SatInput = z.object({ satisfaction: z.number().int().min(1).max(4), satisfactionNote: z.string().trim().max(1000).default('') });
+/** Pas content / Moyen: the reason is required */
+function checkSat(s: { satisfaction: number; satisfactionNote: string }) {
+  if (s.satisfaction <= 2 && !s.satisfactionNote.trim()) throw bad('Client pas satisfait : écrivez pourquoi');
+}
+const satText = (s: { satisfaction: number; satisfactionNote: string }) => `Satisfaction : ${SAT_FR[s.satisfaction]}${s.satisfactionNote.trim() ? ` — ${s.satisfactionNote.trim()}` : ''}`;
+
+/** "Réglé au téléphone" on an open ticket. */
+async function settleTicket(ctx: Ctx, tx: Db, tid: number, s: { reason: string; note: string; satisfaction: number; satisfactionNote: string }) {
+  const me = ctx.session.profile.id;
+  const nowIso = new Date(ctx.now()).toISOString();
+  await tx.query(
+    `UPDATE complaints SET status='resolved', resolution='phone', settle_reason=$2, resolved_at=$3::timestamptz,
+       satisfaction=$4, satisfaction_note=NULLIF($5,''), satisfaction_at=$3::timestamptz, satisfaction_by=$6, updated_at=now() WHERE id=$1`,
+    [tid, s.reason, nowIso, s.satisfaction, s.satisfactionNote.trim(), me],
+  );
+  await pushNote(tx, tid, { at: nowIso, userId: me, text: `Réglé au téléphone (${SETTLE_FR[s.reason]})${s.note.trim() ? ` : ${s.note.trim()}` : ''} · ${satText(s)}`, status: 'resolved' });
+}
 
 const UpdateInput = z.object({
   id,
@@ -378,6 +442,36 @@ export async function savStats(ctx: Ctx, from: string, to: string) {
     )
   )[0];
   const money = await deliveredReport(ctx, { from, to }, 'ticket_parcels');
+  // satisfaction: what the customers answered in the period, before (same length) to compare, by agent, by ending
+  const span = Date.parse(to) - Date.parse(from);
+  const prevFrom = new Date(Date.parse(from) - span).toISOString();
+  const sat = (
+    await ctx.db.query(
+      `SELECT count(*) FILTER (WHERE satisfaction = 1)::int AS s1, count(*) FILTER (WHERE satisfaction = 2)::int AS s2,
+              count(*) FILTER (WHERE satisfaction = 3)::int AS s3, count(*) FILTER (WHERE satisfaction = 4)::int AS s4
+       FROM complaints WHERE satisfaction IS NOT NULL AND satisfaction_at >= $1 AND satisfaction_at < $2`,
+      [from, to],
+    )
+  )[0];
+  const prev = (await ctx.db.query(`SELECT count(*)::int AS n, count(*) FILTER (WHERE satisfaction >= 3)::int AS ok FROM complaints WHERE satisfaction IS NOT NULL AND satisfaction_at >= $1 AND satisfaction_at < $2`, [prevFrom, from]))[0];
+  const satAgents = await ctx.db.query(
+    `SELECT p.id, p.name, count(*)::int AS n, count(*) FILTER (WHERE c.satisfaction >= 3)::int AS ok FROM complaints c
+     JOIN profiles p ON p.id = COALESCE(c.assigned_to, c.created_by)
+     WHERE c.satisfaction IS NOT NULL AND c.satisfaction_at >= $1 AND c.satisfaction_at < $2 GROUP BY p.id, p.name ORDER BY n DESC LIMIT 20`,
+    [from, to],
+  );
+  const satEnd = await ctx.db.query(
+    `SELECT CASE WHEN resolution = 'phone' THEN 'phone' ELSE 'exchange' END AS k, count(*)::int AS n, count(*) FILTER (WHERE satisfaction >= 3)::int AS ok
+     FROM complaints WHERE satisfaction IS NOT NULL AND satisfaction_at >= $1 AND satisfaction_at < $2 GROUP BY 1`,
+    [from, to],
+  );
+  const satReasons = await ctx.db.query(
+    `SELECT c.ref, c.satisfaction, c.satisfaction_note, c.satisfaction_at, c.customer_name FROM complaints c
+     WHERE c.satisfaction <= 2 AND c.satisfaction_at >= $1 AND c.satisfaction_at < $2 ORDER BY c.satisfaction_at DESC LIMIT 10`,
+    [from, to],
+  );
+  const satN = num(sat.s1) + num(sat.s2) + num(sat.s3) + num(sat.s4);
+  const prevN = num(prev.n);
   const delivered = num(p.delivered);
   const returned = num(p.returned);
   return {
@@ -410,6 +504,15 @@ export async function savStats(ctx: Ctx, from: string, to: string) {
       uncashed: money.total.uncashed,
       netToReceive: money.total.netToReceive,
       result: money.total.amount - (money.total.fees + money.total.overweight) - (money.total.returnFees + money.total.returnOverweight),
+    },
+    satisfaction: {
+      n: satN,
+      counts: [num(sat.s1), num(sat.s2), num(sat.s3), num(sat.s4)],
+      rate: satN ? (num(sat.s3) + num(sat.s4)) / satN : null,
+      prevRate: prevN ? num(prev.ok) / prevN : null,
+      agents: satAgents.map((r: any) => ({ id: num(r.id), name: r.name as string, n: num(r.n), rate: num(r.n) ? num(r.ok) / num(r.n) : 0 })),
+      ends: satEnd.map((r: any) => ({ key: r.k as string, n: num(r.n), rate: num(r.n) ? num(r.ok) / num(r.n) : 0 })),
+      unhappy: satReasons.map((r: any) => ({ ref: r.ref as string, satisfaction: num(r.satisfaction), note: (r.satisfaction_note as string) ?? '', at: iso(r.satisfaction_at), customerName: (r.customer_name as string) ?? '' })),
     },
     companies: money.companies.map((c) => ({ companyId: c.companyId, name: c.name, delivered: c.n, returns: c.returns, amount: c.amount, fees: c.fees + c.overweight + c.returnFees + c.returnOverweight })),
   };
@@ -455,8 +558,9 @@ export const savProcs = {
       name = o.customerName;
       phone = o.phone;
     } else if (!name && !phone) throw bad('Choisissez la commande, ou indiquez le nom ou le téléphone du client');
+    if (i.settle) checkSat(i.settle);
     const nowIso = new Date(ctx.now()).toISOString();
-    const notes: SavNote[] = [{ at: nowIso, userId: me, text: 'Ticket créé', status: 'open' }];
+    const notes: SavNote[] = [{ at: nowIso, userId: me, text: i.details.trim() ? `Ticket créé : ${i.details.trim()}` : 'Ticket créé', status: 'open' }];
     if (i.assignedTo) {
       const a = (await ctx.db.query('SELECT name FROM profiles WHERE id=$1', [i.assignedTo]))[0];
       if (!a) throw bad('Responsable introuvable');
@@ -471,6 +575,7 @@ export const savProcs = {
         )
       )[0];
       if (i.orderId) await addEvent(tx, i.orderId, me, 'note', null, 'event', `Ticket SAV ${r.ref} : ${i.details}`.slice(0, 200));
+      if (i.settle) await settleTicket(ctx, tx, num(r.id), i.settle);
       return num(r.id);
     });
     ctx.emit({ type: 'sav', id: tid });
@@ -503,6 +608,70 @@ export const savProcs = {
   }),
 
   'sav.exchange': proc([...SAV_ROLES], ExchangeInput, (ctx, i) => createExchange(ctx, i)),
+
+  /** "Réglé au téléphone": the problem was solved by talking, no parcel; the customer's satisfaction comes with it. */
+  'sav.settle': proc(
+    [...SAV_ROLES],
+    z.object({ id, reason: z.enum(SAV_SETTLE), note: z.string().trim().max(1000).default('') }).merge(SatInput),
+    async (ctx, i) => {
+      checkSat(i);
+      const t = await getTicket(ctx.db, i.id);
+      if (t.status === 'resolved' || t.status === 'closed') throw bad('Ticket déjà clôturé');
+      if (t.exchangeOrderId && t.exchangeFollow !== 'cancelled') throw bad(`Un échange est en cours : ${t.exchangeRef}`);
+      await ctx.db.tx((tx) => settleTicket(ctx, tx, i.id, i));
+      ctx.emit({ type: 'sav', id: i.id });
+      return getTicket(ctx.db, i.id);
+    },
+  ),
+
+  /** After the exchange was delivered: the customer's satisfaction, "Pas répondu", or reopen the ticket (not satisfied). */
+  'sav.rate': proc(
+    [...SAV_ROLES],
+    z.object({
+      id,
+      satisfaction: z.number().int().min(1).max(4).nullable().default(null),
+      satisfactionNote: z.string().trim().max(1000).default(''),
+      noAnswer: z.boolean().default(false),
+      reopen: z.boolean().default(false),
+    }),
+    async (ctx, i) => {
+      const t = await getTicket(ctx.db, i.id);
+      const me = ctx.session.profile.id;
+      const nowIso = new Date(ctx.now()).toISOString();
+      if (t.status !== 'resolved') throw bad('Le ticket n’est pas terminé');
+      await ctx.db.tx(async (tx) => {
+        if (i.noAnswer) {
+          const n = t.satTries + 1;
+          await tx.query('UPDATE complaints SET sat_tries = $2, updated_at = now() WHERE id = $1', [i.id, n]);
+          await pushNote(tx, i.id, { at: nowIso, userId: me, text: n >= SAT_MAX_TRIES ? `Pas répondu (${n}e appel) — on ne demande plus` : `Appel satisfaction : pas répondu (${n}e appel)` });
+          return;
+        }
+        if (!i.satisfaction) throw bad('Choisissez la satisfaction du client');
+        const s = { satisfaction: i.satisfaction, satisfactionNote: i.satisfactionNote };
+        checkSat(s);
+        if (i.reopen) {
+          // not satisfied: the ticket starts again (a new exchange can be made); the answer stays in the history
+          await tx.query(
+            `UPDATE complaints SET status='open', resolved_at=NULL, resolution=NULL, settle_reason=NULL, exchange_order_id=NULL,
+               satisfaction=NULL, satisfaction_note=NULL, satisfaction_at=NULL, satisfaction_by=NULL, sat_tries=0, updated_at=now() WHERE id=$1`,
+            [i.id],
+          );
+          await pushNote(tx, i.id, { at: nowIso, userId: me, text: `${satText(s)} · ticket rouvert`, status: 'open' });
+          return;
+        }
+        await tx.query(`UPDATE complaints SET satisfaction=$2, satisfaction_note=NULLIF($3,''), satisfaction_at=$4::timestamptz, satisfaction_by=$5, updated_at=now() WHERE id=$1`, [
+          i.id,
+          s.satisfaction,
+          s.satisfactionNote.trim(),
+          nowIso,
+          me,
+        ]);
+        await pushNote(tx, i.id, { at: nowIso, userId: me, text: satText(s) });
+      });
+      ctx.emit({ type: 'sav', id: i.id });
+      return getTicket(ctx.db, i.id);
+    },
+  ),
 
   /** Find the order of a new ticket (any status). */
   'sav.findOrder': proc([...SAV_ROLES], z.object({ q: z.string().min(2).max(100) }), (ctx, { q }) => findOrders(ctx, q)),

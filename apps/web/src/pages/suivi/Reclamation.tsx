@@ -49,8 +49,17 @@ export function Reclamation() {
 /** "Rechercher une commande": every order, any status or date. */
 function SearchOrders() {
   const { t } = useTranslation();
-  const [q, setQ] = useState('');
-  const [deb, setDeb] = useState('');
+  // SAV hands over an order not delivered yet (no SAV before delivery: it is a réclamation)
+  const [q, setQ] = useState(() => {
+    try {
+      const v = sessionStorage.getItem('px-rec-q') ?? '';
+      sessionStorage.removeItem('px-rec-q');
+      return v;
+    } catch {
+      return '';
+    }
+  });
+  const [deb, setDeb] = useState(q);
   const [f, setF] = useState({ conf: '', follow: '', company: '', wilaya: '', channel: '', agent: '', from: '', to: '' });
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(50);

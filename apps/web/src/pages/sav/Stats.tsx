@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, dur, n, Period, periodRange } from '../../lib/format';
 import { useRpc } from '../../lib/query';
-import { Empty, ErrorBox, Help, Kpi, Kpis, Loading, PeriodSelect } from '../../ui/kit';
+import { Empty, ErrorBox, Help, Icon, Kpi, Kpis, Loading, PeriodSelect } from '../../ui/kit';
+import { FACES, SatBadge } from './PhoneSav';
 
 const pct = (v: number | null | undefined) => (v === null || v === undefined ? '—' : `${Math.round(v * 100)} %`);
 
@@ -27,6 +28,7 @@ export function SavStats() {
         <ErrorBox error={q.error} onRetry={() => q.refetch()} />
       ) : !s ? null : (
         <div className="bjfc">
+          <Satisfaction s={s.satisfaction} />
           <div className="bjfc-row">
             <span className="bjfc-rl">{t('sav.st.tickets')}</span>
             <Kpis>
@@ -118,5 +120,85 @@ function Breakdown({ title, rows }: { title: string; rows: { label: string; n: n
         </div>
       )}
     </div>
+  );
+}
+
+type Sat = { n: number; counts: number[]; rate: number | null; prevRate: number | null; agents: { id: number; name: string; n: number; rate: number }[]; ends: { key: string; n: number; rate: number }[]; unhappy: { ref: string; satisfaction: number; note: string; at: string; customerName: string }[] };
+
+/** Client satisfaction: the share of happy customers, the answers, by agent, by ending, and why the unhappy ones were. */
+function Satisfaction({ s }: { s: Sat }) {
+  const { t } = useTranslation();
+  const max = Math.max(1, ...s.counts);
+  const delta = s.rate !== null && s.prevRate !== null ? Math.round((s.rate - s.prevRate) * 100) : null;
+  return (
+    <section className="pxv-st">
+      <h3>
+        <Icon name="smile" /> {t('sav.st.sat')}
+      </h3>
+      {!s.n ? (
+        <p className="muted small">{t('sav.st.satNone')}</p>
+      ) : (
+        <div className="pxv-stg">
+          <div className="pxv-stc pxv-str">
+            <div className="pxv-ring" style={{ ['--p' as string]: `${Math.round((s.rate ?? 0) * 100)}%` }}>
+              <b className="ltr">{pct(s.rate)}</b>
+            </div>
+            <div>
+              <b>{t('sav.st.satHappy')}</b>
+              <small>{t('sav.st.satOf', { count: s.n })}</small>
+              {delta !== null && <em className={delta >= 0 ? 'up' : 'down'}>{t(delta >= 0 ? 'sav.st.satUp' : 'sav.st.satDown', { n: Math.abs(delta) })}</em>}
+            </div>
+          </div>
+          <div className="pxv-stc">
+            <span className="pxv-stl">{t('sav.st.satSplit')}</span>
+            {[4, 3, 2, 1].map((v) => (
+              <div key={v} className={`pxv-bar1 f${v}`}>
+                <span className="pxv-bi" title={t(`sav.sat.${v}`)}>
+                  <Icon name={FACES[v]} />
+                </span>
+                <i style={{ width: `${(s.counts[v - 1] / max) * 100}%` }} />
+                <b className="ltr">{n(s.counts[v - 1])}</b>
+              </div>
+            ))}
+          </div>
+          <div className="pxv-stc">
+            <span className="pxv-stl">{t('sav.st.satAgents')}</span>
+            {s.agents.map((a) => (
+              <div key={a.id} className="pxv-sta">
+                <span className="pxv-av">{a.name.slice(0, 1).toUpperCase()}</span>
+                <b>{a.name}</b>
+                <small>{t('sav.st.satAnswers', { count: a.n })}</small>
+                <span className={`badge ${a.rate >= 0.75 ? 't-ok' : a.rate >= 0.5 ? 't-warn' : 't-bad'} ltr`}>{pct(a.rate)}</span>
+              </div>
+            ))}
+            <span className="pxv-stl" style={{ marginTop: 10 }}>
+              {t('sav.st.satEnds')}
+            </span>
+            {s.ends.map((e) => (
+              <div key={e.key} className="pxv-sta">
+                <Icon name={e.key === 'phone' ? 'check' : 'swap'} />
+                <b>{t(`sav.st.end.${e.key}`)}</b>
+                <small>{t('sav.st.satAnswers', { count: e.n })}</small>
+                <span className={`badge ${e.rate >= 0.75 ? 't-ok' : e.rate >= 0.5 ? 't-warn' : 't-bad'} ltr`}>{pct(e.rate)}</span>
+              </div>
+            ))}
+          </div>
+          {s.unhappy.length > 0 && (
+            <div className="pxv-stc pxv-stw">
+              <span className="pxv-stl">{t('sav.st.satWhy')}</span>
+              {s.unhappy.map((u) => (
+                <div key={u.ref + u.at} className="pxv-stu">
+                  <SatBadge v={u.satisfaction} />
+                  <span>
+                    <b>{u.customerName}</b> <small className="ltr">{u.ref}</small>
+                    <q>{u.note}</q>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   );
 }

@@ -8,6 +8,7 @@ import { useAction, useRpc } from '../../lib/query';
 import { ErrorBox, Loading, StatusBadge } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
+import { Faces, SatBadge } from './PhoneSav';
 import { useStaff } from './staff';
 
 type Kind = (typeof EXCHANGE_KINDS)[number];
@@ -22,7 +23,10 @@ export function TicketModal({ id, onClose }: { id: number; onClose: () => void }
   const [wish, setWish] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [exch, setExch] = useState(false);
+  const [sat, setSat] = useState<number | null>(null);
+  const [why, setWhy] = useState('');
   const upd = useAction('sav.update', { success: t('sav.t.saved'), onDone: onClose });
+  const rate = useAction('sav.rate', { success: t('sav.ph.satSaved') });
 
   if (q.isLoading || !q.data)
     return (
@@ -86,6 +90,32 @@ export function TicketModal({ id, onClose }: { id: number; onClose: () => void }
           <div className="warnbox">{t('sav.t.notYet')}</div>
         ) : openT ? (
           <p className="muted small">{t('sav.t.noOrder')}</p>
+        ) : null}
+        {x.satisfaction ? (
+          <div className="row" style={{ gap: 8, alignItems: 'flex-start' }}>
+            <b className="small">{t('sav.ph.satTitle')}</b>
+            <SatBadge v={x.satisfaction} />
+            {x.satisfactionNote && <span className="small">« {x.satisfactionNote} »</span>}
+          </div>
+        ) : x.status === 'resolved' && x.resolution !== 'phone' ? (
+          <div className="warnbox" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <b>{t('sav.ph.satCall')}</b>
+            <Faces value={sat} onChange={setSat} small />
+            {sat !== null && sat <= 2 && <textarea rows={2} value={why} placeholder={t('sav.ph.whyPh')} onChange={(e) => setWhy(e.target.value)} />}
+            <div className="row">
+              <button type="button" className="btn small" disabled={rate.isPending} onClick={() => rate.mutate({ id: x.id, noAnswer: true })}>
+                {t('sav.ph.noAnswer')}
+              </button>
+              {sat !== null && sat <= 2 && (
+                <button type="button" className="btn small" disabled={!why.trim() || rate.isPending} onClick={() => rate.mutate({ id: x.id, satisfaction: sat, satisfactionNote: why.trim(), reopen: true }, { onSuccess: onClose })}>
+                  {t('sav.ph.reopen')}
+                </button>
+              )}
+              <button type="button" className="btn small primary" disabled={sat === null || (sat <= 2 && !why.trim()) || rate.isPending} onClick={() => rate.mutate({ id: x.id, satisfaction: sat ?? 3, satisfactionNote: why.trim() }, { onSuccess: onClose })}>
+                {t('common.save')}
+              </button>
+            </div>
+          </div>
         ) : null}
         <dl className="kv">
           <dt>{t('sav.t.order')}</dt>

@@ -15,6 +15,14 @@ export function startTicketFor(orderId: number, wish = 'exchange') {
   pendingOrder = { id: orderId, wish };
   location.hash = '#/sav/nouveau';
 }
+/** The order a new ticket starts with (read once). */
+export function takePendingOrder() {
+  const p = pendingOrder;
+  pendingOrder = null;
+  return p;
+}
+/** SAV is after delivery (cash on delivery: the customer paid when he got it). A late or missing parcel is a réclamation in Suivi. */
+export const NEW_TYPES = SAV_TYPES.filter((x) => x !== 'late' && x !== 'notdelivered');
 
 /** "Nouveau ticket SAV": find the order (or none), type, wish, details, responsable. */
 export function NewTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: number) => void }) {
@@ -37,8 +45,7 @@ export function NewTicketModal({ onClose, onCreated }: { onClose: () => void; on
     return () => clearTimeout(h);
   }, [q]);
   const [preId] = useState(() => {
-    const p = pendingOrder;
-    pendingOrder = null;
+    const p = takePendingOrder();
     if (p) setTimeout(() => setWish(p.wish), 0);
     return p?.id ?? null;
   });
@@ -159,7 +166,7 @@ export function NewTicketModal({ onClose, onCreated }: { onClose: () => void; on
         <label className="field">
           <span className="lab">{t('sav.form.problem')}</span>
           <select value={type} onChange={(e) => setType(e.target.value as (typeof SAV_TYPES)[number])}>
-            {SAV_TYPES.map((x) => (
+            {NEW_TYPES.map((x) => (
               <option key={x} value={x}>
                 {t(`sav.type.${x}`)}
               </option>

@@ -317,6 +317,7 @@ function ReadyTab({ rows, error, retry }: { rows?: Order[]; error: Error | null;
                   <span className="pxd-pn">
                     <b>
                       <span className="ltr">{o.ref}</span> · {wilayaName(o.wilayaId)}
+                      {o.source === 'sav' && <span className="pxd-sav">{t('depot.ph.savTag')}</span>}
                     </b>
                     <small>{o.items.map((i) => `${i.name}${i.variantTitle ? ` ${i.variantTitle}` : ''} ×${i.qty}`).join(' + ')}</small>
                   </span>
