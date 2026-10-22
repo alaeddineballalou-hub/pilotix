@@ -4,6 +4,7 @@ import { before, test } from 'node:test';
 import { call, Ctx, Db, ServerHooks } from '../index';
 import { chunks, parseMetaWebhook } from '../dellal-server';
 import { findPlace } from '../modules/dellal';
+import { checkDarija, fixDarija, parseAvoid } from '../modules/darija';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -211,6 +212,13 @@ test('the sales playbook reaches the AI; a pack quantity gets the pack price, a 
   const r: any = await call('dellal.receive', sys, { channel: 'whatsapp', externalId: '213555123456', text: 'nheb 2', messageId: 'wamid.pack' });
   await call('dellal.answer', sys, { id: r.conversationId });
   assert.match(system, /MÉTHODE DE VENTE/);
+  assert.match(system, /Découverte : comprendre le client avant de vendre/);
+  assert.match(system, /Augmenter le panier intelligemment/);
+  assert.match(system, /Ne prétends jamais être une personne/);
+  assert.match(system, /Ne demande jamais d’acompte/);
+  assert.match(system, /9 = ق \(et non ص/);
+  assert.match(system, /« nos mlyoun » = 5 000 DA/);
+  assert.match(system, /le matin wela l’après-midi/);
   assert.match(system, /1 million/);
   assert.match(system, /packs : 2 pour 15000 DA/);
   assert.match(system, /un conseiller l’appellera aussi pour confirmer/);
@@ -219,4 +227,85 @@ test('the sales playbook reaches the AI; a pack quantity gets the pack price, a 
   assert.equal(Number(items[0].unit_price), 7500);
   assert.equal(items[0].is_upsell, false);
   assert.equal(items[1].is_upsell, true);
+});
+
+test('darija checker: other dialects and wrong phrases are caught; clean Algerian, Arabic script and mirroring pass', () => {
+  const ids = (t: string, o?: any) => checkDarija(t, o).map((i) => i.id);
+  assert.deepEqual(ids('Saha khouya 🙏 La poussette b 12 900 DA, tkhalles ki testalem. Wach men couleur t7ab ? Rani nab3atlek la photo dorka.'), []);
+  assert.deepEqual(ids('وعليكم السلام، الكرسي بـ 8900 دج، تخلص كي تستلم. واش من لون تحب؟ بزاف مليح'), []);
+  assert.deepEqual(ids('Wakha, daba nsiftlek la photo'), ['daba', 'wakha']);
+  assert.deepEqual(ids('Achmen couleur bghiti ?'), ['achmen']);
+  assert.deepEqual(ids('wach men couleur ?'), [], '"ach men" inside "wach men" is Algerian');
+  assert.ok(ids('Smahli, ma3andek 7a9 tghdab').includes('ma3andek-7a9'));
+  assert.deepEqual(ids('دابا نبعثلك التصويرة'), ['daba']);
+  assert.deepEqual(ids('ودابا نبعثلك'), ['daba'], 'Arabic word with و in front');
+  assert.deepEqual(ids('3andna barcha couleurs', { customer: 'kayen barcha couleurs ?' }), [], 'the customer said it: mirroring is fine');
+  assert.deepEqual(ids('Chine, chinois, machine, Michel'), [], 'no false match inside other words');
+  // Algerian words that look like other dialects must never be flagged (research: dialect_markers.md)
+  assert.deepEqual(ids('kifek kifi, rebbi y3aychek, bghit nchouf, fin rak, qaddach, ghadi, yezzi, wesh, bach, bessah'), []);
+  assert.deepEqual(ids('واشنو تحب؟ هكدا مليح، إيه كاين'), [], 'واشنو contains شنو and هكدا contains كدا: whole words only');
+  assert.deepEqual(ids('Achmen couleur ?').map((x) => x), ['achmen']);
+  assert.equal(checkDarija('Achmen couleur ?')[0].dialect, 'regional', 'used in some Algerian regions: rewritten, but not called foreign');
+  // the shop's own list
+  const avoid = parseAvoid('khoya → khouya\n# comment\nchira');
+  assert.deepEqual(avoid, [{ term: 'khoya', use: 'khouya' }, { term: 'chira', use: undefined }]);
+  assert.deepEqual(ids('Saha khoya', { avoid }), ['boutique:khoya']);
+  const t = 'Saha khoya, daba nab3atlek';
+  assert.equal(fixDarija(t, checkDarija(t, { avoid }), avoid), 'Saha khouya, dorka nab3atlek');
+  assert.equal(fixDarija('Smahli, ma3andek 7a9 tghdab', checkDarija('Smahli, ma3andek 7a9 tghdab')), 'Smahli, 3andek l7a9 tghdab');
+  // one spelling per message: q → 9 and 5 → kh, fixed without changing anything else
+  const sp = 'Tqdri tchoufi le colis qoddam le livreur 9bel ma tkhallsi, yd5ol f budget.';
+  assert.deepEqual(ids(sp), ['orthographe:tqdri', 'orthographe:qoddam', 'orthographe:yd5ol']);
+  assert.equal(fixDarija(sp, checkDarija(sp)), 't9dri tchoufi le colis 9oddam le livreur 9bel ma tkhallsi, ydkhol f budget.');
+  assert.deepEqual(ids('qbel ma tkhalles', { customer: 'qbel ma nkhalles ?' }), [], 'the customer wrote it that way: mirroring is fine');
+  assert.deepEqual(ids('Question : la qualité, quand ?'), [], 'French words with q are not touched');
+  assert.deepEqual(ids('le beige ma kaynch'), ['makaynch']);
+});
+
+test('a reply in another dialect is rewritten in Algerian Darija before it is sent; the shop list is in the instructions', async () => {
+  const admin = await as(EMAILS.admin);
+  const g: any = await call('dellal.settings.get', admin, {});
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, nightReplies: true, darijaPrefer: 'Mar7ba bik / biki', darijaAvoid: 'frero → khouya', secrets: { ai: 'sk-ant-test-1234567890' } });
+  const sent: any[] = [];
+  let system = '';
+  let fixer: any = null;
+  const sys = await as(
+    EMAILS.admin,
+    fakeServer(
+      [
+        (req: any) => ((system = req.system), { content: [{ type: 'text', text: 'Wakha frero, daba nab3atlek la photo ta3 la poussette.' }], stop_reason: 'end_turn' }),
+        (req: any) => ((fixer = req), { content: [{ type: 'text', text: 'D’accord khouya, dorka nab3atlek la photo ta3 la poussette.' }], stop_reason: 'end_turn' }),
+      ],
+      sent,
+    ),
+  );
+  const r: any = await call('dellal.receive', sys, { channel: 'whatsapp', externalId: '213661909090', text: 'sawerli la poussette', messageId: 'wamid.darija' });
+  const out: any = await call('dellal.answer', sys, { id: r.conversationId });
+  assert.match(system, /Mar7ba bik \/ biki/);
+  assert.match(system, /frero → khouya/);
+  assert.equal(fixer.tools.length, 0);
+  assert.match(fixer.messages[0].content, /« daba » \(marocain\)/);
+  assert.match(fixer.messages[0].content, /« frero » \(interdit par la boutique\) → khouya/);
+  assert.equal(out.reply, 'D’accord khouya, dorka nab3atlek la photo ta3 la poussette.');
+  assert.equal(sent[0].text, out.reply, 'the corrected text is what the customer receives');
+  const c: any = await call('dellal.conversation', admin, { id: r.conversationId });
+  const tool = c.messages.find((m: any) => m.role === 'tool' && m.body.startsWith('darija'));
+  assert.ok(tool && tool.meta.rewritten === true);
+
+  // if the rewrite still has a foreign word, the safe replacement fixes it
+  const sys2 = await as(
+    EMAILS.admin,
+    fakeServer([{ content: [{ type: 'text', text: 'Smahli, ma3andek 7a9, daba nchouf.' }], stop_reason: 'end_turn' }, { content: [{ type: 'text', text: 'Smahli, ma3andek 7a9, daba nchouf.' }], stop_reason: 'end_turn' }], []),
+  );
+  const r2: any = await call('dellal.receive', sys2, { channel: 'whatsapp', externalId: '213661909091', text: 'wach sra ?', messageId: 'wamid.darija2' });
+  const out2: any = await call('dellal.answer', sys2, { id: r2.conversationId });
+  assert.equal(out2.reply, 'Smahli, 3andek l7a9, dorka nchouf.');
+
+  // a spelling slip alone is fixed directly: no second AI call
+  let calls = 0;
+  const sys3 = await as(EMAILS.admin, fakeServer([() => (calls++, { content: [{ type: 'text', text: 'Ma tkhafich khti, tqdri tchoufi le colis qoddam le livreur.' }], stop_reason: 'end_turn' }), () => (calls++, { content: [{ type: 'text', text: 'X' }], stop_reason: 'end_turn' })], []));
+  const r3: any = await call('dellal.receive', sys3, { channel: 'whatsapp', externalId: '213661909092', text: 'nkhaf ma yjinich', messageId: 'wamid.darija3' });
+  const out3: any = await call('dellal.answer', sys3, { id: r3.conversationId });
+  assert.equal(out3.reply, 'Ma tkhafich khti, t9dri tchoufi le colis 9oddam le livreur.');
+  assert.equal(calls, 1);
 });

@@ -493,6 +493,16 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'de
         </Field>
       </Card>
 
+      <Card title={t('messages.settings.darija')} help={t('messages.settings.darijaHelp', { name: f.name })}>
+        <p className="muted small">{t('messages.settings.darijaIntro', { name: f.name })}</p>
+        <Field label={t('messages.settings.darijaPrefer')} hint={t('messages.settings.darijaPreferHint')} wide>
+          <textarea rows={5} maxLength={4000} className="ltr" value={f.darijaPrefer} placeholder={t('messages.settings.darijaPreferPh')} onChange={(e) => set('darijaPrefer', e.target.value)} />
+        </Field>
+        <Field label={t('messages.settings.darijaAvoid')} hint={t('messages.settings.darijaAvoidHint')} wide>
+          <textarea rows={4} maxLength={4000} className="ltr" value={f.darijaAvoid} placeholder={t('messages.settings.darijaAvoidPh')} onChange={(e) => set('darijaAvoid', e.target.value)} />
+        </Field>
+      </Card>
+
       <Card title={t('messages.settings.ai')} help={t('messages.settings.aiHelp')}>
         {secret('ai', t('messages.settings.aiKey'), 'sk-ant-…')}
         {!data.has.ai && <p className="muted small">{t('messages.settings.aiNone', { name: f.name })}</p>}
