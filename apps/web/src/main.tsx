@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode, Suspense, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Login } from './layout/Login';
-import { canSee, homeFor, NAV } from './layout/nav';
+import { canSee, canSeeChild, homeFor, NAV } from './layout/nav';
 import { applyTheme, Shell } from './layout/Shell';
 import { ApiError } from './lib/backend';
 import './lib/i18n';
@@ -59,6 +59,13 @@ function App() {
   if (page === 'confirmation' && sub === 'livrees') {
     location.replace('#/confirmation/nouvelles');
     sub = 'nouvelles';
+  }
+  // a group without a page of its own (Pilot AI) opens its first child the user can see
+  const group = NAV.find((n) => n.id === page && n.children && !PAGES[n.id]);
+  const first = group?.children!.find((c) => canSeeChild(c, session.roles, session.isAdmin));
+  if (first) {
+    location.replace(first.href);
+    [page, sub] = first.href.replace(/^#\/?/, '').split('/');
   }
   const item = NAV.find((n) => n.id === page);
   const extra = ['livrees', 'retournees'].includes(page ?? '');

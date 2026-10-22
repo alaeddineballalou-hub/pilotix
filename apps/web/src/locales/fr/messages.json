@@ -1,5 +1,5 @@
 {
-  "title": "Messages",
+  "title": "Message AI agent",
   "help": "Dellal, votre vendeur IA, répond aux clients sur WhatsApp, Messenger, Instagram et TikTok, donne les prix, le stock et la livraison, et prend les commandes (elles arrivent dans Confirmation). Vous pouvez reprendre une conversation à tout moment.",
   "tabs": {
     "inbox": "Boîte de réception",
@@ -45,7 +45,8 @@
     "write": "Écrire au client…",
     "writePause": "Écrire au client ({{name}} se met en pause)…",
     "send": "Envoyer",
-    "back": "Retour"
+    "back": "Retour",
+    "comment": "commentaire"
   },
   "side": {
     "customer": "Client",
