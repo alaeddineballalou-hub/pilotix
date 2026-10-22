@@ -195,6 +195,10 @@ const QueueInput = z.object({
   q: z.string().max(100).optional(),
   wilayaId: z.number().int().min(1).max(69).optional(),
   agentId: z.union([id, z.literal('none')]).optional(),
+  /** a team from the settings: its manager and its agents */
+  teamId: z.string().max(40).optional(),
+  productId: id.optional(),
+  variantId: id.optional(),
   channel: ListInput.shape.channel,
   from: DATE.optional(),
   to: DATE.optional(),
@@ -212,6 +216,12 @@ export const DEFAULT_SORT: Record<ConfSub, { sort: 'created_at' | 'confirmed_at'
   livrees: { sort: 'confirmed_at', dir: 'desc' },
 };
 
+/** The people of a team (its manager and agents); an unknown team matches nobody. */
+async function teamAgents(ctx: Ctx, teamId: string): Promise<number[]> {
+  const t = (await getSetting(ctx.db, 'teams')).find((x) => x.id === teamId);
+  return t ? [...new Set([...(t.managerId ? [t.managerId] : []), ...t.agentIds])] : [];
+}
+
 async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
   const allowed = CONF_SUBS[i.sub] as readonly ConfStatus[];
   if (i.status && !allowed.includes(i.status)) throw bad('Statut hors de cette liste');
@@ -223,6 +233,9 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
     q: i.q,
     wilayaId: i.wilayaId,
     agentId: i.sub === 'livrees' && !ctx.session.isAdmin && !isManager(ctx) ? ctx.session.profile.id : i.agentId,
+    agentIds: i.teamId ? await teamAgents(ctx, i.teamId) : undefined,
+    productId: i.productId,
+    variantId: i.variantId,
     channel: i.channel,
     dateField: 'created_at',
     from: i.from ? isoT(day(i.from)) : undefined,
@@ -563,6 +576,7 @@ export const confirmationProcs = {
       whatsappTemplate: shop.whatsappTemplate,
       calls,
       agents: agents.map((a: any) => ({ id: num(a.id), name: a.name as string })),
+      teams: (await getSetting(ctx.db, 'teams')).map((t) => ({ id: t.id, name: t.name })),
       manager: isManager(ctx),
     };
   }),

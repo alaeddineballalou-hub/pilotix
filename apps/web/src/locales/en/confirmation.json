@@ -104,7 +104,14 @@
       "terminees": "All closed",
       "livrees": "All"
     },
-    "clear": "Clear filters"
+    "clear": "Clear filters",
+    "product": "Product",
+    "variant": "Variant",
+    "team": "Team",
+    "allP": "All products",
+    "allV": "All variants",
+    "allT": "All teams",
+    "pickP": "Pick a product first"
   },
   "tb": {
     "label": "Actions on orders",

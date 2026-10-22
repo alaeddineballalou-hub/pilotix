@@ -104,7 +104,14 @@
       "terminees": "Toutes les terminées",
       "livrees": "Toutes"
     },
-    "clear": "Effacer les filtres"
+    "clear": "Effacer les filtres",
+    "product": "Produit",
+    "variant": "Variante",
+    "team": "Équipe",
+    "allP": "Tous les produits",
+    "allV": "Toutes les variantes",
+    "allT": "Toutes les équipes",
+    "pickP": "Choisissez un produit"
   },
   "tb": {
     "label": "Actions sur les commandes",

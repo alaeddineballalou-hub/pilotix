@@ -141,6 +141,11 @@ export const ListInput = z.object({
   q: z.string().max(100).optional(),
   wilayaId: z.number().int().min(1).max(69).optional(),
   agentId: z.union([id, z.literal('none')]).optional(),
+  /** orders handled by any of these agents (a team) */
+  agentIds: z.array(id).max(500).optional(),
+  /** orders that contain this product (and this variant of it) */
+  productId: id.optional(),
+  variantId: id.optional(),
   companyId: z.union([id, z.literal('none')]).optional(),
   livreurId: id.optional(),
   channel: z.enum(SALES_CHANNELS).optional(),
@@ -177,6 +182,9 @@ export async function listOrders(ctx: Ctx, f: ListInput): Promise<Page<Order>> {
   if (f.wilayaId) w.add('o.wilaya_id = ?', f.wilayaId);
   if (f.agentId === 'none') w.add('o.agent_id IS NULL');
   else if (f.agentId) w.add('o.agent_id = ?', f.agentId);
+  if (f.agentIds) w.add('o.agent_id = ANY(?)', f.agentIds);
+  if (f.variantId) w.add('EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.variant_id = ?)', f.variantId);
+  else if (f.productId) w.add('EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.product_id = ?)', f.productId);
   if (f.companyId === 'none') w.add('o.company_id IS NULL');
   else if (f.companyId) w.add('o.company_id = ?', f.companyId);
   if (f.livreurId) w.add('o.livreur_id = ?', f.livreurId);
