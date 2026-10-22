@@ -58,6 +58,11 @@ export class CoreService implements OnModuleDestroy {
       if (!m?.runMeta) throw new core.AppError('bad_request', 'Connexion Meta indisponible sur ce serveur');
       return m.runMeta(action, args, ctx);
     },
+    dellal: async (action, args, ctx) => {
+      const m = optional('@pilotix/core/dist/dellal-server');
+      if (!m?.runDellal) throw new core.AppError('bad_request', 'Dellal indisponible sur ce serveur');
+      return m.runDellal(action, args, ctx);
+    },
     hashPassword: (pw) => core.hashPassword(pw),
   };
 
