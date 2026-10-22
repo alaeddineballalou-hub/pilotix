@@ -6,7 +6,8 @@
     "depot": "Dépôt",
     "suivi": "Suivi",
     "livreurs": "Livreurs",
-    "sav": "SAV"
+    "sav": "SAV",
+    "overview": "Vue d’ensemble"
   },
   "noArea": "Aucun tableau de bord ne vous est ouvert. Demandez à l’administrateur.",
   "nothing": "Rien sur cette période.",
@@ -326,5 +327,52 @@
       "uncashed": "Non encaissé",
       "net": "Net à payer"
     }
+  },
+  "ov": {
+    "title": "Vue d’ensemble",
+    "vsPrev": "vs période précédente",
+    "revenue": "Chiffre d’affaires livré",
+    "received": "Commandes reçues",
+    "rate": "Taux de livraison",
+    "perDay": "Commandes par jour",
+    "sReceived": "Reçues",
+    "sDelivered": "Livrées",
+    "goal": "Objectif du mois",
+    "editGoal": "Modifier l’objectif",
+    "goalLabel": "Chiffre d’affaires livré visé ce mois (DA)",
+    "goalSaved": "Objectif enregistré",
+    "goalUp": "{{v}} de plus que le mois dernier à la même date",
+    "goalDown": "{{v}} de moins que le mois dernier à la même date",
+    "goalNoPrev": "Pas de comparaison avec le mois dernier",
+    "goalTarget": "Objectif",
+    "goalDone": "Livré ce mois",
+    "topProducts": "Meilleurs produits",
+    "deliveredValue": "Total livré",
+    "other": "Autres",
+    "wilayas": "Meilleures wilayas",
+    "ofReceived": "part des commandes reçues",
+    "funnel": "Parcours des commandes",
+    "funnelSub": "commandes reçues sur la période",
+    "f": {
+      "received": "Reçues",
+      "called": "Appelées",
+      "confirmed": "Confirmées",
+      "shipped": "Expédiées",
+      "delivered": "Livrées"
+    },
+    "channels": "Canaux de vente",
+    "recent": "Commandes récentes",
+    "seeAll": "Tout voir",
+    "cOrder": "Commande",
+    "cCustomer": "Client",
+    "cProduct": "Produit",
+    "cQty": "Qté",
+    "cTotal": "Total",
+    "cStatus": "Statut",
+    "activity": "Activité récente",
+    "aCreated": "Nouvelle commande {{ref}}",
+    "aStatus": "{{who}} : {{ref}} → {{st}}",
+    "system": "Système",
+    "none": "Rien sur cette période."
   }
 }

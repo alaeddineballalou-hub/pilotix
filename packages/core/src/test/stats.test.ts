@@ -95,3 +95,17 @@ test('saveTeams: vendeur moves an agent; a manager cannot', async () => {
   assert.ok(t.agentIds.includes(samira.session.profile.id));
   assert.ok(!teams.some((x) => x.managerId !== amel.session.profile.id && x.agentIds.includes(samira.session.profile.id)));
 });
+
+test('stats.overview2: dashboard overview adds up; goal is admin only', async () => {
+  const admin = await as(EMAILS.admin);
+  const r = range();
+  const o: any = await call('stats.overview2', admin, r);
+  assert.ok(o.series.length >= 28);
+  assert.equal(o.series.reduce((s: number, d: any) => s + d.received, 0), o.kpis.received);
+  assert.ok(o.funnel.received >= o.funnel.called && o.funnel.called >= o.funnel.confirmed && o.funnel.confirmed >= o.funnel.delivered);
+  assert.equal(o.recent.length, 6);
+  await call('stats.setGoal', admin, { monthlyRevenue: 5_000_000 });
+  assert.equal(((await call('stats.overview2', admin, r)) as any).month.goal, 5_000_000);
+  await assert.rejects(call('stats.setGoal', await as(EMAILS.manager), { monthlyRevenue: 1 }), /refusé/);
+  await assert.rejects(call('stats.overview2', await as(EMAILS.manager), r), /refusé/);
+});

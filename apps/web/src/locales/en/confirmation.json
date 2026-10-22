@@ -178,7 +178,8 @@
     "updated": "Status change",
     "view": "Indicators",
     "viewConf": "Confirmation rate",
-    "viewDeliv": "Delivery performance"
+    "viewDeliv": "Delivery performance",
+    "byStatusChange": "by status change"
   },
   "per": {
     "today": "Today",
@@ -384,5 +385,13 @@
     "ok": "Delete",
     "done_one": "{{count}} order deleted",
     "done_other": "{{count}} orders deleted"
+  },
+  "kh": {
+    "waiting": "New orders not called yet (status “New” or “To check”, no attempt). “No agent” = nobody is in charge: assign them quickly.",
+    "late": "Orders not called yet whose deadline has passed: {{first}} min after arrival (or assignment), plus 5 min per newer order. Night time counts from 9 am. Call them now.",
+    "oldest": "The order waiting longest for its first call, with its reference and customer. This number should stay small.",
+    "onTime": "Among orders whose first call was made between the chosen dates: the share called within the deadline ({{first}} min, +5 min per newer order). Good above 80 %.",
+    "median": "Time from an order’s arrival (or assignment) to its first call: half of the orders were called faster than this. Night hours do not count.",
+    "under5": "Share of orders called for the first time less than 5 minutes after arriving, between the chosen dates. The higher, the more customers are reached while still keen."
   }
 }

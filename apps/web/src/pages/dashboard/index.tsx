@@ -8,11 +8,15 @@ import { Card, ErrorBox, Help, Kpis, Loading } from '../../ui/kit';
 import type { PageProps } from '../registry';
 import { LivreursArea } from './Livreurs';
 import { TeamsArea } from './Teams';
+import { Overview } from './Overview';
 import { AnyPeriod, delivTone, KpiBox, rangeOf, useStored } from './util';
 import './dashboard.css';
 
-const AREAS = ['confirmation', 'depot', 'suivi', 'livreurs', 'sav'] as const;
+const AREAS = ['overview', 'confirmation', 'depot', 'suivi', 'livreurs', 'sav'] as const;
 type Area = (typeof AREAS)[number];
+/** areas an admin can give to an agent manager (the overview is for admin / vendeur only) */
+const SCOPE_AREAS = AREAS.filter((a): a is Exclude<Area, 'overview'> => a !== 'overview');
+type ScopeArea = (typeof SCOPE_AREAS)[number];
 type Meta = Out<'stats.dashMeta'>;
 const PERIODS: AnyPeriod[] = ['today', '7d', '30d', 'month', 'lastmonth'];
 
@@ -22,7 +26,7 @@ export function Dashboard({ sub }: PageProps) {
   if (meta.isLoading) return <Loading />;
   if (meta.error) return <ErrorBox error={meta.error} onRetry={() => meta.refetch()} />;
   const m = meta.data!;
-  const allowed = AREAS.filter((a) => (m.areas as string[]).includes(a));
+  const allowed = AREAS.filter((a) => (a === 'overview' ? m.seesAll : (m.areas as string[]).includes(a)));
   if (!allowed.length) return <div className="empty-box">{t('dashboard.noArea')}</div>;
   const area: Area = allowed.includes(sub as Area) ? (sub as Area) : allowed[0];
   return (
@@ -34,6 +38,7 @@ export function Dashboard({ sub }: PageProps) {
           </a>
         ))}
       </nav>
+      {area === 'overview' && <Overview />}
       {area === 'confirmation' && (
         <>
           <section className="card">
@@ -51,7 +56,7 @@ export function Dashboard({ sub }: PageProps) {
       {area === 'suivi' && <PeriodArea area="suivi" />}
       {area === 'sav' && <PeriodArea area="sav" />}
       {area === 'livreurs' && <LivreursArea />}
-      {m.canEditScope && area !== 'livreurs' && <ScopeCard meta={m} />}
+      {m.canEditScope && area !== 'livreurs' && area !== 'overview' && <ScopeCard meta={m} />}
     </>
   );
 }
@@ -241,7 +246,7 @@ function ScopeCard({ meta }: { meta: Meta }) {
   useEffect(() => setScope(init()), [meta]); // eslint-disable-line react-hooks/exhaustive-deps
   const save = useAction('stats.saveScope', { success: t('dashboard.scope.saved') });
   if (!meta.managers.length) return null;
-  const toggle = (id: string, a: Area) => {
+  const toggle = (id: string, a: ScopeArea) => {
     const cur = scope[id] ?? [];
     setScope({ ...scope, [id]: cur.includes(a) ? cur.filter((x) => x !== a) : [...cur, a] });
   };
@@ -252,7 +257,7 @@ function ScopeCard({ meta }: { meta: Meta }) {
           {t('dashboard.scope.title')}
           <Help text={t('dashboard.scope.help')} label={t('dashboard.scope.title')} />
         </h2>
-        <button type="button" className="btn primary" disabled={save.isPending} onClick={() => save.mutate({ scope: scope as Record<string, Area[]> })}>
+        <button type="button" className="btn primary" disabled={save.isPending} onClick={() => save.mutate({ scope: scope as Record<string, ScopeArea[]> })}>
           {t('dashboard.scope.save')}
         </button>
       </div>
@@ -261,7 +266,7 @@ function ScopeCard({ meta }: { meta: Meta }) {
           <thead>
             <tr>
               <th>{t('dashboard.scope.manager')}</th>
-              {AREAS.map((a) => (
+              {SCOPE_AREAS.map((a) => (
                 <th key={a} className="num">
                   {t(`dashboard.areas.${a}`)}
                 </th>
@@ -272,7 +277,7 @@ function ScopeCard({ meta }: { meta: Meta }) {
             {meta.managers.map((m) => (
               <tr key={m.id}>
                 <td data-l={t('dashboard.scope.manager')}>{m.name}</td>
-                {AREAS.map((a) => (
+                {SCOPE_AREAS.map((a) => (
                   <td key={a} className="num" data-l={t(`dashboard.areas.${a}`)}>
                     <input type="checkbox" aria-label={`${m.name} · ${t(`dashboard.areas.${a}`)}`} checked={(scope[String(m.id)] ?? []).includes(a)} onChange={() => toggle(String(m.id), a)} />
                   </td>

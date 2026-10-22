@@ -178,7 +178,8 @@
     "updated": "Changement de statut",
     "view": "Indicateurs",
     "viewConf": "Taux de confirmation",
-    "viewDeliv": "Performance de livraison"
+    "viewDeliv": "Performance de livraison",
+    "byStatusChange": "selon le changement de statut"
   },
   "per": {
     "today": "Aujourd’hui",
@@ -384,5 +385,13 @@
     "ok": "Supprimer",
     "done_one": "{{count}} commande supprimée",
     "done_other": "{{count}} commandes supprimées"
+  },
+  "kh": {
+    "waiting": "Nouvelles commandes jamais appelées pour l’instant (statut « Nouvelle » ou « À vérifier », aucune tentative). « Sans agent » = personne n’en est responsable : à assigner vite.",
+    "late": "Commandes pas encore appelées dont le délai est déjà dépassé : {{first}} min après l’arrivée (ou l’assignation), plus 5 min par commande plus récente. La nuit compte à partir de 9 h. À appeler tout de suite.",
+    "oldest": "La commande qui attend son 1er appel depuis le plus longtemps, avec sa référence et le client. Ce chiffre doit rester petit.",
+    "onTime": "Parmi les commandes dont le 1er appel a été fait entre les dates choisies : la part appelée dans le délai ({{first}} min, +5 min par commande plus récente). Bon au-dessus de 80 %.",
+    "median": "Temps entre l’arrivée (ou l’assignation) d’une commande et son 1er appel : la moitié des commandes a été appelée plus vite que ce temps. Les heures de nuit ne comptent pas.",
+    "under5": "Part des commandes appelées pour la 1re fois moins de 5 minutes après leur arrivée, entre les dates choisies. Plus c’est haut, plus le client est joint pendant qu’il est encore motivé."
   }
 }
