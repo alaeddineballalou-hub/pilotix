@@ -1389,3 +1389,11 @@ html body .tbl.px-fixed td.px-c-agent .row, html body .tbl.px-fixed td.px-c-fage
 html body .tbl.px-fixed td.px-c-agent .row > .badge, html body .tbl.px-fixed td.px-c-fagent .row > .badge { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; line-height: 22px; }
 /* Suivi: row buttons that do not fit the column go onto a second line */
 html body .tbl.px-fixed .row.nowrap.px-sv-acts { flex-wrap: wrap !important; justify-content: flex-end; row-gap: 6px; }
+/* "Commande suivante" in the list's card too (Nouvelles, En cours); "+ Nouvelle commande" beside it, lighter */
+.px-qhead .px-qnext { display: inline-flex; align-items: center; gap: 6px; }
+.px-qhead .px-qnext .px-qnext-ar { width: 18px; height: 18px; }
+html[dir="rtl"] .px-qhead .px-qnext .px-qnext-ar svg { transform: scaleX(-1); }
+html body .px-qhead .btn.px-qnew { background: var(--surface, #fff); color: var(--px-navy, #1B2A47); border: 1.5px solid #E3E7EE; font-weight: 700; }
+html body .px-qhead .btn.px-qnew:hover { border-color: #F7A823; color: #C97A0E; }
+[data-theme="dark"] .px-qhead .btn.px-qnew { background: transparent; color: var(--ink); border-color: rgba(255, 255, 255, .18); }
+[data-theme="dark"] .px-qhead .btn.px-qnew:hover { border-color: #F7A823; color: #F7A823; }

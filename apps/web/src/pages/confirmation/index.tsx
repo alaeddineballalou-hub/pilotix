@@ -394,8 +394,15 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
           </h2>
           <div className="row">
             {has('confirmation') && (
-              <button type="button" className="btn primary" onClick={() => openOrderForm({ onSaved: () => qc.invalidateQueries() })}>
+              <button type="button" className={`btn ${canNext ? 'px-qnew' : 'primary'}`} onClick={() => openOrderForm({ onSaved: () => qc.invalidateQueries() })}>
                 + {t('confirmation.newOrder')}
+              </button>
+            )}
+            {/* the same "Commande suivante" as in the top header */}
+            {canNext && (
+              <button type="button" className="btn primary px-qnext" onClick={() => goNext([...open].pop())}>
+                {t('confirmation.next').replace(/\s*[→←]\s*$/, '')}
+                <Icon name="chevr" className="px-qnext-ar" />
               </button>
             )}
           </div>
