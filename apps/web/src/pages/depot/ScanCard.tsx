@@ -8,6 +8,7 @@ import { Help, Icon } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { itemsLine } from './OrderList';
 import { cleanCode, decodePhoto, isPhone, ring, startCamera, unlockAudio } from './scan';
+import { trackOf } from '../../lib/items';
 
 type Kind = 'ok' | 'bad' | 'warn';
 interface Shown {
@@ -173,7 +174,7 @@ export function ScanCard({ mode, onBack, autoCamera }: { mode: Mode; onBack?: ()
         <input ref={file} type="file" accept="image/*" capture="environment" hidden onChange={onPhoto} />
       </div>
       <div className="bjsc-res" aria-live="assertive">
-        <Result v={shown} badgeOf={badgeOf} onPick={(o) => add(o.tracking || o.ref, o.id)} onCancel={() => setShown({ kind: 'idle', code: '' })} />
+        <Result v={shown} badgeOf={badgeOf} onPick={(o) => add(trackOf(o) || o.ref, o.id)} onCancel={() => setShown({ kind: 'idle', code: '' })} />
       </div>
       {shown.kind === 'idle' && <p className="muted small">{isPhone() ? t('scanner.idlePhone') : t('scanner.idlePc')}</p>}
       <h3>{t('scanner.post')}</h3>

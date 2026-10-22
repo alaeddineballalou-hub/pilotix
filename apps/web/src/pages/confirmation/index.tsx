@@ -13,7 +13,7 @@ import { store } from '../../lib/store';
 import { ErrorBox, Field, Help, Icon, Loading, Pager, SortTh, StageBar, StatusBadge, StatusSelect } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
-import { namesOf, variantsOf } from '../../lib/items';
+import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import type { PageProps } from '../registry';
 import { Countdown, useNow } from './Countdown';
 import { Detail } from './Detail';
@@ -24,7 +24,7 @@ import { useStatusChange } from './StatusDialog';
 
 type Row = NonNullable<ReturnType<typeof useList>['data']>['rows'][number];
 type SortKey = 'created_at' | 'confirmed_at' | 'next_call_at' | 'total' | 'customer_name';
-type ColKey = 'source' | 'tracking' | 'creator' | 'channel' | 'product' | 'variant' | 'sku' | 'name' | 'phone' | 'wilaya' | 'commune' | 'agent' | 'fagent' | 'total' | 'time' | 'created' | 'stock' | 'desk' | 'passed' | 'confirmed' | 'follow' | 'next' | 'status';
+type ColKey = 'order' | 'source' | 'tracking' | 'creator' | 'channel' | 'product' | 'variant' | 'sku' | 'name' | 'phone' | 'wilaya' | 'commune' | 'agent' | 'fagent' | 'total' | 'time' | 'created' | 'stock' | 'desk' | 'passed' | 'confirmed' | 'follow' | 'next' | 'status';
 interface Filters {
   wilayaId?: number;
   agentId?: number | 'none';
@@ -41,6 +41,7 @@ const DEFAULT_SORT: Record<Sub, { sort: SortKey; dir: 'asc' | 'desc' }> = {
   terminees: { sort: 'created_at', dir: 'desc' },
 };
 const columnsOf = (sub: Sub): { k: ColKey; sort?: SortKey }[] => [
+  { k: 'order' },
   { k: 'source' },
   { k: 'tracking' },
   { k: 'creator' },
@@ -102,7 +103,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   const manager = has('agent_manager', 'vendeur');
   const meta = useRpc('confirmation.meta', {}, { staleTime: 5 * 60_000 });
   const COLS = useMemo(() => columnsOf(sub), [sub]);
-  const colsKey = `conf-cols2-${sub}`;
+  const colsKey = `conf-cols3-${sub}`;
   const [visible, setVisible] = useState<Set<ColKey>>(() => new Set(store.json<ColKey[] | null>(colsKey, null) ?? COLS.map((c) => c.k)));
   const [q, setQ] = useState('');
   const [qd, setQd] = useState('');
@@ -206,7 +207,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
           t(`status.conf.${o.confStatus}`),
           o.followStatus ? t(`status.follow.${o.followStatus}`) : '',
           o.companyName ?? '',
-          o.tracking ?? '',
+          trackOf(o),
           o.agentName ?? '',
           o.deliveryNote ?? '',
         ]),
@@ -221,10 +222,18 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
 
   const cell = (r: Row, k: ColKey): ReactNode => {
     switch (k) {
+      case 'order':
+        return (
+          <>
+            <b className="ltr">{r.ref}</b>
+            <small>{when(r.createdAt)}</small>
+            {r.deadline && <Countdown d={r.deadline} />}
+          </>
+        );
       case 'source':
         return <span className="chip">{(r.utm && (r.utm.utm_source || r.utm.source)) || r.source || t('confirmation.direct')}</span>;
       case 'tracking':
-        return r.tracking ? <span className="ltr">{r.tracking}</span> : '—';
+        return trackOf(r) ? <span className="ltr">{trackOf(r)}</span> : '—';
       case 'creator':
         return r.creatorName ?? <span className="muted">{t('confirmation.site')}</span>;
       case 'channel':
@@ -297,7 +306,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
             {r.companyName && (
               <small>
                 {r.companyName}
-                {r.tracking ? ` · ${r.tracking}` : ''}
+                {trackOf(r) ? ` · ${trackOf(r)}` : ''}
               </small>
             )}
           </>
@@ -552,7 +561,6 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                     <th className="ck">
                       <input type="checkbox" aria-label={t('confirmation.selectAll')} checked={allOn} onChange={(e) => setSel(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set())} />
                     </th>
-                    <th>{t('confirmation.col.order')}</th>
                     {cols.map((c) =>
                       c.sort ? (
                         <SortTh key={c.k} k={c.sort} sort={sort} dir={dir} onSort={onSort} num={c.k === 'total'}>
@@ -570,7 +578,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                 <tbody>
                   {!rows.length && (
                     <tr>
-                      <td colSpan={cols.length + 4} className="empty">
+                      <td colSpan={cols.length + 3} className="empty">
                         {t(`confirmation.empty.${sub}`)}
                       </td>
                     </tr>
@@ -600,11 +608,6 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                               onChange={(e) => setSel((s) => (e.target.checked ? new Set(s).add(r.id) : (s.delete(r.id), new Set(s))))}
                             />
                           </td>
-                          <td data-l={t('confirmation.col.order')}>
-                            <b className="ltr">{r.ref}</b>
-                            <small>{when(r.createdAt)}</small>
-                            {r.deadline && <Countdown d={r.deadline} />}
-                          </td>
                           {cols.map((c) => (
                             <td key={c.k} data-l={colLabel(c.k)} className={c.k === 'total' ? 'num' : c.k === 'product' || c.k === 'status' ? 'wide px-cw' : undefined}>
                               {cell(r, c.k)}
@@ -626,7 +629,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                         </tr>
                         {op && (
                           <tr className="qdetail">
-                            <td colSpan={cols.length + 4} className="wide">
+                            <td colSpan={cols.length + 3} className="wide">
                               <Detail order={r} />
                             </td>
                           </tr>

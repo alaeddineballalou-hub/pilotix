@@ -42,7 +42,7 @@ export interface CashOrder {
   savRef: string | null;
 }
 
-const COLS = `o.id, o.ref, o.tracking, o.delivered_at, o.customer_name, o.phone, o.wilaya_id, o.commune, o.total, o.delivery_cost, o.company_id,
+const COLS = `o.id, o.ref, COALESCE(o.tracking, o.own_tracking) AS tracking, o.delivered_at, o.customer_name, o.phone, o.wilaya_id, o.commune, o.total, o.delivery_cost, o.company_id,
   o.livreur_id, o.cashed, o.cashed_at, o.handover_id, o.follow_status, o.address, o.is_exchange,
   CASE WHEN o.is_exchange THEN (SELECT k.ref FROM complaints k WHERE k.exchange_order_id = o.id ORDER BY k.id DESC LIMIT 1) END AS sav_ref, c.name AS company_name, c.kind AS company_kind, lv.name AS livreur_name,
   (SELECT string_agg(CASE WHEN i.qty > 1 THEN i.qty || ' × ' ELSE '' END || i.name, ' + ' ORDER BY i.id)

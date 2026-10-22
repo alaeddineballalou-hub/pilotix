@@ -13,6 +13,7 @@ import { ErrorBox, Field, Icon, Loading, StatusBadge, TicketTag } from '../../ui
 import { toast } from '../../ui/toast';
 import { confLabel, printOrder, telHref, waHref } from './shared';
 import './orders.css';
+import { trackOf } from '../../lib/items';
 
 /** Courier kinds with an API (send / label / status / cancel go through the delivery procedures). */
 export const API_KINDS = ['zr', 'zr_legacy', 'yalidine', 'ecotrack', 'noest', 'custom'];
@@ -377,7 +378,7 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
           )}
           <dt>{t('orders.card.tracking')}</dt>
           <dd>
-            <span className="ltr">{o.tracking || '—'}</span>
+            <span className="ltr">{trackOf(o) || '—'}</span>
           </dd>
           {o.extStatus && (
             <>

@@ -108,3 +108,21 @@ test('orders.list can be limited to a selection (export / print)', async () => {
   const sel: any = await call('orders.list', ctx, { ids, pageSize: 100 });
   assert.deepEqual(sel.rows.map((o: any) => o.id).sort(), [...ids].sort());
 });
+
+test('every order has its own unique Pilotix tracking number, made at creation (old ones filled in), also on duplicates', async () => {
+  const all = await db.query('SELECT own_tracking FROM orders');
+  assert.ok(all.length > 0 && all.every((r: any) => /^PXT\d{8}$/.test(r.own_tracking)));
+  assert.equal(new Set(all.map((r: any) => r.own_tracking)).size, all.length);
+  const ctx = await as(EMAILS.conf);
+  const items = [{ productId: Number((await db.query('SELECT id FROM products WHERE active ORDER BY id LIMIT 1'))[0].id), qty: 1 }];
+  const o: any = await call('orders.create', ctx, { customerName: 'Suivi Test', phone: '0555000222', wilayaId: 16, commune: 'Kouba', items });
+  assert.match(o.ownTracking, /^PXT\d{8}$/);
+  assert.equal(o.tracking, null);
+  const d: any = await call('orders.duplicate', ctx, { ids: [o.id] });
+  const copy = (await db.query('SELECT own_tracking FROM orders ORDER BY id DESC LIMIT 1'))[0].own_tracking;
+  assert.notEqual(copy, o.ownTracking);
+  assert.ok(d);
+  // found by its number in the search
+  const found: any = await call('orders.list', ctx, { q: o.ownTracking.toLowerCase() });
+  assert.equal(found.rows[0]?.id, o.id);
+});

@@ -7,6 +7,7 @@ import { copyText, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { productsText, swapText } from './common';
+import { trackOf } from '../../lib/items';
 
 type Cand = Order & { sameWilaya: boolean; sameVariant: boolean; sameProduct: boolean };
 export type SwapResult = { from: Order; to: Order; oldTracking: string | null; oldTotal: number; wasPrepared?: boolean; companyKind: string | null };
@@ -83,7 +84,7 @@ export function SwapModal({ o, onClose, onDone }: { o: Order; onClose: () => voi
         <p>
           {t('suivi.swapM.intro1')}
           <b>{o.companyName || o.livreurName || t('suivi.swapM.theCompany')}</b>
-          {t('suivi.swapM.intro2', { tracking: o.tracking || '—' })}
+          {t('suivi.swapM.intro2', { tracking: trackOf(o) || '—' })}
           <b>{productsText(o)}</b>
           {t('suivi.swapM.intro3', { name: o.customerName || t('suivi.swapM.theClient') })}
         </p>

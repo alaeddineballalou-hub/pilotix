@@ -3,6 +3,7 @@ import { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, wilaya } from '../../lib/format';
 import { Modal } from '../../ui/modal';
+import { trackOf } from '../../lib/items';
 
 export const productsText = (o: Pick<Order, 'items'>) => o.items.map((i) => `${i.qty} × ${i.name}${i.variantTitle ? ` ${i.variantTitle}` : ''}`).join(' + ') || '—';
 
@@ -37,7 +38,7 @@ export function claimText(t: (k: string, o?: Record<string, unknown>) => string,
     (again ? t('suivi.rec.text.again') : '') + t('suivi.rec.text.hello', { name: to }),
     t('suivi.rec.text.title', { ref: x.ref, shop }),
     '',
-    t('suivi.rec.text.tracking', { v: o?.tracking || '—' }),
+    t('suivi.rec.text.tracking', { v: (o && trackOf(o)) || '—' }),
     t('suivi.rec.text.ref', { v: o?.ref || '—' }),
     t('suivi.rec.text.client', { name: o?.customerName || '—', phone: o?.phone || '—' }),
     wl ? t('suivi.rec.text.wilaya', { v: wl }) : null,

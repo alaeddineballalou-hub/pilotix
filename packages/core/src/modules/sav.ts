@@ -131,7 +131,7 @@ async function listTickets(ctx: Ctx, f: z.infer<typeof ListInput>): Promise<Page
     const q = f.q.trim();
     const digits = q.replace(/\D/g, '');
     if (digits.length >= 4 && digits.length === q.replace(/[\s+.-]/g, '').length) w.add(`(c.phone LIKE '%' || ? || '%' OR c.ref ILIKE '%' || ? || '%')`, digits.slice(-9), digits);
-    else w.add(`(c.ref ILIKE '%' || ? || '%' OR upper(o.ref) = upper(?) OR c.customer_name ILIKE '%' || ? || '%' OR o.tracking = ?)`, q, q, q, q);
+    else w.add(`(c.ref ILIKE '%' || ? || '%' OR upper(o.ref) = upper(?) OR c.customer_name ILIKE '%' || ? || '%' OR o.tracking = ? OR upper(o.own_tracking) = upper(?))`, q, q, q, q, q);
   }
   const from = `FROM complaints c LEFT JOIN orders o ON o.id = c.order_id LEFT JOIN orders ex ON ex.id = c.exchange_order_id`;
   const total = num((await ctx.db.query(`SELECT count(*)::int AS n ${from} ${w.sql}`, w.params))[0]?.n);

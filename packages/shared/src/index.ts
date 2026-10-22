@@ -208,6 +208,8 @@ export interface Order {
   warehouseId: number | null;
   livreurId: number | null;
   tracking: string | null;
+  /** Pilotix's own unique tracking number, made when the order is created (the company's `tracking` replaces it on screen) */
+  ownTracking: string;
   extStatus: string | null;
   deliveryAttempts: number;
   subtotal: number;
