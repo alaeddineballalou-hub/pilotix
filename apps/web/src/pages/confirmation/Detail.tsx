@@ -46,7 +46,17 @@ export function Detail({ order }: { order: Order }) {
   const [deskId, setDeskId] = useState<number | null>(order.stopdeskId);
   const [picker, setPicker] = useState(false);
   const [busy, setBusy] = useState(false);
-  const deskRef = useRef<HTMLDivElement>(null);
+  const deskRef = useRef<HTMLElement>(null);
+  const [disc, setDisc] = useState(order.discount);
+  const [nOrigin, setNOrigin] = useState(order.customerNote ?? '');
+  const [nLivreur, setNLivreur] = useState(order.deliveryNote ?? '');
+  const [nTeam, setNTeam] = useState(order.internalNote ?? '');
+  useEffect(() => {
+    setDisc(order.discount);
+    setNOrigin(order.customerNote ?? '');
+    setNLivreur(order.deliveryNote ?? '');
+    setNTeam(order.internalNote ?? '');
+  }, [order.discount, order.customerNote, order.deliveryNote, order.internalNote]);
   const [modeTouched, setModeTouched] = useState(false);
   const opts = useRpc('confirmation.deskOptions', { wilayaId: order.wilayaId }, { staleTime: 5 * 60_000 });
   const modeFee = useRpc('confirmation.gridFee', { id: order.id, isStopdesk: desk }, { staleTime: 60_000 });
@@ -67,7 +77,8 @@ export function Detail({ order }: { order: Order }) {
   const P = new Map(cat.data.map((p) => [p.id, p]));
   const editable = !(order.followStatus && FOLLOW_LOCKED.includes(order.followStatus)) && !order.shippedAt;
   const lockedPrice = !order.isExchange;
-  const dirty = key(L) !== key(initial) || fee !== order.deliveryFee || desk !== order.isStopdesk || (desk && deskId !== order.stopdeskId);
+  const notesChanged = nOrigin !== (order.customerNote ?? '') || nLivreur !== (order.deliveryNote ?? '') || nTeam !== (order.internalNote ?? '');
+  const dirty = key(L) !== key(initial) || fee !== order.deliveryFee || disc !== order.discount || notesChanged || desk !== order.isStopdesk || (desk && deskId !== order.stopdeskId);
   const chosen = opts.data?.desks.find((d) => d.id === deskId) ?? null;
   const company = opts.data?.companies.find((c) => c.id === (chosen?.companyId ?? order.companyId)) ?? null;
   // can it be delivered? Bureau: the chosen bureau's company serves it. Domicile: the order's company (or any active one) delivers here.
@@ -79,7 +90,8 @@ export function Detail({ order }: { order: Order }) {
     return vs.length ? vs.reduce((n, v) => n + (v.stock ?? 0), 0) : null;
   };
   const sub = L.reduce((s, l) => s + l.qty * l.unitPrice, 0);
-  const disc = order.discount;
+  // the biggest discount the customer can get: each product's limit × quantity (a product without limit allows the whole cart)
+  const maxDisc = L.some((l) => P.get(l.productId)?.maxDiscount == null) ? sub : L.reduce((s, l) => s + (P.get(l.productId)?.maxDiscount ?? 0) * l.qty, 0);
   const gf = grid.data?.fee ?? null;
 
   const priceOf = (p: Prod, vid: number | null) => p.variants.find((v) => v.id === vid)?.price ?? p.price;
@@ -128,13 +140,6 @@ export function Detail({ order }: { order: Order }) {
     if (d && !deskId) setPicker(true);
   };
 
-  const notes = (
-    [
-      ['client', order.customerNote],
-      ['delivery', order.deliveryNote],
-      ['internal', order.internalNote],
-    ] as const
-  ).filter((x) => x[1]);
 
   const out = L.filter((l) => {
     const n = stockOf(l);
@@ -148,7 +153,9 @@ export function Detail({ order }: { order: Order }) {
     if (!dirty) return true;
     const mode = desk !== order.isStopdesk || (desk && deskId !== order.stopdeskId) ? { isStopdesk: desk, stopdeskId: desk ? deskId : null, ...(desk && chosen ? { companyId: chosen.companyId } : {}) } : {};
     try {
-      await rpc('orders.update', { id: order.id, version: order.version, deliveryFee: fee, ...mode, ...(key(L) !== key(initial) ? { items: cartBody } : {}) });
+      if (disc > maxDisc) return setErr(t('confirmation.d6.discTooBig', { v: da(maxDisc) })), false;
+      const notes = notesChanged ? { customerNote: nOrigin.trim() || null, deliveryNote: nLivreur.trim() || null, internalNote: nTeam.trim() || null } : {};
+      await rpc('orders.update', { id: order.id, version: order.version, deliveryFee: fee, discount: disc, ...notes, ...mode, ...(key(L) !== key(initial) ? { items: cartBody } : {}) });
       return true;
     } catch (e: any) {
       setErr(e.message);
@@ -176,16 +183,23 @@ export function Detail({ order }: { order: Order }) {
   return (
     <div className="qd2-main qd3 qd5 qd6">
       <div className="qd6-left">
-        {notes.length > 0 && (
-          <div className="qd3-notes">
-            {notes.map(([k, v]) => (
-              <span key={k} className="qd3-note">
-                <b>{t(`confirmation.d.note.${k}`)}</b>
-                {v}
+        <section className="qd6-card qd6-notes" aria-label={t('confirmation.d6.notes')}>
+          {(
+            [
+              ['origin', 'message', nOrigin, setNOrigin],
+              ['livreur', 'truck', nLivreur, setNLivreur],
+              ['team', 'users', nTeam, setNTeam],
+            ] as const
+          ).map(([k, icon, v, set]) => (
+            <label key={k} className="qd6-note">
+              <span className="qd6-nh">
+                <Icon name={icon} />
+                {t(`confirmation.d6.note.${k}`)}
               </span>
-            ))}
-          </div>
-        )}
+              <textarea rows={2} value={v} maxLength={1000} placeholder={t(`confirmation.d6.notePh.${k}`)} onChange={(e) => set(e.target.value)} />
+            </label>
+          ))}
+        </section>
         <section className="qd6-card">
           <div className="qd6-h">
             {t('confirmation.d6.cart')} <span className="qd6-cnt">{t('confirmation.d6.nProducts', { count: L.length })}</span>
@@ -303,7 +317,7 @@ export function Detail({ order }: { order: Order }) {
             </div>
           )}
         </section>
-        <section className="qd6-card qd6-deliv">
+        <section className="qd6-card qd6-deliv" ref={deskRef}>
           <div className="qd6-h">{t('confirmation.dl.title')}</div>
           <div className="qd5-seg" role="radiogroup" aria-label={t('confirmation.d.type')}>
             <button type="button" role="radio" aria-checked={!desk} className={!desk ? 'on' : ''} disabled={!editable} onClick={() => setMode(false)}>
@@ -317,7 +331,7 @@ export function Detail({ order }: { order: Order }) {
           </div>
           {desk ? (
             chosen ? (
-              <div className="qd6-desk click" ref={deskRef} role="button" tabIndex={editable ? 0 : -1} onClick={() => editable && setPicker((o) => !o)} onKeyDown={(e) => e.key === 'Enter' && editable && setPicker(true)}>
+              <div className="qd6-desk click" role="button" tabIndex={editable ? 0 : -1} onClick={() => editable && setPicker((o) => !o)} onKeyDown={(e) => e.key === 'Enter' && editable && setPicker(true)}>
                 <span>
                   <b>{chosen.name}</b> <small>· {[chosen.address, chosen.commune || wilayaName(order.wilayaId)].filter(Boolean).join(' · ')}</small>
                 </span>
@@ -328,7 +342,7 @@ export function Detail({ order }: { order: Order }) {
                 {editable && <Icon name="chevron" />}
               </div>
             ) : (
-              <div className="qd6-desk miss click" ref={deskRef} role="button" tabIndex={editable ? 0 : -1} onClick={() => editable && setPicker((o) => !o)} onKeyDown={(e) => e.key === 'Enter' && editable && setPicker(true)}>
+              <div className="qd6-desk miss click" role="button" tabIndex={editable ? 0 : -1} onClick={() => editable && setPicker((o) => !o)} onKeyDown={(e) => e.key === 'Enter' && editable && setPicker(true)}>
                 {t('confirmation.d6.noDesk')}
                 <Icon name="chevron" />
               </div>
@@ -346,6 +360,18 @@ export function Detail({ order }: { order: Order }) {
               )}
             </div>
           )}
+          <div className="qd6-fee">
+            <span className="qd6-lab">{t('confirmation.d6.fee')}</span>
+            <label className="qd4-fv ltr">
+              <input type="number" min={0} className="qd2-p" aria-label={t('confirmation.d.fee')} disabled={!editable} value={fee} onChange={(e) => setFee(Math.max(0, Math.round(Number(e.target.value) || 0)))} />
+              <b>DA</b>
+            </label>
+            {modeFee.data?.fee != null && modeFee.data.fee !== fee && editable && (
+              <button type="button" className="linkish qd2-gf" onClick={() => setFee(modeFee.data!.fee!)}>
+                {t('confirmation.d.grid', { v: da(modeFee.data.fee) })}
+              </button>
+            )}
+          </div>
         </section>
       </div>
       <aside className="qd6-rail" aria-label={t('confirmation.d6.decision')}>
@@ -355,27 +381,22 @@ export function Detail({ order }: { order: Order }) {
             <dd className="ltr">{da(sub)}</dd>
           </div>
           <div>
+            <dt>{desk ? t('confirmation.d6.feeDesk') : t('confirmation.d6.feeHome')}</dt>
+            <dd className="ltr">{da(fee)}</dd>
+          </div>
+          <div className="qd6-disc">
             <dt>
-              {desk ? t('confirmation.d6.feeDesk') : t('confirmation.d6.feeHome')}
-              {modeFee.data?.fee != null && modeFee.data.fee !== fee && editable && (
-                <button type="button" className="linkish qd2-gf" onClick={() => setFee(modeFee.data!.fee!)}>
-                  {t('confirmation.d.grid', { v: da(modeFee.data.fee) })}
-                </button>
-              )}
+              {t('confirmation.d.discount')}
+              <small className={disc > maxDisc ? 'over' : ''}>{t('confirmation.d6.maxDisc', { v: da(maxDisc) })}</small>
             </dt>
             <dd>
               <label className="qd4-fv ltr">
-                <input type="number" min={0} className="qd2-p" aria-label={t('confirmation.d.fee')} disabled={!editable} value={fee} onChange={(e) => setFee(Math.max(0, Math.round(Number(e.target.value) || 0)))} />
+                <span className="qd6-minus">−</span>
+                <input type="number" min={0} max={maxDisc} step={50} className="qd2-p" aria-label={t('confirmation.d.discount')} disabled={!editable} value={disc} onChange={(e) => setDisc(Math.max(0, Math.round(Number(e.target.value) || 0)))} />
                 <b>DA</b>
               </label>
             </dd>
           </div>
-          {disc > 0 && (
-            <div>
-              <dt>{t('confirmation.d.discount')}</dt>
-              <dd className="ltr">− {da(disc)}</dd>
-            </div>
-          )}
           <div className="qd5-total">
             <dt>{t('confirmation.d.total')}</dt>
             <dd className="ltr">{da(sub + fee - disc)}</dd>
@@ -408,6 +429,10 @@ export function Detail({ order }: { order: Order }) {
                 setFee(order.deliveryFee);
                 setDesk(order.isStopdesk);
                 setDeskId(order.stopdeskId);
+                setDisc(order.discount);
+                setNOrigin(order.customerNote ?? '');
+                setNLivreur(order.deliveryNote ?? '');
+                setNTeam(order.internalNote ?? '');
                 setErr('');
               }}
             >

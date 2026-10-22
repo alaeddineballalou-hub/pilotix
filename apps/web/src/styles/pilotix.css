@@ -1105,3 +1105,26 @@ html body .qd6-var.on .bji { transform: rotate(180deg); }
 .qd6-desk > .bji { width: 16px; height: 16px; color: var(--muted); flex: none; }
 .qd6-desk.miss { justify-content: space-between; }
 .qd6-add .qd2-add-in:focus { border-color: #F7A823 !important; border-style: solid !important; box-shadow: 0 0 0 3px color-mix(in srgb, #F7A823 18%, transparent) !important; outline: none; }
+
+/* ===== notes card above the cart: origin note, courier note, team note ===== */
+.qd6-notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 760px) { .qd6-notes { grid-template-columns: minmax(0, 1fr); } }
+.qd6-note { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; margin: 0; }
+.qd6-note + .qd6-note { border-inline-start: 1px solid var(--line); }
+@media (max-width: 760px) { .qd6-note + .qd6-note { border-inline-start: 0; border-top: 1px solid var(--line); } }
+.qd6-nh { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.qd6-nh .bji { width: 13px; height: 13px; color: #F28B1E; }
+html body .qd6-note textarea { width: 100%; min-height: 44px; resize: vertical; padding: 7px 10px !important; border: 1px solid var(--line) !important; border-radius: 9px !important; font: inherit; font-size: 13px !important; line-height: 1.4; background: var(--surface); color: var(--ink); }
+html body .qd6-note textarea:focus { outline: none; border-color: #F7A823 !important; box-shadow: 0 0 0 3px color-mix(in srgb, #F7A823 18%, transparent); }
+/* delivery price inside the Livraison card */
+.qd6-fee { display: flex; align-items: center; gap: 8px; }
+.qd6-fee .qd6-lab { font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.qd6-fee input { width: 84px !important; height: 36px !important; text-align: end; font-weight: 800; }
+.qd6-fee .qd2-gf { font-size: 12px; }
+/* remise with its maximum */
+.qd6-disc dt small { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-top: 1px; }
+.qd6-disc dt small.over { color: #c0392b; font-weight: 800; }
+.qd6-disc input { width: 84px !important; height: 34px !important; text-align: end; font-weight: 800; }
+.qd6-minus { font-weight: 800; color: var(--muted); }
+/* the bureau menu is as wide as the Livraison card */
+.pxf-desk { border-top: 3px solid #F7A823; }

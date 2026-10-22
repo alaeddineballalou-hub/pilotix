@@ -608,7 +608,7 @@ export const confirmationProcs = {
 
   /** Products for the open row: variants, packs, linked products, and the client delivery price of the order. */
   'confirmation.catalog': proc(['confirmation'], z.object({}), async (ctx) => {
-    const P = await ctx.db.query('SELECT id, name, sku, price, fixed_price, packs, linked, is_service, fee_grid FROM products WHERE active ORDER BY name');
+    const P = await ctx.db.query('SELECT id, name, sku, price, fixed_price, max_discount, packs, linked, is_service, fee_grid FROM products WHERE active ORDER BY name');
     const V = await ctx.db.query('SELECT v.id, v.product_id, v.title, v.sku, v.price, COALESCE((SELECT sum(qty) FROM stock s WHERE s.variant_id = v.id), 0)::int AS stock FROM product_variants v WHERE v.active ORDER BY v.id');
     return P.map((p: any) => ({
       id: num(p.id),
@@ -616,6 +616,8 @@ export const confirmationProcs = {
       sku: p.sku as string,
       price: num(p.price),
       fixedPrice: !!p.fixed_price,
+      /** biggest discount per unit the agent may give (null: no limit) */
+      maxDiscount: numOrNull(p.max_discount),
       isService: !!p.is_service,
       feeGrid: (p.fee_grid as string | null) ?? null,
       packs: ((typeof p.packs === 'string' ? JSON.parse(p.packs) : p.packs) ?? []).map((x: any) => ({ qty: Number(x.qty), price: Number(x.price) })) as { qty: number; price: number }[],

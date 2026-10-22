@@ -356,6 +356,10 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
       await insertItems(tx, input.id, priced.lines);
       subtotal = priced.subtotal;
       maxDiscount = priced.maxDiscount;
+    } else if (input.discount !== undefined) {
+      // only the discount changes: it is still capped by the products already in the order
+      const its = (await tx.query('SELECT product_id, variant_id, qty, unit_price, is_upsell FROM order_items WHERE order_id = $1', [input.id])).map((r: any) => ({ productId: num(r.product_id), variantId: numOrNull(r.variant_id), qty: num(r.qty), unitPrice: num(r.unit_price), isUpsell: !!r.is_upsell }));
+      if (its.length) maxDiscount = (await priceItems(tx, its, true)).maxDiscount;
     }
     const discount = input.discount ?? num(cur.discount);
     if (discount > maxDiscount) throw bad(`Remise trop élevée (maximum ${maxDiscount} DA)`);

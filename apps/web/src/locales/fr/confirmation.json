@@ -480,6 +480,20 @@
       "postponed": "Reporter la commande",
       "callback": "Rappeler le client"
     },
-    "allProducts": "Tous les produits"
+    "allProducts": "Tous les produits",
+    "notes": "Notes",
+    "note": {
+      "origin": "Note origine",
+      "livreur": "Note livreur",
+      "team": "Note équipe"
+    },
+    "notePh": {
+      "origin": "Ce que le client a écrit en commandant…",
+      "livreur": "Pour le livreur : étage, repère, heure…",
+      "team": "Pour l’équipe seulement…"
+    },
+    "fee": "Prix de livraison",
+    "maxDisc": "max {{v}}",
+    "discTooBig": "Remise trop élevée : maximum {{v}}."
   }
 }
