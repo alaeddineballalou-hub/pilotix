@@ -308,10 +308,10 @@ export function DensitySwitch({ value, onChange }: { value: Density; onChange: (
  * The handle on a header's edge: drag it to set the column's width (saved for this user);
  * a double click puts the automatic width back.
  */
-export function ColResize({ label, onStart, onLive, onDone, onAuto }: { label: string; onStart: (th: HTMLElement) => void; onLive: (w: number) => void; onDone: (w: number) => void; onAuto: (th: HTMLElement) => void }) {
+export function ColResize({ label, side = 'end', onStart, onLive, onDone, onAuto }: { label: string; side?: 'start' | 'end'; onStart: (th: HTMLElement) => void; onLive: (w: number) => void; onDone: (w: number) => void; onAuto: (th: HTMLElement) => void }) {
   return (
     <span
-      className="px-rz"
+      className={`px-rz px-rz-${side}`}
       role="separator"
       aria-orientation="vertical"
       aria-label={label}
@@ -341,7 +341,9 @@ export function ColResize({ label, onStart, onLive, onDone, onAuto }: { label: s
         document.body.classList.add('px-resizing');
         let w = w0;
         const move = (ev: PointerEvent) => {
-          w = Math.max(48, Math.min(900, Math.round(w0 + (rtl ? -1 : 1) * (ev.clientX - x0))));
+          // dragging an edge outwards makes the column wider (the left edge to the left, the right edge to the right)
+          const dir = (side === 'end' ? 1 : -1) * (rtl ? -1 : 1);
+          w = Math.max(48, Math.min(900, Math.round(w0 + dir * (ev.clientX - x0))));
           onLive(w);
         };
         const up = () => {
@@ -391,9 +393,11 @@ export function useResizable(stored: Record<string, number>, save: (m: Record<st
     for (const td of Array.from(table.querySelectorAll(`tbody > tr:not(.qdetail) > td:nth-child(${i + 1})`)) as HTMLElement[]) w = Math.max(w, td.scrollWidth + 2);
     return Math.max(60, Math.min(600, Math.ceil(w)));
   };
-  const handle = (k: string) => (
+  const one = (k: string, side: 'start' | 'end') => (
     <ColResize
+      key={side}
       label={label}
+      side={side}
       onStart={(th) => setL(measure(th))}
       onLive={(w) => setL(w < 0 ? null : { ...(liveRef.current ?? stored), [k]: w })}
       onDone={(w) => {
@@ -403,6 +407,13 @@ export function useResizable(stored: Record<string, number>, save: (m: Record<st
       }}
       onAuto={(th) => save({ ...measure(th), [k]: fit(th) })}
     />
+  );
+  /** a grip on both edges of the header */
+  const handle = (k: string) => (
+    <>
+      {one(k, 'start')}
+      {one(k, 'end')}
+    </>
   );
   return {
     fixed,

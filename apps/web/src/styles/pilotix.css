@@ -1353,3 +1353,13 @@ body.px-resizing, body.px-resizing * { cursor: col-resize !important; user-selec
 @media (max-width: 760px) { .tbl.px-fixed { table-layout: auto !important; width: auto !important; } .tbl.px-fixed > colgroup { display: none; } }
 /* the "Copié" bubble drawn above the page */
 .px-copied.px-copied-fixed { position: fixed; bottom: auto; transform: translate(-50%, calc(-100% - 6px)); z-index: 2147483000; }
+/* a grip on both edges of each header: drag outwards to widen, inwards to narrow */
+html body .px-rz { inset-inline-end: auto; width: 10px; }
+html body .px-rz-end { inset-inline-end: 0; }
+html body .px-rz-start { inset-inline-start: 0; }
+html body .px-rz::after { top: 26%; bottom: 26%; width: 3px; border-radius: 3px; }
+html body .px-rz-end::after { inset-inline-start: auto; inset-inline-end: 1px; }
+html body .px-rz-start::after { inset-inline-start: 1px; }
+.tbl thead th:hover > .px-rz::after { background: #cfd5df; }
+[data-theme="dark"] .tbl thead th:hover > .px-rz::after { background: rgba(255, 255, 255, .25); }
+html body .px-rz:hover::after, html body .px-rz.on::after { top: 10%; bottom: 10%; background: #F7A823 !important; }
