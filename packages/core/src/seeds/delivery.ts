@@ -1,5 +1,6 @@
 import { FOLLOW_ON_ROAD } from '@pilotix/shared';
 import { word } from '../couriers/demo';
+import { WILAYAS } from '@pilotix/shared';
 import type { Db } from '../db';
 import { num } from '../db';
 
@@ -23,6 +24,16 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     await db.query('INSERT INTO stopdesks (company_id, wilaya_id, commune, name, address, ext_id) VALUES ($1,$2,$3,$4,$5,$6)', [zr, w, c, `ZR ${c}`, 'Agence ZR', `zr-hub-${k + 1}`]);
     await db.query('INSERT INTO stopdesks (company_id, wilaya_id, commune, name, address, ext_id) VALUES ($1,$2,$3,$4,$5,$6)', [noest, w, c, `NOEST ${c}`, 'Station NOEST', `${String(w).padStart(2, '0')}A${k}`]);
   }
+  // every wilaya has a bureau of each courier in its main town; NOEST does not serve bureaus in the far south (shown red)
+  const has = new Set((await db.query('SELECT company_id, wilaya_id FROM stopdesks')).map((d: any) => `${num(d.company_id)}-${num(d.wilaya_id)}`));
+  for (const [i, name] of WILAYAS.entries()) {
+    const w = { id: i + 1, name };
+    for (const [cid, label, addr] of [[zr, 'ZR', 'Agence ZR'], [noest, 'NOEST', 'Station NOEST'], [yal, 'Yalidine', 'Point relais Yalidine']] as const) {
+      if (has.has(`${cid}-${w.id}`)) continue;
+      await db.query('INSERT INTO stopdesks (company_id, wilaya_id, commune, name, address, ext_id) VALUES ($1,$2,$3,$4,$5,NULL)', [cid, w.id, w.name, `${label} ${w.name}`, addr]);
+    }
+  }
+  await db.query('UPDATE delivery_fees SET desk = 0 WHERE company_id = $1 AND wilaya_id = ANY($2)', [noest, [1, 11, 33, 37, 49, 50, 53, 54, 56]]);
   await db.query(`UPDATE stopdesks SET ext_id = 'yal-' || id WHERE ext_id IS NULL`);
 
   // a few recent shipped parcels go to NOEST

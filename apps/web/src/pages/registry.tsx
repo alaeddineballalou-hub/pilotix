@@ -31,4 +31,5 @@ export const PAGES: Record<string, ComponentType<PageProps>> = {
   utilisateurs: P(() => import('./admin'), 'Utilisateurs'),
   management: P(() => import('./admin'), 'Management'),
   reglages: P(() => import('./admin'), 'Reglages'),
+  profil: P(() => import('./profil'), 'Profil'),
 };

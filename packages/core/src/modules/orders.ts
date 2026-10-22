@@ -344,6 +344,9 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
     if (locked && input.items) throw bad('Commande déjà partie : produits non modifiables');
     const phone = input.phone !== undefined ? normalizePhone(input.phone) : cur.phone;
     if (!phone) throw bad('Numéro de téléphone algérien invalide');
+    // a bureau delivery needs its bureau (stop desk); going back home forgets it
+    if (input.isStopdesk === true && !(input.stopdeskId ?? (input.stopdeskId === undefined ? cur.stopdesk_id : null))) throw bad('Livraison au bureau : choisissez le bureau.');
+    if (input.isStopdesk === false && input.stopdeskId === undefined) input = { ...input, stopdeskId: null };
 
     let subtotal = num(cur.subtotal);
     let maxDiscount = Infinity;

@@ -15,5 +15,6 @@
   "passwordHint": "8 أحرف على الأقل",
   "passwordChanged": "تم تغيير كلمة المرور",
   "fold": "طيّ القائمة",
-  "unfold": "توسيع القائمة"
+  "unfold": "توسيع القائمة",
+  "account": "حساب {{name}}"
 }

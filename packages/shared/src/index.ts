@@ -127,6 +127,10 @@ export interface Profile {
   active: boolean;
   lastSeenAt: string | null;
   livreurCompanyId?: number | null;
+  /** profile picture (a small square image as a data: URL) */
+  avatar?: string | null;
+  /** code to invite friends to Pilotix */
+  referralCode?: string | null;
 }
 
 export interface Session {

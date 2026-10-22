@@ -3,15 +3,16 @@ import type { TFunction } from 'i18next';
 import { store } from '../../lib/store';
 import { toLocalInput } from '../../lib/format';
 
-export type Sub = 'nouvelles' | 'attente' | 'confirmees' | 'terminees';
-export const SUBS: Sub[] = ['nouvelles', 'attente', 'confirmees', 'terminees'];
+export type Sub = 'nouvelles' | 'attente' | 'confirmees' | 'livrees' | 'terminees';
+export const SUBS: Sub[] = ['nouvelles', 'attente', 'confirmees', 'livrees', 'terminees'];
 export const SUB_STATUSES: Record<Sub, ConfStatus[]> = {
   nouvelles: ['new'],
   attente: ['to_check', 'no_answer', 'busy', 'callback', 'postponed'],
   confirmees: ['confirmed', 'no_stock'],
   terminees: ['duplicate', 'wrong_number', 'fake'],
+  livrees: ['confirmed'],
 };
-export const SUB_TONE: Record<Sub, Tone> = { nouvelles: 'info', attente: 'mid', confirmees: 'ok', terminees: 'off' };
+export const SUB_TONE: Record<Sub, Tone> = { nouvelles: 'info', attente: 'mid', confirmees: 'ok', livrees: 'ok', terminees: 'off' };
 
 /** Values of the status pickers: real statuses plus "try1..3" (= no answer, attempt N). */
 export type StatusChoice = ConfStatus | 'try1' | 'try2' | 'try3';

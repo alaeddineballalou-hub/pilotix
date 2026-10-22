@@ -13,9 +13,11 @@ export const CONF_SUBS = {
   attente: ['to_check', 'no_answer', 'busy', 'callback', 'postponed'],
   confirmees: ['confirmed', 'no_stock'],
   terminees: ['duplicate', 'wrong_number', 'fake'],
+  /** the agent's confirmed orders that reached the customer (admin and managers see the whole team's) */
+  livrees: ['confirmed'],
 } as const satisfies Record<string, readonly ConfStatus[]>;
 export type ConfSub = keyof typeof CONF_SUBS;
-const SUB = z.enum(['nouvelles', 'attente', 'confirmees', 'terminees']);
+const SUB = z.enum(['nouvelles', 'attente', 'confirmees', 'terminees', 'livrees']);
 const id = z.number().int().positive();
 const ids = z.array(id).min(1).max(500);
 const MIN = 60_000;
@@ -207,6 +209,7 @@ export const DEFAULT_SORT: Record<ConfSub, { sort: 'created_at' | 'confirmed_at'
   attente: { sort: 'next_call_at', dir: 'asc' },
   confirmees: { sort: 'confirmed_at', dir: 'desc' },
   terminees: { sort: 'created_at', dir: 'desc' },
+  livrees: { sort: 'confirmed_at', dir: 'desc' },
 };
 
 async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
@@ -216,9 +219,10 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
   const day = (s: string) => Date.parse(s + 'T00:00:00Z') - 3_600_000;
   const page = await listOrders(ctx, {
     conf: i.status ? [i.status] : [...allowed],
+    follow: i.sub === 'livrees' ? ['delivered'] : undefined,
     q: i.q,
     wilayaId: i.wilayaId,
-    agentId: i.agentId,
+    agentId: i.sub === 'livrees' && !ctx.session.isAdmin && !isManager(ctx) ? ctx.session.profile.id : i.agentId,
     channel: i.channel,
     dateField: 'created_at',
     from: i.from ? isoT(day(i.from)) : undefined,
@@ -594,7 +598,9 @@ export const confirmationProcs = {
     const rows = await ctx.db.query(`SELECT conf_status AS k, count(*)::int AS n FROM sales GROUP BY 1`);
     const by = Object.fromEntries(rows.map((r: any) => [r.k, num(r.n)]));
     const sum = (s: readonly string[]) => s.reduce((t, k) => t + (by[k] ?? 0), 0);
-    return { nouvelles: sum(CONF_SUBS.nouvelles), attente: sum(CONF_SUBS.attente), confirmees: sum(CONF_SUBS.confirmees), terminees: sum(CONF_SUBS.terminees) };
+    const all = ctx.session.isAdmin || isManager(ctx);
+    const dl = (await ctx.db.query(`SELECT count(*)::int AS n FROM sales WHERE conf_status = 'confirmed' AND follow_status = 'delivered'${all ? '' : ' AND agent_id = $1'}`, all ? [] : [ctx.session.profile.id]))[0];
+    return { nouvelles: sum(CONF_SUBS.nouvelles), attente: sum(CONF_SUBS.attente), confirmees: sum(CONF_SUBS.confirmees), terminees: sum(CONF_SUBS.terminees), livrees: num(dl?.n) };
   }),
 
   /** One page of a confirmation list, with SKUs, creator and call deadline per row. */
@@ -603,7 +609,7 @@ export const confirmationProcs = {
   /** Products for the open row: variants, packs, linked products, and the client delivery price of the order. */
   'confirmation.catalog': proc(['confirmation'], z.object({}), async (ctx) => {
     const P = await ctx.db.query('SELECT id, name, sku, price, fixed_price, packs, linked, is_service, fee_grid FROM products WHERE active ORDER BY name');
-    const V = await ctx.db.query('SELECT id, product_id, title, sku, price FROM product_variants WHERE active ORDER BY id');
+    const V = await ctx.db.query('SELECT v.id, v.product_id, v.title, v.sku, v.price, COALESCE((SELECT sum(qty) FROM stock s WHERE s.variant_id = v.id), 0)::int AS stock FROM product_variants v WHERE v.active ORDER BY v.id');
     return P.map((p: any) => ({
       id: num(p.id),
       name: p.name as string,
@@ -614,15 +620,39 @@ export const confirmationProcs = {
       feeGrid: (p.fee_grid as string | null) ?? null,
       packs: ((typeof p.packs === 'string' ? JSON.parse(p.packs) : p.packs) ?? []).map((x: any) => ({ qty: Number(x.qty), price: Number(x.price) })) as { qty: number; price: number }[],
       linked: ((p.linked ?? []) as unknown[]).map(num),
-      variants: V.filter((v: any) => num(v.product_id) === num(p.id)).map((v: any) => ({ id: num(v.id), title: v.title as string, sku: v.sku as string, price: numOrNull(v.price) })),
+      variants: V.filter((v: any) => num(v.product_id) === num(p.id)).map((v: any) => ({ id: num(v.id), title: v.title as string, sku: v.sku as string, price: numOrNull(v.price), stock: num(v.stock) })),
     }));
   }),
 
   /** Delivery price from the client grid for this order's wilaya / delivery type / first product. */
-  'confirmation.gridFee': proc(['confirmation'], z.object({ id }), async (ctx, { id }) => {
+  'confirmation.gridFee': proc(['confirmation'], z.object({ id, isStopdesk: z.boolean().optional() }), async (ctx, { id, isStopdesk }) => {
     const o = await getOrder(ctx, id);
     const grid = o.items[0] ? (await ctx.db.query('SELECT fee_grid FROM products WHERE id = $1', [o.items[0].productId]))[0]?.fee_grid : null;
-    return { fee: await clientFee(ctx.db, o.wilayaId, o.isStopdesk, grid) };
+    return { fee: await clientFee(ctx.db, o.wilayaId, isStopdesk ?? o.isStopdesk, grid) };
+  }),
+
+  /**
+   * Delivery choices for a wilaya: each active company says whether it delivers there at home and to a bureau
+   * (own / manual companies always do; a courier with a tariff must have a price for it), and the bureaus (stop desks) there.
+   */
+  'confirmation.deskOptions': proc(['confirmation'], z.object({ wilayaId: z.number().int().min(1).max(69) }), async (ctx, { wilayaId }) => {
+    const cos = await ctx.db.query(
+      `SELECT c.id, c.name, c.kind,
+              (SELECT count(*)::int FROM delivery_fees f WHERE f.company_id = c.id) AS n,
+              (SELECT f.home FROM delivery_fees f WHERE f.company_id = c.id AND f.wilaya_id = $1) AS home,
+              (SELECT f.desk FROM delivery_fees f WHERE f.company_id = c.id AND f.wilaya_id = $1) AS desk
+         FROM delivery_companies c WHERE c.active ORDER BY c.name`,
+      [wilayaId],
+    );
+    const companies = cos.map((c: any) => {
+      const free = c.kind === 'own' || c.kind === 'manual' || num(c.n) === 0;
+      return { id: num(c.id), name: c.name as string, kind: c.kind as string, home: free || num(c.home) > 0, desk: free || num(c.desk) > 0 };
+    });
+    const C = new Map(companies.map((c) => [c.id, c]));
+    const desks = (await ctx.db.query('SELECT id, company_id, commune, name, address FROM stopdesks WHERE wilaya_id = $1 ORDER BY name', [wilayaId]))
+      .filter((d: any) => C.has(num(d.company_id)))
+      .map((d: any) => ({ id: num(d.id), companyId: num(d.company_id), companyName: C.get(num(d.company_id))!.name, name: d.name as string, commune: d.commune as string, address: d.address as string, served: C.get(num(d.company_id))!.desk }));
+    return { companies, desks };
   }),
 
   /** "Tentative 01/02/03": no answer, with the attempt number set. */

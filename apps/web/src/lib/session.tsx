@@ -1,7 +1,7 @@
 import type { Role, Session } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
-import { backend, setOnUnauthorized } from './backend';
+import { backend, rpc, setOnUnauthorized } from './backend';
 import { applyLanguage } from './i18n';
 import { store } from './store';
 
@@ -10,6 +10,8 @@ interface SessionState {
   ready: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  /** Reload my profile (after I change my name or picture). */
+  refresh: () => Promise<void>;
   /** True when the user has one of these roles (admins always). */
   has: (...roles: Role[]) => boolean;
   me: number;
@@ -63,7 +65,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setSession(s);
   };
 
+  const refresh = useCallback(async () => {
+    const s = await rpc('me.get', {});
+    store.set('session', JSON.stringify(s));
+    setSession(s);
+  }, []);
+
   const has = (...roles: Role[]) => !!session && (session.isAdmin || roles.some((r) => session.roles.includes(r)));
 
-  return <Ctx.Provider value={{ session, ready, login, logout, has, me: session?.profile.id ?? 0 }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ session, ready, login, logout, refresh, has, me: session?.profile.id ?? 0 }}>{children}</Ctx.Provider>;
 }

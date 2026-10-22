@@ -13,7 +13,7 @@ import { store } from '../../lib/store';
 import { ErrorBox, Field, Help, Icon, Loading, Pager, SortTh, StageBar, StatusBadge, StatusSelect } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
-import { ColumnMenu } from '../../ui/ColumnMenu';
+import { colDrag, ColumnMenu, DensitySwitch, useColumnOrder, useDensity } from '../../ui/ColumnMenu';
 import { HistoryButton, PhoneCell } from './History';
 import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import type { PageProps } from '../registry';
@@ -41,6 +41,7 @@ const DEFAULT_SORT: Record<Sub, { sort: SortKey; dir: 'asc' | 'desc' }> = {
   nouvelles: { sort: 'created_at', dir: 'desc' },
   attente: { sort: 'next_call_at', dir: 'asc' },
   confirmees: { sort: 'confirmed_at', dir: 'desc' },
+  livrees: { sort: 'confirmed_at', dir: 'desc' },
   terminees: { sort: 'created_at', dir: 'desc' },
 };
 const columnsOf = (sub: Sub): { k: ColKey; sort?: SortKey }[] => [
@@ -64,7 +65,7 @@ const columnsOf = (sub: Sub): { k: ColKey; sort?: SortKey }[] => [
   { k: 'stock' },
   { k: 'desk' },
   { k: 'passed' },
-  ...(sub === 'confirmees' ? [{ k: 'confirmed' as const, sort: 'confirmed_at' as const }, { k: 'follow' as const }] : [{ k: 'next' as const, sort: 'next_call_at' as const }]),
+  ...(sub === 'confirmees' || sub === 'livrees' ? [{ k: 'confirmed' as const, sort: 'confirmed_at' as const }, { k: 'follow' as const }] : [{ k: 'next' as const, sort: 'next_call_at' as const }]),
   { k: 'status' },
 ];
 
@@ -87,6 +88,7 @@ export function Confirmation({ sub: rawSub, rest }: PageProps) {
     { key: 'nouvelles', label: t('confirmation.sub.nouvelles'), href: '#/confirmation/nouvelles', count: c?.nouvelles },
     { key: 'attente', label: t('confirmation.sub.attente'), href: '#/confirmation/attente', count: c?.attente },
     { key: 'confirmees', label: t('confirmation.sub.confirmees'), href: '#/confirmation/confirmees', count: c?.confirmees },
+    { key: 'livrees', label: t('confirmation.sub.livrees'), href: '#/confirmation/livrees', count: c?.livrees },
     ...(sub === 'terminees' ? [{ key: 'terminees', label: t('confirmation.sub.terminees'), href: '#/confirmation/terminees', count: c?.terminees }] : []),
   ];
   const focusId = rest?.[0] ? Number(rest[0]) : null;
@@ -133,7 +135,10 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
     setSel((s) => new Set([...s].filter((x) => ids.has(x))));
   }, [list.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const cols = COLS.filter((c) => visible.has(c.k));
+  const [order, setOrder] = useColumnOrder(`conf-order-${sub}`, COLS.map((c) => c.k));
+  const cols = order.map((k) => COLS.find((c) => c.k === k)!).filter((c) => c && visible.has(c.k));
+  const drag = colDrag(order, setOrder);
+  const [dens, setDens] = useDensity();
   const selected = rows.filter((r) => sel.has(r.id));
   const nFilters = Object.values(f).filter((v) => v !== undefined && v !== '').length;
   const shop = meta.data?.shopName ?? 'Pilotix';
@@ -336,7 +341,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   return (
     <>
       {focus !== null && <Focus initialId={focus === 'ask' ? null : focus} onClose={() => setFocus(null)} />}
-      <div className="card qcard">
+      <div className={`card qcard px-d-${dens}`}>
         <div className="card-head px-qhead">
           <h2>
             {title} <span className={`badge t-${SUB_TONE[sub]} ltr`}>{n(list.data?.total ?? 0)}</span>
@@ -389,7 +394,10 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
               <span className="px-qb-tx">{t('common.filters')}</span>
               {nFilters ? <b className="px-qb-n">{nFilters}</b> : null}
             </button>
+            <DensitySwitch value={dens} onChange={setDens} />
             <ColumnMenu
+              order={order}
+              onOrder={setOrder}
               cols={COLS.map((c) => ({ k: c.k, label: colLabel(c.k) }))}
               visible={visible}
               onChange={saveCols}
@@ -493,11 +501,11 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                     </th>
                     {cols.map((c) =>
                       c.sort ? (
-                        <SortTh key={c.k} k={c.sort} sort={sort} dir={dir} onSort={onSort} num={c.k === 'total'}>
+                        <SortTh key={c.k} k={c.sort} sort={sort} dir={dir} onSort={onSort} num={c.k === 'total'} extra={{ ...drag(c.k), title: t('common.dragCol'), className: 'px-drag' }}>
                           {colLabel(c.k)}
                         </SortTh>
                       ) : (
-                        <th key={c.k} className={c.k === 'total' ? 'num' : undefined}>
+                        <th key={c.k} {...drag(c.k)} title={t('common.dragCol')} className={`px-drag ${c.k === 'total' ? 'num' : ''}`}>
                           {colLabel(c.k)}
                         </th>
                       ),

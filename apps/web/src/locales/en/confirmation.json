@@ -3,25 +3,29 @@
     "nouvelles": "New",
     "attente": "In progress",
     "confirmees": "Confirmed",
-    "terminees": "Closed"
+    "terminees": "Closed",
+    "livrees": "Delivered"
   },
   "title": {
     "nouvelles": "New orders",
     "attente": "In progress",
     "confirmees": "Confirmed",
-    "terminees": "Closed"
+    "terminees": "Closed",
+    "livrees": "Confirmed and delivered"
   },
   "help": {
     "nouvelles": "Orders nobody has called yet, newest at the top (last in, first called). Click a row (or ›) to see the details, “Call” to handle it.",
     "attente": "Orders already called but not confirmed yet: to check, no answer, busy, call back, postponed.",
     "confirmees": "Confirmed orders (and confirmed without stock), newest first, with where their delivery stands.",
-    "terminees": "Orders closed without confirmation: duplicates, wrong numbers and fake orders. They leave the call queue as soon as the agent picks this status."
+    "terminees": "Orders closed without confirmation: duplicates, wrong numbers and fake orders. They leave the call queue as soon as the agent picks this status.",
+    "livrees": "Your confirmed orders that reached the customer. Admins and managers see the whole team’s."
   },
   "empty": {
     "nouvelles": "No new order.",
     "attente": "No order in progress.",
     "confirmees": "No confirmed order.",
-    "terminees": "No closed order."
+    "terminees": "No closed order.",
+    "livrees": "None of your confirmed orders has been delivered yet."
   },
   "newOrder": "New order",
   "next": "Next order →",
@@ -97,7 +101,8 @@
     "allSt": {
       "attente": "All in progress",
       "confirmees": "All confirmed",
-      "terminees": "All closed"
+      "terminees": "All closed",
+      "livrees": "All"
     },
     "clear": "Clear filters"
   },
@@ -352,7 +357,8 @@
       "client": "Customer",
       "delivery": "Courier",
       "internal": "Internal"
-    }
+    },
+    "sub": "Products"
   },
   "focus": {
     "title": "Confirmation",
@@ -422,5 +428,21 @@
     "smsSub": "Phone text message",
     "waSub": "Opens the WhatsApp chat",
     "copied": "Message copied: paste it if needed"
+  },
+  "dl": {
+    "title": "Delivery",
+    "needDesk": "Bureau delivery: choose the bureau before saving.",
+    "inStock": "Available · {{n}} in stock",
+    "outStock": "Out of stock · {{n}} in stock",
+    "change": "Change",
+    "pick": "Choose the bureau",
+    "ok": "Deliverable",
+    "no": "Not deliverable",
+    "okShort": "Deliverable",
+    "noShort": "Not deliverable",
+    "pickTitle": "Bureaus · {{w}}",
+    "pickSub": "{{n}} bureaus in this wilaya",
+    "searchPh": "Search a bureau, commune, company…",
+    "none": "No bureau in this wilaya."
   }
 }

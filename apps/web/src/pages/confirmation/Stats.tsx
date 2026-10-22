@@ -20,7 +20,7 @@ export function StatsSection({ sub }: { sub: Sub }) {
     setKfState(k);
     saveKf(k);
   };
-  if (sub === 'terminees') return null;
+  if (sub === 'terminees' || sub === 'livrees') return null;
   if (sub === 'nouvelles') return <NouvellesStats kf={kf} setKf={setKf} open={open} setOpen={(o) => (setOpen(o), store.set('px-kff', o ? '1' : '0'))} />;
   return (
     <section className={`px-kff ${open ? '' : 'folded'}`}>

@@ -16,7 +16,7 @@ import { NewClaimModal } from './Claims';
 import { Reclamation } from './Reclamation';
 import { SwapModal, SwapResult, SwapSheetModal } from './Swap';
 import './suivi.css';
-import { ColumnMenu } from '../../ui/ColumnMenu';
+import { colDrag, ColumnMenu, DensitySwitch, useColumnOrder, useDensity } from '../../ui/ColumnMenu';
 import { HistoryButton, PhoneCell } from '../confirmation/History';
 import { store } from '../../lib/store';
 import { CopyCode } from '../../ui/CopyCode';
@@ -138,7 +138,10 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
     tracking: t('suivi.col.tracking'), follow: t('suivi.col.delivery'), agent: t('suivi.col.agent'), fagent: t('suivi.col.fagent'), since: t('suivi.col.since'), passed: t('confirmation.col.passed'), status: t('suivi.col.status'),
   };
   const save = (s: Set<SCol>) => (setVisible(s), store.set(SKEY, JSON.stringify([...s])));
-  const cols = SCOLS.filter((k) => visible.has(k));
+  const [order, setOrder] = useColumnOrder('suivi-order', SCOLS);
+  const cols = order.filter((k) => visible.has(k));
+  const drag = colDrag(order, setOrder);
+  const [dens, setDens] = useDensity();
   const cell = (o: Order, k: SCol): ReactNode => {
     switch (k) {
       case 'order':
@@ -197,7 +200,10 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
   return (
     <>
       <div className="px-scols">
+        <DensitySwitch value={dens} onChange={setDens} />
         <ColumnMenu
+          order={order}
+          onOrder={setOrder}
           cols={SCOLS.map((k) => ({ k, label: label[k] }))}
           visible={visible}
           onChange={save}
@@ -209,12 +215,12 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
       {!rows.length ? (
         <Empty>{empty}</Empty>
       ) : (
-        <div className="tbl-wrap">
+        <div className={`tbl-wrap px-d-${dens}`}>
           <table className="tbl">
             <thead>
               <tr>
                 {cols.map((k) => (
-                  <th key={k} className={k === 'product' ? 'wide' : k === 'since' ? 'num' : undefined}>
+                  <th key={k} {...drag(k)} title={t('common.dragCol')} className={`px-drag ${k === 'product' ? 'wide' : k === 'since' ? 'num' : ''}`}>
                     {label[k]}
                   </th>
                 ))}

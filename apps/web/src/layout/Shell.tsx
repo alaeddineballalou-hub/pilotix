@@ -11,6 +11,7 @@ import { store } from '../lib/store';
 import { Field, Icon, StageBar, TicketTag } from '../ui/kit';
 import { Modal } from '../ui/modal';
 import { canSee, NAV } from './nav';
+import { AccountMenu } from './AccountMenu';
 
 const AgentBanner = lazy(() => import('../pages/confirmation/AgentBanner').then((m) => ({ default: m.AgentBanner })));
 
@@ -197,18 +198,6 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
             </a>
           ),
         )}
-        <div className="me">
-          <div className="me-name">{session!.profile.name}</div>
-          <div className="me-roles">{session!.profile.roles.map((r) => t(`roles.${r}`)).join(' · ')}</div>
-          <div className="me-actions">
-            <button className="linkish" onClick={() => setPwOpen(true)}>
-              {t('shell.password')}
-            </button>
-            <button className="linkish" onClick={logout}>
-              {t('shell.logout')}
-            </button>
-          </div>
-        </div>
         </div>
       </nav>
       <div className="scrim" onClick={() => setNavOpen(false)} />
@@ -262,6 +251,7 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
           >
             <Icon name="moon" />
           </button>
+          <AccountMenu session={session!} onLogout={logout} />
         </header>
         {has('confirmation') && !isAdmin && (
           <Suspense fallback={null}>
