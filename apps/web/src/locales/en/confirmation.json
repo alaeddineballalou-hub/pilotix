@@ -479,6 +479,7 @@
       "cancelled": "Cancel the order",
       "postponed": "Postpone the order",
       "callback": "Call the customer back"
-    }
+    },
+    "allProducts": "All products"
   }
 }

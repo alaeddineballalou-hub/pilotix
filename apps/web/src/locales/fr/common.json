@@ -64,5 +64,6 @@
     "l": "Grandes lignes"
   },
   "dragCol": "Glissez pour déplacer la colonne",
-  "back": "Retour"
+  "back": "Retour",
+  "noResults": "Aucun résultat"
 }
