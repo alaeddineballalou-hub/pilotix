@@ -415,5 +415,12 @@
     "none": "Nothing yet.",
     "open": "See the history of {{ref}}",
     "see": "See"
+  },
+  "msg": {
+    "how": "Send a message by…",
+    "sms": "SMS",
+    "smsSub": "Phone text message",
+    "waSub": "Opens the WhatsApp chat",
+    "copied": "Message copied: paste it if needed"
   }
 }

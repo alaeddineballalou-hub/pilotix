@@ -415,5 +415,12 @@
     "none": "Rien pour l’instant.",
     "open": "Voir l’historique de {{ref}}",
     "see": "Voir"
+  },
+  "msg": {
+    "how": "Envoyer un message par…",
+    "sms": "SMS",
+    "smsSub": "Message texte du téléphone",
+    "waSub": "Ouvre la discussion WhatsApp",
+    "copied": "Message copié : collez-le si besoin"
   }
 }
