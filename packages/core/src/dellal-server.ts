@@ -62,7 +62,10 @@ async function send(ctx: Ctx, a: { channel: DellalChannel; externalId: string; a
 async function complete(ctx: Ctx, req: AiRequest): Promise<AiResponse> {
   const key = await dellalSecret(ctx.db, 'ai');
   if (!key) throw new AppError('bad_request', 'Clé API de l’IA manquante (Messages › Réglages).');
-  const data = await postJson(ANTHROPIC, req, { 'x-api-key': key, 'anthropic-version': '2023-06-01' }, 'IA (Anthropic)');
+  // Dellal's instructions are long and identical for every message of a conversation: cache them (tools + system),
+  // so each following message is billed mostly at the cached rate.
+  const body = { ...req, system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }] };
+  const data = await postJson(ANTHROPIC, body, { 'x-api-key': key, 'anthropic-version': '2023-06-01' }, 'IA (Anthropic)');
   return { content: data.content ?? [], stop_reason: data.stop_reason ?? 'end_turn', usage: data.usage };
 }
 

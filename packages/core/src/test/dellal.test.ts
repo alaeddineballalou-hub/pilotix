@@ -213,6 +213,11 @@ test('the sales playbook reaches the AI; a pack quantity gets the pack price, a 
   assert.match(system, /MÉTHODE DE VENTE/);
   assert.match(system, /Découverte : comprendre le client avant de vendre/);
   assert.match(system, /Augmenter le panier intelligemment/);
+  assert.match(system, /Ne prétends jamais être une personne/);
+  assert.match(system, /Ne demande jamais d’acompte/);
+  assert.match(system, /9 = ق \(et non ص/);
+  assert.match(system, /« nos mlyoun » = 5 000 DA/);
+  assert.match(system, /le matin wela l’après-midi/);
   assert.match(system, /1 million/);
   assert.match(system, /packs : 2 pour 15000 DA/);
   assert.match(system, /un conseiller l’appellera aussi pour confirmer/);
