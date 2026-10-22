@@ -69,6 +69,7 @@ export function toOrder(r: any): Order {
     warehouseId: numOrNull(r.warehouse_id),
     livreurId: numOrNull(r.livreur_id),
     tracking: r.tracking,
+    ownTracking: r.own_tracking,
     extStatus: r.ext_status,
     deliveryAttempts: num(r.delivery_attempts),
     subtotal: num(r.subtotal),
@@ -194,7 +195,7 @@ export async function listOrders(ctx: Ctx, f: ListInput): Promise<Page<Order>> {
     const digits = q.replace(/\D/g, '');
     if (phone) w.add('(o.phone = ? OR o.phone2 = ?)', phone, phone);
     else if (digits.length >= 4 && digits.length === q.replace(/[\s+.-]/g, '').length) w.add("o.phone LIKE '%' || ? || '%'", digits.slice(-9));
-    else w.add("(upper(o.ref) = upper(?) OR o.tracking = ? OR o.customer_name ILIKE '%' || ? || '%')", q, q, q);
+    else w.add("(upper(o.ref) = upper(?) OR o.tracking = ? OR upper(o.own_tracking) = upper(?) OR o.customer_name ILIKE '%' || ? || '%')", q, q, q, q);
   }
   const nulls = f.sort === 'next_call_at' ? (f.dir === 'asc' ? 'NULLS FIRST' : 'NULLS LAST') : f.dir === 'desc' ? 'NULLS LAST' : 'NULLS FIRST';
   const total = num((await ctx.db.query(`SELECT count(*)::int AS n FROM orders o ${w.sql}`, w.params))[0]?.n);

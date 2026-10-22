@@ -4,6 +4,7 @@ import type { TFunction } from 'i18next';
 import type { In } from '../../lib/backend';
 import { downloadCsv, escapeHtml, printHtml } from '../../lib/files';
 import { da, dateTime, when, wilaya, wilayaName } from '../../lib/format';
+import { trackOf } from '../../lib/items';
 
 export type ListFilter = In<'orders.list'>;
 
@@ -59,7 +60,7 @@ export function exportOrdersCsv(t: TFunction, rows: Order[]) {
     ...rows.map((o) => [
       o.ref, dateTime(o.createdAt), o.customerName, o.phone, o.phone2 ?? '', wilaya(o.wilayaId), o.commune, o.address, o.isStopdesk ? t('common.yes') : '',
       itemsText(o), pieces(o), o.subtotal, o.deliveryFee, o.discount, o.total, confLabel(t, o), o.followStatus ? t(`status.follow.${o.followStatus}`) : '',
-      o.companyName ?? '', o.tracking ?? '', o.agentName ?? '', o.deliveryNote ?? '',
+      o.companyName ?? '', trackOf(o), o.agentName ?? '', o.deliveryNote ?? '',
     ]),
   ]);
 }
@@ -92,7 +93,7 @@ export function printSlips(t: TFunction, rows: (Order & { companyKind?: string |
   const e = escapeHtml;
   const html = rows
     .map((a) => {
-      const code = a.tracking || a.ref;
+      const code = trackOf(a) || a.ref;
       return `<div style="border:2px solid #111;border-radius:8px;padding:10px;margin-bottom:10px;page-break-inside:avoid">
 <div style="background:#111;color:#fff;padding:7px 12px;border-radius:5px;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:21px;font-weight:900;letter-spacing:.03em;-webkit-print-color-adjust:exact;print-color-adjust:exact">
 <span>${a.companyKind === 'own' ? e(t('orders.slip.livreur')) : ''}${e(String(a.companyName || t('orders.slip.noCompany')).toUpperCase())}</span><span style="font-size:17px">${e(a.ref)}</span></div>
@@ -117,7 +118,7 @@ export function printOrder(t: TFunction, o: Order, shopName: string) {
 <h2>${e(t('orders.card.products'))}</h2><table><tr><th>${e(t('orders.form.product'))}</th><th class="num">${e(t('orders.form.qty'))}</th><th class="num">${e(t('orders.form.price'))}</th><th class="num">${e(t('orders.form.total'))}</th></tr>
 ${o.items.map((i) => `<tr><td>${e(i.name)}${i.variantTitle ? ` — ${e(i.variantTitle)}` : ''}</td><td class="num">${i.qty}</td><td class="num">${e(da(i.unitPrice))}</td><td class="num">${e(da(i.qty * i.unitPrice))}</td></tr>`).join('')}
 </table><p style="text-align:right">${e(t('orders.card.sum', { sub: da(o.subtotal), fee: da(o.deliveryFee) }))}${o.discount ? e(t('orders.card.sumDiscount', { v: da(o.discount) })) : ''}<br><span class="big">${e(t('orders.card.toCollect', { v: da(o.total) }))}</span></p>
-<h2>${e(t('orders.card.delivery'))}</h2><p>${e(t('orders.card.company'))} : ${e(o.companyName ?? '—')} · ${e(t('orders.card.tracking'))} : ${e(o.tracking ?? '—')}</p>
+<h2>${e(t('orders.card.delivery'))}</h2><p>${e(t('orders.card.company'))} : ${e(o.companyName ?? '—')} · ${e(t('orders.card.tracking'))} : ${e(trackOf(o) || '—')}</p>
 ${o.deliveryNote ? `<p><b>${e(t('orders.card.noteLivreur'))} : ${e(o.deliveryNote)}</b></p>` : ''}`,
   );
 }

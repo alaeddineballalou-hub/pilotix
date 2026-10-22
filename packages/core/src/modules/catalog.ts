@@ -420,8 +420,8 @@ export async function findByCode(ctx: Ctx, raw: string): Promise<Order[]> {
   if (!code) return [];
   const phone = /^\+?\d{9,13}$/.test(code) ? normalizePhone(code) : null;
   const rows = await ctx.db.query(
-    `SELECT id FROM orders WHERE upper(ref) = upper($1) OR upper(tracking) = upper($1) OR ($2::text IS NOT NULL AND (phone = $2 OR phone2 = $2))
-     ORDER BY (upper(ref) = upper($1) OR upper(tracking) = upper($1)) DESC, id DESC LIMIT 10`,
+    `SELECT id FROM orders WHERE upper(ref) = upper($1) OR upper(tracking) = upper($1) OR upper(own_tracking) = upper($1) OR ($2::text IS NOT NULL AND (phone = $2 OR phone2 = $2))
+     ORDER BY (upper(ref) = upper($1) OR upper(tracking) = upper($1) OR upper(own_tracking) = upper($1)) DESC, id DESC LIMIT 10`,
     [code, phone],
   );
   const out: Order[] = [];
@@ -519,7 +519,7 @@ export async function scan(ctx: Ctx, i: { code?: string; orderId?: number; mode:
     }
     if (!code) throw bad('Code vide');
     const list = await findByCode(ctx, code);
-    const exact = list.find((o) => (o.tracking ?? '').toUpperCase() === code.toUpperCase() || o.ref.toUpperCase() === code.toUpperCase());
+    const exact = list.find((o) => (o.tracking ?? '').toUpperCase() === code.toUpperCase() || o.ownTracking.toUpperCase() === code.toUpperCase() || o.ref.toUpperCase() === code.toUpperCase());
     const o = exact ?? (list.length === 1 ? list[0] : null);
     if (!o && list.length > 1) return { kind: 'pick', code, why: 'Plusieurs commandes avec ce code : choisissez la bonne.', list };
     if (!o)

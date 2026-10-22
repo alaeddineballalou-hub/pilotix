@@ -6,7 +6,7 @@ import { da, wilaya, when } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
 import { BulkBar, Card, ErrorBox, Loading, StatusBadge, TicketTag } from '../../ui/kit';
-import { namesOf, variantsOf } from '../../lib/items';
+import { namesOf, variantsOf, trackOf } from '../../lib/items';
 
 export interface ExtraCol {
   label: string;
@@ -193,7 +193,7 @@ export function DepotOrderList({
                   </td>
                   <td data-l={t('depot.cols.company')}>
                     {o.companyName ?? '—'}
-                    <small className="ltr">{o.tracking || o.ref}</small>
+                    <small className="ltr">{trackOf(o) || o.ref}</small>
                   </td>
                   <td className="hide-m" data-l={t('depot.cols.agent')}>
                     {o.agentName ?? '—'}

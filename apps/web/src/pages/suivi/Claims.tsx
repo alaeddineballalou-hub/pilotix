@@ -9,6 +9,7 @@ import { copyText, Empty, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { claimText, ClaimCompany, waLink } from './common';
+import { trackOf } from '../../lib/items';
 
 export const CLAIM_REASONS = ['relivrer', 'late', 'nocall', 'fakedeliv', 'fakeret', 'address', 'damaged', 'money', 'noreturn', 'other'] as const;
 type Reason = (typeof CLAIM_REASONS)[number];
@@ -39,7 +40,7 @@ function useTarget(o: Order | null, toLivreur: boolean) {
 export function NewClaimModal({ pre, toLivreur = false, reason = 'late', details = '', onClose }: { pre?: Order | null; toLivreur?: boolean; reason?: Reason; details?: string; onClose: () => void }) {
   const { t } = useTranslation();
   const [o, setO] = useState<Order | null>(pre ?? null);
-  const [q, setQ] = useState(pre ? pre.tracking || pre.ref : '');
+  const [q, setQ] = useState(pre ? trackOf(pre) || pre.ref : '');
   const [deb, setDeb] = useState('');
   const [mot, setMot] = useState<Reason>(reason);
   const [det, setDet] = useState(details);
@@ -56,7 +57,7 @@ export function NewClaimModal({ pre, toLivreur = false, reason = 'late', details
 
   // copy the tracking when opened from an alert (the courier desk asks for it first)
   useEffect(() => {
-    if (pre?.tracking && !toLivreur) copyText(pre.tracking).then((ok) => ok && toast(t('suivi.rec.copiedTracking', { v: pre.tracking }), 'ok'));
+    if (pre && trackOf(pre) && !toLivreur) copyText(trackOf(pre)).then((ok) => ok && toast(t('suivi.rec.copiedTracking', { v: trackOf(pre) }), 'ok'));
   }, [pre, toLivreur, t]);
 
   if (made && o) return <SendModal claim={made} order={o} target={target ?? { name: o.companyName ?? o.livreurName ?? '—', wa: null, email: null, phone: null }} shop={shop} again={false} onClose={onClose} />;
@@ -99,7 +100,7 @@ export function NewClaimModal({ pre, toLivreur = false, reason = 'late', details
                   </b>
                   <span className="badge t-info">{x.followStatus ? t(`status.follow.${x.followStatus}`) : '—'}</span>
                   <small>
-                    {t('suivi.rec.tracking', { v: x.tracking || '—' })} · {x.companyName || x.livreurName || ''}
+                    {t('suivi.rec.tracking', { v: trackOf(x) || '—' })} · {x.companyName || x.livreurName || ''}
                   </small>
                 </button>
               ))
@@ -111,7 +112,7 @@ export function NewClaimModal({ pre, toLivreur = false, reason = 'late', details
         {o && (
           <div className="bjr-sum">
             <b className="ltr">{o.ref}</b>
-            <span>{t('suivi.rec.tracking', { v: o.tracking || '—' })}</span>
+            <span>{t('suivi.rec.tracking', { v: trackOf(o) || '—' })}</span>
             <span>{own ? o.livreurName : o.companyName || t('suivi.rec.noCompany')}</span>
             <span>{o.customerName}</span>
             <span className="ltr">{o.phone}</span>
@@ -355,7 +356,7 @@ export function ClaimsPanel({ target }: { target: 'company' | 'livreur' }) {
                       </td>
                       <td data-l={t('suivi.rec.col.order')}>
                         <b className="ltr">{c.orderRef ?? '—'}</b>
-                        <small>{t('suivi.rec.tracking', { v: c.tracking || '—' })}</small>
+                        <small>{t('suivi.rec.tracking', { v: trackOf(c) || '—' })}</small>
                       </td>
                       <td data-l={t(target === 'company' ? 'suivi.rec.col.company' : 'suivi.rec.col.livreur')}>{nameOf(c)}</td>
                       <td className="wide" data-l={t('suivi.rec.col.problem')}>

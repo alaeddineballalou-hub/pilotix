@@ -2,6 +2,7 @@ import type { Order } from '@pilotix/shared';
 import i18n from '../../lib/i18n';
 import { escapeHtml, printHtml } from '../../lib/files';
 import { da, dateTime, wilaya } from '../../lib/format';
+import { trackOf } from '../../lib/items';
 
 export interface RouteSheet {
   shop: string;
@@ -22,7 +23,7 @@ export function printRouteSheet(s: RouteSheet) {
     .map(
       (o, k) => `<tr>
   <td class="num">${k + 1}</td>
-  <td><b>${escapeHtml(o.ref)}</b>${o.tracking ? `<br><span class="muted">${escapeHtml(o.tracking)}</span>` : ''}</td>
+  <td><b>${escapeHtml(o.ref)}</b>${trackOf(o) ? `<br><span class="muted">${escapeHtml(trackOf(o))}</span>` : ''}</td>
   <td><b>${escapeHtml(o.customerName)}</b><br>${escapeHtml(o.phone)}${o.phone2 ? ` / ${escapeHtml(o.phone2)}` : ''}</td>
   <td>${escapeHtml(wilaya(o.wilayaId))} · ${escapeHtml(o.commune)}<br>${escapeHtml(o.address)}${o.isStopdesk ? `<br><b>${escapeHtml(t('stopdesk'))}</b>` : ''}</td>
   <td>${escapeHtml(items(o))}${o.deliveryNote ? `<br><i>${escapeHtml(o.deliveryNote)}</i>` : ''}</td>

@@ -85,7 +85,7 @@ test('payroll: agents get no commission on ticket parcels', async () => {
   const ym = new Date().toISOString().slice(0, 7);
   const p: any = await call('admin.payroll', admin, { month: ym }).catch(() => null);
   if (!p) return; // payroll input shape differs: covered by admin tests
-  const delivered = (await db.query(`SELECT count(*)::int AS n FROM orders WHERE NOT is_exchange AND agent_id IS NOT NULL AND follow_status IN ('delivered','exchanged') AND to_char(delivered_at, 'YYYY-MM') = $1`, [ym]))[0].n;
+  const delivered = (await db.query(`SELECT count(*)::int AS n FROM orders WHERE NOT is_exchange AND agent_id IS NOT NULL AND follow_status IN ('delivered','exchanged') AND to_char(delivered_at AT TIME ZONE 'Africa/Algiers', 'YYYY-MM') = $1`, [ym]))[0].n;
   const counted = (p.agents ?? []).reduce((s: number, a: any) => s + a.count, 0);
   assert.ok(counted <= delivered);
 });

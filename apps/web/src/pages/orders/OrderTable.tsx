@@ -6,7 +6,7 @@ import { da, when, wilaya, wilayaName } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { BulkBar, Empty, Loading, Pager, SortTh, StatusBadge } from '../../ui/kit';
 import { confLabel } from './shared';
-import { namesOf, variantsOf } from '../../lib/items';
+import { namesOf, variantsOf, trackOf } from '../../lib/items';
 
 /** Built-in columns, in the original order. */
 export type OrderColumn = 'order' | 'client' | 'address' | 'products' | 'variant' | 'total' | 'conf' | 'follow' | 'company' | 'agent' | 'fagent' | 'phone' | 'wilaya' | 'since';
@@ -172,7 +172,7 @@ export function OrderTable(p: OrderTableProps) {
       case 'company':
         return (
           <td key={c} data-l={label[c]}>
-            {o.tracking ? <span className="ltr">{o.tracking}</span> : '—'}
+            {trackOf(o) ? <span className="ltr">{trackOf(o)}</span> : '—'}
           </td>
         );
       case 'agent':

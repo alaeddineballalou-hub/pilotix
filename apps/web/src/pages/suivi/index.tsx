@@ -11,7 +11,7 @@ import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import type { PageProps } from '../registry';
 import { ConfirmModal, daysSince, productsText } from './common';
-import { namesOf, variantsOf } from '../../lib/items';
+import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import { NewClaimModal } from './Claims';
 import { Reclamation } from './Reclamation';
 import { SwapModal, SwapResult, SwapSheetModal } from './Swap';
@@ -163,7 +163,7 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
                 <td data-l={t('suivi.col.delivery')}>
                   {o.companyName || o.livreurName || '—'}
                   <small>
-                    <span className="ltr">{o.tracking || ''}</span>
+                    <span className="ltr">{trackOf(o)}</span>
                     {reasonOf(o, extra[o.id]) ? ` · ${reasonOf(o, extra[o.id])}` : ''}
                   </small>
                 </td>

@@ -6,7 +6,7 @@ import { openOrder, openOrderForm } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
 import { Empty, ErrorBox, Icon, Loading, Pager, StatusBadge } from '../../ui/kit';
 import { ClaimsPanel } from './Claims';
-import { namesOf, variantsOf } from '../../lib/items';
+import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import { productsText } from './common';
 
 type RTab = 'search' | 'companies' | 'livreurs';
@@ -234,7 +234,7 @@ function SearchOrders() {
                         <StatusBadge kind="follow" status={o.followStatus} />
                       </td>
                       <td data-l={t('suivi.col.tracking')}>
-                        {o.tracking ? <span className="ltr">{o.tracking}</span> : '—'}
+                        {trackOf(o) ? <span className="ltr">{trackOf(o)}</span> : '—'}
                       </td>
                     </tr>
                   ))}
