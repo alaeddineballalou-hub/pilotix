@@ -7,9 +7,9 @@ import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { ErrorBox, Icon, Loading, StatusBadge } from '../../ui/kit';
-import { AnyPeriod, rangeOf, useStored } from './util';
+import { AnyPeriod, inputsOf, rangeOf, useStored } from './util';
 
-const PERIODS: AnyPeriod[] = ['7d', '30d', 'month', 'lastmonth'];
+const PERIODS: AnyPeriod[] = ['today', 'yesterday', '7d', '30d', 'month', 'lastmonth', 'custom'];
 // one orange family for the parts of a whole (top products / channels); "other" is neutral
 const SHADES = ['#E8730C', '#F59E2B', '#F9C06A', '#FCDDAE'];
 const OTHER = '#E6DED4';
@@ -34,13 +34,15 @@ export function Overview() {
   const { t } = useTranslation();
   const [period, setPeriod] = useStored<AnyPeriod>('dash.ov.period', '30d');
   const p = PERIODS.includes(period) ? period : '30d';
-  const range = useMemo(() => rangeOf(p), [p]);
+  const [custom, setCustom] = useStored<{ from: string; to: string }>('dash.ov.custom', inputsOf(rangeOf('7d')));
+  const range = useMemo(() => rangeOf(p, custom), [p, custom.from, custom.to]); // eslint-disable-line react-hooks/exhaustive-deps
   const q = useRpc('stats.overview2', range, { refetchInterval: 60_000 });
   const D = q.data;
   return (
     <div className="ov">
       <div className="ov-head">
         <h2>{t('dashboard.ov.title')}</h2>
+        <span className="ov-grow" />
         <select className="ov-sel" aria-label={t('dashboard.period')} value={p} onChange={(e) => setPeriod(e.target.value as AnyPeriod)}>
           {PERIODS.map((x) => (
             <option key={x} value={x}>
@@ -48,6 +50,13 @@ export function Overview() {
             </option>
           ))}
         </select>
+        {p === 'custom' && (
+          <span className="ov-dates">
+            <input type="date" value={custom.from} max={custom.to} aria-label={t('common.from')} onChange={(e) => e.target.value && setCustom({ ...custom, from: e.target.value })} />
+            <span className="muted">→</span>
+            <input type="date" value={custom.to} min={custom.from} aria-label={t('common.to')} onChange={(e) => e.target.value && setCustom({ ...custom, to: e.target.value })} />
+          </span>
+        )}
       </div>
       {q.error ? (
         <ErrorBox error={q.error} onRetry={() => q.refetch()} />
