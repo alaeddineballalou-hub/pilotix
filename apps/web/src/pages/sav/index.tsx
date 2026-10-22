@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useIsPhone } from '../../lib/useMedia';
 import { useTranslation } from 'react-i18next';
 import { dur, when } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
@@ -6,12 +7,20 @@ import { useRpc } from '../../lib/query';
 import { Empty, ErrorBox, Help, Icon, KpiBody, Loading, StageBar, StatusBadge } from '../../ui/kit';
 import type { PageProps } from '../registry';
 import { NewTicketModal } from './NewTicket';
+import { PhoneSav } from './PhoneSav';
 import { SavStats } from './Stats';
 import { TicketModal } from './Ticket';
 
-const VIEWS = ['tickets', 'nouveau', 'attente', 'depot', 'livraison', 'livres', 'annules', 'stats'] as const;
+const VIEWS = ['tickets', 'nouveau', 'attente', 'depot', 'livraison', 'livres', 'annules', 'satisfaction', 'stats'] as const;
 type View = (typeof VIEWS)[number];
 export function Sav({ sub }: PageProps) {
+  // phones: SAV is built around the call (Nouvel appel → réglé au téléphone or échange → dépôt)
+  const phone = useIsPhone();
+  if (phone && sub !== 'stats') return <PhoneSav sub={sub} />;
+  return <SavDesktop sub={sub} />;
+}
+
+function SavDesktop({ sub }: PageProps) {
   const { t } = useTranslation();
   const view: View = (VIEWS as readonly string[]).includes(sub ?? '') ? (sub as View) : 'tickets';
   const [tab, setTab] = useState<'todo' | 'all'>(() => {
@@ -45,7 +54,7 @@ export function Sav({ sub }: PageProps) {
   const kp = useRpc('sav.kpis', {}, { refetchInterval: 60_000 });
   const list = useRpc('sav.list', { view: apiView, q: deb || undefined });
   const k = kp.data;
-  const stageCount = (v: View): number | undefined => (k && (v === 'attente' || v === 'depot' || v === 'livraison' || v === 'livres' || v === 'annules') ? k[v] : undefined);
+  const stageCount = (v: View): number | undefined => (k && (v === 'attente' || v === 'depot' || v === 'livraison' || v === 'livres' || v === 'annules' || v === 'satisfaction') ? k[v] : undefined);
   const closeNew = () => {
     setCreating(false);
     if (view === 'nouveau') location.hash = '#/sav/tickets';

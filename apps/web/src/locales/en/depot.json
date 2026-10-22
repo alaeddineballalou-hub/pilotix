@@ -169,6 +169,7 @@
     "partner": "Delivery partner",
     "send_one": "Send to dispatch · {{count}}",
     "send_other": "Send to dispatch · {{count}}",
-    "stage": "Preparation"
+    "stage": "Preparation",
+    "savTag": "SAV · exchange"
   }
 }

@@ -81,3 +81,5 @@
 .pxd-send { height: 52px; border: 0; border-radius: 14px; background: #1F9D57; color: #fff; font: inherit; font-size: 16px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; box-shadow: 0 8px 20px rgba(31, 157, 87, .3); }
 .pxd-send:disabled { opacity: .4; box-shadow: none; cursor: default; }
 .pxd-send .bji { width: 18px; height: 18px; }
+/* an exchange from SAV: marked, nothing else changes for the depot */
+.pxd-sav { display: inline-flex; align-items: center; height: 18px; margin-inline-start: 6px; padding: 0 7px; border-radius: 999px; background: linear-gradient(135deg, #F7A823, #F28B1E); color: #fff; font-size: 10px; font-weight: 800; vertical-align: 2px; }
