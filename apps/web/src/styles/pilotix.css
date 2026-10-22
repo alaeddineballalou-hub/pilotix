@@ -635,7 +635,11 @@ html body .qcard .qa-btn { height: 36px; white-space: nowrap; justify-content: c
 .qcard .qa-btn .qa-ic .bji { width: 16px; height: 16px; vertical-align: 0; }
 .qcard .qa-wrap .qa-sel { border: 0 !important; background-color: transparent !important; box-shadow: none !important; padding-block: 0 !important; height: 34px; font: inherit; font-weight: 700; color: inherit; cursor: pointer; max-width: 190px; }
 /* not enough room: plain buttons become icon squares (name in the tooltip) */
-@container qcard (max-width: 1240px) {
+html body .qcard .qacts { width: 100%; min-width: 0; box-sizing: border-box; }
+.qcard .qacts.qa-compact .qa-btn:has(.qa-tx) { width: 36px; padding: 0 !important; }
+.qcard .qacts.qa-compact .qa-btn .qa-tx { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+html body .qcard .qa-wrap .qa-sel { max-width: none; width: auto; }
+@container qcard (max-width: 700px) {
   .qcard .qa-btn:has(.qa-tx) { width: 36px; padding: 0 !important; }
   .qcard .qa-btn .qa-tx { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
@@ -677,3 +681,7 @@ html body .qtbl td.qexp .icon-btn[aria-expanded="true"] { background: var(--q-ac
   html body .qtbl td.ck:not(.qexp) { top: 12px; }
   html body .qtbl tbody tr > td:nth-child(3) { grid-column: 1 / -1; padding-inline-end: 88px; }
 }
+/* still too narrow: two tidy lines (selection + agent/status, then order tools + delete at the far end) */
+html body .qcard .qacts.qa-two { flex-wrap: wrap; row-gap: 10px; }
+.qcard .qacts.qa-two .qa-grp { border: 0 !important; padding-inline-start: 0 !important; }
+.qcard .qacts.qa-two .qa-grp.qa-end { margin-inline-start: auto; border: 0; }
