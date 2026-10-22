@@ -10,7 +10,7 @@ import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { da, fromLocalInput, wilayaName } from '../../lib/format';
 import { Icon, Loading, StatusBadge } from '../../ui/kit';
-import { createPortal } from 'react-dom';
+import { Float } from '../../ui/Float';
 import { toast } from '../../ui/toast';
 
 interface Line {
@@ -46,6 +46,7 @@ export function Detail({ order }: { order: Order }) {
   const [deskId, setDeskId] = useState<number | null>(order.stopdeskId);
   const [picker, setPicker] = useState(false);
   const [busy, setBusy] = useState(false);
+  const deskRef = useRef<HTMLDivElement>(null);
   const [modeTouched, setModeTouched] = useState(false);
   const opts = useRpc('confirmation.deskOptions', { wilayaId: order.wilayaId }, { staleTime: 5 * 60_000 });
   const modeFee = useRpc('confirmation.gridFee', { id: order.id, isStopdesk: desk }, { staleTime: 60_000 });
@@ -209,15 +210,8 @@ export function Detail({ order }: { order: Order }) {
                     {l.name} {l.isUpsell && <span className="chip">upsell</span>} {pk && <span className="chip qd2-pk">pack {l.qty}</span>}
                   </b>
                   <div className="qd6-meta">
-                    {vs.length > 1 || (vs.length === 1 && vs[0].id !== l.variantId) ? (
-                      <select className="qd6-var" aria-label={t('confirmation.d.variant')} disabled={!editable} value={l.variantId ?? ''} onChange={(e) => setVar(i, Number(e.target.value))}>
-                        {vs.map((v) => (
-                          <option key={v.id} value={v.id}>
-                            {v.title}
-                            {L.some((x, k) => k !== i && x.variantId === v.id) ? ` ${t('confirmation.d.already')}` : ''}
-                          </option>
-                        ))}
-                      </select>
+                    {p && (vs.length > 1 || (vs.length === 1 && vs[0].id !== l.variantId)) ? (
+                      <VariantMenu product={p} value={l.variantId} lines={L} lineIndex={i} disabled={!editable} onPick={(vid) => setVar(i, vid)} />
                     ) : (
                       l.variantTitle && <span className="qd6-vt">{l.variantTitle}</span>
                     )}
@@ -323,7 +317,7 @@ export function Detail({ order }: { order: Order }) {
           </div>
           {desk ? (
             chosen ? (
-              <div className="qd6-desk">
+              <div className="qd6-desk click" ref={deskRef} role="button" tabIndex={editable ? 0 : -1} onClick={() => editable && setPicker((o) => !o)} onKeyDown={(e) => e.key === 'Enter' && editable && setPicker(true)}>
                 <span>
                   <b>{chosen.name}</b> <small>· {[chosen.address, chosen.commune || wilayaName(order.wilayaId)].filter(Boolean).join(' · ')}</small>
                 </span>
@@ -331,9 +325,13 @@ export function Detail({ order }: { order: Order }) {
                   <i />
                   {chosen.served ? t('confirmation.dl.ok') : t('confirmation.dl.no')}
                 </span>
+                {editable && <Icon name="chevron" />}
               </div>
             ) : (
-              <div className="qd6-desk miss">{t('confirmation.d6.noDesk')}</div>
+              <div className="qd6-desk miss click" ref={deskRef} role="button" tabIndex={editable ? 0 : -1} onClick={() => editable && setPicker((o) => !o)} onKeyDown={(e) => e.key === 'Enter' && editable && setPicker(true)}>
+                {t('confirmation.d6.noDesk')}
+                <Icon name="chevron" />
+              </div>
             )
           ) : (
             <div className="qd6-desk">
@@ -347,11 +345,6 @@ export function Detail({ order }: { order: Order }) {
                 </span>
               )}
             </div>
-          )}
-          {desk && editable && (
-            <button type="button" className={chosen ? 'linkish qd6-change' : 'btn small primary'} onClick={() => setPicker(true)}>
-              {chosen ? t('confirmation.dl.change') : t('confirmation.dl.pick')}
-            </button>
           )}
         </section>
       </div>
@@ -428,7 +421,8 @@ export function Detail({ order }: { order: Order }) {
         <StatusMenu order={order} busy={busy} run={run} />
       </aside>
       {picker && opts.data && (
-        <DeskPicker
+        <DeskMenu
+          anchor={deskRef}
           wilaya={wilayaName(order.wilayaId)}
           desks={opts.data.desks}
           current={deskId}
@@ -571,29 +565,76 @@ function StatusMenu({ order, busy, run }: { order: Order; busy: boolean; run: (f
   );
 }
 
-/** "+ Ajouter un produit : tapez le nom, la couleur ou le SKU…" — Enter adds the first match. */
+/** "+ Ajouter un produit": a menu with every product and variant (price, stock, remise), and under it the products often bought with the cart. */
 function AddProduct({ catalog, lines, onPick }: { catalog: Catalog; lines: Line[]; onPick: (p: Prod, vid: number | null) => void }) {
   const { t } = useTranslation();
   const [q, setQ] = useState('');
   const [k, setK] = useState(0);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
-  const opts = useMemo(
+  const wrap = useRef<HTMLDivElement>(null);
+  type Opt = { p: Prod; v: Prod['variants'][number] | null; label: string; hay: string; price: number; stock: number | null };
+  const opts = useMemo<Opt[]>(
     () =>
       catalog
         .filter((p) => !p.isService)
-        .flatMap((p) => (p.variants.length ? p.variants : [{ id: null as unknown as number, title: '', sku: p.sku, price: null }]).map((v) => ({ p, v, label: `${p.name}${v.title ? ` · ${v.title}` : ''}`, hay: norm(`${p.name} ${v.title} ${v.sku} ${p.sku}`) }))),
+        .flatMap((p) =>
+          (p.variants.length ? p.variants : [null]).map((v) => ({
+            p,
+            v,
+            label: v?.title ?? '',
+            hay: norm(`${p.name} ${v?.title ?? ''} ${v?.sku ?? ''} ${p.sku}`),
+            price: v?.price ?? p.price,
+            stock: v ? (v.stock ?? null) : null,
+          })),
+        ),
     [catalog],
   );
+  const inCart = new Set(lines.map((l) => l.productId));
+  const linkedIds = [...new Set(lines.flatMap((l) => catalog.find((p) => p.id === l.productId)?.linked ?? []))].filter((id) => !inCart.has(id));
   const words = norm(q).trim().split(/\s+/).filter(Boolean);
-  const hits = norm(q).trim().length < 2 ? [] : opts.filter((o) => words.every((w) => o.hay.includes(w))).slice(0, 12);
-  const pick = (o: (typeof opts)[number]) => {
-    onPick(o.p, o.v.id ?? null);
+  const hits = opts.filter((o) => words.every((w) => o.hay.includes(w)));
+  const related = opts.filter((o) => linkedIds.includes(o.p.id) && (o.v === null || o.v.id === o.p.variants[0]?.id) && words.every((w) => o.hay.includes(w)));
+  const list = [...hits.filter((o) => !linkedIds.includes(o.p.id)), ...related];
+  const pick = (o: Opt) => {
+    onPick(o.p, o.v?.id ?? null);
     setQ('');
-    ref.current?.focus();
+    setOpen(false);
+    ref.current?.blur();
   };
+  const row = (o: Opt, i: number) => {
+    const pk = o.p.packs[0];
+    const save = pk ? o.price * pk.qty - pk.price : 0;
+    const has = lines.some((l) => l.productId === o.p.id && l.variantId === (o.v?.id ?? null));
+    return (
+      <button key={`${o.p.id}-${o.v?.id ?? 0}`} type="button" role="option" aria-selected={i === k} className={`pxf-it ${i === k ? 'on' : ''}`} onMouseEnter={() => setK(i)} onMouseDown={(e) => (e.preventDefault(), pick(o))}>
+        <span className="pxf-ic">
+          <Icon name="package" />
+        </span>
+        <span className="pxf-main">
+          <b>
+            {o.p.name}
+            {o.label && <span className="pxf-v"> · {o.label}</span>}
+          </b>
+          <small>
+            {o.stock !== null && <span className={o.stock > 0 ? 'pxf-ok' : 'pxf-bad'}>{o.stock > 0 ? t('confirmation.d6.inStock', { n: o.stock }) : t('confirmation.d6.outStock', { n: o.stock })}</span>}
+            {has && <span> · {t('confirmation.d.inOrder')}</span>}
+          </small>
+        </span>
+        <span className="pxf-price ltr">
+          <b>{da(o.price)}</b>
+          {pk && save > 0 && (
+            <small>
+              {t('confirmation.d6.pack', { n: pk.qty })} {da(pk.price)} <em>−{da(save)}</em>
+            </small>
+          )}
+        </span>
+      </button>
+    );
+  };
+  const main = list.filter((o) => !linkedIds.includes(o.p.id));
   return (
-    <div className="combo qd2-add">
+    <div className="combo qd2-add" ref={wrap}>
       <input
         ref={ref}
         type="search"
@@ -601,100 +642,126 @@ function AddProduct({ catalog, lines, onPick }: { catalog: Catalog; lines: Line[
         autoComplete="off"
         placeholder={t('confirmation.d.addPh')}
         aria-label={t('confirmation.d.add')}
+        role="combobox"
+        aria-expanded={open}
         value={q}
+        onFocus={() => setOpen(true)}
         onChange={(e) => {
           setQ(e.target.value);
           setK(0);
           setOpen(true);
         }}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
         onKeyDown={(e) => {
-          if (!hits.length) return;
+          if (!list.length) return;
           if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
             e.preventDefault();
-            setK((k + (e.key === 'ArrowDown' ? 1 : -1) + hits.length) % hits.length);
+            setOpen(true);
+            setK((k + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length);
           } else if (e.key === 'Enter') {
             e.preventDefault();
-            pick(hits[k]);
-          } else if (e.key === 'Escape') setQ('');
+            pick(list[k]);
+          }
         }}
       />
-      {open && hits.length > 0 && (
-        <div className="combo-list" role="listbox">
-          {hits.map((o, i) => (
-            <button
-              key={`${o.p.id}-${o.v.id}`}
-              type="button"
-              className={i === k ? 'on' : ''}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                pick(o);
-              }}
-            >
-              <span>
-                {o.label}
-                {lines.some((l) => l.productId === o.p.id && l.variantId === (o.v.id ?? null)) && <small className="muted"> · {t('confirmation.d.inOrder')}</small>}
-              </span>
-              <span className="muted ltr">{da(o.v.price ?? o.p.price)}</span>
-            </button>
-          ))}
-        </div>
+      {open && (
+        <Float anchor={wrap} onClose={() => setOpen(false)} className="pxf-prod" minWidth={420}>
+          <div role="listbox" aria-label={t('confirmation.d.add')}>
+            {list.length === 0 && <p className="pxf-none">{t('common.noResults')}</p>}
+            {main.length > 0 && <div className="pxf-gh">{t('confirmation.d6.allProducts')}</div>}
+            {main.map((o, i) => row(o, i))}
+            {related.length > 0 && (
+              <div className="pxf-gh rel">
+                <Icon name="sparkles" />
+                {t('confirmation.d6.offer')}
+              </div>
+            )}
+            {related.map((o, i) => row(o, main.length + i))}
+          </div>
+        </Float>
       )}
     </div>
   );
 }
 
+/** The variant of a cart line, in our dropdown: each variant with its price and stock. */
+function VariantMenu({ product, value, lines, lineIndex, disabled, onPick }: { product: Prod; value: number | null; lines: Line[]; lineIndex: number; disabled: boolean; onPick: (vid: number) => void }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
+  const cur = product.variants.find((v) => v.id === value);
+  return (
+    <>
+      <button type="button" ref={btn} className={`qd6-var ${open ? 'on' : ''}`} disabled={disabled} aria-haspopup="listbox" aria-expanded={open} aria-label={t('confirmation.d.variant')} onClick={() => setOpen((o) => !o)}>
+        {cur?.title || '—'}
+        <Icon name="chevron" />
+      </button>
+      {open && (
+        <Float anchor={btn} onClose={() => setOpen(false)} minWidth={260} maxHeight={320}>
+          <div role="listbox">
+            {product.variants
+              .filter((v) => v.title !== '')
+              .map((v) => (
+                <button key={v.id} type="button" role="option" aria-selected={v.id === value} className={`pxf-it slim ${v.id === value ? 'cur' : ''}`} onClick={() => (onPick(v.id), setOpen(false))}>
+                  <span className="pxf-main">
+                    <b>{v.title}</b>
+                    <small>
+                      <span className={(v.stock ?? 0) > 0 ? 'pxf-ok' : 'pxf-bad'}>{(v.stock ?? 0) > 0 ? t('confirmation.d6.inStock', { n: v.stock ?? 0 }) : t('confirmation.d6.outStock', { n: v.stock ?? 0 })}</span>
+                      {lines.some((x, k) => k !== lineIndex && x.variantId === v.id) && <span> · {t('confirmation.d.already')}</span>}
+                    </small>
+                  </span>
+                  <span className="pxf-price ltr">
+                    <b>{da(v.price ?? product.price)}</b>
+                  </span>
+                </button>
+              ))}
+          </div>
+        </Float>
+      )}
+    </>
+  );
+}
+
 type Desk = { id: number; companyId: number; companyName: string; name: string; commune: string; address: string; served: boolean };
 
-/** Window on the left side: the bureaus of the wilaya, green when the company delivers there, red when not. */
-function DeskPicker({ wilaya, desks, current, onPick, onClose }: { wilaya: string; desks: Desk[]; current: number | null; onPick: (id: number) => void; onClose: () => void }) {
+/** The bureaus of the wilaya, in a menu right under the bureau box: search, grouped by company, green when it delivers, red when not. */
+function DeskMenu({ anchor, wilaya, desks, current, onPick, onClose }: { anchor: React.RefObject<HTMLElement>; wilaya: string; desks: Desk[]; current: number | null; onPick: (id: number) => void; onClose: () => void }) {
   const { t } = useTranslation();
   const [q, setQ] = useState('');
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    document.addEventListener('keydown', key);
-    return () => document.removeEventListener('keydown', key);
-  }, [onClose]);
   const words = norm(q).trim().split(/\s+/).filter(Boolean);
   const list = desks.filter((d) => words.every((w) => norm(`${d.name} ${d.companyName} ${d.commune} ${d.address}`).includes(w)));
   const groups = [...new Set(list.map((d) => d.companyName))];
-  return createPortal(
-    <div className="qd5-pick-wrap" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="qd5-pick" role="dialog" aria-label={t('confirmation.dl.pickTitle', { w: wilaya })}>
-        <div className="qd5-pick-h">
-          <div>
-            <b>{t('confirmation.dl.pickTitle', { w: wilaya })}</b>
-            <small>{t('confirmation.dl.pickSub', { n: desks.length })}</small>
-          </div>
-          <button type="button" className="px-hist-x" aria-label={t('common.close')} onClick={onClose}>
-            <Icon name="x" />
-          </button>
-        </div>
-        <input type="search" className="qd5-pick-q" placeholder={t('confirmation.dl.searchPh')} aria-label={t('confirmation.dl.searchPh')} value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
-        <div className="qd5-pick-list">
-          {list.length === 0 && <p className="muted small">{t('confirmation.dl.none')}</p>}
-          {groups.map((g) => (
-            <div key={g} className="qd5-pick-g">
-              <div className="qd5-pick-gh">{g}</div>
-              {list
-                .filter((d) => d.companyName === g)
-                .map((d) => (
-                  <button key={d.id} type="button" className={`qd5-pick-it ${d.id === current ? 'on' : ''} ${d.served ? '' : 'no'}`} disabled={!d.served} title={d.served ? undefined : t('confirmation.dl.no')} onClick={() => onPick(d.id)}>
-                    <span>
-                      <b>{d.name}</b>
-                      <small>{[d.commune, d.address].filter(Boolean).join(' · ')}</small>
-                    </span>
-                    <span className={`qd5-served mini ${d.served ? 'ok' : 'bad'}`}>
-                      <i />
-                      {d.served ? t('confirmation.dl.okShort') : t('confirmation.dl.noShort')}
-                    </span>
-                  </button>
-                ))}
-            </div>
-          ))}
-        </div>
+  return (
+    <Float anchor={anchor} onClose={onClose} className="pxf-desk" minWidth={380} maxHeight={440}>
+      <div className="pxf-head">
+        <b>{t('confirmation.dl.pickTitle', { w: wilaya })}</b>
+        <small>{t('confirmation.dl.pickSub', { n: desks.length })}</small>
+        {desks.length > 4 && <input type="search" className="pxf-q" placeholder={t('confirmation.dl.searchPh')} aria-label={t('confirmation.dl.searchPh')} value={q} onChange={(e) => setQ(e.target.value)} autoFocus />}
       </div>
-    </div>,
-    document.body,
+      <div role="listbox" aria-label={t('confirmation.dl.pickTitle', { w: wilaya })}>
+        {list.length === 0 && <p className="pxf-none">{t('confirmation.dl.none')}</p>}
+        {groups.map((g) => (
+          <div key={g}>
+            <div className="pxf-gh">{g}</div>
+            {list
+              .filter((d) => d.companyName === g)
+              .map((d) => (
+                <button key={d.id} type="button" role="option" aria-selected={d.id === current} className={`pxf-it ${d.id === current ? 'cur' : ''}`} disabled={!d.served} title={d.served ? undefined : t('confirmation.dl.no')} onClick={() => onPick(d.id)}>
+                  <span className="pxf-ic">
+                    <Icon name="building" />
+                  </span>
+                  <span className="pxf-main">
+                    <b>{d.name}</b>
+                    <small>{[d.commune, d.address].filter(Boolean).join(' · ')}</small>
+                  </span>
+                  <span className={`qd5-served mini ${d.served ? 'ok' : 'bad'}`}>
+                    <i />
+                    {d.served ? t('confirmation.dl.okShort') : t('confirmation.dl.noShort')}
+                  </span>
+                </button>
+              ))}
+          </div>
+        ))}
+      </div>
+    </Float>
   );
 }

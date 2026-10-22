@@ -479,6 +479,7 @@
       "cancelled": "Annuler la commande",
       "postponed": "Reporter la commande",
       "callback": "Rappeler le client"
-    }
+    },
+    "allProducts": "Tous les produits"
   }
 }

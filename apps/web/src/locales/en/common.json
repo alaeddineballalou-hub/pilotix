@@ -64,5 +64,6 @@
     "l": "Large rows"
   },
   "dragCol": "Drag to move the column",
-  "back": "Back"
+  "back": "Back",
+  "noResults": "No results"
 }
