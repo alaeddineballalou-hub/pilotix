@@ -766,3 +766,7 @@ small.px-copy-wrap { display: inline-flex; }
 .px-copied::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border: 5px solid transparent; border-top-color: var(--px-navy, #1B2A47); }
 @keyframes px-pop { from { opacity: 0; transform: translate(-50%, 4px); } to { opacity: 1; transform: translate(-50%, 0); } }
 @media (prefers-reduced-motion: reduce) { .px-copied { animation: none; } }
+/* Historique button: same look as Edit (orange square, navy icon) */
+html body .qo.qo-hist { background: #F7A823; color: #1B2A47; border: 0; }
+html body .qo.qo-hist:hover { filter: brightness(1.06); border: 0; }
+html body .qo.qo-hist.on { background: #1B2A47; color: #F7A823; }
