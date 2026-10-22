@@ -63,3 +63,22 @@
 .qd6.qd6-ph .qd6-bar .qd6-cta, .qd6.qd6-ph .qd6-bar .qd6-savebtn { flex: 2 1 0; padding: 0 12px; font-size: 15px; }
 .qd6.qd6-ph .qd6-bar .qd6-cta { background: #1F9D57; color: #fff; box-shadow: 0 6px 16px rgba(31, 157, 87, .3); }
 .qd6.qd6-ph .qd6-bar > :not(.qd6-bl):not(.qd6-cta):not(.qd6-savebtn) { flex: 1 1 0; min-width: 0; }
+
+/* B's bar on one row: Statut ▾ (left) + the big green Confirmer la commande (right); "Commande modifiée · Annuler" above */
+.qd6.qd6-ph .qd6-bar { flex-direction: row !important; align-items: center !important; flex-wrap: wrap !important; }
+.qd6.qd6-ph .qd6-bar > * { width: auto !important; }
+.qd6.qd6-ph .qd6-bl { order: 0 !important; flex: 1 1 100% !important; justify-content: center; }
+.qd6.qd6-ph .qd6-bar > .qd6-dd { order: 1; flex: 1 1 0 !important; min-width: 0; }
+.qd6.qd6-ph .qd6-bar .qd6-cta, .qd6.qd6-ph .qd6-bar .qd6-savebtn { order: 2 !important; flex: 1.7 1 0 !important; height: 50px !important; justify-content: center; white-space: nowrap; }
+.qd6.qd6-ph .qd6-ddb { height: 50px; padding: 0 12px; gap: 8px; }
+.qd6.qd6-ph .qd6-ddb > .bji:first-child, .qd6.qd6-ph .qd6-ddt, .qd6.qd6-ph .qd6-cur .badge { display: none; }
+.qd6-ddt-s { display: none; }
+.qd6.qd6-ph .qd6-ddt-s { display: inline; }
+.qd6.qd6-ph .qd6-cur .qd6-pend { max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the status menu opens as a panel across the screen, above the bar */
+.qd6.qd6-ph .qd6-mini, .qd6.qd6-ph .qd6-ask { position: fixed; left: 8px; right: 8px; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); max-height: 70vh; overflow-y: auto; }
+.qd6.qd6-ph .qd6-mini .qd6-mi { min-height: 48px; }
+
+/* totals across the whole width; the address is typed in its own field, not repeated beside "Domicile" */
+.qd6.qd6-ph .qd6-rail { width: 100% !important; align-self: stretch !important; box-sizing: border-box; }
+.qd6.qd6-ph .qd6-desk small { display: none; }

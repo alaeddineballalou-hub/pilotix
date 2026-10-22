@@ -593,6 +593,7 @@
     "late": "{{n}} late",
     "queue": "{{n}} to handle",
     "next": "Next order",
-    "empty": "No orders here."
+    "empty": "No orders here.",
+    "status": "Status"
   }
 }

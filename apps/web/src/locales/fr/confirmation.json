@@ -593,6 +593,7 @@
     "late": "{{n}} en retard",
     "queue": "{{n}} à traiter",
     "next": "Commande suivante",
-    "empty": "Aucune commande ici."
+    "empty": "Aucune commande ici.",
+    "status": "Statut"
   }
 }

@@ -751,7 +751,8 @@ function StatusMenu({ order, busy, pending, onPick }: { order: Order; busy: bool
       )}
       <button type="button" className={`qd6-ddb ${step ? 'on' : ''}`} aria-haspopup="menu" aria-expanded={!!step} onClick={() => setStep(step ? null : 'menu')}>
         <Icon name="list" />
-        {t('confirmation.d6.change')}
+        <span className="qd6-ddt">{t('confirmation.d6.change')}</span>
+        <span className="qd6-ddt-s">{t('confirmation.ph.status')}</span>
         <span className="qd6-cur">
           {pending ? <span className={`qd6-pend ${pending.cls}`}>{pending.label}</span> : <StatusBadge kind="conf" status={order.confStatus} />}
           <Icon name="chevron" />
