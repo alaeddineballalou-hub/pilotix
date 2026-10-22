@@ -112,6 +112,8 @@ class RemoteBackend implements Backend {
 }
 
 // ---------------------------------------------------------------- demo (PostgreSQL in the browser, same rules)
+/** Actions whose result the demo keeps in this browser across reloads (its database is rebuilt each time). */
+const DEMO_KEEP = new Set(['confirmation.addColPreset', 'confirmation.deleteColPreset', 'me.setUi']);
 class DemoBackend implements Backend {
   kind = 'demo' as const;
   private session: Session | null = null;
@@ -131,6 +133,8 @@ class DemoBackend implements Backend {
         });
         this.progress('Création des commandes d’exemple…');
         await core.seedDemo(db, { orders: Number(import.meta.env.VITE_DEMO_ORDERS) || 1200 });
+        // the demo database is rebuilt on every reload: put back the column presets and screen choices kept in this browser
+        await core.demoRestore(db, store.json<import('@pilotix/core').DemoKeep | null>('demo-keep', null)).catch(() => {});
         return { core, db };
       })();
     return this.ready;
@@ -164,7 +168,9 @@ class DemoBackend implements Backend {
     if (!this.session) throw new ApiError(401, 'Session expirée');
     const s = this.session;
     try {
-      return (await core.call(name as string, { db, session: s, now: () => Date.now(), emit: (e) => setTimeout(() => this.listeners.forEach((l) => l(e)), 0) }, input)) as Out<N>;
+      const out = (await core.call(name as string, { db, session: s, now: () => Date.now(), emit: (e) => setTimeout(() => this.listeners.forEach((l) => l(e)), 0) }, input)) as Out<N>;
+      if (DEMO_KEEP.has(name as string)) await core.demoSnapshot(db).then((k) => store.set('demo-keep', JSON.stringify(k))).catch(() => {});
+      return out;
     } catch (e: any) {
       const status = { forbidden: 403, not_found: 404, bad_request: 400, conflict: 409, unauthorized: 401 }[e?.code as string] ?? 500;
       throw new ApiError(status, e?.message ?? 'Erreur');

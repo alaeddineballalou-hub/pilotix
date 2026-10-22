@@ -61,6 +61,26 @@ export const usersProcs = {
     await ctx.db.query('UPDATE profiles SET password_hash=$2 WHERE id=$1', [ctx.session.profile.id, await hashPassword(i.next)]);
     return { ok: true };
   }),
+  /** What I chose on screen (columns, the column preset in use…), saved with my account. */
+  'me.ui': proc(null, z.object({}), async (ctx) => {
+    const r = await ctx.db.query('SELECT ui FROM profiles WHERE id=$1', [ctx.session.profile.id]);
+    const ui = r[0]?.ui;
+    return (ui && typeof ui === 'object' ? ui : typeof ui === 'string' ? JSON.parse(ui) : {}) as Record<string, unknown>;
+  }),
+  /** Saves one of my screen choices (null removes it). Small values only. */
+  'me.setUi': proc(null, z.object({ key: z.string().regex(/^[A-Za-z0-9._-]{1,80}$/), value: z.unknown() }), async (ctx, i) => {
+    const me = ctx.session.profile.id;
+    if (i.value === null || i.value === undefined) {
+      await ctx.db.query('UPDATE profiles SET ui = ui - $2 WHERE id=$1', [me, i.key]);
+      return { ok: true };
+    }
+    const json = JSON.stringify(i.value);
+    if (json.length > 20_000) throw bad('Choix trop volumineux');
+    const r = await ctx.db.query('SELECT (SELECT count(*) FROM jsonb_object_keys(ui))::int AS n, jsonb_exists(ui, $2) AS has FROM profiles WHERE id=$1', [me, i.key]);
+    if ((r[0]?.n ?? 0) >= 300 && !r[0]?.has) throw bad('Trop de choix enregistrés');
+    await ctx.db.query('UPDATE profiles SET ui = jsonb_set(ui, ARRAY[$2::text], $3::jsonb, true) WHERE id=$1', [me, i.key, json]);
+    return { ok: true };
+  }),
   /** My profile: name, phone and picture (the email is the login and never changes). */
   'me.update': proc(null, z.object({ name: z.string().trim().min(2).max(80), phone: z.string().trim().max(30).nullable().optional(), avatar: z.string().max(400_000).nullable().optional() }), async (ctx, i) => {
     if (i.avatar && !/^data:image\/(png|jpe?g|webp);base64,/.test(i.avatar)) throw bad('Image invalide');

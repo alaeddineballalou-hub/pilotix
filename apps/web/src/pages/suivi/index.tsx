@@ -16,7 +16,7 @@ import { NewClaimModal } from './Claims';
 import { Reclamation } from './Reclamation';
 import { SwapModal, SwapResult, SwapSheetModal } from './Swap';
 import './suivi.css';
-import { colDrag, ColumnMenu, DensitySwitch, useColumnOrder, useDensity } from '../../ui/ColumnMenu';
+import { colDrag, ColumnMenu, DensitySwitch, useDensity, useTableColumns } from '../../ui/ColumnMenu';
 import { HistoryButton, PhoneCell } from '../confirmation/History';
 import { store } from '../../lib/store';
 import { CopyCode } from '../../ui/CopyCode';
@@ -128,17 +128,15 @@ const SKEY = 'suivi-cols';
 /** The table shared by every Suivi list, with the column menu and the shared presets. */
 export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[]; actions?: (o: Order) => ReactNode; empty: string; extra?: Record<number, Extra> }) {
   const { t } = useTranslation();
-  const [visible, setVisible] = useState<Set<SCol>>(() => {
-    const saved = store.json<SCol[] | null>(SKEY, null);
-    return new Set(saved?.filter((k) => SCOLS.includes(k)) ?? SDEFAULT);
-  });
+  // columns saved with the account; a chosen preset is used by every list until the columns are changed by hand
+  const tc = useTableColumns<SCol>('suivi', SCOLS, { defaults: SDEFAULT, legacy: () => ({ cols: store.json<SCol[] | null>(SKEY, null), order: store.json<SCol[] | null>('suivi-order', null) }) });
+  const visible = tc.visible;
   const [menu, setMenu] = useState(false);
   const label: Record<SCol, string> = {
     order: t('suivi.col.order'), name: t('suivi.col.client'), phone: t('suivi.col.phone'), wilaya: t('suivi.col.wilaya'), product: t('suivi.col.products'), variant: t('suivi.col.variant'),
     tracking: t('suivi.col.tracking'), follow: t('suivi.col.delivery'), agent: t('suivi.col.agent'), fagent: t('suivi.col.fagent'), since: t('suivi.col.since'), passed: t('confirmation.col.passed'), status: t('suivi.col.status'),
   };
-  const save = (s: Set<SCol>) => (setVisible(s), store.set(SKEY, JSON.stringify([...s])));
-  const [order, setOrder] = useColumnOrder('suivi-order', SCOLS);
+  const { order, setOrder } = tc;
   const cols = order.filter((k) => visible.has(k));
   const drag = colDrag(order, setOrder);
   const [dens, setDens] = useDensity();
@@ -206,8 +204,10 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
           onOrder={setOrder}
           cols={SCOLS.map((k) => ({ k, label: label[k] }))}
           visible={visible}
-          onChange={save}
-          onReset={() => (setVisible(new Set(SCOLS)), store.set(SKEY, null))}
+          onChange={tc.setVisible}
+          onReset={tc.reset}
+          presetId={tc.presetId}
+          onPreset={tc.applyPreset}
           open={menu}
           onToggle={() => setMenu((v) => !v)}
         />
