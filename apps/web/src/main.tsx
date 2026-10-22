@@ -12,10 +12,12 @@ import { store } from './lib/store';
 import { PAGES } from './pages/registry';
 import { Loading } from './ui/kit';
 import { Toasts } from './ui/toast';
+import { installEdgeScroll } from './ui/edgeScroll';
 import './styles/legacy.css';
 import './styles/pilotix.css';
 
 applyTheme(store.get('theme') as 'light' | 'dark' | null);
+installEdgeScroll();
 
 const qc = new QueryClient({
   defaultOptions: {
