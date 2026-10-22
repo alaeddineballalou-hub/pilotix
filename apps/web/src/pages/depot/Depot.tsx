@@ -50,52 +50,84 @@ export function Depot({ sub }: PageProps) {
 // (The depot bar is drawn here rather than with <StageBar>: it needs the ⟶ arrow and the red "end" stage of the original.)
 
 // ---------------------------------------------------------------- En préparation
-/** Only the products the depot does not have enough of for the orders waiting (in preparation + in dispatch). */
-function MissingStock() {
+/**
+ * "Quantité à acheter": a small foldable table of the products that are missing for the orders
+ * (available < 0) or that reached their minimum stock (available ≤ alert quantity).
+ */
+function ToBuy() {
   const { t } = useTranslation();
-  const q = useRpc('catalog.picking', {});
-  const rows = (q.data ?? []).filter((r) => r.toPrepare > 0 && r.stock < r.toPrepare + r.prepared);
+  const [open, setOpen] = useState(false);
+  const q = useRpc('catalog.stock', { missingOnly: true });
+  const rows = (q.data ?? []).filter((r) => r.available < 0 || (r.alertQty > 0 && r.available <= r.alertQty));
+  const missing = rows.filter((r) => r.available < 0).length;
+  const low = rows.length - missing;
+  const depots = new Set(rows.map((r) => r.warehouseId)).size > 1;
   return (
-    <Card title={t('depot.missingStock.title')}>
-      {q.isLoading ? (
-        <Loading />
-      ) : q.error ? (
-        <ErrorBox error={q.error} onRetry={() => q.refetch()} />
-      ) : !rows.length ? (
-        <p className="muted">✓ {t('depot.missingStock.none')}</p>
-      ) : (
-        <>
-          <p className="muted small">{t('depot.missingStock.help')}</p>
+    <Card
+      title={
+        <button type="button" className="linklike" aria-expanded={open} onClick={() => setOpen(!open)} style={{ all: 'unset', cursor: 'pointer' }}>
+          {open ? '▾' : '▸'} {t('depot.toBuy.title')}
+        </button>
+      }
+      badge={
+        q.data && (
+          <>
+            {missing > 0 && <span className="badge t-bad">{t('depot.toBuy.missingN', { count: missing })}</span>}{' '}
+            {low > 0 && <span className="badge t-warn">{t('depot.toBuy.lowN', { count: low })}</span>}
+            {!rows.length && <span className="badge t-ok">✓ {t('depot.toBuy.none')}</span>}
+          </>
+        )
+      }
+      actions={
+        <button type="button" className="btn small ghost" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? t('depot.toBuy.hide') : t('depot.toBuy.show')}
+        </button>
+      }
+    >
+      {open &&
+        (q.isLoading ? (
+          <Loading />
+        ) : q.error ? (
+          <ErrorBox error={q.error} onRetry={() => q.refetch()} />
+        ) : !rows.length ? (
+          <p className="muted">✓ {t('depot.toBuy.none')}</p>
+        ) : (
           <div className="tbl-wrap">
             <table className="tbl">
               <thead>
                 <tr>
                   <th className="wide">{t('depot.picking.product')}</th>
-                  <th className="num">{t('depot.missingStock.need')}</th>
-                  <th className="num">{t('depot.picking.stock')}</th>
-                  <th className="num">{t('depot.missingStock.missing')}</th>
-                  <th className="num">{t('depot.picking.orders')}</th>
+                  <th className="num">{t('depot.toBuy.stock')}</th>
+                  <th className="num">{t('depot.toBuy.reserved')}</th>
+                  <th className="num">{t('depot.toBuy.min')}</th>
+                  <th className="num">{t('depot.toBuy.buy')}</th>
+                  <th>{t('depot.toBuy.state')}</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => {
-                  const need = r.toPrepare + r.prepared;
+                  const miss = r.available < 0;
+                  const buy = Math.max(0, r.alertQty - r.available);
                   return (
-                    <tr key={`${r.productId}-${r.variantId}`}>
+                    <tr key={`${r.variantId}-${r.warehouseId}`}>
                       <td className="wide px-cw" data-l={t('depot.picking.product')}>
-                        <div className="px-clamp">{r.label}</div>
+                        <div className="px-clamp">{r.variantTitle ? `${r.productName} ${r.variantTitle}` : r.productName}</div>
+                        {depots && <small>{r.warehouseName}</small>}
                       </td>
-                      <td className="num ltr" data-l={t('depot.missingStock.need')}>
-                        {n(need)}
+                      <td className="num ltr" data-l={t('depot.toBuy.stock')}>
+                        {n(r.qty)}
                       </td>
-                      <td className="num ltr" data-l={t('depot.picking.stock')}>
-                        {n(Math.max(0, r.stock))}
+                      <td className="num ltr" data-l={t('depot.toBuy.reserved')}>
+                        {n(r.reserved)}
                       </td>
-                      <td className="num" data-l={t('depot.missingStock.missing')}>
-                        <b className="stock-low ltr">{n(need - Math.max(0, r.stock))}</b>
+                      <td className="num ltr" data-l={t('depot.toBuy.min')}>
+                        {r.alertQty ? n(r.alertQty) : '—'}
                       </td>
-                      <td className="num ltr" data-l={t('depot.picking.orders')}>
-                        {n(r.toPrepareOrders)}
+                      <td className="num" data-l={t('depot.toBuy.buy')}>
+                        <b className="ltr">{n(buy)}</b>
+                      </td>
+                      <td data-l={t('depot.toBuy.state')}>
+                        <span className={`badge ${miss ? 't-bad' : 't-warn'}`}>{miss ? t('depot.toBuy.missing', { n: -r.available }) : t('depot.toBuy.atMin')}</span>
                       </td>
                     </tr>
                   );
@@ -103,8 +135,7 @@ function MissingStock() {
               </tbody>
             </table>
           </div>
-        </>
-      )}
+        ))}
     </Card>
   );
 }
@@ -202,7 +233,7 @@ function Preparer() {
   const { t } = useTranslation();
   return (
     <>
-      <MissingStock />
+      <ToBuy />
       <DepotOrderList
         title={t('depot.lists.preparer')}
         follow={['to_prepare']}

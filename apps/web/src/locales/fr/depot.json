@@ -76,7 +76,7 @@
     "done": "{{ref}} : retour reçu, stock remis",
     "none": "Aucune commande trouvée."
   },
-  "missingStock": { "title": "Produits manquants au dépôt", "help": "Seulement les produits dont le stock ne suffit pas pour les commandes en préparation et en dispatch.", "need": "Besoin", "missing": "Manque", "none": "Tout est en stock : aucun produit manquant." },
+  "toBuy": { "title": "Quantité à acheter", "show": "Afficher", "hide": "Masquer", "stock": "Stock", "reserved": "Commandes", "min": "Minimum", "buy": "À acheter", "state": "État", "missing": "manque {{n}}", "atMin": "minimum atteint", "missingN_one": "{{count}} manquant", "missingN_other": "{{count}} manquants", "lowN_one": "{{count}} au minimum", "lowN_other": "{{count}} au minimum", "none": "Rien à acheter" },
   "toDispatch": { "partner": "Partenaire de livraison…", "button": "Envoyer au dispatch", "done_one": "{{count}} commande envoyée au dispatch", "done_other": "{{count}} commandes envoyées au dispatch" },
   "dispatchSheet": { "title": "Feuille de préparation — commandes en dispatch", "sheetTitle": "Feuille de préparation — {{date}}", "empty": "Aucune commande en dispatch.", "total": "Total" }
 }
