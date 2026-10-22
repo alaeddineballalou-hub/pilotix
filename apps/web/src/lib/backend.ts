@@ -169,8 +169,8 @@ class DemoBackend implements Backend {
     const { core, db } = await this.boot();
     if (!this.session) throw new ApiError(401, 'Session expirée');
     const s = this.session;
-    // Dellal answers with Claude when the preview is opened in Claude (see dellal-page-ai.ts)
-    const dellalAi = String(name).startsWith('dellal.') ? await pageAi() : null;
+    // Dellal and the CM AI agent answer with Claude when the preview is opened in Claude (see dellal-page-ai.ts)
+    const dellalAi = /^(dellal|cm)\./.test(String(name)) ? await pageAi() : null;
     try {
       const out = (await core.call(name as string, { db, session: s, now: () => Date.now(), emit: (e) => setTimeout(() => this.listeners.forEach((l) => l(e)), 0), ...(dellalAi ? { dellalAi } : {}) }, input)) as Out<N>;
       if (DEMO_KEEP.has(name as string)) await core.demoSnapshot(db).then((k) => store.set('demo-keep', JSON.stringify(k))).catch(() => {});

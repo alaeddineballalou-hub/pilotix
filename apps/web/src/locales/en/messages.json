@@ -1,5 +1,5 @@
 {
-  "title": "Messages",
+  "title": "Message AI agent",
   "help": "Dellal, your AI salesperson, answers customers on WhatsApp, Messenger, Instagram and TikTok, gives prices, stock and delivery, and takes orders (they arrive in Confirmation). You can take over any conversation at any time.",
   "tabs": {
     "inbox": "Inbox",
@@ -45,7 +45,8 @@
     "write": "Write to the customer…",
     "writePause": "Write to the customer ({{name}} pauses)…",
     "send": "Send",
-    "back": "Back"
+    "back": "Back",
+    "comment": "comment"
   },
   "side": {
     "customer": "Customer",

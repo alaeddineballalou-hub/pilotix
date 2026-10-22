@@ -37,5 +37,10 @@ echo "→ website webhook"
 SKU=$(rpc "$ADMIN" orders.get "{\"id\":$OID}" >/dev/null; echo PX-POU-1)
 curl -fsS -X POST "$API/hooks/orders/site?key=demo-webhook-key" -H 'Content-Type: application/json' \
   -d "{\"name\":\"Client Site\",\"phone\":\"0770112233\",\"wilaya\":31,\"commune\":\"Oran\",\"items\":[{\"sku\":\"$SKU\",\"qty\":1}]}" | grep -q '"ok":true'
+echo "→ grouped action names";       rpc "$ADMIN" dellal.settings.get | grep -q '"verifyToken"'; rpc "$ADMIN" cm.settings.get | grep -q '"replyPublic"'
+echo "→ Meta comment webhook (CM AI agent)"
+curl -fsS -X POST "$API/hooks/meta" -H 'Content-Type: application/json' \
+  -d '{"object":"page","entry":[{"id":"111","time":1,"changes":[{"field":"feed","value":{"item":"comment","verb":"add","comment_id":"999_smoke1","post_id":"111_999","parent_id":"111_999","message":"ch7al la poussette ?","from":{"id":"5551","name":"Smoke Test"},"created_time":1}}]}]}' | grep -q '"received":1'
+sleep 1; rpc "$CONF" cm.feed '{"tab":"all"}' | grep -q '999_smoke1'
 echo "→ cron needs its key";         [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/hooks/cron?key=x")" = 401 ]
 echo "✅ All server checks passed"

@@ -108,6 +108,8 @@ function limitLogin(ip: string) {
 /** Dellal: newest message per conversation and the answer running for it. */
 const latest = new Map<number, number>();
 const running = new Map<number, Promise<unknown>>();
+/** CM AI agent: one answer at a time (comments arrive in bursts under an ad). */
+let cmQueue: Promise<unknown> = Promise.resolve();
 function optionalDellal(): any {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -147,7 +149,8 @@ class ApiController {
 
   @Post('rpc/:name')
   rpc(@Param('name') name: string, @Body() body: unknown, @Req() req: { session: Session }) {
-    if (!/^[a-z]+\.[a-zA-Z]+$/.test(name)) throw new core.AppError('not_found', 'Action inconnue');
+    // names like orders.list, and grouped ones like dellal.settings.get or cm.settings.save
+    if (!/^[a-z]+(\.[a-zA-Z]+){1,3}$/.test(name)) throw new core.AppError('not_found', 'Action inconnue');
     return this.core.call(name, req.session, body ?? {});
   }
 
@@ -209,7 +212,7 @@ class ApiController {
     return res.status(403).send({ message: 'Jeton de vérification invalide' });
   }
 
-  /** WhatsApp, Messenger and Instagram messages. Answers 200 at once; Dellal replies in the background. */
+  /** WhatsApp, Messenger and Instagram messages, and comments on posts and ads. Answers 200 at once; Dellal and the CM AI agent reply in the background. */
   @Public()
   @Post('hooks/meta')
   async metaHook(@Req() req: RawBodyRequest<any>, @Headers('x-hub-signature-256') sig: string, @Body() body: any) {
@@ -223,8 +226,10 @@ class ApiController {
     }
     const m = optionalDellal();
     const list: any[] = m?.parseMetaWebhook ? m.parseMetaWebhook(body) : [];
+    const comments: any[] = m?.parseMetaComments ? m.parseMetaComments(body) : [];
     void this.handleIncoming(list);
-    return { ok: true, received: list.length };
+    void this.handleComments(comments);
+    return { ok: true, received: list.length + comments.length };
   }
 
   /** TikTok messages (from TikTok's business messaging or a bridge): { user_id, name?, text, message_id? }. Key = Dellal verify token. */
@@ -266,6 +271,25 @@ class ApiController {
     }
   }
 
+  /** Stores each comment, then lets the CM AI agent handle it after the shop's delay (the sweep job catches missed ones). */
+  private async handleComments(list: any[]) {
+    const log = new Logger('CM');
+    for (const c of list) {
+      try {
+        const session = await this.core.systemSession();
+        const r: any = await this.core.call('cm.receive', session, c);
+        if (!r?.enabled) continue;
+        setTimeout(() => {
+          cmQueue = cmQueue
+            .then(() => this.core.call('cm.run', session, { id: r.commentId }))
+            .catch((e) => log.warn(`comment ${r.commentId}: ${e?.message ?? e}`));
+        }, Math.max(0, Number(r.delaySec) || 0) * 1000);
+      } catch (e: any) {
+        log.warn(`incoming ${c?.channel} comment refused: ${e?.message ?? e}`);
+      }
+    }
+  }
+
   /** Called by an external scheduler (e.g. every 30 minutes) to refresh courier statuses. */
   @Public()
   @Post('hooks/cron')
@@ -273,6 +297,7 @@ class ApiController {
     const ck = (await core.getSetting(this.core.db, 'cron')).key;
     if (!ck || key !== ck) throw new core.AppError('unauthorized', 'Clé cron invalide');
     const session = await this.core.systemSession();
+    await this.core.call('cm.sweep', session, {}).catch(() => null); // comments the CM AI agent has not answered yet
     return this.core.call('delivery.sync', session, {}).catch((e) => ({ ok: false, message: e.message }));
   }
 }

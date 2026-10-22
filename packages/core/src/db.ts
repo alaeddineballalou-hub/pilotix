@@ -16,6 +16,7 @@ import m015 from './migrations/015_profile';
 import m016 from './migrations/016_dellal';
 import m017 from './migrations/017_ui';
 import m018 from './migrations/018_marketers';
+import m019 from './migrations/019_cm';
 
 /** The only thing the core needs from a database: run SQL, and run a function in a transaction. */
 export interface Db {
@@ -23,7 +24,7 @@ export interface Db {
   tx<T>(fn: (db: Db) => Promise<T>): Promise<T>;
 }
 
-export const MIGRATIONS: [string, string][] = [['001_schema', schema001], ['002_orders', m002], ['003_confirmation', m003], ['004_stats', m004], ['005_catalog', m005], ['006_customers', m006], ['007_suivi', m007], ['008_sav', m008], ['009_delivery', m009], ['010_cash', m010], ['011_admin', m011], ['012_ads', m012], ['013_tickets', m013], ['014_own_tracking', m014], ['015_profile', m015], ['016_dellal', m016], ['017_ui', m017], ['018_marketers', m018],];
+export const MIGRATIONS: [string, string][] = [['001_schema', schema001], ['002_orders', m002], ['003_confirmation', m003], ['004_stats', m004], ['005_catalog', m005], ['006_customers', m006], ['007_suivi', m007], ['008_sav', m008], ['009_delivery', m009], ['010_cash', m010], ['011_admin', m011], ['012_ads', m012], ['013_tickets', m013], ['014_own_tracking', m014], ['015_profile', m015], ['016_dellal', m016], ['017_ui', m017], ['018_marketers', m018], ['019_cm', m019],];
 
 /** Applies migrations not applied yet. `exec` runs a multi-statement SQL script. */
 export async function migrate(db: Db, exec: (sql: string) => Promise<void>): Promise<string[]> {

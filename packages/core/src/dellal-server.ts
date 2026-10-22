@@ -7,10 +7,10 @@ import { AiRequest, AiResponse, DellalChannel, dellalSecret } from './modules/de
 const GRAPH = 'https://graph.facebook.com/v21.0';
 const ANTHROPIC = 'https://api.anthropic.com/v1/messages';
 
-async function postJson(url: string, body: unknown, headers: Record<string, string>, who: string): Promise<any> {
+async function postJson(url: string, body: unknown, headers: Record<string, string>, who: string, method: 'POST' | 'GET' = 'POST'): Promise<any> {
   let res: Response;
   try {
-    res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...headers }, body: JSON.stringify(body) });
+    res = await fetch(url, method === 'GET' ? { headers: { Accept: 'application/json', ...headers } } : { method, headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...headers }, body: JSON.stringify(body) });
   } catch {
     throw new AppError('bad_request', `${who} injoignable. Réessayez plus tard.`);
   }
@@ -70,14 +70,62 @@ async function complete(ctx: Ctx, req: AiRequest): Promise<AiResponse> {
   return { content: data.content ?? [], stop_reason: data.stop_reason ?? 'end_turn', usage: data.usage };
 }
 
+// ---------------------------------------------------------------- CM AI agent: comments (Graph API, the page token)
+type CmArgs = { channel: 'facebook' | 'instagram' | 'tiktok'; commentId?: string; postId?: string; text?: string; hidden?: boolean };
+const enc = encodeURIComponent;
+
+async function pageToken(ctx: Ctx): Promise<string> {
+  const token = await dellalSecret(ctx.db, 'pageToken');
+  if (!token) throw new AppError('bad_request', 'La page Facebook n’est pas connectée (jeton de page manquant dans Message AI agent › Réglages).');
+  return token;
+}
+
+/** Answers a comment in public: Facebook /{comment}/comments, Instagram /{comment}/replies. */
+async function cmReply(ctx: Ctx, a: CmArgs) {
+  if (a.channel === 'tiktok') throw new AppError('bad_request', 'TikTok : la réponse aux commentaires arrive bientôt.');
+  const token = await pageToken(ctx);
+  const path = a.channel === 'instagram' ? 'replies' : 'comments';
+  const r = await postJson(`${GRAPH}/${enc(String(a.commentId))}/${path}?access_token=${enc(token)}`, { message: String(a.text ?? '').slice(0, 2000) }, {}, a.channel === 'instagram' ? 'Instagram' : 'Facebook');
+  return { id: r?.id ? String(r.id) : null };
+}
+
+/** The private reply to a comment (one per comment, within 7 days): opens a Messenger / Instagram conversation. */
+async function cmPrivate(ctx: Ctx, a: CmArgs) {
+  if (a.channel === 'tiktok') throw new AppError('bad_request', 'TikTok : le message privé depuis un commentaire arrive bientôt.');
+  const token = await pageToken(ctx);
+  const r = await postJson(`${GRAPH}/me/messages?access_token=${enc(token)}`, { recipient: { comment_id: String(a.commentId) }, message: { text: String(a.text ?? '').slice(0, 1900) } }, {}, a.channel === 'instagram' ? 'Instagram' : 'Messenger');
+  return { recipientId: r?.recipient_id ? String(r.recipient_id) : null, messageId: r?.message_id ? String(r.message_id) : null };
+}
+
+/** Hides (or shows again) a comment: Facebook is_hidden, Instagram hide. */
+async function cmHide(ctx: Ctx, a: CmArgs) {
+  if (a.channel === 'tiktok') throw new AppError('bad_request', 'TikTok : masquer un commentaire arrive bientôt.');
+  const token = await pageToken(ctx);
+  await postJson(`${GRAPH}/${enc(String(a.commentId))}?access_token=${enc(token)}`, a.channel === 'instagram' ? { hide: !!a.hidden } : { is_hidden: !!a.hidden }, {}, a.channel === 'instagram' ? 'Instagram' : 'Facebook');
+  return { ok: true };
+}
+
+/** A post's text and link (the comment webhook does not carry them). */
+async function cmPost(ctx: Ctx, a: CmArgs) {
+  const token = await pageToken(ctx);
+  const fields = a.channel === 'instagram' ? 'caption,permalink' : 'message,permalink_url';
+  const r = await postJson(`${GRAPH}/${enc(String(a.postId))}?fields=${fields}&access_token=${enc(token)}`, null, {}, a.channel === 'instagram' ? 'Instagram' : 'Facebook', 'GET');
+  return { caption: (r?.caption ?? r?.message ?? null) as string | null, permalink: (r?.permalink ?? r?.permalink_url ?? null) as string | null };
+}
+
 /**
  *  - 'complete' → AiRequest: one call to the AI
  *  - 'send'     → { channel, externalId, accountId, text }: sends a message to the customer
  *  - 'ping'     → checks the AI key
+ *  - 'cmReply' / 'cmPrivate' / 'cmHide' / 'cmPost' → the CM AI agent's actions on comments
  */
 export async function runDellal(action: string, args: unknown, ctx: Ctx): Promise<unknown> {
   if (action === 'complete') return complete(ctx, args as AiRequest);
   if (action === 'send') return send(ctx, args as any);
+  if (action === 'cmReply') return cmReply(ctx, args as CmArgs);
+  if (action === 'cmPrivate') return cmPrivate(ctx, args as CmArgs);
+  if (action === 'cmHide') return cmHide(ctx, args as CmArgs);
+  if (action === 'cmPost') return cmPost(ctx, args as CmArgs);
   if (action === 'ping') {
     await complete(ctx, { model: 'claude-haiku-5-5', system: 'Réponds OK.', messages: [{ role: 'user', content: 'ping' }], tools: [] as any, max_tokens: 5 });
     return { ok: true };
@@ -158,6 +206,76 @@ export function parseMetaWebhook(body: any): Incoming[] {
             source: m.referral?.headline ? `pub « ${String(m.referral.headline).slice(0, 80)} »` : m.referral?.source_id ? `pub ${m.referral.source_id}` : null,
           });
         }
+      }
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- incoming comments (CM AI agent)
+export interface IncomingComment {
+  channel: 'facebook' | 'instagram';
+  externalId: string;
+  postId: string;
+  accountId: string | null;
+  parentId: string | null;
+  authorId: string | null;
+  authorName: string | null;
+  text: string;
+  caption: string | null;
+  permalink: string | null;
+  isAd: boolean;
+}
+
+/**
+ * Reads the comments of a Meta webhook: the page's "feed" field (comments on posts and ads) and Instagram's "comments".
+ * Only new comments with text; the page's own comments are left out.
+ */
+export function parseMetaComments(body: any): IncomingComment[] {
+  const out: IncomingComment[] = [];
+  const obj = body?.object;
+  for (const entry of Array.isArray(body?.entry) ? body.entry : []) {
+    const own = entry?.id ? String(entry.id) : null;
+    for (const ch of Array.isArray(entry?.changes) ? entry.changes : []) {
+      const v = ch?.value;
+      if (!v) continue;
+      if (obj === 'page' && ch.field === 'feed' && v.item === 'comment' && v.verb === 'add') {
+        const text = String(v.message ?? '').trim();
+        const from = v.from?.id ? String(v.from.id) : null;
+        if (!text || !v.comment_id || !v.post_id || (own && from === own)) continue;
+        out.push({
+          channel: 'facebook',
+          externalId: String(v.comment_id),
+          postId: String(v.post_id),
+          accountId: own,
+          parentId: v.parent_id && String(v.parent_id) !== String(v.post_id) ? String(v.parent_id) : null,
+          authorId: from,
+          authorName: v.from?.name ? String(v.from.name).slice(0, 200) : null,
+          text: text.slice(0, 4000),
+          caption: null,
+          permalink: v.post?.permalink_url ? String(v.post.permalink_url) : null,
+          // a boosted post or an ad (promotion running, ended or extendable)
+          isAd: ['active', 'extendable', 'finished'].includes(String(v.post?.promotion_status ?? '')),
+        });
+      }
+      if (obj === 'instagram' && ch.field === 'comments') {
+        const text = String(v.text ?? '').trim();
+        const id = v.id ?? v.comment_id;
+        const from = v.from?.id ? String(v.from.id) : null;
+        if (!text || !id || !v.media?.id || (own && from === own) || v.from?.self_ig_scoped_id) continue;
+        out.push({
+          channel: 'instagram',
+          externalId: String(id),
+          postId: String(v.media.id),
+          accountId: own,
+          parentId: v.parent_id ? String(v.parent_id) : null,
+          authorId: from,
+          authorName: v.from?.username ? `@${String(v.from.username).slice(0, 120)}` : null,
+          text: text.slice(0, 4000),
+          caption: null,
+          permalink: null,
+          isAd: v.media?.media_product_type === 'AD',
+        });
       }
     }
   }
