@@ -517,7 +517,8 @@
     "ageHint": "Time since the order came in",
     "chronoHint": "Chrono: time spent on this order since it was opened",
     "chrono": "Chrono",
-    "pickStatus": "Pick a new status first"
+    "pickStatus": "Pick a new status first",
+    "feeLocked": "Delivery grid price (wilaya, home or bureau). Only the discount can be changed."
   },
   "noNext": "No more orders in this list"
 }

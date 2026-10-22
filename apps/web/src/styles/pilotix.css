@@ -1328,3 +1328,8 @@ html[dir="rtl"] .topbar .pxs-next .pxs-ar svg { transform: scaleX(-1); }
 .pxf-geo .pxf-it .bji { width: 16px; height: 16px; color: #F28B1E; }
 .pxf-geo .pxf-it.cur { background: #fff4e2; }
 [data-theme="dark"] .pxf-geo .pxf-it.cur { background: rgba(247, 168, 35, .14); }
+/* delivery price: read-only (grid price); only the remise is typed in */
+html body .qd6-fee.ro { cursor: default; }
+html body .qd6-fee.ro:hover { border-color: var(--line); }
+.qd6-feev { display: inline-flex; align-items: center; gap: 7px; font-size: 14.5px; font-weight: 800; color: var(--ink); }
+.qd6-feev .bji { width: 13px; height: 13px; color: var(--muted); }
