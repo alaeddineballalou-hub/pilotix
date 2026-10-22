@@ -280,7 +280,9 @@ async function firstCall(ctx: Ctx, i: KfInput) {
   for (const g of groups.values())
     for (const x of g) {
       const f = first.get(x.id);
-      if (!f || f.at < R.a || f.at >= R.b) continue;
+      if (!f) continue;
+      // date de création: orders created in the period · changement de statut: first call made in the period
+      if (i.basis === 'created' ? x.created < R.a || x.created >= R.b : f.at < R.a || f.at >= R.b) continue;
       const newer = g.filter((y) => y.r > x.r && y.s <= f.at).length;
       const due = Math.min(x.s + (calls.firstMinutes + newer * calls.paceMinutes) * MIN, x.s + DAY);
       called.push({ d: Math.max(0, (f.at - x.s) / MIN), ok: f.at <= due });
