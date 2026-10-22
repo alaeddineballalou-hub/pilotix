@@ -4,8 +4,8 @@ import { ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, wilaya, when } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
-import { useRpc } from '../../lib/query';
-import { BulkBar, Card, ErrorBox, Loading, StatusBadge, TicketTag } from '../../ui/kit';
+import { useAction, useRpc } from '../../lib/query';
+import { BulkBar, Card, ErrorBox, Loading, RemovableChip, StatusBadge, TicketTag } from '../../ui/kit';
 import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import { CopyCode } from '../../ui/CopyCode';
 
@@ -50,6 +50,8 @@ export function DepotOrderList({
   actions?: (o: Order) => ReactNode;
 }) {
   const { t } = useTranslation();
+  const unCompany = useAction('orders.assignCompany', { success: t('depot.partnerRemoved') });
+  const unDispatch = useAction('depot.unassign', { success: (o) => t('depot.removed', { ref: o.ref }) });
   const [q, setQ] = useState('');
   const [company, setCompany] = useState('');
   const [wil, setWil] = useState('');
@@ -193,7 +195,12 @@ export function DepotOrderList({
                     <StatusBadge kind="follow" status={o.followStatus} />
                   </td>
                   <td data-l={t('depot.cols.company')}>
-                    {o.companyName ?? '—'}
+                    <RemovableChip
+                      name={o.companyName}
+                      removeLabel={t('depot.removePartner')}
+                      disabled={unCompany.isPending || unDispatch.isPending}
+                      onRemove={o.followStatus === 'to_prepare' ? () => unCompany.mutate({ ids: [o.id], companyId: null, livreurId: null }) : o.followStatus === 'prepared' ? () => unDispatch.mutate({ id: o.id }) : undefined}
+                    />
                     <CopyCode code={trackOf(o) || o.ref} small />
                   </td>
                   <td className="hide-m" data-l={t('depot.cols.agent')}>

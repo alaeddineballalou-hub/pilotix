@@ -115,5 +115,7 @@
     "sheetTitle": "Feuille de préparation — {{date}}",
     "empty": "Aucune commande en dispatch.",
     "total": "Total"
-  }
+  },
+  "removePartner": "Retirer le partenaire de livraison",
+  "partnerRemoved": "Partenaire de livraison retiré"
 }

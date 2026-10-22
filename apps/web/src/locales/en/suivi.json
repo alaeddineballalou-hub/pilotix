@@ -263,5 +263,7 @@
       "agent": "Agent"
     },
     "newOrder": "+ New order"
-  }
+  },
+  "removeAgent": "Remove the follow-up agent",
+  "agentRemoved": "{{ref}}: follow-up agent removed"
 }

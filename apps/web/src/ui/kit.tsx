@@ -56,6 +56,20 @@ export function Icon({ name, className = '' }: { name: IconName; className?: str
 
 // ---------------------------------------------------------------- statuses
 /** "Ticket SAV-0003": an exchange parcel belongs to a SAV ticket, not to the orders. */
+/** A name shown as a chip (agent, delivery partner…). With onRemove, hovering it turns it into a red "Retirer" and a click removes it. */
+export function RemovableChip({ name, onRemove, removeLabel, disabled }: { name: string | null | undefined; onRemove?: () => void; removeLabel?: string; disabled?: boolean }) {
+  const { t } = useTranslation();
+  if (!name) return <span className="muted">—</span>;
+  if (!onRemove) return <span className="badge t-info px-rmchip-s" title={name}>{name}</span>;
+  const label = removeLabel ?? t('common.remove');
+  return (
+    <button type="button" className="badge t-info px-rmchip" title={`${name} — ${label}`} aria-label={`${label} : ${name}`} disabled={disabled} onClick={(e) => (e.stopPropagation(), onRemove())}>
+      <span className="px-rmchip-n">{name}</span>
+      <span className="px-rmchip-x" aria-hidden="true">✕ {t('common.remove')}</span>
+    </button>
+  );
+}
+
 export function TicketTag({ savRef }: { savRef: string | null | undefined }) {
   const { t } = useTranslation();
   if (!savRef) return null;

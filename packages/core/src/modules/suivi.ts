@@ -342,6 +342,18 @@ export const suiviProcs = {
     return getOrder(ctx, i.id);
   }),
 
+  /** Takes the suivi agent off an order (the order stays where it is; the next suivi agent who acts on it takes it). */
+  'suivi.unassign': proc(['suivi'], z.object({ id }), async (ctx, { id: oid }) => {
+    const cur = (await ctx.db.query('SELECT follow_agent_id FROM orders WHERE id = $1', [oid]))[0];
+    if (!cur) throw notFound('Commande introuvable');
+    if (cur.follow_agent_id !== null) {
+      await ctx.db.query('UPDATE orders SET follow_agent_id = NULL, updated_at = now() WHERE id = $1', [oid]);
+      await addEvent(ctx.db, oid, ctx.session.profile.id, 'note', null, null, 'Agent suivi retiré');
+      ctx.emit({ type: 'orders' });
+    }
+    return getOrder(ctx, oid);
+  }),
+
   /** Client annule / Livré / Nouvelle alerte from the Suivi lists. */
   'suivi.act': proc(['suivi'], z.object({ id, action: z.enum(['cancel', 'delivered', 'realert']), note: z.string().max(1000).nullable().optional() }), async (ctx, i) => {
     const map = {
