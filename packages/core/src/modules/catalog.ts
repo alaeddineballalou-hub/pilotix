@@ -63,6 +63,9 @@ export interface PickingRow {
   toPrepare: number;
   prepared: number;
   orders: number;
+  /** orders still in preparation / already pushed to dispatch that contain this product */
+  toPrepareOrders: number;
+  preparedOrders: number;
   stock: number;
 }
 export interface ScanResult {
@@ -371,6 +374,8 @@ export async function picking(db: Db): Promise<PickingRow[]> {
             sum(CASE WHEN o.follow_status = 'to_prepare' THEN i.qty ELSE 0 END)::int AS to_prep,
             sum(CASE WHEN o.follow_status = 'prepared' THEN i.qty ELSE 0 END)::int AS prepared,
             count(DISTINCT o.id)::int AS orders,
+            count(DISTINCT CASE WHEN o.follow_status = 'to_prepare' THEN o.id END)::int AS to_prep_orders,
+            count(DISTINCT CASE WHEN o.follow_status = 'prepared' THEN o.id END)::int AS prepared_orders,
             (SELECT COALESCE(sum(s.qty), 0)::int FROM stock s WHERE s.variant_id = i.variant_id) AS stock
      FROM order_items i JOIN orders o ON o.id = i.order_id JOIN products p ON p.id = i.product_id
      LEFT JOIN product_variants v ON v.id = i.variant_id
@@ -385,6 +390,8 @@ export async function picking(db: Db): Promise<PickingRow[]> {
     toPrepare: num(r.to_prep),
     prepared: num(r.prepared),
     orders: num(r.orders),
+    toPrepareOrders: num(r.to_prep_orders),
+    preparedOrders: num(r.prepared_orders),
     stock: num(r.stock),
   }));
 }

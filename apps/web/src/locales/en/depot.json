@@ -58,5 +58,8 @@
     "already": "Already received",
     "done": "{{ref}}: return received, stock put back",
     "none": "No order found."
-  }
+  },
+  "missingStock": { "title": "Products missing in the depot", "help": "Only the products whose stock is not enough for the orders in preparation and in dispatch.", "need": "Needed", "missing": "Missing", "none": "Everything is in stock: no missing product." },
+  "toDispatch": { "partner": "Delivery partner…", "button": "Send to dispatch", "done_one": "{{count}} order sent to dispatch", "done_other": "{{count}} orders sent to dispatch" },
+  "dispatchSheet": { "title": "Picking sheet — orders in dispatch", "sheetTitle": "Picking sheet — {{date}}", "empty": "No order in dispatch.", "total": "Total" }
 }
