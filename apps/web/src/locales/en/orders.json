@@ -73,7 +73,8 @@
     "wilaya": "Wilaya",
     "since": "Since",
     "variant": "Variant",
-    "fagent": "Follow-up agent"
+    "fagent": "Follow-up agent",
+    "tracking": "Tracking no."
   },
   "flag": {
     "dup": "DUPLICATE?",

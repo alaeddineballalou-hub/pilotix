@@ -238,7 +238,7 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number } =
       conf, agent, attempts, attempts ? iso(cap(created + rnd() * 5 * 3_600_000)) : null, nextCall, agent ? iso(created + 600_000) : null,
       conf === 'confirmed' || conf === 'no_stock' ? iso(cap(tConfirm)) : null,
       follow, follow === 'alert' ? null : null, company, follow ? wh1 : null, livreur,
-      shippedLike && company !== own ? `${company === yal ? 'YAL' : 'ZR'}-${100000 + Math.floor(rnd() * 899999)}` : null,
+      shippedLike && company !== own ? `PX${1001 + i}` : null, // one ID: the order ID is the tracking number
       follow === 'failed' ? 1 : 0, subtotal, fee, discount, subtotal - discount + fee, shippedLike ? cost : 0,
       delivered && age > 6 && chance(0.85), delivered && age > 6 ? iso(cap(tDone + 3 * 86_400_000)) : null,
       chance(0.06) ? 'Appeler après 17h' : null, chance(0.05) ? 'Sonner deux fois' : null, null,

@@ -20,11 +20,11 @@ const companyId = async (kind: string) => Number((await db.query('SELECT id FROM
 test('delivery.send in demo mode gives a tracking number and keeps the follow status', async () => {
   const admin = await as(EMAILS.admin);
   const yal = await companyId('yalidine');
-  const o = (await db.query(`SELECT id, follow_status FROM orders WHERE conf_status='confirmed' AND follow_status='prepared' AND tracking IS NULL LIMIT 1`))[0];
+  const o = (await db.query(`SELECT id, ref, follow_status FROM orders WHERE conf_status='confirmed' AND follow_status='prepared' AND tracking IS NULL LIMIT 1`))[0];
   await db.query('UPDATE orders SET company_id=$2 WHERE id=$1', [o.id, yal]);
   const r: any = await call('delivery.send', admin, { ids: [Number(o.id)] });
   assert.equal(r.sent, 1, JSON.stringify(r));
-  assert.match(r.results[0].tracking, /^YAL-\d{6}$/);
+  assert.equal(r.results[0].tracking, o.ref); // the order ID is the tracking number
   const after = (await db.query('SELECT tracking, follow_status, ext_status FROM orders WHERE id=$1', [o.id]))[0];
   assert.equal(after.tracking, r.results[0].tracking);
   assert.equal(after.follow_status, 'prepared');

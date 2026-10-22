@@ -1,12 +1,10 @@
 // Browser preview (no server): realistic fake answers from the couriers.
 import type { CourierKind, FollowStatus } from '@pilotix/shared';
 
-const PREFIX: Partial<Record<CourierKind, string>> = { yalidine: 'YAL', zr: 'ZR', ecotrack: 'ECO', noest: 'NST', custom: 'API' };
 
-export function fakeTracking(kind: CourierKind, ref: string): string {
-  if (kind === 'zr_legacy') return ref;
-  const n = 100000 + Math.floor(Math.random() * 899999);
-  return `${PREFIX[kind] ?? 'TRK'}-${n}`;
+/** One ID: the parcel is sent with the order ID (PX…) as its tracking number. */
+export function fakeTracking(_kind: CourierKind, ref: string): string {
+  return ref;
 }
 
 /** What each courier would say for each step (courier words, as stored in ext_status). */

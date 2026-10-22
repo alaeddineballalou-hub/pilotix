@@ -48,7 +48,8 @@
     "company": "Société",
     "variant": "Variante",
     "agent": "Agent confirmation",
-    "fagent": "Agent suivi"
+    "fagent": "Agent suivi",
+    "tracking": "N° de suivi"
   },
   "days": "{{n}} j",
   "act": {
