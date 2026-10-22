@@ -174,3 +174,5 @@
   #mk .mk-tbl td.ck { grid-row: 1; }
   #mk tr.mk-kid td.mk-prod { padding-inline-start: 0; }
 }
+#mk .mk-warn { margin: 10px 0 0; padding: 10px 14px; border-radius: 12px; background: var(--coral-soft); color: var(--coral); font-weight: 600; font-size: 14px; }
+#mk small.mk-fxwait { color: var(--coral); font-weight: 600; }
