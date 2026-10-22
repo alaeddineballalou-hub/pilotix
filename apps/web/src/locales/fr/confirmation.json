@@ -3,25 +3,29 @@
     "nouvelles": "Nouvelles",
     "attente": "En cours",
     "confirmees": "Confirmées",
-    "terminees": "Terminées"
+    "terminees": "Terminées",
+    "livrees": "Livrées"
   },
   "title": {
     "nouvelles": "Nouvelles commandes",
     "attente": "En cours",
     "confirmees": "Confirmées",
-    "terminees": "Terminées"
+    "terminees": "Terminées",
+    "livrees": "Confirmées et livrées"
   },
   "help": {
     "nouvelles": "Commandes reçues que personne n’a encore appelées, les plus récentes en haut (dernière arrivée, première appelée). Cliquez sur une ligne (ou ›) pour voir le détail, sur « Appeler » pour la traiter.",
     "attente": "Commandes déjà appelées mais pas encore confirmées : à vérifier, pas de réponse, occupé, à rappeler, reportées.",
     "confirmees": "Commandes confirmées (et confirmées sans stock), les plus récentes d’abord, avec où en est leur livraison.",
-    "terminees": "Commandes closes sans confirmation : doublons, faux numéros et fausses commandes. Elles quittent la file d’appel et arrivent ici dès que l’agent choisit ce statut."
+    "terminees": "Commandes closes sans confirmation : doublons, faux numéros et fausses commandes. Elles quittent la file d’appel et arrivent ici dès que l’agent choisit ce statut.",
+    "livrees": "Vos commandes confirmées qui ont été livrées au client. L’administrateur et les managers voient celles de toute l’équipe."
   },
   "empty": {
     "nouvelles": "Aucune nouvelle commande.",
     "attente": "Aucune commande en cours.",
     "confirmees": "Aucune commande confirmée.",
-    "terminees": "Aucune commande terminée."
+    "terminees": "Aucune commande terminée.",
+    "livrees": "Aucune de vos commandes confirmées n’est encore livrée."
   },
   "newOrder": "Nouvelle commande",
   "next": "Commande suivante →",
@@ -97,7 +101,8 @@
     "allSt": {
       "attente": "Tous en cours",
       "confirmees": "Toutes les confirmées",
-      "terminees": "Toutes les terminées"
+      "terminees": "Toutes les terminées",
+      "livrees": "Toutes"
     },
     "clear": "Effacer les filtres"
   },
@@ -338,7 +343,7 @@
     "fee": "Prix de livraison",
     "discount": "Remise",
     "total": "Total",
-    "desk": "Stop desk",
+    "desk": "Bureau",
     "home": "Domicile",
     "grid": "tarif : {{v}}",
     "modified": "Commande modifiée",
@@ -352,7 +357,8 @@
       "client": "Client",
       "delivery": "Livreur",
       "internal": "Interne"
-    }
+    },
+    "sub": "Produits"
   },
   "focus": {
     "title": "Confirmation",
@@ -422,5 +428,21 @@
     "smsSub": "Message texte du téléphone",
     "waSub": "Ouvre la discussion WhatsApp",
     "copied": "Message copié : collez-le si besoin"
+  },
+  "dl": {
+    "title": "Livraison",
+    "needDesk": "Livraison au bureau : choisissez le bureau avant d’enregistrer.",
+    "inStock": "Disponible · {{n}} en stock",
+    "outStock": "Rupture de stock · {{n}} en stock",
+    "change": "Changer",
+    "pick": "Choisir le bureau",
+    "ok": "Livrable",
+    "no": "Non livrable",
+    "okShort": "Livrable",
+    "noShort": "Non livrable",
+    "pickTitle": "Bureaux · {{w}}",
+    "pickSub": "{{n}} bureaux dans cette wilaya",
+    "searchPh": "Chercher un bureau, une commune, une société…",
+    "none": "Aucun bureau pour cette wilaya."
   }
 }

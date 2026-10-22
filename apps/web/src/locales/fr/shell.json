@@ -15,5 +15,6 @@
   "passwordHint": "8 caractères minimum",
   "passwordChanged": "Mot de passe changé",
   "fold": "Replier le menu",
-  "unfold": "Déplier le menu"
+  "unfold": "Déplier le menu",
+  "account": "Compte de {{name}}"
 }

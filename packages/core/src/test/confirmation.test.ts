@@ -148,3 +148,25 @@ test('column presets: admin adds and deletes, others only read, names are unique
   await call('confirmation.deleteColPreset', admin, { id: p.id });
   assert.equal(((await call('confirmation.colPresets', conf, {})) as any).length, 0);
 });
+
+test('delivery choice: bureaus of a wilaya with who delivers, bureau needs a stop desk, home forgets it; catalog has stock', async () => {
+  const { db, as } = await setup(40);
+  const conf = await as(EMAILS.conf);
+  const w = Number((await db.query('SELECT wilaya_id FROM stopdesks ORDER BY id LIMIT 1'))[0].wilaya_id);
+  const o = (await db.query(`SELECT id FROM orders WHERE conf_status = 'new' ORDER BY id LIMIT 1`))[0];
+  await db.query('UPDATE orders SET wilaya_id = $2 WHERE id = $1', [o.id, w]);
+  o.wilaya_id = w;
+  const opts: any = await call('confirmation.deskOptions', conf, { wilayaId: Number(o.wilaya_id) });
+  assert.ok(opts.companies.length > 0 && opts.desks.length > 0);
+  assert.ok(opts.desks.every((d: any) => typeof d.served === 'boolean' && d.companyName));
+  await assert.rejects(call('orders.update', conf, { id: Number(o.id), isStopdesk: true, stopdeskId: null }), /bureau/);
+  const d = opts.desks[0];
+  const up: any = await call('orders.update', conf, { id: Number(o.id), isStopdesk: true, stopdeskId: d.id, companyId: d.companyId });
+  assert.equal(up.isStopdesk, true);
+  assert.equal(up.stopdeskId, d.id);
+  const home: any = await call('orders.update', conf, { id: Number(o.id), isStopdesk: false });
+  assert.equal(home.isStopdesk, false);
+  assert.equal(home.stopdeskId, null);
+  const cat: any = await call('confirmation.catalog', conf, {});
+  assert.ok(cat.some((p: any) => p.variants.some((v: any) => typeof v.stock === 'number')));
+});

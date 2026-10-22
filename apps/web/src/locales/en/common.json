@@ -56,5 +56,12 @@
   "demoOnly": "Available with the Pilotix server (not in the demo)",
   "vsPrev": "compared with the previous period",
   "see": "See",
-  "copyCode": "Copy {{v}}"
+  "copyCode": "Copy {{v}}",
+  "density": "Row size",
+  "dens": {
+    "s": "Compact rows",
+    "m": "Normal rows",
+    "l": "Large rows"
+  },
+  "dragCol": "Drag to move the column"
 }

@@ -15,5 +15,6 @@
   "passwordHint": "At least 8 characters",
   "passwordChanged": "Password changed",
   "fold": "Fold the menu",
-  "unfold": "Unfold the menu"
+  "unfold": "Unfold the menu",
+  "account": "{{name}}’s account"
 }

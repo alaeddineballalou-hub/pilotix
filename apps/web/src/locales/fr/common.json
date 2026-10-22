@@ -56,5 +56,12 @@
   "demoOnly": "Disponible avec le serveur Pilotix (pas dans la démo)",
   "vsPrev": "par rapport à la période précédente",
   "see": "Voir",
-  "copyCode": "Copier {{v}}"
+  "copyCode": "Copier {{v}}",
+  "density": "Taille des lignes",
+  "dens": {
+    "s": "Lignes compactes",
+    "m": "Lignes normales",
+    "l": "Grandes lignes"
+  },
+  "dragCol": "Glissez pour déplacer la colonne"
 }

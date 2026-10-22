@@ -30,6 +30,7 @@ const EXTRA: Record<string, string> = {
   chevl: '<path d="m15 18-6-6 6-6"/>',
   chevr: '<path d="m9 18 6-6-6-6"/>',
   history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l4 2"/>',
+  building: '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M8 10h.01M16 10h.01M12 10h.01M8 14h.01M16 14h.01M12 14h.01"/>',
   lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
 };
 const ALL = { ...(icons as Record<string, string>), ...EXTRA };
@@ -362,10 +363,10 @@ export function Pager({ page, pageSize, total, onPage, onSize, sizes = [20, 50, 
 }
 
 /** Sortable column header with the ↕ ▲ ▼ arrows of the original app. */
-export function SortTh<K extends string>({ k, sort, dir, onSort, children, num }: { k: K; sort: K; dir: 'asc' | 'desc'; onSort: (k: K) => void; children: ReactNode; num?: boolean }) {
+export function SortTh<K extends string>({ k, sort, dir, onSort, children, num, extra }: { k: K; sort: K; dir: 'asc' | 'desc'; onSort: (k: K) => void; children: ReactNode; num?: boolean; extra?: React.ThHTMLAttributes<HTMLTableCellElement> & Record<string, unknown> }) {
   const on = sort === k;
   return (
-    <th className={`${num ? 'num ' : ''}qsort`} aria-sort={on ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+    <th {...extra} className={`${num ? 'num ' : ''}qsort ${(extra?.className as string) ?? ''}`} aria-sort={on ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
       <button type="button" className="qsort-btn" onClick={() => onSort(k)}>
         {children}
         <span className="qarr" data-dir={on ? dir : 'none'} aria-hidden="true">
