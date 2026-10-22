@@ -373,6 +373,13 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   const toggleOpen = (id: number) => setOpen((s) => (s.has(id) ? (s.delete(id), new Set(s)) : new Set(s).add(id)));
   const allOn = rows.length > 0 && rows.every((r) => sel.has(r.id));
   const canNext = (sub === 'nouvelles' || sub === 'attente') && has('confirmation');
+  // "Commande suivante" lives in the top header (Shell): it asks this list to open the next order
+  useEffect(() => {
+    if (!canNext) return;
+    const on = () => goNext([...open].pop());
+    window.addEventListener('px:next-order', on);
+    return () => window.removeEventListener('px:next-order', on);
+  });
 
   return (
     <>
@@ -384,11 +391,6 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
             <Help text={t(`confirmation.help.${sub}`)} label={title} />
           </h2>
           <div className="row">
-            {canNext && focus === null && (
-              <button type="button" className="btn" onClick={() => goNext([...open].pop())}>
-                {t('confirmation.next')}
-              </button>
-            )}
             {has('confirmation') && (
               <button type="button" className="btn primary" onClick={() => openOrderForm({ onSaved: () => qc.invalidateQueries() })}>
                 + {t('confirmation.newOrder')}
