@@ -55,6 +55,8 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
   const [noteTab, setNoteTab] = useState<'origin' | 'livreur' | 'team'>('origin');
   /** the status picked in "Changer le statut": applied only with Enregistrer */
   const [pend, setPend] = useState<Pend | null>(null);
+  /** Enregistrer needs a new status: a status picked in the menu that differs from the current one (another call attempt always counts) */
+  const canSave = !!pend && (pend.status === 'try' || pend.status !== order.confStatus);
   useEffect(() => setPend(null), [order.id, order.confStatus, order.version]);
   useEffect(() => {
     setDisc(order.discount);
@@ -472,10 +474,10 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
         <StatusMenu order={order} busy={busy} pending={pend} onPick={setPend} />
         <button
           type="button"
-          className={`qd6-savebtn ${dirty || pend ? 'on' : ''}`}
-          disabled={busy || (!pend && (!editable || !dirty))}
-          title={dirty || pend ? undefined : t('confirmation.d6.nothing')}
-          onClick={() => (pend ? run(pend.fn, pend.ok, pend.tone) : run(async () => {}, t('confirmation.d.saved', { ref: order.ref })))}
+          className={`qd6-savebtn ${canSave ? 'on' : ''}`}
+          disabled={busy || !canSave}
+          title={canSave ? undefined : t('confirmation.d6.pickStatus')}
+          onClick={() => pend && run(pend.fn, pend.ok, pend.tone)}
         >
           <Icon name="check" />
           {t('common.save')}
@@ -511,6 +513,8 @@ type Step = null | 'menu' | 'cancelled' | 'postponed' | 'callback';
 /** "Changer le statut": a small menu opening upwards; Annulée asks the reason, Reportée the date, Rappel the date and hour. */
 /** A status picked in the menu, waiting for Enregistrer. */
 interface Pend {
+  /** the status it leads to ('try' = one more call attempt) */
+  status: string;
   label: string;
   tone: 'ok' | 'bad';
   cls: string;
@@ -545,24 +549,24 @@ function StatusMenu({ order, busy, pending, onPick }: { order: Order; busy: bool
   const direct = (status: 'busy' | 'duplicate' | 'wrong_number' | 'fake' | 'try') => {
     if (status === 'try') {
       const txt = t('confirmation.try', { n: String(nextTry).padStart(2, '0') });
-      return done({ label: txt, tone: 'ok', cls: 'c-mid', fn: () => rpc('confirmation.setTry', { ids: [order.id], n: nextTry }), ok: `${order.ref} → ${txt}` });
+      return done({ status: 'try', label: txt, tone: 'ok', cls: 'c-mid', fn: () => rpc('confirmation.setTry', { ids: [order.id], n: nextTry }), ok: `${order.ref} → ${txt}` });
     }
     const soft = status === 'busy' || status === 'duplicate';
-    done({ label: label(status), tone: soft ? 'ok' : 'bad', cls: status === 'busy' ? 'c-mid' : 'c-off', fn: () => rpc('orders.setConf', { ids: [order.id], status, reason: status === 'wrong_number' || status === 'fake' ? label(status) : null }), ok: `${order.ref} → ${label(status)}` });
+    done({ status, label: label(status), tone: soft ? 'ok' : 'bad', cls: status === 'busy' ? 'c-mid' : 'c-off', fn: () => rpc('orders.setConf', { ids: [order.id], status, reason: status === 'wrong_number' || status === 'fake' ? label(status) : null }), ok: `${order.ref} → ${label(status)}` });
   };
   const submitAsk = async () => {
     if (step === 'cancelled') {
       if (!reason) return;
       const r = t(`status.cancelReason.${reason}`);
       const n = note.trim() || null;
-      done({ label: `${label('cancelled')} · ${r}`, tone: 'bad', cls: 'c-bad', fn: () => rpc('orders.setConf', { ids: [order.id], status: 'cancelled', reason: r, note: n }), ok: `${order.ref} → ${label('cancelled')}` });
+      done({ status: 'cancelled', label: `${label('cancelled')} · ${r}`, tone: 'bad', cls: 'c-bad', fn: () => rpc('orders.setConf', { ids: [order.id], status: 'cancelled', reason: r, note: n }), ok: `${order.ref} → ${label('cancelled')}` });
     } else if (step === 'postponed' || step === 'callback') {
       if (!when) return;
       const at = step === 'postponed' ? `${when}T10:00` : when;
       const st = step;
       const n = note.trim() || null;
       const shown = st === 'postponed' ? shortDate(when) : `${shortDate(when.slice(0, 10))} ${when.slice(11, 16)}`;
-      done({ label: `${label(st)} · ${shown}`, tone: 'ok', cls: 'c-info', fn: () => rpc('orders.setConf', { ids: [order.id], status: st, nextCallAt: fromLocalInput(at), note: n }), ok: `${order.ref} → ${label(st)}` });
+      done({ status: st, label: `${label(st)} · ${shown}`, tone: 'ok', cls: 'c-info', fn: () => rpc('orders.setConf', { ids: [order.id], status: st, nextCallAt: fromLocalInput(at), note: n }), ok: `${order.ref} → ${label(st)}` });
     }
   };
   const item = (icon: string, cls: string, text: string, hint: string | null, on: () => void) => (
