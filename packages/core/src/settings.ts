@@ -27,6 +27,8 @@ export interface SettingsMap {
   webhook: { key: string };
   cron: { key: string };
   meta: { adAccountId: string; hasToken: boolean };
+  /** Dashboard goals (admin): delivered revenue per month */
+  goals: { monthlyRevenue: number };
 }
 
 export const DEFAULT_SETTINGS: SettingsMap = {
@@ -50,6 +52,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   webhook: { key: '' },
   cron: { key: '' },
   meta: { adAccountId: '', hasToken: false },
+  goals: { monthlyRevenue: 3_000_000 },
 };
 
 export async function getSetting<K extends keyof SettingsMap>(db: Db, key: K): Promise<SettingsMap[K]> {

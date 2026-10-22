@@ -1,7 +1,7 @@
 // Stats: Accueil (home) counters and the Dashboard areas (Confirmation teams, Dépôt, Suivi, Livreurs, SAV).
 import { algiersDayStart, CONF_DONE_BAD, CONF_TODO, FOLLOW_ON_ROAD, nextDue, slotAt } from '@pilotix/shared';
 import { z } from 'zod';
-import { num } from '../db';
+import { iso, num } from '../db';
 import { bad, Ctx, forbidden, proc } from '../rpc';
 import { getSetting, setSetting, SettingsMap } from '../settings';
 
@@ -373,7 +373,117 @@ async function livreursStats(ctx: Ctx, i: z.infer<typeof LivInput>) {
 // ---------------------------------------------------------------- procedures
 const PeriodOnly = Range;
 
+
+// ---------------------------------------------------------------- overview (admin / vendeur): the whole shop at a glance
+const DAY_MS = 86_400_000;
+const algDay = (iso: string) => new Date(Date.parse(iso) + 3_600_000).toISOString().slice(0, 10);
+
+async function overview(ctx: Ctx, r: RangeT) {
+  const a = Date.parse(r.from);
+  const b = Date.parse(r.to);
+  const pa = new Date(a - (b - a)).toISOString();
+  const q1 = async (sql: string, params: unknown[]) => (await ctx.db.query(sql, params))[0];
+  const block = async (from: string, to: string) =>
+    q1(
+      `SELECT
+        (SELECT count(*) FROM sales WHERE created_at >= $1 AND created_at < $2)::int AS received,
+        (SELECT COALESCE(sum(total),0) FROM sales WHERE follow_status IN ('delivered','exchanged') AND delivered_at >= $1 AND delivered_at < $2)::bigint AS revenue,
+        (SELECT count(*) FROM sales WHERE follow_status IN ('delivered','exchanged') AND delivered_at >= $1 AND delivered_at < $2)::int AS delivered,
+        (SELECT count(*) FROM sales WHERE follow_status IN ('returning','returned') AND COALESCE(returned_at, updated_at) >= $1 AND COALESCE(returned_at, updated_at) < $2)::int AS returned`,
+      [from, to],
+    );
+  const cur = await block(r.from, r.to);
+  const prev = await block(pa, r.from);
+  const rate = (x: any) => ratio(num(x.delivered), num(x.delivered) + num(x.returned));
+
+  // per day: orders received / delivered (same unit, one axis)
+  const days: string[] = [];
+  for (let t = a; t < b && days.length < 400; t += DAY_MS) days.push(algDay(new Date(t).toISOString()));
+  const rec = await ctx.db.query(`SELECT to_char(created_at + interval '1 hour', 'YYYY-MM-DD') AS d, count(*)::int AS n FROM sales WHERE created_at >= $1 AND created_at < $2 GROUP BY 1`, [r.from, r.to]);
+  const del = await ctx.db.query(
+    `SELECT to_char(delivered_at + interval '1 hour', 'YYYY-MM-DD') AS d, count(*)::int AS n, COALESCE(sum(total),0)::bigint AS v FROM sales
+      WHERE follow_status IN ('delivered','exchanged') AND delivered_at >= $1 AND delivered_at < $2 GROUP BY 1`,
+    [r.from, r.to],
+  );
+  const R = new Map(rec.map((x: any) => [x.d as string, num(x.n)]));
+  const D = new Map(del.map((x: any) => [x.d as string, { n: num(x.n), v: num(x.v) }]));
+  const series = [...new Set(days)].map((d) => ({ day: d, received: R.get(d) ?? 0, delivered: D.get(d)?.n ?? 0, revenue: D.get(d)?.v ?? 0 }));
+
+  // this month vs the goal
+  const now = new Date(ctx.now() + 3_600_000);
+  const m0 = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) - 3_600_000).toISOString();
+  const pm0 = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1) - 3_600_000).toISOString();
+  const sameDayPrev = new Date(Date.parse(pm0) + (ctx.now() - Date.parse(m0))).toISOString();
+  const month = num((await q1(`SELECT COALESCE(sum(total),0)::bigint AS v FROM sales WHERE follow_status IN ('delivered','exchanged') AND delivered_at >= $1`, [m0])).v);
+  const monthPrev = num((await q1(`SELECT COALESCE(sum(total),0)::bigint AS v FROM sales WHERE follow_status IN ('delivered','exchanged') AND delivered_at >= $1 AND delivered_at < $2`, [pm0, sameDayPrev])).v);
+  const goal = (await getSetting(ctx.db, 'goals')).monthlyRevenue;
+
+  // top products (delivered value)
+  const prods = await ctx.db.query(
+    `SELECT i.name, COALESCE(sum(i.qty * i.unit_price),0)::bigint AS v, COALESCE(sum(i.qty),0)::int AS q FROM order_items i JOIN sales o ON o.id = i.order_id
+      WHERE o.follow_status IN ('delivered','exchanged') AND o.delivered_at >= $1 AND o.delivered_at < $2 GROUP BY i.name ORDER BY 2 DESC`,
+    [r.from, r.to],
+  );
+  const top = prods.slice(0, 4).map((x: any) => ({ name: x.name as string, value: num(x.v), qty: num(x.q) }));
+  const other = prods.slice(4).reduce((s: number, x: any) => s + num(x.v), 0);
+
+  // wilayas (share of orders received)
+  const wil = await ctx.db.query(`SELECT wilaya_id AS w, count(*)::int AS n FROM sales WHERE created_at >= $1 AND created_at < $2 GROUP BY 1 ORDER BY 2 DESC LIMIT 5`, [r.from, r.to]);
+
+  // funnel: orders received in the period, how far they went
+  const f = await q1(
+    `SELECT count(*)::int AS received,
+            count(*) FILTER (WHERE attempts > 0 OR conf_status NOT IN ('new','to_check'))::int AS called,
+            count(*) FILTER (WHERE conf_status = 'confirmed')::int AS confirmed,
+            count(*) FILTER (WHERE shipped_at IS NOT NULL)::int AS shipped,
+            count(*) FILTER (WHERE follow_status IN ('delivered','exchanged'))::int AS delivered
+       FROM sales WHERE created_at >= $1 AND created_at < $2`,
+    [r.from, r.to],
+  );
+
+  // sales channels
+  const ch = await ctx.db.query(`SELECT channel AS c, count(*)::int AS n FROM sales WHERE created_at >= $1 AND created_at < $2 GROUP BY 1 ORDER BY 2 DESC`, [r.from, r.to]);
+
+  // recent orders and activity
+  const recent = await ctx.db.query(
+    `SELECT o.id, o.ref, o.customer_name, o.total, o.conf_status, o.follow_status, o.created_at,
+            (SELECT i.name FROM order_items i WHERE i.order_id = o.id ORDER BY i.id LIMIT 1) AS product,
+            (SELECT COALESCE(sum(i.qty),0) FROM order_items i WHERE i.order_id = o.id)::int AS qty
+       FROM sales o ORDER BY o.created_at DESC, o.id DESC LIMIT 6`,
+    [],
+  );
+  const act = await ctx.db.query(
+    `SELECT e.at, e.kind, e.to_value, e.note, o.ref, o.id, p.name AS who FROM order_events e JOIN sales o ON o.id = e.order_id LEFT JOIN profiles p ON p.id = e.user_id
+      WHERE e.kind IN ('conf_status','follow_status','created') AND e.at <= $1 ORDER BY e.at DESC, e.id DESC LIMIT 6`,
+    [isoNow(ctx)],
+  );
+  return {
+    kpis: {
+      revenue: num(cur.revenue),
+      revenuePrev: num(prev.revenue),
+      received: num(cur.received),
+      receivedPrev: num(prev.received),
+      delivered: num(cur.delivered),
+      deliveryRate: rate(cur),
+      deliveryRatePrev: rate(prev),
+    },
+    series,
+    month: { revenue: month, prevSamePoint: monthPrev, goal },
+    products: { top, other, total: top.reduce((s: number, x: { value: number }) => s + x.value, 0) + other },
+    wilayas: wil.map((x: any) => ({ wilayaId: num(x.w), n: num(x.n) })),
+    funnel: { received: num(f.received), called: num(f.called), confirmed: num(f.confirmed), shipped: num(f.shipped), delivered: num(f.delivered) },
+    channels: ch.map((x: any) => ({ channel: x.c as string, n: num(x.n) })),
+    recent: recent.map((x: any) => ({ id: num(x.id), ref: x.ref as string, customer: x.customer_name as string, product: (x.product ?? '') as string, qty: num(x.qty), total: num(x.total), conf: x.conf_status as string, follow: (x.follow_status ?? null) as string | null, at: iso(x.created_at) })),
+    activity: act.map((x: any) => ({ at: iso(x.at), kind: x.kind as string, to: (x.to_value ?? '') as string, ref: x.ref as string, id: num(x.id), who: (x.who ?? null) as string | null })),
+  };
+}
+
 export const statsProcs = {
+  'stats.overview2': proc(['vendeur'], Range, (ctx, r) => overview(ctx, r)),
+  'stats.setGoal': proc([], z.object({ monthlyRevenue: z.number().int().min(0).max(10_000_000_000) }), async (ctx, i) => {
+    await setSetting(ctx.db, 'goals', { monthlyRevenue: i.monthlyRevenue }, ctx.session.profile.id);
+    return { ok: true };
+  }),
   /** Live counters of the "Maintenant" card. */
   'stats.now': proc(['confirmation', 'suivi', 'depot'], z.object({}), async (ctx) => {
     const now = isoNow(ctx);

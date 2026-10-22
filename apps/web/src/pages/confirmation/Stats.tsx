@@ -99,7 +99,11 @@ const PERS = ['today', 'yesterday', '7', '30', 'month', 'custom'] as const;
 /** Nouvelles › Statistiques: one card with a fold arrow, the date filters under its header, and six numbers. */
 function NouvellesStats({ kf, setKf, open, setOpen }: { kf: Kf; setKf: (k: Kf) => void; open: boolean; setOpen: (o: boolean) => void }) {
   const { t } = useTranslation();
-  const q = useRpc('confirmation.firstCall', kfInput(kf), { refetchInterval: 30_000, enabled: open });
+  // this box always counts by status change, on the chosen dates only
+  const today = new Date(Date.now() + 3_600_000).toISOString().slice(0, 10);
+  const from = kf.from || today;
+  const to = kf.to || today;
+  const q = useRpc('confirmation.firstCall', { per: 'custom', basis: 'updated', from, to }, { refetchInterval: 30_000, enabled: open });
   const now = useNow();
   const D = q.data;
   const set = (p: Partial<Kf>) => setKf({ ...kf, ...p });
@@ -125,27 +129,12 @@ function NouvellesStats({ kf, setKf, open, setOpen }: { kf: Kf; setKf: (k: Kf) =
       {open && (
         <>
           <div className="px-st-filters">
-            <select className="px-st-sel" aria-label={t('common.period')} value={kf.per} onChange={(e) => set({ per: e.target.value as Kf['per'] })}>
-              {PERS.map((p) => (
-                <option key={p} value={p}>
-                  {t(`confirmation.per.${p}`)}
-                </option>
-              ))}
-            </select>
-            <select className="px-st-sel" aria-label={t('confirmation.stats.basis')} value={kf.basis} onChange={(e) => set({ basis: e.target.value as Kf['basis'] })}>
-              {(['created', 'updated'] as const).map((b) => (
-                <option key={b} value={b}>
-                  {t(`confirmation.stats.${b}`)}
-                </option>
-              ))}
-            </select>
-            {kf.per === 'custom' && (
-              <span className="px-st-dates">
-                <input type="date" value={kf.from} aria-label={t('common.from')} onChange={(e) => set({ from: e.target.value })} />
-                <span className="muted">→</span>
-                <input type="date" value={kf.to} aria-label={t('common.to')} onChange={(e) => set({ to: e.target.value })} />
-              </span>
-            )}
+            <span className="px-st-dates">
+              <input type="date" value={from} max={to} aria-label={t('common.from')} onChange={(e) => set({ per: 'custom', from: e.target.value || today })} />
+              <span className="muted">→</span>
+              <input type="date" value={to} min={from} aria-label={t('common.to')} onChange={(e) => set({ per: 'custom', to: e.target.value || today })} />
+            </span>
+            <span className="muted small">{t('confirmation.stats.byStatusChange')}</span>
           </div>
           {q.error ? (
             <ErrorBox error={q.error} onRetry={() => q.refetch()} />
@@ -156,24 +145,27 @@ function NouvellesStats({ kf, setKf, open, setOpen }: { kf: Kf; setKf: (k: Kf) =
               <Kpi
                 tone={D.waiting ? 'warn' : 'ok'}
                 label={t('confirmation.fc.waiting')}
+                help={t('confirmation.kh.waiting')}
                 value={n(D.waiting)}
                 sub={D.waiting ? (D.waitingNoAgent ? t('confirmation.fc.noAgent', { n: D.waitingNoAgent }) : t('confirmation.fc.allAssigned')) : t('confirmation.fc.nobody')}
               />
-              <Kpi tone={D.late ? 'bad' : 'ok'} label={t('confirmation.fc.lateNow')} value={n(D.late)} sub={D.late ? t('confirmation.fc.lateSub') : t('confirmation.fc.noLate')} />
+              <Kpi tone={D.late ? 'bad' : 'ok'} help={t('confirmation.kh.late', { first: fm })} label={t('confirmation.fc.lateNow')} value={n(D.late)} sub={D.late ? t('confirmation.fc.lateSub') : t('confirmation.fc.noLate')} />
               <Kpi
                 tone={age === null ? 'ok' : age > fm * 60_000 ? 'bad' : age > fm * 30_000 ? 'warn' : 'ok'}
                 label={t('confirmation.fc.oldest')}
+                help={t('confirmation.kh.oldest')}
                 value={age === null ? '—' : dur(age)}
                 sub={D.oldest ? `${D.oldest.ref} · ${D.oldest.name}` : t('confirmation.fc.nobody')}
               />
-              <Kpi tone={tone3(onTime, 80, 70)} label={t('confirmation.fc.onTime')} value={pctTxt(onTime)} sub={D.called ? t('confirmation.fc.onTimeSub', { ok: D.onTime, n: D.called }) : t('confirmation.fc.noneCalled')} />
+              <Kpi tone={tone3(onTime, 80, 70)} help={t('confirmation.kh.onTime', { first: fm })} label={t('confirmation.fc.onTime')} value={pctTxt(onTime)} sub={D.called ? t('confirmation.fc.onTimeSub', { ok: D.onTime, n: D.called }) : t('confirmation.fc.noneCalled')} />
               <Kpi
                 tone={med === null ? undefined : med <= fm ? 'ok' : med <= fm * 2 ? 'warn' : 'bad'}
                 label={t('confirmation.fc.median')}
+                help={t('confirmation.kh.median')}
                 value={med === null ? '—' : dur(med * 60_000)}
                 sub={D.called ? t('confirmation.fc.medianSub') : perLabel(t, kf)}
               />
-              <Kpi tone={tone3(f5, 50, 25)} label={t('confirmation.fc.under5')} value={pctTxt(f5)} sub={D.called ? t('confirmation.fc.under5Sub') : perLabel(t, kf)} />
+              <Kpi tone={tone3(f5, 50, 25)} help={t('confirmation.kh.under5')} label={t('confirmation.fc.under5')} value={pctTxt(f5)} sub={D.called ? t('confirmation.fc.under5Sub') : perLabel(t, kf)} />
             </div>
           )}
         </>

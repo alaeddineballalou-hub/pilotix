@@ -6,7 +6,8 @@
     "depot": "Warehouse",
     "suivi": "Follow-up",
     "livreurs": "Couriers",
-    "sav": "After-sales"
+    "sav": "After-sales",
+    "overview": "Overview"
   },
   "noArea": "No dashboard is open to you. Ask the administrator.",
   "nothing": "Nothing in this period.",
@@ -326,5 +327,52 @@
       "uncashed": "Not collected",
       "net": "Net to pay"
     }
+  },
+  "ov": {
+    "title": "Overview",
+    "vsPrev": "vs previous period",
+    "revenue": "Delivered revenue",
+    "received": "Orders received",
+    "rate": "Delivery rate",
+    "perDay": "Orders per day",
+    "sReceived": "Received",
+    "sDelivered": "Delivered",
+    "goal": "Monthly goal",
+    "editGoal": "Edit the goal",
+    "goalLabel": "Delivered revenue targeted this month (DA)",
+    "goalSaved": "Goal saved",
+    "goalUp": "{{v}} more than last month on the same date",
+    "goalDown": "{{v}} less than last month on the same date",
+    "goalNoPrev": "No comparison with last month",
+    "goalTarget": "Goal",
+    "goalDone": "Delivered this month",
+    "topProducts": "Top products",
+    "deliveredValue": "Total delivered",
+    "other": "Other",
+    "wilayas": "Top wilayas",
+    "ofReceived": "share of orders received",
+    "funnel": "Order journey",
+    "funnelSub": "orders received in the period",
+    "f": {
+      "received": "Received",
+      "called": "Called",
+      "confirmed": "Confirmed",
+      "shipped": "Shipped",
+      "delivered": "Delivered"
+    },
+    "channels": "Sales channels",
+    "recent": "Recent orders",
+    "seeAll": "See all",
+    "cOrder": "Order",
+    "cCustomer": "Customer",
+    "cProduct": "Product",
+    "cQty": "Qty",
+    "cTotal": "Total",
+    "cStatus": "Status",
+    "activity": "Recent activity",
+    "aCreated": "New order {{ref}}",
+    "aStatus": "{{who}}: {{ref}} → {{st}}",
+    "system": "System",
+    "none": "Nothing in this period."
   }
 }
