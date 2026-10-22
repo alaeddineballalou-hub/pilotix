@@ -53,6 +53,9 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
   const [nLivreur, setNLivreur] = useState(order.deliveryNote ?? '');
   const [nTeam, setNTeam] = useState(order.internalNote ?? '');
   const [noteTab, setNoteTab] = useState<'origin' | 'livreur' | 'team'>('origin');
+  /** the status picked in "Changer le statut": applied only with Enregistrer */
+  const [pend, setPend] = useState<Pend | null>(null);
+  useEffect(() => setPend(null), [order.id, order.confStatus, order.version]);
   useEffect(() => {
     setDisc(order.discount);
     setNOrigin(order.customerNote ?? '');
@@ -197,6 +200,7 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
             const cur = notes.find((x) => x[0] === noteTab) ?? notes[0];
             return (
               <>
+                <div className="qd6-nrow">
                 <div className="qd6-ntabs" role="tablist">
                   {notes.map(([k, icon, v]) => (
                     <button key={k} type="button" role="tab" id={`qd6-nt-${order.id}-${k}`} aria-selected={k === cur[0]} className={k === cur[0] ? 'on' : ''} onClick={() => setNoteTab(k)}>
@@ -205,6 +209,8 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
                       {v.trim() && <span className="qd6-ndot" aria-label="•" />}
                     </button>
                   ))}
+                </div>
+                <Clocks since={order.createdAt} />
                 </div>
                 <textarea
                   key={cur[0]}
@@ -294,12 +300,13 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
           })}
           <div className="qd6-add">{editable ? <AddProduct catalog={cat.data} lines={L} onPick={add} /> : <p className="muted small">{t('confirmation.d.locked')}</p>}</div>
         </section>
-          {editable && (packs.length > 0 || linked.size > 0) && (
+          {editable && (
             <section className="qd6-card qd6-related" aria-label={t('confirmation.d6.offer')}>
               <div className="qd6-h">
                 <Icon name="sparkles" />
                 {t('confirmation.d6.offer')}
               </div>
+              {packs.length === 0 && linked.size === 0 && <p className="qd6-none">{t('confirmation.d6.noOffer')}</p>}
               <div className="qd6-chips">
                 {packs.map((x, k) => {
                   const l = L[x.i];
@@ -438,7 +445,7 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
       </div>
       <div className="qd6-bar">
         <div className="qd6-bl">
-        {dirty && (
+        {(dirty || pend) && (
           <div className="qd6-dirty">
             <span>{t('confirmation.d.modified')}</span>
             <button
@@ -453,6 +460,7 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
                 setNOrigin(order.customerNote ?? '');
                 setNLivreur(order.deliveryNote ?? '');
                 setNTeam(order.internalNote ?? '');
+                setPend(null);
                 setErr('');
               }}
             >
@@ -461,8 +469,14 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
           </div>
         )}
         </div>
-        <StatusMenu order={order} busy={busy} run={run} />
-        <button type="button" className={`qd6-savebtn ${dirty ? 'on' : ''}`} disabled={busy || !editable || !dirty} title={dirty ? undefined : t('confirmation.d6.nothing')} onClick={() => run(async () => {}, t('confirmation.d.saved', { ref: order.ref }))}>
+        <StatusMenu order={order} busy={busy} pending={pend} onPick={setPend} />
+        <button
+          type="button"
+          className={`qd6-savebtn ${dirty || pend ? 'on' : ''}`}
+          disabled={busy || (!pend && (!editable || !dirty))}
+          title={dirty || pend ? undefined : t('confirmation.d6.nothing')}
+          onClick={() => (pend ? run(pend.fn, pend.ok, pend.tone) : run(async () => {}, t('confirmation.d.saved', { ref: order.ref })))}
+        >
           <Icon name="check" />
           {t('common.save')}
         </button>
@@ -495,7 +509,15 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
 
 type Step = null | 'menu' | 'cancelled' | 'postponed' | 'callback';
 /** "Changer le statut": a small menu opening upwards; Annulée asks the reason, Reportée the date, Rappel the date and hour. */
-function StatusMenu({ order, busy, run }: { order: Order; busy: boolean; run: (fn: () => Promise<unknown>, ok: string, tone?: 'ok' | 'bad') => Promise<boolean> }) {
+/** A status picked in the menu, waiting for Enregistrer. */
+interface Pend {
+  label: string;
+  tone: 'ok' | 'bad';
+  cls: string;
+  fn: () => Promise<unknown>;
+  ok: string;
+}
+function StatusMenu({ order, busy, pending, onPick }: { order: Order; busy: boolean; pending: Pend | null; onPick: (p: Pend | null) => void }) {
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>(null);
   const [reason, setReason] = useState('');
@@ -511,29 +533,36 @@ function StatusMenu({ order, busy, run }: { order: Order; busy: boolean; run: (f
     return () => (document.removeEventListener('mousedown', down), document.removeEventListener('keydown', key));
   }, [step]);
   const label = (c: string) => t(`status.conf.${c}`);
+  const shortDate = (d: string) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : '');
   const nextTry = Math.min(9, (order.attempts || 0) + 1);
-  const done = (ok: boolean) => ok && (setStep(null), setReason(''), setNote(''));
+  const done = (p: Pend) => (onPick(p), setStep(null), setReason(''), setNote(''));
   const pickAsk = (s: 'cancelled' | 'postponed' | 'callback') => {
     setStep(s);
     setReason('');
     setNote('');
     setWhen(s === 'callback' ? defaultNext('callback') : defaultNext('postponed').slice(0, 10));
   };
-  const direct = async (status: 'busy' | 'duplicate' | 'wrong_number' | 'fake' | 'try') => {
-    const ok =
-      status === 'try'
-        ? await run(() => rpc('confirmation.setTry', { ids: [order.id], n: nextTry }), `${order.ref} → ${t('confirmation.try', { n: String(nextTry).padStart(2, '0') })}`)
-        : await run(() => rpc('orders.setConf', { ids: [order.id], status, reason: status === 'wrong_number' || status === 'fake' ? label(status) : null }), `${order.ref} → ${label(status)}`, status === 'busy' || status === 'duplicate' ? 'ok' : 'bad');
-    done(ok);
+  const direct = (status: 'busy' | 'duplicate' | 'wrong_number' | 'fake' | 'try') => {
+    if (status === 'try') {
+      const txt = t('confirmation.try', { n: String(nextTry).padStart(2, '0') });
+      return done({ label: txt, tone: 'ok', cls: 'c-mid', fn: () => rpc('confirmation.setTry', { ids: [order.id], n: nextTry }), ok: `${order.ref} → ${txt}` });
+    }
+    const soft = status === 'busy' || status === 'duplicate';
+    done({ label: label(status), tone: soft ? 'ok' : 'bad', cls: status === 'busy' ? 'c-mid' : 'c-off', fn: () => rpc('orders.setConf', { ids: [order.id], status, reason: status === 'wrong_number' || status === 'fake' ? label(status) : null }), ok: `${order.ref} → ${label(status)}` });
   };
   const submitAsk = async () => {
     if (step === 'cancelled') {
       if (!reason) return;
-      done(await run(() => rpc('orders.setConf', { ids: [order.id], status: 'cancelled', reason: t(`status.cancelReason.${reason}`), note: note.trim() || null }), `${order.ref} → ${label('cancelled')}`, 'bad'));
+      const r = t(`status.cancelReason.${reason}`);
+      const n = note.trim() || null;
+      done({ label: `${label('cancelled')} · ${r}`, tone: 'bad', cls: 'c-bad', fn: () => rpc('orders.setConf', { ids: [order.id], status: 'cancelled', reason: r, note: n }), ok: `${order.ref} → ${label('cancelled')}` });
     } else if (step === 'postponed' || step === 'callback') {
       if (!when) return;
       const at = step === 'postponed' ? `${when}T10:00` : when;
-      done(await run(() => rpc('orders.setConf', { ids: [order.id], status: step, nextCallAt: fromLocalInput(at), note: note.trim() || null }), `${order.ref} → ${label(step)}`));
+      const st = step;
+      const n = note.trim() || null;
+      const shown = st === 'postponed' ? shortDate(when) : `${shortDate(when.slice(0, 10))} ${when.slice(11, 16)}`;
+      done({ label: `${label(st)} · ${shown}`, tone: 'ok', cls: 'c-info', fn: () => rpc('orders.setConf', { ids: [order.id], status: st, nextCallAt: fromLocalInput(at), note: n }), ok: `${order.ref} → ${label(st)}` });
     }
   };
   const item = (icon: string, cls: string, text: string, hint: string | null, on: () => void) => (
@@ -543,7 +572,6 @@ function StatusMenu({ order, busy, run }: { order: Order; busy: boolean; run: (f
       {hint && <small>{hint}</small>}
     </button>
   );
-  const shortDate = (d: string) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : '');
   return (
     <div className="qd6-dd" ref={box}>
       {step === 'menu' && (
@@ -612,7 +640,7 @@ function StatusMenu({ order, busy, run }: { order: Order; busy: boolean; run: (f
         <Icon name="list" />
         {t('confirmation.d6.change')}
         <span className="qd6-cur">
-          <StatusBadge kind="conf" status={order.confStatus} />
+          {pending ? <span className={`qd6-pend ${pending.cls}`}>{pending.label}</span> : <StatusBadge kind="conf" status={order.confStatus} />}
           <Icon name="chevron" />
         </span>
       </button>
@@ -818,5 +846,38 @@ function DeskMenu({ anchor, wilaya, desks, current, onPick, onClose }: { anchor:
         ))}
       </div>
     </Float>
+  );
+}
+
+/** "1 h 05 min" from an hour on, "4 min 12 s" under it. */
+const span = (ms: number) => {
+  const sec = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  if (h >= 24) return `${Math.floor(h / 24)} j ${h % 24} h`;
+  if (h > 0) return `${h} h ${String(m).padStart(2, '0')} min`;
+  return `${m} min ${String(s).padStart(2, '0')} s`;
+};
+/** Beside the note tabs: how long ago the order came in, and a chrono of the time spent on it since it was opened. */
+function Clocks({ since }: { since: string }) {
+  const { t } = useTranslation();
+  const [start] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div className="qd6-clocks ltr">
+      <span className="qd6-clk" title={t('confirmation.d6.ageHint')}>
+        <Icon name="hourglass" />
+        {t('confirmation.d6.age')} <b>{span(now - Date.parse(since))}</b>
+      </span>
+      <span className="qd6-clk run" title={t('confirmation.d6.chronoHint')}>
+        <Icon name="timer" />
+        {t('confirmation.d6.chrono')} <b>{span(now - start)}</b>
+      </span>
+    </div>
   );
 }
