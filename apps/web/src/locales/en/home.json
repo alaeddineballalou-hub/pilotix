@@ -68,5 +68,13 @@
       "rate": "Rate",
       "uncashed": "To collect"
     }
-  }
+  },
+  "vs": {
+    "today": "vs yesterday",
+    "yesterday": "vs day before",
+    "7d": "vs prior 7 d",
+    "30d": "vs prior 30 d",
+    "month": "vs last month"
+  },
+  "vsLong": "▲ ▼ {{vs}}"
 }

@@ -554,3 +554,52 @@ html body .kpi.kpi.on { border-color: #F28C1B !important; }
 .px-sav-flow { grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr) minmax(0,1fr) !important; align-items: stretch !important; }
 .px-sav-end { display: contents !important; }
 @media (max-width: 760px) { .px-sav-flow { grid-template-columns: 1fr 1fr !important; } }
+
+/* ===================== Number boxes — design C+ (chosen) =====================
+   title + trend pill on top · big number (small unit) · rate bar · description · faint icon in the corner
+   · alert = red dot + light red border + red icon · hover: lift, icon turns, "Voir →" */
+html body .kpi.kpi { position: relative; display: grid !important; grid-template-rows: none !important; grid-auto-rows: auto; align-content: start !important; justify-items: stretch !important; text-align: start !important;
+  gap: 4px !important; min-height: 136px; padding: 16px 18px 16px !important; overflow: hidden; background: var(--surface) !important; border: 1px solid var(--line) !important; border-radius: 16px !important;
+  box-shadow: 0 1px 2px rgba(31,38,51,.04) !important; text-decoration: none; color: inherit; transform: none; }
+html body .kpi.kpi::before { display: none; }
+.kpi-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+html body .kpi .l { display: flex !important; align-items: center; gap: 0; padding: 0 !important; min-height: 0 !important; width: auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 13px; font-weight: 700; color: var(--muted); text-align: start; justify-content: flex-start; }
+html body .kpi .l .px-help { position: static !important; flex: none; margin-inline-start: 5px; }
+.kpi-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--coral); margin-inline-end: 6px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--coral) 18%, transparent); }
+html body .kpi .v { font-size: 28px !important; font-weight: 900; letter-spacing: -.02em; line-height: 1.15; white-space: nowrap; text-align: start; width: auto; position: relative; z-index: 1; }
+html body .kpi .v small { font-size: .55em; font-weight: 800; color: var(--muted); margin-inline-start: 4px; letter-spacing: 0; }
+html body .kpi .s { font-size: 12px; color: var(--muted); text-align: start; width: auto; position: relative; z-index: 1; -webkit-line-clamp: 2; padding-inline-end: 54px; }
+.kpi-tr { flex: none; display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 800; white-space: nowrap; background: var(--sky-soft); color: var(--muted); }
+.kpi-tr.good { background: var(--ok-soft); color: var(--ok); }
+.kpi-tr.bad { background: var(--coral-soft); color: var(--coral); }
+.kpi-tr em { font-style: normal; font-weight: 600; opacity: .75; margin-inline-start: 2px; }
+.kpi-bar { display: block; width: 70%; height: 6px; margin: 4px 0 2px; border-radius: 999px; background: #F4EEE7; overflow: hidden; position: relative; z-index: 1; }
+.kpi-bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #F7A823, #E8730C); }
+.kpi-bar.good i { background: linear-gradient(90deg, #34B37A, var(--ok)); }
+html body .kpi .kpi-ic { position: absolute !important; inset: auto -12px -16px auto; margin: 0; width: 88px; height: 88px; border-radius: 0; background: none; color: color-mix(in srgb, #F28C1B 12%, transparent);
+  pointer-events: none; transition: transform .25s, color .25s; z-index: 0; }
+[dir="rtl"] html body .kpi .kpi-ic, html[dir="rtl"] body .kpi .kpi-ic { inset: auto auto -16px -12px; }
+html body .kpi .kpi-ic .bji { width: 88px; height: 88px; }
+html body .kpi .kpi-ic svg { stroke-width: 1.5; }
+html body .kpi.t-bad:not(.px-zero) { border-color: color-mix(in srgb, var(--coral) 28%, var(--line)) !important; }
+html body .kpi.t-bad:not(.px-zero) .kpi-ic { color: color-mix(in srgb, var(--coral) 11%, transparent); }
+.kpi-go { position: absolute; inset: auto 14px 12px auto; font-size: 12px; font-weight: 800; color: #E8730C; opacity: 0; transition: opacity .15s; z-index: 1; }
+html[dir="rtl"] .kpi-go { inset: auto auto 12px 14px; }
+html body a.kpi.kpi, html body .kpi.kpi.clickable { cursor: pointer; transition: transform .18s, box-shadow .18s, border-color .18s; }
+html body a.kpi.kpi:hover, html body .kpi.kpi.clickable:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(31,38,51,.12) !important; border-color: color-mix(in srgb, #F28C1B 45%, var(--line)) !important; }
+html body a.kpi.kpi:hover .kpi-ic, html body .kpi.kpi.clickable:hover .kpi-ic { transform: scale(1.08) rotate(-6deg); color: color-mix(in srgb, #F28C1B 22%, transparent); }
+html body a.kpi.kpi:hover .kpi-go, html body .kpi.kpi.clickable:hover .kpi-go, html body .kpi.kpi:focus-visible .kpi-go { opacity: 1; }
+html body .kpi.kpi.on { border-color: #F28C1B !important; box-shadow: 0 0 0 2px color-mix(in srgb, #F28C1B 30%, transparent) !important; }
+html body .px-sav-flow .kpi.kpi { height: auto !important; min-height: 136px !important; }
+@media (max-width: 760px) { html body .kpi.kpi { min-height: 118px; padding: 14px !important; } html body .kpi .v { font-size: 22px !important; } .kpi-tr em { display: none; } html body .kpi .s { padding-inline-end: 36px; } html body .kpi .kpi-ic, html body .kpi .kpi-ic .bji { width: 64px; height: 64px; } }
+html body .kpi.kpi { container-type: inline-size; }
+@container (max-width: 250px) { .kpi-tr em { display: none; } }
+html body .kpi .l { flex: 0 1 auto; min-width: 3em; }
+.kpi-top .kpi-tr { margin-inline-start: auto; }
+html body .kpi .s { padding-inline-end: 24px; }
+.px-vs { font-size: 12.5px; font-weight: 700; color: var(--muted); margin-inline-start: 8px; font-family: var(--f-body); }
+html body .kpi.kpi { grid-template-columns: minmax(0, 1fr) !important; justify-content: stretch !important; }
+html body .kpi .kpi-top, html body .kpi .v, html body .kpi .s { width: 100%; }
+html body .kpi .v { width: auto; justify-self: start; }
+@container (max-width: 250px) { .kpi-tr { font-size: 10.5px; padding: 2px 6px; gap: 2px; } html body .kpi .l { font-size: 12.5px; } }

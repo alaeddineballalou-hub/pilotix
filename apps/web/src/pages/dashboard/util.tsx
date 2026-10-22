@@ -4,7 +4,7 @@ import { ReactNode, useState } from 'react';
 import { periodRange, Period } from '../../lib/format';
 import { store } from '../../lib/store';
 import i18n from '../../lib/i18n';
-import { KpiIcon } from '../../ui/kit';
+import { Help, KpiBody } from '../../ui/kit';
 
 const DAY = 86_400_000;
 const ALG = 3_600_000;
@@ -66,41 +66,9 @@ export const timeTone = (r: number | null | undefined): Tone | undefined => (r =
 export const delivTone = (r: number | null | undefined, badge = false): Tone | undefined => (r === null || r === undefined ? undefined : r < 0.5 ? 'bad' : r < 0.7 ? (badge ? 'mid' : 'warn') : 'ok');
 
 // ---------------------------------------------------------------- KPI box (original markup: .kpi .l .v .s, link or block, "?" popup)
-export function KpiBox({ label, value, sub, tone, href, help, zero, className = '', icon, trend }: { label: ReactNode; value: ReactNode; sub?: ReactNode; tone?: Tone; href?: string; help?: string; zero?: boolean; className?: string; icon?: string; trend?: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  const cls = `kpi${help ? ' bjt-k' : ''}${tone ? ` t-${tone}` : ''}${zero ? ' px-zero' : ''} ${className}`.trim();
-  const body = (
-    <>
-      <KpiIcon name={icon} />
-      <span className={`l${help ? ' bjt-kl' : ''}`}>
-        {label}
-        {help && (
-          <button
-            type="button"
-            className="bjt-q"
-            aria-label={`${i18n.t('dashboard.explain')} : ${typeof label === 'string' ? label : ''}`}
-            aria-expanded={open}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setOpen(!open);
-            }}
-            onBlur={() => setOpen(false)}
-          >
-            ?
-          </button>
-        )}
-      </span>
-      <span className="v ltr">{value}</span>
-      {trend}
-      {sub !== undefined && <span className="s">{sub}</span>}
-      {help && (
-        <div className="bjt-pop" role="tooltip" hidden={!open}>
-          {help}
-        </div>
-      )}
-    </>
-  );
+export function KpiBox({ label, value, sub, tone, href, help, zero, className = '', icon, trend, rate }: { label: ReactNode; value: ReactNode; sub?: ReactNode; tone?: Tone; href?: string; help?: string; zero?: boolean; className?: string; icon?: string; trend?: ReactNode; rate?: number | null }) {
+  const cls = `kpi${tone ? ` t-${tone}` : ''}${zero ? ' px-zero' : ''}${href ? ' clickable' : ''} ${className}`.trim();
+  const body = <KpiBody label={label} value={value} sub={sub} help={help ? <Help text={help} label={typeof label === 'string' ? label : ''} /> : null} icon={icon} trend={trend} rate={rate} alert={tone === 'bad' && !zero} go={!!href} />;
   return href ? (
     <a className={cls} href={href}>
       {body}

@@ -157,7 +157,7 @@ function NouvellesStats({ kf, setKf, open, setOpen }: { kf: Kf; setKf: (k: Kf) =
                 value={age === null ? '—' : dur(age)}
                 sub={D.oldest ? `${D.oldest.ref} · ${D.oldest.name}` : t('confirmation.fc.nobody')}
               />
-              <Kpi tone={tone3(onTime, 80, 70)} help={t('confirmation.kh.onTime', { first: fm })} icon="check" label={t('confirmation.fc.onTime')} value={pctTxt(onTime)} sub={D.called ? t('confirmation.fc.onTimeSub', { ok: D.onTime, n: D.called }) : t('confirmation.fc.noneCalled')} />
+              <Kpi tone={tone3(onTime, 80, 70)} help={t('confirmation.kh.onTime', { first: fm })} icon="check" rate={onTime === null ? null : onTime / 100} label={t('confirmation.fc.onTime')} value={pctTxt(onTime)} sub={D.called ? t('confirmation.fc.onTimeSub', { ok: D.onTime, n: D.called }) : t('confirmation.fc.noneCalled')} />
               <Kpi
                 tone={med === null ? undefined : med <= fm ? 'ok' : med <= fm * 2 ? 'warn' : 'bad'}
                 icon="sliders" label={t('confirmation.fc.median')}
@@ -165,7 +165,7 @@ function NouvellesStats({ kf, setKf, open, setOpen }: { kf: Kf; setKf: (k: Kf) =
                 value={med === null ? '—' : dur(med * 60_000)}
                 sub={D.called ? t('confirmation.fc.medianSub') : perLabel(t, kf)}
               />
-              <Kpi tone={tone3(f5, 50, 25)} help={t('confirmation.kh.under5')} icon="sparkles" label={t('confirmation.fc.under5')} value={pctTxt(f5)} sub={D.called ? t('confirmation.fc.under5Sub') : perLabel(t, kf)} />
+              <Kpi tone={tone3(f5, 50, 25)} help={t('confirmation.kh.under5')} icon="sparkles" rate={f5 === null ? null : f5 / 100} label={t('confirmation.fc.under5')} value={pctTxt(f5)} sub={D.called ? t('confirmation.fc.under5Sub') : perLabel(t, kf)} />
             </div>
           )}
         </>

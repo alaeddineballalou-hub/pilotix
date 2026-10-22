@@ -173,7 +173,7 @@ export function Kpis({ children }: { children: ReactNode }) {
   return <div className="kpis">{children}</div>;
 }
 
-/** Small brand icon in the top corner of a number box. */
+/** Faint brand icon in the bottom corner of a number box (design C+). */
 export function KpiIcon({ name }: { name?: string }) {
   return name ? (
     <span className="kpi-ic" aria-hidden="true">
@@ -182,8 +182,8 @@ export function KpiIcon({ name }: { name?: string }) {
   ) : null;
 }
 
-/** ▲ / ▼ change against the previous period (green when it goes the good way). */
-export function Trend({ v, goodDown, pts }: { v: number | null | undefined; goodDown?: boolean; pts?: boolean }) {
+/** ▲ / ▼ change against the previous period, as a pill (green when it goes the good way), with what it compares to. */
+export function Trend({ v, goodDown, pts, vs }: { v: number | null | undefined; goodDown?: boolean; pts?: boolean; vs?: string }) {
   const { t } = useTranslation();
   if (v === null || v === undefined || !isFinite(v)) return null;
   const up = v > 0;
@@ -191,26 +191,57 @@ export function Trend({ v, goodDown, pts }: { v: number | null | undefined; good
   const good = flat ? null : up !== !!goodDown;
   const txt = pts ? `${Math.abs(v * 100).toFixed(1).replace('.', ',')} pts` : `${Math.round(Math.abs(v) * 100)} %`;
   return (
-    <span className={`kpi-tr ${good === null ? '' : good ? 'good' : 'bad'}`} title={t('common.vsPrev')}>
+    <span className={`kpi-tr ${good === null ? '' : good ? 'good' : 'bad'}`} title={vs ?? t('common.vsPrev')}>
       {flat ? '=' : up ? '▲' : '▼'} {txt}
+      {vs && <em>{vs}</em>}
     </span>
   );
 }
 
-export function Kpi({ label, value, sub, tone, onClick, active, big, help, icon, trend, href }: { label: ReactNode; value: ReactNode; sub?: ReactNode; tone?: Tone; onClick?: () => void; active?: boolean; big?: boolean; help?: string; icon?: string; trend?: ReactNode; href?: string }) {
-  const cls = `kpi${tone ? ` t-${tone}` : ''}${big ? ' big' : ''}${active ? ' on' : ''}${onClick || href ? ' clickable' : ''}`;
-  const body = (
+/** "1 555 850 DA" → the number, then a smaller "DA". */
+export function KpiValue({ value }: { value: ReactNode }) {
+  if (typeof value === 'string') {
+    const m = value.match(/^(.*\d)\s+(DA|د\.ج)$/);
+    if (m)
+      return (
+        <span className="v ltr">
+          {m[1]}
+          <small>{m[2]}</small>
+        </span>
+      );
+  }
+  return <span className="v ltr">{value}</span>;
+}
+
+/** The inside of every number box (design C+): title + trend on top, number, rate bar, description, faint icon, "Voir →". */
+export function KpiBody({ label, value, sub, help, icon, trend, rate, alert, go }: { label: ReactNode; value: ReactNode; sub?: ReactNode; help?: ReactNode; icon?: string; trend?: ReactNode; rate?: number | null; alert?: boolean; go?: boolean }) {
+  const { t } = useTranslation();
+  return (
     <>
-      <KpiIcon name={icon} />
-      <span className="l">
-        {label}
-        {help && <Help text={help} />}
+      <span className="kpi-top">
+        <span className="l">
+          {alert && <i className="kpi-dot" aria-hidden="true" />}
+          {label}
+          {help}
+        </span>
+        {trend}
       </span>
-      <span className="v ltr">{value}</span>
-      {trend}
+      <KpiValue value={value} />
+      {rate !== undefined && rate !== null && isFinite(rate) && (
+        <span className={`kpi-bar ${rate >= 0.75 ? 'good' : ''}`} aria-hidden="true">
+          <i style={{ width: `${Math.max(0, Math.min(1, rate)) * 100}%` }} />
+        </span>
+      )}
       {sub !== undefined && <span className="s">{sub}</span>}
+      <KpiIcon name={icon} />
+      {go && <span className="kpi-go">{t('common.see')} →</span>}
     </>
   );
+}
+
+export function Kpi({ label, value, sub, tone, onClick, active, big, help, icon, trend, href, rate }: { label: ReactNode; value: ReactNode; sub?: ReactNode; tone?: Tone; onClick?: () => void; active?: boolean; big?: boolean; help?: string; icon?: string; trend?: ReactNode; href?: string; rate?: number | null }) {
+  const cls = `kpi${tone ? ` t-${tone}` : ''}${big ? ' big' : ''}${active ? ' on' : ''}${onClick || href ? ' clickable' : ''}`;
+  const body = <KpiBody label={label} value={value} sub={sub} help={help ? <Help text={help} /> : null} icon={icon} trend={trend} rate={rate} alert={tone === 'bad'} go={!!(onClick || href)} />;
   if (href)
     return (
       <a className={cls} href={href}>

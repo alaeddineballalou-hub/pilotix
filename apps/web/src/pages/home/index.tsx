@@ -51,10 +51,12 @@ function HomeStats() {
       <Now />
       <section className="card">
         <div className="card-head">
-          <h2>{t('home.period')}</h2>
+          <h2>
+            {t('home.period')} <small className="px-vs">{t('home.vsLong', { vs: t(`home.vs.${period}`) })}</small>
+          </h2>
           <Tabs value={period} onChange={setPeriod} items={PERIODS.map((p) => ({ value: p, label: t(`home.periods.${p}`) }))} />
         </div>
-        <Overview range={range} />
+        <Overview range={range} vs={t(`home.vs.${period}`)} />
       </section>
       {showAgents && <Agents range={range} />}
       {showLiv && <LivCard range={range} />}
@@ -93,7 +95,7 @@ function Now() {
   );
 }
 
-function Overview({ range }: { range: { from: string; to: string } }) {
+function Overview({ range, vs }: { range: { from: string; to: string }; vs: string }) {
   const { t } = useTranslation();
   const q = useRpc('stats.overview', range);
   // the same length just before, for the ▲ / ▼ trends
@@ -110,13 +112,13 @@ function Overview({ range }: { range: { from: string; to: string } }) {
   const ch = (a: number | null | undefined, b: number | null | undefined) => (a === null || a === undefined || b === null || b === undefined || b === 0 ? null : (a - b) / b);
   return (
     <Kpis>
-      <KpiBox icon="list" href="#/commandes" label={t('home.received')} value={n(d.received)} trend={<Trend v={ch(d.received, p?.received)} />} sub={t('home.receivedTodo', { n: d.receivedTodo })} />
-      <KpiBox icon="check" href="#/confirmation/confirmees" label={t('home.confirmed')} value={n(d.confirmed)} trend={<Trend v={ch(d.confirmed, p?.confirmed)} />} sub={t('home.rate', { v: pct(d.confRate) })} tone="ok" />
-      <KpiBox icon="xcircle" href="#/commandes/annulees" label={t('home.cancelled')} value={n(d.cancelled)} trend={<Trend v={ch(d.cancelled, p?.cancelled)} goodDown />} sub={t('home.cancelledSub')} tone={d.cancelled ? 'bad' : undefined} zero={!d.cancelled} />
-      <KpiBox icon="route" href="#/suivi" label={t('home.shipped')} value={n(d.shipped)} trend={<Trend v={ch(d.shipped, p?.shipped)} />} sub={t('home.shippedSub', { n: d.shippedOnRoad })} />
-      <KpiBox icon="truck" href="#/commandes/livrees" label={t('home.delivered')} value={n(d.delivered)} trend={<Trend v={ch(d.delivered, p?.delivered)} />} sub={t('home.deliveryRate', { v: pct(d.deliveryRate) })} tone="ok" />
-      <KpiBox icon="undo" href="#/depot/retours" label={t('home.returns')} value={n(d.returns)} trend={<Trend v={ch(d.returns, p?.returns)} goodDown />} sub={t('home.returnsSub')} tone={d.returns ? 'bad' : undefined} zero={!d.returns} />
-      <KpiBox icon="coins" href="#/caisse/done" label={t('home.cashed')} value={da(d.cashed)} trend={<Trend v={ch(d.cashed, p?.cashed)} />} sub={t('home.cashedSub', { v: da(d.cashedProducts) })} />
+      <KpiBox icon="list" href="#/commandes" label={t('home.received')} value={n(d.received)} trend={<Trend v={ch(d.received, p?.received)} vs={vs} />} sub={t('home.receivedTodo', { n: d.receivedTodo })} />
+      <KpiBox icon="check" href="#/confirmation/confirmees" label={t('home.confirmed')} value={n(d.confirmed)} trend={<Trend v={ch(d.confirmed, p?.confirmed)} vs={vs} />} sub={t('home.rate', { v: pct(d.confRate) })} rate={d.confRate} tone="ok" />
+      <KpiBox icon="xcircle" href="#/commandes/annulees" label={t('home.cancelled')} value={n(d.cancelled)} trend={<Trend v={ch(d.cancelled, p?.cancelled)} goodDown vs={vs} />} sub={t('home.cancelledSub')} tone={d.cancelled ? 'bad' : undefined} zero={!d.cancelled} />
+      <KpiBox icon="route" href="#/suivi" label={t('home.shipped')} value={n(d.shipped)} trend={<Trend v={ch(d.shipped, p?.shipped)} vs={vs} />} sub={t('home.shippedSub', { n: d.shippedOnRoad })} />
+      <KpiBox icon="truck" href="#/commandes/livrees" label={t('home.delivered')} value={n(d.delivered)} trend={<Trend v={ch(d.delivered, p?.delivered)} vs={vs} />} sub={t('home.deliveryRate', { v: pct(d.deliveryRate) })} rate={d.deliveryRate} tone="ok" />
+      <KpiBox icon="undo" href="#/depot/retours" label={t('home.returns')} value={n(d.returns)} trend={<Trend v={ch(d.returns, p?.returns)} goodDown vs={vs} />} sub={t('home.returnsSub')} tone={d.returns ? 'bad' : undefined} zero={!d.returns} />
+      <KpiBox icon="coins" href="#/caisse/done" label={t('home.cashed')} value={da(d.cashed)} trend={<Trend v={ch(d.cashed, p?.cashed)} vs={vs} />} sub={t('home.cashedSub', { v: da(d.cashedProducts) })} />
     </Kpis>
   );
 }
