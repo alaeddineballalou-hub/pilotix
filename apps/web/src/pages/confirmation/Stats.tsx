@@ -143,29 +143,29 @@ function NouvellesStats({ kf, setKf, open, setOpen }: { kf: Kf; setKf: (k: Kf) =
           ) : (
             <div className="px-st-grid">
               <Kpi
-                tone={D.waiting ? 'warn' : 'ok'}
-                label={t('confirmation.fc.waiting')}
+                tone={D.waiting ? 'warn' : undefined}
+                icon="hourglass" label={t('confirmation.fc.waiting')}
                 help={t('confirmation.kh.waiting')}
                 value={n(D.waiting)}
                 sub={D.waiting ? (D.waitingNoAgent ? t('confirmation.fc.noAgent', { n: D.waitingNoAgent }) : t('confirmation.fc.allAssigned')) : t('confirmation.fc.nobody')}
               />
-              <Kpi tone={D.late ? 'bad' : 'ok'} help={t('confirmation.kh.late', { first: fm })} label={t('confirmation.fc.lateNow')} value={n(D.late)} sub={D.late ? t('confirmation.fc.lateSub') : t('confirmation.fc.noLate')} />
+              <Kpi tone={D.late ? 'bad' : undefined} help={t('confirmation.kh.late', { first: fm })} icon="alert" label={t('confirmation.fc.lateNow')} value={n(D.late)} sub={D.late ? t('confirmation.fc.lateSub') : t('confirmation.fc.noLate')} />
               <Kpi
-                tone={age === null ? 'ok' : age > fm * 60_000 ? 'bad' : age > fm * 30_000 ? 'warn' : 'ok'}
-                label={t('confirmation.fc.oldest')}
+                tone={age === null ? undefined : age > fm * 60_000 ? 'bad' : age > fm * 30_000 ? 'warn' : undefined}
+                icon="timer" label={t('confirmation.fc.oldest')}
                 help={t('confirmation.kh.oldest')}
                 value={age === null ? '—' : dur(age)}
                 sub={D.oldest ? `${D.oldest.ref} · ${D.oldest.name}` : t('confirmation.fc.nobody')}
               />
-              <Kpi tone={tone3(onTime, 80, 70)} help={t('confirmation.kh.onTime', { first: fm })} label={t('confirmation.fc.onTime')} value={pctTxt(onTime)} sub={D.called ? t('confirmation.fc.onTimeSub', { ok: D.onTime, n: D.called }) : t('confirmation.fc.noneCalled')} />
+              <Kpi tone={tone3(onTime, 80, 70)} help={t('confirmation.kh.onTime', { first: fm })} icon="check" label={t('confirmation.fc.onTime')} value={pctTxt(onTime)} sub={D.called ? t('confirmation.fc.onTimeSub', { ok: D.onTime, n: D.called }) : t('confirmation.fc.noneCalled')} />
               <Kpi
                 tone={med === null ? undefined : med <= fm ? 'ok' : med <= fm * 2 ? 'warn' : 'bad'}
-                label={t('confirmation.fc.median')}
+                icon="sliders" label={t('confirmation.fc.median')}
                 help={t('confirmation.kh.median')}
                 value={med === null ? '—' : dur(med * 60_000)}
                 sub={D.called ? t('confirmation.fc.medianSub') : perLabel(t, kf)}
               />
-              <Kpi tone={tone3(f5, 50, 25)} help={t('confirmation.kh.under5')} label={t('confirmation.fc.under5')} value={pctTxt(f5)} sub={D.called ? t('confirmation.fc.under5Sub') : perLabel(t, kf)} />
+              <Kpi tone={tone3(f5, 50, 25)} help={t('confirmation.kh.under5')} icon="sparkles" label={t('confirmation.fc.under5')} value={pctTxt(f5)} sub={D.called ? t('confirmation.fc.under5Sub') : perLabel(t, kf)} />
             </div>
           )}
         </>

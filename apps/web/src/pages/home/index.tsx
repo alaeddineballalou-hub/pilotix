@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { da, n, pct } from '../../lib/format';
 import { useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
-import { Card, ErrorBox, Kpis, Loading, Tabs } from '../../ui/kit';
+import { Card, ErrorBox, Kpis, Loading, Tabs, Trend } from '../../ui/kit';
 import type { PageProps } from '../registry';
 import { Presence } from '../dashboard/Presence';
 import { LivreursTable } from '../dashboard/Livreurs';
@@ -79,12 +79,12 @@ function Now() {
       ) : (
         q.data && (
           <Kpis>
-            <KpiBox label={t('home.toCall')} value={n(q.data.toCall)} sub={t('home.callbacksLater', { n: q.data.callbacksLater })} tone={q.data.toCall ? 'warn' : undefined} href={has('confirmation') ? '#/confirmation' : undefined} />
-            <KpiBox label={t('home.noStock')} value={n(q.data.noStock)} sub={t('home.noStockSub')} tone={q.data.noStock ? 'bad' : undefined} href="#/commandes" />
-            <KpiBox label={t('home.toPrepare')} value={n(q.data.toPrepare)} sub={t('home.prepared', { n: q.data.prepared })} href={has('depot') ? '#/depot' : undefined} />
-            <KpiBox label={t('home.onRoad')} value={n(q.data.onRoad)} sub={t('home.failed', { n: q.data.failed })} tone={q.data.failed ? 'warn' : undefined} href={has('suivi') ? '#/suivi' : undefined} />
+            <KpiBox icon="phone" label={t('home.toCall')} value={n(q.data.toCall)} sub={t('home.callbacksLater', { n: q.data.callbacksLater })} tone={q.data.toCall ? 'warn' : undefined} href={has('confirmation') ? '#/confirmation' : undefined} />
+            <KpiBox icon="alert" label={t('home.noStock')} value={n(q.data.noStock)} sub={t('home.noStockSub')} tone={q.data.noStock ? 'bad' : undefined} href="#/commandes" />
+            <KpiBox icon="package" label={t('home.toPrepare')} value={n(q.data.toPrepare)} sub={t('home.prepared', { n: q.data.prepared })} href={has('depot') ? '#/depot' : undefined} />
+            <KpiBox icon="truck" label={t('home.onRoad')} value={n(q.data.onRoad)} sub={t('home.failed', { n: q.data.failed })} tone={q.data.failed ? 'warn' : undefined} href={has('suivi') ? '#/suivi' : undefined} />
             {session!.isAdmin && q.data.moneyDue !== null && (
-              <KpiBox label={t('home.moneyDue')} value={da(q.data.moneyDue)} sub={t('home.moneyDueSub', { n: q.data.moneyDueCount ?? 0 })} tone={q.data.moneyDue ? 'info' : undefined} href="#/caisse" />
+              <KpiBox icon="wallet" label={t('home.moneyDue')} value={da(q.data.moneyDue)} sub={t('home.moneyDueSub', { n: q.data.moneyDueCount ?? 0 })} tone={q.data.moneyDue ? 'info' : undefined} href="#/caisse" />
             )}
           </Kpis>
         )
@@ -96,18 +96,27 @@ function Now() {
 function Overview({ range }: { range: { from: string; to: string } }) {
   const { t } = useTranslation();
   const q = useRpc('stats.overview', range);
+  // the same length just before, for the ▲ / ▼ trends
+  // same length just before; a period still running (today, this month) is compared up to the same moment
+  const f0 = Date.parse(range.from);
+  const len = Date.parse(range.to) - f0;
+  const upTo = Math.min(Date.now(), Date.parse(range.to)) - f0;
+  const prevRange = { from: new Date(f0 - len).toISOString(), to: new Date(f0 - len + upTo).toISOString() };
+  const pq = useRpc('stats.overview', prevRange);
   if (q.isLoading) return <Loading />;
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   const d = q.data!;
+  const p = pq.data;
+  const ch = (a: number | null | undefined, b: number | null | undefined) => (a === null || a === undefined || b === null || b === undefined || b === 0 ? null : (a - b) / b);
   return (
     <Kpis>
-      <KpiBox label={t('home.received')} value={n(d.received)} sub={t('home.receivedTodo', { n: d.receivedTodo })} />
-      <KpiBox label={t('home.confirmed')} value={n(d.confirmed)} sub={t('home.rate', { v: pct(d.confRate) })} tone="ok" />
-      <KpiBox label={t('home.cancelled')} value={n(d.cancelled)} sub={t('home.cancelledSub')} tone="bad" />
-      <KpiBox label={t('home.shipped')} value={n(d.shipped)} sub={t('home.shippedSub', { n: d.shippedOnRoad })} />
-      <KpiBox label={t('home.delivered')} value={n(d.delivered)} sub={t('home.deliveryRate', { v: pct(d.deliveryRate) })} tone="ok" />
-      <KpiBox label={t('home.returns')} value={n(d.returns)} sub={t('home.returnsSub')} tone="bad" />
-      <KpiBox label={t('home.cashed')} value={da(d.cashed)} sub={t('home.cashedSub', { v: da(d.cashedProducts) })} />
+      <KpiBox icon="list" href="#/commandes" label={t('home.received')} value={n(d.received)} trend={<Trend v={ch(d.received, p?.received)} />} sub={t('home.receivedTodo', { n: d.receivedTodo })} />
+      <KpiBox icon="check" href="#/confirmation/confirmees" label={t('home.confirmed')} value={n(d.confirmed)} trend={<Trend v={ch(d.confirmed, p?.confirmed)} />} sub={t('home.rate', { v: pct(d.confRate) })} tone="ok" />
+      <KpiBox icon="xcircle" href="#/commandes/annulees" label={t('home.cancelled')} value={n(d.cancelled)} trend={<Trend v={ch(d.cancelled, p?.cancelled)} goodDown />} sub={t('home.cancelledSub')} tone={d.cancelled ? 'bad' : undefined} zero={!d.cancelled} />
+      <KpiBox icon="route" href="#/suivi" label={t('home.shipped')} value={n(d.shipped)} trend={<Trend v={ch(d.shipped, p?.shipped)} />} sub={t('home.shippedSub', { n: d.shippedOnRoad })} />
+      <KpiBox icon="truck" href="#/commandes/livrees" label={t('home.delivered')} value={n(d.delivered)} trend={<Trend v={ch(d.delivered, p?.delivered)} />} sub={t('home.deliveryRate', { v: pct(d.deliveryRate) })} tone="ok" />
+      <KpiBox icon="undo" href="#/depot/retours" label={t('home.returns')} value={n(d.returns)} trend={<Trend v={ch(d.returns, p?.returns)} goodDown />} sub={t('home.returnsSub')} tone={d.returns ? 'bad' : undefined} zero={!d.returns} />
+      <KpiBox icon="coins" href="#/caisse/done" label={t('home.cashed')} value={da(d.cashed)} trend={<Trend v={ch(d.cashed, p?.cashed)} />} sub={t('home.cashedSub', { v: da(d.cashedProducts) })} />
     </Kpis>
   );
 }

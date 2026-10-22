@@ -53,5 +53,6 @@
   "stats": "Statistiques",
   "showAll": "Tout afficher",
   "noSelection": "Aucune sélection",
-  "demoOnly": "Disponible avec le serveur Pilotix (pas dans la démo)"
+  "demoOnly": "Disponible avec le serveur Pilotix (pas dans la démo)",
+  "vsPrev": "par rapport à la période précédente"
 }
