@@ -92,7 +92,7 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
   if (!cat.data) return <Loading />;
   const P = new Map(cat.data.map((p) => [p.id, p]));
   const editable = !(order.followStatus && FOLLOW_LOCKED.includes(order.followStatus)) && !order.shippedAt;
-  const lockedPrice = !order.isExchange;
+  // prices are not typed in here: products keep their catalog / pack price and delivery its grid price; only the remise changes
   const notesChanged = nOrigin !== (order.customerNote ?? '') || nLivreur !== (order.deliveryNote ?? '') || nTeam !== (order.internalNote ?? '');
   const geoChanged = wil !== order.wilayaId || com !== (order.commune ?? '');
   const dirty = key(L) !== key(initial) || fee !== order.deliveryFee || disc !== order.discount || notesChanged || geoChanged || desk !== order.isStopdesk || (desk && deskId !== order.stopdeskId);
@@ -264,7 +264,6 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
             const p = P.get(l.productId);
             const vs = (p?.variants ?? []).filter((v) => v.title !== '');
             const pk = p?.packs.find((x) => x.qty === l.qty && Math.round(x.price / x.qty) === Math.round(l.unitPrice));
-            const fixed = lockedPrice || !!p?.fixedPrice;
             const n = stockOf(l);
             return (
               <div key={`${l.productId}-${l.variantId}-${i}`} className="qd6-line">
@@ -300,13 +299,7 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
                   </button>
                 </div>
                 <div className="qd6-price">
-                  {lockedPrice || fixed ? (
-                    <b className="ltr">{da(l.qty * l.unitPrice)}</b>
-                  ) : (
-                    <label className="qd6-pu ltr">
-                      <input type="number" min={0} className="qd2-p" aria-label={t('confirmation.d.unit')} disabled={!editable} value={l.unitPrice} onChange={(e) => upd(i, { unitPrice: Math.max(0, Math.round(Number(e.target.value) || 0)) })} />
-                    </label>
-                  )}
+                  <b className="ltr">{da(l.qty * l.unitPrice)}</b>
                   {l.qty > 1 && (
                     <small className="ltr">
                       {l.qty} × {da(l.unitPrice)}
@@ -429,18 +422,12 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
               )}
             </div>
           )}
-          <div className="qd6-fee">
+          <div className="qd6-fee ro" title={t('confirmation.d6.feeLocked')}>
             <span className="qd6-lab">{t('confirmation.d6.fee')}</span>
-            <label className={`qd6-dv ltr${editable ? ' ed' : ''}`}>
-                {editable && <Icon name="pencil" />}
-              <input type="number" min={0} style={{ ['--w' as string]: String(fee).length }} aria-label={t('confirmation.d.fee')} disabled={!editable} value={fee} onChange={(e) => setFee(Math.max(0, Math.round(Number(e.target.value) || 0)))} />
-              <span className="qd6-unit">{da(0).replace(/^[\d\s\u00a0\u202f]+/, '')}</span>
-            </label>
-            {modeFee.data?.fee != null && modeFee.data.fee !== fee && editable && (
-              <button type="button" className="linkish qd2-gf" onClick={() => setFee(modeFee.data!.fee!)}>
-                {t('confirmation.d.grid', { v: da(modeFee.data.fee) })}
-              </button>
-            )}
+            <span className="qd6-feev ltr">
+              <Icon name="lock" />
+              {da(fee)}
+            </span>
           </div>
         </section>
       <aside className="qd6-rail" aria-label={t('confirmation.d6.decision')}>
