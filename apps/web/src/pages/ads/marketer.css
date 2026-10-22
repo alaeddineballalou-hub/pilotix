@@ -64,7 +64,7 @@
 #mk .mk-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
 #mk .mk-filters .search { flex: 1 1 16rem; display: flex; }
 #mk .mk-filters .search input { flex: 1; min-width: 0; border-radius: 999px; padding: 8px 14px; border-width: 2px; }
-#mk .mk-fsel { border-radius: 999px; font-weight: 700; color: var(--navy); }
+#mk .mk-filters select.mk-fsel { width: auto; flex: 0 1 auto; max-width: 100%; border-radius: 999px; border-width: 2px; padding: 8px 14px; font-weight: 700; color: var(--navy); }
 #mk .mk-fsel.on { background: var(--navy); color: var(--on-navy); border-color: var(--navy); }
 #mk .mk-bulk { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--sky-soft); }
 #mk .mk-bulk .n { align-self: center; font-weight: 700; color: var(--navy); }
@@ -93,13 +93,13 @@
 #mk .st-ok { background: var(--ok-soft); color: var(--ok); }
 #mk .st-ko { background: var(--coral-soft); color: var(--coral); }
 #mk .st-run { background: var(--butter); color: var(--ink); }
-#mk select.mk-st { display: block; font-size: 13px; font-weight: 700; padding: 5px 8px; border-radius: 999px; border: 1.5px solid; cursor: pointer; max-width: 11rem; }
+#mk select.mk-st { display: block; width: auto; font-size: 13px; font-weight: 700; padding: 5px 8px; border-radius: 999px; border: 1.5px solid; cursor: pointer; max-width: 13rem; }
 #mk select.mk-st.st-ok { border-color: var(--ok); }
 #mk select.mk-st.st-ko { border-color: var(--coral); }
 #mk select.mk-st.st-run { border-color: var(--butter-deep); }
 #mk select.mk-st.man { border-style: dashed; }
 #mk select.mk-st option { color: var(--ink); background: var(--surface); font-weight: 400; }
-#mk select.mk-mk { font-size: 13px; padding: 5px 8px; border-radius: 999px; max-width: 10rem; }
+#mk select.mk-mk { width: auto; font-size: 13px; padding: 5px 8px; border-radius: 999px; max-width: 13rem; }
 #mk select.mk-mk.none { border-color: var(--coral); color: var(--coral); }
 #mk .mk-dot { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
 #mk .mk-dot::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
