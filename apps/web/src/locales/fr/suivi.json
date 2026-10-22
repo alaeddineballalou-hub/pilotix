@@ -286,7 +286,7 @@
     "message": "Message",
     "claim": "Réclamation {{ref}}",
     "waiting": "En attente {{n}} j",
-    "sentOn": "Envoyée le {{d}}",
+    "sentOn": "Envoyée {{d}}",
     "notSent": "Pas encore envoyée",
     "resolved": "Réglée",
     "noClaim": "Aucune pour ce colis",

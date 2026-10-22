@@ -286,7 +286,7 @@
     "message": "Message",
     "claim": "Claim {{ref}}",
     "waiting": "Waiting {{n}} d",
-    "sentOn": "Sent on {{d}}",
+    "sentOn": "Sent {{d}}",
     "notSent": "Not sent yet",
     "resolved": "Resolved",
     "noClaim": "None for this parcel",
