@@ -27,6 +27,7 @@ export const PAGES: Record<string, ComponentType<PageProps>> = {
   clients: P(() => import('./clients'), 'Clients'),
   messages: P(() => import('./messages'), 'Messages'),
   cm: P(() => import('./cm'), 'Cm'),
+  notify: P(() => import('./notify'), 'Notify'),
   marketing: P(() => import('./ads'), 'Marketing'),
   caisse: P(() => import('./caisse'), 'Caisse'),
   livraison: P(() => import('./livraison'), 'Livraison'),

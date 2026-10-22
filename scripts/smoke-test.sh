@@ -54,5 +54,14 @@ for i in $(seq 1 30); do
   [ "$ST" != new ] && [ "$ST" != none ] && break; sleep 0.5
 done
 [ "$ST" = error ]
+echo "→ Delivery AI agent: messages, Meta statuses (signed), SMS gateway hook (key)"
+rpc "$CONF" notify.feed '{"tab":"all"}' | grep -q '"counts"'
+[ "$(code "$LIV" notify.feed '{}')" = 403 ]
+rpc "$ADMIN" notify.settings.get | grep -q '"cases"'
+STB='{"object":"whatsapp_business_account","entry":[{"id":"1","changes":[{"field":"messages","value":{"messaging_product":"whatsapp","metadata":{"phone_number_id":"1"},"statuses":[{"id":"wamid.smoke","status":"read","timestamp":"1","recipient_id":"213661223344"}]}}]}]}'
+SIG2=$(printf '%s' "$STB" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/^.*= //')
+curl -fsS -X POST "$API/hooks/meta" -H 'Content-Type: application/json' -H "x-hub-signature-256: sha256=$SIG2" --data-binary "$STB" | grep -q '"received":1'
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/hooks/sms?key=wrong" -H 'Content-Type: application/json' -d '{}')" = 401 ]
+curl -fsS -X POST "$API/hooks/sms?key=sms-demo-key" -H 'Content-Type: application/json' -d '{"event":"sms:delivered","payload":{"messageId":"none"}}' | grep -q '"ok":false'
 echo "→ cron needs its key";         [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/hooks/cron?key=x")" = 401 ]
 echo "✅ All server checks passed"

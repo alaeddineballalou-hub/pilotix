@@ -9,6 +9,7 @@ import { Ctx, notFound, proc } from '../rpc';
 import { clientFee, getSetting } from '../settings';
 import { getRaw, setRaw } from './admin';
 import { checkDarija, DARIJA_FIXER_SYSTEM, darijaRewritePrompt, DarijaIssue, DELLAL_DARIJA, fixDarija, parseAvoid } from './darija';
+import { markReply, noticeForConversation, ordersForDellal, sendInPreview } from './notify';
 import { createOrder } from './orders';
 
 // ---------------------------------------------------------------- settings and secrets
@@ -148,12 +149,23 @@ async function getConv(db: Db, id: number): Promise<Conversation> {
 async function addMessage(
   db: Db,
   convId: number,
-  m: { role: ConvMessage['role']; body: string; userId?: number | null; externalId?: string | null; meta?: unknown; sendError?: string | null; /** a public comment: not a message, no unread / follow-up */ quiet?: boolean },
+  m: {
+    role: ConvMessage['role'];
+    body: string;
+    userId?: number | null;
+    externalId?: string | null;
+    meta?: unknown;
+    sendError?: string | null;
+    /** a public comment: not a message, no unread / follow-up */
+    quiet?: boolean;
+    /** when it was written (a delivery message sent before the conversation existed) */
+    at?: string | null;
+  },
 ) {
   const r = await db.query(
-    `INSERT INTO conv_messages (conversation_id, role, body, user_id, external_id, meta, send_error) VALUES ($1,$2,$3,$4,$5,$6,$7)
+    `INSERT INTO conv_messages (conversation_id, role, body, user_id, external_id, meta, send_error, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8::timestamptz, now()))
      ON CONFLICT DO NOTHING RETURNING id`,
-    [convId, m.role, m.body, m.userId ?? null, m.externalId ?? null, m.meta === undefined ? null : JSON.stringify(m.meta), m.sendError ?? null],
+    [convId, m.role, m.body, m.userId ?? null, m.externalId ?? null, m.meta === undefined ? null : JSON.stringify(m.meta), m.sendError ?? null, m.at ?? null],
   );
   if (!r[0]) return null; // duplicate (same channel message delivered twice)
   if (m.quiet) await db.query(`UPDATE conversations SET last_message_at = now(), last_preview = $2 WHERE id = $1`, [convId, m.body.slice(0, 140)]);
@@ -201,7 +213,13 @@ export async function receiveMessage(ctx: Ctx, m: z.infer<typeof IncomingInput>)
       )
     )[0];
     const id = num(c.id);
+    // Delivery AI agent: the customer often answers a delivery message (shipped, failed attempt…). It goes in the
+    // conversation just before their answer, so the team and Dellal see what they answer.
+    const notice = phone ? await noticeForConversation(tx, phone, id) : null;
+    if (notice) await addMessage(tx, id, { role: 'agent', body: notice.body, at: notice.sentAt, meta: { notify: notice.kind, notifyId: notice.id, ref: notice.ref, via: notice.channel }, quiet: true });
     const mid = await addMessage(tx, id, { role: 'customer', body: m.text, externalId: m.messageId ?? null });
+    // their first words after the message are their answer to it (later ones belong to the conversation)
+    if (mid && phone && notice) await markReply(tx, phone, m.text, 'whatsapp');
     return mid ? { conversationId: id, messageId: mid } : null;
   });
   if (out) ctx.emit({ type: 'chat', data: { dellal: out.conversationId } });
@@ -483,8 +501,8 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
         internalNote: `Commande prise par ${settings.name} (conversation #${conv.id})`,
         confirm: settings.ordersTo === 'confirmed',
         isExchange: false,
-      });
-      await ctx.db.query('UPDATE orders SET conversation_id = $2 WHERE id = $1', [o.id, conv.id]);
+      }, ctx.db, { conversationId: conv.id }); // linked from the start: no "we received your order" into this very chat
+      await sendInPreview(ctx);
       await ctx.db.query(
         `UPDATE conversations SET order_id = $2, orders_count = orders_count + 1, phone = COALESCE(phone, $3), customer_name = COALESCE(customer_name, $4),
            customer_id = COALESCE(customer_id, (SELECT id FROM customers WHERE phone = $3)) WHERE id = $1`,
@@ -510,6 +528,8 @@ async function systemPrompt(ctx: Ctx, conv: Conversation, s: DellalSettings, fol
     )
     .join('\n');
   const cust = await customerSummary(ctx.db, conv.phone);
+  // the orders of the WhatsApp number writing, or of this conversation (a number typed on Messenger proves nothing)
+  const orders = conv.channel === 'test' ? '' : await ordersForDellal(ctx.db, conv.channel === 'whatsapp' ? conv.phone : null, conv.id);
   const today = new Date(ctx.now()).toISOString().slice(0, 10);
   return [
     `Tu es ${s.name}, le vendeur de la boutique « ${shop.name} » en Algérie. Tu réponds aux clients sur ${conv.channel === 'test' ? 'une conversation de test' : conv.channel}. Date : ${today}.`,
@@ -532,6 +552,7 @@ async function systemPrompt(ctx: Ctx, conv: Conversation, s: DellalSettings, fol
     s.darijaAvoid.trim() ? `Mots et expressions que la boutique interdit (avec ce qu’il faut écrire à la place) :\n${s.darijaAvoid.trim()}` : '',
     `Catalogue (résumé, vérifie le stock avec search_products) :\n${catalog || '(vide)'}`,
     cust ? `Client connu : ${cust.name}, ${cust.orders} commande(s), ${cust.delivered} livrée(s), ${cust.returned} retour(s)${cust.blacklisted ? ', SUR LISTE NOIRE : ne prends pas de commande, passe la main' : ''}.` : '',
+    orders,
     followUp ? `Le client ne répond plus depuis un moment : envoie UNE relance courte et aimable, sans insister.` : '',
   ]
     .filter(Boolean)
@@ -660,12 +681,22 @@ async function history(db: Db, convId: number): Promise<AiMsg[]> {
     const role = r.role === 'customer' ? 'user' : 'assistant';
     // a conversation opened from a comment starts with the public comment, then the private message of the CM AI agent
     const post = r.meta?.comment ? String(r.meta.comment.post ?? '').slice(0, 120) : '';
-    const text = r.role === 'staff' ? `[équipe] ${r.body}` : r.meta?.comment ? `[commentaire public sous la publication${post ? ` « ${post} »` : ''}] ${r.body}` : r.body;
+    const text =
+      r.role === 'staff'
+        ? `[équipe] ${r.body}`
+        : r.meta?.comment
+          ? `[commentaire public sous la publication${post ? ` « ${post} »` : ''}] ${r.body}`
+          : r.meta?.notify
+            ? `[message automatique de suivi de la commande ${r.meta.ref ?? ''}] ${r.body}`
+            : r.body;
     const last = out[out.length - 1];
     if (last && last.role === role) last.content += `\n${text}`;
     else out.push({ role, content: text });
   }
-  while (out.length && out[0].role === 'assistant') out.shift();
+  // the AI conversation starts with the customer: what the shop wrote before stays as context of their first message
+  const before: string[] = [];
+  while (out.length && out[0].role === 'assistant') before.push(String(out.shift()!.content));
+  if (before.length && out.length) out[0].content = `(Avant, la boutique a écrit au client : ${before.join('\n')})\n${out[0].content}`;
   return out;
 }
 

@@ -9,6 +9,7 @@ import { customersProcs } from './modules/customers';
 import { deliveryProcs } from './modules/delivery';
 import { dellalProcs } from './modules/dellal';
 import { marketersProcs } from './modules/marketers';
+import { notifyProcs } from './modules/notify';
 import { ordersProcs } from './modules/orders';
 import { savProcs } from './modules/sav';
 import { statsProcs } from './modules/stats';
@@ -30,5 +31,6 @@ export const REGISTRY = {
   ...adsProcs,
   ...dellalProcs,
   ...cmProcs,
+  ...notifyProcs,
   ...marketersProcs,
 };

@@ -48,6 +48,7 @@ export function useMenuCounts() {
       lowStock: (c as { lowStock?: number }).lowStock ?? 0,
       msgs: c.ai?.messages ?? 0,
       cm: c.ai?.cm ?? 0,
+      notify: c.ai?.notify ?? 0,
     } as Record<string, number>;
   }, [q.data]);
 }

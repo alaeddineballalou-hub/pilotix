@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { Db, iso, isoOrNull, num } from '../db';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
 import { DEFAULT_SETTINGS, getSetting, setSetting, SettingsMap } from '../settings';
+import { sendInPreview } from './notify';
 import { createOrder } from './orders';
 import { usersProcs } from './users';
 
@@ -609,6 +610,7 @@ export const adminProcs = {
       isExchange: false,
       utm: { utm_campaign: 'simulation' },
     });
+    await sendInPreview(ctx);
     return { id: o.id, ref: o.ref };
   }),
   /** Meta Ads connection. The token is write-only: stored under its own key, never returned. */
