@@ -320,7 +320,8 @@
     "partsStay": "Only the parts leave; the item stays with the customer.",
     "sendDepot": "Send to the depot",
     "notShipped_one": "{{count}} other order not shipped yet (no after-sales).",
-    "notShipped_other": "{{count}} other orders not shipped yet (no after-sales)."
+    "notShipped_other": "{{count}} other orders not shipped yet (no after-sales).",
+    "noDelivered": "No order delivered or on the road."
   },
   "sat": {
     "1": "Unhappy",

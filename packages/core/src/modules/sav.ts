@@ -676,6 +676,6 @@ export const savProcs = {
   /** Find the order of a new ticket (any status). */
   'sav.findOrder': proc([...SAV_ROLES], z.object({ q: z.string().min(2).max(100), deliveredFirst: z.boolean().default(false) }), (ctx, { q, deliveredFirst }) =>
     // the call: what the customer received comes first (SAV is after delivery), newest first
-    deliveredFirst ? findOrders(ctx, q, 12, undefined, `(o.follow_status IN ('delivered','exchanged')) DESC, (o.shipped_at IS NOT NULL) DESC, o.created_at DESC`) : findOrders(ctx, q),
+    deliveredFirst ? findOrders(ctx, q, 12, undefined, `COALESCE(o.follow_status IN ('delivered','exchanged'), false) DESC, (o.shipped_at IS NOT NULL) DESC, o.created_at DESC`) : findOrders(ctx, q),
   ),
 };

@@ -465,7 +465,7 @@ function CallFlow({ onClose, onOpen }: { onClose: () => void; onOpen: (id: numbe
               <Loading />
             ) : !delivered.length && !notYet.length ? (
               <p className="pxv-help">
-                {t('sav.form.noOrder')}
+                {t('sav.ph.noDelivered')}
                 {notShipped > 0 ? ` ${t('sav.ph.notShipped', { count: notShipped })}` : ''}
               </p>
             ) : (
