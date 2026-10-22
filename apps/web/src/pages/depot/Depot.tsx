@@ -1,4 +1,5 @@
 import type { Order } from '@pilotix/shared';
+import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
@@ -49,78 +50,60 @@ export function Depot({ sub }: PageProps) {
 // (The depot bar is drawn here rather than with <StageBar>: it needs the ⟶ arrow and the red "end" stage of the original.)
 
 // ---------------------------------------------------------------- En préparation
-function Picking() {
+/** Only the products the depot does not have enough of for the orders waiting (in preparation + in dispatch). */
+function MissingStock() {
   const { t } = useTranslation();
   const q = useRpc('catalog.picking', {});
-  const print = () => {
-    const rows = (q.data ?? []).filter((r) => r.toPrepare > 0);
-    const date = dateOnly(new Date().toISOString());
-    printHtml(
-      t('depot.picking.sheetTitle', { date }),
-      `<h1>${escapeHtml(t('depot.picking.sheetTitle', { date }))}</h1><table><tr><th>${escapeHtml(t('depot.picking.product'))}</th><th class="num">${escapeHtml(t('depot.picking.qty'))}</th><th class="num">${escapeHtml(
-        t('depot.picking.orders'),
-      )}</th><th class="num">${escapeHtml(t('depot.picking.stock'))}</th><th style="width:70px">${escapeHtml(t('depot.picking.done'))}</th></tr>${rows
-        .map((r) => `<tr><td>${escapeHtml(r.label)}</td><td class="num big">${r.toPrepare}</td><td class="num">${r.orders}</td><td class="num">${r.stock}${r.stock < r.toPrepare + r.prepared ? ` (${escapeHtml(t('depot.picking.missing', { n: r.toPrepare + r.prepared - r.stock }))})` : ''}</td><td></td></tr>`)
-        .join('')}</table>`,
-    );
-  };
+  const rows = (q.data ?? []).filter((r) => r.toPrepare > 0 && r.stock < r.toPrepare + r.prepared);
   return (
-    <Card
-      title={t('depot.picking.title')}
-      actions={
-        <button className="btn" onClick={print} disabled={!q.data?.length}>
-          {t('depot.picking.print')}
-        </button>
-      }
-    >
+    <Card title={t('depot.missingStock.title')}>
       {q.isLoading ? (
         <Loading />
       ) : q.error ? (
         <ErrorBox error={q.error} onRetry={() => q.refetch()} />
-      ) : !q.data?.length ? (
-        <Empty>{t('depot.picking.empty')}</Empty>
+      ) : !rows.length ? (
+        <p className="muted">✓ {t('depot.missingStock.none')}</p>
       ) : (
-        <div className="tbl-wrap">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th className="wide">{t('depot.picking.product')}</th>
-                <th className="num">{t('depot.picking.toPrepare')}</th>
-                <th className="num">{t('depot.picking.prepared')}</th>
-                <th className="num">{t('depot.picking.orders')}</th>
-                <th className="num">{t('depot.picking.stock')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {q.data.map((r) => {
-                const need = r.toPrepare + r.prepared;
-                const low = r.stock < need;
-                return (
-                  <tr key={`${r.productId}-${r.variantId}`}>
-                    <td className="wide px-cw" data-l={t('depot.picking.product')}>
-                      <div className="px-clamp">{r.label}</div>
-                    </td>
-                    <td className="num" data-l={t('depot.picking.toPrepare')}>
-                      <b className="ltr">{n(r.toPrepare)}</b>
-                    </td>
-                    <td className="num ltr" data-l={t('depot.picking.prepared')}>
-                      {n(r.prepared)}
-                    </td>
-                    <td className="num ltr" data-l={t('depot.picking.orders')}>
-                      {n(r.orders)}
-                    </td>
-                    <td className="num" data-l={t('depot.picking.stock')}>
-                      <span className={low ? 'stock-low' : undefined}>
-                        <span className="ltr">{n(r.stock)}</span>
-                        {low && ` (${t('depot.picking.missing', { n: need - r.stock })})`}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <p className="muted small">{t('depot.missingStock.help')}</p>
+          <div className="tbl-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th className="wide">{t('depot.picking.product')}</th>
+                  <th className="num">{t('depot.missingStock.need')}</th>
+                  <th className="num">{t('depot.picking.stock')}</th>
+                  <th className="num">{t('depot.missingStock.missing')}</th>
+                  <th className="num">{t('depot.picking.orders')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => {
+                  const need = r.toPrepare + r.prepared;
+                  return (
+                    <tr key={`${r.productId}-${r.variantId}`}>
+                      <td className="wide px-cw" data-l={t('depot.picking.product')}>
+                        <div className="px-clamp">{r.label}</div>
+                      </td>
+                      <td className="num ltr" data-l={t('depot.missingStock.need')}>
+                        {n(need)}
+                      </td>
+                      <td className="num ltr" data-l={t('depot.picking.stock')}>
+                        {n(Math.max(0, r.stock))}
+                      </td>
+                      <td className="num" data-l={t('depot.missingStock.missing')}>
+                        <b className="stock-low ltr">{n(need - Math.max(0, r.stock))}</b>
+                      </td>
+                      <td className="num ltr" data-l={t('depot.picking.orders')}>
+                        {n(r.toPrepareOrders)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </Card>
   );
@@ -148,40 +131,170 @@ function CompanyBulk({ ids, done }: { ids: number[]; done: () => void }) {
   );
 }
 
-function Preparer() {
+/** Assign a delivery partner to the orders, then push them to "En dispatch". */
+function useToDispatch() {
   const { t } = useTranslation();
-  const prep = useAction('orders.setFollow', { success: (r) => t('depot.markPreparedDone', { count: r.changed.length }) });
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const run = async (ids: number[], companyId: number | null, onDone?: () => void) => {
+    if (!ids.length) return;
+    setBusy(true);
+    try {
+      if (companyId) await rpc('orders.assignCompany', { ids, companyId });
+      const r = await rpc('orders.setFollow', { ids, status: 'prepared' });
+      toast(t('depot.toDispatch.done', { count: r.changed.length }), 'ok');
+      onDone?.();
+    } catch (e: any) {
+      toast(e.message, 'bad');
+    } finally {
+      setBusy(false);
+      qc.invalidateQueries();
+    }
+  };
+  return { run, busy };
+}
+
+function DispatchBulk({ ids, done }: { ids: number[]; done: () => void }) {
+  const { t } = useTranslation();
+  const companies = useRpc('depot.companies', {});
+  const [company, setCompany] = useState('');
+  const go = useToDispatch();
   return (
     <>
-      <Picking />
+      <select aria-label={t('depot.toDispatch.partner')} value={company} style={{ width: 'auto' }} disabled={go.busy} onChange={(e) => setCompany(e.target.value)}>
+        <option value="">{t('depot.toDispatch.partner')}</option>
+        {companies.data?.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+      <button className="btn small ok" disabled={!company || go.busy} onClick={() => go.run(ids, Number(company), done)}>
+        {t('depot.toDispatch.button')} ›
+      </button>
+    </>
+  );
+}
+
+function DispatchRow({ o }: { o: Order }) {
+  const { t } = useTranslation();
+  const companies = useRpc('depot.companies', {});
+  const go = useToDispatch();
+  if (o.companyId)
+    return (
+      <button className="btn small ok" disabled={go.busy} onClick={() => go.run([o.id], null)}>
+        {t('depot.toDispatch.button')} ›
+      </button>
+    );
+  return (
+    <select aria-label={t('depot.toDispatch.partner')} value="" style={{ width: 'auto' }} disabled={go.busy} onChange={(e) => e.target.value && go.run([o.id], Number(e.target.value))}>
+      <option value="">{t('depot.toDispatch.partner')}</option>
+      {companies.data?.map((c) => (
+        <option key={c.id} value={c.id}>
+          {c.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function Preparer() {
+  const { t } = useTranslation();
+  return (
+    <>
+      <MissingStock />
       <DepotOrderList
         title={t('depot.lists.preparer')}
         follow={['to_prepare']}
         sort="confirmed_at"
-        bulk={(ids, clear) => (
-          <>
-            <button className="btn small ok" disabled={prep.isPending} onClick={() => prep.mutate({ ids, status: 'prepared' }, { onSuccess: clear })}>
-              ✓ {t('depot.markPrepared')}
-            </button>
-            <CompanyBulk ids={ids} done={clear} />
-          </>
-        )}
-        actions={(o) => (
-          <button className="btn small ok" disabled={prep.isPending} onClick={() => prep.mutate({ ids: [o.id], status: 'prepared' })}>
-            ✓ {t('depot.markPrepared')}
-          </button>
-        )}
+        bulk={(ids, clear) => <DispatchBulk ids={ids} done={clear} />}
+        actions={(o) => <DispatchRow o={o} />}
       />
     </>
   );
 }
 
 // ---------------------------------------------------------------- En dispatch
+/** The picking sheet: quantities of every product in the orders waiting in dispatch, to print and pick. */
+function DispatchSheet() {
+  const { t } = useTranslation();
+  const q = useRpc('catalog.picking', {});
+  const rows = (q.data ?? []).filter((r) => r.prepared > 0);
+  const print = () => {
+    const date = dateOnly(new Date().toISOString());
+    const total = rows.reduce((s, r) => s + r.prepared, 0);
+    printHtml(
+      t('depot.dispatchSheet.sheetTitle', { date }),
+      `<h1>${escapeHtml(t('depot.dispatchSheet.sheetTitle', { date }))}</h1><table><tr><th>${escapeHtml(t('depot.picking.product'))}</th><th class="num">${escapeHtml(t('depot.picking.qty'))}</th><th class="num">${escapeHtml(
+        t('depot.picking.orders'),
+      )}</th><th class="num">${escapeHtml(t('depot.picking.stock'))}</th><th style="width:70px">${escapeHtml(t('depot.picking.done'))}</th></tr>${rows
+        .map((r) => `<tr><td>${escapeHtml(r.label)}</td><td class="num big">${r.prepared}</td><td class="num">${r.preparedOrders}</td><td class="num">${r.stock}${r.stock < r.prepared ? ` (${escapeHtml(t('depot.picking.missing', { n: r.prepared - r.stock }))})` : ''}</td><td></td></tr>`)
+        .join('')}<tr><th>${escapeHtml(t('depot.dispatchSheet.total'))}</th><th class="num big">${total}</th><th></th><th></th><th></th></tr></table>`,
+    );
+  };
+  return (
+    <Card
+      title={t('depot.dispatchSheet.title')}
+      actions={
+        <button className="btn primary" onClick={print} disabled={!rows.length}>
+          🖨 {t('depot.picking.print')}
+        </button>
+      }
+    >
+      {q.isLoading ? (
+        <Loading />
+      ) : q.error ? (
+        <ErrorBox error={q.error} onRetry={() => q.refetch()} />
+      ) : !rows.length ? (
+        <Empty>{t('depot.dispatchSheet.empty')}</Empty>
+      ) : (
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th className="wide">{t('depot.picking.product')}</th>
+                <th className="num">{t('depot.picking.qty')}</th>
+                <th className="num">{t('depot.picking.orders')}</th>
+                <th className="num">{t('depot.picking.stock')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const low = r.stock < r.prepared;
+                return (
+                  <tr key={`${r.productId}-${r.variantId}`}>
+                    <td className="wide px-cw" data-l={t('depot.picking.product')}>
+                      <div className="px-clamp">{r.label}</div>
+                    </td>
+                    <td className="num" data-l={t('depot.picking.qty')}>
+                      <b className="ltr">{n(r.prepared)}</b>
+                    </td>
+                    <td className="num ltr" data-l={t('depot.picking.orders')}>
+                      {n(r.preparedOrders)}
+                    </td>
+                    <td className="num" data-l={t('depot.picking.stock')}>
+                      <span className={low ? 'stock-low' : undefined}>
+                        <span className="ltr">{n(r.stock)}</span>
+                        {low && ` (${t('depot.picking.missing', { n: r.prepared - r.stock })})`}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function Prepares() {
   const { t } = useTranslation();
   const un = useAction('depot.unassign', { success: (o) => t('depot.removed', { ref: o.ref }) });
   return (
     <>
+      <DispatchSheet />
       <ScanCard mode="dispatch" />
       <DepotOrderList
         title={t('depot.lists.prepares')}
