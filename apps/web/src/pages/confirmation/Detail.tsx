@@ -293,9 +293,10 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
             );
           })}
           <div className="qd6-add">{editable ? <AddProduct catalog={cat.data} lines={L} onPick={add} /> : <p className="muted small">{t('confirmation.d.locked')}</p>}</div>
+        </section>
           {editable && (packs.length > 0 || linked.size > 0) && (
-            <div className="qd6-offers">
-              <div className="qd6-h sub">
+            <section className="qd6-card qd6-related" aria-label={t('confirmation.d6.offer')}>
+              <div className="qd6-h">
                 <Icon name="sparkles" />
                 {t('confirmation.d6.offer')}
               </div>
@@ -335,9 +336,10 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
                   </button>
                 ))}
               </div>
-            </div>
+            </section>
           )}
-        </section>
+      </div>
+      <div className="qd6-right">
         <section className="qd6-card qd6-deliv" ref={deskRef}>
           <div className="qd6-h">{t('confirmation.dl.title')}</div>
           <div className="qd5-seg" role="radiogroup" aria-label={t('confirmation.d.type')}>
@@ -395,7 +397,6 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
             )}
           </div>
         </section>
-      </div>
       <aside className="qd6-rail" aria-label={t('confirmation.d6.decision')}>
         <dl className="qd5-sum">
           <div>
@@ -432,16 +433,11 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
           </div>
         )}
         {err && <p className="form-err">{err}</p>}
-        <div className="qd6-fill" aria-hidden="true" />
-        {order.confStatus !== 'confirmed' && (
-          <>
-            <button type="button" className="qd6-cta" disabled={busy || !editable} onClick={confirm}>
-              <Icon name="checkcircle" />
-              {t('confirmation.d6.confirm')}
-            </button>
-            <p className="qd6-hint">{t('confirmation.d6.hint')}</p>
-          </>
-        )}
+      </aside>
+      </div>
+      </div>
+      <div className="qd6-bar">
+        <div className="qd6-bl">
         {dirty && (
           <div className="qd6-dirty">
             <span>{t('confirmation.d.modified')}</span>
@@ -462,13 +458,22 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
             >
               {t('common.cancel')}
             </button>
-            <button type="button" className="btn small" disabled={busy} onClick={() => run(async () => {}, t('confirmation.d.saved', { ref: order.ref }))}>
-              {t('common.save')}
-            </button>
           </div>
         )}
+        </div>
         <StatusMenu order={order} busy={busy} run={run} />
-      </aside>
+        <button type="button" className={`qd6-savebtn ${dirty ? 'on' : ''}`} disabled={busy || !editable || !dirty} title={dirty ? undefined : t('confirmation.d6.nothing')} onClick={() => run(async () => {}, t('confirmation.d.saved', { ref: order.ref }))}>
+          <Icon name="check" />
+          {t('common.save')}
+        </button>
+        {order.confStatus !== 'confirmed' && (
+          <>
+            <button type="button" className="qd6-cta" disabled={busy || !editable} title={t('confirmation.d6.hint')} onClick={confirm}>
+              <Icon name="checkcircle" />
+              {t('confirmation.d6.confirm')}
+            </button>
+          </>
+        )}
       </div>
       {picker && opts.data && (
         <DeskMenu
