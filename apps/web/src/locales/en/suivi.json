@@ -49,7 +49,8 @@
     "variant": "Variant",
     "agent": "Confirmation agent",
     "fagent": "Follow-up agent",
-    "tracking": "Tracking no."
+    "tracking": "Tracking no.",
+    "phone": "Phone"
   },
   "days": "{{n}} d",
   "act": {

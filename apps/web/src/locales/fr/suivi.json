@@ -49,7 +49,8 @@
     "variant": "Variante",
     "agent": "Agent confirmation",
     "fagent": "Agent suivi",
-    "tracking": "N° de suivi"
+    "tracking": "N° de suivi",
+    "phone": "Téléphone"
   },
   "days": "{{n}} j",
   "act": {

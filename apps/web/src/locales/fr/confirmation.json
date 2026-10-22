@@ -87,7 +87,7 @@
     "status": "Statut",
     "stock": "Disponibilité",
     "desk": "Stopdesk",
-    "passed": "Statuts passés",
+    "passed": "Historique",
     "variant": "Variante",
     "fagent": "Agent suivi"
   },
@@ -409,5 +409,11 @@
     "apply": "Afficher les colonnes de {{name}}",
     "by": "par {{by}}",
     "cols": "Colonnes"
+  },
+  "hist": {
+    "title": "Historique de {{ref}}",
+    "none": "Rien pour l’instant.",
+    "open": "Voir l’historique de {{ref}}",
+    "see": "Voir"
   }
 }

@@ -707,3 +707,39 @@ html body .qcard .qacts .qa-info > .linkish { display: inline-flex; align-items:
 .px-pre-new { display: flex; gap: 6px; padding: 6px 4px 0; }
 .px-pre-new input { flex: 1; min-width: 0; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--q-btn-line); font: inherit; font-size: 13px; }
 .px-pre-new .btn { height: 32px; margin: 0 !important; }
+
+/* ===== phone with its small call / WhatsApp icons ===== */
+.px-ph { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.px-ph-i { width: 26px; height: 26px; flex: none; display: inline-grid; place-items: center; border-radius: 8px; color: var(--q-ink, #1B2A47); background: var(--sky-soft, #eef2f8); text-decoration: none; transition: background .15s, color .15s; }
+.px-ph-i .bji { width: 14px; height: 14px; vertical-align: 0; }
+.px-ph-i:hover { background: var(--q-accent, #F7A823); color: #fff; }
+.px-ph-i.wa:hover { background: #25D366; }
+/* ===== Historique column: the status trail, opens the history tab ===== */
+.px-histcell { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid transparent; border-radius: 10px; background: none; font: inherit; color: var(--muted); cursor: pointer; text-align: start; }
+.px-histcell > .bji { width: 15px; height: 15px; flex: none; }
+.px-histcell:hover, .px-histcell.on { border-color: var(--q-btn-line, #e3e7ef); background: var(--surface); color: var(--q-ink); }
+.qo.qo-hist { background: var(--surface); color: var(--q-ink, #1B2A47); border: 1px solid var(--q-btn-line, #e3e7ef); }
+.qo.qo-hist.on, .qo.qo-hist:hover { border-color: var(--q-ink, #1B2A47); filter: none; }
+.qrowacts { display: inline-flex; gap: 6px; align-items: center; }
+/* ===== the floating history tab ===== */
+.px-hist { position: fixed; z-index: 2147482000; width: min(360px, calc(100vw - 16px)); max-height: min(440px, calc(100vh - 16px)); overflow: auto; border-radius: 14px; background: var(--surface, #fff); color: var(--ink); border: 1px solid var(--q-btn-line, #e3e7ef); box-shadow: 0 16px 40px rgba(20,30,50,.22); }
+.px-hist-h { position: sticky; top: 0; display: flex; align-items: center; gap: 8px; padding: 12px 14px; background: var(--surface, #fff); border-bottom: 1px solid var(--q-btn-line, #e3e7ef); font-size: 13.5px; }
+.px-hist-h > .bji { width: 16px; height: 16px; color: var(--q-accent, #F7A823); }
+.px-hist-h b { flex: 1; }
+.px-hist-x { width: 28px; height: 28px; display: inline-grid; place-items: center; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; }
+.px-hist-x:hover { background: var(--sky-soft); color: var(--ink); }
+.px-hist-empty { padding: 18px 14px; color: var(--muted); font-size: 13px; }
+.px-hist-list { list-style: none; margin: 0; padding: 10px 14px 12px; }
+.px-hist-list li { position: relative; display: grid; grid-template-columns: 14px 1fr; gap: 10px; padding-bottom: 12px; }
+.px-hist-list li:not(:last-child)::before { content: ""; position: absolute; left: 6px; top: 14px; bottom: 0; width: 2px; background: var(--q-btn-line, #e3e7ef); }
+.px-hist-dot { width: 14px; height: 14px; margin-top: 2px; border-radius: 50%; background: var(--surface); border: 3px solid var(--muted); box-sizing: border-box; }
+.px-hist-list li:first-child .px-hist-dot { border-color: var(--q-accent, #F7A823); }
+.px-hist-list li.k-conf_status .px-hist-dot, .px-hist-list li.k-follow_status .px-hist-dot { border-color: var(--px-navy, #1B2A47); }
+.px-hist-list li:first-child.k-conf_status .px-hist-dot { border-color: var(--q-accent, #F7A823); }
+.px-hist-what { font-size: 13px; font-weight: 700; line-height: 1.35; }
+.px-hist-meta { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.px-hist-note { margin-top: 4px; font-size: 12px; padding: 6px 8px; border-radius: 8px; background: var(--sky-soft, #eef2f8); }
+[dir="rtl"] .px-hist-list li:not(:last-child)::before { left: auto; right: 6px; }
+/* Suivi: the column menu above the table, on the right */
+.px-scols { display: flex; justify-content: flex-end; margin: 0 0 8px; }
+.px-scols .px-qpop { z-index: 40; }

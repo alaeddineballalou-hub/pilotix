@@ -438,7 +438,7 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
   );
 }
 
-function eventText(t: (k: string, o?: any) => string, e: OrderEvent, user: (v: string | null) => string, company: (v: string | null) => string): string {
+export function eventText(t: (k: string, o?: any) => string, e: OrderEvent, user: (v: string | null) => string, company: (v: string | null) => string): string {
   const conf = (v: string | null) => (v ? t(`status.conf.${v}`, { defaultValue: v }) : '');
   const fol = (v: string | null) => (v ? t(`status.follow.${v}`, { defaultValue: v }) : '');
   switch (e.kind) {
