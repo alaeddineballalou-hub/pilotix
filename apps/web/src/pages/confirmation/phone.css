@@ -74,7 +74,7 @@
 .qd6.qd6-ph .qd6-ddb > .bji:first-child, .qd6.qd6-ph .qd6-ddt, .qd6.qd6-ph .qd6-cur .badge { display: none; }
 .qd6-ddt-s { display: none; }
 .qd6.qd6-ph .qd6-ddt-s { display: inline; }
-.qd6.qd6-ph .qd6-cur .qd6-pend { max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qd6.qd6-ph .qd6-cur .qd6-pend { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* the status menu opens as a panel across the screen, above the bar */
 .qd6.qd6-ph .qd6-mini, .qd6.qd6-ph .qd6-ask { position: fixed; left: 8px; right: 8px; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); max-height: 70vh; overflow-y: auto; }
 .qd6.qd6-ph .qd6-mini .qd6-mi { min-height: 48px; }
@@ -82,3 +82,7 @@
 /* totals across the whole width; the address is typed in its own field, not repeated beside "Domicile" */
 .qd6.qd6-ph .qd6-rail { width: 100% !important; align-self: stretch !important; box-sizing: border-box; }
 .qd6.qd6-ph .qd6-desk small { display: none; }
+/* a status picked: it replaces the word "Statut" so it shows in full */
+.qd6.qd6-ph .qd6-ddb:has(.qd6-pend) .qd6-ddt-s { display: none; }
+.qd6.qd6-ph .qd6-cur { min-width: 0; flex: 1; justify-content: space-between; }
+.qd6.qd6-ph .qd6-cur .qd6-pend { max-width: none; flex: 0 1 auto; min-width: 0; }
