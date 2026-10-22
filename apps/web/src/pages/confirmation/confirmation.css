@@ -15,7 +15,7 @@ html:not([data-theme="dark"]) .px-kff.px-kff-one { background: #FFFFFF; box-shad
 .px-st:has(.px-dr-pop), .px-kff-one:has(.px-dr-pop) { overflow: visible !important; }
 
 /* One date button + Pilotix calendar (quick periods, then first and last day) */
-.px-dr { position: relative; }
+.px-dr { position: relative; --px-dr-band: var(--lt-tint, rgba(247, 168, 35, .18)); }
 .px-dr-btn { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 700; white-space: nowrap; cursor: pointer; }
 .px-dr-btn:hover, .px-dr-btn.on { border-color: var(--navy); }
 .px-dr-btn:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
@@ -28,9 +28,9 @@ html:not([data-theme="dark"]) .px-kff.px-kff-one { background: #FFFFFF; box-shad
 html:not([data-theme="dark"]) .px-dr-pop { background: #FFFFFF; }
 .px-dr-presets { display: flex; flex-direction: column; gap: 2px; min-width: 150px; padding: 12px; background: var(--raise, #FFFAF5); border-inline-end: 1px solid var(--line); }
 .px-dr-presets button { padding: 9px 12px; border: 0; border-radius: 10px; background: transparent; color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 600; text-align: start; cursor: pointer; }
-.px-dr-presets button:hover { background: var(--sky-soft, #FFF3E6); }
+.px-dr-presets button:hover { background: var(--px-dr-band); }
 .px-dr-presets button.on { background: var(--navy); color: var(--on-navy, #FFFFFF); }
-.px-dr-cal { width: 300px; padding: 14px 16px 12px; }
+.px-dr-cal { width: 330px; padding: 14px 16px 12px; }
 .px-dr-month { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .px-dr-month b { font-family: var(--f-display); font-size: 15px; text-transform: capitalize; }
 .px-dr-nav { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); cursor: pointer; }
@@ -41,17 +41,17 @@ html:not([data-theme="dark"]) .px-dr-pop { background: #FFFFFF; }
 .px-dr-wd { padding: 4px 0 6px; font-size: 11px; font-weight: 700; color: var(--muted); text-align: center; text-transform: uppercase; }
 .px-dr-d { display: grid; place-items: center; height: 38px; padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
 .px-dr-d span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 999px; }
-.px-dr-d:hover:not(:disabled) span { background: var(--sky-soft, #FFF3E6); }
+.px-dr-d:hover:not(:disabled) span { background: var(--px-dr-band); }
 .px-dr-d:disabled { color: var(--muted); opacity: .4; cursor: default; }
 .px-dr-d.td span { box-shadow: inset 0 0 0 1.5px var(--navy); }
-.px-dr-d.in { background: var(--sky-soft, #FFF3E6); }
-.px-dr-d.st:not(.en) { background: linear-gradient(to right, transparent 50%, var(--sky-soft, #FFF3E6) 50%); }
-.px-dr-d.en:not(.st) { background: linear-gradient(to left, transparent 50%, var(--sky-soft, #FFF3E6) 50%); }
-[dir="rtl"] .px-dr-d.st:not(.en) { background: linear-gradient(to left, transparent 50%, var(--sky-soft, #FFF3E6) 50%); }
-[dir="rtl"] .px-dr-d.en:not(.st) { background: linear-gradient(to right, transparent 50%, var(--sky-soft, #FFF3E6) 50%); }
+.px-dr-d.in { background: var(--px-dr-band); }
+.px-dr-d.st:not(.en) { background: linear-gradient(to right, transparent 50%, var(--px-dr-band) 50%); }
+.px-dr-d.en:not(.st) { background: linear-gradient(to left, transparent 50%, var(--px-dr-band) 50%); }
+[dir="rtl"] .px-dr-d.st:not(.en) { background: linear-gradient(to left, transparent 50%, var(--px-dr-band) 50%); }
+[dir="rtl"] .px-dr-d.en:not(.st) { background: linear-gradient(to right, transparent 50%, var(--px-dr-band) 50%); }
 .px-dr-d.st span, .px-dr-d.en span { background: linear-gradient(135deg, var(--lt-accent, #F7A823), var(--lt-accent-2, #F28C1B)) !important; color: #FFFFFF; box-shadow: none; }
 .px-dr-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
-.px-dr-sum { margin-inline-end: auto; font-size: 13px; font-weight: 700; color: var(--ink); }
+.px-dr-sum { margin-inline-end: auto; white-space: nowrap; font-size: 13px; font-weight: 700; color: var(--ink); }
 @media (max-width: 760px) {
   .px-dr-veil { background: rgba(11, 18, 32, .35); }
   .px-dr-pop { position: fixed; top: auto; bottom: 12px; inset-inline: 12px; flex-direction: column; width: auto; }
