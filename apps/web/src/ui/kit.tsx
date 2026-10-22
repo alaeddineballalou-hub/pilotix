@@ -1,6 +1,7 @@
 // Pilotix UI kit — same markup and class names as the original app, so its stylesheet applies unchanged.
 import { CONF_TONE, ConfStatus, FOLLOW_TONE, FollowStatus, SAV_TONE, SavStatus, Tone } from '@pilotix/shared';
-import { ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import icons from './icons.json';
 
@@ -89,23 +90,81 @@ export function Card({ title, help, actions, children, className = '', badge }: 
 }
 
 /** The "?" next to a title that explains a number. */
+/** The "?" next to a title or a number: the note opens when the pointer is over it (or on focus / tap), in one bubble
+ *  drawn above everything (never cut by a card), placed under the icon and kept inside the screen. */
 export function Help({ text, label = '' }: { text: string; label?: string }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number; arrow: number; below: boolean } | null>(null);
   const ref = useRef<HTMLSpanElement>(null);
+  const tip = useRef<HTMLSpanElement>(null);
+  const id = useId();
+  const hide = useRef<number>();
+  const show = () => {
+    window.clearTimeout(hide.current);
+    setOpen(true);
+  };
+  const later = () => {
+    window.clearTimeout(hide.current);
+    hide.current = window.setTimeout(() => setOpen(false), 120);
+  };
+  useLayoutEffect(() => {
+    if (!open || !ref.current || !tip.current) return;
+    const r = ref.current.getBoundingClientRect();
+    const w = tip.current.offsetWidth;
+    const h = tip.current.offsetHeight;
+    const vw = window.innerWidth;
+    const below = r.bottom + 10 + h < window.innerHeight - 8 || r.top - 10 - h < 8;
+    const cx = r.left + r.width / 2;
+    const left = Math.min(Math.max(8, cx - w / 2), vw - w - 8);
+    setPos({ top: below ? r.bottom + 10 : r.top - 10 - h, left, arrow: cx - left, below });
+  }, [open, text]);
   useEffect(() => {
     if (!open) return;
-    const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
-    document.addEventListener('click', close);
-    return () => document.removeEventListener('click', close);
+    const close = (e: Event) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', esc);
+    window.addEventListener('scroll', () => setOpen(false), { once: true, capture: true });
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', esc);
+    };
   }, [open]);
   return (
-    <span ref={ref} className="bjq" tabIndex={0} role="button" aria-label={`? ${label}`} aria-expanded={open} onClick={(e) => (e.stopPropagation(), setOpen(!open))} onKeyDown={(e) => e.key === 'Enter' && setOpen(!open)} style={{ position: 'relative' }}>
-      <Icon name="help" />
-      {open && (
-        <span className="bjcc" role="tooltip" style={{ position: 'absolute', top: '120%', insetInlineStart: 0, fontSize: 13, fontWeight: 500, lineHeight: 1.45, width: 280, whiteSpace: 'normal' }}>
-          {text}
-        </span>
-      )}
+    <span
+      ref={ref}
+      className="bjq px-help"
+      tabIndex={0}
+      role="button"
+      aria-label={`? ${label}`}
+      aria-expanded={open}
+      aria-describedby={open ? id : undefined}
+      onMouseEnter={show}
+      onMouseLeave={later}
+      onFocus={show}
+      onBlur={later}
+      onClick={(e) => (e.stopPropagation(), setOpen(!open))}
+    >
+      <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.6-3 4.2" />
+        <circle cx="12" cy="18.2" r="0.4" fill="currentColor" />
+      </svg>
+      {open &&
+        createPortal(
+          <span
+            ref={tip}
+            id={id}
+            role="tooltip"
+            className={`px-tip ${pos?.below === false ? 'above' : ''}`}
+            style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999, ['--ax' as string]: `${pos?.arrow ?? 20}px` }}
+            onMouseEnter={show}
+            onMouseLeave={later}
+          >
+            {label && <b className="px-tip-t">{label}</b>}
+            {text}
+          </span>,
+          document.body,
+        )}
     </span>
   );
 }
