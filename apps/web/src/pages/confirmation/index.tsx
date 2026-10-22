@@ -31,6 +31,9 @@ type ColKey = 'order' | 'source' | 'tracking' | 'creator' | 'channel' | 'product
 interface Filters {
   wilayaId?: number;
   agentId?: number | 'none';
+  teamId?: string;
+  productId?: number;
+  variantId?: number;
   channel?: SalesChannel;
   status?: string;
   from?: string;
@@ -107,6 +110,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   const qc = useQueryClient();
   const manager = has('agent_manager', 'vendeur');
   const meta = useRpc('confirmation.meta', {}, { staleTime: 5 * 60_000 });
+  const catalog = useRpc('confirmation.catalog', {}, { staleTime: 5 * 60_000 });
   const COLS = useMemo(() => columnsOf(sub), [sub]);
   const colsKey = `conf-cols3-${sub}`;
   const [visible, setVisible] = useState<Set<ColKey>>(() => new Set(store.json<ColKey[] | null>(colsKey, null) ?? COLS.map((c) => c.k)));
@@ -446,6 +450,40 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                     {a.name}
                   </option>
                 ))}
+              </select>
+            </Field>
+            {(meta.data?.teams.length ?? 0) > 0 && (
+              <Field label={t('confirmation.f.team')}>
+                <select value={f.teamId ?? ''} onChange={(e) => setFilter({ teamId: e.target.value || undefined })}>
+                  <option value="">{t('confirmation.f.allT')}</option>
+                  {meta.data?.teams.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+            <Field label={t('confirmation.f.product')}>
+              <select value={f.productId ?? ''} onChange={(e) => setFilter({ productId: e.target.value ? Number(e.target.value) : undefined, variantId: undefined })}>
+                <option value="">{t('confirmation.f.allP')}</option>
+                {catalog.data?.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={t('confirmation.f.variant')}>
+              <select value={f.variantId ?? ''} disabled={!f.productId} title={f.productId ? undefined : t('confirmation.f.pickP')} onChange={(e) => setFilter({ variantId: e.target.value ? Number(e.target.value) : undefined })}>
+                <option value="">{f.productId ? t('confirmation.f.allV') : t('confirmation.f.pickP')}</option>
+                {catalog.data
+                  ?.find((p) => p.id === f.productId)
+                  ?.variants.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.title || v.sku}
+                    </option>
+                  ))}
               </select>
             </Field>
             <Field label={t('confirmation.col.channel')}>
