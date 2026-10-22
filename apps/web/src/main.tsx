@@ -53,6 +53,11 @@ function App() {
 
   let [page, sub, ...rest]: (string | undefined)[] = parts;
   if (page && ALIASES[page]) [page, sub] = [ALIASES[page][0], ALIASES[page][1] ?? sub];
+  // Confirmation › Livrées was removed: an old link opens Confirmation › Nouvelles
+  if (page === 'confirmation' && sub === 'livrees') {
+    location.replace('#/confirmation/nouvelles');
+    sub = 'nouvelles';
+  }
   const item = NAV.find((n) => n.id === page);
   const extra = ['livrees', 'retournees'].includes(page ?? '');
   const allowed = (item && canSee(item, session.roles, session.isAdmin)) || (extra && (session.isAdmin || session.roles.some((r) => ['confirmation', 'suivi', 'depot'].includes(r))));
