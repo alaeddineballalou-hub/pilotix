@@ -74,3 +74,9 @@ html, body { overflow-x: clip; }
   .icon-btn.qic, .qrowacts .icon-btn { width: 36px; height: 36px; }
   .px-copy { padding-block: 6px; }
 }
+
+/* ---- tight table columns: content fits its cell instead of being cut ---- */
+.tbl.px-fixed td .px-copy-wrap { max-width: 100%; min-width: 0; }
+.tbl.px-fixed td .px-copy { min-width: 0; }
+/* status words wrap onto two lines rather than losing their end ("Retour en cours", "Confirmée sans stock") */
+.tbl td .badge:not(.px-rmchip):not(.px-rmchip-s), .tbl td .px-histcell { max-width: 100%; white-space: normal; height: auto; min-height: 22px; line-height: 1.2; padding-block: 3px; text-align: center; overflow-wrap: anywhere; }
