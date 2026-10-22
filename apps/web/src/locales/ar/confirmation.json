@@ -84,7 +84,10 @@
     "confirmed": "تاريخ التأكيد",
     "follow": "التوصيل",
     "next": "الاتصال القادم",
-    "status": "الحالة"
+    "status": "الحالة",
+    "stock": "التوفر",
+    "desk": "مكتب التوصيل",
+    "passed": "الحالات السابقة"
   },
   "f": {
     "wilaya": "الولاية",
@@ -110,7 +113,10 @@
     "selected_two": "{{count}} محدد",
     "selected_few": "{{count}} محدد",
     "selected_many": "{{count}} محدد",
-    "selected_other": "{{count}} محدد"
+    "selected_other": "{{count}} محدد",
+    "delete": "حذف",
+    "send": "إرسال رسالة",
+    "removeAgent": "إلغاء تعيين الوكيل"
   },
   "block": {
     "title": "حظر {{n}} زبون؟",
@@ -383,5 +389,20 @@
     "clientNote": "ملاحظة الزبون: {{note}}",
     "release": "تحرير (تركه لوكيل آخر)",
     "history": "عرض السجل"
+  },
+  "stock": {
+    "ok": "متوفر",
+    "short": "نفاد"
+  },
+  "desk": "مكتب",
+  "home": "المنزل",
+  "refresh": "تحديث",
+  "del": {
+    "title_one": "حذف {{count}} طلبية؟",
+    "title_other": "حذف {{count}} طلبيات؟",
+    "text": "سيتم حذف {{refs}} نهائيًا مع سجلها. يمكن حذف الطلبيات التي لم تُرسل بعد إلى المستودع فقط.",
+    "ok": "حذف",
+    "done_one": "تم حذف {{count}} طلبية",
+    "done_other": "تم حذف {{count}} طلبيات"
   }
 }

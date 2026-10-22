@@ -301,3 +301,57 @@ button.kpi.on { box-shadow: 0 0 0 2px var(--navy); }
 @media (max-width: 760px) { .px-st-dates { display: flex; width: 100%; } .px-st-dates input { flex: 1 1 0; min-width: 0; } }
 .px-st-sel { width: auto !important; min-width: 170px; height: 36px; font-weight: 700; border-radius: 10px; }
 @media (max-width: 760px) { .px-st-sel { flex: 1 1 140px; min-width: 0; } }
+
+/* ===== Order list interface (Confirmation): action bar · search + icon tools · column picker.
+   Everything is drawn from these tokens, so a new visual identity only changes the values below. */
+:root {
+  --q-accent: var(--px-orange, #F7A823);      /* active / pressed */
+  --q-on-accent: var(--px-navy, #1B2A47);
+  --q-ink: var(--px-navy, #1B2A47);           /* buttons text and icons */
+  --q-btn-bg: var(--surface, #fff);
+  --q-btn-line: var(--line, #e3e7ef);
+  --q-danger: var(--coral, #d9534f);
+  --q-radius: 10px;
+}
+/* action bar: selection info on the left, actions on the right (like the reference interface) */
+.qcard .qacts { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding: 4px 0 10px; }
+.qcard .qacts .qa-info { margin-inline-end: auto; }
+.qcard .qa-btn { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: var(--q-radius); border: 1px solid var(--q-btn-line);
+  background: var(--q-btn-bg); color: var(--q-ink); font-weight: 700; font-size: 13px; }
+.qcard .qa-btn:not(:disabled):not(.is-dis):hover { border-color: var(--q-ink); }
+.qcard .qa-btn:not(:disabled):not(.is-dis):active { background: var(--q-accent); color: var(--q-on-accent); border-color: var(--q-accent); }
+.qcard .qa-btn:disabled, .qcard .qa-btn.is-dis { opacity: .5; }
+.qcard .qa-btn .qa-ic { display: inline-grid; place-items: center; }
+.qcard .qa-btn.qa-danger { color: var(--q-danger); }
+.qcard .qa-btn.qa-del { background: var(--q-danger); border-color: var(--q-danger); color: #fff; }
+.qcard .qa-btn.qa-del:disabled { opacity: .45; }
+/* search + tools */
+.px-qtools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 6px 0 12px; }
+.px-qsearch { flex: 1 1 280px; display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border: 1px solid var(--q-btn-line); border-radius: var(--q-radius); background: var(--q-btn-bg); color: var(--muted); }
+.px-qsearch:focus-within { border-color: var(--q-ink); box-shadow: 0 0 0 3px color-mix(in srgb, var(--q-accent) 25%, transparent); }
+.px-qsearch input { border: 0 !important; box-shadow: none !important; background: transparent !important; padding: 0 !important; height: 100%; flex: 1; min-width: 0; outline: none; }
+.px-qbtns { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.px-qb { position: relative; display: inline-grid; grid-auto-flow: column; align-items: center; justify-content: center; gap: 6px; min-width: 40px; height: 40px; padding: 0 10px;
+  border-radius: var(--q-radius); border: 1px solid var(--q-btn-line); background: var(--q-btn-bg); color: var(--q-ink); font: inherit; font-weight: 700; font-size: 13px; cursor: pointer; }
+.px-qb:hover:not(:disabled) { border-color: var(--q-ink); }
+.px-qb.on, .px-qb:active:not(:disabled) { background: var(--q-accent); border-color: var(--q-accent); color: var(--q-on-accent); }
+.px-qb:disabled { opacity: .4; cursor: default; }
+.px-qb-l { padding: 0 14px; }
+.px-qb-n { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--q-ink); color: #fff; font-size: 11px; display: inline-grid; place-items: center; }
+.px-qb.spin .bji svg { animation: spin .8s linear infinite; }
+.px-qrange { font-size: 12.5px; font-weight: 700; color: var(--muted); padding: 0 4px; }
+/* column picker: a dropdown under its button */
+.px-qpop-wrap { position: relative; }
+.px-qpop { position: absolute; top: calc(100% + 6px); inset-inline-end: 0; z-index: 30; width: 260px; max-height: 420px; overflow: auto; padding: 8px; border-radius: 14px;
+  background: var(--surface); border: 1px solid var(--q-btn-line); box-shadow: 0 14px 34px rgba(20,30,50,.18); display: flex; flex-direction: column; gap: 2px; }
+.px-qpop-it { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px; border-radius: 8px; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.px-qpop-it:hover { background: var(--sky-soft); }
+.px-qpop-it input { width: 18px; height: 18px; accent-color: var(--q-accent); margin: 0; }
+.px-qpop .btn { margin-top: 6px; align-self: flex-start; }
+.px-passed { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.px-passed .badge { font-size: 10.5px; padding: 1px 7px; }
+@media (max-width: 760px) {
+  .qcard .qacts { justify-content: flex-start; }
+  .px-qbtns { width: 100%; justify-content: flex-end; }
+  .px-qpop { inset-inline-end: auto; inset-inline-start: 0; }
+}
