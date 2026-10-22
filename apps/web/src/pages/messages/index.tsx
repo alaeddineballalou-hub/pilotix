@@ -166,7 +166,9 @@ function Bubbles({
         ) : (
           <div key={m.id} className={`bjr-m ${m.role === 'customer' ? '' : 'mine'} ${m.role === 'agent' ? 'dl-agent' : ''}`}>
             <span className="bjr-who">
-              {m.role === 'customer' ? t('messages.thread.customer') : m.role === 'agent' ? name : m.userName ?? t('messages.thread.team')}
+              {m.role === 'customer' ? t('messages.thread.customer') : m.role === 'agent' ? (m.meta?.cm ? t('nav.cm') : name) : m.userName ?? t('messages.thread.team')}
+              {/* a conversation opened from a comment: the public comment, then the CM AI agent's private message */}
+              {m.meta?.comment && <span className="bjr-role">{t('messages.thread.comment')}</span>}
               {m.role === 'agent' && m.meta?.demo && <span className="bjr-role">{t('messages.thread.demo')}</span>}
               <span>{when(m.at)}</span>
             </span>

@@ -545,8 +545,16 @@ export async function orderCounts(ctx: Ctx) {
     )
   )[0];
   const tickets = { toShip: num(tk?.to_ship), prepared: num(tk?.prepared), onRoad: num(tk?.on_road), uncashed: num(tk?.uncashed) };
+  // Pilot AI: conversations waiting for a person or unread (Message AI agent), comments still to handle (CM AI agent)
+  const aiRow = (
+    await ctx.db.query(
+      `SELECT (SELECT count(*) FROM conversations WHERE channel <> 'test' AND (mode = 'handoff' OR unread > 0))::int AS msgs,
+              (SELECT count(*) FROM cm_comments WHERE status IN ('new','handoff','error'))::int AS cm`,
+    )
+  )[0];
+  const ai = { messages: num(aiRow?.msgs), cm: num(aiRow?.cm) };
   const toObj = (rows: { k: string; n: number }[]) => Object.fromEntries(rows.map((r) => [r.k, num(r.n)]));
-  return { conf: toObj(conf), follow: toObj(follow), sub: toObj(subs), lateCalls, sav, uncashed, tickets, lowStock, all: num((await ctx.db.query('SELECT count(*)::int n FROM sales'))[0]?.n) };
+  return { conf: toObj(conf), follow: toObj(follow), sub: toObj(subs), lateCalls, sav, uncashed, tickets, lowStock, ai, all: num((await ctx.db.query('SELECT count(*)::int n FROM sales'))[0]?.n) };
 }
 
 // ---------------------------------------------------------------- order form, fees and the delivered report

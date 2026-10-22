@@ -10,7 +10,9 @@
   "sav": "SAV",
   "tournee": "Ma tournée",
   "produits": "Produits & stock",
-  "messages": "Messages",
+  "pilotai": "Pilot AI",
+  "messages": "Message AI agent",
+  "cm": "CM AI agent",
   "clients": "Clients",
   "marketing": "Marketing",
   "publicite": "Publicité",
@@ -26,7 +28,9 @@
     "depot": "Dépôt",
     "suivi": "Suivi",
     "livrees": "Livré",
-    "annulees": "Annulé"
+    "annulees": "Annulé",
+    "messages": "Message AI agent",
+    "cm": "CM AI agent"
   },
   "profil": "Mon profil",
   "marketer": "Marketer"
