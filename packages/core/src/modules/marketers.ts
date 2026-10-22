@@ -1,6 +1,6 @@
 // Marketing › Marketer: paying marketers per ad set (ported from the BabyJoy DZ "Marketeurs" tab).
 //
-// Each ad set is made by a marketer (adsets.marketer_id). It is judged on its WHOLE life (the last 6 months of results):
+// Each ad set is made by a marketer (adsets.marketer_id). It is judged on its WHOLE life (from its first day of results):
 //  - its share of a product's orders, each month = its Meta purchases on that product ÷ the purchases of every ad set
 //    selling that product that month (spend when nobody has a purchase). An ad set selling several products counts
 //    1 / (number of products) of its purchases on each;
@@ -12,6 +12,10 @@
 // small margin but many sales). It is judged once stopped (paused / archived) and its parcels have arrived (at most 5 %
 // of its orders still open). Réussi → the marketer's price is owed; raté → 0. The owner can set the result by hand,
 // and a payment, once made, counts as a success.
+//  - An order still in confirmation (new, no answer, call back…) more than STALE_DAYS after it came in no longer counts
+//    as open: forgotten orders must not keep an ad set "en cours" forever.
+//  - A month with ad spend but no dollar rate of its own: the ad set is not judged and cannot be paid until that month's
+//    rate is entered (Publicité › Taux 1 $), since its spend in DA would be a guess.
 import { z } from 'zod';
 import { isoOrNull, num } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
@@ -32,7 +36,14 @@ export const getRules = async (ctx: Ctx) => ({ ...DEFAULT_RULES, ...(await getRa
 const BID = /\b(bid|cost)\s*c[au]p\b/i;
 const CONF_CLOSED = ['cancelled', 'duplicate', 'wrong_number', 'fake'];
 const FOLLOW_CLOSED = ['delivered', 'exchanged', 'returned', 'lost', 'cancelled'];
-const isOpen = (o: any) => !CONF_CLOSED.includes(o.conf_status) && !FOLLOW_CLOSED.includes(o.follow_status ?? '');
+const CONF_DONE = ['confirmed', 'no_stock'];
+export const STALE_DAYS = 15;
+/** Still open: not delivered / returned / cancelled yet, and not a confirmation forgotten for more than STALE_DAYS. */
+export const isOpen = (o: any, now: number) => {
+  if (CONF_CLOSED.includes(o.conf_status) || FOLLOW_CLOSED.includes(o.follow_status ?? '')) return false;
+  if (!CONF_DONE.includes(o.conf_status) && now - new Date(o.created_at).getTime() > STALE_DAYS * 86_400_000) return false;
+  return true;
+};
 /** Algiers day / month of a timestamp. */
 const algDay = (t: number) => new Date(t + 3_600_000).toISOString().slice(0, 10);
 const ymOf = (iso: string | Date) => algDay(new Date(iso).getTime()).slice(0, 7);
@@ -75,14 +86,19 @@ export interface MkRow {
   paid: { amount: number; at: string | null; marketerId: number } | null;
   /** amount owed now (null while not judged or without marketer) */
   owe: number | null;
+  /** months with ad spend and no dollar rate of their own: not judged, not payable */
+  fxMissing: string[];
 }
 
 /** Every ad set (the owner) or the marketer's own, with its lifetime money and result. */
-export async function mkRows(ctx: Ctx, onlyMine = !isOwner(ctx)): Promise<{ rows: MkRow[]; rules: MkRules; fxMissing: boolean; from: string; to: string }> {
+export async function mkRows(ctx: Ctx, onlyMine = !isOwner(ctx)): Promise<{ rows: MkRow[]; rules: MkRules; fxMissing: string[]; from: string; to: string }> {
   const rules = await getRules(ctx);
   const today = algDay(ctx.now());
-  const start = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1 - 5, 1)).toISOString().slice(0, 10);
+  // the whole life of every ad set: from the first day of Meta results
+  const first = (await ctx.db.query('SELECT min(day)::text AS d FROM ad_insights'))[0]?.d as string | null | undefined;
+  const start = first && first < today ? String(first).slice(0, 10) : today;
   const fx = await fxTable(ctx.db);
+  const ownRate = new Set((await ctx.db.query('SELECT ym FROM fx_rates')).map((r: any) => String(r.ym)));
 
   const sets = (
     await ctx.db.query(`SELECT a.*, p.name AS marketer_name FROM adsets a LEFT JOIN profiles p ON p.id = a.marketer_id ORDER BY a.name`)
@@ -111,10 +127,9 @@ export async function mkRows(ctx: Ctx, onlyMine = !isOwner(ctx)): Promise<{ rows
     (m.get(r.adsetId) ?? m.set(r.adsetId, []).get(r.adsetId)!).push(r);
   }
 
-  type Acc = { sp: number; spDa: number; pu: number; n: number; d: number; open: number; rev: number; marge: number; avant: number; months: Set<string> };
+  type Acc = { sp: number; spDa: number; pu: number; n: number; d: number; open: number; rev: number; marge: number; avant: number; months: Set<string>; noFx: Set<string> };
   const acc = new Map<string, Acc>();
-  const get = (id: string) => acc.get(id) ?? acc.set(id, { sp: 0, spDa: 0, pu: 0, n: 0, d: 0, open: 0, rev: 0, marge: 0, avant: 0, months: new Set() }).get(id)!;
-  let fxMissing = false;
+  const get = (id: string) => acc.get(id) ?? acc.set(id, { sp: 0, spDa: 0, pu: 0, n: 0, d: 0, open: 0, rev: 0, marge: 0, avant: 0, months: new Set(), noFx: new Set() }).get(id)!;
   for (const [ym, m] of [...byMonth.entries()].sort()) {
     const rate = fx(ym);
     // spend and purchases of each ad set that month
@@ -126,9 +141,8 @@ export async function mkRows(ctx: Ctx, onlyMine = !isOwner(ctx)): Promise<{ rows
       a.sp += t.spend;
       a.pu += t.pur;
       if (t.spend > 0) a.months.add(ym);
-      if (rate === null) {
-        if (t.spend > 0) fxMissing = true;
-      } else a.spDa += t.spend * rate;
+      if (t.spend > 0 && !ownRate.has(ym)) a.noFx.add(ym);
+      if (rate !== null) a.spDa += t.spend * rate;
     }
     // each product's orders that month, shared between the ad sets that sold it
     const prodSets = new Map<number, string[]>();
@@ -141,7 +155,8 @@ export async function mkRows(ctx: Ctx, onlyMine = !isOwner(ctx)): Promise<{ rows
       const list = ordersBy.get(`${pid}|${ym}`) ?? [];
       if (!list.length) continue;
       const R = await moneyOf(ctx.db, list, 0, 1);
-      const open = list.filter(isOpen).length;
+      const now = ctx.now();
+      const open = list.filter((o) => isOpen(o, now)).length;
       for (const id of ids) {
         const sh = P ? w(id) / P : SP ? ws(id) / SP : 0;
         if (!sh) continue;
@@ -159,14 +174,15 @@ export async function mkRows(ctx: Ctx, onlyMine = !isOwner(ctx)): Promise<{ rows
   const out: MkRow[] = [];
   for (const s of sets) {
     const a = acc.get(s.id);
-    if (!a || a.sp <= 0) continue; // no spend in the last 6 months
+    if (!a || a.sp <= 0) continue; // never spent
     if (onlyMine && s.marketerId !== ctx.session.profile.id) continue;
     const price = s.marketerId ? prices.get(s.marketerId) ?? 0 : 0;
     const net = a.avant - a.spDa;
     const ratio = a.marge > 0 ? net / a.marge : null;
     const unlinked = !s.productIds.length;
     const stopped = s.status !== 'ACTIVE';
-    const finalAuto = !unlinked && stopped && (a.open < 0.5 || a.open <= 0.05 * a.n);
+    const fxMissing = [...a.noFx].sort();
+    const finalAuto = !unlinked && !fxMissing.length && stopped && (a.open < 0.5 || a.open <= 0.05 * a.n);
     const okShare = a.marge > 0 && ratio !== null && ratio >= rules.seuil;
     const okBig = price > 0 && rules.mult > 0 && net >= rules.mult * price;
     const okAuto = okShare || okBig;
@@ -177,7 +193,8 @@ export async function mkRows(ctx: Ctx, onlyMine = !isOwner(ctx)): Promise<{ rows
     if (manual === 'ok' || (!manual && paid)) (final = true), (ok = true);
     else if (manual === 'ko') (final = true), (ok = false);
     else if (manual === 'run') final = false;
-    const owe = !s.marketerId || !final ? null : ok ? price : 0;
+    // nothing can be paid while a month's dollar rate is missing (its spend in DA is unknown)
+    const owe = !s.marketerId || !final || (fxMissing.length && !paid) ? null : ok ? price : 0;
     out.push({
       id: s.id,
       name: s.name,
@@ -212,10 +229,11 @@ export async function mkRows(ctx: Ctx, onlyMine = !isOwner(ctx)): Promise<{ rows
       ok,
       paid,
       owe,
+      fxMissing,
     });
   }
   out.sort((x, y) => y.sp - x.sp);
-  return { rows: out, rules, fxMissing, from: start, to: today };
+  return { rows: out, rules, fxMissing: [...new Set(out.flatMap((r) => r.fxMissing))].sort(), from: start, to: today };
 }
 
 const Ids = z.array(z.string().min(1).max(40)).min(1).max(500);
@@ -316,7 +334,7 @@ export const marketersProcs = {
     let total = 0;
     for (const id of new Set(i.ids)) {
       const a = rows.find((x) => x.id === id);
-      if (!a || a.paid || !a.owe || !a.marketerId) continue;
+      if (!a || a.paid || !a.owe || !a.marketerId || a.fxMissing.length) continue;
       await ctx.db.query(
         'INSERT INTO mk_payments (adset_id, marketer_id, amount, net, marge, paid_by) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (adset_id) DO NOTHING',
         [a.id, a.marketerId, a.owe, a.net, a.marge, ctx.session.profile.id],

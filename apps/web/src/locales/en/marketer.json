@@ -28,7 +28,7 @@
     "runSub": "active or parcels still on the road"
   },
   "rules": "Payment rules",
-  "rulesText": "An ad set is successful if, over its whole life (last 6 months), the shop keeps at least {{seuil}} % of its product margin, or if its net profit is at least {{mult}} times the marketer's price (small margin but many sales). Product margin = delivered sales without delivery fees − purchase price. What the shop keeps = net profit after Meta ads, delivery, confirmation and returns. Its orders = its share of the product's Meta purchases, each month. It is judged once stopped (paused or archived) and its parcels have arrived: successful → the marketer's price, failed → 0.",
+  "rulesText": "An ad set is successful if, over its whole life (since its first day of ads), the shop keeps at least {{seuil}} % of its product margin, or if its net profit is at least {{mult}} times the marketer's price (small margin but many sales). Product margin = delivered sales without delivery fees − purchase price. What the shop keeps = net profit after Meta ads, delivery, confirmation and returns. Its orders = its share of the product's Meta purchases, each month. It is judged once stopped (paused or archived) and its parcels have arrived: successful → the marketer's price, failed → 0. An order left in confirmation for more than 15 days no longer blocks the result. While a month of ads has no dollar rate, the ad set is neither judged nor payable.",
   "seuil": "Threshold: our share at least (% of product margin)",
   "or": "or",
   "mult": "Net profit at least (× the marketer's price, 0 = off)",
@@ -53,7 +53,12 @@
   "priceOf": "Price of {{name}}",
   "perSuccess": "DA / success",
   "priceSaved": "Price saved",
-  "cardStat": { "n": "Ad sets", "ok": "Successful", "ko": "Failed", "run": "Running" },
+  "cardStat": {
+    "n": "Ad sets",
+    "ok": "Successful",
+    "ko": "Failed",
+    "run": "Running"
+  },
   "toPay": "To pay",
   "alreadyPaid": "already paid {{amount}}",
   "nothingPaid": "nothing paid",
@@ -66,14 +71,26 @@
   "search": "Search a product, an ad set or its ID",
   "filterWho": "Filter by marketer",
   "filterSt": "Filter by result",
-  "st": { "all": "All results", "ok": "Successful", "pay": "To pay", "paid": "Paid", "ko": "Failed", "run": "Running" },
+  "st": {
+    "all": "All results",
+    "ok": "Successful",
+    "pay": "To pay",
+    "paid": "Paid",
+    "ko": "Failed",
+    "run": "Running"
+  },
   "selected_one": "{{count}} ad set selected",
   "selected_other": "{{count}} ad sets selected",
   "removeMarketer": "— Remove the marketer",
   "applyTo_one": "Apply",
   "applyTo_other": "Apply to the {{count}}",
   "result": "Result",
-  "res": { "ok": "Successful", "ko": "Failed", "run": "Running", "auto": "Auto (calculated)" },
+  "res": {
+    "ok": "Successful",
+    "ko": "Failed",
+    "run": "Running",
+    "auto": "Auto (calculated)"
+  },
   "changeResult": "Change the result",
   "forced_one": "Result changed for {{count}} ad set",
   "forced_other": "Result changed for {{count}} ad sets",
@@ -86,11 +103,26 @@
   "selectAll": "Select all",
   "selectGroup": "Select the ad sets of {{name}}",
   "selectOne": "Select {{name}}",
-  "col": { "result": "Result", "product": "Product", "adset": "Ad set", "spend": "Spend", "delivered": "Delivered", "net": "Net profit", "cpd": "Cost / delivered", "share": "Our share", "pay": "To pay", "marketer": "Marketer", "status": "Status" },
+  "col": {
+    "result": "Result",
+    "product": "Product",
+    "adset": "Ad set",
+    "spend": "Spend",
+    "delivered": "Delivered",
+    "net": "Net profit",
+    "cpd": "Cost / delivered",
+    "share": "Our share",
+    "pay": "To pay",
+    "marketer": "Marketer",
+    "status": "Status"
+  },
   "gst": {
-    "ok_one": "{{count}} successful", "ok_other": "{{count}} successful",
-    "run_one": "{{count}} running", "run_other": "{{count}} running",
-    "ko_one": "{{count}} failed", "ko_other": "{{count}} failed"
+    "ok_one": "{{count}} successful",
+    "ok_other": "{{count}} successful",
+    "run_one": "{{count}} running",
+    "run_other": "{{count}} running",
+    "ko_one": "{{count}} failed",
+    "ko_other": "{{count}} failed"
   },
   "close": "Close",
   "openHere": "Show the ad sets here",
@@ -105,15 +137,29 @@
   "sales": "sales {{v}}",
   "toPayLow": "to pay",
   "paidLow": "paid",
-  "status": { "active": "Active", "paused": "Paused", "archived": "Archived", "stopped": "Stopped" },
-  "calc": { "paid": "Successful ✓ · paid", "unlinked": "Product to choose", "road": "Parcels on the road", "run": "Running", "ok": "Successful ✓", "ko": "Failed" },
+  "status": {
+    "active": "Active",
+    "paused": "Paused",
+    "archived": "Archived",
+    "stopped": "Stopped"
+  },
+  "calc": {
+    "paid": "Successful ✓ · paid",
+    "unlinked": "Product to choose",
+    "road": "Parcels on the road",
+    "run": "Running",
+    "ok": "Successful ✓",
+    "ko": "Failed",
+    "fx": "Dollar rate missing"
+  },
   "calcWord": "calculated",
   "why": {
     "manual": "Changed by hand · the calculation gives: {{calc}}",
     "share": "Share ≥ {{pct}} % of the margin",
     "big": "Profit ≥ {{mult}} × the marketer's price",
     "notYet": "Not at the threshold yet",
-    "open": "{{open}} parcels still open out of {{n}} orders"
+    "open": "{{open}} parcels still open out of {{n}} orders",
+    "fx": "Dollar rate missing: {{months}}"
   },
   "adsetTip": "Ad set: {{name}} · ID {{id}}",
   "marginPer": "margin {{v}} / delivered",
@@ -128,7 +174,7 @@
   "pick": "+ Choose",
   "resultSaved": "Result saved",
   "ownerSaved": "Marketer saved",
-  "fxMissing": "A month's dollar rate is missing: that month's spend in DA is not counted. Add it in Advertising (\"1 $ rate\").",
+  "fxMissing": "Dollar rate missing for: {{months}}. Ad sets with spend in those months are neither judged nor payable until the rate is entered in Advertising (\"1 $ rate\").",
   "notFound": "Ad set not found.",
   "prev": "Previous ad set",
   "next": "Next ad set",
@@ -163,7 +209,15 @@
     "tiredTxt": "{{names}}: the cost per purchase is rising this week. Ask the marketer for a new video or a new hook.",
     "weak": "Creatives to improve",
     "weekBefore": "week before: {{v}}",
-    "w": { "spend": "Spend 7 d", "pur": "Meta purchases 7 d", "cpa": "Cost per purchase", "freq": "Frequency", "hook": "Hook (3 s views)", "ctr": "CTR (clicks)", "cpm": "CPM (1,000 views)" },
+    "w": {
+      "spend": "Spend 7 d",
+      "pur": "Meta purchases 7 d",
+      "cpa": "Cost per purchase",
+      "freq": "Frequency",
+      "hook": "Hook (3 s views)",
+      "ctr": "CTR (clicks)",
+      "cpm": "CPM (1,000 views)"
+    },
     "meta": "Meta day by day",
     "metaSub": "{{days}} days · {{usd}}",
     "purchases": "Purchases",
@@ -180,5 +234,6 @@
     "advice": "Advice",
     "video": "video",
     "photo": "photo"
-  }
+  },
+  "fxWait": "dollar rate to enter"
 }

@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { call } from '../index';
+import { isOpen, STALE_DAYS } from '../modules/marketers';
 import { EMAILS, setup } from './harness';
 
 test('marketer payments: results, rules, assign, force, pay and unpay', async () => {
@@ -84,4 +85,42 @@ test('marketer payments: results, rules, assign, force, pay and unpay', async ()
   assert.ok(det.ads.length >= 1);
   assert.ok('lpvRate' in det.ads[0] && 'conv' in det.ads[0]);
   await assert.rejects(call('mk.adset', mk, { id: '120200004' }), (e: any) => e.code === 'not_found');
+});
+
+test('marketer payments: whole life, forgotten confirmations, missing dollar rate', async () => {
+  const { db, as } = await setup(500);
+  const owner = await as(EMAILS.vendeur);
+
+  // the whole life: from the first day of Meta results, not only the last 6 months
+  const first = (await db.query('SELECT min(day)::text AS d FROM ad_insights'))[0].d;
+  const ov: any = await call('mk.overview', owner, {});
+  assert.equal(ov.from, first);
+  assert.deepEqual(ov.fxMissing, []);
+
+  // an order still in confirmation stops counting as open after STALE_DAYS; a confirmed one waits for its parcel
+  const now = Date.now();
+  const old = new Date(now - (STALE_DAYS + 1) * 86_400_000).toISOString();
+  const recent = new Date(now - 2 * 86_400_000).toISOString();
+  assert.equal(isOpen({ conf_status: 'no_answer', follow_status: null, created_at: old }, now), false);
+  assert.equal(isOpen({ conf_status: 'no_answer', follow_status: null, created_at: recent }, now), true);
+  assert.equal(isOpen({ conf_status: 'confirmed', follow_status: 'shipped', created_at: old }, now), true);
+  assert.equal(isOpen({ conf_status: 'confirmed', follow_status: 'delivered', created_at: recent }, now), false);
+
+  // a month with spend and no dollar rate of its own: not judged, not payable, even when forced réussi
+  const a0: any = ov.rows.find((r: any) => r.id === '120200006');
+  const ym = a0.months[0];
+  await db.query('DELETE FROM fx_rates WHERE ym = $1', [ym]);
+  await call('mk.force', owner, { ids: ['120200006'], st: 'ok' });
+  const after: any = await call('mk.overview', owner, {});
+  const a1 = after.rows.find((r: any) => r.id === '120200006');
+  assert.ok(a1.fxMissing.includes(ym));
+  assert.ok(after.fxMissing.includes(ym));
+  assert.equal(a1.finalAuto, false);
+  assert.equal(a1.owe, null);
+  await assert.rejects(call('mk.pay', owner, { ids: ['120200006'] }), /Rien à payer/);
+  // the rate entered again: payable
+  await call('ads.setFx', owner, { ym, rate: 247 });
+  const back: any = ((await call('mk.overview', owner, {})) as any).rows.find((r: any) => r.id === '120200006');
+  assert.deepEqual(back.fxMissing, []);
+  assert.ok(back.owe > 0);
 });

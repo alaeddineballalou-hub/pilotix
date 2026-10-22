@@ -17,6 +17,10 @@ const ST: St[] = ['', 'ok', 'pay', 'paid', 'ko', 'run'];
 
 const usd = (v: number | null | undefined) => (v === null || v === undefined || !isFinite(v) ? '—' : `${v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`);
 const r0 = (v: number) => Math.round(v);
+const monthName = (ym: string) => {
+  const l = document.documentElement.lang || 'fr';
+  return new Date(ym + '-15T00:00:00Z').toLocaleDateString(l === 'ar' ? 'ar-DZ' : l, { month: 'long', year: 'numeric' });
+};
 /** Result tags a row carries (one row can be "réussi" and "à payer"). */
 function stOf(a: Row): Set<St> {
   const s = new Set<St>();
@@ -120,7 +124,6 @@ export function Marketer({ rest }: { rest?: string[] }) {
                 </div>
                 {owner && <Bulk d={d} rows={rows} sel={sel} setSel={setSel} />}
                 <AdsetTable d={d} groups={groupRows(show, keys)} sel={sel} setSel={setSel} open={open} setOpen={setOpen} forceOpen={!!ql} name={name} showAll={show} />
-                {d.fxMissing && <p className="note cerr">{t('marketer.fxMissing')}</p>}
               </section>
             </>
           )}
@@ -211,6 +214,7 @@ function Head({ d, rows, who, setWho, st, setSt, inWho, refetch, busy }: { d: Ov
         {kpi(null, t('marketer.k.net'), da(tNet), `${t('marketer.k.netSub', { usd: usd(tSp) })}${cost && tNet > 0 ? ' · ' + t('marketer.k.share', { pct: pct(cost / tNet) }) : ''}`, undefined, tNet < 0 ? 'neg' : '')}
         {kpi('run', t('marketer.k.run'), n(tRun), t('marketer.k.runSub'))}
       </div>
+      {!!d.fxMissing.length && <p className="mk-warn">⚠ {t('marketer.fxMissing', { months: d.fxMissing.map(monthName).join(', ') })}</p>}
       <Rules d={d} />
     </section>
   );
@@ -572,12 +576,13 @@ function AdsetRow({ d, a, kid, sel, toggle, name, back }: { d: Overview; a: Row;
   const pay = useAction('mk.pay', { success: (r) => t('marketer.paidOk', { amount: da(r.total), count: r.n }) });
   const unpay = useAction('mk.unpay', { success: t('marketer.unpaid') });
   const owner = d.owner;
-  const calc = a.paid && !a.manual ? t('marketer.calc.paid') : !a.finalAuto ? (a.unlinked ? t('marketer.calc.unlinked') : a.stopped ? t('marketer.calc.road') : t('marketer.calc.run')) : a.okAuto ? t('marketer.calc.ok') : t('marketer.calc.ko');
+  const calc = a.paid && !a.manual ? t('marketer.calc.paid') : !a.finalAuto ? (a.unlinked ? t('marketer.calc.unlinked') : a.fxMissing.length ? t('marketer.calc.fx') : a.stopped ? t('marketer.calc.road') : t('marketer.calc.run')) : a.okAuto ? t('marketer.calc.ok') : t('marketer.calc.ko');
   const eff = !a.final ? 'run' : a.ok ? 'ok' : 'ko';
   const why: string[] = [];
   if (a.manual) why.push(t('marketer.why.manual', { calc }));
   if (a.okAuto) why.push(a.okShare ? t('marketer.why.share', { pct: Math.round(d.rules.seuil * 100) }) : t('marketer.why.big', { mult: d.rules.mult }));
   else if (!a.finalAuto) why.push(t('marketer.why.notYet'));
+  if (a.fxMissing.length) why.push(t('marketer.why.fx', { months: a.fxMissing.map(monthName).join(', ') }));
   if (a.open >= 0.5) why.push(t('marketer.why.open', { open: n(r0(a.open)), n: n(r0(a.n)) }));
   const mPer = a.d >= 0.5 && a.marge > 0 ? a.marge / a.d : null;
   const cPer = a.d >= 0.5 ? a.spDa / a.d : null;
@@ -664,6 +669,8 @@ function AdsetRow({ d, a, kid, sel, toggle, name, back }: { d: Overview; a: Row;
           )
         ) : a.owe === 0 ? (
           '—'
+        ) : a.fxMissing.length && !a.paid && a.final && a.ok ? (
+          <small className="mk-fxwait">{t('marketer.fxWait')}</small>
         ) : !a.marketerId && a.final && a.ok ? (
           <small>{t('marketer.chooseMarketer')}</small>
         ) : (
@@ -857,7 +864,7 @@ function AdsetView({ id, back, d, list, name }: { id: string; back?: string; d: 
         <Empty>{t('marketer.notFound')}</Empty>
       </section>
     );
-  const res = !a.final ? (a.stopped ? t('marketer.calc.road') : t('marketer.calc.run')) : a.ok ? t('marketer.calc.ok') : t('marketer.calc.ko');
+  const res = !a.final ? (a.fxMissing.length ? t('marketer.calc.fx') : a.stopped ? t('marketer.calc.road') : t('marketer.calc.run')) : a.ok ? t('marketer.calc.ok') : t('marketer.calc.ko');
   const kpi = (l: string, v: ReactNode, s: ReactNode, cls = '') => (
     <div className="kpi">
       <span className="lab">{l}</span>

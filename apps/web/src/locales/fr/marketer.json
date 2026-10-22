@@ -28,7 +28,7 @@
     "runSub": "actifs ou colis encore en route"
   },
   "rules": "Règles de paiement",
-  "rulesText": "Un ad set est réussi si, sur toute sa vie (6 derniers mois), la boutique garde au moins {{seuil}} % de sa marge produit, ou si son bénéfice net fait au moins {{mult}} fois le prix du marketeur (petite marge mais beaucoup de ventes). Marge produit = ventes livrées sans les frais de livraison − prix d’achat. Ce qu’on garde = bénéfice net après pub Meta, livraison, confirmation et retours. Ses commandes = sa part des achats Meta du produit, chaque mois. Il est jugé quand il est arrêté (en pause ou archivé) et que ses colis sont arrivés : réussi → le prix du marketeur, raté → 0.",
+  "rulesText": "Un ad set est réussi si, sur toute sa vie (depuis son premier jour de pub), la boutique garde au moins {{seuil}} % de sa marge produit, ou si son bénéfice net fait au moins {{mult}} fois le prix du marketeur (petite marge mais beaucoup de ventes). Marge produit = ventes livrées sans les frais de livraison − prix d’achat. Ce qu’on garde = bénéfice net après pub Meta, livraison, confirmation et retours. Ses commandes = sa part des achats Meta du produit, chaque mois. Il est jugé quand il est arrêté (en pause ou archivé) et que ses colis sont arrivés : réussi → le prix du marketeur, raté → 0. Une commande restée en confirmation plus de 15 jours ne bloque plus le jugement. Tant qu’un mois de pub n’a pas son taux du dollar, l’ad set n’est ni jugé ni payable.",
   "seuil": "Seuil : notre part au moins (% de la marge produit)",
   "or": "ou",
   "mult": "Bénéfice net au moins (× le prix du marketeur, 0 = non)",
@@ -53,7 +53,12 @@
   "priceOf": "Prix de {{name}}",
   "perSuccess": "DA / réussi",
   "priceSaved": "Prix enregistré",
-  "cardStat": { "n": "Ad sets", "ok": "Réussis", "ko": "Ratés", "run": "En cours" },
+  "cardStat": {
+    "n": "Ad sets",
+    "ok": "Réussis",
+    "ko": "Ratés",
+    "run": "En cours"
+  },
   "toPay": "À payer",
   "alreadyPaid": "déjà payé {{amount}}",
   "nothingPaid": "rien de payé",
@@ -66,14 +71,26 @@
   "search": "Chercher un produit, un ad set ou son ID",
   "filterWho": "Filtrer par marketeur",
   "filterSt": "Filtrer par résultat",
-  "st": { "all": "Tous les résultats", "ok": "Réussis", "pay": "À payer", "paid": "Payés", "ko": "Ratés", "run": "En cours" },
+  "st": {
+    "all": "Tous les résultats",
+    "ok": "Réussis",
+    "pay": "À payer",
+    "paid": "Payés",
+    "ko": "Ratés",
+    "run": "En cours"
+  },
   "selected_one": "{{count}} ad set sélectionné",
   "selected_other": "{{count}} ad sets sélectionnés",
   "removeMarketer": "— Retirer le marketeur",
   "applyTo_one": "Appliquer",
   "applyTo_other": "Appliquer aux {{count}}",
   "result": "Résultat",
-  "res": { "ok": "Réussi", "ko": "Raté", "run": "En cours", "auto": "Auto (calcul)" },
+  "res": {
+    "ok": "Réussi",
+    "ko": "Raté",
+    "run": "En cours",
+    "auto": "Auto (calcul)"
+  },
   "changeResult": "Changer le résultat",
   "forced_one": "Résultat changé pour {{count}} ad set",
   "forced_other": "Résultat changé pour {{count}} ad sets",
@@ -86,11 +103,26 @@
   "selectAll": "Tout sélectionner",
   "selectGroup": "Sélectionner les ad sets de {{name}}",
   "selectOne": "Sélectionner {{name}}",
-  "col": { "result": "Résultat", "product": "Produit", "adset": "Ad set", "spend": "Dépense", "delivered": "Livrées", "net": "Bénéfice net", "cpd": "Coût / livrée", "share": "Notre part", "pay": "À payer", "marketer": "Marketeur", "status": "Statut" },
+  "col": {
+    "result": "Résultat",
+    "product": "Produit",
+    "adset": "Ad set",
+    "spend": "Dépense",
+    "delivered": "Livrées",
+    "net": "Bénéfice net",
+    "cpd": "Coût / livrée",
+    "share": "Notre part",
+    "pay": "À payer",
+    "marketer": "Marketeur",
+    "status": "Statut"
+  },
   "gst": {
-    "ok_one": "{{count}} réussi", "ok_other": "{{count}} réussis",
-    "run_one": "{{count}} en cours", "run_other": "{{count}} en cours",
-    "ko_one": "{{count}} raté", "ko_other": "{{count}} ratés"
+    "ok_one": "{{count}} réussi",
+    "ok_other": "{{count}} réussis",
+    "run_one": "{{count}} en cours",
+    "run_other": "{{count}} en cours",
+    "ko_one": "{{count}} raté",
+    "ko_other": "{{count}} ratés"
   },
   "close": "Fermer",
   "openHere": "Voir les ad sets ici",
@@ -105,15 +137,29 @@
   "sales": "ventes {{v}}",
   "toPayLow": "à payer",
   "paidLow": "payé",
-  "status": { "active": "Active", "paused": "En pause", "archived": "Archivé", "stopped": "Arrêté" },
-  "calc": { "paid": "Réussi ✓ · payé", "unlinked": "Produit à choisir", "road": "Colis en route", "run": "En cours", "ok": "Réussi ✓", "ko": "Raté" },
+  "status": {
+    "active": "Active",
+    "paused": "En pause",
+    "archived": "Archivé",
+    "stopped": "Arrêté"
+  },
+  "calc": {
+    "paid": "Réussi ✓ · payé",
+    "unlinked": "Produit à choisir",
+    "road": "Colis en route",
+    "run": "En cours",
+    "ok": "Réussi ✓",
+    "ko": "Raté",
+    "fx": "Taux du dollar manquant"
+  },
   "calcWord": "calcul",
   "why": {
     "manual": "Changé à la main · le calcul donne : {{calc}}",
     "share": "Part ≥ {{pct}} % de la marge",
     "big": "Bénéfice ≥ {{mult}} × le prix du marketeur",
     "notYet": "Pas encore au seuil",
-    "open": "{{open}} colis encore ouverts sur {{n}} commandes"
+    "open": "{{open}} colis encore ouverts sur {{n}} commandes",
+    "fx": "Taux du dollar manquant : {{months}}"
   },
   "adsetTip": "Ad set : {{name}} · ID {{id}}",
   "marginPer": "marge {{v}} / livrée",
@@ -128,7 +174,7 @@
   "pick": "+ Choisir",
   "resultSaved": "Résultat enregistré",
   "ownerSaved": "Marketeur enregistré",
-  "fxMissing": "Il manque le taux du dollar d’un mois : la dépense en DA de ce mois n’est pas comptée. Ajoutez-le dans Publicité (« Taux 1 $ »).",
+  "fxMissing": "Taux du dollar manquant pour : {{months}}. Les ad sets de ces mois ne sont ni jugés ni payables tant que le taux n’est pas entré dans Publicité (« Taux 1 $ »).",
   "notFound": "Ad set introuvable.",
   "prev": "Ad set précédent",
   "next": "Ad set suivant",
@@ -163,7 +209,15 @@
     "tiredTxt": "{{names}} : le coût par achat monte cette semaine. Demandez une nouvelle vidéo ou un nouveau hook au marketeur.",
     "weak": "Créas à améliorer",
     "weekBefore": "semaine d’avant : {{v}}",
-    "w": { "spend": "Dépense 7 j", "pur": "Achats Meta 7 j", "cpa": "Coût par achat", "freq": "Fréquence", "hook": "Hook (vues 3 s)", "ctr": "CTR (clics)", "cpm": "CPM (1 000 vues)" },
+    "w": {
+      "spend": "Dépense 7 j",
+      "pur": "Achats Meta 7 j",
+      "cpa": "Coût par achat",
+      "freq": "Fréquence",
+      "hook": "Hook (vues 3 s)",
+      "ctr": "CTR (clics)",
+      "cpm": "CPM (1 000 vues)"
+    },
     "meta": "Meta jour par jour",
     "metaSub": "{{days}} jours · {{usd}}",
     "purchases": "Achats",
@@ -180,5 +234,6 @@
     "advice": "Conseil",
     "video": "vidéo",
     "photo": "photo"
-  }
+  },
+  "fxWait": "taux du dollar à entrer"
 }
