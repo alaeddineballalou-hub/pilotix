@@ -160,6 +160,7 @@
   },
   "cd": {
     "wait": "créneau dans {{d}}",
+    "waitShort": "dans {{d}}",
     "waitTitle": "La prochaine tentative commence dans {{d}}",
     "lateTitle": "En retard de {{d}}",
     "firstTitle": "Temps restant pour le 1er appel : {{d}}",
