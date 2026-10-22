@@ -757,3 +757,12 @@ html body .qcard .qacts .qa-info > .linkish { display: inline-flex; align-items:
 .px-msg-ic.sms { background: var(--px-navy, #1B2A47); }
 .px-msg-ic.wa { background: #25D366; }
 .px-msg-txt { margin: 6px 4px 2px; padding: 8px 10px; border-radius: 10px; background: var(--sky-soft, #eef2f8); font-size: 12px; line-height: 1.4; color: var(--muted); }
+/* tracking number: press to copy, a small "Copié" bubble answers */
+.px-copy-wrap { position: relative; display: inline-flex; align-items: center; }
+small.px-copy-wrap { display: inline-flex; }
+.px-copy { padding: 1px 6px; margin: 0 -6px; border: 1px dashed transparent; border-radius: 6px; background: none; font: inherit; color: inherit; cursor: copy; text-align: start; }
+.px-copy:hover, .px-copy:focus-visible { border-color: var(--q-accent, #F7A823); background: color-mix(in srgb, var(--q-accent, #F7A823) 10%, transparent); outline: none; }
+.px-copied { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); z-index: 50; padding: 4px 9px; border-radius: 8px; background: var(--px-navy, #1B2A47); color: #fff; font-size: 11.5px; font-weight: 700; white-space: nowrap; pointer-events: none; animation: px-pop .15s ease-out; box-shadow: 0 6px 16px rgba(0,0,0,.18); }
+.px-copied::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border: 5px solid transparent; border-top-color: var(--px-navy, #1B2A47); }
+@keyframes px-pop { from { opacity: 0; transform: translate(-50%, 4px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@media (prefers-reduced-motion: reduce) { .px-copied { animation: none; } }

@@ -23,6 +23,7 @@ import { Focus } from './Focus';
 import { BULK_CHOICES, choiceLabel, currentLabel, ROW_CHOICES, StatusChoice, Sub, SUB_STATUSES, SUB_TONE, SUBS, telHref, toneOf, waHref } from './shared';
 import { StatsSection } from './Stats';
 import { useStatusChange } from './StatusDialog';
+import { CopyCode } from '../../ui/CopyCode';
 
 type Row = NonNullable<ReturnType<typeof useList>['data']>['rows'][number];
 type SortKey = 'created_at' | 'confirmed_at' | 'next_call_at' | 'total' | 'customer_name';
@@ -212,7 +213,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
       case 'source':
         return <span className="chip">{(r.utm && (r.utm.utm_source || r.utm.source)) || r.source || t('confirmation.direct')}</span>;
       case 'tracking':
-        return trackOf(r) ? <span className="ltr">{trackOf(r)}</span> : '—';
+        return <CopyCode code={trackOf(r)} />;
       case 'creator':
         return r.creatorName ?? <span className="muted">{t('confirmation.site')}</span>;
       case 'channel':
@@ -290,7 +291,12 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
             {r.companyName && (
               <small>
                 {r.companyName}
-                {trackOf(r) ? ` · ${trackOf(r)}` : ''}
+                {trackOf(r) && (
+                  <>
+                    {' · '}
+                    <CopyCode code={trackOf(r)} />
+                  </>
+                )}
               </small>
             )}
           </>

@@ -13,6 +13,7 @@ import type { PageProps } from '../registry';
 import { DepotOrderList, itemsLine } from './OrderList';
 import { ScanCard } from './ScanCard';
 import { trackOf } from '../../lib/items';
+import { CopyCode } from '../../ui/CopyCode';
 
 const STAGES = ['preparer', 'prepares', 'dispatchees', 'enlivraison', 'retours'] as const;
 type Stage = (typeof STAGES)[number];
@@ -484,7 +485,7 @@ function Receive() {
                   <tr key={o.id} className="clickable" onClick={() => openOrder(o.id)}>
                     <td data-l={t('depot.cols.order')}>
                       <b className="ltr">{o.ref}</b>
-                      <small className="ltr">{trackOf(o)}</small>
+                      {trackOf(o) && <CopyCode code={trackOf(o)} small />}
                     </td>
                     <td data-l={t('depot.cols.client')}>
                       {o.customerName}

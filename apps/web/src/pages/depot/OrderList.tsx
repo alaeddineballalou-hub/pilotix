@@ -7,6 +7,7 @@ import { openOrder } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
 import { BulkBar, Card, ErrorBox, Loading, StatusBadge, TicketTag } from '../../ui/kit';
 import { namesOf, variantsOf, trackOf } from '../../lib/items';
+import { CopyCode } from '../../ui/CopyCode';
 
 export interface ExtraCol {
   label: string;
@@ -193,7 +194,7 @@ export function DepotOrderList({
                   </td>
                   <td data-l={t('depot.cols.company')}>
                     {o.companyName ?? '—'}
-                    <small className="ltr">{trackOf(o) || o.ref}</small>
+                    <CopyCode code={trackOf(o) || o.ref} small />
                   </td>
                   <td className="hide-m" data-l={t('depot.cols.agent')}>
                     {o.agentName ?? '—'}

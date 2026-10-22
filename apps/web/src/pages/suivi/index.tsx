@@ -19,6 +19,7 @@ import './suivi.css';
 import { ColumnMenu } from '../../ui/ColumnMenu';
 import { HistoryButton, PhoneCell } from '../confirmation/History';
 import { store } from '../../lib/store';
+import { CopyCode } from '../../ui/CopyCode';
 
 const LIST_TABS = ['alertes', 'traites', 'livres', 'annules', 'swap'] as const;
 type ListTab = (typeof LIST_TABS)[number];
@@ -163,13 +164,13 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
       case 'variant':
         return <div className="px-clamp">{variantsOf(o.items)}</div>;
       case 'tracking':
-        return trackOf(o) ? <span className="ltr">{trackOf(o)}</span> : '—';
+        return <CopyCode code={trackOf(o)} />;
       case 'follow':
         return (
           <>
             {o.companyName || o.livreurName || '—'}
             <small>
-              <span className="ltr">{trackOf(o)}</span>
+              {trackOf(o) && <CopyCode code={trackOf(o)} />}
               {reasonOf(o, extra[o.id]) ? ` · ${reasonOf(o, extra[o.id])}` : ''}
             </small>
           </>

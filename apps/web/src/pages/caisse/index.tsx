@@ -8,6 +8,7 @@ import { openOrder } from '../../lib/modals';
 import { Empty, ErrorBox, Help, Kpi, Kpis, Loading, TicketTag } from '../../ui/kit';
 import type { PageProps } from '../registry';
 import { LivreursCash } from './LivreursCash';
+import { CopyCode } from '../../ui/CopyCode';
 
 export function Caisse({ sub }: PageProps) {
   const { t } = useTranslation();
@@ -168,7 +169,7 @@ function GroupCard({ g, ticket }: { g: Group; ticket?: boolean }) {
                 </td>
                 <td data-l={t('caisse.col.order')} className="clickable" onClick={() => openOrder(o.id)}>
                   <b className="ltr">{o.ref}</b> <TicketTag savRef={o.savRef} />
-                  {o.tracking && <small className="ltr">{o.tracking}</small>}
+                  {o.tracking && <CopyCode code={o.tracking} small />}
                 </td>
                 <td data-l={t('caisse.col.delivered')}>{when(o.deliveredAt)}</td>
                 <td data-l={t('caisse.col.customer')}>
@@ -267,7 +268,7 @@ function Done() {
                     <td data-l={t('caisse.col.receivedAt')}>{when(h.at)}</td>
                     <td data-l={t('caisse.col.order')}>
                       <b className="ltr">{o.ref}</b> <TicketTag savRef={o.savRef} />
-                      {o.tracking && <small className="ltr">{o.tracking}</small>}
+                      {o.tracking && <CopyCode code={o.tracking} small />}
                     </td>
                     <td data-l={t('caisse.col.company')}>{h.name}</td>
                     <td data-l={t('caisse.col.customer')}>{o.customerName}</td>
