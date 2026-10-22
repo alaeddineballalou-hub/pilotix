@@ -1,5 +1,5 @@
 // "Nouvelle commande" / "Modifier la commande X" / "Échange pour X" — the .pxo order form of the original app.
-import { communesOf, FOLLOW_LOCKED, normalizePhone, Order, SALES_CHANNELS, WILAYAS } from '@pilotix/shared';
+import { communesOf, FOLLOW_LOCKED, normalizePhone, Order, origOf, SALES_CHANNELS, upsellOf, WILAYAS } from '@pilotix/shared';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Out, rpc } from '../../lib/backend';
@@ -173,12 +173,6 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
   useEffect(() => {
     if (!isEdit) setTimeout(() => nameRef.current?.focus(), 60);
   }, [isEdit]);
-  // the original quantities (an upsell must go above them)
-  const ORIG = useMemo(() => {
-    const m = new Map<number, number>();
-    (order?.items ?? []).filter((i) => !i.isUpsell).forEach((i) => m.set(i.productId, (m.get(i.productId) ?? 0) + i.qty));
-    return m;
-  }, [order]);
 
   // ---- delivery quote (fee from the client price grid, served, max discount)
   const coId = companyId === '' ? data.defaultCompanyId : companyId;
@@ -194,16 +188,6 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
 
   // ---- lines helpers
   const stockOf = (v: Variant | undefined) => (v ? v.stock : null);
-  const sumP = (pid: number | null) => lines.reduce((s, x) => s + (x.productId === pid && x.variantId ? x.qty : 0), 0);
-  const upsBad = (x: Line): string | null => {
-    if (!x.isUpsell || !x.variantId) return null;
-    if (ORIG.size) {
-      if (!ORIG.has(x.productId!)) return null;
-      return sumP(x.productId) > ORIG.get(x.productId!)! ? null : t('orders.form.eUpsellSame', { n: ORIG.get(x.productId!) });
-    }
-    if (lines.some((y) => y !== x && y.variantId && !y.isUpsell)) return null;
-    return sumP(x.productId) >= 2 ? null : t('orders.form.eUpsellNew');
-  };
   const priceOf = (pr: Product, v: Variant) => v.price ?? pr.price;
   const freeVar = (pr: Product, it: Line | null) => {
     const used = new Set(lines.filter((x) => x !== it).map((x) => x.variantId));
@@ -223,7 +207,7 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
     }
     update(it.key, { productId: pr.id, variantId: v.id, unitPrice: isExchange ? 0 : priceOf(pr, v), name: pr.name });
   };
-  const addLine = (ups: boolean) => setLines((ls) => [...ls, emptyLine(ups)]);
+  const addLine = () => setLines((ls) => [...ls, emptyLine()]);
   const removeLine = (key: number) => {
     setFeeAuto(true);
     setLines((ls) => {
@@ -276,6 +260,16 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
   const nItems = lines.reduce((s, x) => s + (x.variantId ? x.qty : 0), 0);
   const feeN = Number(fee) || 0;
   const disN = Number(discount) || 0;
+  // editing an order: the upsell is counted by itself against what the customer first ordered (the same rule as the server)
+  const autoUp =
+    isEdit && order && !order.isExchange
+      ? upsellOf(
+          order.origItems ?? origOf(order.items),
+          order.origItems ? order.origDiscount : order.discount,
+          lines.map((x) => ({ productId: x.productId ?? 0, variantId: x.variantId, qty: x.variantId ? x.qty : 0, unitPrice: Number(x.unitPrice) || 0 })),
+          disN,
+        )
+      : null;
   const over = maxD !== null && disN > maxD;
 
   const communes = wil === '' ? [] : communesOf(wil);
@@ -293,10 +287,6 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
     for (const x of lines) {
       if (seen.has(x.variantId!)) return t('orders.form.eDupVariant');
       seen.add(x.variantId!);
-    }
-    for (const x of lines) {
-      const u = upsBad(x);
-      if (u) return u;
     }
     if (over) return t('orders.form.eDiscount', { v: da(maxD) });
     if (strict) {
@@ -333,7 +323,7 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
       deliveryNote: noteL.trim() || null,
       internalNote: (isExchange ? [noteT.trim(), `Échange de ${original!.ref}`].filter(Boolean).join(' · ') : noteT.trim()) || null,
     };
-    const items = lines.filter((x) => x.variantId).map((x) => ({ productId: x.productId!, variantId: x.variantId!, qty: x.qty, unitPrice: x.unitPrice ?? undefined, isUpsell: x.isUpsell }));
+    const items = lines.filter((x) => x.variantId).map((x) => ({ productId: x.productId!, variantId: x.variantId!, qty: x.qty, unitPrice: x.unitPrice ?? undefined }));
     try {
       let saved: Order;
       if (isEdit) {
@@ -504,11 +494,8 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
             right={
               !locked && (
                 <div className="pxo-acts">
-                  <button type="button" className="btn small" onClick={() => addLine(false)}>
+                  <button type="button" className="btn small" onClick={() => addLine()}>
                     {t('orders.form.addProduct')}
-                  </button>
-                  <button type="button" className="btn small pxo-upb" onClick={() => addLine(true)}>
-                    {t('orders.form.upsell')}
                   </button>
                 </div>
               )
@@ -524,16 +511,16 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
                 <span className="n">{t('orders.form.total')}</span>
                 <span />
               </div>
-              {lines.map((it) => {
+              {lines.map((it, idx) => {
                 const pr = it.productId ? P.get(it.productId) : undefined;
+                const ups = !!autoUp?.flags[idx];
                 const v = it.variantId ? V.get(it.variantId) : undefined;
                 const s = stockOf(v);
-                const bad = upsBad(it);
                 const fixed = !!pr?.fixedPrice && !isExchange;
                 const pk = pr && it.variantId ? pr.packs.find((x) => x.qty === it.qty && Math.round(x.price / x.qty) === Math.round(Number(it.unitPrice))) : undefined;
                 const vs = pr?.variants ?? [];
                 return (
-                  <div key={it.key} className={`pxo-line${it.isUpsell ? ' ups' : ''}${bad ? ' err' : ''}`}>
+                  <div key={it.key} className={`pxo-line${ups ? ' ups' : ''}`}>
                     <div className="pxo-li">
                       <div className="pxo-c-p">
                         <ProductPick products={data.products} value={pr?.name ?? it.name ?? ''} disabled={locked} onPick={(x) => pickProduct(it, x)} />
@@ -618,16 +605,11 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
                             {t('orders.form.pack', { qty: pk.qty, price: da(pk.price) })}
                           </span>,
                         );
-                      if (it.variantId && !locked)
+                      // editing: shown when Pilotix counts this line as upsell (never ticked by hand)
+                      if (ups)
                         meta.push(
-                          <button key="u" type="button" className={`pxo-tag ups${it.isUpsell ? ' on' : ''}`} aria-pressed={it.isUpsell} title={t('orders.form.upsellTip')} onClick={() => update(it.key, { isUpsell: !it.isUpsell }, false)}>
-                            {it.isUpsell ? t('orders.form.isUpsell') : t('orders.form.markUpsell')}
-                          </button>,
-                        );
-                      if (bad)
-                        meta.push(
-                          <span key="b" className="pxo-tag bad">
-                            {bad}
+                          <span key="u" className="pxo-tag ups on" title={t('orders.form.upsellAuto')}>
+                            {t('orders.form.isUpsell')}
                           </span>,
                         );
                       return meta.length ? <div className="pxo-meta">{meta}</div> : null;
@@ -649,7 +631,7 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
                           const unit = (v ? priceOf(pr, v) : pr.price) || Number(it.unitPrice) || 0;
                           const save = unit * pk.qty - pk.price;
                           return (
-                            <button key={`${it.key}-${pk.qty}`} type="button" className="pxo-chip pk" onClick={() => update(it.key, { qty: pk.qty, unitPrice: Math.round(pk.price / pk.qty), isUpsell: true })}>
+                            <button key={`${it.key}-${pk.qty}`} type="button" className="pxo-chip pk" onClick={() => update(it.key, { qty: pk.qty, unitPrice: Math.round(pk.price / pk.qty) })}>
                               <b>
                                 {pk.qty} × {pr.name}
                               </b>
@@ -674,7 +656,7 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
                               onClick={() => {
                                 if (!v) return;
                                 setFeeAuto(true);
-                                setLines((ls) => [...ls.filter((x) => x.variantId || x.productId), { key: lineKey++, productId: lp.id, variantId: v.id, qty: 1, unitPrice: isExchange ? 0 : priceOf(lp, v), isUpsell: true, name: lp.name }]);
+                                setLines((ls) => [...ls.filter((x) => x.variantId || x.productId), { key: lineKey++, productId: lp.id, variantId: v.id, qty: 1, unitPrice: isExchange ? 0 : priceOf(lp, v), isUpsell: false, name: lp.name }]);
                               }}
                             >
                               <b>+ {lp.name}</b>
@@ -771,6 +753,12 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
                 <span>{t('orders.form.items', { count: nItems })}</span>
                 <b className="ltr">{da(sub)}</b>
               </div>
+              {autoUp && autoUp.value > 0 && (
+                <div className="pxo-tr pxo-up" title={t('orders.form.upsellAuto')}>
+                  <span>{t('orders.form.upsellLine')}</span>
+                  <b className="ltr">+{da(autoUp.value)}</b>
+                </div>
+              )}
               <div className="pxo-tr">
                 <span>
                   {t('orders.form.fee')}

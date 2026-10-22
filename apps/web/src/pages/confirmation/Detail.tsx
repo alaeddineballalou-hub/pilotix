@@ -1,6 +1,6 @@
 // The open row of the queue (".qdetail"): notes, products (variant / qty / price), add a product,
 // delivery price and total, packs and linked products, save bar. Saved with orders.update (version check).
-import { CANCEL_REASONS, communesOf, FOLLOW_LOCKED, Order, WILAYAS, WILAYAS_AR } from '@pilotix/shared';
+import { CANCEL_REASONS, communesOf, FOLLOW_LOCKED, Order, origOf, upsellOf, WILAYAS, WILAYAS_AR } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { rpc } from '../../lib/backend';
 import { defaultNext } from './shared';
@@ -118,6 +118,8 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
     return vs.length ? vs.reduce((n, v) => n + (v.stock ?? 0), 0) : null;
   };
   const sub = L.reduce((s, l) => s + l.qty * l.unitPrice, 0);
+  // the upsell, counted by itself against what the customer first ordered (the same rule as the server): no box to tick
+  const up = order.isExchange ? null : upsellOf(order.origItems ?? origOf(order.items), order.origItems ? order.origDiscount : order.discount, L, disc);
   // the biggest discount the customer can get: each product's limit × quantity (a product without limit allows the whole cart)
   const maxDisc = L.some((l) => P.get(l.productId)?.maxDiscount == null) ? sub : L.reduce((s, l) => s + (P.get(l.productId)?.maxDiscount ?? 0) * l.qty, 0);
   const gf = grid.data?.fee ?? null;
@@ -129,7 +131,7 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
       const ex = cur.find((l) => l.productId === p.id && l.variantId === vid);
       if (ex) return cur.map((l) => (l === ex ? { ...l, qty: l.qty + 1 } : l));
       const v = p.variants.find((x) => x.id === vid);
-      return [...cur, { productId: p.id, variantId: vid, name: p.name, variantTitle: v?.title ?? '', qty: 1, unitPrice: priceOf(p, vid), isUpsell: cur.length > 0 }];
+      return [...cur, { productId: p.id, variantId: vid, name: p.name, variantTitle: v?.title ?? '', qty: 1, unitPrice: priceOf(p, vid), isUpsell: false }];
     });
   };
   const upd = (i: number, patch: Partial<Line>) => setL((cur) => cur.map((l, k) => (k === i ? { ...l, ...patch } : l)));
@@ -272,7 +274,14 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
                 </span>
                 <div className="qd6-pn">
                   <b>
-                    {l.name} {l.isUpsell && <span className="chip">upsell</span>} {pk && <span className="chip qd2-pk">pack {l.qty}</span>}
+                    {l.name}{' '}
+                    {up?.flags[i] && (
+                      <span className="chip qd6-upc" title={t('confirmation.d6.upsellHint')}>
+                        <Icon name="sparkles" />
+                        {t('confirmation.d6.upsell')}
+                      </span>
+                    )}{' '}
+                    {pk && <span className="chip qd2-pk">pack {l.qty}</span>}
                   </b>
                   <div className="qd6-meta">
                     {p && (vs.length > 1 || (vs.length === 1 && vs[0].id !== l.variantId)) ? (
@@ -454,6 +463,15 @@ export function Detail({ order, onDone }: { order: Order; onDone?: (id: number) 
               </label>
             </dd>
           </div>
+          {up && up.value > 0 && (
+            <div className="qd6-up" title={t('confirmation.d6.upsellHint')}>
+              <dt>
+                <Icon name="sparkles" />
+                {t('confirmation.d6.upsell')}
+              </dt>
+              <dd className="ltr">+{da(up.value)}</dd>
+            </div>
+          )}
           <div className="qd5-total">
             <dt>{t('confirmation.d.total')}</dt>
             <dd className="ltr">{da(sub + fee - disc)}</dd>

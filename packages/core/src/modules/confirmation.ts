@@ -511,7 +511,7 @@ async function confirmedKpis(ctx: Ctx, i: KfInput) {
   const upd = i.basis === 'updated';
   const cc = upd ? 'confirmed_at' : 'created_at';
   const O = await ctx.db.query(
-    `SELECT id, total, agent_id, created_at, confirmed_at, has_upsell FROM sales WHERE conf_status = 'confirmed' AND ${cc} >= $1 AND ${cc} < $2`,
+    `SELECT id, total, agent_id, created_at, confirmed_at, has_upsell, upsell_value FROM sales WHERE conf_status = 'confirmed' AND ${cc} >= $1 AND ${cc} < $2`,
     [isoT(R.a), isoT(R.b)],
   );
   const X = num(
@@ -527,7 +527,7 @@ async function confirmedKpis(ctx: Ctx, i: KfInput) {
   );
   const oids = O.map((o: any) => num(o.id));
   const items = oids.length
-    ? await ctx.db.query(`SELECT i.order_id, i.qty, i.unit_price, i.is_upsell, p.packs FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = ANY($1)`, [oids])
+    ? await ctx.db.query(`SELECT i.order_id, i.qty, i.unit_price, p.packs FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = ANY($1)`, [oids])
     : [];
   const byOrder = new Map<number, any[]>();
   for (const it of items) {
@@ -538,12 +538,10 @@ async function confirmedKpis(ctx: Ctx, i: KfInput) {
   const info = (o: any) => {
     const I = byOrder.get(num(o.id)) ?? [];
     const packsOf = (it: any) => (typeof it.packs === 'string' ? JSON.parse(it.packs) : it.packs ?? []) as { qty: number }[];
-    const up = I.filter((x) => x.is_upsell);
-    const upV = up.reduce((s, x) => s + num(x.qty) * num(x.unit_price), 0);
     const pk = I.some((x) => num(x.qty) >= 2 && packsOf(x).some((p) => Number(p.qty) === num(x.qty)));
     const qty = I.reduce((s, x) => s + num(x.qty), 0);
-    const extra = I.reduce((s, x) => s + Math.max(0, num(x.qty) - 1) * num(x.unit_price), 0);
-    return { up: up.length > 0 || !!o.has_upsell || pk, upV: upV + (pk && !up.length ? extra : 0), pk, qty };
+    // the upsell Pilotix counted on the order: above what the customer first ordered (a pack they chose themselves is not one)
+    return { up: !!o.has_upsell, upV: num(o.upsell_value), pk, qty };
   };
   const U = new Map(O.map((o: any) => [num(o.id), info(o)]));
   const n = O.length;

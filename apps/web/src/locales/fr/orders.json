@@ -213,7 +213,6 @@
     "addressPh": "Quartier, rue, repère…",
     "products": "Détails du produit",
     "addProduct": "+ Ajouter un produit",
-    "upsell": "★ Upsell",
     "product": "Produit",
     "variant": "Variante",
     "variantPh": "— Variante —",
@@ -229,9 +228,7 @@
     "rupture": "rupture",
     "already": "déjà ajoutée",
     "standard": "Standard",
-    "markUpsell": "☆ Marquer upsell",
     "isUpsell": "★ Upsell",
-    "upsellTip": "Upsell = un 2e produit ou une quantité plus grande",
     "pack": "Pack {{qty}} · {{price}}",
     "packs": "Packs",
     "linked": "Produits liés",
@@ -301,8 +298,8 @@
     "eCommune": "Choisissez la commune",
     "eDesk": "Choisissez le bureau stop desk",
     "eNotDeliverable": "Non livrable : {{msg}}",
-    "eUpsellSame": "Upsell : même produit que la commande reçue, la quantité doit passer à plus de {{n}}.",
-    "eUpsellNew": "Upsell : ajoutez un 2e produit ou passez à 2 pièces ou plus."
+    "upsellAuto": "Compté automatiquement : ce que le client paie en plus de sa commande d’origine.",
+    "upsellLine": "Upsell (compté automatiquement)"
   },
   "card": {
     "created": "Créée {{when}}",

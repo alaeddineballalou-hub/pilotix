@@ -4,6 +4,8 @@
 export * from './timers';
 export * from './geo';
 export * from './demo';
+export * from './upsell';
+import type { OrigLine } from './upsell';
 
 // ---------------------------------------------------------------- roles
 export const ROLES = ['admin', 'vendeur', 'agent_manager', 'confirmation', 'suivi', 'depot', 'livreur', 'marketer'] as const;
@@ -231,6 +233,11 @@ export interface Order {
   savRef: string | null;
   originalOrderId: number | null;
   hasUpsell: boolean;
+  /** DA the customer pays for products above what they first ordered (counted by Pilotix, see upsellOf) */
+  upsellValue: number;
+  /** what the customer first ordered (null for an order made before this was kept: its lines not marked upsell) */
+  origItems: OrigLine[] | null;
+  origDiscount: number;
   preparedAt: string | null;
   shippedAt: string | null;
   deliveredAt: string | null;

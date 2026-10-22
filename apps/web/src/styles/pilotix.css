@@ -1443,3 +1443,12 @@ html body .px-qhead .btn.px-qnew:hover { border-color: #F7A823; color: #C97A0E; 
 .px-rmchip:disabled { opacity: .6; cursor: progress; }
 /* Phones have no hover: show a small ✕ after the name instead. */
 @media (hover: none) { .px-rmchip { display: inline-flex; gap: 6px; } .px-rmchip > span { grid-area: auto; } .px-rmchip-x { display: none; } .px-rmchip::after { content: '✕'; color: var(--coral); } }
+/* upsell, counted by itself: a green box in the order's summary and a small tag on the lines that carry it */
+.qd6-rail .qd5-sum > .qd6-up { border-color: color-mix(in srgb, var(--ok) 35%, transparent); background: var(--ok-soft); }
+[data-theme="dark"] .qd6-rail .qd5-sum > .qd6-up { background: color-mix(in srgb, var(--ok) 14%, transparent); }
+.qd6-rail .qd5-sum .qd6-up dt { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; color: var(--ok); font-weight: 800; }
+.qd6-rail .qd5-sum .qd6-up dt .bji { width: 15px; height: 15px; }
+.qd6-rail .qd5-sum .qd6-up dd { color: var(--ok); }
+.chip.qd6-upc { display: inline-flex; align-items: center; gap: 4px; vertical-align: 1px; background: var(--ok-soft) !important; color: var(--ok) !important; font-weight: 800; }
+.chip.qd6-upc .bji { width: 12px; height: 12px; }
+.pxo-tr.pxo-up { color: var(--ok); font-weight: 700; }

@@ -12,6 +12,9 @@ import {
   Order,
   OrderEvent,
   OrderItem,
+  OrigLine,
+  origOf,
+  upsellOf,
   Page,
   SALES_CHANNELS,
 } from '@pilotix/shared';
@@ -86,6 +89,9 @@ export function toOrder(r: any): Order {
     savRef: r.sav_ref ?? null,
     originalOrderId: numOrNull(r.original_order_id),
     hasUpsell: r.has_upsell,
+    upsellValue: num(r.upsell_value),
+    origItems: readOrig(r.orig_items),
+    origDiscount: num(r.orig_discount),
     preparedAt: isoOrNull(r.prepared_at),
     shippedAt: isoOrNull(r.shipped_at),
     deliveredAt: isoOrNull(r.delivered_at),
@@ -284,6 +290,18 @@ async function deliveryFeeFor(db: Db, wilayaId: number, stopdesk: boolean, grid:
   return base + extra;
 }
 
+/** The copy of what the customer first ordered, as kept on the order (null for an order made before it was kept). */
+function readOrig(v: unknown): OrigLine[] | null {
+  const a = typeof v === 'string' ? JSON.parse(v) : v;
+  if (!Array.isArray(a)) return null;
+  return a.map((l: any) => ({ productId: num(l.productId), variantId: numOrNull(l.variantId), qty: num(l.qty), unitPrice: num(l.unitPrice) }));
+}
+
+/** The upsell of an order's lines against what the customer first ordered (never on an exchange parcel). */
+function upsellFor(isExchange: boolean, orig: OrigLine[], origDiscount: number, lines: OrigLine[], discount: number) {
+  return isExchange ? { value: 0, flags: lines.map(() => false) } : upsellOf(orig, origDiscount, lines, discount);
+}
+
 async function insertItems(db: Db, orderId: number, lines: OrderItem[]) {
   for (const l of lines) {
     await db.query(
@@ -305,6 +323,10 @@ export async function createOrder(ctx: Ctx, input: OrderInput, db: Db = ctx.db):
     if (input.discount > priced.maxDiscount) throw bad(`Remise trop élevée (maximum ${priced.maxDiscount} DA)`);
     const fee = input.deliveryFee ?? (await deliveryFeeFor(tx, input.wilayaId, input.isStopdesk, priced.grid, priced.weight));
     const total = priced.subtotal - input.discount + fee;
+    // what the customer orders is kept: the upsell is counted against it (lines marked upsell while typing a call are sold in addition)
+    const orig = origOf(priced.lines);
+    const up = upsellFor(input.isExchange, orig, input.discount, priced.lines, input.discount);
+    const lines = priced.lines.map((l, k) => ({ ...l, isUpsell: up.flags[k] }));
     const cust = (
       await tx.query(
         `INSERT INTO customers (phone, name, wilaya_id, orders, last_order_at) VALUES ($1,$2,$3,1,now())
@@ -321,18 +343,18 @@ export async function createOrder(ctx: Ctx, input: OrderInput, db: Db = ctx.db):
       await tx.query(
         `INSERT INTO orders (ref, created_by, customer_id, customer_name, phone, phone2, wilaya_id, commune, address, is_stopdesk, stopdesk_id, channel, source, utm,
            conf_status, agent_id, assigned_at, confirmed_at, follow_status, company_id, warehouse_id, subtotal, delivery_fee, discount, total,
-           customer_note, delivery_note, internal_note, is_exchange, original_order_id, has_upsell)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31) RETURNING id`,
+           customer_note, delivery_note, internal_note, is_exchange, original_order_id, has_upsell, upsell_value, orig_items, orig_discount)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34) RETURNING id`,
         [ref, me, cust.id, input.customerName, phone, phone2, input.wilayaId, input.commune, input.address, input.isStopdesk, input.stopdeskId ?? null,
           input.channel, input.source ?? null, input.utm ? JSON.stringify(input.utm) : null,
           conf, input.confirm ? me : null, input.confirm ? new Date(ctx.now()).toISOString() : null, input.confirm ? new Date(ctx.now()).toISOString() : null,
           input.confirm ? 'to_prepare' : null, defCompany, wh?.id ?? null, priced.subtotal, fee, input.discount, total,
           input.customerNote ?? null, input.deliveryNote ?? null, input.internalNote ?? null, input.isExchange, input.originalOrderId ?? null,
-          priced.lines.some((l) => l.isUpsell)],
+          up.value > 0, up.value, JSON.stringify(orig), input.discount],
       )
     )[0];
     const oid = num(row.id);
-    await insertItems(tx, oid, priced.lines);
+    await insertItems(tx, oid, lines);
     await addEvent(tx, oid, me, 'created', null, conf, input.isExchange ? `Échange de la commande #${input.originalOrderId}` : null);
     if (input.confirm) await addEvent(tx, oid, me, 'follow_status', null, 'to_prepare');
     return getOrder(ctx, oid, tx);
@@ -358,29 +380,50 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
 
     let subtotal = num(cur.subtotal);
     let maxDiscount = Infinity;
+    // the products or the remise change: the upsell is worked out again
+    const recount = !!input.items || input.discount !== undefined;
+    const old = recount
+      ? (await tx.query('SELECT id, product_id, variant_id, qty, unit_price, is_upsell FROM order_items WHERE order_id = $1 ORDER BY id', [input.id])).map((r: any) => ({ id: num(r.id), productId: num(r.product_id), variantId: numOrNull(r.variant_id), qty: num(r.qty), unitPrice: num(r.unit_price), isUpsell: !!r.is_upsell }))
+      : [];
+    let lines: OrderItem[] | null = null;
     if (input.items) {
       const priced = await priceItems(tx, input.items, !!cur.is_exchange);
-      await tx.query('DELETE FROM order_items WHERE order_id = $1', [input.id]);
-      await insertItems(tx, input.id, priced.lines);
+      lines = priced.lines;
       subtotal = priced.subtotal;
       maxDiscount = priced.maxDiscount;
     } else if (input.discount !== undefined) {
       // only the discount changes: it is still capped by the products already in the order
-      const its = (await tx.query('SELECT product_id, variant_id, qty, unit_price, is_upsell FROM order_items WHERE order_id = $1', [input.id])).map((r: any) => ({ productId: num(r.product_id), variantId: numOrNull(r.variant_id), qty: num(r.qty), unitPrice: num(r.unit_price), isUpsell: !!r.is_upsell }));
-      if (its.length) maxDiscount = (await priceItems(tx, its, true)).maxDiscount;
+      if (old.length) maxDiscount = (await priceItems(tx, old, true)).maxDiscount;
     }
     const discount = input.discount ?? num(cur.discount);
     if (discount > maxDiscount) throw bad(`Remise trop élevée (maximum ${maxDiscount} DA)`);
+    // against what the customer first ordered (an order made before it was kept: its lines not marked upsell, now kept)
+    const kept = readOrig(cur.orig_items);
+    const orig = kept ?? origOf(old);
+    const origDiscount = kept ? num(cur.orig_discount) : num(cur.discount);
+    let up = { value: num(cur.upsell_value), flags: [] as boolean[] };
+    if (recount) {
+      const now: OrigLine[] = lines ?? old;
+      up = upsellFor(!!cur.is_exchange, orig, origDiscount, now, discount);
+      if (lines) {
+        await tx.query('DELETE FROM order_items WHERE order_id = $1', [input.id]);
+        await insertItems(tx, input.id, lines.map((l, k) => ({ ...l, isUpsell: up.flags[k] })));
+      } else if (old.length) {
+        await tx.query('UPDATE order_items i SET is_upsell = f.up FROM unnest($1::bigint[], $2::boolean[]) AS f(id, up) WHERE i.id = f.id', [old.map((l) => l.id), up.flags]);
+      }
+    }
     const fee = input.deliveryFee ?? num(cur.delivery_fee);
     const v = <T>(k: keyof typeof input, col: string): T => (input[k] !== undefined ? (input[k] as T) : cur[col]);
     await tx.query(
       `UPDATE orders SET customer_name=$2, phone=$3, phone2=$4, wilaya_id=$5, commune=$6, address=$7, is_stopdesk=$8, stopdesk_id=$9, company_id=$10,
          channel=$11, subtotal=$12, delivery_fee=$13, discount=$14, total=$15, customer_note=$16, delivery_note=$17, internal_note=$18,
-         has_upsell = EXISTS (SELECT 1 FROM order_items WHERE order_id=$1 AND is_upsell), updated_at=now(), version=version+1 WHERE id=$1`,
+         has_upsell = $19 > 0, upsell_value = $19, orig_items = COALESCE(orig_items, $20::jsonb),
+         orig_discount = CASE WHEN orig_items IS NULL THEN $21 ELSE orig_discount END, updated_at=now(), version=version+1 WHERE id=$1`,
       [input.id, v('customerName', 'customer_name'), phone, input.phone2 !== undefined ? (input.phone2 ? normalizePhone(input.phone2) : null) : cur.phone2,
         v('wilayaId', 'wilaya_id'), v('commune', 'commune'), v('address', 'address'), v('isStopdesk', 'is_stopdesk'), v('stopdeskId', 'stopdesk_id'),
         v('companyId', 'company_id'), v('channel', 'channel'), subtotal, fee, discount, subtotal - discount + fee,
-        v('customerNote', 'customer_note'), v('deliveryNote', 'delivery_note'), v('internalNote', 'internal_note')],
+        v('customerNote', 'customer_note'), v('deliveryNote', 'delivery_note'), v('internalNote', 'internal_note'),
+        up.value, JSON.stringify(orig), origDiscount],
     );
     await addEvent(tx, input.id, ctx.session.profile.id, 'edit', null, null);
     return getOrder(ctx, input.id, tx);
@@ -775,7 +818,8 @@ export const ordersProcs = {
       (r: any): OrderEvent => ({ id: num(r.id), orderId: num(r.order_id), at: iso(r.at), userId: numOrNull(r.user_id), userName: r.user_name, kind: r.kind, fromValue: r.from_value, toValue: r.to_value, note: r.note }),
     );
   }),
-  'orders.create': proc(['confirmation', 'suivi', 'depot'], OrderInput, (ctx, i) => createOrder(ctx, i)),
+  // the upsell is always counted by Pilotix: a mark sent by a screen is not taken (only Dellal, inside, marks what it sold in addition)
+  'orders.create': proc(['confirmation', 'suivi', 'depot'], OrderInput, (ctx, i) => createOrder(ctx, { ...i, items: i.items.map((x) => ({ ...x, isUpsell: false })) })),
   'orders.update': proc(['confirmation', 'suivi', 'depot'], UpdateInput, (ctx, i) => updateOrder(ctx, i)),
   'orders.setConf': proc(['confirmation'], ConfInput, (ctx, i) => setConf(ctx, i)),
   'orders.setFollow': proc(['suivi', 'depot', 'livreur'], FollowInput, (ctx, i) => setFollow(ctx, i)),
@@ -879,7 +923,8 @@ export const ordersProcs = {
       const copy = await createOrder(ctx, {
         customerName: o.customerName, phone: o.phone, phone2: o.phone2, wilayaId: o.wilayaId, commune: o.commune, address: o.address,
         isStopdesk: o.isStopdesk, stopdeskId: o.stopdeskId, companyId: o.companyId, channel: o.channel, source: o.source,
-        items: o.items.map((i) => ({ productId: i.productId, variantId: i.variantId, qty: i.qty, unitPrice: i.unitPrice, isUpsell: i.isUpsell })),
+        // a copy starts afresh: its lines are what its customer ordered (the upsell of the first order is not counted twice)
+        items: o.items.map((i) => ({ productId: i.productId, variantId: i.variantId, qty: i.qty, unitPrice: i.unitPrice })),
         deliveryFee: o.deliveryFee, discount: o.discount, customerNote: o.customerNote, deliveryNote: o.deliveryNote,
         internalNote: `Copie de ${o.ref}`, confirm: false, isExchange: false,
       });
