@@ -1301,3 +1301,8 @@ html body .qd6-savebtn.on:hover { background: #18874c; }
 .qd6-nrow .qd6-ntabs { padding: 3px; gap: 2px; }
 .qd6-nrow .qd6-ntabs button { padding: 0 9px; height: 32px; }
 .qd6-clk { padding: 0 8px; font-size: 11.5px; }
+/* call countdown: red under 5 minutes, solid red once late */
+html body .bj-cd.soon { background: #fdeaea; color: #c0392b; }
+[data-theme="dark"] .bj-cd.soon { background: rgba(231, 76, 60, .2); color: #ff9a8f; }
+html body .qtbl td.px-c-chrono { white-space: nowrap; }
+html body .qtbl td.px-c-chrono .bj-cd { margin-top: 0; }

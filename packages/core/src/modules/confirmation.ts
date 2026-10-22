@@ -202,15 +202,16 @@ const QueueInput = z.object({
   channel: ListInput.shape.channel,
   from: DATE.optional(),
   to: DATE.optional(),
-  sort: z.enum(['created_at', 'confirmed_at', 'next_call_at', 'total', 'customer_name']).optional(),
+  /** deadline: the call countdown (most urgent first), only for Nouvelles and En cours */
+  sort: z.enum(['created_at', 'confirmed_at', 'next_call_at', 'total', 'customer_name', 'deadline']).optional(),
   dir: z.enum(['asc', 'desc']).optional(),
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(1).max(3000).default(50),
 });
 
-export const DEFAULT_SORT: Record<ConfSub, { sort: 'created_at' | 'confirmed_at' | 'next_call_at'; dir: 'asc' | 'desc' }> = {
-  nouvelles: { sort: 'created_at', dir: 'desc' },
-  attente: { sort: 'next_call_at', dir: 'asc' },
+export const DEFAULT_SORT: Record<ConfSub, { sort: 'created_at' | 'confirmed_at' | 'next_call_at' | 'deadline'; dir: 'asc' | 'desc' }> = {
+  nouvelles: { sort: 'deadline', dir: 'asc' },
+  attente: { sort: 'deadline', dir: 'asc' },
   confirmees: { sort: 'confirmed_at', dir: 'desc' },
   terminees: { sort: 'created_at', dir: 'desc' },
   livrees: { sort: 'confirmed_at', dir: 'desc' },
@@ -227,7 +228,12 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
   if (i.status && !allowed.includes(i.status)) throw bad('Statut hors de cette liste');
   const def = DEFAULT_SORT[i.sub];
   const day = (s: string) => Date.parse(s + 'T00:00:00Z') - 3_600_000;
-  const page = await listOrders(ctx, {
+  const queue = i.sub === 'nouvelles' || i.sub === 'attente';
+  let sort = i.sort ?? def.sort;
+  if (sort === 'deadline' && !queue) sort = 'created_at';
+  const byDeadline = sort === 'deadline';
+  const dir = i.dir ?? (i.sort ? (i.sort === 'total' ? 'desc' : 'asc') : def.dir);
+  const found = await listOrders(ctx, {
     conf: i.status ? [i.status] : [...allowed],
     follow: i.sub === 'livrees' ? ['delivered'] : undefined,
     q: i.q,
@@ -240,11 +246,26 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
     dateField: 'created_at',
     from: i.from ? isoT(day(i.from)) : undefined,
     to: i.to ? isoT(day(i.to) + DAY) : undefined,
-    sort: i.sort ?? def.sort,
-    dir: i.dir ?? (i.sort ? (i.sort === 'total' ? 'desc' : 'asc') : def.dir),
-    page: i.page,
-    pageSize: i.pageSize,
+    sort: byDeadline ? 'created_at' : (sort as Exclude<typeof sort, 'deadline'>),
+    dir: byDeadline ? 'asc' : dir,
+    page: byDeadline ? 1 : i.page,
+    pageSize: byDeadline ? 3000 : i.pageSize,
   });
+  let due = new Map<number, DueInfo>();
+  if (queue) {
+    const calls = await getSetting(ctx.db, 'calls');
+    due = computeDue(await loadTodo(ctx.db), calls, ctx.now());
+  }
+  let page = found;
+  if (byDeadline) {
+    // the countdown that shows: a waiting order counts from the end of its first slot
+    const key = (id: number) => {
+      const d = due.get(id)?.deadline;
+      return d ? (d.m === 'start' ? d.e ?? d.t : d.t) : Number.POSITIVE_INFINITY;
+    };
+    const all = [...found.rows].sort((a, b) => (key(a.id) - key(b.id)) * (dir === 'desc' ? -1 : 1) || a.id - b.id);
+    page = { ...found, page: i.page, pageSize: i.pageSize, rows: all.slice((i.page - 1) * i.pageSize, i.page * i.pageSize) };
+  }
   const vids = [...new Set(page.rows.flatMap((o) => o.items.map((it) => it.variantId).filter((v): v is number => !!v)))];
   const skuOf = new Map<number, string>();
   if (vids.length) for (const r of await ctx.db.query('SELECT id, sku FROM product_variants WHERE id = ANY($1)', [vids])) skuOf.set(num(r.id), r.sku);
@@ -260,11 +281,6 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
       const v: string[] = (Array.isArray(r.v) ? r.v : String(r.v ?? '').replace(/[{}]/g, '').split(',')).filter(Boolean);
       passedOf.set(num(r.order_id), v.filter((x, k) => k === 0 || v[k - 1] !== x));
     }
-  let due = new Map<number, DueInfo>();
-  if (i.sub === 'nouvelles' || i.sub === 'attente') {
-    const calls = await getSetting(ctx.db, 'calls');
-    due = computeDue(await loadTodo(ctx.db), calls, ctx.now());
-  }
   const rows: QueueRow[] = page.rows.map((o) => ({
     ...o,
     skus: [...new Set(o.items.map((it) => (it.variantId ? skuOf.get(it.variantId) : undefined)).filter((s): s is string => !!s))],

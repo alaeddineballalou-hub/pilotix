@@ -26,8 +26,8 @@ import { useStatusChange } from './StatusDialog';
 import { CopyCode } from '../../ui/CopyCode';
 
 type Row = NonNullable<ReturnType<typeof useList>['data']>['rows'][number];
-type SortKey = 'created_at' | 'confirmed_at' | 'next_call_at' | 'total' | 'customer_name';
-type ColKey = 'order' | 'source' | 'tracking' | 'creator' | 'channel' | 'product' | 'variant' | 'sku' | 'name' | 'phone' | 'wilaya' | 'commune' | 'agent' | 'fagent' | 'total' | 'time' | 'created' | 'stock' | 'desk' | 'passed' | 'confirmed' | 'follow' | 'next' | 'status';
+type SortKey = 'created_at' | 'confirmed_at' | 'next_call_at' | 'total' | 'customer_name' | 'deadline';
+type ColKey = 'order' | 'source' | 'tracking' | 'creator' | 'channel' | 'product' | 'variant' | 'sku' | 'chrono' | 'name' | 'phone' | 'wilaya' | 'commune' | 'agent' | 'fagent' | 'total' | 'time' | 'created' | 'stock' | 'desk' | 'passed' | 'confirmed' | 'follow' | 'next' | 'status';
 interface Filters {
   wilayaId?: number;
   agentId?: number | 'none';
@@ -41,8 +41,8 @@ interface Filters {
 }
 
 const DEFAULT_SORT: Record<Sub, { sort: SortKey; dir: 'asc' | 'desc' }> = {
-  nouvelles: { sort: 'created_at', dir: 'desc' },
-  attente: { sort: 'next_call_at', dir: 'asc' },
+  nouvelles: { sort: 'deadline', dir: 'asc' },
+  attente: { sort: 'deadline', dir: 'asc' },
   confirmees: { sort: 'confirmed_at', dir: 'desc' },
   livrees: { sort: 'confirmed_at', dir: 'desc' },
   terminees: { sort: 'created_at', dir: 'desc' },
@@ -56,6 +56,7 @@ const columnsOf = (sub: Sub): { k: ColKey; sort?: SortKey }[] => [
   { k: 'product' },
   { k: 'variant' },
   { k: 'sku' },
+  ...(sub === 'nouvelles' || sub === 'attente' ? [{ k: 'chrono' as const, sort: 'deadline' as const }] : []),
   { k: 'name', sort: 'customer_name' },
   { k: 'phone' },
   { k: 'wilaya' },
@@ -113,7 +114,16 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   const catalog = useRpc('confirmation.catalog', {}, { staleTime: 5 * 60_000 });
   const COLS = useMemo(() => columnsOf(sub), [sub]);
   const colsKey = `conf-cols3-${sub}`;
-  const [visible, setVisible] = useState<Set<ColKey>>(() => new Set(store.json<ColKey[] | null>(colsKey, null) ?? COLS.map((c) => c.k)));
+  const [visible, setVisible] = useState<Set<ColKey>>(() => {
+    const saved = store.json<ColKey[] | null>(colsKey, null);
+    if (!saved) return new Set(COLS.map((c) => c.k));
+    // the Chrono column came later: show it once in saved column choices
+    if (COLS.some((c) => c.k === 'chrono') && !saved.includes('chrono') && !store.get(`${colsKey}-chrono`)) {
+      store.set(`${colsKey}-chrono`, '1');
+      return new Set([...saved, 'chrono' as ColKey]);
+    }
+    return new Set(saved);
+  });
   const [q, setQ] = useState('');
   const [qd, setQd] = useState('');
   const [f, setF] = useState<Filters>({});
@@ -216,7 +226,6 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
           <>
             <b className="ltr">{r.ref}</b>
             <small>{when(r.createdAt)}</small>
-            {r.deadline && <Countdown d={r.deadline} />}
           </>
         );
       case 'source':
@@ -268,6 +277,8 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
         return r.followAgentName ? <span className="badge t-info">{r.followAgentName}</span> : <span className="muted">—</span>;
       case 'total':
         return <span className="ltr">{da(r.total)}</span>;
+      case 'chrono':
+        return r.deadline ? <Countdown d={r.deadline} /> : <span className="muted">—</span>;
       case 'time':
         return <Spent iso={r.createdAt} />;
       case 'created':
