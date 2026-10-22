@@ -84,7 +84,10 @@
     "confirmed": "Confirmée le",
     "follow": "Livraison",
     "next": "Prochain appel",
-    "status": "Statut"
+    "status": "Statut",
+    "stock": "Disponibilité",
+    "desk": "Stopdesk",
+    "passed": "Statuts passés"
   },
   "f": {
     "wilaya": "Wilaya",
@@ -106,7 +109,10 @@
     "duplicate": "Dupliquer",
     "assign": "Assigner un agent",
     "status": "Statut de confirmation",
-    "block": "Bloquer le client"
+    "block": "Bloquer le client",
+    "delete": "Supprimer",
+    "send": "Envoyer un message",
+    "removeAgent": "Désassigner l’agent"
   },
   "block": {
     "title": "Bloquer {{n}} client(s) ?",
@@ -363,5 +369,20 @@
     "clientNote": "Note du client : {{note}}",
     "release": "Relâcher (la laisser à un autre agent)",
     "history": "Voir l’historique"
+  },
+  "stock": {
+    "ok": "En stock",
+    "short": "Rupture"
+  },
+  "desk": "Bureau",
+  "home": "Domicile",
+  "refresh": "Actualiser",
+  "del": {
+    "title_one": "Supprimer {{count}} commande ?",
+    "title_other": "Supprimer {{count}} commandes ?",
+    "text": "{{refs}} sera supprimée définitivement avec son historique. Seules les commandes pas encore envoyées au dépôt peuvent être supprimées.",
+    "ok": "Supprimer",
+    "done_one": "{{count}} commande supprimée",
+    "done_other": "{{count}} commandes supprimées"
   }
 }

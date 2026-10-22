@@ -828,6 +828,24 @@ export const ordersProcs = {
     return { id: num(r[0].id) };
   }),
 
+  /** "Supprimer" (admin): only orders still at the confirmation stage (not sent to the depot), not SAV parcels, without ticket or claim. */
+  'orders.delete': proc([], z.object({ ids: z.array(id).min(1).max(500) }), async (ctx, { ids }) => {
+    await ctx.db.tx(async (tx) => {
+      const rows = await tx.query('SELECT id, ref, follow_status, is_exchange FROM orders WHERE id = ANY($1) FOR UPDATE', [ids]);
+      for (const r of rows) {
+        if (r.is_exchange) throw bad(`${r.ref} est un colis de ticket SAV : annulez le ticket`);
+        if (r.follow_status && r.follow_status !== 'cancelled') throw bad(`${r.ref} est déjà au dépôt ou en livraison : elle ne peut plus être supprimée`);
+      }
+      const linked = (await tx.query('SELECT o.ref FROM orders o WHERE o.id = ANY($1) AND (EXISTS (SELECT 1 FROM complaints c WHERE c.order_id = o.id) OR EXISTS (SELECT 1 FROM claims c WHERE c.order_id = o.id) OR EXISTS (SELECT 1 FROM orders x WHERE x.original_order_id = o.id)) LIMIT 1', [ids]))[0];
+      if (linked) throw bad(`${linked.ref} a un ticket, une réclamation ou un échange : elle ne peut pas être supprimée`);
+      await tx.query('DELETE FROM order_events WHERE order_id = ANY($1)', [ids]);
+      await tx.query('UPDATE stock_movements SET order_id = NULL WHERE order_id = ANY($1)', [ids]);
+      await tx.query('UPDATE chat_messages SET order_id = NULL WHERE order_id = ANY($1)', [ids]);
+      await tx.query('DELETE FROM orders WHERE id = ANY($1)', [ids]);
+    });
+    ctx.emit({ type: 'orders' });
+    return { deleted: ids.length };
+  }),
   'orders.duplicate': proc(['confirmation'], z.object({ ids }), async (ctx, { ids }) => {
     const out: number[] = [];
     for (const oid of ids) {

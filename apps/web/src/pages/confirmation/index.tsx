@@ -23,7 +23,7 @@ import { useStatusChange } from './StatusDialog';
 
 type Row = NonNullable<ReturnType<typeof useList>['data']>['rows'][number];
 type SortKey = 'created_at' | 'confirmed_at' | 'next_call_at' | 'total' | 'customer_name';
-type ColKey = 'source' | 'tracking' | 'creator' | 'channel' | 'product' | 'sku' | 'name' | 'phone' | 'wilaya' | 'commune' | 'agent' | 'total' | 'time' | 'created' | 'confirmed' | 'follow' | 'next' | 'status';
+type ColKey = 'source' | 'tracking' | 'creator' | 'channel' | 'product' | 'sku' | 'name' | 'phone' | 'wilaya' | 'commune' | 'agent' | 'total' | 'time' | 'created' | 'stock' | 'desk' | 'passed' | 'confirmed' | 'follow' | 'next' | 'status';
 interface Filters {
   wilayaId?: number;
   agentId?: number | 'none';
@@ -54,6 +54,9 @@ const columnsOf = (sub: Sub): { k: ColKey; sort?: SortKey }[] => [
   { k: 'total', sort: 'total' },
   { k: 'time', sort: 'created_at' },
   { k: 'created', sort: 'created_at' },
+  { k: 'stock' },
+  { k: 'desk' },
+  { k: 'passed' },
   ...(sub === 'confirmees' ? [{ k: 'confirmed' as const, sort: 'confirmed_at' as const }, { k: 'follow' as const }] : [{ k: 'next' as const, sort: 'next_call_at' as const }]),
   { k: 'status' },
 ];
@@ -109,6 +112,8 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
   const [open, setOpen] = useState<Set<number>>(new Set());
   const [focus, setFocus] = useState<number | null | 'ask'>(focusId ?? null);
   const [blockAsk, setBlockAsk] = useState<Row[] | null>(null);
+  const [delAsk, setDelAsk] = useState<Row[] | null>(null);
+  const { session } = useSession();
   const { change, dialog } = useStatusChange();
   useEffect(() => {
     const id = setTimeout(() => (setQd(q.trim()), setPage(1)), 350);
@@ -239,6 +244,20 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
         return <Spent iso={r.createdAt} />;
       case 'created':
         return when(r.createdAt);
+      case 'stock':
+        return r.stock === null ? <span className="muted">—</span> : <span className={`badge t-${r.stock === 'ok' ? 'ok' : 'bad'}`}>{t(`confirmation.stock.${r.stock}`)}</span>;
+      case 'desk':
+        return r.isStopdesk ? <span className="badge t-info">{t('confirmation.desk')}</span> : <span className="muted">{t('confirmation.home')}</span>;
+      case 'passed':
+        return r.passed.length ? (
+          <span className="px-passed">
+            {r.passed.map((s, k) => (
+              <StatusBadge key={k} kind="conf" status={s} />
+            ))}
+          </span>
+        ) : (
+          <span className="muted">—</span>
+        );
       case 'confirmed':
         return when(r.confirmedAt);
       case 'follow':
@@ -318,6 +337,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
             if (await change(selected, c)) setSel(new Set());
           }}
           onBlock={() => setBlockAsk(selected)}
+          onDelete={session?.isAdmin ? () => setDelAsk(selected) : undefined}
           onDuplicate={async () => {
             try {
               const r = await rpc('orders.duplicate', { ids: [selected[0].id] });
@@ -329,20 +349,67 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
             }
           }}
         />
-        <div className="row qtools">
-          <div className="grow">
+        <div className="px-qtools">
+          <label className="px-qsearch">
+            <Icon name="search" />
             <input type="search" placeholder={t('confirmation.searchPh')} aria-label={t('common.search')} value={q} onChange={(e) => setQ(e.target.value)} />
+          </label>
+          <div className="px-qbtns">
+            <button type="button" className={`px-qb px-qb-l ${panel === 'f' || nFilters ? 'on' : ''}`} aria-expanded={panel === 'f'} onClick={() => setPanel(panel === 'f' ? null : 'f')}>
+              <Icon name="filter" />
+              {t('common.filters')}
+              {nFilters ? <b className="px-qb-n">{nFilters}</b> : null}
+            </button>
+            <span className="px-qpop-wrap">
+              <button type="button" className={`px-qb ${panel === 'c' ? 'on' : ''}`} aria-expanded={panel === 'c'} title={`${t('common.columns')} (${visible.size}/${COLS.length})`} aria-label={t('common.columns')} onClick={() => setPanel(panel === 'c' ? null : 'c')}>
+                <Icon name="columns" />
+              </button>
+              {panel === 'c' && (
+                <div className="px-qpop" role="dialog" aria-label={t('common.columns')}>
+                  {COLS.map((c) => (
+                    <label key={c.k} className="px-qpop-it">
+                      <span>{colLabel(c.k)}</span>
+                      <input
+                        type="checkbox"
+                        checked={visible.has(c.k)}
+                        onChange={(e) => {
+                          const s2 = new Set(visible);
+                          if (e.target.checked) s2.add(c.k);
+                          else s2.delete(c.k);
+                          saveCols(s2);
+                        }}
+                      />
+                    </label>
+                  ))}
+                  <button
+                    type="button"
+                    className="btn small ghost"
+                    onClick={() => {
+                      setVisible(new Set(COLS.map((c) => c.k)));
+                      store.set(colsKey, null);
+                    }}
+                  >
+                    {t('common.showAll')}
+                  </button>
+                </div>
+              )}
+            </span>
+            <button type="button" className="px-qb" title={t('common.export')} aria-label={t('common.export')} onClick={doExport}>
+              <Icon name="download" />
+            </button>
+            <button type="button" className={`px-qb ${list.isFetching ? 'spin' : ''}`} title={t('confirmation.refresh')} aria-label={t('confirmation.refresh')} onClick={() => list.refetch()}>
+              <Icon name="refresh" />
+            </button>
+            <span className="px-qrange ltr">
+              {list.data?.total ? `${(page - 1) * size + 1}–${Math.min(page * size, list.data.total)} / ${list.data.total}` : '0'}
+            </span>
+            <button type="button" className="px-qb" disabled={page <= 1} aria-label={t('common.prev')} title={t('common.prev')} onClick={() => setPage(page - 1)}>
+              <Icon name="chevl" />
+            </button>
+            <button type="button" className="px-qb" disabled={page >= Math.max(1, Math.ceil((list.data?.total ?? 0) / size))} aria-label={t('common.next')} title={t('common.next')} onClick={() => setPage(page + 1)}>
+              <Icon name="chevr" />
+            </button>
           </div>
-          <button type="button" className={`btn ${panel === 'f' ? 'primary' : ''}`} aria-expanded={panel === 'f'} onClick={() => setPanel(panel === 'f' ? null : 'f')}>
-            {t('common.filters')}
-            {nFilters ? ` (${nFilters})` : ''}
-          </button>
-          <button type="button" className={`btn ${panel === 'c' ? 'primary' : ''}`} aria-expanded={panel === 'c'} onClick={() => setPanel(panel === 'c' ? null : 'c')}>
-            {t('common.columns')} ({visible.size}/{COLS.length})
-          </button>
-          <button type="button" className="btn" onClick={doExport}>
-            {t('common.export')}
-          </button>
         </div>
         {panel === 'f' && (
           <div className="filters qpanel">
@@ -400,35 +467,6 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                 {t('confirmation.f.clear')}
               </button>
             )}
-          </div>
-        )}
-        {panel === 'c' && (
-          <div className="qpanel qcols">
-            {COLS.map((c) => (
-              <label key={c.k} className="check">
-                <input
-                  type="checkbox"
-                  checked={visible.has(c.k)}
-                  onChange={(e) => {
-                    const s = new Set(visible);
-                    if (e.target.checked) s.add(c.k);
-                    else s.delete(c.k);
-                    saveCols(s);
-                  }}
-                />
-                {colLabel(c.k)}
-              </label>
-            ))}
-            <button
-              type="button"
-              className="btn small ghost"
-              onClick={() => {
-                setVisible(new Set(COLS.map((c) => c.k)));
-                store.set(colsKey, null);
-              }}
-            >
-              {t('common.showAll')}
-            </button>
           </div>
         )}
         {list.error ? (
@@ -547,6 +585,39 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
         )}
       </div>
       {dialog}
+      {delAsk && (
+        <Modal
+          title={t('confirmation.del.title', { count: delAsk.length })}
+          className="conf-modal"
+          onClose={() => setDelAsk(null)}
+          footer={
+            <>
+              <button type="button" className="btn" onClick={() => setDelAsk(null)}>
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                className="btn danger"
+                onClick={async () => {
+                  try {
+                    const r = await rpc('orders.delete', { ids: delAsk.map((x) => x.id) });
+                    toast(t('confirmation.del.done', { count: r.deleted }), 'ok');
+                    setSel(new Set());
+                    qc.invalidateQueries();
+                  } catch (e: any) {
+                    toast(e.message, 'bad');
+                  }
+                  setDelAsk(null);
+                }}
+              >
+                {t('confirmation.del.ok')}
+              </button>
+            </>
+          }
+        >
+          <p>{t('confirmation.del.text', { refs: delAsk.map((r) => r.ref).join(', ') })}</p>
+        </Modal>
+      )}
       {blockAsk && (
         <Modal
           title={t('confirmation.block.title', { n: new Set(blockAsk.map((r) => r.phone)).size })}
@@ -603,6 +674,7 @@ function Toolbar(p: {
   onAssign: (rows: Row[], id: number | null) => void;
   onStatus: (c: StatusChoice) => void;
   onBlock: () => void;
+  onDelete?: () => void;
   onDuplicate: () => void;
 }) {
   const { t } = useTranslation();
@@ -632,14 +704,14 @@ function Toolbar(p: {
           <span className="qa-ic">
             <Icon name="message" />
           </span>
-          {t('confirmation.message')}
+          {t('confirmation.tb.send')}
         </a>
       ) : (
         <button type="button" className="btn small qa-btn" disabled title={tipOne}>
           <span className="qa-ic">
             <Icon name="message" />
           </span>
-          {t('confirmation.message')}
+          {t('confirmation.tb.send')}
         </button>
       )}
       {p.manager && (
@@ -672,7 +744,7 @@ function Toolbar(p: {
           <span className="qa-ic">
             <Icon name="userminus" />
           </span>
-          {t('confirmation.removeAgent')}
+          {t('confirmation.tb.removeAgent')}
         </button>
       )}
       <label className={`btn small qa-btn qa-wrap ${none ? 'is-dis' : ''}`}>
@@ -703,6 +775,14 @@ function Toolbar(p: {
         </span>
         {t('confirmation.tb.block')}
       </button>
+      {p.onDelete && (
+        <button type="button" className="btn small qa-btn qa-del" disabled={none} title={none ? tip : undefined} onClick={p.onDelete}>
+          <span className="qa-ic">
+            <Icon name="trash" />
+          </span>
+          {t('confirmation.tb.delete')}
+        </button>
+      )}
     </div>
   );
 }

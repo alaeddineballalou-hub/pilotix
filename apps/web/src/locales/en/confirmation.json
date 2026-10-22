@@ -84,7 +84,10 @@
     "confirmed": "Confirmed",
     "follow": "Delivery",
     "next": "Next call",
-    "status": "Status"
+    "status": "Status",
+    "stock": "Availability",
+    "desk": "Stopdesk",
+    "passed": "Statuses passed"
   },
   "f": {
     "wilaya": "Wilaya",
@@ -106,7 +109,10 @@
     "duplicate": "Duplicate",
     "assign": "Assign an agent",
     "status": "Confirmation status",
-    "block": "Block the customer"
+    "block": "Block the customer",
+    "delete": "Delete",
+    "send": "Send a message",
+    "removeAgent": "Unassign agent"
   },
   "block": {
     "title": "Block {{n}} customer(s)?",
@@ -363,5 +369,20 @@
     "clientNote": "Customer note: {{note}}",
     "release": "Release (leave it to another agent)",
     "history": "See history"
+  },
+  "stock": {
+    "ok": "In stock",
+    "short": "Out of stock"
+  },
+  "desk": "Office",
+  "home": "Home",
+  "refresh": "Refresh",
+  "del": {
+    "title_one": "Delete {{count}} order?",
+    "title_other": "Delete {{count}} orders?",
+    "text": "{{refs}} will be deleted for good with its history. Only orders not yet sent to the depot can be deleted.",
+    "ok": "Delete",
+    "done_one": "{{count}} order deleted",
+    "done_other": "{{count}} orders deleted"
   }
 }

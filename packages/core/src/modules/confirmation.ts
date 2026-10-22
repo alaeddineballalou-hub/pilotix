@@ -181,6 +181,10 @@ export interface QueueRow extends Order {
   creatorName: string | null;
   deadline: Deadline | null;
   dueKind: string | null;
+  /** stock for every line: 'ok' all available, 'short' something missing, null nothing to check */
+  stock: 'ok' | 'short' | null;
+  /** confirmation statuses the order went through (oldest first, without repeats in a row) */
+  passed: string[];
 }
 
 const QueueInput = z.object({
@@ -228,6 +232,17 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
   const skuOf = new Map<number, string>();
   if (vids.length) for (const r of await ctx.db.query('SELECT id, sku FROM product_variants WHERE id = ANY($1)', [vids])) skuOf.set(num(r.id), r.sku);
   const who = await names(ctx.db);
+  // stock: sum over the depots for each variant
+  const stockOf = new Map<number, number>();
+  if (vids.length) for (const r of await ctx.db.query('SELECT variant_id, sum(qty)::int AS q FROM stock WHERE variant_id = ANY($1) GROUP BY 1', [vids])) stockOf.set(num(r.variant_id), num(r.q));
+  // statuses passed
+  const oids = page.rows.map((o) => o.id);
+  const passedOf = new Map<number, string[]>();
+  if (oids.length)
+    for (const r of await ctx.db.query(`SELECT order_id, array_agg(to_value ORDER BY at, id) AS v FROM order_events WHERE kind = 'conf_status' AND order_id = ANY($1) GROUP BY 1`, [oids])) {
+      const v: string[] = (Array.isArray(r.v) ? r.v : String(r.v ?? '').replace(/[{}]/g, '').split(',')).filter(Boolean);
+      passedOf.set(num(r.order_id), v.filter((x, k) => k === 0 || v[k - 1] !== x));
+    }
   let due = new Map<number, DueInfo>();
   if (i.sub === 'nouvelles' || i.sub === 'attente') {
     const calls = await getSetting(ctx.db, 'calls');
@@ -239,6 +254,8 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
     creatorName: o.createdBy ? who.get(o.createdBy) ?? null : null,
     deadline: due.get(o.id)?.deadline ?? null,
     dueKind: due.get(o.id)?.kind ?? null,
+    stock: o.items.some((it) => it.variantId) ? (o.items.every((it) => !it.variantId || (stockOf.get(it.variantId) ?? 0) >= it.qty) ? 'ok' : 'short') : null,
+    passed: passedOf.get(o.id) ?? [],
   }));
   return { ...page, rows };
 }

@@ -117,3 +117,19 @@ test('banner counts the agent orders and gives the next one', async () => {
   const mine: any = await call('confirmation.mine', ctx, {});
   assert.equal(typeof mine.due, 'number');
 });
+
+test('list rows carry stock availability and statuses passed; admin can delete orders still at confirmation only', async () => {
+  const { call } = await import('../index');
+  const admin = await as(EMAILS.admin);
+  const l: any = await call('confirmation.list', admin, { sub: 'attente', pageSize: 50 });
+  assert.ok(l.rows.some((r: any) => r.passed.length > 0));
+  assert.ok(l.rows.every((r: any) => r.stock === null || r.stock === 'ok' || r.stock === 'short'));
+  const fresh: any = await call('confirmation.list', admin, { sub: 'nouvelles', pageSize: 1 });
+  const id = fresh.rows[0].id;
+  await assert.rejects(call('orders.delete', await as(EMAILS.conf), { ids: [id] }), /refusé/);
+  const r: any = await call('orders.delete', admin, { ids: [id] });
+  assert.equal(r.deleted, 1);
+  assert.equal((await db.query('SELECT count(*)::int n FROM orders WHERE id = $1', [id]))[0].n, 0);
+  const shipped = (await db.query(`SELECT id FROM orders WHERE follow_status = 'shipped' LIMIT 1`))[0];
+  await assert.rejects(call('orders.delete', admin, { ids: [Number(shipped.id)] }), /dépôt ou en livraison/);
+});
