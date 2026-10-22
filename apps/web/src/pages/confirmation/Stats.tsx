@@ -20,7 +20,8 @@ export function StatsSection({ sub }: { sub: Sub }) {
     setKfState(k);
     saveKf(k);
   };
-  if (sub === 'terminees' || sub === 'livrees') return null;
+  // En cours has no statistics card (removed on request): the list speaks for itself
+  if (sub === 'terminees' || sub === 'livrees' || sub === 'attente') return null;
   if (sub === 'nouvelles') return <NouvellesStats kf={kf} setKf={setKf} open={open} setOpen={(o) => (setOpen(o), store.set('px-kff', o ? '1' : '0'))} />;
   return (
     <section className={`px-kff ${open ? '' : 'folded'}`}>
@@ -39,7 +40,6 @@ export function StatsSection({ sub }: { sub: Sub }) {
       </button>
       {open && (
         <div className="px-kff-body">
-          {sub === 'attente' && <EnCoursCard kf={kf} setKf={setKf} />}
           {sub === 'confirmees' && <ConfirmedCard kf={kf} setKf={setKf} />}
         </div>
       )}
@@ -318,108 +318,6 @@ function PeriodCard({ kf, setKf }: { kf: Kf; setKf: (k: Kf) => void }) {
   return (
     <div className="card bjkfc bjnew">
       <Head title={t('confirmation.np.title')} help={t('confirmation.np.help')}>
-        <KfBar kf={kf} setKf={setKf} />
-      </Head>
-      {body}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------- En cours
-function EnCoursCard({ kf, setKf }: { kf: Kf; setKf: (k: Kf) => void }) {
-  const { t } = useTranslation();
-  const q = useRpc('confirmation.enCours', kfInput(kf), { refetchInterval: 60_000 });
-  const now = useNow();
-  const D = q.data;
-  let body: ReactNode = <Loading />;
-  if (q.error) body = <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
-  else if (D)
-    body = (
-      <div>
-        <div className="bjec-sec">{t('confirmation.fc.now')}</div>
-        <div className="kpis">
-          <Kpi label={t('confirmation.ec.count')} help={t('confirmation.ec.countHelp')} value={n(D.count)} sub={t('confirmation.ec.value', { v: da(D.value) })} />
-          <Kpi tone={D.dueNow ? 'warn' : undefined} label={t('confirmation.ec.due')} help={t('confirmation.ec.dueHelp')} value={n(D.dueNow)} sub={t('confirmation.ec.dueSub')} />
-          <Kpi
-            tone={D.late ? 'bad' : undefined}
-            label={t('confirmation.ec.late')}
-            help={t('confirmation.ec.lateHelp')}
-            value={n(D.late)}
-            sub={D.lateOldest ? t('confirmation.ec.lateSub', { d: dur(now - Date.parse(D.lateOldest.since)), ref: D.lateOldest.ref }) : t('confirmation.ec.lateNone')}
-          />
-          <Kpi
-            label={t('confirmation.ec.later')}
-            help={t('confirmation.ec.laterHelp')}
-            value={n(D.later)}
-            sub={D.nextLater ? t('confirmation.ec.laterSub', { d: dur(Date.parse(D.nextLater.at) - now), ref: D.nextLater.ref }) : t('confirmation.ec.laterNone')}
-          />
-          <Kpi tone={D.noAgent ? 'bad' : undefined} label={t('confirmation.ec.noAgent')} help={t('confirmation.ec.noAgentHelp')} value={n(D.noAgent)} sub={t('confirmation.ec.noAgentSub')} />
-        </div>
-        <div className="bjec-sec">
-          {t('confirmation.ec.quality')} · {perLabel(t, kf)}
-        </div>
-        <div className="kpis">
-          <Kpi label={t('confirmation.ec.avg')} help={t('confirmation.ec.avgHelp')} value={D.avgAttempts === null ? '—' : String(Math.round(D.avgAttempts * 10) / 10).replace('.', ',')} sub={t('confirmation.ec.avgSub')} />
-          <Kpi tone={D.many ? 'bad' : undefined} label={t('confirmation.ec.many')} help={t('confirmation.ec.manyHelp')} value={n(D.many)} sub={t('confirmation.ec.manySub')} />
-          <Kpi tone={D.old ? 'warn' : undefined} label={t('confirmation.ec.old')} help={t('confirmation.ec.oldHelp')} value={n(D.old)} sub={t('confirmation.ec.oldSub')} />
-          <Kpi tone="ok" label={t('confirmation.ec.recovered')} value={n(D.recovered)} sub={t('confirmation.ec.recoveredSub')} />
-          <Kpi tone={tone3(D.recoveryRate, 60, 40)} label={t('confirmation.ec.rate')} help={t('confirmation.ec.rateHelp')} value={pctTxt(D.recoveryRate)} sub={t('confirmation.ec.rateSub', { r: D.recovered, l: D.lost })} />
-        </div>
-        <div className="bjec-chips">
-          {(['no_answer', 'busy', 'callback', 'postponed'] as const).map((k) => (
-            <span key={k} className="chip">
-              {t(`confirmation.ec.st.${k}`)} · {n(D.byStatus[k] ?? 0)}
-            </span>
-          ))}
-        </div>
-        <h3>{t('confirmation.byAgent')}</h3>
-        <div className="tbl-wrap">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>{t('confirmation.col.agent')}</th>
-                <th className="num">{t('confirmation.ec.count')}</th>
-                <th className="num">{t('confirmation.ec.colDue')}</th>
-                <th className="num">{t('confirmation.ec.late')}</th>
-                <th className="num">{t('confirmation.ec.colMany')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {D.byAgent.length ? (
-                D.byAgent.map((a) => (
-                  <tr key={a.agentId ?? 0} className={a.agentId ? undefined : 'warn-row'}>
-                    <td data-l={t('confirmation.col.agent')}>
-                      <b>{a.name ?? t('confirmation.noAgent')}</b>
-                    </td>
-                    <td className="num ltr" data-l={t('confirmation.ec.count')}>
-                      {n(a.n)}
-                    </td>
-                    <td className="num ltr" data-l={t('confirmation.ec.colDue')}>
-                      {n(a.due)}
-                    </td>
-                    <td className="num ltr" data-l={t('confirmation.ec.late')}>
-                      {a.late ? <b className="stock-low">{n(a.late)}</b> : '0'}
-                    </td>
-                    <td className="num ltr" data-l={t('confirmation.ec.colMany')}>
-                      {n(a.many)}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={5} className="empty">
-                    {t('confirmation.ec.empty')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  return (
-    <div className="card bjkfc bjec">
-      <Head title={t('confirmation.ec.title')} help={t('confirmation.ec.help')}>
         <KfBar kf={kf} setKf={setKf} />
       </Head>
       {body}
