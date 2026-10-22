@@ -1433,7 +1433,7 @@ html body .px-qhead .btn.px-qnew:hover { border-color: #F7A823; color: #C97A0E; 
 /* Removable name chip: the name; on hover it turns red and says "Retirer", a click removes it. */
 .px-rmchip, .px-rmchip-s { max-width: 150px; }
 .px-rmchip-s { overflow: hidden; text-overflow: ellipsis; display: inline-block; line-height: 22px; }
-.px-rmchip { display: inline-grid; align-items: center; border: 1px solid transparent; cursor: pointer; font: inherit; font-size: 12px; font-weight: 800; transition: background .12s, color .12s, border-color .12s; }
+.px-rmchip { min-width: 6.6em; flex: none; display: inline-grid; align-items: center; border: 1px solid transparent; cursor: pointer; font: inherit; font-size: 12px; font-weight: 800; transition: background .12s, color .12s, border-color .12s; }
 .px-rmchip > span { grid-area: 1 / 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
 .px-rmchip-x { visibility: hidden; }
 .px-rmchip:hover:not(:disabled), .px-rmchip:focus-visible { background: var(--coral-soft); color: var(--coral); border-color: color-mix(in srgb, var(--coral) 40%, transparent); }
