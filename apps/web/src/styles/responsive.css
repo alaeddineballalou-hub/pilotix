@@ -79,4 +79,6 @@ html, body { overflow-x: clip; }
 .tbl.px-fixed td .px-copy-wrap { max-width: 100%; min-width: 0; }
 .tbl.px-fixed td .px-copy { min-width: 0; }
 /* status words wrap onto two lines rather than losing their end ("Retour en cours", "Confirmée sans stock") */
-.tbl td .badge:not(.px-rmchip):not(.px-rmchip-s), .tbl td .px-histcell { max-width: 100%; white-space: normal; height: auto; min-height: 22px; line-height: 1.2; padding-block: 3px; text-align: center; overflow-wrap: anywhere; }
+.tbl.px-fixed td .badge:not(.px-rmchip):not(.px-rmchip-s), .tbl.px-fixed td .px-histcell { max-width: 100%; white-space: normal; height: auto; min-height: 22px; line-height: 1.2; padding-block: 3px; text-align: center; overflow-wrap: normal; word-break: normal; }
+/* stronger than the older "buttons in table cells wrap" rule */
+html body .tbl td.px-act > .btn, html body .tbl td.px-act > select { white-space: nowrap !important; }
