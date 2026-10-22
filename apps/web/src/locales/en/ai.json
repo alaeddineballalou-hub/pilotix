@@ -1,0 +1,26 @@
+{
+  "on": "On",
+  "off": "Paused",
+  "turnOn": "Turn it on in Settings",
+  "sections": "{{name}} sections",
+  "period": "Period",
+  "periodShort": {
+    "1": "24 h",
+    "7": "7 d",
+    "30": "30 d",
+    "90": "90 d"
+  },
+  "periodLong_one": "Last 24 h",
+  "periodLong_other": "Last {{count}} days",
+  "unsaved": "Unsaved changes",
+  "allSaved": "Everything is saved",
+  "saving": "Saving…",
+  "filters": "Filters",
+  "try": "Try a customer message",
+  "test": "Test",
+  "about": {
+    "messages": "Answers your customers in messages and takes their orders.",
+    "cm": "Answers the comments on your posts and hides spam.",
+    "notify": "Tells each customer by WhatsApp or SMS at every step."
+  }
+}

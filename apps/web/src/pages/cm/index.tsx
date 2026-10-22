@@ -3,14 +3,16 @@
 // the posts and the product each one sells, a tester, the results and the settings (admin).
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useMenuCounts } from '../../layout/Shell';
 import { backend, Out, rpc, serverUrl } from '../../lib/backend';
-import { da, n, when } from '../../lib/format';
+import { da, n, shortWhen, when } from '../../lib/format';
 import { openOrderForm } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { CopyCode } from '../../ui/CopyCode';
-import { Card, ErrorBox, Field, Help, Icon, Kpi, Kpis, Loading, Tabs } from '../../ui/kit';
+import { Card, ErrorBox, Field, Icon, Kpi, Kpis, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
+import { AgentHeader, Filters, initials, PeriodSwitch, SaveBar, SearchBox, useEdges } from '../ai/agent';
 import type { PageProps } from '../registry';
 import '../messages/messages.css';
 import './cm.css';
@@ -31,30 +33,30 @@ function CmBadge({ ch }: { ch: Channel }) {
 }
 
 const STATUS_TONE: Record<string, string> = { new: 'cm-new', answered: 'cm-ok', hidden: 'cm-mute', handoff: 'cm-warn', ignored: 'cm-mute', error: 'cm-bad' };
+const TAB_ICON: Record<string, string> = { commentaires: 'comments', publications: 'image', tester: 'play', resultats: 'chart', reglages: 'settings' };
+
+/** The author's initials with the network in the corner. */
+function Author({ name, ch }: { name: string; ch: Channel }) {
+  return (
+    <span className="ai-av sm">
+      <span aria-hidden="true">{initials(name)}</span>
+      <CmBadge ch={ch} />
+    </span>
+  );
+}
 
 export function Cm({ sub, rest }: PageProps) {
   const { t } = useTranslation();
   const { session } = useSession();
   const admin = !!session?.isAdmin;
+  const counts = useMenuCounts();
+  const st = useRpc('cm.feed', { limit: 1 });
   const keys = ['commentaires', 'publications', 'tester', 'resultats', ...(admin ? ['reglages'] : [])];
   const current = keys.includes(sub ?? '') ? sub! : 'commentaires';
+  const tabs = keys.map((k) => ({ key: k, label: t(`cm.tabs.${k}`), icon: TAB_ICON[k], href: `#/cm/${k}`, count: k === 'commentaires' ? counts.cm : undefined }));
   return (
     <>
-      <div className="card">
-        <div className="card-head">
-          <h2>
-            {t('cm.title')}
-            <Help text={t('cm.help')} label={t('cm.title')} />
-          </h2>
-          <div className="tabs" role="tablist">
-            {keys.map((k) => (
-              <a key={k} role="tab" aria-selected={current === k} className={`tab ${current === k ? 'on' : ''}`} href={`#/cm/${k}`} style={{ textDecoration: 'none' }}>
-                {t(`cm.tabs.${k}`)}
-              </a>
-            ))}
-          </div>
-        </div>
-      </div>
+      <AgentHeader agent="cm" title={t('cm.title')} help={t('cm.help')} about={t('ai.about.cm')} on={st.data?.enabled} settings={admin ? '#/cm/reglages' : undefined} tabs={tabs} current={current} />
       {current === 'commentaires' && <Feed postId={rest?.[0] ? Number(rest[0]) || null : null} />}
       {current === 'publications' && <Posts />}
       {current === 'tester' && <Tester />}
@@ -98,64 +100,72 @@ function Feed({ postId }: { postId: number | null }) {
   return (
     <>
       {d && !d.enabled && (
-        <div className="warnbox" style={{ marginBottom: 12 }}>
+        <div className="warnbox">
           {t('cm.off')} {session?.isAdmin && <a href="#/cm/reglages">{t('cm.offLink')}</a>}
         </div>
       )}
-      <Card>
-        <div className="cm-filters">
-          <Tabs<FeedTab>
-            value={tab}
-            onChange={setTab}
-            items={[
-              { value: 'todo', label: t('cm.feed.todo'), count: d?.counts.todo },
-              { value: 'answered', label: t('cm.feed.answered'), count: d?.counts.answered },
-              { value: 'hidden', label: t('cm.feed.hidden'), count: d?.counts.hidden },
-              { value: 'all', label: t('cm.feed.all'), count: d?.counts.all },
-            ]}
-          />
-          <div className="row cm-filter-row">
-            <input type="search" className="grow" placeholder={t('cm.feed.search')} aria-label={t('cm.feed.search')} value={q} onChange={(e) => setQ(e.target.value)} />
-            <select aria-label={t('cm.feed.channel')} value={channel} onChange={(e) => setChannel(e.target.value as Channel | '')}>
-              <option value="">{t('cm.feed.allChannels')}</option>
-              {(['facebook', 'instagram'] as Channel[]).map((c) => (
-                <option key={c} value={c}>
-                  {t(`cm.ch.${c}`)}
-                </option>
-              ))}
-            </select>
-            <select aria-label={t('cm.feed.post')} value={post} onChange={(e) => setPost(e.target.value ? Number(e.target.value) : '')} className="cm-post-select">
-              <option value="">{t('cm.feed.allPosts')}</option>
-              {(d?.posts ?? []).map((p) => (
-                <option key={p.id} value={p.id}>
-                  {CH_SHORT[p.channel]} · {(p.caption ?? t('cm.posts.noCaption')).slice(0, 60)}
-                </option>
-              ))}
-            </select>
-          </div>
-          {fresh.length > 0 && (
-            <div className="cm-bulk">
-              <button type="button" className="btn primary small" disabled={!!bulk} onClick={runAll}>
-                <Icon name="sparkles" /> {bulk ? t('cm.feed.bulkRun', { done: bulk.done, count: bulk.count }) : t('cm.feed.bulk', { count: fresh.length })}
-              </button>
-              {backend.kind === 'demo' && <small className="muted">{t('cm.feed.demoNote')}</small>}
+      <div className="ai-feed">
+        <div className="ai-feed-in">
+          <aside className="ai-rail" aria-label={t('ai.filters')}>
+            <div className="ai-rail-row">
+              <SearchBox value={q} onChange={setQ} placeholder={t('cm.feed.search')} />
+              <select aria-label={t('cm.feed.channel')} value={channel} onChange={(e) => setChannel(e.target.value as Channel | '')}>
+                <option value="">{t('cm.feed.allChannels')}</option>
+                {(['facebook', 'instagram'] as Channel[]).map((c) => (
+                  <option key={c} value={c}>
+                    {t(`cm.ch.${c}`)}
+                  </option>
+                ))}
+              </select>
+              <select aria-label={t('cm.feed.post')} value={post} onChange={(e) => setPost(e.target.value ? Number(e.target.value) : '')}>
+                <option value="">{t('cm.feed.allPosts')}</option>
+                {(d?.posts ?? []).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {CH_SHORT[p.channel]} · {(p.caption ?? t('cm.posts.noCaption')).slice(0, 60)}
+                  </option>
+                ))}
+              </select>
             </div>
-          )}
-        </div>
-        {list.isLoading ? (
-          <Loading />
-        ) : list.error ? (
-          <ErrorBox error={list.error} onRetry={() => list.refetch()} />
-        ) : !d?.rows.length ? (
-          <p className="bjr-empty">{t('cm.feed.empty')}</p>
-        ) : (
-          <div className="cm-list">
-            {d.rows.map((c) => (
-              <CommentCard key={c.id} c={c} busy={!!bulk} />
-            ))}
+            <Filters<FeedTab>
+              value={tab}
+              onChange={setTab}
+              label={t('ai.filters')}
+              items={[
+                { value: 'todo', label: t('cm.feed.todo'), count: d?.counts.todo, alert: true },
+                { value: 'answered', label: t('cm.feed.answered'), count: d?.counts.answered },
+                { value: 'hidden', label: t('cm.feed.hidden'), count: d?.counts.hidden },
+                { value: 'all', label: t('cm.feed.all'), count: d?.counts.all },
+              ]}
+            />
+            {backend.kind === 'demo' && <p className="ai-note">{t('cm.feed.demoNote')}</p>}
+          </aside>
+          <div className="ai-main">
+            {fresh.length > 0 && (
+              <div className="cm-bulk">
+                <span className="cm-bulk-t">
+                  <Icon name="sparkles" />
+                  {t('cm.feed.bulkWaiting', { count: fresh.length })}
+                </span>
+                <button type="button" className="btn primary" disabled={!!bulk} onClick={runAll}>
+                  {bulk ? t('cm.feed.bulkRun', { done: bulk.done, count: bulk.count }) : t('cm.feed.bulkGo')}
+                </button>
+              </div>
+            )}
+            {list.isLoading ? (
+              <Loading />
+            ) : list.error ? (
+              <ErrorBox error={list.error} onRetry={() => list.refetch()} />
+            ) : !d?.rows.length ? (
+              <div className="ai-empty">
+                <Icon name="comments" />
+                <p>{t('cm.feed.empty')}</p>
+              </div>
+            ) : (
+              d.rows.map((c) => <CommentCard key={c.id} c={c} busy={!!bulk} />)
+            )}
           </div>
-        )}
-      </Card>
+        </div>
+      </div>
     </>
   );
 }
@@ -192,20 +202,21 @@ function CommentCard({ c, busy }: { c: Comment; busy: boolean }) {
   return (
     <article className={`cm-card ${open ? 'cm-open' : ''}`} aria-busy={answer.isPending}>
       <header className="cm-head">
-        <CmBadge ch={c.channel} />
+        <Author name={c.authorName ?? t('cm.feed.someone')} ch={c.channel} />
         <span className="cm-who">
-          <b>{c.authorName ?? t('cm.feed.someone')}</b>
-          <small className="muted">
-            {when(c.at)}
+          <b>
+            <bdi>{c.authorName ?? t('cm.feed.someone')}</bdi>
+          </b>
+          <small className="cm-meta">
+            <time dateTime={c.at} title={when(c.at)}>
+              {shortWhen(c.at)}
+            </time>
             {c.post && (
-              <>
-                {' · '}
-                <a href={`#/cm/commentaires/${c.postId}`} className="cm-under" title={c.post.caption ?? ''}>
-                  {t('cm.feed.under', { caption: (c.post.caption ?? t('cm.posts.noCaption')).slice(0, 48) })}
-                </a>
-                {c.post.isAd && <span className="cm-ad">{t('cm.feed.ad')}</span>}
-              </>
+              <a href={`#/cm/commentaires/${c.postId}`} className="cm-under" title={c.post.caption ?? ''}>
+                {t('cm.feed.under', { caption: (c.post.caption ?? t('cm.posts.noCaption')).slice(0, 48) })}
+              </a>
             )}
+            {c.post?.isAd && <span className="cm-ad">{t('cm.feed.ad')}</span>}
           </small>
         </span>
         <span className={`cm-status ${STATUS_TONE[c.status] ?? ''}`}>{t(`cm.status.${c.status}`)}</span>
@@ -228,7 +239,7 @@ function CommentCard({ c, busy }: { c: Comment; busy: boolean }) {
         )}
       </div>
       {(c.publicReply || c.privateReply || c.hidden || c.reason || c.sendError) && (
-        <div className="cm-acts">
+        <div className={`cm-acts ${c.by && c.by !== 'team' ? 'by-ai' : ''}`}>
           {c.publicReply && (
             <div className="cm-act">
               <Icon name="reply" />
@@ -359,24 +370,16 @@ function Posts() {
                 <p className="cm-caption" dir="auto">
                   {p.caption ?? <span className="muted">{t('cm.posts.noCaption')}</span>}
                 </p>
-                <small className="muted">
-                  {p.isAd && <span className="cm-ad">{t('cm.feed.ad')}</span>} {t('cm.posts.comments', { count: p.comments })}
-                  {p.todo > 0 && (
-                    <>
-                      {' · '}
-                      <b className="cm-todo">{t('cm.posts.todo', { count: p.todo })}</b>
-                    </>
-                  )}
-                  {p.lastAt && <> · {when(p.lastAt)}</>}
-                  {' · '}
+                <small className="cm-meta cm-post-meta">
+                  {p.isAd && <span className="cm-ad">{t('cm.feed.ad')}</span>}
+                  <span>{t('cm.posts.comments', { count: p.comments })}</span>
+                  {p.todo > 0 && <b className="cm-todo">{t('cm.posts.todo', { count: p.todo })}</b>}
+                  {p.lastAt && <time dateTime={p.lastAt}>{when(p.lastAt)}</time>}
                   <a href={`#/cm/commentaires/${p.id}`}>{t('cm.posts.see')}</a>
                   {p.permalink && (
-                    <>
-                      {' · '}
-                      <a href={p.permalink} target="_blank" rel="noreferrer">
-                        {t('cm.posts.open', { ch: t(`cm.ch.${p.channel}`) })}
-                      </a>
-                    </>
+                    <a href={p.permalink} target="_blank" rel="noreferrer">
+                      {t('cm.posts.open', { ch: t(`cm.ch.${p.channel}`) })}
+                    </a>
                   )}
                 </small>
               </div>
@@ -428,6 +431,7 @@ function Tester() {
   const asked = useRef<{ body: string; post: string | null }>({ body: '', post: null });
   const test = useAction('cm.test', { onDone: (r) => setResults((x) => [{ ...r, ...asked.current }, ...x].slice(0, 8)) });
   const quick = t('cm.tester.quick', { returnObjects: true }) as string[];
+  const chips = useEdges<HTMLDivElement>([quick.length]);
   const run = (text = body) => {
     const v = text.trim();
     if (!v || test.isPending) return;
@@ -437,65 +441,76 @@ function Tester() {
   };
   const last = results[0];
   return (
-    <>
-      <Card title={t('cm.tester.title')}>
-        <p className="muted small">{t('cm.tester.help')}</p>
-        {last && last.by === 'demo' && <div className="warnbox" style={{ margin: '8px 0' }}>{t(backend.kind === 'demo' ? 'cm.tester.demoPreview' : 'cm.tester.demoNoKey')}</div>}
-        {last && last.by === 'ai' && backend.kind === 'demo' && (
-          <div className="okbox" style={{ margin: '8px 0', fontWeight: 500 }}>
-            {t('cm.tester.inPage')}
-          </div>
-        )}
-        <div className="grid2">
-          <Field label={t('cm.tester.post')}>
-            <select value={postId} onChange={(e) => setPostId(e.target.value ? Number(e.target.value) : '')}>
-              <option value="">{t('cm.tester.noPost')}</option>
-              {rows.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {CH_SHORT[p.channel]} · {(p.caption ?? t('cm.posts.noCaption')).slice(0, 70)}
-                  {p.productName ? ` (${p.productName})` : ''}
-                </option>
+    <Card title={t('cm.tester.title')}>
+      <div className="ai-try half">
+        <div className="ai-try-in">
+          <div className="ai-try-side">
+            <p className="muted">{t('cm.tester.help')}</p>
+            {last && last.by === 'demo' && <div className="warnbox">{t(backend.kind === 'demo' ? 'cm.tester.demoPreview' : 'cm.tester.demoNoKey')}</div>}
+            {last && last.by === 'ai' && backend.kind === 'demo' && (
+              <div className="okbox" style={{ fontWeight: 500 }}>
+                {t('cm.tester.inPage')}
+              </div>
+            )}
+            <div className="grid2">
+              <Field label={t('cm.tester.post')}>
+                <select value={postId} onChange={(e) => setPostId(e.target.value ? Number(e.target.value) : '')}>
+                  <option value="">{t('cm.tester.noPost')}</option>
+                  {rows.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {CH_SHORT[p.channel]} · {(p.caption ?? t('cm.posts.noCaption')).slice(0, 70)}
+                      {p.productName ? ` (${p.productName})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label={t('cm.tester.name')}>
+                <input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} placeholder="Amina B." />
+              </Field>
+              <Field label={t('cm.tester.comment')} wide>
+                <textarea
+                  rows={3}
+                  dir="auto"
+                  value={body}
+                  maxLength={1500}
+                  placeholder={t('cm.tester.commentPh')}
+                  onChange={(e) => setBody(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      run();
+                    }
+                  }}
+                />
+              </Field>
+            </div>
+            <div className="ai-quick cm-quick" ref={chips}>
+              {quick.map((x) => (
+                <button key={x} type="button" disabled={test.isPending} onClick={() => run(x)} dir="auto">
+                  {x}
+                </button>
               ))}
-            </select>
-          </Field>
-          <Field label={t('cm.tester.name')}>
-            <input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} placeholder="Amina B." />
-          </Field>
-          <Field label={t('cm.tester.comment')} wide>
-            <textarea
-              rows={2}
-              dir="auto"
-              value={body}
-              maxLength={1500}
-              placeholder={t('cm.tester.commentPh')}
-              onChange={(e) => setBody(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  run();
-                }
-              }}
-            />
-          </Field>
+            </div>
+            <div className="cm-run">
+              {test.isPending && <Seconds />}
+              <button type="button" className="btn primary" disabled={!body.trim() || test.isPending} onClick={() => run()}>
+                <Icon name="sparkles" /> {t('cm.tester.run')}
+              </button>
+            </div>
+          </div>
+          <div className="ai-out" aria-live="polite">
+            {results.length ? (
+              results.map((r, i) => <TestCard key={results.length - i} r={r} />)
+            ) : (
+              <div className="ai-out-empty">
+                <Icon name="comments" />
+                <p>{t('cm.tester.empty', { run: t('cm.tester.run') })}</p>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="bjr-qr cm-quick">
-          {quick.map((x) => (
-            <button key={x} type="button" disabled={test.isPending} onClick={() => run(x)} dir="auto">
-              {x}
-            </button>
-          ))}
-        </div>
-        <div className="row" style={{ justifyContent: 'flex-end', gap: 10 }}>
-          {test.isPending && <Seconds />}
-          <button type="button" className="btn primary" disabled={!body.trim() || test.isPending} onClick={() => run()}>
-            <Icon name="sparkles" /> {t('cm.tester.run')}
-          </button>
-        </div>
-      </Card>
-      {results.map((r, i) => (
-        <TestCard key={results.length - i} r={r} />
-      ))}
-    </>
+      </div>
+    </Card>
   );
 }
 
@@ -505,7 +520,7 @@ function TestCard({ r }: { r: TestResult }) {
   const fixed = [...(r.darija.public?.issues ?? []), ...(r.darija.private?.issues ?? [])].map((x) => x.found);
   const nothing = !d.hide && !d.publicReply && !d.privateReply && !d.handoff;
   return (
-    <Card className="cm-test">
+    <article className="cm-test">
       <div className="cm-test-q">
         <span className="muted small">{r.post ? t('cm.feed.under', { caption: r.post.slice(0, 60) }) : t('cm.tester.noPost')}</span>
         <p className="cm-body" dir="auto">
@@ -519,7 +534,7 @@ function TestCard({ r }: { r: TestResult }) {
       </div>
       <h3 className="cm-h3">{t('cm.tester.result')}</h3>
       {nothing && <p className="muted">{t('cm.tester.nothing')}</p>}
-      <div className="cm-acts">
+      <div className="cm-acts by-ai">
         {d.hide && (
           <div className="cm-act">
             <Icon name="eyeoff" />
@@ -578,7 +593,7 @@ function TestCard({ r }: { r: TestResult }) {
           </>
         )}
       </dl>
-    </Card>
+    </article>
   );
 }
 
@@ -590,24 +605,13 @@ function Results() {
   const s = q.data;
   const max = Math.max(1, ...(s?.intents ?? []).map((x) => x.n));
   return (
-    <Card
-      title={t('cm.results.title')}
-      actions={
-        <select aria-label={t('cm.results.period')} value={days} onChange={(e) => setDays(Number(e.target.value))} style={{ width: 'auto' }}>
-          {[1, 7, 30, 90].map((d) => (
-            <option key={d} value={d}>
-              {t('cm.results.days', { count: d })}
-            </option>
-          ))}
-        </select>
-      }
-    >
+    <Card title={t('cm.results.title')} actions={<PeriodSwitch value={days} onChange={setDays} />}>
       {q.isLoading ? (
         <Loading />
       ) : q.error || !s ? (
         <ErrorBox error={q.error} onRetry={() => q.refetch()} />
       ) : (
-        <>
+        <div className="ai-results">
           <Kpis>
             <Kpi icon="comments" label={t('cm.results.total')} value={n(s.total)} sub={t('cm.results.todo', { count: s.todo })} tone={s.todo ? 'warn' : undefined} />
             <Kpi icon="sparkles" label={t('cm.results.byAi')} value={n(s.byAi)} rate={s.total ? s.byAi / s.total : null} sub={t('cm.results.byTeam', { count: s.byTeam })} />
@@ -632,7 +636,7 @@ function Results() {
             ))}
           </div>
           <p className="muted small">{t('cm.results.note')}</p>
-        </>
+        </div>
       )}
     </Card>
   );
@@ -653,6 +657,7 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'cm
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF({ ...f, [k]: v });
   const m = data.meta;
   const base = serverUrl() || (backend.kind === 'demo' ? 'https://votre-serveur.dz' : window.location.origin);
+  const dirty = JSON.stringify(f) !== JSON.stringify(data.settings);
   const sw = (k: 'enabled' | 'replyPublic' | 'showPrice' | 'sendPrivate' | 'hideSpam' | 'hidePhones' | 'nightReplies') => (
     <label className="dl-switch">
       <input type="checkbox" checked={f[k]} onChange={(e) => set(k, e.target.checked)} />
@@ -735,11 +740,7 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'cm
         {backend.kind === 'demo' && <p className="muted small">{t('cm.settings.demo')}</p>}
       </Card>
 
-      <div className="dl-save">
-        <button type="button" className="btn primary" disabled={save.isPending} onClick={() => save.mutate(f)}>
-          {t('cm.settings.save')}
-        </button>
-      </div>
+      <SaveBar dirty={dirty} busy={save.isPending} onSave={() => save.mutate(f)} label={t('cm.settings.save')} />
     </>
   );
 }

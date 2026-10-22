@@ -102,7 +102,6 @@
     "how": "How it works",
     "howHelp": "Each status change sends at most one message: once per order for “received”, “confirmed”, “shipped”, “cancelled” and “delivered”, at most once a day for the others. A message waiting for the end of the night is replaced if the order moves on meanwhile.",
     "flowLabel": "An order’s journey",
-    "or": "or",
     "step1": "1. WhatsApp",
     "step1Hint": "From Message AI agent’s number, with a text approved by WhatsApp.",
     "step2": "2. SMS",
@@ -137,7 +136,8 @@
     "metaNote": "A changed text must be approved again by WhatsApp (“Send the texts to WhatsApp”); meanwhile it goes by SMS.",
     "default": "Default text",
     "cancel": "Cancel",
-    "saveText": "Save the text"
+    "saveText": "Save the text",
+    "onTheWay": "On the way, when it happens:"
   },
   "var": {
     "nom": "Customer’s first name",
@@ -177,9 +177,6 @@
   },
   "results": {
     "title": "Results",
-    "period": "Period",
-    "days_one": "Last 24 h",
-    "days_other": "Last {{count}} days",
     "sent": "Messages sent",
     "split": "WhatsApp {{wa}} · SMS {{sms}} · by hand {{hand}}",
     "read": "Read on WhatsApp",

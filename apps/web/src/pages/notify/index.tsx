@@ -3,14 +3,16 @@
 // has no WhatsApp, or to send by hand; the cases and their texts, a tester, the results and the settings (admin).
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useMenuCounts } from '../../layout/Shell';
 import { backend, Out, rpc, serverUrl } from '../../lib/backend';
 import { da, n, pct, when } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { CopyCode } from '../../ui/CopyCode';
-import { Card, ErrorBox, Field, Help, Icon, Kpi, Kpis, Loading, Tabs } from '../../ui/kit';
+import { Card, ErrorBox, Field, Icon, Kpi, Kpis, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
+import { AgentHeader, Filters, PeriodSwitch, SaveBar, SearchBox } from '../ai/agent';
 import type { PageProps } from '../registry';
 import '../messages/messages.css';
 import '../cm/cm.css';
@@ -33,29 +35,20 @@ function whenSend(iso: string, t: (k: string) => string) {
   return d === today ? `${t('notify.tomorrow')} ${time}` : when(iso);
 }
 
+const TAB_ICON: Record<string, string> = { messages: 'send', cas: 'route', tester: 'play', resultats: 'chart', reglages: 'settings' };
+
 export function Notify({ sub }: PageProps) {
   const { t } = useTranslation();
   const { session } = useSession();
   const admin = !!session?.isAdmin;
+  const counts = useMenuCounts();
+  const st = useRpc('notify.feed', { limit: 1 });
   const keys = ['messages', 'cas', 'tester', 'resultats', ...(admin ? ['reglages'] : [])];
   const current = keys.includes(sub ?? '') ? sub! : 'messages';
+  const tabs = keys.map((k) => ({ key: k, label: t(`notify.tabs.${k}`), icon: TAB_ICON[k], href: `#/notify/${k}`, count: k === 'messages' ? counts.notify : undefined }));
   return (
     <>
-      <div className="card">
-        <div className="card-head">
-          <h2>
-            {t('notify.title')}
-            <Help text={t('notify.help')} label={t('notify.title')} />
-          </h2>
-          <div className="tabs" role="tablist">
-            {keys.map((k) => (
-              <a key={k} role="tab" aria-selected={current === k} className={`tab ${current === k ? 'on' : ''}`} href={`#/notify/${k}`} style={{ textDecoration: 'none' }}>
-                {t(`notify.tabs.${k}`)}
-              </a>
-            ))}
-          </div>
-        </div>
-      </div>
+      <AgentHeader agent="notify" title={t('notify.title')} help={t('notify.help')} about={t('ai.about.notify')} on={st.data?.enabled} settings={admin ? '#/notify/reglages' : undefined} tabs={tabs} current={current} />
       {current === 'messages' && <Feed admin={admin} />}
       {current === 'cas' && <Cases admin={admin} />}
       {current === 'tester' && <Tester admin={admin} />}
@@ -108,60 +101,67 @@ function Feed({ admin }: { admin: boolean }) {
   return (
     <>
       {d && !d.enabled && (
-        <div className="warnbox" style={{ marginBottom: 12 }}>
+        <div className="warnbox">
           {t('notify.off')} {admin && <a href="#/notify/reglages">{t('notify.offLink')}</a>}
         </div>
       )}
-      {d && d.counts.todo > 0 && tab !== 'todo' && (
-        <div className="warnbox nt-banner">
-          <span>{t('notify.feed.todoBanner', { count: d.counts.todo })}</span>
-          <button type="button" className="btn small" onClick={() => setTab('todo')}>
-            {t('notify.feed.todoGo')}
-          </button>
-        </div>
-      )}
-      <Card>
-        <div className="cm-filters">
-          <Tabs<FeedTab>
-            value={tab}
-            onChange={setTab}
-            items={[
-              { value: 'all', label: t('notify.feed.all'), count: d?.counts.all },
-              { value: 'todo', label: t('notify.feed.todo'), count: d?.counts.todo },
-              { value: 'waiting', label: t('notify.feed.waiting'), count: d?.counts.waiting },
-              { value: 'whatsapp', label: 'WhatsApp', count: d?.counts.whatsapp },
-              { value: 'sms', label: 'SMS', count: d?.counts.sms },
-              { value: 'replies', label: t('notify.feed.replies'), count: d?.counts.replies },
-              { value: 'problems', label: t('notify.feed.problems'), count: d?.counts.problems },
-            ]}
-          />
-          <div className="row cm-filter-row">
-            <input type="search" className="grow" placeholder={t('notify.feed.search')} aria-label={t('notify.feed.search')} value={q} onChange={(e) => setQ(e.target.value)} />
-            <select aria-label={t('notify.feed.kind')} value={kind} onChange={(e) => setKind(e.target.value as Kind | '')}>
-              <option value="">{t('notify.feed.allKinds')}</option>
-              {KINDS.map((k) => (
-                <option key={k} value={k}>
-                  {t(`notify.kind.${k}`)}
-                </option>
-              ))}
-            </select>
+      <div className="ai-feed">
+        <div className="ai-feed-in">
+          <aside className="ai-rail" aria-label={t('ai.filters')}>
+            <div className="ai-rail-row">
+              <SearchBox value={q} onChange={setQ} placeholder={t('notify.feed.search')} />
+              <select aria-label={t('notify.feed.kind')} value={kind} onChange={(e) => setKind(e.target.value as Kind | '')}>
+                <option value="">{t('notify.feed.allKinds')}</option>
+                {KINDS.map((k) => (
+                  <option key={k} value={k}>
+                    {t(`notify.kind.${k}`)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Filters<FeedTab>
+              value={tab}
+              onChange={setTab}
+              label={t('ai.filters')}
+              items={[
+                { value: 'all', label: t('notify.feed.all'), count: d?.counts.all },
+                { value: 'todo', label: t('notify.feed.todo'), count: d?.counts.todo, alert: true },
+                { value: 'waiting', label: t('notify.feed.waiting'), count: d?.counts.waiting },
+                { value: 'whatsapp', label: 'WhatsApp', count: d?.counts.whatsapp },
+                { value: 'sms', label: 'SMS', count: d?.counts.sms },
+                { value: 'replies', label: t('notify.feed.replies'), count: d?.counts.replies },
+                { value: 'problems', label: t('notify.feed.problems'), count: d?.counts.problems, alert: true },
+              ]}
+            />
+            {d?.demo && <p className="ai-note">{t('notify.feed.demoNote')}</p>}
+          </aside>
+          <div className="ai-main">
+            {d && d.counts.todo > 0 && tab !== 'todo' && (
+              <div className="cm-bulk nt-banner">
+                <span className="cm-bulk-t">
+                  <Icon name="send" />
+                  {t('notify.feed.todoBanner', { count: d.counts.todo })}
+                </span>
+                <button type="button" className="btn primary" onClick={() => setTab('todo')}>
+                  {t('notify.feed.todoGo')}
+                </button>
+              </div>
+            )}
+            {list.isLoading ? (
+              <Loading />
+            ) : list.error ? (
+              <ErrorBox error={list.error} onRetry={() => list.refetch()} />
+            ) : !d?.rows.length ? (
+              <div className="ai-empty">
+                <Icon name="send" />
+                <p>{t(`notify.feed.empty_${tab}`, { defaultValue: t('notify.feed.empty') })}</p>
+              </div>
+            ) : (
+              d.rows.map((m) => <MsgCard key={m.id} m={m} />)
+            )}
           </div>
-          {d?.demo && <small className="muted">{t('notify.feed.demoNote')}</small>}
         </div>
-        {list.isLoading ? (
-          <Loading />
-        ) : list.error ? (
-          <ErrorBox error={list.error} onRetry={() => list.refetch()} />
-        ) : !d?.rows.length ? (
-          <p className="bjr-empty">{t(`notify.feed.empty_${tab}`, { defaultValue: t('notify.feed.empty') })}</p>
-        ) : (
-          <div className="cm-list">
-            {d.rows.map((m) => (
-              <MsgCard key={m.id} m={m} />
-            ))}
-          </div>
-        )}
-      </Card>
+      </div>
     </>
   );
 }
@@ -187,16 +187,17 @@ function MsgCard({ m }: { m: Row }) {
       <header className="cm-head">
         <ChannelBadge m={m} />
         <span className="cm-who">
-          <b>{m.customerName}</b>
-          <small className="muted nt-sub">
+          <b>
+            <bdi>{m.customerName}</bdi>
+          </b>
+          <small className="cm-meta nt-line">
             <button type="button" className="linkbtn nt-ref" onClick={() => openOrder(m.orderId)}>
               {m.ref}
             </button>
-            {' · '}
-            <span className="ltr">{m.phone}</span> · {when(m.sentAt ?? m.at)}
+            <span className="ltr">{m.phone}</span>
+            <time dateTime={m.sentAt ?? m.at}>{when(m.sentAt ?? m.at)}</time>
           </small>
         </span>
-        <span className={`cm-status ${st.tone}`}>{st.label}</span>
       </header>
       <div className="cm-tags">
         <span className={`nt-kind nt-k-${m.kind}`}>
@@ -209,6 +210,7 @@ function MsgCard({ m }: { m: Row }) {
           </span>
         )}
         {m.sentBy && <span className="cm-by">{t('notify.msg.by', { name: m.sentBy })}</span>}
+        <span className={`cm-status nt-st ${st.tone}`}>{st.label}</span>
       </div>
       <p className="nt-text" dir="auto">
         {m.body}
@@ -290,23 +292,25 @@ function TemplatePill({ tpl, whatsapp }: { tpl: Case['template']; whatsapp: bool
 function Flow() {
   const { t } = useTranslation();
   return (
-    <div className="nt-flow" aria-label={t('notify.cases.flowLabel')}>
-      {(['created', 'confirmed', 'shipped', 'out_for_delivery', 'delivered'] as Kind[]).map((k, i) => (
-        <span key={k} className="nt-flow-step">
-          {i > 0 && <span className="nt-flow-arrow">›</span>}
-          <span className={`nt-kind nt-k-${k}`}>
-            <Icon name={KIND_ICON[k]} /> {t(`notify.kind.${k}`)}
-          </span>
-        </span>
-      ))}
-      <span className="nt-flow-alt">
-        {t('notify.cases.or')}{' '}
+    <div className="nt-flow">
+      <ol className="nt-track" aria-label={t('notify.cases.flowLabel')}>
+        {(['created', 'confirmed', 'shipped', 'out_for_delivery', 'delivered'] as Kind[]).map((k) => (
+          <li key={k} className="nt-stop">
+            <span className={`nt-node nt-k-${k}`}>
+              <Icon name={KIND_ICON[k]} />
+            </span>
+            <span className="nt-stop-l">{t(`notify.kind.${k}`)}</span>
+          </li>
+        ))}
+      </ol>
+      <p className="nt-alt">
+        <span>{t('notify.cases.onTheWay')}</span>
         {(['stopdesk', 'failed', 'returning'] as Kind[]).map((k) => (
           <span key={k} className={`nt-kind nt-k-${k}`}>
             <Icon name={KIND_ICON[k]} /> {t(`notify.kind.${k}`)}
           </span>
         ))}
-      </span>
+      </p>
     </div>
   );
 }
@@ -391,7 +395,7 @@ function Cases({ admin }: { admin: boolean }) {
         title={t('notify.cases.title')}
         actions={
           admin && settings ? (
-            <select aria-label={t('notify.settings.lang')} value={settings.lang} disabled={saving} onChange={(e) => save({ lang: e.target.value as Lang }, t('notify.settings.saved'))} style={{ width: 'auto' }}>
+            <select className="nt-lang" aria-label={t('notify.settings.lang')} value={settings.lang} disabled={saving} onChange={(e) => save({ lang: e.target.value as Lang }, t('notify.settings.saved'))}>
               {(['dz', 'fr', 'ar'] as Lang[]).map((l) => (
                 <option key={l} value={l}>
                   {t(`notify.lang.${l}`)}
@@ -559,70 +563,76 @@ function Tester({ admin }: { admin: boolean }) {
   const test = useAction('notify.test', { onDone: setResult });
   const ok = /^(\+?213|0)?\s*[5-7](\s*\d){8}$/.test(phone.trim());
   return (
-    <>
-      <Card title={t('notify.tester.title')}>
-        <p className="muted small">{t('notify.tester.help')}</p>
-        <div className="grid2">
-          <Field label={t('notify.tester.kind')}>
-            <select value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
-              {KINDS.map((k) => (
-                <option key={k} value={k}>
-                  {t(`notify.kind.${k}`)}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label={t('notify.tester.ref')} hint={t('notify.tester.refHint')}>
-            <input value={ref} maxLength={20} className="ltr" placeholder="PX1234" onChange={(e) => setRef(e.target.value)} />
-          </Field>
-        </div>
-        {preview.error ? (
-          <p className="dl-err">⚠ {preview.error.message}</p>
-        ) : (
-          preview.data && (
-            <>
-              <div className="nt-phone">
-                <div className="nt-bubble" dir="auto">
-                  {preview.data.body}
-                </div>
-              </div>
-              <small className="muted">
-                {t('notify.msg.parts', { count: preview.data.sms.parts })}
-                {preview.data.sms.unicode ? ` · ${t('notify.msg.unicode')}` : ''}
-              </small>
-            </>
-          )
-        )}
-        {admin ? (
-          <div className="nt-test-row">
-            <Field label={t('notify.tester.phone')}>
-              <input value={phone} inputMode="tel" className="ltr" placeholder="0661 23 45 18" onChange={(e) => setPhone(e.target.value)} />
-            </Field>
-            <button type="button" className="btn primary" disabled={!ok || test.isPending} onClick={() => test.mutate({ phone: phone.trim(), kind, ref: cleanRef || undefined })}>
-              <Icon name="send" /> {test.isPending ? t('notify.tester.sending') : t('notify.tester.send')}
-            </button>
-          </div>
-        ) : (
-          <p className="muted small">{t('notify.tester.adminOnly')}</p>
-        )}
-        {admin && backend.kind === 'demo' && <p className="muted small">{t('notify.tester.demo')}</p>}
-      </Card>
-      {result && (
-        <Card className="nt-result">
-          <div className="nt-result-h">
-            <ChannelBadge m={{ channel: result.channel === 'whatsapp' || result.channel === 'sms' ? result.channel : 'manual', status: 'done' }} />
-            <b>{t(`notify.tester.via.${result.channel}`, { defaultValue: result.channel })}</b>
-            {result.demo && <span className="cm-by">{t('notify.tester.simulated')}</span>}
-          </div>
-          {result.error && <p className="cm-reason">{result.error}</p>}
-          <div className="nt-phone">
-            <div className="nt-bubble" dir="auto">
-              {result.body}
+    <Card title={t('notify.tester.title')}>
+      <div className="ai-try half">
+        <div className="ai-try-in">
+          <div className="ai-try-side">
+            <p className="muted">{t('notify.tester.help')}</p>
+            <div className="grid2">
+              <Field label={t('notify.tester.kind')}>
+                <select value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
+                  {KINDS.map((k) => (
+                    <option key={k} value={k}>
+                      {t(`notify.kind.${k}`)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label={t('notify.tester.ref')} hint={t('notify.tester.refHint')}>
+                <input value={ref} maxLength={20} className="ltr" placeholder="PX1234" onChange={(e) => setRef(e.target.value)} />
+              </Field>
             </div>
+            {admin ? (
+              <div className="nt-test-row">
+                <Field label={t('notify.tester.phone')}>
+                  <input value={phone} inputMode="tel" className="ltr" placeholder="0661 23 45 18" onChange={(e) => setPhone(e.target.value)} />
+                </Field>
+                <button type="button" className="btn primary" disabled={!ok || test.isPending} onClick={() => test.mutate({ phone: phone.trim(), kind, ref: cleanRef || undefined })}>
+                  <Icon name="send" /> {test.isPending ? t('notify.tester.sending') : t('notify.tester.send')}
+                </button>
+              </div>
+            ) : (
+              <p className="muted small">{t('notify.tester.adminOnly')}</p>
+            )}
+            {admin && backend.kind === 'demo' && <p className="muted small">{t('notify.tester.demo')}</p>}
           </div>
-        </Card>
-      )}
-    </>
+          <div className="ai-out" aria-live="polite">
+            {preview.error ? (
+              <p className="dl-err">⚠ {preview.error.message}</p>
+            ) : (
+              preview.data && (
+                <div className="nt-preview">
+                  <div className="nt-phone">
+                    <div className="nt-bubble" dir="auto">
+                      {preview.data.body}
+                    </div>
+                  </div>
+                  <small className="muted">
+                    {t('notify.msg.parts', { count: preview.data.sms.parts })}
+                    {preview.data.sms.unicode ? ` · ${t('notify.msg.unicode')}` : ''}
+                  </small>
+                </div>
+              )
+            )}
+            {result && (
+              <article className="nt-result">
+                <div className="nt-result-h">
+                  <ChannelBadge m={{ channel: result.channel === 'whatsapp' || result.channel === 'sms' ? result.channel : 'manual', status: 'done' }} />
+                  <b>{t(`notify.tester.via.${result.channel}`, { defaultValue: result.channel })}</b>
+                  {result.demo && <span className="cm-by">{t('notify.tester.simulated')}</span>}
+                </div>
+                {result.error && <p className="cm-reason">{result.error}</p>}
+                <div className="nt-phone">
+                  <div className="nt-bubble" dir="auto">
+                    {result.body}
+                  </div>
+                </div>
+              </article>
+            )}
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -634,24 +644,13 @@ function Results() {
   const s = q.data;
   const max = Math.max(1, ...KINDS.map((k) => s?.byKind[k]?.sent ?? 0));
   return (
-    <Card
-      title={t('notify.results.title')}
-      actions={
-        <select aria-label={t('notify.results.period')} value={days} onChange={(e) => setDays(Number(e.target.value))} style={{ width: 'auto' }}>
-          {[1, 7, 30, 90].map((d) => (
-            <option key={d} value={d}>
-              {t('notify.results.days', { count: d })}
-            </option>
-          ))}
-        </select>
-      }
-    >
+    <Card title={t('notify.results.title')} actions={<PeriodSwitch value={days} onChange={setDays} />}>
       {q.isLoading ? (
         <Loading />
       ) : q.error || !s ? (
         <ErrorBox error={q.error} onRetry={() => q.refetch()} />
       ) : (
-        <>
+        <div className="ai-results">
           <Kpis>
             <Kpi icon="send" label={t('notify.results.sent')} value={n(s.sent)} sub={t('notify.results.split', { wa: n(s.whatsapp), sms: n(s.sms), hand: n(s.manualDone) })} />
             <Kpi icon="eye" label={t('notify.results.read')} value={n(s.read)} rate={s.whatsapp ? s.read / Math.max(1, s.whatsapp) : null} sub={t('notify.results.readSub')} />
@@ -680,7 +679,7 @@ function Results() {
             ))}
           </div>
           <p className="muted small">{t('notify.results.note')}</p>
-        </>
+        </div>
       )}
     </Card>
   );
@@ -704,6 +703,7 @@ function SettingsForm({ data }: { data: Out<'notify.settings.get'> }) {
   const m = data.meta;
   const base = serverUrl() || (backend.kind === 'demo' ? 'https://votre-serveur.dz' : window.location.origin);
   const hours = Array.from({ length: 24 }, (_, h) => h);
+  const dirty = JSON.stringify(f) !== JSON.stringify(data.settings) || secret.trim() !== '';
   const sw = (k: 'enabled' | 'whatsapp') => (
     <label className="dl-switch">
       <input type="checkbox" checked={f[k]} onChange={(e) => set(k, e.target.checked)} />
@@ -736,7 +736,7 @@ function SettingsForm({ data }: { data: Out<'notify.settings.get'> }) {
                   </option>
                 ))}
               </select>
-              <span className="muted">→</span>
+              <span className="muted nt-arrow" aria-hidden="true">→</span>
               <select aria-label={t('notify.settings.quietTo')} value={f.quietTo} onChange={(e) => set('quietTo', Number(e.target.value))}>
                 {hours.map((h) => (
                   <option key={h} value={h}>
@@ -827,11 +827,7 @@ function SettingsForm({ data }: { data: Out<'notify.settings.get'> }) {
         {backend.kind === 'demo' && <p className="muted small">{t('notify.settings.demo')}</p>}
       </Card>
 
-      <div className="dl-save">
-        <button type="button" className="btn primary" disabled={save.isPending} onClick={() => save.mutate({ ...f, smsSecret: secret.trim() })}>
-          {t('notify.settings.save')}
-        </button>
-      </div>
+      <SaveBar dirty={dirty} busy={save.isPending} onSave={() => save.mutate({ ...f, smsSecret: secret.trim() })} label={t('notify.settings.save')} />
     </>
   );
 }

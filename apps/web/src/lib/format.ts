@@ -26,6 +26,26 @@ export function when(iso: string | null | undefined): string {
   if (dayKey(t) === dayKey(now - 86_400_000)) return `${i18n.t('common.yesterday')} ${time}`;
   return `${df({ day: 'numeric', month: 'short' }).format(t)} ${time}`;
 }
+/** "21:19" (Algiers time). */
+export const clock = (iso: string | null | undefined) => (iso ? df({ hour: '2-digit', minute: '2-digit' }).format(Date.parse(iso)) : '');
+/** In a list: "21:19" today, "hier" yesterday, "18 oct." before. */
+export function shortWhen(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const t = Date.parse(iso);
+  const now = Date.now();
+  if (dayKey(t) === dayKey(now)) return clock(iso);
+  if (dayKey(t) === dayKey(now - 86_400_000)) return i18n.t('common.yesterday');
+  return df({ day: 'numeric', month: 'short' }).format(t);
+}
+/** Same day in Algiers. */
+export const sameDay = (a: string, b: string) => dayKey(Date.parse(a)) === dayKey(Date.parse(b));
+/** The day between messages of a conversation: "Aujourd'hui", "Hier", "lundi 18 octobre". */
+export function dayLabel(iso: string): string {
+  const t = Date.parse(iso);
+  const now = Date.now();
+  const s = dayKey(t) === dayKey(now) ? i18n.t('common.today') : dayKey(t) === dayKey(now - 86_400_000) ? i18n.t('common.yesterday') : df({ weekday: 'long', day: 'numeric', month: 'long' }).format(t);
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 export const dateOnly = (iso: string | null | undefined) => (iso ? df({ day: 'numeric', month: 'short', year: 'numeric' }).format(Date.parse(iso)) : '—');
 export const dateTime = (iso: string | null | undefined) => (iso ? df({ day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(Date.parse(iso)) : '—');
 

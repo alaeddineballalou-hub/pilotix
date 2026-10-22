@@ -15,7 +15,6 @@
     "test": "Test"
   },
   "mode": {
-    "ai": "IA",
     "human": "Équipe",
     "handoff": "À reprendre"
   },
@@ -30,7 +29,8 @@
     "channel": "Canal",
     "allChannels": "Tous les canaux",
     "empty": "Aucune conversation pour l’instant.",
-    "pick": "Choisissez une conversation."
+    "pick": "Choisissez une conversation.",
+    "pickHint": "Les messages de WhatsApp, Messenger, Instagram et TikTok arrivent ici."
   },
   "thread": {
     "customer": "Client",
@@ -41,12 +41,15 @@
     "giveBack": "Rendre à {{name}}",
     "answered": "{{name}} a répondu au client",
     "modeSaved": "Enregistré",
-    "handoff": "À reprendre : {{reason}}",
     "write": "Écrire au client…",
-    "writePause": "Écrire au client ({{name}} se met en pause)…",
     "send": "Envoyer",
     "back": "Retour",
-    "comment": "commentaire"
+    "comment": "commentaire",
+    "modeAi": "{{name}} répond à ce client.",
+    "modeHuman": "Vous répondez à ce client : {{name}} est en pause ici.",
+    "handoffBar": "{{name}} vous passe la main : {{reason}}",
+    "info": "Fiche client",
+    "modeAiHint": "Si vous écrivez, il se met en pause."
   },
   "side": {
     "customer": "Client",
@@ -78,9 +81,6 @@
   },
   "results": {
     "title": "Résultats de {{name}}",
-    "period": "Période",
-    "days_one": "Dernières 24 h",
-    "days_other": "{{count}} derniers jours",
     "conversations": "Conversations",
     "messages": "{{a}} reçus · {{b}} envoyés",
     "orders": "Commandes prises par {{name}}",
