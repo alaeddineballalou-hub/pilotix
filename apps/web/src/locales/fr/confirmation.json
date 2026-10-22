@@ -572,5 +572,13 @@
       "rec": "Récupération",
       "full": "Tentatives complètes"
     }
+  },
+  "dr": {
+    "title": "Choisir la période",
+    "prev": "Mois précédent",
+    "next": "Mois suivant",
+    "hint": "Cliquez sur le 1er jour, puis sur le dernier",
+    "cancel": "Annuler",
+    "apply": "Appliquer"
   }
 }

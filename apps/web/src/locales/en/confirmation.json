@@ -572,5 +572,13 @@
       "rec": "Recovery",
       "full": "Complete attempts"
     }
+  },
+  "dr": {
+    "title": "Choose the period",
+    "prev": "Previous month",
+    "next": "Next month",
+    "hint": "Click the first day, then the last one",
+    "cancel": "Cancel",
+    "apply": "Apply"
   }
 }
