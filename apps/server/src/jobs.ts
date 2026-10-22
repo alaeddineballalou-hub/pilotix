@@ -10,6 +10,7 @@ import { CoreService } from './core.service';
  *  - courier status sync every 30 minutes
  *  - Meta Ads insights sync every night
  *  - monthly partitions of the order history
+ *  - Dellal follow-ups (one short message to customers who went quiet) every 15 minutes
  */
 @Injectable()
 export class JobsService implements OnModuleInit, OnModuleDestroy {
@@ -33,6 +34,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
         const session = await this.core.systemSession();
         if (job.name === 'courier-sync') return this.core.call('delivery.sync', session, {});
         if (job.name === 'meta-sync') return this.core.call('ads.sync', session, {});
+        if (job.name === 'dellal-followups') return this.core.call('dellal.followUps', session, {});
         if (job.name === 'partitions') {
           for (let i = 0; i <= 3; i++) await this.core.db.query(`SELECT ensure_events_partition((date_trunc('month', now()) + make_interval(months => $1))::date)`, [i]);
         }
@@ -42,6 +44,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     this.worker.on('failed', (job, err) => this.log.error(`${job?.name} failed: ${err.message}`));
     await this.queue.add('courier-sync', {}, { repeat: { every: 30 * 60_000 }, jobId: 'courier-sync', removeOnComplete: 50, removeOnFail: 100 });
     await this.queue.add('meta-sync', {}, { repeat: { pattern: '30 4 * * *' }, jobId: 'meta-sync', removeOnComplete: 20, removeOnFail: 50 });
+    await this.queue.add('dellal-followups', {}, { repeat: { every: 15 * 60_000 }, jobId: 'dellal-followups', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('partitions', {}, { repeat: { pattern: '0 3 1 * *' }, jobId: 'partitions', removeOnComplete: 10 });
   }
 

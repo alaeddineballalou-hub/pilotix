@@ -15,7 +15,9 @@ import {
   Param,
   Post,
   Query,
+  RawBodyRequest,
   Req,
+  Res,
   SetMetadata,
   UnauthorizedException,
   UseGuards,
@@ -24,6 +26,7 @@ import { APP_FILTER, Reflector } from '@nestjs/core';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import * as core from '@pilotix/core';
 import { normalizePhone, Session } from '@pilotix/shared';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { config } from './config';
 import { CoreService } from './core.service';
@@ -100,6 +103,18 @@ function limitLogin(ip: string) {
   const a = attempts.get(ip);
   if (!a || a.until < now) return void attempts.set(ip, { n: 1, until: now + 15 * 60_000 });
   if (++a.n > 10) throw new HttpException({ message: 'Trop de tentatives, réessayez dans quelques minutes' }, 429);
+}
+
+/** Dellal: newest message per conversation and the answer running for it. */
+const latest = new Map<number, number>();
+const running = new Map<number, Promise<unknown>>();
+function optionalDellal(): any {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require('@pilotix/core/dist/dellal-server');
+  } catch {
+    return null;
+  }
 }
 
 const LoginBody = z.object({ email: z.string().email().max(200), password: z.string().min(1).max(200) });
@@ -182,6 +197,73 @@ class ApiController {
     });
     if (ch) await db.query('UPDATE sales_channels SET last_sync_at = now() WHERE id = $1', [ch.id]);
     return { ok: true, id: order.id, ref: order.ref };
+  }
+
+  // ---------------------------------------------------------------- Dellal (AI sales agent) webhooks
+  /** Meta checks the webhook once: answer hub.challenge when the verify token matches. */
+  @Public()
+  @Get('hooks/meta')
+  async metaVerify(@Query() q: Record<string, string>, @Res() res: any) {
+    const r: any = await this.core.call('dellal.routing', await this.core.systemSession(), {});
+    if (q['hub.mode'] === 'subscribe' && r.verifyToken && q['hub.verify_token'] === r.verifyToken) return res.status(200).header('Content-Type', 'text/plain').send(String(q['hub.challenge'] ?? ''));
+    return res.status(403).send({ message: 'Jeton de vérification invalide' });
+  }
+
+  /** WhatsApp, Messenger and Instagram messages. Answers 200 at once; Dellal replies in the background. */
+  @Public()
+  @Post('hooks/meta')
+  async metaHook(@Req() req: RawBodyRequest<any>, @Headers('x-hub-signature-256') sig: string, @Body() body: any) {
+    const db = this.core.db;
+    const secret = String((await db.query(`SELECT value FROM settings WHERE key = 'secret_dellal_meta_app_secret'`))[0]?.value ?? '');
+    if (secret) {
+      const raw: Buffer | undefined = req.rawBody;
+      const want = 'sha256=' + createHmac('sha256', secret).update(raw ?? Buffer.from(JSON.stringify(body ?? {}))).digest('hex');
+      const ok = !!sig && sig.length === want.length && timingSafeEqual(Buffer.from(sig), Buffer.from(want));
+      if (!ok) throw new core.AppError('unauthorized', 'Signature Meta invalide');
+    }
+    const m = optionalDellal();
+    const list: any[] = m?.parseMetaWebhook ? m.parseMetaWebhook(body) : [];
+    void this.handleIncoming(list);
+    return { ok: true, received: list.length };
+  }
+
+  /** TikTok messages (from TikTok's business messaging or a bridge): { user_id, name?, text, message_id? }. Key = Dellal verify token. */
+  @Public()
+  @Post('hooks/tiktok')
+  async tiktokHook(@Query('key') key: string, @Body() body: any) {
+    const r: any = await this.core.call('dellal.routing', await this.core.systemSession(), {});
+    if (!r.verifyToken || key !== r.verifyToken) throw new core.AppError('unauthorized', 'Clé invalide');
+    const text = String(body?.text ?? body?.content?.text ?? '').trim();
+    const user = String(body?.user_id ?? body?.sender?.id ?? '').trim();
+    if (!text || !user) throw new core.AppError('bad_request', 'user_id et text requis');
+    void this.handleIncoming([{ channel: 'tiktok', externalId: user, accountId: null, name: body?.name ? String(body.name) : null, text: text.slice(0, 4000), messageId: body?.message_id ? String(body.message_id) : null, source: null }]);
+    return { ok: true };
+  }
+
+  /** Stores each message, then lets Dellal answer once the customer stops typing (2 s), one answer at a time per conversation. */
+  private async handleIncoming(list: any[]) {
+    const log = new Logger('Dellal');
+    for (const msg of list) {
+      try {
+        const session = await this.core.systemSession();
+        const r: any = await this.core.call('dellal.receive', session, msg);
+        if (!r) continue;
+        latest.set(r.conversationId, r.messageId);
+        setTimeout(() => {
+          if (latest.get(r.conversationId) !== r.messageId) return; // a newer message will be answered instead
+          const prev = running.get(r.conversationId) ?? Promise.resolve();
+          const next = prev
+            .then(() => this.core.call('dellal.answer', session, { id: r.conversationId }))
+            .catch((e) => log.warn(`conversation ${r.conversationId}: ${e?.message ?? e}`))
+            .finally(() => {
+              if (running.get(r.conversationId) === next) running.delete(r.conversationId);
+            });
+          running.set(r.conversationId, next);
+        }, 2000);
+      } catch (e: any) {
+        log.warn(`incoming ${msg?.channel} message refused: ${e?.message ?? e}`);
+      }
+    }
   }
 
   /** Called by an external scheduler (e.g. every 30 minutes) to refresh courier statuses. */

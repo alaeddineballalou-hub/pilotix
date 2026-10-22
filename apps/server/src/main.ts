@@ -3,6 +3,8 @@
 //   POST /api/rpc/:name             → runs one core action for the logged-in user (role checks in the core)
 //   POST /api/hooks/orders/:channel → orders from a website / store (key in ?key= or x-webhook-key)
 //   POST /api/hooks/cron            → courier status sync, called by an external scheduler (?key=)
+//   GET|POST /api/hooks/meta        → Dellal: WhatsApp, Messenger and Instagram messages (Meta webhook)
+//   POST /api/hooks/tiktok          → Dellal: TikTok messages (?key= the Dellal verify token)
 //   GET  /api/health
 //   Socket.IO at /live              → "something changed" events for open screens
 import 'reflect-metadata';
@@ -21,6 +23,7 @@ class AppModule {}
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter({ trustProxy: true, bodyLimit: 5 * 1024 * 1024 }), {
     logger: ['error', 'warn', 'log'],
+    rawBody: true, // Meta webhooks are signed over the raw body
   });
   app.setGlobalPrefix('api');
   app.enableCors({ origin: config.corsOrigins, credentials: true });

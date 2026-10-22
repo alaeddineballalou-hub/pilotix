@@ -43,6 +43,7 @@ export const NAV: NavItem[] = [
   { id: 'sav', icon: 'headset', roles: ['confirmation', 'suivi', 'depot'], subs: ['tickets', 'nouveau', 'attente', 'depot', 'livraison', 'livres', 'annules', 'stats'] },
   { id: 'tournee', icon: 'navigation', roles: ['livreur'], onlyIf: (r) => r.includes('livreur') },
   { id: 'produits', icon: 'layers', roles: ['depot'], subs: ['stock', 'produits', 'mouvements'] },
+  { id: 'messages', icon: 'chat', roles: ['confirmation'] },
   { id: 'clients', icon: 'users', roles: ['confirmation', 'suivi'] },
   { id: 'publicite', icon: 'megaphone', roles: ['marketer'] },
   { id: 'caisse', icon: 'wallet', roles: [], subs: ['due', 'done', 'livreurs'] },

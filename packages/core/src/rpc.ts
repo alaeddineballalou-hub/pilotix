@@ -34,6 +34,8 @@ export interface Ctx {
 export interface ServerHooks {
   courier: (action: string, args: unknown, ctx: Ctx) => Promise<unknown>;
   meta: (action: string, args: unknown, ctx: Ctx) => Promise<unknown>;
+  /** Dellal (AI sales agent): 'complete' (the AI), 'send' (a message to WhatsApp / Messenger / Instagram / TikTok), 'ping'. */
+  dellal?: (action: string, args: unknown, ctx: Ctx) => Promise<unknown>;
   hashPassword: (pw: string) => Promise<string>;
 }
 

@@ -14,6 +14,7 @@ import { seed as seed_delivery } from './seeds/delivery';
 import { seed as seed_cash } from './seeds/cash';
 import { seed as seed_admin } from './seeds/admin';
 import { seed as seed_ads } from './seeds/ads';
+import { seed as seed_dellal } from './seeds/dellal';
 
 /** First admin + one warehouse. Used by the real server on first start. */
 export async function seedBase(db: Db, admin: { email: string; password: string; name?: string }) {
@@ -335,6 +336,7 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number } =
   await seed_cash(db, users, now);
   await seed_admin(db, users, now);
   await seed_ads(db, users, now);
+  await seed_dellal(db, users, now);
 
   return { users, orders: N, todo: CONF_TODO.length };
 }
