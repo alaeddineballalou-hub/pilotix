@@ -334,7 +334,13 @@
     "delivered_zero": "مُسلّمة · {{count}} طلبات",
     "delivered_two": "مُسلّمة · {{count}} طلبات",
     "delivered_few": "مُسلّمة · {{count}} طلبات",
-    "delivered_many": "مُسلّمة · {{count}} طلبات"
+    "delivered_many": "مُسلّمة · {{count}} طلبات",
+    "notShipped_one": "طلب آخر لم يُشحن بعد (لا خدمة ما بعد البيع).",
+    "notShipped_other": "{{count}} طلبات أخرى لم تُشحن بعد (لا خدمة ما بعد البيع).",
+    "notShipped_zero": "{{count}} طلبات أخرى لم تُشحن بعد (لا خدمة ما بعد البيع).",
+    "notShipped_two": "{{count}} طلبات أخرى لم تُشحن بعد (لا خدمة ما بعد البيع).",
+    "notShipped_few": "{{count}} طلبات أخرى لم تُشحن بعد (لا خدمة ما بعد البيع).",
+    "notShipped_many": "{{count}} طلبات أخرى لم تُشحن بعد (لا خدمة ما بعد البيع)."
   },
   "sat": {
     "1": "غير راضٍ",

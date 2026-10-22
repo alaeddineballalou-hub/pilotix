@@ -318,7 +318,9 @@
     "otherFee": "Autre…",
     "takeBack": "Le livreur apporte le nouvel article et reprend l’ancien.",
     "partsStay": "Seules les pièces partent ; l’article reste chez le client.",
-    "sendDepot": "Envoyer au dépôt"
+    "sendDepot": "Envoyer au dépôt",
+    "notShipped_one": "{{count}} autre commande pas encore expédiée (pas de SAV).",
+    "notShipped_other": "{{count}} autres commandes pas encore expédiées (pas de SAV)."
   },
   "sat": {
     "1": "Pas content",

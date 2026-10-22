@@ -392,13 +392,13 @@ export async function createExchange(ctx: Ctx, input: z.infer<typeof ExchangeInp
 }
 
 /** Orders by partial ref (PX12…), partial phone, tracking or name — newest first. */
-export async function findOrders(ctx: Ctx, q: string, limit = 8, extra?: (w: Where) => void): Promise<Order[]> {
+export async function findOrders(ctx: Ctx, q: string, limit = 8, extra?: (w: Where) => void, orderBy = 'o.created_at DESC'): Promise<Order[]> {
   const w = new Where();
   const digits = q.replace(/\D/g, '');
   if (digits.length >= 4 && digits.length === q.replace(/[\s+.-]/g, '').length) w.add(`(o.phone LIKE '%' || ? || '%' OR o.phone2 LIKE '%' || ? || '%' OR o.tracking ILIKE '%' || ? || '%')`, digits.slice(-9), digits.slice(-9), digits);
   else w.add(`(upper(o.ref) LIKE upper(?) || '%' OR o.tracking ILIKE ? || '%' OR o.customer_name ILIKE '%' || ? || '%')`, q.trim(), q.trim(), q.trim());
   extra?.(w);
-  const rows = await ctx.db.query(`SELECT o.id FROM sales o ${w.sql} ORDER BY o.created_at DESC LIMIT ${w.p(limit)}`, w.params);
+  const rows = await ctx.db.query(`SELECT o.id FROM sales o ${w.sql} ORDER BY ${orderBy} LIMIT ${w.p(limit)}`, w.params);
   const out: Order[] = [];
   for (const r of rows) out.push(await getOrder(ctx, num(r.id)));
   return out;
@@ -674,5 +674,8 @@ export const savProcs = {
   ),
 
   /** Find the order of a new ticket (any status). */
-  'sav.findOrder': proc([...SAV_ROLES], z.object({ q: z.string().min(2).max(100) }), (ctx, { q }) => findOrders(ctx, q)),
+  'sav.findOrder': proc([...SAV_ROLES], z.object({ q: z.string().min(2).max(100), deliveredFirst: z.boolean().default(false) }), (ctx, { q, deliveredFirst }) =>
+    // the call: what the customer received comes first (SAV is after delivery), newest first
+    deliveredFirst ? findOrders(ctx, q, 12, undefined, `(o.follow_status IN ('delivered','exchanged')) DESC, (o.shipped_at IS NOT NULL) DESC, o.created_at DESC`) : findOrders(ctx, q),
+  ),
 };
