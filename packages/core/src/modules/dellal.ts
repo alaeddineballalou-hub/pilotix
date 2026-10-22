@@ -224,8 +224,10 @@ export async function conversationFromComment(
     post?: string | null;
     reply: string;
     meta?: Record<string, unknown>;
-    /** a person of the team wrote the private message: the conversation stays with them (Dellal pauses) */
+    /** a person of the team wrote the private message */
     staffId?: number | null;
+    /** …and keeps the conversation (Dellal pauses); otherwise Dellal answers when the customer writes back */
+    takeOver?: boolean;
   },
 ): Promise<number> {
   const id = await ctx.db.tx(async (tx) => {
@@ -244,7 +246,7 @@ export async function conversationFromComment(
     await addMessage(tx, cid, { role: 'customer', body: c.comment, meta: { comment: { post: c.post ?? null } }, quiet: true });
     if (c.staffId) {
       await addMessage(tx, cid, { role: 'staff', body: c.reply, userId: c.staffId, meta: { cm: true } });
-      await tx.query(`UPDATE conversations SET mode = 'human', assigned_to = $2 WHERE id = $1`, [cid, c.staffId]);
+      if (c.takeOver) await tx.query(`UPDATE conversations SET mode = 'human', assigned_to = $2 WHERE id = $1`, [cid, c.staffId]);
     } else await addMessage(tx, cid, { role: 'agent', body: c.reply, meta: { cm: true, ...(c.meta ?? {}) } });
     return cid;
   });

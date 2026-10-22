@@ -260,7 +260,7 @@ function CommentCard({ c, busy }: { c: Comment; busy: boolean }) {
               <Icon name="eyeoff" />
               <span>
                 <small>{t('cm.feed.hiddenBy')}</small>
-                <span>{c.intent === 'spam' || c.intent === 'insult' ? c.reason : c.phone ? t('cm.feed.hiddenPhone') : c.reason ?? '—'}</span>
+                <span>{c.intent === 'spam' || c.intent === 'insult' ? c.reason : c.phone ? t('cm.feed.hiddenPhone') : c.intent === 'complaint' ? t('cm.feed.hiddenRude') : c.reason ?? '—'}</span>
               </span>
             </div>
           )}
@@ -718,6 +718,8 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'cm
           <dd className="ltr">{m.pageId || '—'}</dd>
           <dt>{t('cm.settings.igId')}</dt>
           <dd className="ltr">{m.instagramId || '—'}</dd>
+          <dt>{t('cm.settings.appSecret')}</dt>
+          <dd>{m.appSecret ? <span className="cm-okc">✓ {t('cm.settings.connected')}</span> : <a href="#/messages/reglages">{t('cm.settings.appSecretNone')}</a>}</dd>
           <dt>{t('cm.settings.ai')}</dt>
           <dd>{m.ai ? <span className="cm-okc">✓ {t('cm.settings.connected')}</span> : <a href="#/messages/reglages">{t('cm.settings.aiNone')}</a>}</dd>
         </dl>

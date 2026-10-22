@@ -84,7 +84,8 @@
     "ignore": "Ignorer",
     "createOrder": "Créer la commande",
     "orderNote": "Commentaire : {{text}}",
-    "done": "Marquer comme traité"
+    "done": "Marquer comme traité",
+    "hiddenRude": "Insultes : masqué. La réclamation est passée à l’équipe."
   },
   "posts": {
     "title": "Publications et publicités",
@@ -180,7 +181,7 @@
     "sendPrivate": "Écrire en privé à ceux qui demandent",
     "sendPrivateHint": "Un seul message par commentaire, dans les 7 jours (règle de Meta). La conversation s’ouvre dans Message AI agent, où Dellal continue la vente.",
     "hideSpam": "Masquer le spam et les insultes",
-    "hideSpamHint": "Liens d’autres pages, concurrents, vulgarités. Masqué : la personne et ses amis le voient encore, les autres non. Une réclamation n’est jamais masquée.",
+    "hideSpamHint": "Liens d’autres pages, concurrents, vulgarités. Masqué : la personne et ses amis le voient encore, les autres non. Une réclamation va toujours à l’équipe et n’est masquée que si elle contient des insultes.",
     "hidePhones": "Masquer les numéros de téléphone",
     "hidePhonesHint": "Les concurrents copient les numéros laissés en commentaire : le commentaire est masqué et la personne reçoit un message privé.",
     "nightReplies": "Répondre la nuit (23 h – 8 h)",
@@ -216,6 +217,8 @@
     "verifyToken": "Jeton de vérification",
     "fields": "Permissions Meta : pages_manage_engagement, pages_read_user_content, pages_messaging, instagram_manage_comments, instagram_manage_messages.",
     "demo": "Aperçu : ces réglages sont ceux de la démonstration, rien n’est envoyé à Meta.",
-    "save": "Enregistrer"
+    "save": "Enregistrer",
+    "appSecret": "Clé secrète de l’application Meta",
+    "appSecretNone": "Obligatoire : sans elle, les commentaires ne sont pas traités (Message AI agent › Réglages)"
   }
 }

@@ -226,7 +226,12 @@ class ApiController {
     }
     const m = optionalDellal();
     const list: any[] = m?.parseMetaWebhook ? m.parseMetaWebhook(body) : [];
-    const comments: any[] = m?.parseMetaComments ? m.parseMetaComments(body) : [];
+    // comments make the page act in public (reply, hide): only from a webhook signed with the Meta app secret
+    let comments: any[] = m?.parseMetaComments ? m.parseMetaComments(body) : [];
+    if (comments.length && !secret) {
+      new Logger('CM').warn('comments ignored: add the Meta app secret (Message AI agent › Réglages) so webhooks are signed');
+      comments = [];
+    }
     void this.handleIncoming(list);
     void this.handleComments(comments);
     return { ok: true, received: list.length + comments.length };
@@ -297,7 +302,7 @@ class ApiController {
     const ck = (await core.getSetting(this.core.db, 'cron')).key;
     if (!ck || key !== ck) throw new core.AppError('unauthorized', 'Clé cron invalide');
     const session = await this.core.systemSession();
-    await this.core.call('cm.sweep', session, {}).catch(() => null); // comments the CM AI agent has not answered yet
+    void this.core.call('cm.sweep', session, {}).catch(() => null); // comments the CM AI agent has not answered yet (in the background)
     return this.core.call('delivery.sync', session, {}).catch((e) => ({ ok: false, message: e.message }));
   }
 }
