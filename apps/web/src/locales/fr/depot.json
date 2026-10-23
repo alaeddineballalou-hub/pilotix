@@ -110,12 +110,6 @@
     "done_one": "{{count}} commande envoyée au dispatch",
     "done_other": "{{count}} commandes envoyées au dispatch"
   },
-  "dispatchSheet": {
-    "title": "Feuille de préparation — commandes en dispatch",
-    "sheetTitle": "Feuille de préparation — {{date}}",
-    "empty": "Aucune commande en dispatch.",
-    "total": "Total"
-  },
   "removePartner": "Retirer le partenaire de livraison",
   "partnerRemoved": "Partenaire de livraison retiré",
   "ph": {
@@ -171,5 +165,32 @@
     "send_other": "Envoyer au dispatch · {{count}}",
     "stage": "Préparation",
     "savTag": "SAV · échange"
+  },
+  "stg": {
+    "waiting": "Prêts à partir",
+    "dispatchHelp": "Commandes emballées, avec leur partenaire de livraison. Scannez chaque colis quand le livreur le prend : il passe dans « Dispatchées ».",
+    "noPartner": "Sans partenaire",
+    "parcels_one": "{{count}} colis",
+    "parcels_other": "{{count}} colis",
+    "more": "Voir plus ({{n}})",
+    "filters": "Filtrer les colis",
+    "all": "Tous",
+    "title_dispatchees": "Remis, en attente du partenaire",
+    "title_enlivraison": "En route vers le client",
+    "dispatchees_warn": "24 h et +",
+    "dispatchees_bad": "48 h et +",
+    "enlivraison_warn": "4 jours et +",
+    "enlivraison_bad": "7 jours et +",
+    "noneLate": "Aucun colis en retard.",
+    "empty_prepares": "Aucun colis en attente de départ.",
+    "empty_dispatchees": "Aucun colis remis en attente.",
+    "empty_enlivraison": "Aucun colis en route.",
+    "empty_returning": "Aucun retour en route vers le dépôt.",
+    "empty_exchange": "Aucun échange en cours.",
+    "returning": "Retours",
+    "exchange": "Échanges",
+    "returningHelp": "Touchez « Reçu au dépôt » quand le colis arrive : le stock est remis.",
+    "exchangeHelp": "Le nouveau produit est chez le client ; l’ancien va revenir au dépôt.",
+    "tapAgain": "Touchez encore pour confirmer"
   }
 }

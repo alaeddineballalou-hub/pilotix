@@ -110,12 +110,6 @@
     "done_one": "{{count}} order sent to dispatch",
     "done_other": "{{count}} orders sent to dispatch"
   },
-  "dispatchSheet": {
-    "title": "Picking sheet — orders in dispatch",
-    "sheetTitle": "Picking sheet — {{date}}",
-    "empty": "No order in dispatch.",
-    "total": "Total"
-  },
   "removePartner": "Remove the delivery partner",
   "partnerRemoved": "Delivery partner removed",
   "ph": {
@@ -171,5 +165,32 @@
     "send_other": "Send to dispatch · {{count}}",
     "stage": "Preparation",
     "savTag": "SAV · exchange"
+  },
+  "stg": {
+    "waiting": "Ready to leave",
+    "dispatchHelp": "Packed orders with their delivery partner. Scan each parcel when the driver takes it: it moves to “Dispatched”.",
+    "noPartner": "No partner",
+    "parcels_one": "{{count}} parcel",
+    "parcels_other": "{{count}} parcels",
+    "more": "Show more ({{n}})",
+    "filters": "Filter the parcels",
+    "all": "All",
+    "title_dispatchees": "Handed over, waiting for the partner",
+    "title_enlivraison": "On the way to the customer",
+    "dispatchees_warn": "24 h +",
+    "dispatchees_bad": "48 h +",
+    "enlivraison_warn": "4 days +",
+    "enlivraison_bad": "7 days +",
+    "noneLate": "No late parcel.",
+    "empty_prepares": "No parcel waiting to leave.",
+    "empty_dispatchees": "No handed-over parcel waiting.",
+    "empty_enlivraison": "No parcel on the road.",
+    "empty_returning": "No return on its way to the depot.",
+    "empty_exchange": "No exchange in progress.",
+    "returning": "Returns",
+    "exchange": "Exchanges",
+    "returningHelp": "Tap “Received at the depot” when the parcel arrives: the stock comes back.",
+    "exchangeHelp": "The new product is at the customer’s; the old one will come back to the depot.",
+    "tapAgain": "Tap again to confirm"
   }
 }

@@ -110,12 +110,6 @@
     "done_one": "تم إرسال {{count}} طلب",
     "done_other": "تم إرسال {{count}} طلبات"
   },
-  "dispatchSheet": {
-    "title": "ورقة التحضير — الطلبات قيد الإرسال",
-    "sheetTitle": "ورقة التحضير — {{date}}",
-    "empty": "لا توجد طلبات قيد الإرسال.",
-    "total": "المجموع"
-  },
   "removePartner": "إزالة شريك التوصيل",
   "partnerRemoved": "تمت إزالة شريك التوصيل",
   "ph": {
@@ -187,5 +181,36 @@
     "send_other": "إرسال إلى التوزيع · {{count}}",
     "stage": "التحضير",
     "savTag": "خدمة ما بعد البيع · استبدال"
+  },
+  "stg": {
+    "waiting": "جاهزة للخروج",
+    "dispatchHelp": "طلبات مغلّفة مع شريك التوصيل. امسح كل طرد عندما يأخذه الموزّع: ينتقل إلى «تم تسليمها».",
+    "noPartner": "بدون شريك",
+    "parcels_zero": "لا طرود",
+    "parcels_one": "طرد واحد",
+    "parcels_two": "طردان",
+    "parcels_few": "{{count}} طرود",
+    "parcels_many": "{{count}} طردًا",
+    "parcels_other": "{{count}} طرد",
+    "more": "عرض المزيد ({{n}})",
+    "filters": "تصفية الطرود",
+    "all": "الكل",
+    "title_dispatchees": "مسلَّمة، في انتظار الشريك",
+    "title_enlivraison": "في الطريق إلى الزبون",
+    "dispatchees_warn": "24 ساعة فأكثر",
+    "dispatchees_bad": "48 ساعة فأكثر",
+    "enlivraison_warn": "4 أيام فأكثر",
+    "enlivraison_bad": "7 أيام فأكثر",
+    "noneLate": "لا توجد طرود متأخرة.",
+    "empty_prepares": "لا يوجد طرد في انتظار الخروج.",
+    "empty_dispatchees": "لا توجد طرود مسلَّمة في الانتظار.",
+    "empty_enlivraison": "لا توجد طرود في الطريق.",
+    "empty_returning": "لا يوجد مرتجع في الطريق إلى المستودع.",
+    "empty_exchange": "لا يوجد استبدال جارٍ.",
+    "returning": "المرتجعات",
+    "exchange": "الاستبدالات",
+    "returningHelp": "اضغط زر الاستلام عند وصول الطرد إلى المستودع: يعود المخزون.",
+    "exchangeHelp": "المنتج الجديد عند الزبون؛ والقديم سيعود إلى المستودع.",
+    "tapAgain": "اضغط مرة أخرى للتأكيد"
   }
 }

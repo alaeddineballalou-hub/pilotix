@@ -1,5 +1,5 @@
 import type { Order } from '@pilotix/shared';
-import { useEffect, useRef, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
 import { openOrder } from '../../lib/modals';
@@ -9,6 +9,8 @@ import { Modal } from '../../ui/modal';
 import { itemsLine } from './OrderList';
 import { cleanCode, decodePhoto, isPhone, ring, startCamera, unlockAudio } from './scan';
 import { trackOf } from '../../lib/items';
+import { useIsPhone } from '../../lib/useMedia';
+import './stages.css';
 
 type Kind = 'ok' | 'bad' | 'warn';
 interface Shown {
@@ -25,10 +27,13 @@ type Mode = 'dispatch' | 'back';
 // Same code twice within 2.5 s = one scan (douchettes often send twice).
 const last = { code: '', at: 0 };
 
-/** The scan card: douchette input, camera, photo, result, history ("Ce poste"). */
+/** The scan card: douchette input, camera, photo, result, history ("Ce poste").
+ *  On a phone the camera is the only way to scan: one big button, no douchette box; the camera stays open and shows
+ *  the result of each parcel it reads. */
 export function ScanCard({ mode, onBack, autoCamera }: { mode: Mode; onBack?: () => void; autoCamera?: boolean }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const phone = useIsPhone();
   const inp = useRef<HTMLInputElement>(null);
   const file = useRef<HTMLInputElement>(null);
   const [shown, setShown] = useState<Shown>({ kind: 'idle', code: '' });
@@ -108,6 +113,7 @@ export function ScanCard({ mode, onBack, autoCamera }: { mode: Mode; onBack?: ()
 
   const M = (k: string) => t(`scanner.modes.${mode}.${k}`);
   const badgeOf = (k: Kind) => (k === 'ok' ? t('scanner.good') : k === 'bad' ? t('scanner.stop') : t('scanner.check'));
+  const result = <Result v={shown} badgeOf={badgeOf} onPick={(o) => add(trackOf(o) || o.ref, o.id)} onCancel={() => setShown({ kind: 'idle', code: '' })} />;
 
   return (
     <section className="card bjf bjsc" onClick={(e) => !(e.target as HTMLElement).closest('input,button,a,select,textarea,summary,li') && focus()}>
@@ -130,69 +136,91 @@ export function ScanCard({ mode, onBack, autoCamera }: { mode: Mode; onBack?: ()
         </div>
       </div>
       <div className="bjf-row row">
-        <input
-          ref={inp}
-          id={`bjsc-in-${mode}`}
-          type="text"
-          className="bjf-in grow"
-          placeholder={t('scanner.inputPh')}
-          aria-label={t('scanner.inputLabel')}
-          autoComplete="off"
-          spellCheck={false}
-          autoCapitalize="characters"
-          onKeyDown={(e) => {
-            unlockAudio();
-            const el = e.currentTarget;
-            if ((e.key === 'Enter' || e.key === 'Tab') && el.value.trim()) {
-              e.preventDefault();
-              const v = el.value;
-              el.value = '';
-              add(v);
-            }
-          }}
-        />
-        <button
-          type="button"
-          className="btn primary big"
-          onClick={() => {
-            unlockAudio();
-            setCam(true);
-          }}
-        >
-          <Icon name="camera" /> {t('scanner.camera')}
-        </button>
-        <button
-          type="button"
-          className="btn big"
-          onClick={() => {
-            unlockAudio();
-            file.current?.click();
-          }}
-        >
-          {t('scanner.photo')}
-        </button>
+        {phone ? (
+          <button
+            type="button"
+            className="btn primary big bjsc-cam"
+            onClick={() => {
+              unlockAudio();
+              setCam(true);
+            }}
+          >
+            <Icon name="camera" /> {t('scanner.camTitle')}
+          </button>
+        ) : (
+          <>
+            <input
+              ref={inp}
+              id={`bjsc-in-${mode}`}
+              type="text"
+              className="bjf-in grow"
+              placeholder={t('scanner.inputPh')}
+              aria-label={t('scanner.inputLabel')}
+              autoComplete="off"
+              spellCheck={false}
+              autoCapitalize="characters"
+              onKeyDown={(e) => {
+                unlockAudio();
+                const el = e.currentTarget;
+                if ((e.key === 'Enter' || e.key === 'Tab') && el.value.trim()) {
+                  e.preventDefault();
+                  const v = el.value;
+                  el.value = '';
+                  add(v);
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="btn primary big"
+              onClick={() => {
+                unlockAudio();
+                setCam(true);
+              }}
+            >
+              <Icon name="camera" /> {t('scanner.camera')}
+            </button>
+            <button
+              type="button"
+              className="btn big"
+              onClick={() => {
+                unlockAudio();
+                file.current?.click();
+              }}
+            >
+              {t('scanner.photo')}
+            </button>
+          </>
+        )}
         <input ref={file} type="file" accept="image/*" capture="environment" hidden onChange={onPhoto} />
       </div>
-      <div className="bjsc-res" aria-live="assertive">
-        <Result v={shown} badgeOf={badgeOf} onPick={(o) => add(trackOf(o) || o.ref, o.id)} onCancel={() => setShown({ kind: 'idle', code: '' })} />
-      </div>
-      {shown.kind === 'idle' && <p className="muted small">{isPhone() ? t('scanner.idlePhone') : t('scanner.idlePc')}</p>}
-      <h3>{t('scanner.post')}</h3>
-      <ul className="bjsc-log">
-        {!log.length && <li className="muted small">{t('scanner.postEmpty')}</li>}
-        {log.map((v, i) => (
-          <li key={i} className="bjsc-li" tabIndex={0} onClick={() => show(v, true)} onKeyDown={(e) => e.key === 'Enter' && show(v, true)}>
-            <i className={`bjsc-dot ${v.kind}`} />
-            <div className="grow">
-              <b className="ltr">{v.code}</b>
-              <small>{v.why}</small>
-            </div>
-            <time className="ltr">{new Date(v.at!).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</time>
-          </li>
-        ))}
-      </ul>
+      {!(phone && shown.kind === 'idle') && (
+        <div className="bjsc-res" aria-live="assertive">
+          {result}
+        </div>
+      )}
+      {shown.kind === 'idle' && <p className="muted small">{phone || isPhone() ? t('scanner.idlePhone') : t('scanner.idlePc')}</p>}
+      {!(phone && !log.length) && (
+        <>
+          <h3>{t('scanner.post')}</h3>
+          <ul className="bjsc-log">
+            {!log.length && <li className="muted small">{t('scanner.postEmpty')}</li>}
+            {log.map((v, i) => (
+              <li key={i} className="bjsc-li" tabIndex={0} onClick={() => show(v, true)} onKeyDown={(e) => e.key === 'Enter' && show(v, true)}>
+                <i className={`bjsc-dot ${v.kind}`} />
+                <div className="grow">
+                  <b className="ltr">{v.code}</b>
+                  <small>{v.why}</small>
+                </div>
+                <time className="ltr">{new Date(v.at!).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</time>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       {cam && (
         <CameraModal
+          result={shown.kind === 'idle' ? null : result}
           onClose={() => {
             setCam(false);
             setTimeout(focus, 50);
@@ -263,7 +291,9 @@ function Result({ v, badgeOf, onPick, onCancel }: { v: Shown; badgeOf: (k: Kind)
   );
 }
 
-function CameraModal({ onClose, onCode, onPhoto }: { onClose: () => void; onCode: (c: string) => void; onPhoto: () => void }) {
+/** The live camera. `result`: what the last code read gave (good, stop, check, choose), shown above the picture so the
+ *  camera can stay open from one parcel to the next. */
+function CameraModal({ onClose, onCode, onPhoto, result }: { onClose: () => void; onCode: (c: string) => void; onPhoto: () => void; result?: ReactNode }) {
   const { t } = useTranslation();
   const video = useRef<HTMLVideoElement>(null);
   const [err, setErr] = useState('');
@@ -316,7 +346,13 @@ function CameraModal({ onClose, onCode, onPhoto }: { onClose: () => void; onCode
         <p className="badbox">{err}</p>
       ) : (
         <>
-          <p className="muted small">{ready ? t('scanner.camHelp') : t('scanner.camStarting')}</p>
+          {result ? (
+            <div className="bjsc-camres" aria-live="assertive">
+              {result}
+            </div>
+          ) : (
+            <p className="muted small">{ready ? t('scanner.camHelp') : t('scanner.camStarting')}</p>
+          )}
           <video ref={video} muted playsInline style={{ width: '100%', maxHeight: '60vh', borderRadius: 12, background: '#000' }} />
         </>
       )}

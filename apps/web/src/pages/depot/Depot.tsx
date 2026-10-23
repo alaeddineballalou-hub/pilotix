@@ -1,13 +1,12 @@
 import type { Order } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
-import { escapeHtml, printHtml } from '../../lib/files';
-import { da, dateOnly, n } from '../../lib/format';
+import { da, n } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
-import { Card, Empty, ErrorBox, Loading, StatusBadge } from '../../ui/kit';
+import { Card, ErrorBox, Icon, Loading, StatusBadge } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import type { PageProps } from '../registry';
 import { DepotOrderList, itemsLine } from './OrderList';
@@ -16,6 +15,7 @@ import { trackOf } from '../../lib/items';
 import { CopyCode } from '../../ui/CopyCode';
 import { useIsPhone } from '../../lib/useMedia';
 import { PhonePrep } from './PhonePrep';
+import { PhoneDispatch, PhoneReturns, PhoneRoad } from './PhoneStages';
 
 const STAGES = ['preparer', 'prepares', 'dispatchees', 'enlivraison', 'retours'] as const;
 type Stage = (typeof STAGES)[number];
@@ -27,9 +27,20 @@ export function Depot({ sub }: PageProps) {
   const c = counts.data;
   // phones: the first stage is products first (pick), then the orders that have everything (pack, partner, dispatch)
   const phone = useIsPhone();
+  // a phone shows two or three stages at a time: the current one is brought into view
+  const bar = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const el = bar.current;
+    const on = el?.querySelector<HTMLElement>('.bjm-p.on');
+    if (!el || !on || el.scrollWidth <= el.clientWidth + 1) return;
+    const r = el.getBoundingClientRect();
+    const b = on.getBoundingClientRect();
+    if (b.left >= r.left + 8 && b.right <= r.right - 8) return;
+    el.scrollBy({ left: b.left + b.width / 2 - (r.left + r.width / 2) });
+  }, [stage]);
   return (
     <>
-      <nav className="bjm-bar flow" aria-label={t('depot.title')} data-g="depot">
+      <nav ref={bar} className="bjm-bar flow" aria-label={t('depot.title')} data-g="depot">
         {STAGES.map((k, i) => (
           <span key={k} style={{ display: 'contents' }}>
             {i > 0 && (
@@ -44,12 +55,12 @@ export function Depot({ sub }: PageProps) {
           </span>
         ))}
       </nav>
-      {!(phone && stage === 'preparer') && <Card title={t(`depot.stage.${stage}`)} />}
+      {stage === 'preparer' && !phone && <Card title={t(`depot.stage.${stage}`)} />}
       {stage === 'preparer' && (phone ? <PhonePrep /> : <Preparer />)}
-      {stage === 'prepares' && <Prepares />}
-      {stage === 'dispatchees' && <Dispatchees />}
-      {stage === 'enlivraison' && <EnLivraison />}
-      {stage === 'retours' && <Retours />}
+      {stage === 'prepares' && (phone ? <PhoneDispatch /> : <Prepares />)}
+      {stage === 'dispatchees' && (phone ? <PhoneRoad stage="dispatchees" /> : <Dispatchees />)}
+      {stage === 'enlivraison' && (phone ? <PhoneRoad stage="enlivraison" /> : <EnLivraison />)}
+      {stage === 'retours' && (phone ? <PhoneReturns /> : <Retours />)}
     </>
   );
 }
@@ -266,90 +277,17 @@ function Preparer() {
 }
 
 // ---------------------------------------------------------------- En dispatch
-/** The picking sheet: quantities of every product in the orders waiting in dispatch, to print and pick. */
-function DispatchSheet() {
-  const { t } = useTranslation();
-  const q = useRpc('catalog.picking', {});
-  const rows = (q.data ?? []).filter((r) => r.prepared > 0);
-  const print = () => {
-    const date = dateOnly(new Date().toISOString());
-    const total = rows.reduce((s, r) => s + r.prepared, 0);
-    printHtml(
-      t('depot.dispatchSheet.sheetTitle', { date }),
-      `<h1>${escapeHtml(t('depot.dispatchSheet.sheetTitle', { date }))}</h1><table><tr><th>${escapeHtml(t('depot.picking.product'))}</th><th class="num">${escapeHtml(t('depot.picking.qty'))}</th><th class="num">${escapeHtml(
-        t('depot.picking.orders'),
-      )}</th><th class="num">${escapeHtml(t('depot.picking.stock'))}</th><th style="width:70px">${escapeHtml(t('depot.picking.done'))}</th></tr>${rows
-        .map((r) => `<tr><td>${escapeHtml(r.label)}</td><td class="num big">${r.prepared}</td><td class="num">${r.preparedOrders}</td><td class="num">${r.stock}${r.stock < r.prepared ? ` (${escapeHtml(t('depot.picking.missing', { n: r.prepared - r.stock }))})` : ''}</td><td></td></tr>`)
-        .join('')}<tr><th>${escapeHtml(t('depot.dispatchSheet.total'))}</th><th class="num big">${total}</th><th></th><th></th><th></th></tr></table>`,
-    );
-  };
-  return (
-    <Card
-      title={t('depot.dispatchSheet.title')}
-      actions={
-        <button className="btn primary" onClick={print} disabled={!rows.length}>
-          🖨 {t('depot.picking.print')}
-        </button>
-      }
-    >
-      {q.isLoading ? (
-        <Loading />
-      ) : q.error ? (
-        <ErrorBox error={q.error} onRetry={() => q.refetch()} />
-      ) : !rows.length ? (
-        <Empty>{t('depot.dispatchSheet.empty')}</Empty>
-      ) : (
-        <div className="tbl-wrap">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th className="wide">{t('depot.picking.product')}</th>
-                <th className="num">{t('depot.picking.qty')}</th>
-                <th className="num">{t('depot.picking.orders')}</th>
-                <th className="num">{t('depot.picking.stock')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => {
-                const low = r.stock < r.prepared;
-                return (
-                  <tr key={`${r.productId}-${r.variantId}`}>
-                    <td className="wide px-cw" data-l={t('depot.picking.product')}>
-                      <div className="px-clamp">{r.label}</div>
-                    </td>
-                    <td className="num" data-l={t('depot.picking.qty')}>
-                      <b className="ltr">{n(r.prepared)}</b>
-                    </td>
-                    <td className="num ltr" data-l={t('depot.picking.orders')}>
-                      {n(r.preparedOrders)}
-                    </td>
-                    <td className="num" data-l={t('depot.picking.stock')}>
-                      <span className={low ? 'stock-low' : undefined}>
-                        <span className="ltr">{n(r.stock)}</span>
-                        {low && ` (${t('depot.picking.missing', { n: r.prepared - r.stock })})`}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </Card>
-  );
-}
-
 function Prepares() {
   const { t } = useTranslation();
   return (
     <>
-      <DispatchSheet />
       <ScanCard mode="dispatch" />
       <DepotOrderList
         title={t('depot.lists.prepares')}
         follow={['prepared']}
         sort="updated_at"
+        hide={['conf', 'follow']}
+        compact
         bulk={(ids, clear) => <CompanyBulk ids={ids} done={clear} />}
       />
     </>
@@ -361,13 +299,13 @@ function Dispatchees() {
   const { t } = useTranslation();
   return (
     <>
-      <Card>
-        <p className="muted small">{t('depot.help.dispatchees')}</p>
-      </Card>
       <DepotOrderList
         title={t('depot.lists.dispatchees')}
+        help={t('depot.help.dispatchees')}
         follow={['shipped']}
         sort="shipped_at"
+        hide={['conf', 'follow']}
+        compact
         extra={[
           {
             label: t('depot.cols.handedSince'),
@@ -392,13 +330,13 @@ function EnLivraison() {
   const { t } = useTranslation();
   return (
     <>
-      <Card>
-        <p className="muted small">{t('depot.help.enlivraison')}</p>
-      </Card>
       <DepotOrderList
         title={t('depot.lists.enlivraison')}
+        help={t('depot.help.enlivraison')}
         follow={['out_for_delivery']}
         sort="shipped_at"
+        hide={['conf', 'follow']}
+        compact
         extra={[
           {
             label: t('depot.cols.leftSince'),
@@ -521,8 +459,28 @@ function Retours() {
   return (
     <>
       <Receive />
-      <DepotOrderList title={t('depot.lists.returning')} follow={['returning']} confirmedOnly={false} sort="updated_at" />
-      <DepotOrderList title={t('depot.lists.exchange')} follow={['in_exchange']} confirmedOnly={false} sort="updated_at" />
+      <DepotOrderList
+        title={t('depot.lists.returning')}
+        follow={['returning']}
+        confirmedOnly={false}
+        sort="updated_at"
+        hide={['conf', 'follow']}
+        compact
+        actions={(o) => <ReceiveButton o={o} />}
+      />
+      <DepotOrderList title={t('depot.lists.exchange')} follow={['in_exchange']} confirmedOnly={false} sort="updated_at" hide={['conf', 'follow']} compact />
     </>
+  );
+}
+
+/** « Reçu au dépôt » on a return still on its way: the stock comes back. */
+function ReceiveButton({ o }: { o: Order }) {
+  const { t } = useTranslation();
+  const recv = useAction('depot.receiveReturn', { success: (r) => t('depot.receive.done', { ref: r.ref }) });
+  return (
+    <button type="button" className="btn small ok" disabled={!o.shippedAt || recv.isPending} onClick={(e) => (e.stopPropagation(), recv.mutate({ id: o.id }))}>
+      <Icon name="check" />
+      {t('depot.receive.button')}
+    </button>
   );
 }
