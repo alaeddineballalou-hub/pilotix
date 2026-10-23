@@ -10,11 +10,20 @@ import { store } from '../../lib/store';
 import { Empty, ErrorBox, Help, Loading, StageBar } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { Marketer } from './Marketer';
+import { PhoneMarketing } from './PhoneAds';
+import { useIsPhone } from '../../lib/useMedia';
 import './ads.css';
 
 /** Marketing: Publicité (Meta spend face to the real orders) and Marketer (paying marketers per ad set). */
 export function Marketing({ sub, rest }: PageProps) {
   const { t } = useTranslation();
+  // phones: every KPI to decide (won / lost, where the money goes, what to do), then products and ad sets
+  const phone = useIsPhone();
+  if (phone) return <PhoneMarketing sub={sub} rest={rest} />;
+  return <MarketingDesktop sub={sub} rest={rest} t={t} />;
+}
+
+function MarketingDesktop({ sub, rest, t }: { sub?: string; rest?: string[]; t: (k: string) => string }) {
   const cur = sub === 'marketer' ? 'marketer' : 'publicite';
   return (
     <>

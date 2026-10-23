@@ -8,13 +8,14 @@
 import { EXCHANGE_KINDS } from '@pilotix/shared';
 import type { Order } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
 import type { Out } from '../../lib/backend';
 import { da, dur, when, wilayaName } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
+import { useFullScreen } from '../../lib/fullScreen';
 import { useSession } from '../../lib/session';
 import { ErrorBox, Icon, Loading, StatusBadge } from '../../ui/kit';
 import { toast } from '../../ui/toast';
@@ -50,33 +51,6 @@ const store = {
     }
   },
 };
-
-/** Full-screen pages: the page behind does not scroll; Échap / the phone's back closes. One history entry is shared
- *  by the SAV pages, so going from the call to its ticket does not pop the new page. */
-let openPages = 0;
-function useFullScreen(onClose: () => void) {
-  const ref = useRef(onClose);
-  ref.current = onClose;
-  useEffect(() => {
-    openPages++;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && !document.querySelector('.modal-wrap, .pxv-sheet') && ref.current();
-    const back = () => ref.current();
-    if (!history.state?.pxv) history.pushState({ pxv: 1 }, '');
-    window.addEventListener('keydown', esc);
-    window.addEventListener('popstate', back);
-    return () => {
-      openPages--;
-      document.body.style.overflow = prev;
-      window.removeEventListener('keydown', esc);
-      window.removeEventListener('popstate', back);
-      setTimeout(() => {
-        if (!openPages && history.state?.pxv) history.back();
-      }, 0);
-    };
-  }, []);
-}
 
 // ---------------------------------------------------------------- the satisfaction faces
 export function Faces({ value, onChange, small }: { value: number | null; onChange: (v: number) => void; small?: boolean }) {
