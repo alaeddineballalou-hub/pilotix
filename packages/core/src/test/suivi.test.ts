@@ -89,6 +89,29 @@ test('suivi: claims are saved with their status history', async () => {
   await assert.rejects(call('suivi.claims', await as(EMAILS.livreur), {}), /Accès refusé/);
 });
 
+test('suivi: a claim on a ZR parcel is created at ZR right away (API), then followed from Pilotix', async () => {
+  const ctx = await as(EMAILS.suivi);
+  const r = (await db.query(`SELECT o.id, o.company_id FROM orders o JOIN delivery_companies c ON c.id=o.company_id WHERE c.kind = 'zr' AND o.tracking IS NOT NULL LIMIT 1`))[0];
+  assert.ok(r, 'a ZR parcel in the demo data');
+  const cats: any = await call('suivi.claimCategories', ctx, { companyId: Number(r.company_id) });
+  assert.ok(cats.length > 0);
+  const c: any = await call('suivi.claimCreate', ctx, { orderId: Number(r.id), reason: 'damaged', details: 'Carton ouvert', message: 'Bonjour…', categoryId: cats[0].id });
+  assert.equal(c.viaApi, true);
+  assert.ok(c.extId && c.extRef, 'ZR claim id and number kept');
+  assert.equal(c.channel, 'api');
+  assert.ok(c.sentAt);
+  assert.match(c.notes[c.notes.length - 1].text, /API/);
+  const again: any = await call('suivi.claimPush', ctx, { id: c.id });
+  assert.equal(again.extId, c.extId, 'never sent twice');
+  const rem: any = await call('suivi.claimRemind', ctx, { id: c.id, text: 'Toujours pas de nouvelles ?' });
+  assert.equal(rem.status, 'still_waiting');
+  assert.match(rem.notes[rem.notes.length - 1].text, /Relance/);
+  const sync: any = await call('suivi.claimSync', ctx, {});
+  assert.ok(sync.checked >= 1);
+  const contacts: any = await call('suivi.contacts', ctx, {});
+  assert.equal(contacts.companies.find((x: any) => x.id === Number(r.company_id)).api, true);
+});
+
 test('sav: create a ticket, then an exchange creates a linked order at the depot', async () => {
   const ctx = await as(EMAILS.suivi);
   const o = (await db.query(`SELECT o.id FROM orders o WHERE o.follow_status='delivered' AND EXISTS (SELECT 1 FROM order_items i JOIN product_variants v ON v.product_id=i.product_id AND v.id <> i.variant_id WHERE i.order_id=o.id) LIMIT 1`))[0];

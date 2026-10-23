@@ -100,6 +100,43 @@ export interface PreviewResult {
   note?: string;
 }
 
+/** A réclamation sent to the courier through its API. */
+export interface ClaimInput {
+  /** our claim number (REC-0001) */
+  ref: string;
+  item: TrackItem;
+  /** our reason key (late, damaged…) and its French words */
+  reason: string;
+  reasonText: string;
+  /** the courier's own category, when the user chose one */
+  categoryId: string | null;
+  /** what the user wrote, plus the order facts */
+  description: string;
+}
+
+export interface ClaimCategory {
+  id: string;
+  name: string;
+}
+
+export interface ClaimSent {
+  extId: string;
+  /** the courier's claim number, shown to the user */
+  extRef: string | null;
+  status: string | null;
+}
+
+export interface ClaimState {
+  extId: string;
+  /** what the courier says, in words */
+  status: string;
+  /** the courier closed / solved it */
+  resolved: boolean;
+  at?: string | null;
+  /** the courier's last answer (comment), if any */
+  answer?: string | null;
+}
+
 /** Helpers the framework gives to adapters. */
 export interface Helpers {
   /** Finds the courier's commune matching ours (fuzzy). `load` lists the courier's communes of the wilaya. */
@@ -120,6 +157,12 @@ export interface CourierAdapter {
   cancel?(c: CourierCompany, p: TrackItem): Promise<void>;
   fees?(c: CourierCompany): Promise<FeeRow[]>;
   stopdesks?(c: CourierCompany): Promise<Desk[]>;
+  /** Réclamations through the courier API (create, its categories, read back their state). */
+  claimCategories?(c: CourierCompany): Promise<ClaimCategory[]>;
+  claim?(c: CourierCompany, i: ClaimInput): Promise<ClaimSent>;
+  claimStates?(c: CourierCompany, extIds: string[]): Promise<ClaimState[]>;
+  /** adds a message (follow-up) to a claim at the courier */
+  claimComment?(c: CourierCompany, extId: string, text: string): Promise<void>;
   /** What would be sent, without sending (secrets masked). */
   preview?(c: CourierCompany, p: Parcel): Promise<PreviewResult>;
 }

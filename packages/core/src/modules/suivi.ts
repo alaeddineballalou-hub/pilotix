@@ -6,6 +6,9 @@ import { bad, Ctx, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
 import { addEvent, FollowInput, getOrder, listOrders, ListInput, setFollow } from './orders';
 import { findOrders } from './sav';
+import { KINDS } from '../couriers/kinds';
+import type { ClaimCategory, ClaimSent, ClaimState } from '../couriers/types';
+import type { CourierKind } from '@pilotix/shared';
 
 const id = z.number().int().positive();
 
@@ -218,10 +221,18 @@ export interface Claim {
   updatedAt: string;
   sentAt: string | null;
   resolvedAt: string | null;
+  /** created at the courier through its API (ZR): its id, number, last state, last answer, last refusal */
+  extId: string | null;
+  extRef: string | null;
+  extStatus: string | null;
+  extAnswer: string | null;
+  extError: string | null;
+  /** the courier takes réclamations through its API */
+  viaApi: boolean;
 }
 
 const claimRef = (n: number) => `REC-${String(n).padStart(4, '0')}`;
-const CLAIM_SELECT = `SELECT c.*, o.ref AS order_ref, o.tracking, o.customer_name, o.phone, co.name AS company_name, lv.name AS livreur_name, lv.phone AS livreur_phone, cb.name AS created_by_name
+const CLAIM_SELECT = `SELECT c.*, o.ref AS order_ref, o.tracking, o.customer_name, o.phone, co.name AS company_name, co.kind AS company_kind, lv.name AS livreur_name, lv.phone AS livreur_phone, cb.name AS created_by_name
   FROM claims c LEFT JOIN orders o ON o.id = c.order_id LEFT JOIN delivery_companies co ON co.id = c.company_id
   LEFT JOIN profiles lv ON lv.id = c.livreur_id LEFT JOIN profiles cb ON cb.id = c.created_by`;
 
@@ -252,7 +263,115 @@ function toClaim(r: any): Claim {
     updatedAt: iso(r.updated_at ?? r.created_at),
     sentAt: isoOrNull(r.sent_at),
     resolvedAt: isoOrNull(r.resolved_at),
+    extId: r.ext_id ?? null,
+    extRef: r.ext_ref ?? null,
+    extStatus: r.ext_status ?? null,
+    extAnswer: r.ext_answer ?? null,
+    extError: r.ext_error ?? null,
+    viaApi: r.livreur_id == null && !!KINDS[r.company_kind as CourierKind]?.claims,
   };
+}
+
+// ---------------------------------------------------------------- claims through the courier API (ZR)
+const REASON_FR: Record<string, string> = {
+  relivrer: 'Relivrer le colis', late: 'Retard de livraison', nocall: 'Le livreur n’a pas appelé le client', fakedeliv: 'Faux statut « livré »',
+  fakeret: 'Faux statut « retour »', address: 'Changement d’adresse', damaged: 'Colis endommagé', money: 'Problème de versement',
+  noreturn: 'Retour non reçu', other: 'Autre',
+};
+
+const DEMO_CATS: ClaimCategory[] = [
+  { id: 'demo-retard', name: 'Retard de livraison' },
+  { id: 'demo-relivraison', name: 'Demande de relivraison' },
+  { id: 'demo-statut', name: 'Statut erroné' },
+  { id: 'demo-endommage', name: 'Colis endommagé' },
+  { id: 'demo-adresse', name: 'Modification d’adresse' },
+  { id: 'demo-paiement', name: 'Paiement / versement' },
+  { id: 'demo-retour', name: 'Retour non reçu' },
+  { id: 'demo-autre', name: 'Autre' },
+];
+
+/** Sends a saved claim to the courier's API. Never throws: a refusal is kept on the claim (ext_error) and in its history. */
+async function pushClaim(ctx: Ctx, cid: number, categoryId: string | null): Promise<Claim> {
+  const cur = await getClaim(ctx.db, cid);
+  if (!cur.viaApi || !cur.companyId) throw bad(`${cur.ref} : cette société ne prend pas les réclamations par API`);
+  if (cur.extId) return cur;
+  const o = (await ctx.db.query('SELECT id, ref, tracking, ext_id, customer_name, phone FROM orders WHERE id = $1', [cur.orderId]))[0];
+  if (!o?.tracking) throw bad(`${cur.ref} : la commande n’a pas de numéro de suivi`);
+  const me = ctx.session.profile.id;
+  const nowIso = new Date(ctx.now()).toISOString();
+  const reasonText = REASON_FR[cur.reason] ?? cur.reason;
+  const description = [cur.details.trim() || reasonText, `Commande ${o.ref} · suivi ${o.tracking}`, `Client : ${o.customer_name ?? ''} ${o.phone ?? ''}`.trim()].join('\n');
+  let sent: ClaimSent | null = null;
+  let error: string | null = null;
+  try {
+    if (!ctx.server) sent = { extId: `demo-${cid}`, extRef: `D${String(1000000 + cid)}`, status: 'Nouvelle' };
+    else
+      sent = (await ctx.server.courier('claim', { companyId: cur.companyId, claim: { ref: cur.ref, item: { id: num(o.id), tracking: o.tracking, extId: o.ext_id ?? null }, reason: cur.reason, reasonText, categoryId, description } }, ctx)) as ClaimSent;
+  } catch (e: any) {
+    error = String(e?.message ?? 'Erreur').slice(0, 300);
+  }
+  const text = sent ? `Envoyée à ${cur.companyName ?? 'la société'} (API)${sent.extRef ? ` · n° ${sent.extRef}` : ''}` : `${cur.companyName ?? 'La société'} refuse : ${error}`;
+  const notes = [...cur.notes, { at: nowIso, userId: me, text, status: null }];
+  await ctx.db.query(
+    `UPDATE claims SET notes = $2, ext_id = $3, ext_ref = $4, ext_status = $5, ext_error = $6,
+       channel = CASE WHEN $3::text IS NULL THEN channel ELSE 'api' END,
+       sent_at = CASE WHEN $3::text IS NULL THEN sent_at ELSE COALESCE(sent_at, $7::timestamptz) END, updated_at = $7::timestamptz WHERE id = $1`,
+    [cid, JSON.stringify(notes), sent?.extId ?? null, sent?.extRef ?? null, sent?.status ?? null, error, nowIso],
+  );
+  if (cur.orderId) await addEvent(ctx.db, cur.orderId, me, 'note', null, 'event', `Réclamation ${cur.ref} : ${text}`.slice(0, 300));
+  ctx.emit({ type: 'order', id: cur.orderId ?? undefined });
+  return getClaim(ctx.db, cid);
+}
+
+/** Reads back the state of the open claims sent through an API; a closed one becomes "Réglée", ZR's answer goes in the history. */
+async function syncClaims(ctx: Ctx, onlyId?: number) {
+  const rows = await ctx.db.query(
+    `SELECT c.id, c.company_id, c.ext_id, c.ext_status, c.ext_answer, c.notes, c.order_id, c.status FROM claims c
+     WHERE c.ext_id IS NOT NULL AND c.status <> 'resolved' ${onlyId ? 'AND c.id = $1' : ''} ORDER BY c.updated_at LIMIT 200`,
+    onlyId ? [onlyId] : [],
+  );
+  let changed = 0;
+  let checked = 0;
+  const errors: string[] = [];
+  const byCompany = new Map<number, any[]>();
+  for (const r of rows) byCompany.set(num(r.company_id), [...(byCompany.get(num(r.company_id)) ?? []), r]);
+  const nowIso = new Date(ctx.now()).toISOString();
+  for (const [companyId, list] of byCompany) {
+    let states: ClaimState[] = [];
+    if (!ctx.server) states = list.map((r) => ({ extId: r.ext_id, status: r.ext_status || 'Nouvelle', resolved: false }));
+    else
+      try {
+        states = (await ctx.server.courier('claimStates', { companyId, extIds: list.map((r) => r.ext_id) }, ctx)) as ClaimState[];
+      } catch (e: any) {
+        errors.push(String(e?.message ?? 'Erreur'));
+        continue;
+      }
+    for (const st of states) {
+      const r = list.find((x) => x.ext_id === st.extId);
+      if (!r) continue;
+      checked++;
+      const notes = typeof r.notes === 'string' ? JSON.parse(r.notes) : r.notes ?? [];
+      const parts: string[] = [];
+      if (st.status && st.status !== r.ext_status) parts.push(`Statut ZR : ${st.status}`);
+      if (st.answer && st.answer !== r.ext_answer) parts.push(`Réponse : ${st.answer}`);
+      const status = st.resolved ? 'resolved' : r.status;
+      if (!parts.length && status === r.status) {
+        await ctx.db.query('UPDATE claims SET ext_synced_at = $2 WHERE id = $1', [r.id, nowIso]);
+        continue;
+      }
+      changed++;
+      if (status !== r.status) parts.push(CLAIM_STATUS_FR[status]);
+      notes.push({ at: nowIso, userId: null, text: parts.join(' · '), status: status !== r.status ? status : null });
+      await ctx.db.query(
+        `UPDATE claims SET ext_status = $2, ext_answer = COALESCE($3, ext_answer), status = $4, notes = $5, ext_synced_at = $6::timestamptz, updated_at = $6::timestamptz,
+           resolved_at = CASE WHEN $4 = 'resolved' THEN COALESCE(resolved_at, $6::timestamptz) ELSE resolved_at END WHERE id = $1`,
+        [r.id, st.status, st.answer ?? null, status, JSON.stringify(notes), nowIso],
+      );
+      if (r.order_id) await addEvent(ctx.db, num(r.order_id), null, 'note', null, 'event', `Réclamation ${claimRef(num(r.id))} : ${parts.join(' · ')}`.slice(0, 300));
+    }
+  }
+  if (changed) ctx.emit({ type: 'orders' });
+  return { checked, changed, errors };
 }
 
 async function getClaim(db: Db, cid: number) {
@@ -297,6 +416,9 @@ const ClaimCreate = z.object({
   channel: z.enum(['whatsapp', 'email', 'copy', 'phone']).default('whatsapp'),
   /** to our own livreur instead of the company */
   toLivreur: z.boolean().default(false),
+  /** courier with a claim API (ZR): send it there right away, in this category (null = chosen from the reason) */
+  viaApi: z.boolean().default(true),
+  categoryId: z.string().max(100).nullable().optional(),
 });
 
 const ClaimUpdate = z.object({
@@ -380,7 +502,7 @@ export const suiviProcs = {
       companies: comps.map((c: any) => {
         const cfg = (typeof c.config === 'string' ? JSON.parse(c.config) : c.config) ?? {};
         const k = cfg.claim ?? {};
-        return { id: num(c.id), name: c.name as string, kind: c.kind as string, wa: (k.wa as string) || null, email: (k.email as string) || null, phone: (k.phone as string) || null, portal: (k.portal as string) || null };
+        return { id: num(c.id), name: c.name as string, kind: c.kind as string, api: !!KINDS[c.kind as CourierKind]?.claims, wa: (k.wa as string) || null, email: (k.email as string) || null, phone: (k.phone as string) || null, portal: (k.portal as string) || null };
       }),
       livreurs: livreurs.map((l: any) => ({ id: num(l.id), name: l.name as string, phone: (l.phone as string) ?? null, companyId: numOrNull(l.livreur_company_id) })),
     };
@@ -425,8 +547,43 @@ export const suiviProcs = {
       return n;
     });
     ctx.emit({ type: 'order', id: o.id });
-    return getClaim(ctx.db, cid);
+    const made = await getClaim(ctx.db, cid);
+    if (made.viaApi && i.viaApi && o.tracking) return pushClaim(ctx, cid, i.categoryId ?? null);
+    return made;
   }),
+
+  /** Sends (again) a saved claim to the courier's API, e.g. after a refusal. */
+  'suivi.claimPush': proc(['suivi', 'confirmation', 'depot'], z.object({ id, categoryId: z.string().max(100).nullable().optional() }), (ctx, i) => pushClaim(ctx, i.id, i.categoryId ?? null)),
+
+  /** The courier's claim categories (ZR), to choose one in the form. */
+  'suivi.claimCategories': proc(['suivi', 'confirmation', 'depot'], z.object({ companyId: id }), async (ctx, { companyId }): Promise<ClaimCategory[]> => {
+    const k = (await ctx.db.query('SELECT kind FROM delivery_companies WHERE id = $1', [companyId]))[0]?.kind as CourierKind | undefined;
+    if (!k || !KINDS[k]?.claims) return [];
+    if (!ctx.server) return DEMO_CATS;
+    try {
+      return (await ctx.server.courier('claimCategories', { companyId }, ctx)) as ClaimCategory[];
+    } catch {
+      return [];
+    }
+  }),
+
+  /** Relance of a claim sent through the API: the text goes to the courier as a comment on its claim. */
+  'suivi.claimRemind': proc(['suivi', 'confirmation', 'depot'], z.object({ id, text: z.string().trim().min(1).max(2000) }), async (ctx, i) => {
+    const cur = await getClaim(ctx.db, i.id);
+    if (!cur.extId || !cur.companyId) throw bad(`${cur.ref} n’a pas été créée chez la société par l’API`);
+    if (ctx.server) await ctx.server.courier('claimComment', { companyId: cur.companyId, extId: cur.extId, text: i.text }, ctx);
+    const me = ctx.session.profile.id;
+    const nowIso = new Date(ctx.now()).toISOString();
+    const status = cur.status === 'waiting' ? 'still_waiting' : cur.status;
+    const text = `Relance envoyée à ${cur.companyName ?? 'la société'} (API) : ${i.text}`.slice(0, 1000);
+    await ctx.db.query(`UPDATE claims SET notes = $2, status = $3, updated_at = $4::timestamptz WHERE id = $1`, [i.id, JSON.stringify([...cur.notes, { at: nowIso, userId: me, text, status: status !== cur.status ? status : null }]), status, nowIso]);
+    if (cur.orderId) await addEvent(ctx.db, cur.orderId, me, 'note', null, 'event', `Réclamation ${cur.ref} : ${text}`.slice(0, 300));
+    ctx.emit({ type: 'order', id: cur.orderId ?? undefined });
+    return getClaim(ctx.db, i.id);
+  }),
+
+  /** Reads back from the courier the state of the claims sent through its API. */
+  'suivi.claimSync': proc(['suivi', 'confirmation', 'depot'], z.object({ id: id.optional() }), (ctx, i) => syncClaims(ctx, i.id)),
 
   'suivi.claimUpdate': proc(['suivi', 'confirmation', 'depot'], ClaimUpdate, async (ctx, i) => {
     const cur = await getClaim(ctx.db, i.id);
