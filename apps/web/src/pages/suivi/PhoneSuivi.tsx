@@ -11,7 +11,7 @@ import { useAction, useRpc } from '../../lib/query';
 import { Icon } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { eventText } from '../orders/OrderCard';
-import { ClaimRow, SendModal, useTarget } from './Claims';
+import { ClaimRow, RemindApiModal, SendModal, useTarget } from './Claims';
 import { daysSince, waLink } from './common';
 import '../confirmation/phone.css';
 import './phone.css';
@@ -136,6 +136,17 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Ord
   const claims = useRpc('suivi.claims', { target: 'all', status: 'open', orderId: o.id });
   const claim = ((claims.data?.rows ?? []) as ClaimRow[])[0] ?? null;
   const upd = useAction('suivi.claimUpdate', { success: t('suivi.rec.updated') });
+  const push = useAction('suivi.claimPush', {
+    onDone: (c) => toast(c.extId ? t('suivi.rec.apiSent', { ref: c.ref, name: c.companyName ?? '', n: c.extRef ?? '' }) : c.extError ?? t('suivi.rec.apiFailed', { name: c.companyName ?? '' }), c.extId ? 'ok' : 'bad'),
+  });
+  const sync = useAction('suivi.claimSync', { silent: true });
+  const [remindApi, setRemindApi] = useState(false);
+  // a claim created at ZR: read back its state and answer when the parcel opens
+  const claimExt = claim?.extId ? claim.id : null;
+  useEffect(() => {
+    if (claimExt) sync.mutate({ id: claimExt });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [claimExt]);
   const { target, shop } = useTarget(o, x?.companyKind === 'own');
   const [send, setSend] = useState(false);
   const [note, setNote] = useState('');
@@ -250,10 +261,40 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Ord
               {claim.sentAt ? t('suivi.ph.sentOn', { d: when(claim.sentAt) }) : t('suivi.ph.notSent')}
               {claim.details ? ` · « ${claim.details} »` : ''}
             </p>
+            {claim.extId ? (
+              <p className="xs pxs-rc-api">
+                {t('suivi.rec.apiNo', { name: claim.companyName ?? '', n: claim.extRef || '✓' })}
+                {claim.extStatus && ` · ${claim.extStatus}`}
+              </p>
+            ) : (
+              claim.viaApi &&
+              claim.extError && (
+                <p className="xs pxs-rc-api bad">
+                  {t('suivi.rec.apiRefusedShort', { name: claim.companyName ?? '' })} · {claim.extError}
+                </p>
+              )
+            )}
+            {claim.extAnswer && (
+              <div className="bjr-ans">
+                <b>{t('suivi.rec.apiLastAnswer', { name: claim.companyName ?? '' })}</b>
+                {claim.extAnswer}
+              </div>
+            )}
             <div className="pxs-rca">
-              <button type="button" className="pxs-chip" disabled={!target} onClick={() => setSend(true)}>
-                <Icon name="refresh" /> {t('suivi.act.remind')}
-              </button>
+              {claim.viaApi && !claim.extId && (claim.extError || !claim.sentAt) && (
+                <button type="button" className="pxs-chip or" disabled={push.isPending} onClick={() => push.mutate({ id: claim.id })}>
+                  <Icon name="send" /> {t(claim.extError ? 'suivi.rec.apiRetry' : 'suivi.rec.apiSend', { name: claim.companyName ?? '' })}
+                </button>
+              )}
+              {claim.extId ? (
+                <button type="button" className="pxs-chip" onClick={() => setRemindApi(true)}>
+                  <Icon name="chat" /> {t('suivi.rec.apiRemind', { name: claim.companyName ?? '' })}
+                </button>
+              ) : (
+                <button type="button" className="pxs-chip" disabled={!target} onClick={() => setSend(true)}>
+                  <Icon name="refresh" /> {t('suivi.act.remind')}
+                </button>
+              )}
               <button type="button" className="pxs-chip ok" disabled={upd.isPending} onClick={() => upd.mutate({ id: claim.id, status: 'resolved' })}>
                 <Icon name="check" /> {t('suivi.ph.resolved')}
               </button>
@@ -367,9 +408,8 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Ord
           </button>
         </form>
       </div>
-      {send && claim && target && (
-        <SendModal claim={{ id: claim.id, ref: claim.ref, reason: claim.reason, details: claim.details }} order={o} target={target} shop={shop} again onClose={() => setSend(false)} />
-      )}
+      {send && claim && target && <SendModal claim={claim} order={o} target={target} shop={shop} again onClose={() => setSend(false)} />}
+      {remindApi && claim && <RemindApiModal c={claim} onClose={() => setRemindApi(false)} />}
     </div>
   );
 }
