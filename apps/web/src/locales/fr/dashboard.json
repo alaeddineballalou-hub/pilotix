@@ -374,5 +374,385 @@
     "aStatus": "{{who}} : {{ref}} → {{st}}",
     "system": "Système",
     "none": "Rien sur cette période."
+  },
+  "tb": {
+    "vs": "comparé au {{range}}",
+    "vsPrevShort": "par rapport à la période d’avant",
+    "allTeams": "Toutes les équipes",
+    "noManager": "Sans manager",
+    "team": "L’équipe",
+    "members_one": "{{count}} membre",
+    "members_other": "{{count}} membres",
+    "days": "Jour par jour",
+    "daysOne": "Choisissez au moins 2 jours pour voir l’évolution.",
+    "targetUp": "objectif ≥ {{v}}",
+    "targetDown": "objectif ≤ {{v}}",
+    "allGood": "Rien à signaler",
+    "noWork": "Pas d’activité",
+    "coach": "À travailler",
+    "teamRow": "Équipe",
+    "legTarget": "objectif",
+    "legTeam": "moyenne de l’équipe",
+    "legOpen": "Cliquez sur une personne pour voir son détail et quoi travailler.",
+    "groups": "Par équipe",
+    "groupsSub": "cliquez pour voir une équipe",
+    "focus": "À travailler",
+    "strength": "Point fort",
+    "teamAvg": "moyenne de l’équipe {{v}}",
+    "teamIs": "équipe {{v}}",
+    "fineLong": "Rien à travailler en priorité : tout est à l’objectif ou au niveau de l’équipe.",
+    "noWorkLong": "Pas d’activité sur la période.",
+    "fewShort": "Peu de données",
+    "fewLong": "Trop peu de données sur la période pour juger : choisissez une période plus longue.",
+    "few": "trop peu pour juger",
+    "liveNow": "En ce moment",
+    "lineTeam": "Équipe",
+    "dates": "Dates",
+    "datesTitle": "Choisir les dates",
+    "datesApply": "Voir cette période",
+    "now": "À faire maintenant",
+    "nowNone": "Rien en retard.",
+    "others": "Autres motifs",
+    "noReason": "Sans motif",
+    "settings": "Réglages des équipes",
+    "settingsSub": "composer les équipes, ce que voit chaque manager",
+    "livDetail": "Colis et argent en détail",
+    "livDetailSub": "par livreur ou par société, avec les montants",
+    "who": {
+      "confirmation": "Agent",
+      "suivi": "Agent de suivi",
+      "depot": "Personne",
+      "livreurs": "Livreur",
+      "sav": "Responsable"
+    },
+    "none": {
+      "confirmation": "—",
+      "suivi": "Sans agent de suivi",
+      "depot": "—",
+      "livreurs": "—",
+      "sav": "Sans responsable"
+    },
+    "bar": {
+      "confirmation": "Confirmées",
+      "suivi": "Livrés",
+      "depot": "Emballées",
+      "livreurs": "Livrés",
+      "sav": "Réglés"
+    },
+    "line": {
+      "confirmation": "Taux de confirmation",
+      "suivi": "Taux de livraison",
+      "depot": "Emballées en moins de 24 h",
+      "livreurs": "Taux de livraison",
+      "sav": "Réglés en moins de 48 h"
+    },
+    "why": {
+      "confirmation": "Pourquoi elles sont annulées",
+      "suivi": "Pourquoi les colis reviennent",
+      "depot": "Retours liés à la préparation",
+      "livreurs": "Pourquoi les colis reviennent",
+      "sav": "—"
+    },
+    "whyNone": {
+      "confirmation": "Aucune annulation sur la période.",
+      "suivi": "Aucun retour sur la période.",
+      "depot": "Aucun retour lié à la préparation.",
+      "livreurs": "Aucun retour sur la période.",
+      "sav": "—"
+    },
+    "nowK": {
+      "confirmation": {
+        "firstLate": "premiers appels en retard",
+        "lateCallbacks": "rappels en retard",
+        "unassigned": "nouvelles sans agent",
+        "inProgress": "commandes en cours"
+      },
+      "suivi": {
+        "alertsOld": "alertes de plus de 24 h",
+        "alerts": "alertes à traiter",
+        "claimsLate": "réclamations sans réponse depuis 48 h",
+        "orphan": "colis en route sans agent de suivi"
+      },
+      "depot": {
+        "late24": "confirmées depuis plus de 24 h, pas emballées",
+        "waitingPickup": "emballées depuis plus de 24 h, pas parties",
+        "toPrepare": "à préparer",
+        "toReceive": "retours à recevoir"
+      },
+      "livreurs": {
+        "late": "colis chez un livreur depuis plus de 2 jours",
+        "toBring": "retours à ramener",
+        "uncashed": "argent chez les livreurs"
+      },
+      "sav": {
+        "old48": "tickets ouverts depuis plus de 48 h",
+        "nobody": "tickets sans responsable",
+        "todo": "tickets à traiter"
+      }
+    },
+    "m": {
+      "confirmation": {
+        "treated": {
+          "l": "Traitées",
+          "h": "Commandes dont l’agent a changé le statut sur la période (une fois par commande).",
+          "s": "commandes",
+          "u": "traitées"
+        },
+        "confirmed": {
+          "l": "Confirmées",
+          "h": "Commandes confirmées par l’agent sur la période.",
+          "s": "commandes"
+        },
+        "calls": {
+          "l": "Appels",
+          "h": "Appels passés : chaque statut donné compte un appel.",
+          "s": "statuts donnés"
+        },
+        "confRate": {
+          "l": "Confirmation",
+          "h": "Confirmées ÷ (confirmées + annulées) sur la période. Doublons, faux numéros et fausses commandes ne comptent pas : l’agent n’y peut rien.",
+          "s": "des commandes décidées"
+        },
+        "deliveryRate": {
+          "l": "Qualité",
+          "h": "Commandes confirmées par l’agent arrivées sur la période : livrées ÷ (livrées + revenues). Dit si ses confirmations sont de vraies commandes.",
+          "s": "de ses confirmées livrées"
+        },
+        "firstRate": {
+          "l": "1er appel à temps",
+          "h": "Nouvelles commandes appelées dans leur créneau (réglages des appels), parmi celles reçues sur la période.",
+          "s": "dans le créneau"
+        },
+        "firstMs": {
+          "l": "Délai du 1er appel",
+          "h": "Temps médian entre l’arrivée d’une commande et son premier appel.",
+          "s": "médiane"
+        },
+        "triesRate": {
+          "l": "Tentatives à temps",
+          "h": "Après « pas de réponse » ou « occupé », rappels faits dans le créneau suivant.",
+          "s": "rappels dans le créneau"
+        },
+        "upsellRate": {
+          "l": "Upsell",
+          "h": "Commandes confirmées avec un produit ajouté par l’agent.",
+          "s": "des confirmées"
+        },
+        "basket": {
+          "l": "Panier moyen",
+          "h": "Montant moyen des commandes confirmées par l’agent.",
+          "s": "par commande confirmée"
+        },
+        "callsPerConf": {
+          "l": "Appels par confirmation",
+          "h": "Appels nécessaires pour une confirmation.",
+          "s": "appels"
+        },
+        "inProgress": {
+          "l": "En cours",
+          "h": "Commandes de l’agent encore à appeler, maintenant.",
+          "s": "à appeler"
+        },
+        "lateCallbacks": {
+          "l": "Rappels en retard",
+          "h": "Rappels prévus dont l’heure est passée, maintenant.",
+          "s": "maintenant"
+        }
+      },
+      "suivi": {
+        "outcomes": {
+          "l": "Colis arrivés",
+          "h": "Colis suivis par l’agent arrivés au bout sur la période : livrés ou revenus.",
+          "s": "livrés ou revenus",
+          "u": "colis arrivés"
+        },
+        "deliveryRate": {
+          "l": "Taux de livraison",
+          "h": "Livrés ÷ (livrés + revenus) des colis que l’agent suit.",
+          "s": "des colis arrivés"
+        },
+        "treated": {
+          "l": "Alertes traitées",
+          "h": "Alertes traitées par l’agent sur la période.",
+          "s": "alertes"
+        },
+        "treatMs": {
+          "l": "Délai de traitement",
+          "h": "Temps médian entre l’alerte et son traitement.",
+          "s": "médiane"
+        },
+        "savedRate": {
+          "l": "Colis sauvés",
+          "h": "Des alertes traitées dont on connaît la fin : colis finalement livrés.",
+          "s": "des alertes traitées"
+        },
+        "calls": {
+          "l": "Appels",
+          "h": "Appels aux clients dont le colis était déjà parti.",
+          "s": "appels"
+        },
+        "alertsNow": {
+          "l": "Alertes en cours",
+          "h": "Alertes pas encore traitées, maintenant.",
+          "s": "maintenant"
+        },
+        "alertsOld": {
+          "l": "Alertes de plus de 24 h",
+          "h": "Alertes de plus de 24 h, maintenant.",
+          "s": "maintenant"
+        }
+      },
+      "depot": {
+        "packed": {
+          "l": "Emballées",
+          "h": "Commandes emballées (passées en « préparée ») sur la période.",
+          "s": "commandes emballées",
+          "u": "emballées"
+        },
+        "shipped": {
+          "l": "Expédiées",
+          "h": "Colis remis à la société ou au livreur sur la période.",
+          "s": "colis"
+        },
+        "prepMs": {
+          "l": "Délai de préparation",
+          "h": "Temps médian entre la confirmation et l’emballage.",
+          "s": "médiane"
+        },
+        "prep24Rate": {
+          "l": "Prêtes en 24 h",
+          "h": "Commandes emballées moins de 24 h après la confirmation.",
+          "s": "des emballées"
+        },
+        "wrongRate": {
+          "l": "Erreurs de préparation",
+          "h": "Colis emballés revenus pour un mauvais produit ou un produit abîmé, sur les colis emballés.",
+          "s": "des emballées"
+        },
+        "returnsIn": {
+          "l": "Retours reçus",
+          "h": "Retours reçus au dépôt sur la période.",
+          "s": "colis"
+        }
+      },
+      "livreurs": {
+        "delivered": {
+          "l": "Livrés",
+          "h": "Colis livrés sur la période.",
+          "s": "colis livrés",
+          "u": "livrés"
+        },
+        "returned": {
+          "l": "Revenus",
+          "h": "Colis revenus sur la période.",
+          "s": "colis"
+        },
+        "deliveryRate": {
+          "l": "Taux de livraison",
+          "h": "Livrés ÷ (livrés + revenus) sur la période.",
+          "s": "des colis arrivés"
+        },
+        "inHand": {
+          "l": "En main",
+          "h": "Colis chez le livreur maintenant.",
+          "s": "maintenant"
+        },
+        "late": {
+          "l": "En retard",
+          "h": "Colis chez le livreur depuis plus de 2 jours.",
+          "s": "colis de plus de 2 jours"
+        },
+        "lateRate": {
+          "l": "Colis en retard",
+          "h": "Colis en retard ÷ colis en main.",
+          "s": "des colis en main"
+        },
+        "toBring": {
+          "l": "Retours à ramener",
+          "h": "Retours que le livreur doit ramener au dépôt.",
+          "s": "maintenant"
+        },
+        "uncashed": {
+          "l": "Argent à remettre",
+          "h": "Argent des colis livrés pas encore remis.",
+          "s": "chez les livreurs"
+        }
+      },
+      "sav": {
+        "settled": {
+          "l": "Réglés",
+          "h": "Tickets réglés sur la période.",
+          "s": "tickets réglés",
+          "u": "réglés"
+        },
+        "settleMs": {
+          "l": "Délai de règlement",
+          "h": "Temps médian entre l’ouverture et le règlement d’un ticket.",
+          "s": "médiane"
+        },
+        "settled48Rate": {
+          "l": "Réglés en 48 h",
+          "h": "Tickets réglés moins de 48 h après leur ouverture.",
+          "s": "des réglés"
+        },
+        "satRate": {
+          "l": "Clients contents",
+          "h": "Clients contents ou très contents, parmi ceux qui ont répondu sur la période.",
+          "s": "des réponses"
+        },
+        "todo": {
+          "l": "À traiter",
+          "h": "Tickets ouverts ou en traitement, maintenant.",
+          "s": "maintenant"
+        },
+        "old48": {
+          "l": "Plus de 48 h",
+          "h": "Tickets ouverts depuis plus de 48 h, maintenant.",
+          "s": "maintenant"
+        }
+      }
+    },
+    "tip": {
+      "confirmation": {
+        "confRate": "Écouter quelques appels ensemble : présenter l’offre clairement, rassurer sur le paiement à la livraison et répondre aux objections de prix (frais de livraison, concurrent).",
+        "deliveryRate": "Avant de confirmer, vérifier l’adresse et la commune, et que le client attend vraiment le colis : une commande confirmée qui revient coûte deux fois les frais.",
+        "firstRate": "Appeler chaque nouvelle commande dans son créneau : un client appelé vite confirme bien plus souvent. Commencer la journée par les nouvelles.",
+        "triesRate": "Rappeler les « pas de réponse » au créneau suivant, sans en laisser passer : la 2ᵉ et la 3ᵉ tentative rattrapent beaucoup de commandes.",
+        "upsellRate": "Proposer à chaque appel le pack ou le produit qui va avec : une phrase prête à dire aide beaucoup."
+      },
+      "suivi": {
+        "deliveryRate": "Appeler le client dès que le colis part et la veille de la livraison : un client prévenu est chez lui, avec l’argent.",
+        "treatMs": "Traiter les alertes dans l’heure : appeler le client, puis transmettre la solution à la société (nouvelle date, adresse, stop desk).",
+        "savedRate": "Après une alerte, proposer une solution concrète (nouvelle date, bureau, autre numéro) avant que le colis reparte en retour."
+      },
+      "depot": {
+        "prepMs": "Emballer chaque jour les commandes confirmées la veille, les plus anciennes d’abord.",
+        "prep24Rate": "Ne pas laisser une commande confirmée plus de 24 h : emballer par ordre d’arrivée et signaler tout de suite un manque de stock.",
+        "wrongRate": "Vérifier chaque produit avant de fermer le colis : variante, taille, couleur et état. Scanner quand c’est possible."
+      },
+      "livreurs": {
+        "deliveryRate": "Appeler le client avant de passer et confirmer l’adresse : moins de trajets pour rien, moins de retours.",
+        "lateRate": "Ne pas garder un colis plus de 2 jours : le livrer, ou le ramener au dépôt pour trouver une autre solution."
+      },
+      "sav": {
+        "settleMs": "Rappeler le client le jour même et lancer l’échange ou le remboursement sans attendre.",
+        "settled48Rate": "Régler chaque ticket en moins de 48 h : traiter les plus anciens en premier.",
+        "satRate": "Rappeler après l’échange pour vérifier que le client est content, et noter ce qui ne va pas."
+      }
+    },
+    "health": "Les équipes",
+    "healthSub": "cliquez sur une équipe pour voir chaque personne",
+    "healthOthers": "Vos autres équipes",
+    "lateN_one": "{{count}} en retard",
+    "lateN_other": "{{count}} en retard",
+    "toHelp": "À aider : {{names}}",
+    "nobodyToHelp": "Personne en difficulté",
+    "more": "+{{count}}",
+    "myTeam": "Mon équipe",
+    "openBoard": "Tout le tableau",
+    "focusMine": "Votre priorité",
+    "fineMine": "Bravo : tout est à l’objectif ou au niveau de l’équipe.",
+    "myNumbers": "Mes chiffres",
+    "rank": "Rang {{rank}} sur {{of}}"
   }
 }

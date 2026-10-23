@@ -374,5 +374,385 @@
     "aStatus": "{{who}}: {{ref}} → {{st}}",
     "system": "System",
     "none": "Nothing in this period."
+  },
+  "tb": {
+    "vs": "compared with {{range}}",
+    "vsPrevShort": "compared with the period before",
+    "allTeams": "All teams",
+    "noManager": "No manager",
+    "team": "The team",
+    "members_one": "{{count}} member",
+    "members_other": "{{count}} members",
+    "days": "Day by day",
+    "daysOne": "Choose at least 2 days to see the trend.",
+    "targetUp": "target ≥ {{v}}",
+    "targetDown": "target ≤ {{v}}",
+    "allGood": "Nothing to report",
+    "noWork": "No activity",
+    "coach": "To work on",
+    "teamRow": "Team",
+    "legTarget": "target",
+    "legTeam": "team average",
+    "legOpen": "Click a person to see their details and what to work on.",
+    "groups": "By team",
+    "groupsSub": "click to see a team",
+    "focus": "To work on",
+    "strength": "Strength",
+    "teamAvg": "team average {{v}}",
+    "teamIs": "team {{v}}",
+    "fineLong": "Nothing to work on first: everything is at the target or at the team's level.",
+    "noWorkLong": "No activity in this period.",
+    "fewShort": "Too little data",
+    "fewLong": "Too little data in this period to judge: choose a longer period.",
+    "few": "too few to judge",
+    "liveNow": "Right now",
+    "lineTeam": "Team",
+    "dates": "Dates",
+    "datesTitle": "Choose the dates",
+    "datesApply": "Show this period",
+    "now": "To do now",
+    "nowNone": "Nothing late.",
+    "others": "Other reasons",
+    "noReason": "No reason given",
+    "settings": "Team settings",
+    "settingsSub": "build the teams, what each manager sees",
+    "livDetail": "Parcels and money in detail",
+    "livDetailSub": "by driver or by company, with the amounts",
+    "who": {
+      "confirmation": "Agent",
+      "suivi": "Follow-up agent",
+      "depot": "Person",
+      "livreurs": "Driver",
+      "sav": "In charge"
+    },
+    "none": {
+      "confirmation": "—",
+      "suivi": "No follow-up agent",
+      "depot": "—",
+      "livreurs": "—",
+      "sav": "Nobody in charge"
+    },
+    "bar": {
+      "confirmation": "Confirmed",
+      "suivi": "Delivered",
+      "depot": "Packed",
+      "livreurs": "Delivered",
+      "sav": "Settled"
+    },
+    "line": {
+      "confirmation": "Confirmation rate",
+      "suivi": "Delivery rate",
+      "depot": "Packed within 24 h",
+      "livreurs": "Delivery rate",
+      "sav": "Settled within 48 h"
+    },
+    "why": {
+      "confirmation": "Why they were cancelled",
+      "suivi": "Why parcels come back",
+      "depot": "Returns caused by packing",
+      "livreurs": "Why parcels come back",
+      "sav": "—"
+    },
+    "whyNone": {
+      "confirmation": "No cancellation in this period.",
+      "suivi": "No return in this period.",
+      "depot": "No return caused by packing.",
+      "livreurs": "No return in this period.",
+      "sav": "—"
+    },
+    "nowK": {
+      "confirmation": {
+        "firstLate": "first calls late",
+        "lateCallbacks": "callbacks late",
+        "unassigned": "new orders without an agent",
+        "inProgress": "orders in progress"
+      },
+      "suivi": {
+        "alertsOld": "alerts older than 24 h",
+        "alerts": "alerts to handle",
+        "claimsLate": "claims unanswered for 48 h",
+        "orphan": "parcels on the road without a follow-up agent"
+      },
+      "depot": {
+        "late24": "confirmed over 24 h ago, not packed",
+        "waitingPickup": "packed over 24 h ago, not gone",
+        "toPrepare": "to prepare",
+        "toReceive": "returns to receive"
+      },
+      "livreurs": {
+        "late": "parcels with a driver for over 2 days",
+        "toBring": "returns to bring back",
+        "uncashed": "money held by the drivers"
+      },
+      "sav": {
+        "old48": "tickets open for over 48 h",
+        "nobody": "tickets with nobody in charge",
+        "todo": "tickets to handle"
+      }
+    },
+    "m": {
+      "confirmation": {
+        "treated": {
+          "l": "Handled",
+          "h": "Orders whose status the agent changed in the period (once per order).",
+          "s": "orders",
+          "u": "handled"
+        },
+        "confirmed": {
+          "l": "Confirmed",
+          "h": "Orders the agent confirmed in the period.",
+          "s": "orders"
+        },
+        "calls": {
+          "l": "Calls",
+          "h": "Calls made: each status given counts as a call.",
+          "s": "statuses given"
+        },
+        "confRate": {
+          "l": "Confirmation",
+          "h": "Confirmed ÷ (confirmed + cancelled) in the period. Duplicates, wrong numbers and fake orders are left out: the agent can do nothing about them.",
+          "s": "of decided orders"
+        },
+        "deliveryRate": {
+          "l": "Quality",
+          "h": "Orders the agent confirmed that arrived in the period: delivered ÷ (delivered + returned). Tells whether their confirmations are real orders.",
+          "s": "of their confirmed delivered"
+        },
+        "firstRate": {
+          "l": "First call on time",
+          "h": "New orders called within their slot (call settings), among those received in the period.",
+          "s": "within the slot"
+        },
+        "firstMs": {
+          "l": "First call delay",
+          "h": "Median time between an order's arrival and its first call.",
+          "s": "median"
+        },
+        "triesRate": {
+          "l": "Tries on time",
+          "h": "After “no answer” or “busy”, calls made again within the next slot.",
+          "s": "calls again on time"
+        },
+        "upsellRate": {
+          "l": "Upsell",
+          "h": "Confirmed orders with a product the agent added.",
+          "s": "of confirmed"
+        },
+        "basket": {
+          "l": "Average basket",
+          "h": "Average amount of the orders the agent confirmed.",
+          "s": "per confirmed order"
+        },
+        "callsPerConf": {
+          "l": "Calls per confirmation",
+          "h": "Calls needed for one confirmation.",
+          "s": "calls"
+        },
+        "inProgress": {
+          "l": "In progress",
+          "h": "The agent's orders still to call, now.",
+          "s": "to call"
+        },
+        "lateCallbacks": {
+          "l": "Late callbacks",
+          "h": "Planned callbacks whose time has passed, now.",
+          "s": "now"
+        }
+      },
+      "suivi": {
+        "outcomes": {
+          "l": "Parcels arrived",
+          "h": "Parcels the agent follows that reached their end in the period: delivered or returned.",
+          "s": "delivered or returned",
+          "u": "parcels arrived"
+        },
+        "deliveryRate": {
+          "l": "Delivery rate",
+          "h": "Delivered ÷ (delivered + returned) of the parcels the agent follows.",
+          "s": "of parcels arrived"
+        },
+        "treated": {
+          "l": "Alerts handled",
+          "h": "Alerts the agent handled in the period.",
+          "s": "alerts"
+        },
+        "treatMs": {
+          "l": "Handling time",
+          "h": "Median time between the alert and its handling.",
+          "s": "median"
+        },
+        "savedRate": {
+          "l": "Parcels saved",
+          "h": "Of the handled alerts whose end is known: parcels delivered in the end.",
+          "s": "of handled alerts"
+        },
+        "calls": {
+          "l": "Calls",
+          "h": "Calls to customers whose parcel had already left.",
+          "s": "calls"
+        },
+        "alertsNow": {
+          "l": "Open alerts",
+          "h": "Alerts not handled yet, now.",
+          "s": "now"
+        },
+        "alertsOld": {
+          "l": "Alerts over 24 h",
+          "h": "Alerts older than 24 h, now.",
+          "s": "now"
+        }
+      },
+      "depot": {
+        "packed": {
+          "l": "Packed",
+          "h": "Orders packed (set to “prepared”) in the period.",
+          "s": "orders packed",
+          "u": "packed"
+        },
+        "shipped": {
+          "l": "Shipped",
+          "h": "Parcels handed to the company or the driver in the period.",
+          "s": "parcels"
+        },
+        "prepMs": {
+          "l": "Packing time",
+          "h": "Median time between confirmation and packing.",
+          "s": "median"
+        },
+        "prep24Rate": {
+          "l": "Ready within 24 h",
+          "h": "Orders packed less than 24 h after confirmation.",
+          "s": "of packed"
+        },
+        "wrongRate": {
+          "l": "Packing mistakes",
+          "h": "Packed parcels that came back for a wrong or damaged product, out of the packed parcels.",
+          "s": "of packed"
+        },
+        "returnsIn": {
+          "l": "Returns received",
+          "h": "Returns received at the depot in the period.",
+          "s": "parcels"
+        }
+      },
+      "livreurs": {
+        "delivered": {
+          "l": "Delivered",
+          "h": "Parcels delivered in the period.",
+          "s": "parcels delivered",
+          "u": "delivered"
+        },
+        "returned": {
+          "l": "Returned",
+          "h": "Parcels returned in the period.",
+          "s": "parcels"
+        },
+        "deliveryRate": {
+          "l": "Delivery rate",
+          "h": "Delivered ÷ (delivered + returned) in the period.",
+          "s": "of parcels arrived"
+        },
+        "inHand": {
+          "l": "In hand",
+          "h": "Parcels with the driver now.",
+          "s": "now"
+        },
+        "late": {
+          "l": "Late",
+          "h": "Parcels with the driver for over 2 days.",
+          "s": "parcels over 2 days"
+        },
+        "lateRate": {
+          "l": "Late parcels",
+          "h": "Late parcels ÷ parcels in hand.",
+          "s": "of parcels in hand"
+        },
+        "toBring": {
+          "l": "Returns to bring",
+          "h": "Returns the driver must bring back to the depot.",
+          "s": "now"
+        },
+        "uncashed": {
+          "l": "Money to hand over",
+          "h": "Money of delivered parcels not handed over yet.",
+          "s": "with the drivers"
+        }
+      },
+      "sav": {
+        "settled": {
+          "l": "Settled",
+          "h": "Tickets settled in the period.",
+          "s": "tickets settled",
+          "u": "settled"
+        },
+        "settleMs": {
+          "l": "Settling time",
+          "h": "Median time between a ticket's opening and its settling.",
+          "s": "median"
+        },
+        "settled48Rate": {
+          "l": "Settled within 48 h",
+          "h": "Tickets settled less than 48 h after they were opened.",
+          "s": "of settled"
+        },
+        "satRate": {
+          "l": "Happy customers",
+          "h": "Customers happy or very happy, among those who answered in the period.",
+          "s": "of answers"
+        },
+        "todo": {
+          "l": "To handle",
+          "h": "Tickets open or in progress, now.",
+          "s": "now"
+        },
+        "old48": {
+          "l": "Over 48 h",
+          "h": "Tickets open for over 48 h, now.",
+          "s": "now"
+        }
+      }
+    },
+    "tip": {
+      "confirmation": {
+        "confRate": "Listen to a few calls together: present the offer clearly, reassure about cash on delivery and answer price objections (delivery fee, competitor).",
+        "deliveryRate": "Before confirming, check the address and the commune, and that the customer really expects the parcel: a confirmed order that comes back costs the fees twice.",
+        "firstRate": "Call every new order within its slot: a customer called fast confirms far more often. Start the day with the new orders.",
+        "triesRate": "Call the “no answer” again in the next slot, without missing one: the 2nd and 3rd tries win back many orders.",
+        "upsellRate": "Offer the pack or the matching product on every call: a ready-made sentence helps a lot."
+      },
+      "suivi": {
+        "deliveryRate": "Call the customer as soon as the parcel leaves and the day before delivery: a customer who knows is home, with the money.",
+        "treatMs": "Handle alerts within the hour: call the customer, then pass the solution to the company (new date, address, stop desk).",
+        "savedRate": "After an alert, offer a concrete solution (new date, office, other number) before the parcel goes back."
+      },
+      "depot": {
+        "prepMs": "Every day, pack the orders confirmed the day before, oldest first.",
+        "prep24Rate": "Never leave a confirmed order more than 24 h: pack in order of arrival and report a missing stock at once.",
+        "wrongRate": "Check every product before closing the parcel: variant, size, colour and condition. Scan when possible."
+      },
+      "livreurs": {
+        "deliveryRate": "Call the customer before going and confirm the address: fewer wasted trips, fewer returns.",
+        "lateRate": "Never keep a parcel more than 2 days: deliver it, or bring it back to the depot to find another solution."
+      },
+      "sav": {
+        "settleMs": "Call the customer back the same day and start the exchange or refund without waiting.",
+        "settled48Rate": "Settle every ticket within 48 h: handle the oldest first.",
+        "satRate": "Call after the exchange to check the customer is happy, and write down what is wrong."
+      }
+    },
+    "health": "The teams",
+    "healthSub": "click a team to see each person",
+    "healthOthers": "Your other teams",
+    "lateN_one": "{{count}} late",
+    "lateN_other": "{{count}} late",
+    "toHelp": "To help: {{names}}",
+    "nobodyToHelp": "Nobody struggling",
+    "more": "+{{count}}",
+    "myTeam": "My team",
+    "openBoard": "Full board",
+    "focusMine": "Your priority",
+    "fineMine": "Well done: everything is at target or at the team’s level.",
+    "myNumbers": "My numbers",
+    "rank": "Rank {{rank}} of {{of}}"
   }
 }

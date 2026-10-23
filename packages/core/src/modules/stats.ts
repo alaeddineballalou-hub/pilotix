@@ -9,11 +9,20 @@ import { getSetting, setSetting, SettingsMap } from '../settings';
 export const AREAS = ['confirmation', 'depot', 'suivi', 'livreurs', 'sav'] as const;
 export type Area = (typeof AREAS)[number];
 
-const Range = z
+export const Range = z
   .object({ from: z.string().min(10).max(40), to: z.string().min(10).max(40) })
   .refine((r) => !isNaN(Date.parse(r.from)) && !isNaN(Date.parse(r.to)) && Date.parse(r.to) > Date.parse(r.from), { message: 'Période invalide' })
   .refine((r) => Date.parse(r.to) - Date.parse(r.from) <= 400 * 86_400_000, { message: 'Période trop longue (400 jours max.)' });
 type RangeT = z.infer<typeof Range>;
+
+/** The period before, as long; a period still running (today, this month) is compared up to the same moment. */
+export function prevOf(r: RangeT, now: number): RangeT {
+  const a = Date.parse(r.from);
+  const b = Date.parse(r.to);
+  const len = b - a;
+  const upTo = Math.min(now, b) - a;
+  return { from: new Date(a - len).toISOString(), to: new Date(a - len + (upTo > 0 ? upTo : len)).toISOString() };
+}
 
 const CONFIRMED = ['confirmed', 'no_stock'];
 const FAKE = ['fake', 'wrong_number'];
@@ -35,10 +44,10 @@ export async function allowedAreas(ctx: Ctx): Promise<Area[]> {
   const mine = (scope[String(s.profile.id)] ?? []).filter((a): a is Area => (AREAS as readonly string[]).includes(a));
   return mine.length ? mine : ['confirmation'];
 }
-async function needArea(ctx: Ctx, area: Area) {
+export async function needArea(ctx: Ctx, area: Area) {
   if (!(await allowedAreas(ctx)).includes(area)) throw forbidden('Ce tableau de bord ne vous est pas ouvert');
 }
-const seesAll = (ctx: Ctx) => ctx.session.isAdmin || ctx.session.roles.includes('vendeur');
+export const seesAll = (ctx: Ctx) => ctx.session.isAdmin || ctx.session.roles.includes('vendeur');
 
 async function names(ctx: Ctx): Promise<Map<number, string>> {
   const rows = await ctx.db.query('SELECT id, name FROM profiles');
@@ -62,7 +71,7 @@ async function confAgents(ctx: Ctx): Promise<{ id: number; name: string; roles: 
 }
 
 /** Teams from the setting, each with its manager inside, plus "Sans manager" for the other agents (and anyone who confirmed in the period). */
-async function teamViews(ctx: Ctx, extraAgents: number[] = []): Promise<TeamView[]> {
+export async function teamViews(ctx: Ctx, extraAgents: number[] = []): Promise<TeamView[]> {
   const [teams, agents, nm] = [await getSetting(ctx.db, 'teams'), await confAgents(ctx), await names(ctx)];
   const out: TeamView[] = [];
   const seen = new Set<number>();
@@ -77,7 +86,7 @@ async function teamViews(ctx: Ctx, extraAgents: number[] = []): Promise<TeamView
 }
 
 /** The teams this user may look at: all for admin/vendeur, their own for a manager. */
-async function visibleTeams(ctx: Ctx, extra: number[] = []) {
+export async function visibleTeams(ctx: Ctx, extra: number[] = []) {
   const all = await teamViews(ctx, extra);
   if (seesAll(ctx)) return all;
   const me = ctx.session.profile.id;
@@ -146,7 +155,7 @@ const TeamsInput = Range.and(
   }),
 );
 
-async function confirmationStats(ctx: Ctx, input: z.infer<typeof TeamsInput>) {
+export async function confirmationStats(ctx: Ctx, input: z.infer<typeof TeamsInput>) {
   const { from, to } = input;
   const now = ctx.now();
   const calls = await getSetting(ctx.db, 'calls');
@@ -282,7 +291,7 @@ const strip = (a: AgentStats) => {
 
 const LivInput = Range.and(z.object({ by: z.enum(['livreur', 'company']).default('livreur'), dateType: z.enum(['delivered', 'created']).default('delivered'), livreurId: z.number().int().positive().optional() }));
 
-async function livreursStats(ctx: Ctx, i: z.infer<typeof LivInput>) {
+export async function livreursStats(ctx: Ctx, i: z.infer<typeof LivInput>) {
       const pay = (await getSetting(ctx.db, 'payPlans')).livreur;
       const key = i.by === 'company' ? 'o.company_id' : 'o.livreur_id';
       const dcol = i.dateType === 'created' ? 'o.created_at' : 'o.delivered_at';
@@ -381,7 +390,8 @@ const algDay = (iso: string) => new Date(Date.parse(iso) + 3_600_000).toISOStrin
 async function overview(ctx: Ctx, r: RangeT) {
   const a = Date.parse(r.from);
   const b = Date.parse(r.to);
-  const pa = new Date(a - (b - a)).toISOString();
+  // the period before (a running one is compared up to the same moment)
+  const P = prevOf(r, ctx.now());
   const q1 = async (sql: string, params: unknown[]) => (await ctx.db.query(sql, params))[0];
   const block = async (from: string, to: string) =>
     q1(
@@ -393,7 +403,7 @@ async function overview(ctx: Ctx, r: RangeT) {
       [from, to],
     );
   const cur = await block(r.from, r.to);
-  const prev = await block(pa, r.from);
+  const prev = await block(P.from, P.to);
   const rate = (x: any) => ratio(num(x.delivered), num(x.delivered) + num(x.returned));
 
   // per day: orders received / delivered (same unit, one axis)

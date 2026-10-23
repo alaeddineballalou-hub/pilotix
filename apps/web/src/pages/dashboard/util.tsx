@@ -32,6 +32,15 @@ export function rangeOf(p: AnyPeriod, custom?: { from: string; to: string }): { 
   return periodRange((p === 'custom' ? '7d' : p) as Period);
 }
 
+/** The period just before, of the same length; one still running (today, this month) is compared up to the same moment. */
+export function prevRangeOf(r: { from: string; to: string }, now = Date.now()): { from: string; to: string } {
+  const a = Date.parse(r.from);
+  const b = Date.parse(r.to);
+  const len = b - a;
+  const upTo = Math.min(now, b) - a;
+  return { from: new Date(a - len).toISOString(), to: new Date(a - len + (upTo > 0 ? upTo : len)).toISOString() };
+}
+
 /** Inclusive date inputs for a range. */
 export const inputsOf = (r: { from: string; to: string }) => ({ from: ymd(Date.parse(r.from)), to: ymd(Date.parse(r.to) - 1) });
 

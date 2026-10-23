@@ -1,17 +1,25 @@
-// Accueil: "Maintenant" (live counters), "Période" (7 KPIs), agents table, livreurs card, presence.
-import { useState } from 'react';
+// Accueil, by role, under one period:
+// - admin / vendeur: what is waiting now, the teams at a glance (who to help), the shop over the period, who is online;
+// - agent manager: their team (what is late, its numbers against the targets, each member with what to work on), their
+//   other teams, the shop over the period, who is online;
+// - agent: what is waiting now, their own numbers next to their team's (their priority and how to improve it), the shop.
 import { useTranslation } from 'react-i18next';
-import { da, n, pct } from '../../lib/format';
+import { da, dayRange, n, pct } from '../../lib/format';
 import { useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
-import { Card, ErrorBox, Kpis, Loading, Tabs, Trend } from '../../ui/kit';
+import { useMedia } from '../../lib/useMedia';
+import { Card, ErrorBox, Icon, Kpis, Loading, Trend } from '../../ui/kit';
 import type { PageProps } from '../registry';
 import { Presence } from '../dashboard/Presence';
 import { LivreursTable } from '../dashboard/Livreurs';
-import { delivTone, KpiBox, rangeOf } from '../dashboard/util';
+import { Board, MemberDetail, useBoardPeriod } from '../dashboard/board/Board';
+import { TeamHealth } from '../dashboard/board/Health';
+import { AreaKey, AREAS } from '../dashboard/board/defs';
+import { PeriodChips } from '../dashboard/board/parts';
+import { delivTone, KpiBox, prevRangeOf } from '../dashboard/util';
+import '../dashboard/board/board.css';
 
-type P = 'today' | 'yesterday' | '7d' | '30d' | 'month';
-const PERIODS: P[] = ['today', 'yesterday', '7d', '30d', 'month'];
+type R = { from: string; to: string };
 
 export function Home(_: PageProps) {
   const { t } = useTranslation();
@@ -39,29 +47,61 @@ export function Home(_: PageProps) {
 function HomeStats() {
   const { t } = useTranslation();
   const { session, has } = useSession();
-  const [period, setPeriod] = useState<P>('today');
-  const range = rangeOf(period);
-  const isAdmin = session!.isAdmin;
-  const showAgents = has('confirmation', 'suivi');
-  const showLiv = isAdmin || has('suivi');
-  const showPresence = has('agent_manager', 'vendeur');
+  const per = useBoardPeriod('home', 'today');
+  const lead = has('agent_manager', 'vendeur');
+  const meta = useRpc('stats.dashMeta', {}, { enabled: lead });
+  const prev = prevRangeOf(per.range);
+  const vs = t('dashboard.tb.vs', { range: dayRange(prev.from, prev.to) });
 
+  const head = (
+    <header className="tb-head hm-head">
+      <div className="tb-ht">
+        <h2>{t('home.hello', { name: session!.profile.name })}</h2>
+        <p className="tb-cap">
+          {dayRange(per.range.from, per.range.to)}
+          <span className="tb-capvs"> · {vs}</span>
+        </p>
+      </div>
+      <PeriodChips value={per.period} onChange={per.setPeriod} custom={per.custom} onCustom={per.setCustom} />
+    </header>
+  );
+
+  if (!lead)
+    return (
+      <div className="tb hm">
+        {head}
+        <Now />
+        <MyDay range={per.range} />
+        <Period range={per.range} vs={vs} />
+        {has('suivi') && <LivCard range={per.range} />}
+      </div>
+    );
+
+  const m = meta.data;
+  const areas = (m?.areas ?? []) as AreaKey[];
   return (
-    <>
-      <Now />
-      <section className="card">
-        <div className="card-head">
-          <h2>
-            {t('home.period')} <small className="px-vs">{t('home.vsLong', { vs: t(`home.vs.${period}`) })}</small>
-          </h2>
-          <Tabs value={period} onChange={setPeriod} items={PERIODS.map((p) => ({ value: p, label: t(`home.periods.${p}`) }))} />
-        </div>
-        <Overview range={range} vs={t(`home.vs.${period}`)} />
-      </section>
-      {showAgents && <Agents range={range} />}
-      {showLiv && <LivCard range={range} />}
-      {showPresence && <Presence />}
-    </>
+    <div className="tb hm">
+      {head}
+      {meta.error ? (
+        <ErrorBox error={meta.error} onRetry={() => meta.refetch()} />
+      ) : !m ? (
+        <Loading />
+      ) : m.seesAll ? (
+        <>
+          <Now />
+          <TeamHealth areas={areas} range={per.range} />
+          <Period range={per.range} vs={vs} />
+          <Presence />
+        </>
+      ) : (
+        <>
+          {areas.includes('confirmation') && <Board area="confirmation" compact range={per.range} />}
+          <TeamHealth areas={areas.filter((a) => a !== 'confirmation')} range={per.range} title={areas.includes('confirmation') ? t('dashboard.tb.healthOthers') : undefined} />
+          <Period range={per.range} vs={vs} />
+          <Presence />
+        </>
+      )}
+    </div>
   );
 }
 
@@ -70,7 +110,7 @@ function Now() {
   const { has, session } = useSession();
   const q = useRpc('stats.now', {}, { refetchInterval: 60_000 });
   return (
-    <section className="card">
+    <section className="card hm-now">
       <div className="card-head">
         <h2>{t('home.now')}</h2>
       </div>
@@ -95,79 +135,83 @@ function Now() {
   );
 }
 
-function Overview({ range, vs }: { range: { from: string; to: string }; vs: string }) {
+/** The shop over the period, each number next to the period before. */
+function Period({ range, vs }: { range: R; vs: string }) {
   const { t } = useTranslation();
   const q = useRpc('stats.overview', range);
-  // the same length just before, for the ▲ / ▼ trends
-  // same length just before; a period still running (today, this month) is compared up to the same moment
-  const f0 = Date.parse(range.from);
-  const len = Date.parse(range.to) - f0;
-  const upTo = Math.min(Date.now(), Date.parse(range.to)) - f0;
-  const prevRange = { from: new Date(f0 - len).toISOString(), to: new Date(f0 - len + upTo).toISOString() };
-  const pq = useRpc('stats.overview', prevRange);
-  if (q.isLoading) return <Loading />;
-  if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
-  const d = q.data!;
+  const pq = useRpc('stats.overview', prevRangeOf(range));
+  const d = q.data;
   const p = pq.data;
   const ch = (a: number | null | undefined, b: number | null | undefined) => (a === null || a === undefined || b === null || b === undefined || b === 0 ? null : (a - b) / b);
   return (
-    <Kpis>
-      <KpiBox icon="list" href="#/commandes" label={t('home.received')} value={n(d.received)} trend={<Trend v={ch(d.received, p?.received)} vs={vs} />} sub={t('home.receivedTodo', { n: d.receivedTodo })} />
-      <KpiBox icon="check" href="#/confirmation/confirmees" label={t('home.confirmed')} value={n(d.confirmed)} trend={<Trend v={ch(d.confirmed, p?.confirmed)} vs={vs} />} sub={t('home.rate', { v: pct(d.confRate) })} rate={d.confRate} tone="ok" />
-      <KpiBox icon="xcircle" href="#/commandes/annulees" label={t('home.cancelled')} value={n(d.cancelled)} trend={<Trend v={ch(d.cancelled, p?.cancelled)} goodDown vs={vs} />} sub={t('home.cancelledSub')} tone={d.cancelled ? 'bad' : undefined} zero={!d.cancelled} />
-      <KpiBox icon="route" href="#/suivi" label={t('home.shipped')} value={n(d.shipped)} trend={<Trend v={ch(d.shipped, p?.shipped)} vs={vs} />} sub={t('home.shippedSub', { n: d.shippedOnRoad })} />
-      <KpiBox icon="truck" href="#/commandes/livrees" label={t('home.delivered')} value={n(d.delivered)} trend={<Trend v={ch(d.delivered, p?.delivered)} vs={vs} />} sub={t('home.deliveryRate', { v: pct(d.deliveryRate) })} rate={d.deliveryRate} tone="ok" />
-      <KpiBox icon="undo" href="#/depot/retours" label={t('home.returns')} value={n(d.returns)} trend={<Trend v={ch(d.returns, p?.returns)} goodDown vs={vs} />} sub={t('home.returnsSub')} tone={d.returns ? 'bad' : undefined} zero={!d.returns} />
-      <KpiBox icon="coins" href="#/caisse/done" label={t('home.cashed')} value={da(d.cashed)} trend={<Trend v={ch(d.cashed, p?.cashed)} vs={vs} />} sub={t('home.cashedSub', { v: da(d.cashedProducts) })} />
-    </Kpis>
-  );
-}
-
-function Agents({ range }: { range: { from: string; to: string } }) {
-  const { t } = useTranslation();
-  const q = useRpc('stats.agents', range);
-  const cols = ['agent', 'treated', 'confirmed', 'confRate', 'delivered', 'returned', 'deliveryRate'] as const;
-  return (
-    <Card title={t('home.agents')}>
-      {q.isLoading ? (
-        <Loading />
-      ) : q.error ? (
+    <section className="card hm-per">
+      <div className="card-head">
+        <h2>
+          {t('home.period')} <small className="px-vs">{vs}</small>
+        </h2>
+      </div>
+      {q.error ? (
         <ErrorBox error={q.error} onRetry={() => q.refetch()} />
-      ) : !q.data?.length ? (
-        <p className="muted">{t('home.noAgents')}</p>
+      ) : !d ? (
+        <Loading />
       ) : (
-        <div className="tbl-wrap">
-          <table className="tbl">
-            <thead>
-              <tr>
-                {cols.map((c, i) => (
-                  <th key={c} className={i ? 'num' : undefined}>
-                    {t(`home.col.${c}`)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {q.data.map((a) => (
-                <tr key={a.id}>
-                  <td data-l={t('home.col.agent')}>{a.name}</td>
-                  <td className="num ltr" data-l={t('home.col.treated')}>{n(a.treated)}</td>
-                  <td className="num ltr" data-l={t('home.col.confirmed')}>{n(a.confirmed)}</td>
-                  <td className="num ltr" data-l={t('home.col.confRate')}>{pct(a.confRate)}</td>
-                  <td className="num ltr" data-l={t('home.col.delivered')}>{n(a.delivered)}</td>
-                  <td className="num ltr" data-l={t('home.col.returned')}>{n(a.returned)}</td>
-                  <td className="num ltr" data-l={t('home.col.deliveryRate')}>{pct(a.deliveryRate)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Kpis>
+          <KpiBox icon="list" href="#/commandes" label={t('home.received')} value={n(d.received)} trend={<Trend v={ch(d.received, p?.received)} vs={vs} />} sub={t('home.receivedTodo', { n: d.receivedTodo })} />
+          <KpiBox icon="check" href="#/confirmation/confirmees" label={t('home.confirmed')} value={n(d.confirmed)} trend={<Trend v={ch(d.confirmed, p?.confirmed)} vs={vs} />} sub={t('home.rate', { v: pct(d.confRate) })} rate={d.confRate} tone="ok" />
+          <KpiBox icon="xcircle" href="#/commandes/annulees" label={t('home.cancelled')} value={n(d.cancelled)} trend={<Trend v={ch(d.cancelled, p?.cancelled)} goodDown vs={vs} />} sub={t('home.cancelledSub')} tone={d.cancelled ? 'bad' : undefined} zero={!d.cancelled} />
+          <KpiBox icon="route" href="#/suivi" label={t('home.shipped')} value={n(d.shipped)} trend={<Trend v={ch(d.shipped, p?.shipped)} vs={vs} />} sub={t('home.shippedSub', { n: d.shippedOnRoad })} />
+          <KpiBox icon="truck" href="#/commandes/livrees" label={t('home.delivered')} value={n(d.delivered)} trend={<Trend v={ch(d.delivered, p?.delivered)} vs={vs} />} sub={t('home.deliveryRate', { v: pct(d.deliveryRate) })} rate={d.deliveryRate} tone="ok" />
+          <KpiBox icon="undo" href="#/depot/retours" label={t('home.returns')} value={n(d.returns)} trend={<Trend v={ch(d.returns, p?.returns)} goodDown vs={vs} />} sub={t('home.returnsSub')} tone={d.returns ? 'bad' : undefined} zero={!d.returns} />
+          <KpiBox icon="coins" href="#/caisse/done" label={t('home.cashed')} value={da(d.cashed)} trend={<Trend v={ch(d.cashed, p?.cashed)} vs={vs} />} sub={t('home.cashedSub', { v: da(d.cashedProducts) })} />
+        </Kpis>
       )}
-    </Card>
+    </section>
   );
 }
 
-function LivCard({ range }: { range: { from: string; to: string } }) {
+/** An agent's own numbers in each area they work in, next to their team's, with their rank (no one else's name). */
+function MyDay({ range }: { range: R }) {
+  const { t } = useTranslation();
+  const wide = useMedia('(min-width: 1000px)');
+  const q = useRpc('stats.me', range, { refetchInterval: 60_000 });
+  if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
+  if (!q.data) return <Loading />;
+  return (
+    <>
+      {q.data.map((x) => {
+        const area = x.area as AreaKey;
+        const def = AREAS[area];
+        // a count is compared with the average of those who worked, a rate with the team's
+        const refOf = (k: string) => (x.team[k] === null || x.team[k] === undefined ? null : def.metrics[k]?.fmt === 'n' ? x.avg[k] ?? null : x.team[k]);
+        return (
+          <section key={area} className={`tb-card tb-myc tb-${area}`}>
+            <div className="tb-ch tb-mych">
+              <h3>
+                <Icon name="chart" /> {t('dashboard.tb.myNumbers')}
+                {q.data.length > 1 && <small> · {t(`dashboard.areas.${area}`)}</small>}
+              </h3>
+              {x.rank !== null && x.size > 1 && (
+                <span className="tb-rank">
+                  <Icon name="medal" /> {t('dashboard.tb.rank', { rank: x.rank, of: x.size })}
+                  <small> · {t(`dashboard.tb.m.${area}.${x.rankOf}.l`)}</small>
+                </span>
+              )}
+            </div>
+            {x.me ? (
+              <div className="tb-my">
+                <MemberDetail area={area} v={x.me.v} p={x.me.p} days={x.me.days} reasons={x.me.reasons} team={x.team} teamDays={x.teamDays} refOf={refOf} mine wide={wide} />
+              </div>
+            ) : (
+              <p className="tb-calm">{t('dashboard.tb.noWorkLong')}</p>
+            )}
+          </section>
+        );
+      })}
+    </>
+  );
+}
+
+function LivCard({ range }: { range: R }) {
   const { t } = useTranslation();
   const { has } = useSession();
   const q = useRpc('stats.livreurs', { ...range, by: 'livreur' });
