@@ -211,7 +211,7 @@
     "notSent_other": "{{count}} colis pas envoyés à la société",
     "skipped_one": "{{count}} sans étiquette : société ou n° de suivi manquant",
     "skipped_other": "{{count}} sans étiquette : société ou n° de suivi manquant",
-    "help": "Une étiquette s’imprime quand le colis a sa société de livraison. Une société avec API donne son propre n° de suivi et sa propre étiquette ; l’étiquette Pilotix (10 × 15 cm) sert pour vos livreurs et les sociétés sans API.",
+    "help": "Une étiquette s’imprime quand le colis a sa société de livraison. Une société avec API donne son propre n° de suivi et sa propre étiquette ; l’étiquette Pilotix (10 × 15 cm) sert pour vos livreurs, les sociétés sans API et celles qui n’en donnent pas (Procolis).",
     "docTitle": "Étiquettes ({{n}})",
     "to": "Destinataire",
     "note": "Note",

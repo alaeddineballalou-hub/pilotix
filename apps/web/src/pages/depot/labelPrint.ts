@@ -8,7 +8,7 @@
 // A parcel sent to a company with an API gets that company's own label (Labels.tsx asks the company for it); the
 // Pilotix label is for own livreurs, companies without an API, and couriers that give no label.
 import type { Order } from '@pilotix/shared';
-import { API_COURIER_KINDS } from '@pilotix/shared';
+import { API_COURIER_KINDS, LABEL_COURIER_KINDS } from '@pilotix/shared';
 import type { TFunction } from 'i18next';
 import i18n from '../../lib/i18n';
 import { escapeHtml, printHtml } from '../../lib/files';
@@ -23,8 +23,8 @@ export function labelState(o: Order, kind: string | undefined): LabelState {
   return { ok: true, code: o.tracking || o.ownTracking || o.ref };
 }
 
-/** Whose label a ready parcel gets: the company's own (a company with an API), or Pilotix's. */
-export const labelBy = (kind: string | undefined): 'company' | 'pilotix' => (kind && API_COURIER_KINDS.includes(kind) ? 'company' : 'pilotix');
+/** Whose label a ready parcel gets: the company's own (a company whose API gives one), or Pilotix's. */
+export const labelBy = (kind: string | undefined): 'company' | 'pilotix' => (kind && LABEL_COURIER_KINDS.includes(kind) ? 'company' : 'pilotix');
 
 /** One label to print. `demo`: a stand-in for the company's own label (browser preview, where couriers are simulated). */
 export interface LabelItem {

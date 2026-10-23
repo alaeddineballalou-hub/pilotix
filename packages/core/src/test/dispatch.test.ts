@@ -1,7 +1,9 @@
 // En dispatch: a partner with an API gets the parcel when it is assigned, and its number replaces the Pilotix one
 // (labels are printed with it); moving to another company or « Retirer » cancels at the old one; old labels are refused.
+import { LABEL_COURIER_KINDS } from '@pilotix/shared';
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
+import { KINDS } from '../couriers/kinds';
 import { call, Ctx, Db } from '../index';
 import { EMAILS, setup } from './harness';
 
@@ -108,7 +110,7 @@ test('scanning: the company’s label dispatches; a Pilotix label (reference or 
   assert.equal(ok.order.followStatus, 'shipped');
 });
 
-test('demo data: parcels on the road with a company that has an API carry that company’s own number', async () => {
+test('demo data: parcels on the road with a company that has an API carry that company’s own number; own livreurs keep the Pilotix one', async () => {
   const rows = await db.query(
     `SELECT o.ref, o.tracking, c.kind FROM orders o JOIN delivery_companies c ON c.id = o.company_id
      WHERE o.shipped_at IS NOT NULL AND o.tracking IS NOT NULL AND c.kind IN ('yalidine','zr','noest') AND o.ref NOT LIKE 'PX9%'`,
@@ -117,6 +119,14 @@ test('demo data: parcels on the road with a company that has an API carry that c
   for (const r of rows) {
     assert.notEqual(r.tracking, r.ref);
     assert.match(r.tracking, r.kind === 'yalidine' ? /^yal-/ : r.kind === 'zr' ? /^ZR-/ : /^NOE-/);
+  }
+  // (a shop of 600 orders has a parcel of « En dispatch » moved from Yalidine to Lamine: it loses Yalidine's number)
+  for (const shop of [db, (await setup(600)).db]) {
+    const own = await shop.query(
+      `SELECT o.ref, o.tracking FROM orders o JOIN delivery_companies c ON c.id = o.company_id
+       WHERE c.kind = 'own' AND o.follow_status IN ('to_prepare','prepared') AND o.tracking IS NOT NULL`,
+    );
+    assert.deepEqual(own, []);
   }
 });
 
@@ -150,4 +160,12 @@ test('labels: a company with an API gives its own label (link or PDF); none from
   const none: any = await call('delivery.labels', live, { ids: [c] });
   assert.equal(none[0].label, null);
   assert.equal(none[0].error, undefined);
+});
+
+test('the screens know which couriers give their own label: the others (Procolis…) print the Pilotix one', () => {
+  for (const [kind, k] of Object.entries(KINDS)) {
+    if (k.label_) assert.ok(LABEL_COURIER_KINDS.includes(kind), `${kind} gives its own label`);
+    if (LABEL_COURIER_KINDS.includes(kind)) assert.ok(k.api, `${kind} has an API`);
+  }
+  assert.ok(!LABEL_COURIER_KINDS.includes('zr_legacy'));
 });
