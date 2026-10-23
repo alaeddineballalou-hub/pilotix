@@ -23,9 +23,9 @@ import m022 from './migrations/022_picking';
 import m023 from './migrations/023_sav_satisfaction';
 import m024 from './migrations/024_stock';
 import m025 from './migrations/025_claims_api';
-import m026 from './migrations/026_parcel_mods';
 import m026 from './migrations/026_caisses';
 import m027 from './migrations/027_courier_payments';
+import m028 from './migrations/028_parcel_mods';
 
 /** The only thing the core needs from a database: run SQL, and run a function in a transaction. */
 export interface Db {
@@ -33,7 +33,7 @@ export interface Db {
   tx<T>(fn: (db: Db) => Promise<T>): Promise<T>;
 }
 
-export const MIGRATIONS: [string, string][] = [['001_schema', schema001], ['002_orders', m002], ['003_confirmation', m003], ['004_stats', m004], ['005_catalog', m005], ['006_customers', m006], ['007_suivi', m007], ['008_sav', m008], ['009_delivery', m009], ['010_cash', m010], ['011_admin', m011], ['012_ads', m012], ['013_tickets', m013], ['014_own_tracking', m014], ['015_profile', m015], ['016_dellal', m016], ['017_ui', m017], ['018_marketers', m018], ['019_cm', m019], ['020_upsell', m020], ['021_notify', m021], ['022_picking', m022], ['023_sav_satisfaction', m023], ['024_stock', m024], ['025_claims_api', m025], ['026_caisses', m026], ['027_courier_payments', m027],];
+export const MIGRATIONS: [string, string][] = [['001_schema', schema001], ['002_orders', m002], ['003_confirmation', m003], ['004_stats', m004], ['005_catalog', m005], ['006_customers', m006], ['007_suivi', m007], ['008_sav', m008], ['009_delivery', m009], ['010_cash', m010], ['011_admin', m011], ['012_ads', m012], ['013_tickets', m013], ['014_own_tracking', m014], ['015_profile', m015], ['016_dellal', m016], ['017_ui', m017], ['018_marketers', m018], ['019_cm', m019], ['020_upsell', m020], ['021_notify', m021], ['022_picking', m022], ['023_sav_satisfaction', m023], ['024_stock', m024], ['025_claims_api', m025], ['026_caisses', m026], ['027_courier_payments', m027], ['028_parcel_mods', m028],];
 
 /** Applies migrations not applied yet. `exec` runs a multi-statement SQL script. */
 export async function migrate(db: Db, exec: (sql: string) => Promise<void>): Promise<string[]> {
