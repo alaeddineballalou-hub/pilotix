@@ -132,3 +132,5 @@
 .pxk-qpw { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; border: 1px solid #CFE8D9; background: var(--surface); }
 .pxk-qpw .pxk-rm { flex: 1; }
 .pxk-qpw .pxv-btn { flex: none; height: 40px; padding: 0 14px; }
+.pxk-qp .pxk-k3 small { white-space: normal; line-height: 1.2; }
+.pxk-qp .pxk-k3 b { font-size: 13.5px; white-space: nowrap; }
