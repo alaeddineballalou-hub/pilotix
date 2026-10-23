@@ -595,5 +595,14 @@
     "next": "Next order",
     "empty": "No orders here.",
     "status": "Status"
+  },
+  "cs": {
+    "title": "Confirmed statistics",
+    "help": "The key numbers of the orders confirmed in the chosen period: how many, at what rate, how many were delivered, the average basket and the upsell. The order list stays in Orders.",
+    "key": "The essentials",
+    "upSub": "upsell rate {{p}} · {{n}} orders",
+    "detail": "Confirmation in detail",
+    "after": "After confirmation",
+    "afterHelp": "What became of the orders confirmed in the period: at the depot, on the road, delivered, returns."
   }
 }

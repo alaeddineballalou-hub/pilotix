@@ -1,4 +1,5 @@
-// "Statistiques" (foldable) — the KPI blocks of Nouvelles, En cours and Confirmées (managers).
+// "Statistiques" (foldable) — the KPI blocks of Nouvelles and En cours (managers). « Confirmées » is a page of statistics
+// only (ConfirmedStatsPage): the key numbers, confirmation by agent, and what became of the confirmed orders.
 import { Tone } from '@pilotix/shared';
 import { ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +11,7 @@ import { ErrorBox, Help, Kpi, Loading } from '../../ui/kit';
 import { kfInput, Kf, loadKf, saveKf, Sub } from './shared';
 import { useNow } from './Countdown';
 import { DateRange, periodLabel } from './DateRange';
+import './confirmation.css';
 
 const tone3 = (p: number | null, ok: number, warn: number): Tone | undefined => (p === null ? undefined : p >= ok ? 'ok' : p >= warn ? 'warn' : 'bad');
 const pctTxt = (p: number | null) => (p === null ? '—' : `${p} %`);
@@ -429,7 +431,7 @@ function PeriodCard({ kf, setKf }: { kf: Kf; setKf: (k: Kf) => void }) {
 }
 
 // ---------------------------------------------------------------- Confirmées
-function ConfirmedCard({ kf, setKf }: { kf: Kf; setKf: (k: Kf) => void }) {
+function ConfirmedCard({ kf, setKf, bare }: { kf: Kf; setKf: (k: Kf) => void; bare?: boolean }) {
   const { t } = useTranslation();
   const q = useRpc('confirmation.confirmed', kfInput(kf), { refetchInterval: 60_000, enabled: kf.view === 'conf' });
   const D = q.data;
@@ -513,10 +515,58 @@ function ConfirmedCard({ kf, setKf }: { kf: Kf; setKf: (k: Kf) => void }) {
     );
   return (
     <div className="card bjkfc bjcf">
-      <Head title={t('confirmation.cf.title')} help={t('confirmation.cf.help')}>
-        <KfBar kf={kf} setKf={setKf} />
+      <Head title={bare ? t('confirmation.cs.detail') : t('confirmation.cf.title')} help={t('confirmation.cf.help')}>
+        {!bare && <KfBar kf={kf} setKf={setKf} />}
       </Head>
       {body}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- « Confirmées »: statistics only
+/** One date bar, then L'essentiel (6 numbers), confirmation in detail (upsell, by agent), and what became of the
+ * confirmed orders (dépôt, en route, livrées, retours). Same procedures as the foldable blocks. */
+export function ConfirmedStatsPage() {
+  const { t } = useTranslation();
+  const [kf0, setKfState] = useState<Kf>(loadKf);
+  const kf: Kf = { ...kf0, view: 'conf' };
+  const setKf = (k: Kf) => {
+    setKfState(k);
+    saveKf(k);
+  };
+  const cq = useRpc('confirmation.confirmed', kfInput(kf), { refetchInterval: 60_000 });
+  const dq = useRpc('confirmation.delivery', { ...kfInput(kf), on: 'confirmed' }, { refetchInterval: 60_000 });
+  const C = cq.data;
+  const D = dq.data;
+  return (
+    <div className="px-cs">
+      <div className="card bjkfc px-cs-top">
+        <Head title={t('confirmation.cs.title')} help={t('confirmation.cs.help')}>
+          <KfBar kf={kf} setKf={setKf} noView />
+        </Head>
+        <div className="bjec-sec">
+          {t('confirmation.cs.key')} · {perLabel(t, kf)}
+        </div>
+        {cq.error ? (
+          <ErrorBox error={cq.error} onRetry={() => cq.refetch()} />
+        ) : !C ? (
+          <Loading />
+        ) : (
+          <div className="kpis px-cs-key">
+            <Kpi tone="ok" label={t('confirmation.cf.confirmed')} value={n(C.confirmed)} sub={t('confirmation.ec.value', { v: da(C.value) })} />
+            <Kpi tone={tone3(C.rate, 60, 40)} label={t('confirmation.np.rate')} value={pctTxt(C.rate)} sub={t('confirmation.cf.rateSub', { n: C.cancelled })} />
+            <Kpi tone="ok" label={t('confirmation.dv.delivered')} value={D ? n(D.delivered) : '…'} sub={D ? t('confirmation.dv.deliveredSub', { v: da(D.deliveredValue) }) : ' '} />
+            <Kpi tone={D ? tone3(D.rate, 75, 60) : undefined} label={t('confirmation.dv.rate')} value={D ? pctTxt(D.rate) : '…'} sub={t('confirmation.dv.rateSub')} />
+            <Kpi label={t('confirmation.cf.basket')} value={C.basket === null ? '—' : da(C.basket)} sub={C.itemsPerOrder === null ? ' ' : t('confirmation.cf.basketSub', { n: String(Math.round(C.itemsPerOrder * 10) / 10).replace('.', ',') })} />
+            <Kpi tone="ok" label={t('confirmation.cf.upValue')} value={da(C.upsellValue)} sub={t('confirmation.cs.upSub', { p: pctTxt(C.upsellRate), n: C.upsellOrders })} />
+          </div>
+        )}
+      </div>
+      <ConfirmedCard kf={kf} setKf={setKf} bare />
+      <div className="card bjkfc">
+        <Head title={t('confirmation.cs.after')} help={t('confirmation.cs.afterHelp')} />
+        <DelivBody kf={kf} on="confirmed" />
+      </div>
     </div>
   );
 }

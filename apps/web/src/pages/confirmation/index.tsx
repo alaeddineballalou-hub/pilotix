@@ -23,7 +23,7 @@ import { Focus } from './Focus';
 import { useIsPhone } from '../../lib/useMedia';
 import { PhoneCards, PhoneOrder } from './PhoneList';
 import { BULK_CHOICES, choiceLabel, currentLabel, ROW_CHOICES, StatusChoice, Sub, SUB_STATUSES, SUB_TONE, SUBS, telHref, toneOf, waHref } from './shared';
-import { StatsSection } from './Stats';
+import { ConfirmedStatsPage, StatsSection } from './Stats';
 import { useStatusChange } from './StatusDialog';
 import { CopyCode } from '../../ui/CopyCode';
 
@@ -102,8 +102,15 @@ export function Confirmation({ sub: rawSub, rest }: PageProps) {
   return (
     <>
       <StageBar items={items} current={sub} />
-      {manager && !phone && <StatsSection sub={sub} />}
-      <Queue key={sub} sub={sub} focusId={focusId} />
+      {sub === 'confirmees' && manager ? (
+        // managers: « Confirmées » shows statistics only (computers and phones)
+        <ConfirmedStatsPage />
+      ) : (
+        <>
+          {manager && !phone && <StatsSection sub={sub} />}
+          <Queue key={sub} sub={sub} focusId={focusId} />
+        </>
+      )}
     </>
   );
 }
