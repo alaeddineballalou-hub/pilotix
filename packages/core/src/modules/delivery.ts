@@ -191,6 +191,19 @@ export async function cancelParcel(ctx: Ctx, orderId: number) {
   ctx.emit({ type: 'order', id: orderId });
 }
 
+/** The courier's own label of a parcel sent to it: a link or a PDF. null when the courier gives no label (Pilotix prints
+ *  its own then); in the browser preview a stand-in (the courier is simulated). */
+async function companyLabel(ctx: Ctx, orderId: number): Promise<LabelResult | null> {
+  const o = (await ctx.db.query('SELECT id, tracking, ext_id, label_url, company_id FROM orders WHERE id=$1', [orderId]))[0];
+  if (!o) throw notFound('Commande introuvable');
+  if (o.label_url) return { url: o.label_url };
+  if (!o.tracking || !o.company_id) throw bad('Pas encore envoyée à une société');
+  const c = await companyOr404(ctx.db, num(o.company_id));
+  if (!KINDS[c.kind].label_) return null;
+  if (isDemo(ctx)) return { demo: true };
+  return (await courierOf(ctx)('label', { companyId: c.id, item: { id: num(o.id), tracking: o.tracking, extId: o.ext_id } }, ctx)) as LabelResult | null;
+}
+
 // ---------------------------------------------------------------- status sync
 async function syncCompany(ctx: Ctx, c: CompanyRow) {
   const parcels = await ctx.db.query(
@@ -478,14 +491,19 @@ export const deliveryProcs = {
   }),
 
   /** The courier's label for one parcel: a link or a PDF (base64). null = print our own slip. */
-  'delivery.label': proc(['depot', 'suivi'], z.object({ orderId: id }), async (ctx, { orderId }): Promise<LabelResult | null> => {
-    const o = (await ctx.db.query('SELECT id, tracking, ext_id, label_url, company_id FROM orders WHERE id=$1', [orderId]))[0];
-    if (!o) throw notFound('Commande introuvable');
-    if (o.label_url) return { url: o.label_url };
-    if (!o.tracking || !o.company_id) throw bad('Pas encore envoyée à une société');
-    const c = await companyOr404(ctx.db, num(o.company_id));
-    if (isDemo(ctx) || !KINDS[c.kind].label_) return null;
-    return (await courierOf(ctx)('label', { companyId: c.id, item: { id: num(o.id), tracking: o.tracking, extId: o.ext_id } }, ctx)) as LabelResult | null;
+  'delivery.label': proc(['depot', 'suivi'], z.object({ orderId: id }), async (ctx, { orderId }): Promise<LabelResult | null> => companyLabel(ctx, orderId)),
+
+  /** The couriers' labels of several parcels (En dispatch); a parcel the courier refuses gets its reason. */
+  'delivery.labels': proc(['depot', 'suivi'], z.object({ ids: z.array(id).min(1).max(300) }), async (ctx, { ids }) => {
+    const out: { id: number; label: LabelResult | null; error?: string }[] = [];
+    for (const oid of ids) {
+      try {
+        out.push({ id: oid, label: await companyLabel(ctx, oid) });
+      } catch (e: any) {
+        out.push({ id: oid, label: null, error: e?.message ?? 'Erreur' });
+      }
+    }
+    return out;
   }),
 
   /** Cancels the parcel at the courier (before pickup) and removes the tracking number. */

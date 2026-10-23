@@ -5,6 +5,8 @@
 // the bottom; the shop and its after-sales (SAV) number. The QR code and the barcode carry the same code.
 // A label is printed only once the parcel is assigned: it needs its delivery company, and a company with an API needs
 // its own tracking number first (it replaces the Pilotix one, so a Pilotix label would be refused by the scanner).
+// A parcel sent to a company with an API gets that company's own label (Labels.tsx asks the company for it); the
+// Pilotix label is for own livreurs, companies without an API, and couriers that give no label.
 import type { Order } from '@pilotix/shared';
 import { API_COURIER_KINDS } from '@pilotix/shared';
 import type { TFunction } from 'i18next';
@@ -19,6 +21,16 @@ export function labelState(o: Order, kind: string | undefined): LabelState {
   if (!o.companyId) return { ok: false, why: 'noCompany' };
   if (!o.tracking && (kind === undefined || API_COURIER_KINDS.includes(kind))) return { ok: false, why: 'waiting' };
   return { ok: true, code: o.tracking || o.ownTracking || o.ref };
+}
+
+/** Whose label a ready parcel gets: the company's own (a company with an API), or Pilotix's. */
+export const labelBy = (kind: string | undefined): 'company' | 'pilotix' => (kind && API_COURIER_KINDS.includes(kind) ? 'company' : 'pilotix');
+
+/** One label to print. `demo`: a stand-in for the company's own label (browser preview, where couriers are simulated). */
+export interface LabelItem {
+  o: Order;
+  code: string;
+  demo?: boolean;
 }
 
 // ---------------------------------------------------------------- Code 128 (set B): every printable character, exact case
@@ -122,15 +134,17 @@ html,body{margin:0!important;padding:0;background:#fff}
 .lbl-f{display:flex;align-items:center;justify-content:space-between;gap:2mm;margin-top:2mm;padding-top:1.4mm;border-top:.3mm solid #000;font-size:8pt}
 .lbl-f span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lbl-f b{font-size:9.5pt}
-.lbl-f .lbl-sav{flex:none}`;
+.lbl-f .lbl-sav{flex:none}
+.lbl-demo{margin:-1mm 0 2mm;border:.5mm dashed #000;border-radius:1.4mm;padding:1mm 2mm;font-size:8pt;font-weight:800;text-align:center}`;
 
 /** The label of one parcel. */
-function labelHtml(t: TFunction, z: Zx, o: Order, code: string, shop: LabelShop): string {
+function labelHtml(t: TFunction, z: Zx, { o, code, demo }: LabelItem, shop: LabelShop): string {
   const e = escapeHtml;
   const items = o.items.map((i) => `${i.qty} × ${i.name}${i.variantTitle ? ` ${i.variantTitle}` : ''}`).join(' + ');
   const pieces = o.items.reduce((n, i) => n + i.qty, 0);
   const phones = [o.phone, o.phone2].filter((p): p is string => !!p).map(phone).join(' · ');
   return `<section class="lbl" dir="${i18n.dir()}">
+${demo ? `<div class="lbl-demo">${e(t('depot.labels.demoStandIn', { name: o.companyName ?? '' }))}</div>` : ''}
 <div class="lbl-top"><div class="lbl-id">
 <div class="lbl-co">${e(o.companyName ?? '')}${o.livreurName ? `<small>${e(t('depot.labels.livreur', { name: o.livreurName }))}</small>` : ''}</div>
 <div class="lbl-k">${e(t('depot.labels.tracking'))}</div>
@@ -154,18 +168,20 @@ ${o.deliveryNote ? `<div class="lbl-note">${e(t('depot.labels.note'))} : ${e(o.d
 </section>`;
 }
 
-/** Prints the labels of the parcels that have one; returns how many were printed and how many were left out. */
-export async function printLabels(t: TFunction, orders: Order[], kindOf: (companyId: number) => string | undefined, shop: LabelShop): Promise<{ printed: number; skipped: number }> {
-  // by delivery company, so the labels of one courier come out together
-  const ready = orders
-    .flatMap((o) => {
-      const s = labelState(o, o.companyId ? kindOf(o.companyId) : undefined);
-      return s.ok ? [{ o, code: s.code }] : [];
-    })
-    .sort((a, b) => (a.o.companyName ?? '').localeCompare(b.o.companyName ?? '') || a.o.ref.localeCompare(b.o.ref, undefined, { numeric: true }));
-  if (ready.length) {
-    const z = await loadQr();
-    printHtml(t('depot.labels.docTitle', { n: ready.length }), `<style>${LABEL_CSS}</style>${ready.map((r) => labelHtml(t, z, r.o, r.code, shop)).join('')}`);
-  }
-  return { printed: ready.length, skipped: orders.length - ready.length };
+/** Prints these labels in one go, grouped by delivery company (the labels of one courier come out together). */
+export async function printLabelItems(t: TFunction, items: LabelItem[], shop: LabelShop): Promise<void> {
+  if (!items.length) return;
+  const z = await loadQr();
+  const sorted = [...items].sort((a, b) => (a.o.companyName ?? '').localeCompare(b.o.companyName ?? '') || a.o.ref.localeCompare(b.o.ref, undefined, { numeric: true }));
+  printHtml(t('depot.labels.docTitle', { n: sorted.length }), `<style>${LABEL_CSS}</style>${sorted.map((it) => labelHtml(t, z, it, shop)).join('')}`);
+}
+
+/** The company's own label as something to open: its link, or its PDF as a local file. */
+export function labelHref(l: { url?: string | null; pdf?: string; type?: string } | null | undefined): string | null {
+  if (l?.url) return l.url;
+  if (!l?.pdf) return null;
+  const bin = atob(l.pdf);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return URL.createObjectURL(new Blob([bytes], { type: l.type || 'application/pdf' }));
 }

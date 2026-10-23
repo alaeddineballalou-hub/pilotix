@@ -211,7 +211,7 @@
     "notSent_other": "{{count}} colis pas envoyés à la société",
     "skipped_one": "{{count}} sans étiquette : société ou n° de suivi manquant",
     "skipped_other": "{{count}} sans étiquette : société ou n° de suivi manquant",
-    "help": "Une étiquette (10 × 15 cm) s’imprime quand le colis a sa société de livraison. Une société avec API donne son propre n° de suivi, qui remplace celui de Pilotix : l’étiquette attend ce numéro.",
+    "help": "Une étiquette s’imprime quand le colis a sa société de livraison. Une société avec API donne son propre n° de suivi et sa propre étiquette ; l’étiquette Pilotix (10 × 15 cm) sert pour vos livreurs et les sociétés sans API.",
     "docTitle": "Étiquettes ({{n}})",
     "to": "Destinataire",
     "note": "Note",
@@ -230,6 +230,17 @@
     "exchange": "ÉCHANGE {{ref}}",
     "exchangeHint": "Récupérer l’ancien produit chez le client",
     "fromShort": "Expéditeur :",
-    "savPhone": "SAV :"
+    "savPhone": "SAV :",
+    "printCompanies": "Étiquettes des sociétés ({{n}})",
+    "printPilotix": "Étiquettes Pilotix ({{n}})",
+    "oneOf": "Étiquette {{name}}",
+    "notGot_one": "{{count}} étiquette pas reçue de la société",
+    "notGot_other": "{{count}} étiquettes pas reçues des sociétés",
+    "companyTitle_one": "Étiquette de la société",
+    "companyTitle_other": "Étiquettes des sociétés ({{count}})",
+    "companyHelp": "Chaque société donne sa propre étiquette : ouvrez-les une par une, puis imprimez chacune depuis l’onglet qui s’ouvre.",
+    "open": "Ouvrir",
+    "opened": "Ouverte",
+    "demoStandIn": "Démo : remplace l’étiquette officielle de {{name}} (avec ses clés API, c’est la sienne qui s’imprime)"
   }
 }
