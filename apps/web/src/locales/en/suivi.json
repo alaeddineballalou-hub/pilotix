@@ -328,5 +328,37 @@
     "deliv": "✓ Delivered",
     "cancelled": "✕ Cancelled",
     "realert": "⚠ New alert"
+  },
+  "mod": {
+    "btn": "Modify",
+    "phBtn": "✏️ Modify",
+    "title": "Modification request · {{ref}}",
+    "what": "What needs to change?",
+    "kinds": {
+      "price": "Price",
+      "type": "Home ↔ Stop desk",
+      "commune": "Wrong commune"
+    },
+    "desk": "{{name}} office",
+    "deskPh": "— Choose the office —",
+    "address": "Address",
+    "amount": "Amount to collect (DA)",
+    "feeHint": "Delivery fee {{old}} → {{new}} (courier tariff)",
+    "note": "Note (optional)",
+    "notePh": "Why this change…",
+    "help": "The request goes straight to your {{name}} account. The order keeps its values until {{name}} accepts, then Pilotix applies them.",
+    "noApi": "{{name}} does not take modification requests through its API: change the parcel in the courier's account.",
+    "sent": "Request {{ref}} sent to {{name}}",
+    "failed": "{{name}} did not take the request",
+    "retry": "Send again to {{name}}",
+    "cancel": "Cancel the request",
+    "cancelled": "Request cancelled",
+    "status": {
+      "pending": "Waiting for {{name}}",
+      "approved": "Accepted",
+      "refused": "Refused",
+      "error": "Not sent",
+      "cancelled": "Cancelled"
+    }
   }
 }

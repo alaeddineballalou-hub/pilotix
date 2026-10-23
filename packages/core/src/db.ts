@@ -23,6 +23,7 @@ import m022 from './migrations/022_picking';
 import m023 from './migrations/023_sav_satisfaction';
 import m024 from './migrations/024_stock';
 import m025 from './migrations/025_claims_api';
+import m026 from './migrations/026_parcel_mods';
 import m026 from './migrations/026_caisses';
 import m027 from './migrations/027_courier_payments';
 

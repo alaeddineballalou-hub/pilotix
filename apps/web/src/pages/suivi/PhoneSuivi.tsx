@@ -12,6 +12,7 @@ import { Icon } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { eventText } from '../orders/OrderCard';
 import { ClaimRow, RemindApiModal, SendModal, useTarget } from './Claims';
+import { ModHistory } from './Mods';
 import { daysSince, waLink } from './common';
 import '../confirmation/phone.css';
 import './phone.css';
@@ -141,6 +142,13 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Ord
   });
   const sync = useAction('suivi.claimSync', { silent: true });
   const [remindApi, setRemindApi] = useState(false);
+  // demandes de modification at ZR: read back ZR's answers when the parcel opens
+  const modSync = useAction('suivi.modSync', { silent: true });
+  const isZr = x?.companyKind === 'zr';
+  useEffect(() => {
+    if (isZr) modSync.mutate({ orderId: o.id });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isZr, o.id]);
   // a claim created at ZR: read back its state and answer when the parcel opens
   const claimExt = claim?.extId ? claim.id : null;
   useEffect(() => {
@@ -310,6 +318,8 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Ord
             <span className="pxs-chip or">+ {t('suivi.ph.create')}</span>
           </button>
         )}
+
+        {isZr && <ModHistory orderId={o.id} compact />}
 
         {/* the order */}
         {section(

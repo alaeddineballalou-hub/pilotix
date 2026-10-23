@@ -188,6 +188,27 @@ export interface CourierPayments {
   accept(c: CourierCompany, extId: string): Promise<void>;
 }
 
+/** A demande de modification of a parcel already at the courier. null = unchanged. */
+export interface ModInput {
+  item: TrackItem;
+  /** new amount to collect (DA) */
+  amount: number | null;
+  deliveryType: 'home' | 'pickup-point' | null;
+  /** new home address (wilaya n°, commune name, street) */
+  address: { wilayaId: number; commune: string; street: string } | null;
+  /** the courier's id of the new stop desk */
+  hubExtId: string | null;
+}
+
+export interface ModState {
+  extId: string;
+  /** null = not decided yet */
+  approved: boolean | null;
+  comment?: string | null;
+  /** some couriers give a new tracking number after a change */
+  newTracking?: string | null;
+}
+
 /** Helpers the framework gives to adapters. */
 export interface Helpers {
   /** Finds the courier's commune matching ours (fuzzy). `load` lists the courier's communes of the wilaya. */
@@ -216,6 +237,10 @@ export interface CourierAdapter {
   claimComment?(c: CourierCompany, extId: string, text: string): Promise<void>;
   /** Payments through the courier API (balance, payment requests, payments and their parcels). */
   payments?: CourierPayments;
+  /** Demandes de modification (amount, home ↔ stop desk, address) of a parcel already sent. */
+  modify?(c: CourierCompany, i: ModInput): Promise<{ extId: string }>;
+  modStates?(c: CourierCompany, extIds: string[]): Promise<ModState[]>;
+  modCancel?(c: CourierCompany, extId: string): Promise<void>;
   /** What would be sent, without sending (secrets masked). */
   preview?(c: CourierCompany, p: Parcel): Promise<PreviewResult>;
 }

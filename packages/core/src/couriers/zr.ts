@@ -6,9 +6,12 @@
 // Réclamations (from ZR's API documentation): POST /claim-categories/search → {items:[{id,name}]},
 // POST /claims {categoryId, title, description, parcelId (ZR parcel UUID)} → {id}, POST /claims/{id} {claimId} → claim with
 // state {name, description, isLocked}, PATCH /claim-comments/{id} {claimId, comment}, POST /claim-comments/{id}/search → {items:[{content, createdAt}]}.
+// Demandes de modification: POST /parcel-modification-requests {parcelId, amount?, deliveryType?, deliveryAddress (required:
+// cityTerritoryId, districtTerritoryId, street), hubId?} → {id}; GET /parcel-modification-requests/{id} → {isApproved (null = waiting),
+// comment, newTrackingNumber…}; DELETE /parcel-modification-requests/{id} before validation.
 // BEST GUESS (check with real keys): the "state.name" values in STATUSES below come from ZR's dashboard wording;
 // unknown ones are shown as-is and can be mapped by hand with the "Statuts" button.
-import type { ClaimCategory, ClaimState, CourierAdapter, CourierCompany, Desk } from './types';
+import type { ClaimCategory, ClaimState, CourierAdapter, CourierCompany, Desk, ModState } from './types';
 import { baseUrl, bestMatch, CourierError, cut, http, intl, needKeys, timeUp } from './util';
 
 const STATUSES: CourierAdapter['statuses'] = {
@@ -331,6 +334,61 @@ export const zr: CourierAdapter = {
       out.push({ extId: id, status: words, resolved: !!g?.state?.isLocked || RESOLVED.test(name) || RESOLVED.test(words), at: g?.lastModifiedAt ?? null, answer });
     }
     return out;
+  },
+  async modify(c, i) {
+    needKeys(c, 'api_key', 'tenant');
+    const parcel = await http(c.name, url(c, `/parcels/${encodeURIComponent(i.item.extId || i.item.tracking)}`), { headers: h(c) });
+    if (!parcel?.id) throw new CourierError(`Colis ${i.item.tracking} introuvable chez ZR`);
+    if (parcel.isEligibleForModification === false) throw new CourierError(`ZR n’accepte plus de modification sur ${i.item.tracking} (état « ${parcel.state?.description || parcel.state?.name || '—'} »)`);
+    if (parcel.hasActiveModificationRequest) throw new CourierError(`Une demande de modification est déjà en cours chez ZR pour ${i.item.tracking}`);
+    const cur = parcel.deliveryAddress ?? {};
+    const type: 'home' | 'pickup-point' = i.deliveryType ?? (parcel.deliveryType === 'pickup-point' ? 'pickup-point' : 'home');
+    let address: Record<string, unknown> = { cityTerritoryId: cur.cityTerritoryId, districtTerritoryId: cur.districtTerritoryId, street: cur.street || '' };
+    let hubId: string | undefined = type === 'pickup-point' ? cur.hubId || undefined : undefined;
+    if (type === 'pickup-point' && i.hubExtId) {
+      const hub = (await hubs(c)).find((x) => String(x.id) === String(i.hubExtId));
+      if (!hub) throw new CourierError(`Bureau ZR introuvable : réimportez les stop desks de ${c.name}`);
+      hubId = hub.id;
+      address = { cityTerritoryId: hub.address?.cityTerritoryId, districtTerritoryId: hub.address?.districtTerritoryId, street: cut(hub.address?.street || hub.name, 200) };
+    } else if (type === 'pickup-point' && !hubId) throw new CourierError('Choisissez le bureau ZR (stop desk)');
+    if (type === 'home' && i.address) {
+      const w = (await territories(c, 'wilaya')).find((t) => Number(t.code) === Number(i.address!.wilayaId));
+      if (!w) throw new CourierError(`ZR ne livre pas la wilaya ${i.address.wilayaId}`);
+      const coms = (await territories(c, 'commune')).filter((t) => t.parentId === w.id);
+      const hit = bestMatch(i.address.commune, coms.map((t) => t.name));
+      const com = hit ? coms.find((t) => t.name === hit) : null;
+      if (!com) throw new CourierError(`Commune « ${i.address.commune} » introuvable chez ZR`);
+      address = { cityTerritoryId: w.id, districtTerritoryId: com.id, street: cut(i.address.street || i.address.commune, 200) };
+    }
+    if (!address.cityTerritoryId || !address.districtTerritoryId) throw new CourierError('Adresse du colis inconnue chez ZR : choisissez la commune');
+    const body: Record<string, unknown> = { parcelId: parcel.id, deliveryType: type, deliveryAddress: address };
+    if (i.amount !== null) body.amount = Math.round(i.amount);
+    if (hubId) body.hubId = hubId;
+    const r = await http(c.name, url(c, '/parcel-modification-requests'), { method: 'POST', headers: h(c), json: body });
+    const id = r?.id || (typeof r === 'string' ? r : null);
+    if (!id) throw new CourierError('ZR n’a pas renvoyé de numéro de demande');
+    return { extId: String(id) };
+  },
+  async modStates(c, ids) {
+    needKeys(c, 'api_key', 'tenant');
+    const out: ModState[] = [];
+    for (const id of ids) {
+      if (timeUp()) break;
+      let g: any;
+      try {
+        g = await http(c.name, url(c, `/parcel-modification-requests/${encodeURIComponent(id)}`), { headers: h(c) });
+      } catch (e: any) {
+        if (String(e.message).includes('refuse les clés') || e.status === 429) throw e;
+        if (e.status === 404) out.push({ extId: id, approved: false, comment: 'Demande supprimée chez ZR' });
+        continue;
+      }
+      out.push({ extId: id, approved: g?.isApproved ?? null, comment: g?.comment ?? null, newTracking: g?.newTrackingNumber ?? null });
+    }
+    return out;
+  },
+  async modCancel(c, id) {
+    needKeys(c, 'api_key', 'tenant');
+    await http(c.name, url(c, `/parcel-modification-requests/${encodeURIComponent(id)}`), { method: 'DELETE', headers: h(c) });
   },
   async stopdesks(c) {
     needKeys(c, 'api_key', 'tenant');

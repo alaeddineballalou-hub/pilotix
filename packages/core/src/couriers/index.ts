@@ -4,7 +4,7 @@
 import type { Ctx } from '../rpc';
 import { ADAPTERS } from './adapters';
 import { helpers, loadCompany, loadParcels } from './load';
-import type { ClaimInput, CourierApi, CourierCompany, TrackItem } from './types';
+import type { ClaimInput, CourierApi, CourierCompany, ModInput, TrackItem } from './types';
 import { CourierError, setDeadline } from './util';
 
 export * from './types';
@@ -46,7 +46,7 @@ export function courierApi(c: CourierCompany): CourierApi {
   };
 }
 
-type Args = { companyId: number; date?: string; ids?: number[]; items?: TrackItem[]; item?: TrackItem; orderId?: number; claim?: ClaimInput; extIds?: string[]; extId?: string; text?: string };
+type Args = { companyId: number; date?: string; ids?: number[]; items?: TrackItem[]; item?: TrackItem; orderId?: number; claim?: ClaimInput; extIds?: string[]; extId?: string; text?: string; mod?: ModInput };
 
 /**
  * Entry point used by the server for ctx.server.courier(action, args, ctx).
@@ -94,6 +94,21 @@ export async function runCourier(action: string, args: unknown, ctx: Ctx): Promi
     case 'claimStates': {
       const ad = ADAPTERS[c.kind];
       return ad.claimStates ? ad.claimStates(c, a.extIds ?? []) : [];
+    }
+    case 'modify': {
+      const ad = ADAPTERS[c.kind];
+      if (!ad.modify) throw new CourierError(`${c.name} : pas de demande de modification par API`);
+      return ad.modify(c, a.mod!);
+    }
+    case 'modStates': {
+      const ad = ADAPTERS[c.kind];
+      return ad.modStates ? ad.modStates(c, a.extIds ?? []) : [];
+    }
+    case 'modCancel': {
+      const ad = ADAPTERS[c.kind];
+      if (!ad.modCancel) throw new CourierError(`${c.name} : annulez la demande depuis l’espace de la société`);
+      await ad.modCancel(c, a.extId!);
+      return { ok: true };
     }
     case 'preview': {
       const p = (await loadParcels(ctx.db, [a.orderId!]))[0];

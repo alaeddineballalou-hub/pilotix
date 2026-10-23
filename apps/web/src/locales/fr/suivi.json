@@ -328,5 +328,37 @@
     "deliv": "✓ Livré",
     "cancelled": "✕ Annulé",
     "realert": "⚠ Nouvelle alerte"
+  },
+  "mod": {
+    "btn": "Modifier",
+    "phBtn": "✏️ Modifier",
+    "title": "Demande de modification · {{ref}}",
+    "what": "Que faut-il changer ?",
+    "kinds": {
+      "price": "Prix",
+      "type": "Domicile ↔ Bureau",
+      "commune": "Commune erronée"
+    },
+    "desk": "Bureau {{name}}",
+    "deskPh": "— Choisir le bureau —",
+    "address": "Adresse",
+    "amount": "Montant à encaisser (DA)",
+    "feeHint": "Frais de livraison {{old}} → {{new}} (tarif de la société)",
+    "note": "Note (facultatif)",
+    "notePh": "Pourquoi ce changement…",
+    "help": "La demande part directement dans votre espace {{name}}. La commande garde ses valeurs jusqu’à l’accord de {{name}}, puis Pilotix les applique.",
+    "noApi": "{{name}} ne prend pas les demandes de modification par API : modifiez le colis depuis l’espace de la société.",
+    "sent": "Demande {{ref}} envoyée à {{name}}",
+    "failed": "{{name}} n’a pas pris la demande",
+    "retry": "Renvoyer à {{name}}",
+    "cancel": "Annuler la demande",
+    "cancelled": "Demande annulée",
+    "status": {
+      "pending": "En attente de {{name}}",
+      "approved": "Acceptée",
+      "refused": "Refusée",
+      "error": "Pas envoyée",
+      "cancelled": "Annulée"
+    }
   }
 }

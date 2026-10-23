@@ -13,6 +13,7 @@ import type { PageProps } from '../registry';
 import { ConfirmModal, daysSince, productsText } from './common';
 import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import { NewClaimModal } from './Claims';
+import { ModModal } from './Mods';
 import { Reclamation } from './Reclamation';
 import { SwapModal, SwapResult, SwapSheetModal } from './Swap';
 import './suivi.css';
@@ -266,6 +267,7 @@ type Dialog =
   | { kind: 'cancel'; o: Order }
   | { kind: 'swap'; o: Order }
   | { kind: 'claim'; o: Order; toLivreur: boolean }
+  | { kind: 'mod'; o: Order }
   | { kind: 'sheet'; data: SwapResult & { fresh?: boolean } }
   | null;
 
@@ -281,11 +283,21 @@ function List({ tab }: { tab: ListTab }) {
     act.mutate({ id: o.id, action }, { onSuccess: () => toast(t(`suivi.msg.${action === 'cancel' ? 'cancelled' : action}`, { ref: o.ref }), 'ok') });
 
   const extra = (q.data?.extra ?? {}) as Record<number, Extra>;
+  // demande de modification: couriers that take it through their API (ZR)
+  const canMod = (o: Order) => extra[o.id]?.companyKind === 'zr' && !!o.tracking;
+  const modBtn = (o: Order) =>
+    canMod(o) && (
+      <button type="button" className="btn small" onClick={() => setDlg({ kind: 'mod', o })}>
+        <Icon name="pencil" />
+        {t('suivi.mod.btn')}
+      </button>
+    );
   let actions: ((o: Order) => ReactNode) | undefined;
   if (tab === 'alertes')
     actions = (o) => (
       <div className="row nowrap px-sv-acts">
         <AlertClaim o={o} x={extra[o.id]} onClaim={(toLivreur) => setDlg({ kind: 'claim', o, toLivreur })} />
+        {modBtn(o)}
         <button type="button" className="btn small primary" onClick={() => setDlg({ kind: 'treat', o })}>
           {t('suivi.act.treat')}
         </button>
@@ -306,6 +318,7 @@ function List({ tab }: { tab: ListTab }) {
         <button type="button" className="btn small" disabled={act.isPending} onClick={() => run(o, 'realert')}>
           {t('suivi.act.realert')}
         </button>
+        {modBtn(o)}
       </div>
     );
   if (tab === 'swap')
@@ -331,12 +344,14 @@ function List({ tab }: { tab: ListTab }) {
           const cur = rows.find((r) => r.id === openId) ?? null;
           const phoneActions = (o: Order): ParcelAction[] => {
             const claim: ParcelAction = { key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: extra[o.id]?.companyKind === 'own' }) };
+            const mod: ParcelAction[] = canMod(o) ? [{ key: 'mod', label: t('suivi.mod.phBtn'), run: () => setDlg({ kind: 'mod', o }) }] : [];
             if (tab === 'alertes')
-              return [{ key: 'treat', label: t('suivi.ph.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) }, claim, { key: 'cancel', label: t('suivi.ph.cancel'), tone: 'bad', run: () => setDlg({ kind: 'cancel', o }) }];
+              return [{ key: 'treat', label: t('suivi.ph.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) }, claim, ...mod, { key: 'cancel', label: t('suivi.ph.cancel'), tone: 'bad', run: () => setDlg({ kind: 'cancel', o }) }];
             if (tab === 'traites')
               return [
                 { key: 'deliv', label: t('suivi.ph.deliv'), tone: 'ok', run: () => run(o, 'delivered') },
                 claim,
+                ...mod,
                 { key: 'realert', label: t('suivi.ph.realert'), run: () => run(o, 'realert') },
                 { key: 'cancelled', label: t('suivi.ph.cancelled'), tone: 'bad', run: () => run(o, 'cancel') },
               ];
@@ -385,6 +400,7 @@ function List({ tab }: { tab: ListTab }) {
       )}
       {dlg?.kind === 'swap' && <SwapModal o={dlg.o} onClose={() => setDlg(null)} onDone={(data) => setDlg({ kind: 'sheet', data: { ...data, fresh: true } })} />}
       {dlg?.kind === 'sheet' && <SwapSheetModal {...dlg.data} onClose={() => setDlg(null)} />}
+      {dlg?.kind === 'mod' && <ModModal o={dlg.o} onClose={() => setDlg(null)} />}
       {dlg?.kind === 'claim' && <NewClaimModal pre={dlg.o} toLivreur={dlg.toLivreur} reason="relivrer" details={reasonOf(dlg.o, extra[dlg.o.id]) ? t('suivi.rec.alertDetails', { v: reasonOf(dlg.o, extra[dlg.o.id]) }) : ''} onClose={() => setDlg(null)} />}
     </div>
   );

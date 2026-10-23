@@ -9,3 +9,15 @@
 .bjr-tbl small.bjr-api.bad{color:var(--coral)}
 .bjr-ans{background:var(--raise);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13.5px;white-space:pre-wrap}
 .bjr-ans b{display:block;margin-bottom:4px;font-size:12px;color:var(--muted)}
+
+/* demandes de modification (ZR) */
+.pxm-seg{height:auto;flex-wrap:wrap}
+.pxm-seg button{height:34px}
+.pxm-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.pxm-grid .pxm-wide{grid-column:1/-1}
+@media (max-width:640px){.pxm-grid{grid-template-columns:minmax(0,1fr)}}
+.pxm-hist{display:flex;flex-direction:column;gap:8px}
+.pxm-h{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--raise);display:flex;flex-direction:column;gap:4px}
+.pxm-hh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pxm-ha{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.pxm-bad{color:var(--coral);font-weight:700}

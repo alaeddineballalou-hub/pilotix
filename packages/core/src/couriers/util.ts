@@ -82,7 +82,7 @@ export async function http(who: string, url: string, o: HttpOpts = {}, retried =
   }
   if (res.status === 401 || res.status === 403) throw new CourierError(`${who} refuse les clés API (${errText(data) || res.status}). Vérifiez-les dans Sociétés de livraison.`);
   if (res.status === 429) throw new CourierError(`${who} : trop de demandes, réessayez dans une minute`, 429);
-  if (!res.ok) throw new CourierError(`${who} : ${errText(data) || `erreur ${res.status}`}`);
+  if (!res.ok) throw new CourierError(`${who} : ${errText(data) || `erreur ${res.status}`}`, res.status);
   return data;
 }
 

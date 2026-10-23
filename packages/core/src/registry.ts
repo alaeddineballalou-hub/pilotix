@@ -11,6 +11,7 @@ import { customersProcs } from './modules/customers';
 import { deliveryProcs } from './modules/delivery';
 import { dellalProcs } from './modules/dellal';
 import { marketersProcs } from './modules/marketers';
+import { modsProcs } from './modules/mods';
 import { notifyProcs } from './modules/notify';
 import { pickingProcs } from './modules/picking';
 import { ordersProcs } from './modules/orders';
@@ -30,6 +31,7 @@ export const REGISTRY = {
   ...stockProcs,
   ...customersProcs,
   ...suiviProcs,
+  ...modsProcs,
   ...savProcs,
   ...deliveryProcs,
   ...cashProcs,
