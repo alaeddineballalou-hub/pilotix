@@ -21,7 +21,7 @@ import { HistoryButton, PhoneCell } from '../confirmation/History';
 import { store } from '../../lib/store';
 import { CopyCode } from '../../ui/CopyCode';
 import { useIsPhone } from '../../lib/useMedia';
-import { ParcelAction, ParcelCards, ParcelPage } from './PhoneSuivi';
+import { CancelSheet, ParcelAction, ParcelCards, ParcelPage, TreatSheet } from './PhoneSuivi';
 
 const LIST_TABS = ['alertes', 'traites', 'livres', 'annules', 'swap'] as const;
 type ListTab = (typeof LIST_TABS)[number];
@@ -368,8 +368,19 @@ function List({ tab }: { tab: ListTab }) {
       ) : (
         <ParcelTable rows={q.data?.rows ?? []} extra={extra} actions={actions} empty={t(`suivi.empty.${tab}`)} />
       )}
-      {dlg?.kind === 'treat' && <TreatModal o={dlg.o} reason={reasonOf(dlg.o, extra[dlg.o.id])} onClose={() => setDlg(null)} />}
-      {dlg?.kind === 'cancel' && (
+      {dlg?.kind === 'treat' && (phone ? <TreatSheet o={dlg.o} reason={reasonOf(dlg.o, extra[dlg.o.id])} onClose={() => setDlg(null)} /> : <TreatModal o={dlg.o} reason={reasonOf(dlg.o, extra[dlg.o.id])} onClose={() => setDlg(null)} />)}
+      {dlg?.kind === 'cancel' && phone && (
+        <CancelSheet
+          o={dlg.o}
+          busy={act.isPending}
+          onClose={() => setDlg(null)}
+          onOk={() => {
+            run(dlg.o, 'cancel');
+            setDlg(null);
+          }}
+        />
+      )}
+      {dlg?.kind === 'cancel' && !phone && (
         <ConfirmModal
           title={t('suivi.cancelAsk', { ref: dlg.o.ref })}
           text={t('suivi.cancelText')}

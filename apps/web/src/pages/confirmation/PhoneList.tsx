@@ -86,8 +86,8 @@ export function PhoneOrder({ order, wa, onClose, onDone }: { order: Order; wa: s
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const key = (e: KeyboardEvent) => e.key === 'Escape' && closeRef.current();
-    const back = () => closeRef.current();
+    const key = (e: KeyboardEvent) => e.key === 'Escape' && !document.querySelector('.pxk-sheet') && closeRef.current();
+    const back = (e: PopStateEvent) => !e.state?.pxpOrder && closeRef.current();
     history.pushState({ pxpOrder: 1 }, '');
     window.addEventListener('keydown', key);
     window.addEventListener('popstate', back);

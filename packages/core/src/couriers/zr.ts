@@ -341,6 +341,7 @@ async function parcelInfo(c: CourierCompany, it: TrackItem): Promise<ParcelInfo>
     amount: n(p?.amount),
     deliveryPrice: n(p?.deliveryPrice),
     returnPrice: n(p?.returnPrice),
+    swap: p?.swap ? { eligible: !!p.swap.isEligibleForSwap, count: numOf(p.swap.count ?? 0), sameCityPrice: n(p.swap.sameCityPrice), differentCityPrice: n(p.swap.differentCityPrice) } : null,
     history: listOf(hist)
       .map((x) => ({
         at: String(x.createdAt ?? ''),

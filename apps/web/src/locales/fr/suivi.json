@@ -82,7 +82,23 @@
     "note": "Note",
     "notePh": "ex. client au travail, livrer après 17 h",
     "submit": "Marquer traitée",
-    "done": "{{ref}} : alerte traitée"
+    "done": "{{ref}} : alerte traitée",
+    "ph": {
+      "q": "Qu’avez-vous fait ?",
+      "date": "Client joint",
+      "dateSub": "nouvelle date de livraison",
+      "adresse": "Corrigé",
+      "adresseSub": "adresse ou téléphone",
+      "injoignable": "Injoignable",
+      "injoignableSub": "nouvel essai",
+      "autre": "Autre",
+      "autreSub": "à préciser dans la note",
+      "when": "Nouvelle date de livraison",
+      "tomorrow": "Demain",
+      "other": "Autre date",
+      "zrHint": "Une nouvelle adresse ? Envoyez-la directement à {{name}} :",
+      "zrGo": "Modifier chez {{name}}"
+    }
   },
   "cancelAsk": "Le client annule {{ref}} ?",
   "cancelText": "Le colis passe en « Retour en cours ». Dans Annulés, vous pourrez le swapper vers un autre client.",
@@ -113,7 +129,26 @@
     "mismatch": "Le colis contient « {{a}} », la commande {{ref}} demande « {{b}} ». Vérifiez avec le client avant de swapper.",
     "pick": "Choisissez la commande qui reçoit le colis.",
     "submit": "Swapper le colis",
-    "choose": "Choisir {{ref}}"
+    "choose": "Choisir {{ref}}",
+    "ph": {
+      "title": "Donner ce colis à un autre client",
+      "cancelledBy": "Annulé par {{name}}",
+      "zrPrice": "Swap chez {{name}} : {{same}} dans la même wilaya, {{other}} ailleurs.",
+      "zrNo": "{{name}} n’accepte plus de swap pour ce colis.",
+      "cands": "Mêmes produits, pas encore expédiées",
+      "candsHelp": "Même wilaya d’abord, puis pas encore emballées, puis même variante.",
+      "found": "Résultats",
+      "give": "Donner le colis à {{name}}",
+      "pickFirst": "Choisissez le client",
+      "foot": "Sa commande sort de la préparation et part avec ce colis.",
+      "zrCost": "Swap ZR {{v}}",
+      "tagPrepared": "Déjà emballée",
+      "tagToPrepare": "Pas encore emballée",
+      "tagWilaya": "Même wilaya",
+      "tagVariant": "Même produit",
+      "tagProduct": "Autre variante",
+      "tagOther": "Autre produit"
+    }
   },
   "sheet": {
     "title": "Colis swappé",
@@ -151,6 +186,11 @@
       "amount": "Montant à encaisser : {{v}}",
       "instead": " (au lieu de {{v}})",
       "order": "Commande : {{ref}} (remplace {{old}})"
+    },
+    "ph": {
+      "done": "Terminé",
+      "copy": "Copier",
+      "copied": "Copié"
     }
   },
   "rec": {
@@ -282,7 +322,36 @@
     "apiRemindText": "Bonjour, toujours pas de solution pour le colis {{tracking}}. Merci de nous tenir informés.",
     "apiRemindHelp": "Le message est ajouté comme commentaire sur la réclamation dans votre espace {{name}}.",
     "apiReminded": "Relance envoyée à {{name}}",
-    "apiLastAnswer": "Dernière réponse de {{name}}"
+    "apiLastAnswer": "Dernière réponse de {{name}}",
+    "ph": {
+      "title": "Réclamation à {{name}}",
+      "titleLivreur": "Message à {{name}}",
+      "problemQ": "Quel est le problème ?",
+      "footMsg": "Pilotix prépare le message ; vous l’envoyez par WhatsApp ou e-mail.",
+      "addressHint": "Chez {{name}}, changez l’adresse ou le téléphone directement :",
+      "addressGo": "Modifier chez {{name}}",
+      "auto": "Automatique",
+      "copy": "Copier",
+      "mail": "E-mail",
+      "call": "Appeler",
+      "marked": "Notée comme envoyée.",
+      "new": "Nouvelle réclamation",
+      "remind": "Relancer",
+      "answer": "Réponse",
+      "otherOrder": "Changer",
+      "late_one": "{{count}} réclamation sans réponse depuis plus de 48 h : relancez-la.",
+      "late_other": "{{count}} réclamations sans réponse depuis plus de 48 h : relancez-les.",
+      "tabs": {
+        "companies": "Sociétés",
+        "livreurs": "Livreurs",
+        "search": "Chercher"
+      },
+      "st": {
+        "waiting": "En attente",
+        "still_waiting": "Toujours",
+        "resolved": "Réglée"
+      }
+    }
   },
   "courier": {
     "title": "Chez {{name}}",
@@ -345,7 +414,62 @@
     "note": "Pourquoi (pour l’historique)",
     "notePh": "Ex. : le client a déménagé, remise accordée…",
     "appliedNow": "Changé chez {{name}} et dans la commande",
-    "sent": "Demande envoyée à {{name}} : la commande changera quand elle l’acceptera"
+    "sent": "Demande envoyée à {{name}} : la commande changera quand elle l’acceptera",
+    "ph": {
+      "offNo": "{{name}} ne l’accepte plus pour ce colis",
+      "offPending": "Une demande attend déjà",
+      "offDesk": "Stop desk : changez plutôt le bureau",
+      "before": "Aujourd’hui",
+      "after": "Demandé",
+      "da": "DA",
+      "priceToo": "Le prix change aussi",
+      "sheetTitle": "Modifier chez {{name}}",
+      "sending": "Envoi à {{name}}…",
+      "footPhone": "{{name}} applique le nouveau numéro tout de suite, la commande aussi.",
+      "footAsk": "{{name}} valide la demande ; la commande change dès qu’elle l’accepte.",
+      "freeDelivery": "Livraison offerte",
+      "toDesk": "Stop desk",
+      "toHome": "Domicile",
+      "deskPick": "Quel bureau {{name}} ?",
+      "addressPh": "Rue, cité, bâtiment, repère…",
+      "why": "Pourquoi ? (pour l’historique)",
+      "exchange": "Échange chez {{name}}",
+      "legOut": "Aller",
+      "legOutText": "Le nouveau produit va chez {{name}}",
+      "legBack": "Retour",
+      "legBackText": "L’ancien produit revient à votre dépôt",
+      "legWaits": "part quand l’échange est livré",
+      "livreurOf": "Livreur {{name}}",
+      "callLivreur": "Appeler {{name}}",
+      "riskShort": "{{returns}} retour(s) sur {{orders}} commande(s) de ce client",
+      "requests": "Demandes à {{name}}",
+      "modify": "Modifier chez {{name}}",
+      "modifySub": "Prix · livraison · adresse · téléphone",
+      "journey": "Parcours",
+      "sms": "SMS"
+    },
+    "why": {
+      "amount": {
+        "a": "Remise accordée au client",
+        "b": "Erreur de prix",
+        "c": "Produit manquant"
+      },
+      "delivery": {
+        "a": "Demande du client",
+        "b": "Client absent en journée",
+        "c": "Bureau plus proche"
+      },
+      "address": {
+        "a": "Le client a déménagé",
+        "b": "Adresse incomplète",
+        "c": "Erreur de saisie"
+      },
+      "phone": {
+        "a": "Numéro erroné",
+        "b": "Autre numéro du client",
+        "c": "Erreur de saisie"
+      }
+    }
   },
   "removeAgent": "Retirer l’agent suivi",
   "agentRemoved": "{{ref}} : agent suivi retiré",
@@ -390,6 +514,14 @@
     "cancel": "✕ Client annule",
     "deliv": "✓ Livré",
     "cancelled": "✕ Annulé",
-    "realert": "⚠ Nouvelle alerte"
+    "realert": "⚠ Nouvelle alerte",
+    "fix": {
+      "number": "Corriger le numéro chez {{co}}",
+      "desk": "Passer en stop desk chez {{co}}",
+      "zone": "Choisir un bureau {{co}} proche",
+      "address": "Envoyer la bonne adresse à {{co}}",
+      "absent": "Demander à {{co}} de relivrer"
+    },
+    "keep": "Garder le colis"
   }
 }

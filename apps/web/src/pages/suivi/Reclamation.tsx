@@ -9,16 +9,21 @@ import { ClaimsPanel } from './Claims';
 import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import { productsText } from './common';
 import { CopyCode } from '../../ui/CopyCode';
+import { useIsPhone } from '../../lib/useMedia';
+import { PhoneClaims } from './PhoneClaims';
 
 type RTab = 'search' | 'companies' | 'livreurs';
 
 export function Reclamation() {
   const { t } = useTranslation();
+  const phone = useIsPhone();
+  // a phone opens on the claims to the couriers (the inbox); a computer on the search
   const [tab, setTab] = useState<RTab>(() => {
+    const first: RTab = window.matchMedia('(max-width: 760px)').matches ? 'companies' : 'search';
     try {
-      return (sessionStorage.getItem('px-rec-tab') as RTab) || 'search';
+      return (sessionStorage.getItem('px-rec-tab') as RTab) || first;
     } catch {
-      return 'search';
+      return first;
     }
   });
   const choose = (k: RTab) => {
@@ -33,15 +38,30 @@ export function Reclamation() {
   const liv = useRpc('suivi.claims', { target: 'livreur', status: 'open', pageSize: 1 }).data?.counts?.open;
   return (
     <>
-      <div className="bjp-tabs bjr-tabs" role="tablist">
-        {(['search', 'companies', 'livreurs'] as const).map((k) => (
-          <button key={k} type="button" role="tab" aria-selected={tab === k} className={`tab${tab === k ? ' on' : ''}`} onClick={() => choose(k)}>
-            {t(`suivi.rec.tabs.${k}`)}
-            {k !== 'search' && <b className="bjr-n ltr">{(k === 'companies' ? comp : liv) || ''}</b>}
-          </button>
-        ))}
-      </div>
-      {tab === 'search' ? <SearchOrders /> : <ClaimsPanel target={tab === 'companies' ? 'company' : 'livreur'} />}
+      {phone ? (
+        <div className="pxr-tabs" role="tablist">
+          {(['companies', 'livreurs', 'search'] as const).map((k) => {
+            const n = k === 'companies' ? comp : k === 'livreurs' ? liv : 0;
+            return (
+              <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => choose(k)}>
+                {k === 'search' && <Icon name="search" />}
+                {t(`suivi.rec.ph.tabs.${k}`)}
+                {!!n && <b className="ltr">{n}</b>}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="bjp-tabs bjr-tabs" role="tablist">
+          {(['search', 'companies', 'livreurs'] as const).map((k) => (
+            <button key={k} type="button" role="tab" aria-selected={tab === k} className={`tab${tab === k ? ' on' : ''}`} onClick={() => choose(k)}>
+              {t(`suivi.rec.tabs.${k}`)}
+              {k !== 'search' && <b className="bjr-n ltr">{(k === 'companies' ? comp : liv) || ''}</b>}
+            </button>
+          ))}
+        </div>
+      )}
+      {tab === 'search' ? <SearchOrders /> : phone ? <PhoneClaims target={tab === 'companies' ? 'company' : 'livreur'} /> : <ClaimsPanel target={tab === 'companies' ? 'company' : 'livreur'} />}
     </>
   );
 }

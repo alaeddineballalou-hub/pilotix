@@ -138,6 +138,7 @@ export function useLabelPrinter() {
 
   const modal: ReactNode = list && (
     <Modal
+      sheet
       title={t('depot.labels.companyTitle', { count: list.reduce((n, x) => n + x.os.length, 0) })}
       onClose={() => setList(null)}
       footer={

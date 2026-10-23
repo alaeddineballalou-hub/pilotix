@@ -10,8 +10,9 @@ export function useFullScreen(onClose: () => void) {
     openPages++;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && !document.querySelector('.modal-wrap, .pxv-sheet') && ref.current();
-    const back = () => ref.current();
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && !document.querySelector('.modal-wrap, .pxv-sheet, .pxk-sheet') && ref.current();
+    // a back that lands on this entry closed a sheet above the page: the page stays
+    const back = (e: PopStateEvent) => !e.state?.pxv && ref.current();
     if (!history.state?.pxv) history.pushState({ pxv: 1 }, '');
     window.addEventListener('keydown', esc);
     window.addEventListener('popstate', back);
