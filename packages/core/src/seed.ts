@@ -1,5 +1,6 @@
 // Base data (every install) and demo data (preview only). All demo people, phones and orders are invented.
 import { CONF_TODO, ConfStatus, FollowStatus } from '@pilotix/shared';
+import { fakeTracking } from './couriers/demo';
 import { Db, num } from './db';
 import { UPSELL_BACKFILL } from './migrations/020_upsell';
 import { hashPassword } from './modules/users';
@@ -135,7 +136,7 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number } =
   const zr = await comp('ZR Express', 'zr', true);
   const own = await comp('Nos livreurs', 'own', false);
   await db.query('UPDATE profiles SET livreur_company_id=$1 WHERE id = ANY($2)', [own, [users.livreur, users.livreur2]]);
-  await setSetting(db, 'shop', { ...DEFAULT_SETTINGS.shop, name: 'Pilotix Démo', defaultCompanyId: yal });
+  await setSetting(db, 'shop', { ...DEFAULT_SETTINGS.shop, name: 'Pilotix Démo', defaultCompanyId: yal, savPhone: '0550 11 22 33' });
   const feeRows: unknown[][] = [];
   for (let w = 1; w <= 69; w++) {
     feeRows.push([yal, w, Math.round(grid[w].home * 0.85), Math.round(grid[w].desk * 0.85), 200]);
@@ -243,7 +244,7 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number } =
       conf, agent, attempts, attempts ? iso(cap(created + rnd() * 5 * 3_600_000)) : null, nextCall, agent ? iso(created + 600_000) : null,
       conf === 'confirmed' || conf === 'no_stock' ? iso(cap(tConfirm)) : null,
       follow, follow === 'alert' ? null : null, company, follow ? wh1 : null, livreur,
-      shippedLike && company !== own ? `PX${1001 + i}` : null, // one ID: the order ID is the tracking number
+      shippedLike && company !== own ? fakeTracking(company === yal ? 'yalidine' : 'zr', `PX${1001 + i}`, 0) : null, // the courier's own number
       follow === 'failed' ? 1 : 0, subtotal, fee, discount, subtotal - discount + fee, shippedLike ? cost : 0,
       delivered && age > 6 && chance(0.85), delivered && age > 6 ? iso(cap(tDone + 3 * 86_400_000)) : null,
       chance(0.06) ? 'Appeler après 17h' : null, chance(0.05) ? 'Sonner deux fois' : null, null,

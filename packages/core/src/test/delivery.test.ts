@@ -24,7 +24,7 @@ test('delivery.send in demo mode gives a tracking number and keeps the follow st
   await db.query('UPDATE orders SET company_id=$2 WHERE id=$1', [o.id, yal]);
   const r: any = await call('delivery.send', admin, { ids: [Number(o.id)] });
   assert.equal(r.sent, 1, JSON.stringify(r));
-  assert.equal(r.results[0].tracking, o.ref); // the order ID is the tracking number
+  assert.match(r.results[0].tracking, /^yal-[0-9A-Z]{6}$/); // the courier's own number, not the order's
   const after = (await db.query('SELECT tracking, follow_status, ext_status FROM orders WHERE id=$1', [o.id]))[0];
   assert.equal(after.tracking, r.results[0].tracking);
   assert.equal(after.follow_status, 'prepared');

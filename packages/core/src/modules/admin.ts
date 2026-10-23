@@ -536,10 +536,12 @@ export const adminProcs = {
       defaultCompanyId: id.nullable(),
       whatsappTemplate: z.string().trim().max(500),
       cancelAfterNoAnswer: z.number().int().min(0).max(30),
+      savPhone: z.string().trim().max(40).optional(),
     }),
     async (ctx, i) => {
       if (i.defaultCompanyId && !(await ctx.db.query('SELECT 1 FROM delivery_companies WHERE id = $1', [i.defaultCompanyId])).length) throw notFound('Société introuvable');
-      await setSetting(ctx.db, 'shop', { name: i.name, fromWilayaId: i.fromWilayaId, defaultCompanyId: i.defaultCompanyId, whatsappTemplate: i.whatsappTemplate || DEFAULT_SETTINGS.shop.whatsappTemplate }, me(ctx));
+      const savPhone = i.savPhone ?? (await getSetting(ctx.db, 'shop')).savPhone;
+      await setSetting(ctx.db, 'shop', { name: i.name, fromWilayaId: i.fromWilayaId, defaultCompanyId: i.defaultCompanyId, whatsappTemplate: i.whatsappTemplate || DEFAULT_SETTINGS.shop.whatsappTemplate, savPhone }, me(ctx));
       const calls = await getSetting(ctx.db, 'calls');
       await setSetting(ctx.db, 'calls', { ...DEFAULT_CALL_SETTINGS, ...calls, cancelAfterNoAnswer: i.cancelAfterNoAnswer }, me(ctx));
       ctx.emit({ type: 'settings' });

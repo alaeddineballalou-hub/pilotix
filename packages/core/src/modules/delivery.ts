@@ -121,7 +121,7 @@ async function saveFeeRows(db: Db, companyId: number, rows: FeeRow[]) {
 }
 
 // ---------------------------------------------------------------- sending
-async function sendOrders(ctx: Ctx, orderIds: number[], forceCompanyId?: number | null) {
+export async function sendOrders(ctx: Ctx, orderIds: number[], forceCompanyId?: number | null) {
   const rows = await ctx.db.query(
     `SELECT o.id, o.ref, o.company_id, o.conf_status, o.follow_status, o.tracking, o.wilaya_id, o.is_stopdesk, c.kind, c.active, c.name AS company_name
      FROM orders o LEFT JOIN delivery_companies c ON c.id = COALESCE($2::bigint, o.company_id) WHERE o.id = ANY($1) ORDER BY o.id`,
@@ -172,6 +172,23 @@ async function sendOrders(ctx: Ctx, orderIds: number[], forceCompanyId?: number 
   }
   if (results.some((r) => r.ok)) ctx.emit({ type: 'orders' });
   return { sent: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length, results };
+}
+
+/** Cancels a parcel at its courier (before pickup) and removes the courier's number: the order shows its Pilotix
+ *  number again. Refused when the courier already has the parcel, or has no way to cancel it from Pilotix. */
+export async function cancelParcel(ctx: Ctx, orderId: number) {
+  const o = (await ctx.db.query('SELECT id, ref, tracking, ext_id, company_id, follow_status FROM orders WHERE id=$1', [orderId]))[0];
+  if (!o) throw notFound('Commande introuvable');
+  if (!o.tracking || !o.company_id) throw bad('Ce colis n’a pas été envoyé à une société');
+  const c = await companyOr404(ctx.db, num(o.company_id));
+  if (isDemo(ctx)) {
+    if (!TO_SHIP.includes(o.follow_status)) throw bad(`${c.name} refuse : le colis est déjà pris en charge`);
+  } else if (KINDS[c.kind].cancel) {
+    await courierOf(ctx)('cancel', { companyId: c.id, item: { id: num(o.id), tracking: o.tracking, extId: o.ext_id } }, ctx);
+  } else if (KINDS[c.kind].api) throw bad(`${c.name} : annulez le colis depuis l’espace de la société, puis réessayez`);
+  await ctx.db.query('UPDATE orders SET tracking=NULL, ext_id=NULL, label_url=NULL, ext_status=NULL, ext_status_at=NULL, updated_at=now(), version=version+1 WHERE id=$1', [orderId]);
+  await addEvent(ctx.db, orderId, ctx.session.profile.id, 'company', String(c.id), String(c.id), `Colis annulé chez ${c.name} (${o.tracking})`);
+  ctx.emit({ type: 'order', id: orderId });
 }
 
 // ---------------------------------------------------------------- status sync
@@ -471,18 +488,7 @@ export const deliveryProcs = {
 
   /** Cancels the parcel at the courier (before pickup) and removes the tracking number. */
   'delivery.cancel': proc(['depot', 'suivi'], z.object({ orderId: id }), async (ctx, { orderId }) => {
-    const o = (await ctx.db.query('SELECT id, ref, tracking, ext_id, company_id, follow_status FROM orders WHERE id=$1', [orderId]))[0];
-    if (!o) throw notFound('Commande introuvable');
-    if (!o.tracking || !o.company_id) throw bad('Ce colis n’a pas été envoyé à une société');
-    const c = await companyOr404(ctx.db, num(o.company_id));
-    if (isDemo(ctx)) {
-      if (!TO_SHIP.includes(o.follow_status)) throw bad(`${c.name} refuse : le colis est déjà pris en charge`);
-    } else if (KINDS[c.kind].cancel) {
-      await courierOf(ctx)('cancel', { companyId: c.id, item: { id: num(o.id), tracking: o.tracking, extId: o.ext_id } }, ctx);
-    } else if (KINDS[c.kind].api) throw bad(`${c.name} : annulez le colis depuis l’espace de la société, puis réessayez`);
-    await ctx.db.query('UPDATE orders SET tracking=NULL, ext_id=NULL, label_url=NULL, ext_status=NULL, ext_status_at=NULL, updated_at=now(), version=version+1 WHERE id=$1', [orderId]);
-    await addEvent(ctx.db, orderId, ctx.session.profile.id, 'company', String(c.id), String(c.id), `Colis annulé chez ${c.name} (${o.tracking})`);
-    ctx.emit({ type: 'order', id: orderId });
+    await cancelParcel(ctx, orderId);
     return { ok: true };
   }),
 

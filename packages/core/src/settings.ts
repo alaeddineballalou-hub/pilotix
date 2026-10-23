@@ -3,7 +3,8 @@ import type { Db } from './db';
 
 /** Every setting with its default. Admin edits them in Management / Réglages. */
 export interface SettingsMap {
-  shop: { name: string; fromWilayaId: number; defaultCompanyId: number | null; whatsappTemplate: string };
+  /** savPhone: the shop's after-sales number, printed on the parcel labels */
+  shop: { name: string; fromWilayaId: number; defaultCompanyId: number | null; whatsappTemplate: string; savPhone: string };
   calls: CallSettings;
   /** Client delivery price grids: name → wilaya → { home, desk } */
   clientFees: Record<string, Record<string, { home: number; desk: number }>>;
@@ -36,7 +37,7 @@ export interface SettingsMap {
 }
 
 export const DEFAULT_SETTINGS: SettingsMap = {
-  shop: { name: 'Pilotix', fromWilayaId: 16, defaultCompanyId: null, whatsappTemplate: 'Bonjour {nom}, ici {boutique} à propos de votre commande {ref}.' },
+  shop: { name: 'Pilotix', fromWilayaId: 16, defaultCompanyId: null, whatsappTemplate: 'Bonjour {nom}, ici {boutique} à propos de votre commande {ref}.', savPhone: '' },
   calls: DEFAULT_CALL_SETTINGS,
   clientFees: {},
   defaultFeeGrid: 'Standard',

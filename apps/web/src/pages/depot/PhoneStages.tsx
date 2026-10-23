@@ -1,6 +1,7 @@
 // Dépôt on phones, after « Préparation » (PhonePrep): one white card per parcel, the delivery partner's badge, and
 // how long the parcel has waited — instead of the big tables of a computer.
-// - En dispatch: scan first (a scanned parcel leaves with its partner), then the parcels by delivery partner.
+// - En dispatch: scan first (a scanned parcel leaves with its partner), the labels to print, then the parcels by
+//   delivery partner (each with its label, or « Envoyer à … » while the company has not given its number yet).
 // - Dispatchées and En livraison: the parcels on the road, the oldest first, orange then red when late, with filters
 //   for the late ones.
 // - Retours / Échanges: find a return by its code, or tap « Reçu au dépôt » on its card (twice, to be sure): the
@@ -21,6 +22,7 @@ import { Filters, SearchBox } from '../ai/agent';
 import { CoBadge } from '../suivi/PhoneSuivi';
 import { useDebounced } from './OrderList';
 import { ScanCard } from './ScanCard';
+import { LabelAction, LabelsBar, stateOf, useCouriers } from './Labels';
 import '../suivi/phone.css';
 import './phone.css';
 import './stages.css';
@@ -59,8 +61,9 @@ function Age({ iso, road }: { iso: string | null; road: Road | 'exchange' }) {
 
 const itemsOf = (o: Order) => o.items.map((i) => `${i.qty > 1 ? `${i.qty} × ` : ''}${i.name}${i.variantTitle ? ` ${i.variantTitle}` : ''}`).join(' + ');
 
-/** One parcel: the partner, the reference and the wilaya, the customer, the products, the tracking (copied with a tap) and the amount. */
-function Parcel({ o, badge, children }: { o: Order; badge?: ReactNode; children?: ReactNode }) {
+/** One parcel: the partner, the reference and the wilaya, the customer, the products, the tracking (copied with a tap) and the amount.
+ *  `waiting`: the company has not given its own number yet (the Pilotix one would be replaced), said instead of it. */
+function Parcel({ o, badge, children, waiting }: { o: Order; badge?: ReactNode; children?: ReactNode; waiting?: boolean }) {
   const { t } = useTranslation();
   const open = () => openOrder(o.id);
   return (
@@ -81,7 +84,13 @@ function Parcel({ o, badge, children }: { o: Order; badge?: ReactNode; children?
       </div>
       <p className="pxt-prod">{itemsOf(o)}</p>
       <div className="pxt-bot">
-        <CopyCode code={trackOf(o) || o.ref} small />
+        {waiting ? (
+          <span className="px-wait">
+            <Icon name="clock" /> {t('depot.labels.waiting')}
+          </span>
+        ) : (
+          <CopyCode code={trackOf(o) || o.ref} small />
+        )}
         <b className="ltr">{da(o.total)}</b>
       </div>
       {children}
@@ -122,6 +131,12 @@ export function PhoneDispatch() {
   const { t } = useTranslation();
   const [q, setQ] = useState('');
   const s = useStage(['prepared'], true, 'updated_at', q);
+  const couriers = useCouriers();
+  const waits = (o: Order) => {
+    if (!couriers) return false;
+    const st = stateOf(o, couriers);
+    return !st.ok && st.why === 'waiting';
+  };
   // by delivery partner, the partner with the most parcels first
   const groups = useMemo(() => {
     const m = new Map<string, Order[]>();
@@ -134,6 +149,7 @@ export function PhoneDispatch() {
   return (
     <div className="pxt">
       <ScanCard mode="dispatch" />
+      <LabelsBar phone />
       <Head title={t('depot.stg.waiting')} count={s.total} help={t('depot.stg.dispatchHelp')} />
       <SearchBox value={q} onChange={setQ} placeholder={t('depot.filters.searchPh')} />
       <Body s={s} empty={t(q.trim() ? 'depot.empty' : 'depot.stg.empty_prepares')}>
@@ -147,7 +163,9 @@ export function PhoneDispatch() {
             <ul className="pxt-list">
               {list.map((o) => (
                 <li key={o.id}>
-                  <Parcel o={o} />
+                  <Parcel o={o} waiting={waits(o)}>
+                    <LabelAction o={o} phone />
+                  </Parcel>
                 </li>
               ))}
             </ul>

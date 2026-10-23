@@ -684,11 +684,12 @@ function orderExtraProcs() {
       return { products, companies, stopdesks, defaultCompanyId: shop.defaultCompanyId ?? null };
     }),
 
-    /** Small lists used by the order screens: delivery companies (with kind) and the shop name / WhatsApp template. */
+    /** Small lists used by the order screens: delivery companies (with kind), the shop name / WhatsApp template, and the
+     *  shop's after-sales number (parcel labels). */
     'orders.lookups': proc(null, z.object({}), async (ctx) => {
       const companies = (await ctx.db.query('SELECT id, name, kind, active FROM delivery_companies ORDER BY name')).map((c: any) => ({ id: num(c.id), name: c.name as string, kind: c.kind as string, active: !!c.active }));
       const shop = await getSetting(ctx.db, 'shop');
-      return { companies, shopName: shop.name, whatsappTemplate: shop.whatsappTemplate, defaultCompanyId: shop.defaultCompanyId ?? null };
+      return { companies, shopName: shop.name, whatsappTemplate: shop.whatsappTemplate, defaultCompanyId: shop.defaultCompanyId ?? null, savPhone: shop.savPhone };
     }),
 
     /**
