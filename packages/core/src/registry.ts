@@ -3,6 +3,7 @@ import { adminProcs } from './modules/admin';
 import { adsProcs } from './modules/ads';
 import { cashProcs } from './modules/cash';
 import { caissesProcs } from './modules/caisses';
+import { courierPayProcs } from './modules/courierpay';
 import { catalogProcs } from './modules/catalog';
 import { cmProcs } from './modules/cm';
 import { confirmationProcs } from './modules/confirmation';
@@ -33,6 +34,7 @@ export const REGISTRY = {
   ...deliveryProcs,
   ...cashProcs,
   ...caissesProcs,
+  ...courierPayProcs,
   ...adminProcs,
   ...adsProcs,
   ...dellalProcs,

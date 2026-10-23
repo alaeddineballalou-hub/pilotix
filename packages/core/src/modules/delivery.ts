@@ -472,7 +472,9 @@ export const deliveryProcs = {
       }
     }
     if (out.some((x) => x.changed)) ctx.emit({ type: 'orders' });
-    return { companies: out, checked: out.reduce((s, x) => s + x.checked, 0), changed: out.reduce((s, x) => s + x.changed, 0) };
+    // the companies' payments (ZR): demande de paiement when money is ready, payments imported into the caisse
+    const payments = i.companyId || !ctx.session.isAdmin ? [] : await import('./courierpay').then((m) => m.payRunAll(ctx)).catch(() => []);
+    return { companies: out, checked: out.reduce((s, x) => s + x.checked, 0), changed: out.reduce((s, x) => s + x.changed, 0), payments };
   }),
 
   /** The courier's label for one parcel: a link or a PDF (base64). null = print our own slip. */

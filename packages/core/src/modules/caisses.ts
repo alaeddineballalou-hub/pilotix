@@ -134,7 +134,12 @@ export const caissesProcs = {
     const due = await cashProcs['cash.due'].run(ctx, {});
     const companies = due.groups
       .filter((g) => !g.livreurId)
-      .map((g) => ({ key: g.key, companyId: g.companyId, name: g.name, kind: g.kind, count: g.count, net: g.net, oldest: g.orders[0]?.deliveredAt ?? null }));
+      .map((g) => ({ key: g.key, companyId: g.companyId, name: g.name, kind: g.kind, count: g.count, net: g.net, oldest: g.orders[0]?.deliveredAt ?? null, payWaiting: 0 }));
+    // payments the company made that are not in a caisse yet (ZR: « à récupérer »)
+    for (const r of await ctx.db.query(`SELECT company_id, sum(amount)::bigint AS v FROM courier_payments WHERE imported_at IS NULL GROUP BY 1`)) {
+      const c = companies.find((x) => x.companyId === num(r.company_id));
+      if (c) c.payWaiting = num(r.v);
+    }
     const lc = await livreursCash(ctx, {});
     const lastBy = new Map<number, string>();
     for (const h of lc.handovers) if (h.livreurId && !lastBy.has(h.livreurId)) lastBy.set(h.livreurId, h.at);

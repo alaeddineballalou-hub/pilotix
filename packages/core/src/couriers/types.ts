@@ -137,6 +137,57 @@ export interface ClaimState {
   answer?: string | null;
 }
 
+/** The courier's money: what it holds for us, payment requests, and the payments it made (with their parcels). */
+export interface PayBalance {
+  paid: number;
+  /** ready to be paid now (a payment request can be made) */
+  ready: number;
+  delivered: number;
+  notReady: number;
+}
+export interface PayRequest {
+  extId: string;
+  date: string | null;
+  /** null = waiting for the courier, true = approved, false = refused */
+  approved: boolean | null;
+  comment: string | null;
+  at: string | null;
+}
+export interface PayLine {
+  tracking: string | null;
+  customer: string | null;
+  type: string;
+  amount: number;
+  /** extra costs the courier took on this parcel (weight, exchange, phone change) */
+  costs: number;
+  comment: string | null;
+}
+export interface PayStatement {
+  extId: string;
+  ref: string | null;
+  amount: number;
+  status: string;
+  /** the payment was handed over (accepted) */
+  done: boolean;
+  at: string | null;
+  doneAt: string | null;
+  requestId: string | null;
+  /** ZR's breakdown: parcels delivered / cancelled, refunds, labeling, office holding, storage… */
+  details: Record<string, number>;
+  /** where it was handed over (ZR hub / cash drawer), when known */
+  place: string | null;
+}
+export interface CourierPayments {
+  balance(c: CourierCompany): Promise<PayBalance>;
+  requests(c: CourierCompany): Promise<PayRequest[]>;
+  /** asks the courier to pay on that date (YYYY-MM-DD) */
+  request(c: CourierCompany, date: string): Promise<{ extId: string }>;
+  list(c: CourierCompany): Promise<PayStatement[]>;
+  lines(c: CourierCompany, extId: string): Promise<PayLine[]>;
+  /** tells the courier we received this payment */
+  accept(c: CourierCompany, extId: string): Promise<void>;
+}
+
 /** Helpers the framework gives to adapters. */
 export interface Helpers {
   /** Finds the courier's commune matching ours (fuzzy). `load` lists the courier's communes of the wilaya. */
@@ -163,6 +214,8 @@ export interface CourierAdapter {
   claimStates?(c: CourierCompany, extIds: string[]): Promise<ClaimState[]>;
   /** adds a message (follow-up) to a claim at the courier */
   claimComment?(c: CourierCompany, extId: string, text: string): Promise<void>;
+  /** Payments through the courier API (balance, payment requests, payments and their parcels). */
+  payments?: CourierPayments;
   /** What would be sent, without sending (secrets masked). */
   preview?(c: CourierCompany, p: Parcel): Promise<PreviewResult>;
 }
