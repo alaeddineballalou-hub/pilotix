@@ -119,3 +119,35 @@ test('demo data: parcels on the road with a company that has an API carry that c
     assert.match(r.tracking, r.kind === 'yalidine' ? /^yal-/ : r.kind === 'zr' ? /^ZR-/ : /^NOE-/);
   }
 });
+
+test('labels: a company with an API gives its own label (link or PDF); none from a courier without labels; a stand-in in the preview', async () => {
+  const yal = await companyId('yalidine');
+  const noest = await companyId('noest');
+  const depot = await as(EMAILS.depot);
+  const [a, b, c] = await toPrepare(3);
+  await call('depot.dispatch', depot, { ids: [a], companyId: yal });
+  await call('depot.dispatch', depot, { ids: [b], companyId: noest });
+  // preview (no server): the couriers are simulated, their label is a stand-in
+  const demo: any = await call('delivery.labels', depot, { ids: [a, b] });
+  assert.deepEqual(demo.map((x: any) => x.label), [{ demo: true }, { demo: true }]);
+  // server: the courier answers with a link (stored at sending) or a PDF
+  await db.query(`UPDATE orders SET label_url = 'https://yalidine.example/bordereau/1' WHERE id = $1`, [a]);
+  const calls: unknown[] = [];
+  const server = { courier: async (action: string, args: any) => (calls.push([action, args.item?.tracking]), action === 'label' ? { pdf: 'JVBERi0=', type: 'application/pdf' } : null), meta: async () => null, hashPassword: async (s: string) => s };
+  const live = await as(EMAILS.depot, server as any);
+  const res: any = await call('delivery.labels', live, { ids: [a, b] });
+  assert.deepEqual(res[0].label, { url: 'https://yalidine.example/bordereau/1' });
+  assert.deepEqual(res[1].label, { pdf: 'JVBERi0=', type: 'application/pdf' });
+  assert.equal(calls.length, 1); // the stored link needs no call
+  // a parcel not sent to a company: its reason, the others still come
+  const mixed: any = await call('delivery.labels', live, { ids: [c, a] });
+  assert.match(mixed[0].error, /Pas encore envoyée/);
+  assert.ok(mixed[1].label.url);
+  // Procolis (ZR, old platform) gives no label: none, so Pilotix prints its own
+  const admin = await as(EMAILS.admin);
+  const pro: any = await call('delivery.saveCompany', admin, { name: 'ZR Procolis', kind: 'zr_legacy', settings: {}, secret: {} });
+  await db.query(`UPDATE orders SET company_id = $2, tracking = ref, label_url = NULL WHERE id = $1`, [c, pro.id]);
+  const none: any = await call('delivery.labels', live, { ids: [c] });
+  assert.equal(none[0].label, null);
+  assert.equal(none[0].error, undefined);
+});

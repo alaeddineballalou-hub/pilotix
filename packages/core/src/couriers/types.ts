@@ -90,6 +90,8 @@ export interface LabelResult {
   /** base64 PDF when the courier returns the file itself */
   pdf?: string;
   type?: string;
+  /** browser preview: the courier is simulated, so its label is a stand-in made by Pilotix */
+  demo?: boolean;
 }
 
 export interface PreviewResult {

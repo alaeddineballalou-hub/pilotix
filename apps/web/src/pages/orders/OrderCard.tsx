@@ -15,6 +15,7 @@ import { confLabel, printOrder, telHref, waHref } from './shared';
 import './orders.css';
 import { trackOf } from '../../lib/items';
 import { CopyCode } from '../../ui/CopyCode';
+import { useLabelPrinter } from '../depot/Labels';
 
 /** Courier kinds with an API (send / label / status / cancel go through the delivery procedures). */
 export const API_KINDS = ['zr', 'zr_legacy', 'yalidine', 'ecotrack', 'noest', 'custom'];
@@ -83,6 +84,8 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
   const hist = useRpc('customers.history', { id: o.customerId }, { enabled: has('confirmation', 'suivi'), placeholderData: undefined });
   const [panel, setPanel] = useState<Panel>(null);
   const [busy, setBusy] = useState(false);
+  // the company's own label (a parcel sent to it), opened in a new tab
+  const printer = useLabelPrinter();
   const companies = look.data?.companies ?? [];
   const company = companies.find((c) => c.id === o.companyId);
   const apiKind = !!company && API_KINDS.includes(company.kind);
@@ -182,23 +185,7 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
     );
   if (sent && has('suivi', 'depot')) {
     actions.push(
-      <button
-        key="label"
-        className="btn small"
-        disabled={busy}
-        onClick={() =>
-          optional(
-            'delivery.label',
-            { id: o.id },
-            (d) => {
-              const url = d?.url as string | undefined;
-              if (url) window.open(url, '_blank', 'noopener');
-              return null;
-            },
-            (m) => t('orders.card.labelUnavailable', { msg: m }),
-          )
-        }
-      >
+      <button key="label" className="btn small" disabled={busy || printer.busy} onClick={() => printer.printOne(o)}>
         {t('orders.card.label')}
       </button>,
       <button
@@ -609,7 +596,7 @@ function ActionPanel({ o, panel, busy, companies, onCancel, run, onSendAfter }: 
     body = <p className="muted">{t('orders.card.cancelConfirm', { co: name })}</p>;
     submit = () =>
       run(async () => {
-        const r = await callOptional('delivery.cancel', { ids: [o.id] });
+        const r = await callOptional('delivery.cancel', { orderId: o.id });
         if (!r.ok) throw new Error(t('orders.bulk.unavailable', { msg: r.error }));
         const first = (r.data?.results ?? [])[0];
         if (first && !first.ok) throw new Error(first.error);

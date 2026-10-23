@@ -211,7 +211,7 @@
     "notSent_other": "{{count}} parcels not sent to the company",
     "skipped_one": "{{count}} without a label: company or tracking number missing",
     "skipped_other": "{{count}} without a label: company or tracking number missing",
-    "help": "A label (10 × 15 cm) is printed once the parcel has its delivery company. A company with an API gives its own tracking number, which replaces the Pilotix one: the label waits for that number.",
+    "help": "A label is printed once the parcel has its delivery company. A company with an API gives its own tracking number and its own label; the Pilotix label (10 × 15 cm) is for your own livreurs and companies without an API.",
     "docTitle": "Labels ({{n}})",
     "to": "Recipient",
     "note": "Note",
@@ -230,6 +230,17 @@
     "exchange": "EXCHANGE {{ref}}",
     "exchangeHint": "Collect the old product from the customer",
     "fromShort": "Sender:",
-    "savPhone": "After-sales:"
+    "savPhone": "After-sales:",
+    "printCompanies": "Company labels ({{n}})",
+    "printPilotix": "Pilotix labels ({{n}})",
+    "oneOf": "{{name}} label",
+    "notGot_one": "{{count}} label not received from the company",
+    "notGot_other": "{{count}} labels not received from the companies",
+    "companyTitle_one": "Company label",
+    "companyTitle_other": "Company labels ({{count}})",
+    "companyHelp": "Each company gives its own label: open them one by one, then print each from the tab that opens.",
+    "open": "Open",
+    "opened": "Opened",
+    "demoStandIn": "Demo: stands in for {{name}}’s official label (with its API keys, its own label prints)"
   }
 }
