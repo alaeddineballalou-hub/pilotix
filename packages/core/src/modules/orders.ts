@@ -1,5 +1,6 @@
 import {
   canSetFollow,
+  CONF_DONE_BAD,
   CONF_NEEDS_DATE,
   CONF_NEEDS_REASON,
   CONF_STATUSES,
@@ -143,6 +144,13 @@ const id = z.number().int().positive();
 const ids = z.array(id).min(1).max(500);
 const dateStr = z.string().min(10).max(40);
 
+/** The first words of the note of the status change that put the order where it is: the reason given (« Prix trop
+ *  cher », « Refusé par le client »…), as it was typed or chosen. */
+const reasonOf = (kind: 'conf_status' | 'follow_status', to: string) =>
+  `nullif(split_part(coalesce((SELECT e.note FROM order_events e WHERE e.order_id = o.id AND e.kind = '${kind}' AND e.to_value = ${to} ORDER BY e.at DESC, e.id DESC LIMIT 1), ''), ' — ', 1), '')`;
+/** why an order was cancelled at the confirmation (its current status) / why its parcel came back */
+const REASON_SQL = { conf: reasonOf('conf_status', 'o.conf_status'), back: reasonOf('follow_status', "'returning'") };
+
 export const ListInput = z.object({
   conf: z.array(z.enum(CONF_STATUSES)).optional(),
   follow: z.array(z.enum([...FOLLOW_STATUSES, 'none'] as const)).optional(),
@@ -164,7 +172,10 @@ export const ListInput = z.object({
   subStatus: z.string().max(40).optional(),
   /** only these orders (selection export / print) */
   ids: z.array(id).max(3000).optional(),
-  dateField: z.enum(['created_at', 'confirmed_at', 'shipped_at', 'delivered_at', 'returned_at', 'updated_at']).default('created_at'),
+  /** back_at: when the parcel came back, or its last change while it is on its way back */
+  dateField: z.enum(['created_at', 'confirmed_at', 'shipped_at', 'delivered_at', 'returned_at', 'updated_at', 'back_at']).default('created_at'),
+  /** the reason given when it was cancelled at the confirmation (conf) or sent back (back); null: no reason given */
+  reason: z.object({ of: z.enum(['conf', 'back']), text: z.string().max(200).nullable() }).optional(),
   from: dateStr.optional(),
   to: dateStr.optional(),
   sort: z
@@ -203,8 +214,13 @@ export async function listOrders(ctx: Ctx, f: ListInput): Promise<Page<Order>> {
   else if (f.tickets === 'only') w.add('o.is_exchange');
   if (f.subStatus) w.add('o.sub_status = ?', f.subStatus);
   if (f.ids?.length) w.add('o.id = ANY(?)', f.ids);
-  if (f.from) w.add(`o.${f.dateField} >= ?`, f.from);
-  if (f.to) w.add(`o.${f.dateField} < ?`, f.to);
+  const dcol = f.dateField === 'back_at' ? 'coalesce(o.returned_at, o.updated_at)' : `o.${f.dateField}`;
+  if (f.from) w.add(`${dcol} >= ?`, f.from);
+  if (f.to) w.add(`${dcol} < ?`, f.to);
+  if (f.reason) {
+    if (f.reason.text === null) w.add(`${REASON_SQL[f.reason.of]} IS NULL`);
+    else w.add(`${REASON_SQL[f.reason.of]} = ?`, f.reason.text);
+  }
   if (f.q?.trim()) {
     const q = f.q.trim();
     const phone = normalizePhone(q);
@@ -761,6 +777,17 @@ function orderExtraProcs() {
 
     /** "Bilan des livraisons": delivered in the period, cashed or not, courier fees, returns, net to receive — total and per company. */
     'orders.deliveredReport': proc(['suivi', 'depot'], z.object({ from: dateStr, to: dateStr }), (ctx, i) => deliveredReport(ctx, i)),
+    /** Cancelled at the confirmation and returned parcels of a period: why, by whom, from which company, the cost. */
+    'orders.cancelReport': proc(['suivi', 'depot', 'agent_manager'], z.object({ from: dateStr, to: dateStr }), (ctx, i) => cancelReport(ctx, i)),
+    /** The reason given for these orders: why they were cancelled at the confirmation (conf) or came back (back). */
+    'orders.reasons': proc(null, z.object({ ids: z.array(id).max(500), of: z.enum(['conf', 'back']) }), async (ctx, i) => {
+      const out: Record<string, string | null> = {};
+      if (!i.ids.length) return out;
+      const own = onlyOwnDeliveries(ctx);
+      const rows = await ctx.db.query(`SELECT o.id, ${REASON_SQL[i.of]} AS reason FROM orders o WHERE o.id = ANY($1)${own ? ' AND o.livreur_id = $2' : ''}`, own ? [i.ids, ctx.session.profile.id] : [i.ids]);
+      for (const r of rows) out[String(num(r.id))] = r.reason ?? null;
+      return out;
+    }),
   };
 }
 
@@ -814,6 +841,86 @@ export async function deliveredReport(ctx: Ctx, i: { from: string; to: string },
     }
   }
   return { total: T, companies: [...M.values()].sort((a, b) => b.amount - a.amount), noOverweightRule: [...noRule] };
+}
+
+/** The reasons given, most frequent first; beyond the first six they are « others ». */
+function topReasons(rows: { reason: string | null }[]) {
+  const m = new Map<string, number>();
+  let none = 0;
+  for (const r of rows) {
+    if (!r.reason) none++;
+    else m.set(r.reason, (m.get(r.reason) ?? 0) + 1);
+  }
+  const all = [...m.entries()].map(([reason, n]) => ({ reason, n })).sort((a, b) => b.n - a.n);
+  const others = all.slice(6).reduce((s, x) => s + x.n, 0);
+  return { top: all.slice(0, 6), others, none };
+}
+
+/** What was lost over a period: orders cancelled at the confirmation (their status, the reason given, by which agent,
+ *  out of every order decided) and parcels coming back (why, from which company, what that costs, out of the parcels
+ *  that arrived). A cancelled order counts on its last change, a return on its return (or its last change). */
+export async function cancelReport(ctx: Ctx, i: { from: string; to: string }) {
+  const C = await ctx.db.query(
+    `SELECT o.conf_status AS s, o.total, o.agent_id, p.name AS agent, ${REASON_SQL.conf} AS reason
+     FROM sales o LEFT JOIN profiles p ON p.id = o.agent_id
+     WHERE o.conf_status = ANY($1) AND o.updated_at >= $2 AND o.updated_at < $3`,
+    [CONF_DONE_BAD, i.from, i.to],
+  );
+  const OK = await ctx.db.query<{ agent_id: unknown; agent: string | null; n: number }>(
+    `SELECT o.agent_id, p.name AS agent, count(*)::int AS n FROM sales o LEFT JOIN profiles p ON p.id = o.agent_id
+     WHERE o.confirmed_at >= $1 AND o.confirmed_at < $2 AND NOT (o.conf_status = ANY($3)) GROUP BY 1, 2`,
+    [i.from, i.to, CONF_DONE_BAD],
+  );
+  const byStatus = Object.fromEntries(CONF_DONE_BAD.map((s) => [s, 0])) as Record<ConfStatus, number>;
+  type Agent = { id: number | null; name: string | null; n: number; confirmed: number; rate: number | null };
+  const A = new Map<number, Agent>();
+  const agent = (id: unknown, name: string | null) => {
+    const k = num(id);
+    if (!A.has(k)) A.set(k, { id: id == null ? null : k, name, n: 0, confirmed: 0, rate: null });
+    return A.get(k)!;
+  };
+  let amount = 0;
+  for (const r of C) {
+    byStatus[r.s as ConfStatus] = (byStatus[r.s as ConfStatus] ?? 0) + 1;
+    amount += num(r.total);
+    agent(r.agent_id, r.agent).n++;
+  }
+  let confirmed = 0;
+  for (const r of OK) {
+    confirmed += num(r.n);
+    agent(r.agent_id, r.agent).confirmed += num(r.n);
+  }
+  const rate = (bad: number, good: number) => (bad + good > 0 ? bad / (bad + good) : null);
+  const agents = [...A.values()]
+    .map((a) => ({ ...a, rate: rate(a.n, a.confirmed) }))
+    .filter((a) => a.n > 0)
+    .sort((a, b) => b.n - a.n || (b.rate ?? 0) - (a.rate ?? 0));
+
+  // the parcels coming back, their reason, and per company out of what it delivered (with what the returns cost)
+  const B = await ctx.db.query(
+    `SELECT o.follow_status AS s, o.total, ${REASON_SQL.back} AS reason
+     FROM sales o WHERE o.follow_status IN ('returning','returned') AND coalesce(o.returned_at, o.updated_at) >= $1 AND coalesce(o.returned_at, o.updated_at) < $2`,
+    [i.from, i.to],
+  );
+  const d = await deliveredReport(ctx, i);
+  const companies = d.companies
+    .filter((c) => c.returns > 0)
+    .map((c) => ({ companyId: c.companyId, name: c.name, kind: c.kind, returns: c.returns, delivered: c.n, rate: rate(c.returns, c.n), fees: c.returnFees + c.returnOverweight }))
+    .sort((a, b) => b.returns - a.returns);
+  return {
+    conf: { n: C.length, amount, confirmed, rate: rate(C.length, confirmed), byStatus, reasons: topReasons(C as any), agents },
+    returns: {
+      n: B.length,
+      returning: B.filter((r: any) => r.s === 'returning').length,
+      returned: B.filter((r: any) => r.s === 'returned').length,
+      amount: B.reduce((s: number, r: any) => s + num(r.total), 0),
+      fees: d.total.returnFees + d.total.returnOverweight,
+      delivered: d.total.n,
+      rate: rate(B.length, d.total.n),
+      reasons: topReasons(B as any),
+      companies,
+    },
+  };
 }
 
 // ---------------------------------------------------------------- the procedures

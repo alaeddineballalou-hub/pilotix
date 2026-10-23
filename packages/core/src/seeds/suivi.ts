@@ -15,6 +15,10 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     await db.query(`UPDATE order_events SET note = $2 WHERE order_id = $1 AND kind = 'follow_status' AND to_value = 'alert'`, [o.id, EXT[k % EXT.length]]);
     await db.query(`UPDATE orders SET ext_status = $2, ext_status_at = $3, updated_at = $3 WHERE id = $1`, [o.id, EXT[k % EXT.length], at]);
   }
+  // why parcels were sent back: the reason given when they left for the depot (refusals first)
+  const RET = ['Refusé par le client', 'Refusé par le client', 'Refusé par le client', 'Injoignable', 'Injoignable', 'Annulé par le client', 'Adresse fausse', 'Produit ne correspond pas'];
+  const back = await db.query(`SELECT id FROM order_events WHERE kind = 'follow_status' AND to_value = 'returning' AND coalesce(note, '') = '' ORDER BY id`);
+  for (const [k, e] of back.entries()) await db.query('UPDATE order_events SET note = $2 WHERE id = $1', [e.id, RET[(k * 5) % RET.length]]);
   // a few parcels whose alert was treated and that are back on the road
   const road = await db.query(`SELECT id, tracking FROM orders WHERE follow_status = 'out_for_delivery' AND shipped_at IS NOT NULL ORDER BY shipped_at DESC LIMIT 4`);
   for (const [k, o] of road.entries()) {

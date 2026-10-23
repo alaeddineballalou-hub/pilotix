@@ -16,32 +16,12 @@ import { API_KINDS, callOptional } from './OrderCard';
 import { ExtraColumn, OrderColumn, OrderSort, OrderTable } from './OrderTable';
 import { ConfFilter, exportOrdersCsv, FollowFilter, ListFilter, printSlips, toListInput } from './shared';
 import './orders.css';
+import { useCounts } from './counts';
+import { useIsPhone } from '../../lib/useMedia';
+import { PhoneAnnule, PhoneLivre } from './PhoneDone';
 
 export { OrderTable } from './OrderTable';
 export type { OrderColumn, ExtraColumn, OrderTableProps } from './OrderTable';
-
-// ---------------------------------------------------------------- counts shared by the header KPIs
-function useCounts() {
-  const q = useRpc('orders.counts', {}, { refetchInterval: 60_000 });
-  return useMemo(() => {
-    const c = q.data;
-    if (!c) return null;
-    const sum = (o: Record<string, number>, keys: readonly string[]) => keys.reduce((s, k) => s + (o[k] ?? 0), 0);
-    const cancelledConf = sum(c.conf, CONF_DONE_BAD);
-    const back = sum(c.follow, ['returning', 'returned']);
-    return {
-      raw: c,
-      todo: sum(c.conf, CONF_TODO),
-      depot: sum(c.follow, ['to_prepare', 'prepared']),
-      suivi: sum(c.follow, FOLLOW_ON_ROAD),
-      delivered: c.follow.delivered ?? 0,
-      all: c.all,
-      cancelledConf,
-      back,
-      returning: c.follow.returning ?? 0,
-    };
-  }, [q.data]);
-}
 
 /** The "Commandes" card with its 5 KPI tabs (Confirmation, Dépôt, Suivi, Livré, Annulé). */
 function HeaderKpis({ on }: { on?: 'livrees' | 'annulees' }) {
@@ -527,6 +507,14 @@ function useDeliveredExtra() {
 
 // ---------------------------------------------------------------- pages
 export function Commandes({ sub }: PageProps) {
+  // phones: Livré and Annulé have their own screens (stats you tap, cards, a sheet of filters)
+  const phone = useIsPhone();
+  if (phone && sub === 'livrees') return <PhoneLivre />;
+  if (phone && sub === 'annulees') return <PhoneAnnule />;
+  return <CommandesDesk sub={sub} />;
+}
+
+function CommandesDesk({ sub }: { sub?: string }) {
   const { t } = useTranslation();
   const { has } = useSession();
   const [q, setQ] = useState('');

@@ -47,6 +47,14 @@ export function dayLabel(iso: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 export const dateOnly = (iso: string | null | undefined) => (iso ? df({ day: 'numeric', month: 'short', year: 'numeric' }).format(Date.parse(iso)) : '—');
+/** A period of days, its end excluded (a day after the last): "1–23 oct.", "28 sept. – 4 oct.", "3 oct. 2025 – 2 janv. 2026". */
+export function dayRange(from: string, to: string): string {
+  const a = Date.parse(from);
+  const b = Math.max(a, Date.parse(to) - 1);
+  const year = (t: number) => df({ year: 'numeric' }).format(t);
+  const withYear = year(a) !== year(b) || year(b) !== year(Date.now());
+  return df({ day: 'numeric', month: 'short', ...(withYear ? { year: 'numeric' } : {}) }).formatRange(a, b);
+}
 export const dateTime = (iso: string | null | undefined) => (iso ? df({ day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(Date.parse(iso)) : '—');
 
 /** Duration in words: "39 min", "4 j 0 h", "12 h 07". */

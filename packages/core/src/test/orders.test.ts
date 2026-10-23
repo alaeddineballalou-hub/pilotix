@@ -101,6 +101,53 @@ test('orders.deliveredReport and companyFees add up', async () => {
   await assert.rejects(call('orders.deliveredReport', await as(EMAILS.conf), { from, to }), /Accès refusé/);
 });
 
+test('orders.cancelReport: cancellations by status, reason and agent; returns by company with their rate and cost', async () => {
+  const ctx = await as(EMAILS.suivi);
+  const from = new Date(Date.now() - 120 * 86_400_000).toISOString();
+  const to = new Date(Date.now() + 86_400_000).toISOString();
+  const r: any = await call('orders.cancelReport', ctx, { from, to });
+  // confirmation: every cancelled order of the period, once, by status and by agent
+  const n = (await db.query(`SELECT count(*)::int AS n FROM sales WHERE conf_status = ANY($1) AND updated_at >= $2 AND updated_at < $3`, [['cancelled', 'duplicate', 'wrong_number', 'fake'], from, to]))[0].n;
+  assert.ok(r.conf.n > 0);
+  assert.equal(r.conf.n, Number(n));
+  assert.equal(Object.values(r.conf.byStatus).reduce((s: number, x: any) => s + x, 0), r.conf.n);
+  assert.equal(r.conf.agents.reduce((s: number, a: any) => s + a.n, 0), r.conf.n);
+  assert.ok(r.conf.rate > 0 && r.conf.rate < 1);
+  // the reasons given (« Prix trop cher »…), and those given none
+  const R = r.conf.reasons;
+  assert.equal(R.top.reduce((s: number, x: any) => s + x.n, 0) + R.others + R.none, r.conf.n);
+  assert.ok(R.top.some((x: any) => x.reason === 'Prix trop cher'));
+  // returns: the parcels of the delivery report's returns, by company out of what it delivered
+  const d: any = await call('orders.deliveredReport', ctx, { from, to });
+  assert.equal(r.returns.n, d.total.returns);
+  assert.equal(r.returns.returning + r.returns.returned, r.returns.n);
+  assert.equal(r.returns.companies.reduce((s: number, c: any) => s + c.returns, 0), r.returns.n);
+  assert.equal(r.returns.fees, d.total.returnFees + d.total.returnOverweight);
+  for (const c of r.returns.companies) assert.equal(c.rate, c.returns / (c.returns + c.delivered));
+  assert.equal(r.returns.reasons.top[0].reason, 'Refusé par le client');
+  await assert.rejects(call('orders.cancelReport', await as(EMAILS.conf), { from, to }), /Accès refusé/);
+  assert.ok(await call('orders.cancelReport', await as(EMAILS.manager), { from, to }));
+
+  // the lists behind each line: the same orders, found by the same period, status, agent, company and reason
+  const list = (f: any) => call('orders.list', ctx, { from, to, pageSize: 1, ...f }) as Promise<any>;
+  assert.equal((await list({ conf: ['cancelled', 'duplicate', 'wrong_number', 'fake'], dateField: 'updated_at' })).total, r.conf.n);
+  assert.equal((await list({ follow: ['returning', 'returned'], dateField: 'back_at' })).total, r.returns.n);
+  assert.equal((await list({ follow: ['returning'], dateField: 'back_at' })).total, r.returns.returning);
+  const top = R.top[0];
+  assert.equal((await list({ conf: ['cancelled', 'duplicate', 'wrong_number', 'fake'], dateField: 'updated_at', reason: { of: 'conf', text: top.reason } })).total, top.n);
+  assert.equal((await list({ conf: ['cancelled', 'duplicate', 'wrong_number', 'fake'], dateField: 'updated_at', reason: { of: 'conf', text: null } })).total, R.none);
+  const back = r.returns.reasons.top[0];
+  assert.equal((await list({ follow: ['returning', 'returned'], dateField: 'back_at', reason: { of: 'back', text: back.reason } })).total, back.n);
+  const a = r.conf.agents[0];
+  assert.equal((await list({ conf: ['cancelled', 'duplicate', 'wrong_number', 'fake'], dateField: 'updated_at', agentId: a.id ?? 'none' })).total, a.n);
+  const c = r.returns.companies[0];
+  assert.equal((await list({ follow: ['returning', 'returned'], dateField: 'back_at', companyId: c.companyId ?? 'none' })).total, c.returns);
+  // each card says why: the reason of each order of the list
+  const rows: any = await call('orders.list', ctx, { from, to, pageSize: 40, conf: ['cancelled', 'duplicate', 'wrong_number', 'fake'], dateField: 'updated_at', reason: { of: 'conf', text: top.reason } });
+  const why: any = await call('orders.reasons', ctx, { ids: rows.rows.map((o: any) => o.id), of: 'conf' });
+  assert.ok(rows.rows.length > 0 && rows.rows.every((o: any) => why[String(o.id)] === top.reason));
+});
+
 test('orders.list can be limited to a selection (export / print)', async () => {
   const ctx = await as(EMAILS.conf);
   const l: any = await call('orders.list', ctx, { pageSize: 3 });
