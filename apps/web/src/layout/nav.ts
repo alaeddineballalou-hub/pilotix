@@ -80,6 +80,8 @@ export const NAV: NavItem[] = [
   { id: 'clients', icon: 'users', roles: ['confirmation', 'suivi'] },
   { id: 'marketing', icon: 'megaphone', roles: ['marketer'], subs: ['publicite', 'marketer'] },
   { id: 'caisse', icon: 'wallet', roles: [], subs: ['due', 'done', 'livreurs'] },
+  // an employee's own caisse (money he received, his expenses, what he handed to the main caisse)
+  { id: 'macaisse', icon: 'wallet', roles: ['confirmation', 'suivi', 'depot', 'agent_manager'], onlyIf: (_r, admin) => !admin },
   { id: 'livraison', icon: 'truck', roles: [], subs: ['societes', 'api', 'livreurs'] },
   { id: 'utilisateurs', icon: 'usercog', roles: [], subs: ['roles', 'admins', 'vendeurs', 'agents', 'marketeurs', 'managers'] },
   { id: 'management', icon: 'briefcase', roles: [], subs: ['statuts', 'paie', 'prix', 'canaux'] },

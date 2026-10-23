@@ -92,8 +92,18 @@ function toCash(r: any, pay: Pay): CashOrder {
 
 const payOf = async (db: Db): Promise<Pay> => (await getSetting(db, 'payPlans')).livreur;
 
-/** Marks orders as cashed and records one versement per company / livreur. */
-async function receive(ctx: Ctx, orderIds: number[], note: string | null, livreurShare: boolean) {
+/** A caisse: 'main' (the owner's), 'bank', or 'u<profile id>' (an employee's). */
+export const CaisseKey = z.string().regex(/^(main|bank|u\d+)$/);
+export async function checkCaisse(db: Db, key: string) {
+  if (key === 'main' || key === 'bank') return key;
+  const p = (await db.query('SELECT id FROM profiles WHERE id = $1', [Number(key.slice(1))]))[0];
+  if (!p) throw bad('Caisse inconnue');
+  return key;
+}
+
+/** Marks orders as cashed and records one versement per company / livreur, into the caisse that received the money. */
+async function receive(ctx: Ctx, orderIds: number[], note: string | null, livreurShare: boolean, into = 'main') {
+  await checkCaisse(ctx.db, into);
   const pay = await payOf(ctx.db);
   const me = ctx.session.profile.id;
   const created: number[] = [];
@@ -112,8 +122,8 @@ async function receive(ctx: Ctx, orderIds: number[], note: string | null, livreu
       const collected = list.reduce((s, o) => s + o.total, 0);
       const fees = livreurShare || list[0].livreurId ? list.reduce((s, o) => s + o.share, 0) : list.reduce((s, o) => s + o.deliveryCost, 0);
       const h = await tx.query(
-        'INSERT INTO cash_handovers (company_id, livreur_id, orders, collected, fees, net, note, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
-        [list[0].companyId, list[0].livreurId, list.map((o) => o.id), collected, fees, collected - fees, note, me],
+        'INSERT INTO cash_handovers (company_id, livreur_id, orders, collected, fees, net, note, created_by, received_into) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id',
+        [list[0].companyId, list[0].livreurId, list.map((o) => o.id), collected, fees, collected - fees, note, me, into],
       );
       const hid = num(h[0].id);
       created.push(hid);
@@ -126,7 +136,7 @@ async function receive(ctx: Ctx, orderIds: number[], note: string | null, livreu
 }
 
 /** The livreurs' cash: per livreur, parcels in hand, delivered (cashed or not), their share and what they must hand over. */
-async function livreursCash(ctx: Ctx, f: { livreurId?: number; from?: string; to?: string }) {
+export async function livreursCash(ctx: Ctx, f: { livreurId?: number; from?: string; to?: string }) {
   const pay = await payOf(ctx.db);
   const own = livreurOnly(ctx.session);
   const only = own ? ctx.session.profile.id : f.livreurId;
@@ -263,7 +273,7 @@ export const cashProcs = {
   }),
 
   /** "Argent reçu": one versement per company / livreur, orders marked cashed. */
-  'cash.receive': proc([], z.object({ ids, note: z.string().max(300).nullable().optional() }), async (ctx, i) => receive(ctx, i.ids, i.note ?? null, false)),
+  'cash.receive': proc([], z.object({ ids, note: z.string().max(300).nullable().optional(), into: CaisseKey.default('main') }), async (ctx, i) => receive(ctx, i.ids, i.note ?? null, false, i.into)),
 
   /** "Déjà reçu": versements (not cancelled) with their orders. */
   'cash.history': proc([], z.object({ from: dateStr.optional(), to: dateStr.optional(), limit: z.number().int().min(1).max(500).default(100) }), async (ctx, i) => {
@@ -315,13 +325,13 @@ export const cashProcs = {
   'cash.livreurs': proc(['livreur', 'suivi'], z.object({ livreurId: id.optional(), from: dateStr.optional(), to: dateStr.optional() }), (ctx, i) => livreursCash(ctx, i)),
 
   /** "Encaisser la sélection" / "Tout encaisser" (allIds of one livreur): money received from a livreur, his share kept. */
-  'cash.livreurCollect': proc([], z.object({ livreurId: id, ids: z.array(id).max(3000).optional(), all: z.boolean().optional() }), async (ctx, i) => {
+  'cash.livreurCollect': proc([], z.object({ livreurId: id, ids: z.array(id).max(3000).optional(), all: z.boolean().optional(), into: CaisseKey.default('main') }), async (ctx, i) => {
     let list = i.ids ?? [];
     if (i.all) list = (await ctx.db.query(`SELECT id FROM orders WHERE livreur_id=$1 AND follow_status='delivered' AND NOT cashed`, [i.livreurId])).map((r: any) => num(r.id));
     if (!list.length) throw bad('Rien à encaisser');
     const other = (await ctx.db.query('SELECT ref FROM orders WHERE id = ANY($1) AND (livreur_id IS NULL OR livreur_id <> $2) LIMIT 1', [list, i.livreurId]))[0];
     if (other) throw bad(`${other.ref} n’est pas un colis de ce livreur`);
-    return receive(ctx, list, null, true);
+    return receive(ctx, list, null, true, i.into);
   }),
 
   /** Chat between a livreur and the office (admin, managers, suivi). */

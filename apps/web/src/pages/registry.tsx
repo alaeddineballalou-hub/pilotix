@@ -30,6 +30,7 @@ export const PAGES: Record<string, ComponentType<PageProps>> = {
   notify: P(() => import('./notify'), 'Notify'),
   marketing: P(() => import('./ads'), 'Marketing'),
   caisse: P(() => import('./caisse'), 'Caisse'),
+  macaisse: P(() => import('./caisse'), 'MaCaisse'),
   livraison: P(() => import('./livraison'), 'Livraison'),
   utilisateurs: P(() => import('./admin'), 'Utilisateurs'),
   management: P(() => import('./admin'), 'Management'),
