@@ -82,7 +82,7 @@ function IntoChips({ value, onChange, me }: { value: string; onChange: (k: strin
 // ---------------------------------------------------------------- the page (owner)
 export function PhoneCaisse({ sub }: { sub?: string }) {
   const { t } = useTranslation();
-  const tab = sub === 'done' ? 'journal' : 'view';
+  const tab = sub === 'done' || sub === 'journal' ? 'journal' : 'view';
   const q = useRpc('caisse.overview', {});
   const [sheet, setSheet] = useState<Kind | null>(null);
   const [company, setCompany] = useState<string | null>(null);
