@@ -240,3 +240,6 @@
 .pxv-stu q { display: block; margin-top: 3px; color: var(--ink); quotes: none; }
 .pxv-road .pxv-stlink { flex: none; height: 36px; padding: 0 12px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 800; color: var(--muted); text-decoration: none; }
 .pxv-road .pxv-stlink .bji { width: 15px; height: 15px; }
+.pxv-backl { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; font-weight: 800; font-size: 14px; color: var(--ink); text-decoration: none; }
+.pxv-backl .bji { width: 18px; height: 18px; }
+[dir="rtl"] .pxv-backl .bji { transform: scaleX(-1); }

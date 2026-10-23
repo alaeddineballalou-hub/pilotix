@@ -14,9 +14,19 @@ import { TicketModal } from './Ticket';
 const VIEWS = ['tickets', 'nouveau', 'attente', 'depot', 'livraison', 'livres', 'annules', 'satisfaction', 'stats'] as const;
 type View = (typeof VIEWS)[number];
 export function Sav({ sub }: PageProps) {
+  const { t } = useTranslation();
   // phones: SAV is built around the call (Nouvel appel → réglé au téléphone or échange → dépôt)
   const phone = useIsPhone();
-  if (phone && sub !== 'stats') return <PhoneSav sub={sub} />;
+  if (phone && sub === 'stats')
+    return (
+      <div className="pxv">
+        <a className="pxv-backl" href="#/sav/tickets">
+          <Icon name="chevl" /> {t('sav.title')}
+        </a>
+        <SavStats />
+      </div>
+    );
+  if (phone) return <PhoneSav sub={sub} />;
   return <SavDesktop sub={sub} />;
 }
 
