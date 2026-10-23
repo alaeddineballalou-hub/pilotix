@@ -1,0 +1,1 @@
+import{r as s}from"./index-Cb3T30lS.js";function c(e){const[o,a]=s.useState(()=>typeof window<"u"&&window.matchMedia(e).matches);return s.useEffect(()=>{const t=window.matchMedia(e),n=()=>a(t.matches);return n(),t.addEventListener("change",n),()=>t.removeEventListener("change",n)},[e]),o}const d=()=>c("(max-width: 760px)");export{d as u};
