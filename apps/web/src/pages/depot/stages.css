@@ -73,3 +73,27 @@
 .bjsc .bjf-row > .bjsc-cam .bji { width: 22px; height: 22px; }
 .bjsc-camres { margin-bottom: 10px; }
 .bjsc-camres .bjsc-v { min-height: 0; }
+
+/* ===== Labels in « En dispatch » (Labels.tsx): the bar above the list, « Suivi en attente », the buttons ===== */
+.pxl-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: var(--raise); border: 1px solid var(--line); }
+.pxl-bar .bji, .px-act .btn .bji, .pxl-act .bji { width: 16px; height: 16px; }
+.pxl-warn { display: inline-flex; align-items: center; gap: 8px; color: var(--warn); font-size: 13.5px; font-weight: 700; }
+.pxl-warn > .bji { flex: none; }
+.pxl-warn .btn { color: var(--ink); font-weight: 700; }
+.pxl-none { color: var(--muted); font-size: 13px; }
+.px-wait { display: inline-flex; align-items: center; gap: 4px; color: var(--warn); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.px-wait .bji { width: 13px; height: 13px; }
+.tbl td small.px-wait { display: inline-flex; color: var(--warn); }
+.px-act .btn.pxl-send { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+/* phones: a title, one big print button, then what is still waiting (in a soft orange box, its button full width) */
+.pxl-bar.pxl-phone { flex-direction: column; align-items: stretch; gap: 8px; margin: 0; padding: 12px; border-radius: 14px; background: var(--surface); }
+.pxl-head { display: flex; align-items: center; gap: 4px; font-size: 15px; }
+.pxl-phone .pxl-print { justify-content: center; height: 50px; border-radius: 12px; font-size: 16px; font-weight: 800; }
+.pxl-phone .pxl-print .bji { width: 19px; height: 19px; }
+.pxl-phone .pxl-warn { display: flex; flex-wrap: wrap; gap: 8px; padding: 9px 10px; border-radius: 10px; background: var(--warn-soft); line-height: 1.35; }
+.pxl-phone .pxl-wt { flex: 1 1 0; min-width: 0; }
+.pxl-phone .pxl-warn .btn { flex: 1 1 100%; justify-content: center; height: 40px; }
+.pxl-act { display: flex; align-items: center; justify-content: center; gap: 6px; height: 40px; margin-top: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--raise); color: var(--ink); font: inherit; font-size: 14px; font-weight: 800; cursor: pointer; }
+.pxl-act.pxl-send { border-color: color-mix(in srgb, var(--warn) 50%, var(--line)); background: var(--warn-soft); color: var(--warn); }
+.pxl-act:disabled { opacity: .5; cursor: default; }
+.pxl-act:focus-visible { outline: 2px solid #F7A823; outline-offset: 2px; }

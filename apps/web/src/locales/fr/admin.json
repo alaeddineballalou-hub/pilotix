@@ -370,6 +370,8 @@
     "shop": "Boutique",
     "shopName": "Nom de la boutique",
     "shopNameHelp": "Affiché sur les bons de livraison et envoyé aux sociétés.",
+    "savPhone": "Numéro SAV",
+    "savPhoneHelp": "Imprimé sur les étiquettes des colis : le client appelle ce numéro pour un échange ou une question.",
     "fromWilaya": "Wilaya de départ des colis",
     "defaultCompany": "Société par défaut pour le coût de livraison",
     "defaultCompanyHelp": "Quand la commande n’a pas encore de société, le coût de livraison (ce que vous payez) vient de ses tarifs.",

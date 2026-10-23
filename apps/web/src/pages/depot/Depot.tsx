@@ -16,6 +16,7 @@ import { CopyCode } from '../../ui/CopyCode';
 import { useIsPhone } from '../../lib/useMedia';
 import { PhonePrep } from './PhonePrep';
 import { PhoneDispatch, PhoneReturns, PhoneRoad } from './PhoneStages';
+import { LabelAction, LabelsBar, PrintSelected } from './Labels';
 
 const STAGES = ['preparer', 'prepares', 'dispatchees', 'enlivraison', 'retours'] as const;
 type Stage = (typeof STAGES)[number];
@@ -171,17 +172,19 @@ function ToBuy() {
   );
 }
 
+/** « Société… » in En dispatch: another delivery company for the selection; a company with an API gets the parcels
+ *  right away (a parcel already at another company is cancelled there first). */
 function CompanyBulk({ ids, done }: { ids: number[]; done: () => void }) {
   const { t } = useTranslation();
   const companies = useRpc('depot.companies', {});
-  const assign = useAction('orders.assignCompany', { success: t('depot.companySet'), onDone: done });
+  const go = useToDispatch();
   return (
     <select
       aria-label={t('depot.setCompany')}
       value=""
       style={{ width: 'auto' }}
-      disabled={assign.isPending}
-      onChange={(e) => e.target.value && assign.mutate({ ids, companyId: e.target.value === 'none' ? null : Number(e.target.value) })}
+      disabled={go.busy}
+      onChange={(e) => e.target.value && go.run(ids, Number(e.target.value), done, t('depot.companySet'))}
     >
       <option value="">{t('depot.setCompany')}</option>
       {companies.data?.map((c) => (
@@ -193,18 +196,20 @@ function CompanyBulk({ ids, done }: { ids: number[]; done: () => void }) {
   );
 }
 
-/** Assign a delivery partner to the orders, then push them to "En dispatch". */
+/** Assign a delivery partner to the orders and push them to "En dispatch": a partner with an API gets the parcels
+ *  right away, and its own tracking number replaces the Pilotix one (the labels can be printed then). */
 export function useToDispatch() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
-  const run = async (ids: number[], companyId: number | null, onDone?: () => void) => {
+  const run = async (ids: number[], companyId: number | null, onDone?: () => void, okText?: string) => {
     if (!ids.length) return;
     setBusy(true);
     try {
-      if (companyId) await rpc('orders.assignCompany', { ids, companyId });
-      const r = await rpc('orders.setFollow', { ids, status: 'prepared' });
-      toast(t('depot.toDispatch.done', { count: r.changed.length }), 'ok');
+      const r = await rpc('depot.dispatch', companyId ? { ids, companyId } : { ids });
+      const sent = r.sent ? ` · ${t('depot.labels.sent', { count: r.sent })}` : '';
+      toast(`${okText ?? t('depot.toDispatch.done', { count: r.moved })}${sent}`, 'ok');
+      if (r.failed.length) toast(`${t('depot.labels.notSent', { count: r.failed.length })} : ${r.failed.map((f) => `${f.ref} ${f.error}`).join(' · ')}`, 'bad', 9000);
       onDone?.();
     } catch (e: any) {
       toast(e.message, 'bad');
@@ -288,7 +293,15 @@ function Prepares() {
         sort="updated_at"
         hide={['conf', 'follow']}
         compact
-        bulk={(ids, clear) => <CompanyBulk ids={ids} done={clear} />}
+        labels
+        top={<LabelsBar />}
+        bulk={(ids, clear) => (
+          <>
+            <PrintSelected ids={ids} />
+            <CompanyBulk ids={ids} done={clear} />
+          </>
+        )}
+        actions={(o) => <LabelAction o={o} />}
       />
     </>
   );

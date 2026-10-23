@@ -174,6 +174,9 @@ test('receive a return from the Retours page, and "Retirer" from dispatch', asyn
   const un: any = await call('depot.unassign', depot, { id: prepared.id });
   assert.equal(un.followStatus, 'to_prepare');
   assert.equal(un.companyId, null);
+  // a parcel already at the company is cancelled there (its number goes), then back to « À préparer »
   const sent: any = (await call('depot.find', depot, { code: 'ZR-TEST-0002' }) as any[])[0];
-  await assert.rejects(call('depot.unassign', depot, { id: sent.id }), /déjà envoyée/);
+  const back: any = await call('depot.unassign', depot, { id: sent.id });
+  assert.equal(back.followStatus, 'to_prepare');
+  assert.equal(back.tracking, null);
 });

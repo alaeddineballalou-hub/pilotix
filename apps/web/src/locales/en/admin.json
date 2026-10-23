@@ -370,6 +370,8 @@
     "shop": "Shop",
     "shopName": "Shop name",
     "shopNameHelp": "Shown on delivery slips and sent to couriers.",
+    "savPhone": "After-sales (SAV) number",
+    "savPhoneHelp": "Printed on the parcel labels: customers call this number for an exchange or a question.",
     "fromWilaya": "Wilaya parcels leave from",
     "defaultCompany": "Default courier for delivery cost",
     "defaultCompanyHelp": "When the order has no courier yet, the delivery cost (what you pay) comes from its tariffs.",

@@ -1,13 +1,15 @@
 import type { FollowStatus, Order } from '@pilotix/shared';
-import { WILAYAS } from '@pilotix/shared';
+import { API_COURIER_KINDS, WILAYAS } from '@pilotix/shared';
 import { ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, wilaya, when } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
-import { BulkBar, Card, ErrorBox, Loading, RemovableChip, StatusBadge, TicketTag } from '../../ui/kit';
+import { BulkBar, Card, ErrorBox, Icon, Loading, RemovableChip, StatusBadge, TicketTag } from '../../ui/kit';
 import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import { CopyCode } from '../../ui/CopyCode';
+import { Modal } from '../../ui/modal';
+import { stateOf, useCouriers } from './Labels';
 import './stages.css';
 
 export interface ExtraCol {
@@ -52,6 +54,8 @@ export function useDebounced<T>(v: T, ms = 300): T {
  * `hide` drops the columns that say the same thing on every row of a stage (all confirmed, all shipped…), and
  * `compact` (the stages after « En préparation ») puts the variant next to its product and leaves out the agent,
  * so the columns that matter there (the partner, how long the parcel has waited, the button) fit on a laptop.
+ * `labels` (En dispatch): a parcel whose company has an API shows « Suivi en attente » until the company gives its
+ * number (the Pilotix one would be replaced); `top` goes above the filters (the labels bar).
  */
 export function DepotOrderList({
   title,
@@ -64,6 +68,8 @@ export function DepotOrderList({
   actions,
   hide = [],
   compact = false,
+  labels = false,
+  top,
 }: {
   title: string;
   help?: string;
@@ -75,10 +81,21 @@ export function DepotOrderList({
   actions?: (o: Order) => ReactNode;
   hide?: ('conf' | 'follow')[];
   compact?: boolean;
+  labels?: boolean;
+  top?: ReactNode;
 }) {
   const { t } = useTranslation();
   const unCompany = useAction('orders.assignCompany', { success: t('depot.partnerRemoved') });
   const unDispatch = useAction('depot.unassign', { success: (o) => t('depot.removed', { ref: o.ref }) });
+  const couriers = useCouriers();
+  // « Retirer » on a parcel the company already has (its own number): the parcel is cancelled there, asked first
+  const [ask, setAsk] = useState<Order | null>(null);
+  const atCompany = (o: Order) => !!o.tracking && !!o.companyId && !!couriers && API_COURIER_KINDS.includes(couriers.kindOf(o.companyId) ?? '');
+  const waiting = (o: Order) => {
+    if (!labels || !couriers) return false;
+    const s = stateOf(o, couriers);
+    return !s.ok && s.why === 'waiting';
+  };
   const [q, setQ] = useState('');
   const [company, setCompany] = useState('');
   const [wil, setWil] = useState('');
@@ -117,6 +134,7 @@ export function DepotOrderList({
 
   return (
     <Card title={title} help={help}>
+      {top}
       <div className={`filters ${open ? 'open' : ''}`}>
         <label className="field search-f">
           <span className="lab">{t('depot.filters.search')}</span>
@@ -242,9 +260,21 @@ export function DepotOrderList({
                       name={o.companyName}
                       removeLabel={t('depot.removePartner')}
                       disabled={unCompany.isPending || unDispatch.isPending}
-                      onRemove={o.followStatus === 'to_prepare' ? () => unCompany.mutate({ ids: [o.id], companyId: null, livreurId: null }) : o.followStatus === 'prepared' ? () => unDispatch.mutate({ id: o.id }) : undefined}
+                      onRemove={
+                        o.followStatus === 'to_prepare'
+                          ? () => unCompany.mutate({ ids: [o.id], companyId: null, livreurId: null })
+                          : o.followStatus === 'prepared'
+                            ? () => (atCompany(o) ? setAsk(o) : unDispatch.mutate({ id: o.id }))
+                            : undefined
+                      }
                     />
-                    <CopyCode code={trackOf(o) || o.ref} small />
+                    {waiting(o) ? (
+                      <small className="px-wait">
+                        <Icon name="clock" /> {t('depot.labels.waiting')}
+                      </small>
+                    ) : (
+                      <CopyCode code={trackOf(o) || o.ref} small />
+                    )}
                   </td>
                   {!compact && (
                     <td className="hide-m" data-l={t('depot.cols.agent')}>
@@ -280,6 +310,32 @@ export function DepotOrderList({
           ›
         </button>
       </div>
+      {ask && (
+        <Modal
+          title={t('depot.labels.cancelTitle', { name: ask.companyName ?? '' })}
+          onClose={() => setAsk(null)}
+          footer={
+            <>
+              <button type="button" className="btn" onClick={() => setAsk(null)}>
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                className="btn danger"
+                disabled={unDispatch.isPending}
+                onClick={() => {
+                  unDispatch.mutate({ id: ask.id });
+                  setAsk(null);
+                }}
+              >
+                {t('depot.labels.cancelOk')}
+              </button>
+            </>
+          }
+        >
+          <p>{t('depot.labels.cancelText', { name: ask.companyName ?? '', tracking: ask.tracking ?? '', ref: ask.ref })}</p>
+        </Modal>
+      )}
     </Card>
   );
 }

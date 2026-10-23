@@ -90,6 +90,9 @@ export type SalesChannel = (typeof SALES_CHANNELS)[number];
 
 export const COURIER_KINDS = ['own', 'zr', 'zr_legacy', 'yalidine', 'ecotrack', 'noest', 'custom', 'manual'] as const;
 export type CourierKind = (typeof COURIER_KINDS)[number];
+/** Couriers Pilotix sends parcels to through their API: each gives the parcel its own tracking number, which replaces
+ *  the Pilotix one (screens, labels, scanner). Own livreurs and companies without an API keep the Pilotix number. */
+export const API_COURIER_KINDS: readonly string[] = ['zr', 'zr_legacy', 'yalidine', 'ecotrack', 'noest', 'custom'] satisfies readonly CourierKind[];
 
 // ---------------------------------------------------------------- SAV
 export const SAV_TYPES = ['defect', 'missing', 'wrong', 'late', 'notdelivered', 'refund', 'exchange', 'help', 'other'] as const;

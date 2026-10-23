@@ -2,9 +2,29 @@
 import type { CourierKind, FollowStatus } from '@pilotix/shared';
 
 
-/** One ID: the parcel is sent with the order ID (PX…) as its tracking number. */
-export function fakeTracking(_kind: CourierKind, ref: string): string {
-  return ref;
+/**
+ * The courier's own tracking number, in its style (yal-4K7P2Q, ZR-12345678…): when a parcel is sent to a company, this
+ * number replaces the Pilotix one on screen and on the label, as the real couriers do. Procolis (ZR, old platform) keeps
+ * the order reference, like its API. `salt` gives a parcel sent again after a cancel a new number; the demo data uses 0.
+ */
+export function fakeTracking(kind: CourierKind, ref: string, salt = Date.now()): string {
+  const n = Number(ref.replace(/\D/g, '')) || 0;
+  const mix = (n * 2654435761 + (salt % 1_000_003) * 40503) % 2176782336; // 36^6
+  const d8 = String(mix % 100_000_000).padStart(8, '0');
+  switch (kind) {
+    case 'yalidine':
+      return `yal-${mix.toString(36).toUpperCase().padStart(6, '0')}`;
+    case 'zr':
+      return `ZR-${d8}`;
+    case 'zr_legacy':
+      return ref;
+    case 'noest':
+      return `NOE-${d8}`;
+    case 'ecotrack':
+      return `ECO-${d8}`;
+    default:
+      return `TRK-${d8}`;
+  }
 }
 
 /** What each courier would say for each step (courier words, as stored in ext_status). */

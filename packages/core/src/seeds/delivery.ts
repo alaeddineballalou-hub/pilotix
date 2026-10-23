@@ -1,5 +1,5 @@
 import { FOLLOW_ON_ROAD } from '@pilotix/shared';
-import { word } from '../couriers/demo';
+import { fakeTracking, word } from '../couriers/demo';
 import { WILAYAS } from '@pilotix/shared';
 import type { Db } from '../db';
 import { num } from '../db';
@@ -42,6 +42,18 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
        SELECT id FROM orders WHERE company_id = $2 AND follow_status = ANY($3) ORDER BY id DESC LIMIT 6)`,
     [noest, yal, FOLLOW_ON_ROAD],
   );
+  // a parcel sent to a courier with an API carries that courier's own number (SAV parcels, the NOEST ones above)
+  const sent = await db.query(
+    `SELECT o.id, o.ref, c.kind FROM orders o JOIN delivery_companies c ON c.id = o.company_id
+     WHERE o.tracking = o.ref AND c.kind IN ('yalidine','zr','noest','ecotrack','custom')`,
+  );
+  for (const r of sent) await db.query('UPDATE orders SET tracking = $2 WHERE id = $1', [r.id, fakeTracking(r.kind, r.ref, 0)]);
+  // parcels in « En dispatch » were sent to their company when assigned, so they carry its number; two still wait for it
+  const disp = await db.query(
+    `SELECT o.id, o.ref, c.kind FROM orders o JOIN delivery_companies c ON c.id = o.company_id
+     WHERE o.follow_status = 'prepared' AND o.tracking IS NULL AND c.kind IN ('yalidine','zr','noest','ecotrack','custom') ORDER BY o.id`,
+  );
+  for (const r of disp.slice(2)) await db.query('UPDATE orders SET tracking = $2 WHERE id = $1', [r.id, fakeTracking(r.kind, r.ref, 0)]);
   // what each courier says about parcels with a tracking number
   const rows = await db.query(`SELECT o.id, o.follow_status, c.kind FROM orders o JOIN delivery_companies c ON c.id = o.company_id WHERE o.tracking IS NOT NULL AND o.follow_status IS NOT NULL`);
   for (const r of rows) {

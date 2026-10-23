@@ -1,9 +1,10 @@
 // Catalog, stock and depot: products & variants, stock per depot, movements, picking, returns and the parcel scanner.
-import { normalizePhone, Order, Page, Pack, StockRow, Warehouse } from '@pilotix/shared';
+import { API_COURIER_KINDS, normalizePhone, Order, Page, Pack, StockRow, Warehouse } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, num, numOrNull, Where } from '../db';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
+import { cancelParcel, sendOrders } from './delivery';
 import { getOrder, ordersProcs, setFollow } from './orders';
 import { RESERVED } from './stockquery';
 
@@ -87,7 +88,7 @@ export interface ScanResult {
 const id = z.number().int().positive();
 const label = (name: string, title: string | null | undefined) => (title ? `${name} ${title}` : name);
 /** Courier kinds whose own label (tracking) must be on the parcel: the Pilotix label is not enough. */
-export const API_COURIERS = ['zr', 'zr_legacy', 'yalidine', 'ecotrack', 'noest', 'custom'];
+export const API_COURIERS = [...API_COURIER_KINDS];
 /** Orders with these statuses already left the depot. */
 const LEFT = ['shipped', 'out_for_delivery', 'delivered', 'failed', 'alert', 'in_exchange', 'returning', 'returned', 'exchanged', 'lost'];
 
@@ -472,7 +473,9 @@ export async function scanRules(ctx: Ctx, o: Order, code: string, mode: ScanMode
     const kind = await companyKind(ctx.db, o.companyId);
     const api = !!kind && API_COURIERS.includes(kind);
     if (api && !o.tracking) return bad_(`Pas encore envoyée à ${o.companyName ?? 'la société'} : l’étiquette Pilotix ne suffit pas.`, 'Envoyez-la d’abord à la société, puis collez l’étiquette qu’elle donne.');
-    if (api && o.tracking && code.toUpperCase() === o.ref.toUpperCase())
+    // a Pilotix label (order reference or Pilotix number) on a parcel the company gave its own number to
+    const is = (c: string | null | undefined) => !!c && c.toUpperCase() === code.toUpperCase();
+    if (api && o.tracking && !is(o.tracking) && (is(o.ref) || is(o.ownTracking)))
       return bad_(`Étiquette Pilotix remplacée : la commande a été envoyée à ${o.companyName ?? 'la société'} avec son propre suivi.`, `Collez l’étiquette de la société ${o.tracking} et scannez-la.`);
     if (f !== 'prepared') return bad_(`Pas encore préparée (statut : ${fol(o)}).`, 'Préparez-la et marquez-la « Préparée » avant de la remettre.');
     // Own livreur / no API: the scanned label becomes the tracking number when the order has none.
@@ -767,15 +770,57 @@ export const catalogProcs = {
     return getOrder(ctx, id);
   }),
 
-  /** "Retirer": takes the courier off a prepared order; it goes back to "À préparer". */
+  /** "Retirer": takes the courier off a prepared order; it goes back to "À préparer". A parcel already at a company
+   *  with an API is cancelled there first (refused when the company already has it). */
   'depot.unassign': proc([...DEPOT], z.object({ id }), async (ctx, { id }) => {
     const o = await getOrder(ctx, id);
     if (o.followStatus !== 'prepared') throw bad(`${o.ref} n’est pas en dispatch`);
     const kind = await companyKind(ctx.db, o.companyId);
-    if (o.tracking && kind && API_COURIERS.includes(kind)) throw bad(`${o.ref} : déjà envoyée à ${o.companyName ?? 'la société'}. Annulez d’abord le colis chez la société (fiche de la commande).`);
+    if (o.tracking && kind && API_COURIERS.includes(kind)) await cancelParcel(ctx, id);
     await ordersProcs['orders.assignCompany'].run(ctx, { ids: [id], companyId: null, livreurId: null });
     await setFollow(ctx, { ids: [id], status: 'to_prepare', note: 'société retirée (dépôt)' });
     return getOrder(ctx, id);
+  }),
+
+  /**
+   * « Envoyer au dispatch », and « Société… » in En dispatch. The parcels get their partner and go to « En dispatch »;
+   * a partner with an API gets the parcel right away, and its own tracking number replaces the Pilotix one: the label
+   * can be printed from then on. A parcel moving to another company is cancelled at the old one first. A parcel the
+   * company refuses stays in « En dispatch », waiting for its number (send it again from there); the others go on.
+   */
+  'depot.dispatch': proc([...DEPOT], z.object({ ids: z.array(id).min(1).max(500), companyId: id.optional() }), async (ctx, i) => {
+    const failed: { id: number; ref: string; error: string }[] = [];
+    const fail = (oid: number, ref: string, e: unknown) => failed.push({ id: oid, ref, error: (e as Error)?.message || 'Erreur' });
+    let ids = i.ids;
+    if (i.companyId) {
+      const moving = await ctx.db.query(
+        `SELECT o.id, o.ref FROM orders o JOIN delivery_companies c ON c.id = o.company_id
+         WHERE o.id = ANY($1) AND o.tracking IS NOT NULL AND o.company_id <> $2 AND c.kind = ANY($3)`,
+        [ids, i.companyId, API_COURIERS],
+      );
+      for (const r of moving) await cancelParcel(ctx, num(r.id)).catch((e) => fail(num(r.id), r.ref, e));
+      ids = ids.filter((x) => !failed.some((f) => f.id === x));
+      if (ids.length) await ordersProcs['orders.assignCompany'].run(ctx, { ids, companyId: i.companyId });
+    }
+    const pick = async (sql: string, ...more: unknown[]) => (ids.length ? (await ctx.db.query(sql, [ids, ...more])).map((r: any) => num(r.id)) : []);
+    const toMove = await pick(`SELECT id FROM orders WHERE id = ANY($1) AND follow_status = 'to_prepare'`);
+    const moved = toMove.length ? (await setFollow(ctx, { ids: toMove, status: 'prepared' })).changed.length : 0;
+    const toSend = await pick(
+      `SELECT o.id FROM orders o JOIN delivery_companies c ON c.id = o.company_id
+       WHERE o.id = ANY($1) AND o.follow_status = 'prepared' AND o.tracking IS NULL AND c.kind = ANY($2)`,
+      API_COURIERS,
+    );
+    let sent = 0;
+    if (toSend.length) {
+      try {
+        const r = await sendOrders(ctx, toSend);
+        sent = r.sent;
+        for (const x of r.results) if (!x.ok) fail(x.id, x.ref, new Error(x.error));
+      } catch (e) {
+        for (const r of await ctx.db.query('SELECT id, ref FROM orders WHERE id = ANY($1)', [toSend])) fail(num(r.id), r.ref, e);
+      }
+    }
+    return { moved, sent, failed };
   }),
 
   'depot.scan': proc([...DEPOT], z.object({ code: z.string().max(100).optional(), orderId: id.optional(), mode: z.enum(['dispatch', 'back', 'return', 'exchange']) }), (ctx, i) => scan(ctx, i)),
