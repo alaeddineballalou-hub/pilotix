@@ -496,8 +496,8 @@ export function ClaimsPanel({ target }: { target: 'company' | 'livreur' }) {
                         <span className={`badge ${STATUS_TONE[c.status]}`}>{t(`suivi.rec.status.${c.status}`)}</span>
                       </td>
                       <td className="bjr-a" onClick={(e) => e.stopPropagation()}>
-                        {c.viaApi && !c.extId && c.status !== 'resolved' && (
-                          <button type="button" className="bjp-ib" disabled={push.isPending} title={t('suivi.rec.apiRetry', { name: c.companyName ?? '' })} aria-label={t('suivi.rec.apiRetry', { name: c.companyName ?? '' })} onClick={() => push.mutate({ id: c.id })}>
+                        {c.viaApi && !c.extId && c.status !== 'resolved' && (c.extError || !c.sentAt) && (
+                          <button type="button" className="bjp-ib" disabled={push.isPending} title={t(c.extError ? 'suivi.rec.apiRetry' : 'suivi.rec.apiSend', { name: c.companyName ?? '' })} aria-label={t(c.extError ? 'suivi.rec.apiRetry' : 'suivi.rec.apiSend', { name: c.companyName ?? '' })} onClick={() => push.mutate({ id: c.id })}>
                             <Icon name="send" />
                           </button>
                         )}

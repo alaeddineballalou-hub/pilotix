@@ -164,7 +164,7 @@
     "allOrders": "All orders",
     "results": "{{count}} results",
     "companiesTitle": "Claims to the couriers",
-    "companiesHelp": "ZR, Yalidine, NOEST… have no API for claims: Pilotix prepares the full message (tracking, ref., customer, problem) and sends it by WhatsApp or e-mail to the courier's customer service. Each claim stays here until answered; after 48 h without answer it turns red: remind in one click.",
+    "companiesHelp": "ZR Express: the claim is created directly in your ZR account, and its answer comes back here (Refresh answers). Yalidine, NOEST… have no API for claims: Pilotix prepares the full message (tracking, ref., customer, problem) and sends it by WhatsApp or e-mail to their customer service. Each claim stays here until answered; after 48 h without answer it turns red: remind in one click.",
     "livreursTitle": "Claims to our livreurs",
     "livreursHelp": "For parcels of your own livreurs: the message goes to the livreur's WhatsApp. Write down the answer here.",
     "new": "+ New claim",

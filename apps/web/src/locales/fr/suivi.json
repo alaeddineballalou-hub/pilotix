@@ -164,7 +164,7 @@
     "allOrders": "Toutes les commandes",
     "results": "{{count}} résultats",
     "companiesTitle": "Réclamations aux sociétés de livraison",
-    "companiesHelp": "ZR, Yalidine, NOEST… n’offrent pas d’API pour les réclamations : Pilotix prépare le message complet (n° de suivi, réf., client, problème) et l’envoie par WhatsApp ou e-mail au service client de la société. Chaque réclamation reste ici jusqu’à la réponse ; après 48 h sans réponse elle passe en rouge : relancez en un clic.",
+    "companiesHelp": "ZR Express : la réclamation est créée directement dans votre espace ZR, et sa réponse revient ici (Actualiser les réponses). Yalidine, NOEST… n’ont pas d’API pour les réclamations : Pilotix prépare le message complet (n° de suivi, réf., client, problème) et l’envoie par WhatsApp ou e-mail au service client. Chaque réclamation reste ici jusqu’à la réponse ; après 48 h sans réponse elle passe en rouge : relancez en un clic.",
     "livreursTitle": "Réclamations à nos livreurs",
     "livreursHelp": "Pour les colis de vos propres livreurs : le message part sur le WhatsApp du livreur. Notez sa réponse ici.",
     "new": "+ Nouvelle réclamation",
