@@ -55,8 +55,8 @@ type CompanyLabel = { o: Order; href: string };
 
 /**
  * Prints labels: the Pilotix ones in one go; the companies' own ones asked from each company. One company label opens
- * at once; several open from a list (`modal`), one tap each. In the browser preview the couriers are simulated: their
- * labels are stand-ins, printed in one go and marked as such.
+ * at once; several open from a list (`modal`), one tap each. In the browser preview the couriers are simulated: the
+ * server answers with a stand-in for each company label, printed with the Pilotix ones and marked as such.
  */
 export function useLabelPrinter() {
   const { t } = useTranslation();
@@ -79,10 +79,7 @@ export function useLabelPrinter() {
       if (ready.length < orders.length) toast(t('depot.labels.skipped', { count: orders.length - ready.length }), 'bad', 6000);
       const ours = ready.filter((o) => byOf(o, c) === 'pilotix');
       const companies = ready.filter((o) => byOf(o, c) === 'company');
-      if (backend.kind === 'demo') {
-        await printLabelItems(t, [...ours.map(pilotixItem), ...companies.map((o): LabelItem => ({ o, code: codeOf(o), demo: true }))], c.shop);
-        return;
-      }
+      const standIns: Order[] = [];
       const theirs: CompanyLabel[] = [];
       const errors: string[] = [];
       if (companies.length) {
@@ -92,15 +89,17 @@ export function useLabelPrinter() {
           if (!o) continue;
           const href = labelHref(r.label);
           if (href) theirs.push({ o, href });
+          else if (r.label?.demo) standIns.push(o); // the preview: the courier is simulated
           else if (r.error) errors.push(`${o.ref} ${r.error}`);
           else ours.push(o); // the company gives no label of its own: Pilotix prints one
         }
       }
-      await printLabelItems(t, ours.map(pilotixItem), c.shop);
+      await printLabelItems(t, [...ours.map(pilotixItem), ...standIns.map((o): LabelItem => ({ o, code: codeOf(o), demo: true }))], c.shop);
       if (errors.length) toast(`${t('depot.labels.notGot', { count: errors.length })} : ${errors.join(' · ')}`, 'bad', 9000);
       if (theirs.length) {
         setOpened(new Set());
-        setList(theirs);
+        // by company, as the printed labels: each company's labels come together
+        setList(theirs.sort((a, b) => (a.o.companyName ?? '').localeCompare(b.o.companyName ?? '') || a.o.ref.localeCompare(b.o.ref, undefined, { numeric: true })));
       }
     } catch (e) {
       fail(e);
@@ -147,7 +146,9 @@ export function useLabelPrinter() {
         {list.map(({ o, href }) => (
           <li key={o.id}>
             <span>
-              <b className="ltr">{o.ref}</b> · {o.companyName}
+              <span>
+                <b className="ltr">{o.ref}</b> · {o.companyName}
+              </span>
               <small className="ltr">{o.tracking}</small>
             </span>
             <button

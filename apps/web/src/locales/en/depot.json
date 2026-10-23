@@ -211,7 +211,7 @@
     "notSent_other": "{{count}} parcels not sent to the company",
     "skipped_one": "{{count}} without a label: company or tracking number missing",
     "skipped_other": "{{count}} without a label: company or tracking number missing",
-    "help": "A label is printed once the parcel has its delivery company. A company with an API gives its own tracking number and its own label; the Pilotix label (10 × 15 cm) is for your own livreurs and companies without an API.",
+    "help": "A label is printed once the parcel has its delivery company. A company with an API gives its own tracking number and its own label; the Pilotix label (10 × 15 cm) is for your own livreurs, companies without an API and those that give none (Procolis).",
     "docTitle": "Labels ({{n}})",
     "to": "Recipient",
     "note": "Note",

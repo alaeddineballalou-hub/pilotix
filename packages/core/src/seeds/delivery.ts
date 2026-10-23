@@ -65,7 +65,8 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   await db.query('INSERT INTO livreur_routes (profile_id, end_wilaya_id, end_commune) VALUES ($1, 16, $2), ($3, 16, $4)', [users.livreur, 'Bab Ezzouar', users.livreur2, 'Kouba']);
   const own = num((await db.query(`SELECT id FROM delivery_companies WHERE kind = 'own' LIMIT 1`))[0]?.id);
   const pick = await db.query(`SELECT id FROM orders WHERE follow_status IN ('to_prepare','prepared') AND wilaya_id = 16 AND livreur_id IS NULL ORDER BY id DESC LIMIT 3`);
-  if (pick.length) await db.query('UPDATE orders SET company_id = $1, livreur_id = $2 WHERE id = ANY($3)', [own, users.livreur, pick.map((r: any) => num(r.id))]);
+  // (own livreurs keep the Pilotix number: a company's number from above goes)
+  if (pick.length) await db.query('UPDATE orders SET company_id = $1, livreur_id = $2, tracking = NULL, ext_status = NULL WHERE id = ANY($3)', [own, users.livreur, pick.map((r: any) => num(r.id))]);
   const out = await db.query(`SELECT id FROM orders WHERE follow_status = 'out_for_delivery' AND livreur_id = $1`, [users.livreur]);
   if (out.length < 4) {
     const more = await db.query(`SELECT id FROM orders WHERE follow_status = 'out_for_delivery' AND wilaya_id IN (16, 9, 35, 42) AND livreur_id IS NULL ORDER BY id DESC LIMIT $1`, [4 - out.length]);
