@@ -378,7 +378,7 @@ function FirstCallCard({ kf, setKf }: { kf: Kf; setKf: (k: Kf) => void }) {
   );
 }
 
-function DelivBody({ kf, on }: { kf: Kf; on: 'created' | 'confirmed' }) {
+function DelivBody({ kf, on, bare }: { kf: Kf; on: 'created' | 'confirmed'; bare?: boolean }) {
   const { t } = useTranslation();
   const q = useRpc('confirmation.delivery', { ...kfInput(kf), on }, { refetchInterval: 60_000 });
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
@@ -386,16 +386,18 @@ function DelivBody({ kf, on }: { kf: Kf; on: 'created' | 'confirmed' }) {
   if (!D) return <Loading />;
   return (
     <div>
-      <div className="bjec-sec">
-        {t('confirmation.dv.sec')} · {perLabel(t, kf)}
-      </div>
+      {!bare && (
+        <div className="bjec-sec">
+          {t('confirmation.dv.sec')} · {perLabel(t, kf)}
+        </div>
+      )}
       <div className="kpis">
-        <Kpi label={t('confirmation.dv.confirmed')} value={n(D.confirmed)} sub={`${t('confirmation.dv.confirmedSub')} · ${da(D.value)}`} />
+        {!bare && <Kpi label={t('confirmation.dv.confirmed')} value={n(D.confirmed)} sub={`${t('confirmation.dv.confirmedSub')} · ${da(D.value)}`} />}
         <Kpi label={t('confirmation.dv.depot')} value={n(D.depot)} sub={t('confirmation.dv.depotSub')} />
         <Kpi tone={D.route ? 'warn' : undefined} label={t('confirmation.dv.route')} value={n(D.route)} sub={t('confirmation.dv.routeSub')} />
-        <Kpi tone="ok" label={t('confirmation.dv.delivered')} value={n(D.delivered)} sub={t('confirmation.dv.deliveredSub', { v: da(D.deliveredValue) })} />
+        {!bare && <Kpi tone="ok" label={t('confirmation.dv.delivered')} value={n(D.delivered)} sub={t('confirmation.dv.deliveredSub', { v: da(D.deliveredValue) })} />}
         <Kpi tone={D.back ? 'bad' : undefined} label={t('confirmation.dv.back')} value={n(D.back)} sub={t('confirmation.dv.backSub')} />
-        <Kpi tone={tone3(D.rate, 75, 60)} label={t('confirmation.dv.rate')} value={pctTxt(D.rate)} sub={t('confirmation.dv.rateSub')} />
+        {!bare && <Kpi tone={tone3(D.rate, 75, 60)} label={t('confirmation.dv.rate')} value={pctTxt(D.rate)} sub={t('confirmation.dv.rateSub')} />}
         <Kpi label={t('confirmation.dv.overall')} value={pctTxt(D.overall)} sub={D.cancelledAfter ? t('confirmation.dv.cancelledAfter', { n: D.cancelledAfter }) : t('confirmation.dv.allConfirmed')} />
       </div>
     </div>
@@ -441,22 +443,34 @@ function ConfirmedCard({ kf, setKf, bare }: { kf: Kf; setKf: (k: Kf) => void; ba
   else if (D)
     body = (
       <div>
-        <div className="bjec-sec">
-          {t('confirmation.cf.sec')} · {perLabel(t, kf)}
-        </div>
-        <div className="kpis">
-          <Kpi tone="ok" label={t('confirmation.cf.confirmed')} value={n(D.confirmed)} sub={t('confirmation.ec.value', { v: da(D.value) })} />
-          <Kpi tone={tone3(D.rate, 60, 40)} label={t('confirmation.np.rate')} value={pctTxt(D.rate)} sub={t('confirmation.cf.rateSub', { n: D.cancelled })} />
-          <Kpi label={t('confirmation.cf.basket')} value={D.basket === null ? '—' : da(D.basket)} sub={D.itemsPerOrder === null ? ' ' : t('confirmation.cf.basketSub', { n: String(Math.round(D.itemsPerOrder * 10) / 10).replace('.', ',') })} />
-          <Kpi label={t('confirmation.cf.lead')} value={D.leadMedianMs === null ? '—' : dur(D.leadMedianMs)} sub={t('confirmation.cf.leadSub')} />
-        </div>
-        <div className="bjec-sec">{t('confirmation.cf.upsell')}</div>
-        <div className="kpis">
-          <Kpi label={t('confirmation.cf.upOrders')} value={n(D.upsellOrders)} sub={t('confirmation.cf.upOrdersSub')} />
-          <Kpi tone={D.upsellRate === null ? undefined : D.upsellRate >= 20 ? 'ok' : 'warn'} label={t('confirmation.cf.upRate')} value={pctTxt(D.upsellRate)} sub={t('confirmation.cf.upRateSub')} />
-          <Kpi tone="ok" label={t('confirmation.cf.upValue')} value={da(D.upsellValue)} sub={t('confirmation.cf.upValueSub')} />
-          <Kpi label={t('confirmation.cf.packs')} value={n(D.packs)} sub={t('confirmation.cf.packsSub')} />
-        </div>
+        {bare ? (
+          // the page already shows confirmées, rate, basket and CA upsell on top
+          <div className="kpis">
+            <Kpi label={t('confirmation.cf.lead')} value={D.leadMedianMs === null ? '—' : dur(D.leadMedianMs)} sub={t('confirmation.cf.leadSub')} />
+            <Kpi label={t('confirmation.cf.upOrders')} value={n(D.upsellOrders)} sub={t('confirmation.cf.upOrdersSub')} />
+            <Kpi tone={D.upsellRate === null ? undefined : D.upsellRate >= 20 ? 'ok' : 'warn'} label={t('confirmation.cf.upRate')} value={pctTxt(D.upsellRate)} sub={t('confirmation.cf.upRateSub')} />
+            <Kpi label={t('confirmation.cf.packs')} value={n(D.packs)} sub={t('confirmation.cf.packsSub')} />
+          </div>
+        ) : (
+          <>
+            <div className="bjec-sec">
+              {t('confirmation.cf.sec')} · {perLabel(t, kf)}
+            </div>
+            <div className="kpis">
+              <Kpi tone="ok" label={t('confirmation.cf.confirmed')} value={n(D.confirmed)} sub={t('confirmation.ec.value', { v: da(D.value) })} />
+              <Kpi tone={tone3(D.rate, 60, 40)} label={t('confirmation.np.rate')} value={pctTxt(D.rate)} sub={t('confirmation.cf.rateSub', { n: D.cancelled })} />
+              <Kpi label={t('confirmation.cf.basket')} value={D.basket === null ? '—' : da(D.basket)} sub={D.itemsPerOrder === null ? ' ' : t('confirmation.cf.basketSub', { n: String(Math.round(D.itemsPerOrder * 10) / 10).replace('.', ',') })} />
+              <Kpi label={t('confirmation.cf.lead')} value={D.leadMedianMs === null ? '—' : dur(D.leadMedianMs)} sub={t('confirmation.cf.leadSub')} />
+            </div>
+            <div className="bjec-sec">{t('confirmation.cf.upsell')}</div>
+            <div className="kpis">
+              <Kpi label={t('confirmation.cf.upOrders')} value={n(D.upsellOrders)} sub={t('confirmation.cf.upOrdersSub')} />
+              <Kpi tone={D.upsellRate === null ? undefined : D.upsellRate >= 20 ? 'ok' : 'warn'} label={t('confirmation.cf.upRate')} value={pctTxt(D.upsellRate)} sub={t('confirmation.cf.upRateSub')} />
+              <Kpi tone="ok" label={t('confirmation.cf.upValue')} value={da(D.upsellValue)} sub={t('confirmation.cf.upValueSub')} />
+              <Kpi label={t('confirmation.cf.packs')} value={n(D.packs)} sub={t('confirmation.cf.packsSub')} />
+            </div>
+          </>
+        )}
         <h3>{t('confirmation.byAgent')}</h3>
         <div className="tbl-wrap">
           <table className="tbl">
@@ -565,7 +579,7 @@ export function ConfirmedStatsPage() {
       <ConfirmedCard kf={kf} setKf={setKf} bare />
       <div className="card bjkfc">
         <Head title={t('confirmation.cs.after')} help={t('confirmation.cs.afterHelp')} />
-        <DelivBody kf={kf} on="confirmed" />
+        <DelivBody kf={kf} on="confirmed" bare />
       </div>
     </div>
   );
