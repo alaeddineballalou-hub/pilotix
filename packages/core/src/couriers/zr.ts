@@ -2,11 +2,14 @@
 // Auth: headers X-Api-Key + X-Tenant (ZR space → Paramètres → API).
 // Ported from the original Pilotix adapter, which was used in production with real keys.
 // Endpoints: POST /api/v1/territories/search, /hubs/search, /customers/individual, /parcels, GET /parcels/{id},
-// DELETE /parcels/bulk/by-tracking-number, POST /parcels/labels/individual/pdf, GET /delivery-pricing/rates.
+// DELETE /parcels/bulk/by-tracking-number, POST /parcels/labels/individual/pdf, GET /delivery-pricing/rates,
+// Réclamations (from ZR's API documentation): POST /claim-categories/search → {items:[{id,name}]},
+// POST /claims {categoryId, title, description, parcelId (ZR parcel UUID)} → {id}, POST /claims/{id} {claimId} → claim with
+// state {name, description, isLocked}, PATCH /claim-comments/{id} {claimId, comment}, POST /claim-comments/{id}/search → {items:[{content, createdAt}]}.
 // BEST GUESS (check with real keys): the "state.name" values in STATUSES below come from ZR's dashboard wording;
 // unknown ones are shown as-is and can be mapped by hand with the "Statuts" button.
-import type { CourierAdapter, CourierCompany, Desk } from './types';
-import { baseUrl, CourierError, cut, http, intl, needKeys, timeUp } from './util';
+import type { ClaimCategory, ClaimState, CourierAdapter, CourierCompany, Desk } from './types';
+import { baseUrl, bestMatch, CourierError, cut, http, intl, needKeys, timeUp } from './util';
 
 const STATUSES: CourierAdapter['statuses'] = {
   commande_recue: null, en_traitement: null, appel_confirmation: null, commande_confirmee: null, en_preparation: null, pret_a_expedier: null,
@@ -61,6 +64,31 @@ async function hubs(c: CourierCompany) {
   cache.set(key, out);
   return out;
 }
+
+/** Words of our reasons that should find ZR's category (when the user did not choose one). */
+const REASON_HINTS: Record<string, string[]> = {
+  relivrer: ['relivraison', 'nouvelle tentative', 'livraison'],
+  late: ['retard', 'delai', 'livraison'],
+  nocall: ['appel', 'injoignable', 'livreur'],
+  fakedeliv: ['faux', 'livre', 'statut'],
+  fakeret: ['faux', 'retour', 'statut'],
+  address: ['adresse', 'modification'],
+  damaged: ['endommage', 'casse', 'abime'],
+  money: ['paiement', 'versement', 'argent', 'encaissement'],
+  noreturn: ['retour', 'non recu'],
+  other: ['autre'],
+};
+
+async function loadClaimCats(c: CourierCompany): Promise<ClaimCategory[]> {
+  const key = `${c.id}:claimcat`;
+  if (cache.has(key)) return cache.get(key)!;
+  const r = await http(c.name, url(c, '/claim-categories/search'), { method: 'POST', headers: h(c), json: { keyword: '', pageNumber: 1, pageSize: 200 } });
+  const list = ((r?.items ?? []) as any[]).map((x) => ({ id: String(x.id), name: String(x.name || x.nameEnglish || x.nameArabic || x.id) }));
+  cache.set(key, list);
+  return list;
+}
+
+const RESOLVED = /(r[ée]solu|r[ée]gl|cl[ôo]tur|ferm[ée]|closed|resolved|termin[ée])/i;
 
 export const zr: CourierAdapter = {
   statuses: STATUSES,
@@ -146,6 +174,77 @@ export const zr: CourierAdapter = {
         return x ? Number(x.priceTtc ?? x.discountedPrice ?? x.price) || null : null;
       };
       out.push({ wilayaId: w, home: price('home'), desk: price('pickup-point'), returnFee: price('return') });
+    }
+    return out;
+  },
+  async claimCategories(c) {
+    needKeys(c, 'api_key', 'tenant');
+    return loadClaimCats(c);
+  },
+  async claim(c, i) {
+    needKeys(c, 'api_key', 'tenant');
+    const cats = await loadClaimCats(c);
+    let categoryId = i.categoryId && cats.some((x) => x.id === i.categoryId) ? i.categoryId : null;
+    if (!categoryId) {
+      const norm = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const exact = bestMatch(i.reasonText, cats.map((x) => x.name));
+      const hit = exact ? cats.find((x) => x.name === exact) : (REASON_HINTS[i.reason] ?? []).map((w) => cats.find((x) => norm(x.name).includes(w))).find(Boolean);
+      categoryId = (hit ?? cats.find((x) => /autre|other/i.test(x.name)) ?? cats[0])?.id ?? null;
+    }
+    if (!categoryId) throw new CourierError('ZR n’a pas de catégorie de réclamation : vérifiez votre espace ZR');
+    // ZR wants its own parcel UUID: the one kept at sending, else found from the tracking number
+    let parcelId = i.item.extId;
+    if (!parcelId) {
+      const p = await http(c.name, url(c, `/parcels/${encodeURIComponent(i.item.tracking)}`), { headers: h(c) });
+      parcelId = p?.id ? String(p.id) : null;
+    }
+    if (!parcelId) throw new CourierError(`Colis ${i.item.tracking} introuvable chez ZR`);
+    const r = await http(c.name, url(c, '/claims'), {
+      method: 'POST',
+      headers: h(c),
+      json: { categoryId, title: cut(`${i.reasonText} · ${i.item.tracking}`, 100), description: cut(i.description, 2000), parcelId },
+    });
+    const id = r?.id || (typeof r === 'string' ? r : null);
+    if (!id) throw new CourierError('ZR n’a pas renvoyé de numéro de réclamation');
+    let status: string | null = null;
+    try {
+      const g = await http(c.name, url(c, `/claims/${encodeURIComponent(id)}`), { method: 'POST', headers: h(c), json: { claimId: id } });
+      status = g?.state?.description || g?.state?.name || null;
+    } catch {
+      /* the claim exists; its state comes with the next refresh */
+    }
+    return { extId: String(id), extRef: String(id).slice(0, 8).toUpperCase(), status };
+  },
+  async claimComment(c, extId, text) {
+    needKeys(c, 'api_key', 'tenant');
+    await http(c.name, url(c, `/claim-comments/${encodeURIComponent(extId)}`), { method: 'PATCH', headers: h(c), json: { claimId: extId, comment: cut(text, 2000) } });
+  },
+  async claimStates(c, ids) {
+    needKeys(c, 'api_key', 'tenant');
+    const out: ClaimState[] = [];
+    for (const id of ids) {
+      if (timeUp()) break;
+      let g: any;
+      try {
+        g = await http(c.name, url(c, `/claims/${encodeURIComponent(id)}`), { method: 'POST', headers: h(c), json: { claimId: id } });
+      } catch (e: any) {
+        if (String(e.message).includes('refuse les clés') || e.status === 429) throw e;
+        continue;
+      }
+      const name = String(g?.state?.name || '');
+      const words = String(g?.state?.description || name);
+      if (!words) continue;
+      let answer: string | null = null;
+      try {
+        const cm = await http(c.name, url(c, `/claim-comments/${encodeURIComponent(id)}/search`), { method: 'POST', headers: h(c), json: { claimId: id, pageNumber: 1, pageSize: 100 } });
+        const list = ((cm?.items ?? []) as any[]).filter((x) => String(x.content ?? '').trim());
+        const last = list.sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? ''))).pop();
+        answer = last ? `${last.modifiedBy?.fullName ? `${last.modifiedBy.fullName} : ` : ''}${String(last.content).trim()}` : null;
+      } catch {
+        /* comments are a bonus */
+      }
+      // a locked state is the end of ZR's workflow (solved / closed)
+      out.push({ extId: id, status: words, resolved: !!g?.state?.isLocked || RESOLVED.test(name) || RESOLVED.test(words), at: g?.lastModifiedAt ?? null, answer });
     }
     return out;
   },

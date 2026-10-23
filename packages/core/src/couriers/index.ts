@@ -4,7 +4,7 @@
 import type { Ctx } from '../rpc';
 import { ADAPTERS } from './adapters';
 import { helpers, loadCompany, loadParcels } from './load';
-import type { CourierApi, CourierCompany, TrackItem } from './types';
+import type { ClaimInput, CourierApi, CourierCompany, TrackItem } from './types';
 import { CourierError, setDeadline } from './util';
 
 export * from './types';
@@ -46,12 +46,13 @@ export function courierApi(c: CourierCompany): CourierApi {
   };
 }
 
-type Args = { companyId: number; ids?: number[]; items?: TrackItem[]; item?: TrackItem; orderId?: number };
+type Args = { companyId: number; ids?: number[]; items?: TrackItem[]; item?: TrackItem; orderId?: number; claim?: ClaimInput; extIds?: string[]; extId?: string; text?: string };
 
 /**
  * Entry point used by the server for ctx.server.courier(action, args, ctx).
  * Actions: send {companyId, ids} · track {companyId, items} · label {companyId, item} · cancel {companyId, item} ·
- * fees {companyId} · stopdesks {companyId} · test {companyId} · preview {companyId, orderId}.
+ * fees {companyId} · stopdesks {companyId} · test {companyId} · preview {companyId, orderId} ·
+ * claim {companyId, claim} · claimCategories {companyId} · claimStates {companyId, extIds} · claimComment {companyId, extId, text}.
  */
 export async function runCourier(action: string, args: unknown, ctx: Ctx): Promise<unknown> {
   const a = args as Args;
@@ -74,6 +75,25 @@ export async function runCourier(action: string, args: unknown, ctx: Ctx): Promi
       return api.stopdesks();
     case 'test':
       return api.test();
+    case 'claim': {
+      const ad = ADAPTERS[c.kind];
+      if (!ad.claim) throw new CourierError(`${c.name} : pas de réclamation par API`);
+      return ad.claim(c, a.claim!);
+    }
+    case 'claimCategories': {
+      const ad = ADAPTERS[c.kind];
+      return ad.claimCategories ? ad.claimCategories(c) : [];
+    }
+    case 'claimComment': {
+      const ad = ADAPTERS[c.kind];
+      if (!ad.claimComment) throw new CourierError(`${c.name} : pas de relance par API`);
+      await ad.claimComment(c, a.extId!, a.text ?? '');
+      return { ok: true };
+    }
+    case 'claimStates': {
+      const ad = ADAPTERS[c.kind];
+      return ad.claimStates ? ad.claimStates(c, a.extIds ?? []) : [];
+    }
     case 'preview': {
       const p = (await loadParcels(ctx.db, [a.orderId!]))[0];
       const ad = ADAPTERS[c.kind];

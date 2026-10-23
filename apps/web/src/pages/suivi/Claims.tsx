@@ -26,14 +26,14 @@ interface Target {
 /** Who receives the claim of an order: its courier's claim desk, or our own livreur. */
 export function useTarget(o: Order | null, toLivreur: boolean) {
   const c = useRpc('suivi.contacts', {}).data;
-  if (!o || !c) return { target: null as Target | null, shop: c?.shopName ?? '', own: false };
+  if (!o || !c) return { target: null as Target | null, shop: c?.shopName ?? '', own: false, api: false };
   const comp = c.companies.find((x: ClaimCompany) => x.id === o.companyId);
   const own = toLivreur || comp?.kind === 'own';
   if (own) {
     const lv = c.livreurs.find((l: { id: number }) => l.id === o.livreurId);
-    return { target: { name: lv?.name ?? o.livreurName ?? '—', wa: lv?.phone ?? null, email: null, phone: lv?.phone ?? null }, shop: c.shopName, own };
+    return { target: { name: lv?.name ?? o.livreurName ?? '—', wa: lv?.phone ?? null, email: null, phone: lv?.phone ?? null }, shop: c.shopName, own, api: false };
   }
-  return { target: comp ? { name: comp.name, wa: comp.wa, email: comp.email, phone: comp.phone } : null, shop: c.shopName, own };
+  return { target: comp ? { name: comp.name, wa: comp.wa, email: comp.email, phone: comp.phone } : null, shop: c.shopName, own, api: !!comp?.api && !!trackOf(o) };
 }
 
 /** Step 1: choose the order and the problem → the claim is saved, then step 2: send it. */
@@ -45,15 +45,24 @@ export function NewClaimModal({ pre, toLivreur = false, reason = 'late', details
   const [mot, setMot] = useState<Reason>(reason);
   const [det, setDet] = useState(details);
   const [err, setErr] = useState('');
-  const [made, setMade] = useState<{ id: number; ref: string; reason: string; details: string } | null>(null);
-  const { target, shop, own } = useTarget(o, toLivreur);
+  const [made, setMade] = useState<SentClaim | null>(null);
+  const [cat, setCat] = useState('');
+  const { target, shop, own, api } = useTarget(o, toLivreur);
+  const cats = useRpc('suivi.claimCategories', { companyId: o?.companyId ?? 0 }, { enabled: api && !!o?.companyId, staleTime: 600_000 });
   useEffect(() => {
     const h = setTimeout(() => setDeb(q.trim()), 250);
     return () => clearTimeout(h);
   }, [q]);
   const res = useRpc('suivi.findOrders', { q: deb }, { enabled: deb.length >= 2 && !o });
   const list = res.data ?? [];
-  const create = useAction('suivi.claimCreate', { onDone: (c) => setMade(c) });
+  const create = useAction('suivi.claimCreate', {
+    onDone: (c) => {
+      if (c.extId) {
+        toast(t('suivi.rec.apiSent', { ref: c.ref, name: c.companyName ?? '', n: c.extRef ?? '' }), 'ok');
+        onClose();
+      } else setMade(c);
+    },
+  });
 
   // copy the tracking when opened from an alert (the courier desk asks for it first)
   useEffect(() => {
@@ -65,7 +74,7 @@ export function NewClaimModal({ pre, toLivreur = false, reason = 'late', details
     setErr('');
     if (!o) return setErr(t('suivi.rec.chooseOrder'));
     const message = claimText(t, { ref: '…', reason: mot, details: det.trim() }, o, target?.name ?? '', shop);
-    create.mutate({ orderId: o.id, reason: mot, details: det.trim(), message, channel: 'whatsapp', toLivreur: own });
+    create.mutate({ orderId: o.id, reason: mot, details: det.trim(), message, channel: 'whatsapp', toLivreur: own, viaApi: api, categoryId: api && cat ? cat : null });
   };
   return (
     <Modal
@@ -78,7 +87,8 @@ export function NewClaimModal({ pre, toLivreur = false, reason = 'late', details
             {t('common.cancel')}
           </button>
           <button className="btn primary" disabled={create.isPending} onClick={prepare}>
-            {t('suivi.rec.prepare')}
+            {api && <Icon name="send" />}
+            {create.isPending && api ? t('suivi.rec.apiSending', { name: target?.name ?? '' }) : api ? t('suivi.rec.apiSend', { name: target?.name ?? '' }) : t('suivi.rec.prepare')}
           </button>
         </>
       }
@@ -129,19 +139,53 @@ export function NewClaimModal({ pre, toLivreur = false, reason = 'late', details
             ))}
           </select>
         </label>
+        {api && (
+          <label className="field">
+            <span className="lab">{t('suivi.rec.apiCategory', { name: target?.name ?? '' })}</span>
+            <select value={cat} onChange={(e) => setCat(e.target.value)} disabled={cats.isLoading}>
+              <option value="">{t('suivi.rec.apiCategoryAuto')}</option>
+              {(cats.data ?? []).map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="field">
           <span className="lab">{t('suivi.rec.details')}</span>
           <textarea value={det} placeholder={t('suivi.rec.detailsPh')} onChange={(e) => setDet(e.target.value)} />
         </label>
+        {api && <p className="muted small">{t('suivi.rec.apiHelp', { name: target?.name ?? '' })}</p>}
         {err && <p className="form-err">{err}</p>}
       </div>
     </Modal>
   );
 }
 
+interface SentClaim {
+  id: number;
+  ref: string;
+  reason: string;
+  details: string;
+  viaApi?: boolean;
+  extId?: string | null;
+  extRef?: string | null;
+  extError?: string | null;
+  companyName?: string | null;
+}
+
 /** Step 2: the message, editable, sent by WhatsApp / e-mail / copy; each way is written in the claim history. */
-export function SendModal({ claim, order, target, shop, again, onClose }: { claim: { id: number; ref: string; reason: string; details: string }; order: Order | null; target: Target; shop: string; again: boolean; onClose: () => void }) {
+export function SendModal({ claim, order, target, shop, again, onClose }: { claim: SentClaim; order: Order | null; target: Target; shop: string; again: boolean; onClose: () => void }) {
   const { t } = useTranslation();
+  const push = useAction('suivi.claimPush', {
+    onDone: (c) => {
+      if (c.extId) {
+        toast(t('suivi.rec.apiSent', { ref: c.ref, name: c.companyName ?? '', n: c.extRef ?? '' }), 'ok');
+        onClose();
+      } else toast(c.extError ?? t('suivi.rec.apiFailed', { name: target.name }), 'bad');
+    },
+  });
   const [text, setText] = useState(() => claimText(t, claim, order, target.name, shop, again));
   const [done, setDone] = useState(false);
   const upd = useAction('suivi.claimUpdate', { silent: true });
@@ -163,6 +207,18 @@ export function SendModal({ claim, order, target, shop, again, onClose }: { clai
       }
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {claim.viaApi && !claim.extId && (
+          <div className="warnbox">
+            <b>{t('suivi.rec.apiRefused', { name: target.name })}</b>
+            {claim.extError && <div className="small">{claim.extError}</div>}
+            <div style={{ marginTop: 8 }}>
+              <button type="button" className="btn primary" disabled={push.isPending} onClick={() => push.mutate({ id: claim.id })}>
+                <Icon name="refresh" />
+                {t('suivi.rec.apiRetry', { name: target.name })}
+              </button>
+            </div>
+          </div>
+        )}
         <p className="muted small">{t('suivi.rec.sendHelp', { name: target.name })}</p>
         <textarea className="bjr-msg" value={text} onChange={(e) => setText(e.target.value)} aria-label={t('suivi.rec.sendTitle', { name: target.name })} />
         <div className="bjr-acts">
@@ -210,6 +266,47 @@ export interface ClaimRow {
   createdAt: string;
   updatedAt: string;
   sentAt: string | null;
+  viaApi: boolean;
+  extId: string | null;
+  extRef: string | null;
+  extStatus: string | null;
+  extAnswer: string | null;
+  extError: string | null;
+}
+
+/** Relance of a claim created at the courier through its API: the text is added to the courier's claim as a comment. */
+function RemindApiModal({ c, onClose }: { c: ClaimRow; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [text, setText] = useState(() => t('suivi.rec.apiRemindText', { tracking: trackOf(c) || c.orderRef || '' }));
+  const send = useAction('suivi.claimRemind', { success: t('suivi.rec.apiReminded', { name: c.companyName ?? '' }), onDone: onClose });
+  return (
+    <Modal
+      title={t('suivi.rec.apiRemindTitle', { ref: c.ref, name: c.companyName ?? '' })}
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>
+            {t('common.cancel')}
+          </button>
+          <button className="btn primary" disabled={send.isPending || !text.trim()} onClick={() => send.mutate({ id: c.id, text: text.trim() })}>
+            <Icon name="send" />
+            {t('suivi.rec.apiSend', { name: c.companyName ?? '' })}
+          </button>
+        </>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {c.extAnswer && (
+          <div className="bjr-ans">
+            <b>{t('suivi.rec.apiLastAnswer', { name: c.companyName ?? '' })}</b>
+            <div>{c.extAnswer}</div>
+          </div>
+        )}
+        <textarea className="bjr-msg" value={text} onChange={(e) => setText(e.target.value)} aria-label={t('suivi.rec.apiRemindTitle', { ref: c.ref, name: c.companyName ?? '' })} />
+        <p className="muted small">{t('suivi.rec.apiRemindHelp', { name: c.companyName ?? '' })}</p>
+      </div>
+    </Modal>
+  );
 }
 
 function AnswerModal({ c, name, onClose }: { c: ClaimRow; name: string; onClose: () => void }) {
@@ -269,12 +366,21 @@ export function ClaimsPanel({ target }: { target: 'company' | 'livreur' }) {
   const [filt, setFilt] = useState<'open' | 'waiting' | 'still_waiting' | 'resolved' | 'all'>('open');
   const q = useRpc('suivi.claims', { target, status: filt });
   const contacts = useRpc('suivi.contacts', {}).data;
-  const [dlg, setDlg] = useState<{ kind: 'new' } | { kind: 'answer'; c: ClaimRow } | { kind: 'send'; c: ClaimRow; order: Order } | null>(null);
+  const [dlg, setDlg] = useState<{ kind: 'new' } | { kind: 'answer'; c: ClaimRow } | { kind: 'send'; c: ClaimRow; order: Order } | { kind: 'remindApi'; c: ClaimRow } | null>(null);
+  const sync = useAction('suivi.claimSync', { silent: true });
+  const push = useAction('suivi.claimPush', { onDone: (c) => toast(c.extId ? t('suivi.rec.apiSent', { ref: c.ref, name: c.companyName ?? '', n: c.extRef ?? '' }) : c.extError ?? t('suivi.rec.apiFailed', { name: c.companyName ?? '' }), c.extId ? 'ok' : 'bad') });
+  const hasApi = target === 'company' && !!contacts?.companies.some((x: ClaimCompany) => x.api);
+  // read back ZR's answers once when the list opens
+  useEffect(() => {
+    if (hasApi) sync.mutate({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasApi]);
   const rows = (q.data?.rows ?? []) as ClaimRow[];
   const counts = q.data?.counts ?? {};
   const late = (c: ClaimRow) => c.status !== 'resolved' && Date.now() - Date.parse(c.updatedAt) > 48 * 3_600_000;
   const nameOf = (c: ClaimRow) => (target === 'livreur' ? c.livreurName : c.companyName) ?? '—';
   const remind = async (c: ClaimRow) => {
+    if (c.extId) return setDlg({ kind: 'remindApi', c });
     if (!c.orderId) return;
     try {
       setDlg({ kind: 'send', c, order: await rpc('orders.get', { id: c.orderId }) });
@@ -294,9 +400,21 @@ export function ClaimsPanel({ target }: { target: 'company' | 'livreur' }) {
       <div className="card">
         <div className="card-head">
           <h2>{t(target === 'company' ? 'suivi.rec.companiesTitle' : 'suivi.rec.livreursTitle')}</h2>
-          <button className="btn primary" onClick={() => setDlg({ kind: 'new' })}>
-            {t('suivi.rec.new')}
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {hasApi && (
+              <button
+                className="btn"
+                disabled={sync.isPending}
+                onClick={() => sync.mutate({}, { onSuccess: (r) => toast(r.errors.length ? r.errors[0] : t('suivi.rec.apiSynced', { n: r.changed }), r.errors.length ? 'bad' : 'ok') })}
+              >
+                <Icon name="refresh" />
+                {sync.isPending ? t('suivi.rec.apiSyncing') : t('suivi.rec.apiSync')}
+              </button>
+            )}
+            <button className="btn primary" onClick={() => setDlg({ kind: 'new' })}>
+              {t('suivi.rec.new')}
+            </button>
+          </div>
         </div>
         <p className="muted small">{t(target === 'company' ? 'suivi.rec.companiesHelp' : 'suivi.rec.livreursHelp')}</p>
       </div>
@@ -363,16 +481,36 @@ export function ClaimsPanel({ target }: { target: 'company' | 'livreur' }) {
                         {t(`suivi.rec.reasons.${c.reason}`, { defaultValue: c.reason })}
                         {last?.text && <small>{last.text}</small>}
                       </td>
-                      <td data-l={t('suivi.rec.col.sent')}>{c.sentAt ? <span className={late(c) ? 'bjr-late' : undefined}>{since(c.updatedAt)}</span> : <span className="muted small">{t('suivi.rec.notSent')}</span>}</td>
+                      <td data-l={t('suivi.rec.col.sent')}>
+                        {c.sentAt ? <span className={late(c) ? 'bjr-late' : undefined}>{since(c.updatedAt)}</span> : <span className="muted small">{t('suivi.rec.notSent')}</span>}
+                        {c.extId ? (
+                          <small className="bjr-api" title={c.extAnswer ?? undefined}>
+                            {t('suivi.rec.apiNo', { name: c.companyName ?? '', n: c.extRef || '✓' })}
+                            {c.extStatus && ` · ${c.extStatus}`}
+                          </small>
+                        ) : (
+                          c.viaApi && c.extError && <small className="bjr-api bad" title={c.extError}>{t('suivi.rec.apiRefusedShort', { name: c.companyName ?? '' })}</small>
+                        )}
+                      </td>
                       <td data-l={t('suivi.rec.col.status')}>
                         <span className={`badge ${STATUS_TONE[c.status]}`}>{t(`suivi.rec.status.${c.status}`)}</span>
                       </td>
                       <td className="bjr-a" onClick={(e) => e.stopPropagation()}>
-                        {c.status !== 'resolved' && (
-                          <button type="button" className="bjp-ib bjr-ib-w" title={t('suivi.rec.remind')} aria-label={t('suivi.rec.remind')} onClick={() => remind(c)}>
-                            <Icon name="whatsapp" />
+                        {c.viaApi && !c.extId && c.status !== 'resolved' && (
+                          <button type="button" className="bjp-ib" disabled={push.isPending} title={t('suivi.rec.apiRetry', { name: c.companyName ?? '' })} aria-label={t('suivi.rec.apiRetry', { name: c.companyName ?? '' })} onClick={() => push.mutate({ id: c.id })}>
+                            <Icon name="send" />
                           </button>
                         )}
+                        {c.status !== 'resolved' &&
+                          (c.extId ? (
+                            <button type="button" className="bjp-ib" title={t('suivi.rec.apiRemind', { name: c.companyName ?? '' })} aria-label={t('suivi.rec.apiRemind', { name: c.companyName ?? '' })} onClick={() => remind(c)}>
+                              <Icon name="chat" />
+                            </button>
+                          ) : (
+                            <button type="button" className="bjp-ib bjr-ib-w" title={t('suivi.rec.remind')} aria-label={t('suivi.rec.remind')} onClick={() => remind(c)}>
+                              <Icon name="whatsapp" />
+                            </button>
+                          ))}
                         <button type="button" className="bjp-ib bjp-ib-e" title={t('suivi.rec.answer')} aria-label={t('suivi.rec.answer')} onClick={() => setDlg({ kind: 'answer', c })}>
                           <Icon name="pencil" />
                         </button>
@@ -386,6 +524,7 @@ export function ClaimsPanel({ target }: { target: 'company' | 'livreur' }) {
         )}
       </div>
       {dlg?.kind === 'new' && <NewClaimModal toLivreur={target === 'livreur'} onClose={() => setDlg(null)} />}
+      {dlg?.kind === 'remindApi' && <RemindApiModal c={dlg.c} onClose={() => setDlg(null)} />}
       {dlg?.kind === 'answer' && <AnswerModal c={dlg.c} name={nameOf(dlg.c)} onClose={() => setDlg(null)} />}
       {dlg?.kind === 'send' && <SendModal claim={dlg.c} order={dlg.order} target={targetOf(dlg.c)} shop={contacts?.shopName ?? ''} again={!!dlg.c.sentAt} onClose={() => setDlg(null)} />}
     </>

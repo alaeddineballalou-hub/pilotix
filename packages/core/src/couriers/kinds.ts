@@ -22,6 +22,8 @@ export interface KindInfo {
   cancel: boolean;
   label_: boolean;
   api: boolean;
+  /** réclamations are created at the courier through its API */
+  claims?: boolean;
 }
 
 export const KINDS: Record<CourierKind, KindInfo> = {
@@ -31,7 +33,7 @@ export const KINDS: Record<CourierKind, KindInfo> = {
     fields: [],
   },
   zr: {
-    kind: 'zr', label: 'ZR Express (nouvelle plateforme)', api: true, fees: true, desks: true, cancel: true, label_: true,
+    kind: 'zr', label: 'ZR Express (nouvelle plateforme)', api: true, fees: true, desks: true, cancel: true, label_: true, claims: true,
     help: 'Nouvelle plateforme ZR Express. Clé API et identifiant du compte (tenant) : dans votre espace ZR → Paramètres → API.',
     fields: [
       { key: 'api_key', label: 'Clé API (X-Api-Key)', type: 'secret' },

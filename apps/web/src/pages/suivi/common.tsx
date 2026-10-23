@@ -24,6 +24,8 @@ export interface ClaimCompany {
   id: number;
   name: string;
   kind: string;
+  /** takes réclamations through its API (ZR): Pilotix creates them there directly */
+  api?: boolean;
   wa: string | null;
   email: string | null;
   phone: string | null;
