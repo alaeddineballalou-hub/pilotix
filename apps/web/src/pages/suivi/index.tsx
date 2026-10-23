@@ -287,9 +287,8 @@ function List({ tab }: { tab: ListTab }) {
   const canMod = (o: Order) => extra[o.id]?.companyKind === 'zr' && !!o.tracking;
   const modBtn = (o: Order) =>
     canMod(o) && (
-      <button type="button" className="btn small" onClick={() => setDlg({ kind: 'mod', o })}>
+      <button type="button" className="bjp-ib bjp-ib-e" title={t('suivi.mod.btnTitle')} aria-label={t('suivi.mod.btnTitle')} onClick={() => setDlg({ kind: 'mod', o })}>
         <Icon name="pencil" />
-        {t('suivi.mod.btn')}
       </button>
     );
   let actions: ((o: Order) => ReactNode) | undefined;

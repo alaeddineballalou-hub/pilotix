@@ -359,6 +359,7 @@
       "refused": "Refused",
       "error": "Not sent",
       "cancelled": "Cancelled"
-    }
+    },
+    "btnTitle": "Modification request (price, home ↔ stop desk, commune)"
   }
 }

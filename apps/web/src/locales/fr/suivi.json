@@ -359,6 +359,7 @@
       "refused": "Refusée",
       "error": "Pas envoyée",
       "cancelled": "Annulée"
-    }
+    },
+    "btnTitle": "Demande de modification (prix, domicile ↔ bureau, commune)"
   }
 }
