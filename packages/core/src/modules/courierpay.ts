@@ -18,7 +18,7 @@ const parse = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v ?? {});
 /** Tomorrow in Algiers (ZR wants a date ≥ tomorrow). */
 const tomorrow = (now: number) => new Date(now + 3_600_000 + 86_400_000).toISOString().slice(0, 10);
 
-interface PayCfg {
+export interface PayCfg {
   /** ask for the payment by itself (default on) */
   auto: boolean;
   /** caisse the payments go into */
