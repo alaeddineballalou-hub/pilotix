@@ -3,6 +3,7 @@
 //   POST /api/rpc/:name             → runs one core action for the logged-in user (role checks in the core)
 //   POST /api/hooks/orders/:channel → orders from a website / store (key in ?key= or x-webhook-key)
 //   POST /api/hooks/cron            → courier status sync, called by an external scheduler (?key=)
+//   POST /api/hooks/courier/:id     → a courier's status change (ZR webhook, ?key= set when it was turned on)
 //   GET|POST /api/hooks/meta        → Dellal: WhatsApp, Messenger and Instagram messages (Meta webhook)
 //   POST /api/hooks/tiktok          → Dellal: TikTok messages (?key= the Dellal verify token)
 //   POST /api/hooks/sms             → Delivery AI agent: SMS gateway reports and SMS answers (?key= the SMS hook key)

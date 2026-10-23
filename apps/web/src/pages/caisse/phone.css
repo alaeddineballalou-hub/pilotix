@@ -94,6 +94,11 @@
 .pxk-req span { display: flex; flex-direction: column; gap: 2px; }
 .pxk-req b { font-size: 13.5px; }
 .pxk-req small { font-size: 12px; color: var(--muted); }
+.pxk-req { flex-wrap: wrap; }
+.pxk-req > span { flex: 1 1 160px; min-width: 0; }
+.pxk-reqa { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pxk-reqa .bji { width: 14px; height: 14px; }
+.pxk-reqa input[type="date"] { height: 34px; }
 .pxk-paywait { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 14px; background: var(--surface); border: 1px solid #BFE3CC; box-shadow: 0 4px 14px rgba(31, 157, 87, .1); }
 .pxk-payrow { display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 0; font: inherit; color: var(--ink); text-align: start; cursor: pointer; }
 .pxk-det { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }

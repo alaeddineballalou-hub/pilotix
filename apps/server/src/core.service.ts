@@ -64,6 +64,7 @@ export class CoreService implements OnModuleDestroy {
       return m.runDellal(action, args, ctx);
     },
     hashPassword: (pw) => core.hashPassword(pw),
+    publicUrl: config.publicUrl,
   };
 
   ctx(session: Session): Ctx {

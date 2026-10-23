@@ -1,0 +1,44 @@
+/* ===== A parcel at its courier (CourierPanel.tsx): ZR's state, livreur, return risk, requests, journey, SMS ===== */
+.pxz { display: flex; flex-direction: column; gap: 8px; }
+.pxz-h { display: flex; align-items: center; gap: 6px; margin: 0; }
+.pxz-h .bji { width: 18px; height: 18px; }
+.pxz-sync { margin-inline-start: auto; }
+.pxz-state { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font-size: 14px; }
+.pxz-state > i, .pxz-tl li > i { flex: none; width: 10px; height: 10px; border-radius: 50%; }
+.pxz-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; font-size: 13.5px; }
+.pxz-row > .bji { width: 16px; height: 16px; color: var(--muted); }
+.pxz-row .btn .bji { width: 14px; height: 14px; }
+.pxz-row small { color: var(--muted); }
+.pxz-row > span:not(.badge):not(.bji) { flex: 1 1 180px; min-width: 0; }
+.pxz-ch { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pxz-ch li { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--raise); }
+.pxz-ch .badge { flex: none; }
+.pxz-ct { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; overflow-wrap: anywhere; }
+.pxz-ct small { color: var(--muted); font-size: 12px; }
+.pxz-ct q { font-size: 12.5px; font-style: italic; }
+.pxz-ct q.bad { color: var(--coral); }
+.pxz-acts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pxz-acts .btn .bji { width: 14px; height: 14px; }
+.pxz-more summary { cursor: pointer; font-weight: 700; font-size: 13.5px; padding: 4px 0; }
+.pxz-tl { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.pxz-tl li { display: grid; grid-template-columns: 10px minmax(0, 1fr); column-gap: 8px; align-items: baseline; }
+.pxz-tl li > i { grid-row: 1 / span 4; margin-top: 4px; }
+.pxz-tl b { font-size: 13.5px; }
+.pxz-tl small { grid-column: 2; color: var(--muted); font-size: 12px; }
+.pxz-sit { grid-column: 2; font-size: 12.5px; color: var(--warn); font-weight: 600; }
+.pxz-tl q { grid-column: 2; font-size: 12.5px; }
+.pxz-sms { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pxz-sms li { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 10px; background: var(--raise); font-size: 13px; }
+.pxz-sms small { color: var(--muted); font-size: 12px; }
+/* the request form */
+.pxz-kinds { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-bottom: 12px; }
+.pxz-kind { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; text-align: center; cursor: pointer; }
+.pxz-kind .bji { width: 18px; height: 18px; }
+.pxz-kind.on { border-color: #F28B1E; background: color-mix(in srgb, #F7A823 14%, var(--surface)); }
+.pxz-kind:disabled { opacity: .45; cursor: default; }
+.pxz-kind:focus-visible, .pxz-seg button:focus-visible { outline: 2px solid #F7A823; outline-offset: 2px; }
+.pxz-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
+.pxz-seg button { border: 0; padding: 8px 14px; background: var(--surface); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; }
+.pxz-seg button.on { background: var(--navy); color: #fff; }
+.pxz-warn { margin: 0 0 10px; padding: 8px 10px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-weight: 600; font-size: 13px; }
+@media (max-width: 520px) { .pxz-kinds { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

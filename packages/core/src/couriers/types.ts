@@ -188,6 +188,90 @@ export interface CourierPayments {
   lines(c: CourierCompany, extId: string): Promise<PayLine[]>;
   /** tells the courier we received this payment */
   accept(c: CourierCompany, extId: string): Promise<void>;
+  /** a payment request still waiting: another date (YYYY-MM-DD), or withdrawn */
+  requestDate?(c: CourierCompany, extId: string, date: string): Promise<void>;
+  requestCancel?(c: CourierCompany, extId: string): Promise<void>;
+}
+
+/** A pickup bag (sac de ramassage) at the courier: the parcels handed to its driver together. */
+export interface BagInfo {
+  extId: string;
+  /** the bag's number, on its label */
+  tracking: string | null;
+  /** the courier's word for the bag */
+  state: string | null;
+  parcels: number | null;
+  /** parcels of the bag the courier has not processed yet */
+  unprocessed: number | null;
+  at: string | null;
+}
+export interface BagAdded {
+  /** our tracking numbers now in the bag */
+  added: string[];
+  failed: { tracking: string; error: string }[];
+}
+export interface CourierBags {
+  create(c: CourierCompany, items: TrackItem[]): Promise<{ extId: string; tracking: string | null } & BagAdded>;
+  add(c: CourierCompany, bag: string, items: TrackItem[]): Promise<BagAdded>;
+  remove(c: CourierCompany, bag: string, item: TrackItem): Promise<void>;
+  list(c: CourierCompany): Promise<BagInfo[]>;
+  /** the bag's label (A4 PDF), by its number */
+  label(c: CourierCompany, tracking: string): Promise<LabelResult | null>;
+  drop(c: CourierCompany, bag: string): Promise<void>;
+}
+
+/** What the courier knows about one parcel: its journey, the SMS it sent, its livreur, the customer's return risk. */
+export interface ParcelInfo {
+  state: string | null;
+  color: string | null;
+  situation: string | null;
+  livreur: { name: string; phone: string | null; hub: string | null } | null;
+  /** the customer's return risk at the courier (all its shops): score, level, completed orders, returns */
+  risk: { score: number; level: string | null; orders: number; returns: number } | null;
+  /** a modification request / a phone change can be made; one is already waiting */
+  canModify: boolean;
+  canChangePhone: boolean;
+  pendingChange: boolean;
+  modifications: number | null;
+  modificationLimit: number | null;
+  phoneChanges: number | null;
+  phoneChangeLimit: number | null;
+  phoneChangePrice: number | null;
+  /** where the courier delivers it: home / pickup-point, its hub (stop desk), wilaya and commune names */
+  delivery: { type: string | null; hub: string | null; city: string | null; district: string | null; street: string | null };
+  amount: number | null;
+  deliveryPrice: number | null;
+  returnPrice: number | null;
+  history: { at: string; status: string; color: string | null; hub: string | null; by: string | null; comment: string | null; situations: { name: string; at: string | null }[] }[];
+  sms: { at: string; phone: string | null; message: string | null; status: string | null }[];
+}
+
+/** A modification request for a parcel already sent (validated by the courier); a phone change is applied at once. */
+export interface ChangeInput {
+  item: TrackItem;
+  kind: 'amount' | 'delivery' | 'address' | 'phone';
+  amount?: number;
+  /** delivery: to a stop desk (its courier id) or home */
+  stopdesk?: boolean;
+  hubExtId?: string | null;
+  wilayaId?: number;
+  commune?: string;
+  address?: string;
+  phone?: string;
+  phone2?: string | null;
+}
+export interface ChangeState {
+  extId: string;
+  /** null = waiting for the courier */
+  approved: boolean | null;
+  answer: string | null;
+  at: string | null;
+}
+
+/** An exchange sent to the courier: the new parcel, and the courier's return parcel bringing the old product back. */
+export interface ExchangeResult extends SendResult {
+  returnTracking: string | null;
+  returnExtId: string | null;
 }
 
 /** Helpers the framework gives to adapters. */
@@ -207,6 +291,8 @@ export interface CourierAdapter {
   create(c: CourierCompany, p: Parcel, h: Helpers): Promise<SendResult>;
   track(c: CourierCompany, items: TrackItem[]): Promise<TrackResult[]>;
   label?(c: CourierCompany, p: TrackItem): Promise<LabelResult | null>;
+  /** the labels of many parcels as ONE file (ZR: up to 250); `failed`: the tracking numbers left out */
+  labels?(c: CourierCompany, items: TrackItem[]): Promise<{ label: LabelResult | null; failed: string[] }>;
   cancel?(c: CourierCompany, p: TrackItem): Promise<void>;
   fees?(c: CourierCompany): Promise<FeeRow[]>;
   stopdesks?(c: CourierCompany): Promise<Desk[]>;
@@ -218,6 +304,27 @@ export interface CourierAdapter {
   claimComment?(c: CourierCompany, extId: string, text: string): Promise<void>;
   /** Payments through the courier API (balance, payment requests, payments and their parcels). */
   payments?: CourierPayments;
+  /** Pickup bags (sacs de ramassage) through the courier API. */
+  bags?: CourierBags;
+  /** One parcel as the courier sees it: journey, SMS, livreur, return risk, what can still be changed. */
+  parcel?(c: CourierCompany, item: TrackItem): Promise<ParcelInfo>;
+  /** Modification requests (price, home / stop desk, address, phone) and their answers. */
+  change?(c: CourierCompany, i: ChangeInput, h: Helpers, p: Parcel | null): Promise<{ extId: string; approved: boolean | null }>;
+  changeStates?(c: CourierCompany, extIds: string[]): Promise<ChangeState[]>;
+  /** withdraws a modification request the courier has not answered yet */
+  changeCancel?(c: CourierCompany, extId: string): Promise<void>;
+  /** Sends an exchange: a new parcel to the customer and the courier's return parcel for the old product. */
+  exchange?(c: CourierCompany, p: Parcel, original: TrackItem, h: Helpers): Promise<ExchangeResult>;
+  /** The courier's own list of statuses (its workflow), for the status mapping. */
+  states?(c: CourierCompany): Promise<{ key: string; label: string; color: string | null }[]>;
+  /** The courier's prices for its services (swap, phone change, labelling, office holding…). */
+  services?(c: CourierCompany): Promise<{ key: string; label: string; price: number }[]>;
+  /** Instant status updates: the courier calls our server on every status change. */
+  webhook?: {
+    on(c: CourierCompany, hookUrl: string, key: string): Promise<{ extId: string }>;
+    off(c: CourierCompany, extId: string): Promise<void>;
+    get(c: CourierCompany, extId: string): Promise<{ on: boolean; url: string | null } | null>;
+  };
   /** What would be sent, without sending (secrets masked). */
   preview?(c: CourierCompany, p: Parcel): Promise<PreviewResult>;
 }

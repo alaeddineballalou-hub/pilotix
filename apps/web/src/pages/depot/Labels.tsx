@@ -51,7 +51,8 @@ export function useSendToCompany() {
   return { send, busy };
 }
 
-type CompanyLabel = { o: Order; href: string };
+/** One file of a company: one parcel's label, or (ZR) the labels of many parcels in one PDF. */
+type CompanyLabel = { os: Order[]; href: string };
 
 /**
  * Prints labels: the Pilotix ones in one go; the companies' own ones asked from each company. One company label opens
@@ -82,24 +83,28 @@ export function useLabelPrinter() {
       const standIns: Order[] = [];
       const theirs: CompanyLabel[] = [];
       const errors: string[] = [];
+      let missed = 0;
       if (companies.length) {
         const byId = new Map(companies.map((o) => [o.id, o]));
         for (const r of await rpc('delivery.labels', { ids: companies.map((o) => o.id) })) {
-          const o = byId.get(r.id);
-          if (!o) continue;
+          const os = r.ids.map((x) => byId.get(x)).filter((o): o is Order => !!o);
+          if (!os.length) continue;
           const href = labelHref(r.label);
-          if (href) theirs.push({ o, href });
-          else if (r.label?.demo) standIns.push(o); // the preview: the courier is simulated
-          else if (r.error) errors.push(`${o.ref} ${r.error}`);
-          else ours.push(o); // the company gives no label of its own: Pilotix prints one
+          if (href) theirs.push({ os, href });
+          else if (r.label?.demo) standIns.push(...os); // the preview: the courier is simulated
+          else if (r.error) {
+            missed += os.length;
+            errors.push(`${os.map((o) => o.ref).join(', ')} ${r.error}`);
+          } else ours.push(...os); // the company gives no label of its own: Pilotix prints one
         }
       }
       await printLabelItems(t, [...ours.map(pilotixItem), ...standIns.map((o): LabelItem => ({ o, code: codeOf(o), demo: true }))], c.shop);
-      if (errors.length) toast(`${t('depot.labels.notGot', { count: errors.length })} : ${errors.join(' · ')}`, 'bad', 9000);
+      if (errors.length) toast(`${t('depot.labels.notGot', { count: missed })} : ${errors.join(' · ')}`, 'bad', 9000);
       if (theirs.length) {
         setOpened(new Set());
         // by company, as the printed labels: each company's labels come together
-        setList(theirs.sort((a, b) => (a.o.companyName ?? '').localeCompare(b.o.companyName ?? '') || a.o.ref.localeCompare(b.o.ref, undefined, { numeric: true })));
+        const first = (x: CompanyLabel) => x.os[0];
+        setList(theirs.sort((a, b) => (first(a).companyName ?? '').localeCompare(first(b).companyName ?? '') || first(a).ref.localeCompare(first(b).ref, undefined, { numeric: true })));
       }
     } catch (e) {
       fail(e);
@@ -133,7 +138,7 @@ export function useLabelPrinter() {
 
   const modal: ReactNode = list && (
     <Modal
-      title={t('depot.labels.companyTitle', { count: list.length })}
+      title={t('depot.labels.companyTitle', { count: list.reduce((n, x) => n + x.os.length, 0) })}
       onClose={() => setList(null)}
       footer={
         <button type="button" className="btn primary" onClick={() => setList(null)}>
@@ -143,26 +148,39 @@ export function useLabelPrinter() {
     >
       <p className="muted small">{t('depot.labels.companyHelp')}</p>
       <ul className="pxl-list">
-        {list.map(({ o, href }) => (
-          <li key={o.id}>
-            <span>
-              <span>
-                <b className="ltr">{o.ref}</b> · {o.companyName}
-              </span>
-              <small className="ltr">{o.tracking}</small>
-            </span>
-            <button
-              type="button"
-              className={`btn small ${opened.has(o.id) ? '' : 'primary'}`}
-              onClick={() => {
-                window.open(href, '_blank');
-                setOpened((s) => new Set(s).add(o.id));
-              }}
-            >
-              <Icon name={opened.has(o.id) ? 'check' : 'printer'} /> {opened.has(o.id) ? t('depot.labels.opened') : t('depot.labels.open')}
-            </button>
-          </li>
-        ))}
+        {list.map(({ os, href }) => {
+          const o = os[0];
+          const done = opened.has(o.id);
+          return (
+            <li key={o.id}>
+              {os.length > 1 ? (
+                <span>
+                  <span>
+                    <b>{o.companyName}</b> · {t('depot.labels.fileN', { count: os.length })}
+                  </span>
+                  <small className="ltr">{os.length > 4 ? `${os.slice(0, 4).map((x) => x.ref).join(', ')} +${os.length - 4}` : os.map((x) => x.ref).join(', ')}</small>
+                </span>
+              ) : (
+                <span>
+                  <span>
+                    <b className="ltr">{o.ref}</b> · {o.companyName}
+                  </span>
+                  <small className="ltr">{o.tracking}</small>
+                </span>
+              )}
+              <button
+                type="button"
+                className={`btn small ${done ? '' : 'primary'}`}
+                onClick={() => {
+                  window.open(href, '_blank');
+                  setOpened((s) => new Set(s).add(o.id));
+                }}
+              >
+                <Icon name={done ? 'check' : 'printer'} /> {done ? t('depot.labels.opened') : t('depot.labels.open')}
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </Modal>
   );

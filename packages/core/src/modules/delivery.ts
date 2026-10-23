@@ -8,7 +8,7 @@ import { DEFAULT_TEMPLATE, PLACEHOLDERS, checkTemplate, custom } from '../courie
 import { fakeTracking, nextStep, word } from '../couriers/demo';
 import { CARDS, KINDS } from '../couriers/kinds';
 import { keysOk, loadCompany, loadParcels, resolveStatus } from '../couriers/load';
-import type { Desk, FeeRow, LabelResult, PreviewResult, SendResult, TrackItem, TrackResult } from '../couriers/types';
+import type { Desk, ExchangeResult, FeeRow, LabelResult, PreviewResult, SendResult, TrackItem, TrackResult } from '../couriers/types';
 import { Db, iso, num, numOrNull } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
@@ -123,8 +123,10 @@ async function saveFeeRows(db: Db, companyId: number, rows: FeeRow[]) {
 // ---------------------------------------------------------------- sending
 export async function sendOrders(ctx: Ctx, orderIds: number[], forceCompanyId?: number | null) {
   const rows = await ctx.db.query(
-    `SELECT o.id, o.ref, o.company_id, o.conf_status, o.follow_status, o.tracking, o.wilaya_id, o.is_stopdesk, c.kind, c.active, c.name AS company_name
-     FROM orders o LEFT JOIN delivery_companies c ON c.id = COALESCE($2::bigint, o.company_id) WHERE o.id = ANY($1) ORDER BY o.id`,
+    `SELECT o.id, o.ref, o.company_id, o.conf_status, o.follow_status, o.tracking, o.wilaya_id, o.is_stopdesk, c.kind, c.active, c.name AS company_name,
+       o.is_exchange, o.original_order_id, oo.company_id AS orig_company, oo.tracking AS orig_tracking, oo.ext_id AS orig_ext
+     FROM orders o LEFT JOIN delivery_companies c ON c.id = COALESCE($2::bigint, o.company_id) LEFT JOIN orders oo ON oo.id = o.original_order_id
+     WHERE o.id = ANY($1) ORDER BY o.id`,
     [orderIds, forceCompanyId ?? null],
   );
   const results: { id: number; ref: string; ok: boolean; tracking?: string; error?: string }[] = [];
@@ -142,14 +144,35 @@ export async function sendOrders(ctx: Ctx, orderIds: number[], forceCompanyId?: 
   }
   for (const [companyId, list] of byCompany) {
     const kind = list[0].kind as CourierKind;
-    let sent: ({ id: number; ok: true } & SendResult | { id: number; ok: false; error: string })[];
-    if (isDemo(ctx)) {
-      const cred = parseJson((await ctx.db.query('SELECT credentials FROM delivery_companies WHERE id=$1', [companyId]))[0]?.credentials);
-      sent = list.map((r) =>
+    let sent: ({ id: number; ok: true } & SendResult | { id: number; ok: false; error: string })[] = [];
+    // an SAV exchange whose original parcel this company delivered: the company's own exchange (ZR delivers the new
+    // product and brings the old one back with a return parcel of its own); any other parcel is sent as usual
+    const swaps = KINDS[kind]?.zr ? list.filter((r) => r.is_exchange && r.orig_tracking && num(r.orig_company) === companyId) : [];
+    const plain = list.filter((r) => !swaps.includes(r));
+    const returns = new Map<number, { tracking: string; extId: string | null }>();
+    const cred = isDemo(ctx) ? parseJson((await ctx.db.query('SELECT credentials FROM delivery_companies WHERE id=$1', [companyId]))[0]?.credentials) : null;
+    if (plain.length && isDemo(ctx)) {
+      sent = plain.map((r) =>
         keysOk(kind, cred) ? { id: num(r.id), ok: true as const, tracking: fakeTracking(kind, r.ref), extId: null, labelUrl: null } : { id: num(r.id), ok: false as const, error: `Clés API manquantes pour ${list[0].company_name}` },
       );
-    } else {
-      sent = (await courierOf(ctx)('send', { companyId, ids: list.map((r) => num(r.id)) }, ctx)) as typeof sent;
+    } else if (plain.length) {
+      sent = (await courierOf(ctx)('send', { companyId, ids: plain.map((r) => num(r.id)) }, ctx)) as typeof sent;
+    }
+    for (const r of swaps) {
+      const oid = num(r.id);
+      try {
+        if (isDemo(ctx)) {
+          if (!keysOk(kind, cred)) throw bad(`Clés API manquantes pour ${r.company_name}`);
+          sent.push({ id: oid, ok: true, tracking: fakeTracking(kind, r.ref), extId: null, labelUrl: null });
+          returns.set(oid, { tracking: fakeTracking(kind, r.ref, Date.now() + 7), extId: null });
+        } else {
+          const x = (await courierOf(ctx)('exchange', { companyId, orderId: oid, item: { id: num(r.original_order_id), tracking: r.orig_tracking, extId: r.orig_ext ?? null } }, ctx)) as ExchangeResult;
+          sent.push({ id: oid, ok: true, tracking: x.tracking, extId: x.extId, labelUrl: x.labelUrl });
+          if (x.returnTracking) returns.set(oid, { tracking: x.returnTracking, extId: x.returnExtId });
+        }
+      } catch (e: any) {
+        sent.push({ id: oid, ok: false, error: e?.message ?? 'Erreur' });
+      }
     }
     const fees = new Map((await ctx.db.query('SELECT wilaya_id, home, desk FROM delivery_fees WHERE company_id=$1', [companyId])).map((f: any) => [num(f.wilaya_id), f]));
     for (const s of sent) {
@@ -166,7 +189,14 @@ export async function sendOrders(ctx: Ctx, orderIds: number[], forceCompanyId?: 
            delivery_cost = COALESCE($7, delivery_cost), updated_at=now(), version=version+1 WHERE id=$1`,
         [s.id, companyId, s.tracking, s.extId, s.labelUrl, status, cost],
       );
-      await addEvent(ctx.db, s.id, ctx.session.profile.id, 'company', null, String(companyId), `Envoyée à ${r.company_name} · suivi ${s.tracking}`);
+      const back = returns.get(s.id);
+      if (back)
+        await ctx.db.query(
+          `INSERT INTO parcel_returns (order_id, company_id, tracking, ext_id) VALUES ($1,$2,$3,$4)
+           ON CONFLICT (order_id) DO UPDATE SET company_id = EXCLUDED.company_id, tracking = EXCLUDED.tracking, ext_id = EXCLUDED.ext_id, created_at = now()`,
+          [s.id, companyId, back.tracking, back.extId],
+        );
+      await addEvent(ctx.db, s.id, ctx.session.profile.id, 'company', null, String(companyId), back ? `Échange envoyé à ${r.company_name} · suivi ${s.tracking} · retour de l’ancien produit ${back.tracking}` : `Envoyée à ${r.company_name} · suivi ${s.tracking}`);
       results.push({ id: s.id, ref: r.ref, ok: true, tracking: s.tracking });
     }
   }
@@ -187,6 +217,8 @@ export async function cancelParcel(ctx: Ctx, orderId: number) {
     await courierOf(ctx)('cancel', { companyId: c.id, item: { id: num(o.id), tracking: o.tracking, extId: o.ext_id } }, ctx);
   } else if (KINDS[c.kind].api) throw bad(`${c.name} : annulez le colis depuis l’espace de la société, puis réessayez`);
   await ctx.db.query('UPDATE orders SET tracking=NULL, ext_id=NULL, label_url=NULL, ext_status=NULL, ext_status_at=NULL, updated_at=now(), version=version+1 WHERE id=$1', [orderId]);
+  await ctx.db.query('DELETE FROM parcel_returns WHERE order_id=$1', [orderId]);
+  await ctx.db.query('DELETE FROM pickup_bag_parcels WHERE order_id=$1', [orderId]);
   await addEvent(ctx.db, orderId, ctx.session.profile.id, 'company', String(c.id), String(c.id), `Colis annulé chez ${c.name} (${o.tracking})`);
   ctx.emit({ type: 'order', id: orderId });
 }
@@ -204,12 +236,65 @@ async function companyLabel(ctx: Ctx, orderId: number): Promise<LabelResult | nu
   return (await courierOf(ctx)('label', { companyId: c.id, item: { id: num(o.id), tracking: o.tracking, extId: o.ext_id } }, ctx)) as LabelResult | null;
 }
 
+export type LabelFile = { ids: number[]; label: LabelResult | null; error?: string };
+
+/** The couriers' labels of several parcels, one entry per file. A courier that labels many parcels at once (ZR) gives
+ *  ONE file for all its parcels (250 at most per file); the others one per parcel. */
+async function companyLabels(ctx: Ctx, orderIds: number[]): Promise<LabelFile[]> {
+  const rows = await ctx.db.query(
+    `SELECT o.id, o.tracking, o.ext_id, o.label_url, o.company_id, c.kind FROM orders o LEFT JOIN delivery_companies c ON c.id = o.company_id
+     WHERE o.id = ANY($1) ORDER BY o.id`,
+    [orderIds],
+  );
+  const out: LabelFile[] = [];
+  const found = new Set(rows.map((r: any) => num(r.id)));
+  for (const oid of orderIds) if (!found.has(oid)) out.push({ ids: [oid], label: null, error: 'Commande introuvable' });
+  const batches = new Map<number, any[]>();
+  for (const r of rows) {
+    const oid = num(r.id);
+    const k = r.kind ? KINDS[r.kind as CourierKind] : undefined;
+    if (r.label_url) out.push({ ids: [oid], label: { url: r.label_url } });
+    else if (!r.tracking || !r.company_id) out.push({ ids: [oid], label: null, error: 'Pas encore envoyée à une société' });
+    else if (!k?.label_) out.push({ ids: [oid], label: null });
+    else if (k.labels_) batches.set(num(r.company_id), [...(batches.get(num(r.company_id)) ?? []), r]);
+    else if (isDemo(ctx)) out.push({ ids: [oid], label: { demo: true } });
+    else {
+      try {
+        out.push({ ids: [oid], label: await companyLabel(ctx, oid) });
+      } catch (e: any) {
+        out.push({ ids: [oid], label: null, error: e?.message ?? 'Erreur' });
+      }
+    }
+  }
+  for (const [companyId, list] of batches) {
+    for (let i = 0; i < list.length; i += 250) {
+      const part = list.slice(i, i + 250);
+      if (isDemo(ctx)) {
+        out.push({ ids: part.map((x) => num(x.id)), label: { demo: true } });
+        continue;
+      }
+      try {
+        const items: TrackItem[] = part.map((x) => ({ id: num(x.id), tracking: x.tracking, extId: x.ext_id }));
+        const r = (await courierOf(ctx)('labels', { companyId, items }, ctx)) as { label: LabelResult | null; failed: string[] };
+        const failed = new Set((r?.failed ?? []).map(String));
+        const ok = part.filter((x) => !failed.has(String(x.tracking)));
+        if (ok.length && r?.label) out.push({ ids: ok.map((x) => num(x.id)), label: r.label });
+        else if (ok.length) out.push({ ids: ok.map((x) => num(x.id)), label: null, error: 'La société n’a pas renvoyé d’étiquette' });
+        for (const x of part.filter((y) => failed.has(String(y.tracking)))) out.push({ ids: [num(x.id)], label: null, error: 'La société n’a pas fait cette étiquette' });
+      } catch (e: any) {
+        out.push({ ids: part.map((x) => num(x.id)), label: null, error: e?.message ?? 'Erreur' });
+      }
+    }
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------- status sync
-async function syncCompany(ctx: Ctx, c: CompanyRow) {
+async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[]) {
   const parcels = await ctx.db.query(
     `SELECT id, ref, tracking, ext_id, follow_status, ext_status FROM orders
-     WHERE company_id = $1 AND tracking IS NOT NULL AND follow_status = ANY($2) ORDER BY ext_status_at NULLS FIRST LIMIT 2000`,
-    [c.id, SYNCABLE],
+     WHERE company_id = $1 AND tracking IS NOT NULL AND follow_status = ANY($2) ${onlyIds ? 'AND id = ANY($3)' : ''} ORDER BY ext_status_at NULLS FIRST LIMIT 2000`,
+    onlyIds ? [c.id, SYNCABLE, onlyIds] : [c.id, SYNCABLE],
   );
   if (!parcels.length) return { company: c.name, checked: 0, changed: 0 };
   let answers: TrackResult[];
@@ -356,7 +441,9 @@ export const deliveryProcs = {
         const cred = i.clearKeys || cur.kind !== i.kind ? {} : parseJson(cur.credentials);
         const cfg = parseJson(cur.config);
         await tx.query('UPDATE delivery_companies SET name=$2, kind=$3, active=$4, phone=$5, credentials=$6, config=$7 WHERE id=$1', [
-          cid, i.name, i.kind, i.active, i.phone ?? null, JSON.stringify({ ...cred, ...newKeys }), JSON.stringify({ ...cfg, settings }),
+          cid, i.name, i.kind, i.active, i.phone ?? null, JSON.stringify({ ...cred, ...newKeys }),
+          // the courier's webhook (set from « ZR depuis Pilotix ») stays when the form does not send it back
+          JSON.stringify({ ...cfg, settings: cur.kind === i.kind && cfg.settings?.webhook_id && settings.webhook_id === undefined ? { ...settings, webhook_id: cfg.settings.webhook_id } : settings }),
         ]);
       } else {
         const r = await tx.query('INSERT INTO delivery_companies (name, kind, active, phone, credentials, config) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id', [
@@ -453,13 +540,111 @@ export const deliveryProcs = {
       `SELECT ext_status AS s, count(*)::int AS n FROM orders WHERE company_id=$1 AND ext_status IS NOT NULL GROUP BY 1 ORDER BY 2 DESC LIMIT 300`,
       [companyId],
     );
-    const names = [...new Set([...seen.map((r: any) => r.s as string), ...Object.keys(c.statusMap), ...Object.keys(defaults)])];
+    // the courier's own list of statuses (ZR's workflow), with its words
+    let states: { key: string; label: string; color: string | null }[] = [];
+    if (KINDS[c.kind]?.zr && c.hasKeys) {
+      if (isDemo(ctx)) states = Object.keys(defaults).map((k) => ({ key: k, label: k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, ' '), color: null }));
+      else states = ((await courierOf(ctx)('states', { companyId }, ctx).catch(() => [])) as typeof states) ?? [];
+    }
+    const label = new Map(states.map((x) => [x.key, x.label]));
+    const names = [...new Set([...states.map((x) => x.key), ...seen.map((r: any) => r.s as string), ...Object.keys(c.statusMap), ...Object.keys(defaults)])];
     return names.map((s) => ({
       status: s,
+      label: label.get(s) ?? null,
       parcels: num(seen.find((r: any) => r.s === s)?.n),
       own: Object.prototype.hasOwnProperty.call(c.statusMap, s) ? c.statusMap[s] : undefined,
-      auto: resolveStatus(defaults, {}, { status: s, key: s }) ?? null,
+      auto: resolveStatus(defaults, {}, { status: label.get(s) ?? s, key: s }) ?? null,
     }));
+  }),
+
+  /** ZR from Pilotix: instant status updates (webhook) and ZR's prices for its services. */
+  'delivery.zr': proc([], z.object({ companyId: id }), async (ctx, { companyId }) => {
+    const c = await companyOr404(ctx.db, companyId);
+    if (!KINDS[c.kind]?.zr) throw bad(`${c.name} : pas disponible avec cette société`);
+    const extId = String((c.settings as any).webhook_id ?? '') || null;
+    const hookUrl = ctx.server?.publicUrl ? `${ctx.server.publicUrl}/api/hooks/courier/${c.id}` : null;
+    if (isDemo(ctx))
+      return {
+        webhook: { on: !!extId, extId, url: extId ? `https://votre-serveur.dz/api/hooks/courier/${c.id}` : null, error: null as string | null },
+        hookUrl: `https://votre-serveur.dz/api/hooks/courier/${c.id}`,
+        services: [
+          { key: 'swapSameCity', label: 'Échange (même wilaya)', price: 200 },
+          { key: 'swapOtherCity', label: 'Échange (autre wilaya)', price: 350 },
+          { key: 'phoneChange', label: 'Changement de téléphone', price: 50 },
+          { key: 'labeling', label: 'Étiquetage', price: 30 },
+          { key: 'weighting', label: 'Pesée', price: 20 },
+          { key: 'officeHolding', label: 'Garde au bureau', price: 50 },
+          { key: 'officeHoldingFreeHours', label: 'Heures de garde gratuites', price: 72 },
+        ],
+        servicesError: null as string | null,
+      };
+    let webhook = { on: false, extId, url: null as string | null, error: null as string | null };
+    if (extId) {
+      try {
+        const w = (await courierOf(ctx)('webhookGet', { companyId, extId }, ctx)) as { on: boolean; url: string | null } | null;
+        webhook = w ? { ...webhook, on: w.on, url: w.url } : { ...webhook, error: `${c.name} ne connaît plus ce webhook : réactivez-le` };
+      } catch (e: any) {
+        webhook.error = e?.message ?? 'Erreur';
+      }
+    }
+    let services: { key: string; label: string; price: number }[] | null = null;
+    let servicesError: string | null = null;
+    try {
+      services = (await courierOf(ctx)('services', { companyId }, ctx)) as typeof services;
+    } catch (e: any) {
+      servicesError = e?.message ?? 'Erreur';
+    }
+    return { webhook, hookUrl, services, servicesError };
+  }),
+
+  /** Turns instant status updates on: ZR calls Pilotix on every status change (no waiting for the 30-minute sync). */
+  'delivery.webhookOn': proc([], z.object({ companyId: id }), async (ctx, { companyId }) => {
+    const c = await companyOr404(ctx.db, companyId);
+    if (!KINDS[c.kind]?.zr) throw bad(`${c.name} : pas disponible avec cette société`);
+    if (!c.hasKeys) throw bad(`Clés API manquantes pour ${c.name}`);
+    const bytes = new Uint8Array(18);
+    globalThis.crypto.getRandomValues(bytes);
+    const key = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    let extId = 'demo-hook';
+    if (!isDemo(ctx)) {
+      if (!ctx.server?.publicUrl) throw bad('Adresse publique du serveur manquante (PUBLIC_URL) : la société ne saurait pas où prévenir Pilotix');
+      const old = String((c.settings as any).webhook_id ?? '');
+      if (old) await courierOf(ctx)('webhookOff', { companyId, extId: old }, ctx).catch(() => null);
+      const url = `${ctx.server.publicUrl}/api/hooks/courier/${c.id}?key=${key}`;
+      extId = ((await courierOf(ctx)('webhookOn', { companyId, url, key }, ctx)) as { extId: string }).extId;
+    }
+    await ctx.db.query(
+      `UPDATE delivery_companies SET credentials = credentials || jsonb_build_object('webhook_key', $2::text),
+         config = jsonb_set(COALESCE(config, '{}'::jsonb), '{settings}', COALESCE(config->'settings', '{}'::jsonb) || jsonb_build_object('webhook_id', $3::text)) WHERE id = $1`,
+      [c.id, key, extId],
+    );
+    return { ok: true };
+  }),
+
+  'delivery.webhookOff': proc([], z.object({ companyId: id }), async (ctx, { companyId }) => {
+    const c = await companyOr404(ctx.db, companyId);
+    const extId = String((c.settings as any).webhook_id ?? '');
+    if (extId && !isDemo(ctx)) await courierOf(ctx)('webhookOff', { companyId, extId }, ctx);
+    await ctx.db.query(
+      `UPDATE delivery_companies SET credentials = credentials - 'webhook_key', config = jsonb_set(COALESCE(config, '{}'::jsonb), '{settings}', COALESCE(config->'settings', '{}'::jsonb) - 'webhook_id') WHERE id = $1`,
+      [c.id],
+    );
+    return { ok: true };
+  }),
+
+  /** Server: the courier says a parcel's status changed (webhook). Its state is read again from the courier itself. */
+  'delivery.hook': proc([], z.object({ companyId: id, key: z.string().max(200), trackings: z.array(z.string().max(80)).max(200).default([]), extIds: z.array(z.string().max(80)).max(200).default([]) }), async (ctx, i) => {
+    const row = (await ctx.db.query('SELECT credentials FROM delivery_companies WHERE id = $1', [i.companyId]))[0];
+    const key = String((parseJson(row?.credentials) as Record<string, unknown>).webhook_key ?? '');
+    if (!row || !key || key !== i.key) throw bad('Clé du webhook invalide');
+    const c = await companyOr404(ctx.db, i.companyId);
+    const ids = i.trackings.length || i.extIds.length
+      ? (await ctx.db.query('SELECT id FROM orders WHERE company_id = $1 AND (upper(tracking) = ANY($2) OR ext_id = ANY($3))', [c.id, i.trackings.map((x) => x.toUpperCase()), i.extIds])).map((r: any) => num(r.id))
+      : undefined;
+    if (ids && !ids.length) return { checked: 0, changed: 0 };
+    const r = await syncCompany(ctx, c, ids);
+    if (r.changed) ctx.emit({ type: 'orders' });
+    return { checked: r.checked, changed: r.changed };
   }),
 
   'delivery.saveStatuses': proc([], z.object({ companyId: id, map: z.record(z.string().max(30)) }), async (ctx, i) => {
@@ -485,6 +670,9 @@ export const deliveryProcs = {
       }
     }
     if (out.some((x) => x.changed)) ctx.emit({ type: 'orders' });
+    // ZR's answers to the modification requests (applied to the orders), and how far it is with the pickup bags
+    await import('./parcels').then((m) => m.syncChanges(ctx)).catch(() => null);
+    await import('./pickup').then((m) => m.syncBags(ctx, i.companyId)).catch(() => null);
     // the companies' payments (ZR): demande de paiement when money is ready, payments imported into the caisse
     const payments = i.companyId || !ctx.session.isAdmin ? [] : await import('./courierpay').then((m) => m.payRunAll(ctx)).catch(() => []);
     return { companies: out, checked: out.reduce((s, x) => s + x.checked, 0), changed: out.reduce((s, x) => s + x.changed, 0), payments };
@@ -493,18 +681,9 @@ export const deliveryProcs = {
   /** The courier's label for one parcel: a link or a PDF (base64). null = print our own slip. */
   'delivery.label': proc(['depot', 'suivi'], z.object({ orderId: id }), async (ctx, { orderId }): Promise<LabelResult | null> => companyLabel(ctx, orderId)),
 
-  /** The couriers' labels of several parcels (En dispatch); a parcel the courier refuses gets its reason. */
-  'delivery.labels': proc(['depot', 'suivi'], z.object({ ids: z.array(id).min(1).max(300) }), async (ctx, { ids }) => {
-    const out: { id: number; label: LabelResult | null; error?: string }[] = [];
-    for (const oid of ids) {
-      try {
-        out.push({ id: oid, label: await companyLabel(ctx, oid) });
-      } catch (e: any) {
-        out.push({ id: oid, label: null, error: e?.message ?? 'Erreur' });
-      }
-    }
-    return out;
-  }),
+  /** The couriers' labels of several parcels (En dispatch), one entry per file: ZR gives one file for all its parcels,
+   *  the others one per parcel. label null without error = the courier gives none (Pilotix prints its own). */
+  'delivery.labels': proc(['depot', 'suivi'], z.object({ ids: z.array(id).min(1).max(300) }), async (ctx, { ids }) => companyLabels(ctx, ids)),
 
   /** Cancels the parcel at the courier (before pickup) and removes the tracking number. */
   'delivery.cancel': proc(['depot', 'suivi'], z.object({ orderId: id }), async (ctx, { orderId }) => {

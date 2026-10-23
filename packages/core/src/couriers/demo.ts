@@ -29,11 +29,11 @@ export function fakeTracking(kind: CourierKind, ref: string, salt = Date.now()):
 
 /** What each courier would say for each step (courier words, as stored in ext_status). */
 const WORDS: Partial<Record<CourierKind, Partial<Record<FollowStatus, string>>>> = {
-  yalidine: { prepared: 'En préparation', shipped: 'Vers Wilaya', out_for_delivery: 'Sorti en livraison', failed: 'Tentative échouée', delivered: 'Livré', returning: 'Retour vers vendeur' },
-  zr: { prepared: 'Pret a expedier', shipped: 'Vers wilaya', out_for_delivery: 'En livraison', failed: 'Echec livraison · Client injoignable', delivered: 'Livré', returning: 'Retourné' },
-  zr_legacy: { prepared: 'En Preparation', shipped: 'Dispatcher', out_for_delivery: 'En livraison', failed: 'Appel sans Réponse 1', delivered: 'Livrée', returning: 'Retour Livreur' },
-  ecotrack: { prepared: 'Prêt à expédier', shipped: 'Vers wilaya', out_for_delivery: 'En livraison', failed: 'Attempt delivery · Client absent', delivered: 'Livre non encaissé', returning: 'Retours chez livreur' },
-  noest: { prepared: 'Upload', shipped: 'Validation reception', out_for_delivery: 'Fdr activated', failed: 'Non livré', delivered: 'Livré', returning: 'Return asked by customer' },
+  yalidine: { prepared: 'En préparation', shipped: 'Vers Wilaya', out_for_delivery: 'Sorti en livraison', failed: 'Tentative échouée', alert: 'Tentative échouée', delivered: 'Livré', returning: 'Retour vers vendeur' },
+  zr: { prepared: 'Pret a expedier', shipped: 'Vers wilaya', out_for_delivery: 'En livraison', failed: 'Echec livraison · Client injoignable', alert: 'Echec livraison · Client injoignable', delivered: 'Livré', returning: 'Retourné' },
+  zr_legacy: { prepared: 'En Preparation', shipped: 'Dispatcher', out_for_delivery: 'En livraison', failed: 'Appel sans Réponse 1', alert: 'Appel sans Réponse 2', delivered: 'Livrée', returning: 'Retour Livreur' },
+  ecotrack: { prepared: 'Prêt à expédier', shipped: 'Vers wilaya', out_for_delivery: 'En livraison', failed: 'Attempt delivery · Client absent', alert: 'Attempt delivery · Client absent', delivered: 'Livre non encaissé', returning: 'Retours chez livreur' },
+  noest: { prepared: 'Upload', shipped: 'Validation reception', out_for_delivery: 'Fdr activated', failed: 'Non livré', alert: 'Non livré', delivered: 'Livré', returning: 'Return asked by customer' },
 };
 export const word = (kind: CourierKind, s: FollowStatus) => WORDS[kind]?.[s] ?? WORDS.yalidine![s] ?? s;
 

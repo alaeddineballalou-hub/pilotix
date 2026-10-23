@@ -424,8 +424,9 @@ export async function findByCode(ctx: Ctx, raw: string): Promise<Order[]> {
   if (!code) return [];
   const phone = /^\+?\d{9,13}$/.test(code) ? normalizePhone(code) : null;
   const rows = await ctx.db.query(
-    `SELECT id FROM orders WHERE upper(ref) = upper($1) OR upper(tracking) = upper($1) OR upper(own_tracking) = upper($1) OR ($2::text IS NOT NULL AND (phone = $2 OR phone2 = $2))
-     ORDER BY (upper(ref) = upper($1) OR upper(tracking) = upper($1) OR upper(own_tracking) = upper($1)) DESC, id DESC LIMIT 10`,
+    `SELECT id FROM orders WHERE upper(ref) = upper($1) OR upper(tracking) = upper($1) OR upper(own_tracking) = upper($1)
+       OR id IN (SELECT order_id FROM parcel_returns WHERE upper(tracking) = upper($1)) OR ($2::text IS NOT NULL AND (phone = $2 OR phone2 = $2))
+     ORDER BY (upper(ref) = upper($1) OR upper(tracking) = upper($1) OR upper(own_tracking) = upper($1) OR id IN (SELECT order_id FROM parcel_returns WHERE upper(tracking) = upper($1))) DESC, id DESC LIMIT 10`,
     [code, phone],
   );
   const out: Order[] = [];
@@ -477,6 +478,8 @@ export async function scanRules(ctx: Ctx, o: Order, code: string, mode: ScanMode
     const is = (c: string | null | undefined) => !!c && c.toUpperCase() === code.toUpperCase();
     if (api && o.tracking && !is(o.tracking) && (is(o.ref) || is(o.ownTracking)))
       return bad_(`Étiquette Pilotix remplacée : la commande a été envoyée à ${o.companyName ?? 'la société'} avec son propre suivi.`, `Collez l’étiquette de la société ${o.tracking} et scannez-la.`);
+    if (o.isExchange && (await ctx.db.query('SELECT 1 FROM parcel_returns WHERE order_id = $1 AND upper(tracking) = upper($2)', [o.id, code]))[0])
+      return bad_('Étiquette de retour de l’échange : elle sert au retour de l’ancien produit.', `Scannez l’étiquette du nouveau colis (${o.tracking ?? o.ref}).`);
     if (f !== 'prepared') return bad_(`Pas encore préparée (statut : ${fol(o)}).`, 'Préparez-la et marquez-la « Préparée » avant de la remettre.');
     // Own livreur / no API: the scanned label becomes the tracking number when the order has none.
     const tracking = !o.tracking && code.toUpperCase() !== o.ref.toUpperCase() ? code : null;
@@ -526,7 +529,9 @@ export async function scan(ctx: Ctx, i: { code?: string; orderId?: number; mode:
     if (!code) throw bad('Code vide');
     const list = await findByCode(ctx, code);
     const exact = list.find((o) => (o.tracking ?? '').toUpperCase() === code.toUpperCase() || o.ownTracking.toUpperCase() === code.toUpperCase() || o.ref.toUpperCase() === code.toUpperCase());
-    const o = exact ?? (list.length === 1 ? list[0] : null);
+    // the courier's return parcel of an exchange (its own number) brings the old product back
+    const back = exact ? null : (await ctx.db.query('SELECT order_id FROM parcel_returns WHERE upper(tracking) = upper($1) LIMIT 1', [code]))[0];
+    const o = exact ?? (back ? list.find((x) => x.id === num(back.order_id)) : undefined) ?? (list.length === 1 ? list[0] : null);
     if (!o && list.length > 1) return { kind: 'pick', code, why: 'Plusieurs commandes avec ce code : choisissez la bonne.', list };
     if (!o)
       return {

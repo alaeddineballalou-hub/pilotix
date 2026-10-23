@@ -237,6 +237,11 @@
     "imported_one": "{{count}} paiement importé",
     "imported_other": "{{count}} paiements importés",
     "takenOk_one": "En caisse · {{count}} colis marqué reçu",
-    "takenOk_other": "En caisse · {{count}} colis marqués reçus"
+    "takenOk_other": "En caisse · {{count}} colis marqués reçus",
+    "changeDate": "Changer la date",
+    "cancelRequest": "Annuler la demande",
+    "newDate": "Nouvelle date",
+    "dateMoved": "Demande déplacée au {{d}}",
+    "requestCancelled": "Demande de paiement annulée"
   }
 }

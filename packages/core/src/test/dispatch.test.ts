@@ -139,27 +139,52 @@ test('labels: a company with an API gives its own label (link or PDF); none from
   await call('depot.dispatch', depot, { ids: [b], companyId: noest });
   // preview (no server): the couriers are simulated, their label is a stand-in
   const demo: any = await call('delivery.labels', depot, { ids: [a, b] });
-  assert.deepEqual(demo.map((x: any) => x.label), [{ demo: true }, { demo: true }]);
+  assert.deepEqual(demo.map((x: any) => [x.ids, x.label]), [[[a], { demo: true }], [[b], { demo: true }]]);
   // server: the courier answers with a link (stored at sending) or a PDF
   await db.query(`UPDATE orders SET label_url = 'https://yalidine.example/bordereau/1' WHERE id = $1`, [a]);
   const calls: unknown[] = [];
   const server = { courier: async (action: string, args: any) => (calls.push([action, args.item?.tracking]), action === 'label' ? { pdf: 'JVBERi0=', type: 'application/pdf' } : null), meta: async () => null, hashPassword: async (s: string) => s };
   const live = await as(EMAILS.depot, server as any);
   const res: any = await call('delivery.labels', live, { ids: [a, b] });
-  assert.deepEqual(res[0].label, { url: 'https://yalidine.example/bordereau/1' });
-  assert.deepEqual(res[1].label, { pdf: 'JVBERi0=', type: 'application/pdf' });
+  assert.deepEqual(res[0], { ids: [a], label: { url: 'https://yalidine.example/bordereau/1' } });
+  assert.deepEqual(res[1], { ids: [b], label: { pdf: 'JVBERi0=', type: 'application/pdf' } });
   assert.equal(calls.length, 1); // the stored link needs no call
   // a parcel not sent to a company: its reason, the others still come
   const mixed: any = await call('delivery.labels', live, { ids: [c, a] });
-  assert.match(mixed[0].error, /Pas encore envoyée/);
-  assert.ok(mixed[1].label.url);
+  assert.deepEqual(mixed.find((x: any) => x.ids[0] === c).error, 'Pas encore envoyée à une société');
+  assert.ok(mixed.find((x: any) => x.ids[0] === a).label.url);
   // Procolis (ZR, old platform) gives no label: none, so Pilotix prints its own
   const admin = await as(EMAILS.admin);
   const pro: any = await call('delivery.saveCompany', admin, { name: 'ZR Procolis', kind: 'zr_legacy', settings: {}, secret: {} });
   await db.query(`UPDATE orders SET company_id = $2, tracking = ref, label_url = NULL WHERE id = $1`, [c, pro.id]);
   const none: any = await call('delivery.labels', live, { ids: [c] });
-  assert.equal(none[0].label, null);
-  assert.equal(none[0].error, undefined);
+  assert.deepEqual(none, [{ ids: [c], label: null }]);
+});
+
+test('labels: ZR gives ONE PDF for all its parcels; a parcel it leaves out gets its reason', async () => {
+  const zr = await companyId('zr');
+  const depot = await as(EMAILS.depot);
+  const [a, b] = await toPrepare(2);
+  await call('depot.dispatch', depot, { ids: [a, b], companyId: zr });
+  // preview: one stand-in entry for both
+  const demo: any = await call('delivery.labels', depot, { ids: [a, b] });
+  assert.deepEqual(demo, [{ ids: [a, b], label: { demo: true } }]);
+  // server: one call for both, ZR leaves one out
+  const tr = new Map((await db.query('SELECT id, tracking FROM orders WHERE id = ANY($1)', [[a, b]])).map((r: any) => [Number(r.id), r.tracking]));
+  const calls: any[] = [];
+  const server = {
+    courier: async (action: string, args: any) => {
+      calls.push([action, args.items?.map((i: any) => i.tracking)]);
+      return { label: { url: 'https://zr.example/labels/all.pdf' }, failed: [tr.get(b)] };
+    },
+    meta: async () => null,
+    hashPassword: async (s: string) => s,
+  };
+  const res: any = await call('delivery.labels', await as(EMAILS.depot, server as any), { ids: [a, b] });
+  assert.deepEqual(calls, [['labels', [tr.get(a), tr.get(b)]]]);
+  assert.deepEqual(res[0], { ids: [a], label: { url: 'https://zr.example/labels/all.pdf' } });
+  assert.deepEqual(res[1].ids, [b]);
+  assert.match(res[1].error, /pas fait cette étiquette/);
 });
 
 test('the screens know which couriers give their own label: the others (Procolis…) print the Pilotix one', () => {
