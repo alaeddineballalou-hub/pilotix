@@ -1,24 +1,14 @@
 /* Dashboard / Accueil (stats feature): the few things the original stylesheet does not cover. */
-.bji-silver { color: #9aa3ad; }
-.bji-bronze { color: #c47a2c; }
-.px-dperiod { margin: 0; min-width: 190px; }
-.px-dperiod select { width: 100%; }
-.bjt-team .tbl td.num small, .bjt .tbl td.num small { display: block; font-size: 11.5px; color: var(--muted); font-weight: 500; margin-top: 2px; }
 .bjt-pi { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .bjt-pi small { color: var(--muted); font-size: 12px; line-height: 1.35; }
 .bjt-pi .bjt-ps { font-size: 12.5px; font-weight: 800; }
 .bjt-pt { font-weight: 700; color: var(--ink) !important; }
-.bjt-body { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
-.bjt .row.end, .card .row.end { justify-content: flex-end; margin-top: 12px; }
-@media (max-width: 760px) { .px-dperiod { min-width: 0; width: 100%; } }
+.card .row.end { justify-content: flex-end; margin-top: 12px; }
 
 /* ===== Dashboard › Vue d'ensemble — cards on a grid, orange accents (light), navy frame stays in dark ===== */
-.ov { display: flex; flex-direction: column; gap: 14px; }
-.ov-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.ov-head h2 { margin: 0; font-size: 22px; }
-.ov-sel { width: auto !important; min-width: 150px; height: 38px; font-weight: 700; border-radius: 10px; }
 .ov-grid { display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.1fr);
-  grid-template-areas: "k1 k2 k3 top" "line line goal top" "wil fun fun chan" "rec rec rec act"; }
+  grid-template-areas: "k1 k2 k3 top" "line line goal top" "team team team team" "wil fun fun chan" "rec rec rec act"; }
+.ov-team { grid-area: team; }
 .ov-k1 { grid-area: k1; } .ov-k2 { grid-area: k2; } .ov-k3 { grid-area: k3; } .ov-top { grid-area: top; }
 .ov-line { grid-area: line; } .ov-goal { grid-area: goal; } .ov-wil { grid-area: wil; } .ov-fun { grid-area: fun; }
 .ov-chan { grid-area: chan; } .ov-rec { grid-area: rec; } .ov-act { grid-area: act; }
@@ -37,7 +27,7 @@
 .ov-leg i, .ov-legend i, .ov-tip i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
 .ov-leg i + i, .ov-leg i:not(:first-child) { margin-inline-start: 8px; }
 .ov-chart { position: relative; }
-.ov-chart svg { width: 100%; height: auto; display: block; }
+.ov-chart svg { width: 100%; height: auto; display: block; direction: ltr; }
 .ov-grid-l { stroke: var(--line); stroke-width: 1; }
 .ov-ax { fill: var(--muted); font-size: 10.5px; }
 .ov-hl { fill: color-mix(in srgb, #F28C1B 10%, transparent); }
@@ -87,15 +77,26 @@
 .ov-tl p { margin: 0; font-size: 13px; font-weight: 600; }
 .ov-tl small { color: var(--muted); font-size: 11.5px; }
 @media (max-width: 1250px) {
-  .ov-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-areas: "k1 k2 k3" "line line goal" "top fun fun" "wil chan act" "rec rec rec"; }
+  .ov-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-areas: "k1 k2 k3" "line line goal" "team team team" "top fun fun" "wil chan act" "rec rec rec"; }
 }
+/* recent orders on a phone: one line per order, the whole row opens it */
+.ov-recl { list-style: none; margin: 0 -6px; padding: 0; display: flex; flex-direction: column; }
+.ov-recl li + li { border-top: 1px solid var(--line); }
+.ov-recl button { all: unset; box-sizing: border-box; width: 100%; display: flex; flex-direction: column; gap: 4px; padding: 10px 6px; border-radius: 10px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.ov-recl button:active { background: color-mix(in srgb, #F7A823 8%, var(--surface)); }
+.ov-recl button:focus-visible { outline: 2px solid #F7A823; outline-offset: 1px; }
+.ov-recl-a { display: flex; align-items: baseline; gap: 8px; font-size: 14px; }
+.ov-recl-a > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-weight: 600; }
+.ov-recl-b { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.ov-recl-b > .px-clamp { flex: 1; min-width: 0; }
+.ov-recl small { font-size: 11.5px; color: var(--muted); }
 @media (max-width: 760px) {
-  .ov-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "k1" "k2" "k3" "line" "goal" "top" "fun" "wil" "chan" "rec" "act"; }
-  .ov-fun-g { min-height: 170px; }
+  .ov-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; grid-template-areas: "k1 k1" "k2 k3" "line line" "goal goal" "team team" "top top" "fun fun" "wil wil" "chan chan" "rec rec" "act act"; }
+  .ov-card { padding: 14px 12px; }
+  .ov-k2 .ov-big, .ov-k3 .ov-big { font-size: 23px; }
+  .ov-k2 .ov-ic, .ov-k3 .ov-ic { display: none; }
+  .ov-k2 .ov-delta small, .ov-k3 .ov-delta small { display: none; }
+  .ov-fun-g { min-height: 170px; gap: 4px; }
+  .ov-fun-c small { font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ov-fun-c b { font-size: 15px; }
 }
-.ov-head { flex-wrap: wrap; justify-content: flex-start; }
-.ov-grow { flex: 1; }
-.ov-dates { display: inline-flex; align-items: center; gap: 6px; }
-.ov-dates input { width: auto; height: 38px; border-radius: 10px; }
-@media (max-width: 760px) { .ov-dates { width: 100%; } .ov-dates input { flex: 1; min-width: 0; } }

@@ -1,15 +1,18 @@
 // Dashboard › Vue d'ensemble (admin / vendeur): the whole shop on one screen.
 // KPIs · orders per day · this month vs the goal · top products · wilayas · funnel · sales channels · recent orders · activity.
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { da, n, pct, when, wilayaName } from '../../lib/format';
+import { da, dayRange, n, pct, when, wilayaName } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
+import { useIsPhone } from '../../lib/useMedia';
 import { ErrorBox, Icon, Loading, StatusBadge } from '../../ui/kit';
-import { AnyPeriod, inputsOf, rangeOf, useStored } from './util';
-
-const PERIODS: AnyPeriod[] = ['today', 'yesterday', '7d', '30d', 'month', 'lastmonth', 'custom'];
+import { useBoardPeriod } from './board/Board';
+import type { AreaKey } from './board/defs';
+import { TeamHealth } from './board/Health';
+import { PeriodChips } from './board/parts';
+import { prevRangeOf } from './util';
 // one orange family for the parts of a whole (top products / channels); "other" is neutral
 const SHADES = ['#E8730C', '#F59E2B', '#F9C06A', '#FCDDAE'];
 const OTHER = '#E6DED4';
@@ -30,34 +33,26 @@ function Delta({ v, pts }: { v: number | null; pts?: boolean }) {
   );
 }
 
-export function Overview() {
+export function Overview({ areas }: { areas: AreaKey[] }) {
   const { t } = useTranslation();
-  const [period, setPeriod] = useStored<AnyPeriod>('dash.ov.period', '30d');
-  const p = PERIODS.includes(period) ? period : '30d';
-  const [custom, setCustom] = useStored<{ from: string; to: string }>('dash.ov.custom', inputsOf(rangeOf('7d')));
-  const range = useMemo(() => rangeOf(p, custom), [p, custom.from, custom.to]); // eslint-disable-line react-hooks/exhaustive-deps
+  const phone = useIsPhone();
+  const per = useBoardPeriod('dash.ov', '30d');
+  const range = per.range;
+  const prev = prevRangeOf(range);
   const q = useRpc('stats.overview2', range, { refetchInterval: 60_000 });
   const D = q.data;
   return (
-    <div className="ov">
-      <div className="ov-head">
-        <h2>{t('dashboard.ov.title')}</h2>
-        <span className="ov-grow" />
-        <select className="ov-sel" aria-label={t('dashboard.period')} value={p} onChange={(e) => setPeriod(e.target.value as AnyPeriod)}>
-          {PERIODS.map((x) => (
-            <option key={x} value={x}>
-              {t(`dashboard.periods.${x}`)}
-            </option>
-          ))}
-        </select>
-        {p === 'custom' && (
-          <span className="ov-dates">
-            <input type="date" value={custom.from} max={custom.to} aria-label={t('common.from')} onChange={(e) => e.target.value && setCustom({ ...custom, from: e.target.value })} />
-            <span className="muted">→</span>
-            <input type="date" value={custom.to} min={custom.from} aria-label={t('common.to')} onChange={(e) => e.target.value && setCustom({ ...custom, to: e.target.value })} />
-          </span>
-        )}
-      </div>
+    <div className="ov tb">
+      <header className="tb-head">
+        <div className="tb-ht">
+          <h2>{t('dashboard.ov.title')}</h2>
+          <p className="tb-cap">
+            {dayRange(range.from, range.to)}
+            <span className="tb-capvs"> · {t('dashboard.tb.vs', { range: dayRange(prev.from, prev.to) })}</span>
+          </p>
+        </div>
+        <PeriodChips value={per.period} onChange={per.setPeriod} custom={per.custom} onCustom={per.setCustom} />
+      </header>
       {q.error ? (
         <ErrorBox error={q.error} onRetry={() => q.refetch()} />
       ) : !D ? (
@@ -109,6 +104,8 @@ export function Overview() {
           <section className="ov-card ov-goal">
             <GoalCard month={D.month} />
           </section>
+
+          <TeamHealth areas={areas} range={range} className="ov-team" />
 
           <section className="ov-card ov-top">
             <div className="ov-ch">
@@ -163,6 +160,29 @@ export function Overview() {
                 {t('dashboard.ov.seeAll')}
               </a>
             </div>
+            {phone ? (
+              <ul className="ov-recl">
+                {D.recent.map((o) => (
+                  <li key={o.id}>
+                    <button type="button" onClick={() => openOrder(o.id)}>
+                      <span className="ov-recl-a">
+                        <b className="ltr">{o.ref}</b>
+                        <span>{o.customer}</span>
+                        <b className="ltr">{da(o.total)}</b>
+                      </span>
+                      <span className="ov-recl-b">
+                        <span className="px-clamp">
+                          {o.product || '—'}
+                          {o.qty > 1 && <span className="ltr"> ×{o.qty}</span>}
+                        </span>
+                        {o.follow ? <StatusBadge kind="follow" status={o.follow} /> : <StatusBadge kind="conf" status={o.conf} />}
+                      </span>
+                      <small>{when(o.at)}</small>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
             <div className="tbl-wrap">
               <table className="tbl ov-tbl">
                 <thead>
@@ -198,6 +218,7 @@ export function Overview() {
                 </tbody>
               </table>
             </div>
+            )}
           </section>
 
           <section className="ov-card ov-act">

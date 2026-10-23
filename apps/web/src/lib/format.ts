@@ -58,12 +58,15 @@ export function dayRange(from: string, to: string): string {
 export const dateTime = (iso: string | null | undefined) => (iso ? df({ day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(Date.parse(iso)) : '—');
 
 /** Duration in words: "39 min", "4 j 0 h", "12 h 07". */
+/** minutes, hours, days in the language shown */
+const DUR_UNITS: Record<string, [string, string, string]> = { fr: ['min', 'h', 'j'], en: ['min', 'h', 'd'], ar: ['د', 'سا', 'يوم'] };
 export function dur(ms: number): string {
+  const [mn, hr, dy] = DUR_UNITS[i18n.language] ?? DUR_UNITS.fr;
   const m = Math.max(0, Math.round(ms / 60_000));
-  if (m < 60) return `${m} min`;
+  if (m < 60) return `${m} ${mn}`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h} h ${String(m % 60).padStart(2, '0')}`;
-  return `${Math.floor(h / 24)} j ${h % 24} h`;
+  if (h < 24) return `${h} ${hr} ${String(m % 60).padStart(2, '0')}`;
+  return `${Math.floor(h / 24)} ${dy} ${h % 24} ${hr}`;
 }
 /** Time since: "depuis 3 h 10". */
 export const since = (iso: string | null | undefined) => (iso ? dur(Date.now() - Date.parse(iso)) : '—');
