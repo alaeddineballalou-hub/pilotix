@@ -262,7 +262,9 @@ export const courierPayProcs = {
       if (!isDemo(ctx)) await courier(ctx, 'payAccept', { companyId: c.id, extId: p.ext_id });
       await ctx.db.query('UPDATE courier_payments SET done = true, done_at = now() WHERE id = $1', [i.id]);
     }
-    return importPayment(ctx, i.id, i.into ?? c.cfg.into);
+    const r = await importPayment(ctx, i.id, i.into ?? c.cfg.into);
+    if (isDemo(ctx)) await payRun(ctx, c.id); // the preview's balance follows
+    return r;
   }),
 
   /** The parcels of a payment, with our order when we know it. */
