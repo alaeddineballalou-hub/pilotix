@@ -21,7 +21,13 @@
   "notePh": "Note (optional): new date, details…",
   "confirmFail": "Mark as failed",
   "confirmReturn": "Mark as returning",
-  "kpi": { "toDeliver": "To deliver", "toCollect": "{{amount}} to collect", "deliveredToday": "Delivered today", "cashed": "{{amount}} collected", "pickup": "To pick up at the depot" },
+  "kpi": {
+    "toDeliver": "To deliver",
+    "toCollect": "{{amount}} to collect",
+    "deliveredToday": "Delivered today",
+    "cashed": "{{amount}} collected",
+    "pickup": "To pick up at the depot"
+  },
   "chat": {
     "title": "Messages with the office",
     "titleOffice": "Messages with {{name}}",
@@ -34,7 +40,38 @@
     "placeholder": "Message to the office…",
     "placeholderOffice": "Message to the courier…",
     "send": "Send",
-    "quick": ["Customer unreachable", "The customer refused the parcel", "Postponed to tomorrow by the customer", "Delivered", "Address not found, please call the customer"],
-    "quickOffice": ["Customer reached: please deliver again", "The customer asks for delivery after 4 pm", "Bring the returns to the depot tonight", "Got it, thanks"]
+    "quick": [
+      "Customer unreachable",
+      "The customer refused the parcel",
+      "Postponed to tomorrow by the customer",
+      "Delivered",
+      "Address not found, please call the customer"
+    ],
+    "quickOffice": [
+      "Customer reached: please deliver again",
+      "The customer asks for delivery after 4 pm",
+      "Bring the returns to the depot tonight",
+      "Got it, thanks"
+    ]
+  },
+  "ph": {
+    "toDeliver": "To deliver",
+    "toCollect": "To collect",
+    "done": "Delivered",
+    "allDone": "Everything is delivered for now",
+    "then": "Next · {{n}}",
+    "pickup": "To pick up at the depot · {{n}}",
+    "office": "Office",
+    "next": "Next stop",
+    "call": "Call",
+    "phone2": "2nd number",
+    "notDelivered": "Not delivered",
+    "kind": {
+      "failed": "I come back (failed)",
+      "returning": "Back to the depot"
+    },
+    "confirmFail": "Confirm: I come back",
+    "confirmReturn": "Confirm: back to the depot",
+    "officeKnows": "The office (Suivi) sees it right away."
   }
 }

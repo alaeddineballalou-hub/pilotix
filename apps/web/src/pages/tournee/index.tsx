@@ -12,6 +12,8 @@ import { toast } from '../../ui/toast';
 import { printRouteSheet } from '../livraison/print';
 import type { PageProps } from '../registry';
 import { Chat } from './Chat';
+import { PhoneTournee } from './Phone';
+import { useIsPhone } from '../../lib/useMedia';
 
 export function Tournee(_: PageProps) {
   const { t } = useTranslation();
@@ -21,6 +23,7 @@ export function Tournee(_: PageProps) {
   const [pick, setPick] = useState<number | undefined>();
   const livreurId = self ? undefined : pick ?? livreurs.data?.[0]?.id;
   const q = useRpc('delivery.tournee', { livreurId }, { enabled: self || !!livreurId, refetchInterval: 60_000 });
+  const phone = useIsPhone();
 
   const print = async () => {
     try {
@@ -51,6 +54,16 @@ export function Tournee(_: PageProps) {
           </div>
         </div>
       )}
+      {phone ? (
+        q.isLoading ? (
+          <Loading />
+        ) : q.error ? (
+          <ErrorBox error={q.error} onRetry={() => q.refetch()} />
+        ) : q.data ? (
+          <PhoneTournee d={q.data} livreurId={livreurId} self={self} onPrint={print} />
+        ) : null
+      ) : (
+        <>
       <details className="card bjr-livcard" open>
         <summary style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 800, fontSize: 16, color: 'var(--ink)', listStyle: 'none', cursor: 'pointer' }}>
           <span className="bjr-ic" aria-hidden="true">
@@ -86,6 +99,8 @@ export function Tournee(_: PageProps) {
           ))}
         </div>
       ) : null}
+        </>
+      )}
     </>
   );
 }
