@@ -177,6 +177,7 @@ export interface Money {
   d: number; // delivered
   r: number; // returned
   enRoute: number; // still on the road (not counted yet)
+  x?: number; // cancelled (by the customer or as fake / wrong number)
   qty: number;
   rev: number;
   achat: number;
@@ -191,7 +192,7 @@ export interface Money {
 /** Profit of a set of orders, line by line (the original "Bénéfice réel · ligne par ligne"). share = fraction counted (marketer share). */
 export async function moneyOf(db: Db, orders: any[], pubDzd: number, share = 1): Promise<Money> {
   const plans = await getSetting(db, 'payPlans');
-  let n = 0, d = 0, r = 0, enRoute = 0, qty = 0, rev = 0, achat = 0, liv = 0, conf = 0, ret = 0;
+  let n = 0, d = 0, r = 0, x = 0, enRoute = 0, qty = 0, rev = 0, achat = 0, liv = 0, conf = 0, ret = 0;
   for (const o of orders) {
     n++;
     const fs = o.follow_status as string | null;
@@ -205,10 +206,12 @@ export async function moneyOf(db: Db, orders: any[], pubDzd: number, share = 1):
     } else if (fs === 'returned' || fs === 'lost') {
       r++;
       ret += num(o.return_fee);
+    } else if (fs === 'cancelled' || ['cancelled', 'fake', 'wrong_number'].includes(o.conf_status)) {
+      x++;
     } else if (fs && ['shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange', 'returning'].includes(fs)) enRoute++;
   }
   const k = (v: number) => Math.round(v * share);
-  const m = { n: k(n), d: k(d), r: k(r), enRoute: k(enRoute), qty: k(qty), rev: k(rev), achat: k(achat), liv: k(liv), conf: k(conf), ret: k(ret) };
+  const m = { n: k(n), d: k(d), r: k(r), x: k(x), enRoute: k(enRoute), qty: k(qty), rev: k(rev), achat: k(achat), liv: k(liv), conf: k(conf), ret: k(ret) };
   const avant = m.rev - m.achat - m.liv - m.conf - m.ret;
   const pub = Math.round(pubDzd);
   return { ...m, avant, pub, net: avant - pub };
@@ -391,9 +394,9 @@ async function overview(ctx: Ctx, i: z.infer<typeof Period>) {
   const money: Money = tot.reduce(
     (s, p) => {
       const m = p.money;
-      return { n: s.n + m.n, d: s.d + m.d, r: s.r + m.r, enRoute: s.enRoute + m.enRoute, qty: s.qty + m.qty, rev: s.rev + m.rev, achat: s.achat + m.achat, liv: s.liv + m.liv, conf: s.conf + m.conf, ret: s.ret + m.ret, avant: s.avant + m.avant, pub: s.pub + m.pub, net: s.net + m.net };
+      return { n: s.n + m.n, d: s.d + m.d, r: s.r + m.r, x: (s.x ?? 0) + (m.x ?? 0), enRoute: s.enRoute + m.enRoute, qty: s.qty + m.qty, rev: s.rev + m.rev, achat: s.achat + m.achat, liv: s.liv + m.liv, conf: s.conf + m.conf, ret: s.ret + m.ret, avant: s.avant + m.avant, pub: s.pub + m.pub, net: s.net + m.net };
     },
-    { n: 0, d: 0, r: 0, enRoute: 0, qty: 0, rev: 0, achat: 0, liv: 0, conf: 0, ret: 0, avant: 0, pub: 0, net: 0 },
+    { n: 0, d: 0, r: 0, x: 0, enRoute: 0, qty: 0, rev: 0, achat: 0, liv: 0, conf: 0, ret: 0, avant: 0, pub: 0, net: 0 },
   );
   // spend of unlinked ad sets still counts as ads spend for the shop total
   const unlinked = inPeriod.filter((r) => visible.has(r.adsetId) && !all.find((s) => s.id === r.adsetId)?.productIds.length);
