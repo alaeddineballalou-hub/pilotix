@@ -410,7 +410,8 @@ type MonthRow = { ym: string; spendUsd: number; delivered: number; cpd: number |
 function Months({ rows: raw }: { rows: Out<'ads.months'> | null }) {
   const rows = raw as unknown as MonthRow[] | null;
   const { t, i18n } = useTranslation();
-  if (!rows?.length) return null;
+  const shown = (rows ?? []).filter((r) => r.spendUsd > 0 || r.profit !== 0 || r.delivered > 0);
+  if (!shown.length) return null;
   const lang = i18n.language === 'ar' ? 'ar-DZ' : i18n.language;
   return (
     <section className="pxs-sec">
@@ -426,7 +427,7 @@ function Months({ rows: raw }: { rows: Out<'ads.months'> | null }) {
           </tr>
         </thead>
         <tbody>
-          {[...rows].reverse().map((r) => (
+          {[...shown].reverse().map((r) => (
             <tr key={r.ym}>
               <td>
                 <b>{new Date(r.ym + '-15T00:00:00Z').toLocaleDateString(lang, { month: 'short' })}</b>
