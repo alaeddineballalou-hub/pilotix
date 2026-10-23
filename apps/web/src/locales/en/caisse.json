@@ -264,5 +264,16 @@
       "type": "Type",
       "costs": "Costs"
     }
+  },
+  "qp": {
+    "readAt": "ZR's figures · {{d}}",
+    "atCourier": "At the courier",
+    "delivered": "Delivered",
+    "askV": "Ask for payment · {{v}}",
+    "tomorrow": "For tomorrow",
+    "otherDate": "another date",
+    "forDate": "For",
+    "nothingReady": "Nothing ready to pay yet: the request is sent anyway.",
+    "received": "Received"
   }
 }

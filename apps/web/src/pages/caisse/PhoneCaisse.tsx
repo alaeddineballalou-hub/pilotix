@@ -130,6 +130,11 @@ export function PhoneCaisse({ sub }: { sub?: string }) {
             <Journal caisse="main" />
           ) : (
             <>
+              {d.companies
+                .filter((c) => c.kind === 'zr' && c.companyId)
+                .map((c) => (
+                  <QuickPay key={c.key} companyId={c.companyId!} kind={c.kind ?? 'zr'} onOpen={() => setCompany(c.key)} />
+                ))}
               <button type="button" className="pxk-bank" onClick={() => setCaisse('bank')}>
                 <Icon name="building" />
                 <b>{t('caisse.ph.bank')}</b>
@@ -611,6 +616,106 @@ export function MaCaisse() {
       <Journal caisse={d.key} data={d} mine />
       {sheet && <MoveSheet kind={sheet} from={d.key} to={sheet === 'transfer' ? 'main' : undefined} mine onClose={() => setSheet(null)} />}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------- ZR on the Caisse home: its totals and one tap to ask
+/** What the company says it holds for us (Livré · Prêt à payer · Pas encore prêt · Déjà payé) and « Demander le paiement »
+ * in one tap (for tomorrow; another date if needed). A payment ready to collect shows here too, with « Reçu ». */
+function QuickPay({ companyId, kind, onOpen }: { companyId: number; kind: string; onOpen: () => void }) {
+  const { t } = useTranslation();
+  const q = useRpc('caisse.pay', { companyId });
+  const sync = useAction('caisse.paySync', { success: (r) => (r.imported ? t('caisse.pay.imported', { count: r.imported }) : r.requested ? t('caisse.pay.requestedNow') : t('caisse.pay.upToDate')) });
+  const ask = useAction('caisse.payRequest', { success: (r) => t('caisse.pay.requestSent', { d: dateOnly(r.date) }) });
+  const [other, setOther] = useState(false);
+  const min = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+  const [date, setDate] = useState(min);
+  const [take, setTake] = useState<Pay | null>(null);
+  const d = q.data;
+  if (!d || !d.supported) return null;
+  const b = d.balance;
+  const pending = d.requests.find((r) => r.approved === null);
+  const waiting = d.payments.filter((p) => !p.inCaisse);
+  const ready = b?.ready ?? 0;
+  return (
+    <section className="pxk-qp">
+      <div className="pxk-qph">
+        <button type="button" className="pxk-qpt" onClick={onOpen}>
+          <span className={`pxs-co k-${kind} pxk-co`}>{coShort(d.name)}</span>
+          <span>
+            <b>{d.name}</b>
+            <small>{b ? t('caisse.qp.readAt', { d: when(b.at) }) : t('caisse.qp.atCourier')}</small>
+          </span>
+        </button>
+        <button type="button" className="pxp-back" aria-label={t('caisse.pay.refresh')} disabled={sync.isPending} onClick={() => sync.mutate({ companyId })}>
+          <Icon name="refresh" />
+        </button>
+      </div>
+      {b?.error && <p className="pxk-payerr">{b.error}</p>}
+      {b && (
+        <>
+          <div className="pxk-qpr">
+            <small>{t('caisse.pay.ready')}</small>
+            <b className="ltr">{da(ready)}</b>
+          </div>
+          <div className="pxk-k3">
+            <div>
+              <small>{t('caisse.qp.delivered')}</small>
+              <b className="ltr">{da(b.delivered)}</b>
+            </div>
+            <div>
+              <small>{t('caisse.pay.notReady')}</small>
+              <b className="ltr">{da(b.notReady)}</b>
+            </div>
+            <div>
+              <small>{t('caisse.pay.paid')}</small>
+              <b className="ltr">{da(b.paid)}</b>
+            </div>
+          </div>
+        </>
+      )}
+      {pending ? (
+        <div className="pxk-req">
+          <Icon name="hourglass" />
+          <span>
+            <b>{t('caisse.pay.pending', { d: pending.date ? dateOnly(pending.date) : '—' })}</b>
+            <small>{pending.auto ? t('caisse.pay.byPilotix') : t('caisse.pay.byHand')}</small>
+          </span>
+          <ReqActions id={pending.id} date={pending.date} />
+        </div>
+      ) : (
+        <>
+          <button type="button" className="pxv-btn gr big pxk-qpask" disabled={ask.isPending} onClick={() => ask.mutate({ companyId, date: other ? date : undefined })}>
+            <Icon name="coins" /> {ready > 0 ? t('caisse.qp.askV', { v: da(ready) }) : t('caisse.pay.ask')}
+          </button>
+          {other ? (
+            <label className="pxk-qpd">
+              <span>{t('caisse.qp.forDate')}</span>
+              <input type="date" value={date} min={min} onChange={(e) => setDate(e.target.value || min)} />
+            </label>
+          ) : (
+            <button type="button" className="pxk-qplink" onClick={() => setOther(true)}>
+              {t('caisse.qp.tomorrow')} · <u>{t('caisse.qp.otherDate')}</u>
+            </button>
+          )}
+          {ready <= 0 && b && <p className="pxv-help">{t('caisse.qp.nothingReady')}</p>}
+        </>
+      )}
+      {waiting.map((p) => (
+        <div key={p.id} className="pxk-qpw">
+          <span className="pxk-rm">
+            <b>
+              {p.ref ?? t('caisse.pay.payment')} · <span className="ltr">{da(p.amount)}</span>
+            </b>
+            <small>{p.done ? t('caisse.pay.doneNotIn') : t('caisse.pay.waitingAt', { place: p.place ?? 'ZR' })}</small>
+          </span>
+          <button type="button" className="pxv-btn gr" onClick={() => setTake(p)}>
+            <Icon name="check" /> {t('caisse.qp.received')}
+          </button>
+        </div>
+      ))}
+      {take && <PayTake p={take} into={d.cfg.into} onClose={() => setTake(null)} />}
+    </section>
   );
 }
 

@@ -264,5 +264,16 @@
       "type": "Type",
       "costs": "Frais"
     }
+  },
+  "qp": {
+    "readAt": "Chiffres de ZR · {{d}}",
+    "atCourier": "Chez la société",
+    "delivered": "Livré",
+    "askV": "Demander le paiement · {{v}}",
+    "tomorrow": "Pour demain",
+    "otherDate": "autre date",
+    "forDate": "Pour le",
+    "nothingReady": "Rien de prêt à payer pour l’instant : la demande partira quand même.",
+    "received": "Reçu"
   }
 }
