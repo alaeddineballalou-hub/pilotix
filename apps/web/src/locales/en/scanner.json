@@ -19,7 +19,7 @@
   "camera": "Camera",
   "photo": "Photo",
   "idlePc": "PC: click once in the box then scan with the barcode gun. Phone: Camera button, sharp photo of the barcode.",
-  "idlePhone": "Tap Camera for each parcel: sharp photo of the barcode. The phone asks for permission the first time.",
+  "idlePhone": "The camera stays open: show the parcels one by one, each result shows. The phone asks for permission the first time.",
   "post": "This station",
   "postEmpty": "Each scanned parcel shows here with its result.",
   "checking": "Checking…",

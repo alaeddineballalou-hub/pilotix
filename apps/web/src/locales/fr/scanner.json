@@ -19,7 +19,7 @@
   "camera": "Caméra",
   "photo": "Photo",
   "idlePc": "PC : cliquez une fois dans la case puis scannez avec la douchette. Téléphone : bouton Caméra, photo nette du code-barres.",
-  "idlePhone": "Touchez Caméra pour chaque colis : photo nette du code-barres. Le téléphone demande l’autorisation la première fois.",
+  "idlePhone": "La caméra reste ouverte : passez les colis un par un devant, le résultat de chacun s’affiche. Le téléphone demande l’autorisation la première fois.",
   "post": "Ce poste",
   "postEmpty": "Chaque colis scanné s’affiche ici avec son résultat.",
   "checking": "Vérification…",

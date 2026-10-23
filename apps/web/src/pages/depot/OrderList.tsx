@@ -8,11 +8,29 @@ import { useAction, useRpc } from '../../lib/query';
 import { BulkBar, Card, ErrorBox, Loading, RemovableChip, StatusBadge, TicketTag } from '../../ui/kit';
 import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import { CopyCode } from '../../ui/CopyCode';
+import './stages.css';
 
 export interface ExtraCol {
   label: string;
   num?: boolean;
   cell: (o: Order) => ReactNode;
+}
+
+/** The products of an order with their variant in grey, on up to two lines: "2 × Écharpe de portage Gris chiné + Biberon". */
+function ItemsCell({ o }: { o: Order }) {
+  if (!o.items.length) return <>—</>;
+  return (
+    <>
+      {o.items.map((i, k) => (
+        <span key={k}>
+          {k > 0 && ' + '}
+          {i.qty > 1 && `${i.qty} × `}
+          {i.name}
+          {i.variantTitle && <span className="muted"> {i.variantTitle}</span>}
+        </span>
+      ))}
+    </>
+  );
 }
 
 /** Products of an order on one line: "1 × VELO 16P BLEU + 1 × montage". */
@@ -31,23 +49,32 @@ export function useDebounced<T>(v: T, ms = 300): T {
 /**
  * The order list of the depot stages (same columns as the original "Commandes à préparer"):
  * search, Société and Wilaya filters, checkboxes, extra columns and bulk actions.
+ * `hide` drops the columns that say the same thing on every row of a stage (all confirmed, all shipped…), and
+ * `compact` (the stages after « En préparation ») puts the variant next to its product and leaves out the agent,
+ * so the columns that matter there (the partner, how long the parcel has waited, the button) fit on a laptop.
  */
 export function DepotOrderList({
   title,
+  help,
   follow,
   confirmedOnly = true,
   sort,
   extra = [],
   bulk,
   actions,
+  hide = [],
+  compact = false,
 }: {
   title: string;
+  help?: string;
   follow: FollowStatus[];
   confirmedOnly?: boolean;
   sort: 'confirmed_at' | 'shipped_at' | 'updated_at' | 'created_at';
   extra?: ExtraCol[];
   bulk?: (ids: number[], clear: () => void) => ReactNode;
   actions?: (o: Order) => ReactNode;
+  hide?: ('conf' | 'follow')[];
+  compact?: boolean;
 }) {
   const { t } = useTranslation();
   const unCompany = useAction('orders.assignCompany', { success: t('depot.partnerRemoved') });
@@ -84,9 +111,12 @@ export function DepotOrderList({
     setSel(s);
   };
   const clear = () => setSel(new Set());
+  const showConf = !hide.includes('conf');
+  const showFollow = !hide.includes('follow');
+  const cols = 7 + (compact ? 0 : 2) + (showConf ? 1 : 0) + (showFollow ? 1 : 0);
 
   return (
-    <Card title={title}>
+    <Card title={title} help={help}>
       <div className={`filters ${open ? 'open' : ''}`}>
         <label className="field search-f">
           <span className="lab">{t('depot.filters.search')}</span>
@@ -129,8 +159,8 @@ export function DepotOrderList({
       ) : list.error ? (
         <ErrorBox error={list.error} onRetry={() => list.refetch()} />
       ) : (
-        <div className="tbl-wrap">
-          <table className="tbl">
+        <div className={`tbl-wrap ${compact ? 'px-dlw' : ''}`}>
+          <table className={`tbl ${compact ? 'px-dl' : ''}`}>
             <thead>
               <tr>
                 <th className="ck">
@@ -138,16 +168,16 @@ export function DepotOrderList({
                 </th>
                 <th>{t('depot.cols.order')}</th>
                 <th>{t('depot.cols.client')}</th>
-                <th>{t('depot.cols.address')}</th>
+                <th className={compact ? 'px-dl-addr' : undefined}>{t('depot.cols.address')}</th>
                 <th className="wide">{t('depot.cols.products')}</th>
-                <th>{t('depot.cols.variant')}</th>
-                <th className="num">{t('depot.cols.total')}</th>
-                <th>{t('depot.cols.conf')}</th>
-                <th>{t('depot.cols.follow')}</th>
+                {!compact && <th>{t('depot.cols.variant')}</th>}
+                <th className={`num ${compact ? 'px-dl-tot' : ''}`}>{t('depot.cols.total')}</th>
+                {showConf && <th>{t('depot.cols.conf')}</th>}
+                {showFollow && <th>{t('depot.cols.follow')}</th>}
                 <th>{t('depot.cols.company')}</th>
-                <th className="hide-m">{t('depot.cols.agent')}</th>
+                {!compact && <th className="hide-m">{t('depot.cols.agent')}</th>}
                 {extra.map((c) => (
-                  <th key={c.label} className={c.num ? 'num' : undefined}>
+                  <th key={c.label} className={`${c.num ? 'num' : ''} ${compact ? 'px-dl-x' : ''}`}>
                     {c.label}
                   </th>
                 ))}
@@ -157,7 +187,7 @@ export function DepotOrderList({
             <tbody>
               {!rows.length && (
                 <tr>
-                  <td colSpan={11 + extra.length + (actions ? 1 : 0)} className="muted" style={{ textAlign: 'center', padding: 24 }}>
+                  <td colSpan={cols + extra.length + (actions ? 1 : 0)} className="muted" style={{ textAlign: 'center', padding: 24 }}>
                     {t('depot.empty')}
                   </td>
                 </tr>
@@ -174,26 +204,39 @@ export function DepotOrderList({
                   <td data-l={t('depot.cols.client')}>
                     {o.customerName}
                     <small className="ltr">{o.phone}</small>
+                    {compact && (
+                      <small className="px-dl-where">
+                        {wilaya(o.wilayaId)}
+                        {o.commune ? ` · ${o.commune}` : ''}
+                      </small>
+                    )}
                   </td>
-                  <td data-l={t('depot.cols.address')}>
+                  <td className={compact ? 'px-dl-addr' : undefined} data-l={t('depot.cols.address')}>
                     {wilaya(o.wilayaId)}
                     <small>{o.commune}</small>
                   </td>
                   <td className="wide px-cw" data-l={t('depot.cols.products')}>
-                    <div className="px-clamp">{namesOf(o.items)}</div>
+                    <div className="px-clamp">{compact ? <ItemsCell o={o} /> : namesOf(o.items)}</div>
+                    {compact && <small className="px-dl-sum ltr">{da(o.total)}</small>}
                   </td>
-                  <td data-l={t('depot.cols.variant')}>
-                    <div className="px-clamp">{variantsOf(o.items)}</div>
-                  </td>
-                  <td className="num ltr" data-l={t('depot.cols.total')}>
+                  {!compact && (
+                    <td data-l={t('depot.cols.variant')}>
+                      <div className="px-clamp">{variantsOf(o.items)}</div>
+                    </td>
+                  )}
+                  <td className={`num ltr ${compact ? 'px-dl-tot' : ''}`} data-l={t('depot.cols.total')}>
                     {da(o.total)}
                   </td>
-                  <td data-l={t('depot.cols.conf')}>
-                    <StatusBadge kind="conf" status={o.confStatus} />
-                  </td>
-                  <td data-l={t('depot.cols.follow')}>
-                    <StatusBadge kind="follow" status={o.followStatus} />
-                  </td>
+                  {showConf && (
+                    <td data-l={t('depot.cols.conf')}>
+                      <StatusBadge kind="conf" status={o.confStatus} />
+                    </td>
+                  )}
+                  {showFollow && (
+                    <td data-l={t('depot.cols.follow')}>
+                      <StatusBadge kind="follow" status={o.followStatus} />
+                    </td>
+                  )}
                   <td data-l={t('depot.cols.company')}>
                     <RemovableChip
                       name={o.companyName}
@@ -203,9 +246,11 @@ export function DepotOrderList({
                     />
                     <CopyCode code={trackOf(o) || o.ref} small />
                   </td>
-                  <td className="hide-m" data-l={t('depot.cols.agent')}>
-                    {o.agentName ?? '—'}
-                  </td>
+                  {!compact && (
+                    <td className="hide-m" data-l={t('depot.cols.agent')}>
+                      {o.agentName ?? '—'}
+                    </td>
+                  )}
                   {extra.map((c) => (
                     <td key={c.label} className={c.num ? 'num' : undefined} data-l={c.label}>
                       {c.cell(o)}
