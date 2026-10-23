@@ -16,7 +16,7 @@ const ROLE_SUB: Partial<Record<Role, string>> = { admin: 'admins', vendeur: 'ven
 /** Rôles table order, as in the original. */
 const ROLE_ORDER: Role[] = ['admin', 'vendeur', 'agent_manager', 'confirmation', 'suivi', 'depot', 'livreur', 'marketer'];
 /** Every page in menu order, with the hidden Livrées / Retournées pages of the original. */
-const PAGE_ORDER = ['accueil', 'dashboard', 'commandes', 'confirmation', 'depot', 'scanner', 'suivi', 'livrees', 'retournees', 'sav', 'tournee', 'produits', 'messages', 'cm', 'clients', 'marketing', 'caisse', 'livraison', 'utilisateurs', 'management', 'reglages'];
+const PAGE_ORDER = ['accueil', 'dashboard', 'commandes', 'confirmation', 'depot', 'scanner', 'suivi', 'livrees', 'retournees', 'sav', 'tournee', 'produits', 'messages', 'cm', 'clients', 'marketing', 'caisse', 'macaisse', 'livraison', 'utilisateurs', 'management', 'reglages'];
 
 /** Pages a role opens (its own roles + what they include), computed from the menu rules. */
 export function pagesOf(role: Role): string[] {

@@ -8,9 +8,18 @@ import { openOrder } from '../../lib/modals';
 import { Empty, ErrorBox, Help, Kpi, Kpis, Loading, TicketTag } from '../../ui/kit';
 import type { PageProps } from '../registry';
 import { LivreursCash } from './LivreursCash';
+import { useIsPhone } from '../../lib/useMedia';
+import { PhoneCaisse } from './PhoneCaisse';
+export { MaCaisse } from './PhoneCaisse';
 import { CopyCode } from '../../ui/CopyCode';
 
 export function Caisse({ sub }: PageProps) {
+  const phone = useIsPhone();
+  if (phone) return <PhoneCaisse sub={sub} />;
+  return <CaisseDesktop sub={sub} />;
+}
+
+function CaisseDesktop({ sub }: PageProps) {
   const { t } = useTranslation();
   const current = sub === 'done' ? 'done' : sub === 'livreurs' ? 'livreurs' : 'due';
   const tabs = [
