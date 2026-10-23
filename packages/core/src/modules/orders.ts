@@ -23,6 +23,7 @@ import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, Ctx, forbidden, hasRole, notFound, proc } from '../rpc';
 import { clientFee, getSetting } from '../settings';
 import { notifyContext, onConfChange, onFollowChange, onOrderCreated, sendInPreview } from './notify';
+import { lowStockCount } from './stockquery';
 import { settleTickets } from './tickets';
 
 // ---------------------------------------------------------------- reading
@@ -585,7 +586,7 @@ export async function orderCounts(ctx: Ctx) {
   const sav = num((await ctx.db.query(`SELECT count(*)::int AS n FROM complaints WHERE status IN ('open','progress')`))[0]?.n);
   const uncashed = num((await ctx.db.query(`SELECT count(*)::int AS n FROM sales WHERE follow_status='delivered' AND NOT cashed`))[0]?.n);
   const subs = await ctx.db.query<{ k: string; n: number }>(`SELECT sub_status AS k, count(*)::int AS n FROM sales WHERE sub_status IS NOT NULL GROUP BY 1`);
-  const lowStock = num((await ctx.db.query(`SELECT count(*)::int AS n FROM stock WHERE alert_qty > 0 AND qty <= alert_qty`))[0]?.n);
+  const lowStock = await lowStockCount(ctx.db);
   // SAV ticket parcels have their own counts (depot work, on the road, money not yet cashed)
   const tk = (
     await ctx.db.query(
