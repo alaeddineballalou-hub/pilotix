@@ -59,3 +59,16 @@ html:not([data-theme="dark"]) .px-dr-pop { background: #FFFFFF; }
   .px-dr-presets button { white-space: nowrap; }
   .px-dr-cal { width: auto; }
 }
+
+/* « Confirmées »: statistics only */
+.px-cs { display: flex; flex-direction: column; gap: 16px; }
+.px-cs .card { margin: 0; }
+.px-cs-key { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+.px-cs-key .kpi .v { font-size: 30px; }
+@media (max-width: 760px) {
+  .px-cs-key { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px !important; }
+  .px-cs-key .kpi { padding: 10px; }
+  .px-cs-key .kpi .v { font-size: 21px; }
+  .px-cs .card-head { flex-direction: column; align-items: stretch; gap: 8px; }
+  .px-cs .bjkf { flex-wrap: wrap; }
+}

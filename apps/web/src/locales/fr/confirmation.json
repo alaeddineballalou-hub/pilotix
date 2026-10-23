@@ -595,5 +595,14 @@
     "next": "Commande suivante",
     "empty": "Aucune commande ici.",
     "status": "Statut"
+  },
+  "cs": {
+    "title": "Statistiques des confirmées",
+    "help": "Les chiffres clés des commandes confirmées sur la période choisie : combien, à quel taux, combien ont été livrées, le panier moyen et l’upsell. La liste des commandes reste dans Commandes.",
+    "key": "L’essentiel",
+    "upSub": "taux d’upsell {{p}} · {{n}} commandes",
+    "detail": "Confirmation en détail",
+    "after": "Après la confirmation",
+    "afterHelp": "Ce que sont devenues les commandes confirmées sur la période : au dépôt, en route, livrées, retours."
   }
 }
