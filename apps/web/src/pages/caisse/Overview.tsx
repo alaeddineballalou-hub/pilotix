@@ -290,14 +290,14 @@ function JournalTable({ data: d }: { data: { moves: Move[]; monthIn: number; mon
             </thead>
             <tbody>
               {moves.map((m) => {
-                const day = m.at.slice(0, 10);
+                const day = dayLabel(m.at);
                 const head = day !== lastDay;
                 lastDay = day;
                 const tone = m.kind === 'transfer' ? 'tr' : m.amount > 0 ? 'ok' : 'bad';
                 return [
                   head && (
                     <tr key={`d${day}`} className="pxc-day">
-                      <td colSpan={4}>{dayLabel(m.at)}</td>
+                      <td colSpan={4}>{day}</td>
                     </tr>
                   ),
                   <tr key={m.id} className={m.moveId ? 'clickable' : undefined} onClick={() => m.moveId && setPick(m)}>

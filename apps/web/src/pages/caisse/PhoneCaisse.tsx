@@ -431,7 +431,7 @@ function Journal({ caisse, data, mine }: { caisse: string; data?: { moves: Move[
   const byDay = useMemo(() => {
     const out: [string, Move[]][] = [];
     for (const m of moves) {
-      const k = m.at.slice(0, 10);
+      const k = dayLabel(m.at);
       const last = out[out.length - 1];
       if (last && last[0] === k) last[1].push(m);
       else out.push([k, [m]]);
