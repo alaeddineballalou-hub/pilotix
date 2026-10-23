@@ -53,7 +53,48 @@ function centerOn(el: HTMLElement | null) {
 
 export type AgentKind = 'messages' | 'cm' | 'notify';
 const FACE: Record<AgentKind, string> = { messages: 'chat', cm: 'comments', notify: 'truck' };
-export type AgentTab = { key: string; label: string; icon: string; href: string; count?: number };
+/** A section of a page; `alert` draws its count in red (something waits). */
+export type AgentTab = { key: string; label: string; icon: string; href: string; count?: number; alert?: boolean };
+
+/** The sections of a page, as tabs along the bottom edge of its header. */
+function SectionTabs({ tabs, current, label }: { tabs: AgentTab[]; current: string; label: string }) {
+  const nav = useEdges<HTMLElement>([tabs.length]);
+  useLayoutEffect(() => centerOn(nav.current), [current, tabs.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <nav className="ai-tabs" ref={nav} aria-label={label}>
+      {tabs.map((x) => (
+        <a key={x.key} href={x.href} className={`ai-tab ${current === x.key ? 'on' : ''}`} aria-current={current === x.key ? 'page' : undefined}>
+          <Icon name={x.icon} />
+          <span>{x.label}</span>
+          {!!x.count && <b className={`ltr ${x.alert ? 'alert' : ''}`}>{x.count}</b>}
+        </a>
+      ))}
+    </nav>
+  );
+}
+
+/** The top of a page that is not an agent (Produits & stock): its icon, its name, what it is for, and its sections. */
+export function SectionHeader({ icon, title, help, about, tabs, current, aside }: { icon: string; title: string; help?: string; about: string; tabs: AgentTab[]; current: string; aside?: ReactNode }) {
+  const { t } = useTranslation();
+  return (
+    <header className="ai-head ai-sec">
+      <div className="ai-id">
+        <span className="ai-face" aria-hidden="true">
+          <Icon name={icon} />
+        </span>
+        <div className="ai-name">
+          <h1>
+            {title}
+            {help && <Help text={help} label={title} />}
+          </h1>
+          <p>{about}</p>
+        </div>
+        {aside}
+      </div>
+      <SectionTabs tabs={tabs} current={current} label={t('ai.sections', { name: title })} />
+    </header>
+  );
+}
 
 /** The top of an agent's page: who it is, whether it works right now, and its sections. */
 export function AgentHeader({ agent, title, help, about, on, settings, tabs, current }: {
@@ -70,8 +111,6 @@ export function AgentHeader({ agent, title, help, about, on, settings, tabs, cur
   current: string;
 }) {
   const { t } = useTranslation();
-  const nav = useEdges<HTMLElement>([tabs.length]);
-  useLayoutEffect(() => centerOn(nav.current), [current, tabs.length]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <header className={`ai-head ai-${agent}`}>
       <div className="ai-id">
@@ -95,15 +134,7 @@ export function AgentHeader({ agent, title, help, about, on, settings, tabs, cur
             </a>
           ))}
       </div>
-      <nav className="ai-tabs" ref={nav} aria-label={t('ai.sections', { name: title })}>
-        {tabs.map((x) => (
-          <a key={x.key} href={x.href} className={`ai-tab ${current === x.key ? 'on' : ''}`} aria-current={current === x.key ? 'page' : undefined}>
-            <Icon name={x.icon} />
-            <span>{x.label}</span>
-            {!!x.count && <b className="ltr">{x.count}</b>}
-          </a>
-        ))}
-      </nav>
+      <SectionTabs tabs={tabs} current={current} label={t('ai.sections', { name: title })} />
     </header>
   );
 }

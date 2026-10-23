@@ -5,6 +5,7 @@ import { Db, iso, num, numOrNull, Where } from '../db';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
 import { getOrder, ordersProcs, setFollow } from './orders';
+import { RESERVED } from './stockquery';
 
 // ---------------------------------------------------------------- types
 export interface CatalogVariant {
@@ -55,6 +56,10 @@ export interface Movement {
   orderRef: string | null;
   userName: string | null;
   note: string | null;
+  /** the purchase (ACH-…) or the inventory (INV-…) that made this movement */
+  purchaseId: number | null;
+  purchaseRef: string | null;
+  inventoryRef: string | null;
 }
 export interface PickingRow {
   variantId: number | null;
@@ -134,11 +139,6 @@ export async function defaultWarehouse(db: Db): Promise<number | null> {
   return r[0] ? num(r[0].id) : null;
 }
 
-/** Quantity promised to confirmed orders not shipped yet, per variant and depot. */
-const RESERVED = `SELECT i.variant_id, COALESCE(o.warehouse_id, (SELECT id FROM warehouses WHERE active ORDER BY is_default DESC, id LIMIT 1)) AS wid, sum(i.qty)::int AS n
-  FROM order_items i JOIN orders o ON o.id = i.order_id
-  WHERE i.variant_id IS NOT NULL AND o.conf_status IN ('confirmed','no_stock') AND (o.follow_status IS NULL OR o.follow_status IN ('to_prepare','prepared'))
-  GROUP BY 1, 2`;
 
 export const StockInput = z.object({
   q: z.string().max(100).optional(),
@@ -196,15 +196,18 @@ export async function stockRows(db: Db, f: z.infer<typeof StockInput>): Promise<
 
 // ---------------------------------------------------------------- writing stock
 /** Adds `delta` to the stock of a variant in a depot and writes the movement. Use inside a transaction. */
-export async function moveStock(db: Db, a: { variantId: number; warehouseId: number; delta: number; reason: string; orderId?: number | null; userId: number | null; note?: string | null }) {
+export async function moveStock(
+  db: Db,
+  a: { variantId: number; warehouseId: number; delta: number; reason: string; orderId?: number | null; userId: number | null; note?: string | null; purchaseId?: number | null; inventoryId?: number | null },
+) {
   if (!a.delta) return;
   await db.query(
     `INSERT INTO stock (variant_id, warehouse_id, qty) VALUES ($1,$2,$3)
      ON CONFLICT (variant_id, warehouse_id) DO UPDATE SET qty = stock.qty + EXCLUDED.qty`,
     [a.variantId, a.warehouseId, a.delta],
   );
-  await db.query('INSERT INTO stock_movements (variant_id, warehouse_id, delta, reason, order_id, user_id, note) VALUES ($1,$2,$3,$4,$5,$6,$7)', [
-    a.variantId, a.warehouseId, a.delta, a.reason, a.orderId ?? null, a.userId, a.note ?? null,
+  await db.query('INSERT INTO stock_movements (variant_id, warehouse_id, delta, reason, order_id, user_id, note, purchase_id, inventory_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)', [
+    a.variantId, a.warehouseId, a.delta, a.reason, a.orderId ?? null, a.userId, a.note ?? null, a.purchaseId ?? null, a.inventoryId ?? null,
   ]);
 }
 
@@ -696,21 +699,23 @@ export const catalogProcs = {
       if (f.to) w.add('m.created_at < ?', f.to);
       if (f.q?.trim()) {
         const q = f.q.trim();
-        w.add(`((p.name || ' ' || v.title) ILIKE '%' || ? || '%' OR v.sku ILIKE '%' || ? || '%' OR upper(o.ref) = upper(?) OR m.note ILIKE '%' || ? || '%')`, q, q, q, q);
+        w.add(`((p.name || ' ' || v.title) ILIKE '%' || ? || '%' OR v.sku ILIKE '%' || ? || '%' OR upper(o.ref) = upper(?) OR m.note ILIKE '%' || ? || '%' OR upper(pu.ref) = upper(?) OR upper(inv.ref) = upper(?))`, q, q, q, q, q, q);
       }
       const from = `FROM stock_movements m JOIN product_variants v ON v.id = m.variant_id JOIN products p ON p.id = v.product_id
-        JOIN warehouses wh ON wh.id = m.warehouse_id LEFT JOIN orders o ON o.id = m.order_id LEFT JOIN profiles u ON u.id = m.user_id`;
+        JOIN warehouses wh ON wh.id = m.warehouse_id LEFT JOIN orders o ON o.id = m.order_id LEFT JOIN profiles u ON u.id = m.user_id
+        LEFT JOIN purchases pu ON pu.id = m.purchase_id LEFT JOIN inventories inv ON inv.id = m.inventory_id`;
       const total = num((await ctx.db.query(`SELECT count(*)::int AS n ${from} ${w.sql}`, w.params))[0]?.n);
       const lim = w.p(f.pageSize);
       const off = w.p((f.page - 1) * f.pageSize);
       const rows = await ctx.db.query(
-        `SELECT m.*, p.name, v.title, v.sku, wh.name AS wname, o.ref, u.name AS uname ${from} ${w.sql} ORDER BY m.created_at DESC, m.id DESC LIMIT ${lim} OFFSET ${off}`,
+        `SELECT m.*, p.name, v.title, v.sku, wh.name AS wname, o.ref, u.name AS uname, pu.ref AS pref, inv.ref AS iref ${from} ${w.sql} ORDER BY m.created_at DESC, m.id DESC LIMIT ${lim} OFFSET ${off}`,
         w.params,
       );
       return {
         rows: rows.map((r: any) => ({
           id: num(r.id), at: iso(r.created_at), variantId: num(r.variant_id), label: label(r.name, r.title), sku: r.sku, warehouseId: num(r.warehouse_id), warehouseName: r.wname,
           delta: num(r.delta), reason: r.reason, orderId: numOrNull(r.order_id), orderRef: r.ref ?? null, userName: r.uname ?? null, note: r.note ?? null,
+          purchaseId: numOrNull(r.purchase_id), purchaseRef: r.pref ?? null, inventoryRef: r.iref ?? null,
         })),
         total,
         page: f.page,

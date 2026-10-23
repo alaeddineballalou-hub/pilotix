@@ -14,6 +14,7 @@ import { pickingProcs } from './modules/picking';
 import { ordersProcs } from './modules/orders';
 import { savProcs } from './modules/sav';
 import { statsProcs } from './modules/stats';
+import { stockProcs } from './modules/stock';
 import { suiviProcs } from './modules/suivi';
 import { usersProcs } from './modules/users';
 
@@ -24,6 +25,7 @@ export const REGISTRY = {
   ...statsProcs,
   ...catalogProcs,
   ...pickingProcs,
+  ...stockProcs,
   ...customersProcs,
   ...suiviProcs,
   ...savProcs,

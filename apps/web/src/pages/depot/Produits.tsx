@@ -1,452 +1,295 @@
+// Produits & stock, in eight tabs: Stock · Inventaire · Produits · Prix · Mouvements · Alertes · Achats (and
+// suppliers) · Dépôts (and transfers). The header is the one of the Pilot AI pages: an icon, a name, a sentence
+// about the current tab, and the tabs underneath.
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, dateTime, n } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
-import { useAction, useRpc } from '../../lib/query';
-import { useSession } from '../../lib/session';
-import { Card, Empty, ErrorBox, Field, Loading, Pager, Tabs } from '../../ui/kit';
-import { Modal } from '../../ui/modal';
-import { toast } from '../../ui/toast';
+import { useRpc } from '../../lib/query';
+import { Empty, ErrorBox, Icon, Kpi, Kpis, Loading, Pager } from '../../ui/kit';
+import { Filters, SearchBox, SectionHeader } from '../ai/agent';
 import type { PageProps } from '../registry';
+import { Achats } from './Achats';
+import { Alertes } from './Alertes';
+import { Depots } from './Depots';
+import { Inventaire } from './Inventaire';
 import { useDebounced } from './OrderList';
+import { Prix } from './Prix';
 import { ProductForm } from './ProductForm';
+import { AlertDialog, MoveDialog, TransferDialog } from './StockDialogs';
+import { Delta, DepotSelect, LevelBar, matches, nameOf, RowMenu, StockRowT, Toolbar, useDepots } from './stockui';
+import './produits.css';
 
-const TABS = ['stock', 'produits', 'mouvements'] as const;
+const TABS = ['stock', 'inventaire', 'produits', 'prix', 'mouvements', 'alertes', 'achats', 'depots'] as const;
 type Tab = (typeof TABS)[number];
+const ICONS: Record<Tab, string> = { stock: 'package', inventaire: 'clipboard', produits: 'tag', prix: 'coins', mouvements: 'swap', alertes: 'alert', achats: 'receipt', depots: 'building' };
 
-export function Produits({ sub }: PageProps) {
+export function Produits({ sub, rest }: PageProps) {
   const { t } = useTranslation();
   const tab: Tab = (TABS as readonly string[]).includes(sub ?? '') ? (sub as Tab) : 'stock';
+  const alerts = useRpc('catalog.alerts', {});
+  const tabs = TABS.map((k) => ({ key: k, label: t(`produits.tabs.${k}`), icon: ICONS[k], href: `#/produits/${k}`, count: k === 'alertes' ? alerts.data?.length : undefined, alert: k === 'alertes' }));
+  const arg = rest?.[0] ? decodeURIComponent(rest[0]) : undefined;
   return (
-    <>
-      <Card
-        title={t('produits.title')}
-        actions={<Tabs value={tab} onChange={(v) => (location.hash = `#/produits/${v}`)} items={TABS.map((k) => ({ value: k, label: t(`produits.tabs.${k}`) }))} />}
-      />
-      {tab === 'stock' && (
-        <>
-          <StockTab />
-          <DiscountCard />
-        </>
-      )}
+    <div className="pd">
+      <SectionHeader icon="layers" title={t('produits.title')} about={t(`produits.about.${tab}`)} tabs={tabs} current={tab} />
+      {tab === 'stock' && <StockTab />}
+      {tab === 'inventaire' && <Inventaire />}
       {tab === 'produits' && <ProductsTab />}
-      {tab === 'mouvements' && <MovesTab />}
-    </>
+      {tab === 'prix' && <Prix />}
+      {tab === 'mouvements' && <MovesTab key={arg ?? ''} initial={arg} />}
+      {tab === 'alertes' && <Alertes />}
+      {tab === 'achats' && <Achats open={arg && /^\d+$/.test(arg) ? Number(arg) : undefined} />}
+      {tab === 'depots' && <Depots />}
+    </div>
   );
 }
 
 // ---------------------------------------------------------------- Stock
-type StockRowT = { variantId: number; productName: string; variantTitle: string; sku: string; warehouseId: number; warehouseName: string; qty: number; reserved: number; available: number; alertQty: number; cost: number };
 type Dialog = { kind: 'entry' | 'count' | 'loss' | 'alert' | 'transfer'; row: StockRowT } | null;
-const nameOf = (r: StockRowT) => (r.variantTitle ? `${r.productName} ${r.variantTitle}` : r.productName);
+type StockFilter = 'all' | 'low' | 'out' | 'hidden';
+const isHidden = (r: StockRowT) => !r.productActive || !r.variantActive;
+/** shown in « Tout »: on sale, or still physically in a depot, or promised to an order */
+const isListed = (r: StockRowT) => !isHidden(r) || r.qty !== 0 || r.reserved !== 0;
+const isLow = (r: StockRowT) => !isHidden(r) && r.available <= r.alertQty;
+const isOut = (r: StockRowT) => !isHidden(r) && r.available <= 0;
 
 function StockTab() {
   const { t } = useTranslation();
+  const { depots, many } = useDepots();
   const [q, setQ] = useState('');
-  const [missing, setMissing] = useState(false);
-  const [hidden, setHidden] = useState(false);
+  const [f, setF] = useState<StockFilter>('all');
+  const [wh, setWh] = useState('');
   const [dlg, setDlg] = useState<Dialog>(null);
-  const dq = useDebounced(q, 200);
-  const whs = useRpc('catalog.warehouses', {});
-  const st = useRpc('catalog.stock', { q: dq || undefined, missingOnly: missing, withHidden: hidden });
-  const many = (whs.data?.length ?? 0) > 1;
+  const st = useRpc('catalog.stock', { withHidden: true });
+  const inDepot = (st.data ?? []).filter((r) => !wh || r.warehouseId === Number(wh));
+  const found = inDepot.filter((r) => !q.trim() || matches(q, nameOf(r), r.sku));
+  const test: Record<StockFilter, (r: StockRowT) => boolean> = { all: isListed, low: isLow, out: isOut, hidden: isHidden };
+  const list = found.filter(test[f]);
+  const sum = (fn: (r: StockRowT) => number) => inDepot.reduce((s, r) => s + fn(r), 0);
+  const value = sum((r) => Math.max(0, r.qty) * r.cost);
+  const pieces = sum((r) => Math.max(0, r.qty));
+  const reserved = sum((r) => r.reserved);
+  const toBuy = inDepot.filter(isLow).length;
   return (
-    <Card>
-      <div className="row">
-        <div className="grow">
-          <input type="search" placeholder={t('produits.stock.searchPh')} aria-label={t('produits.stock.searchPh')} value={q} onChange={(e) => setQ(e.target.value)} />
-        </div>
-        <label className="check">
-          <input type="checkbox" checked={missing} onChange={(e) => setMissing(e.target.checked)} />
-          {t('produits.stock.missingOnly')}
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} />
-          {t('produits.stock.withHidden')}
-        </label>
-      </div>
-      <p className="muted small">{t('produits.stock.help')}</p>
-      {st.isLoading ? (
-        <Loading />
-      ) : st.error ? (
-        <ErrorBox error={st.error} onRetry={() => st.refetch()} />
-      ) : !st.data?.length ? (
-        <Empty>{t('produits.stock.empty')}</Empty>
-      ) : (
-        <div className="tbl-wrap">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>{t('produits.stock.product')}</th>
-                {many && <th>{t('produits.stock.depot')}</th>}
-                <th className="num">{t('produits.stock.inStock')}</th>
-                <th className="num">{t('produits.stock.reserved')}</th>
-                <th className="num">{t('produits.stock.available')}</th>
-                <th className="num">{t('produits.stock.cost')}</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {st.data.map((r) => (
-                <tr key={`${r.variantId}-${r.warehouseId}`}>
-                  <td data-l={t('produits.stock.product')}>
-                    {nameOf(r)}
-                    {!r.productActive || !r.variantActive ? <span className="chip">{t('produits.products.hidden')}</span> : null}
-                    <small className="ltr">{r.sku}</small>
-                  </td>
-                  {many && <td data-l={t('produits.stock.depot')}>{r.warehouseName}</td>}
-                  <td className="num ltr" data-l={t('produits.stock.inStock')}>
-                    {n(r.qty)}
-                  </td>
-                  <td className="num ltr" data-l={t('produits.stock.reserved')}>
-                    {n(r.reserved)}
-                  </td>
-                  <td className="num" data-l={t('produits.stock.available')}>
-                    <b className={`ltr ${r.available <= 0 || (r.alertQty > 0 && r.available <= r.alertQty) ? 'stock-low' : ''}`}>{n(r.available)}</b>
-                  </td>
-                  <td className="num ltr" data-l={t('produits.stock.cost')}>
-                    {da(r.cost)}
-                  </td>
-                  <td className="px-act px-act-many" data-l="">
-                    <div className="row nowrap">
-                      <button className="btn small" onClick={() => setDlg({ kind: 'entry', row: r })}>
-                        {t('produits.stock.entry')}
-                      </button>
-                      <button className="btn small" onClick={() => setDlg({ kind: 'count', row: r })}>
-                        {t('produits.stock.count')}
-                      </button>
-                      <button className="btn small" onClick={() => setDlg({ kind: 'loss', row: r })}>
-                        {t('produits.stock.loss')}
-                      </button>
-                      <button className="btn small" title={t('produits.stock.alertTitle')} onClick={() => setDlg({ kind: 'alert', row: r })}>
-                        {t('produits.stock.alert')}
-                        {r.alertQty ? <span className="ltr"> ≤ {r.alertQty}</span> : null}
-                      </button>
-                      {many && (
-                        <button className="btn small" onClick={() => setDlg({ kind: 'transfer', row: r })}>
-                          {t('produits.stock.transfer')}
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
+    <>
+      <Kpis>
+        <Kpi label={t('produits.stock.kValue')} value={da(value)} sub={t('produits.stock.kValueSub')} icon="coins" />
+        <Kpi label={t('produits.stock.kPieces')} value={n(pieces)} sub={t('produits.stock.kPiecesSub', { count: inDepot.filter((r) => r.qty > 0).length })} icon="package" />
+        <Kpi label={t('produits.stock.kReserved')} value={n(reserved)} sub={t('produits.stock.kReservedSub')} icon="clock" />
+        <Kpi label={t('produits.stock.kToBuy')} value={n(toBuy)} sub={t('produits.stock.kToBuySub')} icon="alert" tone={toBuy ? 'bad' : undefined} href="#/produits/alertes" />
+      </Kpis>
+      <section className="card pd-card">
+        <Toolbar action={many ? <DepotSelect value={wh} onChange={setWh} all={t('produits.ui.allDepots')} label={t('produits.stock.depot')} /> : undefined}>
+          <SearchBox value={q} onChange={setQ} placeholder={t('produits.stock.searchPh')} />
+          <Filters<StockFilter>
+            value={f}
+            onChange={setF}
+            label={t('produits.stock.filters')}
+            items={[
+              { value: 'all', label: t('produits.stock.fAll'), count: found.filter(isListed).length },
+              { value: 'low', label: t('produits.stock.fLow'), count: found.filter(isLow).length, alert: true },
+              { value: 'out', label: t('produits.stock.fOut'), count: found.filter(isOut).length, alert: true },
+              { value: 'hidden', label: t('produits.stock.fHidden'), count: found.filter(isHidden).length },
+            ]}
+          />
+        </Toolbar>
+        {st.isLoading ? (
+          <Loading />
+        ) : st.error ? (
+          <ErrorBox error={st.error} onRetry={() => st.refetch()} />
+        ) : !list.length ? (
+          <Empty>{q.trim() ? t('produits.ui.noMatch') : t(`produits.stock.empty_${f}`)}</Empty>
+        ) : (
+          <div className="pd-list">
+            <div className={`pd-row pd-head pd-stock ${many ? 'many' : ''}`} aria-hidden="true">
+              <span>{t('produits.stock.product')}</span>
+              {many && <span>{t('produits.stock.depot')}</span>}
+              <span className="num">{t('produits.stock.inStock')}</span>
+              <span className="num">{t('produits.stock.reserved')}</span>
+              <span className="num">{t('produits.stock.available')}</span>
+              <span className="num">{t('produits.stock.cost')}</span>
+              <span />
+            </div>
+            <div className="pd-rows">
+              {list.map((r) => (
+                <div key={`${r.variantId}-${r.warehouseId}`} className={`pd-row pd-stock ${many ? 'many' : ''} ${isHidden(r) ? 'dim' : ''}`}>
+                  <span className="pd-name">
+                    <b>{nameOf(r)}</b>
+                    <small>
+                      <span className="ltr">{r.sku}</span>
+                      {isHidden(r) && <span className="chip">{t('produits.products.hidden')}</span>}
+                    </small>
+                  </span>
+                  {many && <span className="pd-depot">{r.warehouseName}</span>}
+                  <span className="num pd-c pd-q" data-l={t('produits.stock.inStock')}>
+                    <span className="ltr">{n(r.qty)}</span>
+                  </span>
+                  <span className="num pd-c pd-r" data-l={t('produits.stock.reserved')}>
+                    <span className="ltr">{n(r.reserved)}</span>
+                  </span>
+                  <span className="num pd-avail" data-l={t('produits.stock.available')}>
+                    <b className={`ltr ${r.available <= 0 ? 'out' : r.available <= r.alertQty ? 'low' : ''}`}>{n(r.available)}</b>
+                    <LevelBar available={r.available} alert={r.alertQty} />
+                    {r.alertQty > 0 && <small>{t('produits.stock.alertAt', { n: r.alertQty })}</small>}
+                  </span>
+                  <span className="num pd-c pd-cost" data-l={t('produits.stock.cost')}>
+                    <span className="ltr">{da(r.cost)}</span>
+                  </span>
+                  <span className="pd-acts">
+                    <button className="btn small" onClick={() => setDlg({ kind: 'entry', row: r })}>
+                      <Icon name="plus" />
+                      {t('produits.stock.entry')}
+                    </button>
+                    <RowMenu
+                      label={t('produits.ui.moreFor', { name: nameOf(r) })}
+                      items={[
+                        { label: t('produits.stock.loss'), icon: 'minus', onClick: () => setDlg({ kind: 'loss', row: r }) },
+                        { label: t('produits.stock.count'), icon: 'clipboard', onClick: () => setDlg({ kind: 'count', row: r }) },
+                        { label: t('produits.stock.alertTitle'), icon: 'alert', onClick: () => setDlg({ kind: 'alert', row: r }) },
+                        ...(many ? [{ label: t('produits.stock.transfer'), icon: 'swap', onClick: () => setDlg({ kind: 'transfer', row: r }) }] : []),
+                        { label: t('produits.stock.history'), icon: 'history', onClick: () => (location.hash = `#/produits/mouvements/${encodeURIComponent(r.sku)}`) },
+                      ]}
+                    />
+                  </span>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {dlg && (dlg.kind === 'alert' ? <AlertDialog row={dlg.row} onClose={() => setDlg(null)} /> : dlg.kind === 'transfer' ? <TransferDialog row={dlg.row} warehouses={whs.data ?? []} onClose={() => setDlg(null)} /> : <MoveDialog kind={dlg.kind} row={dlg.row} onClose={() => setDlg(null)} />)}
-    </Card>
-  );
-}
-
-function MoveDialog({ kind, row, onClose }: { kind: 'entry' | 'count' | 'loss'; row: StockRowT; onClose: () => void }) {
-  const { t } = useTranslation();
-  const [qty, setQty] = useState(kind === 'count' ? String(row.qty) : '');
-  const [note, setNote] = useState('');
-  const move = useAction('catalog.move', { success: t('produits.stock.updated'), onDone: onClose });
-  const submit = () => {
-    const v = Number(qty);
-    if (!Number.isInteger(v) || v < (kind === 'count' ? 0 : 1)) return toast(t('produits.stock.invalidQty'), 'bad');
-    if (kind === 'count' && v === row.qty) return onClose();
-    move.mutate({ variantId: row.variantId, warehouseId: row.warehouseId, kind, qty: v, note: note.trim() || null });
-  };
-  return (
-    <Modal
-      title={t(`produits.stock.${kind}Title`, { name: nameOf(row) })}
-      onClose={onClose}
-      footer={
-        <>
-          <button className="btn" onClick={onClose}>
-            {t('common.cancel')}
-          </button>
-          <button className="btn primary" disabled={move.isPending} onClick={submit}>
-            {t('common.save')}
-          </button>
-        </>
-      }
-    >
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit();
-        }}
-      >
-        <Field label={kind === 'count' ? t('produits.stock.countedQty') : t('produits.stock.qty')} hint={kind !== 'count' ? t('produits.stock.inDepot', { n: row.qty }) : undefined}>
-          <input type="number" min={kind === 'count' ? 0 : 1} step={1} required value={qty} onChange={(e) => setQty(e.target.value)} />
-        </Field>
-        <Field label={t('produits.stock.note')}>
-          <input value={note} placeholder={kind === 'entry' ? t('produits.stock.entryNotePh') : t('produits.stock.reasonPh')} onChange={(e) => setNote(e.target.value)} />
-        </Field>
-      </form>
-    </Modal>
-  );
-}
-
-function AlertDialog({ row, onClose }: { row: StockRowT; onClose: () => void }) {
-  const { t } = useTranslation();
-  const [v, setV] = useState(String(row.alertQty || 0));
-  const save = useAction('catalog.setAlert', { success: t('produits.stock.alertSaved'), onDone: onClose });
-  const submit = () => save.mutate({ variantId: row.variantId, warehouseId: row.warehouseId, alertQty: Math.max(0, Number(v) || 0) });
-  return (
-    <Modal
-      title={t('produits.stock.alertModal', { name: nameOf(row) })}
-      onClose={onClose}
-      footer={
-        <>
-          <button className="btn" onClick={onClose}>
-            {t('common.cancel')}
-          </button>
-          <button className="btn primary" disabled={save.isPending} onClick={submit}>
-            {t('common.save')}
-          </button>
-        </>
-      }
-    >
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit();
-        }}
-      >
-        <Field label={t('produits.stock.alertLabel')} hint={t('produits.stock.alertHint')}>
-          <input type="number" min={0} step={1} value={v} onChange={(e) => setV(e.target.value)} />
-        </Field>
-      </form>
-    </Modal>
-  );
-}
-
-function TransferDialog({ row, warehouses, onClose }: { row: StockRowT; warehouses: { id: number; name: string }[]; onClose: () => void }) {
-  const { t } = useTranslation();
-  const others = warehouses.filter((w) => w.id !== row.warehouseId);
-  const [to, setTo] = useState(String(others[0]?.id ?? ''));
-  const [qty, setQty] = useState('');
-  const [note, setNote] = useState('');
-  const tr = useAction('catalog.transfer', { success: t('produits.stock.transferDone'), onDone: onClose });
-  const submit = () => {
-    const v = Number(qty);
-    if (!Number.isInteger(v) || v < 1) return toast(t('produits.stock.invalidQty'), 'bad');
-    tr.mutate({ variantId: row.variantId, from: row.warehouseId, to: Number(to), qty: v, note: note.trim() || null });
-  };
-  return (
-    <Modal
-      title={t('produits.stock.transferTitle', { name: nameOf(row) })}
-      onClose={onClose}
-      footer={
-        <>
-          <button className="btn" onClick={onClose}>
-            {t('common.cancel')}
-          </button>
-          <button className="btn primary" disabled={tr.isPending || !to} onClick={submit}>
-            {t('produits.stock.transfer')}
-          </button>
-        </>
-      }
-    >
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit();
-        }}
-      >
-        <Field label={t('produits.stock.from')}>
-          <input value={`${row.warehouseName} — ${t('produits.stock.inDepot', { n: row.qty })}`} disabled />
-        </Field>
-        <Field label={t('produits.stock.toDepot')}>
-          <select value={to} onChange={(e) => setTo(e.target.value)}>
-            {others.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label={t('produits.stock.qty')}>
-          <input type="number" min={1} max={Math.max(1, row.qty)} step={1} required value={qty} onChange={(e) => setQty(e.target.value)} />
-        </Field>
-        <Field label={t('produits.stock.note')}>
-          <input value={note} onChange={(e) => setNote(e.target.value)} />
-        </Field>
-      </form>
-    </Modal>
-  );
-}
-
-// ---------------------------------------------------------------- Remise maximale par produit
-function DiscountCard() {
-  const { t } = useTranslation();
-  const { session } = useSession();
-  const admin = !!session?.isAdmin;
-  const prods = useRpc('catalog.products', { activeOnly: false });
-  const [vals, setVals] = useState<Record<number, string>>({});
-  useEffect(() => {
-    if (prods.data) setVals(Object.fromEntries(prods.data.map((p) => [p.id, p.maxDiscount === null ? '' : String(p.maxDiscount)])));
-  }, [prods.data]);
-  const save = useAction('catalog.setMaxDiscounts', { success: t('produits.discount.saved') });
-  const list = (prods.data ?? []).filter((p) => !p.isService);
-  if (!list.length) return null;
-  return (
-    <Card
-      className="bjrm"
-      title={t('produits.discount.title')}
-      help={t('produits.discount.help')}
-      actions={
-        admin ? (
-          <button
-            type="button"
-            className="btn primary"
-            disabled={save.isPending}
-            onClick={() =>
-              save.mutate({
-                items: list.map((p) => ({ id: p.id, maxDiscount: vals[p.id] === '' || vals[p.id] === undefined ? null : Math.max(0, Number(vals[p.id]) || 0) })),
-              })
-            }
-          >
-            {t('common.save')}
-          </button>
-        ) : undefined
-      }
-    >
-      <div className="tbl-wrap">
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>{t('produits.products.product')}</th>
-              <th className="num">{t('produits.discount.price')}</th>
-              <th className="num">{t('produits.discount.max')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.map((p) => (
-              <tr key={p.id}>
-                <td data-l={t('produits.products.product')}>
-                  <b>{p.name}</b>
-                </td>
-                <td className="num ltr" data-l={t('produits.discount.price')}>
-                  {da(p.price)}
-                </td>
-                <td className="num" data-l={t('produits.discount.max')}>
-                  <input
-                    type="number"
-                    min={0}
-                    step={50}
-                    disabled={!admin}
-                    value={vals[p.id] ?? ''}
-                    aria-label={t('produits.discount.label', { name: p.name })}
-                    style={{ width: 120 }}
-                    onChange={(e) => setVals({ ...vals, [p.id]: e.target.value })}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Card>
+            </div>
+          </div>
+        )}
+        <p className="pd-note">{t('produits.stock.help')}</p>
+      </section>
+      {dlg && (dlg.kind === 'alert' ? <AlertDialog row={dlg.row} onClose={() => setDlg(null)} /> : dlg.kind === 'transfer' ? <TransferDialog row={dlg.row} warehouses={depots} onClose={() => setDlg(null)} /> : <MoveDialog kind={dlg.kind} row={dlg.row} onClose={() => setDlg(null)} />)}
+    </>
   );
 }
 
 // ---------------------------------------------------------------- Produits
+type ProdFilter = 'active' | 'hidden' | 'service' | 'all';
+
 function ProductsTab() {
   const { t } = useTranslation();
   const [q, setQ] = useState('');
-  const dq = useDebounced(q, 200);
-  const prods = useRpc('catalog.products', { q: dq || undefined });
+  const [f, setF] = useState<ProdFilter>('active');
+  const prods = useRpc('catalog.products', {});
+  const st = useRpc('catalog.stock', { withHidden: true });
   const [edit, setEdit] = useState<number | 'new' | null>(null);
-  const rows = prods.data ?? [];
+  const stock = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const r of st.data ?? []) m.set(r.productId, (m.get(r.productId) ?? 0) + r.available);
+    return m;
+  }, [st.data]);
+  const all = prods.data ?? [];
+  const found = all.filter((p) => !q.trim() || matches(q, p.name, p.sku, ...p.variants.map((v) => `${v.title} ${v.sku}`)));
+  const test: Record<ProdFilter, (p: (typeof all)[number]) => boolean> = { active: (p) => p.active, hidden: (p) => !p.active, service: (p) => p.isService, all: () => true };
+  const rows = found.filter(test[f]);
   return (
-    <Card
-      title={t('produits.products.count', { count: rows.length })}
-      actions={
-        <button className="btn primary" onClick={() => setEdit('new')}>
-          {t('produits.products.new')}
-        </button>
-      }
-    >
-      <div className="row" style={{ marginBottom: 8 }}>
-        <div className="grow">
-          <input type="search" placeholder={t('produits.products.searchPh')} aria-label={t('produits.products.searchPh')} value={q} onChange={(e) => setQ(e.target.value)} />
-        </div>
-      </div>
+    <section className="card pd-card">
+      <Toolbar
+        action={
+          <button className="btn primary" onClick={() => setEdit('new')}>
+            <Icon name="plus" />
+            {t('produits.products.new')}
+          </button>
+        }
+      >
+        <SearchBox value={q} onChange={setQ} placeholder={t('produits.products.searchPh')} />
+        <Filters<ProdFilter>
+          value={f}
+          onChange={setF}
+          label={t('produits.products.filters')}
+          items={(['active', 'hidden', 'service', 'all'] as const).map((k) => ({ value: k, label: t(`produits.products.f_${k}`), count: found.filter(test[k]).length }))}
+        />
+      </Toolbar>
       {prods.isLoading ? (
         <Loading />
       ) : prods.error ? (
         <ErrorBox error={prods.error} onRetry={() => prods.refetch()} />
       ) : !rows.length ? (
-        <Empty>{t('produits.stock.empty')}</Empty>
+        <Empty>{q.trim() ? t('produits.ui.noMatch') : t('produits.products.empty')}</Empty>
       ) : (
-        <div className="tbl-wrap">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>{t('produits.products.product')}</th>
-                <th className="wide">{t('produits.products.variants')}</th>
-                <th className="num">{t('produits.products.price')}</th>
-                <th className="num">{t('produits.products.cost')}</th>
-                <th className="num">{t('produits.products.margin')}</th>
-                <th>{t('produits.products.state')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((p) => (
-                <tr key={p.id} className="clickable" onClick={() => setEdit(p.id)}>
-                  <td data-l={t('produits.products.product')}>
+        <div className="pd-list">
+          <div className="pd-row pd-head pd-prows" aria-hidden="true">
+            <span className="a-name">{t('produits.products.product')}</span>
+            <span className="a-vars">{t('produits.products.variants')}</span>
+            <span className="a-price num">{t('produits.products.price')}</span>
+            <span className="a-cost num">{t('produits.products.cost')}</span>
+            <span className="a-margin num">{t('produits.products.margin')}</span>
+            <span className="a-avail num">{t('produits.products.available')}</span>
+            <span className="a-state">{t('produits.products.state')}</span>
+          </div>
+          {rows.map((p) => {
+            const vars = p.variants.filter((v) => v.title && v.active).map((v) => v.title);
+            return (
+              <div
+                key={p.id}
+                className={`pd-row pd-prows pd-click ${p.active ? '' : 'dim'}`}
+                role="button"
+                tabIndex={0}
+                aria-label={t('produits.form.editTitle', { name: p.name })}
+                onClick={() => setEdit(p.id)}
+                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), setEdit(p.id))}
+              >
+                <span className="a-name pd-prod">
+                  <span className="pd-thumb" aria-hidden="true">
+                    {p.photo ? <img src={p.photo} alt="" loading="lazy" /> : <Icon name={p.isService ? 'sparkles' : 'package'} />}
+                  </span>
+                  <span className="pd-name">
                     <b>{p.name}</b>
-                    <small className="ltr">{p.sku}</small>
-                    {p.isService && <span className="chip">{t('produits.products.service')}</span>}
-                    {p.parts.length > 0 && <span className="chip">🔧 {t('produits.products.parts', { n: p.parts.length })}</span>}
-                  </td>
-                  <td className="wide" data-l={t('produits.products.variants')}>
-                    {p.variants.filter((v) => v.title && v.active).map((v) => v.title).join(', ') || '—'}
-                  </td>
-                  <td className="num ltr" data-l={t('produits.products.price')}>
-                    {da(p.price)}
-                  </td>
-                  <td className="num ltr" data-l={t('produits.products.cost')}>
-                    {da(p.cost)}
-                  </td>
-                  <td className="num ltr" data-l={t('produits.products.margin')}>
-                    {da(p.price - p.cost)}
-                  </td>
-                  <td data-l={t('produits.products.state')}>{p.active ? <span className="badge t-ok">{t('produits.products.active')}</span> : <span className="badge t-off">{t('produits.products.hidden')}</span>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <small>
+                      <span className="ltr">{p.sku}</span>
+                      {p.isService && <span className="chip">{t('produits.products.service')}</span>}
+                      {p.parts.length > 0 && <span className="chip">{t('produits.products.parts', { n: p.parts.length })}</span>}
+                    </small>
+                  </span>
+                </span>
+                <span className="a-vars pd-vars">{vars.length ? <bdi>{vars.join(', ')}</bdi> : <span className="pd-none">—</span>}</span>
+                <span className="pd-sub">
+                  <span className="a-price num" data-l={t('produits.prices.sale')}>
+                    <b className="ltr">{da(p.price)}</b>
+                  </span>
+                  <span className="a-cost num" data-l={t('produits.prices.cost')}>
+                    <span className="ltr">{p.isService ? '—' : da(p.cost)}</span>
+                  </span>
+                  <span className="a-margin num" data-l={t('produits.prices.margin')}>
+                    <span className="ltr">{p.isService ? '—' : da(p.price - p.cost)}</span>
+                  </span>
+                  <span className="a-avail num" data-l={t('produits.products.available')}>
+                    <span className="ltr">{p.isService ? '—' : n(stock.get(p.id) ?? 0)}</span>
+                  </span>
+                </span>
+                <span className="a-state">{p.active ? <span className="badge t-ok">{t('produits.products.active')}</span> : <span className="badge t-off">{t('produits.products.hidden')}</span>}</span>
+              </div>
+            );
+          })}
         </div>
       )}
       {edit !== null && <ProductForm id={edit === 'new' ? null : edit} onClose={() => setEdit(null)} />}
-    </Card>
+    </section>
   );
 }
 
-// ---------------------------------------------------------------- Mouvements
-const REASONS = ['entry', 'count', 'loss', 'transfer_in', 'transfer_out', 'shipped', 'returned', 'exchange_in'];
+// ---------------------------------------------------------------- Mouvements de stock
+const REASONS = ['purchase', 'entry', 'count', 'loss', 'transfer_in', 'transfer_out', 'shipped', 'returned', 'exchange_in'];
 
-function MovesTab() {
+function MovesTab({ initial }: { initial?: string }) {
   const { t } = useTranslation();
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(initial ?? '');
   const [reason, setReason] = useState('');
   const [wh, setWh] = useState('');
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(50);
   const dq = useDebounced(q);
   useEffect(() => setPage(1), [dq, reason, wh, size]);
-  const whs = useRpc('catalog.warehouses', {});
+  const { many } = useDepots();
   const mv = useRpc('catalog.movements', { q: dq || undefined, reason: reason || undefined, warehouseId: wh ? Number(wh) : undefined, page, pageSize: size });
-  const many = (whs.data?.length ?? 0) > 1;
-  const reasonLabel = useMemo(() => (r: string) => t(`produits.moves.reasons.${r}`, { defaultValue: r }), [t]);
+  const reasonLabel = (r: string) => t(`produits.moves.reasons.${r}`, { defaultValue: r });
   return (
-    <Card title={t('produits.moves.title')}>
-      <div className="filters">
-        <label className="field">
-          <span className="lab">{t('common.search')}</span>
-          <input type="search" placeholder={t('produits.moves.searchPh')} value={q} onChange={(e) => setQ(e.target.value)} />
-        </label>
-        <label className="field">
-          <span className="lab">{t('produits.moves.kind')}</span>
-          <select value={reason} onChange={(e) => setReason(e.target.value)}>
+    <section className="card pd-card">
+      <Toolbar>
+        <SearchBox value={q} onChange={setQ} placeholder={t('produits.moves.searchPh')} />
+        <div className="pd-sels">
+          <select className={`pd-sel ${reason ? 'on' : ''}`} aria-label={t('produits.moves.kind')} value={reason} onChange={(e) => setReason(e.target.value)}>
             <option value="">{t('produits.moves.allKinds')}</option>
             {REASONS.map((r) => (
               <option key={r} value={r}>
@@ -454,21 +297,9 @@ function MovesTab() {
               </option>
             ))}
           </select>
-        </label>
-        {many && (
-          <label className="field">
-            <span className="lab">{t('produits.moves.depot')}</span>
-            <select value={wh} onChange={(e) => setWh(e.target.value)}>
-              <option value="">{t('produits.moves.allDepots')}</option>
-              {whs.data?.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-      </div>
+          <DepotSelect value={wh} onChange={setWh} all={t('produits.ui.allDepots')} label={t('produits.moves.depot')} />
+        </div>
+      </Toolbar>
       {mv.isLoading ? (
         <Loading />
       ) : mv.error ? (
@@ -477,59 +308,59 @@ function MovesTab() {
         <Empty>{t('produits.moves.empty')}</Empty>
       ) : (
         <>
-          <div className="tbl-wrap">
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>{t('produits.moves.when')}</th>
-                  <th>{t('produits.moves.product')}</th>
-                  {many && <th>{t('produits.moves.depot')}</th>}
-                  <th>{t('produits.moves.kind')}</th>
-                  <th className="num">{t('produits.moves.qty')}</th>
-                  <th>{t('produits.moves.order')}</th>
-                  <th>{t('produits.moves.by')}</th>
-                  <th className="wide">{t('produits.moves.note')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mv.data.rows.map((m) => (
-                  <tr key={m.id}>
-                    <td data-l={t('produits.moves.when')} className="ltr">
-                      {dateTime(m.at)}
-                    </td>
-                    <td data-l={t('produits.moves.product')}>
-                      {m.label}
-                      <small className="ltr">{m.sku}</small>
-                    </td>
-                    {many && <td data-l={t('produits.moves.depot')}>{m.warehouseName}</td>}
-                    <td data-l={t('produits.moves.kind')}>{reasonLabel(m.reason)}</td>
-                    <td className="num" data-l={t('produits.moves.qty')}>
-                      <b className={`ltr ${m.delta < 0 ? 'stock-low' : ''}`}>
-                        {m.delta > 0 ? '+' : ''}
-                        {n(m.delta)}
-                      </b>
-                    </td>
-                    <td data-l={t('produits.moves.order')}>
-                      {m.orderRef ? (
-                        <button type="button" className="linkish ltr" onClick={() => openOrder(m.orderId!)}>
-                          {m.orderRef}
-                        </button>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td data-l={t('produits.moves.by')}>{m.userName ?? '—'}</td>
-                    <td className="wide" data-l={t('produits.moves.note')}>
-                      {m.note ?? ''}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="pd-list">
+            <div className={`pd-row pd-head pd-mv ${many ? 'many' : ''}`} aria-hidden="true">
+              <span className="a-when">{t('produits.moves.when')}</span>
+              <span className="a-name">{t('produits.moves.product')}</span>
+              {many && <span className="a-depot">{t('produits.moves.depot')}</span>}
+              <span className="a-kind">{t('produits.moves.kind')}</span>
+              <span className="a-qty num">{t('produits.moves.qty')}</span>
+              <span className="a-ref">{t('produits.moves.ref')}</span>
+              <span className="a-note">{t('produits.moves.note')}</span>
+            </div>
+            {mv.data.rows.map((m) => (
+              <div key={m.id} className={`pd-row pd-mv ${many ? 'many' : ''}`}>
+                <span className="a-name pd-name">
+                  <b>{m.label}</b>
+                  <small className="ltr">{m.sku}</small>
+                </span>
+                <span className="a-qty num">
+                  <Delta v={m.delta} />
+                </span>
+                <span className="pd-sub">
+                  <span className="a-kind">
+                    <span className={`pd-reason r-${m.reason}`}>{reasonLabel(m.reason)}</span>
+                  </span>
+                  <span className={`a-ref ${m.orderRef || m.purchaseRef || m.inventoryRef ? '' : 'pd-empty'}`}>
+                    {m.orderRef ? (
+                      <button type="button" className="pd-ref ltr" onClick={() => openOrder(m.orderId!)}>
+                        {m.orderRef}
+                      </button>
+                    ) : m.purchaseRef ? (
+                      <a className="pd-ref ltr" href={`#/produits/achats/${m.purchaseId}`}>
+                        {m.purchaseRef}
+                      </a>
+                    ) : m.inventoryRef ? (
+                      <button type="button" className="pd-ref ltr" onClick={() => setQ(m.inventoryRef!)}>
+                        {m.inventoryRef}
+                      </button>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </span>
+                  {many && <span className="a-depot pd-muted">{m.warehouseName}</span>}
+                  <span className="a-when pd-muted">
+                    <span className="ltr">{dateTime(m.at)}</span>
+                    {m.userName && <small>{m.userName}</small>}
+                  </span>
+                </span>
+                {m.note ? <span className="a-note pd-mnote">{m.note}</span> : null}
+              </div>
+            ))}
           </div>
           <Pager page={page} pageSize={size} total={mv.data.total} onPage={setPage} onSize={setSize} />
         </>
       )}
-    </Card>
+    </section>
   );
 }

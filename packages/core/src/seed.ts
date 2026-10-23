@@ -8,6 +8,7 @@ import { seed as seed_orders } from './seeds/orders';
 import { seed as seed_confirmation } from './seeds/confirmation';
 import { seed as seed_stats } from './seeds/stats';
 import { seed as seed_catalog } from './seeds/catalog';
+import { seed as seed_stock } from './seeds/stock';
 import { seed as seed_customers } from './seeds/customers';
 import { seed as seed_suivi } from './seeds/suivi';
 import { seed as seed_sav } from './seeds/sav';
@@ -332,6 +333,7 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number } =
   await seed_confirmation(db, users, now);
   await seed_stats(db, users, now);
   await seed_catalog(db, users, now);
+  await seed_stock(db, users, now);
   await seed_customers(db, users, now);
   await seed_suivi(db, users, now);
   await seed_sav(db, users, now);
