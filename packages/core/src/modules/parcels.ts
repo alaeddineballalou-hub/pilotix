@@ -141,9 +141,35 @@ async function demoInfo(db: Db, o: any): Promise<ParcelInfo> {
     amount: num(o.total),
     deliveryPrice: null,
     returnPrice: null,
+    // the preview: the prices shown in Livraison › ZR Express; a parcel can be given to someone else until it is back
+    swap: { eligible: f !== 'delivered' && f !== 'returned' && f !== 'exchanged', count: 0, sameCityPrice: 200, differentCityPrice: 350 },
     history,
     sms,
   };
+}
+
+/** Where an exchange's return parcel is (the old product coming back). The preview: it leaves with the livreur once
+ *  the new product is delivered. */
+async function returnLeg(ctx: Ctx, o: any, back: { tracking: string; ext_id: string | null }): Promise<ReturnLeg> {
+  if (isDemo(ctx)) {
+    const done = ['delivered', 'exchanged'].includes(o.follow_status);
+    return done
+      ? { state: 'Retour vers vendeur', color: STEP_COLOR.returning!, situation: null, waiting: false }
+      : { state: 'En attente', color: STEP_COLOR.prepared!, situation: null, waiting: true };
+  }
+  try {
+    const r = (await courier(ctx, 'parcel', { companyId: num(o.company_id), item: { id: num(o.id), tracking: back.tracking, extId: back.ext_id ?? null } })) as ParcelInfo;
+    return { state: r.state, color: r.color, situation: r.situation, waiting: false };
+  } catch {
+    return { state: null, color: null, situation: null, waiting: false };
+  }
+}
+export interface ReturnLeg {
+  state: string | null;
+  color: string | null;
+  situation: string | null;
+  /** not on its way yet: it leaves when the new product is delivered */
+  waiting: boolean;
 }
 
 // ---------------------------------------------------------------- applying an accepted request to the order
@@ -257,15 +283,16 @@ export const parcelsProcs = {
   'parcel.info': proc(['suivi', 'depot', 'confirmation'], z.object({ orderId: id }), async (ctx, { orderId }) => {
     const o = await parcelOf(ctx.db, orderId);
     const changes = (await ctx.db.query(`${CHANGES_SQL} WHERE ch.order_id = $1 ORDER BY ch.created_at DESC`, [orderId])).map(toChange);
-    const back = (await ctx.db.query('SELECT tracking FROM parcel_returns WHERE order_id = $1', [orderId]))[0];
+    const back = (await ctx.db.query('SELECT tracking, ext_id FROM parcel_returns WHERE order_id = $1', [orderId]))[0];
     const base = { companyId: numOrNull(o.company_id), companyName: (o.company_name as string | null) ?? null, returnTracking: (back?.tracking as string | undefined) ?? null, changes };
-    if (!servesFrom(o)) return { ...base, supported: false, info: null as ParcelInfo | null, error: null as string | null };
-    if (isDemo(ctx)) return { ...base, supported: true, info: await demoInfo(ctx.db, o), error: null };
+    if (!servesFrom(o)) return { ...base, supported: false, info: null as ParcelInfo | null, returnInfo: null as ReturnLeg | null, error: null as string | null };
+    const returnInfo = back ? await returnLeg(ctx, o, back) : null;
+    if (isDemo(ctx)) return { ...base, supported: true, info: await demoInfo(ctx.db, o), returnInfo, error: null };
     try {
       const info = (await courier(ctx, 'parcel', { companyId: num(o.company_id), item: { id: num(o.id), tracking: o.tracking, extId: o.ext_id ?? null } })) as ParcelInfo;
-      return { ...base, supported: true, info, error: null };
+      return { ...base, supported: true, info, returnInfo, error: null };
     } catch (e: any) {
-      return { ...base, supported: true, info: null, error: (e?.message as string) ?? 'Erreur' };
+      return { ...base, supported: true, info: null, returnInfo, error: (e?.message as string) ?? 'Erreur' };
     }
   }),
 

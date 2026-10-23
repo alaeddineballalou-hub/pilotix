@@ -17,6 +17,7 @@ import { trackOf } from '../../lib/items';
 import { CopyCode } from '../../ui/CopyCode';
 import { useLabelPrinter } from '../depot/Labels';
 import { CourierPanel } from '../suivi/CourierPanel';
+import { useIsPhone } from '../../lib/useMedia';
 
 /** Courier kinds with an API (send / label / status / cancel go through the delivery procedures). */
 export const API_KINDS = ['zr', 'zr_legacy', 'yalidine', 'ecotrack', 'noest', 'custom'];
@@ -78,6 +79,7 @@ export default function OrderCard({ id, onClose }: { id: number; onClose: () => 
 
 function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose: () => void }) {
   const { t } = useTranslation();
+  const isPhone = useIsPhone();
   const { has, session } = useSession();
   const qc = useQueryClient();
   const look = useRpc('orders.lookups', {}, { staleTime: 5 * 60_000 });
@@ -404,7 +406,7 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
         </dl>
       </section>
 
-      {sent && <CourierPanel o={o} />}
+      {sent && <CourierPanel o={o} phone={isPhone} />}
 
       <section className="card">
         <h3>{t('orders.card.timeline')}</h3>

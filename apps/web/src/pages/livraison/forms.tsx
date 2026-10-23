@@ -555,6 +555,7 @@ export function ZrModal({ company, onClose }: { company: Company; onClose: () =>
   const name = company.name;
   return (
     <Modal
+      sheet
       title={t('livraison.zr.title', { name })}
       onClose={onClose}
       wide

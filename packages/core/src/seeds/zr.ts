@@ -51,4 +51,28 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
       await db.query(`UPDATE orders SET company_id = $2 WHERE id = $1`, [x.id, zr]);
     }
   }
+
+  // an SAV exchange already with ZR, out for delivery: ZR brings the new product and takes the old one back in its
+  // return parcel (which leaves once the new one is delivered)
+  const ex = (await db.query(`SELECT id, ref, original_order_id, shipped_at FROM orders WHERE is_exchange AND original_order_id IS NOT NULL AND follow_status = 'shipped' AND tracking IS NOT NULL ORDER BY id LIMIT 1`))[0];
+  const orig = ex ? (await db.query(`SELECT id, ref FROM orders WHERE id = $1 AND follow_status IN ('delivered','exchanged')`, [ex.original_order_id]))[0] : null;
+  if (ex && orig) {
+    const at = (h: number) => new Date(now - h * 3_600_000).toISOString();
+    await db.query(`UPDATE orders SET company_id = $2, tracking = $3, ext_status = 'Livré' WHERE id = $1`, [orig.id, zr, fakeTracking('zr', orig.ref, 0)]);
+    await db.query(`UPDATE orders SET company_id = $2, tracking = $3, follow_status = 'out_for_delivery', ext_status = 'En livraison', ext_status_at = $4, updated_at = $4 WHERE id = $1`, [ex.id, zr, fakeTracking('zr', ex.ref, 0), at(3)]);
+    await db.query(`INSERT INTO order_events (order_id, at, user_id, kind, from_value, to_value, note) VALUES ($1,$2,NULL,'follow_status','shipped','out_for_delivery',NULL)`, [ex.id, at(3)]);
+    await db.query(`INSERT INTO parcel_returns (order_id, company_id, tracking, ext_id) VALUES ($1,$2,$3,$4) ON CONFLICT (order_id) DO NOTHING`, [ex.id, zr, fakeTracking('zr', ex.ref, 1), `demo-return-${ex.id}`]);
+    if (users.suivi) await db.query(`UPDATE orders SET follow_agent_id = $2 WHERE id = $1`, [ex.id, users.suivi]);
+  }
+
+  // a réclamation created at ZR from Pilotix, with ZR's answer
+  const cl = (await db.query(`SELECT c.id FROM claims c JOIN delivery_companies d ON d.id = c.company_id WHERE d.kind = 'zr' AND c.status <> 'resolved' AND c.livreur_id IS NULL ORDER BY c.id LIMIT 1`))[0];
+  if (cl)
+    await db.query(`UPDATE claims SET channel = 'api', ext_id = $2, ext_ref = $3, ext_status = 'En cours de traitement', ext_answer = $4, ext_synced_at = $5 WHERE id = $1`, [
+      cl.id,
+      `demo-claim-${num(cl.id)}`,
+      `RC-${48210 + num(cl.id)}`,
+      'Le livreur repasse demain matin ; le client a été prévenu par SMS.',
+      new Date(now - 2 * 3_600_000).toISOString(),
+    ]);
 }

@@ -16,6 +16,7 @@ import { da, dur, when, wilayaName } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { useFullScreen } from '../../lib/fullScreen';
+import { ZrExchange } from '../suivi/CourierPanel';
 import { useSession } from '../../lib/session';
 import { ErrorBox, Icon, Loading, StatusBadge } from '../../ui/kit';
 import { toast } from '../../ui/toast';
@@ -811,6 +812,8 @@ function TicketPage({ id, onClose, onOpen }: { id: number; onClose: () => void; 
             <StatusBadge kind="follow" status={exchange.followStatus} />
           </button>
         )}
+        {/* at ZR: the new product going out and the old one coming back, each with its number */}
+        {exchange?.tracking && <ZrExchange o={exchange} />}
 
         {/* who takes care of it */}
         {activeT && (

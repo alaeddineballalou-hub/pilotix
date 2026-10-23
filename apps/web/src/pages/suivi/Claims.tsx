@@ -5,90 +5,42 @@ import { rpc } from '../../lib/backend';
 import { since, when } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
-import { copyText, Empty, ErrorBox, Icon, Loading } from '../../ui/kit';
+import { useIsPhone } from '../../lib/useMedia';
+import { Empty, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
-import { claimText, ClaimCompany, waLink } from './common';
+import { ClaimCompany, waLink } from './common';
 import { trackOf } from '../../lib/items';
+import { CLAIM_REASONS, ClaimFormProps, ClaimRow, Reason, SentClaim, STATUS_TONE, Target, useClaimForm, useSendClaim } from './claimKit';
+import { AnswerSheet, ClaimSheet, RemindSheet, SendSheet } from './PhoneClaims';
 
-export const CLAIM_REASONS = ['relivrer', 'late', 'nocall', 'fakedeliv', 'fakeret', 'address', 'damaged', 'money', 'noreturn', 'other'] as const;
-type Reason = (typeof CLAIM_REASONS)[number];
-type Via = 'whatsapp' | 'email' | 'copy' | 'phone';
-const STATUS_TONE: Record<string, string> = { waiting: 't-warn', still_waiting: 't-bad', resolved: 't-ok' };
+export { CLAIM_REASONS, useTarget } from './claimKit';
+export type { ClaimRow } from './claimKit';
 
-interface Target {
-  name: string;
-  wa: string | null;
-  email: string | null;
-  phone: string | null;
-}
-
-/** Who receives the claim of an order: its courier's claim desk, or our own livreur. */
-export function useTarget(o: Order | null, toLivreur: boolean) {
-  const c = useRpc('suivi.contacts', {}).data;
-  if (!o || !c) return { target: null as Target | null, shop: c?.shopName ?? '', own: false, api: false };
-  const comp = c.companies.find((x: ClaimCompany) => x.id === o.companyId);
-  const own = toLivreur || comp?.kind === 'own';
-  if (own) {
-    const lv = c.livreurs.find((l: { id: number }) => l.id === o.livreurId);
-    return { target: { name: lv?.name ?? o.livreurName ?? '—', wa: lv?.phone ?? null, email: null, phone: lv?.phone ?? null }, shop: c.shopName, own, api: false };
-  }
-  return { target: comp ? { name: comp.name, wa: comp.wa, email: comp.email, phone: comp.phone } : null, shop: c.shopName, own, api: !!comp?.api && !!trackOf(o) };
+/** A new réclamation: a dialog on a computer, a sheet on a phone. */
+export function NewClaimModal(p: ClaimFormProps) {
+  return useIsPhone() ? <ClaimSheet {...p} /> : <NewClaimDesk {...p} />;
 }
 
 /** Step 1: choose the order and the problem → the claim is saved, then step 2: send it. */
-export function NewClaimModal({ pre, toLivreur = false, reason = 'late', details = '', onClose }: { pre?: Order | null; toLivreur?: boolean; reason?: Reason; details?: string; onClose: () => void }) {
+function NewClaimDesk(p: ClaimFormProps) {
   const { t } = useTranslation();
-  const [o, setO] = useState<Order | null>(pre ?? null);
-  const [q, setQ] = useState(pre ? trackOf(pre) || pre.ref : '');
-  const [deb, setDeb] = useState('');
-  const [mot, setMot] = useState<Reason>(reason);
-  const [det, setDet] = useState(details);
-  const [err, setErr] = useState('');
-  const [made, setMade] = useState<SentClaim | null>(null);
-  const [cat, setCat] = useState('');
-  const { target, shop, own, api } = useTarget(o, toLivreur);
-  const cats = useRpc('suivi.claimCategories', { companyId: o?.companyId ?? 0 }, { enabled: api && !!o?.companyId, staleTime: 600_000 });
-  useEffect(() => {
-    const h = setTimeout(() => setDeb(q.trim()), 250);
-    return () => clearTimeout(h);
-  }, [q]);
-  const res = useRpc('suivi.findOrders', { q: deb }, { enabled: deb.length >= 2 && !o });
-  const list = res.data ?? [];
-  const create = useAction('suivi.claimCreate', {
-    onDone: (c) => {
-      if (c.extId) {
-        toast(t('suivi.rec.apiSent', { ref: c.ref, name: c.companyName ?? '', n: c.extRef ?? '' }), 'ok');
-        onClose();
-      } else setMade(c);
-    },
-  });
-
-  // copy the tracking when opened from an alert (the courier desk asks for it first)
-  useEffect(() => {
-    if (pre && trackOf(pre) && !toLivreur) copyText(trackOf(pre)).then((ok) => ok && toast(t('suivi.rec.copiedTracking', { v: trackOf(pre) }), 'ok'));
-  }, [pre, toLivreur, t]);
-
-  if (made && o) return <SendModal claim={made} order={o} target={target ?? { name: o.companyName ?? o.livreurName ?? '—', wa: null, email: null, phone: null }} shop={shop} again={false} onClose={onClose} />;
-  const prepare = () => {
-    setErr('');
-    if (!o) return setErr(t('suivi.rec.chooseOrder'));
-    const message = claimText(t, { ref: '…', reason: mot, details: det.trim() }, o, target?.name ?? '', shop);
-    create.mutate({ orderId: o.id, reason: mot, details: det.trim(), message, channel: 'whatsapp', toLivreur: own, viaApi: api, categoryId: api && cat ? cat : null });
-  };
+  const f = useClaimForm(p);
+  const { o, target, api } = f;
+  if (f.made && o) return <SendModal claim={f.made} order={o} target={target ?? { name: o.companyName ?? o.livreurName ?? '—', wa: null, email: null, phone: null }} shop={f.shop} again={false} onClose={p.onClose} />;
   return (
     <Modal
       wide
       title={t('suivi.rec.newTitle')}
-      onClose={onClose}
+      onClose={p.onClose}
       footer={
         <>
-          <button className="btn" onClick={onClose}>
+          <button className="btn" onClick={p.onClose}>
             {t('common.cancel')}
           </button>
-          <button className="btn primary" disabled={create.isPending} onClick={prepare}>
+          <button className="btn primary" disabled={f.create.isPending} onClick={f.prepare}>
             {api && <Icon name="send" />}
-            {create.isPending && api ? t('suivi.rec.apiSending', { name: target?.name ?? '' }) : api ? t('suivi.rec.apiSend', { name: target?.name ?? '' }) : t('suivi.rec.prepare')}
+            {f.create.isPending && api ? t('suivi.rec.apiSending', { name: target?.name ?? '' }) : api ? t('suivi.rec.apiSend', { name: target?.name ?? '' }) : t('suivi.rec.prepare')}
           </button>
         </>
       }
@@ -96,15 +48,15 @@ export function NewClaimModal({ pre, toLivreur = false, reason = 'late', details
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <label className="field">
           <span className="lab">{t('suivi.rec.order')}</span>
-          <input type="search" value={q} autoComplete="off" placeholder={t('suivi.rec.orderPh')} onChange={(e) => (setQ(e.target.value), setO(null))} autoFocus />
+          <input type="search" value={f.q} autoComplete="off" placeholder={t('suivi.rec.orderPh')} onChange={(e) => f.search(e.target.value)} autoFocus />
         </label>
-        {!o && deb.length >= 2 && (
+        {!o && f.deb.length >= 2 && (
           <div className="bjr-pick">
-            {res.isFetching && !res.data ? (
+            {f.searching ? (
               <Loading />
-            ) : list.length ? (
-              list.map((x) => (
-                <button key={x.id} type="button" onClick={() => (setO(x), setQ(x.ref))}>
+            ) : f.found.length ? (
+              f.found.map((x) => (
+                <button key={x.id} type="button" onClick={() => f.choose(x)}>
                   <b>
                     <span className="ltr">{x.ref}</span> · {x.customerName}
                   </b>
@@ -123,7 +75,7 @@ export function NewClaimModal({ pre, toLivreur = false, reason = 'late', details
           <div className="bjr-sum">
             <b className="ltr">{o.ref}</b>
             <span>{t('suivi.rec.tracking', { v: trackOf(o) || '—' })}</span>
-            <span>{own ? o.livreurName : o.companyName || t('suivi.rec.noCompany')}</span>
+            <span>{f.own ? o.livreurName : o.companyName || t('suivi.rec.noCompany')}</span>
             <span>{o.customerName}</span>
             <span className="ltr">{o.phone}</span>
             {o.followStatus && <span className="badge t-info">{t(`status.follow.${o.followStatus}`)}</span>}
@@ -131,7 +83,7 @@ export function NewClaimModal({ pre, toLivreur = false, reason = 'late', details
         )}
         <label className="field">
           <span className="lab">{t('suivi.rec.problem')}</span>
-          <select value={mot} onChange={(e) => setMot(e.target.value as Reason)}>
+          <select value={f.mot} onChange={(e) => f.setMot(e.target.value as Reason)}>
             {CLAIM_REASONS.map((r) => (
               <option key={r} value={r}>
                 {t(`suivi.rec.reasons.${r}`)}
@@ -142,9 +94,9 @@ export function NewClaimModal({ pre, toLivreur = false, reason = 'late', details
         {api && (
           <label className="field">
             <span className="lab">{t('suivi.rec.apiCategory', { name: target?.name ?? '' })}</span>
-            <select value={cat} onChange={(e) => setCat(e.target.value)} disabled={cats.isLoading}>
+            <select value={f.cat} onChange={(e) => f.setCat(e.target.value)} disabled={f.catsLoading}>
               <option value="">{t('suivi.rec.apiCategoryAuto')}</option>
-              {(cats.data ?? []).map((x) => (
+              {f.cats.map((x) => (
                 <option key={x.id} value={x.id}>
                   {x.name}
                 </option>
@@ -154,47 +106,27 @@ export function NewClaimModal({ pre, toLivreur = false, reason = 'late', details
         )}
         <label className="field">
           <span className="lab">{t('suivi.rec.details')}</span>
-          <textarea value={det} placeholder={t('suivi.rec.detailsPh')} onChange={(e) => setDet(e.target.value)} />
+          <textarea value={f.det} placeholder={t('suivi.rec.detailsPh')} onChange={(e) => f.setDet(e.target.value)} />
         </label>
         {api && <p className="muted small">{t('suivi.rec.apiHelp', { name: target?.name ?? '' })}</p>}
-        {err && <p className="form-err">{err}</p>}
+        {f.err && <p className="form-err">{f.err}</p>}
       </div>
     </Modal>
   );
 }
 
-interface SentClaim {
-  id: number;
-  ref: string;
-  reason: string;
-  details: string;
-  viaApi?: boolean;
-  extId?: string | null;
-  extRef?: string | null;
-  extError?: string | null;
-  companyName?: string | null;
+type SendProps = { claim: SentClaim; order: Order | null; target: Target; shop: string; again: boolean; onClose: () => void };
+
+/** Step 2 (or a relance): a dialog on a computer, a sheet on a phone. */
+export function SendModal(p: SendProps) {
+  return useIsPhone() ? <SendSheet {...p} /> : <SendDesk {...p} />;
 }
 
 /** Step 2: the message, editable, sent by WhatsApp / e-mail / copy; each way is written in the claim history. */
-export function SendModal({ claim, order, target, shop, again, onClose }: { claim: SentClaim; order: Order | null; target: Target; shop: string; again: boolean; onClose: () => void }) {
+function SendDesk(p: SendProps) {
+  const { claim, target, onClose } = p;
   const { t } = useTranslation();
-  const push = useAction('suivi.claimPush', {
-    onDone: (c) => {
-      if (c.extId) {
-        toast(t('suivi.rec.apiSent', { ref: c.ref, name: c.companyName ?? '', n: c.extRef ?? '' }), 'ok');
-        onClose();
-      } else toast(c.extError ?? t('suivi.rec.apiFailed', { name: target.name }), 'bad');
-    },
-  });
-  const [text, setText] = useState(() => claimText(t, claim, order, target.name, shop, again));
-  const [done, setDone] = useState(false);
-  const upd = useAction('suivi.claimUpdate', { silent: true });
-  const mark = (via: Via) => {
-    if (done) return;
-    setDone(true);
-    upd.mutate({ id: claim.id, sentVia: via, message: text }, { onSuccess: () => toast(again ? t('suivi.rec.reminded', { ref: claim.ref }) : t('suivi.rec.sent', { ref: claim.ref, name: target.name }), 'ok') });
-  };
-  const lines = text.split('\n');
+  const f = useSendClaim(p);
   return (
     <Modal
       wide
@@ -212,7 +144,7 @@ export function SendModal({ claim, order, target, shop, again, onClose }: { clai
             <b>{t('suivi.rec.apiRefused', { name: target.name })}</b>
             {claim.extError && <div className="small">{claim.extError}</div>}
             <div style={{ marginTop: 8 }}>
-              <button type="button" className="btn primary" disabled={push.isPending} onClick={() => push.mutate({ id: claim.id })}>
+              <button type="button" className="btn primary" disabled={f.push.isPending} onClick={() => f.push.mutate({ id: claim.id })}>
                 <Icon name="refresh" />
                 {t('suivi.rec.apiRetry', { name: target.name })}
               </button>
@@ -220,19 +152,19 @@ export function SendModal({ claim, order, target, shop, again, onClose }: { clai
           </div>
         )}
         <p className="muted small">{t('suivi.rec.sendHelp', { name: target.name })}</p>
-        <textarea className="bjr-msg" value={text} onChange={(e) => setText(e.target.value)} aria-label={t('suivi.rec.sendTitle', { name: target.name })} />
+        <textarea className="bjr-msg" value={f.text} onChange={(e) => f.setText(e.target.value)} aria-label={t('suivi.rec.sendTitle', { name: target.name })} />
         <div className="bjr-acts">
-          <a className="btn bjr-wa" href={waLink(target.wa, text)} target="_blank" rel="noopener noreferrer" onClick={() => mark('whatsapp')}>
+          <a className="btn bjr-wa" href={waLink(target.wa, f.text)} target="_blank" rel="noopener noreferrer" onClick={() => f.mark('whatsapp')}>
             <Icon name="whatsapp" />
             {t('suivi.rec.wa')}
           </a>
-          {target.email && (
-            <a className="btn" href={`mailto:${encodeURIComponent(target.email)}?subject=${encodeURIComponent(lines[1] || 'Réclamation')}&body=${encodeURIComponent(text)}`} onClick={() => mark('email')}>
+          {f.mail && (
+            <a className="btn" href={f.mail} onClick={() => f.mark('email')}>
               <Icon name="message" />
               {t('suivi.rec.mail')}
             </a>
           )}
-          <button type="button" className="btn" onClick={async () => (await copyText(text), toast(t('common.copied'), 'ok'), mark('copy'))}>
+          <button type="button" className="btn" onClick={f.copy}>
             <Icon name="copy" />
             {t('suivi.rec.copy')}
           </button>
@@ -249,33 +181,13 @@ export function SendModal({ claim, order, target, shop, again, onClose }: { clai
   );
 }
 
-export interface ClaimRow {
-  id: number;
-  ref: string;
-  orderId: number | null;
-  orderRef: string | null;
-  tracking: string | null;
-  companyName: string | null;
-  livreurName: string | null;
-  livreurPhone: string | null;
-  companyId: number | null;
-  reason: string;
-  details: string;
-  status: 'waiting' | 'still_waiting' | 'resolved';
-  notes: { at: string; text: string; status?: string | null }[];
-  createdAt: string;
-  updatedAt: string;
-  sentAt: string | null;
-  viaApi: boolean;
-  extId: string | null;
-  extRef: string | null;
-  extStatus: string | null;
-  extAnswer: string | null;
-  extError: string | null;
+/** Relance of a claim created at the courier through its API: a dialog on a computer, a sheet on a phone. */
+export function RemindApiModal(p: { c: ClaimRow; onClose: () => void }) {
+  return useIsPhone() ? <RemindSheet {...p} /> : <RemindDesk {...p} />;
 }
 
-/** Relance of a claim created at the courier through its API: the text is added to the courier's claim as a comment. */
-export function RemindApiModal({ c, onClose }: { c: ClaimRow; onClose: () => void }) {
+/** The text is added to the courier's claim as a comment. */
+function RemindDesk({ c, onClose }: { c: ClaimRow; onClose: () => void }) {
   const { t } = useTranslation();
   const [text, setText] = useState(() => t('suivi.rec.apiRemindText', { tracking: trackOf(c) || c.orderRef || '' }));
   const send = useAction('suivi.claimRemind', { success: t('suivi.rec.apiReminded', { name: c.companyName ?? '' }), onDone: onClose });
@@ -309,7 +221,11 @@ export function RemindApiModal({ c, onClose }: { c: ClaimRow; onClose: () => voi
   );
 }
 
-function AnswerModal({ c, name, onClose }: { c: ClaimRow; name: string; onClose: () => void }) {
+function AnswerModal(p: { c: ClaimRow; name: string; onClose: () => void }) {
+  return useIsPhone() ? <AnswerSheet {...p} /> : <AnswerDesk {...p} />;
+}
+
+function AnswerDesk({ c, name, onClose }: { c: ClaimRow; name: string; onClose: () => void }) {
   const { t } = useTranslation();
   const [note, setNote] = useState('');
   const [st, setSt] = useState<ClaimRow['status']>(c.status === 'waiting' ? 'still_waiting' : c.status === 'still_waiting' ? 'resolved' : c.status);

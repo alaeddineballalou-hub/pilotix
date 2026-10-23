@@ -1,12 +1,28 @@
 import { ReactNode, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useIsPhone } from '../lib/useMedia';
 import { Icon } from './kit';
+import { Sheet } from './Sheet';
+
+type ModalProps = { title: ReactNode; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean; className?: string };
 
 /**
  * A dialog in the style of the original app (.modal). Closes with Escape, the × or a click outside.
- * `wide` for big forms (order card 960px).
+ * `wide` for big forms (order card 960px). `sheet`: on a phone it rises from the bottom instead (ui/Sheet), its
+ * buttons at the thumb.
  */
-export function Modal({ title, onClose, children, footer, wide, className = '' }: { title: ReactNode; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean; className?: string }) {
+export function Modal({ sheet, ...p }: ModalProps & { sheet?: boolean }) {
+  const phone = useIsPhone();
+  if (sheet && phone)
+    return (
+      <Sheet title={p.title} onClose={p.onClose} foot={p.footer} className={`pxk-modal ${p.className ?? ''}`}>
+        {p.children}
+      </Sheet>
+    );
+  return <ModalBox {...p} />;
+}
+
+function ModalBox({ title, onClose, children, footer, wide, className = '' }: ModalProps) {
   const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {

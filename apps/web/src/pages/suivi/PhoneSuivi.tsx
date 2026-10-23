@@ -9,13 +9,15 @@ import { rpc } from '../../lib/backend';
 import { da, when, wilayaName } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { Icon } from '../../ui/kit';
+import { Sheet, Tiles } from '../../ui/Sheet';
 import { toast } from '../../ui/toast';
 import { eventText } from '../orders/OrderCard';
 import { ClaimRow, RemindApiModal, SendModal, useTarget } from './Claims';
 import { daysSince, waLink } from './common';
 import '../confirmation/phone.css';
 import './phone.css';
-import { CourierPanel } from './CourierPanel';
+import { ChangeKind, ChangeSheet, CourierPanel, useParcelInfo } from './CourierPanel';
+import { useBackLayer } from '../../lib/backLayer';
 
 export type PExtra = { companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
 
@@ -121,6 +123,9 @@ function tipKey(reason: string | null): string {
   return 'other';
 }
 
+/** At ZR the fix is one tap: the alert's tip opens the right request (or the réclamation to deliver again). */
+const TIP_FIX: Record<string, { change?: ChangeKind; claim?: boolean }> = { number: { change: 'phone' }, desk: { change: 'delivery' }, zone: { change: 'delivery' }, address: { change: 'address' }, absent: { claim: true } };
+
 export interface ParcelAction {
   key: string;
   label: string;
@@ -152,24 +157,23 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Ord
   const [send, setSend] = useState(false);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  // the request to ZR (from its block or from the alert's tip)
+  const [change, setChange] = useState<ChangeKind | null | false>(false);
+  const zr = useParcelInfo(o, x?.companyKind === 'zr').data;
   const d = daysSince(o.shippedAt);
 
-  // the page behind does not scroll; Échap / the phone's back closes
+  // the page behind does not scroll; Échap / the phone's back closes (a sheet above closes first)
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  useBackLayer(onClose);
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const key = (e: KeyboardEvent) => e.key === 'Escape' && !document.querySelector('dialog[open], .modal-wrap') && closeRef.current();
-    const back = () => closeRef.current();
-    history.pushState({ pxsParcel: 1 }, '');
+    const key = (e: KeyboardEvent) => e.key === 'Escape' && !document.querySelector('dialog[open], .modal-wrap, .pxk-sheet') && closeRef.current();
     window.addEventListener('keydown', key);
-    window.addEventListener('popstate', back);
     return () => {
       document.body.style.overflow = prev;
       window.removeEventListener('keydown', key);
-      window.removeEventListener('popstate', back);
-      if (history.state?.pxsParcel) history.back();
     };
   }, []);
 
@@ -193,6 +197,9 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Ord
   const company = (v: string | null) => (v ? names.get(`c${v}`) ?? v : '—');
   const list: OrderEvent[] = ev.data ? [...ev.data].reverse() : [];
   const tk = tipKey(reason);
+  const co = o.companyName || o.livreurName || '';
+  const fix = zr?.info && o.followStatus === 'alert' ? TIP_FIX[tk] : undefined;
+  const fixOk = fix?.claim || (fix?.change && (fix.change === 'phone' ? zr?.info?.canChangePhone : zr?.info?.canModify && !zr.info.pendingChange));
   const waText = t('suivi.ph.waText', { nom: o.customerName, ref: o.ref });
   const claimDays = claim ? Math.floor((Date.now() - Date.parse(claim.createdAt)) / 86_400_000) : 0;
 
@@ -233,9 +240,17 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Ord
           )}
           <Journey o={o} label={reason} />
           {o.followStatus === 'alert' && (
-            <p className="pxs-tip">
-              <span aria-hidden="true">💡</span> <b>{t('suivi.ph.todo')}</b> {t(`suivi.ph.tip.${tk}`, { co: o.companyName || o.livreurName || '' })}
-            </p>
+            <div className={`pxs-tip${fix && fixOk ? ' act' : ''}`}>
+              <p>
+                <span aria-hidden="true">💡</span> <b>{t('suivi.ph.todo')}</b> {t(`suivi.ph.tip.${tk}`, { co })}
+              </p>
+              {fix && fixOk && (
+                <button type="button" className="pxs-fix" onClick={() => (fix.claim ? onClaim() : setChange(fix.change!))}>
+                  <Icon name={fix.claim ? 'send' : fix.change === 'phone' ? 'phone' : fix.change === 'address' ? 'navigation' : 'building'} />
+                  {t(`suivi.ph.fix.${tk}`, { co })}
+                </button>
+              )}
+            </div>
           )}
         </section>
 
@@ -313,7 +328,7 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Ord
         )}
 
         {/* the parcel at its courier (ZR): journey, livreur, return risk, modification requests */}
-        <CourierPanel o={o} phone />
+        <CourierPanel o={o} phone onModify={(k) => setChange(k)} />
 
         {/* the order */}
         {section(
@@ -412,8 +427,129 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Ord
           </button>
         </form>
       </div>
+      {change !== false && <ChangeSheet o={o} kind={change} onClose={() => setChange(false)} />}
       {send && claim && target && <SendModal claim={claim} order={o} target={target} shop={shop} again onClose={() => setSend(false)} />}
       {remindApi && claim && <RemindApiModal c={claim} onClose={() => setRemindApi(false)} />}
     </div>
+  );
+}
+
+const isoDay = (plus: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + plus);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+/** « Traiter » on a phone: what was done in four tiles, the new date in one tap, a note; at ZR a new address goes
+ *  straight to ZR as a modification request. */
+export function TreatSheet({ o, reason, onClose }: { o: Order; reason: string | null; onClose: () => void }) {
+  const { t, i18n } = useTranslation();
+  const [what, setWhat] = useState<'date' | 'adresse' | 'injoignable' | 'autre'>('date');
+  const [date, setDate] = useState('');
+  const [pick, setPick] = useState(false);
+  const [note, setNote] = useState('');
+  const [zrOpen, setZrOpen] = useState(false);
+  const zr = useParcelInfo(o).data;
+  const treat = useAction('suivi.treat', {
+    onDone: () => {
+      toast(t('suivi.treat.done', { ref: o.ref }), 'ok');
+      onClose();
+    },
+  });
+  if (zrOpen) return <ChangeSheet o={o} kind={o.isStopdesk ? 'phone' : 'address'} onClose={onClose} />;
+  const name = zr?.companyName ?? o.companyName ?? '';
+  const canZr = !!zr?.supported && !!zr.info && (zr.info.canModify || zr.info.canChangePhone);
+  const day = (v: string) => new Intl.DateTimeFormat(i18n.language === 'ar' ? 'ar-DZ' : i18n.language, { weekday: 'short', day: 'numeric' }).format(new Date(`${v}T12:00:00`));
+  const d1 = isoDay(1);
+  const d2 = isoDay(2);
+  return (
+    <Sheet
+      title={t('suivi.treat.title', { ref: o.ref })}
+      sub={
+        <>
+          {reason || t('status.follow.alert')} · {o.customerName}
+        </>
+      }
+      onClose={onClose}
+      foot={
+        <button type="button" className="pxk-go" disabled={treat.isPending} onClick={() => treat.mutate({ id: o.id, what, date: date || null, note: note.trim() || null })}>
+          <Icon name="check" /> {t('suivi.treat.submit')}
+        </button>
+      }
+    >
+      <fieldset className="pxk-q">
+        <legend>{t('suivi.treat.ph.q')}</legend>
+        <Tiles
+          value={what}
+          onChange={setWhat}
+          label={t('suivi.treat.ph.q')}
+          items={[
+            { k: 'date', icon: 'calendar', label: t('suivi.treat.ph.date'), now: t('suivi.treat.ph.dateSub') },
+            { k: 'adresse', icon: 'navigation', label: t('suivi.treat.ph.adresse'), now: t('suivi.treat.ph.adresseSub') },
+            { k: 'injoignable', icon: 'phoneoff', label: t('suivi.treat.ph.injoignable'), now: t('suivi.treat.ph.injoignableSub') },
+            { k: 'autre', icon: 'chat', label: t('suivi.treat.ph.autre'), now: t('suivi.treat.ph.autreSub') },
+          ]}
+        />
+      </fieldset>
+      {what === 'adresse' && canZr && (
+        <div className="pxk-hint">
+          <span>{t('suivi.treat.ph.zrHint', { name })}</span>
+          <button type="button" onClick={() => setZrOpen(true)}>
+            <Icon name="pencil" /> {t('suivi.treat.ph.zrGo', { name })}
+          </button>
+        </div>
+      )}
+      {(what === 'date' || what === 'injoignable') && (
+        <fieldset className="pxk-q">
+          <legend>{t('suivi.treat.ph.when')}</legend>
+          <div className="pxk-chips">
+            <button type="button" className={`pxk-chip${date === d1 && !pick ? ' on' : ''}`} aria-pressed={date === d1 && !pick} onClick={() => (setDate(date === d1 ? '' : d1), setPick(false))}>
+              {t('suivi.treat.ph.tomorrow')} · {day(d1)}
+            </button>
+            <button type="button" className={`pxk-chip${date === d2 && !pick ? ' on' : ''}`} aria-pressed={date === d2 && !pick} onClick={() => (setDate(date === d2 ? '' : d2), setPick(false))}>
+              {day(d2)}
+            </button>
+            <button type="button" className={`pxk-chip${pick ? ' on' : ''}`} aria-pressed={pick} onClick={() => setPick(!pick)}>
+              <Icon name="calendar" /> {t('suivi.treat.ph.other')}
+            </button>
+          </div>
+          {pick && <input className="pxk-in" type="date" value={date} min={d1} aria-label={t('suivi.treat.ph.when')} onChange={(e) => setDate(e.target.value)} />}
+        </fieldset>
+      )}
+      <label className="pxk-q">
+        <b>{t('suivi.treat.note')}</b>
+        <textarea className="pxk-in" rows={2} value={note} maxLength={1000} placeholder={t('suivi.treat.notePh')} onChange={(e) => setNote(e.target.value)} />
+      </label>
+    </Sheet>
+  );
+}
+
+/** « Client annule » on a phone: what happens to the parcel, then the red button; « Garder » keeps it. */
+export function CancelSheet({ o, busy, onOk, onClose }: { o: Order; busy: boolean; onOk: () => void; onClose: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <Sheet
+      title={t('suivi.cancelAsk', { ref: o.ref })}
+      sub={
+        <>
+          {o.customerName} · <span className="ltr">{o.tracking || o.ref}</span>
+        </>
+      }
+      onClose={onClose}
+      foot={
+        <>
+          <button type="button" className="pxk-go bad" disabled={busy} onClick={onOk}>
+            <Icon name="x" /> {t('suivi.act.cancel')}
+          </button>
+          <button type="button" className="pxk-go ghost" onClick={onClose}>
+            {t('suivi.ph.keep')}
+          </button>
+        </>
+      }
+    >
+      <p className="pxk-info">
+        <Icon name="undo" /> {t('suivi.cancelText')}
+      </p>
+    </Sheet>
   );
 }

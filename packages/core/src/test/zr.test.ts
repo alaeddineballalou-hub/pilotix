@@ -137,6 +137,26 @@ test('exchange (preview): a ZR exchange gets its new number and a return number'
   assert.notEqual(t.tracking, t.back);
 });
 
+test('exchange at ZR: its two parcels — the new product out, the old one back once it is delivered (preview, server)', async () => {
+  const r = (await db.query(`SELECT r.order_id, r.tracking, o.tracking AS out FROM parcel_returns r JOIN orders o ON o.id = r.order_id JOIN delivery_companies c ON c.id = o.company_id WHERE c.kind = 'zr' ORDER BY r.order_id LIMIT 1`))[0];
+  assert.ok(r, 'an exchange at ZR');
+  const xid = Number(r.order_id);
+  await db.query(`UPDATE orders SET follow_status = 'out_for_delivery' WHERE id = $1`, [xid]);
+  const suivi = await as(EMAILS.suivi);
+  const p: any = await call('parcel.info', suivi, { orderId: xid });
+  assert.equal(p.returnTracking, r.tracking);
+  assert.deepEqual([p.returnInfo.state, p.returnInfo.waiting], ['En attente', true]);
+  await db.query(`UPDATE orders SET follow_status = 'exchanged' WHERE id = $1`, [xid]);
+  assert.equal(((await call('parcel.info', suivi, { orderId: xid })) as any).returnInfo.waiting, false);
+  // server: ZR is asked about both parcels
+  const calls: Calls = [];
+  const server = fakeServer((action, args) => (action === 'parcel' ? { state: args.item.tracking === r.tracking ? 'Vers vendeur' : 'Livré', color: null, situation: null, history: [], sms: [], swap: null } : null), calls);
+  const live: any = await call('parcel.info', await as(EMAILS.suivi, server as any), { orderId: xid });
+  assert.deepEqual(calls.map(([a, x]) => `${a}:${x.item.tracking}`).sort(), [`parcel:${r.tracking}`, `parcel:${r.out}`].sort());
+  assert.equal(live.returnInfo.state, 'Vers vendeur');
+  assert.equal(live.info.state, 'Livré');
+});
+
 /** A ZR parcel on the road (sent, with its number), at home delivery. */
 async function zrOnRoad() {
   const zr = await companyId('zr');
@@ -172,6 +192,12 @@ test('parcel at ZR (preview): its journey, livreur and return risk; a price chan
   const ph: any = await call('parcel.change', suivi, { orderId: oid, kind: 'phone', phone: '0661 23 45 67' });
   assert.equal(ph.status, 'approved');
   assert.equal((await order(oid)).phone, '0661234567');
+});
+
+test('swap at ZR (preview): what it costs in the same wilaya or another, while the parcel can still be given', async () => {
+  const { id: oid } = await zrOnRoad();
+  const p: any = await call('parcel.info', await as(EMAILS.suivi), { orderId: oid });
+  assert.deepEqual(p.info.swap, { eligible: true, count: 0, sameCityPrice: 200, differentCityPrice: 350 });
 });
 
 test('parcel at ZR (preview): home → stop desk, applied once ZR accepts; a request can be withdrawn', async () => {

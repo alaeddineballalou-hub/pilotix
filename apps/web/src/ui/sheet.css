@@ -1,0 +1,131 @@
+/* ===== Phone sheets (ui/Sheet.tsx): they rise from the bottom over the page, the actions stay at the thumb.
+   Pilotix: a white sheet, navy ink, orange for the main action and for the choice made, green to call / settle. ===== */
+.pxk-sheet { position: fixed; inset: 0; z-index: 95; display: flex; flex-direction: column; justify-content: flex-end; }
+.pxk-dim { all: unset; position: absolute; inset: 0; background: rgb(15 24 41 / .48); animation: pxk-fade .2s ease-out; }
+.pxk-sh { position: relative; display: flex; flex-direction: column; max-height: 92vh; max-height: 92dvh; border-radius: 22px 22px 0 0; background: var(--surface); color: var(--ink); box-shadow: 0 -12px 40px rgb(15 24 41 / .22); animation: pxk-up .24s cubic-bezier(.2, .8, .2, 1); outline: none; }
+.pxk-sh.tall { height: 92vh; height: 92dvh; }
+@keyframes pxk-up { from { transform: translateY(48px); opacity: .4; } }
+@keyframes pxk-fade { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .pxk-sh, .pxk-dim { animation: none; } }
+
+.pxk-head { flex: none; padding: 6px 16px 12px; border-bottom: 1px solid var(--line); }
+.pxk-grab { display: block; width: 40px; height: 5px; margin: 0 auto 8px; border-radius: 3px; background: var(--line); }
+.pxk-tt { display: flex; align-items: flex-start; gap: 10px; }
+.pxk-tt > span { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pxk-tt b { font-size: 17px; font-weight: 800; line-height: 1.25; }
+.pxk-tt small { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pxk-x { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--sky-soft); color: var(--ink); display: grid; place-items: center; cursor: pointer; }
+.pxk-x .bji { width: 18px; height: 18px; }
+.pxk-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 14px 16px 18px; display: flex; flex-direction: column; gap: 16px; }
+.pxk-foot { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 10px 16px calc(12px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line); background: var(--surface); }
+
+/* the actions */
+.pxk-go { width: 100%; min-height: 52px; border: 0; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 16px; font: inherit; font-size: 15.5px; font-weight: 800; line-height: 1.2; text-align: center; text-decoration: none; color: #fff; background: linear-gradient(135deg, #F7A823, #F28B1E); box-shadow: 0 8px 20px rgb(242 139 30 / .28); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.pxk-go .bji { width: 18px; height: 18px; flex: none; }
+.pxk-go.ok { background: #1F9D57; box-shadow: 0 8px 20px rgb(31 157 87 / .25); }
+.pxk-go.bad { background: #D6453D; box-shadow: 0 8px 20px rgb(214 69 61 / .22); }
+.pxk-go.nv { background: var(--navy); color: var(--on-navy); box-shadow: none; }
+.pxk-go.wa { background: #25D366; box-shadow: 0 8px 20px rgb(37 211 102 / .25); }
+.pxk-go.ghost { min-height: 46px; background: none; color: var(--ink); box-shadow: none; border: 1px solid var(--line); font-size: 14.5px; }
+.pxk-go:disabled { opacity: .45; box-shadow: none; cursor: default; }
+[dir="rtl"] .pxk-go .bji.flip, [dir="rtl"] .pxk-flip { transform: scaleX(-1); }
+.pxk-row { display: flex; gap: 8px; }
+.pxk-row > * { flex: 1 1 0; min-width: 0; }
+.pxk-fnote { margin: 0; text-align: center; font-size: 12px; color: var(--muted); line-height: 1.35; }
+
+/* a question and its answer */
+.pxk-q { display: flex; flex-direction: column; gap: 8px; margin: 0; border: 0; padding: 0; min-width: 0; }
+.pxk-q > b, .pxk-q > legend { padding: 0; font-size: 14px; font-weight: 800; }
+.pxk-q > small { margin-top: -4px; font-size: 12.5px; color: var(--muted); line-height: 1.35; }
+.pxk-in { width: 100%; box-sizing: border-box; min-height: 48px; padding: 0 14px !important; border-radius: 12px !important; border: 1px solid var(--line) !important; background: var(--field); color: var(--ink); font: inherit; font-size: 16px !important; }
+textarea.pxk-in { min-height: 80px; padding: 11px 14px !important; line-height: 1.4; resize: vertical; }
+.pxk-in:focus { border-color: #F7A823 !important; box-shadow: 0 0 0 3px rgb(247 168 35 / .2) !important; outline: none; }
+.pxk-g2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.pxk-g2 > label { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.pxk-money { display: flex; align-items: center; gap: 8px; height: 62px; padding: 0 16px; border-radius: 14px; border: 2px solid #F7A823; background: var(--field); box-shadow: 0 0 0 4px rgb(247 168 35 / .12); }
+.pxk-money input { flex: 1; min-width: 0; height: 100% !important; border: 0 !important; padding: 0 !important; background: none; font: inherit; font-size: 26px !important; font-weight: 800; color: var(--ink); box-shadow: none !important; outline: none; }
+.pxk-money span { font-size: 15px; font-weight: 800; color: var(--muted); }
+
+/* big tiles: one choice among a few */
+.pxk-tiles { display: grid; gap: 8px; }
+.pxk-tiles.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pxk-tiles.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pxk-tiles.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.pxk-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 78px; padding: 11px 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--raise); color: var(--ink); font: inherit; text-align: start; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.pxk-tile .bji { width: 20px; height: 20px; margin-bottom: 4px; color: var(--muted); }
+.pxk-tile b { font-size: 14px; font-weight: 800; line-height: 1.2; }
+.pxk-tile small { font-size: 12px; color: var(--muted); line-height: 1.25; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pxk-tile.on { border: 2px solid #F28B1E; padding: 10px 11px; background: color-mix(in srgb, #F7A823 12%, var(--surface)); }
+.pxk-tile.on .bji { color: #F28B1E; }
+.pxk-tile:disabled { background: none; border-style: dashed; cursor: default; }
+.pxk-tile:disabled b, .pxk-tile:disabled .bji { opacity: .45; }
+.pxk-tile:focus-visible, .pxk-opt:focus-visible, .pxk-seg button:focus-visible, .pxk-chip:focus-visible, .pxk-go:focus-visible { outline: 2px solid #F7A823; outline-offset: 2px; }
+
+/* answers to tap, one per line */
+.pxk-opts { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--raise); }
+.pxk-opt { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 12px; min-height: 50px; padding: 10px 14px; font-size: 14.5px; line-height: 1.3; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.pxk-opt + .pxk-opt { border-top: 1px solid var(--line); }
+.pxk-opt > i { flex: none; width: 20px; height: 20px; box-sizing: border-box; border-radius: 50%; border: 2px solid #C9CFDA; background: var(--surface); }
+.pxk-opt > .bji { flex: none; width: 18px; height: 18px; color: var(--muted); }
+.pxk-opt > span { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pxk-opt small { font-size: 12px; font-weight: 600; color: var(--muted); }
+.pxk-opt.on { background: color-mix(in srgb, #F7A823 12%, var(--surface)); font-weight: 800; }
+.pxk-opt.on > i { border: 6px solid #F28B1E; }
+.pxk-opt.on > .bji { color: #F28B1E; }
+
+/* two or three ways side by side */
+.pxk-seg { display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: var(--sky-soft); }
+.pxk-seg button { flex: 1 1 0; min-width: 0; min-height: 44px; border: 0; border-radius: 10px; background: none; color: var(--muted); font: inherit; font-size: 14px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; }
+.pxk-seg button .bji { width: 16px; height: 16px; }
+.pxk-seg button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 4px rgb(27 42 71 / .14); }
+
+/* small choices that wrap */
+.pxk-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pxk-chip { min-height: 36px; padding: 0 13px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.pxk-chip.on { background: var(--navy); border-color: var(--navy); color: var(--on-navy); }
+.pxk-chip:disabled { opacity: .45; cursor: default; }
+
+/* what it is now → what it becomes */
+.pxk-ba { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--sky-soft); }
+.pxk-ba > span { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pxk-ba small { font-size: 11.5px; font-weight: 700; color: var(--muted); }
+.pxk-ba b { font-size: 15px; line-height: 1.25; overflow-wrap: anywhere; }
+.pxk-ba .now b { color: var(--muted); font-weight: 700; }
+.pxk-ba em { font-style: normal; font-size: 12px; font-weight: 800; color: var(--ok); }
+.pxk-ba em.up { color: var(--warn); }
+.pxk-ba > .bji { flex: none; width: 20px; height: 20px; color: #F28B1E; }
+[dir="rtl"] .pxk-ba > .bji { transform: scaleX(-1); }
+
+/* what the parcel is, at the top of a sheet */
+.pxk-pc { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--raise); }
+.pxk-pc > span:not(.pxs-co) { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pxk-pc b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pxk-pc small { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* lines of information, warnings, a tip with its action */
+.pxk-info { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 13px; line-height: 1.4; color: var(--muted); }
+.pxk-info .bji { flex: none; width: 16px; height: 16px; margin-top: 1px; }
+.pxk-info.ok { color: var(--ok); font-weight: 700; }
+.pxk-warn, .pxk-bad, .pxk-okb { margin: 0; padding: 10px 12px; border-radius: 12px; font-size: 13px; font-weight: 600; line-height: 1.4; }
+.pxk-warn { background: var(--warn-soft); color: var(--warn); }
+.pxk-bad { background: var(--coral-soft); color: var(--coral); }
+.pxk-okb { background: var(--ok-soft); color: var(--ok); }
+.pxk-hint { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: 12px; border: 1px dashed #F7A823; background: color-mix(in srgb, #F7A823 8%, var(--surface)); font-size: 13px; line-height: 1.35; }
+.pxk-hint button { min-height: 38px; padding: 0 14px; border-radius: 999px; border: 0; background: linear-gradient(135deg, #F7A823, #F28B1E); color: #fff; font: inherit; font-size: 12.5px; font-weight: 800; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.pxk-hint button .bji { width: 14px; height: 14px; }
+
+/* used / allowed (ZR's modification and phone-change quotas) */
+.pxk-quota { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; font-size: 12.5px; color: var(--muted); }
+.pxk-quota > span { display: inline-flex; align-items: center; gap: 6px; }
+.pxk-quota i { display: inline-flex; gap: 3px; }
+.pxk-quota i b { width: 16px; height: 6px; border-radius: 3px; background: var(--line); }
+.pxk-quota i b.on { background: #F28B1E; }
+
+/* a message to send, as it will leave */
+.pxk-msg { width: 100%; box-sizing: border-box; min-height: 180px; padding: 12px 14px !important; border-radius: 14px !important; border: 1px solid var(--line) !important; background: var(--raise); color: var(--ink); font: inherit; font-size: 14px !important; line-height: 1.45; resize: vertical; }
+.pxk-ans { margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--sky-soft); font-size: 13.5px; line-height: 1.4; }
+.pxk-ans b { display: block; margin-bottom: 2px; font-size: 12px; color: var(--muted); }
+
+/* a computer dialog shown as a sheet on a phone (Modal sheet): its buttons become thumb-sized */
+.pxk-modal .pxk-foot { flex-direction: row; flex-wrap: wrap; }
+.pxk-modal .pxk-foot .btn { flex: 1 1 0; min-width: 0; min-height: 48px; border-radius: 14px; font-size: 15px; justify-content: center; }

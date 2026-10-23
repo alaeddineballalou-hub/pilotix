@@ -81,6 +81,7 @@ function BagParcels({ b, name, onClose }: { b: Bag; name: string; onClose: () =>
   };
   return (
     <Modal
+      sheet
       title={`${t('depot.bags.bag')} ${b.tracking ?? ''}`}
       onClose={onClose}
       footer={

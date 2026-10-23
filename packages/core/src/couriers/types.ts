@@ -242,6 +242,8 @@ export interface ParcelInfo {
   amount: number | null;
   deliveryPrice: number | null;
   returnPrice: number | null;
+  /** giving the parcel to another customer (a swap): allowed, how many so far, and its price (same wilaya / another) */
+  swap: { eligible: boolean; count: number; sameCityPrice: number | null; differentCityPrice: number | null } | null;
   history: { at: string; status: string; color: string | null; hub: string | null; by: string | null; comment: string | null; situations: { name: string; at: string | null }[] }[];
   sms: { at: string; phone: string | null; message: string | null; status: string | null }[];
 }

@@ -82,7 +82,23 @@
     "note": "Note",
     "notePh": "e.g. customer at work, deliver after 5 pm",
     "submit": "Mark as handled",
-    "done": "{{ref}}: alert handled"
+    "done": "{{ref}}: alert handled",
+    "ph": {
+      "q": "What did you do?",
+      "date": "Customer reached",
+      "dateSub": "new delivery date",
+      "adresse": "Corrected",
+      "adresseSub": "address or phone",
+      "injoignable": "Unreachable",
+      "injoignableSub": "new attempt",
+      "autre": "Other",
+      "autreSub": "explain in the note",
+      "when": "New delivery date",
+      "tomorrow": "Tomorrow",
+      "other": "Other date",
+      "zrHint": "A new address? Send it straight to {{name}}:",
+      "zrGo": "Change at {{name}}"
+    }
   },
   "cancelAsk": "Customer cancels {{ref}}?",
   "cancelText": "The parcel goes to « Returning ». In Cancelled you can swap it to another customer.",
@@ -113,7 +129,26 @@
     "mismatch": "The parcel contains « {{a}} », order {{ref}} asks for « {{b}} ». Check with the customer before swapping.",
     "pick": "Choose the order that receives the parcel.",
     "submit": "Swap the parcel",
-    "choose": "Choose {{ref}}"
+    "choose": "Choose {{ref}}",
+    "ph": {
+      "title": "Give this parcel to another customer",
+      "cancelledBy": "Cancelled by {{name}}",
+      "zrPrice": "Swap at {{name}}: {{same}} in the same wilaya, {{other}} elsewhere.",
+      "zrNo": "{{name}} no longer accepts a swap for this parcel.",
+      "cands": "Same products, not shipped yet",
+      "candsHelp": "Same wilaya first, then not packed yet, then same variant.",
+      "found": "Results",
+      "give": "Give the parcel to {{name}}",
+      "pickFirst": "Choose the customer",
+      "foot": "Their order leaves preparation and goes with this parcel.",
+      "zrCost": "ZR swap {{v}}",
+      "tagPrepared": "Already packed",
+      "tagToPrepare": "Not packed yet",
+      "tagWilaya": "Same wilaya",
+      "tagVariant": "Same product",
+      "tagProduct": "Other variant",
+      "tagOther": "Other product"
+    }
   },
   "sheet": {
     "title": "Parcel swapped",
@@ -151,6 +186,11 @@
       "amount": "Amount to collect: {{v}}",
       "instead": " (instead of {{v}})",
       "order": "Order: {{ref}} (replaces {{old}})"
+    },
+    "ph": {
+      "done": "Done",
+      "copy": "Copy",
+      "copied": "Copied"
     }
   },
   "rec": {
@@ -282,7 +322,36 @@
     "apiRemindText": "Hello, still no solution for parcel {{tracking}}. Please keep us informed.",
     "apiRemindHelp": "The message is added as a comment on the claim in your {{name}} account.",
     "apiReminded": "Follow-up sent to {{name}}",
-    "apiLastAnswer": "Last answer from {{name}}"
+    "apiLastAnswer": "Last answer from {{name}}",
+    "ph": {
+      "title": "Claim to {{name}}",
+      "titleLivreur": "Message to {{name}}",
+      "problemQ": "What is the problem?",
+      "footMsg": "Pilotix writes the message; you send it by WhatsApp or e-mail.",
+      "addressHint": "At {{name}}, change the address or phone directly:",
+      "addressGo": "Change at {{name}}",
+      "auto": "Automatic",
+      "copy": "Copy",
+      "mail": "E-mail",
+      "call": "Call",
+      "marked": "Marked as sent.",
+      "new": "New claim",
+      "remind": "Follow up",
+      "answer": "Answer",
+      "otherOrder": "Change",
+      "late_one": "{{count}} claim without an answer for over 48 h: follow it up.",
+      "late_other": "{{count}} claims without an answer for over 48 h: follow them up.",
+      "tabs": {
+        "companies": "Companies",
+        "livreurs": "Drivers",
+        "search": "Search"
+      },
+      "st": {
+        "waiting": "Waiting",
+        "still_waiting": "Still",
+        "resolved": "Settled"
+      }
+    }
   },
   "courier": {
     "title": "At {{name}}",
@@ -345,7 +414,62 @@
     "note": "Why (for the history)",
     "notePh": "E.g. the customer moved, discount agreed…",
     "appliedNow": "Changed at {{name}} and in the order",
-    "sent": "Request sent to {{name}}: the order will change once it accepts"
+    "sent": "Request sent to {{name}}: the order will change once it accepts",
+    "ph": {
+      "offNo": "{{name}} no longer accepts it for this parcel",
+      "offPending": "A request is already waiting",
+      "offDesk": "Stop desk: change the office instead",
+      "before": "Now",
+      "after": "Requested",
+      "da": "DA",
+      "priceToo": "The price changes too",
+      "sheetTitle": "Change at {{name}}",
+      "sending": "Sending to {{name}}…",
+      "footPhone": "{{name}} applies the new number right away, and so does the order.",
+      "footAsk": "{{name}} validates the request; the order changes as soon as it accepts.",
+      "freeDelivery": "Free delivery",
+      "toDesk": "Stop desk",
+      "toHome": "Home",
+      "deskPick": "Which {{name}} office?",
+      "addressPh": "Street, estate, building, landmark…",
+      "why": "Why? (for the history)",
+      "exchange": "Exchange at {{name}}",
+      "legOut": "Out",
+      "legOutText": "The new product goes to {{name}}",
+      "legBack": "Back",
+      "legBackText": "The old product comes back to your depot",
+      "legWaits": "leaves once the exchange is delivered",
+      "livreurOf": "{{name}} driver",
+      "callLivreur": "Call {{name}}",
+      "riskShort": "{{returns}} return(s) out of {{orders}} order(s) from this customer",
+      "requests": "Requests to {{name}}",
+      "modify": "Change at {{name}}",
+      "modifySub": "Price · delivery · address · phone",
+      "journey": "Journey",
+      "sms": "SMS"
+    },
+    "why": {
+      "amount": {
+        "a": "Discount given to the customer",
+        "b": "Wrong price",
+        "c": "Missing product"
+      },
+      "delivery": {
+        "a": "Customer’s request",
+        "b": "Customer away during the day",
+        "c": "Closer office"
+      },
+      "address": {
+        "a": "The customer moved",
+        "b": "Incomplete address",
+        "c": "Typing mistake"
+      },
+      "phone": {
+        "a": "Wrong number",
+        "b": "Customer’s other number",
+        "c": "Typing mistake"
+      }
+    }
   },
   "removeAgent": "Remove the follow-up agent",
   "agentRemoved": "{{ref}}: follow-up agent removed",
@@ -390,6 +514,14 @@
     "cancel": "✕ Customer cancels",
     "deliv": "✓ Delivered",
     "cancelled": "✕ Cancelled",
-    "realert": "⚠ New alert"
+    "realert": "⚠ New alert",
+    "fix": {
+      "number": "Fix the number at {{co}}",
+      "desk": "Switch to a {{co}} stop desk",
+      "zone": "Pick a nearby {{co}} office",
+      "address": "Send the right address to {{co}}",
+      "absent": "Ask {{co}} to deliver again"
+    },
+    "keep": "Keep the parcel"
   }
 }
