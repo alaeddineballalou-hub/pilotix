@@ -615,6 +615,38 @@ export function MaCaisse() {
 }
 
 // ---------------------------------------------------------------- a company's payments through its API (ZR)
+/** A payment request still waiting: another date (from tomorrow), or withdraw it. */
+function ReqActions({ id, date }: { id: number; date: string | null }) {
+  const { t } = useTranslation();
+  const [edit, setEdit] = useState(false);
+  const min = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+  const [d, setD] = useState(date && date >= min ? date : min);
+  const move = useAction('caisse.payRequestDate', { success: (r) => t('caisse.pay.dateMoved', { d: dateOnly(r.date) }), onDone: () => setEdit(false) });
+  const drop = useAction('caisse.payRequestCancel', { success: t('caisse.pay.requestCancelled') });
+  if (edit)
+    return (
+      <div className="pxk-reqa">
+        <input type="date" value={d} min={min} onChange={(e) => setD(e.target.value)} aria-label={t('caisse.pay.newDate')} />
+        <button type="button" className="btn small primary" disabled={move.isPending || !d} onClick={() => move.mutate({ id, date: d })}>
+          {t('common.save')}
+        </button>
+        <button type="button" className="btn small ghost" onClick={() => setEdit(false)}>
+          {t('common.cancel')}
+        </button>
+      </div>
+    );
+  return (
+    <div className="pxk-reqa">
+      <button type="button" className="btn small" onClick={() => setEdit(true)}>
+        <Icon name="calendar" /> {t('caisse.pay.changeDate')}
+      </button>
+      <button type="button" className="btn small ghost" disabled={drop.isPending} onClick={() => drop.mutate({ id })}>
+        {t('caisse.pay.cancelRequest')}
+      </button>
+    </div>
+  );
+}
+
 type Pay = Extract<Out<'caisse.pay'>, { supported: true }>['payments'][number];
 const DETAILS = ['parcelsDelivered', 'parcelsCancelled', 'refundsCredited', 'refundsDebited', 'labeling', 'officeHolding', 'storage'] as const;
 
@@ -666,6 +698,7 @@ function CourierPay({ companyId }: { companyId: number }) {
             <b>{t('caisse.pay.pending', { d: pending.date ? dateOnly(pending.date) : '—' })}</b>
             <small>{pending.auto ? t('caisse.pay.byPilotix') : t('caisse.pay.byHand')}</small>
           </span>
+          <ReqActions id={pending.id} date={pending.date} />
         </div>
       ) : (
         <button type="button" className="pxv-btn nv" disabled={ask.isPending} onClick={() => ask.mutate({ companyId })}>

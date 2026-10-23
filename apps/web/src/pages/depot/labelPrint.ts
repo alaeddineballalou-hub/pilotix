@@ -176,6 +176,53 @@ export async function printLabelItems(t: TFunction, items: LabelItem[], shop: La
   printHtml(t('depot.labels.docTitle', { n: sorted.length }), `<style>${LABEL_CSS}</style>${sorted.map((it) => labelHtml(t, z, it, shop)).join('')}`);
 }
 
+// ---------------------------------------------------------------- pickup bag (A4), the preview's stand-in for the courier's
+export interface BagSheet {
+  tracking: string;
+  company: string;
+  createdAt: string;
+  parcels: { tracking: string | null; ref: string; customer: string; wilayaId: number | null; commune: string }[];
+}
+const BAG_CSS = `@page{size:A4;margin:12mm}
+.bag{font-family:Arial,"Helvetica Neue",Helvetica,sans-serif;color:#000}
+.bag *{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box}
+.bag-demo{border:.5mm dashed #000;border-radius:1.4mm;padding:1.5mm 3mm;margin-bottom:5mm;font-size:9pt;font-weight:800;text-align:center}
+.bag-top{display:flex;gap:6mm;align-items:flex-start;direction:ltr}
+.bag-id{flex:1;min-width:0;display:flex;flex-direction:column;gap:1.5mm}
+[dir="rtl"] .bag-id{direction:rtl}
+.bag-k{font-size:9pt;font-weight:800;letter-spacing:.02em}
+.bag-co{align-self:flex-start;background:#000;color:#fff;border-radius:2mm;padding:2mm 4mm;font-size:18pt;font-weight:900;text-transform:uppercase}
+.bag-trk{font:900 30pt/1.05 "Courier New",Courier,monospace;direction:ltr}
+[dir="rtl"] .bag-trk{text-align:right}
+.bag-n{font-size:13pt;font-weight:800}
+.bag-qr{flex:none;width:42mm;height:42mm;border:.6mm solid #000;border-radius:2mm;padding:.6mm}
+.bag-qr svg,.bag-bc svg{display:block;width:100%;height:100%}
+.bag-bc{height:20mm;margin:5mm -1mm 1mm;direction:ltr}
+.bag-code{text-align:center;font:800 13pt/1 "Courier New",Courier,monospace;letter-spacing:.12em;direction:ltr}
+.bag table{margin-top:6mm;font-size:10pt}
+.bag th{font-size:8.5pt}
+.bag td.trk{font-family:"Courier New",Courier,monospace;font-weight:800;direction:ltr}`;
+
+/** The pickup bag's sheet: its number (QR code and barcode) and its parcels. */
+export async function printBagSheet(t: TFunction, b: BagSheet, demo: boolean): Promise<void> {
+  const z = await loadQr();
+  const e = escapeHtml;
+  const rows = b.parcels
+    .map((p, i) => `<tr><td class="num">${i + 1}</td><td class="trk">${e(p.tracking ?? '')}</td><td>${e(p.ref)}</td><td>${e(p.customer)}</td><td>${p.wilayaId ? `${String(p.wilayaId).padStart(2, '0')} ${e(wilayaName(p.wilayaId))}` : ''}${p.commune ? ` · ${e(p.commune)}` : ''}</td></tr>`)
+    .join('');
+  printHtml(
+    t('depot.bags.sheetTitle'),
+    `<style>${BAG_CSS}</style><section class="bag" dir="${i18n.dir()}">
+${demo ? `<div class="bag-demo">${e(t('depot.bags.sheetDemo', { name: b.company }))}</div>` : ''}
+<div class="bag-top"><div class="bag-id"><div class="bag-k">${e(t('depot.bags.sheetTitle'))}</div><div class="bag-co">${e(b.company)}</div>
+<div class="bag-trk">${e(b.tracking)}</div><div class="bag-n">${e(t('depot.bags.parcelsN', { count: b.parcels.length }))} · ${e(dateOnly(b.createdAt))}</div></div>
+<div class="bag-qr">${qrSvg(z, b.tracking)}</div></div>
+<div class="bag-bc">${code128Svg(b.tracking)}</div><div class="bag-code">${e(b.tracking)}</div>
+<table><thead><tr><th class="num">#</th><th>${e(t('depot.labels.tracking'))}</th><th>${e(t('depot.labels.order'))}</th><th>${e(t('depot.bags.customer'))}</th><th>${e(t('depot.bags.wilaya'))}</th></tr></thead><tbody>${rows}</tbody></table>
+</section>`,
+  );
+}
+
 /** The company's own label as something to open: its link, or its PDF as a local file. */
 export function labelHref(l: { url?: string | null; pdf?: string; type?: string } | null | undefined): string | null {
   if (l?.url) return l.url;

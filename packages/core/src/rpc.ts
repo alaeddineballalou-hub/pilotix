@@ -53,6 +53,8 @@ export interface ServerHooks {
   /** Dellal (AI sales agent): 'complete' (the AI), 'send' (a message to WhatsApp / Messenger / Instagram / TikTok), 'ping'. */
   dellal?: (action: string, args: unknown, ctx: Ctx) => Promise<unknown>;
   hashPassword: (pw: string) => Promise<string>;
+  /** the server's public address (PUBLIC_URL): couriers call it back (webhooks) */
+  publicUrl?: string;
 }
 
 export interface Procedure<S extends ZodTypeAny = ZodTypeAny, R = unknown> {

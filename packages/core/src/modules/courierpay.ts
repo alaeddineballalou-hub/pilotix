@@ -253,6 +253,27 @@ export const courierPayProcs = {
     return { ok: true, date };
   }),
 
+  /** A payment request still waiting: another date (ZR: ≥ tomorrow), at the courier too. */
+  'caisse.payRequestDate': proc([], z.object({ id, date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }), async (ctx, i) => {
+    const r = (await ctx.db.query('SELECT * FROM courier_pay_requests WHERE id = $1', [i.id]))[0];
+    if (!r) throw notFound('Demande introuvable');
+    if (r.approved !== null && r.approved !== undefined) throw bad('La société a déjà répondu à cette demande');
+    if (i.date < tomorrow(ctx.now())) throw bad('La date doit être demain ou plus tard');
+    if (!isDemo(ctx)) await courier(ctx, 'payRequestDate', { companyId: num(r.company_id), extId: r.ext_id, date: i.date });
+    await ctx.db.query('UPDATE courier_pay_requests SET date = $2 WHERE id = $1', [r.id, i.date]);
+    return { ok: true, date: i.date };
+  }),
+
+  /** Withdraws a payment request still waiting (at the courier too). */
+  'caisse.payRequestCancel': proc([], z.object({ id }), async (ctx, i) => {
+    const r = (await ctx.db.query('SELECT * FROM courier_pay_requests WHERE id = $1', [i.id]))[0];
+    if (!r) throw notFound('Demande introuvable');
+    if (r.approved !== null && r.approved !== undefined) throw bad('La société a déjà répondu à cette demande');
+    if (!isDemo(ctx)) await courier(ctx, 'payRequestCancel', { companyId: num(r.company_id), extId: r.ext_id });
+    await ctx.db.query('DELETE FROM courier_pay_requests WHERE id = $1', [r.id]);
+    return { ok: true };
+  }),
+
   /** « Reçu »: the payment waiting at the courier was handed to us — confirmed at the courier, then into the caisse. */
   'caisse.payReceive': proc([], z.object({ id, into: CaisseKey.optional() }), async (ctx, i) => {
     const p = (await ctx.db.query('SELECT * FROM courier_payments WHERE id = $1', [i.id]))[0];

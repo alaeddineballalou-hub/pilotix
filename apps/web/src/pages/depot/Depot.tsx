@@ -17,6 +17,7 @@ import { useIsPhone } from '../../lib/useMedia';
 import { PhonePrep } from './PhonePrep';
 import { PhoneDispatch, PhoneReturns, PhoneRoad } from './PhoneStages';
 import { LabelAction, LabelsBar, PrintSelected } from './Labels';
+import { BagBulk, BagsCard } from './Bags';
 
 const STAGES = ['preparer', 'prepares', 'dispatchees', 'enlivraison', 'retours'] as const;
 type Stage = (typeof STAGES)[number];
@@ -319,6 +320,8 @@ function Dispatchees() {
         sort="shipped_at"
         hide={['conf', 'follow']}
         compact
+        top={<BagsCard />}
+        bulk={(ids, clear) => <BagBulk ids={ids} done={clear} />}
         extra={[
           {
             label: t('depot.cols.handedSince'),

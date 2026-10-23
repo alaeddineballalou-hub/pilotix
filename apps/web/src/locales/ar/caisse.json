@@ -261,6 +261,11 @@
     "takenOk_two": "في الصندوق · {{count}} طرد مستلم",
     "takenOk_few": "في الصندوق · {{count}} طرد مستلم",
     "takenOk_many": "في الصندوق · {{count}} طرد مستلم",
-    "takenOk_other": "في الصندوق · {{count}} طرد مستلم"
+    "takenOk_other": "في الصندوق · {{count}} طرد مستلم",
+    "changeDate": "تغيير التاريخ",
+    "cancelRequest": "إلغاء الطلب",
+    "newDate": "تاريخ جديد",
+    "dateMoved": "نُقل الطلب إلى {{d}}",
+    "requestCancelled": "أُلغي طلب الدفع"
   }
 }

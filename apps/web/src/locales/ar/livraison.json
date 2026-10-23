@@ -21,7 +21,7 @@
   "noApi": "بدون API",
   "active": "مفعّلة",
   "inactive": "معطّلة",
-  "act": { "fees": "الأسعار", "sheet": "ورقة الطريق", "desks": "مكاتب الاستلام", "statuses": "الحالات", "test": "اختبار", "preview": "معاينة الإرسال" },
+  "act": { "fees": "الأسعار", "sheet": "ورقة الطريق", "desks": "مكاتب الاستلام", "statuses": "الحالات", "test": "اختبار", "preview": "معاينة الإرسال", "zr": "{{name}} من Pilotix" },
   "kinds": { "own": "موصّل خاص بي", "zr": "ZR Express", "zr_legacy": "ZR Express (Procolis)", "yalidine": "Yalidine", "ecotrack": "EcoTrack", "noest": "NOEST Express", "custom": "API مخصّص", "manual": "شركة بدون API" },
   "kindsLong": { "own": "موصّلوك", "zr": "ZR Express (المنصة الجديدة)", "zr_legacy": "ZR Express (القديمة: Procolis)", "yalidine": "Yalidine", "ecotrack": "منصة EcoTrack", "noest": "NOEST Express", "custom": "API مخصّص", "manual": "بدون API" },
   "form": {
@@ -136,5 +136,37 @@
     "empty": "لا يوجد طرد.",
     "signLivreur": "توقيع الموصّل",
     "signDepot": "توقيع المستودع"
+  },
+  "zr": {
+    "title": "{{name}} من Pilotix",
+    "hookTitle": "الحالات مباشرة",
+    "hookHelp": "تُبلغ {{name}} Pilotix بكل تغيير في حالة الطرد: لا حاجة لانتظار التحديث التلقائي (كل 30 دقيقة).",
+    "hookOn": "مفعّلة",
+    "hookOff": "معطّلة",
+    "turnOn": "تفعيل",
+    "turnOff": "تعطيل",
+    "hookOnDone": "ستُبلغ {{name}} Pilotix بكل تغيير في الحالة",
+    "hookOffDone": "تم تعطيل الحالات المباشرة",
+    "pricesTitle": "أسعار خدمات {{name}}",
+    "hours": "{{n}} سا",
+    "svc": {
+      "swapSameCity": "استبدال (نفس الولاية)",
+      "swapOtherCity": "استبدال (ولاية أخرى)",
+      "phoneChange": "تغيير الهاتف",
+      "labeling": "الملصقات",
+      "weighting": "الوزن",
+      "officeHolding": "الحفظ في المكتب",
+      "officeHoldingFreeHours": "حفظ مجاني في المكتب"
+    },
+    "does": {
+      "send": "تُنشأ الطرود عند {{name}} فور خروجها للإرسال",
+      "labels": "ملصقات {{name}}: كلها في ملف PDF واحد",
+      "bags": "أكياس الاستلام تُنشأ وتُطبع في المستودع › المُرسلة",
+      "changes": "طلبات التعديل (السعر، المنزل ↔ المكتب، العنوان، الهاتف) من كل طرد",
+      "claims": "الشكاوى تُنشأ وتُتابع عند {{name}}",
+      "exchanges": "استبدالات خدمة ما بعد البيع تُرسل كاستبدال {{name}} مع إرجاعها",
+      "journey": "المسار والرسائل والموزّع وخطر الإرجاع على كل طرد",
+      "pay": "المدفوعات: الطلب والتاريخ والاستلام في الصندوق"
+    }
   }
 }

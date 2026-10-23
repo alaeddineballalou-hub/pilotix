@@ -10,10 +10,10 @@ import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { LivreursCash } from '../caisse/LivreursCash';
 import type { PageProps } from '../registry';
-import { Company, CompanyDraft, CompanyForm, FeesModal, PreviewModal, StatusesModal, StopdesksModal } from './forms';
+import { Company, CompanyDraft, CompanyForm, FeesModal, PreviewModal, StatusesModal, StopdesksModal, ZrModal } from './forms';
 import { printRouteSheet } from './print';
 
-type Dialog = { kind: 'form'; draft: CompanyDraft; keysSet?: string[] } | { kind: 'fees' | 'desks' | 'statuses' | 'preview'; company: Company } | null;
+type Dialog = { kind: 'form'; draft: CompanyDraft; keysSet?: string[] } | { kind: 'fees' | 'desks' | 'statuses' | 'preview' | 'zr'; company: Company } | null;
 
 export function Livraison({ sub }: PageProps) {
   const { t } = useTranslation();
@@ -92,6 +92,7 @@ export function Livraison({ sub }: PageProps) {
       {dialog?.kind === 'desks' && <StopdesksModal company={dialog.company} onClose={close} />}
       {dialog?.kind === 'statuses' && <StatusesModal company={dialog.company} onClose={close} />}
       {dialog?.kind === 'preview' && <PreviewModal company={dialog.company} onClose={close} />}
+      {dialog?.kind === 'zr' && <ZrModal company={dialog.company} onClose={close} />}
     </>
   );
 }
@@ -109,7 +110,7 @@ function CompaniesCard({
   onlyApi?: boolean;
   title?: string;
   onEdit: (c: Company) => void;
-  onOpen: (k: 'fees' | 'desks' | 'statuses' | 'preview', c: Company) => void;
+  onOpen: (k: 'fees' | 'desks' | 'statuses' | 'preview' | 'zr', c: Company) => void;
 }) {
   const { t } = useTranslation();
   const test = useAction('delivery.test', { silent: true, onDone: (r) => toast(r.message, r.ok ? 'ok' : 'bad', 6000) });
@@ -192,6 +193,11 @@ function CompaniesCard({
                     {api && (
                       <button className="btn small" onClick={() => onOpen('preview', c)}>
                         {t('livraison.act.preview')}
+                      </button>
+                    )}
+                    {c.kind === 'zr' && (
+                      <button className="btn small primary" onClick={() => onOpen('zr', c)}>
+                        {t('livraison.act.zr', { name: c.name })}
                       </button>
                     )}
                   </div>

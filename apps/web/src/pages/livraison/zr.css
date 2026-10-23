@@ -1,0 +1,8 @@
+/* ===== ZR from Pilotix (ZrModal): what Pilotix does with ZR, instant statuses, ZR's service prices ===== */
+.lvz-does { list-style: none; margin: 0 0 14px; padding: 12px 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 16px; border-radius: 12px; background: var(--raise); border: 1px solid var(--line); }
+.lvz-does li { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; line-height: 1.35; }
+.lvz-does .bji { flex: none; width: 15px; height: 15px; margin-top: 1px; color: var(--ok); }
+.lvz-sec { margin-top: 14px; }
+.lvz-sec h3 { margin: 0 0 4px; font-size: 15px; }
+.lvz-prices { max-width: 460px; }
+.lvz-prices td.num { white-space: nowrap; font-weight: 700; }

@@ -13,6 +13,8 @@ import { dellalProcs } from './modules/dellal';
 import { marketersProcs } from './modules/marketers';
 import { notifyProcs } from './modules/notify';
 import { pickingProcs } from './modules/picking';
+import { pickupProcs } from './modules/pickup';
+import { parcelsProcs } from './modules/parcels';
 import { ordersProcs } from './modules/orders';
 import { savProcs } from './modules/sav';
 import { statsProcs } from './modules/stats';
@@ -27,6 +29,8 @@ export const REGISTRY = {
   ...statsProcs,
   ...catalogProcs,
   ...pickingProcs,
+  ...pickupProcs,
+  ...parcelsProcs,
   ...stockProcs,
   ...customersProcs,
   ...suiviProcs,

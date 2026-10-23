@@ -21,7 +21,7 @@
   "noApi": "sans API",
   "active": "Active",
   "inactive": "Désactivée",
-  "act": { "fees": "Tarifs", "sheet": "Feuille de route", "desks": "Stop desks", "statuses": "Statuts", "test": "Tester", "preview": "Aperçu de l’envoi" },
+  "act": { "fees": "Tarifs", "sheet": "Feuille de route", "desks": "Stop desks", "statuses": "Statuts", "test": "Tester", "preview": "Aperçu de l’envoi", "zr": "{{name}} depuis Pilotix" },
   "kinds": { "own": "Livreur à moi", "zr": "ZR Express", "zr_legacy": "ZR Express (Procolis)", "yalidine": "Yalidine", "ecotrack": "EcoTrack", "noest": "NOEST Express", "custom": "API personnalisée", "manual": "Société sans API" },
   "kindsLong": { "own": "Vos livreurs", "zr": "ZR Express (nouvelle plateforme)", "zr_legacy": "ZR Express (ancienne : Procolis)", "yalidine": "Yalidine", "ecotrack": "Plateforme EcoTrack", "noest": "NOEST Express", "custom": "API personnalisée", "manual": "Sans API" },
   "form": {
@@ -136,5 +136,37 @@
     "empty": "Aucun colis.",
     "signLivreur": "Signature du livreur",
     "signDepot": "Signature du dépôt"
+  },
+  "zr": {
+    "title": "{{name}} depuis Pilotix",
+    "hookTitle": "Statuts en direct",
+    "hookHelp": "{{name}} prévient Pilotix à chaque changement de statut d’un colis : plus besoin d’attendre la mise à jour automatique (toutes les 30 minutes).",
+    "hookOn": "Activés",
+    "hookOff": "Désactivés",
+    "turnOn": "Activer",
+    "turnOff": "Désactiver",
+    "hookOnDone": "{{name}} préviendra Pilotix à chaque changement de statut",
+    "hookOffDone": "Statuts en direct désactivés",
+    "pricesTitle": "Prix des services {{name}}",
+    "hours": "{{n}} h",
+    "svc": {
+      "swapSameCity": "Échange (même wilaya)",
+      "swapOtherCity": "Échange (autre wilaya)",
+      "phoneChange": "Changement de téléphone",
+      "labeling": "Étiquetage",
+      "weighting": "Pesée",
+      "officeHolding": "Garde au bureau",
+      "officeHoldingFreeHours": "Garde gratuite au bureau"
+    },
+    "does": {
+      "send": "Colis créés chez {{name}} dès qu’ils partent au dispatch",
+      "labels": "Étiquettes de {{name}} : toutes dans un seul PDF",
+      "bags": "Sacs de ramassage faits et imprimés dans Dépôt › Dispatchées",
+      "changes": "Demandes de modification (prix, domicile ↔ stop desk, adresse, téléphone) depuis chaque colis",
+      "claims": "Réclamations créées et suivies chez {{name}}",
+      "exchanges": "Échanges SAV envoyés comme échanges {{name}}, avec leur retour",
+      "journey": "Parcours, SMS, livreur et risque de retour du client sur chaque colis",
+      "pay": "Paiements : demande, date, réception dans la caisse"
+    }
   }
 }

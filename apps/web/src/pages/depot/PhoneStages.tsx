@@ -23,6 +23,7 @@ import { CoBadge } from '../suivi/PhoneSuivi';
 import { useDebounced } from './OrderList';
 import { ScanCard } from './ScanCard';
 import { LabelAction, LabelsBar, stateOf, useCouriers } from './Labels';
+import { BagsCard } from './Bags';
 import '../suivi/phone.css';
 import './phone.css';
 import './stages.css';
@@ -189,6 +190,7 @@ export function PhoneRoad({ stage }: { stage: Road }) {
   return (
     <div className="pxt">
       <Head title={t(`depot.stg.title_${stage}`)} count={s.total} help={t(`depot.help.${stage}`)} />
+      {stage === 'dispatchees' && <BagsCard phone />}
       <SearchBox value={q} onChange={setQ} placeholder={t('depot.filters.searchPh')} />
       <Filters<'all' | Level>
         value={f}

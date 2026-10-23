@@ -24,6 +24,10 @@ export interface KindInfo {
   api: boolean;
   /** réclamations are created at the courier through its API */
   claims?: boolean;
+  /** the labels of many parcels come as one file (ZR: one PDF for up to 250 parcels) */
+  labels_?: boolean;
+  /** the courier's other services through its API (ZR): pickup bags, exchanges, modification requests, parcel journey */
+  zr?: boolean;
 }
 
 export const KINDS: Record<CourierKind, KindInfo> = {
@@ -33,12 +37,13 @@ export const KINDS: Record<CourierKind, KindInfo> = {
     fields: [],
   },
   zr: {
-    kind: 'zr', label: 'ZR Express (nouvelle plateforme)', api: true, fees: true, desks: true, cancel: true, label_: true, claims: true,
+    kind: 'zr', label: 'ZR Express (nouvelle plateforme)', api: true, fees: true, desks: true, cancel: true, label_: true, claims: true, labels_: true, zr: true,
     help: 'Nouvelle plateforme ZR Express. Clé API et identifiant du compte (tenant) : dans votre espace ZR → Paramètres → API.',
     fields: [
       { key: 'api_key', label: 'Clé API (X-Api-Key)', type: 'secret' },
       { key: 'tenant', label: 'Tenant (X-Tenant)', type: 'secret' },
       { key: 'base_url', label: 'Adresse de l’API', type: 'text', default: 'https://api.zrexpress.app' },
+      { key: 'label_format', label: 'Format des étiquettes ZR', type: 'text', default: 'a6', hint: 'a6 : une étiquette 10 × 15 cm par page (imprimante d’étiquettes) · a4 : quatre par page' },
     ],
   },
   zr_legacy: {

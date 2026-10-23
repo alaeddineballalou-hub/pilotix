@@ -202,6 +202,32 @@ class ApiController {
     return { ok: true, id: order.id, ref: order.ref };
   }
 
+  /**
+   * A courier says a parcel's status changed (ZR webhook, registered from Pilotix with its key in ?key= and the
+   * X-Pilotix-Key header). The parcel numbers are picked from the body, whatever its shape; their state is then read
+   * again from the courier itself, so the body is only a hint.
+   */
+  @Public()
+  @Post('hooks/courier/:companyId')
+  async courierHook(@Param('companyId') companyId: string, @Query('key') qkey: string, @Headers('x-pilotix-key') hkey: string, @Body() body: unknown) {
+    if (!/^\d+$/.test(companyId)) throw new core.AppError('not_found', 'Société inconnue');
+    const trackings = new Set<string>();
+    const extIds = new Set<string>();
+    const walk = (v: unknown, depth: number) => {
+      if (depth > 5 || v === null || typeof v !== 'object') return;
+      if (Array.isArray(v)) return v.slice(0, 200).forEach((x) => walk(x, depth + 1));
+      for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+        if (typeof x === 'string' && x.length <= 80) {
+          if (/tracking/i.test(k)) trackings.add(x);
+          else if (/^(parcel_?id|parcelId|id)$/i.test(k)) extIds.add(x);
+        } else walk(x, depth + 1);
+      }
+    };
+    walk(body, 0);
+    const session = await this.core.systemSession();
+    return this.core.call('delivery.hook', session, { companyId: Number(companyId), key: String(qkey || hkey || ''), trackings: [...trackings].slice(0, 200), extIds: [...extIds].slice(0, 200) });
+  }
+
   // ---------------------------------------------------------------- Dellal (AI sales agent) webhooks
   /** Meta checks the webhook once: answer hub.challenge when the verify token matches. */
   @Public()

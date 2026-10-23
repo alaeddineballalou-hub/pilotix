@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Out, rpc } from '../../lib/backend';
 import { useAction, useRpc } from '../../lib/query';
-import { wilaya } from '../../lib/format';
-import { Empty, ErrorBox, Field, Loading } from '../../ui/kit';
+import { da, wilaya } from '../../lib/format';
+import { Empty, ErrorBox, Field, Icon, Loading } from '../../ui/kit';
+import './zr.css';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 
@@ -458,7 +459,15 @@ export function StatusesModal({ company, onClose }: { company: Company; onClose:
             <tbody>
               {q.data.map((r) => (
                 <tr key={r.status}>
-                  <td data-l={t('livraison.statuses.theirs', { name: company.name })}>{r.status}</td>
+                  <td data-l={t('livraison.statuses.theirs', { name: company.name })}>
+                    {r.label && r.label !== r.status ? (
+                      <>
+                        <b>{r.label}</b> <small className="muted ltr">{r.status}</small>
+                      </>
+                    ) : (
+                      r.status
+                    )}
+                  </td>
                   <td className="num" data-l={t('livraison.statuses.parcels')}>
                     {r.parcels || '—'}
                   </td>
@@ -527,6 +536,85 @@ export function PreviewModal({ company, onClose }: { company: Company; onClose: 
           <pre className="mono ltr" style={{ maxHeight: '50vh', overflow: 'auto', background: 'var(--raise)', padding: 12, borderRadius: 10, fontSize: 12.5, whiteSpace: 'pre-wrap' }}>
             {body}
           </pre>
+        </>
+      ) : null}
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------- ZR from Pilotix: instant statuses, service prices
+const HOURS = new Set(['officeHoldingFreeHours']);
+
+/** What Pilotix does with ZR (so its website is not needed), instant status updates, and ZR's service prices. */
+export function ZrModal({ company, onClose }: { company: Company; onClose: () => void }) {
+  const { t } = useTranslation();
+  const q = useRpc('delivery.zr', { companyId: company.id });
+  const on = useAction('delivery.webhookOn', { success: t('livraison.zr.hookOnDone', { name: company.name }) });
+  const off = useAction('delivery.webhookOff', { success: t('livraison.zr.hookOffDone') });
+  const d = q.data;
+  const name = company.name;
+  return (
+    <Modal
+      title={t('livraison.zr.title', { name })}
+      onClose={onClose}
+      wide
+      footer={
+        <button className="btn primary" onClick={onClose}>
+          {t('common.close')}
+        </button>
+      }
+    >
+      <ul className="lvz-does">
+        {(['send', 'labels', 'bags', 'changes', 'claims', 'exchanges', 'journey', 'pay'] as const).map((k) => (
+          <li key={k}>
+            <Icon name="check" /> {t(`livraison.zr.does.${k}`, { name })}
+          </li>
+        ))}
+      </ul>
+      {q.isLoading ? (
+        <Loading />
+      ) : q.error ? (
+        <ErrorBox error={q.error} />
+      ) : d ? (
+        <>
+          <section className="lvz-sec">
+            <h3>{t('livraison.zr.hookTitle')}</h3>
+            <p className="muted small">{t('livraison.zr.hookHelp', { name })}</p>
+            <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span className={`badge ${d.webhook.on ? 't-ok' : 't-off'}`}>{d.webhook.on ? t('livraison.zr.hookOn') : t('livraison.zr.hookOff')}</span>
+              {d.webhook.on ? (
+                <button className="btn small" disabled={off.isPending} onClick={() => off.mutate({ companyId: company.id })}>
+                  {t('livraison.zr.turnOff')}
+                </button>
+              ) : (
+                <button className="btn small primary" disabled={on.isPending} onClick={() => on.mutate({ companyId: company.id })}>
+                  {t('livraison.zr.turnOn')}
+                </button>
+              )}
+            </div>
+            {(d.webhook.url || d.hookUrl) && (
+              <p className="muted small ltr" style={{ overflowWrap: 'anywhere' }}>
+                {d.webhook.url ?? d.hookUrl}
+              </p>
+            )}
+            {d.webhook.error && <p className="badbox">{d.webhook.error}</p>}
+          </section>
+          <section className="lvz-sec">
+            <h3>{t('livraison.zr.pricesTitle', { name })}</h3>
+            {d.servicesError && <p className="badbox">{d.servicesError}</p>}
+            {d.services && (
+              <table className="tbl lvz-prices">
+                <tbody>
+                  {d.services.map((s) => (
+                    <tr key={s.key}>
+                      <td>{t(`livraison.zr.svc.${s.key}`, { defaultValue: s.label })}</td>
+                      <td className="num ltr">{HOURS.has(s.key) ? t('livraison.zr.hours', { n: s.price }) : da(s.price)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
         </>
       ) : null}
     </Modal>

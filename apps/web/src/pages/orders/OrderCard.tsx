@@ -16,6 +16,7 @@ import './orders.css';
 import { trackOf } from '../../lib/items';
 import { CopyCode } from '../../ui/CopyCode';
 import { useLabelPrinter } from '../depot/Labels';
+import { CourierPanel } from '../suivi/CourierPanel';
 
 /** Courier kinds with an API (send / label / status / cancel go through the delivery procedures). */
 export const API_KINDS = ['zr', 'zr_legacy', 'yalidine', 'ecotrack', 'noest', 'custom'];
@@ -402,6 +403,8 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
           )}
         </dl>
       </section>
+
+      {sent && <CourierPanel o={o} />}
 
       <section className="card">
         <h3>{t('orders.card.timeline')}</h3>

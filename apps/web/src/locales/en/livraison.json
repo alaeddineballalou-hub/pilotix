@@ -21,7 +21,7 @@
   "noApi": "no API",
   "active": "Active",
   "inactive": "Disabled",
-  "act": { "fees": "Rates", "sheet": "Route sheet", "desks": "Stop desks", "statuses": "Statuses", "test": "Test", "preview": "Send preview" },
+  "act": { "fees": "Rates", "sheet": "Route sheet", "desks": "Stop desks", "statuses": "Statuses", "test": "Test", "preview": "Send preview", "zr": "{{name}} from Pilotix" },
   "kinds": { "own": "My courier", "zr": "ZR Express", "zr_legacy": "ZR Express (Procolis)", "yalidine": "Yalidine", "ecotrack": "EcoTrack", "noest": "NOEST Express", "custom": "Custom API", "manual": "Company without API" },
   "kindsLong": { "own": "Your couriers", "zr": "ZR Express (new platform)", "zr_legacy": "ZR Express (old: Procolis)", "yalidine": "Yalidine", "ecotrack": "EcoTrack platform", "noest": "NOEST Express", "custom": "Custom API", "manual": "No API" },
   "form": {
@@ -136,5 +136,37 @@
     "empty": "No parcel.",
     "signLivreur": "Courier signature",
     "signDepot": "Depot signature"
+  },
+  "zr": {
+    "title": "{{name}} from Pilotix",
+    "hookTitle": "Live statuses",
+    "hookHelp": "{{name}} tells Pilotix about every status change of a parcel: no more waiting for the automatic update (every 30 minutes).",
+    "hookOn": "On",
+    "hookOff": "Off",
+    "turnOn": "Turn on",
+    "turnOff": "Turn off",
+    "hookOnDone": "{{name}} will tell Pilotix about every status change",
+    "hookOffDone": "Live statuses turned off",
+    "pricesTitle": "{{name}}’s service prices",
+    "hours": "{{n}} h",
+    "svc": {
+      "swapSameCity": "Exchange (same wilaya)",
+      "swapOtherCity": "Exchange (other wilaya)",
+      "phoneChange": "Phone change",
+      "labeling": "Labelling",
+      "weighting": "Weighing",
+      "officeHolding": "Office holding",
+      "officeHoldingFreeHours": "Free office holding"
+    },
+    "does": {
+      "send": "Parcels created at {{name}} as soon as they go to dispatch",
+      "labels": "{{name}}’s labels: all in a single PDF",
+      "bags": "Pickup bags made and printed in Dépôt › Dispatchées",
+      "changes": "Modification requests (price, home ↔ stop desk, address, phone) from each parcel",
+      "claims": "Claims created and followed at {{name}}",
+      "exchanges": "SAV exchanges sent as {{name}} exchanges, with their return",
+      "journey": "Journey, SMS, driver and the customer’s return risk on each parcel",
+      "pay": "Payments: request, date, received into the cash box"
+    }
   }
 }

@@ -107,3 +107,34 @@
 .pxl-act.pxl-send { border-color: color-mix(in srgb, var(--warn) 50%, var(--line)); background: var(--warn-soft); color: var(--warn); }
 .pxl-act:disabled { opacity: .5; cursor: default; }
 .pxl-act:focus-visible { outline: 2px solid #F7A823; outline-offset: 2px; }
+
+/* ===== Pickup bags in « Dispatchées » (Bags.tsx): the parcels waiting for a bag, then the recent bags ===== */
+.pxb { display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: var(--raise); border: 1px solid var(--line); }
+.pxb .bji { width: 16px; height: 16px; }
+.pxb-head { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--ink); }
+.pxb-head > .bji { width: 18px; height: 18px; }
+.pxb-sync { margin-inline-start: auto; }
+.pxb-wait { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; }
+.pxb-wt { display: inline-flex; align-items: center; gap: 6px; color: var(--warn); font-size: 13.5px; font-weight: 700; }
+.pxb-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.pxb-none { margin: 0; display: flex; align-items: center; gap: 6px; color: var(--ok); font-size: 13px; font-weight: 600; }
+.pxb-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pxb-list li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
+.pxb-id { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.pxb-id small { color: var(--muted); font-size: 12px; }
+.pxb-act { flex: none; display: flex; gap: 6px; }
+.pxb .badge { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.pxb .badge .bji { width: 12px; height: 12px; }
+.pxb-more { align-self: flex-start; }
+.pxb-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--coral); color: var(--ink); font-weight: 600; }
+.pxb-ask > span { flex: 1 1 200px; }
+/* phones: a card like the others, the big button full width in a soft orange box */
+.pxb.pxb-phone { margin: 0; padding: 12px; border-radius: 14px; background: var(--surface); }
+.pxb-phone .pxb-wait { flex-direction: column; align-items: stretch; padding: 9px 10px; border-radius: 10px; background: var(--warn-soft); }
+.pxb-phone .pxb-btns { flex-direction: column; }
+.pxb-phone .pxb-btns .btn { justify-content: center; height: 46px; border-radius: 12px; font-size: 15px; font-weight: 800; }
+.pxb-phone .pxb-list li { flex-wrap: wrap; background: var(--raise); }
+.pxb-phone .pxb-act { width: 100%; }
+.pxb-phone .pxb-act .btn { flex: 1; justify-content: center; height: 38px; }
+/* the bag's number: the thing written on the bag, so it reads first */
+.pxb-id .px-copy { font-size: 14.5px; font-weight: 800; color: var(--ink); letter-spacing: .02em; }

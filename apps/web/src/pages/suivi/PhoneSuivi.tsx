@@ -15,6 +15,7 @@ import { ClaimRow, RemindApiModal, SendModal, useTarget } from './Claims';
 import { daysSince, waLink } from './common';
 import '../confirmation/phone.css';
 import './phone.css';
+import { CourierPanel } from './CourierPanel';
 
 export type PExtra = { companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
 
@@ -310,6 +311,9 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Ord
             <span className="pxs-chip or">+ {t('suivi.ph.create')}</span>
           </button>
         )}
+
+        {/* the parcel at its courier (ZR): journey, livreur, return risk, modification requests */}
+        <CourierPanel o={o} phone />
 
         {/* the order */}
         {section(
