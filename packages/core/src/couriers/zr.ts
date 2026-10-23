@@ -88,10 +88,94 @@ async function loadClaimCats(c: CourierCompany): Promise<ClaimCategory[]> {
   return list;
 }
 
+// Payments (ZR "treasury", from ZR's API documentation): GET /supplier-payment/supplier-balance, POST /payment-request
+// {requestedDate ≥ tomorrow}, POST /payment-request/search {onlyPending}, POST /supplier-payment/search → payments with their
+// totals (parcels delivered / cancelled, refunds, labeling, office holding, storage) and acceptedAt, PUT /supplier-payment/{id}
+// (we received it), POST /treasury-transactions/search/supplier-payment/by-supplier-payment/{id} → one line per parcel.
+const numOf = (v: unknown) => Math.round(Number(v) || 0);
+const DONE = /(accept|pay[ée]|paid|valid|termin|complet|done|re[çc]u)/i;
+async function pages(c: CourierCompany, path: string, json: Record<string, unknown>, max = 5) {
+  const out: any[] = [];
+  for (let n = 1; n <= max; n++) {
+    const r = await http(c.name, url(c, path), { method: 'POST', headers: h(c), json: { pageNumber: n, pageSize: 100, ...json } });
+    out.push(...(r?.items ?? []));
+    if (!r?.hasNext || !(r?.items ?? []).length) break;
+  }
+  return out;
+}
+const payments: NonNullable<CourierAdapter['payments']> = {
+  async balance(c) {
+    needKeys(c, 'api_key', 'tenant');
+    const r = await http(c.name, url(c, '/supplier-payment/supplier-balance'), { headers: h(c) });
+    return { paid: numOf(r?.totalAmountPaid), ready: numOf(r?.totalAmountReadyToBePaid), delivered: numOf(r?.totalAmountDelivered), notReady: numOf(r?.totalAmountNotReadyCashed) + numOf(r?.totalAmountReadyToBeCashed) };
+  },
+  async requests(c) {
+    needKeys(c, 'api_key', 'tenant');
+    const items = await pages(c, '/payment-request/search', { orderBy: ['createdAt desc'], onlyPending: false }, 1);
+    return items.map((x) => ({ extId: String(x.id), date: x.requestedDate ?? null, approved: x.validatedAt ? x.isApproved !== false : null, comment: x.comment ?? null, at: x.createdAt ?? null }));
+  },
+  async request(c, date) {
+    needKeys(c, 'api_key', 'tenant');
+    const r = await http(c.name, url(c, '/payment-request'), { method: 'POST', headers: h(c), json: { requestedDate: date } });
+    const id = r?.id || (typeof r === 'string' ? r : null);
+    if (!id) throw new CourierError('ZR n’a pas renvoyé de numéro de demande');
+    return { extId: String(id) };
+  },
+  async list(c) {
+    needKeys(c, 'api_key', 'tenant');
+    const items = await pages(c, '/supplier-payment/search', { orderBy: ['createdAt desc'] }, 2);
+    return items.map((x) => {
+      const status = String(x.status ?? '');
+      const done = !!x.acceptedAt || DONE.test(status);
+      const hub = x.cashDrawer?.hub?.name;
+      const who = [x.cashDrawer?.cashDrawerUser?.firstName, x.cashDrawer?.cashDrawerUser?.lastName].filter(Boolean).join(' ');
+      return {
+        extId: String(x.id),
+        ref: x.referenceId ?? null,
+        amount: numOf(x.amount),
+        status,
+        done,
+        at: x.createdAt ?? null,
+        doneAt: x.acceptedAt ?? null,
+        requestId: x.paymentRequestId ?? null,
+        place: [hub, who].filter(Boolean).join(' · ') || null,
+        details: {
+          parcelsDelivered: numOf(x.totalParcelsDelivered),
+          parcelsCancelled: numOf(x.totalParcelsCancelled),
+          refundsCredited: numOf(x.totalRefundsCredited),
+          refundsDebited: numOf(x.totalRefundsDebited),
+          labelingItems: numOf(x.totalItemLabeling),
+          labeling: numOf(x.labelingAmount),
+          officeHoldingItems: numOf(x.totalItemOfficeHolding),
+          officeHolding: numOf(x.officeHoldingAmount),
+          storage: numOf(x.storage),
+        },
+      };
+    });
+  },
+  async lines(c, extId) {
+    needKeys(c, 'api_key', 'tenant');
+    const items = await pages(c, `/treasury-transactions/search/supplier-payment/by-supplier-payment/${encodeURIComponent(extId)}`, { supplierPaymentId: extId }, 30);
+    return items.map((x) => ({
+      tracking: x.parcel?.trackingNumber ?? null,
+      customer: x.parcel?.customerFullName ?? null,
+      type: String(x.type ?? ''),
+      amount: numOf(x.amount),
+      costs: numOf(x.weightCost) + numOf(x.swapCost) + numOf(x.phoneChangeCost),
+      comment: x.comment ?? null,
+    }));
+  },
+  async accept(c, extId) {
+    needKeys(c, 'api_key', 'tenant');
+    await http(c.name, url(c, `/supplier-payment/${encodeURIComponent(extId)}`), { method: 'PUT', headers: h(c), json: { supplierPaymentId: extId } });
+  },
+};
+
 const RESOLVED = /(r[ée]solu|r[ée]gl|cl[ôo]tur|ferm[ée]|closed|resolved|termin[ée])/i;
 
 export const zr: CourierAdapter = {
   statuses: STATUSES,
+  payments,
   async test(c) {
     needKeys(c, 'api_key', 'tenant');
     await http(c.name, url(c, '/territories/search'), { method: 'POST', headers: h(c), json: { keyword: 'alger', pageSize: 1, pageNumber: 1 } });

@@ -102,7 +102,8 @@ export async function checkCaisse(db: Db, key: string) {
 }
 
 /** Marks orders as cashed and records one versement per company / livreur, into the caisse that received the money. */
-async function receive(ctx: Ctx, orderIds: number[], note: string | null, livreurShare: boolean, into = 'main') {
+/** `fix`: the courier's own figure for the money paid (its statement): one versement whose net is that amount. */
+export async function receive(ctx: Ctx, orderIds: number[], note: string | null, livreurShare: boolean, into = 'main', fix?: { net: number }) {
   await checkCaisse(ctx.db, into);
   const pay = await payOf(ctx.db);
   const me = ctx.session.profile.id;
@@ -115,12 +116,12 @@ async function receive(ctx: Ctx, orderIds: number[], note: string | null, livreu
     if (notDelivered) throw bad(`${notDelivered.ref} n’est pas livrée`);
     const groups = new Map<string, CashOrder[]>();
     for (const r of rows) {
-      const k = `${r.ticket ? 't' : ''}${r.livreurId ? `l${r.livreurId}` : `c${r.companyId ?? 0}`}`;
+      const k = fix ? 'all' : `${r.ticket ? 't' : ''}${r.livreurId ? `l${r.livreurId}` : `c${r.companyId ?? 0}`}`;
       groups.set(k, [...(groups.get(k) ?? []), r]);
     }
     for (const list of groups.values()) {
       const collected = list.reduce((s, o) => s + o.total, 0);
-      const fees = livreurShare || list[0].livreurId ? list.reduce((s, o) => s + o.share, 0) : list.reduce((s, o) => s + o.deliveryCost, 0);
+      const fees = fix ? collected - fix.net : livreurShare || list[0].livreurId ? list.reduce((s, o) => s + o.share, 0) : list.reduce((s, o) => s + o.deliveryCost, 0);
       const h = await tx.query(
         'INSERT INTO cash_handovers (company_id, livreur_id, orders, collected, fees, net, note, created_by, received_into) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id',
         [list[0].companyId, list[0].livreurId, list.map((o) => o.id), collected, fees, collected - fees, note, me, into],

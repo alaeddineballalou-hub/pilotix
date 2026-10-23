@@ -46,13 +46,14 @@ export function courierApi(c: CourierCompany): CourierApi {
   };
 }
 
-type Args = { companyId: number; ids?: number[]; items?: TrackItem[]; item?: TrackItem; orderId?: number; claim?: ClaimInput; extIds?: string[]; extId?: string; text?: string };
+type Args = { companyId: number; date?: string; ids?: number[]; items?: TrackItem[]; item?: TrackItem; orderId?: number; claim?: ClaimInput; extIds?: string[]; extId?: string; text?: string };
 
 /**
  * Entry point used by the server for ctx.server.courier(action, args, ctx).
  * Actions: send {companyId, ids} · track {companyId, items} · label {companyId, item} · cancel {companyId, item} ·
  * fees {companyId} · stopdesks {companyId} · test {companyId} · preview {companyId, orderId} ·
- * claim {companyId, claim} · claimCategories {companyId} · claimStates {companyId, extIds} · claimComment {companyId, extId, text}.
+ * claim {companyId, claim} · claimCategories {companyId} · claimStates {companyId, extIds} · claimComment {companyId, extId, text} ·
+ * payBalance / payRequests / payments {companyId} · payRequest {companyId, date} · payLines / payAccept {companyId, extId}.
  */
 export async function runCourier(action: string, args: unknown, ctx: Ctx): Promise<unknown> {
   const a = args as Args;
@@ -98,6 +99,22 @@ export async function runCourier(action: string, args: unknown, ctx: Ctx): Promi
       const p = (await loadParcels(ctx.db, [a.orderId!]))[0];
       const ad = ADAPTERS[c.kind];
       return ad.preview ? ad.preview(c, p) : null;
+    }
+    case 'payBalance':
+    case 'payRequests':
+    case 'payRequest':
+    case 'payments':
+    case 'payLines':
+    case 'payAccept': {
+      const pay = ADAPTERS[c.kind].payments;
+      if (!pay) throw new CourierError(`${c.name} : pas de paiements par API`);
+      if (action === 'payBalance') return pay.balance(c);
+      if (action === 'payRequests') return pay.requests(c);
+      if (action === 'payRequest') return pay.request(c, a.date!);
+      if (action === 'payments') return pay.list(c);
+      if (action === 'payLines') return pay.lines(c, a.extId!);
+      await pay.accept(c, a.extId!);
+      return { ok: true };
     }
     default:
       throw new CourierError(`Action inconnue : ${action}`);
