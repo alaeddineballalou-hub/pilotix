@@ -1,4 +1,5 @@
-// « Caisse » (admin): À recevoir (delivered, money not received yet, by company / livreur) · Déjà reçu (versements) · Livreurs.
+// « Caisse » (admin): Vue d'ensemble (main caisse, bank, companies with ZR payments, livreurs, employees' caisses) ·
+// À recevoir (delivered, money not received yet, by company / livreur) · Déjà reçu (versements) · Livreurs · Journal.
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { downloadCsv } from '../../lib/files';
@@ -10,6 +11,7 @@ import type { PageProps } from '../registry';
 import { LivreursCash } from './LivreursCash';
 import { useIsPhone } from '../../lib/useMedia';
 import { PhoneCaisse } from './PhoneCaisse';
+import { CaisseJournal, CaisseOverview } from './Overview';
 export { MaCaisse } from './PhoneCaisse';
 import { CopyCode } from '../../ui/CopyCode';
 
@@ -21,11 +23,13 @@ export function Caisse({ sub }: PageProps) {
 
 function CaisseDesktop({ sub }: PageProps) {
   const { t } = useTranslation();
-  const current = sub === 'done' ? 'done' : sub === 'livreurs' ? 'livreurs' : 'due';
+  const current = sub === 'done' || sub === 'livreurs' || sub === 'due' || sub === 'journal' ? sub : 'overview';
   const tabs = [
+    { key: 'overview', label: t('caisse.dk.tabs.overview') },
     { key: 'due', label: t('caisse.tabs.due') },
     { key: 'done', label: t('caisse.tabs.done') },
     { key: 'livreurs', label: t('caisse.tabs.livreurs') },
+    { key: 'journal', label: t('caisse.ph.journal') },
   ];
   return (
     <>
@@ -44,6 +48,8 @@ function CaisseDesktop({ sub }: PageProps) {
           </div>
         </div>
       </div>
+      {current === 'overview' && <CaisseOverview onOpenDue={() => (location.hash = '#/caisse/due')} onOpenLivreurs={() => (location.hash = '#/caisse/livreurs')} />}
+      {current === 'journal' && <CaisseJournal />}
       {current === 'due' && <Due />}
       {current === 'done' && <Done />}
       {current === 'livreurs' && <LivreursCash />}

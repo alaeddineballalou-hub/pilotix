@@ -243,5 +243,26 @@
     "newDate": "New date",
     "dateMoved": "Request moved to {{d}}",
     "requestCancelled": "Payment request cancelled"
+  },
+  "dk": {
+    "tabs": {
+      "overview": "Overview"
+    },
+    "openJournal": "See the journal",
+    "outsideSub": "Companies, livreurs and employees' caisses",
+    "whichCaisse": "Caisse",
+    "note": "Note",
+    "balanceAt": "ZR balance read {{d}}",
+    "col": {
+      "when": "Date",
+      "what": "Movement",
+      "who": "By",
+      "amount": "Amount",
+      "state": "Status",
+      "order": "Order",
+      "customer": "Customer",
+      "type": "Type",
+      "costs": "Costs"
+    }
   }
 }

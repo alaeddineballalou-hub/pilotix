@@ -243,5 +243,26 @@
     "newDate": "Nouvelle date",
     "dateMoved": "Demande déplacée au {{d}}",
     "requestCancelled": "Demande de paiement annulée"
+  },
+  "dk": {
+    "tabs": {
+      "overview": "Vue d’ensemble"
+    },
+    "openJournal": "Voir le journal",
+    "outsideSub": "Sociétés, livreurs et caisses des employés",
+    "whichCaisse": "Caisse",
+    "note": "Note",
+    "balanceAt": "Solde ZR lu {{d}}",
+    "col": {
+      "when": "Date",
+      "what": "Mouvement",
+      "who": "Par",
+      "amount": "Montant",
+      "state": "État",
+      "order": "Commande",
+      "customer": "Client",
+      "type": "Type",
+      "costs": "Frais"
+    }
   }
 }
