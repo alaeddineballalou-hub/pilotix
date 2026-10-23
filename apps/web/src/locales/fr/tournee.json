@@ -21,7 +21,13 @@
   "notePh": "Note (facultatif) : nouvelle date, détails…",
   "confirmFail": "Marquer en échec",
   "confirmReturn": "Marquer en retour",
-  "kpi": { "toDeliver": "À livrer", "toCollect": "{{amount}} à encaisser", "deliveredToday": "Livrées aujourd’hui", "cashed": "{{amount}} encaissés", "pickup": "À récupérer au dépôt" },
+  "kpi": {
+    "toDeliver": "À livrer",
+    "toCollect": "{{amount}} à encaisser",
+    "deliveredToday": "Livrées aujourd’hui",
+    "cashed": "{{amount}} encaissés",
+    "pickup": "À récupérer au dépôt"
+  },
   "chat": {
     "title": "Messages avec le bureau",
     "titleOffice": "Messages avec {{name}}",
@@ -34,7 +40,38 @@
     "placeholder": "Message au bureau…",
     "placeholderOffice": "Message au livreur…",
     "send": "Envoyer",
-    "quick": ["Client injoignable", "Le client a refusé le colis", "Reporté à demain par le client", "Livré", "Adresse introuvable, merci d’appeler le client"],
-    "quickOffice": ["Client joint : merci de relivrer", "Le client demande à être livré après 16h", "Rapporte les retours au dépôt ce soir", "Bien reçu, merci"]
+    "quick": [
+      "Client injoignable",
+      "Le client a refusé le colis",
+      "Reporté à demain par le client",
+      "Livré",
+      "Adresse introuvable, merci d’appeler le client"
+    ],
+    "quickOffice": [
+      "Client joint : merci de relivrer",
+      "Le client demande à être livré après 16h",
+      "Rapporte les retours au dépôt ce soir",
+      "Bien reçu, merci"
+    ]
+  },
+  "ph": {
+    "toDeliver": "À livrer",
+    "toCollect": "À encaisser",
+    "done": "Livrées",
+    "allDone": "Tout est livré pour l’instant",
+    "then": "Ensuite · {{n}}",
+    "pickup": "À récupérer au dépôt · {{n}}",
+    "office": "Bureau",
+    "next": "Prochain arrêt",
+    "call": "Appeler",
+    "phone2": "2e numéro",
+    "notDelivered": "Pas livrée",
+    "kind": {
+      "failed": "Je repasse (échec)",
+      "returning": "Retour au dépôt"
+    },
+    "confirmFail": "Confirmer : je repasse",
+    "confirmReturn": "Confirmer : retour au dépôt",
+    "officeKnows": "Le bureau (Suivi) le voit tout de suite."
   }
 }
