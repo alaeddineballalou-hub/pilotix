@@ -123,3 +123,9 @@
 .pxs-jt span { white-space: normal; line-height: 1.2; overflow-wrap: anywhere; }
 /* dialogs (Traiter, Réclamation, Annuler…) open above the full-screen parcel and order */
 body:has(.pxs-page) .modal-wrap, body:has(.pxp-order) .modal-wrap { z-index: 90 !important; }
+
+/* réclamation created at ZR through its API */
+.pxs-rca { flex-wrap: wrap; }
+.pxs-rc-api { font-weight: 700; color: var(--ok); margin: 2px 0 0; }
+.pxs-rc-api.bad { color: var(--coral); }
+.pxs-rc .bjr-ans { margin-top: 6px; font-size: 12.5px; }

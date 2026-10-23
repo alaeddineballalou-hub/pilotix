@@ -275,7 +275,7 @@ export interface ClaimRow {
 }
 
 /** Relance of a claim created at the courier through its API: the text is added to the courier's claim as a comment. */
-function RemindApiModal({ c, onClose }: { c: ClaimRow; onClose: () => void }) {
+export function RemindApiModal({ c, onClose }: { c: ClaimRow; onClose: () => void }) {
   const { t } = useTranslation();
   const [text, setText] = useState(() => t('suivi.rec.apiRemindText', { tracking: trackOf(c) || c.orderRef || '' }));
   const send = useAction('suivi.claimRemind', { success: t('suivi.rec.apiReminded', { name: c.companyName ?? '' }), onDone: onClose });
