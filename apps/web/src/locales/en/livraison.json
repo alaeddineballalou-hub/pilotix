@@ -1,6 +1,10 @@
 {
   "saved": "Saved",
-  "tabs": { "societes": "Companies & rates", "api": "API Integration", "livreurs": "Couriers" },
+  "tabs": {
+    "societes": "Companies & rates",
+    "api": "API Integration",
+    "livreurs": "Couriers"
+  },
   "societes": {
     "title": "Delivery companies",
     "help": "Delivery companies (with or without an API) and their rates (what they charge you). Companies with an API are connected in “API Integration”. Your own couriers are in “Couriers”.",
@@ -15,15 +19,48 @@
     "accounts": "Connected accounts",
     "none": "No account connected: pick a company above."
   },
-  "col": { "company": "Company", "name": "Name", "connection": "Connection", "toShip": "To ship", "onRoad": "Out for delivery", "state": "State" },
+  "col": {
+    "company": "Company",
+    "name": "Name",
+    "connection": "Connection",
+    "toShip": "To ship",
+    "onRoad": "Out for delivery",
+    "state": "State"
+  },
   "keysOk": "keys OK",
   "keysMissing": "keys missing",
   "noApi": "no API",
   "active": "Active",
   "inactive": "Disabled",
-  "act": { "fees": "Rates", "sheet": "Route sheet", "desks": "Stop desks", "statuses": "Statuses", "test": "Test", "preview": "Send preview", "zr": "{{name}} from Pilotix" },
-  "kinds": { "own": "My courier", "zr": "ZR Express", "zr_legacy": "ZR Express (Procolis)", "yalidine": "Yalidine", "ecotrack": "EcoTrack", "noest": "NOEST Express", "custom": "Custom API", "manual": "Company without API" },
-  "kindsLong": { "own": "Your couriers", "zr": "ZR Express (new platform)", "zr_legacy": "ZR Express (old: Procolis)", "yalidine": "Yalidine", "ecotrack": "EcoTrack platform", "noest": "NOEST Express", "custom": "Custom API", "manual": "No API" },
+  "act": {
+    "fees": "Rates",
+    "sheet": "Route sheet",
+    "desks": "Stop desks",
+    "statuses": "Statuses",
+    "test": "Test",
+    "preview": "Send preview",
+    "zr": "{{name}} from Pilotix"
+  },
+  "kinds": {
+    "own": "My courier",
+    "zr": "ZR Express",
+    "zr_legacy": "ZR Express (Procolis)",
+    "yalidine": "Yalidine",
+    "ecotrack": "EcoTrack",
+    "noest": "NOEST Express",
+    "custom": "Custom API",
+    "manual": "Company without API"
+  },
+  "kindsLong": {
+    "own": "Your couriers",
+    "zr": "ZR Express (new platform)",
+    "zr_legacy": "ZR Express (old: Procolis)",
+    "yalidine": "Yalidine",
+    "ecotrack": "EcoTrack platform",
+    "noest": "NOEST Express",
+    "custom": "Custom API",
+    "manual": "No API"
+  },
   "form": {
     "newTitle": "Connect: {{kind}}",
     "editTitle": "Edit {{name}}",
@@ -116,7 +153,11 @@
     "help": "Your couriers: create their account in Users with the Courier role. They see their parcels in “My round”. “End of round” sorts their route sheet: farthest first, coming back here.",
     "addAccount": "+ New courier",
     "none": "No courier: create an account with the Courier role in Users.",
-    "col": { "livreur": "Courier", "account": "Account", "end": "End of round" },
+    "col": {
+      "livreur": "Courier",
+      "account": "Account",
+      "end": "End of round"
+    },
     "noAccount": "no account",
     "company": "Company (own couriers)",
     "endWilaya": "End of round (wilaya)",
@@ -168,5 +209,41 @@
       "journey": "Journey, SMS, driver and the customer’s return risk on each parcel",
       "pay": "Payments: request, date, received into the cash box"
     }
+  },
+  "ph": {
+    "tab": {
+      "societes": "Companies",
+      "api": "API",
+      "livreurs": "Livreurs"
+    },
+    "companies": "Active companies",
+    "missing_one": "{{count}} company without API keys: its parcels are not sent automatically.",
+    "missing_other": "{{count}} companies without API keys: their parcels are not sent automatically.",
+    "add": "Add a company",
+    "addTitle": "Add a company",
+    "withApi": "With API (automatic sending and tracking)",
+    "withoutApi": "Without API",
+    "manualSub": "You create the parcels at the company by hand, then enter the tracking number.",
+    "connect": "+ Connect",
+    "daily": "Every day",
+    "sheetSub": "Parcels to hand to the courier, to print",
+    "feesSub": "Price per wilaya, home and desk",
+    "desksSub": "The company's offices (stop desks)",
+    "connection": "Connection",
+    "testSub": "Check that the API keys work",
+    "testing": "Testing…",
+    "statusesSub": "Its statuses → our statuses (Suivi)",
+    "previewSub": "What will be sent for a parcel",
+    "settings": "Settings",
+    "edit": "Edit",
+    "editSub": "Name, phone, active or not",
+    "editSubApi": "Name, API keys, active or not",
+    "addKeys": "API keys missing: tap to add them",
+    "apiHelp": "Connect a company with its API keys: Pilotix sends it the parcels and follows their statuses by itself.",
+    "allCarriers": "All companies",
+    "endsAt": "Ends in",
+    "noEnd": "Tour end not set",
+    "call": "Call",
+    "tourEnd": "End of the tour"
   }
 }

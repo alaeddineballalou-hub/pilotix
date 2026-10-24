@@ -12,6 +12,8 @@ import { LivreursCash } from '../caisse/LivreursCash';
 import type { PageProps } from '../registry';
 import { Company, CompanyDraft, CompanyForm, FeesModal, PreviewModal, StatusesModal, StopdesksModal, ZrModal } from './forms';
 import { printRouteSheet } from './print';
+import { useIsPhone } from '../../lib/useMedia';
+import { PhoneLivraison } from './Phone';
 
 type Dialog = { kind: 'form'; draft: CompanyDraft; keysSet?: string[] } | { kind: 'fees' | 'desks' | 'statuses' | 'preview' | 'zr'; company: Company } | null;
 
@@ -30,6 +32,39 @@ export function Livraison({ sub }: PageProps) {
   ];
 
   const edit = (c: Company) => setDialog({ kind: 'form', draft: { id: c.id, name: c.name, kind: c.kind, active: c.active, phone: c.phone ?? '', settings: { ...(c.settings as Record<string, unknown>) } }, keysSet: c.keysSet });
+
+  const phone = useIsPhone();
+  const dialogs = (
+    <>
+      {dialog?.kind === 'form' && kinds.data && <CompanyForm initial={dialog.draft} kinds={kinds.data} keysSet={dialog.keysSet} onClose={close} />}
+      {dialog?.kind === 'fees' && <FeesModal company={dialog.company} onClose={close} />}
+      {dialog?.kind === 'desks' && <StopdesksModal company={dialog.company} onClose={close} />}
+      {dialog?.kind === 'statuses' && <StatusesModal company={dialog.company} onClose={close} />}
+      {dialog?.kind === 'preview' && <PreviewModal company={dialog.company} onClose={close} />}
+      {dialog?.kind === 'zr' && <ZrModal company={dialog.company} onClose={close} />}
+    </>
+  );
+  if (phone)
+    return (
+      <>
+        <PhoneLivraison
+          current={current}
+          companies={q}
+          kinds={kinds}
+          onEdit={edit}
+          onOpen={(kind, company) => setDialog({ kind, company })}
+          onAdd={(draft) => setDialog({ kind: 'form', draft })}
+          onSheet={async (by) => {
+            try {
+              printRouteSheet(await rpc('delivery.routeSheet', by));
+            } catch (e: any) {
+              toast(e.message, 'bad');
+            }
+          }}
+        />
+        {dialogs}
+      </>
+    );
 
   return (
     <>
@@ -87,12 +122,7 @@ export function Livraison({ sub }: PageProps) {
       )}
       {current === 'livreurs' && <LivreursTab companies={q.data ?? []} />}
 
-      {dialog?.kind === 'form' && kinds.data && <CompanyForm initial={dialog.draft} kinds={kinds.data} keysSet={dialog.keysSet} onClose={close} />}
-      {dialog?.kind === 'fees' && <FeesModal company={dialog.company} onClose={close} />}
-      {dialog?.kind === 'desks' && <StopdesksModal company={dialog.company} onClose={close} />}
-      {dialog?.kind === 'statuses' && <StatusesModal company={dialog.company} onClose={close} />}
-      {dialog?.kind === 'preview' && <PreviewModal company={dialog.company} onClose={close} />}
-      {dialog?.kind === 'zr' && <ZrModal company={dialog.company} onClose={close} />}
+      {dialogs}
     </>
   );
 }

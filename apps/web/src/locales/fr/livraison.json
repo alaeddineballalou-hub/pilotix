@@ -1,6 +1,10 @@
 {
   "saved": "Enregistré",
-  "tabs": { "societes": "Sociétés & tarifs", "api": "API Integration", "livreurs": "Livreurs" },
+  "tabs": {
+    "societes": "Sociétés & tarifs",
+    "api": "API Integration",
+    "livreurs": "Livreurs"
+  },
   "societes": {
     "title": "Sociétés de livraison",
     "help": "Les sociétés de livraison (avec ou sans API) et leurs tarifs (ce qu’elles vous facturent). Les sociétés avec API se connectent dans « API Integration ». Vos livreurs sont dans « Livreurs ».",
@@ -15,15 +19,48 @@
     "accounts": "Comptes connectés",
     "none": "Aucun compte connecté : choisissez une société ci-dessus."
   },
-  "col": { "company": "Société", "name": "Nom", "connection": "Connexion", "toShip": "À expédier", "onRoad": "En livraison", "state": "État" },
+  "col": {
+    "company": "Société",
+    "name": "Nom",
+    "connection": "Connexion",
+    "toShip": "À expédier",
+    "onRoad": "En livraison",
+    "state": "État"
+  },
   "keysOk": "clés OK",
   "keysMissing": "clés manquantes",
   "noApi": "sans API",
   "active": "Active",
   "inactive": "Désactivée",
-  "act": { "fees": "Tarifs", "sheet": "Feuille de route", "desks": "Stop desks", "statuses": "Statuts", "test": "Tester", "preview": "Aperçu de l’envoi", "zr": "{{name}} depuis Pilotix" },
-  "kinds": { "own": "Livreur à moi", "zr": "ZR Express", "zr_legacy": "ZR Express (Procolis)", "yalidine": "Yalidine", "ecotrack": "EcoTrack", "noest": "NOEST Express", "custom": "API personnalisée", "manual": "Société sans API" },
-  "kindsLong": { "own": "Vos livreurs", "zr": "ZR Express (nouvelle plateforme)", "zr_legacy": "ZR Express (ancienne : Procolis)", "yalidine": "Yalidine", "ecotrack": "Plateforme EcoTrack", "noest": "NOEST Express", "custom": "API personnalisée", "manual": "Sans API" },
+  "act": {
+    "fees": "Tarifs",
+    "sheet": "Feuille de route",
+    "desks": "Stop desks",
+    "statuses": "Statuts",
+    "test": "Tester",
+    "preview": "Aperçu de l’envoi",
+    "zr": "{{name}} depuis Pilotix"
+  },
+  "kinds": {
+    "own": "Livreur à moi",
+    "zr": "ZR Express",
+    "zr_legacy": "ZR Express (Procolis)",
+    "yalidine": "Yalidine",
+    "ecotrack": "EcoTrack",
+    "noest": "NOEST Express",
+    "custom": "API personnalisée",
+    "manual": "Société sans API"
+  },
+  "kindsLong": {
+    "own": "Vos livreurs",
+    "zr": "ZR Express (nouvelle plateforme)",
+    "zr_legacy": "ZR Express (ancienne : Procolis)",
+    "yalidine": "Yalidine",
+    "ecotrack": "Plateforme EcoTrack",
+    "noest": "NOEST Express",
+    "custom": "API personnalisée",
+    "manual": "Sans API"
+  },
   "form": {
     "newTitle": "Connecter : {{kind}}",
     "editTitle": "Modifier {{name}}",
@@ -116,7 +153,11 @@
     "help": "Vos livreurs : créez leur compte dans Utilisateurs avec le rôle Livreur. Ils voient leurs colis dans « Ma tournée ». « Fin de tournée » sert à trier leur feuille de route : le plus loin d’abord, en revenant vers ici.",
     "addAccount": "+ Nouveau livreur",
     "none": "Aucun livreur : créez un compte avec le rôle Livreur dans Utilisateurs.",
-    "col": { "livreur": "Livreur", "account": "Compte", "end": "Fin de tournée" },
+    "col": {
+      "livreur": "Livreur",
+      "account": "Compte",
+      "end": "Fin de tournée"
+    },
     "noAccount": "pas de compte",
     "company": "Société (livreurs à moi)",
     "endWilaya": "Fin de tournée (wilaya)",
@@ -168,5 +209,41 @@
       "journey": "Parcours, SMS, livreur et risque de retour du client sur chaque colis",
       "pay": "Paiements : demande, date, réception dans la caisse"
     }
+  },
+  "ph": {
+    "tab": {
+      "societes": "Sociétés",
+      "api": "API",
+      "livreurs": "Livreurs"
+    },
+    "companies": "Sociétés actives",
+    "missing_one": "{{count}} société sans clés API : ses colis ne partent pas seuls.",
+    "missing_other": "{{count}} sociétés sans clés API : leurs colis ne partent pas seuls.",
+    "add": "Ajouter une société",
+    "addTitle": "Ajouter une société",
+    "withApi": "Avec API (envoi et suivi automatiques)",
+    "withoutApi": "Sans API",
+    "manualSub": "Vous créez les colis chez elle à la main, puis mettez le numéro de suivi.",
+    "connect": "+ Connecter",
+    "daily": "Au quotidien",
+    "sheetSub": "Les colis à remettre au livreur, à imprimer",
+    "feesSub": "Prix par wilaya, domicile et bureau",
+    "desksSub": "Les bureaux (stop desks) de la société",
+    "connection": "Connexion",
+    "testSub": "Vérifier que les clés API marchent",
+    "testing": "Test en cours…",
+    "statusesSub": "Ses statuts → nos statuts (Suivi)",
+    "previewSub": "Ce qui sera envoyé pour un colis",
+    "settings": "Réglages",
+    "edit": "Modifier",
+    "editSub": "Nom, téléphone, active ou non",
+    "editSubApi": "Nom, clés API, active ou non",
+    "addKeys": "Clés API manquantes : touchez pour les ajouter",
+    "apiHelp": "Connectez une société avec ses clés API : Pilotix lui envoie les colis et suit leurs statuts tout seul.",
+    "allCarriers": "Toutes les sociétés",
+    "endsAt": "Finit à",
+    "noEnd": "Fin de tournée non réglée",
+    "call": "Appeler",
+    "tourEnd": "Fin de tournée"
   }
 }
