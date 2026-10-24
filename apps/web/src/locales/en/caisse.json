@@ -287,5 +287,42 @@
     "edit": "Edit",
     "received": "Payments received",
     "companiesS": "Companies"
+  },
+  "set": {
+    "title": "Manage caisses",
+    "short": "Create, rename, remove",
+    "shortNone": "Create a caisse (safe, BaridiMob…)",
+    "mine": "Your caisses",
+    "new": "New caisse",
+    "fixed": "Always there",
+    "none": "No other caisse yet. Create one for a safe, the depot's cash box, a BaridiMob account…",
+    "empHelp": "One caisse per office employee, made automatically: they put in the money they receive and hand it to the main caisse.",
+    "edit": "Edit",
+    "editTitle": "Caisse “{{name}}”",
+    "name": "Name",
+    "namePh": "E.g. Safe, Depot cash, BaridiMob",
+    "kind": "Type",
+    "kinds": {
+      "cash": "Cash",
+      "bank": "Bank",
+      "mobile": "Mobile payment"
+    },
+    "newHelp": "The caisse shows at once in Caisse and in the “Money received into” and “Transfer” choices.",
+    "create": "Create the caisse",
+    "created": "Caisse “{{name}}” created",
+    "saved": "Caisse saved",
+    "remove": "Remove",
+    "removeTitle": "Remove “{{name}}”?",
+    "removeLeft": "{{v}} is still in this caisse. It will be transferred to:",
+    "moveTo": "Transfer the money to",
+    "removeEmpty": "This caisse is empty.",
+    "removeHelp": "Its journal stays in the history; it no longer receives money.",
+    "removeBtn": "Remove the caisse",
+    "removed": "Caisse removed",
+    "removedMoved": "Caisse removed · {{v}} transferred",
+    "bankSub": "Remove it if you do not use a bank",
+    "bankGone": "The bank is removed.",
+    "bankBack": "Put it back",
+    "bankRestored": "Bank back among the caisses"
   }
 }

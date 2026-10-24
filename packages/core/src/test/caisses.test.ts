@@ -62,3 +62,40 @@ test('an employee uses only his caisse and hands it only to the main caisse', as
   assert.equal(((await call('caisse.mine', karim, {})) as any).balance, me.balance);
   await assert.rejects(call('caisse.overview', karim, {}), /Accès refusé/);
 });
+
+test('the owner creates his own caisses, uses them, renames them and removes them (money moved first)', async () => {
+  const admin = await as(EMAILS.admin);
+  const c: any = await call('caisse.create', admin, { name: 'Coffre', kind: 'cash' });
+  assert.match(c.key, /^c\d+$/);
+  await assert.rejects(call('caisse.create', admin, { name: 'coffre' }), /existe déjà/);
+  const list: any = await call('caisse.list', admin, {});
+  assert.ok(list.some((x: any) => x.key === c.key && x.name === 'Coffre'));
+  await call('caisse.add', admin, { caisse: c.key, kind: 'income', amount: 5000, note: 'fond de caisse' });
+  assert.equal(await bal(admin, c.key), 5000);
+  await call('caisse.rename', admin, { key: c.key, name: 'Coffre dépôt' });
+  const ov: any = await call('caisse.overview', admin, {});
+  assert.ok(ov.caisses.some((x: any) => x.key === c.key && x.name === 'Coffre dépôt' && x.balance === 5000));
+  await assert.rejects(call('caisse.remove', admin, { key: c.key }), /choisissez où mettre/);
+  const main0 = await bal(admin, 'main');
+  const r: any = await call('caisse.remove', admin, { key: c.key, moveTo: 'main' });
+  assert.equal(r.moved, 5000);
+  assert.equal(await bal(admin, 'main'), main0 + 5000);
+  await assert.rejects(call('caisse.add', admin, { caisse: c.key, kind: 'income', amount: 10 }), /supprimée/);
+  const set: any = await call('caisse.settings', admin, {});
+  assert.ok(!set.caisses.some((x: any) => x.key === c.key));
+  // employees cannot manage caisses
+  await assert.rejects(call('caisse.create', await as(EMAILS.depot), { name: 'X caisse' }), /Accès refusé/);
+});
+
+test('a shop that does not use a bank removes it, and can put it back', async () => {
+  const admin = await as(EMAILS.admin);
+  const left = await bal(admin, 'bank');
+  await call('caisse.remove', admin, { key: 'bank', moveTo: left ? 'main' : undefined });
+  const list: any = await call('caisse.list', admin, {});
+  assert.ok(!list.some((x: any) => x.key === 'bank'));
+  const ov: any = await call('caisse.overview', admin, {});
+  assert.equal(ov.bank, null);
+  await assert.rejects(call('caisse.add', admin, { caisse: 'bank', kind: 'income', amount: 10 }), /supprimée/);
+  await call('caisse.restoreBank', admin, {});
+  assert.ok(((await call('caisse.list', admin, {})) as any).some((x: any) => x.key === 'bank'));
+});

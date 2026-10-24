@@ -30,6 +30,8 @@ export interface SettingsMap {
   meta: { adAccountId: string; hasToken: boolean };
   /** Dashboard goals (admin): delivered revenue per month */
   goals: { monthlyRevenue: number };
+  /** Caisse: the bank can be removed by a shop that does not use one */
+  caisses: { bankHidden: boolean };
   /** Order-list column presets: saved by an admin, shared with everyone, never edited (only deleted by an admin) */
   colPresets: { id: string; name: string; cols: string[]; by: string; at: string }[];
   /** The preset every team uses (set by an admin; only an admin changes the columns) */
@@ -58,6 +60,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   cron: { key: '' },
   meta: { adAccountId: '', hasToken: false },
   goals: { monthlyRevenue: 3_000_000 },
+  caisses: { bankHidden: false },
   colPresets: [],
   colPresetActive: null,
 };

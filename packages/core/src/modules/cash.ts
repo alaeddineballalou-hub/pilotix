@@ -92,13 +92,31 @@ function toCash(r: any, pay: Pay): CashOrder {
 
 const payOf = async (db: Db): Promise<Pay> => (await getSetting(db, 'payPlans')).livreur;
 
-/** A caisse: 'main' (the owner's), 'bank', or 'u<profile id>' (an employee's). */
-export const CaisseKey = z.string().regex(/^(main|bank|u\d+)$/);
+/** A caisse: 'main' (the owner's), 'bank', 'u<profile id>' (an employee's) or 'c<id>' (one the owner created). */
+export const CaisseKey = z.string().regex(/^(main|bank|u\d+|c\d+)$/);
+export const CAISSE_KEY_RE = /^(main|bank|u\d+|c\d+)$/;
 export async function checkCaisse(db: Db, key: string) {
-  if (key === 'main' || key === 'bank') return key;
+  if (key === 'main') return key;
+  if (key === 'bank') {
+    if ((await getSetting(db, 'caisses')).bankHidden) throw bad('La banque a été supprimée des caisses');
+    return key;
+  }
+  if (key.startsWith('c')) {
+    const c = (await db.query('SELECT id FROM caisses WHERE id = $1 AND removed_at IS NULL', [Number(key.slice(1))]))[0];
+    if (!c) throw bad('Caisse inconnue ou supprimée');
+    return key;
+  }
   const p = (await db.query('SELECT id FROM profiles WHERE id = $1', [Number(key.slice(1))]))[0];
   if (!p) throw bad('Caisse inconnue');
   return key;
+}
+/** The name of any caisse key (removed caisses keep their name in the history). */
+export async function caisseLabelOf(db: Db, key: string | null): Promise<string | null> {
+  if (!key) return null;
+  if (key === 'main') return 'Caisse principale';
+  if (key === 'bank') return 'Banque';
+  if (key.startsWith('c')) return ((await db.query('SELECT name FROM caisses WHERE id = $1', [Number(key.slice(1))]))[0]?.name as string) ?? key;
+  return ((await db.query('SELECT name FROM profiles WHERE id = $1', [Number(key.slice(1))]))[0]?.name as string) ?? key;
 }
 
 /** Marks orders as cashed and records one versement per company / livreur, into the caisse that received the money. */

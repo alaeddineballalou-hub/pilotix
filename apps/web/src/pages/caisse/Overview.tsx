@@ -11,6 +11,7 @@ import { useSession } from '../../lib/session';
 import { Empty, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import './caisse.css';
+import { CaisseSettings, kindIcon } from './CaisseSettings';
 
 const CATS = ['fuel', 'packing', 'salary', 'rent', 'ads', 'repair', 'other'] as const;
 type Kind = 'expense' | 'income' | 'transfer';
@@ -43,13 +44,14 @@ export function CaisseOverview({ onOpenDue, onOpenLivreurs }: { onOpenDue: (key:
   const q = useRpc('caisse.overview', {});
   const [move, setMove] = useState<{ kind: Kind; from: string; to?: string } | null>(null);
   const [caisse, setCaisse] = useState<string | null>(null);
+  const [settings, setSettings] = useState(false);
   const d = q.data;
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   if (!d) return <Loading />;
   const payCos = d.companies.filter((c) => c.kind === 'zr' && c.companyId);
   return (
     <>
-      <div className="pxc-top">
+      <div className={`pxc-top${d.bank ? '' : ' nobank'}`}>
         <section className="pxc-main">
           <div className="pxc-mh">
             <span>{t('caisse.ph.main')}</span>
@@ -70,18 +72,37 @@ export function CaisseOverview({ onOpenDue, onOpenLivreurs }: { onOpenDue: (key:
             </button>
           </div>
         </section>
-        <button type="button" className="card pxc-bank" onClick={() => setCaisse('bank')}>
-          <span className="l">
-            <Icon name="building" /> {t('caisse.ph.bank')}
-          </span>
-          <b className="ltr">{da(d.bank.balance)}</b>
-          <small className="muted">{t('caisse.dk.openJournal')}</small>
-        </button>
+        {d.bank && (
+          <button type="button" className="card pxc-bank" onClick={() => setCaisse('bank')}>
+            <span className="l">
+              <Icon name="building" /> {t('caisse.ph.bank')}
+            </span>
+            <b className="ltr">{da(d.bank.balance)}</b>
+            <small className="muted">{t('caisse.dk.openJournal')}</small>
+          </button>
+        )}
         <div className="card pxc-out">
           <span className="l">{t('caisse.ph.outside')}</span>
           <b className="ltr">{da(d.outside)}</b>
           <small className="muted">{t('caisse.dk.outsideSub')}</small>
         </div>
+      </div>
+
+      <div className="pxc-mine">
+        {d.caisses.map((c) => (
+          <button key={c.key} type="button" className="card pxc-cs" onClick={() => setCaisse(c.key)}>
+            <span className="l">
+              <Icon name={kindIcon(c.kind)} /> {c.name}
+            </span>
+            <b className="ltr">{da(c.balance)}</b>
+          </button>
+        ))}
+        <button type="button" className="card pxc-cs pxc-cs-set" onClick={() => setSettings(true)}>
+          <span className="l">
+            <Icon name="settings" /> {t('caisse.set.title')}
+          </span>
+          <small className="muted">{d.caisses.length ? t('caisse.set.short') : t('caisse.set.shortNone')}</small>
+        </button>
       </div>
 
       {payCos.map((c) => (
@@ -171,6 +192,7 @@ export function CaisseOverview({ onOpenDue, onOpenLivreurs }: { onOpenDue: (key:
 
       {move && <MoveModal kind={move.kind} from={move.from} to={move.to} onClose={() => setMove(null)} />}
       {caisse && <CaisseModal caisse={caisse} onClose={() => setCaisse(null)} />}
+      {settings && <CaisseSettings onClose={() => setSettings(false)} />}
     </>
   );
 }
@@ -360,14 +382,17 @@ function MoveModal({ kind, from: from0, to: to0, onClose }: { kind: Kind; from: 
   const [cat, setCat] = useState('');
   const [from, setFrom] = useState(from0);
   const [to, setTo] = useState(to0 ?? (from0 === 'main' ? 'bank' : 'main'));
+  // the destination: the one chosen, else the first other caisse (the bank may have been removed)
+  const caisses = useRpc('caisse.list', {}).data ?? [];
+  const toKey = to !== from && (!caisses.length || caisses.some((x) => x.key === to)) ? to : caisses.find((x) => x.key !== from)?.key ?? to;
   const [note, setNote] = useState('');
   const add = useAction('caisse.add', { success: kind === 'expense' ? t('caisse.ph.expenseSaved') : t('caisse.ph.incomeSaved'), onDone: onClose });
   const tr = useAction('caisse.transfer', { success: t('caisse.ph.transferSaved'), onDone: onClose });
   const v = Math.round(Number(amount.replace(/\s/g, '')) || 0);
-  const ok = v > 0 && (kind !== 'expense' || !!cat) && (kind !== 'transfer' || from !== to);
+  const ok = v > 0 && (kind !== 'expense' || !!cat) && (kind !== 'transfer' || from !== toKey);
   const save = () =>
     kind === 'transfer'
-      ? tr.mutate({ from: from as 'main', to: to as 'main', amount: v, note: note.trim() || null })
+      ? tr.mutate({ from: from as 'main', to: toKey as 'main', amount: v, note: note.trim() || null })
       : add.mutate({ caisse: from as 'main', kind, amount: v, category: kind === 'expense' ? (cat as 'other') : null, note: note.trim() || null });
   return (
     <Modal
@@ -403,7 +428,7 @@ function MoveModal({ kind, from: from0, to: to0, onClose }: { kind: Kind; from: 
           </label>
         )}
         <CaisseSelect value={from} onChange={setFrom} label={kind === 'transfer' ? t('caisse.ph.from') : kind === 'expense' ? t('caisse.ph.paidFrom') : t('caisse.ph.into')} />
-        {kind === 'transfer' && !to0 && <CaisseSelect value={to} onChange={setTo} label={t('caisse.ph.to')} />}
+        {kind === 'transfer' && !to0 && <CaisseSelect value={toKey} onChange={setTo} label={t('caisse.ph.to')} />}
         <label className="field">
           <span className="lab">{t('caisse.dk.note')}</span>
           <input value={note} maxLength={300} placeholder={t('caisse.ph.notePh')} onChange={(e) => setNote(e.target.value)} />
