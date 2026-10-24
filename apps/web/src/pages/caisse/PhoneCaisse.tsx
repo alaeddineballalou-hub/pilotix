@@ -168,7 +168,7 @@ export function PhoneCaisse({ sub }: { sub?: string }) {
             </div>
             <button type="button" className="pxk-bankln" onClick={() => setCaisse('bank')}>
               <Icon name="building" />
-              <span>{t('caisse.ph.bank')}</span>
+              <em>{t('caisse.ph.bank')}</em>
               <b className="ltr">{da(d.bank.balance)}</b>
               <Icon name="chevr" />
             </button>
@@ -190,7 +190,7 @@ export function PhoneCaisse({ sub }: { sub?: string }) {
                 </div>
                 <div className="pxk-out3">
                   <button type="button" onClick={() => go('pxk-co')}>
-                    <small>{t('caisse.ph.companies')}</small>
+                    <small>{t('caisse.ux.companiesS')}</small>
                     <b className="ltr">{da(sumCo)}</b>
                   </button>
                   <button type="button" onClick={() => go('pxk-lv')}>
