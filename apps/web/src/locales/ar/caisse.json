@@ -352,5 +352,29 @@
     "bankGone": "تم حذف البنك.",
     "bankBack": "إعادته",
     "bankRestored": "تمت إعادة البنك إلى الصناديق"
+  },
+  "lcp": {
+    "title": "أموال الموزعين",
+    "allHanded": "كل شيء مسلّم",
+    "lastToday": "آخر تسليم اليوم",
+    "lastAgo": "آخر تسليم منذ {{n}} ي",
+    "toHand": "للتسليم",
+    "collect": "تحصيل",
+    "part": "حصته {{v}}",
+    "more": "عرض الطرود ({{count}})",
+    "less": "إخفاء",
+    "collectTitle": "تحصيل · {{name}}",
+    "k": {
+      "inHand": "بحوزته",
+      "returning": "للإرجاع",
+      "exchanges": "استبدالات",
+      "rate": "نسبة التسليم"
+    },
+    "notHanded_zero": "{{count}} طرد غير مسلّم",
+    "notHanded_one": "{{count}} طرد غير مسلّم",
+    "notHanded_two": "{{count}} طرد غير مسلّم",
+    "notHanded_few": "{{count}} طرد غير مسلّم",
+    "notHanded_many": "{{count}} طرد غير مسلّم",
+    "notHanded_other": "{{count}} طرد غير مسلّم"
   }
 }

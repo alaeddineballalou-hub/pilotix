@@ -324,5 +324,25 @@
     "bankGone": "The bank is removed.",
     "bankBack": "Put it back",
     "bankRestored": "Bank back among the caisses"
+  },
+  "lcp": {
+    "title": "Livreurs' money",
+    "notHanded_one": "{{count}} parcel not handed in",
+    "notHanded_other": "{{count}} parcels not handed in",
+    "allHanded": "All handed in",
+    "lastToday": "last handover today",
+    "lastAgo": "last handover {{n}} d ago",
+    "toHand": "To hand in",
+    "collect": "Collect",
+    "part": "share {{v}}",
+    "more": "Show the {{count}} parcels",
+    "less": "Show less",
+    "collectTitle": "Collect · {{name}}",
+    "k": {
+      "inHand": "In hand",
+      "returning": "To return",
+      "exchanges": "Exchanges",
+      "rate": "Delivery rate"
+    }
   }
 }

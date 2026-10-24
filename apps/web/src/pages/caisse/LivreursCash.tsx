@@ -6,8 +6,15 @@ import { da, when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { Empty, ErrorBox, Kpi, Kpis, Loading } from '../../ui/kit';
+import { useIsPhone } from '../../lib/useMedia';
+import { LivreursCashPhone } from './LivreursCashPhone';
 
-export function LivreursCash({ livreurId: fixed }: { livreurId?: number }) {
+export function LivreursCash({ livreurId }: { livreurId?: number }) {
+  const phone = useIsPhone();
+  return phone ? <LivreursCashPhone livreurId={livreurId} /> : <LivreursCashDesktop livreurId={livreurId} />;
+}
+
+function LivreursCashDesktop({ livreurId: fixed }: { livreurId?: number }) {
   const { t } = useTranslation();
   const { session } = useSession();
   const admin = !!session?.isAdmin;

@@ -181,8 +181,19 @@ export async function livreursCash(ctx: Ctx, f: { livreurId?: number; from?: str
     `SELECT h.*, cardinality(h.orders) AS n FROM cash_handovers h WHERE h.livreur_id = ANY($1) AND h.cancelled_at IS NULL ORDER BY h.created_at DESC LIMIT 200`,
     [pIds],
   );
+  // taux de livraison: delivered ÷ (delivered + returned), parcels finished in the last 30 days (or the period asked)
+  const rateFrom = f.from ?? new Date(ctx.now() - 30 * 86_400_000).toISOString();
+  const rates = new Map<number, { d: number; r: number }>();
+  for (const r of await ctx.db.query(
+    `SELECT livreur_id, count(*) FILTER (WHERE follow_status = 'delivered' AND delivered_at >= $2) AS d,
+            count(*) FILTER (WHERE follow_status IN ('returning', 'returned') AND COALESCE(returned_at, updated_at) >= $2) AS r
+     FROM orders WHERE livreur_id = ANY($1) GROUP BY livreur_id`,
+    [pIds, rateFrom],
+  ))
+    rates.set(num(r.livreur_id), { d: num(r.d), r: num(r.r) });
   const livreurs = people.map((p: any) => {
     const pid = num(p.id);
+    const rt = rates.get(pid) ?? { d: 0, r: 0 };
     const hand = inHand.filter((o) => o.livreurId === pid);
     const del = delivered.filter((o) => o.livreurId === pid);
     const notCashed = del.filter((o) => !o.cashed);
@@ -204,6 +215,11 @@ export async function livreursCash(ctx: Ctx, f: { livreurId?: number; from?: str
       shareAll: del.reduce((s, o) => s + o.share, 0),
       net: sum(notCashed) - share,
       returning: returning.filter((o) => o.livreurId === pid).length,
+      /** SAV exchange parcels he carries now */
+      exchanges: hand.filter((o) => o.ticket).length,
+      /** delivered ÷ (delivered + returned), 0–1, null when nothing finished yet */
+      rate: rt.d + rt.r ? rt.d / (rt.d + rt.r) : null,
+      lastHandover: (handovers.find((h: any) => num(h.livreur_id) === pid)?.created_at ? iso(handovers.find((h: any) => num(h.livreur_id) === pid).created_at) : null) as string | null,
     };
   });
   return {
