@@ -1,6 +1,10 @@
 {
   "saved": "تم الحفظ",
-  "tabs": { "societes": "الشركات والأسعار", "api": "ربط API", "livreurs": "الموصّلون" },
+  "tabs": {
+    "societes": "الشركات والأسعار",
+    "api": "ربط API",
+    "livreurs": "الموصّلون"
+  },
   "societes": {
     "title": "شركات التوصيل",
     "help": "شركات التوصيل (مع API أو بدونه) وأسعارها (ما تدفعه لها). الشركات التي لها API تُربط في « ربط API ». موصّلوك في « الموصّلون ».",
@@ -15,15 +19,48 @@
     "accounts": "الحسابات المربوطة",
     "none": "لا يوجد حساب مربوط: اختر شركة أعلاه."
   },
-  "col": { "company": "الشركة", "name": "الاسم", "connection": "الاتصال", "toShip": "للإرسال", "onRoad": "قيد التوصيل", "state": "الحالة" },
+  "col": {
+    "company": "الشركة",
+    "name": "الاسم",
+    "connection": "الاتصال",
+    "toShip": "للإرسال",
+    "onRoad": "قيد التوصيل",
+    "state": "الحالة"
+  },
   "keysOk": "المفاتيح سليمة",
   "keysMissing": "مفاتيح ناقصة",
   "noApi": "بدون API",
   "active": "مفعّلة",
   "inactive": "معطّلة",
-  "act": { "fees": "الأسعار", "sheet": "ورقة الطريق", "desks": "مكاتب الاستلام", "statuses": "الحالات", "test": "اختبار", "preview": "معاينة الإرسال", "zr": "{{name}} من Pilotix" },
-  "kinds": { "own": "موصّل خاص بي", "zr": "ZR Express", "zr_legacy": "ZR Express (Procolis)", "yalidine": "Yalidine", "ecotrack": "EcoTrack", "noest": "NOEST Express", "custom": "API مخصّص", "manual": "شركة بدون API" },
-  "kindsLong": { "own": "موصّلوك", "zr": "ZR Express (المنصة الجديدة)", "zr_legacy": "ZR Express (القديمة: Procolis)", "yalidine": "Yalidine", "ecotrack": "منصة EcoTrack", "noest": "NOEST Express", "custom": "API مخصّص", "manual": "بدون API" },
+  "act": {
+    "fees": "الأسعار",
+    "sheet": "ورقة الطريق",
+    "desks": "مكاتب الاستلام",
+    "statuses": "الحالات",
+    "test": "اختبار",
+    "preview": "معاينة الإرسال",
+    "zr": "{{name}} من Pilotix"
+  },
+  "kinds": {
+    "own": "موصّل خاص بي",
+    "zr": "ZR Express",
+    "zr_legacy": "ZR Express (Procolis)",
+    "yalidine": "Yalidine",
+    "ecotrack": "EcoTrack",
+    "noest": "NOEST Express",
+    "custom": "API مخصّص",
+    "manual": "شركة بدون API"
+  },
+  "kindsLong": {
+    "own": "موصّلوك",
+    "zr": "ZR Express (المنصة الجديدة)",
+    "zr_legacy": "ZR Express (القديمة: Procolis)",
+    "yalidine": "Yalidine",
+    "ecotrack": "منصة EcoTrack",
+    "noest": "NOEST Express",
+    "custom": "API مخصّص",
+    "manual": "بدون API"
+  },
   "form": {
     "newTitle": "ربط: {{kind}}",
     "editTitle": "تعديل {{name}}",
@@ -116,7 +153,11 @@
     "help": "موصّلوك: أنشئ حساباتهم في المستخدمين بدور الموصّل. يرون طرودهم في « جولتي ». « نهاية الجولة » ترتّب ورقة الطريق: الأبعد أولاً، عودةً إلى هنا.",
     "addAccount": "+ موصّل جديد",
     "none": "لا يوجد موصّل: أنشئ حساباً بدور الموصّل في المستخدمين.",
-    "col": { "livreur": "الموصّل", "account": "الحساب", "end": "نهاية الجولة" },
+    "col": {
+      "livreur": "الموصّل",
+      "account": "الحساب",
+      "end": "نهاية الجولة"
+    },
     "noAccount": "بدون حساب",
     "company": "الشركة (موصّلون خاصون)",
     "endWilaya": "نهاية الجولة (الولاية)",
@@ -168,5 +209,45 @@
       "journey": "المسار والرسائل والموزّع وخطر الإرجاع على كل طرد",
       "pay": "المدفوعات: الطلب والتاريخ والاستلام في الصندوق"
     }
+  },
+  "ph": {
+    "tab": {
+      "societes": "الشركات",
+      "api": "API",
+      "livreurs": "الموزعون"
+    },
+    "companies": "شركات نشطة",
+    "add": "إضافة شركة",
+    "addTitle": "إضافة شركة",
+    "withApi": "مع API (إرسال وتتبع تلقائي)",
+    "withoutApi": "بدون API",
+    "manualSub": "تنشئ الطرود لدى الشركة يدوياً ثم تضع رقم التتبع.",
+    "connect": "+ ربط",
+    "daily": "يومياً",
+    "sheetSub": "الطرود التي تُسلَّم للموزع، للطباعة",
+    "feesSub": "السعر حسب الولاية، للمنزل والمكتب",
+    "desksSub": "مكاتب الشركة (Stop desks)",
+    "connection": "الربط",
+    "testSub": "التحقق من أن مفاتيح API تعمل",
+    "testing": "جارٍ الاختبار…",
+    "statusesSub": "حالاتها ← حالاتنا (المتابعة)",
+    "previewSub": "ما سيُرسل لطرد",
+    "settings": "الإعدادات",
+    "edit": "تعديل",
+    "editSub": "الاسم، الهاتف، نشطة أم لا",
+    "editSubApi": "الاسم، مفاتيح API، نشطة أم لا",
+    "addKeys": "مفاتيح API ناقصة: المس لإضافتها",
+    "apiHelp": "اربط شركة بمفاتيح API الخاصة بها: يرسل لها Pilotix الطرود ويتابع حالاتها تلقائياً.",
+    "allCarriers": "كل الشركات",
+    "endsAt": "تنتهي في",
+    "noEnd": "نهاية الجولة غير محددة",
+    "call": "اتصال",
+    "tourEnd": "نهاية الجولة",
+    "missing_zero": "{{count}} شركة بدون مفاتيح API: طرودها لا تُرسل تلقائياً.",
+    "missing_one": "{{count}} شركة بدون مفاتيح API: طرودها لا تُرسل تلقائياً.",
+    "missing_two": "{{count}} شركة بدون مفاتيح API: طرودها لا تُرسل تلقائياً.",
+    "missing_few": "{{count}} شركة بدون مفاتيح API: طرودها لا تُرسل تلقائياً.",
+    "missing_many": "{{count}} شركة بدون مفاتيح API: طرودها لا تُرسل تلقائياً.",
+    "missing_other": "{{count}} شركة بدون مفاتيح API: طرودها لا تُرسل تلقائياً."
   }
 }
