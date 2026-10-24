@@ -299,5 +299,20 @@
     "forDate": "ليوم",
     "nothingReady": "لا شيء جاهز للدفع حاليًا: يُرسل الطلب رغم ذلك.",
     "received": "تم الاستلام"
+  },
+  "ux": {
+    "hideZero": "إخفاء الموظفين بـ 0 د.ج",
+    "noMoveHelp": "ستظهر هنا التسليمات والمصاريف والتحويلات لهذا الصندوق.",
+    "notReadyS": "غير جاهز",
+    "paidS": "مدفوع",
+    "asked": "طُلب الدفع ليوم {{d}}",
+    "edit": "تعديل",
+    "received": "الدفعات المستلمة",
+    "showZero_zero": "عرض {{count}} موظف بـ 0 د.ج",
+    "showZero_one": "عرض {{count}} موظف بـ 0 د.ج",
+    "showZero_two": "عرض {{count}} موظف بـ 0 د.ج",
+    "showZero_few": "عرض {{count}} موظف بـ 0 د.ج",
+    "showZero_many": "عرض {{count}} موظف بـ 0 د.ج",
+    "showZero_other": "عرض {{count}} موظف بـ 0 د.ج"
   }
 }

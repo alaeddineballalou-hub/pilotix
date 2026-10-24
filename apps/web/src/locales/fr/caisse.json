@@ -275,5 +275,16 @@
     "forDate": "Pour le",
     "nothingReady": "Rien de prêt à payer pour l’instant : la demande partira quand même.",
     "received": "Reçu"
+  },
+  "ux": {
+    "hideZero": "Masquer les employés à 0 DA",
+    "showZero_one": "Voir {{count}} employé à 0 DA",
+    "showZero_other": "Voir les {{count}} employés à 0 DA",
+    "noMoveHelp": "Les versements, dépenses et transferts de cette caisse apparaîtront ici.",
+    "notReadyS": "Pas prêt",
+    "paidS": "Payé",
+    "asked": "Paiement demandé pour le {{d}}",
+    "edit": "Modifier",
+    "received": "Paiements reçus"
   }
 }

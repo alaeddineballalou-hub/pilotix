@@ -275,5 +275,16 @@
     "forDate": "For",
     "nothingReady": "Nothing ready to pay yet: the request is sent anyway.",
     "received": "Received"
+  },
+  "ux": {
+    "hideZero": "Hide employees at 0 DA",
+    "showZero_one": "Show {{count}} employee at 0 DA",
+    "showZero_other": "Show the {{count}} employees at 0 DA",
+    "noMoveHelp": "Handovers, expenses and transfers of this caisse will show here.",
+    "notReadyS": "Not ready",
+    "paidS": "Paid",
+    "asked": "Payment requested for {{d}}",
+    "edit": "Edit",
+    "received": "Payments received"
   }
 }

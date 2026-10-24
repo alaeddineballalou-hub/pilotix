@@ -79,6 +79,41 @@ function IntoChips({ value, onChange, me }: { value: string; onChange: (k: strin
   );
 }
 
+/** The caisse money goes into, as one pill; a tap opens the list (keeps the bottom bar small). */
+function IntoPick({ value, onChange, label, me }: { value: string; onChange: (k: string) => void; label: string; me?: boolean }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const list = useRpc('caisse.list', {}).data ?? [];
+  const name = (k: string, n?: string) => (k === 'main' ? (me ? t('caisse.ph.meMain') : t('caisse.ph.main')) : k === 'bank' ? t('caisse.ph.bank') : n ?? k);
+  const cur = list.find((c) => c.key === value);
+  return (
+    <>
+      <button type="button" className="pxk-pick" onClick={() => setOpen(true)}>
+        <span>{label}</span>
+        <b>{name(value, cur?.name)}</b>
+        <Icon name="chevron" />
+      </button>
+      {open && (
+        <Sheet title={label} onClose={() => setOpen(false)}>
+          <ul className="pxk-grp">
+            {list.map((c) => (
+              <li key={c.key}>
+                <button type="button" onClick={() => (onChange(c.key), setOpen(false))}>
+                  <span className={`pxk-av${c.key === 'main' ? ' nv' : c.key === 'bank' ? ' bl' : ''}`}>{c.key === 'main' ? <Icon name="wallet" /> : c.key === 'bank' ? <Icon name="building" /> : initials(c.name)}</span>
+                  <span className="pxk-rm">
+                    <b>{name(c.key, c.name)}</b>
+                  </span>
+                  {value === c.key && <Icon name="check" />}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Sheet>
+      )}
+    </>
+  );
+}
+
 // ---------------------------------------------------------------- the page (owner)
 export function PhoneCaisse({ sub }: { sub?: string }) {
   const { t } = useTranslation();
@@ -88,7 +123,14 @@ export function PhoneCaisse({ sub }: { sub?: string }) {
   const [company, setCompany] = useState<string | null>(null);
   const [livreur, setLivreur] = useState<number | null>(null);
   const [caisse, setCaisse] = useState<string | null>(null);
+  const [allEmp, setAllEmp] = useState(false);
   const d = q.data;
+  const go = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const sumCo = d ? d.companies.reduce((s, c) => s + c.net, 0) : 0;
+  const sumLv = d ? d.livreurs.reduce((s, l) => s + l.net, 0) : 0;
+  const sumEm = d ? d.employees.reduce((s, e) => s + e.balance, 0) : 0;
+  const emps = d ? (allEmp ? d.employees : d.employees.filter((e) => e.balance !== 0)) : [];
+  const zeroEmp = d ? d.employees.filter((e) => e.balance === 0).length : 0;
   return (
     <div className="pxk">
       <div className="pxv-own" role="tablist">
@@ -124,6 +166,12 @@ export function PhoneCaisse({ sub }: { sub?: string }) {
                 <Icon name="swap" /> {t('caisse.ph.transfer')}
               </button>
             </div>
+            <button type="button" className="pxk-bankln" onClick={() => setCaisse('bank')}>
+              <Icon name="building" />
+              <span>{t('caisse.ph.bank')}</span>
+              <b className="ltr">{da(d.bank.balance)}</b>
+              <Icon name="chevr" />
+            </button>
           </section>
 
           {tab === 'journal' ? (
@@ -135,18 +183,29 @@ export function PhoneCaisse({ sub }: { sub?: string }) {
                 .map((c) => (
                   <QuickPay key={c.key} companyId={c.companyId!} kind={c.kind ?? 'zr'} onOpen={() => setCompany(c.key)} />
                 ))}
-              <button type="button" className="pxk-bank" onClick={() => setCaisse('bank')}>
-                <Icon name="building" />
-                <b>{t('caisse.ph.bank')}</b>
-                <span className="ltr">{da(d.bank.balance)}</span>
-                <Icon name="chevr" />
-              </button>
-              <div className="pxk-sect">
-                {t('caisse.ph.outside')} <b className="ltr">{da(d.outside)}</b>
-              </div>
+              <section className="pxk-out">
+                <div className="pxk-outh">
+                  <span>{t('caisse.ph.outside')}</span>
+                  <b className="ltr">{da(d.outside)}</b>
+                </div>
+                <div className="pxk-out3">
+                  <button type="button" onClick={() => go('pxk-co')}>
+                    <small>{t('caisse.ph.companies')}</small>
+                    <b className="ltr">{da(sumCo)}</b>
+                  </button>
+                  <button type="button" onClick={() => go('pxk-lv')}>
+                    <small>{t('caisse.ph.livreurs')}</small>
+                    <b className="ltr">{da(sumLv)}</b>
+                  </button>
+                  <button type="button" onClick={() => go('pxk-em')}>
+                    <small>{t('caisse.ph.employees')}</small>
+                    <b className="ltr">{da(sumEm)}</b>
+                  </button>
+                </div>
+              </section>
 
-              <div className="pxk-sect sm">
-                {t('caisse.ph.companies')} <b className="ltr">{da(d.companies.reduce((s, c) => s + c.net, 0))}</b>
+              <div className="pxk-sect sm" id="pxk-co">
+                {t('caisse.ph.companies')} <b className="ltr">{da(sumCo)}</b>
               </div>
               {d.companies.length ? (
                 <ul className="pxk-grp">
@@ -171,8 +230,8 @@ export function PhoneCaisse({ sub }: { sub?: string }) {
                 <p className="pxv-help">{t('caisse.ph.noCompany')}</p>
               )}
 
-              <div className="pxk-sect sm">
-                {t('caisse.ph.livreurs')} <b className="ltr">{da(d.livreurs.reduce((s, l) => s + l.net, 0))}</b>
+              <div className="pxk-sect sm" id="pxk-lv">
+                {t('caisse.ph.livreurs')} <b className="ltr">{da(sumLv)}</b>
               </div>
               <ul className="pxk-grp">
                 {d.livreurs.map((l) => (
@@ -186,17 +245,18 @@ export function PhoneCaisse({ sub }: { sub?: string }) {
                           {l.last && l.notCashed ? ` · ${t('caisse.ph.lastHand', { n: days(l.last) })}` : ''}
                         </small>
                       </span>
-                      <b className="ltr pxk-amt">{da(l.net)}</b>
+                      <b className={`ltr pxk-amt${l.net ? '' : ' z'}`}>{da(l.net)}</b>
                     </button>
                   </li>
                 ))}
               </ul>
 
-              <div className="pxk-sect sm">
-                {t('caisse.ph.employees')} <b className="ltr">{da(d.employees.reduce((s, e) => s + e.balance, 0))}</b>
+              <div className="pxk-sect sm" id="pxk-em">
+                {t('caisse.ph.employees')} <b className="ltr">{da(sumEm)}</b>
               </div>
+              {emps.length > 0 && (
               <ul className="pxk-grp">
-                {d.employees.map((e) => (
+                {emps.map((e) => (
                   <li key={e.key}>
                     <button type="button" onClick={() => setCaisse(e.key)}>
                       <span className="pxk-av">{initials(e.name)}</span>
@@ -209,6 +269,13 @@ export function PhoneCaisse({ sub }: { sub?: string }) {
                   </li>
                 ))}
               </ul>
+              )}
+              {zeroEmp > 0 && (
+                <button type="button" className="pxk-more" onClick={() => setAllEmp((v) => !v)}>
+                  {allEmp ? t('caisse.ux.hideZero') : t('caisse.ux.showZero', { count: zeroEmp })}
+                  <Icon name={allEmp ? 'chevron' : 'chevr'} />
+                </button>
+              )}
               {d.tickets.count > 0 && <p className="pxv-help">{t('caisse.ph.tickets', { count: d.tickets.count, v: da(d.tickets.total) })}</p>}
             </>
           )}
@@ -244,8 +311,7 @@ function CompanyPage({ gkey, onClose }: { gkey: string; onClose: () => void }) {
       bar={
         g && (
           <>
-            <div className="pxv-lbl">{t('caisse.ph.receivedInto')}</div>
-            <IntoChips value={into} onChange={setInto} />
+            <IntoPick value={into} onChange={setInto} label={t('caisse.ph.receivedInto')} />
             <button type="button" className="pxv-btn gr big" disabled={!chosen.length || recv.isPending} onClick={() => recv.mutate({ ids: chosen.map((o) => o.id), into: into as 'main' })}>
               <Icon name="check" /> {t('caisse.ph.receiveBtn', { v: da(net) })}
             </button>
@@ -253,7 +319,7 @@ function CompanyPage({ gkey, onClose }: { gkey: string; onClose: () => void }) {
         )
       }
     >
-      {g?.companyId ? <CourierPay companyId={g.companyId} /> : null}
+      {g?.companyId ? <QuickPay companyId={g.companyId} kind={g.kind ?? 'zr'} full /> : null}
       {!g ? (
         q.error ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> : <Loading />
       ) : (
@@ -272,7 +338,7 @@ function CompanyPage({ gkey, onClose }: { gkey: string; onClose: () => void }) {
               <b className="ltr">{da(net)}</b>
             </div>
           </div>
-          <button type="button" className="pxk-all" onClick={() => setOff(off.size ? new Set() : new Set(orders.map((o) => o.id)))}>
+          <button type="button" className="pxk-all sticky" onClick={() => setOff(off.size ? new Set() : new Set(orders.map((o) => o.id)))}>
             <span className={`pxv-ck${!off.size ? ' on' : ''}`}>{!off.size && <Icon name="check" />}</span>
             <b>{t('caisse.ph.all', { n: orders.length })}</b>
             <small>{t('caisse.ph.oldestFirst')}</small>
@@ -328,8 +394,7 @@ function LivreurPage({ id, onClose }: { id: number; onClose: () => void }) {
       bar={
         l && list.length > 0 && (
           <>
-            <div className="pxv-lbl">{t('caisse.ph.takenBy')}</div>
-            <IntoChips value={into} onChange={setInto} me />
+            <IntoPick value={into} onChange={setInto} label={t('caisse.ph.takenBy')} me />
             <button type="button" className="pxv-btn gr big" disabled={!chosen.length || take.isPending} onClick={() => take.mutate({ livreurId: id, ids: chosen.map((o) => o.id), into: into as 'main' })}>
               <Icon name="check" /> {t('caisse.ph.collectBtn', { v: da(due) })}
             </button>
@@ -446,7 +511,7 @@ function Journal({ caisse, data, mine }: { caisse: string; data?: { moves: Move[
   if (!d) return <Loading />;
   return (
     <>
-      <div className="pxk-k3">
+      <div className="pxk-k2">
         <div>
           <small>{t('caisse.ph.monthIn')}</small>
           <b className="ltr ok">{sgn(d.monthIn)}</b>
@@ -454,10 +519,6 @@ function Journal({ caisse, data, mine }: { caisse: string; data?: { moves: Move[
         <div>
           <small>{t('caisse.ph.monthOut')}</small>
           <b className="ltr bad">{sgn(d.monthOut)}</b>
-        </div>
-        <div>
-          <small>{t('caisse.ph.balance')}</small>
-          <b className="ltr">{da(d.balance)}</b>
         </div>
       </div>
       <div className="pxv-road">
@@ -468,7 +529,11 @@ function Journal({ caisse, data, mine }: { caisse: string; data?: { moves: Move[
         ))}
       </div>
       {!moves.length ? (
-        <p className="pxv-help">{t('caisse.ph.noMove')}</p>
+        <div className="pxk-empty">
+          <Icon name="receipt" />
+          <b>{t('caisse.ph.noMove')}</b>
+          <small>{t('caisse.ux.noMoveHelp')}</small>
+        </div>
       ) : (
         byDay.map(([day, ms]) => (
           <div key={day} className="pxk-day">
@@ -622,7 +687,7 @@ export function MaCaisse() {
 // ---------------------------------------------------------------- ZR on the Caisse home: its totals and one tap to ask
 /** What the company says it holds for us (Livré · Prêt à payer · Pas encore prêt · Déjà payé) and « Demander le paiement »
  * in one tap (for tomorrow; another date if needed). A payment ready to collect shows here too, with « Reçu ». */
-function QuickPay({ companyId, kind, onOpen }: { companyId: number; kind: string; onOpen: () => void }) {
+function QuickPay({ companyId, kind, onOpen, full }: { companyId: number; kind: string; onOpen?: () => void; full?: boolean }) {
   const { t } = useTranslation();
   const q = useRpc('caisse.pay', { companyId });
   const sync = useAction('caisse.paySync', { success: (r) => (r.imported ? t('caisse.pay.imported', { count: r.imported }) : r.requested ? t('caisse.pay.requestedNow') : t('caisse.pay.upToDate')) });
@@ -631,121 +696,165 @@ function QuickPay({ companyId, kind, onOpen }: { companyId: number; kind: string
   const min = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
   const [date, setDate] = useState(min);
   const [take, setTake] = useState<Pay | null>(null);
+  const [open, setOpen] = useState<Pay | null>(null);
+  const [req, setReq] = useState(false);
+  const [cfg, setCfg] = useState(false);
   const d = q.data;
   if (!d || !d.supported) return null;
   const b = d.balance;
   const pending = d.requests.find((r) => r.approved === null);
   const waiting = d.payments.filter((p) => !p.inCaisse);
+  const done = d.payments.filter((p) => p.inCaisse);
   const ready = b?.ready ?? 0;
   return (
-    <section className="pxk-qp">
+    <section className={`pxk-qp${full ? ' full' : ''}`}>
       <div className="pxk-qph">
-        <button type="button" className="pxk-qpt" onClick={onOpen}>
-          <span className={`pxs-co k-${kind} pxk-co`}>{coShort(d.name)}</span>
-          <span>
-            <b>{d.name}</b>
-            <small>{b ? t('caisse.qp.readAt', { d: when(b.at) }) : t('caisse.qp.atCourier')}</small>
+        {onOpen ? (
+          <button type="button" className="pxk-qpt" onClick={onOpen}>
+            <span className={`pxs-co k-${kind} pxk-co`}>{coShort(d.name)}</span>
+            <span>
+              <b>{d.name}</b>
+              <small>{b ? t('caisse.qp.readAt', { d: when(b.at) }) : t('caisse.qp.atCourier')}</small>
+            </span>
+          </button>
+        ) : (
+          <span className="pxk-qpt">
+            <span>
+              <b>{t('caisse.pay.title', { name: d.name })}</b>
+              <small>{b ? t('caisse.qp.readAt', { d: when(b.at) }) : t('caisse.qp.atCourier')}</small>
+            </span>
           </span>
-        </button>
-        <button type="button" className="pxp-back" aria-label={t('caisse.pay.refresh')} disabled={sync.isPending} onClick={() => sync.mutate({ companyId })}>
+        )}
+        <button type="button" className={`pxk-ib${sync.isPending ? ' spin' : ''}`} aria-label={t('caisse.pay.refresh')} disabled={sync.isPending} onClick={() => sync.mutate({ companyId })}>
           <Icon name="refresh" />
         </button>
+        {full && (
+          <button type="button" className="pxk-ib" aria-label={t('caisse.pay.settings')} onClick={() => setCfg(true)}>
+            <Icon name="settings" />
+          </button>
+        )}
       </div>
       {b?.error && <p className="pxk-payerr">{b.error}</p>}
       {b && (
-        <>
+        <div className="pxk-qpb">
           <div className="pxk-qpr">
             <small>{t('caisse.pay.ready')}</small>
             <b className="ltr">{da(ready)}</b>
           </div>
-          <div className="pxk-k3">
+          <dl className="pxk-qpl">
             <div>
-              <small>{t('caisse.qp.delivered')}</small>
-              <b className="ltr">{da(b.delivered)}</b>
+              <dt>{t('caisse.qp.delivered')}</dt>
+              <dd className="ltr">{n0(b.delivered)}</dd>
             </div>
             <div>
-              <small>{t('caisse.pay.notReady')}</small>
-              <b className="ltr">{da(b.notReady)}</b>
+              <dt>{t('caisse.ux.notReadyS')}</dt>
+              <dd className="ltr">{n0(b.notReady)}</dd>
             </div>
             <div>
-              <small>{t('caisse.pay.paid')}</small>
-              <b className="ltr">{da(b.paid)}</b>
+              <dt>{t('caisse.ux.paidS')}</dt>
+              <dd className="ltr">{n0(b.paid)}</dd>
             </div>
-          </div>
-        </>
-      )}
-      {pending ? (
-        <div className="pxk-req">
-          <Icon name="hourglass" />
-          <span>
-            <b>{t('caisse.pay.pending', { d: pending.date ? dateOnly(pending.date) : '—' })}</b>
-            <small>{pending.auto ? t('caisse.pay.byPilotix') : t('caisse.pay.byHand')}</small>
-          </span>
-          <ReqActions id={pending.id} date={pending.date} />
+          </dl>
         </div>
-      ) : (
-        <>
-          <button type="button" className="pxv-btn gr big pxk-qpask" disabled={ask.isPending} onClick={() => ask.mutate({ companyId, date: other ? date : undefined })}>
-            <Icon name="coins" /> {t('caisse.pay.ask')}
-          </button>
-          {other ? (
-            <label className="pxk-qpd">
-              <span>{t('caisse.qp.forDate')}</span>
-              <input type="date" value={date} min={min} onChange={(e) => setDate(e.target.value || min)} />
-            </label>
-          ) : (
-            <button type="button" className="pxk-qplink" onClick={() => setOther(true)}>
-              {t('caisse.qp.tomorrow')} · <u>{t('caisse.qp.otherDate')}</u>
-            </button>
-          )}
-          {ready <= 0 && b && <p className="pxv-help">{t('caisse.qp.nothingReady')}</p>}
-        </>
       )}
       {waiting.map((p) => (
         <div key={p.id} className="pxk-qpw">
-          <span className="pxk-rm">
+          <button type="button" className="pxk-rm" onClick={() => setOpen(p)}>
             <b>
               {p.ref ?? t('caisse.pay.payment')} · <span className="ltr">{da(p.amount)}</span>
             </b>
             <small>{p.done ? t('caisse.pay.doneNotIn') : t('caisse.pay.waitingAt', { place: p.place ?? 'ZR' })}</small>
-          </span>
+          </button>
           <button type="button" className="pxv-btn gr" onClick={() => setTake(p)}>
             <Icon name="check" /> {t('caisse.qp.received')}
           </button>
         </div>
       ))}
+      {pending ? (
+        <button type="button" className="pxk-reqln" onClick={() => setReq(true)}>
+          <Icon name="hourglass" />
+          <span>
+            <b>{t('caisse.ux.asked', { d: pending.date ? dateOnly(pending.date) : '—' })}</b>
+            <small>{pending.auto ? t('caisse.pay.byPilotix') : t('caisse.pay.byHand')}</small>
+          </span>
+          <u>{t('caisse.ux.edit')}</u>
+        </button>
+      ) : (
+        <div className="pxk-askrow">
+          <button type="button" className="pxv-btn gr pxk-qpask" disabled={ask.isPending} onClick={() => ask.mutate({ companyId, date: other ? date : undefined })}>
+            <Icon name="coins" /> {t('caisse.pay.ask')}
+          </button>
+          {other ? (
+            <input className="pxk-date" type="date" value={date} min={min} aria-label={t('caisse.qp.forDate')} onChange={(e) => setDate(e.target.value || min)} />
+          ) : (
+            <button type="button" className="pxk-qplink" onClick={() => setOther(true)}>
+              {t('caisse.qp.tomorrow')}
+              <u>{t('caisse.qp.otherDate')}</u>
+            </button>
+          )}
+        </div>
+      )}
+      {!pending && ready <= 0 && b && <p className="pxv-help">{t('caisse.qp.nothingReady')}</p>}
+      {full && done.length > 0 && (
+        <>
+          <div className="pxv-lbl">{t('caisse.ux.received')}</div>
+          <ul className="pxk-grp">
+            {done.slice(0, 6).map((p) => (
+              <li key={p.id}>
+                <button type="button" onClick={() => setOpen(p)}>
+                  <span className="pxk-mi in">
+                    <Icon name="check" />
+                  </span>
+                  <span className="pxk-rm">
+                    <b>{p.ref ?? t('caisse.pay.payment')}</b>
+                    <small>
+                      {when(p.doneAt ?? p.at)} · {t('caisse.pay.intoCaisse', { caisse: p.caisse ?? '—' })} · {t('caisse.ph.parcels', { count: p.matched })}
+                    </small>
+                  </span>
+                  <b className="ltr pxk-amt ok">+{n0(p.amount)}</b>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {req && pending && (
+        <Sheet title={t('caisse.ux.asked', { d: pending.date ? dateOnly(pending.date) : '—' })} onClose={() => setReq(false)}>
+          <p className="pxv-help">{pending.auto ? t('caisse.pay.byPilotix') : t('caisse.pay.byHand')}</p>
+          <ReqActions id={pending.id} date={pending.date} onDone={() => setReq(false)} />
+        </Sheet>
+      )}
+      {open && <PayDetail p={open} onClose={() => setOpen(null)} />}
       {take && <PayTake p={take} into={d.cfg.into} onClose={() => setTake(null)} />}
+      {cfg && <PayConfig companyId={companyId} cfg={d.cfg} help={d.cfg.auto ? t('caisse.pay.autoOn', { caisse: d.cfgName }) : t('caisse.pay.autoOff', { caisse: d.cfgName })} onClose={() => setCfg(false)} />}
     </section>
   );
 }
 
 // ---------------------------------------------------------------- a company's payments through its API (ZR)
 /** A payment request still waiting: another date (from tomorrow), or withdraw it. */
-function ReqActions({ id, date }: { id: number; date: string | null }) {
+function ReqActions({ id, date, onDone }: { id: number; date: string | null; onDone?: () => void }) {
   const { t } = useTranslation();
   const [edit, setEdit] = useState(false);
   const min = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
   const [d, setD] = useState(date && date >= min ? date : min);
-  const move = useAction('caisse.payRequestDate', { success: (r) => t('caisse.pay.dateMoved', { d: dateOnly(r.date) }), onDone: () => setEdit(false) });
-  const drop = useAction('caisse.payRequestCancel', { success: t('caisse.pay.requestCancelled') });
+  const move = useAction('caisse.payRequestDate', { success: (r) => t('caisse.pay.dateMoved', { d: dateOnly(r.date) }), onDone: () => (setEdit(false), onDone?.()) });
+  const drop = useAction('caisse.payRequestCancel', { success: t('caisse.pay.requestCancelled'), onDone: () => onDone?.() });
   if (edit)
     return (
       <div className="pxk-reqa">
-        <input type="date" value={d} min={min} onChange={(e) => setD(e.target.value)} aria-label={t('caisse.pay.newDate')} />
-        <button type="button" className="btn small primary" disabled={move.isPending || !d} onClick={() => move.mutate({ id, date: d })}>
+        <input className="pxk-date" type="date" value={d} min={min} onChange={(e) => setD(e.target.value)} aria-label={t('caisse.pay.newDate')} />
+        <button type="button" className="pxv-btn nv big" disabled={move.isPending || !d} onClick={() => move.mutate({ id, date: d })}>
           {t('common.save')}
-        </button>
-        <button type="button" className="btn small ghost" onClick={() => setEdit(false)}>
-          {t('common.cancel')}
         </button>
       </div>
     );
   return (
     <div className="pxk-reqa">
-      <button type="button" className="btn small" onClick={() => setEdit(true)}>
+      <button type="button" className="pxv-btn big" onClick={() => setEdit(true)}>
         <Icon name="calendar" /> {t('caisse.pay.changeDate')}
       </button>
-      <button type="button" className="btn small ghost" disabled={drop.isPending} onClick={() => drop.mutate({ id })}>
+      <button type="button" className="pxv-btn bad big" disabled={drop.isPending} onClick={() => drop.mutate({ id })}>
         {t('caisse.pay.cancelRequest')}
       </button>
     </div>
@@ -754,107 +863,6 @@ function ReqActions({ id, date }: { id: number; date: string | null }) {
 
 type Pay = Extract<Out<'caisse.pay'>, { supported: true }>['payments'][number];
 const DETAILS = ['parcelsDelivered', 'parcelsCancelled', 'refundsCredited', 'refundsDebited', 'labeling', 'officeHolding', 'storage'] as const;
-
-function CourierPay({ companyId }: { companyId: number }) {
-  const { t } = useTranslation();
-  const q = useRpc('caisse.pay', { companyId });
-  const sync = useAction('caisse.paySync', { success: (r) => (r.imported ? t('caisse.pay.imported', { count: r.imported }) : r.requested ? t('caisse.pay.requestedNow') : t('caisse.pay.upToDate')) });
-  const ask = useAction('caisse.payRequest', { success: (r) => t('caisse.pay.requestSent', { d: r.date }) });
-  const [open, setOpen] = useState<Pay | null>(null);
-  const [take, setTake] = useState<Pay | null>(null);
-  const [cfg, setCfg] = useState(false);
-  const d = q.data;
-  if (!d || !d.supported) return null;
-  const pending = d.requests.find((r) => r.approved === null);
-  const waiting = d.payments.filter((p) => !p.inCaisse);
-  const done = d.payments.filter((p) => p.inCaisse);
-  return (
-    <section className="pxk-pay">
-      <div className="pxk-payh">
-        <b>{t('caisse.pay.title', { name: d.name })}</b>
-        <button type="button" className="pxp-back" aria-label={t('caisse.pay.refresh')} disabled={sync.isPending} onClick={() => sync.mutate({ companyId })}>
-          <Icon name="refresh" />
-        </button>
-        <button type="button" className="pxp-back" aria-label={t('caisse.pay.settings')} onClick={() => setCfg(true)}>
-          <Icon name="settings" />
-        </button>
-      </div>
-      {d.balance?.error && <p className="pxk-payerr">{d.balance.error}</p>}
-      {d.balance && (
-        <div className="pxk-k3">
-          <div>
-            <small>{t('caisse.pay.ready')}</small>
-            <b className="ltr ok">{da(d.balance.ready)}</b>
-          </div>
-          <div>
-            <small>{t('caisse.pay.notReady')}</small>
-            <b className="ltr">{da(d.balance.notReady)}</b>
-          </div>
-          <div>
-            <small>{t('caisse.pay.paid')}</small>
-            <b className="ltr">{da(d.balance.paid)}</b>
-          </div>
-        </div>
-      )}
-      {pending ? (
-        <div className="pxk-req">
-          <Icon name="hourglass" />
-          <span>
-            <b>{t('caisse.pay.pending', { d: pending.date ? dateOnly(pending.date) : '—' })}</b>
-            <small>{pending.auto ? t('caisse.pay.byPilotix') : t('caisse.pay.byHand')}</small>
-          </span>
-          <ReqActions id={pending.id} date={pending.date} />
-        </div>
-      ) : (
-        <button type="button" className="pxv-btn nv" disabled={ask.isPending} onClick={() => ask.mutate({ companyId })}>
-          <Icon name="coins" /> {t('caisse.pay.ask')}
-        </button>
-      )}
-      <p className="pxv-help">{d.cfg.auto ? t('caisse.pay.autoOn', { caisse: d.cfgName }) : t('caisse.pay.autoOff', { caisse: d.cfgName })}</p>
-      {waiting.map((p) => (
-        <div key={p.id} className="pxk-paywait">
-          <button type="button" className="pxk-payrow" onClick={() => setOpen(p)}>
-            <span className="pxk-mi tr">
-              <Icon name="coins" />
-            </span>
-            <span className="pxk-rm">
-              <b>
-                {p.ref ?? t('caisse.pay.payment')} · <span className="ltr">{da(p.amount)}</span>
-              </b>
-              <small>{p.done ? t('caisse.pay.doneNotIn') : t('caisse.pay.waitingAt', { place: p.place ?? 'ZR' })}</small>
-            </span>
-          </button>
-          <button type="button" className="pxv-btn gr" onClick={() => setTake(p)}>
-            <Icon name="check" /> {t('caisse.pay.receivedBtn')}
-          </button>
-        </div>
-      ))}
-      {done.length > 0 && (
-        <ul className="pxk-grp">
-          {done.slice(0, 6).map((p) => (
-            <li key={p.id}>
-              <button type="button" onClick={() => setOpen(p)}>
-                <span className="pxk-mi in">
-                  <Icon name="check" />
-                </span>
-                <span className="pxk-rm">
-                  <b>{p.ref ?? t('caisse.pay.payment')}</b>
-                  <small>
-                    {when(p.doneAt ?? p.at)} · {t('caisse.pay.intoCaisse', { caisse: p.caisse ?? '—' })} · {t('caisse.ph.parcels', { count: p.matched })}
-                  </small>
-                </span>
-                <b className="ltr pxk-amt ok">+{da(p.amount)}</b>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {open && <PayDetail p={open} onClose={() => setOpen(null)} />}
-      {take && <PayTake p={take} into={d.cfg.into} onClose={() => setTake(null)} />}
-      {cfg && <PayConfig companyId={companyId} cfg={d.cfg} onClose={() => setCfg(false)} />}
-    </section>
-  );
-}
 
 function PayDetail({ p, onClose }: { p: Pay; onClose: () => void }) {
   const { t } = useTranslation();
@@ -918,13 +926,14 @@ function PayTake({ p, into: into0, onClose }: { p: Pay; into: string; onClose: (
   );
 }
 
-function PayConfig({ companyId, cfg, onClose }: { companyId: number; cfg: { auto: boolean; into: string }; onClose: () => void }) {
+function PayConfig({ companyId, cfg, help, onClose }: { companyId: number; cfg: { auto: boolean; into: string }; help: string; onClose: () => void }) {
   const { t } = useTranslation();
   const [auto, setAuto] = useState(cfg.auto);
   const [into, setInto] = useState(cfg.into);
   const save = useAction('caisse.payConfig', { success: t('common.saved', { defaultValue: 'OK' }), onDone: onClose });
   return (
     <Sheet title={t('caisse.pay.settings')} onClose={onClose}>
+      <p className="pxv-help">{help}</p>
       <label className="pxk-tog">
         <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
         <span>
