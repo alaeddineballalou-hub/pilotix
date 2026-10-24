@@ -324,5 +324,25 @@
     "bankGone": "La Banque est supprimée.",
     "bankBack": "La remettre",
     "bankRestored": "Banque remise dans les caisses"
+  },
+  "lcp": {
+    "title": "Argent des livreurs",
+    "notHanded_one": "{{count}} colis non versé",
+    "notHanded_other": "{{count}} colis non versés",
+    "allHanded": "Tout est versé",
+    "lastToday": "dernier versement aujourd’hui",
+    "lastAgo": "dernier versement il y a {{n}} j",
+    "toHand": "À verser",
+    "collect": "Encaisser",
+    "part": "part {{v}}",
+    "more": "Voir les {{count}} colis",
+    "less": "Réduire",
+    "collectTitle": "Encaisser · {{name}}",
+    "k": {
+      "inHand": "En main",
+      "returning": "À retourner",
+      "exchanges": "Échanges",
+      "rate": "Taux livr."
+    }
   }
 }
