@@ -287,5 +287,42 @@
     "edit": "Modifier",
     "received": "Paiements reçus",
     "companiesS": "Sociétés"
+  },
+  "set": {
+    "title": "Gérer les caisses",
+    "short": "Créer, renommer, supprimer",
+    "shortNone": "Créer une caisse (coffre, BaridiMob…)",
+    "mine": "Vos caisses",
+    "new": "Nouvelle caisse",
+    "fixed": "Toujours là",
+    "none": "Aucune autre caisse pour l’instant. Créez-en une pour un coffre, la caisse du dépôt, un compte BaridiMob…",
+    "empHelp": "Une caisse par employé du bureau, créée automatiquement : il y met l’argent qu’il reçoit et la verse à la caisse principale.",
+    "edit": "Modifier",
+    "editTitle": "Caisse « {{name}} »",
+    "name": "Nom",
+    "namePh": "Ex. Coffre, Caisse dépôt, BaridiMob",
+    "kind": "Type",
+    "kinds": {
+      "cash": "Espèces",
+      "bank": "Banque",
+      "mobile": "Paiement mobile"
+    },
+    "newHelp": "La caisse apparaît tout de suite dans Caisse et dans les choix « Argent reçu dans » et « Transfert ».",
+    "create": "Créer la caisse",
+    "created": "Caisse « {{name}} » créée",
+    "saved": "Caisse enregistrée",
+    "remove": "Supprimer",
+    "removeTitle": "Supprimer « {{name}} » ?",
+    "removeLeft": "Il reste {{v}} dans cette caisse. Cet argent sera transféré vers :",
+    "moveTo": "Transférer l’argent vers",
+    "removeEmpty": "Cette caisse est vide.",
+    "removeHelp": "Son journal reste visible dans l’historique ; elle ne reçoit plus d’argent.",
+    "removeBtn": "Supprimer la caisse",
+    "removed": "Caisse supprimée",
+    "removedMoved": "Caisse supprimée · {{v}} transférés",
+    "bankSub": "Vous pouvez la supprimer si vous n’utilisez pas de banque",
+    "bankGone": "La Banque est supprimée.",
+    "bankBack": "La remettre",
+    "bankRestored": "Banque remise dans les caisses"
   }
 }

@@ -4,7 +4,8 @@
 import { z } from 'zod';
 import { iso, num } from '../db';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
-import { cashProcs, CaisseKey, checkCaisse, livreursCash } from './cash';
+import { getSetting, setSetting } from '../settings';
+import { caisseLabelOf, cashProcs, CaisseKey, checkCaisse, livreursCash } from './cash';
 
 const STAFF = ['confirmation', 'suivi', 'depot', 'agent_manager'] as const;
 export const EXPENSE_CATS = ['fuel', 'packing', 'salary', 'rent', 'ads', 'repair', 'other'] as const;
@@ -38,10 +39,15 @@ async function staff(ctx: Ctx) {
     .filter((p: { roles: string[] }) => !p.roles.includes('admin') && !p.roles.includes('vendeur') && p.roles.some((x) => (STAFF as readonly string[]).includes(x)));
 }
 
-async function caisseName(ctx: Ctx, key: string) {
-  if (key === 'main') return 'Caisse principale';
-  if (key === 'bank') return 'Banque';
-  return ((await ctx.db.query('SELECT name FROM profiles WHERE id = $1', [Number(key.slice(1))]))[0]?.name as string) ?? key;
+const caisseName = async (ctx: Ctx, key: string) => (await caisseLabelOf(ctx.db, key)) ?? key;
+const bankHidden = async (ctx: Ctx) => (await getSetting(ctx.db, 'caisses')).bankHidden;
+
+export const CAISSE_KINDS = ['cash', 'bank', 'mobile'] as const;
+/** The caisses the owner created (not removed), with their balance. */
+async function customCaisses(ctx: Ctx, bal?: Map<string, number>) {
+  const b = bal ?? (await balances(ctx));
+  const rows = await ctx.db.query('SELECT id, name, kind, created_at FROM caisses WHERE removed_at IS NULL ORDER BY created_at, id');
+  return rows.map((r: any) => ({ key: `c${num(r.id)}`, id: num(r.id), name: r.name as string, kind: r.kind as (typeof CAISSE_KINDS)[number], balance: b.get(`c${num(r.id)}`) ?? 0 }));
 }
 
 const isStaffOnly = (ctx: Ctx) => !ctx.session.isAdmin && !ctx.session.roles.includes('vendeur');
@@ -149,7 +155,10 @@ export const caissesProcs = {
     employees.sort((a, b) => b.balance - a.balance);
     return {
       main: { balance: bal.get('main') ?? 0, today: today.get('main') ?? 0 },
-      bank: { balance: bal.get('bank') ?? 0 },
+      /** null when the shop removed the bank */
+      bank: (await bankHidden(ctx)) ? null : { balance: bal.get('bank') ?? 0 },
+      /** caisses the owner created (safe, depot cash box, BaridiMob…): his own money, like the main caisse */
+      caisses: await customCaisses(ctx, bal),
       companies,
       livreurs,
       employees,
@@ -217,7 +226,69 @@ export const caissesProcs = {
   /** The caisses money can go into (for « Argent reçu » / « Encaisser » / transfers). */
   'caisse.list': proc([...STAFF, 'vendeur'], z.object({}), async (ctx) => [
     { key: 'main', name: 'Caisse principale' },
-    { key: 'bank', name: 'Banque' },
+    ...((await bankHidden(ctx)) ? [] : [{ key: 'bank', name: 'Banque' }]),
+    ...(await customCaisses(ctx)).map((c) => ({ key: c.key, name: c.name })),
     ...(await staff(ctx)).map((p) => ({ key: `u${p.id}`, name: p.name })),
   ]),
+
+  // ---------------------------------------------------------------- réglages: caisses the owner creates / removes
+  /** Every caisse for the settings: fixed ones, the owner's own, the employees' (automatic). */
+  'caisse.settings': proc([], z.object({}), async (ctx) => {
+    const bal = await balances(ctx);
+    const people = await staff(ctx);
+    return {
+      fixed: [{ key: 'main', name: 'Caisse principale', balance: bal.get('main') ?? 0 }],
+      /** the bank: removable (a shop that does not use one), null when removed */
+      bank: (await bankHidden(ctx)) ? null : { key: 'bank', name: 'Banque', balance: bal.get('bank') ?? 0 },
+      caisses: await customCaisses(ctx, bal),
+      employees: people.map((p) => ({ key: `u${p.id}`, name: p.name, role: p.roles.find((r) => (STAFF as readonly string[]).includes(r)) ?? null, balance: bal.get(`u${p.id}`) ?? 0 })),
+    };
+  }),
+
+  'caisse.create': proc([], z.object({ name: z.string().trim().min(2).max(60), kind: z.enum(CAISSE_KINDS).default('cash') }), async (ctx, i) => {
+    const same = (await ctx.db.query('SELECT id FROM caisses WHERE removed_at IS NULL AND lower(name) = lower($1)', [i.name]))[0];
+    if (same || ['caisse principale', 'banque'].includes(i.name.toLowerCase())) throw bad(`Une caisse « ${i.name} » existe déjà`);
+    const r = await ctx.db.query('INSERT INTO caisses (name, kind, created_by) VALUES ($1,$2,$3) RETURNING id', [i.name, i.kind, ctx.session.profile.id]);
+    return { key: `c${num(r[0].id)}`, name: i.name };
+  }),
+
+  /** Puts the bank back among the caisses. */
+  'caisse.restoreBank': proc([], z.object({}), async (ctx) => {
+    await setSetting(ctx.db, 'caisses', { ...(await getSetting(ctx.db, 'caisses')), bankHidden: false }, ctx.session.profile.id);
+    return { ok: true };
+  }),
+
+  'caisse.rename': proc([], z.object({ key: z.string().regex(/^c\d+$/), name: z.string().trim().min(2).max(60), kind: z.enum(CAISSE_KINDS).optional() }), async (ctx, i) => {
+    await checkCaisse(ctx.db, i.key);
+    const same = (await ctx.db.query('SELECT id FROM caisses WHERE removed_at IS NULL AND lower(name) = lower($1) AND id <> $2', [i.name, Number(i.key.slice(1))]))[0];
+    if (same) throw bad(`Une caisse « ${i.name} » existe déjà`);
+    await ctx.db.query('UPDATE caisses SET name = $2, kind = COALESCE($3, kind) WHERE id = $1', [Number(i.key.slice(1)), i.name, i.kind ?? null]);
+    return { ok: true };
+  }),
+
+  /** Removes a caisse the owner created. Money still in it moves first to `moveTo` (one transfer, kept in both journals). */
+  'caisse.remove': proc([], z.object({ key: z.string().regex(/^(c\d+|bank)$/), moveTo: CaisseKey.optional() }), async (ctx, i) => {
+    await checkCaisse(ctx.db, i.key);
+    const left = (await balances(ctx)).get(i.key) ?? 0;
+    if (left !== 0) {
+      if (!i.moveTo) throw bad(`Il reste ${left} DA dans cette caisse : choisissez où mettre cet argent`);
+      if (i.moveTo === i.key) throw bad('Choisissez une autre caisse');
+      await checkCaisse(ctx.db, i.moveTo);
+      const name = await caisseName(ctx, i.key);
+      await ctx.db.tx(async (tx) => {
+        const a = await tx.query(`INSERT INTO cash_moves (caisse, amount, kind, note, created_by) VALUES ($1,$2,'transfer',$3,$4) RETURNING id`, [i.key, -left, `Caisse « ${name} » supprimée`, ctx.session.profile.id]);
+        const pair = num(a[0].id);
+        await tx.query('UPDATE cash_moves SET pair_id = $1 WHERE id = $1', [pair]);
+        await tx.query(`INSERT INTO cash_moves (caisse, amount, kind, note, pair_id, created_by) VALUES ($1,$2,'transfer',$3,$4,$5)`, [i.moveTo, left, `Caisse « ${name} » supprimée`, pair, ctx.session.profile.id]);
+      });
+    }
+    if (i.key === 'bank') await setSetting(ctx.db, 'caisses', { ...(await getSetting(ctx.db, 'caisses')), bankHidden: true }, ctx.session.profile.id);
+    else await ctx.db.query('UPDATE caisses SET removed_at = now() WHERE id = $1', [Number(i.key.slice(1))]);
+    // a courier whose payments went into it now pays into the main caisse
+    await ctx.db.query(
+      `UPDATE delivery_companies SET config = jsonb_set(config, '{pay,into}', '"main"'::jsonb) WHERE config #>> '{pay,into}' = $1`,
+      [i.key],
+    );
+    return { ok: true, moved: left };
+  }),
 };

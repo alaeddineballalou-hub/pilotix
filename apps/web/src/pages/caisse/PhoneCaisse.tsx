@@ -15,6 +15,7 @@ import '../confirmation/phone.css';
 import '../suivi/phone.css';
 import '../sav/phone.css';
 import './phone.css';
+import { CaisseSettings, kindIcon } from './CaisseSettings';
 
 const CATS = ['fuel', 'packing', 'salary', 'rent', 'ads', 'repair', 'other'] as const;
 type Kind = 'expense' | 'income' | 'transfer';
@@ -124,6 +125,7 @@ export function PhoneCaisse({ sub }: { sub?: string }) {
   const [livreur, setLivreur] = useState<number | null>(null);
   const [caisse, setCaisse] = useState<string | null>(null);
   const [allEmp, setAllEmp] = useState(false);
+  const [settings, setSettings] = useState(false);
   const d = q.data;
   const go = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   const sumCo = d ? d.companies.reduce((s, c) => s + c.net, 0) : 0;
@@ -166,10 +168,25 @@ export function PhoneCaisse({ sub }: { sub?: string }) {
                 <Icon name="swap" /> {t('caisse.ph.transfer')}
               </button>
             </div>
-            <button type="button" className="pxk-bankln" onClick={() => setCaisse('bank')}>
-              <Icon name="building" />
-              <em>{t('caisse.ph.bank')}</em>
-              <b className="ltr">{da(d.bank.balance)}</b>
+            {d.bank && (
+              <button type="button" className="pxk-bankln" onClick={() => setCaisse('bank')}>
+                <Icon name="building" />
+                <em>{t('caisse.ph.bank')}</em>
+                <b className="ltr">{da(d.bank.balance)}</b>
+                <Icon name="chevr" />
+              </button>
+            )}
+            {d.caisses.map((c) => (
+              <button key={c.key} type="button" className="pxk-bankln" onClick={() => setCaisse(c.key)}>
+                <Icon name={kindIcon(c.kind)} />
+                <em>{c.name}</em>
+                <b className="ltr">{da(c.balance)}</b>
+                <Icon name="chevr" />
+              </button>
+            ))}
+            <button type="button" className="pxk-bankln pxk-setln" onClick={() => setSettings(true)}>
+              <Icon name="settings" />
+              <em>{t('caisse.set.title')}</em>
               <Icon name="chevr" />
             </button>
           </section>
@@ -285,6 +302,7 @@ export function PhoneCaisse({ sub }: { sub?: string }) {
       {company && <CompanyPage gkey={company} onClose={() => setCompany(null)} />}
       {livreur && <LivreurPage id={livreur} onClose={() => setLivreur(null)} />}
       {caisse && <CaissePage caisse={caisse} onClose={() => setCaisse(null)} />}
+      {settings && <CaisseSettings onClose={() => setSettings(false)} />}
     </div>
   );
 }
@@ -603,14 +621,17 @@ function MoveSheet({ kind: kind0, from: from0, to: to0, mine, onClose }: { kind:
   const [cat, setCat] = useState<string>('');
   const [from, setFrom] = useState(from0);
   const [to, setTo] = useState(to0 ?? (from0 === 'main' ? 'bank' : 'main'));
+  // the destination: the one chosen, else the first other caisse (the bank may have been removed)
+  const caisses = useRpc('caisse.list', {}).data ?? [];
+  const toKey = to !== from && (!caisses.length || caisses.some((x) => x.key === to)) ? to : caisses.find((x) => x.key !== from)?.key ?? to;
   const [note, setNote] = useState('');
   const add = useAction('caisse.add', { success: kind === 'expense' ? t('caisse.ph.expenseSaved') : t('caisse.ph.incomeSaved'), onDone: onClose });
   const tr = useAction('caisse.transfer', { success: t('caisse.ph.transferSaved'), onDone: onClose });
   const v = Math.round(Number(amount.replace(/\s/g, '')) || 0);
-  const ok = v > 0 && (kind !== 'expense' || !!cat) && (kind !== 'transfer' || from !== to);
+  const ok = v > 0 && (kind !== 'expense' || !!cat) && (kind !== 'transfer' || from !== toKey);
   const save = () =>
     kind === 'transfer'
-      ? tr.mutate({ from: from as 'main', to: to as 'main', amount: v, note: note.trim() || null })
+      ? tr.mutate({ from: from as 'main', to: toKey as 'main', amount: v, note: note.trim() || null })
       : add.mutate({ caisse: from as 'main', kind, amount: v, category: kind === 'expense' ? (cat as 'other') : null, note: note.trim() || null });
   return (
     <Sheet title={t(`caisse.ph.new.${kind}`)} onClose={onClose}>
@@ -639,7 +660,7 @@ function MoveSheet({ kind: kind0, from: from0, to: to0, mine, onClose }: { kind:
       {kind === 'transfer' && !to0 && (
         <>
           <div className="pxv-lbl">{t('caisse.ph.to')}</div>
-          <IntoChips value={to} onChange={setTo} />
+          <IntoChips value={toKey} onChange={setTo} />
         </>
       )}
       <input className="pxv-in" value={note} maxLength={300} placeholder={t('caisse.ph.notePh')} onChange={(e) => setNote(e.target.value)} />

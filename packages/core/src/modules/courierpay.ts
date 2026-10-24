@@ -9,7 +9,7 @@ import { ADAPTERS } from '../couriers/adapters';
 import type { PayBalance, PayLine, PayRequest, PayStatement } from '../couriers/types';
 import { iso, isoOrNull, num } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
-import { CaisseKey, checkCaisse, receive } from './cash';
+import { CAISSE_KEY_RE, CaisseKey, caisseLabelOf, checkCaisse, receive } from './cash';
 import { setFollow } from './orders';
 
 const isDemo = (ctx: Ctx) => !ctx.server;
@@ -26,7 +26,7 @@ export interface PayCfg {
 }
 const cfgOf = (config: unknown): PayCfg => {
   const p = (parse(config) as any).pay ?? {};
-  return { auto: p.auto !== false, into: typeof p.into === 'string' && /^(main|bank|u\d+)$/.test(p.into) ? p.into : 'main' };
+  return { auto: p.auto !== false, into: typeof p.into === 'string' && CAISSE_KEY_RE.test(p.into) ? p.into : 'main' };
 };
 
 async function company(ctx: Ctx, id: number) {
@@ -191,8 +191,7 @@ async function importPayment(ctx: Ctx, payId: number, into: string) {
   return { handoverId, moveId, matched: ids.length };
 }
 
-const caisseLabel = async (ctx: Ctx, key: string | null) =>
-  !key ? null : key === 'main' ? 'Caisse principale' : key === 'bank' ? 'Banque' : (((await ctx.db.query('SELECT name FROM profiles WHERE id = $1', [Number(key.slice(1))]))[0]?.name as string) ?? key);
+const caisseLabel = (ctx: Ctx, key: string | null) => caisseLabelOf(ctx.db, key);
 
 // ---------------------------------------------------------------- procedures (owner)
 const id = z.number().int().positive();

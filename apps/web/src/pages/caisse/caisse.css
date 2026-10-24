@@ -50,3 +50,31 @@
 .pxc-tbl tr.pxc-day td{background:var(--sky-soft);font-weight:800;font-size:12.5px;color:var(--muted)}
 .pxc-tog{display:flex;gap:10px;align-items:flex-start;margin-bottom:12px;cursor:pointer}
 .pxc-tog span{display:flex;flex-direction:column}
+
+/* the owner's own caisses + « Gérer les caisses » */
+.pxc-mine{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.pxc-cs{display:flex;flex-direction:column;gap:4px;text-align:start;margin:0;cursor:pointer;font:inherit;color:inherit}
+.pxc-cs:hover{border-color:var(--navy)}
+.pxc-cs .l{display:flex;align-items:center;gap:8px;font-weight:800;color:var(--muted);font-size:13px}
+.pxc-cs b{font-family:var(--f-display);font-size:22px}
+.pxc-cs-set{border-style:dashed;justify-content:center}
+.pxc-cs-set .l{color:var(--navy)}
+/* settings dialog */
+.pxcs{display:flex;flex-direction:column;gap:10px}
+.pxcs-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:4px}
+.pxcs-h b{font-size:15px}
+.pxcs-list{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.pxcs-list li{display:grid;grid-template-columns:36px minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:10px 12px}
+.pxcs-list li+li{border-top:1px solid var(--line)}
+.pxcs-ic{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--sky-soft);color:var(--navy)}
+.pxcs-ic.av{border-radius:50%;background:var(--raise);color:var(--ink);font-weight:900}
+.pxcs-rm{display:flex;flex-direction:column;min-width:0}
+.pxcs-rm b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pxcs-rm small{color:var(--muted);font-size:12px}
+.pxcs-act{min-width:0;display:flex;justify-content:flex-end}
+.pxcs-seg{height:auto;flex-wrap:wrap}
+.pxcs-seg button{height:34px;display:inline-flex;align-items:center;gap:6px}
+@media (max-width:560px){.pxcs-list li{grid-template-columns:36px minmax(0,1fr) auto}.pxcs-act{grid-column:2/-1;justify-content:flex-start}.pxcs-act:empty{display:none}}
+.pxc-top.nobank{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}
+@media (max-width:1100px){.pxc-top.nobank{grid-template-columns:minmax(0,1fr)}}
+.pxcs-link{all:unset;cursor:pointer;color:var(--navy);font-weight:800;text-decoration:underline}
