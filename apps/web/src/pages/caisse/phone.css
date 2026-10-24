@@ -141,9 +141,9 @@
 .pxk-main { gap: 8px; }
 .pxk-big { font-family: var(--f-display); font-size: 32px; line-height: 1.1; }
 .pxk-bankln { all: unset; display: flex; align-items: center; gap: 8px; margin-top: 2px; padding: 9px 2px 0; border-top: 1px solid rgba(255, 255, 255, .14); font-size: 13px; color: rgba(255, 255, 255, .85); cursor: pointer; }
-.pxk-bankln span { flex: 1; font-weight: 700; }
+.pxk-bankln em { flex: 1; font-style: normal; font-weight: 700; }
 .pxk-bankln b { font-weight: 900; color: #fff; }
-.pxk-bankln .bji { width: 15px; height: 15px; opacity: .8; }
+.pxk-bankln .bji { flex: none; width: 15px; height: 15px; opacity: .8; }
 
 .pxk-out { border-radius: 16px; border: 1px solid var(--line); background: var(--surface); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
 .pxk-outh { display: flex; align-items: baseline; justify-content: space-between; }

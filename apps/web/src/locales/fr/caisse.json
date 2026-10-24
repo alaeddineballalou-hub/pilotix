@@ -285,6 +285,7 @@
     "paidS": "Payé",
     "asked": "Paiement demandé pour le {{d}}",
     "edit": "Modifier",
-    "received": "Paiements reçus"
+    "received": "Paiements reçus",
+    "companiesS": "Sociétés"
   }
 }

@@ -313,6 +313,7 @@
     "showZero_two": "عرض {{count}} موظف بـ 0 د.ج",
     "showZero_few": "عرض {{count}} موظف بـ 0 د.ج",
     "showZero_many": "عرض {{count}} موظف بـ 0 د.ج",
-    "showZero_other": "عرض {{count}} موظف بـ 0 د.ج"
+    "showZero_other": "عرض {{count}} موظف بـ 0 د.ج",
+    "companiesS": "الشركات"
   }
 }
