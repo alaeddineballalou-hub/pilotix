@@ -15,6 +15,7 @@ import type { Company, CompanyDraft } from './forms';
 import '../confirmation/phone.css';
 import '../suivi/phone.css';
 import '../sav/phone.css';
+import '../caisse/phone.css';
 import './phone.css';
 
 type Kinds = Out<'delivery.kinds'>;
@@ -380,7 +381,7 @@ function Livreurs({ companies, onSheet }: { companies: Company[]; onSheet: (by: 
         </ul>
       )}
       <a className="pxv-btn big pxl-addl" href="#/utilisateurs/agents">
-        <Icon name="plus" /> {t('livraison.livreurs.addAccount')}
+        {t('livraison.livreurs.addAccount')}
       </a>
       <div className="pxl-cash">
         <LivreursCash />
