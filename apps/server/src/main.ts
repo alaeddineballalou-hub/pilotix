@@ -7,6 +7,7 @@
 //   GET|POST /api/hooks/meta        → Dellal: WhatsApp, Messenger and Instagram messages (Meta webhook)
 //   POST /api/hooks/tiktok          → Dellal: TikTok messages (?key= the Dellal verify token)
 //   POST /api/hooks/sms             → Delivery AI agent: SMS gateway reports and SMS answers (?key= the SMS hook key)
+//   GET  /api/lp/:slug              → a product's landing page (public HTML); POST /api/lp/:slug/order, GET /api/lp/geo/:w, /api/lp/img/:id/:w.webp
 //   GET  /api/health
 //   Socket.IO at /live              → "something changed" events for open screens
 import 'reflect-metadata';

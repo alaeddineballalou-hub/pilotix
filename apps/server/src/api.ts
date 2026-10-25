@@ -202,6 +202,68 @@ class ApiController {
     return { ok: true, id: order.id, ref: order.ref };
   }
 
+  // ---------------------------------------------------------------- landing pages (public, no login)
+  /** The page of one product: a single small HTML file (no app bundle), never cached (it carries a fresh challenge). */
+  @Public()
+  @Get('lp/:slug')
+  async landingPage(@Param('slug') slug: string, @Res() res: any) {
+    if (!/^[a-z0-9-]{2,60}$/.test(slug)) return res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
+    const base = `${config.publicUrl}/api/lp/`;
+    try {
+      const r: any = await this.core.call('landing.html', await this.core.systemSession(), { slug, mode: 'live', post: `${base}${slug}/order`, geo: `${base}geo/`, imgBase: `${base}img/` });
+      return res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'no-store').send(r.html);
+    } catch (e: any) {
+      if (e instanceof core.AppError && e.code === 'not_found') return res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
+      throw e;
+    }
+  }
+
+  /** Communes of a wilaya, [French name, Arabic name] (asked when the customer picks a wilaya; cached a month). */
+  @Public()
+  @Get('lp/geo/:wilaya')
+  landingGeo(@Param('wilaya') w: string, @Res() res: any) {
+    const id = Number(w);
+    if (!Number.isInteger(id) || id < 1 || id > 69) return res.status(404).send([]);
+    return res.status(200).header('Cache-Control', 'public, max-age=2592000, immutable').send(core.landingCommunes(id));
+  }
+
+  /** A page's picture in WebP: /lp/img/<id>/<160|480|960>.webp (never changes: cached a year). */
+  @Public()
+  @Get('lp/img/:id/:file')
+  async landingImage(@Param('id') idp: string, @Param('file') file: string, @Res() res: any) {
+    const m = file.match(/^(160|480|960)\.webp$/);
+    if (!/^\d+$/.test(idp) || !m) return res.status(404).send();
+    try {
+      const r: any = await this.core.call('landing.image', await this.core.systemSession(), { id: Number(idp), size: m[1] });
+      const buf = Buffer.from(r.base64, 'base64');
+      const type = buf[0] === 0xff && buf[1] === 0xd8 ? 'image/jpeg' : 'image/webp'; // browsers that cannot write WebP gave JPEG
+      return res.status(200).header('Content-Type', type).header('Cache-Control', 'public, max-age=31536000, immutable').send(buf);
+    } catch {
+      return res.status(404).send();
+    }
+  }
+
+  /**
+   * An order from a page. The answer is the same whether the order passed or was blocked as fake (the customer must not
+   * be able to tell); only a page that does not exist (404) or a server failure (500, the page asks to try again) differ.
+   */
+  @Public()
+  @Post('lp/:slug/order')
+  async landingOrder(@Param('slug') slug: string, @Body() body: any, @Req() req: { ip?: string; headers: Record<string, string | undefined> }) {
+    if (!/^[a-z0-9-]{2,60}$/.test(slug)) throw new core.AppError('not_found', 'Page introuvable');
+    const h = req.headers;
+    // geolocation from the host when it adds it (Cloudflare, Vercel, or a proxy setting x-geo-*): a soft signal only
+    const meta = {
+      ip: req.ip || '',
+      ua: h['user-agent'] || '',
+      country: h['cf-ipcountry'] || h['x-vercel-ip-country'] || h['x-geo-country'] || '',
+      city: h['cf-ipcity'] || h['x-vercel-ip-city'] || h['x-geo-city'] || '',
+      region: h['cf-region'] || h['x-vercel-ip-country-region'] || h['x-geo-region'] || '',
+    };
+    await this.core.call('landing.submit', await this.core.systemSession(), { ...(body && typeof body === 'object' ? body : {}), slug, meta });
+    return { ok: true };
+  }
+
   /**
    * A courier says a parcel's status changed (ZR webhook, registered from Pilotix with its key in ?key= and the
    * X-Pilotix-Key header). The parcel numbers are picked from the body, whatever its shape; their state is then read
