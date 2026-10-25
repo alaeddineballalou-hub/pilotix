@@ -75,7 +75,18 @@ export interface LandingRow {
   updatedAt: string;
 }
 
-/** a picture as the editor sees it: stored ones come back as data URLs */
+/** what the editor's compressor did to a picture: the original's weight and size, each width's weight and quality score */
+export interface LandingImageInfo {
+  orig: number;
+  ow: number;
+  oh: number;
+  bytes: { t160: number; w480: number; w720?: number; w960: number };
+  /** structural similarity with the resized original (1 = identical) */
+  ssim: { t160: number; w480: number; w720?: number; w960: number };
+  preset: 'max' | 'balanced' | 'light';
+}
+
+/** a picture as the editor sees it: stored ones come back as data URLs; info: null for pictures from before the compressor */
 export interface LandingImageRow {
   id: number | null;
   url: string | null;
@@ -83,6 +94,7 @@ export interface LandingImageRow {
   h: number;
   thumb: string;
   src: string;
+  info?: LandingImageInfo | null;
 }
 
 type ImgRef = { id: number } | { url: string; w: number; h: number };
@@ -98,7 +110,7 @@ const isoAt = (ms: number) => new Date(ms).toISOString();
 async function imageRows(db: Db, refs: ImgRef[], full: boolean): Promise<Map<number, any>> {
   const ids = refs.filter((r): r is { id: number } => 'id' in r).map((r) => r.id);
   if (!ids.length) return new Map();
-  const rows = await db.query(`SELECT id, w, h ${full ? ', t160, w480, w960' : ''} FROM landing_images WHERE id = ANY($1)`, [ids]);
+  const rows = await db.query(`SELECT id, w, h, w720 IS NOT NULL AS has720, lqip, info ${full ? ', t160, w480, w960' : ''} FROM landing_images WHERE id = ANY($1)`, [ids]);
   return new Map(rows.map((r: any) => [num(r.id), r]));
 }
 
@@ -242,7 +254,10 @@ function viewImages(refs: ImgRef[], rows: Map<number, any>, imgBase: string | nu
     else {
       const x = rows.get(r.id);
       if (!x) continue;
-      if (imgBase) out.push({ src: `${imgBase}${r.id}/480.webp`, srcset: `${imgBase}${r.id}/480.webp 480w, ${imgBase}${r.id}/960.webp 960w`, thumb: `${imgBase}${r.id}/160.webp`, w: num(x.w), h: num(x.h) });
+      const at = (k: number) => `${imgBase}${r.id}/${k}.webp`;
+      // phones (360 px at 2×) take the 720 width when the picture has one
+      const srcset = [`${at(480)} 480w`, ...(x.has720 ? [`${at(720)} 720w`] : []), `${at(960)} 960w`].join(', ');
+      if (imgBase) out.push({ src: at(480), srcset, thumb: at(160), w: num(x.w), h: num(x.h), lqip: x.lqip ? b64(x.lqip) : undefined });
       else out.push({ src: b64(x.w480), srcset: `${b64(x.w480)} 480w`, thumb: b64(x.t160), w: num(x.w), h: num(x.h) });
     }
   }
@@ -1012,6 +1027,16 @@ const SettingsInput = z.object({
 });
 
 const B64 = (max: number) => z.string().max(max).regex(/^[A-Za-z0-9+/=]+$/, 'Image invalide');
+const Bytes = z.number().int().min(0).max(200_000_000);
+const Ssim = z.number().min(0).max(1);
+const ImageInfo = z.object({
+  orig: Bytes,
+  ow: z.number().int().min(1).max(100_000),
+  oh: z.number().int().min(1).max(100_000),
+  bytes: z.object({ t160: Bytes, w480: Bytes, w720: Bytes.optional(), w960: Bytes }),
+  ssim: z.object({ t160: Ssim, w480: Ssim, w720: Ssim.optional(), w960: Ssim }),
+  preset: z.enum(['max', 'balanced', 'light']),
+});
 const LEAD_STATUS = ['abandoned', 'converted', 'dismissed', 'all'] as const;
 
 export const landingProcs = {
@@ -1025,7 +1050,7 @@ export const landingProcs = {
     const images: LandingImageRow[] = refs.flatMap((r): LandingImageRow[] => {
       if ('url' in r) return [{ id: null, url: r.url, w: r.w, h: r.h, thumb: r.url, src: r.url }];
       const x = rows.get(r.id);
-      return x ? [{ id: r.id, url: null, w: num(x.w), h: num(x.h), thumb: b64(x.t160), src: b64(x.w480) }] : [];
+      return x ? [{ id: r.id, url: null, w: num(x.w), h: num(x.h), thumb: b64(x.t160), src: b64(x.w480), info: readJson<LandingImageInfo>(x.info) }] : [];
     });
     return { ...(await listPages(ctx.db, ctx.now(), [id]))[0], images };
   }),
@@ -1075,13 +1100,37 @@ export const landingProcs = {
     return { ok: true };
   }),
 
-  /** a picture already turned into WebP by the editor (three widths, base64) */
+  /**
+   * a picture already compressed by the editor (WebP, or JPEG where the browser cannot write WebP, base64): 160 / 480 /
+   * 960 px wide, the 720 width and the tiny placeholder when the compressor made them, and what it did (info)
+   */
   'landing.addImage': proc(
     [...WHO],
-    z.object({ w: z.number().int().min(1).max(10000), h: z.number().int().min(1).max(10000), t160: B64(60_000), w480: B64(400_000), w960: B64(1_200_000) }),
+    z.object({
+      w: z.number().int().min(1).max(10000),
+      h: z.number().int().min(1).max(10000),
+      t160: B64(60_000),
+      w480: B64(400_000),
+      w720: B64(800_000).optional(),
+      w960: B64(1_200_000),
+      lqip: B64(4_000).optional(),
+      info: ImageInfo.optional(),
+    }),
     async (ctx, i) => {
-      const r = (await ctx.db.query('INSERT INTO landing_images (w, h, t160, w480, w960, created_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id', [i.w, i.h, i.t160, i.w480, i.w960, ctx.session.profile.id]))[0];
-      return { id: num(r.id), url: null, w: i.w, h: i.h, thumb: b64(i.t160), src: b64(i.w480) } satisfies LandingImageRow;
+      const r = (
+        await ctx.db.query('INSERT INTO landing_images (w, h, t160, w480, w720, w960, lqip, info, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id', [
+          i.w,
+          i.h,
+          i.t160,
+          i.w480,
+          i.w720 ?? null,
+          i.w960,
+          i.lqip ?? null,
+          i.info ? JSON.stringify(i.info) : null,
+          ctx.session.profile.id,
+        ])
+      )[0];
+      return { id: num(r.id), url: null, w: i.w, h: i.h, thumb: b64(i.t160), src: b64(i.w480), info: i.info ?? null } satisfies LandingImageRow;
     },
   ),
 
@@ -1220,8 +1269,9 @@ export const landingProcs = {
     async (ctx, i) => ({ html: await landingHtml(ctx, i.slug, i) }),
   ),
 
-  'landing.image': proc([], z.object({ id, size: z.enum(['160', '480', '960']) }), async (ctx, i) => {
-    const col = i.size === '160' ? 't160' : i.size === '480' ? 'w480' : 'w960';
+  'landing.image': proc([], z.object({ id, size: z.enum(['160', '480', '720', '960']) }), async (ctx, i) => {
+    // a picture from before the compressor has no 720 width: the 960 one instead
+    const col = i.size === '160' ? 't160' : i.size === '480' ? 'w480' : i.size === '720' ? 'COALESCE(w720, w960)' : 'w960';
     const r = (await ctx.db.query(`SELECT ${col} AS b FROM landing_images WHERE id = $1`, [i.id]))[0];
     if (!r) throw notFound('Image introuvable');
     return { base64: String(r.b) };

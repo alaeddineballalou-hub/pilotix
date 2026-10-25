@@ -27,6 +27,7 @@ import { JwtModule, JwtService } from '@nestjs/jwt';
 import * as core from '@pilotix/core';
 import { normalizePhone, Session } from '@pilotix/shared';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
 import { z } from 'zod';
 import { config } from './config';
 import { CoreService } from './core.service';
@@ -139,6 +140,17 @@ function limitLanding(ip: string, kind: string, max: number): boolean {
   return ++a.n > max;
 }
 /** A browser posting from another site (a page that makes its visitors send fake leads): not our page. */
+/**
+ * A landing page's text (HTML, communes) gzipped when the phone accepts it: the 23 KB page becomes ~9 KB, small
+ * enough to arrive in the first round trip of a new connection (≈ one round trip less on 2G / 3G). A front server
+ * (nginx, Cloudflare) passes it on as it is.
+ */
+function sendText(req: { headers: Record<string, string | undefined> }, res: any, body: string) {
+  res.header('Vary', 'Accept-Encoding');
+  if (!/\bgzip\b/.test(String(req.headers['accept-encoding'] ?? '')) || body.length < 1024) return res.send(body);
+  return res.header('Content-Encoding', 'gzip').send(gzipSync(body, { level: 6 }));
+}
+
 const crossSite = (req: { headers: Record<string, string | undefined> }) => req.headers['sec-fetch-site'] === 'cross-site';
 
 /** Compares two secrets in constant time (no timing hint on how much of a key was right). */
@@ -315,12 +327,12 @@ class ApiController {
   /** The page of one product: a single small HTML file (no app bundle), never cached (it carries a fresh challenge). */
   @Public()
   @Get('lp/:slug')
-  async landingPage(@Param('slug') slug: string, @Res() res: any) {
+  async landingPage(@Param('slug') slug: string, @Req() req: { headers: Record<string, string | undefined> }, @Res() res: any) {
     if (!/^[a-z0-9-]{2,60}$/.test(slug)) return res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
     const base = `${config.publicUrl}/api/lp/`;
     try {
       const r: any = await this.core.call('landing.html', await this.core.systemSession(), { slug, mode: 'live', post: `${base}${slug}/order`, lead: `${base}${slug}/lead`, geo: `${base}geo/`, imgBase: `${base}img/` });
-      return res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'no-store').send(r.html);
+      return sendText(req, res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'no-store'), r.html);
     } catch (e: any) {
       if (e instanceof core.AppError && e.code === 'not_found') return res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
       throw e;
@@ -330,17 +342,17 @@ class ApiController {
   /** Communes of a wilaya, [French name, Arabic name] (asked when the customer picks a wilaya; cached a month). */
   @Public()
   @Get('lp/geo/:wilaya')
-  landingGeo(@Param('wilaya') w: string, @Res() res: any) {
+  landingGeo(@Param('wilaya') w: string, @Req() req: { headers: Record<string, string | undefined> }, @Res() res: any) {
     const id = Number(w);
     if (!Number.isInteger(id) || id < 1 || id > 69) return res.status(404).send([]);
-    return res.status(200).header('Cache-Control', 'public, max-age=2592000, immutable').send(core.landingCommunes(id));
+    return sendText(req, res.status(200).header('Content-Type', 'application/json; charset=utf-8').header('Cache-Control', 'public, max-age=2592000, immutable'), JSON.stringify(core.landingCommunes(id)));
   }
 
-  /** A page's picture in WebP: /lp/img/<id>/<160|480|960>.webp (never changes: cached a year). */
+  /** A page's picture in WebP: /lp/img/<id>/<160|480|720|960>.webp (never changes: cached a year). */
   @Public()
   @Get('lp/img/:id/:file')
   async landingImage(@Param('id') idp: string, @Param('file') file: string, @Res() res: any) {
-    const m = file.match(/^(160|480|960)\.webp$/);
+    const m = file.match(/^(160|480|720|960)\.webp$/);
     if (!/^\d+$/.test(idp) || !m) return res.status(404).send();
     try {
       const r: any = await this.core.call('landing.image', await this.core.systemSession(), { id: Number(idp), size: m[1] });

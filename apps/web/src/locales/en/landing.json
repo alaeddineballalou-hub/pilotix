@@ -57,9 +57,7 @@
     "before": "Earlier",
     "after": "Later",
     "removeImg": "Remove picture",
-    "converting": "Converting…",
     "addImages": "Add pictures",
-    "imagesHint": "Each picture is turned into WebP in three sizes (160, 480 and 960 px): a 4 MB photo reaches the customer as ~40 KB. The first one is the main picture.",
     "addUrl": "Add by link",
     "urlBad": "Invalid picture link",
     "sText": "Text",
@@ -287,5 +285,48 @@
   },
   "alertOn": "Order alert: on",
   "alertOff": "Order alert: off",
-  "alertHelp": "On this device: a notification and a short sound when an order arrives from a landing page."
+  "alertHelp": "On this device: a notification and a short sound when an order arrives from a landing page.",
+  "ph": {
+    "preset": "Photo compression",
+    "p": {
+      "max": "Max quality",
+      "balanced": "Balanced",
+      "light": "Extra light"
+    },
+    "pHelp": {
+      "max": "Most faithful: no visible difference even zoomed in. Slightly heavier files.",
+      "balanced": "Recommended: no visible difference, files 2 to 4 times lighter than before. Ideal on 3G.",
+      "light": "Fastest (2G, weak 3G): a very slight loss when zooming, invisible on a phone."
+    },
+    "hint": "Each photo is compressed in your browser: Pilotix finds the lowest quality that still looks the same as the original (measured), in 4 sizes (160, 480, 720, 960 px) + a blurred preview of a few bytes shown at once. A 4 MB photo reaches the customer as 30 to 80 KB. The first one is the main photo.",
+    "working": "Compressing {{i}}/{{n}}…",
+    "step": {
+      "w480": "480 px",
+      "t160": "thumbnail",
+      "w960": "960 px",
+      "w720": "720 px",
+      "lqip": "blurred preview"
+    },
+    "done": "{{count}} photo(s) compressed: {{before}} → {{after}}",
+    "kb": "{{n}} KB",
+    "gainHelp": "Weight saved and quality: see before / after",
+    "optimize": "Compress",
+    "optimizeAll": "Compress all",
+    "heavy_one": "{{count}} photo comes from an address and is not compressed: it slows the page down.",
+    "heavy_other": "{{count}} photos come from an address and are not compressed: they slow the page down.",
+    "fetchFail": "This site does not let us read the photo. Save it on your phone, then add it with « Add photos ».",
+    "urlKept": "Photo added as is (the site does not let us compress it): it may be heavy.",
+    "cmpTitle": "Before / after compression",
+    "before": "Original",
+    "after": "Compressed",
+    "slider": "Slide to compare",
+    "zoom": "Zoom",
+    "cmpLater": "The side-by-side comparison is available right after adding the photo. Here is what the compression did:",
+    "cmpSum": "Original: {{orig}} ({{ow}} × {{oh}} px). On a phone the customer downloads {{phone}}, {{q}} % identical to the original.",
+    "tWidth": "Size",
+    "tWeight": "Weight",
+    "tSame": "Identical",
+    "lossless": "100 % (lossless)",
+    "ssimHelp": "« Identical »: measured similarity (MS-SSIM, at several scales like the eye) between the compressed photo and the original at the same size. Above 99 %, the eye sees no difference."
+  }
 }

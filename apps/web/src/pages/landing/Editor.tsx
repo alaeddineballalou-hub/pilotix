@@ -12,9 +12,7 @@ import { SaveBar } from '../ai/agent';
 import { useDebounced } from '../depot/OrderList';
 import { useLandingFrame } from './frame';
 import { publicUrl } from './index';
-import { measure, toWebp } from './webp';
-
-type Img = { id: number | null; url: string | null; w: number; h: number; thumb: string; src: string };
+import { Img, Photos } from './Photos';
 type Page = Out<'landing.get'>;
 type Level = 'relaxed' | 'normal' | 'strict';
 const DESKTOP_W = 1280;
@@ -52,7 +50,6 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
   const [slugTouched, setSlugTouched] = useState(!!p);
   const [device, setDevice] = useState<'phone' | 'desktop'>('phone');
   const [busy, setBusy] = useState(0);
-  const [url, setUrl] = useState('');
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }));
   const products = useRpc('landing.products', {});
   const ctx = useRpc('landing.context', { productId: d.productId }, { enabled: !!d.productId });
@@ -75,39 +72,6 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
       live = false;
     };
   }, [d.productId, products.data]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const addFiles = async (files: FileList | null) => {
-    for (const f of Array.from(files ?? []).slice(0, 12 - d.images.length)) {
-      setBusy((b) => b + 1);
-      try {
-        const img = await rpc('landing.addImage', await toWebp(f));
-        setD((x) => ({ ...x, images: [...x.images, img] }));
-      } catch (e) {
-        toast((e as Error).message, 'bad');
-      } finally {
-        setBusy((b) => b - 1);
-      }
-    }
-  };
-  const addUrl = async () => {
-    const u = url.trim();
-    if (!/^https?:\/\//.test(u)) return toast(t('landing.ed.urlBad'), 'bad');
-    try {
-      const { w, h } = await measure(u);
-      setD((x) => ({ ...x, images: [...x.images, { id: null, url: u, w, h, thumb: u, src: u }] }));
-      setUrl('');
-    } catch {
-      toast(t('landing.ed.urlBad'), 'bad');
-    }
-  };
-  const move = (i: number, by: number) =>
-    setD((x) => {
-      const a = [...x.images];
-      const j = i + by;
-      if (j < 0 || j >= a.length) return x;
-      [a[i], a[j]] = [a[j], a[i]];
-      return { ...x, images: a };
-    });
 
   const submit = () => {
     if (!d.productId) return toast(t('landing.ed.pickProduct'), 'bad');
@@ -261,44 +225,7 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
             {ctx.data?.fixedPrice && d.price !== '' && Number(d.price) !== ctx.data.price && <p className="lp-warn-note">{t('landing.ed.fixedPrice', { price: da(ctx.data.price) })}</p>}
           </section>
 
-          <section className="card">
-            <h2>
-              {t('landing.ed.sImages')} <small className="muted">{d.images.length}/12</small>
-            </h2>
-            <div className="lp-imgs">
-              {d.images.map((im, i) => (
-                <figure key={`${im.id ?? im.url}-${i}`} className="lp-img">
-                  <img src={im.thumb} alt="" />
-                  {i === 0 && <span className="chip">{t('landing.ed.main')}</span>}
-                  <div className="lp-img-a">
-                    <button type="button" className="icon-btn" disabled={i === 0} onClick={() => move(i, -1)} aria-label={t('landing.ed.before')}>
-                      <Icon name="chevl" />
-                    </button>
-                    <button type="button" className="icon-btn" disabled={i === d.images.length - 1} onClick={() => move(i, 1)} aria-label={t('landing.ed.after')}>
-                      <Icon name="chevr" />
-                    </button>
-                    <button type="button" className="icon-btn" onClick={() => set('images', d.images.filter((_, k) => k !== i))} aria-label={t('landing.ed.removeImg')}>
-                      <Icon name="x" />
-                    </button>
-                  </div>
-                </figure>
-              ))}
-              {d.images.length < 12 && (
-                <label className={`lp-img lp-add ${busy ? 'busy' : ''}`}>
-                  <input type="file" accept="image/*" multiple onChange={(e) => addFiles(e.target.files).then(() => (e.target.value = ''))} />
-                  <Icon name="camera" />
-                  <span>{busy ? t('landing.ed.converting') : t('landing.ed.addImages')}</span>
-                </label>
-              )}
-            </div>
-            <p className="pd-note">{t('landing.ed.imagesHint')}</p>
-            <div className="lp-url">
-              <input className="ltr" placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)} />
-              <button type="button" className="btn small" onClick={addUrl}>
-                {t('landing.ed.addUrl')}
-              </button>
-            </div>
-          </section>
+          <Photos images={d.images} onChange={(f) => setD((x) => ({ ...x, images: f(x.images) }))} onBusy={(n) => setBusy((b) => b + n)} />
 
           <section className="card">
             <h2>{t('landing.ed.sText')}</h2>

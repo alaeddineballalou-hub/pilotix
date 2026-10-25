@@ -5,12 +5,14 @@ import { WILAYAS_AR } from './geo';
 import { WILAYAS } from './index';
 
 export interface LandingImage {
-  /** main picture (480 px wide) and its srcset (480w, 960w); thumb = 160 px */
+  /** main picture (480 px wide) and its srcset (480w, 720w, 960w); thumb = 160 px */
   src: string;
   srcset: string;
   thumb: string;
   w: number;
   h: number;
+  /** a tiny blurred copy (data URL, a few hundred bytes), drawn at once behind the main picture until it arrives */
+  lqip?: string;
 }
 
 export interface LandingView {
@@ -125,7 +127,7 @@ const CSS = (c: string) => `:root{--c:${c};--cd:${shade(c, -0.25)};--cl:${shade(
 .w{max-width:1080px;margin:0 auto;padding:12px}body{overflow-x:hidden}
 .g{display:grid;gap:16px}@media(min-width:860px){.g{grid-template-columns:1fr 1fr;align-items:start}.gal{position:sticky;top:12px}}
 .card{background:#fff;border:1px solid var(--b);border-radius:14px;padding:14px}
-.main{display:block;width:100%;height:auto;aspect-ratio:var(--r,1);object-fit:cover;border-radius:10px;background:var(--cl)}
+.main{display:block;width:100%;height:auto;aspect-ratio:var(--r,1);object-fit:cover;border-radius:10px;background:var(--cl) center/cover no-repeat}
 .th{display:flex;gap:8px;margin-top:8px;overflow-x:auto;padding-bottom:2px}.th button{flex:0 0 auto;padding:0;border:2px solid transparent;border-radius:8px;background:none;cursor:pointer;line-height:0}
 .th button.on{border-color:var(--c)}.th img{width:64px;height:64px;object-fit:cover;border-radius:6px;background:var(--cl)}
 h1{font-size:22px;line-height:1.3;margin:0 0 4px}.pr{display:flex;align-items:baseline;gap:10px;margin:0 0 12px;flex-wrap:wrap}
@@ -147,7 +149,9 @@ input:focus,select:focus{outline:2px solid var(--c);outline-offset:-1px;border-c
 .so{margin-top:12px;padding:18px;border-radius:12px;background:#f3f4f6;text-align:center}.so b{display:block;font-size:19px;color:#b91c1c}.so p{margin:6px 0 0;color:var(--m)}
 footer{text-align:center;color:var(--m);font-size:12px;padding:18px}`;
 
-// The page's script, kept small and old-browser friendly (no build step on the page itself).
+// The page's script, kept small and old-browser friendly (no build step on the page itself). Meta's pixel (~94 KB)
+// loads after the page: 2.5 s after it, or at the first touch — but never before the photos (a touch while they load
+// waits for them: on 2G / 3G the pixel would otherwise share the line with the main photo).
 const JS = `(function(){var C=window.__LP,d=document,$=function(i){return d.getElementById(i)};
 function ar2(s){return String(s||'').replace(/[\\u0660-\\u0669]/g,function(c){return c.charCodeAt(0)-1632}).replace(/[\\u06f0-\\u06f9]/g,function(c){return c.charCodeAt(0)-1776})}
 function nph(v){var p=ar2(v).replace(/[^\\d+]/g,'').replace(/^(\\+|00)213/,'0');return /^[567]\\d{8}$/.test(p)?'0'+p:p}
@@ -156,8 +160,8 @@ location.search.slice(1).split('&').forEach(function(kv){var p=kv.split('='),k=p
 function ck(n){try{var m=d.cookie.match(new RegExp('(?:^|; )'+n+'=([^;]*)'));return m?m[1]:''}catch(e){return''}}
 var px=C.px,ic=0;if(px){var n=window.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!window._fbq)window._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];
 fbq('init',px);fbq('track','PageView');fbq('track','ViewContent',{content_ids:[String(C.pid)],content_type:'product',value:C.price,currency:'DZD'},{eventID:'vc-'+C.vid});
-var lp=0,lpx=function(){if(lp)return;lp=1;var t=d.createElement('script');t.async=1;t.src='https://connect.facebook.net/en_US/fbevents.js';d.head.appendChild(t)};
-window.addEventListener('load',function(){setTimeout(lpx,2500)});['touchstart','scroll','keydown','mousemove'].forEach(function(e){window.addEventListener(e,lpx,{once:true,passive:true})})}
+var lp=0,ld=0,lw=0,lpx=function(){if(lp)return;if(!ld){lw=1;return}lp=1;var t=d.createElement('script');t.async=1;t.src='https://connect.facebook.net/en_US/fbevents.js';d.head.appendChild(t)};
+window.addEventListener('load',function(){ld=1;if(lw)lpx();else setTimeout(lpx,2500)});['touchstart','scroll','keydown','mousemove'].forEach(function(e){window.addEventListener(e,lpx,{once:true,passive:true})})}
 var f=$('f');if(!f)return;
 var K=[],H0=[];(function(){var n=2,c=0;function f(x){return(x-Math.floor(x))*4294967296|0}while(c<64){for(var i=2;i*i<=n;i++)if(n%i==0)break;if(i*i>n){if(c<8)H0[c]=f(Math.pow(n,1/2));K[c++]=f(Math.pow(n,1/3))}n++}})();
 function sha(s){var m=unescape(encodeURIComponent(s)),l=m.length,w=[],h=H0.slice(),i,j;for(i=0;i<l;i++)w[i>>2]|=m.charCodeAt(i)<<(24-i%4*8);w[l>>2]|=128<<(24-l%4*8);var n=((l+8)>>6)+1<<4;for(i=0;i<n;i++)w[i]|=0;w[n-1]=l*8;
@@ -212,7 +216,7 @@ export function renderLanding(v: LandingView, r: LandingRender): string {
   const ratio = img ? `${img.w}/${img.h}` : '1';
   const sizes = '(min-width:860px) 520px, 100vw';
   const gallery = img
-    ? `<img id="mi" class="main" style="--r:${ratio}" src="${esc(img.src)}" srcset="${esc(img.srcset)}" sizes="${sizes}" width="${img.w}" height="${img.h}" alt="${esc(v.title)}" fetchpriority="high" decoding="async">` +
+    ? `<img id="mi" class="main" style="--r:${ratio}${img.lqip && /^data:image\/(webp|jpeg);base64,[A-Za-z0-9+/=]+$/.test(img.lqip) ? `;background-image:url(${img.lqip})` : ''}" src="${esc(img.src)}" srcset="${esc(img.srcset)}" sizes="${sizes}" width="${img.w}" height="${img.h}" alt="${esc(v.title)}" fetchpriority="high" decoding="async">` +
       (v.images.length > 1
         ? `<div class="th">${v.images
             .map((x, k) => `<button type="button" class="${k ? '' : 'on'}" data-s="${esc(x.src)}" data-ss="${esc(x.srcset)}" aria-label="${k + 1}"><img src="${esc(x.thumb)}" width="64" height="64" alt="" loading="lazy" decoding="async"></button>`)
