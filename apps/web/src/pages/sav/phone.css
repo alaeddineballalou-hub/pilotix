@@ -243,3 +243,9 @@
 .pxv-backl { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; font-weight: 800; font-size: 14px; color: var(--ink); text-decoration: none; }
 .pxv-backl .bji { width: 18px; height: 18px; }
 [dir="rtl"] .pxv-backl .bji { transform: scaleX(-1); }
+
+/* computers (.px-wide): the tickets as cards side by side, the « Nouvel appel » button under them */
+.px-wide .pxv { padding-bottom: 24px; }
+.px-wide .pxv-inbox { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 10px; background: none; border: 0; }
+.px-wide .pxv-inbox li { border-radius: 14px; border: 1px solid var(--line); background: var(--surface); overflow: hidden; }
+.px-wide .pxv-inbox li + li { border-top: 1px solid var(--line); }

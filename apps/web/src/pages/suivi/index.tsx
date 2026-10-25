@@ -21,6 +21,7 @@ import { HistoryButton, PhoneCell } from '../confirmation/History';
 import { store } from '../../lib/store';
 import { CopyCode } from '../../ui/CopyCode';
 import { useIsPhone } from '../../lib/useMedia';
+import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
 import { CancelSheet, ParcelAction, ParcelCards, ParcelPage, TreatSheet } from './PhoneSuivi';
 
 const LIST_TABS = ['alertes', 'traites', 'livres', 'annules', 'swap'] as const;
@@ -276,8 +277,11 @@ function List({ tab }: { tab: ListTab }) {
   const q = useRpc('suivi.list', { tab });
   const [dlg, setDlg] = useState<Dialog>(null);
   const act = useAction('suivi.act');
-  // phones: journey cards; a tap opens the parcel full screen
+  // phones: journey cards; a tap opens the parcel full screen. Computers: the same cards, the parcel in a side panel
+  // (« Tableau » goes back to the table)
   const phone = useIsPhone();
+  const [mode, setMode] = useViewMode('suivi');
+  const cards = phone || mode === 'cards';
   const [openId, setOpenId] = useState<number | null>(null);
   const run = (o: Order, action: 'cancel' | 'delivered' | 'realert') =>
     act.mutate({ id: o.id, action }, { onSuccess: () => toast(t(`suivi.msg.${action === 'cancel' ? 'cancelled' : action}`, { ref: o.ref }), 'ok') });
@@ -318,16 +322,17 @@ function List({ tab }: { tab: ListTab }) {
     );
 
   return (
-    <div className="card">
+    <div className={`card${cards && !phone ? ' px-wide' : ''}`}>
       <div className="card-head">
         <h2>{tab === 'swap' ? t('suivi.toSwap') : t(`suivi.tabs.${tab}`)}</h2>
         <span className="muted small">{q.data ? t('suivi.parcels', { count: q.data.rows.length }) : ''}</span>
+        {!phone && <ViewSwitch mode={mode} onChange={setMode} />}
       </div>
       {q.isLoading ? (
         <Loading />
       ) : q.error ? (
         <ErrorBox error={q.error} onRetry={() => q.refetch()} />
-      ) : phone ? (
+      ) : cards ? (
         (() => {
           const rows = q.data?.rows ?? [];
           const cur = rows.find((r) => r.id === openId) ?? null;

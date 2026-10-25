@@ -2,6 +2,8 @@
 // period adds up to — the money (delivered, cashed, fees, net, what the companies still owe) or why orders were lost
 // (statuses, reasons, agents, companies) — where every line is a tap that shows its orders in the list below; then the
 // list as cards, with a search and a sheet of filters that says how many orders it will show.
+// On a computer the same screen is laid out wide: the road and the period across, the numbers in a column on the left
+// (they stay in view), the cards in a grid on the right; « Tableau » goes back to the big table.
 import { CONF_DONE_BAD, Order, SALES_CHANNELS, WILAYAS } from '@pilotix/shared';
 import { ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,7 +14,9 @@ import { openOrder } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { store } from '../../lib/store';
+import { useIsPhone } from '../../lib/useMedia';
 import { ErrorBox, Icon, Loading } from '../../ui/kit';
+import { ViewSwitch } from '../../ui/ViewSwitch';
 import { Seg, Sheet } from '../../ui/Sheet';
 import { useCounts } from './counts';
 import type { ListFilter } from './shared';
@@ -495,18 +499,23 @@ function CompanySheet({ m, name, label, onClose, onShow }: { m: Agg; name: strin
   );
 }
 
-export function PhoneLivre() {
+export function PhoneLivre({ onTable }: { onTable?: () => void }) {
   const { t } = useTranslation();
   const { has } = useSession();
+  const wide = !useIsPhone();
   const per = usePeriod();
   const [f, setF] = useState<PF>(NO_F);
   const { ref, show } = useShow(f, setF);
   const money = has('suivi', 'depot');
   const rep = useRpc('orders.deliveredReport', per.range, { enabled: money });
   return (
-    <div className="pxn">
-      <Road on="livrees" />
-      <PeriodBar per={per} />
+    <div className={`pxn${wide ? ' wide' : ''}`}>
+      <div className="pxn-top">
+        <Road on="livrees" />
+        <PeriodBar per={per} />
+        {wide && onTable && <ViewSwitch mode="cards" onChange={(m) => m === 'table' && onTable()} />}
+      </div>
+      <div className="pxn-side">
       {money &&
         (rep.error ? (
           <ErrorBox error={rep.error} onRetry={() => rep.refetch()} />
@@ -529,7 +538,8 @@ export function PhoneLivre() {
             <CompanyTable rep={rep.data} label={per.label} f={f} show={show} />
           </>
         ))}
-      <div ref={ref} className="pxn-anchor">
+      </div>
+      <div ref={ref} className="pxn-anchor pxn-main">
         <PhoneList kind="livre" title={t('orders.delivered')} per={per} f={f} setF={setF} />
       </div>
     </div>
@@ -708,9 +718,10 @@ function useTotal(input: ListFilter, enabled: boolean) {
   return useRpc('orders.list', { ...input, pageSize: 1 }, { enabled }).data?.total;
 }
 
-export function PhoneAnnule() {
+export function PhoneAnnule({ onTable }: { onTable?: () => void }) {
   const { t } = useTranslation();
   const { has } = useSession();
+  const wide = !useIsPhone();
   const per = usePeriod();
   const [view, setView] = useState<'conf' | 'back'>(() => (store.get('orders-ph-view') === 'back' ? 'back' : 'conf'));
   const [f, setF] = useState<PF>(NO_F);
@@ -735,14 +746,18 @@ export function PhoneAnnule() {
     </button>
   );
   return (
-    <div className="pxn">
-      <Road on="annulees" />
-      <PeriodBar per={per} />
+    <div className={`pxn${wide ? ' wide' : ''}`}>
+      <div className="pxn-top">
+        <Road on="annulees" />
+        <PeriodBar per={per} />
+        {wide && onTable && <ViewSwitch mode="cards" onChange={(m) => m === 'table' && onTable()} />}
+      </div>
       <div className="pxn-views" role="tablist" aria-label={t('orders.kpi.annule')}>
         {tile('conf', 'ban', t('orders.ph.atConf'), r ? r.conf.n : nConf, r?.conf.rate, 'orders.ph.confRate')}
         {tile('back', 'undo', t('orders.ph.returns'), r ? r.returns.n : nBack, r?.returns.rate, 'orders.ph.backRate')}
       </div>
       <div id="pxn-vp" role="tabpanel" aria-labelledby={`pxn-v-${view}`} className="pxn-vp">
+        <div className="pxn-side">
         {can &&
           (rep.error ? (
             <ErrorBox error={rep.error} onRetry={() => rep.refetch()} />
@@ -755,7 +770,8 @@ export function PhoneAnnule() {
           ) : (
             <BackStats r={r.returns} label={per.label} f={f} show={show} />
           ))}
-        <div ref={ref} className="pxn-anchor">
+        </div>
+        <div ref={ref} className="pxn-anchor pxn-main">
           <PhoneList key={view} kind={view} title={view === 'conf' ? t('orders.cancelledConf') : t('orders.ph.listBack')} per={per} f={f} setF={setF} />
         </div>
       </div>

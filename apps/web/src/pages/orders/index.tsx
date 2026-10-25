@@ -18,6 +18,7 @@ import { ConfFilter, exportOrdersCsv, FollowFilter, ListFilter, printSlips, toLi
 import './orders.css';
 import { useCounts } from './counts';
 import { useIsPhone } from '../../lib/useMedia';
+import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
 import { PhoneAnnule, PhoneLivre } from './PhoneDone';
 
 export { OrderTable } from './OrderTable';
@@ -507,11 +508,21 @@ function useDeliveredExtra() {
 
 // ---------------------------------------------------------------- pages
 export function Commandes({ sub }: PageProps) {
-  // phones: Livré and Annulé have their own screens (stats you tap, cards, a sheet of filters)
+  // Livré and Annulé: the stats you tap and the cards (phones; computers too, laid out wide), or the big table
   const phone = useIsPhone();
-  if (phone && sub === 'livrees') return <PhoneLivre />;
-  if (phone && sub === 'annulees') return <PhoneAnnule />;
-  return <CommandesDesk sub={sub} />;
+  const [mode, setMode] = useViewMode('orders-done');
+  const done = sub === 'livrees' || sub === 'annulees';
+  if (done && (phone || mode === 'cards')) return sub === 'livrees' ? <PhoneLivre onTable={() => setMode('table')} /> : <PhoneAnnule onTable={() => setMode('table')} />;
+  return (
+    <>
+      {done && (
+        <div className="px-vsw-row">
+          <ViewSwitch mode="table" onChange={setMode} />
+        </div>
+      )}
+      <CommandesDesk sub={sub} />
+    </>
+  );
 }
 
 function CommandesDesk({ sub }: { sub?: string }) {

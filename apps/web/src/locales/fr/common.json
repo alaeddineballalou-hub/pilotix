@@ -67,5 +67,8 @@
   "back": "Retour",
   "noResults": "Aucun résultat",
   "resizeCol": "Glissez pour régler la largeur · double-clic : largeur automatique",
-  "remove": "Retirer"
+  "remove": "Retirer",
+  "view": "Affichage",
+  "viewCards": "Cartes",
+  "viewTable": "Tableau"
 }

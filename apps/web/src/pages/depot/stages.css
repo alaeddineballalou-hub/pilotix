@@ -138,3 +138,10 @@
 .pxb-phone .pxb-act .btn { flex: 1; justify-content: center; height: 38px; }
 /* the bag's number: the thing written on the bag, so it reads first */
 .pxb-id .px-copy { font-size: 14.5px; font-weight: 800; color: var(--ink); letter-spacing: .02em; }
+
+/* computers (.px-wide): the tools (scanner, labels, find a return) in a column on the left, the parcels on the right */
+.pxt-tools, .pxt-main { display: contents; }
+.px-wide .pxt:has(> .pxt-tools) { display: grid; grid-template-columns: minmax(340px, 420px) minmax(0, 1fr); gap: 14px 18px; align-items: start; }
+.px-wide .pxt-tools { display: flex; flex-direction: column; gap: 10px; position: sticky; top: 76px; }
+.px-wide .pxt-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.px-wide .pxt-tools .bjsc { margin: 0; }

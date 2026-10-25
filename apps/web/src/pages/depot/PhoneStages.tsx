@@ -149,8 +149,11 @@ export function PhoneDispatch() {
   }, [s.rows]);
   return (
     <div className="pxt">
-      <ScanCard mode="dispatch" />
-      <LabelsBar phone />
+      <div className="pxt-tools">
+        <ScanCard mode="dispatch" />
+        <LabelsBar phone />
+      </div>
+      <div className="pxt-main">
       <Head title={t('depot.stg.waiting')} count={s.total} help={t('depot.stg.dispatchHelp')} />
       <SearchBox value={q} onChange={setQ} placeholder={t('depot.filters.searchPh')} />
       <Body s={s} empty={t(q.trim() ? 'depot.empty' : 'depot.stg.empty_prepares')}>
@@ -173,6 +176,7 @@ export function PhoneDispatch() {
           </section>
         ))}
       </Body>
+      </div>
     </div>
   );
 }
@@ -308,7 +312,10 @@ export function PhoneReturns() {
   const s = tab === 'returning' ? ret : exc;
   return (
     <div className="pxt">
-      <FindReturn />
+      <div className="pxt-tools">
+        <FindReturn />
+      </div>
+      <div className="pxt-main">
       <div className="pxd-tabs" role="tablist">
         <button type="button" role="tab" aria-selected={tab === 'returning'} className={tab === 'returning' ? 'on' : ''} onClick={() => setTab('returning')}>
           {t('depot.stg.returning')} <b className="ltr">{ret.list.data ? ret.total : '…'}</b>
@@ -334,6 +341,7 @@ export function PhoneReturns() {
           ))}
         </ul>
       </Body>
+      </div>
     </div>
   );
 }

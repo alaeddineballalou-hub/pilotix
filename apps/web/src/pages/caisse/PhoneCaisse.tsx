@@ -149,153 +149,157 @@ export function PhoneCaisse({ sub }: { sub?: string }) {
         <Loading />
       ) : (
         <>
-          <section className="pxk-main">
-            <div className="pxk-mh">
-              <span>{t('caisse.ph.main')}</span>
-              {d.main.today !== 0 && <small className="ltr">{t('caisse.ph.today', { v: sgn(d.main.today) })}</small>}
-            </div>
-            <button type="button" className="pxk-big ltr" onClick={() => setCaisse('main')}>
-              {da(d.main.balance)}
-            </button>
-            <div className="pxk-m3">
-              <button type="button" onClick={() => setSheet('expense')}>
-                − {t('caisse.ph.expense')}
+          <div className="pxk-colA">
+            <section className="pxk-main">
+              <div className="pxk-mh">
+                <span>{t('caisse.ph.main')}</span>
+                {d.main.today !== 0 && <small className="ltr">{t('caisse.ph.today', { v: sgn(d.main.today) })}</small>}
+              </div>
+              <button type="button" className="pxk-big ltr" onClick={() => setCaisse('main')}>
+                {da(d.main.balance)}
               </button>
-              <button type="button" onClick={() => setSheet('income')}>
-                + {t('caisse.ph.income')}
-              </button>
-              <button type="button" onClick={() => setSheet('transfer')}>
-                <Icon name="swap" /> {t('caisse.ph.transfer')}
-              </button>
-            </div>
-            {d.bank && (
-              <button type="button" className="pxk-bankln" onClick={() => setCaisse('bank')}>
-                <Icon name="building" />
-                <em>{t('caisse.ph.bank')}</em>
-                <b className="ltr">{da(d.bank.balance)}</b>
+              <div className="pxk-m3">
+                <button type="button" onClick={() => setSheet('expense')}>
+                  − {t('caisse.ph.expense')}
+                </button>
+                <button type="button" onClick={() => setSheet('income')}>
+                  + {t('caisse.ph.income')}
+                </button>
+                <button type="button" onClick={() => setSheet('transfer')}>
+                  <Icon name="swap" /> {t('caisse.ph.transfer')}
+                </button>
+              </div>
+              {d.bank && (
+                <button type="button" className="pxk-bankln" onClick={() => setCaisse('bank')}>
+                  <Icon name="building" />
+                  <em>{t('caisse.ph.bank')}</em>
+                  <b className="ltr">{da(d.bank.balance)}</b>
+                  <Icon name="chevr" />
+                </button>
+              )}
+              {d.caisses.map((c) => (
+                <button key={c.key} type="button" className="pxk-bankln" onClick={() => setCaisse(c.key)}>
+                  <Icon name={kindIcon(c.kind)} />
+                  <em>{c.name}</em>
+                  <b className="ltr">{da(c.balance)}</b>
+                  <Icon name="chevr" />
+                </button>
+              ))}
+              <button type="button" className="pxk-bankln pxk-setln" onClick={() => setSettings(true)}>
+                <Icon name="settings" />
+                <em>{t('caisse.set.title')}</em>
                 <Icon name="chevr" />
               </button>
-            )}
-            {d.caisses.map((c) => (
-              <button key={c.key} type="button" className="pxk-bankln" onClick={() => setCaisse(c.key)}>
-                <Icon name={kindIcon(c.kind)} />
-                <em>{c.name}</em>
-                <b className="ltr">{da(c.balance)}</b>
-                <Icon name="chevr" />
-              </button>
-            ))}
-            <button type="button" className="pxk-bankln pxk-setln" onClick={() => setSettings(true)}>
-              <Icon name="settings" />
-              <em>{t('caisse.set.title')}</em>
-              <Icon name="chevr" />
-            </button>
-          </section>
-
-          {tab === 'journal' ? (
-            <Journal caisse="main" />
-          ) : (
-            <>
-              {d.companies
+            </section>
+            {tab !== 'journal' &&
+              d.companies
                 .filter((c) => c.kind === 'zr' && c.companyId)
                 .map((c) => (
                   <QuickPay key={c.key} companyId={c.companyId!} kind={c.kind ?? 'zr'} onOpen={() => setCompany(c.key)} />
                 ))}
-              <section className="pxk-out">
-                <div className="pxk-outh">
-                  <span>{t('caisse.ph.outside')}</span>
-                  <b className="ltr">{da(d.outside)}</b>
-                </div>
-                <div className="pxk-out3">
-                  <button type="button" onClick={() => go('pxk-co')}>
-                    <small>{t('caisse.ux.companiesS')}</small>
-                    <b className="ltr">{da(sumCo)}</b>
-                  </button>
-                  <button type="button" onClick={() => go('pxk-lv')}>
-                    <small>{t('caisse.ph.livreurs')}</small>
-                    <b className="ltr">{da(sumLv)}</b>
-                  </button>
-                  <button type="button" onClick={() => go('pxk-em')}>
-                    <small>{t('caisse.ph.employees')}</small>
-                    <b className="ltr">{da(sumEm)}</b>
-                  </button>
-                </div>
-              </section>
+          </div>
+          <div className="pxk-colB">
+            {tab === 'journal' ? (
+              <Journal caisse="main" />
+            ) : (
+              <>
+                <section className="pxk-out">
+                  <div className="pxk-outh">
+                    <span>{t('caisse.ph.outside')}</span>
+                    <b className="ltr">{da(d.outside)}</b>
+                  </div>
+                  <div className="pxk-out3">
+                    <button type="button" onClick={() => go('pxk-co')}>
+                      <small>{t('caisse.ux.companiesS')}</small>
+                      <b className="ltr">{da(sumCo)}</b>
+                    </button>
+                    <button type="button" onClick={() => go('pxk-lv')}>
+                      <small>{t('caisse.ph.livreurs')}</small>
+                      <b className="ltr">{da(sumLv)}</b>
+                    </button>
+                    <button type="button" onClick={() => go('pxk-em')}>
+                      <small>{t('caisse.ph.employees')}</small>
+                      <b className="ltr">{da(sumEm)}</b>
+                    </button>
+                  </div>
+                </section>
 
-              <div className="pxk-sect sm" id="pxk-co">
-                {t('caisse.ph.companies')} <b className="ltr">{da(sumCo)}</b>
-              </div>
-              {d.companies.length ? (
+                <div className="pxk-sect sm" id="pxk-co">
+                  {t('caisse.ph.companies')} <b className="ltr">{da(sumCo)}</b>
+                </div>
+                {d.companies.length ? (
+                  <ul className="pxk-grp">
+                    {d.companies.map((c) => (
+                      <li key={c.key}>
+                        <button type="button" onClick={() => setCompany(c.key)}>
+                          <span className={`pxs-co k-${c.kind ?? 'other'} pxk-co`}>{coShort(c.name)}</span>
+                          <span className="pxk-rm">
+                            <b>{c.name}</b>
+                            <small>
+                              {t('caisse.ph.parcels', { count: c.count })}
+                              {days(c.oldest) ? ` · ${t('caisse.ph.oldest', { n: days(c.oldest) })}` : ''}
+                            </small>
+                            {c.payWaiting > 0 && <em className="pxk-paybadge ltr">{t('caisse.pay.waitingBadge', { v: da(c.payWaiting) })}</em>}
+                          </span>
+                          <b className="ltr pxk-amt">{da(c.net)}</b>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="pxv-help">{t('caisse.ph.noCompany')}</p>
+                )}
+
+                <div className="pxk-sect sm" id="pxk-lv">
+                  {t('caisse.ph.livreurs')} <b className="ltr">{da(sumLv)}</b>
+                </div>
                 <ul className="pxk-grp">
-                  {d.companies.map((c) => (
-                    <li key={c.key}>
-                      <button type="button" onClick={() => setCompany(c.key)}>
-                        <span className={`pxs-co k-${c.kind ?? 'other'} pxk-co`}>{coShort(c.name)}</span>
+                  {d.livreurs.map((l) => (
+                    <li key={l.id}>
+                      <button type="button" onClick={() => setLivreur(l.id)}>
+                        <span className="pxk-av or">{initials(l.name)}</span>
                         <span className="pxk-rm">
-                          <b>{c.name}</b>
+                          <b>{l.name}</b>
                           <small>
-                            {t('caisse.ph.parcels', { count: c.count })}
-                            {days(c.oldest) ? ` · ${t('caisse.ph.oldest', { n: days(c.oldest) })}` : ''}
+                            {l.notCashed ? t('caisse.ph.notHanded', { count: l.notCashed }) : t('caisse.ph.nothingHeld')}
+                            {l.last && l.notCashed ? ` · ${t('caisse.ph.lastHand', { n: days(l.last) })}` : ''}
                           </small>
-                          {c.payWaiting > 0 && <em className="pxk-paybadge ltr">{t('caisse.pay.waitingBadge', { v: da(c.payWaiting) })}</em>}
                         </span>
-                        <b className="ltr pxk-amt">{da(c.net)}</b>
+                        <b className={`ltr pxk-amt${l.net ? '' : ' z'}`}>{da(l.net)}</b>
                       </button>
                     </li>
                   ))}
                 </ul>
-              ) : (
-                <p className="pxv-help">{t('caisse.ph.noCompany')}</p>
-              )}
 
-              <div className="pxk-sect sm" id="pxk-lv">
-                {t('caisse.ph.livreurs')} <b className="ltr">{da(sumLv)}</b>
-              </div>
-              <ul className="pxk-grp">
-                {d.livreurs.map((l) => (
-                  <li key={l.id}>
-                    <button type="button" onClick={() => setLivreur(l.id)}>
-                      <span className="pxk-av or">{initials(l.name)}</span>
-                      <span className="pxk-rm">
-                        <b>{l.name}</b>
-                        <small>
-                          {l.notCashed ? t('caisse.ph.notHanded', { count: l.notCashed }) : t('caisse.ph.nothingHeld')}
-                          {l.last && l.notCashed ? ` · ${t('caisse.ph.lastHand', { n: days(l.last) })}` : ''}
-                        </small>
-                      </span>
-                      <b className={`ltr pxk-amt${l.net ? '' : ' z'}`}>{da(l.net)}</b>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-
-              <div className="pxk-sect sm" id="pxk-em">
-                {t('caisse.ph.employees')} <b className="ltr">{da(sumEm)}</b>
-              </div>
-              {emps.length > 0 && (
-              <ul className="pxk-grp">
-                {emps.map((e) => (
-                  <li key={e.key}>
-                    <button type="button" onClick={() => setCaisse(e.key)}>
-                      <span className="pxk-av">{initials(e.name)}</span>
-                      <span className="pxk-rm">
-                        <b>{e.name}</b>
-                        <small>{e.role ? t(`roles.${e.role}`, { defaultValue: e.role }) : ''}</small>
-                      </span>
-                      <b className={`ltr pxk-amt${e.balance ? '' : ' z'}`}>{da(e.balance)}</b>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              )}
-              {zeroEmp > 0 && (
-                <button type="button" className="pxk-more" onClick={() => setAllEmp((v) => !v)}>
-                  {allEmp ? t('caisse.ux.hideZero') : t('caisse.ux.showZero', { count: zeroEmp })}
-                  <Icon name={allEmp ? 'chevron' : 'chevr'} />
-                </button>
-              )}
-              {d.tickets.count > 0 && <p className="pxv-help">{t('caisse.ph.tickets', { count: d.tickets.count, v: da(d.tickets.total) })}</p>}
-            </>
-          )}
+                <div className="pxk-sect sm" id="pxk-em">
+                  {t('caisse.ph.employees')} <b className="ltr">{da(sumEm)}</b>
+                </div>
+                {emps.length > 0 && (
+                <ul className="pxk-grp">
+                  {emps.map((e) => (
+                    <li key={e.key}>
+                      <button type="button" onClick={() => setCaisse(e.key)}>
+                        <span className="pxk-av">{initials(e.name)}</span>
+                        <span className="pxk-rm">
+                          <b>{e.name}</b>
+                          <small>{e.role ? t(`roles.${e.role}`, { defaultValue: e.role }) : ''}</small>
+                        </span>
+                        <b className={`ltr pxk-amt${e.balance ? '' : ' z'}`}>{da(e.balance)}</b>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                )}
+                {zeroEmp > 0 && (
+                  <button type="button" className="pxk-more" onClick={() => setAllEmp((v) => !v)}>
+                    {allEmp ? t('caisse.ux.hideZero') : t('caisse.ux.showZero', { count: zeroEmp })}
+                    <Icon name={allEmp ? 'chevron' : 'chevr'} />
+                  </button>
+                )}
+                {d.tickets.count > 0 && <p className="pxv-help">{t('caisse.ph.tickets', { count: d.tickets.count, v: da(d.tickets.total) })}</p>}
+              </>
+            )}
+          </div>
         </>
       )}
       {sheet && <MoveSheet kind={sheet} from="main" onClose={() => setSheet(null)} />}

@@ -10,6 +10,7 @@ import { Empty, ErrorBox, Help, Kpi, Kpis, Loading, TicketTag } from '../../ui/k
 import type { PageProps } from '../registry';
 import { LivreursCash } from './LivreursCash';
 import { useIsPhone } from '../../lib/useMedia';
+import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
 import { PhoneCaisse } from './PhoneCaisse';
 import { CaisseJournal, CaisseOverview } from './Overview';
 export { MaCaisse } from './PhoneCaisse';
@@ -18,7 +19,26 @@ import { CopyCode } from '../../ui/CopyCode';
 export function Caisse({ sub }: PageProps) {
   const phone = useIsPhone();
   if (phone) return <PhoneCaisse sub={sub} />;
-  return <CaisseDesktop sub={sub} />;
+  return <CaisseWide sub={sub} />;
+}
+
+/** Computers: the phone's caisse laid out wide (the money outside at a glance, a tap opens it), or the tables. */
+function CaisseWide({ sub }: PageProps) {
+  const [mode, setMode] = useViewMode('caisse');
+  return (
+    <>
+      <div className="px-vsw-row">
+        <ViewSwitch mode={mode} onChange={setMode} />
+      </div>
+      {mode === 'cards' ? (
+        <div className="px-wide">
+          <PhoneCaisse sub={sub} />
+        </div>
+      ) : (
+        <CaisseDesktop sub={sub} />
+      )}
+    </>
+  );
 }
 
 function CaisseDesktop({ sub }: PageProps) {
