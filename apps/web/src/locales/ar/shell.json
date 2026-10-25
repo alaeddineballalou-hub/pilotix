@@ -16,5 +16,6 @@
   "passwordChanged": "تم تغيير كلمة المرور",
   "fold": "طيّ القائمة",
   "unfold": "توسيع القائمة",
-  "account": "حساب {{name}}"
+  "account": "حساب {{name}}",
+  "newLandingOrder": "🛒 طلب جديد {{ref}} (صفحة الهبوط)"
 }

@@ -25,6 +25,9 @@ const bag = (c: string, bg: string) =>
     bg,
   );
 
+/** a variant id by position (null when the product has fewer) */
+const v0 = (vars: any[], k: number): number | null => (vars[k] ? num(vars[k].id) : null);
+
 const STROLLER_TEXT = `# عربة أطفال خفيفة وقابلة للطي بيد واحدة
 - **وزن خفيف:** 6 كغ فقط، سهلة الحمل في الحافلة والسيارة
 - طي سريع بيد واحدة في ثانيتين
@@ -79,9 +82,86 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     `SELECT o.id, o.phone, o.created_at FROM orders o WHERE NOT o.is_exchange AND o.created_at > $2 AND EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.product_id = $1) ORDER BY o.created_at DESC LIMIT 40`,
     [pouId, at(10 * day)],
   );
-  for (const o of brought) {
-    await db.query(`UPDATE orders SET channel = 'site', source = 'Landing · poussette-canne-pliable' WHERE id = $1`, [o.id]);
-    await db.query(`INSERT INTO landing_submits (landing_id, product_id, phone, ip, fp, verdict, score, order_id, at) VALUES ($1,$2,$3,'105.235.0.1','d:demo','allow',0,$4,$5)`, [p1, pouId, o.phone, o.id, o.created_at]);
+  const UA = 'Mozilla/5.0 (Linux; Android 13; SM-A145F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36';
+  for (const [k, o] of brought.entries()) {
+    const utm = k % 3 === 0 ? { utm_source: 'facebook', utm_medium: 'paid', utm_campaign: 'Poussette octobre', adset_id: '120210000000001' } : null;
+    await db.query(`UPDATE orders SET channel = 'landing', landing_id = $2, source = 'Landing · poussette-canne-pliable', utm = $3, adset_id = $4 WHERE id = $1`, [o.id, p1, utm ? JSON.stringify(utm) : null, utm?.adset_id ?? null]);
+    await db.query(
+      `INSERT INTO landing_submits (landing_id, product_id, phone, ip, fp, verdict, score, order_id, at, ua, fbp, url) VALUES ($1,$2,$3,'105.235.0.1','d:demo','allow',0,$4,$5,$6,$7,$8)`,
+      [p1, pouId, o.phone, o.id, o.created_at, UA, `fb.1.${Date.parse(String(o.created_at))}.${1000 + k}`, 'https://demo.pilotix.app/api/lp/poussette-canne-pliable'],
+    );
+  }
+
+  // the shop's Meta pixel; a real sale is reported when an agent confirms it
+  await db.query(
+    `INSERT INTO settings (key, value) VALUES ('landing', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [JSON.stringify({ pixelId: '1234567890123456', testEventCode: '', purchaseAt: 'confirmed', abandonAfterMin: 20, autoCreate: false, ignored: [] })],
+  );
+  // what the server sent to Meta (simulated in the demo): Purchase for the confirmed ones, never for a fake one
+  const confirmed = await db.query(`SELECT id, ref, total, conf_status, confirmed_at, created_at FROM orders WHERE landing_id = $1 ORDER BY created_at DESC LIMIT 14`, [p1]);
+  for (const o of confirmed) {
+    const fake = ['fake', 'duplicate', 'wrong_number', 'cancelled'].includes(o.conf_status);
+    const real = ['confirmed', 'no_stock'].includes(o.conf_status) || fake;
+    if (!real) continue;
+    const t0 = o.confirmed_at ?? o.created_at;
+    await db.query(
+      `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, landing_id, value, at, send_after, status, sent_at, error) VALUES ('1234567890123456','Purchase',$1,$2,$3,$4,$5,$5,$6,$7,$8)`,
+      [`purchase-${o.ref}`, o.id, p1, num(o.total), t0, fake ? 'skipped' : 'simulated', fake ? null : t0, fake ? 'Commande annulée ou fausse : pas de Purchase' : null],
+    );
+  }
+
+  // abandoned orders: typed their number and left. Most were added to Commandes by Pilotix 20 minutes later; two had no
+  // wilaya (waiting for a call); one came back and ordered herself; one was set aside.
+  const wh = await db.query(`SELECT id FROM warehouses ORDER BY is_default DESC, id LIMIT 1`);
+  const leads: [string, string, number | null, string, number | null, number, string][] = [
+    ['Lina Mansouri', '0662104455', 16, 'Bab Ezzouar', v0(vars, 1), 35 * 60_000, 'auto'],
+    ['Riad Kaci', '0770551230', 31, 'Bir El Djir', v0(vars, 0), 3 * 3600_000, 'auto'],
+    ['Meriem', '0551908877', 9, 'Boufarik', v0(vars, 2), 26 * 3600_000, 'auto'],
+    ['Imane Lounis', '0698223344', null, '', v0(vars, 2), 50 * 60_000, 'todo'],
+    ['', '0779004411', null, '', null, 4 * 3600_000, 'todo'],
+    ['Sofiane Touati', '0661889900', 25, 'El Khroub', v0(vars, 0), 2 * day, 'came'],
+    ['Nassim', '0540667788', 19, 'El Eulma', v0(vars, 1), 3 * day, 'dismissed'],
+  ];
+  for (const [name, phone, w, commune, vid, ago, kind] of leads) {
+    const lastAt = at(ago);
+    let orderId: number | null = null;
+    if (kind === 'auto' || kind === 'came') {
+      const cust = num(
+        (
+          await db.query(
+            `INSERT INTO customers (phone, name, wilaya_id, orders, last_order_at) VALUES ($1,$2,$3,1,$4) ON CONFLICT (phone) DO UPDATE SET orders = customers.orders + 1 RETURNING id`,
+            [phone, name || 'Client', w, lastAt],
+          )
+        )[0].id,
+      );
+      const created = at(ago - (kind === 'auto' ? 20 * 60_000 : 3600_000));
+      const auto = kind === 'auto';
+      const o = (
+        await db.query(
+          `INSERT INTO orders (ref, created_by, customer_id, customer_name, phone, wilaya_id, commune, channel, source, conf_status, warehouse_id, subtotal, delivery_fee, total, internal_note, landing_id, created_at, updated_at, orig_items, orig_discount)
+           VALUES ('PX' || nextval('order_ref_seq'), $1, $2, $3, $4, $5, $6, 'landing', $7, 'new', $8, 9950, 500, 10450, $9, $10, $11, $11, '[]', 0) RETURNING id`,
+          [users.admin ?? null, cust, name || 'Client', phone, w, commune, auto ? 'Landing · poussette-canne-pliable · abandonnée' : 'Landing · poussette-canne-pliable', num(wh[0]?.id) || null,
+            auto ? 'Commande abandonnée : le client a laissé son numéro sans valider. Appelez-le pour confirmer.' : null, p1, created],
+        )
+      )[0];
+      orderId = num(o.id);
+      const title = vars.find((x: any) => num(x.id) === vid)?.title ?? '';
+      await db.query(`INSERT INTO order_items (order_id, product_id, variant_id, name, variant_title, qty, unit_price, purchase_price) VALUES ($1,$2,$3,'Poussette canne pliable',$4,1,9950,7200)`, [orderId, pouId, vid, title]);
+      await db.query(`INSERT INTO order_events (order_id, at, user_id, kind, from_value, to_value, note) VALUES ($1,$2,NULL,'created',NULL,'new',$3)`, [orderId, created, auto ? 'Commande abandonnée ajoutée par Pilotix' : null]);
+    }
+    const status = kind === 'auto' || kind === 'came' ? 'converted' : kind === 'dismissed' ? 'dismissed' : 'abandoned';
+    const lead = (
+      await db.query(
+        `INSERT INTO landing_leads (at, last_at, landing_id, product_id, variant_id, qty, unit_price, customer_name, phone, wilaya_id, commune, device, ip, ua, utm, view_id, status, abandoned_at, order_id, auto_order, handled_by, handled_at)
+         VALUES ($1,$2,$3,$4,$5,1,9950,$6,$7,$8,$9,'d:demo','105.235.0.1',$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id`,
+        [at(ago + 4 * 60_000), lastAt, p1, pouId, vid, name, phone, w, commune, UA, JSON.stringify({ utm_source: 'facebook', adset_id: '120210000000001' }), `demo${phone.slice(-4)}`,
+          status, at(ago - 20 * 60_000), orderId, kind === 'auto', kind === 'dismissed' ? users.conf1 ?? null : null, kind === 'abandoned' || kind === 'todo' ? null : at(ago - 25 * 60_000)],
+      )
+    )[0];
+    await db.query(
+      `INSERT INTO meta_events (pixel_id, event_name, event_id, lead_id, landing_id, value, at, send_after, status, sent_at) VALUES ('1234567890123456','InitiateCheckout',$1,$2,$3,9950,$4,$4,'simulated',$4)`,
+      [`ic-demo${phone.slice(-4)}`, lead.id, p1, at(ago)],
+    );
   }
 
   // what the fake-order check held back
@@ -106,6 +186,12 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
       )
     )[0];
     await db.query(`INSERT INTO landing_submits (landing_id, product_id, phone, ip, fp, verdict, score, blocked_id, at) VALUES ($1,$2,$3,$4,'d:demo','block',$5,$6,$7)`, [lid, lid === p1 ? pouId : num(sac.id), phone, ip, score, r.id, at(ago)]);
+    // a bot's start of checkout was dropped before reaching Meta
+    if (status !== 'restored')
+      await db.query(
+        `INSERT INTO meta_events (pixel_id, event_name, event_id, landing_id, value, at, send_after, status, error) VALUES ('1234567890123456','InitiateCheckout',$1,$2,$3,$4,$4,'skipped','Commande bloquée (fausse)')`,
+        [`ic-blocked-${r.id}`, lid, price(lid), at(ago)],
+      );
   }
   void p2;
 }

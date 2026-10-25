@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { da, dateTime, n } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
+import { useSession } from '../../lib/session';
 import { Empty, ErrorBox, Icon, Kpi, Kpis, Loading, Pager } from '../../ui/kit';
 import { Filters, SearchBox, SectionHeader } from '../ai/agent';
 import type { PageProps } from '../registry';
@@ -174,6 +175,13 @@ function ProductsTab() {
   const prods = useRpc('catalog.products', {});
   const st = useRpc('catalog.stock', { withHidden: true });
   const [edit, setEdit] = useState<number | 'new' | null>(null);
+  // landing pages: which products have one (a product just created without one gets a banner)
+  const { session } = useSession();
+  const marketer = !!session && (session.isAdmin || session.roles.includes('marketer'));
+  const cov = useRpc('landing.coverage', {});
+  const pages = useMemo(() => new Map((cov.data?.pages ?? []).map((x) => [x.productId, x])), [cov.data]);
+  const ignored = useMemo(() => new Set(cov.data?.ignored ?? []), [cov.data]);
+  const [fresh, setFresh] = useState<{ id: number; name: string } | null>(null);
   const stock = useMemo(() => {
     const m = new Map<number, number>();
     for (const r of st.data ?? []) m.set(r.productId, (m.get(r.productId) ?? 0) + r.available);
@@ -201,6 +209,23 @@ function ProductsTab() {
           items={(['active', 'hidden', 'service', 'all'] as const).map((k) => ({ value: k, label: t(`produits.products.f_${k}`), count: found.filter(test[k]).length }))}
         />
       </Toolbar>
+      {fresh && !pages.has(fresh.id) && (
+        <div className="lp-fresh" role="status">
+          <Icon name="globe" />
+          <span>
+            <b>{t('produits.landing.freshTitle', { name: fresh.name })}</b>
+            <small>{marketer ? t('produits.landing.freshHelp') : t('produits.landing.freshMarketer')}</small>
+          </span>
+          {marketer && (
+            <a className="btn small primary" href={`#/landing/pages/new/${fresh.id}`}>
+              {t('produits.landing.create')}
+            </a>
+          )}
+          <button className="icon-btn" aria-label={t('common.close')} onClick={() => setFresh(null)}>
+            <Icon name="x" />
+          </button>
+        </div>
+      )}
       {prods.isLoading ? (
         <Loading />
       ) : prods.error ? (
@@ -240,6 +265,14 @@ function ProductsTab() {
                       <span className="ltr">{p.sku}</span>
                       {p.isService && <span className="chip">{t('produits.products.service')}</span>}
                       {p.parts.length > 0 && <span className="chip">{t('produits.products.parts', { n: p.parts.length })}</span>}
+                      {cov.data && p.active && !p.isService && !pages.has(p.id) && !ignored.has(p.id) &&
+                        (marketer ? (
+                          <a className="chip lp-nolp" href={`#/landing/pages/new/${p.id}`} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                            {t('produits.landing.none')} · {t('produits.landing.create')}
+                          </a>
+                        ) : (
+                          <span className="chip lp-nolp">{t('produits.landing.none')}</span>
+                        ))}
                     </small>
                   </span>
                 </span>
@@ -264,7 +297,7 @@ function ProductsTab() {
           })}
         </div>
       )}
-      {edit !== null && <ProductForm id={edit === 'new' ? null : edit} onClose={() => setEdit(null)} />}
+      {edit !== null && <ProductForm id={edit === 'new' ? null : edit} onClose={() => setEdit(null)} onCreated={(r) => r.active && !r.isService && setFresh({ id: r.id, name: r.name })} />}
     </section>
   );
 }

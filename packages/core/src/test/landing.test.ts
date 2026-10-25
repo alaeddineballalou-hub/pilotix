@@ -97,14 +97,16 @@ test('a blacklisted number alone is put to review; with one more signal it is bl
   await assert.rejects(call('landing.restore', admin, { id: Number(b.id) }));
 });
 
-test('a second order of the same product the same day goes to review (À vérifier) instead of passing silently', async () => {
+test('a second order of the same product the same day still goes to « Nouvelle », with the warning in its note', async () => {
   const phone = '0661445566';
   await call('landing.submit', admin, await human({}, phone));
   await call('landing.submit', admin, await human({}, phone));
-  const rows = await db.query(`SELECT conf_status, internal_note FROM orders WHERE phone = $1 ORDER BY id`, [phone]);
+  const rows = await db.query(`SELECT conf_status, internal_note, channel, landing_id FROM orders WHERE phone = $1 ORDER BY id`, [phone]);
   assert.equal(rows.length, 2);
-  assert.equal(rows[1].conf_status, 'to_check');
+  assert.equal(rows[1].conf_status, 'new');
   assert.match(rows[1].internal_note, /score anti-fraude/);
+  assert.equal(rows[1].channel, 'landing');
+  assert.ok(rows[1].landing_id);
 });
 
 test('signals: names, phones and the weighted score', () => {

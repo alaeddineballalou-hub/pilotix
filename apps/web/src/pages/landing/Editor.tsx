@@ -19,15 +19,16 @@ type Page = Out<'landing.get'>;
 type Level = 'relaxed' | 'normal' | 'strict';
 const DESKTOP_W = 1280;
 
-export function Editor({ id }: { id: number | null }) {
+/** id: the page (null: a new one); productId: a new page's product, chosen beforehand (« Personnaliser » on a product). */
+export function Editor({ id, productId }: { id: number | null; productId?: number }) {
   const cur = useRpc('landing.get', { id: id ?? 0 }, { enabled: !!id, refetchOnWindowFocus: false });
   if (id && cur.isLoading) return <Loading />;
   if (id && cur.error) return <ErrorBox error={cur.error} onRetry={() => cur.refetch()} />;
-  return <Form key={id ?? 'new'} p={id ? cur.data ?? null : null} />;
+  return <Form key={id ?? `new-${productId ?? ''}`} p={id ? cur.data ?? null : null} productId={productId} />;
 }
 
-const draftOf = (p: Page | null) => ({
-  productId: p?.productId ?? 0,
+const draftOf = (p: Page | null, productId?: number) => ({
+  productId: p?.productId ?? productId ?? 0,
   slug: p?.slug ?? '',
   active: p ? p.active : true,
   title: p?.title ?? '',
@@ -37,15 +38,17 @@ const draftOf = (p: Page | null) => ({
   description: p?.description ?? '',
   variantLabel: p?.variantLabel ?? 'اللون',
   fraudLevel: (p?.fraudLevel ?? 'normal') as Level,
+  pixelId: p?.pixelId ?? '',
+  stockMode: (p?.stockMode ?? 'off') as 'off' | 'hide',
   images: (p?.images ?? []) as Img[],
 });
 type Draft = ReturnType<typeof draftOf>;
 const keyOf = (d: Draft) => JSON.stringify({ ...d, images: d.images.map((i) => i.id ?? i.url) });
 
-function Form({ p }: { p: Page | null }) {
+function Form({ p, productId }: { p: Page | null; productId?: number }) {
   const { t } = useTranslation();
-  const [d, setD] = useState<Draft>(() => draftOf(p));
-  const [saved, setSaved] = useState(() => keyOf(draftOf(p)));
+  const [d, setD] = useState<Draft>(() => draftOf(p, productId));
+  const [saved, setSaved] = useState(() => keyOf(draftOf(p, productId)));
   const [slugTouched, setSlugTouched] = useState(!!p);
   const [device, setDevice] = useState<'phone' | 'desktop'>('phone');
   const [busy, setBusy] = useState(0);
@@ -67,7 +70,7 @@ function Form({ p }: { p: Page | null }) {
     const prod = products.data?.find((x) => x.id === d.productId);
     if (!prod || slugTouched) return;
     let live = true;
-    rpc('landing.freeSlug', { name: prod.name, id: p?.id }).then((r) => live && set('slug', r.slug));
+    rpc('landing.freeSlug', { name: prod.name, sku: prod.sku, id: p?.id }).then((r) => live && set('slug', r.slug));
     return () => {
       live = false;
     };
@@ -120,6 +123,8 @@ function Form({ p }: { p: Page | null }) {
       description: d.description,
       variantLabel: d.variantLabel.trim(),
       fraudLevel: d.fraudLevel,
+      pixelId: d.pixelId.trim(),
+      stockMode: d.stockMode,
       images: d.images.map((i) => (i.id ? { id: i.id } : { url: i.url!, w: i.w, h: i.h })),
     });
   };
@@ -135,15 +140,24 @@ function Form({ p }: { p: Page | null }) {
   const { html, weight } = useMemo(() => {
     const c = ctx.data;
     if (!c) return { html: '', weight: 0 };
+    const pagePrice = view.price === '' ? null : Math.round(Number(view.price) || 0);
+    const shown = pagePrice ?? c.price;
+    const hide = view.stockMode === 'hide';
+    // as the server draws them: the variant's own price when it is not the page's, sold out ones marked (when asked)
+    const variants = c.variants.map((x) => {
+      const price = pagePrice ?? x.price ?? c.price;
+      return { id: x.id, title: x.title, ...(price !== shown ? { price } : {}), ...(hide && x.available !== null && x.available <= 0 ? { out: true } : {}) };
+    });
     const v: LandingView = {
       slug: view.slug || 'apercu',
       title: view.title.trim() || c.name,
       color: view.color,
-      price: view.price === '' ? c.price : Math.round(Number(view.price) || 0),
+      price: shown,
       oldPrice: view.oldPrice === '' ? null : Math.round(Number(view.oldPrice) || 0),
       description: view.description,
       variantLabel: view.variantLabel.trim() || 'اللون',
-      variants: c.variants,
+      variants,
+      soldOut: hide && c.soldOut,
       images: view.images.map((i) => ({ src: i.src, srcset: `${i.src} 480w`, thumb: i.thumb, w: i.w, h: i.h })),
       fees: c.fees,
       shopName: c.shopName,
@@ -244,6 +258,7 @@ function Form({ p }: { p: Page | null }) {
                 <input type="number" min={0} step={50} value={d.oldPrice} onChange={(e) => set('oldPrice', e.target.value)} />
               </Field>
             </div>
+            {ctx.data?.fixedPrice && d.price !== '' && Number(d.price) !== ctx.data.price && <p className="lp-warn-note">{t('landing.ed.fixedPrice', { price: da(ctx.data.price) })}</p>}
           </section>
 
           <section className="card">
@@ -295,6 +310,20 @@ function Form({ p }: { p: Page | null }) {
             <Field label={t('landing.ed.description')} hint={t('landing.ed.descriptionHint')}>
               <textarea dir="auto" rows={10} value={d.description} onChange={(e) => set('description', e.target.value)} />
             </Field>
+          </section>
+
+          <section className="card">
+            <h2>{t('landing.ed.sMore')}</h2>
+            <Field label={t('landing.ed.pixel')} hint={t('landing.ed.pixelHint')}>
+              <input className="ltr" inputMode="numeric" value={d.pixelId} placeholder={t('landing.ed.pixelPh')} onChange={(e) => set('pixelId', e.target.value.replace(/\D/g, ''))} />
+            </Field>
+            <label className="lp-switch">
+              <input type="checkbox" checked={d.stockMode === 'hide'} onChange={(e) => set('stockMode', e.target.checked ? 'hide' : 'off')} />
+              <span>
+                <b>{t('landing.ed.stockHide')}</b>
+                <small>{ctx.data?.soldOut ? t('landing.ed.stockAllOut') : t('landing.ed.stockHideHelp')}</small>
+              </span>
+            </label>
           </section>
 
           <section className="card">

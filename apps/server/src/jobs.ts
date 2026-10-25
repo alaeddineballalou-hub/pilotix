@@ -13,6 +13,7 @@ import { CoreService } from './core.service';
  *  - Dellal follow-ups (one short message to customers who went quiet) every 15 minutes
  *  - CM AI agent: comments still waiting (missed after a restart, or held during the night) every 3 minutes
  *  - Delivery AI agent: the customers' order messages that are due (WhatsApp, SMS) every minute
+ *  - Landing pages: abandoned orders (list, Commandes, reminder) and Meta Conversions API events, every minute
  */
 @Injectable()
 export class JobsService implements OnModuleInit, OnModuleDestroy {
@@ -35,7 +36,12 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       async (job) => {
         const session = await this.core.systemSession();
         if (job.name === 'courier-sync') return this.core.call('delivery.sync', session, {});
-        if (job.name === 'meta-sync') return this.core.call('ads.sync', session, {});
+        // the last 3 days (Algeria time): yesterday's results are final only the next day
+        if (job.name === 'meta-sync') {
+          const day = (d: number) => new Date(Date.now() + 3_600_000 - d * 86_400_000).toISOString().slice(0, 10);
+          return this.core.call('ads.sync', session, { from: day(3), to: day(0) });
+        }
+        if (job.name === 'landing-run') return this.core.call('landing.run', session, {});
         if (job.name === 'dellal-followups') return this.core.call('dellal.followUps', session, {});
         if (job.name === 'cm-sweep') return this.core.call('cm.sweep', session, {});
         if (job.name === 'notify-run') return this.core.call('notify.run', session, {});
@@ -51,6 +57,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.queue.add('dellal-followups', {}, { repeat: { every: 15 * 60_000 }, jobId: 'dellal-followups', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('cm-sweep', {}, { repeat: { every: 3 * 60_000 }, jobId: 'cm-sweep', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('notify-run', {}, { repeat: { every: 60_000 }, jobId: 'notify-run', removeOnComplete: 20, removeOnFail: 50 });
+    await this.queue.add('landing-run', {}, { repeat: { every: 60_000 }, jobId: 'landing-run', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('partitions', {}, { repeat: { pattern: '0 3 1 * *' }, jobId: 'partitions', removeOnComplete: 10 });
   }
 

@@ -409,5 +409,12 @@
     "feeGridHint": "Empty = default grid (Management → Delivery prices).",
     "remove": "Remove",
     "saved": "Product saved"
+  },
+  "landing": {
+    "none": "No landing page",
+    "create": "Create",
+    "freshTitle": "\"{{name}}\" has no landing page",
+    "freshHelp": "Create its order page to use it in your ads.",
+    "freshMarketer": "The marketer will see it in Landing pages."
   }
 }

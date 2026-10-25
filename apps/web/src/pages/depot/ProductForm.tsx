@@ -25,15 +25,16 @@ interface PartRow {
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 /** Create / edit a product: identity, prices, variants, SAV parts, packs, linked products, max discount, delivery price grid. */
-export function ProductForm({ id, onClose }: { id: number | null; onClose: () => void }) {
+/** onCreated: a NEW product was saved (Produits proposes its landing page). */
+export function ProductForm({ id, onClose, onCreated }: { id: number | null; onClose: () => void; onCreated?: (p: { id: number; name: string; isService: boolean; active: boolean }) => void }) {
   const { t } = useTranslation();
   const cur = useRpc('catalog.product', { id: id ?? 0 }, { enabled: !!id });
   if (id && cur.isLoading) return <Modal title="…" onClose={onClose}><Loading /></Modal>;
   if (id && cur.error) return <Modal title="…" onClose={onClose}><ErrorBox error={cur.error} /></Modal>;
-  return <Form p={id ? cur.data ?? null : null} onClose={onClose} key={id ?? 'new'} t={t} />;
+  return <Form p={id ? cur.data ?? null : null} onClose={onClose} onCreated={onCreated} key={id ?? 'new'} t={t} />;
 }
 
-function Form({ p, onClose, t }: { p: any; onClose: () => void; t: (k: string, o?: any) => string }) {
+function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCreated?: (p: { id: number; name: string; isService: boolean; active: boolean }) => void; t: (k: string, o?: any) => string }) {
   const { session } = useSession();
   const admin = !!session?.isAdmin;
   const all = useRpc('catalog.products', {});
@@ -61,7 +62,13 @@ function Form({ p, onClose, t }: { p: any; onClose: () => void; t: (k: string, o
     if (hasParts && !parts.length) setParts([{ name: '', max: '' }]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasParts]);
-  const save = useAction('catalog.saveProduct', { success: t('produits.form.saved'), onDone: onClose });
+  const save = useAction('catalog.saveProduct', {
+    success: t('produits.form.saved'),
+    onDone: (r) => {
+      onClose();
+      if (!p) onCreated?.(r);
+    },
+  });
   const set = (k: keyof typeof f, v: string | boolean) => setF({ ...f, [k]: v });
   const others = (all.data ?? []).filter((x) => !x.isService && x.id !== p?.id);
   const q = norm(relQ);

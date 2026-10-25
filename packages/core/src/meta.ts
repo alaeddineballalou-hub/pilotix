@@ -6,6 +6,36 @@ import { getRaw, META_TOKEN_KEY } from './modules/admin';
 import { AppError, Ctx } from './rpc';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
+/** The Conversions API (landing pages' events): a recent version, supported until mid-2028. */
+const GRAPH_CAPI = 'https://graph.facebook.com/v25.0';
+
+/**
+ * Sends events to a pixel through the Conversions API (landing pages: Purchase of real orders, InitiateCheckout of
+ * abandoned ones). The token goes in the body, never in a URL; a hanging Meta never holds the job more than 15 s.
+ */
+async function sendCapi(a: { pixelId: string; token: string; events: unknown[]; testEventCode?: string }): Promise<{ received: number; trace: string | null }> {
+  if (!/^\d{5,20}$/.test(a.pixelId)) throw new AppError('bad_request', 'Pixel Meta invalide');
+  if (!a.token) throw new AppError('bad_request', 'Jeton Conversions API manquant');
+  let res: Response;
+  try {
+    res = await fetch(`${GRAPH_CAPI}/${a.pixelId}/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ data: a.events, access_token: a.token, ...(a.testEventCode ? { test_event_code: a.testEventCode } : {}) }),
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    throw new AppError('bad_request', 'Meta injoignable. Réessayez plus tard.');
+  }
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok || data?.error) {
+    const e = data?.error;
+    if (e?.code === 190) throw new AppError('bad_request', 'Jeton Conversions API expiré ou révoqué : changez-le dans Landing pages › Réglages.');
+    if (e?.code === 4 || e?.code === 17 || e?.code === 613 || res.status === 429) throw new AppError('conflict', 'Meta limite les demandes pour l’instant.');
+    throw new AppError('bad_request', `Meta : ${e?.error_user_msg ?? e?.message ?? res.statusText}`);
+  }
+  return { received: Number(data?.events_received ?? 0), trace: data?.fbtrace_id ? String(data.fbtrace_id) : null };
+}
 
 /** One day of results for an ad set or an ad (spend in the ad account currency, in cents). */
 export interface MetaDay {
@@ -93,8 +123,11 @@ const toDay = (r: any, level: 'adset' | 'ad'): MetaDay => ({
  * Runs one Meta action with the stored connection.
  *  - 'test'      → { name, currency } of the ad account (checks the token)
  *  - 'insights'  → { from, to } (YYYY-MM-DD): daily results at ad set AND ad level, plus the ad sets / ads (status, video or not)
+ *  - 'capi'      → { pixelId, token, events, testEventCode? }: Conversions API events (landing pages)
  */
 export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<unknown> {
+  // the Conversions API needs a pixel and its token, not the ad account
+  if (action === 'capi') return sendCapi(args as Parameters<typeof sendCapi>[0]);
   const meta = await getSetting(ctx.db, 'meta');
   const token = await getRaw<string>(ctx.db, META_TOKEN_KEY, '');
   if (!meta.adAccountId || !token) throw new AppError('bad_request', 'Meta n’est pas connecté : ajoutez le compte pub et le jeton dans Réglages.');

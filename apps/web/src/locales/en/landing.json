@@ -3,11 +3,15 @@
   "help": "One public page per product, very light (it opens fast even on 3G). Orders arrive in Pilotix; fake ones are blocked without the customer knowing.",
   "about": {
     "pages": "An order page per product: its colour, pictures and text. Share its address in your ads.",
-    "bloquees": "Orders the fake-order check held back. The customer saw the normal thank-you screen; restore the real ones."
+    "bloquees": "Orders the fake-order check held back. The customer saw the normal thank-you screen; restore the real ones.",
+    "abandons": "Customers who left their number without ordering: Pilotix adds them to Commandes › New by itself so your agents call them.",
+    "reglages": "Meta pixel and Conversions API, abandoned orders, automations."
   },
   "tabs": {
     "pages": "Pages",
-    "bloquees": "Blocked orders"
+    "bloquees": "Blocked orders",
+    "abandons": "Abandoned",
+    "reglages": "Settings"
   },
   "copied": "Address copied",
   "list": {
@@ -22,7 +26,8 @@
     "orders": "orders",
     "blocked": "blocked",
     "count_one": "{{count}} page",
-    "count_other": "{{count}} pages"
+    "count_other": "{{count}} pages",
+    "abandoned": "abandoned"
   },
   "view": {
     "back": "Back",
@@ -80,7 +85,15 @@
     "preview": "Live preview",
     "phone": "Phone",
     "desktop": "Desktop",
-    "weight": "page: {{kb}} KB (+ pictures)"
+    "weight": "page: {{kb}} KB (+ pictures)",
+    "fixedPrice": "This product has a fixed price: the order will be at the catalogue price ({{price}}), not the page price.",
+    "sMore": "Pixel and stock",
+    "pixel": "This page’s Meta pixel",
+    "pixelHint": "Empty: the pixel from Settings.",
+    "pixelPh": "pixel from Settings",
+    "stockHide": "Follow the stock",
+    "stockHideHelp": "A sold-out variant shows \"نفذت الكمية\" and cannot be ordered; all sold out: the page says so instead of taking orders.",
+    "stockAllOut": "Careful: everything is sold out, the page will take no order until stock is back."
   },
   "bl": {
     "restored": "Order {{ref}} created",
@@ -154,5 +167,110 @@
     "ip_abroad": "IP outside Algeria",
     "ip_wilaya": "IP from another wilaya",
     "form_invalid": "Incomplete form"
+  },
+  "miss": {
+    "title_one": "{{count}} product has no landing page yet",
+    "title_other": "{{count}} products have no landing page yet",
+    "help": "A new product shows here as soon as it is created. \"Create in 1 click\" makes its page from its name, photo, variants and price; you complete it afterwards.",
+    "stock": "{{n}} in stock",
+    "added": "added {{when}}",
+    "quick": "Create in 1 click",
+    "custom": "Customize",
+    "ignore": "No page",
+    "ignoreHelp": "This product will not get a page (an accessory…): no more alert for it",
+    "ignored": "No more alert for this product",
+    "created": "Page created: complete it and publish it",
+    "more": "Show {{count}} more",
+    "less": "Show less"
+  },
+  "ab": {
+    "converted": "Order {{ref}} added to New",
+    "dismissed": "Set aside",
+    "kTodo": "To handle",
+    "kTodoSub": "no wilaya: to call",
+    "kAdded": "Added to orders",
+    "kAddedSub": "in Commandes › New",
+    "kRecovered": "Came back to order",
+    "kRecoveredSub": "the customer finished their order",
+    "kValue": "Value to handle",
+    "kValueSub": "products left behind",
+    "fTodo": "To handle",
+    "fAdded": "Added to orders",
+    "fDismissed": "Set aside",
+    "note": "A customer who types their number without ordering becomes a \"New\" order {{min}} minutes later, with no message sent to the customer. If they come back to order, there is no duplicate.",
+    "empty_abandoned": "Nothing to handle: abandoned orders are already in Commandes.",
+    "empty_converted": "No abandoned order yet.",
+    "empty_dismissed": "Nothing set aside.",
+    "empty_all": "No abandoned order yet.",
+    "where": "Delivery",
+    "noName": "No name",
+    "left": "left {{when}}",
+    "noWilaya": "No wilaya chosen",
+    "noteOrder": "Order abandoned on the landing page, completed after a call.",
+    "complete": "Complete the order",
+    "completeHelp": "Call the customer, then fill in the wilaya in the order form",
+    "toOrder": "Add to orders",
+    "dismissHelp": "Not interested or wrong number: remove from the list",
+    "st_converted": "The customer ordered",
+    "st_converted_auto": "In Commandes",
+    "st_dismissed": "Set aside",
+    "st_abandoned": "To handle"
+  },
+  "set": {
+    "saved": "Settings saved",
+    "footer": "Pages load the Meta pixel only after they are shown (to stay fast on 3G), and never inside Pilotix (preview, demo).",
+    "meta": "Meta pixel (Facebook, Instagram)",
+    "metaHelp": "The browser sends PageView, ViewContent and InitiateCheckout. The server sends Purchase through the Conversions API, only for a real order: a blocked order or one marked fake is never a sale for Meta.",
+    "pixel": "Pixel ID (default)",
+    "pixelHint": "Events Manager › Data sources. A page may have its own pixel.",
+    "testCode": "Test code (optional)",
+    "testCodeHint": "Events Manager › Test events. Clear it after testing.",
+    "token": "Conversions API token",
+    "tokenOwn": "Token saved",
+    "tokenAds": "Meta Ads token used",
+    "tokenNone": "No token",
+    "tokenHint": "Events Manager › your pixel › Settings › Generate a token. It never leaves the server.",
+    "tokenAdmin": "Only the administrator can change it.",
+    "purchaseAt": "When an order counts as a \"Purchase\" for Meta",
+    "pa": {
+      "order": "When ordered",
+      "confirmed": "When confirmed",
+      "delivered": "When delivered"
+    },
+    "paHelp": {
+      "order": "At once, when the fake-order check is sure. Fastest for Meta, but also counts customers who cancel later.",
+      "confirmed": "When an agent confirms by phone: Meta learns from real buyers.",
+      "delivered": "When the parcel is delivered and paid: the most accurate, but Meta learns it days later."
+    },
+    "recommended": "recommended",
+    "never": "Never a Purchase for a blocked order, nor for one marked fake, duplicate, wrong number or cancelled before sending.",
+    "urlParams": "URL parameters for your ads",
+    "urlParamsHelp": "Paste them in the ad (Meta › Ad › URL parameters): each order keeps its campaign, ad set and ad.",
+    "copy": "Copy",
+    "abandoned": "Abandoned orders",
+    "abandonedHelp": "As soon as a customer types a valid number, Pilotix keeps it. If they do not order, their order goes to Commandes › New by itself, with no message to the customer: your agents call them.",
+    "after": "Add to Commandes after",
+    "afterHint": "with no activity on the form (5 minutes at least)",
+    "minutes": "minutes",
+    "auto": "Automations",
+    "autoCreate": "Create a landing page for each new product",
+    "autoCreateHelp": "Made when the product is created (name, photo, price, variants), to complete afterwards. Otherwise the product shows in \"Pages\" with an alert.",
+    "sound": "Sound and alert for each new order",
+    "soundHelp": "On this device: a notification and a short sound when an order arrives from a landing page."
+  },
+  "ev": {
+    "title": "Events sent to Meta",
+    "help": "What the server sent (or not, and why). A fake order shows as \"skipped\", never \"sent\".",
+    "empty": "Nothing sent yet (add the pixel ID).",
+    "purchase": "Purchase (sale)",
+    "checkout": "InitiateCheckout (order started)",
+    "st": {
+      "sent": "Sent",
+      "simulated": "Simulated (demo)",
+      "queued": "Waiting",
+      "sending": "Sending…",
+      "skipped": "Skipped",
+      "failed": "Failed"
+    }
   }
 }

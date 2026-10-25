@@ -16,5 +16,6 @@
   "passwordChanged": "Password changed",
   "fold": "Fold the menu",
   "unfold": "Unfold the menu",
-  "account": "{{name}}’s account"
+  "account": "{{name}}’s account",
+  "newLandingOrder": "🛒 New order {{ref}} (landing page)"
 }

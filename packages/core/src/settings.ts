@@ -28,6 +28,21 @@ export interface SettingsMap {
   webhook: { key: string };
   cron: { key: string };
   meta: { adAccountId: string; hasToken: boolean };
+  /**
+   * Landing pages: the shop's Meta pixel (each page may have its own), when a real order is reported as a Purchase,
+   * after how long a customer who typed their number without ordering becomes an order in Commandes (« Nouvelle »),
+   * and the automations. The Conversions API token is a secret of its own.
+   */
+  landing: {
+    pixelId: string;
+    testEventCode: string;
+    purchaseAt: 'order' | 'confirmed' | 'delivered';
+    abandonAfterMin: number;
+    /** a landing page is made for every new product */
+    autoCreate: boolean;
+    /** products that will never get a page (accessories…): no alert for them */
+    ignored: number[];
+  };
   /** Dashboard goals (admin): delivered revenue per month */
   goals: { monthlyRevenue: number };
   /** Caisse: the bank can be removed by a shop that does not use one */
@@ -59,6 +74,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   webhook: { key: '' },
   cron: { key: '' },
   meta: { adAccountId: '', hasToken: false },
+  landing: { pixelId: '', testEventCode: '', purchaseAt: 'confirmed', abandonAfterMin: 20, autoCreate: false, ignored: [] },
   goals: { monthlyRevenue: 3_000_000 },
   caisses: { bankHidden: false },
   colPresets: [],
