@@ -208,7 +208,13 @@ test('two « Envoyer » at once send a parcel to the courier only once', async (
 
 test('a claim is not created twice for the same reason', async () => {
   const suivi = await as(EMAILS.suivi);
-  const o = await one(`SELECT o.id FROM orders o JOIN delivery_companies c ON c.id = o.company_id WHERE c.kind = 'zr' AND o.tracking IS NOT NULL AND o.follow_status = 'out_for_delivery' AND NOT EXISTS (SELECT 1 FROM claims WHERE order_id = o.id) LIMIT 1`);
+  let o = await one(`SELECT o.id FROM orders o JOIN delivery_companies c ON c.id = o.company_id WHERE c.kind = 'zr' AND o.tracking IS NOT NULL AND o.follow_status = 'out_for_delivery' AND NOT EXISTS (SELECT 1 FROM claims WHERE order_id = o.id) LIMIT 1`);
+  if (!o) {
+    // the random demo shop has no such parcel this time: make one
+    const zr = await one(`SELECT id FROM delivery_companies WHERE kind = 'zr' ORDER BY id LIMIT 1`);
+    o = await newOrder(await as(EMAILS.conf), { confirm: true, companyId: Number(zr.id) });
+    await db.query(`UPDATE orders SET tracking = 'ZR-AUDIT-CLAIM', follow_status = 'out_for_delivery' WHERE id = $1`, [o.id]);
+  }
   const body = { orderId: Number(o.id), reason: 'late', details: 'colis en retard', message: 'Bonjour', channel: 'whatsapp', viaApi: false };
   await call('suivi.claimCreate', suivi, body);
   await assert.rejects(call('suivi.claimCreate', suivi, body), /déjà une réclamation/);
