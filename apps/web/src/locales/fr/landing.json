@@ -57,9 +57,7 @@
     "before": "Avant",
     "after": "Après",
     "removeImg": "Retirer la photo",
-    "converting": "Conversion…",
     "addImages": "Ajouter des photos",
-    "imagesHint": "Chaque photo est convertie en WebP en trois tailles (160, 480 et 960 px) : une photo de 4 Mo arrive au client en ~40 Ko. La première est la photo principale.",
     "addUrl": "Ajouter par lien",
     "urlBad": "Lien d’image invalide",
     "sText": "Texte",
@@ -287,5 +285,48 @@
   },
   "alertOn": "Alerte commandes : oui",
   "alertOff": "Alerte commandes : non",
-  "alertHelp": "Sur cet appareil : une notification et un petit son quand une commande arrive d’une landing page."
+  "alertHelp": "Sur cet appareil : une notification et un petit son quand une commande arrive d’une landing page.",
+  "ph": {
+    "preset": "Compression des photos",
+    "p": {
+      "max": "Qualité max",
+      "balanced": "Équilibrée",
+      "light": "Très légère"
+    },
+    "pHelp": {
+      "max": "La plus fidèle : aucune différence visible même en zoomant. Fichiers un peu plus lourds.",
+      "balanced": "Conseillé : aucune différence visible à l’œil, fichiers 2 à 4 fois plus légers qu’avant. Idéal en 3G.",
+      "light": "Le plus rapide (2G, 3G faible) : très légère perte en zoomant, invisible sur un téléphone."
+    },
+    "hint": "Chaque photo est compressée dans votre navigateur : Pilotix cherche la qualité la plus basse qui reste identique à l’originale (mesurée), en 4 tailles (160, 480, 720, 960 px) + un aperçu flou de quelques octets affiché tout de suite. Une photo de 4 Mo arrive au client en 30 à 80 Ko. La première est la photo principale.",
+    "working": "Compression {{i}}/{{n}}…",
+    "step": {
+      "w480": "480 px",
+      "t160": "miniature",
+      "w960": "960 px",
+      "w720": "720 px",
+      "lqip": "aperçu flou"
+    },
+    "done": "{{count}} photo(s) compressée(s) : {{before}} → {{after}}",
+    "kb": "{{n}} Ko",
+    "gainHelp": "Poids gagné et qualité : voir avant / après",
+    "optimize": "Compresser",
+    "optimizeAll": "Tout compresser",
+    "heavy_one": "{{count}} photo vient d’une adresse et n’est pas compressée : elle ralentit la page.",
+    "heavy_other": "{{count}} photos viennent d’une adresse et ne sont pas compressées : elles ralentissent la page.",
+    "fetchFail": "Ce site ne laisse pas lire la photo. Enregistrez-la sur votre téléphone puis ajoutez-la avec « Ajouter des photos ».",
+    "urlKept": "Photo ajoutée telle quelle (le site ne laisse pas la compresser) : elle peut être lourde.",
+    "cmpTitle": "Avant / après compression",
+    "before": "Original",
+    "after": "Compressée",
+    "slider": "Glisser pour comparer",
+    "zoom": "Zoom",
+    "cmpLater": "La comparaison image par image est disponible juste après l’ajout de la photo. Voici ce que la compression a fait :",
+    "cmpSum": "Original : {{orig}} ({{ow}} × {{oh}} px). Sur un téléphone le client télécharge {{phone}}, identique à {{q}} % à l’original.",
+    "tWidth": "Taille",
+    "tWeight": "Poids",
+    "tSame": "Identique à",
+    "lossless": "100 % (sans perte)",
+    "ssimHelp": "« Identique à » : similarité mesurée (MS-SSIM, plusieurs échelles comme l’œil) entre la photo compressée et l’originale à la même taille. Au-dessus de 99 %, l’œil ne voit pas de différence."
+  }
 }
