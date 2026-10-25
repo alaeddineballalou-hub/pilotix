@@ -1,4 +1,4 @@
-/* ===== Produits & stock: Stock · Inventaire · Produits · Prix · Mouvements · Alertes · Achats · Dépôts =====
+/* ===== Produits & stock: Stock · Inventaire · Produits · Mouvements · Alertes · Achats · Dépôts =====
    Same language as the Pilot AI pages (header with tabs, orange pills, white cards, navy ink):
    - a number that matters is big and plain; red when nothing is left, amber under the alert level, green when it is right;
    - lists are rows of a grid: a table on a wide screen, compact cards on a phone (container queries, not the screen);
@@ -408,7 +408,9 @@ select.pd-sel.on, .pd-tools-a select.pd-sel { border-color: var(--ai-tint-line);
 .pd-qty { font: 700 16px/1 var(--f-display); font-variant-numeric: tabular-nums; }
 
 /* Produits */
-.pd-prows { grid-template-columns: minmax(220px, 1.5fr) minmax(120px, 1fr) 104px 104px 104px 84px 84px; grid-template-areas: "name vars price cost margin avail state"; }
+.pd-prows { grid-template-columns: minmax(220px, 1.5fr) minmax(110px, 1fr) 104px 104px 104px 110px 84px 84px; grid-template-areas: "name vars price cost margin disc avail state"; }
+.pd-row .a-disc { grid-area: disc; }
+.pd-disc small { display: block; color: var(--muted); font-size: 11.5px; }
 .pd-prod { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .pd-thumb { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; overflow: hidden; background: var(--raise); border: 1px solid var(--line); color: var(--muted); }
 .pd-thumb img { width: 100%; height: 100%; object-fit: cover; }
@@ -555,3 +557,32 @@ a.chip.lp-nolp:hover { text-decoration: underline; }
 .lp-fresh > .bji { flex: none; width: 20px; height: 20px; color: var(--warn); }
 .lp-fresh > span { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .lp-fresh small { color: var(--muted); }
+
+/* ---------------------------------------------------------------- the product form (« Nouveau produit »): sections in boxes */
+.pf { display: flex; flex-direction: column; gap: 14px; }
+.pf-sec { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--raise); }
+.pf-sec > h3, .pf-head > h3 { margin: 0; font-size: 15px; }
+.pf-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pf-grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 14px; }
+.pf-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.pf .field { margin: 0; }
+.pf-req { color: var(--coral); }
+.pf-warn { margin: 0; color: var(--warn); font-size: 12.5px; font-weight: 600; }
+.pf-margin { margin: 0; color: var(--ok); font-size: 12.5px; font-weight: 700; }
+.pf-margin.bad { color: var(--coral); }
+.pf-checks { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.pf-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 0; padding: 14px; color: var(--muted); font-size: 13.5px; }
+.pf-empty .bji { width: 18px; height: 18px; }
+.pf-img { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.pf-thumb { flex: none; display: grid; place-items: center; width: 72px; height: 72px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
+.pf-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.pf-img-f { flex: 1 1 260px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.pf-img-f .btn { align-self: flex-start; }
+.pf-more > summary { cursor: pointer; font-weight: 700; font-size: 15px; }
+.pf-more[open] > summary { margin-bottom: 4px; }
+.pf-more > h3 { margin: 6px 0 0; font-size: 14px; }
+@media (max-width: 900px) { .pf-grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pf-two { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 520px) { .pf-grid4 { grid-template-columns: minmax(0, 1fr); } .pf-sec { padding: 12px; } }
+
+/* Dépôts: a hidden depot, and the card's actions */
+.pd-sup-acts .danger { color: var(--coral); }

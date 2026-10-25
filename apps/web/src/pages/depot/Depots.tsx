@@ -1,5 +1,5 @@
 // Dépôts & transferts: each depot with what it holds (products, pieces, value at purchase price), the administrator's
-// way to add or change one, and stock moved between depots — several products in one transfer, all or nothing.
+// way to add, change, hide (masquer) or delete one, and stock moved between depots — several products in one transfer, all or nothing.
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, dateTime, n, wilayaName } from '../../lib/format';
@@ -8,6 +8,7 @@ import { useSession } from '../../lib/session';
 import { Empty, ErrorBox, Field, Icon, Loading, Pager } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
+import { ConfirmButton } from '../admin/bits';
 import { DepotForm, Wh } from '../admin/DepotForm';
 import { bidi, nameOf, PickItem, ProductPicker, Stepper, Toolbar, useDepots } from './stockui';
 
@@ -20,6 +21,9 @@ export function Depots() {
   const [move, setMove] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const tr = useRpc('catalog.transfers', { page, pageSize: 20 });
+  const show = useAction('admin.warehouses.save', { success: (r) => t(r.active ? 'produits.depots.shown' : 'produits.depots.hidden') });
+  const del = useAction('admin.warehouses.delete', { success: t('produits.depots.deleted') });
+  const toggle = (d: Wh) => show.mutate({ id: d.id, name: d.name, wilayaId: d.wilayaId, commune: d.commune, address: d.address, isDefault: d.isDefault, active: !d.active });
   const active = (dep.data ?? []).filter((d) => d.active);
   const canMove = active.length > 1;
   return (
@@ -99,11 +103,24 @@ export function Depots() {
                       {t('common.edit')}
                     </button>
                   )}
+                  {admin && !d.isDefault && (
+                    <button type="button" className="btn small" disabled={show.isPending} onClick={() => toggle(d)}>
+                      <Icon name={d.active ? 'eyeoff' : 'eye'} />
+                      {d.active ? t('produits.depots.hide') : t('produits.depots.show')}
+                    </button>
+                  )}
+                  {admin && !d.isDefault && (
+                    <ConfirmButton className="btn small ghost danger" disabled={del.isPending} question={t('produits.depots.deleteConfirm')} onConfirm={() => del.mutate({ id: d.id })}>
+                      <Icon name="trash" />
+                      {t('produits.depots.delete')}
+                    </ConfirmButton>
+                  )}
                 </div>
               </li>
             ))}
           </ul>
         )}
+        {admin && !dep.isLoading && <p className="pd-note">{t('produits.depots.hideHelp')}</p>}
         {!canMove && !dep.isLoading && <p className="pd-note">{admin ? t('produits.depots.oneAdmin') : t('produits.depots.one')}</p>}
       </section>
 
