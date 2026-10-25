@@ -31,12 +31,17 @@ import { clientFee, getSetting, setSetting } from '../settings';
 import { BOT_UA, FraudLevel, FraudReason, scoreOrder } from './fraud';
 import { ABANDONED, abandonCutoff, freeLandingSlug, landingCounts, landingSettings, LandingSettings, queuePurchase, quickCreatePage } from './landingquery';
 import { sendInPreview } from './notify';
-import { addEvent, createOrder } from './orders';
+import { addEvent, createOrder, noOrderAccess } from './orders';
 import { RESERVED } from './stockquery';
 
 const id = z.number().int().positive();
 const WHO = ['marketer'] as const;
 const WATCH = ['marketer', 'confirmation'] as const;
+/** A marketer-only account sees the leads and blocked orders as numbers, never who the customer is (name, phone). */
+const PII_HIDDEN = '•••';
+const needOrders = (ctx: Ctx) => {
+  if (noOrderAccess(ctx)) throw forbidden('Réservé à la confirmation');
+};
 /** proof-of-work difficulty: ~8 000 hashes on average, well under a second on a cheap phone */
 export const LANDING_POW_BITS = 13;
 /** a page older than this is reloaded before ordering, in practice: its challenge then counts as missing */
@@ -1164,6 +1169,7 @@ export const landingProcs = {
   /** What was sent to Meta (or not, and why), newest first. */
   'landing.events': proc([...WHO], z.object({ limit: z.number().int().min(1).max(200).default(60) }), async (ctx, i) => {
     await afterChange(ctx);
+    const hide = noOrderAccess(ctx);
     const rows = await ctx.db.query(
       `SELECT e.*, o.ref, o.customer_name AS o_name, a.customer_name AS a_name, a.phone AS a_phone, l.slug
        FROM meta_events e LEFT JOIN orders o ON o.id = e.order_id LEFT JOIN landing_leads a ON a.id = e.lead_id LEFT JOIN landing_pages l ON l.id = e.landing_id
@@ -1186,8 +1192,8 @@ export const landingProcs = {
         value: numOrNull(r.value),
         orderId: numOrNull(r.order_id),
         ref: r.ref ?? null,
-        customer: r.o_name ?? r.a_name ?? null,
-        phone: r.a_phone ?? null,
+        customer: hide ? (r.o_name ?? r.a_name ? PII_HIDDEN : null) : r.o_name ?? r.a_name ?? null,
+        phone: hide ? (r.a_phone ? PII_HIDDEN : null) : r.a_phone ?? null,
         slug: r.slug ?? null,
       })),
     };
@@ -1229,7 +1235,8 @@ export const landingProcs = {
       const where: string[] = [];
       if (f.status !== 'all') where.push(`b.status = $${params.push(f.status)}`);
       const q = f.q?.trim();
-      if (q) where.push(`(b.customer_name ILIKE '%' || $${params.push(q)} || '%' OR b.phone LIKE '%' || $${params.push(q.replace(/\D/g, '') || q)} || '%')`);
+      const hide = noOrderAccess(ctx);
+      if (q && !hide) where.push(`(b.customer_name ILIKE '%' || $${params.push(q)} || '%' OR b.phone LIKE '%' || $${params.push(q.replace(/\D/g, '') || q)} || '%')`);
       const W = where.length ? `WHERE ${where.join(' AND ')}` : '';
       const total = num((await ctx.db.query(`SELECT count(*)::int AS n FROM landing_blocked b ${W}`, params))[0]?.n);
       const stats = (
@@ -1260,8 +1267,8 @@ export const landingProcs = {
           variantTitle: r.variant_title || '',
           qty: num(r.qty),
           unitPrice: num(r.unit_price),
-          customerName: r.customer_name,
-          phone: r.phone,
+          customerName: hide ? PII_HIDDEN : r.customer_name,
+          phone: hide ? PII_HIDDEN : r.phone,
           wilayaId: numOrNull(r.wilaya_id),
           commune: r.commune,
           score: num(r.score),
@@ -1280,6 +1287,7 @@ export const landingProcs = {
 
   /** a real customer after all: the order is created as if it had passed (« Nouvelle », to confirm by phone), once */
   'landing.restore': proc([...WATCH], z.object({ id }), async (ctx, { id }) => {
+    needOrders(ctx);
     const o = await ctx.db.tx(async (tx) => {
       const b = (await tx.query('SELECT * FROM landing_blocked WHERE id = $1 FOR UPDATE', [id]))[0];
       if (!b) throw notFound('Commande bloquée introuvable');
@@ -1324,6 +1332,7 @@ export const landingProcs = {
 
   /** really fake: kept out of the list (and the number blacklisted when asked) */
   'landing.dismiss': proc([...WATCH], z.object({ id, blacklist: z.boolean().default(false) }), async (ctx, i) => {
+    if (i.blacklist) needOrders(ctx);
     const b = (await ctx.db.query(`UPDATE landing_blocked SET status = 'dismissed', handled_by = $2, handled_at = now() WHERE id = $1 AND status = 'blocked' RETURNING phone, customer_name, wilaya_id`, [i.id, ctx.session.profile.id]))[0];
     if (!b) throw notFound('Commande bloquée introuvable');
     const phone = normalizePhone(b.phone);
@@ -1354,7 +1363,8 @@ export const landingProcs = {
       else if (f.status === 'dismissed') where.push(`a.status = 'dismissed' AND $1::timestamptz IS NOT NULL`);
       else where.push(`(a.abandoned_at IS NOT NULL OR a.status = 'dismissed' OR (a.status = 'open' AND a.last_at < $1::timestamptz))`);
       const q = f.q?.trim();
-      if (q) where.push(`(a.customer_name ILIKE '%' || $${params.push(q)} || '%' OR a.phone LIKE '%' || $${params.push(q.replace(/\D/g, '') || q)} || '%')`);
+      const hide = noOrderAccess(ctx);
+      if (q && !hide) where.push(`(a.customer_name ILIKE '%' || $${params.push(q)} || '%' OR a.phone LIKE '%' || $${params.push(q.replace(/\D/g, '') || q)} || '%')`);
       const W = `WHERE ${where.join(' AND ')}`;
       const total = num((await ctx.db.query(`SELECT count(*)::int AS n FROM landing_leads a ${W}`, params))[0]?.n);
       const stats = (
@@ -1392,8 +1402,8 @@ export const landingProcs = {
           variantTitle: r.variant_title || '',
           qty: num(r.qty),
           unitPrice: num(r.unit_price),
-          customerName: r.customer_name,
-          phone: r.phone,
+          customerName: hide ? PII_HIDDEN : r.customer_name,
+          phone: hide ? PII_HIDDEN : r.phone,
           wilayaId: numOrNull(r.wilaya_id),
           commune: r.commune,
           status: (r.status === 'open' ? 'abandoned' : r.status) as 'abandoned' | 'converted' | 'dismissed',
@@ -1417,6 +1427,7 @@ export const landingProcs = {
     [...WATCH],
     z.object({ id, wilayaId: z.number().int().min(1).max(69).optional(), commune: z.string().trim().max(120).optional() }),
     async (ctx, i) => {
+      needOrders(ctx);
       const o = await ctx.db.tx(async (tx) => {
         const a = (await tx.query(`SELECT * FROM landing_leads WHERE id = $1 FOR UPDATE`, [i.id]))[0];
         if (!a) throw notFound('Commande abandonnée introuvable');

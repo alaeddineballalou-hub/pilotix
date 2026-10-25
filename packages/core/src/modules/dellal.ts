@@ -462,6 +462,7 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
     }));
     if (!items.length) return { error: 'Aucun produit dans la commande.' };
     // never sell what the depot does not have
+    let discountCap = 0;
     for (const it of items) {
       const vars = await ctx.db.query('SELECT id, title FROM product_variants WHERE product_id = $1 AND active ORDER BY id', [it.productId]);
       if (!vars.length) return { error: `Produit ${it.productId} introuvable.` };
@@ -476,8 +477,10 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
       // a quantity offer (pack) sets the unit price, otherwise the catalog price applies
       const pack = p.packs.find((k) => k.qty === it.qty);
       if (pack) it.unitPrice = Math.round(pack.price / pack.qty);
+      // a customer could talk the AI into any discount: it never goes above the product's maximum (none set = no discount)
+      discountCap += (p.max_discount ?? 0) * it.qty;
     }
-    const discount = settings.allowDiscount ? Math.max(0, Math.round(Number(input?.discount) || 0)) : 0;
+    const discount = settings.allowDiscount ? Math.min(discountCap, Math.max(0, Math.round(Number(input?.discount) || 0))) : 0;
     const name = String(input?.customer_name ?? '').trim().slice(0, 120) || conv.customerName || 'Client';
     if (t.test) {
       const ps = await searchProducts(ctx.db, null, 1000);

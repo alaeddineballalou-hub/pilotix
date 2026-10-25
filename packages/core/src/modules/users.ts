@@ -33,7 +33,7 @@ export async function login(db: Db, email: string, password: string) {
   return makeSession(toProfile(r));
 }
 
-export const hashPassword = (pw: string) => bcrypt.hash(pw, 10);
+export const hashPassword = (pw: string) => bcrypt.hash(pw, 12);
 
 const NewUser = z.object({
   name: z.string().trim().min(2).max(120),
@@ -90,7 +90,7 @@ export const usersProcs = {
     else await ctx.db.query('UPDATE profiles SET name=$2, phone=$3 WHERE id=$1', [me, i.name, i.phone || null]);
     return { ok: true };
   }),
-  /** Delete my own account for good (password asked again). The last admin cannot leave. My name is removed from the history. */
+  /** Delete my own account (password asked again). The last admin cannot leave. My name, email, phone and picture are erased. */
   'me.delete': proc(null, z.object({ password: z.string().min(1) }), async (ctx, i) => {
     const me = ctx.session.profile.id;
     const r = (await ctx.db.query('SELECT password_hash, roles FROM profiles WHERE id=$1', [me]))[0];
@@ -108,15 +108,17 @@ export const usersProcs = {
       )
     )[0];
     if (num(open?.road) || num(open?.cash)) throw bad('Vous avez encore des colis ou de l’argent à verser : réglez-les avec le dépôt avant de supprimer votre compte');
-    // someone who carried parcels or handled money keeps his place in that history: the account is emptied
-    // (name, email, phone, picture, password) and closed instead of deleted, so no caisse or payment loses its owner
-    const trail = (
-      await ctx.db.query(
-        `SELECT EXISTS (SELECT 1 FROM orders WHERE livreur_id = $1) OR EXISTS (SELECT 1 FROM cash_handovers WHERE created_by = $1 OR livreur_id = $1)
-             OR EXISTS (SELECT 1 FROM cash_moves WHERE created_by = $1) AS has`,
-        [me],
-      )
-    )[0]?.has;
+    // Anyone who did any work (an order confirmed, a status changed, a payment, a stock move…) keeps their place in
+    // that history: the account is emptied (name, email, phone, picture, password) and closed, never deleted, so
+    // nobody can erase their own trail. Only an account that never did anything is really removed.
+    const cols = await ctx.db.query(
+      `SELECT c.table_name AS tb, c.column_name AS col FROM information_schema.columns c
+        WHERE c.table_schema = current_schema() AND c.table_name <> 'profiles'
+          AND c.column_name IN ('user_id','agent_id','created_by','follow_agent_id','livreur_id','locked_by','assigned_to','updated_by','marketer_id','closed_by','profile_id','manager_id','handled_by')
+          AND c.data_type IN ('bigint','integer')`,
+    );
+    let trail = false;
+    for (const c of cols) if (!trail) trail = (await ctx.db.query(`SELECT 1 FROM ${c.tb} WHERE ${c.col} = $1 LIMIT 1`, [me])).length > 0;
     if (trail) {
       const scrap = await hashPassword(globalThis.crypto.randomUUID() + globalThis.crypto.randomUUID());
       await ctx.db.query(
@@ -127,17 +129,6 @@ export const usersProcs = {
       return { ok: true };
     }
     await ctx.db.tx(async (tx) => {
-      // every column that points to a user: emptied when it can be, rows removed when they only belong to me
-      const cols = await tx.query(
-        `SELECT c.table_name AS tb, c.column_name AS col, c.is_nullable AS nul FROM information_schema.columns c
-          WHERE c.table_schema = current_schema() AND c.table_name <> 'profiles'
-            AND (c.column_name IN ('user_id','agent_id','created_by','follow_agent_id','livreur_id','locked_by','assigned_to','updated_by','marketer_id','closed_by','profile_id','manager_id'))
-            AND c.data_type IN ('bigint','integer')`,
-      );
-      for (const c of cols) {
-        if (c.nul === 'YES') await tx.query(`UPDATE ${c.tb} SET ${c.col} = NULL WHERE ${c.col} = $1`, [me]);
-        else await tx.query(`DELETE FROM ${c.tb} WHERE ${c.col} = $1`, [me]);
-      }
       await tx.query('DELETE FROM referrals WHERE referrer_id=$1', [me]);
       await tx.query('DELETE FROM profiles WHERE id=$1', [me]);
     });
@@ -225,14 +216,16 @@ export const usersProcs = {
     return { ok: true };
   }),
 
-  /** Everyone sees the team list (names, roles, presence) — needed for agent / livreur pickers. */
+  /** Everyone sees the team list (names, roles, presence) — needed for agent / livreur pickers. Emails (the logins) and
+   *  phone numbers only for the administrator. */
   'users.list': proc(null, z.object({ role: z.enum(ROLES).optional(), activeOnly: z.boolean().default(false) }), async (ctx, i) => {
     const rows = await ctx.db.query(
       `SELECT *, CASE WHEN last_seen_at > now() - interval '3 minutes' THEN presence ELSE 'offline' END AS live
        FROM profiles WHERE ($1::text IS NULL OR $1 = ANY(roles)) AND (NOT $2 OR active) ORDER BY name`,
       [i.role ?? null, i.activeOnly],
     );
-    return rows.map((r: any) => ({ ...toProfile(r), presence: r.live as 'online' | 'call' | 'idle' | 'offline' }));
+    const admin = ctx.session.isAdmin;
+    return rows.map((r: any) => ({ ...toProfile(r), ...(admin ? {} : { email: '', phone: null }), presence: r.live as 'online' | 'call' | 'idle' | 'offline' }));
   }),
   'users.create': proc([], NewUser, async (ctx, b) => {
     try {

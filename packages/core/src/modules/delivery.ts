@@ -11,6 +11,13 @@ import { keysOk, loadCompany, loadParcels, resolveStatus } from '../couriers/loa
 import type { Desk, ExchangeResult, FeeRow, LabelResult, PreviewResult, SendResult, TrackItem, TrackResult } from '../couriers/types';
 import { Db, iso, num, numOrNull } from '../db';
 import { bad, Ctx, notFound, proc, takeActionLocks } from '../rpc';
+
+/** Compares two secrets in a time that does not depend on where they differ (no guessing a key letter by letter). */
+function sameSecret(a: string, b: string): boolean {
+  let d = a.length ^ b.length;
+  for (let k = 0; k < Math.max(a.length, b.length); k++) d |= (a.charCodeAt(k) || 0) ^ (b.charCodeAt(k) || 0);
+  return d === 0;
+}
 import { getSetting } from '../settings';
 import { addEvent, listOrders, setFollow } from './orders';
 
@@ -666,7 +673,7 @@ export const deliveryProcs = {
   'delivery.hook': proc([], z.object({ companyId: id, key: z.string().max(200), trackings: z.array(z.string().max(80)).max(200).default([]), extIds: z.array(z.string().max(80)).max(200).default([]) }), async (ctx, i) => {
     const row = (await ctx.db.query('SELECT credentials FROM delivery_companies WHERE id = $1', [i.companyId]))[0];
     const key = String((parseJson(row?.credentials) as Record<string, unknown>).webhook_key ?? '');
-    if (!row || !key || key !== i.key) throw bad('Clé du webhook invalide');
+    if (!row || !key || !sameSecret(key, i.key)) throw bad('Clé du webhook invalide');
     const c = await companyOr404(ctx.db, i.companyId);
     const ids = i.trackings.length || i.extIds.length
       ? (await ctx.db.query('SELECT id FROM orders WHERE company_id = $1 AND (upper(tracking) = ANY($2) OR ext_id = ANY($3))', [c.id, i.trackings.map((x) => x.toUpperCase()), i.extIds])).map((r: any) => num(r.id))

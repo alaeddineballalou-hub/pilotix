@@ -154,8 +154,9 @@ export async function tokenVersion(db: core.Db, id: number): Promise<number> {
 }
 
 /**
- * Failed logins: 10 per 15 minutes per address, and 20 per account (an attacker changing address is still stopped).
- * Only failures count, and a good password clears the account's counter, so nobody can lock a colleague out for good.
+ * Failed logins: 10 per 15 minutes per address, and 5 per account from one address. Never per account alone: a stranger
+ * sending wrong passwords from a few addresses would keep the owner out of the shop. Only failures count, and a
+ * good password clears the counter.
  */
 const attempts = new Map<string, { n: number; until: number }>();
 function checkLogin(key: string, max: number) {
@@ -213,8 +214,8 @@ class ApiController {
     checkLogin(ipKey, 10);
     const b = LoginBody.safeParse(body);
     if (!b.success) throw new core.AppError('bad_request', 'Email ou mot de passe manquant');
-    const mailKey = `email:${b.data.email.trim().toLowerCase()}`;
-    checkLogin(mailKey, 20);
+    const mailKey = `email:${b.data.email.trim().toLowerCase()}|${req.ip || 'unknown'}`;
+    checkLogin(mailKey, 5);
     let session: Session;
     try {
       session = await core.login(this.core.db, b.data.email, b.data.password);
