@@ -1,12 +1,11 @@
 // Landing pages › Réglages: the Meta pixel (browser + Conversions API, and when a real order counts as a Purchase),
 // abandoned orders (after how long they go to Commandes), the automations, and the log of what was sent to Meta.
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../lib/backend';
 import { da, dateTime } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
-import { store } from '../../lib/store';
 import { copyText, Empty, ErrorBox, Field, Icon, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { SaveBar } from '../ai/agent';
@@ -33,20 +32,20 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
   const admin = !!session?.isAdmin;
   const [f, setF] = useState({ ...data.settings, abandonAfterMin: String(data.settings.abandonAfterMin) });
   const [token, setToken] = useState('');
-  const [sound, setSound] = useState(store.get('lp-sound') !== 'off');
   const save = useAction('landing.settings.save', { success: t('landing.set.saved'), onDone: () => setToken('') });
+  const unignore = useAction('landing.ignore', { success: t('landing.set.restored') });
   const dirty = JSON.stringify({ ...data.settings, abandonAfterMin: String(data.settings.abandonAfterMin) }) !== JSON.stringify(f) || !!token;
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
-  useEffect(() => store.set('lp-sound', sound ? null : 'off'), [sound]);
-  const submit = () =>
-    save.mutate({
-      pixelId: f.pixelId.trim(),
-      testEventCode: f.testEventCode.trim(),
-      purchaseAt: f.purchaseAt,
-      abandonAfterMin: Math.max(5, Math.min(1440, Math.round(Number(f.abandonAfterMin) || 20))),
-      autoCreate: f.autoCreate,
-      capiToken: token.trim() ? token.trim() : '',
-    });
+  const values = () => ({
+    pixelId: f.pixelId.trim(),
+    testEventCode: f.testEventCode.trim(),
+    purchaseAt: f.purchaseAt,
+    abandonAfterMin: Math.max(5, Math.min(1440, Math.round(Number(f.abandonAfterMin) || 20))),
+    autoCreate: f.autoCreate,
+  });
+  const submit = () => save.mutate({ ...values(), capiToken: token.trim() ? token.trim() : '' });
+  /** a wrong token: removed, the Meta Ads token is used again (if any) */
+  const removeToken = () => window.confirm(t('landing.set.removeTokenAsk')) && save.mutate({ ...values(), capiToken: null });
   const capiOk = data.capi.own || data.capi.ads;
   return (
     <form
@@ -78,7 +77,14 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
             </>
           }
         >
-          <input className="ltr" type="password" autoComplete="off" disabled={!admin} value={token} placeholder={data.capi.own ? '••••••••' : 'EAAB…'} onChange={(e) => setToken(e.target.value)} />
+          <div className="lp-copy">
+            <input className="ltr" type="password" autoComplete="off" disabled={!admin} value={token} placeholder={data.capi.own ? '••••••••' : 'EAAB…'} onChange={(e) => setToken(e.target.value)} />
+            {admin && data.capi.own && (
+              <button type="button" className="btn small ghost danger" onClick={removeToken}>
+                {t('landing.set.removeToken')}
+              </button>
+            )}
+          </div>
         </Field>
         <h3>{t('landing.set.purchaseAt')}</h3>
         <div className="lp-levels" role="radiogroup">
@@ -130,13 +136,21 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
             <small>{t('landing.set.autoCreateHelp')}</small>
           </span>
         </label>
-        <label className="lp-switch">
-          <input type="checkbox" checked={sound} onChange={(e) => setSound(e.target.checked)} />
-          <span>
-            <b>{t('landing.set.sound')}</b>
-            <small>{t('landing.set.soundHelp')}</small>
-          </span>
-        </label>
+        <h3>{t('landing.set.ignored')}</h3>
+        {data.ignored.length ? (
+          <div className="lp-ign">
+            {data.ignored.map((p) => (
+              <span key={p.id} className="chip">
+                {p.name}
+                <button type="button" className="lp-link" disabled={unignore.isPending} onClick={() => unignore.mutate({ productId: p.id, on: false })}>
+                  {t('landing.set.restore')}
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="pd-note">{t('landing.set.ignoredNone')}</p>
+        )}
       </section>
       <div className="lp-ed-foot">
         <SaveBar dirty={dirty} busy={save.isPending} onSave={submit} label={t('common.save')} />
@@ -149,6 +163,7 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
 function Events() {
   const { t } = useTranslation();
   const q = useRpc('landing.events', { limit: 60 });
+  const retry = useAction('landing.retryEvents', { success: (r) => t('landing.ev.retried', { count: r.requeued }) });
   const c = q.data?.counts ?? {};
   return (
     <section className="card pd-card">
@@ -163,6 +178,11 @@ function Events() {
                 {t(`landing.ev.st.${k}`)} <b className="ltr">{c[k]}</b>
               </span>
             ) : null,
+          )}
+          {!!c.failed && (
+            <button type="button" className="btn small" disabled={retry.isPending} onClick={() => retry.mutate({})}>
+              <Icon name="refresh" /> {t('landing.ev.retry')}
+            </button>
           )}
         </div>
       </div>

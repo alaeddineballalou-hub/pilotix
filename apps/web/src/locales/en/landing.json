@@ -166,7 +166,8 @@
     "qty_some": "High quantity",
     "ip_abroad": "IP outside Algeria",
     "ip_wilaya": "IP from another wilaya",
-    "form_invalid": "Incomplete form"
+    "form_invalid": "Incomplete form",
+    "recent_block": "Number blocked as fake (24 h)"
   },
   "miss": {
     "title_one": "{{count}} product has no landing page yet",
@@ -214,7 +215,10 @@
     "st_converted": "The customer ordered",
     "st_converted_auto": "In Commandes",
     "st_dismissed": "Set aside",
-    "st_abandoned": "To handle"
+    "st_abandoned": "To handle",
+    "completeTitle": "Complete {{name}}’s order",
+    "wilaya": "Wilaya",
+    "commune": "Commune"
   },
   "set": {
     "saved": "Settings saved",
@@ -255,8 +259,12 @@
     "auto": "Automations",
     "autoCreate": "Create a landing page for each new product",
     "autoCreateHelp": "Made when the product is created (name, photo, price, variants), to complete afterwards. Otherwise the product shows in \"Pages\" with an alert.",
-    "sound": "Sound and alert for each new order",
-    "soundHelp": "On this device: a notification and a short sound when an order arrives from a landing page."
+    "removeToken": "Remove the token",
+    "removeTokenAsk": "Remove the Conversions API token? The Meta Ads token will be used instead, if there is one.",
+    "ignored": "Products without a page (chosen)",
+    "ignoredNone": "None: every product on sale raises the alert until it has a page.",
+    "restore": "Alert again",
+    "restored": "The alert is back for this product"
   },
   "ev": {
     "title": "Events sent to Meta",
@@ -271,6 +279,12 @@
       "sending": "Sending…",
       "skipped": "Skipped",
       "failed": "Failed"
-    }
-  }
+    },
+    "retry": "Send failed ones again",
+    "retried_one": "{{count}} event sent again",
+    "retried_other": "{{count}} events sent again"
+  },
+  "alertOn": "Order alert: on",
+  "alertOff": "Order alert: off",
+  "alertHelp": "On this device: a notification and a short sound when an order arrives from a landing page."
 }

@@ -9,6 +9,7 @@ import { da, n, when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { copyText, Empty, ErrorBox, Icon, Loading } from '../../ui/kit';
+import { store } from '../../lib/store';
 import { toast } from '../../ui/toast';
 import { SectionHeader } from '../ai/agent';
 import '../depot/produits.css';
@@ -51,7 +52,7 @@ export function Landing({ sub, rest }: PageProps) {
   }));
   return (
     <div className="pd lp">
-      <SectionHeader icon="globe" title={t('landing.title')} help={t('landing.help')} about={t(`landing.about.${tab}`)} tabs={tabs} current={tab} />
+      <SectionHeader icon="globe" title={t('landing.title')} help={t('landing.help')} about={t(`landing.about.${tab}`)} tabs={tabs} current={tab} aside={<AlertSwitch />} />
       {tab === 'pages' && <Pages />}
       {tab === 'abandons' && <Abandoned />}
       {tab === 'bloquees' && <Blocked />}
@@ -128,6 +129,21 @@ function Pages() {
         )}
       </section>
     </>
+  );
+}
+
+/** This device: a toast and a chime when an order arrives from a landing page (agents see it on every screen). */
+function AlertSwitch() {
+  const { t } = useTranslation();
+  const [on, setOn] = useState(store.get('lp-sound') !== 'off');
+  const flip = () => {
+    store.set('lp-sound', on ? 'off' : null);
+    setOn(!on);
+  };
+  return (
+    <button type="button" className={`btn small lp-alert ${on ? 'on' : ''}`} onClick={flip} aria-pressed={on} title={t('landing.alertHelp')}>
+      <Icon name={on ? 'sparkles' : 'x'} /> {on ? t('landing.alertOn') : t('landing.alertOff')}
+    </button>
   );
 }
 

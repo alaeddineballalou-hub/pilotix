@@ -51,8 +51,9 @@ export function useMenuCounts() {
       msgs: c.ai?.messages ?? 0,
       cm: c.ai?.cm ?? 0,
       notify: c.ai?.notify ?? 0,
-      // landing pages (marketers and agents only: undefined hides the badge): blocked + abandoned to handle, products without a page
-      ...(c.landing ? { landing: c.landing.blocked + c.landing.abandoned, noLanding: c.landing.noPage } : {}),
+      // landing pages (marketers and agents only: undefined hides the badge): blocked + abandoned to handle, and for
+      // marketers the products still without a page
+      ...(c.landing ? { landing: c.landing.blocked + c.landing.abandoned + c.landing.noPage } : {}),
     } as Record<string, number>;
   }, [q.data]);
 }
@@ -101,9 +102,9 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
     () =>
       backend.onEvent((e) => {
         const c = (e.data as { created?: { ref: string; channel: string } } | undefined)?.created;
-        if (e.type !== 'orders' || !c || !(isAdmin || roles.includes('confirmation'))) return;
+        if (e.type !== 'orders' || !c || !(isAdmin || roles.includes('confirmation')) || store.get('lp-sound') === 'off') return;
         toast(t('shell.newLandingOrder', { ref: c.ref }), 'ok', 6000);
-        if (store.get('lp-sound') !== 'off') chime();
+        chime();
       }),
     [isAdmin, roles, t],
   );

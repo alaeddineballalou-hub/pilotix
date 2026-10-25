@@ -209,7 +209,7 @@ function ProductsTab() {
           items={(['active', 'hidden', 'service', 'all'] as const).map((k) => ({ value: k, label: t(`produits.products.f_${k}`), count: found.filter(test[k]).length }))}
         />
       </Toolbar>
-      {fresh && !pages.has(fresh.id) && (
+      {fresh && !cov.isFetching && !pages.has(fresh.id) && (
         <div className="lp-fresh" role="status">
           <Icon name="globe" />
           <span>

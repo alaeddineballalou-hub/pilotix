@@ -11,9 +11,10 @@ export const landingSettings = (db: Db): Promise<LandingSettings> => getSetting(
 /** A lead is abandoned when nothing moved on its form for this long and the number did not order since. */
 export const abandonCutoff = (s: Pick<LandingSettings, 'abandonAfterMin'>, now: number) => new Date(now - Math.max(5, num(s.abandonAfterMin) || 20) * 60_000).toISOString();
 
-/** SQL: lead `a` is an abandoned order now ($cut = abandonCutoff). */
+/** SQL: lead `a` is an abandoned order now ($cut = abandonCutoff): no order of this number for this product around it. */
 export const ABANDONED = (cut: string) =>
-  `(a.status = 'abandoned' OR (a.status = 'open' AND a.last_at < ${cut})) AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.phone = a.phone AND o.created_at >= a.at)`;
+  `(a.status = 'abandoned' OR (a.status = 'open' AND a.last_at < ${cut}))
+   AND NOT EXISTS (SELECT 1 FROM orders o JOIN order_items oi ON oi.order_id = o.id WHERE o.phone = a.phone AND oi.product_id = a.product_id AND o.created_at >= a.at - interval '24 hours')`;
 
 /** The menu's landing numbers: blocked orders and abandoned orders to handle, active products without a page. */
 export async function landingCounts(db: Db, now: number): Promise<{ blocked: number; abandoned: number; noPage: number }> {
@@ -76,9 +77,11 @@ export async function queuePurchase(db: Db, s: LandingSettings, orderId: number,
 const CONFIRMED = ['confirmed', 'no_stock'];
 const DELIVERED = ['delivered', 'exchanged'];
 
-/** setConf: an agent confirmed an order from a landing page (Purchase « at confirmation », the default). */
+/** setConf: an agent confirmed an order from a landing page (Purchase « at confirmation », the default, or « at order »). */
 export async function onLandingConf(db: Db, s: LandingSettings, row: { id: number; landing_id?: unknown; is_exchange?: boolean }, from: string | null, to: string, now: number) {
-  if (!row.landing_id || row.is_exchange || s.purchaseAt !== 'confirmed') return;
+  // « at order »: clear orders were reported when received; borderline and abandoned ones count once confirmed
+  // (queuePurchase is once per order). « At delivery »: not yet.
+  if (!row.landing_id || row.is_exchange || s.purchaseAt === 'delivered') return;
   if (CONFIRMED.includes(to) && !CONFIRMED.includes(String(from))) await queuePurchase(db, s, num(row.id), now);
 }
 
