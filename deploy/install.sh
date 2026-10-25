@@ -52,13 +52,18 @@ bantime = 1h
 JAIL
 systemctl enable --now fail2ban >/dev/null 2>&1 || true
 systemctl restart fail2ban || echo "    WARNING: fail2ban did not start (the site still works; the firewall is on)"
-# SSH by key only, once a key is installed (never locks out someone who logs in with a password today)
-if [ -s /root/.ssh/authorized_keys ] || ls /home/*/.ssh/authorized_keys >/dev/null 2>&1; then
+# SSH by key only: ONLY when asked (SSH_KEY_ONLY=1). Never automatic: a key file put there by the hosting company
+# (not by the owner) turned off root password logins on Ubuntu 24.04 and locked the owner out of the server.
+if [ "${SSH_KEY_ONLY:-0}" = 1 ]; then
   printf 'PasswordAuthentication no\nKbdInteractiveAuthentication no\nPermitRootLogin prohibit-password\n' > /etc/ssh/sshd_config.d/99-pilotix.conf
   systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
   echo "    SSH: key only (passwords refused)"
 else
-  echo "    WARNING: SSH still accepts passwords. Add an SSH key, then run this script again to turn passwords off."
+  # undo the old automatic key-only setting, so a server that was locked by it accepts the root password again
+  if [ -f /etc/ssh/sshd_config.d/99-pilotix.conf ]; then
+    rm -f /etc/ssh/sshd_config.d/99-pilotix.conf
+    systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
+  fi
 fi
 
 echo "==> Building and starting (the first time takes 5-10 minutes)"
