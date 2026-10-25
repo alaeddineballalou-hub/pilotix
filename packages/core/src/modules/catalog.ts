@@ -6,6 +6,7 @@ import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
 import { cancelParcel, sendOrders } from './delivery';
 import { getOrder, ordersProcs, setFollow } from './orders';
+import { landingSettings, quickCreatePage } from './landingquery';
 import { RESERVED } from './stockquery';
 
 // ---------------------------------------------------------------- types
@@ -367,6 +368,8 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
     else if (plain) await tx.query('UPDATE product_variants SET active = $2 WHERE id = $1', [plain.id, !hasNamed]);
     return productId;
   });
+  // Landing pages › Réglages « a page for every new product »: made at once (the marketer completes it later)
+  if (!i.id && i.active && !i.isService && (await landingSettings(ctx.db)).autoCreate) await quickCreatePage(ctx.db, pid, ctx.session.profile.id).catch(() => null);
   ctx.emit({ type: 'stock' });
   return (await listProducts(ctx.db, { ids: [pid] }))[0];
 }

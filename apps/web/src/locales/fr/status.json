@@ -35,7 +35,8 @@
     "tiktok": "TikTok",
     "appel": "Appel",
     "whatsapp": "WhatsApp",
-    "autre": "Autre"
+    "autre": "Autre",
+    "landing": "Landing page"
   },
   "cancelReason": {
     "price": "Prix trop cher",

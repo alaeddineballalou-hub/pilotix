@@ -85,7 +85,7 @@ export const FOLLOW_LOCKED: FollowStatus[] = ['shipped', 'out_for_delivery', 'fa
 export const CANCEL_REASONS = ['price', 'fee', 'elsewhere', 'not_ordered', 'too_long', 'changed_mind', 'other'] as const;
 export const FAIL_REASONS = ['absent', 'no_answer', 'postponed_by_client', 'address', 'no_money', 'other'] as const;
 export const RETURN_REASONS = ['refused', 'unreachable', 'mismatch', 'wrong_address', 'cancelled_by_client', 'other'] as const;
-export const SALES_CHANNELS = ['site', 'facebook', 'instagram', 'tiktok', 'appel', 'whatsapp', 'autre'] as const;
+export const SALES_CHANNELS = ['site', 'facebook', 'instagram', 'tiktok', 'appel', 'whatsapp', 'autre', 'landing'] as const;
 export type SalesChannel = (typeof SALES_CHANNELS)[number];
 
 export const COURIER_KINDS = ['own', 'zr', 'zr_legacy', 'yalidine', 'ecotrack', 'noest', 'custom', 'manual'] as const;
@@ -208,6 +208,8 @@ export interface Order {
   channel: SalesChannel;
   source: string | null;
   utm: Record<string, string> | null;
+  /** the landing page the customer ordered on */
+  landingId?: number | null;
   confStatus: ConfStatus;
   agentId: number | null;
   attempts: number;

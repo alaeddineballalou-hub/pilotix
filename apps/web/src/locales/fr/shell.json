@@ -16,5 +16,6 @@
   "passwordChanged": "Mot de passe changé",
   "fold": "Replier le menu",
   "unfold": "Déplier le menu",
-  "account": "Compte de {{name}}"
+  "account": "Compte de {{name}}",
+  "newLandingOrder": "🛒 Nouvelle commande {{ref}} (landing page)"
 }

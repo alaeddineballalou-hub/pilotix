@@ -7,7 +7,9 @@ import { applyLanguage } from '../lib/i18n';
 import { openOrder, openOrderForm } from '../lib/modals';
 import { useAction, useRpc } from '../lib/query';
 import { useSession } from '../lib/session';
+import { chime, unlockAudio } from '../lib/sound';
 import { store } from '../lib/store';
+import { toast } from '../ui/toast';
 import { Field, Icon, StageBar, TicketTag } from '../ui/kit';
 import { Modal } from '../ui/modal';
 import { canSee, canSeeChild, NAV, NavItem } from './nav';
@@ -49,6 +51,8 @@ export function useMenuCounts() {
       msgs: c.ai?.messages ?? 0,
       cm: c.ai?.cm ?? 0,
       notify: c.ai?.notify ?? 0,
+      // landing pages (marketers and agents only: undefined hides the badge): blocked + abandoned to handle, products without a page
+      ...(c.landing ? { landing: c.landing.blocked + c.landing.abandoned, noLanding: c.landing.noPage } : {}),
     } as Record<string, number>;
   }, [q.data]);
 }
@@ -61,6 +65,7 @@ const ITEM_COUNT: Record<string, [string, string]> = {
   sav: ['sav', 'nc-a'],
   tournee: ['onRoad', 'nc-n'],
   produits: ['lowStock', 'nc-a'],
+  landing: ['landing', 'nc-a'],
   caisse: ['uncashed', 'nc-c'],
   livraison: ['toShip', 'nc-n'],
 };
@@ -91,10 +96,25 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
   const roles = session!.roles;
   const isAdmin = session!.isAdmin;
 
+  // A new order from a landing page: a toast and a chime for the people who confirm orders (sound: once the page was touched).
+  useEffect(
+    () =>
+      backend.onEvent((e) => {
+        const c = (e.data as { created?: { ref: string; channel: string } } | undefined)?.created;
+        if (e.type !== 'orders' || !c || !(isAdmin || roles.includes('confirmation'))) return;
+        toast(t('shell.newLandingOrder', { ref: c.ref }), 'ok', 6000);
+        if (store.get('lp-sound') !== 'off') chime();
+      }),
+    [isAdmin, roles, t],
+  );
+
   // Presence heartbeat, every minute (online / idle after 5 min without activity).
   useEffect(() => {
     let last = Date.now();
-    const act = () => (last = Date.now());
+    const act = () => {
+      last = Date.now();
+      unlockAudio();
+    };
     window.addEventListener('pointerdown', act);
     window.addEventListener('keydown', act);
     const beat = () => rpc('me.seen', { presence: Date.now() - last > 5 * 60_000 ? 'idle' : 'online' }).catch(() => {});

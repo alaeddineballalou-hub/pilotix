@@ -35,7 +35,8 @@
     "tiktok": "تيك توك",
     "appel": "مكالمة",
     "whatsapp": "واتساب",
-    "autre": "أخرى"
+    "autre": "أخرى",
+    "landing": "صفحة الهبوط"
   },
   "cancelReason": {
     "price": "السعر مرتفع",

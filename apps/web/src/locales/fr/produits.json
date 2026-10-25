@@ -409,5 +409,12 @@
     "feeGridHint": "Vide = grille par défaut (Management → Prix de livraison).",
     "remove": "Retirer",
     "saved": "Produit enregistré"
+  },
+  "landing": {
+    "none": "Sans landing page",
+    "create": "Créer",
+    "freshTitle": "« {{name}} » n’a pas de landing page",
+    "freshHelp": "Créez sa page de commande pour la mettre dans vos publicités.",
+    "freshMarketer": "Le marketeur la verra dans Landing pages."
   }
 }

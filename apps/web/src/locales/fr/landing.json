@@ -3,11 +3,15 @@
   "help": "Une page publique par produit, très légère (elle s’ouvre vite même en 3G). Les commandes arrivent dans Pilotix ; les fausses sont bloquées sans que le client le sache.",
   "about": {
     "pages": "Une page de commande par produit : sa couleur, ses photos, son texte. Partagez son adresse dans vos publicités.",
-    "bloquees": "Les commandes que le contrôle anti-fraude a retenues. Le client a vu l’écran de remerciement normal ; restaurez les vraies."
+    "bloquees": "Les commandes que le contrôle anti-fraude a retenues. Le client a vu l’écran de remerciement normal ; restaurez les vraies.",
+    "abandons": "Les clients qui ont laissé leur numéro sans valider : Pilotix les ajoute tout seul dans Commandes › Nouvelle pour que vos agents les appellent.",
+    "reglages": "Pixel Meta et Conversions API, commandes abandonnées, automatisations."
   },
   "tabs": {
     "pages": "Pages",
-    "bloquees": "Commandes bloquées"
+    "bloquees": "Commandes bloquées",
+    "abandons": "Abandonnées",
+    "reglages": "Réglages"
   },
   "copied": "Adresse copiée",
   "list": {
@@ -22,7 +26,8 @@
     "orders": "commandes",
     "blocked": "bloquées",
     "count_one": "{{count}} page",
-    "count_other": "{{count}} pages"
+    "count_other": "{{count}} pages",
+    "abandoned": "abandonnées"
   },
   "view": {
     "back": "Retour",
@@ -80,7 +85,15 @@
     "preview": "Aperçu en direct",
     "phone": "Téléphone",
     "desktop": "Ordinateur",
-    "weight": "page : {{kb}} Ko (+ photos)"
+    "weight": "page : {{kb}} Ko (+ photos)",
+    "fixedPrice": "Ce produit a un prix fixe : la commande sera au prix catalogue ({{price}}), pas au prix de la page.",
+    "sMore": "Pixel et stock",
+    "pixel": "Pixel Meta de cette page",
+    "pixelHint": "Vide : le pixel des Réglages.",
+    "pixelPh": "pixel des Réglages",
+    "stockHide": "Suivre le stock",
+    "stockHideHelp": "Une variante épuisée est affichée « نفذت الكمية » et ne peut plus être commandée ; tout épuisé : la page le dit au lieu de prendre des commandes.",
+    "stockAllOut": "Attention : tout est épuisé, la page ne prendra pas de commande tant que le stock n’est pas revenu."
   },
   "bl": {
     "restored": "Commande {{ref}} créée",
@@ -154,5 +167,110 @@
     "ip_abroad": "IP hors d’Algérie",
     "ip_wilaya": "IP d’une autre wilaya",
     "form_invalid": "Formulaire incomplet"
+  },
+  "miss": {
+    "title_one": "{{count}} produit n’a pas encore de landing page",
+    "title_other": "{{count}} produits n’ont pas encore de landing page",
+    "help": "Un nouveau produit apparaît ici dès qu’il est créé. « Créer en 1 clic » fait sa page avec son nom, sa photo, ses variantes et son prix ; vous la complétez ensuite.",
+    "stock": "{{n}} en stock",
+    "added": "ajouté {{when}}",
+    "quick": "Créer en 1 clic",
+    "custom": "Personnaliser",
+    "ignore": "Pas de page",
+    "ignoreHelp": "Ce produit n’aura pas de page (accessoire…) : plus d’alerte pour lui",
+    "ignored": "Plus d’alerte pour ce produit",
+    "created": "Page créée : complétez-la et mettez-la en ligne",
+    "more": "Voir les {{count}} autres",
+    "less": "Voir moins"
+  },
+  "ab": {
+    "converted": "Commande {{ref}} ajoutée dans Nouvelle",
+    "dismissed": "Écartée",
+    "kTodo": "À traiter",
+    "kTodoSub": "sans wilaya : à appeler",
+    "kAdded": "Ajoutées aux commandes",
+    "kAddedSub": "dans Commandes › Nouvelle",
+    "kRecovered": "Revenues commander",
+    "kRecoveredSub": "le client a fini sa commande",
+    "kValue": "Valeur à traiter",
+    "kValueSub": "produits laissés en route",
+    "fTodo": "À traiter",
+    "fAdded": "Ajoutées aux commandes",
+    "fDismissed": "Écartées",
+    "note": "Un client qui tape son numéro sans valider devient une commande « Nouvelle » {{min}} minutes après, sans message envoyé au client. S’il revient commander, il n’y a pas de doublon.",
+    "empty_abandoned": "Rien à traiter : les commandes abandonnées sont déjà dans Commandes.",
+    "empty_converted": "Aucune commande abandonnée pour l’instant.",
+    "empty_dismissed": "Aucune commande écartée.",
+    "empty_all": "Aucune commande abandonnée pour l’instant.",
+    "where": "Livraison",
+    "noName": "Sans nom",
+    "left": "parti {{when}}",
+    "noWilaya": "Wilaya non choisie",
+    "noteOrder": "Commande abandonnée sur la landing page, complétée après appel.",
+    "complete": "Compléter la commande",
+    "completeHelp": "Appelez le client, puis complétez la wilaya dans le formulaire de commande",
+    "toOrder": "Ajouter aux commandes",
+    "dismissHelp": "Pas intéressé ou faux numéro : retirer de la liste",
+    "st_converted": "Le client a commandé",
+    "st_converted_auto": "Dans Commandes",
+    "st_dismissed": "Écartée",
+    "st_abandoned": "À traiter"
+  },
+  "set": {
+    "saved": "Réglages enregistrés",
+    "footer": "Les pages ne chargent le pixel Meta qu’après l’affichage (pour rester rapides en 3G), et jamais dans Pilotix (aperçu, démo).",
+    "meta": "Pixel Meta (Facebook, Instagram)",
+    "metaHelp": "Le navigateur envoie PageView, ViewContent et InitiateCheckout. Le serveur envoie Purchase par la Conversions API, uniquement pour une vraie commande : une commande bloquée ou marquée fausse n’est jamais une vente pour Meta.",
+    "pixel": "ID du pixel (par défaut)",
+    "pixelHint": "Events Manager › Sources de données. Une page peut avoir son propre pixel.",
+    "testCode": "Code de test (facultatif)",
+    "testCodeHint": "Events Manager › Tester les événements. Videz-le après les essais.",
+    "token": "Jeton Conversions API",
+    "tokenOwn": "Jeton enregistré",
+    "tokenAds": "Jeton de Meta Ads utilisé",
+    "tokenNone": "Aucun jeton",
+    "tokenHint": "Events Manager › votre pixel › Paramètres › Générer un jeton. Il ne quitte jamais le serveur.",
+    "tokenAdmin": "Seul l’administrateur peut le changer.",
+    "purchaseAt": "Quand une commande compte comme « Purchase » pour Meta",
+    "pa": {
+      "order": "À la commande",
+      "confirmed": "À la confirmation",
+      "delivered": "À la livraison"
+    },
+    "paHelp": {
+      "order": "Tout de suite, si le contrôle anti-fraude est sûr. Le plus rapide pour Meta, mais compte aussi les clients qui annulent ensuite.",
+      "confirmed": "Quand un agent confirme au téléphone : Meta apprend sur de vrais acheteurs.",
+      "delivered": "Quand le colis est livré et payé : le plus juste, mais Meta l’apprend des jours plus tard."
+    },
+    "recommended": "conseillé",
+    "never": "Jamais de Purchase pour une commande bloquée, ni pour une commande marquée fausse, doublon, faux numéro ou annulée avant l’envoi.",
+    "urlParams": "Paramètres d’URL pour vos publicités",
+    "urlParamsHelp": "Collez-les dans la publicité (Meta › Publicité › Paramètres d’URL) : chaque commande garde sa campagne, son ensemble de publicités et sa publicité.",
+    "copy": "Copier",
+    "abandoned": "Commandes abandonnées",
+    "abandonedHelp": "Dès qu’un client tape un numéro valide, Pilotix le garde. S’il ne valide pas, sa commande va toute seule dans Commandes › Nouvelle, sans aucun message au client : vos agents l’appellent.",
+    "after": "Ajouter dans Commandes après",
+    "afterHint": "sans activité sur le formulaire (5 minutes au moins)",
+    "minutes": "minutes",
+    "auto": "Automatisations",
+    "autoCreate": "Créer une landing page pour chaque nouveau produit",
+    "autoCreateHelp": "Faite dès la création du produit (nom, photo, prix, variantes), à compléter ensuite. Sinon le produit apparaît dans « Pages » avec une alerte.",
+    "sound": "Son et alerte à chaque nouvelle commande",
+    "soundHelp": "Sur cet appareil : une notification et un petit son quand une commande arrive d’une landing page."
+  },
+  "ev": {
+    "title": "Événements envoyés à Meta",
+    "help": "Ce que le serveur a envoyé (ou non, et pourquoi). Une commande fausse apparaît « ignorée », jamais « envoyée ».",
+    "empty": "Rien envoyé pour l’instant (ajoutez l’ID du pixel).",
+    "purchase": "Purchase (vente)",
+    "checkout": "InitiateCheckout (commande commencée)",
+    "st": {
+      "sent": "Envoyé",
+      "simulated": "Simulé (démo)",
+      "queued": "En attente",
+      "sending": "Envoi…",
+      "skipped": "Ignoré",
+      "failed": "Échoué"
+    }
   }
 }

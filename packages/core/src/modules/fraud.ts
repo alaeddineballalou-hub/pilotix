@@ -52,7 +52,7 @@ export interface FraudResult {
   reasons: FraudReason[];
 }
 
-const BOT_UA = /headless|phantomjs|selenium|webdriver|puppeteer|playwright|bot\b|crawler|spider|curl\/|wget\/|python-requests|python-urllib|aiohttp|go-http-client|java\/|okhttp\/[0-2]\.|axios\/|node-fetch|undici|httpclient|libwww|scrapy|postmanruntime|insomnia/i;
+export const BOT_UA = /headless|phantomjs|selenium|webdriver|puppeteer|playwright|bot\b|crawler|spider|curl\/|wget\/|python-requests|python-urllib|aiohttp|go-http-client|java\/|okhttp\/[0-2]\.|axios\/|node-fetch|undici|httpclient|libwww|scrapy|postmanruntime|insomnia/i;
 const MASH = /(qwer|wert|asdf|sdfg|zxcv|azer|qsdf|wxcv|hjkl|uiop|poiu|lkjh|mlkj|azert|ytreza)/i;
 const LATIN_VOWELS = /[aeiouyéèêàâîôûäëïöü]/i;
 

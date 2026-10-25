@@ -12,6 +12,7 @@ export function useLandingFrame(frame: RefObject<HTMLIFrameElement>, onOrder?: (
       let r: unknown = null;
       if (m.lp === 'geo') r = communesOf(Number(m.body)).map((c) => [c[1], c[2]]);
       else if (m.lp === 'order' && onOrder) r = await onOrder(String(m.slug), m.body).catch(() => null);
+      else if (m.lp === 'lead' && onOrder) r = await demoCapture(String(m.slug), m.body).catch(() => null);
       (e.source as Window).postMessage({ lp: 1, id: m.id, r }, '*');
     };
     window.addEventListener('message', on);
@@ -19,5 +20,8 @@ export function useLandingFrame(frame: RefObject<HTMLIFrameElement>, onOrder?: (
   }, [frame, onOrder]);
 }
 
+const visitor = () => ({ ip: '105.235.0.1', ua: navigator.userAgent, country: 'DZ' });
 /** the demo's order path: what the server does with a real page's order, with what it would know of the visitor */
-export const demoSubmit = (slug: string, body: Record<string, unknown>) => rpc('landing.submit', { ...body, slug, meta: { ip: '105.235.0.1', ua: navigator.userAgent, country: 'DZ' } } as any);
+export const demoSubmit = (slug: string, body: Record<string, unknown>) => rpc('landing.submit', { ...body, slug, meta: visitor() } as any);
+/** the demo's abandoned-order path (what the customer typed so far) */
+const demoCapture = (slug: string, body: Record<string, unknown>) => rpc('landing.capture', { ...body, slug, meta: visitor() } as any);

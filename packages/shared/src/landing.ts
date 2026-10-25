@@ -23,11 +23,17 @@ export interface LandingView {
   /** simple text: "- " lines are bullets, "# " a heading, **bold**, a blank line between paragraphs */
   description: string;
   variantLabel: string;
-  variants: { id: number; title: string }[];
+  /** price: the variant's own price when it differs from the page's; out: sold out (shown, not orderable) */
+  variants: { id: number; title: string; price?: number | null; out?: boolean }[];
+  /** everything sold out: the page says so instead of taking orders */
+  soldOut?: boolean;
   images: LandingImage[];
   /** home delivery price per wilaya code (missing: told at confirmation) */
   fees: Record<number, number>;
   shopName: string;
+  /** Meta pixel (real pages only) and the product it reports */
+  pixelId?: string;
+  productId?: number;
 }
 
 export interface LandingRender {
@@ -42,6 +48,10 @@ export interface LandingRender {
   /** signed challenge for the proof-of-work, and its difficulty in bits */
   challenge: string;
   bits: number;
+  /** where the page saves what the customer typed (abandoned orders); empty: not saved */
+  lead?: string;
+  /** this page view: the browser pixel's events and the server's carry the same id (Meta counts them once) */
+  viewId?: string;
 }
 
 export const LANDING_DEFAULT_COLOR = '#0f766e';
@@ -134,11 +144,21 @@ input:focus,select:focus{outline:2px solid var(--c);outline-offset:-1px;border-c
 .ok{text-align:center;padding:26px 10px}.ok i{display:inline-grid;place-items:center;width:64px;height:64px;border-radius:50%;background:var(--c);color:#fff;font-size:34px;font-style:normal}
 .ok h2{margin:12px 0 6px}.ok p{color:var(--m);margin:4px 0}.ok .sum{text-align:start}
 .trust{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;color:var(--m);font-size:13px;margin-top:10px}
+.so{margin-top:12px;padding:18px;border-radius:12px;background:#f3f4f6;text-align:center}.so b{display:block;font-size:19px;color:#b91c1c}.so p{margin:6px 0 0;color:var(--m)}
 footer{text-align:center;color:var(--m);font-size:12px;padding:18px}`;
 
 // The page's script, kept small and old-browser friendly (no build step on the page itself).
 const JS = `(function(){var C=window.__LP,d=document,$=function(i){return d.getElementById(i)};
 function ar2(s){return String(s||'').replace(/[\\u0660-\\u0669]/g,function(c){return c.charCodeAt(0)-1632}).replace(/[\\u06f0-\\u06f9]/g,function(c){return c.charCodeAt(0)-1776})}
+function nph(v){var p=ar2(v).replace(/[^\\d+]/g,'').replace(/^(\\+|00)213/,'0');return /^[567]\\d{8}$/.test(p)?'0'+p:p}
+var utm={};try{utm=JSON.parse(sessionStorage.getItem('pxu')||'{}')}catch(e){}
+try{location.search.slice(1).split('&').forEach(function(kv){var p=kv.split('=');if(/^(utm_\\w+|fbclid|ttclid|gclid|ad_id|adset_id|campaign_id|placement)$/.test(p[0])&&p[1])utm[p[0]]=decodeURIComponent(p[1].replace(/\\+/g,' ')).slice(0,500)});sessionStorage.setItem('pxu',JSON.stringify(utm))}catch(e){}
+function ck(n){var m=d.cookie.match(new RegExp('(?:^|; )'+n+'=([^;]*)'));return m?m[1]:''}
+var px=C.px,ic=0;if(px){var n=window.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!window._fbq)window._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];
+fbq('init',px);fbq('track','PageView');fbq('track','ViewContent',{content_ids:[String(C.pid)],content_type:'product',value:C.price,currency:'DZD'},{eventID:'vc-'+C.vid});
+var lp=0,lpx=function(){if(lp)return;lp=1;var t=d.createElement('script');t.async=1;t.src='https://connect.facebook.net/en_US/fbevents.js';d.head.appendChild(t)};
+window.addEventListener('load',function(){setTimeout(lpx,2500)});['touchstart','scroll','keydown','mousemove'].forEach(function(e){window.addEventListener(e,lpx,{once:true,passive:true})})}
+var f=$('f');if(!f)return;
 var K=[],H0=[];(function(){var n=2,c=0;function f(x){return(x-Math.floor(x))*4294967296|0}while(c<64){for(var i=2;i*i<=n;i++)if(n%i==0)break;if(i*i>n){if(c<8)H0[c]=f(Math.pow(n,1/2));K[c++]=f(Math.pow(n,1/3))}n++}})();
 function sha(s){var m=unescape(encodeURIComponent(s)),l=m.length,w=[],h=H0.slice(),i,j;for(i=0;i<l;i++)w[i>>2]|=m.charCodeAt(i)<<(24-i%4*8);w[l>>2]|=128<<(24-l%4*8);var n=((l+8)>>6)+1<<4;for(i=0;i<n;i++)w[i]|=0;w[n-1]=l*8;
 for(j=0;j<n;j+=16){var W=w.slice(j,j+16),a=h[0],b=h[1],c=h[2],e=h[4],f=h[5],g=h[6],k=h[7],dd=h[3];for(i=0;i<64;i++){if(i>15){var x=W[i-15],y=W[i-2];W[i]=(W[i-16]+((x>>>7|x<<25)^(x>>>18|x<<14)^x>>>3)+W[i-7]+((y>>>17|y<<15)^(y>>>19|y<<13)^y>>>10))|0}
@@ -150,29 +170,39 @@ var t0=Date.now(),ki=0,nonce=null,N=0;function pow(){for(var i=0;i<400;i++){if(z
 var did='';try{did=localStorage.getItem('pxd')||'';if(!did){did=sha(Math.random()+':'+t0).slice(0,16);localStorage.setItem('pxd',did)}}catch(e){}
 var nv=navigator,sc=screen||{},fp=sha([nv.userAgent,nv.language,sc.width+'x'+sc.height+'x'+sc.colorDepth,new Date().getTimezoneOffset(),(window.Intl&&Intl.DateTimeFormat().resolvedOptions().timeZone)||'',nv.hardwareConcurrency,nv.deviceMemory,nv.platform,nv.maxTouchPoints].join('|')).slice(0,24);
 var cb={},seq=0;window.addEventListener('message',function(e){var m=e.data;if(m&&m.lp&&cb[m.id]){cb[m.id](m.r);delete cb[m.id]}});
-function ask(kind,body,done){if(C.mode=='live'){var x=new XMLHttpRequest();x.open(kind=='geo'?'GET':'POST',kind=='geo'?C.geo+body:C.post);x.setRequestHeader('Content-Type','application/json');x.timeout=30000;
+function ask(kind,body,done,beacon){if(C.mode=='live'){var u=kind=='geo'?C.geo+body:kind=='lead'?C.lead:C.post;
+if(beacon&&nv.sendBeacon&&nv.sendBeacon(u,new Blob([JSON.stringify(body)],{type:'text/plain'})))return;
+var x=new XMLHttpRequest();x.open(kind=='geo'?'GET':'POST',u);x.setRequestHeader('Content-Type','application/json');x.timeout=30000;
 x.onload=function(){var r=null;try{r=JSON.parse(x.responseText)}catch(e){}done(x.status<300?r:null,x.status)};x.onerror=x.ontimeout=function(){done(null,0)};x.send(kind=='geo'?null:JSON.stringify(body));return}
-if(C.mode=='preview'&&kind=='order')return setTimeout(function(){done({ok:true},200)},400);var id=++seq;cb[id]=function(r){done(r,r?200:0)};parent.postMessage({lp:kind,id:id,body:body,slug:C.slug},'*')}
-var f=$('f'),w=$('w'),cm=$('cm'),qt=$('qt');
+if(C.mode=='preview'&&kind!='geo')return kind=='order'&&setTimeout(function(){done({ok:true},200)},400);var id=++seq;cb[id]=function(r){done(r,r?200:0)};parent.postMessage({lp:kind,id:id,body:body,slug:C.slug},'*')}
+var w=$('w'),cm=$('cm'),qt=$('qt'),vr=$('vr');
 function money(v){return Math.round(v)+'.00 \\u062f\\u062c'}
-function sum(){var q=Math.max(1,Math.min(99,parseInt(ar2(qt.value))||1)),fee=C.fees[w.value],s=C.price*q;$('s1').textContent=money(s);
+function qv(){return Math.max(1,Math.min(99,parseInt(ar2(qt.value))||1))}
+function unit(){var p=vr&&C.vp[vr.value];return p!=null?p:C.price}
+function sum(){var q=qv(),fee=C.fees[w.value],s=unit()*q;$('pp').textContent=money(unit());$('s1').textContent=money(s);
 $('s2').textContent=!w.value?'\\u0627\\u062e\\u062a\\u0631 \\u0627\\u0644\\u0648\\u0644\\u0627\\u064a\\u0629':fee==null?'\\u064a\\u062d\\u062f\\u062f \\u0639\\u0646\\u062f \\u0627\\u0644\\u062a\\u0623\\u0643\\u064a\\u062f':fee?money(fee):'\\u0645\\u062c\\u0627\\u0646\\u064a';$('s3').textContent=money(s+(fee||0))}
 w.onchange=function(){cm.innerHTML='<option value="">\\u2026</option>';cm.disabled=true;sum();if(!w.value)return;var v=w.value;ask('geo',v,function(r){if(w.value!=v)return;var h='<option value="">\\u0627\\u062e\\u062a\\u0631 \\u0627\\u0644\\u0628\\u0644\\u062f\\u064a\\u0629</option>';
 (r||[]).forEach(function(c){h+='<option value="'+c[0].replace(/"/g,'&quot;')+'">'+(c[1]||c[0])+'</option>'});cm.innerHTML=h;cm.disabled=false})};
-$('qm').onclick=function(){qt.value=Math.max(1,(parseInt(ar2(qt.value))||1)-1);sum()};$('qp').onclick=function(){qt.value=Math.min(99,(parseInt(ar2(qt.value))||1)+1);sum()};qt.oninput=sum;
-f.addEventListener('input',function(e){if(e.isTrusted!==false)ki++});
+if(vr)vr.onchange=sum;
+$('qm').onclick=function(){qt.value=Math.max(1,qv()-1);sum();lead()};$('qp').onclick=function(){qt.value=Math.min(99,qv()+1);sum();lead()};qt.oninput=sum;
 var th=d.querySelectorAll('.th button'),mi=$('mi');for(var i=0;i<th.length;i++)th[i].onclick=function(){for(var j=0;j<th.length;j++)th[j].className='';this.className='on';mi.src=this.getAttribute('data-s');mi.srcset=this.getAttribute('data-ss')};
+var done=0,lt=null,last='';
+function form(){return{name:f.nm.value.trim(),phone:nph(f.ph.value),wilaya:+w.value||0,commune:cm.value,variant:vr?+vr.value||null:null,qty:qv(),hp:f.web.value,fp:fp,did:did,vid:C.vid,utm:utm,fbp:ck('_fbp'),fbc:ck('_fbc'),url:C.mode=='live'?location.href.slice(0,500):''}}
+function lead(now){if(!C.lead||done)return;var b=form();if(!/^0[567]\\d{8}$/.test(b.phone))return;var k=JSON.stringify([b.name,b.phone,b.wilaya,b.commune,b.variant,b.qty]);if(k==last)return;clearTimeout(lt);
+lt=setTimeout(function(){lt=null;last=k;if(px&&!ic){ic=1;fbq('track','InitiateCheckout',{content_ids:[String(C.pid)],content_type:'product',value:unit()*b.qty,currency:'DZD',num_items:b.qty},{eventID:'ic-'+C.vid})}ask('lead',b,function(){},now)},now?0:1500)}
+f.addEventListener('input',function(e){if(e.isTrusted!==false)ki++;lead()});f.addEventListener('change',function(){lead()});
+window.addEventListener('pagehide',function(){if(lt){clearTimeout(lt);last='';lead(1)}});
 function err(id,msg){var el=$(id),e=$(id+'e');if(e)e.textContent=msg||'';if(el)el.className=msg?'bad':'';return!msg}
-var busy=false;f.onsubmit=function(ev){ev.preventDefault();if(busy)return;var nm=f.nm.value.trim(),ph=ar2(f.ph.value).replace(/[^\\d+]/g,'').replace(/^(\\+|00)213/,'0');if(/^[567]\\d{8}$/.test(ph))ph='0'+ph;
+var busy=false;f.onsubmit=function(ev){ev.preventDefault();if(busy)return;var nm=f.nm.value.trim(),ph=nph(f.ph.value);
 var ok=err('nm',nm.length<3?'\\u0623\\u062f\\u062e\\u0644 \\u0627\\u0633\\u0645\\u0643 \\u0627\\u0644\\u0643\\u0627\\u0645\\u0644':'');
 ok=err('ph',/^0[567]\\d{8}$/.test(ph)?'':'\\u0631\\u0642\\u0645 \\u0627\\u0644\\u0647\\u0627\\u062a\\u0641 \\u063a\\u064a\\u0631 \\u0635\\u062d\\u064a\\u062d (\\u0645\\u062b\\u0627\\u0644: 0555123456)')&&ok;
 ok=err('w',w.value?'':'\\u0627\\u062e\\u062a\\u0631 \\u0627\\u0644\\u0648\\u0644\\u0627\\u064a\\u0629')&&ok;ok=err('cm',cm.value?'':'\\u0627\\u062e\\u062a\\u0631 \\u0627\\u0644\\u0628\\u0644\\u062f\\u064a\\u0629')&&ok;
-var vr=$('vr');if(vr)ok=err('vr',vr.value?'':'\\u0627\\u062e\\u062a\\u0631 '+C.vl)&&ok;if(!ok)return;busy=true;var btn=$('go');btn.disabled=true;btn.textContent='\\u2026';
-var q=Math.max(1,Math.min(99,parseInt(ar2(qt.value))||1)),wait=Date.now();
-(function send(){if(nonce===null&&Date.now()-wait<4000)return setTimeout(send,150);
-ask('order',{name:nm,phone:ph,wilaya:+w.value,commune:cm.value,variant:vr?+vr.value:null,qty:q,hp:f.web.value,ch:C.ch,pw:nonce,t:Date.now()-t0,ki:ki,wd:!!nv.webdriver,fp:fp,did:did,tz:(window.Intl&&Intl.DateTimeFormat().resolvedOptions().timeZone)||''},function(r,st){
+if(vr)ok=err('vr',vr.value?'':'\\u0627\\u062e\\u062a\\u0631 '+C.vl)&&ok;if(!ok)return;busy=true;clearTimeout(lt);var btn=$('go');btn.disabled=true;btn.textContent='\\u2026';
+var q=qv(),wait=Date.now();
+(function send(){if(nonce===null&&Date.now()-wait<4000)return setTimeout(send,150);var b=form();b.name=nm;b.phone=ph;b.ch=C.ch;b.pw=nonce;b.t=Date.now()-t0;b.ki=ki;b.wd=!!nv.webdriver;
+ask('order',b,function(r,st){
 if(!r||!r.ok){busy=false;btn.disabled=false;btn.textContent=C.cta;$('fe').textContent='\\u062a\\u0639\\u0630\\u0631 \\u0627\\u0644\\u0625\\u0631\\u0633\\u0627\\u0644\\u060c \\u062a\\u062d\\u0642\\u0642 \\u0645\\u0646 \\u0627\\u0644\\u0627\\u062a\\u0635\\u0627\\u0644 \\u0648\\u0623\\u0639\\u062f \\u0627\\u0644\\u0645\\u062d\\u0627\\u0648\\u0644\\u0629';return}
-var fee=C.fees[w.value];$('okn').textContent=nm;$('o1').textContent=C.title+(vr?' \\u2014 '+vr.options[vr.selectedIndex].text:'')+' \\u00d7 '+q;$('o2').textContent=money(C.price*q+(fee||0));
+done=1;var fee=C.fees[w.value];$('okn').textContent=nm;$('o1').textContent=C.title+(vr?' \\u2014 '+vr.options[vr.selectedIndex].text:'')+' \\u00d7 '+q;$('o2').textContent=money(unit()*q+(fee||0));
 f.style.display='none';$('ok').style.display='block';window.scrollTo(0,0)})})()};sum()})();`;
 
 /** The whole public page. */
@@ -195,17 +225,24 @@ export function renderLanding(v: LandingView, r: LandingRender): string {
     .map((k) => `<option value="${k}">${String(k).padStart(2, '0')} - ${esc(WILAYAS_AR[k] ?? WILAYAS[k - 1])}</option>`)
     .join('');
   const variants = v.variants.length
-    ? `<label for="vr">${esc(v.variantLabel)}</label><select id="vr" name="vr"><option value="">${esc(v.variantLabel)}…</option>${v.variants.map((x) => `<option value="${x.id}">${esc(x.title)}</option>`).join('')}</select><div class="e" id="vre"></div>`
+    ? `<label for="vr">${esc(v.variantLabel)}</label><select id="vr" name="vr"><option value="">${esc(v.variantLabel)}…</option>${v.variants
+        .map((x) => `<option value="${x.id}"${x.out ? ' disabled' : ''}>${esc(x.title)}${x.out ? ' — نفذت الكمية' : x.price != null ? ` — ${landingPrice(x.price)}` : ''}</option>`)
+        .join('')}</select><div class="e" id="vre"></div>`
     : '';
   const off = v.oldPrice && v.oldPrice > v.price ? Math.round((1 - v.price / v.oldPrice) * 100) : 0;
   const cta = 'اطلب الآن';
-  const cfg = { mode: r.mode, post: r.post, geo: r.geo, ch: r.challenge, bits: r.bits, slug: v.slug, price: v.price, fees: v.fees, title: v.title, vl: v.variantLabel, cta };
+  const vp: Record<number, number> = {};
+  for (const x of v.variants) if (x.price != null) vp[x.id] = x.price;
+  const cfg = {
+    mode: r.mode, post: r.post, geo: r.geo, lead: r.lead ?? '', ch: r.challenge, bits: r.bits, slug: v.slug, price: v.price, vp, fees: v.fees, title: v.title, vl: v.variantLabel, cta,
+    vid: r.viewId ?? '', px: r.mode === 'live' && v.pixelId && /^\d{5,20}$/.test(v.pixelId) ? v.pixelId : '', pid: v.productId ?? 0,
+  };
   const desc = landingDescriptionHtml(v.description);
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(v.title)}</title>
 <meta name="theme-color" content="${c}">${img ? `<link rel="preload" as="image" href="${esc(img.src)}" imagesrcset="${esc(img.srcset)}" imagesizes="${sizes}">` : ''}<style>${CSS(c)}</style></head><body>
 <div class="top">🚚 التوصيل لجميع الولايات · الدفع عند الاستلام</div><main class="w"><div class="g">
 <section class="gal card">${gallery}</section>
-<section class="card"><form id="f" novalidate autocomplete="on"><h1>${esc(v.title)}</h1><div class="pr"><b>${landingPrice(v.price)}</b>${off ? `<s>${landingPrice(v.oldPrice!)}</s><span class="off" dir="ltr">-${off}%</span>` : ''}</div>
+<section class="card">${v.soldOut ? `<h1>${esc(v.title)}</h1><div class="so"><b>نفذت الكمية مؤقتاً</b><p>هذا المنتج غير متوفر حالياً، عودوا قريباً.</p></div>` : `<form id="f" novalidate autocomplete="on"><h1>${esc(v.title)}</h1><div class="pr"><b id="pp">${landingPrice(v.price)}</b>${off ? `<s>${landingPrice(v.oldPrice!)}</s><span class="off" dir="ltr">-${off}%</span>` : ''}</div>
 <label for="nm">الاسم الكامل</label><input id="nm" name="nm" autocomplete="name" maxlength="80" placeholder="الاسم واللقب"><div class="e" id="nme"></div>
 <label for="ph">رقم الهاتف</label><input id="ph" name="ph" class="ltr" type="tel" inputmode="tel" autocomplete="tel" maxlength="16" placeholder="05XX XX XX XX"><div class="e" id="phe"></div>
 <div class="r2"><div><label for="w">الولاية</label><select id="w" name="w"><option value="">اختر الولاية</option>${wil}</select><div class="e" id="we"></div></div>
@@ -215,7 +252,7 @@ ${variants}<label for="qt">الكمية</label><div class="q"><button type="butt
 <div class="sum"><div><span>سعر المنتج</span><b id="s1"></b></div><div><span>التوصيل</span><b id="s2"></b></div><div class="tt"><span>المجموع</span><b id="s3"></b></div></div>
 <button class="go" id="go">${cta}</button><div class="e" id="fe" role="alert"></div><div class="trust"><span>✔ الدفع عند الاستلام</span><span>✔ معاينة المنتج قبل الدفع</span></div></form>
 <div id="ok" class="ok" style="display:none" role="status"><i>✓</i><h2>شكراً <span id="okn"></span>!</h2><p>تم استلام طلبك بنجاح.</p><p>سيتصل بك فريقنا قريباً لتأكيد الطلب.</p>
-<div class="sum"><div><span id="o1"></span></div><div class="tt"><span>المجموع</span><b id="o2"></b></div></div></div></section></div>
+<div class="sum"><div><span id="o1"></span></div><div class="tt"><span>المجموع</span><b id="o2"></b></div></div></div>`}</section></div>
 ${desc ? `<section class="card d"><h2>وصف المنتج</h2>${desc}</section>` : ''}</main><footer>${esc(v.shopName)}</footer>
 <script>window.__LP=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script><script>${JS}</script></body></html>`;
 }

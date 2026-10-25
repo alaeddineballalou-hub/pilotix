@@ -95,6 +95,29 @@ class AuthGuard implements CanActivate {
   }
 }
 
+/** What the server knows of a landing page's visitor: address, browser, Meta cookies, and the host's geolocation (a soft signal). */
+function visitorMeta(req: { ip?: string; headers: Record<string, string | undefined> }) {
+  const h = req.headers;
+  const decode = (v: string) => {
+    try {
+      return decodeURIComponent(v);
+    } catch {
+      return v;
+    }
+  };
+  const cookie = (name: string) => (h.cookie ?? '').split(/;\s*/).find((c) => c.startsWith(`${name}=`))?.slice(name.length + 1) ?? '';
+  return {
+    ip: req.ip || '',
+    ua: h['user-agent'] || '',
+    country: h['cf-ipcountry'] || h['x-vercel-ip-country'] || h['x-geo-country'] || '',
+    city: decode(h['cf-ipcity'] || h['x-vercel-ip-city'] || h['x-geo-city'] || ''),
+    region: h['cf-region'] || h['x-vercel-ip-country-region'] || h['x-geo-region'] || '',
+    fbp: cookie('_fbp'),
+    fbc: cookie('_fbc'),
+    url: h.referer || '',
+  };
+}
+
 /** 10 login attempts per 15 minutes per address. */
 const attempts = new Map<string, { n: number; until: number }>();
 function limitLogin(ip: string) {
@@ -210,7 +233,7 @@ class ApiController {
     if (!/^[a-z0-9-]{2,60}$/.test(slug)) return res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
     const base = `${config.publicUrl}/api/lp/`;
     try {
-      const r: any = await this.core.call('landing.html', await this.core.systemSession(), { slug, mode: 'live', post: `${base}${slug}/order`, geo: `${base}geo/`, imgBase: `${base}img/` });
+      const r: any = await this.core.call('landing.html', await this.core.systemSession(), { slug, mode: 'live', post: `${base}${slug}/order`, lead: `${base}${slug}/lead`, geo: `${base}geo/`, imgBase: `${base}img/` });
       return res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'no-store').send(r.html);
     } catch (e: any) {
       if (e instanceof core.AppError && e.code === 'not_found') return res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
@@ -251,16 +274,25 @@ class ApiController {
   @Post('lp/:slug/order')
   async landingOrder(@Param('slug') slug: string, @Body() body: any, @Req() req: { ip?: string; headers: Record<string, string | undefined> }) {
     if (!/^[a-z0-9-]{2,60}$/.test(slug)) throw new core.AppError('not_found', 'Page introuvable');
-    const h = req.headers;
-    // geolocation from the host when it adds it (Cloudflare, Vercel, or a proxy setting x-geo-*): a soft signal only
-    const meta = {
-      ip: req.ip || '',
-      ua: h['user-agent'] || '',
-      country: h['cf-ipcountry'] || h['x-vercel-ip-country'] || h['x-geo-country'] || '',
-      city: h['cf-ipcity'] || h['x-vercel-ip-city'] || h['x-geo-city'] || '',
-      region: h['cf-region'] || h['x-vercel-ip-country-region'] || h['x-geo-region'] || '',
-    };
-    await this.core.call('landing.submit', await this.core.systemSession(), { ...(body && typeof body === 'object' ? body : {}), slug, meta });
+    await this.core.call('landing.submit', await this.core.systemSession(), { ...(body && typeof body === 'object' ? body : {}), slug, meta: visitorMeta(req) });
+    return { ok: true };
+  }
+
+  /** What a customer typed so far (a valid phone): their abandoned order if they leave. Same answer whatever happens. */
+  @Public()
+  @Post('lp/:slug/lead')
+  async landingLead(@Param('slug') slug: string, @Body() body: any, @Req() req: { ip?: string; headers: Record<string, string | undefined> }) {
+    if (!/^[a-z0-9-]{2,60}$/.test(slug)) return { ok: true };
+    // sendBeacon posts text/plain: the body may arrive as a string
+    let b = body;
+    if (typeof b === 'string') {
+      try {
+        b = JSON.parse(b);
+      } catch {
+        b = {};
+      }
+    }
+    await this.core.call('landing.capture', await this.core.systemSession(), { ...(b && typeof b === 'object' ? b : {}), slug, meta: visitorMeta(req) }).catch(() => null);
     return { ok: true };
   }
 
@@ -420,6 +452,7 @@ class ApiController {
     if (!ck || key !== ck) throw new core.AppError('unauthorized', 'Clé cron invalide');
     const session = await this.core.systemSession();
     void this.core.call('cm.sweep', session, {}).catch(() => null); // comments the CM AI agent has not answered yet (in the background)
+    void this.core.call('landing.run', session, {}).catch(() => null); // landing pages: abandoned orders, Meta events (in the background)
     void this.core.call('notify.run', session, {}).catch(() => null); // Delivery AI agent: messages due (in the background)
     return this.core.call('delivery.sync', session, {}).catch((e) => ({ ok: false, message: e.message }));
   }
