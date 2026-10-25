@@ -89,8 +89,20 @@ export class CoreService implements OnModuleDestroy {
     }
   }
 
-  /** A session acting as the system (webhooks, scheduled jobs): the first active admin. */
-  async systemSession(): Promise<Session> {
+  private sys: { at: number; s: Promise<Session> } | null = null;
+  /**
+   * A session acting as the system (webhooks, scheduled jobs, public landing pages): the first active admin. Kept 30 s:
+   * every page view and every photo of a landing page needs it (2 queries saved each time).
+   */
+  systemSession(): Promise<Session> {
+    if (this.sys && Date.now() - this.sys.at < 30_000) return this.sys.s;
+    const s = this.loadSystemSession();
+    this.sys = { at: Date.now(), s };
+    s.catch(() => (this.sys = null));
+    return s;
+  }
+
+  private async loadSystemSession(): Promise<Session> {
     const r = (await this.db.query(`SELECT id FROM profiles WHERE 'admin' = ANY(roles) AND active ORDER BY id LIMIT 1`))[0];
     if (!r) throw new Error('No admin account: run the seed first');
     const p = await core.profileById(this.db, Number(r.id));
