@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
 import { moveStock, stockRows, StockLine } from './catalog';
+import { CaisseKey, checkCaisse } from './cash';
 
 const id = z.number().int().positive();
 const money = z.number().int().min(0).max(100_000_000);
@@ -240,6 +241,8 @@ export const PurchaseInput = z.object({
   lines: z.array(z.object({ variantId: id, qty, unitCost: money })).min(1).max(500),
   /** paid to the supplier at once (DA) */
   paid: money.default(0),
+  /** the caisse that money leaves (default: the owner's main caisse; an employee's own caisse) */
+  caisse: CaisseKey.optional(),
   /** the products' purchase price becomes the price of this purchase */
   updateCost: z.boolean().default(true),
   note: z.string().trim().max(300).default(''),
@@ -313,6 +316,11 @@ export async function createPurchase(ctx: Ctx, i: z.infer<typeof PurchaseInput>)
     await tx.query('INSERT INTO purchases (id, ref, supplier_id, warehouse_id, total, paid, paid_at, note, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)', [
       pid, ref, i.supplierId, w.id, total, i.paid, i.paid > 0 ? new Date(ctx.now()).toISOString() : null, i.note, me(ctx),
     ]);
+    if (i.paid > 0) {
+      const k = supplierCaisse(ctx, i.caisse);
+      await checkCaisse(tx, k);
+      await supplierCash(tx, k, i.paid, ref, supplier, me(ctx));
+    }
     for (const l of i.lines) {
       await tx.query('INSERT INTO purchase_lines (purchase_id, variant_id, qty, unit_cost) VALUES ($1,$2,$3,$4)', [pid, l.variantId, l.qty, l.unitCost]);
       await moveStock(tx, { variantId: l.variantId, warehouseId: w.id, delta: l.qty, reason: 'purchase', userId: me(ctx), note: `Achat ${ref}${supplier ? ` — ${supplier}` : ''}`, purchaseId: pid });
@@ -334,6 +342,23 @@ export async function createPurchase(ctx: Ctx, i: z.infer<typeof PurchaseInput>)
 }
 
 // ---------------------------------------------------------------- procedures
+/** Which caisse pays a supplier: the owner / an admin choose (main by default); an employee pays from his own caisse. */
+function supplierCaisse(ctx: Ctx, asked: string | undefined): string {
+  const owner = ctx.session.isAdmin || ctx.session.roles.includes('vendeur');
+  const own = `u${ctx.session.profile.id}`;
+  const k = asked ?? (owner ? 'main' : own);
+  if (!owner && k !== own) throw forbidden('Vous ne pouvez payer un fournisseur qu’avec votre caisse');
+  return k;
+}
+
+/** Money paid to (or taken back from) a supplier leaves (or comes back to) a caisse, so balances stay true. */
+async function supplierCash(db: Db, caisse: string, delta: number, ref: string, supplier: string | null, userId: number) {
+  if (!delta) return;
+  await db.query(`INSERT INTO cash_moves (caisse, amount, kind, category, note, created_by) VALUES ($1,$2,$3,$4,$5,$6)`, [
+    caisse, -delta, delta > 0 ? 'expense' : 'income', delta > 0 ? 'supplier' : null, `Fournisseur${supplier ? ` ${supplier}` : ''} — ${ref}`, userId,
+  ]);
+}
+
 export const stockProcs = {
   /** "Prix": sale price, purchase price and maximum discount of many products at once. */
   'catalog.setPrices': proc([...DEPOT], PricesInput, (ctx, i) => setPrices(ctx, i)),
@@ -477,11 +502,18 @@ export const stockProcs = {
   'purchases.create': proc([...DEPOT], PurchaseInput, (ctx, i) => createPurchase(ctx, i)),
 
   /** What has been paid to the supplier for this purchase, in total. */
-  'purchases.pay': proc([...DEPOT], z.object({ id, paid: money }), async (ctx, i) => {
-    const r = (await ctx.db.query('SELECT total, paid FROM purchases WHERE id = $1', [i.id]))[0];
-    if (!r) throw notFound('Achat introuvable');
-    if (i.paid > num(r.total)) throw bad('Le montant payé dépasse le total de l’achat');
-    if (i.paid !== num(r.paid)) await ctx.db.query('UPDATE purchases SET paid = $2, paid_at = $3 WHERE id = $1', [i.id, i.paid, new Date(ctx.now()).toISOString()]);
+  'purchases.pay': proc([...DEPOT], z.object({ id, paid: money, caisse: CaisseKey.optional() }), async (ctx, i) => {
+    const k = supplierCaisse(ctx, i.caisse);
+    await checkCaisse(ctx.db, k);
+    await ctx.db.tx(async (tx) => {
+      const r = (await tx.query('SELECT p.ref, p.total, p.paid, s.name AS supplier FROM purchases p LEFT JOIN suppliers s ON s.id = p.supplier_id WHERE p.id = $1 FOR UPDATE OF p', [i.id]))[0];
+      if (!r) throw notFound('Achat introuvable');
+      if (i.paid > num(r.total)) throw bad('Le montant payé dépasse le total de l’achat');
+      if (i.paid === num(r.paid)) return;
+      await tx.query('UPDATE purchases SET paid = $2, paid_at = $3 WHERE id = $1', [i.id, i.paid, new Date(ctx.now()).toISOString()]);
+      // only the difference moves: paying 30 000 more takes 30 000 out of the caisse
+      await supplierCash(tx, k, i.paid - num(r.paid), r.ref, r.supplier ?? null, me(ctx));
+    });
     return getPurchase(ctx.db, i.id);
   }),
 };

@@ -91,3 +91,32 @@ export async function dispatch(registry: Record<string, Procedure>, name: string
   }
   return p.run(ctx, parsed.data);
 }
+
+/**
+ * Runs `fn` while holding a short "in progress" mark on `key` (e.g. 'send:42'). A second call with the same key while
+ * the first runs is refused with `busyMessage` instead of doing the work twice (double click, retry, the background
+ * job at the same moment). A mark older than `staleSec` (a crashed run) is ignored.
+ */
+export async function withActionLock<T>(db: Db, key: string, userId: number | null, busyMessage: string, fn: () => Promise<T>, staleSec = 120): Promise<T> {
+  await db.query(`DELETE FROM action_locks WHERE key = $1 AND created_at < now() - make_interval(secs => $2)`, [key, staleSec]);
+  const got = await db.query('INSERT INTO action_locks (key, user_id) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING RETURNING key', [key, userId]);
+  if (!got.length) throw new AppError('conflict', busyMessage);
+  try {
+    return await fn();
+  } finally {
+    await db.query('DELETE FROM action_locks WHERE key = $1', [key]);
+  }
+}
+
+
+/** Takes the "in progress" marks it can among `keys` (see withActionLock); returns those taken and how to free them. */
+export async function takeActionLocks(db: Db, keys: string[], userId: number | null, staleSec = 120) {
+  if (!keys.length) return { taken: new Set<string>(), release: async () => {} };
+  await db.query(`DELETE FROM action_locks WHERE key = ANY($1) AND created_at < now() - make_interval(secs => $2)`, [keys, staleSec]);
+  const rows = await db.query<{ key: string }>(
+    'INSERT INTO action_locks (key, user_id) SELECT k, $2 FROM unnest($1::text[]) AS k ON CONFLICT (key) DO NOTHING RETURNING key',
+    [keys, userId],
+  );
+  const taken = new Set(rows.map((x) => x.key));
+  return { taken, release: async () => { if (taken.size) await db.query('DELETE FROM action_locks WHERE key = ANY($1)', [[...taken]]); } };
+}

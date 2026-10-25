@@ -24,7 +24,10 @@ export class LiveGateway implements OnGatewayConnection, OnModuleInit {
 
   async handleConnection(socket: Socket) {
     try {
-      const p = await this.jwt.verifyAsync<{ sub: number }>(String(socket.handshake.auth?.token || ''));
+      const p = await this.jwt.verifyAsync<{ sub: number; tv?: number }>(String(socket.handshake.auth?.token || ''));
+      // the same checks as the API: an active account, a token made after the last password change
+      const r = (await this.core.db.query('SELECT active, token_version FROM profiles WHERE id = $1', [Number(p.sub)]))[0];
+      if (!r || !r.active || Number(r.token_version ?? 0) !== Number(p.tv ?? 0)) throw new Error('refused');
       socket.data.userId = Number(p.sub);
       socket.join('staff');
     } catch {

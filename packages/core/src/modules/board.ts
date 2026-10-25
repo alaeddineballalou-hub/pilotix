@@ -194,7 +194,7 @@ async function countConfirmation(ctx: Ctx, r: R, ids: number[], detail: boolean)
   for (const q of await ctx.db.query(
     `SELECT agent_id AS u,
        count(*) FILTER (WHERE follow_status = ANY($4) AND delivered_at >= $1 AND delivered_at < $2)::int AS dl,
-       count(*) FILTER (WHERE follow_status = ANY($5) AND coalesce(returned_at, updated_at) >= $1 AND coalesce(returned_at, updated_at) < $2)::int AS rt
+       count(*) FILTER (WHERE follow_status = ANY($5) AND coalesce(returned_at, returning_at, updated_at) >= $1 AND coalesce(returned_at, returning_at, updated_at) < $2)::int AS rt
      FROM sales WHERE agent_id = ANY($3) GROUP BY 1`,
     [...P, DONE, BACK],
   )) {
@@ -250,8 +250,8 @@ async function countSuivi(ctx: Ctx, r: R, detail: boolean): Promise<Count> {
     onDay(of(x, q.u), q.d, num(q.n), num(q.n), num(q.n));
   }
   const back = await ctx.db.query(
-    `SELECT id, follow_agent_id AS u, ${dayOf('coalesce(returned_at, updated_at)')} AS d${detail ? `, ${REASON_SQL.back} AS reason` : ''}
-     FROM sales o WHERE follow_status = ANY($3) AND coalesce(returned_at, updated_at) >= $1 AND coalesce(returned_at, updated_at) < $2`,
+    `SELECT id, follow_agent_id AS u, ${dayOf('coalesce(returned_at, returning_at, updated_at)')} AS d${detail ? `, ${REASON_SQL.back} AS reason` : ''}
+     FROM sales o WHERE follow_status = ANY($3) AND coalesce(returned_at, returning_at, updated_at) >= $1 AND coalesce(returned_at, returning_at, updated_at) < $2`,
     [...P, BACK],
   );
   for (const q of back) {
@@ -344,8 +344,8 @@ async function countLivreurs(ctx: Ctx, r: R, detail: boolean): Promise<Count> {
     onDay(of(x, q.u), q.d, num(q.n), num(q.n), num(q.n));
   }
   for (const q of await ctx.db.query(
-    `SELECT livreur_id AS u, ${dayOf('coalesce(returned_at, updated_at)')} AS d${detail ? `, ${REASON_SQL.back} AS reason` : ''}
-     FROM sales o WHERE livreur_id IS NOT NULL AND follow_status = ANY($3) AND coalesce(returned_at, updated_at) >= $1 AND coalesce(returned_at, updated_at) < $2`,
+    `SELECT livreur_id AS u, ${dayOf('coalesce(returned_at, returning_at, updated_at)')} AS d${detail ? `, ${REASON_SQL.back} AS reason` : ''}
+     FROM sales o WHERE livreur_id IS NOT NULL AND follow_status = ANY($3) AND coalesce(returned_at, returning_at, updated_at) >= $1 AND coalesce(returned_at, returning_at, updated_at) < $2`,
     [...P, BACK],
   )) {
     add(of(x, q.u), 'returned');

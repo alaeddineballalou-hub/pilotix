@@ -11,6 +11,7 @@
   "sync": "Mettre à jour depuis les sociétés",
   "syncDone": "{{checked}} colis vérifiés chez les sociétés · {{changed}} statut(s) mis à jour",
   "syncFail": "Mise à jour impossible : {{msg}}",
+  "syncProblems": "{{count}} problème(s) avec les sociétés : {{list}}",
   "kpiSub": {
     "alertes": "à traiter",
     "traites": "en route après l’alerte",

@@ -65,6 +65,11 @@ class RemoteBackend implements Backend {
       throw new ApiError(0, 'Serveur injoignable. Vérifiez votre connexion.');
     }
     const data = await res.json().catch(() => undefined);
+    // after a password change the server hands this session a fresh token (the old ones stop working)
+    if (res.ok && path === '/rpc/me.password' && typeof (data as any)?.token === 'string') {
+      this.token = (data as any).token;
+      store.set('token', this.token);
+    }
     if (res.status === 401 && this.token) this.onUnauthorized();
     if (!res.ok) throw new ApiError(res.status, (data as any)?.message || res.statusText);
     return data as T;

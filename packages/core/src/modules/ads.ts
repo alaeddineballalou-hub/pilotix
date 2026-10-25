@@ -576,7 +576,8 @@ export const adsProcs = {
     return { ok: true };
   }),
   /** Dollar rate (DZD for 1 USD) of a month. */
-  'ads.setFx': proc(['marketer'], z.object({ ym: Ym, rate: z.number().min(1).max(10_000) }), async (ctx, i) => {
+  // the dollar rate turns ad spend into dinars, and so the marketers' pay: set by the owner, never by a marketer
+  'ads.setFx': proc(['vendeur'], z.object({ ym: Ym, rate: z.number().min(1).max(10_000) }), async (ctx, i) => {
     await ctx.db.query('INSERT INTO fx_rates (ym, rate) VALUES ($1,$2) ON CONFLICT (ym) DO UPDATE SET rate = EXCLUDED.rate', [i.ym, i.rate]);
     return { ok: true };
   }),

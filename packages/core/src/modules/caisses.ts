@@ -3,12 +3,12 @@
 // (cash_handovers.received_into, NULL = main) + its moves (expenses, manual entries, transfers).
 import { z } from 'zod';
 import { iso, num } from '../db';
-import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
+import { bad, Ctx, forbidden, notFound, proc, withActionLock } from '../rpc';
 import { getSetting, setSetting } from '../settings';
 import { caisseLabelOf, cashProcs, CaisseKey, checkCaisse, livreursCash } from './cash';
 
 const STAFF = ['confirmation', 'suivi', 'depot', 'agent_manager'] as const;
-export const EXPENSE_CATS = ['fuel', 'packing', 'salary', 'rent', 'ads', 'repair', 'other'] as const;
+export const EXPENSE_CATS = ['fuel', 'packing', 'salary', 'rent', 'ads', 'repair', 'supplier', 'other'] as const;
 const Amount = z.number().int().min(1).max(1_000_000_000);
 
 /** Start of today in Algiers (UTC+1), as an ISO date-time. */
@@ -121,13 +121,22 @@ async function caisseView(ctx: Ctx, key: string, limit: number) {
   const bal = await balances(ctx);
   const month = monthStart(ctx.now());
   const moves = await movesOf(ctx, key, limit);
-  const inMonth = moves.filter((m) => m.at >= month);
+  // the month's totals are summed in the database, not from the last `limit` moves (a busy month has more)
+  const t = (
+    await ctx.db.query(
+      `SELECT COALESCE(sum(a) FILTER (WHERE a > 0), 0)::bigint AS inn, COALESCE(sum(a) FILTER (WHERE a < 0), 0)::bigint AS outt FROM (
+         SELECT h.net AS a FROM cash_handovers h WHERE h.cancelled_at IS NULL AND COALESCE(h.received_into, 'main') = $1 AND h.created_at >= $2::timestamptz
+         UNION ALL
+         SELECT m.amount AS a FROM cash_moves m WHERE m.cancelled_at IS NULL AND m.caisse = $1 AND m.created_at >= $2::timestamptz) x`,
+      [key, month],
+    )
+  )[0];
   return {
     key,
     name: await caisseName(ctx, key),
     balance: bal.get(key) ?? 0,
-    monthIn: inMonth.filter((m) => m.amount > 0).reduce((s, m) => s + m.amount, 0),
-    monthOut: inMonth.filter((m) => m.amount < 0).reduce((s, m) => s + m.amount, 0),
+    monthIn: num(t?.inn),
+    monthOut: num(t?.outt),
     moves,
   };
 }
@@ -202,15 +211,18 @@ export const caissesProcs = {
     if (isStaffOnly(ctx) && (i.from !== mine(ctx) || i.to !== 'main')) throw forbidden('Vous pouvez seulement verser votre caisse à la caisse principale');
     await checkCaisse(ctx.db, i.from);
     await checkCaisse(ctx.db, i.to);
-    const bal = (await balances(ctx)).get(i.from) ?? 0;
-    if (bal < i.amount) throw bad(`Solde insuffisant : ${bal} DA dans cette caisse`);
-    await ctx.db.tx(async (tx) => {
-      const a = await tx.query(`INSERT INTO cash_moves (caisse, amount, kind, note, created_by) VALUES ($1,$2,'transfer',$3,$4) RETURNING id`, [i.from, -i.amount, i.note || null, ctx.session.profile.id]);
-      const pair = num(a[0].id);
-      await tx.query('UPDATE cash_moves SET pair_id = $1 WHERE id = $1', [pair]);
-      await tx.query(`INSERT INTO cash_moves (caisse, amount, kind, note, pair_id, created_by) VALUES ($1,$2,'transfer',$3,$4,$5)`, [i.to, i.amount, i.note || null, pair, ctx.session.profile.id]);
+    // one transfer at a time out of a caisse: two at once would both see the same balance and empty it twice
+    return withActionLock(ctx.db, `caisse:${i.from}`, ctx.session.profile.id, 'Un autre mouvement de cette caisse est en cours, réessayez', async () => {
+      const bal = (await balances(ctx)).get(i.from) ?? 0;
+      if (bal < i.amount) throw bad(`Solde insuffisant : ${bal} DA dans cette caisse`);
+      await ctx.db.tx(async (tx) => {
+        const a = await tx.query(`INSERT INTO cash_moves (caisse, amount, kind, note, created_by) VALUES ($1,$2,'transfer',$3,$4) RETURNING id`, [i.from, -i.amount, i.note || null, ctx.session.profile.id]);
+        const pair = num(a[0].id);
+        await tx.query('UPDATE cash_moves SET pair_id = $1 WHERE id = $1', [pair]);
+        await tx.query(`INSERT INTO cash_moves (caisse, amount, kind, note, pair_id, created_by) VALUES ($1,$2,'transfer',$3,$4,$5)`, [i.to, i.amount, i.note || null, pair, ctx.session.profile.id]);
+      });
+      return { ok: true };
     });
-    return { ok: true };
   }),
 
   /** Cancels a move (both sides of a transfer). */

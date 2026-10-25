@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
-import { when, wilayaName } from '../../lib/format';
+import { when, wilayaName, syncProblems } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { Empty, ErrorBox, Icon, Loading, RemovableChip, StatusBadge } from '../../ui/kit';
@@ -81,6 +81,8 @@ function Head({ tab }: { tab: ListTab }) {
       // built by the delivery feature; the demo simulates the couriers
       const r = (await (rpc as unknown as (n: string, i: unknown) => Promise<any>)('delivery.sync', {})) ?? {};
       toast(t('suivi.syncDone', { checked: r.checked ?? 0, changed: r.changed ?? 0 }), 'ok');
+      const problems = syncProblems(r);
+      if (problems.length) toast(t('suivi.syncProblems', { count: problems.length, list: problems.slice(0, 4).join(' · ') }), 'bad');
       qc.invalidateQueries();
     } catch (e: any) {
       toast(t('suivi.syncFail', { msg: e?.message ?? '' }), 'bad');

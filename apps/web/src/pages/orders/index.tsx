@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
-import { da, n, pct } from '../../lib/format';
+import { da, n, pct, syncProblems } from '../../lib/format';
 import { openOrderForm } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
@@ -533,6 +533,8 @@ function CommandesDesk({ sub }: { sub?: string }) {
         setSyncing(false);
         if (r.ok) {
           toast(t('orders.synced', { count: Number(r.data?.changed ?? 0) }), 'ok');
+          const problems = syncProblems(r.data);
+          if (problems.length) toast(t('suivi.syncProblems', { count: problems.length, list: problems.slice(0, 4).join(' · ') }), 'bad');
           qc.invalidateQueries();
         } else toast(t('orders.syncUnavailable', { msg: r.error }), 'bad');
       }}

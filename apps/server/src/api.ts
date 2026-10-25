@@ -62,7 +62,7 @@ const Public = () => SetMetadata(PUBLIC, true);
 @Injectable()
 class AuthGuard implements CanActivate {
   /** Profiles are re-read at most every 30 s, so a deactivated account loses access quickly. */
-  private cache = new Map<number, { s: Session; at: number }>();
+  private cache = new Map<number, { s: Session; at: number; tv: number }>();
   constructor(
     private readonly jwt: JwtService,
     private readonly core: CoreService,
@@ -76,20 +76,27 @@ class AuthGuard implements CanActivate {
     const token = h.startsWith('Bearer ') ? h.slice(7) : '';
     if (!token) throw new UnauthorizedException('Connectez-vous');
     let id: number;
+    let tv = 0;
     try {
-      id = Number((await this.jwt.verifyAsync<{ sub: number }>(token)).sub);
+      const claims = await this.jwt.verifyAsync<{ sub: number; tv?: number }>(token);
+      id = Number(claims.sub);
+      tv = Number(claims.tv ?? 0);
     } catch {
       throw new UnauthorizedException('Session expirée, reconnectez-vous');
     }
     const hit = this.cache.get(id);
-    if (hit && Date.now() - hit.at < 30_000) {
+    // a token of another version than the cached one (just logged in again, password just changed): read again
+    if (hit && Date.now() - hit.at < 30_000 && tv === hit.tv) {
       req.session = hit.s;
       return true;
     }
     const p = await core.profileById(this.core.db, id);
     if (!p || !p.active) throw new UnauthorizedException('Compte désactivé');
+    // a password change raises token_version: tokens made before it stop working
+    const cur = await tokenVersion(this.core.db, id);
     const s = core.makeSession(p);
-    this.cache.set(id, { s, at: Date.now() });
+    this.cache.set(id, { s, at: Date.now(), tv: cur });
+    if (tv !== cur) throw new UnauthorizedException('Mot de passe changé : reconnectez-vous');
     req.session = s;
     return true;
   }
@@ -134,15 +141,35 @@ function limitLanding(ip: string, kind: string, max: number): boolean {
 /** A browser posting from another site (a page that makes its visitors send fake leads): not our page. */
 const crossSite = (req: { headers: Record<string, string | undefined> }) => req.headers['sec-fetch-site'] === 'cross-site';
 
-/** 10 login attempts per 15 minutes per address. */
+/** Compares two secrets in constant time (no timing hint on how much of a key was right). */
+function sameKey(given: unknown, want: unknown): boolean {
+  const a = Buffer.from(String(given ?? ''));
+  const b = Buffer.from(String(want ?? ''));
+  return a.length > 0 && b.length > 0 && a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** The token version of an account (raised when its password changes). */
+export async function tokenVersion(db: core.Db, id: number): Promise<number> {
+  return Number((await db.query('SELECT token_version FROM profiles WHERE id = $1', [id]))[0]?.token_version ?? 0);
+}
+
+/**
+ * Failed logins: 10 per 15 minutes per address, and 20 per account (an attacker changing address is still stopped).
+ * Only failures count, and a good password clears the account's counter, so nobody can lock a colleague out for good.
+ */
 const attempts = new Map<string, { n: number; until: number }>();
-function limitLogin(ip: string) {
+function checkLogin(key: string, max: number) {
+  const a = attempts.get(key);
+  if (a && a.until >= Date.now() && a.n >= max) throw new HttpException({ message: 'Trop de tentatives, réessayez dans quelques minutes' }, 429);
+}
+function failedLogin(key: string) {
   const now = Date.now();
   if (attempts.size > 10_000) for (const [k, v] of attempts) if (v.until < now) attempts.delete(k);
-  const a = attempts.get(ip);
-  if (!a || a.until < now) return void attempts.set(ip, { n: 1, until: now + 15 * 60_000 });
-  if (++a.n > 10) throw new HttpException({ message: 'Trop de tentatives, réessayez dans quelques minutes' }, 429);
+  const a = attempts.get(key);
+  if (!a || a.until < now) attempts.set(key, { n: 1, until: now + 15 * 60_000 });
+  else a.n++;
 }
+let proxyWarned = false;
 
 /** Dellal: newest message per conversation and the answer running for it. */
 const latest = new Map<number, number>();
@@ -177,20 +204,41 @@ class ApiController {
 
   @Public()
   @Post('auth/login')
-  async login(@Body() body: unknown, @Req() req: { ip?: string }) {
-    limitLogin(req.ip || 'unknown');
+  async login(@Body() body: unknown, @Req() req: { ip?: string; headers?: Record<string, unknown> }) {
+    if (!config.trustProxy && req.headers?.['x-forwarded-for'] && !proxyWarned) {
+      proxyWarned = true;
+      new Logger('Pilotix').warn('Requests come through a proxy (X-Forwarded-For) but TRUST_PROXY is not set: the login limit sees every user as the proxy. Set TRUST_PROXY=1.');
+    }
+    const ipKey = `ip:${req.ip || 'unknown'}`;
+    checkLogin(ipKey, 10);
     const b = LoginBody.safeParse(body);
     if (!b.success) throw new core.AppError('bad_request', 'Email ou mot de passe manquant');
-    const session = await core.login(this.core.db, b.data.email, b.data.password);
-    const token = await this.jwt.signAsync({ sub: session.profile.id });
+    const mailKey = `email:${b.data.email.trim().toLowerCase()}`;
+    checkLogin(mailKey, 20);
+    let session: Session;
+    try {
+      session = await core.login(this.core.db, b.data.email, b.data.password);
+    } catch (e) {
+      failedLogin(ipKey);
+      failedLogin(mailKey);
+      throw e;
+    }
+    attempts.delete(mailKey);
+    const token = await this.jwt.signAsync({ sub: session.profile.id, tv: await tokenVersion(this.core.db, session.profile.id) });
     return { token, session };
   }
 
   @Post('rpc/:name')
-  rpc(@Param('name') name: string, @Body() body: unknown, @Req() req: { session: Session }) {
+  async rpc(@Param('name') name: string, @Body() body: unknown, @Req() req: { session: Session }) {
     // names like orders.list, and grouped ones like dellal.settings.get or cm.settings.save
     if (!/^[a-z]+(\.[a-zA-Z]+){1,3}$/.test(name)) throw new core.AppError('not_found', 'Action inconnue');
-    return this.core.call(name, req.session, body ?? {});
+    const out: any = await this.core.call(name, req.session, body ?? {});
+    // a new password logs out the other sessions: this one gets a fresh token and stays in
+    if (name === 'me.password') {
+      const id = req.session.profile.id;
+      return { ...out, token: await this.jwt.signAsync({ sub: id, tv: await tokenVersion(this.core.db, id) }) };
+    }
+    return out;
   }
 
   /**
@@ -205,8 +253,29 @@ class ApiController {
     let ch: any = null;
     if (/^\d+$/.test(channel)) ch = (await db.query('SELECT * FROM sales_channels WHERE id = $1 AND active', [Number(channel)]))[0];
     const shopKey = (await core.getSetting(db, 'webhook')).key;
-    const ok = ch ? key && key === ch.webhook_key : channel === 'site' && shopKey && key === shopKey;
+    const ok = ch ? sameKey(key, ch.webhook_key) : channel === 'site' && sameKey(key, shopKey);
     if (!ok) throw new core.AppError('unauthorized', 'Clé webhook invalide');
+    // the store's own order number: when the store sends the same order again (retry after a timeout), the order
+    // already made is answered instead of creating a second one
+    const extId = String(body?.order_id ?? body?.external_id ?? body?.id ?? '').trim().slice(0, 120) || null;
+    const chKey = ch ? `ch${ch.id}` : 'site';
+    if (extId) {
+      const ext = `${chKey}:${extId}`; // unique per store (two stores may both have an order n° 1001)
+      const seen = (await db.query('SELECT id, ref FROM orders WHERE ext_order_id = $1', [ext]))[0];
+      if (seen) return { ok: true, id: Number(seen.id), ref: seen.ref, duplicate: true };
+      return core.withActionLock(db, `hook:${chKey}:${extId}`, null, 'Commande déjà en cours de réception', async () => {
+        const again = (await db.query('SELECT id, ref FROM orders WHERE ext_order_id = $1', [ext]))[0];
+        if (again) return { ok: true, id: Number(again.id), ref: again.ref, duplicate: true };
+        const made = await this.createFromHook(ch, channel, body);
+        await db.query('UPDATE orders SET ext_order_id = $2 WHERE id = $1', [made.id, ext]);
+        return made;
+      });
+    }
+    return this.createFromHook(ch, channel, body);
+  }
+
+  private async createFromHook(ch: any, channel: string, body: any) {
+    const db = this.core.db;
 
     const items: { productId: number; variantId: number | null; qty: number; unitPrice?: number }[] = [];
     for (const it of Array.isArray(body?.items) ? body.items : []) {
@@ -350,7 +419,7 @@ class ApiController {
   @Get('hooks/meta')
   async metaVerify(@Query() q: Record<string, string>, @Res() res: any) {
     const r: any = await this.core.call('dellal.routing', await this.core.systemSession(), {});
-    if (q['hub.mode'] === 'subscribe' && r.verifyToken && q['hub.verify_token'] === r.verifyToken) return res.status(200).header('Content-Type', 'text/plain').send(String(q['hub.challenge'] ?? ''));
+    if (q['hub.mode'] === 'subscribe' && sameKey(q['hub.verify_token'], r.verifyToken)) return res.status(200).header('Content-Type', 'text/plain').send(String(q['hub.challenge'] ?? ''));
     return res.status(403).send({ message: 'Jeton de vérification invalide' });
   }
 
@@ -360,7 +429,14 @@ class ApiController {
   async metaHook(@Req() req: RawBodyRequest<any>, @Headers('x-hub-signature-256') sig: string, @Body() body: any) {
     const db = this.core.db;
     const secret = String((await db.query(`SELECT value FROM settings WHERE key = 'secret_dellal_meta_app_secret'`))[0]?.value ?? '');
-    if (secret) {
+    // without the Meta app secret nobody can tell a real Meta call from a fake one (anyone could inject messages
+    // "from" a customer, make Dellal answer and spend): nothing is taken until the secret is set. 200 so Meta
+    // does not retry in a loop.
+    if (!secret) {
+      new Logger('Meta').warn('webhook ignored: add the Meta app secret (Message AI agent › Réglages) so Pilotix can check it comes from Meta');
+      return { ok: false, received: 0, error: 'Meta app secret manquant' };
+    }
+    {
       const raw: Buffer | undefined = req.rawBody;
       const want = 'sha256=' + createHmac('sha256', secret).update(raw ?? Buffer.from(JSON.stringify(body ?? {}))).digest('hex');
       const ok = !!sig && sig.length === want.length && timingSafeEqual(Buffer.from(sig), Buffer.from(want));
@@ -413,7 +489,7 @@ class ApiController {
   @Post('hooks/tiktok')
   async tiktokHook(@Query('key') key: string, @Body() body: any) {
     const r: any = await this.core.call('dellal.routing', await this.core.systemSession(), {});
-    if (!r.verifyToken || key !== r.verifyToken) throw new core.AppError('unauthorized', 'Clé invalide');
+    if (!sameKey(key, r.verifyToken)) throw new core.AppError('unauthorized', 'Clé invalide');
     const text = String(body?.text ?? body?.content?.text ?? '').trim();
     const user = String(body?.user_id ?? body?.sender?.id ?? '').trim();
     if (!text || !user) throw new core.AppError('bad_request', 'user_id et text requis');
@@ -471,7 +547,7 @@ class ApiController {
   @Post('hooks/cron')
   async cron(@Query('key') key: string) {
     const ck = (await core.getSetting(this.core.db, 'cron')).key;
-    if (!ck || key !== ck) throw new core.AppError('unauthorized', 'Clé cron invalide');
+    if (!sameKey(key, ck)) throw new core.AppError('unauthorized', 'Clé cron invalide');
     const session = await this.core.systemSession();
     void this.core.call('cm.sweep', session, {}).catch(() => null); // comments the CM AI agent has not answered yet (in the background)
     void this.core.call('landing.run', session, {}).catch(() => null); // landing pages: abandoned orders, Meta events (in the background)

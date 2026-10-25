@@ -2,7 +2,7 @@
 import { API_COURIER_KINDS, normalizePhone, Order, Page, Pack, StockRow, Warehouse } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, num, numOrNull, Where } from '../db';
-import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
+import { bad, Ctx, forbidden, notFound, proc, withActionLock } from '../rpc';
 import { getSetting } from '../settings';
 import { cancelParcel, sendOrders } from './delivery';
 import { getOrder, ordersProcs, setFollow } from './orders';
@@ -507,19 +507,30 @@ export async function scanRules(ctx: Ctx, o: Order, code: string, mode: ScanMode
   const orig = x.originalOrderId ? await getOrder(ctx, x.originalOrderId).catch(() => null) : null;
   if (!orig) return { kind: 'bad', code, order: x, why: `Échange ${x.ref} sans commande d’origine : impossible de savoir quel produit revient.`, fix: 'Remettez l’ancien produit en stock à la main (Produits & stock).' };
   const tag = `Échange ${x.ref} : ancien produit reçu au dépôt`;
-  const mv = await ctx.db.query('SELECT m.created_at, p.name FROM stock_movements m LEFT JOIN profiles p ON p.id = m.user_id WHERE m.note = $1 LIMIT 1', [tag]);
-  if (mv[0]) return { kind: 'bad', code, order: x, why: `Échange déjà reçu le ${dayFr(iso(mv[0].created_at))}${mv[0].name ? ` par ${mv[0].name}` : ''}.`, fix: 'Double scan : l’ancien produit est déjà en stock.' };
   if (!x.followStatus || !['delivered', 'in_exchange', 'exchanged'].includes(x.followStatus))
     return { kind: 'bad', code, order: x, why: `L’échange ${x.ref} n’est pas encore fait chez le client (statut : ${fol(x)}).`, fix: 'L’ancien produit ne peut pas être revenu. Vérifiez l’étiquette.' };
-  const items = orig.items.filter((i) => i.variantId);
+  // what really comes back: the lines the SAV exchanged (kept on the ticket), not the whole original order;
+  // a parts exchange brings nothing back (the article stays with the customer)
+  const tk = (await ctx.db.query('SELECT exchange_kind, exchange_back FROM complaints WHERE exchange_order_id = $1 ORDER BY id DESC LIMIT 1', [x.id]))[0];
+  if (tk?.exchange_kind === 'parts') return { kind: 'bad', code, order: x, why: `Échange de pièces ${x.ref} : l’article reste chez le client, rien ne revient en stock.`, fix: 'Rien à remettre en stock.' };
+  const kept = tk?.exchange_back ? ((typeof tk.exchange_back === 'string' ? JSON.parse(tk.exchange_back) : tk.exchange_back) as { variantId: number; qty: number }[]) : null;
+  const items = kept ? kept.map((b) => ({ variantId: num(b.variantId) as number | null, qty: num(b.qty) })) : orig.items.filter((i) => i.variantId).map((i) => ({ variantId: i.variantId, qty: i.qty }));
   if (!items.length) return { kind: 'bad', code, order: x, why: `La commande d’origine ${orig.ref} n’a pas de produit à remettre.`, fix: 'Remettez l’ancien produit en stock à la main.' };
   const wh = orig.warehouseId ?? (await defaultWarehouse(ctx.db));
   if (!wh) throw bad('Aucun dépôt actif');
-  await ctx.db.tx(async (tx) => {
-    for (const i of items) await moveStock(tx, { variantId: i.variantId!, warehouseId: wh, delta: i.qty, reason: 'exchange_in', orderId: orig.id, userId: ctx.session.profile.id, note: tag });
-  });
+  // the check and the stock move under one lock: two scanners at once never put it back twice
+  const done = await withActionLock(ctx.db, `exscan:${x.id}`, ctx.session.profile.id, 'Ce colis est en cours de scan sur un autre poste', () =>
+    ctx.db.tx(async (tx) => {
+      const mv = await tx.query('SELECT m.created_at, p.name FROM stock_movements m LEFT JOIN profiles p ON p.id = m.user_id WHERE m.note = $1 LIMIT 1', [tag]);
+      if (mv[0]) return mv[0];
+      for (const i of items) await moveStock(tx, { variantId: i.variantId!, warehouseId: wh, delta: i.qty, reason: 'exchange_in', orderId: orig.id, userId: ctx.session.profile.id, note: tag });
+      return null;
+    }),
+  );
+  if (done) return { kind: 'bad', code, order: x, why: `Échange déjà reçu le ${dayFr(iso(done.created_at))}${done.name ? ` par ${done.name}` : ''}.`, fix: 'Double scan : l’ancien produit est déjà en stock.' };
   ctx.emit({ type: 'stock' });
-  return { kind: 'ok', code, order: x, why: `Échange reçu. Ancien produit remis en stock : ${itemsText(orig)}.`, fix: `Commande d’origine : ${orig.ref}.`, did: 'exchange' };
+  const backText = kept ? `${items.reduce((s, i) => s + i.qty, 0)} article(s) échangé(s)` : itemsText(orig);
+  return { kind: 'ok', code, order: x, why: `Échange reçu. Ancien produit remis en stock : ${backText}.`, fix: `Commande d’origine : ${orig.ref}.`, did: 'exchange' };
 }
 
 export async function scan(ctx: Ctx, i: { code?: string; orderId?: number; mode: ScanMode }): Promise<ScanResult> {

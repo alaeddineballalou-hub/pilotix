@@ -8,8 +8,8 @@ import { word } from '../couriers/demo';
 import { KINDS } from '../couriers/kinds';
 import type { ChangeInput, ChangeState, ParcelInfo } from '../couriers/types';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
-import { bad, Ctx, notFound, proc } from '../rpc';
-import { addEvent } from './orders';
+import { bad, Ctx, notFound, proc, withActionLock } from '../rpc';
+import { addEvent, setCourierCost } from './orders';
 
 const id = z.number().int().positive();
 const isDemo = (ctx: Ctx) => !ctx.server;
@@ -210,6 +210,8 @@ async function applyChange(ctx: Ctx, ch: any) {
       if (n.phone2 !== undefined) put('phone2', n.phone2);
     }
     if (sets.length) await tx.query(`UPDATE orders SET ${sets.join(', ')}, updated_at = now(), version = version + 1 WHERE id = $1`, [ch.order_id, ...vals]);
+    // home ↔ bureau or another wilaya: the courier's fee changes too
+    if (ch.kind === 'delivery' || ch.kind === 'address') await setCourierCost(tx, [num(ch.order_id)], true);
     await tx.query('UPDATE parcel_changes SET applied_at = now() WHERE id = $1', [ch.id]);
     await addEvent(tx, num(ch.order_id), ctx.session.profile.id, 'edit', null, null, `Modification acceptée par ${ch.company_name ?? 'la société'} : ${describe(ch.kind, parseJson(ch.old), n)}`);
   });
@@ -278,6 +280,75 @@ const ChangeIn = z.object({
   note: z.string().trim().max(500).nullable().optional(),
 });
 
+/** Sends one modification request (amount, place, phone) to the courier. */
+async function requestChange(ctx: Ctx, i: z.infer<typeof ChangeIn>) {
+  const o = await parcelOf(ctx.db, i.orderId);
+  if (!servesFrom(o)) throw bad('Ce colis n’est pas chez une société qui accepte les demandes de modification depuis Pilotix');
+  if (o.follow_status && FOLLOW_FINAL.includes(o.follow_status)) throw bad('Colis terminé : plus de modification possible');
+  if (i.kind !== 'phone' && (await ctx.db.query(`SELECT 1 FROM parcel_changes WHERE order_id = $1 AND status = 'pending' AND kind <> 'phone'`, [o.id]))[0])
+    throw bad('Une demande attend déjà la réponse de la société pour ce colis');
+  const old: ChangeValues = {
+    amount: num(o.total),
+    stopdesk: !!o.is_stopdesk,
+    stopdeskId: numOrNull(o.stopdesk_id),
+    stopdeskName: o.sd_name ?? null,
+    wilayaId: num(o.wilaya_id),
+    commune: o.commune ?? '',
+    address: o.address ?? '',
+    phone: o.phone,
+    phone2: o.phone2 ?? null,
+  };
+  const next: ChangeValues = {};
+  const input: ChangeInput = { item: { id: num(o.id), tracking: o.tracking, extId: o.ext_id ?? null }, kind: i.kind };
+  if (i.kind === 'amount') {
+    if (i.amount == null) throw bad('Le nouveau montant manque');
+    if (i.amount === num(o.total)) throw bad('C’est déjà le montant à encaisser');
+    next.amount = input.amount = i.amount;
+  } else if (i.kind === 'phone') {
+    const phone = normalizePhone(i.phone ?? '');
+    if (!phone) throw bad('Numéro de téléphone algérien invalide');
+    const phone2 = i.phone2 ? normalizePhone(i.phone2) : null;
+    if (i.phone2 && !phone2) throw bad('Deuxième numéro invalide');
+    next.phone = input.phone = phone;
+    next.phone2 = input.phone2 = phone2;
+  } else {
+    const stopdesk = i.kind === 'delivery' ? !!i.stopdesk : !!o.is_stopdesk;
+    if (i.kind === 'address' && stopdesk) throw bad('Colis livré en stop desk : changez plutôt le bureau (Domicile ↔ Stop desk)');
+    if (stopdesk) {
+      const sd = i.stopdeskId ? (await ctx.db.query('SELECT id, name, ext_id, wilaya_id, commune FROM stopdesks WHERE id = $1 AND company_id = $2', [i.stopdeskId, o.company_id]))[0] : null;
+      if (!sd) throw bad('Choisissez le bureau (stop desk)');
+      if (!isDemo(ctx) && !sd.ext_id) throw bad(`Ce bureau n’a pas d’identifiant chez ${o.company_name} : réimportez ses stop desks`);
+      Object.assign(next, { stopdesk: true, stopdeskId: num(sd.id), stopdeskName: sd.name, wilayaId: num(sd.wilaya_id), commune: sd.commune ?? '' });
+      Object.assign(input, { stopdesk: true, hubExtId: sd.ext_id ?? null, wilayaId: num(sd.wilaya_id), commune: sd.commune ?? '' });
+    } else {
+      if (!i.wilayaId || !i.commune) throw bad('Choisissez la wilaya et la commune');
+      Object.assign(next, { stopdesk: false, stopdeskId: null, wilayaId: i.wilayaId, commune: i.commune, address: i.address ?? '' });
+      Object.assign(input, { stopdesk: false, wilayaId: i.wilayaId, commune: i.commune, address: i.address ?? '' });
+    }
+    if (i.amount != null && i.amount !== num(o.total)) next.amount = input.amount = i.amount;
+    if (i.kind === 'delivery' && !!o.is_stopdesk === stopdesk && (!stopdesk || num(o.stopdesk_id) === next.stopdeskId)) throw bad(stopdesk ? 'C’est déjà ce bureau' : 'Le colis est déjà livré à domicile');
+  }
+  let extId: string | null = null;
+  let approved: boolean | null = null;
+  if (isDemo(ctx)) {
+    extId = `demo-change-${Date.now()}`;
+    approved = i.kind === 'phone' ? true : null;
+  } else {
+    const r = (await courier(ctx, 'change', { companyId: num(o.company_id), orderId: num(o.id), change: input })) as { extId: string; approved: boolean | null };
+    extId = r.extId;
+    approved = r.approved;
+  }
+  const ins = await ctx.db.query(
+    `INSERT INTO parcel_changes (order_id, company_id, ext_id, kind, old, new, status, note, created_by, decided_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+    [o.id, o.company_id, extId, i.kind, JSON.stringify(old), JSON.stringify(next), approved ? 'approved' : 'pending', i.note ?? null, ctx.session.profile.id, approved ? new Date().toISOString() : null],
+  );
+  const row = { ...ins[0], company_name: o.company_name };
+  await addEvent(ctx.db, num(o.id), ctx.session.profile.id, 'note', null, null, `Demande de modification envoyée à ${o.company_name} : ${describe(i.kind, old, next)}${i.note ? ` (${i.note})` : ''}`);
+  if (approved) await applyChange(ctx, row);
+  ctx.emit({ type: 'order', id: num(o.id) });
+  return toChange((await ctx.db.query(`${CHANGES_SQL} WHERE ch.id = $1`, [row.id]))[0]);
+}
+
 export const parcelsProcs = {
   /** The parcel at its courier: journey, SMS, livreur, return risk, what can still change, and the requests made. */
   'parcel.info': proc(['suivi', 'depot', 'confirmation'], z.object({ orderId: id }), async (ctx, { orderId }) => {
@@ -297,73 +368,10 @@ export const parcelsProcs = {
   }),
 
   /** Sends a modification request to the courier (a phone change is applied at once). */
-  'parcel.change': proc(['suivi'], ChangeIn, async (ctx, i) => {
-    const o = await parcelOf(ctx.db, i.orderId);
-    if (!servesFrom(o)) throw bad('Ce colis n’est pas chez une société qui accepte les demandes de modification depuis Pilotix');
-    if (o.follow_status && FOLLOW_FINAL.includes(o.follow_status)) throw bad('Colis terminé : plus de modification possible');
-    if (i.kind !== 'phone' && (await ctx.db.query(`SELECT 1 FROM parcel_changes WHERE order_id = $1 AND status = 'pending' AND kind <> 'phone'`, [o.id]))[0])
-      throw bad('Une demande attend déjà la réponse de la société pour ce colis');
-    const old: ChangeValues = {
-      amount: num(o.total),
-      stopdesk: !!o.is_stopdesk,
-      stopdeskId: numOrNull(o.stopdesk_id),
-      stopdeskName: o.sd_name ?? null,
-      wilayaId: num(o.wilaya_id),
-      commune: o.commune ?? '',
-      address: o.address ?? '',
-      phone: o.phone,
-      phone2: o.phone2 ?? null,
-    };
-    const next: ChangeValues = {};
-    const input: ChangeInput = { item: { id: num(o.id), tracking: o.tracking, extId: o.ext_id ?? null }, kind: i.kind };
-    if (i.kind === 'amount') {
-      if (i.amount == null) throw bad('Le nouveau montant manque');
-      if (i.amount === num(o.total)) throw bad('C’est déjà le montant à encaisser');
-      next.amount = input.amount = i.amount;
-    } else if (i.kind === 'phone') {
-      const phone = normalizePhone(i.phone ?? '');
-      if (!phone) throw bad('Numéro de téléphone algérien invalide');
-      const phone2 = i.phone2 ? normalizePhone(i.phone2) : null;
-      if (i.phone2 && !phone2) throw bad('Deuxième numéro invalide');
-      next.phone = input.phone = phone;
-      next.phone2 = input.phone2 = phone2;
-    } else {
-      const stopdesk = i.kind === 'delivery' ? !!i.stopdesk : !!o.is_stopdesk;
-      if (i.kind === 'address' && stopdesk) throw bad('Colis livré en stop desk : changez plutôt le bureau (Domicile ↔ Stop desk)');
-      if (stopdesk) {
-        const sd = i.stopdeskId ? (await ctx.db.query('SELECT id, name, ext_id, wilaya_id, commune FROM stopdesks WHERE id = $1 AND company_id = $2', [i.stopdeskId, o.company_id]))[0] : null;
-        if (!sd) throw bad('Choisissez le bureau (stop desk)');
-        if (!isDemo(ctx) && !sd.ext_id) throw bad(`Ce bureau n’a pas d’identifiant chez ${o.company_name} : réimportez ses stop desks`);
-        Object.assign(next, { stopdesk: true, stopdeskId: num(sd.id), stopdeskName: sd.name, wilayaId: num(sd.wilaya_id), commune: sd.commune ?? '' });
-        Object.assign(input, { stopdesk: true, hubExtId: sd.ext_id ?? null, wilayaId: num(sd.wilaya_id), commune: sd.commune ?? '' });
-      } else {
-        if (!i.wilayaId || !i.commune) throw bad('Choisissez la wilaya et la commune');
-        Object.assign(next, { stopdesk: false, stopdeskId: null, wilayaId: i.wilayaId, commune: i.commune, address: i.address ?? '' });
-        Object.assign(input, { stopdesk: false, wilayaId: i.wilayaId, commune: i.commune, address: i.address ?? '' });
-      }
-      if (i.amount != null && i.amount !== num(o.total)) next.amount = input.amount = i.amount;
-      if (i.kind === 'delivery' && !!o.is_stopdesk === stopdesk && (!stopdesk || num(o.stopdesk_id) === next.stopdeskId)) throw bad(stopdesk ? 'C’est déjà ce bureau' : 'Le colis est déjà livré à domicile');
-    }
-    let extId: string | null = null;
-    let approved: boolean | null = null;
-    if (isDemo(ctx)) {
-      extId = `demo-change-${Date.now()}`;
-      approved = i.kind === 'phone' ? true : null;
-    } else {
-      const r = (await courier(ctx, 'change', { companyId: num(o.company_id), orderId: num(o.id), change: input })) as { extId: string; approved: boolean | null };
-      extId = r.extId;
-      approved = r.approved;
-    }
-    const ins = await ctx.db.query(
-      `INSERT INTO parcel_changes (order_id, company_id, ext_id, kind, old, new, status, note, created_by, decided_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [o.id, o.company_id, extId, i.kind, JSON.stringify(old), JSON.stringify(next), approved ? 'approved' : 'pending', i.note ?? null, ctx.session.profile.id, approved ? new Date().toISOString() : null],
-    );
-    const row = { ...ins[0], company_name: o.company_name };
-    await addEvent(ctx.db, num(o.id), ctx.session.profile.id, 'note', null, null, `Demande de modification envoyée à ${o.company_name} : ${describe(i.kind, old, next)}${i.note ? ` (${i.note})` : ''}`);
-    if (approved) await applyChange(ctx, row);
-    ctx.emit({ type: 'order', id: num(o.id) });
-    return toChange((await ctx.db.query(`${CHANGES_SQL} WHERE ch.id = $1`, [row.id]))[0]);
-  }),
+  'parcel.change': proc(['suivi'], ChangeIn, (ctx, i) =>
+    // one request at a time per parcel: a double click never sends (and pays) the same change twice
+    withActionLock(ctx.db, `parcelchange:${i.orderId}`, ctx.session.profile.id, 'Une demande de modification est déjà en cours d’envoi pour ce colis', () => requestChange(ctx, i)),
+  ),
 
   /** The courier's answers to the requests still waiting (one order, or every one). */
   'parcel.changeSync': proc(['suivi', 'depot'], z.object({ orderId: id.optional() }), async (ctx, i) => syncChanges(ctx, i.orderId)),

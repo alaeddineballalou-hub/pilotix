@@ -1,4 +1,6 @@
 import {
+  API_COURIER_KINDS,
+  canSetConf,
   canSetFollow,
   CONF_DONE_BAD,
   CONF_NEEDS_DATE,
@@ -6,6 +8,7 @@ import {
   CONF_STATUSES,
   CONF_TODO,
   ConfStatus,
+  FOLLOW_FINAL,
   FOLLOW_LOCKED,
   FOLLOW_STATUSES,
   FollowStatus,
@@ -122,7 +125,14 @@ const onlyOwnDeliveries = (ctx: Ctx) => {
   return !s.isAdmin && s.roles.includes('livreur') && !s.roles.some((r) => ['confirmation', 'suivi', 'depot'].includes(r));
 };
 
+/** Accounts with no order work at all (a marketer): they never read customers' names, phones or addresses. */
+export const noOrderAccess = (ctx: Ctx) => {
+  const s = ctx.session;
+  return !s.isAdmin && !s.roles.some((r) => ['confirmation', 'suivi', 'depot', 'livreur', 'agent_manager', 'vendeur'].includes(r));
+};
+
 export async function getOrder(ctx: Ctx, id: number, db: Db = ctx.db): Promise<Order> {
+  if (noOrderAccess(ctx)) throw forbidden();
   const r = (await db.query(`SELECT ${ORDER_COLS} ${ORDER_FROM} WHERE o.id = $1`, [id]))[0];
   if (!r) throw notFound('Commande introuvable');
   const o = toOrder(r);
@@ -190,6 +200,7 @@ export const ListInput = z.object({
 export type ListInput = z.infer<typeof ListInput>;
 
 export async function listOrders(ctx: Ctx, f: ListInput): Promise<Page<Order>> {
+  if (noOrderAccess(ctx)) return { rows: [], total: 0, page: f.page, pageSize: f.pageSize };
   const w = new Where();
   if (onlyOwnDeliveries(ctx)) w.add('o.livreur_id = ?', ctx.session.profile.id);
   if (f.conf?.length) w.add('o.conf_status = ANY(?)', f.conf);
@@ -216,7 +227,7 @@ export async function listOrders(ctx: Ctx, f: ListInput): Promise<Page<Order>> {
   else if (f.tickets === 'only') w.add('o.is_exchange');
   if (f.subStatus) w.add('o.sub_status = ?', f.subStatus);
   if (f.ids?.length) w.add('o.id = ANY(?)', f.ids);
-  const dcol = f.dateField === 'back_at' ? 'coalesce(o.returned_at, o.updated_at)' : `o.${f.dateField}`;
+  const dcol = f.dateField === 'back_at' ? 'coalesce(o.returned_at, o.returning_at, o.updated_at)' : `o.${f.dateField}`;
   if (f.from) w.add(`${dcol} >= ?`, f.from);
   if (f.to) w.add(`${dcol} < ?`, f.to);
   if (f.reason) {
@@ -349,6 +360,7 @@ export async function createOrder(
   if (!phone) throw bad('Numéro de téléphone algérien invalide');
   const phone2 = input.phone2 ? normalizePhone(input.phone2) : null;
   if (input.confirm && !hasRole(ctx.session, 'confirmation')) throw forbidden();
+  if (input.confirm && !input.isStopdesk && !String(input.commune ?? '').trim()) throw bad('Indiquez la commune avant de confirmer');
   const me = ctx.session.profile.id;
 
   const order = await db.tx(async (tx) => {
@@ -407,6 +419,26 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
     if (input.version && num(cur.version) !== input.version) throw bad('Cette commande a été modifiée par quelqu’un d’autre. Rechargez-la.');
     const locked = cur.follow_status && FOLLOW_LOCKED.includes(cur.follow_status);
     if (locked && input.items) throw bad('Commande déjà partie : produits non modifiables');
+    // the money and the place of a parcel a courier already has (API) or of a cashed order are frozen here: the
+    // courier would still collect the old amount. Such changes go through « Modifier le colis » (sent to the company).
+    const atCourier = !!cur.tracking && API_COURIER_KINDS.includes((await tx.query('SELECT kind FROM delivery_companies WHERE id = $1', [cur.company_id]))[0]?.kind ?? '');
+    if (atCourier || cur.cashed) {
+      const differs = (k: keyof typeof input, col: string, norm: (x: any) => any = (x) => x) => input[k] !== undefined && norm(input[k]) !== norm(cur[col]);
+      const n = (x: any) => (x == null ? null : Number(x));
+      const t = (x: any) => String(x ?? '').trim();
+      // the form always sends the products: only a real change counts
+      let itemsChanged = false;
+      if (input.items) {
+        const key = (l: { productId: number; variantId?: number | null; qty: number }) => `${l.productId}:${l.variantId ?? ''}:${l.qty}`;
+        const now = (await tx.query('SELECT product_id, variant_id, qty FROM order_items WHERE order_id = $1', [input.id])).map((r: any) => key({ productId: num(r.product_id), variantId: numOrNull(r.variant_id), qty: num(r.qty) })).sort();
+        itemsChanged = JSON.stringify(input.items.map(key).sort()) !== JSON.stringify(now);
+      }
+      const moneyOrPlace =
+        itemsChanged || differs('discount', 'discount', n) || differs('deliveryFee', 'delivery_fee', n) || differs('wilayaId', 'wilaya_id', n) ||
+        differs('commune', 'commune', t) || differs('isStopdesk', 'is_stopdesk', (x) => !!x) || differs('stopdeskId', 'stopdesk_id', n);
+      if (moneyOrPlace)
+        throw bad(cur.cashed ? 'Commande déjà encaissée : montant et adresse ne changent plus' : 'Colis déjà chez la société : changez le montant ou l’adresse avec « Modifier le colis »');
+    }
     const phone = input.phone !== undefined ? normalizePhone(input.phone) : cur.phone;
     if (!phone) throw bad('Numéro de téléphone algérien invalide');
     // a bureau delivery needs its bureau (stop desk); going back home forgets it
@@ -494,7 +526,7 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
     const notify = await notifyContext(tx);
     const landing = await landingSettings(tx);
     for (const oid of input.ids) {
-      const cur = (await tx.query('SELECT id, conf_status, follow_status, attempts, agent_id, phone, is_exchange, landing_id FROM orders WHERE id = $1 FOR UPDATE', [oid]))[0];
+      const cur = (await tx.query('SELECT id, conf_status, follow_status, shipped_at, attempts, agent_id, phone, is_exchange, landing_id, commune, is_stopdesk, stopdesk_id FROM orders WHERE id = $1 FOR UPDATE', [oid]))[0];
       if (!cur) continue;
       if (cur.follow_status && !['to_prepare', 'prepared', 'cancelled'].includes(cur.follow_status) && input.status !== 'confirmed')
         throw bad('Commande déjà expédiée : changez plutôt le statut de livraison');
@@ -507,6 +539,10 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
         note = `Annulée automatiquement après ${attempts} appels sans réponse`;
       }
       const confirmed = status === 'confirmed';
+      // the depot and the courier need where to deliver (also checked here, not only on the screen: bulk confirm)
+      if (confirmed && cur.conf_status !== 'confirmed') {
+        if (!cur.is_stopdesk && !String(cur.commune ?? '').trim()) throw bad('Indiquez la commune avant de confirmer');
+      }
       const nowIso = new Date(ctx.now()).toISOString();
       await tx.query(
         `UPDATE orders SET conf_status=$2, attempts=$3,
@@ -514,7 +550,7 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
            next_call_at = $6,
            agent_id = COALESCE(agent_id, $7), assigned_at = COALESCE(assigned_at, $5::timestamptz),
            confirmed_at = CASE WHEN $8 THEN COALESCE(confirmed_at, $5::timestamptz) ELSE confirmed_at END,
-           follow_status = CASE WHEN $8 AND follow_status IS NULL THEN 'to_prepare'
+           follow_status = CASE WHEN $8 AND (follow_status IS NULL OR (follow_status = 'cancelled' AND shipped_at IS NULL)) THEN 'to_prepare'
                                 WHEN $2 IN ('cancelled','duplicate','wrong_number','fake') AND follow_status IN ('to_prepare','prepared') THEN 'cancelled'
                                 ELSE follow_status END,
            updated_at=now(), version=version+1
@@ -522,7 +558,8 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
         [oid, status, attempts, isCallFail || confirmed || CONF_NEEDS_DATE.includes(status), nowIso, CONF_NEEDS_DATE.includes(status) ? input.nextCallAt : null, me, confirmed],
       );
       await addEvent(tx, oid, me, 'conf_status', cur.conf_status, status, [input.reason, note].filter(Boolean).join(' — ') || null);
-      if (confirmed && !cur.follow_status) await addEvent(tx, oid, me, 'follow_status', null, 'to_prepare');
+      // confirmed again after a cancel: back to the depot's « À préparer »
+      if (confirmed && (!cur.follow_status || (cur.follow_status === 'cancelled' && !cur.shipped_at))) await addEvent(tx, oid, me, 'follow_status', cur.follow_status, 'to_prepare');
       await onConfChange(tx, notify, cur, cur.conf_status, status, ctx.now());
       // Meta: an order from a landing page, confirmed by a person, is a real sale (never a blocked or fake one)
       await onLandingConf(tx, landing, cur, cur.conf_status, status, ctx.now());
@@ -546,10 +583,55 @@ export const FollowInput = z.object({
 });
 
 const MILESTONE: Partial<Record<FollowStatus, string>> = { prepared: 'prepared_at', shipped: 'shipped_at', delivered: 'delivered_at', returned: 'returned_at' };
+/** Statuses that mean the parcel has physically left the depot (stock goes out on the first of them). */
+const LEFT_DEPOT: FollowStatus[] = ['shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange', 'delivered', 'returning', 'exchanged', 'lost'];
 
-export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>) {
+/**
+ * Why a delivery status change is not allowed (null = allowed).
+ * - a delivered order whose money is already in a caisse cannot leave « Livrée » (cancel the versement first);
+ * - a final status (livrée, retournée, échangée, perdue, annulée) is only changed by admin / suivi, with a reason;
+ * - a parcel that has left the depot cannot go back to « À préparer » / « Préparée » (admin only).
+ */
+export function followBlock(ctx: Ctx, cur: any, to: FollowStatus, hasReason: boolean): string | null {
+  const from: FollowStatus | null = cur.follow_status;
+  if (!from || from === to) return null;
+  const s = ctx.session;
+  const office = s.isAdmin || s.roles.includes('suivi');
+  if (from === 'delivered' && cur.cashed) return `${cur.ref} est livrée et déjà encaissée : annulez d’abord le versement`;
+  if (FOLLOW_FINAL.includes(from) && from !== 'cancelled') {
+    if (!office) return `${cur.ref} est terminée (${from}) : seul le suivi ou un administrateur peut la changer`;
+    if (!hasReason) return `${cur.ref} est terminée : indiquez la raison du changement`;
+  }
+  if (cur.shipped_at && (to === 'to_prepare' || to === 'prepared') && !s.isAdmin) return `${cur.ref} est déjà partie du dépôt`;
+  return null;
+}
+
+/**
+ * The courier's fee for these parcels, from the company's tariff (home or bureau, by wilaya). Set when the parcel
+ * leaves for every kind of company (not only those with an API), so the caisse never counts the full COD as cash
+ * received. `force`: computed again (the place changed); otherwise only where none was set yet.
+ */
+export async function setCourierCost(db: Db, orderIds: number[], force = false) {
+  if (!orderIds.length) return;
+  await db.query(
+    `UPDATE orders o SET delivery_cost = CASE WHEN o.is_stopdesk THEN f.desk ELSE f.home END
+       FROM delivery_fees f
+      WHERE o.id = ANY($1) AND f.company_id = o.company_id AND f.wilaya_id = o.wilaya_id AND NOT o.cashed
+        AND ($2 OR o.delivery_cost = 0)`,
+    [orderIds, force],
+  );
+}
+
+export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, opts: { system?: boolean } = {}) {
   if (!canSetFollow(ctx.session.roles, input.status)) throw forbidden('Vous ne pouvez pas mettre ce statut de livraison');
   const me = ctx.session.profile.id;
+  const own = onlyOwnDeliveries(ctx);
+  // a livreur never chooses who carries the parcel (it would move his cash to someone else)
+  const livreurId = own ? null : input.livreurId ?? null;
+  if (livreurId) {
+    const l = (await ctx.db.query('SELECT roles, active FROM profiles WHERE id = $1', [livreurId]))[0];
+    if (!l || !l.active || !(l.roles ?? []).includes('livreur')) throw bad('Ce livreur est introuvable');
+  }
   const changed: number[] = [];
   await ctx.db.tx(async (tx) => {
     if (await alreadyApplied(tx, input.clientId, me)) return;
@@ -558,38 +640,54 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>) {
     for (const oid of input.ids) {
       const cur = (await tx.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [oid]))[0];
       if (!cur) continue;
-      if (onlyOwnDeliveries(ctx) && num(cur.livreur_id) !== me) throw forbidden();
+      if (own && num(cur.livreur_id) !== me) throw forbidden();
       if (!['confirmed', 'no_stock'].includes(cur.conf_status) && input.status !== 'cancelled') throw bad(`${cur.ref} n’est pas confirmée`);
       const from: FollowStatus | null = cur.follow_status;
       const to = input.status;
-      const ms = MILESTONE[to];
+      const block = followBlock(ctx, cur, to, !!(input.reason || input.note));
+      if (block) {
+        // the courier sync / payment import skips such parcels instead of failing the whole batch
+        if (opts.system) continue;
+        throw bad(block);
+      }
+      if (livreurId && cur.cashed) throw bad(`${cur.ref} est déjà encaissée : le livreur ne peut plus changer`);
+      // Stock leaves the depot on the first status that means the parcel left (not only « Expédiée »: the courier
+      // can report « En livraison » or « Livrée » straight from « Préparée »), and comes back when returned.
+      const leaves = LEFT_DEPOT.includes(to) && !cur.shipped_at;
+      const back = to === 'returned' && cur.shipped_at && !cur.returned_at;
+      // shipped_at is set below (on whichever status the parcel leaves with); returning_at when it starts coming back
+      const ms = to === 'returning' ? 'returning_at' : MILESTONE[to] === 'shipped_at' ? undefined : MILESTONE[to];
       await tx.query(
         `UPDATE orders SET follow_status=$2, ${ms ? `${ms} = COALESCE(${ms}, now()),` : ''}
+           shipped_at = CASE WHEN $9 THEN COALESCE(shipped_at, now()) ELSE shipped_at END,
            tracking = COALESCE($3, tracking), livreur_id = COALESCE($4, livreur_id),
-           sub_status = $5, follow_agent_id = CASE WHEN $6 THEN $7 ELSE follow_agent_id END,
+           sub_status = CASE WHEN $8 THEN sub_status ELSE $5 END, follow_agent_id = CASE WHEN $6 THEN $7 ELSE follow_agent_id END,
            delivery_attempts = delivery_attempts + CASE WHEN $2 = 'failed' THEN 1 ELSE 0 END,
            updated_at=now(), version=version+1 WHERE id=$1`,
-        [oid, to, input.tracking ?? null, input.livreurId ?? null, input.subStatus ?? null, ctx.session.roles.includes('suivi'), me],
+        [oid, to, input.tracking ?? null, livreurId, input.subStatus ?? null, ctx.session.roles.includes('suivi'), me,
+          !!opts.system && input.subStatus === undefined, leaves],
       );
-      // Stock leaves the depot when shipped and comes back when returned.
-      const leaves = to === 'shipped' && !cur.shipped_at;
-      const back = to === 'returned' && cur.shipped_at && !cur.returned_at;
       if ((leaves || back) && cur.warehouse_id) {
         const items = await tx.query('SELECT variant_id, qty FROM order_items WHERE order_id = $1 AND variant_id IS NOT NULL', [oid]);
         for (const it of items) {
           const d = (leaves ? -1 : 1) * num(it.qty);
-          await tx.query(
+          const left = await tx.query(
             `INSERT INTO stock (variant_id, warehouse_id, qty) VALUES ($1,$2,$3)
-             ON CONFLICT (variant_id, warehouse_id) DO UPDATE SET qty = stock.qty + EXCLUDED.qty`,
+             ON CONFLICT (variant_id, warehouse_id) DO UPDATE SET qty = stock.qty + EXCLUDED.qty RETURNING qty`,
             [it.variant_id, cur.warehouse_id, d],
           );
+          // shipped more than the stock shows: said on the order (the product also shows in the stock alerts)
+          if (leaves && num(left[0]?.qty) < 0)
+            await addEvent(tx, oid, me, 'note', null, 'event', `Attention : stock négatif après ce départ (${num(left[0].qty)} pour la variante n° ${num(it.variant_id)}) — vérifiez l’inventaire`);
           await tx.query('INSERT INTO stock_movements (variant_id, warehouse_id, delta, reason, order_id, user_id) VALUES ($1,$2,$3,$4,$5,$6)', [
             it.variant_id, cur.warehouse_id, d, leaves ? 'shipped' : 'returned', oid, me,
           ]);
         }
       }
-      if (to === 'delivered' && from !== 'delivered') await tx.query('UPDATE customers SET delivered = delivered + 1 WHERE id = $1', [cur.customer_id]);
-      if (to === 'returned' && from !== 'returned') await tx.query('UPDATE customers SET returned = returned + 1 WHERE id = $1', [cur.customer_id]);
+      if (leaves || to === 'delivered') await setCourierCost(tx, [oid]);
+      // counted once per order, even if the status goes back and forth
+      if (to === 'delivered' && from !== 'delivered' && !cur.delivered_at) await tx.query('UPDATE customers SET delivered = delivered + 1 WHERE id = $1', [cur.customer_id]);
+      if (to === 'returned' && from !== 'returned' && !cur.returned_at) await tx.query('UPDATE customers SET returned = returned + 1 WHERE id = $1', [cur.customer_id]);
       await addEvent(tx, oid, me, 'follow_status', from, to, [input.reason, input.note].filter(Boolean).join(' — ') || null);
       // Delivery AI agent: shipped, with the livreur, at the desk, failed attempt, cancelled by the livreur, delivered
       await onFollowChange(tx, notify, cur, from, to, ctx.now());
@@ -822,7 +920,7 @@ export async function deliveredReport(ctx: Ctx, i: { from: string; to: string },
   const base = `FROM ${view} o LEFT JOIN delivery_companies co ON co.id = o.company_id`;
   const D = await ctx.db.query(`SELECT ${FEE_COLS} ${base} WHERE o.follow_status = 'delivered' AND o.delivered_at >= $1 AND o.delivered_at < $2`, [i.from, i.to]);
   const B = await ctx.db.query(
-    `SELECT ${FEE_COLS} ${base} WHERE o.follow_status IN ('returning','returned') AND coalesce(o.returned_at, o.updated_at) >= $1 AND coalesce(o.returned_at, o.updated_at) < $2`,
+    `SELECT ${FEE_COLS} ${base} WHERE o.follow_status IN ('returning','returned') AND coalesce(o.returned_at, o.returning_at, o.updated_at) >= $1 AND coalesce(o.returned_at, o.returning_at, o.updated_at) < $2`,
     [i.from, i.to],
   );
   type Agg = { companyId: number | null; name: string; kind: string | null; n: number; amount: number; cashed: number; cashedN: number; uncashed: number; uncashedN: number; fees: number; overweight: number; returns: number; returnFees: number; returnOverweight: number; netToReceive: number; noTariff: number };
@@ -923,7 +1021,7 @@ export async function cancelReport(ctx: Ctx, i: { from: string; to: string }) {
   // the parcels coming back, their reason, and per company out of what it delivered (with what the returns cost)
   const B = await ctx.db.query(
     `SELECT o.follow_status AS s, o.total, ${REASON_SQL.back} AS reason
-     FROM sales o WHERE o.follow_status IN ('returning','returned') AND coalesce(o.returned_at, o.updated_at) >= $1 AND coalesce(o.returned_at, o.updated_at) < $2`,
+     FROM sales o WHERE o.follow_status IN ('returning','returned') AND coalesce(o.returned_at, o.returning_at, o.updated_at) >= $1 AND coalesce(o.returned_at, o.returning_at, o.updated_at) < $2`,
     [i.from, i.to],
   );
   const d = await deliveredReport(ctx, i);
@@ -990,11 +1088,21 @@ export const ordersProcs = {
   }),
 
   'orders.assignCompany': proc(['depot', 'suivi', 'confirmation'], z.object({ ids, companyId: id.nullable(), livreurId: id.nullable().optional() }), async (ctx, i) => {
+    if (i.livreurId) {
+      const l = (await ctx.db.query('SELECT roles, active FROM profiles WHERE id = $1', [i.livreurId]))[0];
+      if (!l || !l.active || !(l.roles ?? []).includes('livreur')) throw bad('Ce livreur est introuvable');
+    }
+    const office = ctx.session.isAdmin || ctx.session.roles.includes('suivi') || ctx.session.roles.includes('depot');
     await ctx.db.tx(async (tx) => {
       for (const oid of i.ids) {
-        const cur = (await tx.query('SELECT company_id, follow_status, tracking FROM orders WHERE id=$1', [oid]))[0];
+        const cur = (await tx.query('SELECT ref, company_id, livreur_id, follow_status, tracking, shipped_at, cashed FROM orders WHERE id=$1 FOR UPDATE', [oid]))[0];
         if (!cur) continue;
         if (cur.tracking && cur.company_id && num(cur.company_id) !== i.companyId) throw bad('Colis déjà envoyé à une société : annulez-le d’abord');
+        // the livreur of a parcel decides who owes its cash: frozen once it is cashed or finished, and only the
+        // depot / suivi move a parcel that already left
+        const moves = num(cur.company_id) !== (i.companyId ?? 0) || num(cur.livreur_id) !== (i.livreurId ?? 0);
+        if (moves && (cur.cashed || FOLLOW_FINAL.includes(cur.follow_status))) throw bad(`${cur.ref} est terminée ou encaissée : la société et le livreur ne changent plus`);
+        if (moves && cur.shipped_at && !office) throw bad(`${cur.ref} est déjà partie du dépôt`);
         await tx.query('UPDATE orders SET company_id=$2, livreur_id=$3, updated_at=now() WHERE id=$1', [oid, i.companyId, i.livreurId ?? null]);
         await addEvent(tx, oid, ctx.session.profile.id, 'company', cur.company_id ? String(cur.company_id) : null, i.companyId ? String(i.companyId) : null);
       }
@@ -1036,14 +1144,16 @@ export const ordersProcs = {
   /** The next order this agent should call: due callbacks first, then the oldest new ones. */
   'orders.next': proc(['confirmation'], z.object({ skip: z.array(id).max(200).default([]) }), async (ctx, { skip }) => {
     const me = ctx.session.profile.id;
+    // picked and locked in one statement: two agents clicking at the same time never get the same customer
     const r = await ctx.db.query(
-      `SELECT id FROM orders WHERE conf_status = ANY($1) AND (agent_id IS NULL OR agent_id = $2) AND NOT (id = ANY($3))
-         AND (next_call_at IS NULL OR next_call_at <= now()) AND (locked_until IS NULL OR locked_until < now() OR locked_by = $2)
-       ORDER BY (next_call_at IS NOT NULL) DESC, next_call_at ASC, created_at ASC LIMIT 1`,
+      `UPDATE orders SET locked_by = $2, locked_until = now() + interval '10 minutes'
+        WHERE id = (SELECT id FROM orders WHERE conf_status = ANY($1) AND (agent_id IS NULL OR agent_id = $2) AND NOT (id = ANY($3))
+                      AND (next_call_at IS NULL OR next_call_at <= now()) AND (locked_until IS NULL OR locked_until < now() OR locked_by = $2)
+                    ORDER BY (next_call_at IS NOT NULL) DESC, next_call_at ASC, created_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED)
+       RETURNING id`,
       [CONF_TODO, me, skip],
     );
     if (!r[0]) return { id: null };
-    await ctx.db.query(`UPDATE orders SET locked_by=$2, locked_until=now() + interval '10 minutes' WHERE id=$1`, [r[0].id, me]);
     return { id: num(r[0].id) };
   }),
 
@@ -1095,9 +1205,16 @@ export const ordersProcs = {
       const results: { clientId: string; ok: boolean; error?: string }[] = [];
       for (const a of actions) {
         try {
-          if (a.kind === 'conf') await setConf(ctx, ConfInput.parse({ ids: [a.id], status: a.status, note: a.note, reason: a.reason, nextCallAt: a.nextCallAt, clientId: a.clientId }));
-          else if (a.kind === 'follow') await setFollow(ctx, FollowInput.parse({ ids: [a.id], status: a.status, note: a.note, reason: a.reason, clientId: a.clientId }));
-          else await addEvent(ctx.db, a.id, ctx.session.profile.id, 'note', null, 'event', a.note ?? '');
+          // the same rights as the screens: only confirmation (and admin) changes a confirmation status,
+          // and a note goes only on an order this user may open (a livreur: his own parcels)
+          if (a.kind === 'conf') {
+            if (!canSetConf(ctx.session.roles)) throw forbidden('Vous ne pouvez pas changer le statut de confirmation');
+            await setConf(ctx, ConfInput.parse({ ids: [a.id], status: a.status, note: a.note, reason: a.reason, nextCallAt: a.nextCallAt, clientId: a.clientId }));
+          } else if (a.kind === 'follow') await setFollow(ctx, FollowInput.parse({ ids: [a.id], status: a.status, note: a.note, reason: a.reason, clientId: a.clientId }));
+          else {
+            await getOrder(ctx, a.id);
+            await addEvent(ctx.db, a.id, ctx.session.profile.id, 'note', null, 'event', a.note ?? '');
+          }
           results.push({ clientId: a.clientId, ok: true });
         } catch (e: any) {
           results.push({ clientId: a.clientId, ok: false, error: e?.message ?? 'Erreur' });

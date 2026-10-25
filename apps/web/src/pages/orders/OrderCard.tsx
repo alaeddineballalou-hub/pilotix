@@ -1,5 +1,5 @@
 // The order card of the original app: a drawer on the right with Client, Produits, Livraison, Historique and every action.
-import { canSetFollow, CANCEL_REASONS, CONF_TONE, CONF_NEEDS_DATE, CONF_NEEDS_REASON, ConfStatus, FAIL_REASONS, FOLLOW_STATUSES, FollowStatus, Order, OrderEvent, RETURN_REASONS } from '@pilotix/shared';
+import { canSetFollow, CANCEL_REASONS, CONF_TONE, CONF_NEEDS_DATE, CONF_NEEDS_REASON, ConfStatus, FAIL_REASONS, FOLLOW_FINAL, FOLLOW_STATUSES, FollowStatus, Order, OrderEvent, RETURN_REASONS } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -217,7 +217,9 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
         onChange={(e) => {
           const s = e.target.value as FollowStatus;
           if (!s) return;
-          if (['failed', 'returning', 'alert', 'lost'].includes(s)) setPanel({ kind: 'follow', status: s });
+          // a finished order (livrée, retournée…) only changes with a reason: the panel asks for it
+          const finished = !!o.followStatus && o.followStatus !== 'cancelled' && FOLLOW_FINAL.includes(o.followStatus);
+          if (finished || ['failed', 'returning', 'alert', 'lost'].includes(s)) setPanel({ kind: 'follow', status: s });
           else run(() => rpc('orders.setFollow', { ids: [o.id], status: s }), t(`status.follow.${s}`));
         }}
       >
@@ -541,7 +543,11 @@ function ActionPanel({ o, panel, busy, companies, onCancel, run, onSendAfter }: 
         </Field>
       </>
     );
-    submit = () => run(() => rpc('orders.setFollow', { ids: [o.id], status: panel.status, reason: reason || null, note: note.trim() || null }), t(`status.follow.${panel.status}`));
+    submit = () => {
+      const finished = !!o.followStatus && o.followStatus !== 'cancelled' && FOLLOW_FINAL.includes(o.followStatus);
+      if (finished && !reason && !note.trim()) return toast(t('orders.card.finishedReason'), 'bad');
+      run(() => rpc('orders.setFollow', { ids: [o.id], status: panel.status, reason: reason || null, note: note.trim() || null }), t(`status.follow.${panel.status}`));
+    };
   } else if (panel.kind === 'company') {
     title = t('orders.card.companyTitle');
     okLabel = t('orders.card.assign');

@@ -58,7 +58,8 @@ export const usersProcs = {
   'me.password': proc(null, z.object({ current: z.string().min(1), next: z.string().min(8).max(200) }), async (ctx, i) => {
     const r = (await ctx.db.query('SELECT password_hash FROM profiles WHERE id=$1', [ctx.session.profile.id]))[0];
     if (!r || !(await bcrypt.compare(i.current, r.password_hash))) throw bad('Mot de passe actuel incorrect');
-    await ctx.db.query('UPDATE profiles SET password_hash=$2 WHERE id=$1', [ctx.session.profile.id, await hashPassword(i.next)]);
+    // every other session (another phone, a stolen token) is logged out
+    await ctx.db.query('UPDATE profiles SET password_hash=$2, token_version = token_version + 1 WHERE id=$1', [ctx.session.profile.id, await hashPassword(i.next)]);
     return { ok: true };
   }),
   /** What I chose on screen (columns, the column preset in use…), saved with my account. */
@@ -97,6 +98,33 @@ export const usersProcs = {
     if ((r.roles ?? []).includes('admin')) {
       const n = num((await ctx.db.query("SELECT count(*)::int AS n FROM profiles WHERE active AND 'admin' = ANY(roles) AND id <> $1", [me]))[0]?.n);
       if (!n) throw bad('Vous êtes le seul administrateur : nommez un autre administrateur avant de supprimer votre compte');
+    }
+    // a livreur cannot leave with parcels or cash in his hands: it would vanish from « Doit verser »
+    const open = (
+      await ctx.db.query(
+        `SELECT count(*) FILTER (WHERE follow_status = ANY($2))::int AS road, count(*) FILTER (WHERE follow_status = 'delivered' AND NOT cashed)::int AS cash
+           FROM orders WHERE livreur_id = $1`,
+        [me, ['shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange', 'returning']],
+      )
+    )[0];
+    if (num(open?.road) || num(open?.cash)) throw bad('Vous avez encore des colis ou de l’argent à verser : réglez-les avec le dépôt avant de supprimer votre compte');
+    // someone who carried parcels or handled money keeps his place in that history: the account is emptied
+    // (name, email, phone, picture, password) and closed instead of deleted, so no caisse or payment loses its owner
+    const trail = (
+      await ctx.db.query(
+        `SELECT EXISTS (SELECT 1 FROM orders WHERE livreur_id = $1) OR EXISTS (SELECT 1 FROM cash_handovers WHERE created_by = $1 OR livreur_id = $1)
+             OR EXISTS (SELECT 1 FROM cash_moves WHERE created_by = $1) AS has`,
+        [me],
+      )
+    )[0]?.has;
+    if (trail) {
+      const scrap = await hashPassword(globalThis.crypto.randomUUID() + globalThis.crypto.randomUUID());
+      await ctx.db.query(
+        `UPDATE profiles SET name = 'Compte supprimé', email = 'deleted-' || id || '@pilotix.invalid', phone = NULL, avatar = NULL,
+           password_hash = $2, active = false, token_version = token_version + 1 WHERE id = $1`,
+        [me, scrap],
+      );
+      return { ok: true };
     }
     await ctx.db.tx(async (tx) => {
       // every column that points to a user: emptied when it can be, rows removed when they only belong to me
@@ -225,7 +253,8 @@ export const usersProcs = {
     const r = (
       await ctx.db.query(
         `UPDATE profiles SET name=COALESCE($2,name), email=COALESCE($3,email), phone=COALESCE($4,phone), password_hash=COALESCE($5,password_hash),
-           roles=COALESCE($6,roles), language=COALESCE($7,language), active=COALESCE($8,active), livreur_company_id=COALESCE($9,livreur_company_id) WHERE id=$1 RETURNING *`,
+           roles=COALESCE($6,roles), language=COALESCE($7,language), active=COALESCE($8,active), livreur_company_id=COALESCE($9,livreur_company_id),
+           token_version = token_version + CASE WHEN $5::text IS NOT NULL OR $8 = false THEN 1 ELSE 0 END WHERE id=$1 RETURNING *`,
         [b.id, b.name ?? null, b.email?.toLowerCase() ?? null, b.phone ?? null, b.password ? await hashPassword(b.password) : null, b.roles ?? null, b.language ?? null, b.active ?? null, b.livreurCompanyId ?? null],
       )
     )[0];

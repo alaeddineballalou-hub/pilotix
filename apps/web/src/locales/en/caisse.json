@@ -188,6 +188,7 @@
   "cat": {
     "fuel": "Fuel",
     "packing": "Packing",
+    "supplier": "Supplier",
     "salary": "Salary",
     "rent": "Rent",
     "ads": "Ads",

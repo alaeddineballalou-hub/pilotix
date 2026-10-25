@@ -5,7 +5,7 @@ import { EXCHANGE_KINDS, SAV_STATUSES, SAV_TYPES, SAV_WISHES } from '@pilotix/sh
 import type { Order, Page } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
-import { bad, Ctx, notFound, proc } from '../rpc';
+import { bad, Ctx, notFound, proc, withActionLock } from '../rpc';
 import { addEvent, createOrder, deliveredReport, getOrder } from './orders';
 import { savFee } from '../settings';
 import { settleTickets } from './tickets';
@@ -306,6 +306,11 @@ const ExchangeInput = z.object({
 });
 
 export async function createExchange(ctx: Ctx, input: z.infer<typeof ExchangeInput>) {
+  // a double click never makes two exchange parcels (two shipments, two products out of stock)
+  return withActionLock(ctx.db, `exchange:${input.id}`, ctx.session.profile.id, 'Échange déjà en cours de création', () => createExchangeLocked(ctx, input));
+}
+
+async function createExchangeLocked(ctx: Ctx, input: z.infer<typeof ExchangeInput>) {
   const t = await getTicket(ctx.db, input.id);
   if (!t.orderId) throw bad('Ce ticket n’est lié à aucune commande');
   if (t.status === 'resolved' || t.status === 'closed') throw bad('Ticket déjà clôturé');
@@ -342,11 +347,18 @@ export async function createExchange(ctx: Ctx, input: z.infer<typeof ExchangeInp
     }
   }
   if (input.kind === 'parts' && !input.parts.length) throw bad('Choisissez les pièces à envoyer');
+  // what comes back to the depot: the exchanged lines only (a parts exchange: nothing, the article stays with the customer)
+  const back =
+    input.kind === 'parts'
+      ? []
+      : input.lines.map((l) => ({ variantId: byId.get(l.itemId)!.variantId, qty: l.qty })).filter((b): b is { variantId: number; qty: number } => !!b.variantId);
   const partsText = input.parts.map((p) => `${p.qty} × ${p.name}`).join(', ');
   const kindText = KIND_FR[input.kind];
   const nowIso = new Date(ctx.now()).toISOString();
 
   const res = await ctx.db.tx(async (tx) => {
+    const lockd = (await tx.query('SELECT c.exchange_order_id, o.follow_status FROM complaints c LEFT JOIN orders o ON o.id = c.exchange_order_id WHERE c.id = $1 FOR UPDATE OF c', [t.id]))[0];
+    if (lockd?.exchange_order_id && lockd.follow_status !== 'cancelled') throw bad('Un échange existe déjà pour ce ticket');
     const ex = await createOrder(
       ctx,
       {
@@ -382,7 +394,7 @@ export async function createExchange(ctx: Ctx, input: z.infer<typeof ExchangeInp
     await addEvent(tx, ex.id, me, 'conf_status', ex.confStatus, 'confirmed', `SAV ${t.ref} — ${kindText.toLowerCase()} envoyé au dépôt`);
     await addEvent(tx, ex.id, me, 'follow_status', null, 'to_prepare', `SAV ${t.ref}`);
     await addEvent(tx, o.id, me, 'note', null, 'event', `Échange ${ex.ref} créé (SAV ${t.ref} — ${kindText})`);
-    await tx.query(`UPDATE complaints SET exchange_order_id=$2, exchange_kind=$3, status='progress', wish=COALESCE(wish, 'exchange'), updated_at=now() WHERE id=$1`, [t.id, ex.id, input.kind]);
+    await tx.query(`UPDATE complaints SET exchange_order_id=$2, exchange_kind=$3, exchange_back=$4::jsonb, status='progress', wish=COALESCE(wish, 'exchange'), updated_at=now() WHERE id=$1`, [t.id, ex.id, input.kind, JSON.stringify(back)]);
     await pushNote(tx, t.id, { at: nowIso, userId: me, text: `${kindText} ${ex.ref} créé → Dépôt « À préparer »`, status: 'progress' });
     return ex.id;
   });

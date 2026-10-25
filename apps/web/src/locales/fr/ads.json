@@ -13,6 +13,7 @@
   "fx": "Taux 1 $ (en DA) · {{month}}",
   "fxSave": "Enregistrer le taux",
   "fxSaved": "Taux enregistré",
+  "fxOwnerOnly": "Le propriétaire saisit le taux du dollar.",
   "fxMissing": "Entrez votre taux du dollar pour voir les coûts en DA et le bénéfice. C’est ce que vous payez en DA pour 1 $ de publicité.",
   "product": "Produit",
   "allProducts": "Tous les produits",

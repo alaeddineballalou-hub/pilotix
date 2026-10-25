@@ -35,7 +35,13 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       'pilotix',
       async (job) => {
         const session = await this.core.systemSession();
-        if (job.name === 'courier-sync') return this.core.call('delivery.sync', session, {});
+        if (job.name === 'courier-sync') {
+          const r: any = await this.core.call('delivery.sync', session, {});
+          // parcels the courier could not answer for, failed steps: in the server log, not lost
+          const bad = [...(r?.companies ?? []).flatMap((c: any) => [...(c.error ? [`${c.company}: ${c.error}`] : []), ...(c.errors ?? []).map((e: any) => `${e.ref}: ${e.error}`)]), ...(r?.steps ?? []).map((s: any) => `${s.step}: ${s.error}`)];
+          if (bad.length) new Logger('Courier sync').warn(`${bad.length} problem(s): ${bad.slice(0, 20).join(' | ')}`);
+          return r;
+        }
         // the last 3 days (Algeria time): yesterday's results are final only the next day
         if (job.name === 'meta-sync') {
           const day = (d: number) => new Date(Date.now() + 3_600_000 - d * 86_400_000).toISOString().slice(0, 10);

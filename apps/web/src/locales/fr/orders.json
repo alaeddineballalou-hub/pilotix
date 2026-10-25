@@ -365,6 +365,7 @@
     },
     "reason": "Raison",
     "cancelReason": "Motif d’annulation (obligatoire)",
+    "finishedReason": "Commande terminée : écrivez la raison du changement dans la note",
     "detail": "Détail (optionnel)",
     "notePh": "ex. rappeler après 17 h",
     "needAddress": "Ajoutez la wilaya et la commune avant de confirmer (Modifier)",
