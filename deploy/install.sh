@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Installs (or updates) Pilotix on an Ubuntu / Debian server, in /opt/pilotix:
-#   curl -fsSL https://raw.githubusercontent.com/alaeddineballalou-hub/pilotix/main/deploy/install.sh | sudo bash -s -- babyjoydz.net
+#   curl -fsSL https://raw.githubusercontent.com/alaeddineballalou-hub/pilotix/main/deploy/install.sh | sudo bash -s -- pilotix.online
 # Run it again later to update to the latest version: the settings (deploy/.env) and the data are kept.
 set -euo pipefail
-DOMAIN="${1:-babyjoydz.net}"
+DOMAIN="${1:-pilotix.online}"
 DIR=/opt/pilotix
 REPO=https://github.com/alaeddineballalou-hub/pilotix.git
 [ "$(id -u)" = 0 ] || { echo "Run as root (sudo)."; exit 1; }
+# never stop silently: say which line failed
+trap 'echo "ERROR: the installer stopped at line $LINENO. Send a screenshot of this screen." >&2' ERR
 
 echo "==> Docker and git"
 command -v git >/dev/null || (apt-get update -qq && apt-get install -y -qq git)
@@ -16,9 +18,7 @@ echo "==> Pilotix code"
 if [ -d "$DIR/.git" ]; then git -C "$DIR" pull -q --ff-only; else git clone -q --depth 50 "$REPO" "$DIR"; fi
 cd "$DIR"
 
-FIRST=0
 if [ ! -f deploy/.env ]; then
-  FIRST=1
   rnd() { head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c "$1"; }
   umask 077
   cat > deploy/.env <<ENV
@@ -32,11 +32,13 @@ fi
 echo "==> Server protection"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq ufw fail2ban unattended-upgrades >/dev/null
+apt-get install -y -qq ufw fail2ban python3-systemd unattended-upgrades >/dev/null
 # security updates install themselves every night
 dpkg-reconfigure -f noninteractive unattended-upgrades >/dev/null 2>&1 || true
 # firewall: only SSH and the website are reachable (PostgreSQL and Redis never are; Docker publishes only 80 and 443)
-SSH_PORT=$(sshd -T 2>/dev/null | awk '/^port /{print $2; exit}'); SSH_PORT=${SSH_PORT:-22}
+# (Ubuntu 24.04 starts SSH on demand: sshd -T fails without /run/sshd, and must never stop the installer)
+mkdir -p /run/sshd
+SSH_PORT=$(sshd -T 2>/dev/null | awk '/^port /{print $2; exit}' || true); SSH_PORT=${SSH_PORT:-22}
 ufw allow "$SSH_PORT"/tcp >/dev/null; ufw allow 80/tcp >/dev/null; ufw allow 443 >/dev/null
 ufw --force enable >/dev/null
 # fail2ban: an address that fails SSH logins 5 times is banned for an hour
@@ -44,10 +46,12 @@ cat > /etc/fail2ban/jail.d/pilotix.conf <<JAIL
 [sshd]
 enabled = true
 port = $SSH_PORT
+backend = systemd
 maxretry = 5
 bantime = 1h
 JAIL
-systemctl enable --now fail2ban >/dev/null 2>&1; systemctl restart fail2ban
+systemctl enable --now fail2ban >/dev/null 2>&1 || true
+systemctl restart fail2ban || echo "    WARNING: fail2ban did not start (the site still works; the firewall is on)"
 # SSH by key only, once a key is installed (never locks out someone who logs in with a password today)
 if [ -s /root/.ssh/authorized_keys ] || ls /home/*/.ssh/authorized_keys >/dev/null 2>&1; then
   printf 'PasswordAuthentication no\nKbdInteractiveAuthentication no\nPermitRootLogin prohibit-password\n' > /etc/ssh/sshd_config.d/99-pilotix.conf
@@ -62,7 +66,9 @@ C="docker compose -f deploy/docker-compose.yml --env-file deploy/.env"
 $C up -d --build
 for i in $(seq 1 60); do $C exec -T server wget -qO- http://localhost:3000/api/health >/dev/null 2>&1 && break; sleep 3; done
 
-if [ "$FIRST" = 1 ]; then
+# first administrator, asked until one exists (so a run that stopped half-way asks again next time)
+ADMINS=$($C exec -T postgres psql -U pilotix -d pilotix -tAc "SELECT count(*) FROM profiles WHERE 'admin' = ANY(roles)" 2>/dev/null | tr -dc '0-9' || true)
+if [ "${ADMINS:-0}" = 0 ]; then
   echo "==> First administrator"
   read -r -p "    Admin e-mail: " EMAIL </dev/tty
   while :; do
