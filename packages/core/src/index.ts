@@ -5,6 +5,7 @@ import { REGISTRY } from './registry';
 export * from './db';
 export * from './rpc';
 export * from './settings';
+export { expandIp, ipNet } from './net';
 export { seedDemo, seedBase } from './seed';
 export { login, hashPassword, profileById } from './modules/users';
 export { pgliteDb } from './pglite';

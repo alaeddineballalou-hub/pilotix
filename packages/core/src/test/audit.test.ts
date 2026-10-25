@@ -337,3 +337,28 @@ test('a marketer-only account never sees customers (leads, blocked orders) nor s
   assert.ok(team.length > 0 && team.every((u) => u.email === '' && u.phone === null));
   assert.ok(((await call('users.list', admin, {})) as any[]).some((u) => u.email.includes('@')));
 });
+
+test('an employee cannot sell below the allowed price, nor take a colleague’s credit, nor erase a parcel that left', async () => {
+  const conf = await as(EMAILS.conf);
+  const suivi = await as(EMAILS.suivi);
+  const p = await one(`SELECT p.id, p.price, p.max_discount, v.id AS vid FROM products p JOIN product_variants v ON v.product_id = p.id AND v.active
+                        WHERE p.active AND NOT p.is_service AND p.max_discount IS NOT NULL AND p.price > 2000 ORDER BY p.id LIMIT 1`);
+  const line = { productId: Number(p.id), variantId: Number(p.vid), qty: 1 };
+  // a unit price far under the catalog is a discount over the maximum
+  await assert.rejects(newOrder(conf, { items: [{ ...line, unitPrice: 100 }] }), /Prix trop bas/);
+  // within the maximum it goes
+  const ok = await newOrder(conf, { items: [{ ...line, unitPrice: Number(p.price) - Number(p.max_discount) }] });
+  assert.equal(ok.subtotal, Number(p.price) - Number(p.max_discount));
+  // a delivered parcel set « delivered » again by another suivi keeps its first suivi agent
+  const d = await one(`SELECT id, follow_agent_id FROM orders WHERE follow_status = 'delivered' AND follow_agent_id IS NOT NULL AND follow_agent_id <> $1 AND NOT cashed LIMIT 1`, [suivi.session.profile.id]);
+  if (d) {
+    await call('orders.setFollow', suivi, { ids: [Number(d.id)], status: 'delivered' }).catch(() => null);
+    assert.equal(Number((await one('SELECT follow_agent_id FROM orders WHERE id = $1', [d.id])).follow_agent_id), Number(d.follow_agent_id));
+  }
+  // the depot cannot mark « returned » a parcel that is out for delivery (its cash would stop being owed)
+  const depot = await as(EMAILS.depot);
+  const ofd = await one(`SELECT id FROM orders WHERE follow_status = 'out_for_delivery' LIMIT 1`);
+  if (ofd) await assert.rejects(call('orders.setFollow', depot, { ids: [Number(ofd.id)], status: 'returned' }), /pas en retour/);
+  // a free « exchange » cannot be typed as a normal order
+  await assert.rejects(newOrder(conf, { isExchange: true, items: [{ ...line, unitPrice: 0 }] }), /SAV/);
+});

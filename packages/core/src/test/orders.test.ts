@@ -49,7 +49,9 @@ test('create an order with the quoted fee, discount capped, then an exchange at 
   const o: any = await call('orders.create', ctx, { customerName: 'Test Client', phone: '0555000111', wilayaId: 16, commune: 'Kouba', items, discount: 500 });
   assert.equal(o.deliveryFee, 450); // 6 kg: 1 kg above 5 kg × 50
   assert.equal(o.total, p.price - 500 + 450);
-  const ex: any = await call('orders.create', ctx, {
+  // only the SAV (or the administrator) makes an exchange
+  await assert.rejects(call('orders.create', ctx, { customerName: 'Test Client', phone: '0555000111', wilayaId: 16, items: [{ ...items[0], unitPrice: 0 }], isExchange: true, originalOrderId: o.id }), /SAV/);
+  const ex: any = await call('orders.create', await as(EMAILS.admin), {
     customerName: 'Test Client', phone: '0555000111', wilayaId: 16, items: [{ ...items[0], unitPrice: 0 }], isExchange: true, originalOrderId: o.id,
   });
   assert.equal(ex.isExchange, true);
@@ -161,7 +163,8 @@ test('every order has its own unique Pilotix tracking number, made at creation (
   assert.ok(all.length > 0 && all.every((r: any) => /^PXT\d{8}$/.test(r.own_tracking)));
   assert.equal(new Set(all.map((r: any) => r.own_tracking)).size, all.length);
   const ctx = await as(EMAILS.conf);
-  const items = [{ productId: Number((await db.query('SELECT id FROM products WHERE active ORDER BY id LIMIT 1'))[0].id), qty: 1 }];
+  const pv = (await db.query(`SELECT p.id, v.id AS vid FROM products p JOIN product_variants v ON v.product_id = p.id AND v.active WHERE p.active ORDER BY p.id, v.id LIMIT 1`))[0];
+  const items = [{ productId: Number(pv.id), variantId: Number(pv.vid), qty: 1 }];
   const o: any = await call('orders.create', ctx, { customerName: 'Suivi Test', phone: '0555000222', wilayaId: 16, commune: 'Kouba', items });
   assert.match(o.ownTracking, /^PXT\d{8}$/);
   assert.equal(o.tracking, null);

@@ -555,9 +555,12 @@ export const adsProcs = {
   }),
   /** "Quel produit vend cet ad set ?" — the marketer links his ad set to one or more products. */
   'ads.link': proc(['marketer'], z.object({ adsetId: z.string().min(1).max(40), productIds: z.array(z.number().int().positive()).max(20) }), async (ctx, i) => {
-    const s = (await ctx.db.query('SELECT marketer_id FROM adsets WHERE id = $1', [i.adsetId]))[0];
+    const s = (await ctx.db.query('SELECT marketer_id, product_ids FROM adsets WHERE id = $1', [i.adsetId]))[0];
     if (!s) throw notFound('Ad set introuvable');
     if (!isOwner(ctx) && (s.marketer_id === null || num(s.marketer_id) !== ctx.session.profile.id)) throw forbidden('Cet ad set n’est pas à vous');
+    // the products of an ad set decide the marketer's share of their profit: he says it once, then only the owner
+    // changes it (no moving an ad set onto the best seller at the end of the month)
+    if (!isOwner(ctx) && (s.product_ids ?? []).length) throw forbidden('Produits déjà choisis : demandez au propriétaire de les changer');
     if (i.productIds.length) {
       const n = num((await ctx.db.query('SELECT count(*) AS n FROM products WHERE id = ANY($1)', [i.productIds]))[0].n);
       if (n !== new Set(i.productIds).size) throw bad('Produit inconnu');

@@ -284,10 +284,25 @@ export const OrderInput = z.object({
 });
 export type OrderInput = z.infer<typeof OrderInput>;
 
-/** Prices the items from the catalog; returns lines, subtotal and the maximum allowed discount. */
-async function priceItems(db: Db, items: z.infer<typeof ItemInput>[], freePrice = false) {
+/** `kept`: unit prices this order already had (product:variant → price), accepted as they are when the order is edited. */
+async function priceItems(db: Db, items: z.infer<typeof ItemInput>[], freePrice = false, kept: Map<string, number> = new Map(), strictVariant = true) {
   const pids = [...new Set(items.map((i) => i.productId))];
-  const prods = await db.query('SELECT id, name, price, cost, fixed_price, max_discount, active, fee_grid, weight_kg FROM products WHERE id = ANY($1)', [pids]);
+  const prods = await db.query('SELECT id, name, price, cost, fixed_price, max_discount, active, fee_grid, weight_kg, packs FROM products WHERE id = ANY($1)', [pids]);
+  // a line without its variant would leave the depot without a stock movement: a product without colours / sizes uses
+  // its plain variant; one with them needs the customer's choice
+  if (items.some((i) => !i.variantId)) {
+    const all = await db.query('SELECT id, product_id, title, active FROM product_variants WHERE product_id = ANY($1) ORDER BY id', [pids]);
+    items = items.map((i) => {
+      if (i.variantId) return i;
+      const mine = all.filter((v: any) => num(v.product_id) === i.productId);
+      const plain = mine.find((v: any) => v.title === '');
+      const named = mine.filter((v: any) => v.title !== '' && v.active);
+      if (named.length === 1) return { ...i, variantId: num(named[0].id) };
+      if (!named.length && plain) return { ...i, variantId: num(plain.id) };
+      if (strictVariant && named.length > 1) throw bad('Choisissez la variante (couleur, taille…) de chaque produit');
+      return i;
+    });
+  }
   const vids = items.map((i) => i.variantId).filter((v): v is number => !!v);
   const vars = vids.length ? await db.query('SELECT id, product_id, title, price FROM product_variants WHERE id = ANY($1)', [vids]) : [];
   const P = new Map(prods.map((p: any) => [num(p.id), p]));
@@ -296,6 +311,8 @@ async function priceItems(db: Db, items: z.infer<typeof ItemInput>[], freePrice 
   let unlimited = false;
   let weight = 0;
   let grid: string | null = null;
+  /** how much lower than the catalog (or its quantity packs) the typed unit prices sell: it is a discount too */
+  let priceCut = 0;
   const lines: OrderItem[] = items.map((i) => {
     const p: any = P.get(i.productId);
     if (!p) throw bad(`Produit inconnu (${i.productId})`);
@@ -304,6 +321,13 @@ async function priceItems(db: Db, items: z.infer<typeof ItemInput>[], freePrice 
     const listPrice = v?.price ?? p.price;
     // An exchange may be priced freely (often 0: the customer only pays the delivery).
     const unit = i.unitPrice === undefined || (p.fixed_price && !freePrice) ? listPrice : i.unitPrice;
+    if (!freePrice) {
+      // a quantity pack (2 for 18 000) is a normal price, not a cut
+      const packs: { qty: number; price: number }[] = (typeof p.packs === 'string' ? JSON.parse(p.packs) : p.packs ?? []).filter((k: any) => num(k.qty) >= 2 && num(k.qty) <= i.qty);
+      const had = kept.get(`${i.productId}:${i.variantId ?? ''}`);
+      const ref = Math.min(num(listPrice), ...packs.map((k) => Math.floor(num(k.price) / num(k.qty))), ...(had === undefined ? [] : [had]));
+      priceCut += Math.max(0, ref - num(unit)) * i.qty;
+    }
     if (p.max_discount === null) unlimited = true;
     else maxDiscount += num(p.max_discount) * i.qty;
     weight += Number(p.weight_kg) * i.qty;
@@ -311,7 +335,7 @@ async function priceItems(db: Db, items: z.infer<typeof ItemInput>[], freePrice 
     return { productId: i.productId, variantId: i.variantId ?? null, name: p.name, variantTitle: v?.title ?? '', qty: i.qty, unitPrice: num(unit), purchasePrice: num(p.cost), isUpsell: !!i.isUpsell };
   });
   const subtotal = lines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
-  return { lines, subtotal, maxDiscount: unlimited ? subtotal : maxDiscount, weight, grid };
+  return { lines, subtotal, maxDiscount: unlimited ? subtotal : maxDiscount, weight, grid, priceCut };
 }
 
 async function deliveryFeeFor(db: Db, wilayaId: number, stopdesk: boolean, grid: string | null, weight: number): Promise<number> {
@@ -349,6 +373,8 @@ export async function createOrder(
   opts: {
     /** taken in this Message AI agent conversation */
     conversationId?: number | null;
+    /** typed by someone the shop has not verified (a Messenger chatter): never renames an existing customer */
+    untrusted?: boolean;
     /** sent from this landing page (its Meta ad set when the ad link carried it) */
     landingId?: number | null;
     adsetId?: string | null;
@@ -366,6 +392,10 @@ export async function createOrder(
   const order = await db.tx(async (tx) => {
     const priced = await priceItems(tx, input.items, input.isExchange);
     if (input.discount > priced.maxDiscount) throw bad(`Remise trop élevée (maximum ${priced.maxDiscount} DA)`);
+    // a lower unit price typed by an employee is a discount: together they stay within the products' maximum
+    // (prices worked out by Pilotix itself — a landing page, the AI seller — are already the shop's own prices)
+    if (!ctx.session.isAdmin && !opts.landingId && !opts.conversationId && priced.priceCut + input.discount > priced.maxDiscount)
+      throw bad(`Prix trop bas : la baisse de prix et la remise dépassent la remise maximale (${priced.maxDiscount} DA)`);
     const fee = input.deliveryFee ?? (await deliveryFeeFor(tx, input.wilayaId, input.isStopdesk, priced.grid, priced.weight));
     const total = priced.subtotal - input.discount + fee;
     // what the customer orders is kept: the upsell is counted against it (lines marked upsell while typing a call are sold in addition)
@@ -375,12 +405,16 @@ export async function createOrder(
     const cust = (
       await tx.query(
         `INSERT INTO customers (phone, name, wilaya_id, orders, last_order_at) VALUES ($1,$2,$3,1,now())
-         ON CONFLICT (phone) DO UPDATE SET orders = customers.orders + 1, name = EXCLUDED.name, wilaya_id = EXCLUDED.wilaya_id, last_order_at = now()
+         ON CONFLICT (phone) DO UPDATE SET orders = customers.orders + 1, last_order_at = now(),
+           name = CASE WHEN $4 THEN customers.name ELSE EXCLUDED.name END, wilaya_id = CASE WHEN $4 THEN customers.wilaya_id ELSE EXCLUDED.wilaya_id END
          RETURNING id, blacklisted`,
-        [phone, input.customerName, input.wilayaId],
+        // a landing page or a chat: anyone can type a number, so what they type does not rename the shop's customer
+        [phone, input.customerName, input.wilayaId, !!(opts.untrusted || opts.landingId)],
       )
     )[0];
-    const conf: ConfStatus = input.confirm ? 'confirmed' : cust.blacklisted ? 'to_check' : 'new';
+    // a blacklisted number is always checked by a person first, even when the order comes « confirmed » (AI seller)
+    const conf: ConfStatus = cust.blacklisted ? 'to_check' : input.confirm ? 'confirmed' : 'new';
+    const confirmed = conf === 'confirmed';
     const ref = (await tx.query(`SELECT 'PX' || nextval('order_ref_seq') AS r`))[0].r;
     const wh = (await tx.query('SELECT id FROM warehouses WHERE active ORDER BY is_default DESC, id LIMIT 1'))[0];
     const defCompany = input.companyId ?? (await getSetting(tx, 'shop')).defaultCompanyId ?? null;
@@ -392,8 +426,8 @@ export async function createOrder(
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37) RETURNING id`,
         [ref, me, cust.id, input.customerName, phone, phone2, input.wilayaId, input.commune, input.address, input.isStopdesk, input.stopdeskId ?? null,
           input.channel, input.source ?? null, input.utm ? JSON.stringify(input.utm) : null,
-          conf, input.confirm ? me : null, input.confirm ? new Date(ctx.now()).toISOString() : null, input.confirm ? new Date(ctx.now()).toISOString() : null,
-          input.confirm ? 'to_prepare' : null, defCompany, wh?.id ?? null, priced.subtotal, fee, input.discount, total,
+          conf, confirmed ? me : null, confirmed ? new Date(ctx.now()).toISOString() : null, confirmed ? new Date(ctx.now()).toISOString() : null,
+          confirmed ? 'to_prepare' : null, defCompany, wh?.id ?? null, priced.subtotal, fee, input.discount, total,
           input.customerNote ?? null, input.deliveryNote ?? null, input.internalNote ?? null, input.isExchange, input.originalOrderId ?? null,
           up.value > 0, up.value, JSON.stringify(orig), input.discount, opts.conversationId ?? null, opts.landingId ?? null, opts.adsetId ?? null],
       )
@@ -401,7 +435,7 @@ export async function createOrder(
     const oid = num(row.id);
     await insertItems(tx, oid, lines);
     await addEvent(tx, oid, me, 'created', null, conf, input.isExchange ? `Échange de la commande #${input.originalOrderId}` : null);
-    if (input.confirm) await addEvent(tx, oid, me, 'follow_status', null, 'to_prepare');
+    if (confirmed) await addEvent(tx, oid, me, 'follow_status', null, 'to_prepare');
     // Delivery AI agent: "we received your order" (or "confirmed")
     if (!opts.silent) await onOrderCreated(tx, { id: oid, phone, conf_status: conf, is_exchange: input.isExchange }, ctx.now());
     return getOrder(ctx, oid, tx);
@@ -422,7 +456,10 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
     // the money and the place of a parcel a courier already has (API) or of a cashed order are frozen here: the
     // courier would still collect the old amount. Such changes go through « Modifier le colis » (sent to the company).
     const atCourier = !!cur.tracking && API_COURIER_KINDS.includes((await tx.query('SELECT kind FROM delivery_companies WHERE id = $1', [cur.company_id]))[0]?.kind ?? '');
-    if (atCourier || cur.cashed) {
+    // a parcel that left with the shop's own livreur: he collects what the order said when it left; only the
+    // administrator changes that amount afterwards (otherwise the cash « owed » could shrink after he collected it)
+    const leftWithLivreur = !!cur.shipped_at && !ctx.session.isAdmin;
+    if (atCourier || cur.cashed || leftWithLivreur) {
       const differs = (k: keyof typeof input, col: string, norm: (x: any) => any = (x) => x) => input[k] !== undefined && norm(input[k]) !== norm(cur[col]);
       const n = (x: any) => (x == null ? null : Number(x));
       const t = (x: any) => String(x ?? '').trim();
@@ -437,7 +474,11 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
         itemsChanged || differs('discount', 'discount', n) || differs('deliveryFee', 'delivery_fee', n) || differs('wilayaId', 'wilaya_id', n) ||
         differs('commune', 'commune', t) || differs('isStopdesk', 'is_stopdesk', (x) => !!x) || differs('stopdeskId', 'stopdesk_id', n);
       if (moneyOrPlace)
-        throw bad(cur.cashed ? 'Commande déjà encaissée : montant et adresse ne changent plus' : 'Colis déjà chez la société : changez le montant ou l’adresse avec « Modifier le colis »');
+        throw bad(
+          cur.cashed ? 'Commande déjà encaissée : montant et adresse ne changent plus'
+          : atCourier ? 'Colis déjà chez la société : changez le montant ou l’adresse avec « Modifier le colis »'
+          : 'Colis déjà parti : seul l’administrateur change le montant ou l’adresse',
+        );
     }
     const phone = input.phone !== undefined ? normalizePhone(input.phone) : cur.phone;
     if (!phone) throw bad('Numéro de téléphone algérien invalide');
@@ -447,6 +488,7 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
 
     let subtotal = num(cur.subtotal);
     let maxDiscount = Infinity;
+    let priceCut = 0;
     // the products or the remise change: the upsell is worked out again
     const recount = !!input.items || input.discount !== undefined;
     const old = recount
@@ -454,16 +496,19 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
       : [];
     let lines: OrderItem[] | null = null;
     if (input.items) {
-      const priced = await priceItems(tx, input.items, !!cur.is_exchange);
+      const priced = await priceItems(tx, input.items, !!cur.is_exchange, new Map(old.map((l) => [`${l.productId}:${l.variantId ?? ''}`, l.unitPrice])));
       lines = priced.lines;
       subtotal = priced.subtotal;
       maxDiscount = priced.maxDiscount;
+      priceCut = priced.priceCut;
     } else if (input.discount !== undefined) {
       // only the discount changes: it is still capped by the products already in the order
-      if (old.length) maxDiscount = (await priceItems(tx, old, true)).maxDiscount;
+      if (old.length) maxDiscount = (await priceItems(tx, old, true, new Map(), false)).maxDiscount;
     }
     const discount = input.discount ?? num(cur.discount);
     if (discount > maxDiscount) throw bad(`Remise trop élevée (maximum ${maxDiscount} DA)`);
+    if (!ctx.session.isAdmin && priceCut + discount > maxDiscount)
+      throw bad(`Prix trop bas : la baisse de prix et la remise dépassent la remise maximale (${maxDiscount} DA)`);
     // against what the customer first ordered (an order made before it was kept: its lines not marked upsell, now kept)
     const kept = readOrig(cur.orig_items);
     const orig = kept ?? origOf(old);
@@ -492,7 +537,10 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
         v('customerNote', 'customer_note'), v('deliveryNote', 'delivery_note'), v('internalNote', 'internal_note'),
         up.value, JSON.stringify(orig), origDiscount],
     );
-    await addEvent(tx, input.id, ctx.session.profile.id, 'edit', null, null);
+    // the history keeps what the money was and became (who lowered a total, and by how much)
+    const newTotal = subtotal - discount + fee;
+    const moneyNote = newTotal !== num(cur.total) ? `Total ${num(cur.total)} → ${newTotal} DA (remise ${num(cur.discount)} → ${discount}, livraison ${num(cur.delivery_fee)} → ${fee})` : null;
+    await addEvent(tx, input.id, ctx.session.profile.id, 'edit', moneyNote ? String(num(cur.total)) : null, moneyNote ? String(newTotal) : null, moneyNote);
     return getOrder(ctx, input.id, tx);
   });
   ctx.emit({ type: 'order', id: order.id });
@@ -651,6 +699,10 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
         throw bad(block);
       }
       if (livreurId && cur.cashed) throw bad(`${cur.ref} est déjà encaissée : le livreur ne peut plus changer`);
+      // the depot receives back a parcel that is coming back (or failed): never one « en livraison » or « livrée », else a
+      // delivered parcel's cash would stop being owed and its goods would come back into stock on paper only
+      if (!opts.system && to === 'returned' && from !== to && !ctx.session.isAdmin && !ctx.session.roles.includes('suivi') && !['shipped', 'returning', 'failed', 'alert', 'in_exchange'].includes(from ?? ''))
+        throw bad(`${cur.ref} n’est pas en retour : le livreur ou le suivi doit d’abord la marquer « En retour » ou « Échec »`);
       // Stock leaves the depot on the first status that means the parcel left (not only « Expédiée »: the courier
       // can report « En livraison » or « Livrée » straight from « Préparée »), and comes back when returned.
       const leaves = LEFT_DEPOT.includes(to) && !cur.shipped_at;
@@ -661,7 +713,7 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
         `UPDATE orders SET follow_status=$2, ${ms ? `${ms} = COALESCE(${ms}, now()),` : ''}
            shipped_at = CASE WHEN $9 THEN COALESCE(shipped_at, now()) ELSE shipped_at END,
            tracking = COALESCE($3, tracking), livreur_id = COALESCE($4, livreur_id),
-           sub_status = CASE WHEN $8 THEN sub_status ELSE $5 END, follow_agent_id = CASE WHEN $6 THEN $7 ELSE follow_agent_id END,
+           sub_status = CASE WHEN $8 THEN sub_status ELSE $5 END, follow_agent_id = CASE WHEN $6 AND ($2 IS DISTINCT FROM follow_status OR follow_agent_id IS NULL) THEN $7 ELSE follow_agent_id END,
            delivery_attempts = delivery_attempts + CASE WHEN $2 = 'failed' THEN 1 ELSE 0 END,
            updated_at=now(), version=version+1 WHERE id=$1`,
         [oid, to, input.tracking ?? null, livreurId, input.subStatus ?? null, ctx.session.roles.includes('suivi'), me,
@@ -904,7 +956,7 @@ function orderExtraProcs() {
     /** The reason given for these orders: why they were cancelled at the confirmation (conf) or came back (back). */
     'orders.reasons': proc(null, z.object({ ids: z.array(id).max(500), of: z.enum(['conf', 'back']) }), async (ctx, i) => {
       const out: Record<string, string | null> = {};
-      if (!i.ids.length) return out;
+      if (!i.ids.length || noOrderAccess(ctx)) return out;
       const own = onlyOwnDeliveries(ctx);
       const rows = await ctx.db.query(`SELECT o.id, ${REASON_SQL[i.of]} AS reason FROM orders o WHERE o.id = ANY($1)${own ? ' AND o.livreur_id = $2' : ''}`, own ? [i.ids, ctx.session.profile.id] : [i.ids]);
       for (const r of rows) out[String(num(r.id))] = r.reason ?? null;
@@ -1063,6 +1115,9 @@ export const ordersProcs = {
   }),
   // the upsell is always counted by Pilotix: a mark sent by a screen is not taken (only Dellal, inside, marks what it sold in addition)
   'orders.create': proc(['confirmation', 'suivi', 'depot'], OrderInput, async (ctx, i) => {
+    // an exchange leaves free (the customer only pays the delivery): it is made by the SAV (sav.exchange), from a real
+    // ticket — never typed as a free order to anyone. Only the administrator may type one directly.
+    if (i.isExchange && !ctx.session.isAdmin) throw forbidden('Un échange se fait depuis le SAV');
     const o = await createOrder(ctx, { ...i, items: i.items.map((x) => ({ ...x, isUpsell: false })) });
     await sendInPreview(ctx);
     return o;
@@ -1076,9 +1131,11 @@ export const ordersProcs = {
     if (!manager && agentId !== ctx.session.profile.id) throw forbidden('Seul un manager peut assigner à quelqu’un d’autre');
     await ctx.db.tx(async (tx) => {
       for (const oid of ids) {
-        const cur = (await tx.query('SELECT agent_id FROM orders WHERE id=$1', [oid]))[0];
+        const cur = (await tx.query('SELECT ref, agent_id, shipped_at FROM orders WHERE id=$1', [oid]))[0];
         if (!cur) continue;
         if (!manager && cur.agent_id && num(cur.agent_id) !== ctx.session.profile.id) throw forbidden();
+        // the agent of an order that left is the one paid for it: only the administrator changes it then
+        if (cur.shipped_at && !ctx.session.isAdmin) throw bad(`${cur.ref} est déjà partie : seul l’administrateur change son agent`);
         await tx.query('UPDATE orders SET agent_id=$2, assigned_at = CASE WHEN $2::bigint IS NULL THEN NULL ELSE now() END, updated_at=now() WHERE id=$1', [oid, agentId]);
         await addEvent(tx, oid, ctx.session.profile.id, 'assign', cur.agent_id ? String(cur.agent_id) : null, agentId ? String(agentId) : null);
       }
@@ -1121,11 +1178,16 @@ export const ordersProcs = {
   }),
 
   'orders.logCall': proc(['confirmation', 'suivi', 'livreur'], z.object({ id }), async (ctx, { id }) => {
+    await getOrder(ctx, id); // a livreur logs calls on his own parcels only
     await addEvent(ctx.db, id, ctx.session.profile.id, 'call', null, null);
     return { ok: true };
   }),
 
   'orders.setTracking': proc(['depot', 'suivi'], z.object({ id, tracking: z.string().max(80).nullable() }), async (ctx, i) => {
+    // removing the tracking of a parcel that left would unfreeze its amount (see updateOrder)
+    const cur = (await ctx.db.query('SELECT tracking, shipped_at FROM orders WHERE id = $1', [i.id]))[0];
+    if (!cur) throw notFound();
+    if (cur.shipped_at && cur.tracking && !i.tracking?.trim() && !ctx.session.isAdmin) throw bad('Colis déjà parti : le numéro de suivi ne s’efface plus');
     await ctx.db.query('UPDATE orders SET tracking=$2, updated_at=now() WHERE id=$1', [i.id, i.tracking]);
     await addEvent(ctx.db, i.id, ctx.session.profile.id, 'edit', null, null, `Suivi : ${i.tracking ?? '—'}`);
     ctx.emit({ type: 'order', id: i.id });

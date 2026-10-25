@@ -284,6 +284,21 @@ export async function shouldAnswer(ctx: Ctx, convId: number): Promise<{ ok: bool
   if (c.mode !== 'ai') return { ok: false, why: 'Une personne a repris la conversation' };
   const h = algeriaHour(ctx.now());
   if (!s.nightReplies && (h >= 23 || h < 8)) return { ok: false, why: 'Pas de réponse la nuit' };
+  // one chatter (or a script) cannot make the shop pay for AI answers without end
+  const since = new Date(ctx.now() - 3_600_000).toISOString();
+  const day = new Date(ctx.now() - 86_400_000).toISOString();
+  const used = (
+    await ctx.db.query(
+      `SELECT count(*) FILTER (WHERE conversation_id = $1 AND created_at > $2)::int AS conv, count(*)::int AS all_day
+         FROM conv_messages WHERE role = 'agent' AND created_at > $3`,
+      [convId, since, day],
+    )
+  )[0];
+  if (num(used?.conv) >= 40) {
+    await ctx.db.query(`UPDATE conversations SET mode = 'handoff', handoff_reason = $2 WHERE id = $1`, [convId, 'Trop de messages en une heure : à reprendre par une personne']);
+    return { ok: false, why: 'Trop de messages dans cette conversation' };
+  }
+  if (num(used?.all_day) >= 3000) return { ok: false, why: 'Plafond quotidien de réponses atteint' };
   return { ok: true };
 }
 
@@ -450,6 +465,11 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
     return { ok: true, note: 'Une personne de l’équipe va reprendre. Dis-le au client en une phrase.' };
   }
   if (name === 'create_order') {
+    // a chatter cannot fill the shop with orders (for themselves or for other people's numbers)
+    if (!t.test) {
+      const recent = num((await ctx.db.query(`SELECT count(*)::int AS n FROM orders WHERE conversation_id = $1 AND created_at > $2`, [conv.id, new Date(ctx.now() - 86_400_000).toISOString()]))[0]?.n);
+      if (recent >= 2) return { error: 'Déjà deux commandes aujourd’hui dans cette conversation : passe la main à une personne (outil handoff).' };
+    }
     const phone = normalizePhone(String(input?.phone ?? ''));
     if (!phone) return { error: 'Numéro invalide : demande un numéro algérien (05, 06 ou 07…).' };
     const place = findPlace(String(input?.wilaya ?? '')) ?? findPlace(String(input?.commune ?? ''));
@@ -504,7 +524,7 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
         internalNote: `Commande prise par ${settings.name} (conversation #${conv.id})`,
         confirm: settings.ordersTo === 'confirmed',
         isExchange: false,
-      }, ctx.db, { conversationId: conv.id }); // linked from the start: no "we received your order" into this very chat
+      }, ctx.db, { conversationId: conv.id, untrusted: conv.channel !== 'whatsapp' }); // linked from the start: no "we received your order" into this very chat
       await sendInPreview(ctx);
       await ctx.db.query(
         `UPDATE conversations SET order_id = $2, orders_count = orders_count + 1, phone = COALESCE(phone, $3), customer_name = COALESCE(customer_name, $4),
@@ -530,7 +550,9 @@ async function systemPrompt(ctx: Ctx, conv: Conversation, s: DellalSettings, fol
         (p.linked.length ? ` · va avec : ${p.linked.map((l) => `#${l.product_id} ${l.name}`).join(', ')}` : ''),
     )
     .join('\n');
-  const cust = await customerSummary(ctx.db, conv.phone);
+  // what the shop knows about a number only when the channel proves it (WhatsApp): on Messenger / Instagram / TikTok anyone
+  // can type someone else's number, and must not learn that person's name or history
+  const cust = conv.channel === 'whatsapp' || conv.channel === 'test' ? await customerSummary(ctx.db, conv.phone) : null;
   // the orders of the WhatsApp number writing, or of this conversation (a number typed on Messenger proves nothing)
   const orders = conv.channel === 'test' ? '' : await ordersForDellal(ctx.db, conv.channel === 'whatsapp' ? conv.phone : null, conv.id);
   const today = new Date(ctx.now()).toISOString().slice(0, 10);

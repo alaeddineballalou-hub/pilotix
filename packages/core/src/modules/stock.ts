@@ -5,7 +5,7 @@ import { Page } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
-import { moveStock, stockRows, StockLine } from './catalog';
+import { logProductChange, moveStock, stockRows, StockLine } from './catalog';
 import { CaisseKey, checkCaisse } from './cash';
 
 const id = z.number().int().positive();
@@ -73,6 +73,7 @@ export async function setPrices(ctx: Ctx, i: z.infer<typeof PricesInput>) {
       if (md !== numOrNull(cur.max_discount) && !ctx.session.isAdmin) throw forbidden('Seul l’administrateur modifie la remise maximale');
       if (num(cur.price) !== it.price || num(cur.cost) !== it.cost || md !== numOrNull(cur.max_discount)) {
         await tx.query('UPDATE products SET price = $2, cost = $3, max_discount = $4 WHERE id = $1', [it.id, it.price, it.cost, md]);
+        await logProductChange(tx, it.id, ctx.session.profile.id, { price: cur.price, cost: cur.cost, max_discount: cur.max_discount }, { price: it.price, cost: it.cost, max_discount: md }, 'Prix');
         n++;
       }
       for (const v of it.variants) {
@@ -333,7 +334,11 @@ export async function createPurchase(ctx: Ctx, i: z.infer<typeof PurchaseInput>)
         const a = by.get(p) ?? { q: 0, v: 0 };
         by.set(p, { q: a.q + l.qty, v: a.v + l.qty * l.unitCost });
       }
-      for (const [p, a] of by) await tx.query('UPDATE products SET cost = $2 WHERE id = $1', [p, Math.round(a.v / a.q)]);
+      for (const [p, a] of by) {
+        const before = (await tx.query('SELECT cost FROM products WHERE id = $1', [p]))[0];
+        await tx.query('UPDATE products SET cost = $2 WHERE id = $1', [p, Math.round(a.v / a.q)]);
+        await logProductChange(tx, p, me(ctx), { cost: before?.cost }, { cost: Math.round(a.v / a.q) }, `Achat ${ref}`);
+      }
     }
     return pid;
   });
@@ -506,10 +511,16 @@ export const stockProcs = {
     const k = supplierCaisse(ctx, i.caisse);
     await checkCaisse(ctx.db, k);
     await ctx.db.tx(async (tx) => {
-      const r = (await tx.query('SELECT p.ref, p.total, p.paid, s.name AS supplier FROM purchases p LEFT JOIN suppliers s ON s.id = p.supplier_id WHERE p.id = $1 FOR UPDATE OF p', [i.id]))[0];
+      const r = (await tx.query('SELECT p.ref, p.total, p.paid, p.created_by, s.name AS supplier FROM purchases p LEFT JOIN suppliers s ON s.id = p.supplier_id WHERE p.id = $1 FOR UPDATE OF p', [i.id]))[0];
       if (!r) throw notFound('Achat introuvable');
       if (i.paid > num(r.total)) throw bad('Le montant payé dépasse le total de l’achat');
       if (i.paid === num(r.paid)) return;
+      // an employee pays only his own purchases, and never « un-pays » one (that would put the money back in his caisse)
+      if (!ctx.session.isAdmin && !ctx.session.roles.includes('vendeur')) {
+        if (num(r.created_by) !== me(ctx)) throw forbidden('Seul celui qui a saisi cet achat (ou l’administrateur) change ce qui est payé');
+        if (i.paid < num(r.paid)) throw forbidden('Seul l’administrateur diminue un montant déjà payé');
+      }
+
       await tx.query('UPDATE purchases SET paid = $2, paid_at = $3 WHERE id = $1', [i.id, i.paid, new Date(ctx.now()).toISOString()]);
       // only the difference moves: paying 30 000 more takes 30 000 out of the caisse
       await supplierCash(tx, k, i.paid - num(r.paid), r.ref, r.supplier ?? null, me(ctx));
