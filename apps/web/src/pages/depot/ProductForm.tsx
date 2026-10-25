@@ -64,8 +64,8 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
   const [f, setF] = useState({
     name: p?.name ?? '',
     sku: p?.sku ?? '',
-    price: String(p?.price ?? 0),
-    cost: String(p?.cost ?? 0),
+    price: p ? String(p.price) : '',
+    cost: p ? String(p.cost) : '',
     weightKg: String(p?.weightKg ?? 1),
     photo: p?.photo ?? '',
     isService: !!p?.isService,
