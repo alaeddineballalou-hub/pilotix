@@ -1,0 +1,25 @@
+# HTTPS certificates are requested and renewed by Caddy (Let's Encrypt) once the domain points to this server.
+{$DOMAIN}, www.{$DOMAIN} {
+	encode zstd gzip
+
+	@www host www.{$DOMAIN}
+	redir @www https://{$DOMAIN}{uri} permanent
+
+	# the Pilotix server: API, webhooks, landing pages, live updates
+	handle /api/* {
+		reverse_proxy server:3000
+	}
+	handle /live* {
+		reverse_proxy server:3000
+	}
+
+	# the app
+	handle {
+		root * /srv
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		header /index.html Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}

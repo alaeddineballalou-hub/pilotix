@@ -78,6 +78,16 @@ npx cap add ios && npx cap open ios             # Xcode on a Mac → Run
 
 ## Going to production
 
+One command on a fresh Ubuntu server (4 GB RAM), once the domain's DNS A records (`@` and `www`) point to it:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/alaeddineballalou-hub/pilotix/main/deploy/install.sh | sudo bash -s -- babyjoydz.net
+```
+
+It installs Docker, starts PostgreSQL + Redis + the server + the website behind Caddy (automatic HTTPS), asks for the
+first administrator and sets a daily database backup. Run it again to update. By hand, the steps are:
+
+
 1. Host PostgreSQL + Redis + the server (Docker image: `apps/server/Dockerfile`; it migrates on start). Put Cloudflare in front.
 2. Set a long random `JWT_SECRET`, real `CORS_ORIGINS` and `PUBLIC_URL`; create the first admin with `db:seed`.
 3. In the app: Réglages (shop, depots, webhook key), Sociétés de livraison (API keys of each courier, tariffs), Management (prices, pay, statuses), Utilisateurs.
