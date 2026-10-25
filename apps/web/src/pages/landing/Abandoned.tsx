@@ -130,7 +130,7 @@ export function Abandoned() {
                         </>
                       ) : (
                         <span className="lp-done">
-                          <span className={`chip ${r.status === 'converted' ? 'lp-on' : ''}`}>{t(`landing.ab.st_${r.status}${r.status === 'converted' && r.auto ? '_auto' : ''}`)}</span>
+                          <span className={`chip ${r.status === 'converted' ? 'lp-on' : ''}`}>{t(`landing.ab.st_${r.status}${r.status === 'converted' ? (r.auto ? '_auto' : r.handledBy ? '_agent' : '') : ''}`)}</span>
                           {r.orderId && (
                             <button className="lp-link ltr" onClick={() => openOrder(r.orderId!)}>
                               {r.orderRef}

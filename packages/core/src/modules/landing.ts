@@ -1361,7 +1361,7 @@ export const landingProcs = {
         await ctx.db.query(
           `SELECT count(*) FILTER (WHERE ${ABANDONED('$1::timestamptz')})::int AS abandoned,
                   count(*) FILTER (WHERE a.status = 'converted' AND a.abandoned_at IS NOT NULL)::int AS converted,
-                  count(*) FILTER (WHERE a.status = 'converted' AND a.abandoned_at IS NOT NULL AND NOT a.auto_order)::int AS recovered,
+                  count(*) FILTER (WHERE a.status = 'converted' AND a.abandoned_at IS NOT NULL AND NOT a.auto_order AND a.handled_by IS NULL)::int AS recovered,
                   count(*) FILTER (WHERE a.status = 'dismissed')::int AS dismissed,
                   COALESCE(sum(a.unit_price * a.qty) FILTER (WHERE ${ABANDONED('$1::timestamptz')}), 0)::int AS value
            FROM landing_leads a WHERE a.status <> 'blocked'`,
