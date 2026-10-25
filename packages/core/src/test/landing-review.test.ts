@@ -136,7 +136,12 @@ test('« Compléter »: a lead without wilaya becomes a silent order once the ag
   const lead = (await db.query(`SELECT id, status, note FROM landing_leads WHERE phone = $1`, [f.phone]))[0];
   assert.equal(lead.status, 'abandoned');
   assert.match(lead.note, /Wilaya/);
+  const before = (await call('landing.leads', admin, { status: 'all', page: 1, pageSize: 10 })) as any;
   const r: any = await call('landing.convertLead', await as(EMAILS.conf), { id: Number(lead.id), wilayaId: 31, commune: 'Oran' });
+  // added by an agent: not a customer who came back
+  const after = (await call('landing.leads', admin, { status: 'all', page: 1, pageSize: 10 })) as any;
+  assert.equal(after.stats.recovered, before.stats.recovered);
+  assert.equal(after.stats.converted, before.stats.converted + 1);
   const o = (await db.query(`SELECT * FROM orders WHERE id = $1`, [r.orderId]))[0];
   assert.equal(Number(o.wilaya_id), 31);
   assert.equal(o.channel, 'landing');
