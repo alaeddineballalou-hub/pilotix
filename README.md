@@ -81,7 +81,7 @@ npx cap add ios && npx cap open ios             # Xcode on a Mac → Run
 One command on a fresh Ubuntu server (4 GB RAM), once the domain's DNS A records (`@` and `www`) point to it:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/alaeddineballalou-hub/pilotix/main/deploy/install.sh | sudo bash -s -- babyjoydz.net
+curl -fsSL https://raw.githubusercontent.com/alaeddineballalou-hub/pilotix/main/deploy/install.sh | sudo bash -s -- pilotix.online
 ```
 
 It installs Docker, starts PostgreSQL + Redis + the server + the website behind Caddy (automatic HTTPS), asks for the
