@@ -29,7 +29,33 @@ ENV
   echo "    settings written to $DIR/deploy/.env (keep this file secret)"
 fi
 
-if command -v ufw >/dev/null && ufw status | grep -q active; then ufw allow 80/tcp >/dev/null; ufw allow 443 >/dev/null; fi
+echo "==> Server protection"
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq
+apt-get install -y -qq ufw fail2ban unattended-upgrades >/dev/null
+# security updates install themselves every night
+dpkg-reconfigure -f noninteractive unattended-upgrades >/dev/null 2>&1 || true
+# firewall: only SSH and the website are reachable (PostgreSQL and Redis never are; Docker publishes only 80 and 443)
+SSH_PORT=$(sshd -T 2>/dev/null | awk '/^port /{print $2; exit}'); SSH_PORT=${SSH_PORT:-22}
+ufw allow "$SSH_PORT"/tcp >/dev/null; ufw allow 80/tcp >/dev/null; ufw allow 443 >/dev/null
+ufw --force enable >/dev/null
+# fail2ban: an address that fails SSH logins 5 times is banned for an hour
+cat > /etc/fail2ban/jail.d/pilotix.conf <<JAIL
+[sshd]
+enabled = true
+port = $SSH_PORT
+maxretry = 5
+bantime = 1h
+JAIL
+systemctl enable --now fail2ban >/dev/null 2>&1; systemctl restart fail2ban
+# SSH by key only, once a key is installed (never locks out someone who logs in with a password today)
+if [ -s /root/.ssh/authorized_keys ] || ls /home/*/.ssh/authorized_keys >/dev/null 2>&1; then
+  printf 'PasswordAuthentication no\nKbdInteractiveAuthentication no\nPermitRootLogin prohibit-password\n' > /etc/ssh/sshd_config.d/99-pilotix.conf
+  systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
+  echo "    SSH: key only (passwords refused)"
+else
+  echo "    WARNING: SSH still accepts passwords. Add an SSH key, then run this script again to turn passwords off."
+fi
 
 echo "==> Building and starting (the first time takes 5-10 minutes)"
 C="docker compose -f deploy/docker-compose.yml --env-file deploy/.env"
