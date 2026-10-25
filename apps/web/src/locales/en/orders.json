@@ -365,6 +365,7 @@
     },
     "reason": "Reason",
     "cancelReason": "Cancellation reason (required)",
+    "finishedReason": "Finished order: write the reason for the change in the note",
     "detail": "Detail (optional)",
     "notePh": "e.g. call back after 5 pm",
     "needAddress": "Add the wilaya and commune before confirming (Edit)",

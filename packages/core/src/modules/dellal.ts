@@ -1153,7 +1153,10 @@ export const dellalProcs = {
 function randomToken() {
   const a = 'abcdefghijkmnpqrstuvwxyz23456789';
   let s = 'dellal-';
-  for (let i = 0; i < 24; i++) s += a[Math.floor(Math.random() * a.length)];
+  // a secure random source: this token also guards the TikTok webhook
+  const bytes = new Uint8Array(24);
+  globalThis.crypto.getRandomValues(bytes);
+  for (const b of bytes) s += a[b % a.length];
   return s;
 }
 

@@ -114,8 +114,10 @@ export function normalizePhone(input: string): string | null {
   let d = (input || '').replace(/[^\d+]/g, '');
   if (d.startsWith('+213')) d = '0' + d.slice(4);
   else if (d.startsWith('00213')) d = '0' + d.slice(5);
-  else if (d.startsWith('213') && d.length === 12) d = '0' + d.slice(3);
+  else if (d.startsWith('213') && (d.length === 12 || d.length === 13)) d = '0' + d.slice(3);
   d = d.replace(/\D/g, '');
+  // people often keep the 0 after the country code: +213 0661…, 00213 0661…, 2130661… → 0661…
+  if (d.startsWith('00') && (d.length === 11 || d.length === 10)) d = d.slice(1);
   if (d.length === 9 && /^[5-7]/.test(d)) d = '0' + d;
   if (/^0[5-7]\d{8}$/.test(d)) return d;
   if (/^0[2-4]\d{7}$/.test(d)) return d;

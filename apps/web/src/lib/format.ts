@@ -113,3 +113,14 @@ export function periodRange(p: Period): { from: string; to: string } {
     }
   }
 }
+
+/** The problems a courier sync reports (parcels the courier could not answer for, companies or steps that failed). */
+export function syncProblems(r: any): string[] {
+  const out: string[] = [];
+  for (const c of r?.companies ?? []) {
+    if (c.error) out.push(`${c.company} : ${c.error}`);
+    for (const e of c.errors ?? []) out.push(`${e.ref} : ${e.error}`);
+  }
+  for (const s of r?.steps ?? []) out.push(`${s.step} : ${s.error}`);
+  return out;
+}

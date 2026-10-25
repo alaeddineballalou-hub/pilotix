@@ -26,6 +26,8 @@ services:
     environment:
       DATABASE_URL: postgres://pilotix:pilotix_dev_only@postgres:5432/pilotix
       REDIS_URL: redis://redis:6379
+      # never the example value (the server refuses it): put JWT_SECRET=<long random text> in a .env file next to this one
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET (32+ random characters) in a .env file next to docker-compose.yml}
     ports: ["127.0.0.1:3000:3000"]
     depends_on:
       postgres: { condition: service_healthy }

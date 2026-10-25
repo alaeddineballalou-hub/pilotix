@@ -545,6 +545,8 @@ export const zr: CourierAdapter = {
         r = await http(c.name, url(c, `/parcels/${encodeURIComponent(it.extId || it.tracking)}`), { headers: h(c) });
       } catch (e: any) {
         if (String(e.message).includes('refuse les clés') || e.status === 429) throw e;
+        // told to the suivi (sync result) instead of being skipped in silence: the parcel would never update again
+        out.push({ id: it.id, status: '', error: e.status === 404 ? 'ZR ne trouve pas ce colis' : String(e.message ?? 'Erreur').slice(0, 200) });
         continue;
       }
       const key = r.state && (r.state.name || r.state.code) ? String(r.state.name || r.state.code) : null;

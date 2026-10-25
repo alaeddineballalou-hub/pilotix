@@ -24,7 +24,7 @@ import { LiveModule } from './live';
 class AppModule {}
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter({ trustProxy: true, bodyLimit: 5 * 1024 * 1024 }), {
+  const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter({ trustProxy: config.trustProxy as any, bodyLimit: 5 * 1024 * 1024 }), {
     logger: ['error', 'warn', 'log'],
     rawBody: true, // Meta webhooks are signed over the raw body
   });

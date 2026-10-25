@@ -10,7 +10,7 @@ import { CARDS, KINDS } from '../couriers/kinds';
 import { keysOk, loadCompany, loadParcels, resolveStatus } from '../couriers/load';
 import type { Desk, ExchangeResult, FeeRow, LabelResult, PreviewResult, SendResult, TrackItem, TrackResult } from '../couriers/types';
 import { Db, iso, num, numOrNull } from '../db';
-import { bad, Ctx, notFound, proc } from '../rpc';
+import { bad, Ctx, notFound, proc, takeActionLocks } from '../rpc';
 import { getSetting } from '../settings';
 import { addEvent, listOrders, setFollow } from './orders';
 
@@ -21,6 +21,10 @@ const ids = z.array(id).min(1).max(500);
 export const TO_SHIP: FollowStatus[] = ['to_prepare', 'prepared'];
 /** Statuses the courier sync follows (parcels with a tracking number, not final). */
 const SYNCABLE: FollowStatus[] = ['prepared', ...FOLLOW_ON_ROAD];
+/** Statuses set by hand by the suivi that the courier's ordinary on-the-road statuses must not overwrite. */
+const MANUAL_HOLD: FollowStatus[] = ['alert', 'in_exchange'];
+/** Courier statuses that still move a parcel held by the suivi. */
+const SYNC_ENDS: FollowStatus[] = ['delivered', 'returning', 'returned', 'exchanged', 'lost'];
 
 export interface CompanyRow {
   id: number;
@@ -122,6 +126,23 @@ async function saveFeeRows(db: Db, companyId: number, rows: FeeRow[]) {
 
 // ---------------------------------------------------------------- sending
 export async function sendOrders(ctx: Ctx, orderIds: number[], forceCompanyId?: number | null) {
+  // a double click, two people or a retry never send the same parcel twice (the courier would bill two parcels)
+  const locks = await takeActionLocks(ctx.db, orderIds.map((x) => `send:${x}`), ctx.session.profile.id);
+  try {
+    const busy = orderIds.filter((x) => !locks.taken.has(`send:${x}`));
+    const out = await sendOrdersLocked(ctx, orderIds.filter((x) => locks.taken.has(`send:${x}`)), forceCompanyId);
+    if (busy.length) {
+      const refs = await ctx.db.query('SELECT id, ref FROM orders WHERE id = ANY($1)', [busy]);
+      for (const r of refs) out.results.push({ id: num(r.id), ref: r.ref, ok: false, error: 'Envoi déjà en cours pour ce colis' });
+      out.failed = out.results.filter((r) => !r.ok).length;
+    }
+    return out;
+  } finally {
+    await locks.release();
+  }
+}
+
+async function sendOrdersLocked(ctx: Ctx, orderIds: number[], forceCompanyId?: number | null) {
   const rows = await ctx.db.query(
     `SELECT o.id, o.ref, o.company_id, o.conf_status, o.follow_status, o.tracking, o.wilaya_id, o.is_stopdesk, c.kind, c.active, c.name AS company_name,
        o.is_exchange, o.original_order_id, oo.company_id AS orig_company, oo.tracking AS orig_tracking, oo.ext_id AS orig_ext
@@ -292,7 +313,7 @@ async function companyLabels(ctx: Ctx, orderIds: number[]): Promise<LabelFile[]>
 // ---------------------------------------------------------------- status sync
 async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[]) {
   const parcels = await ctx.db.query(
-    `SELECT id, ref, tracking, ext_id, follow_status, ext_status FROM orders
+    `SELECT id, ref, tracking, ext_id, follow_status, sub_status, ext_status FROM orders
      WHERE company_id = $1 AND tracking IS NOT NULL AND follow_status = ANY($2) ${onlyIds ? 'AND id = ANY($3)' : ''} ORDER BY ext_status_at NULLS FIRST LIMIT 2000`,
     onlyIds ? [c.id, SYNCABLE, onlyIds] : [c.id, SYNCABLE],
   );
@@ -311,22 +332,31 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[]) {
   const defaults = ADAPTERS[c.kind]?.statuses ?? {};
   const byStatus = new Map<FollowStatus, number[]>();
   let changed = 0;
+  const errors: { ref: string; error: string }[] = [];
   for (const a of answers) {
     const p = parcels.find((x: any) => num(x.id) === a.id);
     if (!p) continue;
+    if (a.error) {
+      errors.push({ ref: p.ref, error: a.error });
+      continue;
+    }
     const to = resolveStatus(defaults, c.statusMap, a);
     if (a.status !== p.ext_status) {
       await ctx.db.query('UPDATE orders SET ext_status=$2, ext_status_at=COALESCE($3::timestamptz, now()), updated_at=now() WHERE id=$1', [a.id, a.status.slice(0, 200), safeDate(a.at)]);
       changed++;
     }
+    // Suivi's own work (an alert raised or handled, an exchange in progress) is not undone by the courier's
+    // « en livraison » / « vers wilaya »: only an end (livré, retour, perdu…) moves such a parcel.
+    if (MANUAL_HOLD.includes(p.follow_status) && to && !SYNC_ENDS.includes(to)) continue;
+    // a treated alert is not put back to « en route » by the courier, but a new failed attempt or alert still comes in
+    if (p.sub_status === 'alert_traitee' && (to === 'shipped' || to === 'out_for_delivery')) continue;
     if (to && to !== p.follow_status) byStatus.set(to, [...(byStatus.get(to) ?? []), a.id]);
   }
   const sys = asCourier(ctx);
   for (const [status, list] of byStatus) {
-    await setFollow(sys, { ids: list, status, note: `Statut ${c.name}` });
-    changed += list.length;
+    changed += (await setFollow(sys, { ids: list, status, note: `Statut ${c.name}` }, { system: true })).changed.length;
   }
-  return { company: c.name, checked: parcels.length, changed };
+  return { company: c.name, checked: parcels.length, changed, failed: errors.length, errors: errors.slice(0, 20) };
 }
 const safeDate = (s: string | null | undefined) => {
   if (!s) return null;
@@ -661,7 +691,7 @@ export const deliveryProcs = {
   /** Asks every courier with an API for the status of its parcels on the road and updates them. */
   'delivery.sync': proc(['suivi', 'depot'], z.object({ companyId: id.optional() }), async (ctx, i) => {
     const list = (await companies(ctx.db)).filter((c) => c.active && KINDS[c.kind]?.api && c.hasKeys && (!i.companyId || c.id === i.companyId));
-    const out: { company: string; checked: number; changed: number; error?: string }[] = [];
+    const out: { company: string; checked: number; changed: number; failed?: number; errors?: { ref: string; error: string }[]; error?: string }[] = [];
     for (const c of list) {
       try {
         out.push(await syncCompany(ctx, c));
@@ -671,11 +701,28 @@ export const deliveryProcs = {
     }
     if (out.some((x) => x.changed)) ctx.emit({ type: 'orders' });
     // ZR's answers to the modification requests (applied to the orders), and how far it is with the pickup bags
-    await import('./parcels').then((m) => m.syncChanges(ctx)).catch(() => null);
-    await import('./pickup').then((m) => m.syncBags(ctx, i.companyId)).catch(() => null);
+    // each step's failure is returned (shown to the suivi) instead of being dropped
+    const steps: { step: string; error: string }[] = [];
+    const step = async <T>(name: string, run: () => Promise<T>, empty: T): Promise<T> => {
+      try {
+        return await run();
+      } catch (e: any) {
+        steps.push({ step: name, error: String(e?.message ?? 'Erreur').slice(0, 300) });
+        return empty;
+      }
+    };
+    await step('Demandes de modification', () => import('./parcels').then((m) => m.syncChanges(ctx)), null);
+    await step('Sacs d’enlèvement', () => import('./pickup').then((m) => m.syncBags(ctx, i.companyId)), null);
     // the companies' payments (ZR): demande de paiement when money is ready, payments imported into the caisse
-    const payments = i.companyId || !ctx.session.isAdmin ? [] : await import('./courierpay').then((m) => m.payRunAll(ctx)).catch(() => []);
-    return { companies: out, checked: out.reduce((s, x) => s + x.checked, 0), changed: out.reduce((s, x) => s + x.changed, 0), payments };
+    const payments = i.companyId || !ctx.session.isAdmin ? [] : await step('Paiements des sociétés', () => import('./courierpay').then((m) => m.payRunAll(ctx)), [] as any[]);
+    return {
+      companies: out,
+      checked: out.reduce((s, x) => s + x.checked, 0),
+      changed: out.reduce((s, x) => s + x.changed, 0),
+      failed: out.reduce((s, x) => s + (x.failed ?? 0), 0),
+      payments,
+      steps,
+    };
   }),
 
   /** The courier's label for one parcel: a link or a PDF (base64). null = print our own slip. */

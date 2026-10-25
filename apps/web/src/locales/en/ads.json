@@ -13,6 +13,7 @@
   "fx": "$1 rate (in DA) · {{month}}",
   "fxSave": "Save rate",
   "fxSaved": "Rate saved",
+  "fxOwnerOnly": "The owner enters the dollar rate.",
   "fxMissing": "Enter your dollar rate to see costs in DA and the profit. It is what you pay in DA for $1 of ads.",
   "product": "Product",
   "allProducts": "All products",

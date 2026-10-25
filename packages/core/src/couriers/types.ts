@@ -68,6 +68,8 @@ export interface TrackResult {
   at?: string | null;
   /** adapter's own decision for special cases (e.g. ZR "isReturn"); undefined = use the maps */
   mapped?: FollowStatus | null;
+  /** the courier could not answer for this parcel (not found, error): reported, the parcel is left as it is */
+  error?: string;
 }
 
 export interface FeeRow {

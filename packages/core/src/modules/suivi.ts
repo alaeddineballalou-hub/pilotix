@@ -2,7 +2,7 @@
 import type { Order, Page } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
-import { bad, Ctx, notFound, proc } from '../rpc';
+import { bad, Ctx, notFound, proc, withActionLock } from '../rpc';
 import { getSetting } from '../settings';
 import { addEvent, FollowInput, getOrder, listOrders, ListInput, setFollow } from './orders';
 import { findOrders } from './sav';
@@ -441,6 +441,46 @@ const ListSuivi = z.object({
   pageSize: z.number().int().min(1).max(500).default(300),
 });
 
+/** A new claim on an order (one open claim per reason: a second click or the same claim again is refused). */
+async function createClaim(ctx: Ctx, i: z.infer<typeof ClaimCreate>): Promise<Claim> {
+  const o = await getOrder(ctx, i.orderId);
+  const open = (await ctx.db.query(`SELECT id FROM claims WHERE order_id = $1 AND reason = $2 AND status <> 'resolved' LIMIT 1`, [i.orderId, i.reason]))[0];
+  if (open) throw bad(`${o.ref} a déjà une réclamation ouverte pour ce motif (${claimRef(num(open.id))})`);
+  const me = ctx.session.profile.id;
+  let companyId: number | null = null;
+  let livreurId: number | null = null;
+  if (i.toLivreur) {
+    if (!o.livreurId) throw bad(`${o.ref} n’a pas de livreur`);
+    livreurId = o.livreurId;
+    companyId = o.companyId;
+  } else {
+    if (!o.companyId) throw bad(`${o.ref} n’est pas chez une société de livraison`);
+    const kind = (await ctx.db.query('SELECT kind FROM delivery_companies WHERE id=$1', [o.companyId]))[0]?.kind;
+    if (kind === 'own') {
+      if (!o.livreurId) throw bad(`${o.ref} est chez nos livreurs : écrivez au livreur`);
+      livreurId = o.livreurId;
+    }
+    companyId = o.companyId;
+  }
+  const nowIso = new Date(ctx.now()).toISOString();
+  const cid = await ctx.db.tx(async (tx) => {
+    const r = (
+      await tx.query(
+        `INSERT INTO claims (order_id, company_id, livreur_id, reason, details, message, channel, status, created_by, notes, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'waiting',$8,$9,$10,$10) RETURNING id`,
+        [o.id, companyId, livreurId, i.reason, i.details, i.message, i.channel, me, JSON.stringify([{ at: nowIso, userId: me, text: 'Réclamation préparée', status: 'waiting' }]), nowIso],
+      )
+    )[0];
+    const n = num(r.id);
+    await addEvent(tx, o.id, me, 'note', null, 'event', `Réclamation ${claimRef(n)} : ${i.details || i.reason}`.slice(0, 300));
+    return n;
+  });
+  ctx.emit({ type: 'order', id: o.id });
+  const made = await getClaim(ctx.db, cid);
+  if (made.viaApi && i.viaApi && o.tracking) return pushClaim(ctx, cid, i.categoryId ?? null);
+  return made;
+}
+
 export const suiviProcs = {
   'suivi.counts': proc(['suivi'], z.object({}), (ctx) => suiviCounts(ctx)),
 
@@ -515,45 +555,14 @@ export const suiviProcs = {
 
   'suivi.claims': proc(['suivi', 'confirmation', 'depot'], ClaimsInput, (ctx, f) => listClaims(ctx, f)),
 
-  'suivi.claimCreate': proc(['suivi', 'confirmation', 'depot'], ClaimCreate, async (ctx, i) => {
-    const o = await getOrder(ctx, i.orderId);
-    const me = ctx.session.profile.id;
-    let companyId: number | null = null;
-    let livreurId: number | null = null;
-    if (i.toLivreur) {
-      if (!o.livreurId) throw bad(`${o.ref} n’a pas de livreur`);
-      livreurId = o.livreurId;
-      companyId = o.companyId;
-    } else {
-      if (!o.companyId) throw bad(`${o.ref} n’est pas chez une société de livraison`);
-      const kind = (await ctx.db.query('SELECT kind FROM delivery_companies WHERE id=$1', [o.companyId]))[0]?.kind;
-      if (kind === 'own') {
-        if (!o.livreurId) throw bad(`${o.ref} est chez nos livreurs : écrivez au livreur`);
-        livreurId = o.livreurId;
-      }
-      companyId = o.companyId;
-    }
-    const nowIso = new Date(ctx.now()).toISOString();
-    const cid = await ctx.db.tx(async (tx) => {
-      const r = (
-        await tx.query(
-          `INSERT INTO claims (order_id, company_id, livreur_id, reason, details, message, channel, status, created_by, notes, created_at, updated_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,'waiting',$8,$9,$10,$10) RETURNING id`,
-          [o.id, companyId, livreurId, i.reason, i.details, i.message, i.channel, me, JSON.stringify([{ at: nowIso, userId: me, text: 'Réclamation préparée', status: 'waiting' }]), nowIso],
-        )
-      )[0];
-      const n = num(r.id);
-      await addEvent(tx, o.id, me, 'note', null, 'event', `Réclamation ${claimRef(n)} : ${i.details || i.reason}`.slice(0, 300));
-      return n;
-    });
-    ctx.emit({ type: 'order', id: o.id });
-    const made = await getClaim(ctx.db, cid);
-    if (made.viaApi && i.viaApi && o.tracking) return pushClaim(ctx, cid, i.categoryId ?? null);
-    return made;
-  }),
+  'suivi.claimCreate': proc(['suivi', 'confirmation', 'depot'], ClaimCreate, (ctx, i) =>
+    withActionLock(ctx.db, `claim:order:${i.orderId}`, ctx.session.profile.id, 'Réclamation déjà en cours d’envoi pour cette commande', () => createClaim(ctx, i)),
+  ),
 
   /** Sends (again) a saved claim to the courier's API, e.g. after a refusal. */
-  'suivi.claimPush': proc(['suivi', 'confirmation', 'depot'], z.object({ id, categoryId: z.string().max(100).nullable().optional() }), (ctx, i) => pushClaim(ctx, i.id, i.categoryId ?? null)),
+  'suivi.claimPush': proc(['suivi', 'confirmation', 'depot'], z.object({ id, categoryId: z.string().max(100).nullable().optional() }), (ctx, i) =>
+    withActionLock(ctx.db, `claim:${i.id}`, ctx.session.profile.id, 'Réclamation déjà en cours d’envoi', () => pushClaim(ctx, i.id, i.categoryId ?? null)),
+  ),
 
   /** The courier's claim categories (ZR), to choose one in the form. */
   'suivi.claimCategories': proc(['suivi', 'confirmation', 'depot'], z.object({ companyId: id }), async (ctx, { companyId }): Promise<ClaimCategory[]> => {

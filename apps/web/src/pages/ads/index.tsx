@@ -258,10 +258,19 @@ export function Publicite(_: Partial<PageProps> = {}) {
 
 function FxField({ ym, rate }: { ym: string; rate: number | null }) {
   const { t } = useTranslation();
+  const { has } = useSession();
   const [v, setV] = useState(rate ? String(rate) : '');
   useEffect(() => setV(rate ? String(rate) : ''), [rate, ym]);
   const save = useAction('ads.setFx', { success: t('ads.fxSaved') });
   const changed = v !== (rate ? String(rate) : '') && Number(v) >= 1;
+  // only the owner sets the rate (it decides the marketers' pay); a marketer sees it
+  if (!has('vendeur'))
+    return (
+      <label className="field">
+        <span className="lab">{t('ads.fx', { month: ym })}</span>
+        <span className="fxrow">{rate ? `${rate} DA` : t('ads.fxOwnerOnly')}</span>
+      </label>
+    );
   return (
     <label className="field">
       <span className="lab">{t('ads.fx', { month: ym })}</span>

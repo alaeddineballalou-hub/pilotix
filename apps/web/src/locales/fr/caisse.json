@@ -188,6 +188,7 @@
   "cat": {
     "fuel": "Carburant",
     "packing": "Emballage",
+    "supplier": "Fournisseur",
     "salary": "Salaire",
     "rent": "Loyer",
     "ads": "Publicité",

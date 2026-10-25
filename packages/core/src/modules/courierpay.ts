@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { ADAPTERS } from '../couriers/adapters';
 import type { PayBalance, PayLine, PayRequest, PayStatement } from '../couriers/types';
 import { iso, isoOrNull, num } from '../db';
-import { bad, Ctx, notFound, proc } from '../rpc';
+import { bad, Ctx, notFound, proc, withActionLock } from '../rpc';
 import { CAISSE_KEY_RE, CaisseKey, caisseLabelOf, checkCaisse, receive } from './cash';
 import { setFollow } from './orders';
 
@@ -122,8 +122,14 @@ export async function payRun(ctx: Ctx, companyId: number) {
   // handed over and not in a caisse yet → imported now
   const todo = await ctx.db.query('SELECT id FROM courier_payments WHERE company_id = $1 AND done AND imported_at IS NULL ORDER BY at', [companyId]);
   for (const t of todo) {
-    await importPayment(ctx, num(t.id), c.cfg.into);
-    imported++;
+    try {
+      await importPayment(ctx, num(t.id), c.cfg.into);
+      imported++;
+    } catch (e: any) {
+      // someone is importing it by hand right now: it is theirs
+      if (e?.code === 'conflict') continue;
+      throw e;
+    }
   }
   let requested = false;
   const pending = reqs.some((r) => r.approved === null);
@@ -152,10 +158,21 @@ export async function payRunAll(ctx: Ctx) {
   return out;
 }
 
-/** A payment into a caisse: its parcels marked « argent reçu » (delivered first if we did not know yet), net = its amount. */
+/**
+ * A payment into a caisse: its parcels marked « argent reçu » (delivered first if we did not know yet), net = its amount
+ * minus the parcels already received by hand (their money is already in a caisse: counted once, not twice).
+ * One import at a time per payment (the « Reçu » click and the 30-minute job), and all or nothing: a crash halfway
+ * leaves the payment not imported, never half in a caisse.
+ */
 async function importPayment(ctx: Ctx, payId: number, into: string) {
   await checkCaisse(ctx.db, into);
-  const p = (await ctx.db.query('SELECT * FROM courier_payments WHERE id = $1', [payId]))[0];
+  return withActionLock(ctx.db, `payimport:${payId}`, ctx.session.profile.id, 'Ce paiement est déjà en cours d’import', () =>
+    ctx.db.tx((tx) => importPaymentTx({ ...ctx, db: tx }, payId, into)),
+  );
+}
+
+async function importPaymentTx(ctx: Ctx, payId: number, into: string) {
+  const p = (await ctx.db.query('SELECT * FROM courier_payments WHERE id = $1 FOR UPDATE', [payId]))[0];
   if (!p) throw notFound('Paiement introuvable');
   const live = p.handover_id && (await ctx.db.query('SELECT 1 FROM cash_handovers WHERE id = $1 AND cancelled_at IS NULL', [p.handover_id]))[0];
   const liveMove = p.move_id && (await ctx.db.query('SELECT 1 FROM cash_moves WHERE id = $1 AND cancelled_at IS NULL', [p.move_id]))[0];
@@ -167,20 +184,24 @@ async function importPayment(ctx: Ctx, payId: number, into: string) {
     await ctx.db.query('UPDATE courier_payments SET lines = $2 WHERE id = $1', [payId, JSON.stringify(lines)]);
   }
   const tracks = [...new Set(lines.filter((l) => l.tracking && l.amount > 0).map((l) => l.tracking!))];
-  const orders = tracks.length ? await ctx.db.query('SELECT id, tracking, follow_status, cashed FROM orders WHERE company_id = $1 AND tracking = ANY($2)', [companyId, tracks]) : [];
+  const orders = tracks.length ? await ctx.db.query('SELECT id, tracking, follow_status, cashed FROM orders WHERE company_id = $1 AND tracking = ANY($2) FOR UPDATE', [companyId, tracks]) : [];
   const unpaid = orders.filter((o: any) => !o.cashed);
+  // parcels already received by hand: their part of this payment is already in a caisse
+  const cashedTracks = new Set(orders.filter((o: any) => o.cashed).map((o: any) => String(o.tracking)));
+  const already = lines.filter((l) => l.tracking && l.amount > 0 && cashedTracks.has(l.tracking)).reduce((s, l) => s + Math.round(num(l.amount)), 0);
+  const net = Math.max(0, num(p.amount) - already);
   // ZR paid them: they were delivered, even if its status did not reach us yet
   const late = unpaid.filter((o: any) => o.follow_status !== 'delivered' && ([...FOLLOW_ON_ROAD, 'failed', 'alert'] as string[]).includes(o.follow_status)).map((o: any) => num(o.id));
-  if (late.length) await setFollow(sys(ctx), { ids: late, status: 'delivered', note: `Payé par la société (paiement ${p.ref ?? p.ext_id})` } as any);
+  if (late.length) await setFollow(sys(ctx), { ids: late, status: 'delivered', note: `Payé par la société (paiement ${p.ref ?? p.ext_id})` } as any, { system: true });
   const ids = unpaid.filter((o: any) => o.follow_status === 'delivered' || late.includes(num(o.id))).map((o: any) => num(o.id));
-  const note = `Paiement ${p.ref ?? String(p.ext_id).slice(0, 8)}`;
+  const note = `Paiement ${p.ref ?? String(p.ext_id).slice(0, 8)}${already ? ` (dont ${already} DA déjà reçus à la main)` : ''}`;
   let handoverId: number | null = null;
   let moveId: number | null = null;
   if (ids.length) {
-    const r = await receive(sys(ctx), ids, note, false, into, { net: num(p.amount) });
+    const r = await receive(sys(ctx), ids, note, false, into, { net });
     handoverId = r.handovers[0] ?? null;
-  } else {
-    const m = await ctx.db.query(`INSERT INTO cash_moves (caisse, amount, kind, note, created_by) VALUES ($1,$2,'income',$3,$4) RETURNING id`, [into, num(p.amount), note, ctx.session.profile.id]);
+  } else if (net > 0) {
+    const m = await ctx.db.query(`INSERT INTO cash_moves (caisse, amount, kind, note, created_by) VALUES ($1,$2,'income',$3,$4) RETURNING id`, [into, net, note, ctx.session.profile.id]);
     moveId = num(m[0].id);
   }
   await ctx.db.query(
@@ -188,7 +209,7 @@ async function importPayment(ctx: Ctx, payId: number, into: string) {
     [payId, handoverId, moveId, into, ids.length, tracks.length - orders.length, ctx.session.profile.id],
   );
   ctx.emit({ type: 'orders' });
-  return { handoverId, moveId, matched: ids.length };
+  return { handoverId, moveId, matched: ids.length, alreadyCashed: already };
 }
 
 const caisseLabel = (ctx: Ctx, key: string | null) => caisseLabelOf(ctx.db, key);

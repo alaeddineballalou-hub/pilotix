@@ -399,7 +399,7 @@ async function overview(ctx: Ctx, r: RangeT) {
         (SELECT count(*) FROM sales WHERE created_at >= $1 AND created_at < $2)::int AS received,
         (SELECT COALESCE(sum(total),0) FROM sales WHERE follow_status IN ('delivered','exchanged') AND delivered_at >= $1 AND delivered_at < $2)::bigint AS revenue,
         (SELECT count(*) FROM sales WHERE follow_status IN ('delivered','exchanged') AND delivered_at >= $1 AND delivered_at < $2)::int AS delivered,
-        (SELECT count(*) FROM sales WHERE follow_status IN ('returning','returned') AND COALESCE(returned_at, updated_at) >= $1 AND COALESCE(returned_at, updated_at) < $2)::int AS returned`,
+        (SELECT count(*) FROM sales WHERE follow_status IN ('returning','returned') AND coalesce(returned_at, returning_at, updated_at) >= $1 AND coalesce(returned_at, returning_at, updated_at) < $2)::int AS returned`,
       [from, to],
     );
   const cur = await block(r.from, r.to);
@@ -534,7 +534,7 @@ export const statsProcs = {
         `SELECT
           (SELECT count(*) FROM sales WHERE created_at >= $1 AND created_at < $2)::int AS received,
           (SELECT count(*) FROM sales WHERE created_at >= $1 AND created_at < $2 AND conf_status = ANY($3))::int AS received_todo,
-          (SELECT count(*) FROM sales WHERE confirmed_at >= $1 AND confirmed_at < $2)::int AS confirmed,
+          (SELECT count(*) FROM sales WHERE confirmed_at >= $1 AND confirmed_at < $2 AND conf_status IN ('confirmed','no_stock'))::int AS confirmed,
           (SELECT count(DISTINCT e.order_id) FROM order_events e JOIN sales o ON o.id = e.order_id
              WHERE e.kind = 'conf_status' AND e.at >= $1 AND e.at < $2 AND e.to_value = ANY($4) AND o.conf_status = ANY($4))::int AS cancelled,
           (SELECT count(*) FROM sales WHERE shipped_at >= $1 AND shipped_at < $2)::int AS shipped,

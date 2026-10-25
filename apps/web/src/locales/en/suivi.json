@@ -11,6 +11,7 @@
   "sync": "Update from the couriers",
   "syncDone": "{{checked}} parcels checked with the couriers · {{changed}} status(es) updated",
   "syncFail": "Update failed: {{msg}}",
+  "syncProblems": "{{count}} problem(s) with the couriers: {{list}}",
   "kpiSub": {
     "alertes": "to handle",
     "traites": "back on the road after the alert",

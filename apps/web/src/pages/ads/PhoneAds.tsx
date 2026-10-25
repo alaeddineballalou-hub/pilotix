@@ -157,8 +157,17 @@ function Pub() {
 function FxBar({ d }: { d: Ov }) {
   const { t } = useTranslation();
   const [v, setV] = useState('');
+  const { has } = useSession();
   const save = useAction('ads.setFx', { success: t('ads.fxSaved') });
   if (d.fx.rate && !d.fx.missing) return null;
+  // only the owner sets the rate (it decides the marketers' pay)
+  if (!has('vendeur'))
+    return (
+      <div className="pxm-fx">
+        <Icon name="alert" />
+        <span>{t('ads.fxMissing')} {t('ads.fxOwnerOnly')}</span>
+      </div>
+    );
   return (
     <div className="pxm-fx">
       <Icon name="alert" />

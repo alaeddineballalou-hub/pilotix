@@ -12,7 +12,9 @@ async function main() {
     await core.seedBase(db, { email: process.env.SEED_ADMIN_EMAIL || 'admin@pilotix.dz', password: process.env.SEED_ADMIN_PASSWORD || '' });
     console.log('Admin ready.');
   } else if (process.argv[2] === 'demo') {
-    // Fills an EMPTY database with the demo shop (for testing a server). Never on a real shop.
+    // Fills an EMPTY database with the demo shop (for testing a server). Never on a real shop: it creates accounts
+    // whose password is public (demo-pilotix), so it is refused in production unless asked on purpose.
+    if (process.env.NODE_ENV === 'production' && process.env.ALLOW_DEMO_SEED !== '1') throw new Error('Demo data refused in production (set ALLOW_DEMO_SEED=1 only on a test server)');
     const n = Number((await db.query('SELECT count(*)::int AS n FROM orders'))[0].n);
     if (n > 0) throw new Error('Database is not empty');
     await core.seedDemo(db, { orders: Number(process.env.DEMO_ORDERS || 1500) });

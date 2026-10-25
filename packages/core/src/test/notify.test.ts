@@ -181,7 +181,8 @@ test('delivery: shipped, with the livreur, failed attempt, cancelled by the livr
   const old = await newOrder(conf, { confirm: true });
   await db.query(`UPDATE orders SET follow_status = 'shipped', shipped_at = now() - interval '20 days', confirmed_at = now() - interval '21 days', created_at = now() - interval '22 days' WHERE id = $1`, [old.id]);
   await go('delivered', [old.id]);
-  await go('returning', [old.id]);
+  // a finished order only changes with a reason (the suivi corrects a wrong « Livré »)
+  await call('orders.setFollow', suivi, { ids: [old.id], status: 'returning', note: 'livré par erreur chez la société' });
   assert.deepEqual(await kinds(old.id), ['confirmed:whatsapp']);
 });
 
