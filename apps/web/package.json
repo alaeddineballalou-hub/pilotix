@@ -12,9 +12,9 @@
     "build:artifact": "tsc -p tsconfig.json --noEmit && vite build --mode artifact"
   },
   "dependencies": {
-    "@capacitor/android": "7.2.0",
-    "@capacitor/core": "7.2.0",
-    "@capacitor/ios": "7.2.0",
+    "@capacitor/android": "7.6.9",
+    "@capacitor/core": "7.6.9",
+    "@capacitor/ios": "7.6.9",
     "@pilotix/shared": "2.0.0",
     "@tanstack/react-query": "5.59.20",
     "@tanstack/react-table": "8.20.5",
@@ -24,7 +24,6 @@
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-i18next": "15.1.1",
-    "react-router-dom": "6.28.0",
     "socket.io-client": "4.8.1",
     "@pilotix/core": "3.0.0",
     "@electric-sql/pglite": "0.2.17",
@@ -34,7 +33,7 @@
     "@zxing/library": "0.21.3"
   },
   "devDependencies": {
-    "@capacitor/cli": "7.2.0",
+    "@capacitor/cli": "7.6.9",
     "@types/react": "18.3.12",
     "@types/react-dom": "18.3.1",
     "@vitejs/plugin-react": "4.3.3",

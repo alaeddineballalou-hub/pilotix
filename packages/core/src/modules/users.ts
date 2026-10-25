@@ -40,7 +40,7 @@ const NewUser = z.object({
   email: z.string().email().max(200),
   phone: z.string().max(20).nullable().optional(),
   password: z.string().min(8).max(200),
-  roles: z.array(z.enum(ROLES)).min(1),
+  roles: z.array(z.enum(ROLES)).min(1).max(20),
   language: z.enum(LANGUAGES).default('fr'),
   livreurCompanyId: z.number().int().positive().nullable().optional(),
 });
