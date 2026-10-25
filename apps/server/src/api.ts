@@ -114,7 +114,7 @@ function visitorMeta(req: { ip?: string; headers: Record<string, string | undefi
   };
   const cookie = (name: string) => (h.cookie ?? '').split(/;\s*/).find((c) => c.startsWith(`${name}=`))?.slice(name.length + 1) ?? '';
   return {
-    ip: req.ip || '',
+    ip: core.expandIp(req.ip || ''),
     ua: h['user-agent'] || '',
     country: h['cf-ipcountry'] || h['x-vercel-ip-country'] || h['x-geo-country'] || '',
     city: decode(h['cf-ipcity'] || h['x-vercel-ip-city'] || h['x-geo-city'] || ''),
@@ -130,7 +130,7 @@ const lpHits = new Map<string, { n: number; until: number }>();
 function limitLanding(ip: string, kind: string, max: number): boolean {
   const now = Date.now();
   if (lpHits.size > 50_000) for (const [k, v] of lpHits) if (v.until < now) lpHits.delete(k);
-  const key = `${kind}:${ip}`;
+  const key = `${kind}:${core.ipNet(ip)}`; // an IPv6 /64 is one visitor
   const a = lpHits.get(key);
   if (!a || a.until < now) {
     lpHits.set(key, { n: 1, until: now + 10 * 60_000 });
@@ -210,11 +210,11 @@ class ApiController {
       proxyWarned = true;
       new Logger('Pilotix').warn('Requests come through a proxy (X-Forwarded-For) but TRUST_PROXY is not set: the login limit sees every user as the proxy. Set TRUST_PROXY=1.');
     }
-    const ipKey = `ip:${req.ip || 'unknown'}`;
+    const ipKey = `ip:${core.ipNet(req.ip || '') || 'unknown'}`;
     checkLogin(ipKey, 10);
     const b = LoginBody.safeParse(body);
     if (!b.success) throw new core.AppError('bad_request', 'Email ou mot de passe manquant');
-    const mailKey = `email:${b.data.email.trim().toLowerCase()}|${req.ip || 'unknown'}`;
+    const mailKey = `email:${b.data.email.trim().toLowerCase()}|${core.ipNet(req.ip || '') || 'unknown'}`;
     checkLogin(mailKey, 5);
     let session: Session;
     try {

@@ -1,7 +1,7 @@
 import { DEMO_ACCOUNTS, DEMO_PASSWORD, Language, LANGUAGES } from '@pilotix/shared';
 import { FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { backend, DEMO_AVAILABLE, DEMO_ONLY, onDemoProgress, serverUrl, setServerUrl, switchDemo } from '../lib/backend';
+import { backend, DEMO_AVAILABLE, DEMO_ONLY, FIXED_SERVER, onDemoProgress, serverUrl, setServerUrl, switchDemo } from '../lib/backend';
 import { applyLanguage } from '../lib/i18n';
 import { useSession } from '../lib/session';
 
@@ -76,11 +76,13 @@ export function Login() {
               <span className="lab">{t('login.password')}</span>
               <input id="login-password" type="password" dir="ltr" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
             </label>
+            {!FIXED_SERVER && (
             <label className="field">
               <span className="lab">{t('login.server')}</span>
               <input id="login-server" type="url" dir="ltr" required value={server} onChange={(e) => setServer(e.target.value)} placeholder="https://api.votre-boutique.dz" />
               <span className="hint">{t('login.serverHint')}</span>
             </label>
+            )}
             {error && <p className="form-err">{error}</p>}
             <button className="btn primary big" disabled={!!busy}>
               {t('login.submit')}

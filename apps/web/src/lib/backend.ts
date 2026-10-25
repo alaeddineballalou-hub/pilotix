@@ -37,8 +37,15 @@ export interface Backend {
 }
 
 // ---------------------------------------------------------------- real server
+/**
+ * The website of a shop (built with its server's address, opened at that address) always talks to that server: nobody
+ * can talk an employee into typing another « server » that would receive their password. Only the phone apps (served
+ * from localhost) and development ask for it.
+ */
+export const FIXED_SERVER = !!import.meta.env.VITE_API_URL && /^https?:$/.test(location.protocol) && !['localhost', '127.0.0.1'].includes(location.hostname);
+
 export function serverUrl(): string {
-  return (store.get('server') || import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+  return ((FIXED_SERVER ? '' : store.get('server')) || import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
 }
 export function setServerUrl(url: string) {
   store.set('server', url.trim().replace(/\/+$/, '') || null);

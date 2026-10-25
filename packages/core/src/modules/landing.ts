@@ -32,6 +32,7 @@ import { BOT_UA, FraudLevel, FraudReason, scoreOrder } from './fraud';
 import { ABANDONED, abandonCutoff, freeLandingSlug, landingCounts, landingSettings, LandingSettings, queuePurchase, quickCreatePage } from './landingquery';
 import { sendInPreview } from './notify';
 import { addEvent, createOrder, noOrderAccess } from './orders';
+import { ipPrefix } from '../net';
 import { RESERVED } from './stockquery';
 
 const id = z.number().int().positive();
@@ -392,10 +393,10 @@ async function recentCounts(db: Db, a: { phone: string | null; productId: number
          (SELECT count(*)::int FROM landing_submits WHERE $1::text IS NOT NULL AND phone = $1 AND product_id = $2 AND verdict = 'block' AND at > $4)
            + (SELECT count(*)::int FROM sales o WHERE $1::text IS NOT NULL AND o.phone = $1 AND o.created_at > $4 AND EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.product_id = $2)
                 AND NOT EXISTS (SELECT 1 FROM landing_leads x WHERE x.order_id = o.id AND x.auto_order)) AS dup,
-         (SELECT count(*)::int FROM landing_submits WHERE $3 <> '' AND ip = $3 AND at > $5) AS ip10m,
-         (SELECT count(*)::int FROM landing_submits WHERE $3 <> '' AND ip = $3 AND at > $6) AS ip1h,
+         (SELECT count(*)::int FROM landing_submits WHERE $3 <> '' AND (ip = $3 OR ($8 <> '' AND ip LIKE $8 || '%')) AND at > $5) AS ip10m,
+         (SELECT count(*)::int FROM landing_submits WHERE $3 <> '' AND (ip = $3 OR ($8 <> '' AND ip LIKE $8 || '%')) AND at > $6) AS ip1h,
          (SELECT count(*)::int FROM landing_submits WHERE fp = $7 AND at > $6) AS dev1h`,
-      [a.phone, a.productId, a.ip, t(24 * H), t(10 * 60_000), t(H), a.device],
+      [a.phone, a.productId, a.ip, t(24 * H), t(10 * 60_000), t(H), a.device, ipPrefix(a.ip)],
     )
   )[0];
   return { phone24h: num(r.phone24h), phoneSameProduct24h: num(r.dup), ip10m: num(r.ip10m), ip1h: num(r.ip1h), device1h: num(r.dev1h) };
@@ -624,7 +625,12 @@ export async function captureLead(ctx: Ctx, i: z.infer<typeof CaptureInput>): Pr
     return { ok: true };
   }
   // a flood from one device or address is not 20 customers
-  const flood = (await db.query(`SELECT (SELECT count(*) FROM landing_leads WHERE device = $1 AND at > $3) + (SELECT count(*) FROM landing_leads WHERE $2 <> '' AND ip = $2 AND at > $3) AS n`, [device, ip, isoAt(now - 3600_000)]))[0];
+  const flood = (
+    await db.query(
+      `SELECT (SELECT count(*) FROM landing_leads WHERE device = $1 AND at > $3) + (SELECT count(*) FROM landing_leads WHERE $2 <> '' AND (ip = $2 OR ($4 <> '' AND ip LIKE $4 || '%')) AND at > $3) AS n`,
+      [device, ip, isoAt(now - 3600_000), ipPrefix(ip)],
+    )
+  )[0];
   if (num(flood?.n) >= 20) return { ok: true };
   const leadId = num(
     (
@@ -761,9 +767,17 @@ export async function sweepAbandoned(ctx: Ctx): Promise<{ abandoned: number; ord
         await tx.query(`UPDATE landing_leads SET status = 'abandoned', abandoned_at = $2, note = 'Wilaya non choisie' WHERE id = $1`, [a.id, isoAt(now)]);
         return 'abandoned';
       }
+      // a lead carries no proof of work nor typing evidence: a doubtful one, or a sudden wave on one page (a script), waits
+      // in « Abandonnées » for a person instead of becoming an order by itself
+      const wave = num((await tx.query(`SELECT count(*)::int AS n FROM landing_leads WHERE landing_id = $1 AND auto_order AND handled_at > $2`, [a.landing_id, isoAt(now - 3600_000)]))[0]?.n);
+      if (v.verdict === 'review' || wave >= 40) {
+        const why = v.verdict === 'review' ? `Douteuse (score ${v.score}/100) — ${reasonsText(v.reasons)}` : 'Beaucoup de commandes abandonnées en une heure sur cette page : à vérifier';
+        await tx.query(`UPDATE landing_leads SET status = 'abandoned', abandoned_at = $2, note = $3 WHERE id = $1`, [a.id, isoAt(now), why.slice(0, 300)]);
+        return 'abandoned';
+      }
       await tx.query('SAVEPOINT px_lead');
       try {
-        await convertLead(ctx, tx, a, true, v.verdict === 'review' ? `⚠ Score anti-fraude ${v.score}/100 — ${reasonsText(v.reasons)}` : null);
+        await convertLead(ctx, tx, a, true, null);
         await tx.query('RELEASE SAVEPOINT px_lead');
         return 'ordered';
       } catch (e: any) {

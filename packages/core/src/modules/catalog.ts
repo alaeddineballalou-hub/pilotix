@@ -2,7 +2,7 @@
 import { API_COURIER_KINDS, normalizePhone, Order, Page, Pack, StockRow, Warehouse } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, num, numOrNull, Where } from '../db';
-import { bad, Ctx, forbidden, notFound, proc, withActionLock } from '../rpc';
+import { bad, Ctx, forbidden, hasRole, notFound, proc, withActionLock } from '../rpc';
 import { getSetting } from '../settings';
 import { cancelParcel, sendOrders } from './delivery';
 import { getOrder, ordersProcs, setFollow } from './orders';
@@ -212,6 +212,24 @@ export async function stockRows(db: Db, f: z.infer<typeof StockInput>): Promise<
   });
 }
 
+// ---------------------------------------------------------------- price history
+/** Writes what changed among a product's sale price, purchase price and maximum discount. Inside the caller's transaction. */
+export async function logProductChange(
+  db: Db,
+  productId: number,
+  userId: number | null,
+  before: { price?: number | null; cost?: number | null; max_discount?: number | null },
+  after: { price?: number | null; cost?: number | null; max_discount?: number | null },
+  why: string | null = null,
+) {
+  for (const f of ['price', 'cost', 'max_discount'] as const) {
+    if (!(f in after) || after[f] === undefined) continue;
+    const a = before[f] == null ? null : Number(before[f]);
+    const b = after[f] == null ? null : Number(after[f]);
+    if (a !== b) await db.query('INSERT INTO product_changes (product_id, user_id, field, from_value, to_value, why) VALUES ($1,$2,$3,$4,$5,$6)', [productId, userId, f, a, b, why]);
+  }
+}
+
 // ---------------------------------------------------------------- writing stock
 /** Adds `delta` to the stock of a variant in a depot and writes the movement. Use inside a transaction. */
 export async function moveStock(
@@ -264,7 +282,10 @@ export async function stockMove(ctx: Ctx, i: z.infer<typeof MoveInput>) {
       // the supplier changed its price: this entry's price is the product's purchase price from now on
       const p = (await tx.query('SELECT p.id, p.cost FROM products p JOIN product_variants v ON v.product_id = p.id WHERE v.id = $1 FOR UPDATE OF p', [i.variantId]))[0];
       const old = num(p.cost);
-      if (old !== i.unitCost) await tx.query('UPDATE products SET cost = $2 WHERE id = $1', [p.id, i.unitCost]);
+      if (old !== i.unitCost) {
+        await tx.query('UPDATE products SET cost = $2 WHERE id = $1', [p.id, i.unitCost]);
+        await logProductChange(tx, num(p.id), ctx.session.profile.id, { cost: old }, { cost: i.unitCost }, 'Entrée de stock');
+      }
       const price = old !== i.unitCost ? `Prix d’achat ${old} → ${i.unitCost} DA` : `Prix d’achat ${i.unitCost} DA`;
       note = note ? `${note} — ${price}` : price;
     }
@@ -368,6 +389,7 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
     const vals = [i.name, sku, i.price, i.cost, i.weightKg, i.photo || null, i.isService, i.active, i.fixedPrice, maxDiscount, JSON.stringify(i.packs.sort((a, b) => a.qty - b.qty)), linked, JSON.stringify(i.parts.map((p) => ({ name: p.name, max: p.max ?? null }))), i.feeGrid || null, ...extra];
     let productId: number;
     if (cur) {
+      await logProductChange(tx, i.id!, ctx.session.profile.id, { price: cur.price, cost: cur.cost, max_discount: cur.max_discount }, { price: i.price, cost: i.cost, max_discount: maxDiscount }, 'Fiche produit');
       await tx.query(
         `UPDATE products SET name=$2, sku=$3, price=$4, cost=$5, weight_kg=$6, photo=$7, is_service=$8, active=$9, fixed_price=$10, max_discount=$11, packs=$12, linked=$13, parts=$14, fee_grid=$15,
          barcode=$16, brand=$17, external_id=$18, page_url=$19, seller_id=$20, description=$21, alert_qty=$22, default_company_id=$23 WHERE id=$1`,
@@ -813,8 +835,11 @@ export const catalogProcs = {
       [vids],
     );
     const S = new Map(st.map((r: any) => [num(r.id), { qty: num(r.qty), reserved: num(r.res) }]));
+    // the purchase price is for the depot and the owner, not for every account (livreurs, marketers, agents)
+    const seeCost = ctx.session.isAdmin || hasRole(ctx.session, 'depot', 'vendeur');
     return prods.map((p) => ({
       ...p,
+      cost: seeCost ? p.cost : 0,
       variants: p.variants
         .filter((v) => v.active || i.ids)
         .map((v) => {

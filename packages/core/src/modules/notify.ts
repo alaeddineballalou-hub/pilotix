@@ -340,7 +340,21 @@ async function queue(db: Db, nc: NotifyCtx, row: any, kind: NotifyKind, now: num
     const ov = await orderVars(db, num(row.id), s.lang, nc.shop);
     const body = ov ? render(textOf(s, kind, s.lang), ov.vars) : '';
     // taken by Message AI agent in the customer's WhatsApp chat: the answer is already there
-    const why = !phone ? 'Numéro de téléphone invalide' : CONF_KINDS.includes(kind) && ov?.row.conv_channel === 'whatsapp' ? CHAT_SKIP : null;
+    let why = !phone ? 'Numéro de téléphone invalide' : CONF_KINDS.includes(kind) && ov?.row.conv_channel === 'whatsapp' ? CHAT_SKIP : null;
+    // « we received your order » costs a message: fake orders typed with someone's number (or by a script) cannot
+    // make the shop send it more than once a day to a number, nor hundreds in an hour
+    if (!why && kind === 'created') {
+      const c = (
+        await db.query(
+          `SELECT count(*) FILTER (WHERE phone = $1 AND created_at > to_timestamp($2 / 1000.0) - interval '24 hours')::int AS same,
+                  count(*) FILTER (WHERE created_at > to_timestamp($2 / 1000.0) - interval '1 hour')::int AS hour
+             FROM notifications WHERE kind = 'created' AND status <> 'skipped' AND created_at > to_timestamp($2 / 1000.0) - interval '24 hours'`,
+          [phone, now],
+        )
+      )[0];
+      if (num(c?.same) > 0) why = 'Déjà un message « commande reçue » à ce numéro aujourd’hui';
+      else if (num(c?.hour) >= 300) why = 'Plafond de messages « commande reçue » atteint pour cette heure';
+    }
     await db.query(
       `INSERT INTO notifications (order_id, kind, status, phone, lang, body, send_after, error, created_at) VALUES ($1,$2,$3,$4,$5,$6,to_timestamp($7 / 1000.0),$8,to_timestamp($9 / 1000.0))`,
       [row.id, kind, why ? 'skipped' : 'queued', phone ?? String(row.phone ?? ''), s.lang, body, sendTime(now, s), why, now],

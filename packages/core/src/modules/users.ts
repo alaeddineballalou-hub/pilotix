@@ -23,10 +23,14 @@ export async function profileById(db: Db, id: number): Promise<Profile | null> {
   return r ? toProfile(r) : null;
 }
 
+let dummy: Promise<string> | null = null;
+const dummyHash = () => (dummy ??= bcrypt.hash('not-a-real-password', 12));
+
 /** Checks email + password; returns the session or throws one generic message. */
 export async function login(db: Db, email: string, password: string) {
   const r = (await db.query('SELECT * FROM profiles WHERE email = $1', [email.trim().toLowerCase()]))[0];
-  const ok = r ? await bcrypt.compare(password, r.password_hash) : await bcrypt.compare(password, '$2a$10$' + 'x'.repeat(53));
+  // an unknown email takes as long as a known one (a real hash of the same cost): nobody learns which emails have an account
+  const ok = r ? await bcrypt.compare(password, r.password_hash) : await bcrypt.compare(password, await dummyHash());
   if (!r || !ok) throw new AppError('unauthorized', 'Email ou mot de passe incorrect');
   if (!r.active) throw new AppError('unauthorized', 'Votre compte est désactivé');
   await db.query("UPDATE profiles SET last_seen_at = now(), presence = 'online' WHERE id = $1", [r.id]);

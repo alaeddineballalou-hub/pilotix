@@ -105,7 +105,7 @@ test('always counted by Pilotix: a mark sent by a screen is not taken, a copy st
   assert.equal(copy.hasUpsell, false);
   assert.equal(copy.origItems.length, 2);
 
-  const ex: any = await call('orders.create', conf, {
+  const ex: any = await call('orders.create', await as(EMAILS.admin), {
     customerName: 'Appel Test', phone: '0555000555', wilayaId: 16, isExchange: true, originalOrderId: o.id,
     items: [{ productId: p.id, variantId: p.variants[0].id, qty: 2, unitPrice: 0 }, { productId: q.id, variantId: q.variants[0].id, qty: 1, unitPrice: 0, isUpsell: true }],
   });

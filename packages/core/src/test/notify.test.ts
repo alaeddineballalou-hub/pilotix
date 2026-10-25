@@ -120,7 +120,7 @@ test('a new order: "received", then "confirmed" once; WhatsApp, or SMS when the 
   // created already confirmed: only "confirmed"; an SAV exchange: nothing
   const o3 = await newOrder(conf, { confirm: true });
   assert.deepEqual(await kinds(o3.id), ['confirmed:whatsapp']);
-  const ex = await newOrder(conf, { isExchange: true, originalOrderId: o.id, items: [{ ...items[0], unitPrice: 0 }] });
+  const ex = await newOrder(await as(EMAILS.admin), { isExchange: true, originalOrderId: o.id, items: [{ ...items[0], unitPrice: 0 }] });
   assert.deepEqual(await kinds(ex.id), []);
   // a blacklisted customer's order (to check) gets nothing until it is confirmed
   const cust = (await db.query(`SELECT phone FROM customers WHERE blacklisted LIMIT 1`))[0];

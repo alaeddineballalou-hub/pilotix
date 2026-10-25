@@ -180,8 +180,13 @@ export async function computePayroll(db: Db, ym: string) {
 
   // dépôt
   const prepared = await db.query(
-    `SELECT e.user_id, count(DISTINCT e.order_id) AS n FROM order_events e
-     WHERE e.kind = 'follow_status' AND e.to_value = 'prepared' AND e.at >= $1 AND e.at < $2 AND e.user_id IS NOT NULL GROUP BY e.user_id`,
+    // an order is paid once, to whoever prepared it first (setting « Préparée » again, by the same or another person, pays nobody)
+    `SELECT f.user_id, count(*) AS n FROM (
+       SELECT DISTINCT ON (e.order_id) e.order_id, e.user_id, e.at FROM order_events e
+        WHERE e.kind = 'follow_status' AND e.to_value = 'prepared' AND e.user_id IS NOT NULL
+          AND e.order_id IN (SELECT order_id FROM order_events WHERE kind = 'follow_status' AND to_value = 'prepared' AND at >= $1 AND at < $2)
+        ORDER BY e.order_id, e.at, e.id) f
+     WHERE f.at >= $1 AND f.at < $2 GROUP BY f.user_id`,
     [from, to],
   );
   const dp = new Map(prepared.map((r: any) => [num(r.user_id), num(r.n)]));
