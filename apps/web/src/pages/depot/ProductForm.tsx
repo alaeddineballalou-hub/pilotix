@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
-import { ErrorBox, Field, Loading } from '../../ui/kit';
+import { da, pct } from '../../lib/format';
+import { ErrorBox, Field, Icon, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
+import { bidi } from './stockui';
 
 interface VRow {
   id?: number;
@@ -22,9 +24,29 @@ interface PartRow {
   max: string;
 }
 
+/** a field the form cannot be saved without */
+const Req = ({ children }: { children: ReactNode }) => (
+  <>
+    {children} <b className="pf-req">*</b>
+  </>
+);
+
+/** A picked photo becomes a small WebP (or JPEG) thumbnail kept with the product: 320 px is enough for lists and orders. */
+async function thumb(file: File): Promise<string> {
+  const img = await createImageBitmap(file);
+  const k = Math.min(1, 320 / Math.max(img.width, img.height));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(img.width * k));
+  c.height = Math.max(1, Math.round(img.height * k));
+  c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+  const webp = c.toDataURL('image/webp', 0.75);
+  return webp.startsWith('data:image/webp') ? webp : c.toDataURL('image/jpeg', 0.75);
+}
+
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
-/** Create / edit a product: identity, prices, variants, SAV parts, packs, linked products, max discount, delivery price grid. */
+/** Create / edit a product, in the sections of the « Nouveau produit » screen: basic information, prices & margin (with the
+ *  maximum discount), stock & logistics, options (variants), images, then SAV parts, packs and linked products. */
 /** onCreated: a NEW product was saved (Produits proposes its landing page). */
 export function ProductForm({ id, onClose, onCreated }: { id: number | null; onClose: () => void; onCreated?: (p: { id: number; name: string; isService: boolean; active: boolean }) => void }) {
   const { t } = useTranslation();
@@ -49,8 +71,16 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
     isService: !!p?.isService,
     active: p ? !!p.active : true,
     fixedPrice: !!p?.fixedPrice,
-    maxDiscount: p ? (p.maxDiscount === null ? '' : String(p.maxDiscount)) : '0',
+    maxDiscount: p ? (p.maxDiscount === null ? '' : String(p.maxDiscount)) : '',
     feeGrid: p?.feeGrid ?? '',
+    barcode: p?.barcode ?? '',
+    brand: p?.brand ?? '',
+    externalId: p?.externalId ?? '',
+    pageUrl: p?.pageUrl ?? '',
+    sellerId: p?.sellerId ? String(p.sellerId) : '',
+    description: p?.description ?? '',
+    alertQty: String(p?.alertQty ?? 0),
+    defaultCompanyId: p?.defaultCompanyId ? String(p.defaultCompanyId) : '',
   });
   const [vars, setVars] = useState<VRow[]>(() => (p?.variants ?? []).filter((v: any) => v.title !== '').map((v: any) => ({ id: v.id, title: v.title, sku: v.sku, price: v.price === null ? '' : String(v.price), active: v.active })));
   const [packs, setPacks] = useState<PackRow[]>(() => (p?.packs ?? []).map((x: any) => ({ qty: String(x.qty), price: String(x.price) })));
@@ -70,12 +100,14 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
     },
   });
   const set = (k: keyof typeof f, v: string | boolean) => setF({ ...f, [k]: v });
+  const brands = [...new Set((all.data ?? []).map((x) => x.brand).filter((x): x is string => !!x))].sort();
   const others = (all.data ?? []).filter((x) => !x.isService && x.id !== p?.id);
   const q = norm(relQ);
   const relList = others.filter((x) => !q || norm(x.name).includes(q) || linked.has(x.id)).sort((a, b) => Number(linked.has(b.id)) - Number(linked.has(a.id))).slice(0, 80);
 
   const submit = () => {
-    if (!f.name.trim()) return toast(t('produits.form.name'), 'bad');
+    if (!f.name.trim()) return toast(t('produits.form.needName'), 'bad');
+    if (f.price === '' || f.cost === '' || f.alertQty === '') return toast(t('produits.form.needRequired'), 'bad');
     save.mutate({
       id: p?.id,
       name: f.name.trim(),
@@ -89,6 +121,14 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
       fixedPrice: f.fixedPrice,
       maxDiscount: f.maxDiscount === '' ? null : Math.max(0, Math.round(Number(f.maxDiscount) || 0)),
       feeGrid: f.feeGrid || null,
+      barcode: f.barcode.trim() || null,
+      brand: f.brand.trim() || null,
+      externalId: f.externalId.trim() || null,
+      pageUrl: f.pageUrl.trim() || null,
+      sellerId: f.sellerId ? Number(f.sellerId) : null,
+      description: f.description.trim() || null,
+      alertQty: Math.max(0, Math.round(Number(f.alertQty) || 0)),
+      defaultCompanyId: f.defaultCompanyId ? Number(f.defaultCompanyId) : null,
       variants: vars.filter((v) => v.title.trim() || v.id).map((v) => ({ id: v.id, title: v.title.trim(), sku: v.sku.trim() || null, price: v.price === '' ? null : Math.round(Number(v.price) || 0), active: v.active })),
       packs: packs.filter((x) => Number(x.qty) > 1 && Number(x.price) > 0).map((x) => ({ qty: Math.round(Number(x.qty)), price: Math.round(Number(x.price)) })),
       linked: [...linked],
@@ -99,90 +139,218 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
   return (
     <Modal
       wide
+      className="pf-modal"
       title={p ? t('produits.form.editTitle', { name: p.name }) : t('produits.form.newTitle')}
       onClose={onClose}
       footer={
         <>
           <button className="btn" onClick={onClose}>
-            {t('common.cancel')}
+            {t('common.close')}
           </button>
           <button className="btn primary" disabled={save.isPending} onClick={submit}>
-            {t('common.save')}
+            {p ? t('common.save') : t('produits.form.create')}
           </button>
         </>
       }
     >
       <form
+        className="pf"
         onSubmit={(e) => {
           e.preventDefault();
           submit();
         }}
       >
-        <div className="grid2">
-          <Field label={t('produits.form.name')}>
-            <input required value={f.name} onChange={(e) => set('name', e.target.value)} />
+        <section className="pf-sec">
+          <h3>{t('produits.form.basic')}</h3>
+          <div className="pf-grid4">
+            <Field label={<Req>{t('produits.form.name')}</Req>}>
+              <input required value={f.name} onChange={(e) => set('name', e.target.value)} />
+            </Field>
+            <Field label={t('produits.form.sku')} hint={!p ? t('produits.form.skuAuto') : undefined}>
+              <input className="ltr" value={f.sku} onChange={(e) => set('sku', e.target.value)} />
+            </Field>
+            <Field label={t('produits.form.barcode')}>
+              <input className="ltr" value={f.barcode} onChange={(e) => set('barcode', e.target.value)} />
+            </Field>
+            <Field label={t('produits.form.brand')}>
+              <input list="pf-brands" value={f.brand} placeholder={t('produits.form.brandPh')} onChange={(e) => set('brand', e.target.value)} />
+              <datalist id="pf-brands">
+                {brands.map((b) => (
+                  <option key={b} value={b} />
+                ))}
+              </datalist>
+            </Field>
+            <Field label={t('produits.form.externalId')}>
+              <input className="ltr" value={f.externalId} onChange={(e) => set('externalId', e.target.value)} />
+            </Field>
+            <Field label={t('produits.form.pageUrl')}>
+              <input className="ltr" placeholder="https://…" value={f.pageUrl} onChange={(e) => set('pageUrl', e.target.value)} />
+            </Field>
+            <Field label={t('produits.form.seller')}>
+              <select value={f.sellerId} onChange={(e) => set('sellerId', e.target.value)}>
+                <option value="">{t('produits.form.sellerPh')}</option>
+                {grids.data?.sellers.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <Field label={t('produits.form.description')}>
+            <textarea rows={3} value={f.description} onChange={(e) => set('description', e.target.value)} />
           </Field>
-          <Field label={t('produits.form.sku')} hint={!p ? t('produits.form.skuAuto') : undefined}>
-            <input className="ltr" value={f.sku} onChange={(e) => set('sku', e.target.value)} />
-          </Field>
-        </div>
-        <div className="grid3">
-          <Field label={t('produits.form.price')}>
-            <input type="number" min={0} step={50} value={f.price} onChange={(e) => set('price', e.target.value)} />
-          </Field>
-          <Field label={t('produits.form.cost')}>
-            <input type="number" min={0} step={50} value={f.cost} onChange={(e) => set('cost', e.target.value)} />
-          </Field>
-          <Field label={t('produits.form.weight')}>
-            <input type="number" min={0} step={0.1} value={f.weightKg} onChange={(e) => set('weightKg', e.target.value)} />
-          </Field>
-        </div>
-        <Field label={t('produits.form.photo')}>
-          <input className="ltr" placeholder="https://…" value={f.photo} onChange={(e) => set('photo', e.target.value)} />
-        </Field>
-        <div className="row" style={{ flexWrap: 'wrap', gap: 14, margin: '6px 0' }}>
-          <label className="check">
-            <input type="checkbox" checked={f.isService} onChange={(e) => set('isService', e.target.checked)} />
-            {t('produits.form.isService')}
-          </label>
-          <label className="check">
-            <input type="checkbox" checked={f.active} onChange={(e) => set('active', e.target.checked)} />
-            {t('produits.form.active')}
-          </label>
-          <label className="check">
-            <input type="checkbox" checked={f.fixedPrice} onChange={(e) => set('fixedPrice', e.target.checked)} />
-            {t('produits.form.fixedPrice')}
-          </label>
+        </section>
+
+        <div className="pf-two">
+          <section className="pf-sec">
+            <h3>{t('produits.form.pricing')}</h3>
+            <div className="grid2">
+              <Field label={<Req>{t('produits.form.cost')}</Req>}>
+                <input type="number" min={0} step={50} value={f.cost} onChange={(e) => set('cost', e.target.value)} />
+              </Field>
+              <Field label={<Req>{t('produits.form.price')}</Req>}>
+                <input type="number" min={0} step={50} value={f.price} onChange={(e) => set('price', e.target.value)} />
+              </Field>
+            </div>
+            {!f.isService && !(Number(f.cost) > 0) && <p className="pf-warn">⚠ {t('produits.form.noCost')}</p>}
+            {Number(f.price) > 0 && Number(f.cost) > 0 && (
+              <p className={`pf-margin ${Number(f.price) - Number(f.cost) < 0 ? 'bad' : ''}`}>
+                {t('produits.form.marginIs', { m: bidi(da(Number(f.price) - Number(f.cost))), r: bidi(pct((Number(f.price) - Number(f.cost)) / Number(f.price))) })}
+              </p>
+            )}
+            <Field
+              label={
+                <>
+                  {t('produits.form.maxDiscount')}
+                  {!admin && <Icon name="lock" className="pd-lock" />}
+                </>
+              }
+              hint={f.maxDiscount === '' ? t('produits.form.maxDiscountHint') : t('produits.prices.floor', { price: bidi(da(Math.max(0, (Number(f.price) || 0) - (Number(f.maxDiscount) || 0)))) })}
+            >
+              <input type="number" min={0} step={50} disabled={!admin} placeholder={t('produits.prices.noLimit')} value={f.maxDiscount} onChange={(e) => set('maxDiscount', e.target.value)} />
+            </Field>
+            <label className="check">
+              <input type="checkbox" checked={f.fixedPrice} onChange={(e) => set('fixedPrice', e.target.checked)} />
+              {t('produits.form.fixedPrice')}
+            </label>
+          </section>
+
+          <section className="pf-sec">
+            <h3>{t('produits.form.logistics')}</h3>
+            <div className="grid2">
+              <Field label={<Req>{t('produits.form.alertQty')}</Req>} hint={t('produits.form.alertQtyHint')}>
+                <input type="number" min={0} step={1} disabled={f.isService} value={f.alertQty} onChange={(e) => set('alertQty', e.target.value)} />
+              </Field>
+              <Field label={t('produits.form.weight')}>
+                <input type="number" min={0} step={0.1} value={f.weightKg} onChange={(e) => set('weightKg', e.target.value)} />
+              </Field>
+              <Field label={t('produits.form.feeGrid')} hint={t('produits.form.feeGridHint')}>
+                <select value={f.feeGrid} onChange={(e) => set('feeGrid', e.target.value)}>
+                  <option value="">{grids.data?.defaultGrid ? `— ${grids.data.defaultGrid} —` : '—'}</option>
+                  {grids.data?.grids.map((g) => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
+                  ))}
+                  {f.feeGrid && !grids.data?.grids.includes(f.feeGrid) && <option value={f.feeGrid}>{f.feeGrid}</option>}
+                </select>
+              </Field>
+              <Field label={t('produits.form.company')}>
+                <select value={f.defaultCompanyId} onChange={(e) => set('defaultCompanyId', e.target.value)}>
+                  <option value="">{t('produits.form.companyPh')}</option>
+                  {grids.data?.companies.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            <div className="pf-checks">
+              <label className="check">
+                <input type="checkbox" checked={f.isService} onChange={(e) => set('isService', e.target.checked)} />
+                {t('produits.form.isService')}
+              </label>
+              <label className="check">
+                <input type="checkbox" checked={f.active} onChange={(e) => set('active', e.target.checked)} />
+                {t('produits.form.active')}
+              </label>
+            </div>
+          </section>
         </div>
 
-        <h3>{t('produits.form.variants')}</h3>
-        <p className="muted small">{t('produits.form.variantsHelp')}</p>
-        <div className="items-ed">
-          {vars.map((v, i) => (
-            <div key={v.id ?? `n${i}`} className="item-row bjpv-row">
-              <input aria-label={t('produits.form.variants')} value={v.title} placeholder={t('produits.form.variantPh')} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, title: e.target.value } : x)))} />
-              <input aria-label="SKU" className="ltr" value={v.sku} placeholder="SKU" onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, sku: e.target.value } : x)))} />
-              <input type="number" min={0} step={50} aria-label={t('produits.form.variantPrice')} value={v.price} placeholder={t('produits.form.variantPrice')} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, price: e.target.value } : x)))} />
-              <label className="check">
-                <input type="checkbox" checked={v.active} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, active: e.target.checked } : x)))} />
-                {t('produits.form.variantActive')}
-              </label>
-              {v.id ? (
-                <span />
-              ) : (
-                <button type="button" className="icon-btn" aria-label={t('produits.form.remove')} onClick={() => setVars(vars.filter((_, k) => k !== i))}>
-                  ✕
-                </button>
-              )}
-            </div>
-          ))}
-          <div>
-            <button type="button" className="btn small" onClick={() => setVars([...vars, { title: '', sku: '', price: '', active: true }])}>
+        <section className="pf-sec">
+          <div className="pf-head">
+            <h3>{t('produits.form.variants')}</h3>
+            <button type="button" className="btn small primary" onClick={() => setVars([...vars, { title: '', sku: '', price: '', active: true }])}>
+              <Icon name="plus" />
               {t('produits.form.addVariant')}
             </button>
           </div>
-        </div>
+          {vars.length ? (
+            <div className="items-ed">
+              {vars.map((v, i) => (
+                <div key={v.id ?? `n${i}`} className="item-row bjpv-row">
+                  <input aria-label={t('produits.form.variants')} value={v.title} placeholder={t('produits.form.variantPh')} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, title: e.target.value } : x)))} />
+                  <input aria-label="SKU" className="ltr" value={v.sku} placeholder="SKU" onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, sku: e.target.value } : x)))} />
+                  <input type="number" min={0} step={50} aria-label={t('produits.form.variantPrice')} value={v.price} placeholder={t('produits.form.variantPrice')} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, price: e.target.value } : x)))} />
+                  <label className="check">
+                    <input type="checkbox" checked={v.active} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, active: e.target.checked } : x)))} />
+                    {t('produits.form.variantActive')}
+                  </label>
+                  {v.id ? (
+                    <span />
+                  ) : (
+                    <button type="button" className="icon-btn" aria-label={t('produits.form.remove')} onClick={() => setVars(vars.filter((_, k) => k !== i))}>
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="pf-empty">
+              <Icon name="package" />
+              {t('produits.form.noVariants')}
+            </p>
+          )}
+          <p className="muted small">{t('produits.form.variantsHelp')}</p>
+        </section>
 
+        <section className="pf-sec">
+          <h3>{t('produits.form.images')}</h3>
+          <div className="pf-img">
+            <span className="pf-thumb" aria-hidden="true">
+              {f.photo ? <img src={f.photo} alt="" /> : <Icon name="package" />}
+            </span>
+            <div className="pf-img-f">
+              <input
+                type="file"
+                accept="image/*"
+                aria-label={t('produits.form.photoFile')}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  try {
+                    set('photo', await thumb(file));
+                  } catch {
+                    toast(t('produits.form.photoBad'), 'bad');
+                  }
+                }}
+              />
+              <input className="ltr" placeholder={t('produits.form.photoPh')} value={f.photo.startsWith('data:') ? '' : f.photo} onChange={(e) => set('photo', e.target.value)} />
+              {f.photo && (
+                <button type="button" className="btn small ghost" onClick={() => set('photo', '')}>
+                  {t('produits.form.photoRemove')}
+                </button>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <details className="pf-sec pf-more" open={!!p && (packs.length > 0 || hasParts || linked.size > 0)}>
+          <summary>{t('produits.form.more')}</summary>
         <h3>{t('produits.form.parts')}</h3>
         <Field label={t('produits.form.hasParts')}>
           <select value={hasParts ? 'yes' : 'no'} onChange={(e) => setHasParts(e.target.value === 'yes')}>
@@ -255,23 +423,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
           ))}
         </div>
 
-        <h3>{t('produits.form.pricing')}</h3>
-        <div className="grid2">
-          <Field label={t('produits.form.maxDiscount')} hint={t('produits.form.maxDiscountHint')}>
-            <input type="number" min={0} step={50} disabled={!admin} value={f.maxDiscount} onChange={(e) => set('maxDiscount', e.target.value)} />
-          </Field>
-          <Field label={t('produits.form.feeGrid')} hint={t('produits.form.feeGridHint')}>
-            <select value={f.feeGrid} onChange={(e) => set('feeGrid', e.target.value)}>
-              <option value="">{grids.data?.defaultGrid ? `— ${grids.data.defaultGrid} —` : '—'}</option>
-              {grids.data?.grids.map((g) => (
-                <option key={g} value={g}>
-                  {g}
-                </option>
-              ))}
-              {f.feeGrid && !grids.data?.grids.includes(f.feeGrid) && <option value={f.feeGrid}>{f.feeGrid}</option>}
-            </select>
-          </Field>
-        </div>
+        </details>
       </form>
     </Modal>
   );

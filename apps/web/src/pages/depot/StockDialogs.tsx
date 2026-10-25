@@ -1,22 +1,24 @@
 // The dialogs of a stock line (Stock and Alertes tabs): an entry, a count, a loss, the alert level, a transfer.
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { n } from '../../lib/format';
+import { da, n } from '../../lib/format';
 import { useAction } from '../../lib/query';
 import { Field, Icon } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
-import { bidi, nameOf, Stepper, StockRowT } from './stockui';
+import { bidi, MoneyInput, nameOf, Stepper, StockRowT } from './stockui';
 
 export function MoveDialog({ kind, row, onClose }: { kind: 'entry' | 'count' | 'loss'; row: StockRowT; onClose: () => void }) {
   const { t } = useTranslation();
   const [qty, setQty] = useState<number | ''>(kind === 'count' ? row.qty : '');
   const [note, setNote] = useState('');
+  // an entry carries its purchase price: products change price from one delivery to the next
+  const [cost, setCost] = useState<number | ''>(row.cost);
   const move = useAction('catalog.move', { success: t('produits.stock.updated'), onDone: onClose });
   const submit = () => {
     if (qty === '' || qty < (kind === 'count' ? 0 : 1)) return toast(t('produits.stock.invalidQty'), 'bad');
     if (kind === 'count' && qty === row.qty) return onClose();
-    move.mutate({ variantId: row.variantId, warehouseId: row.warehouseId, kind, qty, note: note.trim() || null });
+    move.mutate({ variantId: row.variantId, warehouseId: row.warehouseId, kind, qty, note: note.trim() || null, ...(kind === 'entry' && cost !== '' ? { unitCost: cost } : {}) });
   };
   const after = qty === '' ? null : kind === 'entry' ? row.qty + qty : kind === 'loss' ? row.qty - qty : qty;
   return (
@@ -53,6 +55,11 @@ export function MoveDialog({ kind, row, onClose }: { kind: 'entry' | 'count' | '
             </>
           )}
         </p>
+        {kind === 'entry' && (
+          <Field label={t('produits.stock.entryCost')} hint={cost !== '' && cost !== row.cost ? t('produits.stock.entryCostChange', { from: bidi(da(row.cost)), to: bidi(da(cost)) }) : t('produits.stock.entryCostHint')}>
+            <MoneyInput value={cost} changed={cost !== '' && cost !== row.cost} label={t('produits.stock.entryCost')} onChange={setCost} />
+          </Field>
+        )}
         <Field label={t('produits.stock.note')}>
           <input value={note} placeholder={kind === 'entry' ? t('produits.stock.entryNotePh') : t('produits.stock.reasonPh')} onChange={(e) => setNote(e.target.value)} />
         </Field>

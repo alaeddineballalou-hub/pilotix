@@ -38,6 +38,14 @@ export interface CatalogProduct {
   linked: number[];
   parts: Part[];
   feeGrid: string | null;
+  barcode: string | null;
+  brand: string | null;
+  externalId: string | null;
+  pageUrl: string | null;
+  sellerId: number | null;
+  description: string | null;
+  alertQty: number;
+  defaultCompanyId: number | null;
   variants: CatalogVariant[];
 }
 export interface StockLine extends StockRow {
@@ -112,6 +120,14 @@ function toProduct(p: any, vars: any[]): CatalogProduct {
     linked: (p.linked ?? []).map(num),
     parts: j(p.parts),
     feeGrid: p.fee_grid ?? null,
+    barcode: p.barcode ?? null,
+    brand: p.brand ?? null,
+    externalId: p.external_id ?? null,
+    pageUrl: p.page_url ?? null,
+    sellerId: numOrNull(p.seller_id),
+    description: p.description ?? null,
+    alertQty: num(p.alert_qty),
+    defaultCompanyId: numOrNull(p.default_company_id),
     variants: vars.map((v) => ({ id: num(v.id), productId: num(v.product_id), title: v.title, sku: v.sku, price: numOrNull(v.price), active: !!v.active })),
   };
 }
@@ -233,6 +249,8 @@ export const MoveInput = z.object({
   kind: z.enum(['entry', 'count', 'loss']),
   qty: z.number().int().min(0).max(1_000_000),
   note: z.string().trim().max(300).nullable().optional(),
+  /** entry only: the purchase price of these pieces; when it differs, it becomes the product's purchase price */
+  unitCost: z.number().int().min(0).max(100_000_000).nullable().optional(),
 });
 
 export async function stockMove(ctx: Ctx, i: z.infer<typeof MoveInput>) {
@@ -241,7 +259,16 @@ export async function stockMove(ctx: Ctx, i: z.infer<typeof MoveInput>) {
     await ensureVariantAndDepot(tx, i.variantId, i.warehouseId);
     const cur = await currentQty(tx, i.variantId, i.warehouseId);
     const delta = i.kind === 'entry' ? i.qty : i.kind === 'loss' ? -i.qty : i.qty - cur;
-    await moveStock(tx, { variantId: i.variantId, warehouseId: i.warehouseId, delta, reason: i.kind, userId: ctx.session.profile.id, note: i.note });
+    let note = i.note || null;
+    if (i.kind === 'entry' && i.unitCost != null) {
+      // the supplier changed its price: this entry's price is the product's purchase price from now on
+      const p = (await tx.query('SELECT p.id, p.cost FROM products p JOIN product_variants v ON v.product_id = p.id WHERE v.id = $1 FOR UPDATE OF p', [i.variantId]))[0];
+      const old = num(p.cost);
+      if (old !== i.unitCost) await tx.query('UPDATE products SET cost = $2 WHERE id = $1', [p.id, i.unitCost]);
+      const price = old !== i.unitCost ? `Prix d’achat ${old} → ${i.unitCost} DA` : `Prix d’achat ${i.unitCost} DA`;
+      note = note ? `${note} — ${price}` : price;
+    }
+    await moveStock(tx, { variantId: i.variantId, warehouseId: i.warehouseId, delta, reason: i.kind, userId: ctx.session.profile.id, note });
     return { qty: cur + delta, delta };
   });
   ctx.emit({ type: 'stock' });
@@ -282,7 +309,8 @@ export const ProductInput = z.object({
   price: z.number().int().min(0).max(100_000_000),
   cost: z.number().int().min(0).max(100_000_000).default(0),
   weightKg: z.number().min(0).max(1000).default(1),
-  photo: z.string().trim().max(1000).nullable().optional(),
+  /** a link, or a small picture picked in the form (a data: URL of ~10–30 KB) */
+  photo: z.string().trim().max(200_000).nullable().optional(),
   isService: z.boolean().default(false),
   active: z.boolean().default(true),
   fixedPrice: z.boolean().default(false),
@@ -291,6 +319,15 @@ export const ProductInput = z.object({
   linked: z.array(id).max(50).default([]),
   parts: z.array(z.object({ name: z.string().trim().min(1).max(120), max: z.number().int().min(1).max(999).nullable().optional() })).max(50).default([]),
   feeGrid: z.string().trim().max(80).nullable().optional(),
+  barcode: z.string().trim().max(120).nullable().optional(),
+  brand: z.string().trim().max(120).nullable().optional(),
+  externalId: z.string().trim().max(120).nullable().optional(),
+  pageUrl: z.string().trim().max(1000).nullable().optional(),
+  sellerId: id.nullable().optional(),
+  description: z.string().trim().max(5000).nullable().optional(),
+  /** given to every depot of the product (each depot can then be changed in Stock › Seuil d'alerte) */
+  alertQty: z.number().int().min(0).max(1_000_000).optional(),
+  defaultCompanyId: id.nullable().optional(),
   variants: z.array(VariantInput).max(200).default([]),
 });
 
@@ -325,19 +362,24 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
       if (dup && num(dup.id) !== i.id) throw bad(`Le SKU « ${sku} » est déjà utilisé`);
     } else sku = cur?.sku ?? (await freeSku(tx, 'products', slug(i.name)));
     const linked = [...new Set(i.linked)].filter((x) => x !== i.id);
-    const vals = [i.name, sku, i.price, i.cost, i.weightKg, i.photo || null, i.isService, i.active, i.fixedPrice, maxDiscount, JSON.stringify(i.packs.sort((a, b) => a.qty - b.qty)), linked, JSON.stringify(i.parts.map((p) => ({ name: p.name, max: p.max ?? null }))), i.feeGrid || null];
+    // fields not sent keep their value (older callers send only the first ones)
+    const keep = <T,>(v: T | undefined, col: string): T | null => (v === undefined ? (cur?.[col] ?? null) : (v as any) === '' ? null : v);
+    const extra = [keep(i.barcode, 'barcode'), keep(i.brand, 'brand'), keep(i.externalId, 'external_id'), keep(i.pageUrl, 'page_url'), keep(i.sellerId, 'seller_id'), keep(i.description, 'description'), i.alertQty ?? num(cur?.alert_qty), keep(i.defaultCompanyId, 'default_company_id')];
+    const vals = [i.name, sku, i.price, i.cost, i.weightKg, i.photo || null, i.isService, i.active, i.fixedPrice, maxDiscount, JSON.stringify(i.packs.sort((a, b) => a.qty - b.qty)), linked, JSON.stringify(i.parts.map((p) => ({ name: p.name, max: p.max ?? null }))), i.feeGrid || null, ...extra];
     let productId: number;
     if (cur) {
       await tx.query(
-        `UPDATE products SET name=$2, sku=$3, price=$4, cost=$5, weight_kg=$6, photo=$7, is_service=$8, active=$9, fixed_price=$10, max_discount=$11, packs=$12, linked=$13, parts=$14, fee_grid=$15 WHERE id=$1`,
+        `UPDATE products SET name=$2, sku=$3, price=$4, cost=$5, weight_kg=$6, photo=$7, is_service=$8, active=$9, fixed_price=$10, max_discount=$11, packs=$12, linked=$13, parts=$14, fee_grid=$15,
+         barcode=$16, brand=$17, external_id=$18, page_url=$19, seller_id=$20, description=$21, alert_qty=$22, default_company_id=$23 WHERE id=$1`,
         [i.id, ...vals],
       );
       productId = i.id!;
     } else {
       productId = num(
         (await tx.query(
-          `INSERT INTO products (name, sku, price, cost, weight_kg, photo, is_service, active, fixed_price, max_discount, packs, linked, parts, fee_grid)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
+          `INSERT INTO products (name, sku, price, cost, weight_kg, photo, is_service, active, fixed_price, max_discount, packs, linked, parts, fee_grid,
+                                 barcode, brand, external_id, page_url, seller_id, description, alert_qty, default_company_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING id`,
           vals,
         ))[0].id,
       );
@@ -366,6 +408,14 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
     const plain = after.find((v: any) => v.title === '');
     if (!hasNamed && !plain) await tx.query('INSERT INTO product_variants (product_id, title, sku) VALUES ($1, \'\', $2)', [productId, await freeSku(tx, 'product_variants', `${sku}-1`)]);
     else if (plain) await tx.query('UPDATE product_variants SET active = $2 WHERE id = $1', [plain.id, !hasNamed]);
+    // « Stock minimum d'alerte »: a new product, or a changed level, applies to every variant in every active depot
+    if (!i.isService && i.alertQty !== undefined && (!cur || i.alertQty !== num(cur.alert_qty)))
+      await tx.query(
+        `INSERT INTO stock (variant_id, warehouse_id, qty, alert_qty)
+         SELECT v.id, w.id, 0, $2 FROM product_variants v CROSS JOIN warehouses w WHERE v.product_id = $1 AND w.active
+         ON CONFLICT (variant_id, warehouse_id) DO UPDATE SET alert_qty = EXCLUDED.alert_qty`,
+        [productId, i.alertQty],
+      );
     return productId;
   });
   // Landing pages › Réglages « a page for every new product »: made at once (the marketer completes it later)
@@ -673,7 +723,13 @@ export const catalogProcs = {
   }),
 
   /** Names of the delivery price grids (product form, "Grille de prix de livraison"). */
-  'catalog.feeGrids': proc([...DEPOT], z.object({}), async (ctx) => ({ grids: Object.keys(await getSetting(ctx.db, 'clientFees')), defaultGrid: await getSetting(ctx.db, 'defaultFeeGrid') })),
+  'catalog.feeGrids': proc([...DEPOT], z.object({}), async (ctx) => ({
+    grids: Object.keys(await getSetting(ctx.db, 'clientFees')),
+    defaultGrid: await getSetting(ctx.db, 'defaultFeeGrid'),
+    /** the product form's « Société par défaut » and « Vendeur » lists */
+    companies: (await ctx.db.query('SELECT id, name FROM delivery_companies WHERE active ORDER BY name')).map((r: any) => ({ id: num(r.id), name: r.name as string })),
+    sellers: (await ctx.db.query(`SELECT id, name FROM profiles WHERE active AND ('vendeur' = ANY(roles) OR 'admin' = ANY(roles)) ORDER BY name`)).map((r: any) => ({ id: num(r.id), name: r.name as string })),
+  })),
 
   'catalog.saveProduct': proc([...DEPOT], ProductInput, (ctx, i) => saveProduct(ctx, i)),
 

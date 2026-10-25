@@ -1,5 +1,5 @@
-// Produits & stock, in eight tabs: Stock · Inventaire · Produits · Prix · Mouvements · Alertes · Achats (and
-// suppliers) · Dépôts (and transfers). The header is the one of the Pilot AI pages: an icon, a name, a sentence
+// Produits & stock, in seven tabs: Stock · Inventaire · Produits (prices, margin and maximum discount included) ·
+// Mouvements · Alertes · Achats (and suppliers) · Dépôts (and transfers). The header is the one of the Pilot AI pages: an icon, a name, a sentence
 // about the current tab, and the tabs underneath.
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,19 +15,19 @@ import { Alertes } from './Alertes';
 import { Depots } from './Depots';
 import { Inventaire } from './Inventaire';
 import { useDebounced } from './OrderList';
-import { Prix } from './Prix';
 import { ProductForm } from './ProductForm';
 import { AlertDialog, MoveDialog, TransferDialog } from './StockDialogs';
-import { Delta, DepotSelect, LevelBar, matches, nameOf, RowMenu, StockRowT, Toolbar, useDepots } from './stockui';
+import { bidi, Delta, DepotSelect, LevelBar, matches, nameOf, RowMenu, StockRowT, Toolbar, useDepots } from './stockui';
 import './produits.css';
 
-const TABS = ['stock', 'inventaire', 'produits', 'prix', 'mouvements', 'alertes', 'achats', 'depots'] as const;
+const TABS = ['stock', 'inventaire', 'produits', 'mouvements', 'alertes', 'achats', 'depots'] as const;
 type Tab = (typeof TABS)[number];
-const ICONS: Record<Tab, string> = { stock: 'package', inventaire: 'clipboard', produits: 'tag', prix: 'coins', mouvements: 'swap', alertes: 'alert', achats: 'receipt', depots: 'building' };
+const ICONS: Record<Tab, string> = { stock: 'package', inventaire: 'clipboard', produits: 'tag', mouvements: 'swap', alertes: 'alert', achats: 'receipt', depots: 'building' };
 
 export function Produits({ sub, rest }: PageProps) {
   const { t } = useTranslation();
-  const tab: Tab = (TABS as readonly string[]).includes(sub ?? '') ? (sub as Tab) : 'stock';
+  // the former « Prix » tab lives in Produits now
+  const tab: Tab = sub === 'prix' ? 'produits' : (TABS as readonly string[]).includes(sub ?? '') ? (sub as Tab) : 'stock';
   const alerts = useRpc('catalog.alerts', {});
   const tabs = TABS.map((k) => ({ key: k, label: t(`produits.tabs.${k}`), icon: ICONS[k], href: `#/produits/${k}`, count: k === 'alertes' ? alerts.data?.length : undefined, alert: k === 'alertes' }));
   const arg = rest?.[0] ? decodeURIComponent(rest[0]) : undefined;
@@ -37,7 +37,6 @@ export function Produits({ sub, rest }: PageProps) {
       {tab === 'stock' && <StockTab />}
       {tab === 'inventaire' && <Inventaire />}
       {tab === 'produits' && <ProductsTab />}
-      {tab === 'prix' && <Prix />}
       {tab === 'mouvements' && <MovesTab key={arg ?? ''} initial={arg} />}
       {tab === 'alertes' && <Alertes />}
       {tab === 'achats' && <Achats open={arg && /^\d+$/.test(arg) ? Number(arg) : undefined} />}
@@ -240,6 +239,7 @@ function ProductsTab() {
             <span className="a-price num">{t('produits.products.price')}</span>
             <span className="a-cost num">{t('produits.products.cost')}</span>
             <span className="a-margin num">{t('produits.products.margin')}</span>
+            <span className="a-disc num">{t('produits.prices.discountShort')}</span>
             <span className="a-avail num">{t('produits.products.available')}</span>
             <span className="a-state">{t('produits.products.state')}</span>
           </div>
@@ -286,6 +286,16 @@ function ProductsTab() {
                   </span>
                   <span className="a-margin num" data-l={t('produits.prices.margin')}>
                     <span className="ltr">{p.isService ? '—' : da(p.price - p.cost)}</span>
+                  </span>
+                  <span className="a-disc num pd-disc" data-l={t('produits.prices.discountShort')}>
+                    {p.maxDiscount === null ? (
+                      <span className="pd-none">{t('produits.prices.noLimit')}</span>
+                    ) : (
+                      <>
+                        <span className="ltr">{da(p.maxDiscount)}</span>
+                        <small>{t('produits.prices.floor', { price: bidi(da(Math.max(0, p.price - p.maxDiscount))) })}</small>
+                      </>
+                    )}
                   </span>
                   <span className="a-avail num" data-l={t('produits.products.available')}>
                     <span className="ltr">{p.isService ? '—' : n(stock.get(p.id) ?? 0)}</span>

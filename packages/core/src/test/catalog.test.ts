@@ -112,6 +112,30 @@ test('products: create with variants, packs, linked; rename and disable a varian
   assert.equal(plain.variants[0].title, '');
 });
 
+test('products: the form\'s details and alert level; a stock entry with a new purchase price', async () => {
+  const depot = await as(EMAILS.depot);
+  const p: any = await call('catalog.saveProduct', depot, {
+    name: 'Lampe de chevet', price: 3200, cost: 1500, barcode: '6130000000017', brand: 'Lumo', externalId: 'SH-77', pageUrl: 'https://shop.example/lampe',
+    description: 'Lampe LED', alertQty: 4, maxDiscount: 0,
+  });
+  assert.equal(p.barcode, '6130000000017');
+  assert.equal(p.brand, 'Lumo');
+  assert.equal(p.alertQty, 4);
+  const wid = Number((await db.query('SELECT id FROM warehouses WHERE active ORDER BY is_default DESC, id LIMIT 1'))[0].id);
+  const vid = p.variants[0].id;
+  assert.equal(Number((await db.query('SELECT alert_qty FROM stock WHERE variant_id = $1 AND warehouse_id = $2', [vid, wid]))[0].alert_qty), 4);
+  // an older caller that sends only the first fields keeps the details
+  const p2: any = await call('catalog.saveProduct', depot, { id: p.id, name: p.name, price: 3300, cost: 1500, maxDiscount: 0 });
+  assert.equal(p2.brand, 'Lumo');
+  assert.equal(p2.alertQty, 4);
+  // the supplier raised its price: the entry's price becomes the product's purchase price
+  await call('catalog.move', depot, { variantId: vid, warehouseId: wid, kind: 'entry', qty: 5, unitCost: 1700 });
+  assert.equal(((await call('catalog.product', depot, { id: p.id })) as any).cost, 1700);
+  assert.equal(await qty(vid, wid), 5);
+  const mv: any = await call('catalog.movements', depot, { q: p.sku });
+  assert.match(mv.rows[0].note, /1500 → 1700/);
+});
+
 test('picking: quantities to prepare and stock', async () => {
   const depot = await as(EMAILS.depot);
   const rows: any[] = (await call('catalog.picking', depot, {})) as any;
