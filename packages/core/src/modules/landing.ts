@@ -31,7 +31,7 @@ import { clientFee, getSetting, setSetting } from '../settings';
 import { BOT_UA, FraudLevel, FraudReason, scoreOrder } from './fraud';
 import { ABANDONED, abandonCutoff, freeLandingSlug, landingCounts, landingSettings, LandingSettings, queuePurchase, quickCreatePage } from './landingquery';
 import { sendInPreview } from './notify';
-import { createOrder } from './orders';
+import { addEvent, createOrder } from './orders';
 import { RESERVED } from './stockquery';
 
 const id = z.number().int().positive();
@@ -331,7 +331,7 @@ export const SubmitInput = z.object({
 });
 
 /** What the page sends while the customer fills the form (a valid phone typed): the abandoned order, if no order follows. */
-export const CaptureInput = SubmitInput.pick({ slug: true, name: true, phone: true, wilaya: true, commune: true, variant: true, qty: true, hp: true, fp: true, did: true, vid: true, utm: true, fbp: true, fbc: true, url: true, meta: true });
+export const CaptureInput = SubmitInput.pick({ slug: true, name: true, phone: true, wilaya: true, commune: true, variant: true, qty: true, hp: true, ch: true, fp: true, did: true, vid: true, utm: true, fbp: true, fbc: true, url: true, meta: true });
 
 const arDigits = (s: string) => s.replace(/[٠-٩]/g, (c) => String(c.charCodeAt(0) - 0x660)).replace(/[۰-۹]/g, (c) => String(c.charCodeAt(0) - 0x6f0));
 const plain = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\b(province|wilaya|of)\b/g, '').replace(/[^a-z]/g, '');
@@ -385,7 +385,8 @@ async function recentCounts(db: Db, a: { phone: string | null; productId: number
       `SELECT
          (SELECT count(*)::int FROM landing_submits WHERE $1::text IS NOT NULL AND phone = $1 AND at > $4) AS phone24h,
          (SELECT count(*)::int FROM landing_submits WHERE $1::text IS NOT NULL AND phone = $1 AND product_id = $2 AND verdict = 'block' AND at > $4)
-           + (SELECT count(*)::int FROM sales o WHERE $1::text IS NOT NULL AND o.phone = $1 AND o.created_at > $4 AND EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.product_id = $2)) AS dup,
+           + (SELECT count(*)::int FROM sales o WHERE $1::text IS NOT NULL AND o.phone = $1 AND o.created_at > $4 AND EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.product_id = $2)
+                AND NOT EXISTS (SELECT 1 FROM landing_leads x WHERE x.order_id = o.id AND x.auto_order)) AS dup,
          (SELECT count(*)::int FROM landing_submits WHERE $3 <> '' AND ip = $3 AND at > $5) AS ip10m,
          (SELECT count(*)::int FROM landing_submits WHERE $3 <> '' AND ip = $3 AND at > $6) AS ip1h,
          (SELECT count(*)::int FROM landing_submits WHERE fp = $7 AND at > $6) AS dev1h`,
@@ -404,22 +405,47 @@ export const FRAUD_LABELS_FR: Record<string, string> = {
   webdriver: 'navigateur piloté', duplicate: 'même produit déjà commandé (24 h)', phone_burst: 'beaucoup de commandes de ce numéro', ip_burst: 'rafale depuis la même adresse IP',
   ip_many: 'beaucoup de commandes de la même IP', device_burst: 'rafale depuis le même appareil', blacklisted: 'numéro en liste noire', returns_many: 'refuse souvent ses colis',
   returns_some: 'déjà un colis retourné', cancels_many: 'commandes souvent annulées', good_customer: 'bon client (livré)', qty_high: 'quantité très élevée', qty_some: 'quantité élevée',
-  ip_abroad: 'IP hors d’Algérie', ip_wilaya: 'IP d’une autre wilaya', form_invalid: 'formulaire incomplet',
+  ip_abroad: 'IP hors d’Algérie', ip_wilaya: 'IP d’une autre wilaya', form_invalid: 'formulaire incomplet', recent_block: 'numéro bloqué comme faux (24 h)',
 };
 const reasonsText = (rs: FraudReason[]) => rs.filter((r) => r.points > 0).map((r) => FRAUD_LABELS_FR[r.code] ?? r.code).join(', ');
 
-/** The customer ordered (or was blocked as fake): their abandoned-order data is closed (a fake one's Meta event dropped). */
-async function closeLeads(db: Db, phone: string, status: 'converted' | 'blocked', orderId: number | null, cut: string) {
+/** An order of this number for this lead's product, in the last 24 h before the lead or after it: not an abandoned order. */
+const ORDERED = (a: string) =>
+  `EXISTS (SELECT 1 FROM orders o JOIN order_items oi ON oi.order_id = o.id WHERE o.phone = ${a}.phone AND oi.product_id = ${a}.product_id AND o.created_at >= ${a}.at - interval '24 hours')`;
+
+/**
+ * The customer ordered (or was blocked as fake): what they typed on this page is closed — by number, and by page view
+ * or device (a number corrected while typing leaves no stray lead) — and a fake one's Meta event is dropped.
+ */
+async function closeLeads(db: Db, k: { phone: string; landingId: number; viewId: string; device: string }, status: 'converted' | 'blocked', orderId: number | null, cut: string) {
   const leads = await db.query(
     `UPDATE landing_leads SET status = $2, order_id = COALESCE($3, order_id), handled_at = now(),
        abandoned_at = COALESCE(abandoned_at, CASE WHEN last_at < $4::timestamptz THEN last_at END)
-     WHERE phone = $1 AND status IN ('open','abandoned') RETURNING id`,
-    [phone, status, orderId, cut],
+     WHERE status IN ('open','abandoned') AND (phone = $1 OR (landing_id = $5 AND (($6 <> '' AND view_id = $6) OR device = $7))) RETURNING id`,
+    [k.phone, status, orderId, cut, k.landingId, k.viewId, k.device],
   );
   const ids = leads.map((r: any) => num(r.id));
   if (!ids.length) return;
   // a blocked (fake) submit is not even a start of checkout for Meta
   if (status === 'blocked') await db.query(`UPDATE meta_events SET status = 'skipped', error = 'Commande bloquée (fausse)' WHERE lead_id = ANY($1) AND status = 'queued'`, [ids]);
+}
+
+/**
+ * The customer validated the page themselves after Pilotix had already added their abandoned order (they kept the
+ * page open): that order, still untouched in « Nouvelle », is cancelled as a duplicate of the customer's own one.
+ */
+async function replaceAutoOrder(db: Db, phone: string, productId: number, newOrderId: number, newRef: string, now: number) {
+  const old = await db.query(
+    `SELECT o.id FROM orders o JOIN landing_leads a ON a.order_id = o.id AND a.auto_order
+     WHERE o.phone = $1 AND o.conf_status = 'new' AND o.follow_status IS NULL AND o.id <> $3 AND o.created_at > $4
+       AND EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.product_id = $2)`,
+    [phone, productId, newOrderId, isoAt(now - 86_400_000)],
+  );
+  for (const r of old) {
+    await db.query(`UPDATE orders SET conf_status = 'duplicate', updated_at = now(), version = version + 1 WHERE id = $1 AND conf_status = 'new'`, [r.id]);
+    await addEvent(db, num(r.id), null, 'conf_status', 'new', 'duplicate', `Le client a validé lui-même la commande ${newRef}`);
+    await db.query(`UPDATE landing_leads SET order_id = $2 WHERE order_id = $1`, [r.id, newOrderId]);
+  }
 }
 
 export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Promise<{ ok: true }> {
@@ -477,6 +503,7 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
   const name = i.name.trim().replace(/\s+/g, ' ').slice(0, 120);
   const fbc = fbcOf(i.meta.fbc ?? '', i.fbc, i.utm, now);
   const fbp = i.meta.fbp || i.fbp;
+  const keys = { phone: phone ?? '', landingId: num(l.id), viewId: i.vid, device };
 
   let orderId: number | null = null;
   let blockedId: number | null = null;
@@ -492,7 +519,7 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
         )
       )[0].id,
     );
-    if (phone) await closeLeads(db, phone, 'blocked', null, abandonCutoff(s, now));
+    await closeLeads(db, keys, 'blocked', null, abandonCutoff(s, now));
   } else {
     // borderline orders go to « Nouvelle » too, with the reasons in the note (the agent sees them before calling)
     const review = result.verdict === 'review';
@@ -519,7 +546,8 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
     );
     orderId = o.id;
     ref = o.ref;
-    await closeLeads(db, phone!, 'converted', o.id, abandonCutoff(s, now));
+    await closeLeads(db, keys, 'converted', o.id, abandonCutoff(s, now));
+    await replaceAutoOrder(db, phone!, productId, o.id, o.ref, now);
   }
   await db.query(
     `INSERT INTO landing_submits (landing_id, product_id, phone, ip, fp, challenge, verdict, score, order_id, blocked_id, at, ua, fbp, fbc, url, utm)
@@ -527,79 +555,137 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
     [l.id, productId, phone, ip || null, device, servedMs !== null ? i.ch : null, result.verdict, result.score, orderId, blockedId, isoAt(now),
       (i.meta.ua ?? '').slice(0, 500) || null, fbp || null, fbc || null, (i.meta.url || i.url || '').slice(0, 500) || null, i.utm ? JSON.stringify(i.utm) : null],
   );
-  // Meta Purchase « when the order is received »: only a clear order (a borderline one waits for a person to confirm it)
+  // Meta Purchase « when the order is received »: only a clear order (a borderline one counts once a person confirms it)
   if (orderId && s.purchaseAt === 'order' && result.verdict === 'allow') await queuePurchase(db, s, orderId, now);
   ctx.emit({ type: 'orders', ...(ref ? { id: orderId!, data: { created: { ref, channel: 'landing' } } } : {}) });
   await afterChange(ctx);
   return { ok: true };
 }
 
-/** What a customer typed, saved while they fill the form: their abandoned order if they leave without ordering. */
+/** A number blocked as fake in the last day: what it types is not an abandoned order either. */
+const recentlyBlocked = async (db: Db, phone: string, now: number) =>
+  (
+    await db.query(
+      `SELECT 1 FROM landing_blocked WHERE phone = $1 AND status <> 'restored' AND at > $2
+       UNION ALL SELECT 1 FROM landing_submits WHERE phone = $1 AND verdict = 'block' AND blocked_id IS NULL AND at > $2 LIMIT 1`,
+      [phone, isoAt(now - 86_400_000)],
+    )
+  ).length > 0;
+
+/**
+ * What a customer typed, saved while they fill the form: their abandoned order if they leave without ordering. Cheap
+ * on purpose (the page sends it after each pause): the page's signed challenge is required, a number blocked or that
+ * already ordered this product is ignored, and one page view (or device) keeps one lead (a corrected digit updates it).
+ */
 export async function captureLead(ctx: Ctx, i: z.infer<typeof CaptureInput>): Promise<{ ok: true }> {
   const db = ctx.db;
   const phone = mobileOf(i.phone);
   const ua = i.meta.ua ?? '';
   // robots are not customers: no abandoned order, no Meta event (and the answer is the same: nothing to learn)
   if (!phone || i.hp.trim() || BOT_UA.test(ua) || !ua.trim()) return { ok: true };
-  const l = (await db.query('SELECT id, product_id, price, pixel_id FROM landing_pages WHERE slug = $1 AND active', [i.slug]))[0];
-  if (!l) return { ok: true };
   const now = ctx.now();
+  const l = (await db.query('SELECT l.id, l.product_id, l.price, l.pixel_id, p.price AS p_price FROM landing_pages l JOIN products p ON p.id = l.product_id WHERE l.slug = $1 AND l.active', [i.slug]))[0];
+  if (!l || (await checkChallenge(db, i.ch, i.slug, now)) === null) return { ok: true };
+  // blocked as fake, or already ordered this product (any channel) in the last day: not an abandoned order
+  if (await recentlyBlocked(db, phone, now)) return { ok: true };
+  if ((await db.query(`SELECT 1 FROM orders o JOIN order_items oi ON oi.order_id = o.id WHERE o.phone = $1 AND oi.product_id = $2 AND o.created_at > $3 LIMIT 1`, [phone, l.product_id, isoAt(now - 86_400_000)])).length)
+    return { ok: true };
   const ip = i.meta.ip ?? '';
   const device = i.did ? `d:${i.did}` : `f:${i.fp}:${ip}`;
-  // a flood from one device or address is not 20 customers
-  const flood = (await db.query(`SELECT count(*)::int AS n FROM landing_leads WHERE (device = $1 OR ($2 <> '' AND ip = $2)) AND at > $3`, [device, ip, isoAt(now - 3600_000)]))[0];
-  const pc = await productContext(db, num(l.product_id));
-  const variant = pc.variants.find((v) => v.id === i.variant) ?? null;
-  const unitPrice = unitPriceOf(numOrNull(l.price), pc, variant?.id ?? null);
+  const vars = await db.query(`SELECT id, title, price, active FROM product_variants WHERE product_id = $1 ORDER BY id`, [l.product_id]);
+  const named = vars.filter((v: any) => v.active && v.title !== '');
+  const variant = named.find((v: any) => num(v.id) === i.variant) ?? null;
+  // a product without variants keeps its stock on its plain variant (as a submitted order does)
+  const variantId = variant ? num(variant.id) : named.length ? null : numOrNull(vars.find((v: any) => v.title === '')?.id);
+  const unitPrice = numOrNull(l.price) ?? numOrNull(variant?.price) ?? num(l.p_price);
   const name = i.name.trim().replace(/\s+/g, ' ').slice(0, 120);
   const wilayaId = i.wilaya && i.wilaya >= 1 && i.wilaya <= 69 ? i.wilaya : null;
   const qty = Math.max(1, Math.min(99, i.qty ?? 1));
   const fbc = fbcOf(i.meta.fbc ?? '', i.fbc, i.utm, now);
   const fbp = i.meta.fbp || i.fbp;
   const had = (
-    await db.query(`SELECT id FROM landing_leads WHERE phone = $1 AND landing_id = $2 AND status IN ('open','abandoned') AND last_at > $3 ORDER BY id DESC LIMIT 1`, [phone, l.id, isoAt(now - 86_400_000)])
-  )[0];
-  let leadId: number;
-  if (had) {
-    leadId = num(had.id);
     await db.query(
-      `UPDATE landing_leads SET last_at = $2, status = 'open', customer_name = CASE WHEN $3 <> '' THEN $3 ELSE customer_name END, wilaya_id = COALESCE($4, wilaya_id),
-         commune = CASE WHEN $5 <> '' THEN $5 ELSE commune END, variant_id = COALESCE($6, variant_id), qty = $7, unit_price = $8,
-         fbp = COALESCE(NULLIF($9, ''), fbp), fbc = COALESCE(NULLIF($10, ''), fbc), utm = COALESCE($11, utm) WHERE id = $1`,
-      [leadId, isoAt(now), name, wilayaId, i.commune.trim(), variant?.id ?? null, qty, unitPrice, fbp, fbc, i.utm ? JSON.stringify(i.utm) : null],
+      `SELECT id FROM landing_leads WHERE landing_id = $1 AND status IN ('open','abandoned') AND last_at > $2 AND (($3 <> '' AND view_id = $3) OR phone = $4) ORDER BY id DESC LIMIT 1`,
+      [l.id, isoAt(now - 86_400_000), i.vid, phone],
+    )
+  )[0];
+  if (had) {
+    // the page sends the whole form each time: what it shows now replaces what was there (wilaya changed → its commune too)
+    await db.query(
+      `UPDATE landing_leads SET last_at = $2, status = 'open', phone = $3, customer_name = $4, wilaya_id = $5, commune = $6, variant_id = $7, qty = $8, unit_price = $9,
+         fbp = COALESCE(NULLIF($10, ''), fbp), fbc = COALESCE(NULLIF($11, ''), fbc), utm = COALESCE($12, utm) WHERE id = $1`,
+      [had.id, isoAt(now), phone, name, wilayaId, i.commune.trim(), variantId, qty, unitPrice, fbp, fbc, i.utm ? JSON.stringify(i.utm) : null],
     );
-  } else {
-    if (num(flood?.n) >= 20) return { ok: true };
-    leadId = num(
-      (
-        await db.query(
-          `INSERT INTO landing_leads (at, last_at, landing_id, product_id, variant_id, qty, unit_price, customer_name, phone, wilaya_id, commune, device, ip, ua, fbp, fbc, url, utm, view_id)
-           VALUES ($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id`,
-          [isoAt(now), l.id, l.product_id, variant?.id ?? null, qty, unitPrice, name, phone, wilayaId, i.commune.trim(), device, ip || null, ua.slice(0, 500), fbp || null, fbc || null,
-            (i.meta.url || i.url || '').slice(0, 500) || null, i.utm ? JSON.stringify(i.utm) : null, i.vid || null],
-        )
-      )[0].id,
-    );
-    // Meta: the customer started to order (the browser pixel sends the same event id: counted once). Sent a few
-    // minutes later, so the event of a submit found fake meanwhile is dropped.
-    const s = await landingSettings(db);
-    const pixel = String(l.pixel_id || s.pixelId || '').trim();
-    if (pixel)
-      await db.query(
-        `INSERT INTO meta_events (pixel_id, event_name, event_id, lead_id, landing_id, value, at, send_after) VALUES ($1,'InitiateCheckout',$2,$3,$4,$5,$6,$7)
-         ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING`,
-        [pixel, i.vid ? `ic-${i.vid}` : `ic-lead-${leadId}`, leadId, l.id, unitPrice * qty, isoAt(now), isoAt(now + 3 * 60_000)],
-      );
+    return { ok: true };
   }
+  // a flood from one device or address is not 20 customers
+  const flood = (await db.query(`SELECT (SELECT count(*) FROM landing_leads WHERE device = $1 AND at > $3) + (SELECT count(*) FROM landing_leads WHERE $2 <> '' AND ip = $2 AND at > $3) AS n`, [device, ip, isoAt(now - 3600_000)]))[0];
+  if (num(flood?.n) >= 20) return { ok: true };
+  const leadId = num(
+    (
+      await db.query(
+        `INSERT INTO landing_leads (at, last_at, landing_id, product_id, variant_id, qty, unit_price, customer_name, phone, wilaya_id, commune, device, ip, ua, fbp, fbc, url, utm, view_id)
+         VALUES ($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id`,
+        [isoAt(now), l.id, l.product_id, variantId, qty, unitPrice, name, phone, wilayaId, i.commune.trim(), device, ip || null, ua.slice(0, 500), fbp || null, fbc || null,
+          (i.meta.url || i.url || '').slice(0, 500) || null, i.utm ? JSON.stringify(i.utm) : null, i.vid || null],
+      )
+    )[0].id,
+  );
+  // Meta: the customer started to order (the browser pixel sends the same event id: counted once). Sent a few minutes
+  // later, so the event of a submit found fake meanwhile is dropped.
+  const s = await landingSettings(db);
+  const pixel = String(l.pixel_id || s.pixelId || '').trim();
+  if (pixel)
+    await db.query(
+      `INSERT INTO meta_events (pixel_id, event_name, event_id, lead_id, landing_id, value, at, send_after) VALUES ($1,'InitiateCheckout',$2,$3,$4,$5,$6,$7)
+       ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING`,
+      [pixel, i.vid ? `ic-${i.vid}` : `ic-lead-${leadId}`, leadId, l.id, unitPrice * qty, isoAt(now), isoAt(now + 3 * 60_000)],
+    );
   return { ok: true };
 }
 
-/** An abandoned order becomes a real one (Commandes › Nouvelle): by Pilotix after the chosen time, or by a person. */
-async function convertLead(ctx: Ctx, a: any, auto: boolean) {
+/**
+ * Is an abandoned order real? The same check as a submitted order, on what is known of it (no timing or proof of
+ * work: the lead already carried the page's signed challenge). A number blocked as fake in the last day: blocked.
+ */
+async function leadVerdict(db: Db, a: any, now: number) {
+  const l = (await db.query(`SELECT fraud_level FROM landing_pages WHERE id = $1`, [a.landing_id]))[0];
+  const phone = String(a.phone);
+  const r = scoreOrder(
+    {
+      name: String(a.customer_name ?? ''),
+      phoneRaw: phone,
+      phone,
+      qty: Math.max(1, num(a.qty)),
+      honeypot: '',
+      servedMs: 60_000,
+      clientMs: null,
+      inputs: null,
+      pow: 'ok',
+      userAgent: String(a.ua ?? ''),
+      webdriver: false,
+      recent: await recentCounts(db, { phone, productId: num(a.product_id), ip: String(a.ip ?? ''), device: String(a.device ?? ''), now }),
+      history: await phoneHistory(db, phone),
+      ipCountry: null,
+      ipWilaya: null,
+      wilayaId: num(a.wilaya_id),
+    },
+    (['relaxed', 'normal', 'strict'].includes(l?.fraud_level) ? l.fraud_level : 'normal') as FraudLevel,
+  );
+  if (await recentlyBlocked(db, phone, now)) {
+    r.reasons.unshift({ code: 'recent_block', points: 100 });
+    r.score = 100;
+    r.verdict = 'block';
+  }
+  return r;
+}
+
+/** An abandoned order becomes a real one (Commandes › Nouvelle), inside the caller's transaction: by Pilotix or by a person. */
+async function convertLead(ctx: Ctx, db: Db, a: any, auto: boolean, warn: string | null = null) {
   const phone = normalizePhone(a.phone);
   if (!phone) throw bad('Numéro de téléphone algérien invalide');
-  if (!a.wilaya_id) throw bad('La wilaya n’a pas été choisie : complétez la commande depuis Commandes › Nouvelle commande');
-  const slug = a.landing_id ? (await ctx.db.query('SELECT slug FROM landing_pages WHERE id = $1', [a.landing_id]))[0]?.slug : null;
+  if (!a.wilaya_id) throw bad('Choisissez la wilaya du client');
+  const slug = a.landing_id ? (await db.query('SELECT slug FROM landing_pages WHERE id = $1', [a.landing_id]))[0]?.slug : null;
   const utm = readJson<Record<string, string>>(a.utm);
   const o = await createOrder(
     ctx,
@@ -607,7 +693,7 @@ async function convertLead(ctx: Ctx, a: any, auto: boolean) {
       customerName: String(a.customer_name).length >= 2 ? a.customer_name : 'Client',
       phone,
       wilayaId: num(a.wilaya_id),
-      commune: a.commune,
+      commune: a.commune ?? '',
       address: '',
       isStopdesk: false,
       channel: 'landing',
@@ -617,54 +703,76 @@ async function convertLead(ctx: Ctx, a: any, auto: boolean) {
       discount: 0,
       confirm: false,
       isExchange: false,
-      internalNote: 'Commande abandonnée : le client a laissé son numéro sans valider. Appelez-le pour confirmer.',
+      internalNote: ['Commande abandonnée : le client a laissé son numéro sans valider. Appelez-le pour confirmer.', warn].filter(Boolean).join('\n'),
     },
-    ctx.db,
+    db,
     // no « we received your order » message: the customer did not send it, the agents call
     { landingId: numOrNull(a.landing_id), adsetId: adsetOf(utm), silent: true },
   );
-  await ctx.db.query(
-    `UPDATE landing_leads SET status = 'converted', order_id = $2, auto_order = $3, handled_by = $4, handled_at = now(), abandoned_at = COALESCE(abandoned_at, last_at) WHERE id = $1`,
+  await db.query(
+    `UPDATE landing_leads SET status = 'converted', order_id = $2, auto_order = $3, handled_by = $4, handled_at = now(), abandoned_at = COALESCE(abandoned_at, last_at), note = NULL WHERE id = $1`,
     [a.id, o.id, auto, auto ? null : ctx.session.profile.id],
   );
   return o;
 }
 
 /**
- * Every minute on the server (in the preview: when the lists are read): open leads with no news for the chosen time
- * become abandoned orders, added to Commandes as « Nouvelle » (one without wilaya waits in « Abandonnées » for a
- * person); a lead whose number ordered meanwhile (any channel) is closed.
+ * Every minute on the server (in the preview: when the lists are read). A lead whose number ordered this product
+ * (any channel, in the day before or after) is closed. Then, one at a time and each in its own transaction (two runs
+ * never take the same lead; a failure never leaves a lead half done), a lead with no news for the chosen time is
+ * checked like an order: fake → « Commandes bloquées »; otherwise an order in Commandes › Nouvelle (borderline: with
+ * the reasons in its note); no wilaya → it waits in « Abandonnées » for a person.
  */
-export async function sweepAbandoned(ctx: Ctx): Promise<{ abandoned: number; ordered: number }> {
+export async function sweepAbandoned(ctx: Ctx): Promise<{ abandoned: number; ordered: number; blocked: number }> {
   const db = ctx.db;
   const s = await landingSettings(db);
   const now = ctx.now();
   const cut = abandonCutoff(s, now);
   await db.query(
-    `UPDATE landing_leads a SET status = 'converted', order_id = (SELECT o.id FROM orders o WHERE o.phone = a.phone AND o.created_at >= a.at ORDER BY o.id LIMIT 1), handled_at = now(),
-       abandoned_at = COALESCE(a.abandoned_at, CASE WHEN a.last_at < $1::timestamptz THEN a.last_at END)
-     WHERE a.status IN ('open','abandoned') AND EXISTS (SELECT 1 FROM orders o WHERE o.phone = a.phone AND o.created_at >= a.at)`,
+    `UPDATE landing_leads a SET status = 'converted', handled_at = now(),
+       order_id = (SELECT o.id FROM orders o JOIN order_items oi ON oi.order_id = o.id WHERE o.phone = a.phone AND oi.product_id = a.product_id AND o.created_at >= a.at - interval '24 hours' ORDER BY o.id DESC LIMIT 1),
+       abandoned_at = COALESCE(a.abandoned_at, CASE WHEN a.last_at < $1::timestamptz
+         AND EXISTS (SELECT 1 FROM orders o JOIN order_items oi ON oi.order_id = o.id WHERE o.phone = a.phone AND oi.product_id = a.product_id AND o.created_at >= a.last_at) THEN a.last_at END)
+     WHERE a.status IN ('open','abandoned') AND ${ORDERED('a')}`,
     [cut],
   );
-  // claimed once even when two runs overlap (the job and the cron hook)
-  const rows = await db.query(
-    `UPDATE landing_leads SET status = 'abandoned', abandoned_at = $2 WHERE id IN (
-       SELECT id FROM landing_leads WHERE status = 'open' AND last_at < $1 ORDER BY id LIMIT 200 FOR UPDATE SKIP LOCKED)
-     RETURNING *`,
-    [cut, isoAt(now)],
-  );
-  let ordered = 0;
-  for (const a of rows) {
-    if (!a.wilaya_id) continue; // incomplete: stays in « Abandonnées » for a person
-    try {
-      await convertLead(ctx, a, true);
-      ordered++;
-    } catch {
-      /* a product removed meanwhile…: stays in the list for a person */
-    }
+  const out = { abandoned: 0, ordered: 0, blocked: 0 };
+  for (let k = 0; k < 200; k++) {
+    const r = await db.tx(async (tx) => {
+      const a = (await tx.query(`SELECT * FROM landing_leads WHERE status = 'open' AND last_at < $1 ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED`, [cut]))[0];
+      if (!a) return null;
+      const v = await leadVerdict(tx, a, now);
+      if (v.verdict === 'block') {
+        await tx.query(
+          `INSERT INTO landing_blocked (landing_id, product_id, variant_id, qty, unit_price, customer_name, phone, wilaya_id, commune, score, reasons, ip, user_agent, fp, utm, at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+          [a.landing_id, a.product_id, a.variant_id, a.qty, a.unit_price, a.customer_name, a.phone, a.wilaya_id, a.commune, v.score, JSON.stringify(v.reasons), a.ip, a.ua, a.device, a.utm ? JSON.stringify(readJson(a.utm)) : null, isoAt(now)],
+        );
+        await tx.query(`UPDATE landing_leads SET status = 'blocked', abandoned_at = $2, note = $3 WHERE id = $1`, [a.id, isoAt(now), reasonsText(v.reasons)]);
+        await tx.query(`UPDATE meta_events SET status = 'skipped', error = 'Commande abandonnée bloquée (fausse)' WHERE lead_id = $1 AND status = 'queued'`, [a.id]);
+        return 'blocked';
+      }
+      if (!a.wilaya_id) {
+        await tx.query(`UPDATE landing_leads SET status = 'abandoned', abandoned_at = $2, note = 'Wilaya non choisie' WHERE id = $1`, [a.id, isoAt(now)]);
+        return 'abandoned';
+      }
+      await tx.query('SAVEPOINT px_lead');
+      try {
+        await convertLead(ctx, tx, a, true, v.verdict === 'review' ? `⚠ Score anti-fraude ${v.score}/100 — ${reasonsText(v.reasons)}` : null);
+        await tx.query('RELEASE SAVEPOINT px_lead');
+        return 'ordered';
+      } catch (e: any) {
+        // a product removed meanwhile…: it waits in « Abandonnées » with the reason, for a person
+        await tx.query('ROLLBACK TO SAVEPOINT px_lead');
+        await tx.query(`UPDATE landing_leads SET status = 'abandoned', abandoned_at = $2, note = $3 WHERE id = $1`, [a.id, isoAt(now), String(e?.message ?? e).slice(0, 300)]);
+        return 'abandoned';
+      }
+    });
+    if (!r) break;
+    out[r]++;
   }
-  if (rows.length) ctx.emit({ type: 'orders' });
-  return { abandoned: rows.length - ordered, ordered };
+  if (out.abandoned + out.ordered + out.blocked) ctx.emit({ type: 'orders' });
+  return out;
 }
 
 // ---------------------------------------------------------------- Meta Conversions API (the outbox)
@@ -672,13 +780,18 @@ const sha = (v: string | null | undefined) => {
   const x = String(v ?? '').trim().toLowerCase();
   return x ? sha256Hex(x) : null;
 };
+/** a typed name, not the « Client » placeholder of an order whose customer typed none */
+const realName = (n: string | null | undefined) => {
+  const x = String(n ?? '').trim();
+  return x.length >= 2 && !/^client$/i.test(x) ? x : '';
+};
 /** Meta's user data: hashed phone (213…), names, commune, wilaya, country and customer id; IP, browser and cookies as they are. */
 function userData(r: { phone: string; name: string; commune?: string | null; wilaya?: number | null; customerId?: number | null; ip?: string | null; ua?: string | null; fbp?: string | null; fbc?: string | null }) {
-  const words = r.name.trim().split(/\s+/).filter(Boolean);
+  const words = realName(r.name).split(/\s+/).filter(Boolean);
   const u: Record<string, unknown> = { ph: [sha256Hex(`213${r.phone.replace(/^0/, '')}`)], country: [sha256Hex('dz')] };
   const fn = sha(words[0]);
   const ln = sha(words.slice(1).join(' '));
-  if (fn && words.length) u.fn = [fn];
+  if (fn) u.fn = [fn];
   if (ln) u.ln = [ln];
   const ct = sha((r.commune ?? '').replace(/[^\p{L}]/gu, ''));
   if (ct) u.ct = [ct];
@@ -691,16 +804,23 @@ function userData(r: { phone: string; name: string; commune?: string | null; wil
   return u;
 }
 
+/** Meta keeps events of the last 7 days only. */
+const META_MAX_AGE = 7 * 86_400;
+
 /** The event Meta receives, or why it is not sent anymore. */
-async function buildEvent(db: Db, e: any, publicUrl: string): Promise<{ event?: Record<string, unknown>; skip?: string }> {
+async function buildEvent(db: Db, e: any, publicUrl: string, now: number): Promise<{ event?: Record<string, unknown>; skip?: string }> {
   const sourceUrl = (slug: string | null, url: string | null) => url || (slug && publicUrl ? `${publicUrl}/api/lp/${slug}` : publicUrl || 'https://pilotix.app');
+  const nowS = Math.floor(now / 1000);
   if (e.event_name === 'Purchase') {
+    // the browser's data comes from the customer's submit, or from what they typed (an abandoned order)
     const o = (
       await db.query(
-        `SELECT o.*, l.slug, s.ip AS s_ip, s.ua AS s_ua, s.fbp AS s_fbp, s.fbc AS s_fbc, s.url AS s_url,
+        `SELECT o.*, l.slug, COALESCE(s.ip, a.ip) AS v_ip, COALESCE(s.ua, a.ua) AS v_ua, COALESCE(s.fbp, a.fbp) AS v_fbp, COALESCE(s.fbc, a.fbc) AS v_fbc,
+           COALESCE(s.url, a.url) AS v_url, a.customer_name AS a_name,
            (SELECT json_agg(json_build_object('id', i.product_id, 'quantity', i.qty, 'item_price', i.unit_price)) FROM order_items i WHERE i.order_id = o.id) AS items
          FROM orders o LEFT JOIN landing_pages l ON l.id = o.landing_id
          LEFT JOIN LATERAL (SELECT * FROM landing_submits x WHERE x.order_id = o.id ORDER BY x.id DESC LIMIT 1) s ON true
+         LEFT JOIN LATERAL (SELECT * FROM landing_leads y WHERE y.order_id = o.id ORDER BY y.id DESC LIMIT 1) a ON true
          WHERE o.id = $1`,
         [e.order_id],
       )
@@ -709,14 +829,16 @@ async function buildEvent(db: Db, e: any, publicUrl: string): Promise<{ event?: 
     // an order found fake, a duplicate, a wrong number or cancelled before the event left: never a sale
     if ((CONF_DONE_BAD as string[]).includes(o.conf_status)) return { skip: 'Commande annulée ou fausse : pas de Purchase' };
     const items = (readJson<any[]>(o.items) ?? []).map((x) => ({ id: String(x.id), quantity: num(x.quantity), item_price: num(x.item_price) }));
+    // a website event needs the browser; without it (an old order) the sale is reported as confirmed by Pilotix itself
+    const web = !!o.v_ua;
     return {
       event: {
         event_name: 'Purchase',
-        event_time: Math.floor(Date.now() / 1000),
+        event_time: nowS,
         event_id: e.event_id,
-        action_source: 'website',
-        event_source_url: sourceUrl(o.slug, o.s_url),
-        user_data: userData({ phone: o.phone, name: o.customer_name, commune: o.commune, wilaya: num(o.wilaya_id), customerId: num(o.customer_id), ip: o.s_ip, ua: o.s_ua, fbp: o.s_fbp, fbc: o.s_fbc }),
+        action_source: web ? 'website' : 'system_generated',
+        ...(web ? { event_source_url: sourceUrl(o.slug, o.v_url) } : {}),
+        user_data: userData({ phone: o.phone, name: realName(o.customer_name) || o.a_name || '', commune: o.commune, wilaya: num(o.wilaya_id), customerId: num(o.customer_id), ip: o.v_ip, ua: o.v_ua, fbp: o.v_fbp, fbc: o.v_fbc }),
         custom_data: { currency: 'DZD', value: num(o.total), order_id: o.ref, content_type: 'product', content_ids: items.map((x) => x.id), contents: items, num_items: items.reduce((n, x) => n + x.quantity, 0) },
       },
     };
@@ -724,10 +846,13 @@ async function buildEvent(db: Db, e: any, publicUrl: string): Promise<{ event?: 
   const a = (await db.query(`SELECT a.*, l.slug FROM landing_leads a LEFT JOIN landing_pages l ON l.id = a.landing_id WHERE a.id = $1`, [e.lead_id]))[0];
   if (!a) return { skip: 'Commande abandonnée supprimée' };
   if (['blocked', 'dismissed'].includes(a.status)) return { skip: 'Commande bloquée ou rejetée' };
+  const t = Math.floor(Date.parse(iso(a.at)) / 1000);
+  if (nowS - t > META_MAX_AGE - 3600) return { skip: 'Plus de 7 jours : Meta ne l’accepte plus' };
+  if (!a.ua) return { skip: 'Navigateur inconnu' };
   return {
     event: {
       event_name: 'InitiateCheckout',
-      event_time: Math.floor(Date.parse(iso(a.at)) / 1000),
+      event_time: Math.min(t, nowS),
       event_id: e.event_id,
       action_source: 'website',
       event_source_url: sourceUrl(a.slug, a.url),
@@ -737,24 +862,32 @@ async function buildEvent(db: Db, e: any, publicUrl: string): Promise<{ event?: 
   };
 }
 
-/** Sends the Meta events that are due (the server's job every minute). In the preview they are only marked « simulé ». */
-export async function sendMetaEvents(ctx: Ctx, limit = 100): Promise<{ sent: number; failed: number; skipped: number }> {
+/** Meta's answer to a request, sorted: wait (no token, token refused, limits, network) or a real error of these events. */
+const metaWait = (msg: string) => /jeton|token|limite|injoignable|réessayez/i.test(msg);
+
+/**
+ * Sends the Meta events that are due (the server's job every minute; sales first). In the preview they are only marked
+ * « simulé ». Nothing is lost: without a token, with a token refused, or while Meta limits or is unreachable, events
+ * wait (sent once a token is saved, see landing.settings.save). An error about the events themselves is isolated (a
+ * batch Meta refuses is sent again one event at a time), tried again later, and failed only after 6 tries.
+ */
+export async function sendMetaEvents(ctx: Ctx, limit = 100): Promise<{ sent: number; failed: number; skipped: number; waiting: number }> {
   const db = ctx.db;
   const now = ctx.now();
   await db.query(`UPDATE meta_events SET status = 'queued', claimed_at = NULL WHERE status = 'sending' AND claimed_at < $1`, [isoAt(now - 10 * 60_000)]);
   const claimed = await db.query(
     `UPDATE meta_events SET status = 'sending', claimed_at = $1 WHERE status = 'queued' AND id IN (
-       SELECT id FROM meta_events WHERE status = 'queued' AND send_after <= $1 ORDER BY send_after, id LIMIT $2 FOR UPDATE SKIP LOCKED)
+       SELECT id FROM meta_events WHERE status = 'queued' AND send_after <= $1 ORDER BY (event_name = 'Purchase') DESC, send_after, id LIMIT $2 FOR UPDATE SKIP LOCKED)
      RETURNING *`,
     [isoAt(now), limit],
   );
-  const out = { sent: 0, failed: 0, skipped: 0 };
+  const out = { sent: 0, failed: 0, skipped: 0, waiting: 0 };
   if (!claimed.length) return out;
   const s = await landingSettings(db);
   const token = String((await db.query(`SELECT value FROM settings WHERE key = $1`, [LANDING_CAPI_SECRET]))[0]?.value ?? '') || String((await db.query(`SELECT value FROM settings WHERE key = 'secret_meta_token'`))[0]?.value ?? '');
   const byPixel = new Map<string, { row: any; event: Record<string, unknown> }[]>();
   for (const e of claimed) {
-    const b = await buildEvent(db, e, ctx.server?.publicUrl ?? '');
+    const b = await buildEvent(db, e, ctx.server?.publicUrl ?? '', now);
     if (!b.event) {
       await db.query(`UPDATE meta_events SET status = 'skipped', error = $2, claimed_at = NULL WHERE id = $1`, [e.id, b.skip]);
       out.skipped++;
@@ -763,6 +896,32 @@ export async function sendMetaEvents(ctx: Ctx, limit = 100): Promise<{ sent: num
     if (!byPixel.has(e.pixel_id)) byPixel.set(e.pixel_id, []);
     byPixel.get(e.pixel_id)!.push({ row: e, event: b.event });
   }
+  const wait = async (ids: number[], why: string, minutes: number) => {
+    await db.query(`UPDATE meta_events SET status = 'queued', error = $2, claimed_at = NULL, send_after = $3 WHERE id = ANY($1)`, [ids, why, isoAt(now + minutes * 60_000)]);
+    out.waiting += ids.length;
+  };
+  const send = async (pixelId: string, list: { row: any; event: Record<string, unknown> }[]): Promise<void> => {
+    const ids = list.map((x) => num(x.row.id));
+    try {
+      await ctx.server!.meta('capi', { pixelId, token, events: list.map((x) => x.event), testEventCode: s.testEventCode || undefined }, ctx);
+      await db.query(`UPDATE meta_events SET status = 'sent', sent_at = now(), error = NULL, claimed_at = NULL WHERE id = ANY($1)`, [ids]);
+      out.sent += ids.length;
+    } catch (err: any) {
+      const msg = String(err?.message ?? err ?? 'Erreur Meta').slice(0, 300);
+      if (metaWait(msg)) return wait(ids, msg, /jeton|token/i.test(msg) ? 60 : 15);
+      // one bad event must not hold the others: the batch is sent again one by one
+      if (list.length > 1) {
+        for (const x of list) await send(pixelId, [x]);
+        return;
+      }
+      const tries = num(list[0].row.attempts) + 1;
+      await db.query(
+        `UPDATE meta_events SET attempts = $2, error = $3, claimed_at = NULL, status = CASE WHEN $2 >= 6 THEN 'failed' ELSE 'queued' END, send_after = $4 WHERE id = $1`,
+        [ids[0], tries, msg, isoAt(now + Math.min(24 * 60, 10 * 2 ** (tries - 1)) * 60_000)],
+      );
+      out.failed++;
+    }
+  };
   for (const [pixelId, list] of byPixel) {
     const ids = list.map((x) => num(x.row.id));
     if (simulated(ctx)) {
@@ -771,26 +930,22 @@ export async function sendMetaEvents(ctx: Ctx, limit = 100): Promise<{ sent: num
       continue;
     }
     if (!token) {
-      await db.query(`UPDATE meta_events SET status = 'failed', error = 'Jeton Conversions API manquant (Landing pages › Réglages)', claimed_at = NULL WHERE id = ANY($1)`, [ids]);
-      out.failed += ids.length;
+      await wait(ids, 'Jeton Conversions API manquant (Landing pages › Réglages)', 30);
       continue;
     }
-    try {
-      await ctx.server!.meta('capi', { pixelId, token, events: list.map((x) => x.event), testEventCode: s.testEventCode || undefined }, ctx);
-      await db.query(`UPDATE meta_events SET status = 'sent', sent_at = now(), error = NULL, claimed_at = NULL WHERE id = ANY($1)`, [ids]);
-      out.sent += ids.length;
-    } catch (err: any) {
-      const msg = String(err?.message ?? err ?? 'Erreur Meta').slice(0, 300);
-      // tried again 5 times (10 minutes apart), then left in « échoué » with Meta's message
-      await db.query(
-        `UPDATE meta_events SET attempts = attempts + 1, error = $2, claimed_at = NULL,
-           status = CASE WHEN attempts + 1 >= 5 THEN 'failed' ELSE 'queued' END, send_after = now() + interval '10 minutes' WHERE id = ANY($1)`,
-        [ids, msg],
-      );
-      out.failed += ids.length;
-    }
+    await send(pixelId, list);
   }
   return out;
+}
+
+/** Events that could not leave (no token, token refused, failed): sent again, if Meta still takes them (7 days). */
+async function requeueMetaEvents(db: Db, now: number) {
+  const r = await db.query(
+    `UPDATE meta_events SET status = 'queued', attempts = 0, send_after = $1, claimed_at = NULL
+     WHERE (status = 'failed' OR (status = 'queued' AND error IS NOT NULL)) AND at > $2 RETURNING id`,
+    [isoAt(now), isoAt(now - (META_MAX_AGE - 3600) * 1000)],
+  );
+  return r.length;
 }
 
 /** The landing pages' background work: abandoned orders, then Meta events. */
@@ -973,6 +1128,8 @@ export const landingProcs = {
       settings: { pixelId: s.pixelId, testEventCode: s.testEventCode, purchaseAt: s.purchaseAt, abandonAfterMin: s.abandonAfterMin, autoCreate: s.autoCreate },
       /** the token itself never leaves the server */
       capi: { own, ads },
+      /** products set aside (« Pas de page »): they can get their alert back */
+      ignored: (await ctx.db.query(`SELECT id, name FROM products WHERE id = ANY($1::bigint[]) ORDER BY lower(name)`, [s.ignored ?? []])).map((r: any) => ({ id: num(r.id), name: String(r.name) })),
       demo: simulated(ctx),
       /** what to paste in the ad's « URL parameters » (Meta fills the {{…}}) */
       urlParams: 'utm_source=facebook&utm_medium=paid&utm_campaign={{campaign.name}}&utm_content={{ad.name}}&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}',
@@ -985,13 +1142,23 @@ export const landingProcs = {
     const cur = await landingSettings(ctx.db);
     await setSetting(ctx.db, 'landing', { ...cur, ...rest }, ctx.session.profile.id);
     if (capiToken === null) await ctx.db.query(`DELETE FROM settings WHERE key = $1`, [LANDING_CAPI_SECRET]);
-    else if (capiToken.trim())
+    else if (capiToken.trim()) {
       await ctx.db.query(
         `INSERT INTO settings (key, value, updated_by) VALUES ($1,$2,$3) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now(), updated_by = EXCLUDED.updated_by`,
         [LANDING_CAPI_SECRET, JSON.stringify(capiToken.trim()), ctx.session.profile.id],
       );
+      // what waited for a token (or failed with the old one) leaves now
+      await requeueMetaEvents(ctx.db, ctx.now());
+    }
     ctx.emit({ type: 'settings' });
     return { ok: true };
+  }),
+
+  /** « Renvoyer »: events that could not leave are tried again (the ones Meta still takes: 7 days). */
+  'landing.retryEvents': proc([...WHO], z.object({}), async (ctx) => {
+    const n = await requeueMetaEvents(ctx.db, ctx.now());
+    await afterChange(ctx);
+    return { requeued: n };
   }),
 
   /** What was sent to Meta (or not, and why), newest first. */
@@ -1111,42 +1278,45 @@ export const landingProcs = {
     },
   ),
 
-  /** a real customer after all: the order is created as if it had passed (« Nouvelle », to confirm by phone) */
+  /** a real customer after all: the order is created as if it had passed (« Nouvelle », to confirm by phone), once */
   'landing.restore': proc([...WATCH], z.object({ id }), async (ctx, { id }) => {
-    const b = (await ctx.db.query('SELECT * FROM landing_blocked WHERE id = $1', [id]))[0];
-    if (!b) throw notFound('Commande bloquée introuvable');
-    if (b.status === 'restored') throw bad('Déjà restaurée');
-    const phone = normalizePhone(b.phone);
-    if (!phone) throw bad('Numéro de téléphone algérien invalide : impossible de créer la commande');
-    if (!b.wilaya_id) throw bad('Wilaya manquante : impossible de créer la commande');
-    const slug = b.landing_id ? (await ctx.db.query('SELECT slug FROM landing_pages WHERE id = $1', [b.landing_id]))[0]?.slug : null;
-    const utm = readJson<Record<string, string>>(b.utm);
-    const o = await createOrder(
-      ctx,
-      {
-        customerName: String(b.customer_name).length >= 2 ? b.customer_name : 'Client',
-        phone,
-        wilayaId: num(b.wilaya_id),
-        commune: b.commune,
-        address: '',
-        isStopdesk: false,
-        channel: 'landing',
-        source: slug ? `Landing · ${slug}` : 'Landing',
-        utm,
-        items: [{ productId: num(b.product_id), variantId: numOrNull(b.variant_id), qty: num(b.qty), unitPrice: num(b.unit_price) }],
-        discount: 0,
-        confirm: false,
-        isExchange: false,
-        internalNote: `Restaurée depuis « Commandes bloquées » (score ${num(b.score)}/100)`,
-      },
-      ctx.db,
-      { landingId: numOrNull(b.landing_id), adsetId: adsetOf(utm) },
-    );
-    await ctx.db.query(`UPDATE landing_blocked SET status = 'restored', order_id = $2, handled_by = $3, handled_at = now() WHERE id = $1`, [id, o.id, ctx.session.profile.id]);
-    await ctx.db.query('UPDATE landing_submits SET order_id = $2 WHERE blocked_id = $1', [id, o.id]);
-    // a person decided it is real: with « Purchase when received », it counts now
-    const s = await landingSettings(ctx.db);
-    if (s.purchaseAt === 'order') await queuePurchase(ctx.db, s, o.id, ctx.now());
+    const o = await ctx.db.tx(async (tx) => {
+      const b = (await tx.query('SELECT * FROM landing_blocked WHERE id = $1 FOR UPDATE', [id]))[0];
+      if (!b) throw notFound('Commande bloquée introuvable');
+      if (b.status === 'restored') throw bad('Déjà restaurée');
+      const phone = normalizePhone(b.phone);
+      if (!phone) throw bad('Numéro de téléphone algérien invalide : impossible de créer la commande');
+      if (!b.wilaya_id) throw bad('Wilaya manquante : impossible de créer la commande');
+      const slug = b.landing_id ? (await tx.query('SELECT slug FROM landing_pages WHERE id = $1', [b.landing_id]))[0]?.slug : null;
+      const utm = readJson<Record<string, string>>(b.utm);
+      const order = await createOrder(
+        ctx,
+        {
+          customerName: String(b.customer_name).length >= 2 ? b.customer_name : 'Client',
+          phone,
+          wilayaId: num(b.wilaya_id),
+          commune: b.commune,
+          address: '',
+          isStopdesk: false,
+          channel: 'landing',
+          source: slug ? `Landing · ${slug}` : 'Landing',
+          utm,
+          items: [{ productId: num(b.product_id), variantId: numOrNull(b.variant_id), qty: num(b.qty), unitPrice: num(b.unit_price) }],
+          discount: 0,
+          confirm: false,
+          isExchange: false,
+          internalNote: `Restaurée depuis « Commandes bloquées » (score ${num(b.score)}/100)`,
+        },
+        tx,
+        { landingId: numOrNull(b.landing_id), adsetId: adsetOf(utm) },
+      );
+      await tx.query(`UPDATE landing_blocked SET status = 'restored', order_id = $2, handled_by = $3, handled_at = now() WHERE id = $1`, [id, order.id, ctx.session.profile.id]);
+      await tx.query('UPDATE landing_submits SET order_id = $2 WHERE blocked_id = $1', [id, order.id]);
+      // a person decided it is real: with « Purchase when received », it counts now
+      const s = await landingSettings(tx);
+      if (s.purchaseAt === 'order') await queuePurchase(tx, s, order.id, ctx.now());
+      return order;
+    });
     ctx.emit({ type: 'orders' });
     await afterChange(ctx);
     return { ok: true, orderId: o.id, ref: o.ref };
@@ -1176,11 +1346,12 @@ export const landingProcs = {
       await afterChange(ctx);
       const s = await landingSettings(ctx.db);
       const cut = abandonCutoff(s, ctx.now());
+      // $1 (the cutoff) is in every branch: a parameter bound but unused is an error for PostgreSQL
       const params: unknown[] = [cut];
       const where: string[] = [`a.status <> 'blocked'`];
       if (f.status === 'abandoned') where.push(ABANDONED('$1::timestamptz'));
-      else if (f.status === 'converted') where.push(`a.status = 'converted' AND a.abandoned_at IS NOT NULL`);
-      else if (f.status === 'dismissed') where.push(`a.status = 'dismissed'`);
+      else if (f.status === 'converted') where.push(`a.status = 'converted' AND a.abandoned_at IS NOT NULL AND $1::timestamptz IS NOT NULL`);
+      else if (f.status === 'dismissed') where.push(`a.status = 'dismissed' AND $1::timestamptz IS NOT NULL`);
       else where.push(`(a.abandoned_at IS NOT NULL OR a.status = 'dismissed' OR (a.status = 'open' AND a.last_at < $1::timestamptz))`);
       const q = f.q?.trim();
       if (q) where.push(`(a.customer_name ILIKE '%' || $${params.push(q)} || '%' OR a.phone LIKE '%' || $${params.push(q.replace(/\D/g, '') || q)} || '%')`);
@@ -1230,22 +1401,34 @@ export const landingProcs = {
           orderId: numOrNull(r.order_id),
           orderRef: r.order_ref ?? null,
           handledBy: r.handled_name ?? null,
+          note: (r.note ?? null) as string | null,
           utm: readJson<Record<string, string>>(r.utm),
         })),
       };
     },
   ),
 
-  /** The customer said yes on the phone: their abandoned order becomes a real one (« Nouvelle »). */
-  'landing.convertLead': proc([...WATCH], z.object({ id }), async (ctx, { id }) => {
-    const a = (await ctx.db.query(`SELECT * FROM landing_leads WHERE id = $1`, [id]))[0];
-    if (!a) throw notFound('Commande abandonnée introuvable');
-    if (a.status === 'converted') throw bad('Déjà transformée en commande');
-    const o = await convertLead(ctx, a, false);
-    ctx.emit({ type: 'orders' });
-    await afterChange(ctx);
-    return { ok: true, orderId: o.id, ref: o.ref };
-  }),
+  /**
+   * The customer said yes on the phone: their abandoned order becomes a real one (« Nouvelle »), with no message to
+   * them. The wilaya / commune can be given here when they had not chosen them. Taken in one transaction: two clicks,
+   * two agents or the minute job never make two orders.
+   */
+  'landing.convertLead': proc(
+    [...WATCH],
+    z.object({ id, wilayaId: z.number().int().min(1).max(69).optional(), commune: z.string().trim().max(120).optional() }),
+    async (ctx, i) => {
+      const o = await ctx.db.tx(async (tx) => {
+        const a = (await tx.query(`SELECT * FROM landing_leads WHERE id = $1 FOR UPDATE`, [i.id]))[0];
+        if (!a) throw notFound('Commande abandonnée introuvable');
+        if (!['open', 'abandoned', 'dismissed'].includes(a.status)) throw bad(a.status === 'converted' ? 'Déjà dans les commandes' : 'Commande abandonnée bloquée comme fausse');
+        if (i.wilayaId) Object.assign(a, { wilaya_id: i.wilayaId, commune: i.commune ?? '' });
+        return convertLead(ctx, tx, a, false);
+      });
+      ctx.emit({ type: 'orders' });
+      await afterChange(ctx);
+      return { ok: true, orderId: o.id, ref: o.ref };
+    },
+  ),
 
   /** Not interested / wrong number: out of the list. */
   'landing.dismissLead': proc([...WATCH], z.object({ id }), async (ctx, { id }) => {

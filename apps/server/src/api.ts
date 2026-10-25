@@ -118,6 +118,22 @@ function visitorMeta(req: { ip?: string; headers: Record<string, string | undefi
   };
 }
 
+/** Landing pages: requests per address and kind over 10 minutes; true = over the limit (handled silently). */
+const lpHits = new Map<string, { n: number; until: number }>();
+function limitLanding(ip: string, kind: string, max: number): boolean {
+  const now = Date.now();
+  if (lpHits.size > 50_000) for (const [k, v] of lpHits) if (v.until < now) lpHits.delete(k);
+  const key = `${kind}:${ip}`;
+  const a = lpHits.get(key);
+  if (!a || a.until < now) {
+    lpHits.set(key, { n: 1, until: now + 10 * 60_000 });
+    return false;
+  }
+  return ++a.n > max;
+}
+/** A browser posting from another site (a page that makes its visitors send fake leads): not our page. */
+const crossSite = (req: { headers: Record<string, string | undefined> }) => req.headers['sec-fetch-site'] === 'cross-site';
+
 /** 10 login attempts per 15 minutes per address. */
 const attempts = new Map<string, { n: number; until: number }>();
 function limitLogin(ip: string) {
@@ -274,7 +290,12 @@ class ApiController {
   @Post('lp/:slug/order')
   async landingOrder(@Param('slug') slug: string, @Body() body: any, @Req() req: { ip?: string; headers: Record<string, string | undefined> }) {
     if (!/^[a-z0-9-]{2,60}$/.test(slug)) throw new core.AppError('not_found', 'Page introuvable');
-    await this.core.call('landing.submit', await this.core.systemSession(), { ...(body && typeof body === 'object' ? body : {}), slug, meta: visitorMeta(req) });
+    const start = Date.now();
+    // a post from another site, or a flood from one address: the same answer, nothing done
+    if (!crossSite(req) && !limitLanding(req.ip || 'unknown', 'order', 30))
+      await this.core.call('landing.submit', await this.core.systemSession(), { ...(body && typeof body === 'object' ? body : {}), slug, meta: visitorMeta(req) });
+    // the answer never comes faster for a blocked order than for a real one (its timing would tell a fraudster)
+    await new Promise((r) => setTimeout(r, Math.max(0, 600 + Math.floor(Math.random() * 300) - (Date.now() - start))));
     return { ok: true };
   }
 
@@ -292,6 +313,7 @@ class ApiController {
         b = {};
       }
     }
+    if (crossSite(req) || limitLanding(req.ip || 'unknown', 'lead', 120)) return { ok: true };
     await this.core.call('landing.capture', await this.core.systemSession(), { ...(b && typeof b === 'object' ? b : {}), slug, meta: visitorMeta(req) }).catch(() => null);
     return { ok: true };
   }

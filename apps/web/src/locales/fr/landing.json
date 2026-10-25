@@ -166,7 +166,8 @@
     "qty_some": "Quantité élevée",
     "ip_abroad": "IP hors d’Algérie",
     "ip_wilaya": "IP d’une autre wilaya",
-    "form_invalid": "Formulaire incomplet"
+    "form_invalid": "Formulaire incomplet",
+    "recent_block": "Numéro bloqué comme faux (24 h)"
   },
   "miss": {
     "title_one": "{{count}} produit n’a pas encore de landing page",
@@ -214,7 +215,10 @@
     "st_converted": "Le client a commandé",
     "st_converted_auto": "Dans Commandes",
     "st_dismissed": "Écartée",
-    "st_abandoned": "À traiter"
+    "st_abandoned": "À traiter",
+    "completeTitle": "Compléter la commande de {{name}}",
+    "wilaya": "Wilaya",
+    "commune": "Commune"
   },
   "set": {
     "saved": "Réglages enregistrés",
@@ -255,8 +259,12 @@
     "auto": "Automatisations",
     "autoCreate": "Créer une landing page pour chaque nouveau produit",
     "autoCreateHelp": "Faite dès la création du produit (nom, photo, prix, variantes), à compléter ensuite. Sinon le produit apparaît dans « Pages » avec une alerte.",
-    "sound": "Son et alerte à chaque nouvelle commande",
-    "soundHelp": "Sur cet appareil : une notification et un petit son quand une commande arrive d’une landing page."
+    "removeToken": "Supprimer le jeton",
+    "removeTokenAsk": "Supprimer le jeton Conversions API ? Le jeton de Meta Ads sera utilisé à sa place, s’il existe.",
+    "ignored": "Produits sans page (choisis)",
+    "ignoredNone": "Aucun : tous les produits en vente déclenchent l’alerte tant qu’ils n’ont pas de page.",
+    "restore": "Réactiver l’alerte",
+    "restored": "L’alerte revient pour ce produit"
   },
   "ev": {
     "title": "Événements envoyés à Meta",
@@ -271,6 +279,12 @@
       "sending": "Envoi…",
       "skipped": "Ignoré",
       "failed": "Échoué"
-    }
-  }
+    },
+    "retry": "Renvoyer les échoués",
+    "retried_one": "{{count}} événement renvoyé",
+    "retried_other": "{{count}} événements renvoyés"
+  },
+  "alertOn": "Alerte commandes : oui",
+  "alertOff": "Alerte commandes : non",
+  "alertHelp": "Sur cet appareil : une notification et un petit son quand une commande arrive d’une landing page."
 }

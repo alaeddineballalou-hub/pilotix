@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS landing_leads (
   view_id       text,                                 -- the page view (dedups InitiateCheckout with the browser pixel)
   status        text        NOT NULL DEFAULT 'open',  -- open | abandoned | converted | dismissed | blocked
   abandoned_at  timestamptz,                         -- became an abandoned order (a later order of it is « récupérée »)
+  note          text,                                -- why it was not added to Commandes (no wilaya, fake, an error)
   order_id      bigint,
   auto_order    boolean     NOT NULL DEFAULT false,   -- the order was added by Pilotix (abandoned → Commandes › Nouvelle)
   handled_by    bigint,
@@ -52,6 +53,11 @@ CREATE TABLE IF NOT EXISTS landing_leads (
 );
 CREATE INDEX IF NOT EXISTS landing_leads_status ON landing_leads (status, last_at DESC);
 CREATE INDEX IF NOT EXISTS landing_leads_phone ON landing_leads (phone, last_at DESC);
+CREATE INDEX IF NOT EXISTS landing_leads_device ON landing_leads (device, at DESC);
+CREATE INDEX IF NOT EXISTS landing_leads_ip ON landing_leads (ip, at DESC);
+CREATE INDEX IF NOT EXISTS landing_leads_view ON landing_leads (landing_id, view_id) WHERE view_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS landing_leads_order ON landing_leads (order_id) WHERE order_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS landing_blocked_phone ON landing_blocked (phone, at DESC);
 
 CREATE TABLE IF NOT EXISTS meta_events (
   id          bigserial PRIMARY KEY,

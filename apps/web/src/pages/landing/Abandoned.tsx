@@ -1,13 +1,14 @@
 // « Abandonnées »: customers who typed their number on a landing page and left without ordering. After the chosen
 // time Pilotix adds each one to Commandes as « Nouvelle » by itself (the agents call; no message to the customer).
 // What could not be added (no wilaya chosen) waits here: call, then complete the order in one click.
-import { phoneIntl } from '@pilotix/shared';
+import { communesOf, phoneIntl, WILAYAS_AR } from '@pilotix/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, n, when, wilaya } from '../../lib/format';
-import { openOrder, openOrderForm } from '../../lib/modals';
+import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
-import { Empty, ErrorBox, Icon, Kpi, Kpis, Loading, Pager } from '../../ui/kit';
+import { Empty, ErrorBox, Field, Icon, Kpi, Kpis, Loading, Pager } from '../../ui/kit';
+import { Modal } from '../../ui/modal';
 import { Filters, SearchBox } from '../ai/agent';
 import { useDebounced } from '../depot/OrderList';
 
@@ -21,7 +22,9 @@ export function Abandoned() {
   const [size, setSize] = useState(50);
   const dq = useDebounced(q, 300);
   const list = useRpc('landing.leads', { status, q: dq.trim() || undefined, page, pageSize: size });
-  const convert = useAction('landing.convertLead', { success: (r) => t('landing.ab.converted', { ref: r.ref }) });
+  const convert = useAction('landing.convertLead', { success: (r) => t('landing.ab.converted', { ref: r.ref }), onDone: () => setPick(null) });
+  // a lead without wilaya: the agent asks it on the phone, then completes it here (no message to the customer)
+  const [pick, setPick] = useState<{ id: number; name: string; wilayaId: number | ''; commune: string } | null>(null);
   const dismiss = useAction('landing.dismissLead', { success: t('landing.ab.dismissed') });
   const s = list.data?.stats;
   return (
@@ -107,27 +110,13 @@ export function Abandoned() {
                     <span className="pd-name">
                       {missing ? <span className="chip lp-warn">{t('landing.ab.noWilaya')}</span> : <b>{wilaya(r.wilayaId)}</b>}
                       {r.commune && <small>{r.commune}</small>}
+                      {r.note && r.status === 'abandoned' && <small className="lp-lnote">{r.note}</small>}
                     </span>
                     <span className="lp-bl-a">
                       {r.status === 'abandoned' ? (
                         <>
                           {missing ? (
-                            <button
-                              className="btn small primary"
-                              onClick={() =>
-                                openOrderForm({
-                                  prefill: {
-                                    customerName: r.customerName,
-                                    phone: r.phone,
-                                    channel: 'landing',
-                                    commune: r.commune,
-                                    internalNote: t('landing.ab.noteOrder'),
-                                    items: [{ productId: r.productId, variantId: r.variantId, qty: r.qty, unitPrice: r.unitPrice }],
-                                  },
-                                })
-                              }
-                              title={t('landing.ab.completeHelp')}
-                            >
+                            <button className="btn small primary" onClick={() => setPick({ id: r.id, name: r.customerName || r.phone, wilayaId: '', commune: '' })} title={t('landing.ab.completeHelp')}>
                               <Icon name="pencil" /> {t('landing.ab.complete')}
                             </button>
                           ) : (
@@ -159,6 +148,48 @@ export function Abandoned() {
         )}
         {!!list.data && list.data.total > size && <Pager page={page} pageSize={size} total={list.data.total} onPage={setPage} onSize={setSize} />}
       </section>
+      {pick && (
+        <Modal
+          title={t('landing.ab.completeTitle', { name: pick.name })}
+          onClose={() => setPick(null)}
+          footer={
+            <>
+              <button className="btn" onClick={() => setPick(null)}>
+                {t('common.cancel')}
+              </button>
+              <button className="btn primary" disabled={!pick.wilayaId || !pick.commune || convert.isPending} onClick={() => convert.mutate({ id: pick.id, wilayaId: Number(pick.wilayaId), commune: pick.commune })}>
+                <Icon name="cart" /> {t('landing.ab.toOrder')}
+              </button>
+            </>
+          }
+        >
+          <p className="muted small">{t('landing.ab.completeHelp')}</p>
+          <div className="grid2">
+            <Field label={t('landing.ab.wilaya')}>
+              <select value={pick.wilayaId} onChange={(e) => setPick({ ...pick, wilayaId: e.target.value ? Number(e.target.value) : '', commune: '' })}>
+                <option value="">—</option>
+                {Object.keys(WILAYAS_AR).map((k) => (
+                  <option key={k} value={k}>
+                    {wilaya(Number(k))}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={t('landing.ab.commune')}>
+              <select value={pick.commune} disabled={!pick.wilayaId} onChange={(e) => setPick({ ...pick, commune: e.target.value })}>
+                <option value="">—</option>
+                {pick.wilayaId &&
+                  communesOf(Number(pick.wilayaId)).map((c) => (
+                    <option key={`${c[1]}`} value={c[1]}>
+                      {c[1]}
+                      {c[2] ? ` · ${c[2]}` : ''}
+                    </option>
+                  ))}
+              </select>
+            </Field>
+          </div>
+        </Modal>
+      )}
     </>
   );
 }

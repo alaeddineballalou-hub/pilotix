@@ -648,6 +648,8 @@ export async function orderCounts(ctx: Ctx) {
   const toObj = (rows: { k: string; n: number }[]) => Object.fromEntries(rows.map((r) => [r.k, num(r.n)]));
   // Landing pages (marketers and agents): blocked and abandoned orders to handle, products without a page
   const landing = hasRole(ctx.session, 'marketer', 'confirmation') ? await landingCounts(ctx.db, ctx.now()) : undefined;
+  // only marketers make pages: an agent's badge counts the orders to handle, not the products without a page
+  if (landing && !hasRole(ctx.session, 'marketer')) landing.noPage = 0;
   return { conf: toObj(conf), follow: toObj(follow), sub: toObj(subs), lateCalls, sav, uncashed, tickets, lowStock, ai, landing, all: num((await ctx.db.query('SELECT count(*)::int n FROM sales'))[0]?.n) };
 }
 

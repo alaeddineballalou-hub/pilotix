@@ -182,3 +182,10 @@
 .lp-ev.st-queued, .lp-ev.st-sending { background: var(--sky-soft); color: var(--navy); border-color: transparent; }
 .lp-evr { grid-template-columns: 120px minmax(0, 1fr) auto; }
 .lp-everr { color: var(--coral) !important; }
+
+.lp-lnote { color: var(--warn) !important; font-weight: 600; }
+.lp-alert { white-space: nowrap; }
+.lp-alert.on { border-color: var(--ok); color: var(--ok); }
+.lp-alert .bji { width: 15px; height: 15px; }
+.lp-ign { display: flex; flex-wrap: wrap; gap: 6px; }
+.lp-ign .chip { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
