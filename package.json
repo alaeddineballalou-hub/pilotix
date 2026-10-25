@@ -2,7 +2,7 @@
   "name": "pilotix",
   "version": "3.0.0",
   "private": true,
-  "description": "Pilotix \u2014 order management for cash-on-delivery e-commerce in Algeria (web, Android, iOS)",
+  "description": "Pilotix — order management for cash-on-delivery e-commerce in Algeria (web, Android, iOS)",
   "workspaces": [
     "packages/shared",
     "packages/core",
@@ -20,5 +20,11 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "overrides": {
+    "fastify": "5.12.7",
+    "find-my-way": "9.10.0",
+    "@fastify/middie": "9.3.5",
+    "@fastify/cors": "11.3.1"
   }
 }

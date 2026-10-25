@@ -18,7 +18,8 @@ export const config = {
     if (prod && /change-me|dev-only|example/i.test(s)) throw new Error('JWT_SECRET is still the example value: set a long random secret');
     return s;
   })(),
-  jwtExpires: process.env.JWT_EXPIRES || '12h',
+  /** '12h', '7d', or seconds */
+  jwtExpires: (process.env.JWT_EXPIRES || '12h') as `${number}${'s' | 'm' | 'h' | 'd'}` | number,
   corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5173,capacitor://localhost,https://localhost')
     .split(',')
     .map((s) => s.trim())

@@ -164,8 +164,8 @@ const reasonOf = (kind: 'conf_status' | 'follow_status', to: string) =>
 export const REASON_SQL = { conf: reasonOf('conf_status', 'o.conf_status'), back: reasonOf('follow_status', "'returning'") };
 
 export const ListInput = z.object({
-  conf: z.array(z.enum(CONF_STATUSES)).optional(),
-  follow: z.array(z.enum([...FOLLOW_STATUSES, 'none'] as const)).optional(),
+  conf: z.array(z.enum(CONF_STATUSES)).max(50).optional(),
+  follow: z.array(z.enum([...FOLLOW_STATUSES, 'none'] as const)).max(50).optional(),
   q: z.string().max(100).optional(),
   wilayaId: z.number().int().min(1).max(69).optional(),
   agentId: z.union([id, z.literal('none')]).optional(),

@@ -2,6 +2,17 @@
 {$DOMAIN}, www.{$DOMAIN} {
 	encode zstd gzip
 
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(self), camera=(self)"
+		-Server
+	}
+	# the app cannot be shown inside another site's frame (clickjacking); landing pages (/api/lp) can
+	@app not path /api/lp/*
+	header @app X-Frame-Options "DENY"
+
 	@www host www.{$DOMAIN}
 	redir @www https://{$DOMAIN}{uri} permanent
 
