@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+**/dist-artifact
+.git
+deploy/.env
+apps/server/.env
+apps/web/.env
+apps/web/android
+apps/web/ios

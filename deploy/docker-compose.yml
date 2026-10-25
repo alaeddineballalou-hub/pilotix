@@ -1,0 +1,61 @@
+# Production: PostgreSQL + Redis + the Pilotix server + the website behind Caddy (HTTPS).
+# Settings come from deploy/.env (made by deploy/install.sh). Run from the repository root:
+#   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+name: pilotix
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pilotix
+      POSTGRES_USER: pilotix
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?missing in deploy/.env}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pilotix"]
+      interval: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redisdata:/data]
+
+  server:
+    build:
+      context: ..
+      dockerfile: apps/server/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: postgres://pilotix:${POSTGRES_PASSWORD}@postgres:5432/pilotix
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?missing in deploy/.env}
+      JWT_EXPIRES: 12h
+      CORS_ORIGINS: https://${DOMAIN},https://www.${DOMAIN},capacitor://localhost,https://localhost
+      TRUST_PROXY: "1"
+      PUBLIC_URL: https://${DOMAIN}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+      args:
+        DOMAIN: ${DOMAIN}
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes: [caddydata:/data, caddyconfig:/config]
+    depends_on: [server]
+
+volumes:
+  pgdata:
+  redisdata:
+  caddydata:
+  caddyconfig:
