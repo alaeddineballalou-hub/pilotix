@@ -213,3 +213,10 @@
 /* « Gérer les caisses » on the Caisse home */
 .pxk-setb { all: unset; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; border-radius: 14px; border: 1.5px dashed var(--line); color: var(--navy); font-weight: 800; font-size: 14px; cursor: pointer; }
 .pxk-setln em { opacity: .85; }
+
+/* computers (.px-wide): the main caisse and ZR's payment on the left, the money outside on the right */
+.pxk-colA, .pxk-colB { display: contents; }
+.px-wide .pxk { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 12px 18px; align-items: start; }
+.px-wide .pxk > .pxv-own { grid-column: 1 / -1; max-width: 520px; }
+.px-wide .pxk-colA, .px-wide .pxk-colB { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.px-wide .pxk-colA { position: sticky; top: 76px; }

@@ -210,3 +210,23 @@ button.pxn-tr:focus-visible { outline: 2px solid #F7A823; outline-offset: -2px; 
 .pxn-ff > .pxk-go:not(.ghost) { flex: 1 1 0; width: auto; min-width: 0; }
 /* a reason typed in French on an Arabic screen still starts at the right */
 [dir="rtl"] .pxn-bl > span, [dir="rtl"] .pxn-why { text-align: right; }
+
+/* ===== on a computer: the same screen, wide (PhoneDone with .wide) ===== */
+.pxn-top, .pxn-side { display: contents; }
+.pxn.wide { display: grid; grid-template-columns: minmax(330px, 410px) minmax(0, 1fr); gap: 14px 22px; align-items: start; padding-bottom: 32px; }
+.pxn.wide > .pxn-top { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pxn.wide > .pxn-top > .pxn-road { flex: 0 1 560px; }
+.pxn.wide > .pxn-top > .pxn-per { flex: 1 1 auto; margin: 0; padding: 2px 0; }
+.pxn.wide .pxn-st b { font-size: 18px; }
+.pxn.wide .pxn-vp { display: contents; }
+.pxn.wide .pxn-side { grid-column: 1; display: flex; flex-direction: column; gap: 12px; position: sticky; top: 76px; max-height: calc(100vh - 92px); overflow-y: auto; scrollbar-width: thin; padding-bottom: 4px; }
+.pxn.wide > .pxn-views { grid-column: 1; }
+.pxn.wide .pxn-main { grid-column: 2; grid-row: 2 / span 3; min-width: 0; }
+.pxn.wide .pxn-list { padding: 14px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); }
+.pxn.wide .pxn-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 10px; }
+.pxn.wide .pxn-cards > li { min-width: 0; }
+.pxn.wide .pxn-o { height: 100%; background: var(--raise); }
+.pxn.wide .pxn-o:hover { border-color: color-mix(in srgb, #F7A823 55%, var(--line)); background: var(--surface); }
+.pxn.wide .pxn-find { max-width: 560px; }
+.pxn.wide .pxn-more { max-width: 420px; margin: 4px auto 0; }
+.pxn.wide > .pxn-top > .px-vsw { margin-inline-start: auto; }

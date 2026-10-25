@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useIsPhone } from '../../lib/useMedia';
+import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
 import { useTranslation } from 'react-i18next';
 import { dur, when } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
@@ -27,7 +28,26 @@ export function Sav({ sub }: PageProps) {
       </div>
     );
   if (phone) return <PhoneSav sub={sub} />;
-  return <SavDesktop sub={sub} />;
+  return <SavWide sub={sub} />;
+}
+
+/** Computers: the phone's SAV laid out wide (built around the call), or the desktop screens (« Tableau »). */
+function SavWide({ sub }: PageProps) {
+  const [mode, setMode] = useViewMode('sav');
+  return (
+    <>
+      <div className="px-vsw-row">
+        <ViewSwitch mode={mode} onChange={setMode} />
+      </div>
+      {mode === 'cards' && sub !== 'stats' ? (
+        <div className="px-wide">
+          <PhoneSav sub={sub} />
+        </div>
+      ) : (
+        <SavDesktop sub={sub} />
+      )}
+    </>
+  );
 }
 
 function SavDesktop({ sub }: PageProps) {

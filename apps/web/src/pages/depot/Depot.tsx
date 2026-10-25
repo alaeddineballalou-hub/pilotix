@@ -14,6 +14,7 @@ import { ScanCard } from './ScanCard';
 import { trackOf } from '../../lib/items';
 import { CopyCode } from '../../ui/CopyCode';
 import { useIsPhone } from '../../lib/useMedia';
+import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
 import { PhonePrep } from './PhonePrep';
 import { PhoneDispatch, PhoneReturns, PhoneRoad } from './PhoneStages';
 import { LabelAction, LabelsBar, PrintSelected } from './Labels';
@@ -29,6 +30,9 @@ export function Depot({ sub }: PageProps) {
   const c = counts.data;
   // phones: the first stage is products first (pick), then the orders that have everything (pack, partner, dispatch)
   const phone = useIsPhone();
+  // computers too: the phone's cards laid out wide (« Tableau » goes back to the big tables)
+  const [mode, setMode] = useViewMode('depot');
+  const cards = phone || mode === 'cards';
   // a phone shows two or three stages at a time: the current one is brought into view
   const bar = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
@@ -57,12 +61,19 @@ export function Depot({ sub }: PageProps) {
           </span>
         ))}
       </nav>
-      {stage === 'preparer' && !phone && <Card title={t(`depot.stage.${stage}`)} />}
-      {stage === 'preparer' && (phone ? <PhonePrep /> : <Preparer />)}
-      {stage === 'prepares' && (phone ? <PhoneDispatch /> : <Prepares />)}
-      {stage === 'dispatchees' && (phone ? <PhoneRoad stage="dispatchees" /> : <Dispatchees />)}
-      {stage === 'enlivraison' && (phone ? <PhoneRoad stage="enlivraison" /> : <EnLivraison />)}
-      {stage === 'retours' && (phone ? <PhoneReturns /> : <Retours />)}
+      {!phone && (
+        <div className="px-vsw-row">
+          <ViewSwitch mode={mode} onChange={setMode} />
+        </div>
+      )}
+      {stage === 'preparer' && !cards && <Card title={t(`depot.stage.${stage}`)} />}
+      <div className={cards && !phone ? 'px-wide' : undefined}>
+        {stage === 'preparer' && (cards ? <PhonePrep /> : <Preparer />)}
+        {stage === 'prepares' && (cards ? <PhoneDispatch /> : <Prepares />)}
+        {stage === 'dispatchees' && (cards ? <PhoneRoad stage="dispatchees" /> : <Dispatchees />)}
+        {stage === 'enlivraison' && (cards ? <PhoneRoad stage="enlivraison" /> : <EnLivraison />)}
+        {stage === 'retours' && (cards ? <PhoneReturns /> : <Retours />)}
+      </div>
     </>
   );
 }

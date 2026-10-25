@@ -67,5 +67,8 @@
   "back": "Back",
   "noResults": "No results",
   "resizeCol": "Drag to set the width · double-click: automatic width",
-  "remove": "Remove"
+  "remove": "Remove",
+  "view": "View",
+  "viewCards": "Cards",
+  "viewTable": "Table"
 }
