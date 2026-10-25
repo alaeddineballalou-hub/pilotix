@@ -30,6 +30,10 @@ test('profile, referrals, rules and account deletion', async () => {
   await assert.rejects(call('me.delete', conf, { password: 'wrong' }), /incorrect/);
   const id = conf.session.profile.id;
   await call('me.delete', conf, { password: DEMO_PASSWORD });
-  assert.equal((await db.query('SELECT 1 FROM profiles WHERE id=$1', [id])).length, 0);
-  assert.equal(Number((await db.query('SELECT count(*)::int AS n FROM orders WHERE agent_id=$1', [id]))[0].n), 0);
+  // an agent who confirmed orders keeps their place in the history, under an erased name
+  const p = (await db.query('SELECT name, email, phone, active FROM profiles WHERE id=$1', [id]))[0];
+  assert.equal(p.name, 'Compte supprimé');
+  assert.match(p.email, /@pilotix\.invalid$/);
+  assert.equal(p.phone, null);
+  assert.equal(p.active, false);
 });

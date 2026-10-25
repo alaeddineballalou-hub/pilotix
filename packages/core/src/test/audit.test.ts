@@ -321,3 +321,19 @@ test('an SAV exchange puts back only the exchanged item, and only once', async (
   assert.match(again.why, /déjà reçu/);
   assert.equal(await moved(), 1);
 });
+
+// ---------------------------------------------------------------- launch review (October 2026)
+test('a marketer-only account never sees customers (leads, blocked orders) nor staff emails / phones', async () => {
+  const mk = await as(EMAILS.marketer);
+  const admin = await as(EMAILS.admin);
+  for (const name of ['landing.leads', 'landing.blocked'] as const) {
+    const r: any = await call(name, mk, { status: 'all' } as any);
+    for (const x of r.rows) {
+      assert.equal(x.phone, '•••', name);
+      assert.equal(x.customerName, '•••', name);
+    }
+  }
+  const team: any[] = (await call('users.list', mk, {})) as any;
+  assert.ok(team.length > 0 && team.every((u) => u.email === '' && u.phone === null));
+  assert.ok(((await call('users.list', admin, {})) as any[]).some((u) => u.email.includes('@')));
+});
