@@ -106,6 +106,18 @@ export async function clientFee(db: Db, wilayaId: number, stopdesk: boolean, gri
   return stopdesk ? row.desk : row.home;
 }
 
+/** The home delivery price of every wilaya for a fee grid: clientFee for all of them, the settings read once. */
+export async function clientHomeFees(db: Db, grid?: string | null): Promise<Record<number, number>> {
+  const fees = await getSetting(db, 'clientFees');
+  const name = grid || (await getSetting(db, 'defaultFeeGrid'));
+  const out: Record<number, number> = {};
+  for (let w = 1; w <= 69; w++) {
+    const row = fees[name]?.[String(w)];
+    if (row && row.home !== null) out[w] = row.home;
+  }
+  return out;
+}
+
 /** SAV delivery price for a wilaya (null when the SAV tariff has no price there). */
 export async function savFee(db: Db, wilayaId: number, stopdesk: boolean): Promise<number | null> {
   const row = (await getSetting(db, 'savFees'))[String(wilayaId)];

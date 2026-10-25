@@ -1,6 +1,7 @@
 // Landing pages: the public page of one product, as ONE small HTML file (no app bundle, no web font, no framework) so it
 // opens fast on a 3G phone. The server sends it at /api/lp/<slug>; the Pilotix editor shows the very same HTML in its
-// live preview. Communes load per wilaya when one is picked; images are WebP in three widths, lazy below the first one.
+// live preview. Communes load per wilaya when one is picked; images are WebP in four widths; the thumbnails load once the
+// main photo has arrived (it gets the whole line first).
 import { WILAYAS_AR } from './geo';
 import { WILAYAS } from './index';
 
@@ -162,6 +163,9 @@ var px=C.px,ic=0;if(px){var n=window.fbq=function(){n.callMethod?n.callMethod.ap
 fbq('init',px);fbq('track','PageView');fbq('track','ViewContent',{content_ids:[String(C.pid)],content_type:'product',value:C.price,currency:'DZD'},{eventID:'vc-'+C.vid});
 var lp=0,ld=0,lw=0,lpx=function(){if(lp)return;if(!ld){lw=1;return}lp=1;var t=d.createElement('script');t.async=1;t.src='https://connect.facebook.net/en_US/fbevents.js';d.head.appendChild(t)};
 window.addEventListener('load',function(){ld=1;if(lw)lpx();else setTimeout(lpx,2500)});['touchstart','scroll','keydown','mousemove'].forEach(function(e){window.addEventListener(e,lpx,{once:true,passive:true})})}
+var th=d.querySelectorAll('.th button'),mi=$('mi');for(var i=0;i<th.length;i++)th[i].onclick=function(){for(var j=0;j<th.length;j++)th[j].className='';this.className='on';mi.src=this.getAttribute('data-s');mi.srcset=this.getAttribute('data-ss')};
+function tl(){var a=d.querySelectorAll('.th img[data-src]');for(var i=0;i<a.length;i++){a[i].src=a[i].getAttribute('data-src');a[i].removeAttribute('data-src')}}
+if(mi&&mi.tagName=='IMG'&&!mi.complete){mi.addEventListener('load',tl);mi.addEventListener('error',tl);setTimeout(tl,10000)}else tl();
 var f=$('f');if(!f)return;
 var K=[],H0=[];(function(){var n=2,c=0;function f(x){return(x-Math.floor(x))*4294967296|0}while(c<64){for(var i=2;i*i<=n;i++)if(n%i==0)break;if(i*i>n){if(c<8)H0[c]=f(Math.pow(n,1/2));K[c++]=f(Math.pow(n,1/3))}n++}})();
 function sha(s){var m=unescape(encodeURIComponent(s)),l=m.length,w=[],h=H0.slice(),i,j;for(i=0;i<l;i++)w[i>>2]|=m.charCodeAt(i)<<(24-i%4*8);w[l>>2]|=128<<(24-l%4*8);var n=((l+8)>>6)+1<<4;for(i=0;i<n;i++)w[i]|=0;w[n-1]=l*8;
@@ -189,7 +193,6 @@ w.onchange=function(){cm.innerHTML='<option value="">\\u2026</option>';cm.disabl
 (r||[]).forEach(function(c){h+='<option value="'+c[0].replace(/"/g,'&quot;')+'">'+(c[1]||c[0])+'</option>'});cm.innerHTML=h;cm.disabled=false})};
 if(vr)vr.onchange=sum;
 $('qm').onclick=function(){qt.value=Math.max(1,qv()-1);sum();lead()};$('qp').onclick=function(){qt.value=Math.min(99,qv()+1);sum();lead()};qt.oninput=sum;
-var th=d.querySelectorAll('.th button'),mi=$('mi');for(var i=0;i<th.length;i++)th[i].onclick=function(){for(var j=0;j<th.length;j++)th[j].className='';this.className='on';mi.src=this.getAttribute('data-s');mi.srcset=this.getAttribute('data-ss')};
 var done=0,lt=null,last='';
 function form(){return{name:f.nm.value.trim(),phone:nph(f.ph.value),wilaya:+w.value||0,commune:cm.value,variant:vr?+vr.value||null:null,qty:qv(),hp:f.web.value,ch:C.ch,fp:fp,did:did,vid:C.vid,utm:utm,fbp:ck('_fbp'),fbc:ck('_fbc'),url:C.mode=='live'?location.href.slice(0,500):''}}
 function lead(now){if(!C.lead||done||busy)return;var b=form();if(!/^0[567]\\d{8}$/.test(b.phone))return;var k=JSON.stringify([b.name,b.phone,b.wilaya,b.commune,b.variant,b.qty]);if(k==last)return;clearTimeout(lt);lt=null;
@@ -209,17 +212,31 @@ if(!r||!r.ok){busy=false;btn.disabled=false;btn.textContent=C.cta;$('fe').textCo
 done=1;var fee=C.fees[w.value];$('okn').textContent=nm;$('o1').textContent=C.title+(vr?' \\u2014 '+vr.options[vr.selectedIndex].text:'')+' \\u00d7 '+q;$('o2').textContent=money(unit()*q+(fee||0));
 f.style.display='none';$('ok').style.display='block';window.scrollTo(0,0)})})()};sum()})();`;
 
+/** what the main photo's srcset is chosen for: the page's column on a computer, the whole width on a phone */
+export const LANDING_SIZES = '(min-width:860px) 520px, 100vw';
+
+/**
+ * The HTTP `Link` header that lets the phone ask for the main photo as soon as the answer's headers arrive, before the
+ * page itself (with the very srcset / sizes the page uses: one download). Behind Cloudflare it also becomes an Early
+ * Hint. Null when the photo is inside the page (data URL) or has an address that cannot go in a header.
+ */
+export function landingPreloadLink(v: LandingView): string | null {
+  const img = v.images[0];
+  if (!img || /^data:/.test(img.src) || /[<>"\r\n]/.test(img.src + img.srcset)) return null;
+  return `<${img.src}>; rel=preload; as=image; fetchpriority=high; imagesrcset="${img.srcset}"; imagesizes="${LANDING_SIZES}"`;
+}
+
 /** The whole public page. */
 export function renderLanding(v: LandingView, r: LandingRender): string {
   const c = isHexColor(v.color) ? v.color : LANDING_DEFAULT_COLOR;
   const img = v.images[0];
   const ratio = img ? `${img.w}/${img.h}` : '1';
-  const sizes = '(min-width:860px) 520px, 100vw';
+  const sizes = LANDING_SIZES;
   const gallery = img
     ? `<img id="mi" class="main" style="--r:${ratio}${img.lqip && /^data:image\/(webp|jpeg);base64,[A-Za-z0-9+/=]+$/.test(img.lqip) ? `;background-image:url(${img.lqip})` : ''}" src="${esc(img.src)}" srcset="${esc(img.srcset)}" sizes="${sizes}" width="${img.w}" height="${img.h}" alt="${esc(v.title)}" fetchpriority="high" decoding="async">` +
       (v.images.length > 1
         ? `<div class="th">${v.images
-            .map((x, k) => `<button type="button" class="${k ? '' : 'on'}" data-s="${esc(x.src)}" data-ss="${esc(x.srcset)}" aria-label="${k + 1}"><img src="${esc(x.thumb)}" width="64" height="64" alt="" loading="lazy" decoding="async"></button>`)
+            .map((x, k) => `<button type="button" class="${k ? '' : 'on'}" data-s="${esc(x.src)}" data-ss="${esc(x.srcset)}" aria-label="${k + 1}"><img data-src="${esc(x.thumb)}" width="64" height="64" alt="" decoding="async"></button>`)
             .join('')}</div>`
         : '')
     : `<div class="main" style="--r:1"></div>`;

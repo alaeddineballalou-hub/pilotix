@@ -27,7 +27,7 @@ import { JwtModule, JwtService } from '@nestjs/jwt';
 import * as core from '@pilotix/core';
 import { normalizePhone, Session } from '@pilotix/shared';
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { gzipSync } from 'node:zlib';
+import { brotliCompressSync, constants as zlibConst, gzipSync } from 'node:zlib';
 import { z } from 'zod';
 import { config } from './config';
 import { CoreService } from './core.service';
@@ -141,14 +141,33 @@ function limitLanding(ip: string, kind: string, max: number): boolean {
 }
 /** A browser posting from another site (a page that makes its visitors send fake leads): not our page. */
 /**
- * A landing page's text (HTML, communes) gzipped when the phone accepts it: the 23 KB page becomes ~9 KB, small
- * enough to arrive in the first round trip of a new connection (≈ one round trip less on 2G / 3G). A front server
- * (nginx, Cloudflare) passes it on as it is.
+ * A landing page's text (HTML, communes) compressed when the phone accepts it — Brotli (HTTPS browsers), else gzip:
+ * the 23 KB page becomes ~8 KB, small enough to arrive in the first round trip of a new connection (≈ one round trip
+ * less on 2G / 3G). A front server (nginx, Cloudflare) passes it on as it is.
  */
 function sendText(req: { headers: Record<string, string | undefined> }, res: any, body: string) {
   res.header('Vary', 'Accept-Encoding');
-  if (!/\bgzip\b/.test(String(req.headers['accept-encoding'] ?? '')) || body.length < 1024) return res.send(body);
-  return res.header('Content-Encoding', 'gzip').send(gzipSync(body, { level: 6 }));
+  const accept = String(req.headers['accept-encoding'] ?? '');
+  if (body.length < 1024) return res.send(body);
+  if (/\bbr\b/.test(accept)) return res.header('Content-Encoding', 'br').send(brotliCompressSync(body, { params: { [zlibConst.BROTLI_PARAM_QUALITY]: 5, [zlibConst.BROTLI_PARAM_SIZE_HINT]: body.length } }));
+  if (/\bgzip\b/.test(accept)) return res.header('Content-Encoding', 'gzip').send(gzipSync(body, { level: 6 }));
+  return res.send(body);
+}
+
+/**
+ * How long the answer to a landing order waits at least: twice the slowest recent orders (95th percentile of the last
+ * 200), between 250 and 600 ms (600 until 10 orders were seen), then up to 200 ms more at random. A blocked order,
+ * quicker to handle, is so never answered faster than a real one — without every customer waiting a fixed 0.6–0.9 s.
+ */
+const submitTimes: number[] = [];
+function noteSubmit(ms: number) {
+  submitTimes.push(ms);
+  if (submitTimes.length > 200) submitTimes.shift();
+}
+function orderFloor(): number {
+  if (submitTimes.length < 10) return 600;
+  const s = [...submitTimes].sort((a, b) => a - b);
+  return Math.min(600, Math.max(250, 2 * s[Math.floor((s.length - 1) * 0.95)]));
 }
 
 const crossSite = (req: { headers: Record<string, string | undefined> }) => req.headers['sec-fetch-site'] === 'cross-site';
@@ -332,7 +351,10 @@ class ApiController {
     const base = `${config.publicUrl}/api/lp/`;
     try {
       const r: any = await this.core.call('landing.html', await this.core.systemSession(), { slug, mode: 'live', post: `${base}${slug}/order`, lead: `${base}${slug}/lead`, geo: `${base}geo/`, imgBase: `${base}img/` });
-      return sendText(req, res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'no-store'), r.html);
+      res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'no-store');
+      // the main photo asked for as soon as these headers arrive, before the page itself
+      if (r.link) res.header('Link', r.link);
+      return sendText(req, res, r.html);
     } catch (e: any) {
       if (e instanceof core.AppError && e.code === 'not_found') return res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
       throw e;
@@ -374,10 +396,12 @@ class ApiController {
     if (!/^[a-z0-9-]{2,60}$/.test(slug)) throw new core.AppError('not_found', 'Page introuvable');
     const start = Date.now();
     // a post from another site, or a flood from one address: the same answer, nothing done
-    if (!crossSite(req) && !limitLanding(req.ip || 'unknown', 'order', 30))
+    if (!crossSite(req) && !limitLanding(req.ip || 'unknown', 'order', 30)) {
       await this.core.call('landing.submit', await this.core.systemSession(), { ...(body && typeof body === 'object' ? body : {}), slug, meta: visitorMeta(req) });
+      noteSubmit(Date.now() - start);
+    }
     // the answer never comes faster for a blocked order than for a real one (its timing would tell a fraudster)
-    await new Promise((r) => setTimeout(r, Math.max(0, 600 + Math.floor(Math.random() * 300) - (Date.now() - start))));
+    await new Promise((r) => setTimeout(r, Math.max(0, orderFloor() + Math.floor(Math.random() * 200) - (Date.now() - start))));
     return { ok: true };
   }
 

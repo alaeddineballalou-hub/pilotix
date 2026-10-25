@@ -19,6 +19,7 @@ import {
   LandingRender,
   LandingView,
   normalizePhone,
+  landingPreloadLink,
   renderLanding,
   sha256Hex,
   WILAYAS,
@@ -27,7 +28,7 @@ import {
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
-import { clientFee, getSetting, setSetting } from '../settings';
+import { clientHomeFees, getSetting, setSetting } from '../settings';
 import { BOT_UA, FraudLevel, FraudReason, scoreOrder } from './fraud';
 import { ABANDONED, abandonCutoff, freeLandingSlug, landingCounts, landingSettings, LandingSettings, queuePurchase, quickCreatePage } from './landingquery';
 import { sendInPreview } from './notify';
@@ -175,11 +176,7 @@ async function productContext(db: Db, productId: number) {
     .filter((v: any) => v.active && v.title !== '')
     .map((v: any) => ({ id: num(v.id), title: String(v.title), price: numOrNull(v.price), available: service ? null : num(v.available) }));
   const plain = vars.find((v: any) => v.title === '');
-  const fees: Record<number, number> = {};
-  for (let w = 1; w <= 69; w++) {
-    const f = await clientFee(db, w, false, p.fee_grid);
-    if (f !== null) fees[w] = f;
-  }
+  const fees = await clientHomeFees(db, p.fee_grid);
   const shop = await getSetting(db, 'shop');
   const plainAvailable = service ? null : plain ? num(plain.available) : 0;
   const soldOut = !service && (variants.length ? variants.every((v) => (v.available ?? 1) <= 0) : (plainAvailable ?? 1) <= 0);
@@ -267,6 +264,11 @@ function viewImages(refs: ImgRef[], rows: Map<number, any>, imgBase: string | nu
 const randomId = () => Array.from(globalThis.crypto.getRandomValues(new Uint8Array(9)), (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 14);
 
 export async function landingHtml(ctx: Ctx, slug: string, o: HtmlOpts): Promise<string> {
+  return (await landingPage(ctx, slug, o)).html;
+}
+
+/** The page, and the `Link` header that starts its main photo early (null when the photos are inside the page). */
+export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<{ html: string; link: string | null }> {
   const l = (await ctx.db.query('SELECT * FROM landing_pages WHERE slug = $1', [slug]))[0];
   if (!l || (!l.active && o.mode === 'live')) throw notFound('Page introuvable');
   const pc = await productContext(ctx.db, num(l.product_id));
@@ -292,7 +294,7 @@ export async function landingHtml(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     productId: num(l.product_id),
   };
   if (o.mode === 'live') await ctx.db.query('UPDATE landing_pages SET views = views + 1 WHERE id = $1', [l.id]);
-  return renderLanding(view, {
+  const html = renderLanding(view, {
     mode: o.mode,
     post: o.post,
     geo: o.geo,
@@ -301,6 +303,7 @@ export async function landingHtml(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     challenge: await makeChallenge(ctx.db, slug, ctx.now()),
     bits: LANDING_POW_BITS,
   });
+  return { html, link: o.imgBase ? landingPreloadLink(view) : null };
 }
 
 /** communes of a wilaya for the page: [French name (kept on the order), Arabic name] */
@@ -1266,7 +1269,7 @@ export const landingProcs = {
   'landing.html': proc(
     [],
     z.object({ slug: z.string().max(80), mode: z.enum(['live', 'parent', 'preview']), post: z.string().max(500).default(''), geo: z.string().max(500).default(''), lead: z.string().max(500).default(''), imgBase: z.string().max(500).nullable().default(null) }),
-    async (ctx, i) => ({ html: await landingHtml(ctx, i.slug, i) }),
+    async (ctx, i) => landingPage(ctx, i.slug, i),
   ),
 
   'landing.image': proc([], z.object({ id, size: z.enum(['160', '480', '720', '960']) }), async (ctx, i) => {
