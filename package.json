@@ -1,0 +1,30 @@
+{
+  "name": "pilotix",
+  "version": "3.0.0",
+  "private": true,
+  "description": "Pilotix — order management for cash-on-delivery e-commerce in Algeria (web, Android, iOS)",
+  "workspaces": [
+    "packages/shared",
+    "packages/core",
+    "apps/server",
+    "apps/web"
+  ],
+  "scripts": {
+    "build": "npm run build -w @pilotix/shared && npm run build -w @pilotix/core && npm run build -w @pilotix/server && npm run build -w @pilotix/web",
+    "test": "npm run build -w @pilotix/shared && npm run build -w @pilotix/core && npm test -w @pilotix/core",
+    "typecheck": "npm run build -w @pilotix/shared && npm run build -w @pilotix/core && npm run typecheck -w @pilotix/server && npm run typecheck -w @pilotix/web",
+    "dev:server": "npm run dev -w @pilotix/server",
+    "dev:web": "npm run dev -w @pilotix/web",
+    "db:migrate": "npm run migrate -w @pilotix/server",
+    "db:seed": "npm run seed -w @pilotix/server"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "overrides": {
+    "fastify": "5.12.7",
+    "find-my-way": "9.10.0",
+    "@fastify/middie": "9.3.5",
+    "@fastify/cors": "11.3.1"
+  }
+}
