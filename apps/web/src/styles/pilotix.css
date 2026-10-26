@@ -1475,3 +1475,42 @@ html body .px-qhead .btn.px-qnew:hover { border-color: #F7A823; color: #C97A0E; 
 .px-wide .pxs-page .pxs-bar { position: static; box-shadow: none; }
 .px-wide .pxs-page .pxs-ob { padding-bottom: 20px; }
 .px-wide .pxt-group h3 { max-width: none; }
+
+/* ---------------------------------------------------------------- product form › options (Taille, Couleur, Fille / Garçon…) */
+.po-help { margin: 0 0 10px; }
+.po-opt { display: grid; grid-template-columns: 220px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px; margin: 0 0 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--raise); }
+.po-name { display: flex; align-items: center; gap: 8px; }
+.po-name input { font-weight: 700; }
+.po-num { flex: none; display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 999px; background: var(--navy); color: var(--on-navy, #fff); font-size: 12px; font-weight: 800; }
+.po-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.po-vals { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 40px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.po-vals:focus-within { border-color: var(--navy); box-shadow: 0 0 0 3px var(--sky-soft); }
+.po-vals input { flex: 1; min-width: 160px; border: 0 !important; outline: none; box-shadow: none !important; background: transparent; padding: 4px 2px; height: auto; }
+.po-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 6px 3px 10px; border-radius: 999px; background: var(--sky-soft); color: var(--navy); font-weight: 700; font-size: 12.5px; white-space: nowrap; }
+.po-chip button { border: 0; background: none; cursor: pointer; color: inherit; font-size: 15px; line-height: 1; padding: 0 3px; border-radius: 999px; }
+.po-chip button:hover { background: var(--coral); color: #fff; }
+.po-chip-s { padding: 2px 9px; }
+.po-sugg { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.po-sugg button { border: 1px dashed var(--line); background: var(--surface); border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--muted); }
+.po-sugg button:hover { border-style: solid; border-color: var(--navy); color: var(--navy); }
+.po-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 12px; }
+.po-gen { border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: var(--surface); }
+.po-gen-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.po-bulk { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.po-bulk select { width: auto; }
+.po-bulk input { width: 110px; }
+.po-tbl td { vertical-align: middle; }
+.po-tbl td input[type='number'] { width: 120px; }
+.po-tbl td input.ltr { width: 100%; min-width: 180px; }
+.po-tbl tr.dim td { opacity: .5; }
+.po-others { margin-top: 12px; }
+.po-others h4 { margin: 0 0 4px; }
+@media (max-width: 700px) {
+  .po-opt { grid-template-columns: minmax(0, 1fr) auto; }
+  .po-body { grid-column: 1 / -1; grid-row: 2; }
+}
+.pf .po-bulk select { width: auto; flex: none; }
+.pf .po-bulk input[type='number'] { width: 120px; flex: none; }
+.pd-opts { display: flex; flex-direction: column; gap: 2px; line-height: 1.35; }
+.pd-opts b { font-weight: 800; margin-inline-end: 2px; }
+.pd-opts small { color: var(--muted); font-weight: 700; }
