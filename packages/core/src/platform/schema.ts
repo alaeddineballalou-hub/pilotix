@@ -152,7 +152,66 @@ BEGIN
 END $f$;
 `;
 
-export const PLATFORM_MIGRATIONS: [string, string][] = [['p001_platform', P001]];
+// One e-mail, several shops (the owner of two shops, an agent working for two clients): the login index lists every
+// shop of an e-mail; the login page asks the password of each one and offers the shops it opens. Sign-up by the shops
+// themselves (email check, limits), and their own domain names (myshop.com) for their landing pages.
+const P002 = `
+ALTER TABLE platform.logins DROP CONSTRAINT IF EXISTS logins_pkey;
+ALTER TABLE platform.logins ADD CONSTRAINT logins_pkey PRIMARY KEY (email, shop_id);
+
+CREATE OR REPLACE FUNCTION platform.sync_login() RETURNS trigger LANGUAGE plpgsql AS $f$
+DECLARE
+  sid   integer;
+  e_old text;
+  e_new text;
+BEGIN
+  SELECT id INTO sid FROM platform.shops WHERE schema_name = TG_TABLE_SCHEMA;
+  IF sid IS NULL THEN RETURN NULL; END IF;
+  IF TG_OP <> 'INSERT' THEN e_old := lower(OLD.email); END IF;
+  IF TG_OP <> 'DELETE' THEN e_new := lower(NEW.email); END IF;
+  IF e_new LIKE '%@pilotix.invalid' OR e_new LIKE '%@demo.pilotix.dz' OR e_new = '' THEN e_new := NULL; END IF;
+  IF e_old IS NOT NULL AND e_old IS DISTINCT FROM e_new THEN
+    DELETE FROM platform.logins WHERE email = e_old AND shop_id = sid;
+  END IF;
+  IF e_new IS NOT NULL AND e_new IS DISTINCT FROM e_old THEN
+    INSERT INTO platform.logins (email, shop_id) VALUES (e_new, sid) ON CONFLICT DO NOTHING;
+  END IF;
+  RETURN NULL;
+END $f$;
+
+ALTER TABLE platform.shops ADD COLUMN IF NOT EXISTS self_signup       boolean NOT NULL DEFAULT false;
+ALTER TABLE platform.shops ADD COLUMN IF NOT EXISTS signup_ip         text;
+ALTER TABLE platform.shops ADD COLUMN IF NOT EXISTS email_verified_at timestamptz;
+ALTER TABLE platform.shops ADD COLUMN IF NOT EXISTS domain            text;
+ALTER TABLE platform.shops ADD COLUMN IF NOT EXISTS domain_status     text NOT NULL DEFAULT 'none' CHECK (domain_status IN ('none', 'pending', 'ok'));
+ALTER TABLE platform.shops ADD COLUMN IF NOT EXISTS domain_checked_at timestamptz;
+CREATE UNIQUE INDEX IF NOT EXISTS shops_domain ON platform.shops (domain) WHERE domain IS NOT NULL;
+
+-- sign-ups (limits per address and per e-mail) and the links that confirm a shop owner's e-mail
+CREATE TABLE IF NOT EXISTS platform.signups (
+  id      serial PRIMARY KEY,
+  at      timestamptz NOT NULL DEFAULT now(),
+  ip      text,
+  email   text        NOT NULL,
+  shop_id integer REFERENCES platform.shops(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS signups_ip ON platform.signups (ip, at DESC);
+CREATE INDEX IF NOT EXISTS signups_email ON platform.signups (email, at DESC);
+
+CREATE TABLE IF NOT EXISTS platform.email_checks (
+  token_hash text        PRIMARY KEY,
+  shop_id    integer     NOT NULL REFERENCES platform.shops(id) ON DELETE CASCADE,
+  email      text        NOT NULL,
+  expires_at timestamptz NOT NULL,
+  used_at    timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+`;
+
+export const PLATFORM_MIGRATIONS: [string, string][] = [
+  ['p001_platform', P001],
+  ['p002_accounts_signup_domains', P002],
+];
 
 /** Creates or updates the platform's tables. */
 export async function migratePlatform(t: Tenancy): Promise<string[]> {

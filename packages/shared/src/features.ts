@@ -171,4 +171,8 @@ export interface ShopInfo {
   notice: { text: string; tone: 'info' | 'warn' } | null;
   /** opened by Pilotix support (the name of the staff member) */
   support: string | null;
+  /** the shop's own domain name for its landing pages (myshop.com): pending until its DNS points to the server */
+  domain?: { name: string; status: 'pending' | 'ok' } | null;
+  /** made by its owner on the sign-up page, whose e-mail is not confirmed yet (a banner asks for it) */
+  emailToConfirm?: string | null;
 }
