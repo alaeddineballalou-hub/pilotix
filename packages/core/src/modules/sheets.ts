@@ -119,7 +119,7 @@ async function channelOf(ctx: Ctx, channelId: number) {
 }
 
 /** The sheet's lines: the first line gives the column titles. */
-async function readSheet(ctx: Ctx, url: string): Promise<{ headers: string[]; rows: string[][] }> {
+export async function readSheet(ctx: Ctx, url: string): Promise<{ headers: string[]; rows: string[][] }> {
   let csv: string;
   if (ctx.server?.sheetCsv) csv = await ctx.server.sheetCsv(sheetCsvUrl(url));
   else csv = await demoCsv(ctx); // the browser preview has no server: an example sheet with the shop's own products

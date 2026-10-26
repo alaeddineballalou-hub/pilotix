@@ -55,7 +55,7 @@ export function SheetSync({ channel, onClose }: { channel: { id: number; name: s
       ) : q.data ? (
         <>
           <p className="muted small" style={{ marginTop: 0 }}>
-            {t('admin.channels.sheet.help', { lines: q.data.lines })}
+            {t('admin.channels.sheet.help', { lines: q.data.lines })} <b>{t('admin.channels.sheet.nothingYet')}</b>
           </p>
           <div className="tbl-wrap">
             <table className="tbl px-sheetmap">

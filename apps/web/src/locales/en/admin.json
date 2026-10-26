@@ -355,7 +355,7 @@
     "formEdit": "Edit \"{{name}}\"",
     "name": "Channel name",
     "creator": "Creator",
-    "sheetUrl": "Google sheet link (File → Share → Publish to the web)",
+    "sheetUrl": "Google sheet link",
     "skuRequired": "SKU required",
     "active": "Active",
     "save": "Save",
@@ -405,8 +405,10 @@
         "stopdesk": "Stop desk (yes / no)",
         "note": "Customer note",
         "ignore": "— Do not use —"
-      }
-    }
+      },
+      "nothingYet": "Nothing is imported until you click “Save and sync”."
+    },
+    "sheetHint": "In Google Sheets: Share → “Anyone with the link” → Viewer → Copy link, then paste it here. Pilotix checks the link when you click Save. Then you choose which column goes where: nothing is imported before."
   },
   "settings": {
     "shop": "Shop",

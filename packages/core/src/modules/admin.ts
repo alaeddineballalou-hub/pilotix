@@ -8,6 +8,7 @@ import { DEFAULT_SETTINGS, getSetting, setSetting, SettingsMap } from '../settin
 import { sendInPreview } from './notify';
 import { createOrder } from './orders';
 import { usersProcs } from './users';
+import { readSheet } from './sheets';
 
 // ---------------------------------------------------------------- small helpers
 /** A random key (webhooks, cron). Works in Node 22 and browsers. */
@@ -485,11 +486,13 @@ export const adminProcs = {
       url: z.string().trim().max(500).optional(),
     }),
     async (ctx, i) => {
-      if (i.kind === 'sheets' && !/^https:\/\/docs\.google\.com\/spreadsheets\//.test(i.url ?? '')) throw bad('Collez le lien de la feuille Google (publiée sur le web)');
+      if (i.kind === 'sheets' && !/^https:\/\/docs\.google\.com\/spreadsheets\//.test(i.url ?? '')) throw bad('Collez le lien de la feuille Google (Partager › Copier le lien)');
       // a sheet keeps its column choices (Google Sheets channel) when it is renamed; a new sheet link starts again
       const before = i.id ? (await ctx.db.query('SELECT config FROM sales_channels WHERE id = $1', [i.id]))[0] : null;
       const old = before ? (typeof before.config === 'string' ? JSON.parse(before.config) : before.config ?? {}) : {};
       const keep = old.mapping && old.url === i.url ? { mapping: old.mapping } : {};
+      // the link is tried now: a sheet Pilotix cannot read (not shared, wrong link) is said at once, not at the first sync
+      if (i.kind === 'sheets' && old.url !== i.url) await readSheet(ctx, i.url!);
       const config = JSON.stringify(i.url ? { url: i.url, ...keep } : {});
       let r: any;
       if (i.id) {

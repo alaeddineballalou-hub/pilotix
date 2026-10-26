@@ -311,8 +311,8 @@ function ChannelForm({ kind, ch, onClose, onSheetSaved }: { kind: Kind; ch: Chan
         </Field>
       </div>
       {kind === 'sheets' && (
-        <Field label={t('admin.channels.sheetUrl')}>
-          <input value={url} className="ltr" placeholder="https://docs.google.com/spreadsheets/d/e/…/pubhtml" onChange={(e) => setUrl(e.target.value)} />
+        <Field label={t('admin.channels.sheetUrl')} hint={t('admin.channels.sheetHint')}>
+          <input value={url} className="ltr" placeholder="https://docs.google.com/spreadsheets/d/…/edit?usp=sharing" onChange={(e) => setUrl(e.target.value)} />
         </Field>
       )}
       <div className="row" style={{ gap: 18, flexWrap: 'wrap', margin: '8px 0' }}>
