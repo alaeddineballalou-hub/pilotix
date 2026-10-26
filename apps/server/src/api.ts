@@ -35,6 +35,8 @@ import { mailConfigured, sendMail } from './mail';
 import { PlatformController, PlatformGuard } from './platform';
 import { PUBLIC, Public } from './public';
 import { limitMail, resetMail } from './resetMail';
+import { signupMail } from './signupMail';
+import { promises as dns } from 'node:dns';
 
 // ---------------------------------------------------------------- errors → HTTP
 const STATUS: Record<string, number> = { bad_request: 400, unauthorized: 401, payment_required: 402, forbidden: 403, not_found: 404, conflict: 409 };
@@ -226,6 +228,16 @@ export async function tokenVersion(db: core.Db, id: number): Promise<number> {
 
 let proxyWarned = false;
 
+const escHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+/** The home of a shop's own domain: its name and its landing pages (from its llms.txt list). */
+function storeIndexHtml(llms: string): string {
+  const name = (llms.match(/^# (.+)$/m)?.[1] ?? 'Boutique').trim();
+  const items = [...llms.matchAll(/^- \[(.+?)\]\((https?:\/\/[^)\s]+)\): ([^—\n]+)/gm)]
+    .map((m) => `<li><a href="${escHtml(m[2])}"><b>${escHtml(m[1].replace(/\\([[\]\\])/g, '$1'))}</b><span>${escHtml(m[3].trim())}</span></a></li>`)
+    .join('');
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escHtml(name)}</title><meta name="description" content="${escHtml(name)} — التوصيل لجميع الولايات والدفع عند الاستلام"><style>body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;background:#f6f7f9;color:#14213d}main{max-width:720px;margin:0 auto;padding:20px 16px}h1{font-size:24px;margin:8px 0 4px}p{color:#5b6577;margin:0 0 18px}ul{list-style:none;padding:0;margin:0;display:grid;gap:10px}a{display:flex;justify-content:space-between;gap:12px;padding:14px 16px;background:#fff;border:1px solid #e3e8f0;border-radius:12px;color:inherit;text-decoration:none}a span{color:#0f766e;font-weight:700;white-space:nowrap}</style></head><body><main><h1>${escHtml(name)}</h1><p>🚚 التوصيل لجميع الولايات · الدفع عند الاستلام</p><ul>${items || '<li>—</li>'}</ul></main></body></html>`;
+}
+
 /** Dellal: newest message per conversation and the answer running for it (per shop). */
 const latest = new Map<string, number>();
 const running = new Map<string, Promise<unknown>>();
@@ -300,20 +312,285 @@ class ApiController {
     if (!b.success) throw new core.AppError('bad_request', 'Email ou mot de passe manquant');
     const mailKey = `email:${b.data.email.trim().toLowerCase()}|${core.ipNet(req.ip || '') || 'unknown'}`;
     checkLogin(mailKey, 5);
-    // the shop of this e-mail (an unknown e-mail is checked against shop #1: same answer, same time)
-    const sid = await core.shopIdOfEmail(this.core.t, b.data.email);
-    const ref = (sid ? await this.core.shop({ id: sid }) : null) ?? (await this.core.primary());
-    let session: Session;
-    try {
-      session = await core.login(ref.db, b.data.email, b.data.password);
-    } catch (e) {
+    // every shop of this e-mail checks its own password: the shops it opens are offered (one: opened at once)
+    const email = b.data.email.trim().toLowerCase();
+    const opened = await core.shopsOpenedBy(this.core.t, email, b.data.password);
+    if (!opened.length) {
       failedLogin(ipKey);
       failedLogin(mailKey);
-      throw e;
+      // an unknown e-mail takes as long as a known one (shop #1 checks a real hash): nobody learns which e-mails exist
+      await core.login((await this.core.primary()).db, `unknown-${email}`, b.data.password).catch(() => null);
+      throw new core.AppError('unauthorized', 'Email ou mot de passe incorrect');
     }
     clearLogin(mailKey);
-    if (ref.shop.status === 'archived') throw new core.AppError('unauthorized', CLOSED);
+    const ticket = await this.ticket(email, opened.map((x) => x.shop.id));
+    if (opened.length > 1) return { choose: await Promise.all(opened.map((x) => this.choice(x.shop.id, x.roles))), ticket };
+    const ref = await this.core.shop({ id: opened[0].shop.id });
+    if (!ref || ref.shop.status === 'archived') throw new core.AppError('unauthorized', CLOSED);
+    const session = await core.login(ref.db, email, b.data.password);
+    return { token: await this.signShop(ref, session.profile.id), session: await this.core.withShop(session, ref), ticket };
+  }
+
+  // ---------------------------------------------------------------- one person, several shops
+  /** A short proof (12 h) of the shops a login opened: the store picker and « Mes boutiques » use it, no password again. */
+  private ticket(email: string, ids: number[]) {
+    return this.jwt.signAsync({ typ: 'pick', em: email.toLowerCase(), ids }, { secret: `${config.jwtSecret}:pick`, expiresIn: '12h' });
+  }
+  private async readTicket(t: unknown): Promise<{ em: string; ids: number[] } | null> {
+    try {
+      const c = await this.jwt.verifyAsync<{ typ?: string; em?: string; ids?: number[] }>(String(t ?? ''), { secret: `${config.jwtSecret}:pick` });
+      return c.typ === 'pick' && c.em && Array.isArray(c.ids) ? { em: c.em, ids: c.ids.map(Number) } : null;
+    } catch {
+      return null;
+    }
+  }
+  /** What the store picker shows of a shop. */
+  private async choice(id: number, roles: string[]) {
+    const ref = await this.core.shop({ id });
+    return { id, name: ref?.shop.name ?? '', slug: ref?.shop.slug ?? '', roles, state: ref?.status.state ?? 'active', locked: !!ref?.status.locked, primary: !!ref?.shop.primary };
+  }
+  /** Opens a shop for its account of this e-mail (the password was checked: the ticket, or just now). */
+  private async enterAs(id: number, email: string) {
+    const ref = await this.core.shop({ id });
+    if (!ref || ref.shop.status === 'archived') throw new core.AppError('unauthorized', CLOSED);
+    const r = (await ref.db.query('SELECT id FROM profiles WHERE lower(email) = $1 AND active', [email]))[0];
+    if (!r) throw new core.AppError('unauthorized', 'Votre compte est désactivé dans cette boutique');
+    await ref.db.query("UPDATE profiles SET last_seen_at = now(), presence = 'online' WHERE id = $1", [r.id]);
+    const p = await core.profileById(ref.db, Number(r.id));
+    const session = core.makeSession(p!);
     return { token: await this.signShop(ref, session.profile.id), session: await this.core.withShop(session, ref) };
+  }
+
+  /** The store picker: opens one of the shops of the login (ticket), or another shop of the e-mail with its password. */
+  @Public()
+  @Post('auth/enter')
+  async enter(@Body() body: any, @Req() req: { ip?: string }) {
+    const id = Number(body?.shop);
+    if (!Number.isInteger(id) || id < 1) throw new core.AppError('bad_request', 'Boutique inconnue');
+    const tk = await this.readTicket(body?.ticket);
+    if (tk && tk.ids.includes(id)) return { ...(await this.enterAs(id, tk.em)), ticket: body.ticket };
+    const b = LoginBody.safeParse(body);
+    if (!b.success) throw new core.AppError('unauthorized', 'Reconnectez-vous');
+    const ipKey = `ip:${core.ipNet(req.ip || '') || 'unknown'}`;
+    checkLogin(ipKey, 10);
+    const email = b.data.email.trim().toLowerCase();
+    const opened = await core.shopsOpenedBy(this.core.t, email, b.data.password);
+    if (!opened.some((x) => x.shop.id === id)) {
+      failedLogin(ipKey);
+      throw new core.AppError('unauthorized', 'Mot de passe incorrect pour cette boutique');
+    }
+    const ids = [...new Set([...(tk && tk.em === email ? tk.ids : []), ...opened.map((x) => x.shop.id)])];
+    return { ...(await this.enterAs(id, email)), ticket: await this.ticket(email, ids) };
+  }
+
+  /** « Mes boutiques »: every shop of my e-mail, which ones open without the password (the login's ticket). */
+  @Post('auth/shops')
+  async myShops(@Body() body: any, @Req() req: ShopRequest) {
+    if (req.imp || req.shop.shop.demo) return { shops: [await this.choice(req.shop.shop.id, req.session.roles)].map((c) => ({ ...c, current: true, open: true })) };
+    const email = req.session.profile.email.toLowerCase();
+    const tk = await this.readTicket(body?.ticket);
+    const all = await core.shopsOfEmail(this.core.t, email);
+    const shops = await Promise.all(all.map(async (x) => ({ ...(await this.choice(x.shop.id, x.roles)), current: x.shop.id === req.shop.shop.id, open: x.shop.id === req.shop.shop.id || (!!tk && tk.em === email && tk.ids.includes(x.shop.id)) })));
+    const set = await this.core.settings();
+    return { shops, canAdd: set.signup.open, max: set.signup.maxShopsPerEmail };
+  }
+
+  // ---------------------------------------------------------------- sign-up
+  /** What the sign-up page shows: open or not, the free trial, the plan it starts on. */
+  @Public()
+  @Get('auth/signup')
+  async signupInfo() {
+    const set = await this.core.settings();
+    const plan = (await core.loadPlans(this.core.t)).find((p) => p.code === set.trial.planCode && p.active && !p.system) ?? null;
+    return { open: set.signup.open, trialDays: set.trial.days, plan: plan ? { name: plan.name, priceMonth: plan.priceMonth } : null, publicUrl: config.publicUrl };
+  }
+
+  /** Is this name free for a new shop (its links: site/<name>/<page>)? From a shop's name, or a name typed. */
+  @Public()
+  @Post('auth/slug')
+  async slug(@Body() body: any, @Req() req: { ip?: string }) {
+    checkLogin(`slug:${core.ipNet(req.ip || '') || 'unknown'}`, 120);
+    failedLogin(`slug:${core.ipNet(req.ip || '') || 'unknown'}`);
+    const wanted = typeof body?.slug === 'string' && body.slug.trim() ? body.slug.slice(0, 60) : core.slugify(String(body?.name ?? '').slice(0, 80));
+    return core.slugAvailability(this.core.t, wanted);
+  }
+
+  /**
+   * A new shop by its owner, on a free trial: the shop, its first administrator, the welcome e-mail with the link that
+   * confirms the e-mail; the owner is logged in at once. A robot filling the hidden field, or sending the form faster than
+   * a person types, gets an error.
+   */
+  @Public()
+  @Post('auth/signup')
+  async signup(@Body() body: any, @Req() req: { ip?: string }) {
+    const ip = core.ipNet(req.ip || '') || 'unknown';
+    checkLogin(`signup:${ip}`, 10);
+    failedLogin(`signup:${ip}`);
+    if (String(body?.website ?? '').trim() || Number(body?.elapsed ?? 0) < 4000) throw new core.AppError('bad_request', 'Formulaire refusé. Rechargez la page et réessayez.');
+    const p = core.SignupInput.safeParse(body);
+    if (!p.success) throw new core.AppError('bad_request', p.error.issues[0]?.message ?? 'Formulaire incomplet');
+    const made = await this.signupOrError(p.data, { ip });
+    return this.afterSignup(made, p.data.email, p.data.password, String(body?.language ?? 'fr'));
+  }
+
+  /** « Ajouter une boutique » from inside the app: the same person, the password asked again. */
+  @Post('shop/add')
+  async addShop(@Body() body: any, @Req() req: ShopRequest) {
+    if (req.imp) throw new core.AppError('forbidden', 'Réservé au propriétaire (pas en mode support)');
+    if (req.shop.shop.demo) throw new core.AppError('forbidden', 'Pas dans la boutique démo');
+    const me = req.session.profile;
+    try {
+      await core.login(req.shop.db, me.email, String(body?.password ?? ''));
+    } catch {
+      throw new core.AppError('bad_request', 'Mot de passe incorrect');
+    }
+    const p = core.SignupInput.safeParse({ shopName: body?.shopName, slug: body?.slug || undefined, name: me.name, email: me.email, phone: me.phone ?? undefined, password: String(body?.password ?? '') });
+    if (!p.success) throw new core.AppError('bad_request', p.error.issues[0]?.message ?? 'Formulaire incomplet');
+    const made = await this.signupOrError(p.data, { ip: core.ipNet(req.ip || '') || null, fromShopId: req.shop.shop.id });
+    return this.afterSignup(made, p.data.email, p.data.password, me.language);
+  }
+
+  private async signupOrError(i: core.SignupInput, o: { ip?: string | null; fromShopId?: number }) {
+    try {
+      return await core.signupShop(this.core.t, i, o);
+    } catch (e) {
+      if (e instanceof core.SignupError) throw new core.AppError('bad_request', e.message);
+      throw e;
+    }
+  }
+
+  private async afterSignup(made: { shop: core.Shop; confirm: string }, email: string, password: string, language: string) {
+    this.core.invalidate();
+    const set = await this.core.settings();
+    if (mailConfigured())
+      sendMail(signupMail({ name: made.shop.ownerName ?? '', email, language, shop: made.shop.name, slug: made.shop.slug, token: made.confirm, trialDays: set.trial.days })).catch((e) =>
+        new Logger('Mail').error(`Welcome e-mail to ${email} failed: ${e?.message || e}`),
+      );
+    const ref = await this.core.shop({ id: made.shop.id });
+    if (!ref) throw new Error('New shop not found');
+    const session = await core.login(ref.db, email, password);
+    const ids = (await core.shopsOpenedBy(this.core.t, email, password)).map((x) => x.shop.id);
+    return { token: await this.signShop(ref, session.profile.id), session: await this.core.withShop(session, ref), ticket: await this.ticket(email, ids), mailSent: mailConfigured() };
+  }
+
+  /** The link of the welcome e-mail: the owner's e-mail is confirmed. */
+  @Public()
+  @Post('auth/confirm')
+  async confirm(@Body() body: any, @Req() req: { ip?: string }) {
+    const ipKey = `confirm:${core.ipNet(req.ip || '') || 'unknown'}`;
+    checkLogin(ipKey, 10);
+    try {
+      const s = await core.confirmEmail(this.core.t, String(body?.token ?? '').slice(0, 200));
+      this.core.invalidate();
+      return { ok: true, shop: s.name };
+    } catch (e) {
+      failedLogin(ipKey);
+      if (e instanceof core.SignupError) throw new core.AppError('bad_request', e.message);
+      throw e;
+    }
+  }
+
+  /** The banner « confirmez votre e-mail »: sends the link again (the shop's administrator; 3 per hour). */
+  @Post('shop/confirm-again')
+  async confirmAgain(@Req() req: ShopRequest) {
+    const s = req.shop.shop;
+    if (!req.session.isAdmin || req.imp) throw new core.AppError('forbidden', 'Réservé à l’administrateur');
+    if (!s.selfSignup || s.emailVerifiedAt || !s.ownerEmail) return { ok: true, sent: false };
+    if (!mailConfigured()) throw new core.AppError('bad_request', 'L’envoi d’e-mails n’est pas configuré sur ce serveur. Contactez Pilotix.');
+    const key = `confirm-again:${s.id}`;
+    checkLogin(key, 3);
+    failedLogin(key);
+    const token = await core.emailCheck(this.core.t, s.id, s.ownerEmail);
+    await sendMail(signupMail({ name: s.ownerName ?? '', email: s.ownerEmail, language: req.session.profile.language, shop: s.name, slug: s.slug, token, trialDays: (await this.core.settings()).trial.days }));
+    return { ok: true, sent: true };
+  }
+
+  // ---------------------------------------------------------------- a shop's own domain name (landing pages)
+  private platformHost() {
+    try {
+      return new URL(config.publicUrl).hostname;
+    } catch {
+      return '';
+    }
+  }
+
+  /** The shop's own domain: what it is, whether its DNS is ready, what to write at the domain's registrar. */
+  @Post('shop/domain/get')
+  async domainGet(@Req() req: ShopRequest) {
+    const s = req.shop.shop;
+    const ips = await dns.resolve4(this.platformHost()).catch(() => [] as string[]);
+    return { domain: s.domain, status: s.domainStatus, ips, host: this.platformHost(), primary: s.primary };
+  }
+
+  /** Sets or removes the shop's own domain (its administrator), then checks its DNS at once. */
+  @Post('shop/domain')
+  async domainSet(@Body() body: any, @Req() req: ShopRequest) {
+    if (!req.session.isAdmin) throw new core.AppError('forbidden', 'Réservé à l’administrateur');
+    if (req.shop.shop.demo) throw new core.AppError('forbidden', 'Pas dans la boutique démo');
+    const want = body?.domain === null || body?.domain === '' ? null : String(body?.domain ?? '').slice(0, 260);
+    try {
+      await core.setShopDomain(this.core.t, req.shop.shop.id, want, this.platformHost());
+    } catch (e) {
+      if (e instanceof core.SignupError) throw new core.AppError('bad_request', e.message);
+      throw e;
+    }
+    if (want) await core.checkShopDomain(this.core.t, req.shop.shop.id, this.platformHost(), (h) => dns.resolve4(h));
+    this.core.invalidate();
+    const ref = (await this.core.shop({ id: req.shop.shop.id }))!;
+    return { domain: ref.shop.domain, status: ref.shop.domainStatus };
+  }
+
+  /** « Vérifier »: does the domain point to this server now? (DNS changes take minutes to hours) */
+  @Post('shop/domain/check')
+  async domainCheck(@Req() req: ShopRequest) {
+    const key = `domain:${req.shop.shop.id}`;
+    checkLogin(key, 30);
+    failedLogin(key);
+    const r = await core.checkShopDomain(this.core.t, req.shop.shop.id, this.platformHost(), (h) => dns.resolve4(h));
+    this.core.invalidate();
+    return r;
+  }
+
+  /** Caddy asks before getting an HTTPS certificate for a name: only a ready domain of an active shop. */
+  @Public()
+  @Get('domain-check')
+  async domainAllowed(@Query('domain') domain: string, @Res() res: any) {
+    const id = await core.shopIdByDomain(this.core.t, String(domain ?? ''));
+    return res.status(id ? 200 : 404).send(id ? 'ok' : 'unknown');
+  }
+
+  /**
+   * A shop's own domain (Caddy sends every path here, with the name asked for): https://myshop.com/<page> is the landing
+   * page, / lists the shop's pages, /llms.txt and /robots.txt as on the platform.
+   */
+  @Public()
+  @Get(['domain', 'domain/:page'])
+  async domainPage(@Param('page') page: string | undefined, @Req() req: { url?: string; headers: Record<string, string | undefined> }, @Res() res: any) {
+    const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim().toLowerCase();
+    const id = await core.shopIdByDomain(this.core.t, host);
+    const ref = id ? await this.core.shop({ id }) : null;
+    const missing = () => res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
+    if (!ref || ref.shop.status !== 'active') return missing();
+    const site = `https://${host.replace(/:\d+$/, '')}`;
+    if (page === 'robots.txt') return res.status(200).header('Content-Type', 'text/plain; charset=utf-8').send('User-agent: *\nAllow: /\nDisallow: /api/\n');
+    const shop = intake(ref);
+    if (!page || page === 'llms.txt') {
+      const r: any = await this.core.call(shop, 'landing.llms', await this.core.systemSession(shop), { site, pagesBase: `${site}/` });
+      if (page === 'llms.txt') return sendText(req, res.status(200).header('Content-Type', 'text/plain; charset=utf-8').header('Cache-Control', 'public, max-age=3600'), r.text);
+      return sendText(req, res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'public, max-age=300'), storeIndexHtml(r.text));
+    }
+    return this.sendLanding(shop, page, req, res, { api: `${site}/api${ref.shop.primary ? '' : `/s/${ref.shop.slug}`}`, url: `${site}/${page}` });
+  }
+
+  /** /api/s/<store>/llms.txt: a shop's pages for AI assistants (the platform's /llms.txt links to every shop's). */
+  @Public()
+  @Get('s/:store/llms.txt')
+  async storeLlms(@Param('store') store: string, @Req() req: { headers: Record<string, string | undefined> }, @Res() res: any) {
+    const ref = await this.publicShop(store).catch(() => null);
+    if (!ref || ref.shop.demo) return res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Boutique introuvable');
+    const shop = intake(ref);
+    const r: any = await this.core.call(shop, 'landing.llms', await this.core.systemSession(shop), { site: config.publicUrl });
+    return sendText(req, res.status(200).header('Content-Type', 'text/plain; charset=utf-8').header('Cache-Control', 'public, max-age=3600'), r.text);
   }
 
   /** The demo shop's button on the login page: shown when Pilotix turned it on. */
@@ -388,7 +665,9 @@ class ApiController {
     try {
       const ref = m ? await this.core.shop({ id: Number(m[1]) }) : await this.core.primary();
       if (!ref || ref.shop.demo || ref.shop.status === 'archived') throw new core.AppError('bad_request', 'Ce lien n’est plus valable. Demandez un nouveau lien.');
-      await core.resetPassword(ref.db, m ? m[2] : b.data.token, b.data.password);
+      const done = await core.resetPassword(ref.db, m ? m[2] : b.data.token, b.data.password);
+      // the person proved the e-mail is theirs: the new password opens every shop of this e-mail
+      await core.spreadResetPassword(this.core.t, done.email, ref.shop.id).catch((e) => new Logger('Pilotix').warn(`reset in other shops: ${e?.message ?? e}`));
     } catch (e) {
       failedLogin(ipKey);
       throw e;
@@ -410,8 +689,14 @@ class ApiController {
     }
     // the app learns its shop (plan, state, how to pay) with the session
     if (name === 'me.get') return this.core.withShop(out as Session, req.shop, req.session.shop?.support ?? null);
-    // a new password logs out the other sessions: this one gets a fresh token and stays in
-    if (name === 'me.password') return { ...out, token: await this.signShop(req.shop, req.session.profile.id) };
+    // a new password logs out the other sessions: this one gets a fresh token and stays in; the person's other shops
+    // that had the same password take the new one (a shop with another password keeps it)
+    if (name === 'me.password') {
+      const b = (body ?? {}) as { current?: unknown; next?: unknown };
+      if (!req.shop.shop.demo && typeof b.current === 'string' && typeof b.next === 'string')
+        await core.followPasswordChange(this.core.t, req.session.profile.email, b.current, b.next, req.shop.shop.id).catch((e) => new Logger('Pilotix').warn(`password in other shops: ${e?.message ?? e}`));
+      return { ...out, token: await this.signShop(req.shop, req.session.profile.id) };
+    }
     return out;
   }
 
@@ -486,12 +771,13 @@ class ApiController {
 
   // ---------------------------------------------------------------- landing pages (public, no login)
   /** The page of one product: a single small HTML file (no app bundle), never cached (it carries a fresh challenge). */
-  private async sendLanding(ref: ShopRef, slug: string, req: { headers: Record<string, string | undefined> }, res: any) {
+  private async sendLanding(ref: ShopRef, slug: string, req: { headers: Record<string, string | undefined> }, res: any, own?: { api: string; url: string }) {
     const missing = () => res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
     if (!/^[a-z0-9-]{2,60}$/.test(slug)) return missing();
     try {
-      const base = `${apiOf(ref)}/lp/`;
-      const r: any = await this.core.call(ref, 'landing.html', await this.core.systemSession(ref), { slug, mode: 'live', post: `${base}${slug}/order`, lead: `${base}${slug}/lead`, geo: `${base}geo/`, imgBase: `${base}img/`, site: config.publicUrl });
+      // on the shop's own domain, the page calls that domain (Caddy forwards /api): no other site involved
+      const base = `${own?.api ?? apiOf(ref)}/lp/`;
+      const r: any = await this.core.call(ref, 'landing.html', await this.core.systemSession(ref), { slug, mode: 'live', post: `${base}${slug}/order`, lead: `${base}${slug}/lead`, geo: `${base}geo/`, imgBase: `${base}img/`, site: config.publicUrl, ...(own ? { url: own.url } : {}) });
       res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'no-store');
       // the main photo asked for as soon as these headers arrive, before the page itself
       if (r.link) res.header('Link', r.link);
@@ -540,7 +826,15 @@ class ApiController {
   async llmsTxt(@Req() req: { headers: Record<string, string | undefined> }, @Res() res: any) {
     const p = await this.core.primary();
     const r: any = await this.core.call(p, 'landing.llms', await this.core.systemSession(p), { site: config.publicUrl });
-    return sendText(req, res.status(200).header('Content-Type', 'text/plain; charset=utf-8').header('Cache-Control', 'public, max-age=3600'), r.text);
+    // the other shops of the server: each one's own list (its pages, prices, descriptions)
+    const others = [];
+    for (const s of await core.loadShops(this.core.t)) {
+      if (s.primary || s.demo || s.status !== 'active') continue;
+      const ref = await this.core.shop({ id: s.id });
+      if (ref && !ref.status.locked) others.push(`- [${s.name.replace(/[[\]\\]/g, '')}](${config.publicUrl}/api/s/${s.slug}/llms.txt)`);
+    }
+    const text = others.length ? `${r.text.trimEnd()}\n\n## Boutiques\n\n${others.join('\n')}\n` : r.text;
+    return sendText(req, res.status(200).header('Content-Type', 'text/plain; charset=utf-8').header('Cache-Control', 'public, max-age=3600'), text);
   }
 
   /** Communes of a wilaya, [French name, Arabic name] (asked when the customer picks a wilaya; cached a month). */

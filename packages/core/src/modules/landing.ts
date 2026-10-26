@@ -246,6 +246,8 @@ export interface HtmlOpts {
   imgBase: string | null;
   /** the site's address ("https://pilotix.online"): the page's own address is site/<store>/<page> */
   site?: string;
+  /** the page's own address when it is not site/<store>/<page> (a shop's own domain: https://myshop.com/<page>) */
+  url?: string;
 }
 
 function viewImages(refs: ImgRef[], rows: Map<number, any>, imgBase: string | null): LandingImage[] {
@@ -306,7 +308,7 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     viewId: randomId(),
     challenge: await makeChallenge(ctx.db, slug, ctx.now()),
     bits: LANDING_POW_BITS,
-    url: o.site ? `${o.site}/${await landingStore(ctx.db, s)}/${slug}` : undefined,
+    url: o.url ?? (o.site ? `${o.site}/${await landingStore(ctx.db, s)}/${slug}` : undefined),
   });
   return { html, link: o.imgBase ? landingPreloadLink(view) : null };
 }
@@ -315,8 +317,8 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
  * /llms.txt: the shop for AI assistants and search agents (llmstxt.org) — a title, one line about the shop, and a link
  * to every live landing page with its price and the start of its description.
  */
-export async function landingLlms(db: Db, site: string): Promise<string> {
-  const base = `${site}/${await landingStore(db)}/`;
+export async function landingLlms(db: Db, site: string, pagesBase?: string): Promise<string> {
+  const base = pagesBase ?? `${site}/${await landingStore(db)}/`;
   const shop = await getSetting(db, 'shop');
   const rows = await db.query(
     `SELECT l.slug, COALESCE(NULLIF(l.title, ''), p.name) AS title, COALESCE(l.price, p.price) AS price, l.description
@@ -1316,11 +1318,11 @@ export const landingProcs = {
   // ---------------------------------------------------------------- public side (the server calls these as the system)
   'landing.html': proc(
     [],
-    z.object({ slug: z.string().max(80), mode: z.enum(['live', 'parent', 'preview']), post: z.string().max(500).default(''), geo: z.string().max(500).default(''), lead: z.string().max(500).default(''), imgBase: z.string().max(500).nullable().default(null), site: z.string().max(500).optional() }),
+    z.object({ slug: z.string().max(80), mode: z.enum(['live', 'parent', 'preview']), post: z.string().max(500).default(''), geo: z.string().max(500).default(''), lead: z.string().max(500).default(''), imgBase: z.string().max(500).nullable().default(null), site: z.string().max(500).optional(), url: z.string().max(600).optional() }),
     async (ctx, i) => landingPage(ctx, i.slug, i),
   ),
 
-  'landing.llms': proc([], z.object({ site: z.string().max(500) }), async (ctx, i) => ({ text: await landingLlms(ctx.db, i.site) })),
+  'landing.llms': proc([], z.object({ site: z.string().max(500), pagesBase: z.string().max(500).optional() }), async (ctx, i) => ({ text: await landingLlms(ctx.db, i.site, i.pagesBase) })),
   /** the store's part of the pages' address (site/<store>/<page>): for the links shown in Pilotix, and the server's check */
   'landing.store': proc(null, z.object({}), async (ctx) => ({ store: await landingStore(ctx.db) })),
 
