@@ -9,6 +9,8 @@ import { Empty, ErrorBox, Field, Help, Icon, Loading, copyText } from '../../ui/
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { ConfirmButton, IconBtn, Switch } from './bits';
+import { SheetSync } from './SheetSync';
+import { TestOrders } from './TestOrders';
 
 type Kind = 'sheets' | 'woocommerce' | 'shopify' | 'youcan' | 'lightfunnels' | 'api' | 'connector';
 const TILES: { kind: Kind | 'tiktok'; color: string; solid?: boolean; flag?: 'recommended' | 'soon' }[] = [
@@ -64,6 +66,7 @@ export function Canaux() {
   const [size, setSize] = useState(15);
   const list = useRpc('admin.channels.list', { q: q || undefined, page, pageSize: size });
   const [form, setForm] = useState<{ kind: Kind; ch: Channel | null } | null>(null);
+  const [syncing, setSyncing] = useState<Channel | null>(null);
   const toggle = useAction('admin.channels.toggle', { success: t('admin.channels.saved') });
   const del = useAction('admin.channels.delete', { success: t('admin.channels.deleted') });
   const total = list.data?.total ?? 0;
@@ -71,6 +74,7 @@ export function Canaux() {
 
   return (
     <>
+      <TestOrders />
       <div className="card">
         <div className="card-head">
           <h2>
@@ -192,6 +196,11 @@ export function Canaux() {
                       <Switch checked={c.active} label={`${t('admin.channels.colActive')} — ${c.name}`} onChange={(v) => toggle.mutate({ id: c.id, field: 'active', value: v })} />
                     </td>
                     <td className="bjch-act">
+                      {c.kind === 'sheets' && (
+                        <button type="button" className="btn small primary" title={t('admin.channels.sheet.syncTip')} onClick={() => setSyncing(c)}>
+                          ⟳ {t('admin.channels.sheet.sync')}
+                        </button>
+                      )}
                       <IconBtn kind="e" title={t('admin.channels.edit')} onClick={() => setForm({ kind: c.kind as Kind, ch: c })} />
                       <ConfirmButton className="bjp-ib bjp-ib-d" question={t('admin.channels.deleteConfirm', { name: c.name })} onConfirm={() => del.mutate({ id: c.id })}>
                         <span className="sr-only">{t('admin.channels.delete')}</span>
@@ -236,12 +245,24 @@ export function Canaux() {
         </div>
         {backend.kind === 'demo' && <div className="warnbox">{t('admin.channels.demoWarn')}</div>}
       </div>
-      {form && <ChannelForm kind={form.kind} ch={form.ch} onClose={() => setForm(null)} />}
+      {form && (
+        <ChannelForm
+          kind={form.kind}
+          ch={form.ch}
+          onClose={() => setForm(null)}
+          onSheetSaved={(c) => {
+            // a new sheet: straight to « which column is what »
+            setForm(null);
+            setSyncing(c);
+          }}
+        />
+      )}
+      {syncing && <SheetSync channel={syncing} onClose={() => setSyncing(null)} />}
     </>
   );
 }
 
-function ChannelForm({ kind, ch, onClose }: { kind: Kind; ch: Channel | null; onClose: () => void }) {
+function ChannelForm({ kind, ch, onClose, onSheetSaved }: { kind: Kind; ch: Channel | null; onClose: () => void; onSheetSaved: (c: Channel) => void }) {
   const { t } = useTranslation();
   const [name, setName] = useState(ch?.name ?? '');
   const [url, setUrl] = useState(ch?.url ?? '');
@@ -250,7 +271,7 @@ function ChannelForm({ kind, ch, onClose }: { kind: Kind; ch: Channel | null; on
   const [active, setActive] = useState(ch?.active ?? true);
   const [saved, setSaved] = useState<Channel | null>(ch);
   const users = useRpc('users.list', { activeOnly: true });
-  const save = useAction('admin.channels.save', { success: t('admin.channels.saved'), onDone: (r) => (kind === 'sheets' ? onClose() : setSaved(r)) });
+  const save = useAction('admin.channels.save', { success: t('admin.channels.saved'), onDone: (r) => (kind === 'sheets' ? (ch ? onClose() : onSheetSaved(r as Channel)) : setSaved(r)) });
   const rotate = useAction('admin.channels.rotateKey', { success: t('admin.channels.rotated'), onDone: (r) => setSaved(r) });
   const kindName = t(`admin.channels.kinds.${kind}`);
   const url_ = saved ? hookUrl(saved.id, saved.webhookKey) : '';
