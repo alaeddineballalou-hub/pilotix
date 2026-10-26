@@ -17,6 +17,7 @@ export type { RawAd, SpyAd, SpyBrief, SpyFinding, SpyKeyword, SpyProductRow, Spy
 export { demoSnapshot, demoRestore } from './demoKeep';
 export type { DemoKeep } from './demoKeep';
 export type { PGliteLike } from './pglite';
+export type { ImportProduct, ImportResult } from './modules/productimport';
 
 export { REGISTRY };
 

@@ -15,6 +15,7 @@ import { Alertes } from './Alertes';
 import { Depots } from './Depots';
 import { Inventaire } from './Inventaire';
 import { useDebounced } from './OrderList';
+import { ImportDialog } from './ImportDialog';
 import { ProductForm } from './ProductForm';
 import { AlertDialog, MoveDialog, TransferDialog } from './StockDialogs';
 import { bidi, Delta, DepotSelect, LevelBar, matches, nameOf, RowMenu, StockRowT, Toolbar, useDepots } from './stockui';
@@ -174,6 +175,7 @@ function ProductsTab() {
   const prods = useRpc('catalog.products', {});
   const st = useRpc('catalog.stock', { withHidden: true });
   const [edit, setEdit] = useState<number | 'new' | null>(null);
+  const [importing, setImporting] = useState(false);
   // landing pages: which products have one (a product just created without one gets a banner)
   const { session } = useSession();
   const marketer = !!session && (session.isAdmin || session.roles.includes('marketer'));
@@ -194,10 +196,16 @@ function ProductsTab() {
     <section className="card pd-card">
       <Toolbar
         action={
-          <button className="btn primary" onClick={() => setEdit('new')}>
-            <Icon name="plus" />
-            {t('produits.products.new')}
-          </button>
+          <div className="pd-acts-top">
+            <button className="btn" onClick={() => setImporting(true)}>
+              <Icon name="upload" />
+              {t('produits.import.button')}
+            </button>
+            <button className="btn primary" onClick={() => setEdit('new')}>
+              <Icon name="plus" />
+              {t('produits.products.new')}
+            </button>
+          </div>
         }
       >
         <SearchBox value={q} onChange={setQ} placeholder={t('produits.products.searchPh')} />
@@ -307,6 +315,7 @@ function ProductsTab() {
           })}
         </div>
       )}
+      {importing && <ImportDialog onClose={() => setImporting(false)} />}
       {edit !== null && <ProductForm id={edit === 'new' ? null : edit} onClose={() => setEdit(null)} onCreated={(r) => r.active && !r.isService && setFresh({ id: r.id, name: r.name })} />}
     </section>
   );

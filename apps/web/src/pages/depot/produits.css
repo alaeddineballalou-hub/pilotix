@@ -586,3 +586,30 @@ a.chip.lp-nolp:hover { text-decoration: underline; }
 
 /* Dépôts: a hidden depot, and the card's actions */
 .pd-sup-acts .danger { color: var(--coral); }
+
+/* Produits › « Importer Excel » */
+.pd-acts-top { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.pd-imp { gap: 12px; }
+.pd-imp-intro { margin: 0; line-height: 1.55; }
+.pd-imp-cols { display: flex; flex-wrap: wrap; gap: 6px; }
+.pd-imp-cols .chip.req { font-weight: 600; }
+.pd-imp-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+.pd-imp-err { margin: 0; color: var(--bad, #c0392b); font-size: 13px; }
+.pd-imp-sum { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 10px; background: var(--soft, rgb(127 127 127 / .08)); }
+.pd-imp-sum > span { display: flex; flex-direction: column; min-width: 0; }
+.pd-imp-sum small { color: var(--muted); }
+.pd-imp-table { display: flex; flex-direction: column; border: 1px solid var(--line, rgb(127 127 127 / .2)); border-radius: 10px; overflow: hidden; }
+.pd-imp-row { display: grid; grid-template-columns: 64px minmax(140px, 1.4fr) minmax(140px, 2fr) 96px 96px 90px; gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--line, rgb(127 127 127 / .2)); font-size: 13px; }
+.pd-imp-row:first-child { border-top: 0; }
+.pd-imp-head { font-size: 12px; color: var(--muted); font-weight: 600; background: var(--soft, rgb(127 127 127 / .06)); }
+.pd-imp-row.s-error, .pd-imp-row.s-skip { background: rgb(127 127 127 / .05); }
+.pd-imp-lines { color: var(--muted); }
+.pd-imp-vars { display: flex; flex-wrap: wrap; gap: 4px; }
+.pd-imp-msgs { grid-column: 2 / -1; margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--warn, #b7791f); }
+.pd-imp-msgs .bad { color: var(--bad, #c0392b); }
+@media (max-width: 720px) {
+  .pd-imp-head { display: none; }
+  .pd-imp-row { grid-template-columns: 1fr 1fr; }
+  .pd-imp-lines { display: none; }
+  .pd-imp-row .pd-name, .pd-imp-vars, .pd-imp-msgs { grid-column: 1 / -1; }
+}

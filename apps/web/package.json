@@ -30,7 +30,8 @@
     "bcryptjs": "2.4.3",
     "zod": "3.23.8",
     "@zxing/browser": "0.1.5",
-    "@zxing/library": "0.21.3"
+    "@zxing/library": "0.21.3",
+    "xlsx": "0.18.5"
   },
   "devDependencies": {
     "@capacitor/cli": "7.6.9",
