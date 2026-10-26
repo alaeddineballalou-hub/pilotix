@@ -316,11 +316,19 @@ class ApiController {
     const email = b.data.email.trim().toLowerCase();
     const opened = await core.shopsOpenedBy(this.core.t, email, b.data.password);
     if (!opened.length) {
-      failedLogin(ipKey);
-      failedLogin(mailKey);
-      // an unknown e-mail takes as long as a known one (shop #1 checks a real hash): nobody learns which e-mails exist
-      await core.login((await this.core.primary()).db, `unknown-${email}`, b.data.password).catch(() => null);
-      throw new core.AppError('unauthorized', 'Email ou mot de passe incorrect');
+      // an e-mail the index does not list (shop #1's demo accounts, …@demo.pilotix.dz) is checked by shop #1, as before;
+      // an unknown e-mail takes as long as a known one there (a real hash): nobody learns which e-mails exist
+      const p = await this.core.primary();
+      let session: Session;
+      try {
+        session = await core.login(p.db, email, b.data.password);
+      } catch (e) {
+        failedLogin(ipKey);
+        failedLogin(mailKey);
+        throw e;
+      }
+      clearLogin(mailKey);
+      return { token: await this.signShop(p, session.profile.id), session: await this.core.withShop(session, p) };
     }
     clearLogin(mailKey);
     const ticket = await this.ticket(email, opened.map((x) => x.shop.id));

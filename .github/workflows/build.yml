@@ -62,6 +62,8 @@ jobs:
           for i in $(seq 1 40); do curl -fs http://localhost:3000/api/health && break; sleep 1; done
       - name: End-to-end test
         run: bash scripts/smoke-test.sh
+      - name: End-to-end test of the multi-shop server (sign-up, users, store picker, passwords, domains)
+        run: node scripts/shops-test.mjs
       - if: failure()
         run: cat server.log
 
