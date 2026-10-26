@@ -380,7 +380,7 @@
       "colPilotix": "Va dans Pilotix",
       "dup": "Deux colonnes vont au même endroit : changez-en une.",
       "onlyNew": "Ne pas importer les {{lines}} lignes déjà dans la feuille (seulement les nouvelles, à partir de maintenant)",
-      "auto": "Ensuite, Pilotix lit la feuille tout seul toutes les 10 minutes. Une ligne ne devient une commande qu’une seule fois.",
+      "auto": "Ensuite, Pilotix lit la feuille tout seul toutes les 10 minutes. Une ligne ne devient une commande qu’une seule fois, même si vous la modifiez ensuite, et même si sa commande est confirmée, livrée, annulée ou supprimée. Pilotix reconnaît une ligne par son N° de commande, sinon par sa Date + le téléphone : gardez une de ces colonnes.",
       "saveOnly": "Enregistrer les colonnes",
       "saveSync": "Enregistrer et synchroniser",
       "saved": "Colonnes enregistrées",
@@ -389,6 +389,7 @@
       "seeOrders": "Voir les nouvelles commandes",
       "fields": {
         "ref": "N° de commande",
+        "date": "Date de la commande",
         "name": "Nom du client",
         "phone": "Téléphone",
         "phone2": "Téléphone 2",

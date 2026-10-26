@@ -4,13 +4,13 @@
 import { communesOf, normalizePhone, WILAYAS, WILAYAS_AR } from '@pilotix/shared';
 import { z } from 'zod';
 import { num } from '../db';
-import { bad, Ctx, notFound, proc } from '../rpc';
+import { AppError, bad, Ctx, notFound, proc, withActionLock } from '../rpc';
 import { createOrder } from './orders';
 
 const id = z.number().int().positive();
 
 // ---------------------------------------------------------------- the fields a column can fill
-export const SHEET_FIELDS = ['ref', 'name', 'phone', 'phone2', 'wilaya', 'commune', 'address', 'product', 'sku', 'variant', 'qty', 'unitPrice', 'total', 'stopdesk', 'note', 'ignore'] as const;
+export const SHEET_FIELDS = ['ref', 'date', 'name', 'phone', 'phone2', 'wilaya', 'commune', 'address', 'product', 'sku', 'variant', 'qty', 'unitPrice', 'total', 'stopdesk', 'note', 'ignore'] as const;
 export type SheetField = (typeof SHEET_FIELDS)[number];
 /** Without these, a line cannot become an order (a product or a SKU). */
 const REQUIRED: SheetField[] = ['name', 'phone', 'wilaya'];
@@ -25,15 +25,17 @@ const norm = (s: unknown) =>
 
 /** Words in a column title that tell what it is (French, English, Arabic, darija). Checked in this order. */
 const GUESS: [SheetField, RegExp][] = [
+  // first the titles that hold another field's word: « Date de la commande », « Référence produit », « Numéro de commande »
+  ['date', /\b(date|horodateur|horodatage|timestamp|heure|time|created)\b|التاريخ|الوقت/],
+  ['sku', /\b(sku|code\s*(du\s*)?produit|reference\s*(du\s*)?produit|ref\s*produit)\b/],
+  ['ref', /\b((numero|num|n|no|id)\s*(de\s*)?(la\s*)?(commande|order)|order\s*(id|number|no|n)|id|ref|reference)\b|رقم\s*الطلب/],
   ['phone2', /\b(tel|telephone|phone|mobile|numero|num)\s*2\b|\b2(e|eme)?\s*(tel|telephone|numero)\b|هاتف\s*2|رقم\s*2/],
   ['phone', /\b(tel|telephone|phone|mobile|numero|num|gsm)\b|هاتف|الهاتف|رقم/],
   ['unitPrice', /prix\s*unit|unit\s*price|\bpu\b/],
   ['total', /\b(prix|price|total|montant|amount|somme)\b|السعر|المبلغ|الثمن/],
   ['qty', /\b(quantite|qte|qty|quantity|nombre|nbr)\b|الكمية|العدد/],
-  ['sku', /\b(sku|code\s*produit|reference\s*produit)\b/],
   ['variant', /\b(variante|variant|taille|couleur|size|color|colour|pointure|modele)\b|المقاس|اللون/],
   ['product', /\b(produit|product|article|item|offre)\b|المنتج|منتج|السلعة/],
-  ['ref', /\b(id|order\s*id|n\s*commande|numero\s*commande|commande|ref|reference|order)\b/],
   ['wilaya', /\b(wilaya|state|province|region)\b|الولاية|ولاية/],
   ['commune', /\b(commune|city|ville|daira|localite)\b|البلدية|بلدية|المدينة/],
   ['address', /\b(adresse|address|adress|quartier|rue)\b|العنوان|عنوان/],
@@ -183,8 +185,28 @@ const lineOf = (headers: string[], row: string[], mapping: Record<string, SheetF
   });
   return l;
 };
-/** The same line always gives the same key: its order number when the sheet has one, otherwise its content. */
-const keyOf = async (l: Line, row: string[]) => (l.ref ? `ref:${l.ref}` : `row:${await sha256(row.map((x) => x.trim()).join('␟'))}`);
+const clean = (v: string | undefined) => (v ?? '').replace(/\s+/g, ' ').trim();
+/**
+ * What makes a line « the same order », so it becomes an order only once:
+ * - its order number (N°, ID…) when the sheet has that column;
+ * - otherwise its date + the phone (a form or a landing tool writes the moment of the order);
+ * - otherwise the phone + the product + the variant + the quantity.
+ * Columns the team changes afterwards (a status, a comment, a corrected address) never make a line new again.
+ */
+async function keyOf(l: Line): Promise<string> {
+  if (clean(l.ref)) return `ref:${clean(l.ref)}`;
+  const phone = normalizePhone(l.phone ?? '') ?? clean(l.phone).replace(/\D/g, '');
+  if (clean(l.date)) return `dp:${await sha256(`${clean(l.date)}\u241f${phone}`)}`;
+  return `pp:${await sha256([phone, norm(l.sku || l.product), norm(l.variant), clean(l.qty) || '1'].join('\u241f'))}`;
+}
+/** The key of the first version (every cell of the line): lines imported with it stay known. */
+const legacyKeyOf = async (row: string[]) => `row:${await sha256(row.map((x) => x.trim()).join('\u241f'))}`;
+/**
+ * The same line of the same Google sheet, whatever the channel: kept on the order (unique in the database), so even a
+ * channel deleted and added again with this sheet never brings back a line already made into an order.
+ */
+export const sheetIdOf = (url: string) => /\/spreadsheets\/d\/(?:e\/)?([\w-]+)/.exec(url)?.[1] ?? 'x';
+const extIdOf = (url: string, key: string) => `sheet:${sheetIdOf(url)}:${key}`.slice(0, 200);
 
 async function findProduct(ctx: Ctx, l: Line): Promise<{ productId: number; variantId: number | null }> {
   if (l.sku) {
@@ -225,6 +247,13 @@ async function orderFromLine(ctx: Ctx, ch: any, l: Line) {
   const { productId, variantId } = await findProduct(ctx, l);
   const qty = Math.min(999, Math.max(1, Math.round(Number(String(l.qty ?? '').replace(/[^\d]/g, '')) || 1)));
   const unit = l.unitPrice ? money(l.unitPrice) : l.total ? money(l.total) : null;
+  // the same number ordered in the last 3 days (by the sheet, a landing page, by hand…): imported, and flagged for the agent
+  const twin = (
+    await ctx.db.query(
+      `SELECT ref FROM orders WHERE phone = $1 AND created_at > now() - interval '3 days' AND conf_status NOT IN ('cancelled','duplicate','fake','wrong_number') ORDER BY id DESC LIMIT 1`,
+      [phone],
+    )
+  )[0];
   return createOrder(ctx, {
     customerName: l.name!.slice(0, 120),
     phone,
@@ -238,35 +267,64 @@ async function orderFromLine(ctx: Ctx, ch: any, l: Line) {
     items: [{ productId, variantId, qty, ...(unit !== null ? { unitPrice: l.unitPrice ? unit : Math.round(unit / qty) } : {}) }],
     discount: 0,
     customerNote: l.note ? l.note.slice(0, 1000) : null,
+    internalNote: twin ? `⚠️ Même numéro que ${twin.ref} (moins de 3 jours) : doublon possible` : null,
     confirm: false,
     isExchange: false,
   });
 }
 
-/** Turns the sheet's new lines into orders (at most `limit` a run). Lines with a problem are tried again next time. */
+/**
+ * Turns the sheet's new lines into orders (at most `limit` a run). Lines with a problem are tried again next time.
+ * Never changes an order already made: a line already imported is skipped, whatever its order became since (confirmed,
+ * delivered, cancelled, deleted).
+ */
 async function syncChannel(ctx: Ctx, channelId: number, limit = 300) {
+  // one sync at a time per channel (the 10-minute job and a click at the same moment)
+  return withActionLock(ctx.db, `sheet-sync:${channelId}`, ctx.session.profile.id, 'Synchronisation déjà en cours : réessayez dans une minute', () => syncNow(ctx, channelId, limit), 600);
+}
+
+async function syncNow(ctx: Ctx, channelId: number, limit: number) {
   const { ch, config } = await channelOf(ctx, channelId);
   if (!config.url) throw bad('Lien de la feuille manquant');
   const mapping = config.mapping;
   if (!mapping || !Object.values(mapping).some((f) => f !== 'ignore')) throw bad('Choisissez d’abord quelle colonne va où');
   const { headers, rows } = await readSheet(ctx, config.url);
-  const done = new Set<string>((await ctx.db.query('SELECT row_key FROM sheet_rows WHERE channel_id = $1', [channelId])).map((r: any) => r.row_key));
+  const sheet = sheetIdOf(config.url);
+  const done = new Set<string>((await ctx.db.query('SELECT row_key FROM sheet_rows WHERE sheet_id = $1', [sheet])).map((r: any) => r.row_key));
   const errors: { line: number; error: string }[] = [];
   let created = 0;
   let already = 0;
+  const seenNow = new Set<string>(); // the same order written twice in the sheet: once
   for (let i = 0; i < rows.length && created < limit; i++) {
     const l = lineOf(headers, rows[i], mapping);
-    const key = await keyOf(l, rows[i]);
-    if (done.has(key)) {
+    const key = await keyOf(l);
+    if (done.has(key) || seenNow.has(key) || done.has(await legacyKeyOf(rows[i]))) {
       already++;
       continue;
     }
+    seenNow.add(key);
+    const ext = extIdOf(config.url, key);
     try {
-      const o = await orderFromLine(ctx, ch, l);
-      await ctx.db.query('INSERT INTO sheet_rows (channel_id, row_key, order_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [channelId, key, o.id]);
-      done.add(key);
-      created++;
+      const made = await ctx.db.tx(async (tx) => {
+        // the line is taken first: a second sync running at the same moment waits here, then skips it
+        const claim = await tx.query('INSERT INTO sheet_rows (sheet_id, channel_id, row_key) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING RETURNING row_key', [sheet, channelId, key]);
+        if (!claim.length) return null;
+        // already an order from this same sheet line (a channel deleted then added again with this sheet)
+        const prev = (await tx.query('SELECT id FROM orders WHERE ext_order_id = $1', [ext]))[0];
+        if (prev) {
+          await tx.query('UPDATE sheet_rows SET order_id = $3 WHERE sheet_id = $1 AND row_key = $2', [sheet, key, prev.id]);
+          return null;
+        }
+        const o = await orderFromLine({ ...ctx, db: tx }, ch, l);
+        // unique in the database: never two orders for one sheet line, whatever happens
+        await tx.query('UPDATE orders SET ext_order_id = $2 WHERE id = $1', [o.id, ext]);
+        await tx.query('UPDATE sheet_rows SET order_id = $3 WHERE sheet_id = $1 AND row_key = $2', [sheet, key, o.id]);
+        return o;
+      });
+      if (made) created++;
+      else already++;
     } catch (e: any) {
+      // nothing kept for this line (its transaction was undone): tried again at the next sync
       errors.push({ line: i + 2, error: String(e?.message ?? e).slice(0, 200) });
     }
   }
@@ -285,7 +343,7 @@ export const sheetsProcs = {
     const { headers, rows } = await readSheet(ctx, config.url);
     const guess = guessMapping(headers);
     const mapping = Object.fromEntries(headers.map((h) => [h, config.mapping?.[h] ?? guess[h]]));
-    const done = num((await ctx.db.query('SELECT count(*) AS n FROM sheet_rows WHERE channel_id = $1', [i.id]))[0].n);
+    const done = num((await ctx.db.query('SELECT count(*) AS n FROM sheet_rows WHERE sheet_id = $1', [sheetIdOf(config.url)]))[0].n);
     return { headers, sample: rows.slice(0, 5), lines: rows.length, mapping, saved: !!config.mapping, done, fields: SHEET_FIELDS };
   }),
   /**
@@ -305,7 +363,7 @@ export const sheetsProcs = {
     if (i.skipExisting && config.url) {
       const { headers, rows } = await readSheet(ctx, config.url);
       for (const row of rows) {
-        const r = await ctx.db.query('INSERT INTO sheet_rows (channel_id, row_key) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING row_key', [ch.id, await keyOf(lineOf(headers, row, i.mapping), row)]);
+        const r = await ctx.db.query('INSERT INTO sheet_rows (sheet_id, channel_id, row_key) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING RETURNING row_key', [sheetIdOf(config.url), ch.id, await keyOf(lineOf(headers, row, i.mapping))]);
         skipped += r.length;
       }
     }
@@ -322,6 +380,7 @@ export const sheetsProcs = {
         const r = await syncChannel(ctx, num(c.id));
         out.push({ id: num(c.id), name: c.name, created: r.created, errorCount: r.errorCount });
       } catch (e: any) {
+        if (e instanceof AppError && e.code === 'conflict') continue; // already syncing (a click): that run does the work
         out.push({ id: num(c.id), name: c.name, error: String(e?.message ?? e) });
       }
     }
