@@ -12,6 +12,7 @@
 // GET …/{id}), POST /workflows/search (ZR's statuses), GET /delivery-pricing/service-pricing, webhooks (/webhooks/endpoints).
 // BEST GUESS (check with real keys): the "state.name" values in STATUSES below come from ZR's dashboard wording;
 // unknown ones are shown as-is and can be mapped by hand with the "Statuts" button.
+import { cacheKeyOf } from './types';
 import type { BagAdded, BagInfo, ChangeInput, ChangeState, ClaimCategory, ClaimState, CourierAdapter, CourierBags, CourierCompany, Desk, Helpers, Parcel, ParcelInfo, TrackItem } from './types';
 import { baseUrl, bestMatch, CourierError, cut, http, intl, needKeys, timeUp } from './util';
 
@@ -31,7 +32,7 @@ const labelFormat = (c: CourierCompany) => (/^a4$/i.test(String(c.settings.label
 
 const cache = new Map<string, any[]>();
 async function territories(c: CourierCompany, level: 'wilaya' | 'commune') {
-  const key = `${c.id}:${level}`;
+  const key = `${cacheKeyOf(c)}:${level}`;
   if (cache.has(key)) return cache.get(key)!;
   const out: any[] = [];
   let filtered = true;
@@ -59,7 +60,7 @@ async function territories(c: CourierCompany, level: 'wilaya' | 'commune') {
   return list;
 }
 async function hubs(c: CourierCompany) {
-  const key = `${c.id}:hubs`;
+  const key = `${cacheKeyOf(c)}:hubs`;
   if (cache.has(key)) return cache.get(key)!;
   const out: any[] = [];
   for (let n = 1; n < 10; n++) {
@@ -86,7 +87,7 @@ const REASON_HINTS: Record<string, string[]> = {
 };
 
 async function loadClaimCats(c: CourierCompany): Promise<ClaimCategory[]> {
-  const key = `${c.id}:claimcat`;
+  const key = `${cacheKeyOf(c)}:claimcat`;
   if (cache.has(key)) return cache.get(key)!;
   const r = await http(c.name, url(c, '/claim-categories/search'), { method: 'POST', headers: h(c), json: { keyword: '', pageNumber: 1, pageSize: 200 } });
   const list = ((r?.items ?? []) as any[]).map((x) => ({ id: String(x.id), name: String(x.name || x.nameEnglish || x.nameArabic || x.id) }));
@@ -198,7 +199,7 @@ async function zrAddress(c: CourierCompany, p: Parcel, helpers: Helpers) {
   }
   const w = (await territories(c, 'wilaya')).find((t) => Number(t.code) === Number(p.wilaya_id));
   if (!w) throw new CourierError(`ZR ne livre pas la wilaya ${p.wilaya_id}`);
-  const com = await helpers.communeName(p, async () => (await territories(c, 'commune')).filter((t) => t.parentId === w.id).map((t) => ({ id: t.id, name: t.name })), `zr:${c.id}:${w.id}`);
+  const com = await helpers.communeName(p, async () => (await territories(c, 'commune')).filter((t) => t.parentId === w.id).map((t) => ({ id: t.id, name: t.name })), `zr:${cacheKeyOf(c)}:${w.id}`);
   if (!com) throw new CourierError(`Commune « ${p.commune} » introuvable chez ZR : corrigez la commune`);
   return { hubId: undefined, address: { cityTerritoryId: w.id, districtTerritoryId: com.id, street: cut(p.address || p.commune, 200) } };
 }

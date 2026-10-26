@@ -29,7 +29,7 @@ import {
 } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
-import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
+import { bad, Ctx, forbidden, notFound, proc, publicApi } from '../rpc';
 import { clientHomeFees, getSetting, setSetting } from '../settings';
 import { BOT_UA, FraudLevel, FraudReason, scoreOrder } from './fraud';
 import { ABANDONED, abandonCutoff, freeLandingSlug, landingCounts, landingSettings, LandingSettings, landingStore, queuePurchase, quickCreatePage, STORE_RESERVED } from './landingquery';
@@ -875,8 +875,8 @@ function userData(r: { phone: string; name: string; commune?: string | null; wil
 const META_MAX_AGE = 7 * 86_400;
 
 /** The event Meta receives, or why it is not sent anymore. */
-async function buildEvent(db: Db, e: any, publicUrl: string, now: number): Promise<{ event?: Record<string, unknown>; skip?: string }> {
-  const sourceUrl = (slug: string | null, url: string | null) => url || (slug && publicUrl ? `${publicUrl}/api/lp/${slug}` : publicUrl || 'https://pilotix.app');
+async function buildEvent(db: Db, e: any, api: string, publicUrl: string, now: number): Promise<{ event?: Record<string, unknown>; skip?: string }> {
+  const sourceUrl = (slug: string | null, url: string | null) => url || (slug && api ? `${api}/lp/${slug}` : publicUrl || 'https://pilotix.app');
   const nowS = Math.floor(now / 1000);
   if (e.event_name === 'Purchase') {
     // the browser's data comes from the customer's submit, or from what they typed (an abandoned order)
@@ -954,7 +954,7 @@ export async function sendMetaEvents(ctx: Ctx, limit = 100): Promise<{ sent: num
   const token = String((await db.query(`SELECT value FROM settings WHERE key = $1`, [LANDING_CAPI_SECRET]))[0]?.value ?? '') || String((await db.query(`SELECT value FROM settings WHERE key = 'secret_meta_token'`))[0]?.value ?? '');
   const byPixel = new Map<string, { row: any; event: Record<string, unknown> }[]>();
   for (const e of claimed) {
-    const b = await buildEvent(db, e, ctx.server?.publicUrl ?? '', now);
+    const b = await buildEvent(db, e, publicApi(ctx), ctx.server?.publicUrl ?? '', now);
     if (!b.event) {
       await db.query(`UPDATE meta_events SET status = 'skipped', error = $2, claimed_at = NULL WHERE id = $1`, [e.id, b.skip]);
       out.skipped++;
@@ -1238,6 +1238,8 @@ export const landingProcs = {
       settings: { pixelId: s.pixelId, testEventCode: s.testEventCode, purchaseAt: s.purchaseAt, abandonAfterMin: s.abandonAfterMin, autoCreate: s.autoCreate, storeSlug: s.storeSlug ?? '' },
       /** the store's part of the address in use (the chosen one, else made from the shop's name) */
       store: await landingStore(ctx.db, s),
+      /** a shop of a multi-shop server other than #1: its name is given by Pilotix (its webhooks use it too) */
+      storeFixed: !!ctx.shop && !ctx.shop.primary,
       /** the token itself never leaves the server */
       capi: { own, ads },
       /** products set aside (« Pas de page »): they can get their alert back */
@@ -1252,6 +1254,11 @@ export const landingProcs = {
     const { capiToken, ...rest } = i;
     if (capiToken !== '' && !ctx.session.isAdmin) throw forbidden('Seul l’administrateur modifie le jeton Meta');
     const cur = await landingSettings(ctx.db);
+    // the store's part of the links: another shop of the platform keeps the name Pilotix gave it; shop #1 chooses its
+    // own, which no other shop may have (the server then gives shop #1 that name on the platform too)
+    if (ctx.shop && !ctx.shop.primary) rest.storeSlug = ctx.shop.slug;
+    else if (rest.storeSlug && rest.storeSlug !== cur.storeSlug && (await ctx.server?.storeTaken?.(rest.storeSlug)))
+      throw bad('Ce nom est déjà pris par une autre boutique Pilotix, choisissez-en un autre');
     await setSetting(ctx.db, 'landing', { ...cur, ...rest }, ctx.session.profile.id);
     if (capiToken === null) await ctx.db.query(`DELETE FROM settings WHERE key = $1`, [LANDING_CAPI_SECRET]);
     else if (capiToken.trim()) {

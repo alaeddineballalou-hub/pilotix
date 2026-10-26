@@ -131,10 +131,15 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
           <Icon name="globe" /> {t('landing.set.link')}
         </h2>
         <p className="pd-note">{t('landing.set.linkHelp')}</p>
-        <Field label={t('landing.set.storeSlug')} hint={t('landing.set.storeSlugHint', { name: data.store })}>
+        <Field label={t('landing.set.storeSlug')} hint={data.storeFixed ? t('landing.set.storeFixed') : t('landing.set.storeSlugHint', { name: data.store })}>
           <div className="lp-slug">
             <span className="ltr">{`${serverUrl() || location.host}/`.replace(/^https?:\/\//, '')}</span>
-            <input className="ltr" value={f.storeSlug} maxLength={40} placeholder={data.store} onChange={(e) => set('storeSlug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} />
+            {data.storeFixed ? (
+              // a shop of Pilotix's platform: the name Pilotix gave it (its order links use it too)
+              <input className="ltr" value={data.store} readOnly />
+            ) : (
+              <input className="ltr" value={f.storeSlug} maxLength={40} placeholder={data.store} onChange={(e) => set('storeSlug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} />
+            )}
             <span className="ltr">/…</span>
           </div>
         </Field>

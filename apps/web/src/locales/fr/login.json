@@ -21,5 +21,7 @@
   "resetSave": "Enregistrer",
   "resetShort": "Le mot de passe doit contenir au moins 8 caractères",
   "resetMismatch": "Les deux mots de passe ne sont pas pareils",
-  "resetDone": "C’est fait ! Votre mot de passe est changé. Connectez-vous avec le nouveau."
+  "resetDone": "C’est fait ! Votre mot de passe est changé. Connectez-vous avec le nouveau.",
+  "demoServer": "Essayer la démo",
+  "demoServerText": "une boutique d’exemple, données fictives. Choisissez un rôle :"
 }

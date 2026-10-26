@@ -4,6 +4,7 @@ import { ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from '
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import icons from './icons.json';
+import { hrefIsOn } from '../lib/features';
 
 // ---------------------------------------------------------------- icons
 const EXTRA: Record<string, string> = {
@@ -66,6 +67,14 @@ const EXTRA: Record<string, string> = {
   minus: '<path d="M5 12h14"/>',
   arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
   more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
+  // Pilotix control room: shops, keys, suspend
+  store: '<path d="M3 9 4.5 4h15L21 9"/><path d="M3 9h18v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0Z"/><path d="M5 13v8h14v-8M10 21v-5h4v5"/>',
+  key: '<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/>',
+  shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+  pause: '<circle cx="12" cy="12" r="10"/><path d="M10 15V9M14 15V9"/>',
+  power: '<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>',
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
+  archive: '<rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"/>',
   // AI Spy: follow a page, the Chrome extension
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   puzzle: '<path d="M19.4 15.4a1 1 0 0 0-.3.9l.5 2.6a2 2 0 0 1-2 2.4h-2.2a1 1 0 0 1-1-1.2 2 2 0 1 0-3.8 0 1 1 0 0 1-1 1.2H7.4a2 2 0 0 1-2-2v-2.2a1 1 0 0 1 1.2-1 2 2 0 1 0 0-3.8 1 1 0 0 1-1.2-1V6.4a2 2 0 0 1 2-2h2.2a1 1 0 0 0 1-1.2 2 2 0 1 1 3.8 0 1 1 0 0 0 1 1.2h2.2a2 2 0 0 1 2 2v2.2a1 1 0 0 0 1.2 1 2 2 0 1 1 0 3.8 1 1 0 0 0-.9.3z"/>',
@@ -324,8 +333,9 @@ export function Tabs<T extends string>({ value, onChange, items }: { value: T; o
   );
 }
 
-/** The stage bar under the top bar ("Nouvelles › En cours › Confirmées"). */
-export function StageBar({ items, current, flow = true }: { items: { key: string; label: string; href: string; count?: number }[]; current: string; flow?: boolean }) {
+/** The stage bar under the top bar ("Nouvelles › En cours › Confirmées"). Sub-pages not in the shop's plan are left out. */
+export function StageBar({ items: all, current, flow = true }: { items: { key: string; label: string; href: string; count?: number }[]; current: string; flow?: boolean }) {
+  const items = all.filter((it) => hrefIsOn(it.href));
   return (
     <nav className={`bjm-bar ${flow ? 'flow' : ''}`} aria-label="Étapes">
       {items.map((it, i) => (

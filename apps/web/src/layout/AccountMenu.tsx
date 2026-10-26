@@ -53,6 +53,15 @@ export function AccountMenu({ session, onLogout, lang, onTheme }: { session: Ses
           {item('settings', t('profil.tSettings'), () => go('parametres'))}
           {item('gift', t('profil.tRef'), () => go('parrainage'))}
           {item('lock', t('profil.pwd'), () => go('securite'))}
+          {session.platformStaff && (
+            <>
+              <hr />
+              {item('shield', t('shop.controlRoom'), () => {
+                setOpen(false);
+                location.hash = '#/platform';
+              })}
+            </>
+          )}
           {(lang || onTheme) && (
             <div className="px-me-phone">
               <hr />

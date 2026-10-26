@@ -13,7 +13,15 @@ export interface CourierCompany {
   /** Our own mapping: courier status → follow status ('' = do nothing). Overrides the adapter defaults. */
   statusMap: Record<string, string>;
   shop: { name: string; fromWilayaId: number; fromWilaya: string };
+  /**
+   * What the courier's lists (wilayas, communes, hubs…) are cached under: the company's keys and address, never its id
+   * alone (two shops on one server both have a company n° 1; new keys mean new lists).
+   */
+  cacheKey?: string;
 }
+
+/** The key a company's cached lists are kept under. */
+export const cacheKeyOf = (c: CourierCompany) => c.cacheKey ?? `id${c.id}`;
 
 /** One order, normalized for the couriers (what every adapter receives). */
 export interface Parcel {

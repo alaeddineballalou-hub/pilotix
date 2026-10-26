@@ -1,4 +1,5 @@
 import type { Role } from '@pilotix/shared';
+import { pageIsOn } from '../lib/features';
 
 /**
  * The menu, as in the original Pilotix (final layout): sub-pages appear as a stage bar inside the page,
@@ -94,10 +95,12 @@ export const NAV: NavItem[] = [
   { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'parrainage', 'securite'] },
 ];
 
-/** A group's child: its own roles, or everyone who sees the group. */
-export const canSeeChild = (c: NavChild, roles: Role[], isAdmin: boolean) => isAdmin || !c.roles || c.roles.some((r) => roles.includes(r));
+/** A group's child: its own roles, or everyone who sees the group — and in the shop's plan. */
+export const canSeeChild = (c: NavChild, roles: Role[], isAdmin: boolean) => (isAdmin || !c.roles || c.roles.some((r) => roles.includes(r))) && pageIsOn(c.id);
 
 export function canSee(item: NavItem, roles: Role[], isAdmin: boolean, canManageUsers = false): boolean {
+  // a menu the shop's plan does not include is not shown to anyone, administrators included
+  if (!pageIsOn(item.id)) return false;
   if (item.onlyIf && !item.onlyIf(roles, isAdmin)) return false;
   if (item.manageUsers && canManageUsers) return true;
   if (item.roles === null || isAdmin) return true;
@@ -106,7 +109,7 @@ export function canSee(item: NavItem, roles: Role[], isAdmin: boolean, canManage
 
 /** Where a user lands when the address doesn't match a page they can see. */
 export function homeFor(roles: Role[], isAdmin: boolean): string {
-  if (!isAdmin && roles.includes('livreur') && !roles.some((r) => ['confirmation', 'suivi', 'depot'].includes(r))) return 'tournee';
-  if (!isAdmin && roles.includes('confirmation') && !roles.includes('vendeur') && roles.length === 1) return 'confirmation';
+  if (!isAdmin && roles.includes('livreur') && !roles.some((r) => ['confirmation', 'suivi', 'depot'].includes(r)) && pageIsOn('tournee')) return 'tournee';
+  if (!isAdmin && roles.includes('confirmation') && !roles.includes('vendeur') && roles.length === 1 && pageIsOn('confirmation')) return 'confirmation';
   return 'accueil';
 }

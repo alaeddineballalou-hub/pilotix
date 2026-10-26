@@ -5,7 +5,7 @@
 import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMenuCounts } from '../../layout/Shell';
-import { backend, serverUrl } from '../../lib/backend';
+import { backend, serverUrl, shopApi } from '../../lib/backend';
 import { clock, da, dayLabel, n, sameDay, shortWhen } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
@@ -601,8 +601,8 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'de
   });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF({ ...f, [k]: v });
   const base = serverUrl() || (backend.kind === 'demo' ? 'https://votre-serveur.dz' : window.location.origin);
-  const metaUrl = `${base}/api/hooks/meta`;
-  const tiktokUrl = `${base}/api/hooks/tiktok?key=${f.verifyToken}`;
+  const metaUrl = `${shopApi(base)}/hooks/meta`;
+  const tiktokUrl = `${shopApi(base)}/hooks/tiktok?key=${f.verifyToken}`;
   const dirty = JSON.stringify(f) !== JSON.stringify(data.settings) || Object.values(sec).some((v) => v !== undefined && v !== '');
   const secret = (k: Secret, label: string, ph: string) => (
     <Field

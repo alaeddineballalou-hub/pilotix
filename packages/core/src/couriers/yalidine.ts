@@ -4,6 +4,7 @@
 // DELETE parcels/{tracking}), fees/?from_wilaya_id=&to_wilaya_id=. Yalidine limits the request rate: we wait between calls.
 // Yalidine only knows the 58 historic wilayas; wilayas 59–69 are sent as their parent wilaya.
 import { NEW_WILAYA_PARENT } from '@pilotix/shared';
+import { cacheKeyOf } from './types';
 import type { CourierAdapter, CourierCompany } from './types';
 import { baseUrl, chunks, CourierError, cut, http, HttpOpts, needKeys, sleep, splitName, timeUp } from './util';
 
@@ -35,10 +36,11 @@ async function all(c: CourierCompany, path: string) {
   }
   return out;
 }
-const wcache = new Map<number, any[]>();
+const wcache = new Map<string, any[]>();
 async function wilayas(c: CourierCompany) {
-  if (!wcache.has(c.id)) wcache.set(c.id, await all(c, 'wilayas/'));
-  return wcache.get(c.id)!;
+  const k = cacheKeyOf(c);
+  if (!wcache.has(k)) wcache.set(k, await all(c, 'wilayas/'));
+  return wcache.get(k)!;
 }
 
 export const yalidine: CourierAdapter = {
@@ -69,7 +71,7 @@ export const yalidine: CourierAdapter = {
       commune = center.commune_name;
       toWilaya = Number(center.wilaya_id);
     } else {
-      const m = await helpers.communeName(p, async (w) => (await all(c, `communes/?wilaya_id=${yw(w)}`)).map((x) => ({ id: x.id, name: x.name as string })), `yal:${c.id}`);
+      const m = await helpers.communeName(p, async (w) => (await all(c, `communes/?wilaya_id=${yw(w)}`)).map((x) => ({ id: x.id, name: x.name as string })), `yal:${cacheKeyOf(c)}`);
       if (!m) throw new CourierError(`Commune « ${p.commune} » introuvable chez ${c.name} : corrigez la commune`);
       commune = m.name;
     }

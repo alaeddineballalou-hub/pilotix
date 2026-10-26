@@ -2,7 +2,34 @@ import type { REGISTRY } from '@pilotix/core';
 import type { Session } from '@pilotix/shared';
 import type { z } from 'zod';
 import { pageAi } from './dellal-page-ai';
+import { currentShop } from './features';
 import { store } from './store';
+
+// ---------------------------------------------------------------- support tab
+/**
+ * Pilotix support opens a shop from the control room in a new tab (#/support/<token>): that tab keeps the shop's token
+ * for itself (sessionStorage), never in the browser's shared storage — the other tabs stay in their own shop.
+ */
+const SUPPORT_KEY = 'px.stoken';
+const tabToken = (): string | null => {
+  try {
+    return sessionStorage.getItem(SUPPORT_KEY);
+  } catch {
+    return null;
+  }
+};
+(() => {
+  const m = location.hash.match(/^#\/support\/([A-Za-z0-9._-]{20,2000})$/);
+  if (!m) return;
+  try {
+    sessionStorage.setItem(SUPPORT_KEY, m[1]);
+  } catch {
+    /* storage unavailable */
+  }
+  history.replaceState(null, '', `${location.pathname}${location.search}#/accueil`);
+})();
+/** This tab was opened by Pilotix support (its session is not kept for the other tabs). */
+export const isSupportTab = () => !!tabToken();
 
 // ---------------------------------------------------------------- typed actions
 type Reg = typeof REGISTRY;
@@ -77,12 +104,40 @@ export const forgotAvailable = () =>
 export const requestPasswordReset = (email: string) => authRequest<{ ok: true }>('/auth/forgot', { email });
 export const resetPasswordWithLink = (token: string, password: string) => authRequest<{ ok: true }>('/auth/reset', { token, password });
 
+/** The server's demo shop (its button on the login page), when Pilotix turned it on. */
+export const serverDemo = () =>
+  authRequest<{ available: boolean; accounts: { key: string; name: string; role: string }[] }>('/auth/demo').catch(() => ({ available: false, accounts: [] as { key: string; name: string; role: string }[] }));
+
+/**
+ * The address of the shop's public links (webhooks, landing pages, given to customers and other services):
+ * <server>/api, plus /s/<shop> for every shop but the server owner's.
+ */
+export function shopApi(base: string): string {
+  const s = currentShop();
+  return `${base.replace(/\/+$/, '')}/api${s && !s.primary ? `/s/${s.slug}` : ''}`;
+}
+
 class RemoteBackend implements Backend {
   kind = 'remote' as const;
-  private token = store.get('token');
+  /** a support tab keeps its own token */
+  private readonly support = !!tabToken();
+  private token = this.support ? tabToken() : store.get('token');
   private listeners = new Set<(e: LiveEvent) => void>();
   private socket: { disconnect(): void } | null = null;
   onUnauthorized: () => void = () => {};
+  /** the shop's subscription stopped (unpaid, suspended): the app reloads the session and shows the lock screen */
+  onLocked: () => void = () => {};
+
+  private keep(token: string | null) {
+    this.token = token;
+    if (!this.support) return store.set('token', token);
+    try {
+      if (token) sessionStorage.setItem(SUPPORT_KEY, token);
+      else sessionStorage.removeItem(SUPPORT_KEY);
+    } catch {
+      /* storage unavailable */
+    }
+  }
 
   private async req<T>(path: string, body?: unknown): Promise<T> {
     const base = serverUrl();
@@ -99,19 +154,23 @@ class RemoteBackend implements Backend {
     }
     const data = await res.json().catch(() => undefined);
     // after a password change the server hands this session a fresh token (the old ones stop working)
-    if (res.ok && path === '/rpc/me.password' && typeof (data as any)?.token === 'string') {
-      this.token = (data as any).token;
-      store.set('token', this.token);
-    }
+    if (res.ok && path === '/rpc/me.password' && typeof (data as any)?.token === 'string') this.keep((data as any).token);
     if (res.status === 401 && this.token) this.onUnauthorized();
+    if (res.status === 402 && this.token) this.onLocked();
     if (!res.ok) throw new ApiError(res.status, (data as any)?.message || res.statusText);
     return data as T;
   }
 
   async login(email: string, password: string) {
     const r = await this.req<{ token: string; session: Session }>('/auth/login', { email, password });
-    this.token = r.token;
-    store.set('token', r.token);
+    this.keep(r.token);
+    this.connect();
+    return r.session;
+  }
+  /** Opens the server's demo shop as one of its accounts. */
+  async demo(key: string) {
+    const r = await this.req<{ token: string; session: Session }>('/auth/demo', { key });
+    this.keep(r.token);
     this.connect();
     return r.session;
   }
@@ -130,8 +189,7 @@ class RemoteBackend implements Backend {
     }
   }
   logout() {
-    this.token = null;
-    store.set('token', null);
+    this.keep(null);
     this.socket?.disconnect();
   }
   call<N extends ProcName>(name: N, input: In<N>): Promise<Out<N>> {
@@ -241,6 +299,12 @@ export const onDemoProgress = (fn: (m: string) => void) => {
   if (backend instanceof DemoBackend) backend.progress = fn;
 };
 export const setOnUnauthorized = (fn: () => void) => (remote.onUnauthorized = fn);
+export const setOnLocked = (fn: () => void) => (remote.onLocked = fn);
+/** The server's demo shop, opened from the login page. */
+export function loginServerDemo(key: string) {
+  switchDemo(false);
+  return remote.demo(key);
+}
 
 /** Call an action on the current backend (server or demo). */
 export function rpc<N extends ProcName>(name: N, input: In<N>): Promise<Out<N>> {

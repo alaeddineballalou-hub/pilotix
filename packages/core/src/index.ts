@@ -11,6 +11,7 @@ export { login, hashPassword, profileById } from './modules/users';
 export { createPasswordReset, resetPassword, RESET_MINUTES, RESETS_PER_MONTH } from './passwordReset';
 export type { PasswordResetLink, PasswordResetMail } from './passwordReset';
 export { pgliteDb } from './pglite';
+export * from './platform';
 export { landingCommunes } from './modules/landing';
 export { fromLibrary } from './modules/spy';
 export type { RawAd, SpyAd, SpyBrief, SpyFinding, SpyKeyword, SpyProductRow, SpySettings, SpySite, SpySource, ScorePart } from './modules/spy';
