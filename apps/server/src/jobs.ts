@@ -5,6 +5,7 @@ import { Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { config } from './config';
 import { CoreService, ShopRef } from './core.service';
+import { doctorState } from './doctor';
 
 /**
  * Background work, outside user requests, for every shop that is active and paid (needs REDIS_URL; without it the app
@@ -111,7 +112,12 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       },
       { connection: this.conn, concurrency: 1 },
     );
-    this.worker.on('failed', (job, err) => this.log.error(`${job?.name} failed: ${err.message}`));
+    this.worker.on('failed', (job, err) => {
+      if (job?.name) doctorState.job(job.name, false, err.message);
+      this.log.error(`${job?.name} failed: ${err.message}`);
+    });
+    // the Doctor (control room) sees each job's last run
+    this.worker.on('completed', (job) => doctorState.job(job.name, true));
     await this.queue.add('courier-sync', {}, { repeat: { every: 30 * 60_000 }, jobId: 'courier-sync', removeOnComplete: 50, removeOnFail: 100 });
     await this.queue.add('meta-sync', {}, { repeat: { pattern: '30 4 * * *' }, jobId: 'meta-sync', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('dellal-followups', {}, { repeat: { every: 15 * 60_000 }, jobId: 'dellal-followups', removeOnComplete: 20, removeOnFail: 50 });

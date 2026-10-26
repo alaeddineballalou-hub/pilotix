@@ -1,0 +1,373 @@
+{
+  "shopTitle": "Pilotix Doctor",
+  "shopSub": "Je regarde votre boutique toutes les 5 minutes et je vous préviens avant qu’un problème grossisse.",
+  "serverTitle": "Doctor",
+  "serverSub": "La santé du serveur Pilotix : machine, base de données, tâches automatiques, erreurs du code et boutiques.",
+  "onlyYou": "Visible par vous seulement",
+  "demoNote": "Aperçu : il n’y a pas de serveur ici, ces chiffres sont un exemple. Sur votre serveur, le Doctor montre les vrais.",
+  "checkedAt": "Vérifié à {{time}}",
+  "again": "Revérifier",
+  "go": "Régler →",
+  "allGood": "Tout va bien !",
+  "allGoodSub": "Rien à régler pour le moment. Je continue à surveiller.",
+  "say": {
+    "bad_one": "{{count}} chose à régler aujourd’hui",
+    "bad_other": "{{count}} choses à régler aujourd’hui",
+    "bad": "{{count}} choses à régler aujourd’hui",
+    "warn_one": "{{count}} chose à surveiller",
+    "warn_other": "{{count}} choses à surveiller",
+    "warn": "{{count}} choses à surveiller",
+    "ok": "Tout va bien, rien à régler."
+  },
+  "lv": {
+    "bad": "urgent",
+    "warn": "à surveiller",
+    "ok": "OK"
+  },
+  "tag": {
+    "bad": "Urgent",
+    "warn": "À surveiller",
+    "ok": "OK",
+    "info": "Pas assez de données"
+  },
+  "g": {
+    "bad": "À régler maintenant",
+    "warn": "À surveiller",
+    "ok": "Vérifié, tout va bien"
+  },
+  "u": {
+    "days_one": "{{count}} jour",
+    "days_other": "{{count}} jours",
+    "days": "{{count}} jours",
+    "hours_one": "{{count}} h",
+    "hours_other": "{{count}} h",
+    "hours": "{{count}} h",
+    "mb": "{{n}} Mo"
+  },
+  "area": {
+    "stock": "Stock",
+    "confirmation": "Confirmation",
+    "team": "Équipe",
+    "depot": "Dépôt",
+    "delivery": "Livraison",
+    "sales": "Ventes",
+    "cash": "Argent",
+    "server": "Serveur",
+    "database": "Base de données",
+    "jobs": "Tâches automatiques",
+    "code": "Code",
+    "shops": "Boutiques",
+    "config": "Réglages"
+  },
+  "c": {
+    "stockOut": {
+      "title_one": "{{count}} produit manque pour des commandes déjà confirmées",
+      "title_other": "{{count}} produits manquent pour des commandes déjà confirmées",
+      "title": "{{count}} produits manquent pour des commandes déjà confirmées",
+      "why": "Il manque {{orders}} pièce(s) dans le stock pour envoyer les commandes qui attendent.",
+      "fix": "Commandez chez le fournisseur ou appelez les clients pour proposer un autre produit.",
+      "short": "Stock suffisant pour les commandes",
+      "okTitle": "Le stock suffit pour toutes les commandes confirmées"
+    },
+    "stockSoon": {
+      "title_one": "{{count}} produit sera vide bientôt",
+      "title_other": "{{count}} produits seront vides bientôt",
+      "title": "{{count}} produits seront vides bientôt",
+      "why": "Avec les ventes des 7 derniers jours, le premier sera vide d’ici {{days}} jour(s).",
+      "fix": "Faites un achat maintenant : le fournisseur met du temps à livrer.",
+      "short": "Pas de rupture dans les 5 jours",
+      "okTitle": "Aucun produit ne sera vide dans les 5 prochains jours"
+    },
+    "notCalled": {
+      "title_one": "{{count}} nouvelle commande attend un appel",
+      "title_other": "{{count}} nouvelles commandes attendent un appel",
+      "title": "{{count}} nouvelles commandes attendent un appel",
+      "why": "Elles attendent depuis plus de 2 h (la plus vieille : {{hours}} h). Un client qui attend change d’avis.",
+      "fix": "Demandez aux agents d’appeler les plus vieilles en premier.",
+      "short": "Nouvelles commandes appelées à temps",
+      "okTitle": "Chaque nouvelle commande est appelée en moins de 2 h"
+    },
+    "lateCallbacks": {
+      "title_one": "{{count}} rappel est en retard",
+      "title_other": "{{count}} rappels sont en retard",
+      "title": "{{count}} rappels sont en retard",
+      "why": "L’heure promise au client est passée depuis plus d’1 h.",
+      "fix": "Ouvrez « En attente » et rappelez ces clients maintenant.",
+      "short": "Rappels faits à l’heure",
+      "okTitle": "Les rappels promis sont faits à l’heure"
+    },
+    "confRate": {
+      "title": "Taux de confirmation stable",
+      "short": "Taux de confirmation stable",
+      "okTitle": "Taux de confirmation : {{now}} % (avant : {{before}} %)",
+      "info": "Pas encore assez de commandes pour juger la confirmation"
+    },
+    "confRateDrop": {
+      "title": "Le taux de confirmation baisse : {{now}} % (avant {{before}} %)",
+      "why": "Cette semaine, {{drop}} points de moins que la semaine d’avant.",
+      "fix": "Écoutez quelques appels, regardez les raisons d’annulation et la qualité des publicités.",
+      "short": "Taux de confirmation"
+    },
+    "fakeOrders": {
+      "title": "Trop de fausses commandes : {{pct}} %",
+      "why": "{{count}} commandes fausses ou avec un mauvais numéro en 7 jours.",
+      "fix": "Vérifiez quelle publicité ou quel formulaire les envoie, et bloquez les numéros qui reviennent.",
+      "short": "Peu de fausses commandes",
+      "okTitle": "Fausses commandes : {{pct}} %, c’est normal"
+    },
+    "weakAgents": {
+      "title_one": "{{count}} agent confirme beaucoup moins que l’équipe",
+      "title_other": "{{count}} agents confirment beaucoup moins que l’équipe",
+      "title": "{{count}} agents confirment beaucoup moins que l’équipe",
+      "why": "L’équipe confirme {{team}} % des commandes. Ces agents sont loin derrière (7 jours).",
+      "fix": "Écoutez leurs appels avec eux et donnez-leur le bon script.",
+      "short": "Agents au niveau de l’équipe",
+      "okTitle": "Tous les agents sont proches de l’équipe ({{team}} %)",
+      "info": "Pas encore assez d’appels pour comparer les agents"
+    },
+    "notShipped": {
+      "title_one": "{{count}} commande confirmée n’est pas encore partie",
+      "title_other": "{{count}} commandes confirmées ne sont pas encore parties",
+      "title": "{{count}} commandes confirmées ne sont pas encore parties",
+      "why": "Confirmées depuis plus de 2 jours (la plus vieille : {{days}} jours). Le client risque d’oublier et de refuser.",
+      "fix": "Préparez et envoyez-les aujourd’hui.",
+      "short": "Commandes envoyées vite",
+      "okTitle": "Les commandes confirmées partent en moins de 2 jours"
+    },
+    "stuckParcels": {
+      "title_one": "{{count}} colis bloqué sans nouvelles",
+      "title_other": "{{count}} colis bloqués sans nouvelles",
+      "title": "{{count}} colis bloqués sans nouvelles",
+      "why": "Envoyés depuis plus de 8 jours, et la société de livraison ne dit rien depuis 3 jours.",
+      "fix": "Appelez la société de livraison ou ouvrez une réclamation.",
+      "short": "Pas de colis bloqué",
+      "okTitle": "Aucun colis bloqué chez le livreur"
+    },
+    "openAlerts": {
+      "title_one": "{{count}} alerte de livraison n’est pas traitée",
+      "title_other": "{{count}} alertes de livraison ne sont pas traitées",
+      "title": "{{count}} alertes de livraison ne sont pas traitées",
+      "why": "Le livreur n’a pas pu livrer. Sans action, le colis revient.",
+      "fix": "Appelez le client, donnez une nouvelle date au livreur.",
+      "short": "Alertes traitées",
+      "okTitle": "Toutes les alertes de livraison sont traitées"
+    },
+    "returns": {
+      "title": "Livraisons stables",
+      "short": "Taux de livraison correct",
+      "okTitle": "Taux de livraison : {{now}} % (14 jours)",
+      "info": "Pas encore assez de colis pour juger les retours"
+    },
+    "returnsUp": {
+      "title": "Trop de retours : {{back}} % des colis reviennent",
+      "why": "Taux de livraison {{now}} % sur 14 jours (avant : {{before}} %). Chaque retour coûte la livraison aller et retour.",
+      "fix": "Confirmez mieux (adresse, date), appelez avant la livraison, et regardez les wilayas qui refusent.",
+      "short": "Retours"
+    },
+    "badWilayas": {
+      "title_one": "{{count}} wilaya renvoie beaucoup de colis",
+      "title_other": "{{count}} wilayas renvoient beaucoup de colis",
+      "title": "{{count}} wilayas renvoient beaucoup de colis",
+      "why": "Plus de 40 % des colis reviennent (30 jours).",
+      "fix": "Demandez un acompte, ou confirmez deux fois, ou arrêtez la publicité là-bas.",
+      "short": "Pas de wilaya à problème",
+      "okTitle": "Aucune wilaya ne renvoie trop de colis"
+    },
+    "ordersDrop": {
+      "title": "Les commandes baissent : {{yesterday}} hier, {{avg}} d’habitude",
+      "why": "{{drop}} % de moins que la moyenne des 7 jours d’avant.",
+      "fix": "Regardez vos publicités (arrêtées ? budget fini ?) et si le site ou la landing page marche.",
+      "short": "Commandes normales",
+      "info": "Pas encore assez de commandes pour comparer"
+    },
+    "ordersOk": {
+      "title": "Commandes normales",
+      "short": "Commandes normales",
+      "okTitle": "Commandes normales : {{yesterday}} hier, {{avg}} d’habitude"
+    },
+    "cashLate": {
+      "title_one": "{{count}} colis livré mais pas encore payé",
+      "title_other": "{{count}} colis livrés mais pas encore payés",
+      "title": "{{count}} colis livrés mais pas encore payés",
+      "why": "Livrés depuis plus de 10 jours.",
+      "whyMoney": "Livrés depuis plus de 10 jours : {{amount}} à récupérer.",
+      "fix": "Demandez le paiement à la société de livraison ou au livreur.",
+      "short": "Argent encaissé à temps",
+      "okTitle": "L’argent des colis livrés arrive à temps"
+    },
+    "cpu": {
+      "title": "Le processeur travaille trop : {{pct}} %",
+      "why": "Le serveur est lent pour tout le monde quand le processeur est plein.",
+      "fix": "Cherchez la tâche qui tourne trop, ou prenez un serveur plus fort (plus de cœurs).",
+      "short": "Processeur",
+      "okTitle": "Processeur : {{pct}} % ({{cores}} cœurs)"
+    },
+    "memory": {
+      "title": "La mémoire est presque pleine : {{pct}} %",
+      "why": "Quand la mémoire est pleine, le serveur peut s’arrêter tout seul.",
+      "fix": "Redémarrez Pilotix ce soir, puis ajoutez de la mémoire si ça revient.",
+      "short": "Mémoire",
+      "okTitle": "Mémoire : {{pct}} %"
+    },
+    "disk": {
+      "title": "Le disque est presque plein : {{pct}} %",
+      "why": "Il reste {{free}} Mo. Disque plein = la base de données s’arrête et plus aucune commande n’entre.",
+      "fix": "Supprimez les vieux logs et sauvegardes, nettoyez Docker (docker system prune), ou agrandissez le disque.",
+      "short": "Disque",
+      "okTitle": "Disque : {{pct}} %"
+    },
+    "restarted": {
+      "title": "Pilotix vient de redémarrer ({{minutes}} min)",
+      "why": "Si personne ne l’a redémarré, c’est qu’il est tombé.",
+      "fix": "Regardez les erreurs ci-dessous et les logs du serveur (docker compose logs).",
+      "short": "Pas de redémarrage récent",
+      "okTitle": "Pilotix tourne sans arrêt"
+    },
+    "dbPing": {
+      "title": "La base de données répond lentement : {{ms}} ms",
+      "why": "Toutes les pages deviennent lentes.",
+      "fix": "Regardez les requêtes lentes, le disque et la mémoire.",
+      "short": "Base de données rapide",
+      "okTitle": "Base de données : répond en {{ms}} ms"
+    },
+    "dbConnections": {
+      "title": "Trop de connexions à la base : {{used}} sur {{max}}",
+      "why": "Bientôt les nouvelles connexions seront refusées.",
+      "fix": "Baissez DB_POOL_MAX ou augmentez max_connections.",
+      "short": "Connexions à la base",
+      "okTitle": "Connexions à la base : {{used}} sur {{max}}"
+    },
+    "dbSlow": {
+      "title_one": "{{count}} requête bloquée depuis plus de 30 s",
+      "title_other": "{{count}} requêtes bloquées depuis plus de 30 s",
+      "title": "{{count}} requêtes bloquées depuis plus de 30 s",
+      "why": "Une requête bloquée peut bloquer les autres.",
+      "fix": "Regardez pg_stat_activity et arrêtez la requête si besoin.",
+      "short": "Pas de requête bloquée",
+      "okTitle": "Aucune requête bloquée"
+    },
+    "dbDown": {
+      "title": "La base de données ne répond pas !",
+      "why": "{{error}}",
+      "fix": "Vérifiez que PostgreSQL tourne (docker compose ps) et que le disque n’est pas plein.",
+      "short": "Base de données"
+    },
+    "dbPoolFull": {
+      "title": "Des requêtes attendent une connexion ({{waiting}})",
+      "why": "Toutes les {{max}} connexions de Pilotix sont occupées.",
+      "fix": "Augmentez DB_POOL_MAX ou cherchez ce qui garde les connexions.",
+      "short": "Connexions libres"
+    },
+    "redisOff": {
+      "title": "Redis n’est pas réglé : les tâches automatiques sont arrêtées",
+      "why": "Sans Redis : pas de suivi automatique des colis, pas de Dellal, pas de landing pages automatiques.",
+      "fix": "Ajoutez REDIS_URL dans le fichier .env puis redémarrez.",
+      "short": "Redis"
+    },
+    "redisDown": {
+      "title": "Redis ne répond pas !",
+      "why": "Les tâches automatiques (suivi des colis, Dellal…) sont bloquées.",
+      "fix": "Redémarrez Redis (docker compose restart redis).",
+      "short": "Redis"
+    },
+    "redis": {
+      "title": "Redis répond lentement : {{ms}} ms",
+      "why": "Les tâches automatiques prennent du retard.",
+      "fix": "Regardez la mémoire du serveur.",
+      "short": "Redis",
+      "okTitle": "Redis répond en {{ms}} ms"
+    },
+    "jobs": {
+      "title_one": "{{count}} tâche automatique ne marche pas",
+      "title_other": "{{count}} tâches automatiques ne marchent pas",
+      "title": "{{count}} tâches automatiques ne marchent pas",
+      "why": "Temps depuis son dernier passage réussi :",
+      "fix": "Regardez son erreur dans le tableau « Tâches automatiques », puis la clé API ou le réseau.",
+      "short": "Tâches automatiques à l’heure",
+      "okTitle": "Toutes les tâches automatiques passent à l’heure",
+      "info": "Les tâches automatiques n’ont pas encore tourné depuis le démarrage"
+    },
+    "errors": {
+      "title": "Erreurs dans le code : {{hour}} cette heure, {{day}} en 24 h",
+      "why": "Les erreurs qui reviennent le plus (fois en 24 h) :",
+      "fix": "Corrigez d’abord celle qui revient le plus. Donnez-la à Claude avec le message.",
+      "short": "Pas d’erreur",
+      "okTitle": "Aucune erreur dans le code depuis 24 h"
+    },
+    "courierSync": {
+      "title_one": "Le suivi des colis échoue pour {{count}} boutique",
+      "title_other": "Le suivi des colis échoue pour {{count}} boutiques",
+      "title": "Le suivi des colis échoue pour {{count}} boutiques",
+      "why": "Leurs statuts de livraison ne se mettent plus à jour.",
+      "fix": "Souvent la clé API du livreur (ZR…) a changé : demandez la nouvelle à la boutique.",
+      "short": "Suivi des colis"
+    },
+    "silentShops": {
+      "title_one": "{{count}} boutique ne reçoit plus de commandes",
+      "title_other": "{{count}} boutiques ne reçoivent plus de commandes",
+      "title": "{{count}} boutiques ne reçoivent plus de commandes",
+      "why": "Elles recevaient des commandes chaque jour, et plus rien depuis (heures) :",
+      "fix": "Appelez la boutique : son site, sa landing page ou son lien de commandes est peut-être cassé.",
+      "short": "Les boutiques reçoivent des commandes",
+      "okTitle": "Les {{count}} boutiques reçoivent des commandes"
+    },
+    "config": {
+      "title_one": "{{count}} réglage du serveur manque",
+      "title_other": "{{count}} réglages du serveur manquent",
+      "title": "{{count}} réglages du serveur manquent",
+      "why": "À mettre dans le fichier .env :",
+      "fix": "Ajoutez-les dans .env puis redémarrez Pilotix.",
+      "short": "Réglages du serveur complets",
+      "okTitle": "Réglages du serveur complets"
+    }
+  },
+  "gauge": {
+    "cpu": "Processeur",
+    "memory": "Mémoire",
+    "disk": "Disque",
+    "db": "Connexions base",
+    "cores_one": "{{count}} cœur",
+    "cores_other": "{{count}} cœurs",
+    "cores": "{{count}} cœurs",
+    "dbSize": "Base : {{size}} Mo"
+  },
+  "f": {
+    "version": "Version",
+    "appUp": "Pilotix tourne depuis",
+    "serverUp": "Serveur allumé depuis",
+    "db": "Base",
+    "shops": "Boutiques actives"
+  },
+  "jobs": {
+    "title": "Tâches automatiques",
+    "name": "Tâche",
+    "state": "État",
+    "last": "Dernier passage réussi",
+    "every": "Toutes les {{time}}",
+    "st": {
+      "ok": "OK",
+      "late": "En retard",
+      "failing": "En échec",
+      "waiting": "Pas encore passée",
+      "off": "Arrêtée (pas de Redis)"
+    }
+  },
+  "job": {
+    "courier-sync": "Suivi des colis",
+    "sheets-sync": "Google Sheets",
+    "notify-run": "Messages aux clients",
+    "landing-run": "Landing pages",
+    "cm-sweep": "Commentaires (CM)",
+    "dellal-followups": "Dellal : relances",
+    "spy-scan": "AI Spy",
+    "meta-sync": "Publicités Meta",
+    "demo-reset": "Boutique démo"
+  },
+  "errs": {
+    "title": "Dernières erreurs",
+    "error": "erreur",
+    "warn": "avertissement",
+    "none": "Aucune erreur depuis 24 h.",
+    "memory": "Gardées 24 h en mémoire. Un redémarrage les efface."
+  }
+}

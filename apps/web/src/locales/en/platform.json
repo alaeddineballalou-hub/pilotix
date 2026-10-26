@@ -19,6 +19,7 @@
   "demoSub": "A shop full of fake orders, for interested customers to try.",
   "nav": {
     "dashboard": "Dashboard",
+    "doctor": "Doctor",
     "shops": "Shops",
     "payments": "Payments",
     "plans": "Plans",

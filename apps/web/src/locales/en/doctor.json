@@ -1,0 +1,373 @@
+{
+  "shopTitle": "Pilotix Doctor",
+  "shopSub": "I check your shop every 5 minutes and warn you before a problem grows.",
+  "serverTitle": "Doctor",
+  "serverSub": "The health of the Pilotix server: machine, database, automatic tasks, code errors and shops.",
+  "onlyYou": "Only you can see this",
+  "demoNote": "Preview: there is no server here, these numbers are an example. On your server, the Doctor shows the real ones.",
+  "checkedAt": "Checked at {{time}}",
+  "again": "Check again",
+  "go": "Fix it →",
+  "allGood": "All good!",
+  "allGoodSub": "Nothing to fix right now. I keep watching.",
+  "say": {
+    "bad_one": "{{count}} thing to fix today",
+    "bad_other": "{{count}} things to fix today",
+    "bad": "{{count}} things to fix today",
+    "warn_one": "{{count}} thing to watch",
+    "warn_other": "{{count}} things to watch",
+    "warn": "{{count}} things to watch",
+    "ok": "All good, nothing to fix."
+  },
+  "lv": {
+    "bad": "urgent",
+    "warn": "to watch",
+    "ok": "OK"
+  },
+  "tag": {
+    "bad": "Urgent",
+    "warn": "To watch",
+    "ok": "OK",
+    "info": "Not enough data"
+  },
+  "g": {
+    "bad": "Fix now",
+    "warn": "To watch",
+    "ok": "Checked, all good"
+  },
+  "u": {
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "days": "{{count}} days",
+    "hours_one": "{{count}} h",
+    "hours_other": "{{count}} h",
+    "hours": "{{count}} h",
+    "mb": "{{n}} MB"
+  },
+  "area": {
+    "stock": "Stock",
+    "confirmation": "Confirmation",
+    "team": "Team",
+    "depot": "Depot",
+    "delivery": "Delivery",
+    "sales": "Sales",
+    "cash": "Money",
+    "server": "Server",
+    "database": "Database",
+    "jobs": "Automatic tasks",
+    "code": "Code",
+    "shops": "Shops",
+    "config": "Settings"
+  },
+  "c": {
+    "stockOut": {
+      "title_one": "{{count}} product is missing for orders already confirmed",
+      "title_other": "{{count}} products are missing for orders already confirmed",
+      "title": "{{count}} products are missing for orders already confirmed",
+      "why": "{{orders}} piece(s) are missing to ship the orders that are waiting.",
+      "fix": "Order from your supplier, or call the customers to offer another product.",
+      "short": "Enough stock for orders",
+      "okTitle": "Stock covers every confirmed order"
+    },
+    "stockSoon": {
+      "title_one": "{{count}} product will run out soon",
+      "title_other": "{{count}} products will run out soon",
+      "title": "{{count}} products will run out soon",
+      "why": "At the last 7 days' sales, the first one runs out within {{days}} day(s).",
+      "fix": "Buy now: the supplier needs time to deliver.",
+      "short": "Nothing runs out in 5 days",
+      "okTitle": "No product runs out in the next 5 days"
+    },
+    "notCalled": {
+      "title_one": "{{count}} new order is waiting for a call",
+      "title_other": "{{count}} new orders are waiting for a call",
+      "title": "{{count}} new orders are waiting for a call",
+      "why": "Waiting for more than 2 h (the oldest: {{hours}} h). A customer who waits changes their mind.",
+      "fix": "Ask the agents to call the oldest ones first.",
+      "short": "New orders called on time",
+      "okTitle": "Every new order is called within 2 h"
+    },
+    "lateCallbacks": {
+      "title_one": "{{count}} callback is late",
+      "title_other": "{{count}} callbacks are late",
+      "title": "{{count}} callbacks are late",
+      "why": "The time promised to the customer passed more than 1 h ago.",
+      "fix": "Open “Waiting” and call these customers now.",
+      "short": "Callbacks on time",
+      "okTitle": "Promised callbacks are made on time"
+    },
+    "confRate": {
+      "title": "Confirmation rate is stable",
+      "short": "Confirmation rate stable",
+      "okTitle": "Confirmation rate: {{now}} % (before: {{before}} %)",
+      "info": "Not enough orders yet to judge confirmation"
+    },
+    "confRateDrop": {
+      "title": "Confirmation rate is going down: {{now}} % (before {{before}} %)",
+      "why": "This week, {{drop}} points less than the week before.",
+      "fix": "Listen to some calls, check the cancel reasons and the quality of your ads.",
+      "short": "Confirmation rate"
+    },
+    "fakeOrders": {
+      "title": "Too many fake orders: {{pct}} %",
+      "why": "{{count}} fake or wrong-number orders in 7 days.",
+      "fix": "Find which ad or form sends them, and block the numbers that come back.",
+      "short": "Few fake orders",
+      "okTitle": "Fake orders: {{pct}} %, that is normal"
+    },
+    "weakAgents": {
+      "title_one": "{{count}} agent confirms much less than the team",
+      "title_other": "{{count}} agents confirm much less than the team",
+      "title": "{{count}} agents confirm much less than the team",
+      "why": "The team confirms {{team}} % of orders. These agents are far behind (7 days).",
+      "fix": "Listen to their calls with them and give them the right script.",
+      "short": "Agents at team level",
+      "okTitle": "All agents are close to the team ({{team}} %)",
+      "info": "Not enough calls yet to compare agents"
+    },
+    "notShipped": {
+      "title_one": "{{count}} confirmed order has not left yet",
+      "title_other": "{{count}} confirmed orders have not left yet",
+      "title": "{{count}} confirmed orders have not left yet",
+      "why": "Confirmed more than 2 days ago (the oldest: {{days}} days). The customer may forget and refuse.",
+      "fix": "Prepare and ship them today.",
+      "short": "Orders shipped fast",
+      "okTitle": "Confirmed orders leave within 2 days"
+    },
+    "stuckParcels": {
+      "title_one": "{{count}} parcel is stuck with no news",
+      "title_other": "{{count}} parcels are stuck with no news",
+      "title": "{{count}} parcels are stuck with no news",
+      "why": "Shipped more than 8 days ago, and the courier has said nothing for 3 days.",
+      "fix": "Call the courier or open a claim.",
+      "short": "No stuck parcel",
+      "okTitle": "No parcel stuck at the courier"
+    },
+    "openAlerts": {
+      "title_one": "{{count}} delivery alert is not handled",
+      "title_other": "{{count}} delivery alerts are not handled",
+      "title": "{{count}} delivery alerts are not handled",
+      "why": "The courier could not deliver. Without action, the parcel comes back.",
+      "fix": "Call the customer, give the courier a new date.",
+      "short": "Alerts handled",
+      "okTitle": "Every delivery alert is handled"
+    },
+    "returns": {
+      "title": "Deliveries are stable",
+      "short": "Delivery rate fine",
+      "okTitle": "Delivery rate: {{now}} % (14 days)",
+      "info": "Not enough parcels yet to judge returns"
+    },
+    "returnsUp": {
+      "title": "Too many returns: {{back}} % of parcels come back",
+      "why": "Delivery rate {{now}} % over 14 days (before: {{before}} %). Each return costs the delivery both ways.",
+      "fix": "Confirm better (address, date), call before delivery, and check the wilayas that refuse.",
+      "short": "Returns"
+    },
+    "badWilayas": {
+      "title_one": "{{count}} wilaya sends many parcels back",
+      "title_other": "{{count}} wilayas send many parcels back",
+      "title": "{{count}} wilayas send many parcels back",
+      "why": "More than 40 % of parcels come back (30 days).",
+      "fix": "Ask for a deposit, confirm twice, or stop advertising there.",
+      "short": "No problem wilaya",
+      "okTitle": "No wilaya sends too many parcels back"
+    },
+    "ordersDrop": {
+      "title": "Orders are going down: {{yesterday}} yesterday, {{avg}} usually",
+      "why": "{{drop}} % less than the average of the 7 days before.",
+      "fix": "Check your ads (stopped? budget over?) and whether your site or landing page works.",
+      "short": "Orders normal",
+      "info": "Not enough orders yet to compare"
+    },
+    "ordersOk": {
+      "title": "Orders normal",
+      "short": "Orders normal",
+      "okTitle": "Orders normal: {{yesterday}} yesterday, {{avg}} usually"
+    },
+    "cashLate": {
+      "title_one": "{{count}} parcel delivered but not paid yet",
+      "title_other": "{{count}} parcels delivered but not paid yet",
+      "title": "{{count}} parcels delivered but not paid yet",
+      "why": "Delivered more than 10 days ago.",
+      "whyMoney": "Delivered more than 10 days ago: {{amount}} to collect.",
+      "fix": "Ask the courier or the delivery man for the payment.",
+      "short": "Money collected on time",
+      "okTitle": "Money for delivered parcels arrives on time"
+    },
+    "cpu": {
+      "title": "The processor works too hard: {{pct}} %",
+      "why": "The server is slow for everyone when the processor is full.",
+      "fix": "Find the task that runs too much, or get a stronger server (more cores).",
+      "short": "Processor",
+      "okTitle": "Processor: {{pct}} % ({{cores}} cores)"
+    },
+    "memory": {
+      "title": "Memory is almost full: {{pct}} %",
+      "why": "When memory is full, the server can stop by itself.",
+      "fix": "Restart Pilotix tonight, then add memory if it comes back.",
+      "short": "Memory",
+      "okTitle": "Memory: {{pct}} %"
+    },
+    "disk": {
+      "title": "The disk is almost full: {{pct}} %",
+      "why": "{{free}} MB left. Full disk = the database stops and no order comes in.",
+      "fix": "Delete old logs and backups, clean Docker (docker system prune), or make the disk bigger.",
+      "short": "Disk",
+      "okTitle": "Disk: {{pct}} %"
+    },
+    "restarted": {
+      "title": "Pilotix just restarted ({{minutes}} min)",
+      "why": "If nobody restarted it, it crashed.",
+      "fix": "Look at the errors below and the server logs (docker compose logs).",
+      "short": "No recent restart",
+      "okTitle": "Pilotix runs without stopping"
+    },
+    "dbPing": {
+      "title": "The database answers slowly: {{ms}} ms",
+      "why": "Every page becomes slow.",
+      "fix": "Check slow queries, the disk and memory.",
+      "short": "Database fast",
+      "okTitle": "Database: answers in {{ms}} ms"
+    },
+    "dbConnections": {
+      "title": "Too many database connections: {{used}} of {{max}}",
+      "why": "Soon new connections will be refused.",
+      "fix": "Lower DB_POOL_MAX or raise max_connections.",
+      "short": "Database connections",
+      "okTitle": "Database connections: {{used}} of {{max}}"
+    },
+    "dbSlow": {
+      "title_one": "{{count}} query stuck for more than 30 s",
+      "title_other": "{{count}} queries stuck for more than 30 s",
+      "title": "{{count}} queries stuck for more than 30 s",
+      "why": "A stuck query can block the others.",
+      "fix": "Check pg_stat_activity and stop the query if needed.",
+      "short": "No stuck query",
+      "okTitle": "No stuck query"
+    },
+    "dbDown": {
+      "title": "The database does not answer!",
+      "why": "{{error}}",
+      "fix": "Check that PostgreSQL runs (docker compose ps) and the disk is not full.",
+      "short": "Database"
+    },
+    "dbPoolFull": {
+      "title": "Queries are waiting for a connection ({{waiting}})",
+      "why": "All {{max}} Pilotix connections are busy.",
+      "fix": "Raise DB_POOL_MAX or find what keeps the connections.",
+      "short": "Free connections"
+    },
+    "redisOff": {
+      "title": "Redis is not set: automatic tasks are off",
+      "why": "Without Redis: no automatic parcel tracking, no Dellal, no automatic landing pages.",
+      "fix": "Add REDIS_URL to the .env file, then restart.",
+      "short": "Redis"
+    },
+    "redisDown": {
+      "title": "Redis does not answer!",
+      "why": "Automatic tasks (parcel tracking, Dellal…) are blocked.",
+      "fix": "Restart Redis (docker compose restart redis).",
+      "short": "Redis"
+    },
+    "redis": {
+      "title": "Redis answers slowly: {{ms}} ms",
+      "why": "Automatic tasks fall behind.",
+      "fix": "Check the server's memory.",
+      "short": "Redis",
+      "okTitle": "Redis answers in {{ms}} ms"
+    },
+    "jobs": {
+      "title_one": "{{count}} automatic task is not working",
+      "title_other": "{{count}} automatic tasks are not working",
+      "title": "{{count}} automatic tasks are not working",
+      "why": "Time since its last good run:",
+      "fix": "See its error in the “Automatic tasks” table, then check the API key or the network.",
+      "short": "Automatic tasks on time",
+      "okTitle": "Every automatic task runs on time",
+      "info": "Automatic tasks have not run yet since the start"
+    },
+    "errors": {
+      "title": "Errors in the code: {{hour}} this hour, {{day}} in 24 h",
+      "why": "The errors that come back most (times in 24 h):",
+      "fix": "Fix the one that comes back most first. Give it to Claude with the message.",
+      "short": "No error",
+      "okTitle": "No error in the code for 24 h"
+    },
+    "courierSync": {
+      "title_one": "Parcel tracking fails for {{count}} shop",
+      "title_other": "Parcel tracking fails for {{count}} shops",
+      "title": "Parcel tracking fails for {{count}} shops",
+      "why": "Their delivery statuses no longer update.",
+      "fix": "Often the courier's API key (ZR…) changed: ask the shop for the new one.",
+      "short": "Parcel tracking"
+    },
+    "silentShops": {
+      "title_one": "{{count}} shop no longer receives orders",
+      "title_other": "{{count}} shops no longer receive orders",
+      "title": "{{count}} shops no longer receive orders",
+      "why": "They received orders every day, and nothing since (hours):",
+      "fix": "Call the shop: its site, landing page or order link may be broken.",
+      "short": "Shops receive orders",
+      "okTitle": "All {{count}} shops receive orders"
+    },
+    "config": {
+      "title_one": "{{count}} server setting is missing",
+      "title_other": "{{count}} server settings are missing",
+      "title": "{{count}} server settings are missing",
+      "why": "To put in the .env file:",
+      "fix": "Add them to .env, then restart Pilotix.",
+      "short": "Server settings complete",
+      "okTitle": "Server settings complete"
+    }
+  },
+  "gauge": {
+    "cpu": "Processor",
+    "memory": "Memory",
+    "disk": "Disk",
+    "db": "Database connections",
+    "cores_one": "{{count}} core",
+    "cores_other": "{{count}} cores",
+    "cores": "{{count}} cores",
+    "dbSize": "Database: {{size}} MB"
+  },
+  "f": {
+    "version": "Version",
+    "appUp": "Pilotix running for",
+    "serverUp": "Server on for",
+    "db": "Database",
+    "shops": "Active shops"
+  },
+  "jobs": {
+    "title": "Automatic tasks",
+    "name": "Task",
+    "state": "State",
+    "last": "Last good run",
+    "every": "Every {{time}}",
+    "st": {
+      "ok": "OK",
+      "late": "Late",
+      "failing": "Failing",
+      "waiting": "Not run yet",
+      "off": "Off (no Redis)"
+    }
+  },
+  "job": {
+    "courier-sync": "Parcel tracking",
+    "sheets-sync": "Google Sheets",
+    "notify-run": "Customer messages",
+    "landing-run": "Landing pages",
+    "cm-sweep": "Comments (CM)",
+    "dellal-followups": "Dellal follow-ups",
+    "spy-scan": "AI Spy",
+    "meta-sync": "Meta ads",
+    "demo-reset": "Demo shop"
+  },
+  "errs": {
+    "title": "Latest errors",
+    "error": "error",
+    "warn": "warning",
+    "none": "No error for 24 h.",
+    "memory": "Kept 24 h in memory. A restart clears them."
+  }
+}

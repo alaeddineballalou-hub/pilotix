@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 /** The app's own name of each sub-menu (the same words as in its pages). */
 const SUB_LABEL: Record<string, string> = {
   'dashboard/overview': 'dashboard.areas.overview',
+  'dashboard/doctor': 'dashboard.areas.doctor',
   'dashboard/confirmation': 'dashboard.areas.confirmation',
   'dashboard/depot': 'dashboard.areas.depot',
   'dashboard/suivi': 'dashboard.areas.suivi',

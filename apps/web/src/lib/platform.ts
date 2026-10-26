@@ -1,5 +1,6 @@
 // The control room's link to the server (Pilotix staff, not a shop account): its own login and token.
 import type { PlatformRegistry, StaffSession } from '@pilotix/core';
+import type { ServerDoctorReport } from '@pilotix/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient, UseQueryOptions } from '@tanstack/react-query';
 import type { z } from 'zod';
 import { toast } from '../ui/toast';
@@ -63,6 +64,9 @@ export async function prpc<N extends PName>(name: N, input: PIn<N>): Promise<POu
   }
   return out;
 }
+
+/** Doctor: the server's health (owner and managers). */
+export const serverDoctor = () => req<ServerDoctorReport>('/doctor');
 
 /** Support: opens the shop in a new tab, as its administrator, for 2 hours (written in the journal). */
 export async function openShop(id: number) {
