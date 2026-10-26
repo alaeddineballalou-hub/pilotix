@@ -10,4 +10,6 @@ RUN npm run build -w @pilotix/web
 
 FROM caddy:2-alpine
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
+# a configuration Caddy refuses stops the update here, while the running version keeps serving the site
+RUN DOMAIN=example.com caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 COPY --from=build /app/apps/web/dist /srv

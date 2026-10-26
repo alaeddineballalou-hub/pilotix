@@ -4,6 +4,7 @@ import type { Ctx, Db, LiveEvent, PCtx, PlatformSettings, ServerHooks, Shop, Sho
 import type { Session } from '@pilotix/shared';
 import { Pool, PoolClient } from 'pg';
 import { config } from './config';
+import { mailConfigured } from './mail';
 
 const PATH = Symbol('pilotix.search_path');
 type Client = PoolClient & { [PATH]?: string };
@@ -242,7 +243,10 @@ export class CoreService implements OnModuleDestroy {
   /** A session with its shop (and whether the user is also Pilotix staff: the menu shows the control room). */
   async withShop(session: Session, ref: ShopRef, support: string | null = null): Promise<Session> {
     const platformStaff = ref.shop.primary && session.isAdmin ? await core.isStaffEmail(this.t, session.profile.email).catch(() => false) : false;
-    return { ...session, shop: await this.info(ref, support), ...(platformStaff ? { platformStaff } : {}) };
+    const shop = await this.info(ref, support);
+    // a server that cannot send e-mails never asks to confirm one (the link could not arrive)
+    if (!mailConfigured()) shop.emailToConfirm = null;
+    return { ...session, shop, ...(platformStaff ? { platformStaff } : {}) };
   }
 
   private sys = new Map<number, { at: number; s: Promise<Session> }>();

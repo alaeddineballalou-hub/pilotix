@@ -28,6 +28,15 @@ JWT_SECRET=$(rnd 64)
 ENV
   echo "    settings written to $DIR/deploy/.env (keep this file secret)"
 fi
+# shops' own domains (myshop.com) point to this server's public address; behind Cloudflare the platform's DNS shows
+# Cloudflare's addresses, so the server's own is written once here (change it in deploy/.env if the server moves)
+if ! grep -q '^PUBLIC_IP=' deploy/.env; then
+  IP=$(curl -4 -fsS --max-time 8 https://api.ipify.org 2>/dev/null || true)
+  if printf '%s' "$IP" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'; then
+    echo "PUBLIC_IP=$IP" >> deploy/.env
+    echo "    server address for shops' own domains: $IP"
+  fi
+fi
 
 echo "==> Server protection"
 export DEBIAN_FRONTEND=noninteractive
