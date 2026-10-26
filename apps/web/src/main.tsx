@@ -47,7 +47,7 @@ function useHash() {
   return parts;
 }
 
-const ALIASES: Record<string, [string, string?]> = { livreurs: ['dashboard', 'livreurs'], publicite: ['marketing', 'publicite'], marketer: ['marketing', 'marketer'] };
+const ALIASES: Record<string, [string, string?]> = { livreurs: ['dashboard', 'livreurs'], publicite: ['marketing', 'publicite'], marketer: ['marketing', 'marketer'], spy: ['marketing', 'spy'] };
 
 function App() {
   const { session, ready } = useSession();

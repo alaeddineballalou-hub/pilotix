@@ -1,6 +1,7 @@
 // Marketing on phones. Publicité: everything to know what to do — the verdict (won / lost), where the money goes,
 // every figure (orders, money, Meta), what wins and what loses, what to do, day by day and month by month, then the
 // products and ad sets (a tap opens them full screen). Marketeurs: what is owed to whom, each marketer's ad sets.
+// AI Spy: the desktop page (Spy.tsx), which lays itself out in one column on a phone.
 // Every figure comes from core (ads.*, mk.*); this page only arranges them for a phone.
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +12,7 @@ import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { store } from '../../lib/store';
 import { ErrorBox, Icon, Loading } from '../../ui/kit';
+import { Spy } from './Spy';
 import '../confirmation/phone.css';
 import '../suivi/phone.css';
 import '../sav/phone.css';
@@ -52,8 +54,7 @@ const DIAG_ICON: Record<string, string> = { scale: 'trend', cut: 'cut', hook: 'f
 // ---------------------------------------------------------------- the page
 export function PhoneMarketing({ sub, rest }: { sub?: string; rest?: string[] }) {
   const { t } = useTranslation();
-  const tab = sub === 'marketer' ? 'mk' : 'pub';
-  void rest;
+  const tab = sub === 'marketer' ? 'mk' : sub === 'spy' ? 'spy' : 'pub';
   return (
     <div className="pxm">
       <div className="pxv-own pxm-tabs" role="tablist">
@@ -63,8 +64,12 @@ export function PhoneMarketing({ sub, rest }: { sub?: string; rest?: string[] })
         <a role="tab" aria-selected={tab === 'mk'} className={tab === 'mk' ? 'on' : ''} href="#/marketing/marketer">
           {t('mkph.marketers')}
         </a>
+        <a role="tab" aria-selected={tab === 'spy'} className={tab === 'spy' ? 'on' : ''} href="#/marketing/spy">
+          {t('nav.spy')}
+        </a>
       </div>
-      {tab === 'pub' ? <Pub /> : <Marketeurs />}
+      {/* AI Spy: the same page as on a computer, in one column */}
+      {tab === 'pub' ? <Pub /> : tab === 'spy' ? <Spy rest={rest} /> : <Marketeurs />}
     </div>
   );
 }

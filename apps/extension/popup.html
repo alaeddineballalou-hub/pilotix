@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pilotix Spy</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <img src="icons/icon48.png" alt="" width="32" height="32" />
+      <div class="brand">
+        <h1>Pilotix Spy</h1>
+        <p id="version">Version —</p>
+      </div>
+      <span id="status" class="pill">…</span>
+    </header>
+
+    <section>
+      <h2><label for="site">Adresse de votre Pilotix</label></h2>
+      <form id="add" autocomplete="off">
+        <input id="site" type="text" inputmode="url" spellcheck="false" placeholder="https://app.maboutique.dz" />
+        <button type="submit" class="primary">Ajouter</button>
+      </form>
+      <p id="siteMsg" class="msg" role="status"></p>
+      <ul id="sites"></ul>
+      <p id="noSite" class="empty" hidden>Aucune adresse. Ajoutez celle de votre Pilotix pour que la page AI Spy trouve l’extension.</p>
+    </section>
+
+    <section>
+      <h2>Essai</h2>
+      <div class="row">
+        <button id="test" type="button">Tester</button>
+        <p class="hint">Cherche « poussette » en Algérie dans la bibliothèque de pubs de Facebook.</p>
+      </div>
+      <p id="testMsg" class="msg" role="status"></p>
+      <div id="thumbs" class="thumbs"></div>
+    </section>
+
+    <section class="help">
+      <h2>Comment ça marche</h2>
+      <p>
+        Dans Pilotix, ouvrez <b>Marketing › AI Spy</b> et cliquez sur <b>Chercher</b>. L’extension ouvre la bibliothèque publicitaire de Facebook
+        dans un onglet en arrière-plan, lit les pubs publiques, ferme l’onglet et les donne à votre page Pilotix.
+      </p>
+      <p>Elle ne publie, n’aime et ne clique jamais rien. Si Facebook demande une connexion ou une vérification, ouvrez une fois facebook.com/ads/library dans Chrome.</p>
+    </section>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

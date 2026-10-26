@@ -1,0 +1,237 @@
+/* Pilotix Spy popup: system fonts, Pilotix colours (navy #1B2A47, orange #F7A823 → #F28B1E), light and dark. */
+:root {
+  --bg: #ffffff;
+  --surface: #f4f6fa;
+  --text: #1b2a47;
+  --muted: #5d6b85;
+  --line: #dde2ec;
+  --accent: #f28b1e;
+  --accent-2: #f7a823;
+  --ok: #1f9d57;
+  --bad: #d6453d;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121a2b;
+    --surface: #1b2538;
+    --text: #e8ecf4;
+    --muted: #9aa6bd;
+    --line: #2c384f;
+    --ok: #3cc47a;
+    --bad: #f0706a;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+body {
+  width: 340px;
+  padding: 14px 16px 16px;
+  font: 13px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+header img {
+  border-radius: 8px;
+}
+.brand {
+  flex: 1;
+  min-width: 0;
+}
+h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+}
+#version {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.pill {
+  flex: none;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  background: var(--surface);
+  color: var(--muted);
+}
+.pill.ok {
+  background: color-mix(in srgb, var(--ok) 16%, transparent);
+  color: var(--ok);
+}
+.pill.warn {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+
+section {
+  padding: 12px 0 0;
+}
+h2 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+h2 label {
+  cursor: pointer;
+}
+
+form {
+  display: flex;
+  gap: 6px;
+}
+input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+input:focus {
+  outline: none;
+  border-color: var(--accent-2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-2) 25%, transparent);
+}
+button {
+  flex: none;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+button:hover:not(:disabled) {
+  border-color: var(--accent-2);
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+button:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
+button.primary {
+  border: 0;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent-2), var(--accent));
+}
+button.small {
+  height: 26px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.msg {
+  margin: 6px 0 0;
+  min-height: 0;
+  font-size: 12.5px;
+}
+.msg:empty {
+  display: none;
+}
+.msg.ok {
+  color: var(--ok);
+  font-weight: 700;
+}
+.msg.bad {
+  color: var(--bad);
+}
+.msg small {
+  display: block;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-top: 6px;
+}
+li span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.empty {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.thumbs {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.thumbs:empty {
+  display: none;
+}
+.thumbs img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.help p {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.help b {
+  color: var(--text);
+}

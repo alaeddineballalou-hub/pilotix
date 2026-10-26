@@ -14,6 +14,7 @@ import { CoreService } from './core.service';
  *  - CM AI agent: comments still waiting (missed after a restart, or held during the night) every 3 minutes
  *  - Delivery AI agent: the customers' order messages that are due (WhatsApp, SMS) every minute
  *  - Landing pages: abandoned orders (list, Commandes, reminder) and Meta Conversions API events, every minute
+ *  - AI Spy: competitors' Facebook ads (paid source), checked every hour, scanned once a day after the chosen hour
  */
 @Injectable()
 export class JobsService implements OnModuleInit, OnModuleDestroy {
@@ -51,6 +52,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
         if (job.name === 'dellal-followups') return this.core.call('dellal.followUps', session, {});
         if (job.name === 'cm-sweep') return this.core.call('cm.sweep', session, {});
         if (job.name === 'notify-run') return this.core.call('notify.run', session, {});
+        if (job.name === 'spy-scan') return this.core.call('spy.scan', session, {});
         if (job.name === 'partitions') {
           for (let i = 0; i <= 3; i++) await this.core.db.query(`SELECT ensure_events_partition((date_trunc('month', now()) + make_interval(months => $1))::date)`, [i]);
         }
@@ -64,6 +66,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.queue.add('cm-sweep', {}, { repeat: { every: 3 * 60_000 }, jobId: 'cm-sweep', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('notify-run', {}, { repeat: { every: 60_000 }, jobId: 'notify-run', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('landing-run', {}, { repeat: { every: 60_000 }, jobId: 'landing-run', removeOnComplete: 20, removeOnFail: 50 });
+    await this.queue.add('spy-scan', {}, { repeat: { pattern: '7 * * * *' }, jobId: 'spy-scan', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('partitions', {}, { repeat: { pattern: '0 3 1 * *' }, jobId: 'partitions', removeOnComplete: 10 });
   }
 

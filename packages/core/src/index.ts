@@ -12,6 +12,8 @@ export { createPasswordReset, resetPassword, RESET_MINUTES } from './passwordRes
 export type { PasswordResetLink } from './passwordReset';
 export { pgliteDb } from './pglite';
 export { landingCommunes } from './modules/landing';
+export { fromLibrary } from './modules/spy';
+export type { RawAd, SpyAd, SpyBrief, SpyFinding, SpyKeyword, SpyProductRow, SpySettings, SpySite, SpySource, ScorePart } from './modules/spy';
 export { demoSnapshot, demoRestore } from './demoKeep';
 export type { DemoKeep } from './demoKeep';
 export type { PGliteLike } from './pglite';

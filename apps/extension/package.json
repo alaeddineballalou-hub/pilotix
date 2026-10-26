@@ -1,0 +1,11 @@
+{
+  "name": "pilotix-spy-extension",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pilotix Spy Chrome extension (Manifest V3). No build step: load this folder in chrome://extensions.",
+  "type": "module",
+  "scripts": {
+    "test": "node test/parse.test.mjs",
+    "check": "node --check background.js && node --check parse.js && node --check pictures.js && node --check sites.js && node --check popup.js && node --check bridge.js"
+  }
+}
