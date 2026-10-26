@@ -93,7 +93,11 @@
     "manageUsersLabel": "Peut créer des comptes et changer les mots de passe",
     "manageUsersHint": "Pour un manager ou un superviseur : il crée les comptes de l’équipe et donne un nouveau mot de passe à quelqu’un qui l’a oublié. Jamais pour les administrateurs ni pour les autres personnes qui ont ce droit.",
     "manageChip": "Gère les comptes",
-    "lockedHint": "Seul l’administrateur peut modifier ce compte"
+    "lockedHint": "Seul l’administrateur peut modifier ce compte",
+    "owner": "Propriétaire",
+    "ownerHint": "Le propriétaire de la boutique : lui seul modifie son compte.",
+    "createdExisting": "Ajouté : cette personne a déjà un compte Pilotix, elle se connecte avec son mot de passe habituel.",
+    "passwordAccount": "Si cette personne a déjà un compte Pilotix, elle garde son mot de passe."
   },
   "status": {
     "groups": {
@@ -483,7 +487,17 @@
     "metaDisconnect": "Déconnecter",
     "metaDisconnectConfirm": "Déconnecter Meta ? Le jeton est effacé du serveur.",
     "metaDisconnected": "Meta déconnecté",
-    "metaDemo": "Démo : les chiffres de la page Publicité sont des exemples (aucun appel à Meta)."
+    "metaDemo": "Démo : les chiffres de la page Publicité sont des exemples (aucun appel à Meta).",
+    "danger": "Supprimer la boutique",
+    "dangerHelp": "Seul le propriétaire (la personne qui a créé la boutique) voit cette carte.",
+    "deleteText": "La boutique et toutes ses données (commandes, clients, produits, équipe) sont effacées pour de bon. Vos autres boutiques ne changent pas.",
+    "deleteStore": "Supprimer cette boutique…",
+    "deleteTitle": "Supprimer « {{name}} » ?",
+    "deleteWarn": "Attention : c’est définitif, la boutique ne pourra pas être récupérée.",
+    "deleteName": "Tapez le nom de la boutique pour confirmer : {{name}}",
+    "deletePassword": "Votre mot de passe",
+    "deleteForever": "Supprimer pour toujours",
+    "deleted": "« {{name}} » est supprimée"
   },
   "confirmYes": "Oui",
   "cancel": "Annuler",

@@ -32,3 +32,24 @@ jobs:
           printf '%s\n' "$KEY" > ~/.ssh/deploy
           chmod 600 ~/.ssh/deploy
           ssh -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 "root@$HOST" update
+
+      # the real site, from outside: the server answers, and both the server and the website are this version
+      - name: Check the live site
+        env:
+          SITE: ${{ vars.SITE_URL || 'https://pilotix.online' }}
+        run: |
+          ok=0
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 10 "$SITE/api/health" >/dev/null 2>&1; then ok=1; break; fi
+            sleep 10
+          done
+          if [ "$ok" != 1 ]; then echo "::error::$SITE/api/health does not answer after 5 minutes"; exit 1; fi
+          echo "health: $(curl -fsS --max-time 10 "$SITE/api/health")"
+          curl -fsS --max-time 10 "$SITE/api/legal" | grep -q '"company"' || { echo "::error::the server is not the new version ($SITE/api/legal)"; exit 1; }
+          echo "sign-up: $(curl -fsS --max-time 10 "$SITE/api/auth/signup")"
+          found=0
+          for js in $(curl -fsS --max-time 10 "$SITE/" | grep -o '/assets/index-[A-Za-z0-9_-]*\.js' | sort -u); do
+            if curl -fsS --max-time 20 "$SITE$js" | grep -q 'inscription'; then found=1; break; fi
+          done
+          if [ "$found" != 1 ]; then echo "::error::the website is not the new version"; exit 1; fi
+          echo "The server and the website are live with this version."

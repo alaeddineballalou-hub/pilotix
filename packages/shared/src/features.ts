@@ -142,7 +142,7 @@ export function procFeature(name: string): string | null {
 }
 
 // ---------------------------------------------------------------- the shop, as the app shows it
-export type ShopState = 'trial' | 'active' | 'grace' | 'expired' | 'suspended' | 'archived';
+export type ShopState = 'trial' | 'active' | 'grace' | 'expired' | 'suspended' | 'archived' | 'deleted';
 
 /** What a logged-in user knows of their shop's subscription (a multi-shop server only). */
 export interface ShopInfo {
@@ -156,6 +156,8 @@ export interface ShopInfo {
   plan: string | null;
   /** the plan's price per month (DA) */
   planPrice: number | null;
+  /** the plan's price for a year paid at once (DA), when it has one */
+  planPriceYear: number | null;
   trialEndsAt: string | null;
   paidUntil: string | null;
   /** days until the end of the trial / the paid period (grace: until the shop is locked) */
@@ -165,10 +167,23 @@ export interface ShopInfo {
   /** null = everything */
   features: string[] | null;
   maxUsers: number | null;
+  /** livreurs the plan allows (null = no limit) */
+  maxDrivers: number | null;
+  /** orders per month the plan includes (null = no limit), and this month's count so far */
+  maxOrdersMonth: number | null;
+  ordersMonth: number | null;
   /** how to pay (shown on the trial / renewal banners and the lock screen) */
   payment: { text: string; phone: string; whatsapp: string } | null;
   /** a message from Pilotix to every shop (maintenance, news) */
   notice: { text: string; tone: 'info' | 'warn' } | null;
-  /** opened by Pilotix support (the name of the staff member) */
-  support: string | null;
+  /** the person logged in created this store (only they can delete it; nobody else can touch their account) */
+  owner: boolean;
+  /** the owner's account in this store (the team list marks it; other admins cannot change it) */
+  ownerProfileId: number | null;
+  /** other stores this person can open with the same e-mail (the account menu offers to switch) */
+  stores: number;
+  /** this person can add a store of their own (sign-ups open, under their limit) */
+  canAddStore: boolean;
+  /** unread answers from Pilotix in « Contacter Pilotix » */
+  supportUnread: number;
 }

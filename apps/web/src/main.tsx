@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { lazy, StrictMode, Suspense, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Legal, Signup, SignupConfirm, StorePicker, VerifyEmail } from './layout/Accounts';
 import { LockScreen } from './layout/LockScreen';
 import { Login } from './layout/Login';
 import { ResetPassword } from './layout/ResetPassword';
@@ -53,9 +54,11 @@ const ALIASES: Record<string, [string, string?]> = { livreurs: ['dashboard', 'li
 
 /** Pilotix's control room (#/platform): its own login and pages, loaded only when opened. */
 const PlatformApp = lazy(() => import('./pages/platform').then((m) => ({ default: m.PlatformApp })));
+/** « Contacter Pilotix » (the store's administrators). */
+const Support = lazy(() => import('./pages/aide').then((m) => ({ default: m.Support })));
 
 function App() {
-  const { session, ready } = useSession();
+  const { session, ready, picker } = useSession();
   const parts = useHash();
   if (parts[0] === 'platform')
     return (
@@ -63,13 +66,28 @@ function App() {
         <PlatformApp parts={parts.slice(1)} />
       </Suspense>
     );
+  // the terms of use and privacy page, open to everyone
+  if (parts[0] === 'conditions') return <Legal />;
   if (!ready) return <Loading />;
-  // the link of the "mot de passe oublié" e-mail works logged in or not
+  // the links of e-mails work logged in or not: new password, invitation (choose your password), sign-up, e-mail check
   if (parts[0] === 'reset' && parts[1]) return <ResetPassword token={parts[1]} />;
-  if (!session) return <Login />;
+  if (parts[0] === 'invite' && parts[1]) return <ResetPassword token={parts[1]} invite />;
+  if (parts[0] === 'signup' && parts[1]) return <SignupConfirm token={parts[1]} />;
+  if (parts[0] === 'verify' && parts[1]) return <VerifyEmail token={parts[1]} />;
+  if (parts[0] === 'inscription') return <Signup referral={parts[1]} />;
+  if (!session) return picker ? <StorePicker /> : <Login />;
   // unpaid or suspended: the lock screen (how to pay), nothing else
   if (session.shop?.locked) return <LockScreen />;
 
+  // « Contacter Pilotix »: the store's administrators
+  if (parts[0] === 'aide' && session.isAdmin && !session.shop?.demo)
+    return (
+      <Shell page="aide" sub={undefined}>
+        <Suspense fallback={<Loading />}>
+          <Support id={parts[1] && /^\d+$/.test(parts[1]) ? Number(parts[1]) : null} />
+        </Suspense>
+      </Shell>
+    );
   let [page, sub, ...rest]: (string | undefined)[] = parts;
   if (page && ALIASES[page]) [page, sub] = [ALIASES[page][0], ALIASES[page][1] ?? sub];
   // Confirmation › Livrées was removed: an old link opens Confirmation › Nouvelles

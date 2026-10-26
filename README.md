@@ -82,14 +82,16 @@ One server hosts many shops, each paying for its own plan. Every shop has **its 
 tables: no query can reach another shop's data); the platform itself (shops, plans, payments, staff, journal) lives in
 the schema `platform`. The server owner's shop is shop #1 (schema `public`, as before; it never expires).
 
-- **Control room:** `https://<domain>/#/platform` — Pilotix staff only (owner / manager / support). The first
-  administrator of shop #1 is the owner (same e-mail and password). There: shops (create with a free trial, suspend,
-  archive, open as their administrator for support), payments received by hand (BaridiMob, CCP, cash…: the paid period
-  grows by the months paid), plans (price, active accounts, orders per month, menus and sub-menus), each shop's own menus
-  on top of its plan, the demo shop (fake data, reset every night, "Essayer la démo" on the login page), staff, settings
-  (trial and grace days, payment details shown to shops, a message to every shop) and the journal.
-- **Login:** one page for everybody; the e-mail tells which shop (one e-mail = one shop). Tokens made before carry no shop:
-  they open shop #1.
+- **Control room:** `https://<domain>/#/platform` — Pilotix staff only (owner / manager / support), with a code by e-mail
+  at each login (a device can be remembered 30 days). The first administrator of shop #1 is the owner (same e-mail and
+  password). There: shops (create with a free trial: the owner gets an invitation e-mail and chooses the password; suspend,
+  archive; numbers only, never what is inside a shop), payments received by hand (numbered receipts to print or e-mail),
+  plans (monthly and yearly price, accounts, drivers, orders per month, menus and sub-menus), sign-ups, messages from
+  shops, server health, the demo shop, staff, settings and the journal.
+- **Accounts:** one e-mail = one account = one password for every shop the person works in; after the password, the
+  person picks the shop (or goes straight in with one). Anyone can create a shop at `#/inscription` (confirmed by e-mail)
+  and add more from the account menu. Only the person who created a shop (its owner) can delete it. Tokens made before
+  carry no shop: they open shop #1.
 - **Subscription:** trial → paid → a few grace days (red banner) → locked (a screen with the payment details). A locked
   shop keeps receiving orders (website, landing pages, couriers' statuses) and sees them once it pays.
 - **Public links:** every shop's landing pages are `site/<store>/<page>`, where the store is the shop's name on the

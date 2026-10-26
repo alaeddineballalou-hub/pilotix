@@ -34,6 +34,10 @@ export const config = {
     if (!v || v === 'false' || v === '0') return false;
     return /^\d+$/.test(v) ? Number(v) : v; // hop count, or an address / list of addresses
   })(),
+  /** Where the nightly database backups are (the control room shows the last one and the disk space left). */
+  backupsDir: (process.env.BACKUPS_DIR || '/backups').replace(/\/+$/, ''),
+  /** Emergency switch: PLATFORM_TWO_STEP=off lets the control room in with the password only (e-mails broken). */
+  twoStepOff: (process.env.PLATFORM_TWO_STEP || '').trim().toLowerCase() === 'off',
   /** Public address of this server (used to show webhook URLs). */
   publicUrl: (process.env.PUBLIC_URL || '').replace(/\/+$/, ''),
   /**

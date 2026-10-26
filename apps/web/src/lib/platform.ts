@@ -18,19 +18,19 @@ export const setOnStaffLogout = (fn: () => void) => (onLogout = fn);
 
 const base = () => (serverUrl() || window.location.origin).replace(/\/+$/, '');
 
-async function req<T>(path: string, body?: unknown): Promise<T> {
+async function req<T>(path: string, body?: unknown, method: 'GET' | 'POST' = 'POST'): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${base()}/api/platform${path}`, {
-      method: 'POST',
+      method,
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify(body ?? {}),
+      body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
     });
   } catch {
     throw new ApiError(0, 'Serveur injoignable. Vérifiez votre connexion.');
   }
   const data = await res.json().catch(() => undefined);
-  if (res.status === 401 && token && path !== '/auth/login') {
+  if (res.status === 401 && token && !path.startsWith('/auth/')) {
     staffLogout();
     onLogout();
   }
@@ -40,13 +40,32 @@ async function req<T>(path: string, body?: unknown): Promise<T> {
 
 export const savedStaff = (): Staff | null => (token ? store.json<Staff | null>('pstaff', null) : null);
 
-export async function staffLogin(email: string, password: string): Promise<Staff> {
-  const r = await req<{ token: string; staff: Staff }>('/auth/login', { email, password });
+function keep(r: { token: string; staff: Staff; device?: string }) {
   token = r.token;
   store.set('ptoken', r.token);
   store.set('pstaff', JSON.stringify(r.staff));
+  if (r.device) store.set('pdevice', r.device);
   return r.staff;
 }
+
+/** The password; then, with the two-step login, the code e-mailed to the staff member (`step: 'code'`). */
+export async function staffLogin(email: string, password: string): Promise<Staff | { step: 'code'; ticket: string; email: string }> {
+  const r = await req<{ token: string; staff: Staff } | { step: 'code'; ticket: string; email: string }>('/auth/login', { email, password, device: store.get('pdevice') || undefined });
+  return 'step' in r ? r : keep(r);
+}
+/** The code of the two-step login (« remember this device »: 30 days without it on this browser). */
+export async function staffCode(ticket: string, code: string, remember: boolean): Promise<Staff> {
+  return keep(await req<{ token: string; staff: Staff; device?: string }>('/auth/code', { ticket, code, remember }));
+}
+
+/** The server's health (sizes, backups, disk): GET /api/platform/health. */
+export type Health = {
+  db: { total: number; platform: number; shops: { id: number; name: string; bytes: number }[] };
+  backups: { count: number; last: { name: string; bytes: number; at: string } | null; bytes: number; recent: { name: string; bytes: number; at: string }[] };
+  disk: { total: number; free: number } | null;
+  server: { startedAt: string; node: string; memory: number; mail: boolean; jobs: boolean };
+};
+export const serverHealth = () => req<Health>('/health', undefined, 'GET');
 
 export function staffLogout() {
   token = null;
@@ -62,20 +81,6 @@ export async function prpc<N extends PName>(name: N, input: PIn<N>): Promise<POu
     store.set('ptoken', token);
   }
   return out;
-}
-
-/** Support: opens the shop in a new tab, as its administrator, for 2 hours (written in the journal). */
-export async function openShop(id: number) {
-  const tab = window.open('about:blank', '_blank');
-  try {
-    const r = await req<{ token: string }>(`/open/${id}`);
-    const url = `${window.location.origin}${window.location.pathname}#/support/${r.token}`;
-    if (tab) tab.location.href = url;
-    else window.location.href = url;
-  } catch (e) {
-    tab?.close();
-    throw e;
-  }
 }
 
 export function usePRpc<N extends PName>(name: N, input: PIn<N>, opts: Partial<UseQueryOptions<POut<N>, Error>> = {}) {

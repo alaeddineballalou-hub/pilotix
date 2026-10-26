@@ -1,7 +1,7 @@
 import type { Role, Session } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
-import { backend, isSupportTab, loginServerDemo, rpc, setOnLocked, setOnUnauthorized } from './backend';
+import { backend, isPick, loginServerDemo, PickInfo, rpc, server, setOnLocked, setOnUnauthorized } from './backend';
 import { setShop } from './features';
 import { applyLanguage } from './i18n';
 import { store } from './store';
@@ -9,7 +9,16 @@ import { store } from './store';
 interface SessionState {
   session: Session | null;
   ready: boolean;
+  /** the password was right and the person has several stores (or none): the picker shows them */
+  picker: PickInfo | null;
   login: (email: string, password: string) => Promise<void>;
+  /** the store chosen in the picker */
+  pick: (shop: number) => Promise<void>;
+  cancelPick: () => void;
+  /** a session the server just gave (a confirmed sign-up, a store added, another store chosen) */
+  enter: (s: Session) => void;
+  /** another store of the same person, without the password again */
+  switchStore: (shop: number) => Promise<void>;
   /** opens the server's demo shop as one of its accounts */
   loginDemo: (key: string) => Promise<void>;
   logout: () => void;
@@ -23,15 +32,16 @@ interface SessionState {
 const Ctx = createContext<SessionState>(null as unknown as SessionState);
 export const useSession = () => useContext(Ctx);
 
-/** The session as the browser keeps it for offline use (never for a support tab: it belongs to another shop). */
+/** The session as the browser keeps it for offline use. */
 function keep(s: Session | null) {
-  if (!isSupportTab()) store.set('session', s ? JSON.stringify(s) : null);
+  store.set('session', s ? JSON.stringify(s) : null);
 }
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
   const [session, setSessionState] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
+  const [picker, setPicker] = useState<PickInfo | null>(null);
   // the shop's menus are known before anything renders with the new session
   const setSession = useCallback((s: Session | null) => {
     setShop(s?.shop);
@@ -42,6 +52,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     backend.logout();
     keep(null);
     setSession(null);
+    setPicker(null);
     qc.clear();
   }, [qc, setSession]);
 
@@ -79,15 +90,32 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     };
   }, [session, qc]);
 
-  const start = (s: Session) => {
-    keep(s);
-    if (!store.get('lang')) applyLanguage(s.profile.language);
-    setSession(s);
+  const enter = useCallback(
+    (s: Session) => {
+      // another store: nothing of the previous one stays on screen
+      qc.clear();
+      keep(s);
+      setPicker(null);
+      if (!store.get('lang')) applyLanguage(s.profile.language);
+      setSession(s);
+    },
+    [qc, setSession],
+  );
+  const login = async (email: string, password: string) => {
+    const r = await backend.login(email, password);
+    if (isPick(r)) setPicker(r);
+    else enter(r);
   };
-  const login = async (email: string, password: string) => start(await backend.login(email, password));
-  const loginDemo = async (key: string) => start(await loginServerDemo(key));
+  const pick = async (shop: number) => {
+    if (!picker) return;
+    enter(await server.pick(picker.ticket, shop));
+  };
+  const switchStore = async (shop: number) => enter(await server.switchStore(shop));
+  const loginDemo = async (key: string) => enter(await loginServerDemo(key));
 
   const has = (...roles: Role[]) => !!session && (session.isAdmin || roles.some((r) => session.roles.includes(r)));
 
-  return <Ctx.Provider value={{ session, ready, login, loginDemo, logout, refresh, has, me: session?.profile.id ?? 0 }}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={{ session, ready, picker, login, pick, cancelPick: () => setPicker(null), enter, switchStore, loginDemo, logout, refresh, has, me: session?.profile.id ?? 0 }}>{children}</Ctx.Provider>
+  );
 }
