@@ -3,6 +3,7 @@
 import type { Session, ShopInfo } from '@pilotix/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { confirmAgain } from '../lib/backend';
 import { dateOnly } from '../lib/format';
 import { store } from '../lib/store';
 import { Icon } from '../ui/kit';
@@ -68,6 +69,7 @@ export function ShopBanner({ session }: { session: Session }) {
   const shop = session.shop;
   const [pay, setPay] = useState(false);
   const [hidden, setHidden] = useState<Record<string, boolean>>({});
+  const [sent, setSent] = useState<'' | 'busy' | 'sent' | string>('');
   if (!shop) return null;
   const today = new Date().toISOString().slice(0, 10);
   const closed = (k: string) => hidden[k] || store.get(`banner-${k}`) === today;
@@ -110,6 +112,35 @@ export function ShopBanner({ session }: { session: Session }) {
     );
   }
   if (admin && !shop.support && !shop.demo) {
+    // a shop made on the sign-up page: its owner confirms the e-mail (it is the way back in if the password is lost)
+    if (shop.emailToConfirm && !closed('confirm'))
+      out.push(
+        <div key="confirm" className="px-ban px-ban-info" role="status">
+          <Icon name="mail" />
+          <span className="grow">
+            <b>{t('shop.confirm.banner', { email: shop.emailToConfirm })}</b>
+            {sent === 'sent' ? ` · ${t('shop.confirm.sent')}` : sent && sent !== 'busy' ? ` · ${sent}` : ''}
+          </span>
+          {sent !== 'sent' && (
+            <button
+              type="button"
+              className="btn small"
+              disabled={sent === 'busy'}
+              onClick={() => {
+                setSent('busy');
+                confirmAgain()
+                  .then(() => setSent('sent'))
+                  .catch((e) => setSent(e?.message || t('common.error')));
+              }}
+            >
+              {t('shop.confirm.again')}
+            </button>
+          )}
+          <button type="button" className="px-ban-x" aria-label={t('shop.hide')} title={t('shop.hide')} onClick={() => close('confirm')}>
+            ×
+          </button>
+        </div>,
+      );
     if (shop.state === 'trial' && !closed('trial'))
       out.push(
         <div key="trial" className={`px-ban ${n <= 3 ? 'px-ban-warn' : 'px-ban-info'}`} role="status">

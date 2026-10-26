@@ -2,7 +2,8 @@
 // abandoned orders (after how long they go to Commandes), the automations, and the log of what was sent to Meta.
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { serverUrl, type Out } from '../../lib/backend';
+import { backend, serverUrl, type Out } from '../../lib/backend';
+import { OwnDomain } from './Domain';
 import { da, dateTime } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
@@ -14,12 +15,16 @@ type PurchaseAt = 'order' | 'confirmed' | 'delivered';
 
 export function Settings() {
   const { t } = useTranslation();
+  const { session } = useSession();
+  // a shop of a multi-shop server, its administrator: its own domain name for its pages
+  const ownDomain = backend.kind === 'remote' && !!session?.isAdmin && !!session.shop && !session.shop.demo;
   const q = useRpc('landing.settings.get', {}, { refetchOnWindowFocus: false });
   if (q.isLoading) return <Loading />;
   if (q.error || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   return (
     <>
       <Form key={JSON.stringify(q.data.settings)} data={q.data} />
+      {ownDomain && <OwnDomain />}
       <Events />
       <p className="pd-note">{t('landing.set.footer')}</p>
     </>

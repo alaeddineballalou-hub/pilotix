@@ -219,3 +219,12 @@
 .lp-cmp-t { width: 100%; border-collapse: collapse; font-size: 13px; }
 .lp-cmp-t th, .lp-cmp-t td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: start; }
 .lp-cmp-t th { color: var(--muted); font-weight: 700; font-size: 12px; }
+
+/* Réglages › Votre propre domaine */
+.lp-dom-state { margin: 10px 0 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13.5px; }
+.lp-dom-how { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--raise); }
+.lp-dom-how small { color: var(--muted); }
+.lp-dom-how .btn { align-self: flex-start; }
+.lp-dom-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.lp-dom-table th, .lp-dom-table td { text-align: start; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.lp-dom-table td { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; }

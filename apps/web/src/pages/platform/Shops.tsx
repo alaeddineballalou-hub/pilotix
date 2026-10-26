@@ -103,6 +103,12 @@ export function Shops({ staff, creating, filter }: { staff: Staff; creating?: bo
                       </a>
                       {s.primary && <span className="chip pp-chip-own">{t('platform.ownShop')}</span>}
                       {s.demo && <span className="chip">{t('platform.demoShop')}</span>}
+                      {s.selfSignup && <span className={`chip ${s.emailVerifiedAt ? '' : 'pp-chip-warn'}`}>{s.emailVerifiedAt ? t('platform.selfSignup') : t('platform.emailUnconfirmed')}</span>}
+                      {s.domain && (
+                        <span className={`chip ltr ${s.domain.status === 'ok' ? '' : 'pp-chip-warn'}`} title={s.domain.status === 'ok' ? t('platform.domainOk') : t('platform.domainPending')}>
+                          {s.domain.name}
+                        </span>
+                      )}
                     </td>
                     <td data-l={t('platform.col.owner')}>
                       <span className="pp-two">

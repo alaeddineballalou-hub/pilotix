@@ -138,6 +138,11 @@ function shopRow(s: Shop, set: PlatformSettings, now: number) {
     createdAt: s.createdAt,
     lastActiveAt: s.lastActiveAt,
     owner: { name: s.ownerName, email: s.ownerEmail, phone: s.ownerPhone },
+    /** made by its owner on the sign-up page; when the owner confirmed the e-mail */
+    selfSignup: s.selfSignup,
+    emailVerifiedAt: s.emailVerifiedAt,
+    /** its own domain for its landing pages */
+    domain: s.domain ? { name: s.domain, status: s.domainStatus } : null,
     city: s.city,
     changes: s.featuresOn.length + s.featuresOff.length,
   };
@@ -555,9 +560,10 @@ export const PLATFORM_REGISTRY = {
       payment: z.object({ text: z.string().max(1500), phone: z.string().max(40), whatsapp: z.string().max(40) }).optional(),
       notice: z.object({ text: z.string().max(400), tone: z.enum(['info', 'warn']), until: IsoDate.nullable() }).optional(),
       demo: z.object({ public: z.boolean() }).optional(),
+      signup: z.object({ open: z.boolean(), maxShopsPerEmail: z.number().int().min(1).max(50), perIpPerDay: z.number().int().min(1).max(100) }).optional(),
     }),
     async (ctx, i) => {
-      for (const k of ['trial', 'payment', 'notice', 'demo'] as const) if (i[k]) await setPlatformSetting(ctx.t, k, i[k] as any);
+      for (const k of ['trial', 'payment', 'notice', 'demo', 'signup'] as const) if (i[k]) await setPlatformSetting(ctx.t, k, i[k] as any);
       await audit(ctx, 'settings.save', null, { keys: Object.keys(i) });
       return platformSettings(ctx.t);
     },

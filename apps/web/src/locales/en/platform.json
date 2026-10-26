@@ -333,7 +333,13 @@
     "toneInfo": "Information (blue)",
     "toneWarn": "Warning (orange)",
     "noticeUntil": "Until",
-    "noticeUntilHint": "Empty = until you clear it."
+    "noticeUntilHint": "Empty = until you clear it.",
+    "signupTitle": "Online sign-up",
+    "signupHelp": "Shops create themselves on the sign-up page, on a free trial (plan and days above).",
+    "signupOpen": "Open sign-ups",
+    "signupMax": "Max shops per e-mail",
+    "signupPerIp": "Max sign-ups per connection per day",
+    "signupLink": "Sign-up page: {{url}}"
   },
   "demo": {
     "none": "No demo shop yet",
@@ -350,5 +356,9 @@
     "publicTitle": "The “Try the demo” button",
     "publicOn": "Shown on the login page: visitors pick a role and go in.",
     "publicOff": "Hidden: only the Pilotix team can open the demo."
-  }
+  },
+  "selfSignup": "Online sign-up",
+  "emailUnconfirmed": "E-mail not confirmed",
+  "domainOk": "Domain ready",
+  "domainPending": "Domain waiting for DNS"
 }

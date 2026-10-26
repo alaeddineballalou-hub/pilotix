@@ -1,7 +1,9 @@
 import { DEMO_ACCOUNTS, DEMO_PASSWORD, Language, LANGUAGES } from '@pilotix/shared';
 import { FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { backend, DEMO_AVAILABLE, DEMO_ONLY, FIXED_SERVER, forgotAvailable, onDemoProgress, requestPasswordReset, serverDemo, serverUrl, setServerUrl, switchDemo } from '../lib/backend';
+import { backend, DEMO_AVAILABLE, DEMO_ONLY, FIXED_SERVER, forgotAvailable, onDemoProgress, requestPasswordReset, serverDemo, serverUrl, setServerUrl, ShopChoice, signupInfo, SignupInfo, switchDemo } from '../lib/backend';
+import { StorePicker } from './Shops';
+import { Signup } from './Signup';
 import { applyLanguage } from '../lib/i18n';
 import { useSession } from '../lib/session';
 
@@ -24,12 +26,17 @@ export function Login() {
 
   // the server's demo shop (Pilotix turned its button on): a few of its accounts
   const [srvDemo, setSrvDemo] = useState<{ key: string; name: string; role: string }[]>([]);
+  // the password opens several shops: the store picker; « Créer ma boutique » when the server takes sign-ups
+  const [choose, setChoose] = useState<ShopChoice[] | null>(null);
+  const [su, setSu] = useState<SignupInfo | null>(null);
+  const [signingUp, setSigningUp] = useState(() => location.hash === '#/inscription');
 
   useEffect(() => onDemoProgress(setProgress), [busy]);
   useEffect(() => {
     if (DEMO_ONLY || !serverUrl()) return;
     let on = true;
     forgotAvailable().then((ok) => on && setCanReset(ok));
+    signupInfo().then((r) => on && r?.open && setSu(r));
     serverDemo().then((d) => on && d.available && setSrvDemo(d.accounts.filter((a) => ['admin', 'conf1', 'depot', 'livreur', 'marketer'].includes(a.key))));
     return () => {
       on = false;
@@ -68,6 +75,9 @@ export function Login() {
     setSent(false);
     setError('');
   }
+
+  if (choose) return <StorePicker shops={choose} onBack={() => setChoose(null)} />;
+  if (signingUp && su) return <Signup info={su} onBack={() => (setSigningUp(false), history.replaceState(null, '', `${location.pathname}${location.search}#/`))} />;
 
   if (forgot)
     return (
@@ -108,7 +118,8 @@ export function Login() {
       setServerUrl(server);
     }
     try {
-      await login(email, password);
+      const shops = await login(email, password);
+      if (shops) setChoose(shops);
     } catch (err: any) {
       setError(err?.message || t('login.error'));
     } finally {
@@ -171,6 +182,14 @@ export function Login() {
               <button type="button" className="login-link" onClick={() => (setForgot(true), setError(''))}>
                 {t('login.forgot')}
               </button>
+            )}
+            {su && (
+              <div className="px-signup-cta">
+                <span>{t('shop.signup.cta')}</span>
+                <button type="button" className="btn" onClick={() => (setSigningUp(true), setError(''))}>
+                  {t('shop.signup.ctaBtn', { count: su.trialDays })}
+                </button>
+              </div>
             )}
           </>
         )}

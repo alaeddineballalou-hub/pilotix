@@ -333,7 +333,13 @@
     "toneInfo": "Information (bleu)",
     "toneWarn": "Attention (orange)",
     "noticeUntil": "Jusqu’au",
-    "noticeUntilHint": "Vide = jusqu’à ce que vous l’effaciez."
+    "noticeUntilHint": "Vide = jusqu’à ce que vous l’effaciez.",
+    "signupTitle": "Inscriptions en ligne",
+    "signupHelp": "Les boutiques se créent seules sur la page d’inscription, en essai gratuit (formule et jours ci-dessus).",
+    "signupOpen": "Ouvrir les inscriptions",
+    "signupMax": "Boutiques max. par e-mail",
+    "signupPerIp": "Inscriptions max. par connexion et par jour",
+    "signupLink": "Page d’inscription : {{url}}"
   },
   "demo": {
     "none": "Pas encore de boutique démo",
@@ -350,5 +356,9 @@
     "publicTitle": "Le bouton « Essayer la démo »",
     "publicOn": "Visible sur la page de connexion : les visiteurs choisissent un rôle et entrent.",
     "publicOff": "Caché : seule l’équipe Pilotix peut ouvrir la démo."
-  }
+  },
+  "selfSignup": "Inscription en ligne",
+  "emailUnconfirmed": "E-mail non confirmé",
+  "domainOk": "Domaine prêt",
+  "domainPending": "Domaine en attente du DNS"
 }

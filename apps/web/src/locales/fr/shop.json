@@ -31,5 +31,55 @@
   "checking": "Vérification…",
   "stillLocked": "Pas encore activé. Prévenez Pilotix (WhatsApp) puis réessayez.",
   "logout": "Se déconnecter",
-  "controlRoom": "Centre de contrôle Pilotix"
+  "controlRoom": "Centre de contrôle Pilotix",
+  "picker": {
+    "title": "Choisissez la boutique",
+    "text_one": "Ce mot de passe ouvre {{count}} boutique.",
+    "text_other": "Ce mot de passe ouvre {{count}} boutiques.",
+    "mine": "Mes boutiques",
+    "current": "Ouverte",
+    "locked": "Abonnement terminé",
+    "password": "Mot de passe de « {{shop}} »",
+    "passwordHint": "Chaque boutique garde ses comptes : tapez le mot de passe de votre compte dans cette boutique.",
+    "open": "Ouvrir"
+  },
+  "add": {
+    "button": "Ajouter une boutique",
+    "title": "Ajouter une boutique",
+    "text": "Une nouvelle boutique, avec son essai gratuit : vous en êtes l’administrateur, avec votre e-mail et votre mot de passe.",
+    "password": "Votre mot de passe",
+    "passwordHint": "Celui de votre compte, pour confirmer que c’est bien vous.",
+    "create": "Créer la boutique"
+  },
+  "signup": {
+    "title": "Créer ma boutique",
+    "trial_one": "{{count}} jour d’essai gratuit, sans carte",
+    "trial_other": "{{count}} jours d’essai gratuit, sans carte",
+    "plan": "formule {{plan}} ({{price}} / mois ensuite)",
+    "shopName": "Nom de la boutique",
+    "shopNamePh": "ex. Bijoux Sétif",
+    "slug": "Adresse de vos landing pages",
+    "slugHint": "Lettres minuscules, chiffres et tirets.",
+    "slugFree": "✓ Libre",
+    "slugTaken": "Déjà pris par une autre boutique. Libre : {{suggestion}}",
+    "slugInvalid": "Nom invalide : 2 à 40 lettres minuscules, chiffres et tirets (pas un mot de Pilotix comme « api »).",
+    "name": "Votre nom",
+    "phone": "Téléphone (facultatif)",
+    "short": "10 caractères au moins.",
+    "create": "Créer ma boutique",
+    "creating": "Création de votre boutique…",
+    "terms": "Vos données restent à vous. Vous pouvez arrêter à tout moment.",
+    "haveAccount": "J’ai déjà un compte : me connecter",
+    "cta": "Nouveau sur Pilotix ?",
+    "ctaBtn_one": "Créer ma boutique ({{count}} jour gratuit)",
+    "ctaBtn_other": "Créer ma boutique ({{count}} jours gratuits)"
+  },
+  "confirm": {
+    "title": "Confirmation de l’e-mail",
+    "done": "C’est fait : l’e-mail de « {{shop}} » est confirmé.",
+    "open": "Ouvrir Pilotix",
+    "banner": "Confirmez votre e-mail ({{email}}) : ouvrez le lien que nous vous avons envoyé.",
+    "again": "Renvoyer le lien",
+    "sent": "Lien envoyé"
+  }
 }

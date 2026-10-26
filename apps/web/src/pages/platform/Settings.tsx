@@ -84,6 +84,20 @@ export function Settings({ staff }: { staff: Staff }) {
             <a href="#/platform/demo">{t('platform.set.demoLink')}</a>
           </p>
         </Card>
+        <Card title={t('platform.set.signupTitle')} help={t('platform.set.signupHelp')}>
+          <label className="check">
+            <input disabled={!owner} type="checkbox" checked={f.signup.open} onChange={(e) => setF({ ...f, signup: { ...f.signup, open: e.target.checked } })} /> {t('platform.set.signupOpen')}
+          </label>
+          <div className="grid2 pp-form">
+            <Field label={t('platform.set.signupMax')}>
+              <input disabled={!owner} type="number" min={1} max={50} value={f.signup.maxShopsPerEmail} onChange={(e) => setF({ ...f, signup: { ...f.signup, maxShopsPerEmail: Math.max(1, Math.min(50, Number(e.target.value) || 1)) } })} />
+            </Field>
+            <Field label={t('platform.set.signupPerIp')}>
+              <input disabled={!owner} type="number" min={1} max={100} value={f.signup.perIpPerDay} onChange={(e) => setF({ ...f, signup: { ...f.signup, perIpPerDay: Math.max(1, Math.min(100, Number(e.target.value) || 1)) } })} />
+            </Field>
+          </div>
+          <p className="small muted">{t('platform.set.signupLink', { url: `${location.origin}/#/inscription` })}</p>
+        </Card>
       </div>
       <Card title={t('platform.set.payTitle')} help={t('platform.set.payHelp')}>
         <div className="pp-pay-edit">

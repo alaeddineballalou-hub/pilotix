@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { LockScreen } from './layout/LockScreen';
 import { Login } from './layout/Login';
 import { ResetPassword } from './layout/ResetPassword';
+import { ConfirmEmail } from './layout/ConfirmEmail';
 import { canSee, canSeeChild, homeFor, NAV } from './layout/nav';
 import { applyTheme, Shell } from './layout/Shell';
 import { ApiError } from './lib/backend';
@@ -66,6 +67,8 @@ function App() {
   if (!ready) return <Loading />;
   // the link of the "mot de passe oublié" e-mail works logged in or not
   if (parts[0] === 'reset' && parts[1]) return <ResetPassword token={parts[1]} />;
+  // the link of the welcome e-mail (a new shop's owner confirms the e-mail)
+  if (parts[0] === 'confirmer' && parts[1]) return <ConfirmEmail token={parts[1]} />;
   if (!session) return <Login />;
   // unpaid or suspended: the lock screen (how to pay), nothing else
   if (session.shop?.locked) return <LockScreen />;
