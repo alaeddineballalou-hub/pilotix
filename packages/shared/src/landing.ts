@@ -212,8 +212,11 @@ if(!r||!r.ok){busy=false;btn.disabled=false;btn.textContent=C.cta;$('fe').textCo
 done=1;var fee=C.fees[w.value];$('okn').textContent=nm;$('o1').textContent=C.title+(vr?' \\u2014 '+vr.options[vr.selectedIndex].text:'')+' \\u00d7 '+q;$('o2').textContent=money(unit()*q+(fee||0));
 f.style.display='none';$('ok').style.display='block';window.scrollTo(0,0)})})()};sum()})();`;
 
-/** what the main photo's srcset is chosen for: the page's column on a computer, the whole width on a phone */
-export const LANDING_SIZES = '(min-width:860px) 520px, 100vw';
+/**
+ * what the main photo's srcset is chosen for: its real width. On a computer, half of the 1080 px page minus the card's
+ * padding and border (490 px); on a phone, the screen minus the page's and the card's padding and border (54 px).
+ */
+export const LANDING_SIZES = '(min-width:860px) 490px, calc(100vw - 54px)';
 
 /**
  * The HTTP `Link` header that lets the phone ask for the main photo as soon as the answer's headers arrive, before the

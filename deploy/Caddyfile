@@ -24,6 +24,18 @@
 		reverse_proxy server:3000
 	}
 
+	# for AI assistants: the shop and its landing pages (made by the server); no ai-catalog.json (a 404, not the app's page)
+	handle /llms.txt {
+		rewrite * /api/llms.txt
+		reverse_proxy server:3000
+	}
+	handle /ai-catalog.json {
+		respond 404
+	}
+	handle /.well-known/ai-catalog.json {
+		respond 404
+	}
+
 	# the app
 	handle {
 		root * /srv

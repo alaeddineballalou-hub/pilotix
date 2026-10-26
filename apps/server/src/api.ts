@@ -408,6 +408,14 @@ class ApiController {
     }
   }
 
+  /** /llms.txt (Caddy sends it here): the shop and its live landing pages, for AI assistants (cached an hour). */
+  @Public()
+  @Get('llms.txt')
+  async llmsTxt(@Req() req: { headers: Record<string, string | undefined> }, @Res() res: any) {
+    const r: any = await this.core.call('landing.llms', await this.core.systemSession(), { base: `${config.publicUrl}/api/lp/` });
+    return sendText(req, res.status(200).header('Content-Type', 'text/plain; charset=utf-8').header('Cache-Control', 'public, max-age=3600'), r.text);
+  }
+
   /** Communes of a wilaya, [French name, Arabic name] (asked when the customer picks a wilaya; cached a month). */
   @Public()
   @Get('lp/geo/:wilaya')
