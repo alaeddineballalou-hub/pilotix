@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, dateTime, n } from '../../lib/format';
+import { featureIsOn, pageIsOn } from '../../lib/features';
 import { openOrder } from '../../lib/modals';
 import { useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
@@ -30,7 +31,7 @@ export function Produits({ sub, rest }: PageProps) {
   // the former « Prix » tab lives in Produits now
   const tab: Tab = sub === 'prix' ? 'produits' : (TABS as readonly string[]).includes(sub ?? '') ? (sub as Tab) : 'stock';
   const alerts = useRpc('catalog.alerts', {});
-  const tabs = TABS.map((k) => ({ key: k, label: t(`produits.tabs.${k}`), icon: ICONS[k], href: `#/produits/${k}`, count: k === 'alertes' ? alerts.data?.length : undefined, alert: k === 'alertes' }));
+  const tabs = TABS.filter((k) => pageIsOn('produits', k)).map((k) => ({ key: k, label: t(`produits.tabs.${k}`), icon: ICONS[k], href: `#/produits/${k}`, count: k === 'alertes' ? alerts.data?.length : undefined, alert: k === 'alertes' }));
   const arg = rest?.[0] ? decodeURIComponent(rest[0]) : undefined;
   return (
     <div className="pd">
@@ -179,7 +180,8 @@ function ProductsTab() {
   // landing pages: which products have one (a product just created without one gets a banner)
   const { session } = useSession();
   const marketer = !!session && (session.isAdmin || session.roles.includes('marketer'));
-  const cov = useRpc('landing.coverage', {});
+  // landing pages are not in every plan
+  const cov = useRpc('landing.coverage', {}, { enabled: featureIsOn('landing') });
   const pages = useMemo(() => new Map((cov.data?.pages ?? []).map((x) => [x.productId, x])), [cov.data]);
   const ignored = useMemo(() => new Set(cov.data?.ignored ?? []), [cov.data]);
   const [fresh, setFresh] = useState<{ id: number; name: string } | null>(null);

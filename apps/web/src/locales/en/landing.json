@@ -267,7 +267,8 @@
     "link": "Page links",
     "linkHelp": "Every page has its own address: your site / the store's name / the page's name (the page's name is changed in the page). The old …/api/lp/… links keep working.",
     "storeSlug": "Store name in the link",
-    "storeSlugHint": "Latin letters, digits and dashes. Empty = « {{name}} » (made from the shop's name). After a change, links with the old name still lead to the right page."
+    "storeSlugHint": "Latin letters, digits and dashes. Empty = « {{name}} » (made from the shop's name). After a change, links with the old name still lead to the right page.",
+    "storeFixed": "Chosen by Pilotix when your shop was created: your order links use it too. To change it, write to Pilotix support."
   },
   "ev": {
     "title": "Events sent to Meta",

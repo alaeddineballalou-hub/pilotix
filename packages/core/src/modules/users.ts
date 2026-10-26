@@ -40,6 +40,14 @@ function needGrantable(ctx: Ctx, b: { roles?: string[]; canManageUsers?: boolean
   if (b.canManageUsers !== undefined) throw forbidden('Seul l’administrateur peut donner ce droit');
 }
 
+/** The shop's plan allows N active accounts (a multi-shop server): one more is refused beyond that. */
+async function needSeat(ctx: Ctx) {
+  const max = ctx.shop?.maxUsers;
+  if (!max) return;
+  const n = num((await ctx.db.query(`SELECT count(*)::int AS n FROM profiles WHERE active AND email NOT LIKE '%@pilotix.invalid'`))[0]?.n);
+  if (n >= max) throw bad(`Votre formule Pilotix permet ${max} comptes actifs. Désactivez un compte, ou demandez à Pilotix une formule plus grande.`);
+}
+
 export async function profileById(db: Db, id: number): Promise<Profile | null> {
   const r = (await db.query('SELECT * FROM profiles WHERE id = $1', [id]))[0];
   return r ? toProfile(r) : null;
@@ -257,6 +265,7 @@ export const usersProcs = {
   'users.create': proc(null, NewUser, async (ctx, b) => {
     needUserManager(ctx);
     needGrantable(ctx, b);
+    await needSeat(ctx);
     try {
       const r = (
         await ctx.db.query(
@@ -274,15 +283,23 @@ export const usersProcs = {
     await needCanEdit(ctx, b.id);
     needGrantable(ctx, b);
     if (b.id === ctx.session.profile.id && (b.active === false || (b.roles && !b.roles.includes('admin')))) throw forbidden('Vous ne pouvez pas retirer votre propre accès administrateur');
-    const r = (
-      await ctx.db.query(
-        `UPDATE profiles SET name=COALESCE($2,name), email=COALESCE($3,email), phone=COALESCE($4,phone), password_hash=COALESCE($5,password_hash),
-           roles=COALESCE($6,roles), language=COALESCE($7,language), active=COALESCE($8,active), livreur_company_id=COALESCE($9,livreur_company_id),
-           can_manage_users = CASE WHEN 'admin' = ANY(COALESCE($6,roles)) THEN false ELSE COALESCE($10,can_manage_users) END,
-           token_version = token_version + CASE WHEN $5::text IS NOT NULL OR $8 = false THEN 1 ELSE 0 END WHERE id=$1 RETURNING *`,
-        [b.id, b.name ?? null, b.email?.toLowerCase() ?? null, b.phone ?? null, b.password ? await hashPassword(b.password) : null, b.roles ?? null, b.language ?? null, b.active ?? null, b.livreurCompanyId ?? null, b.canManageUsers ?? null],
-      )
-    )[0];
+    // an account closed earlier and opened again takes a place of the plan
+    if (b.active === true && !(await ctx.db.query('SELECT active FROM profiles WHERE id = $1', [b.id]))[0]?.active) await needSeat(ctx);
+    let r: any;
+    try {
+      r = (
+        await ctx.db.query(
+          `UPDATE profiles SET name=COALESCE($2,name), email=COALESCE($3,email), phone=COALESCE($4,phone), password_hash=COALESCE($5,password_hash),
+             roles=COALESCE($6,roles), language=COALESCE($7,language), active=COALESCE($8,active), livreur_company_id=COALESCE($9,livreur_company_id),
+             can_manage_users = CASE WHEN 'admin' = ANY(COALESCE($6,roles)) THEN false ELSE COALESCE($10,can_manage_users) END,
+             token_version = token_version + CASE WHEN $5::text IS NOT NULL OR $8 = false THEN 1 ELSE 0 END WHERE id=$1 RETURNING *`,
+          [b.id, b.name ?? null, b.email?.toLowerCase() ?? null, b.phone ?? null, b.password ? await hashPassword(b.password) : null, b.roles ?? null, b.language ?? null, b.active ?? null, b.livreurCompanyId ?? null, b.canManageUsers ?? null],
+        )
+      )[0];
+    } catch (e: any) {
+      if (String(e?.code) === '23505' || /unique|duplicate|déjà utilisé/i.test(e?.message)) throw bad('Cet email est déjà utilisé');
+      throw e;
+    }
     if (!r) throw notFound();
     return toProfile(r);
   }),

@@ -10,7 +10,7 @@ import { CARDS, KINDS } from '../couriers/kinds';
 import { keysOk, loadCompany, loadParcels, resolveStatus } from '../couriers/load';
 import type { Desk, ExchangeResult, FeeRow, LabelResult, PreviewResult, SendResult, TrackItem, TrackResult } from '../couriers/types';
 import { Db, iso, num, numOrNull } from '../db';
-import { bad, Ctx, notFound, proc, takeActionLocks } from '../rpc';
+import { bad, Ctx, notFound, proc, publicApi, takeActionLocks } from '../rpc';
 
 /** Compares two secrets in a time that does not depend on where they differ (no guessing a key letter by letter). */
 function sameSecret(a: string, b: string): boolean {
@@ -599,7 +599,7 @@ export const deliveryProcs = {
     const c = await companyOr404(ctx.db, companyId);
     if (!KINDS[c.kind]?.zr) throw bad(`${c.name} : pas disponible avec cette société`);
     const extId = String((c.settings as any).webhook_id ?? '') || null;
-    const hookUrl = ctx.server?.publicUrl ? `${ctx.server.publicUrl}/api/hooks/courier/${c.id}` : null;
+    const hookUrl = publicApi(ctx) ? `${publicApi(ctx)}/hooks/courier/${c.id}` : null;
     if (isDemo(ctx))
       return {
         webhook: { on: !!extId, extId, url: extId ? `https://votre-serveur.dz/api/hooks/courier/${c.id}` : null, error: null as string | null },
@@ -644,10 +644,10 @@ export const deliveryProcs = {
     const key = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
     let extId = 'demo-hook';
     if (!isDemo(ctx)) {
-      if (!ctx.server?.publicUrl) throw bad('Adresse publique du serveur manquante (PUBLIC_URL) : la société ne saurait pas où prévenir Pilotix');
+      if (!publicApi(ctx)) throw bad('Adresse publique du serveur manquante (PUBLIC_URL) : la société ne saurait pas où prévenir Pilotix');
       const old = String((c.settings as any).webhook_id ?? '');
       if (old) await courierOf(ctx)('webhookOff', { companyId, extId: old }, ctx).catch(() => null);
-      const url = `${ctx.server.publicUrl}/api/hooks/courier/${c.id}?key=${key}`;
+      const url = `${publicApi(ctx)}/hooks/courier/${c.id}?key=${key}`;
       extId = ((await courierOf(ctx)('webhookOn', { companyId, url, key }, ctx)) as { extId: string }).extId;
     }
     await ctx.db.query(

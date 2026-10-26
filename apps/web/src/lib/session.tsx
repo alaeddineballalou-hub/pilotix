@@ -1,7 +1,8 @@
 import type { Role, Session } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
-import { backend, rpc, setOnUnauthorized } from './backend';
+import { backend, isSupportTab, loginServerDemo, rpc, setOnLocked, setOnUnauthorized } from './backend';
+import { setShop } from './features';
 import { applyLanguage } from './i18n';
 import { store } from './store';
 
@@ -9,6 +10,8 @@ interface SessionState {
   session: Session | null;
   ready: boolean;
   login: (email: string, password: string) => Promise<void>;
+  /** opens the server's demo shop as one of its accounts */
+  loginDemo: (key: string) => Promise<void>;
   logout: () => void;
   /** Reload my profile (after I change my name or picture). */
   refresh: () => Promise<void>;
@@ -20,30 +23,48 @@ interface SessionState {
 const Ctx = createContext<SessionState>(null as unknown as SessionState);
 export const useSession = () => useContext(Ctx);
 
+/** The session as the browser keeps it for offline use (never for a support tab: it belongs to another shop). */
+function keep(s: Session | null) {
+  if (!isSupportTab()) store.set('session', s ? JSON.stringify(s) : null);
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSessionState] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
+  // the shop's menus are known before anything renders with the new session
+  const setSession = useCallback((s: Session | null) => {
+    setShop(s?.shop);
+    setSessionState(s);
+  }, []);
 
   const logout = useCallback(() => {
     backend.logout();
-    store.set('session', null);
+    keep(null);
     setSession(null);
     qc.clear();
-  }, [qc]);
+  }, [qc, setSession]);
+
+  const refresh = useCallback(async () => {
+    const s = await rpc('me.get', {});
+    keep(s);
+    setSession(s);
+  }, [setSession]);
 
   useEffect(() => {
     setOnUnauthorized(logout);
+    // the subscription stopped while the app was open: the lock screen comes from the fresh session
+    setOnLocked(() => void refresh().catch(() => {}));
     backend
       .resume()
       .then((s) => {
         if (s) {
           setSession(s);
-          store.set('session', JSON.stringify(s));
+          keep(s);
         }
       })
       .finally(() => setReady(true));
-  }, [logout]);
+  }, [logout, refresh, setSession]);
 
   // Live updates refresh what is on screen.
   useEffect(() => {
@@ -58,20 +79,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     };
   }, [session, qc]);
 
-  const login = async (email: string, password: string) => {
-    const s = await backend.login(email, password);
-    store.set('session', JSON.stringify(s));
+  const start = (s: Session) => {
+    keep(s);
     if (!store.get('lang')) applyLanguage(s.profile.language);
     setSession(s);
   };
-
-  const refresh = useCallback(async () => {
-    const s = await rpc('me.get', {});
-    store.set('session', JSON.stringify(s));
-    setSession(s);
-  }, []);
+  const login = async (email: string, password: string) => start(await backend.login(email, password));
+  const loginDemo = async (key: string) => start(await loginServerDemo(key));
 
   const has = (...roles: Role[]) => !!session && (session.isAdmin || roles.some((r) => session.roles.includes(r)));
 
-  return <Ctx.Provider value={{ session, ready, login, logout, refresh, has, me: session?.profile.id ?? 0 }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ session, ready, login, loginDemo, logout, refresh, has, me: session?.profile.id ?? 0 }}>{children}</Ctx.Provider>;
 }

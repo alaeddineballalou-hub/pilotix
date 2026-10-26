@@ -4,7 +4,7 @@
 // customer sees it.
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { backend, rpc, serverUrl } from '../../lib/backend';
+import { backend, rpc, serverUrl, shopApi } from '../../lib/backend';
 import { da, n, when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
@@ -32,7 +32,7 @@ export const useStore = () => useRpc('landing.store', {}, { staleTime: 60_000 })
 
 /** the address customers open: site/<store>/<page> in real use, the in-app view in the demo */
 export function publicUrl(slug: string, store: string | undefined): string {
-  return backend.kind === 'demo' ? `#/landing/voir/${slug}` : store ? `${serverUrl()}/${store}/${slug}` : `${serverUrl()}/api/lp/${slug}`;
+  return backend.kind === 'demo' ? `#/landing/voir/${slug}` : store ? `${serverUrl()}/${store}/${slug}` : `${shopApi(serverUrl())}/lp/${slug}`;
 }
 
 export function Landing({ sub, rest }: PageProps) {

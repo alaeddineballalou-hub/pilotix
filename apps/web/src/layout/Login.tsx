@@ -1,7 +1,7 @@
 import { DEMO_ACCOUNTS, DEMO_PASSWORD, Language, LANGUAGES } from '@pilotix/shared';
 import { FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { backend, DEMO_AVAILABLE, DEMO_ONLY, FIXED_SERVER, forgotAvailable, onDemoProgress, requestPasswordReset, serverUrl, setServerUrl, switchDemo } from '../lib/backend';
+import { backend, DEMO_AVAILABLE, DEMO_ONLY, FIXED_SERVER, forgotAvailable, onDemoProgress, requestPasswordReset, serverDemo, serverUrl, setServerUrl, switchDemo } from '../lib/backend';
 import { applyLanguage } from '../lib/i18n';
 import { useSession } from '../lib/session';
 
@@ -9,7 +9,7 @@ const LANG: Record<Language, string> = { fr: 'Français', en: 'English', ar: 'ا
 
 export function Login() {
   const { t, i18n } = useTranslation();
-  const { login } = useSession();
+  const { login, loginDemo } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [server, setServer] = useState(serverUrl());
@@ -22,15 +22,31 @@ export function Login() {
   const [forgot, setForgot] = useState(false);
   const [sent, setSent] = useState(false);
 
+  // the server's demo shop (Pilotix turned its button on): a few of its accounts
+  const [srvDemo, setSrvDemo] = useState<{ key: string; name: string; role: string }[]>([]);
+
   useEffect(() => onDemoProgress(setProgress), [busy]);
   useEffect(() => {
     if (DEMO_ONLY || !serverUrl()) return;
     let on = true;
     forgotAvailable().then((ok) => on && setCanReset(ok));
+    serverDemo().then((d) => on && d.available && setSrvDemo(d.accounts.filter((a) => ['admin', 'conf1', 'depot', 'livreur', 'marketer'].includes(a.key))));
     return () => {
       on = false;
     };
   }, []);
+
+  async function tryServerDemo(key: string) {
+    setError('');
+    setBusy(`demo:${key}`);
+    try {
+      await loginDemo(key);
+    } catch (err: any) {
+      setError(err?.message || t('common.error'));
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function sendReset(e: FormEvent) {
     e.preventDefault();
@@ -157,6 +173,20 @@ export function Login() {
               </button>
             )}
           </>
+        )}
+        {!DEMO_ONLY && srvDemo.length > 0 && (
+          <div className="demo-accounts">
+            <p className="small">
+              <b>{t('login.demoServer')}</b> — {t('login.demoServerText')}
+            </p>
+            <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
+              {srvDemo.map((a) => (
+                <button key={a.key} type="button" className="btn small" disabled={!!busy} onClick={() => tryServerDemo(a.key)}>
+                  {busy === `demo:${a.key}` ? '…' : t(`roles.${a.role}`)}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
         {(DEMO_AVAILABLE || DEMO_ONLY) && (
           <div className="demo-accounts">

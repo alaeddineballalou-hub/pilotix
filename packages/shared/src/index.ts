@@ -5,6 +5,8 @@ export * from './timers';
 export * from './geo';
 export * from './demo';
 export * from './upsell';
+export * from './features';
+import type { ShopInfo } from './features';
 import type { OrigLine } from './upsell';
 
 // ---------------------------------------------------------------- roles
@@ -151,6 +153,10 @@ export interface Session {
   isAdmin: boolean;
   /** administrator, or given the right to create accounts and set passwords */
   canManageUsers?: boolean;
+  /** the shop and its subscription (a multi-shop server only) */
+  shop?: ShopInfo;
+  /** this e-mail is also a Pilotix staff account (the menu shows the way to the control room) */
+  platformStaff?: boolean;
 }
 
 export interface Variant {

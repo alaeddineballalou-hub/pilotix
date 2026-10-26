@@ -374,9 +374,10 @@ CREATE TABLE applied_actions (
   applied_at timestamptz NOT NULL DEFAULT now()
 );
 
--- Fast search on names and phones when pg_trgm is available (server); plain indexes otherwise.
+-- Fast search on names and phones when pg_trgm is available (server); plain indexes otherwise. A shop's schema sees it
+-- through its search path (the extension lives in the "ext" schema on a multi-shop server).
 DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
+  IF EXISTS (SELECT 1 FROM pg_opclass WHERE opcname = 'gin_trgm_ops' AND pg_opclass_is_visible(oid)) THEN
     EXECUTE 'CREATE INDEX orders_name_trgm ON orders USING gin (customer_name gin_trgm_ops)';
     EXECUTE 'CREATE INDEX orders_phone_trgm ON orders USING gin (phone gin_trgm_ops)';
     EXECUTE 'CREATE INDEX customers_name_trgm ON customers USING gin (name gin_trgm_ops)';

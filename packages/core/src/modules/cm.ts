@@ -769,7 +769,7 @@ export async function answerComment(ctx: Ctx, id: number, opts: { force?: boolea
     }
   }
   try {
-    return await oneAtATime(row.author_id ? `${row.channel}:${row.author_id}` : null, async () => {
+    return await oneAtATime(row.author_id ? `${ctx.shop?.id ?? 0}:${row.channel}:${row.author_id}` : null, async () => {
       // read again inside the queue: another comment of this person may just have got its private message
       const fresh = await rawComment(ctx.db, id);
       const f = await gatherFacts(ctx, {

@@ -2,6 +2,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../lib/backend';
+import { pageIsOn } from '../../lib/features';
 import { useAction, useRpc } from '../../lib/query';
 import { ErrorBox, Help, Icon, Loading } from '../../ui/kit';
 import type { PageProps } from '../registry';
@@ -24,7 +25,7 @@ export function Dashboard({ sub }: PageProps) {
   if (meta.isLoading) return <Loading />;
   if (meta.error) return <ErrorBox error={meta.error} onRetry={() => meta.refetch()} />;
   const m = meta.data!;
-  const allowed = AREAS.filter((a) => (a === 'overview' ? m.seesAll : (m.areas as string[]).includes(a)));
+  const allowed = AREAS.filter((a) => (a === 'overview' ? m.seesAll : (m.areas as string[]).includes(a)) && pageIsOn('dashboard', a));
   if (!allowed.length) return <div className="empty-box">{t('dashboard.noArea')}</div>;
   const area: Area = allowed.includes(sub as Area) ? (sub as Area) : allowed[0];
   return (

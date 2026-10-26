@@ -1,7 +1,7 @@
 // Réglages: Boutique · Dépôts · Commandes du site web (webhook) · Mise à jour automatique des colis (cron) · Meta Ads.
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { backend } from '../../lib/backend';
+import { backend, shopApi } from '../../lib/backend';
 import { when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { Card, ErrorBox, Field, Help, Loading, copyText } from '../../ui/kit';
@@ -155,7 +155,7 @@ function WebCard({ webKey }: { webKey: string }) {
   useEffect(() => setKey(webKey), [webKey]);
   const rotate = useAction('admin.webhook.rotate', { success: t('admin.settings.rotated'), onDone: (r) => setKey(r.key) });
   const sim = useAction('admin.webhook.simulate', { success: (r) => t('admin.settings.simulated', { ref: r.ref }) });
-  const url = `${publicBase()}/api/hooks/orders/site`;
+  const url = `${shopApi(publicBase())}/hooks/orders/site`;
   const copy = async (s: string) => {
     await copyText(s);
     toast(t('admin.settings.copied'), 'ok');
@@ -209,7 +209,7 @@ function CronCard({ cronKey, last }: { cronKey: string; last: { at: string; chec
   const [key, setKey] = useState(cronKey);
   useEffect(() => setKey(cronKey), [cronKey]);
   const rotate = useAction('admin.cron.rotate', { success: t('admin.settings.rotated'), onDone: (r) => setKey(r.key) });
-  const code = `# Pilotix : mise à jour des colis toutes les 30 min de 7 h à 22 h (heure d’Algérie)\nCRON_TZ=Africa/Algiers\n*/30 7-22 * * * curl -fsS -X POST "${publicBase()}/api/hooks/cron?key=${key || 'CLE'}" >/dev/null`;
+  const code = `# Pilotix : mise à jour des colis toutes les 30 min de 7 h à 22 h (heure d’Algérie)\nCRON_TZ=Africa/Algiers\n*/30 7-22 * * * curl -fsS -X POST "${shopApi(publicBase())}/hooks/cron?key=${key || 'CLE'}" >/dev/null`;
   return (
     <Card title={t('admin.settings.cron')} help={t('admin.settings.cronHelp')}>
       {last ? <div className="okbox">{t('admin.settings.lastSync', { when: when(last.at), checked: last.checked, changed: last.changed })}</div> : <p className="muted small">{t('admin.settings.noSync')}</p>}

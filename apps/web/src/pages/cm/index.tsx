@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMenuCounts } from '../../layout/Shell';
-import { backend, Out, rpc, serverUrl } from '../../lib/backend';
+import { backend, Out, rpc, serverUrl, shopApi } from '../../lib/backend';
 import { da, n, shortWhen, when } from '../../lib/format';
 import { openOrderForm } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
@@ -730,7 +730,7 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'cm
         </dl>
         <div className="dl-hook">
           <Field label={t('cm.settings.webhook')}>
-            <CopyCode code={`${base}/api/hooks/meta`} />
+            <CopyCode code={`${shopApi(base)}/hooks/meta`} />
           </Field>
           <Field label={t('cm.settings.verifyToken')}>
             <CopyCode code={m.verifyToken || '—'} />

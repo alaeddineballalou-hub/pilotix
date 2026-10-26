@@ -15,15 +15,29 @@ export async function loadCompany(db: Db, id: number): Promise<CourierCompany> {
   const shop = await getSetting(db, 'shop');
   const cfg = typeof r.config === 'string' ? JSON.parse(r.config) : r.config ?? {};
   const cred = typeof r.credentials === 'string' ? JSON.parse(r.credentials) : r.credentials ?? {};
+  const secret = Object.fromEntries(Object.entries(cred).map(([k, v]) => [k, String(v ?? '')]));
+  const settings = cfg.settings ?? {};
   return {
     id: num(r.id),
     name: r.name,
     kind: r.kind as CourierKind,
-    secret: Object.fromEntries(Object.entries(cred).map(([k, v]) => [k, String(v ?? '')])),
-    settings: cfg.settings ?? {},
+    secret,
+    settings,
     statusMap: cfg.statusMap ?? {},
     shop: { name: shop.name, fromWilayaId: shop.fromWilayaId, fromWilaya: WILAYAS[shop.fromWilayaId - 1] ?? '' },
+    cacheKey: `${r.kind}:${fnv(JSON.stringify([Object.entries(secret).filter(([k]) => k !== 'webhook_key').sort(), settings.base_url ?? '']))}`,
   };
+}
+
+/** A short hash (FNV-1a, 2 × 32 bits) — only to name a cache, never to protect anything. */
+function fnv(s: string): string {
+  let a = 0x811c9dc5;
+  let b = 0x01000193;
+  for (let i = 0; i < s.length; i++) {
+    a = Math.imul(a ^ s.charCodeAt(i), 0x01000193) >>> 0;
+    b = Math.imul(b ^ s.charCodeAt(i), 0x811c9dc5) >>> 0;
+  }
+  return a.toString(36) + b.toString(36);
 }
 
 /** True when every key the kind needs is filled (manual / own: no keys needed). */

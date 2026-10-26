@@ -1,11 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { StrictMode, Suspense, useEffect, useState } from 'react';
+import { lazy, StrictMode, Suspense, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { LockScreen } from './layout/LockScreen';
 import { Login } from './layout/Login';
 import { ResetPassword } from './layout/ResetPassword';
 import { canSee, canSeeChild, homeFor, NAV } from './layout/nav';
 import { applyTheme, Shell } from './layout/Shell';
 import { ApiError } from './lib/backend';
+import { firstSubOn, hasPlanSubs, pageIsOn } from './lib/features';
 import './lib/i18n';
 import { ModalHost } from './lib/modals';
 import { SessionProvider, useSession } from './lib/session';
@@ -49,13 +51,24 @@ function useHash() {
 
 const ALIASES: Record<string, [string, string?]> = { livreurs: ['dashboard', 'livreurs'], publicite: ['marketing', 'publicite'], marketer: ['marketing', 'marketer'], spy: ['marketing', 'spy'] };
 
+/** Pilotix's control room (#/platform): its own login and pages, loaded only when opened. */
+const PlatformApp = lazy(() => import('./pages/platform').then((m) => ({ default: m.PlatformApp })));
+
 function App() {
   const { session, ready } = useSession();
   const parts = useHash();
+  if (parts[0] === 'platform')
+    return (
+      <Suspense fallback={<Loading />}>
+        <PlatformApp parts={parts.slice(1)} />
+      </Suspense>
+    );
   if (!ready) return <Loading />;
   // the link of the "mot de passe oublié" e-mail works logged in or not
   if (parts[0] === 'reset' && parts[1]) return <ResetPassword token={parts[1]} />;
   if (!session) return <Login />;
+  // unpaid or suspended: the lock screen (how to pay), nothing else
+  if (session.shop?.locked) return <LockScreen />;
 
   let [page, sub, ...rest]: (string | undefined)[] = parts;
   if (page && ALIASES[page]) [page, sub] = [ALIASES[page][0], ALIASES[page][1] ?? sub];
@@ -72,7 +85,7 @@ function App() {
     [page, sub] = first.href.replace(/^#\/?/, '').split('/');
   }
   const item = NAV.find((n) => n.id === page);
-  const extra = ['livrees', 'retournees'].includes(page ?? '');
+  const extra = ['livrees', 'retournees'].includes(page ?? '') && pageIsOn(page ?? '');
   const allowed = (item && canSee(item, session.roles, session.isAdmin, !!session.canManageUsers)) || (extra && (session.isAdmin || session.roles.some((r) => ['confirmation', 'suivi', 'depot'].includes(r))));
   if (!page || !allowed || !PAGES[page]) {
     const home = homeFor(session.roles, session.isAdmin);
@@ -82,6 +95,20 @@ function App() {
     rest = [];
   }
   if (!sub && item?.subs?.length) sub = item.subs[0];
+  // a sub-page the shop's plan does not include: its first sub-page that is included
+  if (page && sub && hasPlanSubs(page) && !pageIsOn(page, sub)) {
+    const first = firstSubOn(page);
+    if (first) {
+      location.replace(`#/${page}/${first}`);
+      sub = first;
+    } else {
+      const home = homeFor(session.roles, session.isAdmin);
+      location.replace(`#/${home}`);
+      page = home;
+      sub = undefined;
+      rest = [];
+    }
+  }
   const Page = PAGES[page!];
   return (
     <Shell page={page!} sub={sub}>

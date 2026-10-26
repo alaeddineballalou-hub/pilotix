@@ -14,6 +14,7 @@ import { Field, Icon, StageBar, TicketTag } from '../ui/kit';
 import { Modal } from '../ui/modal';
 import { canSee, canSeeChild, NAV, NavItem } from './nav';
 import { AccountMenu } from './AccountMenu';
+import { ShopBanner } from './ShopBanner';
 
 const AgentBanner = lazy(() => import('../pages/confirmation/AgentBanner').then((m) => ({ default: m.AgentBanner })));
 
@@ -133,9 +134,10 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
     document.body.classList.toggle('nav-open', navOpen);
   }, [navOpen]);
 
-  const items = NAV.filter((n) => !n.hidden && canSee(n, roles, isAdmin, !!session!.canManageUsers));
   /** a group's children this user sees */
   const kids = (n: NavItem) => (n.children ?? []).filter((c) => canSeeChild(c, roles, isAdmin));
+  // a group whose children are all out of the shop's plan is not shown
+  const items = NAV.filter((n) => !n.hidden && canSee(n, roles, isAdmin, !!session!.canManageUsers) && (!n.children || kids(n).length > 0));
   /** the group of the page on screen: its children show in a bar under the header when the sidebar is folded */
   const curGrp = items.find((n) => n.children && n.pages?.includes(page));
   /** the child of a group shown as current */
@@ -300,6 +302,7 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
             }}
           />
         </header>
+        <ShopBanner session={session!} />
         {has('confirmation') && !isAdmin && (
           <Suspense fallback={null}>
             <AgentBanner />

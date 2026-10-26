@@ -3,6 +3,7 @@
 // Ported from the original Pilotix adapter. Endpoints: GET validate/token, get/communes?wilaya_id=, POST create/order, POST valid/order,
 // get/orders/status?trackings=, get/tracking/info?tracking=, DELETE delete/order, get/order/label (PDF), get/fees.
 // EcoTrack allows ~50 requests/minute: we wait 1.25 s between calls.
+import { cacheKeyOf } from './types';
 import type { CourierAdapter, CourierCompany } from './types';
 import { baseUrl, chunks, CourierError, cut, errText, flag, http, HttpOpts, humanize, needKeys, query, sleep, timeUp } from './util';
 
@@ -44,7 +45,7 @@ export const ecotrack: CourierAdapter = {
     const com = await helpers.communeName(
       p,
       async (w) => Object.values((await api(c, '/get/communes', { wilaya_id: w })) ?? {}).map((x: any) => ({ name: x.nom as string, id: x.code_postal, desk: Number(x.has_stop_desk) === 1 })),
-      `eco:${c.id}`,
+      `eco:${cacheKeyOf(c)}`,
     );
     if (!com && !p.is_stopdesk) throw new CourierError(`Commune « ${p.commune} » introuvable chez ${c.name} : corrigez la commune`);
     if (p.is_stopdesk && com && com.desk === false) throw new CourierError(`${c.name} n’a pas de stop desk à ${com.name} : livraison à domicile ou autre commune`);

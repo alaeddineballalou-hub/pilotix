@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { downloadCsv } from '../../lib/files';
+import { pageIsOn } from '../../lib/features';
 import { da, dateTime, n, wilayaName, when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { openOrder } from '../../lib/modals';
@@ -50,7 +51,7 @@ function CaisseDesktop({ sub }: PageProps) {
     { key: 'done', label: t('caisse.tabs.done') },
     { key: 'livreurs', label: t('caisse.tabs.livreurs') },
     { key: 'journal', label: t('caisse.ph.journal') },
-  ];
+  ].filter((x) => pageIsOn('caisse', x.key));
   return (
     <>
       <div className="card">

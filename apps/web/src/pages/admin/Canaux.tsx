@@ -2,7 +2,7 @@
 // and each channel's webhook URL (server address + /api/hooks/orders/<id>?key=<webhook_key>) with a sample JSON.
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { backend, serverUrl } from '../../lib/backend';
+import { backend, serverUrl, shopApi } from '../../lib/backend';
 import { when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { Empty, ErrorBox, Field, Help, Icon, Loading, copyText } from '../../ui/kit';
@@ -28,7 +28,7 @@ const ICON: Record<string, string> = { sheets: 'list', woocommerce: 'package', s
 
 /** Public server address; the demo shows an invented one (nothing can reach a browser). */
 export const publicBase = () => (backend.kind === 'demo' ? 'https://demo.pilotix.local' : serverUrl() || window.location.origin);
-export const hookUrl = (channel: string | number, key: string) => `${publicBase()}/api/hooks/orders/${channel}?key=${encodeURIComponent(key)}`;
+export const hookUrl = (channel: string | number, key: string) => `${shopApi(publicBase())}/hooks/orders/${channel}?key=${encodeURIComponent(key)}`;
 export const SAMPLE_ORDER = {
   customer_name: 'Amina B.',
   phone: '0555 12 34 56',

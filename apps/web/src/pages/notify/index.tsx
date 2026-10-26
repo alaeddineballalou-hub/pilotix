@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMenuCounts } from '../../layout/Shell';
-import { backend, Out, rpc, serverUrl } from '../../lib/backend';
+import { backend, Out, rpc, serverUrl, shopApi } from '../../lib/backend';
 import { da, n, pct, when } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
@@ -811,7 +811,7 @@ function SettingsForm({ data }: { data: Out<'notify.settings.get'> }) {
             )}
             <div className="dl-hook">
               <Field label={t('notify.settings.hook')} hint={t('notify.settings.hookHint')}>
-                <CopyCode code={`${base}/api/hooks/sms?key=${data.settings.hookKey}`} />
+                <CopyCode code={`${shopApi(base)}/hooks/sms?key=${data.settings.hookKey}`} />
               </Field>
               {f.smsProvider === 'android' && (
                 <div className="nt-hook-btn">

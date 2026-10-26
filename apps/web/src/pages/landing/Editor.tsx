@@ -3,7 +3,7 @@
 import { LANDING_COLORS, LANDING_DEFAULT_COLOR, LandingView, renderLanding } from '@pilotix/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { backend, Out, rpc, serverUrl } from '../../lib/backend';
+import { backend, Out, rpc, serverUrl, shopApi } from '../../lib/backend';
 import { da } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { ErrorBox, Field, Icon, Loading } from '../../ui/kit';
@@ -181,7 +181,7 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
             </Field>
             <Field label={t('landing.ed.slug')} hint={t('landing.ed.slugHint')}>
               <div className="lp-slug">
-                <span className="ltr">{backend.kind === 'demo' ? '…/lp/' : `${serverUrl() || ''}/${store ?? 'api/lp'}/`.replace(/^https?:\/\//, '')}</span>
+                <span className="ltr">{backend.kind === 'demo' ? '…/lp/' : (store ? `${serverUrl() || ''}/${store}/` : `${shopApi(serverUrl() || '')}/lp/`).replace(/^https?:\/\//, '')}</span>
                 <input
                   className="ltr"
                   value={d.slug}

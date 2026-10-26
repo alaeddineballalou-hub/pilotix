@@ -1514,3 +1514,25 @@ html body .px-qhead .btn.px-qnew:hover { border-color: #F7A823; color: #C97A0E; 
 .pd-opts { display: flex; flex-direction: column; gap: 2px; line-height: 1.35; }
 .pd-opts b { font-weight: 800; margin-inline-end: 2px; }
 .pd-opts small { color: var(--muted); font-weight: 700; }
+
+/* Pilotix as a service: the shop's subscription banners, how to pay, the lock screen (layout/ShopBanner, LockScreen) */
+.px-bans { display: flex; flex-direction: column; gap: 6px; padding: 10px 16px 0; }
+.px-ban { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-radius: 12px; font-size: 13.5px; border: 1px solid var(--line); background: var(--surface); }
+.px-ban .grow { flex: 1; min-width: 0; }
+.px-ban .bji { width: 18px; height: 18px; flex: none; }
+.px-ban-info { background: color-mix(in srgb, var(--px-info, #2459d6) 8%, var(--surface)); border-color: color-mix(in srgb, var(--px-info, #2459d6) 25%, var(--line)); }
+.px-ban-warn { background: var(--px-orange-soft); border-color: color-mix(in srgb, var(--px-orange) 45%, var(--line)); }
+.px-ban-bad { background: var(--coral-soft); border-color: color-mix(in srgb, var(--coral) 40%, var(--line)); color: var(--ink); }
+.px-ban-bad .bji { color: var(--coral); }
+.px-ban-sup { background: var(--navy); color: var(--on-navy); border-color: var(--navy); }
+.px-ban-sup .btn { background: var(--on-navy); color: var(--navy); border-color: var(--on-navy); }
+.px-ban-x { border: 0; background: none; font-size: 20px; line-height: 1; cursor: pointer; color: var(--muted); padding: 0 4px; }
+.px-pay { display: flex; flex-direction: column; gap: 10px; text-align: start; }
+.px-pay h4 { margin: 4px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.px-pay-plan { margin: 0; font-weight: 800; }
+.px-pay-text { margin: 0; white-space: pre-wrap; font: inherit; font-size: 14px; line-height: 1.5; padding: 12px 14px; border-radius: 12px; background: var(--raise); border: 1px solid var(--line); user-select: all; }
+.px-pay .btn { display: inline-flex; align-items: center; gap: 6px; }
+.px-lock .login-card { max-width: 520px; }
+.px-lock .px-pay .row { justify-content: center; }
+.px-lock-ic { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; margin: 4px auto 0; background: var(--coral-soft); color: var(--coral); }
+.px-lock-ic .bji { width: 30px; height: 30px; }

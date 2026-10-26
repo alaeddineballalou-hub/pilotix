@@ -18,24 +18,26 @@ import {
   RawBodyRequest,
   Req,
   Res,
-  SetMetadata,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { APP_FILTER, Reflector } from '@nestjs/core';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import * as core from '@pilotix/core';
-import { normalizePhone, Session } from '@pilotix/shared';
+import { DEMO_ACCOUNTS, DEMO_PASSWORD, normalizePhone, Session } from '@pilotix/shared';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { brotliCompressSync, constants as zlibConst, gzipSync } from 'node:zlib';
 import { z } from 'zod';
 import { config } from './config';
+import { CoreService, ShopRef } from './core.service';
+import { checkLogin, clearLogin, failedLogin } from './limits';
 import { mailConfigured, sendMail } from './mail';
+import { PlatformController, PlatformGuard } from './platform';
+import { PUBLIC, Public } from './public';
 import { limitMail, resetMail } from './resetMail';
-import { CoreService } from './core.service';
 
 // ---------------------------------------------------------------- errors → HTTP
-const STATUS: Record<string, number> = { bad_request: 400, unauthorized: 401, forbidden: 403, not_found: 404, conflict: 409 };
+const STATUS: Record<string, number> = { bad_request: 400, unauthorized: 401, payment_required: 402, forbidden: 403, not_found: 404, conflict: 409 };
 
 @Catch()
 class ErrorFilter implements ExceptionFilter {
@@ -59,13 +61,33 @@ class ErrorFilter implements ExceptionFilter {
 }
 
 // ---------------------------------------------------------------- auth
-const PUBLIC = 'px:public';
-const Public = () => SetMetadata(PUBLIC, true);
+
+/**
+ * A shop's token: the account, its token version, its shop (missing on tokens made before the server hosted several
+ * shops: shop #1), and — when Pilotix support opened the shop — the staff member.
+ */
+export interface ShopClaims {
+  sub: number;
+  tv?: number;
+  shop?: number;
+  imp?: number;
+}
+
+export interface ShopRequest {
+  session: Session;
+  shop: ShopRef;
+  /** Pilotix support opened the shop (staff id) */
+  imp?: number;
+  ip?: string;
+  headers?: Record<string, unknown>;
+}
+
+const CLOSED = 'Cette boutique est fermée. Contactez Pilotix.';
 
 @Injectable()
 class AuthGuard implements CanActivate {
   /** Profiles are re-read at most every 30 s, so a deactivated account loses access quickly. */
-  private cache = new Map<number, { s: Session; at: number; tv: number }>();
+  private cache = new Map<string, { s: Session; at: number; tv: number }>();
   constructor(
     private readonly jwt: JwtService,
     private readonly core: CoreService,
@@ -78,29 +100,45 @@ class AuthGuard implements CanActivate {
     const h: string = req.headers?.authorization || '';
     const token = h.startsWith('Bearer ') ? h.slice(7) : '';
     if (!token) throw new UnauthorizedException('Connectez-vous');
-    let id: number;
-    let tv = 0;
+    let c: ShopClaims;
     try {
-      const claims = await this.jwt.verifyAsync<{ sub: number; tv?: number }>(token);
-      id = Number(claims.sub);
-      tv = Number(claims.tv ?? 0);
+      c = await this.jwt.verifyAsync<ShopClaims>(token);
     } catch {
       throw new UnauthorizedException('Session expirée, reconnectez-vous');
     }
-    const hit = this.cache.get(id);
+    if (!c.sub || (c as { typ?: string }).typ) throw new UnauthorizedException('Session expirée, reconnectez-vous');
+    const id = Number(c.sub);
+    const tv = Number(c.tv ?? 0);
+    let ref = c.shop ? await this.core.shop({ id: Number(c.shop) }) : await this.core.primary();
+    if (!ref || ref.shop.status === 'archived') throw new UnauthorizedException(CLOSED);
+    const imp = c.imp ? Number(c.imp) : undefined;
+    // Pilotix support sees a shop even when it is unpaid (to help it)
+    if (imp) ref = { ...ref, status: { ...ref.status, locked: false }, rules: { ...ref.rules, locked: false } };
+    const key = `${ref.shop.id}:${id}:${imp ?? ''}`;
+    const hit = this.cache.get(key);
     // a token of another version than the cached one (just logged in again, password just changed): read again
     if (hit && Date.now() - hit.at < 30_000 && tv === hit.tv) {
-      req.session = hit.s;
+      Object.assign(req, { session: hit.s, shop: ref, imp });
+      if (!imp) this.core.touch(ref);
       return true;
     }
-    const p = await core.profileById(this.core.db, id);
+    const p = await core.profileById(ref.db, id);
     if (!p || !p.active) throw new UnauthorizedException('Compte désactivé');
     // a password change raises token_version: tokens made before it stop working
-    const cur = await tokenVersion(this.core.db, id);
-    const s = core.makeSession(p);
-    this.cache.set(id, { s, at: Date.now(), tv: cur });
+    const cur = await tokenVersion(ref.db, id);
+    let support: string | null = null;
+    if (imp) {
+      // support access ends when the staff member leaves Pilotix
+      const st = (await this.core.t.platform.query('SELECT name, active FROM platform.staff WHERE id = $1', [imp]))[0];
+      if (!st?.active) throw new UnauthorizedException('Accès support terminé');
+      support = st.name;
+    }
+    const s = await this.core.withShop(core.makeSession(p), ref, support);
+    if (this.cache.size > 20_000) this.cache.clear();
+    this.cache.set(key, { s, at: Date.now(), tv: cur });
     if (tv !== cur) throw new UnauthorizedException('Mot de passe changé : reconnectez-vous');
-    req.session = s;
+    Object.assign(req, { session: s, shop: ref, imp });
+    if (!imp) this.core.touch(ref);
     return true;
   }
 }
@@ -141,7 +179,6 @@ function limitLanding(ip: string, kind: string, max: number): boolean {
   }
   return ++a.n > max;
 }
-/** A browser posting from another site (a page that makes its visitors send fake leads): not our page. */
 /**
  * A landing page's text (HTML, communes) compressed when the phone accepts it — Brotli (HTTPS browsers), else gzip:
  * the 23 KB page becomes ~8 KB, small enough to arrive in the first round trip of a new connection (≈ one round trip
@@ -172,6 +209,7 @@ function orderFloor(): number {
   return Math.min(600, Math.max(250, 2 * s[Math.floor((s.length - 1) * 0.95)]));
 }
 
+/** A browser posting from another site (a page that makes its visitors send fake leads): not our page. */
 const crossSite = (req: { headers: Record<string, string | undefined> }) => req.headers['sec-fetch-site'] === 'cross-site';
 
 /** Compares two secrets in constant time (no timing hint on how much of a key was right). */
@@ -186,30 +224,13 @@ export async function tokenVersion(db: core.Db, id: number): Promise<number> {
   return Number((await db.query('SELECT token_version FROM profiles WHERE id = $1', [id]))[0]?.token_version ?? 0);
 }
 
-/**
- * Failed logins: 10 per 15 minutes per address, and 5 per account from one address. Never per account alone: a stranger
- * sending wrong passwords from a few addresses would keep the owner out of the shop. Only failures count, and a
- * good password clears the counter.
- */
-const attempts = new Map<string, { n: number; until: number }>();
-function checkLogin(key: string, max: number) {
-  const a = attempts.get(key);
-  if (a && a.until >= Date.now() && a.n >= max) throw new HttpException({ message: 'Trop de tentatives, réessayez dans quelques minutes' }, 429);
-}
-function failedLogin(key: string) {
-  const now = Date.now();
-  if (attempts.size > 10_000) for (const [k, v] of attempts) if (v.until < now) attempts.delete(k);
-  const a = attempts.get(key);
-  if (!a || a.until < now) attempts.set(key, { n: 1, until: now + 15 * 60_000 });
-  else a.n++;
-}
 let proxyWarned = false;
 
-/** Dellal: newest message per conversation and the answer running for it. */
-const latest = new Map<number, number>();
-const running = new Map<number, Promise<unknown>>();
-/** CM AI agent: one answer at a time (comments arrive in bursts under an ad). */
-let cmQueue: Promise<unknown> = Promise.resolve();
+/** Dellal: newest message per conversation and the answer running for it (per shop). */
+const latest = new Map<string, number>();
+const running = new Map<string, Promise<unknown>>();
+/** CM AI agent: one answer at a time per shop (comments arrive in bursts under an ad). */
+const cmQueues = new Map<number, Promise<unknown>>();
 function optionalDellal(): any {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -219,9 +240,25 @@ function optionalDellal(): any {
   }
 }
 
+/** The shop's public API address (links given to customers and to other services). */
+const apiOf = (ref: ShopRef) => `${config.publicUrl}/api${ref.shop.primary ? '' : `/s/${ref.shop.slug}`}`;
+
+/**
+ * Orders, landing pages and parcel statuses keep coming in while a shop is unpaid (locked): no customer order is lost,
+ * the shop sees them once it pays. Everything else of a locked shop stays closed.
+ */
+const intake = (ref: ShopRef): ShopRef => (ref.status.state === 'expired' ? { ...ref, rules: { ...ref.rules, locked: false } } : ref);
+
 const LoginBody = z.object({ email: z.string().email().max(200), password: z.string().min(1).max(200) });
 const ForgotBody = z.object({ email: z.string().email().max(200) });
-const ResetBody = z.object({ token: z.string().max(200), password: z.string().max(200) });
+const ResetBody = z.object({ token: z.string().max(220), password: z.string().max(200) });
+
+/** Actions refused when Pilotix support opened the shop: they belong to the shop's own administrator. */
+const NOT_FOR_SUPPORT = new Set(['me.password', 'me.delete', 'me.update']);
+/** Saving these can change the store's part of shop #1's links (site/<store>/<page>). */
+const STORE_NAMING = new Set(['landing.settings.save', 'admin.settings.save']);
+/** The demo shop's accounts are shared by every visitor: nobody changes them (a visitor would lock the others out). */
+const NOT_IN_DEMO = new Set(['me.password', 'me.delete', 'me.update', 'users.create', 'users.update', 'admin.users.resetPassword']);
 
 @Controller()
 @UseGuards(AuthGuard)
@@ -231,10 +268,22 @@ class ApiController {
     private readonly jwt: JwtService,
   ) {}
 
+  /** A shop token: the account, its token version, its shop (and the staff member when support opened it). */
+  private async signShop(ref: ShopRef, id: number, imp?: number) {
+    return this.jwt.signAsync({ sub: id, tv: await tokenVersion(ref.db, id), shop: ref.shop.id, ...(imp ? { imp } : {}) });
+  }
+
+  /** The shop of a public link (/api/s/<slug>/…; none = shop #1). A suspended or closed shop answers as unknown. */
+  private async publicShop(slug: string | undefined): Promise<ShopRef> {
+    const ref = await this.core.fromParam(slug);
+    if (!ref || ref.shop.status !== 'active') throw new core.AppError('not_found', 'Boutique introuvable');
+    return ref;
+  }
+
   @Public()
   @Get('health')
   async health() {
-    await this.core.db.query('SELECT 1');
+    await this.core.t.platform.query('SELECT 1');
     return { ok: true, time: new Date().toISOString() };
   }
 
@@ -251,17 +300,48 @@ class ApiController {
     if (!b.success) throw new core.AppError('bad_request', 'Email ou mot de passe manquant');
     const mailKey = `email:${b.data.email.trim().toLowerCase()}|${core.ipNet(req.ip || '') || 'unknown'}`;
     checkLogin(mailKey, 5);
+    // the shop of this e-mail (an unknown e-mail is checked against shop #1: same answer, same time)
+    const sid = await core.shopIdOfEmail(this.core.t, b.data.email);
+    const ref = (sid ? await this.core.shop({ id: sid }) : null) ?? (await this.core.primary());
     let session: Session;
     try {
-      session = await core.login(this.core.db, b.data.email, b.data.password);
+      session = await core.login(ref.db, b.data.email, b.data.password);
     } catch (e) {
       failedLogin(ipKey);
       failedLogin(mailKey);
       throw e;
     }
-    attempts.delete(mailKey);
-    const token = await this.jwt.signAsync({ sub: session.profile.id, tv: await tokenVersion(this.core.db, session.profile.id) });
-    return { token, session };
+    clearLogin(mailKey);
+    if (ref.shop.status === 'archived') throw new core.AppError('unauthorized', CLOSED);
+    return { token: await this.signShop(ref, session.profile.id), session: await this.core.withShop(session, ref) };
+  }
+
+  /** The demo shop's button on the login page: shown when Pilotix turned it on. */
+  @Public()
+  @Get('auth/demo')
+  async demoInfo() {
+    const ref = (await this.core.settings()).demo.public ? await this.demoShop() : null;
+    return { available: !!ref, accounts: ref ? DEMO_ACCOUNTS.map((a) => ({ key: a.key, name: a.name, role: a.roles[0] })) : [] };
+  }
+
+  /** Opens the demo shop as one of its accounts (fake data; nothing leaves the server). */
+  @Public()
+  @Post('auth/demo')
+  async demoLogin(@Body() body: any, @Req() req: { ip?: string }) {
+    const ipKey = `demo:${core.ipNet(req.ip || '') || 'unknown'}`;
+    checkLogin(ipKey, 30);
+    failedLogin(ipKey);
+    const acc = DEMO_ACCOUNTS.find((a) => a.key === String(body?.key ?? ''));
+    if (!acc) throw new core.AppError('bad_request', 'Compte démo inconnu');
+    const ref = (await this.core.settings()).demo.public ? await this.demoShop() : null;
+    if (!ref) throw new core.AppError('not_found', 'Démo indisponible');
+    const session = await core.login(ref.db, acc.email, DEMO_PASSWORD);
+    return { token: await this.signShop(ref, session.profile.id), session: await this.core.withShop(session, ref) };
+  }
+
+  private async demoShop(): Promise<ShopRef | null> {
+    const s = (await core.loadShops(this.core.t)).find((x) => x.demo && !x.primary && x.status === 'active');
+    return s ? this.core.shop({ id: s.id }) : null;
   }
 
   /** Can this server send "mot de passe oublié" e-mails? (the login page shows the link only then) */
@@ -284,9 +364,15 @@ class ApiController {
     if (!mailConfigured()) throw new HttpException({ message: 'L’envoi d’e-mails n’est pas configuré sur ce serveur. Demandez à votre administrateur.' }, 503);
     const b = ForgotBody.safeParse(body);
     if (!b.success) throw new core.AppError('bad_request', 'Email invalide');
-    const r = await core.createPasswordReset(this.core.db, b.data.email);
-    // the link, or "already changed twice this month: ask your supervisor" (told by e-mail, never on screen)
-    if (r) sendMail(r.kind === 'link' ? resetMail(r) : limitMail(r)).catch((e) => new Logger('Mail').error(`Reset e-mail to ${r.email} failed: ${e?.message || e}`));
+    const sid = await core.shopIdOfEmail(this.core.t, b.data.email);
+    const ref = (sid ? await this.core.shop({ id: sid }) : null) ?? (await this.core.primary());
+    if (ref.shop.demo || ref.shop.status === 'archived') return { ok: true };
+    const r = await core.createPasswordReset(ref.db, b.data.email);
+    // the link carries its shop (shop #1: as before, so links already sent keep working)
+    if (r)
+      sendMail(r.kind === 'link' ? resetMail({ ...r, token: ref.shop.primary ? r.token : `${ref.shop.id}.${r.token}` }) : limitMail(r)).catch((e) =>
+        new Logger('Mail').error(`Reset e-mail to ${r.email} failed: ${e?.message || e}`),
+      );
     return { ok: true };
   }
 
@@ -298,8 +384,11 @@ class ApiController {
     checkLogin(ipKey, 10);
     const b = ResetBody.safeParse(body);
     if (!b.success) throw new core.AppError('bad_request', 'Lien invalide');
+    const m = b.data.token.match(/^(\d{1,9})\.(.+)$/);
     try {
-      await core.resetPassword(this.core.db, b.data.token, b.data.password);
+      const ref = m ? await this.core.shop({ id: Number(m[1]) }) : await this.core.primary();
+      if (!ref || ref.shop.demo || ref.shop.status === 'archived') throw new core.AppError('bad_request', 'Ce lien n’est plus valable. Demandez un nouveau lien.');
+      await core.resetPassword(ref.db, m ? m[2] : b.data.token, b.data.password);
     } catch (e) {
       failedLogin(ipKey);
       throw e;
@@ -308,15 +397,21 @@ class ApiController {
   }
 
   @Post('rpc/:name')
-  async rpc(@Param('name') name: string, @Body() body: unknown, @Req() req: { session: Session }) {
+  async rpc(@Param('name') name: string, @Body() body: unknown, @Req() req: ShopRequest) {
     // names like orders.list, and grouped ones like dellal.settings.get or cm.settings.save
     if (!/^[a-z]+(\.[a-zA-Z]+){1,3}$/.test(name)) throw new core.AppError('not_found', 'Action inconnue');
-    const out: any = await this.core.call(name, req.session, body ?? {});
-    // a new password logs out the other sessions: this one gets a fresh token and stays in
-    if (name === 'me.password') {
-      const id = req.session.profile.id;
-      return { ...out, token: await this.jwt.signAsync({ sub: id, tv: await tokenVersion(this.core.db, id) }) };
+    if (req.imp && NOT_FOR_SUPPORT.has(name)) throw new core.AppError('forbidden', 'Réservé à l’administrateur de la boutique (pas en mode support)');
+    if (req.shop.shop.demo && NOT_IN_DEMO.has(name)) throw new core.AppError('forbidden', 'Pas dans la boutique démo : ses comptes sont partagés par tous les visiteurs');
+    const out: any = await this.core.call(req.shop, name, req.session, body ?? {});
+    // shop #1's name in its links (« Lien des pages », else made from the shop's name) is its name on the platform too
+    if (req.shop.shop.primary && STORE_NAMING.has(name)) {
+      await core.syncPrimaryStore(this.core.t);
+      this.core.invalidate();
     }
+    // the app learns its shop (plan, state, how to pay) with the session
+    if (name === 'me.get') return this.core.withShop(out as Session, req.shop, req.session.shop?.support ?? null);
+    // a new password logs out the other sessions: this one gets a fresh token and stays in
+    if (name === 'me.password') return { ...out, token: await this.signShop(req.shop, req.session.profile.id) };
     return out;
   }
 
@@ -325,10 +420,11 @@ class ApiController {
    *   items: [{ sku, qty, price? }], note?, source?, utm? }. Key: ?key= or header x-webhook-key.
    */
   @Public()
-  @Post('hooks/orders/:channel')
-  async orderHook(@Param('channel') channel: string, @Query('key') qkey: string, @Headers('x-webhook-key') hkey: string, @Body() body: any) {
+  @Post(['hooks/orders/:channel', 's/:shop/hooks/orders/:channel'])
+  async orderHook(@Param('shop') shop: string | undefined, @Param('channel') channel: string, @Query('key') qkey: string, @Headers('x-webhook-key') hkey: string, @Body() body: any) {
+    const ref = intake(await this.publicShop(shop));
     const key = qkey || hkey || '';
-    const db = this.core.db;
+    const db = ref.db;
     let ch: any = null;
     if (/^\d+$/.test(channel)) ch = (await db.query('SELECT * FROM sales_channels WHERE id = $1 AND active', [Number(channel)]))[0];
     const shopKey = (await core.getSetting(db, 'webhook')).key;
@@ -345,17 +441,16 @@ class ApiController {
       return core.withActionLock(db, `hook:${chKey}:${extId}`, null, 'Commande déjà en cours de réception', async () => {
         const again = (await db.query('SELECT id, ref FROM orders WHERE ext_order_id = $1', [ext]))[0];
         if (again) return { ok: true, id: Number(again.id), ref: again.ref, duplicate: true };
-        const made = await this.createFromHook(ch, channel, body);
+        const made = await this.createFromHook(ref, ch, channel, body);
         await db.query('UPDATE orders SET ext_order_id = $2 WHERE id = $1', [made.id, ext]);
         return made;
       });
     }
-    return this.createFromHook(ch, channel, body);
+    return this.createFromHook(ref, ch, channel, body);
   }
 
-  private async createFromHook(ch: any, channel: string, body: any) {
-    const db = this.core.db;
-
+  private async createFromHook(ref: ShopRef, ch: any, channel: string, body: any) {
+    const db = ref.db;
     const items: { productId: number; variantId: number | null; qty: number; unitPrice?: number }[] = [];
     for (const it of Array.isArray(body?.items) ? body.items : []) {
       const sku = String(it.sku ?? '').trim();
@@ -370,8 +465,8 @@ class ApiController {
     if (!items.length) throw new core.AppError('bad_request', 'Aucun produit reconnu (vérifiez les SKU)');
     const phone = normalizePhone(String(body?.phone ?? ''));
     if (!phone) throw new core.AppError('bad_request', 'Téléphone invalide');
-    const session = await this.core.systemSession();
-    const order: any = await this.core.call('orders.create', session, {
+    const session = await this.core.systemSession(ref);
+    const order: any = await this.core.call(ref, 'orders.create', session, {
       customerName: String(body?.customer_name ?? body?.name ?? '').slice(0, 120) || 'Client',
       phone,
       phone2: body?.phone2 ? String(body.phone2) : null,
@@ -391,51 +486,66 @@ class ApiController {
 
   // ---------------------------------------------------------------- landing pages (public, no login)
   /** The page of one product: a single small HTML file (no app bundle), never cached (it carries a fresh challenge). */
-  private async sendLanding(slug: string, req: { headers: Record<string, string | undefined> }, res: any) {
-    if (!/^[a-z0-9-]{2,60}$/.test(slug)) return res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
-    const base = `${config.publicUrl}/api/lp/`;
+  private async sendLanding(ref: ShopRef, slug: string, req: { headers: Record<string, string | undefined> }, res: any) {
+    const missing = () => res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
+    if (!/^[a-z0-9-]{2,60}$/.test(slug)) return missing();
     try {
-      const r: any = await this.core.call('landing.html', await this.core.systemSession(), { slug, mode: 'live', post: `${base}${slug}/order`, lead: `${base}${slug}/lead`, geo: `${base}geo/`, imgBase: `${base}img/`, site: config.publicUrl });
+      const base = `${apiOf(ref)}/lp/`;
+      const r: any = await this.core.call(ref, 'landing.html', await this.core.systemSession(ref), { slug, mode: 'live', post: `${base}${slug}/order`, lead: `${base}${slug}/lead`, geo: `${base}geo/`, imgBase: `${base}img/`, site: config.publicUrl });
       res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'no-store');
       // the main photo asked for as soon as these headers arrive, before the page itself
       if (r.link) res.header('Link', r.link);
       return sendText(req, res, r.html);
     } catch (e: any) {
-      if (e instanceof core.AppError && e.code === 'not_found') return res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
+      // no such page, or landing pages not in the shop's plan
+      if (e instanceof core.AppError && (e.code === 'not_found' || e.code === 'forbidden')) return missing();
       throw e;
     }
   }
 
-  /** The address given to customers: site/<store>/<page> (Caddy sends it here). Another store name: the right address. */
+  /**
+   * The address given to customers: site/<store>/<page> (Caddy sends it here). The store is a shop's name on the
+   * platform (unique); a name no shop has (shop #1's former name): shop #1's address for that page.
+   */
   @Public()
   @Get('s/:store/:slug')
   async storePage(@Param('store') store: string, @Param('slug') slug: string, @Req() req: { url?: string; headers: Record<string, string | undefined> }, @Res() res: any) {
-    const r: any = await this.core.call('landing.store', await this.core.systemSession(), {});
+    const ref = await this.core.fromParam(store).catch(() => null);
+    if (ref) {
+      // a suspended or closed shop: its pages are gone
+      if (ref.shop.status !== 'active') return res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
+      return this.sendLanding(intake(ref), slug, req, res);
+    }
+    const p = await this.core.primary();
+    const r: any = await this.core.call(p, 'landing.store', await this.core.systemSession(p), {});
     if (store !== r.store && /^[a-z0-9-]{2,60}$/.test(slug)) {
       const q = String(req.url ?? '').indexOf('?');
       return res.status(301).header('Location', `${config.publicUrl}/${r.store}/${slug}${q >= 0 ? String(req.url).slice(q) : ''}`).send();
     }
-    return this.sendLanding(slug, req, res);
+    return this.sendLanding(p, slug, req, res);
   }
 
-  /** The first address of the pages (links already in ads keep working; the page names site/<store>/<page> as its own). */
+  /** The first addresses of the pages (links already in ads keep working; the page names site/<store>/<page> as its own). */
   @Public()
-  @Get('lp/:slug')
-  landingPage(@Param('slug') slug: string, @Req() req: { headers: Record<string, string | undefined> }, @Res() res: any) {
-    return this.sendLanding(slug, req, res);
+  @Get(['lp/:slug', 's/:shop/lp/:slug'])
+  async landingPage(@Param('shop') shop: string | undefined, @Param('slug') slug: string, @Req() req: { headers: Record<string, string | undefined> }, @Res() res: any) {
+    const ref = await this.publicShop(shop).catch(() => null);
+    if (!ref) return res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
+    return this.sendLanding(intake(ref), slug, req, res);
   }
 
-  /** /llms.txt (Caddy sends it here): the shop and its live landing pages, for AI assistants (cached an hour). */
+  /** /llms.txt (Caddy sends it here): shop #1 and its live landing pages, for AI assistants (cached an hour). */
   @Public()
   @Get('llms.txt')
   async llmsTxt(@Req() req: { headers: Record<string, string | undefined> }, @Res() res: any) {
-    const r: any = await this.core.call('landing.llms', await this.core.systemSession(), { site: config.publicUrl });
+    const p = await this.core.primary();
+    const r: any = await this.core.call(p, 'landing.llms', await this.core.systemSession(p), { site: config.publicUrl });
     return sendText(req, res.status(200).header('Content-Type', 'text/plain; charset=utf-8').header('Cache-Control', 'public, max-age=3600'), r.text);
   }
 
   /** Communes of a wilaya, [French name, Arabic name] (asked when the customer picks a wilaya; cached a month). */
   @Public()
-  @Get('lp/geo/:wilaya')
+  @Get(['lp/geo/:wilaya', 's/:shop/lp/geo/:wilaya'])
   landingGeo(@Param('wilaya') w: string, @Req() req: { headers: Record<string, string | undefined> }, @Res() res: any) {
     const id = Number(w);
     if (!Number.isInteger(id) || id < 1 || id > 69) return res.status(404).send([]);
@@ -444,12 +554,13 @@ class ApiController {
 
   /** A page's picture in WebP: /lp/img/<id>/<160|480|720|960>.webp (never changes: cached a year). */
   @Public()
-  @Get('lp/img/:id/:file')
-  async landingImage(@Param('id') idp: string, @Param('file') file: string, @Res() res: any) {
+  @Get(['lp/img/:id/:file', 's/:shop/lp/img/:id/:file'])
+  async landingImage(@Param('shop') shop: string | undefined, @Param('id') idp: string, @Param('file') file: string, @Res() res: any) {
     const m = file.match(/^(160|480|720|960)\.webp$/);
     if (!/^\d+$/.test(idp) || !m) return res.status(404).send();
     try {
-      const r: any = await this.core.call('landing.image', await this.core.systemSession(), { id: Number(idp), size: m[1] });
+      const ref = intake(await this.publicShop(shop));
+      const r: any = await this.core.call(ref, 'landing.image', await this.core.systemSession(ref), { id: Number(idp), size: m[1] });
       const buf = Buffer.from(r.base64, 'base64');
       const type = buf[0] === 0xff && buf[1] === 0xd8 ? 'image/jpeg' : 'image/webp'; // browsers that cannot write WebP gave JPEG
       return res.status(200).header('Content-Type', type).header('Cache-Control', 'public, max-age=31536000, immutable').send(buf);
@@ -463,13 +574,14 @@ class ApiController {
    * be able to tell); only a page that does not exist (404) or a server failure (500, the page asks to try again) differ.
    */
   @Public()
-  @Post('lp/:slug/order')
-  async landingOrder(@Param('slug') slug: string, @Body() body: any, @Req() req: { ip?: string; headers: Record<string, string | undefined> }) {
+  @Post(['lp/:slug/order', 's/:shop/lp/:slug/order'])
+  async landingOrder(@Param('shop') shop: string | undefined, @Param('slug') slug: string, @Body() body: any, @Req() req: { ip?: string; headers: Record<string, string | undefined> }) {
     if (!/^[a-z0-9-]{2,60}$/.test(slug)) throw new core.AppError('not_found', 'Page introuvable');
+    const ref = intake(await this.publicShop(shop));
     const start = Date.now();
     // a post from another site, or a flood from one address: the same answer, nothing done
     if (!crossSite(req) && !limitLanding(req.ip || 'unknown', 'order', 30)) {
-      await this.core.call('landing.submit', await this.core.systemSession(), { ...(body && typeof body === 'object' ? body : {}), slug, meta: visitorMeta(req) });
+      await this.core.call(ref, 'landing.submit', await this.core.systemSession(ref), { ...(body && typeof body === 'object' ? body : {}), slug, meta: visitorMeta(req) });
       noteSubmit(Date.now() - start);
     }
     // the answer never comes faster for a blocked order than for a real one (its timing would tell a fraudster)
@@ -479,8 +591,8 @@ class ApiController {
 
   /** What a customer typed so far (a valid phone): their abandoned order if they leave. Same answer whatever happens. */
   @Public()
-  @Post('lp/:slug/lead')
-  async landingLead(@Param('slug') slug: string, @Body() body: any, @Req() req: { ip?: string; headers: Record<string, string | undefined> }) {
+  @Post(['lp/:slug/lead', 's/:shop/lp/:slug/lead'])
+  async landingLead(@Param('shop') shop: string | undefined, @Param('slug') slug: string, @Body() body: any, @Req() req: { ip?: string; headers: Record<string, string | undefined> }) {
     if (!/^[a-z0-9-]{2,60}$/.test(slug)) return { ok: true };
     // sendBeacon posts text/plain: the body may arrive as a string
     let b = body;
@@ -492,7 +604,10 @@ class ApiController {
       }
     }
     if (crossSite(req) || limitLanding(req.ip || 'unknown', 'lead', 120)) return { ok: true };
-    await this.core.call('landing.capture', await this.core.systemSession(), { ...(b && typeof b === 'object' ? b : {}), slug, meta: visitorMeta(req) }).catch(() => null);
+    const ref = await this.core.fromParam(shop).catch(() => null);
+    if (!ref || ref.shop.status !== 'active') return { ok: true };
+    const r = intake(ref);
+    await this.core.call(r, 'landing.capture', await this.core.systemSession(r), { ...(b && typeof b === 'object' ? b : {}), slug, meta: visitorMeta(req) }).catch(() => null);
     return { ok: true };
   }
 
@@ -502,9 +617,10 @@ class ApiController {
    * again from the courier itself, so the body is only a hint.
    */
   @Public()
-  @Post('hooks/courier/:companyId')
-  async courierHook(@Param('companyId') companyId: string, @Query('key') qkey: string, @Headers('x-pilotix-key') hkey: string, @Body() body: unknown) {
+  @Post(['hooks/courier/:companyId', 's/:shop/hooks/courier/:companyId'])
+  async courierHook(@Param('shop') shop: string | undefined, @Param('companyId') companyId: string, @Query('key') qkey: string, @Headers('x-pilotix-key') hkey: string, @Body() body: unknown) {
     if (!/^\d+$/.test(companyId)) throw new core.AppError('not_found', 'Société inconnue');
+    const ref = intake(await this.publicShop(shop));
     const trackings = new Set<string>();
     const extIds = new Set<string>();
     const walk = (v: unknown, depth: number) => {
@@ -518,31 +634,33 @@ class ApiController {
       }
     };
     walk(body, 0);
-    const session = await this.core.systemSession();
-    return this.core.call('delivery.hook', session, { companyId: Number(companyId), key: String(qkey || hkey || ''), trackings: [...trackings].slice(0, 200), extIds: [...extIds].slice(0, 200) });
+    const session = await this.core.systemSession(ref);
+    return this.core.call(ref, 'delivery.hook', session, { companyId: Number(companyId), key: String(qkey || hkey || ''), trackings: [...trackings].slice(0, 200), extIds: [...extIds].slice(0, 200) });
   }
 
   // ---------------------------------------------------------------- Dellal (AI sales agent) webhooks
   /** Meta checks the webhook once: answer hub.challenge when the verify token matches. */
   @Public()
-  @Get('hooks/meta')
-  async metaVerify(@Query() q: Record<string, string>, @Res() res: any) {
-    const r: any = await this.core.call('dellal.routing', await this.core.systemSession(), {});
+  @Get(['hooks/meta', 's/:shop/hooks/meta'])
+  async metaVerify(@Param('shop') shop: string | undefined, @Query() q: Record<string, string>, @Res() res: any) {
+    const ref = await this.publicShop(shop);
+    const r: any = await this.core.call(ref, 'dellal.routing', await this.core.systemSession(ref), {});
     if (q['hub.mode'] === 'subscribe' && sameKey(q['hub.verify_token'], r.verifyToken)) return res.status(200).header('Content-Type', 'text/plain').send(String(q['hub.challenge'] ?? ''));
     return res.status(403).send({ message: 'Jeton de vérification invalide' });
   }
 
   /** WhatsApp, Messenger and Instagram messages, and comments on posts and ads. Answers 200 at once; Dellal and the CM AI agent reply in the background. */
   @Public()
-  @Post('hooks/meta')
-  async metaHook(@Req() req: RawBodyRequest<any>, @Headers('x-hub-signature-256') sig: string, @Body() body: any) {
-    const db = this.core.db;
+  @Post(['hooks/meta', 's/:shop/hooks/meta'])
+  async metaHook(@Param('shop') shop: string | undefined, @Req() req: RawBodyRequest<any>, @Headers('x-hub-signature-256') sig: string, @Body() body: any) {
+    const ref = await this.publicShop(shop);
+    const db = ref.db;
     const secret = String((await db.query(`SELECT value FROM settings WHERE key = 'secret_dellal_meta_app_secret'`))[0]?.value ?? '');
     // without the Meta app secret nobody can tell a real Meta call from a fake one (anyone could inject messages
     // "from" a customer, make Dellal answer and spend): nothing is taken until the secret is set. 200 so Meta
     // does not retry in a loop.
     if (!secret) {
-      new Logger('Meta').warn('webhook ignored: add the Meta app secret (Message AI agent › Réglages) so Pilotix can check it comes from Meta');
+      new Logger('Meta').warn(`[${ref.shop.slug}] webhook ignored: add the Meta app secret (Message AI agent › Réglages) so Pilotix can check it comes from Meta`);
       return { ok: false, received: 0, error: 'Meta app secret manquant' };
     }
     {
@@ -554,122 +672,121 @@ class ApiController {
     const m = optionalDellal();
     const list: any[] = m?.parseMetaWebhook ? m.parseMetaWebhook(body) : [];
     // comments make the page act in public (reply, hide): only from a webhook signed with the Meta app secret
-    let comments: any[] = m?.parseMetaComments ? m.parseMetaComments(body) : [];
-    if (comments.length && !secret) {
-      new Logger('CM').warn('comments ignored: add the Meta app secret (Message AI agent › Réglages) so webhooks are signed');
-      comments = [];
-    }
-    // Delivery AI agent: what became of its WhatsApp messages (delivered, read, failed → SMS). A "failed" sends an SMS:
-    // only from a webhook signed with the Meta app secret (without it, the 1-hour fallback still works)
-    let statuses: any[] = m?.parseWhatsAppStatuses ? m.parseWhatsAppStatuses(body) : [];
-    if (statuses.length && !secret) {
-      new Logger('Delivery AI').warn('WhatsApp statuses ignored: add the Meta app secret (Message AI agent › Réglages) so webhooks are signed');
-      statuses = [];
-    }
-    void this.handleIncoming(list);
-    void this.handleComments(comments);
-    void this.handleStatuses(statuses);
+    const comments: any[] = m?.parseMetaComments ? m.parseMetaComments(body) : [];
+    // Delivery AI agent: what became of its WhatsApp messages (delivered, read, failed → SMS)
+    const statuses: any[] = m?.parseWhatsAppStatuses ? m.parseWhatsAppStatuses(body) : [];
+    void this.handleIncoming(ref, list);
+    void this.handleComments(ref, comments);
+    void this.handleStatuses(ref, statuses);
     return { ok: true, received: list.length + comments.length + statuses.length };
   }
 
   /** Delivery AI agent: the SMS gateway's reports (sent, delivered, failed) and the customers' SMS answers. Key in ?key=. */
   @Public()
-  @Post('hooks/sms')
-  async smsHook(@Query('key') key: string, @Body() body: any) {
-    const session = await this.core.systemSession();
-    const r: any = await this.core.call('notify.hookKey', session, {});
+  @Post(['hooks/sms', 's/:shop/hooks/sms'])
+  async smsHook(@Param('shop') shop: string | undefined, @Query('key') key: string, @Body() body: any) {
+    const ref = await this.publicShop(shop);
+    const session = await this.core.systemSession(ref);
+    const r: any = await this.core.call(ref, 'notify.hookKey', session, {});
     const want = String(r?.hookKey ?? '');
     const got = String(key ?? '');
     if (!want || got.length !== want.length || !timingSafeEqual(Buffer.from(got), Buffer.from(want))) throw new core.AppError('unauthorized', 'Clé invalide');
     const m = optionalDellal();
     const ev = m?.parseSmsEvent ? m.parseSmsEvent(body) : null;
     if (!ev) return { ok: true, ignored: true };
-    return this.core.call('notify.smsEvent', session, ev);
+    return this.core.call(ref, 'notify.smsEvent', session, ev);
   }
 
-  private async handleStatuses(list: any[]) {
+  private async handleStatuses(ref: ShopRef, list: any[]) {
     if (!list.length) return;
-    const session = await this.core.systemSession();
-    for (const st of list) await this.core.call('notify.waStatus', session, st).catch((e) => new Logger('Delivery AI').warn(`status ${st?.id}: ${e?.message ?? e}`));
+    const session = await this.core.systemSession(ref);
+    for (const st of list) await this.core.call(ref, 'notify.waStatus', session, st).catch((e) => new Logger('Delivery AI').warn(`[${ref.shop.slug}] status ${st?.id}: ${e?.message ?? e}`));
   }
 
   /** TikTok messages (from TikTok's business messaging or a bridge): { user_id, name?, text, message_id? }. Key = Dellal verify token. */
   @Public()
-  @Post('hooks/tiktok')
-  async tiktokHook(@Query('key') key: string, @Body() body: any) {
-    const r: any = await this.core.call('dellal.routing', await this.core.systemSession(), {});
+  @Post(['hooks/tiktok', 's/:shop/hooks/tiktok'])
+  async tiktokHook(@Param('shop') shop: string | undefined, @Query('key') key: string, @Body() body: any) {
+    const ref = await this.publicShop(shop);
+    const r: any = await this.core.call(ref, 'dellal.routing', await this.core.systemSession(ref), {});
     if (!sameKey(key, r.verifyToken)) throw new core.AppError('unauthorized', 'Clé invalide');
     const text = String(body?.text ?? body?.content?.text ?? '').trim();
     const user = String(body?.user_id ?? body?.sender?.id ?? '').trim();
     if (!text || !user) throw new core.AppError('bad_request', 'user_id et text requis');
-    void this.handleIncoming([{ channel: 'tiktok', externalId: user, accountId: null, name: body?.name ? String(body.name) : null, text: text.slice(0, 4000), messageId: body?.message_id ? String(body.message_id) : null, source: null }]);
+    void this.handleIncoming(ref, [{ channel: 'tiktok', externalId: user, accountId: null, name: body?.name ? String(body.name) : null, text: text.slice(0, 4000), messageId: body?.message_id ? String(body.message_id) : null, source: null }]);
     return { ok: true };
   }
 
   /** Stores each message, then lets Dellal answer once the customer stops typing (2 s), one answer at a time per conversation. */
-  private async handleIncoming(list: any[]) {
+  private async handleIncoming(ref: ShopRef, list: any[]) {
     const log = new Logger('Dellal');
     for (const msg of list) {
       try {
-        const session = await this.core.systemSession();
-        const r: any = await this.core.call('dellal.receive', session, msg);
+        const session = await this.core.systemSession(ref);
+        const r: any = await this.core.call(ref, 'dellal.receive', session, msg);
         if (!r) continue;
-        latest.set(r.conversationId, r.messageId);
+        const conv = `${ref.shop.id}:${r.conversationId}`;
+        latest.set(conv, r.messageId);
         setTimeout(() => {
-          if (latest.get(r.conversationId) !== r.messageId) return; // a newer message will be answered instead
-          const prev = running.get(r.conversationId) ?? Promise.resolve();
+          if (latest.get(conv) !== r.messageId) return; // a newer message will be answered instead
+          const prev = running.get(conv) ?? Promise.resolve();
           const next = prev
-            .then(() => this.core.call('dellal.answer', session, { id: r.conversationId }))
-            .catch((e) => log.warn(`conversation ${r.conversationId}: ${e?.message ?? e}`))
+            .then(() => this.core.call(ref, 'dellal.answer', session, { id: r.conversationId }))
+            .catch((e) => log.warn(`[${ref.shop.slug}] conversation ${r.conversationId}: ${e?.message ?? e}`))
             .finally(() => {
-              if (running.get(r.conversationId) === next) running.delete(r.conversationId);
+              if (running.get(conv) === next) running.delete(conv);
+              if (latest.get(conv) === r.messageId) latest.delete(conv);
             });
-          running.set(r.conversationId, next);
+          running.set(conv, next);
         }, 2000);
       } catch (e: any) {
-        log.warn(`incoming ${msg?.channel} message refused: ${e?.message ?? e}`);
+        log.warn(`[${ref.shop.slug}] incoming ${msg?.channel} message refused: ${e?.message ?? e}`);
       }
     }
   }
 
   /** Stores each comment, then lets the CM AI agent handle it after the shop's delay (the sweep job catches missed ones). */
-  private async handleComments(list: any[]) {
+  private async handleComments(ref: ShopRef, list: any[]) {
     const log = new Logger('CM');
     for (const c of list) {
       try {
-        const session = await this.core.systemSession();
-        const r: any = await this.core.call('cm.receive', session, c);
+        const session = await this.core.systemSession(ref);
+        const r: any = await this.core.call(ref, 'cm.receive', session, c);
         if (!r?.enabled) continue;
         setTimeout(() => {
-          cmQueue = cmQueue
-            .then(() => this.core.call('cm.run', session, { id: r.commentId }))
-            .catch((e) => log.warn(`comment ${r.commentId}: ${e?.message ?? e}`));
+          const prev = cmQueues.get(ref.shop.id) ?? Promise.resolve();
+          const next = prev.then(() => this.core.call(ref, 'cm.run', session, { id: r.commentId })).catch((e) => log.warn(`[${ref.shop.slug}] comment ${r.commentId}: ${e?.message ?? e}`));
+          cmQueues.set(ref.shop.id, next);
+          void next.finally(() => cmQueues.get(ref.shop.id) === next && cmQueues.delete(ref.shop.id));
         }, Math.max(0, Number(r.delaySec) || 0) * 1000);
       } catch (e: any) {
-        log.warn(`incoming ${c?.channel} comment refused: ${e?.message ?? e}`);
+        log.warn(`[${ref.shop.slug}] incoming ${c?.channel} comment refused: ${e?.message ?? e}`);
       }
     }
   }
 
   /** Called by an external scheduler (e.g. every 30 minutes) to refresh courier statuses. */
   @Public()
-  @Post('hooks/cron')
-  async cron(@Query('key') key: string) {
-    const ck = (await core.getSetting(this.core.db, 'cron')).key;
+  @Post(['hooks/cron', 's/:shop/hooks/cron'])
+  async cron(@Param('shop') shop: string | undefined, @Query('key') key: string) {
+    const ref = await this.publicShop(shop);
+    const ck = (await core.getSetting(ref.db, 'cron')).key;
     if (!sameKey(key, ck)) throw new core.AppError('unauthorized', 'Clé cron invalide');
-    const session = await this.core.systemSession();
-    void this.core.call('cm.sweep', session, {}).catch(() => null); // comments the CM AI agent has not answered yet (in the background)
-    void this.core.call('landing.run', session, {}).catch(() => null); // landing pages: abandoned orders, Meta events (in the background)
-    void this.core.call('notify.run', session, {}).catch(() => null); // Delivery AI agent: messages due (in the background)
-    void this.core.call('spy.scan', session, {}).catch(() => null); // AI Spy: the daily scan of competitors' ads, once a day (in the background)
-    void this.core.call('channels.sheet.syncAll', session, {}).catch(() => null); // Google Sheets channels: new lines become orders (in the background)
-    return this.core.call('delivery.sync', session, {}).catch((e) => ({ ok: false, message: e.message }));
+    if (ref.status.locked) return { ok: false, message: 'Abonnement inactif' };
+    const session = await this.core.systemSession(ref);
+    const bg = (name: string) => void this.core.call(ref, name, session, {}).catch(() => null);
+    bg('cm.sweep'); // comments the CM AI agent has not answered yet (in the background)
+    bg('landing.run'); // landing pages: abandoned orders, Meta events (in the background)
+    bg('notify.run'); // Delivery AI agent: messages due (in the background)
+    bg('spy.scan'); // AI Spy: the daily scan of competitors' ads, once a day (in the background)
+    bg('channels.sheet.syncAll'); // Google Sheets channels: new lines become orders (in the background)
+    return this.core.call(ref, 'delivery.sync', session, {}).catch((e) => ({ ok: false, message: e.message }));
   }
 }
 
 @Module({
   imports: [JwtModule.register({ global: true, secret: config.jwtSecret, signOptions: { expiresIn: config.jwtExpires } })],
-  controllers: [ApiController],
-  providers: [AuthGuard, { provide: APP_FILTER, useClass: ErrorFilter }],
+  controllers: [ApiController, PlatformController],
+  providers: [AuthGuard, PlatformGuard, { provide: APP_FILTER, useClass: ErrorFilter }],
 })
 export class ApiModule {}

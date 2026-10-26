@@ -35,6 +35,8 @@
 .lp-slug { display: flex; align-items: stretch; min-width: 0; border: 1.5px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--field); }
 .lp-slug > span { display: flex; align-items: center; padding: 0 10px; background: var(--raise); color: var(--muted); font-size: 13px; white-space: nowrap; max-width: 55%; overflow: hidden; text-overflow: ellipsis; border-inline-end: 1px solid var(--line); }
 .lp-slug > input { flex: 1; min-width: 0; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+/* a shop of the platform: its name is given by Pilotix (Réglages › Lien des pages) */
+.lp-slug > input[readonly] { background: var(--raise); color: var(--muted); cursor: default; }
 
 .lp-colors { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .lp-sw { position: relative; width: 34px; height: 34px; padding: 0; border: 3px solid var(--surface); border-radius: 50%; box-shadow: 0 0 0 1.5px var(--line); cursor: pointer; }

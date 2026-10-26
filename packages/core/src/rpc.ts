@@ -1,11 +1,11 @@
-import { expandRoles, Role, Session } from '@pilotix/shared';
+import { expandRoles, featureOn, procFeature, Role, Session } from '@pilotix/shared';
 import { z, ZodTypeAny } from 'zod';
 import type { Db } from './db';
 
 /** An error the app can show as-is (in French — the app translates known codes). */
 export class AppError extends Error {
   constructor(
-    public code: 'bad_request' | 'forbidden' | 'not_found' | 'conflict' | 'unauthorized',
+    public code: 'bad_request' | 'forbidden' | 'not_found' | 'conflict' | 'unauthorized' | 'payment_required',
     message: string,
   ) {
     super(message);
@@ -21,9 +21,27 @@ export interface LiveEvent {
   data?: unknown;
 }
 
+/** The shop a request works for, on a server that hosts several shops (missing = a single-shop install or the preview). */
+export interface ShopCtx {
+  id: number;
+  /** its name on the platform, also the first part of its links (site/<store>/<page>, /api/s/<store>/…) */
+  slug: string;
+  /** shop #1, the server owner's (schema "public") */
+  primary: boolean;
+  /** null = every feature */
+  features: string[] | null;
+  /** unpaid or suspended: only the user's own account answers (the app shows the lock screen) */
+  locked: boolean;
+  /** the demo shop (fake data, nothing leaves the server) */
+  demo: boolean;
+  /** active accounts the plan allows (null = no limit) */
+  maxUsers: number | null;
+}
+
 export interface Ctx {
   db: Db;
   session: Session;
+  shop?: ShopCtx;
   now: () => number;
   /** Tell connected screens that something changed. */
   emit: (e: LiveEvent) => void;
@@ -59,7 +77,14 @@ export interface ServerHooks {
   hashPassword: (pw: string) => Promise<string>;
   /** the server's public address (PUBLIC_URL): couriers call it back (webhooks) */
   publicUrl?: string;
+  /** the shop's public API address: PUBLIC_URL/api, or PUBLIC_URL/api/s/<shop> for a shop other than the first */
+  publicApi?: string;
+  /** another shop of the platform already has this name (the first part of its links) */
+  storeTaken?: (store: string) => Promise<boolean>;
 }
+
+/** Where links given to others (courier webhooks, landing pages) point: the shop's public API address ('' = unknown). */
+export const publicApi = (ctx: Ctx) => ctx.server?.publicApi ?? (ctx.server?.publicUrl ? `${ctx.server.publicUrl}/api` : '');
 
 export interface Procedure<S extends ZodTypeAny = ZodTypeAny, R = unknown> {
   /** null = every logged-in user; [] = admin only. Admin always passes. */
@@ -85,9 +110,25 @@ export function makeSession(profile: Session['profile']): Session {
   return { profile, roles, isAdmin, canManageUsers: isAdmin || !!profile.canManageUsers };
 }
 
+/** What an unpaid (locked) shop may still do: read and change the user's own account. */
+const WHEN_LOCKED = new Set(['me.get', 'me.language', 'me.ui', 'me.setUi', 'me.seen', 'me.password', 'me.update']);
+export const FEATURE_OFF = 'Cette fonction n’est pas incluse dans votre formule Pilotix';
+export const SHOP_LOCKED = 'Votre abonnement Pilotix n’est pas actif';
+
+/** Can this shop run this action (its plan includes the feature, the subscription is active)? */
+export function shopAllows(shop: ShopCtx | undefined, name: string): { ok: true } | { ok: false; error: AppError } {
+  if (!shop) return { ok: true };
+  if (shop.locked && !WHEN_LOCKED.has(name)) return { ok: false, error: new AppError('payment_required', SHOP_LOCKED) };
+  const f = procFeature(name);
+  if (f && !featureOn(shop.features, f)) return { ok: false, error: new AppError('forbidden', FEATURE_OFF) };
+  return { ok: true };
+}
+
 export async function dispatch(registry: Record<string, Procedure>, name: string, ctx: Ctx, rawInput: unknown): Promise<unknown> {
   const p = registry[name];
   if (!p) throw notFound(`Action inconnue : ${name}`);
+  const allowed = shopAllows(ctx.shop, name);
+  if (!allowed.ok) throw allowed.error;
   if (p.roles !== null && !hasRole(ctx.session, ...p.roles)) throw forbidden();
   const parsed = p.input.safeParse(rawInput ?? {});
   if (!parsed.success) {
