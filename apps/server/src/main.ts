@@ -20,6 +20,7 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { ApiModule } from './api';
 import { config } from './config';
+import { DoctorLogger, watchProcess } from './doctor';
 import { CoreModule } from './core.service';
 import { JobsModule } from './jobs';
 import { LiveModule } from './live';
@@ -28,8 +29,12 @@ import { LiveModule } from './live';
 class AppModule {}
 
 async function bootstrap() {
+  // the Doctor (control room) keeps every error and warning the server writes
+  const logger = new DoctorLogger();
+  logger.setLogLevels(['error', 'warn', 'log']);
+  watchProcess();
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter({ trustProxy: config.trustProxy as any, bodyLimit: 5 * 1024 * 1024 }), {
-    logger: ['error', 'warn', 'log'],
+    logger,
     rawBody: true, // Meta webhooks are signed over the raw body
   });
   app.setGlobalPrefix('api');

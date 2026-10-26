@@ -11,6 +11,7 @@ import { Modal } from '../../ui/modal';
 import { can } from './bits';
 import { Dashboard } from './Dashboard';
 import { Demo } from './Demo';
+import { DoctorPage } from './Doctor';
 import { Journal } from './Journal';
 import { Payments } from './Payments';
 import { Plans } from './Plans';
@@ -23,6 +24,7 @@ import './platform.css';
 type Section = { id: string; icon: string; roles?: Staff['role'][] };
 const SECTIONS: Section[] = [
   { id: 'dashboard', icon: 'grid' },
+  { id: 'doctor', icon: 'sparkles', roles: ['owner', 'manager'] },
   { id: 'shops', icon: 'store' },
   { id: 'payments', icon: 'coins', roles: ['owner', 'manager'] },
   { id: 'plans', icon: 'layers' },
@@ -41,7 +43,8 @@ export function PlatformApp({ parts }: { parts: string[] }) {
       document.title = 'Pilotix';
     };
   }, []);
-  if (DEMO_ONLY) return <ServerOnly />;
+  // the preview has no server: only the Doctor can be seen there, with an example
+  if (DEMO_ONLY) return parts[0] === 'doctor' ? <PlatformShell staff={DEMO_STAFF} parts={parts} demo onLogout={() => (location.hash = '#/accueil')} /> : <ServerOnly />;
   if (!staff) return <PlatformLogin onDone={setStaff} />;
   return (
     <PlatformShell
@@ -54,6 +57,8 @@ export function PlatformApp({ parts }: { parts: string[] }) {
     />
   );
 }
+
+const DEMO_STAFF: Staff = { id: 0, name: 'Pilotix', email: '', role: 'owner' };
 
 function ServerOnly() {
   const { t } = useTranslation();
@@ -128,7 +133,7 @@ function PlatformLogin({ onDone }: { onDone: (s: Staff) => void }) {
   );
 }
 
-function PlatformShell({ staff, parts, onLogout }: { staff: Staff; parts: string[]; onLogout: () => void }) {
+function PlatformShell({ staff, parts, onLogout, demo }: { staff: Staff; parts: string[]; onLogout: () => void; demo?: boolean }) {
   const { t, i18n } = useTranslation();
   const [menu, setMenu] = useState(false);
   const [pw, setPw] = useState(false);
@@ -143,6 +148,7 @@ function PlatformShell({ staff, parts, onLogout }: { staff: Staff; parts: string
   let page: ReactNode;
   if (cur === 'shops' && parts[1] && /^\d+$/.test(parts[1])) page = <ShopDetail id={Number(parts[1])} staff={staff} />;
   else if (cur === 'shops') page = <Shops staff={staff} creating={parts[1] === 'new'} filter={parts[1] === 'f' ? parts[2] : undefined} />;
+  else if (cur === 'doctor') page = <DoctorPage demo={demo} />;
   else if (cur === 'payments') page = <Payments staff={staff} />;
   else if (cur === 'plans') page = <Plans staff={staff} />;
   else if (cur === 'demo') page = <Demo staff={staff} />;

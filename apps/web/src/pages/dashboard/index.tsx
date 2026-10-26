@@ -7,15 +7,16 @@ import { useAction, useRpc } from '../../lib/query';
 import { ErrorBox, Help, Icon, Loading } from '../../ui/kit';
 import type { PageProps } from '../registry';
 import { Board } from './board/Board';
+import { ShopDoctor } from './Doctor';
 import { LivreursArea } from './Livreurs';
 import { TeamEditor } from './Teams';
 import { Overview } from './Overview';
 import './dashboard.css';
 
-const AREAS = ['overview', 'confirmation', 'depot', 'suivi', 'livreurs', 'sav'] as const;
+const AREAS = ['overview', 'doctor', 'confirmation', 'depot', 'suivi', 'livreurs', 'sav'] as const;
 type Area = (typeof AREAS)[number];
-/** areas an admin can give to an agent manager (the overview is for admin / vendeur only) */
-const SCOPE_AREAS = AREAS.filter((a): a is Exclude<Area, 'overview'> => a !== 'overview');
+/** areas an admin can give to an agent manager (the overview and Pilotix Doctor are for admin / vendeur only) */
+const SCOPE_AREAS = AREAS.filter((a): a is Exclude<Area, 'overview' | 'doctor'> => a !== 'overview' && a !== 'doctor');
 type ScopeArea = (typeof SCOPE_AREAS)[number];
 type Meta = Out<'stats.dashMeta'>;
 
@@ -25,7 +26,7 @@ export function Dashboard({ sub }: PageProps) {
   if (meta.isLoading) return <Loading />;
   if (meta.error) return <ErrorBox error={meta.error} onRetry={() => meta.refetch()} />;
   const m = meta.data!;
-  const allowed = AREAS.filter((a) => (a === 'overview' ? m.seesAll : (m.areas as string[]).includes(a)) && pageIsOn('dashboard', a));
+  const allowed = AREAS.filter((a) => (a === 'overview' || a === 'doctor' ? m.seesAll : (m.areas as string[]).includes(a)) && pageIsOn('dashboard', a));
   if (!allowed.length) return <div className="empty-box">{t('dashboard.noArea')}</div>;
   const area: Area = allowed.includes(sub as Area) ? (sub as Area) : allowed[0];
   return (
@@ -38,6 +39,7 @@ export function Dashboard({ sub }: PageProps) {
         ))}
       </nav>
       {area === 'overview' && <Overview areas={m.areas as ScopeArea[]} />}
+      {area === 'doctor' && <ShopDoctor />}
       {area === 'confirmation' && (
         <Board
           key={area}

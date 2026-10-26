@@ -10,6 +10,7 @@ import type { StaffSession } from '@pilotix/core';
 import { z } from 'zod';
 import { config } from './config';
 import { CoreService } from './core.service';
+import { serverDoctor } from './doctor';
 import { checkLogin, clearLogin, failedLogin } from './limits';
 import { PUBLIC, Public } from './public';
 
@@ -105,6 +106,13 @@ export class PlatformController {
       return { ...out, token: await this.sign(req.staff, Number(r?.token_version ?? 0)) };
     }
     return out;
+  }
+
+  /** Doctor: the server's health (machine, database, jobs, errors in the code, silent shops). Owner and managers. */
+  @Post('doctor')
+  async doctor(@Req() req: { staff: StaffSession }) {
+    if (req.staff.role === 'support') throw new core.AppError('forbidden', 'Réservé au propriétaire et aux managers');
+    return serverDoctor(this.core);
   }
 
   /** Support: opens a shop as its first administrator for 2 hours (written in the journal). */

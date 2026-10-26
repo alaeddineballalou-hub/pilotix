@@ -74,7 +74,8 @@ test('suivi: treat an alert → back on the road with alert_traitee', async () =
 
 test('suivi: claims are saved with their status history', async () => {
   const ctx = await as(EMAILS.suivi);
-  const r = (await db.query(`SELECT o.id FROM orders o JOIN delivery_companies c ON c.id=o.company_id WHERE c.kind <> 'own' AND o.tracking IS NOT NULL LIMIT 1`))[0];
+  // a parcel with no claim yet (the demo data already has a few open ones)
+  const r = (await db.query(`SELECT o.id FROM orders o JOIN delivery_companies c ON c.id=o.company_id WHERE c.kind <> 'own' AND o.tracking IS NOT NULL AND NOT EXISTS (SELECT 1 FROM claims cl WHERE cl.order_id = o.id) ORDER BY o.id LIMIT 1`))[0];
   const c: any = await call('suivi.claimCreate', ctx, { orderId: Number(r.id), reason: 'late', message: 'Bonjour…' });
   assert.equal(c.status, 'waiting');
   const u: any = await call('suivi.claimUpdate', ctx, { id: c.id, sentVia: 'whatsapp' });

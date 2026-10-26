@@ -19,7 +19,7 @@ export interface FeatureNode {
 
 export const FEATURES: readonly FeatureNode[] = [
   { key: 'accueil', always: true },
-  { key: 'dashboard', subs: ['overview', 'confirmation', 'depot', 'suivi', 'livreurs', 'sav'] },
+  { key: 'dashboard', subs: ['overview', 'doctor', 'confirmation', 'depot', 'suivi', 'livreurs', 'sav'] },
   { key: 'commandes', subs: ['confirmation', 'depot', 'suivi'] },
   { key: 'scanner' },
   { key: 'sav' },
