@@ -12,6 +12,12 @@ const T = {
     button: 'Choisir un nouveau mot de passe',
     valid: (m: number) => `Ce lien marche une seule fois, pendant ${m} minutes.`,
     notYou: 'Si ce n’est pas vous, ignorez cet e-mail : votre mot de passe ne change pas.',
+    title: 'Nouveau mot de passe',
+    account: 'Compte',
+    asked: 'Demandé le',
+    copy: 'Le bouton ne marche pas ? Copiez ce lien dans votre navigateur :',
+    footer: 'Pilotix · gestion des commandes',
+    locale: 'fr-FR',
   },
   en: {
     subject: 'Pilotix: new password',
@@ -20,6 +26,12 @@ const T = {
     button: 'Choose a new password',
     valid: (m: number) => `This link works once, for ${m} minutes.`,
     notYou: 'If it was not you, ignore this e-mail: your password does not change.',
+    title: 'New password',
+    account: 'Account',
+    asked: 'Asked on',
+    copy: 'Button not working? Copy this link into your browser:',
+    footer: 'Pilotix · order management',
+    locale: 'en-GB',
   },
   ar: {
     subject: 'Pilotix: كلمة مرور جديدة',
@@ -28,25 +40,62 @@ const T = {
     button: 'اختر كلمة مرور جديدة',
     valid: (m: number) => `يعمل هذا الرابط مرة واحدة فقط، لمدة ${m} دقيقة.`,
     notYou: 'إن لم تكن أنت، تجاهل هذه الرسالة: كلمة مرورك لن تتغير.',
+    title: 'كلمة مرور جديدة',
+    account: 'الحساب',
+    asked: 'تاريخ الطلب',
+    copy: 'الزر لا يعمل؟ انسخ هذا الرابط في متصفحك:',
+    footer: 'Pilotix · إدارة الطلبات',
+    locale: 'ar-DZ',
   },
 };
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
-export function resetMail(r: PasswordResetLink): Mail {
+const NAVY = '#1B2A47';
+const ORANGE = '#F5A623';
+
+export function resetMail(r: PasswordResetLink, now = new Date()): Mail {
   const t = T[(r.language as keyof typeof T) in T ? (r.language as keyof typeof T) : 'fr'];
   const rtl = r.language === 'ar';
+  const align = rtl ? 'right' : 'left';
   const link = `${config.publicUrl}/#/reset/${r.token}`;
-  const text = [t.hello(r.name), '', t.why, '', `${t.button}${r.language === 'fr' ? ' :' : ':'}`, link, '', t.valid(RESET_MINUTES), t.notYou, '', 'Pilotix'].join('\n');
-  const html = `<!doctype html><html dir="${rtl ? 'rtl' : 'ltr'}"><body style="margin:0;padding:24px;background:#f4f6fa;font-family:Arial,Helvetica,sans-serif;color:#1B2A47">
-<div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:28px;text-align:${rtl ? 'right' : 'left'}">
-<div style="font-size:26px;font-weight:bold;color:#1B2A47;margin-bottom:18px">pilotix<span style="color:#F5A623">.</span></div>
-<p style="margin:0 0 12px">${esc(t.hello(r.name))}</p>
-<p style="margin:0 0 22px;line-height:1.5">${esc(t.why)}</p>
-<p style="margin:0 0 22px;text-align:center"><a href="${esc(link)}" style="display:inline-block;background:#1B2A47;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold">${esc(t.button)}</a></p>
-<p style="margin:0 0 8px;font-size:13px;color:#5b6577">${esc(t.valid(RESET_MINUTES))}</p>
-<p style="margin:0 0 16px;font-size:13px;color:#5b6577">${esc(t.notYou)}</p>
-<p style="margin:0;font-size:12px;color:#8a93a3;word-break:break-all" dir="ltr">${esc(link)}</p>
-</div></body></html>`;
+  const logo = `${config.publicUrl}/email-logo.png`;
+  const when = now.toLocaleString(t.locale, { timeZone: 'Africa/Algiers', dateStyle: 'long', timeStyle: 'short' });
+  const text = [t.hello(r.name), '', t.why, '', `${t.button}${r.language === 'fr' ? ' :' : ':'}`, link, '', t.valid(RESET_MINUTES), t.notYou, '', t.footer].join('\n');
+  // tables and inline styles: what Outlook, Gmail and phone mail apps all show the same way
+  const html = `<!doctype html>
+<html lang="${esc(r.language)}" dir="${rtl ? 'rtl' : 'ltr'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(t.title)}</title></head>
+<body style="margin:0;padding:0;background:#EEF1F6;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">${esc(t.valid(RESET_MINUTES))}</div>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#EEF1F6;"><tr><td align="center" style="padding:28px 12px;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:520px;background:#FFFFFF;border-radius:16px;overflow:hidden;font-family:Segoe UI,Arial,Helvetica,sans-serif;color:${NAVY};">
+  <tr><td align="center" style="background:${NAVY};padding:26px 24px 22px;">
+    <img src="${esc(logo)}" width="150" alt="pilotix" style="display:block;width:150px;max-width:60%;height:auto;border:0;color:#FFFFFF;font-size:28px;font-weight:bold;">
+  </td></tr>
+  <tr><td style="height:5px;background:${ORANGE};font-size:0;line-height:0;">&nbsp;</td></tr>
+  <tr><td style="padding:30px 32px 6px;text-align:${align};">
+    <div style="font-size:24px;font-weight:bold;margin:0 0 16px;">🔑 ${esc(t.title)}</div>
+    <p style="margin:0 0 10px;font-size:16px;line-height:1.5;">${esc(t.hello(r.name))}</p>
+    <p style="margin:0 0 22px;font-size:16px;line-height:1.5;color:#3C4A63;">${esc(t.why)}</p>
+  </td></tr>
+  <tr><td style="padding:0 32px;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#F6F8FB;border:1px solid #E3E8F0;border-radius:10px;">
+      <tr><td style="padding:12px 16px;font-size:14px;color:#5B6577;text-align:${align};">${esc(t.account)}</td><td dir="ltr" style="padding:12px 16px;font-size:14px;font-weight:bold;text-align:${rtl ? 'left' : 'right'};">${esc(r.email)}</td></tr>
+      <tr><td style="padding:0 16px 12px;font-size:14px;color:#5B6577;text-align:${align};">${esc(t.asked)}</td><td style="padding:0 16px 12px;font-size:14px;font-weight:bold;text-align:${rtl ? 'left' : 'right'};">${esc(when)}</td></tr>
+    </table>
+  </td></tr>
+  <tr><td align="center" style="padding:28px 32px 10px;">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td align="center" bgcolor="${ORANGE}" style="border-radius:10px;">
+      <a href="${esc(link)}" style="display:inline-block;padding:15px 30px;font-size:17px;font-weight:bold;color:${NAVY};text-decoration:none;border-radius:10px;">${esc(t.button)}</a>
+    </td></tr></table>
+  </td></tr>
+  <tr><td align="center" style="padding:6px 32px 24px;font-size:14px;color:#5B6577;">⏱️ ${esc(t.valid(RESET_MINUTES))}</td></tr>
+  <tr><td style="padding:0 32px;"><div style="border-top:1px solid #E3E8F0;height:1px;line-height:1px;font-size:0;">&nbsp;</div></td></tr>
+  <tr><td style="padding:18px 32px 8px;font-size:13px;line-height:1.5;color:#5B6577;text-align:${align};">🛡️ ${esc(t.notYou)}</td></tr>
+  <tr><td style="padding:4px 32px 26px;font-size:12px;line-height:1.5;color:#8A93A3;text-align:${align};">${esc(t.copy)}<br><a href="${esc(link)}" dir="ltr" style="color:#3B6FD8;word-break:break-all;">${esc(link)}</a></td></tr>
+  <tr><td align="center" style="background:#F6F8FB;padding:16px 24px;font-size:12px;color:#8A93A3;">${esc(t.footer)} · <a href="${esc(config.publicUrl)}" style="color:#8A93A3;">${esc(config.publicUrl.replace(/^https?:\/\//, ''))}</a></td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
   return { to: r.email, subject: t.subject, text, html };
 }
