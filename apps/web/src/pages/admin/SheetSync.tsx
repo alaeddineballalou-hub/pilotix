@@ -1,5 +1,5 @@
 // Google Sheets channel: say which sheet column is what (Nom du client → the customer's name…), then sync: the new
-// lines become orders in Confirmation › Nouvelles. The server also syncs by itself every 10 minutes.
+// lines become orders in Confirmation › Nouvelles. The server also syncs by itself every 2 minutes.
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAction, useRpc } from '../../lib/query';

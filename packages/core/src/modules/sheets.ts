@@ -279,8 +279,8 @@ async function orderFromLine(ctx: Ctx, ch: any, l: Line) {
  * delivered, cancelled, deleted).
  */
 async function syncChannel(ctx: Ctx, channelId: number, limit = 300) {
-  // one sync at a time per channel (the 10-minute job and a click at the same moment)
-  return withActionLock(ctx.db, `sheet-sync:${channelId}`, ctx.session.profile.id, 'Synchronisation déjà en cours : réessayez dans une minute', () => syncNow(ctx, channelId, limit), 600);
+  // one sync at a time per channel (the 2-minute job and a click at the same moment)
+  return withActionLock(ctx.db, `sheet-sync:${channelId}`, ctx.session.profile.id, 'Synchronisation déjà en cours : réessayez dans une minute', () => syncNow(ctx, channelId, limit), 300);
 }
 
 async function syncNow(ctx: Ctx, channelId: number, limit: number) {
@@ -371,7 +371,7 @@ export const sheetsProcs = {
   }),
   /** "Synchroniser maintenant": the new lines become orders in Confirmation › Nouvelles. */
   'channels.sheet.sync': proc([], z.object({ id }), (ctx, i) => syncChannel(ctx, i.id)),
-  /** Every active sheet channel with its columns chosen (the server runs it every 10 minutes). */
+  /** Every active sheet channel with its columns chosen (the server runs it every 2 minutes). */
   'channels.sheet.syncAll': proc([], z.object({}), async (ctx) => {
     const chans = await ctx.db.query("SELECT id, name FROM sales_channels WHERE kind = 'sheets' AND active AND config ? 'mapping'");
     const out: { id: number; name: string; created?: number; errorCount?: number; error?: string }[] = [];
