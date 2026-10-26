@@ -12,7 +12,7 @@
   "forgotTitle": "Mot de passe oublié",
   "forgotText": "Entrez l’e-mail de votre compte. Nous vous envoyons un lien pour choisir un nouveau mot de passe.",
   "forgotSend": "Envoyer le lien",
-  "forgotSent": "C’est envoyé. Si un compte existe avec cet e-mail, vous allez recevoir un lien dans quelques minutes (regardez aussi dans les spams). Le lien marche 30 minutes.",
+  "forgotSent": "C’est envoyé. Si un compte existe avec cet e-mail, vous allez recevoir un e-mail dans quelques minutes (regardez aussi dans les spams). Le lien marche 30 minutes. Vous pouvez changer votre mot de passe 2 fois par mois ; après, l’e-mail vous dira de demander à votre superviseur.",
   "backToLogin": "Retour à la connexion",
   "resetTitle": "Nouveau mot de passe",
   "resetNew": "Nouveau mot de passe",

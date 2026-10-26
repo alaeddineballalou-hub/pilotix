@@ -1,5 +1,5 @@
 // The "mot de passe oublié" e-mail, in the account's language.
-import { RESET_MINUTES } from '@pilotix/core';
+import { RESET_MINUTES, RESETS_PER_MONTH } from '@pilotix/core';
 import type { PasswordResetLink } from '@pilotix/core';
 import { config } from './config';
 import { Mail } from './mail';
@@ -18,6 +18,11 @@ const T = {
     copy: 'Le bouton ne marche pas ? Copiez ce lien dans votre navigateur :',
     footer: 'Pilotix · gestion des commandes',
     locale: 'fr-FR',
+    limitSubject: 'Pilotix : demandez votre nouveau mot de passe à votre responsable',
+    limitTitle: 'Limite atteinte ce mois-ci',
+    limitWhy: (n: number) => `Vous avez déjà changé votre mot de passe ${n} fois ce mois-ci avec « Mot de passe oublié ».`,
+    limitAsk: 'Demandez à votre superviseur ou à l’administrateur : il peut vous donner un nouveau mot de passe tout de suite dans Pilotix (Utilisateurs).',
+    limitNext: 'Le mois prochain, « Mot de passe oublié » remarchera.',
   },
   en: {
     subject: 'Pilotix: new password',
@@ -32,6 +37,11 @@ const T = {
     copy: 'Button not working? Copy this link into your browser:',
     footer: 'Pilotix · order management',
     locale: 'en-GB',
+    limitSubject: 'Pilotix: ask your supervisor for a new password',
+    limitTitle: 'Limit reached this month',
+    limitWhy: (n: number) => `You already changed your password ${n} times this month with “Forgot password”.`,
+    limitAsk: 'Ask your supervisor or the administrator: they can give you a new password right away in Pilotix (Users).',
+    limitNext: 'Next month, “Forgot password” will work again.',
   },
   ar: {
     subject: 'Pilotix: كلمة مرور جديدة',
@@ -46,6 +56,11 @@ const T = {
     copy: 'الزر لا يعمل؟ انسخ هذا الرابط في متصفحك:',
     footer: 'Pilotix · إدارة الطلبات',
     locale: 'ar-DZ',
+    limitSubject: 'Pilotix: اطلب كلمة مرور جديدة من مسؤولك',
+    limitTitle: 'تم بلوغ الحد هذا الشهر',
+    limitWhy: (n: number) => `لقد غيّرت كلمة مرورك ${n} مرات هذا الشهر عبر «نسيت كلمة المرور».`,
+    limitAsk: 'اطلب من مشرفك أو من المسؤول: يمكنه أن يعطيك كلمة مرور جديدة فورًا في Pilotix (المستخدمون).',
+    limitNext: 'في الشهر القادم، سيعمل «نسيت كلمة المرور» من جديد.',
   },
 };
 
@@ -98,4 +113,35 @@ export function resetMail(r: PasswordResetLink, now = new Date()): Mail {
 </td></tr></table>
 </body></html>`;
   return { to: r.email, subject: t.subject, text, html };
+}
+
+/** Sent instead of a link when the person already changed their password twice this month. */
+export function limitMail(r: { name: string; email: string; language: string }): Mail {
+  const t = T[(r.language as keyof typeof T) in T ? (r.language as keyof typeof T) : 'fr'];
+  const rtl = r.language === 'ar';
+  const align = rtl ? 'right' : 'left';
+  const logo = `${config.publicUrl}/email-logo.png`;
+  const text = [t.hello(r.name), '', t.limitWhy(RESETS_PER_MONTH), '', t.limitAsk, '', t.limitNext, t.notYou, '', t.footer].join('\n');
+  const html = `<!doctype html>
+<html lang="${esc(r.language)}" dir="${rtl ? 'rtl' : 'ltr'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(t.limitTitle)}</title></head>
+<body style="margin:0;padding:0;background:#EEF1F6;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#EEF1F6;"><tr><td align="center" style="padding:28px 12px;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:520px;background:#FFFFFF;border-radius:16px;overflow:hidden;font-family:Segoe UI,Arial,Helvetica,sans-serif;color:${NAVY};">
+  <tr><td align="center" style="background:${NAVY};padding:26px 24px 22px;"><img src="${esc(logo)}" width="150" alt="pilotix" style="display:block;width:150px;max-width:60%;height:auto;border:0;color:#FFFFFF;font-size:28px;font-weight:bold;"></td></tr>
+  <tr><td style="height:5px;background:${ORANGE};font-size:0;line-height:0;">&nbsp;</td></tr>
+  <tr><td style="padding:30px 32px 8px;text-align:${align};">
+    <div style="font-size:24px;font-weight:bold;margin:0 0 16px;">🔒 ${esc(t.limitTitle)}</div>
+    <p style="margin:0 0 10px;font-size:16px;line-height:1.5;">${esc(t.hello(r.name))}</p>
+    <p style="margin:0 0 18px;font-size:16px;line-height:1.5;color:#3C4A63;">${esc(t.limitWhy(RESETS_PER_MONTH))}</p>
+  </td></tr>
+  <tr><td style="padding:0 32px;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#FEF3DF;border:1px solid #F5D9A6;border-radius:10px;"><tr><td style="padding:14px 16px;font-size:15px;line-height:1.5;font-weight:bold;text-align:${align};">👤 ${esc(t.limitAsk)}</td></tr></table>
+  </td></tr>
+  <tr><td style="padding:18px 32px 6px;font-size:14px;color:#5B6577;text-align:${align};">📅 ${esc(t.limitNext)}</td></tr>
+  <tr><td style="padding:8px 32px 26px;font-size:13px;line-height:1.5;color:#5B6577;text-align:${align};">🛡️ ${esc(t.notYou)}</td></tr>
+  <tr><td align="center" style="background:#F6F8FB;padding:16px 24px;font-size:12px;color:#8A93A3;">${esc(t.footer)} · <a href="${esc(config.publicUrl)}" style="color:#8A93A3;">${esc(config.publicUrl.replace(/^https?:\/\//, ''))}</a></td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+  return { to: r.email, subject: t.limitSubject, text, html };
 }

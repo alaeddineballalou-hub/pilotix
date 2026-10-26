@@ -28,6 +28,8 @@ export interface NavItem {
   /** only shown when this returns true (session roles) */
   onlyIf?: (roles: Role[], isAdmin: boolean) => boolean;
   hidden?: boolean;
+  /** also shown to people the administrator allowed to create accounts and set passwords */
+  manageUsers?: boolean;
   /** menu children: the item is a group (Commandes, Pilot AI) */
   children?: NavChild[];
   /** pages of the group: it is highlighted on them, and shows its bar under the header when the sidebar is folded */
@@ -86,7 +88,7 @@ export const NAV: NavItem[] = [
   // an employee's own caisse (money he received, his expenses, what he handed to the main caisse)
   { id: 'macaisse', icon: 'wallet', roles: ['confirmation', 'suivi', 'depot', 'agent_manager'], onlyIf: (_r, admin) => !admin },
   { id: 'livraison', icon: 'truck', roles: [], subs: ['societes', 'api', 'livreurs'] },
-  { id: 'utilisateurs', icon: 'usercog', roles: [], subs: ['roles', 'admins', 'vendeurs', 'agents', 'marketeurs', 'managers'] },
+  { id: 'utilisateurs', icon: 'usercog', roles: [], manageUsers: true, subs: ['roles', 'admins', 'vendeurs', 'agents', 'marketeurs', 'managers'] },
   { id: 'management', icon: 'briefcase', roles: [], subs: ['statuts', 'paie', 'prix', 'canaux'] },
   { id: 'reglages', icon: 'settings', roles: [] },
   { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'parrainage', 'securite'] },
@@ -95,8 +97,9 @@ export const NAV: NavItem[] = [
 /** A group's child: its own roles, or everyone who sees the group. */
 export const canSeeChild = (c: NavChild, roles: Role[], isAdmin: boolean) => isAdmin || !c.roles || c.roles.some((r) => roles.includes(r));
 
-export function canSee(item: NavItem, roles: Role[], isAdmin: boolean): boolean {
+export function canSee(item: NavItem, roles: Role[], isAdmin: boolean, canManageUsers = false): boolean {
   if (item.onlyIf && !item.onlyIf(roles, isAdmin)) return false;
+  if (item.manageUsers && canManageUsers) return true;
   if (item.roles === null || isAdmin) return true;
   return item.roles.some((r) => roles.includes(r));
 }

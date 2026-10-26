@@ -279,7 +279,8 @@ async function gridFromCompany(db: Db, companyId: number | null) {
 export const adminProcs = {
   // ---------- users (the lists use users.list; these add what the original had on top)
   /** Users per role for the Rôles table. */
-  'admin.roles': proc([], z.object({}), async (ctx) => {
+  'admin.roles': proc(null, z.object({}), async (ctx) => {
+    if (!ctx.session.isAdmin && !ctx.session.canManageUsers) throw forbidden();
     const rows = await ctx.db.query('SELECT id, name, roles, active FROM profiles ORDER BY name');
     const out: Record<string, { active: number; total: number; names: string[] }> = {};
     for (const r of rows as any[]) {
@@ -295,15 +296,17 @@ export const adminProcs = {
     return out;
   }),
   /** Sets a new random password and returns it once (the admin passes it on). */
-  'admin.users.resetPassword': proc([], z.object({ id }), async (ctx, i) => {
+  'admin.users.resetPassword': proc(null, z.object({ id }), async (ctx, i) => {
+    // the administrator, or someone allowed to handle the team's accounts (users.update checks who may be touched)
     const pw = randomKey(10);
     await usersProcs['users.update'].run(ctx, { id: i.id, password: pw });
     return { password: pw };
   }),
   /** Companies for selects (default company, livreur's company). */
-  'admin.companies': proc([], z.object({}), async (ctx) =>
-    (await ctx.db.query('SELECT id, name, kind, active FROM delivery_companies ORDER BY name')).map((r: any) => ({ id: num(r.id), name: r.name as string, kind: r.kind as string, active: !!r.active })),
-  ),
+  'admin.companies': proc(null, z.object({}), async (ctx) => {
+    if (!ctx.session.isAdmin && !ctx.session.canManageUsers) throw forbidden();
+    return (await ctx.db.query('SELECT id, name, kind, active FROM delivery_companies ORDER BY name')).map((r: any) => ({ id: num(r.id), name: r.name as string, kind: r.kind as string, active: !!r.active }));
+  }),
 
   // ---------- statuses (everyone reads them: every screen shows the renamed labels)
   'admin.statuses.get': proc(null, z.object({}), async (ctx) => ({

@@ -88,7 +88,12 @@
     "resetConfirm": "Generate a new password? The old one will stop working.",
     "resetDone": "New password (pass it on, it will not be shown again):",
     "needRole": "Choose at least one role",
-    "yes": "Yes, continue"
+    "yes": "Yes, continue",
+    "manageUsers": "Team accounts",
+    "manageUsersLabel": "Can create accounts and change passwords",
+    "manageUsersHint": "For a manager or a supervisor: creates the team’s accounts and gives a new password to someone who forgot theirs. Never for administrators or for other people who have this right.",
+    "manageChip": "Manages accounts",
+    "lockedHint": "Only the administrator can change this account"
   },
   "status": {
     "groups": {

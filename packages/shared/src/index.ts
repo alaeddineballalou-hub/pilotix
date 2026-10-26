@@ -141,12 +141,16 @@ export interface Profile {
   avatar?: string | null;
   /** code to invite friends to Pilotix */
   referralCode?: string | null;
+  /** set by the administrator: may create accounts and set passwords of the team (not administrators) */
+  canManageUsers?: boolean;
 }
 
 export interface Session {
   profile: Profile;
   roles: Role[]; // expanded
   isAdmin: boolean;
+  /** administrator, or given the right to create accounts and set passwords */
+  canManageUsers?: boolean;
 }
 
 export interface Variant {

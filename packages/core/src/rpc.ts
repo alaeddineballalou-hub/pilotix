@@ -79,7 +79,8 @@ export function hasRole(s: Session, ...roles: Role[]): boolean {
 
 export function makeSession(profile: Session['profile']): Session {
   const roles = expandRoles(profile.roles);
-  return { profile, roles, isAdmin: roles.includes('admin') };
+  const isAdmin = roles.includes('admin');
+  return { profile, roles, isAdmin, canManageUsers: isAdmin || !!profile.canManageUsers };
 }
 
 export async function dispatch(registry: Record<string, Procedure>, name: string, ctx: Ctx, rawInput: unknown): Promise<unknown> {

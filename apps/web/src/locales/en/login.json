@@ -12,7 +12,7 @@
   "forgotTitle": "Forgot password",
   "forgotText": "Enter your account’s e-mail. We will send you a link to choose a new password.",
   "forgotSend": "Send the link",
-  "forgotSent": "Sent. If an account exists with this e-mail, you will get a link in a few minutes (check your spam too). The link works for 30 minutes.",
+  "forgotSent": "Sent. If an account exists with this e-mail, you will get an e-mail in a few minutes (check your spam too). The link works for 30 minutes. You can change your password 2 times a month; after that, the e-mail will tell you to ask your supervisor.",
   "backToLogin": "Back to log in",
   "resetTitle": "New password",
   "resetNew": "New password",

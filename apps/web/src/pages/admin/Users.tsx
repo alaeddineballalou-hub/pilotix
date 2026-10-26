@@ -41,9 +41,12 @@ export function UsersPage({ sub, rest }: { sub?: string; rest?: string[] }) {
   const { t } = useTranslation();
   const cur = subOf(sub, rest);
   const [form, setForm] = useState<{ user: Profile | null; role: Role | null } | null>(null);
+  const { session } = useSession();
+  // people allowed to handle the team's accounts (not administrators) do not see the administrators' list
+  const subs = USER_SUBS.filter((k) => session?.isAdmin || k !== 'admins');
   return (
     <>
-      <StageBar flow={false} current={cur.sub} items={USER_SUBS.map((k) => ({ key: k, label: t(`admin.subs.${k}`), href: `#/utilisateurs/${k}` }))} />
+      <StageBar flow={false} current={cur.sub} items={subs.map((k) => ({ key: k, label: t(`admin.subs.${k}`), href: `#/utilisateurs/${k}` }))} />
       {cur.role ? <RoleList role={cur.role} onNew={() => setForm({ user: null, role: cur.role })} onEdit={(u) => setForm({ user: u, role: cur.role })} /> : <RolesTable onNew={() => setForm({ user: null, role: null })} />}
       {form && <UserForm user={form.user} role={form.role} onClose={() => setForm(null)} />}
     </>
@@ -52,6 +55,7 @@ export function UsersPage({ sub, rest }: { sub?: string; rest?: string[] }) {
 
 function RolesTable({ onNew }: { onNew: () => void }) {
   const { t } = useTranslation();
+  const { session } = useSession();
   const q = useRpc('admin.roles', {});
   return (
     <>
@@ -82,7 +86,7 @@ function RolesTable({ onNew }: { onNew: () => void }) {
                 </tr>
               </thead>
               <tbody>
-                {ROLE_ORDER.map((r) => {
+                {ROLE_ORDER.filter((r) => session?.isAdmin || r !== 'admin').map((r) => {
                   const c = q.data?.[r] ?? { active: 0, total: 0, names: [] };
                   const names = c.names.slice(0, 4).join(', ') + (c.names.length > 4 ? '…' : '');
                   const pages = pagesOf(r).map((p) => t(`nav.${p}`));
@@ -129,7 +133,10 @@ function RolesTable({ onNew }: { onNew: () => void }) {
 
 function RoleList({ role, onNew, onEdit }: { role: Role; onNew: () => void; onEdit: (u: Profile) => void }) {
   const { t } = useTranslation();
+  const { session, me } = useSession();
   const q = useRpc('users.list', { role });
+  /** accounts only the administrator may change (administrators, people with the accounts right, oneself) */
+  const locked = (u: Profile) => !session?.isAdmin && (u.roles.includes('admin') || !!u.canManageUsers || u.id === me);
   // users.list matches own roles; vendeurs also count as agents etc. only through their own roles (as in the original)
   return (
     <>
@@ -163,9 +170,19 @@ function RoleList({ role, onNew, onEdit }: { role: Role; onNew: () => void; onEd
               </thead>
               <tbody>
                 {q.data.map((u) => (
-                  <tr key={u.id} className={`clickable ${u.active ? '' : 'dim'}`} onClick={() => onEdit(u)} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onEdit(u)}>
+                  <tr
+                    key={u.id}
+                    className={`${locked(u) ? '' : 'clickable'} ${u.active ? '' : 'dim'}`}
+                    title={locked(u) ? t('admin.users.lockedHint') : undefined}
+                    onClick={() => !locked(u) && onEdit(u)}
+                    tabIndex={locked(u) ? -1 : 0}
+                    onKeyDown={(e) => e.key === 'Enter' && !locked(u) && onEdit(u)}
+                  >
                     <td data-l={t('admin.users.colName')}>
-                      <b>{u.name}</b>
+                      <b>
+                        {locked(u) && '🔒 '}
+                        {u.name}
+                      </b>
                       <small className="ltr">{u.email}</small>
                     </td>
                     <td data-l={t('admin.users.colPhone')}>
@@ -177,6 +194,11 @@ function RoleList({ role, onNew, onEdit }: { role: Role; onNew: () => void; onEd
                           {t(`roles.${r}`)}
                         </span>
                       ))}
+                      {u.canManageUsers && (
+                        <span className="chip" title={t('admin.users.manageUsersHint')}>
+                          🔑 {t('admin.users.manageChip')}
+                        </span>
+                      )}
                     </td>
                     <td data-l={t('admin.users.colLast')}>{u.lastSeenAt ? when(u.lastSeenAt) : t('admin.users.never')}</td>
                     <td data-l={t('admin.users.colState')}>
@@ -195,7 +217,9 @@ function RoleList({ role, onNew, onEdit }: { role: Role; onNew: () => void; onEd
 
 function UserForm({ user, role, onClose }: { user: Profile | null; role: Role | null; onClose: () => void }) {
   const { t } = useTranslation();
-  const { me } = useSession();
+  const { me, session } = useSession();
+  const isAdmin = !!session?.isAdmin;
+  const [manage, setManage] = useState(!!user?.canManageUsers);
   const [name, setName] = useState(user?.name ?? '');
   const [phone, setPhone] = useState(user?.phone ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
@@ -216,7 +240,16 @@ function UserForm({ user, role, onClose }: { user: Profile | null; role: Role | 
     e.preventDefault();
     if (!roles.length) return setErr(t('admin.users.needRole'));
     setErr('');
-    const base = { name: name.trim(), email: email.trim(), phone: phone.trim() || null, roles, language, livreurCompanyId: roles.includes('livreur') ? company : null };
+    const base = {
+      name: name.trim(),
+      email: email.trim(),
+      phone: phone.trim() || null,
+      roles,
+      language,
+      livreurCompanyId: roles.includes('livreur') ? company : null,
+      // only the administrator gives (or takes back) the right to handle accounts
+      ...(isAdmin ? { canManageUsers: manage && !roles.includes('admin') } : {}),
+    };
     if (user) update.mutate({ id: user.id, ...base, ...(password ? { password } : {}) });
     else create.mutate({ ...base, password });
   };
@@ -254,7 +287,7 @@ function UserForm({ user, role, onClose }: { user: Profile | null; role: Role | 
         </div>
         <Field label={t('admin.users.roles')} hint={t('admin.users.rolesHint')}>
           <div className="row" style={{ flexWrap: 'wrap', gap: '6px 14px' }}>
-            {ROLE_ORDER.map((r) => (
+            {ROLE_ORDER.filter((r) => isAdmin || r !== 'admin').map((r) => (
               <label key={r} className="row nowrap" style={{ gap: 6 }}>
                 <input type="checkbox" checked={roles.includes(r)} onChange={() => flip(r)} disabled={user?.id === me && r === 'admin'} />
                 {t(`roles.${r}`)}
@@ -262,6 +295,14 @@ function UserForm({ user, role, onClose }: { user: Profile | null; role: Role | 
             ))}
           </div>
         </Field>
+        {isAdmin && !roles.includes('admin') && (
+          <Field label={t('admin.users.manageUsers')} hint={t('admin.users.manageUsersHint')}>
+            <label className="row nowrap" style={{ gap: 8 }}>
+              <input type="checkbox" checked={manage} onChange={(e) => setManage(e.target.checked)} />
+              🔑 {t('admin.users.manageUsersLabel')}
+            </label>
+          </Field>
+        )}
         <div className="grid2">
           {roles.includes('livreur') && (
             <Field label={t('admin.users.company')}>

@@ -133,7 +133,7 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
     document.body.classList.toggle('nav-open', navOpen);
   }, [navOpen]);
 
-  const items = NAV.filter((n) => !n.hidden && canSee(n, roles, isAdmin));
+  const items = NAV.filter((n) => !n.hidden && canSee(n, roles, isAdmin, !!session!.canManageUsers));
   /** a group's children this user sees */
   const kids = (n: NavItem) => (n.children ?? []).filter((c) => canSeeChild(c, roles, isAdmin));
   /** the group of the page on screen: its children show in a bar under the header when the sidebar is folded */
