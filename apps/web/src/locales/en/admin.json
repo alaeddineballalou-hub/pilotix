@@ -369,7 +369,43 @@
     "rotated": "New key",
     "sample": "Sample order sent (JSON)",
     "sampleNote": "Products by \"sku\" (product or variant SKU). The wilaya is its number (1 to 69).",
-    "afterSave": "Save the channel to get its webhook address."
+    "afterSave": "Save the channel to get its webhook address.",
+    "sheet": {
+      "sync": "Sync",
+      "syncTip": "Choose the columns and bring in the new orders",
+      "title": "Sheet “{{name}}”: which column goes where?",
+      "help": "The sheet has {{lines}} line(s). For each column of your sheet, choose where it goes in Pilotix. At least: Customer name, Phone, Wilaya and Product (or SKU).",
+      "colSheet": "Sheet column",
+      "colExample": "Examples",
+      "colPilotix": "Goes in Pilotix",
+      "dup": "Two columns go to the same place: change one.",
+      "onlyNew": "Do not import the {{lines}} lines already in the sheet (only new ones, from now on)",
+      "auto": "Then Pilotix reads the sheet by itself every 10 minutes. A line becomes an order only once.",
+      "saveOnly": "Save the columns",
+      "saveSync": "Save and sync",
+      "saved": "Columns saved",
+      "result": "{{created}} order(s) created in Confirmation › New · {{already}} already imported · {{errors}} line(s) refused",
+      "lineError": "Line {{line}}: {{error}}",
+      "seeOrders": "See the new orders",
+      "fields": {
+        "ref": "Order number",
+        "name": "Customer name",
+        "phone": "Phone",
+        "phone2": "Phone 2",
+        "wilaya": "Wilaya",
+        "commune": "Commune",
+        "address": "Address",
+        "product": "Product (name)",
+        "sku": "Product SKU",
+        "variant": "Variant (colour, size…)",
+        "qty": "Quantity",
+        "unitPrice": "Unit price",
+        "total": "Products total price",
+        "stopdesk": "Stop desk (yes / no)",
+        "note": "Customer note",
+        "ignore": "— Do not use —"
+      }
+    }
   },
   "settings": {
     "shop": "Shop",
@@ -447,5 +483,22 @@
     "metaDemo": "Demo: the Ads page figures are examples (no call to Meta)."
   },
   "confirmYes": "Yes",
-  "cancel": "Cancel"
+  "cancel": "Cancel",
+  "testOrders": {
+    "title": "Test orders",
+    "help": "Orders with fake customers to try Pilotix for real: Confirmation, Depot, Follow-up… The customers are called “TEST …”, their numbers (0500…) do not exist and no message is sent.",
+    "text": "Create fake orders with your real products to test. They arrive in Confirmation › New. Delete them when you are done.",
+    "howMany": "How many",
+    "option_one": "{{count}} order",
+    "option_other": "{{count}} orders",
+    "create": "Create test orders",
+    "created_one": "{{count}} test order created",
+    "created_other": "{{count}} test orders created",
+    "see": "See ({{count}})",
+    "delete": "Delete the test orders",
+    "deleteConfirm": "Delete the {{count}} test orders?",
+    "deleted_one": "{{count}} test order deleted",
+    "deleted_other": "{{count}} test orders deleted",
+    "deletedKept": "{{count}} deleted. Already at the depot, cancel by hand: {{refs}}"
+  }
 }

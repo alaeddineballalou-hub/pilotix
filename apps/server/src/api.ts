@@ -637,6 +637,7 @@ class ApiController {
     void this.core.call('landing.run', session, {}).catch(() => null); // landing pages: abandoned orders, Meta events (in the background)
     void this.core.call('notify.run', session, {}).catch(() => null); // Delivery AI agent: messages due (in the background)
     void this.core.call('spy.scan', session, {}).catch(() => null); // AI Spy: the daily scan of competitors' ads, once a day (in the background)
+    void this.core.call('channels.sheet.syncAll', session, {}).catch(() => null); // Google Sheets channels: new lines become orders (in the background)
     return this.core.call('delivery.sync', session, {}).catch((e) => ({ ok: false, message: e.message }));
   }
 }

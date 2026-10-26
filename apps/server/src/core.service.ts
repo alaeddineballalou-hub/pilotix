@@ -68,6 +68,20 @@ export class CoreService implements OnModuleDestroy {
       if (!m?.runSpy) throw new core.AppError('bad_request', 'AI Spy indisponible sur ce serveur');
       return m.runSpy(action, args, ctx);
     },
+    sheetCsv: async (url) => {
+      // only Google (the link was checked by the core); a sheet that is not public answers with a Google sign-in page
+      const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(20_000), headers: { Accept: 'text/csv,*/*' } }).catch(() => {
+        throw new core.AppError('bad_request', 'Impossible de lire la feuille Google (délai dépassé ou lien faux)');
+      });
+      const host = new URL(res.url).hostname;
+      if (!/(^|\.)(google\.com|googleusercontent\.com)$/.test(host)) throw new core.AppError('bad_request', 'La feuille Google a renvoyé vers un autre site');
+      const type = res.headers.get('content-type') || '';
+      if (!res.ok || /text\/html/i.test(type))
+        throw new core.AppError('bad_request', 'La feuille n’est pas publique. Dans Google Sheets : Partager › « Tous les utilisateurs disposant du lien » (lecteur), ou Fichier › Partager › Publier sur le web.');
+      const text = await res.text();
+      if (text.length > 5_000_000) throw new core.AppError('bad_request', 'Feuille trop grande (plus de 5 Mo) : gardez les commandes récentes');
+      return text;
+    },
     hashPassword: (pw) => core.hashPassword(pw),
     publicUrl: config.publicUrl,
   };

@@ -369,7 +369,43 @@
     "rotated": "Nouvelle clé",
     "sample": "Exemple de commande envoyée (JSON)",
     "sampleNote": "Produits par « sku » (SKU du produit ou de la variante). La wilaya est son numéro (1 à 69).",
-    "afterSave": "Enregistrez le canal pour obtenir son adresse webhook."
+    "afterSave": "Enregistrez le canal pour obtenir son adresse webhook.",
+    "sheet": {
+      "sync": "Synchroniser",
+      "syncTip": "Choisir les colonnes et faire entrer les nouvelles commandes",
+      "title": "Feuille « {{name}} » : quelle colonne va où ?",
+      "help": "La feuille a {{lines}} ligne(s). Pour chaque colonne de votre feuille, choisissez où elle va dans Pilotix. Il faut au moins : Nom du client, Téléphone, Wilaya et Produit (ou SKU).",
+      "colSheet": "Colonne de la feuille",
+      "colExample": "Exemples",
+      "colPilotix": "Va dans Pilotix",
+      "dup": "Deux colonnes vont au même endroit : changez-en une.",
+      "onlyNew": "Ne pas importer les {{lines}} lignes déjà dans la feuille (seulement les nouvelles, à partir de maintenant)",
+      "auto": "Ensuite, Pilotix lit la feuille tout seul toutes les 10 minutes. Une ligne ne devient une commande qu’une seule fois.",
+      "saveOnly": "Enregistrer les colonnes",
+      "saveSync": "Enregistrer et synchroniser",
+      "saved": "Colonnes enregistrées",
+      "result": "{{created}} commande(s) créée(s) dans Confirmation › Nouvelles · {{already}} déjà importée(s) · {{errors}} ligne(s) refusée(s)",
+      "lineError": "Ligne {{line}} : {{error}}",
+      "seeOrders": "Voir les nouvelles commandes",
+      "fields": {
+        "ref": "N° de commande",
+        "name": "Nom du client",
+        "phone": "Téléphone",
+        "phone2": "Téléphone 2",
+        "wilaya": "Wilaya",
+        "commune": "Commune",
+        "address": "Adresse",
+        "product": "Produit (nom)",
+        "sku": "SKU du produit",
+        "variant": "Variante (couleur, taille…)",
+        "qty": "Quantité",
+        "unitPrice": "Prix unitaire",
+        "total": "Prix total des produits",
+        "stopdesk": "Stop desk (oui / non)",
+        "note": "Note du client",
+        "ignore": "— Ne pas utiliser —"
+      }
+    }
   },
   "settings": {
     "shop": "Boutique",
@@ -447,5 +483,22 @@
     "metaDemo": "Démo : les chiffres de la page Publicité sont des exemples (aucun appel à Meta)."
   },
   "confirmYes": "Oui",
-  "cancel": "Annuler"
+  "cancel": "Annuler",
+  "testOrders": {
+    "title": "Commandes de test",
+    "help": "Des commandes avec de faux clients pour essayer Pilotix en vrai : Confirmation, Dépôt, Suivi… Les clients s’appellent « TEST … », leurs numéros (0500…) n’existent pas et aucun message n’est envoyé.",
+    "text": "Créez de fausses commandes avec vos vrais produits pour tester. Elles arrivent dans Confirmation › Nouvelles. Supprimez-les quand vous avez fini.",
+    "howMany": "Combien",
+    "option_one": "{{count}} commande",
+    "option_other": "{{count}} commandes",
+    "create": "Créer des commandes de test",
+    "created_one": "{{count}} commande de test créée",
+    "created_other": "{{count}} commandes de test créées",
+    "see": "Voir ({{count}})",
+    "delete": "Supprimer les commandes de test",
+    "deleteConfirm": "Supprimer les {{count}} commandes de test ?",
+    "deleted_one": "{{count}} commande de test supprimée",
+    "deleted_other": "{{count}} commandes de test supprimées",
+    "deletedKept": "{{count}} supprimée(s). Déjà au dépôt, à annuler à la main : {{refs}}"
+  }
 }

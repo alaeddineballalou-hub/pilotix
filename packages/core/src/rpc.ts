@@ -54,6 +54,8 @@ export interface ServerHooks {
   dellal?: (action: string, args: unknown, ctx: Ctx) => Promise<unknown>;
   /** AI Spy: 'search' (ScrapeCreators / SearchAPI.io), 'media' (a competitor's picture), 'site' (a competitor's page). */
   spy?: (action: string, args: unknown, ctx: Ctx) => Promise<unknown>;
+  /** Google Sheets sales channel: the CSV text of a public sheet (docs.google.com only). */
+  sheetCsv?: (url: string) => Promise<string>;
   hashPassword: (pw: string) => Promise<string>;
   /** the server's public address (PUBLIC_URL): couriers call it back (webhooks) */
   publicUrl?: string;
