@@ -31,5 +31,55 @@
   "checking": "Checking…",
   "stillLocked": "Not active yet. Tell Pilotix (WhatsApp), then try again.",
   "logout": "Log out",
-  "controlRoom": "Pilotix control room"
+  "controlRoom": "Pilotix control room",
+  "picker": {
+    "title": "Choose the shop",
+    "text_one": "This password opens {{count}} shop.",
+    "text_other": "This password opens {{count}} shops.",
+    "mine": "My shops",
+    "current": "Open",
+    "locked": "Subscription ended",
+    "password": "Password of « {{shop}} »",
+    "passwordHint": "Each shop keeps its own accounts: type the password of your account in this shop.",
+    "open": "Open"
+  },
+  "add": {
+    "button": "Add a shop",
+    "title": "Add a shop",
+    "text": "A new shop, with its free trial: you are its administrator, with your e-mail and password.",
+    "password": "Your password",
+    "passwordHint": "Your account’s, to confirm it is you.",
+    "create": "Create the shop"
+  },
+  "signup": {
+    "title": "Create my shop",
+    "trial_one": "{{count}}-day free trial, no card",
+    "trial_other": "{{count}}-day free trial, no card",
+    "plan": "{{plan}} plan ({{price}} / month afterwards)",
+    "shopName": "Shop name",
+    "shopNamePh": "e.g. Bijoux Sétif",
+    "slug": "Address of your landing pages",
+    "slugHint": "Lowercase letters, digits and dashes.",
+    "slugFree": "✓ Available",
+    "slugTaken": "Already taken by another shop. Available: {{suggestion}}",
+    "slugInvalid": "Invalid name: 2 to 40 lowercase letters, digits and dashes (not a Pilotix word like « api »).",
+    "name": "Your name",
+    "phone": "Phone (optional)",
+    "short": "At least 10 characters.",
+    "create": "Create my shop",
+    "creating": "Creating your shop…",
+    "terms": "Your data stays yours. You can stop at any time.",
+    "haveAccount": "I already have an account: log in",
+    "cta": "New to Pilotix?",
+    "ctaBtn_one": "Create my shop ({{count}} free day)",
+    "ctaBtn_other": "Create my shop ({{count}} free days)"
+  },
+  "confirm": {
+    "title": "E-mail confirmation",
+    "done": "Done: the e-mail of « {{shop}} » is confirmed.",
+    "open": "Open Pilotix",
+    "banner": "Confirm your e-mail ({{email}}): open the link we sent you.",
+    "again": "Send the link again",
+    "sent": "Link sent"
+  }
 }

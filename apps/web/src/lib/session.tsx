@@ -1,7 +1,7 @@
 import type { Role, Session } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
-import { backend, isSupportTab, loginServerDemo, rpc, setOnLocked, setOnUnauthorized } from './backend';
+import { backend, enterShop, isChoice, isSupportTab, loginServerDemo, rpc, setOnLocked, setOnUnauthorized, ShopChoice } from './backend';
 import { setShop } from './features';
 import { applyLanguage } from './i18n';
 import { store } from './store';
@@ -9,7 +9,12 @@ import { store } from './store';
 interface SessionState {
   session: Session | null;
   ready: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  /** Logs in; when the password opens several shops, returns them (the store picker) instead */
+  login: (email: string, password: string) => Promise<ShopChoice[] | null>;
+  /** Opens one of my shops (store picker, « Mes boutiques »): the app restarts in it */
+  enter: (shop: number, cred?: { email: string; password: string }) => Promise<void>;
+  /** A session the server just opened (sign-up, « Ajouter une boutique ») */
+  adopt: (s: Session) => void;
   /** opens the server's demo shop as one of its accounts */
   loginDemo: (key: string) => Promise<void>;
   logout: () => void;
@@ -84,10 +89,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (!store.get('lang')) applyLanguage(s.profile.language);
     setSession(s);
   };
-  const login = async (email: string, password: string) => start(await backend.login(email, password));
+  const login = async (email: string, password: string) => {
+    const r = await backend.login(email, password);
+    if (isChoice(r)) return r.choose;
+    start(r);
+    return null;
+  };
+  // another shop: nothing of the previous one stays on screen
+  const adopt = (s: Session) => {
+    qc.clear();
+    start(s);
+    location.hash = '#/accueil';
+  };
+  const enter = async (shop: number, cred?: { email: string; password: string }) => adopt(await enterShop(shop, cred));
   const loginDemo = async (key: string) => start(await loginServerDemo(key));
 
   const has = (...roles: Role[]) => !!session && (session.isAdmin || roles.some((r) => session.roles.includes(r)));
 
-  return <Ctx.Provider value={{ session, ready, login, loginDemo, logout, refresh, has, me: session?.profile.id ?? 0 }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ session, ready, login, enter, adopt, loginDemo, logout, refresh, has, me: session?.profile.id ?? 0 }}>{children}</Ctx.Provider>;
 }

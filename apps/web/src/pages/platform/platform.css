@@ -142,3 +142,4 @@
 /* login of the control room */
 .pp-login .login-title { display: flex; align-items: center; justify-content: center; gap: 8px; }
 
+.pp-chip-warn { background: var(--px-orange-soft, #fef3df) !important; color: var(--ink) !important; border-color: transparent !important; }

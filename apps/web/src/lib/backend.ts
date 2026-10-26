@@ -54,9 +54,27 @@ export class ApiError extends Error {
 /** "Couldn't reach the server" (the action can be queued and retried). */
 export const isNetworkError = (e: unknown) => e instanceof ApiError && e.status === 0;
 
+/** A shop the store picker offers (one person may work in several shops). */
+export interface ShopChoice {
+  id: number;
+  name: string;
+  slug: string;
+  roles: string[];
+  state: string;
+  locked: boolean;
+  primary: boolean;
+  /** the shop open now (« Mes boutiques ») */
+  current?: boolean;
+  /** opens without the password again (it opened at login) */
+  open?: boolean;
+}
+/** A login: the session, or the shops the password opens when there are several (the store picker). */
+export type LoginResult = Session | { choose: ShopChoice[] };
+export const isChoice = (r: LoginResult): r is { choose: ShopChoice[] } => 'choose' in r;
+
 export interface Backend {
   kind: 'remote' | 'demo';
-  login(email: string, password: string): Promise<Session>;
+  login(email: string, password: string): Promise<LoginResult>;
   resume(): Promise<Session | null>;
   logout(): void;
   call<N extends ProcName>(name: N, input: In<N>): Promise<Out<N>>;
@@ -161,11 +179,28 @@ class RemoteBackend implements Backend {
     return data as T;
   }
 
-  async login(email: string, password: string) {
-    const r = await this.req<{ token: string; session: Session }>('/auth/login', { email, password });
+  async login(email: string, password: string): Promise<LoginResult> {
+    const r = await this.req<{ token?: string; session?: Session; choose?: ShopChoice[]; ticket?: string }>('/auth/login', { email, password });
+    if (r.ticket) store.set('pick-ticket', r.ticket);
+    if (r.choose) return { choose: r.choose };
+    this.keep(r.token!);
+    this.connect();
+    return r.session!;
+  }
+  /** Opens a shop: one of the login's (the ticket), or another shop of my e-mail with its password. */
+  async enter(shop: number, cred?: { email: string; password: string }) {
+    return this.adopt(await this.req<Entered>('/auth/enter', { shop, ticket: store.get('pick-ticket'), ...cred }));
+  }
+  /** A shop opened by the server (store picker, sign-up, « Ajouter une boutique »): its token becomes this app's. */
+  adopt(r: Entered) {
+    if (r.ticket) store.set('pick-ticket', r.ticket);
     this.keep(r.token);
     this.connect();
     return r.session;
+  }
+  /** A request with this app's token (the actions outside /rpc: shops, domain). */
+  request<T>(path: string, body?: unknown) {
+    return this.req<T>(path, body ?? {});
   }
   /** Opens the server's demo shop as one of its accounts. */
   async demo(key: string) {
@@ -190,6 +225,7 @@ class RemoteBackend implements Backend {
   }
   logout() {
     this.keep(null);
+    if (!this.support) store.set('pick-ticket', null);
     this.socket?.disconnect();
   }
   call<N extends ProcName>(name: N, input: In<N>): Promise<Out<N>> {
@@ -305,6 +341,47 @@ export function loginServerDemo(key: string) {
   switchDemo(false);
   return remote.demo(key);
 }
+
+// ---------------------------------------------------------------- shops of one person, sign-up, own domain (server only)
+interface Entered {
+  token: string;
+  session: Session;
+  ticket?: string;
+}
+const onServer = () => {
+  if (backend !== remote) throw new ApiError(400, 'Pas dans la démo');
+  return remote;
+};
+export const enterShop = (shop: number, cred?: { email: string; password: string }) => remote.enter(shop, cred);
+export const myShops = () => onServer().request<{ shops: ShopChoice[]; canAdd?: boolean; max?: number }>('/auth/shops', { ticket: store.get('pick-ticket') });
+export async function addShop(body: { shopName: string; slug?: string; password: string }) {
+  const r = await onServer().request<Entered & { mailSent: boolean }>('/shop/add', body);
+  return { session: remote.adopt(r), mailSent: r.mailSent };
+}
+export interface SignupInfo {
+  open: boolean;
+  trialDays: number;
+  plan: { name: string; priceMonth: number } | null;
+  publicUrl: string;
+}
+export const signupInfo = () => authRequest<SignupInfo>('/auth/signup').catch(() => null);
+export const slugCheck = (q: { name?: string; slug?: string }) => authRequest<{ slug: string; valid: boolean; available: boolean; suggestion: string }>('/auth/slug', q);
+export async function signup(body: Record<string, unknown>) {
+  switchDemo(false);
+  const r = await authRequest<Entered & { mailSent: boolean }>('/auth/signup', body);
+  return { session: remote.adopt(r), mailSent: r.mailSent };
+}
+export const confirmEmail = (token: string) => authRequest<{ ok: true; shop: string }>('/auth/confirm', { token });
+export const confirmAgain = () => onServer().request<{ ok: true; sent: boolean }>('/shop/confirm-again');
+export interface DomainState {
+  domain: string | null;
+  status: 'none' | 'pending' | 'ok';
+  ips?: string[];
+  host?: string;
+}
+export const domainGet = () => onServer().request<DomainState>('/shop/domain/get');
+export const domainSet = (domain: string | null) => onServer().request<DomainState>('/shop/domain', { domain });
+export const domainCheck = () => onServer().request<{ ok: boolean; found: string[]; expected: string[] }>('/shop/domain/check');
 
 /** Call an action on the current backend (server or demo). */
 export function rpc<N extends ProcName>(name: N, input: In<N>): Promise<Out<N>> {

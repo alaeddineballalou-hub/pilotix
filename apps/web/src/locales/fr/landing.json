@@ -333,5 +333,27 @@
     "tSame": "Identique à",
     "lossless": "100 % (sans perte)",
     "ssimHelp": "« Identique à » : similarité mesurée (MS-SSIM, plusieurs échelles comme l’œil) entre la photo compressée et l’originale à la même taille. Au-dessus de 99 %, l’œil ne voit pas de différence."
+  },
+  "domain": {
+    "title": "Votre propre domaine",
+    "help": "Vos landing pages aussi à votre adresse : https://www.ma-boutique.com/<page>. Achetez le domaine chez un registraire (OVH, Namecheap…), écrivez-le ici, puis faites-le pointer vers Pilotix. Le HTTPS se met en place tout seul.",
+    "label": "Domaine",
+    "hint": "Sans https:// ni / (ex. www.ma-boutique.com).",
+    "saved": "Domaine enregistré : faites-le pointer vers Pilotix",
+    "removed": "Domaine retiré",
+    "ready": "Votre domaine est prêt",
+    "notYet": "Le domaine ne pointe pas encore vers Pilotix (le DNS peut prendre quelques heures)",
+    "remove": "Retirer",
+    "removeAsk": "Retirer ce domaine ? Vos pages restent sur l’adresse Pilotix.",
+    "ok": "Prêt",
+    "pending": "En attente du DNS",
+    "wait": "Pas encore : faites pointer le domaine vers Pilotix.",
+    "how": "Chez votre registraire, dans la zone DNS du domaine :",
+    "type": "Type",
+    "name": "Nom",
+    "value": "Valeur",
+    "howHelp": "Supprimez les autres enregistrements A ou AAAA de ce nom. Le changement prend de quelques minutes à quelques heures.",
+    "found": "Adresse trouvée aujourd’hui : {{ips}}",
+    "check": "Vérifier"
   }
 }

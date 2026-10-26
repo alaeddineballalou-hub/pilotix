@@ -1536,3 +1536,27 @@ html body .px-qhead .btn.px-qnew:hover { border-color: #F7A823; color: #C97A0E; 
 .px-lock .px-pay .row { justify-content: center; }
 .px-lock-ic { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; margin: 4px auto 0; background: var(--coral-soft); color: var(--coral); }
 .px-lock-ic .bji { width: 30px; height: 30px; }
+
+/* One person, several shops: the store picker, « Mes boutiques », the sign-up page */
+.px-shops { display: flex; flex-direction: column; gap: 8px; }
+.px-shop { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; text-align: start; cursor: pointer; position: relative; }
+.px-shop:hover:not(:disabled) { border-color: var(--navy); }
+.px-shop:disabled { cursor: default; }
+.px-shop.on { border-color: var(--navy); box-shadow: inset 3px 0 0 var(--navy); }
+.px-shop-ic { flex: none; width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; background: var(--navy); color: var(--on-navy, #fff); font-weight: 900; font-size: 17px; }
+.px-shop-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.px-shop-t b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.px-shop-t small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.px-shop .bji { width: 18px; height: 18px; color: var(--muted); flex: none; }
+.px-shop-go { transform: rotate(-90deg); }
+[dir="rtl"] .px-shop-go { transform: rotate(90deg); }
+.px-shop-lock { color: var(--bad, #c0392b); }
+.px-shop-busy { position: absolute; inset-inline-end: 12px; font-weight: 900; }
+.px-shop-ask { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px dashed var(--line); border-radius: 12px; }
+.px-slug { display: flex; align-items: stretch; min-width: 0; border: 1.5px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--field, var(--surface)); }
+.px-slug > span { display: flex; align-items: center; padding: 0 10px; background: var(--raise); color: var(--muted); font-size: 13px; white-space: nowrap; max-width: 60%; overflow: hidden; text-overflow: ellipsis; border-inline-end: 1px solid var(--line); }
+.px-slug > input { flex: 1; min-width: 0; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+.hint.px-ok { color: var(--ok, #1a7f4b); font-weight: 700; }
+.hint.px-bad { color: var(--bad, #c0392b); font-weight: 700; }
+.px-signup-cta { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13.5px; }
+.px-signup-cta .btn { width: 100%; justify-content: center; }

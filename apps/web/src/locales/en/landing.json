@@ -333,5 +333,27 @@
     "tSame": "Identical",
     "lossless": "100 % (lossless)",
     "ssimHelp": "« Identical »: measured similarity (MS-SSIM, at several scales like the eye) between the compressed photo and the original at the same size. Above 99 %, the eye sees no difference."
+  },
+  "domain": {
+    "title": "Your own domain",
+    "help": "Your landing pages at your own address too: https://www.my-shop.com/<page>. Buy the domain from a registrar (OVH, Namecheap…), write it here, then point it to Pilotix. HTTPS comes by itself.",
+    "label": "Domain",
+    "hint": "Without https:// or / (e.g. www.my-shop.com).",
+    "saved": "Domain saved: point it to Pilotix",
+    "removed": "Domain removed",
+    "ready": "Your domain is ready",
+    "notYet": "The domain does not point to Pilotix yet (DNS can take a few hours)",
+    "remove": "Remove",
+    "removeAsk": "Remove this domain? Your pages stay on the Pilotix address.",
+    "ok": "Ready",
+    "pending": "Waiting for DNS",
+    "wait": "Not yet: point the domain to Pilotix.",
+    "how": "At your registrar, in the domain’s DNS zone:",
+    "type": "Type",
+    "name": "Name",
+    "value": "Value",
+    "howHelp": "Delete the other A or AAAA records of this name. The change takes from a few minutes to a few hours.",
+    "found": "Address found now: {{ips}}",
+    "check": "Check"
   }
 }

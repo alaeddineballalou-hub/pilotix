@@ -3,12 +3,15 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Avatar } from '../pages/profil/Avatar';
 import { Icon } from '../ui/kit';
+import { backend } from '../lib/backend';
+import { MyShops } from './Shops';
 
 /** The signed-in account at the right of the header (moved from the sidebar): picture, name and role; the menu opens my profile pages and signs out. */
 /** On phones the header has no room for the language and theme buttons: they are in this menu instead (lang / onTheme). */
 export function AccountMenu({ session, onLogout, lang, onTheme }: { session: Session; onLogout: () => void; lang?: { value: string; options: string[]; onChange: (l: string) => void }; onTheme?: () => void }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  const [shops, setShops] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -53,6 +56,12 @@ export function AccountMenu({ session, onLogout, lang, onTheme }: { session: Ses
           {item('settings', t('profil.tSettings'), () => go('parametres'))}
           {item('gift', t('profil.tRef'), () => go('parrainage'))}
           {item('lock', t('profil.pwd'), () => go('securite'))}
+          {backend.kind === 'remote' && !session.shop?.demo && !session.shop?.support && (
+            <>
+              <hr />
+              {item('building', t('shop.picker.mine'), () => (setOpen(false), setShops(true)))}
+            </>
+          )}
           {session.platformStaff && (
             <>
               <hr />
@@ -82,6 +91,7 @@ export function AccountMenu({ session, onLogout, lang, onTheme }: { session: Ses
           {item('logout', t('shell.logout'), () => (setOpen(false), onLogout()), 'px-me-out')}
         </div>
       )}
+      {shops && <MyShops onClose={() => setShops(false)} />}
     </div>
   );
 }
