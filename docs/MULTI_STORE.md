@@ -29,9 +29,13 @@ Read `README.md` › "Several shops on one server" and `packages/core/src/platfo
   sub-menus plus per-shop overrides (the server refuses what is off), demo shop (reset nightly, "Essayer la démo"
   button), staff, settings (trial and grace days, payment details, a message to every shop), journal.
 
-**Still to do from this plan:** step 2 (accounts working in several stores, store picker, token = account + store,
-password reset per account — replaces `platform.logins`), step 3 (self sign-up creating a shop on the trial plan, email
-verification, rate limits, « Ajouter une boutique »), llms.txt per store, the phone apps' store picker.
+**Built since (2026-10-26, p002):** one e-mail in several shops (the login index lists every shop of an e-mail; each
+shop checks its own password; store picker; Mes boutiques; password changes follow, a reset by e-mail opens every shop),
+self sign-up and « Ajouter une boutique » (trial plan, limits, welcome e-mail confirming the e-mail), own domains
+(Caddy on-demand HTTPS, `/api/domain-check`, `/api/domain/<page>`), llms.txt per shop (`/api/s/<store>/llms.txt`, linked
+from the platform's). The phone apps use the same login, so they have the picker too.
+
+**Still open:** online card payments (Chargily Pay: CIB / Edahabia) — payments are recorded by hand in the control room.
 
 ## What the owner asked for
 

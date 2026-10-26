@@ -514,11 +514,18 @@ class ApiController {
     }
   }
 
+  /** The addresses a shop's domain must point to: PUBLIC_IP, else those of the platform's name. */
+  private serverIps(): Promise<string[]> {
+    return config.publicIps.length ? Promise.resolve(config.publicIps) : dns.resolve4(this.platformHost()).catch(() => [] as string[]);
+  }
+  /** The DNS as the domain check sees it: the platform's name answers the server's addresses. */
+  private resolve = (h: string) => (h === this.platformHost() ? this.serverIps() : dns.resolve4(h));
+
   /** The shop's own domain: what it is, whether its DNS is ready, what to write at the domain's registrar. */
   @Post('shop/domain/get')
   async domainGet(@Req() req: ShopRequest) {
     const s = req.shop.shop;
-    const ips = await dns.resolve4(this.platformHost()).catch(() => [] as string[]);
+    const ips = await this.serverIps();
     return { domain: s.domain, status: s.domainStatus, ips, host: this.platformHost(), primary: s.primary };
   }
 
@@ -534,7 +541,7 @@ class ApiController {
       if (e instanceof core.SignupError) throw new core.AppError('bad_request', e.message);
       throw e;
     }
-    if (want) await core.checkShopDomain(this.core.t, req.shop.shop.id, this.platformHost(), (h) => dns.resolve4(h));
+    if (want) await core.checkShopDomain(this.core.t, req.shop.shop.id, this.platformHost(), this.resolve);
     this.core.invalidate();
     const ref = (await this.core.shop({ id: req.shop.shop.id }))!;
     return { domain: ref.shop.domain, status: ref.shop.domainStatus };
@@ -546,7 +553,7 @@ class ApiController {
     const key = `domain:${req.shop.shop.id}`;
     checkLogin(key, 30);
     failedLogin(key);
-    const r = await core.checkShopDomain(this.core.t, req.shop.shop.id, this.platformHost(), (h) => dns.resolve4(h));
+    const r = await core.checkShopDomain(this.core.t, req.shop.shop.id, this.platformHost(), this.resolve);
     this.core.invalidate();
     return r;
   }

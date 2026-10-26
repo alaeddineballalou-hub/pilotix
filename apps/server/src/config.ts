@@ -34,6 +34,14 @@ export const config = {
     if (!v || v === 'false' || v === '0') return false;
     return /^\d+$/.test(v) ? Number(v) : v; // hop count, or an address / list of addresses
   })(),
+  /**
+   * This server's IPv4 addresses, for shops' own domains (their A record). Empty: those of PUBLIC_URL's name in the DNS
+   * (wrong behind Cloudflare: set PUBLIC_IP then).
+   */
+  publicIps: (process.env.PUBLIC_IP || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => /^\d{1,3}(\.\d{1,3}){3}$/.test(s)),
   /** Public address of this server (used to show webhook URLs). */
   publicUrl: (process.env.PUBLIC_URL || '').replace(/\/+$/, ''),
   /**
