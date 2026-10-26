@@ -263,7 +263,11 @@
     "ignored": "Products without a page (chosen)",
     "ignoredNone": "None: every product on sale raises the alert until it has a page.",
     "restore": "Alert again",
-    "restored": "The alert is back for this product"
+    "restored": "The alert is back for this product",
+    "link": "Page links",
+    "linkHelp": "Every page has its own address: your site / the store's name / the page's name (the page's name is changed in the page). The old …/api/lp/… links keep working.",
+    "storeSlug": "Store name in the link",
+    "storeSlugHint": "Latin letters, digits and dashes. Empty = « {{name}} » (made from the shop's name). After a change, links with the old name still lead to the right page."
   },
   "ev": {
     "title": "Events sent to Meta",

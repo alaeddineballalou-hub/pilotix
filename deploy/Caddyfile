@@ -24,6 +24,16 @@
 		reverse_proxy server:3000
 	}
 
+	# a product's page as customers see it: site/<store>/<page> (the app's own files all have a dot: never matched)
+	@store {
+		path_regexp page ^/([a-z0-9-]{2,40})/([a-z0-9-]{2,60})/?$
+		not path /api/* /live*
+	}
+	handle @store {
+		rewrite * /api/s/{re.page.1}/{re.page.2}
+		reverse_proxy server:3000
+	}
+
 	# for AI assistants: the shop and its landing pages (made by the server); no ai-catalog.json (a 404, not the app's page)
 	handle /llms.txt {
 		rewrite * /api/llms.txt

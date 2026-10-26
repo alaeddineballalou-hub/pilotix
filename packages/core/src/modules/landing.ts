@@ -32,7 +32,7 @@ import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
 import { clientHomeFees, getSetting, setSetting } from '../settings';
 import { BOT_UA, FraudLevel, FraudReason, scoreOrder } from './fraud';
-import { ABANDONED, abandonCutoff, freeLandingSlug, landingCounts, landingSettings, LandingSettings, queuePurchase, quickCreatePage } from './landingquery';
+import { ABANDONED, abandonCutoff, freeLandingSlug, landingCounts, landingSettings, LandingSettings, landingStore, queuePurchase, quickCreatePage, STORE_RESERVED } from './landingquery';
 import { sendInPreview } from './notify';
 import { addEvent, createOrder, noOrderAccess } from './orders';
 import { ipPrefix } from '../net';
@@ -244,6 +244,8 @@ export interface HtmlOpts {
   lead?: string;
   /** base address of stored pictures ("…/api/lp/img/"); null = data URLs inside the page (Pilotix preview) */
   imgBase: string | null;
+  /** the site's address ("https://pilotix.online"): the page's own address is site/<store>/<page> */
+  site?: string;
 }
 
 function viewImages(refs: ImgRef[], rows: Map<number, any>, imgBase: string | null): LandingImage[] {
@@ -304,6 +306,7 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     viewId: randomId(),
     challenge: await makeChallenge(ctx.db, slug, ctx.now()),
     bits: LANDING_POW_BITS,
+    url: o.site ? `${o.site}/${await landingStore(ctx.db, s)}/${slug}` : undefined,
   });
   return { html, link: o.imgBase ? landingPreloadLink(view) : null };
 }
@@ -312,7 +315,8 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
  * /llms.txt: the shop for AI assistants and search agents (llmstxt.org) — a title, one line about the shop, and a link
  * to every live landing page with its price and the start of its description.
  */
-export async function landingLlms(db: Db, base: string): Promise<string> {
+export async function landingLlms(db: Db, site: string): Promise<string> {
+  const base = `${site}/${await landingStore(db)}/`;
   const shop = await getSetting(db, 'shop');
   const rows = await db.query(
     `SELECT l.slug, COALESCE(NULLIF(l.title, ''), p.name) AS title, COALESCE(l.price, p.price) AS price, l.description
@@ -1051,6 +1055,15 @@ const SettingsInput = z.object({
   purchaseAt: z.enum(['order', 'confirmed', 'delivered']),
   abandonAfterMin: z.number().int().min(5).max(24 * 60),
   autoCreate: z.boolean(),
+  /** the store's part of the pages' address; '' = made from the shop's name */
+  storeSlug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(40)
+    .regex(/^([a-z0-9][a-z0-9-]*[a-z0-9])?$/, 'Nom de la boutique dans le lien : lettres latines, chiffres et tirets (ex. ma-boutique)')
+    .refine((v) => !STORE_RESERVED.includes(v), 'Ce nom est réservé, choisissez-en un autre')
+    .default(''),
   /** the Conversions API token: a value replaces, '' keeps, null removes (admins only) */
   capiToken: z.string().max(600).nullable().default(''),
 });
@@ -1222,7 +1235,9 @@ export const landingProcs = {
     const own = !!String((await ctx.db.query(`SELECT value FROM settings WHERE key = $1`, [LANDING_CAPI_SECRET]))[0]?.value ?? '');
     const ads = !!String((await ctx.db.query(`SELECT value FROM settings WHERE key = 'secret_meta_token'`))[0]?.value ?? '');
     return {
-      settings: { pixelId: s.pixelId, testEventCode: s.testEventCode, purchaseAt: s.purchaseAt, abandonAfterMin: s.abandonAfterMin, autoCreate: s.autoCreate },
+      settings: { pixelId: s.pixelId, testEventCode: s.testEventCode, purchaseAt: s.purchaseAt, abandonAfterMin: s.abandonAfterMin, autoCreate: s.autoCreate, storeSlug: s.storeSlug ?? '' },
+      /** the store's part of the address in use (the chosen one, else made from the shop's name) */
+      store: await landingStore(ctx.db, s),
       /** the token itself never leaves the server */
       capi: { own, ads },
       /** products set aside (« Pas de page »): they can get their alert back */
@@ -1294,11 +1309,13 @@ export const landingProcs = {
   // ---------------------------------------------------------------- public side (the server calls these as the system)
   'landing.html': proc(
     [],
-    z.object({ slug: z.string().max(80), mode: z.enum(['live', 'parent', 'preview']), post: z.string().max(500).default(''), geo: z.string().max(500).default(''), lead: z.string().max(500).default(''), imgBase: z.string().max(500).nullable().default(null) }),
+    z.object({ slug: z.string().max(80), mode: z.enum(['live', 'parent', 'preview']), post: z.string().max(500).default(''), geo: z.string().max(500).default(''), lead: z.string().max(500).default(''), imgBase: z.string().max(500).nullable().default(null), site: z.string().max(500).optional() }),
     async (ctx, i) => landingPage(ctx, i.slug, i),
   ),
 
-  'landing.llms': proc([], z.object({ base: z.string().max(500) }), async (ctx, i) => ({ text: await landingLlms(ctx.db, i.base) })),
+  'landing.llms': proc([], z.object({ site: z.string().max(500) }), async (ctx, i) => ({ text: await landingLlms(ctx.db, i.site) })),
+  /** the store's part of the pages' address (site/<store>/<page>): for the links shown in Pilotix, and the server's check */
+  'landing.store': proc(null, z.object({}), async (ctx) => ({ store: await landingStore(ctx.db) })),
 
   'landing.image': proc([], z.object({ id, size: z.enum(['160', '480', '720', '960']) }), async (ctx, i) => {
     // a picture from before the compressor has no 720 width: the 960 one instead

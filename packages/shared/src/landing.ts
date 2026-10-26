@@ -55,6 +55,8 @@ export interface LandingRender {
   lead?: string;
   /** this page view: the browser pixel's events and the server's carry the same id (Meta counts them once) */
   viewId?: string;
+  /** the page's public address (site/<store>/<page>): its canonical address for search engines and shared links */
+  url?: string;
 }
 
 export const LANDING_DEFAULT_COLOR = '#0f766e';
@@ -273,9 +275,9 @@ export function renderLanding(v: LandingView, r: LandingRender): string {
     vid: r.viewId ?? '', px: r.mode === 'live' && v.pixelId && /^\d{5,20}$/.test(v.pixelId) ? v.pixelId : '', pid: v.productId ?? 0, op: off ? v.oldPrice : 0,
   };
   const desc = landingDescriptionHtml(v.description);
-  // search engines and shared links (Facebook, WhatsApp): the real page only, at its own address (the order address minus /order)
+  // search engines and shared links (Facebook, WhatsApp): the real page only, at its own address (site/<store>/<page>; else the order address minus /order)
   const meta = esc(landingMetaDescription(v));
-  const url = r.mode === 'live' && /^https?:\/\/[^\s"<>]+\/order$/.test(r.post) ? r.post.slice(0, -'/order'.length) : '';
+  const url = r.mode !== 'live' ? '' : r.url && /^https?:\/\/[^\s"<>]+$/.test(r.url) ? r.url : /^https?:\/\/[^\s"<>]+\/order$/.test(r.post) ? r.post.slice(0, -'/order'.length) : '';
   const head =
     `<meta name="description" content="${meta}">` +
     (r.mode === 'live'

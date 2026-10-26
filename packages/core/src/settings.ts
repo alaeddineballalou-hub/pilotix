@@ -42,6 +42,8 @@ export interface SettingsMap {
     autoCreate: boolean;
     /** products that will never get a page (accessories…): no alert for them */
     ignored: number[];
+    /** the store's part of the pages' address (site/<store>/<page>); '' = made from the shop's name */
+    storeSlug?: string;
   };
   /** Dashboard goals (admin): delivered revenue per month */
   goals: { monthlyRevenue: number };

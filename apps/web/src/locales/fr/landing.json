@@ -263,7 +263,11 @@
     "ignored": "Produits sans page (choisis)",
     "ignoredNone": "Aucun : tous les produits en vente déclenchent l’alerte tant qu’ils n’ont pas de page.",
     "restore": "Réactiver l’alerte",
-    "restored": "L’alerte revient pour ce produit"
+    "restored": "L’alerte revient pour ce produit",
+    "link": "Lien des pages",
+    "linkHelp": "Chaque page a une adresse unique : votre site / le nom de la boutique / le nom de la page (le nom de la page se change dans la page). Les anciens liens …/api/lp/… restent valables.",
+    "storeSlug": "Nom de la boutique dans le lien",
+    "storeSlugHint": "Lettres latines, chiffres et tirets. Vide = « {{name}} » (fait à partir du nom de la boutique). En le changeant, les liens avec l’ancien nom mènent toujours à la bonne page."
   },
   "ev": {
     "title": "Événements envoyés à Meta",

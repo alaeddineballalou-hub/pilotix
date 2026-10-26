@@ -27,9 +27,12 @@ const ICON: Record<Tab, string> = { pages: 'globe', abandons: 'cart', bloquees: 
 /** what agents (confirmation) see: the orders to handle, not the pages */
 const AGENT_TABS: Tab[] = ['abandons', 'bloquees'];
 
-/** the address customers open: the server's page in real use, the in-app view in the demo */
-export function publicUrl(slug: string): string {
-  return backend.kind === 'demo' ? `#/landing/voir/${slug}` : `${serverUrl()}/api/lp/${slug}`;
+/** the store's part of the pages' address (Réglages); undefined while it loads */
+export const useStore = () => useRpc('landing.store', {}, { staleTime: 60_000 }).data?.store;
+
+/** the address customers open: site/<store>/<page> in real use, the in-app view in the demo */
+export function publicUrl(slug: string, store: string | undefined): string {
+  return backend.kind === 'demo' ? `#/landing/voir/${slug}` : store ? `${serverUrl()}/${store}/${slug}` : `${serverUrl()}/api/lp/${slug}`;
 }
 
 export function Landing({ sub, rest }: PageProps) {
@@ -64,8 +67,9 @@ export function Landing({ sub, rest }: PageProps) {
 function Pages() {
   const { t } = useTranslation();
   const list = useRpc('landing.list', {});
+  const store = useStore();
   const copy = async (slug: string) => {
-    if (await copyText(backend.kind === 'demo' ? `${location.origin}${location.pathname}${publicUrl(slug)}` : publicUrl(slug))) toast(t('landing.copied'), 'ok');
+    if (await copyText(backend.kind === 'demo' ? `${location.origin}${location.pathname}${publicUrl(slug, store)}` : publicUrl(slug, store))) toast(t('landing.copied'), 'ok');
   };
   return (
     <>
@@ -115,7 +119,7 @@ function Pages() {
                     <a className="btn small" href={`#/landing/pages/${p.id}`}>
                       <Icon name="pencil" /> {t('landing.list.edit')}
                     </a>
-                    <a className="btn small" href={publicUrl(p.slug)} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer">
+                    <a className="btn small" href={publicUrl(p.slug, store)} target={backend.kind === 'demo' ? undefined : '_blank'} rel="noreferrer">
                       <Icon name="external" /> {t('landing.list.open')}
                     </a>
                     <button type="button" className="btn small" onClick={() => copy(p.slug)} aria-label={t('landing.list.copy')} title={t('landing.list.copy')}>

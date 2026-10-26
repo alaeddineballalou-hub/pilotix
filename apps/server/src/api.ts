@@ -391,13 +391,11 @@ class ApiController {
 
   // ---------------------------------------------------------------- landing pages (public, no login)
   /** The page of one product: a single small HTML file (no app bundle), never cached (it carries a fresh challenge). */
-  @Public()
-  @Get('lp/:slug')
-  async landingPage(@Param('slug') slug: string, @Req() req: { headers: Record<string, string | undefined> }, @Res() res: any) {
+  private async sendLanding(slug: string, req: { headers: Record<string, string | undefined> }, res: any) {
     if (!/^[a-z0-9-]{2,60}$/.test(slug)) return res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
     const base = `${config.publicUrl}/api/lp/`;
     try {
-      const r: any = await this.core.call('landing.html', await this.core.systemSession(), { slug, mode: 'live', post: `${base}${slug}/order`, lead: `${base}${slug}/lead`, geo: `${base}geo/`, imgBase: `${base}img/` });
+      const r: any = await this.core.call('landing.html', await this.core.systemSession(), { slug, mode: 'live', post: `${base}${slug}/order`, lead: `${base}${slug}/lead`, geo: `${base}geo/`, imgBase: `${base}img/`, site: config.publicUrl });
       res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'no-store');
       // the main photo asked for as soon as these headers arrive, before the page itself
       if (r.link) res.header('Link', r.link);
@@ -408,11 +406,30 @@ class ApiController {
     }
   }
 
+  /** The address given to customers: site/<store>/<page> (Caddy sends it here). Another store name: the right address. */
+  @Public()
+  @Get('s/:store/:slug')
+  async storePage(@Param('store') store: string, @Param('slug') slug: string, @Req() req: { url?: string; headers: Record<string, string | undefined> }, @Res() res: any) {
+    const r: any = await this.core.call('landing.store', await this.core.systemSession(), {});
+    if (store !== r.store && /^[a-z0-9-]{2,60}$/.test(slug)) {
+      const q = String(req.url ?? '').indexOf('?');
+      return res.status(301).header('Location', `${config.publicUrl}/${r.store}/${slug}${q >= 0 ? String(req.url).slice(q) : ''}`).send();
+    }
+    return this.sendLanding(slug, req, res);
+  }
+
+  /** The first address of the pages (links already in ads keep working; the page names site/<store>/<page> as its own). */
+  @Public()
+  @Get('lp/:slug')
+  landingPage(@Param('slug') slug: string, @Req() req: { headers: Record<string, string | undefined> }, @Res() res: any) {
+    return this.sendLanding(slug, req, res);
+  }
+
   /** /llms.txt (Caddy sends it here): the shop and its live landing pages, for AI assistants (cached an hour). */
   @Public()
   @Get('llms.txt')
   async llmsTxt(@Req() req: { headers: Record<string, string | undefined> }, @Res() res: any) {
-    const r: any = await this.core.call('landing.llms', await this.core.systemSession(), { base: `${config.publicUrl}/api/lp/` });
+    const r: any = await this.core.call('landing.llms', await this.core.systemSession(), { site: config.publicUrl });
     return sendText(req, res.status(200).header('Content-Type', 'text/plain; charset=utf-8').header('Cache-Control', 'public, max-age=3600'), r.text);
   }
 
