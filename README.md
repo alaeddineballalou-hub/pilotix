@@ -87,6 +87,11 @@ curl -fsSL https://raw.githubusercontent.com/alaeddineballalou-hub/pilotix/main/
 It installs Docker, starts PostgreSQL + Redis + the server + the website behind Caddy (automatic HTTPS), asks for the
 first administrator and sets a daily database backup. Run it again to update. By hand, the steps are:
 
+**Updates from GitHub, without logging in to the server:** once, on the server, run
+`sudo bash /opt/pilotix/deploy/setup-github-deploy.sh` and put the two secrets it prints in GitHub (Settings › Secrets and
+variables › Actions). Then **Actions › Deploy to the server › Run workflow** backs up the database and updates the server
+(the site pauses a few seconds). The key it uses can run only `deploy/update.sh`. By hand: `sudo /opt/pilotix/deploy/update.sh`.
+
 
 1. Host PostgreSQL + Redis + the server (Docker image: `apps/server/Dockerfile`; it migrates on start). Put Cloudflare in front.
 2. Set a long random `JWT_SECRET`, real `CORS_ORIGINS` and `PUBLIC_URL`; create the first admin with `db:seed`.
