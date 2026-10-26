@@ -61,9 +61,25 @@ test('search engines: a description, its own address and share tags on the real 
 });
 
 test('llms.txt: a title, then a link to every live page with its price', async () => {
-  const r: any = await call('landing.llms', admin, { base: 'https://shop.example/api/lp/' });
+  const r: any = await call('landing.llms', admin, { site: 'https://shop.example' });
   assert.match(r.text, /^# \S/);
-  assert.ok(r.text.includes(`- [عربة أطفال](https://shop.example/api/lp/${SLUG}): 9950.00 دج — خفيفة قابلة للطي`));
+  const { store }: any = await call('landing.store', admin, {});
+  assert.ok(r.text.includes(`- [عربة أطفال](https://shop.example/${store}/${SLUG}): 9950.00 دج — خفيفة قابلة للطي`));
+});
+
+test('page address: site/<store>/<page>, the store from the shop name or chosen in Réglages, reserved names refused', async () => {
+  const mk = await as(EMAILS.marketer);
+  const base = { pixelId: '', testEventCode: '', purchaseAt: 'confirmed', abandonAfterMin: 20, autoCreate: false };
+  const before: any = await call('landing.store', admin, {});
+  assert.match(before.store, /^[a-z0-9-]{2,40}$/);
+  await call('landing.settings.save', mk, { ...base, storeSlug: 'Ma-Boutique' });
+  assert.deepEqual(await call('landing.store', admin, {}), { store: 'ma-boutique' });
+  const r: any = await call('landing.html', admin, { slug: SLUG, mode: 'live', post: '/o', geo: '/g/', imgBase: null, site: 'https://shop.example' });
+  assert.ok(r.html.includes(`<link rel="canonical" href="https://shop.example/ma-boutique/${SLUG}">`));
+  await assert.rejects(call('landing.settings.save', mk, { ...base, storeSlug: 'api' }), /réservé/);
+  await assert.rejects(call('landing.settings.save', mk, { ...base, storeSlug: 'ma boutique!' }), /lettres latines/);
+  await call('landing.settings.save', mk, { ...base, storeSlug: '' });
+  assert.deepEqual(await call('landing.store', admin, {}), before);
 });
 
 test('a normal customer becomes a new order, at the page price', async () => {

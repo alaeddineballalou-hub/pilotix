@@ -2,7 +2,7 @@
 // abandoned orders (after how long they go to Commandes), the automations, and the log of what was sent to Meta.
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Out } from '../../lib/backend';
+import { serverUrl, type Out } from '../../lib/backend';
 import { da, dateTime } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
@@ -42,6 +42,7 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
     purchaseAt: f.purchaseAt,
     abandonAfterMin: Math.max(5, Math.min(1440, Math.round(Number(f.abandonAfterMin) || 20))),
     autoCreate: f.autoCreate,
+    storeSlug: f.storeSlug.trim().replace(/^-+|-+$/g, ''),
   });
   const submit = () => save.mutate({ ...values(), capiToken: token.trim() ? token.trim() : '' });
   /** a wrong token: removed, the Meta Ads token is used again (if any) */
@@ -121,6 +122,20 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
           <div className="lp-min">
             <input type="number" min={5} max={1440} step={5} value={f.abandonAfterMin} onChange={(e) => set('abandonAfterMin', e.target.value)} />
             <span>{t('landing.set.minutes')}</span>
+          </div>
+        </Field>
+      </section>
+
+      <section className="card">
+        <h2>
+          <Icon name="globe" /> {t('landing.set.link')}
+        </h2>
+        <p className="pd-note">{t('landing.set.linkHelp')}</p>
+        <Field label={t('landing.set.storeSlug')} hint={t('landing.set.storeSlugHint', { name: data.store })}>
+          <div className="lp-slug">
+            <span className="ltr">{`${serverUrl() || location.host}/`.replace(/^https?:\/\//, '')}</span>
+            <input className="ltr" value={f.storeSlug} maxLength={40} placeholder={data.store} onChange={(e) => set('storeSlug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} />
+            <span className="ltr">/…</span>
           </div>
         </Field>
       </section>

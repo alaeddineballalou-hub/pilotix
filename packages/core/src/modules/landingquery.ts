@@ -9,6 +9,16 @@ export type LandingSettings = SettingsMap['landing'];
 export const landingSettings = (db: Db): Promise<LandingSettings> => getSetting(db, 'landing');
 
 /** A lead is abandoned when nothing moved on its form for this long and the number did not order since. */
+/** first parts of an address that belong to the app or its server: never a store's name */
+export const STORE_RESERVED = ['api', 'live', 'assets', 'lp', 's', 'app', 'admin', 'www', 'static', 'img'];
+/** The store's part of the pages' public address (site/<store>/<page>): the one chosen in Réglages, else the shop's name. */
+export async function landingStore(db: Db, s?: LandingSettings): Promise<string> {
+  const chosen = String((s ?? (await landingSettings(db))).storeSlug ?? '').trim();
+  if (chosen) return chosen;
+  const made = landingSlug(String((await getSetting(db, 'shop')).name ?? '')).slice(0, 40).replace(/-+$/, '');
+  return made === 'produit' || made.length < 2 || STORE_RESERVED.includes(made) ? 'boutique' : made;
+}
+
 export const abandonCutoff = (s: Pick<LandingSettings, 'abandonAfterMin'>, now: number) => new Date(now - Math.max(5, num(s.abandonAfterMin) || 20) * 60_000).toISOString();
 
 /** SQL: lead `a` is an abandoned order now ($cut = abandonCutoff): no order of this number for this product around it. */
