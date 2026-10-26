@@ -8,6 +8,8 @@ export * from './settings';
 export { expandIp, ipNet } from './net';
 export { seedDemo, seedBase } from './seed';
 export { login, hashPassword, profileById } from './modules/users';
+export { createPasswordReset, resetPassword, RESET_MINUTES } from './passwordReset';
+export type { PasswordResetLink } from './passwordReset';
 export { pgliteDb } from './pglite';
 export { landingCommunes } from './modules/landing';
 export { demoSnapshot, demoRestore } from './demoKeep';

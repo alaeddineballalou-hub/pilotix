@@ -1,7 +1,7 @@
 import { DEMO_ACCOUNTS, DEMO_PASSWORD, Language, LANGUAGES } from '@pilotix/shared';
 import { FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { backend, DEMO_AVAILABLE, DEMO_ONLY, FIXED_SERVER, onDemoProgress, serverUrl, setServerUrl, switchDemo } from '../lib/backend';
+import { backend, DEMO_AVAILABLE, DEMO_ONLY, FIXED_SERVER, forgotAvailable, onDemoProgress, requestPasswordReset, serverUrl, setServerUrl, switchDemo } from '../lib/backend';
 import { applyLanguage } from '../lib/i18n';
 import { useSession } from '../lib/session';
 
@@ -17,7 +17,71 @@ export function Login() {
   const [busy, setBusy] = useState<string | null>(null);
   const [progress, setProgress] = useState('');
 
+  // "Mot de passe oublié": shown only when the server can send the e-mail
+  const [canReset, setCanReset] = useState(false);
+  const [forgot, setForgot] = useState(false);
+  const [sent, setSent] = useState(false);
+
   useEffect(() => onDemoProgress(setProgress), [busy]);
+  useEffect(() => {
+    if (DEMO_ONLY || !serverUrl()) return;
+    let on = true;
+    forgotAvailable().then((ok) => on && setCanReset(ok));
+    return () => {
+      on = false;
+    };
+  }, []);
+
+  async function sendReset(e: FormEvent) {
+    e.preventDefault();
+    setError('');
+    setBusy('forgot');
+    try {
+      if (!FIXED_SERVER) setServerUrl(server);
+      await requestPasswordReset(email.trim());
+      setSent(true);
+    } catch (err: any) {
+      setError(err?.message || t('common.error'));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function backToLogin() {
+    setForgot(false);
+    setSent(false);
+    setError('');
+  }
+
+  if (forgot)
+    return (
+      <div className="login">
+        <form className="card login-card" onSubmit={sendReset}>
+          <span className="brand-big" role="img" aria-label="Pilotix">
+            Pilotix
+          </span>
+          <h2 className="login-title">{t('login.forgotTitle')}</h2>
+          {sent ? (
+            <p className="login-note">{t('login.forgotSent')}</p>
+          ) : (
+            <>
+              <p className="login-note">{t('login.forgotText')}</p>
+              <label className="field">
+                <span className="lab">{t('login.email')}</span>
+                <input id="forgot-email" type="email" dir="ltr" autoComplete="username" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} />
+              </label>
+              {error && <p className="form-err">{error}</p>}
+              <button className="btn primary big" disabled={!!busy}>
+                {busy ? '…' : t('login.forgotSend')}
+              </button>
+            </>
+          )}
+          <button type="button" className="login-link" onClick={backToLogin}>
+            {t('login.backToLogin')}
+          </button>
+        </form>
+      </div>
+    );
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -87,6 +151,11 @@ export function Login() {
             <button className="btn primary big" disabled={!!busy}>
               {t('login.submit')}
             </button>
+            {canReset && (
+              <button type="button" className="login-link" onClick={() => (setForgot(true), setError(''))}>
+                {t('login.forgot')}
+              </button>
+            )}
           </>
         )}
         {(DEMO_AVAILABLE || DEMO_ONLY) && (

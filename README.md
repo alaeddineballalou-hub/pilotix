@@ -92,6 +92,9 @@ first administrator and sets a daily database backup. Run it again to update. By
 2. Set a long random `JWT_SECRET`, real `CORS_ORIGINS` and `PUBLIC_URL`; create the first admin with `db:seed`.
 3. In the app: Réglages (shop, depots, webhook key), Sociétés de livraison (API keys of each courier, tariffs), Management (prices, pay, statuses), Utilisateurs.
 4. Website orders: POST to `/api/hooks/orders/site?key=<key>` (or a sales channel's own URL, see Management → Canaux de vente).
-5. Without Redis, call `POST /api/hooks/cron?key=<cron key>` every 30 minutes to refresh courier statuses.
-6. **Algerian data law (Law 18-07, amended by Law 25-11 of 2025):** customer names, phones and addresses are personal data.
+5. **Mot de passe oublié** (e-mail with a 30-minute, one-time link): add to `deploy/.env` (`/opt/pilotix/deploy/.env` on the server)
+   `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`, then run the installer again. Gmail: `smtp.gmail.com`, `465`,
+   your Gmail address and an app password. Without them the login page simply hides the link.
+6. Without Redis, call `POST /api/hooks/cron?key=<cron key>` every 30 minutes to refresh courier statuses.
+7. **Algerian data law (Law 18-07, amended by Law 25-11 of 2025):** customer names, phones and addresses are personal data.
    Storing them outside Algeria needs ANPDP authorization; breaches must be reported to the ANPDP within 5 days. Check with a legal advisor.

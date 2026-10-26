@@ -7,5 +7,19 @@
   "serverHint": "Given by your administrator",
   "error": "Wrong email or password",
   "demo": "Demo",
-  "demoText": "log in with a test account (invented data, nothing is sent):"
+  "demoText": "log in with a test account (invented data, nothing is sent):",
+  "forgot": "Forgot your password?",
+  "forgotTitle": "Forgot password",
+  "forgotText": "Enter your account’s e-mail. We will send you a link to choose a new password.",
+  "forgotSend": "Send the link",
+  "forgotSent": "Sent. If an account exists with this e-mail, you will get a link in a few minutes (check your spam too). The link works for 30 minutes.",
+  "backToLogin": "Back to log in",
+  "resetTitle": "New password",
+  "resetNew": "New password",
+  "resetAgain": "Once more",
+  "resetHint": "At least 8 characters",
+  "resetSave": "Save",
+  "resetShort": "The password must have at least 8 characters",
+  "resetMismatch": "The two passwords are not the same",
+  "resetDone": "Done! Your password is changed. Log in with the new one."
 }
