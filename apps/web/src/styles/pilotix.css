@@ -1560,3 +1560,5 @@ html body .px-qhead .btn.px-qnew:hover { border-color: #F7A823; color: #C97A0E; 
 .hint.px-bad { color: var(--bad, #c0392b); font-weight: 700; }
 .px-signup-cta { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13.5px; }
 .px-signup-cta .btn { width: 100%; justify-content: center; }
+.px-form { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.px-form .field { margin: 0; }

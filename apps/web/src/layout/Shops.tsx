@@ -114,7 +114,7 @@ export function MyShops({ onClose }: { onClose: () => void }) {
           onCancel={() => setAdding(false)}
         />
       ) : (
-        <div className="pd-form">
+        <div className="px-form">
           {!shops && !error && <p className="muted">…</p>}
           {shops && <ShopList shops={shops} busy={busy} onPick={pick} />}
           {ask && (
@@ -219,7 +219,7 @@ function AddShop({ onDone, onCancel }: { onDone: (s: import('@pilotix/shared').S
     }
   };
   return (
-    <form className="pd-form" onSubmit={submit}>
+    <form className="px-form" onSubmit={submit}>
       <p className="login-note">{t('shop.add.text')}</p>
       <label className="field">
         <span className="lab">{t('shop.signup.shopName')}</span>

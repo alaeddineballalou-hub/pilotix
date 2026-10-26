@@ -37,6 +37,9 @@ services:
       CORS_ORIGINS: https://${DOMAIN},https://www.${DOMAIN},capacitor://localhost,https://localhost
       TRUST_PROXY: "1"
       PUBLIC_URL: https://${DOMAIN}
+      # shops' own domains point to this server's address: set it when the domain is behind Cloudflare (its DNS shows
+      # Cloudflare's addresses, not the server's). Several: comma-separated.
+      PUBLIC_IP: ${PUBLIC_IP:-}
       # e-mails ("mot de passe oublié"): put these lines in deploy/.env, then run the installer again
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
