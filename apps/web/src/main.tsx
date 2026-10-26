@@ -73,7 +73,7 @@ function App() {
   }
   const item = NAV.find((n) => n.id === page);
   const extra = ['livrees', 'retournees'].includes(page ?? '');
-  const allowed = (item && canSee(item, session.roles, session.isAdmin)) || (extra && (session.isAdmin || session.roles.some((r) => ['confirmation', 'suivi', 'depot'].includes(r))));
+  const allowed = (item && canSee(item, session.roles, session.isAdmin, !!session.canManageUsers)) || (extra && (session.isAdmin || session.roles.some((r) => ['confirmation', 'suivi', 'depot'].includes(r))));
   if (!page || !allowed || !PAGES[page]) {
     const home = homeFor(session.roles, session.isAdmin);
     if (location.hash !== `#/${home}`) location.replace(`#/${home}`);

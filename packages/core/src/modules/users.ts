@@ -2,7 +2,7 @@ import { LANGUAGES, Profile, ROLES } from '@pilotix/shared';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { Db, isoOrNull, num, numOrNull } from '../db';
-import { AppError, bad, forbidden, makeSession, notFound, proc } from '../rpc';
+import { AppError, bad, Ctx, forbidden, makeSession, notFound, proc } from '../rpc';
 
 export const toProfile = (r: any): Profile => ({
   id: num(r.id),
@@ -16,7 +16,29 @@ export const toProfile = (r: any): Profile => ({
   livreurCompanyId: numOrNull(r.livreur_company_id),
   avatar: r.avatar ?? null,
   referralCode: r.referral_code ?? null,
+  canManageUsers: !!r.can_manage_users,
 });
+
+/**
+ * Team accounts: the administrator, or someone the administrator allowed (a manager, a supervisor). Such a person never
+ * touches administrators, nor other people who have this right, nor gives either right: nobody can raise themselves.
+ */
+function needUserManager(ctx: Ctx) {
+  if (!ctx.session.isAdmin && !ctx.session.canManageUsers) throw forbidden();
+}
+async function needCanEdit(ctx: Ctx, id: number) {
+  needUserManager(ctx);
+  if (ctx.session.isAdmin) return;
+  if (id === ctx.session.profile.id) throw forbidden('Changez vos propres informations dans Mon profil');
+  const t = (await ctx.db.query('SELECT roles, can_manage_users FROM profiles WHERE id = $1', [id]))[0];
+  if (!t) throw notFound();
+  if ((t.roles as string[]).includes('admin') || t.can_manage_users) throw forbidden('Seul l’administrateur peut modifier ce compte');
+}
+function needGrantable(ctx: Ctx, b: { roles?: string[]; canManageUsers?: boolean }) {
+  if (ctx.session.isAdmin) return;
+  if (b.roles?.includes('admin')) throw forbidden('Seul l’administrateur peut donner le rôle Administrateur');
+  if (b.canManageUsers !== undefined) throw forbidden('Seul l’administrateur peut donner ce droit');
+}
 
 export async function profileById(db: Db, id: number): Promise<Profile | null> {
   const r = (await db.query('SELECT * FROM profiles WHERE id = $1', [id]))[0];
@@ -47,6 +69,7 @@ const NewUser = z.object({
   roles: z.array(z.enum(ROLES)).min(1).max(20),
   language: z.enum(LANGUAGES).default('fr'),
   livreurCompanyId: z.number().int().positive().nullable().optional(),
+  canManageUsers: z.boolean().optional(),
 });
 
 export const usersProcs = {
@@ -228,15 +251,17 @@ export const usersProcs = {
        FROM profiles WHERE ($1::text IS NULL OR $1 = ANY(roles)) AND (NOT $2 OR active) ORDER BY name`,
       [i.role ?? null, i.activeOnly],
     );
-    const admin = ctx.session.isAdmin;
+    const admin = ctx.session.isAdmin || !!ctx.session.canManageUsers;
     return rows.map((r: any) => ({ ...toProfile(r), ...(admin ? {} : { email: '', phone: null }), presence: r.live as 'online' | 'call' | 'idle' | 'offline' }));
   }),
-  'users.create': proc([], NewUser, async (ctx, b) => {
+  'users.create': proc(null, NewUser, async (ctx, b) => {
+    needUserManager(ctx);
+    needGrantable(ctx, b);
     try {
       const r = (
         await ctx.db.query(
-          'INSERT INTO profiles (name, email, phone, password_hash, roles, language, livreur_company_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
-          [b.name, b.email.toLowerCase(), b.phone ?? null, await hashPassword(b.password), b.roles, b.language, b.livreurCompanyId ?? null],
+          'INSERT INTO profiles (name, email, phone, password_hash, roles, language, livreur_company_id, can_manage_users) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
+          [b.name, b.email.toLowerCase(), b.phone ?? null, await hashPassword(b.password), b.roles, b.language, b.livreurCompanyId ?? null, !!b.canManageUsers && !b.roles.includes('admin')],
         )
       )[0];
       return toProfile(r);
@@ -245,14 +270,17 @@ export const usersProcs = {
       throw e;
     }
   }),
-  'users.update': proc([], NewUser.partial().extend({ id: z.number().int().positive(), active: z.boolean().optional() }), async (ctx, b) => {
+  'users.update': proc(null, NewUser.partial().extend({ id: z.number().int().positive(), active: z.boolean().optional() }), async (ctx, b) => {
+    await needCanEdit(ctx, b.id);
+    needGrantable(ctx, b);
     if (b.id === ctx.session.profile.id && (b.active === false || (b.roles && !b.roles.includes('admin')))) throw forbidden('Vous ne pouvez pas retirer votre propre accès administrateur');
     const r = (
       await ctx.db.query(
         `UPDATE profiles SET name=COALESCE($2,name), email=COALESCE($3,email), phone=COALESCE($4,phone), password_hash=COALESCE($5,password_hash),
            roles=COALESCE($6,roles), language=COALESCE($7,language), active=COALESCE($8,active), livreur_company_id=COALESCE($9,livreur_company_id),
+           can_manage_users = CASE WHEN 'admin' = ANY(COALESCE($6,roles)) THEN false ELSE COALESCE($10,can_manage_users) END,
            token_version = token_version + CASE WHEN $5::text IS NOT NULL OR $8 = false THEN 1 ELSE 0 END WHERE id=$1 RETURNING *`,
-        [b.id, b.name ?? null, b.email?.toLowerCase() ?? null, b.phone ?? null, b.password ? await hashPassword(b.password) : null, b.roles ?? null, b.language ?? null, b.active ?? null, b.livreurCompanyId ?? null],
+        [b.id, b.name ?? null, b.email?.toLowerCase() ?? null, b.phone ?? null, b.password ? await hashPassword(b.password) : null, b.roles ?? null, b.language ?? null, b.active ?? null, b.livreurCompanyId ?? null, b.canManageUsers ?? null],
       )
     )[0];
     if (!r) throw notFound();

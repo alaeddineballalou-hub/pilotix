@@ -88,7 +88,12 @@
     "resetConfirm": "Générer un nouveau mot de passe ? L’ancien ne marchera plus.",
     "resetDone": "Nouveau mot de passe (à transmettre, il ne sera plus affiché) :",
     "needRole": "Choisissez au moins un rôle",
-    "yes": "Oui, continuer"
+    "yes": "Oui, continuer",
+    "manageUsers": "Comptes de l’équipe",
+    "manageUsersLabel": "Peut créer des comptes et changer les mots de passe",
+    "manageUsersHint": "Pour un manager ou un superviseur : il crée les comptes de l’équipe et donne un nouveau mot de passe à quelqu’un qui l’a oublié. Jamais pour les administrateurs ni pour les autres personnes qui ont ce droit.",
+    "manageChip": "Gère les comptes",
+    "lockedHint": "Seul l’administrateur peut modifier ce compte"
   },
   "status": {
     "groups": {

@@ -31,7 +31,7 @@ import { brotliCompressSync, constants as zlibConst, gzipSync } from 'node:zlib'
 import { z } from 'zod';
 import { config } from './config';
 import { mailConfigured, sendMail } from './mail';
-import { resetMail } from './resetMail';
+import { limitMail, resetMail } from './resetMail';
 import { CoreService } from './core.service';
 
 // ---------------------------------------------------------------- errors → HTTP
@@ -284,8 +284,9 @@ class ApiController {
     if (!mailConfigured()) throw new HttpException({ message: 'L’envoi d’e-mails n’est pas configuré sur ce serveur. Demandez à votre administrateur.' }, 503);
     const b = ForgotBody.safeParse(body);
     if (!b.success) throw new core.AppError('bad_request', 'Email invalide');
-    const link = await core.createPasswordReset(this.core.db, b.data.email);
-    if (link) sendMail(resetMail(link)).catch((e) => new Logger('Mail').error(`Reset e-mail to ${link.email} failed: ${e?.message || e}`));
+    const r = await core.createPasswordReset(this.core.db, b.data.email);
+    // the link, or "already changed twice this month: ask your supervisor" (told by e-mail, never on screen)
+    if (r) sendMail(r.kind === 'link' ? resetMail(r) : limitMail(r)).catch((e) => new Logger('Mail').error(`Reset e-mail to ${r.email} failed: ${e?.message || e}`));
     return { ok: true };
   }
 
