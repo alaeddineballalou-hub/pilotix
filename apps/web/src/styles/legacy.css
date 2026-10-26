@@ -708,6 +708,25 @@ dialog.modal::backdrop { background: rgba(10, 15, 20, .55); }
 .login-card { width: min(380px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 24px; display: flex; flex-direction: column; gap: 12px; text-align: left; }
 .brand-big { font-size: 28px; font-weight: 900; letter-spacing: .08em; color: var(--navy); text-align: center; }
 .login-card .muted { text-align: center; margin: -6px 0 6px; }
+/* the login page (and "mot de passe oublié"): the card in the middle of any screen. margin:auto centres it and still
+   lets it scroll when the screen is shorter than the card (phone held sideways, keyboard open) */
+.login { box-sizing: border-box; min-height: 100vh; min-height: 100dvh; width: 100%; display: flex; flex-direction: column; align-items: center;
+  padding: max(24px, env(safe-area-inset-top, 0px)) 16px max(24px, env(safe-area-inset-bottom, 0px));
+  background: radial-gradient(1200px 600px at 50% -10%, var(--px-orange-soft, #FFF4E0), transparent 70%), var(--bg); }
+.login > .login-card { margin: auto; width: min(400px, 100%); box-sizing: border-box; padding: 28px 26px; gap: 14px; text-align: start;
+  box-shadow: 0 1px 2px rgb(0 0 0 / .04), 0 12px 32px rgb(27 42 71 / .10); }
+.login .login-card .tabs { justify-content: center; }
+.login .login-card .field input { width: 100%; box-sizing: border-box; }
+.login .login-card .btn.big { width: 100%; }
+.login .demo-accounts { box-sizing: border-box; margin: 16px auto 0; width: min(400px, 100%); }
+@media (max-width: 480px) {
+  .login { padding-left: 12px; padding-right: 12px; }
+  .login > .login-card { padding: 22px 18px; border-radius: 16px; }
+  .login .brand-big { width: 160px; height: 58px; }
+  /* 16px: phones do not zoom into the field when typing */
+  .login .login-card .field input { font-size: 16px; }
+}
+@media (max-height: 560px) { .login .brand-big { height: 44px; margin: 0 auto 4px; } .login > .login-card { gap: 10px; padding-top: 18px; padding-bottom: 18px; } }
 
 /* ---------------------------------------------------------------- order view */
 .ord-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
