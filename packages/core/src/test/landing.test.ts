@@ -49,6 +49,17 @@ test('the page is one small HTML file with the form, the colour and the descript
   assert.ok(!/<script src=/.test(r.html), 'no external script');
 });
 
+test('search engines: a description, its own address and share tags on the real page; the previews are not indexed', async () => {
+  const live: any = await call('landing.html', admin, { slug: SLUG, mode: 'live', post: `https://shop.example/api/lp/${SLUG}/order`, geo: '/g/', imgBase: 'https://shop.example/api/lp/img/' });
+  assert.ok(live.html.includes('<meta name="description" content="خفيفة قابلة للطي">'));
+  assert.ok(live.html.includes(`<link rel="canonical" href="https://shop.example/api/lp/${SLUG}">`));
+  assert.ok(live.html.includes('<meta property="og:title" content="عربة أطفال">'));
+  assert.ok(!live.html.includes('noindex'));
+  const preview: any = await call('landing.html', admin, { slug: SLUG, mode: 'preview', geo: '/g/', imgBase: null });
+  assert.ok(preview.html.includes('<meta name="robots" content="noindex">'));
+  assert.ok(!preview.html.includes('canonical') && !preview.html.includes('og:title'));
+});
+
 test('a normal customer becomes a new order, at the page price', async () => {
   const input = await human();
   assert.deepEqual(await call('landing.submit', admin, input), { ok: true });

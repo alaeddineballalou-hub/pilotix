@@ -226,6 +226,17 @@ export function landingPreloadLink(v: LandingView): string | null {
   return `<${img.src}>; rel=preload; as=image; fetchpriority=high; imagesrcset="${img.srcset}"; imagesizes="${LANDING_SIZES}"`;
 }
 
+/** The search and share snippet: the start of the description (no markup), else the title, the price and the delivery. */
+export function landingMetaDescription(v: Pick<LandingView, 'title' | 'price' | 'description'>): string {
+  const plain = String(v.description ?? '')
+    .replace(/^\s*(#+|-)\s+/gm, '')
+    .replace(/\*\*/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const text = plain || `${v.title} — ${landingPrice(v.price)}. التوصيل لجميع الولايات والدفع عند الاستلام.`;
+  return text.length > 160 ? `${text.slice(0, 157).replace(/\s+\S*$/, '')}…` : text;
+}
+
 /** The whole public page. */
 export function renderLanding(v: LandingView, r: LandingRender): string {
   const c = isHexColor(v.color) ? v.color : LANDING_DEFAULT_COLOR;
@@ -259,8 +270,19 @@ export function renderLanding(v: LandingView, r: LandingRender): string {
     vid: r.viewId ?? '', px: r.mode === 'live' && v.pixelId && /^\d{5,20}$/.test(v.pixelId) ? v.pixelId : '', pid: v.productId ?? 0, op: off ? v.oldPrice : 0,
   };
   const desc = landingDescriptionHtml(v.description);
+  // search engines and shared links (Facebook, WhatsApp): the real page only, at its own address (the order address minus /order)
+  const meta = esc(landingMetaDescription(v));
+  const url = r.mode === 'live' && /^https?:\/\/[^\s"<>]+\/order$/.test(r.post) ? r.post.slice(0, -'/order'.length) : '';
+  const head =
+    `<meta name="description" content="${meta}">` +
+    (r.mode === 'live'
+      ? (url ? `<link rel="canonical" href="${esc(url)}"><meta property="og:url" content="${esc(url)}">` : '') +
+        `<meta property="og:type" content="product"><meta property="og:title" content="${esc(v.title)}"><meta property="og:description" content="${meta}"><meta property="og:locale" content="ar_DZ">` +
+        (v.shopName ? `<meta property="og:site_name" content="${esc(v.shopName)}">` : '') +
+        (img && /^https?:\/\//.test(img.src) ? `<meta property="og:image" content="${esc(img.src)}"><meta name="twitter:card" content="summary_large_image">` : '')
+      : '<meta name="robots" content="noindex">');
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(v.title)}</title>
-<meta name="theme-color" content="${c}">${img ? `<link rel="preload" as="image" href="${esc(img.src)}" imagesrcset="${esc(img.srcset)}" imagesizes="${sizes}">` : ''}<style>${CSS(c)}</style></head><body>
+${head}<meta name="theme-color" content="${c}">${img ? `<link rel="preload" as="image" href="${esc(img.src)}" imagesrcset="${esc(img.srcset)}" imagesizes="${sizes}">` : ''}<style>${CSS(c)}</style></head><body>
 <div class="top">🚚 التوصيل لجميع الولايات · الدفع عند الاستلام</div><main class="w"><div class="g">
 <section class="gal card">${gallery}</section>
 <section class="card">${v.soldOut ? `<h1>${esc(v.title)}</h1><div class="so"><b>نفذت الكمية مؤقتاً</b><p>هذا المنتج غير متوفر حالياً، عودوا قريباً.</p></div>` : `<form id="f" novalidate autocomplete="on"><h1>${esc(v.title)}</h1><div class="pr"><b id="pp">${landingPrice(v.price)}</b>${off ? `<s>${landingPrice(v.oldPrice!)}</s><span class="off" dir="ltr">-${off}%</span>` : ''}</div>
