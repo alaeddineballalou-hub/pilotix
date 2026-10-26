@@ -1,0 +1,34 @@
+# The "Deploy" button: Actions > Deploy to the server > Run workflow.
+# Backs up the database, then updates the server to the latest main (about 3-5 minutes; the site pauses a few seconds).
+# Needs the secrets DEPLOY_HOST and DEPLOY_SSH_KEY, made by deploy/setup-github-deploy.sh on the server.
+# The key can run only deploy/update.sh on the server: nothing else, even if it leaked.
+name: Deploy to the server
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Update pilotix.online
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          if [ -z "$KEY" ] || [ -z "$HOST" ]; then
+            echo "Missing the secrets DEPLOY_HOST / DEPLOY_SSH_KEY: run deploy/setup-github-deploy.sh on the server first."
+            exit 1
+          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          ssh -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 "root@$HOST" update
