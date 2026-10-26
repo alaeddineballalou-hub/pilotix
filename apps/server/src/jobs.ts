@@ -14,7 +14,7 @@ import { CoreService } from './core.service';
  *  - CM AI agent: comments still waiting (missed after a restart, or held during the night) every 3 minutes
  *  - Delivery AI agent: the customers' order messages that are due (WhatsApp, SMS) every minute
  *  - Landing pages: abandoned orders (list, Commandes, reminder) and Meta Conversions API events, every minute
- *  - Google Sheets sales channels: new lines become orders, every 10 minutes
+ *  - Google Sheets sales channels: new lines become orders, every 2 minutes
  *  - AI Spy: competitors' Facebook ads (paid source), checked every hour, scanned once a day after the chosen hour
  */
 @Injectable()
@@ -73,7 +73,14 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.queue.add('cm-sweep', {}, { repeat: { every: 3 * 60_000 }, jobId: 'cm-sweep', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('notify-run', {}, { repeat: { every: 60_000 }, jobId: 'notify-run', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('landing-run', {}, { repeat: { every: 60_000 }, jobId: 'landing-run', removeOnComplete: 20, removeOnFail: 50 });
-    await this.queue.add('sheets-sync', {}, { repeat: { every: 10 * 60_000 }, jobId: 'sheets-sync', removeOnComplete: 20, removeOnFail: 50 });
+    // Google Sheets every 2 minutes. Redis keeps repeat timers: one left from another interval (it was 10 minutes) is removed
+    const SHEETS_EVERY = 2 * 60_000;
+    try {
+      for (const r of await this.queue.getRepeatableJobs()) if (r.name === 'sheets-sync' && Number(r.every) !== SHEETS_EVERY) await this.queue.removeRepeatableByKey(r.key);
+    } catch (e) {
+      this.log.warn(`sheets-sync: old timer not removed (${(e as Error).message})`);
+    }
+    await this.queue.add('sheets-sync', {}, { repeat: { every: SHEETS_EVERY }, jobId: 'sheets-sync', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('spy-scan', {}, { repeat: { pattern: '7 * * * *' }, jobId: 'spy-scan', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('partitions', {}, { repeat: { pattern: '0 3 1 * *' }, jobId: 'partitions', removeOnComplete: 10 });
   }

@@ -380,7 +380,7 @@
       "colPilotix": "Goes in Pilotix",
       "dup": "Two columns go to the same place: change one.",
       "onlyNew": "Do not import the {{lines}} lines already in the sheet (only new ones, from now on)",
-      "auto": "Then Pilotix reads the sheet by itself every 10 minutes. A line becomes an order only once, even if you edit it later, and even if its order is confirmed, delivered, cancelled or deleted. Pilotix recognises a line by its Order number, otherwise by its Date + the phone: keep one of these columns.",
+      "auto": "Then Pilotix reads the sheet by itself every 2 minutes. A line becomes an order only once, even if you edit it later, and even if its order is confirmed, delivered, cancelled or deleted. Pilotix recognises a line by its Order number, otherwise by its Date + the phone: keep one of these columns.",
       "saveOnly": "Save the columns",
       "saveSync": "Save and sync",
       "saved": "Columns saved",
