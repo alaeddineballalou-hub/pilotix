@@ -18,6 +18,8 @@ import {
   seedBase,
   shopCtx,
   shopIdOfEmail,
+  shopIdsOfEmail,
+  shopsOpenedBy,
   shopStatus,
   staffLogin,
   Tenancy,
@@ -52,7 +54,7 @@ async function shopUserCtx(t: Tenancy, schema: string, email: string, password: 
 
 test('first start: the existing shop becomes shop #1, its admin the platform owner', async () => {
   const { t, applied, staff } = await server();
-  assert.deepEqual(applied.platform, ['p001_platform']);
+  assert.deepEqual(applied.platform, ['p001_platform', 'p002_accounts_signup_domains']);
   assert.deepEqual(applied.public, []);
   const s1 = (await loadShop(t, { primary: true }))!;
   assert.equal(s1.schema, 'public');
@@ -157,30 +159,33 @@ test('store names: one per shop, unique, the first part of its links (site/<stor
   assert.equal(await landingStore(db2), 'bebe-confort');
 });
 
-test('one e-mail = one shop (the login page must know where to go)', async () => {
+test('one e-mail, several shops: each shop keeps its accounts, the login index lists them all', async () => {
   const { t, p } = await server();
   const plan = (await p<any[]>('p.plans.list')).find((x) => x.code === 'business');
-  await assert.rejects(p('p.shops.create', { name: 'Doublon', ownerName: 'Xavier', ownerEmail: OWNER.email, planId: plan.id, trialDays: 7 }), /déjà utilisé/);
-  assert.equal((await t.platform.query('SELECT count(*)::int AS n FROM platform.shops'))[0].n, 1);
+  // the owner of shop #1 may own another shop (its own password there)
+  const other = await p('p.shops.create', { name: 'Deuxième', ownerName: 'Amine', ownerEmail: OWNER.email, planId: plan.id, trialDays: 7, password: 'Other-Password-1' });
+  assert.deepEqual(await shopIdsOfEmail(t, OWNER.email), [1, other.id]);
   const made = await p('p.shops.create', { name: 'Shop Deux', ownerName: 'Lina', ownerEmail: 'lina@deux.dz', planId: plan.id, trialDays: 7, password: 'Lina-Password-1' });
   const schema = `shop_${made.id}`;
   const lina = await shopUserCtx(t, schema, 'lina@deux.dz', 'Lina-Password-1');
   const amine = await shopUserCtx(t, 'public', OWNER.email, OWNER.password);
   const user = { name: 'Agent', password: 'agent-pass-1', roles: ['confirmation'], language: 'fr' };
-  // an account of shop #1's e-mail cannot be made in shop 2, and the reverse
-  await assert.rejects(call('users.create', lina, { ...user, email: OWNER.email }), /déjà utilisé/);
-  await assert.rejects(call('users.create', amine, { ...user, email: 'lina@deux.dz' }), /déjà utilisé/);
-  // a new account is found by the login page; changing its e-mail moves it
-  const u: any = await call('users.create', lina, { ...user, email: 'agent@deux.dz' });
-  assert.equal(await shopIdOfEmail(t, 'agent@deux.dz'), made.id);
-  await assert.rejects(call('users.update', amine, { id: 1, email: 'agent@deux.dz' }), /déjà utilisé/);
-  await call('users.update', lina, { id: u.id, email: 'agent2@deux.dz' });
-  assert.equal(await shopIdOfEmail(t, 'agent@deux.dz'), null);
-  assert.equal(await shopIdOfEmail(t, 'agent2@deux.dz'), made.id);
+  // the same person may work in two shops; inside one shop an e-mail is still unique
+  await call('users.create', lina, { ...user, email: 'agent@deux.dz' });
+  await assert.rejects(call('users.create', lina, { ...user, email: 'agent@deux.dz' }), /déjà utilisé/);
+  const a1: any = await call('users.create', amine, { ...user, email: 'agent@deux.dz', password: 'other-pass-22' });
+  assert.deepEqual(await shopIdsOfEmail(t, 'agent@deux.dz'), [1, made.id]);
+  // the login page offers only the shops the password opens: shop #1's admin setting a password never opens shop 2
+  assert.deepEqual((await shopsOpenedBy(t, 'agent@deux.dz', 'other-pass-22')).map((x) => x.shop.id), [1]);
+  assert.deepEqual((await shopsOpenedBy(t, 'agent@deux.dz', 'agent-pass-1')).map((x) => x.shop.id), [made.id]);
+  // changing the e-mail in one shop moves only that shop's line
+  await call('users.update', amine, { id: a1.id, email: 'agent2@un.dz' });
+  assert.deepEqual(await shopIdsOfEmail(t, 'agent@deux.dz'), [made.id]);
+  assert.deepEqual(await shopIdsOfEmail(t, 'agent2@un.dz'), [1]);
   // a closed account leaves the index (the same "deleted-…@pilotix.invalid" in two shops is fine)
-  const agent = await shopUserCtx(t, schema, 'agent2@deux.dz', 'agent-pass-1');
+  const agent = await shopUserCtx(t, schema, 'agent@deux.dz', 'agent-pass-1');
   await call('me.delete', agent, { password: 'agent-pass-1' });
-  assert.equal(await shopIdOfEmail(t, 'agent2@deux.dz'), null);
+  assert.deepEqual(await shopIdsOfEmail(t, 'agent@deux.dz'), []);
 });
 
 test('trial, grace, lock, payment', async () => {

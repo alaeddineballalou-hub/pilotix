@@ -3,3 +3,4 @@ export * from './tenancy';
 export * from './schema';
 export * from './shops';
 export * from './procs';
+export * from './accounts';

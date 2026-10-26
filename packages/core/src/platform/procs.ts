@@ -156,7 +156,7 @@ function checkSlug(slug: string) {
 
 function shopError(e: any): never {
   const m = String(e?.message ?? '');
-  if (m === 'EMAIL_TAKEN' || String(e?.code) === '23505') throw bad('Cet email est déjà utilisé par un compte Pilotix (un email = une boutique)');
+  if (String(e?.code) === '23505') throw bad('Ce nom est déjà pris par une autre boutique');
   if (m === 'SLUG_TAKEN') throw bad('Ce nom est déjà pris par une autre boutique');
   if (m === 'BAD_SLUG') throw bad(SLUG_HELP);
   throw e;

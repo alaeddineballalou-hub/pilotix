@@ -56,6 +56,12 @@ export interface Shop {
   lastActiveAt: string | null;
   resetAt: string | null;
   createdAt: string;
+  /** made by its owner on the sign-up page */
+  selfSignup: boolean;
+  emailVerifiedAt: string | null;
+  /** its own domain name for its landing pages (myshop.com) */
+  domain: string | null;
+  domainStatus: 'none' | 'pending' | 'ok';
 }
 
 const json = (v: unknown): any => (typeof v === 'string' ? JSON.parse(v) : v);
@@ -106,6 +112,10 @@ export const toShop = (r: any): Shop => ({
   lastActiveAt: isoOrNull(r.last_active_at),
   resetAt: isoOrNull(r.reset_at),
   createdAt: new Date(r.created_at).toISOString(),
+  selfSignup: !!r.self_signup,
+  emailVerifiedAt: isoOrNull(r.email_verified_at),
+  domain: r.domain ?? null,
+  domainStatus: r.domain ? (r.domain_status === 'ok' ? 'ok' : 'pending') : 'none',
 });
 
 export async function loadPlans(t: Tenancy): Promise<Plan[]> {
@@ -126,10 +136,15 @@ export async function loadShop(t: Tenancy, by: { id: number } | { slug: string }
   return r[0] ? toShop(r[0]) : null;
 }
 
-/** The shop of an account's e-mail (null = no shop knows it). */
+/** The first shop of an account's e-mail (null = no shop knows it). */
 export async function shopIdOfEmail(t: Tenancy, email: string): Promise<number | null> {
-  const r = await t.platform.query('SELECT shop_id FROM platform.logins WHERE email = $1', [email.trim().toLowerCase()]);
-  return r[0] ? num(r[0].shop_id) : null;
+  return (await shopIdsOfEmail(t, email))[0] ?? null;
+}
+
+/** Every shop where this e-mail has an account (one person may work in several shops), oldest shop first. */
+export async function shopIdsOfEmail(t: Tenancy, email: string): Promise<number[]> {
+  const r = await t.platform.query('SELECT shop_id FROM platform.logins WHERE email = $1 ORDER BY shop_id', [email.trim().toLowerCase()]);
+  return r.map((x: any) => num(x.shop_id));
 }
 
 // ---------------------------------------------------------------- settings of the platform
@@ -142,6 +157,11 @@ export interface PlatformSettings {
   notice: { text: string; tone: 'info' | 'warn'; until: string | null };
   /** the demo shop: its button on the login page */
   demo: { public: boolean };
+  /**
+   * Shops made by their owners on the sign-up page: open or not, how many shops one e-mail may make, how many sign-ups
+   * one internet address may make per day (against robots).
+   */
+  signup: { open: boolean; maxShopsPerEmail: number; perIpPerDay: number };
 }
 
 export const PLATFORM_DEFAULTS: PlatformSettings = {
@@ -149,6 +169,7 @@ export const PLATFORM_DEFAULTS: PlatformSettings = {
   payment: { text: '', phone: '', whatsapp: '' },
   notice: { text: '', tone: 'info', until: null },
   demo: { public: false },
+  signup: { open: true, maxShopsPerEmail: 5, perIpPerDay: 3 },
 };
 
 export async function platformSettings(t: Tenancy): Promise<PlatformSettings> {
@@ -224,6 +245,8 @@ export function shopInfo(s: Shop, st: ShopStatus, settings: PlatformSettings, no
     payment: s.primary || s.demo || (!pay.text.trim() && !pay.phone.trim() && !pay.whatsapp.trim()) ? null : { text: pay.text, phone: pay.phone, whatsapp: pay.whatsapp },
     notice: noticeOn ? { text: n.text, tone: n.tone } : null,
     support,
+    domain: s.domain && s.domainStatus !== 'none' ? { name: s.domain, status: s.domainStatus } : null,
+    emailToConfirm: s.selfSignup && !s.emailVerifiedAt ? s.ownerEmail : null,
   };
 }
 
@@ -287,6 +310,9 @@ export interface NewShop {
   demo?: boolean;
   createdBy?: number | null;
   now?: number;
+  /** made by its owner on the sign-up page (from this address) */
+  selfSignup?: boolean;
+  signupIp?: string | null;
 }
 
 /**
@@ -294,8 +320,8 @@ export interface NewShop {
  * demo data instead). Undone completely if any step fails.
  */
 export async function provisionShop(t: Tenancy, n: NewShop): Promise<Shop> {
+  // one e-mail may own or work in several shops: the login page asks the password of each one
   const email = n.owner.email.trim().toLowerCase();
-  if (!n.demo && (await shopIdOfEmail(t, email))) throw new Error('EMAIL_TAKEN');
   const slug = n.slug ? n.slug : await freeSlug(t, n.name);
   if (!slugOk(slug)) throw new Error('BAD_SLUG');
   if ((await t.platform.query('SELECT 1 FROM platform.shops WHERE slug = $1', [slug])).length) throw new Error('SLUG_TAKEN');
@@ -304,9 +330,9 @@ export async function provisionShop(t: Tenancy, n: NewShop): Promise<Shop> {
   const row = (
     await t.platform.query(
       `WITH n AS (SELECT nextval(pg_get_serial_sequence('platform.shops', 'id'))::int AS id)
-       INSERT INTO platform.shops (id, slug, name, schema_name, plan_id, trial_ends_at, never_expires, is_demo, owner_name, owner_email, owner_phone, city, notes, created_by)
-       SELECT n.id, $1, $2, 'shop_' || n.id, $3, $4, $5, $5, $6, $7, $8, $9, $10, $11 FROM n RETURNING id, schema_name`,
-      [slug, n.name.trim(), n.planId, trialEnds, !!n.demo, n.owner.name.trim(), email, n.owner.phone?.trim() || null, n.city?.trim() || null, n.notes ?? '', n.createdBy ?? null],
+       INSERT INTO platform.shops (id, slug, name, schema_name, plan_id, trial_ends_at, never_expires, is_demo, owner_name, owner_email, owner_phone, city, notes, created_by, self_signup, signup_ip)
+       SELECT n.id, $1, $2, 'shop_' || n.id, $3, $4, $5, $5, $6, $7, $8, $9, $10, $11, $12, $13 FROM n RETURNING id, schema_name`,
+      [slug, n.name.trim(), n.planId, trialEnds, !!n.demo, n.owner.name.trim(), email, n.owner.phone?.trim() || null, n.city?.trim() || null, n.notes ?? '', n.createdBy ?? null, !!n.selfSignup, n.signupIp ?? null],
     )
   )[0];
   const id = num(row.id);
@@ -420,7 +446,7 @@ export async function bootstrapPlatform(t: Tenancy): Promise<void> {
   await t.platform.query(
     `INSERT INTO platform.logins (email, shop_id)
      SELECT lower(email), $1 FROM public.profiles WHERE email NOT LIKE '%@pilotix.invalid' AND email NOT LIKE '%@demo.pilotix.dz'
-     ON CONFLICT (email) DO NOTHING`,
+     ON CONFLICT DO NOTHING`,
     [primary.id],
   );
   await ensureLoginTrigger(t, 'public');
