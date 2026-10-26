@@ -65,6 +65,9 @@ const EXTRA: Record<string, string> = {
   minus: '<path d="M5 12h14"/>',
   arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
   more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
+  // AI Spy: follow a page, the Chrome extension
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  puzzle: '<path d="M19.4 15.4a1 1 0 0 0-.3.9l.5 2.6a2 2 0 0 1-2 2.4h-2.2a1 1 0 0 1-1-1.2 2 2 0 1 0-3.8 0 1 1 0 0 1-1 1.2H7.4a2 2 0 0 1-2-2v-2.2a1 1 0 0 1 1.2-1 2 2 0 1 0 0-3.8 1 1 0 0 1-1.2-1V6.4a2 2 0 0 1 2-2h2.2a1 1 0 0 0 1-1.2 2 2 0 1 1 3.8 0 1 1 0 0 0 1 1.2h2.2a2 2 0 0 1 2 2v2.2a1 1 0 0 0 1.2 1 2 2 0 1 1 0 3.8 1 1 0 0 0-.9.3z"/>',
 };
 const ALL = { ...(icons as Record<string, string>), ...EXTRA };
 export type IconName = keyof typeof ALL | string;

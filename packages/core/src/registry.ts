@@ -18,6 +18,7 @@ import { pickupProcs } from './modules/pickup';
 import { parcelsProcs } from './modules/parcels';
 import { ordersProcs } from './modules/orders';
 import { savProcs } from './modules/sav';
+import { spyProcs } from './modules/spy';
 import { statsProcs } from './modules/stats';
 import { boardProcs } from './modules/board';
 import { stockProcs } from './modules/stock';
@@ -49,4 +50,5 @@ export const REGISTRY = {
   ...notifyProcs,
   ...marketersProcs,
   ...landingProcs,
+  ...spyProcs,
 };

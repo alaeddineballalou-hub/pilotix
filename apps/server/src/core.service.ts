@@ -63,6 +63,11 @@ export class CoreService implements OnModuleDestroy {
       if (!m?.runDellal) throw new core.AppError('bad_request', 'Dellal indisponible sur ce serveur');
       return m.runDellal(action, args, ctx);
     },
+    spy: async (action, args, ctx) => {
+      const m = optional('@pilotix/core/dist/spy-server');
+      if (!m?.runSpy) throw new core.AppError('bad_request', 'AI Spy indisponible sur ce serveur');
+      return m.runSpy(action, args, ctx);
+    },
     hashPassword: (pw) => core.hashPassword(pw),
     publicUrl: config.publicUrl,
   };

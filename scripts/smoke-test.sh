@@ -63,5 +63,11 @@ SIG2=$(printf '%s' "$STB" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/^.*= /
 curl -fsS -X POST "$API/hooks/meta" -H 'Content-Type: application/json' -H "x-hub-signature-256: sha256=$SIG2" --data-binary "$STB" | grep -q '"received":1'
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/hooks/sms?key=wrong" -H 'Content-Type: application/json' -d '{}')" = 401 ]
 curl -fsS -X POST "$API/hooks/sms?key=sms-demo-key" -H 'Content-Type: application/json' -d '{"event":"sms:delivered","payload":{"messageId":"none"}}' | grep -q '"ok":false'
+echo "→ AI Spy: the demo competitors' ads, an ad from the extension, settings for admins only"
+SPYP=$(rpc "$ADMIN" spy.products | j '.find(p=>p.sku==="PX-POU").id')
+[ "$(rpc "$ADMIN" spy.view "{\"productId\":$SPYP}" | j '.ads.length')" -ge 5 ]
+rpc "$ADMIN" spy.findings | grep -q '"kind"'
+rpc "$ADMIN" spy.ingest "{\"productId\":$SPYP,\"keyword\":\"smoke\",\"count\":1,\"ads\":[{\"id\":\"123456789\",\"pageName\":\"Smoke Shop\",\"body\":\"Poussette 9900 DA\",\"copies\":2,\"platforms\":[\"FACEBOOK\"]}]}" | grep -q '"added":1'
+[ "$(code "$CONF" spy.settings.save '{"source":"extension","dailyScan":true,"scanHour":6,"ownPages":"","maxPerKeyword":30,"keys":{}}')" = 403 ]
 echo "→ cron needs its key";         [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/hooks/cron?key=x")" = 401 ]
 echo "✅ All server checks passed"

@@ -11,10 +11,12 @@ import { Empty, ErrorBox, Help, Loading, StageBar } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { Marketer } from './Marketer';
 import { PhoneMarketing } from './PhoneAds';
+import { Spy } from './Spy';
 import { useIsPhone } from '../../lib/useMedia';
 import './ads.css';
 
-/** Marketing: Publicité (Meta spend face to the real orders) and Marketer (paying marketers per ad set). */
+/** Marketing: Publicité (Meta spend face to the real orders), Marketer (paying marketers per ad set) and AI Spy
+ *  (competitors' Facebook ads in Algeria, Spy.tsx). */
 export function Marketing({ sub, rest }: PageProps) {
   const { t } = useTranslation();
   // phones: every KPI to decide (won / lost, where the money goes, what to do), then products and ad sets
@@ -24,11 +26,11 @@ export function Marketing({ sub, rest }: PageProps) {
 }
 
 function MarketingDesktop({ sub, rest, t }: { sub?: string; rest?: string[]; t: (k: string) => string }) {
-  const cur = sub === 'marketer' ? 'marketer' : 'publicite';
+  const cur = sub === 'marketer' ? 'marketer' : sub === 'spy' ? 'spy' : 'publicite';
   return (
     <>
-      <StageBar flow={false} current={cur} items={(['publicite', 'marketer'] as const).map((k) => ({ key: k, label: t(`nav.${k}`), href: `#/marketing/${k}` }))} />
-      {cur === 'marketer' ? <Marketer rest={rest} /> : <Publicite />}
+      <StageBar flow={false} current={cur} items={(['publicite', 'marketer', 'spy'] as const).map((k) => ({ key: k, label: t(`nav.${k}`), href: `#/marketing/${k}` }))} />
+      {cur === 'marketer' ? <Marketer rest={rest} /> : cur === 'spy' ? <Spy rest={rest} /> : <Publicite />}
     </>
   );
 }

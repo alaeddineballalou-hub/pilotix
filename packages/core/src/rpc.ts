@@ -52,6 +52,8 @@ export interface ServerHooks {
   meta: (action: string, args: unknown, ctx: Ctx) => Promise<unknown>;
   /** Dellal (AI sales agent): 'complete' (the AI), 'send' (a message to WhatsApp / Messenger / Instagram / TikTok), 'ping'. */
   dellal?: (action: string, args: unknown, ctx: Ctx) => Promise<unknown>;
+  /** AI Spy: 'search' (ScrapeCreators / SearchAPI.io), 'media' (a competitor's picture), 'site' (a competitor's page). */
+  spy?: (action: string, args: unknown, ctx: Ctx) => Promise<unknown>;
   hashPassword: (pw: string) => Promise<string>;
   /** the server's public address (PUBLIC_URL): couriers call it back (webhooks) */
   publicUrl?: string;

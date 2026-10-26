@@ -78,7 +78,8 @@ export const NAV: NavItem[] = [
   { id: 'cm', icon: 'comments', roles: ['confirmation', 'marketer'], hidden: true },
   { id: 'notify', icon: 'truck', roles: ['confirmation', 'suivi'], hidden: true },
   { id: 'clients', icon: 'users', roles: ['confirmation', 'suivi'] },
-  { id: 'marketing', icon: 'megaphone', roles: ['marketer'], subs: ['publicite', 'marketer'] },
+  // Publicité (Meta spend face to the orders), Marketer (paying marketers), AI Spy (competitors' ads in Algeria)
+  { id: 'marketing', icon: 'megaphone', roles: ['marketer'], subs: ['publicite', 'marketer', 'spy'] },
   // a public page per product, and the orders its fake-order check held back (agents restore the real ones)
   { id: 'landing', icon: 'globe', roles: ['marketer', 'confirmation'] },
   { id: 'caisse', icon: 'wallet', roles: [], subs: ['overview', 'due', 'done', 'livreurs', 'journal'] },
