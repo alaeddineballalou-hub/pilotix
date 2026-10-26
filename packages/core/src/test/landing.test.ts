@@ -60,6 +60,12 @@ test('search engines: a description, its own address and share tags on the real 
   assert.ok(!preview.html.includes('canonical') && !preview.html.includes('og:title'));
 });
 
+test('llms.txt: a title, then a link to every live page with its price', async () => {
+  const r: any = await call('landing.llms', admin, { base: 'https://shop.example/api/lp/' });
+  assert.match(r.text, /^# \S/);
+  assert.ok(r.text.includes(`- [عربة أطفال](https://shop.example/api/lp/${SLUG}): 9950.00 دج — خفيفة قابلة للطي`));
+});
+
 test('a normal customer becomes a new order, at the page price', async () => {
   const input = await human();
   assert.deepEqual(await call('landing.submit', admin, input), { ok: true });

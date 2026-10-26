@@ -19,7 +19,9 @@ import {
   LandingRender,
   LandingView,
   normalizePhone,
+  landingMetaDescription,
   landingPreloadLink,
+  landingPrice,
   renderLanding,
   sha256Hex,
   WILAYAS,
@@ -304,6 +306,30 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     bits: LANDING_POW_BITS,
   });
   return { html, link: o.imgBase ? landingPreloadLink(view) : null };
+}
+
+/**
+ * /llms.txt: the shop for AI assistants and search agents (llmstxt.org) — a title, one line about the shop, and a link
+ * to every live landing page with its price and the start of its description.
+ */
+export async function landingLlms(db: Db, base: string): Promise<string> {
+  const shop = await getSetting(db, 'shop');
+  const rows = await db.query(
+    `SELECT l.slug, COALESCE(NULLIF(l.title, ''), p.name) AS title, COALESCE(l.price, p.price) AS price, l.description
+     FROM landing_pages l JOIN products p ON p.id = l.product_id WHERE l.active AND p.active ORDER BY l.id`,
+  );
+  const md = (t: string) => t.replace(/[\[\]\\]/g, (c) => `\\${c}`).replace(/\s+/g, ' ').trim();
+  const name = md(String(shop.name || 'Boutique')) || 'Boutique';
+  const lines = [`# ${name}`, '', `> ${name} — boutique en ligne en Algérie : livraison dans les 58 wilayas, paiement à la livraison.`, ''];
+  if (rows.length) {
+    lines.push('## Produits', '');
+    for (const r of rows) {
+      const about = md(landingMetaDescription({ title: String(r.title), price: num(r.price), description: r.description ?? '' }));
+      lines.push(`- [${md(String(r.title))}](${base}${r.slug}): ${landingPrice(num(r.price))}${about ? ` — ${about}` : ''}`);
+    }
+    lines.push('');
+  }
+  return lines.join('\n');
 }
 
 /** communes of a wilaya for the page: [French name (kept on the order), Arabic name] */
@@ -1271,6 +1297,8 @@ export const landingProcs = {
     z.object({ slug: z.string().max(80), mode: z.enum(['live', 'parent', 'preview']), post: z.string().max(500).default(''), geo: z.string().max(500).default(''), lead: z.string().max(500).default(''), imgBase: z.string().max(500).nullable().default(null) }),
     async (ctx, i) => landingPage(ctx, i.slug, i),
   ),
+
+  'landing.llms': proc([], z.object({ base: z.string().max(500) }), async (ctx, i) => ({ text: await landingLlms(ctx.db, i.base) })),
 
   'landing.image': proc([], z.object({ id, size: z.enum(['160', '480', '720', '960']) }), async (ctx, i) => {
     // a picture from before the compressor has no 720 width: the 960 one instead
