@@ -355,7 +355,7 @@
     "formEdit": "Modifier « {{name}} »",
     "name": "Nom du canal",
     "creator": "Créateur",
-    "sheetUrl": "Lien de la feuille Google (Fichier → Partager → Publier sur le web)",
+    "sheetUrl": "Lien de la feuille Google",
     "skuRequired": "SKU obligatoire",
     "active": "Actif",
     "save": "Enregistrer",
@@ -405,8 +405,10 @@
         "stopdesk": "Stop desk (oui / non)",
         "note": "Note du client",
         "ignore": "— Ne pas utiliser —"
-      }
-    }
+      },
+      "nothingYet": "Rien n’est importé tant que vous n’avez pas cliqué « Enregistrer et synchroniser »."
+    },
+    "sheetHint": "Dans Google Sheets : Partager → « Tous les utilisateurs disposant du lien » → Lecteur → Copier le lien, puis collez-le ici. Pilotix vérifie le lien quand vous cliquez Enregistrer. Ensuite vous choisissez quelle colonne va où : rien n’est importé avant."
   },
   "settings": {
     "shop": "Boutique",

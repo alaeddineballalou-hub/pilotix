@@ -89,6 +89,12 @@ test('sheet channel: choose the columns, then each line becomes an order once', 
     assert.match(s3.errors[0].error, /colonne Variante/);
   }
 
+  // a sheet Pilotix cannot read is refused when saving (not at the first sync), and nothing is saved
+  const closed = { ...admin, server: { sheetCsv: async () => { throw new Error('La feuille n’est pas publique'); } } as any };
+  const n = Number((await db.query('SELECT count(*) AS n FROM sales_channels'))[0].n);
+  await assert.rejects(call('admin.channels.save', closed, { kind: 'sheets', name: 'Feuille fermée', url: 'https://docs.google.com/spreadsheets/d/zzz/edit' }), /pas publique/);
+  assert.equal(Number((await db.query('SELECT count(*) AS n FROM sales_channels'))[0].n), n);
+
   // only the administrator
   await assert.rejects(call('channels.sheet.sync', await as(EMAILS.manager), { id: ch.id }), /refusé/);
 });
