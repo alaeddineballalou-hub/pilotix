@@ -35,6 +35,8 @@ import { mailConfigured, sendMail } from './mail';
 import { PlatformController, PlatformGuard } from './platform';
 import { PUBLIC, Public } from './public';
 import { limitMail, resetMail } from './resetMail';
+import { signupConfirmMail, signupExistsMail, verifyMail } from './mails';
+import type { Mail } from './mail';
 
 // ---------------------------------------------------------------- errors → HTTP
 const STATUS: Record<string, number> = { bad_request: 400, unauthorized: 401, payment_required: 402, forbidden: 403, not_found: 404, conflict: 409 };
@@ -63,31 +65,30 @@ class ErrorFilter implements ExceptionFilter {
 // ---------------------------------------------------------------- auth
 
 /**
- * A shop's token: the account, its token version, its shop (missing on tokens made before the server hosted several
- * shops: shop #1), and — when Pilotix support opened the shop — the staff member.
+ * A shop's token: the person's account in that shop, its token version, its shop (missing on tokens made before the
+ * server hosted several shops: shop #1).
  */
 export interface ShopClaims {
   sub: number;
   tv?: number;
   shop?: number;
-  imp?: number;
 }
 
 export interface ShopRequest {
   session: Session;
   shop: ShopRef;
-  /** Pilotix support opened the shop (staff id) */
-  imp?: number;
   ip?: string;
   headers?: Record<string, unknown>;
 }
 
 const CLOSED = 'Cette boutique est fermée. Contactez Pilotix.';
+/** The store picker's ticket (after the password, before a store is chosen) is signed with its own key. */
+const pickSecret = () => `${config.jwtSecret}:pick`;
 
 @Injectable()
 class AuthGuard implements CanActivate {
   /** Profiles are re-read at most every 30 s, so a deactivated account loses access quickly. */
-  private cache = new Map<string, { s: Session; at: number; tv: number }>();
+  private cache = new Map<string, { s: Session; at: number; tv: number; ep: number }>();
   constructor(
     private readonly jwt: JwtService,
     private readonly core: CoreService,
@@ -100,45 +101,36 @@ class AuthGuard implements CanActivate {
     const h: string = req.headers?.authorization || '';
     const token = h.startsWith('Bearer ') ? h.slice(7) : '';
     if (!token) throw new UnauthorizedException('Connectez-vous');
-    let c: ShopClaims;
+    let c: ShopClaims & { typ?: string; imp?: number };
     try {
       c = await this.jwt.verifyAsync<ShopClaims>(token);
     } catch {
       throw new UnauthorizedException('Session expirée, reconnectez-vous');
     }
-    if (!c.sub || (c as { typ?: string }).typ) throw new UnauthorizedException('Session expirée, reconnectez-vous');
+    // a staff token, a picker ticket, or a support token of the past (Pilotix no longer opens stores): not a shop's
+    if (!c.sub || c.typ || c.imp) throw new UnauthorizedException('Session expirée, reconnectez-vous');
     const id = Number(c.sub);
     const tv = Number(c.tv ?? 0);
-    let ref = c.shop ? await this.core.shop({ id: Number(c.shop) }) : await this.core.primary();
-    if (!ref || ref.shop.status === 'archived') throw new UnauthorizedException(CLOSED);
-    const imp = c.imp ? Number(c.imp) : undefined;
-    // Pilotix support sees a shop even when it is unpaid (to help it)
-    if (imp) ref = { ...ref, status: { ...ref.status, locked: false }, rules: { ...ref.rules, locked: false } };
-    const key = `${ref.shop.id}:${id}:${imp ?? ''}`;
+    const ref = c.shop ? await this.core.shop({ id: Number(c.shop) }) : await this.core.primary();
+    if (!ref || ref.shop.status === 'archived' || ref.shop.status === 'deleted') throw new UnauthorizedException(CLOSED);
+    const key = `${ref.shop.id}:${id}`;
     const hit = this.cache.get(key);
     // a token of another version than the cached one (just logged in again, password just changed): read again
-    if (hit && Date.now() - hit.at < 30_000 && tv === hit.tv) {
-      Object.assign(req, { session: hit.s, shop: ref, imp });
-      if (!imp) this.core.touch(ref);
+    if (hit && Date.now() - hit.at < 30_000 && tv === hit.tv && hit.ep === authEpoch) {
+      Object.assign(req, { session: hit.s, shop: ref });
+      this.core.touch(ref);
       return true;
     }
     const p = await core.profileById(ref.db, id);
     if (!p || !p.active) throw new UnauthorizedException('Compte désactivé');
     // a password change raises token_version: tokens made before it stop working
     const cur = await tokenVersion(ref.db, id);
-    let support: string | null = null;
-    if (imp) {
-      // support access ends when the staff member leaves Pilotix
-      const st = (await this.core.t.platform.query('SELECT name, active FROM platform.staff WHERE id = $1', [imp]))[0];
-      if (!st?.active) throw new UnauthorizedException('Accès support terminé');
-      support = st.name;
-    }
-    const s = await this.core.withShop(core.makeSession(p), ref, support);
+    const s = await this.core.withShop(core.makeSession(p), ref, false);
     if (this.cache.size > 20_000) this.cache.clear();
-    this.cache.set(key, { s, at: Date.now(), tv: cur });
+    this.cache.set(key, { s, at: Date.now(), tv: cur, ep: authEpoch });
     if (tv !== cur) throw new UnauthorizedException('Mot de passe changé : reconnectez-vous');
-    Object.assign(req, { session: s, shop: ref, imp });
-    if (!imp) this.core.touch(ref);
+    Object.assign(req, { session: s, shop: ref });
+    this.core.touch(ref);
     return true;
   }
 }
@@ -249,16 +241,29 @@ const apiOf = (ref: ShopRef) => `${config.publicUrl}/api${ref.shop.primary ? '' 
  */
 const intake = (ref: ShopRef): ShopRef => (ref.status.state === 'expired' ? { ...ref, rules: { ...ref.rules, locked: false } } : ref);
 
-const LoginBody = z.object({ email: z.string().email().max(200), password: z.string().min(1).max(200) });
+const LoginBody = z.object({ email: z.string().email().max(200), password: z.string().min(1).max(200), shop: z.number().int().positive().optional() });
+const PickBody = z.object({ ticket: z.string().max(4000), shop: z.number().int().positive() });
 const ForgotBody = z.object({ email: z.string().email().max(200) });
 const ResetBody = z.object({ token: z.string().max(220), password: z.string().max(200) });
+const TokenBody = z.object({ token: z.string().max(220) });
 
-/** Actions refused when Pilotix support opened the shop: they belong to the shop's own administrator. */
-const NOT_FOR_SUPPORT = new Set(['me.password', 'me.delete', 'me.update']);
 /** Saving these can change the store's part of shop #1's links (site/<store>/<page>). */
 const STORE_NAMING = new Set(['landing.settings.save', 'admin.settings.save']);
 /** The demo shop's accounts are shared by every visitor: nobody changes them (a visitor would lock the others out). */
 const NOT_IN_DEMO = new Set(['me.password', 'me.delete', 'me.update', 'users.create', 'users.update', 'admin.users.resetPassword']);
+/** Actions on the team that the owner's protection and the password rules look at. */
+const TEAM_ACTIONS = new Set(['users.update', 'admin.users.resetPassword', 'me.delete']);
+/**
+ * Raised when a password changes or an account is switched off: the sessions the guard keeps (30 s) are read again at
+ * once, so the old sessions stop now, not half a minute later. Rare: every cached session is read once more.
+ */
+let authEpoch = 0;
+const AUTH_CHANGES = new Set(['me.password', 'me.delete', 'users.update', 'admin.users.resetPassword']);
+
+const ipOf = (req: { ip?: string }) => core.ipNet(req.ip || '') || 'unknown';
+const sendLater = (m: Mail | null, what: string) => {
+  if (m) sendMail(m).catch((e) => new Logger('Mail').error(`${what} e-mail to ${m.to} failed: ${e?.message || e}`));
+};
 
 @Controller()
 @UseGuards(AuthGuard)
@@ -268,9 +273,9 @@ class ApiController {
     private readonly jwt: JwtService,
   ) {}
 
-  /** A shop token: the account, its token version, its shop (and the staff member when support opened it). */
-  private async signShop(ref: ShopRef, id: number, imp?: number) {
-    return this.jwt.signAsync({ sub: id, tv: await tokenVersion(ref.db, id), shop: ref.shop.id, ...(imp ? { imp } : {}) });
+  /** A shop token: the person's account in that shop, its token version, its shop. */
+  private async signShop(ref: ShopRef, id: number) {
+    return this.jwt.signAsync({ sub: id, tv: await tokenVersion(ref.db, id), shop: ref.shop.id });
   }
 
   /** The shop of a public link (/api/s/<slug>/…; none = shop #1). A suspended or closed shop answers as unknown. */
@@ -287,6 +292,42 @@ class ApiController {
     return { ok: true, time: new Date().toISOString() };
   }
 
+  // ---------------------------------------------------------------- login: one account, its stores
+  /** A token and a session for one of the person's stores (the person must have an active account in it). */
+  private async enter(shopId: number, email: string) {
+    const ref = await this.core.shop({ id: shopId });
+    if (!ref || ref.shop.status === 'archived' || ref.shop.status === 'deleted') throw new core.AppError('unauthorized', CLOSED);
+    const m = (await core.membershipsOf(this.core.t, email)).find((x) => x.shopId === shopId);
+    if (!m) throw new core.AppError('forbidden', 'Vous n’avez pas de compte dans cette boutique');
+    const p = await core.profileById(ref.db, m.profileId);
+    if (!p?.active) throw new core.AppError('unauthorized', 'Votre compte est désactivé');
+    await ref.db.query("UPDATE profiles SET last_seen_at = now(), presence = 'online' WHERE id = $1", [p.id]);
+    return { token: await this.signShop(ref, p.id), session: await this.core.withShop(core.makeSession(p), ref) };
+  }
+
+  /** The store picker's ticket (15 minutes): the password is not sent again to choose a store. */
+  private pickTicket(acc: core.Account) {
+    return this.jwt.signAsync({ acc: acc.id, atv: acc.tokenVersion, typ: 'pick' }, { secret: pickSecret(), expiresIn: '15m' });
+  }
+  private async ticketAccount(ticket: string): Promise<core.Account> {
+    let c: { acc?: number; atv?: number; typ?: string };
+    try {
+      c = await this.jwt.verifyAsync(ticket, { secret: pickSecret() });
+    } catch {
+      throw new core.AppError('unauthorized', 'Session expirée, reconnectez-vous');
+    }
+    const acc = c.typ === 'pick' && c.acc ? await core.accountById(this.core.t, Number(c.acc)) : null;
+    if (!acc || acc.tokenVersion !== Number(c.atv)) throw new core.AppError('unauthorized', 'Session expirée, reconnectez-vous');
+    return acc;
+  }
+  /** What the picker shows: the person's stores, and whether they can add one. */
+  private async picker(acc: core.Account) {
+    const set = await this.core.settings();
+    const stores = await core.storeChoices(this.core.t, acc.email);
+    const canAddStore = set.signup.open && (await core.ownedStores(this.core.t, acc.id)) < core.storeLimit(acc, set);
+    return { pick: true as const, ticket: await this.pickTicket(acc), account: { name: acc.name, email: acc.email, verified: acc.verified }, stores, canAddStore };
+  }
+
   @Public()
   @Post('auth/login')
   async login(@Body() body: unknown, @Req() req: { ip?: string; headers?: Record<string, unknown> }) {
@@ -294,26 +335,59 @@ class ApiController {
       proxyWarned = true;
       new Logger('Pilotix').warn('Requests come through a proxy (X-Forwarded-For) but TRUST_PROXY is not set: the login limit sees every user as the proxy. Set TRUST_PROXY=1.');
     }
-    const ipKey = `ip:${core.ipNet(req.ip || '') || 'unknown'}`;
+    const ipKey = `ip:${ipOf(req)}`;
     checkLogin(ipKey, 10);
     const b = LoginBody.safeParse(body);
     if (!b.success) throw new core.AppError('bad_request', 'Email ou mot de passe manquant');
-    const mailKey = `email:${b.data.email.trim().toLowerCase()}|${core.ipNet(req.ip || '') || 'unknown'}`;
+    const email = b.data.email.trim().toLowerCase();
+    const mailKey = `email:${email}|${ipOf(req)}`;
     checkLogin(mailKey, 5);
-    // the shop of this e-mail (an unknown e-mail is checked against shop #1: same answer, same time)
-    const sid = await core.shopIdOfEmail(this.core.t, b.data.email);
-    const ref = (sid ? await this.core.shop({ id: sid }) : null) ?? (await this.core.primary());
-    let session: Session;
+    let acc: core.Account | null;
     try {
-      session = await core.login(ref.db, b.data.email, b.data.password);
+      acc = await core.checkAccountPassword(this.core.t, email, b.data.password);
+      // the demo accounts of shop #1 on old installs (no account of their own): the shop's own check, as before
+      if (!acc && core.NO_ACCOUNT.test(email)) {
+        const ref = await this.core.primary();
+        const session = await core.login(ref.db, email, b.data.password);
+        clearLogin(mailKey);
+        return { token: await this.signShop(ref, session.profile.id), session: await this.core.withShop(session, ref) };
+      }
+      if (!acc) throw new core.AppError('unauthorized', 'Email ou mot de passe incorrect');
     } catch (e) {
       failedLogin(ipKey);
       failedLogin(mailKey);
       throw e;
     }
     clearLogin(mailKey);
-    if (ref.shop.status === 'archived') throw new core.AppError('unauthorized', CLOSED);
-    return { token: await this.signShop(ref, session.profile.id), session: await this.core.withShop(session, ref) };
+    const stores = await core.storeChoices(this.core.t, acc.email);
+    // one store (or the one asked for): straight in; several or none: the picker
+    const one = b.data.shop ? stores.find((x) => x.id === b.data.shop) : stores.length === 1 ? stores[0] : null;
+    if (one) return this.enter(one.id, acc.email);
+    return this.picker(acc);
+  }
+
+  /** The picker: the chosen store, with the ticket the login gave. */
+  @Public()
+  @Post('auth/pick')
+  async pick(@Body() body: unknown) {
+    const b = PickBody.safeParse(body);
+    if (!b.success) throw new core.AppError('bad_request', 'Choisissez une boutique');
+    const acc = await this.ticketAccount(b.data.ticket);
+    return this.enter(b.data.shop, acc.email);
+  }
+
+  /** « Changer de boutique »: another store of the same person, without the password again. */
+  @Post('auth/switch')
+  async switchStore(@Body() body: any, @Req() req: ShopRequest) {
+    const shop = Number(body?.shop);
+    if (!Number.isInteger(shop) || shop <= 0) throw new core.AppError('bad_request', 'Choisissez une boutique');
+    return this.enter(shop, req.session.profile.email);
+  }
+
+  /** The person's stores (the account menu). */
+  @Get('auth/stores')
+  async myStores(@Req() req: ShopRequest) {
+    return core.storeChoices(this.core.t, req.session.profile.email);
   }
 
   /** The demo shop's button on the login page: shown when Pilotix turned it on. */
@@ -328,7 +402,7 @@ class ApiController {
   @Public()
   @Post('auth/demo')
   async demoLogin(@Body() body: any, @Req() req: { ip?: string }) {
-    const ipKey = `demo:${core.ipNet(req.ip || '') || 'unknown'}`;
+    const ipKey = `demo:${ipOf(req)}`;
     checkLogin(ipKey, 30);
     failedLogin(ipKey);
     const acc = DEMO_ACCOUNTS.find((a) => a.key === String(body?.key ?? ''));
@@ -344,6 +418,7 @@ class ApiController {
     return s ? this.core.shop({ id: s.id }) : null;
   }
 
+  // ---------------------------------------------------------------- passwords: one account, every store
   /** Can this server send "mot de passe oublié" e-mails? (the login page shows the link only then) */
   @Public()
   @Get('auth/forgot')
@@ -352,43 +427,69 @@ class ApiController {
   }
 
   /**
-   * "Mot de passe oublié": e-mails a one-time link. Same answer whether the account exists or not, and the e-mail
-   * leaves after the answer (no timing difference). 5 requests per 15 minutes per address.
+   * "Mot de passe oublié": e-mails a one-time link (for every store of the person). Same answer whether the account
+   * exists or not, and the e-mail leaves after the answer (no timing difference). 5 requests per 15 minutes per address.
    */
   @Public()
   @Post('auth/forgot')
   async forgot(@Body() body: unknown, @Req() req: { ip?: string }) {
-    const ipKey = `forgot:${core.ipNet(req.ip || '') || 'unknown'}`;
+    const ipKey = `forgot:${ipOf(req)}`;
     checkLogin(ipKey, 5);
     failedLogin(ipKey);
     if (!mailConfigured()) throw new HttpException({ message: 'L’envoi d’e-mails n’est pas configuré sur ce serveur. Demandez à votre administrateur.' }, 503);
     const b = ForgotBody.safeParse(body);
     if (!b.success) throw new core.AppError('bad_request', 'Email invalide');
-    const sid = await core.shopIdOfEmail(this.core.t, b.data.email);
-    const ref = (sid ? await this.core.shop({ id: sid }) : null) ?? (await this.core.primary());
-    if (ref.shop.demo || ref.shop.status === 'archived') return { ok: true };
-    const r = await core.createPasswordReset(ref.db, b.data.email);
-    // the link carries its shop (shop #1: as before, so links already sent keep working)
-    if (r)
-      sendMail(r.kind === 'link' ? resetMail({ ...r, token: ref.shop.primary ? r.token : `${ref.shop.id}.${r.token}` }) : limitMail(r)).catch((e) =>
-        new Logger('Mail').error(`Reset e-mail to ${r.email} failed: ${e?.message || e}`),
-      );
+    const r = await core.accountResetRequest(this.core.t, b.data.email);
+    if (r) sendLater(r.kind === 'link' ? resetMail(r) : limitMail(r), 'Reset');
     return { ok: true };
   }
 
-  /** Sets the new password with the link's secret. 10 wrong links per 15 minutes per address. */
+  /** What a link is (an invitation says « choose your password »; null: used or too old). */
+  @Public()
+  @Get('auth/link/:token')
+  async linkInfo(@Param('token') token: string) {
+    return { kind: await core.linkKind(this.core.t, token) };
+  }
+
+  /**
+   * Sets the new password with a link (« Mot de passe oublié », an invitation): for every store of the person. A link
+   * sent before accounts existed (one store's) still works, and every store follows. 10 wrong links per 15 minutes.
+   */
   @Public()
   @Post('auth/reset')
   async reset(@Body() body: unknown, @Req() req: { ip?: string }) {
-    const ipKey = `reset:${core.ipNet(req.ip || '') || 'unknown'}`;
+    const ipKey = `reset:${ipOf(req)}`;
     checkLogin(ipKey, 10);
     const b = ResetBody.safeParse(body);
     if (!b.success) throw new core.AppError('bad_request', 'Lien invalide');
-    const m = b.data.token.match(/^(\d{1,9})\.(.+)$/);
     try {
-      const ref = m ? await this.core.shop({ id: Number(m[1]) }) : await this.core.primary();
-      if (!ref || ref.shop.demo || ref.shop.status === 'archived') throw new core.AppError('bad_request', 'Ce lien n’est plus valable. Demandez un nouveau lien.');
-      await core.resetPassword(ref.db, m ? m[2] : b.data.token, b.data.password);
+      if (await core.linkKind(this.core.t, b.data.token)) await core.passwordFromLink(this.core.t, b.data.token, b.data.password);
+      else {
+        const m = b.data.token.match(/^(\d{1,9})\.(.+)$/);
+        const ref = m ? await this.core.shop({ id: Number(m[1]) }) : await this.core.primary();
+        if (!ref || ref.shop.demo || ref.shop.status === 'archived' || ref.shop.status === 'deleted') throw new core.AppError('bad_request', 'Ce lien n’est plus valable. Demandez un nouveau lien.');
+        const r = await core.resetPassword(ref.db, m ? m[2] : b.data.token, b.data.password);
+        const p = (await ref.db.query('SELECT id FROM profiles WHERE email = $1', [r.email]))[0];
+        if (p) await core.propagateProfilePassword(this.core.t, ref.shop.schema, Number(p.id));
+      }
+    } catch (e) {
+      failedLogin(ipKey);
+      throw e;
+    }
+    authEpoch++;
+    return { ok: true };
+  }
+
+  /** The e-mail check link (needed before adding a store to an account made by a store's admin). */
+  @Public()
+  @Post('auth/verify')
+  async verify(@Body() body: unknown, @Req() req: { ip?: string }) {
+    const ipKey = `verify:${ipOf(req)}`;
+    checkLogin(ipKey, 10);
+    const b = TokenBody.safeParse(body);
+    if (!b.success) throw new core.AppError('bad_request', 'Lien invalide');
+    try {
+      await core.verifyFromLink(this.core.t, b.data.token);
     } catch (e) {
       failedLogin(ipKey);
       throw e;
@@ -396,23 +497,230 @@ class ApiController {
     return { ok: true };
   }
 
+  /** Sends the e-mail check link to the logged-in person (3 an hour). */
+  @Post('auth/verify/send')
+  async verifySend(@Req() req: ShopRequest) {
+    const acc = await core.accountByEmail(this.core.t, req.session.profile.email);
+    if (!acc) throw new core.AppError('bad_request', 'Compte introuvable');
+    if (acc.verified) return { ok: true, already: true };
+    if (!mailConfigured()) throw new HttpException({ message: 'L’envoi d’e-mails n’est pas configuré sur ce serveur.' }, 503);
+    if ((await core.recentTokens(this.core.t, acc.id, 'verify', Date.now() - 3_600_000)) >= 3) throw new core.AppError('bad_request', 'Lien déjà envoyé : regardez vos e-mails (et les spams)');
+    sendLater(verifyMail({ token: await core.makeAccountToken(this.core.t, acc.id, 'verify'), email: acc.email, name: acc.name, language: acc.language }), 'Verify');
+    return { ok: true, email: acc.email };
+  }
+
+  // ---------------------------------------------------------------- « Créer ma boutique », « Ajouter une boutique »
+  /** The sign-up page: open or not (needs e-mails), the trial's length. */
+  @Public()
+  @Get('auth/signup')
+  async signupInfo() {
+    const set = await this.core.settings();
+    return { open: set.signup.open && mailConfigured(), trialDays: set.trial.days, site: (config.publicUrl || '').replace(/^https?:\/\//, '') };
+  }
+
+  /** Is a store name free? (the sign-up form checks while it is typed) */
+  @Public()
+  @Get('auth/store-name')
+  async storeName(@Query('name') name: string, @Query('slug') slug: string, @Req() req: { ip?: string }) {
+    const ipKey = `storename:${ipOf(req)}`;
+    checkLogin(ipKey, 300);
+    failedLogin(ipKey);
+    return core.storeNameCheck(this.core.t, String(name ?? '').slice(0, 80), slug ? String(slug).slice(0, 40) : undefined);
+  }
+
+  /**
+   * A sign-up: the e-mail with its link leaves; nothing is made before it is opened. 10 per 15 minutes per address
+   * (phones share addresses), and 3 an hour per e-mail.
+   */
+  @Public()
+  @Post('auth/signup')
+  async signup(@Body() body: unknown, @Req() req: { ip?: string }) {
+    const ipKey = `signup:${ipOf(req)}`;
+    checkLogin(ipKey, 10);
+    failedLogin(ipKey);
+    if (!mailConfigured()) throw new HttpException({ message: 'Les inscriptions ne sont pas encore ouvertes sur ce serveur.' }, 503);
+    const m = await core.startSignup(this.core.t, body, core.expandIp(req.ip || ''));
+    if (m) sendLater(m.kind === 'confirm' ? signupConfirmMail(m) : signupExistsMail(m), 'Sign-up');
+    return { ok: true };
+  }
+
+  /** The sign-up e-mail's link: the account and its store are made, the person is logged in. */
+  @Public()
+  @Post('auth/signup/confirm')
+  async signupConfirm(@Body() body: unknown, @Req() req: { ip?: string }) {
+    const ipKey = `confirm:${ipOf(req)}`;
+    checkLogin(ipKey, 10);
+    const b = TokenBody.safeParse(body);
+    if (!b.success) throw new core.AppError('bad_request', 'Lien invalide');
+    let r: Awaited<ReturnType<typeof core.confirmSignup>>;
+    try {
+      r = await core.confirmSignup(this.core.t, b.data.token);
+    } catch (e) {
+      failedLogin(ipKey);
+      throw e;
+    }
+    if ('exists' in r) return { exists: true, email: r.email };
+    this.core.invalidate();
+    return this.enter(r.shop.id, r.account.email);
+  }
+
+  /** « Ajouter une boutique » from the account menu: a new store this person owns (they enter it). */
+  @Post('auth/add-store')
+  async addStore(@Body() body: unknown, @Req() req: ShopRequest) {
+    const acc = await core.accountByEmail(this.core.t, req.session.profile.email);
+    if (!acc) throw new core.AppError('forbidden', 'Compte introuvable');
+    return this.addFor(acc, body);
+  }
+  /** The same from the store picker (a person who has no store left), with the login's ticket. */
+  @Public()
+  @Post('auth/add-store/ticket')
+  async addStoreTicket(@Body() body: any) {
+    return this.addFor(await this.ticketAccount(String(body?.ticket ?? '')), body);
+  }
+  private async addFor(acc: core.Account, body: unknown) {
+    const shop = await core.addStore(this.core.t, acc, body);
+    this.core.invalidate();
+    return this.enter(shop.id, acc.email);
+  }
+
+  /** Only the owner: the store and all its data are deleted (its password and the store's exact name asked). */
+  @Post('auth/delete-store')
+  async deleteStore(@Body() body: any, @Req() req: ShopRequest) {
+    const acc = await core.accountByEmail(this.core.t, req.session.profile.email);
+    if (!acc) throw new core.AppError('forbidden', 'Seul le propriétaire de la boutique peut la supprimer');
+    await core.deleteStoreByOwner(this.core.t, acc, req.shop.shop.id, String(body?.password ?? ''), String(body?.name ?? ''));
+    this.core.invalidate();
+    const stores = await core.storeChoices(this.core.t, acc.email);
+    // the session of the deleted store ends: the person goes on in another store of theirs (a working one first)
+    const other = stores.find((s) => !s.locked) ?? stores[0];
+    const next = other ? await this.enter(other.id, acc.email).catch(() => null) : null;
+    return { ok: true, stores, next };
+  }
+
+  // ---------------------------------------------------------------- « Contacter Pilotix » (the store's administrators)
+  private needAdmin(req: ShopRequest) {
+    if (!req.session.isAdmin) throw new core.AppError('forbidden', 'Réservé aux administrateurs de la boutique');
+    if (req.shop.shop.demo) throw new core.AppError('forbidden', 'Pas dans la boutique démo');
+  }
+  @Get('support')
+  async supportList(@Req() req: ShopRequest) {
+    this.needAdmin(req);
+    return core.shopThreads(this.core.t, req.shop.shop.id);
+  }
+  @Get('support/:id')
+  async supportGet(@Param('id') id: string, @Req() req: ShopRequest) {
+    this.needAdmin(req);
+    return core.shopThread(this.core.t, req.shop.shop.id, Number(id) || 0);
+  }
+  @Post('support')
+  async supportWrite(@Body() body: unknown, @Req() req: ShopRequest) {
+    this.needAdmin(req);
+    return core.shopWrite(this.core.t, req.shop.shop.id, { name: req.session.profile.name, email: req.session.profile.email }, body);
+  }
+  @Post('support/:id')
+  async supportReply(@Param('id') id: string, @Body() body: unknown, @Req() req: ShopRequest) {
+    this.needAdmin(req);
+    return core.shopReply(this.core.t, req.shop.shop.id, Number(id) || 0, { name: req.session.profile.name }, body);
+  }
+
+  /** The terms of use and privacy page: Pilotix's own text when it wrote one (else the app's standard text). */
+  @Public()
+  @Get('legal')
+  async legal() {
+    const set = await this.core.settings();
+    return { text: set.legal.text, company: set.company.name, email: set.company.email };
+  }
+
+  // ---------------------------------------------------------------- the shops' actions
   @Post('rpc/:name')
   async rpc(@Param('name') name: string, @Body() body: unknown, @Req() req: ShopRequest) {
     // names like orders.list, and grouped ones like dellal.settings.get or cm.settings.save
     if (!/^[a-z]+(\.[a-zA-Z]+){1,3}$/.test(name)) throw new core.AppError('not_found', 'Action inconnue');
-    if (req.imp && NOT_FOR_SUPPORT.has(name)) throw new core.AppError('forbidden', 'Réservé à l’administrateur de la boutique (pas en mode support)');
     if (req.shop.shop.demo && NOT_IN_DEMO.has(name)) throw new core.AppError('forbidden', 'Pas dans la boutique démo : ses comptes sont partagés par tous les visiteurs');
-    const out: any = await this.core.call(req.shop, name, req.session, body ?? {});
+    if (TEAM_ACTIONS.has(name)) await this.teamRules(name, body as any, req);
+    // « Parrainage » on a multi-shop server: this store's code and the stores it brought
+    if (name === 'me.referrals' && !req.shop.shop.demo) return this.referrals(req);
+    let out: any = await this.core.call(req.shop, name, req.session, body ?? {});
+    if (AUTH_CHANGES.has(name)) authEpoch++;
+    if (!req.shop.shop.demo) out = await this.afterTeam(name, body as any, out, req);
     // shop #1's name in its links (« Lien des pages », else made from the shop's name) is its name on the platform too
     if (req.shop.shop.primary && STORE_NAMING.has(name)) {
       await core.syncPrimaryStore(this.core.t);
       this.core.invalidate();
     }
-    // the app learns its shop (plan, state, how to pay) with the session
-    if (name === 'me.get') return this.core.withShop(out as Session, req.shop, req.session.shop?.support ?? null);
-    // a new password logs out the other sessions: this one gets a fresh token and stays in
-    if (name === 'me.password') return { ...out, token: await this.signShop(req.shop, req.session.profile.id) };
+    // the app learns its shop (plan, limits, owner, other stores) with the session
+    if (name === 'me.get') return this.core.withShop(out as Session, req.shop);
+    // a new password logs out the other sessions (in every store of the person): this one gets a fresh token
+    if (name === 'me.password') {
+      await core.propagateProfilePassword(this.core.t, req.shop.shop.schema, req.session.profile.id);
+      return { ...out, token: await this.signShop(req.shop, req.session.profile.id) };
+    }
     return out;
+  }
+
+  /**
+   * The owner's account is touched by nobody else, and the owner cannot leave the store; a store's admin sets the
+   * password only of someone who works in that store alone (not the owner): otherwise they would open other stores.
+   */
+  private async teamRules(name: string, body: any, req: ShopRequest) {
+    if (req.shop.shop.demo) return;
+    const ownerId = await core.ownerProfileId(this.core.t, req.shop.shop);
+    const me = req.session.profile.id;
+    if (name === 'me.delete') {
+      if (ownerId === me) throw new core.AppError('bad_request', 'Vous êtes le propriétaire de cette boutique : votre compte reste (vous pouvez supprimer la boutique entière dans Réglages).');
+      return;
+    }
+    const target = Number(body?.id);
+    if (!target || target === me) return;
+    if (ownerId === target) throw new core.AppError('forbidden', 'Seul le propriétaire modifie son propre compte');
+    const setsPassword = name === 'admin.users.resetPassword' || (name === 'users.update' && typeof body?.password === 'string' && body.password !== '');
+    if (setsPassword) {
+      const email = (await req.shop.db.query('SELECT email FROM profiles WHERE id = $1', [target]))[0]?.email as string | undefined;
+      if (email && !(await core.adminMaySetPassword(this.core.t, req.shop.shop.id, email)))
+        throw new core.AppError('forbidden', 'Cette personne utilise Pilotix dans une autre boutique : elle change son mot de passe elle-même (Mon profil, ou « Mot de passe oublié »).');
+    }
+  }
+
+  /** After a team action: the person's account follows (a new person gets one; a known one keeps its password). */
+  private async afterTeam(name: string, body: any, out: any, req: ShopRequest) {
+    const t = this.core.t;
+    const schema = req.shop.shop.schema;
+    if (name === 'users.create' && out?.id) {
+      const a = await core.attachProfile(t, schema, Number(out.id));
+      if (a?.existing) return { ...out, existingAccount: true };
+    }
+    if (name === 'users.update' && body?.id) {
+      if (body.email) await core.attachProfile(t, schema, Number(body.id));
+      if (body.password) await core.propagateProfilePassword(t, schema, Number(body.id));
+    }
+    if (name === 'admin.users.resetPassword' && body?.id) await core.propagateProfilePassword(t, schema, Number(body.id));
+    return out;
+  }
+
+  /** « Parrainage »: the store's code, its link, and the stores it brought (the free months they earned). */
+  private async referrals(req: ShopRequest) {
+    const r = await core.storeReferrals(this.core.t, req.shop.shop.id);
+    const friends = r.list.map((x, i) => ({
+      id: i + 1,
+      name: x.name,
+      email: null as string | null,
+      shop: x.name,
+      status: (x.paid ? 'subscribed' : 'signed_up') as 'invited' | 'signed_up' | 'subscribed',
+      cash: 0,
+      months: x.months,
+      paid: x.paid,
+      createdAt: x.at,
+      subscribedAt: x.paid ? x.at : null,
+    }));
+    const sub = friends.filter((f) => f.status === 'subscribed');
+    return {
+      code: r.code,
+      rules: { cash: 0, months: r.on ? r.months : 0 },
+      friends,
+      totals: { invited: friends.length, signedUp: friends.length, subscribed: sub.length, cashEarned: 0, cashPaid: 0, cashPending: 0, months: r.earned },
+      platform: true,
+      link: r.code && config.publicUrl ? `${config.publicUrl}/#/inscription/${r.code}` : null,
+    };
   }
 
   /**

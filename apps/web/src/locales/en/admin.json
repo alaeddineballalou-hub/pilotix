@@ -93,7 +93,11 @@
     "manageUsersLabel": "Can create accounts and change passwords",
     "manageUsersHint": "For a manager or a supervisor: creates the team’s accounts and gives a new password to someone who forgot theirs. Never for administrators or for other people who have this right.",
     "manageChip": "Manages accounts",
-    "lockedHint": "Only the administrator can change this account"
+    "lockedHint": "Only the administrator can change this account",
+    "owner": "Owner",
+    "ownerHint": "The store’s owner: only they change their account.",
+    "createdExisting": "Added: this person already has a Pilotix account and logs in with their usual password.",
+    "passwordAccount": "If this person already has a Pilotix account, they keep their password."
   },
   "status": {
     "groups": {
@@ -483,7 +487,17 @@
     "metaDisconnect": "Disconnect",
     "metaDisconnectConfirm": "Disconnect Meta? The token is erased from the server.",
     "metaDisconnected": "Meta disconnected",
-    "metaDemo": "Demo: the Ads page figures are examples (no call to Meta)."
+    "metaDemo": "Demo: the Ads page figures are examples (no call to Meta).",
+    "danger": "Delete the store",
+    "dangerHelp": "Only the owner (the person who created the store) sees this card.",
+    "deleteText": "The store and all its data (orders, customers, products, team) are erased for good. Your other stores don’t change.",
+    "deleteStore": "Delete this store…",
+    "deleteTitle": "Delete “{{name}}”?",
+    "deleteWarn": "Careful: this is final, the store cannot be brought back.",
+    "deleteName": "Type the store’s name to confirm: {{name}}",
+    "deletePassword": "Your password",
+    "deleteForever": "Delete forever",
+    "deleted": "“{{name}}” is deleted"
   },
   "confirmYes": "Yes",
   "cancel": "Cancel",

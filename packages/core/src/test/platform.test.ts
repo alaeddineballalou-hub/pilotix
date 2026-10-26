@@ -23,7 +23,27 @@ import {
   Tenancy,
 } from '../index';
 import { landingStore } from '../modules/landingquery';
-import { syncPrimaryStore } from '../platform/shops';
+import {
+  accountByEmail,
+  accountResetRequest,
+  addStore,
+  adminMaySetPassword,
+  attachProfile,
+  checkAccountPassword,
+  confirmSignup,
+  deleteStoreByOwner,
+  membershipsOf,
+  passwordFromLink,
+  propagateProfilePassword,
+  shopThread,
+  shopThreads,
+  shopWrite,
+  startSignup,
+  storeChoices,
+  storeReferrals,
+  takeDueReminders,
+} from '../platform';
+import { bootstrapPlatform, syncPrimaryStore } from '../platform/shops';
 import { getSetting, setSetting } from '../settings';
 
 const OWNER = { email: 'owner@boutique.dz', password: 'Owner-Password-1' };
@@ -45,6 +65,13 @@ async function server() {
   return { t, pg, applied, staff, pctx, p };
 }
 
+/** A store made from the control room; its owner chooses a password from the invitation e-mail. */
+async function invite(t: Tenancy, p: (name: string, input?: unknown) => Promise<any>, input: Record<string, unknown>, password: string) {
+  const made = await p('p.shops.create', input);
+  if (made.mail.kind === 'invite') await passwordFromLink(t, made.mail.token, password);
+  return { ...made, password };
+}
+
 async function shopUserCtx(t: Tenancy, schema: string, email: string, password: string, shop?: Ctx['shop']): Promise<Ctx> {
   const db = t.shop(schema);
   return { db, session: await login(db, email, password), now: () => Date.now(), emit: () => {}, shop };
@@ -52,7 +79,7 @@ async function shopUserCtx(t: Tenancy, schema: string, email: string, password: 
 
 test('first start: the existing shop becomes shop #1, its admin the platform owner', async () => {
   const { t, applied, staff } = await server();
-  assert.deepEqual(applied.platform, ['p001_platform']);
+  assert.deepEqual(applied.platform, ['p001_platform', 'p002_accounts']);
   assert.deepEqual(applied.public, []);
   const s1 = (await loadShop(t, { primary: true }))!;
   assert.equal(s1.schema, 'public');
@@ -61,6 +88,13 @@ test('first start: the existing shop becomes shop #1, its admin the platform own
   assert.equal(await shopIdOfEmail(t, ' OWNER@boutique.dz '), s1.id);
   assert.equal(staff.role, 'owner');
   assert.equal(staff.email, OWNER.email);
+  // the person already in the store got an account (same password), and owns shop #1
+  const acc = (await accountByEmail(t, OWNER.email))!;
+  assert.equal(acc.verified, true);
+  assert.ok(await checkAccountPassword(t, OWNER.email, OWNER.password));
+  assert.equal(s1.ownerAccountId, acc.id);
+  assert.match(s1.referralCode ?? '', /^[A-Z2-9]{6}$/);
+
   // the plans offered at the start
   const plans = await t.platform.query('SELECT code FROM platform.plans ORDER BY sort');
   assert.deepEqual(plans.map((r: any) => r.code), ['interne', 'essentiel', 'pro', 'business']);
@@ -74,9 +108,12 @@ test('first start: the existing shop becomes shop #1, its admin the platform own
 test('a new shop: its own schema, its own admin, nothing shared', async () => {
   const { t, p } = await server();
   const pro = (await p<any[]>('p.plans.list')).find((x) => x.code === 'pro');
-  const made = await p('p.shops.create', { name: 'Bébé Confort Oran', ownerName: 'Karim', ownerEmail: 'Karim@Oran.dz', ownerPhone: '0550 00 00 00', planId: pro.id, trialDays: 14 });
+  const made = await invite(t, p, { name: 'Bébé Confort Oran', ownerName: 'Karim', ownerEmail: 'Karim@Oran.dz', ownerPhone: '0550 00 00 00', planId: pro.id, trialDays: 14 }, 'Karim-Password-1');
   assert.equal(made.slug, 'bebe-confort-oran');
-  assert.match(made.password, /^Pilotix-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+  // Pilotix never sees a password: an invitation by e-mail (the link only goes in the e-mail)
+  assert.equal(made.invited, true);
+  assert.equal(made.mail.kind, 'invite');
+  assert.equal('password' in (await p('p.shops.get', { id: made.id })), false);
   const s2 = (await loadShop(t, { id: made.id }))!;
   assert.equal(s2.schema, `shop_${made.id}`);
   assert.equal((await t.shop(s2.schema).query('SELECT count(*)::int AS n FROM schema_migrations'))[0].n, MIGRATIONS.length);
@@ -117,6 +154,8 @@ test('store names: one per shop, unique, the first part of its links (site/<stor
   assert.equal((await shop('Admin')).slug, 'admin-boutique');
   const made = await shop('Bébé Oran', undefined, 'karim@oran.dz');
   assert.equal(made.slug, 'bebe-oran');
+  await passwordFromLink(t, made.mail.token, 'Karim-Password-1');
+  made.password = 'Karim-Password-1';
   // shop 2: its name is in its own settings (its pages, its llms.txt) and it cannot change it itself
   const s2 = (await loadShop(t, { id: made.id }))!;
   const db2 = t.shop(s2.schema);
@@ -157,30 +196,183 @@ test('store names: one per shop, unique, the first part of its links (site/<stor
   assert.equal(await landingStore(db2), 'bebe-confort');
 });
 
-test('one e-mail = one shop (the login page must know where to go)', async () => {
+test('one e-mail, several stores: one account, one password, chosen by the person only', async () => {
   const { t, p } = await server();
   const plan = (await p<any[]>('p.plans.list')).find((x) => x.code === 'business');
-  await assert.rejects(p('p.shops.create', { name: 'Doublon', ownerName: 'Xavier', ownerEmail: OWNER.email, planId: plan.id, trialDays: 7 }), /déjà utilisé/);
-  assert.equal((await t.platform.query('SELECT count(*)::int AS n FROM platform.shops'))[0].n, 1);
-  const made = await p('p.shops.create', { name: 'Shop Deux', ownerName: 'Lina', ownerEmail: 'lina@deux.dz', planId: plan.id, trialDays: 7, password: 'Lina-Password-1' });
-  const schema = `shop_${made.id}`;
-  const lina = await shopUserCtx(t, schema, 'lina@deux.dz', 'Lina-Password-1');
-  const amine = await shopUserCtx(t, 'public', OWNER.email, OWNER.password);
-  const user = { name: 'Agent', password: 'agent-pass-1', roles: ['confirmation'], language: 'fr' };
-  // an account of shop #1's e-mail cannot be made in shop 2, and the reverse
-  await assert.rejects(call('users.create', lina, { ...user, email: OWNER.email }), /déjà utilisé/);
-  await assert.rejects(call('users.create', amine, { ...user, email: 'lina@deux.dz' }), /déjà utilisé/);
-  // a new account is found by the login page; changing its e-mail moves it
-  const u: any = await call('users.create', lina, { ...user, email: 'agent@deux.dz' });
-  assert.equal(await shopIdOfEmail(t, 'agent@deux.dz'), made.id);
-  await assert.rejects(call('users.update', amine, { id: 1, email: 'agent@deux.dz' }), /déjà utilisé/);
-  await call('users.update', lina, { id: u.id, email: 'agent2@deux.dz' });
-  assert.equal(await shopIdOfEmail(t, 'agent@deux.dz'), null);
-  assert.equal(await shopIdOfEmail(t, 'agent2@deux.dz'), made.id);
-  // a closed account leaves the index (the same "deleted-…@pilotix.invalid" in two shops is fine)
-  const agent = await shopUserCtx(t, schema, 'agent2@deux.dz', 'agent-pass-1');
-  await call('me.delete', agent, { password: 'agent-pass-1' });
-  assert.equal(await shopIdOfEmail(t, 'agent2@deux.dz'), null);
+  // a store for an e-mail that already has an account: added to it, its password unchanged
+  const two = await p('p.shops.create', { name: 'Deuxième', ownerName: 'Amine', ownerEmail: OWNER.email, planId: plan.id, trialDays: 7 });
+  assert.equal(two.mail.kind, 'added');
+  assert.equal(two.invited, false);
+  assert.deepEqual((await membershipsOf(t, OWNER.email)).map((m) => m.schema), ['public', `shop_${two.id}`]);
+  await shopUserCtx(t, `shop_${two.id}`, OWNER.email, OWNER.password);
+  const choices = await storeChoices(t, OWNER.email);
+  assert.equal(choices.length, 2);
+  assert.ok(choices.every((c) => c.owner));
+  // Lina's store; Lina adds Amine to her team: Amine keeps his own password (the one Lina typed does nothing)
+  const lina = await invite(t, p, { name: 'Shop Lina', ownerName: 'Lina', ownerEmail: 'lina@deux.dz', planId: plan.id, trialDays: 7 }, 'Lina-Password-1');
+  const ls = `shop_${lina.id}`;
+  const lc = await shopUserCtx(t, ls, 'lina@deux.dz', 'Lina-Password-1');
+  const user = { name: 'Amine', password: 'mot-de-passe-de-lina', roles: ['confirmation'], language: 'fr' };
+  const added: any = await call('users.create', lc, { ...user, email: OWNER.email });
+  const at = await attachProfile(t, ls, added.id);
+  assert.equal(at?.existing, true);
+  await assert.rejects(login(t.shop(ls), OWNER.email, 'mot-de-passe-de-lina'));
+  await shopUserCtx(t, ls, OWNER.email, OWNER.password);
+  // Lina may not set Amine's password (he works in other stores, he owns some); she may for her own agent
+  assert.equal(await adminMaySetPassword(t, lina.id, OWNER.email), false);
+  const agent: any = await call('users.create', lc, { ...user, name: 'Agent', email: 'agent@deux.dz', password: 'agent-pass-1' });
+  await attachProfile(t, ls, agent.id);
+  assert.equal(await adminMaySetPassword(t, lina.id, 'agent@deux.dz'), true);
+  assert.equal(await adminMaySetPassword(t, lina.id, 'lina@deux.dz'), false); // the owner
+  // Amine changes his password in one store: every store follows, old sessions end
+  const a2 = await shopUserCtx(t, ls, OWNER.email, OWNER.password);
+  await call('me.password', a2, { current: OWNER.password, next: 'Nouveau-Pass-9' });
+  await propagateProfilePassword(t, ls, added.id);
+  await shopUserCtx(t, 'public', OWNER.email, 'Nouveau-Pass-9');
+  await shopUserCtx(t, `shop_${two.id}`, OWNER.email, 'Nouveau-Pass-9');
+  assert.ok(await checkAccountPassword(t, OWNER.email, 'Nouveau-Pass-9'));
+  // « Mot de passe oublié »: one link, every store; an agent (nobody's admin): 2 a month
+  const r = (await accountResetRequest(t, 'agent@deux.dz'))!;
+  assert.equal(r.kind, 'link');
+  await passwordFromLink(t, (r as any).token, 'Agent-Pass-2');
+  await shopUserCtx(t, ls, 'agent@deux.dz', 'Agent-Pass-2');
+  await assert.rejects(passwordFromLink(t, (r as any).token, 'Agent-Pass-3'), /plus valable/);
+  const r2 = (await accountResetRequest(t, 'agent@deux.dz'))!;
+  await passwordFromLink(t, (r2 as any).token, 'Agent-Pass-3');
+  assert.equal((await accountResetRequest(t, 'agent@deux.dz'))!.kind, 'limit');
+  assert.equal((await accountResetRequest(t, OWNER.email))!.kind, 'link');
+  assert.equal(await accountResetRequest(t, 'nobody@nowhere.dz'), null);
+  // a closed account leaves the index
+  const ag = await shopUserCtx(t, ls, 'agent@deux.dz', 'Agent-Pass-3');
+  await call('me.delete', ag, { password: 'Agent-Pass-3' });
+  assert.deepEqual(await membershipsOf(t, 'agent@deux.dz'), []);
+});
+
+test('sign-up: confirmed by e-mail, the store on the trial plan, referral reward at the first payment', async () => {
+  const { t, p } = await server();
+  const s1 = (await loadShop(t, { primary: true }))!;
+  const form = { name: 'Yasmine', email: 'Yasmine@Shop.dz', password: 'yasmine-pass', storeName: 'Yasmine Shop', language: 'fr', referral: s1.referralCode, terms: true };
+  await assert.rejects(startSignup(t, { ...form, terms: false }, '1.2.3.4'), /conditions/);
+  await assert.rejects(startSignup(t, { ...form, slug: 'api' }, '1.2.3.4'), /réservé/);
+  await assert.rejects(startSignup(t, { ...form, referral: 'ZZZZZZ' }, '1.2.3.4'), /parrainage/);
+  const m = (await startSignup(t, form, '1.2.3.4'))!;
+  assert.equal(m.kind, 'confirm');
+  // nothing made before the e-mail is confirmed
+  assert.equal(await accountByEmail(t, 'yasmine@shop.dz'), null);
+  const done: any = await confirmSignup(t, (m as any).token);
+  assert.equal(done.shop.slug, 'yasmine-shop');
+  assert.equal(done.shop.selfSignup, true);
+  assert.equal(done.shop.plan.code, 'pro');
+  assert.equal(done.account.verified, true);
+  await shopUserCtx(t, done.shop.schema, 'yasmine@shop.dz', 'yasmine-pass');
+  await assert.rejects(confirmSignup(t, (m as any).token), /plus valable/);
+  // the same e-mail again: « you already have an account » (nothing made)
+  assert.equal((await startSignup(t, form, '1.2.3.4'))!.kind, 'exists');
+  // a second store from the account menu, up to the limit
+  await p('p.settings.save', { signup: { open: true, maxStores: 2 } });
+  const acc = (await accountByEmail(t, 'yasmine@shop.dz'))!;
+  const b = await addStore(t, acc, { name: 'Yasmine Bébé' });
+  assert.equal(b.ownerAccountId, acc.id);
+  await assert.rejects(addStore(t, acc, { name: 'Trois' }), /maximum/);
+  // the dashboard counts it; the referrer gets its month at the first payment
+  const d = await p('p.dashboard');
+  assert.equal(d.signups.week, 2);
+  const shopUntil = (await loadShop(t, { id: s1.id }))!.paidUntil;
+  const pay = await p('p.payments.add', { shopId: done.shop.id, amount: 7900, method: 'baridimob', months: 1 });
+  assert.match(pay.receiptNo, /^PX-\d{4}-0001$/);
+  // shop #1 never expires: its referral is recorded, no months added
+  assert.equal(pay.rewarded, null);
+  assert.equal((await loadShop(t, { id: s1.id }))!.paidUntil, shopUntil);
+  const refs = await storeReferrals(t, s1.id);
+  assert.equal(refs.list.length, 1);
+  // a store brought by Yasmine's store: Yasmine gets a free month when it pays
+  const m2 = (await startSignup(t, { ...form, email: 'nadia@x.dz', name: 'Nadia', storeName: 'Nadia Beauty', referral: done.shop.referralCode }, '1.2.3.5'))!;
+  const n: any = await confirmSignup(t, (m2 as any).token);
+  const before = Date.parse((await loadShop(t, { id: done.shop.id }))!.paidUntil!);
+  const pay2 = await p('p.payments.add', { shopId: n.shop.id, amount: 7900, method: 'cash', months: 1 });
+  assert.deepEqual(pay2.rewarded, { shop: 'Yasmine Shop', months: 1 });
+  assert.equal(pay2.mails[0].kind, 'reward');
+  assert.ok(Date.parse((await loadShop(t, { id: done.shop.id }))!.paidUntil!) - before > 27 * DAY);
+  // only the first payment counts
+  assert.equal((await p('p.payments.add', { shopId: n.shop.id, amount: 7900, method: 'cash', months: 1 })).rewarded, null);
+  // sign-ups closed: refused
+  await p('p.settings.save', { signup: { open: false, maxStores: 2 } });
+  await assert.rejects(startSignup(t, { ...form, email: 'z@z.dz' }, '1.2.3.6'), /fermées/);
+});
+
+test('only the owner deletes a store; Pilotix cannot open it, only suspend it', async () => {
+  const { t, p } = await server();
+  const plan = (await p<any[]>('p.plans.list')).find((x) => x.code === 'pro');
+  const made = await invite(t, p, { name: 'A Supprimer', ownerName: 'Omar', ownerEmail: 'omar@x.dz', planId: plan.id, trialDays: 7 }, 'Omar-Password-1');
+  const s = (await loadShop(t, { id: made.id }))!;
+  const omar = (await accountByEmail(t, 'omar@x.dz'))!;
+  const other = (await accountByEmail(t, OWNER.email))!;
+  await assert.rejects(deleteStoreByOwner(t, other, s.id, OWNER.password, s.name), /propriétaire/);
+  await assert.rejects(deleteStoreByOwner(t, omar, s.id, 'wrong', s.name), /Mot de passe incorrect/);
+  await assert.rejects(deleteStoreByOwner(t, omar, s.id, 'Omar-Password-1', 'autre nom'), /nom de la boutique/);
+  await deleteStoreByOwner(t, omar, s.id, 'Omar-Password-1', 'a supprimer');
+  const gone = (await loadShop(t, { id: s.id }))!;
+  assert.equal(gone.status, 'deleted');
+  assert.equal(gone.slug, `deleted-${s.id}`);
+  assert.equal((await t.platform.query(`SELECT 1 FROM pg_namespace WHERE nspname = $1`, [s.schema])).length, 0);
+  assert.deepEqual(await membershipsOf(t, 'omar@x.dz'), []);
+  await assert.rejects(p('p.shops.setStatus', { id: s.id, status: 'active' }), /supprimée/);
+  // the control room has no « open as » nor « new admin password » any more
+  await assert.rejects(p('p.shops.resetAdminPassword', { id: s.id, profileId: 1 }), /inconnue/);
+  // shop #1 can never be deleted
+  const s1 = (await loadShop(t, { primary: true }))!;
+  await assert.rejects(deleteStoreByOwner(t, other, s1.id, OWNER.password, s1.name), /ne peut pas/);
+});
+
+test('numbers only, and the plan limits: accounts, livreurs, orders per month, stores per owner', async () => {
+  const { t, p } = await server();
+  const plan = (await p<any[]>('p.plans.list')).find((x) => x.code === 'essentiel');
+  await p('p.plans.save', { id: plan.id, name: plan.name, priceMonth: plan.priceMonth, priceYear: 39000, features: plan.features, maxUsers: 10, maxDrivers: 1, maxOrdersMonth: 1, public: true, active: true });
+  const made = await invite(t, p, { name: 'Compteurs', ownerName: 'Rania', ownerEmail: 'rania@x.dz', planId: plan.id, trialDays: 14 }, 'Rania-Password-1');
+  const s = (await loadShop(t, { id: made.id }))!;
+  const c = await shopUserCtx(t, s.schema, 'rania@x.dz', 'Rania-Password-1', shopCtx(s, shopStatus(s, Date.now(), 3)));
+  const user = { name: 'Livreur', password: 'livreur-pass-1', roles: ['livreur'], language: 'fr' };
+  await call('users.create', c, { ...user, email: 'l1@x.dz' });
+  await assert.rejects(call('users.create', c, { ...user, email: 'l2@x.dz' }), /1 livreur actif/);
+  const agent: any = await call('users.create', c, { ...user, roles: ['confirmation'], email: 'a1@x.dz' });
+  await assert.rejects(call('users.update', c, { id: agent.id, roles: ['confirmation', 'livreur'] }), /1 livreur actif/);
+  // the control room: numbers only (no names, no e-mails of the team)
+  const g = await p('p.shops.get', { id: made.id });
+  assert.deepEqual(g.usage, { users: 3, drivers: 1, ordersMonth: 0, ordersLastMonth: 0, ordersTotal: 0, ownerStores: 1 });
+  assert.equal(g.admins, undefined);
+  assert.equal(g.limits.maxDrivers, 1);
+  assert.equal(g.ownerAccount.email, 'rania@x.dz');
+  // 2 orders with a plan of 1 a month: still taken (no customer lost), the store is « over »
+  await t.shop(s.schema).query(`INSERT INTO products (name, sku, price) VALUES ('P', 'P1', 1000)`);
+  const pid = Number((await t.shop(s.schema).query(`SELECT id FROM products WHERE sku = 'P1'`))[0].id);
+  for (const ph of ['0661000001', '0661000002']) await call('orders.create', c, { customerName: 'Client', phone: ph, wilayaId: 16, commune: 'Alger', items: [{ productId: pid, variantId: null, qty: 1 }] });
+  assert.equal((await p('p.shops.get', { id: made.id })).usage.ordersMonth, 2);
+  const over = await p<any[]>('p.shops.list', { state: 'over' });
+  assert.deepEqual(over.map((x) => x.id), [made.id]);
+  assert.equal(over[0].limits.over.orders, true);
+  // the owner's stores: their own limit
+  await p('p.shops.update', { id: made.id, ownerMaxStores: 1 });
+  await assert.rejects(addStore(t, (await accountByEmail(t, 'rania@x.dz'))!, { name: 'Encore' }), /maximum/);
+});
+
+test('messages between a store and Pilotix; reminders once per end date', async () => {
+  const { t, p } = await server();
+  const plan = (await p<any[]>('p.plans.list')).find((x) => x.code === 'pro');
+  const made = await invite(t, p, { name: 'Aide', ownerName: 'Sami', ownerEmail: 'sami@x.dz', planId: plan.id, trialDays: 2 }, 'Sami-Password-1');
+  const w = await shopWrite(t, made.id, { name: 'Sami', email: 'sami@x.dz' }, { subject: 'Question', body: 'Comment ajouter un livreur ?' });
+  assert.equal((await p('p.dashboard')).messages, 1);
+  const list = await p<any[]>('p.support.list', {});
+  assert.equal(list[0].unreadStaff, true);
+  const r = await p('p.support.reply', { id: w.id, body: 'Dans Utilisateurs › Nouveau.' });
+  assert.equal(r.mail.kind, 'answer');
+  assert.equal((await shopThreads(t, made.id))[0].unreadShop, true);
+  const th = await shopThread(t, made.id, w.id);
+  assert.equal(th.messages.length, 2);
+  await assert.rejects(shopThread(t, 999, w.id), /introuvable/);
+  // the trial ends in 2 days: one reminder, once
+  const due = await takeDueReminders(t);
+  assert.deepEqual(due.map((d) => [d.shop, d.kind, d.to]), [['Aide', 'trial_end', 'sami@x.dz']]);
+  assert.deepEqual(await takeDueReminders(t), []);
 });
 
 test('trial, grace, lock, payment', async () => {
@@ -200,6 +392,10 @@ test('trial, grace, lock, payment', async () => {
   const trialEnd = Date.parse((await loadShop(t, { id: made.id }))!.trialEndsAt!);
   // paid during the trial: the month starts at the end of the trial (no day lost)
   const r1 = await p('p.payments.add', { shopId: made.id, amount: 3900, method: 'baridimob', months: 1, reference: 'BM-1' });
+  assert.match(r1.receiptNo, /^PX-\d{4}-0001$/);
+  const rc = await p('p.payments.receipt', { id: r1.id });
+  assert.equal(rc.shop.name, 'Payeur');
+  assert.equal(rc.amount, 3900);
   const end1 = Date.parse(r1.paidUntil);
   assert.ok(end1 - trialEnd > 27 * DAY && end1 - trialEnd < 32 * DAY);
   const r2 = await p('p.payments.add', { shopId: made.id, amount: 7800, method: 'ccp', months: 2 });
@@ -222,11 +418,19 @@ test('trial, grace, lock, payment', async () => {
   const s1 = (await loadShop(t, { primary: true }))!;
   await assert.rejects(p('p.shops.setStatus', { id: s1.id, status: 'suspended' }), /ne peut pas/);
   await assert.rejects(p('p.payments.add', { shopId: s1.id, amount: 1, method: 'cash', months: 1 }), /Pas de paiement/);
+  // payments recorded before receipts existed get a number at the next start, after the year's last one
+  await t.platform.query('UPDATE platform.payments SET receipt_no = NULL WHERE id = ANY($1)', [[r1.id, r3.id]]);
+  await bootstrapPlatform(t);
+  const nums = await t.platform.query('SELECT id, receipt_no FROM platform.payments WHERE shop_id = $1 ORDER BY id', [made.id]);
+  const year = new Date().getUTCFullYear();
+  assert.deepEqual(nums.map((x: any) => x.receipt_no), [`PX-${year}-0003`, `PX-${year}-0002`, `PX-${year}-0004`]);
+  const r4 = await p('p.payments.add', { shopId: made.id, amount: 3900, method: 'cash', months: 1 });
+  assert.equal(r4.receiptNo, `PX-${year}-0005`);
   // the journal
   const log = await p<any[]>('p.audit.list', { shopId: made.id });
   assert.deepEqual(
     log.map((l) => l.action).reverse(),
-    ['shop.create', 'payment.add', 'payment.add', 'payment.void', 'shop.suspend', 'payment.add'],
+    ['shop.create', 'payment.add', 'payment.add', 'payment.void', 'shop.suspend', 'payment.add', 'payment.add'],
   );
 });
 
@@ -242,7 +446,7 @@ test('menus by plan, own changes per shop, enforced by the server', async () => 
 
   const { t, p } = await server();
   const plan = (await p<any[]>('p.plans.list')).find((x) => x.code === 'essentiel');
-  const made = await p('p.shops.create', { name: 'Menus', ownerName: 'Mehdi', ownerEmail: 'm@menus.dz', planId: plan.id, trialDays: 14, password: 'Menus-Password-1' });
+  const made = await invite(t, p, { name: 'Menus', ownerName: 'Mehdi', ownerEmail: 'm@menus.dz', planId: plan.id, trialDays: 14 }, 'Menus-Password-1');
   const schema = `shop_${made.id}`;
   const ctxOf = async () => {
     const s = (await loadShop(t, { id: made.id }))!;
@@ -272,7 +476,7 @@ test('menus by plan, own changes per shop, enforced by the server', async () => 
 test('the plan limits active accounts', async () => {
   const { t, p } = await server();
   const plan = (await p<any[]>('p.plans.list')).find((x) => x.code === 'essentiel');
-  const made = await p('p.shops.create', { name: 'Petite', ownerName: 'Selma', ownerEmail: 's@petite.dz', planId: plan.id, trialDays: 14, password: 'Petite-Password-1' });
+  const made = await invite(t, p, { name: 'Petite', ownerName: 'Selma', ownerEmail: 's@petite.dz', planId: plan.id, trialDays: 14 }, 'Petite-Password-1');
   await p('p.shops.update', { id: made.id, maxUsers: 2 });
   const s = (await loadShop(t, { id: made.id }))!;
   const c = await shopUserCtx(t, `shop_${made.id}`, 's@petite.dz', 'Petite-Password-1', shopCtx(s, shopStatus(s, Date.now(), 3)));

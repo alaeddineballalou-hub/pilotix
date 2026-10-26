@@ -100,7 +100,10 @@ export function PhoneOrder({ order, wa, onClose, onDone }: { order: Order; wa: s
   }, []);
   // a new order: back to the top of the page
   const body = useRef<HTMLDivElement>(null);
-  useEffect(() => body.current?.scrollTo({ top: 0 }), [order.id]);
+  // a block, not an arrow that returns: new browsers' scrollTo returns a Promise, and React would call it as the clean-up
+  useEffect(() => {
+    body.current?.scrollTo({ top: 0 });
+  }, [order.id]);
   return (
     <div className="pxp-order" role="dialog" aria-modal="true" aria-label={`${order.ref} · ${order.customerName}`}>
       <header className="pxp-oh">

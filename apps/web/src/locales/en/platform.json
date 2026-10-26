@@ -25,7 +25,10 @@
     "demo": "Demo",
     "staff": "Pilotix team",
     "journal": "Journal",
-    "settings": "Settings"
+    "settings": "Settings",
+    "signups": "Sign-ups",
+    "messages": "Messages",
+    "health": "Server"
   },
   "roles": {
     "owner": "Owner",
@@ -43,7 +46,8 @@
     "grace": "Late",
     "expired": "Locked (unpaid)",
     "suspended": "Suspended",
-    "archived": "Archived"
+    "archived": "Archived",
+    "deleted": "Deleted"
   },
   "daysShort_one": "{{count}} d",
   "daysShort_other": "{{count}} d",
@@ -53,7 +57,9 @@
     "active": "Active",
     "late": "Late",
     "suspended": "Suspended",
-    "archived": "Archived"
+    "archived": "Archived",
+    "over": "Over limits",
+    "deleted": "Deleted"
   },
   "method": {
     "baridimob": "BaridiMob",
@@ -75,7 +81,18 @@
     "month": "Received this month",
     "lastMonth": "last month: {{amount}}",
     "mrr": "Expected monthly revenue",
-    "mrrHelp": "The monthly price of the plans of every active (paid) shop, added up."
+    "mrrHelp": "The monthly price of the plans of every active (paid) shop, added up.",
+    "signups": "Sign-ups this week",
+    "signupsSub_one": "{{count}} this month",
+    "signupsSub_other": "{{count}} this month",
+    "pending": "E-mails not confirmed yet",
+    "pendingHelp": "They filled “Create my store” but haven’t clicked the e-mail link yet (it works for 48 hours).",
+    "conversion": "Sign-ups who pay",
+    "conversionSub": "{{paid}} of {{made}} (90 days)",
+    "conversionHelp": "Of the stores created by sign-up in the last 90 days, how many made at least one payment.",
+    "messages": "Messages to read",
+    "over": "Over their limits",
+    "overHelp": "Stores above their plan (accounts, drivers or orders this month): offer them the bigger plan."
   },
   "d": {
     "trialsEnding": "Trials ending (3 days)",
@@ -98,7 +115,8 @@
     "state": "State",
     "team": "Accounts",
     "orders": "Orders (month)",
-    "activity": "Last activity"
+    "activity": "Last activity",
+    "drivers": "Drivers"
   },
   "searchShop": "Search a shop, a phone…",
   "noShop": "No shop here.",
@@ -152,7 +170,7 @@
     "owner": "The owner",
     "ownerName": "Owner’s name",
     "ownerEmail": "Email (their login)",
-    "ownerEmailHint": "They log in with this email. One email = one shop.",
+    "ownerEmailHint": "They log in with this e-mail. One e-mail can have several stores.",
     "ownerPhone": "Phone / WhatsApp",
     "ownerPhoneHint": "To send them their login on WhatsApp.",
     "contactEmail": "Contact email",
@@ -163,7 +181,10 @@
     "passwordAuto": "Made automatically",
     "passwordHint": "Empty = an easy-to-read password is made for you.",
     "notes": "Notes",
-    "link": "Link"
+    "link": "Link",
+    "inviteNote": "Pilotix e-mails the owner so they choose their own password. If they already have an account, the store is added to their stores.",
+    "language": "E-mail language",
+    "languageHint": "The language of the invitation and reminder e-mails."
   },
   "field": {
     "name": "name",
@@ -175,7 +196,8 @@
     "plan": "plan",
     "trialEndsAt": "trial end",
     "paidUntil": "end of paid period",
-    "maxUsers": "max accounts"
+    "maxUsers": "max accounts",
+    "maxDrivers": "max drivers"
   },
   "p": {
     "months": "Period paid",
@@ -194,7 +216,8 @@
     "count_one": "{{count}} payment",
     "count_other": "{{count}} payments",
     "period": "Period",
-    "by": "Recorded by"
+    "by": "Recorded by",
+    "yearly": "The plan’s yearly price: {{price}}"
   },
   "pay": {
     "title": "Payments",
@@ -203,7 +226,9 @@
     "voidTitle": "Cancel this payment?",
     "voidText": "For a payment typed by mistake: it stays in the history, crossed out, and no longer counts. If it was the last one, the paid period goes back.",
     "voidDone": "Payment cancelled",
-    "voided": "cancelled ({{reason}})"
+    "voided": "cancelled ({{reason}})",
+    "sendReceipt": "E-mail the receipt",
+    "receiptSent": "Receipt sent to {{email}}"
   },
   "sub": {
     "title": "Subscription",
@@ -213,7 +238,9 @@
     "maxUsers": "Maximum active accounts",
     "maxUsersHint": "Empty = the plan’s limit ({{n}}).",
     "trialEnds": "Trial ends",
-    "paidUntil": "Paid until"
+    "paidUntil": "Paid until",
+    "maxDrivers": "Maximum drivers",
+    "maxDriversHint": "Empty = the plan’s limit ({{n}})."
   },
   "use": {
     "title": "Usage",
@@ -222,7 +249,12 @@
     "ordersTotal": "orders in all",
     "lastOrder": "last order",
     "lastActive": "last login",
-    "overOrders": "Above its plan’s orders this month: offer it the bigger plan."
+    "overOrders": "Above its plan’s orders this month: offer it the bigger plan.",
+    "drivers": "active drivers",
+    "ordersLastMonth": "orders last month",
+    "ownerStores": "owner’s stores",
+    "help": "Numbers only, never what’s inside the store. In red: above its plan’s limit.",
+    "over": "This store is above its plan: offer it the bigger plan. Its orders are never blocked."
   },
   "menus": {
     "title": "Menus and sub-menus",
@@ -268,7 +300,16 @@
     "staffPassword": "Changed their password",
     "settings": "Settings changed",
     "demoCreate": "Created (demo)",
-    "demoReset": "Reset (demo)"
+    "demoReset": "Reset (demo)",
+    "shopSignup": "Store created by sign-up ({{plan}} plan)",
+    "shopAdded": "Store added by its owner ({{plan}} plan)",
+    "shopDeleted": "Store “{{name}}” deleted by its owner",
+    "shopInvite": "Invitation sent to {{email}}",
+    "ownerStores": "Owner’s max stores: {{n}}",
+    "receipt": "Receipt {{no}} sent to {{email}}",
+    "reward_one": "Referral: {{count}} free month thanks to “{{from}}”",
+    "reward_other": "Referral: {{count}} free months thanks to “{{from}}”",
+    "supportReply": "Answer to the message “{{subject}}”"
   },
   "plan": {
     "new": "New plan",
@@ -292,7 +333,14 @@
     "emptyAny": "Empty = unlimited.",
     "description": "Description",
     "activeLabel": "Offered to new shops",
-    "systemMenus": "The internal plan (your shop) always gives everything."
+    "systemMenus": "The internal plan (your shop) always gives everything.",
+    "drivers_one": "{{count}} driver",
+    "drivers_other": "{{count}} drivers",
+    "driversAny": "Unlimited drivers",
+    "maxDrivers": "Max drivers",
+    "priceYear": "Price for a year (DA)",
+    "priceYearHint": "Empty = no yearly price. 12 months at the monthly price = {{price}}.",
+    "year": "/ year"
   },
   "staff": {
     "new": "New account",
@@ -333,7 +381,35 @@
     "toneInfo": "Information (blue)",
     "toneWarn": "Warning (orange)",
     "noticeUntil": "Until",
-    "noticeUntilHint": "Empty = until you clear it."
+    "noticeUntilHint": "Empty = until you clear it.",
+    "signupTitle": "Sign-ups",
+    "signupHelp": "Anyone can create a store from “Create my store”: the e-mail is confirmed before the store is made.",
+    "signupOpen": "Sign-ups open",
+    "maxStores": "Max stores per account",
+    "maxStoresHint": "How many stores one person can have. You can change it for one owner on their store’s page.",
+    "signupLink": "See the “Create my store” page",
+    "remindTitle": "E-mail reminders",
+    "remindHelp": "Every morning at 8, Pilotix writes to owners: trial ending, subscription ending, grace period, store locked. One e-mail per step.",
+    "remindOn": "Send reminders",
+    "remindDays": "How many days before the end",
+    "refTitle": "Referral",
+    "refHelp": "Each store has a link. When a store that came with it makes its first payment, the store that brought it gets free months, automatically.",
+    "refOn": "Referral on",
+    "refMonths": "Free months earned",
+    "secTitle": "Control room security",
+    "secHelp": "At each login, a 6-digit code is e-mailed. A device can be remembered for 30 days.",
+    "secTwoStep": "Ask for an e-mailed code at login",
+    "companyTitle": "Your company (on receipts)",
+    "companyHelp": "This is printed at the top of each payment receipt.",
+    "coName": "Company name",
+    "coTax": "Tax ID (NIF)",
+    "coAddress": "Address",
+    "legalTitle": "Terms of use and privacy",
+    "legalHelp": "The page everyone accepts when creating a store. Empty = Pilotix’s standard text.",
+    "legalText": "Your text",
+    "legalHint": "Plain text, line breaks are kept.",
+    "legalPh": "Leave empty to keep the standard text.",
+    "legalLink": "See the page"
   },
   "demo": {
     "none": "No demo shop yet",
@@ -350,5 +426,104 @@
     "publicTitle": "The “Try the demo” button",
     "publicOn": "Shown on the login page: visitors pick a role and go in.",
     "publicOff": "Hidden: only the Pilotix team can open the demo."
+  },
+  "code": {
+    "text": "A 6-digit code was just sent to {{email}}. It works for 10 minutes.",
+    "label": "Code from the e-mail",
+    "remember": "Don’t ask for a code on this device for 30 days",
+    "submit": "Confirm"
+  },
+  "createdInvite": "“{{name}}” is created. {{email}} got an e-mail to choose a password (the link works for 7 days).",
+  "createdAdded": "“{{name}}” is created and added to the Pilotix account of {{email}}: they find it when they log in, with their usual password.",
+  "createdPrivacy": "You don’t know their password and you won’t see their data: only numbers (accounts, drivers, orders per month).",
+  "welcomeInvite": "Hello {{name}} 👋\nYour store “{{shop}}” is ready on Pilotix.\n\nWe sent an e-mail to {{email}}: open it to choose your password (check your spam folder too).\nLog in: {{url}}\n\nFree trial: {{days}} days.",
+  "welcomeAdded": "Hello {{name}} 👋\nYour new store “{{shop}}” is ready on Pilotix.\n\nLog in as usual with {{email}}: you’ll find it in your stores.\nLog in: {{url}}\n\nFree trial: {{days}} days.",
+  "msg": {
+    "sub": "Messages sent by stores from “Contact Pilotix”.",
+    "list": "Conversations",
+    "f_open": "Open",
+    "f_closed": "Closed",
+    "f_all": "All",
+    "none": "No messages here.",
+    "pick": "Message",
+    "pickText": "Pick a conversation from the list.",
+    "replyHint": "Your answer (the store gets it by e-mail too)",
+    "send": "Reply",
+    "sent": "Answer sent",
+    "close": "Close the conversation",
+    "reopen": "Reopen"
+  },
+  "h": {
+    "sub": "The server’s state: database, backups, disk, e-mails.",
+    "db": "Database",
+    "stores_one": "{{count}} store",
+    "stores_other": "{{count}} stores",
+    "lastBackup": "Last backup",
+    "backups_one": "{{count}} backup kept",
+    "backups_other": "{{count}} backups kept",
+    "noBackup": "No backup found",
+    "disk": "Free disk space",
+    "diskSub": "{{pct}}% free of {{total}}",
+    "mail": "E-mails",
+    "mailSub": "Invitations, receipts, reminders, codes",
+    "jobs": "Automatic jobs",
+    "on": "On",
+    "off": "Off",
+    "since": "since {{date}}",
+    "oldBackup": "The last backup is more than 30 hours old: the nightly backup may have stopped working.",
+    "lowDisk": "Less than 15% of the disk is free: delete old files or get a bigger disk.",
+    "byStore": "Size per store",
+    "byStoreHelp": "Only the size of each store’s data, never what is inside.",
+    "platform": "Control room (accounts, payments, journal):",
+    "recent": "Latest backups",
+    "server": "Node {{node}} · memory {{mem}} · {{n}} backups in the folder"
+  },
+  "owner": {
+    "title": "Owner",
+    "help": "The account that created the store. Only they see everything and can delete it. You can’t enter the store or change their password.",
+    "state": "Account",
+    "invited": "Invitation not accepted yet",
+    "ok": "Active, e-mail confirmed",
+    "unverified": "Active, e-mail not confirmed yet",
+    "lastLogin": "Last login",
+    "resend": "Resend the invitation",
+    "resent": "Invitation sent again to {{email}}",
+    "maxStores": "Max stores for this owner",
+    "maxStoresHint": "They have {{n}}. Empty = the general setting ({{def}}).",
+    "none": "No owner account.",
+    "privacy": "To respect their privacy, you only see numbers: you can’t enter their store or see their data. You can suspend it."
+  },
+  "ref": {
+    "title": "Referral",
+    "code": "Its code:",
+    "by": "Came through",
+    "rewarded_one": "paid · +{{count}} month earned",
+    "rewarded_other": "paid · +{{count}} months earned",
+    "waiting": "waiting for its first payment",
+    "rewardedTo_one": "“{{shop}}” gets {{count}} free month (referral)",
+    "rewardedTo_other": "“{{shop}}” gets {{count}} free months (referral)"
+  },
+  "rc": {
+    "title": "Payment receipt",
+    "client": "Customer",
+    "date": "Payment date",
+    "what": "For",
+    "subscription": "Pilotix subscription, {{plan}} plan",
+    "total": "Total paid:",
+    "void": "Receipt voided: {{reason}}",
+    "thanks": "Thank you for your trust.",
+    "print": "Print / PDF"
+  },
+  "su": {
+    "sub": "People who create their store themselves, and how many pay afterwards.",
+    "summary": "{{week}} this week · {{month}} this month · {{pending}} not confirmed yet.",
+    "rate": "{{rate}}% pay ({{paid}} of {{made}}, 90 days).",
+    "pending": "Waiting for confirmation",
+    "pendingHelp": "They filled the form but haven’t clicked the e-mailed link yet (it works for 48 hours). Nothing is made before.",
+    "noPending": "Nobody waiting.",
+    "made": "Stores created by sign-up",
+    "noneMade": "None yet.",
+    "paid": "Paid",
+    "trial": "On trial"
   }
 }

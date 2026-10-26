@@ -1,7 +1,9 @@
-// Réglages: Boutique · Dépôts · Commandes du site web (webhook) · Mise à jour automatique des colis (cron) · Meta Ads.
+// Réglages: Boutique · Dépôts · Commandes du site web (webhook) · Mise à jour automatique des colis (cron) · Meta Ads ·
+// and for the store's owner only (a multi-shop server): delete the store and all its data.
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { backend, shopApi } from '../../lib/backend';
+import { backend, server, shopApi } from '../../lib/backend';
+import { useSession } from '../../lib/session';
 import { when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { Card, ErrorBox, Field, Help, Loading, copyText } from '../../ui/kit';
@@ -23,7 +25,70 @@ export function ReglagesPage() {
       <WebCard webKey={s.webhook.key} />
       <CronCard cronKey={s.cron.key} last={s.lastSync} />
       <MetaCard meta={s.meta} />
+      <DeleteStoreCard />
     </div>
+  );
+}
+
+/** Only the store's owner (the person who created it): the store and all its data are deleted for good. */
+function DeleteStoreCard() {
+  const { t } = useTranslation();
+  const { session, logout, enter } = useSession();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const shop = session?.shop;
+  if (!shop || !shop.owner || shop.primary || shop.demo) return null;
+  const go = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const r = await server.deleteStore(password, name);
+      toast(t('admin.settings.deleted', { name: shop.name }), 'ok');
+      // the person goes on in another store of theirs, else back to the login page
+      if (r.next) enter(r.next);
+      else logout();
+      location.hash = '#/accueil';
+    } catch (e: any) {
+      setError(e?.message ?? t('common.error'));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card title={t('admin.settings.danger')} help={t('admin.settings.dangerHelp')}>
+      <p className="small">{t('admin.settings.deleteText')}</p>
+      <button type="button" className="btn danger" onClick={() => setOpen(true)}>
+        {t('admin.settings.deleteStore')}
+      </button>
+      {open && (
+        <Modal
+          title={t('admin.settings.deleteTitle', { name: shop.name })}
+          onClose={() => setOpen(false)}
+          footer={
+            <>
+              <button type="button" className="btn" onClick={() => setOpen(false)}>
+                {t('admin.cancel')}
+              </button>
+              <button type="button" className="btn danger" disabled={busy || !password || name.trim().toLowerCase() !== shop.name.trim().toLowerCase()} onClick={go}>
+                {busy ? '…' : t('admin.settings.deleteForever')}
+              </button>
+            </>
+          }
+        >
+          <p className="px-ban px-ban-bad">{t('admin.settings.deleteWarn')}</p>
+          <Field label={t('admin.settings.deleteName', { name: shop.name })}>
+            <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" />
+          </Field>
+          <Field label={t('admin.settings.deletePassword')}>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+          </Field>
+          {error && <p className="form-err">{error}</p>}
+        </Modal>
+      )}
+    </Card>
   );
 }
 

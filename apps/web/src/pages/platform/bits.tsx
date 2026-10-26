@@ -57,6 +57,22 @@ export function auditText(t: TFunction, a: AuditRow): string {
       return t('platform.log.adminPassword', { email: d.email ?? '' });
     case 'shop.open':
       return t('platform.log.shopOpen', { as: d.as ?? '' });
+    case 'shop.signup':
+      return t('platform.log.shopSignup', { plan: d.plan ?? '' });
+    case 'shop.added':
+      return t('platform.log.shopAdded', { plan: d.plan ?? '' });
+    case 'shop.deleted':
+      return t('platform.log.shopDeleted', { name: d.name ?? '' });
+    case 'shop.invite':
+      return t('platform.log.shopInvite', { email: d.email ?? '' });
+    case 'shop.ownerStores':
+      return t('platform.log.ownerStores', { n: d.maxStores ?? '∞' });
+    case 'payment.receipt':
+      return t('platform.log.receipt', { no: d.receipt ?? '', email: d.to ?? '' });
+    case 'referral.reward':
+      return t('platform.log.reward', { count: d.months ?? 0, from: d.from ?? '' });
+    case 'support.reply':
+      return t('platform.log.supportReply', { subject: d.subject ?? '' });
     case 'payment.add':
       return t('platform.log.paymentAdd', { amount: da(d.amount), method: t(`platform.method.${d.method}`, { defaultValue: d.method }), months: d.months, date: dateOnly(d.paidUntil) });
     case 'payment.void':

@@ -47,12 +47,19 @@ export function Plans({ staff }: { staff: Staff }) {
                 ) : (
                   <>
                     <b className="ltr">{da(p.priceMonth)}</b> <span className="muted">{t('platform.plan.month')}</span>
+                    {p.priceYear ? (
+                      <small className="pp-year">
+                        {' '}
+                        · <b className="ltr">{da(p.priceYear)}</b> {t('platform.plan.year')}
+                      </small>
+                    ) : null}
                   </>
                 )}
               </p>
               {p.description && <p className="muted small">{p.description}</p>}
               <ul className="pp-plan-lim">
                 <li>{p.maxUsers === null ? t('platform.plan.usersAny') : t('platform.plan.users', { n: n(p.maxUsers) })}</li>
+                <li>{p.maxDrivers === null ? t('platform.plan.driversAny') : t('platform.plan.drivers', { count: p.maxDrivers })}</li>
                 <li>{p.maxOrdersMonth === null ? t('platform.plan.ordersAny') : t('platform.plan.orders', { n: n(p.maxOrdersMonth) })}</li>
                 {!p.system && <li>{t('platform.plan.shops', { count: p.shops })}</li>}
               </ul>
@@ -94,6 +101,7 @@ function PlanForm({ plan, onClose }: { plan: Plan | null; onClose: () => void })
     priceMonth: plan?.priceMonth ?? 0,
     priceYear: plan?.priceYear ?? null,
     maxUsers: plan?.maxUsers ?? null,
+    maxDrivers: plan?.maxDrivers ?? null,
     maxOrdersMonth: plan?.maxOrdersMonth ?? null,
     description: plan?.description ?? '',
     public: plan?.public ?? true,
@@ -139,6 +147,7 @@ function PlanForm({ plan, onClose }: { plan: Plan | null; onClose: () => void })
                 priceMonth: f.priceMonth,
                 priceYear: f.priceYear,
                 maxUsers: f.maxUsers || null,
+                maxDrivers: f.maxDrivers ?? null,
                 maxOrdersMonth: f.maxOrdersMonth || null,
                 description: f.description,
                 public: f.public,
@@ -159,6 +168,12 @@ function PlanForm({ plan, onClose }: { plan: Plan | null; onClose: () => void })
           </Field>
           <Field label={t('platform.plan.priceMonth')}>
             <input type="number" min={0} disabled={plan?.system} value={f.priceMonth} onChange={(e) => setF({ ...f, priceMonth: Math.max(0, Number(e.target.value) || 0) })} />
+          </Field>
+          <Field label={t('platform.plan.priceYear')} hint={t('platform.plan.priceYearHint', { price: da(f.priceMonth * 12) })}>
+            <input type="number" min={0} disabled={plan?.system} value={f.priceYear ?? ''} placeholder="—" onChange={(e) => setF({ ...f, priceYear: numOrNull(e.target.value) })} />
+          </Field>
+          <Field label={t('platform.plan.maxDrivers')} hint={t('platform.plan.emptyAny')}>
+            <input type="number" min={0} disabled={plan?.system} value={f.maxDrivers ?? ''} onChange={(e) => setF({ ...f, maxDrivers: e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0) })} />
           </Field>
           <Field label={t('platform.plan.maxUsers')} hint={t('platform.plan.emptyAny')}>
             <input type="number" min={1} disabled={plan?.system} value={f.maxUsers ?? ''} onChange={(e) => setF({ ...f, maxUsers: numOrNull(e.target.value) })} />

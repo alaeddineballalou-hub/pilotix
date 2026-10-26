@@ -1,9 +1,10 @@
 import { DEMO_ACCOUNTS, DEMO_PASSWORD, Language, LANGUAGES } from '@pilotix/shared';
 import { FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { backend, DEMO_AVAILABLE, DEMO_ONLY, FIXED_SERVER, forgotAvailable, onDemoProgress, requestPasswordReset, serverDemo, serverUrl, setServerUrl, switchDemo } from '../lib/backend';
+import { backend, DEMO_AVAILABLE, DEMO_ONLY, FIXED_SERVER, forgotAvailable, onDemoProgress, requestPasswordReset, serverDemo, serverUrl, setServerUrl, signupInfo, switchDemo } from '../lib/backend';
 import { applyLanguage } from '../lib/i18n';
 import { useSession } from '../lib/session';
+import { Icon } from '../ui/kit';
 
 const LANG: Record<Language, string> = { fr: 'Français', en: 'English', ar: 'العربية' };
 
@@ -24,12 +25,15 @@ export function Login() {
 
   // the server's demo shop (Pilotix turned its button on): a few of its accounts
   const [srvDemo, setSrvDemo] = useState<{ key: string; name: string; role: string }[]>([]);
+  // « Créer ma boutique » when Pilotix opened sign-ups
+  const [canSignup, setCanSignup] = useState(false);
 
   useEffect(() => onDemoProgress(setProgress), [busy]);
   useEffect(() => {
     if (DEMO_ONLY || !serverUrl()) return;
     let on = true;
     forgotAvailable().then((ok) => on && setCanReset(ok));
+    signupInfo().then((r) => on && setCanSignup(r.open));
     serverDemo().then((d) => on && d.available && setSrvDemo(d.accounts.filter((a) => ['admin', 'conf1', 'depot', 'livreur', 'marketer'].includes(a.key))));
     return () => {
       on = false;
@@ -172,6 +176,14 @@ export function Login() {
                 {t('login.forgot')}
               </button>
             )}
+            {canSignup && (
+              <div className="px-signup-cta">
+                <span className="muted">{t('login.noAccount')}</span>
+                <a className="btn" href="#/inscription">
+                  <Icon name="store" /> {t('login.createStore')}
+                </a>
+              </div>
+            )}
           </>
         )}
         {!DEMO_ONLY && srvDemo.length > 0 && (
@@ -203,6 +215,11 @@ export function Login() {
             {busy && busy !== 'login' && <p className="muted small">{progress}</p>}
             {DEMO_ONLY && error && <p className="form-err">{error}</p>}
           </div>
+        )}
+        {!DEMO_ONLY && (
+          <a className="login-link small" href="#/conditions">
+            {t('login.terms')}
+          </a>
         )}
       </form>
       {backend.kind === 'demo' && <span hidden>{progress}</span>}

@@ -25,7 +25,10 @@
     "demo": "Démo",
     "staff": "Équipe Pilotix",
     "journal": "Journal",
-    "settings": "Réglages"
+    "settings": "Réglages",
+    "signups": "Inscriptions",
+    "messages": "Messages",
+    "health": "Serveur"
   },
   "roles": {
     "owner": "Propriétaire",
@@ -43,7 +46,8 @@
     "grace": "En retard",
     "expired": "Bloquée (impayé)",
     "suspended": "Suspendue",
-    "archived": "Archivée"
+    "archived": "Archivée",
+    "deleted": "Supprimée"
   },
   "daysShort_one": "{{count}} j",
   "daysShort_other": "{{count}} j",
@@ -53,7 +57,9 @@
     "active": "Actives",
     "late": "En retard",
     "suspended": "Suspendues",
-    "archived": "Archivées"
+    "archived": "Archivées",
+    "over": "Au-dessus des limites",
+    "deleted": "Supprimées"
   },
   "method": {
     "baridimob": "BaridiMob",
@@ -75,7 +81,18 @@
     "month": "Encaissé ce mois",
     "lastMonth": "mois dernier : {{amount}}",
     "mrr": "Revenu mensuel attendu",
-    "mrrHelp": "La somme du prix mensuel des formules de toutes les boutiques actives (payées)."
+    "mrrHelp": "La somme du prix mensuel des formules de toutes les boutiques actives (payées).",
+    "signups": "Inscriptions cette semaine",
+    "signupsSub_one": "{{count}} ce mois",
+    "signupsSub_other": "{{count}} ce mois",
+    "pending": "Emails pas encore confirmés",
+    "pendingHelp": "Ils ont rempli « Créer ma boutique » mais n’ont pas encore cliqué le lien de l’email (il marche 48 heures).",
+    "conversion": "Inscrits qui paient",
+    "conversionSub": "{{paid}} sur {{made}} (90 jours)",
+    "conversionHelp": "Parmi les boutiques créées par inscription ces 90 derniers jours, combien ont fait au moins un paiement.",
+    "messages": "Messages à lire",
+    "over": "Au-dessus des limites",
+    "overHelp": "Boutiques qui dépassent leur formule (comptes, livreurs ou commandes du mois) : proposez-leur la formule supérieure."
   },
   "d": {
     "trialsEnding": "Essais qui finissent (3 jours)",
@@ -98,7 +115,8 @@
     "state": "État",
     "team": "Comptes",
     "orders": "Commandes (mois)",
-    "activity": "Dernière activité"
+    "activity": "Dernière activité",
+    "drivers": "Livreurs"
   },
   "searchShop": "Chercher une boutique, un téléphone…",
   "noShop": "Aucune boutique ici.",
@@ -152,7 +170,7 @@
     "owner": "Le propriétaire",
     "ownerName": "Nom du propriétaire",
     "ownerEmail": "Email (son identifiant)",
-    "ownerEmailHint": "Il se connecte avec cet email. Un email = une seule boutique.",
+    "ownerEmailHint": "Il se connecte avec cet email. Le même email peut avoir plusieurs boutiques.",
     "ownerPhone": "Téléphone / WhatsApp",
     "ownerPhoneHint": "Pour lui envoyer ses accès sur WhatsApp.",
     "contactEmail": "Email de contact",
@@ -163,7 +181,10 @@
     "passwordAuto": "Créé automatiquement",
     "passwordHint": "Vide = un mot de passe facile à lire est créé pour vous.",
     "notes": "Notes",
-    "link": "Lien"
+    "link": "Lien",
+    "inviteNote": "Pilotix envoie un email au propriétaire pour qu’il choisisse lui-même son mot de passe. S’il a déjà un compte, la boutique s’ajoute à ses boutiques.",
+    "language": "Langue des emails",
+    "languageHint": "La langue de l’email d’invitation et des rappels."
   },
   "field": {
     "name": "nom",
@@ -175,7 +196,8 @@
     "plan": "formule",
     "trialEndsAt": "fin d’essai",
     "paidUntil": "fin de période payée",
-    "maxUsers": "comptes max"
+    "maxUsers": "comptes max",
+    "maxDrivers": "livreurs max"
   },
   "p": {
     "months": "Durée payée",
@@ -194,7 +216,8 @@
     "count_one": "{{count}} paiement",
     "count_other": "{{count}} paiements",
     "period": "Période",
-    "by": "Saisi par"
+    "by": "Saisi par",
+    "yearly": "Prix à l’année de la formule : {{price}}"
   },
   "pay": {
     "title": "Paiements",
@@ -203,7 +226,9 @@
     "voidTitle": "Annuler ce paiement ?",
     "voidText": "Pour un paiement saisi par erreur : il reste dans l’historique, barré, et n’est plus compté. Si c’était le dernier, la période payée revient en arrière.",
     "voidDone": "Paiement annulé",
-    "voided": "annulé ({{reason}})"
+    "voided": "annulé ({{reason}})",
+    "sendReceipt": "Envoyer le reçu par email",
+    "receiptSent": "Reçu envoyé à {{email}}"
   },
   "sub": {
     "title": "Abonnement",
@@ -213,7 +238,9 @@
     "maxUsers": "Comptes actifs maximum",
     "maxUsersHint": "Vide = la limite de la formule ({{n}}).",
     "trialEnds": "Fin de l’essai",
-    "paidUntil": "Payé jusqu’au"
+    "paidUntil": "Payé jusqu’au",
+    "maxDrivers": "Livreurs maximum",
+    "maxDriversHint": "Vide = la limite de la formule ({{n}})."
   },
   "use": {
     "title": "Utilisation",
@@ -222,7 +249,12 @@
     "ordersTotal": "commandes en tout",
     "lastOrder": "dernière commande",
     "lastActive": "dernière connexion",
-    "overOrders": "Au-dessus des commandes de sa formule ce mois : proposez-lui la formule supérieure."
+    "overOrders": "Au-dessus des commandes de sa formule ce mois : proposez-lui la formule supérieure.",
+    "drivers": "livreurs actifs",
+    "ordersLastMonth": "commandes le mois dernier",
+    "ownerStores": "boutiques du propriétaire",
+    "help": "Seulement des chiffres, jamais le contenu de la boutique. En rouge : au-dessus de la limite de sa formule.",
+    "over": "Cette boutique dépasse sa formule : proposez-lui la formule supérieure. Ses commandes ne sont jamais bloquées."
   },
   "menus": {
     "title": "Menus et sous-menus",
@@ -268,7 +300,16 @@
     "staffPassword": "A changé son mot de passe",
     "settings": "Réglages changés",
     "demoCreate": "Créée (démo)",
-    "demoReset": "Remise à zéro (démo)"
+    "demoReset": "Remise à zéro (démo)",
+    "shopSignup": "Boutique créée par inscription (formule {{plan}})",
+    "shopAdded": "Boutique ajoutée par son propriétaire (formule {{plan}})",
+    "shopDeleted": "Boutique « {{name}} » supprimée par son propriétaire",
+    "shopInvite": "Invitation envoyée à {{email}}",
+    "ownerStores": "Boutiques max du propriétaire : {{n}}",
+    "receipt": "Reçu {{no}} envoyé à {{email}}",
+    "reward_one": "Parrainage : {{count}} mois gratuit grâce à « {{from}} »",
+    "reward_other": "Parrainage : {{count}} mois gratuits grâce à « {{from}} »",
+    "supportReply": "Réponse au message « {{subject}} »"
   },
   "plan": {
     "new": "Nouvelle formule",
@@ -292,7 +333,14 @@
     "emptyAny": "Vide = illimité.",
     "description": "Description",
     "activeLabel": "Proposée aux nouvelles boutiques",
-    "systemMenus": "La formule interne (votre boutique) donne toujours tout."
+    "systemMenus": "La formule interne (votre boutique) donne toujours tout.",
+    "drivers_one": "{{count}} livreur",
+    "drivers_other": "{{count}} livreurs",
+    "driversAny": "Livreurs illimités",
+    "maxDrivers": "Livreurs max",
+    "priceYear": "Prix pour un an (DA)",
+    "priceYearHint": "Vide = pas de prix à l’année. 12 mois au prix du mois = {{price}}.",
+    "year": "/ an"
   },
   "staff": {
     "new": "Nouveau compte",
@@ -333,7 +381,35 @@
     "toneInfo": "Information (bleu)",
     "toneWarn": "Attention (orange)",
     "noticeUntil": "Jusqu’au",
-    "noticeUntilHint": "Vide = jusqu’à ce que vous l’effaciez."
+    "noticeUntilHint": "Vide = jusqu’à ce que vous l’effaciez.",
+    "signupTitle": "Inscriptions",
+    "signupHelp": "Tout le monde peut créer sa boutique depuis « Créer ma boutique » : l’email est confirmé avant que la boutique soit faite.",
+    "signupOpen": "Inscriptions ouvertes",
+    "maxStores": "Boutiques max par compte",
+    "maxStoresHint": "Combien de boutiques une même personne peut avoir. Vous pouvez changer ce nombre pour un propriétaire dans la fiche de sa boutique.",
+    "signupLink": "Voir la page « Créer ma boutique »",
+    "remindTitle": "Rappels par email",
+    "remindHelp": "Chaque matin à 8 h, Pilotix écrit aux propriétaires : fin de l’essai, fin de l’abonnement, délai de grâce, boutique bloquée. Un seul email par étape.",
+    "remindOn": "Envoyer les rappels",
+    "remindDays": "Combien de jours avant la fin",
+    "refTitle": "Parrainage",
+    "refHelp": "Chaque boutique a un lien. Quand une boutique venue avec ce lien fait son premier paiement, la boutique qui l’a amenée gagne des mois gratuits, tout seul.",
+    "refOn": "Parrainage actif",
+    "refMonths": "Mois gratuits gagnés",
+    "secTitle": "Sécurité du centre de contrôle",
+    "secHelp": "À chaque connexion, un code à 6 chiffres est envoyé par email. Un appareil peut être retenu 30 jours.",
+    "secTwoStep": "Demander un code par email à la connexion",
+    "companyTitle": "Votre société (sur les reçus)",
+    "companyHelp": "Ces informations sont imprimées en haut de chaque reçu de paiement.",
+    "coName": "Nom de la société",
+    "coTax": "NIF",
+    "coAddress": "Adresse",
+    "legalTitle": "Conditions d’utilisation et confidentialité",
+    "legalHelp": "La page que chacun accepte en créant sa boutique. Vide = le texte standard de Pilotix.",
+    "legalText": "Votre texte",
+    "legalHint": "Texte simple, les retours à la ligne sont gardés.",
+    "legalPh": "Laissez vide pour garder le texte standard.",
+    "legalLink": "Voir la page"
   },
   "demo": {
     "none": "Pas encore de boutique démo",
@@ -350,5 +426,104 @@
     "publicTitle": "Le bouton « Essayer la démo »",
     "publicOn": "Visible sur la page de connexion : les visiteurs choisissent un rôle et entrent.",
     "publicOff": "Caché : seule l’équipe Pilotix peut ouvrir la démo."
+  },
+  "code": {
+    "text": "Un code à 6 chiffres vient d’être envoyé à {{email}}. Il marche 10 minutes.",
+    "label": "Code reçu par email",
+    "remember": "Ne plus demander de code sur cet appareil pendant 30 jours",
+    "submit": "Valider"
+  },
+  "createdInvite": "« {{name}} » est créée. {{email}} a reçu un email pour choisir son mot de passe (le lien marche 7 jours).",
+  "createdAdded": "« {{name}} » est créée et ajoutée au compte Pilotix de {{email}} : il la trouve en se connectant, avec son mot de passe habituel.",
+  "createdPrivacy": "Vous ne connaissez pas son mot de passe et vous ne verrez pas ses données : seulement des chiffres (comptes, livreurs, commandes par mois).",
+  "welcomeInvite": "Bonjour {{name}} 👋\nVotre boutique « {{shop}} » est prête sur Pilotix.\n\nNous avons envoyé un email à {{email}} : ouvrez-le pour choisir votre mot de passe (regardez aussi dans les spams).\nConnexion : {{url}}\n\nEssai gratuit : {{days}} jours.",
+  "welcomeAdded": "Bonjour {{name}} 👋\nVotre nouvelle boutique « {{shop}} » est prête sur Pilotix.\n\nConnectez-vous comme d’habitude avec {{email}} : vous la trouverez dans vos boutiques.\nConnexion : {{url}}\n\nEssai gratuit : {{days}} jours.",
+  "msg": {
+    "sub": "Les messages envoyés par les boutiques depuis « Contacter Pilotix ».",
+    "list": "Conversations",
+    "f_open": "Ouvertes",
+    "f_closed": "Fermées",
+    "f_all": "Toutes",
+    "none": "Aucun message ici.",
+    "pick": "Message",
+    "pickText": "Choisissez une conversation dans la liste.",
+    "replyHint": "Votre réponse (la boutique la reçoit aussi par email)",
+    "send": "Répondre",
+    "sent": "Réponse envoyée",
+    "close": "Fermer la conversation",
+    "reopen": "Rouvrir"
+  },
+  "h": {
+    "sub": "L’état du serveur : base de données, sauvegardes, disque, emails.",
+    "db": "Base de données",
+    "stores_one": "{{count}} boutique",
+    "stores_other": "{{count}} boutiques",
+    "lastBackup": "Dernière sauvegarde",
+    "backups_one": "{{count}} sauvegarde gardée",
+    "backups_other": "{{count}} sauvegardes gardées",
+    "noBackup": "Aucune sauvegarde trouvée",
+    "disk": "Espace disque libre",
+    "diskSub": "{{pct}} % libre sur {{total}}",
+    "mail": "Emails",
+    "mailSub": "Invitations, reçus, rappels, codes",
+    "jobs": "Tâches automatiques",
+    "on": "En marche",
+    "off": "Arrêté",
+    "since": "depuis le {{date}}",
+    "oldBackup": "La dernière sauvegarde a plus de 30 heures : la sauvegarde de nuit ne marche peut-être plus.",
+    "lowDisk": "Moins de 15 % du disque est libre : supprimez de vieux fichiers ou prenez un disque plus grand.",
+    "byStore": "Taille par boutique",
+    "byStoreHelp": "Seulement la taille des données de chaque boutique, jamais leur contenu.",
+    "platform": "Centre de contrôle (comptes, paiements, journal) :",
+    "recent": "Dernières sauvegardes",
+    "server": "Node {{node}} · mémoire {{mem}} · {{n}} sauvegardes dans le dossier"
+  },
+  "owner": {
+    "title": "Propriétaire",
+    "help": "Le compte qui a créé la boutique. Lui seul voit tout et peut la supprimer. Vous ne pouvez pas entrer dans la boutique ni changer son mot de passe.",
+    "state": "Compte",
+    "invited": "Invitation pas encore acceptée",
+    "ok": "Actif, email confirmé",
+    "unverified": "Actif, email pas encore confirmé",
+    "lastLogin": "Dernière connexion",
+    "resend": "Renvoyer l’invitation",
+    "resent": "Invitation renvoyée à {{email}}",
+    "maxStores": "Boutiques max pour ce propriétaire",
+    "maxStoresHint": "Il en a {{n}}. Vide = le réglage général ({{def}}).",
+    "none": "Pas de compte propriétaire.",
+    "privacy": "Par respect de sa vie privée, vous voyez seulement des chiffres : vous ne pouvez ni entrer dans sa boutique ni voir ses données. Vous pouvez la suspendre."
+  },
+  "ref": {
+    "title": "Parrainage",
+    "code": "Son code :",
+    "by": "Venue grâce à",
+    "rewarded_one": "a payé · +{{count}} mois gagné",
+    "rewarded_other": "a payé · +{{count}} mois gagnés",
+    "waiting": "attend son premier paiement",
+    "rewardedTo_one": "« {{shop}} » gagne {{count}} mois gratuit (parrainage)",
+    "rewardedTo_other": "« {{shop}} » gagne {{count}} mois gratuits (parrainage)"
+  },
+  "rc": {
+    "title": "Reçu de paiement",
+    "client": "Client",
+    "date": "Date du paiement",
+    "what": "Objet",
+    "subscription": "Abonnement Pilotix, formule {{plan}}",
+    "total": "Total payé :",
+    "void": "Reçu annulé : {{reason}}",
+    "thanks": "Merci pour votre confiance.",
+    "print": "Imprimer / PDF"
+  },
+  "su": {
+    "sub": "Les personnes qui créent leur boutique elles-mêmes, et combien paient ensuite.",
+    "summary": "{{week}} cette semaine · {{month}} ce mois · {{pending}} pas encore confirmé(s).",
+    "rate": "{{rate}} % paient ({{paid}} sur {{made}}, 90 jours).",
+    "pending": "En attente de confirmation",
+    "pendingHelp": "Ils ont rempli le formulaire mais n’ont pas encore cliqué le lien reçu par email (il marche 48 heures). Rien n’est créé avant.",
+    "noPending": "Personne en attente.",
+    "made": "Boutiques créées par inscription",
+    "noneMade": "Aucune pour l’instant.",
+    "paid": "A payé",
+    "trial": "En essai"
   }
 }
