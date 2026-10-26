@@ -10,6 +10,13 @@ permissions:
   contents: read
 
 jobs:
+  caddy:
+    name: Web server configuration (Caddy validate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker run --rm -e DOMAIN=example.com -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
   core:
     name: Core rules (tests on PostgreSQL in-process)
     runs-on: ubuntu-latest
