@@ -5,6 +5,7 @@ import { cashProcs } from './modules/cash';
 import { caissesProcs } from './modules/caisses';
 import { courierPayProcs } from './modules/courierpay';
 import { catalogProcs } from './modules/catalog';
+import { productImportProcs } from './modules/productimport';
 import { cmProcs } from './modules/cm';
 import { confirmationProcs } from './modules/confirmation';
 import { customersProcs } from './modules/customers';
@@ -34,6 +35,7 @@ export const REGISTRY = {
   ...statsProcs,
   ...boardProcs,
   ...catalogProcs,
+  ...productImportProcs,
   ...pickingProcs,
   ...pickupProcs,
   ...parcelsProcs,
