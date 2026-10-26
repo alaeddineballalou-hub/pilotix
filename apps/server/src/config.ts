@@ -36,4 +36,15 @@ export const config = {
   })(),
   /** Public address of this server (used to show webhook URLs). */
   publicUrl: (process.env.PUBLIC_URL || '').replace(/\/+$/, ''),
+  /**
+   * E-mails ("mot de passe oublié"). Any SMTP server: Gmail (smtp.gmail.com, 465, an app password), Microsoft 365
+   * (smtp.office365.com, 587), Brevo (smtp-relay.brevo.com, 587)… MAIL_FROM: "Pilotix <contact@your-shop.dz>".
+   */
+  smtp: {
+    host: (process.env.SMTP_HOST || '').trim(),
+    port: Number(process.env.SMTP_PORT || 587),
+    user: (process.env.SMTP_USER || '').trim(),
+    pass: process.env.SMTP_PASS || '',
+    from: (process.env.MAIL_FROM || process.env.SMTP_USER || '').trim(),
+  },
 };

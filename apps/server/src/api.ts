@@ -30,6 +30,8 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { brotliCompressSync, constants as zlibConst, gzipSync } from 'node:zlib';
 import { z } from 'zod';
 import { config } from './config';
+import { mailConfigured, sendMail } from './mail';
+import { resetMail } from './resetMail';
 import { CoreService } from './core.service';
 
 // ---------------------------------------------------------------- errors → HTTP
@@ -218,6 +220,8 @@ function optionalDellal(): any {
 }
 
 const LoginBody = z.object({ email: z.string().email().max(200), password: z.string().min(1).max(200) });
+const ForgotBody = z.object({ email: z.string().email().max(200) });
+const ResetBody = z.object({ token: z.string().max(200), password: z.string().max(200) });
 
 @Controller()
 @UseGuards(AuthGuard)
@@ -258,6 +262,48 @@ class ApiController {
     attempts.delete(mailKey);
     const token = await this.jwt.signAsync({ sub: session.profile.id, tv: await tokenVersion(this.core.db, session.profile.id) });
     return { token, session };
+  }
+
+  /** Can this server send "mot de passe oublié" e-mails? (the login page shows the link only then) */
+  @Public()
+  @Get('auth/forgot')
+  forgotAvailable() {
+    return { available: mailConfigured() };
+  }
+
+  /**
+   * "Mot de passe oublié": e-mails a one-time link. Same answer whether the account exists or not, and the e-mail
+   * leaves after the answer (no timing difference). 5 requests per 15 minutes per address.
+   */
+  @Public()
+  @Post('auth/forgot')
+  async forgot(@Body() body: unknown, @Req() req: { ip?: string }) {
+    const ipKey = `forgot:${core.ipNet(req.ip || '') || 'unknown'}`;
+    checkLogin(ipKey, 5);
+    failedLogin(ipKey);
+    if (!mailConfigured()) throw new HttpException({ message: 'L’envoi d’e-mails n’est pas configuré sur ce serveur. Demandez à votre administrateur.' }, 503);
+    const b = ForgotBody.safeParse(body);
+    if (!b.success) throw new core.AppError('bad_request', 'Email invalide');
+    const link = await core.createPasswordReset(this.core.db, b.data.email);
+    if (link) sendMail(resetMail(link)).catch((e) => new Logger('Mail').error(`Reset e-mail to ${link.email} failed: ${e?.message || e}`));
+    return { ok: true };
+  }
+
+  /** Sets the new password with the link's secret. 10 wrong links per 15 minutes per address. */
+  @Public()
+  @Post('auth/reset')
+  async reset(@Body() body: unknown, @Req() req: { ip?: string }) {
+    const ipKey = `reset:${core.ipNet(req.ip || '') || 'unknown'}`;
+    checkLogin(ipKey, 10);
+    const b = ResetBody.safeParse(body);
+    if (!b.success) throw new core.AppError('bad_request', 'Lien invalide');
+    try {
+      await core.resetPassword(this.core.db, b.data.token, b.data.password);
+    } catch (e) {
+      failedLogin(ipKey);
+      throw e;
+    }
+    return { ok: true };
   }
 
   @Post('rpc/:name')

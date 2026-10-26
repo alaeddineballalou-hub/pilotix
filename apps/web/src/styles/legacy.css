@@ -1349,3 +1349,8 @@ input.bjsav-q{width:76px!important}.bjsav-pp{display:flex;flex-direction:column;
 .side .nav-count, .side .nav-count.nc-n, .side .nav-count.nc-a, .side .nav-count.nc-c, .side .nav-item.on .nav-count { background: #FFFFFF; color: #1E2A38; box-shadow: 0 1px 2px rgba(15, 23, 42, .22), 0 0 0 1px rgba(15, 23, 42, .07); min-width: 24px; height: 24px; padding: 0 7px; border-radius: 999px; font-family: var(--f); font-size: 11.5px; font-weight: 800; letter-spacing: .01em; font-variant-numeric: tabular-nums lining-nums; }
 .side .nav-count.zero { opacity: .6; }
 /* end Menu counts */
+/* "mot de passe oublié" */
+.login-title { margin: 4px 0 0; font-size: 18px; text-align: center; }
+.login-note { margin: 0; line-height: 1.5; color: var(--muted, #5b6577); text-align: center; }
+.login-link { font: inherit; align-self: center; background: none; border: 0; padding: 4px; color: var(--navy); font-weight: 700; text-decoration: underline; cursor: pointer; }
+.login-link:hover { color: var(--coral); }

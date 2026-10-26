@@ -7,5 +7,19 @@
   "serverHint": "Fournie par votre administrateur",
   "error": "Email ou mot de passe incorrect",
   "demo": "Démo",
-  "demoText": "entrez avec un compte d’essai (données fictives, rien n’est envoyé) :"
+  "demoText": "entrez avec un compte d’essai (données fictives, rien n’est envoyé) :",
+  "forgot": "Mot de passe oublié ?",
+  "forgotTitle": "Mot de passe oublié",
+  "forgotText": "Entrez l’e-mail de votre compte. Nous vous envoyons un lien pour choisir un nouveau mot de passe.",
+  "forgotSend": "Envoyer le lien",
+  "forgotSent": "C’est envoyé. Si un compte existe avec cet e-mail, vous allez recevoir un lien dans quelques minutes (regardez aussi dans les spams). Le lien marche 30 minutes.",
+  "backToLogin": "Retour à la connexion",
+  "resetTitle": "Nouveau mot de passe",
+  "resetNew": "Nouveau mot de passe",
+  "resetAgain": "Encore une fois",
+  "resetHint": "Au moins 8 caractères",
+  "resetSave": "Enregistrer",
+  "resetShort": "Le mot de passe doit contenir au moins 8 caractères",
+  "resetMismatch": "Les deux mots de passe ne sont pas pareils",
+  "resetDone": "C’est fait ! Votre mot de passe est changé. Connectez-vous avec le nouveau."
 }

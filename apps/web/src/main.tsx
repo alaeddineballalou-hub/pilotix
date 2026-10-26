@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode, Suspense, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Login } from './layout/Login';
+import { ResetPassword } from './layout/ResetPassword';
 import { canSee, canSeeChild, homeFor, NAV } from './layout/nav';
 import { applyTheme, Shell } from './layout/Shell';
 import { ApiError } from './lib/backend';
@@ -52,6 +53,8 @@ function App() {
   const { session, ready } = useSession();
   const parts = useHash();
   if (!ready) return <Loading />;
+  // the link of the "mot de passe oublié" e-mail works logged in or not
+  if (parts[0] === 'reset' && parts[1]) return <ResetPassword token={parts[1]} />;
   if (!session) return <Login />;
 
   let [page, sub, ...rest]: (string | undefined)[] = parts;

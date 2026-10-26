@@ -51,6 +51,32 @@ export function setServerUrl(url: string) {
   store.set('server', url.trim().replace(/\/+$/, '') || null);
 }
 
+/** "Mot de passe oublié" (no login): asks the server, at its own address, without a session. */
+async function authRequest<T>(path: string, body?: unknown): Promise<T> {
+  const base = serverUrl();
+  if (!base) throw new ApiError(0, 'Adresse du serveur manquante');
+  let res: Response;
+  try {
+    res = await fetch(`${base}/api${path}`, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError(0, 'Serveur injoignable. Vérifiez votre connexion.');
+  }
+  const data = await res.json().catch(() => undefined);
+  if (!res.ok) throw new ApiError(res.status, (data as any)?.message || res.statusText);
+  return data as T;
+}
+/** Does this server send reset e-mails? (false when unknown: the link is then not shown) */
+export const forgotAvailable = () =>
+  authRequest<{ available: boolean }>('/auth/forgot')
+    .then((r) => !!r.available)
+    .catch(() => false);
+export const requestPasswordReset = (email: string) => authRequest<{ ok: true }>('/auth/forgot', { email });
+export const resetPasswordWithLink = (token: string, password: string) => authRequest<{ ok: true }>('/auth/reset', { token, password });
+
 class RemoteBackend implements Backend {
   kind = 'remote' as const;
   private token = store.get('token');
