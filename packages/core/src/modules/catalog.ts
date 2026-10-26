@@ -46,8 +46,16 @@ export interface CatalogProduct {
   description: string | null;
   alertQty: number;
   defaultCompanyId: number | null;
+  /** Taille, Couleur, Genre…: the options the variants are made from (empty: variants typed one by one) */
+  options: ProductOption[];
   variants: CatalogVariant[];
 }
+export interface ProductOption {
+  name: string;
+  values: string[];
+}
+/** Between the option values in a variant's name: « 12P / ROSE / Fille ». */
+export const OPTION_SEP = ' / ';
 export interface StockLine extends StockRow {
   productActive: boolean;
   variantActive: boolean;
@@ -128,6 +136,7 @@ function toProduct(p: any, vars: any[]): CatalogProduct {
     description: p.description ?? null,
     alertQty: num(p.alert_qty),
     defaultCompanyId: numOrNull(p.default_company_id),
+    options: j(p.options),
     variants: vars.map((v) => ({ id: num(v.id), productId: num(v.product_id), title: v.title, sku: v.sku, price: numOrNull(v.price), active: !!v.active })),
   };
 }
@@ -349,6 +358,16 @@ export const ProductInput = z.object({
   /** given to every depot of the product (each depot can then be changed in Stock › Seuil d'alerte) */
   alertQty: z.number().int().min(0).max(1_000_000).optional(),
   defaultCompanyId: id.nullable().optional(),
+  /** Taille, Couleur, Genre…: at most 3 options; a value never holds « / » (it separates the values in a variant's name) */
+  options: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1, 'Nom de l’option manquant').max(40),
+        values: z.array(z.string().trim().min(1).max(60).refine((v) => !v.includes('/'), 'Une valeur ne peut pas contenir « / »')).min(1, 'Ajoutez au moins une valeur').max(60),
+      }),
+    )
+    .max(3, '3 options au maximum')
+    .optional(),
   variants: z.array(VariantInput).max(200).default([]),
 });
 
@@ -383,6 +402,15 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
       if (dup && num(dup.id) !== i.id) throw bad(`Le SKU « ${sku} » est déjà utilisé`);
     } else sku = cur?.sku ?? (await freeSku(tx, 'products', slug(i.name)));
     const linked = [...new Set(i.linked)].filter((x) => x !== i.id);
+    if (i.options) {
+      const names = i.options.map((o) => o.name.toLowerCase());
+      if (new Set(names).size !== names.length) throw bad('Deux options ont le même nom');
+      for (const o of i.options) {
+        const vals = o.values.map((v) => v.toLowerCase());
+        if (new Set(vals).size !== vals.length) throw bad(`L’option « ${o.name} » a deux fois la même valeur`);
+      }
+    }
+    const options = i.options === undefined ? (cur ? (typeof cur.options === 'string' ? JSON.parse(cur.options) : cur.options ?? []) : []) : i.options;
     // fields not sent keep their value (older callers send only the first ones)
     const keep = <T,>(v: T | undefined, col: string): T | null => (v === undefined ? (cur?.[col] ?? null) : (v as any) === '' ? null : v);
     const extra = [keep(i.barcode, 'barcode'), keep(i.brand, 'brand'), keep(i.externalId, 'external_id'), keep(i.pageUrl, 'page_url'), keep(i.sellerId, 'seller_id'), keep(i.description, 'description'), i.alertQty ?? num(cur?.alert_qty), keep(i.defaultCompanyId, 'default_company_id')];
@@ -392,17 +420,17 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
       await logProductChange(tx, i.id!, ctx.session.profile.id, { price: cur.price, cost: cur.cost, max_discount: cur.max_discount }, { price: i.price, cost: i.cost, max_discount: maxDiscount }, 'Fiche produit');
       await tx.query(
         `UPDATE products SET name=$2, sku=$3, price=$4, cost=$5, weight_kg=$6, photo=$7, is_service=$8, active=$9, fixed_price=$10, max_discount=$11, packs=$12, linked=$13, parts=$14, fee_grid=$15,
-         barcode=$16, brand=$17, external_id=$18, page_url=$19, seller_id=$20, description=$21, alert_qty=$22, default_company_id=$23 WHERE id=$1`,
-        [i.id, ...vals],
+         barcode=$16, brand=$17, external_id=$18, page_url=$19, seller_id=$20, description=$21, alert_qty=$22, default_company_id=$23, options=$24 WHERE id=$1`,
+        [i.id, ...vals, JSON.stringify(options)],
       );
       productId = i.id!;
     } else {
       productId = num(
         (await tx.query(
           `INSERT INTO products (name, sku, price, cost, weight_kg, photo, is_service, active, fixed_price, max_discount, packs, linked, parts, fee_grid,
-                                 barcode, brand, external_id, page_url, seller_id, description, alert_qty, default_company_id)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING id`,
-          vals,
+                                 barcode, brand, external_id, page_url, seller_id, description, alert_qty, default_company_id, options)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) RETURNING id`,
+          [...vals, JSON.stringify(options)],
         ))[0].id,
       );
     }

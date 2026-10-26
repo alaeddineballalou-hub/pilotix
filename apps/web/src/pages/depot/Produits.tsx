@@ -284,7 +284,23 @@ function ProductsTab() {
                     </small>
                   </span>
                 </span>
-                <span className="a-vars pd-vars">{vars.length ? <bdi>{vars.join(', ')}</bdi> : <span className="pd-none">—</span>}</span>
+                <span className="a-vars pd-vars">
+                  {p.options.length ? (
+                    // made from options (Taille, Couleur…): the options, not 20 names
+                    <span className="pd-opts">
+                      {p.options.map((o) => (
+                        <bdi key={o.name}>
+                          <b>{o.name}</b> {o.values.join(', ')}
+                        </bdi>
+                      ))}
+                      <small>{t('produits.form.opt.count', { count: vars.length })}</small>
+                    </span>
+                  ) : vars.length ? (
+                    <bdi>{vars.join(', ')}</bdi>
+                  ) : (
+                    <span className="pd-none">—</span>
+                  )}
+                </span>
                 <span className="pd-sub">
                   <span className="a-price num" data-l={t('produits.prices.sale')}>
                     <b className="ltr">{da(p.price)}</b>
