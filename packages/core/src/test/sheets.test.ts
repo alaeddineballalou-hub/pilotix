@@ -19,8 +19,17 @@ test('sheet links, CSV and column guess', () => {
   assert.equal(g['Quantité'], 'qty');
   assert.equal(g['Prix'], 'total');
   assert.equal(g['Remarque'], 'note');
-  assert.equal(g['Date'], 'ignore');
+  assert.equal(g['Date'], 'date');
   assert.equal(g['الولاية'], 'ignore'); // wilaya already taken
+  // titles that hold another field's word
+  const h = guessMapping(['Numéro de commande', 'Date de la commande', 'Référence produit', 'Numéro', 'Horodateur', 'رقم الطلب']);
+  assert.equal(h['Numéro de commande'], 'ref');
+  assert.equal(h['Date de la commande'], 'date');
+  assert.equal(h['Référence produit'], 'sku');
+  assert.equal(h['Numéro'], 'phone');
+  assert.equal(h['رقم الطلب'], 'ignore'); // order number already taken
+  assert.equal(guessMapping(['Horodateur'])['Horodateur'], 'date');
+  assert.equal(guessMapping(['رقم الطلب'])['رقم الطلب'], 'ref');
 });
 
 test('sheet channel: choose the columns, then each line becomes an order once', async () => {
@@ -97,4 +106,81 @@ test('test orders: made with fake customers, then removed', async () => {
   assert.equal(d.deleted, 3);
   assert.equal(((await call('admin.testOrders.count', admin, {})) as any).count, 0);
   await assert.rejects(call('admin.testOrders.create', await as(EMAILS.conf), { count: 1 }), /refusé/);
+});
+
+test('sheet channel: a line never becomes a second order', async () => {
+  const { db, as } = await setup(5);
+  const admin = await as(EMAILS.admin);
+  const product = (await db.query('SELECT p.name FROM products p WHERE p.active AND NOT p.is_service AND (SELECT count(*) FROM product_variants v WHERE v.product_id = p.id AND v.active) <= 1 ORDER BY p.id LIMIT 1'))[0].name;
+  const count = async () => Number((await db.query("SELECT count(*) AS n FROM orders WHERE source LIKE 'Feuille%'"))[0].n);
+  let csv = '';
+  const ctx = { ...admin, server: { sheetCsv: async () => csv } as any };
+  const url = 'https://docs.google.com/spreadsheets/d/e/2PACX-dedup/pubhtml';
+  const mk = async (name: string) => (await call('admin.channels.save', admin, { kind: 'sheets', name, url })) as any;
+
+  // no order number: Date + phone; the team edits the address and a status column afterwards
+  csv = `Date,Client,Téléphone,Wilaya,Adresse,Produit,Statut\n26/10/2026 10:12,Karim Un,0661 00 00 01,Alger,Rue A,"${product}",\n26/10/2026 10:20,Amina Deux,0661 00 00 02,Oran,Rue B,"${product}",\n`;
+  const ch = await mk('Feuille dates');
+  const r: any = await call('channels.sheet.read', ctx, { id: ch.id });
+  assert.equal(r.mapping['Date'], 'date');
+  assert.equal(r.mapping['Statut'], 'ignore');
+  await call('channels.sheet.saveMapping', ctx, { id: ch.id, mapping: r.mapping });
+  assert.equal(((await call('channels.sheet.sync', ctx, { id: ch.id })) as any).created, 2);
+  csv = csv.replace('Rue A', 'Rue A, bâtiment 3').replace(/,\n/g, ',confirmé\n');
+  const again: any = await call('channels.sheet.sync', ctx, { id: ch.id });
+  assert.equal(again.created, 0);
+  assert.equal(again.already, 2);
+  assert.equal(await count(), 2);
+
+  // the same customer orders again another day: a new order, flagged for the agent (same number, under 3 days)
+  csv += `27/10/2026 09:00,Karim Un,0661 00 00 01,Alger,Rue A,"${product}",\n`;
+  assert.equal(((await call('channels.sheet.sync', ctx, { id: ch.id })) as any).created, 1);
+  const flagged = (await db.query("SELECT internal_note FROM orders WHERE phone = '0661000001' ORDER BY id DESC LIMIT 1"))[0];
+  assert.match(flagged.internal_note ?? '', /Même numéro que PX/);
+
+  // whatever the order became (confirmed, delivered, deleted…), its line never comes back
+  const first = (await db.query("SELECT id FROM orders WHERE phone = '0661000002'"))[0];
+  await call('orders.delete', admin, { ids: [Number(first.id)] });
+  assert.equal(((await call('channels.sheet.sync', ctx, { id: ch.id })) as any).created, 0);
+
+  // a click while the 10-minute job is running: one of the two works, never twice
+  csv += `27/10/2026 11:00,Sara Trois,0661 00 00 03,Blida,,"${product}",\n27/10/2026 11:05,Riad Quatre,0661 00 00 04,Sétif,,"${product}",\n`;
+  const before = await count();
+  const both = await Promise.allSettled([call('channels.sheet.sync', ctx, { id: ch.id }), call('channels.sheet.sync', ctx, { id: ch.id })]);
+  const ok = both.filter((x) => x.status === 'fulfilled') as PromiseFulfilledResult<any>[];
+  assert.equal(ok.reduce((n, x) => n + x.value.created, 0), 2);
+  assert.ok(both.every((x) => x.status === 'fulfilled' || /déjà en cours/.test(String((x as PromiseRejectedResult).reason?.message))));
+  assert.equal(await count(), before + 2);
+
+  // the channel deleted, then the same sheet added again: nothing already made comes back
+  await call('admin.channels.delete', admin, { id: ch.id });
+  const ch2 = await mk('Feuille dates bis');
+  await call('channels.sheet.saveMapping', ctx, { id: ch2.id, mapping: r.mapping });
+  const back: any = await call('channels.sheet.sync', ctx, { id: ch2.id });
+  // remembered per Google sheet: nothing comes back, not even the line whose order was deleted
+  assert.equal(back.created, 0);
+  assert.equal(back.already, 5);
+  assert.equal(((await call('channels.sheet.read', ctx, { id: ch2.id })) as any).done, 5);
+
+  // no order number, no date: phone + product + quantity; the same line written twice in the sheet: once
+  csv = `Client,Téléphone,Wilaya,Produit,Qté,Commentaire\nLina Cinq,0661 00 00 05,Oran,"${product}",1,\nLina Cinq,0661 00 00 05,Oran,"${product}",1,\n`;
+  const ch3 = await mk('Feuille simple');
+  await call('channels.sheet.saveMapping', ctx, { id: ch3.id, mapping: ((await call('channels.sheet.read', ctx, { id: ch3.id })) as any).mapping });
+  const s3: any = await call('channels.sheet.sync', ctx, { id: ch3.id });
+  assert.equal(s3.created, 1);
+  assert.equal(s3.already, 1);
+  csv = csv.replace(/,\n/g, ',appelée\n');
+  assert.equal(((await call('channels.sheet.sync', ctx, { id: ch3.id })) as any).created, 0);
+
+  // lines imported by the first version (every cell) are still known
+  const legacyCsv = `Client,Téléphone,Wilaya,Produit,Qté,Commentaire\nOld Six,0661 00 00 06,Oran,"${product}",1,x\n`;
+  csv = legacyCsv;
+  const ch4 = await mk('Feuille ancienne');
+  const m4 = ((await call('channels.sheet.read', ctx, { id: ch4.id })) as any).mapping;
+  await call('channels.sheet.saveMapping', ctx, { id: ch4.id, mapping: m4 });
+  const cells = ['Old Six', '0661 00 00 06', 'Oran', product, '1', 'x'];
+  const d = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(cells.join('␟')));
+  const legacy = 'row:' + Array.from(new Uint8Array(d), (x) => x.toString(16).padStart(2, '0')).join('');
+  await db.query('INSERT INTO sheet_rows (sheet_id, channel_id, row_key) VALUES ($1, $2, $3)', ['2PACX-dedup', ch4.id, legacy]);
+  assert.equal(((await call('channels.sheet.sync', ctx, { id: ch4.id })) as any).created, 0);
 });
