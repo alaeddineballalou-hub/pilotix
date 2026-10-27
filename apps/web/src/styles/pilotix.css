@@ -1852,3 +1852,13 @@ html[data-theme="dark"] :is(.pxs-tl q.n, .pxk-mi.tr) { background: var(--c-info-
 html[data-theme="dark"] .pxlc-due > button { background: #fff; color: #137A3B; }
 html[data-theme="dark"] .pxk-av:not(.nv, .or) { background: rgba(255, 255, 255, .1); color: var(--ink); }
 html body .pxl-nums > span:not(.or, .nv) { color: var(--c-muted); }
+
+/* Language picker in the top bar: never squeezed to "F" */
+.topbar .px-hdr-lang { flex: none; min-width: 62px; }
+
+/* Phone: the order toolbar keeps only filter, refresh and the pages — row height, columns and download are hidden */
+@media (max-width: 760px) {
+  .px-qtools .px-qbtns { width: 100%; flex-wrap: nowrap; gap: 6px; }
+  .px-qtools .px-qbtns > :is(.px-dens, .px-qpop-wrap, .px-qb-dl) { display: none !important; }
+  .px-qtools .px-qrange { margin-inline-start: auto; white-space: nowrap; }
+}
