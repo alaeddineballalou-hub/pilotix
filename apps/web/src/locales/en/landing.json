@@ -6,14 +6,16 @@
     "bloquees": "Orders the fake-order check held back. The customer saw the normal thank-you screen; restore the real ones.",
     "abandons": "Customers who left their number without ordering: Pilotix adds them to Commandes › New by itself so your agents call them.",
     "reglages": "Meta pixel and Conversions API, abandoned orders, automations.",
-    "protection": "What the fake-order protection did: orders passed, to check, blocked, and the attacks (one device sending many numbers, numbers in a row)."
+    "protection": "What the fake-order protection did: orders passed, to check, blocked, and the attacks (one device sending many numbers, numbers in a row).",
+    "groupes": "One page with several products: the customer picks one and lands on that product’s landing page."
   },
   "tabs": {
     "pages": "Pages",
     "protection": "Protection",
     "bloquees": "Blocked orders",
     "abandons": "Abandoned",
-    "reglages": "Settings"
+    "reglages": "Settings",
+    "groupes": "Groups"
   },
   "copied": "Address copied",
   "list": {
@@ -446,5 +448,64 @@
     "fake": "Fake order",
     "kConfirmed": "Confirmed",
     "kConfirmedSub": "{{rate}} of real orders"
+  },
+  "gr": {
+    "count_one": "{{count}} group",
+    "count_other": "{{count}} groups",
+    "new": "New group",
+    "help": "A group shows several products on one page. The customer taps a product and lands on its real landing page (same form, same protection), with « رجوع إلى كل المنتجات » at the top to go back to the group.",
+    "empty": "No group yet. Create one to put several products in a single ad.",
+    "clicks": "clicks",
+    "nProducts_one": "{{count}} product",
+    "nProducts_other": "{{count}} products",
+    "theme": {
+      "grid": "Grid",
+      "big": "Big cards",
+      "best": "Best seller + grid",
+      "list": "Fast list",
+      "tabs": "Tabs + search"
+    },
+    "themeHelp": {
+      "grid": "2 products per row, a button on each. Good for 4 to 12 products.",
+      "big": "One big product per row, with a short line. Good for 2 or 3 products.",
+      "best": "Your best product big at the top, the others below.",
+      "list": "Small photo + name + price in one line. The fastest to scroll.",
+      "tabs": "Tabs and a search box, like a small shop. Good for 15+ products."
+    },
+    "saved": "Group saved",
+    "needTitle": "Give the group a title",
+    "needProducts": "Add at least one product",
+    "removeAsk": "Delete this group? The products’ landing pages stay.",
+    "removed": "Group deleted",
+    "back": "Groups",
+    "newTitle": "New group",
+    "sGroup": "The group",
+    "title": "Title (top of the page)",
+    "titlePh": "كل ما يحتاجه طفلك",
+    "subtitle": "Subtitle",
+    "subtitleHint": "A short line under the title (optional).",
+    "subtitlePh": "اختر المنتج واطلب في دقيقة",
+    "slugHint": "The group’s address, to put in your ad.",
+    "active": "Online (customers can see it)",
+    "sDesign": "Design",
+    "sProducts": "Products in the group",
+    "productsHelp": "Pick the landing pages to show, in the order you want (↑ ↓).",
+    "bestHelp": "Tick ⭐ the best seller: it is shown big at the top. A short line can show under its name.",
+    "tabsHelp": "Write each product’s tab (e.g. « الملابس »). Products with no tab are only in « الكل ».",
+    "noPages": "Create landing pages first: a group shows existing landing pages.",
+    "itemStats": "{{clicks}} clicks · {{orders}} orders",
+    "best": "Best seller",
+    "tabPh": "Tab (e.g. الملابس)",
+    "notePh": "Short line (e.g. خفيفة 5 كغ · تُطوى بيد واحدة)",
+    "up": "Move up",
+    "down": "Move down",
+    "removeItem": "Remove from the group",
+    "add": "Add",
+    "pick": "Pick a landing page…",
+    "addAll": "Add all ({{count}})",
+    "pixelHint": "Leave empty to use the pixel from Settings.",
+    "remove": "Delete the group",
+    "previewHint": "As the customer sees it",
+    "navHint": "On the real page, this product opens its landing page"
   }
 }

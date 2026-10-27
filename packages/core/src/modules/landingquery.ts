@@ -172,7 +172,7 @@ export async function freeLandingSlug(db: Db, name: string, sku = '', selfId?: n
   for (let k = 0; k < 100; k++) {
     const s = k ? `${base}-${k + 1}` : base;
     const r = (await db.query('SELECT id FROM landing_pages WHERE slug = $1', [s]))[0];
-    if (!r || num(r.id) === selfId) return s;
+    if ((!r || num(r.id) === selfId) && !(await db.query('SELECT 1 FROM landing_groups WHERE slug = $1', [s])).length) return s;
   }
   return `${base}-${Date.now().toString(36)}`;
 }

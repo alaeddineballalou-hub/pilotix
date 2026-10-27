@@ -34,6 +34,7 @@ import { bad, Ctx, forbidden, notFound, proc, publicApi } from '../rpc';
 import { clientHomeFees, getSetting, setSetting } from '../settings';
 import { BOT_UA, FraudLevel, FraudReason, scoreOrder, verdictOf } from './fraud';
 import { lookAlikeOf, trustOf } from './trust';
+import { groupHtml, groupOf } from './landinggroups';
 import { ABANDONED, abandonCutoff, freeLandingSlug, landingCounts, landingSettings, LandingSettings, landingStore, queuePurchase, quickCreatePage, STORE_RESERVED } from './landingquery';
 import { sendInPreview } from './notify';
 import { addEvent, createOrder, noOrderAccess } from './orders';
@@ -41,7 +42,7 @@ import { ipPrefix } from '../net';
 import { RESERVED } from './stockquery';
 
 const id = z.number().int().positive();
-const WHO = ['marketer'] as const;
+export const WHO = ['marketer'] as const;
 const WATCH = ['marketer', 'confirmation'] as const;
 /** A marketer-only account sees the leads and blocked orders as numbers, never who the customer is (name, phone). */
 const PII_HIDDEN = '•••';
@@ -104,17 +105,17 @@ export interface LandingImageRow {
   info?: LandingImageInfo | null;
 }
 
-type ImgRef = { id: number } | { url: string; w: number; h: number };
+export type ImgRef = { id: number } | { url: string; w: number; h: number };
 
-const readImgs = (v: unknown): ImgRef[] => {
+export const readImgs = (v: unknown): ImgRef[] => {
   const a = typeof v === 'string' ? JSON.parse(v) : v;
   return Array.isArray(a) ? a.filter((x) => x && (x.id || x.url)) : [];
 };
 const readJson = <T>(v: unknown): T | null => (typeof v === 'string' ? (JSON.parse(v) as T) : ((v as T) ?? null));
-const b64 = (s: string) => `data:image/webp;base64,${s}`;
+export const b64 = (s: string) => `data:image/webp;base64,${s}`;
 const isoAt = (ms: number) => new Date(ms).toISOString();
 
-async function imageRows(db: Db, refs: ImgRef[], full: boolean): Promise<Map<number, any>> {
+export async function imageRows(db: Db, refs: ImgRef[], full: boolean): Promise<Map<number, any>> {
   const ids = refs.filter((r): r is { id: number } => 'id' in r).map((r) => r.id);
   if (!ids.length) return new Map();
   const rows = await db.query(`SELECT id, w, h, w720 IS NOT NULL AS has720, lqip, info ${full ? ', t160, w480, w960' : ''} FROM landing_images WHERE id = ANY($1)`, [ids]);
@@ -165,7 +166,7 @@ async function listPages(db: Db, now: number, ids?: number[]): Promise<LandingRo
  * What a page needs from its product: price, variants (their own price, what is left in the depots), delivery prices,
  * shop name. Left = stock − what confirmed orders already promised (the same count as Produits › Stock).
  */
-async function productContext(db: Db, productId: number) {
+export async function productContext(db: Db, productId: number) {
   const p = (await db.query('SELECT id, name, price, active, fee_grid, is_service, fixed_price FROM products WHERE id = $1', [productId]))[0];
   if (!p) throw notFound('Produit introuvable');
   const vars = await db.query(
@@ -252,9 +253,11 @@ export interface HtmlOpts {
   site?: string;
   /** the page's own address when it is not site/<store>/<page> (a shop's own domain: https://myshop.com/<page>) */
   url?: string;
+  /** opened from this group page (?g=<slug>): the « back to all the products » bar */
+  group?: string;
 }
 
-function viewImages(refs: ImgRef[], rows: Map<number, any>, imgBase: string | null): LandingImage[] {
+export function viewImages(refs: ImgRef[], rows: Map<number, any>, imgBase: string | null): LandingImage[] {
   const out: LandingImage[] = [];
   for (const r of refs) {
     if ('url' in r) out.push({ src: r.url, srcset: `${r.url} ${r.w || 960}w`, thumb: r.url, w: r.w || 960, h: r.h || 960 });
@@ -280,7 +283,9 @@ export async function landingHtml(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
 /** The page, and the `Link` header that starts its main photo early (null when the photos are inside the page). */
 export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<{ html: string; link: string | null }> {
   const l = (await ctx.db.query('SELECT * FROM landing_pages WHERE slug = $1', [slug]))[0];
-  if (!l || (!l.active && o.mode === 'live')) throw notFound('Page introuvable');
+  // not a product's page: a group page (several products) at that address
+  if (!l) return { html: await groupHtml(ctx, slug, o), link: null };
+  if (!l.active && o.mode === 'live') throw notFound('Page introuvable');
   const pc = await productContext(ctx.db, num(l.product_id));
   if (!pc.active && o.mode === 'live') throw notFound('Page introuvable');
   const refs = readImgs(l.images);
@@ -307,6 +312,7 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     turnstileKey: o.mode === 'live' ? String(s.turnstileSiteKey ?? '').trim() || ((await ctx.server?.turnstileSite?.(hostOf(pageUrl || o.post))) ?? '') : '',
   };
   if (o.mode === 'live') await ctx.db.query('UPDATE landing_pages SET views = views + 1 WHERE id = $1', [l.id]);
+  const group = o.group ? await groupOf(ctx.db, o.group, num(l.id), o.mode === 'live') : null;
   const html = renderLanding(view, {
     mode: o.mode,
     post: o.post,
@@ -316,6 +322,7 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     challenge: await makeChallenge(ctx.db, slug, ctx.now()),
     bits: LANDING_POW_BITS,
     url: pageUrl || undefined,
+    group: group ?? undefined,
   });
   return { html, link: o.imgBase ? landingPreloadLink(view) : null };
 }
@@ -1332,6 +1339,7 @@ export const landingProcs = {
   'landing.save': proc([...WHO], PageInput, async (ctx, i) => {
     const dup = (await ctx.db.query('SELECT id FROM landing_pages WHERE slug = $1', [i.slug]))[0];
     if (dup && num(dup.id) !== i.id) throw bad(`L’adresse « ${i.slug} » est déjà prise`);
+    if ((await ctx.db.query('SELECT 1 FROM landing_groups WHERE slug = $1', [i.slug])).length) throw bad(`L’adresse « ${i.slug} » est déjà prise par un groupe`);
     if (!(await ctx.db.query('SELECT 1 FROM products WHERE id = $1', [i.productId])).length) throw notFound('Produit introuvable');
     const vals = [i.productId, i.slug, i.active, i.title, i.color.toLowerCase(), i.price, i.oldPrice, i.description, i.variantLabel || 'اللون', i.fraudLevel, JSON.stringify(i.images), i.pixelId, i.stockMode];
     let pid: number;
@@ -1409,7 +1417,9 @@ export const landingProcs = {
   ),
 
   /** the saved page as the customer sees it, inside Pilotix (the order goes to the window around it) */
-  'landing.preview': proc([...WHO], z.object({ slug: z.string().max(80) }), async (ctx, i) => ({ html: await landingHtml(ctx, i.slug, { mode: 'parent', post: '', geo: '', lead: 'parent', imgBase: null }) })),
+  'landing.preview': proc([...WHO], z.object({ slug: z.string().max(80), group: z.string().max(80).optional() }), async (ctx, i) => ({
+    html: await landingHtml(ctx, i.slug, { mode: 'parent', post: '', geo: '', lead: 'parent', imgBase: null, group: i.group }),
+  })),
 
   // ---------------------------------------------------------------- products without a page
   /** active products (not services) with no page yet, newest first, except those set aside */
@@ -1549,7 +1559,7 @@ export const landingProcs = {
   // ---------------------------------------------------------------- public side (the server calls these as the system)
   'landing.html': proc(
     [],
-    z.object({ slug: z.string().max(80), mode: z.enum(['live', 'parent', 'preview']), post: z.string().max(500).default(''), geo: z.string().max(500).default(''), lead: z.string().max(500).default(''), imgBase: z.string().max(500).nullable().default(null), site: z.string().max(500).optional(), url: z.string().max(600).optional() }),
+    z.object({ slug: z.string().max(80), mode: z.enum(['live', 'parent', 'preview']), post: z.string().max(500).default(''), geo: z.string().max(500).default(''), lead: z.string().max(500).default(''), imgBase: z.string().max(500).nullable().default(null), site: z.string().max(500).optional(), url: z.string().max(600).optional(), group: z.string().max(80).optional() }),
     async (ctx, i) => landingPage(ctx, i.slug, i),
   ),
 
