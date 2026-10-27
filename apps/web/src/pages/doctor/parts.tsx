@@ -1,10 +1,11 @@
 // The Doctor's screen pieces, shared by Pilotix Doctor (each shop, Dashboard) and the server Doctor (control room):
 // the score, the problems (worst first, each with what to do and a link), what is fine.
 import type { DoctorItem, DoctorLevel, DoctorLine } from '@pilotix/shared';
-import { ReactNode, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { clock, da, n, wilaya } from '../../lib/format';
+import { da, n, wilaya } from '../../lib/format';
 import { Icon } from '../../ui/kit';
+import { copilotMood, CopilotIcon } from './CopilotIcon';
 import './doctor.css';
 
 const AREA_ICON: Record<string, string> = {
@@ -74,49 +75,66 @@ export function ScoreRing({ score }: { score: number }) {
   );
 }
 
-/** The top of a Doctor page: the score, one sentence, when it looked, "look again". */
-/** `icon`: drawn instead of the ✦ next to the title (the Co-Pilot face). */
-export function DoctorHero({ title, sub, score, items, checkedAt, onRefresh, busy, badge, icon }: { title?: string; sub: string; score: number; items: DoctorItem[]; checkedAt: string; onRefresh: () => void; busy?: boolean; badge?: string; icon?: ReactNode }) {
+/** "il y a 12 s", "il y a 3 min": how long ago it looked, ticking every second. */
+function Live({ at }: { at: string }) {
+  const { t } = useTranslation();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  const s = Math.max(0, Math.round((now - Date.parse(at)) / 1000));
+  const ago = s < 60 ? t('doctor.ago.s', { n: s }) : t('doctor.ago.min', { n: Math.round(s / 60) });
+  return (
+    <span className="dr-live" aria-live="off">
+      <i aria-hidden="true" />
+      {t('doctor.live', { ago })}
+    </span>
+  );
+}
+
+/**
+ * The top of a Doctor / Co-Pilot (the "cockpit"): the living face, one sentence, a bar of every check's colour, the
+ * counts, the score. No "look again" button: the page keeps it up to date by itself.
+ */
+export function DoctorHero({ title, sub, score, items, checkedAt, badge }: { title: string; sub?: string; score: number; items: DoctorItem[]; checkedAt: string; badge?: string }) {
   const { t } = useTranslation();
   const bad = items.filter((i) => i.level === 'bad').length;
   const warn = items.filter((i) => i.level === 'warn').length;
   // the same checks as the folded « all good » list below (what only informs is fine too)
   const ok = items.filter((i) => i.level === 'ok' || i.level === 'info').length;
-  const mood = bad ? 'bad' : warn ? 'warn' : 'ok';
+  const mood = copilotMood(items);
   return (
-    <section className={`dr-hero dr-hero-${mood}`}>
-      <ScoreRing score={score} />
-      <div className="dr-hero-t">
-        {title && (
-          <div className="dr-hero-h">
-            {icon ?? (
-              <span className="dr-logo">
-                <Icon name="sparkles" />
-              </span>
-            )}
-            <h2>{title}</h2>
-            {badge && <span className="dr-badge">{badge}</span>}
-          </div>
-        )}
-        <p className="dr-hero-say">{bad ? t('doctor.say.bad', { count: bad }) : warn ? t('doctor.say.warn', { count: warn }) : t('doctor.say.ok')}</p>
-        <p className="muted small">{sub}</p>
-        <div className="dr-counts">
-          <span className="dr-pill dr-bad">
+    <section className={`dr-cock dr-cock-${mood}`}>
+      <CopilotIcon mood={mood} size={64} label={title} />
+      <div className="dr-cock-m">
+        <div className="dr-cock-top">
+          <h2 className="dr-cock-t">{title}</h2>
+          {badge && <span className="dr-cock-badge">{badge}</span>}
+          <Live at={checkedAt} />
+        </div>
+        <p className="dr-cock-say">{bad ? t('doctor.say.bad', { count: bad }) : warn ? t('doctor.say.warn', { count: warn }) : t('doctor.say.ok')}</p>
+        {sub && <p className="dr-cock-sub">{sub}</p>}
+        <div className="dr-cock-bar" role="img" aria-label={`${bad} ${t('doctor.lv.bad')}, ${warn} ${t('doctor.lv.warn')}, ${ok} ${t('doctor.lv.ok')}`}>
+          {bad > 0 && <i className="dr-seg-bad" style={{ flexGrow: bad }} />}
+          {warn > 0 && <i className="dr-seg-warn" style={{ flexGrow: warn }} />}
+          {ok > 0 && <i className="dr-seg-ok" style={{ flexGrow: ok }} />}
+        </div>
+        <div className="dr-cock-legend">
+          <span>
             <b>{bad}</b> {t('doctor.lv.bad')}
           </span>
-          <span className="dr-pill dr-warn">
+          <span>
             <b>{warn}</b> {t('doctor.lv.warn')}
           </span>
-          <span className="dr-pill dr-ok">
+          <span>
             <b>{ok}</b> {t('doctor.lv.ok')}
           </span>
         </div>
       </div>
-      <div className="dr-hero-r">
-        <small className="muted">{t('doctor.checkedAt', { time: clock(checkedAt) })}</small>
-        <button type="button" className="btn" onClick={onRefresh} disabled={busy}>
-          <Icon name="refresh" /> {t('doctor.again')}
-        </button>
+      <div className="dr-cock-score">
+        <b className="ltr">{score}</b>
+        <small>{t('doctor.outOf')}</small>
       </div>
     </section>
   );

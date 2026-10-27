@@ -2,7 +2,7 @@
 // - admin / vendeur: what is waiting now, Co-Pilot (what is going wrong, with what to do), the teams at a glance (who to help), the shop over the period, who is online;
 // - agent manager: their team (what is late, its numbers against the targets, each member with what to work on), their
 //   other teams, the shop over the period, who is online;
-// - agent: what is waiting now, their own numbers next to their team's (their priority and how to improve it), the shop.
+// - agent: their own Co-Pilot, what is waiting now, their own numbers next to their team's (their priority and how to improve it), the shop.
 import { useTranslation } from 'react-i18next';
 import { da, dayRange, n, pct } from '../../lib/format';
 import { featureIsOn } from '../../lib/features';
@@ -30,6 +30,7 @@ export function Home(_: PageProps) {
   if (!has('confirmation', 'suivi', 'depot')) {
     const livreur = s.roles.includes('livreur');
     return (
+      <>
       <section className="card">
         <h2>{t('home.hello', { name: s.profile.name })}</h2>
         <p className="muted">{livreur ? t('home.livreurHint') : t('home.soon')}</p>
@@ -41,6 +42,8 @@ export function Home(_: PageProps) {
           </div>
         )}
       </section>
+      {s.roles.includes('marketer') && featureIsOn('dashboard/doctor') && <ShopDoctor card />}
+      </>
     );
   }
   return <HomeStats />;
@@ -53,6 +56,7 @@ function HomeStats() {
   const lead = has('agent_manager', 'vendeur');
   const meta = useRpc('stats.dashMeta', {}, { enabled: lead });
   const prev = prevRangeOf(per.range);
+  const copilot = featureIsOn('dashboard/doctor');
   const vs = t('dashboard.tb.vs', { range: dayRange(prev.from, prev.to) });
 
   const head = (
@@ -72,6 +76,7 @@ function HomeStats() {
     return (
       <div className="tb hm">
         {head}
+        {copilot && <ShopDoctor card />}
         <Now />
         <MyDay range={per.range} />
         <Period range={per.range} vs={vs} />
@@ -90,7 +95,7 @@ function HomeStats() {
         <Loading />
       ) : m.seesAll ? (
         <>
-          {featureIsOn('dashboard/doctor') && <ShopDoctor card />}
+          {copilot && <ShopDoctor card />}
           <Now />
           <TeamHealth areas={areas} range={per.range} />
           <Period range={per.range} vs={vs} />
@@ -98,6 +103,7 @@ function HomeStats() {
         </>
       ) : (
         <>
+          {copilot && <ShopDoctor card />}
           {areas.includes('confirmation') && <Board area="confirmation" compact range={per.range} />}
           <TeamHealth areas={areas.filter((a) => a !== 'confirmation')} range={per.range} title={areas.includes('confirmation') ? t('dashboard.tb.healthOthers') : undefined} />
           <Period range={per.range} vs={vs} />

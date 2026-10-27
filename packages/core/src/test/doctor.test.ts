@@ -83,8 +83,8 @@ const many = async (n: number, fn: (i: number) => Promise<unknown>) => {
 const find = (r: ShopDoctorReport, id: string) => r.items.find((i) => i.id === id);
 const level = (r: ShopDoctorReport, ...ids: string[]) => ids.map((id) => r.items.find((i) => i.id === id)?.level).find(Boolean);
 
-/** What every answer must respect, whatever the data. */
-function wellFormed(r: ShopDoctorReport) {
+/** What every answer must respect, whatever the data. `full`: the whole shop (admin / vendeur) — every check answers. */
+function wellFormed(r: ShopDoctorReport, full = true) {
   assert.ok(!isNaN(Date.parse(r.checkedAt)));
   assert.equal(r.score, doctorScore(r.items), 'score = the items');
   assert.ok(r.score >= 5 && r.score <= 100);
@@ -92,11 +92,14 @@ function wellFormed(r: ShopDoctorReport) {
   const ids = r.items.map((i) => i.id);
   assert.equal(new Set(ids).size, ids.length, 'one item per check');
   // each check answers exactly once (some under two names: confRate/confRateDrop, returns/returnsUp, ordersDrop/ordersOk)
-  for (const id of SHOP_IDS) assert.equal(ids.filter((x) => x === id).length, 1, id);
-  assert.equal(ids.filter((x) => x === 'confRate' || x === 'confRateDrop').length, 1);
-  assert.equal(ids.filter((x) => x === 'returns' || x === 'returnsUp').length, 1);
-  assert.equal(ids.filter((x) => x === 'ordersDrop' || x === 'ordersOk').length, 1);
-  assert.equal(r.items.length, SHOP_IDS.length + 3);
+  if (full) for (const id of SHOP_IDS) assert.equal(ids.filter((x) => x === id).length, 1, id);
+  if (full) {
+    assert.equal(ids.filter((x) => x === 'confRate' || x === 'confRateDrop').length, 1);
+    assert.equal(ids.filter((x) => x === 'returns' || x === 'returnsUp').length, 1);
+    assert.equal(ids.filter((x) => x === 'ordersDrop' || x === 'ordersOk').length, 1);
+    assert.equal(r.items.length, SHOP_IDS.length + 3);
+    assert.deepEqual(r.scope, { whole: true, mine: false });
+  }
   for (const i of r.items) {
     assert.ok(['bad', 'warn', 'ok', 'info'].includes(i.level), i.id);
     assert.ok(AREAS.includes(i.area), `${i.id}: area ${i.area}`);
@@ -125,8 +128,36 @@ describe('who may open Pilotix Doctor', () => {
     }
   });
 
-  test('everybody else: refused (agent manager, confirmation, suivi, dépôt, livreur, marketer)', async () => {
-    for (const e of [EMAILS.manager, EMAILS.conf, EMAILS.suivi, EMAILS.depot, EMAILS.livreur, EMAILS.marketer]) await assert.rejects(call('stats.doctor', await as(e), {}), /refusé/i, e);
+  test('everybody else gets the part that is theirs', async () => {
+    const ids = async (e: string) => {
+      const r = (await call('stats.doctor', await as(e), {})) as ShopDoctorReport;
+      wellFormed(r, false);
+      return { r, ids: r.items.map((i) => i.id.replace(/^confRateDrop$/, 'confRate').replace(/^returnsUp$/, 'returns').replace(/^ordersOk$/, 'ordersDrop')).sort() };
+    };
+    const sorted = (a: string[]) => [...a].sort();
+    // a confirmation agent: their own orders
+    let x = await ids(EMAILS.conf);
+    assert.deepEqual(x.ids, sorted(['notCalled', 'lateCallbacks', 'confRate', 'meVsTeam']));
+    assert.deepEqual(x.r.scope, { whole: false, mine: true });
+    // a suivi agent: their own parcels
+    x = await ids(EMAILS.suivi);
+    assert.deepEqual(x.ids, sorted(['stuckParcels', 'openAlerts', 'returns']));
+    assert.deepEqual(x.r.scope, { whole: false, mine: true });
+    // dépôt: stock and orders to ship
+    x = await ids(EMAILS.depot);
+    assert.deepEqual(x.ids, sorted(['stockOut', 'stockSoon', 'notShipped']));
+    assert.deepEqual(x.r.scope, { whole: false, mine: false });
+    // an agent manager: the team's confirmation (their area by default)
+    x = await ids(EMAILS.manager);
+    assert.deepEqual(x.ids, sorted(['notCalled', 'lateCallbacks', 'confRate', 'fakeOrders', 'weakAgents']));
+    assert.deepEqual(x.r.scope, { whole: false, mine: false });
+    // marketer: orders dropping, fake orders
+    x = await ids(EMAILS.marketer);
+    assert.deepEqual(x.ids, sorted(['ordersDrop', 'fakeOrders']));
+    // livreur: nothing to check, nothing to worry about
+    x = await ids(EMAILS.livreur);
+    assert.deepEqual(x.ids, []);
+    assert.equal(x.r.score, 100);
   });
 
   test('money only for the administrator', async () => {
@@ -315,6 +346,53 @@ test('a healthy shop: every check says OK', async () => {
   assert.deepEqual(open.map((i) => `${i.id}:${i.level}`), []);
   assert.equal(r.score, 100);
   assert.equal(find(r, 'ordersOk')?.params?.avg, 10);
+});
+
+// ---------------------------------------------------------------- each person's own score
+test('one agent works well, another does not: each sees their own score; the suivi agent only their parcels', async () => {
+  const s = await shop();
+  const mk = async (name: string, roles: string) => {
+    const email = `${name.toLowerCase()}@shop.dz`;
+    const id = Number((await s.db.query(`INSERT INTO profiles (name, email, password_hash, roles) VALUES ($1, $2, $3, $4) RETURNING id`, [name, email, await hashPassword('Agent-Password-1'), `{${roles}}`]))[0].id);
+    return { id, ctx: { db: s.db, session: await login(s.db, email, 'Agent-Password-1'), now: () => NOW, emit: () => {} } as Ctx };
+  };
+  const good = await mk('Samira', 'confirmation');
+  const late = await mk('Rania', 'confirmation');
+  const nadia = await mk('Nadia', 'suivi');
+  const karim = await mk('Karim', 'suivi');
+  // Samira: 25 orders this week, 22 confirmed, all called on time
+  await many(25, (i) => s.order({ agent_id: good.id, conf_status: i < 22 ? 'confirmed' : 'cancelled', created_at: ago(2 * D), confirmed_at: ago(2 * D) }));
+  // Rania: 25 orders, 8 confirmed, 12 new orders not called for 5 h, 4 late callbacks
+  await many(25, (i) => s.order({ agent_id: late.id, conf_status: i < 8 ? 'confirmed' : 'cancelled', created_at: ago(2 * D), confirmed_at: ago(2 * D) }));
+  await many(12, () => s.order({ agent_id: late.id, conf_status: 'new', created_at: ago(5 * H) }));
+  await many(4, () => s.order({ agent_id: late.id, conf_status: 'callback', next_call_at: ago(3 * H), created_at: ago(D) }));
+  // Nadia's parcels are fine; Karim has 3 stuck and 2 open alerts
+  await many(3, () => s.order({ follow_agent_id: nadia.id, conf_status: 'confirmed', follow_status: 'shipped', shipped_at: ago(2 * D), ext_status_at: ago(H) }));
+  await many(3, () => s.order({ follow_agent_id: karim.id, conf_status: 'confirmed', follow_status: 'shipped', shipped_at: ago(10 * D), ext_status_at: ago(5 * D) }));
+  await many(2, () => s.order({ follow_agent_id: karim.id, conf_status: 'confirmed', follow_status: 'alert', shipped_at: ago(3 * D) }));
+
+  const sam = (await call('stats.doctor', good.ctx, {})) as ShopDoctorReport;
+  const ran = (await call('stats.doctor', late.ctx, {})) as ShopDoctorReport;
+  assert.deepEqual(sam.items.filter((i) => i.level === 'bad' || i.level === 'warn').map((i) => i.id), [], 'Samira did everything well');
+  assert.equal(sam.score, 100);
+  assert.equal(sam.items.find((i) => i.id === 'meVsTeam')?.params?.me, 88);
+  assert.equal(ran.items.find((i) => i.id === 'notCalled')?.params?.count, 12);
+  assert.equal(ran.items.find((i) => i.id === 'lateCallbacks')?.params?.count, 4);
+  assert.equal(ran.items.find((i) => i.id === 'meVsTeam')?.level, 'bad', 'Rania is far below the team (32 % vs 60 %)');
+  assert.ok(ran.score < sam.score);
+
+  const nad = (await call('stats.doctor', nadia.ctx, {})) as ShopDoctorReport;
+  const kar = (await call('stats.doctor', karim.ctx, {})) as ShopDoctorReport;
+  assert.equal(nad.score, 100, 'Nadia sees only her own parcels');
+  assert.equal(kar.items.find((i) => i.id === 'stuckParcels')?.params?.count, 3);
+  assert.equal(kar.items.find((i) => i.id === 'openAlerts')?.params?.count, 2);
+  assert.ok(kar.score < 100);
+
+  // the administrator sees the whole shop: everybody's problems
+  const all = await s.doctor(s.admin);
+  assert.equal(all.items.find((i) => i.id === 'notCalled')?.params?.count, 12);
+  assert.equal(all.items.find((i) => i.id === 'stuckParcels')?.params?.count, 3);
+  assert.equal(all.items.find((i) => i.id === 'weakAgents')?.list?.[0]?.label, 'Rania');
 });
 
 // ---------------------------------------------------------------- borders
