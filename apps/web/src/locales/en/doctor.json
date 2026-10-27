@@ -330,7 +330,7 @@
     "turnstileOff": {
       "title": "Cloudflare (robots) is not connected",
       "why": "Cloudflare’s invisible robot check protects every shop’s landing pages, for free (up to {{max}} domains).",
-      "fix": "Further down, “Cloudflare” card: paste the Account ID and a Turnstile API token. Pilotix does the rest by itself.",
+      "fix": "Control room › Settings › “Cloudflare (robots)”: paste the Account ID and a Turnstile API token, once. Pilotix does the rest by itself.",
       "short": "Cloudflare (robots)",
       "okTitle": "Cloudflare (robots)",
       "info": "Cloudflare (robots) is not connected"
@@ -402,7 +402,6 @@
     "synced": "Last update",
     "sync": "Update now",
     "syncedOk": "Cloudflare widgets up to date",
-    "change": "Change account",
     "off": "Not connected yet. The owner connects the Cloudflare account once; then everything is automatic.",
     "s1": "dash.cloudflare.com › the account’s home page: copy the “Account ID” (32 characters, right column or the account’s “…” menu).",
     "s2": "Profile (top right) › API Tokens › Create Token › Custom token: permission “Account › Turnstile › Edit”, then Create.",
@@ -410,12 +409,20 @@
     "accountId": "Account ID",
     "accountIdHint": "32 characters (letters a-f and digits)",
     "token": "API token (Turnstile: Edit)",
-    "tokenHint": "Leave empty to keep the saved token.",
     "connect": "Connect and create the widgets",
     "savedOk": "Cloudflare connected: widgets created",
-    "remove": "Disconnect",
-    "removeAsk": "Disconnect Cloudflare? The robot check stops for every shop (the rest of the protection goes on).",
-    "removedOk": "Cloudflare disconnected",
-    "demo": "Demo: nothing is sent to Cloudflare"
+    "demo": "Demo: nothing is sent to Cloudflare",
+    "setTitle": "Cloudflare (robots): Pilotix’s account",
+    "locked": "🔒 Connected and locked",
+    "lockedShort": "Locked",
+    "domainsUsed": "{{domains}} domains out of {{max}}",
+    "lockedOwner": "Nobody can edit or delete it. Only you can replace it with a new account or a new token.",
+    "lockedOthers": "Nobody can edit or delete it. Only the owner can replace it.",
+    "replace": "Replace with a new one",
+    "replaceHelp": "The new one is checked with Cloudflare first. If it is refused, the old one keeps working: the protection never stops.",
+    "replaceGo": "Check and replace",
+    "tokenNew": "The new token (Turnstile: Edit). It never leaves the server.",
+    "offOthers": "Not connected yet. Only the owner can connect it (Settings).",
+    "goSettings": "Connect in Settings"
   }
 }

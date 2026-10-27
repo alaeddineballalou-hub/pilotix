@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { PayInfo } from '../../layout/ShopBanner';
 import { POut, Staff, usePAction, usePRpc } from '../../lib/platform';
 import { Card, ErrorBox, Field, Loading } from '../../ui/kit';
+import { CloudflareBox } from './CloudflareBox';
 
 type S = POut<'p.settings.get'>;
 
@@ -65,6 +66,7 @@ export function Settings({ staff }: { staff: Staff }) {
           </button>
         )}
       </div>
+      <CloudflareBox owner={owner} />
       <div className="pp-grid">
         <Card title={t('platform.set.trialTitle')} help={t('platform.set.trialHelp')}>
           <div className="grid2 pp-form">
