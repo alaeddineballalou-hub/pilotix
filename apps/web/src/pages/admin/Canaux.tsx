@@ -126,6 +126,7 @@ export function Canaux() {
             </span>
             <input
               type="search"
+              aria-label={t('admin.channels.search')}
               placeholder={t('admin.channels.search')}
               value={q}
               onChange={(e) => {

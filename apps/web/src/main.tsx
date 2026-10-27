@@ -6,7 +6,7 @@ import { LockScreen } from './layout/LockScreen';
 import { Login } from './layout/Login';
 import { ResetPassword } from './layout/ResetPassword';
 import { canSee, canSeeChild, homeFor, NAV } from './layout/nav';
-import { applyTheme, Shell } from './layout/Shell';
+import { applySkin, applyTheme, Shell } from './layout/Shell';
 import { ApiError } from './lib/backend';
 import { firstSubOn, hasPlanSubs, pageIsOn } from './lib/features';
 import './lib/i18n';
@@ -17,11 +17,15 @@ import { PAGES } from './pages/registry';
 import { Loading } from './ui/kit';
 import { Toasts } from './ui/toast';
 import { installEdgeScroll } from './ui/edgeScroll';
+import './styles/tokens.css';
 import './styles/legacy.css';
 import './styles/pilotix.css';
 import './styles/responsive.css';
+import './styles/ux.css';
+import './styles/skins.css';
 
 applyTheme(store.get('theme') as 'light' | 'dark' | null);
+applySkin(new URLSearchParams(location.search).get('skin') ?? store.get('skin'));
 installEdgeScroll();
 
 const qc = new QueryClient({

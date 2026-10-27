@@ -15,11 +15,11 @@
 .pxp-meta b { color: var(--ink); }
 .pxp-prod { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pxp-st { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
-.pxp-st small { color: var(--muted); font-size: 11.5px; }
-.pxp-call { flex: none; width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: #1F9D57; color: #fff !important; text-decoration: none; }
+.pxp-st small { color: var(--muted); font-size: 12px; }
+.pxp-call { flex: none; width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--c-ok-fill); color: #fff !important; text-decoration: none; }
 .pxp-call .bji, .pxp-call svg { width: 20px; height: 20px; }
 .pxp-call:active { filter: brightness(.92); }
-.pxp-next { position: fixed; z-index: 30; left: 12px; right: 12px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); height: 54px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(135deg, #F7A823, #F28B1E); color: #fff; font: inherit; font-size: 16px; font-weight: 800; box-shadow: 0 10px 24px rgba(242, 139, 30, .4); cursor: pointer; }
+.pxp-next { position: fixed; z-index: 30; left: 12px; right: 12px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); height: 54px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--c-accent-grad); color: var(--c-on-accent); font: inherit; font-size: 16px; font-weight: 800; box-shadow: 0 10px 24px rgba(242, 139, 30, .4); cursor: pointer; }
 .pxp-next .bji { width: 18px; height: 18px; }
 /* the table's tools (columns, row size, selection) are for big screens */
 @media (max-width: 760px) { .qcard .px-qnext, .qcard .qacts { display: none !important; } }
@@ -31,7 +31,7 @@
 [dir="rtl"] .pxp-back .bji { transform: scaleX(-1); }
 .pxp-ot { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
 .pxp-ot b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pxp-ot small { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pxp-ot small { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pxp-call.big { width: 42px; height: 42px; border-radius: 12px; }
 .pxp-wa { flex: none; width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: #25D366; color: #fff !important; }
 .pxp-wa .bji { width: 20px; height: 20px; }
@@ -57,7 +57,7 @@
 .qd6-flds { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
 .qd6-fld { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); min-width: 0; }
 .qd6-fld.wide { grid-column: 1 / -1; }
-.qd6-fld small { font-size: 10.5px; font-weight: 700; color: var(--muted); }
+.qd6-fld small { font-size: 11.5px; font-weight: 700; color: var(--muted); }
 .qd6-fld input { border: 0 !important; padding: 0 !important; height: 24px; min-height: 0 !important; background: none !important; font: inherit; font-size: 15px; font-weight: 600; color: var(--ink); box-shadow: none !important; width: 100%; }
 .qd6-fld:focus-within { border-color: #F7A823; box-shadow: 0 0 0 3px rgba(247, 168, 35, .18); }
 .qd6-addr { margin-top: 8px; }
@@ -68,7 +68,7 @@
 .qd6.qd6-ph .qd6-bl:empty { display: none; }
 .qd6.qd6-ph .qd6-bar > :not(.qd6-bl) { height: 50px; }
 .qd6.qd6-ph .qd6-bar .qd6-cta, .qd6.qd6-ph .qd6-bar .qd6-savebtn { flex: 2 1 0; padding: 0 12px; font-size: 15px; }
-.qd6.qd6-ph .qd6-bar .qd6-cta { background: #1F9D57; color: #fff; box-shadow: 0 6px 16px rgba(31, 157, 87, .3); }
+.qd6.qd6-ph .qd6-bar .qd6-cta { background: var(--c-ok-fill); color: #fff; box-shadow: 0 6px 16px rgba(31, 157, 87, .3); }
 .qd6.qd6-ph .qd6-bar > :not(.qd6-bl):not(.qd6-cta):not(.qd6-savebtn) { flex: 1 1 0; min-width: 0; }
 
 /* B's bar on one row: Statut ▾ (left) + the big green Confirmer la commande (right); "Commande modifiée · Annuler" above */

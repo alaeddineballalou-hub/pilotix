@@ -72,7 +72,7 @@ export function Shops({ staff, creating, filter }: { staff: Staff; creating?: bo
         </div>
         <label className="pp-search">
           <Icon name="search" />
-          <input type="search" placeholder={t('platform.searchShop')} value={q} onChange={(e) => setQ(e.target.value)} />
+          <input type="search" aria-label={t('platform.searchShop')} placeholder={t('platform.searchShop')} value={q} onChange={(e) => setQ(e.target.value)} />
         </label>
       </div>
       <div className="card">

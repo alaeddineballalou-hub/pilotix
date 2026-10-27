@@ -27,8 +27,8 @@
 .pxc-rm small{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pxc-av{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-weight:900;background:var(--raise);color:var(--ink)}
 .pxc-av.or{background:var(--butter);color:#a0620a}
-.pxc-co{width:36px!important;height:36px!important;border-radius:10px!important;font-size:11px!important}
-.pxc-badge{font-style:normal;font-size:11.5px;font-weight:800;color:var(--ok);margin-top:2px}
+.pxc-co{width:36px!important;height:36px!important;border-radius:10px!important;font-size:12px!important}
+.pxc-badge{font-style:normal;font-size:12px;font-weight:800;color:var(--ok);margin-top:2px}
 .pxc-acts{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .pxc-pay{background:color-mix(in srgb,var(--butter) 22%,var(--surface))}
 .pxc-pay .card-head .pxc-acts{margin:0}

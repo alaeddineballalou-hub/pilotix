@@ -90,7 +90,7 @@ function SwapDesk({ o, onClose, onDone }: PickProps) {
         <p className="muted small">{t('suivi.swapM.candsHelp')}</p>
         <div className="bjsv-cands">{f.sug.isLoading ? <Loading /> : f.sug.error ? <p className="badbox">{f.sug.error.message}</p> : f.sugRows.length ? f.sugRows.map(opt) : <p className="muted small">{t('suivi.swapM.noCands')}</p>}</div>
         <h3>{t('suivi.swapM.other')}</h3>
-        <input type="search" value={f.q} placeholder={t('suivi.swapM.searchPh')} autoComplete="off" onChange={(e) => f.setQ(e.target.value)} />
+        <input type="search" aria-label={t('suivi.swapM.searchPh')} value={f.q} placeholder={t('suivi.swapM.searchPh')} autoComplete="off" onChange={(e) => f.setQ(e.target.value)} />
         {f.deb.length >= 2 && <div className="bjsv-cands">{f.found.isFetching && !f.found.data ? <Loading /> : f.foundRows.length ? f.foundRows.map(opt) : <p className="muted small">{t('suivi.swapM.noFound')}</p>}</div>}
         {f.pick && !f.pick.sameVariant && <p className="warnbox">{t('suivi.swapM.mismatch', { a: productsText(o), ref: f.pick.ref, b: productsText(f.pick) })}</p>}
         {f.err && <p className="form-err">{f.err}</p>}

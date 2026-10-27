@@ -46,7 +46,7 @@
 /* an exchange: the new product going out, the old one coming back (computer and phone) */
 .pxz-ex { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--raise); }
 .pxz-exh { display: flex; align-items: center; gap: 6px; font-size: 13.5px; }
-.pxz-exh .bji { width: 16px; height: 16px; color: #F28B1E; }
+.pxz-exh .bji { width: 16px; height: 16px; color: var(--c-accent-ink); }
 .pxz-leg { display: flex; align-items: flex-start; gap: 10px; }
 .pxz-leg > span:last-child { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .pxz-leg b { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font-size: 13.5px; }
@@ -78,7 +78,7 @@
 .pxz-lv b { font-size: 14.5px; }
 .pxz-lv small { font-size: 12px; line-height: 1.3; color: var(--muted); }
 .pxz-av { flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: #0E7C3A; color: #fff; font-size: 13px; font-weight: 800; }
-.pxz-call { flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: #1F9D57; color: #fff !important; box-shadow: 0 6px 14px rgb(31 157 87 / .25); }
+.pxz-call { flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--c-ok-fill); color: #fff !important; box-shadow: 0 6px 14px rgb(31 157 87 / .25); }
 .pxz-call .bji { width: 19px; height: 19px; }
 /* the customer's return risk, as a meter */
 .pxz-risk { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font-size: 13px; }
@@ -86,17 +86,17 @@
 .pxz-risk small { flex-basis: 100%; padding-inline-start: 50px; font-size: 12px; color: var(--muted); }
 .pxz-m { display: inline-flex; gap: 3px; }
 .pxz-m i { width: 12px; height: 8px; border-radius: 3px; background: var(--line); }
-.pxz-risk.r-low .pxz-m i:nth-child(1) { background: #1F9D57; }
+.pxz-risk.r-low .pxz-m i:nth-child(1) { background: var(--c-ok-fill); }
 .pxz-risk.r-low b { color: var(--ok); }
 .pxz-risk.r-medium .pxz-m i:nth-child(-n + 2) { background: #E9A23B; }
 .pxz-risk.r-medium b { color: var(--warn); }
-.pxz-risk.r-high .pxz-m i { background: #D6453D; }
+.pxz-risk.r-high .pxz-m i { background: var(--c-bad-fill); }
 .pxz-risk.r-high b { color: var(--coral); }
 /* the requests sent to ZR */
 .pxz-req { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .pxz-req li { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); }
 .pxz-req li.s-pending { border-color: #F6DDB0; background: color-mix(in srgb, #F7A823 7%, var(--surface)); }
-.pxz-req li.s-refused, .pxz-req li.s-failed { border-color: color-mix(in srgb, #D6453D 30%, var(--line)); }
+.pxz-req li.s-refused, .pxz-req li.s-failed { border-color: color-mix(in srgb, var(--c-bad-line) 30%, var(--line)); }
 .pxz-rqi { flex: none; width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; background: var(--sky-soft); color: var(--ink); }
 .pxz-rqi .bji { width: 16px; height: 16px; }
 .pxz-rqt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
@@ -104,7 +104,7 @@
 .pxz-rqh b { font-size: 13.5px; }
 .pxz-rqv { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; font-size: 13.5px; overflow-wrap: anywhere; }
 .pxz-rqv s { color: var(--muted); text-decoration-thickness: 1px; }
-.pxz-rqv .bji { width: 14px; height: 14px; color: #F28B1E; }
+.pxz-rqv .bji { width: 14px; height: 14px; color: var(--c-accent-ink); }
 .pxz-rqt small { font-size: 12px; color: var(--muted); }
 .pxz-rqt q { font-size: 12.5px; font-style: italic; }
 .pxz-rqt q.bad { color: var(--coral); }
@@ -114,14 +114,14 @@
 .pxz-mod > span:nth-child(2) { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .pxz-mod b { font-size: 14.5px; }
 .pxz-mod small { font-size: 12px; color: var(--muted); }
-.pxz-mod > .bji { width: 18px; height: 18px; color: #F28B1E; }
-.pxz-mi { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: linear-gradient(135deg, #F7A823, #F28B1E); color: #fff; }
+.pxz-mod > .bji { width: 18px; height: 18px; color: var(--c-accent-ink); }
+.pxz-mi { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--c-accent-grad); color: var(--c-on-accent); }
 .pxz-mi .bji { width: 17px; height: 17px; }
 /* the journey and the SMS, one tap away */
 .pxz-tabs { display: flex; gap: 6px; }
 .pxz-tabs button { flex: 1 1 0; min-width: 0; min-height: 40px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; }
 .pxz-tabs button .bji { width: 15px; height: 15px; color: var(--muted); }
-.pxz-tabs button b { font-size: 11.5px; padding: 1px 7px; border-radius: 999px; background: var(--sky-soft); }
+.pxz-tabs button b { font-size: 12px; padding: 1px 7px; border-radius: 999px; background: var(--sky-soft); }
 .pxz-tabs button.on { background: var(--navy); border-color: var(--navy); color: var(--on-navy); }
 .pxz-tabs button.on .bji { color: inherit; }
 .pxz-tabs button.on b { background: rgb(255 255 255 / .2); }

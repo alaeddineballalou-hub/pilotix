@@ -21,7 +21,7 @@
 .cm-meta > * { flex: none; }
 .cm-meta time { font-variant-numeric: tabular-nums; }
 .cm-under { flex: 0 1 auto !important; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; }
-.cm-ad { display: inline-block; font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 6px; background: var(--butter, var(--warn-soft)); color: var(--ink); }
+.cm-ad { display: inline-block; font-size: 12px; font-weight: 800; padding: 1px 7px; border-radius: 6px; background: var(--butter, var(--warn-soft)); color: var(--ink); }
 .cm-status { flex: none; font-size: 12px; font-weight: 800; padding: 4px 10px; border-radius: 999px; white-space: nowrap; background: var(--raise); color: var(--ink); }
 .cm-status.cm-new { background: var(--sky-soft); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
 .cm-status.cm-ok { background: var(--ok-soft); color: var(--ok); }
@@ -102,7 +102,7 @@
 /* settings */
 .cm-chans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 20px; }
 @media (max-width: 760px) { .cm-chans { grid-template-columns: minmax(0, 1fr); } }
-.cm-chans b .dl-ch { display: inline-grid; place-items: center; width: 24px; height: 24px; font-size: 10px; }
+.cm-chans b .dl-ch { display: inline-grid; place-items: center; width: 24px; height: 24px; font-size: 11px; }
 .cm-soon { opacity: .6; cursor: default; }
 .cm-conn { max-width: 520px; margin: 8px 0 14px; }
 .cm-okc { color: var(--ok); font-weight: 700; }

@@ -85,7 +85,7 @@ export function Archive({ initial }: { initial?: Kind }) {
               <span>{t('admin.archive.to')}</span>
               <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
             </label>
-            <input className="px-arch-q" type="search" value={q} placeholder={t('admin.archive.search')} onChange={(e) => setQ(e.target.value)} />
+            <input className="px-arch-q" type="search" value={q} aria-label={t('admin.archive.search')} placeholder={t('admin.archive.search')} onChange={(e) => setQ(e.target.value)} />
             {filtered && (
               <button type="button" className="btn small ghost" onClick={() => (setFrom(''), setTo(''), setQ(''))}>
                 {t('admin.archive.clear')}

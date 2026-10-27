@@ -455,7 +455,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
           </div>
         </div>
         <Field label={t('produits.form.linked')}>
-          <input type="search" placeholder={t('produits.form.linkedPh')} value={relQ} onChange={(e) => setRelQ(e.target.value)} />
+          <input type="search" aria-label={t('produits.form.linkedPh')} placeholder={t('produits.form.linkedPh')} value={relQ} onChange={(e) => setRelQ(e.target.value)} />
         </Field>
         <div className="qd2-rel">
           {relList.map((x) => (
