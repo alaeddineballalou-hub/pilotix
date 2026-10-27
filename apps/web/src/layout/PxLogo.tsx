@@ -30,7 +30,7 @@ export function PxLogo() {
   const [enter, setEnter] = useState(true);
   useEffect(() => {
     const r = requestAnimationFrame(() => setReady(true));
-    const e = window.setTimeout(() => setEnter(false), 2300);
+    const e = window.setTimeout(() => setEnter(false), 2700);
     return () => {
       cancelAnimationFrame(r);
       window.clearTimeout(e);
