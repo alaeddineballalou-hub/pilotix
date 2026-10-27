@@ -1,7 +1,7 @@
 // The Doctor's screen pieces, shared by Pilotix Doctor (each shop, Dashboard) and the server Doctor (control room):
 // the score, the problems (worst first, each with what to do and a link), what is fine.
 import type { DoctorItem, DoctorLevel, DoctorLine } from '@pilotix/shared';
-import { useState } from 'react';
+import { ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { clock, da, n, wilaya } from '../../lib/format';
 import { Icon } from '../../ui/kit';
@@ -75,7 +75,8 @@ export function ScoreRing({ score }: { score: number }) {
 }
 
 /** The top of a Doctor page: the score, one sentence, when it looked, "look again". */
-export function DoctorHero({ title, sub, score, items, checkedAt, onRefresh, busy, badge }: { title?: string; sub: string; score: number; items: DoctorItem[]; checkedAt: string; onRefresh: () => void; busy?: boolean; badge?: string }) {
+/** `icon`: drawn instead of the ✦ next to the title (the Co-Pilot face). */
+export function DoctorHero({ title, sub, score, items, checkedAt, onRefresh, busy, badge, icon }: { title?: string; sub: string; score: number; items: DoctorItem[]; checkedAt: string; onRefresh: () => void; busy?: boolean; badge?: string; icon?: ReactNode }) {
   const { t } = useTranslation();
   const bad = items.filter((i) => i.level === 'bad').length;
   const warn = items.filter((i) => i.level === 'warn').length;
@@ -88,9 +89,11 @@ export function DoctorHero({ title, sub, score, items, checkedAt, onRefresh, bus
       <div className="dr-hero-t">
         {title && (
           <div className="dr-hero-h">
-            <span className="dr-logo">
-              <Icon name="sparkles" />
-            </span>
+            {icon ?? (
+              <span className="dr-logo">
+                <Icon name="sparkles" />
+              </span>
+            )}
             <h2>{title}</h2>
             {badge && <span className="dr-badge">{badge}</span>}
           </div>
