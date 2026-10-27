@@ -356,8 +356,8 @@ function Form({ g }: { g: Group | null }) {
           </section>
 
           <section className="card">
-            <h2>{t('landing.ed.sMore')}</h2>
-            <Field label={t('landing.ed.pixel')} hint={t('landing.gr.pixelHint')}>
+            <h2>{t('landing.gr.sPixel')}</h2>
+            <Field label={t('landing.gr.pixel')} hint={t('landing.gr.pixelHint')}>
               <input className="ltr" inputMode="numeric" value={d.pixelId} placeholder={t('landing.ed.pixelPh')} onChange={(e) => set('pixelId', e.target.value.replace(/\D/g, ''))} />
             </Field>
           </section>
