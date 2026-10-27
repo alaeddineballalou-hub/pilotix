@@ -37,7 +37,9 @@ jobs:
       # the server could log in to its e-mail server (red here, but the deploy itself is done: see the line it wrote)
       - name: E-mails work on the server
         continue-on-error: true
-        run: grep -h '^E-mail:' update.log; grep -q '^E-mail: OK' update.log
+        run: |
+          grep -h '^E-mail:' update.log
+          grep -q '^E-mail: OK' update.log
 
       # the real site, from outside, without changing anything in it: the server and the website are this version,
       # and each public door answers as it should (scripts/live-check.mjs)
