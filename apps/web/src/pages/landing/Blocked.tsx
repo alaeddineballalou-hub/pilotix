@@ -8,6 +8,7 @@ import { useAction, useRpc } from '../../lib/query';
 import { Empty, ErrorBox, Icon, Kpi, Kpis, Loading, Pager } from '../../ui/kit';
 import { Filters, SearchBox } from '../ai/agent';
 import { useDebounced } from '../depot/OrderList';
+import { UtmAdChip } from '../orders/AdSource';
 
 type Status = 'blocked' | 'restored' | 'dismissed' | 'all';
 
@@ -85,6 +86,7 @@ export function Blocked() {
                       <span>{r.wilayaId ? wilaya(r.wilayaId) : '—'}{r.commune ? ` · ${r.commune}` : ''}</span>
                     </small>
                     <small className="muted">{dateTime(r.at)}</small>
+                    <UtmAdChip utm={r.utm} />
                   </span>
                   <span className="pd-name">
                     <b>
