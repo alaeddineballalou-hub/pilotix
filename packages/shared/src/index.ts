@@ -291,6 +291,8 @@ export interface Order {
   customerRefusals?: number;
   /** a refuser this new number looks like (same device, or same name + commune) */
   looksLikePhone?: string | null;
+  /** the Meta ad's name (from the ads Pilotix reads), for the ad id in utm */
+  adName?: string | null;
   agentName?: string | null;
   followAgentName?: string | null;
   companyName?: string | null;
