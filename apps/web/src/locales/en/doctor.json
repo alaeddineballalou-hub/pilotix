@@ -443,5 +443,7 @@
     "whole": "The whole shop: confirmation, depot, delivery, stock, sales and money.",
     "team": "The teams you manage.",
     "mine": "Your own work: your orders and your parcels."
-  }
+  },
+  "foldAll": "Fold everything",
+  "unfoldAll": "Unfold everything"
 }
