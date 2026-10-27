@@ -211,7 +211,7 @@ function Attacks({ attacks }: { attacks: Data['attacks'] }) {
                       <Icon name="undo" /> {t('landing.pr.unblock')}
                     </button>
                   ) : (
-                    <button type="button" className="btn small danger" disabled={mark.isPending} onClick={() => window.confirm(t('landing.pr.blockAsk')) && mark.mutate({ device: a.key, on: true })}>
+                    <button type="button" className="btn small lp-blockbtn" disabled={mark.isPending} onClick={() => window.confirm(t('landing.pr.blockAsk')) && mark.mutate({ device: a.key, on: true })}>
                       <Icon name="ban" /> {t('landing.pr.block')}
                     </button>
                   ))}

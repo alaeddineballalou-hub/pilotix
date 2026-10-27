@@ -242,5 +242,9 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     );
   await db.query(`INSERT INTO fraud_marks (at, kind, value, reason, device, phone, by_user) VALUES ($1,'device','d:x92k','competitor','d:x92k','0770219999',$2)`, [at(5 * day + 3600_000), users.conf1 ?? null]);
   await db.query(`INSERT INTO fraud_marks (at, kind, value, reason, device, phone, by_user) VALUES ($1,'device','d:s3x41','fake','d:s3x41','0661448210',$2)`, [at(3 * day), users.conf1 ?? null]);
+  // the demo's other customers each have their own phone (one device for all of them would look like an attack)
+  await db.query(`UPDATE landing_submits SET fp = 'd:demo' || id WHERE fp = 'd:demo'`);
+  await db.query(`UPDATE landing_blocked SET fp = 'd:demo' || id WHERE fp = 'd:demo'`);
+  await db.query(`UPDATE landing_leads SET device = 'd:demo' || id WHERE device = 'd:demo'`);
   void p2;
 }
