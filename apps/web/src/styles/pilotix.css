@@ -1781,7 +1781,7 @@ html[data-theme="dark"] select option { background: #16202B; color: #ECEEF2; }
 html[data-theme="dark"] :is(.pxv-own, .pxk-out3 > button, .pxlc-k4 > div, .pxlc-due.zero, .pxv-road button b, .pxd-tabs button b,
   .pxv-age, .pxv-stepn, .pxv-ti, .pxl-ai, .pxl-st.na, .pxv-quote, .pxv-satr q, .pxs-tl q.m, .pxk-note, .pxk-qp.full, .pxv-ord.dim, .pxm-gauge i, .pxm-bar, .ov-bar-t) { background: rgba(255, 255, 255, .07); }
 html[data-theme="dark"] .pxk-out3 > button:active { background: rgba(255, 255, 255, .12); }
-html[data-theme="dark"] :is(.pxv-own button.on, .pxk .pxv-own a.on) { background: var(--surface); color: var(--ink); box-shadow: 0 1px 4px rgba(0, 0, 0, .35); }
+html[data-theme="dark"] :is(.pxv-own button.on, .pxk .pxv-own a.on) { background: #3A4150; color: #FFFFFF; box-shadow: 0 1px 4px rgba(0, 0, 0, .45); }
 html[data-theme="dark"] :is(.pxv-own button, .pxk .pxv-own a):not(.on) { color: #C3CBD9; }
 /* warm brand tints (peach, cream-orange) -> dark orange tint */
 html[data-theme="dark"] :is(.pxk-reqln, .pxd-th, .pxs-th, .ov-dot, .pxs-tip, .pxs-rc, .pxm-kg > div.hl, .pxd-ord.on, .pxv-ord:active, .pxv-tile.on, .pxv-ln.on,
