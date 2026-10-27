@@ -14,3 +14,12 @@ export const DEMO_ACCOUNTS = [
   { key: 'livreur2', name: 'Walid', email: 'walid@demo.pilotix.dz', roles: ['livreur'] },
   { key: 'marketer', name: 'Lyes (Marketeur)', email: 'lyes@demo.pilotix.dz', roles: ['marketer'] },
 ] as const;
+
+/**
+ * The in-browser demo's partners (invented): a confirmation agency and a marketer working for the demo store, each
+ * opened with its chief's account (the demo password too).
+ */
+export const DEMO_PARTNER_ACCOUNTS = [
+  { key: 'agence', kind: 'agency', name: 'Samir Benali', email: 'agence@demo.pilotix.dz', shop: 'Rapide Call Center' },
+  { key: 'mkpartner', kind: 'marketer', name: 'Nassim Belaid', email: 'marketer@demo.pilotix.dz', shop: 'Nassim Ads' },
+] as const;

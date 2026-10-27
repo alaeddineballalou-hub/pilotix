@@ -146,3 +146,6 @@ html body .topbar .px-seller select { flex: 1; min-width: 0; min-height: 0; heig
 .agx-all-tbl td .agx-tel { display: block; font-size: 13px; color: var(--c-muted, var(--muted)); }
 .agx-users-sellers .chip { height: auto; white-space: normal; line-height: 1.3; padding-top: 3px; padding-bottom: 3px; margin: 2px 4px 2px 0; display: inline-block; }
 .agx-users-sellers .chip small { display: inline; font-size: 12px; }
+/* the demo's partner accounts on the login page: an agency, a marketer (their own colours) */
+.demo-accounts .btn.agx-demo { background: var(--c-info-tint); color: var(--c-info-ink); border-color: transparent; }
+.demo-accounts .btn.mkx-demo { background: var(--c-mk-tint); color: var(--c-mk-ink); border-color: transparent; }
