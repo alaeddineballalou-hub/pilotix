@@ -18,6 +18,9 @@ before(async () => {
   as = s.as;
   marketer = await s.as(EMAILS.marketer);
   admin = await s.as(EMAILS.admin);
+  // a third page (the demo has two)
+  const free = (await db.query('SELECT p.id FROM products p WHERE p.active AND NOT p.is_service AND NOT EXISTS (SELECT 1 FROM landing_pages l WHERE l.product_id = p.id) ORDER BY p.id LIMIT 1'))[0];
+  await call('landing.save', marketer, { productId: Number(free.id), slug: 'groupe-trois', title: 'Trois', images: [] });
   pages = (await db.query('SELECT id, slug FROM landing_pages WHERE active ORDER BY id LIMIT 3')).map((r: any) => ({ id: Number(r.id), slug: String(r.slug) }));
   assert.equal(pages.length, 3);
 });
