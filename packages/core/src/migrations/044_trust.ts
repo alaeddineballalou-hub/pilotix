@@ -8,6 +8,9 @@ ALTER TABLE customers ADD COLUMN IF NOT EXISTS refusals integer NOT NULL DEFAULT
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS stopdesk_only boolean NOT NULL DEFAULT false;
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS blacklist_auto boolean NOT NULL DEFAULT false;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS looks_like_customer_id bigint;
+-- the views keep exactly the columns of orders
+CREATE OR REPLACE VIEW sales AS SELECT * FROM orders WHERE NOT is_exchange;
+CREATE OR REPLACE VIEW ticket_parcels AS SELECT * FROM orders WHERE is_exchange;
 -- the parcels already refused since each customer's last delivered one (Pilotix decides stop-desk / blacklist on the next one)
 UPDATE customers c SET refusals = x.n FROM (
   SELECT o.customer_id, count(*)::int AS n FROM orders o
