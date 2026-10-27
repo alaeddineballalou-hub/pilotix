@@ -1,0 +1,23 @@
+✓ https://pilotix.online/api/health answers
+✓ the server is this version (/api/legal) — {"text":"","company":"Pilotix","email":""}
+✓ « Créer ma boutique »: its page answers — {"open":true,"trialDays":14,"site":"pilotix.online"}
+• sign-ups are open (e-mails work)
+✓ « Mot de passe oublié »: its page answers — {"available":true}
+• e-mails are set up on the server
+✓ a store name can be checked — {"slug":"live-check","free":true,"reason":null}
+✓ Pilotix’s own words are never a store name — {"slug":"platform","free":false,"reason":"Ce nom est réservé par Pilotix, choisissez-en un autre"}
+✓ a login with an unknown e-mail is refused like a wrong password — {"message":"Email ou mot de passe incorrect"}
+✓ the control room refuses an unknown e-mail — {"message":"Email ou mot de passe incorrect"}
+✓ the app’s actions need a login — 401
+✓ the control room’s pages need its own login — 401
+✓ a wrong e-mail link is just « no longer valid » — {"kind":null}
+✓ no HTTPS certificate for a domain no shop has — 404
+✓ llms.txt for AI assistants — # Pilotix
+
+> Pilotix — boutique en ligne en Algérie : livraison dans les 58 wila
+✓ the demo button’s info — {"available":false,"accounts":[]}
+✓ the website answers — 200
+✓ the website is this version — /assets/index-CuJJxwpy.js
+✓ the website shows the new look (Doux, Readex Pro) — <html lang="fr" dir="ltr" data-skin="doux">
+
+✅ https://pilotix.online: the server and the website are live with this version
