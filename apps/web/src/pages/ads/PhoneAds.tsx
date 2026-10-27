@@ -78,7 +78,9 @@ export function PhoneMarketing({ sub, rest, noSpy, mkLabel }: { sub?: string; re
 
 function Pub() {
   const { t } = useTranslation();
-  const { has } = useSession();
+  const { has, session } = useSession();
+  // opened from a marketer's space: Meta is connected (or not) at the seller's
+  const atSeller = session?.shop?.kind === 'marketer';
   const owner = has('vendeur');
   const [p, setP] = useState<PKey>(() => {
     const s = store.get('ads-period') as PKey | null;
@@ -140,7 +142,7 @@ function Pub() {
       ) : (
         <>
           {d.syncWarning && <div className="error">{d.syncWarning}</div>}
-          {!d.connected && !d.demo && <div className="warnbox">{t('ads.notConnected')}</div>}
+          {!d.connected && !d.demo && <div className="warnbox">{t(atSeller ? 'ads.notConnectedSeller' : 'ads.notConnected')}</div>}
           <FxBar d={d} />
           <Dash d={d} prev={prev.data ?? null} label={t(`mkph.when.${p}`)} onProd={setProd} onAdset={setAdset} />
           {d && <Months rows={months.data ?? null} />}
@@ -190,6 +192,8 @@ function FxBar({ d }: { d: Ov }) {
 // ---------------------------------------------------------------- the dashboard (shop, or one product)
 function Dash({ d, prev, label, onProd, onAdset, product }: { d: Ov; prev: Ov | null; label: string; onProd?: (id: number) => void; onAdset: (a: Adset) => void; product?: boolean }) {
   const { t } = useTranslation();
+  // in a marketer's space the money is the seller's, not the marketer's
+  const atSeller = useSession().session?.shop?.kind === 'marketer';
   const m = d.totals;
   const fxOk = !!d.fx.rate && !d.fx.missing;
   const win = m.net >= 0;
@@ -207,7 +211,7 @@ function Dash({ d, prev, label, onProd, onAdset, product }: { d: Ov; prev: Ov | 
       {/* the verdict */}
       <section className={`pxm-verd ${!fxOk ? 'off' : win ? 'w' : 'l'}`}>
         <div className="pxm-vh">
-          <span>{fxOk ? t(win ? 'mkph.youWin' : 'mkph.youLose', { when: label }) : t('mkph.noFx')}</span>
+          <span>{fxOk ? t(atSeller ? (win ? 'mkph.sellerWin' : 'mkph.sellerLose') : win ? 'mkph.youWin' : 'mkph.youLose', { when: label }) : t('mkph.noFx')}</span>
           {d.fx.rate ? <b className="ltr">1 $ = {n(d.fx.rate)} DA</b> : null}
         </div>
         <b className="pxm-big ltr">{fxOk ? `${sgn(m.net)} DA` : usd(m.spendUsd)}</b>
@@ -774,7 +778,11 @@ function Marketeurs() {
                 <u className="r" style={{ width: `${rs.length ? (ko / rs.length) * 100 : 0}%` }} />
               </i>
             </span>
-            {!m.partner && (
+            {m.partner ? (
+              <span className="pxm-av">
+                <span className="chip mkx-chip">{m.partner.name}</span>
+              </span>
+            ) : (
               <span className="pxm-av">
                 <b className={`ltr ${owe ? 'ok' : ''}`}>{da(owe)}</b>
                 <small>{t('mkph.toPayShort')}</small>

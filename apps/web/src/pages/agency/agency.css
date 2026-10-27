@@ -177,6 +177,13 @@ html[data-skin][data-theme] .card.agx-danger { border: 1.5px solid var(--c-bad-t
   .agx-row-act .btn { margin: 4px 0 0; }
 }
 
+/* on a phone a table row is a two-column card: its action button takes the whole width under the numbers */
+@media (max-width: 760px) {
+  .tbl td.agx-row-act { grid-column: 1 / -1; text-align: start; white-space: normal; }
+  .tbl td.agx-row-act:empty { display: none; }
+  .tbl td.agx-row-act .btn { width: 100%; justify-content: center; margin: 6px 0 0; }
+}
+
 /* products already given to another agency */
 .agx-taken { opacity: 0.6; }
 .agx-taken .chip { margin-inline-start: auto; }

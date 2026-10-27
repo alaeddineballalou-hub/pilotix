@@ -69,7 +69,9 @@ const dayLabel = (d: string, lang: string) => new Date(d + 'T12:00:00Z').toLocal
 
 export function Publicite(_: Partial<PageProps> = {}) {
   const { t, i18n } = useTranslation();
-  const { has } = useSession();
+  const { has, session } = useSession();
+  // opened from a marketer's space: Meta is connected (or not) at the seller's
+  const atSeller = session?.shop?.kind === 'marketer';
   const owner = has('vendeur');
   const [period, setPeriod] = useState<PeriodKey>(() => {
     const s = store.get('ads-period') as PeriodKey | null;
@@ -164,7 +166,7 @@ export function Publicite(_: Partial<PageProps> = {}) {
         <ErrorBox error={q.error} onRetry={() => q.refetch()} />
       ) : d ? (
         <>
-          {!d.connected && !d.demo && <div className="warnbox">{t('ads.notConnected')}</div>}
+          {!d.connected && !d.demo && <div className="warnbox">{t(atSeller ? 'ads.notConnectedSeller' : 'ads.notConnected')}</div>}
           {d.syncWarning && <div className="error">{d.syncWarning}</div>}
           {!fxOk && <div className="fxcard warnbox">{t('ads.fxMissing')}</div>}
           {productId && (

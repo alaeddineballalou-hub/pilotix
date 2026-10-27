@@ -18,6 +18,8 @@
   },
   "youWin": "You earn {{when}}",
   "youLose": "You lose {{when}}",
+  "sellerWin": "The seller earns {{when}}",
+  "sellerLose": "The seller loses {{when}}",
   "noFx": "Ad spend (enter the dollar rate)",
   "perDelivered": "{{v}} DA per delivered",
   "vsBefore": "{{v}} vs previous period",

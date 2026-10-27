@@ -5,6 +5,7 @@
   "demo": "Demo · examples",
   "demoTip": "Demo: example Meta spend, against the demo orders.",
   "notConnected": "Meta is not connected: the administrator adds it in Settings → Ads · Meta Ads. Meanwhile, figures already saved are shown.",
+  "notConnectedSeller": "Meta is not connected at this seller: they add it in their Settings → Ads · Meta Ads. Meanwhile, figures already saved are shown.",
   "stamp": "Meta updated {{when}}",
   "period": "Period",
   "periods": { "today": "Today", "yesterday": "Yesterday", "thisweek": "This week", "lastweek": "Last week", "month": "This month", "lastmonth": "Last month", "custom": "Chosen dates" },

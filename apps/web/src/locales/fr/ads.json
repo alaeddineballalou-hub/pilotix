@@ -5,6 +5,7 @@
   "demo": "Démo · exemples",
   "demoTip": "Démo : dépenses Meta d’exemple, face aux commandes de la démo.",
   "notConnected": "Meta n’est pas connecté : l’administrateur l’ajoute dans Réglages → Publicité · Meta Ads. En attendant, les chiffres déjà enregistrés s’affichent.",
+  "notConnectedSeller": "Meta n’est pas connecté chez ce vendeur : il l’ajoute dans ses Réglages → Publicité · Meta Ads. En attendant, les chiffres déjà enregistrés s’affichent.",
   "stamp": "Meta mis à jour {{when}}",
   "period": "Période",
   "periods": { "today": "Aujourd'hui", "yesterday": "Hier", "thisweek": "Cette semaine", "lastweek": "Sem. dernière", "month": "Ce mois", "lastmonth": "Mois dernier", "custom": "Dates choisies" },
