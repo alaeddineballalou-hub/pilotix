@@ -32,7 +32,7 @@ export function Protection() {
         <Kpi
           label={t('landing.pr.kQuality')}
           value={tt?.submits ? pct(real / tt.submits) : '—'}
-          sub={t('landing.pr.kQualitySub', { real: n(real), total: n(tt?.submits), confirmed: n(tt?.confirmed) })}
+          sub={t('landing.pr.kQualitySub', { real: n(real), total: n(tt?.submits) })}
           icon="medal"
           tone={tt?.submits ? (real / tt.submits >= 0.85 ? 'ok' : real / tt.submits >= 0.7 ? 'warn' : 'bad') : undefined}
           big
@@ -48,6 +48,7 @@ export function Protection() {
           tone={tt?.waiting ? 'bad' : undefined}
           href="#/landing/bloquees"
         />
+        <Kpi label={t('landing.pr.kConfirmed')} value={n(tt?.confirmed)} sub={t('landing.pr.kConfirmedSub', { rate: real ? pct((tt?.confirmed ?? 0) / real) : '—' })} icon="check" />
         <Kpi label={t('landing.pr.kMerged')} value={n(tt?.merged)} sub={t('landing.pr.kMergedSub')} icon="layers" />
         <Kpi label={t('landing.pr.kMarked')} value={n(tt?.marked)} sub={t('landing.pr.kMarkedSub', { count: tt?.competitor ?? 0 })} icon="flag" />
       </Kpis>
