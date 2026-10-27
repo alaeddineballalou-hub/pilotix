@@ -1,6 +1,6 @@
 // The photo compressor of the landing page editor, in the browser itself (nothing to install, nothing sent before it is
 // small). A picture (a 4 MB phone photo, a supplier's picture, a product photo address) becomes the files the page uses:
-// 160 px (thumbnails), 480, 720 (most phones) and 960 px wide, plus a tiny blurred copy shown at once while the photo
+// 160 px (thumbnails), 320 (small boxes on a computer), 480, 720 (most phones) and 960 px wide, plus a tiny blurred copy shown at once while the photo
 // loads. For each width it looks for the LOWEST quality whose result still looks the same as the resized original —
 // measured with MS-SSIM (multi-scale structural similarity of brightness, 1 = identical; it follows what the eye sees
 // better than plain SSIM, which over-rates fine textures like fur or grass) — so every file is as light as it can be
@@ -22,16 +22,16 @@ export const PRESETS: Record<Preset, { ssim: number; thumb: number }> = {
 };
 
 /** never heavier than this (bytes), whatever the photo: the first photo must stay quick on 3G */
-const CAP = { t160: 10_000, w480: 50_000, w720: 100_000, w960: 150_000 };
-const WIDTHS = { t160: 160, w480: 480, w720: 720, w960: 960 } as const;
+const CAP = { t160: 10_000, w320: 25_000, w480: 50_000, w720: 100_000, w960: 150_000 };
+const WIDTHS = { t160: 160, w320: 320, w480: 480, w720: 720, w960: 960 } as const;
 type Size = keyof typeof WIDTHS;
 
 export interface ImageInfo {
   orig: number;
   ow: number;
   oh: number;
-  bytes: { t160: number; w480: number; w720?: number; w960: number };
-  ssim: { t160: number; w480: number; w720?: number; w960: number };
+  bytes: { t160: number; w320?: number; w480: number; w720?: number; w960: number };
+  ssim: { t160: number; w320?: number; w480: number; w720?: number; w960: number };
   preset: Preset;
 }
 
@@ -39,6 +39,7 @@ export interface Encoded {
   w: number;
   h: number;
   t160: string;
+  w320?: string;
   w480: string;
   w720?: string;
   w960: string;
@@ -352,19 +353,19 @@ export async function optimize(file: Blob, preset: Preset, step?: (size: Size | 
   const alpha = !opaque(big);
   const out: Partial<Record<Size, Pick & { w: number; h: number }>> = {};
   let lossless: boolean | null = null; // decided on the 480 width, kept for the others
-  for (const k of ['w480', 't160', 'w960', 'w720'] as Size[]) {
+  for (const k of ['w480', 't160', 'w960', 'w720', 'w320'] as Size[]) {
     const { w, h } = dims(WIDTHS[k]);
     // same pixels as a width already made (a small original): the same file
     const same = (Object.values(out) as (Pick & { w: number; h: number })[]).find((x) => x.w === w && x.h === h);
     if (same) {
-      if (k !== 'w720') out[k] = same;
+      if (k !== 'w720' && k !== 'w320') out[k] = same;
       continue;
     }
     step?.(k);
     let c = k === 'w960' ? big : resize(big, w, h);
     if (!webp && alpha) c = flatten(c);
     const ref = luma(ctx2d(c).getImageData(0, 0, w, h));
-    const pick = await lightest(c, ref, type, k === 't160' ? p.thumb : p.ssim, CAP[k], webp && lossless !== false, k === 'w960' || k === 'w720' ? out.w480?.q : undefined);
+    const pick = await lightest(c, ref, type, k === 't160' ? p.thumb : p.ssim, CAP[k], webp && lossless !== false, k === 'w960' || k === 'w720' || k === 'w320' ? out.w480?.q : undefined);
     if (k === 'w480' && webp) lossless = pick.q === 1;
     out[k] = { ...pick, w, h };
   }
@@ -377,12 +378,14 @@ export async function optimize(file: Blob, preset: Preset, step?: (size: Size | 
   }
   const r = out as Record<Size, Pick & { w: number; h: number }>;
   const has720 = !!out.w720 && out.w720 !== out.w480 && out.w720 !== out.w960;
+  const has320 = !!out.w320 && out.w320 !== out.w480 && out.w320 !== out.t160;
   const phone = has720 ? r.w720 : r.w960;
   return {
     w: r.w960.w,
     h: r.w960.h,
     t160: await toBase64(r.t160.blob),
     w480: await toBase64(r.w480.blob),
+    w320: has320 ? await toBase64(r.w320.blob) : undefined,
     w720: has720 ? await toBase64(r.w720.blob) : undefined,
     w960: await toBase64(r.w960.blob),
     lqip,
@@ -390,8 +393,8 @@ export async function optimize(file: Blob, preset: Preset, step?: (size: Size | 
       orig: file.size,
       ow: src.width,
       oh: src.height,
-      bytes: { t160: r.t160.blob.size, w480: r.w480.blob.size, w720: has720 ? r.w720.blob.size : undefined, w960: r.w960.blob.size },
-      ssim: { t160: round(r.t160.ssim), w480: round(r.w480.ssim), w720: has720 ? round(r.w720.ssim) : undefined, w960: round(r.w960.ssim) },
+      bytes: { t160: r.t160.blob.size, w320: has320 ? r.w320.blob.size : undefined, w480: r.w480.blob.size, w720: has720 ? r.w720.blob.size : undefined, w960: r.w960.blob.size },
+      ssim: { t160: round(r.t160.ssim), w320: has320 ? round(r.w320.ssim) : undefined, w480: round(r.w480.ssim), w720: has720 ? round(r.w720.ssim) : undefined, w960: round(r.w960.ssim) },
       preset,
     },
     compare: { orig: URL.createObjectURL(file), opt: URL.createObjectURL(phone.blob) },
@@ -401,6 +404,24 @@ export async function optimize(file: Blob, preset: Preset, step?: (size: Size | 
 const round = (x: number) => Math.round(x * 10000) / 10000;
 
 /** a picture at an address (a product photo, a supplier's page) fetched to be compressed; fails when the site refuses */
+/**
+ * The 320 width for a picture stored before it existed, made from its 480 file (what a computer shows in a small box):
+ * the same search for the lightest file that still looks the same. null when the picture is 320 px wide or less.
+ */
+export async function make320(src480: Blob, preset: Preset): Promise<{ b64: string; bytes: number; ssim: number } | null> {
+  const img = await load(src480);
+  if (img.width <= 320) return null;
+  const w = 320;
+  const h = Math.max(1, Math.round((img.height * 320) / img.width));
+  const webp = await canWebp();
+  let c = resize(img, w, h);
+  if (!webp && !opaque(c)) c = flatten(c);
+  const ref = luma(ctx2d(c).getImageData(0, 0, w, h));
+  const pick = await lightest(c, ref, webp ? 'image/webp' : 'image/jpeg', PRESETS[preset].ssim, CAP.w320, false);
+  if (pick.blob.size >= src480.size) return null;
+  return { b64: await toBase64(pick.blob), bytes: pick.blob.size, ssim: round(pick.ssim) };
+}
+
 export async function fetchImage(url: string): Promise<Blob> {
   const r = await fetch(url, { mode: 'cors', credentials: 'omit' });
   if (!r.ok) throw new Error(String(r.status));
