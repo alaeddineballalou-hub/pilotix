@@ -18,6 +18,8 @@
   },
   "youWin": "Vous gagnez {{when}}",
   "youLose": "Vous perdez {{when}}",
+  "sellerWin": "Le vendeur gagne {{when}}",
+  "sellerLose": "Le vendeur perd {{when}}",
   "noFx": "Dépense pub (entrez le taux du dollar)",
   "perDelivered": "{{v}} DA par livrée",
   "vsBefore": "{{v}} vs période d’avant",
