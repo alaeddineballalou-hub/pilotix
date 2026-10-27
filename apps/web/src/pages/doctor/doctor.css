@@ -139,3 +139,30 @@
 .dr-cf-lock small { font-size: 12.5px; color: var(--ink); }
 .dr-cf-lock-i { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: var(--surface); color: var(--ok); flex: 0 0 auto; }
 .dr-cf-lock-i .bji { width: 19px; height: 19px; }
+
+/* Co-Pilot's living icon (CopilotIcon.tsx): 3 s checking (orange, eyes left/right, three dots), 4 s the mood */
+.cp-ic { --cp: #F28C1B; display: inline-grid; place-items: center; flex: none; border-radius: 30%; background: var(--cp); transition: background-color .8s ease; }
+.cp-ic[data-mood="ok"] { --cp: #1E9E5A; }
+.cp-ic[data-mood="warn"] { --cp: #F2B705; }
+.cp-ic[data-mood="bad"] { --cp: #D63B2B; }
+.cp-ic svg { width: 70%; height: 70%; overflow: visible; fill: #fff; }
+.cp-shield { fill: none; stroke: #fff; stroke-width: 2; stroke-linejoin: round; }
+.cp-line { fill: none; stroke: #fff; stroke-linecap: round; }
+.cp-f { opacity: 0; transition: opacity .45s ease; transform-origin: 12px 12px; transform-box: view-box; }
+.cp-ic[data-mood="scan"] .cp-f-scan, .cp-ic[data-mood="ok"] .cp-f-ok, .cp-ic[data-mood="warn"] .cp-f-warn, .cp-ic[data-mood="bad"] .cp-f-bad { opacity: 1; }
+.cp-ic[data-mood="scan"] .cp-eyes { animation: cp-look 3s ease-in-out infinite; }
+@keyframes cp-look { 0% { transform: translateX(0) } 12%, 45% { transform: translateX(-1.7px) } 58%, 92% { transform: translateX(1.7px) } 100% { transform: translateX(0) } }
+.cp-think circle { opacity: 0; transition: opacity .3s; }
+.cp-ic[data-mood="scan"] .cp-think circle { animation: cp-think 1.2s ease-in-out infinite; }
+.cp-ic[data-mood="scan"] .cp-think circle:nth-child(2) { animation-delay: .2s; }
+.cp-ic[data-mood="scan"] .cp-think circle:nth-child(3) { animation-delay: .4s; }
+@keyframes cp-think { 0%, 100% { opacity: .25 } 50% { opacity: 1 } }
+.cp-ic[data-mood="ok"] .cp-f-ok { animation: cp-pop .6s ease; }
+.cp-ic[data-mood="ok"] .cp-blink { animation: cp-blink 4s infinite; transform-origin: 9.3px 10.3px; transform-box: view-box; }
+@keyframes cp-pop { 0% { transform: scale(.7) } 60% { transform: scale(1.12) } 100% { transform: scale(1) } }
+@keyframes cp-blink { 0%, 92%, 100% { transform: scaleY(1) } 95% { transform: scaleY(.15) } }
+.cp-ic[data-mood="warn"] .cp-f-warn { animation: cp-sigh 3.2s ease-in-out infinite; }
+@keyframes cp-sigh { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(.6px) } }
+.cp-ic[data-mood="bad"] { animation: cp-shake 2s ease-in-out infinite; }
+@keyframes cp-shake { 0%, 60%, 100% { transform: translateX(0) } 66% { transform: translateX(-1.5px) rotate(-3deg) } 72% { transform: translateX(1.5px) rotate(3deg) } 78% { transform: translateX(-1px) rotate(-2deg) } 84% { transform: translateX(0) } }
+@media (prefers-reduced-motion: reduce) { .cp-ic, .cp-ic * { animation: none !important; transition: none !important; } }
