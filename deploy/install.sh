@@ -98,6 +98,9 @@ cat > /etc/cron.d/pilotix-backup <<CRON
 15 3 * * * root cd $DIR && $C exec -T postgres pg_dump -U pilotix pilotix | gzip > /opt/pilotix-backups/pilotix-\$(date +\%F).sql.gz && find /opt/pilotix-backups -name '*.sql.gz' -mtime +14 -delete
 CRON
 
+echo "==> E-mails (the control room's login code, password links, invitations, sign-ups)"
+$C exec -T server node apps/server/dist/mailcheck.js || echo "E-mail: FAILED (the check did not run)"
+
 echo
 echo "Pilotix is running: https://$DOMAIN"
 echo "(HTTPS works once the domain's DNS points to this server; Caddy gets the certificate by itself.)"

@@ -135,7 +135,8 @@ class Smtp {
   }
 }
 
-export async function sendMail(m: Mail): Promise<void> {
+/** A connection to the SMTP server, encrypted and logged in (port 465: TLS at once; otherwise STARTTLS). */
+async function openSmtp(): Promise<Smtp> {
   const { host, port, user, pass, from } = config.smtp;
   if (!host || !from) throw new Error('SMTP non configuré');
   const local = ['localhost', '127.0.0.1', '::1'].includes(host);
@@ -167,12 +168,32 @@ export async function sendMail(m: Mail): Promise<void> {
         await s.cmd(Buffer.from(pass).toString('base64'), [235], 'AUTH (mot de passe)');
       }
     }
-    await s.cmd(`MAIL FROM:<${addr(from)}>`, [250]);
+    return s;
+  } catch (e) {
+    s.end();
+    throw e;
+  }
+}
+
+export async function sendMail(m: Mail): Promise<void> {
+  const s = await openSmtp();
+  try {
+    await s.cmd(`MAIL FROM:<${addr(config.smtp.from)}>`, [250]);
     await s.cmd(`RCPT TO:<${addr(m.to)}>`, [250, 251]);
     await s.cmd('DATA', [354]);
-    const msg = buildMessage(from, m).replace(/\r\n\./g, '\r\n..');
+    const msg = buildMessage(config.smtp.from, m).replace(/\r\n\./g, '\r\n..');
     s.write(`${msg}${msg.endsWith('\r\n') ? '' : '\r\n'}.\r\n`);
     await s.cmd(null, [250], 'DATA (message)');
+    s.write('QUIT\r\n');
+  } finally {
+    s.end();
+  }
+}
+
+/** Can this server log in to its SMTP server? (nothing is sent: the deploy's e-mail check) */
+export async function checkSmtp(): Promise<void> {
+  const s = await openSmtp();
+  try {
     s.write('QUIT\r\n');
   } finally {
     s.end();
