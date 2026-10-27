@@ -359,11 +359,69 @@ CREATE TABLE IF NOT EXISTS platform.turnstile_widgets (
 );
 `;
 
+// Confirmation agencies. An agency is a « shop » of its own kind: its team logs in on the same page as a store's and
+// lands in the agency's space. Stores and agencies have a public code (typed to find each other); an agency has its
+// usual prices and is checked by Pilotix before it can work. A link joins an agency to a store: asked by either side,
+// accepted by the other; it carries the agency's prices (only the agency sets them), the tasks (confirmation, suivi)
+// and the store's products given to the agency (only the store chooses them). The agency's people work on the store's
+// orders from the agency's space; its bills are its monthly payment requests to the store.
+const P005 = `
+ALTER TABLE platform.shops ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'store';
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shops_kind_check') THEN
+    ALTER TABLE platform.shops ADD CONSTRAINT shops_kind_check CHECK (kind IN ('store', 'agency'));
+  END IF;
+END $$;
+ALTER TABLE platform.shops ADD COLUMN IF NOT EXISTS public_code text;
+CREATE UNIQUE INDEX IF NOT EXISTS shops_public_code ON platform.shops (public_code) WHERE public_code IS NOT NULL;
+ALTER TABLE platform.shops ADD COLUMN IF NOT EXISTS agency_verified_at timestamptz;
+ALTER TABLE platform.shops ADD COLUMN IF NOT EXISTS agency_prices jsonb;
+ALTER TABLE platform.signup_requests ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'store';
+
+CREATE TABLE IF NOT EXISTS platform.agency_links (
+  id             serial PRIMARY KEY,
+  agency_id      integer     NOT NULL REFERENCES platform.shops(id),
+  store_id       integer     NOT NULL REFERENCES platform.shops(id),
+  status         text        NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'refused', 'cancelled', 'ended')),
+  requested_by   text        NOT NULL CHECK (requested_by IN ('agency', 'store')),
+  requester      text        NOT NULL DEFAULT '',
+  tasks          jsonb       NOT NULL DEFAULT '["confirmation"]',
+  prices         jsonb       NOT NULL,
+  -- new prices from the agency, waiting for the store's yes (the old ones stay until then)
+  prices_new     jsonb,
+  -- null = every product (also the new ones); else the ids of the products the store gives
+  products       jsonb,
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  answered_at    timestamptz,
+  started_at     timestamptz,
+  ended_at       timestamptz,
+  ended_by       text
+);
+CREATE UNIQUE INDEX IF NOT EXISTS agency_links_open ON platform.agency_links (agency_id, store_id) WHERE status IN ('pending', 'active');
+CREATE INDEX IF NOT EXISTS agency_links_store ON platform.agency_links (store_id, status);
+CREATE INDEX IF NOT EXISTS agency_links_agency ON platform.agency_links (agency_id, status);
+
+-- the agency's payment requests to a store: one per month, its numbers kept as they were counted
+CREATE TABLE IF NOT EXISTS platform.agency_bills (
+  id           serial PRIMARY KEY,
+  link_id      integer     NOT NULL REFERENCES platform.agency_links(id),
+  month        text        NOT NULL,
+  amount       integer     NOT NULL CHECK (amount >= 0),
+  details      jsonb       NOT NULL,
+  status       text        NOT NULL DEFAULT 'requested' CHECK (status IN ('requested', 'paid', 'received')),
+  requested_at timestamptz NOT NULL DEFAULT now(),
+  paid_at      timestamptz,
+  received_at  timestamptz
+);
+CREATE UNIQUE INDEX IF NOT EXISTS agency_bills_month ON platform.agency_bills (link_id, month);
+`;
+
 export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p001_platform', P001],
   ['p002_accounts_signup_domains', P002],
   ['p003_accounts_privacy', P003],
   ['p004_turnstile', P004],
+  ['p005_agencies', P005],
 ];
 
 /** Creates or updates the platform's tables. */

@@ -30,10 +30,10 @@ async function section(name, fn) {
     results.push([name, e.message]);
   }
 }
-async function req(path, body, token, method) {
+async function req(path, body, token, method, headers) {
   const r = await fetch(API + path, {
     method: method ?? (body === undefined ? 'GET' : 'POST'),
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...headers },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await r.text();
@@ -46,12 +46,14 @@ async function req(path, body, token, method) {
   return { status: r.status, data };
 }
 /** The answer, or an error carrying the status and the answer. */
-async function must(path, body, token) {
-  const r = await req(path, body, token);
+async function must(path, body, token, headers) {
+  const r = await req(path, body, token, undefined, headers);
   if (r.status >= 300) throw Object.assign(new Error(`${path} → ${r.status} ${JSON.stringify(r.data).slice(0, 300)}`), { status: r.status, data: r.data });
   return r.data;
 }
 const rpc = (token, name, input = {}) => must(`/rpc/${name}`, input, token);
+/** A confirmation agency's space, on one seller's orders (or 'all' of them). */
+const rpcSeller = (token, seller, name, input = {}) => must(`/rpc/${name}`, input, token, { 'X-Seller': String(seller) });
 let P; // the control room's token
 const prpc = (name, input = {}) => must(`/platform/rpc/${name}`, input, P);
 /** The call must fail (with this status, and a message matching re). */
@@ -627,6 +629,102 @@ await section('A suspended store: locked in the picker, its work refused', async
   await fails(rpc(e.token, 'orders.list', { pageSize: 5 }), 402);
   ok('« Bloquée » in the picker; it opens on the lock screen; its work is refused');
   await prpc('p.shops.setStatus', { id: ctx.owner1.second, status: 'active' });
+});
+
+// ---------------------------------------------------------------- confirmation agencies
+await section('Confirmation agencies: « Créer mon agence », Pilotix’s check, a store and an agency work together', async () => {
+  const PR = { perConfirmed: 0, perDelivered: 150, perUpsell: 50, monthly: 0, bonusRate: { min: 0, amount: 0 }, bonusVolume: { above: 0, amount: 0 } };
+  // the agency signs up like a store, with its own e-mail
+  const n0 = mailCount();
+  const email = em('agence');
+  await must('/auth/signup', { name: 'Samir Agence', email, password: 'Agence-Password-1', storeName: `Agence Rapide ${run}`, language: 'fr', terms: true, kind: 'agency' });
+  const m = await mailTo(email, n0);
+  assert.match(`${m.subject} ${m.text}`, /agence/i);
+  const a = await must('/auth/signup/confirm', { token: linkToken(m, 'signup') });
+  assert.equal(a.session.shop.kind, 'agency');
+  assert.equal(a.session.shop.verified, false);
+  assert.match(a.session.shop.code, /^AG-[A-Z2-9]{4}$/);
+  ok(`the e-mail « ${m.subject} » → agency ${a.session.shop.code} made, free, not checked yet`);
+  const A = a.token;
+  const agencyId = a.session.shop.id;
+  // its space runs only its own actions (a seller's orders need a seller); a store's never runs agency.*
+  await fails(rpc(A, 'orders.list', { pageSize: 5 }), 400, /vendeur/);
+  await fails(rpc(A, 'catalog.products', {}), 403);
+  await fails(rpc(ctx.signup1.token, 'agency.home'), 403);
+  ok('an agency’s space opens no store page; a store opens no agency page');
+  await rpc(A, 'agency.prices', { prices: PR });
+  const nora = await rpc(A, 'users.create', { name: 'Nora Agent', email: em('nora'), password: 'Nora-Password-1', roles: ['confirmation'], language: 'fr' });
+  // the store: its code; the agency is not found before Pilotix checks it
+  const sh = await rpc(ctx.signup1.token, 'partners.home');
+  assert.match(sh.code, /^[A-Z2-9]{3}-[A-Z2-9]{3}$/);
+  await fails(rpc(ctx.signup1.token, 'partners.find', { code: a.session.shop.code }), 400, /vérifiée/);
+  assert.ok((await prpc('p.agencies.list')).some((x) => x.id === agencyId && !x.verifiedAt));
+  assert.ok(!(await prpc('p.shops.list')).some((x) => x.id === agencyId), 'not among the stores');
+  await prpc('p.agencies.verify', { id: agencyId, verified: true });
+  ok(`control room › Agences: checked; the store’s code is ${sh.code}`);
+  // the store asks for one product; the agency accepts and sends its agent
+  const prod = await rpc(ctx.signup1.token, 'catalog.saveProduct', { name: `Montre ${run}`, price: 3000, variants: [] });
+  const pid = prod.id ?? prod.product?.id;
+  const other = await rpc(ctx.signup1.token, 'catalog.saveProduct', { name: `Sac ${run}`, price: 2000, variants: [] });
+  const oid2 = other.id ?? other.product?.id;
+  const f = await rpc(ctx.signup1.token, 'partners.find', { code: a.session.shop.code.toLowerCase().replace('-', '') });
+  assert.equal(f.agency.prices.perDelivered, 150);
+  const link = await rpc(ctx.signup1.token, 'partners.request', { agencyId, tasks: ['confirmation'], products: [pid] });
+  const ans = await rpc(A, 'agency.answer', { id: link.id, accept: true });
+  assert.deepEqual(ans.problems, []);
+  ok('the store found it by its code, asked, the agency accepted (its agents work for every seller unless the chief chooses)');
+  // one login: Nora lands in her agency; the store is not opened by itself (its orders are reached from the agency)
+  const l = await login(em('nora'), 'Nora-Password-1');
+  assert.ok(!l.pick, 'no picker: her agency only');
+  assert.equal(l.session.shop.kind, 'agency');
+  const N = l.token;
+  await fails(must('/auth/switch', { shop: ctx.signup1.shopId }, N), 403, /agence/);
+  const sellers = await rpc(N, 'agency.sellers');
+  assert.deepEqual(sellers.map((x) => x.id), [ctx.signup1.shopId]);
+  ok('Nora lands in her agency; the seller is in her picker at the top, never opened by itself');
+  // orders go by their first product: hers, and the store’s own
+  const o1 = await rpc(ctx.signup1.token, 'orders.create', { customerName: 'Client Agence', phone: '0661223311', wilayaId: 16, commune: 'Alger', items: [{ productId: pid, variantId: null, qty: 1 }] });
+  const o2 = await rpc(ctx.signup1.token, 'orders.create', { customerName: 'Client Boutique', phone: '0661223312', wilayaId: 16, commune: 'Alger', items: [{ productId: oid2, variantId: null, qty: 1 }] });
+  assert.equal(o1.confAgencyId, agencyId);
+  assert.equal(o2.confAgencyId, null);
+  const S = ctx.signup1.shopId;
+  const seen = await rpcSeller(N, S, 'orders.list', { pageSize: 50 });
+  assert.deepEqual(seen.rows.map((r) => r.id), [o1.id]);
+  await fails(rpcSeller(N, S, 'orders.get', { id: o2.id }), 403);
+  await fails(rpcSeller(N, S, 'catalog.products', {}), 403);
+  const all = await rpcSeller(N, 'all', 'confirmation.list', { sub: 'nouvelles' });
+  assert.deepEqual(all.rows.map((r) => [r.id, r.seller.id]), [[o1.id, S]]);
+  await rpcSeller(N, S, 'orders.setConf', { ids: [o1.id], status: 'confirmed' });
+  ok('from her agency: one seller or all of them; only the agency’s orders; nothing else of the store opens');
+  // the store never edits the agent's account
+  const team = await rpc(ctx.signup1.token, 'users.list', { agencies: true });
+  const nid = team.find((u) => u.email === em('nora'))?.id;
+  await fails(rpc(ctx.signup1.token, 'users.update', { id: nid, name: 'Autre Nom' }), 403, /agence/);
+  // the numbers and the payment request: the store says « Payé », the agency « Reçu »
+  const d = await rpc(A, 'agency.link', { id: link.id });
+  assert.equal(d.counts.received, 1);
+  assert.equal(d.counts.confirmed, 1);
+  // only the agency changes its prices; the old ones stay until the store says yes
+  await rpc(A, 'agency.linkPrices', { id: link.id, prices: { ...PR, perDelivered: 170 } });
+  const sd = await rpc(ctx.signup1.token, 'partners.link', { id: link.id });
+  assert.deepEqual([sd.link.prices.perDelivered, sd.link.pricesNew.perDelivered], [150, 170]);
+  await rpc(ctx.signup1.token, 'partners.acceptPrices', { id: link.id });
+  ok('numbers per month; new prices wait for the store’s yes');
+  // Facturation: the seller's month
+  const bill = await rpc(A, 'agency.billing', {});
+  assert.deepEqual(bill.rows.map((r) => [r.link.store.id, r.counts.confirmed]), [[S, 1]]);
+  // Pilotix suspends the agency: its agents stop at once
+  await prpc('p.shops.setStatus', { id: agencyId, status: 'suspended', reason: 'Test' });
+  await sleep(200);
+  const stopped = await fails(rpcSeller(N, S, 'orders.list', { pageSize: 5 }));
+  assert.ok([401, 402, 403].includes(stopped.status), `stopped: ${stopped.status}`);
+  await prpc('p.shops.setStatus', { id: agencyId, status: 'active' });
+  // the store ends the contract
+  await rpc(ctx.signup1.token, 'partners.end', { id: link.id });
+  const l2 = await login(em('nora'), 'Nora-Password-1');
+  assert.deepEqual(await rpc(l2.token, 'agency.sellers'), [], 'the seller left her picker');
+  await fails(rpcSeller(l2.token, S, 'orders.list', { pageSize: 5 }), 403);
+  ok('suspended → the agents are out at once; contract ended → the seller leaves the picker');
 });
 
 console.log('\n========== SUMMARY');

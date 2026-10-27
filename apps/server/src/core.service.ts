@@ -192,11 +192,18 @@ export class CoreService implements OnModuleDestroy {
     return p;
   }
 
-  /** Forget what is kept (after a change in the control room: seen at once). */
+  /**
+   * Raised when sessions must be read again at once (a password changed, an account switched off, an agency's agents
+   * opened or closed, a change in the control room): the login guard keeps sessions 30 s otherwise.
+   */
+  authEpoch = 0;
+
+  /** Forget what is kept (after a change in the control room: seen at once, sessions included). */
   invalidate() {
     this.cache.clear();
     this.settingsCache = null;
     this.sys.clear();
+    this.authEpoch++;
   }
 
   /** A shop by id, address (slug) or the owner's own shop; kept 15 s. */
@@ -237,12 +244,31 @@ export class CoreService implements OnModuleDestroy {
     return { ...this.baseHooks, publicApi, storeTaken };
   }
 
-  ctx(ref: ShopRef, session: Session): Ctx {
-    return { db: ref.db, session, shop: ref.rules, now: () => Date.now(), emit: (e) => this.emitLive(ref.shop.id, e), server: ref.hooks };
+  ctx(ref: ShopRef, session: Session, seller?: number | 'all'): Ctx {
+    // t: what joins two shops (a confirmation agency and the stores it works for); seller: the agency's chosen seller
+    return {
+      db: ref.db,
+      session,
+      shop: ref.rules,
+      now: () => Date.now(),
+      emit: (e) => this.emitLive(ref.shop.id, e),
+      server: ref.hooks,
+      t: this.t,
+      ...(ref.shop.kind === 'agency' ? { seller, otherShop: (id: number, profileId: number) => this.otherShop(id, profileId) } : {}),
+    };
   }
 
-  call(ref: ShopRef, name: string, session: Session, input: unknown) {
-    return core.call(name, this.ctx(ref, session), input);
+  /** A store an agency works for, as one of the agency's people's accounts there (its live updates, its couriers). */
+  private async otherShop(shopId: number, profileId: number): Promise<Ctx> {
+    const ref = await this.shop({ id: shopId });
+    if (!ref || ref.shop.status === 'archived' || ref.shop.status === 'deleted') throw new core.AppError('not_found', 'Vendeur introuvable');
+    const p = await core.profileById(ref.db, profileId);
+    if (!p?.active) throw new core.AppError('forbidden', 'Vous ne travaillez plus pour ce vendeur');
+    return this.ctx(ref, core.makeSession(p));
+  }
+
+  call(ref: ShopRef, name: string, session: Session, input: unknown, seller?: number | 'all') {
+    return core.call(name, this.ctx(ref, session, seller), input);
   }
 
   /** What the app shows of a shop (plan, state, how to pay, Pilotix's message, its limits). */
@@ -285,6 +311,8 @@ export class CoreService implements OnModuleDestroy {
     const out: ShopRef[] = [];
     for (const s of await core.loadShops(this.t)) {
       if (s.status === 'archived') continue;
+      // a confirmation agency has no orders, couriers or messages of its own: nothing to run
+      if (s.kind === 'agency') continue;
       const ref = await this.shop({ id: s.id });
       if (!ref) continue;
       if (!evenLocked && ref.status.locked) continue;

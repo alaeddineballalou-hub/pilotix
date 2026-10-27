@@ -1,6 +1,8 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, ReactNode, Suspense, useEffect, useState } from 'react';
 import { Loading } from '../ui/kit';
 import { useBackLayer } from './backLayer';
+import { ambientSeller, Seller, SellerScope } from './seller';
+import { AgentView } from './session';
 import { useIsPhone } from './useMedia';
 
 /** Options for the order form (new order, edit, exchange). */
@@ -13,7 +15,8 @@ export interface OrderFormOpts {
   onSaved?: (orderId: number) => void;
 }
 
-type Open = { kind: 'card'; id: number } | { kind: 'form'; opts: OrderFormOpts } | null;
+/** seller: in a confirmation agency's space, the store the order belongs to */
+type Open = { kind: 'card'; id: number; seller?: Seller } | { kind: 'form'; opts: OrderFormOpts; seller?: Seller } | null;
 let current: Open = null;
 const subs = new Set<(o: Open) => void>();
 const set = (o: Open) => {
@@ -21,10 +24,13 @@ const set = (o: Open) => {
   subs.forEach((s) => s(o));
 };
 
-/** Opens the order card (details, history, actions). */
-export const openOrder = (id: number) => set({ kind: 'card', id });
+/**
+ * Opens the order card (details, history, actions). `seller` (an agency's space): the order's store, by default the
+ * seller of what is open on screen.
+ */
+export const openOrder = (id: number, seller?: Seller) => set({ kind: 'card', id, seller: seller ?? ambientSeller() });
 /** Opens the order form: new order, edit (orderId) or exchange (exchangeOf). */
-export const openOrderForm = (opts: OrderFormOpts = {}) => set({ kind: 'form', opts });
+export const openOrderForm = (opts: OrderFormOpts = {}) => set({ kind: 'form', opts, seller: ambientSeller() });
 export const closeModal = () => set(null);
 
 const OrderCard = lazy(() => import('../pages/orders/OrderCard'));
@@ -49,7 +55,17 @@ export function ModalHost() {
   return (
     <Suspense fallback={<Loading />}>
       {phone && open.kind === 'card' && <BackCloses onClose={closeModal} />}
-      {open.kind === 'card' ? <OrderCard id={open.id} onClose={closeModal} /> : <OrderForm {...open.opts} onClose={closeModal} />}
+      <OfSeller seller={open.seller}>{open.kind === 'card' ? <OrderCard id={open.id} onClose={closeModal} /> : <OrderForm {...open.opts} onClose={closeModal} />}</OfSeller>
     </Suspense>
+  );
+}
+
+/** An order of one of an agency's sellers: shown inside that store, as the agency's agents see it there. */
+function OfSeller({ seller, children }: { seller?: Seller; children: ReactNode }) {
+  if (seller === undefined) return <>{children}</>;
+  return (
+    <SellerScope seller={seller}>
+      <AgentView>{children}</AgentView>
+    </SellerScope>
   );
 }

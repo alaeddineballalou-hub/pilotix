@@ -1,5 +1,5 @@
 import type { Role } from '@pilotix/shared';
-import { pageIsOn } from '../lib/features';
+import { currentShop, pageIsOn } from '../lib/features';
 
 /**
  * The menu, as in the original Pilotix (final layout): sub-pages appear as a stage bar inside the page,
@@ -90,6 +90,8 @@ export const NAV: NavItem[] = [
   { id: 'macaisse', icon: 'wallet', roles: ['confirmation', 'suivi', 'depot', 'agent_manager'], onlyIf: (_r, admin) => !admin },
   { id: 'livraison', icon: 'truck', roles: [], subs: ['societes', 'api', 'livreurs'] },
   { id: 'utilisateurs', icon: 'usercog', roles: [], manageUsers: true, subs: ['roles', 'admins', 'vendeurs', 'agents', 'marketeurs', 'managers'] },
+  // confirmation agencies working for the store (its code, requests both ways, contracts, numbers, payments)
+  { id: 'agences', icon: 'handshake', roles: [], onlyIf: () => !!currentShop() && !currentShop()!.demo },
   { id: 'management', icon: 'briefcase', roles: [], subs: ['statuts', 'paie', 'prix', 'canaux', 'archive'] },
   { id: 'reglages', icon: 'settings', roles: [] },
   { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'parrainage', 'securite'] },
@@ -113,3 +115,29 @@ export function homeFor(roles: Role[], isAdmin: boolean): string {
   if (!isAdmin && roles.includes('confirmation') && !roles.includes('vendeur') && roles.length === 1 && pageIsOn('confirmation')) return 'confirmation';
   return 'accueil';
 }
+
+// ---------------------------------------------------------------- a confirmation agency's own space
+/**
+ * The menu of a confirmation agency: like a store's (Accueil, Commandes › Confirmation / Suivi, Utilisateurs,
+ * Réglages), on its sellers' orders (the seller picker at the top of the page), plus its sellers and its bills.
+ */
+export const AGENCY_NAV: NavItem[] = [
+  { id: 'accueil', icon: 'home', roles: null },
+  {
+    id: 'commandes',
+    icon: 'list',
+    roles: ['confirmation', 'suivi', 'agent_manager'],
+    pages: ['confirmation', 'suivi'],
+    children: [
+      { id: 'confirmation', href: '#/confirmation', count: 'conf', tone: 'nc-n', icon: 'phone', roles: ['confirmation', 'agent_manager'] },
+      { id: 'suivi', href: '#/suivi', count: 'suivi', tone: 'nc-a', icon: 'route', roles: ['suivi', 'agent_manager'] },
+    ],
+  },
+  { id: 'confirmation', icon: 'phone', roles: ['confirmation', 'agent_manager'], subs: ['nouvelles', 'attente', 'confirmees'], flow: true, hidden: true },
+  { id: 'suivi', icon: 'route', roles: ['suivi', 'agent_manager'], subs: ['alertes', 'traites', 'livres', 'annules'], hidden: true },
+  { id: 'vendeurs', icon: 'store', roles: [] },
+  { id: 'facturation', icon: 'receipt', roles: [] },
+  { id: 'utilisateurs', icon: 'usercog', roles: [], manageUsers: true },
+  { id: 'reglages', icon: 'settings', roles: [] },
+  { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'securite'] },
+];

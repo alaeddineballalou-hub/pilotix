@@ -394,7 +394,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
             <Help text={t(`confirmation.help.${sub}`)} label={title} />
           </h2>
           <div className="row">
-            {has('confirmation') && (
+            {has('confirmation') && !session?.profile.agencyId && (
               <button type="button" className={`btn ${canNext ? 'px-qnew' : 'primary'}`} onClick={() => openOrderForm({ onSaved: () => qc.invalidateQueries() })}>
                 + {t('confirmation.newOrder')}
               </button>
@@ -420,7 +420,8 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
           }}
           onBlock={() => setBlockAsk(selected)}
           onDelete={session?.isAdmin ? () => setDelAsk(selected) : undefined}
-          onDuplicate={async () => {
+          // a confirmation agency's agent does not make orders in the store
+          onDuplicate={session?.profile.agencyId ? undefined : async () => {
             try {
               const r = await rpc('orders.duplicate', { ids: [selected[0].id] });
               toast(t('confirmation.duplicated', { ref: selected[0].ref }), 'ok');
@@ -792,7 +793,7 @@ function Toolbar(p: {
   onStatus: (c: StatusChoice) => void;
   onBlock: () => void;
   onDelete?: () => void;
-  onDuplicate: () => void;
+  onDuplicate?: () => void;
 }) {
   const { t } = useTranslation();
   const nSel = p.rows.length;
@@ -882,12 +883,12 @@ function Toolbar(p: {
         </label>
       </span>
       <span className="qa-grp">
-        <button type="button" className="btn small qa-btn" aria-label={t('confirmation.tb.duplicate')} disabled={!one} title={one ? t('confirmation.tb.duplicate') : tipOne} onClick={p.onDuplicate}>
+        {p.onDuplicate && <button type="button" className="btn small qa-btn" aria-label={t('confirmation.tb.duplicate')} disabled={!one} title={one ? t('confirmation.tb.duplicate') : tipOne} onClick={p.onDuplicate}>
           <span className="qa-ic">
             <Icon name="copy" />
           </span>
           <span className="qa-tx">{t('confirmation.tb.duplicate')}</span>
-        </button>
+        </button>}
         {one ? (
           <a className="btn small qa-btn" aria-label={t('confirmation.tb.send')} title={t('confirmation.tb.send')} href={p.waHref(one)} target="_blank" rel="noopener">
             <span className="qa-ic">

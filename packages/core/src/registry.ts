@@ -1,6 +1,8 @@
 // Every action the app can call, by name. Each feature has its own module file.
 import { adminProcs } from './modules/admin';
 import { adsProcs } from './modules/ads';
+import { agencyProcs } from './modules/agencies';
+import { agencyWorkProcs } from './modules/agencywork';
 import { archiveProcs } from './modules/archive';
 import { cashProcs } from './modules/cash';
 import { caissesProcs } from './modules/caisses';
@@ -59,4 +61,6 @@ export const REGISTRY = {
   ...landingProcs,
   ...spyProcs,
   ...archiveProcs,
+  ...agencyProcs,
+  ...agencyWorkProcs,
 };

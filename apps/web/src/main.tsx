@@ -5,15 +5,16 @@ import { Legal, Signup, SignupConfirm, StorePicker, VerifyEmail } from './layout
 import { LockScreen } from './layout/LockScreen';
 import { Login } from './layout/Login';
 import { ResetPassword } from './layout/ResetPassword';
-import { canSee, canSeeChild, homeFor, NAV } from './layout/nav';
+import { AGENCY_NAV, canSee, canSeeChild, homeFor, NAV, NavItem } from './layout/nav';
 import { applyTheme, Shell } from './layout/Shell';
 import { ApiError } from './lib/backend';
 import { firstSubOn, hasPlanSubs, pageIsOn } from './lib/features';
 import './lib/i18n';
 import { ModalHost } from './lib/modals';
+import { initSeller } from './lib/seller';
 import { SessionProvider, useSession } from './lib/session';
 import { store } from './lib/store';
-import { PAGES } from './pages/registry';
+import { AGENCY_PAGES, PAGES } from './pages/registry';
 import { Loading } from './ui/kit';
 import { Toasts } from './ui/toast';
 import { installEdgeScroll } from './ui/edgeScroll';
@@ -57,6 +58,8 @@ function useHash() {
 }
 
 const ALIASES: Record<string, [string, string?]> = { livreurs: ['dashboard', 'livreurs'], publicite: ['marketing', 'publicite'], marketer: ['marketing', 'marketer'], spy: ['marketing', 'spy'] };
+/** An agency's older links: its team is « Utilisateurs », its prices are in « Réglages ». */
+const AGENCY_ALIASES: Record<string, [string, string?]> = { equipe: ['utilisateurs'], tarifs: ['reglages'] };
 
 /** Pilotix's control room (#/platform): its own login and pages, loaded only when opened. */
 const PlatformApp = lazy(() => import('./pages/platform').then((m) => ({ default: m.PlatformApp })));
@@ -81,6 +84,8 @@ function App() {
   if (parts[0] === 'signup' && parts[1]) return <SignupConfirm token={parts[1]} />;
   if (parts[0] === 'verify' && parts[1]) return <VerifyEmail token={parts[1]} />;
   if (parts[0] === 'inscription') return <Signup referral={parts[1]} />;
+  // « Créer mon agence »: a confirmation agency signs up the same way
+  if (parts[0] === 'inscription-agence') return <Signup agency />;
   // the link of the first sign-up e-mails (before accounts): every account counts as confirmed now, the app opens
   if (parts[0] === 'confirmer') location.replace('#/accueil');
   if (!session) return picker ? <StorePicker /> : <Login />;
@@ -96,25 +101,35 @@ function App() {
         </Suspense>
       </Shell>
     );
+  // whose space this is: a store's, or a confirmation agency's (it works on its sellers' orders, one seller or all)
+  const space: 'store' | 'agency' = session.shop?.kind === 'agency' ? 'agency' : 'store';
+  if (space === 'agency') initSeller(session.shop!.id);
+  const nav: NavItem[] = space === 'agency' ? AGENCY_NAV : NAV;
+  const pages = space === 'agency' ? AGENCY_PAGES : PAGES;
+  const homeOf = () => (space === 'agency' ? 'accueil' : homeFor(session.roles, session.isAdmin));
   let [page, sub, ...rest]: (string | undefined)[] = parts;
-  if (page && ALIASES[page]) [page, sub] = [ALIASES[page][0], ALIASES[page][1] ?? sub];
+  if (page && ALIASES[page] && space === 'store') [page, sub] = [ALIASES[page][0], ALIASES[page][1] ?? sub];
+  if (page && AGENCY_ALIASES[page] && space === 'agency') {
+    [page, sub] = AGENCY_ALIASES[page];
+    location.replace(`#/${page}`);
+  }
   // Confirmation › Livrées was removed: an old link opens Confirmation › Nouvelles
   if (page === 'confirmation' && sub === 'livrees') {
     location.replace('#/confirmation/nouvelles');
     sub = 'nouvelles';
   }
   // a group without a page of its own (Pilot AI) opens its first child the user can see
-  const group = NAV.find((n) => n.id === page && n.children && !PAGES[n.id]);
+  const group = nav.find((n) => n.id === page && n.children && !pages[n.id]);
   const first = group?.children!.find((c) => canSeeChild(c, session.roles, session.isAdmin));
   if (first) {
     location.replace(first.href);
     [page, sub] = first.href.replace(/^#\/?/, '').split('/');
   }
-  const item = NAV.find((n) => n.id === page);
-  const extra = ['livrees', 'retournees'].includes(page ?? '') && pageIsOn(page ?? '');
+  const item = nav.find((n) => n.id === page);
+  const extra = space === 'store' && ['livrees', 'retournees'].includes(page ?? '') && pageIsOn(page ?? '');
   const allowed = (item && canSee(item, session.roles, session.isAdmin, !!session.canManageUsers)) || (extra && (session.isAdmin || session.roles.some((r) => ['confirmation', 'suivi', 'depot'].includes(r))));
-  if (!page || !allowed || !PAGES[page]) {
-    const home = homeFor(session.roles, session.isAdmin);
+  if (!page || !allowed || !pages[page]) {
+    const home = homeOf();
     if (location.hash !== `#/${home}`) location.replace(`#/${home}`);
     page = home;
     sub = undefined;
@@ -128,16 +143,16 @@ function App() {
       location.replace(`#/${page}/${first}`);
       sub = first;
     } else {
-      const home = homeFor(session.roles, session.isAdmin);
+      const home = homeOf();
       location.replace(`#/${home}`);
       page = home;
       sub = undefined;
       rest = [];
     }
   }
-  const Page = PAGES[page!];
+  const Page = pages[page!];
   return (
-    <Shell page={page!} sub={sub}>
+    <Shell page={page!} sub={sub} nav={nav} space={space}>
       <Suspense fallback={<Loading />}>
         <Page key={page} sub={sub} rest={rest as string[]} />
       </Suspense>

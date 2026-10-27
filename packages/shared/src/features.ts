@@ -185,8 +185,16 @@ export interface ShopInfo {
   stores: number;
   /** this person can add a store of their own (sign-ups open, under their limit) */
   canAddStore: boolean;
+  /** « Créer mon agence » (the person has no confirmation agency yet) */
+  canAddAgency?: boolean;
   /** unread answers from Pilotix in « Contacter Pilotix » */
   supportUnread: number;
   /** the shop's own domain name for its landing pages (myshop.com): pending until its DNS points to the server */
   domain?: { name: string; status: 'pending' | 'ok' } | null;
+  /** a store, or a confirmation agency (its own space: sellers, team, prices, payments) */
+  kind?: 'store' | 'agency';
+  /** the code others type to find it (a store: K7Q-29X; an agency: AG-7K2Q) */
+  code?: string | null;
+  /** an agency checked by Pilotix (before that it cannot work with stores) */
+  verified?: boolean;
 }

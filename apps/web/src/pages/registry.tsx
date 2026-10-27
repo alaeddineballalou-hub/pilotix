@@ -36,5 +36,21 @@ export const PAGES: Record<string, ComponentType<PageProps>> = {
   utilisateurs: P(() => import('./admin'), 'Utilisateurs'),
   management: P(() => import('./admin'), 'Management'),
   reglages: P(() => import('./admin'), 'Reglages'),
+  agences: P(() => import('./agences'), 'Agences'),
   profil: P(() => import('./profil'), 'Profil'),
+};
+
+/**
+ * A confirmation agency's space: like a store's (its sellers' confirmation and suivi, one seller or all of them, its
+ * users, its settings), plus its sellers and its bills.
+ */
+export const AGENCY_PAGES: Record<string, ComponentType<PageProps>> = {
+  accueil: P(() => import('./agency'), 'AgencyHome'),
+  confirmation: P(() => import('./agency/work'), 'AgencyConfirmation'),
+  suivi: P(() => import('./agency/work'), 'AgencySuivi'),
+  vendeurs: P(() => import('./agency'), 'Vendeurs'),
+  facturation: P(() => import('./agency'), 'Facturation'),
+  utilisateurs: P(() => import('./agency'), 'AgencyUsers'),
+  reglages: P(() => import('./agency'), 'AgencySettings'),
+  profil: PAGES.profil,
 };

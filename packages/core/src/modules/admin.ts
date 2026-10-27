@@ -101,7 +101,8 @@ export async function computePayroll(db: Db, ym: string) {
   const { from, to } = monthRange(ym);
   const plans = await getSetting(db, 'payPlans');
   const teams = await getSetting(db, 'teams');
-  const people = await db.query(`SELECT id, name, roles, active FROM profiles ORDER BY name`);
+  // a confirmation agency's agents are paid by their agency (it sends its own bill), never by these payslips
+  const people = await db.query(`SELECT id, name, roles, active FROM profiles WHERE agency_id IS NULL ORDER BY name`);
   const P = new Map(people.map((p: any) => [num(p.id), p]));
   const has = (id: number, r: string) => {
     const p: any = P.get(id);

@@ -6,6 +6,7 @@ import { rpc } from '../../lib/backend';
 import { when, wilayaName, syncProblems } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
+import { useSession } from '../../lib/session';
 import { Empty, ErrorBox, Icon, Loading, RemovableChip, StatusBadge } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
@@ -29,7 +30,10 @@ type ListTab = (typeof LIST_TABS)[number];
 type Sub = ListTab | 'reclamation';
 
 export function Suivi({ sub }: PageProps) {
-  const tab: Sub = sub === 'reclamation' || (LIST_TABS as readonly string[]).includes(sub ?? '') ? (sub as Sub) : 'alertes';
+  // a confirmation agency's agents follow the parcels; the claims with couriers and the swaps stay the store's
+  const agency = !!useSession().session?.profile.agencyId;
+  const tabs: readonly string[] = agency ? LIST_TABS.filter((k) => k !== 'swap') : [...LIST_TABS, 'reclamation'];
+  const tab: Sub = tabs.includes(sub ?? '') ? (sub as Sub) : 'alertes';
   return (
     <>
       <SuiviBar tab={tab} />
@@ -49,6 +53,7 @@ export function Suivi({ sub }: PageProps) {
 /** "Alertes › Traités | Annulés  Réclamation  Swap" — same markup as the original stage bar. */
 function SuiviBar({ tab }: { tab: Sub }) {
   const { t } = useTranslation();
+  const agency = !!useSession().session?.profile.agencyId;
   const c = useRpc('suivi.counts', {}, { refetchInterval: 60_000 }).data;
   const item = (k: Sub, count?: number, x = false) => (
     <a className={`bjm-p ${tab === k ? 'on' : ''} ${x ? 'x' : ''}`} href={`#/suivi/${k}`} data-k={k} aria-current={tab === k ? 'page' : undefined}>
@@ -65,8 +70,8 @@ function SuiviBar({ tab }: { tab: Sub }) {
       {item('traites', c?.traites ?? 0)}
       <span className="bjm-sep" aria-hidden="true" />
       {item('annules', c?.annules ?? 0, true)}
-      {item('reclamation', undefined, true)}
-      {item('swap', c?.swap ?? 0, true)}
+      {!agency && item('reclamation', undefined, true)}
+      {!agency && item('swap', c?.swap ?? 0, true)}
     </nav>
   );
 }
@@ -74,6 +79,7 @@ function SuiviBar({ tab }: { tab: Sub }) {
 function Head({ tab }: { tab: ListTab }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const agency = !!useSession().session?.profile.agencyId;
   const c = useRpc('suivi.counts', {}).data;
   const [busy, setBusy] = useState(false);
   const sync = async () => {
@@ -101,9 +107,11 @@ function Head({ tab }: { tab: ListTab }) {
     <div className="card">
       <div className="card-head">
         <h2>{t('suivi.title')}</h2>
-        <button className="btn" onClick={sync} disabled={busy}>
-          <Icon name="refresh" /> {t('suivi.sync')}
-        </button>
+        {!agency && (
+          <button className="btn" onClick={sync} disabled={busy}>
+            <Icon name="refresh" /> {t('suivi.sync')}
+          </button>
+        )}
       </div>
       <div className="kpis bjsv-kpis">
         {kpis.map(([k, tone]) => (
@@ -274,6 +282,7 @@ type Dialog =
 
 function List({ tab }: { tab: ListTab }) {
   const { t } = useTranslation();
+  const agency = !!useSession().session?.profile.agencyId;
   const q = useRpc('suivi.list', { tab });
   const [dlg, setDlg] = useState<Dialog>(null);
   const act = useAction('suivi.act');
@@ -291,7 +300,7 @@ function List({ tab }: { tab: ListTab }) {
   if (tab === 'alertes')
     actions = (o) => (
       <div className="row nowrap px-sv-acts">
-        <AlertClaim o={o} x={extra[o.id]} onClaim={(toLivreur) => setDlg({ kind: 'claim', o, toLivreur })} />
+        {!agency && <AlertClaim o={o} x={extra[o.id]} onClaim={(toLivreur) => setDlg({ kind: 'claim', o, toLivreur })} />}
         <button type="button" className="btn small primary" onClick={() => setDlg({ kind: 'treat', o })}>
           {t('suivi.act.treat')}
         </button>
@@ -365,7 +374,7 @@ function List({ tab }: { tab: ListTab }) {
                   x={extra[cur.id]}
                   reason={reasonOf(cur, extra[cur.id])}
                   actions={phoneActions(cur)}
-                  onClaim={() => setDlg({ kind: 'claim', o: cur, toLivreur: extra[cur.id]?.companyKind === 'own' })}
+                  onClaim={agency ? undefined : () => setDlg({ kind: 'claim', o: cur, toLivreur: extra[cur.id]?.companyKind === 'own' })}
                   onClose={() => setOpenId(null)}
                 />
               )}
@@ -451,7 +460,7 @@ function AlertClaim({ o, x, onClaim }: { o: Order; x?: Extra; onClaim: (toLivreu
   );
 }
 
-function TreatModal({ o, reason, onClose }: { o: Order; reason: string | null; onClose: () => void }) {
+export function TreatModal({ o, reason, onClose }: { o: Order; reason: string | null; onClose: () => void }) {
   const { t } = useTranslation();
   const [what, setWhat] = useState<'date' | 'adresse' | 'injoignable' | 'autre'>('date');
   const [date, setDate] = useState('');

@@ -64,7 +64,10 @@ export function Profil({ sub }: PageProps) {
   const { t } = useTranslation();
   const { session } = useSession();
   const p = session!.profile;
-  const tab: Tab = TABS.some((x) => x[0] === sub) ? (sub as Tab) : 'infos';
+  // a confirmation agency's people (its own space, or working in a store for it) have no referral programme
+  const agencyPerson = session!.shop?.kind === 'agency' || !!p.agencyId;
+  const tabs = TABS.filter(([k]) => k !== 'parrainage' || !agencyPerson);
+  const tab: Tab = tabs.some((x) => x[0] === sub) ? (sub as Tab) : 'infos';
   return (
     <div className="px-pf">
       <section className="card px-pf-hero">
@@ -82,7 +85,7 @@ export function Profil({ sub }: PageProps) {
         </div>
       </section>
       <nav className="px-pf-tabs" aria-label={t('profil.title')}>
-        {TABS.map(([k, l, ic]) => (
+        {tabs.map(([k, l, ic]) => (
           <a key={k} href={`#/profil/${k}`} className={`px-pf-tab${tab === k ? ' on' : ''}`} aria-current={tab === k ? 'page' : undefined}>
             <Icon name={ic} />
             {t(`profil.${l}`)}

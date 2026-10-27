@@ -5,6 +5,7 @@ import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, Ctx, notFound, proc, withActionLock } from '../rpc';
 import { getSetting } from '../settings';
 import { addEvent, FollowInput, getOrder, listOrders, ListInput, setFollow } from './orders';
+import { agencyOf, andSql, queueSql } from './agencyscope';
 import { findOrders } from './sav';
 import { applyTrust, DRIVER_CLAIMS } from './trust';
 import { KINDS } from '../couriers/kinds';
@@ -84,11 +85,12 @@ export async function suiviCounts(ctx: Ctx) {
          count(*) FILTER (WHERE follow_status = 'delivered' AND delivered_at >= $1)::int AS livres,
          count(*) FILTER (WHERE follow_status = 'returning')::int AS returning,
          count(*) FILTER (WHERE follow_status = 'cancelled' AND sub_status = 'annule_swappe')::int AS swapped
-       FROM sales WHERE follow_status IS NOT NULL`,
+       FROM sales o WHERE follow_status IS NOT NULL${andSql(queueSql(ctx, 'follow'))}`,
       [d30],
     )
   )[0];
-  const claims = num((await ctx.db.query(`SELECT count(*)::int AS n FROM claims WHERE status <> 'resolved'`))[0]?.n);
+  // a confirmation agency's agents do not handle the store's claims with its couriers
+  const claims = agencyOf(ctx) !== null ? 0 : num((await ctx.db.query(`SELECT count(*)::int AS n FROM claims WHERE status <> 'resolved'`))[0]?.n);
   return {
     alertes: num(r.alertes),
     traites: num(r.traites),
@@ -491,7 +493,7 @@ export const suiviProcs = {
   'suivi.counts': proc(['suivi'], z.object({}), (ctx) => suiviCounts(ctx)),
 
   'suivi.list': proc(['suivi'], ListSuivi, async (ctx, i) => {
-    const page = await listOrders(ctx, ListInput.parse({ ...tabFilter(i.tab, ctx.now()), q: i.q, page: i.page, pageSize: i.pageSize }));
+    const page = await listOrders(ctx, ListInput.parse({ ...tabFilter(i.tab, ctx.now()), q: i.q, page: i.page, pageSize: i.pageSize }), { queue: 'follow' });
     // the swap list only shows parcels that really left (still with the courier or the livreur)
     const rows = i.tab === 'swap' ? page.rows.filter((o) => o.shippedAt) : page.rows;
     return { ...page, rows, extra: await extras(ctx.db, rows) };

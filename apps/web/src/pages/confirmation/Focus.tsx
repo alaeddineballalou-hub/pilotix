@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
 import { da, n, when } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
-import { useRpc } from '../../lib/query';
+import { useRpc, useRpcFor } from '../../lib/query';
+import { useScope } from '../../lib/seller';
 import { store } from '../../lib/store';
 import { Kpi, Loading, StatusBadge } from '../../ui/kit';
 import { toast } from '../../ui/toast';
@@ -17,7 +18,11 @@ import { TrustFlags } from '../orders/TrustFlags';
 const CHOICES: StatusChoice[] = ['confirmed', 'try1', 'callback', 'postponed', 'no_stock', 'cancelled', 'wrong_number', 'fake', 'duplicate'];
 const CLS: Partial<Record<StatusChoice, string>> = { confirmed: 'ok big', try1: 'big', no_stock: 'warn', cancelled: 'danger' };
 
-export function Focus({ initialId, onClose }: { initialId: number | null; onClose: () => void }) {
+/**
+ * onNext: « Commande suivante » given by the page (an agency's « Tous les vendeurs »: the next order of any seller);
+ * seller: the order's seller, shown in the title.
+ */
+export function Focus({ initialId, onClose, onNext, seller, allSellers }: { initialId: number | null; onClose: () => void; onNext?: () => Promise<void>; seller?: string; allSellers?: boolean }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [id, setId] = useState<number | null>(initialId);
@@ -25,7 +30,9 @@ export function Focus({ initialId, onClose }: { initialId: number | null; onClos
   const [busy, setBusy] = useState(false);
   const [auto, setAuto] = useState(() => store.get('conf-auto') !== '0');
   const skip = useRef<number[]>([]);
-  const mine = useRpc('confirmation.mine', {}, { refetchInterval: 60_000 });
+  // an agency's « Tous les vendeurs »: the numbers of every seller
+  const scope = useScope();
+  const mine = useRpcFor(allSellers ? 'all' : scope, 'confirmation.mine', {}, { refetchInterval: 60_000 });
   const meta = useRpc('confirmation.meta', {}, { staleTime: 5 * 60_000 });
   const order = useRpc('orders.get', { id: id ?? 0 }, { enabled: !!id });
   const others = useRpc('orders.list', { q: order.data?.phone ?? '', pageSize: 10 }, { enabled: !!order.data?.phone });
@@ -34,6 +41,7 @@ export function Focus({ initialId, onClose }: { initialId: number | null; onClos
   const next = async () => {
     setBusy(true);
     try {
+      if (onNext) return await onNext();
       if (id) await rpc('confirmation.release', { id }).catch(() => {});
       const r = await rpc('orders.next', { skip: skip.current.slice(-200) });
       setId(r.id);
@@ -64,7 +72,10 @@ export function Focus({ initialId, onClose }: { initialId: number | null; onClos
     <>
       <div className="card">
         <div className="card-head">
-          <h2>{t('confirmation.focus.title')}</h2>
+          <h2>
+            {t('confirmation.focus.title')}
+            {seller && <span className="chip agx-seller-chip">{seller}</span>}
+          </h2>
           <div className="row">
             <label className="check">
               <input

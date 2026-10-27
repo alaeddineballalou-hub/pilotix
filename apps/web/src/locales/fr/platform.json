@@ -21,6 +21,7 @@
     "dashboard": "Tableau de bord",
     "doctor": "Doctor",
     "shops": "Boutiques",
+    "agencies": "Agences",
     "payments": "Paiements",
     "plans": "Formules",
     "demo": "Démo",
@@ -520,5 +521,28 @@
     "noneMade": "Aucune pour l’instant.",
     "paid": "A payé",
     "trial": "En essai"
+  },
+  "ag": {
+    "sub": "Les agences de confirmation : Pilotix vérifie chacune avant qu’elle travaille avec des boutiques.",
+    "search": "Chercher (nom, code, e-mail)",
+    "waiting_one": "{{count}} agence attend votre vérification.",
+    "waiting_other": "{{count}} agences attendent votre vérification.",
+    "agency": "Agence",
+    "owner": "Propriétaire",
+    "sellers": "Vendeurs",
+    "check": "Vérification",
+    "since": "depuis le {{d}}",
+    "links": "{{active}} en contrat · {{pending}} en attente",
+    "verified": "Vérifiée",
+    "toCheck": "À vérifier",
+    "verify": "Vérifier",
+    "unverify": "Retirer la vérification",
+    "suspend": "Suspendre",
+    "reactivate": "Réactiver",
+    "suspendTitle": "Suspendre {{name}} ?",
+    "suspendText": "Ses agents s’arrêtent tout de suite dans toutes les boutiques ; les commandes pas encore confirmées reviennent aux équipes des boutiques.",
+    "reason": "Raison (pour le journal)",
+    "saved": "Enregistré",
+    "none": "Pas encore d’agence."
   }
 }

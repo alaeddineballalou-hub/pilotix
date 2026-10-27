@@ -1,6 +1,6 @@
 // Shops of a multi-shop server: reading them, their subscription state, creating one (its own schema), the demo shop,
 // and the first start (the server owner's shop becomes shop #1, its first admin the platform owner).
-import { effectiveFeatures, isFeatureKey, ShopInfo, ShopState } from '@pilotix/shared';
+import { AgencyPrices, effectiveFeatures, isFeatureKey, ShopInfo, ShopState } from '@pilotix/shared';
 import { Db, isoOrNull, migrate, num, numOrNull } from '../db';
 import type { ShopCtx } from '../rpc';
 import { landingSettings, landingStore, STORE_RESERVED } from '../modules/landingquery';
@@ -75,9 +75,30 @@ export interface Shop {
   lastActiveAt: string | null;
   resetAt: string | null;
   createdAt: string;
+  /** a store, or a confirmation agency (its own space: sellers, team, prices, payments) */
+  kind: 'store' | 'agency';
+  /** the code others type to find it (a store: K7Q-29X; an agency: AG-7K2Q) */
+  publicCode: string | null;
+  /** an agency checked by Pilotix (null: not yet; it cannot work with stores before) */
+  agencyVerifiedAt: string | null;
+  /** an agency's usual prices (what a store sees before asking it to work) */
+  agencyPrices: AgencyPrices | null;
 }
 
 const json = (v: unknown): any => (typeof v === 'string' ? JSON.parse(v) : v);
+
+/** An agency's prices as stored (any missing piece is 0). */
+export function cleanPrices(v: any): AgencyPrices {
+  const n = (x: unknown) => (typeof x === 'number' && isFinite(x) && x > 0 ? Math.round(x) : 0);
+  return {
+    perConfirmed: n(v?.perConfirmed),
+    perDelivered: n(v?.perDelivered),
+    perUpsell: n(v?.perUpsell),
+    monthly: n(v?.monthly),
+    bonusRate: { min: Math.min(100, n(v?.bonusRate?.min)), amount: n(v?.bonusRate?.amount) },
+    bonusVolume: { above: n(v?.bonusVolume?.above), amount: n(v?.bonusVolume?.amount) },
+  };
+}
 const list = (v: unknown): string[] => (Array.isArray(json(v)) ? (json(v) as unknown[]).map(String) : []);
 
 export const SYSTEM_PLAN = 'interne';
@@ -135,6 +156,10 @@ export const toShop = (r: any): Shop => ({
   lastActiveAt: isoOrNull(r.last_active_at),
   resetAt: isoOrNull(r.reset_at),
   createdAt: new Date(r.created_at).toISOString(),
+  kind: r.kind === 'agency' ? 'agency' : 'store',
+  publicCode: r.public_code ?? null,
+  agencyVerifiedAt: isoOrNull(r.agency_verified_at),
+  agencyPrices: r.agency_prices ? cleanPrices(json(r.agency_prices)) : null,
 });
 
 export async function loadPlans(t: Tenancy): Promise<Plan[]> {
@@ -250,7 +275,9 @@ export function shopStatus(s: Pick<Shop, 'status' | 'trialEndsAt' | 'paidUntil' 
 }
 
 /** The shop's features after its own changes (null = everything). */
-export const shopFeatures = (s: Shop): string[] | null => (s.primary || s.plan?.system ? effectiveFeatures(['*'], s.featuresOn, s.featuresOff) : effectiveFeatures(s.plan?.features ?? [], s.featuresOn, s.featuresOff));
+// a confirmation agency has no plan: its own screens are all there (what it may do is limited by agencyscope.ts)
+export const shopFeatures = (s: Shop): string[] | null =>
+  s.primary || s.plan?.system || s.kind === 'agency' ? effectiveFeatures(['*'], s.featuresOn, s.featuresOff) : effectiveFeatures(s.plan?.features ?? [], s.featuresOn, s.featuresOff);
 
 export const shopMaxUsers = (s: Shop): number | null => (s.primary ? null : s.maxUsers ?? s.plan?.maxUsers ?? null);
 export const shopMaxDrivers = (s: Shop): number | null => (s.primary ? null : s.maxDrivers ?? s.plan?.maxDrivers ?? null);
@@ -258,7 +285,7 @@ export const shopMaxOrders = (s: Shop): number | null => (s.primary ? null : s.p
 
 /** What a request of this shop carries (rules checked by the core). */
 export function shopCtx(s: Shop, st: ShopStatus): ShopCtx {
-  return { id: s.id, slug: s.slug, primary: s.primary, features: shopFeatures(s), locked: st.locked, demo: s.demo, maxUsers: shopMaxUsers(s), maxDrivers: shopMaxDrivers(s) };
+  return { id: s.id, slug: s.slug, primary: s.primary, features: shopFeatures(s), locked: st.locked, demo: s.demo, maxUsers: shopMaxUsers(s), maxDrivers: shopMaxDrivers(s), kind: s.kind, code: s.publicCode };
 }
 
 /** What the app shows of the shop: its plan, its state, how to pay, Pilotix's message. */
@@ -268,10 +295,12 @@ export interface ShopInfoExtra {
   ownerProfileId: number | null;
   stores: number;
   canAddStore: boolean;
+  /** « Créer mon agence »: the person has no confirmation agency yet */
+  canAddAgency?: boolean;
   ordersMonth: number | null;
   supportUnread: number;
 }
-export const NO_EXTRA: ShopInfoExtra = { owner: false, ownerProfileId: null, stores: 0, canAddStore: false, ordersMonth: null, supportUnread: 0 };
+export const NO_EXTRA: ShopInfoExtra = { owner: false, ownerProfileId: null, stores: 0, canAddStore: false, canAddAgency: false, ordersMonth: null, supportUnread: 0 };
 
 /** What the app shows of the shop: its plan, its state, how to pay, Pilotix's message, its limits. */
 export function shopInfo(s: Shop, st: ShopStatus, settings: PlatformSettings, now: number, extra: ShopInfoExtra = NO_EXTRA): ShopInfo {
@@ -304,8 +333,12 @@ export function shopInfo(s: Shop, st: ShopStatus, settings: PlatformSettings, no
     ownerProfileId: extra.ownerProfileId,
     stores: extra.stores,
     canAddStore: extra.canAddStore,
+    canAddAgency: !!extra.canAddAgency,
     supportUnread: extra.supportUnread,
     domain: s.domain && s.domainStatus !== 'none' ? { name: s.domain, status: s.domainStatus } : null,
+    kind: s.kind,
+    code: s.publicCode,
+    verified: s.kind === 'agency' ? !!s.agencyVerifiedAt : undefined,
   };
 }
 
@@ -383,6 +416,8 @@ export interface NewShop {
   signupIp?: string | null;
   /** the store that brought this one */
   referredBy?: number | null;
+  /** a confirmation agency instead of a store (free: it never expires) */
+  kind?: 'store' | 'agency';
   now?: number;
 }
 
@@ -395,6 +430,20 @@ async function freeReferralCode(t: Tenancy): Promise<string> {
     if (!(await t.platform.query('SELECT 1 FROM platform.shops WHERE referral_code = $1', [code])).length) return code;
   }
   throw new Error('No free referral code');
+}
+
+/**
+ * The code others type to find a store or an agency: hard to guess (nobody can try every store), easy to read and to
+ * dictate on the phone (no 0/O, 1/I/L). A store: K7Q-29X; an agency: AG-7K2Q.
+ */
+export async function freePublicCode(t: Tenancy, kind: 'store' | 'agency'): Promise<string> {
+  const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  const pick = (n: number) => Array.from(globalThis.crypto.getRandomValues(new Uint32Array(n)), (x) => A[x % A.length]).join('');
+  for (let i = 0; i < 50; i++) {
+    const code = kind === 'agency' ? `AG-${pick(4)}` : `${pick(3)}-${pick(3)}`;
+    if (!(await t.platform.query('SELECT 1 FROM platform.shops WHERE public_code = $1', [code])).length) return code;
+  }
+  throw new Error('No free public code');
 }
 
 /**
@@ -412,9 +461,9 @@ export async function provisionShop(t: Tenancy, n: NewShop): Promise<Shop> {
   const row = (
     await t.platform.query(
       `WITH n AS (SELECT nextval(pg_get_serial_sequence('platform.shops', 'id'))::int AS id)
-       INSERT INTO platform.shops (id, slug, name, schema_name, plan_id, trial_ends_at, never_expires, is_demo, owner_name, owner_email, owner_phone, city, notes, created_by, self_signup, referred_by, signup_ip)
-       SELECT n.id, $1, $2, 'shop_' || n.id, $3, $4, $5, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14 FROM n RETURNING id, schema_name`,
-      [slug, n.name.trim(), n.planId, trialEnds, !!n.demo, n.owner.name.trim(), email, n.owner.phone?.trim() || null, n.city?.trim() || null, n.notes ?? '', n.createdBy ?? null, !!n.selfSignup, n.referredBy ?? null, n.signupIp ?? null],
+       INSERT INTO platform.shops (id, slug, name, schema_name, plan_id, trial_ends_at, never_expires, is_demo, owner_name, owner_email, owner_phone, city, notes, created_by, self_signup, referred_by, signup_ip, kind)
+       SELECT n.id, $1, $2, 'shop_' || n.id, $3, $4, $5 OR $15 = 'agency', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15 FROM n RETURNING id, schema_name`,
+      [slug, n.name.trim(), n.kind === 'agency' ? null : n.planId, n.kind === 'agency' ? null : trialEnds, !!n.demo, n.owner.name.trim(), email, n.owner.phone?.trim() || null, n.city?.trim() || null, n.notes ?? '', n.createdBy ?? null, !!n.selfSignup, n.referredBy ?? null, n.signupIp ?? null, n.kind === 'agency' ? 'agency' : 'store'],
     )
   )[0];
   const id = num(row.id);
@@ -434,7 +483,12 @@ export async function provisionShop(t: Tenancy, n: NewShop): Promise<Shop> {
       if (own) await db.query('UPDATE profiles SET password_hash = $2 WHERE email = $1', [email, own]);
       if (n.owner.language) await db.query('UPDATE profiles SET language = $2 WHERE email = $1', [email, n.owner.language]);
       await setSetting(db, 'shop', { ...DEFAULT_SETTINGS.shop, name: n.name.trim() });
-      await t.platform.query('UPDATE platform.shops SET owner_account_id = $2, referral_code = $3 WHERE id = $1', [id, account.id, await freeReferralCode(t)]);
+      await t.platform.query('UPDATE platform.shops SET owner_account_id = $2, referral_code = $3, public_code = $4 WHERE id = $1', [
+        id,
+        account.id,
+        n.kind === 'agency' ? null : await freeReferralCode(t),
+        await freePublicCode(t, n.kind === 'agency' ? 'agency' : 'store'),
+      ]);
     }
     await setShopStore(db, slug);
     if (n.demo) await t.platform.query('UPDATE platform.shops SET reset_at = now() WHERE id = $1', [id]);
@@ -487,7 +541,7 @@ export async function shopUsage(t: Tenancy, s: Shop): Promise<ShopUsage> {
   if (s.status === 'archived' || s.status === 'deleted') return { users: 0, drivers: 0, ordersMonth: 0, ordersLastMonth: 0, ordersTotal: 0, ownerStores };
   const r = (
     await t.shop(s.schema).query(
-      `SELECT (SELECT count(*) FROM profiles WHERE active AND email NOT LIKE '%@pilotix.invalid')::int AS users,
+      `SELECT (SELECT count(*) FROM profiles WHERE active AND agency_id IS NULL AND email NOT LIKE '%@pilotix.invalid')::int AS users,
               (SELECT count(*) FROM profiles WHERE active AND 'livreur' = ANY(roles) AND email NOT LIKE '%@pilotix.invalid')::int AS drivers,
               (SELECT count(*) FROM orders WHERE NOT is_exchange AND created_at >= (date_trunc('month', now() + interval '1 hour') - interval '1 hour'))::int AS month,
               (SELECT count(*) FROM orders WHERE NOT is_exchange AND created_at >= (date_trunc('month', now() + interval '1 hour') - interval '1 month' - interval '1 hour')
@@ -565,8 +619,11 @@ export async function bootstrapPlatform(t: Tenancy): Promise<void> {
   await syncPrimaryStore(t);
   // accounts: everyone already in a store gets one; stores get their owner and their referral code
   await backfillAccounts(t);
-  for (const r of await t.platform.query(`SELECT id FROM platform.shops WHERE referral_code IS NULL AND NOT is_demo AND status <> 'deleted'`))
+  for (const r of await t.platform.query(`SELECT id FROM platform.shops WHERE referral_code IS NULL AND NOT is_demo AND status <> 'deleted' AND kind = 'store'`))
     await t.platform.query('UPDATE platform.shops SET referral_code = $2 WHERE id = $1 AND referral_code IS NULL', [r.id, await freeReferralCode(t)]);
+  // every store and agency has its public code (typed to find each other)
+  for (const r of await t.platform.query(`SELECT id, kind FROM platform.shops WHERE public_code IS NULL AND NOT is_demo AND status <> 'deleted'`))
+    await t.platform.query('UPDATE platform.shops SET public_code = $2 WHERE id = $1 AND public_code IS NULL', [r.id, await freePublicCode(t, r.kind === 'agency' ? 'agency' : 'store')]);
   await numberOldPayments(t);
 }
 

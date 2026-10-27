@@ -6,6 +6,7 @@ import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, hasRole, proc } from '../rpc';
 import { clientFee, getSetting, setSetting } from '../settings';
 import { ConfInput, getOrder, ListInput, listOrders, setConf } from './orders';
+import { andSql, queueSql } from './agencyscope';
 
 // ---------------------------------------------------------------- sub-pages
 export const CONF_SUBS = {
@@ -58,10 +59,11 @@ export function workStart(t: number, s: CallSettings): number {
   return sl.open ? t : sl.from;
 }
 
-async function loadTodo(db: Db): Promise<TodoRow[]> {
+/** The orders still to call (`queue`: only one person's work queue, see queueSql). */
+async function loadTodo(db: Db, queue = ''): Promise<TodoRow[]> {
   const rows = await db.query(
     `SELECT id, ref, customer_name, agent_id, created_at, assigned_at, attempts, next_call_at, last_call_at, conf_status
-       FROM sales WHERE conf_status = ANY($1)`,
+       FROM sales o WHERE conf_status = ANY($1)${andSql(queue)}`,
     [CONF_TODO],
   );
   return rows.map((r: any) => {
@@ -250,11 +252,11 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
     dir: byDeadline ? 'asc' : dir,
     page: byDeadline ? 1 : i.page,
     pageSize: byDeadline ? 3000 : i.pageSize,
-  });
+  }, { queue: 'conf' });
   let due = new Map<number, DueInfo>();
   if (queue) {
     const calls = await getSetting(ctx.db, 'calls');
-    due = computeDue(await loadTodo(ctx.db), calls, ctx.now());
+    due = computeDue(await loadTodo(ctx.db, queueSql(ctx, 'conf')), calls, ctx.now());
   }
   let page = found;
   if (byDeadline) {
@@ -583,7 +585,7 @@ async function banner(ctx: Ctx) {
   const now = ctx.now();
   const me = ctx.session.profile.id;
   const calls = await getSetting(ctx.db, 'calls');
-  const todo = await loadTodo(ctx.db);
+  const todo = await loadTodo(ctx.db, queueSql(ctx, 'conf'));
   const due = computeDue(todo, calls, now);
   const L = todo.map((o) => ({ o, d: due.get(o.id)! }));
   const forMe = (x: (typeof L)[number]) => !x.o.agentId || x.o.agentId === me;
@@ -670,11 +672,12 @@ export const confirmationProcs = {
     };
   }),
   'confirmation.counts': proc(['confirmation'], z.object({}), async (ctx) => {
-    const rows = await ctx.db.query(`SELECT conf_status AS k, count(*)::int AS n FROM sales GROUP BY 1`);
+    const q = andSql(queueSql(ctx, 'conf'));
+    const rows = await ctx.db.query(`SELECT conf_status AS k, count(*)::int AS n FROM sales o WHERE true${q} GROUP BY 1`);
     const by = Object.fromEntries(rows.map((r: any) => [r.k, num(r.n)]));
     const sum = (s: readonly string[]) => s.reduce((t, k) => t + (by[k] ?? 0), 0);
     const all = ctx.session.isAdmin || isManager(ctx);
-    const dl = (await ctx.db.query(`SELECT count(*)::int AS n FROM sales WHERE conf_status = 'confirmed' AND follow_status = 'delivered'${all ? '' : ' AND agent_id = $1'}`, all ? [] : [ctx.session.profile.id]))[0];
+    const dl = (await ctx.db.query(`SELECT count(*)::int AS n FROM sales o WHERE conf_status = 'confirmed' AND follow_status = 'delivered'${all ? '' : ' AND agent_id = $1'}${q}`, all ? [] : [ctx.session.profile.id]))[0];
     return { nouvelles: sum(CONF_SUBS.nouvelles), attente: sum(CONF_SUBS.attente), confirmees: sum(CONF_SUBS.confirmees), terminees: sum(CONF_SUBS.terminees), livrees: num(dl?.n) };
   }),
 
@@ -765,7 +768,7 @@ export const confirmationProcs = {
            count(*) FILTER (WHERE conf_status = ANY($1) AND (next_call_at IS NULL OR next_call_at <= now()))::int AS due,
            count(*) FILTER (WHERE conf_status = ANY($1) AND next_call_at > now())::int AS later,
            count(*) FILTER (WHERE conf_status = 'confirmed' AND agent_id = $2 AND confirmed_at >= $3)::int AS confirmed
-         FROM sales`,
+         FROM sales o WHERE true${andSql(queueSql(ctx, 'conf'))}`,
         [CONF_TODO, me, day],
       )
     )[0];

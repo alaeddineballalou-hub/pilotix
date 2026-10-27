@@ -58,3 +58,67 @@ html[data-theme="dark"] { --q-ink: var(--ink); --q-on-accent: #1B2A47; }
 /* ---- coloured number boxes that a later "all boxes are white" rule had turned white (white text on white) ---- */
 html body #ads .kpi.net { background: var(--navy) !important; border-color: var(--navy) !important; color: var(--on-navy) !important; }
 html body #ads .kpi.net.loss { background: var(--c-bad-fill) !important; border-color: var(--c-bad-fill) !important; color: #fff !important; }
+
+/* confirmation agencies: bits shown outside their pages (the store picker, the login page, an agency's agent in a store) */
+.agx-chip { background: var(--c-info-tint) !important; color: var(--c-info-ink) !important; font-weight: 700; }
+.px-stores-ic.agx-ic, .agx-where-ic.agx-ic { background: var(--c-info-tint); color: var(--c-info-ink); }
+.agx-where { display: flex; align-items: center; gap: 8px; margin: 12px 16px 0; padding: 8px 14px; border-radius: 12px; background: var(--c-info-tint); color: var(--c-info-ink); font-weight: 600; font-size: 14px; }
+.agx-where .bji svg { width: 18px; height: 18px; }
+.agx-signup-line { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; margin: 2px 0 0; }
+.agx-signup-line a { font-weight: 700; color: var(--ink); }
+@media (max-width: 640px) { .agx-where { margin: 10px 10px 0; } }
+.agx-code-line { margin: 4px 0 8px; }
+.agx-code-line .px-copy { font-family: var(--f-display); font-size: 22px; font-weight: 700; letter-spacing: 0.08em; color: var(--ink); background: var(--c-accent-tint); border: 2px dashed var(--c-accent); border-radius: 14px; padding: 4px 14px; }
+.agx-codecard { align-self: start; }
+.agx-codecard .btn { align-self: flex-start; }
+
+/* ---- a confirmation agency: the seller whose orders are on screen (top bar) */
+.topbar .px-seller { display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 4px 0 12px; margin-left: 8px; border-radius: var(--sk-r-ctl, 999px); background: var(--sk-search-bg, var(--surface)); color: var(--ink); flex: 0 1 320px; min-width: 0; cursor: pointer; }
+.topbar .px-seller .bji { width: 16px; height: 16px; color: var(--c-muted, var(--muted)); flex: none; }
+.topbar .px-seller .bji svg { width: 16px; height: 16px; }
+.topbar .px-seller-l { font-size: 12.5px; font-weight: 600; color: var(--c-muted, var(--muted)); flex: none; }
+html body .topbar .px-seller select { flex: 1; min-width: 0; min-height: 0; height: 34px; border: 0; background-color: transparent; box-shadow: none; font-weight: 700; font-size: 14px; color: var(--ink); padding: 0 26px 0 4px; cursor: pointer; text-overflow: ellipsis; }
+.topbar .px-seller.one { background: var(--c-accent-tint); box-shadow: inset 0 0 0 1.5px var(--c-accent); }
+.topbar .px-seller + .pxs-new, .topbar .px-seller + .px-hdr-lang { margin-left: auto; }
+[dir="rtl"] .topbar .px-seller { margin-left: 0; margin-right: 8px; padding: 0 12px 0 4px; }
+[dir="rtl"] .topbar .px-seller + .pxs-new, [dir="rtl"] .topbar .px-seller + .px-hdr-lang { margin-left: 0; margin-right: auto; }
+@media (max-width: 900px) {
+  .topbar .px-seller { order: 9; flex: 1 1 100%; margin: 0 !important; }
+}
+.agx-seller-chip { background: var(--c-accent-tint) !important; color: var(--ink) !important; font-weight: 700; white-space: nowrap; }
+.agx-all-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--c-info-tint) !important; color: var(--c-info-ink) !important; font-weight: 700; white-space: nowrap; }
+.agx-all-chip .bji svg { width: 14px; height: 14px; }
+.card-head h2 .agx-seller-chip { margin-inline-start: 8px; vertical-align: middle; font-size: 13px; }
+.agx-tel { font-weight: 600; color: var(--ink); text-decoration: none; white-space: nowrap; }
+.agx-tel:hover { text-decoration: underline; }
+.agx-all-tbl td small { display: block; }
+.agx-all-tbl .agx-row-act { white-space: nowrap; text-align: end; }
+.agx-all-tbl .agx-row-act .btn + .btn { margin-inline-start: 6px; }
+
+/* Utilisateurs of an agency: each person's sellers, and the products for each seller */
+.agx-sellers { display: grid; gap: 8px; }
+.agx-radio { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; background: var(--chip-bg, var(--bg)); cursor: pointer; font-weight: 400; }
+.agx-radio input { margin-top: 3px; }
+.agx-radio > span { display: grid; gap: 2px; }
+.agx-seller-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.agx-seller-list li { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; display: grid; gap: 8px; }
+.agx-seller-list li.on { border-color: var(--c-accent); background: var(--c-accent-tint); }
+.agx-seller-row { display: flex; gap: 10px; align-items: center; cursor: pointer; font-weight: 400; }
+.agx-seller-row small { margin-inline-start: auto; }
+.agx-seller-prod { display: grid; gap: 8px; padding-inline-start: 28px; }
+.agx-seller-prod select { max-width: 280px; background-color: var(--card); }
+.agx-prods { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.agx-prod { cursor: pointer; display: inline-flex; align-items: center; gap: 6px; background: var(--card) !important; }
+.agx-prod input { margin: 0; }
+.agx-prod.on { background: var(--c-accent) !important; color: #fff !important; }
+
+/* « Tous les vendeurs » on a phone: one card per order, its seller first */
+.agx-pcards { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.agx-pcard { width: 100%; text-align: start; display: grid; gap: 4px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; cursor: pointer; }
+.agx-pcard-top, .agx-pcard-bot { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.agx-all-tbl td.px-cw .px-clamp { max-width: 220px; }
+.agx-prod { border: 1px solid var(--line); }
+.agx-prod.on { border-color: var(--c-accent); }
+.agx-all-tbl td .agx-tel { display: block; font-size: 13px; color: var(--c-muted, var(--muted)); }
+.agx-users-sellers .chip { height: auto; white-space: normal; line-height: 1.3; padding-top: 3px; padding-bottom: 3px; margin: 2px 4px 2px 0; display: inline-block; }
+.agx-users-sellers .chip small { display: inline; font-size: 12px; }

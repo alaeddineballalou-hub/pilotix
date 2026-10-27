@@ -15,6 +15,7 @@ import {
   membershipsOf,
   NO_ACCOUNT,
   normEmail,
+  ownedAgencies,
   ownedStores,
   ownerProfileId,
   randomToken,
@@ -50,20 +51,25 @@ export interface StoreChoice {
   owner: boolean;
   primary: boolean;
   profileId: number;
+  /** a store, or a confirmation agency's own space */
+  kind: 'store' | 'agency';
 }
 
-/** The stores this e-mail can open, its own first. */
+/** The stores (and the agency) this e-mail can open, its own first. */
 export async function storeChoices(t: Tenancy, email: string, now = Date.now()): Promise<StoreChoice[]> {
   const set = await platformSettings(t);
   const acc = await accountByEmail(t, email);
   const out: StoreChoice[] = [];
   for (const m of await membershipsOf(t, email)) {
+    // an agency's person works on its sellers' orders from the agency's space, never inside the store itself
+    if (m.agencyId) continue;
     const s = await loadShop(t, { id: m.shopId });
     if (!s || s.demo) continue;
     const st = shopStatus(s, now, set.trial.graceDays);
-    out.push({ id: s.id, name: s.name, slug: s.slug, state: st.state, locked: st.locked, owner: !!acc && s.ownerAccountId === acc.id, primary: s.primary, profileId: m.profileId });
+    out.push({ id: s.id, name: s.name, slug: s.slug, state: st.state, locked: st.locked, owner: !!acc && s.ownerAccountId === acc.id, primary: s.primary, profileId: m.profileId, kind: s.kind });
   }
-  return out.sort((a, b) => Number(b.owner) - Number(a.owner) || a.name.localeCompare(b.name));
+  // the person's own first, then their agency's space, then the stores they work for
+  return out.sort((a, b) => Number(b.owner) - Number(a.owner) || Number(b.kind === 'agency') - Number(a.kind === 'agency') || a.name.localeCompare(b.name));
 }
 
 // ---------------------------------------------------------------- the name of a new store
@@ -97,10 +103,14 @@ export const SignupInput = z.object({
   referral: z.string().trim().toUpperCase().max(12).optional(),
   /** the terms of use and the privacy policy, accepted */
   terms: z.literal(true, { errorMap: () => ({ message: 'Acceptez les conditions d’utilisation pour continuer' }) }),
+  /** « Créer mon agence »: a confirmation agency instead of a store (storeName is then the agency's name) */
+  kind: z.enum(['store', 'agency']).default('store'),
 });
 
-/** What to e-mail after a sign-up: the link that makes the store, or « you already have an account ». */
-export type SignupMail = { kind: 'confirm'; token: string; email: string; name: string; language: string; store: string } | { kind: 'exists'; email: string; name: string; language: string };
+/** What to e-mail after a sign-up: the link that makes the store (or the agency), or « you already have an account ». */
+export type SignupMail =
+  | { kind: 'confirm'; token: string; email: string; name: string; language: string; store: string; agency: boolean }
+  | { kind: 'exists'; email: string; name: string; language: string };
 
 const firstError = (e: z.ZodError) => e.issues[0]?.message || 'Formulaire incomplet';
 
@@ -114,11 +124,13 @@ export async function startSignup(t: Tenancy, raw: unknown, ip: string | null, n
   const p = SignupInput.safeParse(raw);
   if (!p.success) throw bad(firstError(p.error));
   const i = p.data;
+  const agency = i.kind === 'agency';
   const email = normEmail(i.email);
   if (NO_ACCOUNT.test(email)) throw bad('E-mail invalide');
-  const name = await storeNameCheck(t, i.storeName, i.slug);
+  // an agency has no landing pages: the name in its links is made from its name
+  const name = await storeNameCheck(t, i.storeName, agency ? undefined : i.slug);
   if (!name.free) throw bad(name.reason ?? 'Nom indisponible');
-  if (i.referral && !(await t.platform.query(`SELECT 1 FROM platform.shops WHERE referral_code = $1 AND status <> 'deleted'`, [i.referral])).length)
+  if (!agency && i.referral && !(await t.platform.query(`SELECT 1 FROM platform.shops WHERE referral_code = $1 AND status <> 'deleted'`, [i.referral])).length)
     throw bad('Code de parrainage inconnu (laissez vide si vous n’en avez pas)');
   // 3 sign-ups an hour per e-mail: nobody can fill someone's inbox
   const recent = Number((await t.platform.query('SELECT count(*)::int AS n FROM platform.signup_requests WHERE email = $1 AND created_at > $2::timestamptz', [email, iso(now - HOUR)]))[0]?.n ?? 0);
@@ -134,11 +146,25 @@ export async function startSignup(t: Tenancy, raw: unknown, ip: string | null, n
   }
   const token = randomToken();
   await t.platform.query(
-    `INSERT INTO platform.signup_requests (token_hash, email, name, phone, store_name, slug, password_hash, language, referral_code, terms_at, ip, expires_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::timestamptz,$11,$12::timestamptz)`,
-    [await sha256Hex(token), email, i.name, i.phone || null, i.storeName, i.slug || null, await hashPassword(i.password), i.language, i.referral || null, iso(now), ip, iso(now + 48 * HOUR)],
+    `INSERT INTO platform.signup_requests (token_hash, email, name, phone, store_name, slug, password_hash, language, referral_code, terms_at, ip, expires_at, kind)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::timestamptz,$11,$12::timestamptz,$13)`,
+    [
+      await sha256Hex(token),
+      email,
+      i.name,
+      i.phone || null,
+      i.storeName,
+      agency ? null : i.slug || null,
+      await hashPassword(i.password),
+      i.language,
+      agency ? null : i.referral || null,
+      iso(now),
+      ip,
+      iso(now + 48 * HOUR),
+      i.kind,
+    ],
   );
-  return { kind: 'confirm', token, email, name: i.name, language: i.language, store: i.storeName };
+  return { kind: 'confirm', token, email, name: i.name, language: i.language, store: i.storeName, agency };
 }
 
 /**
@@ -155,11 +181,13 @@ export async function confirmSignup(t: Tenancy, token: string, now = Date.now())
   )[0];
   if (!row) throw bad('Ce lien n’est plus valable. Inscrivez-vous à nouveau.');
   if (await accountByEmail(t, row.email)) return { exists: true, email: row.email };
+  const agency = row.kind === 'agency';
   const set = await platformSettings(t);
-  const plan = await startPlan(t, set);
+  // an agency is free (no plan, no trial); Pilotix checks it before it works with stores
+  const plan = agency ? null : await startPlan(t, set);
   const name = await storeNameCheck(t, row.store_name, row.slug ?? undefined);
   const slug = name.free ? name.slug : (await storeNameCheck(t, row.store_name)).slug;
-  const referrer = row.referral_code ? ((await t.platform.query(`SELECT id FROM platform.shops WHERE referral_code = $1 AND status <> 'deleted'`, [row.referral_code]))[0]?.id ?? null) : null;
+  const referrer = !agency && row.referral_code ? ((await t.platform.query(`SELECT id FROM platform.shops WHERE referral_code = $1 AND status <> 'deleted'`, [row.referral_code]))[0]?.id ?? null) : null;
   const shop = await provisionShop(t, {
     name: row.store_name,
     slug,
@@ -170,17 +198,23 @@ export async function confirmSignup(t: Tenancy, token: string, now = Date.now())
     verified: true,
     selfSignup: true,
     referredBy: referrer ? Number(referrer) : null,
+    kind: agency ? 'agency' : 'store',
     now,
   });
   await t.platform.query('UPDATE platform.signup_requests SET shop_id = $2 WHERE id = $1', [row.id, shop.id]);
   if (referrer) await t.platform.query('INSERT INTO platform.referrals (referrer_shop_id, referred_shop_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [referrer, shop.id]);
-  await journal(t, shop.id, 'shop.signup', row.email, { name: shop.name, plan: plan?.name ?? null, referredBy: referrer });
+  await journal(t, shop.id, agency ? 'agency.signup' : 'shop.signup', row.email, { name: shop.name, plan: plan?.name ?? null, referredBy: referrer });
   const account = (await accountByEmail(t, row.email))!;
   return { shop, account };
 }
 
 // ---------------------------------------------------------------- « Ajouter une boutique »
-export const AddStoreInput = z.object({ name: z.string().trim().min(2, 'Nom de la boutique : au moins 2 lettres').max(80), slug: z.string().trim().toLowerCase().max(40).optional() });
+export const AddStoreInput = z.object({
+  name: z.string().trim().min(2, 'Nom de la boutique : au moins 2 lettres').max(80),
+  slug: z.string().trim().toLowerCase().max(40).optional(),
+  /** « Créer mon agence » from the account menu: a confirmation agency (one per person) */
+  kind: z.enum(['store', 'agency']).default('store'),
+});
 
 /** How many stores this person may own. */
 export const storeLimit = (a: Account, set: PlatformSettings) => a.maxStores ?? set.signup.maxStores;
@@ -192,11 +226,16 @@ export async function addStore(t: Tenancy, account: Account, raw: unknown, now =
   const p = AddStoreInput.safeParse(raw);
   if (!p.success) throw bad(firstError(p.error));
   if (!account.verified) throw new AppError('forbidden', 'VERIFY_EMAIL');
-  const limit = storeLimit(account, set);
-  if ((await ownedStores(t, account.id)) >= limit) throw bad(`Vous avez déjà ${limit} boutique${limit > 1 ? 's' : ''} : c’est le maximum. Écrivez à Pilotix pour en avoir plus.`);
-  const name = await storeNameCheck(t, p.data.name, p.data.slug);
+  const agency = p.data.kind === 'agency';
+  if (agency) {
+    if ((await ownedAgencies(t, account.id)) > 0) throw bad('Vous avez déjà une agence de confirmation');
+  } else {
+    const limit = storeLimit(account, set);
+    if ((await ownedStores(t, account.id)) >= limit) throw bad(`Vous avez déjà ${limit} boutique${limit > 1 ? 's' : ''} : c’est le maximum. Écrivez à Pilotix pour en avoir plus.`);
+  }
+  const name = await storeNameCheck(t, p.data.name, agency ? undefined : p.data.slug);
   if (!name.free) throw bad(name.reason ?? 'Nom indisponible');
-  const plan = await startPlan(t, set);
+  const plan = agency ? null : await startPlan(t, set);
   const shop = await provisionShop(t, {
     name: p.data.name,
     slug: name.slug,
@@ -205,9 +244,10 @@ export async function addStore(t: Tenancy, account: Account, raw: unknown, now =
     owner: { name: account.name || account.email, email: account.email, language: account.language },
     verified: true,
     selfSignup: true,
+    kind: agency ? 'agency' : 'store',
     now,
   });
-  await journal(t, shop.id, 'shop.added', account.email, { name: shop.name, plan: plan?.name ?? null });
+  await journal(t, shop.id, agency ? 'agency.added' : 'shop.added', account.email, { name: shop.name, plan: plan?.name ?? null });
   return shop;
 }
 
@@ -278,12 +318,14 @@ export async function linkKind(t: Tenancy, token: string, now = Date.now()): Pro
 /** The owner flag, the person's other stores, whether they can add one, this month's orders and unread answers. */
 export async function shopInfoExtra(t: Tenancy, s: Shop, email: string, set: PlatformSettings): Promise<ShopInfoExtra> {
   const acc = await accountByEmail(t, email);
-  const mem = acc ? await membershipsOf(t, acc.email) : [];
+  // the stores an agency's person works for are reached from the agency's space: not other stores of theirs
+  const mem = acc ? (await membershipsOf(t, acc.email)).filter((m) => !m.agencyId) : [];
   return {
     owner: !!acc && s.ownerAccountId === acc.id,
     ownerProfileId: await ownerProfileId(t, s),
     stores: Math.max(0, mem.length - 1),
     canAddStore: !!acc && set.signup.open && !s.demo && (await ownedStores(t, acc.id)) < storeLimit(acc, set),
+    canAddAgency: !!acc && set.signup.open && !s.demo && (await ownedAgencies(t, acc.id)) === 0,
     ordersMonth: shopMaxOrders(s) !== null ? await ordersThisMonth(t.shop(s.schema)) : null,
     supportUnread: await shopUnread(t, s.id),
   };
