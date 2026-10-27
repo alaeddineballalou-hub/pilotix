@@ -60,6 +60,7 @@ export const USER_REFS: readonly Ref[] = [
   ['spy_follow', 'created_by', 'marketing'],
   ['landing_pages', 'created_by', 'pages'],
   ['landing_images', 'created_by', 'pages'],
+  ['landing_groups', 'created_by', 'pages'],
   ['landing_leads', 'handled_by', 'pages'],
   ['landing_blocked', 'handled_by', 'pages'],
   ['products', 'seller_id', 'products'],
