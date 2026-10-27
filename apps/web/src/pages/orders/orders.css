@@ -39,3 +39,15 @@
 .bulkbar select { width: auto; height: 32px; color: var(--ink); }
 .ord-filters-dates { display: contents; }
 .pxo .pxo-in input { width: 110px !important; height: 36px !important; flex: none; }
+
+/* the customer's full order history in the order card (« Voir tout ») */
+.oc-histmore { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; font-weight: 700; }
+.oc-histmore .bji.flip svg { transform: rotate(180deg); }
+.oc-hist { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; max-height: 360px; overflow-y: auto; }
+.oc-hist button { display: grid; gap: 4px; width: 100%; text-align: start; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+.oc-hist button:hover:not(:disabled) { border-color: var(--navy); background: var(--sky-soft); }
+.oc-hist button.on { background: var(--butter-soft, #fff6e0); cursor: default; }
+.oc-hist-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.oc-hist-top .grow { flex: 1; }
+.oc-hist-items { color: var(--muted, #6b7280); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oc-hist-st { display: flex; gap: 6px; flex-wrap: wrap; }

@@ -388,7 +388,10 @@
     "labelUnavailable": "Label unavailable: {{msg}}",
     "noChange": "No change",
     "updated": "Status updated",
-    "dup": "Possible duplicate: another open order with this number"
+    "dup": "Possible duplicate: another open order with this number",
+    "historyMore": "See the full history ({{n}} orders)",
+    "historyLess": "Hide the history",
+    "historyThis": "this order"
   },
   "ph": {
     "per": {
