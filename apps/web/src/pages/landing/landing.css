@@ -284,3 +284,4 @@
   .lp-mk > .chip { justify-self: start; }
   .lp-pg { grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(44px, .5fr)); }
 }
+.lp-ts-auto { margin: 0; font-size: 13px; color: var(--ink); line-height: 1.6; }

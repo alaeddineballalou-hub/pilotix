@@ -319,6 +319,20 @@
       "fix": "Ajoutez-les dans .env puis redémarrez Pilotix.",
       "short": "Réglages du serveur complets",
       "okTitle": "Réglages du serveur complets"
+    },
+    "turnstile": {
+      "title": "Cloudflare (robots) : {{domains}} domaines sur {{max}} ({{pct}} %)",
+      "why": "{{widgets}} widgets sur {{maxWidgets}} utilisés. Quand tout est plein, les nouveaux domaines des boutiques n’ont plus la vérification anti-robots (le reste de la protection marche toujours).",
+      "fix": "Avant 100 % : passez au plan Cloudflare Enterprise (Turnstile « any hostname »), ou ouvrez un 2e compte Cloudflare gratuit.",
+      "short": "Cloudflare (robots)",
+      "okTitle": "Cloudflare (robots) : {{domains}} domaines sur {{max}}"
+    },
+    "turnstileOff": {
+      "title": "Cloudflare (robots) n’est pas connecté",
+      "why": "La vérification anti-robots invisible de Cloudflare protège les landing pages de toutes les boutiques, gratuitement (jusqu’à {{max}} domaines).",
+      "fix": "Plus bas, carte « Cloudflare » : collez l’Account ID et un jeton API Turnstile. Pilotix fait le reste tout seul.",
+      "short": "Cloudflare (robots)",
+      "okTitle": "Cloudflare (robots)"
     }
   },
   "gauge": {
@@ -362,7 +376,8 @@
     "spy-scan": "AI Spy",
     "meta-sync": "Publicités Meta",
     "demo-reset": "Boutique démo",
-    "platform-reminders": "Rappels d’abonnement"
+    "platform-reminders": "Rappels d’abonnement",
+    "turnstile-sync": "Cloudflare (robots) : domaines des boutiques"
   },
   "errs": {
     "title": "Dernières erreurs",
@@ -370,5 +385,36 @@
     "warn": "avertissement",
     "none": "Aucune erreur depuis 24 h.",
     "memory": "Gardées 24 h en mémoire. Un redémarrage les efface."
+  },
+  "cf": {
+    "title": "Cloudflare : vérification anti-robots de toutes les boutiques",
+    "help": "Pilotix ajoute tout seul pilotix.online et le domaine de chaque boutique dans vos widgets Cloudflare Turnstile. Le plan gratuit permet 20 widgets × 10 domaines = 200 domaines.",
+    "domains": "Domaines protégés",
+    "left_one": "{{count}} place libre",
+    "left_other": "{{count}} places libres",
+    "widgets": "Widgets",
+    "perWidget": "{{count}} domaines par widget",
+    "soon": "Déjà {{pct}} % du plan gratuit utilisé : pensez à passer à Cloudflare Enterprise avant d’être plein.",
+    "full_one": "Plan gratuit plein : {{count}} domaine attend une place. Passez à Cloudflare Enterprise.",
+    "full_other": "Plan gratuit plein : {{count}} domaines attendent une place. Passez à Cloudflare Enterprise.",
+    "account": "Compte",
+    "synced": "Dernière mise à jour",
+    "sync": "Mettre à jour maintenant",
+    "syncedOk": "Widgets Cloudflare à jour",
+    "change": "Changer le compte",
+    "off": "Pas encore connecté. Le propriétaire connecte le compte Cloudflare une seule fois, ensuite tout est automatique.",
+    "s1": "dash.cloudflare.com › la page d’accueil du compte : copiez l’« Account ID » (32 caractères, colonne de droite ou menu « … » du compte).",
+    "s2": "Profil (en haut à droite) › API Tokens › Create Token › Custom token : permission « Account › Turnstile › Edit », puis Create.",
+    "s3": "Collez les deux ici. Le jeton ne quitte jamais le serveur.",
+    "accountId": "Account ID",
+    "accountIdHint": "32 caractères (lettres a-f et chiffres)",
+    "token": "Jeton API (Turnstile : Edit)",
+    "tokenHint": "Laissez vide pour garder le jeton déjà enregistré.",
+    "connect": "Connecter et créer les widgets",
+    "savedOk": "Cloudflare connecté : widgets créés",
+    "remove": "Déconnecter",
+    "removeAsk": "Déconnecter Cloudflare ? La vérification anti-robots s’arrête sur toutes les boutiques (le reste de la protection continue).",
+    "removedOk": "Cloudflare déconnecté",
+    "demo": "Démo : rien n’est envoyé à Cloudflare"
   }
 }

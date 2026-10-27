@@ -70,6 +70,9 @@ export const serverHealth = () => req<Health>('/health', undefined, 'GET');
 
 /** Doctor: the server's health (owner and managers). */
 export const serverDoctor = () => req<ServerDoctorReport>('/doctor');
+/** Cloudflare Turnstile for every shop: connect the account (owner; token '' keeps the saved one), remove it, sync now. */
+export const turnstileSave = (body: { accountId: string; token: string } | { remove: true }) => req<NonNullable<ServerDoctorReport['turnstile']>>('/turnstile/save', body);
+export const turnstileSync = () => req<NonNullable<ServerDoctorReport['turnstile']>>('/turnstile/sync', {});
 
 export function staffLogout() {
   token = null;

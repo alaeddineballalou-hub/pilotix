@@ -307,7 +307,9 @@
     "tsSecretHint": "لا يغادر الخادم أبداً.",
     "tsOn": "مفعّل",
     "tsOff": "غير مفعّل",
-    "tsRemoveAsk": "إزالة تحقق Cloudflare؟"
+    "tsRemoveAsk": "إزالة تحقق Cloudflare؟",
+    "tsAuto": "مفعّل تلقائياً من Pilotix",
+    "tsAutoHelp": "لا شيء لتفعله: صفحات الهبوط محمية مسبقاً، حتى على نطاقك الخاص. مفاتيح Cloudflare الخاصة بك (اختياري) تحل محل مفاتيح Pilotix."
   },
   "ev": {
     "title": "الأحداث المرسلة إلى ميتا",

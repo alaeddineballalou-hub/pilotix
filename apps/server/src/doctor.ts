@@ -13,6 +13,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import { config } from './config';
 import type { CoreService } from './core.service';
+import { turnstileStatus } from './turnstile';
 
 const MIN = 60_000;
 const H = 60 * MIN;
@@ -30,6 +31,7 @@ export const JOB_EVERY: Record<string, number> = {
   'meta-sync': D,
   'demo-reset': D,
   'platform-reminders': D,
+  'turnstile-sync': 30 * MIN,
 };
 
 interface Seen {
@@ -312,6 +314,23 @@ export async function serverDoctor(core: CoreService): Promise<ServerDoctorRepor
   if (!config.trustProxy) missing.push({ label: 'TRUST_PROXY', n: 0, unit: 'text' });
   items.push(missing.length ? { id: 'config', level: 'warn', area: 'config', params: { count: missing.length }, list: missing } : { id: 'config', level: 'ok', area: 'config' });
 
+  // ------------------------------------------------------------ Cloudflare (robot check of every shop's pages)
+  const ts = await turnstileStatus(core).catch(() => null);
+  if (ts) {
+    const used = ts.domains / ts.maxDomains;
+    items.push(
+      !ts.configured
+        ? { id: 'turnstileOff', level: 'info', area: 'config', params: { max: ts.maxDomains } }
+        : {
+            id: 'turnstile',
+            level: ts.waiting.length || used >= 0.95 ? 'bad' : used >= 0.8 || ts.lastError ? 'warn' : 'ok',
+            area: 'config',
+            params: { domains: ts.domains, max: ts.maxDomains, pct: pct(used), widgets: ts.widgets.length, maxWidgets: ts.maxWidgets, waiting: ts.waiting.length },
+            ...(ts.lastError ? { list: [{ label: ts.lastError.slice(0, 140), n: 0, unit: 'text' as const }] } : {}),
+          },
+    );
+  }
+
   const sorted = doctorSort(items);
   return {
     checkedAt: new Date(now).toISOString(),
@@ -332,5 +351,6 @@ export async function serverDoctor(core: CoreService): Promise<ServerDoctorRepor
     },
     jobs,
     errors: errors.slice(0, 40),
+    ...(ts ? { turnstile: ts } : {}),
   };
 }

@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { config } from './config';
 import { CoreService } from './core.service';
 import { serverDoctor } from './doctor';
+import { saveTurnstileConfig, syncTurnstile, turnstileStatus } from './turnstile';
 import { checkLogin, clearLogin, failedLogin } from './limits';
 import { mailConfigured, sendMail } from './mail';
 import { ownerMail, ReceiptData, receiptMail, staffCodeMail } from './mails';
@@ -195,6 +196,26 @@ export class PlatformController {
   async doctor(@Req() req: { staff: StaffSession }) {
     if (req.staff.role === 'support') throw new core.AppError('forbidden', 'Réservé au propriétaire et aux managers');
     return serverDoctor(this.core);
+  }
+
+  /**
+   * Cloudflare Turnstile for every shop (Doctor): « save » the account id and API token (the owner only; '' keeps the
+   * saved token, null removes the connection), « sync » now. The token never comes back.
+   */
+  @Post('turnstile/:action')
+  async turnstile(@Param('action') action: string, @Body() body: any, @Req() req: { staff: StaffSession }) {
+    if (req.staff.role === 'support') throw new core.AppError('forbidden', 'Réservé au propriétaire et aux managers');
+    if (action === 'status') return turnstileStatus(this.core);
+    if (action === 'sync') return syncTurnstile(this.core);
+    if (action === 'save') {
+      if (req.staff.role !== 'owner') throw new core.AppError('forbidden', 'Réservé au propriétaire');
+      try {
+        return await saveTurnstileConfig(this.core, body?.remove ? null : { accountId: String(body?.accountId ?? '').slice(0, 64), token: String(body?.token ?? '').slice(0, 400) });
+      } catch (e) {
+        throw new core.AppError('bad_request', (e as Error).message);
+      }
+    }
+    throw new core.AppError('not_found', 'Action inconnue');
   }
 
   /** The server: database and stores' sizes (numbers only), the last backups, the disk space, the e-mails. */

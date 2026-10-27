@@ -395,6 +395,20 @@
       "fix": "أضفها في .env ثم أعد تشغيل Pilotix.",
       "short": "إعدادات الخادم كاملة",
       "okTitle": "إعدادات الخادم كاملة"
+    },
+    "turnstile": {
+      "title": "Cloudflare (الروبوتات): {{domains}} نطاق من {{max}} ({{pct}} %)",
+      "why": "{{widgets}} من {{maxWidgets}} widget مستعملة. عند الامتلاء، لا تحصل نطاقات المتاجر الجديدة على تحقق الروبوتات (باقي الحماية يعمل دائماً).",
+      "fix": "قبل 100 %: انتقل إلى Cloudflare Enterprise (Turnstile «any hostname») أو افتح حساب Cloudflare مجانياً ثانياً.",
+      "short": "Cloudflare (الروبوتات)",
+      "okTitle": "Cloudflare (الروبوتات): {{domains}} نطاق من {{max}}"
+    },
+    "turnstileOff": {
+      "title": "Cloudflare (الروبوتات) غير متصل",
+      "why": "تحقق Cloudflare غير المرئي يحمي صفحات هبوط كل المتاجر مجاناً (حتى {{max}} نطاق).",
+      "fix": "في الأسفل، بطاقة «Cloudflare»: ألصق Account ID ورمز API لـ Turnstile. Pilotix يتكفل بالباقي.",
+      "short": "Cloudflare (الروبوتات)",
+      "okTitle": "Cloudflare (الروبوتات)"
     }
   },
   "gauge": {
@@ -442,7 +456,8 @@
     "spy-scan": "AI Spy",
     "meta-sync": "إعلانات Meta",
     "demo-reset": "متجر العرض",
-    "platform-reminders": "تذكيرات الاشتراك"
+    "platform-reminders": "تذكيرات الاشتراك",
+    "turnstile-sync": "Cloudflare (الروبوتات): نطاقات المتاجر"
   },
   "errs": {
     "title": "آخر الأخطاء",
@@ -450,5 +465,44 @@
     "warn": "تنبيه",
     "none": "لا أخطاء منذ 24 ساعة.",
     "memory": "تُحفظ 24 ساعة في الذاكرة. إعادة التشغيل تمسحها."
+  },
+  "cf": {
+    "title": "Cloudflare: تحقق الروبوتات لكل المتاجر",
+    "help": "يضيف Pilotix تلقائياً pilotix.online ونطاق كل متجر إلى widgets Cloudflare Turnstile. الخطة المجانية تسمح بـ 20 widget × 10 نطاقات = 200 نطاق.",
+    "domains": "النطاقات المحمية",
+    "left_zero": "لا مكان فارغ",
+    "left_one": "مكان فارغ واحد",
+    "left_two": "مكانان فارغان",
+    "left_few": "{{count}} أماكن فارغة",
+    "left_many": "{{count}} مكاناً فارغاً",
+    "left_other": "{{count}} مكان فارغ",
+    "widgets": "Widgets",
+    "perWidget": "{{count}} نطاقات لكل widget",
+    "soon": "استُعمل {{pct}} % من الخطة المجانية: فكّر في الانتقال إلى Cloudflare Enterprise قبل الامتلاء.",
+    "full_zero": "الخطة المجانية ممتلئة.",
+    "full_one": "الخطة المجانية ممتلئة: نطاق واحد ينتظر مكاناً. انتقل إلى Cloudflare Enterprise.",
+    "full_two": "الخطة المجانية ممتلئة: نطاقان ينتظران مكاناً. انتقل إلى Cloudflare Enterprise.",
+    "full_few": "الخطة المجانية ممتلئة: {{count}} نطاقات تنتظر مكاناً. انتقل إلى Cloudflare Enterprise.",
+    "full_many": "الخطة المجانية ممتلئة: {{count}} نطاقاً ينتظر مكاناً. انتقل إلى Cloudflare Enterprise.",
+    "full_other": "الخطة المجانية ممتلئة: {{count}} نطاق ينتظر مكاناً. انتقل إلى Cloudflare Enterprise.",
+    "account": "الحساب",
+    "synced": "آخر تحديث",
+    "sync": "تحديث الآن",
+    "syncedOk": "widgets Cloudflare محدّثة",
+    "change": "تغيير الحساب",
+    "off": "غير متصل بعد. يربط المالك حساب Cloudflare مرة واحدة، ثم يصبح كل شيء تلقائياً.",
+    "s1": "dash.cloudflare.com › الصفحة الرئيسية للحساب: انسخ «Account ID» (32 حرفاً).",
+    "s2": "الملف الشخصي (أعلى اليمين) › API Tokens › Create Token › Custom token: الإذن «Account › Turnstile › Edit» ثم Create.",
+    "s3": "ألصقهما هنا. الرمز لا يغادر الخادم أبداً.",
+    "accountId": "Account ID",
+    "accountIdHint": "32 حرفاً (a-f وأرقام)",
+    "token": "رمز API (Turnstile: Edit)",
+    "tokenHint": "اتركه فارغاً للإبقاء على الرمز المحفوظ.",
+    "connect": "ربط وإنشاء الـ widgets",
+    "savedOk": "تم ربط Cloudflare: أُنشئت الـ widgets",
+    "remove": "فصل",
+    "removeAsk": "فصل Cloudflare؟ يتوقف تحقق الروبوتات في كل المتاجر (باقي الحماية مستمر).",
+    "removedOk": "تم فصل Cloudflare",
+    "demo": "تجريبي: لا شيء يُرسل إلى Cloudflare"
   }
 }

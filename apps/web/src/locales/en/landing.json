@@ -299,7 +299,9 @@
     "tsSecretHint": "It never leaves the server.",
     "tsOn": "On",
     "tsOff": "Off",
-    "tsRemoveAsk": "Remove the Cloudflare check?"
+    "tsRemoveAsk": "Remove the Cloudflare check?",
+    "tsAuto": "Turned on automatically by Pilotix",
+    "tsAutoHelp": "Nothing to do: your landing pages are already protected, even on your own domain. Your own Cloudflare keys (optional) replace Pilotix’s."
   },
   "ev": {
     "title": "Events sent to Meta",

@@ -189,7 +189,7 @@ function PlatformShell({ staff, parts, onLogout, demo }: { staff: Staff; parts: 
   let page: ReactNode;
   if (cur === 'shops' && parts[1] && /^\d+$/.test(parts[1])) page = <ShopDetail id={Number(parts[1])} staff={staff} />;
   else if (cur === 'shops') page = <Shops staff={staff} creating={parts[1] === 'new'} filter={parts[1] === 'f' ? parts[2] : undefined} />;
-  else if (cur === 'doctor') page = <DoctorPage demo={demo} />;
+  else if (cur === 'doctor') page = <DoctorPage demo={demo} owner={demo || staff?.role === 'owner'} />;
   else if (cur === 'payments') page = <Payments staff={staff} />;
   else if (cur === 'signups') page = <Signups />;
   else if (cur === 'messages') page = <Messages id={parts[1] && /^\d+$/.test(parts[1]) ? Number(parts[1]) : null} />;
