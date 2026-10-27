@@ -246,18 +246,16 @@ export async function turnstileStatus(core: CoreService): Promise<TsStatus> {
   };
 }
 
-/** The control room's owner sets (or removes) the Cloudflare account: checked with Cloudflare first, then synced. */
-export async function saveTurnstileConfig(core: CoreService, input: { accountId: string; token: string } | null): Promise<TsStatus> {
-  if (!input) {
-    await writeConfig(core, null);
-    cache.clear();
-    return turnstileStatus(core);
-  }
+/**
+ * The control room's owner connects the Cloudflare account, or replaces it with a new one (never removed: the robot
+ * check stays on). The new account id and token are checked with Cloudflare first: refused, the old ones stay.
+ */
+export async function saveTurnstileConfig(core: CoreService, input: { accountId: string; token: string }): Promise<TsStatus> {
   const accountId = input.accountId.trim();
   if (!/^[0-9a-f]{32}$/i.test(accountId)) throw new Error('Account ID Cloudflare invalide (32 caractères, sur la page d’accueil du compte)');
   const old = await readConfig(core);
-  const token = input.token.trim() || old?.token || '';
-  if (!token) throw new Error('Collez le jeton API Cloudflare');
+  const token = input.token.trim();
+  if (token.length < 20) throw new Error('Collez le nouveau jeton API Cloudflare (l’ancien reste tant que le nouveau n’est pas accepté)');
   // the token can read the account's widgets: it works
   await cf({ accountId, token }, 'GET', '/challenges/widgets?per_page=1');
   // another Cloudflare account: the widgets of the old one are not usable with it (made again by the sync)

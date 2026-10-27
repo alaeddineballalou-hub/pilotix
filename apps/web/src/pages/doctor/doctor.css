@@ -133,3 +133,9 @@
 .dr-cf-a > small { flex: 1 1 220px; }
 .dr-cf-f { display: flex; flex-direction: column; gap: 10px; border-top: 1px dashed var(--line); padding-top: 12px; }
 .dr-cf-steps { margin: 0; padding-inline-start: 20px; font-size: 13px; line-height: 1.6; color: var(--ink); }
+.dr-cf-lock { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border-radius: 12px; background: var(--ok-soft); }
+.dr-cf-lock > div { display: flex; flex-direction: column; gap: 3px; flex: 1 1 260px; min-width: 0; }
+.dr-cf-lock b { color: var(--ok); }
+.dr-cf-lock small { font-size: 12.5px; color: var(--ink); }
+.dr-cf-lock-i { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: var(--surface); color: var(--ok); flex: 0 0 auto; }
+.dr-cf-lock-i .bji { width: 19px; height: 19px; }

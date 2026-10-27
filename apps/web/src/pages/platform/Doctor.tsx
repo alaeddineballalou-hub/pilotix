@@ -6,8 +6,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { dur, n, shortWhen } from '../../lib/format';
-import { serverDoctor, turnstileSave, turnstileSync } from '../../lib/platform';
-import { Card, ErrorBox, Field, Icon, Loading } from '../../ui/kit';
+import { serverDoctor, turnstileSync } from '../../lib/platform';
+import { Card, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { DoctorHero, DoctorList } from '../doctor/parts';
 
@@ -121,20 +121,15 @@ export function DoctorPage({ demo, owner }: { demo?: boolean; owner?: boolean })
 function Cloudflare({ ts, demo, owner }: { ts: DoctorTurnstile; demo: boolean; owner: boolean }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [accountId, setAccountId] = useState('');
-  const [token, setToken] = useState('');
   const [busy, setBusy] = useState(false);
-  const [edit, setEdit] = useState(!ts.configured);
   const used = ts.maxDomains ? ts.domains / ts.maxDomains : 0;
   const tone = ts.waiting.length || used >= 0.95 ? 'dr-bad' : used >= 0.8 ? 'dr-warn' : '';
-  const run = async (fn: () => Promise<unknown>, ok: string) => {
+  const sync = async () => {
     if (demo) return toast(t('doctor.cf.demo'), 'ok');
     setBusy(true);
     try {
-      await fn();
-      toast(ok, 'ok');
-      setToken('');
-      setEdit(false);
+      await turnstileSync();
+      toast(t('doctor.cf.syncedOk'), 'ok');
       await qc.invalidateQueries({ queryKey: ['p', 'doctor'] });
     } catch (e) {
       toast((e as Error).message, 'bad');
@@ -193,58 +188,24 @@ function Cloudflare({ ts, demo, owner }: { ts: DoctorTurnstile; demo: boolean; o
             </ul>
             <div className="dr-cf-a">
               <small className="muted">
-                {t('doctor.cf.account')} <span className="ltr">{ts.accountId}</span> · {t('doctor.cf.synced')} {ts.lastSyncAt ? shortWhen(ts.lastSyncAt) : '—'}
+                <Icon name="lock" /> {t('doctor.cf.lockedShort')} · {t('doctor.cf.account')} <span className="ltr">{ts.accountId}</span> · {t('doctor.cf.synced')} {ts.lastSyncAt ? shortWhen(ts.lastSyncAt) : '—'}
               </small>
-              <button type="button" className="btn small" disabled={busy} onClick={() => run(turnstileSync, t('doctor.cf.syncedOk'))}>
+              <button type="button" className="btn small" disabled={busy} onClick={sync}>
                 <Icon name="refresh" /> {t('doctor.cf.sync')}
               </button>
-              {owner && !edit && (
-                <button type="button" className="btn small ghost" onClick={() => setEdit(true)}>
-                  {t('doctor.cf.change')}
-                </button>
-              )}
             </div>
           </>
         ) : (
-          <p className="muted">{t('doctor.cf.off')}</p>
-        )}
-        {owner && edit && (
-          <form
-            className="dr-cf-f"
-            onSubmit={(e) => {
-              e.preventDefault();
-              run(() => turnstileSave({ accountId: accountId.trim(), token: token.trim() }), t('doctor.cf.savedOk'));
-            }}
-          >
-            <ol className="dr-cf-steps">
-              <li>{t('doctor.cf.s1')}</li>
-              <li>{t('doctor.cf.s2')}</li>
-              <li>{t('doctor.cf.s3')}</li>
-            </ol>
-            <div className="grid2">
-              <Field label={t('doctor.cf.accountId')} hint={t('doctor.cf.accountIdHint')}>
-                <input className="ltr" value={accountId} maxLength={40} placeholder="023e105f4ecef8ad9ca31a8372d0c353" onChange={(e) => setAccountId(e.target.value.replace(/[^0-9a-fA-F]/g, ''))} />
-              </Field>
-              <Field label={t('doctor.cf.token')} hint={t('doctor.cf.tokenHint')}>
-                <input className="ltr" type="password" autoComplete="off" value={token} placeholder={ts.configured ? '••••••••' : ''} onChange={(e) => setToken(e.target.value)} />
-              </Field>
-            </div>
-            <div className="dr-cf-a">
-              <button type="submit" className="btn primary small" disabled={busy || accountId.length !== 32 || (!token.trim() && !ts.configured)}>
-                {busy ? '…' : t('doctor.cf.connect')}
-              </button>
-              {ts.configured && (
-                <>
-                  <button type="button" className="btn small ghost" onClick={() => setEdit(false)}>
-                    {t('common.cancel')}
-                  </button>
-                  <button type="button" className="btn small ghost danger" disabled={busy} onClick={() => window.confirm(t('doctor.cf.removeAsk')) && run(() => turnstileSave({ remove: true }), t('doctor.cf.removedOk'))}>
-                    {t('doctor.cf.remove')}
-                  </button>
-                </>
-              )}
-            </div>
-          </form>
+          <div className="dr-cf-a">
+            <p className="muted" style={{ margin: 0, flex: '1 1 260px' }}>
+              {owner ? t('doctor.cf.off') : t('doctor.cf.offOthers')}
+            </p>
+            {owner && (
+              <a className="btn small primary" href="#/platform/settings">
+                <Icon name="settings" /> {t('doctor.cf.goSettings')}
+              </a>
+            )}
+          </div>
         )}
       </div>
     </Card>

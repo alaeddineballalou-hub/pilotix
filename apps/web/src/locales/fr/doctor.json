@@ -330,7 +330,7 @@
     "turnstileOff": {
       "title": "Cloudflare (robots) n’est pas connecté",
       "why": "La vérification anti-robots invisible de Cloudflare protège les landing pages de toutes les boutiques, gratuitement (jusqu’à {{max}} domaines).",
-      "fix": "Plus bas, carte « Cloudflare » : collez l’Account ID et un jeton API Turnstile. Pilotix fait le reste tout seul.",
+      "fix": "Control room › Réglages › « Cloudflare (robots) » : collez l’Account ID et un jeton API Turnstile, une seule fois. Pilotix fait le reste tout seul.",
       "short": "Cloudflare (robots)",
       "okTitle": "Cloudflare (robots)",
       "info": "Cloudflare (robots) n’est pas connecté"
@@ -402,7 +402,6 @@
     "synced": "Dernière mise à jour",
     "sync": "Mettre à jour maintenant",
     "syncedOk": "Widgets Cloudflare à jour",
-    "change": "Changer le compte",
     "off": "Pas encore connecté. Le propriétaire connecte le compte Cloudflare une seule fois, ensuite tout est automatique.",
     "s1": "dash.cloudflare.com › la page d’accueil du compte : copiez l’« Account ID » (32 caractères, colonne de droite ou menu « … » du compte).",
     "s2": "Profil (en haut à droite) › API Tokens › Create Token › Custom token : permission « Account › Turnstile › Edit », puis Create.",
@@ -410,12 +409,20 @@
     "accountId": "Account ID",
     "accountIdHint": "32 caractères (lettres a-f et chiffres)",
     "token": "Jeton API (Turnstile : Edit)",
-    "tokenHint": "Laissez vide pour garder le jeton déjà enregistré.",
     "connect": "Connecter et créer les widgets",
     "savedOk": "Cloudflare connecté : widgets créés",
-    "remove": "Déconnecter",
-    "removeAsk": "Déconnecter Cloudflare ? La vérification anti-robots s’arrête sur toutes les boutiques (le reste de la protection continue).",
-    "removedOk": "Cloudflare déconnecté",
-    "demo": "Démo : rien n’est envoyé à Cloudflare"
+    "demo": "Démo : rien n’est envoyé à Cloudflare",
+    "setTitle": "Cloudflare (robots) : compte de Pilotix",
+    "locked": "🔒 Connecté et verrouillé",
+    "lockedShort": "Verrouillé",
+    "domainsUsed": "{{domains}} domaines sur {{max}}",
+    "lockedOwner": "Personne ne peut le modifier ni le supprimer. Vous seul pouvez le remplacer par un nouveau compte ou un nouveau jeton.",
+    "lockedOthers": "Personne ne peut le modifier ni le supprimer. Seul le propriétaire peut le remplacer.",
+    "replace": "Remplacer par un nouveau",
+    "replaceHelp": "Le nouveau est d’abord vérifié avec Cloudflare. S’il est refusé, l’ancien continue de marcher : la protection ne s’arrête jamais.",
+    "replaceGo": "Vérifier et remplacer",
+    "tokenNew": "Le nouveau jeton (Turnstile : Edit). Il ne quitte jamais le serveur.",
+    "offOthers": "Pas encore connecté. Seul le propriétaire peut le connecter (Réglages).",
+    "goSettings": "Connecter dans Réglages"
   }
 }

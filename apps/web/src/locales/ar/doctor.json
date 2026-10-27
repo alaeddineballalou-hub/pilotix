@@ -406,7 +406,7 @@
     "turnstileOff": {
       "title": "Cloudflare (الروبوتات) غير متصل",
       "why": "تحقق Cloudflare غير المرئي يحمي صفحات هبوط كل المتاجر مجاناً (حتى {{max}} نطاق).",
-      "fix": "في الأسفل، بطاقة «Cloudflare»: ألصق Account ID ورمز API لـ Turnstile. Pilotix يتكفل بالباقي.",
+      "fix": "غرفة التحكم › الإعدادات › «Cloudflare (الروبوتات)»: ألصق Account ID ورمز API لـ Turnstile مرة واحدة. Pilotix يتكفل بالباقي.",
       "short": "Cloudflare (الروبوتات)",
       "okTitle": "Cloudflare (الروبوتات)",
       "info": "Cloudflare (الروبوتات) غير متصل"
@@ -490,7 +490,6 @@
     "synced": "آخر تحديث",
     "sync": "تحديث الآن",
     "syncedOk": "widgets Cloudflare محدّثة",
-    "change": "تغيير الحساب",
     "off": "غير متصل بعد. يربط المالك حساب Cloudflare مرة واحدة، ثم يصبح كل شيء تلقائياً.",
     "s1": "dash.cloudflare.com › الصفحة الرئيسية للحساب: انسخ «Account ID» (32 حرفاً).",
     "s2": "الملف الشخصي (أعلى اليمين) › API Tokens › Create Token › Custom token: الإذن «Account › Turnstile › Edit» ثم Create.",
@@ -498,12 +497,20 @@
     "accountId": "Account ID",
     "accountIdHint": "32 حرفاً (a-f وأرقام)",
     "token": "رمز API (Turnstile: Edit)",
-    "tokenHint": "اتركه فارغاً للإبقاء على الرمز المحفوظ.",
     "connect": "ربط وإنشاء الـ widgets",
     "savedOk": "تم ربط Cloudflare: أُنشئت الـ widgets",
-    "remove": "فصل",
-    "removeAsk": "فصل Cloudflare؟ يتوقف تحقق الروبوتات في كل المتاجر (باقي الحماية مستمر).",
-    "removedOk": "تم فصل Cloudflare",
-    "demo": "تجريبي: لا شيء يُرسل إلى Cloudflare"
+    "demo": "تجريبي: لا شيء يُرسل إلى Cloudflare",
+    "setTitle": "Cloudflare (الروبوتات): حساب Pilotix",
+    "locked": "🔒 متصل ومقفل",
+    "lockedShort": "مقفل",
+    "domainsUsed": "{{domains}} نطاق من {{max}}",
+    "lockedOwner": "لا أحد يستطيع تعديله أو حذفه. أنت وحدك تستطيع استبداله بحساب أو رمز جديد.",
+    "lockedOthers": "لا أحد يستطيع تعديله أو حذفه. المالك وحده يستطيع استبداله.",
+    "replace": "استبدال بجديد",
+    "replaceHelp": "يُتحقق من الجديد مع Cloudflare أولاً. إن رُفض، يبقى القديم يعمل: الحماية لا تتوقف أبداً.",
+    "replaceGo": "تحقق واستبدل",
+    "tokenNew": "الرمز الجديد (Turnstile: Edit). لا يغادر الخادم أبداً.",
+    "offOthers": "غير متصل بعد. المالك وحده يستطيع ربطه (الإعدادات).",
+    "goSettings": "الربط في الإعدادات"
   }
 }
