@@ -30,6 +30,9 @@ import { notifyContext, onConfChange, onFollowChange, onOrderCreated, sendInPrev
 import { landingCounts, landingSettings, onLandingConf, onLandingFollow } from './landingquery';
 import { lowStockCount } from './stockquery';
 import { settleTickets } from './tickets';
+import { applyTrust, lookAlikeNote, lookAlikeOf } from './trust';
+
+export const STOPDESK_NOTE = '🏬 Ce client a refusé 2 colis : livraison au bureau (stop-desk) uniquement. Proposez-lui le stop-desk le plus proche.';
 
 // ---------------------------------------------------------------- reading
 const ORDER_COLS = `o.*,
@@ -38,7 +41,8 @@ const ORDER_COLS = `o.*,
    FROM order_items i WHERE i.order_id = o.id) AS items_json,
   ag.name AS agent_name, fa.name AS follow_agent_name, co.name AS company_name, lv.name AS livreur_name,
   CASE WHEN o.is_exchange THEN (SELECT k.ref FROM complaints k WHERE k.exchange_order_id = o.id ORDER BY k.id DESC LIMIT 1) END AS sav_ref,
-  c.blacklisted AS c_blacklisted, c.delivered AS c_delivered, c.returned AS c_returned,
+  c.blacklisted AS c_blacklisted, c.delivered AS c_delivered, c.returned AS c_returned, c.stopdesk_only AS c_stopdesk, c.refusals AS c_refusals,
+  (SELECT lk.phone FROM customers lk WHERE lk.id = o.looks_like_customer_id) AS looks_like_phone,
   EXISTS (SELECT 1 FROM sales d WHERE d.phone = o.phone AND d.id <> o.id AND d.conf_status = ANY('{to_check,new,no_answer,busy,callback,postponed,confirmed,no_stock}')
           AND (d.follow_status IS NULL OR d.follow_status IN ('to_prepare','prepared')) AND d.created_at > o.created_at - interval '15 days') AS possible_dup`;
 
@@ -110,6 +114,9 @@ export function toOrder(r: any): Order {
     blacklisted: r.c_blacklisted ?? undefined,
     customerDelivered: r.c_delivered ?? undefined,
     customerReturned: r.c_returned ?? undefined,
+    customerStopdeskOnly: r.c_stopdesk ?? undefined,
+    customerRefusals: r.c_refusals ?? undefined,
+    looksLikePhone: r.looks_like_phone ?? null,
     agentName: r.agent_name ?? null,
     followAgentName: r.follow_agent_name ?? null,
     companyName: r.company_name ?? null,
@@ -380,6 +387,8 @@ export async function createOrder(
     adsetId?: string | null;
     /** no « we received your order » message (an abandoned order added by Pilotix: the customer did not send it) */
     silent?: boolean;
+    /** the landing page's device key: a new number on a refuser's device is a look-alike */
+    device?: string | null;
   } = {},
 ): Promise<Order> {
   const phone = normalizePhone(input.phone);
@@ -407,13 +416,21 @@ export async function createOrder(
         `INSERT INTO customers (phone, name, wilaya_id, orders, last_order_at) VALUES ($1,$2,$3,1,now())
          ON CONFLICT (phone) DO UPDATE SET orders = customers.orders + 1, last_order_at = now(),
            name = CASE WHEN $4 THEN customers.name ELSE EXCLUDED.name END, wilaya_id = CASE WHEN $4 THEN customers.wilaya_id ELSE EXCLUDED.wilaya_id END
-         RETURNING id, blacklisted`,
+         RETURNING id, blacklisted, stopdesk_only, delivered`,
         // a landing page or a chat: anyone can type a number, so what they type does not rename the shop's customer
         [phone, input.customerName, input.wilayaId, !!(opts.untrusted || opts.landingId)],
       )
     )[0];
     // a blacklisted number is always checked by a person first, even when the order comes « confirmed » (AI seller)
-    const conf: ConfStatus = cust.blacklisted ? 'to_check' : input.confirm ? 'confirmed' : 'new';
+    // refused 2 parcels: only at the desk. A home delivery is not confirmed by itself (AI seller), a person checks it
+    const homeRefused = !!cust.stopdesk_only && !input.isStopdesk;
+    const conf: ConfStatus = cust.blacklisted || (homeRefused && input.confirm) ? 'to_check' : input.confirm ? 'confirmed' : 'new';
+    // a number that never received a parcel and looks like a refuser (same device, same name + commune): 🟡, never blocked
+    const look = num(cust.delivered) === 0 && !cust.blacklisted
+      ? await lookAlikeOf(tx, { phone, name: input.customerName, wilayaId: input.wilayaId, commune: String(input.commune ?? ''), device: opts.device ?? null })
+      : null;
+    const trustNotes = [homeRefused ? STOPDESK_NOTE : '', look ? lookAlikeNote(look) : ''].filter(Boolean);
+    const internalNote = [input.internalNote ?? '', ...trustNotes].filter(Boolean).join('\n') || null;
     const confirmed = conf === 'confirmed';
     const ref = (await tx.query(`SELECT 'PX' || nextval('order_ref_seq') AS r`))[0].r;
     const wh = (await tx.query('SELECT id FROM warehouses WHERE active ORDER BY is_default DESC, id LIMIT 1'))[0];
@@ -422,20 +439,21 @@ export async function createOrder(
       await tx.query(
         `INSERT INTO orders (ref, created_by, customer_id, customer_name, phone, phone2, wilaya_id, commune, address, is_stopdesk, stopdesk_id, channel, source, utm,
            conf_status, agent_id, assigned_at, confirmed_at, follow_status, company_id, warehouse_id, subtotal, delivery_fee, discount, total,
-           customer_note, delivery_note, internal_note, is_exchange, original_order_id, has_upsell, upsell_value, orig_items, orig_discount, conversation_id, landing_id, adset_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37) RETURNING id`,
+           customer_note, delivery_note, internal_note, is_exchange, original_order_id, has_upsell, upsell_value, orig_items, orig_discount, conversation_id, landing_id, adset_id, looks_like_customer_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38) RETURNING id`,
         [ref, me, cust.id, input.customerName, phone, phone2, input.wilayaId, input.commune, input.address, input.isStopdesk, input.stopdeskId ?? null,
           input.channel, input.source ?? null, input.utm ? JSON.stringify(input.utm) : null,
           conf, confirmed ? me : null, confirmed ? new Date(ctx.now()).toISOString() : null, confirmed ? new Date(ctx.now()).toISOString() : null,
           confirmed ? 'to_prepare' : null, defCompany, wh?.id ?? null, priced.subtotal, fee, input.discount, total,
-          input.customerNote ?? null, input.deliveryNote ?? null, input.internalNote ?? null, input.isExchange, input.originalOrderId ?? null,
-          up.value > 0, up.value, JSON.stringify(orig), input.discount, opts.conversationId ?? null, opts.landingId ?? null, opts.adsetId ?? null],
+          input.customerNote ?? null, input.deliveryNote ?? null, internalNote, input.isExchange, input.originalOrderId ?? null,
+          up.value > 0, up.value, JSON.stringify(orig), input.discount, opts.conversationId ?? null, opts.landingId ?? null, opts.adsetId ?? null, look?.id ?? null],
       )
     )[0];
     const oid = num(row.id);
     await insertItems(tx, oid, lines);
     await addEvent(tx, oid, me, 'created', null, conf, input.isExchange ? `Échange de la commande #${input.originalOrderId}` : null);
     if (confirmed) await addEvent(tx, oid, me, 'follow_status', null, 'to_prepare');
+    for (const n of trustNotes) await addEvent(tx, oid, null, 'note', null, 'event', n);
     // Delivery AI agent: "we received your order" (or "confirmed")
     if (!opts.silent) await onOrderCreated(tx, { id: oid, phone, conf_status: conf, is_exchange: input.isExchange }, ctx.now());
     return getOrder(ctx, oid, tx);
@@ -574,7 +592,7 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
     const notify = await notifyContext(tx);
     const landing = await landingSettings(tx);
     for (const oid of input.ids) {
-      const cur = (await tx.query('SELECT id, conf_status, follow_status, shipped_at, attempts, agent_id, phone, is_exchange, landing_id, commune, is_stopdesk, stopdesk_id FROM orders WHERE id = $1 FOR UPDATE', [oid]))[0];
+      const cur = (await tx.query('SELECT id, ref, customer_id, conf_status, follow_status, shipped_at, attempts, agent_id, phone, is_exchange, landing_id, commune, is_stopdesk, stopdesk_id FROM orders WHERE id = $1 FOR UPDATE', [oid]))[0];
       if (!cur) continue;
       if (cur.follow_status && !['to_prepare', 'prepared', 'cancelled'].includes(cur.follow_status) && input.status !== 'confirmed')
         throw bad('Commande déjà expédiée : changez plutôt le statut de livraison');
@@ -590,6 +608,9 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
       // the depot and the courier need where to deliver (also checked here, not only on the screen: bulk confirm)
       if (confirmed && cur.conf_status !== 'confirmed') {
         if (!cur.is_stopdesk && !String(cur.commune ?? '').trim()) throw bad('Indiquez la commune avant de confirmer');
+        // refused 2 parcels: only at the desk (lifted once they receive and pay one)
+        if (!cur.is_stopdesk && !cur.is_exchange && (await tx.query('SELECT stopdesk_only FROM customers WHERE id = $1', [cur.customer_id]))[0]?.stopdesk_only)
+          throw bad(`${cur.ref} : ce client a refusé 2 colis, il est livré au bureau (stop-desk) uniquement. Choisissez un stop-desk avant de confirmer.`);
       }
       const nowIso = new Date(ctx.now()).toISOString();
       await tx.query(
@@ -741,6 +762,11 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
       if (to === 'delivered' && from !== 'delivered' && !cur.delivered_at) await tx.query('UPDATE customers SET delivered = delivered + 1 WHERE id = $1', [cur.customer_id]);
       if (to === 'returned' && from !== 'returned' && !cur.returned_at) await tx.query('UPDATE customers SET returned = returned + 1 WHERE id = $1', [cur.customer_id]);
       await addEvent(tx, oid, me, 'follow_status', from, to, [input.reason, input.note].filter(Boolean).join(' — ') || null);
+      // the customer's trust: refused → stop-desk only, then blacklist; delivered → forgiven
+      if (from !== to && ['returning', 'returned', 'delivered', 'exchanged'].includes(to)) {
+        const t = await applyTrust(tx, numOrNull(cur.customer_id));
+        if (t) await addEvent(tx, oid, null, 'note', null, 'event', t);
+      }
       // Delivery AI agent: shipped, with the livreur, at the desk, failed attempt, cancelled by the livreur, delivered
       await onFollowChange(tx, notify, cur, from, to, ctx.now());
       await onLandingFollow(tx, landing, cur, from, to, ctx.now());
