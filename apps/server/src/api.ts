@@ -38,6 +38,7 @@ import { limitMail, resetMail } from './resetMail';
 import { promises as dns } from 'node:dns';
 import { signupConfirmMail, signupExistsMail, verifyMail } from './mails';
 import type { Mail } from './mail';
+import { syncTurnstile } from './turnstile';
 
 // ---------------------------------------------------------------- errors → HTTP
 const STATUS: Record<string, number> = { bad_request: 400, unauthorized: 401, payment_required: 402, forbidden: 403, not_found: 404, conflict: 409 };
@@ -439,6 +440,8 @@ class ApiController {
     }
     if (want) await core.checkShopDomain(this.core.t, req.shop.shop.id, this.platformHost(), this.resolve);
     this.core.invalidate();
+    // its landing pages get Cloudflare's robot check on the new domain (or the old one is taken out), in the background
+    void syncTurnstile(this.core).catch(() => null);
     const ref = (await this.core.shop({ id: req.shop.shop.id }))!;
     return { domain: ref.shop.domain, status: ref.shop.domainStatus };
   }
@@ -451,6 +454,7 @@ class ApiController {
     failedLogin(key);
     const r = await core.checkShopDomain(this.core.t, req.shop.shop.id, this.platformHost(), this.resolve);
     this.core.invalidate();
+    if (r.ok) void syncTurnstile(this.core).catch(() => null);
     return r;
   }
 

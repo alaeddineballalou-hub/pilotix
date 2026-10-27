@@ -132,7 +132,13 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
         <h2>
           <Icon name="shield" /> {t('landing.set.ts')}
         </h2>
-        <p className="pd-note">{t('landing.set.tsHelp')}</p>
+        {data.turnstileAuto ? (
+          <p className="lp-ts-auto">
+            <span className="chip lp-on">✓ {t('landing.set.tsAuto')}</span> {t('landing.set.tsAutoHelp')}
+          </p>
+        ) : (
+          <p className="pd-note">{t('landing.set.tsHelp')}</p>
+        )}
         <div className="grid2">
           <Field label={t('landing.set.tsSite')} hint={t('landing.set.tsSiteHint')}>
             <input className="ltr" value={f.turnstileSiteKey} placeholder="0x4AAAAAAA…" onChange={(e) => set('turnstileSiteKey', e.target.value.replace(/[^0-9A-Za-z_-]/g, ''))} />

@@ -1,15 +1,17 @@
 // Control room › Doctor: the health of the Pilotix server — machine, database, background jobs, errors in the code,
 // shops that went silent, settings. Looks again every minute. In the preview (no server) it shows an example.
-import type { DoctorItem, ServerDoctorReport } from '@pilotix/shared';
+import type { DoctorItem, DoctorTurnstile, ServerDoctorReport } from '@pilotix/shared';
 import { doctorScore, doctorSort } from '@pilotix/shared';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { dur, n, shortWhen } from '../../lib/format';
-import { serverDoctor } from '../../lib/platform';
-import { Card, ErrorBox, Icon, Loading } from '../../ui/kit';
+import { serverDoctor, turnstileSave, turnstileSync } from '../../lib/platform';
+import { Card, ErrorBox, Field, Icon, Loading } from '../../ui/kit';
+import { toast } from '../../ui/toast';
 import { DoctorHero, DoctorList } from '../doctor/parts';
 
-export function DoctorPage({ demo }: { demo?: boolean }) {
+export function DoctorPage({ demo, owner }: { demo?: boolean; owner?: boolean }) {
   const { t } = useTranslation();
   const q = useQuery<ServerDoctorReport, Error>({ queryKey: ['p', 'doctor', !!demo], queryFn: () => (demo ? Promise.resolve(demoReport()) : serverDoctor()), refetchInterval: 60_000 });
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
@@ -48,6 +50,7 @@ export function DoctorPage({ demo }: { demo?: boolean }) {
         </span>
       </div>
       <DoctorList items={r.items} />
+      {r.turnstile && <Cloudflare ts={r.turnstile} demo={!!demo} owner={!!owner} />}
       <div className="dr-two">
         <Card title={t('doctor.jobs.title')}>
           <table className="dr-jobs">
@@ -111,6 +114,143 @@ export function DoctorPage({ demo }: { demo?: boolean }) {
   );
 }
 
+/**
+ * Cloudflare Turnstile kept by Pilotix for every shop: how many domains of the free plan are used (upgrade before it is
+ * full), the widgets and their domains, the last sync; the owner connects the Cloudflare account here (once).
+ */
+function Cloudflare({ ts, demo, owner }: { ts: DoctorTurnstile; demo: boolean; owner: boolean }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [accountId, setAccountId] = useState('');
+  const [token, setToken] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [edit, setEdit] = useState(!ts.configured);
+  const used = ts.maxDomains ? ts.domains / ts.maxDomains : 0;
+  const tone = ts.waiting.length || used >= 0.95 ? 'dr-bad' : used >= 0.8 ? 'dr-warn' : '';
+  const run = async (fn: () => Promise<unknown>, ok: string) => {
+    if (demo) return toast(t('doctor.cf.demo'), 'ok');
+    setBusy(true);
+    try {
+      await fn();
+      toast(ok, 'ok');
+      setToken('');
+      setEdit(false);
+      await qc.invalidateQueries({ queryKey: ['p', 'doctor'] });
+    } catch (e) {
+      toast((e as Error).message, 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card title={t('doctor.cf.title')} help={t('doctor.cf.help')} badge={ts.configured ? <span className={`pp-count ${tone ? 'bad' : ''}`}>{`${ts.domains} / ${ts.maxDomains}`}</span> : undefined}>
+      <div className="dr-cf">
+        {ts.configured ? (
+          <>
+            <div className="dr-cf-top">
+              <section className="dr-gauge">
+                <div className="dr-gauge-h">
+                  <span>{t('doctor.cf.domains')}</span>
+                  <Icon name="shield" />
+                </div>
+                <b className="dr-gauge-v ltr">
+                  {ts.domains} <small>/ {ts.maxDomains}</small>
+                </b>
+                <div className={`dr-bar ${tone}`}>
+                  <i style={{ width: `${Math.min(100, Math.round(used * 100))}%` }} />
+                </div>
+                <small>{t('doctor.cf.left', { count: Math.max(0, ts.maxDomains - ts.domains) })}</small>
+              </section>
+              <section className="dr-gauge">
+                <div className="dr-gauge-h">
+                  <span>{t('doctor.cf.widgets')}</span>
+                  <Icon name="layers" />
+                </div>
+                <b className="dr-gauge-v ltr">
+                  {ts.widgets.length} <small>/ {ts.maxWidgets}</small>
+                </b>
+                <div className={`dr-bar ${ts.widgets.length >= ts.maxWidgets ? 'dr-warn' : ''}`}>
+                  <i style={{ width: `${Math.round((ts.widgets.length / ts.maxWidgets) * 100)}%` }} />
+                </div>
+                <small>{t('doctor.cf.perWidget', { count: ts.perWidget })}</small>
+              </section>
+            </div>
+            {(used >= 0.8 || ts.waiting.length > 0) && <p className={`dr-cf-up ${tone}`}>{ts.waiting.length ? t('doctor.cf.full', { count: ts.waiting.length }) : t('doctor.cf.soon', { pct: Math.round(used * 100) })}</p>}
+            {ts.lastError && !ts.waiting.length && <p className="dr-cf-up dr-warn">{ts.lastError}</p>}
+            <ul className="dr-cf-w">
+              {ts.widgets.map((w) => (
+                <li key={w.sitekey}>
+                  <b>{w.name}</b> <small className="muted ltr">{`${w.domains.length} / ${ts.perWidget}`}</small>
+                  <div className="dr-cf-d">
+                    {w.domains.map((d) => (
+                      <span key={d} className="ltr">
+                        {d}
+                      </span>
+                    ))}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="dr-cf-a">
+              <small className="muted">
+                {t('doctor.cf.account')} <span className="ltr">{ts.accountId}</span> · {t('doctor.cf.synced')} {ts.lastSyncAt ? shortWhen(ts.lastSyncAt) : '—'}
+              </small>
+              <button type="button" className="btn small" disabled={busy} onClick={() => run(turnstileSync, t('doctor.cf.syncedOk'))}>
+                <Icon name="refresh" /> {t('doctor.cf.sync')}
+              </button>
+              {owner && !edit && (
+                <button type="button" className="btn small ghost" onClick={() => setEdit(true)}>
+                  {t('doctor.cf.change')}
+                </button>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="muted">{t('doctor.cf.off')}</p>
+        )}
+        {owner && edit && (
+          <form
+            className="dr-cf-f"
+            onSubmit={(e) => {
+              e.preventDefault();
+              run(() => turnstileSave({ accountId: accountId.trim(), token: token.trim() }), t('doctor.cf.savedOk'));
+            }}
+          >
+            <ol className="dr-cf-steps">
+              <li>{t('doctor.cf.s1')}</li>
+              <li>{t('doctor.cf.s2')}</li>
+              <li>{t('doctor.cf.s3')}</li>
+            </ol>
+            <div className="grid2">
+              <Field label={t('doctor.cf.accountId')} hint={t('doctor.cf.accountIdHint')}>
+                <input className="ltr" value={accountId} maxLength={40} placeholder="023e105f4ecef8ad9ca31a8372d0c353" onChange={(e) => setAccountId(e.target.value.replace(/[^0-9a-fA-F]/g, ''))} />
+              </Field>
+              <Field label={t('doctor.cf.token')} hint={t('doctor.cf.tokenHint')}>
+                <input className="ltr" type="password" autoComplete="off" value={token} placeholder={ts.configured ? '••••••••' : ''} onChange={(e) => setToken(e.target.value)} />
+              </Field>
+            </div>
+            <div className="dr-cf-a">
+              <button type="submit" className="btn primary small" disabled={busy || accountId.length !== 32 || (!token.trim() && !ts.configured)}>
+                {busy ? '…' : t('doctor.cf.connect')}
+              </button>
+              {ts.configured && (
+                <>
+                  <button type="button" className="btn small ghost" onClick={() => setEdit(false)}>
+                    {t('common.cancel')}
+                  </button>
+                  <button type="button" className="btn small ghost danger" disabled={busy} onClick={() => window.confirm(t('doctor.cf.removeAsk')) && run(() => turnstileSave({ remove: true }), t('doctor.cf.removedOk'))}>
+                    {t('doctor.cf.remove')}
+                  </button>
+                </>
+              )}
+            </div>
+          </form>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 function Gauge({ label, icon, v, warn, bad, sub }: { label: string; icon: string; v: number | null; warn: number; bad: number; sub: string }) {
   const tone = v === null ? '' : v >= bad ? 'dr-bad' : v >= warn ? 'dr-warn' : '';
   return (
@@ -155,6 +295,7 @@ function demoReport(): ServerDoctorReport {
     { id: 'courierSync', level: 'bad', area: 'code', params: { count: 1 }, list: [{ label: 'boutique-amine · ZR: 401 Unauthorized (token expired)', n: 28, unit: 'n' }] },
     { id: 'silentShops', level: 'warn', area: 'shops', params: { count: 1 }, list: [{ label: 'Maison Sara', n: 52, unit: 'hours' }] },
     { id: 'config', level: 'warn', area: 'config', params: { count: 1 }, list: [{ label: 'SMTP_HOST (e-mails)', n: 0, unit: 'text' }] },
+    { id: 'turnstile', level: 'ok', area: 'config', params: { domains: 23, max: 200, pct: 11.5, widgets: 3, maxWidgets: 20, waiting: 0 } },
   ];
   const sorted = doctorSort(items);
   const job = (name: string, every: number, state: ServerDoctorReport['jobs'][number]['state'], okMin: number | null, err?: string) => ({
@@ -183,7 +324,24 @@ function demoReport(): ServerDoctorReport {
       job('spy-scan', 60 * 60_000, 'ok', 31),
       job('meta-sync', 86_400_000, 'ok', 600),
       job('demo-reset', 86_400_000, 'ok', 1100),
+      job('turnstile-sync', 30 * 60_000, 'ok', 12),
     ],
+    turnstile: {
+      configured: true,
+      accountId: '023e…c353',
+      widgets: [
+        { sitekey: '0x4AAAAAAA1', name: 'Pilotix 1', domains: ['pilotix.online', 'maison-sara.com', 'boutique-amine.dz', 'bebe-confort.shop', 'www.toutpourbebe.com', 'kids-dz.com', 'ma-boutique.store', 'luna-baby.com', 'oran-shop.com', 'mode-alger.com'] },
+        { sitekey: '0x4AAAAAAA2', name: 'Pilotix 2', domains: ['setif-store.com', 'deco-maison.dz', 'beauty-dz.com', 'sport-alger.shop', 'cuisine-pro.dz', 'kabylie-shop.com', 'vape-dz.store', 'tech-oran.com', 'bijoux-dz.com', 'jouets-annaba.com'] },
+        { sitekey: '0x4AAAAAAA3', name: 'Pilotix 3', domains: ['parfum-blida.com', 'chaussures-dz.shop', 'sacs-constantine.com'] },
+      ],
+      domains: 23,
+      maxDomains: 200,
+      maxWidgets: 20,
+      perWidget: 10,
+      waiting: [],
+      lastSyncAt: ago(12),
+      lastError: null,
+    },
     errors: [
       { at: ago(3), level: 'error', source: 'Courier sync', shop: 'boutique-amine', message: 'ZR: 401 Unauthorized (token expired)', count: 28 },
       { at: ago(17), level: 'error', source: 'API', shop: null, message: 'TypeError: Cannot read properties of undefined (reading "wilaya")\n    at orderForm (orders.js:412:18)', count: 9 },

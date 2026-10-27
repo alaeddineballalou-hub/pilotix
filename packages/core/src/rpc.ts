@@ -76,6 +76,10 @@ export interface ServerHooks {
   spy?: (action: string, args: unknown, ctx: Ctx) => Promise<unknown>;
   /** Cloudflare Turnstile: is this page token real (true / false), null when Cloudflare cannot be reached. */
   turnstile?: (secret: string, token: string, ip: string) => Promise<boolean | null>;
+  /** Turnstile managed by the platform for every shop: the site key for a page on this host (null: none) */
+  turnstileSite?: (host: string) => Promise<string | null>;
+  /** and the check of a page's token with the secret of that site key's widget (null: cannot tell) */
+  turnstileCheck?: (siteKey: string, token: string, ip: string) => Promise<boolean | null>;
   /** Google Sheets sales channel: the CSV text of a public sheet (docs.google.com only). */
   sheetCsv?: (url: string) => Promise<string>;
   hashPassword: (pw: string) => Promise<string>;

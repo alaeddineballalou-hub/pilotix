@@ -346,10 +346,24 @@ CREATE TABLE IF NOT EXISTS platform.referrals (
 CREATE INDEX IF NOT EXISTS referrals_referrer ON platform.referrals (referrer_shop_id);
 `;
 
+// Cloudflare Turnstile, managed by Pilotix for every shop: the widgets it made in the platform's Cloudflare account
+// (10 domains each on the free plan) and the domains in each; the account id and its API token are platform settings.
+const P004 = `
+CREATE TABLE IF NOT EXISTS platform.turnstile_widgets (
+  sitekey    text        PRIMARY KEY,
+  secret     text        NOT NULL,
+  name       text        NOT NULL,
+  domains    text[]      NOT NULL DEFAULT '{}',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+`;
+
 export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p001_platform', P001],
   ['p002_accounts_signup_domains', P002],
   ['p003_accounts_privacy', P003],
+  ['p004_turnstile', P004],
 ];
 
 /** Creates or updates the platform's tables. */

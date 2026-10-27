@@ -4,6 +4,7 @@ import type { Ctx, Db, LiveEvent, PCtx, PlatformSettings, ServerHooks, Shop, Sho
 import type { Session } from '@pilotix/shared';
 import { Pool, PoolClient } from 'pg';
 import { config } from './config';
+import { turnstileCheck, turnstileSiteKey } from './turnstile';
 
 const PATH = Symbol('pilotix.search_path');
 type Client = PoolClient & { [PATH]?: string };
@@ -172,6 +173,8 @@ export class CoreService implements OnModuleDestroy {
       const r: any = await res.json().catch(() => null);
       return r ? !!r.success : null;
     },
+    turnstileSite: (host) => turnstileSiteKey(this, host),
+    turnstileCheck: (siteKey, token, ip) => turnstileCheck(this, siteKey, token, ip),
     hashPassword: (pw) => core.hashPassword(pw),
     publicUrl: config.publicUrl,
   };

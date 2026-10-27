@@ -80,6 +80,23 @@ export interface ServerDoctorReport {
   };
   jobs: DoctorJob[];
   errors: DoctorError[];
+  /** Cloudflare Turnstile kept by Pilotix for every shop: how full the free plan is */
+  turnstile?: DoctorTurnstile;
+}
+
+export interface DoctorTurnstile {
+  configured: boolean;
+  /** shortened (the token never leaves the server) */
+  accountId: string | null;
+  widgets: { sitekey: string; name: string; domains: string[] }[];
+  domains: number;
+  maxDomains: number;
+  maxWidgets: number;
+  perWidget: number;
+  /** domains with no place left (every widget full) */
+  waiting: string[];
+  lastSyncAt: string | null;
+  lastError: string | null;
 }
 
 /** 100 minus 15 per "bad" and 5 per "warn" (never below 5). */

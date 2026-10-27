@@ -117,3 +117,19 @@
 /* Accueil: Pilot Agent in its own card, titled like « Maintenant » */
 .dr-home .dr-home-h { display: flex; align-items: center; gap: 10px; }
 .dr-home .dr-hero { background: var(--raise, var(--surface)); }
+
+/* control room › Doctor › Cloudflare (robot check of every shop's pages) */
+.dr-cf { display: flex; flex-direction: column; gap: 12px; }
+.dr-cf-top { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 640px) { .dr-cf-top { grid-template-columns: minmax(0, 1fr); } }
+.dr-cf .dr-gauge-v small { font-size: 15px; color: var(--muted); font-weight: 700; }
+.dr-cf-up { margin: 0; padding: 9px 12px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-weight: 600; font-size: 13px; }
+.dr-cf-up.dr-bad { background: var(--coral-soft); color: var(--coral); }
+.dr-cf-w { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.dr-cf-w li { border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; }
+.dr-cf-d { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.dr-cf-d span { font-size: 12px; padding: 2px 8px; border-radius: 99px; background: var(--raise); border: 1px solid var(--line); }
+.dr-cf-a { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dr-cf-a > small { flex: 1 1 220px; }
+.dr-cf-f { display: flex; flex-direction: column; gap: 10px; border-top: 1px dashed var(--line); padding-top: 12px; }
+.dr-cf-steps { margin: 0; padding-inline-start: 20px; font-size: 13px; line-height: 1.6; color: var(--ink); }

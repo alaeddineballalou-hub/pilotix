@@ -285,6 +285,7 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
   const refs = readImgs(l.images);
   const hide = l.stock_mode === 'hide';
   const s = await landingSettings(ctx.db);
+  const pageUrl = o.url ?? (o.site ? `${o.site}/${await landingStore(ctx.db, s)}/${slug}` : '');
   const view: LandingView = {
     slug,
     title: l.title || pc.name,
@@ -301,7 +302,8 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     // the pixel only on the real page: never in Pilotix (preview, demo), whose visits are not customers
     pixelId: o.mode === 'live' ? String(l.pixel_id || s.pixelId || '').trim() : '',
     productId: num(l.product_id),
-    turnstileKey: o.mode === 'live' ? String(s.turnstileSiteKey ?? '').trim() : '',
+    // the shop's own Cloudflare keys, else the widget Pilotix keeps for the address the page is served at
+    turnstileKey: o.mode === 'live' ? String(s.turnstileSiteKey ?? '').trim() || ((await ctx.server?.turnstileSite?.(hostOf(pageUrl || o.post))) ?? '') : '',
   };
   if (o.mode === 'live') await ctx.db.query('UPDATE landing_pages SET views = views + 1 WHERE id = $1', [l.id]);
   const html = renderLanding(view, {
@@ -312,7 +314,7 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     viewId: randomId(),
     challenge: await makeChallenge(ctx.db, slug, ctx.now()),
     bits: LANDING_POW_BITS,
-    url: o.url ?? (o.site ? `${o.site}/${await landingStore(ctx.db, s)}/${slug}` : undefined),
+    url: pageUrl || undefined,
   });
   return { html, link: o.imgBase ? landingPreloadLink(view) : null };
 }
@@ -385,8 +387,9 @@ export const SubmitInput = z.object({
   ps: z.any().transform((v) => v === true),
   tz: str(60),
   mt: int(null),
-  /** Cloudflare Turnstile's token (when the shop turned it on) */
+  /** Cloudflare Turnstile's token (when the shop turned it on), and the site key the page used */
   tt: str(2100),
+  tk: str(100),
   fp: str(64),
   did: str(64),
   vid: str(40),
@@ -536,16 +539,34 @@ async function usualQty(db: Db, productId: number, now: number): Promise<number 
   return num(r?.n) >= 20 ? Math.max(1, num(r.q)) : null;
 }
 
-/** Cloudflare Turnstile: 'off' when the shop has no keys (or the server cannot ask Cloudflare), else what Cloudflare says. */
-async function turnstileOf(ctx: Ctx, token: string, ip: string): Promise<'ok' | 'fail' | 'off'> {
-  const s = await landingSettings(ctx.db);
-  const verify = ctx.server?.turnstile;
-  if (!s.turnstileSiteKey || !verify) return 'off';
-  const key = String((await ctx.db.query(`SELECT value FROM settings WHERE key = $1`, [LANDING_TURNSTILE_SECRET]))[0]?.value ?? '');
-  if (!key) return 'off';
-  // the page could not load Cloudflare's script (a slow or filtered line): not held against a real customer
+/** the host of an address ('' when it is not one) */
+const hostOf = (u: string) => {
+  try {
+    return new URL(u).hostname;
+  } catch {
+    return '';
+  }
+};
+
+/**
+ * Cloudflare Turnstile: 'off' when there is nothing to check with (no keys, the server cannot ask Cloudflare, the page
+ * could not load Cloudflare's script on a slow line), else what Cloudflare says. The shop's own keys first; otherwise
+ * the widget Pilotix keeps for every shop (the page says which site key it used).
+ */
+async function turnstileOf(ctx: Ctx, token: string, siteKey: string, ip: string): Promise<'ok' | 'fail' | 'off'> {
   if (!token) return 'off';
-  const ok = await verify(key, token, ip).catch(() => null);
+  const s = await landingSettings(ctx.db);
+  const own = String(s.turnstileSiteKey ?? '').trim();
+  if (own && (!siteKey || siteKey === own)) {
+    const verify = ctx.server?.turnstile;
+    const key = String((await ctx.db.query(`SELECT value FROM settings WHERE key = $1`, [LANDING_TURNSTILE_SECRET]))[0]?.value ?? '');
+    if (!verify || !key) return 'off';
+    const ok = await verify(key, token, ip).catch(() => null);
+    return ok === null ? 'off' : ok ? 'ok' : 'fail';
+  }
+  const check = ctx.server?.turnstileCheck;
+  if (!siteKey || !check) return 'off';
+  const ok = await check(siteKey, token, ip).catch(() => null);
   return ok === null ? 'off' : ok ? 'ok' : 'fail';
 }
 
@@ -696,7 +717,7 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
       wilayaId,
       marks: await deviceMarks(db, device, phone, now),
       qtyUsual: await usualQty(db, productId, now),
-      turnstile: await turnstileOf(ctx, i.tt, ip),
+      turnstile: await turnstileOf(ctx, i.tt, i.tk, ip),
       behavior:
         i.sc === null
           ? null
@@ -1427,6 +1448,8 @@ export const landingProcs = {
       settings: { pixelId: s.pixelId, testEventCode: s.testEventCode, purchaseAt: s.purchaseAt, abandonAfterMin: s.abandonAfterMin, autoCreate: s.autoCreate, storeSlug: s.storeSlug ?? '', turnstileSiteKey: s.turnstileSiteKey ?? '' },
       /** Cloudflare Turnstile's secret key is saved (it never leaves the server either) */
       turnstile: !!String((await ctx.db.query(`SELECT value FROM settings WHERE key = $1`, [LANDING_TURNSTILE_SECRET]))[0]?.value ?? ''),
+      /** Pilotix keeps a Cloudflare widget for the pages' address: protected with nothing to do */
+      turnstileAuto: !!(ctx.server?.publicUrl && (await ctx.server?.turnstileSite?.(hostOf(ctx.server.publicUrl)))),
       /** the store's part of the address in use (the chosen one, else made from the shop's name) */
       store: await landingStore(ctx.db, s),
       /** a shop of a multi-shop server other than #1: its name is given by Pilotix (its webhooks use it too) */

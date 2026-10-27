@@ -319,6 +319,20 @@
       "fix": "Add them to .env, then restart Pilotix.",
       "short": "Server settings complete",
       "okTitle": "Server settings complete"
+    },
+    "turnstile": {
+      "title": "Cloudflare (robots): {{domains}} domains out of {{max}} ({{pct}} %)",
+      "why": "{{widgets}} of {{maxWidgets}} widgets used. When everything is full, shops’ new domains get no robot check (the rest of the protection still works).",
+      "fix": "Before 100 %: move to Cloudflare Enterprise (Turnstile “any hostname”), or open a 2nd free Cloudflare account.",
+      "short": "Cloudflare (robots)",
+      "okTitle": "Cloudflare (robots): {{domains}} domains out of {{max}}"
+    },
+    "turnstileOff": {
+      "title": "Cloudflare (robots) is not connected",
+      "why": "Cloudflare’s invisible robot check protects every shop’s landing pages, for free (up to {{max}} domains).",
+      "fix": "Further down, “Cloudflare” card: paste the Account ID and a Turnstile API token. Pilotix does the rest by itself.",
+      "short": "Cloudflare (robots)",
+      "okTitle": "Cloudflare (robots)"
     }
   },
   "gauge": {
@@ -362,7 +376,8 @@
     "spy-scan": "AI Spy",
     "meta-sync": "Meta ads",
     "demo-reset": "Demo shop",
-    "platform-reminders": "Subscription reminders"
+    "platform-reminders": "Subscription reminders",
+    "turnstile-sync": "Cloudflare (robots): shops’ domains"
   },
   "errs": {
     "title": "Latest errors",
@@ -370,5 +385,36 @@
     "warn": "warning",
     "none": "No error for 24 h.",
     "memory": "Kept 24 h in memory. A restart clears them."
+  },
+  "cf": {
+    "title": "Cloudflare: robot check for every shop",
+    "help": "Pilotix adds pilotix.online and each shop’s own domain to your Cloudflare Turnstile widgets by itself. The free plan allows 20 widgets × 10 domains = 200 domains.",
+    "domains": "Protected domains",
+    "left_one": "{{count}} free place",
+    "left_other": "{{count}} free places",
+    "widgets": "Widgets",
+    "perWidget": "{{count}} domains per widget",
+    "soon": "Already {{pct}} % of the free plan used: plan to move to Cloudflare Enterprise before it is full.",
+    "full_one": "Free plan full: {{count}} domain is waiting for a place. Move to Cloudflare Enterprise.",
+    "full_other": "Free plan full: {{count}} domains are waiting for a place. Move to Cloudflare Enterprise.",
+    "account": "Account",
+    "synced": "Last update",
+    "sync": "Update now",
+    "syncedOk": "Cloudflare widgets up to date",
+    "change": "Change account",
+    "off": "Not connected yet. The owner connects the Cloudflare account once; then everything is automatic.",
+    "s1": "dash.cloudflare.com › the account’s home page: copy the “Account ID” (32 characters, right column or the account’s “…” menu).",
+    "s2": "Profile (top right) › API Tokens › Create Token › Custom token: permission “Account › Turnstile › Edit”, then Create.",
+    "s3": "Paste both here. The token never leaves the server.",
+    "accountId": "Account ID",
+    "accountIdHint": "32 characters (letters a-f and digits)",
+    "token": "API token (Turnstile: Edit)",
+    "tokenHint": "Leave empty to keep the saved token.",
+    "connect": "Connect and create the widgets",
+    "savedOk": "Cloudflare connected: widgets created",
+    "remove": "Disconnect",
+    "removeAsk": "Disconnect Cloudflare? The robot check stops for every shop (the rest of the protection goes on).",
+    "removedOk": "Cloudflare disconnected",
+    "demo": "Demo: nothing is sent to Cloudflare"
   }
 }

@@ -8,6 +8,7 @@ import { CoreService, ShopRef } from './core.service';
 import { doctorState } from './doctor';
 import { mailConfigured, sendMail } from './mail';
 import { reminderMail } from './mails';
+import { syncTurnstile } from './turnstile';
 
 /**
  * Background work, outside user requests, for every shop that is active and paid (needs REDIS_URL; without it the app
@@ -99,6 +100,12 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
           for (const r of due) await sendMail(reminderMail(r, pay)).catch((e) => this.log.warn(`reminder to ${r.to}: ${e?.message || e}`));
           return { sent: due.length };
         }
+        if (job.name === 'turnstile-sync') {
+          // Cloudflare's widgets in step with the shops' domains (a shop stopped, a domain became ready…)
+          const st = await syncTurnstile(this.core);
+          if (st.lastError) throw new Error(st.lastError);
+          return { domains: st.domains, widgets: st.widgets.length };
+        }
         if (job.name === 'demo-reset') {
           for (const s of await core.loadShops(this.core.t))
             if (s.demo && !s.primary && s.status === 'active') {
@@ -143,6 +150,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     }
     await this.queue.add('sheets-sync', {}, { repeat: { every: SHEETS_EVERY }, jobId: 'sheets-sync', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('spy-scan', {}, { repeat: { pattern: '7 * * * *' }, jobId: 'spy-scan', removeOnComplete: 20, removeOnFail: 50 });
+    await this.queue.add('turnstile-sync', {}, { repeat: { every: 30 * 60_000 }, jobId: 'turnstile-sync', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('partitions', {}, { repeat: { pattern: '0 3 1 * *' }, jobId: 'partitions', removeOnComplete: 10 });
     // 03:40 UTC = 04:40 in Algeria: nobody is visiting the demo
     await this.queue.add('demo-reset', {}, { repeat: { pattern: '40 3 * * *' }, jobId: 'demo-reset', removeOnComplete: 10, removeOnFail: 20 });
