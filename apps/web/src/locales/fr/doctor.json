@@ -334,6 +334,14 @@
       "short": "Cloudflare (robots)",
       "okTitle": "Cloudflare (robots)",
       "info": "Cloudflare (robots) n’est pas connecté"
+    },
+    "meVsTeam": {
+      "title": "Votre taux de confirmation est en dessous de l’équipe : {{me}} % (équipe {{team}} %)",
+      "why": "{{gap}} points de moins que l’équipe cette semaine.",
+      "fix": "Écoutez les appels des meilleurs de l’équipe et demandez des conseils à votre manager.",
+      "short": "Au niveau de l’équipe",
+      "okTitle": "Votre taux : {{me}} % (équipe {{team}} %)",
+      "info": "Pas encore assez d’appels cette semaine pour vous comparer"
     }
   },
   "gauge": {
@@ -424,5 +432,16 @@
     "tokenNew": "Le nouveau jeton (Turnstile : Edit). Il ne quitte jamais le serveur.",
     "offOthers": "Pas encore connecté. Seul le propriétaire peut le connecter (Réglages).",
     "goSettings": "Connecter dans Réglages"
+  },
+  "live": "En direct · vérifié il y a {{ago}}",
+  "ago": {
+    "s": "{{n}} s",
+    "min": "{{n}} min"
+  },
+  "outOf": "sur 100",
+  "scope": {
+    "whole": "Toute la boutique : confirmation, dépôt, livraison, stock, ventes et argent.",
+    "team": "Les équipes que vous gérez.",
+    "mine": "Votre propre travail : vos commandes et vos colis."
   }
 }

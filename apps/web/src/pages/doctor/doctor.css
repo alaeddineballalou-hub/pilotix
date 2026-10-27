@@ -166,3 +166,39 @@
 .cp-ic[data-mood="bad"] { animation: cp-shake 2s ease-in-out infinite; }
 @keyframes cp-shake { 0%, 60%, 100% { transform: translateX(0) } 66% { transform: translateX(-1.5px) rotate(-3deg) } 72% { transform: translateX(1.5px) rotate(3deg) } 78% { transform: translateX(-1px) rotate(-2deg) } 84% { transform: translateX(0) } }
 @media (prefers-reduced-motion: reduce) { .cp-ic, .cp-ic * { animation: none !important; transition: none !important; } }
+
+/* ---------- the cockpit: the top of Doctor and Co-Pilot (navy, like a plane's dashboard) ---------- */
+.dr-cock { --ck: var(--px-navy, #1B2A47); display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 20px; align-items: center;
+  background: var(--ck); color: #fff; border-radius: 22px; padding: 22px 24px; }
+:root[data-theme="dark"] .dr-cock { --ck: #0F1A2E; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .dr-cock { --ck: #0F1A2E; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); } }
+.dr-cock .cp-ic { align-self: center; }
+.dr-cock-m { min-width: 0; display: flex; flex-direction: column; }
+.dr-cock-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dr-cock-t { margin: 0; font-size: 15px; font-weight: 700; color: #fff; }
+.dr-cock-badge { font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 99px; background: rgba(255,255,255,.1); color: rgba(255,255,255,.75); }
+.dr-live { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: rgba(255,255,255,.7); white-space: nowrap; }
+.dr-live i { width: 8px; height: 8px; border-radius: 50%; background: #3DD68C; animation: dr-pulse 2s infinite; }
+@keyframes dr-pulse { 0% { box-shadow: 0 0 0 0 rgba(61,214,140,.5) } 70% { box-shadow: 0 0 0 7px rgba(61,214,140,0) } 100% { box-shadow: 0 0 0 0 rgba(61,214,140,0) } }
+.dr-cock-say { margin: 6px 0 0; font-family: var(--f-display, Poppins, Inter, sans-serif); font-size: 22px; font-weight: 700; line-height: 1.25; color: #fff; }
+.dr-cock-sub { margin: 4px 0 0; font-size: 13px; color: rgba(255,255,255,.62); line-height: 1.45; }
+.dr-cock-bar { display: flex; gap: 3px; height: 10px; margin-top: 14px; border-radius: 99px; overflow: hidden; background: rgba(255,255,255,.12); }
+.dr-cock-bar i { display: block; height: 100%; flex-basis: 0; transition: flex-grow .6s ease; }
+.dr-seg-bad { background: #D63B2B; } .dr-seg-warn { background: #F2B705; } .dr-seg-ok { background: #1E9E5A; }
+.dr-cock-legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 9px; font-size: 13px; color: rgba(255,255,255,.78); }
+.dr-cock-legend b { color: #fff; font-size: 15px; margin-inline-end: 3px; }
+.dr-cock-score { text-align: end; color: #fff; }
+.dr-cock-score b { display: block; font-family: var(--f-display, Poppins, Inter, sans-serif); font-size: 44px; font-weight: 800; line-height: 1; }
+.dr-cock-score small { display: block; margin-top: 4px; font-size: 12px; color: rgba(255,255,255,.6); }
+.dr-home { padding: 14px; }
+@media (prefers-reduced-motion: reduce) { .dr-live i { animation: none; } .dr-cock-bar i { transition: none; } }
+@media (max-width: 760px) {
+  .dr-cock { grid-template-columns: auto minmax(0, 1fr); gap: 14px 16px; padding: 18px; }
+  .dr-cock-score { grid-column: 1 / -1; grid-row: 1; justify-self: end; display: flex; align-items: baseline; gap: 6px; position: absolute; }
+  .dr-cock { position: relative; }
+  .dr-cock-score { top: 16px; inset-inline-end: 18px; }
+  .dr-cock-score b { font-size: 26px; }
+  .dr-cock-say { font-size: 18px; }
+  .dr-cock .cp-ic { width: 48px !important; height: 48px !important; align-self: start; }
+  .dr-cock-top { padding-inline-end: 70px; }
+}

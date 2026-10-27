@@ -1,17 +1,74 @@
-// Pilotix Doctor (Dashboard › Pilotix Doctor, admin / vendeur): looks at the shop and warns before a problem grows —
-// stock running out, orders nobody called, parcels stuck, returns going up, agents slowing down, cash not collected.
-// Each check gives an item (bad / warn / ok); the app writes the sentences (doctor.c.<id>).
+// Co-Pilot (Accueil): looks at the shop and warns before a problem grows — stock running out, orders nobody called,
+// parcels stuck, returns going up, agents slowing down, cash not collected. Each check gives an item (bad / warn / ok);
+// the app writes the sentences (doctor.c.<id>).
+//
+// Each person sees the part that is theirs, so their score is about their own work:
+//   - admin / vendeur: the whole shop;
+//   - agent manager: the areas the admin gave them (team-wide: Confirmation, Dépôt, Suivi);
+//   - confirmation agent: their own orders (not called, late callbacks, their rate, them vs the team);
+//   - suivi agent: their own parcels (stuck, alerts, their delivery rate);
+//   - dépôt: stock and orders waiting to leave;  marketer: orders dropping, fake orders (the ads' quality).
+// Someone with several roles gets each part. Nobody else (livreur) gets any check.
 import { algiersDayStart, CONF_DONE_BAD, CONF_TODO, DoctorItem, DoctorLine, doctorScore, doctorSort, FOLLOW_ON_ROAD, ShopDoctorReport } from '@pilotix/shared';
 import { z } from 'zod';
 import { iso, num } from '../db';
 import { Ctx, proc } from '../rpc';
+import { allowedAreas } from './stats';
 
 const H = 3_600_000;
 const D = 24 * H;
 const ratio = (a: number, b: number) => (b > 0 ? a / b : null);
 const pts = (x: number) => Math.round(x * 1000) / 10; // 0.123 → 12.3
 
+type CheckId = 'stockOut' | 'stockSoon' | 'notCalled' | 'lateCallbacks' | 'confRate' | 'fakeOrders' | 'weakAgents' | 'meVsTeam' | 'notShipped' | 'stuckParcels' | 'openAlerts' | 'returns' | 'badWilayas' | 'ordersDrop' | 'cashLate';
+const ALL: CheckId[] = ['stockOut', 'stockSoon', 'notCalled', 'lateCallbacks', 'confRate', 'fakeOrders', 'weakAgents', 'notShipped', 'stuckParcels', 'openAlerts', 'returns', 'badWilayas', 'ordersDrop', 'cashLate'];
+const CONF_TEAM: CheckId[] = ['notCalled', 'lateCallbacks', 'confRate', 'fakeOrders', 'weakAgents'];
+const CONF_MINE: CheckId[] = ['notCalled', 'lateCallbacks', 'confRate', 'meVsTeam'];
+const DEPOT: CheckId[] = ['stockOut', 'stockSoon', 'notShipped'];
+const SUIVI_TEAM: CheckId[] = ['stuckParcels', 'openAlerts', 'returns', 'badWilayas'];
+const SUIVI_MINE: CheckId[] = ['stuckParcels', 'openAlerts', 'returns'];
+const MARKETER: CheckId[] = ['ordersDrop', 'fakeOrders'];
+
+export interface DoctorScope {
+  checks: Set<CheckId>;
+  /** the whole shop (admin / vendeur) */
+  whole: boolean;
+  /** confirmation checks on this agent's own orders */
+  mineConf: boolean;
+  /** suivi checks on this agent's own parcels */
+  mineSuivi: boolean;
+}
+
+/** What this person's Co-Pilot looks at (see the top of the file). */
+export async function doctorScope(ctx: Ctx): Promise<DoctorScope> {
+  const s = ctx.session;
+  if (s.isAdmin || s.roles.includes('vendeur')) return { checks: new Set(ALL), whole: true, mineConf: false, mineSuivi: false };
+  const checks = new Set<CheckId>();
+  let mineConf = false;
+  let mineSuivi = false;
+  const team = s.roles.includes('agent_manager') ? await allowedAreas(ctx) : [];
+  if (team.includes('confirmation')) CONF_TEAM.forEach((c) => checks.add(c));
+  else if (s.roles.includes('confirmation')) {
+    mineConf = true;
+    CONF_MINE.forEach((c) => checks.add(c));
+  }
+  if (team.includes('suivi')) SUIVI_TEAM.forEach((c) => checks.add(c));
+  else if (s.roles.includes('suivi')) {
+    mineSuivi = true;
+    SUIVI_MINE.forEach((c) => checks.add(c));
+  }
+  if (team.includes('depot') || s.roles.includes('depot')) DEPOT.forEach((c) => checks.add(c));
+  if (s.roles.includes('marketer')) MARKETER.forEach((c) => checks.add(c));
+  return { checks, whole: false, mineConf, mineSuivi };
+}
+
 export async function shopDoctor(ctx: Ctx): Promise<ShopDoctorReport> {
+  const scope = await doctorScope(ctx);
+  const want = (c: CheckId) => scope.checks.has(c);
+  const me = Number(ctx.session.profile.id);
+  // an agent's own orders / parcels (the id is a number from the session, never text from a request)
+  const confMine = scope.mineConf ? ` AND agent_id = ${me}` : '';
+  const suiviMine = scope.mineSuivi ? ` AND follow_agent_id = ${me}` : '';
   const now = ctx.now();
   const at = (ms: number) => new Date(now - ms).toISOString();
   const q = (sql: string, params: unknown[] = []) => ctx.db.query(sql, params);
@@ -22,6 +79,7 @@ export async function shopDoctor(ctx: Ctx): Promise<ShopDoctorReport> {
   // ------------------------------------------------------------ stock
   // sold per day = quantities of the orders confirmed in the last 7 days; days left = (stock − what confirmed orders still
   // need) ÷ sold per day. Stock leaves the shelves when the parcel is shipped: to_prepare and prepared orders still need it.
+  if (want('stockOut') || want('stockSoon')) {
   const stock = await q(
     `WITH sold AS (
        SELECT i.variant_id, sum(i.qty)::numeric / 7 AS per_day
@@ -59,10 +117,12 @@ export async function shopDoctor(ctx: Ctx): Promise<ShopDoctorReport> {
       ? { id: 'stockSoon', level: soon[0].n <= 2 ? 'bad' : 'warn', area: 'stock', params: { count: soon.length, days: soon[0].n }, list: soon.slice(0, 6), href: '#/produits/achats' }
       : { id: 'stockSoon', level: 'ok', area: 'stock', href: '#/produits/achats' },
   );
+  }
 
   // ------------------------------------------------------------ confirmation
+  if (want('notCalled')) {
   const nc = await one(
-    `SELECT count(*)::int AS n, min(created_at) AS oldest FROM sales WHERE conf_status IN ('new','to_check') AND attempts = 0 AND created_at < $1`,
+    `SELECT count(*)::int AS n, min(created_at) AS oldest FROM sales WHERE conf_status IN ('new','to_check') AND attempts = 0 AND created_at < $1${confMine}`,
     [at(2 * H)],
   );
   const ncN = num(nc.n);
@@ -72,14 +132,18 @@ export async function shopDoctor(ctx: Ctx): Promise<ShopDoctorReport> {
       ? { id: 'notCalled', level: ncN >= 20 || ncH >= 24 ? 'bad' : 'warn', area: 'confirmation', params: { count: ncN, hours: ncH }, href: '#/confirmation/nouvelles' }
       : { id: 'notCalled', level: 'ok', area: 'confirmation', href: '#/confirmation/nouvelles' },
   );
-  const cb = num((await one(`SELECT count(*)::int AS n FROM sales WHERE conf_status = ANY($1) AND next_call_at IS NOT NULL AND next_call_at < $2`, [CONF_TODO, at(H)])).n);
+  }
+  if (want('lateCallbacks')) {
+  const cb = num((await one(`SELECT count(*)::int AS n FROM sales WHERE conf_status = ANY($1) AND next_call_at IS NOT NULL AND next_call_at < $2${confMine}`, [CONF_TODO, at(H)])).n);
   items.push(cb ? { id: 'lateCallbacks', level: cb >= 30 ? 'bad' : 'warn', area: 'confirmation', params: { count: cb }, href: '#/confirmation/attente' } : { id: 'lateCallbacks', level: 'ok', area: 'confirmation', href: '#/confirmation/attente' });
+  }
 
   // confirmation rate: orders received in the last 7 days vs the 7 days before (decided ones only)
+  if (want('confRate')) {
   const rate = async (from: string, to: string) => {
     const r = await one(
       `SELECT count(*) FILTER (WHERE conf_status IN ('confirmed','no_stock'))::int AS ok, count(*) FILTER (WHERE conf_status = ANY($3))::int AS ko
-         FROM sales WHERE created_at >= $1 AND created_at < $2`,
+         FROM sales WHERE created_at >= $1 AND created_at < $2${confMine}`,
       [from, to, CONF_DONE_BAD],
     );
     return { ok: num(r.ok), all: num(r.ok) + num(r.ko) };
@@ -93,8 +157,10 @@ export async function shopDoctor(ctx: Ctx): Promise<ShopDoctorReport> {
     const drop = r0 - r1;
     items.push({ id: drop >= 0.05 ? 'confRateDrop' : 'confRate', level: drop >= 0.15 ? 'bad' : drop >= 0.05 ? 'warn' : 'ok', area: 'confirmation', params: { now: pts(r1), before: pts(r0), drop: pts(Math.max(drop, 0)) }, href: '#/dashboard/confirmation' });
   }
+  }
 
   // fake / wrong numbers: more than 1 order in 7 → bad ads or someone playing
+  if (want('fakeOrders')) {
   const fk = await one(`SELECT count(*) FILTER (WHERE conf_status IN ('fake','wrong_number'))::int AS f, count(*)::int AS n FROM sales WHERE created_at >= $1`, [at(7 * D)]);
   const fr = ratio(num(fk.f), num(fk.n));
   items.push(
@@ -102,8 +168,10 @@ export async function shopDoctor(ctx: Ctx): Promise<ShopDoctorReport> {
       ? { id: 'fakeOrders', level: fr >= 0.15 ? 'bad' : 'warn', area: 'confirmation', params: { pct: pts(fr), count: num(fk.f) }, href: '#/commandes/tout' }
       : { id: 'fakeOrders', level: 'ok', area: 'confirmation', params: { pct: fr === null ? 0 : pts(fr) } },
   );
+  }
 
   // agents far below the team (7 days, at least 20 orders decided)
+  if (want('weakAgents') || want('meVsTeam')) {
   const ag = await q(
     `SELECT o.agent_id AS id, p.name, count(*) FILTER (WHERE o.conf_status IN ('confirmed','no_stock'))::int AS ok, count(*) FILTER (WHERE o.conf_status = ANY($2))::int AS ko
        FROM sales o JOIN profiles p ON p.id = o.agent_id
@@ -122,13 +190,27 @@ export async function shopDoctor(ctx: Ctx): Promise<ShopDoctorReport> {
           .map((a: any) => ({ label: a.name as string, n: pts(num(a.ok) / (num(a.ok) + num(a.ko))), unit: 'pct' as const }))
           .filter((a: DoctorLine) => a.n <= pts(team) - 12)
           .sort((a: DoctorLine, b: DoctorLine) => a.n - b.n);
+  if (want('weakAgents'))
   items.push(
     weak.length
       ? { id: 'weakAgents', level: 'warn', area: 'team', params: { count: weak.length, team: pts(team!) }, list: weak.slice(0, 5), href: '#/dashboard/confirmation' }
       : { id: 'weakAgents', level: team === null ? 'info' : 'ok', area: 'team', params: { team: team === null ? 0 : pts(team) }, href: '#/dashboard/confirmation' },
   );
+  // an agent: their own rate next to the team's (7 days, at least 20 orders decided)
+  if (want('meVsTeam')) {
+    const mine = ag.find((a: any) => num(a.id) === me);
+    const n = mine ? num(mine.ok) + num(mine.ko) : 0;
+    const my = mine && n ? num(mine.ok) / n : null;
+    if (my === null || team === null || n < 20) items.push({ id: 'meVsTeam', level: 'info', area: 'team', params: { me: my === null ? 0 : pts(my), team: team === null ? 0 : pts(team) }, href: '#/confirmation' });
+    else {
+      const gap = team - my;
+      items.push({ id: 'meVsTeam', level: gap >= 0.2 ? 'bad' : gap >= 0.1 ? 'warn' : 'ok', area: 'team', params: { me: pts(my), team: pts(team), gap: pts(Math.max(gap, 0)) }, href: '#/confirmation' });
+    }
+  }
+  }
 
   // ------------------------------------------------------------ depot
+  if (want('notShipped')) {
   const st = await one(`SELECT count(*)::int AS n, min(confirmed_at) AS oldest FROM sales WHERE follow_status IN ('to_prepare','prepared') AND confirmed_at < $1`, [at(2 * D)]);
   const stN = num(st.n);
   items.push(
@@ -136,22 +218,28 @@ export async function shopDoctor(ctx: Ctx): Promise<ShopDoctorReport> {
       ? { id: 'notShipped', level: stN >= 30 ? 'bad' : 'warn', area: 'depot', params: { count: stN, days: st.oldest ? Math.floor((now - Date.parse(iso(st.oldest))) / D) : 2 }, href: '#/depot/preparer' }
       : { id: 'notShipped', level: 'ok', area: 'depot', href: '#/depot/preparer' },
   );
+  }
 
   // ------------------------------------------------------------ delivery
+  if (want('stuckParcels')) {
   const road = num(
-    (await one(`SELECT count(*)::int AS n FROM sales WHERE follow_status = ANY($1) AND shipped_at < $2 AND COALESCE(ext_status_at, shipped_at) < $3`, [FOLLOW_ON_ROAD, at(8 * D), at(3 * D)])).n,
+    (await one(`SELECT count(*)::int AS n FROM sales WHERE follow_status = ANY($1) AND shipped_at < $2 AND COALESCE(ext_status_at, shipped_at) < $3${suiviMine}`, [FOLLOW_ON_ROAD, at(8 * D), at(3 * D)])).n,
   );
   items.push(road ? { id: 'stuckParcels', level: road >= 20 ? 'bad' : 'warn', area: 'delivery', params: { count: road }, href: '#/suivi' } : { id: 'stuckParcels', level: 'ok', area: 'delivery', href: '#/suivi' });
+  }
 
-  const al = num((await one(`SELECT count(*)::int AS n FROM sales WHERE follow_status = 'alert' AND COALESCE(sub_status,'') <> 'alert_traitee'`)).n);
+  if (want('openAlerts')) {
+  const al = num((await one(`SELECT count(*)::int AS n FROM sales WHERE follow_status = 'alert' AND COALESCE(sub_status,'') <> 'alert_traitee'${suiviMine}`)).n);
   items.push(al ? { id: 'openAlerts', level: al >= 15 ? 'bad' : 'warn', area: 'delivery', params: { count: al }, href: '#/suivi/alertes' } : { id: 'openAlerts', level: 'ok', area: 'delivery', href: '#/suivi/alertes' });
+  }
 
   // delivery rate: last 14 days vs the 14 before (delivered ÷ delivered + returned)
+  if (want('returns')) {
   const dr = async (from: string, to: string) => {
     const r = await one(
       `SELECT count(*) FILTER (WHERE follow_status IN ('delivered','exchanged') AND delivered_at >= $1 AND delivered_at < $2)::int AS d,
               count(*) FILTER (WHERE follow_status IN ('returning','returned') AND COALESCE(returning_at, returned_at, updated_at) >= $1 AND COALESCE(returning_at, returned_at, updated_at) < $2)::int AS r
-         FROM sales`,
+         FROM sales WHERE TRUE${suiviMine}`,
       [from, to],
     );
     return { d: num(r.d), all: num(r.d) + num(r.r) };
@@ -166,7 +254,9 @@ export async function shopDoctor(ctx: Ctx): Promise<ShopDoctorReport> {
     const level = e1 < 0.55 || drop >= 0.12 ? 'bad' : e1 < 0.7 || drop >= 0.05 ? 'warn' : 'ok';
     items.push({ id: level === 'ok' ? 'returns' : 'returnsUp', level, area: 'delivery', params: { now: pts(e1), before: e0 === null ? pts(e1) : pts(e0), back: pts(1 - e1) }, href: '#/dashboard/suivi' });
   }
+  }
   // wilayas that send many parcels back (30 days, at least 12 parcels)
+  if (want('badWilayas')) {
   const wl = await q(
     `SELECT wilaya_id AS w,
             count(*) FILTER (WHERE follow_status IN ('delivered','exchanged'))::int AS d,
@@ -184,9 +274,11 @@ export async function shopDoctor(ctx: Ctx): Promise<ShopDoctorReport> {
       ? { id: 'badWilayas', level: badW[0].n >= 55 ? 'bad' : 'warn', area: 'delivery', params: { count: badW.length }, list: badW.slice(0, 5), href: '#/dashboard/suivi' }
       : { id: 'badWilayas', level: 'ok', area: 'delivery' },
   );
+  }
 
   // ------------------------------------------------------------ sales
   // yesterday (Algeria day) vs the 7 days before it
+  if (want('ordersDrop')) {
   const today0 = algiersDayStart(now);
   const y0 = new Date(today0 - D).toISOString();
   const yN = num((await one(`SELECT count(*)::int AS n FROM sales WHERE created_at >= $1 AND created_at < $2`, [y0, new Date(today0).toISOString()])).n);
@@ -197,8 +289,10 @@ export async function shopDoctor(ctx: Ctx): Promise<ShopDoctorReport> {
     const fall = 1 - yN / avg;
     items.push({ id: fall >= 0.3 ? 'ordersDrop' : 'ordersOk', level: fall >= 0.5 ? 'bad' : fall >= 0.3 ? 'warn' : 'ok', area: 'sales', params: { yesterday: yN, avg: Math.round(avg), drop: pts(Math.max(fall, 0)) }, href: '#/marketing' });
   }
+  }
 
   // ------------------------------------------------------------ cash
+  if (want('cashLate')) {
   const cash = await one(`SELECT count(*)::int AS n, COALESCE(sum(total),0)::bigint AS v FROM sales WHERE follow_status = 'delivered' AND NOT cashed AND delivered_at < $1`, [at(10 * D)]);
   const cN = num(cash.n);
   items.push(
@@ -206,11 +300,13 @@ export async function shopDoctor(ctx: Ctx): Promise<ShopDoctorReport> {
       ? { id: 'cashLate', level: cN >= 50 ? 'bad' : 'warn', area: 'cash', params: money ? { count: cN, amount: num(cash.v) } : { count: cN }, href: '#/caisse/due' }
       : { id: 'cashLate', level: 'ok', area: 'cash', href: '#/caisse/due' },
   );
+  }
 
   const sorted = doctorSort(items);
-  return { checkedAt: new Date(now).toISOString(), score: doctorScore(sorted), items: sorted };
+  return { checkedAt: new Date(now).toISOString(), score: doctorScore(sorted), items: sorted, scope: { whole: scope.whole, mine: scope.mineConf || scope.mineSuivi } };
 }
 
 export const doctorProcs = {
-  'stats.doctor': proc(['vendeur'], z.object({}), (ctx) => shopDoctor(ctx)),
+  // everyone: each person gets the checks of their own work (none for a livreur)
+  'stats.doctor': proc(null, z.object({}), (ctx) => shopDoctor(ctx)),
 };

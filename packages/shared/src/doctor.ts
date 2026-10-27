@@ -34,6 +34,8 @@ export interface ShopDoctorReport {
   /** 0–100: 100 = nothing to worry about */
   score: number;
   items: DoctorItem[];
+  /** whose work it looks at: the whole shop (admin / vendeur), or this person's own orders / parcels (an agent) */
+  scope?: { whole: boolean; mine: boolean };
 }
 
 export interface DoctorJob {

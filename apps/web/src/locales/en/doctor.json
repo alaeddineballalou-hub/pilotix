@@ -334,6 +334,14 @@
       "short": "Cloudflare (robots)",
       "okTitle": "Cloudflare (robots)",
       "info": "Cloudflare (robots) is not connected"
+    },
+    "meVsTeam": {
+      "title": "Your confirmation rate is below the team: {{me}} % (team {{team}} %)",
+      "why": "{{gap}} points less than the team this week.",
+      "fix": "Listen to the best agents’ calls and ask your manager for tips.",
+      "short": "At team level",
+      "okTitle": "Your rate: {{me}} % (team {{team}} %)",
+      "info": "Not enough calls yet this week to compare you"
     }
   },
   "gauge": {
@@ -424,5 +432,16 @@
     "tokenNew": "The new token (Turnstile: Edit). It never leaves the server.",
     "offOthers": "Not connected yet. Only the owner can connect it (Settings).",
     "goSettings": "Connect in Settings"
+  },
+  "live": "Live · checked {{ago}} ago",
+  "ago": {
+    "s": "{{n}} s",
+    "min": "{{n}} min"
+  },
+  "outOf": "out of 100",
+  "scope": {
+    "whole": "The whole shop: confirmation, depot, delivery, stock, sales and money.",
+    "team": "The teams you manage.",
+    "mine": "Your own work: your orders and your parcels."
   }
 }

@@ -1,5 +1,5 @@
 // Control room › Doctor: the health of the Pilotix server — machine, database, background jobs, errors in the code,
-// shops that went silent, settings. Looks again every minute. In the preview (no server) it shows an example.
+// shops that went silent, settings. Looks again every 15 seconds and when you come back to the page (no button). In the preview (no server) it shows an example.
 import type { DoctorItem, DoctorTurnstile, ServerDoctorReport } from '@pilotix/shared';
 import { doctorScore, doctorSort } from '@pilotix/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,12 +9,11 @@ import { dur, n, shortWhen } from '../../lib/format';
 import { serverDoctor, turnstileSync } from '../../lib/platform';
 import { Card, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
-import { copilotMood, CopilotIcon } from '../doctor/CopilotIcon';
 import { DoctorHero, DoctorList } from '../doctor/parts';
 
 export function DoctorPage({ demo, owner }: { demo?: boolean; owner?: boolean }) {
   const { t } = useTranslation();
-  const q = useQuery<ServerDoctorReport, Error>({ queryKey: ['p', 'doctor', !!demo], queryFn: () => (demo ? Promise.resolve(demoReport()) : serverDoctor()), refetchInterval: 60_000 });
+  const q = useQuery<ServerDoctorReport, Error>({ queryKey: ['p', 'doctor', !!demo], queryFn: () => (demo ? Promise.resolve(demoReport()) : serverDoctor()), refetchInterval: 15_000, refetchOnWindowFocus: true });
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   if (!q.data) return <Loading />;
   const r = q.data;
@@ -23,7 +22,7 @@ export function DoctorPage({ demo, owner }: { demo?: boolean; owner?: boolean })
   return (
     <div className="dr pp-stack">
       {demo && <p className="dr-demo">{t('doctor.demoNote')}</p>}
-      <DoctorHero title={t('doctor.serverTitle')} icon={<CopilotIcon mood={q.isFetching ? null : copilotMood(r.items)} label={t('doctor.serverTitle')} />} sub={t('doctor.serverSub')} badge={t('doctor.onlyYou')} score={r.score} items={r.items} checkedAt={r.checkedAt} onRefresh={() => q.refetch()} busy={q.isFetching} />
+      <DoctorHero title={t('doctor.serverTitle')} sub={t('doctor.serverSub')} badge={t('doctor.onlyYou')} score={r.score} items={r.items} checkedAt={r.checkedAt} />
       <div className="dr-gauges">
         <Gauge label={t('doctor.gauge.cpu')} icon="sliders" v={g.cpu} warn={0.75} bad={0.95} sub={t('doctor.gauge.cores', { count: f.cores })} />
         <Gauge label={t('doctor.gauge.memory')} icon="layers" v={g.memory} warn={0.8} bad={0.92} sub={t('doctor.u.mb', { n: n(f.memoryTotalMb) })} />

@@ -3,7 +3,7 @@
 //   2. the logger: every warning and error the server writes reaches the Doctor
 //   3. POST /api/platform/doctor: who may call it, the shape of the answer, Redis, the database, the jobs really
 //      running, a warning written by the server showing up
-//   4. stats.doctor (Pilotix Doctor of a shop) over HTTP: admin yes, an agent no
+//   4. stats.doctor (Co-Pilot of a shop) over HTTP: the admin gets the whole shop, an agent only their own work
 //   5. every sentence the app needs exists in French, English and Arabic
 //   API=http://localhost:3000/api node scripts/doctor-test.mjs
 import { spawnSync } from 'node:child_process';
@@ -192,11 +192,12 @@ r = await req('/rpc/stats.doctor', {}, SHOP_ADMIN);
 check(r.status === 201 && Array.isArray(r.data.items) && r.data.items.length === 14 && r.data.score >= 5, 'the shop admin gets the report', r.data);
 const SHOP = r.data;
 const agent = (await req('/auth/login', { email: 'samira@demo.pilotix.dz', password: 'demo-pilotix' })).data.token;
-check((await req('/rpc/stats.doctor', {}, agent)).status === 403, 'a confirmation agent is refused');
+r = await req('/rpc/stats.doctor', {}, agent);
+check(r.status === 201 && r.data.scope?.mine === true && r.data.items.every((i) => ['confirmation', 'team'].includes(i.area)), 'a confirmation agent gets only their own work', r.data);
 
 // ---------------------------------------------------------------- 5. the sentences
 step('every sentence exists in French, English and Arabic');
-const SHOP_IDS = ['stockOut', 'stockSoon', 'notCalled', 'lateCallbacks', 'confRate', 'confRateDrop', 'fakeOrders', 'weakAgents', 'notShipped', 'stuckParcels', 'openAlerts', 'returns', 'returnsUp', 'badWilayas', 'ordersDrop', 'ordersOk', 'cashLate'];
+const SHOP_IDS = ['stockOut', 'stockSoon', 'notCalled', 'lateCallbacks', 'confRate', 'confRateDrop', 'fakeOrders', 'weakAgents', 'meVsTeam', 'notShipped', 'stuckParcels', 'openAlerts', 'returns', 'returnsUp', 'badWilayas', 'ordersDrop', 'ordersOk', 'cashLate'];
 const SERVER_IDS = ['cpu', 'memory', 'disk', 'restarted', 'dbPing', 'dbConnections', 'dbSlow', 'dbDown', 'dbPoolFull', 'redisOff', 'redisDown', 'redis', 'jobs', 'errors', 'courierSync', 'silentShops', 'config', 'turnstile', 'turnstileOff'];
 // the ids the code can give (read from its source): none may be missing from the lists above
 const src = readFileSync(join(ROOT, 'packages/core/src/modules/doctor.ts'), 'utf8') + readFileSync(join(ROOT, 'apps/server/src/doctor.ts'), 'utf8');
