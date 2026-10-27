@@ -48,14 +48,6 @@ export function PxLogo() {
             <path key={i} className={`px-lg-gl ${i === 0 ? 'px-lg-p' : ''}`} style={v(i, { '--dx': `${g.dx}px` })} d={g.d} />
           ))}
           <path className="px-lg-gl px-lg-x" style={v(GLYPHS.length)} d={X_STROKE} strokeWidth={X_WIDTH} />
-          {DOTS.map(([cx, cy, r], i) => (
-            <g key={i} className="px-lg-dx" style={v(i, { '--dx': DOT_TO[i].dx })}>
-              <circle className="px-lg-dot" style={v(i, { '--dy': DOT_TO[i].dy })} cx={cx} cy={cy} r={r} />
-            </g>
-          ))}
-        </g>
-        <g transform={word}>
-          <path className="px-lg-smile" d={SMILE} />
         </g>
         <g transform="translate(0 5) scale(0.0703125)" clipPath={`url(#${id}t)`}>
           <g className="px-lg-tile">
@@ -69,6 +61,17 @@ export function PxLogo() {
               <path className="px-lg-wink" d="M290,186 H364" />
             </g>
           </g>
+        </g>
+        <g transform={word}>
+          <path className="px-lg-smile" d={SMILE} />
+        </g>
+        {/* the dots fly over the tile, so they are drawn last */}
+        <g transform={word} clipPath={`url(#${id}c)`}>
+          {DOTS.map(([cx, cy, r], i) => (
+            <g key={i} className="px-lg-dx" style={v(i, { '--dx': DOT_TO[i].dx })}>
+              <circle className="px-lg-dot" style={v(i, { '--dy': DOT_TO[i].dy })} cx={cx} cy={cy} r={r} />
+            </g>
+          ))}
         </g>
       </svg>
     </span>
