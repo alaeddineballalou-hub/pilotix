@@ -527,7 +527,8 @@
     "pickStatus": "Pick a new status first",
     "feeLocked": "Delivery grid price (wilaya, home or bureau). Only the discount can be changed.",
     "upsell": "Upsell",
-    "upsellHint": "Counted automatically: what the customer pays above their original order (more pieces, a pack, a product added or a dearer one), less any discount added. Another colour at the same price does not count."
+    "upsellHint": "Counted automatically: what the customer pays above their original order (more pieces, a pack, a product added or a dearer one), less any discount added. Another colour at the same price does not count.",
+    "competitorHint": "blocks their device"
   },
   "noNext": "No more orders in this list",
   "ek": {

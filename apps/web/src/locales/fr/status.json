@@ -47,6 +47,11 @@
     "changed_mind": "Changé d'avis",
     "other": "Autre"
   },
+  "fakeReason": {
+    "competitor": "🕵️ Concurrent",
+    "not_ordered": "N’a pas commandé",
+    "other": "Autre"
+  },
   "failReason": {
     "absent": "Client absent",
     "no_answer": "Ne répond pas",

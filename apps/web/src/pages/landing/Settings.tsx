@@ -37,9 +37,16 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
   const admin = !!session?.isAdmin;
   const [f, setF] = useState({ ...data.settings, abandonAfterMin: String(data.settings.abandonAfterMin) });
   const [token, setToken] = useState('');
-  const save = useAction('landing.settings.save', { success: t('landing.set.saved'), onDone: () => setToken('') });
+  const [tsSecret, setTsSecret] = useState('');
+  const save = useAction('landing.settings.save', {
+    success: t('landing.set.saved'),
+    onDone: () => {
+      setToken('');
+      setTsSecret('');
+    },
+  });
   const unignore = useAction('landing.ignore', { success: t('landing.set.restored') });
-  const dirty = JSON.stringify({ ...data.settings, abandonAfterMin: String(data.settings.abandonAfterMin) }) !== JSON.stringify(f) || !!token;
+  const dirty = JSON.stringify({ ...data.settings, abandonAfterMin: String(data.settings.abandonAfterMin) }) !== JSON.stringify(f) || !!token || !!tsSecret;
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
   const values = () => ({
     pixelId: f.pixelId.trim(),
@@ -48,8 +55,11 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
     abandonAfterMin: Math.max(5, Math.min(1440, Math.round(Number(f.abandonAfterMin) || 20))),
     autoCreate: f.autoCreate,
     storeSlug: f.storeSlug.trim().replace(/^-+|-+$/g, ''),
+    turnstileSiteKey: f.turnstileSiteKey.trim(),
   });
-  const submit = () => save.mutate({ ...values(), capiToken: token.trim() ? token.trim() : '' });
+  const submit = () => save.mutate({ ...values(), capiToken: token.trim() ? token.trim() : '', turnstileSecret: tsSecret.trim() ? tsSecret.trim() : '' });
+  /** Cloudflare's secret key removed: the check is off until a new one is saved */
+  const removeTs = () => window.confirm(t('landing.set.tsRemoveAsk')) && save.mutate({ ...values(), turnstileSiteKey: '', capiToken: '', turnstileSecret: null });
   /** a wrong token: removed, the Meta Ads token is used again (if any) */
   const removeToken = () => window.confirm(t('landing.set.removeTokenAsk')) && save.mutate({ ...values(), capiToken: null });
   const capiOk = data.capi.own || data.capi.ads;
@@ -115,6 +125,36 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
           <button type="button" className="btn small" onClick={async () => (await copyText(data.urlParams)) && toast(t('landing.copied'), 'ok')}>
             <Icon name="copy" /> {t('landing.set.copy')}
           </button>
+        </div>
+      </section>
+
+      <section className="card">
+        <h2>
+          <Icon name="shield" /> {t('landing.set.ts')}
+        </h2>
+        <p className="pd-note">{t('landing.set.tsHelp')}</p>
+        <div className="grid2">
+          <Field label={t('landing.set.tsSite')} hint={t('landing.set.tsSiteHint')}>
+            <input className="ltr" value={f.turnstileSiteKey} placeholder="0x4AAAAAAA…" onChange={(e) => set('turnstileSiteKey', e.target.value.replace(/[^0-9A-Za-z_-]/g, ''))} />
+          </Field>
+          <Field
+            label={t('landing.set.tsSecret')}
+            hint={
+              <>
+                <span className={`chip ${data.turnstile && f.turnstileSiteKey ? 'lp-on' : 'lp-warn'}`}>{data.turnstile && f.turnstileSiteKey ? t('landing.set.tsOn') : t('landing.set.tsOff')}</span>{' '}
+                {admin ? t('landing.set.tsSecretHint') : t('landing.set.tokenAdmin')}
+              </>
+            }
+          >
+            <div className="lp-copy">
+              <input className="ltr" type="password" autoComplete="off" disabled={!admin} value={tsSecret} placeholder={data.turnstile ? '••••••••' : '0x4AAAAAAA…'} onChange={(e) => setTsSecret(e.target.value)} />
+              {admin && data.turnstile && (
+                <button type="button" className="btn small ghost danger" onClick={removeTs}>
+                  {t('landing.set.removeToken')}
+                </button>
+              )}
+            </div>
+          </Field>
         </div>
       </section>
 
@@ -224,7 +264,7 @@ function Events() {
             <div key={e.id} className="pd-row lp-evr">
               <span className={`lp-ev st-${e.status}`}>{t(`landing.ev.st.${e.status}`)}</span>
               <span className="pd-name">
-                <b>{e.name === 'Purchase' ? t('landing.ev.purchase') : t('landing.ev.checkout')}</b>
+                <b>{e.name === 'Purchase' ? t('landing.ev.purchase') : e.name === 'Confirmed' ? t('landing.ev.confirmed') : t('landing.ev.checkout')}</b>
                 <small>
                   {e.ref && <span className="ltr">{e.ref}</span>}
                   {e.customer && <span dir="auto">{e.customer}</span>}

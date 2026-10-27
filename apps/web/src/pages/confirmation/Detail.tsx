@@ -655,7 +655,12 @@ function StatusMenu({ order, busy, pending, onPick }: { order: Order; busy: bool
     setNote('');
     setWhen(s === 'callback' ? defaultNext('callback') : defaultNext('postponed').slice(0, 10));
   };
-  const direct = (status: 'busy' | 'duplicate' | 'wrong_number' | 'fake' | 'try') => {
+  const direct = (status: 'busy' | 'duplicate' | 'wrong_number' | 'fake' | 'competitor' | 'try') => {
+    if (status === 'competitor') {
+      // a fake order placed by a competitor: the device that sent it is blocked for good (landing pages)
+      const txt = t('status.fakeReason.competitor');
+      return done({ status: 'fake', label: `${label('fake')} · ${txt}`, tone: 'bad', cls: 'c-off', fn: () => rpc('orders.setConf', { ids: [order.id], status: 'fake', reason: txt }), ok: `${order.ref} → ${txt}` });
+    }
     if (status === 'try') {
       const txt = t('confirmation.try', { n: String(nextTry).padStart(2, '0') });
       return done({ status: 'try', label: txt, tone: 'ok', cls: 'c-mid', fn: () => rpc('confirmation.setTry', { ids: [order.id], n: nextTry }), ok: `${order.ref} → ${txt}` });
@@ -698,6 +703,7 @@ function StatusMenu({ order, busy, pending, onPick }: { order: Order; busy: bool
           {item('xcircle', 'c-off', label('wrong_number'), null, () => direct('wrong_number'))}
           {item('copy', 'c-off', label('duplicate'), null, () => direct('duplicate'))}
           {item('alert', 'c-off', label('fake'), null, () => direct('fake'))}
+          {item('flag', 'c-off', t('status.fakeReason.competitor'), t('confirmation.d6.competitorHint'), () => direct('competitor'))}
         </div>
       )}
       {(step === 'cancelled' || step === 'postponed' || step === 'callback') && (

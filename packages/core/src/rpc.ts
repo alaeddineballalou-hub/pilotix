@@ -74,6 +74,8 @@ export interface ServerHooks {
   dellal?: (action: string, args: unknown, ctx: Ctx) => Promise<unknown>;
   /** AI Spy: 'search' (ScrapeCreators / SearchAPI.io), 'media' (a competitor's picture), 'site' (a competitor's page). */
   spy?: (action: string, args: unknown, ctx: Ctx) => Promise<unknown>;
+  /** Cloudflare Turnstile: is this page token real (true / false), null when Cloudflare cannot be reached. */
+  turnstile?: (secret: string, token: string, ip: string) => Promise<boolean | null>;
   /** Google Sheets sales channel: the CSV text of a public sheet (docs.google.com only). */
   sheetCsv?: (url: string) => Promise<string>;
   hashPassword: (pw: string) => Promise<string>;

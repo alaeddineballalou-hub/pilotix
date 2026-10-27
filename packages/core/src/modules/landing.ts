@@ -11,6 +11,7 @@
 // - the products still without a page (menu badge, one-click page, automatic page for each new product).
 import {
   CONF_DONE_BAD,
+  CONF_TODO,
   communesOf,
   hmacSha256Hex,
   isHexColor,
@@ -31,7 +32,7 @@ import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, notFound, proc, publicApi } from '../rpc';
 import { clientHomeFees, getSetting, setSetting } from '../settings';
-import { BOT_UA, FraudLevel, FraudReason, scoreOrder } from './fraud';
+import { BOT_UA, FRAUD_THRESHOLDS, FraudLevel, FraudReason, scoreOrder } from './fraud';
 import { ABANDONED, abandonCutoff, freeLandingSlug, landingCounts, landingSettings, LandingSettings, landingStore, queuePurchase, quickCreatePage, STORE_RESERVED } from './landingquery';
 import { sendInPreview } from './notify';
 import { addEvent, createOrder, noOrderAccess } from './orders';
@@ -52,6 +53,8 @@ export const LANDING_POW_BITS = 13;
 const CHALLENGE_TTL = 6 * 3600_000;
 /** the Conversions API token (Events Manager › the pixel › Settings); the ads token is used when it is empty */
 export const LANDING_CAPI_SECRET = 'secret_landing_capi_token';
+/** Cloudflare Turnstile's secret key (the site key is in the landing settings): it never leaves the server */
+export const LANDING_TURNSTILE_SECRET = 'secret_landing_turnstile';
 /** the browser preview and the tests have no server: Meta events are only simulated */
 const simulated = (ctx: Ctx) => !ctx.server;
 
@@ -298,6 +301,7 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     // the pixel only on the real page: never in Pilotix (preview, demo), whose visits are not customers
     pixelId: o.mode === 'live' ? String(l.pixel_id || s.pixelId || '').trim() : '',
     productId: num(l.product_id),
+    turnstileKey: o.mode === 'live' ? String(s.turnstileSiteKey ?? '').trim() : '',
   };
   if (o.mode === 'live') await ctx.db.query('UPDATE landing_pages SET views = views + 1 WHERE id = $1', [l.id]);
   const html = renderLanding(view, {
@@ -376,6 +380,13 @@ export const SubmitInput = z.object({
   t: int(null),
   ki: int(null),
   wd: z.any().transform((v) => v === true),
+  /** how the visitor used the page: scroll depth 0–100, phone pasted, time zone, touch points (newer pages) */
+  sc: int(null),
+  ps: z.any().transform((v) => v === true),
+  tz: str(60),
+  mt: int(null),
+  /** Cloudflare Turnstile's token (when the shop turned it on) */
+  tt: str(2100),
   fp: str(64),
   did: str(64),
   vid: str(40),
@@ -452,9 +463,98 @@ async function recentCounts(db: Db, a: { phone: string | null; productId: number
   return { phone24h: num(r.phone24h), phoneSameProduct24h: num(r.dup), ip10m: num(r.ip10m), ip1h: num(r.ip1h), device1h: num(r.dev1h) };
 }
 
+/** the device marks agents left (« fausse commande », « concurrent »): fraud_marks */
+async function deviceMarks(db: Db, device: string, phone: string | null, now: number): Promise<{ competitor: boolean; fake30d: number; victimDevices: number }> {
+  const r = (
+    await db.query(
+      `SELECT bool_or(reason = 'competitor' AND value = $1) AS c, count(*) FILTER (WHERE reason = 'fake' AND value = $1 AND at > $2)::int AS f,
+              count(DISTINCT device) FILTER (WHERE $3::text IS NOT NULL AND phone = $3)::int AS v
+       FROM fraud_marks WHERE kind = 'device' AND NOT lifted AND ((value = $1 AND $1 <> '') OR ($3::text IS NOT NULL AND phone = $3))`,
+      [device, isoAt(now - 30 * 86_400_000), phone],
+    )
+  )[0];
+  return { competitor: !!r?.c, fake30d: num(r?.f), victimDevices: num(r?.v) };
+}
+
+/** a full name as compared: lower case, single spaces; '' when it is not at least two words (a first name alone says nothing) */
+const fullName = (n: string) => {
+  const x = n.trim().toLowerCase().replace(/\s+/g, ' ');
+  return x.split(' ').length >= 2 && x.length >= 5 ? x : '';
+};
+
+/**
+ * The competitor's hands: other numbers from this device, numbers that differ only in their last two digits, one full
+ * name for many numbers, a sudden wave of one product in one wilaya, many brand-new devices behind one address.
+ */
+async function handCounts(db: Db, a: { phone: string | null; productId: number; ip: string; device: string; name: string; wilayaId: number; now: number }) {
+  const t = (ms: number) => isoAt(a.now - ms);
+  const H = 3600_000;
+  const name = fullName(a.name);
+  const r = (
+    await db.query(
+      `SELECT
+         (SELECT count(DISTINCT phone)::int FROM landing_submits WHERE $2 <> '' AND fp = $2 AND phone IS NOT NULL AND phone IS DISTINCT FROM $1 AND at > $4) AS dn1,
+         (SELECT count(DISTINCT phone)::int FROM landing_submits WHERE $2 <> '' AND fp = $2 AND phone IS NOT NULL AND phone IS DISTINCT FROM $1 AND at > $5) AS dn24,
+         (SELECT count(DISTINCT phone)::int FROM landing_submits WHERE $1::text IS NOT NULL AND left(phone, 8) = left($1, 8) AND phone <> $1 AND at > $5) AS near,
+         (SELECT count(*)::int FROM landing_submits WHERE $1::text IS NOT NULL AND left(phone, 8) = left($1, 8) AND phone <> $1 AND at > $5 AND ((fp = $2 AND $2 <> '') OR (ip = $3 AND $3 <> ''))) AS near_src,
+         (SELECT count(DISTINCT phone)::int FROM (
+            SELECT phone FROM sales WHERE $6 <> '' AND lower(customer_name) = $6 AND wilaya_id = $7 AND created_at > $8
+            UNION ALL SELECT phone FROM landing_blocked WHERE $6 <> '' AND lower(customer_name) = $6 AND wilaya_id = $7 AND at > $8) x
+          WHERE phone IS DISTINCT FROM $1) AS names,
+         (SELECT count(DISTINCT fp)::int FROM landing_submits s WHERE $3 <> '' AND s.ip = $3 AND s.at > $9 AND s.fp <> $2
+            AND NOT EXISTS (SELECT 1 FROM landing_submits p WHERE p.fp = s.fp AND p.at <= $9)) AS rain,
+         (SELECT count(*)::int FROM landing_submits s WHERE s.product_id = $10 AND s.at > $11
+            AND EXISTS (SELECT 1 FROM sales o WHERE o.id = s.order_id AND o.wilaya_id = $7)) AS wave_now,
+         (SELECT count(*)::int FROM sales o WHERE o.wilaya_id = $7 AND o.channel = 'landing' AND o.created_at > $12 AND o.created_at <= $13
+            AND EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.product_id = $10)) AS wave_week`,
+      [a.phone, a.device, a.ip, t(H), t(24 * H), name, a.wilayaId || 0, t(7 * 24 * H), t(10 * 60_000), a.productId, t(30 * 60_000), t(7 * 24 * H), t(H)],
+    )
+  )[0];
+  // the usual pace of this product in this wilaya: orders per half hour over the last week (the last hour aside)
+  const usual = num(r.wave_week) / (7 * 48 - 2);
+  const waveNow = num(r.wave_now);
+  return {
+    deviceNumbers1h: num(r.dn1),
+    deviceNumbers24h: num(r.dn24),
+    nearPhones24h: num(r.near),
+    nearSameSource: num(r.near_src) > 0,
+    nameOtherPhones7d: num(r.names),
+    wilayaWave: waveNow >= 10 && waveNow >= 3 * Math.max(usual, 2),
+    newDevicesIp10m: num(r.rain),
+  };
+}
+
+/** the usual biggest quantity of a product (the 95th percentile of its last 90 days), when it has 20 orders or more */
+async function usualQty(db: Db, productId: number, now: number): Promise<number | null> {
+  const r = (
+    await db.query(
+      `SELECT count(*)::int AS n, percentile_disc(0.95) WITHIN GROUP (ORDER BY i.qty) AS q
+       FROM order_items i JOIN sales o ON o.id = i.order_id WHERE i.product_id = $1 AND o.created_at > $2`,
+      [productId, isoAt(now - 90 * 86_400_000)],
+    )
+  )[0];
+  return num(r?.n) >= 20 ? Math.max(1, num(r.q)) : null;
+}
+
+/** Cloudflare Turnstile: 'off' when the shop has no keys (or the server cannot ask Cloudflare), else what Cloudflare says. */
+async function turnstileOf(ctx: Ctx, token: string, ip: string): Promise<'ok' | 'fail' | 'off'> {
+  const s = await landingSettings(ctx.db);
+  const verify = ctx.server?.turnstile;
+  if (!s.turnstileSiteKey || !verify) return 'off';
+  const key = String((await ctx.db.query(`SELECT value FROM settings WHERE key = $1`, [LANDING_TURNSTILE_SECRET]))[0]?.value ?? '');
+  if (!key) return 'off';
+  // the page could not load Cloudflare's script (a slow or filtered line): not held against a real customer
+  if (!token) return 'off';
+  const ok = await verify(key, token, ip).catch(() => null);
+  return ok === null ? 'off' : ok ? 'ok' : 'fail';
+}
+
+/** they came from an ad: Meta's click id or the ad link's parameters */
+const fromAdOf = (utm: Record<string, string> | null, fbc: string) => !!(fbc || utm?.fbclid || utm?.ad_id || utm?.adset_id || utm?.gclid || utm?.ttclid || /^(facebook|fb|ig|instagram|meta|tiktok)$/i.test(utm?.utm_source ?? ''));
+
 /** French labels of the reasons, for an order's internal note (the app shows its own translated labels). */
 export const FRAUD_LABELS_FR: Record<string, string> = {
-  honeypot: 'champ piège rempli', phone_invalid: 'téléphone invalide', phone_repeat: 'téléphone répétitif', phone_sequence: 'téléphone en suite',
+  honeypot: 'champ piège rempli', phone_invalid: 'téléphone invalide', phone_repeat: 'téléphone répétitif', phone_sequence: 'téléphone en suite', phone_pattern: 'téléphone à motif (0660606060)',
   name_link: 'lien dans le nom', name_digits: 'chiffres dans le nom', name_short: 'nom trop court', name_repeat: 'lettres répétées', name_keyboard: 'nom tapé au hasard',
   name_gibberish: 'nom incohérent', no_challenge: 'page non chargée normalement', too_fast: 'envoyé en moins de 3 s', fast: 'envoyé très vite', pow_missing: 'preuve JavaScript absente',
   pow_bad: 'preuve JavaScript fausse', pow_replay: 'preuve déjà utilisée', no_typing: 'aucune saisie au clavier', ua_empty: 'navigateur inconnu', ua_bot: 'robot / navigateur automatisé',
@@ -462,6 +562,11 @@ export const FRAUD_LABELS_FR: Record<string, string> = {
   ip_many: 'beaucoup de commandes de la même IP', device_burst: 'rafale depuis le même appareil', blacklisted: 'numéro en liste noire', returns_many: 'refuse souvent ses colis',
   returns_some: 'déjà un colis retourné', cancels_many: 'commandes souvent annulées', good_customer: 'bon client (livré)', qty_high: 'quantité très élevée', qty_some: 'quantité élevée',
   ip_abroad: 'IP hors d’Algérie', ip_wilaya: 'IP d’une autre wilaya', form_invalid: 'formulaire incomplet', recent_block: 'numéro bloqué comme faux (24 h)',
+  turnstile_fail: 'Cloudflare : robot', mask_touch: 'téléphone sans écran tactile (masque)', mask_tz: 'fuseau horaire étranger', device_numbers: 'plusieurs numéros depuis le même appareil',
+  device_two: 'deux numéros depuis le même appareil', phone_near: 'numéros presque identiques', name_reused: 'même nom, numéros différents', wilaya_wave: 'vague de commandes dans cette wilaya',
+  device_rain: 'beaucoup de nouveaux appareils, même adresse', device_competitor: 'appareil marqué « concurrent »', device_fake_again: 'appareil déjà 2 fois en fausse commande',
+  device_fake: 'appareil déjà en fausse commande', phone_victim: 'numéro utilisé dans de fausses commandes (vérifiez que c’est bien lui)', no_browse: 'directement au formulaire', read_page: 'a lu la page', phone_pasted: 'numéro collé', from_ad: 'vient de la pub',
+  not_from_ad: 'ne vient pas de la pub', qty_unusual: 'quantité inhabituelle', merged: 'commande renvoyée : fusionnée',
 };
 const reasonsText = (rs: FraudReason[]) => rs.filter((r) => r.points > 0).map((r) => FRAUD_LABELS_FR[r.code] ?? r.code).join(', ');
 
@@ -504,6 +609,37 @@ async function replaceAutoOrder(db: Db, phone: string, productId: number, newOrd
   }
 }
 
+/** signals that point to a competitor's team: the agent asks a check question and ships after a second call */
+const TEAM_CODES = ['device_two', 'device_burst', 'phone_near', 'name_reused', 'wilaya_wave', 'device_rain', 'device_fake', 'no_browse', 'phone_pasted', 'qty_unusual'];
+
+/** the note of a borderline order: the score and why, and what the agent does about it */
+function reviewNote(r: { score: number; reasons: FraudReason[] }): string {
+  const lines = [`⚠ Landing page : score anti-fraude ${r.score}/100 — ${reasonsText(r.reasons)}`];
+  if (r.reasons.some((x) => x.points > 0 && TEAM_CODES.includes(x.code)))
+    lines.push('🕵️ Peut-être un concurrent : demandez la wilaya et un repère près de chez lui ; n’expédiez qu’après un 2e appel le lendemain.');
+  return lines.join('\n');
+}
+
+/**
+ * The same customer has another order of a different product, still to call, from the last 48 h: both orders say so,
+ * so one agent confirms them in one call and the depot can ship them in one parcel.
+ */
+async function linkSameCustomer(db: Db, phone: string, orderId: number, ref: string, now: number) {
+  const others = await db.query(
+    `SELECT id, ref FROM orders WHERE phone = $1 AND id <> $2 AND created_at > $3 AND conf_status = ANY($4) AND follow_status IS NULL AND NOT is_exchange ORDER BY id`,
+    [phone, orderId, isoAt(now - 48 * 3600_000), CONF_TODO],
+  );
+  if (!others.length) return;
+  const refs = others.map((o: any) => String(o.ref));
+  const mine = `🧩 Même client : aussi ${refs.join(', ')} — confirmez-les dans le même appel, un seul colis si possible.`;
+  await db.query(`UPDATE orders SET internal_note = concat_ws(E'\n', NULLIF(internal_note, ''), $2::text) WHERE id = $1`, [orderId, mine]);
+  for (const o of others)
+    await db.query(`UPDATE orders SET internal_note = concat_ws(E'\n', NULLIF(internal_note, ''), $2::text), updated_at = now(), version = version + 1 WHERE id = $1`, [
+      o.id,
+      `🧩 Même client : aussi ${ref} (nouvelle commande) — un seul appel, un seul colis si possible.`,
+    ]);
+}
+
 export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Promise<{ ok: true }> {
   const db = ctx.db;
   const l = (await db.query('SELECT * FROM landing_pages WHERE slug = $1 AND active', [i.slug]))[0];
@@ -526,6 +662,20 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
     if (pow === 'ok' && (await db.query('SELECT 1 FROM landing_submits WHERE challenge = $1 LIMIT 1', [i.ch])).length) pow = 'replay';
   } else if (i.pw) pow = 'bad';
 
+  // the same customer sent this product again within 48 h and the first order is still waiting for its call: it is one
+  // order, not two (the « duplicate » signal does not count then; an agent asks which quantity they want)
+  const mergeInto = phone
+    ? (
+        await db.query(
+          `SELECT o.id, o.ref, i.qty, i.variant_id FROM orders o JOIN order_items i ON i.order_id = o.id AND i.product_id = $2
+           WHERE o.phone = $1 AND o.created_at > $3 AND o.conf_status = ANY($4) AND o.follow_status IS NULL AND NOT o.is_exchange
+             AND NOT EXISTS (SELECT 1 FROM landing_leads x WHERE x.order_id = o.id AND x.auto_order)
+           ORDER BY o.id DESC LIMIT 1`,
+          [phone, productId, isoAt(now - 48 * 3600_000), CONF_TODO],
+        )
+      )[0] ?? null
+    : null;
+
   const result = scoreOrder(
     {
       name: i.name,
@@ -539,11 +689,18 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
       pow,
       userAgent: i.meta.ua ?? '',
       webdriver: i.wd,
-      recent: await recentCounts(db, { phone, productId, ip, device, now }),
+      recent: { ...(await recentCounts(db, { phone, productId, ip, device, now })), ...(await handCounts(db, { phone, productId, ip, device, name: i.name, wilayaId, now })) },
       history: await phoneHistory(db, phone),
       ipCountry: i.meta.country ? i.meta.country.toUpperCase() : null,
       ipWilaya: ipWilaya(i.meta.city ?? '', i.meta.region ?? ''),
       wilayaId,
+      marks: await deviceMarks(db, device, phone, now),
+      qtyUsual: await usualQty(db, productId, now),
+      turnstile: await turnstileOf(ctx, i.tt, ip),
+      behavior:
+        i.sc === null
+          ? null
+          : { scroll: Math.max(0, Math.min(100, i.sc)), pasted: i.ps, tz: i.tz, touch: i.mt, fromAd: fromAdOf(i.utm, i.meta.fbc || i.fbc) },
     },
     (['relaxed', 'normal', 'strict'].includes(l.fraud_level) ? l.fraud_level : 'normal') as FraudLevel,
   );
@@ -553,6 +710,12 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
     result.reasons.unshift({ code: 'form_invalid', points: 100 });
     result.score = 100;
     result.verdict = 'block';
+  }
+  if (mergeInto && result.verdict !== 'block' && result.reasons.some((r) => r.code === 'duplicate')) {
+    result.reasons = result.reasons.filter((r) => r.code !== 'duplicate');
+    result.score = Math.max(0, Math.min(100, result.reasons.reduce((n, r) => n + r.points, 0)));
+    const t = FRAUD_THRESHOLDS[(['relaxed', 'normal', 'strict'].includes(l.fraud_level) ? l.fraud_level : 'normal') as FraudLevel];
+    result.verdict = result.score >= t.block ? 'block' : result.score >= t.review ? 'review' : 'allow';
   }
   const unitPrice = unitPriceOf(numOrNull(l.price), pc, variant?.id ?? null);
   const variantId = variant?.id ?? (pc.variants.length ? null : pc.plainVariantId);
@@ -564,6 +727,7 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
   let orderId: number | null = null;
   let blockedId: number | null = null;
   let ref: string | null = null;
+  let merged = false;
   if (result.verdict === 'block') {
     blockedId = num(
       (
@@ -576,6 +740,19 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
       )[0].id,
     );
     await closeLeads(db, keys, 'blocked', null, abandonCutoff(s, now));
+  } else if (mergeInto) {
+    // sent again: the first order stays the only one; what changed is written on it for the agent
+    orderId = num(mergeInto.id);
+    ref = String(mergeInto.ref);
+    merged = true;
+    const changes = [
+      num(mergeInto.qty) !== qty ? `quantité ${qty} (avant ${num(mergeInto.qty)})` : '',
+      (numOrNull(mergeInto.variant_id) ?? null) !== (variantId ?? null) ? `variante ${variant?.title ?? '—'}` : '',
+    ].filter(Boolean);
+    const note = `🔁 Le client a renvoyé la commande depuis la landing page${changes.length ? ` avec ${changes.join(', ')} : demandez-lui laquelle il veut` : ' (même commande)'}.`;
+    await db.query(`UPDATE orders SET internal_note = concat_ws(E'\n', NULLIF(internal_note, ''), $2::text), updated_at = now(), version = version + 1 WHERE id = $1`, [orderId, note]);
+    await addEvent(db, orderId, null, 'note', null, null, note);
+    await closeLeads(db, keys, 'converted', orderId, abandonCutoff(s, now));
   } else {
     // borderline orders go to « Nouvelle » too, with the reasons in the note (the agent sees them before calling)
     const review = result.verdict === 'review';
@@ -595,7 +772,7 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
         discount: 0,
         confirm: false,
         isExchange: false,
-        internalNote: review ? `⚠ Landing page : score anti-fraude ${result.score}/100 — ${reasonsText(result.reasons)}` : null,
+        internalNote: review ? reviewNote(result) : null,
       },
       db,
       { landingId: num(l.id), adsetId: adsetOf(i.utm) },
@@ -604,15 +781,18 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
     ref = o.ref;
     await closeLeads(db, keys, 'converted', o.id, abandonCutoff(s, now));
     await replaceAutoOrder(db, phone!, productId, o.id, o.ref, now);
+    await linkSameCustomer(db, phone!, o.id, o.ref, now);
   }
   await db.query(
-    `INSERT INTO landing_submits (landing_id, product_id, phone, ip, fp, challenge, verdict, score, order_id, blocked_id, at, ua, fbp, fbc, url, utm)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+    `INSERT INTO landing_submits (landing_id, product_id, phone, ip, fp, challenge, verdict, score, order_id, blocked_id, at, ua, fbp, fbc, url, utm, reasons, merged)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
     [l.id, productId, phone, ip || null, device, servedMs !== null ? i.ch : null, result.verdict, result.score, orderId, blockedId, isoAt(now),
-      (i.meta.ua ?? '').slice(0, 500) || null, fbp || null, fbc || null, (i.meta.url || i.url || '').slice(0, 500) || null, i.utm ? JSON.stringify(i.utm) : null],
+      (i.meta.ua ?? '').slice(0, 500) || null, fbp || null, fbc || null, (i.meta.url || i.url || '').slice(0, 500) || null, i.utm ? JSON.stringify(i.utm) : null,
+      JSON.stringify(result.reasons), merged],
   );
-  // Meta Purchase « when the order is received »: only a clear order (a borderline one counts once a person confirms it)
-  if (orderId && s.purchaseAt === 'order' && result.verdict === 'allow') await queuePurchase(db, s, orderId, now);
+  // Meta Purchase « when the order is received »: only a clear order (a borderline one counts once a person confirms it);
+  // an order sent again is the same sale (queuePurchase is once per order anyway)
+  if (orderId && !merged && s.purchaseAt === 'order' && result.verdict === 'allow') await queuePurchase(db, s, orderId, now);
   ctx.emit({ type: 'orders', ...(ref ? { id: orderId!, data: { created: { ref, channel: 'landing' } } } : {}) });
   await afterChange(ctx);
   return { ok: true };
@@ -725,11 +905,15 @@ async function leadVerdict(db: Db, a: any, now: number) {
       pow: 'ok',
       userAgent: String(a.ua ?? ''),
       webdriver: false,
-      recent: await recentCounts(db, { phone, productId: num(a.product_id), ip: String(a.ip ?? ''), device: String(a.device ?? ''), now }),
+      recent: {
+        ...(await recentCounts(db, { phone, productId: num(a.product_id), ip: String(a.ip ?? ''), device: String(a.device ?? ''), now })),
+        ...(await handCounts(db, { phone, productId: num(a.product_id), ip: String(a.ip ?? ''), device: String(a.device ?? ''), name: String(a.customer_name ?? ''), wilayaId: num(a.wilaya_id), now })),
+      },
       history: await phoneHistory(db, phone),
       ipCountry: null,
       ipWilaya: null,
       wilayaId: num(a.wilaya_id),
+      marks: await deviceMarks(db, String(a.device ?? ''), phone, now),
     },
     (['relaxed', 'normal', 'strict'].includes(l?.fraud_level) ? l.fraud_level : 'normal') as FraudLevel,
   );
@@ -880,7 +1064,7 @@ const META_MAX_AGE = 7 * 86_400;
 async function buildEvent(db: Db, e: any, api: string, publicUrl: string, now: number): Promise<{ event?: Record<string, unknown>; skip?: string }> {
   const sourceUrl = (slug: string | null, url: string | null) => url || (slug && api ? `${api}/lp/${slug}` : publicUrl || 'https://pilotix.app');
   const nowS = Math.floor(now / 1000);
-  if (e.event_name === 'Purchase') {
+  if (e.event_name === 'Purchase' || e.event_name === 'Confirmed') {
     // the browser's data comes from the customer's submit, or from what they typed (an abandoned order)
     const o = (
       await db.query(
@@ -902,7 +1086,7 @@ async function buildEvent(db: Db, e: any, api: string, publicUrl: string, now: n
     const web = !!o.v_ua;
     return {
       event: {
-        event_name: 'Purchase',
+        event_name: e.event_name,
         event_time: nowS,
         event_id: e.event_id,
         action_source: web ? 'website' : 'system_generated',
@@ -1068,6 +1252,9 @@ const SettingsInput = z.object({
     .default(''),
   /** the Conversions API token: a value replaces, '' keeps, null removes (admins only) */
   capiToken: z.string().max(600).nullable().default(''),
+  /** Cloudflare Turnstile: the site key (public, on the pages) and the secret key (a value replaces, '' keeps, null removes; admins only) */
+  turnstileSiteKey: z.string().trim().max(100).regex(/^([0-9A-Za-z_-]{10,100})?$/, 'Clé de site Cloudflare invalide').default(''),
+  turnstileSecret: z.string().max(200).nullable().default(''),
 });
 
 const B64 = (max: number) => z.string().max(max).regex(/^[A-Za-z0-9+/=]+$/, 'Image invalide');
@@ -1237,7 +1424,9 @@ export const landingProcs = {
     const own = !!String((await ctx.db.query(`SELECT value FROM settings WHERE key = $1`, [LANDING_CAPI_SECRET]))[0]?.value ?? '');
     const ads = !!String((await ctx.db.query(`SELECT value FROM settings WHERE key = 'secret_meta_token'`))[0]?.value ?? '');
     return {
-      settings: { pixelId: s.pixelId, testEventCode: s.testEventCode, purchaseAt: s.purchaseAt, abandonAfterMin: s.abandonAfterMin, autoCreate: s.autoCreate, storeSlug: s.storeSlug ?? '' },
+      settings: { pixelId: s.pixelId, testEventCode: s.testEventCode, purchaseAt: s.purchaseAt, abandonAfterMin: s.abandonAfterMin, autoCreate: s.autoCreate, storeSlug: s.storeSlug ?? '', turnstileSiteKey: s.turnstileSiteKey ?? '' },
+      /** Cloudflare Turnstile's secret key is saved (it never leaves the server either) */
+      turnstile: !!String((await ctx.db.query(`SELECT value FROM settings WHERE key = $1`, [LANDING_TURNSTILE_SECRET]))[0]?.value ?? ''),
       /** the store's part of the address in use (the chosen one, else made from the shop's name) */
       store: await landingStore(ctx.db, s),
       /** a shop of a multi-shop server other than #1: its name is given by Pilotix (its webhooks use it too) */
@@ -1253,8 +1442,9 @@ export const landingProcs = {
   }),
 
   'landing.settings.save': proc([...WHO], SettingsInput, async (ctx, i) => {
-    const { capiToken, ...rest } = i;
+    const { capiToken, turnstileSecret, ...rest } = i;
     if (capiToken !== '' && !ctx.session.isAdmin) throw forbidden('Seul l’administrateur modifie le jeton Meta');
+    if (turnstileSecret !== '' && !ctx.session.isAdmin) throw forbidden('Seul l’administrateur modifie la clé secrète Cloudflare');
     const cur = await landingSettings(ctx.db);
     // the store's part of the links: another shop of the platform keeps the name Pilotix gave it; shop #1 chooses its
     // own, which no other shop may have (the server then gives shop #1 that name on the platform too)
@@ -1262,6 +1452,12 @@ export const landingProcs = {
     else if (rest.storeSlug && rest.storeSlug !== cur.storeSlug && (await ctx.server?.storeTaken?.(rest.storeSlug)))
       throw bad('Ce nom est déjà pris par une autre boutique Pilotix, choisissez-en un autre');
     await setSetting(ctx.db, 'landing', { ...cur, ...rest }, ctx.session.profile.id);
+    if (turnstileSecret === null) await ctx.db.query(`DELETE FROM settings WHERE key = $1`, [LANDING_TURNSTILE_SECRET]);
+    else if (turnstileSecret.trim())
+      await ctx.db.query(
+        `INSERT INTO settings (key, value, updated_by) VALUES ($1,$2,$3) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now(), updated_by = EXCLUDED.updated_by`,
+        [LANDING_TURNSTILE_SECRET, JSON.stringify(turnstileSecret.trim()), ctx.session.profile.id],
+      );
     if (capiToken === null) await ctx.db.query(`DELETE FROM settings WHERE key = $1`, [LANDING_CAPI_SECRET]);
     else if (capiToken.trim()) {
       await ctx.db.query(
@@ -1301,7 +1497,7 @@ export const landingProcs = {
         id: num(r.id),
         at: iso(r.at),
         sentAt: isoOrNull(r.sent_at),
-        name: r.event_name as 'Purchase' | 'InitiateCheckout',
+        name: r.event_name as 'Purchase' | 'InitiateCheckout' | 'Confirmed',
         pixelId: r.pixel_id,
         status: r.status as 'queued' | 'sending' | 'sent' | 'failed' | 'skipped' | 'simulated',
         error: r.error ?? null,
@@ -1405,6 +1601,148 @@ export const landingProcs = {
       };
     },
   ),
+
+  /**
+   * « Protection »: what the fake-order check did over a period — orders received, passed, put to review, blocked,
+   * merged (sent again); day by day; the reasons that weigh most; per page; the attacks (one device sending many
+   * numbers, numbers in a row) and the devices agents marked. Marketer-only accounts see no customer.
+   */
+  'landing.protection': proc([...WATCH], z.object({ days: z.number().int().min(1).max(90).default(7) }), async (ctx, i) => {
+    const db = ctx.db;
+    const now = ctx.now();
+    const from = isoAt(now - i.days * 86_400_000);
+    const hide = noOrderAccess(ctx);
+    const t = (
+      await db.query(
+        `SELECT count(*)::int AS submits,
+                count(*) FILTER (WHERE verdict = 'allow' AND NOT merged)::int AS allowed,
+                count(*) FILTER (WHERE verdict = 'review' AND NOT merged)::int AS review,
+                count(*) FILTER (WHERE verdict = 'block')::int AS blocked,
+                count(*) FILTER (WHERE merged)::int AS merged
+         FROM landing_submits WHERE at > $1`,
+        [from],
+      )
+    )[0];
+    const handled = (
+      await db.query(
+        `SELECT count(*) FILTER (WHERE status = 'restored')::int AS restored, count(*) FILTER (WHERE status = 'blocked')::int AS waiting,
+                (SELECT count(*)::int FROM fraud_marks WHERE at > $1 AND NOT lifted) AS marked,
+                (SELECT count(*)::int FROM fraud_marks WHERE at > $1 AND NOT lifted AND reason = 'competitor') AS competitor
+         FROM landing_blocked WHERE at > $1`,
+        [from],
+      )
+    )[0];
+    // day by day (Algiers time)
+    const days = await db.query(
+      `SELECT to_char(at AT TIME ZONE 'Africa/Algiers', 'YYYY-MM-DD') AS day,
+              count(*) FILTER (WHERE verdict = 'allow')::int AS allowed, count(*) FILTER (WHERE verdict = 'review')::int AS review, count(*) FILTER (WHERE verdict = 'block')::int AS blocked
+       FROM landing_submits WHERE at > $1 GROUP BY 1 ORDER BY 1`,
+      [from],
+    );
+    // the hours the blocked ones came at (attacks often come at night, when nobody watches)
+    const hours = await db.query(
+      `SELECT extract(hour FROM at AT TIME ZONE 'Africa/Algiers')::int AS h, count(*)::int AS n FROM landing_submits WHERE at > $1 AND verdict = 'block' GROUP BY 1`,
+      [from],
+    );
+    // the reasons: blocked orders (their list keeps them) and the ones put to review (kept on the submit since 043)
+    const reasons = await db.query(
+      `SELECT r->>'code' AS code, count(*) FILTER (WHERE x.kind = 'block')::int AS blocked, count(*) FILTER (WHERE x.kind = 'review')::int AS review
+       FROM (SELECT 'block' AS kind, reasons FROM landing_blocked WHERE at > $1
+             UNION ALL SELECT 'review', reasons FROM landing_submits WHERE at > $1 AND verdict = 'review' AND reasons IS NOT NULL) x,
+            jsonb_array_elements(x.reasons) r
+       WHERE (r->>'points')::int > 0 GROUP BY 1 ORDER BY count(*) DESC LIMIT 12`,
+      [from],
+    );
+    const pages = await db.query(
+      `SELECT l.slug, COALESCE(NULLIF(l.title, ''), p.name) AS title, count(*)::int AS submits,
+              count(*) FILTER (WHERE s.verdict = 'review')::int AS review, count(*) FILTER (WHERE s.verdict = 'block')::int AS blocked
+       FROM landing_submits s JOIN landing_pages l ON l.id = s.landing_id LEFT JOIN products p ON p.id = l.product_id
+       WHERE s.at > $1 GROUP BY 1, 2 ORDER BY count(*) FILTER (WHERE s.verdict = 'block') DESC, count(*) DESC LIMIT 10`,
+      [from],
+    );
+    // attacks: one device that sent 3 numbers or more, or 3 orders or more held back; and numbers in a row (same first 8 digits)
+    const devices = await db.query(
+      `SELECT s.fp AS key, count(*)::int AS n, count(DISTINCT s.phone)::int AS phones, count(*) FILTER (WHERE s.verdict = 'block')::int AS blocked,
+              count(*) FILTER (WHERE s.verdict = 'review')::int AS review, min(s.at) AS first, max(s.at) AS last,
+              array_agg(DISTINCT s.phone) FILTER (WHERE s.phone IS NOT NULL) AS list, array_agg(DISTINCT l.slug) FILTER (WHERE l.slug IS NOT NULL) AS slugs,
+              (SELECT bool_or(m.reason = 'competitor') FROM fraud_marks m WHERE m.kind = 'device' AND m.value = s.fp AND NOT m.lifted) AS competitor,
+              (SELECT count(*)::int FROM fraud_marks m WHERE m.kind = 'device' AND m.value = s.fp AND NOT m.lifted AND m.reason = 'fake') AS fakes
+       FROM landing_submits s LEFT JOIN landing_pages l ON l.id = s.landing_id
+       WHERE s.at > $1 AND s.fp IS NOT NULL AND s.fp <> ''
+       GROUP BY s.fp HAVING count(DISTINCT s.phone) >= 3 OR count(*) FILTER (WHERE s.verdict <> 'allow') >= 3
+       ORDER BY count(*) FILTER (WHERE s.verdict <> 'allow') DESC, count(*) DESC LIMIT 12`,
+      [from],
+    );
+    const rows = await db.query(
+      `SELECT left(s.phone, 8) AS key, count(*)::int AS n, count(DISTINCT s.phone)::int AS phones, count(*) FILTER (WHERE s.verdict = 'block')::int AS blocked,
+              count(*) FILTER (WHERE s.verdict = 'review')::int AS review, min(s.at) AS first, max(s.at) AS last, array_agg(DISTINCT s.phone) AS list,
+              array_agg(DISTINCT l.slug) FILTER (WHERE l.slug IS NOT NULL) AS slugs
+       FROM landing_submits s LEFT JOIN landing_pages l ON l.id = s.landing_id
+       WHERE s.at > $1 AND s.phone IS NOT NULL GROUP BY 1 HAVING count(DISTINCT s.phone) >= 3 ORDER BY count(DISTINCT s.phone) DESC LIMIT 6`,
+      [from],
+    );
+    const marks = await db.query(
+      `SELECT m.id, m.at, m.reason, m.value, m.phone, o.ref, o.id AS order_id, u.name AS by_name
+       FROM fraud_marks m LEFT JOIN orders o ON o.id = m.order_id LEFT JOIN profiles u ON u.id = m.by_user
+       WHERE NOT m.lifted ORDER BY m.at DESC LIMIT 12`,
+    );
+    const short = (k: string) => (k.length > 12 ? `${k.slice(0, 4)}…${k.slice(-5)}` : k);
+    const mask = (p: string) => (hide ? PII_HIDDEN : p);
+    const attack = (r: any, kind: 'device' | 'numbers') => ({
+      kind,
+      key: String(r.key),
+      label: kind === 'device' ? short(String(r.key)) : `${String(r.key).slice(0, 4)} ${String(r.key).slice(4, 6)} ${String(r.key).slice(6, 8)} ••`,
+      orders: num(r.n),
+      phones: num(r.phones),
+      blocked: num(r.blocked),
+      review: num(r.review),
+      first: iso(r.first),
+      last: iso(r.last),
+      sample: ((r.list as string[] | null) ?? []).slice(0, 4).map(mask),
+      pages: ((r.slugs as string[] | null) ?? []).slice(0, 3),
+      competitor: !!r.competitor,
+      fakes: num(r.fakes),
+    });
+    const submits = num(t?.submits);
+    return {
+      days: i.days,
+      totals: {
+        submits,
+        allowed: num(t?.allowed),
+        review: num(t?.review),
+        blocked: num(t?.blocked),
+        merged: num(t?.merged),
+        restored: num(handled?.restored),
+        waiting: num(handled?.waiting),
+        marked: num(handled?.marked),
+        competitor: num(handled?.competitor),
+      },
+      series: days.map((r: any) => ({ day: String(r.day), allowed: num(r.allowed), review: num(r.review), blocked: num(r.blocked) })),
+      hours: Array.from({ length: 24 }, (_, h) => num(hours.find((r: any) => num(r.h) === h)?.n)),
+      reasons: reasons.map((r: any) => ({ code: String(r.code), blocked: num(r.blocked), review: num(r.review) })),
+      pages: pages.map((r: any) => ({ slug: String(r.slug), title: String(r.title ?? r.slug), submits: num(r.submits), review: num(r.review), blocked: num(r.blocked) })),
+      attacks: [...devices.map((r: any) => attack(r, 'device')), ...rows.map((r: any) => attack(r, 'numbers'))].sort((a, b) => b.blocked + b.review - (a.blocked + a.review) || b.orders - a.orders),
+      marks: marks.map((r: any) => ({
+        id: num(r.id),
+        at: iso(r.at),
+        reason: r.reason as 'fake' | 'competitor',
+        device: short(String(r.value)),
+        phone: r.phone ? mask(String(r.phone)) : null,
+        orderId: numOrNull(r.order_id),
+        orderRef: r.ref ?? null,
+        by: r.by_name ?? null,
+      })),
+    };
+  }),
+
+  /** From « Protection »: a device seen attacking is marked « concurrent » by hand (all its next orders blocked), or freed again. */
+  'landing.markDevice': proc([...WATCH], z.object({ device: z.string().min(1).max(200), on: z.boolean() }), async (ctx, i) => {
+    if (i.on) {
+      const had = (await ctx.db.query(`SELECT 1 FROM fraud_marks WHERE kind = 'device' AND value = $1 AND reason = 'competitor' AND NOT lifted LIMIT 1`, [i.device])).length;
+      if (!had) await ctx.db.query(`INSERT INTO fraud_marks (kind, value, reason, device, by_user) VALUES ('device', $1, 'competitor', $1, $2)`, [i.device, ctx.session.profile.id]);
+    } else await ctx.db.query(`UPDATE fraud_marks SET lifted = true WHERE kind = 'device' AND value = $1 AND NOT lifted`, [i.device]);
+    return { ok: true, on: i.on };
+  }),
 
   /** a real customer after all: the order is created as if it had passed (« Nouvelle », to confirm by phone), once */
   'landing.restore': proc([...WATCH], z.object({ id }), async (ctx, { id }) => {

@@ -193,5 +193,54 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
         [`ic-blocked-${r.id}`, lid, price(lid), at(ago)],
       );
   }
+  // two weeks of what the pages received (Protection): most orders pass, a few are put to review or blocked, and two
+  // attacks — a competitor's team (one phone, numbers in a row, the same name, at night) and a device agents marked
+  const pid = (lid: number) => (lid === p1 ? pouId : num(sac.id));
+  const R = (...x: [string, number][]) => JSON.stringify(x.map(([code, points]) => ({ code, points })));
+  const UAm = 'Mozilla/5.0 (Linux; Android 13; SM-A145F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36';
+  let seq = 0;
+  const rnd = (k: number) => {
+    const x = Math.sin(++seq * 9301 + k * 49297) * 233280;
+    return x - Math.floor(x);
+  };
+  const submits: unknown[][] = [];
+  for (let d = 13; d >= 0; d--) {
+    const allowed = 18 + Math.floor(rnd(d) * 22);
+    const review = 1 + Math.floor(rnd(d + 50) * 5);
+    const blocked = Math.floor(rnd(d + 90) * 4);
+    for (let k = 0; k < allowed + review + blocked; k++) {
+      const verdict = k < allowed ? 'allow' : k < allowed + review ? 'review' : 'block';
+      // customers order in the day and the evening; robots at night
+      const hour = verdict === 'block' ? [1, 2, 3, 3, 4, 23][Math.floor(rnd(k) * 6)] : 9 + Math.floor(rnd(k + 7) * 13);
+      const t = now - d * day - ((new Date(now).getUTCHours() + 24 - hour) % 24) * 3600_000 - Math.floor(rnd(k + 3) * 3600_000);
+      if (t > now) continue;
+      const lid = rnd(k + 11) < 0.7 ? p1 : p2;
+      const reasons =
+        verdict === 'allow'
+          ? R(['from_ad', -10])
+          : verdict === 'review'
+            ? [R(['duplicate', 40]), R(['returns_many', 35], ['not_from_ad', 10]), R(['device_two', 15], ['no_browse', 15], ['phone_pasted', 10]), R(['blacklisted', 60])][k % 4]
+            : [R(['honeypot', 100], ['ua_bot', 50]), R(['too_fast', 100], ['no_typing', 15]), R(['webdriver', 100], ['pow_missing', 30])][k % 3];
+      submits.push([lid, pid(lid), `0${['661', '770', '550', '696'][k % 4]}${String(100000 + Math.floor(rnd(k + 23) * 899999))}`, `105.10${k % 10}.${d}.${k % 250}`, `d:s${d}x${k}`, verdict, verdict === 'block' ? 100 : verdict === 'review' ? 45 : 0, new Date(t).toISOString(), reasons]);
+    }
+  }
+  // the competitor's team: one phone, 7 numbers in a row, « Mohamed Ali », Alger, between 1 and 3 at night two days ago
+  for (let k = 0; k < 7; k++)
+    submits.push([p1, pouId, `05551234${String(10 + k * 3)}`, '105.235.44.12', 'd:team7a', k < 3 ? 'review' : 'block', k < 3 ? 70 : 100, at(2 * day + (3 - k * 0.3) * 3600_000),
+      k < 3 ? R(['phone_near', 40], ['device_two', 15], ['no_browse', 15], ['phone_pasted', 10]) : R(['device_numbers', 100], ['phone_near', 40], ['name_reused', 30])]);
+  // a device agents marked « concurrent » after its first fake order: everything after it is blocked
+  for (let k = 0; k < 4; k++)
+    submits.push([p2, num(sac.id), `0770${String(220000 + k * 1111)}`, '41.97.10.8', 'd:x92k', 'block', 100, at(5 * day - k * 7200_000), R(['device_competitor', 100], ['not_from_ad', 10])]);
+  for (const r of submits)
+    await db.query(`INSERT INTO landing_submits (landing_id, product_id, phone, ip, fp, verdict, score, at, reasons, ua) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [...r, UAm]);
+  // the same orders in « Commandes bloquées », with their reasons
+  for (const r of submits.filter((x) => x[5] === 'block' && (x[4] === 'd:team7a' || x[4] === 'd:x92k')))
+    await db.query(
+      `INSERT INTO landing_blocked (landing_id, product_id, qty, unit_price, customer_name, phone, wilaya_id, commune, score, reasons, ip, user_agent, fp, at)
+       VALUES ($1,$2,1,$3,$4,$5,16,'Bab Ezzouar',100,$6,$7,$8,$9,$10)`,
+      [r[0], r[1], price(r[0] as number), r[4] === 'd:team7a' ? 'Mohamed Ali' : 'Rachid B', r[2], r[8], r[3], UAm, r[4], r[7]],
+    );
+  await db.query(`INSERT INTO fraud_marks (at, kind, value, reason, device, phone, by_user) VALUES ($1,'device','d:x92k','competitor','d:x92k','0770219999',$2)`, [at(5 * day + 3600_000), users.conf1 ?? null]);
+  await db.query(`INSERT INTO fraud_marks (at, kind, value, reason, device, phone, by_user) VALUES ($1,'device','d:s3x41','fake','d:s3x41','0661448210',$2)`, [at(3 * day), users.conf1 ?? null]);
   void p2;
 }

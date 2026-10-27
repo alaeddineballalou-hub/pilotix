@@ -47,6 +47,11 @@
     "changed_mind": "غيّر رأيه",
     "other": "أخرى"
   },
+  "fakeReason": {
+    "competitor": "🕵️ منافس",
+    "not_ordered": "لم يطلب",
+    "other": "أخرى"
+  },
   "failReason": {
     "absent": "الزبون غائب",
     "no_answer": "لا يرد",

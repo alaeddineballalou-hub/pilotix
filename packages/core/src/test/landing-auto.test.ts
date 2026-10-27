@@ -30,13 +30,17 @@ before(async () => {
   await call('landing.settings.save', admin, { pixelId: '', testEventCode: '', purchaseAt: 'confirmed', abandonAfterMin: 20, autoCreate: false, capiToken: 'EAAtest' });
 });
 
+const SURNAMES = ['Benali', 'Haddad', 'Mansouri', 'Belkacem', 'Saidi', 'Bouzid', 'Cherif', 'Djebbar', 'Ferhat', 'Hamidi', 'Kaci', 'Larbi', 'Meziane', 'Nouri', 'Ouali', 'Rahmani', 'Slimani', 'Taleb', 'Yahiaoui', 'Zerrouki', 'Amrani', 'Benaissa', 'Brahimi', 'Chaoui', 'Derradji', 'Guerfi', 'Hadjadj', 'Khelifi', 'Lounes', 'Mebarki'];
+/** a different family name each time: the same full name sent with many numbers is a signal of its own */
+let nameSeq = 0;
+const custName = () => `Amina ${SURNAMES[nameSeq++ % SURNAMES.length]}`;
 const solve = (ch: string) => {
   for (let n = 0; ; n++) if (zeroBits(sha256Hex(`${ch}:${n}`)) >= LANDING_POW_BITS) return String(n);
 };
 const rndPhone = () => `066${String(Math.floor(Math.random() * 1e7)).padStart(7, '0')}`;
 async function human(over: Record<string, unknown> = {}, phone = rndPhone()) {
   const ch = await makeChallenge(db, SLUG, Date.now() - 25_000);
-  return { slug: SLUG, name: 'Amina Benali', phone, wilaya: 16, commune: 'Hydra', variant: variants[0].id, qty: 1, hp: '', ch, pw: solve(ch), t: 25_000, ki: 40, wd: false, fp: 'x', did: `d${Math.random()}`, vid: `v${Math.random().toString(36).slice(2, 8)}`, meta: { ip: `10.1.0.${Math.floor(Math.random() * 250)}`, ua: UA }, ...over };
+  return { slug: SLUG, name: custName(), phone, wilaya: 16, commune: 'Hydra', variant: variants[0].id, qty: 1, hp: '', ch, pw: solve(ch), t: 25_000, ki: 40, wd: false, fp: 'x', did: `d${Math.random()}`, vid: `v${Math.random().toString(36).slice(2, 8)}`, meta: { ip: `10.1.0.${Math.floor(Math.random() * 250)}`, ua: UA }, ...over };
 }
 const orderOf = async (phone: string) => (await db.query(`SELECT * FROM orders WHERE phone = $1 ORDER BY id DESC`, [phone]))[0];
 const events = async (where: string, params: unknown[]) => db.query(`SELECT * FROM meta_events WHERE ${where} ORDER BY id`, params);
@@ -86,12 +90,19 @@ test('Meta: a blocked order is never a Purchase, even in « at order » mode; a 
   await call('landing.submit', admin, clear);
   const o = await orderOf(clear.phone as string);
   assert.equal((await events(`order_id = $1`, [o.id])).length, 1, 'a clear order counts at once in « at order » mode');
-  // the same number again the same day: borderline (duplicate) → no Purchase until confirmed
+  // the same number sends it again the same day: merged into the first order → no second Purchase
   await call('landing.submit', admin, await human({}, clear.phone as string));
   const o2 = await orderOf(clear.phone as string);
-  assert.notEqual(o2.id, o.id);
-  assert.match(o2.internal_note, /score anti-fraude/);
-  assert.equal((await events(`order_id = $1`, [o2.id])).length, 0);
+  assert.equal(o2.id, o.id);
+  assert.match(o2.internal_note, /renvoyé la commande/);
+  assert.equal((await events(`order_id = $1 AND event_name = 'Purchase'`, [o.id])).length, 1);
+  // a borderline one (a number on the blacklist) waits for a person
+  const refuser = '0662003344';
+  await db.query(`INSERT INTO customers (phone, name, blacklisted, blacklist_reason) VALUES ($1, 'R', true, 'test') ON CONFLICT (phone) DO UPDATE SET blacklisted = true`, [refuser]);
+  await call('landing.submit', admin, await human({}, refuser));
+  const o3 = await orderOf(refuser);
+  assert.match(o3.internal_note, /score anti-fraude/);
+  assert.equal((await events(`order_id = $1`, [o3.id])).length, 0);
   await call('landing.settings.save', admin, { pixelId: '', testEventCode: '', purchaseAt: 'confirmed', abandonAfterMin: 20, autoCreate: false, capiToken: '' });
 });
 

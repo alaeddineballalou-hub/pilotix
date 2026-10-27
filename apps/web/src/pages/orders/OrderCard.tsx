@@ -1,5 +1,5 @@
 // The order card of the original app: a drawer on the right with Client, Produits, Livraison, Historique and every action.
-import { canSetFollow, CANCEL_REASONS, CONF_TONE, CONF_NEEDS_DATE, CONF_NEEDS_REASON, ConfStatus, FAIL_REASONS, FOLLOW_FINAL, FOLLOW_STATUSES, FollowStatus, Order, OrderEvent, RETURN_REASONS } from '@pilotix/shared';
+import { canSetFollow, CANCEL_REASONS, CONF_TONE, FAKE_REASONS, CONF_NEEDS_DATE, CONF_NEEDS_REASON, ConfStatus, FAIL_REASONS, FOLLOW_FINAL, FOLLOW_STATUSES, FollowStatus, Order, OrderEvent, RETURN_REASONS } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -482,6 +482,7 @@ function ActionPanel({ o, panel, busy, companies, onCancel, run, onSendAfter }: 
   const coKind = companies.find((c) => String(c.id) === co)?.kind;
   const reasons = useMemo(() => {
     if (panel.kind === 'conf' && panel.status === 'cancelled') return CANCEL_REASONS.map((r) => t(`status.cancelReason.${r}`));
+    if (panel.kind === 'conf' && panel.status === 'fake') return FAKE_REASONS.map((r) => t(`status.fakeReason.${r}`));
     if (panel.kind === 'follow' && panel.status === 'failed') return FAIL_REASONS.map((r) => t(`status.failReason.${r}`));
     if (panel.kind === 'follow' && panel.status === 'returning') return RETURN_REASONS.map((r) => t(`status.returnReason.${r}`));
     return [];

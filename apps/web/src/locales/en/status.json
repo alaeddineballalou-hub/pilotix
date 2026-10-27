@@ -47,6 +47,11 @@
     "changed_mind": "Changed mind",
     "other": "Other"
   },
+  "fakeReason": {
+    "competitor": "🕵️ Competitor",
+    "not_ordered": "Did not order",
+    "other": "Other"
+  },
   "failReason": {
     "absent": "Customer absent",
     "no_answer": "Not answering",

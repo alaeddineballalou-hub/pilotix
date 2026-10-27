@@ -87,12 +87,76 @@ export async function queuePurchase(db: Db, s: LandingSettings, orderId: number,
 const CONFIRMED = ['confirmed', 'no_stock'];
 const DELIVERED = ['delivered', 'exchanged'];
 
+/** the agent's reason says « concurrent » (the 🕵️ chip, or typed in French, English or Arabic) */
+export const isCompetitorReason = (reason: string | null | undefined) => /🕵|concurren|competitor|منافس/i.test(String(reason ?? ''));
+
+/**
+ * An agent found a landing-page order fake: the device that sent it is marked (its next orders are put to review, the
+ * second time in 30 days or once « concurrent » they are blocked). The phone number is noted too, but not punished:
+ * it may belong to someone who never ordered (a fake order with a stranger's number).
+ */
+async function markFake(db: Db, orderId: number, reason: string | null, userId: number | null) {
+  await guarded(db, async (db) => {
+    const src = (
+      await db.query(
+        `SELECT o.phone, COALESCE((SELECT fp FROM landing_submits WHERE order_id = o.id ORDER BY id DESC LIMIT 1), (SELECT device FROM landing_leads WHERE order_id = o.id ORDER BY id DESC LIMIT 1)) AS device
+         FROM orders o WHERE o.id = $1`,
+        [orderId],
+      )
+    )[0];
+    if (!src?.device) return;
+    if ((await db.query(`SELECT 1 FROM fraud_marks WHERE order_id = $1 AND NOT lifted LIMIT 1`, [orderId])).length) return;
+    await db.query(`INSERT INTO fraud_marks (kind, value, reason, device, phone, order_id, by_user) VALUES ('device', $1, $2, $1, $3, $4, $5)`, [
+      src.device,
+      isCompetitorReason(reason) ? 'competitor' : 'fake',
+      src.phone ?? null,
+      orderId,
+      userId,
+    ]);
+  });
+}
+
+/** An agent said it was not fake after all (the order is back to a normal status): its mark is lifted. */
+async function liftMark(db: Db, orderId: number) {
+  await db.query(`UPDATE fraud_marks SET lifted = true WHERE order_id = $1 AND NOT lifted`, [orderId]);
+}
+
+/** « Purchase at order »: the sale was already reported; a « Confirmed » event (for the reports) says a person confirmed it. */
+async function queueConfirmed(db: Db, s: LandingSettings, orderId: number, now: number) {
+  await guarded(db, async (db) => {
+    const o = (await db.query(`SELECT o.id, o.ref, o.total, o.landing_id, l.pixel_id FROM orders o LEFT JOIN landing_pages l ON l.id = o.landing_id WHERE o.id = $1`, [orderId]))[0];
+    const pixel = String(o?.pixel_id || s.pixelId || '').trim();
+    if (!o?.landing_id || !pixel) return;
+    const at = new Date(now).toISOString();
+    await db.query(
+      `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, landing_id, value, at, send_after) VALUES ($1,'Confirmed',$2,$3,$4,$5,$6,$6)
+       ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING`,
+      [pixel, `confirmed-${o.ref}`, o.id, o.landing_id, num(o.total), at],
+    );
+  });
+}
+
 /** setConf: an agent confirmed an order from a landing page (Purchase « at confirmation », the default, or « at order »). */
-export async function onLandingConf(db: Db, s: LandingSettings, row: { id: number; landing_id?: unknown; is_exchange?: boolean }, from: string | null, to: string, now: number) {
+export async function onLandingConf(
+  db: Db,
+  s: LandingSettings,
+  row: { id: number; landing_id?: unknown; is_exchange?: boolean },
+  from: string | null,
+  to: string,
+  now: number,
+  reason: string | null = null,
+  userId: number | null = null,
+) {
+  if (!row.landing_id || row.is_exchange) return;
+  if (to === 'fake' && from !== 'fake') await markFake(db, num(row.id), reason, userId);
+  else if (from === 'fake' && to !== 'fake') await liftMark(db, num(row.id));
   // « at order »: clear orders were reported when received; borderline and abandoned ones count once confirmed
   // (queuePurchase is once per order). « At delivery »: not yet.
-  if (!row.landing_id || row.is_exchange || s.purchaseAt === 'delivered') return;
-  if (CONFIRMED.includes(to) && !CONFIRMED.includes(String(from))) await queuePurchase(db, s, num(row.id), now);
+  if (s.purchaseAt === 'delivered') return;
+  if (CONFIRMED.includes(to) && !CONFIRMED.includes(String(from))) {
+    await queuePurchase(db, s, num(row.id), now);
+    if (s.purchaseAt === 'order') await queueConfirmed(db, s, num(row.id), now);
+  }
 }
 
 /** setFollow: an order from a landing page was delivered (Purchase « at delivery »). */

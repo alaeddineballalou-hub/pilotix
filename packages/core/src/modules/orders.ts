@@ -610,7 +610,7 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
       if (confirmed && (!cur.follow_status || (cur.follow_status === 'cancelled' && !cur.shipped_at))) await addEvent(tx, oid, me, 'follow_status', cur.follow_status, 'to_prepare');
       await onConfChange(tx, notify, cur, cur.conf_status, status, ctx.now());
       // Meta: an order from a landing page, confirmed by a person, is a real sale (never a blocked or fake one)
-      await onLandingConf(tx, landing, cur, cur.conf_status, status, ctx.now());
+      await onLandingConf(tx, landing, cur, cur.conf_status, status, ctx.now(), input.reason ?? null, me);
       changed.push(oid);
     }
   });
