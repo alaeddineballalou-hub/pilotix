@@ -6,8 +6,10 @@ export * from './geo';
 export * from './demo';
 export * from './upsell';
 export * from './features';
+export * from './agency';
 import type { ShopInfo } from './features';
 import type { OrigLine } from './upsell';
+import type { AgencySellerWork } from './agency';
 
 // ---------------------------------------------------------------- roles
 export const ROLES = ['admin', 'vendeur', 'agent_manager', 'confirmation', 'suivi', 'depot', 'livreur', 'marketer'] as const;
@@ -149,6 +151,12 @@ export interface Profile {
   canManageUsers?: boolean;
   /** put in Management › Archives: out of the team list, kept in the history (always closed) */
   archived?: boolean;
+  /** an agent of a confirmation agency working in this store (the agency manages the account) */
+  agencyId?: number | null;
+  /** such an agent: the products they work on here (null: all the agency's) */
+  agencyProducts?: number[] | null;
+  /** in an agency's own space: the sellers this person works for, and the products (null: every seller) */
+  agencySellers?: AgencySellerWork[] | null;
 }
 
 export interface Session {
@@ -268,6 +276,9 @@ export interface Order {
   returnedAt: string | null;
   updatedAt: string;
   version: number;
+  /** the confirmation agency that confirms / follows this order (null: the store's own team) */
+  confAgencyId?: number | null;
+  followAgencyId?: number | null;
   items: OrderItem[];
   // computed
   possibleDuplicate?: boolean;

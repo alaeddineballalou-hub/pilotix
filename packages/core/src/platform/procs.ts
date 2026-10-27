@@ -7,6 +7,7 @@ import { z, ZodTypeAny } from 'zod';
 import { isoOrNull, num, numOrNull } from '../db';
 import { AppError, bad, forbidden, notFound } from '../rpc';
 import { hashPassword } from '../modules/users';
+import { syncAgency } from '../modules/agencies';
 import { accountById, makeAccountToken, sha256Hex } from './accounts';
 import { rewardReferrer, ReferralReward } from './reminders';
 import { staffReply, staffSetStatus, staffThread, staffThreads, staffUnread } from './support';
@@ -242,7 +243,8 @@ export const PLATFORM_REGISTRY = {
   'p.dashboard': pproc(ALL, z.object({}), async (ctx) => {
     const now = ctx.now();
     const set = await platformSettings(ctx.t);
-    const shops = (await loadShops(ctx.t)).map((s) => shopRow(s, set, now));
+    // confirmation agencies are not stores (free, their own page)
+    const shops = (await loadShops(ctx.t)).filter((s) => s.kind !== 'agency').map((s) => shopRow(s, set, now));
     const real = shops.filter((s) => !s.primary && !s.demo);
     const count = (st: string) => real.filter((s) => s.state === st).length;
     const pay = await ctx.t.platform.query(
@@ -276,7 +278,7 @@ export const PLATFORM_REGISTRY = {
       overLimit: await (async () => {
         let n = 0;
         for (const s of await loadShops(ctx.t)) {
-          if (s.primary || s.demo || s.status === 'deleted' || s.status === 'archived') continue;
+          if (s.primary || s.demo || s.kind === 'agency' || s.status === 'deleted' || s.status === 'archived') continue;
           const l = limitsOf(s, await usage(ctx, s));
           if (l.over.users || l.over.drivers || l.over.orders) n++;
         }
@@ -301,6 +303,7 @@ export const PLATFORM_REGISTRY = {
     const st = i.state && i.state !== 'all' ? i.state : null;
     const rows = [];
     for (const s of all) {
+      if (s.kind === 'agency') continue; // « Agences » lists them
       const r = shopRow(s, set, now);
       // deleted stores only when asked for
       if (s.status === 'deleted' && st !== 'deleted') continue;
@@ -488,6 +491,43 @@ export const PLATFORM_REGISTRY = {
     if (s.status === i.status) return { ok: true };
     await ctx.t.platform.query('UPDATE platform.shops SET status = $2, status_reason = $3 WHERE id = $1', [s.id, i.status, i.status === 'active' ? null : i.reason || null]);
     await audit(ctx, `shop.${i.status === 'active' ? 'reactivate' : i.status === 'suspended' ? 'suspend' : 'archive'}`, s.id, { from: s.status, reason: i.reason ?? null });
+    // a suspended agency's agents stop in every store at once (and start again when it is reactivated)
+    if (s.kind === 'agency') await syncAgency(ctx.t, s.id);
+    return { ok: true };
+  }),
+
+  /** Confirmation agencies: checked by Pilotix or not, their sellers (contracts, requests), their owner. */
+  'p.agencies.list': pproc(ALL, z.object({ q: z.string().max(100).optional() }), async (ctx, i) => {
+    const q = (i.q ?? '').trim().toLowerCase();
+    const rows = await ctx.t.platform.query(
+      `SELECT s.*, (SELECT count(*) FROM platform.agency_links l WHERE l.agency_id = s.id AND l.status = 'active')::int AS active_links,
+              (SELECT count(*) FROM platform.agency_links l WHERE l.agency_id = s.id AND l.status = 'pending')::int AS pending_links
+         FROM platform.shops s WHERE s.kind = 'agency' AND s.status <> 'deleted' ORDER BY (s.agency_verified_at IS NULL) DESC, s.created_at DESC`,
+    );
+    return rows
+      .filter((r: any) => !q || [r.name, r.public_code, r.owner_name, r.owner_email, r.owner_phone].some((v) => String(v ?? '').toLowerCase().includes(q)))
+      .map((r: any) => ({
+        id: num(r.id),
+        name: r.name as string,
+        code: (r.public_code as string | null) ?? null,
+        status: r.status as string,
+        statusReason: (r.status_reason as string | null) ?? null,
+        verifiedAt: isoOrNull(r.agency_verified_at),
+        owner: { name: (r.owner_name as string) ?? '', email: (r.owner_email as string) ?? '', phone: (r.owner_phone as string | null) ?? null },
+        createdAt: new Date(r.created_at).toISOString(),
+        lastActiveAt: isoOrNull(r.last_active_at),
+        activeLinks: num(r.active_links),
+        pendingLinks: num(r.pending_links),
+      }));
+  }),
+
+  /** « Vérifier » an agency (it may then work with stores), or take the check back (its agents stop at once). */
+  'p.agencies.verify': pproc(MANAGERS, z.object({ id: Id, verified: z.boolean() }), async (ctx, i) => {
+    const s = await needShop(ctx, i.id);
+    if (s.kind !== 'agency') throw bad('Ce n’est pas une agence de confirmation');
+    await ctx.t.platform.query('UPDATE platform.shops SET agency_verified_at = CASE WHEN $2 THEN COALESCE(agency_verified_at, now()) END WHERE id = $1', [s.id, i.verified]);
+    await audit(ctx, i.verified ? 'agency.verify' : 'agency.unverify', s.id, {});
+    await syncAgency(ctx.t, s.id);
     return { ok: true };
   }),
 

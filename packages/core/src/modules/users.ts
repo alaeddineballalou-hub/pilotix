@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { Db, isoOrNull, num, numOrNull } from '../db';
 import { AppError, bad, Ctx, forbidden, makeSession, notFound, proc } from '../rpc';
+import { idsOrNull, sellersOrNull } from './agencyscope';
 
 export const toProfile = (r: any): Profile => ({
   id: num(r.id),
@@ -18,6 +19,9 @@ export const toProfile = (r: any): Profile => ({
   referralCode: r.referral_code ?? null,
   canManageUsers: !!r.can_manage_users,
   archived: !!r.archived_at,
+  agencyId: numOrNull(r.agency_id),
+  agencyProducts: idsOrNull(r.agency_products),
+  agencySellers: sellersOrNull(r.agency_sellers),
 });
 
 /**
@@ -45,7 +49,8 @@ function needGrantable(ctx: Ctx, b: { roles?: string[]; canManageUsers?: boolean
 async function needSeat(ctx: Ctx) {
   const max = ctx.shop?.maxUsers;
   if (!max) return;
-  const n = num((await ctx.db.query(`SELECT count(*)::int AS n FROM profiles WHERE active AND email NOT LIKE '%@pilotix.invalid'`))[0]?.n);
+  // a confirmation agency's agents take no place: the agency brings them
+  const n = num((await ctx.db.query(`SELECT count(*)::int AS n FROM profiles WHERE active AND agency_id IS NULL AND email NOT LIKE '%@pilotix.invalid'`))[0]?.n);
   if (n >= max) throw bad(`Votre formule Pilotix permet ${max} comptes actifs. Désactivez un compte, ou demandez à Pilotix une formule plus grande.`);
 }
 
@@ -94,7 +99,29 @@ const NewUser = z.object({
   language: z.enum(LANGUAGES).default('fr'),
   livreurCompanyId: z.number().int().positive().nullable().optional(),
   canManageUsers: z.boolean().optional(),
+  /** in a confirmation agency's space: the sellers this person works for, and the products (null: every seller) */
+  sellers: z
+    .array(z.object({ store: z.number().int().positive(), products: z.array(z.number().int().positive()).max(2000).nullable() }))
+    .max(500)
+    .nullable()
+    .optional(),
 });
+
+/** The roles of a confirmation agency's people: its chief, its supervisors, its agents. */
+const AGENCY_ROLES = ['admin', 'agent_manager', 'confirmation', 'suivi'];
+/** In an agency's space: only its own roles, and the sellers the person works for (checked against its contracts). */
+async function agencyFields(ctx: Ctx, b: { roles?: string[]; sellers?: z.infer<typeof NewUser>['sellers'] }) {
+  const agency = ctx.shop?.kind === 'agency';
+  if (!agency) {
+    if (b.sellers !== undefined) throw bad('Réservé aux agences de confirmation');
+    return undefined;
+  }
+  if (b.roles?.some((r) => !AGENCY_ROLES.includes(r))) throw bad('Rôle hors d’une agence de confirmation');
+  if (b.sellers === undefined) return undefined;
+  // loaded here: agencies.ts reads the platform's shops, which need this file
+  const { checkSellers } = await import('./agencies');
+  return checkSellers(ctx, b.sellers);
+}
 
 export const usersProcs = {
   'me.get': proc(null, z.object({}), async (ctx) => {
@@ -272,11 +299,15 @@ export const usersProcs = {
 
   /** Everyone sees the team list (names, roles, presence) — needed for agent / livreur pickers. Emails (the logins) and
    *  phone numbers only for the administrator. */
-  'users.list': proc(null, z.object({ role: z.enum(ROLES).optional(), activeOnly: z.boolean().default(false) }), async (ctx, i) => {
+  'users.list': proc(null, z.object({ role: z.enum(ROLES).optional(), activeOnly: z.boolean().default(false), agencies: z.boolean().default(false) }), async (ctx, i) => {
+    // the store's own team; a confirmation agency's agents only when asked (« Agences »). An agency's agent sees the
+    // people of their own agency only.
+    const agency = ctx.session.profile.agencyId ?? null;
     const rows = await ctx.db.query(
       `SELECT *, CASE WHEN last_seen_at > now() - interval '3 minutes' THEN presence ELSE 'offline' END AS live
-       FROM profiles WHERE ($1::text IS NULL OR $1 = ANY(roles)) AND (NOT $2 OR active) ORDER BY name`,
-      [i.role ?? null, i.activeOnly],
+       FROM profiles WHERE ($1::text IS NULL OR $1 = ANY(roles)) AND (NOT $2 OR active)
+        AND CASE WHEN $3::int IS NOT NULL THEN agency_id = $3 WHEN $4 THEN true ELSE agency_id IS NULL END ORDER BY name`,
+      [i.role ?? null, i.activeOnly, agency, i.agencies],
     );
     const admin = ctx.session.isAdmin || !!ctx.session.canManageUsers;
     return rows.map((r: any) => ({ ...toProfile(r), ...(admin ? {} : { email: '', phone: null }), presence: r.live as 'online' | 'call' | 'idle' | 'offline' }));
@@ -286,11 +317,13 @@ export const usersProcs = {
     needGrantable(ctx, b);
     await needSeat(ctx);
     if (b.roles.includes('livreur')) await needDriverSeat(ctx);
+    // an agency's person: every seller unless the chief chose some
+    const sellers = await agencyFields(ctx, b);
     try {
       const r = (
         await ctx.db.query(
-          'INSERT INTO profiles (name, email, phone, password_hash, roles, language, livreur_company_id, can_manage_users) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
-          [b.name, b.email.toLowerCase(), b.phone ?? null, await hashPassword(b.password), b.roles, b.language, b.livreurCompanyId ?? null, !!b.canManageUsers && !b.roles.includes('admin')],
+          'INSERT INTO profiles (name, email, phone, password_hash, roles, language, livreur_company_id, can_manage_users, agency_sellers) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',
+          [b.name, b.email.toLowerCase(), b.phone ?? null, await hashPassword(b.password), b.roles, b.language, b.livreurCompanyId ?? null, !!b.canManageUsers && !b.roles.includes('admin'), sellers ? JSON.stringify(sellers) : null],
         )
       )[0];
       return toProfile(r);
@@ -301,7 +334,10 @@ export const usersProcs = {
   }),
   'users.update': proc(null, NewUser.partial().extend({ id: z.number().int().positive(), active: z.boolean().optional() }), async (ctx, b) => {
     await needCanEdit(ctx, b.id);
+    if ((await ctx.db.query('SELECT 1 FROM profiles WHERE id = $1 AND agency_id IS NOT NULL', [b.id])).length)
+      throw forbidden('Ce compte appartient à une agence de confirmation : seule l’agence le gère');
     needGrantable(ctx, b);
+    const sellers = await agencyFields(ctx, b);
     if (b.id === ctx.session.profile.id && (b.active === false || (b.roles && !b.roles.includes('admin')))) throw forbidden('Vous ne pouvez pas retirer votre propre accès administrateur');
     // an account closed earlier and opened again takes a place of the plan; so does a new livreur
     const before = (await ctx.db.query('SELECT active, roles, archived_at FROM profiles WHERE id = $1', [b.id]))[0];
@@ -326,6 +362,7 @@ export const usersProcs = {
       throw e;
     }
     if (!r) throw notFound();
+    if (b.sellers !== undefined) r = (await ctx.db.query('UPDATE profiles SET agency_sellers = $2 WHERE id = $1 RETURNING *', [b.id, sellers ? JSON.stringify(sellers) : null]))[0];
     return toProfile(r);
   }),
 };

@@ -107,14 +107,20 @@ const site = () => config.publicUrl || '';
 const mail = (to: string, subject: string, o: Layout): Mail => ({ to, subject, ...layout(o) });
 
 // ---------------------------------------------------------------- sign-up
-export function signupConfirmMail(m: { token: string; email: string; name: string; language: string; store: string }): Mail {
+export function signupConfirmMail(m: { token: string; email: string; name: string; language: string; store: string; agency?: boolean }): Mail {
   const l = lang(m.language);
   const link = `${site()}/#/signup/${m.token}`;
-  const T = {
+  const A = {
+    fr: { s: 'Pilotix : confirmez votre inscription', t: 'Confirmez votre e-mail', a: `Merci ! Votre agence de confirmation « ${m.store} » est presque prête.`, b: 'Cliquez sur le bouton : votre agence est créée tout de suite. Pilotix la vérifie ensuite, avant qu’elle travaille avec des boutiques.', btn: 'Créer mon agence', v: 'Ce lien marche une fois, pendant 48 heures.' },
+    en: { s: 'Pilotix: confirm your sign-up', t: 'Confirm your e-mail', a: `Thank you! Your confirmation agency “${m.store}” is almost ready.`, b: 'Click the button: your agency is created right away. Pilotix then checks it before it works with stores.', btn: 'Create my agency', v: 'This link works once, for 48 hours.' },
+    ar: { s: 'Pilotix: أكّد تسجيلك', t: 'أكّد بريدك الإلكتروني', a: `شكرًا! وكالة التأكيد «${m.store}» جاهزة تقريبًا.`, b: 'اضغط على الزر: تُنشأ وكالتك فورًا، ثم يتحقق منها Pilotix قبل أن تعمل مع المتاجر.', btn: 'إنشاء وكالتي', v: 'يعمل هذا الرابط مرة واحدة، لمدة 48 ساعة.' },
+  }[l];
+  const S = {
     fr: { s: 'Pilotix : confirmez votre inscription', t: 'Confirmez votre e-mail', a: `Merci ! Votre boutique « ${m.store} » est presque prête.`, b: 'Cliquez sur le bouton : votre boutique est créée tout de suite, avec son essai gratuit.', btn: 'Créer ma boutique', v: 'Ce lien marche une fois, pendant 48 heures.' },
     en: { s: 'Pilotix: confirm your sign-up', t: 'Confirm your e-mail', a: `Thank you! Your store “${m.store}” is almost ready.`, b: 'Click the button: your store is created right away, with its free trial.', btn: 'Create my store', v: 'This link works once, for 48 hours.' },
     ar: { s: 'Pilotix: أكّد تسجيلك', t: 'أكّد بريدك الإلكتروني', a: `شكرًا! متجرك «${m.store}» جاهز تقريبًا.`, b: 'اضغط على الزر: يُنشأ متجرك فورًا مع فترته التجريبية المجانية.', btn: 'إنشاء متجري', v: 'يعمل هذا الرابط مرة واحدة، لمدة 48 ساعة.' },
   }[l];
+  const T = m.agency ? A : S;
   return mail(m.email, T.s, { l, title: T.t, icon: '✉️', hello: hello(l, m.name), lines: [T.a, T.b], button: { label: T.btn, link }, after: [`⏱️ ${T.v}`], note: NOT_YOU[l] });
 }
 

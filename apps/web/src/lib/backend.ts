@@ -3,6 +3,7 @@ import type { Session } from '@pilotix/shared';
 import type { z } from 'zod';
 import { pageAi } from './dellal-page-ai';
 import { currentShop } from './features';
+import { ambientSeller, Seller } from './seller';
 import { store } from './store';
 
 // ---------------------------------------------------------------- typed actions
@@ -37,6 +38,8 @@ export interface StoreChoice {
   locked: boolean;
   owner: boolean;
   primary: boolean;
+  /** a store, or a confirmation agency's own space */
+  kind?: 'store' | 'agency';
 }
 /** After the password: several stores (or none) → the picker, with a ticket to choose without the password again. */
 export interface PickInfo {
@@ -45,6 +48,8 @@ export interface PickInfo {
   account: { name: string; email: string; verified: boolean };
   stores: StoreChoice[];
   canAddStore: boolean;
+  /** « Créer mon agence » (the person has no confirmation agency yet) */
+  canAddAgency?: boolean;
 }
 export type LoginResult = Session | PickInfo;
 export const isPick = (r: LoginResult): r is PickInfo => (r as PickInfo).pick === true;
@@ -54,7 +59,8 @@ export interface Backend {
   login(email: string, password: string): Promise<LoginResult>;
   resume(): Promise<Session | null>;
   logout(): void;
-  call<N extends ProcName>(name: N, input: In<N>): Promise<Out<N>>;
+  /** `seller`: in a confirmation agency's space, the seller (store) whose orders the action works on */
+  call<N extends ProcName>(name: N, input: In<N>, seller?: Seller): Promise<Out<N>>;
   onEvent(fn: (e: LiveEvent) => void): () => void;
 }
 
@@ -117,6 +123,8 @@ export interface SignupForm {
   language: 'fr' | 'en' | 'ar';
   referral?: string;
   terms: true;
+  /** « Créer mon agence »: a confirmation agency (storeName is its name) */
+  kind?: 'store' | 'agency';
 }
 export const signup = (f: SignupForm) => authRequest<{ ok: true }>('/auth/signup', f);
 /** The terms of use and privacy page (Pilotix's own text, else the app's standard one). */
@@ -149,7 +157,7 @@ class RemoteBackend implements Backend {
     store.set('token', token);
   }
 
-  private async req<T>(path: string, body?: unknown): Promise<T> {
+  private async req<T>(path: string, body?: unknown, extra?: Record<string, string>): Promise<T> {
     const base = serverUrl();
     if (!base) throw new ApiError(0, 'Adresse du serveur manquante');
     // the token this request carries: an answer to an older one (a store just left or deleted) does not log out
@@ -158,7 +166,7 @@ class RemoteBackend implements Backend {
     try {
       res = await fetch(`${base}/api${path}`, {
         method: body === undefined ? 'GET' : 'POST',
-        headers: { 'Content-Type': 'application/json', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}) },
+        headers: { 'Content-Type': 'application/json', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}), ...extra },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
     } catch {
@@ -195,7 +203,7 @@ class RemoteBackend implements Backend {
     return this.req<StoreChoice[]>('/auth/stores');
   }
   /** « Ajouter une boutique »: made, then entered (from the picker: with its ticket). */
-  async addStore(input: { name: string; slug?: string }, ticket?: string) {
+  async addStore(input: { name: string; slug?: string; kind?: 'store' | 'agency' }, ticket?: string) {
     return this.enterWith(await this.req<{ token: string; session: Session }>(ticket ? '/auth/add-store/ticket' : '/auth/add-store', { ...input, ...(ticket ? { ticket } : {}) }));
   }
   /** The sign-up e-mail's link: the store is made and entered (or « you already have an account »). */
@@ -245,8 +253,8 @@ class RemoteBackend implements Backend {
     this.keep(null);
     this.socket?.disconnect();
   }
-  call<N extends ProcName>(name: N, input: In<N>): Promise<Out<N>> {
-    return this.req(`/rpc/${name}`, input ?? {});
+  call<N extends ProcName>(name: N, input: In<N>, seller?: Seller): Promise<Out<N>> {
+    return this.req(`/rpc/${name}`, input ?? {}, seller === undefined ? undefined : { 'X-Seller': String(seller) });
   }
   onEvent(fn: (e: LiveEvent) => void) {
     this.listeners.add(fn);
@@ -377,7 +385,11 @@ export const domainGet = () => onServer().request<DomainState>('/shop/domain/get
 export const domainSet = (domain: string | null) => onServer().request<DomainState>('/shop/domain', { domain });
 export const domainCheck = () => onServer().request<{ ok: boolean; found: string[]; expected: string[] }>('/shop/domain/check');
 
-/** Call an action on the current backend (server or demo). */
-export function rpc<N extends ProcName>(name: N, input: In<N>): Promise<Out<N>> {
-  return backend.call(name, input);
+/**
+ * Call an action on the current backend (server or demo). `seller` (a confirmation agency's space): the seller whose
+ * orders it works on — null: none (the agency itself); not given: the seller of what is open on screen, if any.
+ */
+export function rpc<N extends ProcName>(name: N, input: In<N>, seller?: Seller | null): Promise<Out<N>> {
+  const s = seller === undefined ? ambientSeller() : seller === null ? undefined : seller;
+  return backend.call(name, input, s);
 }

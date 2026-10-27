@@ -79,6 +79,8 @@ export interface Membership {
   schema: string;
   profileId: number;
   roles: string[];
+  /** an agent of this confirmation agency working in the store (null: the store's own person) */
+  agencyId: number | null;
 }
 
 /**
@@ -94,8 +96,8 @@ export async function membershipsOf(t: Tenancy, email: string): Promise<Membersh
   );
   const out: Membership[] = [];
   for (const r of rows as any[]) {
-    const p = (await t.shop(r.schema_name).query('SELECT id, roles, active FROM profiles WHERE email = $1', [e]).catch(() => []))[0];
-    if (p?.active) out.push({ shopId: num(r.id), schema: r.schema_name, profileId: num(p.id), roles: p.roles as string[] });
+    const p = (await t.shop(r.schema_name).query('SELECT id, roles, active, agency_id FROM profiles WHERE email = $1', [e]).catch(() => []))[0];
+    if (p?.active) out.push({ shopId: num(r.id), schema: r.schema_name, profileId: num(p.id), roles: p.roles as string[], agencyId: numOrNull(p.agency_id) });
   }
   return out;
 }
@@ -196,15 +198,26 @@ export async function ownerProfileId(t: Tenancy, s: { schema: string; ownerAccou
 export async function adminMaySetPassword(t: Tenancy, shopId: number, email: string): Promise<boolean> {
   const e = normEmail(email);
   if (NO_ACCOUNT.test(e)) return true;
-  const shops = await t.platform.query('SELECT shop_id FROM platform.logins WHERE email = $1', [e]);
-  if (shops.some((r: any) => num(r.shop_id) !== shopId)) return false;
+  const shops = await t.platform.query('SELECT l.shop_id, s.schema_name FROM platform.logins l JOIN platform.shops s ON s.id = l.shop_id WHERE l.email = $1', [e]);
+  for (const r of shops as any[]) {
+    if (num(r.shop_id) === shopId) continue;
+    // a confirmation agency's agent inside a store the agency works for: still the agency's own person
+    const p = (await t.shop(r.schema_name).query('SELECT agency_id FROM profiles WHERE lower(email) = $1', [e]).catch(() => []))[0];
+    if (p && num(p.agency_id) === shopId) continue;
+    return false;
+  }
   const owns = await t.platform.query('SELECT 1 FROM platform.shops s JOIN platform.accounts a ON a.id = s.owner_account_id WHERE a.email = $1 AND s.status <> $2', [e, 'deleted']);
   return owns.length === 0;
 }
 
-/** Stores this account owns (deleted ones do not count). */
+/** Stores this account owns (deleted ones do not count; nor its confirmation agency). */
 export async function ownedStores(t: Tenancy, accountId: number): Promise<number> {
-  return num((await t.platform.query(`SELECT count(*)::int AS n FROM platform.shops WHERE owner_account_id = $1 AND status <> 'deleted'`, [accountId]))[0]?.n);
+  return num((await t.platform.query(`SELECT count(*)::int AS n FROM platform.shops WHERE owner_account_id = $1 AND status <> 'deleted' AND kind = 'store'`, [accountId]))[0]?.n);
+}
+
+/** Confirmation agencies this account owns (one at most). */
+export async function ownedAgencies(t: Tenancy, accountId: number): Promise<number> {
+  return num((await t.platform.query(`SELECT count(*)::int AS n FROM platform.shops WHERE owner_account_id = $1 AND status <> 'deleted' AND kind = 'agency'`, [accountId]))[0]?.n);
 }
 
 // ---------------------------------------------------------------- one-time links (new password, invitation, e-mail check)
@@ -266,7 +279,7 @@ export async function completedResets(t: Tenancy, accountId: number, since: numb
 
 /** Is this person an administrator somewhere, or a store's owner? (« Mot de passe oublié » is then never limited) */
 export async function isAdminSomewhere(t: Tenancy, account: Account): Promise<boolean> {
-  if ((await ownedStores(t, account.id)) > 0) return true;
+  if ((await ownedStores(t, account.id)) > 0 || (await ownedAgencies(t, account.id)) > 0) return true;
   return (await membershipsOf(t, account.email)).some((m) => m.roles.includes('admin'));
 }
 

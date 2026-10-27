@@ -757,6 +757,7 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
   let orderId: number | null = null;
   let blockedId: number | null = null;
   let ref: string | null = null;
+  let agency: number | null = null;
   let merged = false;
   if (result.verdict === 'block') {
     blockedId = num(
@@ -809,6 +810,7 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
     );
     orderId = o.id;
     ref = o.ref;
+    agency = o.confAgencyId ?? null;
     await closeLeads(db, keys, 'converted', o.id, abandonCutoff(s, now));
     await replaceAutoOrder(db, phone!, productId, o.id, o.ref, now);
     await linkSameCustomer(db, phone!, o.id, o.ref, now);
@@ -823,7 +825,8 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
   // Meta Purchase « when the order is received »: only a clear order (a borderline one counts once a person confirms it);
   // an order sent again is the same sale (queuePurchase is once per order anyway)
   if (orderId && !merged && s.purchaseAt === 'order' && result.verdict === 'allow') await queuePurchase(db, s, orderId, now);
-  ctx.emit({ type: 'orders', ...(ref ? { id: orderId!, data: { created: { ref, channel: 'landing' } } } : {}) });
+  // the agency it went to (its agents are told; the store's own team only of its own orders)
+  ctx.emit({ type: 'orders', ...(ref ? { id: orderId!, data: { created: { ref, channel: 'landing', agency } } } : {}) });
   await afterChange(ctx);
   return { ok: true };
 }

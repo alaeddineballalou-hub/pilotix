@@ -29,6 +29,7 @@ import { clientFee, getSetting } from '../settings';
 import { notifyContext, onConfChange, onFollowChange, onOrderCreated, sendInPreview } from './notify';
 import { landingCounts, landingSettings, onLandingConf, onLandingFollow } from './landingquery';
 import { lowStockCount } from './stockquery';
+import { agencyOf, agencyRowSql, andSql, queueSql } from './agencyscope';
 import { settleTickets } from './tickets';
 import { applyTrust, lookAlikeNote, lookAlikeOf } from './trust';
 
@@ -124,6 +125,8 @@ export function toOrder(r: any): Order {
     subStatus: r.sub_status ?? null,
     lastCallAt: isoOrNull(r.last_call_at),
     version: num(r.version),
+    confAgencyId: numOrNull(r.conf_agency_id),
+    followAgencyId: numOrNull(r.follow_agency_id),
   };
 }
 
@@ -138,12 +141,32 @@ export const noOrderAccess = (ctx: Ctx) => {
   return !s.isAdmin && !s.roles.some((r) => ['confirmation', 'suivi', 'depot', 'livreur', 'agent_manager', 'vendeur'].includes(r));
 };
 
+/** The orders an agent may take now with « Commande suivante », the most urgent first ($1 to-do statuses, $2 the agent, $3 skipped). */
+const nextFrom = (ctx: Ctx) => `FROM orders o WHERE conf_status = ANY($1) AND (agent_id IS NULL OR agent_id = $2) AND NOT (id = ANY($3))
+  AND (next_call_at IS NULL OR next_call_at <= now()) AND (locked_until IS NULL OR locked_until < now() OR locked_by = $2)${andSql(queueSql(ctx, 'conf'))}
+  ORDER BY (next_call_at IS NOT NULL) DESC, next_call_at ASC, created_at ASC`;
+
+/** What « Commande suivante » would give this agent (nothing taken): to choose between several stores. */
+export async function peekNext(ctx: Ctx, skip: number[]): Promise<{ nextCallAt: string | null; createdAt: string } | null> {
+  const r = (await ctx.db.query(`SELECT next_call_at, created_at ${nextFrom(ctx)} LIMIT 1`, [CONF_TODO, ctx.session.profile.id, skip]))[0];
+  return r ? { nextCallAt: isoOrNull(r.next_call_at), createdAt: iso(r.created_at) } : null;
+}
+
 export async function getOrder(ctx: Ctx, id: number, db: Db = ctx.db): Promise<Order> {
   if (noOrderAccess(ctx)) throw forbidden();
   const r = (await db.query(`SELECT ${ORDER_COLS} ${ORDER_FROM} WHERE o.id = $1`, [id]))[0];
   if (!r) throw notFound('Commande introuvable');
   const o = toOrder(r);
   if (onlyOwnDeliveries(ctx) && o.livreurId !== ctx.session.profile.id) throw forbidden();
+  // a confirmation agency's agent: only the orders the store gives the agency, for their tasks
+  const ag = agencyOf(ctx);
+  if (ag !== null) {
+    const roles = ctx.session.roles;
+    if (!((roles.includes('confirmation') && o.confAgencyId === ag) || (roles.includes('suivi') && o.followAgencyId === ag))) throw forbidden('Cette commande n’est pas confiée à votre agence');
+    // given some products only (in the agency): the orders that came for them
+    const only = ctx.session.profile.agencyProducts;
+    if (only && !only.includes(num((await db.query('SELECT route_product_id FROM orders WHERE id = $1', [id]))[0]?.route_product_id))) throw forbidden('Cette commande n’est pas pour vos produits');
+  }
   return o;
 }
 
@@ -206,10 +229,16 @@ export const ListInput = z.object({
 });
 export type ListInput = z.infer<typeof ListInput>;
 
-export async function listOrders(ctx: Ctx, f: ListInput): Promise<Page<Order>> {
+export async function listOrders(ctx: Ctx, f: ListInput, opts: { queue?: 'conf' | 'follow' } = {}): Promise<Page<Order>> {
   if (noOrderAccess(ctx)) return { rows: [], total: 0, page: f.page, pageSize: f.pageSize };
   const w = new Where();
   if (onlyOwnDeliveries(ctx)) w.add('o.livreur_id = ?', ctx.session.profile.id);
+  // confirmation agencies: an agency's agent sees its agency's orders; a work list (confirmation, suivi) shows each
+  // person the orders they work on (the store's own agents: those no agency handles)
+  const scope = agencyRowSql(ctx);
+  if (scope) w.add(scope);
+  const queue = opts.queue ? queueSql(ctx, opts.queue) : '';
+  if (queue) w.add(queue);
   if (f.conf?.length) w.add('o.conf_status = ANY(?)', f.conf);
   if (f.follow?.length) {
     const real = f.follow.filter((x) => x !== 'none');
@@ -364,6 +393,24 @@ function upsellFor(isExchange: boolean, orig: OrigLine[], origDiscount: number, 
   return isExchange ? { value: 0, flags: lines.map(() => false) } : upsellOf(orig, origDiscount, lines, discount);
 }
 
+/**
+ * The confirmation agencies a new order goes to, by its first product: the agency the store gave that product, else
+ * the one that has « every product » (none: the store's own team). An order that arrives confirmed has nothing left to
+ * confirm: only its suivi can go to an agency.
+ */
+async function routeToAgencies(db: Db, orderId: number, productId: number | undefined, confirmed: boolean) {
+  if (!productId) return;
+  const rows = await db.query('SELECT agency_id, task FROM agency_routes WHERE product_id = $1 OR product_id IS NULL ORDER BY (product_id IS NULL), task', [productId]);
+  if (!rows.length) return;
+  const pick = (task: string) => {
+    const r = rows.find((x: any) => x.task === task);
+    return r ? num(r.agency_id) : null;
+  };
+  const conf = confirmed ? null : pick('confirmation');
+  const follow = pick('suivi');
+  if (conf !== null || follow !== null) await db.query('UPDATE orders SET conf_agency_id = $2, follow_agency_id = $3, route_product_id = $4 WHERE id = $1', [orderId, conf, follow, productId]);
+}
+
 async function insertItems(db: Db, orderId: number, lines: OrderItem[]) {
   for (const l of lines) {
     await db.query(
@@ -451,6 +498,8 @@ export async function createOrder(
     )[0];
     const oid = num(row.id);
     await insertItems(tx, oid, lines);
+    // SAV exchange parcels stay with the store's team (they are not sales)
+    if (!input.isExchange) await routeToAgencies(tx, oid, lines[0]?.productId, confirmed);
     await addEvent(tx, oid, me, 'created', null, conf, input.isExchange ? `Échange de la commande #${input.originalOrderId}` : null);
     if (confirmed) await addEvent(tx, oid, me, 'follow_status', null, 'to_prepare');
     for (const n of trustNotes) await addEvent(tx, oid, null, 'note', null, 'event', n);
@@ -784,8 +833,33 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
 export async function orderCounts(ctx: Ctx) {
   const own = onlyOwnDeliveries(ctx);
   const me = ctx.session.profile.id;
+  // a confirmation agency's agent: only the numbers of its agency's orders (nothing else of the store)
+  const scope = agencyRowSql(ctx);
+  if (scope) {
+    const conf = await ctx.db.query<{ k: string; n: number }>(`SELECT conf_status AS k, count(*)::int AS n FROM sales o WHERE ${scope} GROUP BY 1`);
+    const follow = await ctx.db.query<{ k: string; n: number }>(`SELECT follow_status AS k, count(*)::int AS n FROM sales o WHERE follow_status IS NOT NULL AND ${scope} GROUP BY 1`);
+    const subs = await ctx.db.query<{ k: string; n: number }>(`SELECT sub_status AS k, count(*)::int AS n FROM sales o WHERE sub_status IS NOT NULL AND ${scope} GROUP BY 1`);
+    const late = num((await ctx.db.query(`SELECT count(*)::int AS n FROM sales o WHERE conf_status = ANY($1) AND next_call_at IS NOT NULL AND next_call_at <= now() AND ${scope}`, [CONF_TODO]))[0]?.n);
+    const all = num((await ctx.db.query(`SELECT count(*)::int AS n FROM sales o WHERE ${scope}`))[0]?.n);
+    const obj = (rows: { k: string; n: number }[]) => Object.fromEntries(rows.map((r) => [r.k, num(r.n)]));
+    return {
+      conf: obj(conf),
+      follow: obj(follow),
+      sub: obj(subs),
+      lateCalls: late,
+      sav: 0,
+      uncashed: 0,
+      tickets: { toShip: 0, prepared: 0, onRoad: 0, uncashed: 0 },
+      lowStock: 0,
+      ai: { messages: 0, cm: 0, notify: 0 },
+      landing: undefined as Awaited<ReturnType<typeof landingCounts>> | undefined,
+      all,
+    };
+  }
+  // the confirmation numbers of the store's own agents: the orders no agency handles (their lists show those)
+  const q = queueSql(ctx, 'conf');
   const conf = await ctx.db.query<{ k: string; n: number }>(
-    `SELECT conf_status AS k, count(*)::int AS n FROM sales ${own ? 'WHERE livreur_id = $1' : ''} GROUP BY 1`,
+    `SELECT conf_status AS k, count(*)::int AS n FROM sales o WHERE true${own ? ' AND livreur_id = $1' : ''}${andSql(q)} GROUP BY 1`,
     own ? [me] : [],
   );
   const follow = await ctx.db.query<{ k: string; n: number }>(
@@ -793,7 +867,7 @@ export async function orderCounts(ctx: Ctx) {
     own ? [me] : [],
   );
   const lateCalls = num(
-    (await ctx.db.query(`SELECT count(*)::int AS n FROM sales WHERE conf_status = ANY($1) AND next_call_at IS NOT NULL AND next_call_at <= now()`, [CONF_TODO]))[0]?.n,
+    (await ctx.db.query(`SELECT count(*)::int AS n FROM sales o WHERE conf_status = ANY($1) AND next_call_at IS NOT NULL AND next_call_at <= now()${andSql(q)}`, [CONF_TODO]))[0]?.n,
   );
   const sav = num((await ctx.db.query(`SELECT count(*)::int AS n FROM complaints WHERE status IN ('open','progress')`))[0]?.n);
   const uncashed = num((await ctx.db.query(`SELECT count(*)::int AS n FROM sales WHERE follow_status='delivered' AND NOT cashed`))[0]?.n);
@@ -1235,9 +1309,7 @@ export const ordersProcs = {
     // picked and locked in one statement: two agents clicking at the same time never get the same customer
     const r = await ctx.db.query(
       `UPDATE orders SET locked_by = $2, locked_until = now() + interval '10 minutes'
-        WHERE id = (SELECT id FROM orders WHERE conf_status = ANY($1) AND (agent_id IS NULL OR agent_id = $2) AND NOT (id = ANY($3))
-                      AND (next_call_at IS NULL OR next_call_at <= now()) AND (locked_until IS NULL OR locked_until < now() OR locked_by = $2)
-                    ORDER BY (next_call_at IS NOT NULL) DESC, next_call_at ASC, created_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED)
+        WHERE id = (SELECT id ${nextFrom(ctx)} LIMIT 1 FOR UPDATE SKIP LOCKED)
        RETURNING id`,
       [CONF_TODO, me, skip],
     );

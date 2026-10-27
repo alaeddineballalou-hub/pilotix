@@ -5,7 +5,9 @@ import { backend, rpc } from '../lib/backend';
 import { compact, when } from '../lib/format';
 import { applyLanguage } from '../lib/i18n';
 import { openOrder, openOrderForm } from '../lib/modals';
-import { useAction, useRpc } from '../lib/query';
+import { useAction, useRpc, useRpcFor } from '../lib/query';
+import { Seller, setSeller, useSeller } from '../lib/seller';
+import { useSellers } from '../lib/sellers';
 import { useSession } from '../lib/session';
 import { PxLogo } from './PxLogo';
 import { PxMenuFace } from './PxMenuFace';
@@ -32,9 +34,9 @@ export function applyTheme(t: Theme) {
 }
 
 
-/** Menu counts, refreshed every minute and on live updates. */
-export function useMenuCounts() {
-  const q = useRpc('orders.counts', {}, { refetchInterval: 60_000 });
+/** Menu counts, refreshed every minute and on live updates (an agency's space: its chosen seller's, or all of them). */
+export function useMenuCounts(seller: Seller | null = null) {
+  const q = useRpcFor(seller, 'orders.counts', {}, { refetchInterval: 60_000 });
   return useMemo(() => {
     const c = q.data;
     if (!c) return {} as Record<string, number>;
@@ -87,12 +89,18 @@ function Count({ v, tone }: { v: number; tone: string }) {
   );
 }
 
-export function Shell({ page, sub, children }: { page: string; sub?: string; children: ReactNode }) {
+export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { page: string; sub?: string; children: ReactNode; nav?: NavItem[]; space?: 'store' | 'agency' }) {
   const { t, i18n } = useTranslation();
-  const { session, logout, has } = useSession();
+  const { session, logout, has: hasRole } = useSession();
+  const agency = space === 'agency';
+  // a confirmation agency's space: no store-wide search nor « new order »; the seller picker instead
+  const has = (...r: Parameters<typeof hasRole>) => !agency && hasRole(...r);
+  const seller = useSeller();
   const [navOpen, setNavOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
-  const counts = useMenuCounts();
+  const counts = useMenuCounts(agency ? seller : null);
+  // an agency: the work its sellers give it (one seller chosen: that one's)
+  const work = useSellers(agency);
   const [folded, setFolded] = useState(() => store.get('sidebar') === 'folded');
   const toggleFold = () => {
     // On a phone the logo just closes the menu; on a computer it folds / unfolds the sidebar.
@@ -104,17 +112,24 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
   };
   const roles = session!.roles;
   const isAdmin = session!.isAdmin;
+  /** a menu item's name (an agency's space names some of its pages its own way) */
+  const label = (id: string) => (agency ? t(`agency.nav.${id}`, { defaultValue: t(`nav.${id}`, { defaultValue: '' }) }) : t(`nav.${id}`));
+  /** an agency's person who calls customers (its chief and supervisors too) */
+  const calls = agency && (isAdmin || roles.some((r) => r === 'confirmation' || r === 'agent_manager'));
 
   // A new order from a landing page: a toast and a chime for the people who confirm orders (sound: once the page was touched).
   useEffect(
     () =>
       backend.onEvent((e) => {
-        const c = (e.data as { created?: { ref: string; channel: string } } | undefined)?.created;
+        const c = (e.data as { created?: { ref: string; channel: string; agency?: number | null } } | undefined)?.created;
         if (e.type !== 'orders' || !c || !(isAdmin || roles.includes('confirmation')) || store.get('lp-sound') === 'off') return;
+        // a confirmation agency's agent hears only of its agency's orders; the store's own agents of theirs
+        const agency = session!.profile.agencyId ?? null;
+        if (!isAdmin && (c.agency ?? null) !== agency && (agency !== null || !roles.includes('agent_manager'))) return;
         toast(t('shell.newLandingOrder', { ref: c.ref }), 'ok', 6000);
         chime();
       }),
-    [isAdmin, roles, t],
+    [isAdmin, roles, t, session],
   );
 
   // Presence heartbeat, every minute (online / idle after 5 min without activity).
@@ -141,17 +156,18 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
     document.body.classList.toggle('nav-open', navOpen);
   }, [navOpen]);
 
-  /** a group's children this user sees */
-  const kids = (n: NavItem) => (n.children ?? []).filter((c) => canSeeChild(c, roles, isAdmin));
+  /** a group's children this user sees (an agency: the work its sellers give it) */
+  const kids = (n: NavItem) =>
+    (n.children ?? []).filter((c) => canSeeChild(c, roles, isAdmin) && (!agency || !work.loaded || (c.id === 'confirmation' ? work.tasks.has('confirmation') : c.id === 'suivi' ? work.tasks.has('suivi') : true)));
   // a group whose children are all out of the shop's plan is not shown
-  const items = NAV.filter((n) => !n.hidden && canSee(n, roles, isAdmin, !!session!.canManageUsers) && (!n.children || kids(n).length > 0));
+  const items = nav.filter((n) => !n.hidden && canSee(n, roles, isAdmin, !!session!.canManageUsers) && (!n.children || kids(n).length > 0));
   /** the group of the page on screen: its children show in a bar under the header when the sidebar is folded */
   const curGrp = items.find((n) => n.children && n.pages?.includes(page));
   /** the child of a group shown as current */
   const childOn = (n: NavItem, id: string) => id === page || (page === n.id && sub === id);
   // each group remembers whether it is open (Commandes keeps its old key)
   const grpKey = (id: string) => (id === 'commandes' ? 'cmdgrp' : `grp-${id}`);
-  const [grpOpen, setGrpOpen] = useState<Record<string, boolean>>(() => Object.fromEntries(NAV.filter((n) => n.children).map((n) => [n.id, store.get(grpKey(n.id)) !== 'closed'])));
+  const [grpOpen, setGrpOpen] = useState<Record<string, boolean>>(() => Object.fromEntries(nav.filter((n) => n.children).map((n) => [n.id, store.get(grpKey(n.id)) !== 'closed'])));
   const toggleGrp = (id: string) =>
     setGrpOpen((o) => {
       const next = !(o[id] ?? true);
@@ -226,9 +242,9 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
               </div>
             </div>
           ) : (
-            <a key={n.id} href={`#/${n.id}`} className={`nav-item ${page === n.id ? 'on' : ''}`} data-page={n.id} aria-current={page === n.id ? 'page' : undefined} title={`${t(`nav.${n.id}`)}${ITEM_COUNT[n.id] && counts[ITEM_COUNT[n.id][0]] !== undefined ? ` · ${counts[ITEM_COUNT[n.id][0]]}` : ''}`}>
+            <a key={n.id} href={`#/${n.id}`} className={`nav-item ${page === n.id ? 'on' : ''}`} data-page={n.id} aria-current={page === n.id ? 'page' : undefined} title={`${label(n.id)}${ITEM_COUNT[n.id] && counts[ITEM_COUNT[n.id][0]] !== undefined ? ` · ${counts[ITEM_COUNT[n.id][0]]}` : ''}`}>
               <Icon name={n.icon} className="ic" />
-              <span className="nav-l">{t(`nav.${n.id}`)}</span>
+              <span className="nav-l">{label(n.id)}</span>
               {ITEM_COUNT[n.id] && counts[ITEM_COUNT[n.id][0]] !== undefined && <Count v={counts[ITEM_COUNT[n.id][0]]} tone={ITEM_COUNT[n.id][1]} />}
             </a>
           ),
@@ -245,8 +261,15 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
             Pilotix
           </a>
           <span id="page-title" className="page-title">
-            {t(`nav.${page}`, { defaultValue: '' })}
+            {agency ? label(page) : t(`nav.${page}`, { defaultValue: '' })}
           </span>
+          {agency && SELLER_PAGES.has(page) && <SellerSwitch />}
+          {calls && page === 'confirmation' && (!sub || sub === 'nouvelles' || sub === 'attente') && (
+            <button type="button" className="btn primary pxs-new pxs-next" title={t('confirmation.next').replace(/\s*[→←]\s*$/, '')} onClick={() => window.dispatchEvent(new Event('px:next-order'))}>
+              <span className="pxs-t">{t('confirmation.next').replace(/\s*[→←]\s*$/, '')}</span>
+              <Icon name="chevr" className="pxs-ar" />
+            </button>
+          )}
           {has('confirmation', 'suivi', 'depot') && <GlobalSearch />}
           {has('confirmation', 'suivi', 'depot') && (
             page === 'confirmation' && (!sub || sub === 'nouvelles' || sub === 'attente') && has('confirmation') ? (
@@ -332,6 +355,38 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
       </div>
       {pwOpen && <PasswordModal onClose={() => setPwOpen(false)} />}
     </div>
+  );
+}
+
+/** An agency's pages that show one seller or all of them (the picker shows there). */
+const SELLER_PAGES = new Set(['accueil', 'confirmation', 'suivi', 'facturation']);
+
+/**
+ * A confirmation agency's space: the seller whose orders are on screen — one of the stores the person works for, or
+ * « Tous les vendeurs » (every one of them in the same lists).
+ */
+function SellerSwitch() {
+  const { t } = useTranslation();
+  const seller = useSeller();
+  const q = useRpcFor(null, 'agency.sellers', {}, { staleTime: 60_000, refetchInterval: 120_000 });
+  const list = q.data ?? [];
+  // a seller the person no longer works for: back to all of them
+  useEffect(() => {
+    if (q.data && seller !== 'all' && !q.data.some((s) => s.id === seller)) setSeller('all');
+  }, [q.data, seller]);
+  return (
+    <label className={`px-seller${seller === 'all' ? '' : ' one'}`} title={t('agency.pick.label')}>
+      <Icon name="store" />
+      <span className="px-seller-l">{t('agency.pick.short')}</span>
+      <select value={String(seller)} aria-label={t('agency.pick.label')} onChange={(e) => setSeller(e.target.value === 'all' ? 'all' : Number(e.target.value))}>
+        <option value="all">{t('agency.pick.all', { count: list.length })}</option>
+        {list.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.name}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

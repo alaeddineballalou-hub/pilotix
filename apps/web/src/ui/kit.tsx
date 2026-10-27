@@ -80,6 +80,8 @@ const EXTRA: Record<string, string> = {
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   puzzle: '<path d="M19.4 15.4a1 1 0 0 0-.3.9l.5 2.6a2 2 0 0 1-2 2.4h-2.2a1 1 0 0 1-1-1.2 2 2 0 1 0-3.8 0 1 1 0 0 1-1 1.2H7.4a2 2 0 0 1-2-2v-2.2a1 1 0 0 1 1.2-1 2 2 0 1 0 0-3.8 1 1 0 0 1-1.2-1V6.4a2 2 0 0 1 2-2h2.2a1 1 0 0 0 1-1.2 2 2 0 1 1 3.8 0 1 1 0 0 0 1 1.2h2.2a2 2 0 0 1 2 2v2.2a1 1 0 0 0 1.2 1 2 2 0 1 1 0 3.8 1 1 0 0 0-.9.3z"/>',
 };
+// confirmation agencies working with stores
+EXTRA.handshake = '<path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2"/><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/>';
 // the control room: the server's health, the stores' messages
 EXTRA.server = '<rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 7h.01M6 17h.01"/>';
 EXTRA.database = '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/>';

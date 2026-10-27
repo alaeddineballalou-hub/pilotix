@@ -111,6 +111,8 @@ export const NOT_REFS: readonly string[] = [
   'spy_ads.product_id',
   'spy_follow.product_id',
   'spy_events.product_id',
+  // which agency gets this product (goes with the product: removed when it is deleted)
+  'agency_routes.product_id',
 ];
 
 const KIND = z.enum(ARCHIVE_KINDS);
@@ -210,6 +212,8 @@ export async function archiveList(ctx: Ctx, i: z.infer<typeof ListInput>): Promi
   const params: unknown[] = [];
   const p = (v: unknown) => (params.push(v), `$${params.length}`);
   const where = [i.archived ? 'x.archived_at IS NOT NULL' : 'x.archived_at IS NULL'];
+  // a confirmation agency's agents are the agency's: the store never archives them
+  if (i.kind === 'users') where.push('x.agency_id IS NULL');
   const date = i.field === 'created' ? 'x.created_at' : `COALESCE(${LAST[i.kind]}, x.created_at)`;
   if (i.from) where.push(`${date} >= ${p(i.from)}::date`);
   if (i.to) where.push(`${date} < ${p(i.to)}::date + 1`);
@@ -272,7 +276,8 @@ export interface Skipped {
 }
 
 async function namesOf(db: Db, kind: ArchiveKind, ids: number[]) {
-  const rows = await db.query(`SELECT id, name, archived_at FROM ${TABLE[kind]} WHERE id = ANY($1)`, [ids]);
+  // an agency's agent is not the store's account (missing for the store)
+  const rows = await db.query(`SELECT id, name, archived_at FROM ${TABLE[kind]} WHERE id = ANY($1)${kind === 'users' ? ' AND agency_id IS NULL' : ''}`, [ids]);
   return new Map(rows.map((r: any) => [num(r.id), { name: (r.name as string) ?? '', archived: !!r.archived_at }]));
 }
 
@@ -335,6 +340,7 @@ export async function archiveDelete(ctx: Ctx, kind: ArchiveKind, ids: number[]):
       } else if (kind === 'products') {
         // other products that offered them as « produits liés » forget them
         await tx.query('UPDATE products SET linked = ARRAY(SELECT x FROM unnest(linked) AS x WHERE NOT (x = ANY($1::bigint[]))) WHERE linked && $1::bigint[]', [free]);
+        await tx.query('DELETE FROM agency_routes WHERE product_id = ANY($1)', [free]);
         await tx.query('DELETE FROM products WHERE id = ANY($1) AND archived_at IS NOT NULL', [free]);
       } else {
         await tx.query('DELETE FROM stock WHERE warehouse_id = ANY($1) AND qty = 0', [free]);

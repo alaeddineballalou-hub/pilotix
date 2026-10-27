@@ -118,18 +118,20 @@ class AuthGuard implements CanActivate {
     const key = `${ref.shop.id}:${id}`;
     const hit = this.cache.get(key);
     // a token of another version than the cached one (just logged in again, password just changed): read again
-    if (hit && Date.now() - hit.at < 30_000 && tv === hit.tv && hit.ep === authEpoch) {
+    if (hit && Date.now() - hit.at < 30_000 && tv === hit.tv && hit.ep === this.core.authEpoch) {
       Object.assign(req, { session: hit.s, shop: ref });
       this.core.touch(ref);
       return true;
     }
     const p = await core.profileById(ref.db, id);
     if (!p || !p.active) throw new UnauthorizedException('Compte désactivé');
+    // an agency's account inside a store is used only from the agency's space (see core agencywork.ts)
+    if (p.agencyId) throw new UnauthorizedException('Ouvrez l’espace de votre agence');
     // a password change raises token_version: tokens made before it stop working
     const cur = await tokenVersion(ref.db, id);
     const s = await this.core.withShop(core.makeSession(p), ref, false);
     if (this.cache.size > 20_000) this.cache.clear();
-    this.cache.set(key, { s, at: Date.now(), tv: cur, ep: authEpoch });
+    this.cache.set(key, { s, at: Date.now(), tv: cur, ep: this.core.authEpoch });
     if (tv !== cur) throw new UnauthorizedException('Mot de passe changé : reconnectez-vous');
     Object.assign(req, { session: s, shop: ref });
     this.core.touch(ref);
@@ -266,13 +268,31 @@ const NOT_IN_DEMO = new Set(['me.password', 'me.delete', 'me.update', 'users.cre
 /** Actions on the team that the owner's protection and the password rules look at. */
 const TEAM_ACTIONS = new Set(['users.update', 'admin.users.resetPassword', 'me.delete']);
 /**
- * Raised when a password changes or an account is switched off: the sessions the guard keeps (30 s) are read again at
- * once, so the old sessions stop now, not half a minute later. Rare: every cached session is read once more.
+ * Actions after which the sessions the guard keeps (30 s) are read again at once (CoreService.authEpoch): a password
+ * changes, an account is switched off, an agency's agents open or close — the old sessions stop now, not half a minute
+ * later. Rare: every cached session is read once more.
  */
-let authEpoch = 0;
-const AUTH_CHANGES = new Set(['me.password', 'me.delete', 'users.update', 'admin.users.resetPassword']);
+const AUTH_CHANGES = new Set([
+  'me.password',
+  'me.delete',
+  'users.update',
+  'admin.users.resetPassword',
+  // a confirmation agency's agents: opened, closed or given other tasks in the stores it works for
+  'agency.answer',
+  'agency.setAgents',
+  'agency.end',
+  'partners.answer',
+  'partners.setWork',
+  'partners.end',
+]);
 
 const ipOf = (req: { ip?: string }) => core.ipNet(req.ip || '') || 'unknown';
+/** The X-Seller header of an agency's space: a store's id, or « all » (anything else: none). */
+const sellerOf = (v: unknown): number | 'all' | undefined => {
+  const s = String(Array.isArray(v) ? v[0] : (v ?? '')).trim();
+  if (s === 'all') return 'all';
+  return /^[1-9]\d{0,9}$/.test(s) ? Number(s) : undefined;
+};
 const sendLater = (m: Mail | null, what: string) => {
   if (m) sendMail(m).catch((e) => new Logger('Mail').error(`${what} e-mail to ${m.to} failed: ${e?.message || e}`));
 };
@@ -311,6 +331,8 @@ class ApiController {
     if (!ref || ref.shop.status === 'archived' || ref.shop.status === 'deleted') throw new core.AppError('unauthorized', CLOSED);
     const m = (await core.membershipsOf(this.core.t, email)).find((x) => x.shopId === shopId);
     if (!m) throw new core.AppError('forbidden', 'Vous n’avez pas de compte dans cette boutique');
+    // a confirmation agency's person works on this store's orders from the agency's space, never inside the store
+    if (m.agencyId) throw new core.AppError('forbidden', 'Ouvrez l’espace de votre agence : vous y travaillez sur les commandes de ce vendeur');
     const p = await core.profileById(ref.db, m.profileId);
     if (!p?.active) throw new core.AppError('unauthorized', 'Votre compte est désactivé');
     await ref.db.query("UPDATE profiles SET last_seen_at = now(), presence = 'online' WHERE id = $1", [p.id]);
@@ -337,7 +359,8 @@ class ApiController {
     const set = await this.core.settings();
     const stores = await core.storeChoices(this.core.t, acc.email);
     const canAddStore = set.signup.open && (await core.ownedStores(this.core.t, acc.id)) < core.storeLimit(acc, set);
-    return { pick: true as const, ticket: await this.pickTicket(acc), account: { name: acc.name, email: acc.email, verified: acc.verified }, stores, canAddStore };
+    const canAddAgency = set.signup.open && (await core.ownedAgencies(this.core.t, acc.id)) === 0;
+    return { pick: true as const, ticket: await this.pickTicket(acc), account: { name: acc.name, email: acc.email, verified: acc.verified }, stores, canAddStore, canAddAgency };
   }
 
   @Public()
@@ -586,7 +609,7 @@ class ApiController {
       failedLogin(ipKey);
       throw e;
     }
-    authEpoch++;
+    this.core.authEpoch++;
     return { ok: true };
   }
 
@@ -760,8 +783,9 @@ class ApiController {
     if (name.startsWith('archive.') && !req.shop.shop.demo) return this.archive(name, body as any, req);
     // « Parrainage » on a multi-shop server: this store's code and the stores it brought
     if (name === 'me.referrals' && !req.shop.shop.demo) return this.referrals(req);
-    let out: any = await this.core.call(req.shop, name, req.session, body ?? {});
-    if (AUTH_CHANGES.has(name)) authEpoch++;
+    // a confirmation agency's space: the seller chosen at the top of the page (one store, or all of them)
+    let out: any = await this.core.call(req.shop, name, req.session, body ?? {}, sellerOf(req.headers?.['x-seller']));
+    if (AUTH_CHANGES.has(name)) this.core.authEpoch++;
     if (!req.shop.shop.demo) out = await this.afterTeam(name, body as any, out, req);
     // shop #1's name in its links (« Lien des pages », else made from the shop's name) is its name on the platform too
     if (req.shop.shop.primary && STORE_NAMING.has(name)) {
@@ -812,7 +836,7 @@ class ApiController {
     if (name === 'archive.set' && body?.kind === 'users' && body?.archived === true && ownerId !== null && ids.includes(ownerId)) throw new core.AppError('forbidden', 'Le compte du propriétaire ne s’archive pas');
     const out: any = await this.core.call(req.shop, name, req.session, body ?? {});
     // archived or deleted accounts: their sessions end now
-    if (name !== 'archive.list' && body?.kind === 'users') authEpoch++;
+    if (name !== 'archive.list' && body?.kind === 'users') this.core.authEpoch++;
     if (name === 'archive.list' && body?.kind === 'users' && ownerId !== null && Array.isArray(out))
       return out.map((r: core.ArchiveRow) => (r.id === ownerId && !r.archivedAt ? { ...r, blocked: 'owner' } : r));
     return out;

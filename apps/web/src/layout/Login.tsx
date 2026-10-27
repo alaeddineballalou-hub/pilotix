@@ -179,6 +179,12 @@ export function Login() {
                 <a className="btn" href="#/inscription">
                   <Icon name="store" /> {t('login.createStore')}
                 </a>
+                <p className="agx-signup-line small">
+                  <Icon name="headset" />
+                  <span>
+                    <span className="muted">{t('agency.areYou')}</span> <a href="#/inscription-agence">{t('agency.create')}</a>
+                  </span>
+                </p>
               </div>
             )}
           </>

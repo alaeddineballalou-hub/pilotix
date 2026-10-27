@@ -1,6 +1,7 @@
 import { expandRoles, featureOn, procFeature, Role, Session } from '@pilotix/shared';
 import { z, ZodTypeAny } from 'zod';
 import type { Db } from './db';
+import type { Tenancy } from './platform/tenancy';
 
 /** An error the app can show as-is (in French — the app translates known codes). */
 export class AppError extends Error {
@@ -38,6 +39,10 @@ export interface ShopCtx {
   maxUsers: number | null;
   /** active livreurs the plan allows (null = no limit) */
   maxDrivers: number | null;
+  /** a store, or a confirmation agency (missing = a store) */
+  kind?: 'store' | 'agency';
+  /** its public code (others type it to find it) */
+  code?: string | null;
 }
 
 export interface Ctx {
@@ -49,6 +54,18 @@ export interface Ctx {
   emit: (e: LiveEvent) => void;
   /** Server-only abilities (courier APIs, Meta). Missing in the browser preview. */
   server?: ServerHooks;
+  /**
+   * The whole server's data (the platform and every shop's schema), for what joins two shops (a confirmation agency and
+   * the stores it works for). Missing in the browser preview and on a single-shop install.
+   */
+  t?: Tenancy;
+  /**
+   * In a confirmation agency's space: the seller (store) its person works on now — one store, or 'all' of them (the
+   * picker at the top of the page). The work on orders runs in that store (modules/agencywork.ts).
+   */
+  seller?: number | 'all';
+  /** The server's way to act inside another shop (its live updates, its couriers): that shop's ctx for one of its accounts. */
+  otherShop?: (shopId: number, profileId: number) => Promise<Ctx>;
   /**
    * Dellal's AI when it runs inside the page (the Pilotix preview opened in Claude): Claude answers through the page, with
    * no API key, and runs Dellal's tools itself through `runTool` (the same tool code as on the server). Only that preview
@@ -132,7 +149,10 @@ export function shopAllows(shop: ShopCtx | undefined, name: string): { ok: true 
   return { ok: true };
 }
 
-export async function dispatch(registry: Record<string, Procedure>, name: string, ctx: Ctx, rawInput: unknown): Promise<unknown> {
+/** A last check of an action with its checked input (who may call it on what), before it runs. */
+export type Gate = (name: string, ctx: Ctx, input: unknown) => Promise<void>;
+
+export async function dispatch(registry: Record<string, Procedure>, name: string, ctx: Ctx, rawInput: unknown, gate?: Gate): Promise<unknown> {
   const p = registry[name];
   if (!p) throw notFound(`Action inconnue : ${name}`);
   const allowed = shopAllows(ctx.shop, name);
@@ -143,6 +163,7 @@ export async function dispatch(registry: Record<string, Procedure>, name: string
     const i = parsed.error.issues[0];
     throw bad(`Champ invalide : ${i.path.join('.') || 'entrée'} (${i.message})`);
   }
+  if (gate) await gate(name, ctx, parsed.data);
   return p.run(ctx, parsed.data);
 }
 

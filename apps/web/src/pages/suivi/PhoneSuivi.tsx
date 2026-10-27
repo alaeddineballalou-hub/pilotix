@@ -133,7 +133,7 @@ export interface ParcelAction {
   run: () => void;
 }
 
-export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Order; x?: PExtra; reason: string | null; actions: ParcelAction[]; onClaim: () => void; onClose: () => void }) {
+export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Order; x?: PExtra; reason: string | null; actions: ParcelAction[]; onClaim?: () => void; onClose: () => void }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const meta = useRpc('orders.uiMeta', {}, { staleTime: 5 * 60_000 });
@@ -244,8 +244,8 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Ord
               <p>
                 <span aria-hidden="true">💡</span> <b>{t('suivi.ph.todo')}</b> {t(`suivi.ph.tip.${tk}`, { co })}
               </p>
-              {fix && fixOk && (
-                <button type="button" className="pxs-fix" onClick={() => (fix.claim ? onClaim() : setChange(fix.change!))}>
+              {fix && fixOk && (!fix.claim || onClaim) && (
+                <button type="button" className="pxs-fix" onClick={() => (fix.claim ? onClaim?.() : setChange(fix.change!))}>
                   <Icon name={fix.claim ? 'send' : fix.change === 'phone' ? 'phone' : fix.change === 'address' ? 'navigation' : 'building'} />
                   {t(`suivi.ph.fix.${tk}`, { co })}
                 </button>
@@ -316,7 +316,7 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Ord
               </button>
             </div>
           </section>
-        ) : (
+        ) : !onClaim ? null : (
           <button type="button" className="pxs-rc pxs-rc0" onClick={onClaim}>
             <Icon name="copy" />
             <span>

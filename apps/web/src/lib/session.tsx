@@ -1,6 +1,6 @@
 import type { Role, Session } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { backend, isPick, loginServerDemo, PickInfo, rpc, server, setOnLocked, setOnUnauthorized } from './backend';
 import { setShop } from './features';
 import { applyLanguage } from './i18n';
@@ -118,4 +118,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={{ session, ready, picker, login, pick, cancelPick: () => setPicker(null), enter, switchStore, loginDemo, logout, refresh, has, me: session?.profile.id ?? 0 }}>{children}</Ctx.Provider>
   );
+}
+
+/**
+ * A confirmation agency's space, on its sellers' orders: the screens of a store's confirmation and suivi as one of the
+ * agency's agents sees them there — the agency's chief and supervisors do both tasks, the others their own; nobody is
+ * the store's administrator (no store settings, no new orders).
+ */
+export function AgentView({ children }: { children: ReactNode }) {
+  const s = useContext(Ctx);
+  const value = useMemo(() => {
+    if (!s.session) return s;
+    const own = s.session.roles;
+    const lead = s.session.isAdmin || own.includes('agent_manager');
+    const roles = (lead ? ['confirmation', 'suivi'] : own.filter((r) => r === 'confirmation' || r === 'suivi')) as Role[];
+    const session: Session = { ...s.session, isAdmin: false, canManageUsers: false, roles, profile: { ...s.session.profile, agencyId: s.session.shop?.id ?? -1 } };
+    return { ...s, session, has: (...want: Role[]) => want.some((r) => roles.includes(r)) };
+  }, [s]);
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

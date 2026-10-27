@@ -21,6 +21,7 @@
     "dashboard": "Dashboard",
     "doctor": "Doctor",
     "shops": "Shops",
+    "agencies": "Agencies",
     "payments": "Payments",
     "plans": "Plans",
     "demo": "Demo",
@@ -520,5 +521,28 @@
     "noneMade": "None yet.",
     "paid": "Paid",
     "trial": "On trial"
+  },
+  "ag": {
+    "sub": "Confirmation agencies: Pilotix checks each one before it works with stores.",
+    "search": "Search (name, code, e-mail)",
+    "waiting_one": "{{count}} agency is waiting for your check.",
+    "waiting_other": "{{count}} agencies are waiting for your check.",
+    "agency": "Agency",
+    "owner": "Owner",
+    "sellers": "Sellers",
+    "check": "Check",
+    "since": "since {{d}}",
+    "links": "{{active}} under contract · {{pending}} waiting",
+    "verified": "Checked",
+    "toCheck": "To check",
+    "verify": "Check",
+    "unverify": "Remove the check",
+    "suspend": "Suspend",
+    "reactivate": "Reactivate",
+    "suspendTitle": "Suspend {{name}}?",
+    "suspendText": "Its agents stop at once in every store; orders not confirmed yet go back to the stores’ teams.",
+    "reason": "Reason (for the journal)",
+    "saved": "Saved",
+    "none": "No agency yet."
   }
 }

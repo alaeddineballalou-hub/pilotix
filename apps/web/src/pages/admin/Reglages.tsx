@@ -6,7 +6,8 @@ import { backend, server, shopApi } from '../../lib/backend';
 import { useSession } from '../../lib/session';
 import { when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
-import { Card, ErrorBox, Field, Help, Loading, copyText } from '../../ui/kit';
+import { Card, ErrorBox, Field, Help, Icon, Loading, copyText } from '../../ui/kit';
+import { CopyCode } from '../../ui/CopyCode';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { ConfirmButton, intOf, WilayaOptions } from './bits';
@@ -21,12 +22,32 @@ export function ReglagesPage() {
   return (
     <div className="settings-grid">
       <ShopCard s={s} />
+      <StoreCodeCard />
       <DepotsCard />
       <WebCard webKey={s.webhook.key} />
       <CronCard cronKey={s.cron.key} last={s.lastSync} />
       <MetaCard meta={s.meta} />
       <DeleteStoreCard />
     </div>
+  );
+}
+
+/** The store's code (a multi-shop server): a confirmation agency types it to send the store a request. */
+function StoreCodeCard() {
+  const { t } = useTranslation();
+  const { session } = useSession();
+  const code = session?.shop?.code;
+  if (!code || session?.shop?.demo) return null;
+  return (
+    <Card title={t('agency.store.codeTitle')} help={t('agency.store.codeHelp')} className="agx-codecard">
+      <p className="agx-code-line">
+        <CopyCode code={code} />
+      </p>
+      <p className="small muted">{t('agency.store.codeText')}</p>
+      <a className="btn small" href="#/agences">
+        <Icon name="handshake" /> {t('nav.agences')}
+      </a>
+    </Card>
   );
 }
 
