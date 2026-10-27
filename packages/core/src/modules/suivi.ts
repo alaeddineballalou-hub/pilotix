@@ -6,6 +6,7 @@ import { bad, Ctx, notFound, proc, withActionLock } from '../rpc';
 import { getSetting } from '../settings';
 import { addEvent, FollowInput, getOrder, listOrders, ListInput, setFollow } from './orders';
 import { findOrders } from './sav';
+import { applyTrust, DRIVER_CLAIMS } from './trust';
 import { KINDS } from '../couriers/kinds';
 import type { ClaimCategory, ClaimSent, ClaimState } from '../couriers/types';
 import type { CourierKind } from '@pilotix/shared';
@@ -473,6 +474,11 @@ async function createClaim(ctx: Ctx, i: z.infer<typeof ClaimCreate>): Promise<Cl
     )[0];
     const n = num(r.id);
     await addEvent(tx, o.id, me, 'note', null, 'event', `Réclamation ${claimRef(n)} : ${i.details || i.reason}`.slice(0, 300));
+    // the driver was at fault (never called, fake return or delivery): this refusal does not count against the customer (once)
+    if (DRIVER_CLAIMS.includes(i.reason)) {
+      const t = await applyTrust(tx, o.customerId);
+      if (t) await addEvent(tx, o.id, null, 'note', null, 'event', t);
+    }
     return n;
   });
   ctx.emit({ type: 'order', id: o.id });

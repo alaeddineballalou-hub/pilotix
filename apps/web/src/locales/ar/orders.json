@@ -79,7 +79,12 @@
   "flag": {
     "dup": "مكررة ؟",
     "black": "قائمة سوداء",
-    "exchange": "استبدال"
+    "exchange": "استبدال",
+    "stopdesk": "مكتب فقط",
+    "refused": "{{n}} رفض",
+    "look": "شبيه؟",
+    "lookHint": "يشبه {{phone}}، زبون يرفض الطرود",
+    "stopdeskHint": "رفض طردين: التوصيل للمكتب فقط"
   },
   "attemptN": "محاولة {{n}}",
   "callbackAt": "إعادة الاتصال {{when}}",

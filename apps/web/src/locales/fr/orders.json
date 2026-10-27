@@ -79,7 +79,12 @@
   "flag": {
     "dup": "DOUBLON ?",
     "black": "LISTE NOIRE",
-    "exchange": "échange"
+    "exchange": "échange",
+    "stopdesk": "STOP-DESK SEUL",
+    "refused": "{{n}} REFUS",
+    "look": "SOSIE ?",
+    "lookHint": "Ressemble à {{phone}}, un client qui refuse ses colis",
+    "stopdeskHint": "A refusé 2 colis : livraison au bureau uniquement"
   },
   "attemptN": "Tentative {{n}}",
   "callbackAt": "rappel {{when}}",
