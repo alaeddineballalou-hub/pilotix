@@ -274,6 +274,12 @@ export interface Order {
   blacklisted?: boolean;
   customerDelivered?: number;
   customerReturned?: number;
+  /** refused 2 parcels: delivered at the desk only */
+  customerStopdeskOnly?: boolean;
+  /** parcels refused since their last delivered one */
+  customerRefusals?: number;
+  /** a refuser this new number looks like (same device, or same name + commune) */
+  looksLikePhone?: string | null;
   agentName?: string | null;
   followAgentName?: string | null;
   companyName?: string | null;

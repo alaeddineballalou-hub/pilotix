@@ -18,6 +18,7 @@ import { CopyCode } from '../../ui/CopyCode';
 import { useLabelPrinter } from '../depot/Labels';
 import { CourierPanel } from '../suivi/CourierPanel';
 import { useIsPhone } from '../../lib/useMedia';
+import { TrustFlags } from './TrustFlags';
 
 /** Courier kinds with an API (send / label / status / cancel go through the delivery procedures). */
 export const API_KINDS = ['zr', 'zr_legacy', 'yalidine', 'ecotrack', 'noest', 'custom'];
@@ -59,6 +60,7 @@ export default function OrderCard({ id, onClose }: { id: number; onClose: () => 
                   {o.followStatus ? <StatusBadge kind="follow" status={o.followStatus} /> : <span className="muted">—</span>}
                   {o.possibleDuplicate && <span className="flag dup">{t('orders.flag.dup')}</span>}
                   {o.blacklisted && <span className="flag">{t('orders.flag.black')}</span>}
+            <TrustFlags o={o} />
                 </div>
                 <div className="muted small">
                   {t('orders.card.created', { when: when(o.createdAt) })} · {t(`status.channel.${o.channel}`)}
