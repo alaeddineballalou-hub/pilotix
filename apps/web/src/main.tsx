@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { lazy, StrictMode, Suspense, useEffect, useState } from 'react';
+import { lazy, startTransition, StrictMode, Suspense, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Legal, Signup, SignupConfirm, StorePicker, VerifyEmail } from './layout/Accounts';
 import { LockScreen } from './layout/LockScreen';
@@ -45,8 +45,9 @@ function useHash() {
   const read = () => location.hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
   const [parts, setParts] = useState(read);
   useEffect(() => {
+    // the new page is rendered as a transition: the click shows at once and a big page no longer freezes the screen while it builds
     const on = () => {
-      setParts(read());
+      startTransition(() => setParts(read()));
       window.scrollTo(0, 0);
     };
     window.addEventListener('hashchange', on);
