@@ -264,22 +264,24 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
               </button>
             )
           )}
-          <select
-            className="icon-btn px-hdr-lang"
-            aria-label={t('shell.language')}
-            value={i18n.language}
-            onChange={(e) => {
-              applyLanguage(e.target.value as Language);
-              rpc('me.language', { language: e.target.value as Language }).catch(() => {});
-            }}
-            style={{ width: 'auto', padding: '0 6px', fontWeight: 700 }}
-          >
-            {LANGUAGES.map((l) => (
-              <option key={l} value={l}>
-                {l.toUpperCase()}
-              </option>
-            ))}
-          </select>
+          <span className="icon-btn px-hdr-lang px-lang" title={t('shell.language')}>
+            <Icon name="languages" />
+            <select
+              className="px-lang-sel"
+              aria-label={t('shell.language')}
+              value={i18n.language}
+              onChange={(e) => {
+                applyLanguage(e.target.value as Language);
+                rpc('me.language', { language: e.target.value as Language }).catch(() => {});
+              }}
+            >
+              {LANGUAGES.map((l) => (
+                <option key={l} value={l}>
+                  {l.toUpperCase()}
+                </option>
+              ))}
+            </select>
+          </span>
           <button
             className="icon-btn theme-btn px-hdr-theme"
             aria-label={t('shell.theme')}
