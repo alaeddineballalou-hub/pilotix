@@ -324,3 +324,8 @@
 .lp-px-form h3 { margin-top: 0; }
 .lp-px-a { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
 .lp-px-a .grow { flex: 1; }
+
+/* Réglages › WhatsApp button */
+.lp-wa-vars { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.lp-wa-vars .chip { cursor: pointer; border: 1px solid var(--line); background: var(--surface); }
+.lp-wa-ex { background: #e7fbe9; border-radius: 12px; padding: 10px 12px; font-size: 14px; }

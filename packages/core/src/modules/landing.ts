@@ -25,6 +25,8 @@ import {
   landingPrice,
   renderLanding,
   sha256Hex,
+  WHATSAPP_DEFAULT,
+  whatsappNumber,
   WILAYAS,
   zeroBits,
 } from '@pilotix/shared';
@@ -314,6 +316,7 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     // the pixel only on the real page: never in Pilotix (preview, demo), whose visits are not customers
     pixelId: o.mode === 'live' ? px.meta : '',
     tiktokId: o.mode === 'live' ? px.tiktok : '',
+    whatsapp: s.whatsapp?.on && whatsappNumber(s.whatsapp.number) ? { number: s.whatsapp.number, label: s.whatsapp.label || WHATSAPP_DEFAULT.label, message: s.whatsapp.message || WHATSAPP_DEFAULT.message } : null,
     productId: num(l.product_id),
     // the shop's own Cloudflare keys, else the widget Pilotix keeps for the address the page is served at
     turnstileKey: o.mode === 'live' ? String(s.turnstileSiteKey ?? '').trim() || ((await ctx.server?.turnstileSite?.(hostOf(pageUrl || o.post))) ?? '') : '',
@@ -1362,6 +1365,16 @@ const SettingsInput = z.object({
   /** Cloudflare Turnstile: the site key (public, on the pages) and the secret key (a value replaces, '' keeps, null removes; admins only) */
   turnstileSiteKey: z.string().trim().max(100).regex(/^([0-9A-Za-z_-]{10,100})?$/, 'Clé de site Cloudflare invalide').default(''),
   turnstileSecret: z.string().max(200).nullable().default(''),
+  /** the WhatsApp button of the thank-you screen ({nom}, {produit}, {quantite}, {total}, {telephone}, {wilaya}, {commune}) */
+  whatsapp: z
+    .object({
+      on: z.boolean(),
+      number: z.string().trim().max(30),
+      label: z.string().trim().max(60),
+      message: z.string().trim().max(800),
+    })
+    .refine((w) => !w.on || !!whatsappNumber(w.number), { message: 'Numéro WhatsApp invalide (ex. 0661234567 ou +213661234567)' })
+    .default({ on: false, number: '', label: '', message: '' }),
 });
 
 const B64 = (max: number) => z.string().max(max).regex(/^[A-Za-z0-9+/=]+$/, 'Image invalide');
@@ -1549,7 +1562,10 @@ export const landingProcs = {
     const own = !!String((await ctx.db.query(`SELECT value FROM settings WHERE key = $1`, [LANDING_CAPI_SECRET]))[0]?.value ?? '');
     const ads = !!String((await ctx.db.query(`SELECT value FROM settings WHERE key = 'secret_meta_token'`))[0]?.value ?? '');
     return {
-      settings: { pixelId: s.pixelId, testEventCode: s.testEventCode, purchaseAt: s.purchaseAt, abandonAfterMin: s.abandonAfterMin, autoCreate: s.autoCreate, storeSlug: s.storeSlug ?? '', turnstileSiteKey: s.turnstileSiteKey ?? '' },
+      settings: {
+        pixelId: s.pixelId, testEventCode: s.testEventCode, purchaseAt: s.purchaseAt, abandonAfterMin: s.abandonAfterMin, autoCreate: s.autoCreate, storeSlug: s.storeSlug ?? '', turnstileSiteKey: s.turnstileSiteKey ?? '',
+        whatsapp: s.whatsapp ?? { on: false, number: '', label: WHATSAPP_DEFAULT.label, message: WHATSAPP_DEFAULT.message },
+      },
       /** Cloudflare Turnstile's secret key is saved (it never leaves the server either) */
       turnstile: !!String((await ctx.db.query(`SELECT value FROM settings WHERE key = $1`, [LANDING_TURNSTILE_SECRET]))[0]?.value ?? ''),
       /** Pilotix keeps a Cloudflare widget for the pages' address: protected with nothing to do */

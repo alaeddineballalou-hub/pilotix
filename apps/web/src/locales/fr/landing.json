@@ -564,5 +564,26 @@
     "noDefault": "Par défaut (aucun)",
     "off": "Aucun pixel",
     "legacy": "Cette page utilise encore le pixel {{id}} tapé à la main : choisissez un pixel ci-dessus pour le remplacer."
+  },
+  "wa": {
+    "title": "Bouton WhatsApp (après la commande)",
+    "help": "Sur l’écran « Merci », un bouton vert ouvre WhatsApp vers votre numéro avec un message déjà écrit (nom, produit, total…). Le client confirme plus vite, et vous l’avez sur WhatsApp.",
+    "on": "Afficher le bouton WhatsApp",
+    "onHelp": "Sur toutes les landing pages, après la commande.",
+    "number": "Votre numéro WhatsApp",
+    "numberHint": "Ex. 0661234567 ou +213661234567.",
+    "label": "Texte du bouton",
+    "message": "Message envoyé par le client",
+    "messageHint": "Touchez un mot ci-dessous pour l’ajouter : il est remplacé par la vraie valeur de la commande.",
+    "example": "Exemple :",
+    "var": {
+      "nom": "nom du client",
+      "produit": "produit (et variante)",
+      "quantite": "quantité",
+      "total": "total avec livraison",
+      "telephone": "téléphone",
+      "wilaya": "wilaya",
+      "commune": "commune"
+    }
   }
 }

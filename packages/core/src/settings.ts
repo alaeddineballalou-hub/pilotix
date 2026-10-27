@@ -46,6 +46,8 @@ export interface SettingsMap {
     storeSlug?: string;
     /** Cloudflare Turnstile's site key (invisible robot check on the pages); '' = off. Its secret key is a secret of its own. */
     turnstileSiteKey?: string;
+    /** the « contact us on WhatsApp » button of the thank-you screen */
+    whatsapp?: { on: boolean; number: string; label: string; message: string };
   };
   /** Dashboard goals (admin): delivered revenue per month */
   goals: { monthlyRevenue: number };

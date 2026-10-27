@@ -5,12 +5,18 @@ import { useTranslation } from 'react-i18next';
 import { backend, serverUrl, type Out } from '../../lib/backend';
 import { OwnDomain } from './Domain';
 import { PixelsCard } from './Pixels';
+import { WHATSAPP_DEFAULT, WHATSAPP_VARS } from '@pilotix/shared';
+
 import { da, dateTime } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { copyText, Empty, ErrorBox, Field, Icon, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { SaveBar } from '../ai/agent';
+
+/** the message as a customer would send it (an example order) */
+const WA_EX: Record<string, string> = { nom: 'أمينة بوضياف', produit: 'عربة أطفال قابلة للطي', quantite: '1', total: '10450.00 دج', telephone: '0661234567', wilaya: 'الجزائر', commune: 'باب الزوار' };
+const waExample = (m: string) => m.replace(/\{(\w+)\}/g, (x, k) => WA_EX[k] ?? x);
 
 type PurchaseAt = 'order' | 'confirmed' | 'delivered';
 
@@ -58,6 +64,7 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
     autoCreate: f.autoCreate,
     storeSlug: f.storeSlug.trim().replace(/^-+|-+$/g, ''),
     turnstileSiteKey: f.turnstileSiteKey.trim(),
+    whatsapp: { on: f.whatsapp.on, number: f.whatsapp.number.trim(), label: f.whatsapp.label.trim(), message: f.whatsapp.message.trim() },
   });
   const submit = () => save.mutate({ ...values(), capiToken: token.trim() ? token.trim() : '', turnstileSecret: tsSecret.trim() ? tsSecret.trim() : '' });
   /** Cloudflare's secret key removed: the check is off until a new one is saved */
@@ -123,6 +130,45 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
             <Icon name="copy" /> {t('landing.set.copy')}
           </button>
         </div>
+      </section>
+
+      <section className="card">
+        <h2>
+          <Icon name="whatsapp" /> {t('landing.wa.title')}
+        </h2>
+        <p className="pd-note">{t('landing.wa.help')}</p>
+        <label className="lp-switch">
+          <input type="checkbox" checked={f.whatsapp.on} onChange={(e) => set('whatsapp', { ...f.whatsapp, on: e.target.checked })} />
+          <span>
+            <b>{t('landing.wa.on')}</b>
+            <small>{t('landing.wa.onHelp')}</small>
+          </span>
+        </label>
+        {f.whatsapp.on && (
+          <>
+            <div className="grid2">
+              <Field label={t('landing.wa.number')} hint={t('landing.wa.numberHint')}>
+                <input className="ltr" type="tel" inputMode="tel" value={f.whatsapp.number} placeholder="0661 23 45 67" onChange={(e) => set('whatsapp', { ...f.whatsapp, number: e.target.value })} />
+              </Field>
+              <Field label={t('landing.wa.label')}>
+                <input dir="auto" value={f.whatsapp.label} maxLength={60} placeholder={WHATSAPP_DEFAULT.label} onChange={(e) => set('whatsapp', { ...f.whatsapp, label: e.target.value })} />
+              </Field>
+            </div>
+            <Field label={t('landing.wa.message')} hint={t('landing.wa.messageHint')}>
+              <textarea dir="auto" rows={4} maxLength={800} value={f.whatsapp.message} placeholder={WHATSAPP_DEFAULT.message} onChange={(e) => set('whatsapp', { ...f.whatsapp, message: e.target.value })} />
+            </Field>
+            <div className="lp-wa-vars">
+              {WHATSAPP_VARS.map((k) => (
+                <button key={k} type="button" className="chip" onClick={() => set('whatsapp', { ...f.whatsapp, message: `${f.whatsapp.message}${f.whatsapp.message && !/\s$/.test(f.whatsapp.message) ? ' ' : ''}{${k}}` })} title={t(`landing.wa.var.${k}`)}>
+                  {`{${k}}`} · {t(`landing.wa.var.${k}`)}
+                </button>
+              ))}
+            </div>
+            <p className="lp-wa-ex" dir="rtl">
+              <b>{t('landing.wa.example')}</b> {waExample(f.whatsapp.message || WHATSAPP_DEFAULT.message)}
+            </p>
+          </>
+        )}
       </section>
 
       <section className="card">

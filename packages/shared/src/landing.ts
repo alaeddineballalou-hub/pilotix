@@ -41,6 +41,21 @@ export interface LandingView {
   turnstileKey?: string;
   /** TikTok pixel code (real pages only) */
   tiktokId?: string;
+  /** a « contact us on WhatsApp » button on the thank-you screen: the number (international, digits), its label, the message ({nom}, {produit}…) */
+  whatsapp?: { number: string; label: string; message: string } | null;
+}
+
+/** the words of the WhatsApp message the customer can send from the thank-you screen */
+export const WHATSAPP_VARS = ['nom', 'produit', 'quantite', 'total', 'telephone', 'wilaya', 'commune'] as const;
+export const WHATSAPP_DEFAULT = {
+  label: 'تواصل معنا على واتساب',
+  message: 'السلام عليكم، أنا {nom}. طلبت {produit} (الكمية {quantite}) بمبلغ {total}. رقمي {telephone}، {wilaya} - {commune}.',
+};
+/** a WhatsApp number as wa.me wants it: international digits (0661… → 213661…) */
+export function whatsappNumber(raw: string): string {
+  let d = String(raw ?? '').replace(/\D/g, '').replace(/^00/, '');
+  if (/^0[567]\d{8}$/.test(d)) d = `213${d.slice(1)}`;
+  return /^\d{10,15}$/.test(d) ? d : '';
 }
 
 export interface LandingRender {
@@ -160,6 +175,7 @@ input:focus,select:focus{outline:2px solid var(--c);outline-offset:-1px;border-c
 .trust{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;color:var(--m);font-size:13px;margin-top:10px}
 .so{margin-top:12px;padding:18px;border-radius:12px;background:#f3f4f6;text-align:center}.so b{display:block;font-size:19px;color:#b91c1c}.so p{margin:6px 0 0;color:var(--m)}
 footer{text-align:center;color:var(--m);font-size:12px;padding:18px}
+.wa{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;padding:13px;border-radius:12px;background:#25d366;color:#fff;font-weight:800;font-size:17px;text-decoration:none}.wa:active{background:#1da851}
 .bk{display:block;background:#fff;border-bottom:1px solid var(--b);padding:10px 14px;font-weight:700;color:var(--c);text-decoration:none;font-size:15px}`;
 
 // The page's script, kept small and old-browser friendly (no build step on the page itself). Meta's pixel (~94 KB)
@@ -229,6 +245,7 @@ var q=qv(),wait=Date.now();
 ask('order',b,function(r,st){
 if(!r||!r.ok){busy=false;btn.disabled=false;btn.textContent=C.cta;$('fe').textContent='\\u062a\\u0639\\u0630\\u0631 \\u0627\\u0644\\u0625\\u0631\\u0633\\u0627\\u0644\\u060c \\u062a\\u062d\\u0642\\u0642 \\u0645\\u0646 \\u0627\\u0644\\u0627\\u062a\\u0635\\u0627\\u0644 \\u0648\\u0623\\u0639\\u062f \\u0627\\u0644\\u0645\\u062d\\u0627\\u0648\\u0644\\u0629';return}
 done=1;var fee=C.fees[w.value];$('okn').textContent=nm;$('o1').textContent=C.title+(vr?' \\u2014 '+vr.options[vr.selectedIndex].text:'')+' \\u00d7 '+q;$('o2').textContent=money(unit()*q+(fee||0));
+var wa=$('wa');if(wa&&C.wa){var V={nom:nm,produit:C.title+(vr?' \\u2014 '+vr.options[vr.selectedIndex].text:''),quantite:q,total:money(unit()*q+(fee||0)),telephone:nph(f.ph.value),wilaya:w.value?w.options[w.selectedIndex].text.replace(/^\\d+\\s*-\\s*/,''):'',commune:cm.value?cm.options[cm.selectedIndex].text:''};wa.href='https://wa.me/'+C.wa.n+'?text='+encodeURIComponent(C.wa.m.replace(/\\{(\\w+)\\}/g,function(x,k){return V[k]!=null?V[k]:x}))}
 f.style.display='none';$('ok').style.display='block';window.scrollTo(0,0)})})()};sum()})();`;
 
 /**
@@ -291,6 +308,7 @@ export function renderLanding(v: LandingView, r: LandingRender): string {
     mode: r.mode, post: r.post, geo: r.geo, lead: r.lead ?? '', ch: r.challenge, bits: r.bits, slug: v.slug, price: v.price, vp, fees: v.fees, title: v.title, vl: v.variantLabel, cta,
     vid: r.viewId ?? '', px: r.mode === 'live' && v.pixelId && /^\d{5,20}$/.test(v.pixelId) ? v.pixelId : '', pid: v.productId ?? 0, op: off ? v.oldPrice : 0,
     g: r.group?.slug ?? '',
+    wa: v.whatsapp && whatsappNumber(v.whatsapp.number) ? { n: whatsappNumber(v.whatsapp.number), m: v.whatsapp.message || WHATSAPP_DEFAULT.message } : null,
     tt: r.mode === 'live' && v.tiktokId && /^[A-Z0-9]{10,30}$/.test(v.tiktokId) ? v.tiktokId : '',
     ts: r.mode === 'live' && v.turnstileKey && /^[0-9A-Za-z_-]{10,100}$/.test(v.turnstileKey) ? v.turnstileKey : '',
   };
@@ -320,7 +338,11 @@ ${variants}<label for="qt">الكمية</label><div class="q"><button type="butt
 <div class="sum"><div><span>سعر المنتج</span><b id="s1"></b></div><div><span>التوصيل</span><b id="s2"></b></div><div class="tt"><span>المجموع</span><b id="s3"></b></div></div>
 <button class="go" id="go">${cta}</button><div class="e" id="fe" role="alert"></div><div class="trust"><span>✔ الدفع عند الاستلام</span><span>✔ معاينة المنتج قبل الدفع</span></div></form>
 <div id="ok" class="ok" style="display:none" role="status"><i>✓</i><h2>شكراً <span id="okn"></span>!</h2><p>تم استلام طلبك بنجاح.</p><p>سيتصل بك فريقنا قريباً لتأكيد الطلب.</p>
-<div class="sum"><div><span id="o1"></span></div><div class="tt"><span>المجموع</span><b id="o2"></b></div></div></div>`}</section></div>
+<div class="sum"><div><span id="o1"></span></div><div class="tt"><span>المجموع</span><b id="o2"></b></div></div>${
+  v.whatsapp && whatsappNumber(v.whatsapp.number)
+    ? `<a id="wa" class="wa" href="https://wa.me/${whatsappNumber(v.whatsapp.number)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 2.9 2.9 0 0 0-.9 2.2 5 5 0 0 0 1.1 2.7 11.5 11.5 0 0 0 4.4 3.9c1.6.7 2.3.8 3.1.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3Z"/></svg>${esc(v.whatsapp.label || WHATSAPP_DEFAULT.label)}</a>`
+    : ''
+}</div>`}</section></div>
 ${desc ? `<section class="card d"><h2>وصف المنتج</h2>${desc}</section>` : ''}</main><footer>${esc(v.shopName)}</footer>
 <script>window.__LP=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script><script>${JS}</script></body></html>`;
 }

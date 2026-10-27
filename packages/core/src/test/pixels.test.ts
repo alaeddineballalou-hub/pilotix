@@ -102,3 +102,17 @@ test('pixels: a deleted pixel — its pages take the default again', async () =>
   assert.equal(cfg(await live(pages[0].slug)).px, META_A);
   assert.equal((await db.query(`SELECT 1 FROM settings WHERE key = $1`, [`secret_pixel_${b.id}`])).length, 0);
 });
+
+test('thank-you screen: the WhatsApp button with the shop’s own message (off by default)', async () => {
+  assert.doesNotMatch(await live(pages[0].slug), /id="wa"/);
+  const g: any = await call('landing.settings.get', admin, {});
+  await assert.rejects(call('landing.settings.save', admin, { ...g.settings, whatsapp: { on: true, number: '12', label: '', message: '' } }), /WhatsApp/);
+  await call('landing.settings.save', admin, { ...g.settings, whatsapp: { on: true, number: '0661 23 45 67', label: 'كلمنا', message: 'سلام، أنا {nom}، طلبت {produit}' } });
+  const h = await live(pages[0].slug);
+  assert.match(h, /id="wa" class="wa" href="https:\/\/wa\.me\/213661234567"/);
+  assert.match(h, /كلمنا/);
+  assert.equal(cfg(h).wa.n, '213661234567');
+  assert.equal(cfg(h).wa.m, 'سلام، أنا {nom}، طلبت {produit}');
+  await call('landing.settings.save', admin, { ...g.settings, whatsapp: { on: false, number: '0661234567', label: '', message: '' } });
+  assert.doesNotMatch(await live(pages[0].slug), /id="wa"/);
+});
