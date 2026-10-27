@@ -1799,17 +1799,40 @@ html[data-theme="dark"] body #ads .kpi.net:not(.loss) :is(.lab, .sub) { color: #
 /* count inside the selected filter pill: pale orange on white -> dark ink */
 html[data-theme="dark"] .ai-filter.on b { background: rgba(255, 255, 255, .92); color: #1B2A47; }
 /* secondary grey a step brighter where it sits on cards */
-html[data-theme="dark"] :is(.nt-card .cm-meta, .nt-card .cm-reason, .nt-card .nt-st) { color: #BCC5D4; }
+html[data-theme="dark"] :is(.nt-card .cm-meta, .nt-card .cm-reason, .nt-card .nt-st, .nt-case-f .cm-by) { color: #CDD4DF; }
 
 /* both themes */
-.dl-ch.dl-whatsapp { background: #15803D; }
-.ai-unread { background: var(--c-accent); color: #1B2A47; }
-html:not([data-theme="dark"]) .ai-conv.unread .ai-conv-l1 time { color: #A4480A; }
-html:not([data-theme="dark"]) .pxk-av.or { color: #8F4A00; }
-.bjm-ar { color: var(--ink); opacity: .75; }
-.bjt-pa.off { opacity: 1; }
-.bjt-pa.off .bjt-pi :is(small, .bjt-ps) { color: var(--c-muted); }
+html body .dl-ch.dl-whatsapp { background: #15803D; }
+html body .ai-unread { background: var(--c-accent); color: #1B2A47; }
+html:not([data-theme="dark"]) body .ai-conv.unread .ai-conv-l1 time { color: #A4480A; }
+html:not([data-theme="dark"]) body .pxk-av.or { color: #8F4A00; }
+html body .bjm-ar { color: var(--ink); opacity: .75; }
+html body .bjt-pa.off { opacity: 1; }
+html body .bjt-pa.off .bjt-pi :is(small, .bjt-ps) { color: var(--c-muted); }
 /* "replaced / not sent" notification cards were faded with opacity, which pushed their small text under 3:1.
    They stay fully readable now and show they are inactive with a dashed edge and greyed colours instead. */
-.nt-dim { opacity: 1; border-style: dashed !important; background: var(--raise) !important; }
-.nt-dim :is(.cm-tags, .dl-ch) { filter: saturate(.35); }
+html body .nt-dim { opacity: 1; border-style: dashed !important; background: var(--raise) !important; }
+html body .nt-dim :is(.cm-tags, .dl-ch) { filter: saturate(.35); }
+
+/* round 2 — found by crawling every screen (164 desktop screens + phone) */
+/* small count badges: white on coral / orange was 2:1 -> dark ink */
+html body .bjr-tabs .tab b.bjr-n, html body .dr-gh.dr-bad span { color: #fff; background: var(--c-bad-fill); }
+html body .spy-pmark.you span { color: #1B2A47; }
+/* "selected" segment buttons used white text on the navy token, which is pale blue in dark */
+html[data-theme="dark"] .bjliv .seg button[aria-pressed=true] { color: var(--on-navy); }
+/* the "net" card on the Spy page: same calm dark card as Marketing */
+html[data-theme="dark"] body .spy .kpi.spy-net { background: #1E2D48 !important; border-color: #5D84D6 !important; color: #ECEEF2 !important; }
+html[data-theme="dark"] body .spy .kpi.spy-net :is(.lab, .sub, small) { color: #C3CBD9 !important; }
+/* fixed light colours that stayed light in dark */
+html[data-theme="dark"] .pxs-days.t-info { color: var(--c-info-ink); }
+html[data-theme="dark"] .pxk-reqln u { color: var(--c-accent-ink); }
+html[data-theme="dark"] .pxl-warn { color: var(--c-bad-ink); }
+html[data-theme="dark"] :is(.kpi-bar, .ov-bar-t) { background: rgba(255, 255, 255, .08); }
+html[data-theme="dark"] .bjp-switch span { background: #3A414D; }
+/* brand-coloured names (Google Sheets green, WooCommerce/API purple…) were too dark on dark tiles */
+html[data-theme="dark"] .bjch-tile:not(.solid) b, html[data-theme="dark"] .bjch-type { color: color-mix(in srgb, var(--tc) 55%, #fff); }
+html[data-theme="dark"] .bjg-def { color: var(--c-ok-ink); }
+html[data-theme="dark"] .bjg-add { color: #B9A5F0; }
+html[data-theme="dark"] .bjp-ib-d { color: #F09C95; }
+/* switched-off cases on Notify were faded to half; keep them readable */
+html body .nt-case.nt-off :is(.nt-phone, .nt-case-f) { opacity: .8; }
