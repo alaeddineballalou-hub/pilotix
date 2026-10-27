@@ -275,16 +275,6 @@
 .lp-pg .lp-hi { color: var(--coral); font-weight: 700; }
 .lp-pg .lp-mid { color: var(--warn); font-weight: 700; }
 .lp-mk { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; }
-/* how it works */
-.lp-how-g { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 6px; }
-@media (max-width: 760px) { .lp-how-g { grid-template-columns: minmax(0, 1fr); } }
-.lp-how-c { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px; background: var(--raise); }
-.lp-how-c.a { background: var(--ok-soft); }
-.lp-how-c.r { background: var(--warn-soft); }
-.lp-how-c.b { background: var(--coral-soft); }
-.lp-how-c small { color: var(--ink); opacity: .8; font-size: 12.5px; line-height: 1.45; }
-.lp-how h3 { margin: 14px 0 4px; font-size: 14px; }
-.lp-how-l { margin: 0; padding-inline-start: 20px; color: var(--ink); font-size: 13px; line-height: 1.6; }
 .lp-blockbtn { background: var(--coral); border-color: var(--coral); color: #fff; }
 .lp-blockbtn:hover:not(:disabled) { filter: brightness(1.08); }
 .lp-blockbtn .bji { color: inherit; }

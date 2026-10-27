@@ -68,7 +68,6 @@ export function Protection() {
             <Pages pages={d.pages} />
           </div>
           <Marks marks={d.marks} />
-          <HowItWorks />
         </>
       )}
     </>
@@ -323,38 +322,6 @@ function Marks({ marks }: { marks: Data['marks'] }) {
           ))}
         </div>
       )}
-    </section>
-  );
-}
-
-/** the rules in three lines, and what to set on Meta's side */
-function HowItWorks() {
-  const { t } = useTranslation();
-  return (
-    <section className="card pd-card lp-how">
-      <h2 className="lp-h2">
-        <Icon name="shield" /> {t('landing.pr.how')}
-      </h2>
-      <div className="lp-how-g">
-        <div className="lp-how-c a">
-          <b>🟢 {t('landing.pr.hAllow')}</b>
-          <small>{t('landing.pr.hAllowSub')}</small>
-        </div>
-        <div className="lp-how-c r">
-          <b>🟡 {t('landing.pr.hReview')}</b>
-          <small>{t('landing.pr.hReviewSub')}</small>
-        </div>
-        <div className="lp-how-c b">
-          <b>🔴 {t('landing.pr.hBlock')}</b>
-          <small>{t('landing.pr.hBlockSub')}</small>
-        </div>
-      </div>
-      <h3>{t('landing.pr.meta')}</h3>
-      <ul className="lp-how-l">
-        <li>{t('landing.pr.meta1')}</li>
-        <li>{t('landing.pr.meta2')}</li>
-        <li>{t('landing.pr.meta3')}</li>
-      </ul>
     </section>
   );
 }

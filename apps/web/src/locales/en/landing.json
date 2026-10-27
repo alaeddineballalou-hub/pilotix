@@ -435,17 +435,6 @@
     "marks": "Marked by agents",
     "marksHelp": "When an agent sets “Fake” or “🕵️ Competitor”, the device that ordered is marked: 🟡 next time, 🔴 at the 2nd fake within 30 days or right away for “competitor”. The phone number is not punished (it may belong to someone who never ordered).",
     "noMarks": "No device marked.",
-    "fake": "Fake order",
-    "how": "How it works",
-    "hAllow": "Under 30 points",
-    "hAllowSub": "Normal order. Purchase sent to Meta right away (“At order” setting).",
-    "hReview": "30 to 99 points",
-    "hReviewSub": "The agent sees why. Possible competitor: check question (wilaya + landmark) and ship after a 2nd call the next day. Nothing sent to Meta before confirmation.",
-    "hBlock": "100 points or a certain sign",
-    "hBlockSub": "Robot trap, sent in under 3 s, 3 numbers in 1 h from one device, “competitor” device… Normal “Thank you” screen, nothing to Meta, restore in one click if it was a real customer.",
-    "meta": "On Meta’s side (once)",
-    "meta1": "Ads Manager › your ad sets › Placements: untick “Audience Network” (many fake clicks).",
-    "meta2": "Events Manager › your pixel › Settings › Traffic permissions: allow only your domains.",
-    "meta3": "Landing pages › Settings: “Purchase” at order — only 🟢 orders count; a “Confirmed” event follows when an agent confirms."
+    "fake": "Fake order"
   }
 }
