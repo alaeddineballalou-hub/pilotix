@@ -90,8 +90,8 @@ function HomeStats() {
         <Loading />
       ) : m.seesAll ? (
         <>
+          {featureIsOn('dashboard/doctor') && <ShopDoctor card />}
           <Now />
-          {featureIsOn('dashboard/doctor') && <ShopDoctor />}
           <TeamHealth areas={areas} range={per.range} />
           <Period range={per.range} vs={vs} />
           <Presence />

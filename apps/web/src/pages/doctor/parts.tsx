@@ -75,7 +75,7 @@ export function ScoreRing({ score }: { score: number }) {
 }
 
 /** The top of a Doctor page: the score, one sentence, when it looked, "look again". */
-export function DoctorHero({ title, sub, score, items, checkedAt, onRefresh, busy, badge }: { title: string; sub: string; score: number; items: DoctorItem[]; checkedAt: string; onRefresh: () => void; busy?: boolean; badge?: string }) {
+export function DoctorHero({ title, sub, score, items, checkedAt, onRefresh, busy, badge }: { title?: string; sub: string; score: number; items: DoctorItem[]; checkedAt: string; onRefresh: () => void; busy?: boolean; badge?: string }) {
   const { t } = useTranslation();
   const bad = items.filter((i) => i.level === 'bad').length;
   const warn = items.filter((i) => i.level === 'warn').length;
@@ -86,13 +86,15 @@ export function DoctorHero({ title, sub, score, items, checkedAt, onRefresh, bus
     <section className={`dr-hero dr-hero-${mood}`}>
       <ScoreRing score={score} />
       <div className="dr-hero-t">
-        <div className="dr-hero-h">
-          <span className="dr-logo">
-            <Icon name="sparkles" />
-          </span>
-          <h2>{title}</h2>
-          {badge && <span className="dr-badge">{badge}</span>}
-        </div>
+        {title && (
+          <div className="dr-hero-h">
+            <span className="dr-logo">
+              <Icon name="sparkles" />
+            </span>
+            <h2>{title}</h2>
+            {badge && <span className="dr-badge">{badge}</span>}
+          </div>
+        )}
         <p className="dr-hero-say">{bad ? t('doctor.say.bad', { count: bad }) : warn ? t('doctor.say.warn', { count: warn }) : t('doctor.say.ok')}</p>
         <p className="muted small">{sub}</p>
         <div className="dr-counts">
