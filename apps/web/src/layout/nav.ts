@@ -41,7 +41,7 @@ export interface NavItem {
 
 export const NAV: NavItem[] = [
   { id: 'accueil', icon: 'home', roles: null },
-  { id: 'dashboard', icon: 'chart', roles: ['agent_manager', 'vendeur'], subs: ['overview', 'doctor', 'confirmation', 'depot', 'suivi', 'livreurs', 'sav'] },
+  { id: 'dashboard', icon: 'chart', roles: ['agent_manager', 'vendeur'], subs: ['overview', 'confirmation', 'depot', 'suivi', 'livreurs', 'sav'] },
   {
     id: 'commandes',
     icon: 'list',
