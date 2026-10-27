@@ -506,6 +506,8 @@
     "pixelHint": "Laissez vide pour utiliser le pixel des Réglages.",
     "remove": "Supprimer le groupe",
     "previewHint": "Comme le client le voit",
-    "navHint": "Sur la vraie page, ce produit ouvre sa landing page"
+    "navHint": "Sur la vraie page, ce produit ouvre sa landing page",
+    "sPixel": "Pixel Meta",
+    "pixel": "Pixel Meta de ce groupe"
   }
 }

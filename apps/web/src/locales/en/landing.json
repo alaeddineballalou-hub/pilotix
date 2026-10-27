@@ -506,6 +506,8 @@
     "pixelHint": "Leave empty to use the pixel from Settings.",
     "remove": "Delete the group",
     "previewHint": "As the customer sees it",
-    "navHint": "On the real page, this product opens its landing page"
+    "navHint": "On the real page, this product opens its landing page",
+    "sPixel": "Meta pixel",
+    "pixel": "Meta pixel of this group"
   }
 }
