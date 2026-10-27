@@ -206,10 +206,10 @@ class RemoteBackend implements Backend {
   async addStore(input: { name: string; slug?: string; kind?: 'store' | 'agency' }, ticket?: string) {
     return this.enterWith(await this.req<{ token: string; session: Session }>(ticket ? '/auth/add-store/ticket' : '/auth/add-store', { ...input, ...(ticket ? { ticket } : {}) }));
   }
-  /** The sign-up e-mail's link: the store is made and entered (or « you already have an account »). */
-  async confirmSignup(token: string): Promise<Session | { exists: true; email: string }> {
-    const r = await this.req<{ token: string; session: Session } | { exists: true; email: string }>('/auth/signup/confirm', { token });
-    return 'exists' in r ? r : this.enterWith(r);
+  /** The sign-up e-mail's link: the store is made and entered, or (account-only sign-up) the picker to create it, or « you already have an account ». */
+  async confirmSignup(token: string): Promise<Session | PickInfo | { exists: true; email: string }> {
+    const r = await this.req<{ token: string; session: Session } | PickInfo | { exists: true; email: string }>('/auth/signup/confirm', { token });
+    return 'exists' in r ? r : 'pick' in r ? r : this.enterWith(r);
   }
   /** The e-mail check link (from the store picker: with its ticket). */
   verifySend(ticket?: string) {

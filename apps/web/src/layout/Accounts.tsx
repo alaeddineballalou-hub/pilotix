@@ -58,7 +58,9 @@ export function StorePicker() {
   const { t } = useTranslation();
   const { picker, pick, cancelPick, enter } = useSession();
   const [busy, setBusy] = useState<number | null>(null);
-  const [adding, setAdding] = useState<'store' | 'agency' | null>(null);
+  const first = !!picker && !picker.stores.length && picker.canAddStore;
+  // a new account (no store yet): the first store's form straight away
+  const [adding, setAdding] = useState<'store' | 'agency' | null>(first ? 'store' : null);
   if (!picker) return null;
   const go = async (id: number) => {
     setBusy(id);
@@ -70,11 +72,15 @@ export function StorePicker() {
     }
   };
   return (
-    <Page title={t('shop.acc.pickTitle')}>
-      <p className="pxa-note">{picker.stores.length ? t('shop.acc.pickText', { name: picker.account.name || picker.account.email }) : t('shop.acc.noStore')}</p>
+    <Page
+      title={first ? t('auth.firstStore1') : t('shop.acc.pickTitle')}
+      mark={first ? t('auth.firstStore2') : undefined}
+      sub={first ? t('auth.firstStoreText', { name: (picker.account.name || '').split(' ')[0] || picker.account.email }) : undefined}
+    >
+      {!first && <p className="pxa-note">{picker.stores.length ? t('shop.acc.pickText', { name: picker.account.name || picker.account.email }) : t('shop.acc.noStore')}</p>}
       <StoreList stores={picker.stores} onPick={go} busy={busy} />
       {adding ? (
-        <AddStoreForm ticket={picker.ticket} agency={adding === 'agency'} onDone={enter} onCancel={() => setAdding(null)} />
+        <AddStoreForm ticket={picker.ticket} agency={adding === 'agency'} onDone={enter} onCancel={first && adding === 'store' ? undefined : () => setAdding(null)} />
       ) : (
         <>
           {picker.canAddStore && (
@@ -252,10 +258,8 @@ export function AddStoreModal({ onClose, agency }: { onClose: () => void; agency
 export function Signup({ referral, agency }: { referral?: string; agency?: boolean }) {
   const { t, i18n } = useTranslation();
   const [info, setInfo] = useState<{ open: boolean; trialDays: number } | null>(null);
-  const [f, setF] = useState({ name: '', email: '', password: '', phone: '', referral: (referral ?? '').toUpperCase(), terms: false });
+  const [f, setF] = useState({ name: '', email: '', password: '', phone: '', referral: (referral ?? '').toUpperCase() });
   const [storeName, setStoreName] = useState('');
-  const [slug, setSlug] = useState('');
-  const [touched, setTouched] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -267,7 +271,6 @@ export function Signup({ referral, agency }: { referral?: string; agency?: boole
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!f.terms) return setError(t('shop.acc.needTerms'));
     if (DEMO_ONLY) return setError(t('auth.demoNoSignup'));
     setBusy(true);
     try {
@@ -276,8 +279,8 @@ export function Signup({ referral, agency }: { referral?: string; agency?: boole
         email: f.email.trim(),
         password: f.password,
         phone: f.phone.trim() || null,
-        storeName: storeName.trim(),
-        ...(!agency && touched && slug ? { slug } : {}),
+        // a store sign-up opens the account only; the first store is created right after
+        storeName: agency ? storeName.trim() : '',
         language: (['fr', 'en', 'ar'].includes(i18n.language) ? i18n.language : 'fr') as 'fr' | 'en' | 'ar',
         ...(!agency && f.referral.trim() ? { referral: f.referral.trim() } : {}),
         terms: true,
@@ -313,59 +316,50 @@ export function Signup({ referral, agency }: { referral?: string; agency?: boole
     <Page
       title={agency ? t('auth.signupAgency1') : t('auth.signup1')}
       mark={agency ? t('auth.signupAgency2') : t('auth.signup2')}
-      sub={agency ? t('agency.signupText') : t('shop.acc.signupText', { days: info?.trialDays ?? 14 })}
-      wide
+      sub={agency ? t('agency.signupText') : t('auth.signupSub')}
     >
+      {!agency && (
+        <p className="pxa-badge">
+          <Icon name="gift" /> {t('auth.trialBadge', { days: info?.trialDays ?? 14 })}
+        </p>
+      )}
       <form className="px-acc-form" onSubmit={submit}>
-        {agency ? (
+        {agency && (
           <label className="field">
             <span className="lab">{t('agency.name')}</span>
             <input required minLength={2} maxLength={80} value={storeName} onChange={(e) => setStoreName(e.target.value)} placeholder={t('agency.namePh')} />
           </label>
-        ) : (
-          <StoreNameFields name={storeName} setName={setStoreName} slug={slug} setSlug={setSlug} touched={touched} setTouched={setTouched} />
         )}
-        <div className="pxa-grid2">
-          <label className="field">
-            <span className="lab">{t('shop.acc.yourName')}</span>
-            <input required minLength={2} maxLength={80} autoComplete="name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
-          </label>
-          <label className="field">
-            <span className="lab">{t('shop.acc.phone')}</span>
-            <input dir="ltr" inputMode="tel" maxLength={30} autoComplete="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} placeholder="0550 12 34 56" />
-          </label>
-        </div>
+        <label className="field">
+          <span className="lab">{t('auth.fullName')}</span>
+          <input required minLength={2} maxLength={80} autoComplete="name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder={t('auth.fullNamePh')} />
+        </label>
         <label className="field">
           <span className="lab">{t('login.email')}</span>
-          <input type="email" dir="ltr" required maxLength={200} autoComplete="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
+          <input type="email" dir="ltr" required maxLength={200} autoComplete="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} placeholder="vous@exemple.com" />
+        </label>
+        <label className="field">
+          <span className="lab">{t('shop.acc.phone')}</span>
+          <input dir="ltr" inputMode="tel" required minLength={9} maxLength={30} autoComplete="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} placeholder="0555 12 34 56" />
         </label>
         <label className="field">
           <span className="lab">{t('login.password')}</span>
           <PasswordInput required minLength={8} maxLength={200} autoComplete="new-password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />
-          <span className="hint">{t('shop.acc.passwordHint')}</span>
-        </label>
-        {!agency && (
-          <label className="field">
-            <span className="lab">{t('shop.acc.referral')}</span>
-            <input dir="ltr" maxLength={12} value={f.referral} onChange={(e) => setF({ ...f, referral: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })} placeholder={t('shop.acc.referralPh')} />
-          </label>
-        )}
-        <label className="px-terms">
-          <input type="checkbox" checked={f.terms} onChange={(e) => setF({ ...f, terms: e.target.checked })} />
-          <span>
-            {t('shop.acc.terms1')}{' '}
-            <a href="#/conditions" target="_blank" rel="noreferrer">
-              {t('shop.acc.terms2')}
-            </a>
+          <span className={`pxa-hint${f.password.length >= 8 ? ' ok' : ''}`}>
+            <i /> {t('auth.pwMin')}
           </span>
         </label>
-        <p className="small muted px-privacy">
-          <Icon name="shield" /> {agency ? t('agency.private') : t('shop.acc.private')}
-        </p>
         {error && <p className="form-err">{error}</p>}
         <button className="pxa-submit" disabled={busy}>
-          {busy ? '…' : agency ? t('agency.signupSubmit') : t('shop.acc.signupSubmit')}
+          {busy ? '…' : t('auth.createAccount')}
         </button>
+        <p className="pxa-legalnote">
+          {t('auth.accept1')} <a href="#/conditions" target="_blank" rel="noreferrer">{t('auth.terms')}</a> {t('auth.accept2')}{' '}
+          <a href="#/conditions" target="_blank" rel="noreferrer">
+            {t('auth.privacyFull')}
+          </a>
+          .
+        </p>
       </form>
       <p className="pxa-alt">
         {t('auth.haveAccountQ')} <a href="#/">{t('auth.signIn')}</a>
@@ -387,7 +381,7 @@ export function Signup({ referral, agency }: { referral?: string; agency?: boole
 /** The sign-up e-mail's link: the store is made and the person enters it. */
 export function SignupConfirm({ token }: { token: string }) {
   const { t } = useTranslation();
-  const { enter } = useSession();
+  const { enter, showPicker } = useSession();
   const [state, setState] = useState<'busy' | 'exists' | 'error'>('busy');
   const [msg, setMsg] = useState('');
   const once = useRef(false);
@@ -398,6 +392,11 @@ export function SignupConfirm({ token }: { token: string }) {
       .confirmSignup(token)
       .then((r) => {
         if ('exists' in r) return setState('exists');
+        // account-only sign-up: the picker, where the first store is created
+        if ('pick' in r) {
+          showPicker(r);
+          return home('#/');
+        }
         enter(r);
         home('#/accueil');
       })
@@ -405,7 +404,7 @@ export function SignupConfirm({ token }: { token: string }) {
         setMsg(e?.message ?? t('common.error'));
         setState('error');
       });
-  }, [token, enter, t]);
+  }, [token, enter, showPicker, t]);
   return (
     <Page title={state === 'busy' ? t('shop.acc.making') : state === 'exists' ? t('shop.acc.haveAccountTitle') : t('shop.acc.linkBad')}>
       <p className="pxa-note">{state === 'busy' ? t('shop.acc.makingText') : state === 'exists' ? t('shop.acc.haveAccountText') : msg}</p>

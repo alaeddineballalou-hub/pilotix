@@ -540,3 +540,24 @@ test('the demo shop: fake data, reset to the start, its accounts not in the logi
   const g = await p('p.demo.get');
   assert.equal(g.shop.id, s.id);
 });
+
+test('sign-up without a store: only the account; the first store, added inside, keeps the phone and the referral', async () => {
+  const { t } = await server();
+  const s1 = (await loadShop(t, { primary: true }))!;
+  const form = { name: 'Karim Ouali', email: 'karim@nouveau.dz', password: 'karim-pass-1', phone: '0550 11 22 33', language: 'fr', referral: s1.referralCode, terms: true };
+  const m = (await startSignup(t, form, '1.2.3.9'))!;
+  assert.equal(m.kind, 'confirm');
+  assert.equal((m as any).store, '');
+  const done: any = await confirmSignup(t, (m as any).token);
+  assert.equal(done.shop, null);
+  assert.equal(done.account.verified, true);
+  assert.equal(done.account.email, 'karim@nouveau.dz');
+  const acc = (await accountByEmail(t, 'karim@nouveau.dz'))!;
+  const shop = await addStore(t, acc, { name: 'Karim Bébé' });
+  assert.equal(shop.ownerAccountId, acc.id);
+  const row = (await t.platform.query('SELECT owner_phone, referred_by FROM platform.shops WHERE id = $1', [shop.id]))[0];
+  assert.equal(row.owner_phone, '0550 11 22 33');
+  assert.equal(Number(row.referred_by), s1.id);
+  // an agency still gives its name
+  await assert.rejects(startSignup(t, { ...form, email: 'ag@nouveau.dz', kind: 'agency' }, '1.2.3.9'), /agence/);
+});

@@ -120,7 +120,13 @@ export function signupConfirmMail(m: { token: string; email: string; name: strin
     en: { s: 'Pilotix: confirm your sign-up', t: 'Confirm your e-mail', a: `Thank you! Your store “${m.store}” is almost ready.`, b: 'Click the button: your store is created right away, with its free trial.', btn: 'Create my store', v: 'This link works once, for 48 hours.' },
     ar: { s: 'Pilotix: أكّد تسجيلك', t: 'أكّد بريدك الإلكتروني', a: `شكرًا! متجرك «${m.store}» جاهز تقريبًا.`, b: 'اضغط على الزر: يُنشأ متجرك فورًا مع فترته التجريبية المجانية.', btn: 'إنشاء متجري', v: 'يعمل هذا الرابط مرة واحدة، لمدة 48 ساعة.' },
   }[l];
-  const T = m.agency ? A : S;
+  // an account-only sign-up (the first store is added once inside)
+  const O = {
+    fr: { s: 'Pilotix : confirmez votre inscription', t: 'Confirmez votre e-mail', a: 'Merci ! Votre compte Pilotix est presque prêt.', b: 'Cliquez sur le bouton : votre compte s’ouvre, et vous créez votre boutique avec son essai gratuit.', btn: 'Ouvrir mon compte', v: 'Ce lien marche une fois, pendant 48 heures.' },
+    en: { s: 'Pilotix: confirm your sign-up', t: 'Confirm your e-mail', a: 'Thank you! Your Pilotix account is almost ready.', b: 'Click the button: your account opens, and you create your store with its free trial.', btn: 'Open my account', v: 'This link works once, for 48 hours.' },
+    ar: { s: 'Pilotix: أكّد تسجيلك', t: 'أكّد بريدك الإلكتروني', a: 'شكرًا! حسابك في Pilotix جاهز تقريبًا.', b: 'اضغط على الزر: يُفتح حسابك، ثم تنشئ متجرك مع فترته التجريبية المجانية.', btn: 'فتح حسابي', v: 'يعمل هذا الرابط مرة واحدة، لمدة 48 ساعة.' },
+  }[l];
+  const T = m.agency ? A : m.store.trim() ? S : O;
   return mail(m.email, T.s, { l, title: T.t, icon: '✉️', hello: hello(l, m.name), lines: [T.a, T.b], button: { label: T.btn, link }, after: [`⏱️ ${T.v}`], note: NOT_YOU[l] });
 }
 

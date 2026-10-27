@@ -15,6 +15,8 @@ interface SessionState {
   /** the store chosen in the picker */
   pick: (shop: number) => Promise<void>;
   cancelPick: () => void;
+  /** the picker from somewhere else than the login (an account-only sign-up just confirmed) */
+  showPicker: (p: PickInfo) => void;
   /** a session the server just gave (a confirmed sign-up, a store added, another store chosen) */
   enter: (s: Session) => void;
   /** another store of the same person, without the password again */
@@ -116,7 +118,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const has = (...roles: Role[]) => !!session && (session.isAdmin || roles.some((r) => session.roles.includes(r)));
 
   return (
-    <Ctx.Provider value={{ session, ready, picker, login, pick, cancelPick: () => setPicker(null), enter, switchStore, loginDemo, logout, refresh, has, me: session?.profile.id ?? 0 }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ session, ready, picker, login, pick, cancelPick: () => setPicker(null), showPicker: setPicker, enter, switchStore, loginDemo, logout, refresh, has, me: session?.profile.id ?? 0 }}>{children}</Ctx.Provider>
   );
 }
 

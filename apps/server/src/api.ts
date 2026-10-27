@@ -702,6 +702,8 @@ class ApiController {
       throw e;
     }
     if ('exists' in r) return { exists: true, email: r.email };
+    // an account-only sign-up: the picker, where the person creates their first store
+    if (!r.shop) return this.picker(r.account);
     this.core.invalidate();
     return this.enter(r.shop.id, r.account.email);
   }
