@@ -7,7 +7,10 @@ import { z } from 'zod';
 import { Db, iso, num, numOrNull } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
-import { b64, HtmlOpts, imageRows, ImgRef, productContext, readImgs, viewImages, WHO } from './landing';
+// (landing.ts imports this file too: only functions from it here, used once both are loaded)
+import { b64, HtmlOpts, imageRows, ImgRef, productContext, readImgs, viewImages } from './landing';
+
+const WHO = ['marketer'] as const;
 import { landingSettings, landingStore } from './landingquery';
 
 const id = z.number().int().positive();
