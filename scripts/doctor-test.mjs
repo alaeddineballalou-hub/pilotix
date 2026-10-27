@@ -65,7 +65,7 @@ step('server Doctor: the jobs');
   const t0 = s.startedAt;
   const st = (list, name) => list.find((j) => j.name === name)?.state;
   let l = s.jobList(t0 + MIN);
-  check(l.length === 10 && l.every((j) => j.state === 'waiting'), 'just started: every job is waiting', l.map((j) => j.state));
+  check(l.length === 11 && l.every((j) => j.state === 'waiting'), 'just started: every job is waiting', l.map((j) => j.state));
   l = s.jobList(t0 + 6 * MIN);
   check(st(l, 'notify-run') === 'late' && st(l, 'courier-sync') === 'waiting', 'a job never seen after 3 runs + 2 min is late; a slow one still waits', l);
   s.job('notify-run', true);
@@ -84,7 +84,7 @@ step('server Doctor: the jobs');
     encoding: 'utf8',
   });
   const offStates = JSON.parse(off.stdout.trim() || '[]');
-  check(offStates.length === 10 && offStates.every((x) => x === 'off'), 'without Redis every job is "off"', off.stderr || offStates);
+  check(offStates.length === 11 && offStates.every((x) => x === 'off'), 'without Redis every job is "off"', off.stderr || offStates);
 }
 
 // ---------------------------------------------------------------- 2. the logger
@@ -173,7 +173,7 @@ check(
   it('config'),
 );
 check(['ok', 'warn'].includes(it('silentShops')?.level) && !(it('silentShops').list ?? []).some((l) => /démo|demo/i.test(l.label)), 'silent shops checked (the demo shop is never counted)', it('silentShops'));
-check(R.jobs.length === 10 && R.jobs.every((j) => ['ok', 'late', 'failing', 'waiting', 'off'].includes(j.state)), 'the 10 jobs with a state', R.jobs);
+check(R.jobs.length === 11 && R.jobs.every((j) => ['ok', 'late', 'failing', 'waiting', 'off'].includes(j.state)), 'the 11 jobs with a state', R.jobs);
 check(R.errors.some((e) => e.level === 'warn' && /TRUST_PROXY/.test(e.message)), 'a warning the server wrote shows in the report', R.errors);
 for (const i of R.items) for (const l of i.list ?? []) check(Number.isFinite(l.n) && typeof l.label === 'string', `${i.id}: a clean line`, l);
 
@@ -197,7 +197,7 @@ check((await req('/rpc/stats.doctor', {}, agent)).status === 403, 'a confirmatio
 // ---------------------------------------------------------------- 5. the sentences
 step('every sentence exists in French, English and Arabic');
 const SHOP_IDS = ['stockOut', 'stockSoon', 'notCalled', 'lateCallbacks', 'confRate', 'confRateDrop', 'fakeOrders', 'weakAgents', 'notShipped', 'stuckParcels', 'openAlerts', 'returns', 'returnsUp', 'badWilayas', 'ordersDrop', 'ordersOk', 'cashLate'];
-const SERVER_IDS = ['cpu', 'memory', 'disk', 'restarted', 'dbPing', 'dbConnections', 'dbSlow', 'dbDown', 'dbPoolFull', 'redisOff', 'redisDown', 'redis', 'jobs', 'errors', 'courierSync', 'silentShops', 'config'];
+const SERVER_IDS = ['cpu', 'memory', 'disk', 'restarted', 'dbPing', 'dbConnections', 'dbSlow', 'dbDown', 'dbPoolFull', 'redisOff', 'redisDown', 'redis', 'jobs', 'errors', 'courierSync', 'silentShops', 'config', 'turnstile', 'turnstileOff'];
 // the ids the code can give (read from its source): none may be missing from the lists above
 const src = readFileSync(join(ROOT, 'packages/core/src/modules/doctor.ts'), 'utf8') + readFileSync(join(ROOT, 'apps/server/src/doctor.ts'), 'utf8');
 const inCode = new Set([...src.matchAll(/\bid: (?:[^,{}]*\? )?'([a-zA-Z]+)'(?: : '([a-zA-Z]+)')?/g)].flatMap((m) => [m[1], m[2]].filter(Boolean)));

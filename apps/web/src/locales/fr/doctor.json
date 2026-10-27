@@ -332,7 +332,8 @@
       "why": "La vérification anti-robots invisible de Cloudflare protège les landing pages de toutes les boutiques, gratuitement (jusqu’à {{max}} domaines).",
       "fix": "Plus bas, carte « Cloudflare » : collez l’Account ID et un jeton API Turnstile. Pilotix fait le reste tout seul.",
       "short": "Cloudflare (robots)",
-      "okTitle": "Cloudflare (robots)"
+      "okTitle": "Cloudflare (robots)",
+      "info": "Cloudflare (robots) n’est pas connecté"
     }
   },
   "gauge": {

@@ -332,7 +332,8 @@
       "why": "Cloudflare’s invisible robot check protects every shop’s landing pages, for free (up to {{max}} domains).",
       "fix": "Further down, “Cloudflare” card: paste the Account ID and a Turnstile API token. Pilotix does the rest by itself.",
       "short": "Cloudflare (robots)",
-      "okTitle": "Cloudflare (robots)"
+      "okTitle": "Cloudflare (robots)",
+      "info": "Cloudflare (robots) is not connected"
     }
   },
   "gauge": {
