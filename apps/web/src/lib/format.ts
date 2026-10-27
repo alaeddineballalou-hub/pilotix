@@ -59,7 +59,7 @@ export const dateTime = (iso: string | null | undefined) => (iso ? df({ day: 'nu
 
 /** Duration in words: "39 min", "4 j 0 h", "12 h 07". */
 /** minutes, hours, days in the language shown */
-const DUR_UNITS: Record<string, [string, string, string]> = { fr: ['min', 'h', 'j'], en: ['min', 'h', 'd'], ar: ['د', 'سا', 'يوم'] };
+export const DUR_UNITS: Record<string, [string, string, string]> = { fr: ['min', 'h', 'j'], en: ['min', 'h', 'd'], ar: ['د', 'سا', 'يوم'] };
 export function dur(ms: number): string {
   const [mn, hr, dy] = DUR_UNITS[i18n.language] ?? DUR_UNITS.fr;
   const m = Math.max(0, Math.round(ms / 60_000));

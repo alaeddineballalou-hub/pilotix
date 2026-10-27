@@ -7,12 +7,12 @@
 
 .pxl-sum { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
 .pxl-sum > div { border-radius: 12px; border: 1px solid var(--line); background: var(--surface); padding: 9px 12px; display: flex; flex-direction: column; gap: 2px; }
-.pxl-sum small { font-size: 11.5px; font-weight: 700; color: var(--muted); }
+.pxl-sum small { font-size: 12px; font-weight: 700; color: var(--muted); }
 .pxl-sum b { font-family: var(--f-display); font-size: 22px; font-weight: 900; line-height: 1.1; }
-.pxl-sum b.or { color: #F28B1E; }
+.pxl-sum b.or { color: var(--c-accent-ink); }
 .pxl-sum b.nv { color: #1B2A47; }
 
-.pxl-warn { margin: 0; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: #FBE6E4; color: #B3352E; font-size: 13px; font-weight: 700; border: 0; font-family: inherit; text-align: start; }
+.pxl-warn { margin: 0; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: var(--c-bad-tint); color: #B3352E; font-size: 13px; font-weight: 700; border: 0; font-family: inherit; text-align: start; }
 .pxl-warn .bji { width: 16px; height: 16px; flex: none; }
 .pxl-warn.btn-like { cursor: pointer; }
 
@@ -21,15 +21,15 @@
 .pxl-co { min-width: 38px; height: 38px; border-radius: 11px; }
 .pxl-co .bji { width: 18px; height: 18px; }
 .pxl-list .pxk-rm > small { display: flex; align-items: center; gap: 6px; }
-.pxl-st { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 800; white-space: nowrap; flex: none; }
-.pxl-st.ok { background: #E3F4EA; color: #1F9D57; }
-.pxl-st.bad { background: #FBE6E4; color: #D6453D; }
+.pxl-st { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 800; white-space: nowrap; flex: none; }
+.pxl-st.ok { background: var(--c-ok-tint); color: var(--c-ok-ink); }
+.pxl-st.bad { background: var(--c-bad-tint); color: var(--c-bad-ink); }
 .pxl-st.na { background: #EFE8DD; color: #6B6355; }
 .pxl-st.off { background: #EEE; color: #888; }
 .pxl-nums { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
 .pxl-nums > span { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 800; color: #B5AC9E; }
 .pxl-nums > span .bji { width: 13px; height: 13px; }
-.pxl-nums > span.or { color: #F28B1E; }
+.pxl-nums > span.or { color: var(--c-accent-ink); }
 .pxl-nums > span.nv { color: #1B2A47; }
 .pxl-legend { display: flex; align-items: center; justify-content: center; gap: 5px; }
 .pxl-legend .bji { width: 13px; height: 13px; }
@@ -38,14 +38,14 @@
 
 .pxl-ai { flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: #F3EEE6; color: #1B2A47; }
 .pxl-ai .bji { width: 16px; height: 16px; }
-.pxl-ai.gr { background: #E3F4EA; color: #1F9D57; }
-.pxl-plus { flex: none; font-size: 12px; font-weight: 800; color: #F28B1E; padding: 4px 10px; border-radius: 999px; background: #FFF3E2; }
+.pxl-ai.gr { background: var(--c-ok-tint); color: var(--c-ok-ink); }
+.pxl-plus { flex: none; font-size: 12px; font-weight: 800; color: var(--c-accent-ink); padding: 4px 10px; border-radius: 999px; background: #FFF3E2; }
 .pxp-oh .pxl-st { margin-inline-end: 4px; }
 
 .pxl-form { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); }
 .pxl-form label { display: flex; flex-direction: column; gap: 5px; }
 .pxl-form label > span { font-size: 12px; font-weight: 800; color: var(--muted); }
-.pxl-form label > small { font-size: 11.5px; color: var(--muted); }
+.pxl-form label > small { font-size: 12px; color: var(--muted); }
 .pxl-form select, .pxl-form input { height: 44px; border-radius: 12px; border: 1px solid var(--line); padding: 0 12px; font: inherit; font-size: 14px; background: var(--surface); color: var(--ink); }
 .pxl-cash { margin-top: 6px; }
 .pxl-ob > .pxv-btn, .pxl > .pxv-btn, .pxl > .pxl-addl { flex: none; }

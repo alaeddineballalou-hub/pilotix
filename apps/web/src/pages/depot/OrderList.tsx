@@ -138,7 +138,7 @@ export function DepotOrderList({
       <div className={`filters ${open ? 'open' : ''}`}>
         <label className="field search-f">
           <span className="lab">{t('depot.filters.search')}</span>
-          <input type="search" placeholder={t('depot.filters.searchPh')} value={q} onChange={(e) => setQ(e.target.value)} />
+          <input type="search" aria-label={t('depot.filters.searchPh')} placeholder={t('depot.filters.searchPh')} value={q} onChange={(e) => setQ(e.target.value)} />
         </label>
         <button type="button" className="btn filters-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
           {t('common.filters')}

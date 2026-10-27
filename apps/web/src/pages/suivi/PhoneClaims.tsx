@@ -75,7 +75,7 @@ export function ClaimSheet(p: ClaimFormProps) {
         ) : (
           <label className="pxk-q">
             <b>{t('suivi.rec.order')}</b>
-            <input className="pxk-in" type="search" value={f.q} autoComplete="off" placeholder={t('suivi.rec.orderPh')} onChange={(e) => f.search(e.target.value)} />
+            <input className="pxk-in" type="search" aria-label={t('suivi.rec.orderPh')} value={f.q} autoComplete="off" placeholder={t('suivi.rec.orderPh')} onChange={(e) => f.search(e.target.value)} />
           </label>
         ))}
       {!o && f.deb.length >= 2 && (

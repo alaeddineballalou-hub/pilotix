@@ -19,10 +19,24 @@ import { ShopBanner } from './ShopBanner';
 const AgentBanner = lazy(() => import('../pages/confirmation/AgentBanner').then((m) => ({ default: m.AgentBanner })));
 
 type Theme = 'light' | 'dark' | null;
+const darkQuery = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+let followSystem = false;
+darkQuery?.addEventListener?.('change', () => followSystem && document.documentElement.setAttribute('data-theme', darkQuery.matches ? 'dark' : 'light'));
+/** Light, dark or "like the phone" (null). The page always carries the theme it shows, so the styles need one rule per theme. */
 export function applyTheme(t: Theme) {
-  if (t) document.documentElement.setAttribute('data-theme', t);
-  else document.documentElement.removeAttribute('data-theme');
+  followSystem = !t;
+  document.documentElement.setAttribute('data-theme', t ?? (darkQuery?.matches ? 'dark' : 'light'));
   store.set('theme', t);
+}
+
+export const SKINS = ['creme', 'marine', 'suisse', 'bloc', 'doux'] as const;
+export type Skin = (typeof SKINS)[number];
+/** Visual identity (colours, fonts, shapes) — one of the looks proposed in the redesign preview. */
+export function applySkin(s: string | null) {
+  const skin = SKINS.includes(s as Skin) ? (s as Skin) : null;
+  if (skin) document.documentElement.setAttribute('data-skin', skin);
+  else document.documentElement.removeAttribute('data-skin');
+  store.set('skin', skin);
 }
 
 /** Menu counts, refreshed every minute and on live updates. */

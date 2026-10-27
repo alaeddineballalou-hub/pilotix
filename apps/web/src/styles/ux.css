@@ -1,0 +1,56 @@
+/* UX fixes shared by every look (loaded after the other base styles, before the skins):
+   readable secondary text, tap targets big enough for a finger, a header that fits on a phone,
+   arrows that point the right way in Arabic, and dark-mode text that stays visible. */
+
+/* ---- secondary text and table headers: 4.5:1 or more ---- */
+html:root[data-theme="light"] { --muted: var(--c-muted); --lt-muted: var(--c-muted); }
+html:root[data-theme="dark"] { --muted: var(--c-muted); }
+html[data-theme="light"] .side .nav-item, html[data-theme="light"] .side .nav-group-head { color: #4F5663 !important; }
+html[data-theme="light"] .side .nav-count.nc-a:not(.zero) { color: #8F4D00 !important; }
+
+/* ---- "?" help: the round icon stays small, the area you can tap is 33 px ---- */
+html body .px-help, html body .kpi .l .px-help { position: relative !important; }
+.px-help::before { content: ""; position: absolute; inset: -9px; border-radius: 999px; }
+
+/* ---- table header sort buttons, tick boxes, small text buttons ---- */
+.qsort-btn { min-height: 28px; padding-block: 4px; }
+input[type=checkbox] { width: 20px; height: 20px; }
+.linkbtn.small, .px-copy { min-height: 28px; }
+@media (pointer: coarse) {
+  input[type=checkbox] { width: 24px; height: 24px; }
+  .login-link, a.login-link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; }
+}
+@media (max-width: 760px) {
+  /* pager and page size: finger-sized */
+  .pager .btn.small { min-width: 44px; min-height: 44px; }
+  select.qsz, input.qgo { min-height: 44px; }
+  /* the filter button keeps its name for screen readers when the word is hidden */
+  .px-qb-tx { display: inline !important; position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+
+/* ---- phone header: the small "p" mark instead of the full logo, so the page name fits ---- */
+@media (max-width: 900px) {
+  html[data-theme] .topbar .brand { width: 32px !important; min-width: 32px; height: 32px !important; flex: none; background-image: var(--px-mark) !important; background-size: contain !important; background-position: center !important; }
+  html[data-theme="dark"] .topbar .brand { background-image: var(--px-mark-white) !important; }
+  html[data-theme] .topbar .page-title { font-size: 17px !important; }
+}
+
+/* ---- Arabic: "›" already turns around by itself in right-to-left text, so it must not be flipped again ---- */
+html[dir="rtl"] .bjm-ar { transform: none !important; }
+html[dir="rtl"] .pxp-next .bji { transform: scaleX(-1); }
+
+/* ---- status chips: AA text on their tint, white text on filled chips ---- */
+.bj-cd.late { background: var(--c-bad-fill) !important; color: #fff !important; }
+html[data-theme="dark"] .bj-cd.soon { background: var(--c-bad-tint); color: var(--c-bad-ink); }
+.pxs-co.k-own, .pxn-co.k-own { color: var(--c-on-accent) !important; }
+.pxv-link { color: var(--c-accent-ink) !important; text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---- dark mode: the order-list tools used the navy of the light frame as their text colour ---- */
+html[data-theme="dark"] { --q-ink: var(--ink); --q-on-accent: #1B2A47; }
+
+/* ---- keyboard focus always visible ---- */
+:where(a, button, [role="button"], select, input, textarea, summary):focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}

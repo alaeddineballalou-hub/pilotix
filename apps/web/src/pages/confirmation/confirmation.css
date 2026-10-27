@@ -19,7 +19,7 @@ html:not([data-theme="dark"]) .px-kff.px-kff-one { background: #FFFFFF; box-shad
 .px-dr-btn { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 700; white-space: nowrap; cursor: pointer; }
 .px-dr-btn:hover, .px-dr-btn.on { border-color: var(--navy); }
 .px-dr-btn:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
-.px-dr-btn .bji { display: inline-flex; color: var(--lt-accent-2, #F28C1B); }
+.px-dr-btn .bji { display: inline-flex; color: var(--lt-accent-2, var(--c-accent-ink)); }
 .px-dr-btn .bji svg { width: 16px; height: 16px; }
 .px-dr-ch { color: var(--muted); transition: transform .2s; }
 .px-dr-btn.on .px-dr-ch { transform: rotate(180deg); }
@@ -38,7 +38,7 @@ html:not([data-theme="dark"]) .px-dr-pop { background: #FFFFFF; }
 .px-dr-nav:disabled { opacity: .35; cursor: default; }
 [dir="rtl"] .px-dr-nav svg { transform: scaleX(-1); }
 .px-dr-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); row-gap: 2px; }
-.px-dr-wd { padding: 4px 0 6px; font-size: 11px; font-weight: 700; color: var(--muted); text-align: center; text-transform: uppercase; }
+.px-dr-wd { padding: 4px 0 6px; font-size: 12px; font-weight: 700; color: var(--muted); text-align: center; text-transform: uppercase; }
 .px-dr-d { display: grid; place-items: center; height: 38px; padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
 .px-dr-d span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 999px; }
 .px-dr-d:hover:not(:disabled) span { background: var(--px-dr-band); }
@@ -49,7 +49,7 @@ html:not([data-theme="dark"]) .px-dr-pop { background: #FFFFFF; }
 .px-dr-d.en:not(.st) { background: linear-gradient(to left, transparent 50%, var(--px-dr-band) 50%); }
 [dir="rtl"] .px-dr-d.st:not(.en) { background: linear-gradient(to left, transparent 50%, var(--px-dr-band) 50%); }
 [dir="rtl"] .px-dr-d.en:not(.st) { background: linear-gradient(to right, transparent 50%, var(--px-dr-band) 50%); }
-.px-dr-d.st span, .px-dr-d.en span { background: linear-gradient(135deg, var(--lt-accent, #F7A823), var(--lt-accent-2, #F28C1B)) !important; color: #FFFFFF; box-shadow: none; }
+.px-dr-d.st span, .px-dr-d.en span { background: var(--c-accent-grad) !important; color: var(--c-on-accent); box-shadow: none; }
 .px-dr-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 .px-dr-sum { margin-inline-end: auto; white-space: nowrap; font-size: 13px; font-weight: 700; color: var(--ink); }
 @media (max-width: 760px) {

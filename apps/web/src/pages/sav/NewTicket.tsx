@@ -117,7 +117,7 @@ export function NewTicketModal({ onClose, onCreated }: { onClose: () => void; on
             </button>
           </div>
         ) : (
-          <input type="search" value={q} autoComplete="off" placeholder={t('sav.form.orderPh')} disabled={without} onChange={(e) => setQ(e.target.value)} autoFocus />
+          <input type="search" aria-label={t('sav.form.orderPh')} value={q} autoComplete="off" placeholder={t('sav.form.orderPh')} disabled={without} onChange={(e) => setQ(e.target.value)} autoFocus />
         )}
       </label>
       {!pick && !without && deb.length >= 2 && (

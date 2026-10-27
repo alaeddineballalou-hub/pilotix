@@ -1,0 +1,51 @@
+/* Design tokens: the brand and status colours every screen uses.
+   Text colours ("ink") reach at least 4.5:1 on white and on their tint; filled colours ("fill") carry white text at
+   4.5:1 or more; "line" colours are for borders, rings and bars. The page styles use these instead of raw hex codes,
+   so the dark theme and the skins only change them here. */
+:root {
+  --c-accent: #F7A823;
+  --c-accent-2: #F28B1E;
+  --c-accent-grad: linear-gradient(135deg, var(--c-accent), var(--c-accent-2));
+  --c-on-accent: #1B2A47;
+  --c-accent-ink: #A4480A;
+  --c-accent-tint: #FFF3E6;
+
+  --c-ok-fill: #15803D;
+  --c-ok-ink: #137A3B;
+  --c-ok-tint: #E3F5EA;
+  --c-ok-line: #1F9D57;
+
+  --c-bad-fill: #C2362B;
+  --c-bad-ink: #B42318;
+  --c-bad-tint: #FCE7E5;
+  --c-bad-line: #D6453D;
+
+  --c-warn-fill: #B26B00;
+  --c-warn-ink: #8A5A00;
+  --c-warn-tint: #FFF2DA;
+  --c-warn-line: #F2B544;
+
+  --c-info-ink: #2459D6;
+  --c-info-tint: #E8EEF8;
+
+  /* secondary text: 5.4:1 on the cream page, 5.8:1 on white */
+  --c-muted: #5F6673;
+}
+html[data-theme="dark"] {
+  --c-accent-ink: #F7B955;
+  --c-accent-tint: #3A2E14;
+  --c-ok-ink: #82D2A9;
+  --c-ok-tint: #1D3A2C;
+  --c-ok-line: #3CB878;
+  --c-bad-ink: #F09C95;
+  --c-bad-tint: #44282B;
+  --c-bad-line: #E0675F;
+  --c-warn-ink: #F2C46B;
+  --c-warn-tint: #3D3320;
+  --c-info-ink: #93B4FF;
+  --c-info-tint: #1E2D48;
+  --c-muted: #A9B4C8;
+}
+
+/* the "p" mark of the logo (small spaces such as the phone header): navy on light frames, white on dark ones */
+:root { --px-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 1000'%3E%3Crect x='0' y='0' width='1000' height='1000' rx='224' fill='none'/%3E%3Cg transform='translate%28215%2C720%29 scale%280.80%29'%3E%3Cpath d='M405 566Q474 566 530.0 531.0Q586 496 618.5 431.0Q651 366 651 280Q651 194 618.5 128.5Q586 63 530.0 27.5Q474 -8 405 -8Q347 -8 302.5 16.0Q258 40 233 78V-266H62V558H233V479Q258 518 302.0 542.0Q346 566 405 566ZM354 417Q303 417 267.5 380.0Q232 343 232 279Q232 215 267.5 178.0Q303 141 354 141Q405 141 441.0 178.5Q477 216 477 280Q477 344 441.5 380.5Q406 417 354 417Z' transform='scale%281%2C-1%29' fill='%231B2A47' stroke='%23FFFFFF' stroke-width='30' stroke-linejoin='round'/%3E%3C/g%3E%3Ccircle cx='790' cy='215' r='88' fill='%23F7A823'/%3E%3C/svg%3E"); --px-mark-white: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 1000'%3E%3Crect x='0' y='0' width='1000' height='1000' rx='224' fill='none'/%3E%3Cg transform='translate%28215%2C720%29 scale%280.80%29'%3E%3Cpath d='M405 566Q474 566 530.0 531.0Q586 496 618.5 431.0Q651 366 651 280Q651 194 618.5 128.5Q586 63 530.0 27.5Q474 -8 405 -8Q347 -8 302.5 16.0Q258 40 233 78V-266H62V558H233V479Q258 518 302.0 542.0Q346 566 405 566ZM354 417Q303 417 267.5 380.0Q232 343 232 279Q232 215 267.5 178.0Q303 141 354 141Q405 141 441.0 178.5Q477 216 477 280Q477 344 441.5 380.5Q406 417 354 417Z' transform='scale%281%2C-1%29' fill='%23FFFFFF' stroke='%23FFFFFF' stroke-width='30' stroke-linejoin='round'/%3E%3C/g%3E%3Ccircle cx='790' cy='215' r='88' fill='%23F7A823'/%3E%3C/svg%3E"); }

@@ -141,7 +141,7 @@ function GridEditor({ name, grid, isDefault, sav, onRename, onProducts, onDelete
         )}
       </div>
       <div className="filters row" style={{ gap: 8, flexWrap: 'wrap' }}>
-        <input type="search" placeholder={t('admin.fees.search')} value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 'auto', minWidth: 240, flex: '0 1 300px' }} />
+        <input type="search" aria-label={t('admin.fees.search')} placeholder={t('admin.fees.search')} value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 'auto', minWidth: 240, flex: '0 1 300px' }} />
         <span className="row nowrap" style={{ gap: 6 }}>
           <input type="number" step={50} value={delta} onChange={(e) => setDelta(e.target.value)} placeholder="± 100" aria-label={t('admin.fees.allHome')} style={{ width: 110 }} />
           <button className="btn small" onClick={shift}>

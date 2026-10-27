@@ -48,7 +48,7 @@ a.ai-state.off:hover { border-color: var(--ai-dot-2); color: var(--ink); }
 .ai-tab.on { color: var(--ink); font-weight: 700; }
 .ai-tab.on .bji { color: var(--ai-dot-2); }
 .ai-tab.on::after { background: linear-gradient(90deg, var(--ai-dot), var(--ai-dot-2)); }
-.ai-tab b { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, var(--ai-dot) 22%, var(--surface)); color: var(--ai-tint-ink); font-size: 11.5px; font-weight: 800; }
+.ai-tab b { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, var(--ai-dot) 22%, var(--surface)); color: var(--ai-tint-ink); font-size: 12px; font-weight: 800; }
 .ai-tab:focus-visible { outline: 2px solid var(--ai-dot-2); outline-offset: -5px; border-radius: 12px; }
 
 /* rows that scroll sideways fade at the side that hides more */
@@ -65,7 +65,7 @@ a.ai-state.off:hover { border-color: var(--ai-dot-2); color: var(--ink); }
   .ai-name h1 { font-size: 18px; }
   .ai-name h1 .px-help { flex: none; }
   .ai-name p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 12.5px; }
-  .ai-state { height: 26px; margin-top: 1px; padding: 0 10px; font-size: 11.5px; }
+  .ai-state { height: 26px; margin-top: 1px; padding: 0 10px; font-size: 12px; }
   /* a phone: the lit dot of the portrait says the agent works; the words stay for screen readers. "Paused" stays visible. */
   .ai-state.on { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   .ai-tabs { margin: 0 -14px; padding: 0 4px; }
@@ -94,7 +94,7 @@ a.ai-state.off:hover { border-color: var(--ai-dot-2); color: var(--ink); }
 .ai-filter.alert b { color: var(--ai-tint-ink); }
 .ai-filter:hover { border-color: var(--ai-dot-2); }
 .ai-filter.on { border-color: transparent; background: linear-gradient(135deg, var(--ai-dot), var(--ai-dot-2)); color: var(--ai-on-dot); }
-.ai-filter.on b { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: #FFFFFF; color: #C2650A; }
+.ai-filter.on b { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: #FFFFFF; color: var(--c-accent-ink); }
 .ai-filter:focus-visible { outline: 2px solid var(--ai-dot-2); outline-offset: 2px; }
 .ai-filters-g { display: contents; }
 /* a select that sits in the row of pills (the inbox's channel) */
@@ -166,9 +166,9 @@ a.ai-state.off:hover { border-color: var(--ai-dot-2); color: var(--ink); }
 
 /* ---------------------------------------------------------------- avatars */
 .ai-av { position: relative; flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--ai-av); color: var(--ink); font: 700 14px/1 var(--f-display); letter-spacing: .02em; }
-.ai-av .dl-ch { position: absolute; bottom: -3px; inset-inline-end: -5px; width: 21px; height: 21px; border-radius: 7px; border: 2px solid var(--surface); font-size: 8.5px; letter-spacing: 0; }
+.ai-av .dl-ch { position: absolute; bottom: -3px; inset-inline-end: -5px; width: 21px; height: 21px; border-radius: 7px; border: 2px solid var(--surface); font-size: 10px; letter-spacing: 0; }
 .ai-av.sm { width: 38px; height: 38px; font-size: 13px; }
-.ai-av.sm .dl-ch { width: 19px; height: 19px; font-size: 8px; }
+.ai-av.sm .dl-ch { width: 19px; height: 19px; font-size: 10px; }
 .ai-av.lg { width: 52px; height: 52px; font-size: 17px; }
 
 /* ---------------------------------------------------------------- Message AI agent: the inbox */
@@ -192,7 +192,7 @@ html[dir="ltr"] .ai-prev { text-align: left; }
 html[dir="rtl"] .ai-prev { text-align: right; }
 .ai-conv.unread .ai-conv-l1 time { color: var(--ai-dot-2); font-weight: 700; }
 .ai-conv.unread .ai-prev { color: var(--ink); font-weight: 600; }
-.ai-unread { flex: none; display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--ai-dot-2); color: #FFFFFF; font-size: 11px; font-weight: 800; }
+.ai-unread { flex: none; display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--ai-dot-2); color: #FFFFFF; font-size: 12px; font-weight: 800; }
 .ai-pick { display: none; place-items: center; align-content: center; gap: 12px; padding: 30px; text-align: center; color: var(--muted); background: var(--ai-chat); }
 .ai-pick .ai-face { opacity: .9; }
 .ai-pick p { margin: 0; max-width: 34ch; }
@@ -232,14 +232,14 @@ html[dir="rtl"] .ai-prev { text-align: right; }
 .ai-msg.first { margin-top: 10px; }
 .ai-who { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 6px 4px; color: var(--muted); font-size: 12px; font-weight: 700; }
 .ai-who .bji { width: 13px; height: 13px; color: var(--ai-dot-2); }
-.ai-tag { padding: 1px 8px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); font-size: 11px; font-weight: 700; }
+.ai-tag { padding: 1px 8px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); font-size: 12px; font-weight: 700; }
 .ai-bub { display: flex; flex-direction: column; gap: 3px; min-width: 64px; max-width: 100%; padding: 8px 12px 6px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); color: var(--ink); font-size: 14.5px; line-height: 1.45; }
 .ai-msg.in .ai-bub { border-start-start-radius: 6px; }
 .ai-msg.out .ai-bub { border-start-end-radius: 6px; }
 .ai-msg.bot .ai-bub { background: var(--ai-tint); border-color: var(--ai-tint-line); }
 .ai-msg.team .ai-bub { background: var(--ai-team); border-color: var(--ai-team); color: var(--ai-on-team); }
 .ai-txt { white-space: pre-wrap; overflow-wrap: anywhere; }
-.ai-bub time { align-self: flex-end; color: var(--muted); font-size: 11px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.ai-bub time { align-self: flex-end; color: var(--muted); font-size: 12px; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .ai-msg.team .ai-bub time { color: color-mix(in srgb, var(--ai-on-team) 72%, transparent); }
 .ai-msg.wait .ai-bub { color: var(--ai-tint-ink); }
 .ai-err { margin: 4px 6px 0; color: var(--coral); font-size: 12px; font-weight: 700; }

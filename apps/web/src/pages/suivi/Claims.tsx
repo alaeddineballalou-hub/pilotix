@@ -48,7 +48,7 @@ function NewClaimDesk(p: ClaimFormProps) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <label className="field">
           <span className="lab">{t('suivi.rec.order')}</span>
-          <input type="search" value={f.q} autoComplete="off" placeholder={t('suivi.rec.orderPh')} onChange={(e) => f.search(e.target.value)} autoFocus />
+          <input type="search" aria-label={t('suivi.rec.orderPh')} value={f.q} autoComplete="off" placeholder={t('suivi.rec.orderPh')} onChange={(e) => f.search(e.target.value)} autoFocus />
         </label>
         {!o && f.deb.length >= 2 && (
           <div className="bjr-pick">

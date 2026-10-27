@@ -3,11 +3,11 @@
 .pxd { display: flex; flex-direction: column; gap: 10px; }
 .pxd-tabs { display: flex; gap: 6px; padding: 4px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
 .pxd-tabs button { flex: 1; height: 40px; border: 0; border-radius: 10px; background: none; font: inherit; font-size: 14px; font-weight: 800; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; }
-.pxd-tabs button b { font-size: 11.5px; padding: 1px 7px; border-radius: 999px; background: #F3EEE6; color: var(--ink); }
+.pxd-tabs button b { font-size: 12px; padding: 1px 7px; border-radius: 999px; background: #F3EEE6; color: var(--ink); }
 /* dark theme: the count of the other tab stays readable (light text on a light chip before) */
 html:root[data-theme="dark"] .pxd-tabs button:not(.on) b { background: rgba(255, 255, 255, .12); }
 @media (prefers-color-scheme: dark) { html:root:not([data-theme="light"]) .pxd-tabs button:not(.on) b { background: rgba(255, 255, 255, .12); } }
-.pxd-tabs button.on { background: linear-gradient(135deg, #F7A823, #F28B1E); color: #fff; }
+.pxd-tabs button.on { background: var(--c-accent-grad); color: var(--c-on-accent); }
 .pxd-tabs button.on b { background: rgba(255, 255, 255, .3); color: #fff; }
 
 .pxd-list { list-style: none; margin: 0; padding: 0 0 20px; display: flex; flex-direction: column; gap: 10px; }
@@ -15,17 +15,17 @@ html:root[data-theme="dark"] .pxd-tabs button:not(.on) b { background: rgba(255,
 .pxd-card.open { border: 2px solid #F7A823; box-shadow: 0 8px 22px rgba(242, 139, 30, .15); }
 .pxd-top { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .pxd-top:focus-visible { outline: 2px solid #F7A823; outline-offset: -2px; }
-.pxd-th { flex: none; width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; background: #FFF4E2; color: #F28B1E; }
+.pxd-th { flex: none; width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; background: #FFF4E2; color: var(--c-accent-ink); }
 .pxd-th .bji { width: 22px; height: 22px; }
 .pxd-pn { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; text-align: start; }
 .pxd-pn b { font-size: 15px; color: var(--ink); }
 .pxd-pn small { font-size: 13px; color: var(--muted); }
 .pxd-pn em { font-style: normal; font-size: 12px; color: var(--muted); margin-top: 2px; }
-.pxd-pn em.bad { color: #D6453D; font-weight: 800; }
-.pxd-pn em.warn { color: #C27A06; font-weight: 800; }
+.pxd-pn em.bad { color: var(--c-bad-ink); font-weight: 800; }
+.pxd-pn em.warn { color: var(--c-warn-ink); font-weight: 800; }
 .pxd-need { flex: none; display: flex; flex-direction: column; align-items: center; min-width: 58px; }
 .pxd-need b { font-family: Poppins, Inter, sans-serif; font-size: 28px; line-height: 1; color: var(--ink); }
-.pxd-need small { font-size: 10.5px; font-weight: 800; color: var(--muted); }
+.pxd-need small { font-size: 11.5px; font-weight: 800; color: var(--muted); }
 
 /* "J'ai pris" */
 .pxd-took { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px 12px; border-top: 1px dashed var(--line); }
@@ -35,13 +35,13 @@ html:root[data-theme="dark"] .pxd-tabs button:not(.on) b { background: rgba(255,
 .pxd-step button:disabled { opacity: .35; }
 .pxd-step input { width: 56px; height: 100% !important; border: 0 !important; border-inline: 1px solid var(--line) !important; border-radius: 0 !important; text-align: center; font-family: Poppins, Inter, sans-serif; font-size: 22px; font-weight: 700; padding: 0 !important; background: none; color: var(--ink); -moz-appearance: textfield; }
 .pxd-step input::-webkit-outer-spin-button, .pxd-step input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.pxd-ok { height: 48px; padding: 0 20px; border: 0; border-radius: 12px; background: #1F9D57; color: #fff; font: inherit; font-size: 15px; font-weight: 800; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.pxd-ok { height: 48px; padding: 0 20px; border: 0; border-radius: 12px; background: var(--c-ok-fill); color: #fff; font: inherit; font-size: 15px; font-weight: 800; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .pxd-ok .bji { width: 16px; height: 16px; }
 .pxd-quick { flex: 1 1 100%; display: flex; gap: 6px; }
 
 /* « À ramener au dépôt » */
 .pxd-bring { padding: 12px; border-radius: 14px; background: #FFF6F5; border: 1px solid #F5C6C2; display: flex; flex-direction: column; gap: 8px; }
-.pxd-bh { display: flex; align-items: center; gap: 8px; color: #D6453D; }
+.pxd-bh { display: flex; align-items: center; gap: 8px; color: var(--c-bad-ink); }
 .pxd-bh b { flex: 1; font-size: 15px; }
 .pxd-bh .bji { width: 20px; height: 20px; }
 .pxd-bl { margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--ink); }
@@ -61,8 +61,8 @@ html:root[data-theme="dark"] .pxd-tabs button:not(.on) b { background: rgba(255,
 .pxd-opt span { display: flex; flex-direction: column; }
 .pxd-opt small { color: var(--muted); font-size: 12px; }
 .pxd-opt.on { border: 2px solid #1B2A47; }
-.pxd-opt.bad > .bji, .pxd-opt.bad b { color: #D6453D; }
-.pxd-opt.bad.on { border-color: #D6453D; background: #FFF6F5; }
+.pxd-opt.bad > .bji, .pxd-opt.bad b { color: var(--c-bad-ink); }
+.pxd-opt.bad.on { border-color: var(--c-bad-line); background: #FFF6F5; }
 .pxd-mfull { width: 100%; height: 48px; justify-content: center; font-size: 15px; }
 .pxd-msg { width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; line-height: 1.5; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); resize: vertical; }
 
@@ -72,17 +72,17 @@ html:root[data-theme="dark"] .pxd-tabs button:not(.on) b { background: rgba(255,
 .pxd-ord.on { border: 2px solid #F7A823; background: #FFFBF4; }
 .pxd-ord:focus-visible { outline: 2px solid #F7A823; outline-offset: 2px; }
 .pxd-cb { flex: none; width: 28px; height: 28px; border-radius: 8px; border: 2px solid #CFC7BA; background: var(--surface); display: grid; place-items: center; color: #fff; }
-.pxd-ord.on .pxd-cb { background: #F28B1E; border-color: #F28B1E; }
+.pxd-ord.on .pxd-cb { background: var(--c-accent-2); border-color: #F28B1E; }
 .pxd-cb .bji { width: 16px; height: 16px; }
 .pxd-bar { position: fixed; z-index: 30; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px)); background: var(--surface); border-top: 1px solid var(--line); box-shadow: 0 -6px 18px rgba(27, 42, 71, .1); }
 .pxd-brow { display: flex; align-items: center; justify-content: space-between; font-size: 14px; }
-.pxd-lbl { font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.pxd-lbl { font-size: 12px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
 .pxd-parts { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
 .pxd-parts::-webkit-scrollbar { display: none; }
 .pxd-parts .pxs-chip { height: 40px; padding: 0 14px; }
 .pxd-parts .pxs-chip.sel { background: #1B2A47; border-color: #1B2A47; color: #fff; }
-.pxd-send { height: 52px; border: 0; border-radius: 14px; background: #1F9D57; color: #fff; font: inherit; font-size: 16px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; box-shadow: 0 8px 20px rgba(31, 157, 87, .3); }
+.pxd-send { height: 52px; border: 0; border-radius: 14px; background: var(--c-ok-fill); color: #fff; font: inherit; font-size: 16px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; box-shadow: 0 8px 20px rgba(31, 157, 87, .3); }
 .pxd-send:disabled { opacity: .4; box-shadow: none; cursor: default; }
 .pxd-send .bji { width: 18px; height: 18px; }
 /* an exchange from SAV: marked, nothing else changes for the depot */
-.pxd-sav { display: inline-flex; align-items: center; height: 18px; margin-inline-start: 6px; padding: 0 7px; border-radius: 999px; background: linear-gradient(135deg, #F7A823, #F28B1E); color: #fff; font-size: 10px; font-weight: 800; vertical-align: 2px; }
+.pxd-sav { display: inline-flex; align-items: center; height: 18px; margin-inline-start: 6px; padding: 0 7px; border-radius: 999px; background: var(--c-accent-grad); color: var(--c-on-accent); font-size: 11px; font-weight: 800; vertical-align: 2px; }

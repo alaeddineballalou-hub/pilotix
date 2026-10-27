@@ -663,7 +663,7 @@ function PickProduct({ adset, catalog, onClose }: { adset: { id: string; name: s
       <div className="adpick-who">
         <b>{adset.name}</b> <span className="muted ltr">{adset.id}</span>
       </div>
-      <input type="search" placeholder={t('ads.pickSearch')} value={q} onChange={(e) => setQ(e.target.value)} style={{ margin: '8px 0' }} />
+      <input type="search" aria-label={t('ads.pickSearch')} placeholder={t('ads.pickSearch')} value={q} onChange={(e) => setQ(e.target.value)} style={{ margin: '8px 0' }} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto' }}>
         {list.map((p) => (
           <label key={p.id} className="row nowrap" style={{ gap: 8 }}>

@@ -264,7 +264,7 @@ export function OrderList(p: ListProps) {
         {show.includes('search') && (
           <label className="field search-f" hidden={p.q !== undefined}>
             <span className="lab">{t('orders.f.search')}</span>
-            <input type="search" placeholder={t('orders.f.searchPh')} value={f.q} onChange={(e) => set({ q: e.target.value })} />
+            <input type="search" aria-label={t('orders.f.searchPh')} placeholder={t('orders.f.searchPh')} value={f.q} onChange={(e) => set({ q: e.target.value })} />
           </label>
         )}
         <button type="button" className="btn filters-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>

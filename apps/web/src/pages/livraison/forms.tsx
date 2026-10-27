@@ -259,7 +259,7 @@ export function FeesModal({ company, onClose }: { company: Company; onClose: () 
     >
       <p className="muted small">{t('livraison.fees.help')}</p>
       <div className="row">
-        <input type="search" placeholder={t('livraison.fees.search')} value={filter} onChange={(e) => setFilter(e.target.value)} style={{ maxWidth: 260 }} />
+        <input type="search" aria-label={t('livraison.fees.search')} placeholder={t('livraison.fees.search')} value={filter} onChange={(e) => setFilter(e.target.value)} style={{ maxWidth: 260 }} />
         <span className="muted small">{t('livraison.fees.fillHint')}</span>
       </div>
       {q.isLoading ? (
