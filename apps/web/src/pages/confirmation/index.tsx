@@ -458,7 +458,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
               open={panel === 'c'}
               onToggle={() => setPanel(panel === 'c' ? null : 'c')}
             />
-            <button type="button" className="px-qb" title={t('common.export')} aria-label={t('common.export')} onClick={doExport}>
+            <button type="button" className="px-qb px-qb-dl" title={t('common.export')} aria-label={t('common.export')} onClick={doExport}>
               <Icon name="download" />
             </button>
             <button type="button" className={`px-qb ${list.isFetching ? 'spin' : ''}`} title={t('confirmation.refresh')} aria-label={t('confirmation.refresh')} onClick={() => list.refetch()}>
