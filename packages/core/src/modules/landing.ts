@@ -37,7 +37,7 @@ import { clientHomeFees, getSetting, setSetting } from '../settings';
 import { BOT_UA, FraudLevel, FraudReason, scoreOrder, verdictOf } from './fraud';
 import { lookAlikeOf, trustOf } from './trust';
 import { groupHtml, groupOf } from './landinggroups';
-import { checkRef, pixelsOf, PixelRef, pixelTestCode, pixelToken } from './pixels';
+import { checkPixels, PixelList, pixelsJson, pixelsOf, pixelTestCode, pixelToken, readPixels } from './pixels';
 import { ABANDONED, abandonCutoff, freeLandingSlug, landingCounts, landingSettings, LandingSettings, landingStore, queuePurchase, quickCreatePage, STORE_RESERVED } from './landingquery';
 import { sendInPreview } from './notify';
 import { addEvent, createOrder, noOrderAccess } from './orders';
@@ -77,8 +77,10 @@ export interface LandingRow {
   variantLabel: string;
   fraudLevel: FraudLevel;
   pixelId: string;
-  metaPixelRef: number | null;
-  tiktokPixelRef: number | null;
+  metaPixels: number[] | null;
+  tiktokPixels: number[] | null;
+  /** null: the WhatsApp button of Réglages; { on: false }: none; else this page's own */
+  whatsapp: { on: boolean; number?: string; label?: string; message?: string } | null;
   stockMode: 'off' | 'hide';
   views: number;
   orders: number;
@@ -156,8 +158,9 @@ async function listPages(db: Db, now: number, ids?: number[]): Promise<LandingRo
       variantLabel: r.variant_label,
       fraudLevel: r.fraud_level,
       pixelId: r.pixel_id ?? '',
-      metaPixelRef: numOrNull(r.meta_pixel_ref),
-      tiktokPixelRef: numOrNull(r.tiktok_pixel_ref),
+      metaPixels: readPixels(r.meta_pixels),
+      tiktokPixels: readPixels(r.tiktok_pixels),
+      whatsapp: readJson<{ on: boolean; number?: string; label?: string; message?: string }>(r.whatsapp),
       stockMode: r.stock_mode === 'hide' ? 'hide' : 'off',
       views: num(r.views),
       orders: num(r.n_orders),
@@ -283,6 +286,13 @@ export function viewImages(refs: ImgRef[], rows: Map<number, any>, imgBase: stri
 
 const randomId = () => Array.from(globalThis.crypto.getRandomValues(new Uint8Array(9)), (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 14);
 
+/** the page's own WhatsApp button, else the one of Réglages (null: no button) */
+function whatsappOf(own: { on: boolean; number?: string; label?: string; message?: string } | null, shop: LandingSettings['whatsapp']) {
+  const w = own ?? shop;
+  if (!w?.on || !whatsappNumber(w.number ?? '')) return null;
+  return { number: w.number ?? '', label: w.label || shop?.label || WHATSAPP_DEFAULT.label, message: w.message || shop?.message || WHATSAPP_DEFAULT.message };
+}
+
 export async function landingHtml(ctx: Ctx, slug: string, o: HtmlOpts): Promise<string> {
   return (await landingPage(ctx, slug, o)).html;
 }
@@ -314,9 +324,9 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     fees: pc.fees,
     shopName: pc.shopName,
     // the pixel only on the real page: never in Pilotix (preview, demo), whose visits are not customers
-    pixelId: o.mode === 'live' ? px.meta : '',
-    tiktokId: o.mode === 'live' ? px.tiktok : '',
-    whatsapp: s.whatsapp?.on && whatsappNumber(s.whatsapp.number) ? { number: s.whatsapp.number, label: s.whatsapp.label || WHATSAPP_DEFAULT.label, message: s.whatsapp.message || WHATSAPP_DEFAULT.message } : null,
+    pixelId: o.mode === 'live' ? px.meta.join(',') : '',
+    tiktokId: o.mode === 'live' ? px.tiktok.join(',') : '',
+    whatsapp: whatsappOf(readJson<{ on: boolean; number?: string; label?: string; message?: string }>(l.whatsapp), s.whatsapp),
     productId: num(l.product_id),
     // the shop's own Cloudflare keys, else the widget Pilotix keeps for the address the page is served at
     turnstileKey: o.mode === 'live' ? String(s.turnstileSiteKey ?? '').trim() || ((await ctx.server?.turnstileSite?.(hostOf(pageUrl || o.post))) ?? '') : '',
@@ -872,7 +882,7 @@ export async function captureLead(ctx: Ctx, i: z.infer<typeof CaptureInput>): Pr
   // robots are not customers: no abandoned order, no Meta event (and the answer is the same: nothing to learn)
   if (!phone || i.hp.trim() || BOT_UA.test(ua) || !ua.trim()) return { ok: true };
   const now = ctx.now();
-  const l = (await db.query('SELECT l.id, l.product_id, l.price, l.pixel_id, l.meta_pixel_ref, l.tiktok_pixel_ref, p.price AS p_price FROM landing_pages l JOIN products p ON p.id = l.product_id WHERE l.slug = $1 AND l.active', [i.slug]))[0];
+  const l = (await db.query('SELECT l.id, l.product_id, l.price, l.pixel_id, l.meta_pixels, l.tiktok_pixels, p.price AS p_price FROM landing_pages l JOIN products p ON p.id = l.product_id WHERE l.slug = $1 AND l.active', [i.slug]))[0];
   if (!l || (await checkChallenge(db, i.ch, i.slug, now)) === null) return { ok: true };
   // blocked as fake, or already ordered this product (any channel) in the last day: not an abandoned order
   if (await recentlyBlocked(db, phone, now)) return { ok: true };
@@ -928,7 +938,7 @@ export async function captureLead(ctx: Ctx, i: z.infer<typeof CaptureInput>): Pr
   // later, so the event of a submit found fake meanwhile is dropped.
   const s = await landingSettings(db);
   const px = await pixelsOf(db, l, s.pixelId);
-  for (const [platform, pixel] of [['meta', px.meta], ['tiktok', px.tiktok]] as const)
+  for (const [platform, pixel] of [...px.meta.map((x) => ['meta', x] as const), ...px.tiktok.map((x) => ['tiktok', x] as const)])
     if (pixel)
       await db.query(
         `INSERT INTO meta_events (pixel_id, event_name, event_id, lead_id, landing_id, value, at, send_after, platform) VALUES ($1,'InitiateCheckout',$2,$3,$4,$5,$6,$7,$8)
@@ -1338,9 +1348,15 @@ export const PageInput = z.object({
   variantLabel: z.string().trim().max(40).default('اللون'),
   fraudLevel: z.enum(['relaxed', 'normal', 'strict']).default('normal'),
   pixelId: PixelId.default(''),
-  /** the Meta / TikTok pixel of this page: null = the default one, 0 = none (Réglages › Pixels) */
-  metaPixelRef: PixelRef,
-  tiktokPixelRef: PixelRef,
+  /** the Meta / TikTok pixels of this page: null = the default one, [] = none (Réglages › Pixels) */
+  metaPixels: PixelList,
+  tiktokPixels: PixelList,
+  /** the thank-you screen's WhatsApp button: null = as in Réglages, { on: false } = none, else this page's own */
+  whatsapp: z
+    .object({ on: z.boolean(), number: z.string().trim().max(30).default(''), label: z.string().trim().max(60).default(''), message: z.string().trim().max(800).default('') })
+    .refine((w) => !w.on || !!whatsappNumber(w.number), { message: 'Numéro WhatsApp invalide (ex. 0661234567 ou +213661234567)' })
+    .nullable()
+    .default(null),
   stockMode: z.enum(['off', 'hide']).default('off'),
   images: z.array(ImgInput).max(12).default([]),
 });
@@ -1421,14 +1437,14 @@ export const landingProcs = {
     if (dup && num(dup.id) !== i.id) throw bad(`L’adresse « ${i.slug} » est déjà prise`);
     if ((await ctx.db.query('SELECT 1 FROM landing_groups WHERE slug = $1', [i.slug])).length) throw bad(`L’adresse « ${i.slug} » est déjà prise par un groupe`);
     if (!(await ctx.db.query('SELECT 1 FROM products WHERE id = $1', [i.productId])).length) throw notFound('Produit introuvable');
-    await checkRef(ctx.db, 'meta', i.metaPixelRef);
-    await checkRef(ctx.db, 'tiktok', i.tiktokPixelRef);
-    const vals = [i.productId, i.slug, i.active, i.title, i.color.toLowerCase(), i.price, i.oldPrice, i.description, i.variantLabel || 'اللون', i.fraudLevel, JSON.stringify(i.images), i.pixelId, i.stockMode, i.metaPixelRef, i.tiktokPixelRef];
+    await checkPixels(ctx.db, 'meta', i.metaPixels);
+    await checkPixels(ctx.db, 'tiktok', i.tiktokPixels);
+    const vals = [i.productId, i.slug, i.active, i.title, i.color.toLowerCase(), i.price, i.oldPrice, i.description, i.variantLabel || 'اللون', i.fraudLevel, JSON.stringify(i.images), i.pixelId, i.stockMode, pixelsJson(i.metaPixels), pixelsJson(i.tiktokPixels), i.whatsapp ? JSON.stringify(i.whatsapp) : null];
     let pid: number;
     if (i.id) {
       const r = await ctx.db.query(
         `UPDATE landing_pages SET product_id=$2, slug=$3, active=$4, title=$5, color=$6, price=$7, old_price=$8, description=$9, variant_label=$10, fraud_level=$11, images=$12,
-           pixel_id=$13, stock_mode=$14, meta_pixel_ref=$15, tiktok_pixel_ref=$16, updated_at=now() WHERE id=$1 RETURNING id`,
+           pixel_id=$13, stock_mode=$14, meta_pixels=$15, tiktok_pixels=$16, whatsapp=$17, updated_at=now() WHERE id=$1 RETURNING id`,
         [i.id, ...vals],
       );
       if (!r.length) throw notFound('Page introuvable');
@@ -1437,8 +1453,8 @@ export const landingProcs = {
       pid = num(
         (
           await ctx.db.query(
-            `INSERT INTO landing_pages (product_id, slug, active, title, color, price, old_price, description, variant_label, fraud_level, images, pixel_id, stock_mode, meta_pixel_ref, tiktok_pixel_ref, created_by)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`,
+            `INSERT INTO landing_pages (product_id, slug, active, title, color, price, old_price, description, variant_label, fraud_level, images, pixel_id, stock_mode, meta_pixels, tiktok_pixels, whatsapp, created_by)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
             [...vals, ctx.session.profile.id],
           )
         )[0].id,
@@ -1581,6 +1597,8 @@ export const landingProcs = {
       demo: simulated(ctx),
       /** what to paste in the ad's « URL parameters » (Meta fills the {{…}}) */
       urlParams: 'utm_source=facebook&utm_medium=paid&utm_campaign={{campaign.name}}&utm_content={{ad.name}}&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}',
+      /** the same for TikTok (its « URL parameters » / tracking: TikTok fills the __…__; an ad group is « adset », an ad « ad ») */
+      tiktokUrlParams: 'utm_source=tiktok&utm_medium=paid&utm_campaign=__CAMPAIGN_NAME__&utm_content=__CID_NAME__&campaign_id=__CAMPAIGN_ID__&adset_id=__AID__&ad_id=__CID__&placement=__PLACEMENT__',
     };
   }),
 

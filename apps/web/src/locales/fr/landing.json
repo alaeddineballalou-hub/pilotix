@@ -307,7 +307,9 @@
     "tsOff": "Désactivée",
     "tsRemoveAsk": "Retirer la vérification Cloudflare ?",
     "tsAuto": "Activée automatiquement par Pilotix",
-    "tsAutoHelp": "Rien à faire : vos landing pages sont déjà protégées, même sur votre propre domaine. Vos propres clés Cloudflare (facultatif) remplacent celles de Pilotix."
+    "tsAutoHelp": "Rien à faire : vos landing pages sont déjà protégées, même sur votre propre domaine. Vos propres clés Cloudflare (facultatif) remplacent celles de Pilotix.",
+    "ttParams": "Paramètres d’URL pour vos pubs TikTok",
+    "ttParamsHelp": "Collez-les dans chaque pub TikTok (Annonce › Destination › « Paramètres d’URL » / URL avec suivi). Chaque commande garde sa campagne, son groupe d’annonces et son annonce TikTok."
   },
   "ev": {
     "title": "Événements envoyés à Meta",
@@ -555,15 +557,16 @@
     "saved": "Pixel enregistré",
     "removed": "Pixel supprimé",
     "pick": {
-      "meta": "Pixel Meta de cette page",
-      "tiktok": "Pixel TikTok de cette page"
+      "meta": "Pixels Meta de cette page",
+      "tiktok": "Pixels TikTok de cette page"
     },
     "noneYet": "Ajoutez des pixels dans Réglages › Pixels.",
     "useDefault": "Par défaut ({{name}})",
     "useSettings": "Par défaut (Réglages)",
     "noDefault": "Par défaut (aucun)",
     "off": "Aucun pixel",
-    "legacy": "Cette page utilise encore le pixel {{id}} tapé à la main : choisissez un pixel ci-dessus pour le remplacer."
+    "legacy": "Cette page utilise encore le pixel {{id}} tapé à la main : choisissez un pixel ci-dessus pour le remplacer.",
+    "choose": "Choisir un ou plusieurs pixels…"
   },
   "wa": {
     "title": "Bouton WhatsApp (après la commande)",
@@ -584,6 +587,14 @@
       "telephone": "téléphone",
       "wilaya": "wilaya",
       "commune": "commune"
-    }
+    },
+    "page": "Bouton WhatsApp de cette page",
+    "pageHint": "Après la commande, sur l’écran « Merci ».",
+    "mode": {
+      "shop": "Comme dans les Réglages",
+      "own": "Numéro et message propres à cette page",
+      "off": "Pas de bouton sur cette page"
+    },
+    "pageMessageHint": "Vide : le message des Réglages."
   }
 }

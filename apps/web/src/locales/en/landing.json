@@ -307,7 +307,9 @@
     "tsOff": "Off",
     "tsRemoveAsk": "Remove the Cloudflare check?",
     "tsAuto": "Turned on automatically by Pilotix",
-    "tsAutoHelp": "Nothing to do: your landing pages are already protected, even on your own domain. Your own Cloudflare keys (optional) replace Pilotix’s."
+    "tsAutoHelp": "Nothing to do: your landing pages are already protected, even on your own domain. Your own Cloudflare keys (optional) replace Pilotix’s.",
+    "ttParams": "URL parameters for your TikTok ads",
+    "ttParamsHelp": "Paste them in each TikTok ad (Ad › Destination › « URL parameters » / tracking URL). Each order keeps its TikTok campaign, ad group and ad."
   },
   "ev": {
     "title": "Events sent to Meta",
@@ -555,15 +557,16 @@
     "saved": "Pixel saved",
     "removed": "Pixel deleted",
     "pick": {
-      "meta": "Meta pixel of this page",
-      "tiktok": "TikTok pixel of this page"
+      "meta": "Meta pixels of this page",
+      "tiktok": "TikTok pixels of this page"
     },
     "noneYet": "Add pixels in Settings › Pixels.",
     "useDefault": "Default ({{name}})",
     "useSettings": "Default (Settings)",
     "noDefault": "Default (none)",
     "off": "No pixel",
-    "legacy": "This page still uses the pixel {{id}} typed by hand: pick a pixel above to replace it."
+    "legacy": "This page still uses the pixel {{id}} typed by hand: pick a pixel above to replace it.",
+    "choose": "Pick one or several pixels…"
   },
   "wa": {
     "title": "WhatsApp button (after the order)",
@@ -584,6 +587,14 @@
       "telephone": "phone",
       "wilaya": "wilaya",
       "commune": "commune"
-    }
+    },
+    "page": "WhatsApp button of this page",
+    "pageHint": "After the order, on the « Thank you » screen.",
+    "mode": {
+      "shop": "As in Settings",
+      "own": "This page’s own number and message",
+      "off": "No button on this page"
+    },
+    "pageMessageHint": "Empty: the message from Settings."
   }
 }

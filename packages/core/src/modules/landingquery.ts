@@ -68,7 +68,7 @@ export async function queuePurchase(db: Db, s: LandingSettings, orderId: number,
   await guarded(db, async (db) => {
     const o = (
       await db.query(
-        `SELECT o.id, o.ref, o.total, o.landing_id, o.conf_status, o.is_exchange, l.pixel_id, l.meta_pixel_ref, l.tiktok_pixel_ref
+        `SELECT o.id, o.ref, o.total, o.landing_id, o.conf_status, o.is_exchange, l.pixel_id, l.meta_pixels, l.tiktok_pixels
          FROM orders o LEFT JOIN landing_pages l ON l.id = o.landing_id WHERE o.id = $1`,
         [orderId],
       )
@@ -77,7 +77,7 @@ export async function queuePurchase(db: Db, s: LandingSettings, orderId: number,
     // the page's Meta pixel and TikTok pixel (TikTok's « CompletePayment »)
     const px = await pixelsOf(db, o, s.pixelId);
     const at = new Date(now).toISOString();
-    for (const [platform, pixel] of [['meta', px.meta], ['tiktok', px.tiktok]] as const)
+    for (const [platform, pixel] of [...px.meta.map((x) => ['meta', x] as const), ...px.tiktok.map((x) => ['tiktok', x] as const)])
       if (pixel)
         await db.query(
           `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, landing_id, value, at, send_after, platform) VALUES ($1,'Purchase',$2,$3,$4,$5,$6,$6,$7)
@@ -127,16 +127,17 @@ async function liftMark(db: Db, orderId: number) {
 /** « Purchase at order »: the sale was already reported; a « Confirmed » event (for the reports) says a person confirmed it. */
 async function queueConfirmed(db: Db, s: LandingSettings, orderId: number, now: number) {
   await guarded(db, async (db) => {
-    const o = (await db.query(`SELECT o.id, o.ref, o.total, o.landing_id, l.pixel_id, l.meta_pixel_ref, l.tiktok_pixel_ref FROM orders o LEFT JOIN landing_pages l ON l.id = o.landing_id WHERE o.id = $1`, [orderId]))[0];
+    const o = (await db.query(`SELECT o.id, o.ref, o.total, o.landing_id, l.pixel_id, l.meta_pixels, l.tiktok_pixels FROM orders o LEFT JOIN landing_pages l ON l.id = o.landing_id WHERE o.id = $1`, [orderId]))[0];
     // Meta only (TikTok has no such event)
-    const pixel = o ? (await pixelsOf(db, o, s.pixelId)).meta : '';
-    if (!o?.landing_id || !pixel) return;
+    const pixels = o ? (await pixelsOf(db, o, s.pixelId)).meta : [];
+    if (!o?.landing_id) return;
     const at = new Date(now).toISOString();
-    await db.query(
-      `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, landing_id, value, at, send_after) VALUES ($1,'Confirmed',$2,$3,$4,$5,$6,$6)
-       ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING`,
-      [pixel, `confirmed-${o.ref}`, o.id, o.landing_id, num(o.total), at],
-    );
+    for (const pixel of pixels)
+      await db.query(
+        `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, landing_id, value, at, send_after) VALUES ($1,'Confirmed',$2,$3,$4,$5,$6,$6)
+         ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING`,
+        [pixel, `confirmed-${o.ref}`, o.id, o.landing_id, num(o.total), at],
+      );
   });
 }
 

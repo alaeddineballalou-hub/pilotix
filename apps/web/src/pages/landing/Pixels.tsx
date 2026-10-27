@@ -130,32 +130,60 @@ function PixelForm({ platform, p, onClose }: { platform: Platform; p: Pixel | nu
   );
 }
 
-/** A landing page's or group's choice: null = the default pixel, 0 = none, else one pixel. */
-export function PixelSelects({ meta, tiktok, onChange }: { meta: number | null; tiktok: number | null; onChange: (k: 'metaPixelRef' | 'tiktokPixelRef', v: number | null) => void }) {
+/** A landing page's or group's pixels: null = the default pixel, [] = none, else the ticked ones (several allowed). */
+export function PixelSelects({
+  meta,
+  tiktok,
+  onChange,
+}: {
+  meta: number[] | null;
+  tiktok: number[] | null;
+  onChange: (k: 'metaPixels' | 'tiktokPixels', v: number[] | null) => void;
+}) {
   const { t } = useTranslation();
   const q = useRpc('landing.pixels', {});
   const list = q.data ?? [];
-  const sel = (pf: Platform, v: number | null) => {
+  const pick = (pf: Platform, v: number[] | null) => {
     const mine = list.filter((p) => p.platform === pf);
     const def = mine.find((p) => p.isDefault);
+    const key = pf === 'meta' ? 'metaPixels' : 'tiktokPixels';
+    const mode = v === null ? 'd' : v.length ? 'c' : 'n';
     return (
       <Field label={t(`landing.px.pick.${pf}`)} hint={!mine.length ? t('landing.px.noneYet') : undefined}>
-        <select value={v === null ? 'd' : String(v)} onChange={(e) => onChange(pf === 'meta' ? 'metaPixelRef' : 'tiktokPixelRef', e.target.value === 'd' ? null : Number(e.target.value))}>
+        <select
+          value={mode}
+          onChange={(e) => onChange(key, e.target.value === 'd' ? null : e.target.value === 'n' ? [] : def ? [def.id] : mine[0] ? [mine[0].id] : [])}
+        >
           <option value="d">{def ? t('landing.px.useDefault', { name: def.name }) : pf === 'meta' ? t('landing.px.useSettings') : t('landing.px.noDefault')}</option>
-          {mine.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name} · {p.pixelId}
-            </option>
-          ))}
-          <option value="0">{t('landing.px.off')}</option>
+          {!!mine.length && <option value="c">{t('landing.px.choose')}</option>}
+          <option value="n">{t('landing.px.off')}</option>
         </select>
+        {mode === 'c' && (
+          <div className="lp-px-ticks">
+            {mine.map((p) => (
+              <label key={p.id} className="check">
+                <input
+                  type="checkbox"
+                  checked={!!v?.includes(p.id)}
+                  onChange={(e) => {
+                    const next = e.target.checked ? [...(v ?? []), p.id] : (v ?? []).filter((x) => x !== p.id);
+                    onChange(key, next.length ? next : null);
+                  }}
+                />
+                <span dir="auto">
+                  {p.name} <code className="ltr">{p.pixelId}</code>
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
       </Field>
     );
   };
   return (
     <div className="grid2">
-      {sel('meta', meta)}
-      {sel('tiktok', tiktok)}
+      {pick('meta', meta)}
+      {pick('tiktok', tiktok)}
     </div>
   );
 }
