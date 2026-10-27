@@ -389,6 +389,8 @@
     "check": "Vérifier"
   },
   "pr": {
+    "kQuality": "Qualité des commandes",
+    "kQualitySub": "{{real}} vraies sur {{total}} reçues · {{confirmed}} confirmées",
     "intro": "Chaque commande reçue est notée : 🟢 elle passe, 🟡 un agent vérifie avant d’appeler, 🔴 elle est bloquée sans que le client le sache (il voit le même « Merci »).",
     "kSubmits": "Commandes reçues",
     "kSubmitsSub": "envoyées depuis vos pages",

@@ -1618,7 +1618,9 @@ export const landingProcs = {
                 count(*) FILTER (WHERE verdict = 'allow' AND NOT merged)::int AS allowed,
                 count(*) FILTER (WHERE verdict = 'review' AND NOT merged)::int AS review,
                 count(*) FILTER (WHERE verdict = 'block')::int AS blocked,
-                count(*) FILTER (WHERE merged)::int AS merged
+                count(*) FILTER (WHERE merged)::int AS merged,
+                count(DISTINCT order_id) FILTER (WHERE verdict <> 'block' AND NOT merged AND EXISTS (
+                  SELECT 1 FROM orders o WHERE o.id = landing_submits.order_id AND (o.conf_status IN ('confirmed','no_stock') OR o.follow_status IN ('delivered','exchanged'))))::int AS confirmed
          FROM landing_submits WHERE at > $1`,
         [from],
       )
@@ -1712,6 +1714,8 @@ export const landingProcs = {
         review: num(t?.review),
         blocked: num(t?.blocked),
         merged: num(t?.merged),
+        /** real orders confirmed by an agent (or delivered) */
+        confirmed: num(t?.confirmed),
         restored: num(handled?.restored),
         waiting: num(handled?.waiting),
         marked: num(handled?.marked),
