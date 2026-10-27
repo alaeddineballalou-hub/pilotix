@@ -205,13 +205,16 @@ test('Meta: an event Meta refuses does not take the others down with it', async 
 
 test('« at order » mode: a borderline order counts once an agent confirms it', async () => {
   await call('landing.settings.save', admin, { pixelId: '', testEventCode: '', purchaseAt: 'order', abandonAfterMin: 20, autoCreate: false, capiToken: '' });
+  // borderline: a number on the blacklist (an order sent twice is merged into one, not borderline anymore)
   const f = await form();
+  await db.query(`INSERT INTO customers (phone, name, blacklisted, blacklist_reason) VALUES ($1, 'X', true, 'test') ON CONFLICT (phone) DO UPDATE SET blacklisted = true`, [f.phone]);
   await call('landing.submit', admin, f);
-  await call('landing.submit', admin, await form({ phone: f.phone }));
-  const second = (await orders(f.phone as string))[1];
+  const second = (await orders(f.phone as string))[0];
   assert.match(second.internal_note, /anti-fraude/);
   assert.equal((await db.query(`SELECT count(*)::int AS n FROM meta_events WHERE order_id = $1`, [second.id]))[0].n, 0);
   await call('orders.setConf', await as(EMAILS.conf), { ids: [Number(second.id)], status: 'confirmed' });
   assert.equal((await db.query(`SELECT count(*)::int AS n FROM meta_events WHERE order_id = $1 AND event_name = 'Purchase'`, [second.id]))[0].n, 1);
+  // and, in « at order » mode, the agent's confirmation is reported too (for the reports)
+  assert.equal((await db.query(`SELECT count(*)::int AS n FROM meta_events WHERE order_id = $1 AND event_name = 'Confirmed'`, [second.id]))[0].n, 1);
   await call('landing.settings.save', admin, { pixelId: '', testEventCode: '', purchaseAt: 'confirmed', abandonAfterMin: 20, autoCreate: false, capiToken: '' });
 });
