@@ -2,7 +2,14 @@ import { WILAYAS, WILAYAS_AR } from '@pilotix/shared';
 import i18n from './i18n';
 
 const loc = () => (i18n.language === 'ar' ? 'ar-DZ' : i18n.language === 'en' ? 'en-GB' : 'fr-FR');
-const nf = (opts: Intl.NumberFormatOptions = {}) => new Intl.NumberFormat(loc(), { numberingSystem: 'latn', maximumFractionDigits: 0, ...opts } as Intl.NumberFormatOptions);
+// Building an Intl formatter is slow (tens of µs each); lists call these thousands of times, so each one is made once per language and options.
+const fmtCache = new Map<string, Intl.NumberFormat | Intl.DateTimeFormat>();
+const nf = (opts: Intl.NumberFormatOptions = {}) => {
+  const k = `n|${loc()}|${JSON.stringify(opts)}`;
+  let f = fmtCache.get(k) as Intl.NumberFormat | undefined;
+  if (!f) fmtCache.set(k, (f = new Intl.NumberFormat(loc(), { numberingSystem: 'latn', maximumFractionDigits: 0, ...opts } as Intl.NumberFormatOptions)));
+  return f;
+};
 
 /** 12 900 DA / 12 900 د.ج */
 export const da = (v: number | null | undefined) => (v === null || v === undefined ? '—' : `${nf().format(v)} ${i18n.language === 'ar' ? 'د.ج' : 'DA'}`);
@@ -13,7 +20,12 @@ export const pct = (v: number | null | undefined, digits = 0) => (v === null || 
 export const compact = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1).replace('.', ',')}k` : String(v));
 
 const TZ = 'Africa/Algiers';
-const df = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(loc(), { timeZone: TZ, numberingSystem: 'latn', ...o } as Intl.DateTimeFormatOptions);
+const df = (o: Intl.DateTimeFormatOptions) => {
+  const k = `d|${loc()}|${JSON.stringify(o)}`;
+  let f = fmtCache.get(k) as Intl.DateTimeFormat | undefined;
+  if (!f) fmtCache.set(k, (f = new Intl.DateTimeFormat(loc(), { timeZone: TZ, numberingSystem: 'latn', ...o } as Intl.DateTimeFormatOptions)));
+  return f;
+};
 const dayKey = (t: number) => df({ year: 'numeric', month: '2-digit', day: '2-digit' }).format(t);
 
 /** "aujourd'hui 21:19", "hier 19:53", "18 oct. 08:51" — like the original app. */
