@@ -19,6 +19,7 @@ import { useLabelPrinter } from '../depot/Labels';
 import { CourierPanel } from '../suivi/CourierPanel';
 import { useIsPhone } from '../../lib/useMedia';
 import { TrustFlags } from './TrustFlags';
+import { AdSection } from './AdSource';
 
 /** Courier kinds with an API (send / label / status / cancel go through the delivery procedures). */
 export const API_KINDS = ['zr', 'zr_legacy', 'yalidine', 'ecotrack', 'noest', 'custom'];
@@ -388,6 +389,8 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
           <span className="grand">{t('orders.card.toCollect', { v: da(o.total) })}</span>
         </div>
       </section>
+
+      <AdSection o={o} />
 
       <section className="card">
         <h3>{t('orders.card.delivery')}</h3>
