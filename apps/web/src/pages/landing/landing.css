@@ -244,7 +244,7 @@
 .lp-bar-s { display: flex; flex-direction: column; min-height: 2px; border-radius: 5px 5px 2px 2px; overflow: hidden; background: var(--raise); }
 .lp-bar-s i, .lp-legend i, .lp-why-b i { display: block; }
 .lp-bar-s i.a, .lp-legend i.a { background: var(--ok); opacity: .55; }
-.lp-bar-s i.r, .lp-legend i.r, .lp-why-b i.r { background: var(--warn); }
+.lp-bar-s i.r, .lp-legend i.r, .lp-why-b i.r { background: var(--butter-deep, var(--warn)); }
 .lp-bar-s i.b, .lp-legend i.b, .lp-why-b i.b { background: var(--coral); }
 .lp-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; color: var(--muted); font-size: 12.5px; }
 .lp-legend span { display: inline-flex; align-items: center; gap: 6px; }
@@ -285,3 +285,7 @@
 .lp-how-c small { color: var(--ink); opacity: .8; font-size: 12.5px; line-height: 1.45; }
 .lp-how h3 { margin: 14px 0 4px; font-size: 14px; }
 .lp-how-l { margin: 0; padding-inline-start: 20px; color: var(--ink); font-size: 13px; line-height: 1.6; }
+.lp-blockbtn { background: var(--coral); border-color: var(--coral); color: #fff; }
+.lp-blockbtn:hover:not(:disabled) { filter: brightness(1.08); }
+.lp-blockbtn .bji { color: inherit; }
+.lp-bars.hours .lp-bar-s i.r { opacity: .7; }
