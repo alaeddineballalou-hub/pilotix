@@ -289,3 +289,8 @@
 .lp-blockbtn:hover:not(:disabled) { filter: brightness(1.08); }
 .lp-blockbtn .bji { color: inherit; }
 .lp-bars.hours .lp-bar-s i.r { opacity: .7; }
+@media (max-width: 640px) {
+  .lp-mk { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .lp-mk > .chip { justify-self: start; }
+  .lp-pg { grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(44px, .5fr)); }
+}
