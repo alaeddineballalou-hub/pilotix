@@ -23,6 +23,18 @@ const SYNC_KEY = 'ads_last_sync';
 const SYNC_EVERY_MS = 30 * 60_000;
 
 export const isOwner = (ctx: Ctx) => hasRole(ctx.session, 'vendeur');
+/** A marketer partner's person given some products only (the store chose them): those products, else null. */
+const givenProducts = (ctx: Ctx): Set<number> | null => (ctx.session.profile.agencyId && ctx.session.profile.agencyProducts ? new Set(ctx.session.profile.agencyProducts) : null);
+/**
+ * A marketer partner's chief (or manager) inside the store: the partner's id — they see the ad sets of every person of
+ * their team here, not only their own. null for anyone else.
+ */
+export function partnerLead(ctx: Ctx): number | null {
+  const p = ctx.session.profile;
+  if (p.agencyId === null || p.agencyId === undefined || !p.agencyLead || !p.roles.includes('marketer')) return null;
+  const n = Number(p.agencyId);
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
+}
 /** Algiers midnight of a YYYY-MM-DD day, as ISO (UTC+1). */
 export const dayStart = (d: string) => new Date(Date.parse(d + 'T00:00:00Z') - 3_600_000).toISOString();
 export const addDays = (d: string, n: number) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86_400_000).toISOString().slice(0, 10);
@@ -98,11 +110,13 @@ export interface AdsetRow {
 
 async function visibleAdsets(ctx: Ctx, marketerId?: number | null): Promise<AdsetRow[]> {
   const mine = !isOwner(ctx);
-  const who = mine ? ctx.session.profile.id : marketerId ?? null;
+  // a marketer partner's chief: every ad set of the partner's people
+  const lead = mine ? partnerLead(ctx) : null;
+  const who = mine ? (lead ? null : ctx.session.profile.id) : marketerId ?? null;
   const rows = await ctx.db.query(
     `SELECT a.*, p.name AS marketer_name FROM adsets a LEFT JOIN profiles p ON p.id = a.marketer_id
-     WHERE ($1::bigint IS NULL OR a.marketer_id = $1) ORDER BY a.name`,
-    [who],
+     WHERE ($1::bigint IS NULL OR a.marketer_id = $1) AND ($2::bigint IS NULL OR p.agency_id = $2) ORDER BY a.name`,
+    [who, lead],
   );
   return rows.map((r: any) => ({
     id: String(r.id),
@@ -461,7 +475,8 @@ async function overview(ctx: Ctx, i: z.infer<typeof Period>) {
     products: productRows,
     adsets: adsetRows,
     days,
-    catalog: products,
+    // a marketer partner's person: only the products the store gave the marketer
+    catalog: givenProducts(ctx) ? products.filter((p) => givenProducts(ctx)!.has(p.id)) : products,
     marketers: owner ? (await ctx.db.query(`SELECT id, name FROM profiles WHERE ('marketer' = ANY(roles) OR 'vendeur' = ANY(roles)) AND active ORDER BY name`)).map((r: any) => ({ id: num(r.id), name: r.name as string })) : [],
   };
 }
@@ -557,13 +572,21 @@ export const adsProcs = {
   'ads.link': proc(['marketer'], z.object({ adsetId: z.string().min(1).max(40), productIds: z.array(z.number().int().positive()).max(20) }), async (ctx, i) => {
     const s = (await ctx.db.query('SELECT marketer_id, product_ids FROM adsets WHERE id = $1', [i.adsetId]))[0];
     if (!s) throw notFound('Ad set introuvable');
-    if (!isOwner(ctx) && (s.marketer_id === null || num(s.marketer_id) !== ctx.session.profile.id)) throw forbidden('Cet ad set n’est pas à vous');
+    if (!isOwner(ctx) && (s.marketer_id === null || num(s.marketer_id) !== ctx.session.profile.id)) {
+      // a marketer partner's chief: also the ad sets of the partner's people
+      const lead = partnerLead(ctx);
+      const team = lead !== null && s.marketer_id !== null && (await ctx.db.query('SELECT 1 FROM profiles WHERE id = $1 AND agency_id = $2', [s.marketer_id, lead])).length > 0;
+      if (!team) throw forbidden('Cet ad set n’est pas à vous');
+    }
     // the products of an ad set decide the marketer's share of their profit: he says it once, then only the owner
     // changes it (no moving an ad set onto the best seller at the end of the month)
     if (!isOwner(ctx) && (s.product_ids ?? []).length) throw forbidden('Produits déjà choisis : demandez au propriétaire de les changer');
     if (i.productIds.length) {
       const n = num((await ctx.db.query('SELECT count(*) AS n FROM products WHERE id = ANY($1)', [i.productIds]))[0].n);
       if (n !== new Set(i.productIds).size) throw bad('Produit inconnu');
+      // a marketer partner's person: only the products the store gave the marketer
+      const given = givenProducts(ctx);
+      if (given && i.productIds.some((p) => !given.has(p))) throw forbidden('Ce produit n’est pas confié à votre espace marketer');
     }
     await ctx.db.query('UPDATE adsets SET product_ids = $2, updated_at = now() WHERE id = $1', [i.adsetId, [...new Set(i.productIds)]]);
     return { ok: true };

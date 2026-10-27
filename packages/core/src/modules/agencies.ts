@@ -1,6 +1,14 @@
-// Confirmation agencies and the stores they work for, both sides of the link.
-// An agency is a shop of its own kind: its team logs in on the same page as a store's and lands in the agency's space.
-// The two find each other by code (a store: K7Q-29X, an agency: AG-7K2Q) and ask; the other side accepts or refuses.
+// The stores' partners and the stores they work for, both sides of the link: confirmation agencies (confirmation,
+// suivi) and marketers (the stores' ads). A partner is a shop of its own kind: its team logs in on the same page as a
+// store's and lands in the partner's space. The two find each other by code (a store: K7Q-29X, an agency: AG-7K2Q, a
+// marketer: MK-7K2Q) and ask; the other side accepts or refuses. What follows says « agency »; a marketer works the
+// same way, except:
+// - it does no confirmation nor suivi: the store gives it products, and ad sets to its people (Marketing › Marketer);
+//   its people work on the ads of those ad sets from the marketer's space (agencyscope.ts);
+// - several marketers may work on the same products (each one is judged on its own ad sets);
+// - its prices are its own pieces (per delivered order, per ad set « réussi », a part of the net profit, a fixed
+//   amount) and its month counts its ad sets (marketers.ts).
+//
 // - Only the agency sets its prices. A change waits for the store's yes; the old prices stay until then.
 // - Only the store chooses what it gives: the tasks (confirmation, suivi) and its products (all of them: also the new
 //   ones). An order goes by its first product; products given to nobody stay with the store's own team.
@@ -11,8 +19,8 @@
 // - Pilotix checks an agency before it can work (verified), and can suspend it: its agents then stop at once and the
 //   orders it had not finished go back to each store's own team.
 import {
+  AGENCY_TASKS,
   AgencyBillInfo,
-  agencyBill,
   AgencyCounts,
   AgencyLinkInfo,
   AgencySellerWork,
@@ -23,27 +31,37 @@ import {
   hasPrice,
   NO_AGENCY_PRICES,
   NO_COUNTS,
+  PartnerKind,
+  partnerBill,
 } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num } from '../db';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
 import { cleanPrices } from '../platform/shops';
 import { sellersOrNull } from './agencyscope';
+import { marketerMonth } from './marketers';
 import type { Tenancy } from '../platform/tenancy';
 
 const HOUR = 3_600_000;
-const TASKS = ['confirmation', 'suivi'] as const;
-const NO_SERVER = 'Les agences de confirmation fonctionnent sur le serveur Pilotix (pas dans cet aperçu)';
-const NOT_VERIFIED = 'Votre agence doit d’abord être vérifiée par Pilotix';
-const TASK_FR: Record<AgencyTask, string> = { confirmation: 'confirmation', suivi: 'suivi' };
+/** Every task a link can carry (an agency: confirmation, suivi; a marketer: its ads). */
+const ALL_TASKS = ['confirmation', 'suivi', 'marketing'] as const;
+const NO_SERVER = 'Les agences de confirmation et les marketers fonctionnent sur le serveur Pilotix (pas dans cet aperçu)';
+const notVerified = (kind: PartnerKind) => (kind === 'marketer' ? 'Votre espace marketer doit d’abord être vérifié par Pilotix' : 'Votre agence doit d’abord être vérifiée par Pilotix');
+const TASK_FR: Record<AgencyTask, string> = { confirmation: 'confirmation', suivi: 'suivi', marketing: 'publicité' };
+/** A partner's name in a sentence: « l’agence X », « le marketer X ». */
+const partnerFr = (kind: PartnerKind) => (kind === 'marketer' ? 'ce marketer' : 'cette agence');
 
 // ---------------------------------------------------------------- inputs
 const Id = z.number().int().positive();
-const Tasks = z
-  .array(z.enum(TASKS))
-  .min(1, 'Choisissez au moins une tâche')
-  .max(2)
-  .transform((a) => TASKS.filter((k) => a.includes(k)));
+/** The tasks asked (checked against the partner's kind by tasksFor) */
+const Tasks = z.array(z.enum(ALL_TASKS)).min(1, 'Choisissez au moins une tâche').max(3);
+/** The tasks of a link, for a partner of this kind: an agency confirmation and / or suivi, a marketer its ads. */
+function tasksFor(kind: PartnerKind, v: readonly AgencyTask[]): AgencyTask[] {
+  if (kind === 'marketer') return ['marketing'];
+  const out = AGENCY_TASKS.filter((k) => v.includes(k));
+  if (!out.length) throw bad('Choisissez au moins une tâche');
+  return out;
+}
 const Money = z.number().int().min(0).max(10_000_000);
 const PricesIn = z.object({
   perConfirmed: Money,
@@ -52,6 +70,10 @@ const PricesIn = z.object({
   monthly: Money,
   bonusRate: z.object({ min: z.number().int().min(0).max(100), amount: Money }),
   bonusVolume: z.object({ above: z.number().int().min(0).max(1_000_000), amount: Money }),
+  /** marketers: per ad set « réussi » */
+  perSuccess: Money.default(0),
+  /** marketers: % of the net profit */
+  profitRate: z.number().int().min(0).max(100).default(0),
 });
 /** null: every product (also the new ones) */
 const Products = z.array(Id).max(2000).nullable();
@@ -73,16 +95,17 @@ function tOf(ctx: Ctx): Tenancy {
   if (!ctx.t || !ctx.shop) throw bad(NO_SERVER);
   return ctx.t;
 }
-/** The agency's own space (its chief, unless said). */
-function asAgency(ctx: Ctx): { t: Tenancy; id: number } {
+/** A partner's own space: an agency's or a marketer's (its chief, unless said). */
+function asAgency(ctx: Ctx): { t: Tenancy; id: number; kind: PartnerKind } {
   const t = tOf(ctx);
-  if (ctx.shop!.kind !== 'agency') throw forbidden('Réservé aux agences de confirmation');
-  return { t, id: ctx.shop!.id };
+  const kind = ctx.shop!.kind;
+  if (kind !== 'agency' && kind !== 'marketer') throw forbidden('Réservé aux agences de confirmation et aux marketers');
+  return { t, id: ctx.shop!.id, kind };
 }
 /** A store's administrator. */
 function asStore(ctx: Ctx): { t: Tenancy; id: number } {
   const t = tOf(ctx);
-  if (ctx.shop!.kind === 'agency') throw forbidden('Réservé aux boutiques');
+  if (ctx.shop!.kind === 'agency' || ctx.shop!.kind === 'marketer') throw forbidden('Réservé aux boutiques');
   if (ctx.shop!.demo) throw forbidden('Pas dans la boutique démo : ses comptes sont partagés par tous les visiteurs');
   return { t, id: ctx.shop!.id };
 }
@@ -91,14 +114,14 @@ function asStore(ctx: Ctx): { t: Tenancy; id: number } {
 const json = (v: unknown): any => (typeof v === 'string' ? JSON.parse(v) : v);
 const tasksOf = (v: unknown): AgencyTask[] => {
   const a = json(v);
-  return TASKS.filter((k) => Array.isArray(a) && a.includes(k));
+  return ALL_TASKS.filter((k) => Array.isArray(a) && a.includes(k));
 };
 const productsOf = (v: unknown): number[] | null => {
   const a = json(v);
   return Array.isArray(a) ? a.map(Number).filter((x) => Number.isSafeInteger(x) && x > 0) : null;
 };
 
-export const LINK_SQL = `SELECT l.*, a.name AS a_name, a.public_code AS a_code, a.agency_verified_at AS a_verified, a.status AS a_status, a.schema_name AS a_schema,
+export const LINK_SQL = `SELECT l.*, a.kind AS a_kind, a.name AS a_name, a.public_code AS a_code, a.agency_verified_at AS a_verified, a.status AS a_status, a.schema_name AS a_schema,
     s.name AS s_name, s.public_code AS s_code, s.status AS s_status, s.schema_name AS s_schema
   FROM platform.agency_links l JOIN platform.shops a ON a.id = l.agency_id JOIN platform.shops s ON s.id = l.store_id`;
 
@@ -113,16 +136,18 @@ export interface Link {
 }
 
 export function toLink(r: any): Link {
+  const kind: PartnerKind = r.a_kind === 'marketer' ? 'marketer' : 'agency';
   return {
     info: {
       id: num(r.id),
+      kind,
       status: r.status,
       requestedBy: r.requested_by,
       agency: { id: num(r.agency_id), name: r.a_name, code: r.a_code ?? null, verified: !!r.a_verified, suspended: r.a_status !== 'active' },
       store: { id: num(r.store_id), name: r.s_name, code: r.s_code ?? null },
-      tasks: tasksOf(r.tasks),
-      prices: cleanPrices(json(r.prices)),
-      pricesNew: r.prices_new ? cleanPrices(json(r.prices_new)) : null,
+      tasks: kind === 'marketer' ? ['marketing'] : tasksOf(r.tasks).filter((k) => k !== 'marketing'),
+      prices: cleanPrices(json(r.prices), kind),
+      pricesNew: r.prices_new ? cleanPrices(json(r.prices_new), kind) : null,
       products: productsOf(r.products),
       agents: [],
       createdAt: iso(r.created_at),
@@ -150,6 +175,8 @@ export interface AgencyPerson {
 }
 /** The agency's chief and managers do every task the seller gives; the others the tasks of their roles. */
 export const isLead = (roles: string[]) => roles.includes('admin') || roles.includes('agent_manager');
+/** Can this person of the partner work for a seller with these tasks? (a marketer's people: the marketer role) */
+const fits = (kind: PartnerKind, roles: string[], tasks: AgencyTask[]) => isLead(roles) || (kind === 'marketer' ? roles.includes('marketer') : tasks.some((k) => roles.includes(k)));
 
 /** The agency's active people (its space's database), the system accounts left out. */
 export async function agencyPeople(db: Db): Promise<AgencyPerson[]> {
@@ -179,8 +206,7 @@ async function withAgents(t: Tenancy, links: Link[]): Promise<Link[]> {
     L.info.agents = people.flatMap((p) => {
       const w = workFor(p, L.info.store.id);
       // their role must fit one of the seller's tasks (the chief and supervisors: every task)
-      const fits = isLead(p.roles) || L.info.tasks.some((k) => p.roles.includes(k));
-      return w && fits ? [{ profileId: p.id, name: p.name, products: w.products }] : [];
+      return w && fits(L.info.kind, p.roles, L.info.tasks) ? [{ profileId: p.id, name: p.name, products: w.products }] : [];
     });
   }
   return links;
@@ -221,8 +247,10 @@ async function checkProducts(db: Db, products: number[] | null): Promise<number[
  * Two agencies never get the same product for the same task (one may have « every product », the others named
  * products: those go to them). Returns why not, or null.
  */
-async function clash(t: Tenancy, db: Db, storeId: number, exceptId: number, tasks: AgencyTask[], products: number[] | null): Promise<string | null> {
-  const others = (await t.platform.query(`${LINK_SQL} WHERE l.store_id = $1 AND l.status = 'active' AND l.id <> $2`, [storeId, exceptId])).map(toLink);
+async function clash(t: Tenancy, db: Db, storeId: number, exceptId: number, tasks: AgencyTask[], products: number[] | null, kind: PartnerKind = 'agency'): Promise<string | null> {
+  // marketers share products: each one is judged on its own ad sets
+  if (kind === 'marketer') return null;
+  const others = (await t.platform.query(`${LINK_SQL} WHERE l.store_id = $1 AND l.status = 'active' AND l.id <> $2 AND a.kind = 'agency'`, [storeId, exceptId])).map(toLink);
   for (const o of others) {
     const both = tasks.filter((k) => o.info.tasks.includes(k));
     if (!both.length) continue;
@@ -251,10 +279,10 @@ export async function checkSellers(ctx: Ctx, v: AgencySellerWork[] | null): Prom
   for (const w of v) {
     if (out.some((x) => x.store === w.store)) continue;
     const L = links.find((l) => l.info.store.id === w.store);
-    if (!L) throw bad('Vendeur introuvable : il ne travaille pas (ou plus) avec votre agence');
+    if (!L) throw bad('Vendeur introuvable : il ne travaille pas (ou plus) avec vous');
     const products = w.products === null ? null : [...new Set(w.products)].sort((a, b) => a - b);
     if (products && !products.length) throw bad(`${L.info.store.name} : choisissez au moins un produit (ou « Tous les produits »)`);
-    if (products && L.info.products && products.some((x) => !L.info.products!.includes(x))) throw bad(`${L.info.store.name} : ce produit n’est pas confié à votre agence`);
+    if (products && L.info.products && products.some((x) => !L.info.products!.includes(x))) throw bad(`${L.info.store.name} : ce produit ne vous est pas confié`);
     if (products && !L.info.products && (await productNames(t.shop(L.storeSchema), products)).size !== products.length) throw bad('Produit introuvable');
     out.push({ store: w.store, products });
   }
@@ -294,6 +322,7 @@ export async function syncLink(t: Tenancy, linkId: number): Promise<string[]> {
   const tasks = on ? L.info.tasks : [];
   const problems: string[] = [];
   if (!L.storeOk) return problems;
+  if (L.info.kind === 'marketer') return syncMarketer(t, L, db, on);
   // which products go to the agency, for each task
   await db.tx(async (tx) => {
     await tx.query('DELETE FROM agency_routes WHERE agency_id = $1', [A]);
@@ -323,8 +352,53 @@ export async function syncLink(t: Tenancy, linkId: number): Promise<string[]> {
   // the others of this agency: closed now (their sessions end)
   await db.query('UPDATE profiles SET active = false, token_version = token_version + 1 WHERE agency_id = $1 AND active AND NOT (lower(email) = ANY($2))', [A, [...want.keys()]]);
   // orders of a task it no longer does: back to the store's team
-  for (const task of TASKS) if (!tasks.includes(task)) await releaseOrders(db, A, task);
+  for (const task of AGENCY_TASKS) if (!tasks.includes(task)) await releaseOrders(db, A, task);
   await releaseStuck(db, A);
+  return problems;
+}
+
+/**
+ * A marketer in a store: its people who work for this seller get an account there with the marketer role, on the
+ * products the store gave the marketer (those the chief chose for them, among them), with the marketer's price per ad
+ * set « réussi ». The store gives them ad sets (Marketing › Marketer); the others of the marketer are closed (their ad
+ * sets stay theirs: the store gives them to someone else).
+ */
+async function syncMarketer(t: Tenancy, L: Link, db: Db, on: boolean): Promise<string[]> {
+  const A = L.info.agency.id;
+  const problems: string[] = [];
+  const want = new Map<string, { name: string; hash: string; language: string; products: number[] | null; lead: boolean }>();
+  if (on)
+    for (const p of await agencyPeople(t.shop(L.agencySchema))) {
+      const w = workFor(p, L.info.store.id);
+      if (!w || !fits('marketer', p.roles, L.info.tasks)) continue;
+      // the chief's choice within what the store gives (none left: the person stops working here)
+      const products = w.products ? (L.info.products ? w.products.filter((x) => L.info.products!.includes(x)) : w.products) : L.info.products;
+      if (!products || products.length) want.set(p.email, { name: p.name, hash: p.hash, language: p.language, products, lead: isLead(p.roles) });
+    }
+  for (const [email, w] of want) {
+    // the marketer's chief and managers see every ad set of the team here (agency_lead: see ads.ts)
+    const cur = (await db.query('SELECT id, agency_id FROM profiles WHERE lower(email) = $1', [email]))[0];
+    if (!cur)
+      await db.query(`INSERT INTO profiles (name, email, password_hash, roles, language, agency_id, agency_products, agency_lead, active) VALUES ($1, $2, $3, '{marketer}', $4, $5, $6, $7, true)`, [
+        w.name,
+        email,
+        w.hash,
+        w.language,
+        A,
+        w.products,
+        w.lead,
+      ]);
+    else if (num(cur.agency_id) === A)
+      await db.query(`UPDATE profiles SET name = $2, roles = '{marketer}', password_hash = $3, agency_products = $4, agency_lead = $5, active = true, archived_at = NULL WHERE id = $1`, [cur.id, w.name, w.hash, w.products, w.lead]);
+    else problems.push(`${w.name} (${email}) a déjà un compte dans ${L.info.store.name} : il ne peut pas y travailler pour votre espace marketer`);
+  }
+  await db.query('UPDATE profiles SET active = false, token_version = token_version + 1 WHERE agency_id = $1 AND active AND NOT (lower(email) = ANY($2))', [A, [...want.keys()]]);
+  // the marketer's price per ad set « réussi » (the store's Marketer page judges its people's ad sets with it)
+  await db.query(
+    `INSERT INTO marketer_prices (profile_id, price, updated_at) SELECT id, $2, now() FROM profiles WHERE agency_id = $1
+     ON CONFLICT (profile_id) DO UPDATE SET price = EXCLUDED.price, updated_at = now()`,
+    [A, L.info.prices.perSuccess],
+  );
   return problems;
 }
 
@@ -354,6 +428,9 @@ export async function syncAgency(t: Tenancy, agencyId: number): Promise<void> {
 // ---------------------------------------------------------------- numbers and bills
 /** What Pilotix counts for an agency in a store over [from, to). */
 export async function agencyCounts(db: Db, agencyId: number, from: string, to: string): Promise<AgencyCounts> {
+  return { ...NO_COUNTS, ...(await countOrders(db, agencyId, from, to)) };
+}
+async function countOrders(db: Db, agencyId: number, from: string, to: string) {
   const r = (
     await db.query(
       `SELECT
@@ -371,6 +448,15 @@ export async function agencyCounts(db: Db, agencyId: number, from: string, to: s
 
 /** Did the link work during [from, to)? (the fixed monthly amount counts then) */
 const workedIn = (l: AgencyLinkInfo, from: string, to: string) => !!l.startedAt && l.startedAt < to && (!l.endedAt || l.endedAt >= from);
+
+/** A link's numbers for a month (YYYY-MM): an agency's orders, a marketer's ad sets. */
+async function linkCounts(t: Tenancy, L: Link, month: string, now: number): Promise<AgencyCounts> {
+  if (!L.storeOk) return { ...NO_COUNTS };
+  const db = t.shop(L.storeSchema);
+  if (L.info.kind === 'marketer') return marketerMonth(db, L.info.agency.id, month, now);
+  const { from, to } = monthBounds(month);
+  return agencyCounts(db, L.info.agency.id, from, to);
+}
 
 const toBill = (r: any): AgencyBillInfo => {
   const d = json(r.details) ?? {};
@@ -391,12 +477,12 @@ async function billsOf(t: Tenancy, linkId: number): Promise<AgencyBillInfo[]> {
   return (await t.platform.query('SELECT * FROM platform.agency_bills WHERE link_id = $1 ORDER BY month DESC', [linkId])).map(toBill);
 }
 
-/** One link: its numbers and bill for a month, and its payment requests (and who of the agency works for it). */
-async function linkDetail(t: Tenancy, L: Link, month: string) {
+/** One link: its numbers and bill for a month, and its payment requests (and who of the partner works for it). */
+async function linkDetail(t: Tenancy, L: Link, month: string, now: number) {
   await withAgents(t, [L]);
   const { from, to } = monthBounds(month);
-  const counts = await agencyCounts(t.shop(L.storeSchema), L.info.agency.id, from, to);
-  const bill = agencyBill(L.info.prices, counts, { monthly: workedIn(L.info, from, to) });
+  const counts = await linkCounts(t, L, month, now);
+  const bill = partnerBill(L.info.kind, L.info.prices, counts, { monthly: workedIn(L.info, from, to) });
   return { link: L.info, month, counts, bill, bills: await billsOf(t, L.info.id) };
 }
 
@@ -407,23 +493,25 @@ async function monthCounts(t: Tenancy, links: Link[], now: number) {
   const out: Record<string, AgencyCounts & { total: number }> = {};
   for (const L of links) {
     if (!L.info.startedAt || !L.storeOk || !workedIn(L.info, from, to)) continue;
-    const c = await agencyCounts(t.shop(L.storeSchema), L.info.agency.id, from, to);
-    out[String(L.info.id)] = { ...c, total: agencyBill(L.info.prices, c, { monthly: true }).total };
+    const c = await linkCounts(t, L, month, now);
+    out[String(L.info.id)] = { ...c, total: partnerBill(L.info.kind, L.info.prices, c, { monthly: true }).total };
   }
   return { month, counts: out };
 }
 
 // ---------------------------------------------------------------- the agency itself
 async function agencyRow(t: Tenancy, id: number) {
-  const r = (await t.platform.query('SELECT id, name, public_code, agency_verified_at, agency_prices, status FROM platform.shops WHERE id = $1', [id]))[0];
-  if (!r) throw notFound('Agence introuvable');
+  const r = (await t.platform.query('SELECT id, kind, name, public_code, agency_verified_at, agency_prices, status FROM platform.shops WHERE id = $1', [id]))[0];
+  if (!r) throw notFound('Partenaire introuvable');
+  const kind: PartnerKind = r.kind === 'marketer' ? 'marketer' : 'agency';
   return {
     id: num(r.id),
+    kind,
     name: r.name as string,
     code: (r.public_code as string | null) ?? null,
     verified: !!r.agency_verified_at,
     active: r.status === 'active',
-    prices: r.agency_prices ? cleanPrices(json(r.agency_prices)) : null,
+    prices: r.agency_prices ? cleanPrices(json(r.agency_prices), kind) : null,
   };
 }
 
@@ -453,7 +541,7 @@ export const agencyProcs = {
     const all = lead ? await withAgents(t, (await t.platform.query(`${LINK_SQL} WHERE l.agency_id = $1 ORDER BY l.id DESC`, [id])).map(toLink)) : [];
     const m = lead ? await monthCounts(t, all, ctx.now()) : { month: monthNow(ctx.now()), counts: {} };
     return {
-      agency: { id: a.id, name: a.name, code: a.code, verified: a.verified, prices: lead ? a.prices : null },
+      agency: { id: a.id, kind: a.kind, name: a.name, code: a.code, verified: a.verified, prices: lead ? a.prices : null },
       lead,
       month: m.month,
       counts: m.counts,
@@ -470,17 +558,17 @@ export const agencyProcs = {
     const rows = [];
     for (const L of links) {
       if (!workedIn(L.info, from, to)) continue;
-      const counts = L.storeOk ? await agencyCounts(t.shop(L.storeSchema), id, from, to) : { ...NO_COUNTS };
+      const counts = await linkCounts(t, L, month, ctx.now());
       const b = (await t.platform.query('SELECT * FROM platform.agency_bills WHERE link_id = $1 AND month = $2', [L.info.id, month]))[0];
-      rows.push({ link: L.info, counts, bill: agencyBill(L.info.prices, counts, { monthly: true }), request: b ? toBill(b) : null });
+      rows.push({ link: L.info, counts, bill: partnerBill(L.info.kind, L.info.prices, counts, { monthly: true }), request: b ? toBill(b) : null });
     }
     return { month, rows };
   }),
 
   /** The agency's usual prices: what a store sees before working with it, and the start of a new request's prices. */
   'agency.prices': proc([], z.object({ prices: PricesIn }), async (ctx, i) => {
-    const { t, id } = asAgency(ctx);
-    await t.platform.query('UPDATE platform.shops SET agency_prices = $2 WHERE id = $1', [id, JSON.stringify(cleanPrices(i.prices))]);
+    const { t, id, kind } = asAgency(ctx);
+    await t.platform.query('UPDATE platform.shops SET agency_prices = $2 WHERE id = $1', [id, JSON.stringify(cleanPrices(i.prices, kind))]);
     return { ok: true };
   }),
 
@@ -495,10 +583,11 @@ export const agencyProcs = {
 
   /** Asks a store to work with it: the tasks and the prices for this store (its usual prices to start with). */
   'agency.request': proc([], z.object({ storeId: Id, tasks: Tasks, prices: PricesIn.optional() }), async (ctx, i) => {
-    const { t, id } = asAgency(ctx);
+    const { t, id, kind } = asAgency(ctx);
     const a = await agencyRow(t, id);
-    if (!a.verified) throw bad(NOT_VERIFIED);
-    const prices = cleanPrices(i.prices ?? a.prices ?? NO_AGENCY_PRICES);
+    if (!a.verified) throw bad(notVerified(kind));
+    const tasks = tasksFor(kind, i.tasks);
+    const prices = cleanPrices(i.prices ?? a.prices ?? NO_AGENCY_PRICES, kind);
     if (!hasPrice(prices)) throw bad('Écrivez d’abord vos prix (au moins un montant)');
     const s = (await t.platform.query(`SELECT id FROM platform.shops WHERE id = $1 AND kind = 'store' AND NOT is_demo AND status = 'active'`, [i.storeId]))[0];
     if (!s) throw notFound('Boutique introuvable');
@@ -506,7 +595,7 @@ export const agencyProcs = {
       const r = (
         await t.platform.query(
           `INSERT INTO platform.agency_links (agency_id, store_id, requested_by, requester, tasks, prices) VALUES ($1, $2, 'agency', $3, $4, $5) RETURNING id`,
-          [id, i.storeId, requesterOf(ctx), JSON.stringify(i.tasks), JSON.stringify(prices)],
+          [id, i.storeId, requesterOf(ctx), JSON.stringify(tasks), JSON.stringify(prices)],
         )
       )[0];
       return { id: num(r.id) };
@@ -525,8 +614,8 @@ export const agencyProcs = {
       await setStatus(t, L.info.id, 'pending', 'refused');
       return { ok: true, problems: [] as string[] };
     }
-    if (!L.agencyOk) throw bad(NOT_VERIFIED);
-    const why = await clash(t, t.shop(L.storeSchema), L.info.store.id, L.info.id, L.info.tasks, L.info.products);
+    if (!L.agencyOk) throw bad(notVerified(L.info.kind));
+    const why = await clash(t, t.shop(L.storeSchema), L.info.store.id, L.info.id, L.info.tasks, L.info.products, L.info.kind);
     if (why) throw bad(why);
     if (!(await setStatus(t, L.info.id, 'pending', 'active', ', started_at = now()'))) throw bad('Cette demande n’attend plus votre réponse');
     return { ok: true, problems: await syncLink(t, L.info.id) };
@@ -547,7 +636,7 @@ export const agencyProcs = {
   'agency.linkPrices': proc([], z.object({ id: Id, prices: PricesIn }), async (ctx, i) => {
     const { t, id } = asAgency(ctx);
     const L = await agencyLink(t, id, i.id);
-    const p = cleanPrices(i.prices);
+    const p = cleanPrices(i.prices, L.info.kind);
     if (!hasPrice(p)) throw bad('Écrivez au moins un montant');
     if (L.info.status === 'pending' && L.info.requestedBy === 'agency') await t.platform.query('UPDATE platform.agency_links SET prices = $2 WHERE id = $1', [L.info.id, JSON.stringify(p)]);
     else if (L.info.status === 'active') await t.platform.query('UPDATE platform.agency_links SET prices_new = $2 WHERE id = $1', [L.info.id, sameJson(p, L.info.prices) ? null : JSON.stringify(p)]);
@@ -595,8 +684,8 @@ export const agencyProcs = {
     const want = new Set(i.people);
     const people = await agencyPeople(ctx.db);
     for (const p of people)
-      if (want.has(p.id) && !p.roles.some((r) => isLead([r]) || (L.info.tasks as string[]).includes(r)))
-        throw bad(`${p.name} n’a pas le rôle ${L.info.tasks.map((k) => TASK_FR[k]).join(' ou ')} : changez son rôle dans Utilisateurs`);
+      if (want.has(p.id) && !fits(L.info.kind, p.roles, L.info.tasks))
+        throw bad(`${p.name} n’a pas le rôle ${L.info.kind === 'marketer' ? 'Marketer' : L.info.tasks.map((k) => TASK_FR[k]).join(' ou ')} : changez son rôle dans Utilisateurs`);
     if ([...want].some((pid) => !people.some((p) => p.id === pid))) throw bad('Personne introuvable dans votre équipe (ou compte désactivé)');
     // « every seller » becomes the list of the sellers of today, without this one
     const open = (await t.platform.query(`SELECT store_id FROM platform.agency_links WHERE agency_id = $1 AND status IN ('pending', 'active') ORDER BY id`, [id])).map((r: any) => num(r.store_id));
@@ -620,7 +709,7 @@ export const agencyProcs = {
   /** One store: its numbers and bill for a month, and the payment requests. */
   'agency.link': proc([], z.object({ id: Id, month: Month.optional() }), async (ctx, i) => {
     const { t, id } = asAgency(ctx);
-    return linkDetail(t, await agencyLink(t, id, i.id), i.month ?? monthNow(ctx.now()));
+    return linkDetail(t, await agencyLink(t, id, i.id), i.month ?? monthNow(ctx.now()), ctx.now());
   }),
 
   /** « Demander le paiement » of a month (asked again while not paid: counted again). */
@@ -630,7 +719,7 @@ export const agencyProcs = {
     if (!L.info.startedAt) throw bad('Ce lien n’a pas encore commencé');
     if (i.month > monthNow(ctx.now())) throw bad('Ce mois n’a pas commencé');
     if (i.month < monthNow(Date.parse(L.info.startedAt))) throw bad('Le contrat n’avait pas commencé ce mois-là');
-    const d = await linkDetail(t, L, i.month);
+    const d = await linkDetail(t, L, i.month, ctx.now());
     if (d.bill.total <= 0) throw bad('Rien à demander pour ce mois');
     const cur = (await t.platform.query('SELECT id, status FROM platform.agency_bills WHERE link_id = $1 AND month = $2', [L.info.id, i.month]))[0];
     if (cur && cur.status !== 'requested') throw bad('Ce mois est déjà payé');
@@ -649,8 +738,8 @@ export const agencyProcs = {
     return { ok: true };
   }),
 
-  // ---------------------------------------------------------------- the store's side (« Agences »)
-  /** The store's code (to give to an agency), its agencies (requests, contracts), this month's numbers, its products. */
+  // ---------------------------------------------------------------- the store's side (« Partenaires »: agencies, marketers)
+  /** The store's code (to give to a partner), its partners (requests, contracts), this month's numbers, its products. */
   'partners.home': proc([], z.object({}), async (ctx) => {
     const { t, id } = asStore(ctx);
     const code = ((await t.platform.query('SELECT public_code FROM platform.shops WHERE id = $1', [id]))[0]?.public_code as string | null) ?? null;
@@ -666,39 +755,42 @@ export const agencyProcs = {
     };
   }),
 
-  /** An agency by its code: its name, whether Pilotix checked it, its prices. */
-  'partners.find': proc([], z.object({ code: z.string().trim().min(4).max(20) }), async (ctx, i) => {
+  /** A partner by its code (an agency AG-7K2Q, a marketer MK-7K2Q): its name, whether Pilotix checked it, its prices. */
+  'partners.find': proc([], z.object({ code: z.string().trim().min(4).max(20), kind: z.enum(['agency', 'marketer']).optional() }), async (ctx, i) => {
     const { t, id } = asStore(ctx);
-    const a = (await t.platform.query(`SELECT id FROM platform.shops WHERE public_code = $1 AND kind = 'agency' AND status = 'active'`, [cleanCode(i.code, 'agency')]))[0];
-    if (!a) throw notFound('Aucune agence avec ce code');
+    const kind: PartnerKind = i.kind ?? (/^\s*mk/i.test(i.code) ? 'marketer' : 'agency');
+    const a = (await t.platform.query(`SELECT id FROM platform.shops WHERE public_code = $1 AND kind = $2 AND status = 'active'`, [cleanCode(i.code, kind), kind]))[0];
+    if (!a) throw notFound(kind === 'marketer' ? 'Aucun marketer avec ce code' : 'Aucune agence avec ce code');
     const ag = await agencyRow(t, num(a.id));
-    if (!ag.verified) throw bad('Cette agence n’est pas encore vérifiée par Pilotix');
+    if (!ag.verified) throw bad(`${kind === 'marketer' ? 'Ce marketer n’est pas encore vérifié' : 'Cette agence n’est pas encore vérifiée'} par Pilotix`);
     const open = (await t.platform.query(`SELECT id, status FROM platform.agency_links WHERE agency_id = $1 AND store_id = $2 AND status IN ('pending', 'active')`, [ag.id, id]))[0];
     const prices = ag.prices ?? NO_AGENCY_PRICES;
-    return { agency: { id: ag.id, name: ag.name, code: ag.code, prices, priced: hasPrice(prices) }, link: open ? { id: num(open.id), status: open.status as 'pending' | 'active' } : null };
+    return { agency: { id: ag.id, kind: ag.kind, name: ag.name, code: ag.code, prices, priced: hasPrice(prices) }, link: open ? { id: num(open.id), status: open.status as 'pending' | 'active' } : null };
   }),
 
-  /** Asks an agency to work for the store: its usual prices, the tasks and products the store gives. */
+  /** Asks a partner to work for the store: its usual prices, the tasks (an agency) and products the store gives. */
   'partners.request': proc([], z.object({ agencyId: Id, tasks: Tasks, products: Products }), async (ctx, i) => {
     const { t, id } = asStore(ctx);
-    const a = (await t.platform.query(`SELECT id FROM platform.shops WHERE id = $1 AND kind = 'agency' AND status = 'active'`, [i.agencyId]))[0];
-    if (!a) throw notFound('Agence introuvable');
+    const a = (await t.platform.query(`SELECT id FROM platform.shops WHERE id = $1 AND kind IN ('agency', 'marketer') AND status = 'active'`, [i.agencyId]))[0];
+    if (!a) throw notFound('Partenaire introuvable');
     const ag = await agencyRow(t, i.agencyId);
-    if (!ag.verified) throw bad('Cette agence n’est pas encore vérifiée par Pilotix');
-    if (!ag.prices || !hasPrice(ag.prices)) throw bad('Cette agence n’a pas encore écrit ses prix');
+    const who = ag.kind === 'marketer' ? 'Ce marketer' : 'Cette agence';
+    if (!ag.verified) throw bad(`${who} n’est pas encore ${ag.kind === 'marketer' ? 'vérifié' : 'vérifiée'} par Pilotix`);
+    if (!ag.prices || !hasPrice(ag.prices)) throw bad(`${who} n’a pas encore écrit ses prix`);
+    const tasks = tasksFor(ag.kind, i.tasks);
     const products = await checkProducts(ctx.db, i.products);
-    const why = await clash(t, ctx.db, id, 0, i.tasks, products);
+    const why = await clash(t, ctx.db, id, 0, tasks, products, ag.kind);
     if (why) throw bad(why);
     try {
       const r = (
         await t.platform.query(
           `INSERT INTO platform.agency_links (agency_id, store_id, requested_by, requester, tasks, prices, products) VALUES ($1, $2, 'store', $3, $4, $5, $6) RETURNING id`,
-          [i.agencyId, id, requesterOf(ctx), JSON.stringify(i.tasks), JSON.stringify(ag.prices), products === null ? null : JSON.stringify(products)],
+          [i.agencyId, id, requesterOf(ctx), JSON.stringify(tasks), JSON.stringify(ag.prices), products === null ? null : JSON.stringify(products)],
         )
       )[0];
       return { id: num(r.id) };
     } catch (e: any) {
-      if (String(e?.code) === '23505' || /unique|duplicate/i.test(String(e?.message))) throw bad('Une demande ou un contrat existe déjà avec cette agence');
+      if (String(e?.code) === '23505' || /unique|duplicate/i.test(String(e?.message))) throw bad(`Une demande ou un contrat existe déjà avec ${partnerFr(ag.kind)}`);
       throw e;
     }
   }),
@@ -712,10 +804,10 @@ export const agencyProcs = {
       await setStatus(t, L.info.id, 'pending', 'refused');
       return { ok: true, problems: [] as string[] };
     }
-    if (!L.agencyOk) throw bad('Cette agence ne peut pas travailler pour le moment');
-    const tasks = i.tasks ?? L.info.tasks;
+    if (!L.agencyOk) throw bad(L.info.kind === 'marketer' ? 'Ce marketer ne peut pas travailler pour le moment' : 'Cette agence ne peut pas travailler pour le moment');
+    const tasks = tasksFor(L.info.kind, i.tasks ?? L.info.tasks);
     const products = await checkProducts(ctx.db, i.products === undefined ? null : i.products);
-    const why = await clash(t, ctx.db, id, L.info.id, tasks, products);
+    const why = await clash(t, ctx.db, id, L.info.id, tasks, products, L.info.kind);
     if (why) throw bad(why);
     await t.platform.query('UPDATE platform.agency_links SET tasks = $2, products = $3 WHERE id = $1 AND status = $4', [L.info.id, JSON.stringify(tasks), products === null ? null : JSON.stringify(products), 'pending']);
     if (!(await setStatus(t, L.info.id, 'pending', 'active', ', started_at = now()'))) throw bad('Cette demande n’attend plus votre réponse');
@@ -736,10 +828,11 @@ export const agencyProcs = {
     const L = await storeLink(t, id, i.id);
     const editable = L.info.status === 'active' || (L.info.status === 'pending' && L.info.requestedBy === 'store');
     if (!editable) throw bad('Ce lien ne change plus');
+    const tasks = tasksFor(L.info.kind, i.tasks);
     const products = await checkProducts(ctx.db, i.products);
-    const why = await clash(t, ctx.db, id, L.info.id, i.tasks, products);
+    const why = await clash(t, ctx.db, id, L.info.id, tasks, products, L.info.kind);
     if (why) throw bad(why);
-    await t.platform.query('UPDATE platform.agency_links SET tasks = $2, products = $3 WHERE id = $1', [L.info.id, JSON.stringify(i.tasks), products === null ? null : JSON.stringify(products)]);
+    await t.platform.query('UPDATE platform.agency_links SET tasks = $2, products = $3 WHERE id = $1', [L.info.id, JSON.stringify(tasks), products === null ? null : JSON.stringify(products)]);
     return { ok: true, problems: L.info.status === 'active' ? await syncLink(t, L.info.id) : [] };
   }),
 
@@ -762,7 +855,7 @@ export const agencyProcs = {
   /** One agency: its numbers and bill for a month, and its payment requests. */
   'partners.link': proc([], z.object({ id: Id, month: Month.optional() }), async (ctx, i) => {
     const { t, id } = asStore(ctx);
-    return linkDetail(t, await storeLink(t, id, i.id), i.month ?? monthNow(ctx.now()));
+    return linkDetail(t, await storeLink(t, id, i.id), i.month ?? monthNow(ctx.now()), ctx.now());
   }),
 
   /** « Payé »: the store paid the agency (outside Pilotix). */

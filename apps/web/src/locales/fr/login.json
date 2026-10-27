@@ -28,5 +28,7 @@
   "createStore": "Créer ma boutique",
   "terms": "Conditions d’utilisation et confidentialité",
   "inviteTitle": "Bienvenue sur Pilotix",
-  "inviteText": "Choisissez votre mot de passe pour entrer dans votre boutique. Vous seul le connaîtrez."
+  "inviteText": "Choisissez votre mot de passe pour entrer dans votre boutique. Vous seul le connaîtrez.",
+  "createAccount": "Créer un compte",
+  "createAccountSub": "Vendeur, agence de confirmation ou marketer"
 }

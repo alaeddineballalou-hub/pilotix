@@ -30,7 +30,8 @@
     "settings": "الإعدادات",
     "signups": "التسجيلات",
     "messages": "الرسائل",
-    "health": "النسخ الاحتياطية"
+    "health": "النسخ الاحتياطية",
+    "marketers": "المسوّقون"
   },
   "roles": {
     "owner": "المالك",
@@ -339,7 +340,11 @@
     "receipt": "أُرسل الإيصال {{no}} إلى {{email}}",
     "reward_one": "إحالة: {{count}} شهر مجاني بفضل «{{from}}»",
     "reward_other": "إحالة: {{count}} أشهر مجانية بفضل «{{from}}»",
-    "supportReply": "رد على الرسالة «{{subject}}»"
+    "supportReply": "رد على الرسالة «{{subject}}»",
+    "partnerSignup": "تسجيل: {{kind}}",
+    "partnerAdded": "أُنشئ من حساب: {{kind}}",
+    "partnerVerify": "تحقق منه Pilotix",
+    "partnerUnverify": "سُحب التحقق"
   },
   "plan": {
     "new": "باقة جديدة",
@@ -576,5 +581,18 @@
     "reason": "السبب (للسجل)",
     "saved": "تم الحفظ",
     "none": "لا توجد وكالة بعد."
+  },
+  "mk": {
+    "sub": "المسوّقون: يتحقق Pilotix من كل واحد قبل أن يعمل مع المتاجر.",
+    "waiting_one": "مسوّق واحد ينتظر تحققك.",
+    "waiting_other": "{{count}} مسوّقين ينتظرون تحققك.",
+    "agency": "المسوّق",
+    "verified": "تم التحقق",
+    "none": "لا مسوّق بعد.",
+    "suspendText": "يتوقف فريقه فورًا في كل المتاجر؛ وتبقى مجموعات إعلاناته للمتاجر."
+  },
+  "kind": {
+    "agency": "وكالة تأكيد",
+    "marketer": "مساحة مسوّق"
   }
 }

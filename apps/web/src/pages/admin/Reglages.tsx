@@ -32,7 +32,7 @@ export function ReglagesPage() {
   );
 }
 
-/** The store's code (a multi-shop server): a confirmation agency types it to send the store a request. */
+/** The store's code (a multi-shop server): a partner (confirmation agency, marketer) types it to send the store a request. */
 function StoreCodeCard() {
   const { t } = useTranslation();
   const { session } = useSession();
@@ -43,10 +43,15 @@ function StoreCodeCard() {
       <p className="agx-code-line">
         <CopyCode code={code} />
       </p>
-      <p className="small muted">{t('agency.store.codeText')}</p>
-      <a className="btn small" href="#/agences">
-        <Icon name="handshake" /> {t('nav.agences')}
-      </a>
+      <p className="small muted">{t('agency.store.codeTextAll')}</p>
+      <span className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <a className="btn small" href="#/agences">
+          <Icon name="handshake" /> {t('nav.agences')}
+        </a>
+        <a className="btn small" href="#/marketers">
+          <Icon name="trend" /> {t('nav.marketers')}
+        </a>
+      </span>
     </Card>
   );
 }

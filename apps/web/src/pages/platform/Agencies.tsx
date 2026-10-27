@@ -1,5 +1,6 @@
-// Confirmation agencies: Pilotix checks each one before it can work with stores (« Vérifier »), and can suspend it
-// (its agents stop at once in every store). The control room sees its name, code, owner and how many sellers it has.
+// Confirmation agencies (and, on their own page, marketers): Pilotix checks each one before it can work with stores
+// (« Vérifier »), and can suspend it (its people stop at once in every store). The control room sees its name, code,
+// owner and how many sellers it has.
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { dateOnly, when } from '../../lib/format';
@@ -9,10 +10,12 @@ import { Modal } from '../../ui/modal';
 import { can, Empty } from './bits';
 import '../agency/agency.css';
 
-export function Agencies({ staff }: { staff: Staff }) {
+export function Agencies({ staff, kind = 'agency' }: { staff: Staff; kind?: 'agency' | 'marketer' }) {
   const { t } = useTranslation();
+  /** a marketer's own words (platform.mk.*), else the agency's */
+  const tk = (key: string, o?: Record<string, unknown>) => (kind === 'marketer' ? t(`platform.mk.${key}`, { ...o, defaultValue: t(`platform.ag.${key}`, o) }) : t(`platform.ag.${key}`, o));
   const [q, setQ] = useState('');
-  const list = usePRpc('p.agencies.list', { q }, { refetchInterval: 60_000 });
+  const list = usePRpc('p.agencies.list', { q, kind }, { refetchInterval: 60_000 });
   const verify = usePAction('p.agencies.verify', { success: t('platform.ag.saved') });
   const status = usePAction('p.shops.setStatus', { success: t('platform.ag.saved') });
   const [suspend, setSuspend] = useState<{ id: number; name: string } | null>(null);
@@ -26,17 +29,17 @@ export function Agencies({ staff }: { staff: Staff }) {
     <div className="pp-stack">
       <div className="pp-head">
         <div>
-          <h1>{t('platform.nav.agencies')}</h1>
-          <p className="muted">{t('platform.ag.sub')}</p>
+          <h1>{t(kind === 'marketer' ? 'platform.nav.marketers' : 'platform.nav.agencies')}</h1>
+          <p className="muted">{tk('sub')}</p>
         </div>
         <label className="pp-search">
           <Icon name="search" />
-          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('platform.ag.search')} aria-label={t('platform.ag.search')} />
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tk('search')} aria-label={tk('search')} />
         </label>
       </div>
       {waiting > 0 && (
         <p className="pp-preview">
-          <Icon name="shield" /> {t('platform.ag.waiting', { count: waiting })}
+          <Icon name="shield" /> {tk('waiting', { count: waiting })}
         </p>
       )}
       <Card>
@@ -45,7 +48,7 @@ export function Agencies({ staff }: { staff: Staff }) {
             <table className="agx-table">
               <thead>
                 <tr>
-                  <th>{t('platform.ag.agency')}</th>
+                  <th>{tk('agency')}</th>
                   <th>{t('platform.ag.owner')}</th>
                   <th>{t('platform.ag.sellers')}</th>
                   <th>{t('platform.ag.check')}</th>
@@ -77,7 +80,7 @@ export function Agencies({ staff }: { staff: Staff }) {
                         <span className="chip agx-st agx-st-bad">{t(`platform.state.${a.status}`)}</span>
                       ) : a.verifiedAt ? (
                         <span className="chip pp-chip-ok">
-                          <Icon name="shield" /> {t('platform.ag.verified')}
+                          <Icon name="shield" /> {tk('verified')}
                         </span>
                       ) : (
                         <span className="chip pp-chip-warn">{t('platform.ag.toCheck')}</span>
@@ -108,7 +111,7 @@ export function Agencies({ staff }: { staff: Staff }) {
             </table>
           </div>
         ) : (
-          <Empty>{t('platform.ag.none')}</Empty>
+          <Empty>{tk('none')}</Empty>
         )}
       </Card>
       {suspend && (
@@ -126,7 +129,7 @@ export function Agencies({ staff }: { staff: Staff }) {
             </>
           }
         >
-          <p>{t('platform.ag.suspendText')}</p>
+          <p>{tk('suspendText')}</p>
           <label className="field">
             <span className="lab">{t('platform.ag.reason')}</span>
             <input value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />

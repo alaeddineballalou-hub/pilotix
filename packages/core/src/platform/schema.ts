@@ -416,12 +416,21 @@ CREATE TABLE IF NOT EXISTS platform.agency_bills (
 CREATE UNIQUE INDEX IF NOT EXISTS agency_bills_month ON platform.agency_bills (link_id, month);
 `;
 
+// Marketers: a partner's space like an agency's (its team, its sellers, its prices, its bills) for the people who run
+// the stores' ads. Same links and bills as the agencies (agency_links.agency_id is the partner, whatever its kind);
+// the store gives it products, and it gets paid on its ad sets' results.
+const P006 = `
+ALTER TABLE platform.shops DROP CONSTRAINT IF EXISTS shops_kind_check;
+ALTER TABLE platform.shops ADD CONSTRAINT shops_kind_check CHECK (kind IN ('store', 'agency', 'marketer'));
+`;
+
 export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p001_platform', P001],
   ['p002_accounts_signup_domains', P002],
   ['p003_accounts_privacy', P003],
   ['p004_turnstile', P004],
   ['p005_agencies', P005],
+  ['p006_marketers', P006],
 ];
 
 /** Creates or updates the platform's tables. */

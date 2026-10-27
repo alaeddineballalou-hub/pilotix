@@ -28,6 +28,10 @@
   --c-info-ink: #2459D6;
   --c-info-tint: #E8EEF8;
 
+  /* marketers (their own accounts: a sign-up choice, their badge) */
+  --c-mk-ink: #6D3FD1;
+  --c-mk-tint: #F0EAFD;
+
   /* secondary text: 5.4:1 on the cream page, 5.8:1 on white */
   --c-muted: #5F6673;
 }
@@ -44,6 +48,8 @@ html[data-theme="dark"] {
   --c-warn-tint: #3D3320;
   --c-info-ink: #93B4FF;
   --c-info-tint: #1E2D48;
+  --c-mk-ink: #C3AEFF;
+  --c-mk-tint: #2C2347;
   --c-muted: #A9B4C8;
 }
 

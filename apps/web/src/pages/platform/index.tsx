@@ -35,6 +35,7 @@ const SECTIONS: Section[] = [
   { id: 'doctor', icon: 'sparkles', roles: ['owner', 'manager'] },
   { id: 'shops', icon: 'store' },
   { id: 'agencies', icon: 'headset' },
+  { id: 'marketers', icon: 'trend' },
   { id: 'signups', icon: 'signup' },
   { id: 'messages', icon: 'inbox' },
   { id: 'payments', icon: 'coins', roles: ['owner', 'manager'] },
@@ -195,6 +196,7 @@ function PlatformShell({ staff, parts, onLogout, demo }: { staff: Staff; parts: 
   else if (cur === 'payments') page = <Payments staff={staff} />;
   else if (cur === 'signups') page = <Signups />;
   else if (cur === 'agencies') page = <Agencies staff={staff} />;
+  else if (cur === 'marketers') page = <Agencies staff={staff} kind="marketer" />;
   else if (cur === 'messages') page = <Messages id={parts[1] && /^\d+$/.test(parts[1]) ? Number(parts[1]) : null} />;
   else if (cur === 'health') page = <HealthPage />;
   else if (cur === 'plans') page = <Plans staff={staff} />;

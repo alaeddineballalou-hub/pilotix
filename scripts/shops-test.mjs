@@ -727,6 +727,71 @@ await section('Confirmation agencies: « Créer mon agence », Pilotix’s check
   ok('suspended → the agents are out at once; contract ended → the seller leaves the picker');
 });
 
+// ---------------------------------------------------------------- marketers (their own accounts, never an agency's)
+await section('Marketers: « Marketer » on the sign-up page, Pilotix’s check, a store gives products, its people see their ad sets only', async () => {
+  const PR = { perConfirmed: 0, perDelivered: 120, perUpsell: 0, monthly: 0, bonusRate: { min: 0, amount: 0 }, bonusVolume: { above: 0, amount: 0 }, perSuccess: 12000, profitRate: 10 };
+  const n0 = mailCount();
+  const email = em('marketer');
+  await must('/auth/signup', { name: 'Yacine Marketer', email, password: 'Marketer-Password-1', storeName: `Yacine Ads ${run}`, language: 'fr', terms: true, kind: 'marketer' });
+  const m = await mailTo(email, n0);
+  assert.match(`${m.subject} ${m.text}`, /marketer/i);
+  const a = await must('/auth/signup/confirm', { token: linkToken(m, 'signup') });
+  assert.equal(a.session.shop.kind, 'marketer');
+  assert.equal(a.session.shop.verified, false);
+  assert.match(a.session.shop.code, /^MK-[A-Z2-9]{4}$/);
+  ok(`the e-mail « ${m.subject} » → marketer ${a.session.shop.code} made, free, not checked yet`);
+  const M = a.token;
+  const mkId = a.session.shop.id;
+  // its space runs only its own actions: the ads need a seller, the orders are never its work
+  await fails(rpc(M, 'mk.overview', {}), 400, /vendeur/);
+  await fails(rpc(M, 'orders.list', { pageSize: 5 }), 403);
+  await rpc(M, 'agency.prices', { prices: PR });
+  await fails(rpc(M, 'users.create', { name: 'Agent', email: em('mk-agent'), password: 'Agent-Password-1', roles: ['confirmation'], language: 'fr' }), 400, /marketer/);
+  await rpc(M, 'users.create', { name: 'Nadir Marketer', email: em('nadir'), password: 'Nadir-Password-1', roles: ['marketer'], language: 'fr' });
+  ok('a marketer’s space: its own prices and team (marketers only), no store page');
+  // the store does not find it before Pilotix checks it; the control room lists it with the marketers only
+  await fails(rpc(ctx.signup1.token, 'partners.find', { code: a.session.shop.code, kind: 'marketer' }), 400, /vérifié/);
+  assert.ok((await prpc('p.agencies.list', { kind: 'marketer' })).some((x) => x.id === mkId && x.kind === 'marketer'));
+  assert.ok(!(await prpc('p.agencies.list', { kind: 'agency' })).some((x) => x.id === mkId), 'not among the agencies');
+  await prpc('p.agencies.verify', { id: mkId, verified: true });
+  // the store finds it by its code and gives it one product; the marketer accepts
+  const prod = await rpc(ctx.signup1.token, 'catalog.saveProduct', { name: `Lampe ${run}`, price: 4500, variants: [] });
+  const pid = prod.id ?? prod.product?.id;
+  const f = await rpc(ctx.signup1.token, 'partners.find', { code: a.session.shop.code.toLowerCase() });
+  assert.deepEqual([f.agency.kind, f.agency.prices.perSuccess], ['marketer', 12000]);
+  const link = await rpc(ctx.signup1.token, 'partners.request', { agencyId: mkId, tasks: ['marketing'], products: [pid] });
+  assert.deepEqual((await rpc(M, 'agency.answer', { id: link.id, accept: true })).problems, []);
+  ok('control room › Marketers: checked; the store found it, gave one product, it accepted');
+  // Nadir lands in the marketer's space; from there: the seller's ads, never its orders
+  const l = await login(em('nadir'), 'Nadir-Password-1');
+  assert.ok(!l.pick, 'no picker: the marketer’s space only');
+  assert.equal(l.session.shop.kind, 'marketer');
+  const K = l.token;
+  const S = ctx.signup1.shopId;
+  assert.deepEqual((await rpc(K, 'agency.sellers')).map((x) => [x.id, x.tasks]), [[S, ['marketing']]]);
+  const today = new Date(Date.now() + 3_600_000).toISOString().slice(0, 10);
+  const pub = await rpcSeller(K, S, 'ads.overview', { from: today, to: today });
+  assert.equal(pub.owner, false);
+  assert.deepEqual(pub.catalog.map((c) => c.id), [pid], 'only the product given');
+  assert.deepEqual((await rpcSeller(K, 'all', 'mk.overview', {})).rows, []);
+  await fails(rpcSeller(K, S, 'orders.list', { pageSize: 5 }), 403);
+  await fails(rpcSeller(K, S, 'catalog.products', {}), 403);
+  ok('from the marketer’s space: one seller’s ads or every seller’s ad sets; no order, no catalog of the store');
+  // the store never sets his price (the marketer does), nor edits his account
+  const team = await rpc(ctx.signup1.token, 'users.list', { agencies: true });
+  const nid = team.find((u) => u.email === em('nadir'))?.id;
+  assert.ok(nid, 'his account in the store');
+  await fails(rpc(ctx.signup1.token, 'mk.price', { marketerId: nid, price: 1000 }), 403, /fixe lui-même/);
+  await fails(rpc(ctx.signup1.token, 'users.update', { id: nid, name: 'Autre Nom' }), 403);
+  const d = await rpc(M, 'agency.link', { id: link.id });
+  assert.deepEqual([d.link.kind, d.counts.adsets, d.bill.total], ['marketer', 0, 0]);
+  ok('his price is the marketer’s; the month counts his ad sets');
+  // the store ends it: the seller leaves Nadir's picker
+  await rpc(ctx.signup1.token, 'partners.end', { id: link.id });
+  assert.deepEqual(await rpc((await login(em('nadir'), 'Nadir-Password-1')).token, 'agency.sellers'), []);
+  ok('contract ended → the seller leaves the picker');
+});
+
 console.log('\n========== SUMMARY');
 for (const [n, err] of results) console.log(`${err ? '✗' : '✓'} ${n}${err ? `  → ${err}` : ''}`);
 const failed = results.filter(([, e]) => e).length;

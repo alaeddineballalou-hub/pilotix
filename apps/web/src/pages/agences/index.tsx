@@ -1,7 +1,9 @@
-// « Agences » (the store's administrator): the store's code to give to an agency, finding an agency by its code,
-// requests both ways, what the store gives each agency (tasks, products), its prices (set by the agency: accept new
-// ones or end), its agents, the month's numbers and the agency's payment requests.
-import { AgencyCounts, AgencyLinkInfo, AgencyTask, NO_COUNTS } from '@pilotix/shared';
+// « Agences » and « Marketers » (the store's administrator), two pages that never mix: its confirmation agencies, its
+// marketers. The store's code to give to them, finding one by its code, requests both ways, what the store gives each
+// one (an agency: tasks and products; a marketer: products, and ad sets to its people in Marketing › Marketer), its
+// prices (set by the agency or the marketer: accept new ones or end), its people, the month's numbers and its payment
+// requests.
+import { AgencyCounts, AgencyLinkInfo, AgencyTask, NO_COUNTS, PartnerKind } from '@pilotix/shared';
 import { FormEvent, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Out, rpc } from '../../lib/backend';
@@ -10,7 +12,7 @@ import { CopyCode } from '../../ui/CopyCode';
 import { Card, Empty, ErrorBox, Field, Icon, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
-import { BillLines, BillsList, CountsLine, CountsRow, EndModal, Lead, LinkStatus, monthLabel, MonthPicker, PriceList, TaskChips, TaskPicker } from '../agency/parts';
+import { BillLines, BillsList, CountsLine, CountsRow, EndModal, Lead, LinkStatus, monthLabel, MonthPicker, PriceList, TaskChips, TaskPicker, useTp } from '../agency/parts';
 import type { PageProps } from '../registry';
 import '../agency/agency.css';
 
@@ -22,21 +24,34 @@ const monthNow = () => {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 };
 
+/** The page of each kind, and the address of one of them: #/agences/<id>, #/marketers/<id>. */
+const PAGE_OF: Record<PartnerKind, string> = { agency: 'agences', marketer: 'marketers' };
+const linkHref = (l: { kind: PartnerKind; id: number }) => `#/${PAGE_OF[l.kind]}/${l.id}`;
+
+/** « Agences »: the store's confirmation agencies (#/agences), one of them (#/agences/<id>). */
 export function Agences({ sub }: PageProps) {
   const id = sub && /^\d+$/.test(sub) ? Number(sub) : null;
-  return id ? <AgencyDetail id={id} /> : <AgencyList />;
+  return id ? <AgencyDetail id={id} kind="agency" /> : <AgencyList kind="agency" />;
 }
 
-function AgencyList() {
+/** « Marketers »: the marketers running the store's ads (#/marketers), one of them (#/marketers/<id>). */
+export function Marketers({ sub }: PageProps) {
+  const id = sub && /^\d+$/.test(sub) ? Number(sub) : null;
+  return id ? <AgencyDetail id={id} kind="marketer" /> : <AgencyList kind="marketer" />;
+}
+
+function AgencyList({ kind }: { kind: PartnerKind }) {
   const { t } = useTranslation();
+  const tp = useTp(kind);
   const q = useRpc('partners.home', {});
   if (q.isLoading) return <Loading />;
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   const h = q.data!;
-  const received = h.links.filter((l) => l.status === 'pending' && l.requestedBy === 'agency');
-  const sent = h.links.filter((l) => l.status === 'pending' && l.requestedBy === 'store');
-  const active = h.links.filter((l) => l.status === 'active');
-  const past = h.links.filter((l) => l.status !== 'pending' && l.status !== 'active');
+  const mine = h.links.filter((l) => l.kind === kind);
+  const received = mine.filter((l) => l.status === 'pending' && l.requestedBy === 'agency');
+  const sent = mine.filter((l) => l.status === 'pending' && l.requestedBy === 'store');
+  const active = mine.filter((l) => l.status === 'active');
+  const past = mine.filter((l) => l.status !== 'pending' && l.status !== 'active');
   return (
     <div className="agx-page">
       <div className="agx-grid">
@@ -44,13 +59,13 @@ function AgencyList() {
           <div className="agx-hero-t">
             <small>{t('agency.store.yourCode')}</small>
             <span className="agx-code">{h.code ? <CopyCode code={h.code} /> : '—'}</span>
-            <p className="muted">{t('agency.store.codeText')}</p>
+            <p className="muted">{tp('store.codeText')}</p>
           </div>
         </section>
-        <FindAgency products={h.products} links={h.links} />
+        <FindAgency key={kind} kind={kind} products={h.products} links={h.links} />
       </div>
       {received.length > 0 && (
-        <Card title={t('agency.store.received')} badge={<span className="nav-count nc-a">{received.length}</span>}>
+        <Card title={tp('store.received')} badge={<span className="nav-count nc-a">{received.length}</span>}>
           <div className="agx-links">
             {received.map((l) => (
               <ReceivedFromAgency key={l.id} l={l} products={h.products} links={h.links} />
@@ -58,7 +73,7 @@ function AgencyList() {
           </div>
         </Card>
       )}
-      <Card title={t('agency.store.agencies')} help={t('agency.store.agenciesHelp')}>
+      <Card title={tp('store.agencies')} help={tp('store.agenciesHelp')}>
         {active.length ? (
           <div className="agx-links">
             {active.map((l) => (
@@ -66,7 +81,7 @@ function AgencyList() {
             ))}
           </div>
         ) : (
-          <Empty>{t('agency.store.none')}</Empty>
+          <Empty>{tp('store.none')}</Empty>
         )}
       </Card>
       {sent.length > 0 && (
@@ -87,7 +102,7 @@ function AgencyList() {
             {past.map((l) => (
               <li key={l.id}>
                 <b>{l.agency.name}</b> <LinkStatus l={l} side="store" />
-                {l.status === 'ended' && <a href={`#/agences/${l.id}`}>{t('agency.seeDetail')}</a>}
+                {l.status === 'ended' && <a href={linkHref(l)}>{t('agency.seeDetail')}</a>}
               </li>
             ))}
           </ul>
@@ -97,12 +112,16 @@ function AgencyList() {
   );
 }
 
-/** What other agencies already have, for one of these tasks: their products (they go to them), or every product. */
-function takenBy(links: AgencyLinkInfo[], exceptId: number | null, tasks: AgencyTask[]) {
+/**
+ * What other agencies already have, for one of these tasks: their products (they go to them), or every product.
+ * Marketers share products (each one is judged on its own ad sets): nothing is taken.
+ */
+function takenBy(links: AgencyLinkInfo[], exceptId: number | null, tasks: AgencyTask[], kind: PartnerKind = 'agency') {
   const map = new Map<number, string>();
   let all: string | null = null;
+  if (kind === 'marketer') return { map, all };
   for (const l of links) {
-    if (l.status !== 'active' || l.id === exceptId || !l.tasks.some((k) => tasks.includes(k))) continue;
+    if (l.kind !== 'agency' || l.status !== 'active' || l.id === exceptId || !l.tasks.some((k) => tasks.includes(k))) continue;
     if (l.products === null) all = l.agency.name;
     else for (const p of l.products) map.set(p, l.agency.name);
   }
@@ -110,8 +129,9 @@ function takenBy(links: AgencyLinkInfo[], exceptId: number | null, tasks: Agency
 }
 
 /** « Tous les produits (aussi les nouveaux) » or a choice of products (those of another agency are shown, not offered). */
-function ProductPicker({ products, value, onChange, taken }: { products: Product[]; value: number[] | null; onChange: (v: number[] | null) => void; taken: ReturnType<typeof takenBy> }) {
+function ProductPicker({ products, value, onChange, taken, kind }: { products: Product[]; value: number[] | null; onChange: (v: number[] | null) => void; taken: ReturnType<typeof takenBy>; kind: PartnerKind }) {
   const { t } = useTranslation();
+  const tp = useTp(kind);
   const [q, setQ] = useState('');
   // the products still free first, those of another agency after
   const shown = useMemo(
@@ -126,7 +146,7 @@ function ProductPicker({ products, value, onChange, taken }: { products: Product
         <Icon name="layers" />
         <span>
           <b>{t('agency.allProducts')}</b>
-          <small className="muted">{taken.all ? t('agency.store.allTaken', { name: taken.all }) : t('agency.allProductsHelp')}</small>
+          <small className="muted">{taken.all ? t('agency.store.allTaken', { name: taken.all }) : tp('allProductsHelp')}</small>
         </span>
       </label>
       <label className={`agx-pick-it ${value !== null ? 'on' : ''}`}>
@@ -134,7 +154,7 @@ function ProductPicker({ products, value, onChange, taken }: { products: Product
         <Icon name="tag" />
         <span>
           <b>{t('agency.someProducts')}</b>
-          <small className="muted">{t('agency.someProductsHelp')}</small>
+          <small className="muted">{tp('someProductsHelp')}</small>
         </span>
       </label>
       {value !== null && (
@@ -173,12 +193,13 @@ function ProductsText({ l, products }: { l: AgencyLinkInfo; products: Product[] 
   return <>{names.length > 3 ? t('agency.nProducts', { count: names.length }) : names.join(', ') || t('agency.nProducts', { count: l.products.length })}</>;
 }
 
-/** « Ajouter une agence »: its code, then the tasks and products given; its prices are its own. */
-function FindAgency({ products, links }: { products: Product[]; links: AgencyLinkInfo[] }) {
+/** « Ajouter une agence » / « Ajouter un marketer »: its code, then what the store gives; its prices are its own. */
+function FindAgency({ products, links, kind }: { products: Product[]; links: AgencyLinkInfo[]; kind: PartnerKind }) {
   const { t } = useTranslation();
+  const tp = useTp(kind);
   const [code, setCode] = useState('');
   const [found, setFound] = useState<Out<'partners.find'> | null>(null);
-  const [tasks, setTasks] = useState<AgencyTask[]>(['confirmation']);
+  const [tasks, setTasks] = useState<AgencyTask[]>(kind === 'marketer' ? ['marketing'] : ['confirmation']);
   const [chosen, setChosen] = useState<number[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -189,7 +210,7 @@ function FindAgency({ products, links }: { products: Product[]; links: AgencyLin
     setFound(null);
     setBusy(true);
     try {
-      setFound(await rpc('partners.find', { code }));
+      setFound(await rpc('partners.find', { code, kind }));
     } catch (x: any) {
       setErr(x?.message ?? t('common.error'));
     } finally {
@@ -197,10 +218,10 @@ function FindAgency({ products, links }: { products: Product[]; links: AgencyLin
     }
   };
   return (
-    <Card title={t('agency.store.add')} className="agx-find-card">
-      <Lead>{t('agency.store.addText')}</Lead>
+    <Card title={tp('store.add')} className="agx-find-card">
+      <Lead>{tp('store.addText')}</Lead>
       <form className="agx-find" onSubmit={find}>
-        <input dir="ltr" className="agx-code-in" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="AG-7K2Q" aria-label={t('agency.agencyCode')} maxLength={10} />
+        <input dir="ltr" className="agx-code-in" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder={kind === 'marketer' ? 'MK-7K2Q' : 'AG-7K2Q'} aria-label={tp('agencyCode')} maxLength={10} />
         <button className="btn" disabled={busy || code.replace(/[^A-Za-z0-9]/g, '').length < 4}>
           <Icon name="search" /> {busy ? '…' : t('agency.find')}
         </button>
@@ -209,28 +230,30 @@ function FindAgency({ products, links }: { products: Product[]; links: AgencyLin
       {found && (
         <div className="agx-found">
           <div className="agx-found-head">
-            <span className="agx-where-ic agx-ic">
-              <Icon name="headset" />
+            <span className={`agx-where-ic ${kind === 'marketer' ? 'mkx-ic' : 'agx-ic'}`}>
+              <Icon name={kind === 'marketer' ? 'megaphone' : 'headset'} />
             </span>
             <b>{found.agency.name}</b>
             <span className="chip agx-st agx-st-ok">
-              <Icon name="shield" /> {t('agency.verified')}
+              <Icon name="shield" /> {tp('verified')}
             </span>
           </div>
           {found.link ? (
-            <p className="agx-note">{found.link.status === 'active' ? t('agency.store.alreadyActive') : t('agency.alreadyPending')}</p>
+            <p className="agx-note">{found.link.status === 'active' ? tp('store.alreadyActive') : t('agency.alreadyPending')}</p>
           ) : (
             <>
               <div className="agx-sub">
                 <b>{t('agency.store.theirPrices')}</b>
-                <Lead>{t('agency.store.theirPricesText')}</Lead>
-                {found.agency.priced ? <PriceList p={found.agency.prices} /> : <p className="agx-note warn">{t('agency.store.noPriceYet')}</p>}
+                <Lead>{tp('store.theirPricesText')}</Lead>
+                {found.agency.priced ? <PriceList p={found.agency.prices} kind={kind} /> : <p className="agx-note warn">{tp('store.noPriceYet')}</p>}
               </div>
-              <Field label={t('agency.store.tasksGiven')}>
-                <TaskPicker value={tasks} onChange={setTasks} />
-              </Field>
+              {kind === 'agency' && (
+                <Field label={t('agency.store.tasksGiven')}>
+                  <TaskPicker value={tasks} onChange={setTasks} />
+                </Field>
+              )}
               <Field label={t('agency.store.productsGiven')}>
-                <ProductPicker products={products} value={chosen} onChange={setChosen} taken={takenBy(links, null, tasks)} />
+                <ProductPicker products={products} value={chosen} onChange={setChosen} taken={takenBy(links, null, tasks, kind)} kind={kind} />
               </Field>
               <div className="row agx-actions">
                 <button type="button" className="btn" onClick={() => setFound(null)}>
@@ -256,6 +279,7 @@ function FindAgency({ products, links }: { products: Product[]; links: AgencyLin
 /** What the store gives an agency: the tasks and products (when it accepts, or later). */
 function WorkModal({ l, products, links, accept, onClose }: { l: AgencyLinkInfo; products: Product[]; links: AgencyLinkInfo[]; accept?: boolean; onClose: () => void }) {
   const { t } = useTranslation();
+  const tp = useTp(l.kind);
   const [tasks, setTasks] = useState<AgencyTask[]>(l.tasks);
   const [chosen, setChosen] = useState<number[] | null>(l.products);
   const done = (r: { problems: string[] }) => {
@@ -290,22 +314,25 @@ function WorkModal({ l, products, links, accept, onClose }: { l: AgencyLinkInfo;
       {accept && (
         <div className="agx-sub">
           <b>{t('agency.store.theirPrices')}</b>
-          <PriceList p={l.prices} />
+          <PriceList p={l.prices} kind={l.kind} />
         </div>
       )}
-      <Field label={t('agency.store.tasksGiven')}>
-        <TaskPicker value={tasks} onChange={setTasks} />
-      </Field>
+      {l.kind === 'agency' && (
+        <Field label={t('agency.store.tasksGiven')}>
+          <TaskPicker value={tasks} onChange={setTasks} />
+        </Field>
+      )}
       <Field label={t('agency.store.productsGiven')}>
-        <ProductPicker products={products} value={chosen} onChange={setChosen} taken={takenBy(links, l.id, tasks)} />
+        <ProductPicker products={products} value={chosen} onChange={setChosen} taken={takenBy(links, l.id, tasks, l.kind)} kind={l.kind} />
       </Field>
-      {!accept && <p className="small muted">{t('agency.store.workRule')}</p>}
+      {!accept && <p className="small muted">{tp('store.workRule')}</p>}
     </Modal>
   );
 }
 
 function ReceivedFromAgency({ l, products, links }: { l: AgencyLinkInfo; products: Product[]; links: AgencyLinkInfo[] }) {
   const { t } = useTranslation();
+  const tp = useTp(l.kind);
   const [open, setOpen] = useState(false);
   const answer = useAction('partners.answer', { success: t('agency.answered') });
   return (
@@ -315,11 +342,11 @@ function ReceivedFromAgency({ l, products, links }: { l: AgencyLinkInfo; product
         <span className="muted ltr small">{l.agency.code}</span>
         <LinkStatus l={l} side="store" />
       </header>
-      <p className="small">{t('agency.store.agencyAsks')}</p>
-      <TaskChips tasks={l.tasks} />
+      <p className="small">{tp('store.agencyAsks')}</p>
+      {l.kind === 'agency' && <TaskChips tasks={l.tasks} />}
       <div className="agx-sub">
         <small className="muted">{t('agency.store.theirPrices')}</small>
-        <PriceList p={l.prices} compact />
+        <PriceList p={l.prices} compact kind={l.kind} />
       </div>
       <div className="row agx-actions">
         <button type="button" className="btn" disabled={answer.isPending} onClick={() => answer.mutate({ id: l.id, accept: false })}>
@@ -343,7 +370,7 @@ function SentToAgency({ l, products }: { l: AgencyLinkInfo; products: Product[] 
         <b>{l.agency.name}</b>
         <LinkStatus l={l} side="store" />
       </header>
-      <TaskChips tasks={l.tasks} />
+      {l.kind === 'agency' && <TaskChips tasks={l.tasks} />}
       <p className="small muted">
         <ProductsText l={l} products={products} />
       </p>
@@ -358,18 +385,19 @@ function SentToAgency({ l, products }: { l: AgencyLinkInfo; products: Product[] 
 
 function AgencyCard({ l, c, products }: { l: AgencyLinkInfo; c?: AgencyCounts & { total: number }; products: Product[] }) {
   const { t } = useTranslation();
+  const tp = useTp(l.kind);
   return (
-    <a className="agx-link agx-link-go" href={`#/agences/${l.id}`}>
+    <a className="agx-link agx-link-go" href={linkHref(l)}>
       <header>
         <b>{l.agency.name}</b>
         <LinkStatus l={l} side="store" />
         {l.pricesNew && <span className="chip agx-st agx-st-wait">{t('agency.store.newPrices')}</span>}
       </header>
-      <TaskChips tasks={l.tasks} />
+      {l.kind === 'agency' && <TaskChips tasks={l.tasks} />}
       <p className="small muted">
-        <ProductsText l={l} products={products} /> · {l.agents.length ? t('agency.nAgents', { count: l.agents.length }) : t('agency.store.noAgentYet')}
+        <ProductsText l={l} products={products} /> · {l.agents.length ? tp('nAgents', { count: l.agents.length }) : tp('store.noAgentYet')}
       </p>
-      <CountsLine c={c ?? NO_COUNTS} total={c?.total ?? 0} />
+      <CountsLine c={c ?? NO_COUNTS} total={c?.total ?? 0} kind={l.kind} />
       <span className="agx-go">
         {t('agency.seeDetail')} <Icon name="chevr" />
       </span>
@@ -377,11 +405,12 @@ function AgencyCard({ l, c, products }: { l: AgencyLinkInfo; c?: AgencyCounts & 
   );
 }
 
-function AgencyDetail({ id }: { id: number }) {
+function AgencyDetail({ id, kind }: { id: number; kind: PartnerKind }) {
   const { t, i18n } = useTranslation();
   const max = monthNow();
   const [month, setMonth] = useState(max);
   const q = useRpc('partners.link', { id, month });
+  const tp = useTp(kind);
   const home = useRpc('partners.home', {});
   const [modal, setModal] = useState<'work' | 'end' | null>(null);
   const yes = useAction('partners.acceptPrices', { success: t('agency.store.pricesAccepted') });
@@ -390,12 +419,18 @@ function AgencyDetail({ id }: { id: number }) {
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   const d = q.data!;
   const l = d.link;
+  // an agency's link opened on « Marketers » (or the other way): its own page
+  if (l.kind !== kind) {
+    location.replace(linkHref(l));
+    return <Loading />;
+  }
   const products = home.data?.products ?? [];
   const live = l.status === 'active';
+  const back = `#/${PAGE_OF[l.kind]}`;
   return (
     <div className="agx-page">
-      <a className="agx-back" href="#/agences">
-        <Icon name="chevl" /> {t('agency.store.back')}
+      <a className="agx-back" href={back}>
+        <Icon name="chevl" /> <BackLabel kind={l.kind} />
       </a>
       <section className="card agx-head">
         <div>
@@ -415,11 +450,11 @@ function AgencyDetail({ id }: { id: number }) {
             <div className="agx-compare">
               <div>
                 <small className="muted">{t('agency.store.nowPrices')}</small>
-                <PriceList p={l.prices} compact />
+                <PriceList p={l.prices} compact kind={l.kind} />
               </div>
               <div>
                 <small className="muted">{t('agency.store.nextPrices')}</small>
-                <PriceList p={l.pricesNew} compact />
+                <PriceList p={l.pricesNew} compact kind={l.kind} />
               </div>
             </div>
             <div className="row agx-actions">
@@ -436,7 +471,7 @@ function AgencyDetail({ id }: { id: number }) {
       <div className="agx-grid">
         <Card
           title={t('agency.store.given')}
-          help={t('agency.store.givenHelp')}
+          help={tp('store.givenHelp')}
           actions={
             live && (
               <button type="button" className="btn small" onClick={() => setModal('work')}>
@@ -445,15 +480,26 @@ function AgencyDetail({ id }: { id: number }) {
             )
           }
         >
-          <TaskChips tasks={l.tasks} />
+          {l.kind === 'agency' && <TaskChips tasks={l.tasks} />}
           <p className="small">
             <ProductsText l={l} products={products} />
           </p>
         </Card>
-        <Card title={t('agency.pricesTitle')} help={t('agency.store.pricesHelp')}>
-          <PriceList p={l.prices} />
+        <Card title={t('agency.pricesTitle')} help={tp('store.pricesHelp')}>
+          <PriceList p={l.prices} kind={l.kind} />
         </Card>
-        <Card title={t('agency.store.theirAgents')} help={t('agency.store.theirAgentsHelp')}>
+        <Card
+          title={tp('store.theirAgents')}
+          help={tp('store.theirAgentsHelp')}
+          actions={
+            l.kind === 'marketer' &&
+            live && (
+              <a className="btn small" href="#/marketing/marketer">
+                <Icon name="megaphone" /> {t('agency.mk.store.giveAdsets')}
+              </a>
+            )
+          }
+        >
           {l.agents.length ? (
             <ul className="agx-people">
               {l.agents.map((a) => (
@@ -463,16 +509,16 @@ function AgencyDetail({ id }: { id: number }) {
               ))}
             </ul>
           ) : (
-            <p className="muted small">{t('agency.store.noAgentYet')}</p>
+            <p className="muted small">{tp('store.noAgentYet')}</p>
           )}
         </Card>
       </div>
       <Card title={t('agency.monthTitle')} actions={<MonthPicker value={month} max={max} onChange={setMonth} />}>
-        <Lead>{t('agency.store.monthText', { m: monthLabel(month, i18n.language) })}</Lead>
-        <CountsRow c={d.counts} total={d.bill.total} />
-        <BillLines lines={d.bill.lines} total={d.bill.total} />
+        <Lead>{tp('store.monthText', { m: monthLabel(month, i18n.language) })}</Lead>
+        <CountsRow c={d.counts} total={d.bill.total} kind={l.kind} />
+        <BillLines lines={d.bill.lines} total={d.bill.total} kind={l.kind} />
       </Card>
-      <Card title={t('agency.payments')} help={t('agency.store.paymentsHelp')}>
+      <Card title={t('agency.payments')} help={tp('store.paymentsHelp')}>
         <BillsList
           bills={d.bills}
           action={(b) =>
@@ -488,7 +534,7 @@ function AgencyDetail({ id }: { id: number }) {
         <section className="card agx-danger">
           <div>
             <b>{t('agency.endTitle')}</b>
-            <p className="small muted">{t('agency.endTextStore')}</p>
+            <p className="small muted">{tp('endTextStore')}</p>
           </div>
           <button type="button" className="btn danger" onClick={() => setModal('end')}>
             {t('agency.end')}
@@ -496,7 +542,13 @@ function AgencyDetail({ id }: { id: number }) {
         </section>
       )}
       {modal === 'work' && <WorkModal l={l} products={products} links={home.data?.links ?? []} onClose={() => setModal(null)} />}
-      {modal === 'end' && <EndModal name={l.agency.name} proc="partners.end" id={l.id} back="#/agences" onClose={() => setModal(null)} text={t('agency.endTextStore')} />}
+      {modal === 'end' && <EndModal name={l.agency.name} proc="partners.end" id={l.id} back={back} onClose={() => setModal(null)} text={tp('endTextStore')} />}
     </div>
   );
+}
+
+/** « Vos agences » / « Vos marketers » (the back link of a partner's page). */
+function BackLabel({ kind }: { kind: PartnerKind }) {
+  const tp = useTp(kind);
+  return <>{tp('store.back')}</>;
 }

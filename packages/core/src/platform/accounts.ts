@@ -210,15 +210,19 @@ export async function adminMaySetPassword(t: Tenancy, shopId: number, email: str
   return owns.length === 0;
 }
 
-/** Stores this account owns (deleted ones do not count; nor its confirmation agency). */
+/** Stores this account owns (deleted ones do not count; nor its partner spaces: agency, marketer). */
 export async function ownedStores(t: Tenancy, accountId: number): Promise<number> {
   return num((await t.platform.query(`SELECT count(*)::int AS n FROM platform.shops WHERE owner_account_id = $1 AND status <> 'deleted' AND kind = 'store'`, [accountId]))[0]?.n);
 }
 
-/** Confirmation agencies this account owns (one at most). */
-export async function ownedAgencies(t: Tenancy, accountId: number): Promise<number> {
-  return num((await t.platform.query(`SELECT count(*)::int AS n FROM platform.shops WHERE owner_account_id = $1 AND status <> 'deleted' AND kind = 'agency'`, [accountId]))[0]?.n);
+/** Partner spaces of this kind (confirmation agency, marketer) this account owns (one of each at most). */
+export async function ownedPartners(t: Tenancy, accountId: number, kind: 'agency' | 'marketer'): Promise<number> {
+  return num((await t.platform.query(`SELECT count(*)::int AS n FROM platform.shops WHERE owner_account_id = $1 AND status <> 'deleted' AND kind = $2`, [accountId, kind]))[0]?.n);
 }
+/** Confirmation agencies this account owns (one at most). */
+export const ownedAgencies = (t: Tenancy, accountId: number) => ownedPartners(t, accountId, 'agency');
+/** Marketer spaces this account owns (one at most). */
+export const ownedMarketers = (t: Tenancy, accountId: number) => ownedPartners(t, accountId, 'marketer');
 
 // ---------------------------------------------------------------- one-time links (new password, invitation, e-mail check)
 export type AccountTokenKind = 'reset' | 'invite' | 'verify';
@@ -279,7 +283,7 @@ export async function completedResets(t: Tenancy, accountId: number, since: numb
 
 /** Is this person an administrator somewhere, or a store's owner? (« Mot de passe oublié » is then never limited) */
 export async function isAdminSomewhere(t: Tenancy, account: Account): Promise<boolean> {
-  if ((await ownedStores(t, account.id)) > 0 || (await ownedAgencies(t, account.id)) > 0) return true;
+  if ((await ownedStores(t, account.id)) > 0 || (await ownedAgencies(t, account.id)) > 0 || (await ownedMarketers(t, account.id)) > 0) return true;
   return (await membershipsOf(t, account.email)).some((m) => m.roles.includes('admin'));
 }
 

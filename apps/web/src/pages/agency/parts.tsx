@@ -1,14 +1,34 @@
-// Pieces both sides of a confirmation agency use: its prices (edited by the agency, read by the store), the tasks,
-// the status of a link, a month's numbers and bill, the payment requests.
-import { agencyBill, AgencyBillInfo, AgencyCounts, AgencyLinkInfo, AgencyPrices, AgencyTask, BillLine, confirmRate, deliveryRate, NO_AGENCY_PRICES } from '@pilotix/shared';
-import { ReactNode } from 'react';
+// Pieces both sides of a partner use (a confirmation agency, a marketer): its prices (edited by the partner, read by
+// the store), the tasks, the status of a link, a month's numbers and bill, the payment requests.
+import { AgencyBillInfo, AgencyCounts, AgencyLinkInfo, AgencyPrices, AgencyTask, BillLine, confirmRate, deliveryRate, NO_AGENCY_PRICES, partnerBill, PartnerKind } from '@pilotix/shared';
+import { ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, dateOnly, n } from '../../lib/format';
 import { useAction } from '../../lib/query';
+import { useSession } from '../../lib/session';
 import { Icon } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 
 export const TASKS: AgencyTask[] = ['confirmation', 'suivi'];
+
+/** The kind of partner whose space is open (a store's own app: an agency, for the old texts). */
+export function usePartnerKind(): PartnerKind {
+  return useSession().session?.shop?.kind === 'marketer' ? 'marketer' : 'agency';
+}
+
+/**
+ * The words of the partners' pages for one kind: a marketer's own text (agency.mk.*) when there is one, else the
+ * agency's (agency.*). Without a kind: the partner whose space is open.
+ */
+export function useTp(kind?: PartnerKind) {
+  const { t } = useTranslation();
+  const own = usePartnerKind();
+  const k = kind ?? own;
+  return useCallback(
+    (key: string, opts?: Record<string, unknown>) => (k === 'marketer' ? t(`agency.mk.${key}`, { ...opts, defaultValue: t(`agency.${key}`, opts) }) : t(`agency.${key}`, opts)),
+    [k, t],
+  );
+}
 
 /** « octobre 2026 » */
 export function monthLabel(ym: string, lang: string): string {
@@ -38,13 +58,15 @@ export function MonthPicker({ value, max, onChange }: { value: string; max: stri
   );
 }
 
+const TASK_ICON: Record<AgencyTask, string> = { confirmation: 'phone', suivi: 'route', marketing: 'megaphone' };
+
 export function TaskChips({ tasks }: { tasks: AgencyTask[] }) {
   const { t } = useTranslation();
   return (
     <span className="agx-chips">
       {tasks.map((k) => (
         <span key={k} className={`chip agx-task agx-task-${k}`}>
-          <Icon name={k === 'confirmation' ? 'phone' : 'route'} />
+          <Icon name={TASK_ICON[k]} />
           {t(`agency.task.${k}`)}
         </span>
       ))}
@@ -76,10 +98,10 @@ export function TaskPicker({ value, onChange }: { value: AgencyTask[]; onChange:
 
 /** Where a link stands, seen from one side. */
 export function LinkStatus({ l, side }: { l: AgencyLinkInfo; side: 'agency' | 'store' }) {
-  const { t } = useTranslation();
-  if (l.status === 'pending') return <span className="chip agx-st agx-st-wait">{l.requestedBy === side ? t('agency.st.sent') : t('agency.st.received')}</span>;
-  if (l.status === 'active') return l.agency.suspended ? <span className="chip agx-st agx-st-bad">{t('agency.st.suspended')}</span> : <span className="chip agx-st agx-st-ok">{t('agency.st.active')}</span>;
-  return <span className="chip agx-st">{t(`agency.st.${l.status}`)}</span>;
+  const tp = useTp(l.kind);
+  if (l.status === 'pending') return <span className="chip agx-st agx-st-wait">{l.requestedBy === side ? tp('st.sent') : tp('st.received')}</span>;
+  if (l.status === 'active') return l.agency.suspended ? <span className="chip agx-st agx-st-bad">{tp('st.suspended')}</span> : <span className="chip agx-st agx-st-ok">{tp('st.active')}</span>;
+  return <span className="chip agx-st">{tp(`st.${l.status}`)}</span>;
 }
 
 // ---------------------------------------------------------------- prices
@@ -100,10 +122,23 @@ function Money({ label, help, value, onChange, unit }: { label: string; help?: s
   );
 }
 
-/** The agency's prices, piece by piece (0: the piece is not used). */
-export function PriceEditor({ value, onChange }: { value: AgencyPrices; onChange: (p: AgencyPrices) => void }) {
+/** The partner's prices, piece by piece (0: the piece is not used). */
+export function PriceEditor({ value, onChange, kind }: { value: AgencyPrices; onChange: (p: AgencyPrices) => void; kind?: PartnerKind }) {
   const { t } = useTranslation();
+  const own = usePartnerKind();
+  const tp = useTp(kind);
   const set = (k: keyof AgencyPrices, v: number) => onChange({ ...value, [k]: v });
+  if ((kind ?? own) === 'marketer')
+    return (
+      <div className="agx-pe">
+        <div className="agx-pe-grid">
+          <Money label={tp('p.perDelivered')} help={tp('ph.perDelivered')} value={value.perDelivered} onChange={(v) => set('perDelivered', v)} />
+          <Money label={tp('p.perSuccess')} help={tp('ph.perSuccess')} value={value.perSuccess} onChange={(v) => set('perSuccess', v)} />
+          <Money label={tp('p.profitRate')} help={tp('ph.profitRate')} unit="%" value={value.profitRate} onChange={(v) => set('profitRate', Math.min(100, v))} />
+          <Money label={tp('p.monthly')} help={tp('ph.monthly')} value={value.monthly} onChange={(v) => set('monthly', v)} />
+        </div>
+      </div>
+    );
   return (
     <div className="agx-pe">
       <div className="agx-pe-grid">
@@ -131,17 +166,20 @@ export function PriceEditor({ value, onChange }: { value: AgencyPrices; onChange
 }
 
 /** The prices in words: only the pieces used. */
-export function PriceList({ p, compact }: { p: AgencyPrices | null | undefined; compact?: boolean }) {
+export function PriceList({ p, compact, kind }: { p: AgencyPrices | null | undefined; compact?: boolean; kind?: PartnerKind }) {
   const { t } = useTranslation();
+  const tp = useTp(kind);
   const x = p ?? NO_AGENCY_PRICES;
   const rows: [string, ReactNode][] = [];
-  if (x.perDelivered) rows.push([t('agency.p.perDelivered'), da(x.perDelivered)]);
+  if (x.perDelivered) rows.push([tp('p.perDelivered'), da(x.perDelivered)]);
   if (x.perConfirmed) rows.push([t('agency.p.perConfirmed'), da(x.perConfirmed)]);
   if (x.perUpsell) rows.push([t('agency.p.perUpsell'), da(x.perUpsell)]);
-  if (x.monthly) rows.push([t('agency.p.monthly'), da(x.monthly)]);
+  if (x.perSuccess) rows.push([tp('p.perSuccess'), da(x.perSuccess)]);
+  if (x.profitRate) rows.push([tp('p.profitRate'), `${n(x.profitRate)} %`]);
+  if (x.monthly) rows.push([tp('p.monthly'), da(x.monthly)]);
   if (x.bonusRate.amount) rows.push([t('agency.p.bonusRateShort', { min: x.bonusRate.min }), t('agency.perDeliveredShort', { v: da(x.bonusRate.amount) })]);
   if (x.bonusVolume.amount) rows.push([t('agency.p.bonusVolumeShort', { above: n(x.bonusVolume.above) }), t('agency.perDeliveredShort', { v: da(x.bonusVolume.amount) })]);
-  if (!rows.length) return <p className="muted small">{t('agency.noPrice')}</p>;
+  if (!rows.length) return <p className="muted small">{tp('noPrice')}</p>;
   return (
     <dl className={`agx-prices ${compact ? 'compact' : ''}`}>
       {rows.map(([k, v]) => (
@@ -158,10 +196,43 @@ export function PriceList({ p, compact }: { p: AgencyPrices | null | undefined; 
 /** 78,9 % (the language's way) */
 const pc = (v: number, lang: string) => `${new Intl.NumberFormat(lang === 'ar' ? 'ar-DZ-u-nu-latn' : lang, { maximumFractionDigits: 1 }).format(v)} %`;
 
-export function CountsRow({ c, total }: { c: AgencyCounts; total?: number }) {
+export function CountsRow({ c, total, kind }: { c: AgencyCounts; total?: number; kind?: PartnerKind }) {
   const { t, i18n } = useTranslation();
+  const own = usePartnerKind();
   const dr = deliveryRate(c);
   const cr = confirmRate(c);
+  if ((kind ?? own) === 'marketer')
+    return (
+      <div className="agx-nums">
+        <div>
+          <small>{t('agency.c.adsets')}</small>
+          <b className="ltr">{n(c.adsets)}</b>
+        </div>
+        <div>
+          <small>{t('agency.c.spend')}</small>
+          <b className="ltr">{da(c.spend)}</b>
+        </div>
+        <div>
+          <small>{t('agency.c.delivered')}</small>
+          <b className="ltr">{n(c.delivered)}</b>
+          <span className="muted small ltr">{t('agency.c.ofOrders', { n: n(c.orders) })}</span>
+        </div>
+        <div>
+          <small>{t('agency.c.net')}</small>
+          <b className={`ltr ${c.net < 0 ? 'agx-bad' : ''}`}>{da(c.net)}</b>
+        </div>
+        <div>
+          <small>{t('agency.c.successes')}</small>
+          <b className="ltr">{n(c.successes)}</b>
+        </div>
+        {total !== undefined && (
+          <div className="agx-nums-total">
+            <small>{t('agency.c.amount')}</small>
+            <b className="ltr">{da(total)}</b>
+          </div>
+        )}
+      </div>
+    );
   return (
     <div className="agx-nums">
       <div>
@@ -193,9 +264,27 @@ export function CountsRow({ c, total }: { c: AgencyCounts; total?: number }) {
 }
 
 /** The same numbers on one line (a card in a list). */
-export function CountsLine({ c, total }: { c: AgencyCounts; total: number }) {
+export function CountsLine({ c, total, kind }: { c: AgencyCounts; total: number; kind?: PartnerKind }) {
   const { t, i18n } = useTranslation();
+  const own = usePartnerKind();
   const dr = deliveryRate(c);
+  if ((kind ?? own) === 'marketer')
+    return (
+      <p className="agx-mini">
+        <span>
+          <b className="ltr">{n(c.adsets)}</b> {t('agency.c.adsets').toLowerCase()}
+        </span>
+        <span>
+          <b className="ltr">{da(c.spend)}</b> {t('agency.c.spendShort')}
+        </span>
+        <span>
+          <b className="ltr">{n(c.delivered)}</b> {t('agency.c.delivered').toLowerCase()}
+        </span>
+        <span className="agx-mini-total">
+          <b className="ltr">{da(total)}</b>
+        </span>
+      </p>
+    );
   return (
     <p className="agx-mini">
       <span>
@@ -215,17 +304,18 @@ export function CountsLine({ c, total }: { c: AgencyCounts; total: number }) {
   );
 }
 
-/** The lines of a bill: what is counted × the price. */
-export function BillLines({ lines, total }: { lines: BillLine[]; total: number }) {
+/** The lines of a bill: what is counted × the price (a part of the profit: the % of the net profit). */
+export function BillLines({ lines, total, kind }: { lines: BillLine[]; total: number; kind?: PartnerKind }) {
   const { t } = useTranslation();
+  const tp = useTp(kind);
   if (!lines.length) return <p className="muted small">{t('agency.billEmpty')}</p>;
   return (
     <table className="agx-bill">
       <tbody>
         {lines.map((l) => (
           <tr key={l.key}>
-            <td>{t(`agency.line.${l.key}`)}</td>
-            <td className="ltr num">{l.key === 'monthly' ? '' : `${n(l.qty)} × ${da(l.price)}`}</td>
+            <td>{tp(`line.${l.key}`)}</td>
+            <td className="ltr num">{l.key === 'monthly' ? '' : l.key === 'profitRate' ? `${n(l.price)} % × ${da(l.qty)}` : `${n(l.qty)} × ${da(l.price)}`}</td>
             <td className="ltr num">{da(l.amount)}</td>
           </tr>
         ))}
@@ -241,7 +331,7 @@ export function BillLines({ lines, total }: { lines: BillLine[]; total: number }
 }
 
 /** What the bill of a month would be with these numbers (the same rule as the server). */
-export const billOf = (p: AgencyPrices, c: AgencyCounts) => agencyBill(p, c, { monthly: true });
+export const billOf = (p: AgencyPrices, c: AgencyCounts, kind: PartnerKind = 'agency') => partnerBill(kind, p, c, { monthly: true });
 
 /** The payment requests: requested → paid (the store says so) → received (the agency confirms). */
 export function BillsList({ bills, action }: { bills: AgencyBillInfo[]; action?: (b: AgencyBillInfo) => ReactNode }) {

@@ -157,6 +157,8 @@ export interface Profile {
   agencyProducts?: number[] | null;
   /** in an agency's own space: the sellers this person works for, and the products (null: every seller) */
   agencySellers?: AgencySellerWork[] | null;
+  /** a marketer's chief (or manager) working in this store: sees every ad set of the marketer's people here */
+  agencyLead?: boolean;
 }
 
 export interface Session {

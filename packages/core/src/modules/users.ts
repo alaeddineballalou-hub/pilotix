@@ -22,6 +22,7 @@ export const toProfile = (r: any): Profile => ({
   agencyId: numOrNull(r.agency_id),
   agencyProducts: idsOrNull(r.agency_products),
   agencySellers: sellersOrNull(r.agency_sellers),
+  agencyLead: !!r.agency_lead,
 });
 
 /**
@@ -99,7 +100,7 @@ const NewUser = z.object({
   language: z.enum(LANGUAGES).default('fr'),
   livreurCompanyId: z.number().int().positive().nullable().optional(),
   canManageUsers: z.boolean().optional(),
-  /** in a confirmation agency's space: the sellers this person works for, and the products (null: every seller) */
+  /** in a partner's space (agency, marketer): the sellers this person works for, and the products (null: every seller) */
   sellers: z
     .array(z.object({ store: z.number().int().positive(), products: z.array(z.number().int().positive()).max(2000).nullable() }))
     .max(500)
@@ -107,16 +108,16 @@ const NewUser = z.object({
     .optional(),
 });
 
-/** The roles of a confirmation agency's people: its chief, its supervisors, its agents. */
-const AGENCY_ROLES = ['admin', 'agent_manager', 'confirmation', 'suivi'];
-/** In an agency's space: only its own roles, and the sellers the person works for (checked against its contracts). */
+/** The roles of a partner's people: an agency's chief, supervisors and agents; a marketer's chief and media buyers. */
+export const PARTNER_ROLES: Record<'agency' | 'marketer', string[]> = { agency: ['admin', 'agent_manager', 'confirmation', 'suivi'], marketer: ['admin', 'marketer'] };
+/** In a partner's space: only its own roles, and the sellers the person works for (checked against its contracts). */
 async function agencyFields(ctx: Ctx, b: { roles?: string[]; sellers?: z.infer<typeof NewUser>['sellers'] }) {
-  const agency = ctx.shop?.kind === 'agency';
-  if (!agency) {
-    if (b.sellers !== undefined) throw bad('Réservé aux agences de confirmation');
+  const kind = ctx.shop?.kind;
+  if (kind !== 'agency' && kind !== 'marketer') {
+    if (b.sellers !== undefined) throw bad('Réservé aux agences de confirmation et aux marketers');
     return undefined;
   }
-  if (b.roles?.some((r) => !AGENCY_ROLES.includes(r))) throw bad('Rôle hors d’une agence de confirmation');
+  if (b.roles?.some((r) => !PARTNER_ROLES[kind].includes(r))) throw bad(kind === 'agency' ? 'Rôle hors d’une agence de confirmation' : 'Rôle hors d’un espace marketer');
   if (b.sellers === undefined) return undefined;
   // loaded here: agencies.ts reads the platform's shops, which need this file
   const { checkSellers } = await import('./agencies');
@@ -335,7 +336,7 @@ export const usersProcs = {
   'users.update': proc(null, NewUser.partial().extend({ id: z.number().int().positive(), active: z.boolean().optional() }), async (ctx, b) => {
     await needCanEdit(ctx, b.id);
     if ((await ctx.db.query('SELECT 1 FROM profiles WHERE id = $1 AND agency_id IS NOT NULL', [b.id])).length)
-      throw forbidden('Ce compte appartient à une agence de confirmation : seule l’agence le gère');
+      throw forbidden('Ce compte appartient à une agence de confirmation (ou à un marketer) : seule elle le gère');
     needGrantable(ctx, b);
     const sellers = await agencyFields(ctx, b);
     if (b.id === ctx.session.profile.id && (b.active === false || (b.roles && !b.roles.includes('admin')))) throw forbidden('Vous ne pouvez pas retirer votre propre accès administrateur');

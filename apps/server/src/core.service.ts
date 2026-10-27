@@ -245,7 +245,7 @@ export class CoreService implements OnModuleDestroy {
   }
 
   ctx(ref: ShopRef, session: Session, seller?: number | 'all'): Ctx {
-    // t: what joins two shops (a confirmation agency and the stores it works for); seller: the agency's chosen seller
+    // t: what joins two shops (a partner and the stores it works for); seller: the partner's chosen seller
     return {
       db: ref.db,
       session,
@@ -254,11 +254,11 @@ export class CoreService implements OnModuleDestroy {
       emit: (e) => this.emitLive(ref.shop.id, e),
       server: ref.hooks,
       t: this.t,
-      ...(ref.shop.kind === 'agency' ? { seller, otherShop: (id: number, profileId: number) => this.otherShop(id, profileId) } : {}),
+      ...(ref.shop.kind !== 'store' ? { seller, otherShop: (id: number, profileId: number) => this.otherShop(id, profileId) } : {}),
     };
   }
 
-  /** A store an agency works for, as one of the agency's people's accounts there (its live updates, its couriers). */
+  /** A store a partner works for, as one of the partner's people's accounts there (its live updates, its couriers). */
   private async otherShop(shopId: number, profileId: number): Promise<Ctx> {
     const ref = await this.shop({ id: shopId });
     if (!ref || ref.shop.status === 'archived' || ref.shop.status === 'deleted') throw new core.AppError('not_found', 'Vendeur introuvable');
@@ -311,8 +311,8 @@ export class CoreService implements OnModuleDestroy {
     const out: ShopRef[] = [];
     for (const s of await core.loadShops(this.t)) {
       if (s.status === 'archived') continue;
-      // a confirmation agency has no orders, couriers or messages of its own: nothing to run
-      if (s.kind === 'agency') continue;
+      // a partner (agency, marketer) has no orders, couriers or messages of its own: nothing to run
+      if (s.kind !== 'store') continue;
       const ref = await this.shop({ id: s.id });
       if (!ref) continue;
       if (!evenLocked && ref.status.locked) continue;

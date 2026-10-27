@@ -65,7 +65,7 @@ export function Profil({ sub }: PageProps) {
   const { session } = useSession();
   const p = session!.profile;
   // a confirmation agency's people (its own space, or working in a store for it) have no referral programme
-  const agencyPerson = session!.shop?.kind === 'agency' || !!p.agencyId;
+  const agencyPerson = (!!session!.shop?.kind && session!.shop.kind !== 'store') || !!p.agencyId;
   const tabs = TABS.filter(([k]) => k !== 'parrainage' || !agencyPerson);
   const tab: Tab = tabs.some((x) => x[0] === sub) ? (sub as Tab) : 'infos';
   return (

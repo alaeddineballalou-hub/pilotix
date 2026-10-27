@@ -1,8 +1,10 @@
-// Who works on which orders, once a store works with confirmation agencies.
+// Who works on which orders, once a store works with confirmation agencies (and marketers).
 // - An agency's agent works inside the store only on the orders the store gives the agency (its products, for its
 //   tasks: confirmation, suivi), with the confirmation and suivi screens — nothing else of the store.
+// - A marketer partner's person works inside the store only on the ads: the ad sets the store gave them, the products
+//   the store gave the marketer — never an order, a customer, the team or the money of the store.
 // - The store's own team works on the orders no agency handles; its managers and administrators see every order.
-// - An agency's own space (its team, prices, sellers, payments) answers only the agency's own actions.
+// - A partner's own space (its team, prices, sellers, payments) answers only the partner's own actions.
 import { AgencySellerWork, normalizePhone } from '@pilotix/shared';
 import { num } from '../db';
 import { bad, Ctx, forbidden, hasRole } from '../rpc';
@@ -157,22 +159,51 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
  */
 export const SELLER_PROCS = new Set(Object.keys(AGENCY_AGENT_PROCS).filter((n) => !n.startsWith('me.')));
 
-/** What an agency's own space answers (its own team and account; the rest are the agency.* actions). */
+/**
+ * A marketer partner's person inside a store: the ads of the ad sets the store gave them (Publicité, Marketer), the
+ * products the store gave the marketer (ads.ts checks them), and their own account.
+ */
+export const MARKETER_AGENT_PROCS: Record<string, Gate> = {
+  'me.get': free,
+  'me.language': free,
+  'me.password': free,
+  'me.ui': free,
+  'me.setUi': free,
+  'me.update': free,
+  'me.seen': free,
+  'ads.overview': free,
+  'ads.months': free,
+  'ads.closeMonth': free,
+  'ads.adset': free,
+  'ads.link': free,
+  'ads.sync': free,
+  'mk.overview': free,
+  'mk.adset': free,
+};
+/** The work on a seller's ads, asked from the marketer's own space: it runs inside that store (agencywork.ts). */
+export const MARKETER_SELLER_PROCS = new Set(Object.keys(MARKETER_AGENT_PROCS).filter((n) => !n.startsWith('me.')));
+/** The actions a partner's space runs inside its sellers' stores. */
+export const sellerProcsOf = (kind: 'agency' | 'marketer') => (kind === 'marketer' ? MARKETER_SELLER_PROCS : SELLER_PROCS);
+
+/** What a partner's own space answers (its own team and account; the rest are the agency.* actions). */
 const AGENCY_SPACE = new Set(['me.get', 'me.language', 'me.password', 'me.ui', 'me.setUi', 'me.update', 'me.seen', 'me.delete', 'users.list', 'users.create', 'users.update', 'admin.users.resetPassword']);
 
 /**
- * Checked before every action: an agency's space runs only its own actions; an agency's agent inside a store only the
- * confirmation and suivi work on the agency's orders; agency.* never runs in a store, partners.* never in an agency.
+ * Checked before every action: a partner's space (agency, marketer) runs only its own actions; an agency's agent inside
+ * a store only the confirmation and suivi work on the agency's orders, a marketer's person only the ads of their ad
+ * sets; agency.* never runs in a store, partners.* never in a partner's space.
  */
 export async function agencyGate(name: string, ctx: Ctx, input: unknown): Promise<void> {
-  if (ctx.shop?.kind === 'agency') {
+  const kind = ctx.shop?.kind;
+  if (kind === 'agency' || kind === 'marketer') {
     if (name.startsWith('agency.') || AGENCY_SPACE.has(name)) return;
-    if (SELLER_PROCS.has(name)) throw bad('Choisissez un vendeur en haut de la page');
-    throw forbidden('Pas dans l’espace d’une agence');
+    if (sellerProcsOf(kind).has(name)) throw bad('Choisissez un vendeur en haut de la page');
+    throw forbidden(kind === 'agency' ? 'Pas dans l’espace d’une agence' : 'Pas dans l’espace d’un marketer');
   }
-  if (name.startsWith('agency.')) throw forbidden('Réservé aux agences de confirmation');
+  if (name.startsWith('agency.')) throw forbidden('Réservé aux agences de confirmation et aux marketers');
   if (agencyOf(ctx) === null) return;
-  const g = AGENCY_AGENT_PROCS[name];
+  // a marketer partner's person has the marketer role only (an agency's agents never have it)
+  const g = (ctx.session.roles.includes('marketer') ? MARKETER_AGENT_PROCS : AGENCY_AGENT_PROCS)[name];
   if (!g) throw forbidden('Réservé à l’équipe de la boutique');
   await g(ctx, input);
 }

@@ -30,7 +30,8 @@
     "settings": "Settings",
     "signups": "Sign-ups",
     "messages": "Messages",
-    "health": "Backups"
+    "health": "Backups",
+    "marketers": "Marketers"
   },
   "roles": {
     "owner": "Owner",
@@ -311,7 +312,11 @@
     "receipt": "Receipt {{no}} sent to {{email}}",
     "reward_one": "Referral: {{count}} free month thanks to “{{from}}”",
     "reward_other": "Referral: {{count}} free months thanks to “{{from}}”",
-    "supportReply": "Answer to the message “{{subject}}”"
+    "supportReply": "Answer to the message “{{subject}}”",
+    "partnerSignup": "Sign-up: {{kind}}",
+    "partnerAdded": "Created from an account: {{kind}}",
+    "partnerVerify": "Checked by Pilotix",
+    "partnerUnverify": "Check taken back"
   },
   "plan": {
     "new": "New plan",
@@ -544,5 +549,18 @@
     "reason": "Reason (for the journal)",
     "saved": "Saved",
     "none": "No agency yet."
+  },
+  "mk": {
+    "sub": "Marketers: Pilotix checks each one before it works with stores.",
+    "waiting_one": "{{count}} marketer is waiting for your check.",
+    "waiting_other": "{{count}} marketers are waiting for your check.",
+    "agency": "Marketer",
+    "verified": "Checked",
+    "none": "No marketer yet.",
+    "suspendText": "Their team stops at once in every store; their ad sets stay with the stores."
+  },
+  "kind": {
+    "agency": "confirmation agency",
+    "marketer": "marketer space"
   }
 }

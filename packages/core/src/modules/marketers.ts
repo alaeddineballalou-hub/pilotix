@@ -16,11 +16,16 @@
 //    as open: forgotten orders must not keep an ad set "en cours" forever.
 //  - A month with ad spend but no dollar rate of its own: the ad set is not judged and cannot be paid until that month's
 //    rate is entered (Publicité › Taux 1 $), since its spend in DA would be a guess.
+//  - A marketer partner (a marketer's own space working for the store, Partenaires › Marketers): its people get an
+//    account in the store (profiles.agency_id = the marketer); the store gives them ad sets as to its own marketers.
+//    Their price per ad set is the marketer's own (copied by agencies.ts), and they are paid by the marketer's
+//    monthly bill, never ad set by ad set here.
+import { AgencyCounts, NO_COUNTS } from '@pilotix/shared';
 import { z } from 'zod';
-import { isoOrNull, num } from '../db';
-import { bad, Ctx, notFound, proc } from '../rpc';
+import { Db, isoOrNull, num } from '../db';
+import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
 import { getRaw, setRaw } from './admin';
-import { addDays, adsetDiagnostic, adsProcs, DayRow, fxTable, insights, isOwner, moneyOf, ordersOf, sumDays } from './ads';
+import { addDays, adsetDiagnostic, adsProcs, DayRow, fxTable, insights, isOwner, moneyOf, ordersOf, partnerLead, sumDays } from './ads';
 
 const RULES_KEY = 'mk_rules';
 export interface MkRules {
@@ -30,7 +35,7 @@ export interface MkRules {
   mult: number;
 }
 const DEFAULT_RULES: MkRules = { seuil: 0.3, mult: 3 };
-export const getRules = async (ctx: Ctx) => ({ ...DEFAULT_RULES, ...(await getRaw<Partial<MkRules>>(ctx.db, RULES_KEY, {})) });
+export const getRules = async (ctx: { db: Db }) => ({ ...DEFAULT_RULES, ...(await getRaw<Partial<MkRules>>(ctx.db, RULES_KEY, {})) });
 
 /** "BID CAP" / "COST CAP" copies of an ad set are tagged in the list. */
 const BID = /\b(bid|cost)\s*c[au]p\b/i;
@@ -59,6 +64,8 @@ export interface MkRow {
   prod: string;
   marketerId: number | null;
   marketerName: string | null;
+  /** its marketer works for a marketer partner (this partner's id): paid by the partner's monthly bill */
+  partnerId: number | null;
   price: number;
   bid: boolean;
   /** not linked to a product yet: can't be judged */
@@ -90,28 +97,68 @@ export interface MkRow {
   fxMissing: string[];
 }
 
+/** One ad set's numbers in one month (its months: those with results). */
+export interface MkMonth {
+  sp: number; // ad spend (USD)
+  spDa: number; // ad spend (DZD, at the month's rate)
+  n: number; // its share of the month's orders
+  d: number; // of those, delivered
+  r: number; // of those, returned
+  avant: number; // its share of the profit before ads (DZD)
+}
+
+interface SetRow {
+  id: string;
+  name: string;
+  campaign: string | null;
+  status: string | null;
+  productIds: number[];
+  marketerId: number | null;
+  marketerName: string | null;
+  partnerId: number | null;
+}
+
 /** Every ad set (the owner) or the marketer's own, with its lifetime money and result. */
 export async function mkRows(ctx: Ctx, onlyMine = !isOwner(ctx)): Promise<{ rows: MkRow[]; rules: MkRules; fxMissing: string[]; from: string; to: string }> {
-  const rules = await getRules(ctx);
-  const today = algDay(ctx.now());
-  // the whole life of every ad set: from the first day of Meta results
-  const first = (await ctx.db.query('SELECT min(day)::text AS d FROM ad_insights'))[0]?.d as string | null | undefined;
-  const start = first && first < today ? String(first).slice(0, 10) : today;
-  const fx = await fxTable(ctx.db);
-  const ownRate = new Set((await ctx.db.query('SELECT ym FROM fx_rates')).map((r: any) => String(r.ym)));
+  const me = ctx.session.profile.id;
+  // a marketer partner's chief: the ad sets of every person of the partner here
+  const lead = onlyMine ? partnerLead(ctx) : null;
+  const r = await mkCompute(ctx.db, ctx.now(), onlyMine ? (lead ? (s) => s.partnerId === lead : (s) => s.marketerId === me) : undefined);
+  return { rows: r.rows, rules: r.rules, fxMissing: r.fxMissing, from: r.from, to: r.to };
+}
 
-  const sets = (
-    await ctx.db.query(`SELECT a.*, p.name AS marketer_name FROM adsets a LEFT JOIN profiles p ON p.id = a.marketer_id ORDER BY a.name`)
-  ).map((r: any) => ({ id: String(r.id), name: r.name as string, campaign: r.campaign as string | null, status: r.status as string | null, productIds: ((r.product_ids ?? []) as unknown[]).map(num), marketerId: r.marketer_id === null ? null : num(r.marketer_id), marketerName: (r.marketer_name ?? null) as string | null }));
-  const rows = await insights(ctx.db, sets.map((s) => s.id), start, today);
-  const products = new Map((await ctx.db.query('SELECT id, name FROM products')).map((p: any) => [num(p.id), p.name as string]));
-  const prices = new Map((await ctx.db.query('SELECT profile_id, price FROM marketer_prices')).map((r: any) => [num(r.profile_id), num(r.price)]));
-  const forced = new Map((await ctx.db.query('SELECT adset_id, st FROM mk_results')).map((r: any) => [String(r.adset_id), r.st as MkResult]));
-  const pays = new Map((await ctx.db.query('SELECT adset_id, marketer_id, amount, paid_at FROM mk_payments')).map((r: any) => [String(r.adset_id), { amount: num(r.amount), at: isoOrNull(r.paid_at), marketerId: num(r.marketer_id) }]));
+/**
+ * The ad sets' lifetime money and result on a store's database, and each one's numbers month by month. Every ad set
+ * counts in the shares; `keep` chooses the rows given back (a marketer's own, a marketer partner's people's).
+ */
+export async function mkCompute(db: Db, now: number, keep?: (s: SetRow) => boolean) {
+  const rules = await getRules({ db });
+  const today = algDay(now);
+  // the whole life of every ad set: from the first day of Meta results
+  const first = (await db.query('SELECT min(day)::text AS d FROM ad_insights'))[0]?.d as string | null | undefined;
+  const start = first && first < today ? String(first).slice(0, 10) : today;
+  const fx = await fxTable(db);
+  const ownRate = new Set((await db.query('SELECT ym FROM fx_rates')).map((r: any) => String(r.ym)));
+
+  const sets: SetRow[] = (await db.query(`SELECT a.*, p.name AS marketer_name, p.agency_id AS partner_id FROM adsets a LEFT JOIN profiles p ON p.id = a.marketer_id ORDER BY a.name`)).map((r: any) => ({
+    id: String(r.id),
+    name: r.name as string,
+    campaign: r.campaign as string | null,
+    status: r.status as string | null,
+    productIds: ((r.product_ids ?? []) as unknown[]).map(num),
+    marketerId: r.marketer_id === null ? null : num(r.marketer_id),
+    marketerName: (r.marketer_name ?? null) as string | null,
+    partnerId: r.partner_id === null || r.partner_id === undefined ? null : num(r.partner_id),
+  }));
+  const rows = await insights(db, sets.map((s) => s.id), start, today);
+  const products = new Map((await db.query('SELECT id, name FROM products')).map((p: any) => [num(p.id), p.name as string]));
+  const prices = new Map((await db.query('SELECT profile_id, price FROM marketer_prices')).map((r: any) => [num(r.profile_id), num(r.price)]));
+  const forced = new Map((await db.query('SELECT adset_id, st FROM mk_results')).map((r: any) => [String(r.adset_id), r.st as MkResult]));
+  const pays = new Map((await db.query('SELECT adset_id, marketer_id, amount, paid_at FROM mk_payments')).map((r: any) => [String(r.adset_id), { amount: num(r.amount), at: isoOrNull(r.paid_at), marketerId: num(r.marketer_id) }]));
 
   // orders of every linked product, by product and month
   const pids = [...new Set(sets.flatMap((s) => s.productIds))];
-  const orders = await ordersOf(ctx.db, pids, start, today);
+  const orders = await ordersOf(db, pids, start, today);
   const ordersBy = new Map<string, any[]>(); // `${pid}|${ym}`
   for (const o of orders) {
     const k = `${num(o.product_id)}|${ymOf(o.created_at)}`;
@@ -130,6 +177,12 @@ export async function mkRows(ctx: Ctx, onlyMine = !isOwner(ctx)): Promise<{ rows
   type Acc = { sp: number; spDa: number; pu: number; n: number; d: number; open: number; rev: number; marge: number; avant: number; months: Set<string>; noFx: Set<string> };
   const acc = new Map<string, Acc>();
   const get = (id: string) => acc.get(id) ?? acc.set(id, { sp: 0, spDa: 0, pu: 0, n: 0, d: 0, open: 0, rev: 0, marge: 0, avant: 0, months: new Set(), noFx: new Set() }).get(id)!;
+  // each ad set's numbers month by month (a marketer partner's bill counts one month)
+  const perMonth = new Map<string, Map<string, MkMonth>>();
+  const getM = (id: string, ym: string) => {
+    const m = perMonth.get(id) ?? perMonth.set(id, new Map()).get(id)!;
+    return m.get(ym) ?? m.set(ym, { sp: 0, spDa: 0, n: 0, d: 0, r: 0, avant: 0 }).get(ym)!;
+  };
   for (const [ym, m] of [...byMonth.entries()].sort()) {
     const rate = fx(ym);
     // spend and purchases of each ad set that month
@@ -143,6 +196,9 @@ export async function mkRows(ctx: Ctx, onlyMine = !isOwner(ctx)): Promise<{ rows
       if (t.spend > 0) a.months.add(ym);
       if (t.spend > 0 && !ownRate.has(ym)) a.noFx.add(ym);
       if (rate !== null) a.spDa += t.spend * rate;
+      const mm = getM(id, ym);
+      mm.sp += t.spend;
+      if (rate !== null) mm.spDa += t.spend * rate;
     }
     // each product's orders that month, shared between the ad sets that sold it
     const prodSets = new Map<number, string[]>();
@@ -154,8 +210,7 @@ export async function mkRows(ctx: Ctx, onlyMine = !isOwner(ctx)): Promise<{ rows
       const SP = ids.reduce((s, id) => s + ws(id), 0);
       const list = ordersBy.get(`${pid}|${ym}`) ?? [];
       if (!list.length) continue;
-      const R = await moneyOf(ctx.db, list, 0, 1);
-      const now = ctx.now();
+      const R = await moneyOf(db, list, 0, 1);
       const open = list.filter((o) => isOpen(o, now)).length;
       for (const id of ids) {
         const sh = P ? w(id) / P : SP ? ws(id) / SP : 0;
@@ -167,6 +222,11 @@ export async function mkRows(ctx: Ctx, onlyMine = !isOwner(ctx)): Promise<{ rows
         a.rev += R.rev * sh;
         a.marge += (R.rev - R.liv - R.achat) * sh;
         a.avant += R.avant * sh;
+        const mm = getM(id, ym);
+        mm.n += R.n * sh;
+        mm.d += R.d * sh;
+        mm.r += R.r * sh;
+        mm.avant += R.avant * sh;
       }
     }
   }
@@ -175,7 +235,7 @@ export async function mkRows(ctx: Ctx, onlyMine = !isOwner(ctx)): Promise<{ rows
   for (const s of sets) {
     const a = acc.get(s.id);
     if (!a || a.sp <= 0) continue; // never spent
-    if (onlyMine && s.marketerId !== ctx.session.profile.id) continue;
+    if (keep && !keep(s)) continue;
     const price = s.marketerId ? prices.get(s.marketerId) ?? 0 : 0;
     const net = a.avant - a.spDa;
     const ratio = a.marge > 0 ? net / a.marge : null;
@@ -193,8 +253,9 @@ export async function mkRows(ctx: Ctx, onlyMine = !isOwner(ctx)): Promise<{ rows
     if (manual === 'ok' || (!manual && paid)) (final = true), (ok = true);
     else if (manual === 'ko') (final = true), (ok = false);
     else if (manual === 'run') final = false;
-    // nothing can be paid while a month's dollar rate is missing (its spend in DA is unknown)
-    const owe = !s.marketerId || !final || (fxMissing.length && !paid) ? null : ok ? price : 0;
+    // nothing can be paid while a month's dollar rate is missing (its spend in DA is unknown); a marketer partner's
+    // people are paid by the partner's monthly bill, not here
+    const owe = !s.marketerId || s.partnerId !== null || !final || (fxMissing.length && !paid) ? null : ok ? price : 0;
     out.push({
       id: s.id,
       name: s.name,
@@ -204,6 +265,7 @@ export async function mkRows(ctx: Ctx, onlyMine = !isOwner(ctx)): Promise<{ rows
       prod: s.productIds.map((p) => products.get(p) ?? `#${p}`).join(' + '),
       marketerId: s.marketerId,
       marketerName: s.marketerName,
+      partnerId: s.partnerId,
       price,
       bid: BID.test(s.name),
       unlinked,
@@ -233,7 +295,38 @@ export async function mkRows(ctx: Ctx, onlyMine = !isOwner(ctx)): Promise<{ rows
     });
   }
   out.sort((x, y) => y.sp - x.sp);
-  return { rows: out, rules, fxMissing: [...new Set(out.flatMap((r) => r.fxMissing))].sort(), from: start, to: today };
+  const months = new Map(out.map((r) => [r.id, perMonth.get(r.id) ?? new Map<string, MkMonth>()]));
+  return { rows: out, months, rules, fxMissing: [...new Set(out.flatMap((r) => r.fxMissing))].sort(), from: start, to: today };
+}
+
+/**
+ * A marketer partner's month in a store: its people's ad sets that spent that month (their spend, their share of the
+ * orders and of the profit), and those judged « réussi » whose last month with spend is this one.
+ */
+export async function marketerMonth(db: Db, partnerId: number, ym: string, now: number): Promise<AgencyCounts> {
+  const people = new Set((await db.query('SELECT id FROM profiles WHERE agency_id = $1', [partnerId])).map((r: any) => num(r.id)));
+  if (!people.size) return { ...NO_COUNTS };
+  const r = await mkCompute(db, now, (s) => s.marketerId !== null && people.has(s.marketerId));
+  const c = { adsets: 0, spend: 0, orders: 0, delivered: 0, returned: 0, net: 0, successes: 0 };
+  for (const row of r.rows) {
+    const m = r.months.get(row.id)?.get(ym);
+    if (m) {
+      if (m.sp > 0) c.adsets++;
+      c.spend += m.spDa;
+      c.orders += m.n;
+      c.delivered += m.d;
+      c.returned += m.r;
+      c.net += m.avant - m.spDa;
+    }
+    if (row.final && row.ok && row.months[row.months.length - 1] === ym) c.successes++;
+  }
+  return { ...NO_COUNTS, adsets: c.adsets, spend: Math.round(c.spend), orders: Math.round(c.orders), delivered: Math.round(c.delivered), returned: Math.round(c.returned), net: Math.round(c.net), successes: c.successes };
+}
+
+/** A marketer partner's person (their price and payments come from the partner): not changed here. */
+async function partnerOf(db: Db, profileId: number): Promise<number | null> {
+  const r = (await db.query('SELECT agency_id FROM profiles WHERE id = $1', [profileId]))[0];
+  return r && r.agency_id !== null && r.agency_id !== undefined ? num(r.agency_id) : null;
 }
 
 const Ids = z.array(z.string().min(1).max(40)).min(1).max(500);
@@ -244,9 +337,15 @@ export const marketersProcs = {
     const owner = isOwner(ctx);
     const r = await mkRows(ctx);
     const people = owner
-      ? await ctx.db.query(`SELECT p.id, p.name, p.active, mp.price FROM profiles p LEFT JOIN marketer_prices mp ON mp.profile_id = p.id
+      ? await ctx.db.query(`SELECT p.id, p.name, p.active, p.agency_id, mp.price FROM profiles p LEFT JOIN marketer_prices mp ON mp.profile_id = p.id
            WHERE (('marketer' = ANY(p.roles) OR 'vendeur' = ANY(p.roles)) AND p.active) OR p.id IN (SELECT marketer_id FROM adsets WHERE marketer_id IS NOT NULL) ORDER BY p.name`)
-      : await ctx.db.query(`SELECT p.id, p.name, p.active, mp.price FROM profiles p LEFT JOIN marketer_prices mp ON mp.profile_id = p.id WHERE p.id = $1`, [ctx.session.profile.id]);
+      : partnerLead(ctx)
+        ? await ctx.db.query(`SELECT p.id, p.name, p.active, p.agency_id, mp.price FROM profiles p LEFT JOIN marketer_prices mp ON mp.profile_id = p.id WHERE p.agency_id = $1 ORDER BY p.name`, [partnerLead(ctx)])
+        : await ctx.db.query(`SELECT p.id, p.name, p.active, p.agency_id, mp.price FROM profiles p LEFT JOIN marketer_prices mp ON mp.profile_id = p.id WHERE p.id = $1`, [ctx.session.profile.id]);
+    // the marketer partners (Partenaires › Marketers) whose people are here: their name, to tell them apart
+    const pids = [...new Set(people.map((p: any) => p.agency_id).filter((x: unknown) => x !== null && x !== undefined).map(num))];
+    const partners = new Map<number, string>();
+    if (pids.length && ctx.t) for (const row of await ctx.t.platform.query('SELECT id, name FROM platform.shops WHERE id = ANY($1)', [pids])) partners.set(num(row.id), row.name as string);
     return {
       owner,
       admin: ctx.session.isAdmin,
@@ -255,7 +354,10 @@ export const marketersProcs = {
       to: r.to,
       fxMissing: r.fxMissing,
       rules: r.rules,
-      marketers: people.map((p: any) => ({ id: num(p.id), name: p.name as string, active: !!p.active, price: p.price === null || p.price === undefined ? 0 : num(p.price) })),
+      marketers: people.map((p: any) => {
+        const partnerId = p.agency_id === null || p.agency_id === undefined ? null : num(p.agency_id);
+        return { id: num(p.id), name: p.name as string, active: !!p.active, price: p.price === null || p.price === undefined ? 0 : num(p.price), partner: partnerId === null ? null : { id: partnerId, name: partners.get(partnerId) ?? '' } };
+      }),
       rows: r.rows,
     };
   }),
@@ -302,6 +404,7 @@ export const marketersProcs = {
   'mk.price': proc(['vendeur'], z.object({ marketerId: z.number().int().positive(), price: z.number().int().min(0).max(10_000_000) }), async (ctx, i) => {
     const p = (await ctx.db.query('SELECT id FROM profiles WHERE id = $1', [i.marketerId]))[0];
     if (!p) throw notFound('Marketeur introuvable');
+    if ((await partnerOf(ctx.db, i.marketerId)) !== null) throw forbidden('Ce marketer fixe lui-même ses prix (Partenaires › Marketers)');
     await ctx.db.query(
       'INSERT INTO marketer_prices (profile_id, price, updated_at) VALUES ($1,$2,now()) ON CONFLICT (profile_id) DO UPDATE SET price = EXCLUDED.price, updated_at = now()',
       [i.marketerId, i.price],
@@ -342,6 +445,7 @@ export const marketersProcs = {
       n++;
       total += a.owe;
     }
+    if (!n && [...new Set(i.ids)].every((id) => rows.find((x) => x.id === id)?.partnerId != null)) throw bad('Ces ad sets sont payés par la facture mensuelle de leur marketer (Partenaires › Marketers)');
     if (!n) throw bad('Rien à payer pour ces ad sets');
     return { ok: true, n, total };
   }),

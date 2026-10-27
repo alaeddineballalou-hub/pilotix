@@ -5,7 +5,7 @@ import { Legal, Signup, SignupConfirm, StorePicker, VerifyEmail } from './layout
 import { LockScreen } from './layout/LockScreen';
 import { Login } from './layout/Login';
 import { ResetPassword } from './layout/ResetPassword';
-import { AGENCY_NAV, canSee, canSeeChild, homeFor, NAV, NavItem } from './layout/nav';
+import { AGENCY_NAV, canSee, canSeeChild, homeFor, MARKETER_NAV, NAV, NavItem } from './layout/nav';
 import { applyTheme, Shell } from './layout/Shell';
 import { ApiError } from './lib/backend';
 import { firstSubOn, hasPlanSubs, pageIsOn } from './lib/features';
@@ -14,7 +14,7 @@ import { ModalHost } from './lib/modals';
 import { initSeller } from './lib/seller';
 import { SessionProvider, useSession } from './lib/session';
 import { store } from './lib/store';
-import { AGENCY_PAGES, PAGES } from './pages/registry';
+import { AGENCY_PAGES, MARKETER_PAGES, PAGES } from './pages/registry';
 import { Loading } from './ui/kit';
 import { Toasts } from './ui/toast';
 import { installEdgeScroll } from './ui/edgeScroll';
@@ -60,6 +60,8 @@ function useHash() {
 const ALIASES: Record<string, [string, string?]> = { livreurs: ['dashboard', 'livreurs'], publicite: ['marketing', 'publicite'], marketer: ['marketing', 'marketer'], spy: ['marketing', 'spy'] };
 /** An agency's older links: its team is « Utilisateurs », its prices are in « Réglages ». */
 const AGENCY_ALIASES: Record<string, [string, string?]> = { equipe: ['utilisateurs'], tarifs: ['reglages'] };
+/** A marketer's short links: its ads are in « Marketing ». */
+const MARKETER_ALIASES: Record<string, [string, string?]> = { ...AGENCY_ALIASES, publicite: ['marketing', 'publicite'], marketer: ['marketing', 'marketer'], adsets: ['marketing', 'marketer'] };
 
 /** Pilotix's control room (#/platform): its own login and pages, loaded only when opened. */
 const PlatformApp = lazy(() => import('./pages/platform').then((m) => ({ default: m.PlatformApp })));
@@ -84,8 +86,9 @@ function App() {
   if (parts[0] === 'signup' && parts[1]) return <SignupConfirm token={parts[1]} />;
   if (parts[0] === 'verify' && parts[1]) return <VerifyEmail token={parts[1]} />;
   if (parts[0] === 'inscription') return <Signup referral={parts[1]} />;
-  // « Créer mon agence »: a confirmation agency signs up the same way
-  if (parts[0] === 'inscription-agence') return <Signup agency />;
+  // « Créer mon agence » / « Créer mon espace marketer »: a partner signs up the same way (its kind chosen already)
+  if (parts[0] === 'inscription-agence') return <Signup kind="agency" />;
+  if (parts[0] === 'inscription-marketer') return <Signup kind="marketer" />;
   // the link of the first sign-up e-mails (before accounts): every account counts as confirmed now, the app opens
   if (parts[0] === 'confirmer') location.replace('#/accueil');
   if (!session) return picker ? <StorePicker /> : <Login />;
@@ -101,17 +104,19 @@ function App() {
         </Suspense>
       </Shell>
     );
-  // whose space this is: a store's, or a confirmation agency's (it works on its sellers' orders, one seller or all)
-  const space: 'store' | 'agency' = session.shop?.kind === 'agency' ? 'agency' : 'store';
-  if (space === 'agency') initSeller(session.shop!.id);
-  const nav: NavItem[] = space === 'agency' ? AGENCY_NAV : NAV;
-  const pages = space === 'agency' ? AGENCY_PAGES : PAGES;
-  const homeOf = () => (space === 'agency' ? 'accueil' : homeFor(session.roles, session.isAdmin));
+  // whose space this is: a store's, or a partner's — a confirmation agency (it works on its sellers' orders) or a
+  // marketer (on its sellers' ads), one seller or all of them
+  const space: 'store' | 'agency' | 'marketer' = session.shop?.kind === 'agency' || session.shop?.kind === 'marketer' ? session.shop.kind : 'store';
+  if (space !== 'store') initSeller(session.shop!.id);
+  const nav: NavItem[] = space === 'agency' ? AGENCY_NAV : space === 'marketer' ? MARKETER_NAV : NAV;
+  const pages = space === 'agency' ? AGENCY_PAGES : space === 'marketer' ? MARKETER_PAGES : PAGES;
+  const homeOf = () => (space !== 'store' ? 'accueil' : homeFor(session.roles, session.isAdmin));
   let [page, sub, ...rest]: (string | undefined)[] = parts;
   if (page && ALIASES[page] && space === 'store') [page, sub] = [ALIASES[page][0], ALIASES[page][1] ?? sub];
-  if (page && AGENCY_ALIASES[page] && space === 'agency') {
-    [page, sub] = AGENCY_ALIASES[page];
-    location.replace(`#/${page}`);
+  const partnerAliases = space === 'agency' ? AGENCY_ALIASES : space === 'marketer' ? MARKETER_ALIASES : null;
+  if (page && partnerAliases?.[page]) {
+    [page, sub] = partnerAliases[page];
+    location.replace(`#/${page}${sub ? `/${sub}` : ''}`);
   }
   // Confirmation › Livrées was removed: an old link opens Confirmation › Nouvelles
   if (page === 'confirmation' && sub === 'livrees') {

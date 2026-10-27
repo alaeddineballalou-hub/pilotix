@@ -38,8 +38,8 @@ export interface StoreChoice {
   locked: boolean;
   owner: boolean;
   primary: boolean;
-  /** a store, or a confirmation agency's own space */
-  kind?: 'store' | 'agency';
+  /** a store, or a partner's own space (a confirmation agency, a marketer) */
+  kind?: 'store' | 'agency' | 'marketer';
 }
 /** After the password: several stores (or none) → the picker, with a ticket to choose without the password again. */
 export interface PickInfo {
@@ -50,6 +50,8 @@ export interface PickInfo {
   canAddStore: boolean;
   /** « Créer mon agence » (the person has no confirmation agency yet) */
   canAddAgency?: boolean;
+  /** « Créer mon espace marketer » (the person has no marketer space yet) */
+  canAddMarketer?: boolean;
 }
 export type LoginResult = Session | PickInfo;
 export const isPick = (r: LoginResult): r is PickInfo => (r as PickInfo).pick === true;
@@ -123,8 +125,8 @@ export interface SignupForm {
   language: 'fr' | 'en' | 'ar';
   referral?: string;
   terms: true;
-  /** « Créer mon agence »: a confirmation agency (storeName is its name) */
-  kind?: 'store' | 'agency';
+  /** « Créer mon agence » / « Créer mon espace marketer »: a partner's space (storeName is its name) */
+  kind?: 'store' | 'agency' | 'marketer';
 }
 export const signup = (f: SignupForm) => authRequest<{ ok: true }>('/auth/signup', f);
 /** The terms of use and privacy page (Pilotix's own text, else the app's standard one). */
@@ -203,7 +205,7 @@ class RemoteBackend implements Backend {
     return this.req<StoreChoice[]>('/auth/stores');
   }
   /** « Ajouter une boutique »: made, then entered (from the picker: with its ticket). */
-  async addStore(input: { name: string; slug?: string; kind?: 'store' | 'agency' }, ticket?: string) {
+  async addStore(input: { name: string; slug?: string; kind?: 'store' | 'agency' | 'marketer' }, ticket?: string) {
     return this.enterWith(await this.req<{ token: string; session: Session }>(ticket ? '/auth/add-store/ticket' : '/auth/add-store', { ...input, ...(ticket ? { ticket } : {}) }));
   }
   /** The sign-up e-mail's link: the store is made and entered (or « you already have an account »). */

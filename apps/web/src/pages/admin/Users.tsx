@@ -11,6 +11,7 @@ import { Card, copyText, Empty, ErrorBox, Field, Icon, Loading, StageBar } from 
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { ConfirmButton } from './bits';
+import { usePartnerKind, useTp } from '../agency/parts';
 
 export const USER_SUBS = ['roles', 'admins', 'vendeurs', 'agents', 'marketeurs', 'managers'] as const;
 /** WhatsApp with a ready message, to the person's number when it is known (0550… → 213550…). */
@@ -24,6 +25,10 @@ const AGENCY_SUBS = ['equipe', 'agents', 'suivi', 'managers', 'admins'] as const
 const AGENCY_SUB_ROLE: Record<string, Role> = { agents: 'confirmation', suivi: 'suivi', managers: 'agent_manager', admins: 'admin' };
 /** The roles of an agency's people: its chief, its supervisors, its agents. */
 const AGENCY_ROLES: Role[] = ['admin', 'agent_manager', 'confirmation', 'suivi'];
+/** A marketer's Utilisateurs: everyone, its marketers (media buyers), its administrators. */
+const MARKETER_SUBS = ['equipe', 'marketeurs', 'admins'] as const;
+const MARKETER_SUB_ROLE: Record<string, Role> = { marketeurs: 'marketer', admins: 'admin' };
+const MARKETER_ROLES: Role[] = ['admin', 'marketer'];
 const ROLE_SUB: Partial<Record<Role, string>> = { admin: 'admins', vendeur: 'vendeurs', confirmation: 'agents', marketer: 'marketeurs', agent_manager: 'managers' };
 /** Rôles table order, as in the original. */
 const ROLE_ORDER: Role[] = ['admin', 'vendeur', 'agent_manager', 'confirmation', 'suivi', 'depot', 'livreur', 'marketer'];
@@ -54,14 +59,17 @@ export function UsersPage({ sub, rest, agency }: { sub?: string; rest?: string[]
   const cur = subOf(sub, rest);
   const [form, setForm] = useState<{ user: Profile | null; role: Role | null } | null>(null);
   const { session } = useSession();
+  const tp = useTp();
+  const mk = usePartnerKind() === 'marketer';
   if (agency) {
-    // a confirmation agency: its whole team first, then each role; each person with their sellers and products
-    const k = (AGENCY_SUBS as readonly string[]).includes(sub ?? '') ? (sub as (typeof AGENCY_SUBS)[number]) : 'equipe';
-    const role = AGENCY_SUB_ROLE[k] ?? null;
-    const subs = AGENCY_SUBS.filter((x) => session?.isAdmin || x !== 'admins');
+    // a partner (agency, marketer): its whole team first, then each role; each person with their sellers and products
+    const all: readonly string[] = mk ? MARKETER_SUBS : AGENCY_SUBS;
+    const k = all.includes(sub ?? '') ? sub! : 'equipe';
+    const role = (mk ? MARKETER_SUB_ROLE : AGENCY_SUB_ROLE)[k] ?? null;
+    const subs = all.filter((x) => session?.isAdmin || x !== 'admins');
     return (
       <>
-        <StageBar flow={false} current={k} items={subs.map((x) => ({ key: x, label: t(`agency.users.subs.${x}`), href: `#/utilisateurs/${x}` }))} />
+        <StageBar flow={false} current={k} items={subs.map((x) => ({ key: x, label: tp(`users.subs.${x}`), href: `#/utilisateurs/${x}` }))} />
         <RoleList agency role={role} onNew={() => setForm({ user: null, role })} onEdit={(u) => setForm({ user: u, role })} />
         {form && <UserForm agency user={form.user} role={form.role} onClose={() => setForm(null)} />}
       </>
@@ -78,10 +86,11 @@ export function UsersPage({ sub, rest, agency }: { sub?: string; rest?: string[]
   );
 }
 
-/** A role's name: an agency names its own (Chef d'agence, Superviseur, Agent de confirmation, Agent de suivi). */
+/** A role's name: a partner names its own (Chef d'agence, Superviseur, Agent de confirmation, Marketeur…). */
 function useRoleName(agency?: boolean) {
   const { t } = useTranslation();
-  return (r: Role) => (agency ? t(`agency.team.r.${r}`, { defaultValue: t(`roles.${r}`) }) : t(`roles.${r}`));
+  const tp = useTp();
+  return (r: Role) => (agency ? tp(`team.r.${r}`, { defaultValue: t(`roles.${r}`) }) : t(`roles.${r}`));
 }
 
 function RolesTable({ onNew }: { onNew: () => void }) {
@@ -164,6 +173,7 @@ function RolesTable({ onNew }: { onNew: () => void }) {
 
 function RoleList({ role, onNew, onEdit, agency }: { role: Role | null; onNew: () => void; onEdit: (u: Profile) => void; agency?: boolean }) {
   const { t } = useTranslation();
+  const tp = useTp();
   const { session, me } = useSession();
   const roleName = useRoleName(agency);
   const q = useRpc('users.list', role ? { role } : {});
@@ -180,8 +190,8 @@ function RoleList({ role, onNew, onEdit, agency }: { role: Role | null; onNew: (
   return (
     <>
       <Card
-        title={agency ? t(`agency.users.title.${role ?? 'all'}`) : t(`admin.users.listTitle.${role}`)}
-        help={agency ? t('agency.users.help') : t('admin.users.listHelp')}
+        title={agency ? tp(`users.title.${role ?? 'all'}`) : t(`admin.users.listTitle.${role}`)}
+        help={agency ? tp('users.help') : t('admin.users.listHelp')}
         actions={
           <>
             {archives && (
@@ -285,6 +295,7 @@ function RoleList({ role, onNew, onEdit, agency }: { role: Role | null; onNew: (
 
 function UserForm({ user, role, onClose, agency }: { user: Profile | null; role: Role | null; onClose: () => void; agency?: boolean }) {
   const { t } = useTranslation();
+  const mk = usePartnerKind() === 'marketer';
   const { me, session } = useSession();
   const isAdmin = !!session?.isAdmin;
   const roleName = useRoleName(agency);
@@ -295,7 +306,7 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
   const [phone, setPhone] = useState(user?.phone ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
   const [password, setPassword] = useState('');
-  const [roles, setRoles] = useState<Role[]>(user?.roles ?? (role ? [role] : ['confirmation']));
+  const [roles, setRoles] = useState<Role[]>(user?.roles ?? (role ? [role] : [agency && mk ? 'marketer' : 'confirmation']));
   const [language, setLanguage] = useState(user?.language ?? 'fr');
   const [company, setCompany] = useState<number | null>(user?.livreurCompanyId ?? null);
   const [err, setErr] = useState('');
@@ -363,7 +374,7 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
         </div>
         <Field label={t('admin.users.roles')} hint={t('admin.users.rolesHint')}>
           <div className="row" style={{ flexWrap: 'wrap', gap: '6px 14px' }}>
-            {(agency ? AGENCY_ROLES : ROLE_ORDER)
+            {(agency ? (mk ? MARKETER_ROLES : AGENCY_ROLES) : ROLE_ORDER)
               .filter((r) => isAdmin || r !== 'admin')
               .map((r) => (
                 <label key={r} className="row nowrap" style={{ gap: 6 }}>
@@ -455,13 +466,14 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
  */
 function SellersField({ value, onChange }: { value: AgencySellerWork[] | null; onChange: (v: AgencySellerWork[] | null) => void }) {
   const { t } = useTranslation();
+  const tp = useTp();
   const q = useRpc('agency.sellerChoices', {}, { staleTime: 60_000 });
   const list = q.data ?? [];
   const some = value !== null;
   const of = (store: number) => value?.find((w) => w.store === store);
   const set = (store: number, w: AgencySellerWork | null) => onChange([...(value ?? []).filter((x) => x.store !== store), ...(w ? [w] : [])]);
   return (
-    <Field label={t('agency.users.sellers')} hint={t('agency.users.sellersHint')}>
+    <Field label={t('agency.users.sellers')} hint={tp('users.sellersHint')}>
       <div className="agx-sellers">
         <label className="agx-radio">
           <input type="radio" name="agx-sellers" checked={!some} onChange={() => onChange(null)} />
