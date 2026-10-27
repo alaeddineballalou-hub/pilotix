@@ -68,6 +68,7 @@ const scripts = [...new Set(r.text.match(/\/assets\/index-[A-Za-z0-9_-]+\.js/g) 
 let found = false;
 for (const s of scripts) if (!found) found = (await get(`${SITE}${s}`)).text.includes('verify/send/ticket');
 check(found, 'the website is this version', scripts.join(' '));
+check(/data-skin="doux"/.test(r.text) && /family=Readex\+Pro/.test(r.text), 'the website shows the new look (Doux, Readex Pro)', r.text.match(/<html[^>]*>/)?.[0]);
 
 console.log(failed ? `\n❌ ${failed} check(s) failed on ${SITE}` : `\n✅ ${SITE}: the server and the website are live with this version`);
 process.exit(failed ? 1 : 0);
