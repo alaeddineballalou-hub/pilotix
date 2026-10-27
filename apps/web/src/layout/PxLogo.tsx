@@ -39,9 +39,10 @@ export function PxLogo() {
           <clipPath id={`${id}c`}>
             <rect x="-60" y="-40" width="480" height="200" />
           </clipPath>
-          <clipPath id={`${id}t`}>
-            <rect width="512" height="512" rx="112" />
-          </clipPath>
+          {/* a mask (not a clipPath): browsers smooth its rounded corners, a clipPath can come out jagged */}
+          <mask id={`${id}t`} maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+            <rect width="512" height="512" rx="112" fill="#fff" />
+          </mask>
         </defs>
         <g transform={word} clipPath={`url(#${id}c)`}>
           {GLYPHS.map((g, i) => (
@@ -49,7 +50,7 @@ export function PxLogo() {
           ))}
           <path className="px-lg-gl px-lg-x" style={v(GLYPHS.length)} d={X_STROKE} strokeWidth={X_WIDTH} />
         </g>
-        <g transform="translate(0 5) scale(0.0703125)" clipPath={`url(#${id}t)`}>
+        <g transform="translate(0 5) scale(0.0703125)" mask={`url(#${id}t)`}>
           <g className="px-lg-tile">
             <rect className="px-lg-ground" width="512" height="512" />
             <g className="px-lg-wave">
