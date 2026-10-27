@@ -6,14 +6,16 @@
     "bloquees": "Les commandes que le contrôle anti-fraude a retenues. Le client a vu l’écran de remerciement normal ; restaurez les vraies.",
     "abandons": "Les clients qui ont laissé leur numéro sans valider : Pilotix les ajoute tout seul dans Commandes › Nouvelle pour que vos agents les appellent.",
     "reglages": "Pixel Meta et Conversions API, commandes abandonnées, automatisations.",
-    "protection": "Ce que la protection anti-fausses commandes a fait : commandes passées, à vérifier, bloquées, et les attaques (un appareil qui envoie beaucoup de numéros, des numéros à la suite)."
+    "protection": "Ce que la protection anti-fausses commandes a fait : commandes passées, à vérifier, bloquées, et les attaques (un appareil qui envoie beaucoup de numéros, des numéros à la suite).",
+    "groupes": "Une page avec plusieurs produits : le client choisit, et arrive sur la landing page du produit."
   },
   "tabs": {
     "pages": "Pages",
     "protection": "Protection",
     "bloquees": "Commandes bloquées",
     "abandons": "Abandonnées",
-    "reglages": "Réglages"
+    "reglages": "Réglages",
+    "groupes": "Groupes"
   },
   "copied": "Adresse copiée",
   "list": {
@@ -446,5 +448,64 @@
     "fake": "Fausse commande",
     "kConfirmed": "Confirmées",
     "kConfirmedSub": "{{rate}} des vraies commandes"
+  },
+  "gr": {
+    "count_one": "{{count}} groupe",
+    "count_other": "{{count}} groupes",
+    "new": "Nouveau groupe",
+    "help": "Un groupe montre plusieurs produits sur une seule page. Le client touche un produit et arrive sur sa vraie landing page (même formulaire, même protection), avec « رجوع إلى كل المنتجات » en haut pour revenir au groupe.",
+    "empty": "Aucun groupe pour l’instant. Créez-en un pour mettre plusieurs produits dans une seule pub.",
+    "clicks": "clics",
+    "nProducts_one": "{{count}} produit",
+    "nProducts_other": "{{count}} produits",
+    "theme": {
+      "grid": "Grille",
+      "big": "Grandes cartes",
+      "best": "Best-seller + grille",
+      "list": "Liste rapide",
+      "tabs": "Onglets + recherche"
+    },
+    "themeHelp": {
+      "grid": "2 produits par ligne, un bouton sur chacun. Bon pour 4 à 12 produits.",
+      "big": "Un grand produit par ligne, avec une phrase. Bon pour 2 ou 3 produits.",
+      "best": "Votre meilleur produit en grand en haut, les autres en dessous.",
+      "list": "Petite photo + nom + prix sur une ligne. Le plus rapide à faire défiler.",
+      "tabs": "Des onglets et une recherche, comme une petite boutique. Bon pour 15 produits et plus."
+    },
+    "saved": "Groupe enregistré",
+    "needTitle": "Donnez un titre au groupe",
+    "needProducts": "Ajoutez au moins un produit",
+    "removeAsk": "Supprimer ce groupe ? Les landing pages des produits restent.",
+    "removed": "Groupe supprimé",
+    "back": "Groupes",
+    "newTitle": "Nouveau groupe",
+    "sGroup": "Le groupe",
+    "title": "Titre (en haut de la page)",
+    "titlePh": "كل ما يحتاجه طفلك",
+    "subtitle": "Sous-titre",
+    "subtitleHint": "Une phrase courte sous le titre (facultatif).",
+    "subtitlePh": "اختر المنتج واطلب في دقيقة",
+    "slugHint": "L’adresse du groupe, à mettre dans votre pub.",
+    "active": "En ligne (visible par les clients)",
+    "sDesign": "Design",
+    "sProducts": "Produits du groupe",
+    "productsHelp": "Choisissez les landing pages à montrer, dans l’ordre voulu (↑ ↓).",
+    "bestHelp": "Cochez ⭐ le best-seller : il est montré en grand en haut. Une phrase courte peut s’afficher sous son nom.",
+    "tabsHelp": "Écrivez l’onglet de chaque produit (ex. « الملابس »). Les produits sans onglet sont seulement dans « الكل ».",
+    "noPages": "Créez d’abord des landing pages : un groupe montre des landing pages existantes.",
+    "itemStats": "{{clicks}} clics · {{orders}} commandes",
+    "best": "Best-seller",
+    "tabPh": "Onglet (ex. الملابس)",
+    "notePh": "Phrase courte (ex. خفيفة 5 كغ · تُطوى بيد واحدة)",
+    "up": "Monter",
+    "down": "Descendre",
+    "removeItem": "Retirer du groupe",
+    "add": "Ajouter",
+    "pick": "Choisir une landing page…",
+    "addAll": "Tout ajouter ({{count}})",
+    "pixelHint": "Laissez vide pour utiliser le pixel des Réglages.",
+    "remove": "Supprimer le groupe",
+    "previewHint": "Comme le client le voit",
+    "navHint": "Sur la vraie page, ce produit ouvre sa landing page"
   }
 }

@@ -17,14 +17,15 @@ import type { PageProps } from '../registry';
 import { Abandoned } from './Abandoned';
 import { Blocked } from './Blocked';
 import { Editor } from './Editor';
+import { Groups } from './Groups';
 import { demoSubmit, useLandingFrame } from './frame';
 import { Protection } from './Protection';
 import { Settings } from './Settings';
 import './landing.css';
 
-const TABS = ['pages', 'protection', 'abandons', 'bloquees', 'reglages'] as const;
+const TABS = ['pages', 'groupes', 'protection', 'abandons', 'bloquees', 'reglages'] as const;
 type Tab = (typeof TABS)[number];
-const ICON: Record<Tab, string> = { pages: 'globe', protection: 'shield', abandons: 'cart', bloquees: 'ban', reglages: 'settings' };
+const ICON: Record<Tab, string> = { pages: 'globe', groupes: 'grid', protection: 'shield', abandons: 'cart', bloquees: 'ban', reglages: 'settings' };
 /** what agents (confirmation) see: the orders to handle and the attacks, not the pages */
 const AGENT_TABS: Tab[] = ['protection', 'abandons', 'bloquees'];
 
@@ -43,8 +44,9 @@ export function Landing({ sub, rest }: PageProps) {
   const allowed = TABS.filter((k) => canEdit || AGENT_TABS.includes(k));
   const tab: Tab = (allowed as readonly string[]).includes(sub ?? '') ? (sub as Tab) : allowed[0];
   const counts = useRpc('landing.counts', {});
-  if (sub === 'voir' && rest?.[0]) return <Viewer slug={decodeURIComponent(rest[0])} />;
+  if (sub === 'voir' && rest?.[0]) return <Viewer key={rest.join('/')} slug={decodeURIComponent(rest[0])} group={rest[1] ? decodeURIComponent(rest[1]) : undefined} />;
   const arg = rest?.[0];
+  if (tab === 'groupes' && arg) return <Groups edit={arg} />;
   if (tab === 'pages' && arg) return <Editor id={arg === 'new' ? null : Number(arg)} productId={arg === 'new' && rest?.[1] ? Number(rest[1]) : undefined} />;
   const tabs = allowed.map((k) => ({
     key: k,
@@ -52,12 +54,13 @@ export function Landing({ sub, rest }: PageProps) {
     icon: ICON[k],
     href: `#/landing/${k}`,
     count: k === 'bloquees' ? counts.data?.blocked : k === 'abandons' ? counts.data?.abandoned : k === 'pages' ? counts.data?.noPage : undefined,
-    alert: k !== 'reglages' && k !== 'protection',
+    alert: k !== 'reglages' && k !== 'protection' && k !== 'groupes',
   }));
   return (
     <div className="pd lp">
       <SectionHeader icon="globe" title={t('landing.title')} help={t('landing.help')} about={t(`landing.about.${tab}`)} tabs={tabs} current={tab} aside={<AlertSwitch />} />
       {tab === 'pages' && <Pages />}
+      {tab === 'groupes' && <Groups />}
       {tab === 'protection' && <Protection />}
       {tab === 'abandons' && <Abandoned />}
       {tab === 'bloquees' && <Blocked />}
@@ -223,16 +226,19 @@ function Missing() {
 }
 
 /** The page as the customer sees it, full screen (demo: the order goes through the demo database, fake-order check included). */
-function Viewer({ slug }: { slug: string }) {
+function Viewer({ slug, group }: { slug: string; group?: string }) {
   const { t } = useTranslation();
-  const page = useRpc('landing.preview', { slug }, { refetchOnWindowFocus: false, staleTime: Infinity });
+  const page = useRpc('landing.preview', { slug, group }, { refetchOnWindowFocus: false, staleTime: Infinity });
   // kept as first loaded: an order refreshes Pilotix's data, which must not reload the page under the thank-you screen
   const [html, setHtml] = useState<string | null>(null);
   useEffect(() => {
     if (page.data && html === null) setHtml(page.data.html);
   }, [page.data, html]);
   const frame = useRef<HTMLIFrameElement>(null);
-  useLandingFrame(frame, demoSubmit);
+  // a group's product tapped: its page (with the « back » bar); the « back » bar: the group again
+  useLandingFrame(frame, demoSubmit, (s, g) => {
+    location.hash = g ? `#/landing/voir/${s}/${g}` : `#/landing/voir/${s}`;
+  });
   return (
     <div className="lp-view">
       <div className="lp-view-bar">

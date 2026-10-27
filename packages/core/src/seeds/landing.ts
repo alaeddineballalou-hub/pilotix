@@ -248,5 +248,16 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   await db.query(`UPDATE landing_submits SET fp = 'd:demo' || id WHERE fp = 'd:demo'`);
   await db.query(`UPDATE landing_blocked SET fp = 'd:demo' || id WHERE fp = 'd:demo'`);
   await db.query(`UPDATE landing_leads SET device = 'd:demo' || id WHERE device = 'd:demo'`);
+  // a group page: several products on one page (each opens its landing page)
+  const pages = await db.query('SELECT id FROM landing_pages WHERE active ORDER BY id LIMIT 6');
+  if (pages.length >= 2) {
+    const g = (
+      await db.query(
+        `INSERT INTO landing_groups (slug, title, subtitle, color, theme, best_page_id, items, views, created_by) VALUES ('bebe', 'كل ما يحتاجه طفلك 👶', 'اختر المنتج واطلب في دقيقة', '#0f766e', 'grid', $1, $2, 412, $3) RETURNING id`,
+        [pages[0].id, JSON.stringify(pages.map((p: any) => ({ pageId: Number(p.id), tab: '', note: '' }))), users.marketer ?? users.admin ?? null],
+      )
+    )[0];
+    for (const [k, p] of pages.entries()) await db.query('INSERT INTO landing_group_clicks (group_id, page_id, clicks) VALUES ($1,$2,$3)', [g.id, p.id, 90 - k * 13]);
+  }
   void p2;
 }

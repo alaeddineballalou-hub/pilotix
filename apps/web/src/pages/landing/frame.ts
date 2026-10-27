@@ -4,11 +4,20 @@ import { communesOf } from '@pilotix/shared';
 import { RefObject, useEffect } from 'react';
 import { rpc } from '../../lib/backend';
 
-export function useLandingFrame(frame: RefObject<HTMLIFrameElement>, onOrder?: (slug: string, body: Record<string, unknown>) => Promise<unknown>) {
+/** onNav: a group page's product tapped (slug), or a product page's « back » bar (g: the group) */
+export function useLandingFrame(
+  frame: RefObject<HTMLIFrameElement>,
+  onOrder?: (slug: string, body: Record<string, unknown>) => Promise<unknown>,
+  onNav?: (slug: string, group: string | null) => void,
+) {
   useEffect(() => {
     const on = async (e: MessageEvent) => {
       const m = e.data;
       if (!m || typeof m !== 'object' || !m.lp || e.source !== frame.current?.contentWindow) return;
+      if (m.lp === 'nav') {
+        if (onNav && /^[a-z0-9-]{2,60}$/.test(String(m.slug))) onNav(String(m.slug), m.g && /^[a-z0-9-]{2,60}$/.test(String(m.g)) ? String(m.g) : null);
+        return;
+      }
       let r: unknown = null;
       if (m.lp === 'geo') r = communesOf(Number(m.body)).map((c) => [c[1], c[2]]);
       else if (m.lp === 'order' && onOrder) r = await onOrder(String(m.slug), m.body).catch(() => null);
@@ -17,7 +26,7 @@ export function useLandingFrame(frame: RefObject<HTMLIFrameElement>, onOrder?: (
     };
     window.addEventListener('message', on);
     return () => window.removeEventListener('message', on);
-  }, [frame, onOrder]);
+  }, [frame, onOrder, onNav]);
 }
 
 const visitor = () => ({ ip: '105.235.0.1', ua: navigator.userAgent, country: 'DZ' });

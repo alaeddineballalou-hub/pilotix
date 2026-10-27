@@ -59,6 +59,8 @@ export interface LandingRender {
   viewId?: string;
   /** the page's public address (site/<store>/<page>): its canonical address for search engines and shared links */
   url?: string;
+  /** opened from a group page: a « back to all the products » bar at the top, to that group */
+  group?: { slug: string; title: string };
 }
 
 export const LANDING_DEFAULT_COLOR = '#0f766e';
@@ -152,7 +154,8 @@ input:focus,select:focus{outline:2px solid var(--c);outline-offset:-1px;border-c
 .ok h2{margin:12px 0 6px}.ok p{color:var(--m);margin:4px 0}.ok .sum{text-align:start}
 .trust{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;color:var(--m);font-size:13px;margin-top:10px}
 .so{margin-top:12px;padding:18px;border-radius:12px;background:#f3f4f6;text-align:center}.so b{display:block;font-size:19px;color:#b91c1c}.so p{margin:6px 0 0;color:var(--m)}
-footer{text-align:center;color:var(--m);font-size:12px;padding:18px}`;
+footer{text-align:center;color:var(--m);font-size:12px;padding:18px}
+.bk{display:block;background:#fff;border-bottom:1px solid var(--b);padding:10px 14px;font-weight:700;color:var(--c);text-decoration:none;font-size:15px}`;
 
 // The page's script, kept small and old-browser friendly (no build step on the page itself). Meta's pixel (~94 KB)
 // loads after the page: 2.5 s after it, or at the first touch — but never before the photos (a touch while they load
@@ -161,12 +164,13 @@ const JS = `(function(){var C=window.__LP,d=document,$=function(i){return d.getE
 function ar2(s){return String(s||'').replace(/[\\u0660-\\u0669]/g,function(c){return c.charCodeAt(0)-1632}).replace(/[\\u06f0-\\u06f9]/g,function(c){return c.charCodeAt(0)-1776})}
 function nph(v){var p=ar2(v).replace(/[^\\d+]/g,'').replace(/^(\\+|00)213/,'0');return /^[567]\\d{8}$/.test(p)?'0'+p:p}
 var utm={};try{utm=JSON.parse(sessionStorage.getItem('pxu')||'{}')}catch(e){}
-location.search.slice(1).split('&').forEach(function(kv){var p=kv.split('='),k=p.shift(),v=p.join('=').replace(/\\+/g,' ');if(!/^(utm_\\w+|fbclid|ttclid|gclid|ad_id|adset_id|campaign_id|placement)$/.test(k)||!v)return;try{v=decodeURIComponent(v)}catch(e){}utm[k]=v.slice(0,500)});try{sessionStorage.setItem('pxu',JSON.stringify(utm))}catch(e){}
+location.search.slice(1).split('&').forEach(function(kv){var p=kv.split('='),k=p.shift(),v=p.join('=').replace(/\\+/g,' ');if(!/^(utm_\\w+|fbclid|ttclid|gclid|ad_id|adset_id|campaign_id|placement|g)$/.test(k)||!v)return;try{v=decodeURIComponent(v)}catch(e){}utm[k]=v.slice(0,500)});try{sessionStorage.setItem('pxu',JSON.stringify(utm))}catch(e){}
 function ck(n){try{var m=d.cookie.match(new RegExp('(?:^|; )'+n+'=([^;]*)'));return m?m[1]:''}catch(e){return''}}
 var px=C.px,ic=0;if(px){var n=window.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!window._fbq)window._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];
 fbq('init',px);fbq('track','PageView');fbq('track','ViewContent',{content_ids:[String(C.pid)],content_type:'product',value:C.price,currency:'DZD'},{eventID:'vc-'+C.vid});
 var lp=0,ld=0,lw=0,lpx=function(){if(lp)return;if(!ld){lw=1;return}lp=1;var t=d.createElement('script');t.async=1;t.src='https://connect.facebook.net/en_US/fbevents.js';d.head.appendChild(t)};
 window.addEventListener('load',function(){ld=1;if(lw)lpx();else setTimeout(lpx,2500)});['touchstart','scroll','keydown','mousemove'].forEach(function(e){window.addEventListener(e,lpx,{once:true,passive:true})})}
+var bk=$('bk');if(bk){if(C.mode=='live'){var bq=location.search.replace(/([?&])g=[^&]*&?/,'$1').replace(/[?&]$/,'');bk.href=bk.getAttribute('href')+bq}else bk.onclick=function(e){e.preventDefault();parent.postMessage({lp:'nav',slug:C.g},'*')}}
 var th=d.querySelectorAll('.th button'),mi=$('mi');for(var i=0;i<th.length;i++)th[i].onclick=function(){for(var j=0;j<th.length;j++)th[j].className='';this.className='on';mi.src=this.getAttribute('data-s');mi.srcset=this.getAttribute('data-ss')};
 function tl(){var a=d.querySelectorAll('.th img[data-src]');for(var i=0;i<a.length;i++){a[i].src=a[i].getAttribute('data-src');a[i].removeAttribute('data-src')}}
 if(mi&&mi.tagName=='IMG'&&!mi.complete){mi.addEventListener('load',tl);mi.addEventListener('error',tl);setTimeout(tl,10000)}else tl();
@@ -279,6 +283,7 @@ export function renderLanding(v: LandingView, r: LandingRender): string {
   const cfg = {
     mode: r.mode, post: r.post, geo: r.geo, lead: r.lead ?? '', ch: r.challenge, bits: r.bits, slug: v.slug, price: v.price, vp, fees: v.fees, title: v.title, vl: v.variantLabel, cta,
     vid: r.viewId ?? '', px: r.mode === 'live' && v.pixelId && /^\d{5,20}$/.test(v.pixelId) ? v.pixelId : '', pid: v.productId ?? 0, op: off ? v.oldPrice : 0,
+    g: r.group?.slug ?? '',
     ts: r.mode === 'live' && v.turnstileKey && /^[0-9A-Za-z_-]{10,100}$/.test(v.turnstileKey) ? v.turnstileKey : '',
   };
   const desc = landingDescriptionHtml(v.description);
@@ -295,7 +300,7 @@ export function renderLanding(v: LandingView, r: LandingRender): string {
       : '<meta name="robots" content="noindex">');
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(v.title)}</title>
 ${head}<meta name="theme-color" content="${c}">${img ? `<link rel="preload" as="image" href="${esc(img.src)}" imagesrcset="${esc(img.srcset)}" imagesizes="${sizes}">` : ''}<style>${CSS(c)}</style></head><body>
-<div class="top">🚚 التوصيل لجميع الولايات · الدفع عند الاستلام</div><main class="w"><div class="g">
+<div class="top">🚚 التوصيل لجميع الولايات · الدفع عند الاستلام</div>${r.group ? `<a class="bk" id="bk" href="${esc(r.group.slug)}">→ ${esc(GROUP_BACK)}</a>` : ''}<main class="w"><div class="g">
 <section class="gal card">${gallery}</section>
 <section class="card">${v.soldOut ? `<h1>${esc(v.title)}</h1><div class="so"><b>نفذت الكمية مؤقتاً</b><p>هذا المنتج غير متوفر حالياً، عودوا قريباً.</p></div>` : `<form id="f" novalidate autocomplete="on"><h1>${esc(v.title)}</h1><div class="pr"><b id="pp">${landingPrice(v.price)}</b>${off ? `<s>${landingPrice(v.oldPrice!)}</s><span class="off" dir="ltr">-${off}%</span>` : ''}</div>
 <label for="nm">الاسم الكامل</label><input id="nm" name="nm" autocomplete="name" maxlength="80" placeholder="الاسم واللقب"><div class="e" id="nme"></div>
@@ -310,4 +315,144 @@ ${variants}<label for="qt">الكمية</label><div class="q"><button type="butt
 <div class="sum"><div><span id="o1"></span></div><div class="tt"><span>المجموع</span><b id="o2"></b></div></div></div>`}</section></div>
 ${desc ? `<section class="card d"><h2>وصف المنتج</h2>${desc}</section>` : ''}</main><footer>${esc(v.shopName)}</footer>
 <script>window.__LP=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script><script>${JS}</script></body></html>`;
+}
+
+// ---------------------------------------------------------------- group pages: several products on one page
+// The customer picks a product; it opens that product's own landing page (the same page, the same order form), which
+// shows a « back to all the products » bar at the top. Five looks: grid, big cards, best seller + grid, fast list,
+// tabs + search. The ad's tracking (utm, fbclid) follows the customer to the product page.
+
+export const GROUP_THEMES = ['grid', 'big', 'best', 'list', 'tabs'] as const;
+export type GroupTheme = (typeof GROUP_THEMES)[number];
+export const GROUP_BACK = 'رجوع إلى كل المنتجات';
+
+export interface GroupItem {
+  slug: string;
+  title: string;
+  price: number;
+  oldPrice: number | null;
+  image: LandingImage | null;
+  soldOut?: boolean;
+  /** design « tabs »: the tab it is in (empty: only in « all ») */
+  tab?: string;
+  /** a short line under the name (designs « big » and « best ») */
+  note?: string;
+}
+
+export interface GroupView {
+  slug: string;
+  title: string;
+  subtitle: string;
+  color: string;
+  theme: GroupTheme;
+  items: GroupItem[];
+  /** design « best »: the product shown big at the top (else the first one) */
+  bestSlug?: string | null;
+  shopName: string;
+  pixelId?: string;
+}
+
+export interface GroupRender {
+  mode: 'live' | 'parent' | 'preview';
+  url?: string;
+}
+
+const GROUP_CSS = (c: string) => `:root{--c:${c};--cd:${shade(c, -0.25)};--cl:${shade(c, 0.9)};--b:#e5e7eb;--t:#111827;--m:#6b7280}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0;font:16px/1.5 system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif;color:var(--t);background:#f6f7f9;overflow-x:hidden}
+.top{background:var(--c);color:#fff;text-align:center;padding:8px 12px;font-weight:600;font-size:14px}
+.hd{background:#fff;border-bottom:1px solid var(--b);padding:14px 16px}.hd h1{font-size:21px;line-height:1.3;margin:0}.hd p{margin:3px 0 0;color:var(--m);font-size:14px}
+.w{max-width:1080px;margin:0 auto;padding:12px}
+a.it{display:block;color:inherit;text-decoration:none;background:#fff;border:1px solid var(--b);border-radius:14px;padding:8px;position:relative;-webkit-tap-highlight-color:transparent}
+a.it:active{transform:scale(.985)}.it.out{opacity:.55}
+.im{display:block;width:100%;height:auto;aspect-ratio:1;object-fit:cover;border-radius:10px;background:var(--cl)}
+.it h2{font-size:15px;line-height:1.35;margin:7px 2px 2px;font-weight:700}
+.pr{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin:0 2px}.pr b{color:var(--c);font-size:17px}.pr s{color:var(--m);font-size:13px}
+.off{position:absolute;top:12px;right:12px;background:#dc2626;color:#fff;border-radius:99px;padding:1px 8px;font-size:12px;font-weight:800;direction:ltr}
+.so{position:absolute;top:12px;left:12px;background:#111827;color:#fff;border-radius:99px;padding:1px 8px;font-size:12px;font-weight:700}
+.go{display:block;margin-top:8px;border-radius:10px;background:var(--c);color:#fff;font-weight:800;padding:9px;text-align:center;font-size:15px}
+.out .go{background:#9ca3af}
+.g2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}@media(min-width:700px){.g2{grid-template-columns:repeat(3,1fr)}}@media(min-width:980px){.g2{grid-template-columns:repeat(4,1fr)}}
+.big{display:grid;gap:12px}@media(min-width:700px){.big{grid-template-columns:repeat(2,1fr)}}.big .im{aspect-ratio:16/11}.big h2{font-size:18px}
+.nt{color:var(--m);font-size:14px;margin:2px 2px 0}.row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px}.row .go{margin:0;padding:9px 20px}
+.hero{border:2px solid var(--c);margin-bottom:14px}.hero .im{aspect-ratio:16/10}.hero h2{font-size:19px}
+.star{display:inline-block;background:#fef3c7;color:#92400e;border-radius:99px;padding:1px 10px;font-size:12px;font-weight:800;margin:8px 2px 0}
+.st{font-weight:800;font-size:16px;margin:2px 2px 10px}
+.ls{display:grid;gap:8px}.ls a.it{display:flex;align-items:center;gap:10px}.ls .im{width:86px;flex:0 0 86px}.ls .tx{flex:1;min-width:0}.ls h2{margin:0 0 2px}.ls .go{margin:0;padding:9px 14px;flex:0 0 auto}
+.ls .off{position:static;display:inline-block}.ok{color:#16a34a;font-weight:700;font-size:12px}
+.sr{display:block;width:100%;font:inherit;padding:10px 12px;border:1px solid #d1d5db;border-radius:10px;background:#fff;color:inherit;margin-bottom:10px}
+.tb{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:10px}.tb button{flex:0 0 auto;border:1px solid var(--b);background:#fff;border-radius:99px;padding:6px 14px;font:inherit;font-size:14px;font-weight:700;color:var(--t);cursor:pointer}
+.tb button.on{background:var(--c);color:#fff;border-color:var(--c)}.no{display:none!important}.em{text-align:center;color:var(--m);padding:20px}
+.trust{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;color:var(--m);font-size:13px;margin:14px 0 4px}
+footer{text-align:center;color:var(--m);font-size:12px;padding:18px}`;
+
+const GROUP_JS = `(function(){var C=window.__LG,d=document,a=d.querySelectorAll('a.it[data-s]');
+var q=location.search.replace(/([?&])g=[^&]*&?/,'$1').replace(/^\\?$/,'').replace(/&$/,'');
+for(var i=0;i<a.length;i++){if(C.mode=='live'){if(q)a[i].href=a[i].getAttribute('href')+'&'+q.slice(1)}else a[i].onclick=function(e){e.preventDefault();parent.postMessage({lp:'nav',slug:this.getAttribute('data-s'),g:C.g},'*')}}
+var sr=d.getElementById('sr'),tb=d.querySelectorAll('.tb button'),tab='',em=d.getElementById('em');
+function f(){var t=sr?sr.value.trim().toLowerCase():'',n=0;for(var i=0;i<a.length;i++){var x=a[i],ok=(!tab||x.getAttribute('data-t')==tab)&&(!t||x.getAttribute('data-n').indexOf(t)>=0);x.className=x.className.replace(/ no/g,'')+(ok?'':' no');if(ok)n++}if(em)em.className=n?'em no':'em'}
+if(sr)sr.oninput=f;for(var j=0;j<tb.length;j++)tb[j].onclick=function(){for(var k=0;k<tb.length;k++)tb[k].className='';this.className='on';tab=this.getAttribute('data-t');f()};
+if(C.px){var n=window.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!window._fbq)window._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];fbq('init',C.px);fbq('track','PageView');
+var lp=0,lx=function(){if(lp)return;lp=1;var s=d.createElement('script');s.async=1;s.src='https://connect.facebook.net/en_US/fbevents.js';d.head.appendChild(s)};
+window.addEventListener('load',function(){setTimeout(lx,2500)});['touchstart','scroll'].forEach(function(e){window.addEventListener(e,lx,{once:true,passive:true})})}
+})()`;
+
+export function renderGroup(v: GroupView, r: GroupRender): string {
+  const c = isHexColor(v.color) ? v.color : LANDING_DEFAULT_COLOR;
+  const theme: GroupTheme = (GROUP_THEMES as readonly string[]).includes(v.theme) ? v.theme : 'grid';
+  // sold-out products at the end
+  const items = [...v.items.filter((x) => !x.soldOut), ...v.items.filter((x) => x.soldOut)];
+  let k = 0;
+  const img = (x: GroupItem, size: string) => {
+    const eager = k++ < 4;
+    return x.image
+      ? `<img class="im" src="${esc(x.image.src)}" srcset="${esc(x.image.srcset)}" sizes="${size}" width="${x.image.w}" height="${x.image.h}" alt="${esc(x.title)}" ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async">`
+      : `<span class="im"></span>`;
+  };
+  const price = (x: GroupItem) => `<div class="pr"><b>${landingPrice(x.price)}</b>${x.oldPrice && x.oldPrice > x.price ? `<s>${landingPrice(x.oldPrice)}</s>` : ''}</div>`;
+  const off = (x: GroupItem) => (x.oldPrice && x.oldPrice > x.price ? `<span class="off">-${Math.round((1 - x.price / x.oldPrice) * 100)}%</span>` : '');
+  const so = (x: GroupItem) => (x.soldOut ? `<span class="so">نفذت الكمية</span>` : '');
+  const open = (x: GroupItem, extra = '') =>
+    `<a class="it${x.soldOut ? ' out' : ''}${extra}" href="${esc(x.slug)}?g=${esc(v.slug)}" data-s="${esc(x.slug)}" data-n="${esc(x.title.toLowerCase())}" data-t="${esc(x.tab ?? '')}">`;
+  const go = (x: GroupItem, label = 'اطلب الآن') => `<span class="go">${x.soldOut ? 'نفذت الكمية' : label}</span>`;
+  const card = (x: GroupItem, size = '(min-width:980px) 250px, (min-width:700px) 320px, 46vw') => `${open(x)}${img(x, size)}${off(x)}${so(x)}<h2>${esc(x.title)}</h2>${price(x)}${go(x)}</a>`;
+  let body = '';
+  if (theme === 'grid') body = `<div class="g2">${items.map((x) => card(x)).join('')}</div>`;
+  else if (theme === 'big')
+    body = `<div class="big">${items
+      .map((x) => `${open(x)}${img(x, '(min-width:700px) 520px, 94vw')}${off(x)}${so(x)}<h2>${esc(x.title)}</h2>${x.note ? `<p class="nt">${esc(x.note)}</p>` : ''}<div class="row">${price(x)}${go(x, 'اطلب الآن ←')}</div></a>`)
+      .join('')}</div>`;
+  else if (theme === 'best') {
+    const best = items.find((x) => x.slug === v.bestSlug && !x.soldOut) ?? items[0];
+    const rest = items.filter((x) => x !== best);
+    body = best
+      ? `${open(best, ' hero')}${img(best, '(min-width:1080px) 1050px, 94vw')}${off(best)}<span class="star">⭐ الأكثر طلباً</span><h2>${esc(best.title)}</h2>${best.note ? `<p class="nt">${esc(best.note)}</p>` : ''}${price(best)}${go(best)}</a>` +
+        (rest.length ? `<div class="st">منتجات أخرى</div><div class="g2">${rest.map((x) => card(x)).join('')}</div>` : '')
+      : '';
+  } else if (theme === 'list')
+    body = `<div class="ls">${items.map((x) => `${open(x)}${img(x, '86px')}<span class="tx"><h2>${esc(x.title)}</h2><span class="pr"><b>${landingPrice(x.price)}</b>${off(x)}</span>${x.soldOut ? '' : '<span class="ok">✔ متوفر</span>'}</span>${go(x, 'اطلب')}</a>`).join('')}</div>`;
+  else {
+    const tabs = [...new Set(items.map((x) => (x.tab ?? '').trim()).filter(Boolean))];
+    body =
+      `<input id="sr" class="sr" type="search" placeholder="🔍 ابحث عن منتج..." aria-label="بحث">` +
+      (tabs.length ? `<div class="tb"><button type="button" class="on" data-t="">الكل</button>${tabs.map((t) => `<button type="button" data-t="${esc(t)}">${esc(t)}</button>`).join('')}</div>` : '') +
+      `<div class="g2">${items.map((x) => card(x)).join('')}</div><p id="em" class="em no">لا يوجد منتج بهذا الاسم</p>`;
+  }
+  if (!items.length) body = `<p class="em">لا توجد منتجات حالياً</p>`;
+  const cfg = { mode: r.mode, g: v.slug, px: r.mode === 'live' && v.pixelId && /^\d{5,20}$/.test(v.pixelId) ? v.pixelId : '' };
+  const url = r.mode === 'live' && r.url && /^https?:\/\/[^\s"<>]+$/.test(r.url) ? r.url : '';
+  const desc = esc(v.subtitle || `${v.title} · التوصيل لجميع الولايات · الدفع عند الاستلام`);
+  const first = items.find((x) => x.image)?.image;
+  const head =
+    `<meta name="description" content="${desc}">` +
+    (r.mode === 'live'
+      ? (url ? `<link rel="canonical" href="${esc(url)}"><meta property="og:url" content="${esc(url)}">` : '') +
+        `<meta property="og:type" content="website"><meta property="og:title" content="${esc(v.title)}"><meta property="og:description" content="${desc}"><meta property="og:locale" content="ar_DZ">` +
+        (v.shopName ? `<meta property="og:site_name" content="${esc(v.shopName)}">` : '') +
+        (first && /^https?:\/\//.test(first.src) ? `<meta property="og:image" content="${esc(first.src)}">` : '')
+      : '<meta name="robots" content="noindex">');
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(v.title)}</title>
+${head}<meta name="theme-color" content="${c}"><style>${GROUP_CSS(c)}</style></head><body>
+<div class="top">🚚 التوصيل لجميع الولايات · الدفع عند الاستلام</div><header class="hd"><h1>${esc(v.title)}</h1>${v.subtitle ? `<p>${esc(v.subtitle)}</p>` : ''}</header>
+<main class="w">${body}<div class="trust"><span>✔ الدفع عند الاستلام</span><span>✔ معاينة المنتج قبل الدفع</span></div></main><footer>${esc(v.shopName)}</footer>
+<script>window.__LG=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script><script>${GROUP_JS}</script></body></html>`;
 }

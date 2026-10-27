@@ -955,13 +955,17 @@ class ApiController {
 
   // ---------------------------------------------------------------- landing pages (public, no login)
   /** The page of one product: a single small HTML file (no app bundle), never cached (it carries a fresh challenge). */
-  private async sendLanding(ref: ShopRef, slug: string, req: { headers: Record<string, string | undefined> }, res: any, own?: { api: string; url: string }) {
+  private async sendLanding(ref: ShopRef, slug: string, req: { url?: string; headers: Record<string, string | undefined> }, res: any, own?: { api: string; url: string }) {
     const missing = () => res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
     if (!/^[a-z0-9-]{2,60}$/.test(slug)) return missing();
     try {
       // on the shop's own domain, the page calls that domain (Caddy forwards /api): no other site involved
       const base = `${own?.api ?? apiOf(ref)}/lp/`;
-      const r: any = await this.core.call(ref, 'landing.html', await this.core.systemSession(ref), { slug, mode: 'live', post: `${base}${slug}/order`, lead: `${base}${slug}/lead`, geo: `${base}geo/`, imgBase: `${base}img/`, site: config.publicUrl, ...(own ? { url: own.url } : {}) });
+      // opened from a group page (?g=<group>): the product page shows « back to all the products »
+      const g = /[?&]g=([a-z0-9-]{2,60})(?:&|$)/.exec(String(req.url ?? ''))?.[1];
+      const r: any = await this.core.call(ref, 'landing.html', await this.core.systemSession(ref), {
+        slug, mode: 'live', post: `${base}${slug}/order`, lead: `${base}${slug}/lead`, geo: `${base}geo/`, imgBase: `${base}img/`, site: config.publicUrl, ...(own ? { url: own.url } : {}), ...(g ? { group: g } : {}),
+      });
       res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'no-store');
       // the main photo asked for as soon as these headers arrive, before the page itself
       if (r.link) res.header('Link', r.link);
@@ -998,7 +1002,7 @@ class ApiController {
   /** The first addresses of the pages (links already in ads keep working; the page names site/<store>/<page> as its own). */
   @Public()
   @Get(['lp/:slug', 's/:shop/lp/:slug'])
-  async landingPage(@Param('shop') shop: string | undefined, @Param('slug') slug: string, @Req() req: { headers: Record<string, string | undefined> }, @Res() res: any) {
+  async landingPage(@Param('shop') shop: string | undefined, @Param('slug') slug: string, @Req() req: { url?: string; headers: Record<string, string | undefined> }, @Res() res: any) {
     const ref = await this.publicShop(shop).catch(() => null);
     if (!ref) return res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
     return this.sendLanding(intake(ref), slug, req, res);
