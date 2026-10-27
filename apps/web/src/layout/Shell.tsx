@@ -29,15 +29,6 @@ export function applyTheme(t: Theme) {
   store.set('theme', t);
 }
 
-export const SKINS = ['creme', 'marine', 'suisse', 'bloc', 'doux'] as const;
-export type Skin = (typeof SKINS)[number];
-/** Visual identity (colours, fonts, shapes) — one of the looks proposed in the redesign preview. */
-export function applySkin(s: string | null) {
-  const skin = SKINS.includes(s as Skin) ? (s as Skin) : null;
-  if (skin) document.documentElement.setAttribute('data-skin', skin);
-  else document.documentElement.removeAttribute('data-skin');
-  store.set('skin', skin);
-}
 
 /** Menu counts, refreshed every minute and on live updates. */
 export function useMenuCounts() {

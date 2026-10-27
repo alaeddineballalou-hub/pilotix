@@ -38,6 +38,7 @@ SKU=$(rpc "$ADMIN" orders.get "{\"id\":$OID}" >/dev/null; echo PX-POU-1)
 curl -fsS -X POST "$API/hooks/orders/site?key=demo-webhook-key" -H 'Content-Type: application/json' \
   -d "{\"name\":\"Client Site\",\"phone\":\"0770112233\",\"wilaya\":31,\"commune\":\"Oran\",\"items\":[{\"sku\":\"$SKU\",\"qty\":1}]}" | grep -q '"ok":true'
 echo "→ grouped action names";       rpc "$ADMIN" dellal.settings.get | grep -q '"verifyToken"'; rpc "$ADMIN" cm.settings.get | grep -q '"replyPublic"'
+echo "→ action names with a digit";   rpc "$ADMIN" stats.overview2 '{"from":"2026-01-01T00:00:00.000Z","to":"2026-12-31T23:00:00.000Z"}' | grep -q '"month"'
 echo "→ Meta comment webhook (CM AI agent): signed only, answered after the shop's delay"
 SECRET=smoke-app-secret
 merge() { node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const o=JSON.parse(s).settings;console.log(JSON.stringify(Object.assign(o,JSON.parse(process.argv[1]))))})" "$1"; }

@@ -4,7 +4,7 @@
 .pxt-money { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .pxt-money div { padding: 8px 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); min-width: 0; }
 .pxt-money small { display: block; font-size: 11.5px; font-weight: 700; color: var(--muted); }
-.pxt-money b { display: block; font-family: Poppins, Inter, sans-serif; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pxt-money b { display: block; font-family: var(--f-display); font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pxt-money b.ok { color: var(--c-ok-ink); }
 
 /* the next stop */

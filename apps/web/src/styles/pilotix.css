@@ -1017,7 +1017,7 @@ html body .qtbl td.px-c-status { text-align: center !important; }
 /* the decision panel */
 .qd6-rail { position: sticky; top: 76px; display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 14px; background: var(--surface); border: 2px solid #F7A823; box-shadow: 0 6px 22px rgba(242, 139, 30, .12); }
 .qd6-rail .qd5-sum { padding-top: 0; border-top: 0; }
-.qd6-rail .qd5-total dd { font-family: Poppins, Inter, sans-serif; font-size: 22px; }
+.qd6-rail .qd5-total dd { font-family: var(--f-display); font-size: 22px; }
 .qd6-warn { display: flex; gap: 8px; align-items: flex-start; padding: 9px 11px; border-radius: 11px; background: var(--c-bad-tint); color: var(--c-bad-ink); font-weight: 700; font-size: 12.5px; line-height: 1.35; }
 [data-theme="dark"] .qd6-warn { background: rgba(231, 76, 60, .16); color: #ff9a8f; }
 .qd6-warn .bji { width: 16px; height: 16px; flex: none; margin-top: 1px; }

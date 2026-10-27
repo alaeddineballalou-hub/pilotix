@@ -750,7 +750,7 @@ class ApiController {
   @Post('rpc/:name')
   async rpc(@Param('name') name: string, @Body() body: unknown, @Req() req: ShopRequest) {
     // names like orders.list, and grouped ones like dellal.settings.get or cm.settings.save
-    if (!/^[a-z]+(\.[a-zA-Z]+){1,3}$/.test(name)) throw new core.AppError('not_found', 'Action inconnue');
+    if (!/^[a-z]+(\.[a-zA-Z0-9]+){1,3}$/.test(name)) throw new core.AppError('not_found', 'Action inconnue');
     if (req.shop.shop.demo && NOT_IN_DEMO.has(name)) throw new core.AppError('forbidden', 'Pas dans la boutique démo : ses comptes sont partagés par tous les visiteurs');
     if (TEAM_ACTIONS.has(name)) await this.teamRules(name, body as any, req);
     if (name.startsWith('archive.') && !req.shop.shop.demo) return this.archive(name, body as any, req);

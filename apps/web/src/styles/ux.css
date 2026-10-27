@@ -54,3 +54,7 @@ html[data-theme="dark"] { --q-ink: var(--ink); --q-on-accent: #1B2A47; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+/* ---- coloured number boxes that a later "all boxes are white" rule had turned white (white text on white) ---- */
+html body #ads .kpi.net { background: var(--navy) !important; border-color: var(--navy) !important; color: var(--on-navy) !important; }
+html body #ads .kpi.net.loss { background: var(--c-bad-fill) !important; border-color: var(--c-bad-fill) !important; color: #fff !important; }

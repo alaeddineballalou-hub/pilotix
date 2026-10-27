@@ -6,7 +6,7 @@ import { LockScreen } from './layout/LockScreen';
 import { Login } from './layout/Login';
 import { ResetPassword } from './layout/ResetPassword';
 import { canSee, canSeeChild, homeFor, NAV } from './layout/nav';
-import { applySkin, applyTheme, Shell } from './layout/Shell';
+import { applyTheme, Shell } from './layout/Shell';
 import { ApiError } from './lib/backend';
 import { firstSubOn, hasPlanSubs, pageIsOn } from './lib/features';
 import './lib/i18n';
@@ -25,7 +25,8 @@ import './styles/ux.css';
 import './styles/skins.css';
 
 applyTheme(store.get('theme') as 'light' | 'dark' | null);
-applySkin(new URLSearchParams(location.search).get('skin') ?? store.get('skin'));
+// the Pilotix look (styles/skins.css); also set in index.html so the first paint already has it
+document.documentElement.setAttribute('data-skin', 'doux');
 installEdgeScroll();
 
 const qc = new QueryClient({

@@ -160,7 +160,7 @@ export class PlatformController {
 
   @Post('rpc/:name')
   async rpc(@Param('name') name: string, @Body() body: unknown, @Req() req: { staff: StaffSession }) {
-    if (!/^p(\.[a-zA-Z]+){1,3}$/.test(name)) throw new core.AppError('not_found', 'Action inconnue');
+    if (!/^p(\.[a-zA-Z0-9]+){1,3}$/.test(name)) throw new core.AppError('not_found', 'Action inconnue');
     if (NEEDS_MAIL.has(name) && !mailConfigured()) throw new core.AppError('bad_request', 'L’envoi d’e-mails n’est pas configuré sur le serveur : le propriétaire ne recevrait pas son lien.');
     const ctx = this.core.platformCtx(req.staff);
     const out: any = await core.platformCall(name, ctx, body ?? {});
