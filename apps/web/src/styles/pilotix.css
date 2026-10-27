@@ -1838,3 +1838,8 @@ html[data-theme="dark"] .bjp-ib-d { color: #F09C95; }
 html body .nt-case.nt-off :is(.nt-phone, .nt-case-f) { opacity: .8; }
 /* Caisse "ready to pay" card: its pale-green gradient stayed pale in dark, so the company name and amounts vanished */
 html[data-theme="dark"] .pxk-qp:not(.full) { background: linear-gradient(180deg, var(--c-ok-tint), var(--surface)); border-color: rgba(60, 184, 120, .35); }
+/* light theme: a few coloured links and labels were just under 4.5:1 */
+html:not([data-theme="dark"]) body .spy .spy-a { color: var(--c-accent-ink); }
+html:not([data-theme="dark"]) body .bjp-ib-d { color: var(--c-bad-ink); }
+html:not([data-theme="dark"]) body .bjg-def { color: var(--c-ok-ink); }
+html body .cm-soon { opacity: .8; }
