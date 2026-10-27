@@ -56,7 +56,7 @@ html:root[data-theme="dark"] { --tb-or-ink: #F5B04A; }
 .tb-pulse { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .tb-k { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 14px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 1px 2px rgb(27 42 71 / .04); }
 .tb-kl { display: flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 800; color: var(--muted); }
-.tb-kv { font-family: var(--f-display, Poppins), Inter, sans-serif; font-size: 28px; font-weight: 700; line-height: 1.1; letter-spacing: -.01em; color: var(--ink); }
+.tb-kv { font-family: var(--f-display); font-size: 28px; font-weight: 700; line-height: 1.1; letter-spacing: -.01em; color: var(--ink); }
 .tb-k.is-ok .tb-kv { color: var(--ok); }
 .tb-k.is-warn .tb-kv { color: var(--warn); }
 .tb-k.is-bad .tb-kv { color: var(--coral); }
@@ -215,7 +215,7 @@ i.lt { width: 14px; height: 0; border-top: 2px dashed var(--muted); }
 .tb-coach.focus .tb-coachh { color: var(--tb-or-ink); }
 .tb-coachh .bji { width: 16px; height: 16px; flex: none; }
 .tb-coachv { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin: 0; font-size: 12.5px; color: var(--muted); }
-.tb-coachv b { font-family: var(--f-display, Poppins), Inter, sans-serif; font-size: 24px; color: var(--ink); }
+.tb-coachv b { font-family: var(--f-display); font-size: 24px; color: var(--ink); }
 .tb-tip-t { display: flex; gap: 8px; margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--ink); }
 .tb-tip-t .bji { flex: none; width: 16px; height: 16px; margin-top: 2px; color: var(--c-accent-ink); }
 .tb-strongl { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--ok-soft); color: var(--ok); font-size: 13px; }
@@ -253,7 +253,7 @@ i.lt { width: 14px; height: 0; border-top: 2px dashed var(--muted); }
 .tb-hch .bji { flex: none; width: 16px; height: 16px; color: var(--muted); }
 [dir="rtl"] .tb-hch .bji { transform: scaleX(-1); }
 .tb-hcv { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
-.tb-hcv > b { font-family: var(--f-display, Poppins), Inter, sans-serif; font-size: 26px; font-weight: 700; line-height: 1.1; letter-spacing: -.01em; }
+.tb-hcv > b { font-family: var(--f-display); font-size: 26px; font-weight: 700; line-height: 1.1; letter-spacing: -.01em; }
 .tb-hc.is-ok .tb-hcv > b { color: var(--ok); }
 .tb-hc.is-warn .tb-hcv > b { color: var(--warn); }
 .tb-hc.is-bad .tb-hcv > b { color: var(--coral); }

@@ -25,7 +25,7 @@ html[data-theme="dark"] .spy { --spy-or-3: #F7B955; --spy-fb: #6EA8FF; --spy-gol
 .spy .spy-bad { color: var(--coral); }
 .spy .spy-a { color: var(--spy-or-3); font-weight: 700; }
 .spy bdi { unicode-bidi: isolate; }
-.spy [lang="ar"] { font-family: "Cairo", "Segoe UI", Tahoma, var(--f, system-ui), sans-serif; }
+.spy [lang="ar"] { font-family: var(--f, system-ui), "Segoe UI", Tahoma, sans-serif; }
 .spy .spy-sub-h { margin: 4px 0 0; font-size: 12px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
 .spy .spy-iconbtn { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 6px; border-radius: 8px; flex: none; display: grid; place-items: center; }
 .spy .spy-iconbtn:hover { background: var(--line); color: var(--ink); }
