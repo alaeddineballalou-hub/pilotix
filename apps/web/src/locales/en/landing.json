@@ -389,6 +389,8 @@
     "check": "Check"
   },
   "pr": {
+    "kQuality": "Order quality",
+    "kQualitySub": "{{real}} real out of {{total}} received · {{confirmed}} confirmed",
     "intro": "Every order received gets a score: 🟢 it passes, 🟡 an agent checks before calling, 🔴 it is blocked without the customer knowing (they see the same “Thank you”).",
     "kSubmits": "Orders received",
     "kSubmitsSub": "sent from your pages",

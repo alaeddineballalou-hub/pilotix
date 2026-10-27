@@ -20,6 +20,8 @@ export function Protection() {
   const d = q.data;
   const tt = d?.totals;
   const held = (tt?.blocked ?? 0) + (tt?.review ?? 0);
+  /** real orders: received, minus the fake ones (blocked) and the ones sent twice (merged) */
+  const real = (tt?.allowed ?? 0) + (tt?.review ?? 0);
   return (
     <>
       <div className="lp-pr-top">
@@ -27,6 +29,14 @@ export function Protection() {
         <PeriodSwitch value={days} onChange={setDays} />
       </div>
       <Kpis>
+        <Kpi
+          label={t('landing.pr.kQuality')}
+          value={tt?.submits ? pct(real / tt.submits) : '—'}
+          sub={t('landing.pr.kQualitySub', { real: n(real), total: n(tt?.submits), confirmed: n(tt?.confirmed) })}
+          icon="medal"
+          tone={tt?.submits ? (real / tt.submits >= 0.85 ? 'ok' : real / tt.submits >= 0.7 ? 'warn' : 'bad') : undefined}
+          big
+        />
         <Kpi label={t('landing.pr.kSubmits')} value={n(tt?.submits)} sub={t('landing.pr.kSubmitsSub')} icon="cart" />
         <Kpi label={t('landing.pr.kAllowed')} value={n(tt?.allowed)} sub={t('landing.pr.kAllowedSub')} icon="checkcircle" />
         <Kpi label={t('landing.pr.kReview')} value={n(tt?.review)} sub={t('landing.pr.kReviewSub')} icon="eye" />
