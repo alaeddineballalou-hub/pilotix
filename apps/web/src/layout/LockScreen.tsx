@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useSession } from '../lib/session';
 import { Icon } from '../ui/kit';
 import { PayInfo } from './ShopBanner';
+import { BrandBig } from './PxWordmark';
 
 export function LockScreen() {
   const { t } = useTranslation();
@@ -27,9 +28,7 @@ export function LockScreen() {
   return (
     <div className="login px-lock">
       <div className="card login-card">
-        <span className="brand-big" role="img" aria-label="Pilotix">
-          Pilotix
-        </span>
+        <BrandBig />
         <div className="px-lock-ic" aria-hidden="true">
           <Icon name="lock" />
         </div>

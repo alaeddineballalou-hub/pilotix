@@ -5,6 +5,7 @@ import { backend, DEMO_AVAILABLE, DEMO_ONLY, FIXED_SERVER, forgotAvailable, onDe
 import { applyLanguage } from '../lib/i18n';
 import { useSession } from '../lib/session';
 import { Icon } from '../ui/kit';
+import { BrandBig } from './PxWordmark';
 
 const LANG: Record<Language, string> = { fr: 'Français', en: 'English', ar: 'العربية' };
 
@@ -77,9 +78,7 @@ export function Login() {
     return (
       <div className="login">
         <form className="card login-card" onSubmit={sendReset}>
-          <span className="brand-big" role="img" aria-label="Pilotix">
-            Pilotix
-          </span>
+          <BrandBig />
           <h2 className="login-title">{t('login.forgotTitle')}</h2>
           {sent ? (
             <p className="login-note">{t('login.forgotSent')}</p>
@@ -137,9 +136,7 @@ export function Login() {
   return (
     <div className="login">
       <form className="card login-card" onSubmit={submit}>
-        <span className="brand-big" role="img" aria-label="Pilotix">
-          Pilotix
-        </span>
+        <BrandBig />
         <p className="muted" style={{ textAlign: 'center', margin: 0 }}>
           {t('login.tagline')}
         </p>

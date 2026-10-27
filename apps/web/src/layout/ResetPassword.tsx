@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { resetPasswordWithLink } from '../lib/backend';
+import { BrandBig } from './PxWordmark';
 
 /**
  * The page opened from the "mot de passe oublié" e-mail (#/reset/<secret>), or from an invitation (#/invite/<secret>):
@@ -39,9 +40,7 @@ export function ResetPassword({ token, invite }: { token: string; invite?: boole
   return (
     <div className="login">
       <form className="card login-card" onSubmit={submit}>
-        <span className="brand-big" role="img" aria-label="Pilotix">
-          Pilotix
-        </span>
+        <BrandBig />
         <h2 className="login-title">{invite ? t('login.inviteTitle') : t('login.resetTitle')}</h2>
         {invite && !done && <p className="login-note">{t('login.inviteText')}</p>}
         {done ? (
