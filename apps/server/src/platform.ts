@@ -14,7 +14,7 @@ import { readdir, stat, statfs } from 'node:fs/promises';
 import { z } from 'zod';
 import { config } from './config';
 import { CoreService } from './core.service';
-import { serverDoctor } from './doctor';
+import { dismissDoctor, serverDoctor } from './doctor';
 import { saveTurnstileConfig, syncTurnstile, turnstileStatus } from './turnstile';
 import { checkLogin, clearLogin, failedLogin } from './limits';
 import { mailConfigured, sendMail } from './mail';
@@ -195,6 +195,20 @@ export class PlatformController {
   @Post('doctor')
   async doctor(@Req() req: { staff: StaffSession }) {
     if (req.staff.role === 'support') throw new core.AppError('forbidden', 'Réservé au propriétaire et aux managers');
+    return serverDoctor(this.core);
+  }
+
+  /** Doctor: « Résolu » / « Ignorer » / « Ré-afficher » an alert no page can fix (owner and managers). */
+  @Post('doctor/dismiss')
+  async doctorDismiss(@Body() body: unknown, @Req() req: { staff: StaffSession }) {
+    if (req.staff.role === 'support') throw new core.AppError('forbidden', 'Réservé au propriétaire et aux managers');
+    const b = z.object({ id: z.string().regex(/^[a-zA-Z]{2,40}$/), kind: z.enum(['solve', 'ignore', 'restore']) }).safeParse(body);
+    if (!b.success) throw new core.AppError('bad_request', 'Alerte ou action inconnue');
+    try {
+      await dismissDoctor(this.core, b.data.id, b.data.kind, req.staff.name);
+    } catch (e) {
+      throw new core.AppError('bad_request', (e as Error).message);
+    }
     return serverDoctor(this.core);
   }
 

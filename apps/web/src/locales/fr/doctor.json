@@ -445,5 +445,17 @@
     "mine": "Votre propre travail : vos commandes et vos colis."
   },
   "foldAll": "Tout replier",
-  "unfoldAll": "Tout déplier"
+  "unfoldAll": "Tout déplier",
+  "act": {
+    "solve": "Résolu",
+    "ignore": "Ignorer",
+    "restore": "Ré-afficher",
+    "solved": "Marqué comme résolu : l’alerte revient seulement si le problème revient",
+    "ignored": "Alerte ignorée pendant 7 jours",
+    "restored": "Alerte ré-affichée",
+    "solveHelp": "C’est réglé : cacher cette alerte. Elle revient seulement si le problème revient.",
+    "ignoreHelp": "Cacher cette alerte pendant 7 jours",
+    "mutedTitle": "Alertes ignorées",
+    "mutedUntil": "Cachée jusqu’au {{date}} · par {{by}}"
+  }
 }

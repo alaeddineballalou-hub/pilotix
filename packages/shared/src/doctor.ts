@@ -27,6 +27,20 @@ export interface DoctorItem {
   list?: DoctorLine[];
   /** where to fix it */
   href?: string;
+  /** the control room's Doctor: what the owner may do with an alert no page can fix (solve = hide until it changes,
+   *  ignore = hide 7 days) */
+  actions?: DoctorAction[];
+}
+
+export type DoctorAction = 'solve' | 'ignore';
+
+/** An alert the owner hid (« Ignorer »): until when, by whom. */
+export interface DoctorMuted {
+  id: string;
+  /** the alert's numbers when it was hidden (its sentence) */
+  params?: Record<string, string | number>;
+  until: string;
+  by: string;
 }
 
 export interface ShopDoctorReport {
@@ -82,6 +96,8 @@ export interface ServerDoctorReport {
   };
   jobs: DoctorJob[];
   errors: DoctorError[];
+  /** alerts hidden with « Ignorer » (they come back by themselves after 7 days, or with « Ré-afficher ») */
+  muted?: DoctorMuted[];
   /** Cloudflare Turnstile kept by Pilotix for every shop: how full the free plan is */
   turnstile?: DoctorTurnstile;
 }

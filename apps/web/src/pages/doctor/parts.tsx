@@ -1,6 +1,6 @@
 // The Doctor's screen pieces, shared by Pilotix Doctor (each shop, Dashboard) and the server Doctor (control room):
 // the score, the problems (worst first, each with what to do and a link), what is fine.
-import type { DoctorItem, DoctorLevel, DoctorLine } from '@pilotix/shared';
+import type { DoctorAction, DoctorItem, DoctorLevel, DoctorLine } from '@pilotix/shared';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, n, wilaya } from '../../lib/format';
@@ -25,7 +25,7 @@ const AREA_ICON: Record<string, string> = {
 };
 
 /** A number of a sentence, written for the reader (money in DA, the rest in the reader's language). */
-function fmtParams(p: DoctorItem['params']): Record<string, string | number> {
+export function fmtParams(p: DoctorItem['params']): Record<string, string | number> {
   const out: Record<string, string | number> = {};
   for (const [k, v] of Object.entries(p ?? {})) out[k] = typeof v !== 'number' ? v : k === 'amount' ? da(v) : n(v);
   // i18next picks the plural from `count`: it must stay a number
@@ -149,7 +149,7 @@ function itemTitle(t: (k: string, o?: any) => string, item: DoctorItem) {
 }
 
 /** One line of the list: colour, icon, the sentence, its team; a click unfolds why, the worst cases, what to do, where. */
-function DoctorRow({ item, open, onToggle }: { item: DoctorItem; open: boolean; onToggle: () => void }) {
+function DoctorRow({ item, open, onToggle, onAction }: { item: DoctorItem; open: boolean; onToggle: () => void; onAction?: (id: string, kind: DoctorAction) => void }) {
   const { t } = useTranslation();
   const p = fmtParams(item.params);
   const key = `doctor.c.${item.id}`;
@@ -157,6 +157,7 @@ function DoctorRow({ item, open, onToggle }: { item: DoctorItem; open: boolean; 
   const id = `dr-row-${item.id}`;
   return (
     <li className={`dr-row dr-${item.level} ${open ? 'open' : ''}`}>
+      <div className="dr-row-top">
       <button type="button" className="dr-row-h" aria-expanded={open} aria-controls={id} onClick={onToggle}>
         <i className="dr-row-bar" aria-hidden="true" />
         <span className="dr-row-ic">
@@ -169,6 +170,23 @@ function DoctorRow({ item, open, onToggle }: { item: DoctorItem; open: boolean; 
         <span className={`dr-tag dr-${item.level}`}>{t(`doctor.tag.${item.level}`)}</span>
         <Icon name="chevron" className="dr-row-ch" />
       </button>
+      {onAction && !!item.actions?.length && (
+        <span className="dr-acts">
+          {item.actions.includes('solve') && (
+            <button type="button" className="dr-act" title={t('doctor.act.solveHelp')} onClick={() => onAction(item.id, 'solve')}>
+              <Icon name="check" />
+              {t('doctor.act.solve')}
+            </button>
+          )}
+          {item.actions.includes('ignore') && (
+            <button type="button" className="dr-act" title={t('doctor.act.ignoreHelp')} onClick={() => onAction(item.id, 'ignore')}>
+              <Icon name="pause" />
+              {t('doctor.act.ignore')}
+            </button>
+          )}
+        </span>
+      )}
+      </div>
       {open && (
         <div className="dr-row-d" id={id}>
           {problem && <p className="dr-why">{t(`${key}.${item.params?.amount !== undefined ? 'whyMoney' : 'why'}`, { ...p, defaultValue: t(`${key}.why`, p) })}</p>}
@@ -207,7 +225,8 @@ type Group = 'bad' | 'warn' | 'ok';
  * own, each line unfolds its details, and one button folds or unfolds everything. What is open stays open while the
  * page updates itself.
  */
-export function DoctorList({ items }: { items: DoctorItem[] }) {
+/** `onAction`: the control room's « Résolu » / « Ignorer » on the alerts that allow it (nothing else shows them). */
+export function DoctorList({ items, onAction }: { items: DoctorItem[]; onAction?: (id: string, kind: DoctorAction) => void }) {
   const { t } = useTranslation();
   const groups: { g: Group; label: string; xs: DoctorItem[] }[] = [
     { g: 'bad', label: t('doctor.g.bad'), xs: items.filter((i) => i.level === 'bad') },
@@ -257,7 +276,7 @@ export function DoctorList({ items }: { items: DoctorItem[] }) {
           {!closed[g] && (
             <ul className="dr-rows">
               {xs.map((i) => (
-                <DoctorRow key={i.id} item={i} open={rows.has(i.id)} onToggle={() => toggleRow(i.id)} />
+                <DoctorRow key={i.id} item={i} open={rows.has(i.id)} onToggle={() => toggleRow(i.id)} onAction={onAction} />
               ))}
             </ul>
           )}

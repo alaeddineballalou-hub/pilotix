@@ -134,11 +134,13 @@ check((await req('/platform/doctor', {}, SHOP_ADMIN)).status === 401, 'a shop to
 r = await staffLogin(API, OWNER.email, OWNER.password);
 check(r.status === 201 && r.data.token, 'the owner logs in to the control room', r.data);
 const OWN = r.data.token;
+let SUPPORT = null;
 for (const role of ['support', 'manager']) {
   const email = `${role}-${run}@pilotix.test`;
   r = await req('/platform/rpc/p.staff.save', { name: `Test ${role}`, email, role, active: true, password: 'Staff-Password-1' }, OWN);
   check(r.status === 201, `the owner adds a ${role}`, r.data);
   const tok = (await staffLogin(API, email, 'Staff-Password-1')).data.token;
+  if (role === 'support') SUPPORT = tok;
   const d = await req('/platform/doctor', {}, tok);
   if (role === 'support') check(d.status === 403, 'support staff: refused', d);
   else check(d.status === 201 && Array.isArray(d.data.items), 'a manager: allowed', d.status);
@@ -185,6 +187,33 @@ for (let i = 0; i < 24 && !jobOk; i++) {
   if (!jobOk) await sleep(5000);
 }
 check(jobOk, 'the jobs that run every minute are seen running');
+
+// ---------------------------------------------------------------- « Résolu » / « Ignorer »
+step('control room Doctor: « Résolu » and « Ignorer » on the alerts no page can fix');
+const DISMISSABLE = ['restarted', 'errors', 'courierSync', 'jobs', 'dbSlow', 'dbPoolFull', 'silentShops', 'config', 'redisOff'];
+r = await req('/platform/doctor', {}, OWN);
+let D1 = r.data;
+check(D1.items.every((i) => !i.actions || (DISMISSABLE.includes(i.id) && ['bad', 'warn'].includes(i.level))), 'only those alerts, and only when they are a problem, have the buttons', D1.items.filter((i) => i.actions));
+check(!D1.items.find((i) => i.id === 'cpu')?.actions, 'the processor has no button (nothing to hide)');
+const restarted = D1.items.find((i) => i.id === 'restarted');
+check(restarted?.level === 'warn' && restarted.actions?.includes('solve'), 'just after a start: « Pilotix vient de redémarrer » can be solved', restarted);
+r = await req('/platform/doctor/dismiss', { id: 'restarted', kind: 'solve' }, OWN);
+check(r.status === 201 && !r.data.items.some((i) => i.id === 'restarted'), '« Résolu »: the restart alert is gone', r.data.items?.map((i) => i.id));
+r = await req('/platform/doctor', {}, OWN);
+check(!r.data.items.some((i) => i.id === 'restarted'), '…and stays gone on the next check');
+check(r.data.score === Math.max(5, 100 - r.data.items.reduce((s, i) => s + (i.level === 'bad' ? 15 : i.level === 'warn' ? 5 : 0), 0)), 'the score counts only what is shown');
+r = await req('/platform/doctor/dismiss', { id: 'config', kind: 'ignore' }, OWN);
+const cm = r.data.muted?.find((m) => m.id === 'config');
+check(r.status === 201 && !r.data.items.some((i) => i.id === 'config') && cm && Date.parse(cm.until) - Date.now() > 6.9 * 86400000 && cm.by === 'Owner Test', '« Ignorer »: the settings alert is hidden 7 days, listed as ignored', r.data.muted);
+r = await req('/platform/doctor/dismiss', { id: 'config', kind: 'restore' }, OWN);
+check(r.data.items.some((i) => i.id === 'config') && !r.data.muted?.some((m) => m.id === 'config'), '« Ré-afficher »: it is back');
+r = await req('/platform/doctor/dismiss', { id: 'errors', kind: 'solve' }, OWN);
+check(r.status === 201 && r.data.items.find((i) => i.id === 'errors')?.level === 'ok', '« Résolu » on the errors: they are forgotten', r.data.items?.find((i) => i.id === 'errors'));
+check((await req('/platform/doctor/dismiss', { id: 'config', kind: 'solve' }, OWN)).status === 400, 'an action the alert does not allow is refused');
+check((await req('/platform/doctor/dismiss', { id: 'cpu', kind: 'ignore' }, OWN)).status === 400, 'an alert a page can fix cannot be hidden');
+check((await req('/platform/doctor/dismiss', { id: 'config', kind: 'delete' }, OWN)).status === 400, 'an unknown action is refused');
+check((await req('/platform/doctor/dismiss', { id: 'config', kind: 'ignore' })).status === 401, 'no token: refused');
+check((await req('/platform/doctor/dismiss', { id: 'config', kind: 'ignore' }, SUPPORT)).status === 403, 'support staff cannot hide alerts');
 
 // ---------------------------------------------------------------- 4. Pilotix Doctor of a shop over HTTP
 step('Pilotix Doctor of a shop');
