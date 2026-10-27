@@ -6,6 +6,8 @@ import IORedis from 'ioredis';
 import { config } from './config';
 import { CoreService, ShopRef } from './core.service';
 import { doctorState } from './doctor';
+import { mailConfigured, sendMail } from './mail';
+import { reminderMail } from './mails';
 
 /**
  * Background work, outside user requests, for every shop that is active and paid (needs REDIS_URL; without it the app
@@ -19,6 +21,7 @@ import { doctorState } from './doctor';
  *  - Landing pages: abandoned orders (list, Commandes, reminder) and Meta Conversions API events, every minute
  *  - Google Sheets sales channels: new lines become orders, every 2 minutes
  *  - AI Spy: competitors' Facebook ads (paid source), checked every hour, scanned once a day after the chosen hour
+ *  - Pilotix: reminders e-mailed to stores' owners before their trial / paid period ends, and when a store locks (daily)
  *  - the demo shop starts again from fresh demo data every night
  * A job whose feature is not in a shop's plan is skipped for that shop.
  */
@@ -89,6 +92,13 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
               await ref.db.query(`SELECT ensure_events_partition((date_trunc('month', now()) + make_interval(months => $1))::date)`, [i]).catch((e) => this.log.warn(`[${ref.shop.slug}] partitions: ${e.message}`));
           return null;
         }
+        if (job.name === 'platform-reminders') {
+          if (!mailConfigured()) return null;
+          const pay = (await this.core.settings()).payment;
+          const due = await core.takeDueReminders(this.core.t);
+          for (const r of due) await sendMail(reminderMail(r, pay)).catch((e) => this.log.warn(`reminder to ${r.to}: ${e?.message || e}`));
+          return { sent: due.length };
+        }
         if (job.name === 'demo-reset') {
           for (const s of await core.loadShops(this.core.t))
             if (s.demo && !s.primary && s.status === 'active') {
@@ -136,6 +146,8 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.queue.add('partitions', {}, { repeat: { pattern: '0 3 1 * *' }, jobId: 'partitions', removeOnComplete: 10 });
     // 03:40 UTC = 04:40 in Algeria: nobody is visiting the demo
     await this.queue.add('demo-reset', {}, { repeat: { pattern: '40 3 * * *' }, jobId: 'demo-reset', removeOnComplete: 10, removeOnFail: 20 });
+    // every morning at 08:00 in Algeria (what the control room's settings say), whatever the server's time zone
+    await this.queue.add('platform-reminders', {}, { repeat: { pattern: '0 8 * * *', tz: 'Africa/Algiers' }, jobId: 'platform-reminders', removeOnComplete: 20, removeOnFail: 50 });
   }
 
   async onModuleDestroy() {

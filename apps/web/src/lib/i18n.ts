@@ -14,6 +14,16 @@ for (const [path, mod] of Object.entries(files)) {
   resources[lang].translation[ns] = mod.default;
 }
 
+// Arabic counts have six forms (0, 1, 2, 3–10, 11–99, other); the files give « _one » and « _other ». Without a key
+// for the others, i18next would show the French text: the plain key (tried before French) takes the « _other » text.
+function pluralFallback(o: Record<string, unknown>) {
+  for (const [k, v] of Object.entries(o)) {
+    if (v && typeof v === 'object' && !Array.isArray(v)) pluralFallback(v as Record<string, unknown>);
+    else if (typeof v === 'string' && k.endsWith('_other') && !(k.slice(0, -6) in o)) o[k.slice(0, -6)] = v;
+  }
+}
+pluralFallback(resources.ar.translation);
+
 const saved = store.get('lang') as Language | null;
 const initial: Language = saved ?? 'fr';
 

@@ -79,7 +79,8 @@ export function DoctorHero({ title, sub, score, items, checkedAt, onRefresh, bus
   const { t } = useTranslation();
   const bad = items.filter((i) => i.level === 'bad').length;
   const warn = items.filter((i) => i.level === 'warn').length;
-  const ok = items.filter((i) => i.level === 'ok').length;
+  // the same checks as the folded « all good » list below (what only informs is fine too)
+  const ok = items.filter((i) => i.level === 'ok' || i.level === 'info').length;
   const mood = bad ? 'bad' : warn ? 'warn' : 'ok';
   return (
     <section className={`dr-hero dr-hero-${mood}`}>

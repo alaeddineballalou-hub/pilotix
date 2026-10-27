@@ -1,9 +1,8 @@
-// What a shop sees of its Pilotix subscription (a multi-shop server): the support banner, Pilotix's message, the trial
-// days left, the renewal reminder, the grace period — and how to pay. Nothing on a single-shop server.
+// What a shop sees of its Pilotix subscription (a multi-shop server): Pilotix's message, the trial days left, the
+// renewal reminder, the grace period, the plan's orders per month — and how to pay. Nothing on a single-shop server.
 import type { Session, ShopInfo } from '@pilotix/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { confirmAgain } from '../lib/backend';
 import { dateOnly } from '../lib/format';
 import { store } from '../lib/store';
 import { Icon } from '../ui/kit';
@@ -32,6 +31,7 @@ export function PayInfo({ shop }: { shop: ShopInfo }) {
   return (
     <div className="px-pay">
       {shop.plan && shop.planPrice !== null && <p className="px-pay-plan">{t('shop.payPlan', { plan: shop.plan, price: shop.planPrice.toLocaleString('fr-DZ') })}</p>}
+      {shop.plan && shop.planPriceYear ? <p className="px-pay-plan">{t('shop.payPlanYear', { price: shop.planPriceYear.toLocaleString('fr-DZ') })}</p> : null}
       {p.text.trim() && (
         <>
           <h4>{t('shop.payHow')}</h4>
@@ -69,7 +69,6 @@ export function ShopBanner({ session }: { session: Session }) {
   const shop = session.shop;
   const [pay, setPay] = useState(false);
   const [hidden, setHidden] = useState<Record<string, boolean>>({});
-  const [sent, setSent] = useState<'' | 'busy' | 'sent' | string>('');
   if (!shop) return null;
   const today = new Date().toISOString().slice(0, 10);
   const closed = (k: string) => hidden[k] || store.get(`banner-${k}`) === today;
@@ -82,16 +81,6 @@ export function ShopBanner({ session }: { session: Session }) {
   const end = shop.state === 'trial' ? shop.trialEndsAt : shop.paidUntil;
   const out: JSX.Element[] = [];
 
-  if (shop.support)
-    out.push(
-      <div key="sup" className="px-ban px-ban-sup" role="status">
-        <Icon name="headset" />
-        <span className="grow">{t('shop.support', { staff: shop.support, shop: shop.name })}</span>
-        <button type="button" className="btn small" onClick={() => window.close()}>
-          {t('shop.supportClose')}
-        </button>
-      </div>,
-    );
   if (shop.demo)
     out.push(
       <div key="demo" className="px-ban px-ban-info" role="status">
@@ -111,32 +100,23 @@ export function ShopBanner({ session }: { session: Session }) {
       </div>,
     );
   }
-  if (admin && !shop.support && !shop.demo) {
-    // a shop made on the sign-up page: its owner confirms the e-mail (it is the way back in if the password is lost)
-    if (shop.emailToConfirm && !closed('confirm'))
+  if (admin && !shop.demo) {
+    // the plan's orders per month: still taken (no customer lost), the owner sees it's time for a bigger plan
+    const max = shop.maxOrdersMonth;
+    const done = shop.ordersMonth ?? 0;
+    if (max && done >= Math.ceil(max * 0.8) && !closed(`orders${done >= max ? 'x' : ''}`))
       out.push(
-        <div key="confirm" className="px-ban px-ban-info" role="status">
-          <Icon name="mail" />
+        <div key="orders" className={`px-ban ${done >= max ? 'px-ban-bad' : 'px-ban-warn'}`} role="status">
+          <Icon name="alert" />
           <span className="grow">
-            <b>{t('shop.confirm.banner', { email: shop.emailToConfirm })}</b>
-            {sent === 'sent' ? ` · ${t('shop.confirm.sent')}` : sent && sent !== 'busy' ? ` · ${sent}` : ''}
+            <b>{done >= max ? t('shop.ordersOver', { done, max }) : t('shop.ordersNear', { done, max })}</b> · {t('shop.ordersKeep')}
           </span>
-          {sent !== 'sent' && (
-            <button
-              type="button"
-              className="btn small"
-              disabled={sent === 'busy'}
-              onClick={() => {
-                setSent('busy');
-                confirmAgain()
-                  .then(() => setSent('sent'))
-                  .catch((e) => setSent(e?.message || t('common.error')));
-              }}
-            >
-              {t('shop.confirm.again')}
+          {shop.payment && (
+            <button type="button" className="btn small primary" onClick={() => setPay(true)}>
+              {t('shop.upgrade')}
             </button>
           )}
-          <button type="button" className="px-ban-x" aria-label={t('shop.hide')} title={t('shop.hide')} onClick={() => close('confirm')}>
+          <button type="button" className="px-ban-x" aria-label={t('shop.hide')} title={t('shop.hide')} onClick={() => close(`orders${done >= max ? 'x' : ''}`)}>
             ×
           </button>
         </div>,

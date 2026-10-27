@@ -1,21 +1,27 @@
-// Pilotix's control room (#/platform): Pilotix staff run every shop of the server from here — shops, trials, payments,
-// plans and their menus, the demo shop, staff, settings, the journal. Its own login (staff accounts, not shop accounts).
+// Pilotix's control room (#/platform): Pilotix staff run every shop of the server from here — shops, trials, payments
+// and receipts, plans and their menus, sign-ups, messages from stores, backups, the demo shop, staff,
+// settings, the journal. Its own login (staff accounts, not shop accounts), with a code by e-mail (two-step login).
+// Pilotix never sees what is inside a store: only its numbers.
 import { Language, LANGUAGES } from '@pilotix/shared';
 import { FormEvent, ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DEMO_ONLY } from '../../lib/backend';
 import { applyLanguage } from '../../lib/i18n';
-import { savedStaff, setOnStaffLogout, Staff, staffLogin, staffLogout, usePAction } from '../../lib/platform';
+import { savedStaff, setOnStaffLogout, Staff, staffCode, staffLogin, staffLogout, usePAction, usePRpc } from '../../lib/platform';
 import { Field, Icon } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { can } from './bits';
 import { Dashboard } from './Dashboard';
 import { Demo } from './Demo';
 import { DoctorPage } from './Doctor';
+import { HealthPage } from './Health';
 import { Journal } from './Journal';
+import { Messages } from './Messages';
 import { Payments } from './Payments';
 import { Plans } from './Plans';
+import { Receipt } from './Receipt';
 import { Settings } from './Settings';
+import { Signups } from './Signups';
 import { ShopDetail } from './ShopDetail';
 import { Shops } from './Shops';
 import { StaffPage } from './Staff';
@@ -26,9 +32,12 @@ const SECTIONS: Section[] = [
   { id: 'dashboard', icon: 'grid' },
   { id: 'doctor', icon: 'sparkles', roles: ['owner', 'manager'] },
   { id: 'shops', icon: 'store' },
+  { id: 'signups', icon: 'signup' },
+  { id: 'messages', icon: 'inbox' },
   { id: 'payments', icon: 'coins', roles: ['owner', 'manager'] },
   { id: 'plans', icon: 'layers' },
   { id: 'demo', icon: 'sparkles' },
+  { id: 'health', icon: 'archive', roles: ['owner', 'manager'] },
   { id: 'staff', icon: 'users', roles: ['owner'] },
   { id: 'journal', icon: 'history', roles: ['owner', 'manager'] },
   { id: 'settings', icon: 'settings' },
@@ -46,6 +55,8 @@ export function PlatformApp({ parts }: { parts: string[] }) {
   // the preview has no server: only the Doctor can be seen there, with an example
   if (DEMO_ONLY) return parts[0] === 'doctor' ? <PlatformShell staff={DEMO_STAFF} parts={parts} demo onLogout={() => (location.hash = '#/accueil')} /> : <ServerOnly />;
   if (!staff) return <PlatformLogin onDone={setStaff} />;
+  // a receipt alone on its page (printed, or saved as PDF from the browser)
+  if (parts[0] === 'receipt' && /^\d+$/.test(parts[1] ?? '')) return <Receipt id={Number(parts[1])} />;
   return (
     <PlatformShell
       staff={staff}
@@ -84,12 +95,21 @@ function PlatformLogin({ onDone }: { onDone: (s: Staff) => void }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // two-step login: the code e-mailed after the password
+  const [step, setStep] = useState<{ ticket: string; email: string } | null>(null);
+  const [code, setCode] = useState('');
+  const [remember, setRemember] = useState(true);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     setBusy(true);
     try {
-      onDone(await staffLogin(email.trim(), password));
+      if (step) onDone(await staffCode(step.ticket, code.trim(), remember));
+      else {
+        const r = await staffLogin(email.trim(), password);
+        if ('step' in r) setStep({ ticket: r.ticket, email: r.email });
+        else onDone(r);
+      }
     } catch (err: any) {
       setError(err?.message || t('login.error'));
     } finally {
@@ -105,29 +125,51 @@ function PlatformLogin({ onDone }: { onDone: (s: Staff) => void }) {
         <h2 className="login-title">
           <Icon name="shield" /> {t('platform.title')}
         </h2>
-        <p className="login-note">{t('platform.loginText')}</p>
-        <div className="tabs" style={{ justifyContent: 'center' }}>
-          {LANGUAGES.map((l) => (
-            <button type="button" key={l} className={`tab ${i18n.language === l ? 'on' : ''}`} onClick={() => applyLanguage(l)}>
-              {l.toUpperCase()}
-            </button>
-          ))}
-        </div>
-        <label className="field">
-          <span className="lab">{t('login.email')}</span>
-          <input type="email" dir="ltr" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />
-        </label>
-        <label className="field">
-          <span className="lab">{t('login.password')}</span>
-          <input type="password" dir="ltr" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-        </label>
+        {step ? (
+          <>
+            <p className="login-note">{t('platform.code.text', { email: step.email })}</p>
+            <label className="field">
+              <span className="lab">{t('platform.code.label')}</span>
+              <input autoFocus inputMode="numeric" autoComplete="one-time-code" dir="ltr" maxLength={6} pattern="\d{6}" required value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} className="pp-code" />
+            </label>
+            <label className="pp-remember">
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+              <span>{t('platform.code.remember')}</span>
+            </label>
+          </>
+        ) : (
+          <>
+            <p className="login-note">{t('platform.loginText')}</p>
+            <div className="tabs" style={{ justifyContent: 'center' }}>
+              {LANGUAGES.map((l) => (
+                <button type="button" key={l} className={`tab ${i18n.language === l ? 'on' : ''}`} onClick={() => applyLanguage(l)}>
+                  {l.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            <label className="field">
+              <span className="lab">{t('login.email')}</span>
+              <input type="email" dir="ltr" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            </label>
+            <label className="field">
+              <span className="lab">{t('login.password')}</span>
+              <input type="password" dir="ltr" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+            </label>
+          </>
+        )}
         {error && <p className="form-err">{error}</p>}
-        <button className="btn primary big" disabled={busy}>
-          {busy ? '…' : t('login.submit')}
+        <button className="btn primary big" disabled={busy || (!!step && code.length !== 6)}>
+          {busy ? '…' : step ? t('platform.code.submit') : t('login.submit')}
         </button>
-        <a className="login-link" href="#/accueil">
-          {t('platform.backToShop')}
-        </a>
+        {step ? (
+          <button type="button" className="login-link" onClick={() => (setStep(null), setCode(''), setError(''))}>
+            {t('login.backToLogin')}
+          </button>
+        ) : (
+          <a className="login-link" href="#/accueil">
+            {t('platform.backToShop')}
+          </a>
+        )}
       </form>
     </div>
   );
@@ -139,6 +181,8 @@ function PlatformShell({ staff, parts, onLogout, demo }: { staff: Staff; parts: 
   const [pw, setPw] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const sections = SECTIONS.filter((s) => !s.roles || can(staff, ...s.roles));
+  const dash = usePRpc('p.dashboard', {}, { refetchInterval: 60_000, enabled: !demo });
+  const unread = dash.data?.messages ?? 0;
   const cur = sections.find((s) => s.id === parts[0])?.id ?? 'dashboard';
   useEffect(() => setNavOpen(false), [parts.join('/')]);
   useEffect(() => {
@@ -150,6 +194,9 @@ function PlatformShell({ staff, parts, onLogout, demo }: { staff: Staff; parts: 
   else if (cur === 'shops') page = <Shops staff={staff} creating={parts[1] === 'new'} filter={parts[1] === 'f' ? parts[2] : undefined} />;
   else if (cur === 'doctor') page = <DoctorPage demo={demo} />;
   else if (cur === 'payments') page = <Payments staff={staff} />;
+  else if (cur === 'signups') page = <Signups />;
+  else if (cur === 'messages') page = <Messages id={parts[1] && /^\d+$/.test(parts[1]) ? Number(parts[1]) : null} />;
+  else if (cur === 'health') page = <HealthPage />;
   else if (cur === 'plans') page = <Plans staff={staff} />;
   else if (cur === 'demo') page = <Demo staff={staff} />;
   else if (cur === 'staff') page = <StaffPage staff={staff} />;
@@ -170,6 +217,7 @@ function PlatformShell({ staff, parts, onLogout, demo }: { staff: Staff; parts: 
             <a key={s.id} href={s.id === 'dashboard' ? '#/platform' : `#/platform/${s.id}`} className={`nav-item ${cur === s.id ? 'on' : ''}`} aria-current={cur === s.id ? 'page' : undefined}>
               <Icon name={s.icon} className="ic" />
               <span className="nav-l">{t(`platform.nav.${s.id}`)}</span>
+              {s.id === 'messages' && unread > 0 && <span className="nav-count ltr">{unread}</span>}
             </a>
           ))}
           <a href="#/accueil" className="nav-item pp-back">

@@ -2,8 +2,11 @@ import { FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { resetPasswordWithLink } from '../lib/backend';
 
-/** The page opened from the "mot de passe oublié" e-mail: #/reset/<secret>. */
-export function ResetPassword({ token }: { token: string }) {
+/**
+ * The page opened from the "mot de passe oublié" e-mail (#/reset/<secret>), or from an invitation (#/invite/<secret>):
+ * the person chooses their password, for every store they work in. Only they know it.
+ */
+export function ResetPassword({ token, invite }: { token: string; invite?: boolean }) {
   const { t } = useTranslation();
   const [password, setPassword] = useState('');
   const [again, setAgain] = useState('');
@@ -39,7 +42,8 @@ export function ResetPassword({ token }: { token: string }) {
         <span className="brand-big" role="img" aria-label="Pilotix">
           Pilotix
         </span>
-        <h2 className="login-title">{t('login.resetTitle')}</h2>
+        <h2 className="login-title">{invite ? t('login.inviteTitle') : t('login.resetTitle')}</h2>
+        {invite && !done && <p className="login-note">{t('login.inviteText')}</p>}
         {done ? (
           <>
             <p className="login-note">{t('login.resetDone')}</p>

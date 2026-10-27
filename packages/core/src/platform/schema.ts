@@ -153,8 +153,8 @@ END $f$;
 `;
 
 // One e-mail, several shops (the owner of two shops, an agent working for two clients): the login index lists every
-// shop of an e-mail; the login page asks the password of each one and offers the shops it opens. Sign-up by the shops
-// themselves (email check, limits), and their own domain names (myshop.com) for their landing pages.
+// shop of an e-mail. Sign-up by the shops themselves (its log: platform.signups), and their own domain names
+// (myshop.com) for their landing pages. (p003 then gives every person one account: one password for all their shops.)
 const P002 = `
 ALTER TABLE platform.logins DROP CONSTRAINT IF EXISTS logins_pkey;
 ALTER TABLE platform.logins ADD CONSTRAINT logins_pkey PRIMARY KEY (email, shop_id);
@@ -208,9 +208,148 @@ CREATE TABLE IF NOT EXISTS platform.email_checks (
 );
 `;
 
+/**
+ * Accounts (one e-mail, one password, several stores), each store's owner (who created it), sign-ups by e-mail,
+ * invitations, numbered payment receipts, messages between stores and Pilotix, reminders already sent, the control
+ * room's two-step codes, referrals, and the plans' new limits.
+ */
+const P003 = `
+-- a shop its owner deleted: its row stays (payments, journal), its data is gone
+ALTER TABLE platform.shops DROP CONSTRAINT IF EXISTS shops_status_check;
+ALTER TABLE platform.shops ADD CONSTRAINT shops_status_check CHECK (status IN ('active', 'suspended', 'archived', 'deleted'));
+ALTER TABLE platform.shops ADD COLUMN IF NOT EXISTS owner_account_id integer;
+ALTER TABLE platform.shops ADD COLUMN IF NOT EXISTS deleted_at       timestamptz;
+ALTER TABLE platform.shops ADD COLUMN IF NOT EXISTS max_drivers      integer;
+ALTER TABLE platform.shops ADD COLUMN IF NOT EXISTS self_signup      boolean NOT NULL DEFAULT false;
+ALTER TABLE platform.shops ADD COLUMN IF NOT EXISTS referral_code    text;
+ALTER TABLE platform.shops ADD COLUMN IF NOT EXISTS referred_by      integer REFERENCES platform.shops(id);
+CREATE UNIQUE INDEX IF NOT EXISTS shops_referral_code ON platform.shops (referral_code) WHERE referral_code IS NOT NULL;
+
+ALTER TABLE platform.plans ADD COLUMN IF NOT EXISTS max_drivers integer;
+
+-- one person = one account (e-mail, password), whatever the number of stores they work in
+CREATE TABLE IF NOT EXISTS platform.accounts (
+  id                serial PRIMARY KEY,
+  email             text        NOT NULL UNIQUE,
+  name              text        NOT NULL DEFAULT '',
+  language          text        NOT NULL DEFAULT 'fr',
+  -- null: invited, the password is not chosen yet
+  password_hash     text,
+  token_version     integer     NOT NULL DEFAULT 0,
+  email_verified_at timestamptz,
+  -- stores this person may own (null = the platform's setting)
+  max_stores        integer,
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  last_login_at     timestamptz
+);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shops_owner_account') THEN
+    ALTER TABLE platform.shops ADD CONSTRAINT shops_owner_account FOREIGN KEY (owner_account_id) REFERENCES platform.accounts(id);
+  END IF;
+END $$;
+
+-- one-time links of an account: new password, invitation (choose a password), e-mail check
+CREATE TABLE IF NOT EXISTS platform.account_tokens (
+  token_hash   text PRIMARY KEY,
+  account_id   integer     NOT NULL REFERENCES platform.accounts(id) ON DELETE CASCADE,
+  kind         text        NOT NULL CHECK (kind IN ('reset', 'invite', 'verify')),
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  expires_at   timestamptz NOT NULL,
+  used_at      timestamptz,
+  completed_at timestamptz
+);
+CREATE INDEX IF NOT EXISTS account_tokens_account ON platform.account_tokens (account_id, created_at DESC);
+
+-- a sign-up waits for its e-mail to be confirmed (nothing is created before)
+CREATE TABLE IF NOT EXISTS platform.signup_requests (
+  id              serial PRIMARY KEY,
+  token_hash      text        NOT NULL UNIQUE,
+  email           text        NOT NULL,
+  name            text        NOT NULL,
+  phone           text,
+  store_name      text        NOT NULL,
+  slug            text,
+  password_hash   text        NOT NULL,
+  language        text        NOT NULL DEFAULT 'fr',
+  referral_code   text,
+  -- when the person accepted the terms of use and the privacy policy
+  terms_at        timestamptz NOT NULL,
+  ip              text,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  expires_at      timestamptz NOT NULL,
+  used_at         timestamptz,
+  shop_id         integer
+);
+CREATE INDEX IF NOT EXISTS signup_requests_created ON platform.signup_requests (created_at DESC);
+CREATE INDEX IF NOT EXISTS signup_requests_email ON platform.signup_requests (email, created_at DESC);
+
+-- payment receipts: one number per payment, counted per year (PX-2026-0001)
+ALTER TABLE platform.payments ADD COLUMN IF NOT EXISTS receipt_no text;
+CREATE UNIQUE INDEX IF NOT EXISTS payments_receipt ON platform.payments (receipt_no) WHERE receipt_no IS NOT NULL;
+
+-- « Contacter Pilotix »: a store writes, Pilotix answers (the store chooses what it tells)
+CREATE TABLE IF NOT EXISTS platform.support_threads (
+  id           serial PRIMARY KEY,
+  shop_id      integer     NOT NULL REFERENCES platform.shops(id),
+  author_email text        NOT NULL,
+  author_name  text        NOT NULL,
+  subject      text        NOT NULL,
+  status       text        NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
+  unread_staff boolean     NOT NULL DEFAULT true,
+  unread_shop  boolean     NOT NULL DEFAULT false,
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  updated_at   timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS support_threads_shop ON platform.support_threads (shop_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS support_threads_updated ON platform.support_threads (updated_at DESC);
+CREATE TABLE IF NOT EXISTS platform.support_messages (
+  id         serial PRIMARY KEY,
+  thread_id  integer     NOT NULL REFERENCES platform.support_threads(id) ON DELETE CASCADE,
+  from_staff boolean     NOT NULL,
+  author     text        NOT NULL,
+  body       text        NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS support_messages_thread ON platform.support_messages (thread_id, id);
+
+-- reminders already e-mailed (one per shop, kind and end date)
+CREATE TABLE IF NOT EXISTS platform.reminders (
+  shop_id integer     NOT NULL REFERENCES platform.shops(id) ON DELETE CASCADE,
+  kind    text        NOT NULL,
+  ends_at text        NOT NULL,
+  sent_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (shop_id, kind, ends_at)
+);
+
+-- control room: the code e-mailed at each login (two-step login)
+CREATE TABLE IF NOT EXISTS platform.staff_codes (
+  id         serial PRIMARY KEY,
+  staff_id   integer     NOT NULL REFERENCES platform.staff(id) ON DELETE CASCADE,
+  code_hash  text        NOT NULL,
+  attempts   integer     NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  expires_at timestamptz NOT NULL,
+  used_at    timestamptz
+);
+CREATE INDEX IF NOT EXISTS staff_codes_staff ON platform.staff_codes (staff_id, created_at DESC);
+
+-- referrals: a store brought another one; its reward when that one first pays
+CREATE TABLE IF NOT EXISTS platform.referrals (
+  id               serial PRIMARY KEY,
+  referrer_shop_id integer     NOT NULL REFERENCES platform.shops(id),
+  referred_shop_id integer     NOT NULL UNIQUE REFERENCES platform.shops(id),
+  created_at       timestamptz NOT NULL DEFAULT now(),
+  rewarded_at      timestamptz,
+  reward_months    integer,
+  payment_id       integer
+);
+CREATE INDEX IF NOT EXISTS referrals_referrer ON platform.referrals (referrer_shop_id);
+`;
+
 export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p001_platform', P001],
   ['p002_accounts_signup_domains', P002],
+  ['p003_accounts_privacy', P003],
 ];
 
 /** Creates or updates the platform's tables. */

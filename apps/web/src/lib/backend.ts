@@ -5,32 +5,6 @@ import { pageAi } from './dellal-page-ai';
 import { currentShop } from './features';
 import { store } from './store';
 
-// ---------------------------------------------------------------- support tab
-/**
- * Pilotix support opens a shop from the control room in a new tab (#/support/<token>): that tab keeps the shop's token
- * for itself (sessionStorage), never in the browser's shared storage — the other tabs stay in their own shop.
- */
-const SUPPORT_KEY = 'px.stoken';
-const tabToken = (): string | null => {
-  try {
-    return sessionStorage.getItem(SUPPORT_KEY);
-  } catch {
-    return null;
-  }
-};
-(() => {
-  const m = location.hash.match(/^#\/support\/([A-Za-z0-9._-]{20,2000})$/);
-  if (!m) return;
-  try {
-    sessionStorage.setItem(SUPPORT_KEY, m[1]);
-  } catch {
-    /* storage unavailable */
-  }
-  history.replaceState(null, '', `${location.pathname}${location.search}#/accueil`);
-})();
-/** This tab was opened by Pilotix support (its session is not kept for the other tabs). */
-export const isSupportTab = () => !!tabToken();
-
 // ---------------------------------------------------------------- typed actions
 type Reg = typeof REGISTRY;
 export type ProcName = keyof Reg;
@@ -54,23 +28,26 @@ export class ApiError extends Error {
 /** "Couldn't reach the server" (the action can be queued and retried). */
 export const isNetworkError = (e: unknown) => e instanceof ApiError && e.status === 0;
 
-/** A shop the store picker offers (one person may work in several shops). */
-export interface ShopChoice {
+/** One of the person's stores, as the picker shows it. */
+export interface StoreChoice {
   id: number;
   name: string;
   slug: string;
-  roles: string[];
   state: string;
   locked: boolean;
+  owner: boolean;
   primary: boolean;
-  /** the shop open now (« Mes boutiques ») */
-  current?: boolean;
-  /** opens without the password again (it opened at login) */
-  open?: boolean;
 }
-/** A login: the session, or the shops the password opens when there are several (the store picker). */
-export type LoginResult = Session | { choose: ShopChoice[] };
-export const isChoice = (r: LoginResult): r is { choose: ShopChoice[] } => 'choose' in r;
+/** After the password: several stores (or none) → the picker, with a ticket to choose without the password again. */
+export interface PickInfo {
+  pick: true;
+  ticket: string;
+  account: { name: string; email: string; verified: boolean };
+  stores: StoreChoice[];
+  canAddStore: boolean;
+}
+export type LoginResult = Session | PickInfo;
+export const isPick = (r: LoginResult): r is PickInfo => (r as PickInfo).pick === true;
 
 export interface Backend {
   kind: 'remote' | 'demo';
@@ -121,6 +98,29 @@ export const forgotAvailable = () =>
     .catch(() => false);
 export const requestPasswordReset = (email: string) => authRequest<{ ok: true }>('/auth/forgot', { email });
 export const resetPasswordWithLink = (token: string, password: string) => authRequest<{ ok: true }>('/auth/reset', { token, password });
+/** What a link is: an invitation (« choose your password »), a new-password link, or nothing (used, too old). */
+export const linkKind = (token: string) => authRequest<{ kind: 'reset' | 'invite' | null }>(`/auth/link/${encodeURIComponent(token)}`).catch(() => ({ kind: null }));
+/** The e-mail check link. */
+export const verifyEmail = (token: string) => authRequest<{ ok: true }>('/auth/verify', { token });
+
+// ---------------------------------------------------------------- « Créer ma boutique »
+export const signupInfo = () => authRequest<{ open: boolean; trialDays: number; site: string }>('/auth/signup').catch(() => ({ open: false, trialDays: 0, site: '' }));
+export const storeNameCheck = (name: string, slug?: string) =>
+  authRequest<{ slug: string; free: boolean; reason: string | null }>(`/auth/store-name?name=${encodeURIComponent(name)}${slug ? `&slug=${encodeURIComponent(slug)}` : ''}`);
+export interface SignupForm {
+  name: string;
+  email: string;
+  password: string;
+  phone?: string | null;
+  storeName: string;
+  slug?: string;
+  language: 'fr' | 'en' | 'ar';
+  referral?: string;
+  terms: true;
+}
+export const signup = (f: SignupForm) => authRequest<{ ok: true }>('/auth/signup', f);
+/** The terms of use and privacy page (Pilotix's own text, else the app's standard one). */
+export const legalText = () => authRequest<{ text: string; company: string; email: string }>('/legal').catch(() => ({ text: '', company: 'Pilotix', email: '' }));
 
 /** The server's demo shop (its button on the login page), when Pilotix turned it on. */
 export const serverDemo = () =>
@@ -137,9 +137,7 @@ export function shopApi(base: string): string {
 
 class RemoteBackend implements Backend {
   kind = 'remote' as const;
-  /** a support tab keeps its own token */
-  private readonly support = !!tabToken();
-  private token = this.support ? tabToken() : store.get('token');
+  private token = store.get('token');
   private listeners = new Set<(e: LiveEvent) => void>();
   private socket: { disconnect(): void } | null = null;
   onUnauthorized: () => void = () => {};
@@ -148,18 +146,14 @@ class RemoteBackend implements Backend {
 
   private keep(token: string | null) {
     this.token = token;
-    if (!this.support) return store.set('token', token);
-    try {
-      if (token) sessionStorage.setItem(SUPPORT_KEY, token);
-      else sessionStorage.removeItem(SUPPORT_KEY);
-    } catch {
-      /* storage unavailable */
-    }
+    store.set('token', token);
   }
 
   private async req<T>(path: string, body?: unknown): Promise<T> {
     const base = serverUrl();
     if (!base) throw new ApiError(0, 'Adresse du serveur manquante');
+    // the token this request carries: an answer to an older one (a store just left or deleted) does not log out
+    const sent = this.token;
     let res: Response;
     try {
       res = await fetch(`${base}/api${path}`, {
@@ -171,36 +165,60 @@ class RemoteBackend implements Backend {
       throw new ApiError(0, 'Serveur injoignable. Vérifiez votre connexion.');
     }
     const data = await res.json().catch(() => undefined);
-    // after a password change the server hands this session a fresh token (the old ones stop working)
+    // after a password change the server hands this session a fresh token (the old ones stop working in every store)
     if (res.ok && path === '/rpc/me.password' && typeof (data as any)?.token === 'string') this.keep((data as any).token);
-    if (res.status === 401 && this.token) this.onUnauthorized();
-    if (res.status === 402 && this.token) this.onLocked();
+    if (res.status === 401 && this.token && this.token === sent) this.onUnauthorized();
+    if (res.status === 402 && this.token && this.token === sent) this.onLocked();
     if (!res.ok) throw new ApiError(res.status, (data as any)?.message || res.statusText);
     return data as T;
   }
 
-  async login(email: string, password: string): Promise<LoginResult> {
-    const r = await this.req<{ token?: string; session?: Session; choose?: ShopChoice[]; ticket?: string }>('/auth/login', { email, password });
-    if (r.ticket) store.set('pick-ticket', r.ticket);
-    if (r.choose) return { choose: r.choose };
-    this.keep(r.token!);
-    this.connect();
-    return r.session!;
-  }
-  /** Opens a shop: one of the login's (the ticket), or another shop of my e-mail with its password. */
-  async enter(shop: number, cred?: { email: string; password: string }) {
-    return this.adopt(await this.req<Entered>('/auth/enter', { shop, ticket: store.get('pick-ticket'), ...cred }));
-  }
-  /** A shop opened by the server (store picker, sign-up, « Ajouter une boutique »): its token becomes this app's. */
-  adopt(r: Entered) {
-    if (r.ticket) store.set('pick-ticket', r.ticket);
+  /** A token and a session from the server: kept, live updates connected. */
+  private enterWith(r: { token: string; session: Session }) {
     this.keep(r.token);
     this.connect();
     return r.session;
   }
-  /** A request with this app's token (the actions outside /rpc: shops, domain). */
+  async login(email: string, password: string): Promise<LoginResult> {
+    const r = await this.req<{ token: string; session: Session } | PickInfo>('/auth/login', { email, password });
+    return 'pick' in r ? r : this.enterWith(r);
+  }
+  /** The store chosen in the picker. */
+  async pick(ticket: string, shop: number) {
+    return this.enterWith(await this.req<{ token: string; session: Session }>('/auth/pick', { ticket, shop }));
+  }
+  /** Another store of the same person (account menu). */
+  async switchStore(shop: number) {
+    return this.enterWith(await this.req<{ token: string; session: Session }>('/auth/switch', { shop }));
+  }
+  stores() {
+    return this.req<StoreChoice[]>('/auth/stores');
+  }
+  /** « Ajouter une boutique »: made, then entered (from the picker: with its ticket). */
+  async addStore(input: { name: string; slug?: string }, ticket?: string) {
+    return this.enterWith(await this.req<{ token: string; session: Session }>(ticket ? '/auth/add-store/ticket' : '/auth/add-store', { ...input, ...(ticket ? { ticket } : {}) }));
+  }
+  /** The sign-up e-mail's link: the store is made and entered (or « you already have an account »). */
+  async confirmSignup(token: string): Promise<Session | { exists: true; email: string }> {
+    const r = await this.req<{ token: string; session: Session } | { exists: true; email: string }>('/auth/signup/confirm', { token });
+    return 'exists' in r ? r : this.enterWith(r);
+  }
+  /** The e-mail check link (from the store picker: with its ticket). */
+  verifySend(ticket?: string) {
+    return this.req<{ ok: true; already?: boolean; email?: string }>(ticket ? '/auth/verify/send/ticket' : '/auth/verify/send', ticket ? { ticket } : {});
+  }
+  /** Only the owner: the store and all its data are deleted; the person goes on in another store of theirs (if any). */
+  async deleteStore(password: string, name: string): Promise<{ stores: StoreChoice[]; next: Session | null }> {
+    const r = await this.req<{ ok: true; stores: StoreChoice[]; next: { token: string; session: Session } | null }>('/auth/delete-store', { password, name });
+    return { stores: r.stores, next: r.next ? this.enterWith(r.next) : null };
+  }
+  /** « Contacter Pilotix » */
+  /** A request with this app's token outside /rpc (a shop's own domain…). */
   request<T>(path: string, body?: unknown) {
     return this.req<T>(path, body ?? {});
+  }
+  support<T>(path: string, body?: unknown) {
+    return this.req<T>(`/support${path}`, body);
   }
   /** Opens the server's demo shop as one of its accounts. */
   async demo(key: string) {
@@ -225,7 +243,6 @@ class RemoteBackend implements Backend {
   }
   logout() {
     this.keep(null);
-    if (!this.support) store.set('pick-ticket', null);
     this.socket?.disconnect();
   }
   call<N extends ProcName>(name: N, input: In<N>): Promise<Out<N>> {
@@ -273,7 +290,7 @@ class DemoBackend implements Backend {
       })();
     return this.ready;
   }
-  async login(email: string, password: string) {
+  async login(email: string, password: string): Promise<LoginResult> {
     const { core, db } = await this.boot();
     try {
       this.session = await core.login(db, email, password);
@@ -288,7 +305,8 @@ class DemoBackend implements Backend {
     if (!email) return null;
     try {
       const { DEMO_PASSWORD } = await import('@pilotix/shared');
-      return await this.login(email, DEMO_PASSWORD);
+      const r = await this.login(email, DEMO_PASSWORD);
+      return isPick(r) ? null : r;
     } catch {
       return null;
     }
@@ -341,44 +359,20 @@ export function loginServerDemo(key: string) {
   switchDemo(false);
   return remote.demo(key);
 }
+/** The server (several stores, sign-up, « Contacter Pilotix »): its own calls. */
+export const server = remote;
 
-// ---------------------------------------------------------------- shops of one person, sign-up, own domain (server only)
-interface Entered {
-  token: string;
-  session: Session;
-  ticket?: string;
-}
-const onServer = () => {
-  if (backend !== remote) throw new ApiError(400, 'Pas dans la démo');
-  return remote;
-};
-export const enterShop = (shop: number, cred?: { email: string; password: string }) => remote.enter(shop, cred);
-export const myShops = () => onServer().request<{ shops: ShopChoice[]; canAdd?: boolean; max?: number }>('/auth/shops', { ticket: store.get('pick-ticket') });
-export async function addShop(body: { shopName: string; slug?: string; password: string }) {
-  const r = await onServer().request<Entered & { mailSent: boolean }>('/shop/add', body);
-  return { session: remote.adopt(r), mailSent: r.mailSent };
-}
-export interface SignupInfo {
-  open: boolean;
-  trialDays: number;
-  plan: { name: string; priceMonth: number } | null;
-  publicUrl: string;
-}
-export const signupInfo = () => authRequest<SignupInfo>('/auth/signup').catch(() => null);
-export const slugCheck = (q: { name?: string; slug?: string }) => authRequest<{ slug: string; valid: boolean; available: boolean; suggestion: string }>('/auth/slug', q);
-export async function signup(body: Record<string, unknown>) {
-  switchDemo(false);
-  const r = await authRequest<Entered & { mailSent: boolean }>('/auth/signup', body);
-  return { session: remote.adopt(r), mailSent: r.mailSent };
-}
-export const confirmEmail = (token: string) => authRequest<{ ok: true; shop: string }>('/auth/confirm', { token });
-export const confirmAgain = () => onServer().request<{ ok: true; sent: boolean }>('/shop/confirm-again');
+// ---------------------------------------------------------------- a shop's own domain name (server only)
 export interface DomainState {
   domain: string | null;
   status: 'none' | 'pending' | 'ok';
   ips?: string[];
   host?: string;
 }
+const onServer = () => {
+  if (backend !== remote) throw new ApiError(400, 'Pas dans la démo');
+  return remote;
+};
 export const domainGet = () => onServer().request<DomainState>('/shop/domain/get');
 export const domainSet = (domain: string | null) => onServer().request<DomainState>('/shop/domain', { domain });
 export const domainCheck = () => onServer().request<{ ok: boolean; found: string[]; expected: string[] }>('/shop/domain/check');

@@ -1,11 +1,10 @@
 import { DEMO_ACCOUNTS, DEMO_PASSWORD, Language, LANGUAGES } from '@pilotix/shared';
 import { FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { backend, DEMO_AVAILABLE, DEMO_ONLY, FIXED_SERVER, forgotAvailable, onDemoProgress, requestPasswordReset, serverDemo, serverUrl, setServerUrl, ShopChoice, signupInfo, SignupInfo, switchDemo } from '../lib/backend';
-import { StorePicker } from './Shops';
-import { Signup } from './Signup';
+import { backend, DEMO_AVAILABLE, DEMO_ONLY, FIXED_SERVER, forgotAvailable, onDemoProgress, requestPasswordReset, serverDemo, serverUrl, setServerUrl, signupInfo, switchDemo } from '../lib/backend';
 import { applyLanguage } from '../lib/i18n';
 import { useSession } from '../lib/session';
+import { Icon } from '../ui/kit';
 
 const LANG: Record<Language, string> = { fr: 'Français', en: 'English', ar: 'العربية' };
 
@@ -26,17 +25,15 @@ export function Login() {
 
   // the server's demo shop (Pilotix turned its button on): a few of its accounts
   const [srvDemo, setSrvDemo] = useState<{ key: string; name: string; role: string }[]>([]);
-  // the password opens several shops: the store picker; « Créer ma boutique » when the server takes sign-ups
-  const [choose, setChoose] = useState<ShopChoice[] | null>(null);
-  const [su, setSu] = useState<SignupInfo | null>(null);
-  const [signingUp, setSigningUp] = useState(() => location.hash === '#/inscription');
+  // « Créer ma boutique » when Pilotix opened sign-ups
+  const [canSignup, setCanSignup] = useState(false);
 
   useEffect(() => onDemoProgress(setProgress), [busy]);
   useEffect(() => {
     if (DEMO_ONLY || !serverUrl()) return;
     let on = true;
     forgotAvailable().then((ok) => on && setCanReset(ok));
-    signupInfo().then((r) => on && r?.open && setSu(r));
+    signupInfo().then((r) => on && setCanSignup(r.open));
     serverDemo().then((d) => on && d.available && setSrvDemo(d.accounts.filter((a) => ['admin', 'conf1', 'depot', 'livreur', 'marketer'].includes(a.key))));
     return () => {
       on = false;
@@ -75,9 +72,6 @@ export function Login() {
     setSent(false);
     setError('');
   }
-
-  if (choose) return <StorePicker shops={choose} onBack={() => setChoose(null)} />;
-  if (signingUp && su) return <Signup info={su} onBack={() => (setSigningUp(false), history.replaceState(null, '', `${location.pathname}${location.search}#/`))} />;
 
   if (forgot)
     return (
@@ -118,8 +112,7 @@ export function Login() {
       setServerUrl(server);
     }
     try {
-      const shops = await login(email, password);
-      if (shops) setChoose(shops);
+      await login(email, password);
     } catch (err: any) {
       setError(err?.message || t('login.error'));
     } finally {
@@ -183,12 +176,12 @@ export function Login() {
                 {t('login.forgot')}
               </button>
             )}
-            {su && (
+            {canSignup && (
               <div className="px-signup-cta">
-                <span>{t('shop.signup.cta')}</span>
-                <button type="button" className="btn" onClick={() => (setSigningUp(true), setError(''))}>
-                  {t('shop.signup.ctaBtn', { count: su.trialDays })}
-                </button>
+                <span className="muted">{t('login.noAccount')}</span>
+                <a className="btn" href="#/inscription">
+                  <Icon name="store" /> {t('login.createStore')}
+                </a>
               </div>
             )}
           </>
@@ -222,6 +215,11 @@ export function Login() {
             {busy && busy !== 'login' && <p className="muted small">{progress}</p>}
             {DEMO_ONLY && error && <p className="form-err">{error}</p>}
           </div>
+        )}
+        {!DEMO_ONLY && (
+          <a className="login-link small" href="#/conditions">
+            {t('login.terms')}
+          </a>
         )}
       </form>
       {backend.kind === 'demo' && <span hidden>{progress}</span>}

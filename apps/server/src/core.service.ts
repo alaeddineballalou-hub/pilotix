@@ -4,7 +4,6 @@ import type { Ctx, Db, LiveEvent, PCtx, PlatformSettings, ServerHooks, Shop, Sho
 import type { Session } from '@pilotix/shared';
 import { Pool, PoolClient } from 'pg';
 import { config } from './config';
-import { mailConfigured } from './mail';
 
 const PATH = Symbol('pilotix.search_path');
 type Client = PoolClient & { [PATH]?: string };
@@ -235,18 +234,20 @@ export class CoreService implements OnModuleDestroy {
     return core.call(name, this.ctx(ref, session), input);
   }
 
-  /** What the app shows of a shop (plan, state, how to pay, Pilotix's message). */
-  async info(ref: ShopRef, support: string | null = null) {
-    return core.shopInfo(ref.shop, ref.status, await this.settings(), Date.now(), support);
+  /** What the app shows of a shop (plan, state, how to pay, Pilotix's message, its limits). */
+  async info(ref: ShopRef, extra: core.ShopInfoExtra = core.NO_EXTRA) {
+    return core.shopInfo(ref.shop, ref.status, await this.settings(), Date.now(), extra);
   }
 
-  /** A session with its shop (and whether the user is also Pilotix staff: the menu shows the control room). */
-  async withShop(session: Session, ref: ShopRef, support: string | null = null): Promise<Session> {
-    const platformStaff = ref.shop.primary && session.isAdmin ? await core.isStaffEmail(this.t, session.profile.email).catch(() => false) : false;
-    const shop = await this.info(ref, support);
-    // a server that cannot send e-mails never asks to confirm one (the link could not arrive)
-    if (!mailConfigured()) shop.emailToConfirm = null;
-    return { ...session, shop, ...(platformStaff ? { platformStaff } : {}) };
+  /**
+   * A session with its shop: the plan and its limits, and what this person has there (owner, other stores, unread
+   * answers from Pilotix) — `full` at login and when the app loads; the per-request check only needs the rules.
+   */
+  async withShop(session: Session, ref: ShopRef, full = true): Promise<Session> {
+    const set = await this.settings();
+    const extra = full && !ref.shop.demo ? await core.shopInfoExtra(this.t, ref.shop, session.profile.email, set).catch(() => core.NO_EXTRA) : core.NO_EXTRA;
+    const platformStaff = full && ref.shop.primary && session.isAdmin ? await core.isStaffEmail(this.t, session.profile.email).catch(() => false) : false;
+    return { ...session, shop: core.shopInfo(ref.shop, ref.status, set, Date.now(), extra), ...(platformStaff ? { platformStaff } : {}) };
   }
 
   private sys = new Map<number, { at: number; s: Promise<Session> }>();

@@ -1,39 +1,54 @@
 # Multi-store Pilotix (all clients on pilotix.online)
 
-Status: plan agreed 2026-10-26. **Since then the control room ("Pilotix as a service", another session, same day) built
-steps 1 and 5, billing, and the store part of step 4 — see "What is built" just below. Start from there: steps 2 and 3
-remain.** Each step is its own branch, previewed, tested, and only then pushed and deployed.
+Status: plan agreed 2026-10-26. Steps 1 and 5, billing and the store part of step 4 were built the same day (the
+control room); **steps 2 and 3 were built on 2026-10-27 (accounts, store picker, sign-up, owner privacy)** — see "What is
+built" below. Left: the phone apps' store picker. Each step is its own branch, tested on a copy of
+production (the e2e and browser checks), and only then pushed and deployed.
 
-## What is built (control room, 2026-10-26)
+## What is built
 
 Read `README.md` › "Several shops on one server" and `packages/core/src/platform/` before changing any of this.
 
 - **Schemas.** Shop #1 (today's shop) **stays in `public`** — nothing to move, old links and tokens keep working. Every other
   shop gets `shop_<id>` (not `s_<id>`). Platform tables in `platform`; extensions (pg_trgm) in `ext`; each pooled
-  connection runs with `search_path = <schema>, ext`. Migrations: platform, then `public`, then every other shop
-  (`migrateAll`).
-- **Platform tables:** `shops` (slug UNIQUE = the store name, plan, trial / paid-until, status active|suspended|archived,
-  demo, owner contact), `plans` (price, menus and sub-menus, account and order limits), `payments` (recorded by hand),
-  `staff` (control-room accounts: owner / manager / support), `settings`, `audit`, `logins`.
-- **Login today: one email = one shop.** `platform.logins` (email → shop) is kept by a trigger on every shop's
-  `profiles`; an email already used in another shop is refused. Step 2 replaces this with accounts × stores.
-- **Store names and links.** A shop's slug is its store name, unique, never a reserved word (`STORE_RESERVED`).
-  Landing pages: `site/<store>/<page>` for every shop (the server finds the shop by its name; an unknown name sends to
-  shop #1's address). Shop #1 still picks its name in Landing pages › Réglages › « Lien des pages » and the platform
-  follows (`syncPrimaryStore`); other shops get theirs from the control room (read-only in their Réglages). Webhooks and
-  the pages' order/lead/image calls: `/api/s/<store>/…` (shop #1 keeps `/api/…`).
-- **Per shop:** tokens carry the shop; live updates in room `shop:<id>`; background jobs loop over the shops; courier
-  caches keyed per shop's credentials.
-- **Control room** (`#/platform`): shops (create with a free trial, suspend, archive, open as their admin for support,
-  new admin password), payments by hand (BaridiMob, CCP, cash…) that extend the paid period, plans with menus and
-  sub-menus plus per-shop overrides (the server refuses what is off), demo shop (reset nightly, "Essayer la démo"
-  button), staff, settings (trial and grace days, payment details, a message to every shop), journal.
-
-**Built since (2026-10-26, p002):** one e-mail in several shops (the login index lists every shop of an e-mail; each
-shop checks its own password; store picker; Mes boutiques; password changes follow, a reset by e-mail opens every shop),
-self sign-up and « Ajouter une boutique » (trial plan, limits, welcome e-mail confirming the e-mail), own domains
-(Caddy on-demand HTTPS, `/api/domain-check`, `/api/domain/<page>`), llms.txt per shop (`/api/s/<store>/llms.txt`, linked
-from the platform's). The phone apps use the same login, so they have the picker too.
+  connection runs with `search_path = <schema>, ext`. Migrations: platform (`p001_platform`, `p002_accounts`), then
+  `public`, then every other shop (`migrateAll`, run by `migrate.js` before the server starts).
+- **Platform tables:** `shops` (slug UNIQUE = the store name, plan, trial / paid-until, status
+  active|suspended|archived|deleted, demo, owner account, referral code), `plans` (monthly and yearly price, menus and
+  sub-menus, limits: accounts, drivers, orders per month), `payments` (by hand, numbered receipts `PX-<year>-0001`),
+  `staff` (owner / manager / support), `settings`, `audit`, and since step 2: `accounts`, `account_tokens`, `logins`
+  (email × store), `signups`, `support_threads` / `support_messages`, `reminders`, `staff_codes`, `referrals`.
+- **Accounts (step 2).** One e-mail = one account = one password for every store the person works in
+  (`platform.accounts`); each store keeps its profiles and roles, and the profile mirrors the account's password hash.
+  Login → straight in with one store, else the store picker (a 15-minute ticket, no password again); « Changer de
+  boutique » from the account menu. Only the person sets their password (reset link, invitation link, Mon profil); a
+  store's admin may set it only for someone who works in that store alone and is not its owner. A new password ends every
+  other session at once (in every store).
+- **The owner** is the account that created the store (`shops.owner_account_id`): nobody else changes their account,
+  only they delete the store (password + the store's name; its schema is dropped, its row stays as « deleted »).
+- **Sign-up and « Ajouter une boutique » (step 3).** `#/inscription[/<referral>]`: name checked live (unique, reserved
+  words refused), terms accepted, nothing made before the e-mail link (48 h) is opened; then the store is made on the
+  trial plan and the person is in. « Ajouter une boutique » needs a confirmed e-mail; stores per person: the setting,
+  or the owner's own number set in the control room. Limits: 10 sign-ups per 15 minutes per address, 3 an hour per e-mail.
+- **Privacy.** The control room has no « open as » and never sets or sees a store's password: a store it makes is an
+  invitation e-mailed to its owner (or added to the account they already have). It sees numbers only (accounts, drivers,
+  orders this month and last month, the owner's stores), and can suspend, archive and limit.
+- **Store names and links.** A shop's slug is its store name, unique, never a reserved word. Landing pages:
+  `site/<store>/<page>`; webhooks and the pages' calls: `/api/s/<store>/…` (shop #1 keeps `/api/…`).
+- **Per shop:** tokens carry the shop; live updates in room `shop:<id>`; background jobs loop over the shops.
+- **Control room** (`#/platform`): two-step login (a code by e-mail, a device remembered 30 days; emergency switch
+  `PLATFORM_TWO_STEP=off`), dashboard (sign-ups, conversion, messages, stores over their limits), stores (limits, owner,
+  referrals, payments with receipts to print or e-mail), plans, sign-ups, messages from stores (« Contacter Pilotix »),
+  backups (nightly backups in `/opt/pilotix-backups`, the database's and each store's size), Doctor (machine, database,
+  jobs, errors, settings), settings
+  (trial, sign-ups, reminders, referral, security, company on receipts, terms text, payment details, a message to every
+  shop), journal, demo shop, staff.
+- **Automatic:** reminders e-mailed at 8:00, Algeria time (trial ending, paid period ending, grace, locked: once per end date); a free
+  month to the store that brought another one, at that store's first payment.
+- **Own domains** (p002, another session the same day): Caddy on-demand HTTPS, `/api/domain-check`,
+  `/api/domain/<page>`; llms.txt per shop (`/api/s/<store>/llms.txt`, linked from the platform's). The Doctor (server and
+  per shop). That session also made a first sign-up and store picker with a password per shop; p003 replaced them with
+  the accounts above (its `platform.signups` and `platform.email_checks` tables stay, unused).
 
 **Still open:** online card payments (Chargily Pay: CIB / Edahabia) — payments are recorded by hand in the control room.
 
@@ -89,6 +104,5 @@ would need another look (PostgreSQL catalog size).
 
 ## Open questions (later)
 
-- Billing / plans (free trial, monthly price per store?) — not in these steps.
 - Custom domains per store (`shop.com` instead of `pilotix.online/<store>`).
-- The phone apps (Android/iOS) need the store picker too (step 2).
+- The phone apps (Android/iOS) need the store picker too.

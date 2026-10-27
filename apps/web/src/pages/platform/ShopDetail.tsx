@@ -1,17 +1,16 @@
-// One shop: its subscription (plan, trial, paid period, limits), its own menus, payments, team usage, details and notes,
-// administrators (a new password), and its journal. Actions: payment received, longer trial, open, suspend, archive.
+// One shop: its subscription (plan, trial, paid period, limits), its own menus, payments and receipts, its numbers
+// (accounts, livreurs, orders — never what is inside), its owner, details and notes, and its journal. Actions: payment
+// received, longer trial, suspend, archive. Pilotix never opens a store nor sets the password of its people.
 import { effectiveFeatures, featureOn } from '@pilotix/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { waLink } from '../../layout/ShopBanner';
 import { da, dateOnly, dateTime, n, when } from '../../lib/format';
 import { POut, Staff, usePAction, usePRpc } from '../../lib/platform';
-import { Card, copyText, ErrorBox, Field, Icon, Loading } from '../../ui/kit';
+import { Card, ErrorBox, Field, Icon, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
-import { toast } from '../../ui/toast';
 import { auditText, can, Empty, StateBadge } from './bits';
 import { FeatureTree } from './FeatureTree';
-import { OpenButton, PaymentModal } from './Shops';
+import { PaymentModal } from './Shops';
 
 type Detail = POut<'p.shops.get'>;
 const day = (iso: string | null) => (iso ? iso.slice(0, 10) : '');
@@ -30,6 +29,7 @@ export function ShopDetail({ id, staff }: { id: number; staff: Staff }) {
   const s = q.data as Detail;
   const manager = can(staff, 'manager');
   const special = s.primary || s.demo;
+  const gone = s.status === 'deleted';
   return (
     <div className="pp-stack">
       <a className="pp-backlink" href="#/platform/shops">
@@ -45,7 +45,7 @@ export function ShopDetail({ id, staff }: { id: number; staff: Staff }) {
             {s.status !== 'active' && s.statusReason ? ` · ${s.statusReason}` : ''}
           </p>
         </div>
-        <div className="row pp-head-acts">
+        <div className="row pp-head-acts" hidden={gone}>
           {manager && !special && s.status !== 'archived' && (
             <button type="button" className="btn primary" onClick={() => setPay(true)}>
               <Icon name="coins" /> {t('platform.paymentReceived')}
@@ -56,7 +56,6 @@ export function ShopDetail({ id, staff }: { id: number; staff: Staff }) {
               <Icon name="clock" /> {t('platform.extend7')}
             </button>
           )}
-          {s.status !== 'archived' && <OpenButton id={s.id} />}
           {manager && !s.primary && s.status === 'active' && (
             <button type="button" className="btn pp-danger" onClick={() => setStatus('suspended')}>
               <Icon name="pause" /> {t('platform.suspend')}
@@ -80,8 +79,8 @@ export function ShopDetail({ id, staff }: { id: number; staff: Staff }) {
       </div>
       <Menus s={s} manager={manager} />
       <div className="pp-grid">
-        <Payments s={s} staff={staff} onAdd={manager && !special && s.status !== 'archived' ? () => setPay(true) : undefined} />
-        <Admins s={s} manager={manager} />
+        <Payments s={s} staff={staff} onAdd={manager && !special && s.status !== 'archived' && !gone ? () => setPay(true) : undefined} />
+        <Owner s={s} manager={manager} />
       </div>
       <div className="pp-grid">
         <Info s={s} manager={manager} />
@@ -95,8 +94,16 @@ export function ShopDetail({ id, staff }: { id: number; staff: Staff }) {
 
 function Subscription({ s, plans, manager }: { s: Detail; plans: POut<'p.plans.list'>; manager: boolean }) {
   const { t } = useTranslation();
-  const [f, setF] = useState({ planId: s.plan?.id ?? 0, trial: day(s.trialEndsAt), paid: day(s.paidUntil), maxUsers: s.maxUsers === null ? '' : String(s.maxUsers) });
-  useEffect(() => setF({ planId: s.plan?.id ?? 0, trial: day(s.trialEndsAt), paid: day(s.paidUntil), maxUsers: s.maxUsers === null ? '' : String(s.maxUsers) }), [s]);
+  const init = () => ({
+    planId: s.plan?.id ?? 0,
+    trial: day(s.trialEndsAt),
+    paid: day(s.paidUntil),
+    maxUsers: s.maxUsers === null ? '' : String(s.maxUsers),
+    maxDrivers: s.maxDrivers === null ? '' : String(s.maxDrivers),
+  });
+  const [f, setF] = useState(init);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setF(init()), [s]);
   const save = usePAction('p.shops.update', { success: t('platform.saved') });
   if (s.primary || s.demo)
     return (
@@ -105,14 +112,17 @@ function Subscription({ s, plans, manager }: { s: Detail; plans: POut<'p.plans.l
       </Card>
     );
   const planMax = plans.find((p) => p.id === f.planId)?.maxUsers ?? null;
-  const dirty = f.planId !== (s.plan?.id ?? 0) || f.trial !== day(s.trialEndsAt) || f.paid !== day(s.paidUntil) || f.maxUsers !== (s.maxUsers === null ? '' : String(s.maxUsers));
+  const planDrivers = plans.find((p) => p.id === f.planId)?.maxDrivers ?? null;
+  const o = init();
+  const dirty = JSON.stringify(f) !== JSON.stringify(o);
   const submit = () =>
     save.mutate({
       id: s.id,
-      ...(f.planId !== (s.plan?.id ?? 0) ? { planId: f.planId } : {}),
-      ...(f.trial !== day(s.trialEndsAt) ? { trialEndsAt: iso(f.trial) } : {}),
-      ...(f.paid !== day(s.paidUntil) ? { paidUntil: iso(f.paid) } : {}),
-      ...(f.maxUsers !== (s.maxUsers === null ? '' : String(s.maxUsers)) ? { maxUsers: f.maxUsers === '' ? null : Math.max(1, Number(f.maxUsers) || 1) } : {}),
+      ...(f.planId !== o.planId ? { planId: f.planId } : {}),
+      ...(f.trial !== o.trial ? { trialEndsAt: iso(f.trial) } : {}),
+      ...(f.paid !== o.paid ? { paidUntil: iso(f.paid) } : {}),
+      ...(f.maxUsers !== o.maxUsers ? { maxUsers: f.maxUsers === '' ? null : Math.max(1, Number(f.maxUsers) || 1) } : {}),
+      ...(f.maxDrivers !== o.maxDrivers ? { maxDrivers: f.maxDrivers === '' ? null : Math.max(0, Number(f.maxDrivers) || 0) } : {}),
     });
   return (
     <Card title={t('platform.sub.title')} help={t('platform.sub.help')}>
@@ -130,6 +140,9 @@ function Subscription({ s, plans, manager }: { s: Detail; plans: POut<'p.plans.l
         </Field>
         <Field label={t('platform.sub.maxUsers')} hint={t('platform.sub.maxUsersHint', { n: planMax ?? '∞' })}>
           <input disabled={!manager} type="number" min={1} value={f.maxUsers} placeholder={String(planMax ?? '∞')} onChange={(e) => setF({ ...f, maxUsers: e.target.value })} />
+        </Field>
+        <Field label={t('platform.sub.maxDrivers')} hint={t('platform.sub.maxDriversHint', { n: planDrivers ?? '∞' })}>
+          <input disabled={!manager} type="number" min={0} value={f.maxDrivers} placeholder={String(planDrivers ?? '∞')} onChange={(e) => setF({ ...f, maxDrivers: e.target.value })} />
         </Field>
         <Field label={t('platform.sub.trialEnds')}>
           <input disabled={!manager} type="date" value={f.trial} onChange={(e) => setF({ ...f, trial: e.target.value })} />
@@ -149,41 +162,33 @@ function Subscription({ s, plans, manager }: { s: Detail; plans: POut<'p.plans.l
   );
 }
 
+/** The store's numbers against its limits — numbers only, never what is inside. */
 function Usage({ s }: { s: Detail }) {
   const { t } = useTranslation();
   const u = s.usage;
-  const over = (v: number, max: number | null) => max !== null && v > max;
+  const tile = (v: number, max: number | null, label: string, over: boolean) => (
+    <div className={over ? 'bad' : ''}>
+      <b className="ltr">
+        {n(v)}
+        {max !== null && <small> / {n(max)}</small>}
+      </b>
+      <span>{label}</span>
+    </div>
+  );
   return (
-    <Card title={t('platform.use.title')}>
+    <Card title={t('platform.use.title')} help={t('platform.use.help')}>
       <div className="pp-use">
-        <div className={over(u.users, s.maxUsersEffective) ? 'bad' : ''}>
-          <b className="ltr">
-            {n(u.users)}
-            {s.maxUsersEffective !== null && <small> / {n(s.maxUsersEffective)}</small>}
-          </b>
-          <span>{t('platform.use.users')}</span>
-        </div>
-        <div className={over(u.ordersMonth, s.maxOrdersMonth) ? 'bad' : ''}>
-          <b className="ltr">
-            {n(u.ordersMonth)}
-            {s.maxOrdersMonth !== null && <small> / {n(s.maxOrdersMonth)}</small>}
-          </b>
-          <span>{t('platform.use.ordersMonth')}</span>
-        </div>
-        <div>
-          <b className="ltr">{n(u.ordersTotal)}</b>
-          <span>{t('platform.use.ordersTotal')}</span>
-        </div>
-        <div className="txt">
-          <b>{u.lastOrderAt ? when(u.lastOrderAt) : '—'}</b>
-          <span>{t('platform.use.lastOrder')}</span>
-        </div>
+        {tile(u.users, s.limits.maxUsers, t('platform.use.users'), s.limits.over.users)}
+        {tile(u.drivers, s.limits.maxDrivers, t('platform.use.drivers'), s.limits.over.drivers)}
+        {tile(u.ordersMonth, s.limits.maxOrdersMonth, t('platform.use.ordersMonth'), s.limits.over.orders)}
+        {tile(u.ordersLastMonth, null, t('platform.use.ordersLastMonth'), false)}
+        {tile(u.ownerStores, null, t('platform.use.ownerStores'), false)}
         <div className="txt">
           <b>{s.lastActiveAt ? when(s.lastActiveAt) : '—'}</b>
           <span>{t('platform.use.lastActive')}</span>
         </div>
       </div>
-      {over(u.ordersMonth, s.maxOrdersMonth) && <p className="pp-warn">{t('platform.use.overOrders')}</p>}
+      {(s.limits.over.users || s.limits.over.drivers || s.limits.over.orders) && <p className="pp-warn">{t('platform.use.over')}</p>}
     </Card>
   );
 }
@@ -264,11 +269,19 @@ function Payments({ s, staff, onAdd }: { s: Detail; staff: Staff; onAdd?: () => 
                 {p.by ? ` · ${p.by}` : ''}
                 {p.voidAt ? ` · ${t('platform.pay.voided', { reason: p.voidReason ?? '' })}` : ''}
               </small>
-              {!p.voidAt && staff.role === 'owner' && (
-                <button type="button" className="btn small pp-link" onClick={() => setVoiding(p.id)}>
-                  {t('platform.pay.void')}
-                </button>
-              )}
+              <span className="row pp-pay-acts">
+                {p.receiptNo && (
+                  <a className="btn small pp-link" href={`#/platform/receipt/${p.id}`} target="_blank" rel="noreferrer">
+                    <Icon name="receipt" /> <span className="ltr">{p.receiptNo}</span>
+                  </a>
+                )}
+                {!p.voidAt && can(staff, 'manager') && <MailReceipt id={p.id} />}
+                {!p.voidAt && staff.role === 'owner' && (
+                  <button type="button" className="btn small pp-link" onClick={() => setVoiding(p.id)}>
+                    {t('platform.pay.void')}
+                  </button>
+                )}
+              </span>
             </li>
           ))}
         </ul>
@@ -277,6 +290,17 @@ function Payments({ s, staff, onAdd }: { s: Detail; staff: Staff; onAdd?: () => 
       )}
       {voiding && <VoidModal id={voiding} onClose={() => setVoiding(null)} />}
     </Card>
+  );
+}
+
+/** E-mails the receipt to the store's owner. */
+export function MailReceipt({ id }: { id: number }) {
+  const { t } = useTranslation();
+  const m = usePAction('p.payments.mailReceipt', { success: (r) => t('platform.pay.receiptSent', { email: r.email }) });
+  return (
+    <button type="button" className="btn small pp-link" disabled={m.isPending} onClick={() => m.mutate({ id })}>
+      <Icon name="send" /> {t('platform.pay.sendReceipt')}
+    </button>
   );
 }
 
@@ -307,59 +331,74 @@ function VoidModal({ id, onClose }: { id: number; onClose: () => void }) {
   );
 }
 
-function Admins({ s, manager }: { s: Detail; manager: boolean }) {
+/** The owner: the account that made the store (only they see everything and can delete it). */
+function Owner({ s, manager }: { s: Detail; manager: boolean }) {
   const { t } = useTranslation();
-  const [shown, setShown] = useState<{ email: string; name: string; password: string } | null>(null);
-  const reset = usePAction('p.shops.resetAdminPassword', { onDone: (r) => setShown(r) });
+  const a = s.ownerAccount;
+  const resend = usePAction('p.shops.resendInvite', { success: (r) => t('platform.owner.resent', { email: r.email }) });
+  const save = usePAction('p.shops.update', { success: t('platform.saved') });
+  const [max, setMax] = useState(a?.maxStores === null || a?.maxStores === undefined ? '' : String(a.maxStores));
+  useEffect(() => setMax(a?.maxStores === null || a?.maxStores === undefined ? '' : String(a.maxStores)), [a?.maxStores]);
   return (
-    <Card title={t('platform.admins.title')} help={t('platform.admins.help')}>
-      {s.admins.length ? (
-        <ul className="pp-mini">
-          {s.admins.map((a) => (
-            <li key={a.id}>
-              <span className="pp-two">
-                <b>{a.name}</b>
-                <small className="muted ltr">
-                  {a.email}
-                  {a.phone ? ` · ${a.phone}` : ''}
-                </small>
-              </span>
-              <span className="pp-mini-r">
-                <small className="muted">{a.lastSeenAt ? when(a.lastSeenAt) : '—'}</small>
-                {manager && !s.demo && (
-                  <button type="button" className="btn small" disabled={reset.isPending} onClick={() => reset.mutate({ id: s.id, profileId: a.id })}>
-                    <Icon name="key" /> {t('platform.admins.newPassword')}
-                  </button>
-                )}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <Empty>—</Empty>
-      )}
-      {shown && (
-        <Modal title={t('platform.admins.newPassword')} onClose={() => setShown(null)}>
-          <p>{t('platform.admins.shownText', { name: shown.name })}</p>
+    <Card title={t('platform.owner.title')} help={t('platform.owner.help')}>
+      {a ? (
+        <>
           <dl className="pp-creds">
             <dt>{t('login.email')}</dt>
-            <dd className="ltr">{shown.email}</dd>
-            <dt>{t('login.password')}</dt>
-            <dd className="ltr">
-              <b>{shown.password}</b>
-            </dd>
+            <dd className="ltr">{a.email}</dd>
+            <dt>{t('platform.owner.state')}</dt>
+            <dd>{a.invited ? <span className="pp-bad">{t('platform.owner.invited')}</span> : a.verified ? t('platform.owner.ok') : t('platform.owner.unverified')}</dd>
+            <dt>{t('platform.owner.lastLogin')}</dt>
+            <dd>{a.lastLoginAt ? when(a.lastLoginAt) : '—'}</dd>
           </dl>
-          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-            <button type="button" className="btn" onClick={async () => toast((await copyText(shown.password)) ? t('platform.copied') : t('common.error'), 'ok')}>
-              <Icon name="copy" /> {t('platform.copy')}
+          {a.invited && manager && s.status !== 'deleted' && (
+            <button type="button" className="btn small" disabled={resend.isPending} onClick={() => resend.mutate({ id: s.id })}>
+              <Icon name="send" /> {t('platform.owner.resend')}
             </button>
-            {s.owner.phone && (
-              <a className="btn primary" target="_blank" rel="noreferrer" href={waLink(s.owner.phone, t('platform.admins.waText', { url: `${window.location.origin}/`, email: shown.email, password: shown.password }))}>
-                <Icon name="chat" /> {t('platform.sendWa')}
-              </a>
-            )}
-          </div>
-        </Modal>
+          )}
+          {!s.primary && !s.demo && (
+            <Field label={t('platform.owner.maxStores')} hint={t('platform.owner.maxStoresHint', { n: a.stores, def: a.maxStoresDefault })}>
+              <div className="row" style={{ gap: 8 }}>
+                <input disabled={!manager} type="number" min={1} max={100} value={max} placeholder={String(a.maxStoresDefault)} onChange={(e) => setMax(e.target.value)} style={{ width: 110 }} />
+                {manager && (
+                  <button type="button" className="btn small" disabled={save.isPending || max === (a.maxStores === null ? '' : String(a.maxStores))} onClick={() => save.mutate({ id: s.id, ownerMaxStores: max === '' ? null : Math.max(1, Number(max) || 1) })}>
+                    {t('common.save')}
+                  </button>
+                )}
+              </div>
+            </Field>
+          )}
+        </>
+      ) : (
+        <Empty>{t('platform.owner.none')}</Empty>
+      )}
+      <p className="small muted pp-privacy">
+        <Icon name="shield" /> {t('platform.owner.privacy')}
+      </p>
+      {(s.referralCode || s.referredBy || s.referrals.length > 0) && (
+        <div className="pp-ref">
+          <h4>{t('platform.ref.title')}</h4>
+          {s.referralCode && (
+            <p className="small">
+              {t('platform.ref.code')} <b className="ltr">{s.referralCode}</b>
+            </p>
+          )}
+          {s.referredBy && (
+            <p className="small">
+              {t('platform.ref.by')} <a href={`#/platform/shops/${s.referredBy.id}`}>{s.referredBy.name}</a>
+            </p>
+          )}
+          {s.referrals.length > 0 && (
+            <ul className="pp-mini">
+              {s.referrals.map((r) => (
+                <li key={r.shopId}>
+                  <a href={`#/platform/shops/${r.shopId}`}>{r.name}</a>
+                  <small className="muted">{r.rewardedAt ? t('platform.ref.rewarded', { count: r.months }) : t('platform.ref.waiting')}</small>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
     </Card>
   );

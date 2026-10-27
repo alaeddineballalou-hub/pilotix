@@ -29,6 +29,7 @@ export const JOB_EVERY: Record<string, number> = {
   'spy-scan': H,
   'meta-sync': D,
   'demo-reset': D,
+  'platform-reminders': D,
 };
 
 interface Seen {
