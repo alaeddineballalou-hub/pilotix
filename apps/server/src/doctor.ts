@@ -7,7 +7,7 @@
 //   - the settings: e-mail, public address, production mode
 // What it keeps lives in memory: a restart starts from zero (the page says so).
 import { ConsoleLogger } from '@nestjs/common';
-import { DoctorError, DoctorItem, DoctorJob, DoctorLine, doctorScore, doctorSort, ServerDoctorReport } from '@pilotix/shared';
+import { DoctorAction, DoctorError, DoctorMuted, DoctorItem, DoctorJob, DoctorLine, doctorScore, doctorSort, ServerDoctorReport } from '@pilotix/shared';
 import IORedis from 'ioredis';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -104,6 +104,18 @@ export class DoctorState {
     return n;
   }
 
+  /** « Résolu » on the errors: forget what was written (all of it, or the lines that match). */
+  clear(match?: (s: { level: 'error' | 'warn'; source: string; shop: string | null; message: string }) => boolean) {
+    for (const [k, s] of this.seen) if (!match || match(s)) this.seen.delete(k);
+  }
+
+  /** « Résolu » on the jobs: start counting again from now (each job waits for its next run). */
+  resetJobs() {
+    this.jobs.clear();
+    this.jobsSince = Date.now();
+  }
+  private jobsSince = Date.now();
+
   job(name: string, ok: boolean, error?: string) {
     const j = this.jobs.get(name) ?? { runs: 0, fails: 0, lastOkAt: null, lastErrorAt: null, lastError: null };
     j.runs++;
@@ -117,7 +129,7 @@ export class DoctorState {
   }
 
   jobList(now = Date.now()): DoctorJob[] {
-    const up = now - this.startedAt;
+    const up = now - Math.max(this.startedAt, this.jobsSince);
     return Object.entries(JOB_EVERY).map(([name, every]) => {
       const j = this.jobs.get(name);
       let state: DoctorJob['state'];
@@ -203,11 +215,81 @@ async function redisPing(): Promise<number | null> {
   }
 }
 
+// ---------------------------------------------------------------- « Résolu » / « Ignorer » (owner and managers)
+/** The alerts no page of Pilotix can fix, and what the owner may do with each. */
+export const DISMISSABLE: Record<string, DoctorAction[]> = {
+  restarted: ['solve'],
+  errors: ['solve', 'ignore'],
+  courierSync: ['solve', 'ignore'],
+  jobs: ['solve', 'ignore'],
+  dbSlow: ['solve'],
+  dbPoolFull: ['solve'],
+  silentShops: ['solve', 'ignore'],
+  config: ['ignore'],
+  redisOff: ['ignore'],
+};
+const DISMISS_KEY = 'doctor_dismissed';
+const IGNORE_DAYS = 7;
+interface Dismissed {
+  kind: DoctorAction;
+  at: string;
+  by: string;
+  /** solve: hidden while the alert stays the same (its level and numbers) */
+  sig?: string;
+  /** ignore: hidden until */
+  until?: string;
+}
+const sigOf = (i: DoctorItem) => (i.id === 'restarted' ? `start:${doctorState.startedAt}` : JSON.stringify([i.level, i.params ?? {}, (i.list ?? []).map((l) => l.label)]));
+
+async function readDismissed(core: CoreService): Promise<Record<string, Dismissed>> {
+  const r = (await core.t.platform.query(`SELECT value FROM platform.settings WHERE key = $1`, [DISMISS_KEY]))[0];
+  const v = r?.value;
+  return v && typeof v === 'object' ? (v as Record<string, Dismissed>) : {};
+}
+async function writeDismissed(core: CoreService, v: Record<string, Dismissed>) {
+  await core.t.platform.query(
+    `INSERT INTO platform.settings (key, value, updated_at) VALUES ($1, $2, now()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    [DISMISS_KEY, JSON.stringify(v)],
+  );
+}
+
+/**
+ * « Résolu »: the errors are forgotten (they come back if they happen again), the jobs are counted again from now, the
+ * other alerts are hidden while they stay the same. « Ignorer »: hidden 7 days. « Ré-afficher »: shown again.
+ */
+export async function dismissDoctor(core: CoreService, id: string, kind: DoctorAction | 'restore', by: string) {
+  const allowed = DISMISSABLE[id];
+  if (!allowed) throw new Error('Cette alerte ne peut pas être cachée : elle se règle dans Pilotix');
+  const all = await readDismissed(core);
+  if (kind === 'restore') delete all[id];
+  else {
+    if (!allowed.includes(kind)) throw new Error('Action impossible pour cette alerte');
+    const now = Date.now();
+    if (kind === 'ignore') all[id] = { kind, at: new Date(now).toISOString(), by, until: new Date(now + IGNORE_DAYS * D).toISOString() };
+    else if (id === 'errors') {
+      doctorState.clear();
+      delete all[id];
+    } else if (id === 'courierSync') {
+      doctorState.clear((s) => /courier/i.test(s.source));
+      delete all[id];
+    } else if (id === 'jobs') {
+      doctorState.resetJobs();
+      delete all[id];
+    } else {
+      // hidden while it stays the same: the report that is shown right now gives its signature
+      const cur = (await serverDoctor(core, { raw: true })).items.find((i) => i.id === id);
+      if (!cur) return;
+      all[id] = { kind, at: new Date(now).toISOString(), by, sig: sigOf(cur) };
+    }
+  }
+  await writeDismissed(core, all);
+}
+
 const lv = (v: number | null, warn: number, bad: number): DoctorItem['level'] => (v === null ? 'info' : v >= bad ? 'bad' : v >= warn ? 'warn' : 'ok');
 const pct = (x: number) => Math.round(x * 1000) / 10;
 
 /** The whole check (a few hundred milliseconds: one small query per shop). */
-export async function serverDoctor(core: CoreService): Promise<ServerDoctorReport> {
+export async function serverDoctor(core: CoreService, opts: { raw?: boolean } = {}): Promise<ServerDoctorReport> {
   const now = Date.now();
   const items: DoctorItem[] = [];
   const cores = os.cpus().length || 1;
@@ -331,7 +413,31 @@ export async function serverDoctor(core: CoreService): Promise<ServerDoctorRepor
     );
   }
 
-  const sorted = doctorSort(items);
+  // what the owner hid: « Ignorer » for 7 days, « Résolu » while the alert stays the same; what can be hidden says so
+  const muted: DoctorMuted[] = [];
+  let shown = items;
+  if (!opts.raw) {
+    const dis = await readDismissed(core).catch(() => ({}) as Record<string, Dismissed>);
+    let changed = false;
+    shown = [];
+    for (const i of items) {
+      const d = dis[i.id];
+      const problem = i.level === 'bad' || i.level === 'warn';
+      if (d && d.kind === 'ignore' && d.until && Date.parse(d.until) > now) {
+        muted.push({ id: i.id, until: d.until, by: d.by, ...(i.params ? { params: i.params } : {}) });
+        continue;
+      }
+      if (d && d.kind === 'solve' && problem && d.sig === sigOf(i)) continue;
+      if (d && (d.kind === 'ignore' || !problem || d.sig !== sigOf(i))) {
+        // expired, fixed, or changed: forgotten
+        delete dis[i.id];
+        changed = true;
+      }
+      shown.push(problem && DISMISSABLE[i.id] ? { ...i, actions: DISMISSABLE[i.id] } : i);
+    }
+    if (changed) await writeDismissed(core, dis).catch(() => {});
+  }
+  const sorted = doctorSort(shown);
   return {
     checkedAt: new Date(now).toISOString(),
     score: doctorScore(sorted),
@@ -351,6 +457,7 @@ export async function serverDoctor(core: CoreService): Promise<ServerDoctorRepor
     },
     jobs,
     errors: errors.slice(0, 40),
+    muted,
     ...(ts ? { turnstile: ts } : {}),
   };
 }

@@ -23,7 +23,6 @@ import { seed as seed_cm } from './seeds/cm';
 import { seed as seed_notify } from './seeds/notify';
 import { seed as seed_landing } from './seeds/landing';
 import { seed as seed_spy } from './seeds/spy';
-import { seed as seed_everyone } from './seeds/everyone';
 
 /** First admin + one warehouse. Used by the real server on first start. */
 export async function seedBase(db: Db, admin: { email: string; password: string; name?: string }) {
@@ -357,8 +356,6 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number } =
   await seed_notify(db, users, now);
   await seed_landing(db, users, now);
   await seed_spy(db, users, now);
-  // last: every demo account has its own orders, parcels and messages
-  await seed_everyone(db, users, now);
 
   return { users, orders: N, todo: CONF_TODO.length };
 }

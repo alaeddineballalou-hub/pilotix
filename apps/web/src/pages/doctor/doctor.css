@@ -248,3 +248,26 @@
 .dr-grp > .dr-gh > .bji { margin-inline-start: auto; width: 18px; height: 18px; min-width: 0; padding: 0; background: none; color: var(--ink); opacity: .7; transition: transform .2s; }
 .dr-grp > .dr-gh[aria-expanded="true"] > .bji { transform: rotate(180deg); }
 .dr-grp > .dr-gh:hover { filter: brightness(.98); }
+
+/* control room: « Résolu » / « Ignorer » on the alerts no page can fix (small, quiet, next to the line) */
+.dr-row-top { display: flex; align-items: center; }
+.dr-row-top > .dr-row-h { flex: 1; min-width: 0; }
+.dr-acts { display: inline-flex; gap: 6px; padding-inline-end: 12px; flex: none; }
+.dr-act { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--muted); font: 600 12px var(--f, Inter, sans-serif); cursor: pointer; white-space: nowrap; }
+.dr-act .bji { width: 13px; height: 13px; }
+.dr-act:hover { color: var(--ink); border-color: var(--muted); }
+.dr-act:focus-visible { outline: 2px solid var(--px-orange, #F7A823); outline-offset: 2px; }
+.dr-muted { border: 1px dashed var(--line); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.dr-muted h3 { margin: 0; font-size: 14px; display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.dr-muted h3 .bji { width: 15px; height: 15px; }
+.dr-muted h3 span { font-size: 12px; min-width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: 99px; background: var(--sky-soft); color: var(--muted); }
+.dr-muted ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.dr-muted li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 2px; }
+.dr-muted li + li { border-top: 1px solid var(--line); }
+.dr-muted li > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dr-muted small { color: var(--muted); font-size: 12px; }
+@media (max-width: 560px) {
+  .dr-row-top { flex-wrap: wrap; }
+  .dr-acts { padding: 0 14px 10px calc(14px + 4px + 12px); }
+}

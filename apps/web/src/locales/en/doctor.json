@@ -445,5 +445,17 @@
     "mine": "Your own work: your orders and your parcels."
   },
   "foldAll": "Fold everything",
-  "unfoldAll": "Unfold everything"
+  "unfoldAll": "Unfold everything",
+  "act": {
+    "solve": "Solved",
+    "ignore": "Ignore",
+    "restore": "Show again",
+    "solved": "Marked as solved: the alert comes back only if the problem comes back",
+    "ignored": "Alert ignored for 7 days",
+    "restored": "Alert shown again",
+    "solveHelp": "It is fixed: hide this alert. It comes back only if the problem comes back.",
+    "ignoreHelp": "Hide this alert for 7 days",
+    "mutedTitle": "Ignored alerts",
+    "mutedUntil": "Hidden until {{date}} · by {{by}}"
+  }
 }

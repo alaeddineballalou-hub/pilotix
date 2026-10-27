@@ -70,6 +70,8 @@ export const serverHealth = () => req<Health>('/health', undefined, 'GET');
 
 /** Doctor: the server's health (owner and managers). */
 export const serverDoctor = () => req<ServerDoctorReport>('/doctor');
+/** Doctor: « Résolu » / « Ignorer » / « Ré-afficher » an alert no page can fix; answers with the new report. */
+export const doctorDismiss = (id: string, kind: 'solve' | 'ignore' | 'restore') => req<ServerDoctorReport>('/doctor/dismiss', { id, kind });
 /** Cloudflare Turnstile for every shop: connect the account (owner; token '' keeps the saved one), remove it, sync now. */
 export const turnstileSave = (body: { accountId: string; token: string }) => req<NonNullable<ServerDoctorReport['turnstile']>>('/turnstile/save', body);
 export const turnstileStatus = () => req<NonNullable<ServerDoctorReport['turnstile']>>('/turnstile/status', {});

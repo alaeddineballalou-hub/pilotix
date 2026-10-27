@@ -6,14 +6,40 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { dur, n, shortWhen } from '../../lib/format';
-import { serverDoctor, turnstileSync } from '../../lib/platform';
+import { doctorDismiss, serverDoctor, turnstileSync } from '../../lib/platform';
 import { Card, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
-import { DoctorHero, DoctorList } from '../doctor/parts';
+import { DoctorHero, DoctorList, fmtParams } from '../doctor/parts';
 
 export function DoctorPage({ demo, owner }: { demo?: boolean; owner?: boolean }) {
   const { t } = useTranslation();
-  const q = useQuery<ServerDoctorReport, Error>({ queryKey: ['p', 'doctor', !!demo], queryFn: () => (demo ? Promise.resolve(demoReport()) : serverDoctor()), refetchInterval: 15_000, refetchOnWindowFocus: true });
+  const qc = useQueryClient();
+  // the preview has no server: what the owner hides is kept in the page
+  const [demoHidden, setDemoHidden] = useState<Record<string, 'solve' | 'ignore'>>({});
+  const q = useQuery<ServerDoctorReport, Error>({ queryKey: ['p', 'doctor', !!demo, demoHidden], queryFn: () => (demo ? Promise.resolve(demoReport(demoHidden)) : serverDoctor()), refetchInterval: 15_000, refetchOnWindowFocus: true });
+  const [busy, setBusy] = useState(false);
+  const act = async (id: string, kind: 'solve' | 'ignore' | 'restore') => {
+    const done = t(kind === 'solve' ? 'doctor.act.solved' : kind === 'ignore' ? 'doctor.act.ignored' : 'doctor.act.restored');
+    if (demo) {
+      setDemoHidden((h) => {
+        const n = { ...h };
+        if (kind === 'restore') delete n[id];
+        else n[id] = kind;
+        return n;
+      });
+      toast(done, 'ok');
+      return;
+    }
+    setBusy(true);
+    try {
+      qc.setQueryData(['p', 'doctor', false, demoHidden], await doctorDismiss(id, kind));
+      toast(done, 'ok');
+    } catch (e) {
+      toast((e as Error).message, 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   if (!q.data) return <Loading />;
   const r = q.data;
@@ -49,7 +75,27 @@ export function DoctorPage({ demo, owner }: { demo?: boolean; owner?: boolean })
           {t('doctor.f.shops')} <b>{f.shops}</b>
         </span>
       </div>
-      <DoctorList items={r.items} />
+      <DoctorList items={r.items} onAction={busy ? undefined : (id, kind) => act(id, kind)} />
+      {!!r.muted?.length && (
+        <section className="dr-muted">
+          <h3>
+            <Icon name="pause" /> {t('doctor.act.mutedTitle')} <span>{r.muted.length}</span>
+          </h3>
+          <ul>
+            {r.muted.map((m) => (
+              <li key={m.id}>
+                <span>
+                  <b>{t(`doctor.c.${m.id}.title`, { ...fmtParams(m.params), count: Number(m.params?.count ?? 1) })}</b>
+                  <small>{t('doctor.act.mutedUntil', { date: shortWhen(m.until), by: m.by })}</small>
+                </span>
+                <button type="button" className="btn small" disabled={busy} onClick={() => act(m.id, 'restore')}>
+                  {t('doctor.act.restore')}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {r.turnstile && <Cloudflare ts={r.turnstile} demo={!!demo} owner={!!owner} />}
       <div className="dr-two">
         <Card title={t('doctor.jobs.title')}>
@@ -230,7 +276,9 @@ function Gauge({ label, icon, v, warn, bad, sub }: { label: string; icon: string
 }
 
 /** What the page looks like on a real server (the preview has none). */
-function demoReport(): ServerDoctorReport {
+const DEMO_ACTIONS: Record<string, ('solve' | 'ignore')[]> = { restarted: ['solve'], errors: ['solve', 'ignore'], courierSync: ['solve', 'ignore'], jobs: ['solve', 'ignore'], silentShops: ['solve', 'ignore'], config: ['ignore'] };
+
+function demoReport(hidden: Record<string, 'solve' | 'ignore'> = {}): ServerDoctorReport {
   const now = Date.now();
   const ago = (min: number) => new Date(now - min * 60_000).toISOString();
   const items: DoctorItem[] = [
@@ -258,7 +306,12 @@ function demoReport(): ServerDoctorReport {
     { id: 'config', level: 'warn', area: 'config', params: { count: 1 }, list: [{ label: 'SMTP_HOST (e-mails)', n: 0, unit: 'text' }] },
     { id: 'turnstile', level: 'ok', area: 'config', params: { domains: 23, max: 200, pct: 11.5, widgets: 3, maxWidgets: 20, waiting: 0 } },
   ];
-  const sorted = doctorSort(items);
+  const sorted = doctorSort(
+    items.filter((i) => !hidden[i.id]).map((i) => ((i.level === 'bad' || i.level === 'warn') && DEMO_ACTIONS[i.id] ? { ...i, actions: DEMO_ACTIONS[i.id] } : i)),
+  );
+  const muted = Object.entries(hidden)
+    .filter(([, k]) => k === 'ignore')
+    .map(([id]) => ({ id, until: new Date(now + 7 * 86_400_000).toISOString(), by: 'Pilotix', params: items.find((i) => i.id === id)?.params }));
   const job = (name: string, every: number, state: ServerDoctorReport['jobs'][number]['state'], okMin: number | null, err?: string) => ({
     name,
     every,
@@ -303,6 +356,7 @@ function demoReport(): ServerDoctorReport {
       lastSyncAt: ago(12),
       lastError: null,
     },
+    muted,
     errors: [
       { at: ago(3), level: 'error', source: 'Courier sync', shop: 'boutique-amine', message: 'ZR: 401 Unauthorized (token expired)', count: 28 },
       { at: ago(17), level: 'error', source: 'API', shop: null, message: 'TypeError: Cannot read properties of undefined (reading "wilaya")\n    at orderForm (orders.js:412:18)', count: 9 },
