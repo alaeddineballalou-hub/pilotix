@@ -1851,3 +1851,4 @@ html[data-theme="dark"] .pxl-plus { background: var(--c-accent-tint); }
 html[data-theme="dark"] :is(.pxs-tl q.n, .pxk-mi.tr) { background: var(--c-info-tint); color: #DCE6FF; }
 html[data-theme="dark"] .pxlc-due > button { background: #fff; color: #137A3B; }
 html[data-theme="dark"] .pxk-av:not(.nv, .or) { background: rgba(255, 255, 255, .1); color: var(--ink); }
+html body .pxl-nums > span:not(.or, .nv) { color: var(--c-muted); }
