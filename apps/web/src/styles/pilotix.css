@@ -1822,7 +1822,7 @@ html body .spy-pmark.you span { color: #1B2A47; }
 html[data-theme="dark"] .bjliv .seg button[aria-pressed=true] { color: var(--on-navy); }
 /* the "net" card on the Spy page: same calm dark card as Marketing */
 html[data-theme="dark"] body .spy .kpi.spy-net { background: #1E2D48 !important; border-color: #5D84D6 !important; color: #ECEEF2 !important; }
-html[data-theme="dark"] body .spy .kpi.spy-net :is(.lab, .sub, small) { color: #C3CBD9 !important; }
+html[data-theme="dark"] body .spy .kpi.spy-net { --on-navy: #ECEEF2; }
 /* fixed light colours that stayed light in dark */
 html[data-theme="dark"] .pxs-days.t-info { color: var(--c-info-ink); }
 html[data-theme="dark"] .pxk-reqln u { color: var(--c-accent-ink); }
@@ -1836,3 +1836,5 @@ html[data-theme="dark"] .bjg-add { color: #B9A5F0; }
 html[data-theme="dark"] .bjp-ib-d { color: #F09C95; }
 /* switched-off cases on Notify were faded to half; keep them readable */
 html body .nt-case.nt-off :is(.nt-phone, .nt-case-f) { opacity: .8; }
+/* Caisse "ready to pay" card: its pale-green gradient stayed pale in dark, so the company name and amounts vanished */
+html[data-theme="dark"] .pxk-qp:not(.full) { background: linear-gradient(180deg, var(--c-ok-tint), var(--surface)); border-color: rgba(60, 184, 120, .35); }
