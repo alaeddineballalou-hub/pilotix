@@ -7,6 +7,7 @@ import { applyLanguage } from '../lib/i18n';
 import { openOrder, openOrderForm } from '../lib/modals';
 import { useAction, useRpc } from '../lib/query';
 import { useSession } from '../lib/session';
+import { PxLogo } from './PxLogo';
 import { chime, unlockAudio } from '../lib/sound';
 import { store } from '../lib/store';
 import { toast } from '../ui/toast';
@@ -177,8 +178,7 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
               }
             }}
           >
-            <span className="px-logo-full" aria-hidden="true" />
-            <span className="px-logo-icon" aria-hidden="true" />
+            <PxLogo />
             <span className="px-logo-open" aria-hidden="true">
               <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
                 <path d="m9 6 6 6-6 6" />
