@@ -67,3 +67,25 @@ test('what the compressor sends is checked: bad quality scores, oversized placeh
   await assert.rejects(call('landing.addImage', marketer, { ...base, w720: 'not base64!' }));
   await assert.rejects(call('landing.addImage', marketer, { ...base, info: { ...INFO, preset: 'ultra' } }));
 });
+
+test('the 320 width: in the srcset when made, added later to a picture from before (once), the 480 file until then', async () => {
+  const sys = admin;
+  const made: any = await call('landing.addImage', marketer, { w: 960, h: 720, t160: B('a'), w320: B('n320'), w480: B('n480'), w960: B('n960'), info: { ...INFO, bytes: { ...INFO.bytes, w320: 9_000 }, ssim: { ...INFO.ssim, w320: 0.988 } } });
+  const old: any = await call('landing.addImage', marketer, { w: 960, h: 720, t160: B('a'), w480: B('p480'), w960: B('p960'), info: INFO });
+  await call('landing.save', marketer, { productId, slug: 'photos-320', title: 'Photos 320', price: 9950, images: [{ id: made.id }, { id: old.id }] });
+  const html = async () => ((await call('landing.html', admin, { slug: 'photos-320', mode: 'live', post: '/o', geo: '/g/', lead: '/l', imgBase: '/i/' })) as any).html as string;
+
+  assert.match(await html(), new RegExp(`srcset="/i/${made.id}/320\\.webp 320w, /i/${made.id}/480\\.webp 480w, /i/${made.id}/960\\.webp 960w"`));
+  assert.equal(((await call('landing.image', sys, { id: old.id, size: '320' })) as any).base64, B('p480'), 'no 320 yet: the 480 file');
+  assert.doesNotMatch(await html(), new RegExp(`/i/${old.id}/320\\.webp`));
+
+  const up: any = await call('landing.addW320', marketer, { id: old.id, w320: B('p320'), bytes: 8_000, ssim: 0.989 });
+  assert.equal(up.ok, true);
+  assert.equal(up.info.bytes.w320, 8_000);
+  assert.equal(up.info.ssim.w320, 0.989);
+  assert.equal(((await call('landing.image', sys, { id: old.id, size: '320' })) as any).base64, B('p320'));
+  assert.match(await html(), new RegExp(`/i/${old.id}/320\\.webp 320w, /i/${old.id}/480\\.webp 480w`));
+  // a second time changes nothing
+  assert.equal(((await call('landing.addW320', marketer, { id: old.id, w320: B('other'), bytes: 1, ssim: 0.5 })) as any).ok, false);
+  assert.equal(((await call('landing.image', sys, { id: old.id, size: '320' })) as any).base64, B('p320'));
+});

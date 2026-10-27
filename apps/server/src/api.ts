@@ -1034,11 +1034,11 @@ class ApiController {
     return sendText(req, res.status(200).header('Content-Type', 'application/json; charset=utf-8').header('Cache-Control', 'public, max-age=2592000, immutable'), JSON.stringify(core.landingCommunes(id)));
   }
 
-  /** A page's picture in WebP: /lp/img/<id>/<160|480|720|960>.webp (never changes: cached a year). */
+  /** A page's picture in WebP: /lp/img/<id>/<160|320|480|720|960>.webp (never changes: cached a year). */
   @Public()
   @Get(['lp/img/:id/:file', 's/:shop/lp/img/:id/:file'])
   async landingImage(@Param('shop') shop: string | undefined, @Param('id') idp: string, @Param('file') file: string, @Res() res: any) {
-    const m = file.match(/^(160|480|720|960)\.webp$/);
+    const m = file.match(/^(160|320|480|720|960)\.webp$/);
     if (!/^\d+$/.test(idp) || !m) return res.status(404).send();
     try {
       const ref = intake(await this.publicShop(shop));

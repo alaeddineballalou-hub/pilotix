@@ -8,7 +8,7 @@ import { store } from '../../lib/store';
 import { Icon } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
-import { fetchImage, ImageInfo, measure, optimize, Preset, PRESETS } from './webp';
+import { fetchImage, ImageInfo, make320, measure, optimize, Preset, PRESETS } from './webp';
 
 export type Img = { id: number | null; url: string | null; w: number; h: number; thumb: string; src: string; info?: ImageInfo | null };
 
@@ -33,6 +33,29 @@ export function Photos({ images, onChange, onBusy }: { images: Img[]; onChange: 
   // before / after of the pictures compressed in this visit (object URLs, freed when leaving)
   const views = useRef(new Map<number, { orig: string; opt: string }>());
   useEffect(() => () => views.current.forEach((v) => (URL.revokeObjectURL(v.orig), URL.revokeObjectURL(v.opt))), []);
+  // pictures stored before the 320 width existed get it now, quietly (computers then load a lighter file for the small box)
+  const upgraded = useRef(new Set<number>());
+  useEffect(() => {
+    const todo = images.filter((x) => x.id && x.info && x.info.bytes.w320 === undefined && !upgraded.current.has(x.id) && x.src.startsWith('data:'));
+    if (!todo.length) return;
+    let live = true;
+    (async () => {
+      for (const x of todo) {
+        upgraded.current.add(x.id!);
+        try {
+          const made = await make320(await (await fetch(x.src)).blob(), (x.info?.preset as Preset) ?? presetOf());
+          if (!live || !made) continue;
+          const r = await rpc('landing.addW320', { id: x.id!, w320: made.b64, bytes: made.bytes, ssim: made.ssim });
+          if (live && r.info) onChange((a) => a.map((y) => (y.id === x.id ? { ...y, info: r.info } : y)));
+        } catch {
+          /* the page keeps its 480 file: nothing to tell */
+        }
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [images]); // eslint-disable-line react-hooks/exhaustive-deps
   const kb = (b: number) => t('landing.ph.kb', { n: b < 10_240 ? (b / 1024).toFixed(1) : Math.round(b / 1024) });
 
   const choose = (p: Preset) => {
@@ -45,7 +68,7 @@ export function Photos({ images, onChange, onBusy }: { images: Img[]; onChange: 
     setWork({ i, n, step: '' });
     try {
       const e = await optimize(blob, preset, (step) => setWork({ i, n, step }));
-      const row = await rpc('landing.addImage', { w: e.w, h: e.h, t160: e.t160, w480: e.w480, w720: e.w720, w960: e.w960, lqip: e.lqip, info: e.info });
+      const row = await rpc('landing.addImage', { w: e.w, h: e.h, t160: e.t160, w320: e.w320, w480: e.w480, w720: e.w720, w960: e.w960, lqip: e.lqip, info: e.info });
       if (row.id) views.current.set(row.id, e.compare);
       return row as Img;
     } catch (err) {
@@ -230,6 +253,7 @@ function Compare({ img, view, kb, onClose }: { img: Img; view?: { orig: string; 
     ['960', i.bytes.w960, i.ssim.w960],
     ['720', i.bytes.w720, i.ssim.w720],
     ['480', i.bytes.w480, i.ssim.w480],
+    ['320', i.bytes.w320, i.ssim.w320],
     ['160', i.bytes.t160, i.ssim.t160],
   ];
   return (
