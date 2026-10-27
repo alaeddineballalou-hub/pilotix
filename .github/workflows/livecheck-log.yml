@@ -1,0 +1,19 @@
+name: Live check log (for Claude, temporary)
+on:
+  push:
+    branches: ['preview/livecheck']
+permissions:
+  contents: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: SITE="${{ vars.SITE_URL || 'https://pilotix.online' }}" node scripts/live-check.mjs > /tmp/live.txt 2>&1 || true
+      - run: |
+          mkdir /tmp/out && cp /tmp/live.txt /tmp/out/ && cd /tmp/out && git init -q && git checkout -qb livecheck-log && git add -A
+          git -c user.name=ci -c user.email=ci@x commit -qm "Live check ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" livecheck-log
