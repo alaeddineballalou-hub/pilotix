@@ -87,7 +87,7 @@ button.kpi.on { box-shadow: 0 0 0 2px var(--navy); }
 @media (prefers-reduced-motion: reduce) { .shell { transition: none; } }
 
 /* ==== Pilotix palette on the frame: navy sidebar and top bar, orange for the active / pressed item ==== */
-:root { --px-navy: #1B2A47; --px-navy-2: #23365A; --px-orange: #F7A823; --px-on-orange: #1B2A47; --px-frame-ink: #FFFFFF; --px-frame-muted: rgba(255,255,255,.72); --px-frame-line: rgba(255,255,255,.12); --px-logo-white: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-30 -870 3187 1160'%3E%3Cpath d='M405 566Q474 566 530.0 531.0Q586 496 618.5 431.0Q651 366 651 280Q651 194 618.5 128.5Q586 63 530.0 27.5Q474 -8 405 -8Q347 -8 302.5 16.0Q258 40 233 78V-266H62V558H233V479Q258 518 302.0 542.0Q346 566 405 566ZM354 417Q303 417 267.5 380.0Q232 343 232 279Q232 215 267.5 178.0Q303 141 354 141Q405 141 441.0 178.5Q477 216 477 280Q477 344 441.5 380.5Q406 417 354 417Z' transform='translate(0,0) scale(1,-1)' fill='%23FFFFFF' stroke='%23FFFFFF' stroke-width='30' stroke-linejoin='round'/%3E%3Cpath d='M246 558V0H75V558Z' transform='translate(659,0) scale(1,-1)' fill='%23FFFFFF' stroke='%23FFFFFF' stroke-width='30' stroke-linejoin='round'/%3E%3Cpath d='M233 740V0H62V740Z' transform='translate(960,0) scale(1,-1)' fill='%23FFFFFF' stroke='%23FFFFFF' stroke-width='30' stroke-linejoin='round'/%3E%3Cpath d='M28 279Q28 365 66.0 430.5Q104 496 170.0 531.0Q236 566 318 566Q400 566 466.0 531.0Q532 496 570.0 430.5Q608 365 608 279Q608 193 569.5 127.5Q531 62 464.5 27.0Q398 -8 316 -8Q234 -8 168.5 27.0Q103 62 65.5 127.0Q28 192 28 279ZM434 279Q434 346 400.5 382.0Q367 418 318 418Q268 418 235.0 382.5Q202 347 202 279Q202 212 234.5 176.0Q267 140 316 140Q365 140 399.5 176.0Q434 212 434 279Z' transform='translate(1235,0) scale(1,-1)' fill='%23FFFFFF' stroke='%23FFFFFF' stroke-width='30' stroke-linejoin='round'/%3E%3Cpath d='M373 145V0H286Q193 0 141.0 45.5Q89 91 89 194V416H21V558H89V694H260V558H372V416H260V192Q260 167 272.0 156.0Q284 145 312 145Z' transform='translate(1852,0) scale(1,-1)' fill='%23FFFFFF' stroke='%23FFFFFF' stroke-width='30' stroke-linejoin='round'/%3E%3Cpath d='M246 558V0H75V558Z' transform='translate(2238,0) scale(1,-1)' fill='%23FFFFFF' stroke='%23FFFFFF' stroke-width='30' stroke-linejoin='round'/%3E%3Cpath d='M392 0 285 155 195 0H10L194 285L5 558H197L304 404L394 558H579L392 277L584 0Z' transform='translate(2539,0) scale(1,-1)' fill='%23FFFFFF' stroke='%23FFFFFF' stroke-width='30' stroke-linejoin='round'/%3E%3Ccircle cx='819' cy='-748' r='100' fill='%23F7A823'/%3E%3Ccircle cx='2398' cy='-748' r='100' fill='%23F7A823'/%3E%3C/svg%3E"); }
+:root { --px-navy: #1B2A47; --px-navy-2: #23365A; --px-orange: #F7A823; --px-on-orange: #1B2A47; --px-frame-ink: #FFFFFF; --px-frame-muted: rgba(255,255,255,.72); --px-frame-line: rgba(255,255,255,.12); --px-logo-white: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 18 339 140'%3E%3Cpath d='M24.6875 120.41015625H41.484375V92.333984375H41.6796875C44.365234375 98.046875 49.443359375 101.123046875 56.23046875 101.123046875C69.755859375 101.123046875 78.49609375 90.4296875 78.49609375 74.12109375C78.49609375 58.349609375 69.4140625 47.314453125 56.376953125 47.314453125C49.6875 47.314453125 44.609375 49.951171875 41.533203125 55.17578125H41.2890625V48.4375H24.6875ZM51.494140625 87.6953125C45.146484375 87.6953125 40.80078125 82.373046875 40.80078125 74.12109375C40.80078125 65.966796875 45.146484375 60.693359375 51.494140625 60.693359375C57.6953125 60.693359375 61.50390625 65.72265625 61.50390625 74.12109375C61.50390625 82.6171875 57.6953125 87.6953125 51.494140625 87.6953125Z M83.771484375 100.0H100.568359375V48.4375H83.771484375Z M124.740234375 27.24609375H107.943359375V100.0H124.740234375Z M157.115234375 101.171875C173.27734375 101.171875 184.21484375 90.576171875 184.21484375 74.21875C184.21484375 57.958984375 173.27734375 47.265625 157.115234375 47.265625C140.953125 47.265625 129.966796875 57.958984375 129.966796875 74.21875C129.966796875 90.576171875 140.953125 101.171875 157.115234375 101.171875ZM157.115234375 87.79296875C151.20703125 87.79296875 147.0078125 82.958984375 147.0078125 74.21875C147.0078125 65.52734375 151.255859375 60.64453125 157.115234375 60.64453125C162.974609375 60.64453125 167.22265625 65.52734375 167.22265625 74.21875C167.22265625 82.958984375 162.974609375 87.79296875 157.115234375 87.79296875Z M221.912109375 48.4375H211.31640625V34.375H194.470703125V48.4375H185.681640625V61.42578125H194.470703125V85.498046875C194.470703125 95.5078125 200.037109375 100.0 212.390625 100.0H221.912109375V87.01171875H216.1015625C212.341796875 87.01171875 211.31640625 85.986328125 211.31640625 82.666015625V61.42578125H221.912109375Z M226.650390625 100.0H243.447265625V48.4375H226.650390625Z' fill='%23FFFFFF'/%3E%3Ccircle cx='92.17' cy='32.30' r='10.41' fill='%23F7A823'/%3E%3Ccircle cx='235.05' cy='32.30' r='10.41' fill='%23F7A823'/%3E%3Cpath d='M254.42,55.79 L292.73,92.64' stroke='%23FFFFFF' stroke-width='14.71' stroke-linecap='round'/%3E%3Cpath d='M64.50,110.00 C138.50,160.00 226.33,120.00 314.82,34.44 C226.33,104.04 138.50,144.04 64.50,110.00 Z' fill='%23F7A823'/%3E%3C/svg%3E"); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --px-navy: #0B1424; --px-navy-2: #16233A; } }
 :root[data-theme="dark"] { --px-navy: #0B1424; --px-navy-2: #16233A; }
 
@@ -1631,3 +1631,60 @@ html body .px-qhead .btn.px-qnew:hover { border-color: #F7A823; color: #C97A0E; 
 .px-newpw p { margin: 0; }
 .px-newpw-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .px-newpw-code { font-size: 18px; font-weight: 800; letter-spacing: .04em; padding: 6px 12px; border-radius: 8px; background: var(--surface); border: 1px dashed var(--line); user-select: all; }
+
+/* ---- Sidebar logo, Oct 2026 brand ("Grand sourire" wordmark + winking icon) ----
+   Open = wordmark, folded = icon. The change is the "masked type" motion:
+   folding, the letters sink one by one behind a clean line on the baseline (the dots and the x last), the smile slides away,
+   then the tile rises from its own bottom edge, the orange wave fills it (a thin marker rides the wave's edge) and the face appears;
+   unfolding plays it back, a little faster. Transitions only start after the first paint (.px-lg-ready). */
+.px-logo-full, .px-logo-icon { display: none !important; }
+.px-lg { --ink: #FFFFFF; --tile: #2B3F66; display: block; flex: none; width: 112px; height: 46px; color: var(--ink); }
+html:not([data-theme="dark"]) .px-lg { --ink: #1B2A47; --tile: #1B2A47; }
+.px-lg svg { display: block; overflow: visible; }
+.px-lg-gl { fill: currentColor; }
+.px-lg-x { fill: none; stroke: currentColor; stroke-linecap: round; }
+.px-lg-dot, .px-lg-smile, .px-lg-wave path, .px-lg-eye, .px-lg-mark { fill: #F7A823; }
+.px-lg-ground { fill: var(--tile); }
+.px-lg-mouth { fill: #1B2A47; }
+.px-lg-wink { fill: none; stroke: #F7A823; stroke-width: 30; stroke-linecap: round; }
+/* open state: the icon waits below its own edge */
+.px-lg-tile { transform: translateY(520px); }
+.px-lg-wave { transform: translateY(330px); }
+.px-lg-face { opacity: 0; transform: scale(.7); transform-box: fill-box; transform-origin: center; }
+.px-lg-mark { opacity: 0; }
+/* unfolding (back to the wordmark): the icon drops away first, then the letters rise left to right */
+.px-lg-ready { transition: width .3s cubic-bezier(.16, 1, .3, 1); }
+.px-lg-ready .px-lg-face { transition: opacity .1s ease, transform .1s ease; }
+.px-lg-ready .px-lg-wave { transition: transform .16s cubic-bezier(.5, 0, .75, 0); }
+.px-lg-ready .px-lg-tile { transition: transform .18s cubic-bezier(.5, 0, .75, 0) .04s; }
+.px-lg-ready .px-lg-gl { transition: transform .3s cubic-bezier(.16, 1, .3, 1) calc(.14s + var(--i) * 22ms); }
+.px-lg-ready .px-lg-dot { transition: transform .3s cubic-bezier(.16, 1, .3, 1) calc(.24s + var(--i) * 40ms); }
+.px-lg-ready .px-lg-smile { transition: transform .32s cubic-bezier(.16, 1, .3, 1) .18s, opacity .22s ease .18s; }
+@media (min-width: 901px) {
+  .px-folded .px-lg { width: 36px; }
+  .px-folded .px-lg-gl { transform: translateY(150px); }
+  .px-folded .px-lg-dot { transform: translateY(150px); }
+  .px-folded .px-lg-smile { transform: translateX(-30px); opacity: 0; }
+  .px-folded .px-lg-tile, .px-folded .px-lg-wave, .px-folded .px-lg-face { transform: none; }
+  .px-folded .px-lg-face { opacity: 1; }
+  /* folding: letters first (one beat apart), then the tile, the wave and the face */
+  .px-folded .px-lg-ready .px-lg-gl { transition: transform .26s cubic-bezier(.5, 0, .75, 0) calc(var(--i) * 28ms); }
+  .px-folded .px-lg-ready .px-lg-dot { transition: transform .24s cubic-bezier(.5, 0, .75, 0) calc(.04s + var(--i) * 70ms); }
+  .px-folded .px-lg-ready .px-lg-smile { transition: transform .24s cubic-bezier(.5, 0, .75, 0), opacity .2s ease; }
+  .px-folded .px-lg-ready .px-lg-tile { transition: transform .26s cubic-bezier(.16, 1, .3, 1) .2s; }
+  .px-folded .px-lg-ready .px-lg-wave { transition: transform .32s cubic-bezier(.65, 0, .35, 1) .26s; }
+  .px-folded .px-lg-ready .px-lg-face { transition: opacity .16s ease .44s, transform .2s cubic-bezier(.34, 1.45, .64, 1) .44s; }
+  .px-folded .px-lg-ready .px-lg-mark { animation: px-lg-mark .36s linear .24s both; }
+  /* folded + hover: the face makes room for the "open" arrow, as before */
+  .px-folded .px-logo-btn:hover .px-lg, .px-folded .px-logo-btn:focus-visible .px-lg { display: none; }
+}
+@keyframes px-lg-mark { 0% { opacity: 0; } 20% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
+/* reduced motion: no movement, a short cross-fade between the wordmark and the icon */
+@media (prefers-reduced-motion: reduce) {
+  .px-lg-ready, .px-lg-ready * { transition-property: opacity !important; transition-duration: .15s !important; transition-delay: 0s !important; animation: none !important; }
+  .px-lg-tile { opacity: 0; }
+  @media (min-width: 901px) {
+    .px-folded .px-lg-gl, .px-folded .px-lg-dot, .px-folded .px-lg-smile { opacity: 0; }
+    .px-folded .px-lg-tile { opacity: 1; }
+  }
+}
