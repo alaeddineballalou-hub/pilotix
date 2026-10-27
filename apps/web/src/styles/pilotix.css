@@ -1640,7 +1640,7 @@ html body .px-qhead .btn.px-qnew:hover { border-color: #F7A823; color: #C97A0E; 
 .px-logo-full, .px-logo-icon { display: none !important; }
 .px-lg { --ink: #FFFFFF; --tile: #2B3F66; display: block; flex: none; width: 112px; height: 46px; color: var(--ink); }
 html:not([data-theme="dark"]) .px-lg { --ink: #1B2A47; --tile: #1B2A47; }
-.px-lg svg { display: block; overflow: visible; }
+.px-lg svg { display: block; overflow: visible; max-width: none; }
 .px-lg-gl { fill: currentColor; }
 .px-lg-x { fill: none; stroke: currentColor; stroke-linecap: round; }
 .px-lg-dot, .px-lg-smile, .px-lg-wave path, .px-lg-eye, .px-lg-mark { fill: #F7A823; }
