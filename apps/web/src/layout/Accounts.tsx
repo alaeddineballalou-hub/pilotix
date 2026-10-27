@@ -339,7 +339,7 @@ export function Signup({ referral, agency }: { referral?: string; agency?: boole
           <input type="email" dir="ltr" required maxLength={200} autoComplete="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} placeholder="vous@exemple.com" />
         </label>
         <label className="field">
-          <span className="lab">{t('shop.acc.phone')}</span>
+          <span className="lab">{t('auth.phone')}</span>
           <input dir="ltr" inputMode="tel" required minLength={9} maxLength={30} autoComplete="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} placeholder="0555 12 34 56" />
         </label>
         <label className="field">
