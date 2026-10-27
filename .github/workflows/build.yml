@@ -152,6 +152,11 @@ jobs:
         run: |
           [ -d android ] || npx cap add android
           npx cap sync android
+      # the Pilotix app icon and a navy launch screen, from apps/web/resources (brand kit, Oct 2026); never blocks the build
+      - name: App icon and launch screen
+        continue-on-error: true
+        working-directory: apps/web
+        run: npx --yes @capacitor/assets@3 generate --android --assetPath resources --iconBackgroundColor '#1B2A47' --iconBackgroundColorDark '#1B2A47' --splashBackgroundColor '#1B2A47' --splashBackgroundColorDark '#1B2A47'
       - name: Build debug APK
         working-directory: apps/web/android
         run: ./gradlew assembleDebug
@@ -178,6 +183,10 @@ jobs:
         run: |
           [ -d ios ] || npx cap add ios
           npx cap sync ios
+      - name: App icon and launch screen
+        continue-on-error: true
+        working-directory: apps/web
+        run: npx --yes @capacitor/assets@3 generate --ios --assetPath resources --iconBackgroundColor '#1B2A47' --iconBackgroundColorDark '#1B2A47' --splashBackgroundColor '#1B2A47' --splashBackgroundColorDark '#1B2A47'
       - name: Build for iOS simulator (unsigned)
         working-directory: apps/web/ios/App
         run: |
