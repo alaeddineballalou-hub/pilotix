@@ -8,6 +8,7 @@ import { openOrder, openOrderForm } from '../lib/modals';
 import { useAction, useRpc } from '../lib/query';
 import { useSession } from '../lib/session';
 import { PxLogo } from './PxLogo';
+import { PxMenuFace } from './PxMenuFace';
 import { chime, unlockAudio } from '../lib/sound';
 import { store } from '../lib/store';
 import { toast } from '../ui/toast';
@@ -237,8 +238,8 @@ export function Shell({ page, sub, children }: { page: string; sub?: string; chi
       <div className="scrim" onClick={() => setNavOpen(false)} />
       <div className="content">
         <header className="topbar">
-          <button className="icon-btn menu-btn px-fold-btn" aria-label={folded ? t('shell.unfold') : t('nav.menu')} title={folded ? t('shell.unfold') : t('shell.fold')} aria-expanded={!folded} onClick={() => (window.matchMedia('(max-width: 900px)').matches ? setNavOpen(!navOpen) : toggleFold())}>
-            <Icon name="menu" />
+          <button className="icon-btn menu-btn px-fold-btn px-mf-btn" aria-label={folded ? t('shell.unfold') : t('nav.menu')} title={folded ? t('shell.unfold') : t('shell.fold')} aria-expanded={!folded} onClick={() => (window.matchMedia('(max-width: 900px)').matches ? setNavOpen(!navOpen) : toggleFold())}>
+            <PxMenuFace />
           </button>
           <a className="brand" href="#/accueil" aria-label="Pilotix">
             Pilotix

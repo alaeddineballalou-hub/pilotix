@@ -12,8 +12,8 @@ const X_STROKE = "M254.42,55.79 L292.73,92.64";
 const X_WIDTH = 14.71;
 const SMILE = "M64.50,110.00 C138.50,160.00 226.33,120.00 314.82,34.44 C226.33,104.04 138.50,144.04 64.50,110.00 Z";
 const DOTS: [number, number, number][] = [[92.17, 32.3, 10.41], [235.05, 32.3, 10.41]];
-const WAVE = "M0,250 C120,200 200,320 300,280 C380,248 440,230 512,250 V512 H0 Z";
-const MOUTH = "M146.00,296.00 C217.40,372.00 324.50,364.40 384.00,272.00 C324.50,329.82 217.40,337.42 146.00,296.00 Z";
+export const WAVE = "M0,250 C120,200 200,320 300,280 C380,248 440,230 512,250 V512 H0 Z";
+export const MOUTH = "M146.00,296.00 C217.40,372.00 324.50,364.40 384.00,272.00 C324.50,329.82 217.40,337.42 146.00,296.00 Z";
 
 const v = (i: number, more: Record<string, string> = {}) => ({ ['--i' as string]: i, ...more }) as CSSProperties;
 // where each orange i-dot lands: the open eye, then the wink (header px -> wordmark units), and its size there
