@@ -1,0 +1,23 @@
+→ health
+→ wrong password refused
+→ no token refused
+→ orders.list
+→ counts
+→ create order (phone normalized, fee from grid)
+→ callback needs a date
+→ confirm
+→ confirmation agent cannot ship
+→ depot prepares and ships
+→ products locked after shipping
+→ livreur sees only own orders
+→ non-admin cannot create users
+→ unknown action
+→ website webhook
+→ grouped action names
+→ action names with a digit
+→ Meta comment webhook (CM AI agent): signed only, answered after the shop's delay
+→ Delivery AI agent: messages, Meta statuses (signed), SMS gateway hook (key)
+→ AI Spy: the demo competitors' ads, an ad from the extension, settings for admins only
+→ cron needs its key
+✅ All server checks passed
+exit 0

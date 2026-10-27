@@ -1,0 +1,143 @@
+→ server Doctor: what it keeps
+✓ the same line with other numbers is one group, seen twice
+✓ the shop is read from [slug], the last text is kept
+✓ another shop or another level is another group
+✓ errors come before warnings
+✓ an Error is kept by its message
+✓ an object is kept as JSON
+✓ an empty line is ignored
+✓ counts per level in the last minute
+✓ after 24 h everything is forgotten
+✓ one group keeps at most 500 times (memory stays small)
+✓ at most 400 groups: the oldest go
+✓ a long message is cut to 400 characters
+→ server Doctor: the jobs
+✓ just started: every job is waiting
+✓ a job never seen after 3 runs + 2 min is late; a slow one still waits
+✓ a job that ran is OK
+✓ and late when it stops running
+✓ its last run failed: failing, with the error
+✓ a good run after a failure: OK again
+✓ without Redis every job is "off"
+→ server Doctor: the logger
+[33m[Nest] 3786  - [39m10/27/2026, 6:16:44 PM [33m   WARN[39m [38;5;3m[Sheets sync] [39m[33m[shop-z] Commandes: 3 ligne(s) refusée(s)[39m
+[31m[Nest] 3786  - [39m10/27/2026, 6:16:44 PM [31m  ERROR[39m [38;5;3m[API] [39m[31mSomething broke[39m
+Error: Something broke
+    at x (y.js:1:1)
+[31m[Nest] 3786  - [39m10/27/2026, 6:16:44 PM [31m  ERROR[39m [31mNo context given[39m
+✓ every warning and error reaches the Doctor
+✓ with the part of the server that wrote it and the shop
+✓ the stack is not taken for the source
+✓ no context: "Pilotix"
+→ control room Doctor: who may open it
+✓ no token: refused
+✓ a shop token (even an admin) is not a staff token
+✓ the owner logs in to the control room
+✓ the owner adds a support
+✓ support staff: refused
+✓ the owner adds a manager
+✓ a manager: allowed
+→ control room Doctor: the answer
+✓ the owner gets the report
+✓ the score matches the items
+✓ worst first
+✓ one item per check
+✓ gauge cpu between 0 and 1
+✓ gauge memory between 0 and 1
+✓ gauge disk between 0 and 1
+✓ gauge dbConnections between 0 and 1
+✓ processor, memory and database are measured
+✓ facts about the machine
+✓ the database answers and has a size
+✓ check "cpu" answered
+✓ check "memory" answered
+✓ check "disk" answered
+✓ check "restarted" answered
+✓ check "dbPing" answered
+✓ check "dbConnections" answered
+✓ check "dbSlow" answered
+✓ check "redis" answered
+✓ check "jobs" answered
+✓ check "errors" answered
+✓ check "silentShops" answered
+✓ check "config" answered
+✓ database and Redis are up
+✓ Redis answers fast
+✓ the database answers fast
+✓ the server just started: said
+✓ missing settings listed
+✓ silent shops checked (the demo shop is never counted)
+✓ the 11 jobs with a state
+✓ a warning the server wrote shows in the report
+✓ config: a clean line
+✓ config: a clean line
+→ control room Doctor: the jobs really run (up to 2 minutes)
+✓ the jobs that run every minute are seen running
+→ control room Doctor: « Résolu » and « Ignorer » on the alerts no page can fix
+✓ only those alerts, and only when they are a problem, have the buttons
+✓ the processor has no button (nothing to hide)
+✓ just after a start: « Pilotix vient de redémarrer » can be solved
+✓ « Résolu »: the restart alert is gone
+✓ …and stays gone on the next check
+✓ the score counts only what is shown
+✓ « Ignorer »: the settings alert is hidden 7 days, listed as ignored
+✓ « Ré-afficher »: it is back
+✓ « Résolu » on the errors: they are forgotten
+✓ an action the alert does not allow is refused
+✓ an alert a page can fix cannot be hidden
+✓ an unknown action is refused
+✓ no token: refused
+✓ support staff cannot hide alerts
+→ Pilotix Doctor of a shop
+✓ the shop admin gets the report
+✓ a confirmation agent gets only their own work
+→ every sentence exists in French, English and Arabic
+✓ id "stockOut" of the code is known to this test
+✓ id "stockSoon" of the code is known to this test
+✓ id "notCalled" of the code is known to this test
+✓ id "lateCallbacks" of the code is known to this test
+✓ id "confRate" of the code is known to this test
+✓ id "confRateDrop" of the code is known to this test
+✓ id "fakeOrders" of the code is known to this test
+✓ id "weakAgents" of the code is known to this test
+✓ id "meVsTeam" of the code is known to this test
+✓ id "notShipped" of the code is known to this test
+✓ id "stuckParcels" of the code is known to this test
+✓ id "openAlerts" of the code is known to this test
+✓ id "returns" of the code is known to this test
+✓ id "returnsUp" of the code is known to this test
+✓ id "badWilayas" of the code is known to this test
+✓ id "ordersDrop" of the code is known to this test
+✓ id "ordersOk" of the code is known to this test
+✓ id "cashLate" of the code is known to this test
+✓ id "cpu" of the code is known to this test
+✓ id "memory" of the code is known to this test
+✓ id "disk" of the code is known to this test
+✓ id "restarted" of the code is known to this test
+✓ id "dbPing" of the code is known to this test
+✓ id "dbConnections" of the code is known to this test
+✓ id "dbSlow" of the code is known to this test
+✓ id "dbDown" of the code is known to this test
+✓ id "dbPoolFull" of the code is known to this test
+✓ id "redisOff" of the code is known to this test
+✓ id "redisDown" of the code is known to this test
+✓ id "redis" of the code is known to this test
+✓ id "jobs" of the code is known to this test
+✓ id "errors" of the code is known to this test
+✓ id "courierSync" of the code is known to this test
+✓ id "silentShops" of the code is known to this test
+✓ id "config" of the code is known to this test
+✓ id "turnstileOff" of the code is known to this test
+✓ id "turnstile" of the code is known to this test
+✓ fr: every Doctor sentence is there
+✓ fr: no sentence waits for a number that never comes
+✓ fr: the menu names (control room, dashboard tab)
+✓ en: every Doctor sentence is there
+✓ en: no sentence waits for a number that never comes
+✓ en: the menu names (control room, dashboard tab)
+✓ ar: every Doctor sentence is there
+✓ ar: no sentence waits for a number that never comes
+✓ ar: the menu names (control room, dashboard tab)
+
+All Doctor checks passed
+exit 0

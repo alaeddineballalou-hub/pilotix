@@ -1,0 +1,19 @@
+smtp sink on 2525 → /tmp/mails
+mail 1 → owner-r0b4m2@pilotix.test : Pilotix : votre code 200321
+mail 2 → owner-r0b4m2@pilotix.test : Pilotix : votre code 953948
+mail 3 → owner1.r0b4m2@shops-test.dz : Pilotix : votre boutique « Boutique Invit r0b4m2 » est prête
+mail 4 → owner1.r0b4m2@shops-test.dz : Pilotix : « Deuxième Owner r0b4m2 » a été ajoutée à votre compte
+mail 5 → owner2.r0b4m2@shops-test.dz : Pilotix: متجرك «Pas Encore r0b4m2» جاهز
+mail 6 → owner2.r0b4m2@shops-test.dz : Pilotix: متجرك «Pas Encore r0b4m2» جاهز
+mail 7 → signup1.r0b4m2@shops-test.dz : Pilotix : confirmez votre inscription
+mail 8 → owner1.r0b4m2@shops-test.dz : Pilotix : vous avez déjà un compte
+mail 9 → staff1.r0b4m2@shops-test.dz : Pilotix : confirmez votre e-mail
+mail 10 → signup1.r0b4m2@shops-test.dz : Pilotix : nouveau mot de passe
+mail 11 → owner1.r0b4m2@shops-test.dz : Pilotix : 1 mois offert 🎁
+mail 12 → signup1.r0b4m2@shops-test.dz : Pilotix : reçu de paiement PX-2026-0002
+mail 13 → signup1.r0b4m2@shops-test.dz : Pilotix vous a répondu : Question bon de livraison
+mail 14 → admin2.r0b4m2@shops-test.dz : Pilotix : confirmez votre e-mail
+mail 15 → owner2.r0b4m2@shops-test.dz : Pilotix: تنتهي فترتك التجريبية يوم 29 أكتوبر 2026
+mail 16 → owner-mvr0bwm4@pilotix.test : Pilotix : votre code 766001
+mail 17 → support-mvr0bwm4@pilotix.test : Pilotix : votre code 590895
+mail 18 → manager-mvr0bwm4@pilotix.test : Pilotix : votre code 421651

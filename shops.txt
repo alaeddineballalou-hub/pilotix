@@ -1,0 +1,164 @@
+
+■ Shop #1: its demo accounts log in as before; an unknown e-mail gets the same answer as a wrong password
+   ✓ demo admin → shop #1
+   ✓ unknown e-mail → « Email ou mot de passe incorrect »
+
+■ Control room: two-step login (a code by e-mail, « remember this device »)
+   ✓ password accepted → the « code » step, the e-mail shown masked (o••••••@pilotix.test)
+   ✓ a wrong code is refused
+   ✓ the right code → logged in, this device remembered
+   ✓ a code works once
+   ✓ remembered device → straight in
+   ✓ a wrong password is refused
+
+■ Control room: settings (sign-ups, reminders, referral, company, terms) and the public terms page
+   ✓ settings saved and read back (two-step untouched)
+   ✓ the terms page answers (standard text, the company’s name)
+
+■ Control room: a plan with a yearly price and a limit of drivers
+   ✓ Pro: 7900 DA a month, 79000 DA a year, 2 drivers
+
+■ A store for a NEW person: invitation e-mail, the owner chooses the password (Pilotix never sees it)
+   ✓ store #2 « boutique-invit-r0b4m2 »: the answer carries no password and no link
+   ✓ invitation e-mail: « Pilotix : votre boutique « Boutique Invit r0b4m2 » est prête »
+   ✓ before choosing a password nobody can log in
+   ✓ the owner chose a password with the link; the link is used up
+   ✓ the owner logs in to the store, as its owner, on trial
+   ✓ the control room shows the owner (invitation accepted) and numbers only
+   ✓ « open the store as its admin » is gone (404)
+
+■ A store for a person who ALREADY has an account: added to their stores, their password unchanged
+   ✓ store #3 added to the account; the e-mail « Pilotix : « Deuxième Owner r0b4m2 » a été ajoutée à votre compte » has no link
+   ✓ the usual password → the picker: Boutique Invit r0b4m2 / Deuxième Owner r0b4m2
+   ✓ the picker opens a store; « Changer de boutique » needs no password
+   ✓ no way into a store where one has no account
+
+■ Invitation sent again
+   ✓ an owner who chose a password already: refused
+   ✓ invitation sent again (in Arabic: « Pilotix: متجرك «Pas Encore r0b4m2» جاهز »)
+
+■ « Créer ma boutique »: the e-mail link makes the store, on trial, with its referral
+   ✓ sign-up open, 14 days of trial
+   ✓ store names: a taken one → boutique-invit-r0b4m2-2; a taken link → « Ce nom est déjà pris par une autre boutique »; Pilotix’s words refused
+   ✓ terms not accepted → refused
+   ✓ an unknown referral code → a clear message
+   ✓ confirmation e-mail: « Pilotix : confirmez votre inscription »
+   ✓ nothing exists before the link is opened
+   ✓ control room › Inscriptions shows it waiting
+   ✓ the link → store #5 made, its owner logged in, on trial
+   ✓ the link works once
+   ✓ control room: in « made », brought by the first store
+   ✓ an e-mail that has an account signs up → « Pilotix : vous avez déjà un compte » (log in instead), nothing made
+
+■ « Ajouter une boutique »: stores per person, and an e-mail check for accounts made by a store
+   ✓ a 2nd and a 3rd store; the 4th is refused (3 per person)
+   ✓ the control room allows this owner 4 → the 4th works
+   ✓ an account made by an admin → « confirm your e-mail first »
+   ✓ the e-mail confirmed with its link → the store is made
+
+■ The team: the owner is protected; an admin sets passwords only of people in this store alone
+   ✓ another admin cannot change or reset the owner
+   ✓ a person who works in another store too: the admin cannot set their password
+   ✓ a person in this store alone: the admin sets the password, and it works
+   ✓ someone who has an account joins with their own password (the one typed by the admin is ignored)
+   ✓ the owner cannot delete their own account (only the whole store)
+
+■ Passwords: « Mot de passe oublié » and Mon profil change it in every store; old sessions end
+   ✓ the new password opens all 5 stores; the old one and the old sessions stop at once
+   ✓ an unknown e-mail: the same answer, no e-mail
+   ✓ Mon profil › new password: every store follows, the other sessions end
+
+■ An account turned off: out of that store at once
+   ✓ the session ends; the login finds no store left (« create your store »)
+
+■ Stores never see each other’s data
+   ✓ a product and an order (PX1001) in the first store
+   ✓ neither another store nor shop #1 sees them
+
+■ Landing pages and llms.txt of a store
+   ✓ the page at <site>/<store>/<page>
+   ✓ the store’s llms.txt lists its page
+   ✓ the platform’s llms.txt links the store’s
+
+■ Management › Archives: the owner is never archived, only the owner deletes for good, archived sessions end at once
+   ✓ the owner’s account shows « propriétaire » and cannot be archived
+   ✓ an administrator archives an account: its session ends at once
+   ✓ another administrator cannot delete for good; the owner can (never used)
+   ✓ a product made by mistake is deleted for good; a sold one stays in the archives
+
+■ Limits: accounts and drivers (hard), orders per month (soft), « over » in the control room
+   ✓ 3 active accounts → limits set to 5 accounts and 1 driver
+   ✓ 1 driver allowed → the 2nd is refused
+   ✓ accounts at the limit → one more is refused with a clear message
+   ✓ the control room’s numbers: 5 accounts, 1 driver
+   ✓ 3 more orders on a plan of 2 a month: none blocked
+   ✓ the store knows: 5 / 2 this month (its banner)
+   ✓ control room: in « Au-dessus des limites », counted on the dashboard
+
+■ Payments: numbered receipts, receipt by e-mail, the referral reward (a free month)
+   ✓ payment saved, receipt PX-2026-0001
+   ✓ the referrer’s free month, and its e-mail « Pilotix : 1 mois offert 🎁 »
+   ✓ a second payment (a year) → PX-2026-0002, no second reward
+   ✓ the receipt e-mailed to the owner: « Pilotix : reçu de paiement PX-2026-0002 »
+   ✓ cancelled → the receipt says so
+   ✓ the store’s « Parrainage »: http://localhost:3000/#/inscription/BRX6Q2, 1 store(s) brought, 1 month(s) earned
+
+■ « Contacter Pilotix »: a store writes, Pilotix answers (by e-mail too), unread dots, closed
+   ✓ the store’s admin wrote (#1); the control room shows it unread
+   ✓ the answer goes by e-mail too: « Pilotix vous a répondu : Question bon de livraison »
+   ✓ the store reads the answer; its unread dot goes away
+   ✓ the store answers again; Pilotix closes the conversation
+   ✓ someone who is not an admin of the store cannot use it
+
+■ A store’s own domain for its landing pages
+   ✓ a wrong name is refused; only the store’s administrator sets it
+   ✓ the name is cleaned and waits for its DNS
+   ✓ another store cannot take it; no certificate before the DNS points here
+   ✓ removed → another store may use it
+
+■ The owner deletes a store (and only the owner)
+   ✓ another admin of the store cannot delete it
+   ✓ a wrong password or a wrong name is refused
+   ✓ deleted: its sessions end, the owner goes on in « Deuxième r0b4m2 »
+   ✓ its employee logs in to an empty list (« create your store »)
+   ✓ …confirms the e-mail from there and makes a store of their own
+   ✓ the control room cannot touch it, and lists it in « Supprimées »
+
+■ Backups page, journal
+   ✓ database 77 MB, 9 stores, 0 backup(s)
+   ✓ the journal has every new action (15 kinds)
+
+■ Reminders: a trial ending → one e-mail to its owner, never twice
+   ✓ reminder e-mail (in Arabic): « Pilotix: تنتهي فترتك التجريبية يوم 29 أكتوبر 2026 »
+   ✓ the next run sends no second e-mail
+
+■ A suspended store: locked in the picker, its work refused
+   ✓ « Bloquée » in the picker; it opens on the lock screen; its work is refused
+
+========== SUMMARY
+✓ Shop #1: its demo accounts log in as before; an unknown e-mail gets the same answer as a wrong password
+✓ Control room: two-step login (a code by e-mail, « remember this device »)
+✓ Control room: settings (sign-ups, reminders, referral, company, terms) and the public terms page
+✓ Control room: a plan with a yearly price and a limit of drivers
+✓ A store for a NEW person: invitation e-mail, the owner chooses the password (Pilotix never sees it)
+✓ A store for a person who ALREADY has an account: added to their stores, their password unchanged
+✓ Invitation sent again
+✓ « Créer ma boutique »: the e-mail link makes the store, on trial, with its referral
+✓ « Ajouter une boutique »: stores per person, and an e-mail check for accounts made by a store
+✓ The team: the owner is protected; an admin sets passwords only of people in this store alone
+✓ Passwords: « Mot de passe oublié » and Mon profil change it in every store; old sessions end
+✓ An account turned off: out of that store at once
+✓ Stores never see each other’s data
+✓ Landing pages and llms.txt of a store
+✓ Management › Archives: the owner is never archived, only the owner deletes for good, archived sessions end at once
+✓ Limits: accounts and drivers (hard), orders per month (soft), « over » in the control room
+✓ Payments: numbered receipts, receipt by e-mail, the referral reward (a free month)
+✓ « Contacter Pilotix »: a store writes, Pilotix answers (by e-mail too), unread dots, closed
+✓ A store’s own domain for its landing pages
+✓ The owner deletes a store (and only the owner)
+✓ Backups page, journal
+✓ Reminders: a trial ending → one e-mail to its owner, never twice
+✓ A suspended store: locked in the picker, its work refused
+
+✅ All multi-shop checks passed
+exit 0

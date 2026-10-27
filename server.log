@@ -1,0 +1,80 @@
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[NestFactory] [39m[32mStarting Nest application...[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAppModule dependencies initialized[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mCoreModule dependencies initialized[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mJwtModule dependencies initialized[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mJobsModule dependencies initialized[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mLiveModule dependencies initialized[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mApiModule dependencies initialized[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mApiController {/api}:[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/health, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/login, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/pick, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/switch, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/stores, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/shop/domain/get, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/shop/domain, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/shop/domain/check, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/domain-check, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/domain, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/domain/:page, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/s/:store/llms.txt, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/demo, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/demo, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/forgot, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/forgot, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/link/:token, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/reset, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/verify, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/verify/send, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/verify/send/ticket, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/signup, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/store-name, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/signup, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/signup/confirm, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/add-store, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/add-store/ticket, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/delete-store, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/support, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/support/:id, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/support, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/support/:id, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/legal, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/rpc/:name, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/hooks/orders/:channel, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/s/:shop/hooks/orders/:channel, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/s/:store/:slug, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/lp/:slug, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/s/:shop/lp/:slug, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/llms.txt, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/lp/geo/:wilaya, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/s/:shop/lp/geo/:wilaya, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/lp/img/:id/:file, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/s/:shop/lp/img/:id/:file, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/lp/:slug/order, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/s/:shop/lp/:slug/order, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/lp/:slug/lead, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/s/:shop/lp/:slug/lead, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/hooks/courier/:companyId, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/s/:shop/hooks/courier/:companyId, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/hooks/meta, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/s/:shop/hooks/meta, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/hooks/meta, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/s/:shop/hooks/meta, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/hooks/sms, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/s/:shop/hooks/sms, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/hooks/tiktok, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/s/:shop/hooks/tiktok, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/hooks/cron, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/s/:shop/hooks/cron, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mPlatformController {/api/platform}:[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/platform/auth/login, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/platform/auth/code, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/platform/rpc/:name, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/platform/doctor, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/platform/doctor/dismiss, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/platform/turnstile/:action, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/platform/health, GET} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:02 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/platform/open/:id, POST} route[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:03 PM [32m    LOG[39m [38;5;3m[NestApplication] [39m[32mNest application successfully started[39m
+[32m[Nest] 3286  - [39m10/27/2026, 6:16:03 PM [32m    LOG[39m [38;5;3m[Pilotix] [39m[32mServer ready on port 3000[39m
+[33m[Nest] 3286  - [39m10/27/2026, 6:16:47 PM [33m   WARN[39m [38;5;3m[Pilotix] [39m[33mRequests come through a proxy (X-Forwarded-For) but TRUST_PROXY is not set: the login limit sees every user as the proxy. Set TRUST_PROXY=1.[39m
