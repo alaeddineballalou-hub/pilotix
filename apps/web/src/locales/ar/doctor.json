@@ -408,7 +408,8 @@
       "why": "تحقق Cloudflare غير المرئي يحمي صفحات هبوط كل المتاجر مجاناً (حتى {{max}} نطاق).",
       "fix": "في الأسفل، بطاقة «Cloudflare»: ألصق Account ID ورمز API لـ Turnstile. Pilotix يتكفل بالباقي.",
       "short": "Cloudflare (الروبوتات)",
-      "okTitle": "Cloudflare (الروبوتات)"
+      "okTitle": "Cloudflare (الروبوتات)",
+      "info": "Cloudflare (الروبوتات) غير متصل"
     }
   },
   "gauge": {
