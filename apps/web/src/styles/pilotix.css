@@ -1699,16 +1699,36 @@ html:not([data-theme="dark"]) .px-lg { --ink: #1B2A47; --tile: #1B2A47; --eye: #
   }
 }
 
-/* ---- Phones: the big logo's entrance when the menu opens ("eyes first") ----
-   the two orange i-dots pop in and blink, the smile draws under them (a face), then the letters fill in between. */
-@keyframes px-eye-in { 0% { transform: scale(0); opacity: 0; } 20% { transform: scale(1.25); opacity: 1; } 30% { transform: scale(1); } 38% { transform: scale(1, .2); } 46%, 100% { transform: scale(1); opacity: 1; } }
-@keyframes px-smile-draw { 0%, 30% { clip-path: inset(-30% 100% -30% -3%); } 64%, 100% { clip-path: inset(-30% -3% -30% -3%); } }
+/* ---- The big logo's entrance, "eyes first" (about 2 s) ----
+   the two orange i-dots pop in and blink, then the smile draws slowly under them (a face), then the letters fill in.
+   Plays: on every page with the big logo (login, lock, reset password, accounts, platform: .px-wm),
+   in the open sidebar when the page loads (.px-lg-enter) and in the phone menu each time it opens (body.nav-open). */
+@keyframes px-eye-in { 0% { transform: scale(0); opacity: 0; } 8% { transform: scale(1.25); opacity: 1; } 13% { transform: scale(1); } 30% { transform: scale(1); } 34% { transform: scale(1, .15); } 39%, 100% { transform: scale(1); opacity: 1; } }
+@keyframes px-smile-draw { 0%, 36% { clip-path: inset(-30% 100% -30% -3%); } 74%, 100% { clip-path: inset(-30% -3% -30% -3%); } }
 @keyframes px-letter-in { 0% { opacity: 0; transform: scale(.6); } 100% { opacity: 1; transform: none; } }
-@media (max-width: 900px) {
-  body.nav-open .px-lg-dot { animation: px-eye-in .9s cubic-bezier(.22, 1, .36, 1) calc(.12s + var(--i) * 55ms) both; }
-  body.nav-open .px-lg-smile { animation: px-smile-draw .9s cubic-bezier(.65, 0, .35, 1) .12s both; }
-  body.nav-open .px-lg-gl, body.nav-open .px-lg-x { transform-origin: center; animation: px-letter-in .26s cubic-bezier(.22, 1, .36, 1) calc(.62s + var(--i) * 45ms) both; }
+.px-wm-dot, .px-lg-dot { transform-box: fill-box; transform-origin: center; }
+.px-wm .px-wm-dot { animation: px-eye-in 1.9s cubic-bezier(.22, 1, .36, 1) calc(.15s + var(--i) * 70ms) both; }
+.px-wm .px-wm-smile { animation: px-smile-draw 1.9s cubic-bezier(.45, 0, .25, 1) .15s both; }
+.px-wm .px-wm-gl { transform-box: fill-box; transform-origin: center; animation: px-letter-in .42s cubic-bezier(.22, 1, .36, 1) calc(1.45s + var(--i) * 60ms) both; }
+@media (min-width: 901px) {
+  .shell:not(.px-folded) .px-lg-enter .px-lg-dot { animation: px-eye-in 1.9s cubic-bezier(.22, 1, .36, 1) calc(.15s + var(--i) * 70ms) both; }
+  .shell:not(.px-folded) .px-lg-enter .px-lg-smile { animation: px-smile-draw 1.9s cubic-bezier(.45, 0, .25, 1) .15s both; }
+  .shell:not(.px-folded) .px-lg-enter .px-lg-gl { transform-origin: center; animation: px-letter-in .42s cubic-bezier(.22, 1, .36, 1) calc(1.45s + var(--i) * 60ms) both; }
 }
+@media (max-width: 900px) {
+  body.nav-open .px-lg-dot { animation: px-eye-in 1.9s cubic-bezier(.22, 1, .36, 1) calc(.15s + var(--i) * 70ms) both; }
+  body.nav-open .px-lg-smile { animation: px-smile-draw 1.9s cubic-bezier(.45, 0, .25, 1) .15s both; }
+  body.nav-open .px-lg-gl { transform-origin: center; animation: px-letter-in .42s cubic-bezier(.22, 1, .36, 1) calc(1.45s + var(--i) * 60ms) both; }
+}
+/* the big logo of the pages: an inline drawing now (it used to be a background picture) */
+.brand-big.px-bb { background: none !important; display: flex; align-items: center; justify-content: center; }
+.px-bb .px-wm { display: block; height: 100%; width: auto; max-width: 100%; overflow: visible; color: #1B2A47; }
+html[data-theme="dark"] .px-bb .px-wm { color: #FFFFFF; }
+@media (prefers-color-scheme: dark) { html:not([data-theme="light"]) .px-bb .px-wm { color: #FFFFFF; } }
+.px-wm-gl { fill: currentColor; }
+.px-wm-x { fill: none; stroke: currentColor; stroke-linecap: round; }
+.px-wm-dot, .px-wm-smile { fill: #F7A823; }
+@media (prefers-reduced-motion: reduce) { .px-wm *, .px-lg-enter *, body.nav-open .px-lg * { animation: none !important; } }
 
 /* ---- Phones: the winking icon is the menu button; touched / hovered / menu open = the grey ☰ ---- */
 @media (max-width: 900px) { html .topbar .brand { display: none !important; } }

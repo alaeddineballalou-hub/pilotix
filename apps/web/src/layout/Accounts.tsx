@@ -8,6 +8,7 @@ import { useSession } from '../lib/session';
 import { Icon } from '../ui/kit';
 import { Modal } from '../ui/modal';
 import { toast } from '../ui/toast';
+import { BrandBig } from './PxWordmark';
 
 /** Leaves a page opened from an e-mail (its secret leaves the address bar and the history). */
 function home(to = '') {
@@ -19,9 +20,7 @@ function Page({ title, children, wide }: { title: string; children: ReactNode; w
   return (
     <div className="login">
       <div className={`card login-card ${wide ? 'px-acc-wide' : ''}`}>
-        <span className="brand-big" role="img" aria-label="Pilotix">
-          Pilotix
-        </span>
+        <BrandBig />
         <h2 className="login-title">{title}</h2>
         {children}
       </div>
@@ -414,9 +413,7 @@ export function Legal() {
   return (
     <div className="px-legal">
       <article className="card">
-        <span className="brand-big" role="img" aria-label="Pilotix">
-          Pilotix
-        </span>
+        <BrandBig />
         <h1>{t('legal.title')}</h1>
         {d?.text.trim() ? (
           <div className="px-legal-own">{d.text}</div>

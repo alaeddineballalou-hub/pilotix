@@ -26,6 +26,7 @@ import { ShopDetail } from './ShopDetail';
 import { Shops } from './Shops';
 import { StaffPage } from './Staff';
 import './platform.css';
+import { BrandBig } from '../../layout/PxWordmark';
 
 type Section = { id: string; icon: string; roles?: Staff['role'][] };
 const SECTIONS: Section[] = [
@@ -76,9 +77,7 @@ function ServerOnly() {
   return (
     <div className="login">
       <div className="card login-card">
-        <span className="brand-big" role="img" aria-label="Pilotix">
-          Pilotix
-        </span>
+        <BrandBig />
         <h2 className="login-title">{t('platform.title')}</h2>
         <p className="login-note">{t('platform.serverOnly')}</p>
         <a className="login-link" href="#/accueil">
@@ -119,9 +118,7 @@ function PlatformLogin({ onDone }: { onDone: (s: Staff) => void }) {
   return (
     <div className="login pp-login">
       <form className="card login-card" onSubmit={submit}>
-        <span className="brand-big" role="img" aria-label="Pilotix">
-          Pilotix
-        </span>
+        <BrandBig />
         <h2 className="login-title">
           <Icon name="shield" /> {t('platform.title')}
         </h2>
