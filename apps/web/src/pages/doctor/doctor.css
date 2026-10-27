@@ -113,3 +113,7 @@
   .dr-card { grid-template-columns: auto 1fr; }
   .dr-go { grid-column: 1 / -1; justify-self: stretch; text-align: center; }
 }
+
+/* Accueil: Pilot Agent in its own card, titled like « Maintenant » */
+.dr-home .dr-home-h { display: flex; align-items: center; gap: 10px; }
+.dr-home .dr-hero { background: var(--raise, var(--surface)); }
