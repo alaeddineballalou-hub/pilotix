@@ -3,7 +3,7 @@
 // link, the e-mail check link, and the terms of use and privacy page.
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ApiError, legalText, server, signup, signupInfo, StoreChoice, storeNameCheck, verifyEmail } from '../lib/backend';
+import { ApiError, DEMO_ONLY, legalText, server, signup, signupInfo, StoreChoice, storeNameCheck, verifyEmail } from '../lib/backend';
 import { useSession } from '../lib/session';
 import { Icon } from '../ui/kit';
 import { Modal } from '../ui/modal';
@@ -260,12 +260,15 @@ export function Signup({ referral, agency }: { referral?: string; agency?: boole
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   useEffect(() => {
-    signupInfo().then(setInfo);
+    // the demo (no server): the form is shown, but nothing can be created
+    if (DEMO_ONLY) setInfo({ open: true, trialDays: 14 });
+    else signupInfo().then(setInfo);
   }, []);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     if (!f.terms) return setError(t('shop.acc.needTerms'));
+    if (DEMO_ONLY) return setError(t('auth.demoNoSignup'));
     setBusy(true);
     try {
       await signup({

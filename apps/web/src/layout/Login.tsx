@@ -129,8 +129,8 @@ export function Login() {
   return (
     <AuthShell>
       <form onSubmit={submit} style={{ display: 'contents' }}>
-        <AuthTitle a={t('auth.welcome1')} b={t('auth.welcome2')} sub={DEMO_ONLY ? t('login.tagline') : undefined} />
-        {!DEMO_ONLY && (
+        <AuthTitle a={t('auth.welcome1')} b={t('auth.welcome2')} />
+        {(
           <>
             <label className="field">
               <span className="lab">{t('login.email')}</span>
@@ -147,7 +147,7 @@ export function Login() {
               </span>
               <PasswordInput id="login-password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
             </label>
-            {!FIXED_SERVER && (
+            {!FIXED_SERVER && !DEMO_ONLY && (
               <label className="field">
                 <span className="lab">{t('login.server')}</span>
                 <input id="login-server" type="url" dir="ltr" required value={server} onChange={(e) => setServer(e.target.value)} placeholder="https://api.votre-boutique.dz" />
@@ -158,7 +158,7 @@ export function Login() {
             <button className="pxa-submit" disabled={!!busy}>
               {busy === 'login' ? '…' : t('login.submit')}
             </button>
-            {canSignup && (
+            {(canSignup || DEMO_ONLY) && (
               <>
                 <p className="pxa-alt">
                   {t('auth.newQ')} <a href="#/inscription">{t('auth.startTrial')}</a>
@@ -186,6 +186,8 @@ export function Login() {
           </div>
         )}
         {(DEMO_AVAILABLE || DEMO_ONLY) && (
+          <>
+          <div className="pxa-sep">{t('auth.orDemo')}</div>
           <div className="demo-accounts">
             <p className="small">
               <b>{t('login.demo')}</b> — {t('login.demoText')}
@@ -198,8 +200,8 @@ export function Login() {
               ))}
             </div>
             {busy && busy !== 'login' && <p className="muted small">{progress}</p>}
-            {DEMO_ONLY && error && <p className="form-err">{error}</p>}
           </div>
+          </>
         )}
       </form>
       {backend.kind === 'demo' && <span hidden>{progress}</span>}
