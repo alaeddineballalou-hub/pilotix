@@ -1,0 +1,52 @@
+name: Test log (for Claude, preview only)
+on:
+  push:
+    branches: ['preview/**']
+permissions:
+  contents: write
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: pilotix
+          POSTGRES_USER: pilotix
+          POSTGRES_PASSWORD: pilotix_ci
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U pilotix" --health-interval 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    env:
+      DATABASE_URL: postgres://pilotix:pilotix_ci@localhost:5432/pilotix
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-only-secret-0123456789abcdefghijklmnop
+      PUBLIC_URL: http://localhost:3000
+      SMTP_HOST: 127.0.0.1
+      SMTP_PORT: '2525'
+      MAIL_FROM: Pilotix <noreply@pilotix.test>
+      MAILS_DIR: /tmp/mails
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: |
+          (npm test > /tmp/test.txt 2>&1; echo "=== TEST EXIT $?" >> /tmp/test.txt) || true
+          (npm run build -w @pilotix/server && npm run migrate -w @pilotix/server && npm run seed:demo -w @pilotix/server) >> /tmp/test.txt 2>&1 || echo "=== SERVER BUILD FAILED" >> /tmp/test.txt
+          node scripts/smtp-sink.cjs 2525 /tmp/mails > /tmp/mails.log 2>&1 &
+          node apps/server/dist/main.js > /tmp/server.log 2>&1 &
+          for i in $(seq 1 40); do curl -fs http://localhost:3000/api/health && break; sleep 1; done
+          for t in "bash scripts/smoke-test.sh" "node scripts/shops-test.mjs" "node scripts/doctor-test.mjs"; do echo "=== $t" >> /tmp/test.txt; ($t >> /tmp/test.txt 2>&1; echo "=== EXIT $?" >> /tmp/test.txt) || true; done
+          echo "=== SERVER LOG" >> /tmp/test.txt; tail -80 /tmp/server.log >> /tmp/test.txt
+      - name: Publish the log to testlog-<branch>
+        if: always()
+        run: |
+          OUT="testlog-${GITHUB_REF_NAME//\//-}"
+          mkdir -p /tmp/out && cp /tmp/test.txt /tmp/out/ && cd /tmp/out
+          git init -q && git checkout -qb "$OUT" && git add -A
+          git -c user.name=ci -c user.email=ci@x commit -qm "Tests of ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" "$OUT"

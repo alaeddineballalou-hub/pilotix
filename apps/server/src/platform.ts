@@ -199,18 +199,20 @@ export class PlatformController {
   }
 
   /**
-   * Cloudflare Turnstile for every shop (Doctor): « save » the account id and API token (the owner only; '' keeps the
-   * saved token, null removes the connection), « sync » now. The token never comes back.
+   * Cloudflare Turnstile for every shop: « save » the account id and API token (the owner only, Réglages; locked: it is
+   * never removed, only replaced by a new one that Cloudflare accepted), « status », « sync » now. The token never comes back.
    */
   @Post('turnstile/:action')
   async turnstile(@Param('action') action: string, @Body() body: any, @Req() req: { staff: StaffSession }) {
-    if (req.staff.role === 'support') throw new core.AppError('forbidden', 'Réservé au propriétaire et aux managers');
+    // every staff member sees whether it is connected (Réglages); syncing is for the owner and managers
     if (action === 'status') return turnstileStatus(this.core);
+    if (req.staff.role === 'support') throw new core.AppError('forbidden', 'Réservé au propriétaire et aux managers');
     if (action === 'sync') return syncTurnstile(this.core);
     if (action === 'save') {
       if (req.staff.role !== 'owner') throw new core.AppError('forbidden', 'Réservé au propriétaire');
       try {
-        return await saveTurnstileConfig(this.core, body?.remove ? null : { accountId: String(body?.accountId ?? '').slice(0, 64), token: String(body?.token ?? '').slice(0, 400) });
+        // locked: no « remove »; a new Account ID and a new token replace the old ones (checked with Cloudflare first)
+        return await saveTurnstileConfig(this.core, { accountId: String(body?.accountId ?? '').slice(0, 64), token: String(body?.token ?? '').slice(0, 400) });
       } catch (e) {
         throw new core.AppError('bad_request', (e as Error).message);
       }
