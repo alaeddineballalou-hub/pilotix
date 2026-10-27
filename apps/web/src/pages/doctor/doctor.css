@@ -193,12 +193,12 @@
 .dr-home { padding: 14px; }
 @media (prefers-reduced-motion: reduce) { .dr-live i { animation: none; } .dr-cock-bar i { transition: none; } }
 @media (max-width: 760px) {
-  .dr-cock { grid-template-columns: auto minmax(0, 1fr); gap: 14px 16px; padding: 18px; }
-  .dr-cock-score { grid-column: 1 / -1; grid-row: 1; justify-self: end; display: flex; align-items: baseline; gap: 6px; position: absolute; }
-  .dr-cock { position: relative; }
-  .dr-cock-score { top: 16px; inset-inline-end: 18px; }
-  .dr-cock-score b { font-size: 26px; }
+  .dr-cock { grid-template-columns: auto minmax(0, 1fr); gap: 10px 14px; padding: 18px 16px; }
+  .dr-cock .cp-ic { grid-column: 1; grid-row: 1; width: 48px !important; height: 48px !important; align-self: start; }
+  .dr-cock-score { grid-column: 1; grid-row: 2; align-self: start; text-align: center; }
+  .dr-cock-score b { font-size: 24px; }
+  .dr-cock-score small { font-size: 10.5px; margin-top: 2px; }
+  .dr-cock-m { grid-column: 2; grid-row: 1 / span 2; }
   .dr-cock-say { font-size: 18px; }
-  .dr-cock .cp-ic { width: 48px !important; height: 48px !important; align-self: start; }
-  .dr-cock-top { padding-inline-end: 70px; }
+  .dr-live { white-space: normal; }
 }
