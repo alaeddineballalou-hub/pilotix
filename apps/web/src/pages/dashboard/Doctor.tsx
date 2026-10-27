@@ -1,8 +1,9 @@
-// Pilot Agent (Accueil, admin / vendeur): what is going wrong in the shop, or about to — with what to do.
-// `card`: inside a card titled « Pilot Agent », like « Maintenant ».
+// Co-Pilot (Accueil, admin / vendeur): what is going wrong in the shop, or about to — with what to do.
+// `card`: inside a card titled « Co-Pilot », like « Maintenant », with its living icon (CopilotIcon).
 import { useTranslation } from 'react-i18next';
 import { useRpc } from '../../lib/query';
-import { ErrorBox, Icon, Loading } from '../../ui/kit';
+import { ErrorBox, Loading } from '../../ui/kit';
+import { copilotMood, CopilotIcon } from '../doctor/CopilotIcon';
 import { DoctorHero, DoctorList } from '../doctor/parts';
 
 export function ShopDoctor({ card }: { card?: boolean }) {
@@ -25,9 +26,7 @@ export function ShopDoctor({ card }: { card?: boolean }) {
     <section className="card dr-home">
       <div className="card-head">
         <h2 className="dr-home-h">
-          <span className="dr-logo">
-            <Icon name="sparkles" />
-          </span>
+          <CopilotIcon mood={r && !q.isFetching ? copilotMood(r.items) : null} label={t('doctor.shopTitle')} />
           {t('doctor.shopTitle')}
         </h2>
       </div>
