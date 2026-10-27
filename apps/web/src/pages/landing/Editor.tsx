@@ -1,6 +1,6 @@
 // The editor of one landing page: the form on one side, the page itself on the other (live, desktop or phone), drawn
 // by the very function the server uses, so what is seen here is what customers get.
-import { LANDING_COLORS, LANDING_DEFAULT_COLOR, LandingView, renderLanding } from '@pilotix/shared';
+import { LANDING_COLORS, LANDING_DEFAULT_COLOR, LandingView, renderLanding, WHATSAPP_DEFAULT, WHATSAPP_VARS } from '@pilotix/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { backend, Out, rpc, serverUrl, shopApi } from '../../lib/backend';
@@ -38,8 +38,13 @@ const draftOf = (p: Page | null, productId?: number) => ({
   variantLabel: p?.variantLabel ?? 'اللون',
   fraudLevel: (p?.fraudLevel ?? 'normal') as Level,
   pixelId: p?.pixelId ?? '',
-  metaPixelRef: (p?.metaPixelRef ?? null) as number | null,
-  tiktokPixelRef: (p?.tiktokPixelRef ?? null) as number | null,
+  metaPixels: (p?.metaPixels ?? null) as number[] | null,
+  tiktokPixels: (p?.tiktokPixels ?? null) as number[] | null,
+  /** 'shop': as in Réglages; 'off': no button; 'own': this page's number and message */
+  waMode: (p?.whatsapp ? (p.whatsapp.on ? 'own' : 'off') : 'shop') as 'shop' | 'off' | 'own',
+  waNumber: p?.whatsapp?.number ?? '',
+  waLabel: p?.whatsapp?.label ?? '',
+  waMessage: p?.whatsapp?.message ?? '',
   stockMode: (p?.stockMode ?? 'off') as 'off' | 'hide',
   images: (p?.images ?? []) as Img[],
 });
@@ -57,6 +62,8 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }));
   const products = useRpc('landing.products', {});
   const ctx = useRpc('landing.context', { productId: d.productId }, { enabled: !!d.productId });
+  // the WhatsApp button of Réglages (the preview's thank-you screen shows the one the page will have)
+  const shopWa = useRpc('landing.settings.get', {}, { staleTime: 60_000 }).data?.settings.whatsapp;
   const save = useAction('landing.save', {
     success: t('landing.ed.saved'),
     onDone: (r) => {
@@ -92,9 +99,10 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
       variantLabel: d.variantLabel.trim(),
       fraudLevel: d.fraudLevel,
       // a pixel typed on the page before pixels had names: kept until another choice is made
-      pixelId: d.metaPixelRef === null && d.pixelId.trim() ? d.pixelId.trim() : '',
-      metaPixelRef: d.metaPixelRef,
-      tiktokPixelRef: d.tiktokPixelRef,
+      pixelId: d.metaPixels === null && d.pixelId.trim() ? d.pixelId.trim() : '',
+      metaPixels: d.metaPixels,
+      tiktokPixels: d.tiktokPixels,
+      whatsapp: d.waMode === 'shop' ? null : d.waMode === 'off' ? { on: false, number: '', label: '', message: '' } : { on: true, number: d.waNumber.trim(), label: d.waLabel.trim(), message: d.waMessage.trim() },
       stockMode: d.stockMode,
       images: d.images.map((i) => (i.id ? { id: i.id } : { url: i.url!, w: i.w, h: i.h })),
     });
@@ -132,12 +140,18 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
       images: view.images.map((i) => ({ src: i.src, srcset: `${i.src} 480w`, thumb: i.thumb, w: i.w, h: i.h })),
       fees: c.fees,
       shopName: c.shopName,
+      whatsapp:
+        view.waMode === 'own'
+          ? { number: view.waNumber, label: view.waLabel || shopWa?.label || WHATSAPP_DEFAULT.label, message: view.waMessage || shopWa?.message || WHATSAPP_DEFAULT.message }
+          : view.waMode === 'shop' && shopWa?.on
+            ? { number: shopWa.number, label: shopWa.label || WHATSAPP_DEFAULT.label, message: shopWa.message || WHATSAPP_DEFAULT.message }
+            : null,
     };
     const r = { mode: 'preview' as const, post: '', geo: '', challenge: 'apercu', bits: c.bits };
     // the weight customers download before pictures (here the pictures are inside the page, as data)
     const bare = renderLanding({ ...v, images: v.images.map((i) => ({ ...i, src: 'x', srcset: 'x 480w', thumb: 'x' })) }, r);
     return { html: renderLanding(v, r), weight: new Blob([bare]).size };
-  }, [view, ctx.data]);
+  }, [view, ctx.data, shopWa]);
   const frame = useRef<HTMLIFrameElement>(null);
   useLandingFrame(frame);
   // « Ordinateur »: the page drawn 1280 px wide, then scaled down to fit the box
@@ -248,8 +262,37 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
 
           <section className="card">
             <h2>{t('landing.ed.sMore')}</h2>
-            <PixelSelects meta={d.metaPixelRef} tiktok={d.tiktokPixelRef} onChange={(k, v) => setD((x) => ({ ...x, [k]: v, ...(k === 'metaPixelRef' ? { pixelId: '' } : {}) }))} />
-            {d.metaPixelRef === null && !!d.pixelId && <p className="pd-note">{t('landing.px.legacy', { id: d.pixelId })}</p>}
+            <PixelSelects meta={d.metaPixels} tiktok={d.tiktokPixels} onChange={(k, v) => setD((x) => ({ ...x, [k]: v, ...(k === 'metaPixels' ? { pixelId: '' } : {}) }))} />
+            {d.metaPixels === null && !!d.pixelId && <p className="pd-note">{t('landing.px.legacy', { id: d.pixelId })}</p>}
+            <Field label={t('landing.wa.page')} hint={t('landing.wa.pageHint')}>
+              <select value={d.waMode} onChange={(e) => set('waMode', e.target.value as Draft['waMode'])}>
+                <option value="shop">{t('landing.wa.mode.shop')}</option>
+                <option value="own">{t('landing.wa.mode.own')}</option>
+                <option value="off">{t('landing.wa.mode.off')}</option>
+              </select>
+            </Field>
+            {d.waMode === 'own' && (
+              <>
+                <div className="grid2">
+                  <Field label={t('landing.wa.number')} hint={t('landing.wa.numberHint')}>
+                    <input className="ltr" type="tel" inputMode="tel" value={d.waNumber} placeholder="0661 23 45 67" onChange={(e) => set('waNumber', e.target.value)} />
+                  </Field>
+                  <Field label={t('landing.wa.label')}>
+                    <input dir="auto" value={d.waLabel} maxLength={60} placeholder={WHATSAPP_DEFAULT.label} onChange={(e) => set('waLabel', e.target.value)} />
+                  </Field>
+                </div>
+                <Field label={t('landing.wa.message')} hint={t('landing.wa.pageMessageHint')}>
+                  <textarea dir="auto" rows={3} maxLength={800} value={d.waMessage} placeholder={WHATSAPP_DEFAULT.message} onChange={(e) => set('waMessage', e.target.value)} />
+                </Field>
+                <div className="lp-wa-vars">
+                  {WHATSAPP_VARS.map((k) => (
+                    <button key={k} type="button" className="chip" onClick={() => set('waMessage', `${d.waMessage}${d.waMessage && !/\s$/.test(d.waMessage) ? ' ' : ''}{${k}}`)}>
+                      {`{${k}}`} · {t(`landing.wa.var.${k}`)}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
             <label className="lp-switch">
               <input type="checkbox" checked={d.stockMode === 'hide'} onChange={(e) => set('stockMode', e.target.checked ? 'hide' : 'off')} />
               <span>

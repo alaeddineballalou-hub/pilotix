@@ -128,8 +128,8 @@ const draftOf = (g: Group | null) => ({
   bestPageId: g?.bestPageId ?? null,
   items: (g?.items ?? []).map((x) => ({ pageId: x.pageId, tab: x.tab, note: x.note })),
   pixelId: g?.pixelId ?? '',
-  metaPixelRef: (g?.metaPixelRef ?? null) as number | null,
-  tiktokPixelRef: (g?.tiktokPixelRef ?? null) as number | null,
+  metaPixels: (g?.metaPixels ?? null) as number[] | null,
+  tiktokPixels: (g?.tiktokPixels ?? null) as number[] | null,
 });
 type Draft = ReturnType<typeof draftOf>;
 
@@ -360,7 +360,7 @@ function Form({ g }: { g: Group | null }) {
 
           <section className="card">
             <h2>{t('landing.gr.sPixel')}</h2>
-            <PixelSelects meta={d.metaPixelRef} tiktok={d.tiktokPixelRef} onChange={(k, v) => setD((x) => ({ ...x, [k]: v, ...(k === 'metaPixelRef' ? { pixelId: '' } : {}) }))} />
+            <PixelSelects meta={d.metaPixels} tiktok={d.tiktokPixels} onChange={(k, v) => setD((x) => ({ ...x, [k]: v, ...(k === 'metaPixels' ? { pixelId: '' } : {}) }))} />
           </section>
 
           <div className="lp-ed-foot">

@@ -47,9 +47,9 @@ test('pixels: named, one default per platform, chosen per page; tokens only by t
 
   // page 1: Pixel B and the TikTok pixel; page 2: the defaults, no TikTok
   const p1: any = await call('landing.get', marketer, { id: pages[0].id });
-  await call('landing.save', marketer, { ...p1, id: p1.id, images: [], metaPixelRef: b.id, tiktokPixelRef: tt.id, pixelId: '' });
+  await call('landing.save', marketer, { ...p1, id: p1.id, images: [], metaPixels: [b.id], tiktokPixels: [tt.id], pixelId: '' });
   const p2: any = await call('landing.get', marketer, { id: pages[1].id });
-  await call('landing.save', marketer, { ...p2, id: p2.id, images: [], metaPixelRef: null, tiktokPixelRef: 0, pixelId: '' });
+  await call('landing.save', marketer, { ...p2, id: p2.id, images: [], metaPixels: null, tiktokPixels: [], pixelId: '' });
   const c1 = cfg(await live(pages[0].slug));
   assert.equal(c1.px, META_B);
   assert.equal(c1.tt, TT);
@@ -115,4 +115,33 @@ test('thank-you screen: the WhatsApp button with the shop’s own message (off b
   assert.equal(cfg(h).wa.m, 'سلام، أنا {nom}، طلبت {produit}');
   await call('landing.settings.save', admin, { ...g.settings, whatsapp: { on: false, number: '0661234567', label: '', message: '' } });
   assert.doesNotMatch(await live(pages[0].slug), /id="wa"/);
+});
+
+test('pixels: a page sends to several pixels at once; its own WhatsApp button; TikTok URL parameters', async () => {
+  const list: any[] = (await call('landing.pixels', marketer, {})) as any;
+  const a = list.find((p) => p.pixelId === META_A);
+  const c: any = await call('landing.pixelSave', marketer, { platform: 'meta', name: 'Pixel C', pixelId: '333333333333333' });
+  const tt = list.find((p) => p.platform === 'tiktok' && p.pixelId === TT);
+  const p2: any = await call('landing.get', marketer, { id: pages[1].id });
+  await call('landing.save', marketer, { ...p2, id: p2.id, images: [], metaPixels: [a.id, c.id], tiktokPixels: [tt.id], pixelId: '', whatsapp: { on: true, number: '+213 770 11 22 33', label: 'واتساب', message: 'صفحة خاصة {nom}' } });
+  const h = await live(pages[1].slug);
+  const k = cfg(h);
+  assert.deepEqual(k.pxs, [META_A, '333333333333333']);
+  assert.deepEqual(k.tts, [TT]);
+  assert.match(h, /wa\.me\/213770112233/);
+  assert.equal(k.wa.m, 'صفحة خاصة {nom}');
+  // the order reaches every pixel of the page
+  const o = (await db.query(`SELECT id, ref FROM orders WHERE NOT is_exchange ORDER BY id DESC OFFSET 1 LIMIT 1`))[0];
+  await db.query(`UPDATE orders SET landing_id = $2, conf_status = 'confirmed' WHERE id = $1`, [o.id, pages[1].id]);
+  await queuePurchase(db, await landingSettings(db), Number(o.id), Date.now());
+  const rows = await db.query(`SELECT platform || ':' || pixel_id AS k FROM meta_events WHERE order_id = $1 ORDER BY 1`, [o.id]);
+  assert.deepEqual(rows.map((r: any) => r.k), [`meta:${META_A}`, 'meta:333333333333333', `tiktok:${TT}`]);
+  // deleting a ticked pixel keeps the others
+  await call('landing.pixelRemove', marketer, { id: c.id });
+  assert.deepEqual(cfg(await live(pages[1].slug)).pxs, [META_A]);
+  // a page with no button while Réglages has one
+  await call('landing.save', marketer, { ...p2, id: p2.id, images: [], metaPixels: null, tiktokPixels: [], pixelId: '', whatsapp: { on: false } });
+  assert.doesNotMatch(await live(pages[1].slug), /id="wa"/);
+  const g: any = await call('landing.settings.get', marketer, {});
+  assert.match(g.tiktokUrlParams, /ad_id=__CID__/);
 });

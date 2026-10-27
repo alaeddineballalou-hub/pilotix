@@ -130,6 +130,14 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
             <Icon name="copy" /> {t('landing.set.copy')}
           </button>
         </div>
+        <h3>{t('landing.set.ttParams')}</h3>
+        <p className="pd-note">{t('landing.set.ttParamsHelp')}</p>
+        <div className="lp-copy">
+          <code className="ltr">{data.tiktokUrlParams}</code>
+          <button type="button" className="btn small" onClick={async () => (await copyText(data.tiktokUrlParams)) && toast(t('landing.copied'), 'ok')}>
+            <Icon name="copy" /> {t('landing.set.copy')}
+          </button>
+        </div>
       </section>
 
       <section className="card">

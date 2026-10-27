@@ -30,8 +30,8 @@ export interface PixelRow {
 export async function listPixels(db: Db): Promise<PixelRow[]> {
   const rows = await db.query(
     `SELECT p.*, EXISTS (SELECT 1 FROM settings s WHERE s.key = 'secret_pixel_' || p.id) AS has_token,
-       (SELECT count(*)::int FROM landing_pages l WHERE (p.platform = 'meta' AND l.meta_pixel_ref = p.id) OR (p.platform = 'tiktok' AND l.tiktok_pixel_ref = p.id))
-       + (SELECT count(*)::int FROM landing_groups g WHERE (p.platform = 'meta' AND g.meta_pixel_ref = p.id) OR (p.platform = 'tiktok' AND g.tiktok_pixel_ref = p.id)) AS n_pages
+       (SELECT count(*)::int FROM landing_pages l WHERE CASE p.platform WHEN 'meta' THEN l.meta_pixels ELSE l.tiktok_pixels END @> to_jsonb(p.id))
+       + (SELECT count(*)::int FROM landing_groups g WHERE CASE p.platform WHEN 'meta' THEN g.meta_pixels ELSE g.tiktok_pixels END @> to_jsonb(p.id)) AS n_pages
      FROM tracking_pixels p ORDER BY p.platform, p.is_default DESC, lower(p.name), p.id`,
   );
   return rows.map((r: any) => ({
@@ -47,28 +47,34 @@ export async function listPixels(db: Db): Promise<PixelRow[]> {
   }));
 }
 
+/** a page's or group's list of pixels of a platform: null = the default one, [] = none */
+const listOf = (v: unknown): number[] | null => {
+  const a = typeof v === 'string' ? JSON.parse(v) : v;
+  return Array.isArray(a) ? a.map(Number).filter((x) => Number.isInteger(x) && x > 0) : null;
+};
+
 /**
- * The pixels a page (or group) reports to: its choice, else the platform's default. Meta also falls back on what the
- * page had typed before pixels had names, then on the pixel of Réglages.
+ * The pixels a page (or group) reports to: the ones it ticked, else the platform's default. Meta also falls back on
+ * what the page had typed before pixels had names, then on the pixel of Réglages.
  */
 export async function pixelsOf(
   db: Db,
-  row: { meta_pixel_ref?: unknown; tiktok_pixel_ref?: unknown; pixel_id?: unknown } | null | undefined,
+  row: { meta_pixels?: unknown; tiktok_pixels?: unknown; pixel_id?: unknown } | null | undefined,
   legacyDefault: string,
-): Promise<{ meta: string; tiktok: string; tiktokTest: string }> {
-  const all = await db.query('SELECT id, platform, pixel_id, test_code, is_default FROM tracking_pixels');
-  const pick = (platform: PixelPlatform, ref: unknown) => {
-    if (ref === 0 || ref === '0') return null;
-    if (ref !== null && ref !== undefined) return all.find((p: any) => num(p.id) === num(ref) && p.platform === platform) ?? null;
-    return undefined; // not chosen: the default
+): Promise<{ meta: string[]; tiktok: string[] }> {
+  const all = await db.query('SELECT id, platform, pixel_id, is_default FROM tracking_pixels ORDER BY id');
+  const pick = (platform: PixelPlatform, v: unknown): string[] | null => {
+    const ids = listOf(v);
+    if (ids === null) return null;
+    return all.filter((p: any) => p.platform === platform && ids.includes(num(p.id))).map((p: any) => String(p.pixel_id));
   };
-  const def = (platform: PixelPlatform) => all.find((p: any) => p.platform === platform && p.is_default) ?? null;
-  const m = pick('meta', row?.meta_pixel_ref);
+  const def = (platform: PixelPlatform) => all.find((p: any) => p.platform === platform && p.is_default);
   const legacy = String(row?.pixel_id ?? '').trim();
-  const meta = m === null ? '' : m ? String(m.pixel_id) : legacy || (def('meta') ? String(def('meta').pixel_id) : legacyDefault.trim());
-  const t0 = pick('tiktok', row?.tiktok_pixel_ref);
-  const t = t0 === undefined ? def('tiktok') : t0;
-  return { meta: META_ID.test(meta) ? meta : '', tiktok: t ? String(t.pixel_id) : '', tiktokTest: t ? String(t.test_code ?? '') : '' };
+  const dm = def('meta');
+  const dt = def('tiktok');
+  const meta = pick('meta', row?.meta_pixels) ?? [legacy || (dm ? String(dm.pixel_id) : legacyDefault.trim())];
+  const tiktok = pick('tiktok', row?.tiktok_pixels) ?? (dt ? [String(dt.pixel_id)] : []);
+  return { meta: [...new Set(meta.filter((x) => META_ID.test(x)))], tiktok: [...new Set(tiktok.filter((x) => TIKTOK_ID.test(x)))] };
 }
 
 /** The token of a pixel (its own), or '' (Meta then uses the shop's Conversions API token). */
@@ -84,12 +90,15 @@ export async function pixelTestCode(db: Db, platform: PixelPlatform, pixelId: st
   return String((await db.query('SELECT test_code FROM tracking_pixels WHERE platform = $1 AND pixel_id = $2', [platform, pixelId]))[0]?.test_code ?? '');
 }
 
-/** a page's or group's choice for one platform: null = the default, 0 = none, else a pixel of that platform */
-export const PixelRef = z.number().int().min(0).nullable().default(null);
-export async function checkRef(db: Db, platform: PixelPlatform, ref: number | null) {
-  if (!ref) return;
-  if (!(await db.query('SELECT 1 FROM tracking_pixels WHERE id = $1 AND platform = $2', [ref, platform])).length) throw notFound('Pixel introuvable');
+/** a page's or group's pixels of one platform: null = the default one, [] = none, else pixels of that platform */
+export const PixelList = z.array(id).max(10, '10 pixels au maximum').nullable().default(null);
+export async function checkPixels(db: Db, platform: PixelPlatform, ids: number[] | null) {
+  if (!ids?.length) return;
+  const n = num((await db.query('SELECT count(*)::int AS n FROM tracking_pixels WHERE id = ANY($1) AND platform = $2', [[...new Set(ids)], platform]))[0].n);
+  if (n !== new Set(ids).size) throw notFound('Pixel introuvable');
 }
+export const pixelsJson = (ids: number[] | null) => (ids === null ? null : JSON.stringify([...new Set(ids)]));
+export const readPixels = listOf;
 
 const PixelInput = z.object({
   id: id.optional(),
@@ -146,9 +155,10 @@ export const pixelProcs = {
     if (!p) throw notFound('Pixel introuvable');
     await ctx.db.tx(async (tx) => {
       // the pages that chose it follow the default again
-      const col = p.platform === 'tiktok' ? 'tiktok_pixel_ref' : 'meta_pixel_ref';
-      await tx.query(`UPDATE landing_pages SET ${col} = NULL WHERE ${col} = $1`, [rid]);
-      await tx.query(`UPDATE landing_groups SET ${col} = NULL WHERE ${col} = $1`, [rid]);
+      // taken off the pages that ticked it (a page left with none of its own follows the default again)
+      const col = p.platform === 'tiktok' ? 'tiktok_pixels' : 'meta_pixels';
+      for (const table of ['landing_pages', 'landing_groups'])
+        await tx.query(`UPDATE ${table} SET ${col} = (SELECT jsonb_agg(x) FROM jsonb_array_elements(${col}) x WHERE x <> to_jsonb($1::bigint)) WHERE ${col} @> to_jsonb($1::bigint)`, [rid]);
       await tx.query('DELETE FROM tracking_pixels WHERE id = $1', [rid]);
       await tx.query('DELETE FROM settings WHERE key = $1', [secretKey(rid)]);
       if (p.is_default) await tx.query(`UPDATE tracking_pixels SET is_default = true WHERE id = (SELECT id FROM tracking_pixels WHERE platform = $1 ORDER BY id LIMIT 1)`, [p.platform]);

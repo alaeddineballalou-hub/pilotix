@@ -12,7 +12,7 @@ import { b64, HtmlOpts, imageRows, ImgRef, productContext, readImgs, viewImages 
 
 const WHO = ['marketer'] as const;
 import { landingSettings, landingStore } from './landingquery';
-import { checkRef, pixelsOf, PixelRef } from './pixels';
+import { checkPixels, PixelList, pixelsJson, pixelsOf, readPixels } from './pixels';
 
 const id = z.number().int().positive();
 const SLUG = z.string().trim().min(2).max(60).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Adresse : lettres minuscules, chiffres et tirets');
@@ -33,8 +33,8 @@ export const GroupInput = z.object({
     .default([]),
   pixelId: z.string().trim().max(30).regex(/^\d*$/, 'Pixel : chiffres seulement').default(''),
   /** Réglages › Pixels: null = the default one, 0 = none */
-  metaPixelRef: PixelRef,
-  tiktokPixelRef: PixelRef,
+  metaPixels: PixelList,
+  tiktokPixels: PixelList,
 });
 type GroupIn = z.infer<typeof GroupInput>;
 
@@ -48,8 +48,8 @@ interface GroupRowIn {
   best_page_id: number | null;
   items: unknown;
   pixel_id: string | null;
-  meta_pixel_ref: number | null;
-  tiktok_pixel_ref: number | null;
+  meta_pixels: unknown;
+  tiktok_pixels: unknown;
 }
 
 const readItems = (v: unknown): { pageId: number; tab: string; note: string }[] => {
@@ -106,8 +106,8 @@ async function renderRow(ctx: Ctx, g: GroupRowIn, o: Pick<HtmlOpts, 'mode' | 'im
       items,
       bestSlug: best?.slug ?? null,
       shopName,
-      pixelId: o.mode === 'live' ? px.meta : '',
-      tiktokId: o.mode === 'live' ? px.tiktok : '',
+      pixelId: o.mode === 'live' ? px.meta.join(',') : '',
+      tiktokId: o.mode === 'live' ? px.tiktok.join(',') : '',
     },
     { mode: o.mode, url: url || undefined },
   );
@@ -172,8 +172,8 @@ async function listGroups(db: Db, ids?: number[]) {
       theme: ((GROUP_THEMES as readonly string[]).includes(r.theme) ? r.theme : 'grid') as GroupTheme,
       bestPageId: numOrNull(r.best_page_id),
       pixelId: String(r.pixel_id ?? ''),
-      metaPixelRef: numOrNull(r.meta_pixel_ref),
-      tiktokPixelRef: numOrNull(r.tiktok_pixel_ref),
+      metaPixels: readPixels(r.meta_pixels),
+      tiktokPixels: readPixels(r.tiktok_pixels),
       views: num(r.views),
       clicks: items.reduce((n, x) => n + x.clicks, 0),
       orders: orders.filter((o: any) => o.g === r.slug).reduce((n: number, o: any) => n + num(o.n), 0),
@@ -204,8 +204,8 @@ const rowOf = (i: GroupIn): GroupRowIn => ({
   best_page_id: i.bestPageId,
   items: i.items,
   pixel_id: i.pixelId,
-  meta_pixel_ref: i.metaPixelRef,
-  tiktok_pixel_ref: i.tiktokPixelRef,
+  meta_pixels: i.metaPixels,
+  tiktok_pixels: i.tiktokPixels,
 });
 
 export const landingGroupProcs = {
@@ -213,14 +213,14 @@ export const landingGroupProcs = {
 
   'landing.groupSave': proc([...WHO], GroupInput, async (ctx, i) => {
     await checkInput(ctx.db, i);
-    await checkRef(ctx.db, 'meta', i.metaPixelRef);
-    await checkRef(ctx.db, 'tiktok', i.tiktokPixelRef);
+    await checkPixels(ctx.db, 'meta', i.metaPixels);
+    await checkPixels(ctx.db, 'tiktok', i.tiktokPixels);
     const r = rowOf(i);
-    const vals = [r.slug, r.active, r.title, r.subtitle, r.color, r.theme, r.best_page_id, JSON.stringify(r.items), r.pixel_id || null, r.meta_pixel_ref, r.tiktok_pixel_ref];
+    const vals = [r.slug, r.active, r.title, r.subtitle, r.color, r.theme, r.best_page_id, JSON.stringify(r.items), r.pixel_id || null, pixelsJson(i.metaPixels), pixelsJson(i.tiktokPixels)];
     let gid: number;
     if (i.id) {
       const u = await ctx.db.query(
-        `UPDATE landing_groups SET slug=$2, active=$3, title=$4, subtitle=$5, color=$6, theme=$7, best_page_id=$8, items=$9, pixel_id=$10, meta_pixel_ref=$11, tiktok_pixel_ref=$12, updated_at=now() WHERE id=$1 RETURNING id`,
+        `UPDATE landing_groups SET slug=$2, active=$3, title=$4, subtitle=$5, color=$6, theme=$7, best_page_id=$8, items=$9, pixel_id=$10, meta_pixels=$11, tiktok_pixels=$12, updated_at=now() WHERE id=$1 RETURNING id`,
         [i.id, ...vals],
       );
       if (!u.length) throw notFound('Groupe introuvable');
@@ -229,7 +229,7 @@ export const landingGroupProcs = {
       gid = num(
         (
           await ctx.db.query(
-            `INSERT INTO landing_groups (slug, active, title, subtitle, color, theme, best_page_id, items, pixel_id, meta_pixel_ref, tiktok_pixel_ref, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+            `INSERT INTO landing_groups (slug, active, title, subtitle, color, theme, best_page_id, items, pixel_id, meta_pixels, tiktok_pixels, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
             [...vals, ctx.session.profile.id],
           )
         )[0].id,
