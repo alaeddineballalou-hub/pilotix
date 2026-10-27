@@ -500,5 +500,21 @@
     },
     "recvOne": "To receive from {{name}}",
     "searchPh": "Name, phone, PX…"
+  },
+  "ad": {
+    "title": "Ad (where the order came from)",
+    "source": "Source",
+    "group": "Group",
+    "campaign": "Campaign",
+    "name": "Ad",
+    "adId": "Ad ID",
+    "adsetId": "Ad set ID",
+    "campaignId": "Campaign ID",
+    "placement": "Placement",
+    "copy": "Copy",
+    "copied": "Copied",
+    "noIdAd": "Came from an ad, but with no ID: add the « URL parameters » to each Meta ad (Landing pages › Settings).",
+    "noAd": "No ad recognised (direct visit, or an ad without « URL parameters »).",
+    "searchHint": "Tip: type the ad ID in the orders search to see all its orders."
   }
 }

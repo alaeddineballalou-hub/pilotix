@@ -248,6 +248,12 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   await db.query(`UPDATE landing_submits SET fp = 'd:demo' || id WHERE fp = 'd:demo'`);
   await db.query(`UPDATE landing_blocked SET fp = 'd:demo' || id WHERE fp = 'd:demo'`);
   await db.query(`UPDATE landing_leads SET device = 'd:demo' || id WHERE device = 'd:demo'`);
+  // the ad each landing order came from (what Meta puts in the link when the ad's « URL parameters » are set)
+  await db.query(
+    `UPDATE orders o SET utm = COALESCE(o.utm, '{}'::jsonb) || jsonb_build_object('utm_source', 'facebook', 'utm_medium', 'paid', 'utm_campaign', 'Bébé · Conversions', 'utm_content', a.name, 'ad_id', a.id, 'adset_id', a.adset_id, 'campaign_id', '120210000000000777')
+     FROM (SELECT id, adset_id, name, row_number() OVER (ORDER BY id) - 1 AS k, count(*) OVER () AS n FROM ads) a
+     WHERE o.channel = 'landing' AND a.k = o.id % a.n`,
+  );
   // a group page: several products on one page (each opens its landing page)
   const pages = await db.query('SELECT id FROM landing_pages WHERE active ORDER BY id LIMIT 6');
   if (pages.length >= 2) {

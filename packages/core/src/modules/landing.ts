@@ -1642,6 +1642,7 @@ export const landingProcs = {
           orderRef: r.order_ref ?? null,
           handledBy: r.handled_name ?? null,
           handledAt: isoOrNull(r.handled_at),
+          utm: readJson<Record<string, string>>(r.utm),
         })),
       };
     },

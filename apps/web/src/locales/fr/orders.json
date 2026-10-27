@@ -500,5 +500,21 @@
     },
     "recvOne": "À recevoir de {{name}}",
     "searchPh": "Nom, téléphone, PX…"
+  },
+  "ad": {
+    "title": "Publicité (d’où vient la commande)",
+    "source": "Source",
+    "group": "Groupe",
+    "campaign": "Campagne",
+    "name": "Pub",
+    "adId": "ID de la pub",
+    "adsetId": "ID de l’ensemble de pubs",
+    "campaignId": "ID de la campagne",
+    "placement": "Emplacement",
+    "copy": "Copier",
+    "copied": "Copié",
+    "noIdAd": "Vient d’une pub, mais sans ID : ajoutez les « Paramètres d’URL » dans chaque pub Meta (Landing pages › Réglages).",
+    "noAd": "Pas de pub reconnue (visite directe, ou pub sans « Paramètres d’URL »).",
+    "searchHint": "Astuce : tapez l’ID de la pub dans la recherche des commandes pour voir toutes ses commandes."
   }
 }

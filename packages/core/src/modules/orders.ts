@@ -44,6 +44,7 @@ const ORDER_COLS = `o.*,
   CASE WHEN o.is_exchange THEN (SELECT k.ref FROM complaints k WHERE k.exchange_order_id = o.id ORDER BY k.id DESC LIMIT 1) END AS sav_ref,
   c.blacklisted AS c_blacklisted, c.delivered AS c_delivered, c.returned AS c_returned, c.stopdesk_only AS c_stopdesk, c.refusals AS c_refusals,
   (SELECT lk.phone FROM customers lk WHERE lk.id = o.looks_like_customer_id) AS looks_like_phone,
+  CASE WHEN o.utm->>'ad_id' IS NOT NULL THEN (SELECT ad.name FROM ads ad WHERE ad.id = o.utm->>'ad_id') END AS ad_name,
   EXISTS (SELECT 1 FROM sales d WHERE d.phone = o.phone AND d.id <> o.id AND d.conf_status = ANY('{to_check,new,no_answer,busy,callback,postponed,confirmed,no_stock}')
           AND (d.follow_status IS NULL OR d.follow_status IN ('to_prepare','prepared')) AND d.created_at > o.created_at - interval '15 days') AS possible_dup`;
 
@@ -118,6 +119,7 @@ export function toOrder(r: any): Order {
     customerStopdeskOnly: r.c_stopdesk ?? undefined,
     customerRefusals: r.c_refusals ?? undefined,
     looksLikePhone: r.looks_like_phone ?? null,
+    adName: r.ad_name ?? null,
     agentName: r.agent_name ?? null,
     followAgentName: r.follow_agent_name ?? null,
     companyName: r.company_name ?? null,
@@ -275,6 +277,8 @@ export async function listOrders(ctx: Ctx, f: ListInput, opts: { queue?: 'conf' 
     const phone = normalizePhone(q);
     const digits = q.replace(/\D/g, '');
     if (phone) w.add('(o.phone = ? OR o.phone2 = ?)', phone, phone);
+    // a Meta id (ad, ad set, campaign: 12+ digits): the orders that came from it
+    else if (/^\d{12,25}$/.test(q)) w.add("(o.utm->>'ad_id' = ? OR o.utm->>'adset_id' = ? OR o.utm->>'campaign_id' = ? OR o.adset_id = ?)", q, q, q, q);
     else if (digits.length >= 4 && digits.length === q.replace(/[\s+.-]/g, '').length) w.add("o.phone LIKE '%' || ? || '%'", digits.slice(-9));
     else w.add("(upper(o.ref) = upper(?) OR o.tracking = ? OR upper(o.own_tracking) = upper(?) OR o.customer_name ILIKE '%' || ? || '%')", q, q, q, q);
   }
