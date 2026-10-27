@@ -25,7 +25,7 @@ import { z } from 'zod';
 import { Db, isoOrNull, num } from '../db';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
 import { getRaw, setRaw } from './admin';
-import { addDays, adsetDiagnostic, adsProcs, DayRow, fxTable, insights, isOwner, moneyOf, ordersOf, partnerLead, sumDays } from './ads';
+import { addDays, adsetDiagnostic, adsetInScope, adsProcs, DayRow, fxTable, insights, isOwner, moneyOf, ordersOf, partnerLead, sumDays } from './ads';
 
 const RULES_KEY = 'mk_rules';
 export interface MkRules {
@@ -123,7 +123,9 @@ export async function mkRows(ctx: Ctx, onlyMine = !isOwner(ctx)): Promise<{ rows
   const me = ctx.session.profile.id;
   // a marketer partner's chief: the ad sets of every person of the partner here
   const lead = onlyMine ? partnerLead(ctx) : null;
-  const r = await mkCompute(ctx.db, ctx.now(), onlyMine ? (lead ? (s) => s.partnerId === lead : (s) => s.marketerId === me) : undefined);
+  // a marketer partner's person: only the products the store gives (one taken back takes its ad sets with it)
+  const given = adsetInScope(ctx);
+  const r = await mkCompute(ctx.db, ctx.now(), onlyMine ? (lead ? (s) => s.partnerId === lead && given(s) : (s) => s.marketerId === me && given(s)) : undefined);
   return { rows: r.rows, rules: r.rules, fxMissing: r.fxMissing, from: r.from, to: r.to };
 }
 
@@ -303,10 +305,12 @@ export async function mkCompute(db: Db, now: number, keep?: (s: SetRow) => boole
  * A marketer partner's month in a store: its people's ad sets that spent that month (their spend, their share of the
  * orders and of the profit), and those judged « réussi » whose last month with spend is this one.
  */
-export async function marketerMonth(db: Db, partnerId: number, ym: string, now: number): Promise<AgencyCounts> {
+export async function marketerMonth(db: Db, partnerId: number, ym: string, now: number, products: number[] | null = null): Promise<AgencyCounts> {
   const people = new Set((await db.query('SELECT id FROM profiles WHERE agency_id = $1', [partnerId])).map((r: any) => num(r.id)));
   if (!people.size) return { ...NO_COUNTS };
-  const r = await mkCompute(db, now, (s) => s.marketerId !== null && people.has(s.marketerId));
+  // the bill counts what the marketer sees: ad sets on the products the store gives (null: all of them)
+  const given = products ? new Set(products) : null;
+  const r = await mkCompute(db, now, (s) => s.marketerId !== null && people.has(s.marketerId) && (!given || s.productIds.every((p) => given.has(p))));
   const c = { adsets: 0, spend: 0, orders: 0, delivered: 0, returned: 0, net: 0, successes: 0 };
   for (const row of r.rows) {
     const m = r.months.get(row.id)?.get(ym);

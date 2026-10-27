@@ -40,7 +40,7 @@ import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
 import { cleanPrices } from '../platform/shops';
 import { sellersOrNull } from './agencyscope';
 import { marketerMonth } from './marketers';
-import type { Tenancy } from '../platform/tenancy';
+import { SCHEMA_RE, type Tenancy } from '../platform/tenancy';
 
 const HOUR = 3_600_000;
 /** Every task a link can carry (an agency: confirmation, suivi; a marketer: its ads). */
@@ -178,9 +178,14 @@ export const isLead = (roles: string[]) => roles.includes('admin') || roles.incl
 /** Can this person of the partner work for a seller with these tasks? (a marketer's people: the marketer role) */
 const fits = (kind: PartnerKind, roles: string[], tasks: AgencyTask[]) => isLead(roles) || (kind === 'marketer' ? roles.includes('marketer') : tasks.some((k) => roles.includes(k)));
 
-/** The agency's active people (its space's database), the system accounts left out. */
-export async function agencyPeople(db: Db): Promise<AgencyPerson[]> {
-  const rows = await db.query(`SELECT id, name, email, roles, password_hash, language, agency_sellers FROM profiles WHERE active AND email NOT LIKE '%@pilotix.invalid' ORDER BY name`);
+/**
+ * The agency's active people (its space's database), the system accounts left out. `schema`: read them through another
+ * database's connection (a store's transaction: see syncLink).
+ */
+export async function agencyPeople(db: Db, schema?: string): Promise<AgencyPerson[]> {
+  if (schema !== undefined && !SCHEMA_RE.test(schema)) throw new Error('Invalid schema');
+  const table = schema === undefined ? 'profiles' : `${schema}.profiles`;
+  const rows = await db.query(`SELECT id, name, email, roles, password_hash, language, agency_sellers FROM ${table} WHERE active AND email NOT LIKE '%@pilotix.invalid' ORDER BY name`);
   return rows.map((p: any) => ({
     id: num(p.id),
     name: p.name as string,
@@ -313,34 +318,45 @@ async function releaseOrders(db: Db, agencyId: number, task: AgencyTask) {
 /**
  * Makes the store match the link (safe to run again): which products go to the agency, its agents' accounts in the
  * store (opened, closed, their tasks), and the orders it no longer works on. Returns what could not be done.
+ * One sync of a partner in a store at a time: a second one (the chief and the store changing things at the same
+ * moment) waits for the first, then reads the link and the team as the first one left them — all in the store's
+ * transaction (the link and the team are read through it, by their schema).
  */
 export async function syncLink(t: Tenancy, linkId: number): Promise<string[]> {
-  const L = await loadLink(t, linkId);
+  const first = await loadLink(t, linkId);
+  if (!first.storeOk) return [];
+  const db = t.shop(first.storeSchema);
+  return db.tx(async (tx) => {
+    await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`partner-sync:${first.storeSchema}:${first.info.agency.id}`]);
+    const row = (await tx.query(`${LINK_SQL} WHERE l.id = $1`, [linkId]))[0];
+    if (!row) return [];
+    const L = toLink(row);
+    const on = L.info.status === 'active' && L.agencyOk && L.storeOk;
+    const people = on ? await agencyPeople(tx, L.agencySchema) : [];
+    return L.info.kind === 'marketer' ? syncMarketer(tx, L, people, on) : syncAgencyLink(tx, L, people, on);
+  });
+}
+
+/** A confirmation agency in a store (inside syncLink's transaction). */
+async function syncAgencyLink(db: Db, L: Link, people: AgencyPerson[], on: boolean): Promise<string[]> {
   const A = L.info.agency.id;
-  const db = t.shop(L.storeSchema);
-  const on = L.info.status === 'active' && L.agencyOk && L.storeOk;
   const tasks = on ? L.info.tasks : [];
   const problems: string[] = [];
-  if (!L.storeOk) return problems;
-  if (L.info.kind === 'marketer') return syncMarketer(t, L, db, on);
   // which products go to the agency, for each task
-  await db.tx(async (tx) => {
-    await tx.query('DELETE FROM agency_routes WHERE agency_id = $1', [A]);
-    for (const task of tasks)
-      for (const pid of L.info.products ?? [null]) await tx.query('INSERT INTO agency_routes (agency_id, task, product_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [A, task, pid]);
-  });
+  await db.query('DELETE FROM agency_routes WHERE agency_id = $1', [A]);
+  for (const task of tasks)
+    for (const pid of L.info.products ?? [null]) await db.query('INSERT INTO agency_routes (agency_id, task, product_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [A, task, pid]);
   // its people who work for this seller: an account in the store with the tasks they can do (the chief and its
   // managers: every task the seller gives) and, when the chief chose, their products there
   const want = new Map<string, { name: string; hash: string; language: string; roles: AgencyTask[]; products: number[] | null }>();
-  if (on)
-    for (const p of await agencyPeople(t.shop(L.agencySchema))) {
-      const w = workFor(p, L.info.store.id);
-      if (!w) continue;
-      const roles = tasks.filter((k) => isLead(p.roles) || p.roles.includes(k));
-      // products the seller no longer gives fall out (none left: the person stops working here)
-      const products = w.products && L.info.products ? w.products.filter((x) => L.info.products!.includes(x)) : w.products;
-      if (roles.length && (!products || products.length)) want.set(p.email, { name: p.name, hash: p.hash, language: p.language, roles, products });
-    }
+  for (const p of people) {
+    const w = workFor(p, L.info.store.id);
+    if (!w) continue;
+    const roles = tasks.filter((k) => isLead(p.roles) || p.roles.includes(k));
+    // products the seller no longer gives fall out (none left: the person stops working here)
+    const products = w.products && L.info.products ? w.products.filter((x) => L.info.products!.includes(x)) : w.products;
+    if (roles.length && (!products || products.length)) want.set(p.email, { name: p.name, hash: p.hash, language: p.language, roles, products });
+  }
   for (const [email, w] of want) {
     const cur = (await db.query('SELECT id, agency_id FROM profiles WHERE lower(email) = $1', [email]))[0];
     if (!cur)
@@ -358,17 +374,17 @@ export async function syncLink(t: Tenancy, linkId: number): Promise<string[]> {
 }
 
 /**
- * A marketer in a store: its people who work for this seller get an account there with the marketer role, on the
- * products the store gave the marketer (those the chief chose for them, among them), with the marketer's price per ad
- * set « réussi ». The store gives them ad sets (Marketing › Marketer); the others of the marketer are closed (their ad
- * sets stay theirs: the store gives them to someone else).
+ * A marketer in a store (inside syncLink's transaction): its people who work for this seller get an account there with
+ * the marketer role, on the products the store gave the marketer (those the chief chose for them, among them), with the
+ * marketer's price per ad set « réussi ». The store gives them ad sets (Marketing › Marketer); the others of the marketer
+ * are closed (their ad sets stay theirs: the store gives them to someone else).
  */
-async function syncMarketer(t: Tenancy, L: Link, db: Db, on: boolean): Promise<string[]> {
+async function syncMarketer(db: Db, L: Link, people: AgencyPerson[], on: boolean): Promise<string[]> {
   const A = L.info.agency.id;
   const problems: string[] = [];
   const want = new Map<string, { name: string; hash: string; language: string; products: number[] | null; lead: boolean }>();
   if (on)
-    for (const p of await agencyPeople(t.shop(L.agencySchema))) {
+    for (const p of people) {
       const w = workFor(p, L.info.store.id);
       if (!w || !fits('marketer', p.roles, L.info.tasks)) continue;
       // the chief's choice within what the store gives (none left: the person stops working here)
@@ -453,7 +469,7 @@ const workedIn = (l: AgencyLinkInfo, from: string, to: string) => !!l.startedAt 
 async function linkCounts(t: Tenancy, L: Link, month: string, now: number): Promise<AgencyCounts> {
   if (!L.storeOk) return { ...NO_COUNTS };
   const db = t.shop(L.storeSchema);
-  if (L.info.kind === 'marketer') return marketerMonth(db, L.info.agency.id, month, now);
+  if (L.info.kind === 'marketer') return marketerMonth(db, L.info.agency.id, month, now, L.info.products);
   const { from, to } = monthBounds(month);
   return agencyCounts(db, L.info.agency.id, from, to);
 }
