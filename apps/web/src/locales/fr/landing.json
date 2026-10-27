@@ -509,5 +509,60 @@
     "navHint": "Sur la vraie page, ce produit ouvre sa landing page",
     "sPixel": "Pixel Meta",
     "pixel": "Pixel Meta de ce groupe"
+  },
+  "px": {
+    "title": "Pixels (Meta et TikTok)",
+    "help": "Ajoutez vos pixels Meta et TikTok avec un nom. Chaque landing page (et chaque groupe) choisit son pixel Meta et son pixel TikTok. Les vraies commandes leur sont envoyées par le serveur, avec les mêmes règles anti-fausses commandes.",
+    "meta": "Pixels Meta",
+    "tiktok": "Pixels TikTok",
+    "none": "Aucun pixel pour l’instant.",
+    "default": "Par défaut",
+    "tokenOk": "Jeton enregistré",
+    "tokenNeeded": "Jeton manquant",
+    "tokenShop": "Jeton de la boutique",
+    "used_one": "{{count}} page",
+    "used_other": "{{count}} pages",
+    "add": {
+      "meta": "Ajouter un pixel Meta",
+      "tiktok": "Ajouter un pixel TikTok"
+    },
+    "editTitle": "Modifier « {{name}} »",
+    "name": "Nom",
+    "namePh": "ex. Pixel bébé, Pixel maison",
+    "id": {
+      "meta": "ID du pixel Meta",
+      "tiktok": "Code du pixel TikTok"
+    },
+    "idHint": {
+      "meta": "Gestionnaire d’événements Meta › votre pixel › Paramètres (15 à 16 chiffres).",
+      "tiktok": "TikTok Ads Manager › Outils › Événements › Web › votre pixel (lettres et chiffres)."
+    },
+    "token": {
+      "meta": "Jeton Conversions API de ce pixel (facultatif)",
+      "tiktok": "Jeton Events API de ce pixel"
+    },
+    "tokenHint": {
+      "meta": "Vide : le jeton de la boutique (plus bas) est utilisé. Le jeton reste sur le serveur.",
+      "tiktok": "TikTok Ads › Événements › votre pixel › Paramètres › « Générer un jeton d’accès ». Sans lui, TikTok ne reçoit pas les ventes. Il reste sur le serveur."
+    },
+    "tokenAdmin": "Seul l’administrateur peut ajouter le jeton.",
+    "removeTokenAsk": "Retirer le jeton de ce pixel ?",
+    "testCode": "Code de test TikTok (facultatif)",
+    "testCodeHint": "Pour voir les événements dans « Tester les événements » de TikTok. Videz-le ensuite.",
+    "makeDefault": "Pixel par défaut (pour les pages qui n’en choisissent pas)",
+    "remove": "Supprimer",
+    "removeAsk": "Supprimer le pixel « {{name}} » ? Les pages qui l’utilisaient prendront le pixel par défaut.",
+    "saved": "Pixel enregistré",
+    "removed": "Pixel supprimé",
+    "pick": {
+      "meta": "Pixel Meta de cette page",
+      "tiktok": "Pixel TikTok de cette page"
+    },
+    "noneYet": "Ajoutez des pixels dans Réglages › Pixels.",
+    "useDefault": "Par défaut ({{name}})",
+    "useSettings": "Par défaut (Réglages)",
+    "noDefault": "Par défaut (aucun)",
+    "off": "Aucun pixel",
+    "legacy": "Cette page utilise encore le pixel {{id}} tapé à la main : choisissez un pixel ci-dessus pour le remplacer."
   }
 }

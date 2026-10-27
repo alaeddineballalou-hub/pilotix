@@ -12,6 +12,7 @@ import { SaveBar } from '../ai/agent';
 import { useDebounced } from '../depot/OrderList';
 import { useLandingFrame } from './frame';
 import { publicUrl, useStore } from './index';
+import { PixelSelects } from './Pixels';
 
 type Group = Out<'landing.groups'>[number];
 
@@ -127,6 +128,8 @@ const draftOf = (g: Group | null) => ({
   bestPageId: g?.bestPageId ?? null,
   items: (g?.items ?? []).map((x) => ({ pageId: x.pageId, tab: x.tab, note: x.note })),
   pixelId: g?.pixelId ?? '',
+  metaPixelRef: (g?.metaPixelRef ?? null) as number | null,
+  tiktokPixelRef: (g?.tiktokPixelRef ?? null) as number | null,
 });
 type Draft = ReturnType<typeof draftOf>;
 
@@ -357,9 +360,7 @@ function Form({ g }: { g: Group | null }) {
 
           <section className="card">
             <h2>{t('landing.gr.sPixel')}</h2>
-            <Field label={t('landing.gr.pixel')} hint={t('landing.gr.pixelHint')}>
-              <input className="ltr" inputMode="numeric" value={d.pixelId} placeholder={t('landing.ed.pixelPh')} onChange={(e) => set('pixelId', e.target.value.replace(/\D/g, ''))} />
-            </Field>
+            <PixelSelects meta={d.metaPixelRef} tiktok={d.tiktokPixelRef} onChange={(k, v) => setD((x) => ({ ...x, [k]: v, ...(k === 'metaPixelRef' ? { pixelId: '' } : {}) }))} />
           </section>
 
           <div className="lp-ed-foot">

@@ -309,3 +309,18 @@
 .lp-gbest { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13px; cursor: pointer; }
 .lp-gadd { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .lp-gadd select { flex: 1 1 220px; }
+
+/* Réglages › Pixels */
+.lp-px-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.lp-px-col h3 { display: flex; align-items: center; gap: 8px; margin: 6px 0 8px; }
+.lp-px-logo { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; color: #fff; font-weight: 800; font-size: 14px; }
+.lp-px-logo.meta { background: #1877f2; }
+.lp-px-logo.tiktok { background: #111; }
+.lp-px-list { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 6px; }
+.lp-px-list li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; }
+.lp-px-b { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.lp-px-b small { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.lp-px-form { margin-top: 14px; padding: 12px; border: 1.5px solid var(--navy); border-radius: 14px; background: var(--sky-soft); }
+.lp-px-form h3 { margin-top: 0; }
+.lp-px-a { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.lp-px-a .grow { flex: 1; }

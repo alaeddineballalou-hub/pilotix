@@ -39,6 +39,8 @@ export interface LandingView {
   productId?: number;
   /** Cloudflare Turnstile's site key (real pages only, when the shop turned it on): invisible robot check */
   turnstileKey?: string;
+  /** TikTok pixel code (real pages only) */
+  tiktokId?: string;
 }
 
 export interface LandingRender {
@@ -62,6 +64,9 @@ export interface LandingRender {
   /** opened from a group page: a « back to all the products » bar at the top, to that group */
   group?: { slug: string; title: string };
 }
+
+/** TikTok's pixel loader (its official snippet, the script itself loaded later by the page) */
+const TT_STUB = `!function(w,t){w.TiktokAnalyticsObject=t;var q=w[t]=w[t]||[];q.methods=['page','track','identify','instances','debug','on','off','once','ready','alias','group','enableCookie','disableCookie','holdConsent','revokeConsent','grantConsent'];q.setAndDefer=function(a,e){a[e]=function(){a.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<q.methods.length;i++)q.setAndDefer(q,q.methods[i]);q.instance=function(a){for(var e=q._i[a]||[],n=0;n<q.methods.length;n++)q.setAndDefer(e,q.methods[n]);return e};q.load=function(e,n){var r='https://analytics.tiktok.com/i18n/pixel/events.js';q._i=q._i||{};q._i[e]=[];q._i[e]._u=r;q._t=q._t||{};q._t[e]=+new Date;q._o=q._o||{};q._o[e]=n||{};var s=document.createElement('script');s.async=!0;s.src=r+'?sdkid='+e+'&lib='+t;var f=document.getElementsByTagName('script')[0];f.parentNode.insertBefore(s,f)}}(window,'ttq');`;
 
 export const LANDING_DEFAULT_COLOR = '#0f766e';
 export const LANDING_COLORS = ['#0f766e', '#2563eb', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#111827'];
@@ -170,6 +175,8 @@ var px=C.px,ic=0;if(px){var n=window.fbq=function(){n.callMethod?n.callMethod.ap
 fbq('init',px);fbq('track','PageView');fbq('track','ViewContent',{content_ids:[String(C.pid)],content_type:'product',value:C.price,currency:'DZD'},{eventID:'vc-'+C.vid});
 var lp=0,ld=0,lw=0,lpx=function(){if(lp)return;if(!ld){lw=1;return}lp=1;var t=d.createElement('script');t.async=1;t.src='https://connect.facebook.net/en_US/fbevents.js';d.head.appendChild(t)};
 window.addEventListener('load',function(){ld=1;if(lw)lpx();else setTimeout(lpx,2500)});['touchstart','scroll','keydown','mousemove'].forEach(function(e){window.addEventListener(e,lpx,{once:true,passive:true})})}
+var tic=0;if(C.tt){${TT_STUB}var tl=0,tlx=function(){if(tl)return;tl=1;ttq.load(C.tt);ttq.page();ttq.track('ViewContent',{contents:[{content_id:String(C.pid),content_type:'product',content_name:C.title}],value:C.price,currency:'DZD'},{event_id:'vc-'+C.vid})};
+window.addEventListener('load',function(){setTimeout(tlx,2500)});['touchstart','scroll','keydown','mousemove'].forEach(function(e){window.addEventListener(e,tlx,{once:true,passive:true})})}
 var bk=$('bk');if(bk){if(C.mode=='live'){var bq=location.search.replace(/([?&])g=[^&]*&?/,'$1').replace(/[?&]$/,'');bk.href=bk.getAttribute('href')+bq}else bk.onclick=function(e){e.preventDefault();parent.postMessage({lp:'nav',slug:C.g},'*')}}
 var th=d.querySelectorAll('.th button'),mi=$('mi');for(var i=0;i<th.length;i++)th[i].onclick=function(){for(var j=0;j<th.length;j++)th[j].className='';this.className='on';mi.src=this.getAttribute('data-s');mi.srcset=this.getAttribute('data-ss')};
 function tl(){var a=d.querySelectorAll('.th img[data-src]');for(var i=0;i<a.length;i++){a[i].src=a[i].getAttribute('data-src');a[i].removeAttribute('data-src')}}
@@ -205,9 +212,9 @@ w.onchange=function(){cm.innerHTML='<option value="">\\u2026</option>';cm.disabl
 if(vr)vr.onchange=sum;
 $('qm').onclick=function(){qt.value=Math.max(1,qv()-1);sum();lead()};$('qp').onclick=function(){qt.value=Math.min(99,qv()+1);sum();lead()};qt.oninput=sum;
 var done=0,lt=null,last='';
-function form(){return{name:f.nm.value.trim(),phone:nph(f.ph.value),wilaya:+w.value||0,commune:cm.value,variant:vr?+vr.value||null:null,qty:qv(),hp:f.web.value,ch:C.ch,fp:fp,did:did,vid:C.vid,utm:utm,fbp:ck('_fbp'),fbc:ck('_fbc'),url:C.mode=='live'?location.href.slice(0,500):''}}
+function form(){return{name:f.nm.value.trim(),phone:nph(f.ph.value),wilaya:+w.value||0,commune:cm.value,variant:vr?+vr.value||null:null,qty:qv(),hp:f.web.value,ch:C.ch,fp:fp,did:did,vid:C.vid,utm:utm,fbp:ck('_fbp'),fbc:ck('_fbc'),ttp:ck('_ttp'),url:C.mode=='live'?location.href.slice(0,500):''}}
 function lead(now){if(!C.lead||done||busy)return;var b=form();if(!/^0[567]\\d{8}$/.test(b.phone))return;var k=JSON.stringify([b.name,b.phone,b.wilaya,b.commune,b.variant,b.qty]);if(k==last)return;clearTimeout(lt);lt=null;
-var go=function(){lt=null;last=k;if(px&&!ic){ic=1;fbq('track','InitiateCheckout',{content_ids:[String(C.pid)],content_type:'product',value:unit()*b.qty,currency:'DZD',num_items:b.qty},{eventID:'ic-'+C.vid})}ask('lead',b,function(){},now)};if(now)go();else lt=setTimeout(go,1500)}
+var go=function(){lt=null;last=k;if(px&&!ic){ic=1;fbq('track','InitiateCheckout',{content_ids:[String(C.pid)],content_type:'product',value:unit()*b.qty,currency:'DZD',num_items:b.qty},{eventID:'ic-'+C.vid})}if(C.tt&&!tic){tic=1;ttq.track('InitiateCheckout',{contents:[{content_id:String(C.pid),content_type:'product',quantity:b.qty}],value:unit()*b.qty,currency:'DZD'},{event_id:'ic-'+C.vid})}ask('lead',b,function(){},now)};if(now)go();else lt=setTimeout(go,1500)}
 f.addEventListener('input',function(e){if(e.isTrusted!==false)ki++;lead()});f.ph.addEventListener('paste',function(){ps=true});f.addEventListener('change',function(){lead()});
 function flush(){if(lt){clearTimeout(lt);lt=null;last='';lead(1)}}window.addEventListener('pagehide',flush);d.addEventListener('visibilitychange',function(){if(d.visibilityState=='hidden')flush()});
 function fk(p){var x=p.slice(2);return/(\\d)\\1{5,}/.test(x)||'0123456789012345'.indexOf(x.slice(0,7))>=0||'9876543210987654'.indexOf(x.slice(0,7))>=0}
@@ -284,6 +291,7 @@ export function renderLanding(v: LandingView, r: LandingRender): string {
     mode: r.mode, post: r.post, geo: r.geo, lead: r.lead ?? '', ch: r.challenge, bits: r.bits, slug: v.slug, price: v.price, vp, fees: v.fees, title: v.title, vl: v.variantLabel, cta,
     vid: r.viewId ?? '', px: r.mode === 'live' && v.pixelId && /^\d{5,20}$/.test(v.pixelId) ? v.pixelId : '', pid: v.productId ?? 0, op: off ? v.oldPrice : 0,
     g: r.group?.slug ?? '',
+    tt: r.mode === 'live' && v.tiktokId && /^[A-Z0-9]{10,30}$/.test(v.tiktokId) ? v.tiktokId : '',
     ts: r.mode === 'live' && v.turnstileKey && /^[0-9A-Za-z_-]{10,100}$/.test(v.turnstileKey) ? v.turnstileKey : '',
   };
   const desc = landingDescriptionHtml(v.description);
@@ -350,6 +358,7 @@ export interface GroupView {
   bestSlug?: string | null;
   shopName: string;
   pixelId?: string;
+  tiktokId?: string;
 }
 
 export interface GroupRender {
@@ -394,6 +403,7 @@ if(sr)sr.oninput=f;for(var j=0;j<tb.length;j++)tb[j].onclick=function(){for(var 
 if(C.px){var n=window.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!window._fbq)window._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];fbq('init',C.px);fbq('track','PageView');
 var lp=0,lx=function(){if(lp)return;lp=1;var s=d.createElement('script');s.async=1;s.src='https://connect.facebook.net/en_US/fbevents.js';d.head.appendChild(s)};
 window.addEventListener('load',function(){setTimeout(lx,2500)});['touchstart','scroll'].forEach(function(e){window.addEventListener(e,lx,{once:true,passive:true})})}
+if(C.tt){${TT_STUB}var tl=0,tlx=function(){if(tl)return;tl=1;ttq.load(C.tt);ttq.page()};window.addEventListener('load',function(){setTimeout(tlx,2500)});['touchstart','scroll'].forEach(function(e){window.addEventListener(e,tlx,{once:true,passive:true})})}
 })()`;
 
 export function renderGroup(v: GroupView, r: GroupRender): string {
@@ -438,7 +448,12 @@ export function renderGroup(v: GroupView, r: GroupRender): string {
       `<div class="g2">${items.map((x) => card(x)).join('')}</div><p id="em" class="em no">لا يوجد منتج بهذا الاسم</p>`;
   }
   if (!items.length) body = `<p class="em">لا توجد منتجات حالياً</p>`;
-  const cfg = { mode: r.mode, g: v.slug, px: r.mode === 'live' && v.pixelId && /^\d{5,20}$/.test(v.pixelId) ? v.pixelId : '' };
+  const cfg = {
+    mode: r.mode,
+    g: v.slug,
+    px: r.mode === 'live' && v.pixelId && /^\d{5,20}$/.test(v.pixelId) ? v.pixelId : '',
+    tt: r.mode === 'live' && v.tiktokId && /^[A-Z0-9]{10,30}$/.test(v.tiktokId) ? v.tiktokId : '',
+  };
   const url = r.mode === 'live' && r.url && /^https?:\/\/[^\s"<>]+$/.test(r.url) ? r.url : '';
   const desc = esc(v.subtitle || `${v.title} · التوصيل لجميع الولايات · الدفع عند الاستلام`);
   const first = items.find((x) => x.image)?.image;

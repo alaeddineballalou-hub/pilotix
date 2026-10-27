@@ -37,6 +37,35 @@ async function sendCapi(a: { pixelId: string; token: string; events: unknown[]; 
   return { received: Number(data?.events_received ?? 0), trace: data?.fbtrace_id ? String(data.fbtrace_id) : null };
 }
 
+/**
+ * Sends events to a TikTok pixel through the Events API 2.0 (landing pages: CompletePayment of real orders,
+ * InitiateCheckout of abandoned ones). The token goes in a header, never in a URL; 15 s at most.
+ */
+async function sendTiktok(a: { pixelCode: string; token: string; events: unknown[]; testEventCode?: string }): Promise<{ received: number }> {
+  if (!/^[A-Z0-9]{10,30}$/.test(a.pixelCode)) throw new AppError('bad_request', 'Pixel TikTok invalide');
+  if (!a.token) throw new AppError('bad_request', 'Jeton TikTok Events API manquant');
+  let res: Response;
+  try {
+    res = await fetch('https://business-api.tiktok.com/open_api/v1.3/event/track/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'Access-Token': a.token },
+      body: JSON.stringify({ event_source: 'web', event_source_id: a.pixelCode, data: a.events, ...(a.testEventCode ? { test_event_code: a.testEventCode } : {}) }),
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    throw new AppError('bad_request', 'TikTok injoignable. Réessayez plus tard.');
+  }
+  const data: any = await res.json().catch(() => ({}));
+  // TikTok answers 200 with its own code: 0 is OK
+  if (!res.ok || (data?.code !== undefined && data.code !== 0)) {
+    const code = Number(data?.code);
+    if (code === 40001 || code === 40100 || code === 40105 || res.status === 401) throw new AppError('bad_request', 'Jeton TikTok refusé ou expiré : changez-le dans Landing pages › Réglages › Pixels.');
+    if (code === 40016 || code === 51021 || res.status === 429) throw new AppError('conflict', 'TikTok limite les demandes pour l’instant.');
+    throw new AppError('bad_request', `TikTok : ${data?.message ?? res.statusText}`);
+  }
+  return { received: a.events.length };
+}
+
 /** One day of results for an ad set or an ad (spend in the ad account currency, in cents). */
 export interface MetaDay {
   day: string; // YYYY-MM-DD
@@ -128,6 +157,7 @@ const toDay = (r: any, level: 'adset' | 'ad'): MetaDay => ({
 export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<unknown> {
   // the Conversions API needs a pixel and its token, not the ad account
   if (action === 'capi') return sendCapi(args as Parameters<typeof sendCapi>[0]);
+  if (action === 'tiktok') return sendTiktok(args as Parameters<typeof sendTiktok>[0]);
   const meta = await getSetting(ctx.db, 'meta');
   const token = await getRaw<string>(ctx.db, META_TOKEN_KEY, '');
   if (!meta.adAccountId || !token) throw new AppError('bad_request', 'Meta n’est pas connecté : ajoutez le compte pub et le jeton dans Réglages.');
