@@ -402,6 +402,39 @@ await section('Landing pages and llms.txt of a store', async () => {
   ok('the platform’s llms.txt links the store’s');
 });
 
+// ---------------------------------------------------------------- archives
+await section('Management › Archives: the owner is never archived, only the owner deletes for good, archived sessions end at once', async () => {
+  const O = ctx.owner1.token;
+  const A = (await login(ctx.staff1.email, ctx.staff1.password, ctx.owner1.shopId)).token; // another administrator
+  const ownerId = (await rpc(O, 'me.get')).profile.id;
+  const seen = await rpc(A, 'archive.list', { kind: 'users' });
+  assert.equal(seen.find((u) => u.id === ownerId)?.blocked, 'owner');
+  await fails(rpc(A, 'archive.set', { kind: 'users', ids: [ownerId], archived: true }), 403, /propriétaire/);
+  ok('the owner’s account shows « propriétaire » and cannot be archived');
+  const temp = await rpc(O, 'users.create', { name: 'Compte Erreur', email: em('erreur'), password: 'Erreur-Pass-1', roles: ['confirmation'], language: 'fr' });
+  const T = (await login(em('erreur'), 'Erreur-Pass-1')).token;
+  const r = await rpc(A, 'archive.set', { kind: 'users', ids: [temp.id], archived: true });
+  assert.equal(r.done, 1);
+  await fails(rpc(T, 'me.get'), 401);
+  ok('an administrator archives an account: its session ends at once');
+  assert.ok((await rpc(O, 'archive.list', { kind: 'users', archived: true })).some((u) => u.id === temp.id && u.uses.length === 0));
+  await fails(rpc(A, 'archive.delete', { kind: 'users', ids: [temp.id] }), 403, /propriétaire/);
+  const d = await rpc(O, 'archive.delete', { kind: 'users', ids: [temp.id] });
+  assert.equal(d.deleted, 1);
+  ok('another administrator cannot delete for good; the owner can (never used)');
+  const prod = await rpc(O, 'catalog.saveProduct', { name: `Produit Erreur ${run}`, price: 1000, variants: [] });
+  await rpc(O, 'archive.set', { kind: 'products', ids: [prod.id], archived: true });
+  assert.ok(!(await rpc(O, 'catalog.products', {})).some((p) => p.id === prod.id));
+  assert.equal((await rpc(O, 'archive.delete', { kind: 'products', ids: [prod.id] })).deleted, 1);
+  const sold = await rpc(O, 'catalog.saveProduct', { name: `Produit Vendu ${run}`, price: 2000, variants: [] });
+  await rpc(O, 'orders.create', { customerName: 'Client Archive', phone: '0661334455', wilayaId: 16, commune: 'Alger', items: [{ productId: sold.id, variantId: null, qty: 1 }] });
+  assert.equal((await rpc(O, 'archive.set', { kind: 'products', ids: [sold.id], archived: true })).done, 1, 'a sold product with no stock is archived');
+  const kept = await rpc(O, 'archive.delete', { kind: 'products', ids: [sold.id] });
+  assert.equal(kept.kept[0]?.reason, 'used');
+  assert.ok(kept.kept[0].uses.includes('orders'));
+  ok('a product made by mistake is deleted for good; a sold one stays in the archives');
+});
+
 // ---------------------------------------------------------------- limits
 await section('Limits: accounts and drivers (hard), orders per month (soft), « over » in the control room', async () => {
   const sid = ctx.owner1.shopId;

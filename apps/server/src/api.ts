@@ -261,7 +261,7 @@ const TokenBody = z.object({ token: z.string().max(220) });
 /** Saving these can change the store's part of shop #1's links (site/<store>/<page>). */
 const STORE_NAMING = new Set(['landing.settings.save', 'admin.settings.save']);
 /** The demo shop's accounts are shared by every visitor: nobody changes them (a visitor would lock the others out). */
-const NOT_IN_DEMO = new Set(['me.password', 'me.delete', 'me.update', 'users.create', 'users.update', 'admin.users.resetPassword']);
+const NOT_IN_DEMO = new Set(['me.password', 'me.delete', 'me.update', 'users.create', 'users.update', 'admin.users.resetPassword', 'archive.set', 'archive.delete']);
 /** Actions on the team that the owner's protection and the password rules look at. */
 const TEAM_ACTIONS = new Set(['users.update', 'admin.users.resetPassword', 'me.delete']);
 /**
@@ -753,6 +753,7 @@ class ApiController {
     if (!/^[a-z]+(\.[a-zA-Z]+){1,3}$/.test(name)) throw new core.AppError('not_found', 'Action inconnue');
     if (req.shop.shop.demo && NOT_IN_DEMO.has(name)) throw new core.AppError('forbidden', 'Pas dans la boutique démo : ses comptes sont partagés par tous les visiteurs');
     if (TEAM_ACTIONS.has(name)) await this.teamRules(name, body as any, req);
+    if (name.startsWith('archive.') && !req.shop.shop.demo) return this.archive(name, body as any, req);
     // « Parrainage » on a multi-shop server: this store's code and the stores it brought
     if (name === 'me.referrals' && !req.shop.shop.demo) return this.referrals(req);
     let out: any = await this.core.call(req.shop, name, req.session, body ?? {});
@@ -794,6 +795,23 @@ class ApiController {
       if (email && !(await core.adminMaySetPassword(this.core.t, req.shop.shop.id, email)))
         throw new core.AppError('forbidden', 'Cette personne utilise Pilotix dans une autre boutique : elle change son mot de passe elle-même (Mon profil, ou « Mot de passe oublié »).');
     }
+  }
+
+  /**
+   * Management › Archives with the store's owner: the owner's account is never archived (the list says so), and only
+   * the owner deletes for good (a store without a known owner: its administrators).
+   */
+  private async archive(name: string, body: any, req: ShopRequest) {
+    const ownerId = await core.ownerProfileId(this.core.t, req.shop.shop);
+    const ids: number[] = Array.isArray(body?.ids) ? body.ids.map(Number) : [];
+    if (name === 'archive.delete' && ownerId !== null && ownerId !== req.session.profile.id) throw new core.AppError('forbidden', 'Seul le propriétaire de la boutique supprime pour toujours');
+    if (name === 'archive.set' && body?.kind === 'users' && body?.archived === true && ownerId !== null && ids.includes(ownerId)) throw new core.AppError('forbidden', 'Le compte du propriétaire ne s’archive pas');
+    const out: any = await this.core.call(req.shop, name, req.session, body ?? {});
+    // archived or deleted accounts: their sessions end now
+    if (name !== 'archive.list' && body?.kind === 'users') authEpoch++;
+    if (name === 'archive.list' && body?.kind === 'users' && ownerId !== null && Array.isArray(out))
+      return out.map((r: core.ArchiveRow) => (r.id === ownerId && !r.archivedAt ? { ...r, blocked: 'owner' } : r));
+    return out;
   }
 
   /** After a team action: the person's account follows (a new person gets one; a known one keeps its password). */

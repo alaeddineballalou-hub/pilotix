@@ -1,8 +1,10 @@
 // Dépôts & transferts: each depot with what it holds (products, pieces, value at purchase price), the administrator's
-// way to add, change, hide (masquer) or delete one, and stock moved between depots — several products in one transfer, all or nothing.
+// way to add, change, hide (masquer) or archive one (deleted later from Management › Archives), and stock moved between
+// depots — several products in one transfer, all or nothing.
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, dateTime, n, wilayaName } from '../../lib/format';
+import { pageIsOn } from '../../lib/features';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { Empty, ErrorBox, Field, Icon, Loading, Pager } from '../../ui/kit';
@@ -22,7 +24,7 @@ export function Depots() {
   const [page, setPage] = useState(1);
   const tr = useRpc('catalog.transfers', { page, pageSize: 20 });
   const show = useAction('admin.warehouses.save', { success: (r) => t(r.active ? 'produits.depots.shown' : 'produits.depots.hidden') });
-  const del = useAction('admin.warehouses.delete', { success: t('produits.depots.deleted') });
+  const archive = useAction('archive.set', { success: (r) => (r.done ? t('produits.depots.archived') : t('produits.depots.archiveStock')) });
   const toggle = (d: Wh) => show.mutate({ id: d.id, name: d.name, wilayaId: d.wilayaId, commune: d.commune, address: d.address, isDefault: d.isDefault, active: !d.active });
   const active = (dep.data ?? []).filter((d) => d.active);
   const canMove = active.length > 1;
@@ -109,10 +111,10 @@ export function Depots() {
                       {d.active ? t('produits.depots.hide') : t('produits.depots.show')}
                     </button>
                   )}
-                  {admin && !d.isDefault && (
-                    <ConfirmButton className="btn small ghost danger" disabled={del.isPending} question={t('produits.depots.deleteConfirm')} onConfirm={() => del.mutate({ id: d.id })}>
-                      <Icon name="trash" />
-                      {t('produits.depots.delete')}
+                  {admin && !d.isDefault && pageIsOn('management', 'archive') && (
+                    <ConfirmButton className="btn small ghost" disabled={archive.isPending} question={t('produits.depots.archiveConfirm')} onConfirm={() => archive.mutate({ kind: 'warehouses', ids: [d.id], archived: true })}>
+                      <Icon name="archive" />
+                      {t('produits.depots.archive')}
                     </ConfirmButton>
                   )}
                 </div>

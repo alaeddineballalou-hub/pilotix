@@ -129,7 +129,10 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number } =
   await setSetting(db, 'webhook', { key: 'demo-webhook-key' });
 
   // depots
-  const wh1 = num((await db.query(`INSERT INTO warehouses (name, wilaya_id, commune, address, is_default) VALUES ('Dépôt Alger', 16, 'Bab Ezzouar', 'Zone d’activité, lot 12', true) RETURNING id`))[0].id);
+  // the default depot, unless the shop already has one (one default depot only)
+  const wh1 = num(
+    (await db.query(`INSERT INTO warehouses (name, wilaya_id, commune, address, is_default) VALUES ('Dépôt Alger', 16, 'Bab Ezzouar', 'Zone d’activité, lot 12', NOT EXISTS (SELECT 1 FROM warehouses WHERE is_default)) RETURNING id`))[0].id,
+  );
   await db.query(`INSERT INTO warehouses (name, wilaya_id, commune, address) VALUES ('Dépôt Oran', 31, 'Es Senia', 'Route de l’aéroport')`);
 
   // couriers

@@ -17,6 +17,7 @@ export const toProfile = (r: any): Profile => ({
   avatar: r.avatar ?? null,
   referralCode: r.referral_code ?? null,
   canManageUsers: !!r.can_manage_users,
+  archived: !!r.archived_at,
 });
 
 /**
@@ -303,7 +304,8 @@ export const usersProcs = {
     needGrantable(ctx, b);
     if (b.id === ctx.session.profile.id && (b.active === false || (b.roles && !b.roles.includes('admin')))) throw forbidden('Vous ne pouvez pas retirer votre propre accès administrateur');
     // an account closed earlier and opened again takes a place of the plan; so does a new livreur
-    const before = (await ctx.db.query('SELECT active, roles FROM profiles WHERE id = $1', [b.id]))[0];
+    const before = (await ctx.db.query('SELECT active, roles, archived_at FROM profiles WHERE id = $1', [b.id]))[0];
+    if (before?.archived_at && b.active === true) throw bad('Ce compte est archivé : sortez-le d’abord des archives (Management › Archives)');
     if (b.active === true && !before?.active) await needSeat(ctx);
     const willBeActive = b.active ?? !!before?.active;
     const wasDriver = !!before?.active && (before?.roles as string[] | undefined)?.includes('livreur');

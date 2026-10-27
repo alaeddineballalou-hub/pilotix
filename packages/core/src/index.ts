@@ -8,6 +8,7 @@ export * from './settings';
 export { expandIp, ipNet } from './net';
 export { seedDemo, seedBase } from './seed';
 export { login, hashPassword, profileById } from './modules/users';
+export type { ArchiveBlock, ArchiveKind, ArchiveRow, UseKind } from './modules/archive';
 export { createPasswordReset, resetPassword, RESET_MINUTES, RESETS_PER_MONTH } from './passwordReset';
 export type { PasswordResetLink, PasswordResetMail } from './passwordReset';
 export { pgliteDb } from './pglite';

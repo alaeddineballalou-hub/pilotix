@@ -145,6 +145,8 @@ export interface Profile {
   referralCode?: string | null;
   /** set by the administrator: may create accounts and set passwords of the team (not administrators) */
   canManageUsers?: boolean;
+  /** put in Management › Archives: out of the team list, kept in the history (always closed) */
+  archived?: boolean;
 }
 
 export interface Session {

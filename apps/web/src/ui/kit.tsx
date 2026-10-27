@@ -341,8 +341,17 @@ export function Tabs<T extends string>({ value, onChange, items }: { value: T; o
 /** The stage bar under the top bar ("Nouvelles › En cours › Confirmées"). Sub-pages not in the shop's plan are left out. */
 export function StageBar({ items: all, current, flow = true }: { items: { key: string; label: string; href: string; count?: number }[]; current: string; flow?: boolean }) {
   const items = all.filter((it) => hrefIsOn(it.href));
+  const bar = useRef<HTMLElement>(null);
+  // a bar wider than the screen (a phone): the current stage is brought into view, not left behind the edge
+  useEffect(() => {
+    const b = bar.current;
+    const on = b?.querySelector<HTMLElement>('.bjm-p.on');
+    if (b && on && b.scrollWidth > b.clientWidth + 1) {
+      on.scrollIntoView({ block: 'nearest', inline: 'center' });
+    }
+  }, [current]);
   return (
-    <nav className={`bjm-bar ${flow ? 'flow' : ''}`} aria-label="Étapes">
+    <nav ref={bar} className={`bjm-bar ${flow ? 'flow' : ''}`} aria-label="Étapes">
       {items.map((it, i) => (
         <span key={it.key} style={{ display: 'contents' }}>
           {i > 0 && flow && (

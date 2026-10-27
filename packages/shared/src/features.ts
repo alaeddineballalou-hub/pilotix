@@ -33,7 +33,7 @@ export const FEATURES: readonly FeatureNode[] = [
   { key: 'macaisse' },
   { key: 'livraison', subs: ['societes', 'api', 'livreurs'] },
   { key: 'utilisateurs', always: true },
-  { key: 'management', subs: ['statuts', 'paie', 'prix', 'canaux'] },
+  { key: 'management', subs: ['statuts', 'paie', 'prix', 'canaux', 'archive'] },
   { key: 'reglages', always: true },
 ];
 
@@ -134,6 +134,7 @@ export const PROC_FEATURES: readonly (readonly [prefix: string, feature: string]
   ['mk.', 'marketing/marketer'],
   ['landing.', 'landing'],
   ['channels.sheet.', 'management/canaux'],
+  ['archive.', 'management/archive'],
 ];
 
 export function procFeature(name: string): string | null {

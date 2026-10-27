@@ -144,6 +144,8 @@ function toProduct(p: any, vars: any[]): CatalogProduct {
 export async function listProducts(db: Db, opts: { ids?: number[]; q?: string; activeOnly?: boolean } = {}): Promise<CatalogProduct[]> {
   const w = new Where();
   if (opts.ids) w.add('p.id = ANY(?)', opts.ids);
+  // archived products leave the lists (asked by id they are still found: an old order shows them)
+  else w.add('p.archived_at IS NULL');
   if (opts.activeOnly) w.add('p.active');
   if (opts.q?.trim()) {
     const q = opts.q.trim();
@@ -183,6 +185,7 @@ export async function stockRows(db: Db, f: z.infer<typeof StockInput>): Promise<
   if (f.warehouseId) w.add('wh.id = ?', f.warehouseId);
   if (f.variantIds) w.add('v.id = ANY(?)', f.variantIds);
   if (!f.withHidden) w.add('((p.active AND v.active) OR COALESCE(s.qty, 0) <> 0 OR COALESCE(r.n, 0) <> 0)');
+  else w.add('(p.archived_at IS NULL OR COALESCE(s.qty, 0) <> 0 OR COALESCE(r.n, 0) <> 0)');
   if (f.q?.trim()) {
     const q = f.q.trim();
     w.add(`((p.name || ' ' || v.title) ILIKE '%' || ? || '%' OR v.sku ILIKE '%' || ? || '%' OR p.sku ILIKE '%' || ? || '%')`, q, q, q);
@@ -393,6 +396,7 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
   const pid = await ctx.db.tx(async (tx) => {
     const cur = i.id ? (await tx.query('SELECT * FROM products WHERE id = $1 FOR UPDATE', [i.id]))[0] : null;
     if (i.id && !cur) throw notFound('Produit introuvable');
+    if (cur?.archived_at && i.active) throw bad('Ce produit est archivé : sortez-le d’abord des archives (Management › Archives)');
     const maxDiscount = i.maxDiscount === undefined ? (cur ? numOrNull(cur.max_discount) : 0) : i.maxDiscount;
     // Only the administrator decides how much discount agents may give.
     if (!ctx.session.isAdmin && (cur ? numOrNull(cur.max_discount) : 0) !== maxDiscount) throw forbidden('Seul l’administrateur modifie la remise maximale');
@@ -760,7 +764,7 @@ export const catalogProcs = {
   'catalog.ping': proc(null, z.object({}), async () => ({ ok: true })),
 
   'catalog.warehouses': proc(null, z.object({ all: z.boolean().default(false) }), async (ctx, i): Promise<Warehouse[]> => {
-    const rows = await ctx.db.query(`SELECT * FROM warehouses ${i.all ? '' : 'WHERE active'} ORDER BY is_default DESC, id`);
+    const rows = await ctx.db.query(`SELECT * FROM warehouses ${i.all ? 'WHERE archived_at IS NULL' : 'WHERE active'} ORDER BY is_default DESC, id`);
     return rows.map((r: any) => ({ id: num(r.id), name: r.name, wilayaId: num(r.wilaya_id), commune: r.commune, address: r.address, isDefault: !!r.is_default, active: !!r.active }));
   }),
 

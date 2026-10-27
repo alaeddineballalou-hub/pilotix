@@ -371,12 +371,13 @@
     "badLine": "Invalid quantity for “{{name}}” ({{n}} in stock)",
     "hide": "Hide",
     "show": "Show again",
-    "delete": "Delete",
-    "deleteConfirm": "Delete this depot?",
     "hidden": "Depot hidden",
     "shown": "Depot shown again",
-    "deleted": "Depot deleted",
-    "hideHelp": "A hidden depot no longer receives stock or orders; a depot that has been used cannot be deleted, it is hidden."
+    "hideHelp": "A hidden warehouse no longer receives stock or orders. An empty warehouse you no longer need is archived; it can only be deleted from Management › Archives, if it was never used.",
+    "archive": "Archive",
+    "archiveConfirm": "Archive this warehouse? It goes to Management › Archives (it must be empty).",
+    "archived": "Warehouse archived (Management › Archives)",
+    "archiveStock": "Empty this warehouse first (transfer), then archive it"
   },
   "form": {
     "newTitle": "New product",
@@ -475,7 +476,11 @@
       "organize": "Organise in options (Size, Colour…)",
       "tooMany": "{{count}} combinations: 200 at most. Remove some values.",
       "needName": "Give each option a name (e.g. Size)."
-    }
+    },
+    "archive": "Archive",
+    "archiveAsk": "Archive this product? It leaves the lists (old orders keep it). It must have 0 in stock.",
+    "archived": "Product archived (Management › Archives)",
+    "archiveStock": "There is stock left: take it out of stock first, then archive"
   },
   "landing": {
     "none": "No landing page",

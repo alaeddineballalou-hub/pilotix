@@ -2,6 +2,7 @@
 import { communesOf } from '@pilotix/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { pageIsOn } from '../../lib/features';
 import { useAction } from '../../lib/query';
 import { Field } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
@@ -17,12 +18,13 @@ export interface Wh {
   active: boolean;
 }
 
-/** Admin: create or change a depot (the default depot cannot be deleted). */
+/** Admin: create or change a depot (the default depot cannot be archived). */
 export function DepotForm({ w, onClose }: { w: Wh | null; onClose: () => void }) {
   const { t } = useTranslation();
   const [v, setV] = useState({ name: w?.name ?? '', wilayaId: w?.wilayaId ?? 16, commune: w?.commune ?? '', address: w?.address ?? '', isDefault: w?.isDefault ?? false, active: w?.active ?? true });
   const save = useAction('admin.warehouses.save', { success: t('admin.settings.saved'), onDone: onClose });
-  const del = useAction('admin.warehouses.delete', { success: t('admin.settings.depotDeleted'), onDone: onClose });
+  // archived (out of the lists, kept for the orders and the stock history): deleted later from Management › Archives
+  const archive = useAction('archive.set', { success: (r) => (r.done ? t('admin.settings.depotArchived') : t('admin.settings.depotArchiveStock')), onDone: (r) => r.done && onClose() });
   const communes = communesOf(v.wilayaId);
   return (
     <Modal
@@ -30,9 +32,9 @@ export function DepotForm({ w, onClose }: { w: Wh | null; onClose: () => void })
       onClose={onClose}
       footer={
         <>
-          {w && !w.isDefault && (
-            <ConfirmButton className="btn ghost danger" question={t('admin.settings.depotDeleteConfirm')} onConfirm={() => del.mutate({ id: w.id })}>
-              {t('admin.settings.depotDelete')}
+          {w && !w.isDefault && pageIsOn('management', 'archive') && (
+            <ConfirmButton className="btn ghost" question={t('admin.settings.depotArchiveConfirm')} onConfirm={() => archive.mutate({ kind: 'warehouses', ids: [w.id], archived: true })}>
+              {t('admin.settings.depotArchive')}
             </ConfirmButton>
           )}
           <span className="grow" />
