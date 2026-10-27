@@ -34,13 +34,17 @@ before(async () => {
   await call('landing.save', mk, { productId: plainProduct, slug: PLAIN, title: 'P', pixelId: '111122223333444' });
 });
 
+const SURNAMES = ['Benali', 'Haddad', 'Mansouri', 'Belkacem', 'Saidi', 'Bouzid', 'Cherif', 'Djebbar', 'Ferhat', 'Hamidi', 'Kaci', 'Larbi', 'Meziane', 'Nouri', 'Ouali', 'Rahmani', 'Slimani', 'Taleb', 'Yahiaoui', 'Zerrouki', 'Amrani', 'Benaissa', 'Brahimi', 'Chaoui', 'Derradji', 'Guerfi', 'Hadjadj', 'Khelifi', 'Lounes', 'Mebarki'];
+/** a different family name each time: the same full name sent with many numbers is a signal of its own */
+let nameSeq = 0;
+const custName = () => `Amina ${SURNAMES[nameSeq++ % SURNAMES.length]}`;
 const solve = (ch: string) => {
   for (let n = 0; ; n++) if (zeroBits(sha256Hex(`${ch}:${n}`)) >= LANDING_POW_BITS) return String(n);
 };
 const rndPhone = () => `066${String(Math.floor(Math.random() * 1e7)).padStart(7, '0')}`;
 async function form(over: Record<string, unknown> = {}, slug = SLUG, t0 = Date.now()) {
   const ch = await makeChallenge(db, slug, t0 - 25_000);
-  return { slug, name: 'Amina Benali', phone: rndPhone(), wilaya: 16, commune: 'Hydra', variant: slug === SLUG ? variantId : null, qty: 1, hp: '', ch, pw: solve(ch), t: 25_000, ki: 40, wd: false, fp: 'x', did: `d${Math.random()}`, vid: `v${Math.random().toString(36).slice(2, 9)}`, meta: { ip: `10.2.0.${Math.floor(Math.random() * 250)}`, ua: UA }, ...over };
+  return { slug, name: custName(), phone: rndPhone(), wilaya: 16, commune: 'Hydra', variant: slug === SLUG ? variantId : null, qty: 1, hp: '', ch, pw: solve(ch), t: 25_000, ki: 40, wd: false, fp: 'x', did: `d${Math.random()}`, vid: `v${Math.random().toString(36).slice(2, 9)}`, meta: { ip: `10.2.0.${Math.floor(Math.random() * 250)}`, ua: UA }, ...over };
 }
 const orders = async (phone: string) => db.query(`SELECT * FROM orders WHERE phone = $1 ORDER BY id`, [phone]);
 

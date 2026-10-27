@@ -27,6 +27,10 @@ before(async () => {
   await call('landing.save', await s.as(EMAILS.marketer), { productId, slug: SLUG, title: 'عربة أطفال', color: '#db2777', price: 9950, description: '- خفيفة\n- قابلة للطي' });
 });
 
+const SURNAMES = ['Benali', 'Haddad', 'Mansouri', 'Belkacem', 'Saidi', 'Bouzid', 'Cherif', 'Djebbar', 'Ferhat', 'Hamidi', 'Kaci', 'Larbi', 'Meziane', 'Nouri', 'Ouali', 'Rahmani', 'Slimani', 'Taleb', 'Yahiaoui', 'Zerrouki', 'Amrani', 'Benaissa', 'Brahimi', 'Chaoui', 'Derradji', 'Guerfi', 'Hadjadj', 'Khelifi', 'Lounes', 'Mebarki'];
+/** a different family name each time: the same full name sent with many numbers is a signal of its own */
+let nameSeq = 0;
+const custName = () => `Amina ${SURNAMES[nameSeq++ % SURNAMES.length]}`;
 const solve = (ch: string) => {
   for (let n = 0; ; n++) if (zeroBits(sha256Hex(`${ch}:${n}`)) >= LANDING_POW_BITS) return String(n);
 };
@@ -35,7 +39,7 @@ const solve = (ch: string) => {
 async function human(over: Record<string, unknown> = {}, phone = `0661${String(Math.floor(Math.random() * 1e6)).padStart(6, '0')}`) {
   const t0 = Date.now() - 25_000;
   const ch = await makeChallenge(db, SLUG, t0);
-  return { slug: SLUG, name: 'Amina Benali', phone, wilaya: 16, commune: 'Hydra', variant: variantId, qty: 1, hp: '', ch, pw: solve(ch), t: 25_000, ki: 40, wd: false, fp: 'abc', did: `d${Math.random()}`, meta: { ip: `10.0.0.${Math.floor(Math.random() * 250)}`, ua: UA }, ...over };
+  return { slug: SLUG, name: custName(), phone, wilaya: 16, commune: 'Hydra', variant: variantId, qty: 1, hp: '', ch, pw: solve(ch), t: 25_000, ki: 40, wd: false, fp: 'abc', did: `d${Math.random()}`, meta: { ip: `10.0.0.${Math.floor(Math.random() * 250)}`, ua: UA }, ...over };
 }
 
 test('the page is one small HTML file with the form, the colour and the description', async () => {
@@ -130,16 +134,44 @@ test('a blacklisted number alone is put to review; with one more signal it is bl
   await assert.rejects(call('landing.restore', admin, { id: Number(b.id) }));
 });
 
-test('a second order of the same product the same day still goes to « Nouvelle », with the warning in its note', async () => {
+test('the same product sent again within 48 h, still to call: one order, the change written on it for the agent', async () => {
   const phone = '0661445566';
   await call('landing.submit', admin, await human({}, phone));
-  await call('landing.submit', admin, await human({}, phone));
+  await call('landing.submit', admin, await human({ qty: 2 }, phone));
   const rows = await db.query(`SELECT conf_status, internal_note, channel, landing_id FROM orders WHERE phone = $1 ORDER BY id`, [phone]);
-  assert.equal(rows.length, 2);
-  assert.equal(rows[1].conf_status, 'new');
-  assert.match(rows[1].internal_note, /score anti-fraude/);
-  assert.equal(rows[1].channel, 'landing');
-  assert.ok(rows[1].landing_id);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].conf_status, 'new');
+  assert.match(rows[0].internal_note, /renvoyé la commande.*quantité 2/);
+  assert.equal(rows[0].channel, 'landing');
+  const s = await db.query(`SELECT merged FROM landing_submits WHERE phone = $1 ORDER BY id`, [phone]);
+  assert.deepEqual(s.map((r: any) => r.merged), [false, true]);
+  // once confirmed, a new one is a new order again (with the warning)
+  await db.query(`UPDATE orders SET conf_status = 'confirmed' WHERE phone = $1`, [phone]);
+  await call('landing.submit', admin, await human({}, phone));
+  const after = await db.query(`SELECT internal_note FROM orders WHERE phone = $1 ORDER BY id`, [phone]);
+  assert.equal(after.length, 2);
+  assert.match(after[1].internal_note, /score anti-fraude/);
+});
+
+test('a competitor: one device sending a third number in an hour is blocked; a device agents marked « concurrent » too', async () => {
+  const did = `team${Math.random()}`;
+  const phones = ['0771203040', '0662918273', '0553746152'];
+  for (const p of phones) await call('landing.submit', admin, await human({ did }, p));
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM orders WHERE phone = ANY($1)', [phones.slice(0, 2)]))[0].n, 2);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM orders WHERE phone = $1', [phones[2]]))[0].n, 0);
+  const b = (await db.query(`SELECT reasons FROM landing_blocked WHERE phone = $1`, [phones[2]]))[0];
+  assert.ok(b.reasons.some((r: any) => r.code === 'device_numbers'));
+  // an agent marks an order of another device « 🕵️ Concurrent »: that device's next order is blocked
+  const did2 = `cmp${Math.random()}`;
+  await call('landing.submit', admin, await human({ did: did2 }, '0661900111'));
+  const o = (await db.query(`SELECT id FROM orders WHERE phone = '0661900111'`))[0];
+  await call('orders.setConf', await as(EMAILS.conf), { ids: [Number(o.id)], status: 'fake', reason: '🕵️ Concurrent' });
+  assert.equal((await db.query(`SELECT reason FROM fraud_marks WHERE order_id = $1`, [o.id]))[0]?.reason, 'competitor');
+  await call('landing.submit', admin, await human({ did: did2 }, '0661900222'));
+  assert.equal((await db.query(`SELECT count(*)::int AS n FROM orders WHERE phone = '0661900222'`))[0].n, 0);
+  const p: any = await call('landing.protection', admin, { days: 7 });
+  assert.ok(p.totals.blocked >= 2);
+  assert.ok(p.marks.some((m: any) => m.reason === 'competitor'));
 });
 
 test('signals: names, phones and the weighted score', () => {
@@ -153,7 +185,7 @@ test('signals: names, phones and the weighted score', () => {
   assert.ok(phoneSignals('0555555555').length > 0);
   assert.ok(phoneSignals('0512345678').some((r) => r.code === 'phone_sequence'));
   const base: FraudFacts = {
-    name: 'Amina Benali', phoneRaw: '0661445566', phone: '0661445566', qty: 1, honeypot: '', servedMs: 30_000, clientMs: 30_000, inputs: 30, pow: 'ok', userAgent: UA, webdriver: false,
+    name: custName(), phoneRaw: '0661445566', phone: '0661445566', qty: 1, honeypot: '', servedMs: 30_000, clientMs: 30_000, inputs: 30, pow: 'ok', userAgent: UA, webdriver: false,
     recent: { phone24h: 0, phoneSameProduct24h: 0, ip10m: 0, ip1h: 0, device1h: 0 }, history: { blacklisted: false, orders: 0, delivered: 0, returned: 0, cancelled: 0 }, ipCountry: null, ipWilaya: null, wilayaId: 16,
   };
   assert.equal(scoreOrder(base).verdict, 'allow');
@@ -162,9 +194,25 @@ test('signals: names, phones and the weighted score', () => {
   assert.equal(scoreOrder({ ...base, ipWilaya: 31 }).verdict, 'allow');
   // a customer who refuses parcels: review, and blocked when strict
   const refuser = { ...base, history: { blacklisted: false, orders: 3, delivered: 0, returned: 2, cancelled: 1 } };
-  assert.equal(scoreOrder(refuser).verdict, 'allow');
+  assert.equal(scoreOrder(refuser).verdict, 'review');
   assert.equal(scoreOrder({ ...refuser, servedMs: 5000 }).verdict, 'review');
   assert.equal(scoreOrder({ ...refuser, servedMs: 5000, inputs: 0 }, 'strict').verdict, 'block');
   assert.equal(scoreOrder({ ...base, userAgent: 'Mozilla/5.0 HeadlessChrome/120' }).verdict, 'review');
   assert.equal(scoreOrder({ ...base, userAgent: 'Mozilla/5.0 HeadlessChrome/120', webdriver: true }).verdict, 'block');
+  // a customer who already received and paid is not blocked by soft signals, only by a certain one
+  const good = { ...base, history: { blacklisted: false, orders: 2, delivered: 2, returned: 0, cancelled: 0 } };
+  assert.equal(scoreOrder({ ...good, qty: 12, ipCountry: 'FR', servedMs: 5000 }).verdict, 'allow');
+  assert.equal(scoreOrder({ ...good, honeypot: 'x' }).verdict, 'block');
+  // the competitor's hands: 3 numbers in an hour from one device; numbers in a row; one name for many numbers
+  assert.equal(scoreOrder({ ...base, recent: { ...base.recent, deviceNumbers1h: 2, deviceNumbers24h: 2 } }).verdict, 'block');
+  assert.equal(scoreOrder({ ...base, recent: { ...base.recent, deviceNumbers24h: 1 } }).verdict, 'allow'); // a family: two numbers
+  assert.equal(scoreOrder({ ...base, recent: { ...base.recent, nearPhones24h: 2 } }).verdict, 'review');
+  assert.equal(scoreOrder({ ...base, recent: { ...base.recent, nameOtherPhones7d: 2 } }).verdict, 'review');
+  assert.equal(scoreOrder({ ...base, marks: { competitor: true, fake30d: 0 } }).verdict, 'block');
+  assert.equal(scoreOrder({ ...base, marks: { competitor: false, fake30d: 1 } }).verdict, 'review');
+  assert.equal(scoreOrder({ ...base, marks: { competitor: false, fake30d: 2 } }).verdict, 'block');
+  // how they used the page: a phone with no touch screen is a mask; reading the page from an ad is a good sign
+  const seen = { scroll: 60, pasted: false, tz: 'Africa/Algiers', touch: 5, fromAd: true };
+  assert.equal(scoreOrder({ ...base, clientMs: 50_000, behavior: seen }).score, 0);
+  assert.equal(scoreOrder({ ...base, clientMs: 9_000, behavior: { ...seen, scroll: 0, pasted: true, touch: 0, fromAd: false } }).verdict, 'review');
 });

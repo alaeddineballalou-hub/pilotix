@@ -1,7 +1,7 @@
 // Changing the confirmation status of one or more orders, with the small questions of the original:
 // callback / postponed → date (+2 h / tomorrow 10:00) + note; cancelled / fake / wrong number → reason + note.
 // Confirmed / confirmed without stock → the order form opens instead (check the order, then confirm).
-import { CANCEL_REASONS, CONF_NEEDS_REASON, ConfStatus } from '@pilotix/shared';
+import { CANCEL_REASONS, CONF_NEEDS_REASON, ConfStatus, FAKE_REASONS } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -90,12 +90,15 @@ function AskDialog({ ask, onClose, onSubmit }: { ask: Ask; onClose: () => void; 
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const label = choiceLabel(t, ask.choice);
+  /** a fake order: its own reasons (« concurrent » blocks the landing page's device for good) */
+  const fake = ask.choice === 'fake';
+  const reasons: readonly string[] = fake ? FAKE_REASONS : CANCEL_REASONS;
   const title = ask.rows.length === 1 ? `${label} — ${ask.rows[0].ref}` : t('confirmation.askTitleMany', { label, n: ask.rows.length });
   const submit = async () => {
     if (isDate && !when) return setErr(t('confirmation.ask.needDate'));
     if (!isDate && !reason) return setErr(t('confirmation.ask.needReason'));
     setBusy(true);
-    const reasonText = reason ? t(`status.cancelReason.${reason}`) : null;
+    const reasonText = reason ? t(`status.${fake ? 'fakeReason' : 'cancelReason'}.${reason}`) : null;
     await onSubmit(isDate ? { nextCallAt: fromLocalInput(when), note: note.trim() || null } : { reason: reasonText, note: note.trim() || null });
     setBusy(false);
   };
@@ -130,9 +133,9 @@ function AskDialog({ ask, onClose, onSubmit }: { ask: Ask; onClose: () => void; 
           <Field label={t('confirmation.ask.reason')}>
             <select required value={reason} onChange={(e) => (setReason(e.target.value), setErr(''))}>
               <option value="">{t('confirmation.ask.choose')}</option>
-              {CANCEL_REASONS.map((r) => (
+              {reasons.map((r) => (
                 <option key={r} value={r}>
-                  {t(`status.cancelReason.${r}`)}
+                  {t(`status.${fake ? 'fakeReason' : 'cancelReason'}.${r}`)}
                 </option>
               ))}
             </select>

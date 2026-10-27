@@ -44,6 +44,8 @@ export interface SettingsMap {
     ignored: number[];
     /** the store's part of the pages' address (site/<store>/<page>); '' = made from the shop's name */
     storeSlug?: string;
+    /** Cloudflare Turnstile's site key (invisible robot check on the pages); '' = off. Its secret key is a secret of its own. */
+    turnstileSiteKey?: string;
   };
   /** Dashboard goals (admin): delivered revenue per month */
   goals: { monthlyRevenue: number };

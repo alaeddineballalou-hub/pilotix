@@ -527,7 +527,8 @@
     "pickStatus": "Choisissez d’abord un nouveau statut",
     "feeLocked": "Prix de la grille de livraison (wilaya, domicile ou bureau). Seule la remise peut être modifiée.",
     "upsell": "Upsell",
-    "upsellHint": "Compté automatiquement : ce que le client paie en plus de sa commande d’origine (pièces en plus, pack, produit ajouté ou plus cher), moins la remise ajoutée. Changer de couleur au même prix ne compte pas."
+    "upsellHint": "Compté automatiquement : ce que le client paie en plus de sa commande d’origine (pièces en plus, pack, produit ajouté ou plus cher), moins la remise ajoutée. Changer de couleur au même prix ne compte pas.",
+    "competitorHint": "bloque son appareil"
   },
   "noNext": "Plus de commande dans cette liste",
   "ek": {

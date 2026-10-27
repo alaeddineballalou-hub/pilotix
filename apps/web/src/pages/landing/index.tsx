@@ -18,14 +18,15 @@ import { Abandoned } from './Abandoned';
 import { Blocked } from './Blocked';
 import { Editor } from './Editor';
 import { demoSubmit, useLandingFrame } from './frame';
+import { Protection } from './Protection';
 import { Settings } from './Settings';
 import './landing.css';
 
-const TABS = ['pages', 'abandons', 'bloquees', 'reglages'] as const;
+const TABS = ['pages', 'protection', 'abandons', 'bloquees', 'reglages'] as const;
 type Tab = (typeof TABS)[number];
-const ICON: Record<Tab, string> = { pages: 'globe', abandons: 'cart', bloquees: 'ban', reglages: 'settings' };
-/** what agents (confirmation) see: the orders to handle, not the pages */
-const AGENT_TABS: Tab[] = ['abandons', 'bloquees'];
+const ICON: Record<Tab, string> = { pages: 'globe', protection: 'shield', abandons: 'cart', bloquees: 'ban', reglages: 'settings' };
+/** what agents (confirmation) see: the orders to handle and the attacks, not the pages */
+const AGENT_TABS: Tab[] = ['protection', 'abandons', 'bloquees'];
 
 /** the store's part of the pages' address (Réglages); undefined while it loads */
 export const useStore = () => useRpc('landing.store', {}, { staleTime: 60_000 }).data?.store;
@@ -51,12 +52,13 @@ export function Landing({ sub, rest }: PageProps) {
     icon: ICON[k],
     href: `#/landing/${k}`,
     count: k === 'bloquees' ? counts.data?.blocked : k === 'abandons' ? counts.data?.abandoned : k === 'pages' ? counts.data?.noPage : undefined,
-    alert: k !== 'reglages',
+    alert: k !== 'reglages' && k !== 'protection',
   }));
   return (
     <div className="pd lp">
       <SectionHeader icon="globe" title={t('landing.title')} help={t('landing.help')} about={t(`landing.about.${tab}`)} tabs={tabs} current={tab} aside={<AlertSwitch />} />
       {tab === 'pages' && <Pages />}
+      {tab === 'protection' && <Protection />}
       {tab === 'abandons' && <Abandoned />}
       {tab === 'bloquees' && <Blocked />}
       {tab === 'reglages' && <Settings />}

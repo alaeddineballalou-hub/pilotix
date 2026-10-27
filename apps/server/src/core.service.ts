@@ -164,6 +164,14 @@ export class CoreService implements OnModuleDestroy {
       if (text.length > 5_000_000) throw new core.AppError('bad_request', 'Feuille trop grande (plus de 5 Mo) : gardez les commandes récentes');
       return text;
     },
+    turnstile: async (secret, token, ip) => {
+      // Cloudflare's own check of the invisible widget's token (5 s at most: an order never waits for it longer)
+      const body = new URLSearchParams({ secret, response: token, ...(ip ? { remoteip: ip } : {}) });
+      const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body, signal: AbortSignal.timeout(5_000) }).catch(() => null);
+      if (!res?.ok) return null;
+      const r: any = await res.json().catch(() => null);
+      return r ? !!r.success : null;
+    },
     hashPassword: (pw) => core.hashPassword(pw),
     publicUrl: config.publicUrl,
   };
