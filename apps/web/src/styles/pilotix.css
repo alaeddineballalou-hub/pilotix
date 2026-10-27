@@ -1691,35 +1691,59 @@ html:not([data-theme="dark"]) .px-lg { --ink: #1B2A47; --tile: #1B2A47; --eye: #
   .px-folded .px-lg { transition: width .3s cubic-bezier(.16, 1, .3, 1), transform .18s cubic-bezier(.16, 1, .3, 1); }
   .px-folded .px-logo-btn:hover .px-lg, .px-folded .px-logo-btn:focus-visible .px-lg { transform: translateY(-1px); } /* no scale: a scaled layer is stretched like a photo and looks blurry */
 }
-/* phones: the sidebar is a slide-in menu, so the same morph plays when the menu opens (closed menu = icon state) */
-@media (max-width: 900px) {
-  body:not(.nav-open) .px-lg { width: 36px; }
-  body:not(.nav-open) .px-lg-gl:not(.px-lg-p) { transform: translateX(var(--dx)) scale(.6); opacity: 0; }
-  body:not(.nav-open) .px-lg-x { transform: translateX(-160px); opacity: 0; }
-  body:not(.nav-open) .px-lg-p { opacity: 0; }
-  body:not(.nav-open) .px-lg-tile { transform: none; opacity: 1; }
-  body:not(.nav-open) .px-lg-wave { transform: none; }
-  body:not(.nav-open) .px-lg-dx { transform: translateX(var(--dx)); }
-  body:not(.nav-open) .px-lg-dot { transform: translateY(var(--dy)) scale(.901); opacity: 0; }
-  body:not(.nav-open) .px-lg-smile { transform: translate(13.2px, 82.4px) scale(.2228); fill: #1B2A47; opacity: 0; }
-  body:not(.nav-open) .px-lg-face { opacity: 1; }
-  /* folding timeline (about 0.6 s) */
-  body:not(.nav-open) .px-lg-ready .px-lg-gl:not(.px-lg-p), body:not(.nav-open) .px-lg-ready .px-lg-x { transition: transform .24s cubic-bezier(.5, 0, .75, 0) calc((6 - var(--i)) * 26ms), opacity .2s ease calc((6 - var(--i)) * 26ms + 40ms); }
-  body:not(.nav-open) .px-lg-ready .px-lg-p { transition: opacity .1s ease .2s; }
-  body:not(.nav-open) .px-lg-ready .px-lg-tile { transition: transform .34s cubic-bezier(.16, 1, .3, 1) .12s, opacity .1s ease .12s; }
-  body:not(.nav-open) .px-lg-ready .px-lg-wave { transition: transform .3s cubic-bezier(.65, 0, .35, 1) .28s; }
-  body:not(.nav-open) .px-lg-ready .px-lg-dx { transition: transform .4s cubic-bezier(.16, 1, .3, 1) calc(.06s + var(--i) * 60ms); }
-  body:not(.nav-open) .px-lg-ready .px-lg-dot { transition: transform .4s cubic-bezier(.5, 0, .75, 0) calc(.06s + var(--i) * 60ms), opacity .06s ease calc(.46s + var(--i) * 60ms); }
-  body:not(.nav-open) .px-lg-ready .px-lg-smile { transition: transform .42s cubic-bezier(.65, 0, .35, 1) .06s, fill .2s ease .3s, opacity .06s ease .48s; }
-  body:not(.nav-open) .px-lg-ready .px-lg-face { transition: opacity .06s ease .46s; }
-}
 /* reduced motion: no movement, a short cross-fade between the wordmark and the icon */
 @media (prefers-reduced-motion: reduce) {
   .px-lg-ready, .px-lg-ready * { transition-property: opacity !important; transition-duration: .15s !important; transition-delay: 0s !important; }
   @media (min-width: 901px) {
     .px-folded .px-lg-gl, .px-folded .px-lg-dot, .px-folded .px-lg-smile, .px-folded .px-lg-x { opacity: 0; }
   }
-  @media (max-width: 900px) {
-    body:not(.nav-open) .px-lg-gl, body:not(.nav-open) .px-lg-dot, body:not(.nav-open) .px-lg-smile, body:not(.nav-open) .px-lg-x { opacity: 0; }
-  }
 }
+
+/* ---- Phones: the big logo's entrance when the menu opens ("eyes first") ----
+   the two orange i-dots pop in and blink, the smile draws under them (a face), then the letters fill in between. */
+@keyframes px-eye-in { 0% { transform: scale(0); opacity: 0; } 20% { transform: scale(1.25); opacity: 1; } 30% { transform: scale(1); } 38% { transform: scale(1, .2); } 46%, 100% { transform: scale(1); opacity: 1; } }
+@keyframes px-smile-draw { 0%, 30% { clip-path: inset(-30% 100% -30% -3%); } 64%, 100% { clip-path: inset(-30% -3% -30% -3%); } }
+@keyframes px-letter-in { 0% { opacity: 0; transform: scale(.6); } 100% { opacity: 1; transform: none; } }
+@media (max-width: 900px) {
+  body.nav-open .px-lg-dot { animation: px-eye-in .9s cubic-bezier(.22, 1, .36, 1) calc(.12s + var(--i) * 55ms) both; }
+  body.nav-open .px-lg-smile { animation: px-smile-draw .9s cubic-bezier(.65, 0, .35, 1) .12s both; }
+  body.nav-open .px-lg-gl, body.nav-open .px-lg-x { transform-origin: center; animation: px-letter-in .26s cubic-bezier(.22, 1, .36, 1) calc(.62s + var(--i) * 45ms) both; }
+}
+
+/* ---- Phones: the winking icon is the menu button; touched / hovered / menu open = the grey ☰ ---- */
+@media (max-width: 900px) { html .topbar .brand { display: none !important; } }
+.topbar .menu-btn.px-mf-btn { width: 36px; height: 36px; min-width: 36px; padding: 0 !important; border: 0 !important; border-radius: 10px; background: transparent !important; box-shadow: none !important; display: inline-grid; place-items: center; }
+.px-mf { display: block; width: 36px; height: 36px; max-width: none; overflow: visible;
+  --bg: #1B2A47; --feat: #F7A823; --line: #1B2A47; --bg-menu: #F1EEEA; }
+html[data-theme="dark"] .px-mf { --bg: #FFFFFF; --feat: #1B2A47; --line: #FFFFFF; --bg-menu: rgba(255, 255, 255, .14); }
+.px-mf * { transition: transform .3s cubic-bezier(.65, 0, .35, 1), fill .25s ease, opacity .2s ease; }
+.px-mf-bg { fill: var(--bg); }
+.px-mf-wave { fill: #F7A823; }
+.px-mf-mouth { fill: #1B2A47; transform-box: fill-box; transform-origin: center; }
+.px-mf-bar { fill: var(--feat); }
+.px-mf-low { fill: #1B2A47; }
+/* the face: each bar = left cap, end cap, middle rect (unit shapes placed with transforms) */
+.px-mf-eye .px-mf-l, .px-mf-eye .px-mf-e { transform: translate(186px, 186px) scale(40); }
+.px-mf-eye .px-mf-r { transform: translate(186px, 186px) scale(0, 80); }
+.px-mf-wink .px-mf-l { transform: translate(290px, 186px) scale(15); }
+.px-mf-wink .px-mf-e { transform: translate(364px, 186px) scale(15); }
+.px-mf-wink .px-mf-r { transform: translate(290px, 186px) scale(74, 30); }
+.px-mf-low .px-mf-l, .px-mf-low .px-mf-e { transform: translate(256px, 336px) scale(0); }
+.px-mf-low .px-mf-r { transform: translate(256px, 336px) scale(0, 30); }
+/* the ☰ button */
+body.nav-open .px-mf .px-mf-bg, .topbar .px-mf-btn:active .px-mf .px-mf-bg, .topbar .px-mf-btn:focus-visible .px-mf .px-mf-bg { fill: var(--bg-menu); }
+@media (hover: hover) { .topbar .px-mf-btn:hover .px-mf .px-mf-bg { fill: var(--bg-menu); } }
+body.nav-open .px-mf .px-mf-wave, .topbar .px-mf-btn:active .px-mf .px-mf-wave, .topbar .px-mf-btn:focus-visible .px-mf .px-mf-wave { transform: translateY(330px); }
+@media (hover: hover) { .topbar .px-mf-btn:hover .px-mf .px-mf-wave { transform: translateY(330px); } }
+body.nav-open .px-mf .px-mf-mouth, .topbar .px-mf-btn:active .px-mf .px-mf-mouth, .topbar .px-mf-btn:focus-visible .px-mf .px-mf-mouth { opacity: 0; transform: scaleY(.15); }
+@media (hover: hover) { .topbar .px-mf-btn:hover .px-mf .px-mf-mouth { opacity: 0; transform: scaleY(.15); } }
+body.nav-open .px-mf .px-mf-bar, .topbar .px-mf-btn:active .px-mf .px-mf-bar, .topbar .px-mf-btn:focus-visible .px-mf .px-mf-bar { fill: var(--line); }
+@media (hover: hover) { .topbar .px-mf-btn:hover .px-mf .px-mf-bar { fill: var(--line); } }
+body.nav-open .px-mf .px-mf-l, .topbar .px-mf-btn:active .px-mf .px-mf-l, .topbar .px-mf-btn:focus-visible .px-mf .px-mf-l { transform: translate(146px, var(--y)) scale(15) !important; }
+@media (hover: hover) { .topbar .px-mf-btn:hover .px-mf .px-mf-l { transform: translate(146px, var(--y)) scale(15) !important; } }
+body.nav-open .px-mf .px-mf-e, .topbar .px-mf-btn:active .px-mf .px-mf-e, .topbar .px-mf-btn:focus-visible .px-mf .px-mf-e { transform: translate(366px, var(--y)) scale(15) !important; }
+@media (hover: hover) { .topbar .px-mf-btn:hover .px-mf .px-mf-e { transform: translate(366px, var(--y)) scale(15) !important; } }
+body.nav-open .px-mf .px-mf-r, .topbar .px-mf-btn:active .px-mf .px-mf-r, .topbar .px-mf-btn:focus-visible .px-mf .px-mf-r { transform: translate(146px, var(--y)) scale(220, 30) !important; }
+@media (hover: hover) { .topbar .px-mf-btn:hover .px-mf .px-mf-r { transform: translate(146px, var(--y)) scale(220, 30) !important; } }
+.px-mf-eye { --y: 176px; } .px-mf-wink { --y: 256px; } .px-mf-low { --y: 336px; }
+@media (prefers-reduced-motion: reduce) { .px-mf * { transition-duration: .01s !important; } }
