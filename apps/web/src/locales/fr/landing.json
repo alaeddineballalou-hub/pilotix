@@ -435,17 +435,6 @@
     "marks": "Marqués par les agents",
     "marksHelp": "Quand un agent met « Fausse » ou « 🕵️ Concurrent », l’appareil qui a commandé est marqué : 🟡 la fois suivante, 🔴 à la 2e fausse en 30 jours ou dès « concurrent ». Le numéro, lui, n’est pas puni (il peut appartenir à quelqu’un qui n’a rien commandé).",
     "noMarks": "Aucun appareil marqué.",
-    "fake": "Fausse commande",
-    "how": "Comment ça marche",
-    "hAllow": "Moins de 30 points",
-    "hAllowSub": "Commande normale. Purchase envoyé à Meta tout de suite (réglage « À la commande »).",
-    "hReview": "30 à 99 points",
-    "hReviewSub": "L’agent voit pourquoi. Si concurrent possible : question de contrôle (wilaya + repère) et expédition après un 2e appel le lendemain. Rien envoyé à Meta avant confirmation.",
-    "hBlock": "100 points ou signe certain",
-    "hBlockSub": "Piège à robot, envoi en moins de 3 s, 3 numéros en 1 h depuis un appareil, appareil « concurrent »… Écran « Merci » normal, rien à Meta, à restaurer en un clic si c’était un vrai client.",
-    "meta": "Côté Meta (à faire une fois)",
-    "meta1": "Gestionnaire de publicités › vos ensembles de publicités › Placements : décochez « Audience Network » (beaucoup de faux clics).",
-    "meta2": "Events Manager › votre pixel › Paramètres › Autorisations du trafic : n’autorisez que vos domaines.",
-    "meta3": "Landing pages › Réglages : « Purchase » à la commande — seules les commandes 🟢 comptent ; l’événement « Confirmed » suit quand un agent confirme."
+    "fake": "Fausse commande"
   }
 }
