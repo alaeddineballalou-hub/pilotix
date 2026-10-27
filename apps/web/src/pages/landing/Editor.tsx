@@ -13,6 +13,7 @@ import { useDebounced } from '../depot/OrderList';
 import { useLandingFrame } from './frame';
 import { publicUrl, useStore } from './index';
 import { Img, Photos } from './Photos';
+import { PixelSelects } from './Pixels';
 type Page = Out<'landing.get'>;
 type Level = 'relaxed' | 'normal' | 'strict';
 const DESKTOP_W = 1280;
@@ -37,6 +38,8 @@ const draftOf = (p: Page | null, productId?: number) => ({
   variantLabel: p?.variantLabel ?? 'اللون',
   fraudLevel: (p?.fraudLevel ?? 'normal') as Level,
   pixelId: p?.pixelId ?? '',
+  metaPixelRef: (p?.metaPixelRef ?? null) as number | null,
+  tiktokPixelRef: (p?.tiktokPixelRef ?? null) as number | null,
   stockMode: (p?.stockMode ?? 'off') as 'off' | 'hide',
   images: (p?.images ?? []) as Img[],
 });
@@ -88,7 +91,10 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
       description: d.description,
       variantLabel: d.variantLabel.trim(),
       fraudLevel: d.fraudLevel,
-      pixelId: d.pixelId.trim(),
+      // a pixel typed on the page before pixels had names: kept until another choice is made
+      pixelId: d.metaPixelRef === null && d.pixelId.trim() ? d.pixelId.trim() : '',
+      metaPixelRef: d.metaPixelRef,
+      tiktokPixelRef: d.tiktokPixelRef,
       stockMode: d.stockMode,
       images: d.images.map((i) => (i.id ? { id: i.id } : { url: i.url!, w: i.w, h: i.h })),
     });
@@ -242,9 +248,8 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
 
           <section className="card">
             <h2>{t('landing.ed.sMore')}</h2>
-            <Field label={t('landing.ed.pixel')} hint={t('landing.ed.pixelHint')}>
-              <input className="ltr" inputMode="numeric" value={d.pixelId} placeholder={t('landing.ed.pixelPh')} onChange={(e) => set('pixelId', e.target.value.replace(/\D/g, ''))} />
-            </Field>
+            <PixelSelects meta={d.metaPixelRef} tiktok={d.tiktokPixelRef} onChange={(k, v) => setD((x) => ({ ...x, [k]: v, ...(k === 'metaPixelRef' ? { pixelId: '' } : {}) }))} />
+            {d.metaPixelRef === null && !!d.pixelId && <p className="pd-note">{t('landing.px.legacy', { id: d.pixelId })}</p>}
             <label className="lp-switch">
               <input type="checkbox" checked={d.stockMode === 'hide'} onChange={(e) => set('stockMode', e.target.checked ? 'hide' : 'off')} />
               <span>

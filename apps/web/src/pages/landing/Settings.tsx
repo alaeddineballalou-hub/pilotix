@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { backend, serverUrl, type Out } from '../../lib/backend';
 import { OwnDomain } from './Domain';
+import { PixelsCard } from './Pixels';
 import { da, dateTime } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
@@ -23,6 +24,7 @@ export function Settings() {
   if (q.error || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   return (
     <>
+      <PixelsCard />
       <Form key={JSON.stringify(q.data.settings)} data={q.data} />
       {ownDomain && <OwnDomain />}
       <Events />
@@ -76,14 +78,9 @@ function Form({ data }: { data: Out<'landing.settings.get'> }) {
           <Icon name="megaphone" /> {t('landing.set.meta')}
         </h2>
         <p className="pd-note">{t('landing.set.metaHelp')}</p>
-        <div className="grid2">
-          <Field label={t('landing.set.pixel')} hint={t('landing.set.pixelHint')}>
-            <input className="ltr" inputMode="numeric" value={f.pixelId} placeholder="123456789012345" onChange={(e) => set('pixelId', e.target.value.replace(/\D/g, ''))} />
-          </Field>
-          <Field label={t('landing.set.testCode')} hint={t('landing.set.testCodeHint')}>
-            <input className="ltr" value={f.testEventCode} placeholder="TEST12345" onChange={(e) => set('testEventCode', e.target.value.replace(/[^A-Za-z0-9]/g, ''))} />
-          </Field>
-        </div>
+        <Field label={t('landing.set.testCode')} hint={t('landing.set.testCodeHint')}>
+          <input className="ltr" value={f.testEventCode} placeholder="TEST12345" onChange={(e) => set('testEventCode', e.target.value.replace(/[^A-Za-z0-9]/g, ''))} />
+        </Field>
         <Field
           label={t('landing.set.token')}
           hint={

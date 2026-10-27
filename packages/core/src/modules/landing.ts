@@ -35,6 +35,7 @@ import { clientHomeFees, getSetting, setSetting } from '../settings';
 import { BOT_UA, FraudLevel, FraudReason, scoreOrder, verdictOf } from './fraud';
 import { lookAlikeOf, trustOf } from './trust';
 import { groupHtml, groupOf } from './landinggroups';
+import { checkRef, pixelsOf, PixelRef, pixelTestCode, pixelToken } from './pixels';
 import { ABANDONED, abandonCutoff, freeLandingSlug, landingCounts, landingSettings, LandingSettings, landingStore, queuePurchase, quickCreatePage, STORE_RESERVED } from './landingquery';
 import { sendInPreview } from './notify';
 import { addEvent, createOrder, noOrderAccess } from './orders';
@@ -74,6 +75,8 @@ export interface LandingRow {
   variantLabel: string;
   fraudLevel: FraudLevel;
   pixelId: string;
+  metaPixelRef: number | null;
+  tiktokPixelRef: number | null;
   stockMode: 'off' | 'hide';
   views: number;
   orders: number;
@@ -151,6 +154,8 @@ async function listPages(db: Db, now: number, ids?: number[]): Promise<LandingRo
       variantLabel: r.variant_label,
       fraudLevel: r.fraud_level,
       pixelId: r.pixel_id ?? '',
+      metaPixelRef: numOrNull(r.meta_pixel_ref),
+      tiktokPixelRef: numOrNull(r.tiktok_pixel_ref),
       stockMode: r.stock_mode === 'hide' ? 'hide' : 'off',
       views: num(r.views),
       orders: num(r.n_orders),
@@ -292,6 +297,7 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
   const hide = l.stock_mode === 'hide';
   const s = await landingSettings(ctx.db);
   const pageUrl = o.url ?? (o.site ? `${o.site}/${await landingStore(ctx.db, s)}/${slug}` : '');
+  const px = await pixelsOf(ctx.db, l, s.pixelId);
   const view: LandingView = {
     slug,
     title: l.title || pc.name,
@@ -306,7 +312,8 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     fees: pc.fees,
     shopName: pc.shopName,
     // the pixel only on the real page: never in Pilotix (preview, demo), whose visits are not customers
-    pixelId: o.mode === 'live' ? String(l.pixel_id || s.pixelId || '').trim() : '',
+    pixelId: o.mode === 'live' ? px.meta : '',
+    tiktokId: o.mode === 'live' ? px.tiktok : '',
     productId: num(l.product_id),
     // the shop's own Cloudflare keys, else the widget Pilotix keeps for the address the page is served at
     turnstileKey: o.mode === 'live' ? String(s.turnstileSiteKey ?? '').trim() || ((await ctx.server?.turnstileSite?.(hostOf(pageUrl || o.post))) ?? '') : '',
@@ -404,12 +411,14 @@ export const SubmitInput = z.object({
   utm: utmOf,
   fbp: str(200),
   fbc: str(600),
+  /** TikTok's browser cookie (_ttp) */
+  ttp: str(200),
   url: str(500),
   meta: Meta,
 });
 
 /** What the page sends while the customer fills the form (a valid phone typed): the abandoned order, if no order follows. */
-export const CaptureInput = SubmitInput.pick({ slug: true, name: true, phone: true, wilaya: true, commune: true, variant: true, qty: true, hp: true, ch: true, fp: true, did: true, vid: true, utm: true, fbp: true, fbc: true, url: true, meta: true });
+export const CaptureInput = SubmitInput.pick({ slug: true, name: true, phone: true, wilaya: true, commune: true, variant: true, qty: true, hp: true, ch: true, fp: true, did: true, vid: true, utm: true, fbp: true, fbc: true, ttp: true, url: true, meta: true });
 
 const arDigits = (s: string) => s.replace(/[٠-٩]/g, (c) => String(c.charCodeAt(0) - 0x660)).replace(/[۰-۹]/g, (c) => String(c.charCodeAt(0) - 0x6f0));
 const plain = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\b(province|wilaya|of)\b/g, '').replace(/[^a-z]/g, '');
@@ -823,11 +832,11 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
     await linkSameCustomer(db, phone!, o.id, o.ref, now);
   }
   await db.query(
-    `INSERT INTO landing_submits (landing_id, product_id, phone, ip, fp, challenge, verdict, score, order_id, blocked_id, at, ua, fbp, fbc, url, utm, reasons, merged)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+    `INSERT INTO landing_submits (landing_id, product_id, phone, ip, fp, challenge, verdict, score, order_id, blocked_id, at, ua, fbp, fbc, url, utm, reasons, merged, ttp)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
     [l.id, productId, phone, ip || null, device, servedMs !== null ? i.ch : null, result.verdict, result.score, orderId, blockedId, isoAt(now),
       (i.meta.ua ?? '').slice(0, 500) || null, fbp || null, fbc || null, (i.meta.url || i.url || '').slice(0, 500) || null, i.utm ? JSON.stringify(i.utm) : null,
-      JSON.stringify(result.reasons), merged],
+      JSON.stringify(result.reasons), merged, i.ttp || null],
   );
   // Meta Purchase « when the order is received »: only a clear order (a borderline one counts once a person confirms it);
   // an order sent again is the same sale (queuePurchase is once per order anyway)
@@ -860,7 +869,7 @@ export async function captureLead(ctx: Ctx, i: z.infer<typeof CaptureInput>): Pr
   // robots are not customers: no abandoned order, no Meta event (and the answer is the same: nothing to learn)
   if (!phone || i.hp.trim() || BOT_UA.test(ua) || !ua.trim()) return { ok: true };
   const now = ctx.now();
-  const l = (await db.query('SELECT l.id, l.product_id, l.price, l.pixel_id, p.price AS p_price FROM landing_pages l JOIN products p ON p.id = l.product_id WHERE l.slug = $1 AND l.active', [i.slug]))[0];
+  const l = (await db.query('SELECT l.id, l.product_id, l.price, l.pixel_id, l.meta_pixel_ref, l.tiktok_pixel_ref, p.price AS p_price FROM landing_pages l JOIN products p ON p.id = l.product_id WHERE l.slug = $1 AND l.active', [i.slug]))[0];
   if (!l || (await checkChallenge(db, i.ch, i.slug, now)) === null) return { ok: true };
   // blocked as fake, or already ordered this product (any channel) in the last day: not an abandoned order
   if (await recentlyBlocked(db, phone, now)) return { ok: true };
@@ -905,23 +914,24 @@ export async function captureLead(ctx: Ctx, i: z.infer<typeof CaptureInput>): Pr
   const leadId = num(
     (
       await db.query(
-        `INSERT INTO landing_leads (at, last_at, landing_id, product_id, variant_id, qty, unit_price, customer_name, phone, wilaya_id, commune, device, ip, ua, fbp, fbc, url, utm, view_id)
-         VALUES ($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id`,
+        `INSERT INTO landing_leads (at, last_at, landing_id, product_id, variant_id, qty, unit_price, customer_name, phone, wilaya_id, commune, device, ip, ua, fbp, fbc, url, utm, view_id, ttp)
+         VALUES ($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id`,
         [isoAt(now), l.id, l.product_id, variantId, qty, unitPrice, name, phone, wilayaId, i.commune.trim(), device, ip || null, ua.slice(0, 500), fbp || null, fbc || null,
-          (i.meta.url || i.url || '').slice(0, 500) || null, i.utm ? JSON.stringify(i.utm) : null, i.vid || null],
+          (i.meta.url || i.url || '').slice(0, 500) || null, i.utm ? JSON.stringify(i.utm) : null, i.vid || null, i.ttp || null],
       )
     )[0].id,
   );
   // Meta: the customer started to order (the browser pixel sends the same event id: counted once). Sent a few minutes
   // later, so the event of a submit found fake meanwhile is dropped.
   const s = await landingSettings(db);
-  const pixel = String(l.pixel_id || s.pixelId || '').trim();
-  if (pixel)
-    await db.query(
-      `INSERT INTO meta_events (pixel_id, event_name, event_id, lead_id, landing_id, value, at, send_after) VALUES ($1,'InitiateCheckout',$2,$3,$4,$5,$6,$7)
-       ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING`,
-      [pixel, i.vid ? `ic-${i.vid}` : `ic-lead-${leadId}`, leadId, l.id, unitPrice * qty, isoAt(now), isoAt(now + 3 * 60_000)],
-    );
+  const px = await pixelsOf(db, l, s.pixelId);
+  for (const [platform, pixel] of [['meta', px.meta], ['tiktok', px.tiktok]] as const)
+    if (pixel)
+      await db.query(
+        `INSERT INTO meta_events (pixel_id, event_name, event_id, lead_id, landing_id, value, at, send_after, platform) VALUES ($1,'InitiateCheckout',$2,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING`,
+        [pixel, i.vid ? `ic-${i.vid}` : `ic-lead-${leadId}`, leadId, l.id, unitPrice * qty, isoAt(now), isoAt(now + 3 * 60_000), platform],
+      );
   return { ok: true };
 }
 
@@ -1102,13 +1112,51 @@ const META_MAX_AGE = 7 * 86_400;
 
 /** The event Meta receives, or why it is not sent anymore. */
 async function buildEvent(db: Db, e: any, api: string, publicUrl: string, now: number): Promise<{ event?: Record<string, unknown>; skip?: string }> {
+  const b = await buildMetaEvent(db, e, api, publicUrl, now);
+  if (e.platform !== 'tiktok' || !b.event) return b;
+  return b.tt ? { event: b.tt } : { skip: 'TikTok : pas d’événement de ce type' };
+}
+
+/** TikTok's names for the events (Events API 2.0) */
+const TIKTOK_EVENT: Record<string, string> = { Purchase: 'CompletePayment', InitiateCheckout: 'InitiateCheckout' };
+
+/** The same event for TikTok's Events API (phone in E.164, hashed; its click id and browser cookie when known). */
+function tiktokEvent(
+  name: string,
+  r: { time: number; eventId: string; phone: string; customerId?: number | null; ip?: string | null; ua?: string | null; ttp?: string | null; ttclid?: string | null; url: string; value: number; orderId?: string; contents: { id: string; quantity: number; item_price: number }[] },
+): Record<string, unknown> | undefined {
+  const event = TIKTOK_EVENT[name];
+  if (!event) return undefined;
+  const user: Record<string, unknown> = { phone: sha256Hex(`+213${r.phone.replace(/^0/, '')}`) };
+  if (r.customerId) user.external_id = sha256Hex(String(r.customerId));
+  if (r.ip) user.ip = r.ip;
+  if (r.ua) user.user_agent = r.ua;
+  if (r.ttp) user.ttp = r.ttp;
+  if (r.ttclid) user.ttclid = r.ttclid;
+  return {
+    event,
+    event_time: r.time,
+    event_id: r.eventId,
+    user,
+    page: { url: r.url },
+    properties: {
+      currency: 'DZD',
+      value: r.value,
+      content_type: 'product',
+      contents: r.contents.map((x) => ({ content_id: x.id, quantity: x.quantity, price: x.item_price })),
+      ...(r.orderId ? { order_id: r.orderId } : {}),
+    },
+  };
+}
+
+async function buildMetaEvent(db: Db, e: any, api: string, publicUrl: string, now: number): Promise<{ event?: Record<string, unknown>; tt?: Record<string, unknown>; skip?: string }> {
   const sourceUrl = (slug: string | null, url: string | null) => url || (slug && api ? `${api}/lp/${slug}` : publicUrl || 'https://pilotix.app');
   const nowS = Math.floor(now / 1000);
   if (e.event_name === 'Purchase' || e.event_name === 'Confirmed') {
     // the browser's data comes from the customer's submit, or from what they typed (an abandoned order)
     const o = (
       await db.query(
-        `SELECT o.*, l.slug, COALESCE(s.ip, a.ip) AS v_ip, COALESCE(s.ua, a.ua) AS v_ua, COALESCE(s.fbp, a.fbp) AS v_fbp, COALESCE(s.fbc, a.fbc) AS v_fbc,
+        `SELECT o.*, l.slug, COALESCE(s.ip, a.ip) AS v_ip, COALESCE(s.ua, a.ua) AS v_ua, COALESCE(s.fbp, a.fbp) AS v_fbp, COALESCE(s.fbc, a.fbc) AS v_fbc, COALESCE(s.ttp, a.ttp) AS v_ttp,
            COALESCE(s.url, a.url) AS v_url, a.customer_name AS a_name,
            (SELECT json_agg(json_build_object('id', i.product_id, 'quantity', i.qty, 'item_price', i.unit_price)) FROM order_items i WHERE i.order_id = o.id) AS items
          FROM orders o LEFT JOIN landing_pages l ON l.id = o.landing_id
@@ -1134,6 +1182,10 @@ async function buildEvent(db: Db, e: any, api: string, publicUrl: string, now: n
         user_data: userData({ phone: o.phone, name: realName(o.customer_name) || o.a_name || '', commune: o.commune, wilaya: num(o.wilaya_id), customerId: num(o.customer_id), ip: o.v_ip, ua: o.v_ua, fbp: o.v_fbp, fbc: o.v_fbc }),
         custom_data: { currency: 'DZD', value: num(o.total), order_id: o.ref, content_type: 'product', content_ids: items.map((x) => x.id), contents: items, num_items: items.reduce((n, x) => n + x.quantity, 0) },
       },
+      tt: tiktokEvent(e.event_name, {
+        time: nowS, eventId: e.event_id, phone: o.phone, customerId: num(o.customer_id), ip: o.v_ip, ua: o.v_ua, ttp: o.v_ttp, ttclid: readJson<Record<string, string>>(o.utm)?.ttclid ?? null,
+        url: sourceUrl(o.slug, o.v_url), value: num(o.total), orderId: o.ref, contents: items,
+      }),
     };
   }
   const a = (await db.query(`SELECT a.*, l.slug FROM landing_leads a LEFT JOIN landing_pages l ON l.id = a.landing_id WHERE a.id = $1`, [e.lead_id]))[0];
@@ -1152,6 +1204,10 @@ async function buildEvent(db: Db, e: any, api: string, publicUrl: string, now: n
       user_data: userData({ phone: a.phone, name: a.customer_name, commune: a.commune, wilaya: numOrNull(a.wilaya_id), ip: a.ip, ua: a.ua, fbp: a.fbp, fbc: a.fbc }),
       custom_data: { currency: 'DZD', value: num(e.value), content_type: 'product', content_ids: [String(a.product_id)], num_items: Math.max(1, num(a.qty)) },
     },
+    tt: tiktokEvent('InitiateCheckout', {
+      time: Math.min(t, nowS), eventId: e.event_id, phone: a.phone, ip: a.ip, ua: a.ua, ttp: a.ttp, ttclid: readJson<Record<string, string>>(a.utm)?.ttclid ?? null,
+      url: sourceUrl(a.slug, a.url), value: num(e.value), contents: [{ id: String(a.product_id), quantity: Math.max(1, num(a.qty)), item_price: num(a.unit_price) }],
+    }),
   };
 }
 
@@ -1177,7 +1233,8 @@ export async function sendMetaEvents(ctx: Ctx, limit = 100): Promise<{ sent: num
   const out = { sent: 0, failed: 0, skipped: 0, waiting: 0 };
   if (!claimed.length) return out;
   const s = await landingSettings(db);
-  const token = String((await db.query(`SELECT value FROM settings WHERE key = $1`, [LANDING_CAPI_SECRET]))[0]?.value ?? '') || String((await db.query(`SELECT value FROM settings WHERE key = 'secret_meta_token'`))[0]?.value ?? '');
+  const shopToken = String((await db.query(`SELECT value FROM settings WHERE key = $1`, [LANDING_CAPI_SECRET]))[0]?.value ?? '') || String((await db.query(`SELECT value FROM settings WHERE key = 'secret_meta_token'`))[0]?.value ?? '');
+  // by platform and pixel: « meta|123… », « tiktok|CQ… »
   const byPixel = new Map<string, { row: any; event: Record<string, unknown> }[]>();
   for (const e of claimed) {
     const b = await buildEvent(db, e, publicApi(ctx), ctx.server?.publicUrl ?? '', now);
@@ -1186,17 +1243,21 @@ export async function sendMetaEvents(ctx: Ctx, limit = 100): Promise<{ sent: num
       out.skipped++;
       continue;
     }
-    if (!byPixel.has(e.pixel_id)) byPixel.set(e.pixel_id, []);
-    byPixel.get(e.pixel_id)!.push({ row: e, event: b.event });
+    const k = `${e.platform === 'tiktok' ? 'tiktok' : 'meta'}|${e.pixel_id}`;
+    if (!byPixel.has(k)) byPixel.set(k, []);
+    byPixel.get(k)!.push({ row: e, event: b.event });
   }
   const wait = async (ids: number[], why: string, minutes: number) => {
     await db.query(`UPDATE meta_events SET status = 'queued', error = $2, claimed_at = NULL, send_after = $3 WHERE id = ANY($1)`, [ids, why, isoAt(now + minutes * 60_000)]);
     out.waiting += ids.length;
   };
-  const send = async (pixelId: string, list: { row: any; event: Record<string, unknown> }[]): Promise<void> => {
+  const send = async (key: string, token: string, list: { row: any; event: Record<string, unknown> }[]): Promise<void> => {
     const ids = list.map((x) => num(x.row.id));
+    const [platform, pixelId] = key.split('|');
     try {
-      await ctx.server!.meta('capi', { pixelId, token, events: list.map((x) => x.event), testEventCode: s.testEventCode || undefined }, ctx);
+      if (platform === 'tiktok')
+        await ctx.server!.meta('tiktok', { pixelCode: pixelId, token, events: list.map((x) => x.event), testEventCode: (await pixelTestCode(db, 'tiktok', pixelId)) || undefined }, ctx);
+      else await ctx.server!.meta('capi', { pixelId, token, events: list.map((x) => x.event), testEventCode: s.testEventCode || undefined }, ctx);
       await db.query(`UPDATE meta_events SET status = 'sent', sent_at = now(), error = NULL, claimed_at = NULL WHERE id = ANY($1)`, [ids]);
       out.sent += ids.length;
     } catch (err: any) {
@@ -1204,7 +1265,7 @@ export async function sendMetaEvents(ctx: Ctx, limit = 100): Promise<{ sent: num
       if (metaWait(msg)) return wait(ids, msg, /jeton|token/i.test(msg) ? 60 : 15);
       // one bad event must not hold the others: the batch is sent again one by one
       if (list.length > 1) {
-        for (const x of list) await send(pixelId, [x]);
+        for (const x of list) await send(key, token, [x]);
         return;
       }
       const tries = num(list[0].row.attempts) + 1;
@@ -1215,18 +1276,21 @@ export async function sendMetaEvents(ctx: Ctx, limit = 100): Promise<{ sent: num
       out.failed++;
     }
   };
-  for (const [pixelId, list] of byPixel) {
+  for (const [key, list] of byPixel) {
     const ids = list.map((x) => num(x.row.id));
+    const [platform, pixelId] = key.split('|');
     if (simulated(ctx)) {
       await db.query(`UPDATE meta_events SET status = 'simulated', sent_at = now(), error = NULL, claimed_at = NULL WHERE id = ANY($1)`, [ids]);
       out.sent += ids.length;
       continue;
     }
+    // the pixel's own token, else (Meta) the shop's Conversions API token
+    const token = (await pixelToken(db, platform === 'tiktok' ? 'tiktok' : 'meta', pixelId)) || (platform === 'tiktok' ? '' : shopToken);
     if (!token) {
-      await wait(ids, 'Jeton Conversions API manquant (Landing pages › Réglages)', 30);
+      await wait(ids, platform === 'tiktok' ? 'Jeton TikTok Events API manquant (Landing pages › Réglages › Pixels)' : 'Jeton Conversions API manquant (Landing pages › Réglages)', 30);
       continue;
     }
-    await send(pixelId, list);
+    await send(key, token, list);
   }
   return out;
 }
@@ -1271,6 +1335,9 @@ export const PageInput = z.object({
   variantLabel: z.string().trim().max(40).default('اللون'),
   fraudLevel: z.enum(['relaxed', 'normal', 'strict']).default('normal'),
   pixelId: PixelId.default(''),
+  /** the Meta / TikTok pixel of this page: null = the default one, 0 = none (Réglages › Pixels) */
+  metaPixelRef: PixelRef,
+  tiktokPixelRef: PixelRef,
   stockMode: z.enum(['off', 'hide']).default('off'),
   images: z.array(ImgInput).max(12).default([]),
 });
@@ -1341,12 +1408,14 @@ export const landingProcs = {
     if (dup && num(dup.id) !== i.id) throw bad(`L’adresse « ${i.slug} » est déjà prise`);
     if ((await ctx.db.query('SELECT 1 FROM landing_groups WHERE slug = $1', [i.slug])).length) throw bad(`L’adresse « ${i.slug} » est déjà prise par un groupe`);
     if (!(await ctx.db.query('SELECT 1 FROM products WHERE id = $1', [i.productId])).length) throw notFound('Produit introuvable');
-    const vals = [i.productId, i.slug, i.active, i.title, i.color.toLowerCase(), i.price, i.oldPrice, i.description, i.variantLabel || 'اللون', i.fraudLevel, JSON.stringify(i.images), i.pixelId, i.stockMode];
+    await checkRef(ctx.db, 'meta', i.metaPixelRef);
+    await checkRef(ctx.db, 'tiktok', i.tiktokPixelRef);
+    const vals = [i.productId, i.slug, i.active, i.title, i.color.toLowerCase(), i.price, i.oldPrice, i.description, i.variantLabel || 'اللون', i.fraudLevel, JSON.stringify(i.images), i.pixelId, i.stockMode, i.metaPixelRef, i.tiktokPixelRef];
     let pid: number;
     if (i.id) {
       const r = await ctx.db.query(
         `UPDATE landing_pages SET product_id=$2, slug=$3, active=$4, title=$5, color=$6, price=$7, old_price=$8, description=$9, variant_label=$10, fraud_level=$11, images=$12,
-           pixel_id=$13, stock_mode=$14, updated_at=now() WHERE id=$1 RETURNING id`,
+           pixel_id=$13, stock_mode=$14, meta_pixel_ref=$15, tiktok_pixel_ref=$16, updated_at=now() WHERE id=$1 RETURNING id`,
         [i.id, ...vals],
       );
       if (!r.length) throw notFound('Page introuvable');
@@ -1355,8 +1424,8 @@ export const landingProcs = {
       pid = num(
         (
           await ctx.db.query(
-            `INSERT INTO landing_pages (product_id, slug, active, title, color, price, old_price, description, variant_label, fraud_level, images, pixel_id, stock_mode, created_by)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
+            `INSERT INTO landing_pages (product_id, slug, active, title, color, price, old_price, description, variant_label, fraud_level, images, pixel_id, stock_mode, meta_pixel_ref, tiktok_pixel_ref, created_by)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`,
             [...vals, ctx.session.profile.id],
           )
         )[0].id,

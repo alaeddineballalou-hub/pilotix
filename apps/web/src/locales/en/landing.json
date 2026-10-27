@@ -509,5 +509,60 @@
     "navHint": "On the real page, this product opens its landing page",
     "sPixel": "Meta pixel",
     "pixel": "Meta pixel of this group"
+  },
+  "px": {
+    "title": "Pixels (Meta and TikTok)",
+    "help": "Add your Meta and TikTok pixels with a name. Each landing page (and each group) picks its Meta pixel and its TikTok pixel. Real orders reach them from the server, with the same fake-order rules.",
+    "meta": "Meta pixels",
+    "tiktok": "TikTok pixels",
+    "none": "No pixel yet.",
+    "default": "Default",
+    "tokenOk": "Token saved",
+    "tokenNeeded": "Token missing",
+    "tokenShop": "Shop token",
+    "used_one": "{{count}} page",
+    "used_other": "{{count}} pages",
+    "add": {
+      "meta": "Add a Meta pixel",
+      "tiktok": "Add a TikTok pixel"
+    },
+    "editTitle": "Edit « {{name}} »",
+    "name": "Name",
+    "namePh": "e.g. Baby pixel, Home pixel",
+    "id": {
+      "meta": "Meta pixel ID",
+      "tiktok": "TikTok pixel code"
+    },
+    "idHint": {
+      "meta": "Meta Events Manager › your pixel › Settings (15–16 digits).",
+      "tiktok": "TikTok Ads Manager › Tools › Events › Web › your pixel (letters and digits)."
+    },
+    "token": {
+      "meta": "Conversions API token of this pixel (optional)",
+      "tiktok": "Events API token of this pixel"
+    },
+    "tokenHint": {
+      "meta": "Empty: the shop token (below) is used. The token stays on the server.",
+      "tiktok": "TikTok Ads › Events › your pixel › Settings › « Generate access token ». Without it TikTok does not get the sales. It stays on the server."
+    },
+    "tokenAdmin": "Only the administrator can add the token.",
+    "removeTokenAsk": "Remove this pixel’s token?",
+    "testCode": "TikTok test code (optional)",
+    "testCodeHint": "To see the events in TikTok’s « Test events ». Empty it afterwards.",
+    "makeDefault": "Default pixel (for pages that pick none)",
+    "remove": "Delete",
+    "removeAsk": "Delete the pixel « {{name}} »? Pages that used it will take the default pixel.",
+    "saved": "Pixel saved",
+    "removed": "Pixel deleted",
+    "pick": {
+      "meta": "Meta pixel of this page",
+      "tiktok": "TikTok pixel of this page"
+    },
+    "noneYet": "Add pixels in Settings › Pixels.",
+    "useDefault": "Default ({{name}})",
+    "useSettings": "Default (Settings)",
+    "noDefault": "Default (none)",
+    "off": "No pixel",
+    "legacy": "This page still uses the pixel {{id}} typed by hand: pick a pixel above to replace it."
   }
 }

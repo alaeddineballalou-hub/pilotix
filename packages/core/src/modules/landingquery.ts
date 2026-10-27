@@ -4,6 +4,7 @@ import { CONF_DONE_BAD, LANDING_DEFAULT_COLOR, landingSlug } from '@pilotix/shar
 import { Db, num } from '../db';
 import { bad, notFound } from '../rpc';
 import { getSetting, SettingsMap } from '../settings';
+import { pixelsOf } from './pixels';
 
 export type LandingSettings = SettingsMap['landing'];
 export const landingSettings = (db: Db): Promise<LandingSettings> => getSetting(db, 'landing');
@@ -67,20 +68,22 @@ export async function queuePurchase(db: Db, s: LandingSettings, orderId: number,
   await guarded(db, async (db) => {
     const o = (
       await db.query(
-        `SELECT o.id, o.ref, o.total, o.landing_id, o.conf_status, o.is_exchange, l.pixel_id
+        `SELECT o.id, o.ref, o.total, o.landing_id, o.conf_status, o.is_exchange, l.pixel_id, l.meta_pixel_ref, l.tiktok_pixel_ref
          FROM orders o LEFT JOIN landing_pages l ON l.id = o.landing_id WHERE o.id = $1`,
         [orderId],
       )
     )[0];
     if (!o || !o.landing_id || o.is_exchange || (CONF_DONE_BAD as string[]).includes(o.conf_status)) return;
-    const pixel = String(o.pixel_id || s.pixelId || '').trim();
-    if (!pixel) return;
+    // the page's Meta pixel and TikTok pixel (TikTok's « CompletePayment »)
+    const px = await pixelsOf(db, o, s.pixelId);
     const at = new Date(now).toISOString();
-    await db.query(
-      `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, landing_id, value, at, send_after) VALUES ($1,'Purchase',$2,$3,$4,$5,$6,$6)
-       ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING`,
-      [pixel, `purchase-${o.ref}`, o.id, o.landing_id, num(o.total), at],
-    );
+    for (const [platform, pixel] of [['meta', px.meta], ['tiktok', px.tiktok]] as const)
+      if (pixel)
+        await db.query(
+          `INSERT INTO meta_events (pixel_id, event_name, event_id, order_id, landing_id, value, at, send_after, platform) VALUES ($1,'Purchase',$2,$3,$4,$5,$6,$6,$7)
+           ON CONFLICT (pixel_id, event_name, event_id) DO NOTHING`,
+          [pixel, `purchase-${o.ref}`, o.id, o.landing_id, num(o.total), at, platform],
+        );
   });
 }
 
@@ -124,8 +127,9 @@ async function liftMark(db: Db, orderId: number) {
 /** « Purchase at order »: the sale was already reported; a « Confirmed » event (for the reports) says a person confirmed it. */
 async function queueConfirmed(db: Db, s: LandingSettings, orderId: number, now: number) {
   await guarded(db, async (db) => {
-    const o = (await db.query(`SELECT o.id, o.ref, o.total, o.landing_id, l.pixel_id FROM orders o LEFT JOIN landing_pages l ON l.id = o.landing_id WHERE o.id = $1`, [orderId]))[0];
-    const pixel = String(o?.pixel_id || s.pixelId || '').trim();
+    const o = (await db.query(`SELECT o.id, o.ref, o.total, o.landing_id, l.pixel_id, l.meta_pixel_ref, l.tiktok_pixel_ref FROM orders o LEFT JOIN landing_pages l ON l.id = o.landing_id WHERE o.id = $1`, [orderId]))[0];
+    // Meta only (TikTok has no such event)
+    const pixel = o ? (await pixelsOf(db, o, s.pixelId)).meta : '';
     if (!o?.landing_id || !pixel) return;
     const at = new Date(now).toISOString();
     await db.query(
