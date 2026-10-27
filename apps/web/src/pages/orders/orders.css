@@ -53,6 +53,7 @@
 .oc-hist-st { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* which ad brought the order */
-.ad-chip { display: inline-flex; align-items: center; gap: 3px; max-width: 100%; font-size: 11px; margin-top: 3px; }
+.ad-chip { display: inline-flex; align-items: center; gap: 3px; max-width: 150px; font-size: 11px; margin-top: 3px; white-space: nowrap; overflow: hidden; }
+.ad-chip span { overflow: hidden; text-overflow: ellipsis; }
 .ad-v { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; word-break: break-all; }
 .ad-copy { width: 28px; height: 28px; }
