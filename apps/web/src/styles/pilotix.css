@@ -1767,3 +1767,6 @@ body.nav-open .px-mf .px-mf-r, .topbar .px-mf-btn:active .px-mf .px-mf-r, .topba
 @media (hover: hover) { .topbar .px-mf-btn:hover .px-mf .px-mf-r { transform: translate(146px, var(--y)) scale(220, 30) !important; } }
 .px-mf-eye { --y: 176px; } .px-mf-wink { --y: 256px; } .px-mf-low { --y: 336px; }
 @media (prefers-reduced-motion: reduce) { .px-mf * { transition-duration: .01s !important; } }
+/* 8 boxes: two full rows of 4 (2 × 4 on a phone) */
+.kpis:has(> :nth-child(8):last-child) { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+@media (max-width: 900px) { .kpis:has(> :nth-child(8):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
