@@ -1677,8 +1677,11 @@ html:not([data-theme="dark"]) .px-lg { --ink: #1B2A47; --tile: #1B2A47; --eye: #
   .px-folded .px-lg-ready .px-lg-wave { transition: transform .32s cubic-bezier(.65, 0, .35, 1) .26s; }
   .px-folded .px-lg-ready .px-lg-face { transition: opacity .16s ease .44s, transform .2s cubic-bezier(.34, 1.45, .64, 1) .44s; }
   .px-folded .px-lg-ready .px-lg-mark { animation: px-lg-mark .36s linear .24s both; }
-  /* folded + hover: the face makes room for the "open" arrow, as before */
-  .px-folded .px-logo-btn:hover .px-lg, .px-folded .px-logo-btn:focus-visible .px-lg { display: none; }
+  /* folded + hover: the face stays (hiding it cut the fold animation when the pointer stayed on the logo);
+     it lifts a little instead, and the old "open" arrow is not used any more */
+  .px-folded .px-logo-btn .px-logo-open, .px-folded .px-logo-btn:hover .px-logo-open, .px-folded .px-logo-btn:focus-visible .px-logo-open { display: none !important; }
+  .px-folded .px-lg { transition: width .3s cubic-bezier(.16, 1, .3, 1), transform .18s cubic-bezier(.16, 1, .3, 1); }
+  .px-folded .px-logo-btn:hover .px-lg, .px-folded .px-logo-btn:focus-visible .px-lg { transform: translateY(-1px) scale(1.06); }
 }
 @keyframes px-lg-mark { 0% { opacity: 0; } 20% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
 /* reduced motion: no movement, a short cross-fade between the wordmark and the icon */
