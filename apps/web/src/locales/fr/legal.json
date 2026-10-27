@@ -1,0 +1,33 @@
+{
+  "title": "Conditions d’utilisation et confidentialité",
+  "intro": "{{company}} est un logiciel en ligne pour gérer les commandes d’une boutique (confirmation, livraison, stock, caisse). En créant une boutique, vous acceptez ces conditions.",
+  "s1": {
+    "t": "Votre compte",
+    "p": "Vous vous connectez avec votre email et un mot de passe que vous seul connaissez : gardez-le secret. La personne qui crée une boutique en est le propriétaire ; elle seule peut la supprimer."
+  },
+  "s2": {
+    "t": "Vos données vous appartiennent",
+    "p": "Les commandes, clients, produits et chiffres de votre boutique sont à vous. L’équipe Pilotix n’a pas accès à l’intérieur de votre boutique depuis son centre de contrôle et ne vend vos données à personne. Pour la facturation, elle voit seulement des chiffres : nombre de comptes, de livreurs et de commandes par mois."
+  },
+  "s3": {
+    "t": "Ce que nous gardons",
+    "p": "Nous gardons ce qu’il faut pour le service : votre nom, votre email, votre téléphone, les données de votre boutique et un journal des connexions. Une sauvegarde est faite chaque nuit."
+  },
+  "s4": {
+    "t": "Essai gratuit et abonnement",
+    "p": "Chaque nouvelle boutique a un essai gratuit. Ensuite, l’abonnement se paie selon la formule choisie. Sans paiement, l’accès est bloqué après un délai de grâce ; les commandes continuent d’arriver et sont gardées."
+  },
+  "s5": {
+    "t": "Utilisation correcte",
+    "p": "N’utilisez pas Pilotix pour des produits ou des activités interdits par la loi, ni pour envoyer des messages non désirés. Une boutique qui ne respecte pas ces règles peut être suspendue."
+  },
+  "s6": {
+    "t": "Supprimer votre boutique",
+    "p": "Le propriétaire peut supprimer sa boutique dans Réglages : toutes ses données sont effacées pour de bon. Les paiements déjà faits restent dans notre comptabilité."
+  },
+  "s7": {
+    "t": "Nous contacter",
+    "p": "Une question sur vos données ou sur ces conditions ? Écrivez-nous à {{email}} ou depuis « Contacter Pilotix » dans votre boutique."
+  },
+  "back": "Retour"
+}

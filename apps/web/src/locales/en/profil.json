@@ -83,5 +83,16 @@
   "rulesMonths": "Free months per subscribed friend",
   "rulesSave": "Save rules",
   "rulesOk": "Rules saved",
-  "demo": "Demo: the friends shown are fictional. Tracking real sign-ups needs the Pilotix server."
+  "demo": "Demo: the friends shown are fictional. Tracking real sign-ups needs the Pilotix server.",
+  "refTitlePlat": "Refer other stores",
+  "refRulePlat": "Each store created with your link that pays its first subscription gives you {{months}} free month(s).",
+  "refOff": "Referrals are paused for now.",
+  "kStores": "Stores signed up",
+  "kPaying": "Who paid",
+  "p1": "Send your link (or your code) to another seller.",
+  "p2": "They create their store with it and enjoy their free trial.",
+  "p3": "When they pay their first subscription, your store gets {{months}} free month(s), automatically.",
+  "friendsPlat": "Stores that came with your link",
+  "noFriendsPlat": "No store yet. Share your link!",
+  "nMonths": "{{n}} month(s)"
 }

@@ -3,16 +3,16 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Avatar } from '../pages/profil/Avatar';
 import { Icon } from '../ui/kit';
-import { backend } from '../lib/backend';
-import { MyShops } from './Shops';
+import { AddStoreModal, SwitchStoreModal } from './Accounts';
 
 /** The signed-in account at the right of the header (moved from the sidebar): picture, name and role; the menu opens my profile pages and signs out. */
 /** On phones the header has no room for the language and theme buttons: they are in this menu instead (lang / onTheme). */
 export function AccountMenu({ session, onLogout, lang, onTheme }: { session: Session; onLogout: () => void; lang?: { value: string; options: string[]; onChange: (l: string) => void }; onTheme?: () => void }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const [shops, setShops] = useState(false);
+  const [modal, setModal] = useState<'switch' | 'add' | null>(null);
   const box = useRef<HTMLDivElement>(null);
+  const shop = session.shop;
   useEffect(() => {
     if (!open) return;
     const down = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
@@ -39,8 +39,9 @@ export function AccountMenu({ session, onLogout, lang, onTheme }: { session: Ses
         <Avatar p={p} />
         <span className="px-me-t">
           <b>{p.name}</b>
-          <small>{role}</small>
+          <small>{shop && shop.stores > 0 ? shop.name : role}</small>
         </span>
+        {shop && shop.supportUnread > 0 && <span className="px-me-dot" aria-hidden="true" />}
         <Icon name="chevron" className="px-me-ch" />
       </button>
       {open && (
@@ -56,10 +57,18 @@ export function AccountMenu({ session, onLogout, lang, onTheme }: { session: Ses
           {item('settings', t('profil.tSettings'), () => go('parametres'))}
           {item('gift', t('profil.tRef'), () => go('parrainage'))}
           {item('lock', t('profil.pwd'), () => go('securite'))}
-          {backend.kind === 'remote' && !session.shop?.demo && !session.shop?.support && (
+          {shop && !shop.demo && (shop.stores > 0 || shop.canAddStore || session.isAdmin) && (
             <>
               <hr />
-              {item('building', t('shop.picker.mine'), () => (setOpen(false), setShops(true)))}
+              {shop.stores > 0 && item('swap', t('shop.acc.switch'), () => (setOpen(false), setModal('switch')))}
+              {shop.canAddStore && item('plus', t('shop.acc.addStore'), () => (setOpen(false), setModal('add')))}
+              {session.isAdmin && (
+                <button type="button" role="menuitem" onClick={() => (setOpen(false), (location.hash = '#/aide'))}>
+                  <Icon name="chat" />
+                  {t('shop.aide.title')}
+                  {shop.supportUnread > 0 && <span className="nav-count ltr">{shop.supportUnread}</span>}
+                </button>
+              )}
             </>
           )}
           {session.platformStaff && (
@@ -91,7 +100,8 @@ export function AccountMenu({ session, onLogout, lang, onTheme }: { session: Ses
           {item('logout', t('shell.logout'), () => (setOpen(false), onLogout()), 'px-me-out')}
         </div>
       )}
-      {shops && <MyShops onClose={() => setShops(false)} />}
+      {modal === 'switch' && <SwitchStoreModal onClose={() => setModal(null)} />}
+      {modal === 'add' && <AddStoreModal onClose={() => setModal(null)} />}
     </div>
   );
 }

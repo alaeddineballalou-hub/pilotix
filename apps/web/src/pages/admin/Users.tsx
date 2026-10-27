@@ -135,8 +135,10 @@ function RoleList({ role, onNew, onEdit }: { role: Role; onNew: () => void; onEd
   const { t } = useTranslation();
   const { session, me } = useSession();
   const q = useRpc('users.list', { role });
-  /** accounts only the administrator may change (administrators, people with the accounts right, oneself) */
-  const locked = (u: Profile) => !session?.isAdmin && (u.roles.includes('admin') || !!u.canManageUsers || u.id === me);
+  /** the store's owner (who created it): only they change their own account */
+  const ownerId = session?.shop?.ownerProfileId ?? null;
+  /** accounts only the administrator may change (administrators, people with the accounts right, oneself); the owner's: only the owner */
+  const locked = (u: Profile) => (u.id === ownerId && u.id !== me) || (!session?.isAdmin && (u.roles.includes('admin') || !!u.canManageUsers || u.id === me));
   // users.list matches own roles; vendeurs also count as agents etc. only through their own roles (as in the original)
   return (
     <>
@@ -173,7 +175,7 @@ function RoleList({ role, onNew, onEdit }: { role: Role; onNew: () => void; onEd
                   <tr
                     key={u.id}
                     className={`${locked(u) ? '' : 'clickable'} ${u.active ? '' : 'dim'}`}
-                    title={locked(u) ? t('admin.users.lockedHint') : undefined}
+                    title={locked(u) ? (u.id === ownerId ? t('admin.users.ownerHint') : t('admin.users.lockedHint')) : undefined}
                     onClick={() => !locked(u) && onEdit(u)}
                     tabIndex={locked(u) ? -1 : 0}
                     onKeyDown={(e) => e.key === 'Enter' && !locked(u) && onEdit(u)}
@@ -197,6 +199,11 @@ function RoleList({ role, onNew, onEdit }: { role: Role; onNew: () => void; onEd
                       {u.canManageUsers && (
                         <span className="chip" title={t('admin.users.manageUsersHint')}>
                           🔑 {t('admin.users.manageChip')}
+                        </span>
+                      )}
+                      {u.id === ownerId && (
+                        <span className="chip px-chip-owner" title={t('admin.users.ownerHint')}>
+                          👑 {t('admin.users.owner')}
                         </span>
                       )}
                     </td>
@@ -230,7 +237,8 @@ function UserForm({ user, role, onClose }: { user: Profile | null; role: Role | 
   const [err, setErr] = useState('');
   const [newPw, setNewPw] = useState<string | null>(null);
   const companies = useRpc('admin.companies', {});
-  const create = useAction('users.create', { success: t('admin.users.created'), onDone: onClose });
+  // a person who already has a Pilotix account (another store) keeps their own password: the one typed here does nothing
+  const create = useAction('users.create', { success: (r) => ((r as { existingAccount?: boolean }).existingAccount ? t('admin.users.createdExisting') : t('admin.users.created')), onDone: onClose });
   const update = useAction('users.update', { success: t('admin.users.saved'), onDone: onClose });
   const toggle = useAction('users.update', { success: (r) => (r.active ? t('admin.users.activated') : t('admin.users.deactivated')), onDone: onClose });
   const reset = useAction('admin.users.resetPassword', { onDone: (r) => setNewPw(r.password) });
@@ -281,7 +289,7 @@ function UserForm({ user, role, onClose }: { user: Profile | null; role: Role | 
           <Field label={t('admin.users.email')}>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="ltr" autoComplete="off" />
           </Field>
-          <Field label={t('admin.users.password')} hint={user ? t('admin.users.passwordKeep') : t('admin.users.passwordHint')}>
+          <Field label={t('admin.users.password')} hint={user ? t('admin.users.passwordKeep') : `${t('admin.users.passwordHint')} ${t('admin.users.passwordAccount')}`}>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required={!user} minLength={8} autoComplete="new-password" />
           </Field>
         </div>

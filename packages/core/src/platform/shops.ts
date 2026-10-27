@@ -4,8 +4,10 @@ import { effectiveFeatures, isFeatureKey, ShopInfo, ShopState } from '@pilotix/s
 import { Db, isoOrNull, migrate, num, numOrNull } from '../db';
 import type { ShopCtx } from '../rpc';
 import { landingSettings, landingStore, STORE_RESERVED } from '../modules/landingquery';
+import { hashPassword } from '../modules/users';
 import { seedBase, seedDemo } from '../seed';
 import { DEFAULT_SETTINGS, setSetting } from '../settings';
+import { backfillAccounts, ensureAccount, ownedStores } from './accounts';
 import { ensureLoginTrigger, migratePlatform } from './schema';
 import { schemaOf, SCHEMA_RE, Tenancy } from './tenancy';
 
@@ -20,6 +22,8 @@ export interface Plan {
   /** feature list (see @pilotix/shared features.ts): menu items, '-item/sub' sub-menus taken out, '*' = everything */
   features: string[];
   maxUsers: number | null;
+  /** livreurs (drivers) the plan allows */
+  maxDrivers: number | null;
   maxOrdersMonth: number | null;
   description: string;
   /** offered to new shops (false: the internal plan) */
@@ -37,7 +41,8 @@ export interface Shop {
   schema: string;
   planId: number | null;
   plan: Plan | null;
-  status: 'active' | 'suspended' | 'archived';
+  /** deleted: by its owner (the data is gone; the row stays for the payments and the journal) */
+  status: 'active' | 'suspended' | 'archived' | 'deleted';
   statusReason: string | null;
   trialEndsAt: string | null;
   paidUntil: string | null;
@@ -48,6 +53,20 @@ export interface Shop {
   featuresOff: string[];
   /** this shop's own limit (null = the plan's) */
   maxUsers: number | null;
+  maxDrivers: number | null;
+  /** the account that created the store: only its owner sees everything and can delete it */
+  ownerAccountId: number | null;
+  /** made by its owner from the sign-up page (not from the control room) */
+  selfSignup: boolean;
+  /** a store made on the first sign-up page (before accounts): when its owner confirmed the e-mail */
+  emailVerifiedAt: string | null;
+  /** its own domain name for its landing pages (myshop.com) */
+  domain: string | null;
+  domainStatus: 'none' | 'pending' | 'ok';
+  /** its code for bringing other stores (a free month when one of them first pays) */
+  referralCode: string | null;
+  referredBy: number | null;
+  deletedAt: string | null;
   ownerName: string | null;
   ownerEmail: string | null;
   ownerPhone: string | null;
@@ -56,12 +75,6 @@ export interface Shop {
   lastActiveAt: string | null;
   resetAt: string | null;
   createdAt: string;
-  /** made by its owner on the sign-up page */
-  selfSignup: boolean;
-  emailVerifiedAt: string | null;
-  /** its own domain name for its landing pages (myshop.com) */
-  domain: string | null;
-  domainStatus: 'none' | 'pending' | 'ok';
 }
 
 const json = (v: unknown): any => (typeof v === 'string' ? JSON.parse(v) : v);
@@ -77,6 +90,7 @@ export const toPlan = (r: any): Plan => ({
   priceYear: numOrNull(r.price_year),
   features: list(r.features),
   maxUsers: numOrNull(r.max_users),
+  maxDrivers: numOrNull(r.max_drivers),
   maxOrdersMonth: numOrNull(r.max_orders_month),
   description: r.description ?? '',
   public: !!r.public,
@@ -104,6 +118,15 @@ export const toShop = (r: any): Shop => ({
   featuresOn: list(r.features_on),
   featuresOff: list(r.features_off),
   maxUsers: numOrNull(r.max_users),
+  maxDrivers: numOrNull(r.max_drivers),
+  ownerAccountId: numOrNull(r.owner_account_id),
+  selfSignup: !!r.self_signup,
+  emailVerifiedAt: isoOrNull(r.email_verified_at),
+  domain: r.domain ?? null,
+  domainStatus: r.domain ? (r.domain_status === 'ok' ? 'ok' : 'pending') : 'none',
+  referralCode: r.referral_code ?? null,
+  referredBy: numOrNull(r.referred_by),
+  deletedAt: isoOrNull(r.deleted_at),
   ownerName: r.owner_name ?? null,
   ownerEmail: r.owner_email ?? null,
   ownerPhone: r.owner_phone ?? null,
@@ -112,10 +135,6 @@ export const toShop = (r: any): Shop => ({
   lastActiveAt: isoOrNull(r.last_active_at),
   resetAt: isoOrNull(r.reset_at),
   createdAt: new Date(r.created_at).toISOString(),
-  selfSignup: !!r.self_signup,
-  emailVerifiedAt: isoOrNull(r.email_verified_at),
-  domain: r.domain ?? null,
-  domainStatus: r.domain ? (r.domain_status === 'ok' ? 'ok' : 'pending') : 'none',
 });
 
 export async function loadPlans(t: Tenancy): Promise<Plan[]> {
@@ -136,7 +155,7 @@ export async function loadShop(t: Tenancy, by: { id: number } | { slug: string }
   return r[0] ? toShop(r[0]) : null;
 }
 
-/** The first shop of an account's e-mail (null = no shop knows it). */
+/** The first shop of an e-mail (null = no shop knows it). One e-mail can be in several shops: see membershipsOf. */
 export async function shopIdOfEmail(t: Tenancy, email: string): Promise<number | null> {
   return (await shopIdsOfEmail(t, email))[0] ?? null;
 }
@@ -157,11 +176,18 @@ export interface PlatformSettings {
   notice: { text: string; tone: 'info' | 'warn'; until: string | null };
   /** the demo shop: its button on the login page */
   demo: { public: boolean };
-  /**
-   * Shops made by their owners on the sign-up page: open or not, how many shops one e-mail may make, how many sign-ups
-   * one internet address may make per day (against robots).
-   */
-  signup: { open: boolean; maxShopsPerEmail: number; perIpPerDay: number };
+  /** « Créer ma boutique » on the login page; stores one person may own (each account can have its own number) */
+  signup: { open: boolean; maxStores: number };
+  /** e-mails to the store's owner before the trial / the paid period ends, and when the store locks */
+  reminders: { on: boolean; daysBefore: number };
+  /** a store that brings another one gets free months when that one first pays */
+  referral: { on: boolean; months: number };
+  /** the control room asks for a code sent by e-mail at each login (when the server sends e-mails) */
+  security: { twoStep: boolean };
+  /** Pilotix's own details, printed on payment receipts */
+  company: { name: string; address: string; phone: string; email: string; taxId: string };
+  /** the terms of use and privacy page (empty = Pilotix's standard text) */
+  legal: { text: string };
 }
 
 export const PLATFORM_DEFAULTS: PlatformSettings = {
@@ -169,13 +195,23 @@ export const PLATFORM_DEFAULTS: PlatformSettings = {
   payment: { text: '', phone: '', whatsapp: '' },
   notice: { text: '', tone: 'info', until: null },
   demo: { public: false },
-  signup: { open: true, maxShopsPerEmail: 5, perIpPerDay: 3 },
+  signup: { open: true, maxStores: 3 },
+  reminders: { on: true, daysBefore: 3 },
+  referral: { on: true, months: 1 },
+  security: { twoStep: true },
+  company: { name: 'Pilotix', address: '', phone: '', email: '', taxId: '' },
+  legal: { text: '' },
 };
 
 export async function platformSettings(t: Tenancy): Promise<PlatformSettings> {
   const rows = await t.platform.query<{ key: string; value: unknown }>('SELECT key, value FROM platform.settings');
   const out = structuredClone(PLATFORM_DEFAULTS) as any;
   for (const r of rows) if (r.key in out) out[r.key] = { ...out[r.key], ...json(r.value) };
+  // saved by the first sign-up settings (stores per e-mail): kept until saved again
+  const su = rows.find((r) => r.key === 'signup');
+  if (su && !('maxStores' in (json(su.value) ?? {})) && Number(out.signup.maxShopsPerEmail) > 0) out.signup.maxStores = Number(out.signup.maxShopsPerEmail);
+  delete out.signup.maxShopsPerEmail;
+  delete out.signup.perIpPerDay;
   return out as PlatformSettings;
 }
 
@@ -199,6 +235,7 @@ export interface ShopStatus {
  * locked until a payment. Suspended / archived by Pilotix: locked. The owner's shop never expires.
  */
 export function shopStatus(s: Pick<Shop, 'status' | 'trialEndsAt' | 'paidUntil' | 'neverExpires'>, now: number, graceDays: number): ShopStatus {
+  if (s.status === 'deleted') return { state: 'deleted', daysLeft: null, locked: true };
   if (s.status === 'archived') return { state: 'archived', daysLeft: null, locked: true };
   if (s.status === 'suspended') return { state: 'suspended', daysLeft: null, locked: true };
   if (s.neverExpires) return { state: 'active', daysLeft: null, locked: false };
@@ -215,18 +252,33 @@ export function shopStatus(s: Pick<Shop, 'status' | 'trialEndsAt' | 'paidUntil' 
 /** The shop's features after its own changes (null = everything). */
 export const shopFeatures = (s: Shop): string[] | null => (s.primary || s.plan?.system ? effectiveFeatures(['*'], s.featuresOn, s.featuresOff) : effectiveFeatures(s.plan?.features ?? [], s.featuresOn, s.featuresOff));
 
-export const shopMaxUsers = (s: Shop): number | null => s.maxUsers ?? s.plan?.maxUsers ?? null;
+export const shopMaxUsers = (s: Shop): number | null => (s.primary ? null : s.maxUsers ?? s.plan?.maxUsers ?? null);
+export const shopMaxDrivers = (s: Shop): number | null => (s.primary ? null : s.maxDrivers ?? s.plan?.maxDrivers ?? null);
+export const shopMaxOrders = (s: Shop): number | null => (s.primary ? null : s.plan?.maxOrdersMonth ?? null);
 
 /** What a request of this shop carries (rules checked by the core). */
 export function shopCtx(s: Shop, st: ShopStatus): ShopCtx {
-  return { id: s.id, slug: s.slug, primary: s.primary, features: shopFeatures(s), locked: st.locked, demo: s.demo, maxUsers: shopMaxUsers(s) };
+  return { id: s.id, slug: s.slug, primary: s.primary, features: shopFeatures(s), locked: st.locked, demo: s.demo, maxUsers: shopMaxUsers(s), maxDrivers: shopMaxDrivers(s) };
 }
 
 /** What the app shows of the shop: its plan, its state, how to pay, Pilotix's message. */
-export function shopInfo(s: Shop, st: ShopStatus, settings: PlatformSettings, now: number, support: string | null = null): ShopInfo {
+/** What the server knows of the person and the store at login (the store's numbers, the person's other stores). */
+export interface ShopInfoExtra {
+  owner: boolean;
+  ownerProfileId: number | null;
+  stores: number;
+  canAddStore: boolean;
+  ordersMonth: number | null;
+  supportUnread: number;
+}
+export const NO_EXTRA: ShopInfoExtra = { owner: false, ownerProfileId: null, stores: 0, canAddStore: false, ordersMonth: null, supportUnread: 0 };
+
+/** What the app shows of the shop: its plan, its state, how to pay, Pilotix's message, its limits. */
+export function shopInfo(s: Shop, st: ShopStatus, settings: PlatformSettings, now: number, extra: ShopInfoExtra = NO_EXTRA): ShopInfo {
   const n = settings.notice;
   const noticeOn = !!n.text.trim() && (!n.until || Date.parse(n.until) > now);
   const pay = settings.payment;
+  const paid = s.plan && !s.plan.system;
   return {
     id: s.id,
     slug: s.slug,
@@ -234,19 +286,26 @@ export function shopInfo(s: Shop, st: ShopStatus, settings: PlatformSettings, no
     primary: s.primary,
     demo: s.demo,
     state: st.state,
-    plan: s.plan && !s.plan.system ? s.plan.name : null,
-    planPrice: s.plan && !s.plan.system ? s.plan.priceMonth : null,
+    plan: paid ? s.plan!.name : null,
+    planPrice: paid ? s.plan!.priceMonth : null,
+    planPriceYear: paid ? s.plan!.priceYear : null,
     trialEndsAt: s.trialEndsAt,
     paidUntil: s.paidUntil,
     daysLeft: st.daysLeft,
     locked: st.locked,
     features: shopFeatures(s),
     maxUsers: shopMaxUsers(s),
+    maxDrivers: shopMaxDrivers(s),
+    maxOrdersMonth: shopMaxOrders(s),
+    ordersMonth: extra.ordersMonth,
     payment: s.primary || s.demo || (!pay.text.trim() && !pay.phone.trim() && !pay.whatsapp.trim()) ? null : { text: pay.text, phone: pay.phone, whatsapp: pay.whatsapp },
     notice: noticeOn ? { text: n.text, tone: n.tone } : null,
-    support,
+    owner: extra.owner,
+    ownerProfileId: extra.ownerProfileId,
+    stores: extra.stores,
+    canAddStore: extra.canAddStore,
+    supportUnread: extra.supportUnread,
     domain: s.domain && s.domainStatus !== 'none' ? { name: s.domain, status: s.domainStatus } : null,
-    emailToConfirm: s.selfSignup && !s.emailVerifiedAt ? s.ownerEmail : null,
   };
 }
 
@@ -269,11 +328,14 @@ export function slugify(s: string): string {
 }
 
 export const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/;
-/** a name a shop can have (the format, and not a word of the app: api, live, assets…) */
-export const slugOk = (s: string): boolean => SLUG_RE.test(s) && !STORE_RESERVED.includes(s);
+/** Names a new store cannot take: the app's own words (api, live…) and names that would pass for Pilotix itself. */
+export const NAME_RESERVED = [...STORE_RESERVED, 'pilotix', 'platform', 'plateforme', 'support', 'aide', 'help', 'contact', 'inscription', 'signup', 'login', 'connexion', 'conditions', 'legal', 'privacy', 'terms', 'compte', 'account'];
+/** a name a new shop can have (the format, and not a reserved word) */
+export const slugOk = (s: string): boolean => SLUG_RE.test(s) && !NAME_RESERVED.includes(s);
 
 export async function freeSlug(t: Tenancy, wanted: string, exceptId?: number): Promise<string> {
-  const base = slugify(wanted);
+  let base = slugify(wanted);
+  if (NAME_RESERVED.includes(base)) base = `${base}-boutique`;
   for (let i = 1; i < 500; i++) {
     const s = i === 1 ? base : `${base.slice(0, 36)}-${i}`;
     const r = await t.platform.query('SELECT id FROM platform.shops WHERE slug = $1', [s]);
@@ -302,25 +364,45 @@ export interface NewShop {
   slug?: string;
   planId: number | null;
   trialDays: number;
-  owner: { name: string; email: string; phone?: string | null };
-  /** the first administrator's password (≥ 10 characters) */
-  password: string;
+  owner: { name: string; email: string; phone?: string | null; language?: string };
+  /**
+   * The owner's password for a new account: `password` (plain) or `passwordHash`. Neither: invited, the owner chooses
+   * it from the e-mail. An e-mail that already has an account keeps its own password.
+   */
+  password?: string;
+  passwordHash?: string | null;
+  /** the owner proved the e-mail is theirs (a confirmed sign-up) */
+  verified?: boolean;
   city?: string | null;
   notes?: string;
   demo?: boolean;
   createdBy?: number | null;
-  now?: number;
-  /** made by its owner on the sign-up page (from this address) */
+  /** made by its owner from the sign-up page */
   selfSignup?: boolean;
+  /** the address it was signed up from */
   signupIp?: string | null;
+  /** the store that brought this one */
+  referredBy?: number | null;
+  now?: number;
+}
+
+/** A store's code for bringing others: 6 letters and digits, easy to read and to type (no 0/O, 1/I/L). */
+async function freeReferralCode(t: Tenancy): Promise<string> {
+  const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  for (let i = 0; i < 50; i++) {
+    const r = globalThis.crypto.getRandomValues(new Uint32Array(6));
+    const code = Array.from(r, (x) => A[x % A.length]).join('');
+    if (!(await t.platform.query('SELECT 1 FROM platform.shops WHERE referral_code = $1', [code])).length) return code;
+  }
+  throw new Error('No free referral code');
 }
 
 /**
- * A new shop: its row, its own schema with every table, its first administrator and default depot (the demo shop: the
- * demo data instead). Undone completely if any step fails.
+ * A new shop: its row, its own schema with every table, its owner (an account: new, or the one this e-mail already has)
+ * as first administrator and its default depot (the demo shop: the demo data instead). Undone completely if any step
+ * fails.
  */
 export async function provisionShop(t: Tenancy, n: NewShop): Promise<Shop> {
-  // one e-mail may own or work in several shops: the login page asks the password of each one
   const email = n.owner.email.trim().toLowerCase();
   const slug = n.slug ? n.slug : await freeSlug(t, n.name);
   if (!slugOk(slug)) throw new Error('BAD_SLUG');
@@ -330,9 +412,9 @@ export async function provisionShop(t: Tenancy, n: NewShop): Promise<Shop> {
   const row = (
     await t.platform.query(
       `WITH n AS (SELECT nextval(pg_get_serial_sequence('platform.shops', 'id'))::int AS id)
-       INSERT INTO platform.shops (id, slug, name, schema_name, plan_id, trial_ends_at, never_expires, is_demo, owner_name, owner_email, owner_phone, city, notes, created_by, self_signup, signup_ip)
-       SELECT n.id, $1, $2, 'shop_' || n.id, $3, $4, $5, $5, $6, $7, $8, $9, $10, $11, $12, $13 FROM n RETURNING id, schema_name`,
-      [slug, n.name.trim(), n.planId, trialEnds, !!n.demo, n.owner.name.trim(), email, n.owner.phone?.trim() || null, n.city?.trim() || null, n.notes ?? '', n.createdBy ?? null, !!n.selfSignup, n.signupIp ?? null],
+       INSERT INTO platform.shops (id, slug, name, schema_name, plan_id, trial_ends_at, never_expires, is_demo, owner_name, owner_email, owner_phone, city, notes, created_by, self_signup, referred_by, signup_ip)
+       SELECT n.id, $1, $2, 'shop_' || n.id, $3, $4, $5, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14 FROM n RETURNING id, schema_name`,
+      [slug, n.name.trim(), n.planId, trialEnds, !!n.demo, n.owner.name.trim(), email, n.owner.phone?.trim() || null, n.city?.trim() || null, n.notes ?? '', n.createdBy ?? null, !!n.selfSignup, n.referredBy ?? null, n.signupIp ?? null],
     )
   )[0];
   const id = num(row.id);
@@ -344,8 +426,15 @@ export async function provisionShop(t: Tenancy, n: NewShop): Promise<Shop> {
     const db = t.shop(schema);
     if (n.demo) await fillDemo(db, n.name.trim(), now);
     else {
-      await seedBase(db, { email, password: n.password, name: n.owner.name.trim() || undefined });
+      // the owner's account first: an e-mail already known keeps its own password
+      const hash = n.passwordHash !== undefined ? n.passwordHash : n.password ? await hashPassword(n.password) : null;
+      const { account } = await ensureAccount(t, { email, name: n.owner.name, language: n.owner.language, passwordHash: hash, verified: n.verified });
+      await seedBase(db, { email, password: `${makePassword()}-${makePassword()}`, name: n.owner.name.trim() || undefined });
+      const own = (await t.platform.query('SELECT password_hash FROM platform.accounts WHERE id = $1', [account.id]))[0]?.password_hash as string | null;
+      if (own) await db.query('UPDATE profiles SET password_hash = $2 WHERE email = $1', [email, own]);
+      if (n.owner.language) await db.query('UPDATE profiles SET language = $2 WHERE email = $1', [email, n.owner.language]);
       await setSetting(db, 'shop', { ...DEFAULT_SETTINGS.shop, name: n.name.trim() });
+      await t.platform.query('UPDATE platform.shops SET owner_account_id = $2, referral_code = $3 WHERE id = $1', [id, account.id, await freeReferralCode(t)]);
     }
     await setShopStore(db, slug);
     if (n.demo) await t.platform.query('UPDATE platform.shops SET reset_at = now() WHERE id = $1', [id]);
@@ -362,7 +451,8 @@ async function fillDemo(db: Db, name: string, now: number) {
   await setSetting(db, 'shop', { ...DEFAULT_SETTINGS.shop, name });
 }
 
-async function dropShopData(t: Tenancy, id: number, schema: string) {
+/** Removes a store's data (its schema) and its e-mails from the login index. */
+export async function dropShopData(t: Tenancy, id: number, schema: string) {
   if (!/^shop_\d+$/.test(schema)) throw new Error('Only a shop_<id> schema can be dropped');
   await t.platform.query('DELETE FROM platform.logins WHERE shop_id = $1', [id]);
   await t.exec('platform', `DROP SCHEMA IF EXISTS ${schema} CASCADE`);
@@ -380,18 +470,39 @@ export async function resetDemoShop(t: Tenancy, id: number, now = Date.now()): P
   await t.platform.query('UPDATE platform.shops SET reset_at = now() WHERE id = $1', [s.id]);
 }
 
-/** Active accounts and orders of a shop (this month, all time), for the control room. */
-export async function shopUsage(t: Tenancy, s: Shop) {
-  if (s.status === 'archived') return { users: 0, ordersMonth: 0, ordersTotal: 0, lastOrderAt: null as string | null };
+/**
+ * A store's numbers for the control room — numbers only, never what is inside: active accounts, active livreurs,
+ * orders this month and last month, and how many stores its owner has.
+ */
+export interface ShopUsage {
+  users: number;
+  drivers: number;
+  ordersMonth: number;
+  ordersLastMonth: number;
+  ordersTotal: number;
+  ownerStores: number;
+}
+export async function shopUsage(t: Tenancy, s: Shop): Promise<ShopUsage> {
+  const ownerStores = s.ownerAccountId ? await ownedStores(t, s.ownerAccountId) : 0;
+  if (s.status === 'archived' || s.status === 'deleted') return { users: 0, drivers: 0, ordersMonth: 0, ordersLastMonth: 0, ordersTotal: 0, ownerStores };
   const r = (
     await t.shop(s.schema).query(
       `SELECT (SELECT count(*) FROM profiles WHERE active AND email NOT LIKE '%@pilotix.invalid')::int AS users,
-              (SELECT count(*) FROM orders WHERE NOT is_exchange AND created_at >= date_trunc('month', now()))::int AS month,
-              (SELECT count(*) FROM orders WHERE NOT is_exchange)::int AS total,
-              (SELECT max(created_at) FROM orders) AS last`,
+              (SELECT count(*) FROM profiles WHERE active AND 'livreur' = ANY(roles) AND email NOT LIKE '%@pilotix.invalid')::int AS drivers,
+              (SELECT count(*) FROM orders WHERE NOT is_exchange AND created_at >= (date_trunc('month', now() + interval '1 hour') - interval '1 hour'))::int AS month,
+              (SELECT count(*) FROM orders WHERE NOT is_exchange AND created_at >= (date_trunc('month', now() + interval '1 hour') - interval '1 month' - interval '1 hour')
+                                              AND created_at < (date_trunc('month', now() + interval '1 hour') - interval '1 hour'))::int AS last,
+              (SELECT count(*) FROM orders WHERE NOT is_exchange)::int AS total`,
     )
   )[0];
-  return { users: num(r?.users), ordersMonth: num(r?.month), ordersTotal: num(r?.total), lastOrderAt: isoOrNull(r?.last) };
+  return { users: num(r?.users), drivers: num(r?.drivers), ordersMonth: num(r?.month), ordersLastMonth: num(r?.last), ordersTotal: num(r?.total), ownerStores };
+}
+
+/** Orders made this month (Algeria time) in one store: the plan's monthly number. */
+export async function ordersThisMonth(db: Db): Promise<number> {
+  return num(
+    (await db.query(`SELECT count(*)::int AS n FROM orders WHERE NOT is_exchange AND created_at >= (date_trunc('month', now() + interval '1 hour') - interval '1 hour')`))[0]?.n,
+  );
 }
 
 // ---------------------------------------------------------------- first start
@@ -452,6 +563,31 @@ export async function bootstrapPlatform(t: Tenancy): Promise<void> {
   await ensureLoginTrigger(t, 'public');
   await ensureOwnerStaff(t);
   await syncPrimaryStore(t);
+  // accounts: everyone already in a store gets one; stores get their owner and their referral code
+  await backfillAccounts(t);
+  for (const r of await t.platform.query(`SELECT id FROM platform.shops WHERE referral_code IS NULL AND NOT is_demo AND status <> 'deleted'`))
+    await t.platform.query('UPDATE platform.shops SET referral_code = $2 WHERE id = $1 AND referral_code IS NULL', [r.id, await freeReferralCode(t)]);
+  await numberOldPayments(t);
+}
+
+/**
+ * Payments recorded before receipts existed get their number too (PX-<year of payment>-0001…, in the order they were
+ * paid), so every payment has its receipt. Same lock as a new payment's number, after the year's last one: no double.
+ */
+async function numberOldPayments(t: Tenancy): Promise<void> {
+  if (!(await t.platform.query('SELECT 1 FROM platform.payments WHERE receipt_no IS NULL LIMIT 1')).length) return;
+  await t.platform.tx(async (db) => {
+    await db.query('SELECT pg_advisory_xact_lock(7340211)');
+    const todo = await db.query(`SELECT id, extract(year FROM paid_at AT TIME ZONE 'UTC')::int AS y FROM platform.payments WHERE receipt_no IS NULL ORDER BY paid_at, id`);
+    const last = new Map<number, number>();
+    for (const r of todo) {
+      const y = num(r.y);
+      if (!last.has(y)) last.set(y, num((await db.query('SELECT COALESCE(max(substring(receipt_no from 9)::int), 0) AS n FROM platform.payments WHERE receipt_no LIKE $1', [`PX-${y}-%`]))[0]?.n));
+      const seq = last.get(y)! + 1;
+      last.set(y, seq);
+      await db.query('UPDATE platform.payments SET receipt_no = $2 WHERE id = $1', [r.id, `PX-${y}-${String(seq).padStart(4, '0')}`]);
+    }
+  });
 }
 
 /**
@@ -502,7 +638,7 @@ export async function migrateAll(t: Tenancy): Promise<Record<string, string[]>> 
   out.public = await migrate(t.shop('public'), (sql) => t.exec('public', sql));
   await bootstrapPlatform(t);
   for (const s of await loadShops(t)) {
-    if (s.primary || s.status === 'archived') continue;
+    if (s.primary || s.status === 'archived' || s.status === 'deleted') continue;
     out[s.schema] = await migrateShop(t, s.schema);
     await setShopStore(t.shop(s.schema), s.slug);
   }

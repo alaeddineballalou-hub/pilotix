@@ -1527,6 +1527,13 @@ html body .px-qhead .btn.px-qnew:hover { border-color: #F7A823; color: #C97A0E; 
 .px-ban-sup { background: var(--navy); color: var(--on-navy); border-color: var(--navy); }
 .px-ban-sup .btn { background: var(--on-navy); color: var(--navy); border-color: var(--on-navy); }
 .px-ban-x { border: 0; background: none; font-size: 20px; line-height: 1; cursor: pointer; color: var(--muted); padding: 0 4px; }
+/* phones: the text takes the width, its button goes under it, the × stays in the corner */
+@media (max-width: 640px) {
+  .px-ban { flex-wrap: wrap; align-items: flex-start; row-gap: 8px; position: relative; padding-inline-end: 34px; }
+  .px-ban .grow { flex: 1 1 calc(100% - 30px); }
+  .px-ban > .btn { margin-inline-start: 28px; }
+  .px-ban .px-ban-x { position: absolute; top: 7px; inset-inline-end: 6px; }
+}
 .px-pay { display: flex; flex-direction: column; gap: 10px; text-align: start; }
 .px-pay h4 { margin: 4px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .px-pay-plan { margin: 0; font-weight: 800; }
@@ -1537,28 +1544,49 @@ html body .px-qhead .btn.px-qnew:hover { border-color: #F7A823; color: #C97A0E; 
 .px-lock-ic { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; margin: 4px auto 0; background: var(--coral-soft); color: var(--coral); }
 .px-lock-ic .bji { width: 30px; height: 30px; }
 
-/* One person, several shops: the store picker, « Mes boutiques », the sign-up page */
-.px-shops { display: flex; flex-direction: column; gap: 8px; }
-.px-shop { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; text-align: start; cursor: pointer; position: relative; }
-.px-shop:hover:not(:disabled) { border-color: var(--navy); }
-.px-shop:disabled { cursor: default; }
-.px-shop.on { border-color: var(--navy); box-shadow: inset 3px 0 0 var(--navy); }
-.px-shop-ic { flex: none; width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; background: var(--navy); color: var(--on-navy, #fff); font-weight: 900; font-size: 17px; }
-.px-shop-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.px-shop-t b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.px-shop-t small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.px-shop .bji { width: 18px; height: 18px; color: var(--muted); flex: none; }
-.px-shop-go { transform: rotate(-90deg); }
-[dir="rtl"] .px-shop-go { transform: rotate(90deg); }
-.px-shop-lock { color: var(--bad, #c0392b); }
-.px-shop-busy { position: absolute; inset-inline-end: 12px; font-weight: 900; }
-.px-shop-ask { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px dashed var(--line); border-radius: 12px; }
+/* ---------------------------------------------------------------- accounts: store picker, sign-up, terms */
+.login > .login-card.px-acc-wide { width: min(520px, 100%); }
+.px-stores { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.px-stores button { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; text-align: start; cursor: pointer; transition: border-color .15s, box-shadow .15s, background .15s; }
+.px-stores button:hover:not(:disabled) { border-color: var(--px-orange); box-shadow: 0 0 0 3px color-mix(in srgb, var(--px-orange) 18%, transparent); }
+.px-stores button:disabled { cursor: progress; opacity: .7; }
+.px-stores-ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex: none; background: var(--px-orange-soft, #FEF3DF); color: var(--navy); }
+.px-stores-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; line-height: 1.25; }
+.px-stores-t b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.px-stores-t small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.px-stores .chip { flex: none; margin: 0; }
+.px-stores-go { flex: none; color: var(--muted); display: inline-flex; }
+[dir="rtl"] .px-stores-go .bji { transform: scaleX(-1); }
+.px-acc-form { display: flex; flex-direction: column; gap: 12px; }
+.px-acc-form .field input, .px-acc-form .field textarea { width: 100%; box-sizing: border-box; }
+.px-acc-box { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; padding: 14px; border-radius: 12px; background: var(--raise); border: 1px solid var(--line); }
+.px-acc-box p { margin: 0; }
+.px-acc-box .btn { display: inline-flex; align-items: center; gap: 6px; }
 .px-slug { display: flex; align-items: stretch; min-width: 0; border: 1.5px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--field, var(--surface)); }
-.px-slug > span { display: flex; align-items: center; padding: 0 10px; background: var(--raise); color: var(--muted); font-size: 13px; white-space: nowrap; max-width: 60%; overflow: hidden; text-overflow: ellipsis; border-inline-end: 1px solid var(--line); }
+.px-slug > span { display: flex; align-items: center; padding: 0 10px; background: var(--raise); color: var(--muted); font-size: 13px; white-space: nowrap; max-width: 55%; overflow: hidden; text-overflow: ellipsis; border-inline-end: 1px solid var(--line); }
 .px-slug > input { flex: 1; min-width: 0; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
-.hint.px-ok { color: var(--ok, #1a7f4b); font-weight: 700; }
-.hint.px-bad { color: var(--bad, #c0392b); font-weight: 700; }
-.px-signup-cta { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13.5px; }
-.px-signup-cta .btn { width: 100%; justify-content: center; }
-.px-form { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.px-form .field { margin: 0; }
+.px-slug:focus-within { border-color: var(--px-orange); }
+.field .hint.px-bad, .px-bad { color: var(--coral); font-weight: 700; }
+.px-terms { display: flex; align-items: flex-start; gap: 8px; font-size: 13.5px; line-height: 1.4; cursor: pointer; }
+.px-terms input { margin-top: 2px; flex: none; }
+.px-terms > span { flex: 1; min-width: 0; }
+.px-terms a { color: var(--navy); font-weight: 700; }
+.px-privacy, .login-card .muted.px-privacy { display: flex; align-items: flex-start; gap: 7px; margin: 0; line-height: 1.4; text-align: start; }
+.px-privacy .bji { flex: none; color: var(--ok); margin-top: 1px; }
+.chip.px-chip-bad { background: var(--coral-soft); color: var(--coral); }
+.chip.px-chip-owner { background: var(--px-orange-soft, #FEF3DF); color: var(--ink); }
+.px-me-btn { position: relative; }
+.px-me-dot { position: absolute; top: 2px; inset-inline-start: 30px; width: 10px; height: 10px; border-radius: 50%; background: var(--coral); box-shadow: 0 0 0 2px var(--surface); }
+.px-me-menu .nav-count { margin-inline-start: auto; }
+.px-signup-cta { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--line); }
+.px-signup-cta .btn { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; }
+.px-legal { box-sizing: border-box; min-height: 100vh; min-height: 100dvh; padding: 32px 16px; background: var(--bg); }
+.px-legal > .card { max-width: 760px; margin: 0 auto; padding: 28px 32px; display: flex; flex-direction: column; gap: 10px; }
+.px-legal .brand-big { margin: 0 0 4px; }
+.px-legal h1 { margin: 0 0 4px; font-size: 24px; }
+.px-legal h2 { margin: 10px 0 2px; font-size: 17px; }
+.px-legal p { margin: 0; line-height: 1.6; }
+.px-legal-own { white-space: pre-wrap; line-height: 1.6; }
+@media (max-width: 640px) { .px-legal { padding: 12px; } .px-legal > .card { padding: 20px 16px; } }
+.px-aide { display: flex; flex-direction: column; gap: 16px; }
+.px-aide .pp-head .btn { display: inline-flex; align-items: center; gap: 6px; }

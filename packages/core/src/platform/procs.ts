@@ -1,12 +1,15 @@
 // The control room's actions (Pilotix staff only): shops, trials, payments, plans and their menus, staff, settings,
-// the journal and the demo shop. Same shape as the shops' actions (input checked, roles checked), own registry.
+// the journal, sign-ups, messages from stores and the demo shop. Same shape as the shops' actions (input checked, roles
+// checked), own registry. Pilotix never sees what is inside a store: only its numbers (accounts, livreurs, orders).
 import { DEMO_ACCOUNTS, FEATURE_KEYS } from '@pilotix/shared';
 import bcrypt from 'bcryptjs';
 import { z, ZodTypeAny } from 'zod';
 import { isoOrNull, num, numOrNull } from '../db';
 import { AppError, bad, forbidden, notFound } from '../rpc';
-import { STORE_RESERVED } from '../modules/landingquery';
 import { hashPassword } from '../modules/users';
+import { accountById, makeAccountToken, sha256Hex } from './accounts';
+import { rewardReferrer, ReferralReward } from './reminders';
+import { staffReply, staffSetStatus, staffThread, staffThreads, staffUnread } from './support';
 import {
   cleanFeatures,
   freeSlug,
@@ -22,11 +25,15 @@ import {
   setShopStore,
   Shop,
   shopFeatures,
+  shopMaxDrivers,
+  shopMaxOrders,
   shopMaxUsers,
   shopStatus,
   shopUsage,
+  ShopUsage,
   slugify,
   slugOk,
+  NAME_RESERVED,
   SYSTEM_PLAN,
   toPlan,
 } from './shops';
@@ -75,6 +82,36 @@ export async function staffLogin(t: Tenancy, email: string, password: string): P
   return { staff: toStaff(r), tv: num(r.token_version) };
 }
 
+/** The control room's two-step login: a 6-digit code e-mailed at each login (10 minutes, 5 tries, once). */
+export async function makeStaffCode(t: Tenancy, staffId: number, now = Date.now()): Promise<string> {
+  const r = globalThis.crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000;
+  const code = String(r).padStart(6, '0');
+  await t.platform.query('UPDATE platform.staff_codes SET used_at = $2::timestamptz WHERE staff_id = $1 AND used_at IS NULL', [staffId, new Date(now).toISOString()]);
+  await t.platform.query('INSERT INTO platform.staff_codes (staff_id, code_hash, created_at, expires_at) VALUES ($1, $2, $3::timestamptz, $4::timestamptz)', [
+    staffId,
+    await sha256Hex(`${staffId}:${code}`),
+    new Date(now).toISOString(),
+    new Date(now + 10 * 60_000).toISOString(),
+  ]);
+  return code;
+}
+export async function checkStaffCode(t: Tenancy, staffId: number, code: string, now = Date.now()): Promise<boolean> {
+  const r = (
+    await t.platform.query('SELECT id, code_hash, attempts FROM platform.staff_codes WHERE staff_id = $1 AND used_at IS NULL AND expires_at > $2::timestamptz ORDER BY id DESC LIMIT 1', [
+      staffId,
+      new Date(now).toISOString(),
+    ])
+  )[0];
+  if (!r) return false;
+  if (num(r.attempts) >= 5) return false;
+  if (r.code_hash !== (await sha256Hex(`${staffId}:${String(code).trim()}`))) {
+    await t.platform.query('UPDATE platform.staff_codes SET attempts = attempts + 1 WHERE id = $1', [r.id]);
+    return false;
+  }
+  await t.platform.query('UPDATE platform.staff_codes SET used_at = $2::timestamptz WHERE id = $1', [r.id, new Date(now).toISOString()]);
+  return true;
+}
+
 /** The staff member of a token, if still active with the same token version. */
 export async function staffById(t: Tenancy, id: number, tv: number): Promise<StaffSession | null> {
   const r = (await t.platform.query('SELECT * FROM platform.staff WHERE id = $1', [id]))[0];
@@ -84,12 +121,6 @@ export async function staffById(t: Tenancy, id: number, tv: number): Promise<Sta
 /** Is this e-mail also a Pilotix staff account? (the shop menu then shows the way to the control room) */
 export async function isStaffEmail(t: Tenancy, email: string): Promise<boolean> {
   return (await t.platform.query('SELECT 1 FROM platform.staff WHERE email = $1 AND active', [email.trim().toLowerCase()])).length > 0;
-}
-
-/** Who Pilotix support acts as when it opens a shop: its first active administrator. */
-export async function supportProfile(t: Tenancy, s: Shop): Promise<{ id: number; tv: number; name: string } | null> {
-  const r = (await t.shop(s.schema).query(`SELECT id, name, token_version FROM profiles WHERE active AND 'admin' = ANY(roles) AND email NOT LIKE '%@pilotix.invalid' ORDER BY id LIMIT 1`))[0];
-  return r ? { id: num(r.id), tv: num(r.token_version), name: r.name } : null;
 }
 
 // ---------------------------------------------------------------- helpers
@@ -105,15 +136,33 @@ async function needShop(ctx: PCtx, id: number): Promise<Shop> {
   return s;
 }
 
-const usageCache = new WeakMap<Tenancy, Map<number, { at: number; v: Awaited<ReturnType<typeof shopUsage>> }>>();
-async function usage(ctx: PCtx, s: Shop, fresh = false) {
+const usageCache = new WeakMap<Tenancy, Map<number, { at: number; v: ShopUsage }>>();
+/** A store's numbers (kept a minute: the list asks for every store). */
+async function usage(ctx: PCtx, s: Shop, fresh = false): Promise<ShopUsage> {
   let m = usageCache.get(ctx.t);
   if (!m) usageCache.set(ctx.t, (m = new Map()));
   const hit = m.get(s.id);
   if (!fresh && hit && ctx.now() - hit.at < 60_000) return hit.v;
-  const v = await shopUsage(ctx.t, s).catch(() => ({ users: 0, ordersMonth: 0, ordersTotal: 0, lastOrderAt: null }));
+  const v = await shopUsage(ctx.t, s).catch(() => ({ users: 0, drivers: 0, ordersMonth: 0, ordersLastMonth: 0, ordersTotal: 0, ownerStores: 0 }));
   m.set(s.id, { at: ctx.now(), v });
   return v;
+}
+
+/** The store's limits and whether it is over one (its numbers against its plan). */
+function limitsOf(s: Shop, u: ShopUsage) {
+  const maxUsers = shopMaxUsers(s);
+  const maxDrivers = shopMaxDrivers(s);
+  const maxOrders = shopMaxOrders(s);
+  return {
+    maxUsers,
+    maxDrivers,
+    maxOrdersMonth: maxOrders,
+    over: {
+      users: maxUsers !== null && u.users > maxUsers,
+      drivers: maxDrivers !== null && u.drivers > maxDrivers,
+      orders: maxOrders !== null && u.ordersMonth > maxOrders,
+    },
+  };
 }
 
 const stateOf = (s: Shop, set: PlatformSettings, now: number) => shopStatus(s, now, set.trial.graceDays);
@@ -138,24 +187,34 @@ function shopRow(s: Shop, set: PlatformSettings, now: number) {
     createdAt: s.createdAt,
     lastActiveAt: s.lastActiveAt,
     owner: { name: s.ownerName, email: s.ownerEmail, phone: s.ownerPhone },
-    /** made by its owner on the sign-up page; when the owner confirmed the e-mail */
-    selfSignup: s.selfSignup,
-    emailVerifiedAt: s.emailVerifiedAt,
-    /** its own domain for its landing pages */
-    domain: s.domain ? { name: s.domain, status: s.domainStatus } : null,
     city: s.city,
     changes: s.featuresOn.length + s.featuresOff.length,
+    selfSignup: s.selfSignup,
+    deletedAt: s.deletedAt,
+    /** its own domain for its landing pages */
+    domain: s.domain ? { name: s.domain, status: s.domainStatus } : null,
   };
 }
 
 const IsoDate = z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'date invalide');
+
+/**
+ * An e-mail the server sends after an action (the control room never sees its link): the owner's invitation (choose a
+ * password), « a store was added to your account », a payment receipt, an answer to a message, a referral reward.
+ */
+export type OwnerMail =
+  | { kind: 'invite'; to: string; name: string; language: string; store: string; token: string }
+  | { kind: 'added'; to: string; name: string; language: string; store: string }
+  | { kind: 'receipt'; to: string; name: string; language: string; paymentId: number }
+  | { kind: 'reward'; to: string; name: string; language: string; reward: ReferralReward }
+  | { kind: 'answer'; to: string; name: string; language: string; shop: string; subject: string; body: string };
 const Id = z.number().int().positive();
 const Features = z.array(z.string().max(60)).max(200);
 
 const SLUG_HELP = 'Nom dans les liens invalide : 2 à 40 lettres minuscules, chiffres et tirets (ex. ma-boutique)';
 /** the shop's name in its links: the format, and not a word of the app (api, live, assets…) */
 function checkSlug(slug: string) {
-  if (STORE_RESERVED.includes(slug)) throw bad('Ce nom est réservé par Pilotix, choisissez-en un autre');
+  if (NAME_RESERVED.includes(slug)) throw bad('Ce nom est réservé par Pilotix, choisissez-en un autre');
   if (!slugOk(slug)) throw bad(SLUG_HELP);
 }
 
@@ -195,7 +254,34 @@ export const PLATFORM_REGISTRY = {
     const byMonth = pay.map((r: any) => ({ month: r.m as string, amount: num(r.amount), count: num(r.n) }));
     const recent = await ctx.t.platform.query(`SELECT a.*, s.name AS shop_name FROM platform.audit a LEFT JOIN platform.shops s ON s.id = a.shop_id ORDER BY a.id DESC LIMIT 8`);
     const createdThisMonth = real.filter((s) => s.createdAt.slice(0, 7) === month).length;
+    // sign-ups: stores made by their owners, sign-ups waiting for their e-mail, trials that became paying stores
+    const week = now - 7 * 86_400_000;
+    const pending = num(
+      (await ctx.t.platform.query(`SELECT count(*)::int AS n FROM platform.signup_requests WHERE used_at IS NULL AND expires_at > now() AND password_hash <> '-'`))[0]?.n,
+    );
+    const since = now - 90 * 86_400_000;
+    const recentStores = real.filter((s) => Date.parse(s.createdAt) >= since);
+    const paidIds = new Set((await ctx.t.platform.query('SELECT DISTINCT shop_id FROM platform.payments WHERE void_at IS NULL')).map((r: any) => num(r.shop_id)));
+    const converted = recentStores.filter((s) => paidIds.has(s.id)).length;
     return {
+      signups: {
+        week: real.filter((s) => s.selfSignup && Date.parse(s.createdAt) >= week).length,
+        month: real.filter((s) => s.selfSignup && s.createdAt.slice(0, 7) === month).length,
+        pending,
+        made90: recentStores.length,
+        paid90: converted,
+        rate: recentStores.length ? Math.round((converted / recentStores.length) * 100) : null,
+      },
+      messages: await staffUnread(ctx.t),
+      overLimit: await (async () => {
+        let n = 0;
+        for (const s of await loadShops(ctx.t)) {
+          if (s.primary || s.demo || s.status === 'deleted' || s.status === 'archived') continue;
+          const l = limitsOf(s, await usage(ctx, s));
+          if (l.over.users || l.over.drivers || l.over.orders) n++;
+        }
+        return n;
+      })(),
       counts: { total: real.length, trial: count('trial'), active: count('active'), grace: count('grace'), expired: count('expired'), suspended: count('suspended'), archived: count('archived'), newThisMonth: createdThisMonth },
       mrr: real.filter((s) => s.state === 'active').reduce((a, s) => a + (s.plan?.priceMonth ?? 0), 0),
       revenue: { thisMonth: byMonth.find((b) => b.month === month)?.amount ?? 0, lastMonth: byMonth.find((b) => b.month === prev)?.amount ?? 0, byMonth },
@@ -206,17 +292,24 @@ export const PLATFORM_REGISTRY = {
     };
   }),
 
+  /** Stores by state (or « over »: over one of their plan's limits), with their numbers — never what is inside. */
   'p.shops.list': pproc(ALL, z.object({ q: z.string().max(100).optional(), state: z.string().max(20).optional() }), async (ctx, i) => {
     const now = ctx.now();
     const set = await platformSettings(ctx.t);
     const all = await loadShops(ctx.t);
     const q = (i.q ?? '').trim().toLowerCase();
+    const st = i.state && i.state !== 'all' ? i.state : null;
     const rows = [];
     for (const s of all) {
       const r = shopRow(s, set, now);
-      if (i.state && i.state !== 'all' && r.state !== i.state && !(i.state === 'late' && (r.state === 'grace' || r.state === 'expired'))) continue;
+      // deleted stores only when asked for
+      if (s.status === 'deleted' && st !== 'deleted') continue;
+      if (st && st !== 'over' && r.state !== st && !(st === 'late' && (r.state === 'grace' || r.state === 'expired'))) continue;
       if (q && ![s.name, s.slug, s.ownerName, s.ownerEmail, s.ownerPhone, s.city].some((v) => v?.toLowerCase().includes(q))) continue;
-      rows.push({ ...r, usage: await usage(ctx, s) });
+      const u = await usage(ctx, s);
+      const limits = limitsOf(s, u);
+      if (st === 'over' && !(limits.over.users || limits.over.drivers || limits.over.orders)) continue;
+      rows.push({ ...r, usage: u, limits });
     }
     const last = await ctx.t.platform.query(`SELECT shop_id, max(paid_at) AS at FROM platform.payments WHERE void_at IS NULL GROUP BY shop_id`);
     const lastPay = new Map(last.map((r: any) => [num(r.shop_id), isoOrNull(r.at)]));
@@ -229,10 +322,11 @@ export const PLATFORM_REGISTRY = {
     const set = await platformSettings(ctx.t);
     const payments = await ctx.t.platform.query('SELECT p.*, st.name AS by_name FROM platform.payments p LEFT JOIN platform.staff st ON st.id = p.created_by WHERE p.shop_id = $1 ORDER BY p.paid_at DESC, p.id DESC', [s.id]);
     const log = await ctx.t.platform.query('SELECT a.*, NULL AS shop_name FROM platform.audit a WHERE a.shop_id = $1 ORDER BY a.id DESC LIMIT 40', [s.id]);
-    const admins =
-      s.status === 'archived'
-        ? []
-        : await ctx.t.shop(s.schema).query(`SELECT id, name, email, phone, active, last_seen_at FROM profiles WHERE 'admin' = ANY(roles) AND email NOT LIKE '%@pilotix.invalid' ORDER BY id`).catch(() => []);
+    const u = await usage(ctx, s, true);
+    // the owner: the account that made the store (its e-mail, whether it chose its password, how many stores it has)
+    const acc = s.ownerAccountId ? await accountById(ctx.t, s.ownerAccountId) : null;
+    const brought = await ctx.t.platform.query('SELECT r.*, s.name FROM platform.referrals r JOIN platform.shops s ON s.id = r.referred_shop_id WHERE r.referrer_shop_id = $1 ORDER BY r.id DESC', [s.id]);
+    const by = s.referredBy ? await loadShop(ctx.t, { id: s.referredBy }) : null;
     return {
       ...shopRow(s, set, now),
       notes: s.notes,
@@ -242,15 +336,28 @@ export const PLATFORM_REGISTRY = {
       features: shopFeatures(s),
       maxUsers: s.maxUsers,
       maxUsersEffective: shopMaxUsers(s),
-      maxOrdersMonth: s.plan?.maxOrdersMonth ?? null,
+      maxDrivers: s.maxDrivers,
+      maxDriversEffective: shopMaxDrivers(s),
+      maxOrdersMonth: shopMaxOrders(s),
       resetAt: s.resetAt,
-      usage: await usage(ctx, s, true),
-      admins: admins.map((a: any) => ({ id: num(a.id), name: a.name as string, email: a.email as string, phone: (a.phone as string | null) ?? null, active: !!a.active, lastSeenAt: isoOrNull(a.last_seen_at) })),
+      usage: u,
+      limits: limitsOf(s, u),
+      ownerAccount: acc
+        ? { email: acc.email, name: acc.name, invited: !acc.hasPassword, verified: acc.verified, stores: u.ownerStores, maxStores: acc.maxStores, maxStoresDefault: set.signup.maxStores, lastLoginAt: acc.lastLoginAt }
+        : null,
+      referralCode: s.referralCode,
+      referredBy: by ? { id: by.id, name: by.name } : null,
+      referrals: brought.map((r: any) => ({ shopId: num(r.referred_shop_id), name: r.name as string, at: isoOrNull(r.created_at), rewardedAt: isoOrNull(r.rewarded_at), months: num(r.reward_months) })),
       payments: payments.map(paymentRow),
       log: log.map(auditRow),
     };
   }),
 
+  /**
+   * A store made for a client. Pilotix never knows its password: the owner gets an e-mail to choose it (an e-mail that
+   * already has a Pilotix account gets « a new store was added to your account » and keeps its password). The
+   * e-mail to send comes back in `mail` (the server sends it and never returns its link).
+   */
   'p.shops.create': pproc(
     MANAGERS,
     z.object({
@@ -262,14 +369,15 @@ export const PLATFORM_REGISTRY = {
       city: z.string().trim().max(60).nullable().optional(),
       planId: Id,
       trialDays: z.number().int().min(0).max(90),
-      password: z.string().min(10).max(200).optional(),
+      language: z.enum(['fr', 'en', 'ar']).default('fr'),
       notes: z.string().max(2000).optional(),
     }),
     async (ctx, i) => {
       const plan = (await loadPlans(ctx.t)).find((p) => p.id === i.planId);
       if (!plan) throw bad('Formule introuvable');
       if (i.slug) checkSlug(i.slug);
-      const password = i.password || makePassword();
+      const email = i.ownerEmail.trim().toLowerCase();
+      if (/@(pilotix\.invalid|demo\.pilotix\.dz)$/.test(email)) throw bad('E-mail invalide');
       let shop: Shop;
       try {
         shop = await provisionShop(ctx.t, {
@@ -277,8 +385,7 @@ export const PLATFORM_REGISTRY = {
           slug: i.slug || undefined,
           planId: plan.id,
           trialDays: i.trialDays,
-          owner: { name: i.ownerName, email: i.ownerEmail, phone: i.ownerPhone ?? null },
-          password,
+          owner: { name: i.ownerName, email, phone: i.ownerPhone ?? null, language: i.language },
           city: i.city ?? null,
           notes: i.notes ?? '',
           createdBy: ctx.staff.id,
@@ -287,10 +394,25 @@ export const PLATFORM_REGISTRY = {
       } catch (e) {
         shopError(e);
       }
-      await audit(ctx, 'shop.create', shop.id, { name: shop.name, plan: plan.name, trialDays: i.trialDays, email: i.ownerEmail.toLowerCase() });
-      return { id: shop.id, slug: shop.slug, name: shop.name, email: i.ownerEmail.trim().toLowerCase(), password };
+      const acc = (await accountById(ctx.t, shop.ownerAccountId!))!;
+      const mail: OwnerMail = acc.hasPassword
+        ? { kind: 'added', to: acc.email, name: acc.name || i.ownerName, language: acc.language, store: shop.name }
+        : { kind: 'invite', to: acc.email, name: acc.name || i.ownerName, language: acc.language, store: shop.name, token: await makeAccountToken(ctx.t, acc.id, 'invite', ctx.now()) };
+      await audit(ctx, 'shop.create', shop.id, { name: shop.name, plan: plan.name, trialDays: i.trialDays, email, invited: mail.kind === 'invite' });
+      return { id: shop.id, slug: shop.slug, name: shop.name, email, invited: mail.kind === 'invite', mail };
     },
   ),
+
+  /** The owner never chose a password (the e-mail got lost): a new invitation link, by e-mail only. */
+  'p.shops.resendInvite': pproc(MANAGERS, z.object({ id: Id }), async (ctx, i) => {
+    const s = await needShop(ctx, i.id);
+    const acc = s.ownerAccountId ? await accountById(ctx.t, s.ownerAccountId) : null;
+    if (!acc) throw bad('Cette boutique n’a pas de propriétaire connu');
+    if (acc.hasPassword) throw bad('Le propriétaire a déjà choisi son mot de passe : il se connecte, ou utilise « Mot de passe oublié »');
+    const mail: OwnerMail = { kind: 'invite', to: acc.email, name: acc.name, language: acc.language, store: s.name, token: await makeAccountToken(ctx.t, acc.id, 'invite', ctx.now()) };
+    await audit(ctx, 'shop.invite', s.id, { email: acc.email });
+    return { ok: true, email: acc.email, mail };
+  }),
 
   'p.shops.update': pproc(
     MANAGERS,
@@ -306,10 +428,18 @@ export const PLATFORM_REGISTRY = {
       trialEndsAt: IsoDate.nullable().optional(),
       paidUntil: IsoDate.nullable().optional(),
       maxUsers: z.number().int().min(1).max(10_000).nullable().optional(),
+      maxDrivers: z.number().int().min(0).max(10_000).nullable().optional(),
+      /** stores its owner may have (null = the platform's setting) */
+      ownerMaxStores: z.number().int().min(1).max(100).nullable().optional(),
     }),
     async (ctx, i) => {
       const s = await needShop(ctx, i.id);
+      if (s.status === 'deleted') throw bad('Boutique supprimée par son propriétaire');
       if (s.primary && (i.planId !== undefined || i.trialEndsAt !== undefined || i.paidUntil !== undefined)) throw bad('Votre propre boutique n’a ni formule ni échéance : elle ne s’arrête jamais');
+      if (i.ownerMaxStores !== undefined && s.ownerAccountId) {
+        await ctx.t.platform.query('UPDATE platform.accounts SET max_stores = $2 WHERE id = $1', [s.ownerAccountId, i.ownerMaxStores]);
+        await audit(ctx, 'shop.ownerStores', s.id, { maxStores: i.ownerMaxStores });
+      }
       if (i.slug !== undefined && i.slug !== s.slug) {
         checkSlug(i.slug);
         if ((await freeSlug(ctx.t, i.slug, s.id)) !== i.slug) throw bad('Ce nom est déjà pris par une autre boutique');
@@ -334,6 +464,7 @@ export const PLATFORM_REGISTRY = {
       put('trial_ends_at', i.trialEndsAt === undefined ? undefined : i.trialEndsAt && new Date(i.trialEndsAt).toISOString(), 'trialEndsAt', s.trialEndsAt);
       put('paid_until', i.paidUntil === undefined ? undefined : i.paidUntil && new Date(i.paidUntil).toISOString(), 'paidUntil', s.paidUntil);
       put('max_users', i.maxUsers, 'maxUsers', s.maxUsers);
+      put('max_drivers', i.maxDrivers, 'maxDrivers', s.maxDrivers);
       if (!sets.length) return { ok: true };
       await ctx.t.platform.query(`UPDATE platform.shops SET ${sets.join(', ')} WHERE id = $1`, vals);
       // the new name is the store's part of its links (shop #1: its « Lien des pages » too)
@@ -352,6 +483,7 @@ export const PLATFORM_REGISTRY = {
   /** Suspend (locked at once), reactivate, or archive (closed, its data kept). Never the owner's own shop. */
   'p.shops.setStatus': pproc(MANAGERS, z.object({ id: Id, status: z.enum(['active', 'suspended', 'archived']), reason: z.string().trim().max(300).optional() }), async (ctx, i) => {
     const s = await needShop(ctx, i.id);
+    if (s.status === 'deleted') throw bad('Boutique supprimée par son propriétaire');
     if (s.primary && i.status !== 'active') throw bad('Votre propre boutique ne peut pas être suspendue');
     if (s.status === i.status) return { ok: true };
     await ctx.t.platform.query('UPDATE platform.shops SET status = $2, status_reason = $3 WHERE id = $1', [s.id, i.status, i.status === 'active' ? null : i.reason || null]);
@@ -377,21 +509,6 @@ export const PLATFORM_REGISTRY = {
     return { trialEndsAt: isoOrNull(r?.trial_ends_at) };
   }),
 
-  /** A shop's administrator forgot the password (no e-mail): a new one, shown once. Their open sessions end. */
-  'p.shops.resetAdminPassword': pproc(MANAGERS, z.object({ id: Id, profileId: Id }), async (ctx, i) => {
-    const s = await needShop(ctx, i.id);
-    if (s.status === 'archived') throw bad('Boutique archivée');
-    const password = makePassword();
-    const r = (
-      await ctx.t
-        .shop(s.schema)
-        .query(`UPDATE profiles SET password_hash = $2, token_version = token_version + 1 WHERE id = $1 AND 'admin' = ANY(roles) RETURNING email, name`, [i.profileId, await hashPassword(password)])
-    )[0];
-    if (!r) throw notFound('Administrateur introuvable');
-    await audit(ctx, 'shop.adminPassword', s.id, { email: r.email });
-    return { email: r.email as string, name: r.name as string, password };
-  }),
-
   // ---------------------------------------------------------------- payments
   /** A payment received (BaridiMob, CCP, cash…): the paid period grows by `months`, from today or the end of the trial / the current period. */
   'p.payments.add': pproc(
@@ -410,16 +527,22 @@ export const PLATFORM_REGISTRY = {
       const s = await needShop(ctx, i.shopId);
       if (s.primary || s.demo) throw bad('Pas de paiement pour cette boutique');
       if (i.planId !== undefined && !(await loadPlans(ctx.t)).some((p) => p.id === i.planId)) throw bad('Formule introuvable');
+      const set = await platformSettings(ctx.t);
       const out = await ctx.t.platform.tx(async (db) => {
         const cur = (await db.query('SELECT status FROM platform.shops WHERE id = $1 FOR UPDATE', [s.id]))[0];
+        // receipts are numbered per year, one after the other (one payment at a time takes its number)
+        await db.query('SELECT pg_advisory_xact_lock(7340211)');
+        const year = new Date(i.paidAt ? Date.parse(i.paidAt) : ctx.now()).getUTCFullYear();
+        const seq = num((await db.query(`SELECT COALESCE(max(substring(receipt_no from 9)::int), 0) AS n FROM platform.payments WHERE receipt_no LIKE $1`, [`PX-${year}-%`]))[0]?.n) + 1;
+        const receiptNo = `PX-${year}-${String(seq).padStart(4, '0')}`;
         // from today, or from the end of the trial / of the period already paid when it is still ahead
         const p = (
           await db.query(
-            `INSERT INTO platform.payments (shop_id, amount, method, reference, months, plan_id, period_from, period_to, paid_at, note, created_by)
-             SELECT $1, $2, $3, $4, $5, $6, x.f, x.f + make_interval(months => $5), COALESCE($7::timestamptz, now()), $8, $9
+            `INSERT INTO platform.payments (shop_id, amount, method, reference, months, plan_id, period_from, period_to, paid_at, note, created_by, receipt_no)
+             SELECT $1, $2, $3, $4, $5, $6, x.f, x.f + make_interval(months => $5), COALESCE($7::timestamptz, now()), $8, $9, $10
                FROM (SELECT GREATEST(now(), paid_until, trial_ends_at) AS f FROM platform.shops WHERE id = $1) x
              RETURNING id, period_to`,
-            [s.id, i.amount, i.method, i.reference || null, i.months, i.planId ?? s.planId, i.paidAt ? new Date(i.paidAt).toISOString() : null, i.note || null, ctx.staff.id],
+            [s.id, i.amount, i.method, i.reference || null, i.months, i.planId ?? s.planId, i.paidAt ? new Date(i.paidAt).toISOString() : null, i.note || null, ctx.staff.id, receiptNo],
           )
         )[0];
         await db.query(
@@ -429,10 +552,15 @@ export const PLATFORM_REGISTRY = {
              FROM platform.payments p WHERE sh.id = $1 AND p.id = $2`,
           [s.id, p.id, i.planId ?? null],
         );
-        return { id: num(p.id), paidUntil: isoOrNull(p.period_to), reactivated: cur.status === 'suspended' };
+        // the first payment of a store another one brought: that one gets its free months
+        const reward = await rewardReferrer(db, set, s.id, num(p.id));
+        return { id: num(p.id), paidUntil: isoOrNull(p.period_to), reactivated: cur.status === 'suspended', receiptNo, reward };
       });
-      await audit(ctx, 'payment.add', s.id, { amount: i.amount, method: i.method, months: i.months, paidUntil: out.paidUntil, reference: i.reference ?? null, reactivated: out.reactivated });
-      return out;
+      await audit(ctx, 'payment.add', s.id, { amount: i.amount, method: i.method, months: i.months, paidUntil: out.paidUntil, reference: i.reference ?? null, reactivated: out.reactivated, receipt: out.receiptNo });
+      if (out.reward) await audit(ctx, 'referral.reward', out.reward.referrerShopId, { months: out.reward.months, from: s.name, paidUntil: out.reward.paidUntil });
+      const mails: OwnerMail[] = [];
+      if (out.reward?.to) mails.push({ kind: 'reward', to: out.reward.to, name: out.reward.name, language: out.reward.language, reward: out.reward });
+      return { id: out.id, paidUntil: out.paidUntil, reactivated: out.reactivated, receiptNo: out.receiptNo, rewarded: out.reward ? { shop: out.reward.shop, months: out.reward.months } : null, mails };
     },
   ),
 
@@ -448,6 +576,18 @@ export const PLATFORM_REGISTRY = {
     const list = rows.map((r: any) => ({ ...paymentRow(r), shop: { id: num(r.shop_id), name: r.shop_name as string, slug: r.shop_slug as string } }));
     const live = list.filter((p) => !p.voidAt);
     return { rows: list, total: live.reduce((a, p) => a + p.amount, 0), count: live.length, byMethod: PAYMENT_METHODS.map((m) => ({ method: m, amount: live.filter((p) => p.method === m).reduce((a, p) => a + p.amount, 0) })) };
+  }),
+
+  /** A payment's receipt (printed, or saved as PDF from the browser): who paid, what, for which period. */
+  'p.payments.receipt': pproc(MANAGERS, z.object({ id: Id }), async (ctx, i) => receiptOf(ctx.t, i.id)),
+
+  /** E-mails the receipt to the store's owner. */
+  'p.payments.mailReceipt': pproc(MANAGERS, z.object({ id: Id }), async (ctx, i) => {
+    const r = await receiptOf(ctx.t, i.id);
+    if (!r.shop.ownerEmail) throw bad('Pas d’e-mail pour le propriétaire de cette boutique');
+    await audit(ctx, 'payment.receipt', r.shop.id, { receipt: r.receiptNo, to: r.shop.ownerEmail });
+    const mail: OwnerMail = { kind: 'receipt', to: r.shop.ownerEmail, name: r.shop.ownerName ?? '', language: r.language, paymentId: r.id };
+    return { ok: true, email: r.shop.ownerEmail, mail };
   }),
 
   /** A payment typed by mistake: cancelled (kept in the history). The paid period goes back if it was the last one. */
@@ -484,6 +624,7 @@ export const PLATFORM_REGISTRY = {
       priceYear: z.number().int().min(0).max(100_000_000).nullable().optional(),
       features: Features,
       maxUsers: z.number().int().min(1).max(10_000).nullable().optional(),
+      maxDrivers: z.number().int().min(0).max(10_000).nullable().optional(),
       maxOrdersMonth: z.number().int().min(1).max(10_000_000).nullable().optional(),
       description: z.string().max(400).optional(),
       public: z.boolean(),
@@ -493,11 +634,11 @@ export const PLATFORM_REGISTRY = {
       const old = i.id ? (await loadPlans(ctx.t)).find((p) => p.id === i.id) : null;
       if (i.id && !old) throw notFound('Formule introuvable');
       const features = old?.system ? ['*'] : cleanFeatures(i.features, true);
-      const vals = [i.name, i.priceMonth, i.priceYear ?? null, JSON.stringify(features), i.maxUsers ?? null, i.maxOrdersMonth ?? null, i.description ?? '', old?.system ? false : i.public, old?.system ? true : i.active];
+      const vals = [i.name, i.priceMonth, i.priceYear ?? null, JSON.stringify(features), i.maxUsers ?? null, i.maxOrdersMonth ?? null, i.description ?? '', old?.system ? false : i.public, old?.system ? true : i.active, i.maxDrivers ?? null];
       let id = i.id ?? 0;
       if (old) {
         await ctx.t.platform.query(
-          `UPDATE platform.plans SET name=$2, price_month=$3, price_year=$4, features=$5, max_users=$6, max_orders_month=$7, description=$8, public=$9, active=$10 WHERE id=$1`,
+          `UPDATE platform.plans SET name=$2, price_month=$3, price_year=$4, features=$5, max_users=$6, max_orders_month=$7, description=$8, public=$9, active=$10, max_drivers=$11 WHERE id=$1`,
           [old.id, ...vals],
         );
       } else {
@@ -507,7 +648,7 @@ export const PLATFORM_REGISTRY = {
         id = num(
           (
             await ctx.t.platform.query(
-              `INSERT INTO platform.plans (code, name, price_month, price_year, features, max_users, max_orders_month, description, public, active, sort) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+              `INSERT INTO platform.plans (code, name, price_month, price_year, features, max_users, max_orders_month, description, public, active, max_drivers, sort) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
               [code, ...vals, sort],
             )
           )[0].id,
@@ -560,10 +701,15 @@ export const PLATFORM_REGISTRY = {
       payment: z.object({ text: z.string().max(1500), phone: z.string().max(40), whatsapp: z.string().max(40) }).optional(),
       notice: z.object({ text: z.string().max(400), tone: z.enum(['info', 'warn']), until: IsoDate.nullable() }).optional(),
       demo: z.object({ public: z.boolean() }).optional(),
-      signup: z.object({ open: z.boolean(), maxShopsPerEmail: z.number().int().min(1).max(50), perIpPerDay: z.number().int().min(1).max(100) }).optional(),
+      signup: z.object({ open: z.boolean(), maxStores: z.number().int().min(1).max(100) }).optional(),
+      reminders: z.object({ on: z.boolean(), daysBefore: z.number().int().min(1).max(30) }).optional(),
+      referral: z.object({ on: z.boolean(), months: z.number().int().min(0).max(12) }).optional(),
+      security: z.object({ twoStep: z.boolean() }).optional(),
+      company: z.object({ name: z.string().trim().max(120), address: z.string().trim().max(300), phone: z.string().trim().max(40), email: z.string().trim().max(200), taxId: z.string().trim().max(80) }).optional(),
+      legal: z.object({ text: z.string().max(30_000) }).optional(),
     }),
     async (ctx, i) => {
-      for (const k of ['trial', 'payment', 'notice', 'demo', 'signup'] as const) if (i[k]) await setPlatformSetting(ctx.t, k, i[k] as any);
+      for (const k of ['trial', 'payment', 'notice', 'demo', 'signup', 'reminders', 'referral', 'security', 'company', 'legal'] as const) if (i[k]) await setPlatformSetting(ctx.t, k, i[k] as any);
       await audit(ctx, 'settings.save', null, { keys: Object.keys(i) });
       return platformSettings(ctx.t);
     },
@@ -576,6 +722,62 @@ export const PLATFORM_REGISTRY = {
       [i.shopId ?? null, i.before ?? null, i.limit],
     );
     return rows.map(auditRow);
+  }),
+
+  // ---------------------------------------------------------------- sign-ups (#4)
+  /** Sign-ups waiting for their e-mail, and the stores their owners made lately. */
+  'p.signups.list': pproc(ALL, z.object({}), async (ctx) => {
+    const pending = await ctx.t.platform.query(
+      `SELECT id, email, name, store_name, created_at, expires_at FROM platform.signup_requests
+        WHERE used_at IS NULL AND expires_at > now() AND password_hash <> '-' ORDER BY created_at DESC LIMIT 100`,
+    );
+    const made = await ctx.t.platform.query(
+      `SELECT s.id, s.name, s.slug, s.created_at, s.status, s.trial_ends_at, s.paid_until, a.email,
+              EXISTS (SELECT 1 FROM platform.payments p WHERE p.shop_id = s.id AND p.void_at IS NULL) AS paid
+         FROM platform.shops s LEFT JOIN platform.accounts a ON a.id = s.owner_account_id
+        WHERE s.self_signup ORDER BY s.created_at DESC LIMIT 100`,
+    );
+    return {
+      pending: pending.map((r: any) => ({ id: num(r.id), email: r.email as string, name: r.name as string, store: r.store_name as string, at: isoOrNull(r.created_at)!, expiresAt: isoOrNull(r.expires_at)! })),
+      made: made.map((r: any) => ({ id: num(r.id), name: r.name as string, slug: r.slug as string, email: (r.email as string | null) ?? null, at: isoOrNull(r.created_at)!, status: r.status as string, paid: !!r.paid })),
+    };
+  }),
+
+  // ---------------------------------------------------------------- messages from stores (#5)
+  'p.support.list': pproc(ALL, z.object({ status: z.enum(['open', 'closed', 'all']).default('open'), shopId: Id.optional() }), async (ctx, i) => staffThreads(ctx.t, i)),
+  'p.support.get': pproc(ALL, z.object({ id: Id }), async (ctx, i) => staffThread(ctx.t, i.id)),
+  /** Pilotix answers: the store sees it in « Contacter Pilotix », its author gets an e-mail. */
+  'p.support.reply': pproc(ALL, z.object({ id: Id, body: z.string().max(5000) }), async (ctx, i) => {
+    const r = await staffReply(ctx.t, i.id, ctx.staff.name, { body: i.body });
+    await audit(ctx, 'support.reply', r.shopId, { subject: r.subject });
+    const mail: OwnerMail = { kind: 'answer', to: r.to, name: r.name, language: 'fr', shop: r.shop, subject: r.subject, body: r.body };
+    return { ok: true, mail };
+  }),
+  'p.support.setStatus': pproc(ALL, z.object({ id: Id, status: z.enum(['open', 'closed']) }), async (ctx, i) => {
+    await staffSetStatus(ctx.t, i.id, i.status);
+    return { ok: true };
+  }),
+
+  // ---------------------------------------------------------------- the server (#6): sizes only
+  /** The database's size, and each store's (numbers only). */
+  'p.health.db': pproc(MANAGERS, z.object({}), async (ctx) => {
+    const total = num((await ctx.t.platform.query('SELECT pg_database_size(current_database())::bigint AS n'))[0]?.n);
+    const rows = await ctx.t.platform.query(
+      `SELECT n.nspname AS schema, sum(pg_total_relation_size(c.oid))::bigint AS bytes
+         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relkind IN ('r', 'm') AND (n.nspname = 'public' OR n.nspname = 'platform' OR n.nspname LIKE 'shop\\_%')
+        GROUP BY n.nspname`,
+    );
+    const shops = await loadShops(ctx.t);
+    const bySchema = new Map(rows.map((r: any) => [r.schema as string, num(r.bytes)]));
+    return {
+      total,
+      platform: bySchema.get('platform') ?? 0,
+      shops: shops
+        .filter((x) => x.status !== 'deleted')
+        .map((x) => ({ id: x.id, name: x.name, bytes: bySchema.get(x.schema) ?? 0 }))
+        .sort((a, b) => b.bytes - a.bytes),
+    };
   }),
 
   // ---------------------------------------------------------------- the demo shop
@@ -607,9 +809,40 @@ export const PLATFORM_REGISTRY = {
   }),
 };
 
+/** Everything a payment's receipt shows. */
+async function receiptOf(t: Tenancy, id: number) {
+  const r = (
+    await t.platform.query(
+      `SELECT p.*, s.name AS shop_name, s.slug AS shop_slug, s.owner_name, s.owner_email, s.owner_phone, s.city, pl.name AS plan_name,
+              a.email AS acc_email, a.name AS acc_name, a.language AS acc_lang
+         FROM platform.payments p JOIN platform.shops s ON s.id = p.shop_id LEFT JOIN platform.plans pl ON pl.id = p.plan_id
+         LEFT JOIN platform.accounts a ON a.id = s.owner_account_id WHERE p.id = $1`,
+      [id],
+    )
+  )[0];
+  if (!r) throw notFound('Paiement introuvable');
+  const set = await platformSettings(t);
+  return {
+    ...paymentRow(r),
+    plan: (r.plan_name as string | null) ?? null,
+    language: (r.acc_lang as string | null) ?? 'fr',
+    shop: {
+      id: num(r.shop_id),
+      name: r.shop_name as string,
+      slug: r.shop_slug as string,
+      ownerName: ((r.acc_name as string | null) || (r.owner_name as string | null)) ?? null,
+      ownerEmail: ((r.acc_email as string | null) || (r.owner_email as string | null)) ?? null,
+      ownerPhone: (r.owner_phone as string | null) ?? null,
+      city: (r.city as string | null) ?? null,
+    },
+    company: set.company,
+  };
+}
+
 function paymentRow(r: any) {
   return {
     id: num(r.id),
+    receiptNo: (r.receipt_no as string | null) ?? null,
     shopId: num(r.shop_id),
     amount: num(r.amount),
     method: r.method as (typeof PAYMENT_METHODS)[number],

@@ -5,7 +5,6 @@ import { dateTime, n, when } from '../../lib/format';
 import { Staff, usePAction, usePRpc } from '../../lib/platform';
 import { Card, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { can } from './bits';
-import { OpenButton } from './Shops';
 
 /** the accounts the login page offers (layout/Login.tsx) */
 const ON_LOGIN = ['admin', 'conf1', 'depot', 'livreur', 'marketer'];
@@ -56,7 +55,6 @@ export function Demo({ staff }: { staff: Staff }) {
             </div>
             <p className="small muted">{t('platform.demo.nightly')}</p>
             <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-              <OpenButton id={d.shop.id} />
               {manager && (
                 <button type="button" className="btn" disabled={reset.isPending} onClick={() => reset.mutate({})}>
                   <Icon name="refresh" /> {reset.isPending ? t('platform.demo.resetting') : t('platform.demo.reset')}

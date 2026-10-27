@@ -327,7 +327,10 @@ function Referral() {
   const d = q.data;
   const cash = da(d.rules.cash);
   const months = String(d.rules.months);
-  const link = `${location.origin}${location.pathname}?ref=${d.code}`;
+  // on the Pilotix server: the store's own sign-up link, and Pilotix's programme (free months, no cash)
+  const plat = d.platform;
+  const off = plat && !d.rules.months;
+  const link = d.link ?? (plat ? `${location.origin}${location.pathname}#/inscription/${d.code}` : `${location.origin}${location.pathname}?ref=${d.code}`);
   const msg = t('profil.refMsg', { code: d.code, link });
   const copy = (v: string, k: string) =>
     navigator.clipboard
@@ -350,8 +353,8 @@ function Referral() {
     <>
       <section className="card px-ref-hero">
         <div className="px-ref-ht">
-          <h2>{t('profil.refTitle')}</h2>
-          <p>{t('profil.refRule', { cash, months })}</p>
+          <h2>{t(plat ? 'profil.refTitlePlat' : 'profil.refTitle')}</h2>
+          <p>{off ? t('profil.refOff') : plat ? t('profil.refRulePlat', { months }) : t('profil.refRule', { cash, months })}</p>
         </div>
         <div className="px-ref-share">
           <div className="px-ref-code">
@@ -380,23 +383,40 @@ function Referral() {
           </div>
         </div>
       </section>
-      <div className="kpis px-ref-k">
-        {kpi(t('profil.kInv'), n(d.totals.invited))}
-        {kpi(t('profil.kSign'), n(d.totals.signedUp))}
-        {kpi(t('profil.kSub'), n(d.totals.subscribed), 'ok')}
-        {kpi(t('profil.kEarn'), da(d.totals.cashEarned), 'ok')}
-        {kpi(t('profil.kPend'), da(d.totals.cashPending), d.totals.cashPending ? 'warn' : undefined)}
-        {kpi(t('profil.kMonths'), n(d.totals.months))}
-      </div>
-      <div className="px-ref-grid">
+      {plat ? (
+        <div className="kpis px-ref-k">
+          {kpi(t('profil.kStores'), n(d.totals.signedUp))}
+          {kpi(t('profil.kPaying'), n(d.totals.subscribed), 'ok')}
+          {kpi(t('profil.kMonths'), n(d.totals.months), d.totals.months ? 'ok' : undefined)}
+        </div>
+      ) : (
+        <div className="kpis px-ref-k">
+          {kpi(t('profil.kInv'), n(d.totals.invited))}
+          {kpi(t('profil.kSign'), n(d.totals.signedUp))}
+          {kpi(t('profil.kSub'), n(d.totals.subscribed), 'ok')}
+          {kpi(t('profil.kEarn'), da(d.totals.cashEarned), 'ok')}
+          {kpi(t('profil.kPend'), da(d.totals.cashPending), d.totals.cashPending ? 'warn' : undefined)}
+          {kpi(t('profil.kMonths'), n(d.totals.months))}
+        </div>
+      )}
+      <div className={plat ? undefined : 'px-ref-grid'}>
         <section className="card px-pf-card">
           <h2>{t('profil.how')}</h2>
-          <ol className="px-ref-steps">
-            <li>{t('profil.h1')}</li>
-            <li>{t('profil.h2')}</li>
-            <li>{t('profil.h3', { cash, months })}</li>
-          </ol>
+          {plat ? (
+            <ol className="px-ref-steps">
+              <li>{t('profil.p1')}</li>
+              <li>{t('profil.p2')}</li>
+              <li>{t('profil.p3', { months })}</li>
+            </ol>
+          ) : (
+            <ol className="px-ref-steps">
+              <li>{t('profil.h1')}</li>
+              <li>{t('profil.h2')}</li>
+              <li>{t('profil.h3', { cash, months })}</li>
+            </ol>
+          )}
         </section>
+        {!plat && (
         <form
           className="card px-pf-card"
           onSubmit={(e) => {
@@ -417,9 +437,10 @@ function Referral() {
             </button>
           </div>
         </form>
+        )}
       </div>
       <section className="card px-pf-card">
-        <h2>{t('profil.friends')}</h2>
+        <h2>{t(plat ? 'profil.friendsPlat' : 'profil.friends')}</h2>
         {d.friends.length ? (
           <div className="tbl-wrap">
             <table className="tbl">
@@ -443,7 +464,9 @@ function Referral() {
                     </td>
                     <td data-l={t('profil.cDate')}>{date(f.createdAt)}</td>
                     <td className="num" data-l={t('profil.cReward')}>
-                      {f.status === 'subscribed' ? (
+                      {f.status === 'subscribed' && plat ? (
+                        <b className="ltr">+{t('profil.nMonths', { n: f.months })}</b>
+                      ) : f.status === 'subscribed' ? (
                         <>
                           <b className="ltr">
                             {da(f.cash)} + {f.months} m
@@ -462,11 +485,11 @@ function Referral() {
             </table>
           </div>
         ) : (
-          <p className="muted">{t('profil.noFriends')}</p>
+          <p className="muted">{t(plat ? 'profil.noFriendsPlat' : 'profil.noFriends')}</p>
         )}
-        <p className="muted small">{t('profil.demo')}</p>
+        {!plat && <p className="muted small">{t('profil.demo')}</p>}
       </section>
-      {session?.isAdmin && (
+      {session?.isAdmin && !plat && (
         <form
           className="card px-pf-card"
           onSubmit={(e) => {

@@ -48,6 +48,21 @@ async function needSeat(ctx: Ctx) {
   if (n >= max) throw bad(`Votre formule Pilotix permet ${max} comptes actifs. Désactivez un compte, ou demandez à Pilotix une formule plus grande.`);
 }
 
+/** The shop's plan allows N active livreurs (a multi-shop server): one more is refused beyond that. */
+async function needDriverSeat(ctx: Ctx, exceptId: number | null = null) {
+  const max = ctx.shop?.maxDrivers;
+  if (max === null || max === undefined) return;
+  const n = num(
+    (await ctx.db.query(`SELECT count(*)::int AS n FROM profiles WHERE active AND 'livreur' = ANY(roles) AND email NOT LIKE '%@pilotix.invalid' AND ($1::bigint IS NULL OR id <> $1)`, [exceptId]))[0]?.n,
+  );
+  if (n >= max)
+    throw bad(
+      max === 0
+        ? 'Votre formule Pilotix ne comprend pas de livreurs. Demandez à Pilotix une formule plus grande.'
+        : `Votre formule Pilotix permet ${max} livreur${max > 1 ? 's' : ''} actif${max > 1 ? 's' : ''}. Désactivez un livreur, ou demandez à Pilotix une formule plus grande.`,
+    );
+}
+
 export async function profileById(db: Db, id: number): Promise<Profile | null> {
   const r = (await db.query('SELECT * FROM profiles WHERE id = $1', [id]))[0];
   return r ? toProfile(r) : null;
@@ -226,6 +241,9 @@ export const usersProcs = {
         cashPending: sub.filter((f) => !f.paid).reduce((s, f) => s + f.cash, 0),
         months: sub.reduce((s, f) => s + f.months, 0),
       },
+      /** On a server with several stores, Pilotix's own programme answers instead (the store's link, free months). */
+      platform: false,
+      link: null as string | null,
     };
   }),
   'me.invite': proc(null, z.object({ name: z.string().trim().min(2).max(80), email: z.string().trim().email().max(120) }), async (ctx, i) => {
@@ -266,6 +284,7 @@ export const usersProcs = {
     needUserManager(ctx);
     needGrantable(ctx, b);
     await needSeat(ctx);
+    if (b.roles.includes('livreur')) await needDriverSeat(ctx);
     try {
       const r = (
         await ctx.db.query(
@@ -283,8 +302,12 @@ export const usersProcs = {
     await needCanEdit(ctx, b.id);
     needGrantable(ctx, b);
     if (b.id === ctx.session.profile.id && (b.active === false || (b.roles && !b.roles.includes('admin')))) throw forbidden('Vous ne pouvez pas retirer votre propre accès administrateur');
-    // an account closed earlier and opened again takes a place of the plan
-    if (b.active === true && !(await ctx.db.query('SELECT active FROM profiles WHERE id = $1', [b.id]))[0]?.active) await needSeat(ctx);
+    // an account closed earlier and opened again takes a place of the plan; so does a new livreur
+    const before = (await ctx.db.query('SELECT active, roles FROM profiles WHERE id = $1', [b.id]))[0];
+    if (b.active === true && !before?.active) await needSeat(ctx);
+    const willBeActive = b.active ?? !!before?.active;
+    const wasDriver = !!before?.active && (before?.roles as string[] | undefined)?.includes('livreur');
+    if (willBeActive && (b.roles ?? (before?.roles as string[] | undefined) ?? []).includes('livreur') && !wasDriver) await needDriverSeat(ctx, b.id);
     let r: any;
     try {
       r = (

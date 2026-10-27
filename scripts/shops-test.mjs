@@ -1,15 +1,38 @@
-// End-to-end check of a multi-shop server (after scripts/smoke-test.sh, same demo server): sign-up, users of a new shop,
-// one e-mail in several shops (store picker, « Mes boutiques »), « Ajouter une boutique », passwords across shops, a
-// deactivated account, shops never seeing each other's data, own domains, landing pages and llms.txt per shop.
-//   API=http://localhost:3000/api node scripts/shops-test.mjs
-const API = process.env.API || 'http://localhost:3000/api';
-const SITE = API.replace(/\/api$/, '');
-const run = Date.now().toString(36); // names unique per run: the script can run twice on one server
-let failed = 0;
+// End-to-end check of a multi-shop server (after scripts/smoke-test.sh, same demo server, with e-mails going to the
+// test mailbox of scripts/smtp-sink.cjs): accounts (one e-mail, one password, every store of the person), the control
+// room (two-step login, new stores and their owner's invitation, plans, limits, payments and receipts, sign-ups,
+// messages, reminders), « Créer ma boutique », « Ajouter une boutique », the store picker, the owner's rights, stores
+// never seeing each other's data, landing pages and llms.txt per store, own domains, deleting a store.
+//   API=http://localhost:3000/api MAILS_DIR=/tmp/mails DATABASE_URL=… REDIS_URL=… node scripts/shops-test.mjs
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { allMails, codeIn, linkToken, mailCount, mailTo, staffLogin } from './mailbox.mjs';
 
-async function req(method, path, body, token) {
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const require = createRequire(join(ROOT, 'apps/server/package.json'));
+const API = process.env.API || 'http://localhost:3000/api';
+const run = Date.now().toString(36).slice(-6); // names unique per run: the script can run twice on one server
+const em = (n) => `${n}.${run}@shops-test.dz`;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// ---------------------------------------------------------------- helpers
+const results = [];
+const ok = (m) => console.log(`   ✓ ${m}`);
+async function section(name, fn) {
+  console.log(`\n■ ${name}`);
+  try {
+    await fn();
+    results.push([name, null]);
+  } catch (e) {
+    console.log(`   ✗ FAILED: ${e.message}\n${String(e.stack || '').split('\n').slice(1, 4).join('\n')}`);
+    results.push([name, e.message]);
+  }
+}
+async function req(path, body, token, method) {
   const r = await fetch(API + path, {
-    method,
+    method: method ?? (body === undefined ? 'GET' : 'POST'),
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -22,172 +45,559 @@ async function req(method, path, body, token) {
   }
   return { status: r.status, data };
 }
-const post = (path, body, token) => req('POST', path, body ?? {}, token);
-const rpc = (token, name, body) => post(`/rpc/${name}`, body ?? {}, token);
-function check(cond, label, extra) {
-  console.log(`${cond ? '✓' : '✗'} ${label}${!cond && extra !== undefined ? ` — ${JSON.stringify(extra).slice(0, 300)}` : ''}`);
-  if (!cond) failed++;
+/** The answer, or an error carrying the status and the answer. */
+async function must(path, body, token) {
+  const r = await req(path, body, token);
+  if (r.status >= 300) throw Object.assign(new Error(`${path} → ${r.status} ${JSON.stringify(r.data).slice(0, 300)}`), { status: r.status, data: r.data });
+  return r.data;
 }
-const step = (s) => console.log(`→ ${s}`);
+const rpc = (token, name, input = {}) => must(`/rpc/${name}`, input, token);
+let P; // the control room's token
+const prpc = (name, input = {}) => must(`/platform/rpc/${name}`, input, P);
+/** The call must fail (with this status, and a message matching re). */
+async function fails(p, status, re) {
+  try {
+    await p;
+  } catch (e) {
+    if (status) assert.equal(e.status, status, e.message);
+    if (re) assert.match(JSON.stringify(e.data ?? e.message), re);
+    return e;
+  }
+  assert.fail(`expected a failure${status ? ` (${status})` : ''}`);
+}
+const login = (email, password, shop) => must('/auth/login', { email, password, ...(shop ? { shop } : {}) });
 
-// ---------------------------------------------------------------- shop #1 and its demo accounts still log in
-step('shop #1: its demo accounts log in as before');
-let r = await post('/auth/login', { email: 'admin@demo.pilotix.dz', password: 'demo-pilotix' });
-check(r.status === 201 && r.data.token && !r.data.choose, 'demo admin opens shop #1 directly', r.data);
-const ADMIN1 = r.data.token;
-r = await post('/auth/login', { email: `nobody-${run}@x.dz`, password: 'whatever-123' });
-check(r.status === 401 && r.data.message === 'Email ou mot de passe incorrect', 'an unknown e-mail gets the same answer as a wrong password', r.data);
+const ctx = {};
+let plans;
+
+// ---------------------------------------------------------------- shop #1
+await section('Shop #1: its demo accounts log in as before; an unknown e-mail gets the same answer as a wrong password', async () => {
+  const r = await login('admin@demo.pilotix.dz', 'demo-pilotix');
+  assert.ok(r.token && !r.pick, 'the demo admin opens shop #1 directly');
+  ctx.admin1 = r.token;
+  ok('demo admin → shop #1');
+  const e = await fails(login(`nobody-${run}@x.dz`, 'whatever-123'), 401);
+  assert.equal(e.data.message, 'Email ou mot de passe incorrect');
+  ok('unknown e-mail → « Email ou mot de passe incorrect »');
+});
+
+// ---------------------------------------------------------------- the control room
+await section('Control room: two-step login (a code by e-mail, « remember this device »)', async () => {
+  // a demo server has no Pilotix staff (demo accounts never become staff): one is added for the test
+  const { Pool } = require('pg');
+  const bcrypt = require(createRequire(join(ROOT, 'packages/core/package.json')).resolve('bcryptjs'));
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  ctx.staff = { email: `owner-${run}@pilotix.test`, password: 'Owner-Password-1' };
+  await pool.query(`INSERT INTO platform.staff (name, email, password_hash, role) VALUES ('Owner Shops Test', $1, $2, 'owner')`, [ctx.staff.email, await bcrypt.hash(ctx.staff.password, 10)]);
+  await pool.end();
+  const n0 = mailCount();
+  const r1 = await must('/platform/auth/login', ctx.staff);
+  assert.equal(r1.step, 'code', 'two-step is on when the server sends e-mails');
+  assert.ok(!r1.token, 'no token before the code');
+  assert.match(r1.email, /^o•+@pilotix\.test$/);
+  ok(`password accepted → the « code » step, the e-mail shown masked (${r1.email})`);
+  const code = codeIn(await mailTo(ctx.staff.email, n0));
+  assert.ok(code, 'a 6-digit code in the e-mail');
+  await fails(must('/platform/auth/code', { ticket: r1.ticket, code: code === '000000' ? '111111' : '000000' }), 401, /incorrect/i);
+  ok('a wrong code is refused');
+  const r2 = await must('/platform/auth/code', { ticket: r1.ticket, code, remember: true });
+  assert.ok(r2.token && r2.device);
+  P = r2.token;
+  ok('the right code → logged in, this device remembered');
+  await fails(must('/platform/auth/code', { ticket: r1.ticket, code }), 401);
+  ok('a code works once');
+  const r3 = await must('/platform/auth/login', { ...ctx.staff, device: r2.device });
+  assert.ok(r3.token, 'a remembered device needs no code');
+  ok('remembered device → straight in');
+  await fails(must('/platform/auth/login', { ...ctx.staff, password: 'Wrong-Password-1' }), 401);
+  ok('a wrong password is refused');
+  const r4 = await staffLogin(API, ctx.staff.email, ctx.staff.password);
+  assert.ok(r4.data.token);
+});
+
+await section('Control room: settings (sign-ups, reminders, referral, company, terms) and the public terms page', async () => {
+  const d = await prpc('p.dashboard');
+  for (const k of ['signups', 'messages', 'overLimit', 'counts', 'mrr']) assert.ok(k in d, `dashboard has ${k}`);
+  const s = await prpc('p.settings.get');
+  for (const k of ['signup', 'reminders', 'referral', 'security', 'company', 'legal']) assert.ok(k in s, `settings has ${k}`);
+  await prpc('p.settings.save', {
+    signup: { open: true, maxStores: 3 },
+    reminders: { on: true, daysBefore: 3 },
+    referral: { on: true, months: 1 },
+    company: { name: 'Pilotix SARL', address: 'Alger', phone: '0550 00 00 00', email: 'contact@pilotix.test', taxId: '0001234567' },
+    legal: { text: '' },
+  });
+  const s2 = await prpc('p.settings.get');
+  assert.equal(s2.company.name, 'Pilotix SARL');
+  assert.equal(s2.signup.maxStores, 3);
+  assert.equal(s2.security.twoStep, true, 'saving other settings keeps two-step on');
+  ok('settings saved and read back (two-step untouched)');
+  const legal = await must('/legal');
+  assert.equal(legal.company, 'Pilotix SARL');
+  assert.equal(legal.text, '');
+  ok('the terms page answers (standard text, the company’s name)');
+});
+
+await section('Control room: a plan with a yearly price and a limit of drivers', async () => {
+  plans = await prpc('p.plans.list');
+  const pro = plans.find((p) => p.code === 'pro');
+  assert.ok(pro, 'the Pro plan exists');
+  await prpc('p.plans.save', { id: pro.id, name: pro.name, priceMonth: pro.priceMonth, priceYear: pro.priceMonth * 10, maxUsers: pro.maxUsers, maxDrivers: 2, maxOrdersMonth: pro.maxOrdersMonth, description: pro.description ?? '', public: pro.public, active: true, features: pro.features });
+  plans = await prpc('p.plans.list');
+  const pro2 = plans.find((p) => p.code === 'pro');
+  assert.equal(pro2.priceYear, pro.priceMonth * 10);
+  assert.equal(pro2.maxDrivers, 2);
+  ok(`Pro: ${pro2.priceMonth} DA a month, ${pro2.priceYear} DA a year, ${pro2.maxDrivers} drivers`);
+});
+
+await section('A store for a NEW person: invitation e-mail, the owner chooses the password (Pilotix never sees it)', async () => {
+  const n0 = mailCount();
+  const email = em('owner1');
+  const pro = plans.find((p) => p.code === 'pro');
+  const r = await prpc('p.shops.create', { name: `Boutique Invit ${run}`, ownerName: 'Owner Un', ownerEmail: email, ownerPhone: '0550 11 22 33', city: 'Oran', planId: pro.id, trialDays: 14, language: 'fr' });
+  assert.equal(r.invited, true);
+  assert.ok(!('mail' in r) && !('password' in r) && !JSON.stringify(r).includes('token'), 'no password, no link in the answer');
+  ok(`store #${r.id} « ${r.slug} »: the answer carries no password and no link`);
+  const m = await mailTo(email, n0);
+  const tok = linkToken(m, 'invite');
+  ok(`invitation e-mail: « ${m.subject} »`);
+  assert.equal((await must(`/auth/link/${tok}`)).kind, 'invite');
+  await fails(login(email, 'Anything-123'), 401);
+  ok('before choosing a password nobody can log in');
+  await fails(must('/auth/reset', { token: tok, password: 'short' }), 400);
+  await must('/auth/reset', { token: tok, password: 'Owner1-Password!' });
+  assert.equal((await must(`/auth/link/${tok}`)).kind, null);
+  ok('the owner chose a password with the link; the link is used up');
+  const l = await login(email, 'Owner1-Password!');
+  assert.ok(l.token, 'one store → straight in');
+  assert.equal(l.session.shop.id, r.id);
+  assert.equal(l.session.shop.owner, true);
+  assert.equal(l.session.shop.state, 'trial');
+  ctx.owner1 = { email, password: 'Owner1-Password!', shopId: r.id, slug: r.slug, name: `Boutique Invit ${run}` };
+  ok('the owner logs in to the store, as its owner, on trial');
+  const det = await prpc('p.shops.get', { id: r.id });
+  assert.equal(det.ownerAccount.email, email);
+  assert.equal(det.ownerAccount.invited, false);
+  assert.ok(!('admins' in det) && !JSON.stringify(det).includes('password_hash'));
+  ok('the control room shows the owner (invitation accepted) and numbers only');
+  await fails(must(`/platform/open/${r.id}`, {}, P), 404);
+  ok('« open the store as its admin » is gone (404)');
+});
+
+await section('A store for a person who ALREADY has an account: added to their stores, their password unchanged', async () => {
+  const n0 = mailCount();
+  const ess = plans.find((p) => p.code === 'essentiel');
+  const r = await prpc('p.shops.create', { name: `Deuxième Owner ${run}`, ownerName: 'Owner Un', ownerEmail: ctx.owner1.email, planId: ess.id, trialDays: 7, language: 'fr' });
+  assert.equal(r.invited, false);
+  const m = await mailTo(ctx.owner1.email, n0);
+  assert.ok(!/#\/invite\//.test(m.text), 'no invitation link for an existing account');
+  ok(`store #${r.id} added to the account; the e-mail « ${m.subject} » has no link`);
+  const l = await login(ctx.owner1.email, ctx.owner1.password);
+  assert.equal(l.pick, true, 'two stores → the picker');
+  assert.equal(l.stores.length, 2);
+  assert.ok(l.stores.every((s) => s.owner));
+  ok(`the usual password → the picker: ${l.stores.map((s) => s.name).join(' / ')}`);
+  const e1 = await must('/auth/pick', { ticket: l.ticket, shop: r.id });
+  assert.equal(e1.session.shop.id, r.id);
+  const e2 = await must('/auth/switch', { shop: ctx.owner1.shopId }, e1.token);
+  assert.equal(e2.session.shop.id, ctx.owner1.shopId);
+  ok('the picker opens a store; « Changer de boutique » needs no password');
+  assert.equal((await must('/auth/stores', undefined, e2.token)).length, 2);
+  const primary = (await prpc('p.shops.list', {})).find((s) => s.primary);
+  await fails(must('/auth/switch', { shop: primary.id }, e2.token), 403);
+  ok('no way into a store where one has no account');
+  await fails(must('/auth/pick', { ticket: 'not-a-ticket', shop: r.id }), 401);
+  ctx.owner1.second = r.id;
+  ctx.owner1.token = e2.token;
+});
+
+await section('Invitation sent again', async () => {
+  await fails(prpc('p.shops.resendInvite', { id: ctx.owner1.shopId }), 400, /déjà choisi/);
+  ok('an owner who chose a password already: refused');
+  const n0 = mailCount();
+  const ess = plans.find((p) => p.code === 'essentiel');
+  const r = await prpc('p.shops.create', { name: `Pas Encore ${run}`, ownerName: 'Owner Deux', ownerEmail: em('owner2'), planId: ess.id, trialDays: 14, language: 'ar' });
+  await mailTo(em('owner2'), n0);
+  const n1 = mailCount();
+  const rs = await prpc('p.shops.resendInvite', { id: r.id });
+  assert.ok(!JSON.stringify(rs).includes('token'));
+  const m = await mailTo(em('owner2'), n1);
+  linkToken(m, 'invite');
+  ok(`invitation sent again (in Arabic: « ${m.subject} »)`);
+  ctx.owner2 = { shopId: r.id };
+});
 
 // ---------------------------------------------------------------- sign-up
-step('sign-up');
-r = await req('GET', '/auth/signup');
-check(r.status === 200 && typeof r.data.open === 'boolean', 'sign-up info', r.data);
-if (!r.data.open) {
-  console.log('Sign-up is closed on this server: the rest needs it open.');
-  process.exit(1);
-}
-const shopA = { shopName: `Bijoux ${run}`, name: 'Sara', email: `sara-${run}@bijoux.dz`, phone: '0550 11 22 33', password: 'Sara-Password-1', website: '', elapsed: 9000 };
-r = await post('/auth/slug', { name: shopA.shopName });
-check(r.data.available && r.data.slug === `bijoux-${run}`, 'the shop name gives a free address', r.data);
-const slugA = r.data.slug;
-check((await post('/auth/slug', { slug: 'api' })).data.valid === false, 'a word of the app is never a shop name');
-check((await post('/auth/signup', { ...shopA, website: 'http://spam.example' })).status === 400, 'a robot filling the hidden field is refused');
-check((await post('/auth/signup', { ...shopA, elapsed: 800 })).status === 400, 'a form sent faster than a person types is refused');
-check((await post('/auth/signup', { ...shopA, password: 'short' })).status === 400, 'a short password is refused');
-r = await post('/auth/signup', { ...shopA, slug: slugA });
-check(r.status === 201 && r.data.session?.isAdmin && r.data.session.shop?.slug === slugA && r.data.session.shop.state === 'trial', 'sign-up: the shop on trial, its owner logged in as administrator', r.data);
-const SARA = r.data.token;
-const shopAId = r.data.session?.shop?.id;
-r = await post('/auth/signup', { ...shopA, email: `other-${run}@x.dz`, slug: slugA });
-check(r.status === 400 && /déjà pris/.test(r.data.message), 'the same address for another shop is refused', r.data);
-check((await post('/auth/slug', { slug: slugA })).data.available === false, 'the address is taken now');
+await section('« Créer ma boutique »: the e-mail link makes the store, on trial, with its referral', async () => {
+  const info = await must('/auth/signup');
+  assert.equal(info.open, true);
+  ok(`sign-up open, ${info.trialDays} days of trial`);
+  const taken = await must(`/auth/store-name?name=${encodeURIComponent(ctx.owner1.name)}`);
+  assert.equal(taken.slug, `${ctx.owner1.slug}-2`, 'a taken name gets the next free link');
+  const takenSlug = await must(`/auth/store-name?name=x&slug=${ctx.owner1.slug}`);
+  assert.equal(takenSlug.free, false);
+  for (const w of ['platform', 'pilotix', 'api', 'support']) assert.equal((await must(`/auth/store-name?name=x&slug=${w}`)).free, false, `${w} is reserved`);
+  assert.equal((await must('/auth/store-name?name=Pilotix')).slug, 'pilotix-boutique');
+  ok(`store names: a taken one → ${taken.slug}; a taken link → « ${takenSlug.reason} »; Pilotix’s words refused`);
+  const code = (await prpc('p.shops.get', { id: ctx.owner1.shopId })).referralCode;
+  assert.ok(code, 'every store has a referral code');
+  await fails(must('/auth/signup', { name: 'X Y', email: em('bad'), password: 'Password-123', storeName: 'Abc', language: 'fr', terms: false }), 400);
+  ok('terms not accepted → refused');
+  await fails(must('/auth/signup', { name: 'Sara Test', email: em('bad2'), password: 'Password-123', storeName: `Ref Bad ${run}`, language: 'fr', referral: 'ZZZZZZ', terms: true }), 400, /parrainage/i);
+  ok('an unknown referral code → a clear message');
+  const n0 = mailCount();
+  const email = em('signup1');
+  await must('/auth/signup', { name: 'Sara Signup', email, password: 'Signup-Password-1', phone: '0770 00 11 22', storeName: `Nouvelle Boutique ${run}`, language: 'fr', referral: code, terms: true });
+  const m = await mailTo(email, n0);
+  const tok = linkToken(m, 'signup');
+  ok(`confirmation e-mail: « ${m.subject} »`);
+  await fails(login(email, 'Signup-Password-1'), 401);
+  ok('nothing exists before the link is opened');
+  assert.ok((await prpc('p.signups.list')).pending.some((p) => p.email === email), 'waiting in the control room');
+  ok('control room › Inscriptions shows it waiting');
+  const c = await must('/auth/signup/confirm', { token: tok });
+  assert.ok(c.token);
+  assert.equal(c.session.shop.owner, true);
+  assert.equal(c.session.shop.state, 'trial');
+  ctx.signup1 = { email, password: 'Signup-Password-1', shopId: c.session.shop.id, token: c.token, slug: c.session.shop.slug };
+  ok(`the link → store #${c.session.shop.id} made, its owner logged in, on trial`);
+  await fails(must('/auth/signup/confirm', { token: tok }), 400);
+  ok('the link works once');
+  assert.ok((await prpc('p.signups.list')).made.some((x) => x.id === ctx.signup1.shopId));
+  assert.equal((await prpc('p.shops.get', { id: ctx.signup1.shopId })).referredBy?.id, ctx.owner1.shopId);
+  ok('control room: in « made », brought by the first store');
+  const n1 = mailCount();
+  await must('/auth/signup', { name: 'Owner Un', email: ctx.owner1.email, password: 'Whatever-123', storeName: `Doublon ${run}`, language: 'fr', terms: true });
+  const ex = await mailTo(ctx.owner1.email, n1);
+  assert.ok(!/#\/signup\//.test(ex.text));
+  ok(`an e-mail that has an account signs up → « ${ex.subject} » (log in instead), nothing made`);
+});
 
-// ---------------------------------------------------------------- the new shop: its users
-step('the new shop adds users, who log in and see only their shop');
-r = await rpc(SARA, 'users.create', { name: 'Agent Confirmation', email: `agent-${run}@bijoux.dz`, password: 'Agent-Pass-1', roles: ['confirmation'], language: 'fr' });
-check(r.status === 201 && r.data.id, 'the owner creates a confirmation agent', r.data);
-const agentId = r.data.id;
-r = await rpc(SARA, 'users.create', { name: 'Depot', email: `depot-${run}@bijoux.dz`, password: 'Depot-Pass-1', roles: ['depot'], language: 'ar' });
-check(r.status === 201, 'the owner creates a depot account', r.data);
-r = await rpc(SARA, 'users.create', { name: 'Agent Confirmation', email: `agent-${run}@bijoux.dz`, password: 'Agent-Pass-1', roles: ['confirmation'], language: 'fr' });
-check(r.status === 400, 'the same e-mail twice in one shop is refused', r.data);
-r = await post('/auth/login', { email: `agent-${run}@bijoux.dz`, password: 'Agent-Pass-1' });
-check(r.status === 201 && r.data.session?.shop?.slug === slugA && !r.data.session.isAdmin, 'the agent logs in to the new shop', r.data);
-const AGENT = r.data.token;
-check((await rpc(AGENT, 'users.create', { name: 'X Y', email: `x-${run}@y.dz`, password: '12345678', roles: ['admin'] })).status === 403, 'the agent cannot create accounts');
-r = await rpc(SARA, 'users.list', {});
-check(r.status === 201 && r.data.length === 3, 'the shop has its 3 accounts, nobody of shop #1', r.data.length);
+await section('« Ajouter une boutique »: stores per person, and an e-mail check for accounts made by a store', async () => {
+  const a = await must('/auth/add-store', { name: `Deuxième ${run}` }, ctx.signup1.token);
+  assert.equal(a.session.shop.owner, true);
+  const b = await must('/auth/add-store', { name: `Troisième ${run}` }, a.token);
+  await fails(must('/auth/add-store', { name: `Quatrième ${run}` }, b.token), 400, /3 boutiques/);
+  ok('a 2nd and a 3rd store; the 4th is refused (3 per person)');
+  await prpc('p.shops.update', { id: ctx.signup1.shopId, ownerMaxStores: 4 });
+  const d = await must('/auth/add-store', { name: `Quatrième ${run}` }, b.token);
+  ctx.signup1.fourth = d.session.shop.id;
+  ok('the control room allows this owner 4 → the 4th works');
+  // an account made by a store's admin is not proven: adding a store asks to confirm the e-mail first
+  const admin = await login(ctx.owner1.email, ctx.owner1.password, ctx.owner1.shopId);
+  const staff = em('staff1');
+  await rpc(admin.token, 'users.create', { name: 'Staff Un', email: staff, password: 'Staff1-Password', roles: ['admin'], language: 'fr' });
+  const st = await login(staff, 'Staff1-Password');
+  await fails(must('/auth/add-store', { name: `Staff Store ${run}` }, st.token), 403, /VERIFY_EMAIL/);
+  ok('an account made by an admin → « confirm your e-mail first »');
+  const n0 = mailCount();
+  await must('/auth/verify/send', {}, st.token);
+  await must('/auth/verify', { token: linkToken(await mailTo(staff, n0), 'verify') });
+  const s2 = await must('/auth/add-store', { name: `Staff Store ${run}` }, st.token);
+  assert.equal(s2.session.shop.owner, true);
+  ok('the e-mail confirmed with its link → the store is made');
+  ctx.staff1 = { email: staff, password: 'Staff1-Password' };
+});
 
-// ---------------------------------------------------------------- shops never see each other
-step('shops never see each other’s data');
-r = await rpc(SARA, 'catalog.saveProduct', { name: 'Bague argent', sku: 'BAG-1', price: 4500, cost: 1500, variants: [] });
-check(r.status === 201, 'a product in the new shop', r.data);
-const prodId = r.data.id;
-r = await rpc(AGENT, 'orders.create', { customerName: 'Client Sétif', phone: '0661998877', wilayaId: 19, commune: 'Sétif', items: [{ productId: prodId, variantId: null, qty: 1 }] });
-check(r.status === 201 && r.data.ref, 'the agent creates an order in the new shop', r.data);
-const orderRef = r.data.ref;
-r = await rpc(SARA, 'orders.list', { pageSize: 50 });
-check(r.data.total === 1 && r.data.rows[0].ref === orderRef, 'the new shop sees its one order only', r.data.total);
-r = await rpc(ADMIN1, 'orders.list', { q: '0661998877', pageSize: 5 });
-check(r.status === 201 && r.data.total === 0, 'shop #1 does not see the new shop’s order', r.data.total);
-r = await rpc(ADMIN1, 'catalog.products', {});
-check(!r.data.some((p) => p.sku === 'BAG-1'), 'shop #1 does not see the new shop’s product');
+await section('The team: the owner is protected; an admin sets passwords only of people in this store alone', async () => {
+  const T = (await login(ctx.owner1.email, ctx.owner1.password, ctx.owner1.shopId)).token;
+  const list = await rpc(T, 'users.list', {});
+  const staff = list.find((u) => u.email === ctx.staff1.email);
+  const me = list.find((u) => u.email === ctx.owner1.email);
+  assert.ok(staff && me);
+  const st = await login(ctx.staff1.email, ctx.staff1.password, ctx.owner1.shopId);
+  await fails(rpc(st.token, 'users.update', { id: me.id, name: 'Hacked' }), 403, /propriétaire/);
+  await fails(rpc(st.token, 'admin.users.resetPassword', { id: me.id }), 403);
+  ok('another admin cannot change or reset the owner');
+  await fails(rpc(T, 'users.update', { id: staff.id, password: 'New-Password-99' }), 403, /autre boutique/);
+  ok('a person who works in another store too: the admin cannot set their password');
+  const solo = em('solo');
+  await rpc(T, 'users.create', { name: 'Solo', email: solo, password: 'Solo-Password-1', roles: ['confirmation'], language: 'fr' });
+  const soloU = (await rpc(T, 'users.list', {})).find((u) => u.email === solo);
+  await rpc(T, 'users.update', { id: soloU.id, password: 'Solo-Password-2' });
+  assert.ok((await login(solo, 'Solo-Password-2')).token);
+  ok('a person in this store alone: the admin sets the password, and it works');
+  const r = await rpc(T, 'users.create', { name: 'Sara', email: ctx.signup1.email, password: 'Ignored-Password-1', roles: ['confirmation'], language: 'fr' });
+  assert.equal(r.existingAccount, true);
+  const sl = await login(ctx.signup1.email, ctx.signup1.password);
+  assert.equal(sl.pick, true);
+  assert.equal(sl.stores.length, 5);
+  await fails(login(ctx.signup1.email, 'Ignored-Password-1'), 401);
+  ok('someone who has an account joins with their own password (the one typed by the admin is ignored)');
+  await fails(rpc(T, 'me.delete', { password: ctx.owner1.password, email: ctx.owner1.email }), 400, /propriétaire/);
+  ok('the owner cannot delete their own account (only the whole store)');
+  ctx.solo = { email: solo, password: 'Solo-Password-2', id: soloU.id };
+  ctx.owner1.token = T;
+});
 
-// ---------------------------------------------------------------- landing pages, llms.txt
-step('landing pages and llms.txt of the new shop');
-r = await rpc(SARA, 'landing.save', { productId: prodId, slug: 'bague-argent', title: 'خاتم فضة', color: '#0f766e', price: 4500, description: 'خاتم فضة عيار 925' });
-check(r.status === 201, 'a landing page in the new shop', r.data);
-let page = await fetch(`${API}/s/${slugA}/bague-argent`);
-let html = await page.text();
-// its own address (canonical) is written when the server knows its public address (PUBLIC_URL)
-check(page.status === 200 && html.includes('خاتم فضة') && (!html.includes('rel="canonical"') || html.includes(`/${slugA}/bague-argent"`)), 'the page at <site>/<store>/<page>', page.status);
-page = await fetch(`${API}/s/${slugA}/llms.txt`);
-const llms = await page.text();
-check(page.status === 200 && llms.includes(`# Bijoux ${run}`) && llms.includes(`/${slugA}/bague-argent`), 'the shop’s llms.txt', llms.slice(0, 200));
-page = await fetch(`${API}/llms.txt`);
-check((await page.text()).includes(`/api/s/${slugA}/llms.txt`), 'the platform’s llms.txt links the new shop');
+await section('Passwords: « Mot de passe oublié » and Mon profil change it in every store; old sessions end', async () => {
+  const n0 = mailCount();
+  await must('/auth/forgot', { email: ctx.signup1.email });
+  const tok = linkToken(await mailTo(ctx.signup1.email, n0), 'reset');
+  await must('/auth/reset', { token: tok, password: 'Signup-New-Pass-1' });
+  const l = await login(ctx.signup1.email, 'Signup-New-Pass-1');
+  assert.equal(l.pick, true);
+  for (const s of l.stores) assert.equal((await must('/auth/pick', { ticket: l.ticket, shop: s.id })).session.profile.email, ctx.signup1.email);
+  await fails(login(ctx.signup1.email, ctx.signup1.password), 401);
+  await fails(rpc(ctx.signup1.token, 'me.get'), 401);
+  ok(`the new password opens all ${l.stores.length} stores; the old one and the old sessions stop at once`);
+  const n1 = mailCount();
+  assert.equal((await must('/auth/forgot', { email: em('nobody') })).ok, true);
+  await sleep(800);
+  assert.equal(mailCount(), n1);
+  ok('an unknown e-mail: the same answer, no e-mail');
+  const e = await must('/auth/pick', { ticket: l.ticket, shop: ctx.signup1.shopId });
+  const ch = await rpc(e.token, 'me.password', { current: 'Signup-New-Pass-1', next: 'Signup-Pass-3' });
+  assert.ok(ch.token, 'this session gets a fresh token');
+  assert.equal((await login(ctx.signup1.email, 'Signup-Pass-3')).stores.length, 5);
+  await fails(rpc(e.token, 'me.get'), 401);
+  ok('Mon profil › new password: every store follows, the other sessions end');
+  ctx.signup1.password = 'Signup-Pass-3';
+  ctx.signup1.token = (await must('/auth/pick', { ticket: (await login(ctx.signup1.email, 'Signup-Pass-3')).ticket, shop: ctx.signup1.shopId })).token;
+});
 
-// ---------------------------------------------------------------- one e-mail, several shops
-step('one person in several shops: the store picker');
-const MULTI = `multi-${run}@x.dz`;
-r = await rpc(SARA, 'users.create', { name: 'Multi', email: MULTI, password: 'Same-Pass-123', roles: ['confirmation'], language: 'fr' });
-check(r.status === 201, 'shop A gives Multi an account', r.data);
-const multiInA = r.data.id;
-r = await post('/auth/signup', { shopName: `Mode ${run}`, name: 'Yasmine', email: `yas-${run}@mode.dz`, password: 'Yasmine-Pass-1', website: '', elapsed: 9000 });
-check(r.status === 201, 'a second shop signs up', r.data);
-const YAS = r.data.token;
-const slugB = r.data.session?.shop?.slug;
-r = await rpc(YAS, 'users.create', { name: 'Multi', email: MULTI, password: 'Same-Pass-123', roles: ['depot'], language: 'fr' });
-check(r.status === 201, 'shop B gives Multi an account too (same e-mail, same password)', r.data);
-r = await post('/auth/signup', { shopName: `Tech ${run}`, name: 'Walid', email: `walid-${run}@tech.dz`, password: 'Walid-Pass-123', website: '', elapsed: 9000 });
-const WALID = r.data.token;
-const slugC = r.data.session?.shop?.slug;
-r = await rpc(WALID, 'users.create', { name: 'Multi', email: MULTI, password: 'Other-Pass-456', roles: ['suivi'], language: 'fr' });
-check(r.status === 201, 'shop C gives Multi an account with ANOTHER password', r.data);
-r = await post('/auth/login', { email: MULTI, password: 'Same-Pass-123' });
-check(r.status === 201 && r.data.choose?.length === 2 && !r.data.token, 'the password opens shops A and B: the picker, not shop C', r.data);
-const ticket = r.data.ticket;
-const ids = Object.fromEntries((r.data.choose ?? []).map((c) => [c.slug, c.id]));
-r = await post('/auth/enter', { shop: ids[slugB], ticket });
-check(r.status === 201 && r.data.session.shop.slug === slugB && r.data.session.roles.includes('depot'), 'the picker opens shop B with Multi’s role there', r.data);
-const MULTI_B = r.data.token;
-r = await post('/auth/shops', { ticket }, MULTI_B);
-const mine = r.data.shops ?? [];
-check(mine.length === 3 && mine.find((s) => s.current)?.slug === slugB && mine.find((s) => s.slug === slugC)?.open === false, '« Mes boutiques »: the 3 shops, shop C asks its own password', r.data);
-const idC = mine.find((s) => s.slug === slugC)?.id;
-check((await post('/auth/enter', { shop: idC, ticket })).status === 401, 'the login’s proof never opens shop C');
-check((await post('/auth/enter', { shop: idC, email: MULTI, password: 'Same-Pass-123' })).status === 401, 'shop C refuses the other shops’ password');
-r = await post('/auth/enter', { shop: idC, email: MULTI, password: 'Other-Pass-456', ticket });
-check(r.status === 201 && r.data.session.shop.slug === slugC, 'shop C opens with its own password', r.data);
-r = await post('/auth/login', { email: MULTI, password: 'Other-Pass-456' });
-check(r.status === 201 && r.data.token && r.data.session.shop.slug === slugC, 'that password alone opens shop C directly', r.data);
+await section('An account turned off: out of that store at once', async () => {
+  const S = (await login(ctx.solo.email, ctx.solo.password)).token;
+  await rpc(ctx.owner1.token, 'users.update', { id: ctx.solo.id, active: false });
+  await fails(rpc(S, 'me.get'), 401);
+  const l = await login(ctx.solo.email, ctx.solo.password);
+  assert.equal(l.pick, true);
+  assert.equal(l.stores.length, 0);
+  ok('the session ends; the login finds no store left (« create your store »)');
+});
 
-// ---------------------------------------------------------------- passwords across shops
-step('a password change follows in the shops that had the same one');
-r = await post('/auth/enter', { shop: ids[slugA], ticket });
-const MULTI_A = r.data.token;
-r = await rpc(MULTI_A, 'me.password', { current: 'Same-Pass-123', next: 'New-Pass-7890' });
-check(r.status === 201 && r.data.token, 'Multi changes the password in shop A', r.data);
-r = await post('/auth/login', { email: MULTI, password: 'New-Pass-7890' });
-check(r.data.choose?.length === 2, 'the new password opens A and B', r.data);
-check((await post('/auth/login', { email: MULTI, password: 'Same-Pass-123' })).status === 401, 'the old password opens nothing');
-// accounts are read again at most every 30 s (as for one shop): the other sessions end within that time
-await new Promise((res) => setTimeout(res, 31_000));
-check((await rpc(MULTI_B, 'me.get')).status === 401, 'the old session in shop B ended (within 30 s)');
-r = await post('/auth/login', { email: MULTI, password: 'Other-Pass-456' });
-check(r.data.session?.shop?.slug === slugC, 'shop C kept its own password');
+// ---------------------------------------------------------------- stores never see each other
+await section('Stores never see each other’s data', async () => {
+  const p = await rpc(ctx.owner1.token, 'catalog.saveProduct', { name: 'Bague argent', sku: `BAG-${run}`, price: 4500, cost: 1500, variants: [] });
+  ctx.product = p.id ?? p.product?.id;
+  assert.ok(ctx.product);
+  const o = await rpc(ctx.owner1.token, 'orders.create', { customerName: 'Client Sétif', phone: '0661998877', wilayaId: 19, commune: 'Sétif', items: [{ productId: ctx.product, variantId: null, qty: 1 }] });
+  assert.ok(o.ref);
+  const mine = await rpc(ctx.owner1.token, 'orders.list', { pageSize: 50 });
+  assert.ok(mine.rows.some((r) => r.ref === o.ref));
+  ok(`a product and an order (${o.ref}) in the first store`);
+  for (const [who, T] of [
+    ['another store', ctx.signup1.token],
+    ['shop #1', ctx.admin1],
+  ]) {
+    assert.equal((await rpc(T, 'orders.list', { q: '0661998877', pageSize: 5 })).total, 0, `${who} sees the order`);
+    assert.ok(!(await rpc(T, 'catalog.products', {})).some((x) => x.sku === `BAG-${run}`), `${who} sees the product`);
+  }
+  ok('neither another store nor shop #1 sees them');
+});
 
-// ---------------------------------------------------------------- a deactivated account
-step('an account turned off in one shop');
-r = await rpc(SARA, 'users.update', { id: multiInA, active: false });
-check(r.status === 201, 'shop A turns Multi off', r.data);
-r = await post('/auth/login', { email: MULTI, password: 'New-Pass-7890' });
-check(r.status === 201 && r.data.token && r.data.session.shop.slug === slugB, 'the login now opens shop B only', r.data);
-check((await rpc(MULTI_A, 'me.get')).status === 401, 'Multi’s session in shop A ended');
+await section('Landing pages and llms.txt of a store', async () => {
+  await rpc(ctx.owner1.token, 'landing.save', { productId: ctx.product, slug: 'bague-argent', title: 'خاتم فضة', color: '#0f766e', price: 4500, description: 'خاتم فضة عيار 925' });
+  let page = await fetch(`${API}/s/${ctx.owner1.slug}/bague-argent`);
+  const html = await page.text();
+  assert.equal(page.status, 200);
+  assert.ok(html.includes('خاتم فضة'));
+  ok('the page at <site>/<store>/<page>');
+  page = await fetch(`${API}/s/${ctx.owner1.slug}/llms.txt`);
+  const llms = await page.text();
+  assert.equal(page.status, 200);
+  assert.ok(llms.includes(`# ${ctx.owner1.name}`) && llms.includes(`/${ctx.owner1.slug}/bague-argent`), llms.slice(0, 200));
+  ok('the store’s llms.txt lists its page');
+  assert.ok((await (await fetch(`${API}/llms.txt`)).text()).includes(`/api/s/${ctx.owner1.slug}/llms.txt`));
+  ok('the platform’s llms.txt links the store’s');
+});
 
-// ---------------------------------------------------------------- « Ajouter une boutique »
-step('« Ajouter une boutique » from inside the app');
-r = await post('/shop/add', { shopName: `Bijoux Oran ${run}`, password: 'wrong-password' }, SARA);
-check(r.status === 400, 'a wrong password is refused', r.data);
-r = await post('/shop/add', { shopName: `Bijoux Oran ${run}`, password: shopA.password }, SARA);
-check(r.status === 201 && r.data.session.isAdmin && r.data.session.shop.state === 'trial' && r.data.session.shop.id !== shopAId, 'a second shop for Sara, on trial, Sara its admin', r.data);
-r = await post('/auth/login', { email: shopA.email, password: shopA.password });
-check(r.data.choose?.length === 2, 'Sara’s password now offers her 2 shops', r.data);
-check((await post('/shop/add', { shopName: 'X', password: 'demo-pilotix' }, AGENT)).status === 400, 'an agent with a wrong password cannot add a shop');
+// ---------------------------------------------------------------- limits
+await section('Limits: accounts and drivers (hard), orders per month (soft), « over » in the control room', async () => {
+  const sid = ctx.owner1.shopId;
+  const u0 = (await prpc('p.shops.get', { id: sid })).usage.users;
+  await prpc('p.shops.update', { id: sid, maxUsers: u0 + 2, maxDrivers: 1 });
+  const T = ctx.owner1.token;
+  ok(`${u0} active accounts → limits set to ${u0 + 2} accounts and 1 driver`);
+  await rpc(T, 'users.create', { name: 'Livreur Un', email: em('liv1'), password: 'Livreur-Pass-1', roles: ['livreur'], language: 'fr' });
+  await fails(rpc(T, 'users.create', { name: 'Livreur Deux', email: em('liv2'), password: 'Livreur-Pass-2', roles: ['livreur'], language: 'fr' }), 400, /livreur/i);
+  ok('1 driver allowed → the 2nd is refused');
+  await rpc(T, 'users.create', { name: 'Agent Limite', email: em('lim1'), password: 'Limite-Pass-1', roles: ['confirmation'], language: 'fr' });
+  await fails(rpc(T, 'users.create', { name: 'Trop', email: em('trop'), password: 'Trop-Password-1', roles: ['confirmation'], language: 'fr' }), 400, /comptes actifs/);
+  ok('accounts at the limit → one more is refused with a clear message');
+  const det = await prpc('p.shops.get', { id: sid });
+  assert.equal(det.usage.users, u0 + 2);
+  assert.equal(det.usage.drivers, 1);
+  ok(`the control room’s numbers: ${det.usage.users} accounts, ${det.usage.drivers} driver`);
+  const ess = plans.find((p) => p.code === 'essentiel');
+  const tiny = await prpc('p.plans.save', { name: `Tiny ${run}`, priceMonth: 1000, priceYear: null, maxUsers: null, maxDrivers: null, maxOrdersMonth: 2, description: '', public: false, active: false, features: ess.features });
+  await prpc('p.shops.update', { id: sid, planId: tiny.id });
+  for (let i = 0; i < 3; i++) await rpc(T, 'orders.create', { customerName: `Client ${i}`, phone: `066120000${i}`, wilayaId: 31, commune: 'Oran', items: [{ productId: ctx.product, variantId: null, qty: 1 }] });
+  ok('3 more orders on a plan of 2 a month: none blocked');
+  const me = await rpc(T, 'me.get');
+  assert.equal(me.shop.maxOrdersMonth, 2);
+  assert.ok(me.shop.ordersMonth >= 3, `ordersMonth ${me.shop.ordersMonth}`);
+  ok(`the store knows: ${me.shop.ordersMonth} / ${me.shop.maxOrdersMonth} this month (its banner)`);
+  await prpc('p.shops.get', { id: sid }); // the store's page refreshes its numbers (the list keeps them a minute)
+  assert.ok((await prpc('p.shops.list', { state: 'over' })).some((s) => s.id === sid), 'listed in « over »');
+  assert.ok((await prpc('p.dashboard')).overLimit >= 1);
+  ok('control room: in « Au-dessus des limites », counted on the dashboard');
+});
+
+// ---------------------------------------------------------------- payments
+await section('Payments: numbered receipts, receipt by e-mail, the referral reward (a free month)', async () => {
+  const end = (s) => new Date(s.paidUntil ?? s.trialEndsAt).getTime();
+  const before = await prpc('p.shops.get', { id: ctx.owner1.shopId });
+  const pro = plans.find((p) => p.code === 'pro');
+  const n0 = mailCount();
+  const pay = await prpc('p.payments.add', { shopId: ctx.signup1.shopId, amount: pro.priceMonth, method: 'baridimob', months: 1, reference: 'BM-TEST', planId: pro.id });
+  assert.match(pay.receiptNo, /^PX-\d{4}-\d{4}$/);
+  assert.ok(pay.rewarded, 'the store that brought it is rewarded at its first payment');
+  ok(`payment saved, receipt ${pay.receiptNo}`);
+  assert.ok(end(await prpc('p.shops.get', { id: ctx.owner1.shopId })) > end(before), 'the referrer got time');
+  const rm = await mailTo(ctx.owner1.email, n0, /mois|month|شهر/i);
+  ok(`the referrer’s free month, and its e-mail « ${rm.subject} »`);
+  const pay2 = await prpc('p.payments.add', { shopId: ctx.signup1.shopId, amount: pro.priceYear ?? pro.priceMonth * 12, method: 'ccp', months: 12, planId: pro.id });
+  assert.ok(!pay2.rewarded, 'only the first payment rewards');
+  assert.equal(Number(pay2.receiptNo.slice(-4)), Number(pay.receiptNo.slice(-4)) + 1);
+  ok(`a second payment (a year) → ${pay2.receiptNo}, no second reward`);
+  const rc = await prpc('p.payments.receipt', { id: pay2.id });
+  assert.equal(rc.receiptNo, pay2.receiptNo);
+  assert.equal(rc.company.name, 'Pilotix SARL');
+  const n1 = mailCount();
+  await prpc('p.payments.mailReceipt', { id: pay2.id });
+  const m = await mailTo(ctx.signup1.email, n1);
+  assert.ok(`${m.text} ${m.html}`.includes(pay2.receiptNo));
+  ok(`the receipt e-mailed to the owner: « ${m.subject} »`);
+  await prpc('p.payments.void', { id: pay2.id, reason: 'Test annulation' });
+  assert.ok((await prpc('p.payments.receipt', { id: pay2.id })).voidAt);
+  ok('cancelled → the receipt says so');
+  const ref = await rpc(ctx.owner1.token, 'me.referrals');
+  assert.equal(ref.platform, true);
+  assert.match(String(ref.link), /#\/inscription\/[A-Z0-9]+$/);
+  assert.ok(ref.friends.some((f) => f.status === 'subscribed'));
+  ok(`the store’s « Parrainage »: ${ref.link}, ${ref.friends.length} store(s) brought, ${ref.totals.months} month(s) earned`);
+});
+
+// ---------------------------------------------------------------- messages
+await section('« Contacter Pilotix »: a store writes, Pilotix answers (by e-mail too), unread dots, closed', async () => {
+  const T = ctx.signup1.token;
+  const t1 = await must('/support', { subject: 'Question bon de livraison', body: 'Bonjour, comment imprimer 2 bons par page ?' }, T);
+  assert.ok((await prpc('p.dashboard')).messages >= 1);
+  assert.ok((await prpc('p.support.list', { status: 'open' })).find((x) => x.id === t1.id)?.unreadStaff);
+  ok(`the store’s admin wrote (#${t1.id}); the control room shows it unread`);
+  assert.equal((await prpc('p.support.get', { id: t1.id })).messages.length, 1);
+  const n0 = mailCount();
+  await prpc('p.support.reply', { id: t1.id, body: 'Bonjour ! Dans Réglages › Impression, choisissez 2 par page.' });
+  const m = await mailTo(ctx.signup1.email, n0);
+  ok(`the answer goes by e-mail too: « ${m.subject} »`);
+  assert.ok((await rpc(T, 'me.get')).shop.supportUnread >= 1);
+  assert.equal((await must(`/support/${t1.id}`, undefined, T)).messages.length, 2);
+  assert.equal((await rpc(T, 'me.get')).shop.supportUnread, 0);
+  ok('the store reads the answer; its unread dot goes away');
+  await must(`/support/${t1.id}`, { body: 'Merci beaucoup !' }, T);
+  await prpc('p.support.setStatus', { id: t1.id, status: 'closed' });
+  assert.equal((await must('/support', undefined, T)).find((x) => x.id === t1.id).status, 'closed');
+  ok('the store answers again; Pilotix closes the conversation');
+  const agent = em('agent');
+  await rpc(T, 'users.create', { name: 'Agent', email: agent, password: 'Agent-Pass-123', roles: ['confirmation'], language: 'fr' });
+  ctx.agent = (await login(agent, 'Agent-Pass-123')).token;
+  await fails(must('/support', undefined, ctx.agent), 403);
+  ok('someone who is not an admin of the store cannot use it');
+});
 
 // ---------------------------------------------------------------- own domain
-step('own domain');
-check((await post('/shop/domain', { domain: 'pas un domaine' }, SARA)).status === 400, 'a wrong domain is refused');
-check((await post('/shop/domain', { domain: `www.${run}.com` }, AGENT)).status === 403, 'only the shop’s administrator sets it');
-r = await post('/shop/domain', { domain: `https://WWW.Bijoux-${run}.com/` }, SARA);
-check(r.status === 201 && r.data.domain === `www.bijoux-${run}.com` && r.data.status === 'pending', 'the domain is cleaned and waits for its DNS', r.data);
-check((await post('/shop/domain', { domain: `www.bijoux-${run}.com` }, YAS)).status === 400, 'another shop cannot take it');
-check((await fetch(`${API}/domain-check?domain=www.bijoux-${run}.com`)).status === 404, 'no certificate before the DNS points here');
-r = await post('/shop/domain/get', {}, SARA);
-check(r.status === 201 && r.data.domain === `www.bijoux-${run}.com`, 'the shop reads its domain', r.data);
-r = await post('/shop/domain', { domain: null }, SARA);
-check(r.status === 201 && r.data.status === 'none', 'the domain is removed', r.data);
-check((await post('/shop/domain', { domain: `www.bijoux-${run}.com` }, YAS)).status === 201, 'then another shop may use it');
+await section('A store’s own domain for its landing pages', async () => {
+  await fails(must('/shop/domain', { domain: 'pas un domaine' }, ctx.signup1.token), 400);
+  await fails(must('/shop/domain', { domain: `www.${run}.com` }, ctx.agent), 403);
+  ok('a wrong name is refused; only the store’s administrator sets it');
+  const r = await must('/shop/domain', { domain: `https://WWW.Bijoux-${run}.com/` }, ctx.signup1.token);
+  assert.equal(r.domain, `www.bijoux-${run}.com`);
+  assert.equal(r.status, 'pending');
+  ok('the name is cleaned and waits for its DNS');
+  await fails(must('/shop/domain', { domain: `www.bijoux-${run}.com` }, ctx.owner1.token), 400);
+  assert.equal((await fetch(`${API}/domain-check?domain=www.bijoux-${run}.com`)).status, 404);
+  assert.equal((await must('/shop/domain/get', {}, ctx.signup1.token)).domain, `www.bijoux-${run}.com`);
+  ok('another store cannot take it; no certificate before the DNS points here');
+  assert.equal((await must('/shop/domain', { domain: null }, ctx.signup1.token)).status, 'none');
+  await must('/shop/domain', { domain: `www.bijoux-${run}.com` }, ctx.owner1.token);
+  ok('removed → another store may use it');
+});
 
-console.log(failed ? `\n❌ ${failed} check(s) failed` : '\n✅ All multi-shop checks passed');
+// ---------------------------------------------------------------- deleting a store
+await section('The owner deletes a store (and only the owner)', async () => {
+  const sid = ctx.signup1.fourth;
+  const T = (await login(ctx.signup1.email, ctx.signup1.password, sid)).token;
+  const other = em('admin2');
+  await rpc(T, 'users.create', { name: 'Admin Deux', email: other, password: 'Admin2-Password', roles: ['admin'], language: 'fr' });
+  const a2 = await login(other, 'Admin2-Password');
+  await fails(must('/auth/delete-store', { password: 'Admin2-Password', name: 'x' }, a2.token), 403);
+  ok('another admin of the store cannot delete it');
+  const det = await prpc('p.shops.get', { id: sid });
+  await fails(must('/auth/delete-store', { password: 'Wrong-Password-1', name: det.name }, T), 400, /Mot de passe/);
+  await fails(must('/auth/delete-store', { password: ctx.signup1.password, name: 'wrong name' }, T), 400);
+  ok('a wrong password or a wrong name is refused');
+  const r = await must('/auth/delete-store', { password: ctx.signup1.password, name: det.name }, T);
+  assert.ok(!r.stores.some((s) => s.id === sid));
+  assert.ok(r.next?.token && r.next.session.shop.id !== sid, 'the owner goes on in another store');
+  await rpc(r.next.token, 'me.get');
+  await fails(rpc(T, 'me.get'), 401);
+  assert.equal((await prpc('p.shops.get', { id: sid })).status, 'deleted');
+  ok(`deleted: its sessions end, the owner goes on in « ${r.next.session.shop.name} »`);
+  const gone = await login(other, 'Admin2-Password');
+  assert.equal(gone.pick, true);
+  assert.equal(gone.stores.length, 0);
+  ok('its employee logs in to an empty list (« create your store »)');
+  // from that list: the e-mail check link is asked with the login's ticket (no store to be in)
+  await fails(must('/auth/add-store/ticket', { ticket: gone.ticket, name: `Admin Deux ${run}` }), 403, /VERIFY_EMAIL/);
+  const n0 = mailCount();
+  await must('/auth/verify/send/ticket', { ticket: gone.ticket });
+  await must('/auth/verify', { token: linkToken(await mailTo(other, n0), 'verify') });
+  const mine = await must('/auth/add-store/ticket', { ticket: (await login(other, 'Admin2-Password')).ticket, name: `Admin Deux ${run}` });
+  assert.equal(mine.session.shop.owner, true);
+  ok('…confirms the e-mail from there and makes a store of their own');
+  await fails(prpc('p.shops.update', { id: sid, name: 'Back' }), 400);
+  assert.ok((await prpc('p.shops.list', { state: 'deleted' })).some((s) => s.id === sid));
+  ok('the control room cannot touch it, and lists it in « Supprimées »');
+});
+
+// ---------------------------------------------------------------- the rest of the control room
+await section('Backups page, journal', async () => {
+  const h = await must('/platform/health', undefined, P);
+  assert.ok(h.db.total > 0 && h.db.shops.length >= 5 && Number.isInteger(h.backups.count));
+  assert.equal(h.server.mail, true);
+  ok(`database ${Math.round(h.db.total / 1e6)} MB, ${h.db.shops.length} stores, ${h.backups.count} backup(s)`);
+  const acts = new Set((await prpc('p.audit.list', { limit: 200 })).map((x) => x.action));
+  for (const a of ['shop.create', 'shop.signup', 'shop.added', 'shop.deleted', 'shop.invite', 'shop.ownerStores', 'payment.receipt', 'referral.reward', 'support.reply']) assert.ok(acts.has(a), `the journal has ${a}`);
+  ok(`the journal has every new action (${acts.size} kinds)`);
+});
+
+await section('Reminders: a trial ending → one e-mail to its owner, never twice', async () => {
+  await prpc('p.shops.update', { id: ctx.owner2.shopId, trialEndsAt: new Date(Date.now() + 2 * 86_400_000).toISOString() });
+  const { Queue } = require('bullmq');
+  const IORedis = require('ioredis');
+  const conn = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', { maxRetriesPerRequest: null });
+  const q = new Queue('pilotix', { connection: conn });
+  try {
+    const n0 = mailCount();
+    await q.add('platform-reminders', {}, { removeOnComplete: true });
+    const m = await mailTo(em('owner2'), n0);
+    ok(`reminder e-mail (in Arabic): « ${m.subject} »`);
+    const n1 = mailCount();
+    await q.add('platform-reminders', {}, { removeOnComplete: true });
+    await sleep(3000);
+    assert.equal(allMails().slice(n1).filter((x) => String(x.to).includes(em('owner2'))).length, 0, 'not twice');
+    ok('the next run sends no second e-mail');
+  } finally {
+    await q.close();
+    await conn.quit();
+  }
+});
+
+await section('A suspended store: locked in the picker, its work refused', async () => {
+  await prpc('p.shops.setStatus', { id: ctx.owner1.second, status: 'suspended', reason: 'Test' });
+  const l = await login(ctx.owner1.email, ctx.owner1.password);
+  const s = l.stores.find((x) => x.id === ctx.owner1.second);
+  assert.equal(s.locked, true);
+  const e = await must('/auth/pick', { ticket: l.ticket, shop: s.id });
+  assert.equal(e.session.shop.state, 'suspended');
+  await fails(rpc(e.token, 'orders.list', { pageSize: 5 }), 402);
+  ok('« Bloquée » in the picker; it opens on the lock screen; its work is refused');
+  await prpc('p.shops.setStatus', { id: ctx.owner1.second, status: 'active' });
+});
+
+console.log('\n========== SUMMARY');
+for (const [n, err] of results) console.log(`${err ? '✗' : '✓'} ${n}${err ? `  → ${err}` : ''}`);
+const failed = results.filter(([, e]) => e).length;
+console.log(failed ? `\n❌ ${failed} part(s) failed` : '\n✅ All multi-shop checks passed');
 process.exit(failed ? 1 : 0);

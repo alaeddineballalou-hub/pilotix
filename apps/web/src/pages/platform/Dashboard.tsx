@@ -44,6 +44,13 @@ export function Dashboard({ staff }: { staff: Staff }) {
         <Kpi label={t('platform.k.month')} value={da(d.revenue.thisMonth)} icon="coins" sub={t('platform.k.lastMonth', { amount: da(d.revenue.lastMonth) })} />
         <Kpi label={t('platform.k.mrr')} value={da(d.mrr)} icon="chart" help={t('platform.k.mrrHelp')} />
       </Kpis>
+      <Kpis>
+        <Kpi label={t('platform.k.signups')} value={d.signups.week} icon="signup" href="#/platform/signups" sub={t('platform.k.signupsSub', { count: d.signups.month })} />
+        <Kpi label={t('platform.k.pending')} value={d.signups.pending} icon="mail" href="#/platform/signups" help={t('platform.k.pendingHelp')} />
+        <Kpi label={t('platform.k.conversion')} value={d.signups.rate === null ? '—' : `${d.signups.rate} %`} icon="trend" help={t('platform.k.conversionHelp')} sub={t('platform.k.conversionSub', { paid: d.signups.paid90, made: d.signups.made90 })} />
+        <Kpi label={t('platform.k.messages')} value={d.messages} icon="inbox" href="#/platform/messages" tone={d.messages ? 'info' : undefined} />
+        <Kpi label={t('platform.k.over')} value={d.overLimit} icon="alert" href="#/platform/shops/f/over" tone={d.overLimit ? 'bad' : undefined} help={t('platform.k.overHelp')} />
+      </Kpis>
       <div className="pp-grid">
         <ShopList title={t('platform.d.trialsEnding')} rows={d.trialsEnding} empty={t('platform.d.trialsEndingNone')} />
         <ShopList title={t('platform.d.renewSoon')} rows={d.renewSoon} empty={t('platform.d.renewSoonNone')} />
@@ -85,7 +92,7 @@ export function Dashboard({ staff }: { staff: Staff }) {
   );
 }
 
-function ShopList({ title, rows, empty, bad }: { title: string; rows: Omit<ShopRow, 'usage' | 'lastPaymentAt'>[]; empty: string; bad?: boolean }) {
+function ShopList({ title, rows, empty, bad }: { title: string; rows: Omit<ShopRow, 'usage' | 'limits' | 'lastPaymentAt'>[]; empty: string; bad?: boolean }) {
   const { t } = useTranslation();
   return (
     <Card title={title} badge={rows.length ? <span className={`pp-count ${bad ? 'bad' : ''}`}>{rows.length}</span> : undefined}>

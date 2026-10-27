@@ -34,6 +34,8 @@ export const config = {
     if (!v || v === 'false' || v === '0') return false;
     return /^\d+$/.test(v) ? Number(v) : v; // hop count, or an address / list of addresses
   })(),
+  /** Where the nightly database backups are (the control room shows the last one and the disk space left). */
+  backupsDir: (process.env.BACKUPS_DIR || '/backups').replace(/\/+$/, ''),
   /**
    * This server's IPv4 addresses, for shops' own domains (their A record). Empty: those of PUBLIC_URL's name in the DNS
    * (wrong behind Cloudflare: set PUBLIC_IP then).
@@ -42,6 +44,8 @@ export const config = {
     .split(',')
     .map((s) => s.trim())
     .filter((s) => /^\d{1,3}(\.\d{1,3}){3}$/.test(s)),
+  /** Emergency switch: PLATFORM_TWO_STEP=off lets the control room in with the password only (e-mails broken). */
+  twoStepOff: (process.env.PLATFORM_TWO_STEP || '').trim().toLowerCase() === 'off',
   /** Public address of this server (used to show webhook URLs). */
   publicUrl: (process.env.PUBLIC_URL || '').replace(/\/+$/, ''),
   /**

@@ -83,5 +83,16 @@
   "rulesMonths": "Mois offerts par ami abonné",
   "rulesSave": "Enregistrer les règles",
   "rulesOk": "Règles enregistrées",
-  "demo": "Démo : les amis affichés sont fictifs. Le suivi des vraies inscriptions demandera le serveur Pilotix."
+  "demo": "Démo : les amis affichés sont fictifs. Le suivi des vraies inscriptions demandera le serveur Pilotix.",
+  "refTitlePlat": "Parrainez d’autres boutiques",
+  "refRulePlat": "Chaque boutique créée avec votre lien qui paie son premier abonnement vous donne {{months}} mois gratuit(s).",
+  "refOff": "Le parrainage est en pause pour le moment.",
+  "kStores": "Boutiques inscrites",
+  "kPaying": "Qui ont payé",
+  "p1": "Envoyez votre lien (ou votre code) à un autre commerçant.",
+  "p2": "Il crée sa boutique avec et profite de son essai gratuit.",
+  "p3": "Quand il paie son premier abonnement, votre boutique gagne {{months}} mois gratuit(s), tout seul.",
+  "friendsPlat": "Les boutiques venues avec votre lien",
+  "noFriendsPlat": "Aucune boutique pour l’instant. Partagez votre lien !",
+  "nMonths": "{{n}} mois"
 }

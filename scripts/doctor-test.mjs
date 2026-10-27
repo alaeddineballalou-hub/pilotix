@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { staffLogin } from './mailbox.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(join(ROOT, 'apps/server/package.json'));
@@ -64,7 +65,7 @@ step('server Doctor: the jobs');
   const t0 = s.startedAt;
   const st = (list, name) => list.find((j) => j.name === name)?.state;
   let l = s.jobList(t0 + MIN);
-  check(l.length === 9 && l.every((j) => j.state === 'waiting'), 'just started: every job is waiting', l.map((j) => j.state));
+  check(l.length === 10 && l.every((j) => j.state === 'waiting'), 'just started: every job is waiting', l.map((j) => j.state));
   l = s.jobList(t0 + 6 * MIN);
   check(st(l, 'notify-run') === 'late' && st(l, 'courier-sync') === 'waiting', 'a job never seen after 3 runs + 2 min is late; a slow one still waits', l);
   s.job('notify-run', true);
@@ -83,7 +84,7 @@ step('server Doctor: the jobs');
     encoding: 'utf8',
   });
   const offStates = JSON.parse(off.stdout.trim() || '[]');
-  check(offStates.length === 9 && offStates.every((x) => x === 'off'), 'without Redis every job is "off"', off.stderr || offStates);
+  check(offStates.length === 10 && offStates.every((x) => x === 'off'), 'without Redis every job is "off"', off.stderr || offStates);
 }
 
 // ---------------------------------------------------------------- 2. the logger
@@ -129,14 +130,15 @@ check((await req('/platform/doctor')).status === 401, 'no token: refused');
 let r = await req('/auth/login', { email: 'admin@demo.pilotix.dz', password: 'demo-pilotix' });
 const SHOP_ADMIN = r.data.token;
 check((await req('/platform/doctor', {}, SHOP_ADMIN)).status === 401, 'a shop token (even an admin) is not a staff token');
-r = await req('/platform/auth/login', OWNER);
+// with e-mails on the server, the control room asks for a code sent by e-mail (read from the test mailbox)
+r = await staffLogin(API, OWNER.email, OWNER.password);
 check(r.status === 201 && r.data.token, 'the owner logs in to the control room', r.data);
 const OWN = r.data.token;
 for (const role of ['support', 'manager']) {
   const email = `${role}-${run}@pilotix.test`;
   r = await req('/platform/rpc/p.staff.save', { name: `Test ${role}`, email, role, active: true, password: 'Staff-Password-1' }, OWN);
   check(r.status === 201, `the owner adds a ${role}`, r.data);
-  const tok = (await req('/platform/auth/login', { email, password: 'Staff-Password-1' })).data.token;
+  const tok = (await staffLogin(API, email, 'Staff-Password-1')).data.token;
   const d = await req('/platform/doctor', {}, tok);
   if (role === 'support') check(d.status === 403, 'support staff: refused', d);
   else check(d.status === 201 && Array.isArray(d.data.items), 'a manager: allowed', d.status);
@@ -164,9 +166,14 @@ check(!it('dbDown') && !it('redisDown') && !it('redisOff'), 'database and Redis 
 check(it('redis')?.level === 'ok', 'Redis answers fast', it('redis'));
 check(it('dbPing')?.level === 'ok', 'the database answers fast', it('dbPing'));
 check(it('restarted')?.level === 'warn', 'the server just started: said', it('restarted'));
-check(it('config')?.level === 'warn' && it('config').list.some((l) => l.label.startsWith('SMTP_HOST')) && it('config').list.every((l) => l.unit === 'text'), 'missing settings listed (no e-mail on CI)', it('config'));
+// CI runs without NODE_ENV=production nor TRUST_PROXY; e-mails go to the test mailbox when SMTP_HOST is set
+check(
+  it('config')?.level === 'warn' && it('config').list.some((l) => l.label.startsWith('SMTP_HOST')) === !process.env.SMTP_HOST && it('config').list.every((l) => l.unit === 'text'),
+  'missing settings listed',
+  it('config'),
+);
 check(['ok', 'warn'].includes(it('silentShops')?.level) && !(it('silentShops').list ?? []).some((l) => /démo|demo/i.test(l.label)), 'silent shops checked (the demo shop is never counted)', it('silentShops'));
-check(R.jobs.length === 9 && R.jobs.every((j) => ['ok', 'late', 'failing', 'waiting', 'off'].includes(j.state)), 'the 9 jobs with a state', R.jobs);
+check(R.jobs.length === 10 && R.jobs.every((j) => ['ok', 'late', 'failing', 'waiting', 'off'].includes(j.state)), 'the 10 jobs with a state', R.jobs);
 check(R.errors.some((e) => e.level === 'warn' && /TRUST_PROXY/.test(e.message)), 'a warning the server wrote shows in the report', R.errors);
 for (const i of R.items) for (const l of i.list ?? []) check(Number.isFinite(l.n) && typeof l.label === 'string', `${i.id}: a clean line`, l);
 

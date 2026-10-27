@@ -1,0 +1,33 @@
+{
+  "title": "Terms of use and privacy",
+  "intro": "{{company}} is online software to manage a store’s orders (confirmation, delivery, stock, cash). By creating a store, you accept these terms.",
+  "s1": {
+    "t": "Your account",
+    "p": "You log in with your e-mail and a password only you know: keep it secret. The person who creates a store is its owner; only they can delete it."
+  },
+  "s2": {
+    "t": "Your data belongs to you",
+    "p": "Your store’s orders, customers, products and figures are yours. The Pilotix team has no access inside your store from its control room and sells your data to no one. For billing, it only sees numbers: how many accounts, drivers and orders per month."
+  },
+  "s3": {
+    "t": "What we keep",
+    "p": "We keep what the service needs: your name, e-mail, phone, your store’s data and a log of logins. A backup is made every night."
+  },
+  "s4": {
+    "t": "Free trial and subscription",
+    "p": "Each new store gets a free trial. After that, the subscription is paid according to the chosen plan. Without payment, access is locked after a grace period; orders keep coming in and are kept."
+  },
+  "s5": {
+    "t": "Fair use",
+    "p": "Don’t use Pilotix for products or activities the law forbids, or to send unwanted messages. A store that breaks these rules can be suspended."
+  },
+  "s6": {
+    "t": "Deleting your store",
+    "p": "The owner can delete their store in Settings: all its data is erased for good. Payments already made stay in our accounts."
+  },
+  "s7": {
+    "t": "Contact us",
+    "p": "A question about your data or these terms? Write to us at {{email}} or from “Contact Pilotix” in your store."
+  },
+  "back": "Back"
+}

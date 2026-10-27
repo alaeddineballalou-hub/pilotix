@@ -36,6 +36,8 @@ export interface ShopCtx {
   demo: boolean;
   /** active accounts the plan allows (null = no limit) */
   maxUsers: number | null;
+  /** active livreurs the plan allows (null = no limit) */
+  maxDrivers: number | null;
 }
 
 export interface Ctx {

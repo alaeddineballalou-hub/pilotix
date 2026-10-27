@@ -80,6 +80,10 @@ const EXTRA: Record<string, string> = {
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   puzzle: '<path d="M19.4 15.4a1 1 0 0 0-.3.9l.5 2.6a2 2 0 0 1-2 2.4h-2.2a1 1 0 0 1-1-1.2 2 2 0 1 0-3.8 0 1 1 0 0 1-1 1.2H7.4a2 2 0 0 1-2-2v-2.2a1 1 0 0 1 1.2-1 2 2 0 1 0 0-3.8 1 1 0 0 1-1.2-1V6.4a2 2 0 0 1 2-2h2.2a1 1 0 0 0 1-1.2 2 2 0 1 1 3.8 0 1 1 0 0 0 1 1.2h2.2a2 2 0 0 1 2 2v2.2a1 1 0 0 0 1.2 1 2 2 0 1 1 0 3.8 1 1 0 0 0-.9.3z"/>',
 };
+// the control room: the server's health, the stores' messages
+EXTRA.server = '<rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 7h.01M6 17h.01"/>';
+EXTRA.database = '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/>';
+EXTRA.signup = '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>';
 const ALL = { ...(icons as Record<string, string>), ...EXTRA };
 export type IconName = keyof typeof ALL | string;
 
