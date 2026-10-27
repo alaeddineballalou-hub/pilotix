@@ -9,6 +9,7 @@ import { Icon } from '../ui/kit';
 import { Modal } from '../ui/modal';
 import { toast } from '../ui/toast';
 import { BrandBig } from './PxWordmark';
+import { AuthShell, AuthTitle, PasswordInput } from './AuthShell';
 
 /** Leaves a page opened from an e-mail (its secret leaves the address bar and the history). */
 function home(to = '') {
@@ -16,15 +17,13 @@ function home(to = '') {
   window.dispatchEvent(new HashChangeEvent('hashchange'));
 }
 
-function Page({ title, children, wide }: { title: string; children: ReactNode; wide?: boolean }) {
+/** The account pages (sign-up, store picker, e-mail links): the split sign-in layout, a title with an optional marked word. */
+function Page({ title, mark, sub, children, wide }: { title: string; mark?: string; sub?: ReactNode; children: ReactNode; wide?: boolean }) {
   return (
-    <div className="login">
-      <div className={`card login-card ${wide ? 'px-acc-wide' : ''}`}>
-        <BrandBig />
-        <h2 className="login-title">{title}</h2>
-        {children}
-      </div>
-    </div>
+    <AuthShell wide={wide}>
+      <AuthTitle a={title} b={mark} sub={sub} />
+      {children}
+    </AuthShell>
   );
 }
 
@@ -72,7 +71,7 @@ export function StorePicker() {
   };
   return (
     <Page title={t('shop.acc.pickTitle')}>
-      <p className="login-note">{picker.stores.length ? t('shop.acc.pickText', { name: picker.account.name || picker.account.email }) : t('shop.acc.noStore')}</p>
+      <p className="pxa-note">{picker.stores.length ? t('shop.acc.pickText', { name: picker.account.name || picker.account.email }) : t('shop.acc.noStore')}</p>
       <StoreList stores={picker.stores} onPick={go} busy={busy} />
       {adding ? (
         <AddStoreForm ticket={picker.ticket} agency={adding === 'agency'} onDone={enter} onCancel={() => setAdding(null)} />
@@ -84,13 +83,13 @@ export function StorePicker() {
             </button>
           )}
           {picker.canAddAgency && (
-            <button type="button" className="login-link" onClick={() => setAdding('agency')}>
+            <button type="button" className="pxa-back" onClick={() => setAdding('agency')}>
               <Icon name="headset" /> {t('agency.create')}
             </button>
           )}
         </>
       )}
-      <button type="button" className="login-link" onClick={cancelPick}>
+      <button type="button" className="pxa-back" onClick={cancelPick}>
         {t('login.backToLogin')}
       </button>
     </Page>
@@ -291,8 +290,8 @@ export function Signup({ referral, agency }: { referral?: string; agency?: boole
   if (info && !info.open)
     return (
       <Page title={t('shop.acc.signupTitle')}>
-        <p className="login-note">{t('shop.acc.signupClosed')}</p>
-        <a className="login-link" href="#/">
+        <p className="pxa-note">{t('shop.acc.signupClosed')}</p>
+        <a className="pxa-back" href="#/">
           {t('login.backToLogin')}
         </a>
       </Page>
@@ -300,16 +299,20 @@ export function Signup({ referral, agency }: { referral?: string; agency?: boole
   if (sent)
     return (
       <Page title={t('shop.acc.checkMail')}>
-        <p className="login-note">{t('shop.acc.checkMailText', { email: f.email.trim() })}</p>
+        <p className="pxa-note">{t('shop.acc.checkMailText', { email: f.email.trim() })}</p>
         <p className="small muted">{t('shop.acc.checkMailSpam')}</p>
-        <a className="login-link" href="#/">
+        <a className="pxa-back" href="#/">
           {t('login.backToLogin')}
         </a>
       </Page>
     );
   return (
-    <Page title={agency ? t('agency.signupTitle') : t('shop.acc.signupTitle')} wide>
-      <p className="login-note">{agency ? t('agency.signupText') : t('shop.acc.signupText', { days: info?.trialDays ?? 14 })}</p>
+    <Page
+      title={agency ? t('auth.signupAgency1') : t('auth.signup1')}
+      mark={agency ? t('auth.signupAgency2') : t('auth.signup2')}
+      sub={agency ? t('agency.signupText') : t('shop.acc.signupText', { days: info?.trialDays ?? 14 })}
+      wide
+    >
       <form className="px-acc-form" onSubmit={submit}>
         {agency ? (
           <label className="field">
@@ -319,22 +322,24 @@ export function Signup({ referral, agency }: { referral?: string; agency?: boole
         ) : (
           <StoreNameFields name={storeName} setName={setStoreName} slug={slug} setSlug={setSlug} touched={touched} setTouched={setTouched} />
         )}
-        <label className="field">
-          <span className="lab">{t('shop.acc.yourName')}</span>
-          <input required minLength={2} maxLength={80} autoComplete="name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
-        </label>
+        <div className="pxa-grid2">
+          <label className="field">
+            <span className="lab">{t('shop.acc.yourName')}</span>
+            <input required minLength={2} maxLength={80} autoComplete="name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+          </label>
+          <label className="field">
+            <span className="lab">{t('shop.acc.phone')}</span>
+            <input dir="ltr" inputMode="tel" maxLength={30} autoComplete="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} placeholder="0550 12 34 56" />
+          </label>
+        </div>
         <label className="field">
           <span className="lab">{t('login.email')}</span>
           <input type="email" dir="ltr" required maxLength={200} autoComplete="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
         </label>
         <label className="field">
           <span className="lab">{t('login.password')}</span>
-          <input type="password" dir="ltr" required minLength={8} maxLength={200} autoComplete="new-password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />
+          <PasswordInput required minLength={8} maxLength={200} autoComplete="new-password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />
           <span className="hint">{t('shop.acc.passwordHint')}</span>
-        </label>
-        <label className="field">
-          <span className="lab">{t('shop.acc.phone')}</span>
-          <input dir="ltr" inputMode="tel" maxLength={30} autoComplete="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} placeholder="0550 12 34 56" />
         </label>
         {!agency && (
           <label className="field">
@@ -355,23 +360,21 @@ export function Signup({ referral, agency }: { referral?: string; agency?: boole
           <Icon name="shield" /> {agency ? t('agency.private') : t('shop.acc.private')}
         </p>
         {error && <p className="form-err">{error}</p>}
-        <button className="btn primary big" disabled={busy}>
+        <button className="pxa-submit" disabled={busy}>
           {busy ? '…' : agency ? t('agency.signupSubmit') : t('shop.acc.signupSubmit')}
         </button>
       </form>
-      <a className="login-link" href="#/">
-        {t('shop.acc.haveAccount')}
-      </a>
+      <p className="pxa-alt">
+        {t('auth.haveAccountQ')} <a href="#/">{t('auth.signIn')}</a>
+      </p>
       {agency ? (
-        <a className="login-link small" href="#/inscription">
-          <Icon name="store" /> {t('agency.isStore')}
-        </a>
+        <p className="pxa-alt2">
+          <Icon name="store" /> <a href="#/inscription">{t('agency.isStore')}</a>
+        </p>
       ) : (
-        <p className="agx-signup-line small">
+        <p className="pxa-alt2">
           <Icon name="headset" />
-          <span>
-            <span className="muted">{t('agency.areYou')}</span> <a href="#/inscription-agence">{t('agency.create')}</a>
-          </span>
+          <span>{t('agency.areYou')}</span> <a href="#/inscription-agence">{t('agency.create')}</a>
         </p>
       )}
     </Page>
@@ -402,9 +405,9 @@ export function SignupConfirm({ token }: { token: string }) {
   }, [token, enter, t]);
   return (
     <Page title={state === 'busy' ? t('shop.acc.making') : state === 'exists' ? t('shop.acc.haveAccountTitle') : t('shop.acc.linkBad')}>
-      <p className="login-note">{state === 'busy' ? t('shop.acc.makingText') : state === 'exists' ? t('shop.acc.haveAccountText') : msg}</p>
+      <p className="pxa-note">{state === 'busy' ? t('shop.acc.makingText') : state === 'exists' ? t('shop.acc.haveAccountText') : msg}</p>
       {state !== 'busy' && (
-        <button type="button" className="btn primary big" onClick={() => home()}>
+        <button type="button" className="pxa-submit" onClick={() => home()}>
           {t('login.submit')}
         </button>
       )}
@@ -430,9 +433,9 @@ export function VerifyEmail({ token }: { token: string }) {
   }, [token, t]);
   return (
     <Page title={state === 'ok' ? t('shop.acc.verified') : state === 'busy' ? '…' : t('shop.acc.linkBad')}>
-      <p className="login-note">{state === 'ok' ? t('shop.acc.verifiedText') : state === 'error' ? msg : ''}</p>
+      <p className="pxa-note">{state === 'ok' ? t('shop.acc.verifiedText') : state === 'error' ? msg : ''}</p>
       {state !== 'busy' && (
-        <button type="button" className="btn primary big" onClick={() => home('#/accueil')}>
+        <button type="button" className="pxa-submit" onClick={() => home('#/accueil')}>
           {t('shop.acc.continue')}
         </button>
       )}

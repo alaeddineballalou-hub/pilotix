@@ -1,0 +1,113 @@
+/* Sign-in / sign-up / password pages: form side + Pilotix showcase side (AuthShell.tsx). */
+.pxa { box-sizing: border-box; min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); background: var(--surface); }
+
+/* ---- the form side */
+.pxa-side { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; padding: 22px clamp(20px, 5vw, 64px) 18px; box-sizing: border-box; }
+.pxa-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pxa-logo { display: inline-flex; text-decoration: none; }
+.pxa-logo .brand-big { width: 118px; height: 42px; margin: 0; }
+.pxa-lang { display: flex; gap: 4px; }
+.pxa-lang button { border: 0; background: none; padding: 6px 8px; border-radius: 8px; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.pxa-lang button:hover { color: var(--ink); background: var(--raise); }
+.pxa-form { width: min(400px, 100%); margin: auto; padding: 28px 0; display: flex; flex-direction: column; gap: 16px; }
+.pxa-form.wide { width: min(480px, 100%); }
+.pxa-head { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+.pxa-head h1 { margin: 0; font-family: var(--f-display); font-size: clamp(28px, 3.2vw, 36px); font-weight: 700; line-height: 1.2; color: var(--ink); letter-spacing: -.01em; }
+.pxa mark { background: linear-gradient(transparent 58%, color-mix(in srgb, var(--orange, #F28B1E) 32%, transparent) 58%); color: inherit; font-weight: 800; padding: 0 2px; }
+.pxa-head p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.5; }
+.pxa .field { display: flex; flex-direction: column; gap: 7px; margin: 0; }
+.pxa .field .lab { font-size: 13.5px; font-weight: 700; color: var(--ink); }
+.pxa-labrow { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.pxa-labrow button, .pxa-labrow a { border: 0; background: none; padding: 0; font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; text-decoration: none; }
+.pxa-labrow button:hover, .pxa-labrow a:hover { color: var(--ink); text-decoration: underline; }
+.pxa .field input, .pxa .field select { box-sizing: border-box; width: 100%; height: 48px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); padding: 0 14px; font: inherit; font-size: 15px; color: var(--ink); transition: border-color .15s, box-shadow .15s; }
+.pxa .field input:focus, .pxa .field select:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 14%, transparent); }
+.pxa .field .hint { font-size: 12.5px; color: var(--muted); }
+.pxa-pw { position: relative; display: block; }
+.pxa-pw input { padding-inline-end: 46px !important; }
+.pxa-eye { position: absolute; inset-inline-end: 6px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border: 0; background: none; border-radius: 9px; color: var(--muted); cursor: pointer; display: grid; place-items: center; }
+.pxa-eye:hover { color: var(--ink); background: var(--raise); }
+.pxa-submit { height: 50px; width: 100%; border: 0; border-radius: 12px; background: #0E1B2E; color: #fff; font: inherit; font-size: 15.5px; font-weight: 700; cursor: pointer; transition: transform .1s, background .15s; }
+.pxa-submit:hover { background: var(--navy); }
+.pxa-submit:active { transform: translateY(1px); }
+.pxa-submit:disabled { opacity: .6; cursor: default; }
+.pxa-alt { text-align: center; font-size: 14px; color: var(--muted); margin: 6px 0 0; }
+.pxa-alt a { color: var(--ink); font-weight: 800; text-decoration: none; background: linear-gradient(transparent 62%, color-mix(in srgb, var(--orange, #F28B1E) 30%, transparent) 62%); }
+.pxa-alt2 { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; color: var(--muted); margin: 0; }
+.pxa-alt2 a { color: var(--navy); font-weight: 700; }
+.pxa-sep { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12.5px; margin: 4px 0; }
+.pxa-sep::before, .pxa-sep::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.pxa .form-err { margin: 0; }
+.pxa-note { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
+.pxa-back { border: 0; background: none; padding: 0; font: inherit; font-size: 14px; color: var(--navy); font-weight: 700; cursor: pointer; text-align: center; text-decoration: none; }
+.pxa-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 520px) { .pxa-grid2 { grid-template-columns: minmax(0, 1fr); } }
+.pxa .demo-accounts { margin: 6px 0 0; width: 100%; box-sizing: border-box; }
+.pxa-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.pxa-foot a { color: var(--ink); font-weight: 700; text-decoration: none; }
+.pxa-foot a:hover { text-decoration: underline; }
+.pxa-legal { display: flex; gap: 16px; }
+.pxa-legal a { font-weight: 500; color: var(--muted); }
+
+/* ---- the showcase side */
+.pxa-show { position: relative; overflow: hidden; margin: 12px; margin-inline-start: 0; border-radius: 26px; padding: clamp(28px, 4vw, 56px); display: flex; flex-direction: column; gap: 28px;
+  background-color: #F4F5F8; background-image: radial-gradient(rgb(27 42 71 / .10) 1px, transparent 1.2px); background-size: 18px 18px; }
+.pxa-show h2 { margin: 0; max-width: 520px; font-family: var(--f-display); font-size: clamp(26px, 2.6vw, 36px); line-height: 1.25; font-weight: 500; color: #0E1B2E; }
+.pxa-show h2 mark { font-weight: 800; background: linear-gradient(transparent 55%, color-mix(in srgb, var(--orange, #F28B1E) 38%, transparent) 55%); }
+.pxa-stage { position: relative; flex: 1; min-height: 420px; }
+.pxa-browser { position: absolute; inset-inline-end: 0; top: 0; width: 88%; border-radius: 16px; background: #fff; box-shadow: 0 24px 60px rgb(27 42 71 / .16), 0 2px 6px rgb(27 42 71 / .06); overflow: hidden; }
+.pxa-bbar { display: flex; align-items: center; gap: 6px; padding: 10px 14px; background: #EEF0F4; }
+.pxa-bbar i { width: 9px; height: 9px; border-radius: 50%; background: #CBD0DA; }
+.pxa-bbar span { margin-inline: auto; font-size: 11.5px; color: #66708A; background: #fff; padding: 3px 12px; border-radius: 7px; direction: ltr; }
+.pxa-app { display: grid; grid-template-columns: 52px minmax(0, 1fr); min-height: 300px; }
+.pxa-app-nav { background: #1B2A47; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 12px 0; }
+.pxa-app-nav b { color: #fff; font-family: var(--f-display); font-size: 9px; letter-spacing: .02em; }
+.pxa-app-nav span { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; color: rgb(255 255 255 / .6); }
+.pxa-app-nav span.on { background: var(--orange, #F28B1E); color: #fff; }
+.pxa-app-nav .bji { width: 15px; height: 15px; }
+.pxa-app-main { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.pxa-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.pxa-kpis div { border: 1px solid #E6E9EF; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.pxa-kpis small { font-size: 10px; color: #7A8399; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pxa-kpis b { font-size: 15px; color: #0E1B2E; white-space: nowrap; }
+.pxa-kpis b.ok { color: #1F9D57; }
+.pxa-chart { height: 96px; display: flex; align-items: flex-end; gap: 8px; padding: 8px 10px 0; border: 1px solid #E6E9EF; border-radius: 10px; }
+.pxa-chart i { flex: 1; border-radius: 6px 6px 0 0; background: linear-gradient(180deg, #FFB255, var(--orange, #F28B1E)); opacity: .9; }
+.pxa-chart i:nth-child(odd) { background: linear-gradient(180deg, #3B5585, #1B2A47); }
+.pxa-rows { display: flex; flex-direction: column; gap: 7px; }
+.pxa-rows div { display: grid; grid-template-columns: 1.4fr 1fr 18px; gap: 10px; align-items: center; }
+.pxa-rows span { height: 8px; border-radius: 4px; background: #E9ECF2; }
+.pxa-rows em, .pxa-ph-v em { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+em.ok { background: #1F9D57; }
+em.or { background: var(--orange, #F28B1E); }
+.pxa-phone { position: absolute; inset-inline-start: 0; bottom: 0; width: 42%; min-width: 190px; max-width: 250px; border-radius: 28px; border: 7px solid #0E1B2E; background: #fff; padding: 22px 12px 14px; box-shadow: 0 24px 50px rgb(14 27 46 / .25); display: flex; flex-direction: column; gap: 8px; }
+.pxa-notch { position: absolute; top: 6px; left: 50%; transform: translateX(-50%); width: 64px; height: 6px; border-radius: 4px; background: #0E1B2E; }
+.pxa-ph-title { font-family: var(--f-display); font-weight: 800; font-size: 13px; color: #0E1B2E; }
+.pxa-ph-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 8px; border-radius: 11px; background: #F6F7FA; }
+.pxa-av { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: #1B2A47; color: #fff; font-size: 11px; font-weight: 800; }
+.pxa-ph-n { display: flex; flex-direction: column; min-width: 0; }
+.pxa-ph-n b { font-size: 11.5px; color: #0E1B2E; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pxa-ph-n small { font-size: 10px; color: #7A8399; }
+.pxa-ph-v { display: flex; align-items: center; gap: 6px; }
+.pxa-ph-v b { font-size: 11px; color: #0E1B2E; white-space: nowrap; direction: ltr; }
+.pxa-toast { position: absolute; inset-inline-start: 6%; bottom: 46%; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 16px; background: #fff; box-shadow: 0 18px 40px rgb(14 27 46 / .18); max-width: 300px; animation: pxa-in .6s .5s both cubic-bezier(.2, .8, .2, 1); }
+.pxa-toast-ic { width: 40px; height: 40px; flex: none; border-radius: 12px; display: grid; place-items: center; background: color-mix(in srgb, var(--orange, #F28B1E) 16%, #fff); color: var(--orange, #F28B1E); }
+.pxa-toast b { display: block; font-size: 14px; color: #0E1B2E; line-height: 1.3; }
+.pxa-toast small { color: #7A8399; font-size: 12px; }
+@keyframes pxa-in { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .pxa-toast { animation: none; } }
+
+/* ---- smaller screens: only the form */
+@media (max-width: 960px) {
+  .pxa { grid-template-columns: minmax(0, 1fr); }
+  .pxa-show { display: none; }
+}
+@media (max-width: 480px) {
+  .pxa-side { padding: 16px 18px 14px; }
+  .pxa-form { padding: 18px 0; gap: 14px; }
+  .pxa .field input { font-size: 16px; }
+  .pxa-foot { justify-content: center; text-align: center; }
+}
+
+/* dark theme: the showcase stays light (it is a picture of the app), the form follows the theme */
+:root[data-theme="dark"] .pxa-submit { background: var(--orange, #F28B1E); color: #111; }

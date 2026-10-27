@@ -657,7 +657,7 @@ class ApiController {
   @Get('auth/signup')
   async signupInfo() {
     const set = await this.core.settings();
-    return { open: set.signup.open && mailConfigured(), trialDays: set.trial.days, site: (config.publicUrl || '').replace(/^https?:\/\//, '') };
+    return { open: set.signup.open && mailConfigured(), trialDays: set.trial.days, site: (config.publicUrl || '').replace(/^https?:\/\//, ''), whatsapp: (set.payment?.whatsapp || set.company?.phone || '').trim() };
   }
 
   /** Is a store name free? (the sign-up form checks while it is typed) */

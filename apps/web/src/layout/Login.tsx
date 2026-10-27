@@ -1,16 +1,13 @@
-import { DEMO_ACCOUNTS, DEMO_PASSWORD, Language, LANGUAGES } from '@pilotix/shared';
+import { DEMO_ACCOUNTS, DEMO_PASSWORD } from '@pilotix/shared';
 import { FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { backend, DEMO_AVAILABLE, DEMO_ONLY, FIXED_SERVER, forgotAvailable, onDemoProgress, requestPasswordReset, serverDemo, serverUrl, setServerUrl, signupInfo, switchDemo } from '../lib/backend';
-import { applyLanguage } from '../lib/i18n';
 import { useSession } from '../lib/session';
 import { Icon } from '../ui/kit';
-import { BrandBig } from './PxWordmark';
-
-const LANG: Record<Language, string> = { fr: 'Français', en: 'English', ar: 'العربية' };
+import { AuthShell, AuthTitle, PasswordInput } from './AuthShell';
 
 export function Login() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { login, loginDemo } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -76,30 +73,26 @@ export function Login() {
 
   if (forgot)
     return (
-      <div className="login">
-        <form className="card login-card" onSubmit={sendReset}>
-          <BrandBig />
-          <h2 className="login-title">{t('login.forgotTitle')}</h2>
-          {sent ? (
-            <p className="login-note">{t('login.forgotSent')}</p>
-          ) : (
+      <AuthShell>
+        <form className="pxa-fields" onSubmit={sendReset} style={{ display: 'contents' }}>
+          <AuthTitle a={t('auth.forgot1')} b={t('auth.forgot2')} sub={sent ? t('login.forgotSent') : t('login.forgotText')} />
+          {!sent && (
             <>
-              <p className="login-note">{t('login.forgotText')}</p>
               <label className="field">
                 <span className="lab">{t('login.email')}</span>
                 <input id="forgot-email" type="email" dir="ltr" autoComplete="username" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} />
               </label>
               {error && <p className="form-err">{error}</p>}
-              <button className="btn primary big" disabled={!!busy}>
+              <button className="pxa-submit" disabled={!!busy}>
                 {busy ? '…' : t('login.forgotSend')}
               </button>
             </>
           )}
-          <button type="button" className="login-link" onClick={backToLogin}>
-            {t('login.backToLogin')}
+          <button type="button" className="pxa-back" onClick={backToLogin}>
+            ← {t('login.backToLogin')}
           </button>
         </form>
-      </div>
+      </AuthShell>
     );
 
   async function submit(e: FormEvent) {
@@ -134,19 +127,9 @@ export function Login() {
   }
 
   return (
-    <div className="login">
-      <form className="card login-card" onSubmit={submit}>
-        <BrandBig />
-        <p className="muted" style={{ textAlign: 'center', margin: 0 }}>
-          {t('login.tagline')}
-        </p>
-        <div className="tabs" style={{ justifyContent: 'center' }}>
-          {LANGUAGES.map((l) => (
-            <button type="button" key={l} className={`tab ${i18n.language === l ? 'on' : ''}`} onClick={() => applyLanguage(l)}>
-              {LANG[l]}
-            </button>
-          ))}
-        </div>
+    <AuthShell>
+      <form onSubmit={submit} style={{ display: 'contents' }}>
+        <AuthTitle a={t('auth.welcome1')} b={t('auth.welcome2')} sub={DEMO_ONLY ? t('login.tagline') : undefined} />
         {!DEMO_ONLY && (
           <>
             <label className="field">
@@ -154,38 +137,37 @@ export function Login() {
               <input id="login-email" type="email" dir="ltr" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />
             </label>
             <label className="field">
-              <span className="lab">{t('login.password')}</span>
-              <input id="login-password" type="password" dir="ltr" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+              <span className="pxa-labrow">
+                <span className="lab">{t('login.password')}</span>
+                {canReset && (
+                  <button type="button" onClick={() => (setForgot(true), setError(''))}>
+                    {t('auth.forgotQ')}
+                  </button>
+                )}
+              </span>
+              <PasswordInput id="login-password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
             </label>
             {!FIXED_SERVER && (
-            <label className="field">
-              <span className="lab">{t('login.server')}</span>
-              <input id="login-server" type="url" dir="ltr" required value={server} onChange={(e) => setServer(e.target.value)} placeholder="https://api.votre-boutique.dz" />
-              <span className="hint">{t('login.serverHint')}</span>
-            </label>
+              <label className="field">
+                <span className="lab">{t('login.server')}</span>
+                <input id="login-server" type="url" dir="ltr" required value={server} onChange={(e) => setServer(e.target.value)} placeholder="https://api.votre-boutique.dz" />
+                <span className="hint">{t('login.serverHint')}</span>
+              </label>
             )}
             {error && <p className="form-err">{error}</p>}
-            <button className="btn primary big" disabled={!!busy}>
-              {t('login.submit')}
+            <button className="pxa-submit" disabled={!!busy}>
+              {busy === 'login' ? '…' : t('login.submit')}
             </button>
-            {canReset && (
-              <button type="button" className="login-link" onClick={() => (setForgot(true), setError(''))}>
-                {t('login.forgot')}
-              </button>
-            )}
             {canSignup && (
-              <div className="px-signup-cta">
-                <span className="muted">{t('login.noAccount')}</span>
-                <a className="btn" href="#/inscription">
-                  <Icon name="store" /> {t('login.createStore')}
-                </a>
-                <p className="agx-signup-line small">
-                  <Icon name="headset" />
-                  <span>
-                    <span className="muted">{t('agency.areYou')}</span> <a href="#/inscription-agence">{t('agency.create')}</a>
-                  </span>
+              <>
+                <p className="pxa-alt">
+                  {t('auth.newQ')} <a href="#/inscription">{t('auth.startTrial')}</a>
                 </p>
-              </div>
+                <p className="pxa-alt2">
+                  <Icon name="headset" />
+                  <span>{t('agency.areYou')}</span> <a href="#/inscription-agence">{t('agency.create')}</a>
+                </p>
+              </>
             )}
           </>
         )}
@@ -219,13 +201,8 @@ export function Login() {
             {DEMO_ONLY && error && <p className="form-err">{error}</p>}
           </div>
         )}
-        {!DEMO_ONLY && (
-          <a className="login-link small" href="#/conditions">
-            {t('login.terms')}
-          </a>
-        )}
       </form>
       {backend.kind === 'demo' && <span hidden>{progress}</span>}
-    </div>
+    </AuthShell>
   );
 }

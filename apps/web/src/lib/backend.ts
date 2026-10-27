@@ -110,7 +110,7 @@ export const linkKind = (token: string) => authRequest<{ kind: 'reset' | 'invite
 export const verifyEmail = (token: string) => authRequest<{ ok: true }>('/auth/verify', { token });
 
 // ---------------------------------------------------------------- « Créer ma boutique »
-export const signupInfo = () => authRequest<{ open: boolean; trialDays: number; site: string }>('/auth/signup').catch(() => ({ open: false, trialDays: 0, site: '' }));
+export const signupInfo = () => authRequest<{ open: boolean; trialDays: number; site: string; whatsapp?: string }>('/auth/signup').catch(() => ({ open: false, trialDays: 0, site: '', whatsapp: '' }));
 export const storeNameCheck = (name: string, slug?: string) =>
   authRequest<{ slug: string; free: boolean; reason: string | null }>(`/auth/store-name?name=${encodeURIComponent(name)}${slug ? `&slug=${encodeURIComponent(slug)}` : ''}`);
 export interface SignupForm {
