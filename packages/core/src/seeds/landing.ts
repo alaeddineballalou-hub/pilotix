@@ -212,7 +212,9 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
       const verdict = k < allowed ? 'allow' : k < allowed + review ? 'review' : 'block';
       // customers order in the day and the evening; robots at night
       const hour = verdict === 'block' ? [1, 2, 3, 3, 4, 23][Math.floor(rnd(k) * 6)] : 9 + Math.floor(rnd(k + 7) * 13);
-      const t = now - d * day - ((new Date(now).getUTCHours() + 24 - hour) % 24) * 3600_000 - Math.floor(rnd(k + 3) * 3600_000);
+      // that day at that hour, Algiers time (UTC+1)
+      const midnight = Math.floor((now + 3600_000) / day) * day - 3600_000;
+      const t = midnight - d * day + hour * 3600_000 + Math.floor(rnd(k + 3) * 3600_000);
       if (t > now) continue;
       const lid = rnd(k + 11) < 0.7 ? p1 : p2;
       const reasons =

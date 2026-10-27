@@ -1,0 +1,23 @@
+name: Test log (for Claude, preview only)
+on:
+  push:
+    branches: ['preview/**']
+permissions:
+  contents: write
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm test > /tmp/test.txt 2>&1 || true
+      - name: Publish the log to testlog-<branch>
+        run: |
+          OUT="testlog-${GITHUB_REF_NAME//\//-}"
+          mkdir /tmp/out && cp /tmp/test.txt /tmp/out/ && cd /tmp/out
+          git init -q && git checkout -qb "$OUT" && git add -A
+          git -c user.name=ci -c user.email=ci@x commit -qm "Tests of ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" "$OUT"
