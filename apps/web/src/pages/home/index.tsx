@@ -1,15 +1,17 @@
 // Accueil, by role, under one period:
-// - admin / vendeur: what is waiting now, the teams at a glance (who to help), the shop over the period, who is online;
+// - admin / vendeur: what is waiting now, Pilot Agent (what is going wrong, with what to do), the teams at a glance (who to help), the shop over the period, who is online;
 // - agent manager: their team (what is late, its numbers against the targets, each member with what to work on), their
 //   other teams, the shop over the period, who is online;
 // - agent: what is waiting now, their own numbers next to their team's (their priority and how to improve it), the shop.
 import { useTranslation } from 'react-i18next';
 import { da, dayRange, n, pct } from '../../lib/format';
+import { featureIsOn } from '../../lib/features';
 import { useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { useMedia } from '../../lib/useMedia';
 import { Card, ErrorBox, Icon, Kpis, Loading, Trend } from '../../ui/kit';
 import type { PageProps } from '../registry';
+import { ShopDoctor } from '../dashboard/Doctor';
 import { Presence } from '../dashboard/Presence';
 import { LivreursTable } from '../dashboard/Livreurs';
 import { Board, MemberDetail, useBoardPeriod } from '../dashboard/board/Board';
@@ -89,6 +91,7 @@ function HomeStats() {
       ) : m.seesAll ? (
         <>
           <Now />
+          {featureIsOn('dashboard/doctor') && <ShopDoctor />}
           <TeamHealth areas={areas} range={per.range} />
           <Period range={per.range} vs={vs} />
           <Presence />
