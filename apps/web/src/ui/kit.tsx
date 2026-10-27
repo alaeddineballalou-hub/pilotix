@@ -339,9 +339,13 @@ export function Tabs<T extends string>({ value, onChange, items }: { value: T; o
 }
 
 /** The stage bar under the top bar ("Nouvelles › En cours › Confirmées"). Sub-pages not in the shop's plan are left out. */
-export function StageBar({ items: all, current, flow = true }: { items: { key: string; label: string; href: string; count?: number }[]; current: string; flow?: boolean }) {
+export function StageBar({ items: all, current: shown, flow = true }: { items: { key: string; label: string; href: string; count?: number }[]; current: string; flow?: boolean }) {
   const items = all.filter((it) => hrefIsOn(it.href));
   const bar = useRef<HTMLElement>(null);
+  // the clicked stage lights up straight away, even while its page is still being built
+  const [picked, setPicked] = useState<string | null>(null);
+  useEffect(() => setPicked(null), [shown]);
+  const current = picked ?? shown;
   // a bar wider than the screen (a phone): the current stage is brought into view, not left behind the edge
   useEffect(() => {
     const b = bar.current;
@@ -359,7 +363,7 @@ export function StageBar({ items: all, current, flow = true }: { items: { key: s
               ›
             </span>
           )}
-          <a className={`bjm-p ${current === it.key ? 'on' : ''}`} href={it.href} aria-current={current === it.key ? 'page' : undefined}>
+          <a className={`bjm-p ${current === it.key ? 'on' : ''}`} href={it.href} aria-current={current === it.key ? 'page' : undefined} onClick={() => it.key !== shown && setPicked(it.key)}>
             <span className="bjm-l">{it.label}</span>
             {it.count !== undefined && <b className="bjm-n ltr">{it.count}</b>}
           </a>
