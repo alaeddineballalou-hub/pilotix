@@ -1636,17 +1636,19 @@ html body .px-qhead .btn.px-qnew:hover { border-color: #F7A823; color: #C97A0E; 
    Open = wordmark, folded = icon. The change is the "masked type" motion:
    folding, the letters sink one by one behind a clean line on the baseline (the dots and the x last), the smile slides away,
    then the tile rises from its own bottom edge, the orange wave fills it (a thin marker rides the wave's edge) and the face appears;
-   unfolding plays it back, a little faster. Transitions only start after the first paint (.px-lg-ready). */
+   unfolding plays it back, a little faster. Transitions only start after the first paint (.px-lg-ready).
+   Dark theme: the icon's top is white with a navy wink; light theme: navy top with an orange wink. */
 .px-logo-full, .px-logo-icon { display: none !important; }
-.px-lg { --ink: #FFFFFF; --tile: #2B3F66; display: block; flex: none; width: 112px; height: 46px; color: var(--ink); }
-html:not([data-theme="dark"]) .px-lg { --ink: #1B2A47; --tile: #1B2A47; }
+.px-lg { --ink: #FFFFFF; --tile: #FFFFFF; --eye: #1B2A47; display: block; flex: none; width: 112px; height: 46px; color: var(--ink); }
+html:not([data-theme="dark"]) .px-lg { --ink: #1B2A47; --tile: #1B2A47; --eye: #F7A823; }
 .px-lg svg { display: block; overflow: visible; max-width: none; }
 .px-lg-gl { fill: currentColor; }
 .px-lg-x { fill: none; stroke: currentColor; stroke-linecap: round; }
-.px-lg-dot, .px-lg-smile, .px-lg-wave path, .px-lg-eye, .px-lg-mark { fill: #F7A823; }
+.px-lg-dot, .px-lg-smile, .px-lg-wave path, .px-lg-mark { fill: #F7A823; }
+.px-lg-eye { fill: var(--eye); }
 .px-lg-ground { fill: var(--tile); }
 .px-lg-mouth { fill: #1B2A47; }
-.px-lg-wink { fill: none; stroke: #F7A823; stroke-width: 30; stroke-linecap: round; }
+.px-lg-wink { fill: none; stroke: var(--eye); stroke-width: 30; stroke-linecap: round; }
 /* open state: the icon waits below its own edge */
 .px-lg-tile { transform: translateY(520px); }
 .px-lg-wave { transform: translateY(330px); }
