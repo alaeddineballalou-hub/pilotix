@@ -241,3 +241,10 @@
   .dr-row-d { padding: 0 14px 14px; }
 }
 @media (prefers-reduced-motion: reduce) { .dr-row-ch, .dr-tools .bji { transition: none; } }
+/* group headers: a light bar of the group's colour, the count, the fold arrow on the right */
+.dr-grp > .dr-gh { width: 100%; justify-content: flex-start; padding: 9px 12px; border-radius: 12px; background: var(--cs); }
+.dr-grp > .dr-gh > span:not(.bji) { background: var(--c); color: #fff; }
+.dr-grp.dr-warn > .dr-gh > span:not(.bji) { color: #5C3D00; }
+.dr-grp > .dr-gh > .bji { margin-inline-start: auto; width: 18px; height: 18px; min-width: 0; padding: 0; background: none; color: var(--ink); opacity: .7; transition: transform .2s; }
+.dr-grp > .dr-gh[aria-expanded="true"] > .bji { transform: rotate(180deg); }
+.dr-grp > .dr-gh:hover { filter: brightness(.98); }
