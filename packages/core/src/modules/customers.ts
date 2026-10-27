@@ -104,7 +104,7 @@ export const customersProcs = {
       if (!i.id && !phone) throw bad('Indiquez le client');
       const r = (
         await ctx.db.query(
-          `UPDATE customers SET blacklisted = $3, blacklist_reason = CASE WHEN $3 THEN $4 ELSE NULL END
+          `UPDATE customers SET blacklisted = $3, blacklist_reason = CASE WHEN $3 THEN $4 ELSE NULL END, blacklist_auto = false
            WHERE ($1::bigint IS NOT NULL AND id = $1) OR ($1::bigint IS NULL AND phone = $2) RETURNING id, phone`,
           [i.id ?? null, phone, i.on, i.reason || null],
         )

@@ -79,7 +79,12 @@
   "flag": {
     "dup": "DUPLICATE?",
     "black": "BLACKLIST",
-    "exchange": "exchange"
+    "exchange": "exchange",
+    "stopdesk": "STOP-DESK ONLY",
+    "refused": "{{n}} REFUSED",
+    "look": "LOOK-ALIKE?",
+    "lookHint": "Looks like {{phone}}, a customer who refuses parcels",
+    "stopdeskHint": "Refused 2 parcels: desk delivery only"
   },
   "attemptN": "Attempt {{n}}",
   "callbackAt": "call back {{when}}",

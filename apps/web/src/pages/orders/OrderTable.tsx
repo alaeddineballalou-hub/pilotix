@@ -10,6 +10,7 @@ import { useSession } from '../../lib/session';
 import { confLabel } from './shared';
 import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import { CopyCode } from '../../ui/CopyCode';
+import { TrustFlags } from './TrustFlags';
 
 /** Built-in columns, in the original order. */
 export type OrderColumn = 'order' | 'client' | 'address' | 'products' | 'variant' | 'total' | 'conf' | 'follow' | 'company' | 'agent' | 'fagent' | 'phone' | 'wilaya' | 'since';
@@ -116,6 +117,7 @@ export function OrderTable(p: OrderTableProps) {
             <small>{when(o.createdAt)}</small>
             {o.possibleDuplicate && <span className="flag dup">{t('orders.flag.dup')}</span>}
             {o.blacklisted && <span className="flag">{t('orders.flag.black')}</span>}
+            <TrustFlags o={o} />
             {o.isExchange && <span className="chip">{t('orders.flag.exchange')}</span>}
           </td>
         );

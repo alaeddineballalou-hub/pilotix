@@ -32,7 +32,8 @@ import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, notFound, proc, publicApi } from '../rpc';
 import { clientHomeFees, getSetting, setSetting } from '../settings';
-import { BOT_UA, FRAUD_THRESHOLDS, FraudLevel, FraudReason, scoreOrder } from './fraud';
+import { BOT_UA, FraudLevel, FraudReason, scoreOrder, verdictOf } from './fraud';
+import { lookAlikeOf, trustOf } from './trust';
 import { ABANDONED, abandonCutoff, freeLandingSlug, landingCounts, landingSettings, LandingSettings, landingStore, queuePurchase, quickCreatePage, STORE_RESERVED } from './landingquery';
 import { sendInPreview } from './notify';
 import { addEvent, createOrder, noOrderAccess } from './orders';
@@ -431,9 +432,13 @@ const adsetOf = (utm: Record<string, string> | null) => (utm?.adset_id && /^\d{5
 /** Meta's click id: the _fbc cookie, else made from the ad link's fbclid (fb.1.<ms>.<fbclid>). */
 const fbcOf = (cookie: string, sent: string, utm: Record<string, string> | null, now: number) => cookie || sent || (utm?.fbclid ? `fb.1.${now}.${utm.fbclid}` : '');
 
-async function phoneHistory(db: Db, phone: string | null) {
+async function phoneHistory(db: Db, phone: string | null, look?: { name: string; wilayaId: number | null; commune: string; device: string | null }) {
   if (!phone) return { blacklisted: false, orders: 0, delivered: 0, returned: 0, cancelled: 0 };
-  const c = (await db.query('SELECT blacklisted FROM customers WHERE phone = $1', [phone]))[0];
+  const c = (await db.query('SELECT id, blacklisted, blacklist_auto, delivered FROM customers WHERE phone = $1', [phone]))[0];
+  // worked out live (not the stored count): the parcels refused since the last delivered one
+  const refusals = c ? (await trustOf(db, num(c.id))).refusals : 0;
+  // a number that never received a parcel and looks like a refuser
+  const lookAlike = !!look && !c?.blacklisted && !num(c?.delivered) && !!(await lookAlikeOf(db, { phone, ...look }));
   const h = (
     await db.query(
       `SELECT count(*)::int AS n,
@@ -444,7 +449,10 @@ async function phoneHistory(db: Db, phone: string | null) {
       [phone, CONF_DONE_BAD],
     )
   )[0];
-  return { blacklisted: !!c?.blacklisted, orders: num(h?.n), delivered: num(h?.d), returned: num(h?.r), cancelled: num(h?.c) };
+  return {
+    blacklisted: !!c?.blacklisted, orders: num(h?.n), delivered: num(h?.d), returned: num(h?.r), cancelled: num(h?.c),
+    blacklistAuto: !!c?.blacklist_auto, refusals, lookAlike,
+  };
 }
 
 async function recentCounts(db: Db, a: { phone: string | null; productId: number; ip: string; device: string; now: number }) {
@@ -588,6 +596,8 @@ export const FRAUD_LABELS_FR: Record<string, string> = {
   device_rain: 'beaucoup de nouveaux appareils, même adresse', device_competitor: 'appareil marqué « concurrent »', device_fake_again: 'appareil déjà 2 fois en fausse commande',
   device_fake: 'appareil déjà en fausse commande', phone_victim: 'numéro utilisé dans de fausses commandes (vérifiez que c’est bien lui)', no_browse: 'directement au formulaire', read_page: 'a lu la page', phone_pasted: 'numéro collé', from_ad: 'vient de la pub',
   not_from_ad: 'ne vient pas de la pub', qty_unusual: 'quantité inhabituelle', merged: 'commande renvoyée : fusionnée',
+  refused_once: 'a déjà refusé un colis', refused_twice: 'a refusé 2 colis (stop-desk uniquement)', refuser_blocked: 'refuse ses colis (liste noire automatique)',
+  looks_like: 'ressemble à un client qui refuse ses colis',
 };
 const reasonsText = (rs: FraudReason[]) => rs.filter((r) => r.points > 0).map((r) => FRAUD_LABELS_FR[r.code] ?? r.code).join(', ');
 
@@ -711,7 +721,7 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
       userAgent: i.meta.ua ?? '',
       webdriver: i.wd,
       recent: { ...(await recentCounts(db, { phone, productId, ip, device, now })), ...(await handCounts(db, { phone, productId, ip, device, name: i.name, wilayaId, now })) },
-      history: await phoneHistory(db, phone),
+      history: await phoneHistory(db, phone, { name: i.name, wilayaId: wilayaId || null, commune: i.commune, device: device || null }),
       ipCountry: i.meta.country ? i.meta.country.toUpperCase() : null,
       ipWilaya: ipWilaya(i.meta.city ?? '', i.meta.region ?? ''),
       wilayaId,
@@ -735,8 +745,7 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
   if (mergeInto && result.verdict !== 'block' && result.reasons.some((r) => r.code === 'duplicate')) {
     result.reasons = result.reasons.filter((r) => r.code !== 'duplicate');
     result.score = Math.max(0, Math.min(100, result.reasons.reduce((n, r) => n + r.points, 0)));
-    const t = FRAUD_THRESHOLDS[(['relaxed', 'normal', 'strict'].includes(l.fraud_level) ? l.fraud_level : 'normal') as FraudLevel];
-    result.verdict = result.score >= t.block ? 'block' : result.score >= t.review ? 'review' : 'allow';
+    result.verdict = verdictOf(result.score, false, result.reasons, (['relaxed', 'normal', 'strict'].includes(l.fraud_level) ? l.fraud_level : 'normal') as FraudLevel);
   }
   const unitPrice = unitPriceOf(numOrNull(l.price), pc, variant?.id ?? null);
   const variantId = variant?.id ?? (pc.variants.length ? null : pc.plainVariantId);
@@ -796,7 +805,7 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
         internalNote: review ? reviewNote(result) : null,
       },
       db,
-      { landingId: num(l.id), adsetId: adsetOf(i.utm) },
+      { landingId: num(l.id), adsetId: adsetOf(i.utm), device: device || null },
     );
     orderId = o.id;
     ref = o.ref;
@@ -930,7 +939,7 @@ async function leadVerdict(db: Db, a: any, now: number) {
         ...(await recentCounts(db, { phone, productId: num(a.product_id), ip: String(a.ip ?? ''), device: String(a.device ?? ''), now })),
         ...(await handCounts(db, { phone, productId: num(a.product_id), ip: String(a.ip ?? ''), device: String(a.device ?? ''), name: String(a.customer_name ?? ''), wilayaId: num(a.wilaya_id), now })),
       },
-      history: await phoneHistory(db, phone),
+      history: await phoneHistory(db, phone, { name: String(a.customer_name ?? ''), wilayaId: numOrNull(a.wilaya_id), commune: String(a.commune ?? ''), device: a.device ? String(a.device) : null }),
       ipCountry: null,
       ipWilaya: null,
       wilayaId: num(a.wilaya_id),
@@ -973,7 +982,7 @@ async function convertLead(ctx: Ctx, db: Db, a: any, auto: boolean, warn: string
     },
     db,
     // no « we received your order » message: the customer did not send it, the agents call
-    { landingId: numOrNull(a.landing_id), adsetId: adsetOf(utm), silent: true },
+    { landingId: numOrNull(a.landing_id), adsetId: adsetOf(utm), silent: true, device: a.device ? String(a.device) : null },
   );
   await db.query(
     `UPDATE landing_leads SET status = 'converted', order_id = $2, auto_order = $3, handled_by = $4, handled_at = now(), abandoned_at = COALESCE(abandoned_at, last_at), note = NULL WHERE id = $1`,

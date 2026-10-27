@@ -18,7 +18,9 @@ export const FRAUD_THRESHOLDS: Record<FraudLevel, { review: number; block: numbe
 };
 
 /** certain signals: the order is blocked whatever the good signals say */
-export const HARD_CODES = ['honeypot', 'phone_invalid', 'phone_repeat', 'phone_sequence', 'form_invalid', 'too_fast', 'pow_bad', 'pow_replay', 'webdriver', 'device_numbers', 'device_competitor', 'device_fake_again', 'recent_block'];
+export const HARD_CODES = ['honeypot', 'phone_invalid', 'phone_repeat', 'phone_sequence', 'form_invalid', 'too_fast', 'pow_bad', 'pow_replay', 'webdriver', 'device_numbers', 'device_competitor', 'device_fake_again', 'recent_block', 'refuser_blocked'];
+/** never « allowed » alone: a person calls first (a customer who refused a parcel, a look-alike of a refuser) */
+export const YELLOW_CODES = ['refused_once', 'refused_twice', 'looks_like'];
 
 /** what the page saw of the visitor (sent by the page with the order; absent for older pages and abandoned orders) */
 export interface FraudBehavior {
@@ -78,7 +80,19 @@ export interface FraudFacts {
   turnstile?: 'ok' | 'fail' | 'off';
   behavior?: FraudBehavior | null;
   /** what Pilotix knows of this phone */
-  history: { blacklisted: boolean; orders: number; delivered: number; returned: number; cancelled: number };
+  history: {
+    blacklisted: boolean;
+    orders: number;
+    delivered: number;
+    returned: number;
+    cancelled: number;
+    /** blacklisted by Pilotix itself (refused 3 parcels): blocked silently */
+    blacklistAuto?: boolean;
+    /** parcels refused since the last delivered one (the customer's trust) */
+    refusals?: number;
+    /** a new number that looks like a refuser (same device, or same name + commune) */
+    lookAlike?: boolean;
+  };
   /** soft: country / wilaya from the IP when the host gives them (Cloudflare headers…) */
   ipCountry: string | null;
   ipWilaya: number | null;
@@ -198,12 +212,19 @@ export function scoreOrder(f: FraudFacts, level: FraudLevel = 'normal'): FraudRe
 
   // 6. what Pilotix already knows of this phone
   const h = f.history;
-  if (h.blacklisted) add('blacklisted', 60);
-  if (h.returned >= 2 && h.returned >= h.delivered) add('returns_many', 35);
+  if (h.blacklisted && h.blacklistAuto) add('refuser_blocked', 100);
+  else if (h.blacklisted) add('blacklisted', 60);
+  if (h.refusals !== undefined) {
+    // the customer's trust from their parcels (a paid delivery forgives: counted since the last one)
+    // (3 refusals and no longer blacklisted: a person lifted it, so only checked)
+    if (h.refusals >= 2) add('refused_twice', 50);
+    else if (h.refusals === 1) add('refused_once', 40);
+  } else if (h.returned >= 2 && h.returned >= h.delivered) add('returns_many', 35);
   else if (h.returned >= 1) add('returns_some', 10);
+  if (h.lookAlike) add('looks_like', 40);
   if (h.cancelled >= 3 && h.delivered === 0) add('cancels_many', 20);
   // a customer who already received and paid: trusted (only a certain signal can block them)
-  if (h.delivered >= 1 && h.returned === 0 && !h.blacklisted) add('good_customer', -100);
+  if (h.delivered >= 1 && (h.refusals ?? h.returned) === 0 && !h.blacklisted && !h.lookAlike) add('good_customer', -100);
 
   // 7. soft signals: never enough alone
   const newNumber = h.orders === 0;
@@ -216,6 +237,12 @@ export function scoreOrder(f: FraudFacts, level: FraudLevel = 'normal'): FraudRe
   const reasons = dedupe(r).sort((a, b) => b.points - a.points);
   const hard = reasons.some((x) => HARD_CODES.includes(x.code));
   const score = hard ? 100 : Math.max(0, Math.min(100, reasons.reduce((s, x) => s + x.points, 0)));
+  return { score, verdict: verdictOf(score, hard, reasons, level), reasons };
+}
+
+export function verdictOf(score: number, hard: boolean, reasons: FraudReason[], level: FraudLevel): FraudVerdict {
   const t = FRAUD_THRESHOLDS[level];
-  return { score, verdict: hard || score >= t.block ? 'block' : score >= t.review ? 'review' : 'allow', reasons };
+  if (hard || score >= t.block) return 'block';
+  if (score >= t.review || reasons.some((x) => YELLOW_CODES.includes(x.code))) return 'review';
+  return 'allow';
 }
