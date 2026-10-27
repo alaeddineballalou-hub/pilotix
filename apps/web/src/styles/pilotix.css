@@ -1843,3 +1843,11 @@ html:not([data-theme="dark"]) body .spy .spy-a { color: var(--c-accent-ink); }
 html:not([data-theme="dark"]) body .bjp-ib-d { color: var(--c-bad-ink); }
 html:not([data-theme="dark"]) body .bjg-def { color: var(--c-ok-ink); }
 html body .cm-soon { opacity: .8; }
+/* round 5 — phone screens (390 px) in dark: navy numbers and labels painted on dark cards */
+html[data-theme="dark"] :is(.pxl-sum b.nv, .pxl-nums > span.nv, .pxk-amt.tr, .pxv-kind.on .bji) { color: #93B4FF; }
+html[data-theme="dark"] .pxl-st.na { color: #C3CBD9; }
+html[data-theme="dark"] .pxl-ai { color: var(--ink); }
+html[data-theme="dark"] .pxl-plus { background: var(--c-accent-tint); }
+html[data-theme="dark"] :is(.pxs-tl q.n, .pxk-mi.tr) { background: var(--c-info-tint); color: #DCE6FF; }
+html[data-theme="dark"] .pxlc-due > button { background: #fff; color: #137A3B; }
+html[data-theme="dark"] .pxk-av:not(.nv, .or) { background: rgba(255, 255, 255, .1); color: var(--ink); }
