@@ -274,11 +274,20 @@ class RemoteBackend implements Backend {
 // ---------------------------------------------------------------- demo (PostgreSQL in the browser, same rules)
 /** Actions whose result the demo keeps in this browser across reloads (its database is rebuilt each time). */
 const DEMO_KEEP = new Set(['confirmation.addColPreset', 'confirmation.deleteColPreset', 'me.setUi']);
+/** Actions that need the demo's partners (a confirmation agency, a marketer): they are made the first time. */
+const NEEDS_PARTNERS = /^(partners|agency|mk)\./;
+type Core = typeof import('@pilotix/core');
+type ShopCtx = NonNullable<import('@pilotix/core').Ctx['shop']>;
 class DemoBackend implements Backend {
   kind = 'demo' as const;
   private session: Session | null = null;
+  /** the partner's space opened (its schema and rules); null: the demo store */
+  private space: { schema: string; shop: ShopCtx } | null = null;
+  /** the demo store's rules, once the platform's tables exist (with the partners) */
+  private storeShop: ShopCtx | null = null;
   private listeners = new Set<(e: LiveEvent) => void>();
-  private ready: Promise<{ core: typeof import('@pilotix/core'); db: import('@pilotix/core').Db }> | null = null;
+  private ready: Promise<{ core: Core; db: import('@pilotix/core').Db; t: import('@pilotix/core').Tenancy }> | null = null;
+  private partners: Promise<void> | null = null;
   progress: (msg: string) => void = () => {};
 
   private boot() {
@@ -288,22 +297,48 @@ class DemoBackend implements Backend {
         this.progress('Démarrage de la base de démonstration…');
         const [{ PGlite }, core] = await Promise.all([import('@electric-sql/pglite'), import('@pilotix/core')]);
         const pg = new PGlite();
-        const db = core.pgliteDb(pg as any);
-        await core.migrate(db, async (sql) => {
-          await pg.exec(sql);
-        });
+        // several shops in one database (the store, and the partners made when first needed), as on a server
+        const t = core.pgliteTenancy(pg as any);
+        const db = t.shop('public');
+        await core.migrate(db, (sql) => t.exec('public', sql));
         this.progress('Création des commandes d’exemple…');
         await core.seedDemo(db, { orders: Number(import.meta.env.VITE_DEMO_ORDERS) || 1200 });
         // the demo database is rebuilt on every reload: put back the column presets and screen choices kept in this browser
         await core.demoRestore(db, store.json<import('@pilotix/core').DemoKeep | null>('demo-keep', null)).catch(() => {});
-        return { core, db };
+        return { core, db, t };
       })();
     return this.ready;
   }
+  /** The demo's confirmation agency and marketer, with their teams, contracts, orders, ad sets and bills (once). */
+  private withPartners() {
+    if (!this.partners)
+      this.partners = (async () => {
+        const { core, t } = await this.boot();
+        this.progress('Création de l’agence et du marketer d’exemple…');
+        await core.seedDemoPartners(t);
+        const s = (await core.loadShop(t, { primary: true }))!;
+        this.storeShop = core.shopCtx(s, core.shopStatus(s, Date.now(), (await core.platformSettings(t)).trial.graceDays));
+      })();
+    return this.partners;
+  }
   async login(email: string, password: string): Promise<LoginResult> {
-    const { core, db } = await this.boot();
+    const { core, db, t } = await this.boot();
+    const { DEMO_PARTNER_ACCOUNTS } = await import('@pilotix/shared');
+    const partner = DEMO_PARTNER_ACCOUNTS.find((a) => a.email === email.trim().toLowerCase());
     try {
-      this.session = await core.login(db, email, password);
+      if (partner) {
+        // the partner's own space: its shop, its rules, what the app shows of it
+        await this.withPartners();
+        const s = (await core.loadShops(t)).find((x) => x.kind === partner.kind)!;
+        const set = await core.platformSettings(t);
+        const st = core.shopStatus(s, Date.now(), set.trial.graceDays);
+        const session = await core.login(t.shop(s.schema), email, password);
+        this.session = { ...session, shop: core.shopInfo(s, st, set, Date.now()) };
+        this.space = { schema: s.schema, shop: core.shopCtx(s, st) };
+      } else {
+        this.session = await core.login(db, email, password);
+        this.space = null;
+      }
     } catch (e: any) {
       throw new ApiError(401, e.message);
     }
@@ -323,20 +358,27 @@ class DemoBackend implements Backend {
   }
   logout() {
     this.session = null;
+    this.space = null;
     store.set('demo-user', null);
   }
-  async call<N extends ProcName>(name: N, input: In<N>): Promise<Out<N>> {
-    const { core, db } = await this.boot();
+  async call<N extends ProcName>(name: N, input: In<N>, seller?: Seller): Promise<Out<N>> {
+    const { core, db, t } = await this.boot();
     if (!this.session) throw new ApiError(401, 'Session expirée');
     const s = this.session;
+    if (this.space || NEEDS_PARTNERS.test(String(name))) await this.withPartners();
     // Dellal, the CM AI agent and AI Spy answer with Claude when the preview is opened in Claude (see dellal-page-ai.ts)
     const dellalAi = /^(dellal|cm|spy)\./.test(String(name)) ? await pageAi() : null;
+    const base = { session: s, now: () => Date.now(), emit: (e: LiveEvent) => setTimeout(() => this.listeners.forEach((l) => l(e)), 0), ...(dellalAi ? { dellalAi } : {}) };
+    // a partner's space: its own shop, and the seller chosen at the top of the page (its work runs in that store)
+    const ctx = this.space
+      ? { ...base, db: t.shop(this.space.schema), t, shop: this.space.shop, ...(seller !== undefined ? { seller } : {}) }
+      : { ...base, db, ...(this.storeShop ? { t, shop: this.storeShop } : {}) };
     try {
-      const out = (await core.call(name as string, { db, session: s, now: () => Date.now(), emit: (e) => setTimeout(() => this.listeners.forEach((l) => l(e)), 0), ...(dellalAi ? { dellalAi } : {}) }, input)) as Out<N>;
-      if (DEMO_KEEP.has(name as string)) await core.demoSnapshot(db).then((k) => store.set('demo-keep', JSON.stringify(k))).catch(() => {});
+      const out = (await core.call(name as string, ctx as import('@pilotix/core').Ctx, input)) as Out<N>;
+      if (DEMO_KEEP.has(name as string) && !this.space) await core.demoSnapshot(db).then((k) => store.set('demo-keep', JSON.stringify(k))).catch(() => {});
       return out;
     } catch (e: any) {
-      const status = { forbidden: 403, not_found: 404, bad_request: 400, conflict: 409, unauthorized: 401 }[e?.code as string] ?? 500;
+      const status = { forbidden: 403, not_found: 404, bad_request: 400, conflict: 409, unauthorized: 401, payment_required: 402 }[e?.code as string] ?? 500;
       throw new ApiError(status, e?.message ?? 'Erreur');
     }
   }

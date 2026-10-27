@@ -1,4 +1,4 @@
-import { DEMO_ACCOUNTS, DEMO_PASSWORD, Language, LANGUAGES } from '@pilotix/shared';
+import { DEMO_ACCOUNTS, DEMO_PARTNER_ACCOUNTS, DEMO_PASSWORD, Language, LANGUAGES } from '@pilotix/shared';
 import { FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { backend, DEMO_AVAILABLE, DEMO_ONLY, FIXED_SERVER, forgotAvailable, onDemoProgress, requestPasswordReset, serverDemo, serverUrl, setServerUrl, signupInfo, switchDemo } from '../lib/backend';
@@ -207,6 +207,12 @@ export function Login() {
               {DEMO_ACCOUNTS.map((a) => (
                 <button key={a.email} type="button" className="btn small" disabled={!!busy} onClick={() => demo(a.email)}>
                   {busy === a.email ? '…' : `${t(`roles.${a.roles[0]}`)} (${a.name.replace(/ \(.*\)/, '')})`}
+                </button>
+              ))}
+              {/* the demo store's partners: a confirmation agency and a marketer, each in its own space */}
+              {DEMO_PARTNER_ACCOUNTS.map((a) => (
+                <button key={a.email} type="button" className={`btn small ${a.kind === 'marketer' ? 'mkx-demo' : 'agx-demo'}`} disabled={!!busy} onClick={() => demo(a.email)}>
+                  {busy === a.email ? '…' : `${t(`agency.acct.${a.kind}.t`)} · ${a.shop}`}
                 </button>
               ))}
             </div>

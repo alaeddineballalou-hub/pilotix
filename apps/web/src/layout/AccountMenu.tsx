@@ -2,6 +2,7 @@ import type { Session } from '@pilotix/shared';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Avatar } from '../pages/profil/Avatar';
+import { backend } from '../lib/backend';
 import { Icon } from '../ui/kit';
 import { AddStoreModal, SwitchStoreModal } from './Accounts';
 
@@ -57,7 +58,7 @@ export function AccountMenu({ session, onLogout, lang, onTheme }: { session: Ses
           {item('settings', t('profil.tSettings'), () => go('parametres'))}
           {(!shop?.kind || shop.kind === 'store') && !p.agencyId && item('gift', t('profil.tRef'), () => go('parrainage'))}
           {item('lock', t('profil.pwd'), () => go('securite'))}
-          {shop && !shop.demo && (shop.stores > 0 || shop.canAddStore || shop.canAddAgency || shop.canAddMarketer || session.isAdmin) && (
+          {shop && !shop.demo && backend.kind !== 'demo' && (shop.stores > 0 || shop.canAddStore || shop.canAddAgency || shop.canAddMarketer || session.isAdmin) && (
             <>
               <hr />
               {shop.stores > 0 && item('swap', t('shop.acc.switch'), () => (setOpen(false), setModal('switch')))}

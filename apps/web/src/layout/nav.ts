@@ -1,4 +1,5 @@
 import type { Role } from '@pilotix/shared';
+import { backend } from '../lib/backend';
 import { currentShop, pageIsOn } from '../lib/features';
 
 /**
@@ -91,9 +92,9 @@ export const NAV: NavItem[] = [
   { id: 'livraison', icon: 'truck', roles: [], subs: ['societes', 'api', 'livreurs'] },
   { id: 'utilisateurs', icon: 'usercog', roles: [], manageUsers: true, subs: ['roles', 'admins', 'vendeurs', 'agents', 'marketeurs', 'managers'] },
   // confirmation agencies working for the store (its code, requests both ways, contracts, numbers, payments)
-  { id: 'agences', icon: 'handshake', roles: [], onlyIf: () => !!currentShop() && !currentShop()!.demo },
+  { id: 'agences', icon: 'handshake', roles: [], onlyIf: partnersOn },
   // marketers running the store's ads (the same, on their own: a marketer has nothing to do with the agencies)
-  { id: 'marketers', icon: 'trend', roles: [], onlyIf: () => !!currentShop() && !currentShop()!.demo },
+  { id: 'marketers', icon: 'trend', roles: [], onlyIf: partnersOn },
   { id: 'management', icon: 'briefcase', roles: [], subs: ['statuts', 'paie', 'prix', 'canaux', 'archive'] },
   { id: 'reglages', icon: 'settings', roles: [] },
   { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'parrainage', 'securite'] },
@@ -123,6 +124,15 @@ export function homeFor(roles: Role[], isAdmin: boolean): string {
  * The menu of a confirmation agency: like a store's (Accueil, Commandes › Confirmation / Suivi, Utilisateurs,
  * Réglages), on its sellers' orders (the seller picker at the top of the page), plus its sellers and its bills.
  */
+/**
+ * The store's « Agences » and « Marketers »: on a multi-shop server (not in its shared demo shop, whose accounts every
+ * visitor uses), and in the in-browser demo (its own agency and marketer are made there).
+ */
+function partnersOn(): boolean {
+  const s = currentShop();
+  return s ? !s.demo : backend.kind === 'demo';
+}
+
 export const AGENCY_NAV: NavItem[] = [
   { id: 'accueil', icon: 'home', roles: null },
   {
