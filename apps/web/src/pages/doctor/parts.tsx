@@ -140,75 +140,100 @@ export function DoctorHero({ title, sub, score, items, checkedAt, badge }: { tit
   );
 }
 
-/** One problem (or one check that is fine): what is wrong, the worst cases, what to do, where. */
-export function DoctorCard({ item }: { item: DoctorItem }) {
-  const { t } = useTranslation();
+/** The sentence of one check: its problem, or what is fine. */
+function itemTitle(t: (k: string, o?: any) => string, item: DoctorItem) {
   const p = fmtParams(item.params);
   const key = `doctor.c.${item.id}`;
   const open = item.level === 'bad' || item.level === 'warn';
+  return open ? t(`${key}.title`, p) : t(`${key}.${item.level === 'info' ? 'info' : 'okTitle'}`, { ...p, defaultValue: t(`${key}.short`, p) });
+}
+
+/** One line of the list: colour, icon, the sentence, its team; a click unfolds why, the worst cases, what to do, where. */
+function DoctorRow({ item, open, onToggle }: { item: DoctorItem; open: boolean; onToggle: () => void }) {
+  const { t } = useTranslation();
+  const p = fmtParams(item.params);
+  const key = `doctor.c.${item.id}`;
+  const problem = item.level === 'bad' || item.level === 'warn';
+  const id = `dr-row-${item.id}`;
   return (
-    <article className={`dr-card dr-${item.level}`}>
-      <span className="dr-card-ic">
-        <Icon name={AREA_ICON[item.area] ?? 'help'} />
-      </span>
-      <div className="dr-card-b">
-        <div className="dr-card-h">
-          <span className="dr-area">{t(`doctor.area.${item.area}`)}</span>
-          <span className={`dr-tag dr-${item.level}`}>{t(`doctor.tag.${item.level}`)}</span>
+    <li className={`dr-row dr-${item.level} ${open ? 'open' : ''}`}>
+      <button type="button" className="dr-row-h" aria-expanded={open} aria-controls={id} onClick={onToggle}>
+        <i className="dr-row-bar" aria-hidden="true" />
+        <span className="dr-row-ic">
+          <Icon name={AREA_ICON[item.area] ?? 'help'} />
+        </span>
+        <span className="dr-row-t">
+          <b>{itemTitle(t, item)}</b>
+          <small>{t(`doctor.area.${item.area}`)}</small>
+        </span>
+        <span className={`dr-tag dr-${item.level}`}>{t(`doctor.tag.${item.level}`)}</span>
+        <Icon name="chevron" className="dr-row-ch" />
+      </button>
+      {open && (
+        <div className="dr-row-d" id={id}>
+          {problem && <p className="dr-why">{t(`${key}.${item.params?.amount !== undefined ? 'whyMoney' : 'why'}`, { ...p, defaultValue: t(`${key}.why`, p) })}</p>}
+          {!!item.list?.length && (
+            <ul className="dr-list">
+              {item.list.map((l, i) => (
+                <li key={i}>
+                  <span>{l.wilaya ? wilaya(l.wilaya) : item.id === 'jobs' ? t(`doctor.job.${l.label}`, { defaultValue: l.label }) : l.label}</span>
+                  {l.unit !== 'text' && <b className="ltr">{lineValue(t, l)}</b>}
+                </li>
+              ))}
+            </ul>
+          )}
+          {problem && (
+            <p className="dr-fix">
+              <Icon name="checkcircle" />
+              <span>{t(`${key}.fix`, p)}</span>
+            </p>
+          )}
+          {!problem && <p className="dr-why">{t(`${key}.short`, p)}</p>}
+          {problem && item.href && (
+            <a className="btn small primary dr-go" href={item.href}>
+              {t('doctor.go')}
+            </a>
+          )}
         </div>
-        <h3>{open ? t(`${key}.title`, p) : t(`${key}.${item.level === 'info' ? 'info' : 'okTitle'}`, { ...p, defaultValue: t(`${key}.short`, p) })}</h3>
-        {open && <p className="dr-why">{t(`${key}.${item.params?.amount !== undefined ? 'whyMoney' : 'why'}`, { ...p, defaultValue: t(`${key}.why`, p) })}</p>}
-        {!!item.list?.length && (
-          <ul className="dr-list">
-            {item.list.map((l, i) => (
-              <li key={i}>
-                <span>{l.wilaya ? wilaya(l.wilaya) : item.id === 'jobs' ? t(`doctor.job.${l.label}`, { defaultValue: l.label }) : l.label}</span>
-                <b className="ltr">{lineValue(t, l)}</b>
-              </li>
-            ))}
-          </ul>
-        )}
-        {open && (
-          <p className="dr-fix">
-            <Icon name="checkcircle" />
-            <span>{t(`${key}.fix`, p)}</span>
-          </p>
-        )}
-      </div>
-      {open && item.href && (
-        <a className="btn small primary dr-go" href={item.href}>
-          {t('doctor.go')}
-        </a>
       )}
-    </article>
+    </li>
   );
 }
 
-/** Every check: the problems first; what is fine folded as small green lines. */
+type Group = 'bad' | 'warn' | 'ok';
+
+/**
+ * Every check, as a list that folds: the urgent ones, then the ones to watch, then what is fine. Each group folds on its
+ * own, each line unfolds its details, and one button folds or unfolds everything. What is open stays open while the
+ * page updates itself.
+ */
 export function DoctorList({ items }: { items: DoctorItem[] }) {
   const { t } = useTranslation();
-  const [showOk, setShowOk] = useState(false);
-  const open = items.filter((i) => i.level === 'bad' || i.level === 'warn');
-  const rest = items.filter((i) => i.level === 'ok' || i.level === 'info');
-  const group = (lv: DoctorLevel, label: string) => {
-    const xs = open.filter((i) => i.level === lv);
-    if (!xs.length) return null;
-    return (
-      <div className="dr-group">
-        <h3 className={`dr-gh dr-${lv}`}>
-          {label} <span>{xs.length}</span>
-        </h3>
-        <div className="dr-cards">
-          {xs.map((i) => (
-            <DoctorCard key={i.id} item={i} />
-          ))}
-        </div>
-      </div>
-    );
+  const groups: { g: Group; label: string; xs: DoctorItem[] }[] = [
+    { g: 'bad', label: t('doctor.g.bad'), xs: items.filter((i) => i.level === 'bad') },
+    { g: 'warn', label: t('doctor.g.warn'), xs: items.filter((i) => i.level === 'warn') },
+    { g: 'ok', label: t('doctor.g.ok'), xs: items.filter((i) => i.level === 'ok' || i.level === 'info') },
+  ];
+  const shown = groups.filter((x) => x.xs.length);
+  // groups: urgent and to watch open, what is fine folded; lines: all folded
+  const [closed, setClosed] = useState<Record<Group, boolean>>({ bad: false, warn: false, ok: true });
+  const [rows, setRows] = useState<Set<string>>(() => new Set());
+  const everythingOpen = shown.every((x) => !closed[x.g]) && items.every((i) => rows.has(i.id));
+  const all = (open: boolean) => {
+    setClosed({ bad: !open, warn: !open, ok: !open });
+    setRows(open ? new Set(items.map((i) => i.id)) : new Set());
   };
+  const toggleRow = (id: string) =>
+    setRows((cur) => {
+      const n = new Set(cur);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const problems = groups[0].xs.length + groups[1].xs.length;
   return (
     <div className="dr-body">
-      {!open.length && (
+      {!problems && (
         <div className="dr-allgood">
           <Icon name="checkcircle" />
           <div>
@@ -217,32 +242,27 @@ export function DoctorList({ items }: { items: DoctorItem[] }) {
           </div>
         </div>
       )}
-      {group('bad', t('doctor.g.bad'))}
-      {group('warn', t('doctor.g.warn'))}
-      {!!rest.length && (
-        <div className="dr-group">
-          <button type="button" className="dr-gh dr-ok dr-fold" aria-expanded={showOk} onClick={() => setShowOk((v) => !v)}>
-            {t('doctor.g.ok')} <span>{rest.length}</span>
+      <div className="dr-tools">
+        <button type="button" className="btn small" onClick={() => all(!everythingOpen)}>
+          <Icon name="chevron" className={everythingOpen ? 'dr-up' : ''} />
+          {everythingOpen ? t('doctor.foldAll') : t('doctor.unfoldAll')}
+        </button>
+      </div>
+      {shown.map(({ g, label, xs }) => (
+        <section key={g} className={`dr-grp dr-${g}`}>
+          <button type="button" className="dr-gh dr-fold" aria-expanded={!closed[g]} onClick={() => setClosed((c) => ({ ...c, [g]: !c[g] }))}>
+            {label} <span>{xs.length}</span>
             <Icon name="chevron" />
           </button>
-          {showOk ? (
-            <div className="dr-cards">
-              {rest.map((i) => (
-                <DoctorCard key={i.id} item={i} />
+          {!closed[g] && (
+            <ul className="dr-rows">
+              {xs.map((i) => (
+                <DoctorRow key={i.id} item={i} open={rows.has(i.id)} onToggle={() => toggleRow(i.id)} />
               ))}
-            </div>
-          ) : (
-            <div className="dr-okline">
-              {rest.map((i) => (
-                <span key={i.id} className={`dr-okchip dr-${i.level}`}>
-                  <Icon name={i.level === 'ok' ? 'check' : 'hourglass'} />
-                  {t(`doctor.c.${i.id}.short`)}
-                </span>
-              ))}
-            </div>
+            </ul>
           )}
-        </div>
-      )}
+        </section>
+      ))}
     </div>
   );
 }

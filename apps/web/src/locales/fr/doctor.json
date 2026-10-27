@@ -443,5 +443,7 @@
     "whole": "Toute la boutique : confirmation, dépôt, livraison, stock, ventes et argent.",
     "team": "Les équipes que vous gérez.",
     "mine": "Votre propre travail : vos commandes et vos colis."
-  }
+  },
+  "foldAll": "Tout replier",
+  "unfoldAll": "Tout déplier"
 }
