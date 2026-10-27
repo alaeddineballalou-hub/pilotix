@@ -371,12 +371,13 @@
     "badLine": "Quantité invalide pour « {{name}} » ({{n}} en stock)",
     "hide": "Masquer",
     "show": "Réafficher",
-    "delete": "Supprimer",
-    "deleteConfirm": "Supprimer ce dépôt ?",
     "hidden": "Dépôt masqué",
     "shown": "Dépôt réaffiché",
-    "deleted": "Dépôt supprimé",
-    "hideHelp": "Un dépôt masqué ne reçoit plus de stock ni de commandes ; un dépôt qui a déjà servi ne se supprime pas, il se masque."
+    "hideHelp": "Un dépôt masqué ne reçoit plus de stock ni de commandes. Un dépôt vide dont vous n’avez plus besoin s’archive ; il ne se supprime que depuis Management › Archives, s’il n’a jamais servi.",
+    "archive": "Archiver",
+    "archiveConfirm": "Archiver ce dépôt ? Il sera rangé dans Management › Archives (il doit être vide).",
+    "archived": "Dépôt archivé (Management › Archives)",
+    "archiveStock": "Videz d’abord ce dépôt (transfert), puis archivez-le"
   },
   "form": {
     "newTitle": "Nouveau produit",
@@ -475,7 +476,11 @@
       "organize": "Organiser en options (Taille, Couleur…)",
       "tooMany": "{{count}} combinaisons : 200 au maximum. Retirez des valeurs.",
       "needName": "Donnez un nom à chaque option (ex. Taille)."
-    }
+    },
+    "archive": "Archiver",
+    "archiveAsk": "Archiver ce produit ? Il sort des listes (les anciennes commandes le gardent). Il doit avoir 0 en stock.",
+    "archived": "Produit archivé (Management › Archives)",
+    "archiveStock": "Il reste du stock : faites une sortie de stock d’abord, puis archivez"
   },
   "landing": {
     "none": "Sans landing page",

@@ -3,14 +3,21 @@ import { expandRoles, LANGUAGES, Profile, Role, ROLES } from '@pilotix/shared';
 import { FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { canSee, NAV } from '../../layout/nav';
+import { pageIsOn } from '../../lib/features';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { when } from '../../lib/format';
-import { Card, Empty, ErrorBox, Field, Loading, StageBar } from '../../ui/kit';
+import { Card, copyText, Empty, ErrorBox, Field, Icon, Loading, StageBar } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
+import { toast } from '../../ui/toast';
 import { ConfirmButton } from './bits';
 
 export const USER_SUBS = ['roles', 'admins', 'vendeurs', 'agents', 'marketeurs', 'managers'] as const;
+/** WhatsApp with a ready message, to the person's number when it is known (0550… → 213550…). */
+const waLink = (phone: string | null | undefined, text: string) => {
+  const d = String(phone ?? '').replace(/\D/g, '');
+  return `https://wa.me/${d.startsWith('00') ? d.slice(2) : d.startsWith('0') ? `213${d.slice(1)}` : d}?text=${encodeURIComponent(text)}`;
+};
 const SUB_ROLE: Record<string, Role> = { admins: 'admin', vendeurs: 'vendeur', agents: 'confirmation', marketeurs: 'marketer', managers: 'agent_manager' };
 const ROLE_SUB: Partial<Record<Role, string>> = { admin: 'admins', vendeur: 'vendeurs', confirmation: 'agents', marketer: 'marketeurs', agent_manager: 'managers' };
 /** Rôles table order, as in the original. */
@@ -139,6 +146,9 @@ function RoleList({ role, onNew, onEdit }: { role: Role; onNew: () => void; onEd
   const ownerId = session?.shop?.ownerProfileId ?? null;
   /** accounts only the administrator may change (administrators, people with the accounts right, oneself); the owner's: only the owner */
   const locked = (u: Profile) => (u.id === ownerId && u.id !== me) || (!session?.isAdmin && (u.roles.includes('admin') || !!u.canManageUsers || u.id === me));
+  // archived accounts are in Management › Archives (users.list still names them, for the history)
+  const rows = (q.data ?? []).filter((u) => !u.archived);
+  const archives = !!session?.isAdmin && pageIsOn('management', 'archive');
   // users.list matches own roles; vendeurs also count as agents etc. only through their own roles (as in the original)
   return (
     <>
@@ -146,9 +156,16 @@ function RoleList({ role, onNew, onEdit }: { role: Role; onNew: () => void; onEd
         title={t(`admin.users.listTitle.${role}`)}
         help={t('admin.users.listHelp')}
         actions={
-          <button className="btn primary" onClick={onNew}>
-            {t(`admin.users.newBtn.${role}`)}
-          </button>
+          <>
+            {archives && (
+              <a className="btn" href="#/management/archive/users">
+                <Icon name="archive" /> {t('admin.users.archives')}
+              </a>
+            )}
+            <button className="btn primary" onClick={onNew}>
+              {t(`admin.users.newBtn.${role}`)}
+            </button>
+          </>
         }
       />
       <div className="card">
@@ -156,7 +173,7 @@ function RoleList({ role, onNew, onEdit }: { role: Role; onNew: () => void; onEd
           <Loading />
         ) : q.error ? (
           <ErrorBox error={q.error} onRetry={() => q.refetch()} />
-        ) : !q.data?.length ? (
+        ) : !rows.length ? (
           <Empty>{t('admin.users.empty')}</Empty>
         ) : (
           <div className="tbl-wrap">
@@ -171,7 +188,7 @@ function RoleList({ role, onNew, onEdit }: { role: Role; onNew: () => void; onEd
                 </tr>
               </thead>
               <tbody>
-                {q.data.map((u) => (
+                {rows.map((u) => (
                   <tr
                     key={u.id}
                     className={`${locked(u) ? '' : 'clickable'} ${u.active ? '' : 'dim'}`}
@@ -242,6 +259,9 @@ function UserForm({ user, role, onClose }: { user: Profile | null; role: Role | 
   const update = useAction('users.update', { success: t('admin.users.saved'), onDone: onClose });
   const toggle = useAction('users.update', { success: (r) => (r.active ? t('admin.users.activated') : t('admin.users.deactivated')), onDone: onClose });
   const reset = useAction('admin.users.resetPassword', { onDone: (r) => setNewPw(r.password) });
+  const archive = useAction('archive.set', { success: (r) => (r.done ? t('admin.users.archivedDone', { name: user?.name ?? '' }) : t('admin.users.archiveRefused')), onDone: onClose });
+  const ownerId = session?.shop?.ownerProfileId ?? null;
+  const canArchive = !!user && isAdmin && user.id !== me && user.id !== ownerId && pageIsOn('management', 'archive');
   const busy = create.isPending || update.isPending;
 
   const submit = (e: FormEvent) => {
@@ -339,8 +359,18 @@ function UserForm({ user, role, onClose }: { user: Profile | null; role: Role | 
       {user && (
         <div className="row" style={{ marginTop: 14, gap: 8, flexWrap: 'wrap', borderTop: '1px solid var(--line)', paddingTop: 12 }}>
           {newPw ? (
-            <div className="okbox" style={{ width: '100%' }}>
-              {t('admin.users.resetDone')} <code className="ltr">{newPw}</code>
+            <div className="okbox px-newpw">
+              <p>{t('admin.users.resetDone')}</p>
+              <div className="px-newpw-row">
+                <code className="ltr px-newpw-code">{newPw}</code>
+                <button type="button" className="btn small" onClick={async () => toast((await copyText(newPw)) ? t('admin.users.copied') : t('common.error'), 'ok')}>
+                  <Icon name="copy" /> {t('admin.users.copy')}
+                </button>
+                <a className="btn small" target="_blank" rel="noreferrer" href={waLink(user.phone, t('admin.users.waText', { name: user.name, email: user.email, password: newPw, site: location.origin }))}>
+                  <Icon name="whatsapp" /> WhatsApp
+                </a>
+              </div>
+              <p className="small muted">{t('admin.users.resetNote')}</p>
             </div>
           ) : (
             <ConfirmButton question={t('admin.users.resetConfirm')} onConfirm={() => reset.mutate({ id: user.id })}>
@@ -357,6 +387,11 @@ function UserForm({ user, role, onClose }: { user: Profile | null; role: Role | 
                 {t('admin.users.activate')}
               </button>
             ))}
+          {canArchive && (
+            <ConfirmButton className="btn small ghost" disabled={archive.isPending} question={t('admin.users.archiveConfirm')} onConfirm={() => archive.mutate({ kind: 'users', ids: [user.id], archived: true })}>
+              <Icon name="archive" /> {t('admin.users.archive')}
+            </ConfirmButton>
+          )}
         </div>
       )}
     </Modal>

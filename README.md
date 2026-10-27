@@ -97,6 +97,10 @@ the schema `platform`. The server owner's shop is shop #1 (schema `public`, as b
   certificate on the first visit and `https://myshop.com/<page>` serves the shop's pages (`/` lists them, `/llms.txt`).
 - **Doctor:** the control room's Doctor watches the server (machine, database, jobs, errors, silent shops); each shop's
   Dashboard has its own Pilotix Doctor.
+- **Archives (Management › Archives):** accounts, products and depots a shop no longer needs are archived (closed and out
+  of every list, kept in the history); only what is archived and was never used (no order, stock movement, money,
+  message…) can be deleted for good, by the shop's owner. `modules/archive.ts` lists every column that points to them;
+  a test fails when a new one is missing. Nobody can see a password: an administrator makes a new one, shown once.
 - **Subscription:** trial → paid → a few grace days (red banner) → locked (a screen with the payment details). A locked
   shop keeps receiving orders (website, landing pages, couriers' statuses) and sees them once it pays.
 - **Public links:** every shop's landing pages are `site/<store>/<page>`, where the store is the shop's name on the

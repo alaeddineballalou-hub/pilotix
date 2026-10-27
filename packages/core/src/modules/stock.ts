@@ -427,6 +427,7 @@ export const stockProcs = {
       `SELECT wh.*, COALESCE(sum(s.qty) FILTER (WHERE s.qty > 0), 0)::bigint AS pieces, count(s.variant_id) FILTER (WHERE s.qty > 0)::int AS products,
               COALESCE(sum(s.qty::bigint * p.cost) FILTER (WHERE s.qty > 0), 0)::bigint AS value
        FROM warehouses wh LEFT JOIN stock s ON s.warehouse_id = wh.id LEFT JOIN product_variants v ON v.id = s.variant_id LEFT JOIN products p ON p.id = v.product_id
+       WHERE wh.archived_at IS NULL
        GROUP BY wh.id ORDER BY wh.active DESC, wh.is_default DESC, wh.id`,
     );
     return rows.map((r: any) => ({

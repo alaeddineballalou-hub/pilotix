@@ -39,6 +39,7 @@ const SUB_LABEL: Record<string, string> = {
   'management/paie': 'admin.subs.paie',
   'management/prix': 'admin.subs.prix',
   'management/canaux': 'admin.subs.canaux',
+  'management/archive': 'admin.subs.archive',
 };
 
 export const featureLabel = (t: (k: string) => string, key: string) => (key.includes('/') ? t(SUB_LABEL[key] ?? key) : t(`nav.${key}`));

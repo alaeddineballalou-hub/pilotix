@@ -1,11 +1,13 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { pageIsOn } from '../../lib/features';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { da, pct } from '../../lib/format';
 import { ErrorBox, Field, Icon, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
+import { ConfirmButton } from '../admin/bits';
 import { bidi } from './stockui';
 import { combosOf, MAX_COMBOS, Opt, skuOf, titleOf, VariantOptions, VRow } from './VariantOptions';
 
@@ -102,6 +104,9 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
       if (!p) onCreated?.(r);
     },
   });
+  // Archiver (administrators): out of the lists, kept for the orders; deleted later from Management › Archives
+  const archive = useAction('archive.set', { success: (r) => (r.done ? t('produits.form.archived') : t('produits.form.archiveStock')), onDone: (r) => r.done && onClose() });
+  const canArchive = !!p && admin && pageIsOn('management', 'archive');
   const set = (k: keyof typeof f, v: string | boolean) => setF({ ...f, [k]: v });
   const brands = [...new Set((all.data ?? []).map((x) => x.brand).filter((x): x is string => !!x))].sort();
   const others = (all.data ?? []).filter((x) => !x.isService && x.id !== p?.id);
@@ -171,6 +176,12 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
       onClose={onClose}
       footer={
         <>
+          {canArchive && (
+            <ConfirmButton className="btn ghost" disabled={archive.isPending} question={t('produits.form.archiveAsk')} onConfirm={() => archive.mutate({ kind: 'products', ids: [p.id], archived: true })}>
+              <Icon name="archive" /> {t('produits.form.archive')}
+            </ConfirmButton>
+          )}
+          <span className="grow" />
           <button className="btn" onClick={onClose}>
             {t('common.close')}
           </button>

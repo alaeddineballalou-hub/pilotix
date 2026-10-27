@@ -282,7 +282,7 @@ export const adminProcs = {
   /** Users per role for the Rôles table. */
   'admin.roles': proc(null, z.object({}), async (ctx) => {
     if (!ctx.session.isAdmin && !ctx.session.canManageUsers) throw forbidden();
-    const rows = await ctx.db.query('SELECT id, name, roles, active FROM profiles ORDER BY name');
+    const rows = await ctx.db.query('SELECT id, name, roles, active FROM profiles WHERE archived_at IS NULL ORDER BY name');
     const out: Record<string, { active: number; total: number; names: string[] }> = {};
     for (const r of rows as any[]) {
       for (const role of r.roles as string[]) {
@@ -398,7 +398,7 @@ export const adminProcs = {
 
   // ---------- client delivery prices
   'admin.fees.get': proc([], z.object({}), async (ctx) => {
-    const products = await ctx.db.query('SELECT id, name, sku, fee_grid, active, weight_kg FROM products ORDER BY name');
+    const products = await ctx.db.query('SELECT id, name, sku, fee_grid, active, weight_kg FROM products WHERE archived_at IS NULL ORDER BY name');
     return {
       grids: await getSetting(ctx.db, 'clientFees'),
       defaultGrid: await getSetting(ctx.db, 'defaultFeeGrid'),
@@ -563,7 +563,7 @@ export const adminProcs = {
       return { ok: true };
     },
   ),
-  'admin.warehouses.list': proc([], z.object({}), async (ctx) => (await ctx.db.query('SELECT * FROM warehouses ORDER BY is_default DESC, name')).map(toWarehouse)),
+  'admin.warehouses.list': proc([], z.object({}), async (ctx) => (await ctx.db.query('SELECT * FROM warehouses WHERE archived_at IS NULL ORDER BY is_default DESC, name')).map(toWarehouse)),
   'admin.warehouses.save': proc(
     [],
     z.object({ id: id.optional(), name: z.string().trim().min(2).max(80), wilayaId: z.number().int().min(1).max(69), commune: z.string().trim().max(120).default(''), address: z.string().trim().max(300).default(''), isDefault: z.boolean().default(false), active: z.boolean().default(true) }),
@@ -574,6 +574,7 @@ export const adminProcs = {
         if (i.id) {
           const cur = (await tx.query('SELECT * FROM warehouses WHERE id = $1', [i.id]))[0];
           if (!cur) throw notFound('Dépôt introuvable');
+          if (cur.archived_at && i.active) throw bad('Ce dépôt est archivé : sortez-le d’abord des archives (Management › Archives)');
           if (cur.is_default && !i.isDefault) throw bad('Choisissez un autre dépôt par défaut à la place');
           r = (await tx.query('UPDATE warehouses SET name=$2, wilaya_id=$3, commune=$4, address=$5, is_default=$6, active=$7 WHERE id=$1 RETURNING *', [i.id, i.name, i.wilayaId, i.commune, i.address, i.isDefault, i.active]))[0];
         } else {
@@ -585,17 +586,6 @@ export const adminProcs = {
       });
     },
   ),
-  /** Deletes an unused depot; a depot with stock or orders can only be deactivated. */
-  'admin.warehouses.delete': proc([], z.object({ id }), async (ctx, i) => {
-    const w = (await ctx.db.query('SELECT * FROM warehouses WHERE id = $1', [i.id]))[0];
-    if (!w) throw notFound('Dépôt introuvable');
-    if (w.is_default) throw bad('Le dépôt par défaut ne se supprime pas');
-    const used = (await ctx.db.query('SELECT (SELECT count(*) FROM stock WHERE warehouse_id = $1 AND qty <> 0) + (SELECT count(*) FROM orders WHERE warehouse_id = $1) + (SELECT count(*) FROM stock_movements WHERE warehouse_id = $1) AS n', [i.id]))[0];
-    if (num(used.n) > 0) throw bad('Ce dépôt a du stock ou des commandes : désactivez-le plutôt');
-    await ctx.db.query('DELETE FROM stock WHERE warehouse_id = $1', [i.id]);
-    await ctx.db.query('DELETE FROM warehouses WHERE id = $1', [i.id]);
-    return { ok: true };
-  }),
   'admin.webhook.rotate': proc([], z.object({}), async (ctx) => {
     const key = randomKey(32);
     await setSetting(ctx.db, 'webhook', { key }, me(ctx));
