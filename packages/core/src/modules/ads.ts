@@ -26,6 +26,15 @@ export const isOwner = (ctx: Ctx) => hasRole(ctx.session, 'vendeur');
 /** A marketer partner's person given some products only (the store chose them): those products, else null. */
 const givenProducts = (ctx: Ctx): Set<number> | null => (ctx.session.profile.agencyId && ctx.session.profile.agencyProducts ? new Set(ctx.session.profile.agencyProducts) : null);
 /**
+ * May this person see this ad set's numbers? A marketer partner's person: only ad sets on the products the store gives
+ * (all of them; one not linked to a product yet too, to link it). A product the store takes back takes its ad sets'
+ * numbers with it, even if they are still in the person's name.
+ */
+export function adsetInScope(ctx: Ctx): (s: { productIds: number[] }) => boolean {
+  const g = givenProducts(ctx);
+  return (s) => !g || s.productIds.every((p) => g.has(p));
+}
+/**
  * A marketer partner's chief (or manager) inside the store: the partner's id — they see the ad sets of every person of
  * their team here, not only their own. null for anyone else.
  */
@@ -118,15 +127,17 @@ async function visibleAdsets(ctx: Ctx, marketerId?: number | null): Promise<Adse
      WHERE ($1::bigint IS NULL OR a.marketer_id = $1) AND ($2::bigint IS NULL OR p.agency_id = $2) ORDER BY a.name`,
     [who, lead],
   );
-  return rows.map((r: any) => ({
-    id: String(r.id),
-    name: r.name,
-    campaign: r.campaign,
-    status: r.status,
-    productIds: (r.product_ids ?? []).map(num),
-    marketerId: r.marketer_id === null ? null : num(r.marketer_id),
-    marketerName: r.marketer_name ?? null,
-  }));
+  return rows
+    .map((r: any) => ({
+      id: String(r.id),
+      name: r.name,
+      campaign: r.campaign,
+      status: r.status,
+      productIds: (r.product_ids ?? []).map(num),
+      marketerId: r.marketer_id === null ? null : num(r.marketer_id),
+      marketerName: r.marketer_name ?? null,
+    }))
+    .filter(mine ? adsetInScope(ctx) : () => true);
 }
 
 /** DZD per USD for each month (latest earlier rate when a month has none). */
@@ -607,11 +618,20 @@ export const adsProcs = {
     await ctx.db.query('INSERT INTO fx_rates (ym, rate) VALUES ($1,$2) ON CONFLICT (ym) DO UPDATE SET rate = EXCLUDED.rate', [i.ym, i.rate]);
     return { ok: true };
   }),
-  /** "Actualiser": pulls Meta now (server). In the demo there is nothing to pull. */
+  /**
+   * "Actualiser": pulls Meta now (server). In the demo there is nothing to pull. A marketer partner's person refreshes
+   * no more often than the automatic refresh (every 30 minutes): the Meta connection, and its limits, are the store's.
+   */
   'ads.sync': proc(['marketer'], z.object({ from: Day, to: Day }), async (ctx, i) => {
     if (!ctx.server) return { ok: true, demo: true, at: null as string | null };
-    const r = await syncMeta(ctx, i.from, i.to, true);
-    if (!r) throw bad('Meta n’est pas connecté : demandez à l’administrateur (Réglages → Meta Ads).');
-    return { ok: true, demo: false, at: r.at };
+    const partner = !!ctx.session.profile.agencyId;
+    const meta = await getSetting(ctx.db, 'meta');
+    if (!meta.adAccountId || !meta.hasToken)
+      throw bad(partner ? 'Meta n’est pas connecté chez ce vendeur : il l’ajoute dans ses Réglages → Meta Ads.' : 'Meta n’est pas connecté : demandez à l’administrateur (Réglages → Meta Ads).');
+    const r = await syncMeta(ctx, i.from, i.to, !partner);
+    if (r) return { ok: true, demo: false, at: r.at };
+    // a partner's person within the 30 minutes: the last refresh stands
+    const last = await getRaw<{ at: string } | null>(ctx.db, SYNC_KEY, null);
+    return { ok: true, demo: false, at: last?.at ?? null };
   }),
 };

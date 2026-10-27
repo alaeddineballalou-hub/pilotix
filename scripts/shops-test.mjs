@@ -786,6 +786,17 @@ await section('Marketers: « Marketer » on the sign-up page, Pilotix’s check,
   const d = await rpc(M, 'agency.link', { id: link.id });
   assert.deepEqual([d.link.kind, d.counts.adsets, d.bill.total], ['marketer', 0, 0]);
   ok('his price is the marketer’s; the month counts his ad sets');
+  // two changes at the same moment (a new person of the team, the store changing its products): both are done, one
+  // sync of the team waits for the other (no « this e-mail already exists » clash in the store)
+  for (let k = 0; k < 3; k++) {
+    const burst = await Promise.all([
+      req('/rpc/users.create', { name: `Selma Marketer ${k}`, email: em(`selma${k}`), password: 'Selma-Password-1', roles: ['marketer'], language: 'fr' }, M),
+      req('/rpc/partners.setWork', { id: link.id, tasks: ['marketing'], products: [pid] }, ctx.signup1.token),
+      req('/rpc/partners.setWork', { id: link.id, tasks: ['marketing'], products: [pid] }, ctx.signup1.token),
+    ]);
+    assert.ok(burst.every((r) => r.status < 300), JSON.stringify(burst.map((r) => [r.status, r.data])));
+  }
+  ok('a new person of the team and the store’s change at the same moment: both done');
   // the store ends it: the seller leaves Nadir's picker
   await rpc(ctx.signup1.token, 'partners.end', { id: link.id });
   assert.deepEqual(await rpc((await login(em('nadir'), 'Nadir-Password-1')).token, 'agency.sellers'), []);

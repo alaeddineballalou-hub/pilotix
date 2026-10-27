@@ -242,3 +242,60 @@ test('« Créer mon espace marketer » from a seller’s account: one per person
   const extra = await shopInfoExtra(t, m, 'reda@tlemcen.dz', await platformSettings(t));
   assert.deepEqual([extra.canAddMarketer, extra.canAddAgency], [false, false]);
 });
+
+test('a product the store takes back takes its ad sets with it: out of the marketer’s view and of its bill', async () => {
+  const { t, p } = await server();
+  const shop = await store(t, p, 'Boutique Blida', 'samy@blida.dz');
+  const admin = await as(t, shop.id, 'samy@blida.dz', PW);
+  const mk = await marketer(t, 'Blida Ads', 'chef@blida-ads.dz');
+  await p('p.agencies.verify', { id: mk.id, verified: true });
+  const chief = await as(t, mk.id, 'chef@blida-ads.dz', PW);
+  await call('agency.prices', chief, { prices: PRICES });
+  const { VELO, POUS, CASQ } = shop.products;
+  const { id: linkId } = (await call('partners.request', admin, { agencyId: mk.id, tasks: ['marketing'], products: [VELO, POUS] })) as any;
+  await call('agency.answer', chief, { id: linkId, accept: true });
+  const nadir: any = await call('users.create', chief, { name: 'Nadir', email: 'nadir@blida-ads.dz', password: PW, roles: ['marketer'] });
+  await call('agency.setAgents', chief, { id: linkId, people: [nadir.id, chief.session.profile.id] });
+  const inStore = Number((await shop.db.query(`SELECT id FROM profiles WHERE email = 'nadir@blida-ads.dz'`))[0].id);
+
+  // three ad sets in Nadir's name: the Vélo, the Poussette, and the Casque (never given: the store's mistake)
+  await shop.db.query(
+    `INSERT INTO adsets (id, name, campaign, product_ids, marketer_id, status) VALUES ('V-1', 'Vélo', 'C', $1, $4, 'ACTIVE'), ('P-1', 'Poussette', 'C', $2, $4, 'ACTIVE'), ('C-1', 'Casque', 'C', $3, $4, 'ACTIVE')`,
+    [[VELO], [POUS], [CASQ], inStore],
+  );
+  const day = today();
+  await shop.db.query(`INSERT INTO ad_insights (day, adset_id, spend_cents, impressions, clicks, purchases) VALUES ($1, 'V-1', 4000, 9000, 100, 5), ($1, 'P-1', 4000, 9000, 100, 5), ($1, 'C-1', 4000, 9000, 100, 5)`, [day]);
+  await shop.db.query(`INSERT INTO fx_rates (ym, rate) VALUES ($1, 250) ON CONFLICT (ym) DO UPDATE SET rate = 250`, [day.slice(0, 7)]);
+  for (const [k, pid] of [[0, VELO], [1, POUS], [2, CASQ]] as const)
+    await call('orders.create', admin, { customerName: `Client ${k}`, phone: `055000020${k}`, wilayaId: 9, commune: 'Blida', items: [{ productId: pid, variantId: null, qty: 1 }] });
+  await shop.db.query(`UPDATE orders SET conf_status = 'confirmed', confirmed_at = now(), follow_status = 'delivered', delivered_at = now()`);
+
+  const nadirCtx = { ...(await as(t, mk.id, 'nadir@blida-ads.dz', PW)), seller: shop.id };
+  const lead = { ...chief, seller: shop.id };
+  const seen = async (c: Ctx) => ({
+    mk: ((await call('mk.overview', c, {})) as any).rows.map((r: any) => r.id).sort(),
+    ads: ((await call('ads.overview', c, { from: day, to: day })) as any).adsets.map((a: any) => a.id).sort(),
+    money: ((await call('ads.overview', c, { from: day, to: day })) as any).products.map((x: any) => x.productId).sort(),
+  });
+  // the Casque was never given: not seen, not billed
+  assert.deepEqual(await seen(nadirCtx), { mk: ['P-1', 'V-1'], ads: ['P-1', 'V-1'], money: [VELO, POUS].sort() });
+  assert.deepEqual((await seen(lead)).mk, ['P-1', 'V-1']);
+  await assert.rejects(call('ads.adset', nadirCtx, { id: 'C-1', from: day, to: day }), /introuvable/);
+  await assert.rejects(call('mk.adset', nadirCtx, { id: 'C-1' }), /introuvable/);
+  assert.equal(((await call('agency.link', chief, { id: linkId })) as any).counts.adsets, 2);
+
+  // the store takes the Poussette back: its ad set leaves the marketer's view and bill (still in Nadir's name)
+  await call('partners.setWork', admin, { id: linkId, tasks: ['marketing'], products: [VELO] });
+  assert.deepEqual(await seen(nadirCtx), { mk: ['V-1'], ads: ['V-1'], money: [VELO] });
+  assert.deepEqual((await seen(lead)).mk, ['V-1']);
+  for (const id of ['P-1', 'C-1']) {
+    await assert.rejects(call('ads.adset', nadirCtx, { id, from: day, to: day }), /introuvable/);
+    await assert.rejects(call('mk.adset', nadirCtx, { id }), /introuvable/);
+    await assert.rejects(call('ads.adset', lead, { id, from: day, to: day }), /introuvable/);
+  }
+  const d: any = await call('agency.link', chief, { id: linkId });
+  assert.deepEqual([d.counts.adsets, d.counts.delivered], [1, 1]);
+  // the store still sees all three in Nadir's name, to give them to someone else
+  const own: any = await call('mk.overview', admin, {});
+  assert.deepEqual(own.rows.filter((r: any) => r.marketerId === inStore).map((r: any) => r.id).sort(), ['C-1', 'P-1', 'V-1']);
+});
