@@ -88,6 +88,7 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
   const users = useRpc('users.list', {}, { staleTime: 5 * 60_000 });
   const hist = useRpc('customers.history', { id: o.customerId }, { enabled: has('confirmation', 'suivi'), placeholderData: undefined });
   const [panel, setPanel] = useState<Panel>(null);
+  const [showHist, setShowHist] = useState(false);
   const [busy, setBusy] = useState(false);
   // the company's own label (a parcel sent to it), opened in a new tab
   const printer = useLabelPrinter();
@@ -324,9 +325,37 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
           )}
         </dl>
         {h && h.orders > 1 && (
-          <div className={h.returned > 0 ? 'badbox' : 'okbox'} style={{ marginTop: 10 }}>
-            {t('orders.card.history', { orders: h.orders, delivered: h.delivered, returned: h.returned, cancelled: h.cancelled })}
-          </div>
+          <>
+            <div className={h.returned > 0 ? 'badbox' : 'okbox'} style={{ marginTop: 10, cursor: 'default' }}>
+              {t('orders.card.history', { orders: h.orders, delivered: h.delivered, returned: h.returned, cancelled: h.cancelled })}
+            </div>
+            <button type="button" className="linkish oc-histmore" onClick={() => setShowHist((v) => !v)} aria-expanded={showHist}>
+              {showHist ? t('orders.card.historyLess') : t('orders.card.historyMore', { n: hist.data?.orders.length ?? h.orders })}
+              <Icon name="chevron" className={showHist ? 'flip' : ''} />
+            </button>
+            {showHist && (
+              <ul className="oc-hist">
+                {(hist.data?.orders ?? []).map((x) => (
+                  <li key={x.id}>
+                    <button type="button" className={x.id === o.id ? 'on' : ''} disabled={x.id === o.id} onClick={() => openOrder(x.id)}>
+                      <span className="oc-hist-top">
+                        <b className="ltr">{x.ref}</b>
+                        <span className="muted small">{when(x.createdAt)}</span>
+                        {x.id === o.id && <span className="chip">{t('orders.card.historyThis')}</span>}
+                        <span className="grow" />
+                        <span className="ltr">{da(x.total)}</span>
+                      </span>
+                      <span className="oc-hist-items small">{[x.itemsText, x.variantsText].filter(Boolean).join(' — ')}</span>
+                      <span className="oc-hist-st">
+                        <StatusBadge kind="conf" status={x.confStatus} />
+                        {x.followStatus && <StatusBadge kind="follow" status={x.followStatus} />}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         )}
       </section>
 

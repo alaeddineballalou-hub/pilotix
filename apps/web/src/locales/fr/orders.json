@@ -388,7 +388,10 @@
     "labelUnavailable": "Étiquette indisponible : {{msg}}",
     "noChange": "Pas de changement",
     "updated": "Statut mis à jour",
-    "dup": "Doublon possible : une autre commande en cours avec ce numéro"
+    "dup": "Doublon possible : une autre commande en cours avec ce numéro",
+    "historyMore": "Voir tout l’historique ({{n}} commandes)",
+    "historyLess": "Masquer l’historique",
+    "historyThis": "cette commande"
   },
   "ph": {
     "per": {
