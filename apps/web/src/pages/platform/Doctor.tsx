@@ -9,6 +9,7 @@ import { dur, n, shortWhen } from '../../lib/format';
 import { serverDoctor, turnstileSync } from '../../lib/platform';
 import { Card, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
+import { copilotMood, CopilotIcon } from '../doctor/CopilotIcon';
 import { DoctorHero, DoctorList } from '../doctor/parts';
 
 export function DoctorPage({ demo, owner }: { demo?: boolean; owner?: boolean }) {
@@ -22,7 +23,7 @@ export function DoctorPage({ demo, owner }: { demo?: boolean; owner?: boolean })
   return (
     <div className="dr pp-stack">
       {demo && <p className="dr-demo">{t('doctor.demoNote')}</p>}
-      <DoctorHero title={t('doctor.serverTitle')} sub={t('doctor.serverSub')} badge={t('doctor.onlyYou')} score={r.score} items={r.items} checkedAt={r.checkedAt} onRefresh={() => q.refetch()} busy={q.isFetching} />
+      <DoctorHero title={t('doctor.serverTitle')} icon={<CopilotIcon mood={q.isFetching ? null : copilotMood(r.items)} label={t('doctor.serverTitle')} />} sub={t('doctor.serverSub')} badge={t('doctor.onlyYou')} score={r.score} items={r.items} checkedAt={r.checkedAt} onRefresh={() => q.refetch()} busy={q.isFetching} />
       <div className="dr-gauges">
         <Gauge label={t('doctor.gauge.cpu')} icon="sliders" v={g.cpu} warn={0.75} bad={0.95} sub={t('doctor.gauge.cores', { count: f.cores })} />
         <Gauge label={t('doctor.gauge.memory')} icon="layers" v={g.memory} warn={0.8} bad={0.92} sub={t('doctor.u.mb', { n: n(f.memoryTotalMb) })} />
