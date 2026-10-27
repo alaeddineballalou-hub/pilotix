@@ -187,14 +187,16 @@ export interface ShopInfo {
   canAddStore: boolean;
   /** « Créer mon agence » (the person has no confirmation agency yet) */
   canAddAgency?: boolean;
+  /** « Créer mon espace marketer » (the person has no marketer space yet) */
+  canAddMarketer?: boolean;
   /** unread answers from Pilotix in « Contacter Pilotix » */
   supportUnread: number;
   /** the shop's own domain name for its landing pages (myshop.com): pending until its DNS points to the server */
   domain?: { name: string; status: 'pending' | 'ok' } | null;
-  /** a store, or a confirmation agency (its own space: sellers, team, prices, payments) */
-  kind?: 'store' | 'agency';
-  /** the code others type to find it (a store: K7Q-29X; an agency: AG-7K2Q) */
+  /** a store, or a partner's own space: a confirmation agency or a marketer (sellers, team, prices, payments) */
+  kind?: 'store' | 'agency' | 'marketer';
+  /** the code others type to find it (a store: K7Q-29X; an agency: AG-7K2Q; a marketer: MK-7K2Q) */
   code?: string | null;
-  /** an agency checked by Pilotix (before that it cannot work with stores) */
+  /** a partner (agency, marketer) checked by Pilotix (before that it cannot work with stores) */
   verified?: boolean;
 }

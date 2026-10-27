@@ -37,6 +37,7 @@ export const PAGES: Record<string, ComponentType<PageProps>> = {
   management: P(() => import('./admin'), 'Management'),
   reglages: P(() => import('./admin'), 'Reglages'),
   agences: P(() => import('./agences'), 'Agences'),
+  marketers: P(() => import('./agences'), 'Marketers'),
   profil: P(() => import('./profil'), 'Profil'),
 };
 
@@ -52,5 +53,19 @@ export const AGENCY_PAGES: Record<string, ComponentType<PageProps>> = {
   facturation: P(() => import('./agency'), 'Facturation'),
   utilisateurs: P(() => import('./agency'), 'AgencyUsers'),
   reglages: P(() => import('./agency'), 'AgencySettings'),
+  profil: PAGES.profil,
+};
+
+/**
+ * A marketer's space: like a store's Marketing (its sellers' ads: Publicité and its ad sets, one seller or all of them),
+ * its users, its settings, plus its sellers and its bills (the agency's pages, for a marketer).
+ */
+export const MARKETER_PAGES: Record<string, ComponentType<PageProps>> = {
+  accueil: P(() => import('./marketer'), 'MarketerHome'),
+  marketing: P(() => import('./marketer'), 'MarketerAds'),
+  vendeurs: AGENCY_PAGES.vendeurs,
+  facturation: AGENCY_PAGES.facturation,
+  utilisateurs: AGENCY_PAGES.utilisateurs,
+  reglages: AGENCY_PAGES.reglages,
   profil: PAGES.profil,
 };

@@ -126,7 +126,7 @@ class AuthGuard implements CanActivate {
     const p = await core.profileById(ref.db, id);
     if (!p || !p.active) throw new UnauthorizedException('Compte désactivé');
     // an agency's account inside a store is used only from the agency's space (see core agencywork.ts)
-    if (p.agencyId) throw new UnauthorizedException('Ouvrez l’espace de votre agence');
+    if (p.agencyId) throw new UnauthorizedException('Ouvrez l’espace de votre agence (ou votre espace marketer)');
     // a password change raises token_version: tokens made before it stop working
     const cur = await tokenVersion(ref.db, id);
     const s = await this.core.withShop(core.makeSession(p), ref, false);
@@ -331,8 +331,8 @@ class ApiController {
     if (!ref || ref.shop.status === 'archived' || ref.shop.status === 'deleted') throw new core.AppError('unauthorized', CLOSED);
     const m = (await core.membershipsOf(this.core.t, email)).find((x) => x.shopId === shopId);
     if (!m) throw new core.AppError('forbidden', 'Vous n’avez pas de compte dans cette boutique');
-    // a confirmation agency's person works on this store's orders from the agency's space, never inside the store
-    if (m.agencyId) throw new core.AppError('forbidden', 'Ouvrez l’espace de votre agence : vous y travaillez sur les commandes de ce vendeur');
+    // a partner's person (agency, marketer) works for this store from the partner's space, never inside the store
+    if (m.agencyId) throw new core.AppError('forbidden', 'Ouvrez l’espace de votre agence (ou votre espace marketer) : vous y travaillez pour ce vendeur');
     const p = await core.profileById(ref.db, m.profileId);
     if (!p?.active) throw new core.AppError('unauthorized', 'Votre compte est désactivé');
     await ref.db.query("UPDATE profiles SET last_seen_at = now(), presence = 'online' WHERE id = $1", [p.id]);
@@ -360,7 +360,8 @@ class ApiController {
     const stores = await core.storeChoices(this.core.t, acc.email);
     const canAddStore = set.signup.open && (await core.ownedStores(this.core.t, acc.id)) < core.storeLimit(acc, set);
     const canAddAgency = set.signup.open && (await core.ownedAgencies(this.core.t, acc.id)) === 0;
-    return { pick: true as const, ticket: await this.pickTicket(acc), account: { name: acc.name, email: acc.email, verified: acc.verified }, stores, canAddStore, canAddAgency };
+    const canAddMarketer = set.signup.open && (await core.ownedMarketers(this.core.t, acc.id)) === 0;
+    return { pick: true as const, ticket: await this.pickTicket(acc), account: { name: acc.name, email: acc.email, verified: acc.verified }, stores, canAddStore, canAddAgency, canAddMarketer };
   }
 
   @Public()

@@ -34,9 +34,12 @@ export function applyTheme(t: Theme) {
 }
 
 
-/** Menu counts, refreshed every minute and on live updates (an agency's space: its chosen seller's, or all of them). */
-export function useMenuCounts(seller: Seller | null = null) {
-  const q = useRpcFor(seller, 'orders.counts', {}, { refetchInterval: 60_000 });
+/**
+ * Menu counts, refreshed every minute and on live updates (an agency's space: its chosen seller's, or all of them; a
+ * marketer's space has none).
+ */
+export function useMenuCounts(seller: Seller | null = null, enabled = true) {
+  const q = useRpcFor(seller, 'orders.counts', {}, { refetchInterval: 60_000, enabled });
   return useMemo(() => {
     const c = q.data;
     if (!c) return {} as Record<string, number>;
@@ -89,18 +92,19 @@ function Count({ v, tone }: { v: number; tone: string }) {
   );
 }
 
-export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { page: string; sub?: string; children: ReactNode; nav?: NavItem[]; space?: 'store' | 'agency' }) {
+export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { page: string; sub?: string; children: ReactNode; nav?: NavItem[]; space?: 'store' | 'agency' | 'marketer' }) {
   const { t, i18n } = useTranslation();
   const { session, logout, has: hasRole } = useSession();
   const agency = space === 'agency';
-  // a confirmation agency's space: no store-wide search nor « new order »; the seller picker instead
-  const has = (...r: Parameters<typeof hasRole>) => !agency && hasRole(...r);
+  // a partner's space (agency, marketer): no store-wide search nor « new order »; the seller picker instead
+  const partner = space !== 'store';
+  const has = (...r: Parameters<typeof hasRole>) => !partner && hasRole(...r);
   const seller = useSeller();
   const [navOpen, setNavOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
-  const counts = useMenuCounts(agency ? seller : null);
-  // an agency: the work its sellers give it (one seller chosen: that one's)
-  const work = useSellers(agency);
+  const counts = useMenuCounts(agency ? seller : null, space !== 'marketer');
+  // a partner: the work its sellers give it (one seller chosen: that one's)
+  const work = useSellers(partner);
   const [folded, setFolded] = useState(() => store.get('sidebar') === 'folded');
   const toggleFold = () => {
     // On a phone the logo just closes the menu; on a computer it folds / unfolds the sidebar.
@@ -112,8 +116,9 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
   };
   const roles = session!.roles;
   const isAdmin = session!.isAdmin;
-  /** a menu item's name (an agency's space names some of its pages its own way) */
-  const label = (id: string) => (agency ? t(`agency.nav.${id}`, { defaultValue: t(`nav.${id}`, { defaultValue: '' }) }) : t(`nav.${id}`));
+  /** a menu item's name (a partner's space names some of its pages its own way) */
+  const label = (id: string) =>
+    partner ? t(`agency.${space === 'marketer' ? 'mnav' : 'nav'}.${id}`, { defaultValue: t(`agency.nav.${id}`, { defaultValue: t(`nav.${id}`, { defaultValue: '' }) }) }) : t(`nav.${id}`);
   /** an agency's person who calls customers (its chief and supervisors too) */
   const calls = agency && (isAdmin || roles.some((r) => r === 'confirmation' || r === 'agent_manager'));
 
@@ -261,9 +266,9 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
             Pilotix
           </a>
           <span id="page-title" className="page-title">
-            {agency ? label(page) : t(`nav.${page}`, { defaultValue: '' })}
+            {partner ? label(page) : t(`nav.${page}`, { defaultValue: '' })}
           </span>
-          {agency && SELLER_PAGES.has(page) && <SellerSwitch />}
+          {partner && SELLER_PAGES[space].has(page) && <SellerSwitch />}
           {calls && page === 'confirmation' && (!sub || sub === 'nouvelles' || sub === 'attente') && (
             <button type="button" className="btn primary pxs-new pxs-next" title={t('confirmation.next').replace(/\s*[→←]\s*$/, '')} onClick={() => window.dispatchEvent(new Event('px:next-order'))}>
               <span className="pxs-t">{t('confirmation.next').replace(/\s*[→←]\s*$/, '')}</span>
@@ -358,12 +363,16 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
   );
 }
 
-/** An agency's pages that show one seller or all of them (the picker shows there). */
-const SELLER_PAGES = new Set(['accueil', 'confirmation', 'suivi', 'facturation']);
+/** A partner's pages that show one seller or all of them (the picker shows there). */
+const SELLER_PAGES: Record<'store' | 'agency' | 'marketer', Set<string>> = {
+  store: new Set(),
+  agency: new Set(['accueil', 'confirmation', 'suivi', 'facturation']),
+  marketer: new Set(['accueil', 'marketing', 'facturation']),
+};
 
 /**
- * A confirmation agency's space: the seller whose orders are on screen — one of the stores the person works for, or
- * « Tous les vendeurs » (every one of them in the same lists).
+ * A partner's space: the seller on screen — one of the stores the person works for, or « Tous les vendeurs » (every
+ * one of them in the same lists).
  */
 function SellerSwitch() {
   const { t } = useTranslation();

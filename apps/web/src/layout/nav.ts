@@ -92,6 +92,8 @@ export const NAV: NavItem[] = [
   { id: 'utilisateurs', icon: 'usercog', roles: [], manageUsers: true, subs: ['roles', 'admins', 'vendeurs', 'agents', 'marketeurs', 'managers'] },
   // confirmation agencies working for the store (its code, requests both ways, contracts, numbers, payments)
   { id: 'agences', icon: 'handshake', roles: [], onlyIf: () => !!currentShop() && !currentShop()!.demo },
+  // marketers running the store's ads (the same, on their own: a marketer has nothing to do with the agencies)
+  { id: 'marketers', icon: 'trend', roles: [], onlyIf: () => !!currentShop() && !currentShop()!.demo },
   { id: 'management', icon: 'briefcase', roles: [], subs: ['statuts', 'paie', 'prix', 'canaux', 'archive'] },
   { id: 'reglages', icon: 'settings', roles: [] },
   { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'parrainage', 'securite'] },
@@ -135,6 +137,22 @@ export const AGENCY_NAV: NavItem[] = [
   },
   { id: 'confirmation', icon: 'phone', roles: ['confirmation', 'agent_manager'], subs: ['nouvelles', 'attente', 'confirmees'], flow: true, hidden: true },
   { id: 'suivi', icon: 'route', roles: ['suivi', 'agent_manager'], subs: ['alertes', 'traites', 'livres', 'annules'], hidden: true },
+  { id: 'vendeurs', icon: 'store', roles: [] },
+  { id: 'facturation', icon: 'receipt', roles: [] },
+  { id: 'utilisateurs', icon: 'usercog', roles: [], manageUsers: true },
+  { id: 'reglages', icon: 'settings', roles: [] },
+  { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'securite'] },
+];
+
+// ---------------------------------------------------------------- a marketer's own space
+/**
+ * The menu of a marketer (who runs the ads of the stores it works for): like a store's Marketing (Publicité, its ad
+ * sets), on its sellers' ads (the seller picker at the top of the page), plus its sellers, its bills, its team and its
+ * settings.
+ */
+export const MARKETER_NAV: NavItem[] = [
+  { id: 'accueil', icon: 'home', roles: null },
+  { id: 'marketing', icon: 'megaphone', roles: ['marketer'], subs: ['publicite', 'marketer'] },
   { id: 'vendeurs', icon: 'store', roles: [] },
   { id: 'facturation', icon: 'receipt', roles: [] },
   { id: 'utilisateurs', icon: 'usercog', roles: [], manageUsers: true },

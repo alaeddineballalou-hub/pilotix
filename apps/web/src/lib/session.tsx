@@ -121,9 +121,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 }
 
 /**
- * A confirmation agency's space, on its sellers' orders: the screens of a store's confirmation and suivi as one of the
- * agency's agents sees them there — the agency's chief and supervisors do both tasks, the others their own; nobody is
- * the store's administrator (no store settings, no new orders).
+ * A partner's space, working for its sellers: the store's screens as one of the partner's people sees them there — an
+ * agency's chief and supervisors do the confirmation and the suivi, its agents their own task; a marketer's people the
+ * ads of their ad sets. Nobody is the store's administrator (no store settings, no new orders).
  */
 export function AgentView({ children }: { children: ReactNode }) {
   const s = useContext(Ctx);
@@ -131,7 +131,15 @@ export function AgentView({ children }: { children: ReactNode }) {
     if (!s.session) return s;
     const own = s.session.roles;
     const lead = s.session.isAdmin || own.includes('agent_manager');
-    const roles = (lead ? ['confirmation', 'suivi'] : own.filter((r) => r === 'confirmation' || r === 'suivi')) as Role[];
+    const roles = (
+      s.session.shop?.kind === 'marketer'
+        ? lead || own.includes('marketer')
+          ? ['marketer']
+          : []
+        : lead
+          ? ['confirmation', 'suivi']
+          : own.filter((r) => r === 'confirmation' || r === 'suivi')
+    ) as Role[];
     const session: Session = { ...s.session, isAdmin: false, canManageUsers: false, roles, profile: { ...s.session.profile, agencyId: s.session.shop?.id ?? -1 } };
     return { ...s, session, has: (...want: Role[]) => want.some((r) => roles.includes(r)) };
   }, [s]);

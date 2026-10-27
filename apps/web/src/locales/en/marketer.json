@@ -235,5 +235,9 @@
     "video": "video",
     "photo": "photo"
   },
-  "fxWait": "dollar rate to enter"
+  "fxWait": "dollar rate to enter",
+  "partnerPrice": "Price set by this marketer (Marketers page)",
+  "partnerBill": "Paid by their monthly bill, in",
+  "titlePartner": "My ad sets at this seller",
+  "partnerPaidBy": "Your “successful” ad sets, your delivered orders and your share of the profit are paid each month by your bill:"
 }

@@ -15,6 +15,9 @@ type Row = Overview['rows'][number];
 type St = '' | 'ok' | 'pay' | 'paid' | 'ko' | 'run';
 const ST: St[] = ['', 'ok', 'pay', 'paid', 'ko', 'run'];
 
+/** A marketer's name; one of a marketer account's people (« Marketers »): with the account's name. */
+const mkName = (m: { name: string; partner?: { name: string } | null }) => (m.partner?.name ? `${m.name} · ${m.partner.name}` : m.name);
+
 const usd = (v: number | null | undefined) => (v === null || v === undefined || !isFinite(v) ? '—' : `${v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`);
 const r0 = (v: number) => Math.round(v);
 const monthName = (ym: string) => {
@@ -111,7 +114,7 @@ export function Marketer({ rest }: { rest?: string[] }) {
                     <select className={`mk-fsel ${who ? 'on' : ''}`} value={who} onChange={(e) => setWho(e.target.value)} aria-label={t('marketer.filterWho')}>
                       <option value="">{`${t('marketer.allMarketers')} · ${n(rows.length)}`}</option>
                       {people.map((m) => (
-                        <option key={m.id} value={String(m.id)}>{`${m.name} · ${n(rows.filter((a) => a.marketerId === m.id).length)}`}</option>
+                        <option key={m.id} value={String(m.id)}>{`${mkName(m)} · ${n(rows.filter((a) => a.marketerId === m.id).length)}`}</option>
                       ))}
                       {rows.some((a) => !a.marketerId) && <option value="-">{`${t('marketer.noMarketer')} · ${n(rows.filter((a) => !a.marketerId).length)}`}</option>}
                     </select>
@@ -151,6 +154,8 @@ function Head({ d, rows, who, setWho, st, setSt, inWho, refetch, busy }: { d: Ov
     else if (a.owe) (tPay += a.owe), nPay++;
   }
   const cost = tPaid + tPay;
+  // a marketer account's people (from its own space): paid by its monthly bill (Facturation), not ad set by ad set
+  const partnerView = !d.owner && rows.length > 0 && rows.every((a) => a.partnerId !== null);
   const kpi = (k: St | null, lab: string, val: ReactNode, sub: ReactNode, extra?: ReactNode, cls = '') => {
     const body = (
       <>
@@ -171,7 +176,7 @@ function Head({ d, rows, who, setWho, st, setSt, inWho, refetch, busy }: { d: Ov
   return (
     <section className="card">
       <div className="card-head">
-        <h2>{d.owner ? t('marketer.title') : t('marketer.titleMine')}</h2>
+        <h2>{d.owner ? t('marketer.title') : partnerView ? t('marketer.titlePartner') : t('marketer.titleMine')}</h2>
         <div className="mk-head-r">
           {d.owner && (
             <label className="mk-who">
@@ -180,7 +185,7 @@ function Head({ d, rows, who, setWho, st, setSt, inWho, refetch, busy }: { d: Ov
                 <option value="">{t('marketer.all')}</option>
                 {d.marketers.map((m) => (
                   <option key={m.id} value={String(m.id)}>
-                    {m.name}
+                    {mkName(m)}
                   </option>
                 ))}
                 {rows.some((a) => !a.marketerId) && <option value="-">{t('marketer.noMarketer')}</option>}
@@ -199,8 +204,8 @@ function Head({ d, rows, who, setWho, st, setSt, inWho, refetch, busy }: { d: Ov
         </div>
       </div>
       <div className="kpis mk-kpis">
-        {kpi('pay', t('marketer.k.pay'), da(tPay), nPay ? t('marketer.k.paySub', { count: nPay }) : t('marketer.k.payNone'))}
-        {kpi('paid', t('marketer.k.paid'), da(tPaid), t('marketer.k.paidSub', { count: nPaid }))}
+        {!partnerView && kpi('pay', t('marketer.k.pay'), da(tPay), nPay ? t('marketer.k.paySub', { count: nPay }) : t('marketer.k.payNone'))}
+        {!partnerView && kpi('paid', t('marketer.k.paid'), da(tPaid), t('marketer.k.paidSub', { count: nPaid }))}
         {kpi(
           'ok',
           t('marketer.k.ok'),
@@ -210,11 +215,16 @@ function Head({ d, rows, who, setWho, st, setSt, inWho, refetch, busy }: { d: Ov
             <i style={{ width: nLines ? `${Math.round((100 * tOk) / nLines)}%` : 0 }} />
           </span>,
         )}
-        {kpi(null, t('marketer.k.cpa'), nLines ? da(r0(cost / nLines)) : '—', `${da(cost)} ÷ ${n(nLines)}`)}
+        {!partnerView && kpi(null, t('marketer.k.cpa'), nLines ? da(r0(cost / nLines)) : '—', `${da(cost)} ÷ ${n(nLines)}`)}
         {kpi(null, t('marketer.k.net'), da(tNet), `${t('marketer.k.netSub', { usd: usd(tSp) })}${cost && tNet > 0 ? ' · ' + t('marketer.k.share', { pct: pct(cost / tNet) }) : ''}`, undefined, tNet < 0 ? 'neg' : '')}
         {kpi('run', t('marketer.k.run'), n(tRun), t('marketer.k.runSub'))}
       </div>
       {!!d.fxMissing.length && <p className="mk-warn">⚠ {t('marketer.fxMissing', { months: d.fxMissing.map(monthName).join(', ') })}</p>}
+      {partnerView && (
+        <p className="note">
+          {t('marketer.partnerPaidBy')} <a href="#/facturation">{t('agency.nav.facturation')}</a>
+        </p>
+      )}
       <Rules d={d} />
     </section>
   );
@@ -285,7 +295,7 @@ function Ask({ d, rows }: { d: Overview; rows: Row[] }) {
             <option value="">{t('marketer.choose')}</option>
             {d.marketers.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.name}
+                {mkName(m)}
               </option>
             ))}
           </select>
@@ -340,7 +350,14 @@ function Manage({ d, rows, who, onPick }: { d: Overview; rows: Row[]; who: strin
               <div key={m.id} className={`mk-card ${who === String(m.id) ? 'on' : ''}`} tabIndex={0} title={t('marketer.seeHis')} onClick={(e) => !(e.target as HTMLElement).closest('input,button,label') && onPick(m.id)} onKeyDown={(e) => e.key === 'Enter' && e.target === e.currentTarget && onPick(m.id)}>
                 <div className="top">
                   <b>{m.name}</b>
+                  {m.partner && <span className="chip mkx-chip">{m.partner.name}</span>}
                   {!m.active && <span className="pill">{t('marketer.inactive')}</span>}
+                  {m.partner ? (
+                    <span className="field mk-fixed" title={t('marketer.partnerPrice')}>
+                      <b className="ltr">{da(m.price)}</b>
+                      <small> {t('marketer.perSuccess')}</small>
+                    </span>
+                  ) : (
                   <label className="field">
                     <input
                       type="number"
@@ -357,6 +374,7 @@ function Manage({ d, rows, who, onPick }: { d: Overview; rows: Row[]; who: strin
                     />
                     <small> {t('marketer.perSuccess')}</small>
                   </label>
+                  )}
                 </div>
                 <div className="stats">
                   {(['n', 'ok', 'ko', 'run'] as const).map((k) => (
@@ -365,13 +383,24 @@ function Manage({ d, rows, who, onPick }: { d: Overview; rows: Row[]; who: strin
                     </span>
                   ))}
                 </div>
+                {m.partner ? (
+                  <div className="money">
+                    <span>
+                      {t('marketer.partnerBill')}{' '}
+                      <a href="#/marketers" onClick={(e) => e.stopPropagation()}>
+                        {t('nav.marketers')}
+                      </a>
+                    </span>
+                  </div>
+                ) : (
                 <div className="money">
                   <span>
                     {t('marketer.toPay')} <b className="due ltr">{da(x.pay)}</b>
                   </span>
                   <span>{t('marketer.alreadyPaid', { amount: da(x.paid) })}</span>
                 </div>
-                {!!due.length && (
+                )}
+                {!m.partner && !!due.length && (
                   <ConfirmButton className="fix-copy ok" question={t('marketer.payAllQ', { count: due.length })} onConfirm={() => pay.mutate({ ids: due.map((a) => a.id) })} disabled={pay.isPending}>
                     {t('marketer.payAll', { name: m.name, amount: da(x.pay) })}
                   </ConfirmButton>
@@ -407,7 +436,7 @@ function Bulk({ d, rows, sel, setSel }: { d: Overview; rows: Row[]; sel: Set<str
           <option value="">{t('marketer.choose')}</option>
           {d.marketers.map((m) => (
             <option key={m.id} value={m.id}>
-              {m.name}
+              {mkName(m)}
             </option>
           ))}
           <option value="-">{t('marketer.removeMarketer')}</option>
@@ -683,7 +712,7 @@ function AdsetRow({ d, a, kid, sel, toggle, name, back }: { d: Overview; a: Row;
             <option value="">{t('marketer.pick')}</option>
             {d.marketers.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.name}
+                {mkName(m)}
               </option>
             ))}
           </select>

@@ -30,7 +30,8 @@
     "settings": "Réglages",
     "signups": "Inscriptions",
     "messages": "Messages",
-    "health": "Sauvegardes"
+    "health": "Sauvegardes",
+    "marketers": "Marketers"
   },
   "roles": {
     "owner": "Propriétaire",
@@ -311,7 +312,11 @@
     "receipt": "Reçu {{no}} envoyé à {{email}}",
     "reward_one": "Parrainage : {{count}} mois gratuit grâce à « {{from}} »",
     "reward_other": "Parrainage : {{count}} mois gratuits grâce à « {{from}} »",
-    "supportReply": "Réponse au message « {{subject}} »"
+    "supportReply": "Réponse au message « {{subject}} »",
+    "partnerSignup": "Inscription : {{kind}}",
+    "partnerAdded": "Créé depuis un compte : {{kind}}",
+    "partnerVerify": "Vérifié par Pilotix",
+    "partnerUnverify": "Vérification retirée"
   },
   "plan": {
     "new": "Nouvelle formule",
@@ -544,5 +549,18 @@
     "reason": "Raison (pour le journal)",
     "saved": "Enregistré",
     "none": "Pas encore d’agence."
+  },
+  "mk": {
+    "sub": "Les marketers : Pilotix vérifie chacun avant qu’il travaille avec des boutiques.",
+    "waiting_one": "{{count}} marketer attend votre vérification.",
+    "waiting_other": "{{count}} marketers attendent votre vérification.",
+    "agency": "Marketer",
+    "verified": "Vérifié",
+    "none": "Pas encore de marketer.",
+    "suspendText": "Son équipe s’arrête tout de suite dans toutes les boutiques ; ses ad sets restent aux boutiques."
+  },
+  "kind": {
+    "agency": "agence de confirmation",
+    "marketer": "espace marketer"
   }
 }

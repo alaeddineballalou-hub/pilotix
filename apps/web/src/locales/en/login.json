@@ -28,5 +28,7 @@
   "createStore": "Create my store",
   "terms": "Terms of use and privacy",
   "inviteTitle": "Welcome to Pilotix",
-  "inviteText": "Choose your password to enter your store. Only you will know it."
+  "inviteText": "Choose your password to enter your store. Only you will know it.",
+  "createAccount": "Create an account",
+  "createAccountSub": "Seller, confirmation agency or marketer"
 }

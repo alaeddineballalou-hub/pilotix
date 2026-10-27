@@ -2,6 +2,8 @@
 // works for: requests both ways, who works for each, prices, numbers), its Facturation (each seller's month, the
 // payment asked, paid, received), its Utilisateurs (the store's page, with each person's sellers and products) and its
 // Réglages (its code, its usual prices). The confirmation and suivi work is in work.tsx.
+// A marketer's space uses the same Vendeurs, Facturation, Utilisateurs and Réglages (its own words, prices and
+// numbers); its Accueil and its ads are in ../marketer.
 import { AgencyCounts, AgencyLinkInfo, AgencyPrices, AgencyTask, confirmRate, deliveryRate, hasPrice, NO_AGENCY_PRICES, NO_COUNTS } from '@pilotix/shared';
 import { FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,7 +20,7 @@ import { toast } from '../../ui/toast';
 import { UsersPage } from '../admin/Users';
 import { KpiBox } from '../dashboard/util';
 import type { PageProps } from '../registry';
-import { BillLines, billOf, BillsList, CountsLine, CountsRow, EndModal, Lead, LinkStatus, monthLabel, MonthPicker, PriceEditor, PriceList, TaskChips, TaskPicker } from './parts';
+import { BillLines, billOf, BillsList, CountsLine, CountsRow, EndModal, Lead, LinkStatus, monthLabel, MonthPicker, PriceEditor, PriceList, TaskChips, TaskPicker, usePartnerKind, useTp } from './parts';
 import './agency.css';
 
 type Home = Out<'agency.home'>;
@@ -28,9 +30,10 @@ const monthNow = () => {
   const d = new Date(Date.now() + 3_600_000);
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 };
-const sumCounts = (xs: AgencyCounts[]) => xs.reduce((a, c) => ({ received: a.received + c.received, confirmed: a.confirmed + c.confirmed, delivered: a.delivered + c.delivered, returned: a.returned + c.returned, upsells: a.upsells + c.upsells }), { ...NO_COUNTS });
+const sumCounts = (xs: AgencyCounts[]) => xs.reduce((a, c) => Object.fromEntries(Object.keys(NO_COUNTS).map((k) => [k, (a as any)[k] + ((c as any)[k] ?? 0)])) as unknown as AgencyCounts, { ...NO_COUNTS });
+export { sumCounts };
 
-function useHome() {
+export function useHome() {
   return useRpc('agency.home', {}, { refetchInterval: 60_000 });
 }
 
@@ -208,6 +211,7 @@ export function Vendeurs({ sub }: PageProps) {
 
 function SellerList() {
   const { t } = useTranslation();
+  const tp = useTp();
   const q = useHome();
   if (q.isLoading) return <Loading />;
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
@@ -228,7 +232,7 @@ function SellerList() {
           </div>
         </Card>
       )}
-      <Card title={t('agency.sellers')} help={t('agency.sellersHelp')}>
+      <Card title={tp('sellers')} help={tp('sellersHelp')}>
         {active.length ? (
           <div className="agx-links">
             {active.map((l) => (
@@ -236,7 +240,7 @@ function SellerList() {
             ))}
           </div>
         ) : (
-          <Empty>{t('agency.home.noSeller')}</Empty>
+          <Empty>{tp('home.noSeller')}</Empty>
         )}
       </Card>
       {sent.length > 0 && (
@@ -270,9 +274,11 @@ function SellerList() {
 /** « Ajouter un vendeur »: its code, then the tasks and the prices for it. */
 function FindStore({ h }: { h: Home }) {
   const { t } = useTranslation();
+  const tp = useTp();
+  const kind = usePartnerKind();
   const [code, setCode] = useState('');
   const [found, setFound] = useState<Out<'agency.find'> | null>(null);
-  const [tasks, setTasks] = useState<AgencyTask[]>(['confirmation']);
+  const [tasks, setTasks] = useState<AgencyTask[]>(kind === 'marketer' ? ['marketing'] : ['confirmation']);
   const [prices, setPrices] = useState<AgencyPrices>(h.agency.prices ?? NO_AGENCY_PRICES);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -293,8 +299,8 @@ function FindStore({ h }: { h: Home }) {
   };
   return (
     <Card title={t('agency.addSeller')} className="agx-find-card">
-      <Lead>{t('agency.addSellerText')}</Lead>
-      {!h.agency.verified && <p className="agx-note warn">{t('agency.notVerifiedYet')}</p>}
+      <Lead>{tp('addSellerText')}</Lead>
+      {!h.agency.verified && <p className="agx-note warn">{tp('notVerifiedYet')}</p>}
       <form className="agx-find" onSubmit={find}>
         <input dir="ltr" className="agx-code-in" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="K7Q-29X" aria-label={t('agency.storeCode')} maxLength={12} />
         <button className="btn" disabled={busy || code.replace(/[^A-Za-z0-9]/g, '').length < 6}>
@@ -312,12 +318,14 @@ function FindStore({ h }: { h: Home }) {
             <span className="muted ltr">{found.store.code}</span>
           </div>
           {found.link ? (
-            <p className="agx-note">{found.link.status === 'active' ? t('agency.alreadyActive') : t('agency.alreadyPending')}</p>
+            <p className="agx-note">{found.link.status === 'active' ? tp('alreadyActive') : t('agency.alreadyPending')}</p>
           ) : (
             <>
-              <Field label={t('agency.tasks')}>
-                <TaskPicker value={tasks} onChange={setTasks} />
-              </Field>
+              {kind === 'agency' && (
+                <Field label={t('agency.tasks')}>
+                  <TaskPicker value={tasks} onChange={setTasks} />
+                </Field>
+              )}
               <div className="agx-sub">
                 <b>{t('agency.pricesFor', { store: found.store.name })}</b>
                 <Lead>{t('agency.pricesForText')}</Lead>
@@ -341,6 +349,7 @@ function FindStore({ h }: { h: Home }) {
 
 function ReceivedFromStore({ l }: { l: AgencyLinkInfo }) {
   const { t } = useTranslation();
+  const tp = useTp(l.kind);
   const answer = useAction('agency.answer', { success: t('agency.answered') });
   return (
     <article className="agx-link">
@@ -348,8 +357,8 @@ function ReceivedFromStore({ l }: { l: AgencyLinkInfo }) {
         <b>{l.store.name}</b>
         <LinkStatus l={l} side="agency" />
       </header>
-      <p className="small">{t('agency.storeAsks')}</p>
-      <TaskChips tasks={l.tasks} />
+      <p className="small">{tp('storeAsks')}</p>
+      {l.kind === 'agency' && <TaskChips tasks={l.tasks} />}
       <p className="small muted">{l.products === null ? t('agency.allProducts') : t('agency.nProducts', { count: l.products.length })}</p>
       <div className="agx-sub">
         <small className="muted">{t('agency.yourPrices')}</small>
@@ -376,7 +385,7 @@ function SentToStore({ l }: { l: AgencyLinkInfo }) {
         <b>{l.store.name}</b>
         <LinkStatus l={l} side="agency" />
       </header>
-      <TaskChips tasks={l.tasks} />
+      {l.kind === 'agency' && <TaskChips tasks={l.tasks} />}
       <PriceList p={l.prices} compact />
       <div className="row agx-actions">
         <button type="button" className="btn" disabled={cancel.isPending} onClick={() => cancel.mutate({ id: l.id })}>
@@ -389,6 +398,7 @@ function SentToStore({ l }: { l: AgencyLinkInfo }) {
 
 function SellerCard({ l, c }: { l: AgencyLinkInfo; c?: AgencyCounts & { total: number } }) {
   const { t } = useTranslation();
+  const tp = useTp(l.kind);
   return (
     <a className="agx-link agx-link-go" href={`#/vendeurs/${l.id}`}>
       <header>
@@ -396,9 +406,9 @@ function SellerCard({ l, c }: { l: AgencyLinkInfo; c?: AgencyCounts & { total: n
         <LinkStatus l={l} side="agency" />
         {l.pricesNew && <span className="chip agx-st agx-st-wait">{t('agency.newPricesWaiting')}</span>}
       </header>
-      <TaskChips tasks={l.tasks} />
+      {l.kind === 'agency' && <TaskChips tasks={l.tasks} />}
       <p className="small muted">
-        {l.products === null ? t('agency.allProducts') : t('agency.nProducts', { count: l.products.length })} · {l.agents.length ? t('agency.nAgents', { count: l.agents.length }) : <span className="agx-bad">{t('agency.noAgent')}</span>}
+        {l.products === null ? t('agency.allProducts') : t('agency.nProducts', { count: l.products.length })} · {l.agents.length ? tp('nAgents', { count: l.agents.length }) : <span className="agx-bad">{tp('noAgent')}</span>}
       </p>
       <CountsLine c={c ?? NO_COUNTS} total={c?.total ?? 0} />
       <span className="agx-go">
@@ -411,6 +421,7 @@ function SellerCard({ l, c }: { l: AgencyLinkInfo; c?: AgencyCounts & { total: n
 /** One seller: its agents, the prices, a month's numbers and bill, the payment requests, the end. */
 function SellerDetail({ id }: { id: number }) {
   const { t, i18n } = useTranslation();
+  const tp = useTp();
   const max = monthNow();
   const [month, setMonth] = useState(max);
   const q = useRpc('agency.link', { id, month });
@@ -433,15 +444,15 @@ function SellerDetail({ id }: { id: number }) {
           <h1>{l.store.name}</h1>
           <div className="row">
             <LinkStatus l={l} side="agency" />
-            <TaskChips tasks={l.tasks} />
+            {l.kind === 'agency' && <TaskChips tasks={l.tasks} />}
           </div>
           <p className="small muted">{l.products === null ? t('agency.allProductsLong') : t('agency.nProducts', { count: l.products.length })}</p>
         </div>
       </section>
       <div className="agx-grid">
         <Card
-          title={t('agency.agents')}
-          help={t('agency.agentsHelp')}
+          title={tp('agents')}
+          help={tp('agentsHelp')}
           actions={
             (live || l.status === 'pending') && (
               <button type="button" className="btn small" onClick={() => setModal('agents')}>
@@ -460,7 +471,7 @@ function SellerDetail({ id }: { id: number }) {
               ))}
             </ul>
           ) : (
-            <p className="agx-note warn">{t('agency.noAgentText')}</p>
+            <p className="agx-note warn">{tp('noAgentText')}</p>
           )}
         </Card>
         <Card
@@ -484,8 +495,9 @@ function SellerDetail({ id }: { id: number }) {
         </Card>
       </div>
       <Card title={t('agency.monthTitle')} actions={<MonthPicker value={month} max={max} onChange={setMonth} />}>
-        <CountsRow c={d.counts} total={d.bill.total} />
-        <BillLines lines={d.bill.lines} total={d.bill.total} />
+        {l.kind === 'marketer' && <Lead>{tp('monthLead')}</Lead>}
+        <CountsRow c={d.counts} total={d.bill.total} kind={l.kind} />
+        <BillLines lines={d.bill.lines} total={d.bill.total} kind={l.kind} />
         <div className="row agx-actions">
           {billed && billed.status !== 'requested' ? (
             <span className="chip agx-st agx-st-ok">{t(`agency.bill.${billed.status}`)}</span>
@@ -512,7 +524,7 @@ function SellerDetail({ id }: { id: number }) {
         <section className="card agx-danger">
           <div>
             <b>{t('agency.endTitle')}</b>
-            <p className="small muted">{t('agency.endTextAgency')}</p>
+            <p className="small muted">{tp('endTextAgency')}</p>
           </div>
           <button type="button" className="btn danger" onClick={() => setModal('end')}>
             {t('agency.end')}
@@ -521,7 +533,7 @@ function SellerDetail({ id }: { id: number }) {
       )}
       {modal === 'agents' && <AgentsModal l={l} onClose={() => setModal(null)} />}
       {modal === 'prices' && <PricesModal l={l} onClose={() => setModal(null)} />}
-      {modal === 'end' && <EndModal name={l.store.name} proc="agency.end" id={l.id} back="#/vendeurs" onClose={() => setModal(null)} text={t('agency.endTextAgency')} />}
+      {modal === 'end' && <EndModal name={l.store.name} proc="agency.end" id={l.id} back="#/vendeurs" onClose={() => setModal(null)} text={tp('endTextAgency')} />}
     </div>
   );
 }
@@ -531,17 +543,19 @@ const worksFor = (p: { sellers: { store: number }[] | null }, store: number) => 
 
 function AgentsModal({ l, onClose }: { l: AgencyLinkInfo; onClose: () => void }) {
   const { t } = useTranslation();
+  const tp = useTp(l.kind);
   const team = useRpc('agency.team', {});
   const [sel, setSel] = useState<Set<number> | null>(null);
   const save = useAction('agency.setAgents', {
     onDone: (r) => {
       if (r.problems.length) r.problems.forEach((p) => toast(p, 'bad', 7000));
-      else toast(t('agency.agentsSaved'), 'ok');
+      else toast(tp('agentsSaved'), 'ok');
       onClose();
     },
   });
-  // who can work for this store: their role fits one of its tasks (the chief and team leads: every task)
-  const people = (team.data ?? []).filter((p) => p.roles.includes('admin') || p.roles.includes('agent_manager') || l.tasks.some((k) => p.roles.includes(k)));
+  // who can work for this store: their role fits one of its tasks (the chief and team leads: every task); a
+  // marketer's people: the marketer role
+  const people = (team.data ?? []).filter((p) => p.roles.includes('admin') || p.roles.includes('agent_manager') || (l.kind === 'marketer' ? p.roles.includes('marketer') : l.tasks.some((k) => p.roles.includes(k))));
   useEffect(() => {
     if (team.data && sel === null) setSel(new Set(team.data.filter((p) => worksFor(p, l.store.id)).map((p) => p.id)));
   }, [team.data, sel, l.id]);
@@ -561,7 +575,7 @@ function AgentsModal({ l, onClose }: { l: AgencyLinkInfo; onClose: () => void })
         </>
       }
     >
-      <Lead>{t('agency.chooseAgentsText')}</Lead>
+      <Lead>{tp('chooseAgentsText')}</Lead>
       {team.isLoading ? (
         <Loading />
       ) : people.length ? (
@@ -572,7 +586,7 @@ function AgentsModal({ l, onClose }: { l: AgencyLinkInfo; onClose: () => void })
                 <input type="checkbox" checked={s.has(p.id)} onChange={() => setSel(new Set(s.has(p.id) ? [...s].filter((x) => x !== p.id) : [...s, p.id]))} />
                 <span>
                   <b>{p.name}</b>
-                  <small className="muted">{p.roles.map((r) => t(`agency.team.r.${r}`, { defaultValue: t(`roles.${r}`) })).join(' · ')}</small>
+                  <small className="muted">{p.roles.map((r) => tp(`team.r.${r}`, { defaultValue: t(`roles.${r}`) })).join(' · ')}</small>
                 </span>
                 {p.sellers === null ? <span className="chip">{t('agency.users.allSellers')}</span> : p.sellers.length > 0 && <span className="chip">{t('agency.worksFor', { count: p.sellers.length })}</span>}
               </label>
@@ -581,7 +595,7 @@ function AgentsModal({ l, onClose }: { l: AgencyLinkInfo; onClose: () => void })
         </ul>
       ) : (
         <Empty>
-          {t('agency.noTeamYet')} <a href="#/utilisateurs">{t('agency.nav.utilisateurs')}</a>
+          {tp('noTeamYet')} <a href="#/utilisateurs">{t('agency.nav.utilisateurs')}</a>
         </Empty>
       )}
     </Modal>
@@ -609,7 +623,7 @@ function PricesModal({ l, onClose }: { l: AgencyLinkInfo; onClose: () => void })
       }
     >
       {l.status === 'active' && <p className="agx-note">{t('agency.pricesChangeRule')}</p>}
-      <PriceEditor value={p} onChange={setP} />
+      <PriceEditor value={p} onChange={setP} kind={l.kind} />
     </Modal>
   );
 }
@@ -618,6 +632,8 @@ function PricesModal({ l, onClose }: { l: AgencyLinkInfo; onClose: () => void })
 /** Each seller's month: its numbers, what they make, and the payment: asked → paid (the seller) → received (us). */
 export function Facturation(_: PageProps) {
   const { t, i18n } = useTranslation();
+  const tp = useTp();
+  const mk = usePartnerKind() === 'marketer';
   const seller = useSeller();
   const max = monthNow();
   const [month, setMonth] = useState(max);
@@ -629,7 +645,7 @@ export function Facturation(_: PageProps) {
   const total = rows.reduce((s, r) => s + r.bill.total, 0);
   return (
     <div className="agx-page">
-      <Card title={t('agency.fact.title', { m: monthLabel(month, i18n.language) })} help={t('agency.fact.help')} actions={<MonthPicker value={month} max={max} onChange={setMonth} />}>
+      <Card title={t('agency.fact.title', { m: monthLabel(month, i18n.language) })} help={tp('fact.help')} actions={<MonthPicker value={month} max={max} onChange={setMonth} />}>
         <Kpis>
           <KpiBox icon="coins" label={t('agency.fact.total')} value={da(total)} sub={t('agency.fact.totalSub', { count: rows.length })} />
           <KpiBox icon="send" label={t('agency.fact.asked')} value={da(sum((r) => r.request?.status === 'requested'))} sub={t('agency.fact.askedSub')} tone={sum((r) => r.request?.status === 'requested') ? 'warn' : undefined} />
@@ -650,9 +666,21 @@ export function Facturation(_: PageProps) {
               <thead>
                 <tr>
                   <th>{t('agency.seller')}</th>
-                  <th className="num">{t('agency.c.confirmed')}</th>
-                  <th className="num">{t('agency.c.delivered')}</th>
-                  <th className="num">{t('agency.c.upsells')}</th>
+                  {mk ? (
+                    <>
+                      <th className="num">{t('agency.c.adsets')}</th>
+                      <th className="num">{t('agency.c.spend')}</th>
+                      <th className="num">{t('agency.c.delivered')}</th>
+                      <th className="num">{t('agency.c.net')}</th>
+                      <th className="num">{t('agency.c.successes')}</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="num">{t('agency.c.confirmed')}</th>
+                      <th className="num">{t('agency.c.delivered')}</th>
+                      <th className="num">{t('agency.c.upsells')}</th>
+                    </>
+                  )}
                   <th className="num">{t('agency.c.amount')}</th>
                   <th>{t('agency.fact.state')}</th>
                   <th />
@@ -667,9 +695,21 @@ export function Facturation(_: PageProps) {
                       </a>
                       {l.status !== 'active' && <small className="muted">{t(`agency.st.${l.status}`)}</small>}
                     </td>
-                    <td className="num ltr" data-l={t('agency.c.confirmed')}>{n(c.confirmed)}</td>
-                    <td className="num ltr" data-l={t('agency.c.delivered')}>{n(c.delivered)}</td>
-                    <td className="num ltr" data-l={t('agency.c.upsells')}>{n(c.upsells)}</td>
+                    {mk ? (
+                      <>
+                        <td className="num ltr" data-l={t('agency.c.adsets')}>{n(c.adsets)}</td>
+                        <td className="num ltr" data-l={t('agency.c.spend')}>{da(c.spend)}</td>
+                        <td className="num ltr" data-l={t('agency.c.delivered')}>{n(c.delivered)}</td>
+                        <td className={`num ltr ${c.net < 0 ? 'agx-bad' : ''}`} data-l={t('agency.c.net')}>{da(c.net)}</td>
+                        <td className="num ltr" data-l={t('agency.c.successes')}>{n(c.successes)}</td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="num ltr" data-l={t('agency.c.confirmed')}>{n(c.confirmed)}</td>
+                        <td className="num ltr" data-l={t('agency.c.delivered')}>{n(c.delivered)}</td>
+                        <td className="num ltr" data-l={t('agency.c.upsells')}>{n(c.upsells)}</td>
+                      </>
+                    )}
                     <td className="num" data-l={t('agency.c.amount')}>
                       <b className="ltr">{da(b && b.status !== 'requested' ? b.amount : bill.total)}</b>
                     </td>
@@ -714,11 +754,15 @@ export function AgencyUsers({ sub, rest }: PageProps) {
 
 // ---------------------------------------------------------------- Réglages
 /** An example month, to see what the prices give. */
-const EXAMPLE: AgencyCounts = { received: 300, confirmed: 210, delivered: 150, returned: 40, upsells: 30 };
+const EXAMPLE: AgencyCounts = { ...NO_COUNTS, received: 300, confirmed: 210, delivered: 150, returned: 40, upsells: 30 };
+/** A marketer's example month: its ad sets, their spend, the orders they brought, the profit left. */
+const MK_EXAMPLE: AgencyCounts = { ...NO_COUNTS, adsets: 12, spend: 420_000, orders: 380, delivered: 240, returned: 70, net: 310_000, successes: 4 };
 
-/** The agency's code (sellers add it with it) and its usual prices. */
+/** The partner's code (sellers add it with it) and its usual prices. */
 export function AgencySettings(_: PageProps) {
   const { t } = useTranslation();
+  const tp = useTp();
+  const kind = usePartnerKind();
   const q = useHome();
   const [p, setP] = useState<AgencyPrices | null>(null);
   const save = useAction('agency.prices', { success: t('agency.pricesSaved') });
@@ -727,14 +771,15 @@ export function AgencySettings(_: PageProps) {
   }, [q.data, p]);
   if (q.isLoading || (!p && !q.error)) return <Loading />;
   if (q.error || !p) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
-  const ex = billOf(p, EXAMPLE);
+  const sample = kind === 'marketer' ? MK_EXAMPLE : EXAMPLE;
+  const ex = billOf(p, sample, kind);
   return (
     <div className="agx-page">
       <section className="card agx-hero">
         <div className="agx-hero-t">
-          <small>{t('agency.home.yourCode')}</small>
+          <small>{tp('home.yourCode')}</small>
           <span className="agx-code">{q.data!.agency.code ? <CopyCode code={q.data!.agency.code} /> : '—'}</span>
-          <p className="muted">{t('agency.home.codeText')}</p>
+          <p className="muted">{tp('home.codeText')}</p>
         </div>
         <a className="btn" href="#/vendeurs">
           <Icon name="plus" /> {t('agency.addSeller')}
@@ -742,7 +787,7 @@ export function AgencySettings(_: PageProps) {
       </section>
       <div className="agx-grid-2">
         <Card title={t('agency.tarifs.title')} help={t('agency.tarifs.help')}>
-          <Lead>{t('agency.tarifs.text')}</Lead>
+          <Lead>{tp('tarifs.text')}</Lead>
           <PriceEditor value={p} onChange={setP} />
           <div className="row agx-actions">
             <button type="button" className="btn primary" disabled={save.isPending || !hasPrice(p)} onClick={() => save.mutate({ prices: p })}>
@@ -751,8 +796,12 @@ export function AgencySettings(_: PageProps) {
           </div>
         </Card>
         <Card title={t('agency.tarifs.example')} help={t('agency.tarifs.exampleHelp')}>
-          <Lead>{t('agency.tarifs.exampleText', { r: n(EXAMPLE.received), c: n(EXAMPLE.confirmed), d: n(EXAMPLE.delivered), u: n(EXAMPLE.upsells) })}</Lead>
-          <CountsRow c={EXAMPLE} total={ex.total} />
+          <Lead>
+            {kind === 'marketer'
+              ? tp('tarifs.exampleText', { a: n(sample.adsets), s: da(sample.spend), d: n(sample.delivered), w: n(sample.successes), net: da(sample.net) })
+              : t('agency.tarifs.exampleText', { r: n(sample.received), c: n(sample.confirmed), d: n(sample.delivered), u: n(sample.upsells) })}
+          </Lead>
+          <CountsRow c={sample} total={ex.total} />
           <BillLines lines={ex.lines} total={ex.total} />
         </Card>
       </div>

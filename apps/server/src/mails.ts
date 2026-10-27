@@ -107,7 +107,7 @@ const site = () => config.publicUrl || '';
 const mail = (to: string, subject: string, o: Layout): Mail => ({ to, subject, ...layout(o) });
 
 // ---------------------------------------------------------------- sign-up
-export function signupConfirmMail(m: { token: string; email: string; name: string; language: string; store: string; agency?: boolean }): Mail {
+export function signupConfirmMail(m: { token: string; email: string; name: string; language: string; store: string; agency?: boolean; marketer?: boolean }): Mail {
   const l = lang(m.language);
   const link = `${site()}/#/signup/${m.token}`;
   const A = {
@@ -120,7 +120,12 @@ export function signupConfirmMail(m: { token: string; email: string; name: strin
     en: { s: 'Pilotix: confirm your sign-up', t: 'Confirm your e-mail', a: `Thank you! Your store “${m.store}” is almost ready.`, b: 'Click the button: your store is created right away, with its free trial.', btn: 'Create my store', v: 'This link works once, for 48 hours.' },
     ar: { s: 'Pilotix: أكّد تسجيلك', t: 'أكّد بريدك الإلكتروني', a: `شكرًا! متجرك «${m.store}» جاهز تقريبًا.`, b: 'اضغط على الزر: يُنشأ متجرك فورًا مع فترته التجريبية المجانية.', btn: 'إنشاء متجري', v: 'يعمل هذا الرابط مرة واحدة، لمدة 48 ساعة.' },
   }[l];
-  const T = m.agency ? A : S;
+  const M = {
+    fr: { s: 'Pilotix : confirmez votre inscription', t: 'Confirmez votre e-mail', a: `Merci ! Votre espace marketer « ${m.store} » est presque prêt.`, b: 'Cliquez sur le bouton : votre espace est créé tout de suite. Pilotix le vérifie ensuite, avant qu’il travaille avec des boutiques.', btn: 'Créer mon espace marketer', v: 'Ce lien marche une fois, pendant 48 heures.' },
+    en: { s: 'Pilotix: confirm your sign-up', t: 'Confirm your e-mail', a: `Thank you! Your marketer space “${m.store}” is almost ready.`, b: 'Click the button: your space is created right away. Pilotix then checks it before it works with stores.', btn: 'Create my marketer space', v: 'This link works once, for 48 hours.' },
+    ar: { s: 'Pilotix: أكّد تسجيلك', t: 'أكّد بريدك الإلكتروني', a: `شكرًا! مساحة المسوّق «${m.store}» جاهزة تقريبًا.`, b: 'اضغط على الزر: تُنشأ مساحتك فورًا، ثم يتحقق منها Pilotix قبل أن تعمل مع المتاجر.', btn: 'إنشاء مساحة المسوّق', v: 'يعمل هذا الرابط مرة واحدة، لمدة 48 ساعة.' },
+  }[l];
+  const T = m.marketer ? M : m.agency ? A : S;
   return mail(m.email, T.s, { l, title: T.t, icon: '✉️', hello: hello(l, m.name), lines: [T.a, T.b], button: { label: T.btn, link }, after: [`⏱️ ${T.v}`], note: NOT_YOU[l] });
 }
 

@@ -1,9 +1,9 @@
-// A confirmation agency's space works on its sellers' orders: one seller at a time (the picker at the top of the
-// page), or all of them together. Each action runs inside the store, as the person's own account there (agencies.ts
-// opens those accounts), with the limits of agencyscope.ts: the agency's orders only (the person's products only, when
-// the chief chose some), the confirmation and suivi work only. « Tous les vendeurs » asks every store and puts the
-// answers together (counts added up, lists merged in their order, the next order to call taken from the store whose
-// customer waits the most).
+// A partner's space works for its sellers: one seller at a time (the picker at the top of the page), or all of them
+// together. Each action runs inside the store, as the person's own account there (agencies.ts opens those accounts),
+// with the limits of agencyscope.ts: an agency's orders only (the person's products only, when the chief chose some),
+// the confirmation and suivi work only; a marketer's ad sets only, the ads work only. « Tous les vendeurs » asks every
+// store and puts the answers together (counts added up, lists merged in their order, the next order to call taken
+// from the store whose customer waits the most, every ad set of every seller).
 import type { AgencySeller } from '@pilotix/shared';
 import { z } from 'zod';
 import { num } from '../db';
@@ -31,7 +31,7 @@ const sellerOf = (L: Link): AgencySeller => ({ id: L.info.store.id, name: L.info
  */
 export async function sellerWork(ctx: Ctx, only?: number): Promise<Work[]> {
   const t = ctx.t;
-  if (!t || ctx.shop?.kind !== 'agency') throw forbidden('Réservé aux agences de confirmation');
+  if (!t || (ctx.shop?.kind !== 'agency' && ctx.shop?.kind !== 'marketer')) throw forbidden('Réservé aux agences de confirmation et aux marketers');
   const agencyId = ctx.shop.id;
   const email = ctx.session.profile.email.toLowerCase();
   const rows = await t.platform.query(`${LINK_SQL} WHERE l.agency_id = $1 AND l.status = 'active'${only ? ' AND l.store_id = $2' : ''} ORDER BY s.name, l.id`, only ? [agencyId, only] : [agencyId]);
@@ -125,11 +125,34 @@ interface Fan {
   merge: (parts: Part[], i: any) => any;
 }
 const sum: Fan = { merge: (parts) => sumDeep(parts.map((p) => p.out)) };
+
+/** A marketer's ad sets in every seller's store, in one list (the most spent first), each with its seller. */
+const mkAll: Fan = {
+  merge: (parts) => {
+    const rows = parts.flatMap((p) => (p.out?.rows ?? []).map((r: any) => ({ ...r, seller: { id: p.seller.id, name: p.seller.name } })));
+    rows.sort((a, b) => (b.sp ?? 0) - (a.sp ?? 0));
+    const first = parts[0]?.out ?? {};
+    return {
+      ...first,
+      owner: false,
+      admin: false,
+      from: parts.map((p) => p.out?.from).filter(Boolean).sort()[0] ?? first.from,
+      to: parts.map((p) => p.out?.to).filter(Boolean).sort().pop() ?? first.to,
+      fxMissing: [...new Set(parts.flatMap((p) => p.out?.fxMissing ?? []))].sort(),
+      marketers: parts.flatMap((p) => p.out?.marketers ?? []).filter((m: any, i: number, a: any[]) => a.findIndex((x) => x.id === m.id && x.name === m.name) === i),
+      rows,
+      // each seller's own rules (they judge the ad sets « réussi »)
+      sellers: parts.map((p) => ({ id: p.seller.id, name: p.seller.name, rules: p.out?.rules ?? null })),
+    };
+  },
+};
+
 const FANOUT: Record<string, Fan> = {
   'orders.counts': sum,
   'confirmation.counts': sum,
   'confirmation.mine': sum,
   'suivi.counts': sum,
+  'mk.overview': mkAll,
   'confirmation.list': {
     input: (i) => ({ ...i, page: 1, pageSize: Math.min(3000, (i?.page ?? 1) * (i?.pageSize ?? 50)) }),
     merge: (parts, i) => {

@@ -177,14 +177,9 @@ export function Login() {
               <div className="px-signup-cta">
                 <span className="muted">{t('login.noAccount')}</span>
                 <a className="btn" href="#/inscription">
-                  <Icon name="store" /> {t('login.createStore')}
+                  <Icon name="signup" /> {t('login.createAccount')}
                 </a>
-                <p className="agx-signup-line small">
-                  <Icon name="headset" />
-                  <span>
-                    <span className="muted">{t('agency.areYou')}</span> <a href="#/inscription-agence">{t('agency.create')}</a>
-                  </span>
-                </p>
+                <p className="small muted px-signup-kinds">{t('login.createAccountSub')}</p>
               </div>
             )}
           </>

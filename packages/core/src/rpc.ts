@@ -39,8 +39,8 @@ export interface ShopCtx {
   maxUsers: number | null;
   /** active livreurs the plan allows (null = no limit) */
   maxDrivers: number | null;
-  /** a store, or a confirmation agency (missing = a store) */
-  kind?: 'store' | 'agency';
+  /** a store, or a partner's own space: a confirmation agency or a marketer (missing = a store) */
+  kind?: 'store' | 'agency' | 'marketer';
   /** its public code (others type it to find it) */
   code?: string | null;
 }

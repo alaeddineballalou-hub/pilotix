@@ -1,6 +1,7 @@
 // The screens of an account on a multi-shop server: the store picker (after the password, or from the account menu),
-// « Ajouter une boutique », « Créer ma boutique » (confirmed by e-mail before anything is made), the sign-up e-mail's
-// link, the e-mail check link, and the terms of use and privacy page.
+// « Ajouter une boutique » (or « Créer mon agence », « Créer mon espace marketer »), « Créer un compte » (a store, a
+// confirmation agency or a marketer: confirmed by e-mail before anything is made), the sign-up e-mail's link, the
+// e-mail check link, and the terms of use and privacy page.
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, legalText, server, signup, signupInfo, StoreChoice, storeNameCheck, verifyEmail } from '../lib/backend';
@@ -14,6 +15,16 @@ import { BrandBig } from './PxWordmark';
 function home(to = '') {
   history.replaceState(null, '', `${location.pathname}${location.search}${to}`);
   window.dispatchEvent(new HashChangeEvent('hashchange'));
+}
+
+/** What an account can be: a store (a seller), a confirmation agency, a marketer. */
+type Kind = 'store' | 'agency' | 'marketer';
+const KINDS: Kind[] = ['store', 'agency', 'marketer'];
+const KIND_ICON: Record<Kind, string> = { store: 'store', agency: 'headset', marketer: 'megaphone' };
+/** The words of a partner's account (agency.*, a marketer's own agency.mk.* first). */
+function useKindT(kind: Kind) {
+  const { t } = useTranslation();
+  return (key: string, o?: Record<string, unknown>) => (kind === 'marketer' ? t(`agency.mk.${key}`, { ...o, defaultValue: t(`agency.${key}`, o) }) : t(`agency.${key}`, o));
 }
 
 function Page({ title, children, wide }: { title: string; children: ReactNode; wide?: boolean }) {
@@ -36,14 +47,15 @@ function StoreList({ stores, onPick, busy }: { stores: StoreChoice[]; onPick: (i
       {stores.map((s) => (
         <li key={s.id}>
           <button type="button" disabled={busy !== null} onClick={() => onPick(s.id)}>
-            <span className={`px-stores-ic ${s.kind === 'agency' ? 'agx-ic' : ''}`}>
-              <Icon name={s.kind === 'agency' ? 'headset' : 'store'} />
+            <span className={`px-stores-ic ${s.kind === 'agency' ? 'agx-ic' : s.kind === 'marketer' ? 'mkx-ic' : ''}`}>
+              <Icon name={KIND_ICON[s.kind ?? 'store']} />
             </span>
             <span className="px-stores-t">
               <b>{s.name}</b>
               <small className="ltr">{s.slug}</small>
             </span>
             {s.kind === 'agency' && <span className="chip agx-chip">{t('agency.badge')}</span>}
+            {s.kind === 'marketer' && <span className="chip mkx-chip">{t('agency.mk.badge')}</span>}
             {s.owner && <span className="chip">{t('shop.acc.owner')}</span>}
             {s.locked && <span className="chip px-chip-bad">{t('shop.acc.locked')}</span>}
             <span className="px-stores-go">{busy === s.id ? '…' : <Icon name="chevr" />}</span>
@@ -59,7 +71,7 @@ export function StorePicker() {
   const { t } = useTranslation();
   const { picker, pick, cancelPick, enter } = useSession();
   const [busy, setBusy] = useState<number | null>(null);
-  const [adding, setAdding] = useState<'store' | 'agency' | null>(null);
+  const [adding, setAdding] = useState<Kind | null>(null);
   if (!picker) return null;
   const go = async (id: number) => {
     setBusy(id);
@@ -75,7 +87,7 @@ export function StorePicker() {
       <p className="login-note">{picker.stores.length ? t('shop.acc.pickText', { name: picker.account.name || picker.account.email }) : t('shop.acc.noStore')}</p>
       <StoreList stores={picker.stores} onPick={go} busy={busy} />
       {adding ? (
-        <AddStoreForm ticket={picker.ticket} agency={adding === 'agency'} onDone={enter} onCancel={() => setAdding(null)} />
+        <AddStoreForm ticket={picker.ticket} kind={adding} onDone={enter} onCancel={() => setAdding(null)} />
       ) : (
         <>
           {picker.canAddStore && (
@@ -86,6 +98,11 @@ export function StorePicker() {
           {picker.canAddAgency && (
             <button type="button" className="login-link" onClick={() => setAdding('agency')}>
               <Icon name="headset" /> {t('agency.create')}
+            </button>
+          )}
+          {picker.canAddMarketer && (
+            <button type="button" className="login-link" onClick={() => setAdding('marketer')}>
+              <Icon name="megaphone" /> {t('agency.mk.create')}
             </button>
           )}
         </>
@@ -168,9 +185,14 @@ function StoreNameFields({ name, setName, slug, setSlug, touched, setTouched }: 
   );
 }
 
-/** « Ajouter une boutique » (its name and link) or « Créer mon agence » (its name): the person owns it and enters it. */
-export function AddStoreForm({ ticket, onDone, onCancel, agency }: { ticket?: string; onDone: (s: import('@pilotix/shared').Session) => void; onCancel?: () => void; agency?: boolean }) {
+/**
+ * « Ajouter une boutique » (its name and link), « Créer mon agence » or « Créer mon espace marketer » (its name): the
+ * person owns it and enters it.
+ */
+export function AddStoreForm({ ticket, onDone, onCancel, kind = 'store' }: { ticket?: string; onDone: (s: import('@pilotix/shared').Session) => void; onCancel?: () => void; kind?: Kind }) {
   const { t } = useTranslation();
+  const tk = useKindT(kind);
+  const partner = kind !== 'store';
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [touched, setTouched] = useState(false);
@@ -182,7 +204,7 @@ export function AddStoreForm({ ticket, onDone, onCancel, agency }: { ticket?: st
     setError('');
     setBusy(true);
     try {
-      onDone(await server.addStore(agency ? { name: name.trim(), kind: 'agency' } : { name: name.trim(), ...(touched && slug ? { slug } : {}) }, ticket));
+      onDone(await server.addStore(partner ? { name: name.trim(), kind } : { name: name.trim(), ...(touched && slug ? { slug } : {}) }, ticket));
       location.hash = '#/accueil';
     } catch (err: any) {
       if (err instanceof ApiError && err.message === 'VERIFY_EMAIL') setVerify('need');
@@ -215,15 +237,15 @@ export function AddStoreForm({ ticket, onDone, onCancel, agency }: { ticket?: st
     );
   return (
     <form className="px-acc-form" onSubmit={submit}>
-      {agency ? (
+      {partner ? (
         <label className="field">
-          <span className="lab">{t('agency.name')}</span>
-          <input required minLength={2} maxLength={80} value={name} onChange={(e) => setName(e.target.value)} placeholder={t('agency.namePh')} />
+          <span className="lab">{tk('name')}</span>
+          <input required minLength={2} maxLength={80} value={name} onChange={(e) => setName(e.target.value)} placeholder={tk('namePh')} />
         </label>
       ) : (
         <StoreNameFields name={name} setName={setName} slug={slug} setSlug={setSlug} touched={touched} setTouched={setTouched} />
       )}
-      <p className="small muted">{agency ? t('agency.addText') : t('shop.acc.addText')}</p>
+      <p className="small muted">{partner ? tk('addText') : t('shop.acc.addText')}</p>
       {error && <p className="form-err">{error}</p>}
       <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
         {onCancel && (
@@ -239,19 +261,27 @@ export function AddStoreForm({ ticket, onDone, onCancel, agency }: { ticket?: st
   );
 }
 
-export function AddStoreModal({ onClose, agency }: { onClose: () => void; agency?: boolean }) {
+export function AddStoreModal({ onClose, kind = 'store' }: { onClose: () => void; kind?: Kind }) {
   const { t } = useTranslation();
+  const tk = useKindT(kind);
   const { enter } = useSession();
   return (
-    <Modal title={agency ? t('agency.create') : t('shop.acc.addStore')} onClose={onClose}>
-      <AddStoreForm agency={agency} onDone={(s) => (enter(s), onClose())} onCancel={onClose} />
+    <Modal title={kind !== 'store' ? tk('create') : t('shop.acc.addStore')} onClose={onClose}>
+      <AddStoreForm kind={kind} onDone={(s) => (enter(s), onClose())} onCancel={onClose} />
     </Modal>
   );
 }
 
-// ---------------------------------------------------------------- « Créer ma boutique »
-export function Signup({ referral, agency }: { referral?: string; agency?: boolean }) {
+// ---------------------------------------------------------------- « Créer un compte »
+/**
+ * The sign-up page: the account to make first (a store, a confirmation agency, a marketer: each one its own space),
+ * then its name and the person. `kind`: chosen already (#/inscription-agence, #/inscription-marketer).
+ */
+export function Signup({ referral, kind: chosen }: { referral?: string; kind?: 'agency' | 'marketer' }) {
   const { t, i18n } = useTranslation();
+  const [kind, setKind] = useState<Kind>(chosen ?? 'store');
+  const tk = useKindT(kind);
+  const partner = kind !== 'store';
   const [info, setInfo] = useState<{ open: boolean; trialDays: number } | null>(null);
   const [f, setF] = useState({ name: '', email: '', password: '', phone: '', referral: (referral ?? '').toUpperCase(), terms: false });
   const [storeName, setStoreName] = useState('');
@@ -275,11 +305,11 @@ export function Signup({ referral, agency }: { referral?: string; agency?: boole
         password: f.password,
         phone: f.phone.trim() || null,
         storeName: storeName.trim(),
-        ...(!agency && touched && slug ? { slug } : {}),
+        ...(!partner && touched && slug ? { slug } : {}),
         language: (['fr', 'en', 'ar'].includes(i18n.language) ? i18n.language : 'fr') as 'fr' | 'en' | 'ar',
-        ...(!agency && f.referral.trim() ? { referral: f.referral.trim() } : {}),
+        ...(!partner && f.referral.trim() ? { referral: f.referral.trim() } : {}),
         terms: true,
-        ...(agency ? { kind: 'agency' as const } : {}),
+        ...(partner ? { kind } : {}),
       });
       setSent(true);
     } catch (err: any) {
@@ -308,13 +338,29 @@ export function Signup({ referral, agency }: { referral?: string; agency?: boole
       </Page>
     );
   return (
-    <Page title={agency ? t('agency.signupTitle') : t('shop.acc.signupTitle')} wide>
-      <p className="login-note">{agency ? t('agency.signupText') : t('shop.acc.signupText', { days: info?.trialDays ?? 14 })}</p>
+    <Page title={t('agency.acct.title')} wide>
+      <fieldset className="px-kinds">
+        <legend>{t('agency.acct.which')}</legend>
+        {KINDS.map((k) => (
+          <label key={k} className={`px-kind ${kind === k ? 'on' : ''}`}>
+            <input type="radio" name="px-kind" value={k} checked={kind === k} onChange={() => setKind(k)} />
+            <span className={`px-kind-ic px-kind-${k}`}>
+              <Icon name={KIND_ICON[k]} />
+            </span>
+            <span className="px-kind-t">
+              <b>{t(`agency.acct.${k}.t`)}</b>
+              <small>{t(`agency.acct.${k}.d`)}</small>
+            </span>
+            <span className="px-kind-dot" aria-hidden="true" />
+          </label>
+        ))}
+      </fieldset>
+      <p className="login-note">{partner ? tk('signupText') : t('shop.acc.signupText', { days: info?.trialDays ?? 14 })}</p>
       <form className="px-acc-form" onSubmit={submit}>
-        {agency ? (
+        {partner ? (
           <label className="field">
-            <span className="lab">{t('agency.name')}</span>
-            <input required minLength={2} maxLength={80} value={storeName} onChange={(e) => setStoreName(e.target.value)} placeholder={t('agency.namePh')} />
+            <span className="lab">{tk('name')}</span>
+            <input required minLength={2} maxLength={80} value={storeName} onChange={(e) => setStoreName(e.target.value)} placeholder={tk('namePh')} />
           </label>
         ) : (
           <StoreNameFields name={storeName} setName={setStoreName} slug={slug} setSlug={setSlug} touched={touched} setTouched={setTouched} />
@@ -336,7 +382,7 @@ export function Signup({ referral, agency }: { referral?: string; agency?: boole
           <span className="lab">{t('shop.acc.phone')}</span>
           <input dir="ltr" inputMode="tel" maxLength={30} autoComplete="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} placeholder="0550 12 34 56" />
         </label>
-        {!agency && (
+        {!partner && (
           <label className="field">
             <span className="lab">{t('shop.acc.referral')}</span>
             <input dir="ltr" maxLength={12} value={f.referral} onChange={(e) => setF({ ...f, referral: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })} placeholder={t('shop.acc.referralPh')} />
@@ -352,28 +398,16 @@ export function Signup({ referral, agency }: { referral?: string; agency?: boole
           </span>
         </label>
         <p className="small muted px-privacy">
-          <Icon name="shield" /> {agency ? t('agency.private') : t('shop.acc.private')}
+          <Icon name="shield" /> {partner ? tk('private') : t('shop.acc.private')}
         </p>
         {error && <p className="form-err">{error}</p>}
         <button className="btn primary big" disabled={busy}>
-          {busy ? '…' : agency ? t('agency.signupSubmit') : t('shop.acc.signupSubmit')}
+          {busy ? '…' : partner ? tk('signupSubmit') : t('shop.acc.signupSubmit')}
         </button>
       </form>
       <a className="login-link" href="#/">
         {t('shop.acc.haveAccount')}
       </a>
-      {agency ? (
-        <a className="login-link small" href="#/inscription">
-          <Icon name="store" /> {t('agency.isStore')}
-        </a>
-      ) : (
-        <p className="agx-signup-line small">
-          <Icon name="headset" />
-          <span>
-            <span className="muted">{t('agency.areYou')}</span> <a href="#/inscription-agence">{t('agency.create')}</a>
-          </span>
-        </p>
-      )}
     </Page>
   );
 }

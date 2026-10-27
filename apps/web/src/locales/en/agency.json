@@ -47,11 +47,13 @@
   "tasks": "The work",
   "task": {
     "confirmation": "Confirmation",
-    "suivi": "Follow-up"
+    "suivi": "Follow-up",
+    "marketing": "Ads"
   },
   "taskHelp": {
     "confirmation": "Call the customers and confirm the orders",
-    "suivi": "Follow the parcels until they are delivered"
+    "suivi": "Follow the parcels until they are delivered",
+    "marketing": "Run the ads of the products given"
   },
   "pricesFor": "Your prices for {{store}}",
   "pricesForText": "Your usual prices are already filled in: change them for this store if you want.",
@@ -109,13 +111,17 @@
     "volAbove": "Above",
     "volAmount": "Bonus per extra delivered order",
     "bonusRateShort": "Bonus if rate ≥ {{min}} %",
-    "bonusVolumeShort": "Bonus above {{above}} delivered"
+    "bonusVolumeShort": "Bonus above {{above}} delivered",
+    "perSuccess": "Per successful ad set",
+    "profitRate": "Share of net profit"
   },
   "ph": {
     "perDelivered": "The most common: paid when the customer received it.",
     "perConfirmed": "Paid as soon as the order is confirmed.",
     "perUpsell": "For each delivered order with an extra product.",
-    "monthly": "A fixed amount every month."
+    "monthly": "A fixed amount every month.",
+    "perSuccess": "An ad set the store judges “successful” (Marketing › Marketer), in the month it stops.",
+    "profitRate": "A % of your ad sets’ net profit for the month (after ads), when it is positive."
   },
   "perDeliveredShort": "{{v}} / delivered",
   "c": {
@@ -123,7 +129,14 @@
     "confirmed": "Confirmed",
     "delivered": "Delivered",
     "upsells": "Upsells",
-    "amount": "Amount"
+    "amount": "Amount",
+    "adsets": "Ad sets",
+    "spend": "Ad spend",
+    "spendShort": "in ads",
+    "orders": "Orders",
+    "ofOrders": "of {{n}} orders",
+    "net": "Net profit",
+    "successes": "Successful"
   },
   "line": {
     "perConfirmed": "Confirmed orders",
@@ -131,7 +144,9 @@
     "perUpsell": "Delivered upsells",
     "monthly": "Monthly salary",
     "bonusRate": "Delivery rate bonus",
-    "bonusVolume": "Volume bonus"
+    "bonusVolume": "Volume bonus",
+    "perSuccess": "Successful ad sets",
+    "profitRate": "Share of net profit"
   },
   "billEmpty": "Nothing to pay for this month.",
   "billAsk": "Ask to be paid for {{m}}",
@@ -224,7 +239,7 @@
   "store": {
     "yourCode": "Your store code",
     "codeTitle": "Store code",
-    "codeHelp": "A confirmation agency types this code to send you a request.",
+    "codeHelp": "A confirmation agency or a marketer types this code to send you a request.",
     "codeText": "Give this code to a confirmation agency: it sends you a request, you accept it.",
     "add": "Add an agency",
     "addText": "Type the agency’s code (AG-…). You see its prices, then you choose the work and the products you give it.",
@@ -262,7 +277,8 @@
     "markPaid": "Paid",
     "paidSaved": "Marked as paid",
     "allTaken": "Already with {{name}}: give precise products.",
-    "takenBy": "with {{name}}"
+    "takenBy": "with {{name}}",
+    "codeTextAll": "Give this code to a confirmation agency or a marketer: they send you a request, you accept it."
   },
   "areYou": "A confirmation agency?",
   "private": "Your data stays yours: the Pilotix team does not see inside your agency.",
@@ -334,6 +350,174 @@
     "noneGives": {
       "confirmation": "None of your sellers gives you the confirmation.",
       "suivi": "None of your sellers gives you the follow-up."
+    }
+  },
+  "mnav": {
+    "accueil": "Home",
+    "marketing": "Marketing",
+    "vendeurs": "Sellers",
+    "facturation": "Billing",
+    "utilisateurs": "Users",
+    "reglages": "Settings",
+    "profil": "My profile"
+  },
+  "acct": {
+    "title": "Create an account",
+    "which": "Which account do you want?",
+    "store": {
+      "t": "Seller",
+      "d": "I sell my products: store, orders, delivery."
+    },
+    "agency": {
+      "t": "Confirmation agency",
+      "d": "My team confirms and follows the sellers’ orders."
+    },
+    "marketer": {
+      "t": "Marketer",
+      "d": "I run the sellers’ ads and get paid on the results."
+    }
+  },
+  "mk": {
+    "badge": "Marketer",
+    "create": "Create my marketer space",
+    "name": "Your marketer space’s name",
+    "namePh": "e.g. Yacine Ads",
+    "addText": "Your marketer space is free. Pilotix checks it before it works with stores.",
+    "signupTitle": "Create my marketer space",
+    "signupText": "You run your sellers’ ads: your ad sets, their results and your payments in one place, with your team. Free: Pilotix checks your space before it starts.",
+    "signupSubmit": "Create my marketer space",
+    "private": "Your data stays yours: the Pilotix team does not see inside your space.",
+    "verified": "Checked by Pilotix",
+    "adsets": "My ad sets",
+    "sellers": "Your sellers",
+    "sellersHelp": "The stores whose ads you run. Open one to see its numbers, your prices and who works for it.",
+    "addSellerText": "Type the store’s code (the seller finds it in Settings or Marketers). They get your request, choose the products and accept it.",
+    "notVerifiedYet": "Pilotix has not checked your space yet: you can send requests afterwards.",
+    "alreadyActive": "You already work for this store.",
+    "storeAsks": "This store wants you to run its ads:",
+    "allProductsHelp": "Also the products added later.",
+    "someProductsHelp": "Only these products.",
+    "nAgents_one": "{{count}} marketer",
+    "nAgents_other": "{{count}} marketers",
+    "noAgent": "nobody works there yet",
+    "agents": "Your team for this store",
+    "agentsHelp": "They see the ad sets the store gives them, from your space.",
+    "chooseAgentsText": "Tick the people of your team who work for this seller. Their products are chosen in Users.",
+    "agentsSaved": "Team saved",
+    "noAgentText": "Nobody: choose who works for this store.",
+    "noTeamYet": "Nobody in your team for this work. Add marketers in",
+    "noPrice": "No prices yet.",
+    "endTextAgency": "Your team will no longer see this seller’s ads. Its ad sets stay with it.",
+    "endTextStore": "The marketer will no longer see your ads. Their ad sets stay with you: give them to someone else.",
+    "monthLead": "Your team’s ad sets at this seller, this month: their spend, what they brought in, and what your prices make.",
+    "pickTitle": "Choose a seller",
+    "pickText": "The Ads page shows one seller at a time. Open the one you want (you can also choose it at the top of the page).",
+    "p": {
+      "perDelivered": "Per delivered order",
+      "monthly": "Fixed per month"
+    },
+    "ph": {
+      "perDelivered": "The delivered orders your ad sets brought (your share).",
+      "monthly": "A fixed amount each month, whatever happens."
+    },
+    "line": {
+      "perDelivered": "Delivered orders (your ad sets)",
+      "monthly": "Fixed amount of the month"
+    },
+    "st": {
+      "suspended": "Marketer suspended"
+    },
+    "home": {
+      "adsetsNow": "Your ad sets",
+      "running": "Running",
+      "runningSub": "not judged yet",
+      "runSpend": "Spend running",
+      "runSpendSub": "of the running ad sets",
+      "runNet": "Profit running",
+      "runNetSub": "after ads, running ad sets",
+      "won": "Successful",
+      "wonSub": "{{n}} failed",
+      "spendSub": "{{n}} ad sets this month",
+      "netSub": "after ads",
+      "amountSub": "to ask the sellers",
+      "noSeller": "No seller yet. Add one with its code.",
+      "noWhere": "Your boss has not given you a seller yet.",
+      "waitTitle": "Pilotix is checking your space",
+      "waitText": "Prepare your prices and your team now. As soon as Pilotix has checked your space, you can work with sellers.",
+      "step1": "Space created",
+      "step2": "Write your prices",
+      "step3": "Add your team",
+      "step4": "Checked by Pilotix",
+      "yourCode": "Your marketer space’s code",
+      "codeText": "Give this code to sellers: they find you with it and send you their request.",
+      "waiting_one": "{{count}} seller is waiting for your answer",
+      "waiting_other": "{{count}} sellers are waiting for your answer"
+    },
+    "all": {
+      "sellers_one": "at {{count}} seller",
+      "sellers_other": "at {{count}} sellers",
+      "life": "since they started",
+      "netSub": "after ads, since they started",
+      "search": "Search an ad set, a product, a seller",
+      "adset": "Ad set",
+      "result": "Result",
+      "noProduct": "no product yet",
+      "none": "No ad set yet: the store gives you some in Marketing › Marketer.",
+      "res": {
+        "run": "Running",
+        "ok": "Successful",
+        "ko": "Failed"
+      }
+    },
+    "tarifs": {
+      "text": "Put 0 for a part you don’t use. Only you set your prices: the seller accepts or refuses.",
+      "exampleText": "{{a}} ad sets, {{s}} of ads, {{d}} delivered orders, {{w}} successful ad sets, {{net}} of net profit:"
+    },
+    "fact": {
+      "help": "Each seller this month: your ad sets and what your prices make. You ask for the payment, the seller pays outside Pilotix and clicks “Paid”, then you click “Money received”."
+    },
+    "team": {
+      "r": {
+        "marketer": "Marketer",
+        "admin": "Administrator"
+      }
+    },
+    "users": {
+      "subs": {
+        "equipe": "Team",
+        "marketeurs": "Marketers",
+        "admins": "Administrators"
+      },
+      "title": {
+        "all": "Your team",
+        "marketer": "Marketers",
+        "admin": "Administrators"
+      },
+      "help": "Add a person as in a store. Choose their sellers (one, several or all) and, for each seller, their products: they only see these ads.",
+      "sellersHint": "The person only sees the ads of these sellers and these products."
+    },
+    "store": {
+      "codeText": "Give this code to a marketer: they send you a request, you accept it.",
+      "add": "Add a marketer",
+      "addText": "Type the marketer’s code (MK-…). You see their prices, then you choose the products you give them.",
+      "theirPricesText": "The prices are set by the marketer: you accept or refuse.",
+      "noPriceYet": "This marketer has not written their prices yet.",
+      "alreadyActive": "This marketer already works for you.",
+      "received": "Requests from marketers",
+      "agencyAsks": "This marketer wants to run your ads:",
+      "agencies": "Your marketers",
+      "agenciesHelp": "The marketers who run your ads. Give ad sets to their team in Marketing › Marketer: each one is judged on its ad sets.",
+      "none": "No marketer yet. Add one with their code.",
+      "noAgentYet": "the marketer has not chosen their team yet",
+      "workRule": "Their team can link their ad sets to these products only.",
+      "back": "Your marketers",
+      "givenHelp": "The products they advertise: their team links its ad sets to these products only. Several marketers can have the same product.",
+      "pricesHelp": "Set by the marketer. A change waits for your “yes”.",
+      "theirAgents": "Their team with you",
+      "theirAgentsHelp": "Chosen by the marketer. Give them ad sets in Marketing › Marketer: they only see those ad sets.",
+      "monthText": "Counted by Pilotix for {{m}}: their ad sets of the month and what you owe them with their prices.",
+      "paymentsHelp": "The marketer asks for the payment of a month. You pay outside Pilotix, then click “Paid”.",
+      "giveAdsets": "Give ad sets"
     }
   }
 }

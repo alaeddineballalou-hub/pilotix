@@ -52,9 +52,9 @@ const ADV_TONE: Record<string, string> = { scale: 'g', keep: 'o', price: 'o', cu
 const DIAG_ICON: Record<string, string> = { scale: 'trend', cut: 'cut', hook: 'film', fatigue: 'film', audience: 'users', page: 'globe' };
 
 // ---------------------------------------------------------------- the page
-export function PhoneMarketing({ sub, rest }: { sub?: string; rest?: string[] }) {
+export function PhoneMarketing({ sub, rest, noSpy, mkLabel }: { sub?: string; rest?: string[]; noSpy?: boolean; mkLabel?: string }) {
   const { t } = useTranslation();
-  const tab = sub === 'marketer' ? 'mk' : sub === 'spy' ? 'spy' : 'pub';
+  const tab = sub === 'marketer' ? 'mk' : sub === 'spy' && !noSpy ? 'spy' : 'pub';
   return (
     <div className="pxm">
       <div className="pxv-own pxm-tabs" role="tablist">
@@ -62,11 +62,13 @@ export function PhoneMarketing({ sub, rest }: { sub?: string; rest?: string[] })
           {t('nav.publicite')}
         </a>
         <a role="tab" aria-selected={tab === 'mk'} className={tab === 'mk' ? 'on' : ''} href="#/marketing/marketer">
-          {t('mkph.marketers')}
+          {mkLabel ?? t('mkph.marketers')}
         </a>
-        <a role="tab" aria-selected={tab === 'spy'} className={tab === 'spy' ? 'on' : ''} href="#/marketing/spy">
-          {t('nav.spy')}
-        </a>
+        {!noSpy && (
+          <a role="tab" aria-selected={tab === 'spy'} className={tab === 'spy' ? 'on' : ''} href="#/marketing/spy">
+            {t('nav.spy')}
+          </a>
+        )}
       </div>
       {/* AI Spy: the same page as on a computer, in one column */}
       {tab === 'pub' ? <Pub /> : tab === 'spy' ? <Spy rest={rest} /> : <Marketeurs />}
@@ -724,8 +726,15 @@ function Marketeurs() {
   const none = d.rows.filter((r) => !r.marketerId);
   const people = d.owner ? d.marketers.filter((m) => by.has(m.id) || m.active) : d.marketers;
   const judged = d.rows.filter((r) => r.final && r.marketerId);
+  // a marketer account's people (from its own space): paid by its monthly bill (Facturation), not ad set by ad set
+  const partnerView = !d.owner && d.rows.length > 0 && d.rows.every((r) => r.partnerId !== null);
   return (
     <>
+      {partnerView ? (
+        <p className="pxv-help">
+          {t('marketer.partnerPaidBy')} <a href="#/facturation">{t('agency.nav.facturation')}</a>
+        </p>
+      ) : (
       <section className={`pxm-verd ${total ? 'w' : 'n'}`}>
         <div className="pxm-vh">
           <span>{d.owner ? t('mkph.toPay') : t('mkph.myToPay')}</span>
@@ -741,6 +750,7 @@ function Marketeurs() {
           )}
         </div>
       </section>
+      )}
       {d.fxMissing.length > 0 && <div className="warnbox">{t('mkph.fxMissing', { m: d.fxMissing.join(', ') })}</div>}
       <div className="pxm-kg">
         <K l={t('mkph.k.success')} v={pct(div(judged.filter((r) => r.ok).length, judged.length))} s={t('mkph.k.successSub', { ok: judged.filter((r) => r.ok).length, n: judged.length })} />
@@ -764,10 +774,12 @@ function Marketeurs() {
                 <u className="r" style={{ width: `${rs.length ? (ko / rs.length) * 100 : 0}%` }} />
               </i>
             </span>
-            <span className="pxm-av">
-              <b className={`ltr ${owe ? 'ok' : ''}`}>{da(owe)}</b>
-              <small>{t('mkph.toPayShort')}</small>
-            </span>
+            {!m.partner && (
+              <span className="pxm-av">
+                <b className={`ltr ${owe ? 'ok' : ''}`}>{da(owe)}</b>
+                <small>{t('mkph.toPayShort')}</small>
+              </span>
+            )}
           </button>
         );
       })}

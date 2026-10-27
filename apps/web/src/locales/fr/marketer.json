@@ -235,5 +235,9 @@
     "video": "vidéo",
     "photo": "photo"
   },
-  "fxWait": "taux du dollar à entrer"
+  "fxWait": "taux du dollar à entrer",
+  "partnerPrice": "Prix fixé par ce marketer (page Marketers)",
+  "partnerBill": "Payé par sa facture du mois, dans",
+  "titlePartner": "Mes ad sets chez ce vendeur",
+  "partnerPaidBy": "Vos ad sets « réussis », vos commandes livrées et votre part du bénéfice sont payés chaque mois par votre facture :"
 }

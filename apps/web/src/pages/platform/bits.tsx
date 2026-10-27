@@ -87,6 +87,18 @@ export function auditText(t: TFunction, a: AuditRow): string {
       return t('platform.log.staffPassword');
     case 'settings.save':
       return t('platform.log.settings');
+    case 'agency.signup':
+    case 'marketer.signup':
+      return t('platform.log.partnerSignup', { kind: t(`platform.kind.${a.action.split('.')[0]}`) });
+    case 'agency.added':
+    case 'marketer.added':
+      return t('platform.log.partnerAdded', { kind: t(`platform.kind.${a.action.split('.')[0]}`) });
+    case 'agency.verify':
+    case 'marketer.verify':
+      return t('platform.log.partnerVerify');
+    case 'agency.unverify':
+    case 'marketer.unverify':
+      return t('platform.log.partnerUnverify');
     case 'demo.create':
       return t('platform.log.demoCreate');
     case 'demo.reset':

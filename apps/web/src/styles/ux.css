@@ -67,6 +67,30 @@ html body #ads .kpi.net.loss { background: var(--c-bad-fill) !important; border-
 .agx-signup-line { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; margin: 2px 0 0; }
 .agx-signup-line a { font-weight: 700; color: var(--ink); }
 @media (max-width: 640px) { .agx-where { margin: 10px 10px 0; } }
+/* marketers: their badge and icon (the store picker, the account lists) */
+.mkx-chip { background: var(--c-mk-tint) !important; color: var(--c-mk-ink) !important; font-weight: 700; }
+.px-stores-ic.mkx-ic, .agx-where-ic.mkx-ic { background: var(--c-mk-tint); color: var(--c-mk-ink); }
+
+/* « Créer un compte »: the three kinds of account (a store, a confirmation agency, a marketer) */
+.px-kinds { border: 0; margin: 2px 0 4px; padding: 0; display: grid; gap: 8px; min-width: 0; }
+.px-kinds legend { font-weight: 700; font-size: 14px; color: var(--ink); padding: 0; margin: 0 0 8px; }
+.px-kind { position: relative; display: flex; align-items: center; gap: 12px; padding: 11px 14px; border: 1.5px solid var(--line); border-radius: 14px; background: var(--surface); cursor: pointer; transition: border-color 0.15s, background 0.15s, box-shadow 0.15s; }
+.px-kind:hover { border-color: var(--c-accent); }
+.px-kind.on { border-color: var(--c-accent); background: var(--c-accent-tint); box-shadow: 0 0 0 3px rgba(247, 168, 35, 0.16); }
+.px-kind input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.px-kind:focus-within { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.px-kind-ic { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; flex: none; }
+.px-kind-ic svg { width: 21px; height: 21px; }
+.px-kind-store { background: var(--c-accent-tint); color: var(--c-accent-ink); }
+.px-kind.on .px-kind-store { background: var(--surface); }
+.px-kind-agency { background: var(--c-info-tint); color: var(--c-info-ink); }
+.px-kind-marketer { background: var(--c-mk-tint); color: var(--c-mk-ink); }
+.px-kind-t { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.px-kind-t b { font-size: 15px; color: var(--ink); }
+.px-kind-t small { color: var(--c-muted); font-size: 12.5px; line-height: 1.35; }
+.px-kind-dot { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); flex: none; background: var(--surface); }
+.px-kind.on .px-kind-dot { border-color: var(--c-accent); background: radial-gradient(circle, var(--c-accent) 0 5px, var(--surface) 5.5px); }
+.px-signup-kinds { margin: 0; text-align: center; }
 .agx-code-line { margin: 4px 0 8px; }
 .agx-code-line .px-copy { font-family: var(--f-display); font-size: 22px; font-weight: 700; letter-spacing: 0.08em; color: var(--ink); background: var(--c-accent-tint); border: 2px dashed var(--c-accent); border-radius: 14px; padding: 4px 14px; }
 .agx-codecard { align-self: start; }

@@ -10,7 +10,7 @@ import { AddStoreModal, SwitchStoreModal } from './Accounts';
 export function AccountMenu({ session, onLogout, lang, onTheme }: { session: Session; onLogout: () => void; lang?: { value: string; options: string[]; onChange: (l: string) => void }; onTheme?: () => void }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const [modal, setModal] = useState<'switch' | 'add' | 'agency' | null>(null);
+  const [modal, setModal] = useState<'switch' | 'add' | 'agency' | 'marketer' | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const shop = session.shop;
   useEffect(() => {
@@ -55,14 +55,15 @@ export function AccountMenu({ session, onLogout, lang, onTheme }: { session: Ses
           </a>
           {item('usercog', t('profil.title'), () => go('infos'))}
           {item('settings', t('profil.tSettings'), () => go('parametres'))}
-          {shop?.kind !== 'agency' && !p.agencyId && item('gift', t('profil.tRef'), () => go('parrainage'))}
+          {(!shop?.kind || shop.kind === 'store') && !p.agencyId && item('gift', t('profil.tRef'), () => go('parrainage'))}
           {item('lock', t('profil.pwd'), () => go('securite'))}
-          {shop && !shop.demo && (shop.stores > 0 || shop.canAddStore || shop.canAddAgency || session.isAdmin) && (
+          {shop && !shop.demo && (shop.stores > 0 || shop.canAddStore || shop.canAddAgency || shop.canAddMarketer || session.isAdmin) && (
             <>
               <hr />
               {shop.stores > 0 && item('swap', t('shop.acc.switch'), () => (setOpen(false), setModal('switch')))}
               {shop.canAddStore && item('plus', t('shop.acc.addStore'), () => (setOpen(false), setModal('add')))}
               {shop.canAddAgency && item('headset', t('agency.create'), () => (setOpen(false), setModal('agency')))}
+              {shop.canAddMarketer && item('megaphone', t('agency.mk.create'), () => (setOpen(false), setModal('marketer')))}
               {session.isAdmin && (
                 <button type="button" role="menuitem" onClick={() => (setOpen(false), (location.hash = '#/aide'))}>
                   <Icon name="chat" />
@@ -103,7 +104,8 @@ export function AccountMenu({ session, onLogout, lang, onTheme }: { session: Ses
       )}
       {modal === 'switch' && <SwitchStoreModal onClose={() => setModal(null)} />}
       {modal === 'add' && <AddStoreModal onClose={() => setModal(null)} />}
-      {modal === 'agency' && <AddStoreModal agency onClose={() => setModal(null)} />}
+      {modal === 'agency' && <AddStoreModal kind="agency" onClose={() => setModal(null)} />}
+      {modal === 'marketer' && <AddStoreModal kind="marketer" onClose={() => setModal(null)} />}
     </div>
   );
 }
