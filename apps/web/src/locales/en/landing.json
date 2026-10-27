@@ -390,7 +390,7 @@
   },
   "pr": {
     "kQuality": "Order quality",
-    "kQualitySub": "{{real}} real out of {{total}} received · {{confirmed}} confirmed",
+    "kQualitySub": "{{real}} real out of {{total}} received",
     "intro": "Every order received gets a score: 🟢 it passes, 🟡 an agent checks before calling, 🔴 it is blocked without the customer knowing (they see the same “Thank you”).",
     "kSubmits": "Orders received",
     "kSubmitsSub": "sent from your pages",
@@ -437,6 +437,8 @@
     "marks": "Marked by agents",
     "marksHelp": "When an agent sets “Fake” or “🕵️ Competitor”, the device that ordered is marked: 🟡 next time, 🔴 at the 2nd fake within 30 days or right away for “competitor”. The phone number is not punished (it may belong to someone who never ordered).",
     "noMarks": "No device marked.",
-    "fake": "Fake order"
+    "fake": "Fake order",
+    "kConfirmed": "Confirmed",
+    "kConfirmedSub": "{{rate}} of real orders"
   }
 }

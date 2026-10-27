@@ -390,7 +390,7 @@
   },
   "pr": {
     "kQuality": "Qualité des commandes",
-    "kQualitySub": "{{real}} vraies sur {{total}} reçues · {{confirmed}} confirmées",
+    "kQualitySub": "{{real}} vraies sur {{total}} reçues",
     "intro": "Chaque commande reçue est notée : 🟢 elle passe, 🟡 un agent vérifie avant d’appeler, 🔴 elle est bloquée sans que le client le sache (il voit le même « Merci »).",
     "kSubmits": "Commandes reçues",
     "kSubmitsSub": "envoyées depuis vos pages",
@@ -437,6 +437,8 @@
     "marks": "Marqués par les agents",
     "marksHelp": "Quand un agent met « Fausse » ou « 🕵️ Concurrent », l’appareil qui a commandé est marqué : 🟡 la fois suivante, 🔴 à la 2e fausse en 30 jours ou dès « concurrent ». Le numéro, lui, n’est pas puni (il peut appartenir à quelqu’un qui n’a rien commandé).",
     "noMarks": "Aucun appareil marqué.",
-    "fake": "Fausse commande"
+    "fake": "Fausse commande",
+    "kConfirmed": "Confirmées",
+    "kConfirmedSub": "{{rate}} des vraies commandes"
   }
 }
