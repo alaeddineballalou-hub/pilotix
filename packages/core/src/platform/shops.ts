@@ -220,6 +220,8 @@ export interface PlatformSettings {
   legal: { text: string };
   /** the sign-in and sign-up pages: the designs turned on (1–20); each visit shows one of them at random */
   login: { designs: number[] };
+  /** « Continuer avec Google / Facebook » on the sign-in pages: the public ids of Pilotix's Google and Facebook apps (empty = no button) */
+  social: { googleClientId: string; facebookAppId: string };
 }
 
 /** How many designs the sign-in pages have (numbered 1…LOGIN_DESIGNS). */
@@ -237,6 +239,7 @@ export const PLATFORM_DEFAULTS: PlatformSettings = {
   company: { name: 'Pilotix', address: '', phone: '', email: '', taxId: '' },
   legal: { text: '' },
   login: { designs: Array.from({ length: LOGIN_DESIGNS }, (_, i) => i + 1) },
+  social: { googleClientId: '', facebookAppId: '' },
 };
 
 export async function platformSettings(t: Tenancy): Promise<PlatformSettings> {

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { backend, DEMO_AVAILABLE, DEMO_ONLY, FIXED_SERVER, forgotAvailable, onDemoProgress, requestPasswordReset, serverDemo, serverUrl, setServerUrl, signupInfo, switchDemo } from '../lib/backend';
 import { useSession } from '../lib/session';
 import { AuthShell, AuthTabs, AuthTitle, PasswordInput } from './AuthShell';
+import { SocialButtons } from './SocialButtons';
 
 export function Login() {
   const { t } = useTranslation();
@@ -130,6 +131,7 @@ export function Login() {
       <form onSubmit={submit} style={{ display: 'contents' }}>
         {(canSignup || DEMO_ONLY) && <AuthTabs on="login" />}
         <AuthTitle a={t('auth.welcome1')} b={t('auth.welcome2')} />
+        <SocialButtons mode="login" onError={setError} />
         <label className="field">
           <span className="lab">{t('login.email')}</span>
           <input id="login-email" type="email" dir="ltr" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />

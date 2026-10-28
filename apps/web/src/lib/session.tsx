@@ -12,6 +12,8 @@ interface SessionState {
   /** the password was right and the person has several stores (or none): the picker shows them */
   picker: PickInfo | null;
   login: (email: string, password: string) => Promise<void>;
+  /** with Google or Facebook (the provider's token) */
+  loginSocial: (provider: 'google' | 'facebook', token: string) => Promise<void>;
   /** the store chosen in the picker */
   pick: (shop: number) => Promise<void>;
   cancelPick: () => void;
@@ -108,6 +110,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (isPick(r)) setPicker(r);
     else enter(r);
   };
+  const loginSocial = async (provider: 'google' | 'facebook', token: string) => {
+    const r = await server.socialLogin(provider, token, store.get('lang') || undefined);
+    if (isPick(r)) setPicker(r);
+    else enter(r);
+  };
   const pick = async (shop: number) => {
     if (!picker) return;
     enter(await server.pick(picker.ticket, shop));
@@ -118,7 +125,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const has = (...roles: Role[]) => !!session && (session.isAdmin || roles.some((r) => session.roles.includes(r)));
 
   return (
-    <Ctx.Provider value={{ session, ready, picker, login, pick, cancelPick: () => setPicker(null), showPicker: setPicker, enter, switchStore, loginDemo, logout, refresh, has, me: session?.profile.id ?? 0 }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ session, ready, picker, login, loginSocial, pick, cancelPick: () => setPicker(null), showPicker: setPicker, enter, switchStore, loginDemo, logout, refresh, has, me: session?.profile.id ?? 0 }}>{children}</Ctx.Provider>
   );
 }
 

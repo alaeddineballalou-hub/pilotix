@@ -37,6 +37,7 @@ import {
   propagateProfilePassword,
   shopThread,
   shopThreads,
+  socialAccount,
   shopWrite,
   startSignup,
   storeChoices,
@@ -567,4 +568,26 @@ test('the sign-in page designs: all on by default; the control room keeps the on
   assert.equal((await platformSettings(t)).login.designs.length, 20);
   await setPlatformSetting(t, 'login', { designs: [3, 7, 18] });
   assert.deepEqual((await platformSettings(t)).login.designs, [3, 7, 18]);
+});
+
+test('Google / Facebook: a new person gets a proven account without a password; the same e-mail finds it again', async () => {
+  const { t } = await server();
+  const a = await socialAccount(t, { email: 'Lina@Gmail.com', name: 'Lina Haddad', language: 'ar' });
+  assert.equal(a.created, true);
+  assert.equal(a.account.email, 'lina@gmail.com');
+  assert.equal(a.account.verified, true);
+  const b = await socialAccount(t, { email: 'lina@gmail.com', name: 'Autre nom' });
+  assert.equal(b.created, false);
+  assert.equal(b.account.id, a.account.id);
+  // the first store is added inside, like an e-mail sign-up
+  const shop = await addStore(t, b.account, { name: 'Lina Store' });
+  assert.equal(shop.ownerAccountId, a.account.id);
+  // the settings: empty by default, kept when saved
+  assert.deepEqual((await platformSettings(t)).social, { googleClientId: '', facebookAppId: '' });
+  await setPlatformSetting(t, 'social', { googleClientId: '123-abc.apps.googleusercontent.com', facebookAppId: '1234567890' });
+  assert.equal((await platformSettings(t)).social.facebookAppId, '1234567890');
+  // sign-ups closed: no new account (an existing one still enters)
+  await setPlatformSetting(t, 'signup', { ...(await platformSettings(t)).signup, open: false });
+  await assert.rejects(socialAccount(t, { email: 'nouveau@gmail.com', name: 'X' }), /fermées/);
+  assert.equal((await socialAccount(t, { email: 'lina@gmail.com', name: '' })).account.id, a.account.id);
 });

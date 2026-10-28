@@ -260,6 +260,35 @@ const PickBody = z.object({ ticket: z.string().max(4000), shop: z.number().int()
 const ForgotBody = z.object({ email: z.string().email().max(200) });
 const ResetBody = z.object({ token: z.string().max(220), password: z.string().max(200) });
 const TokenBody = z.object({ token: z.string().max(220) });
+const SocialBody = z.object({ provider: z.enum(['google', 'facebook']), token: z.string().min(20).max(4000), language: z.enum(['fr', 'en', 'ar']).optional() });
+
+/**
+ * Who Google or Facebook says this is: their proven e-mail and name, from the token their button gave the page (checked
+ * here with Google / Facebook, and that it was made for Pilotix's own app). null: not a valid token for this app.
+ */
+async function socialIdentity(provider: 'google' | 'facebook', token: string, set: core.PlatformSettings): Promise<{ email: string; name: string } | null> {
+  const get = async (url: string) => {
+    const res = await fetch(url, { signal: AbortSignal.timeout(8_000) }).catch(() => null);
+    return res?.ok ? ((await res.json().catch(() => null)) as any) : null;
+  };
+  if (provider === 'google') {
+    const id = set.social.googleClientId.trim();
+    if (!id) return null;
+    const j = await get(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(token)}`);
+    if (!j || j.aud !== id || !['accounts.google.com', 'https://accounts.google.com'].includes(j.iss)) return null;
+    if (!(j.email_verified === true || j.email_verified === 'true') || !j.email) return null;
+    return { email: String(j.email), name: String(j.name || '') };
+  }
+  const app = set.social.facebookAppId.trim();
+  if (!app) return null;
+  // the token must belong to Pilotix's Facebook app (not one another site got from the same person)
+  const a = await get(`https://graph.facebook.com/v19.0/app?access_token=${encodeURIComponent(token)}`);
+  if (!a || String(a.id) !== app) return null;
+  const me = await get(`https://graph.facebook.com/v19.0/me?fields=name,email&access_token=${encodeURIComponent(token)}`);
+  if (!me) return null;
+  if (!me.email) throw new core.AppError('bad_request', 'Facebook ne nous donne pas votre e-mail : continuez avec Google ou avec votre e-mail.');
+  return { email: String(me.email), name: String(me.name || '') };
+}
 
 /** Saving these can change the store's part of shop #1's links (site/<store>/<page>). */
 const STORE_NAMING = new Set(['landing.settings.save', 'admin.settings.save']);
@@ -400,6 +429,30 @@ class ApiController {
     const one = b.data.shop ? stores.find((x) => x.id === b.data.shop) : stores.length === 1 ? stores[0] : null;
     if (one) return this.enter(one.id, acc.email);
     return this.picker(acc);
+  }
+
+  /**
+   * « Continuer avec Google / Facebook »: the person is proven by Google or Facebook. An account: they enter (their store,
+   * or the picker). None: it is made now (a sign-up, when sign-ups are open), then the picker where they create their
+   * first store.
+   */
+  @Public()
+  @Post('auth/social')
+  async social(@Body() body: unknown, @Req() req: { ip?: string }) {
+    const ipKey = `social:${ipOf(req)}`;
+    checkLogin(ipKey, 20);
+    const b = SocialBody.safeParse(body);
+    if (!b.success) throw new core.AppError('bad_request', 'Connexion refusée');
+    const set = await this.core.settings();
+    const who = await socialIdentity(b.data.provider, b.data.token, set);
+    if (!who) {
+      failedLogin(ipKey);
+      throw new core.AppError('unauthorized', b.data.provider === 'google' ? 'Google n’a pas confirmé ce compte. Réessayez.' : 'Facebook n’a pas confirmé ce compte. Réessayez.');
+    }
+    const { account } = await core.socialAccount(this.core.t, { email: who.email, name: who.name, language: b.data.language });
+    const stores = await core.storeChoices(this.core.t, account.email);
+    if (stores.length === 1) return this.enter(stores[0].id, account.email);
+    return this.picker(account);
   }
 
   /** The picker: the chosen store, with the ticket the login gave. */
@@ -666,6 +719,9 @@ class ApiController {
       whatsapp: (set.payment.whatsapp || set.company.phone || '').trim(),
       // the sign-in page designs turned on in the control room (one is drawn at random on each visit)
       designs: [...new Set(set.login.designs)].filter((n) => n >= 1 && n <= 20),
+      // « Continuer avec Google / Facebook » (public ids; empty: no button)
+      googleClientId: set.social.googleClientId,
+      facebookAppId: set.social.facebookAppId,
     };
   }
 

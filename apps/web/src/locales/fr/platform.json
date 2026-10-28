@@ -417,7 +417,13 @@
     "legalText": "Votre texte",
     "legalHint": "Texte simple, les retours à la ligne sont gardés.",
     "legalPh": "Laissez vide pour garder le texte standard.",
-    "legalLink": "Voir la page"
+    "legalLink": "Voir la page",
+    "socialTitle": "Connexion Google et Facebook",
+    "socialHelp": "Collez ici votre identifiant Google et votre identifiant Facebook : les boutons « Continuer avec Google » et « Continuer avec Facebook » apparaissent alors sur les pages de connexion et d’inscription. Laissez vide pour cacher un bouton.",
+    "socialGoogle": "Google — ID client OAuth",
+    "socialGoogleHint": "Google Cloud Console → Identifiants → ID client OAuth « Application Web ». Origine JavaScript autorisée : {{site}}",
+    "socialFacebook": "Facebook — ID de l’app",
+    "socialFacebookHint": "developers.facebook.com → Mes apps → Créer une app → « Facebook Login ». Domaine de l’app : {{site}}. Mettez l’app en mode « En ligne »."
   },
   "demo": {
     "none": "Pas encore de boutique démo",

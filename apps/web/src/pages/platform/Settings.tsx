@@ -123,6 +123,16 @@ export function Settings({ staff }: { staff: Staff }) {
             <input disabled={!owner} type="checkbox" checked={f.security.twoStep} onChange={(e) => setF({ ...f, security: { twoStep: e.target.checked } })} /> {t('platform.set.secTwoStep')}
           </label>
         </Card>
+        <Card title={t('platform.set.socialTitle')} help={t('platform.set.socialHelp')}>
+          <div className="pp-form">
+            <Field label={t('platform.set.socialGoogle')} hint={t('platform.set.socialGoogleHint', { site: location.origin })}>
+              <input disabled={!owner} dir="ltr" maxLength={200} value={f.social?.googleClientId ?? ''} onChange={(e) => setF({ ...f, social: { googleClientId: e.target.value.trim(), facebookAppId: f.social?.facebookAppId ?? '' } })} placeholder="1234567890-abc.apps.googleusercontent.com" />
+            </Field>
+            <Field label={t('platform.set.socialFacebook')} hint={t('platform.set.socialFacebookHint', { site: location.origin })}>
+              <input disabled={!owner} dir="ltr" inputMode="numeric" maxLength={30} value={f.social?.facebookAppId ?? ''} onChange={(e) => setF({ ...f, social: { googleClientId: f.social?.googleClientId ?? '', facebookAppId: e.target.value.replace(/\D/g, '') } })} placeholder="123456789012345" />
+            </Field>
+          </div>
+        </Card>
         <Card title={t('platform.set.demoTitle')} help={t('platform.set.demoHelp')}>
           <label className="check">
             <input disabled={!owner} type="checkbox" checked={f.demo.public} onChange={(e) => setF({ ...f, demo: { public: e.target.checked } })} /> {t('platform.set.demoPublic')}

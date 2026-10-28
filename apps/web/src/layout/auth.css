@@ -102,3 +102,9 @@
 .pxa-kind .hint { line-height: 1.45; }
 /* the tabs first, then the trial badge, then the title */
 .pxa-form > .pxa-tabs { order: -2; }
+/* « Continuer avec Google / Facebook »: the providers' own buttons (SocialButtons.tsx) */
+.pxa-social { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+.pxa-g, .pxa-f { display: flex; justify-content: center; min-height: 44px; }
+.pxa-g > div, .pxa-f > div { max-width: 100%; }
+.pxa-social-wait { text-align: center; margin: 0; }
+.pxa-social .pxa-sep { margin-top: 2px; }
