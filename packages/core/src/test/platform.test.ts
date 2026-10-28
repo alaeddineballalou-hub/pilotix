@@ -43,7 +43,7 @@ import {
   storeReferrals,
   takeDueReminders,
 } from '../platform';
-import { bootstrapPlatform, syncPrimaryStore } from '../platform/shops';
+import { bootstrapPlatform, platformSettings, setPlatformSetting, syncPrimaryStore } from '../platform/shops';
 import { getSetting, setSetting } from '../settings';
 
 const OWNER = { email: 'owner@boutique.dz', password: 'Owner-Password-1' };
@@ -539,4 +539,32 @@ test('the demo shop: fake data, reset to the start, its accounts not in the logi
   await assert.rejects(p('p.demo.create'), /existe déjà/);
   const g = await p('p.demo.get');
   assert.equal(g.shop.id, s.id);
+});
+
+test('sign-up without a store: only the account; the first store, added inside, keeps the phone and the referral', async () => {
+  const { t } = await server();
+  const s1 = (await loadShop(t, { primary: true }))!;
+  const form = { name: 'Karim Ouali', email: 'karim@nouveau.dz', password: 'karim-pass-1', phone: '0550 11 22 33', language: 'fr', referral: s1.referralCode, terms: true };
+  const m = (await startSignup(t, form, '1.2.3.9'))!;
+  assert.equal(m.kind, 'confirm');
+  assert.equal((m as any).store, '');
+  const done: any = await confirmSignup(t, (m as any).token);
+  assert.equal(done.shop, null);
+  assert.equal(done.account.verified, true);
+  assert.equal(done.account.email, 'karim@nouveau.dz');
+  const acc = (await accountByEmail(t, 'karim@nouveau.dz'))!;
+  const shop = await addStore(t, acc, { name: 'Karim Bébé' });
+  assert.equal(shop.ownerAccountId, acc.id);
+  const row = (await t.platform.query('SELECT owner_phone, referred_by FROM platform.shops WHERE id = $1', [shop.id]))[0];
+  assert.equal(row.owner_phone, '0550 11 22 33');
+  assert.equal(Number(row.referred_by), s1.id);
+  // an agency or a marketer still gives its name
+  await assert.rejects(startSignup(t, { ...form, email: 'ag@nouveau.dz', kind: 'agency' }, '1.2.3.9'), /au moins 2/);
+});
+
+test('the sign-in page designs: all on by default; the control room keeps the ones turned on', async () => {
+  const { t } = await server();
+  assert.equal((await platformSettings(t)).login.designs.length, 20);
+  await setPlatformSetting(t, 'login', { designs: [3, 7, 18] });
+  assert.deepEqual((await platformSettings(t)).login.designs, [3, 7, 18]);
 });

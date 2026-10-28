@@ -125,7 +125,12 @@ export function signupConfirmMail(m: { token: string; email: string; name: strin
     en: { s: 'Pilotix: confirm your sign-up', t: 'Confirm your e-mail', a: `Thank you! Your marketer space “${m.store}” is almost ready.`, b: 'Click the button: your space is created right away. Pilotix then checks it before it works with stores.', btn: 'Create my marketer space', v: 'This link works once, for 48 hours.' },
     ar: { s: 'Pilotix: أكّد تسجيلك', t: 'أكّد بريدك الإلكتروني', a: `شكرًا! مساحة المسوّق «${m.store}» جاهزة تقريبًا.`, b: 'اضغط على الزر: تُنشأ مساحتك فورًا، ثم يتحقق منها Pilotix قبل أن تعمل مع المتاجر.', btn: 'إنشاء مساحة المسوّق', v: 'يعمل هذا الرابط مرة واحدة، لمدة 48 ساعة.' },
   }[l];
-  const T = m.marketer ? M : m.agency ? A : S;
+  const O = {
+    fr: { s: 'Pilotix : confirmez votre inscription', t: 'Confirmez votre e-mail', a: 'Merci ! Votre compte Pilotix est presque prêt.', b: 'Cliquez sur le bouton : votre compte s’ouvre tout de suite, puis vous créez votre première boutique, avec son essai gratuit.', btn: 'Ouvrir mon compte', v: 'Ce lien marche une fois, pendant 48 heures.' },
+    en: { s: 'Pilotix: confirm your sign-up', t: 'Confirm your e-mail', a: 'Thank you! Your Pilotix account is almost ready.', b: 'Click the button: your account opens right away, then you create your first store, with its free trial.', btn: 'Open my account', v: 'This link works once, for 48 hours.' },
+    ar: { s: 'Pilotix: أكّد تسجيلك', t: 'أكّد بريدك الإلكتروني', a: 'شكرًا! حسابك في Pilotix جاهز تقريبًا.', b: 'اضغط على الزر: يُفتح حسابك فورًا، ثم تنشئ متجرك الأول مع فترته التجريبية المجانية.', btn: 'فتح حسابي', v: 'يعمل هذا الرابط مرة واحدة، لمدة 48 ساعة.' },
+  }[l];
+  const T = m.marketer ? M : m.agency ? A : m.store.trim() ? S : O;
   return mail(m.email, T.s, { l, title: T.t, icon: '✉️', hello: hello(l, m.name), lines: [T.a, T.b], button: { label: T.btn, link }, after: [`⏱️ ${T.v}`], note: NOT_YOU[l] });
 }
 

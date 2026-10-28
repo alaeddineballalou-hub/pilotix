@@ -218,7 +218,12 @@ export interface PlatformSettings {
   company: { name: string; address: string; phone: string; email: string; taxId: string };
   /** the terms of use and privacy page (empty = Pilotix's standard text) */
   legal: { text: string };
+  /** the sign-in and sign-up pages: the designs turned on (1–20); each visit shows one of them at random */
+  login: { designs: number[] };
 }
+
+/** How many designs the sign-in pages have (numbered 1…LOGIN_DESIGNS). */
+export const LOGIN_DESIGNS = 20;
 
 export const PLATFORM_DEFAULTS: PlatformSettings = {
   trial: { days: 14, graceDays: 3, planCode: 'pro' },
@@ -231,6 +236,7 @@ export const PLATFORM_DEFAULTS: PlatformSettings = {
   security: { twoStep: true },
   company: { name: 'Pilotix', address: '', phone: '', email: '', taxId: '' },
   legal: { text: '' },
+  login: { designs: Array.from({ length: LOGIN_DESIGNS }, (_, i) => i + 1) },
 };
 
 export async function platformSettings(t: Tenancy): Promise<PlatformSettings> {
