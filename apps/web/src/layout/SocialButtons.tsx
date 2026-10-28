@@ -24,7 +24,6 @@ function script(src: string) {
         s.src = src;
         s.async = true;
         s.defer = true;
-        s.crossOrigin = 'anonymous';
         s.onload = () => ok();
         s.onerror = () => (loaded.delete(src), bad(new Error('script')));
         document.head.appendChild(s);
