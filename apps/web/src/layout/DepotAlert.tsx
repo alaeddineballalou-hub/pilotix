@@ -75,12 +75,7 @@ export function DepotAlert() {
         </div>
         <div className="pxda-who">
           {a.customer} · <span className="ltr">{a.phone}</span>
-          {a.tracking && (
-            <>
-              {' '}
-              · <span className="ltr">{a.tracking}</span>
-            </>
-          )}
+
         </div>
         <div className="pxda-by">{t('depot.alert.by', { name: a.byName ?? '—', when: when(a.at) })}</div>
 
