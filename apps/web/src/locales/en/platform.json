@@ -593,5 +593,31 @@
     "n18": "Giant logo",
     "n19": "Layers in depth",
     "n20": "Big bold words"
+  },
+  "otp": {
+    "title": "WhatsApp code (every account's number)",
+    "help": "Every Pilotix account has its own number (one account per number). Turned on, Pilotix sends a 6-digit WhatsApp code to prove the number at the next login.",
+    "isOn": "On: every account proves its number with a WhatsApp code",
+    "isOff": "Off: the number is required and unique, but no code is asked",
+    "counts": "{{accounts}} accounts · {{withPhone}} with a number · {{verified}} verified",
+    "lastSent": "Last code sent {{when}}",
+    "s1": "Meta Business › WhatsApp › API Setup: copy Pilotix's Phone number ID.",
+    "s2": "Create a permanent token (system user) with the whatsapp_business_messaging permission.",
+    "s3": "WhatsApp Manager › Templates: create an Authentication template and wait for « Approved ».",
+    "phoneId": "WhatsApp Phone number ID",
+    "phoneIdHint": "Digits only (the Phone number ID, not the number itself)",
+    "token": "Permanent token",
+    "tokenHint": "It will never be shown again",
+    "tokenKept": "A token is already saved: leave empty to keep it",
+    "template": "Template name",
+    "templateHint": "Exactly as in Meta (e.g. code_pilotix)",
+    "lang": "Template language",
+    "langHint": "The template's language code (fr, en, ar…)",
+    "button": "The template has the « Copy code » button (Meta's default)",
+    "turnOn": "Turn the WhatsApp code on",
+    "onNote": "Once on, every person whose number is not verified yet must type the code at their next login. Send a test first.",
+    "ownerOnly": "Only the Pilotix owner can change these settings.",
+    "test": "Send a test",
+    "testSent": "Test code sent"
   }
 }

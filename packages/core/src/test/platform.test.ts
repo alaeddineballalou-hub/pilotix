@@ -30,11 +30,16 @@ import {
   adminMaySetPassword,
   attachProfile,
   checkAccountPassword,
+  checkPhoneCode,
   confirmSignup,
   deleteStoreByOwner,
   membershipsOf,
+  newPhoneCode,
   passwordFromLink,
+  PHONE_CODE,
+  phoneStep,
   propagateProfilePassword,
+  setAccountPhone,
   shopThread,
   shopThreads,
   socialAccount,
@@ -46,6 +51,10 @@ import {
 } from '../platform';
 import { bootstrapPlatform, platformSettings, setPlatformSetting, syncPrimaryStore } from '../platform/shops';
 import { getSetting, setSetting } from '../settings';
+
+/** a new team member's phone (required, one per person) */
+let phoneN = 0;
+const tph = () => `076${String(++phoneN).padStart(7, '0')}`;
 
 const OWNER = { email: 'owner@boutique.dz', password: 'Owner-Password-1' };
 const DAY = 86_400_000;
@@ -80,7 +89,7 @@ async function shopUserCtx(t: Tenancy, schema: string, email: string, password: 
 
 test('first start: the existing shop becomes shop #1, its admin the platform owner', async () => {
   const { t, applied, staff } = await server();
-  assert.deepEqual(applied.platform, ['p001_platform', 'p002_accounts_signup_domains', 'p003_accounts_privacy', 'p004_turnstile', 'p005_agencies', 'p006_marketers']);
+  assert.deepEqual(applied.platform, ['p001_platform', 'p002_accounts_signup_domains', 'p003_accounts_privacy', 'p004_turnstile', 'p005_agencies', 'p006_marketers', 'p007_account_phone']);
   assert.deepEqual(applied.public, []);
   const s1 = (await loadShop(t, { primary: true }))!;
   assert.equal(s1.schema, 'public');
@@ -214,14 +223,14 @@ test('one e-mail, several stores: one account, one password, chosen by the perso
   const ls = `shop_${lina.id}`;
   const lc = await shopUserCtx(t, ls, 'lina@deux.dz', 'Lina-Password-1');
   const user = { name: 'Amine', password: 'mot-de-passe-de-lina', roles: ['confirmation'], language: 'fr' };
-  const added: any = await call('users.create', lc, { ...user, email: OWNER.email });
+  const added: any = await call('users.create', lc, { phone: tph(), ...user, email: OWNER.email });
   const at = await attachProfile(t, ls, added.id);
   assert.equal(at?.existing, true);
   await assert.rejects(login(t.shop(ls), OWNER.email, 'mot-de-passe-de-lina'));
   await shopUserCtx(t, ls, OWNER.email, OWNER.password);
   // Lina may not set Amine's password (he works in other stores, he owns some); she may for her own agent
   assert.equal(await adminMaySetPassword(t, lina.id, OWNER.email), false);
-  const agent: any = await call('users.create', lc, { ...user, name: 'Agent', email: 'agent@deux.dz', password: 'agent-pass-1' });
+  const agent: any = await call('users.create', lc, { phone: tph(), ...user, name: 'Agent', email: 'agent@deux.dz', password: 'agent-pass-1' });
   await attachProfile(t, ls, agent.id);
   assert.equal(await adminMaySetPassword(t, lina.id, 'agent@deux.dz'), true);
   assert.equal(await adminMaySetPassword(t, lina.id, 'lina@deux.dz'), false); // the owner
@@ -252,10 +261,12 @@ test('one e-mail, several stores: one account, one password, chosen by the perso
 test('sign-up: confirmed by e-mail, the store on the trial plan, referral reward at the first payment', async () => {
   const { t, p } = await server();
   const s1 = (await loadShop(t, { primary: true }))!;
-  const form = { name: 'Yasmine', email: 'Yasmine@Shop.dz', password: 'yasmine-pass', storeName: 'Yasmine Shop', language: 'fr', referral: s1.referralCode, terms: true };
+  const form = { name: 'Yasmine', email: 'Yasmine@Shop.dz', phone: '0661 00 00 01', password: 'yasmine-pass', storeName: 'Yasmine Shop', language: 'fr', referral: s1.referralCode, terms: true };
   await assert.rejects(startSignup(t, { ...form, terms: false }, '1.2.3.4'), /conditions/);
   await assert.rejects(startSignup(t, { ...form, slug: 'api' }, '1.2.3.4'), /réservé/);
   await assert.rejects(startSignup(t, { ...form, referral: 'ZZZZZZ' }, '1.2.3.4'), /parrainage/);
+  await assert.rejects(startSignup(t, { ...form, phone: '' }, '1.2.3.4'), /obligatoire/);
+  await assert.rejects(startSignup(t, { ...form, phone: '021 00 00 00' }, '1.2.3.4'), /Numéro invalide/);
   const m = (await startSignup(t, form, '1.2.3.4'))!;
   assert.equal(m.kind, 'confirm');
   // nothing made before the e-mail is confirmed
@@ -265,6 +276,9 @@ test('sign-up: confirmed by e-mail, the store on the trial plan, referral reward
   assert.equal(done.shop.selfSignup, true);
   assert.equal(done.shop.plan.code, 'pro');
   assert.equal(done.account.verified, true);
+  // the number given at sign-up is the account's, not proven yet (the WhatsApp code does that)
+  assert.equal(done.account.phone, '0661000001');
+  assert.equal(done.account.phoneVerified, false);
   await shopUserCtx(t, done.shop.schema, 'yasmine@shop.dz', 'yasmine-pass');
   await assert.rejects(confirmSignup(t, (m as any).token), /plus valable/);
   // the same e-mail again: « you already have an account » (nothing made)
@@ -287,7 +301,9 @@ test('sign-up: confirmed by e-mail, the store on the trial plan, referral reward
   const refs = await storeReferrals(t, s1.id);
   assert.equal(refs.list.length, 1);
   // a store brought by Yasmine's store: Yasmine gets a free month when it pays
-  const m2 = (await startSignup(t, { ...form, email: 'nadia@x.dz', name: 'Nadia', storeName: 'Nadia Beauty', referral: done.shop.referralCode }, '1.2.3.5'))!;
+  // one number = one account
+  await assert.rejects(startSignup(t, { ...form, email: 'other@x.dz', storeName: 'Other Shop' }, '1.2.3.5'), /déjà utilisé/);
+  const m2 = (await startSignup(t, { ...form, email: 'nadia@x.dz', phone: '0661000002', name: 'Nadia', storeName: 'Nadia Beauty', referral: done.shop.referralCode }, '1.2.3.5'))!;
   const n: any = await confirmSignup(t, (m2 as any).token);
   const before = Date.parse((await loadShop(t, { id: done.shop.id }))!.paidUntil!);
   const pay2 = await p('p.payments.add', { shopId: n.shop.id, amount: 7900, method: 'cash', months: 1 });
@@ -333,9 +349,9 @@ test('numbers only, and the plan limits: accounts, livreurs, orders per month, s
   const s = (await loadShop(t, { id: made.id }))!;
   const c = await shopUserCtx(t, s.schema, 'rania@x.dz', 'Rania-Password-1', shopCtx(s, shopStatus(s, Date.now(), 3)));
   const user = { name: 'Livreur', password: 'livreur-pass-1', roles: ['livreur'], language: 'fr' };
-  await call('users.create', c, { ...user, email: 'l1@x.dz' });
-  await assert.rejects(call('users.create', c, { ...user, email: 'l2@x.dz' }), /1 livreur actif/);
-  const agent: any = await call('users.create', c, { ...user, roles: ['confirmation'], email: 'a1@x.dz' });
+  await call('users.create', c, { phone: tph(), ...user, email: 'l1@x.dz' });
+  await assert.rejects(call('users.create', c, { phone: tph(), ...user, email: 'l2@x.dz' }), /1 livreur actif/);
+  const agent: any = await call('users.create', c, { phone: tph(), ...user, roles: ['confirmation'], email: 'a1@x.dz' });
   await assert.rejects(call('users.update', c, { id: agent.id, roles: ['confirmation', 'livreur'] }), /1 livreur actif/);
   // the control room: numbers only (no names, no e-mails of the team)
   const g = await p('p.shops.get', { id: made.id });
@@ -482,10 +498,10 @@ test('the plan limits active accounts', async () => {
   const s = (await loadShop(t, { id: made.id }))!;
   const c = await shopUserCtx(t, `shop_${made.id}`, 's@petite.dz', 'Petite-Password-1', shopCtx(s, shopStatus(s, Date.now(), 3)));
   const user = { name: 'Agent', password: 'agent-pass-1', roles: ['confirmation'], language: 'fr' };
-  const a: any = await call('users.create', c, { ...user, email: 'a@petite.dz' });
-  await assert.rejects(call('users.create', c, { ...user, email: 'b@petite.dz' }), /permet 2 comptes/);
+  const a: any = await call('users.create', c, { phone: tph(), ...user, email: 'a@petite.dz' });
+  await assert.rejects(call('users.create', c, { phone: tph(), ...user, email: 'b@petite.dz' }), /permet 2 comptes/);
   await call('users.update', c, { id: a.id, active: false });
-  await call('users.create', c, { ...user, email: 'b@petite.dz' });
+  await call('users.create', c, { phone: tph(), ...user, email: 'b@petite.dz' });
   await assert.rejects(call('users.update', c, { id: a.id, active: true }), /permet 2 comptes/);
 });
 
@@ -557,7 +573,7 @@ test('sign-up without a store: only the account; the first store, added inside, 
   const shop = await addStore(t, acc, { name: 'Karim Bébé' });
   assert.equal(shop.ownerAccountId, acc.id);
   const row = (await t.platform.query('SELECT owner_phone, referred_by FROM platform.shops WHERE id = $1', [shop.id]))[0];
-  assert.equal(row.owner_phone, '0550 11 22 33');
+  assert.equal(row.owner_phone, '0550112233');
   assert.equal(Number(row.referred_by), s1.id);
   // an agency or a marketer still gives its name
   await assert.rejects(startSignup(t, { ...form, email: 'ag@nouveau.dz', kind: 'agency' }, '1.2.3.9'), /au moins 2/);
@@ -590,4 +606,52 @@ test('Google / Facebook: a new person gets a proven account without a password; 
   await setPlatformSetting(t, 'signup', { ...(await platformSettings(t)).signup, open: false });
   await assert.rejects(socialAccount(t, { email: 'nouveau@gmail.com', name: 'X' }), /fermées/);
   assert.equal((await socialAccount(t, { email: 'lina@gmail.com', name: '' })).account.id, a.account.id);
+});
+
+test('phone of every account: required, one number = one account, proven by a WhatsApp code when it is on', async () => {
+  const { t, p } = await server();
+  const plan = (await p<any[]>('p.plans.list')).find((x) => x.code === 'pro');
+  const made = await invite(t, p, { name: 'Tel Shop', ownerName: 'Rym', ownerEmail: 'rym@x.dz', planId: plan.id, trialDays: 7 }, 'Rym-Password-1');
+  let rym = (await accountByEmail(t, 'rym@x.dz'))!;
+  // no number anywhere: asked (code off: no code)
+  assert.deepEqual(await phoneStep(t, rym, false), { current: null, otp: false });
+  await assert.rejects(setAccountPhone(t, rym.id, '0211234567', false), /Numéro invalide/);
+  rym = await setAccountPhone(t, rym.id, '+33 6 12 34 56 78', false);
+  assert.equal(rym.phone, '+33612345678');
+  assert.equal(await phoneStep(t, rym, false), null);
+  // code on: the number must be proven
+  assert.deepEqual(await phoneStep(t, rym, true), { current: '+33612345678', otp: true });
+  // another account cannot take it
+  const owner = (await accountByEmail(t, OWNER.email))!;
+  await assert.rejects(setAccountPhone(t, owner.id, '+33612345678', false), /déjà utilisé/);
+  await assert.rejects(newPhoneCode(t, owner, '+33 6 12 34 56 78'), /déjà utilisé/);
+  // a code: one a minute, wrong code counted, the right one proves the number
+  const now = Date.now();
+  const c = await newPhoneCode(t, rym, '0770 12 34 56', now);
+  assert.equal(c.phone, '0770123456');
+  assert.match(c.code, /^\d{6}$/);
+  await assert.rejects(newPhoneCode(t, rym, '0770123456', now + 5_000), /Attendez/);
+  const wrong = c.code === '000000' ? '111111' : '000000';
+  await assert.rejects(checkPhoneCode(t, rym, '0770123456', wrong, now + 10_000), /encore 4 essais/);
+  await assert.rejects(checkPhoneCode(t, rym, '0770123456', c.code, now + PHONE_CODE.ttlMs + 1), /expiré/);
+  rym = await checkPhoneCode(t, rym, '0770123456', c.code, now + 20_000);
+  assert.equal(rym.phone, '0770123456');
+  assert.equal(rym.phoneVerified, true);
+  assert.equal(await phoneStep(t, rym, true), null);
+  // a used code never works again
+  await assert.rejects(checkPhoneCode(t, rym, '0770123456', c.code, now + 30_000), /expiré/);
+  // the stores of the person got the number
+  for (const m of await membershipsOf(t, 'rym@x.dz')) {
+    const s = (await loadShop(t, { id: m.shopId }))!;
+    assert.equal((await t.shop(s.schema).query('SELECT phone FROM profiles WHERE id = $1', [m.profileId]))[0].phone, '0770123456');
+  }
+  // code off: a number the person already has in a store is taken as theirs without asking
+  const ls = (await loadShop(t, { id: made.id }))!;
+  const admin = await shopUserCtx(t, ls.schema, 'rym@x.dz', 'Rym-Password-1');
+  const made2: any = await call('users.create', admin, { phone: '0550 99 88 77', name: 'Agent Tel', email: 'agent-tel@x.dz', password: 'agent-tel-1', roles: ['confirmation'] });
+  await assert.rejects(call('users.create', admin, { phone: '0770123456', name: 'Agent Deux', email: 'agent-deux@x.dz', password: 'agent-deux-1', roles: ['confirmation'] }), /déjà utilisé/);
+  await assert.rejects(call('users.create', admin, { phone: '', name: 'Agent Trois', email: 'agent-trois@x.dz', password: 'agent-trois-1', roles: ['confirmation'] }), /obligatoire/);
+  const agent = (await attachProfile(t, ls.schema, made2.id))!.account;
+  assert.equal(await phoneStep(t, agent, false), null);
+  assert.equal((await accountByEmail(t, 'agent-tel@x.dz'))!.phone, '0550998877');
 });

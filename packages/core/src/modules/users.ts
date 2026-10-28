@@ -1,4 +1,4 @@
-import { LANGUAGES, Profile, ROLES } from '@pilotix/shared';
+import { LANGUAGES, normalizeAccountPhone, Profile, ROLES } from '@pilotix/shared';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { Db, isoOrNull, num, numOrNull } from '../db';
@@ -91,10 +91,28 @@ export async function login(db: Db, email: string, password: string) {
 
 export const hashPassword = (pw: string) => bcrypt.hash(pw, 12);
 
+/**
+ * A team member's phone: required, a mobile (or a number from abroad with its +), and nobody else's — not another
+ * person of this team, not another person's Pilotix account.
+ */
+async function teamPhone(ctx: Ctx, raw: unknown, who: { id: number | null; email: string }): Promise<string> {
+  const p = normalizeAccountPhone(String(raw ?? ''));
+  if (!p) throw bad('Téléphone obligatoire : un mobile algérien (05, 06 ou 07) ou un numéro étranger avec son + (ex. +33 6…)');
+  const email = who.email.toLowerCase();
+  if ((await ctx.db.query('SELECT 1 FROM profiles WHERE phone = $1 AND id IS DISTINCT FROM $2 AND lower(email) <> $3 AND active', [p, who.id, email])).length)
+    throw bad('Ce numéro est déjà utilisé par une autre personne de l’équipe');
+  if (ctx.t) {
+    const owner = (await ctx.t.platform.query('SELECT email FROM platform.accounts WHERE phone = $1', [p]))[0];
+    if (owner && String(owner.email).toLowerCase() !== email) throw bad('Ce numéro est déjà utilisé par un autre compte Pilotix');
+  }
+  return p;
+}
+
 const NewUser = z.object({
   name: z.string().trim().min(2).max(120),
   email: z.string().email().max(200),
-  phone: z.string().max(20).nullable().optional(),
+  /** required (checked by teamPhone, after the rights): one number = one person */
+  phone: z.string().trim().max(30).nullable().optional(),
   password: z.string().min(8).max(200),
   roles: z.array(z.enum(ROLES)).min(1).max(20),
   language: z.enum(LANGUAGES).default('fr'),
@@ -165,8 +183,12 @@ export const usersProcs = {
   'me.update': proc(null, z.object({ name: z.string().trim().min(2).max(80), phone: z.string().trim().max(30).nullable().optional(), avatar: z.string().max(400_000).nullable().optional() }), async (ctx, i) => {
     if (i.avatar && !/^data:image\/(png|jpe?g|webp);base64,/.test(i.avatar)) throw bad('Image invalide');
     const me = ctx.session.profile.id;
-    if (i.avatar !== undefined) await ctx.db.query('UPDATE profiles SET name=$2, phone=$3, avatar=$4 WHERE id=$1', [me, i.name, i.phone || null, i.avatar]);
-    else await ctx.db.query('UPDATE profiles SET name=$2, phone=$3 WHERE id=$1', [me, i.name, i.phone || null]);
+    // the phone is the account's (one number = one account, proven by a WhatsApp code on a server): it is not changed
+    // here on a server; in the preview it can be, but never emptied and never someone else's
+    const cur = (await ctx.db.query('SELECT phone, email FROM profiles WHERE id = $1', [me]))[0];
+    const phone = ctx.t || !i.phone ? (cur?.phone ?? null) : await teamPhone(ctx, i.phone, { id: me, email: String(cur?.email ?? '') });
+    if (i.avatar !== undefined) await ctx.db.query('UPDATE profiles SET name=$2, phone=$3, avatar=$4 WHERE id=$1', [me, i.name, phone, i.avatar]);
+    else await ctx.db.query('UPDATE profiles SET name=$2, phone=$3 WHERE id=$1', [me, i.name, phone]);
     return { ok: true };
   }),
   /** Delete my own account (password asked again). The last admin cannot leave. My name, email, phone and picture are erased. */
@@ -320,11 +342,12 @@ export const usersProcs = {
     if (b.roles.includes('livreur')) await needDriverSeat(ctx);
     // an agency's person: every seller unless the chief chose some
     const sellers = await agencyFields(ctx, b);
+    const phone = await teamPhone(ctx, b.phone, { id: null, email: b.email });
     try {
       const r = (
         await ctx.db.query(
           'INSERT INTO profiles (name, email, phone, password_hash, roles, language, livreur_company_id, can_manage_users, agency_sellers) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',
-          [b.name, b.email.toLowerCase(), b.phone ?? null, await hashPassword(b.password), b.roles, b.language, b.livreurCompanyId ?? null, !!b.canManageUsers && !b.roles.includes('admin'), sellers ? JSON.stringify(sellers) : null],
+          [b.name, b.email.toLowerCase(), phone, await hashPassword(b.password), b.roles, b.language, b.livreurCompanyId ?? null, !!b.canManageUsers && !b.roles.includes('admin'), sellers ? JSON.stringify(sellers) : null],
         )
       )[0];
       return toProfile(r);
@@ -344,6 +367,8 @@ export const usersProcs = {
     const before = (await ctx.db.query('SELECT active, roles, archived_at FROM profiles WHERE id = $1', [b.id]))[0];
     if (before?.archived_at && b.active === true) throw bad('Ce compte est archivé : sortez-le d’abord des archives (Management › Archives)');
     if (b.active === true && !before?.active) await needSeat(ctx);
+    // a new phone: required form, nobody else's (empty: unchanged)
+    const phone = b.phone ? await teamPhone(ctx, b.phone, { id: b.id, email: b.email ?? String((await ctx.db.query('SELECT email FROM profiles WHERE id = $1', [b.id]))[0]?.email ?? '') }) : null;
     const willBeActive = b.active ?? !!before?.active;
     const wasDriver = !!before?.active && (before?.roles as string[] | undefined)?.includes('livreur');
     if (willBeActive && (b.roles ?? (before?.roles as string[] | undefined) ?? []).includes('livreur') && !wasDriver) await needDriverSeat(ctx, b.id);
@@ -355,7 +380,7 @@ export const usersProcs = {
              roles=COALESCE($6,roles), language=COALESCE($7,language), active=COALESCE($8,active), livreur_company_id=COALESCE($9,livreur_company_id),
              can_manage_users = CASE WHEN 'admin' = ANY(COALESCE($6,roles)) THEN false ELSE COALESCE($10,can_manage_users) END,
              token_version = token_version + CASE WHEN $5::text IS NOT NULL OR $8 = false THEN 1 ELSE 0 END WHERE id=$1 RETURNING *`,
-          [b.id, b.name ?? null, b.email?.toLowerCase() ?? null, b.phone ?? null, b.password ? await hashPassword(b.password) : null, b.roles ?? null, b.language ?? null, b.active ?? null, b.livreurCompanyId ?? null, b.canManageUsers ?? null],
+          [b.id, b.name ?? null, b.email?.toLowerCase() ?? null, phone, b.password ? await hashPassword(b.password) : null, b.roles ?? null, b.language ?? null, b.active ?? null, b.livreurCompanyId ?? null, b.canManageUsers ?? null],
         )
       )[0];
     } catch (e: any) {

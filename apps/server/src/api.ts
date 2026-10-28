@@ -24,7 +24,7 @@ import {
 import { APP_FILTER, Reflector } from '@nestjs/core';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import * as core from '@pilotix/core';
-import { DEMO_ACCOUNTS, DEMO_PASSWORD, normalizePhone, Session } from '@pilotix/shared';
+import { DEMO_ACCOUNTS, DEMO_PASSWORD, maskPhone, normalizePhone, Session } from '@pilotix/shared';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { brotliCompressSync, constants as zlibConst, gzipSync } from 'node:zlib';
 import { z } from 'zod';
@@ -39,6 +39,7 @@ import { promises as dns } from 'node:dns';
 import { signupConfirmMail, signupExistsMail, verifyMail } from './mails';
 import type { Mail } from './mail';
 import { syncTurnstile } from './turnstile';
+import { otpOn, sendOtp } from './otp';
 
 // ---------------------------------------------------------------- errors → HTTP
 const STATUS: Record<string, number> = { bad_request: 400, unauthorized: 401, payment_required: 402, forbidden: 403, not_found: 404, conflict: 409 };
@@ -257,6 +258,8 @@ const intake = (ref: ShopRef): ShopRef => (ref.status.state === 'expired' ? { ..
 
 const LoginBody = z.object({ email: z.string().email().max(200), password: z.string().min(1).max(200), shop: z.number().int().positive().optional() });
 const PickBody = z.object({ ticket: z.string().max(4000), shop: z.number().int().positive() });
+/** « Vérifiez votre numéro »: the number (and the WhatsApp code when it is asked), with the login's ticket */
+const PhoneBody = z.object({ ticket: z.string().max(4000), phone: z.string().trim().min(1).max(30), code: z.string().trim().max(12).optional(), shop: z.number().int().positive().optional() });
 const ForgotBody = z.object({ email: z.string().email().max(200) });
 const ResetBody = z.object({ token: z.string().max(220), password: z.string().max(200) });
 const TokenBody = z.object({ token: z.string().max(220) });
@@ -352,6 +355,9 @@ class ApiController {
     if (!ref || ref.shop.status === 'archived' || ref.shop.status === 'deleted') throw new core.AppError('unauthorized', CLOSED);
     const m = (await core.membershipsOf(this.core.t, email)).find((x) => x.shopId === shopId);
     if (!m) throw new core.AppError('forbidden', 'Vous n’avez pas de compte dans cette boutique');
+    // every account has its own number (proven by the WhatsApp code when it is on) before entering any store
+    const acc = await core.accountByEmail(this.core.t, email);
+    if (acc && (await core.phoneStep(this.core.t, acc, await otpOn(this.core)))) throw new core.AppError('forbidden', 'Votre numéro de téléphone doit d’abord être vérifié : déconnectez-vous puis reconnectez-vous');
     // a partner's person (agency, marketer) works for this store from the partner's space, never inside the store
     if (m.agencyId) throw new core.AppError('forbidden', 'Ouvrez l’espace de votre agence (ou votre espace marketer) : vous y travaillez pour ce vendeur');
     const p = await core.profileById(ref.db, m.profileId);
@@ -385,6 +391,59 @@ class ApiController {
     return { pick: true as const, ticket: await this.pickTicket(acc), account: { name: acc.name, email: acc.email, verified: acc.verified }, stores, canAddStore, canAddAgency, canAddMarketer };
   }
 
+  /**
+   * After the person is proven (password, Google / Facebook, sign-up link): their number first if it is missing (or not
+   * proven while the WhatsApp code is on), then the store asked for, their only store, or the picker.
+   */
+  private async proceed(acc: core.Account, shop?: number) {
+    const step = await core.phoneStep(this.core.t, acc, await otpOn(this.core));
+    if (step) return { phone: true as const, ticket: await this.pickTicket(acc), account: { name: acc.name, email: acc.email }, current: step.current, otp: step.otp, shop: shop ?? null };
+    const stores = await core.storeChoices(this.core.t, acc.email);
+    const one = shop ? stores.find((x) => x.id === shop) : stores.length === 1 ? stores[0] : null;
+    if (one) return this.enter(one.id, acc.email);
+    return this.picker(acc);
+  }
+
+  /**
+   * « Vérifiez votre numéro »: code off → the number is saved and the person goes on. Code on → without `code`, a code
+   * is sent by WhatsApp; with it, the number is proven and the person goes on. 20 codes and 20 wrong codes per 15
+   * minutes per address (and per account: 1 a minute, 5 an hour, 5 tries each).
+   */
+  @Public()
+  @Post('auth/phone')
+  async phone(@Body() body: unknown, @Req() req: { ip?: string }) {
+    const b = PhoneBody.safeParse(body);
+    if (!b.success) throw new core.AppError('bad_request', 'Numéro de téléphone manquant');
+    const acc = await this.ticketAccount(b.data.ticket);
+    if (!(await otpOn(this.core))) {
+      const done = await core.setAccountPhone(this.core.t, acc.id, b.data.phone, false);
+      return this.proceed(done, b.data.shop);
+    }
+    if (!b.data.code) {
+      const ipKey = `otp:${ipOf(req)}`;
+      checkLogin(ipKey, 20);
+      failedLogin(ipKey);
+      const c = await core.newPhoneCode(this.core.t, acc, b.data.phone);
+      try {
+        await sendOtp(this.core, c.phone, c.code);
+      } catch (e) {
+        await core.dropPhoneCode(this.core.t, c.id);
+        throw new core.AppError('bad_request', (e as Error).message);
+      }
+      return { sent: true, phone: c.phone, masked: maskPhone(c.phone), wait: Math.round(core.PHONE_CODE.gapMs / 1000), ttl: Math.round(core.PHONE_CODE.ttlMs / 1000) };
+    }
+    const ipKey = `otpcheck:${ipOf(req)}`;
+    checkLogin(ipKey, 20);
+    let done: core.Account;
+    try {
+      done = await core.checkPhoneCode(this.core.t, acc, b.data.phone, b.data.code);
+    } catch (e) {
+      failedLogin(ipKey);
+      throw e;
+    }
+    return this.proceed(done, b.data.shop);
+  }
+
   @Public()
   @Post('auth/login')
   async login(@Body() body: unknown, @Req() req: { ip?: string; headers?: Record<string, unknown> }) {
@@ -416,11 +475,8 @@ class ApiController {
       throw e;
     }
     clearLogin(mailKey);
-    const stores = await core.storeChoices(this.core.t, acc.email);
-    // one store (or the one asked for): straight in; several or none: the picker
-    const one = b.data.shop ? stores.find((x) => x.id === b.data.shop) : stores.length === 1 ? stores[0] : null;
-    if (one) return this.enter(one.id, acc.email);
-    return this.picker(acc);
+    // the number first (when missing); then one store (or the one asked for): straight in; several or none: the picker
+    return this.proceed(acc, b.data.shop);
   }
 
   /**
@@ -442,9 +498,7 @@ class ApiController {
       throw new core.AppError('unauthorized', 'Google n’a pas confirmé ce compte. Réessayez.');
     }
     const { account } = await core.socialAccount(this.core.t, { email: who.email, name: who.name, language: b.data.language });
-    const stores = await core.storeChoices(this.core.t, account.email);
-    if (stores.length === 1) return this.enter(stores[0].id, account.email);
-    return this.picker(account);
+    return this.proceed(account);
   }
 
   /** The picker: the chosen store, with the ticket the login gave. */
@@ -758,10 +812,10 @@ class ApiController {
       throw e;
     }
     if ('exists' in r) return { exists: true, email: r.email };
-    // an account-only sign-up: the picker, where the person creates their first store
-    if (!r.shop) return this.picker(r.account);
-    this.core.invalidate();
-    return this.enter(r.shop.id, r.account.email);
+    if (r.shop) this.core.invalidate();
+    // the number's WhatsApp code first (when it is on); then the new store, or (account-only sign-up) the picker where
+    // the person creates their first store
+    return this.proceed(r.account, r.shop?.id);
   }
 
   /** « Ajouter une boutique » from the account menu: a new store this person owns (they enter it). */

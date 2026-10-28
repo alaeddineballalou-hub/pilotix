@@ -6,6 +6,10 @@ import { call, Ctx, Db, login, migrate, seedDemo } from '../index';
 import { pgliteDb } from '../pglite';
 import { DEMO_PASSWORD } from '../seed';
 
+/** a new team member's phone (required, one per person) */
+let phoneN = 0;
+const tph = () => `072${String(++phoneN).padStart(7, '0')}`;
+
 let db: Db;
 const ctxFor = async (email: string): Promise<Ctx> => ({ db, session: await login(db, email, DEMO_PASSWORD), now: () => Date.now(), emit: () => {} });
 
@@ -95,9 +99,9 @@ test('livreur only sees own orders and cannot open others', async () => {
 
 test('roles: confirmation cannot create users, admin can', async () => {
   const conf = await ctxFor('samira@demo.pilotix.dz');
-  await assert.rejects(call('users.create', conf, { name: 'X Y', email: 'x@y.dz', password: '12345678', roles: ['admin'] }));
+  await assert.rejects(call('users.create', conf, { phone: tph(), name: 'X Y', email: 'x@y.dz', password: '12345678', roles: ['admin'] }));
   const admin = await ctxFor('admin@demo.pilotix.dz');
-  const u: any = await call('users.create', admin, { name: 'Nouvel Agent', email: 'nouvel@demo.pilotix.dz', password: 'motdepasse1', roles: ['confirmation'] });
+  const u: any = await call('users.create', admin, { phone: tph(), name: 'Nouvel Agent', email: 'nouvel@demo.pilotix.dz', password: 'motdepasse1', roles: ['confirmation'] });
   assert.equal(u.roles[0], 'confirmation');
 });
 

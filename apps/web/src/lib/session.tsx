@@ -1,7 +1,7 @@
 import type { Role, Session } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { backend, isPick, loginServerDemo, PickInfo, rpc, server, setOnLocked, setOnUnauthorized } from './backend';
+import { backend, isPhone, isPick, LoginResult, loginServerDemo, PhoneInfo, PickInfo, rpc, server, setOnLocked, setOnUnauthorized } from './backend';
 import { setShop } from './features';
 import { applyLanguage } from './i18n';
 import { store } from './store';
@@ -11,6 +11,10 @@ interface SessionState {
   ready: boolean;
   /** the password was right and the person has several stores (or none): the picker shows them */
   picker: PickInfo | null;
+  /** the account has no number of its own yet (or not proven): « Vérifiez votre numéro » before anything else */
+  phoneStep: PhoneInfo | null;
+  /** what the server answered after the person was proven: the number step, the picker, or a store */
+  afterLogin: (r: LoginResult) => void;
   login: (email: string, password: string) => Promise<void>;
   /** with Google (its token) */
   loginSocial: (provider: 'google', token: string) => Promise<void>;
@@ -46,6 +50,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSessionState] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
   const [picker, setPicker] = useState<PickInfo | null>(null);
+  const [phoneStep, setPhoneStep] = useState<PhoneInfo | null>(null);
   // the shop's menus are known before anything renders with the new session
   const setSession = useCallback((s: Session | null) => {
     setShop(s?.shop);
@@ -57,6 +62,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     keep(null);
     setSession(null);
     setPicker(null);
+    setPhoneStep(null);
     qc.clear();
   }, [qc, setSession]);
 
@@ -100,21 +106,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       qc.clear();
       keep(s);
       setPicker(null);
+      setPhoneStep(null);
       if (!store.get('lang')) applyLanguage(s.profile.language);
       setSession(s);
     },
     [qc, setSession],
   );
-  const login = async (email: string, password: string) => {
-    const r = await backend.login(email, password);
-    if (isPick(r)) setPicker(r);
-    else enter(r);
+  const afterLogin = (r: LoginResult) => {
+    if (isPhone(r)) {
+      setPicker(null);
+      setPhoneStep(r);
+    } else if (isPick(r)) {
+      setPhoneStep(null);
+      setPicker(r);
+    } else enter(r);
   };
-  const loginSocial = async (provider: 'google', token: string) => {
-    const r = await server.socialLogin(provider, token, store.get('lang') || undefined);
-    if (isPick(r)) setPicker(r);
-    else enter(r);
-  };
+  const login = async (email: string, password: string) => afterLogin(await backend.login(email, password));
+  const loginSocial = async (provider: 'google', token: string) => afterLogin(await server.socialLogin(provider, token, store.get('lang') || undefined));
   const pick = async (shop: number) => {
     if (!picker) return;
     enter(await server.pick(picker.ticket, shop));
@@ -125,7 +133,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const has = (...roles: Role[]) => !!session && (session.isAdmin || roles.some((r) => session.roles.includes(r)));
 
   return (
-    <Ctx.Provider value={{ session, ready, picker, login, loginSocial, pick, cancelPick: () => setPicker(null), showPicker: setPicker, enter, switchStore, loginDemo, logout, refresh, has, me: session?.profile.id ?? 0 }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ session, ready, picker, phoneStep, afterLogin, login, loginSocial, pick, cancelPick: () => {
+        setPicker(null);
+        setPhoneStep(null);
+      }, showPicker: setPicker, enter, switchStore, loginDemo, logout, refresh, has, me: session?.profile.id ?? 0 }}>{children}</Ctx.Provider>
   );
 }
 

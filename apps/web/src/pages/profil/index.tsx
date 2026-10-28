@@ -3,7 +3,7 @@
 import { LANGUAGES, Language, Profile } from '@pilotix/shared';
 import { FormEvent, ReactNode, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { rpc } from '../../lib/backend';
+import { backend, rpc } from '../../lib/backend';
 import { da, n } from '../../lib/format';
 import { applyLanguage } from '../../lib/i18n';
 import { useAction, useRpc } from '../../lib/query';
@@ -149,9 +149,16 @@ function Infos({ p }: { p: Profile }) {
         <Field label={t('profil.name')}>
           <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" maxLength={80} required />
         </Field>
-        <Field label={t('profil.phone')}>
-          <input type="tel" className="ltr" value={phone} placeholder={t('profil.phonePh')} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" maxLength={30} />
-        </Field>
+        {backend.kind === 'demo' ? (
+          <Field label={t('profil.phone')}>
+            <input type="tel" className="ltr" value={phone} placeholder={t('profil.phonePh')} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" maxLength={30} />
+          </Field>
+        ) : (
+          // the account's own number (one number = one account, proven by the WhatsApp code): not changed here
+          <Field label={t('profil.phone')} hint={t('profil.phoneLock')} lock>
+            <input value={p.phone || ''} readOnly disabled className="ltr px-pf-ro" aria-readonly="true" />
+          </Field>
+        )}
       </div>
       <Field label={t('profil.email')} hint={t('profil.emailLock')} lock>
         <input value={p.email || ''} readOnly disabled className="ltr px-pf-ro" aria-readonly="true" />

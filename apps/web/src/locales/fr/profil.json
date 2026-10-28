@@ -94,5 +94,6 @@
   "p3": "Quand il paie son premier abonnement, votre boutique gagne {{months}} mois gratuit(s), tout seul.",
   "friendsPlat": "Les boutiques venues avec votre lien",
   "noFriendsPlat": "Aucune boutique pour l’instant. Partagez votre lien !",
-  "nMonths": "{{n}} mois"
+  "nMonths": "{{n}} mois",
+  "phoneLock": "C’est le numéro de votre compte (un seul compte par numéro). Pour le changer, écrivez à Pilotix."
 }

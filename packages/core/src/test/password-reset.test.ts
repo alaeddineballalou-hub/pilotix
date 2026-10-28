@@ -6,6 +6,10 @@ import { DEMO_PASSWORD } from '@pilotix/shared';
 import { call, createPasswordReset, login, resetPassword } from '../index';
 import { EMAILS, setup } from './harness';
 
+/** a new team member's phone (required, one per person) */
+let phoneN = 0;
+const tph = () => `074${String(++phoneN).padStart(7, '0')}`;
+
 const link = (r: Awaited<ReturnType<typeof createPasswordReset>>) => {
   assert.ok(r && r.kind === 'link', `expected a link, got ${JSON.stringify(r)}`);
   return r;
@@ -79,7 +83,7 @@ test('team accounts: the administrator chooses who may create accounts and set p
   const confId = await id(EMAILS.conf);
 
   // not allowed yet
-  await assert.rejects(call('users.create', manager, { name: 'Nouvel Agent', email: 'nouveau@example.com', password: 'motdepasse1', roles: ['confirmation'] }), /refusé/);
+  await assert.rejects(call('users.create', manager, { phone: tph(), name: 'Nouvel Agent', email: 'nouveau@example.com', password: 'motdepasse1', roles: ['confirmation'] }), /refusé/);
   await assert.rejects(call('admin.users.resetPassword', manager, { id: confId }), /refusé/);
 
   // the administrator gives the right
@@ -88,7 +92,7 @@ test('team accounts: the administrator chooses who may create accounts and set p
   assert.equal(m.session.canManageUsers, true);
 
   // creates an agent, sets an agent's password, sees the logins
-  const created: any = await call('users.create', m, { name: 'Nouvel Agent', email: 'nouveau@example.com', password: 'motdepasse1', roles: ['confirmation'] });
+  const created: any = await call('users.create', m, { phone: tph(), name: 'Nouvel Agent', email: 'nouveau@example.com', password: 'motdepasse1', roles: ['confirmation'] });
   assert.equal(created.canManageUsers, false);
   const r: any = await call('admin.users.resetPassword', m, { id: confId });
   assert.equal((await login(db, EMAILS.conf, r.password)).profile.email, EMAILS.conf);
@@ -100,10 +104,10 @@ test('team accounts: the administrator chooses who may create accounts and set p
   await call('users.update', admin, { id: await id(EMAILS.manager2), canManageUsers: true });
   await assert.rejects(call('users.update', m, { id: await id(EMAILS.manager2), password: 'motdepasse2' }), /administrateur/);
   await assert.rejects(call('users.update', m, { id: m.session.profile.id, name: 'Moi Même' }), /Mon profil/);
-  await assert.rejects(call('users.create', m, { name: 'Faux Admin', email: 'faux@example.com', password: 'motdepasse1', roles: ['admin'] }), /Administrateur/);
+  await assert.rejects(call('users.create', m, { phone: tph(), name: 'Faux Admin', email: 'faux@example.com', password: 'motdepasse1', roles: ['admin'] }), /Administrateur/);
   await assert.rejects(call('users.update', m, { id: confId, roles: ['confirmation', 'admin'] }), /Administrateur/);
   await assert.rejects(call('users.update', m, { id: confId, canManageUsers: true }), /ce droit/);
-  await assert.rejects(call('users.create', m, { name: 'Autre Chef', email: 'chef@example.com', password: 'motdepasse1', roles: ['agent_manager'], canManageUsers: true }), /ce droit/);
+  await assert.rejects(call('users.create', m, { phone: tph(), name: 'Autre Chef', email: 'chef@example.com', password: 'motdepasse1', roles: ['agent_manager'], canManageUsers: true }), /ce droit/);
 
   // an administrator never carries the flag (they already have everything)
   const adm: any = await call('users.update', admin, { id: await id(EMAILS.vendeur), roles: ['admin'], canManageUsers: true });

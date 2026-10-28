@@ -53,8 +53,31 @@ export interface PickInfo {
   /** « Créer mon espace marketer » (the person has no marketer space yet) */
   canAddMarketer?: boolean;
 }
-export type LoginResult = Session | PickInfo;
+/**
+ * After the password: the account has no number of its own yet (or it is not proven while the WhatsApp code is on) →
+ * « Vérifiez votre numéro », with the same ticket; then the store (`shop`), the picker or the only store.
+ */
+export interface PhoneInfo {
+  phone: true;
+  ticket: string;
+  account: { name: string; email: string };
+  /** the number already known (to prove), or null (the person types it) */
+  current: string | null;
+  /** a code is sent by WhatsApp */
+  otp: boolean;
+  shop: number | null;
+}
+/** The WhatsApp code left: where, when the next one can be asked, how long it lives (seconds). */
+export interface PhoneSent {
+  sent: true;
+  phone: string;
+  masked: string;
+  wait: number;
+  ttl: number;
+}
+export type LoginResult = Session | PickInfo | PhoneInfo;
 export const isPick = (r: LoginResult): r is PickInfo => (r as PickInfo).pick === true;
+export const isPhone = (r: unknown): r is PhoneInfo => (r as PhoneInfo)?.phone === true;
 
 export interface Backend {
   kind: 'remote' | 'demo';
@@ -201,13 +224,19 @@ class RemoteBackend implements Backend {
     return r.session;
   }
   async login(email: string, password: string): Promise<LoginResult> {
-    const r = await this.req<{ token: string; session: Session } | PickInfo>('/auth/login', { email, password });
-    return 'pick' in r ? r : this.enterWith(r);
+    const r = await this.req<{ token: string; session: Session } | PickInfo | PhoneInfo>('/auth/login', { email, password });
+    return 'pick' in r || 'phone' in r ? r : this.enterWith(r);
+  }
+  /** « Vérifiez votre numéro »: the number (code off: saved, then on), or the WhatsApp code asked / checked. */
+  async phone(input: { ticket: string; phone: string; code?: string; shop?: number | null }): Promise<LoginResult | PhoneSent> {
+    const r = await this.req<{ token: string; session: Session } | PickInfo | PhoneInfo | PhoneSent>('/auth/phone', { ticket: input.ticket, phone: input.phone, ...(input.code ? { code: input.code } : {}), ...(input.shop ? { shop: input.shop } : {}) });
+    if ('session' in r && 'token' in r && !('pick' in r)) return this.enterWith(r as { token: string; session: Session });
+    return r as PickInfo | PhoneInfo | PhoneSent;
   }
   /** Google: its token, checked by the server; a new person gets an account. */
   async socialLogin(provider: 'google', token: string, language?: string): Promise<LoginResult> {
-    const r = await this.req<{ token: string; session: Session } | PickInfo>('/auth/social', { provider, token, language });
-    return 'pick' in r ? r : this.enterWith(r);
+    const r = await this.req<{ token: string; session: Session } | PickInfo | PhoneInfo>('/auth/social', { provider, token, language });
+    return 'pick' in r || 'phone' in r ? r : this.enterWith(r);
   }
   /** The store chosen in the picker. */
   async pick(ticket: string, shop: number) {
@@ -226,9 +255,9 @@ class RemoteBackend implements Backend {
   }
   /** The sign-up e-mail's link: the store is made and entered (or « you already have an account »). */
   /** The sign-up e-mail's link: the store is made and entered, or (account-only sign-up) the picker to create it, or « you already have an account ». */
-  async confirmSignup(token: string): Promise<Session | PickInfo | { exists: true; email: string }> {
-    const r = await this.req<{ token: string; session: Session } | PickInfo | { exists: true; email: string }>('/auth/signup/confirm', { token });
-    return 'exists' in r ? r : 'pick' in r ? r : this.enterWith(r);
+  async confirmSignup(token: string): Promise<Session | PickInfo | PhoneInfo | { exists: true; email: string }> {
+    const r = await this.req<{ token: string; session: Session } | PickInfo | PhoneInfo | { exists: true; email: string }>('/auth/signup/confirm', { token });
+    return 'exists' in r ? r : 'pick' in r || 'phone' in r ? r : this.enterWith(r);
   }
   /** The e-mail check link (from the store picker: with its ticket). */
   verifySend(ticket?: string) {
@@ -368,7 +397,7 @@ class DemoBackend implements Backend {
     try {
       const { DEMO_PASSWORD } = await import('@pilotix/shared');
       const r = await this.login(email, DEMO_PASSWORD);
-      return isPick(r) ? null : r;
+      return isPick(r) || isPhone(r) ? null : r;
     } catch {
       return null;
     }

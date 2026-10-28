@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { lazy, startTransition, StrictMode, Suspense, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Legal, Signup, SignupConfirm, StorePicker, VerifyEmail } from './layout/Accounts';
+import { Legal, PhoneStep, Signup, SignupConfirm, StorePicker, VerifyEmail } from './layout/Accounts';
 import { LockScreen } from './layout/LockScreen';
 import { Login } from './layout/Login';
 import { ResetPassword } from './layout/ResetPassword';
@@ -69,7 +69,7 @@ const PlatformApp = lazy(() => import('./pages/platform').then((m) => ({ default
 const Support = lazy(() => import('./pages/aide').then((m) => ({ default: m.Support })));
 
 function App() {
-  const { session, ready, picker } = useSession();
+  const { session, ready, picker, phoneStep } = useSession();
   const parts = useHash();
   if (parts[0] === 'platform')
     return (
@@ -91,7 +91,8 @@ function App() {
   if (parts[0] === 'inscription-marketer') return <Signup kind="marketer" />;
   // the link of the first sign-up e-mails (before accounts): every account counts as confirmed now, the app opens
   if (parts[0] === 'confirmer') location.replace('#/accueil');
-  if (!session) return picker ? <StorePicker /> : <Login />;
+  // the account's own number first (« Vérifiez votre numéro »), then the store picker
+  if (!session) return phoneStep ? <PhoneStep /> : picker ? <StorePicker /> : <Login />;
   // unpaid or suspended: the lock screen (how to pay), nothing else
   if (session.shop?.locked) return <LockScreen />;
 

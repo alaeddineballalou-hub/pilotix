@@ -9,6 +9,10 @@ import { cleanCode } from '@pilotix/shared';
 import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
 import { confirmSignup, loadShop, membershipsOf, passwordFromLink, startSignup, storeChoices } from '../platform';
 
+/** a new team member's phone (required, one per person) */
+let phoneN = 0;
+const tph = () => `073${String(++phoneN).padStart(7, '0')}`;
+
 const OWNER = { email: 'owner@boutique.dz', password: 'Owner-Password-1' };
 const PW = 'Marketer-Password-1';
 
@@ -46,7 +50,7 @@ async function store(t: Tenancy, p: (n: string, i?: unknown) => Promise<any>, na
 
 /** A marketer made by its owner on the sign-up page (« Marketer » chosen, e-mail confirmed). */
 async function marketer(t: Tenancy, name: string, email: string) {
-  const mail = await startSignup(t, { name: 'Yacine', email, password: PW, storeName: name, language: 'fr', terms: true, kind: 'marketer' }, null);
+  const mail = await startSignup(t, { name: 'Yacine', email, phone: tph(), password: PW, storeName: name, language: 'fr', terms: true, kind: 'marketer' }, null);
   assert.equal(mail?.kind, 'confirm');
   assert.equal((mail as any).marketer, true);
   const made: any = await confirmSignup(t, (mail as any).token);
@@ -104,8 +108,8 @@ test('a marketer: its own account, checked by Pilotix, works for a store on the 
   assert.deepEqual(ans.problems, []);
 
   // its team, added in Utilisateurs: a marketer (media buyer) — never a confirmation agent
-  await assert.rejects(call('users.create', chief, { name: 'Nora', email: 'nora@ads.dz', password: PW, roles: ['confirmation'] }), /espace marketer/);
-  const nadir: any = await call('users.create', chief, { name: 'Nadir', email: 'nadir@ads.dz', password: PW, roles: ['marketer'] });
+  await assert.rejects(call('users.create', chief, { phone: tph(), name: 'Nora', email: 'nora@ads.dz', password: PW, roles: ['confirmation'] }), /espace marketer/);
+  const nadir: any = await call('users.create', chief, { phone: tph(), name: 'Nadir', email: 'nadir@ads.dz', password: PW, roles: ['marketer'] });
   await call('agency.setAgents', chief, { id: linkId, people: [nadir.id] });
   const inStore = (await shop.db.query(`SELECT id, roles, agency_id, agency_products, active FROM profiles WHERE email = 'nadir@ads.dz'`))[0];
   assert.deepEqual([inStore.roles, Number(inStore.agency_id), (inStore.agency_products ?? []).map(Number), inStore.active], [['marketer'], mk.id, [shop.products.VELO], true]);
@@ -254,7 +258,7 @@ test('a product the store takes back takes its ad sets with it: out of the marke
   const { VELO, POUS, CASQ } = shop.products;
   const { id: linkId } = (await call('partners.request', admin, { agencyId: mk.id, tasks: ['marketing'], products: [VELO, POUS] })) as any;
   await call('agency.answer', chief, { id: linkId, accept: true });
-  const nadir: any = await call('users.create', chief, { name: 'Nadir', email: 'nadir@blida-ads.dz', password: PW, roles: ['marketer'] });
+  const nadir: any = await call('users.create', chief, { phone: tph(), name: 'Nadir', email: 'nadir@blida-ads.dz', password: PW, roles: ['marketer'] });
   await call('agency.setAgents', chief, { id: linkId, people: [nadir.id, chief.session.profile.id] });
   const inStore = Number((await shop.db.query(`SELECT id FROM profiles WHERE email = 'nadir@blida-ads.dz'`))[0].id);
 

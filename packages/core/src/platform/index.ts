@@ -3,6 +3,7 @@ export * from './tenancy';
 export * from './schema';
 export * from './shops';
 export * from './accounts';
+export * from './phone';
 export * from './signup';
 export * from './support';
 export * from './reminders';

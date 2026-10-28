@@ -75,6 +75,25 @@ export const doctorDismiss = (id: string, kind: 'solve' | 'ignore' | 'restore') 
 /** Cloudflare Turnstile for every shop: connect the account (owner; token '' keeps the saved one), remove it, sync now. */
 export const turnstileSave = (body: { accountId: string; token: string }) => req<NonNullable<ServerDoctorReport['turnstile']>>('/turnstile/save', body);
 export const turnstileStatus = () => req<NonNullable<ServerDoctorReport['turnstile']>>('/turnstile/status', {});
+/** Control room › Réglages › Code WhatsApp: the code that proves every account's phone (the token never comes back). */
+export interface OtpStatus {
+  on: boolean;
+  wanted: boolean;
+  ready: boolean;
+  phoneId: string;
+  tokenSet: boolean;
+  template: string;
+  lang: string;
+  button: boolean;
+  lastError: string | null;
+  lastSentAt: string | null;
+  accounts: number;
+  withPhone: number;
+  verified: number;
+}
+export const otpStatus = () => req<OtpStatus>('/otp/status', {});
+export const otpSave = (body: { on: boolean; phoneId: string; token?: string; template: string; lang: string; button: boolean }) => req<OtpStatus>('/otp/save', body);
+export const otpTest = (phone: string) => req<OtpStatus>('/otp/test', { phone });
 export const turnstileSync = () => req<NonNullable<ServerDoctorReport['turnstile']>>('/turnstile/sync', {});
 
 export function staffLogout() {

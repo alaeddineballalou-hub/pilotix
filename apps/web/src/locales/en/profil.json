@@ -94,5 +94,6 @@
   "p3": "When they pay their first subscription, your store gets {{months}} free month(s), automatically.",
   "friendsPlat": "Stores that came with your link",
   "noFriendsPlat": "No store yet. Share your link!",
-  "nMonths": "{{n}} month(s)"
+  "nMonths": "{{n}} month(s)",
+  "phoneLock": "This is your account’s number (one account per number). To change it, write to Pilotix."
 }

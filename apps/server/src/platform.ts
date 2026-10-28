@@ -16,6 +16,7 @@ import { config } from './config';
 import { CoreService } from './core.service';
 import { dismissDoctor, serverDoctor } from './doctor';
 import { saveTurnstileConfig, syncTurnstile, turnstileStatus } from './turnstile';
+import { otpStatus, saveOtp, testOtp } from './otp';
 import { checkLogin, clearLogin, failedLogin } from './limits';
 import { mailConfigured, sendMail } from './mail';
 import { ownerMail, ReceiptData, receiptMail, staffCodeMail } from './mails';
@@ -230,6 +231,31 @@ export class PlatformController {
       } catch (e) {
         throw new core.AppError('bad_request', (e as Error).message);
       }
+    }
+    throw new core.AppError('not_found', 'Action inconnue');
+  }
+
+  /**
+   * The WhatsApp code that proves every account's phone: « status » (every staff member), « save » (the owner: the
+   * number's ID, the token — never shown again —, the template, on/off), « test » (owner and managers: a code to a
+   * number).
+   */
+  @Post('otp/:action')
+  async otp(@Param('action') action: string, @Body() body: any, @Req() req: { staff: StaffSession }) {
+    if (action === 'status') return otpStatus(this.core);
+    try {
+      if (action === 'save') {
+        if (req.staff.role !== 'owner') throw new core.AppError('forbidden', 'Réservé au propriétaire');
+        return await saveOtp(this.core, body ?? {});
+      }
+      if (action === 'test') {
+        if (req.staff.role === 'support') throw new core.AppError('forbidden', 'Réservé au propriétaire et aux managers');
+        const phone = core.accountPhoneOrBad(body?.phone);
+        return await testOtp(this.core, phone);
+      }
+    } catch (e) {
+      if (e instanceof core.AppError) throw e;
+      throw new core.AppError('bad_request', (e as Error).message);
     }
     throw new core.AppError('not_found', 'Action inconnue');
   }

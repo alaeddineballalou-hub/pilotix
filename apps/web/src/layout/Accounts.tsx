@@ -4,7 +4,7 @@
 // e-mail check link, and the terms of use and privacy page.
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ApiError, DEMO_ONLY, legalText, server, signup, signupInfo, StoreChoice, storeNameCheck, verifyEmail } from '../lib/backend';
+import { ApiError, DEMO_ONLY, isPhone, legalText, PhoneSent, server, signup, signupInfo, StoreChoice, storeNameCheck, verifyEmail } from '../lib/backend';
 import { useSession } from '../lib/session';
 import { Icon } from '../ui/kit';
 import { Modal } from '../ui/modal';
@@ -63,6 +63,115 @@ function StoreList({ stores, onPick, busy }: { stores: StoreChoice[]; onPick: (i
         </li>
       ))}
     </ul>
+  );
+}
+
+// ---------------------------------------------------------------- « Vérifiez votre numéro »
+/**
+ * After the password (or Google / Facebook, or the sign-up link): every account has its own number. Code off: the
+ * person types it and goes on. Code on: a 6-digit code leaves by WhatsApp, the person types it, the number is proven.
+ */
+export function PhoneStep() {
+  const { t } = useTranslation();
+  const { phoneStep: info, afterLogin, cancelPick } = useSession();
+  const [phone, setPhone] = useState(info?.current ?? '');
+  const [code, setCode] = useState('');
+  const [sent, setSent] = useState<PhoneSent | null>(null);
+  const [wait, setWait] = useState(0);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const codeRef = useRef<HTMLInputElement>(null);
+  // the seconds before another code can be asked
+  useEffect(() => {
+    if (wait <= 0) return;
+    const id = window.setTimeout(() => setWait((w) => w - 1), 1000);
+    return () => window.clearTimeout(id);
+  }, [wait]);
+  if (!info) return null;
+  const go = async (withCode: boolean) => {
+    setError('');
+    setBusy(true);
+    try {
+      const r = await server.phone({ ticket: info.ticket, phone: sent && withCode ? sent.phone : phone, code: withCode ? code : undefined, shop: info.shop });
+      if ('sent' in r) {
+        setSent(r);
+        setCode('');
+        setWait(r.wait);
+        window.setTimeout(() => codeRef.current?.focus(), 50);
+      } else afterLogin(r);
+    } catch (e: any) {
+      setError(e?.message || t('common.error'));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    void go(!!sent);
+  };
+  const first = (info.account.name || '').split(' ')[0] || info.account.email;
+  return (
+    <Page title={t('auth.phone1')} mark={t('auth.phone2')} sub={info.otp ? t('auth.phoneOtpText', { name: first }) : t('auth.phoneText', { name: first })}>
+      <form className="px-acc-form" onSubmit={submit}>
+        {!sent ? (
+          <label className="field">
+            <span className="lab">{t('auth.phone')}</span>
+            <input dir="ltr" inputMode="tel" required minLength={9} maxLength={30} autoComplete="tel" autoFocus value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0555 12 34 56" />
+            <span className="hint">{info.otp ? t('auth.phoneOtpHint') : t('auth.phoneUnique')}</span>
+          </label>
+        ) : (
+          <>
+            <p className="pxa-note">
+              <Icon name="phone" /> {t('auth.codeSent', { phone: sent.masked })}
+            </p>
+            <label className="field">
+              <span className="lab">{t('auth.code')}</span>
+              <input
+                ref={codeRef}
+                dir="ltr"
+                className="px-otp"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                required
+                pattern="[0-9]{6}"
+                maxLength={6}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="••••••"
+              />
+              <span className="hint">{t('auth.codeHint', { min: Math.round(sent.ttl / 60) })}</span>
+            </label>
+          </>
+        )}
+        {error && <p className="form-err">{error}</p>}
+        <button className="pxa-submit" disabled={busy || (!!sent && code.length !== 6)}>
+          {busy ? '…' : sent ? t('auth.codeCheck') : info.otp ? t('auth.codeSend') : t('auth.phoneSave')}
+        </button>
+        {sent && (
+          <p className="pxa-alt">
+            <button type="button" className="login-link" disabled={busy || wait > 0} onClick={() => void go(false)}>
+              {wait > 0 ? t('auth.codeAgainIn', { s: wait }) : t('auth.codeAgain')}
+            </button>{' '}
+            ·{' '}
+            <button
+              type="button"
+              className="login-link"
+              disabled={busy}
+              onClick={() => {
+                setSent(null);
+                setCode('');
+                setError('');
+              }}
+            >
+              {t('auth.phoneChange')}
+            </button>
+          </p>
+        )}
+      </form>
+      <button type="button" className="pxa-back" onClick={cancelPick}>
+        {t('login.backToLogin')}
+      </button>
+    </Page>
   );
 }
 
@@ -321,7 +430,7 @@ export function Signup({ referral, kind: chosen }: { referral?: string; kind?: '
         name: f.name.trim(),
         email: f.email.trim(),
         password: f.password,
-        phone: f.phone.trim() || null,
+        phone: f.phone.trim(),
         // a store sign-up opens the account only: the first store is created right after, inside
         storeName: partner ? storeName.trim() : '',
         language: (['fr', 'en', 'ar'].includes(i18n.language) ? i18n.language : 'fr') as 'fr' | 'en' | 'ar',
@@ -393,6 +502,7 @@ export function Signup({ referral, kind: chosen }: { referral?: string; kind?: '
         <label className="field">
           <span className="lab">{t('auth.phone')}</span>
           <input dir="ltr" inputMode="tel" required minLength={9} maxLength={30} autoComplete="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} placeholder="0555 12 34 56" />
+          <span className="hint">{t('auth.phoneHint')}</span>
         </label>
         <label className="field">
           <span className="lab">{t('login.password')}</span>
@@ -427,7 +537,7 @@ export function Signup({ referral, kind: chosen }: { referral?: string; kind?: '
 /** The sign-up e-mail's link: the store is made and the person enters it. */
 export function SignupConfirm({ token }: { token: string }) {
   const { t } = useTranslation();
-  const { enter, showPicker } = useSession();
+  const { enter, afterLogin } = useSession();
   const [state, setState] = useState<'busy' | 'exists' | 'error'>('busy');
   const [msg, setMsg] = useState('');
   const once = useRef(false);
@@ -438,9 +548,10 @@ export function SignupConfirm({ token }: { token: string }) {
       .confirmSignup(token)
       .then((r) => {
         if ('exists' in r) return setState('exists');
-        // an account-only sign-up: the picker, where the first store is created
-        if ('pick' in r) {
-          showPicker(r);
+        // the number's WhatsApp code first (when Pilotix asks it), or (account-only sign-up) the picker, where the
+        // first store is created
+        if (isPhone(r) || 'pick' in r) {
+          afterLogin(r);
           return home('#/');
         }
         enter(r);
@@ -450,7 +561,7 @@ export function SignupConfirm({ token }: { token: string }) {
         setMsg(e?.message ?? t('common.error'));
         setState('error');
       });
-  }, [token, enter, showPicker, t]);
+  }, [token, enter, afterLogin, t]);
   return (
     <Page title={state === 'busy' ? t('shop.acc.making') : state === 'exists' ? t('shop.acc.haveAccountTitle') : t('shop.acc.linkBad')}>
       <p className="pxa-note">{state === 'busy' ? t('shop.acc.makingText') : state === 'exists' ? t('shop.acc.haveAccountText') : msg}</p>

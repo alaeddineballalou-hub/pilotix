@@ -593,5 +593,31 @@
     "n18": "Logo géant",
     "n19": "Calques en profondeur",
     "n20": "Gros caractères"
+  },
+  "otp": {
+    "title": "Code WhatsApp (numéro de chaque compte)",
+    "help": "Chaque compte Pilotix a son propre numéro (un seul compte par numéro). Activé, Pilotix envoie un code à 6 chiffres par WhatsApp pour prouver le numéro à la prochaine connexion.",
+    "isOn": "Activé : chaque compte prouve son numéro par un code WhatsApp",
+    "isOff": "Désactivé : le numéro est obligatoire et unique, mais aucun code n’est demandé",
+    "counts": "{{accounts}} comptes · {{withPhone}} avec un numéro · {{verified}} vérifiés",
+    "lastSent": "Dernier code envoyé {{when}}",
+    "s1": "Meta Business › WhatsApp › Configuration de l’API : copiez l’ID du numéro (Phone number ID) de Pilotix.",
+    "s2": "Créez un jeton permanent (utilisateur système) avec la permission whatsapp_business_messaging.",
+    "s3": "Gestionnaire WhatsApp › Modèles : créez un modèle « Authentification » (catégorie Authentication) et attendez « Approuvé ».",
+    "phoneId": "ID du numéro WhatsApp",
+    "phoneIdHint": "Des chiffres seulement (Phone number ID, pas le numéro lui-même)",
+    "token": "Jeton permanent",
+    "tokenHint": "Il ne sera plus jamais affiché",
+    "tokenKept": "Un jeton est déjà enregistré : laissez vide pour le garder",
+    "template": "Nom du modèle",
+    "templateHint": "Exactement comme dans Meta (ex. code_pilotix)",
+    "lang": "Langue du modèle",
+    "langHint": "Le code de langue du modèle (fr, en, ar…)",
+    "button": "Le modèle a le bouton « Copier le code » (par défaut chez Meta)",
+    "turnOn": "Activer le code WhatsApp",
+    "onNote": "Activé, chaque personne dont le numéro n’est pas encore vérifié devra taper le code à sa prochaine connexion. Envoyez d’abord un test.",
+    "ownerOnly": "Seul le propriétaire de Pilotix peut changer ces réglages.",
+    "test": "Envoyer un test",
+    "testSent": "Code de test envoyé"
   }
 }

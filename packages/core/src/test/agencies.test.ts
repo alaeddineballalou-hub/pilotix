@@ -8,6 +8,10 @@ import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCal
 import { confirmSignup, loadShop, membershipsOf, passwordFromLink, startSignup, storeChoices } from '../platform';
 import { computePayroll } from '../modules/admin';
 
+/** a new team member's phone (required, one per person) */
+let phoneN = 0;
+const tph = () => `071${String(++phoneN).padStart(7, '0')}`;
+
 const OWNER = { email: 'owner@boutique.dz', password: 'Owner-Password-1' };
 const PW = 'Agence-Password-1';
 
@@ -45,7 +49,7 @@ async function store(t: Tenancy, p: (n: string, i?: unknown) => Promise<any>, na
 
 /** An agency made by its owner (« Créer mon agence »: e-mail confirmed). */
 async function agency(t: Tenancy, name: string, email: string) {
-  const mail = await startSignup(t, { name: 'Samir', email, password: PW, storeName: name, language: 'fr', terms: true, kind: 'agency' }, null);
+  const mail = await startSignup(t, { name: 'Samir', email, phone: tph(), password: PW, storeName: name, language: 'fr', terms: true, kind: 'agency' }, null);
   assert.equal(mail?.kind, 'confirm');
   const made: any = await confirmSignup(t, (mail as any).token);
   return { id: made.shop.id as number, schema: made.shop.schema as string, code: made.shop.publicCode as string };
@@ -107,12 +111,12 @@ test('an agency: signs up, checked by Pilotix, works for a store on the products
   assert.deepEqual(ans.problems, []);
 
   // the agency's team, added in Utilisateurs like any account: a confirmation agent, a suivi agent (every seller)
-  const nora: any = await call('users.create', chief, { name: 'Nora', email: 'nora@agence.dz', password: PW, roles: ['confirmation'] });
-  const ali: any = await call('users.create', chief, { name: 'Ali', email: 'ali@agence.dz', password: PW, roles: ['suivi'] });
+  const nora: any = await call('users.create', chief, { phone: tph(), name: 'Nora', email: 'nora@agence.dz', password: PW, roles: ['confirmation'] });
+  const ali: any = await call('users.create', chief, { phone: tph(), name: 'Ali', email: 'ali@agence.dz', password: PW, roles: ['suivi'] });
   assert.equal(nora.agencySellers, null);
   // the store gives only the confirmation: Ali has nothing to do there
   await assert.rejects(call('agency.setAgents', chief, { id: linkId, people: [nora.id, ali.id] }), /rôle confirmation/);
-  await assert.rejects(call('users.create', chief, { name: 'Lyes', email: 'lyes@agence.dz', password: PW, roles: ['depot'] }), /agence de confirmation/);
+  await assert.rejects(call('users.create', chief, { phone: tph(), name: 'Lyes', email: 'lyes@agence.dz', password: PW, roles: ['depot'] }), /agence de confirmation/);
   const inStore = (await shop.db.query(`SELECT name, roles, agency_id, active FROM profiles WHERE email = 'nora@agence.dz'`))[0];
   assert.deepEqual([inStore.roles, Number(inStore.agency_id), inStore.active], [['confirmation'], ag.id, true]);
   assert.equal((await shop.db.query(`SELECT 1 FROM profiles WHERE email = 'ali@agence.dz'`)).length, 0);
@@ -160,7 +164,7 @@ test('an agency: signs up, checked by Pilotix, works for a store on the products
   await call('orders.setConf', n, { ids: [o1.id], status: 'confirmed' });
 
   // the store's own agent: the orders no agency handles
-  await call('users.create', admin, { name: 'Samia', email: 'samia@oran.dz', password: PW, roles: ['confirmation'] });
+  await call('users.create', admin, { phone: tph(), name: 'Samia', email: 'samia@oran.dz', password: PW, roles: ['confirmation'] });
   const own = await as(t, shop.id, 'samia@oran.dz', PW);
   const o3 = await order(admin, shop.products.VELO, '0661000003');
   assert.deepEqual(((await call('confirmation.list', own, { sub: 'nouvelles' })) as any).rows.map((o: any) => o.id), [o2.id]);
@@ -316,10 +320,10 @@ test('an agency works on several sellers: one at a time or all together, its peo
   await call('agency.answer', chief, { id: lb.id, accept: true });
 
   // Utilisateurs: Nora works for seller A on the Vélo only; Ali for every seller; Lina for seller B only
-  await assert.rejects(call('users.create', chief, { name: 'Nora', email: 'nora@centre.dz', password: PW, roles: ['confirmation'], sellers: [{ store: a.id, products: [a.products.CASQ] }] }), /pas confié/);
-  const nora: any = await call('users.create', chief, { name: 'Nora', email: 'nora@centre.dz', password: PW, roles: ['confirmation'], sellers: [{ store: a.id, products: [a.products.VELO] }] });
-  await call('users.create', chief, { name: 'Ali', email: 'ali@centre.dz', password: PW, roles: ['confirmation'] });
-  const lina: any = await call('users.create', chief, { name: 'Lina', email: 'lina@centre.dz', password: PW, roles: ['confirmation', 'suivi'], sellers: [{ store: b.id, products: null }] });
+  await assert.rejects(call('users.create', chief, { phone: tph(), name: 'Nora', email: 'nora@centre.dz', password: PW, roles: ['confirmation'], sellers: [{ store: a.id, products: [a.products.CASQ] }] }), /pas confié/);
+  const nora: any = await call('users.create', chief, { phone: tph(), name: 'Nora', email: 'nora@centre.dz', password: PW, roles: ['confirmation'], sellers: [{ store: a.id, products: [a.products.VELO] }] });
+  await call('users.create', chief, { phone: tph(), name: 'Ali', email: 'ali@centre.dz', password: PW, roles: ['confirmation'] });
+  const lina: any = await call('users.create', chief, { phone: tph(), name: 'Lina', email: 'lina@centre.dz', password: PW, roles: ['confirmation', 'suivi'], sellers: [{ store: b.id, products: null }] });
   assert.deepEqual(nora.agencySellers, [{ store: a.id, products: [a.products.VELO] }]);
   assert.deepEqual(((await call('agency.products', chief, { store: a.id })) as any[]).map((x) => x.name), ['Poussette', 'Vélo']);
   assert.deepEqual(((await call('agency.products', chief, { store: b.id })) as any[]).map((x) => x.name), ['Casque', 'Poussette', 'Vélo']);

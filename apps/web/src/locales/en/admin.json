@@ -107,7 +107,8 @@
     "copy": "Copy",
     "copied": "Copied",
     "waText": "Hello {{name}}, here is your Pilotix login:\nSite: {{site}}\nE-mail: {{email}}\nPassword: {{password}}\nChange it in My profile after you log in.",
-    "resetNote": "Nobody can see an old password, not even Pilotix: it is hidden. Give this one to the person (WhatsApp or face to face); they can change it in My profile."
+    "resetNote": "Nobody can see an old password, not even Pilotix: it is hidden. Give this one to the person (WhatsApp or face to face); they can change it in My profile.",
+    "phoneHint": "Required: their own mobile (one account per number)."
   },
   "status": {
     "groups": {

@@ -132,6 +132,24 @@ export function normalizePhone(input: string): string | null {
 /** 0661234567 → 213661234567 (for WhatsApp links). */
 export const phoneIntl = (p: string) => '213' + p.replace(/^0/, '');
 
+/**
+ * The phone number of an account (a person who logs in): an Algerian mobile (05/06/07…, it gets the WhatsApp code), or
+ * a number from another country written with its + (+212…, +33…: 8 to 15 digits). Null when it is neither.
+ */
+export function normalizeAccountPhone(input: string): string | null {
+  const dz = normalizePhone(input);
+  if (dz) return /^0[5-7]\d{8}$/.test(dz) ? dz : null;
+  const raw = String(input ?? '').trim();
+  const d = raw.replace(/[^\d+]/g, '');
+  const intl = d.startsWith('00') ? '+' + d.slice(2) : d;
+  if (/^\+[1-9]\d{7,14}$/.test(intl) && !intl.startsWith('+213')) return intl;
+  return null;
+}
+/** An account's phone as WhatsApp wants it (digits with the country code, no +): 0661… → 213661…, +33… → 33… */
+export const phoneWa = (p: string) => (p.startsWith('+') ? p.slice(1) : phoneIntl(p));
+/** A phone shown half hidden (where a code was sent): 0661 •• •• 67 */
+export const maskPhone = (p: string) => (p.length > 6 ? `${p.slice(0, 4)} •• •• ${p.slice(-2)}` : p);
+
 // ---------------------------------------------------------------- data types
 export interface Profile {
   id: number;

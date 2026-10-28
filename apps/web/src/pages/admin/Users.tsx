@@ -329,7 +329,7 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
     const base = {
       name: name.trim(),
       email: email.trim(),
-      phone: phone.trim() || null,
+      phone: phone.trim(),
       roles,
       language,
       livreurCompanyId: roles.includes('livreur') ? company : null,
@@ -362,8 +362,8 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
           <Field label={t('admin.users.name')}>
             <input value={name} onChange={(e) => setName(e.target.value)} required minLength={2} maxLength={120} autoComplete="off" />
           </Field>
-          <Field label={t('admin.users.phone')}>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" maxLength={20} className="ltr" placeholder="0550 00 00 00" />
+          <Field label={t('admin.users.phone')} hint={t('admin.users.phoneHint')}>
+            <input required minLength={9} value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" maxLength={30} className="ltr" placeholder="0550 00 00 00" />
           </Field>
           <Field label={t('admin.users.email')}>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="ltr" autoComplete="off" />

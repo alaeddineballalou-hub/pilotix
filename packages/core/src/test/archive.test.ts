@@ -7,6 +7,10 @@ import { NOT_REFS, PRODUCT_REFS, USER_REFS, VARIANT_REFS, WAREHOUSE_REFS } from 
 import { EMAILS, setup } from './harness';
 import { DEMO_PASSWORD } from '@pilotix/shared';
 
+/** a new team member's phone (required, one per person) */
+let phoneN = 0;
+const tph = () => `075${String(++phoneN).padStart(7, '0')}`;
+
 let db: Db;
 let as: (email: string) => Promise<Ctx>;
 before(async () => {
@@ -81,7 +85,7 @@ test('accounts: archived = closed and out of the team list, kept in the history;
   assert.ok(r.kept[0].uses.includes('orders'));
 
   // a new account that never did anything: archived, then deleted for good (and out of the teams)
-  const u: any = await call('users.create', admin, { name: 'Erreur Saisie', email: 'erreur@demo.pilotix.dz', password: 'Password-123', roles: ['confirmation'], language: 'fr' });
+  const u: any = await call('users.create', admin, { phone: tph(), name: 'Erreur Saisie', email: 'erreur@demo.pilotix.dz', password: 'Password-123', roles: ['confirmation'], language: 'fr' });
   const teams = [{ id: 't-x', name: 'Équipe X', managerId: null, agentIds: [u.id, samira.id] }];
   await db.query(`INSERT INTO settings (key, value) VALUES ('teams', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [JSON.stringify(teams)]);
   r = await call('archive.delete', admin, { kind: 'users', ids: [u.id] });

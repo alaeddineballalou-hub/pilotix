@@ -22,6 +22,10 @@ export interface Account {
   verified: boolean;
   /** stores this person may own (null = the platform's setting) */
   maxStores: number | null;
+  /** the person's own phone number (one number = one account) */
+  phone: string | null;
+  /** the phone was proven with a code sent to it */
+  phoneVerified: boolean;
   createdAt: string;
   lastLoginAt: string | null;
 }
@@ -35,6 +39,8 @@ const toAccount = (r: any): Account => ({
   tokenVersion: num(r.token_version),
   verified: !!r.email_verified_at,
   maxStores: numOrNull(r.max_stores),
+  phone: r.phone ?? null,
+  phoneVerified: !!r.phone_verified_at,
   createdAt: new Date(r.created_at).toISOString(),
   lastLoginAt: isoOrNull(r.last_login_at),
 });
@@ -103,7 +109,7 @@ export async function membershipsOf(t: Tenancy, email: string): Promise<Membersh
 }
 
 /** Every schema where this e-mail has a profile (active or not), stores that still exist. */
-async function schemasOf(t: Tenancy, email: string): Promise<string[]> {
+export async function schemasOf(t: Tenancy, email: string): Promise<string[]> {
   const rows = await t.platform.query(
     `SELECT s.schema_name FROM platform.logins l JOIN platform.shops s ON s.id = l.shop_id WHERE l.email = $1 AND s.status NOT IN ('archived', 'deleted')`,
     [normEmail(email)],

@@ -28,6 +28,7 @@ import {
   takeAccountToken,
 } from './accounts';
 import { dropShopData, freeSlug, NAME_RESERVED, loadPlans, loadShop, ordersThisMonth, platformSettings, PlatformSettings, provisionShop, Shop, ShopInfoExtra, shopMaxOrders, shopStatus, slugOk } from './shops';
+import { accountPhoneOrBad, setAccountPhone } from './phone';
 import { shopUnread } from './support';
 import type { Tenancy } from './tenancy';
 
@@ -99,7 +100,8 @@ export const SignupInput = z.object({
   name: z.string().trim().min(2, 'Votre nom : au moins 2 lettres').max(80),
   email: z.string().trim().email('E-mail invalide').max(200),
   password: z.string().min(8, 'Le mot de passe doit contenir au moins 8 caractères').max(200),
-  phone: z.string().trim().max(30).nullable().optional(),
+  /** the person's own mobile (required: one number = one account) */
+  phone: z.string().trim().min(1, 'Votre numéro de téléphone est obligatoire').max(30),
   /** empty (a store only): just the account; the person adds their first store once inside. A partner always gives its name. */
   storeName: z.string().trim().max(80).default(''),
   slug: z.string().trim().toLowerCase().max(40).optional(),
@@ -145,6 +147,10 @@ export async function startSignup(t: Tenancy, raw: unknown, ip: string | null, n
   }
   if (!partner && i.referral && !(await t.platform.query(`SELECT 1 FROM platform.shops WHERE referral_code = $1 AND status <> 'deleted'`, [i.referral])).length)
     throw bad('Code de parrainage inconnu (laissez vide si vous n’en avez pas)');
+  // one number = one account
+  const phone = accountPhoneOrBad(i.phone);
+  const phoneOwner = (await t.platform.query('SELECT email FROM platform.accounts WHERE phone = $1', [phone]))[0];
+  if (phoneOwner && phoneOwner.email !== email) throw bad('Ce numéro est déjà utilisé par un autre compte');
   // 3 sign-ups an hour per e-mail: nobody can fill someone's inbox
   const recent = Number((await t.platform.query('SELECT count(*)::int AS n FROM platform.signup_requests WHERE email = $1 AND created_at > $2::timestamptz', [email, iso(now - HOUR)]))[0]?.n ?? 0);
   if (recent >= 3) return null;
@@ -165,7 +171,7 @@ export async function startSignup(t: Tenancy, raw: unknown, ip: string | null, n
       await sha256Hex(token),
       email,
       i.name,
-      i.phone || null,
+      phone,
       i.storeName,
       partner ? null : i.slug || null,
       await hashPassword(i.password),
@@ -199,7 +205,7 @@ export async function confirmSignup(t: Tenancy, token: string, now = Date.now())
   // a store sign-up without a store name: only the account, proven; the person adds their first store from the picker
   if (!partner && !String(row.store_name ?? '').trim()) {
     const { account } = await ensureAccount(t, { email: row.email, name: row.name, language: row.language, passwordHash: row.password_hash, verified: true });
-    return { shop: null, account };
+    return { shop: null, account: await signupPhone(t, account, row.phone) };
   }
   const set = await platformSettings(t);
   // a partner (agency, marketer) is free (no plan, no trial); Pilotix checks it before it works with stores
@@ -223,8 +229,14 @@ export async function confirmSignup(t: Tenancy, token: string, now = Date.now())
   await t.platform.query('UPDATE platform.signup_requests SET shop_id = $2 WHERE id = $1', [row.id, shop.id]);
   if (referrer) await t.platform.query('INSERT INTO platform.referrals (referrer_shop_id, referred_shop_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [referrer, shop.id]);
   await journal(t, shop.id, partner ? `${kind}.signup` : 'shop.signup', row.email, { name: shop.name, plan: plan?.name ?? null, referredBy: referrer });
-  const account = (await accountByEmail(t, row.email))!;
+  const account = await signupPhone(t, (await accountByEmail(t, row.email))!, row.phone);
   return { shop, account };
+}
+
+/** The number given at sign-up becomes the account's (not proven yet: the WhatsApp code does that). Taken meanwhile: asked again at login. */
+async function signupPhone(t: Tenancy, account: Account, phone: string | null): Promise<Account> {
+  if (!phone || account.phone) return account;
+  return (await setAccountPhone(t, account.id, phone, false).catch(() => null)) ?? account;
 }
 
 // ---------------------------------------------------------------- « Continuer avec Google / Facebook »

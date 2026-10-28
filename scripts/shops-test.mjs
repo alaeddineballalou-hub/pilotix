@@ -67,7 +67,14 @@ async function fails(p, status, re) {
   }
   assert.fail(`expected a failure${status ? ` (${status})` : ''}`);
 }
-const login = (email, password, shop) => must('/auth/login', { email, password, ...(shop ? { shop } : {}) });
+/** A phone nobody has (one number = one account), unique per run. */
+let phoneN = 0;
+const newPhone = () => `07${String(parseInt(run, 36) % 1000).padStart(3, '0')}${String(++phoneN).padStart(5, '0')}`;
+/** The login; an account without its own number gives one first (« Vérifiez votre numéro », the WhatsApp code is off here). */
+async function login(email, password, shop) {
+  const r = await must('/auth/login', { email, password, ...(shop ? { shop } : {}) });
+  return r.phone ? must('/auth/phone', { ticket: r.ticket, phone: newPhone(), ...(shop ? { shop } : {}) }) : r;
+}
 
 const ctx = {};
 let plans;
@@ -243,13 +250,13 @@ await section('« Créer ma boutique »: the e-mail link makes the store, on tri
   ok(`store names: a taken one → ${taken.slug}; a taken link → « ${takenSlug.reason} »; Pilotix’s words refused`);
   const code = (await prpc('p.shops.get', { id: ctx.owner1.shopId })).referralCode;
   assert.ok(code, 'every store has a referral code');
-  await fails(must('/auth/signup', { name: 'X Y', email: em('bad'), password: 'Password-123', storeName: 'Abc', language: 'fr', terms: false }), 400);
+  await fails(must('/auth/signup', { name: 'X Y', email: em('bad'), phone: newPhone(), password: 'Password-123', storeName: 'Abc', language: 'fr', terms: false }), 400);
   ok('terms not accepted → refused');
-  await fails(must('/auth/signup', { name: 'Sara Test', email: em('bad2'), password: 'Password-123', storeName: `Ref Bad ${run}`, language: 'fr', referral: 'ZZZZZZ', terms: true }), 400, /parrainage/i);
+  await fails(must('/auth/signup', { name: 'Sara Test', email: em('bad2'), phone: newPhone(), password: 'Password-123', storeName: `Ref Bad ${run}`, language: 'fr', referral: 'ZZZZZZ', terms: true }), 400, /parrainage/i);
   ok('an unknown referral code → a clear message');
   const n0 = mailCount();
   const email = em('signup1');
-  await must('/auth/signup', { name: 'Sara Signup', email, password: 'Signup-Password-1', phone: '0770 00 11 22', storeName: `Nouvelle Boutique ${run}`, language: 'fr', referral: code, terms: true });
+  await must('/auth/signup', { name: 'Sara Signup', email, phone: newPhone(), password: 'Signup-Password-1', storeName: `Nouvelle Boutique ${run}`, language: 'fr', referral: code, terms: true });
   const m = await mailTo(email, n0);
   const tok = linkToken(m, 'signup');
   ok(`confirmation e-mail: « ${m.subject} »`);
@@ -269,7 +276,7 @@ await section('« Créer ma boutique »: the e-mail link makes the store, on tri
   assert.equal((await prpc('p.shops.get', { id: ctx.signup1.shopId })).referredBy?.id, ctx.owner1.shopId);
   ok('control room: in « made », brought by the first store');
   const n1 = mailCount();
-  await must('/auth/signup', { name: 'Owner Un', email: ctx.owner1.email, password: 'Whatever-123', storeName: `Doublon ${run}`, language: 'fr', terms: true });
+  await must('/auth/signup', { name: 'Owner Un', email: ctx.owner1.email, phone: newPhone(), password: 'Whatever-123', storeName: `Doublon ${run}`, language: 'fr', terms: true });
   const ex = await mailTo(ctx.owner1.email, n1);
   assert.ok(!/#\/signup\//.test(ex.text));
   ok(`an e-mail that has an account signs up → « ${ex.subject} » (log in instead), nothing made`);
@@ -288,7 +295,7 @@ await section('« Ajouter une boutique »: stores per person, and an e-mail chec
   // an account made by a store's admin is not proven: adding a store asks to confirm the e-mail first
   const admin = await login(ctx.owner1.email, ctx.owner1.password, ctx.owner1.shopId);
   const staff = em('staff1');
-  await rpc(admin.token, 'users.create', { name: 'Staff Un', email: staff, password: 'Staff1-Password', roles: ['admin'], language: 'fr' });
+  await rpc(admin.token, 'users.create', { phone: newPhone(), name: 'Staff Un', email: staff, password: 'Staff1-Password', roles: ['admin'], language: 'fr' });
   const st = await login(staff, 'Staff1-Password');
   await fails(must('/auth/add-store', { name: `Staff Store ${run}` }, st.token), 403, /VERIFY_EMAIL/);
   ok('an account made by an admin → « confirm your e-mail first »');
@@ -314,12 +321,12 @@ await section('The team: the owner is protected; an admin sets passwords only of
   await fails(rpc(T, 'users.update', { id: staff.id, password: 'New-Password-99' }), 403, /autre boutique/);
   ok('a person who works in another store too: the admin cannot set their password');
   const solo = em('solo');
-  await rpc(T, 'users.create', { name: 'Solo', email: solo, password: 'Solo-Password-1', roles: ['confirmation'], language: 'fr' });
+  await rpc(T, 'users.create', { phone: newPhone(), name: 'Solo', email: solo, password: 'Solo-Password-1', roles: ['confirmation'], language: 'fr' });
   const soloU = (await rpc(T, 'users.list', {})).find((u) => u.email === solo);
   await rpc(T, 'users.update', { id: soloU.id, password: 'Solo-Password-2' });
   assert.ok((await login(solo, 'Solo-Password-2')).token);
   ok('a person in this store alone: the admin sets the password, and it works');
-  const r = await rpc(T, 'users.create', { name: 'Sara', email: ctx.signup1.email, password: 'Ignored-Password-1', roles: ['confirmation'], language: 'fr' });
+  const r = await rpc(T, 'users.create', { phone: newPhone(), name: 'Sara', email: ctx.signup1.email, password: 'Ignored-Password-1', roles: ['confirmation'], language: 'fr' });
   assert.equal(r.existingAccount, true);
   const sl = await login(ctx.signup1.email, ctx.signup1.password);
   assert.equal(sl.pick, true);
@@ -413,7 +420,7 @@ await section('Management › Archives: the owner is never archived, only the ow
   assert.equal(seen.find((u) => u.id === ownerId)?.blocked, 'owner');
   await fails(rpc(A, 'archive.set', { kind: 'users', ids: [ownerId], archived: true }), 403, /propriétaire/);
   ok('the owner’s account shows « propriétaire » and cannot be archived');
-  const temp = await rpc(O, 'users.create', { name: 'Compte Erreur', email: em('erreur'), password: 'Erreur-Pass-1', roles: ['confirmation'], language: 'fr' });
+  const temp = await rpc(O, 'users.create', { phone: newPhone(), name: 'Compte Erreur', email: em('erreur'), password: 'Erreur-Pass-1', roles: ['confirmation'], language: 'fr' });
   const T = (await login(em('erreur'), 'Erreur-Pass-1')).token;
   const r = await rpc(A, 'archive.set', { kind: 'users', ids: [temp.id], archived: true });
   assert.equal(r.done, 1);
@@ -444,11 +451,11 @@ await section('Limits: accounts and drivers (hard), orders per month (soft), « 
   await prpc('p.shops.update', { id: sid, maxUsers: u0 + 2, maxDrivers: 1 });
   const T = ctx.owner1.token;
   ok(`${u0} active accounts → limits set to ${u0 + 2} accounts and 1 driver`);
-  await rpc(T, 'users.create', { name: 'Livreur Un', email: em('liv1'), password: 'Livreur-Pass-1', roles: ['livreur'], language: 'fr' });
-  await fails(rpc(T, 'users.create', { name: 'Livreur Deux', email: em('liv2'), password: 'Livreur-Pass-2', roles: ['livreur'], language: 'fr' }), 400, /livreur/i);
+  await rpc(T, 'users.create', { phone: newPhone(), name: 'Livreur Un', email: em('liv1'), password: 'Livreur-Pass-1', roles: ['livreur'], language: 'fr' });
+  await fails(rpc(T, 'users.create', { phone: newPhone(), name: 'Livreur Deux', email: em('liv2'), password: 'Livreur-Pass-2', roles: ['livreur'], language: 'fr' }), 400, /livreur/i);
   ok('1 driver allowed → the 2nd is refused');
-  await rpc(T, 'users.create', { name: 'Agent Limite', email: em('lim1'), password: 'Limite-Pass-1', roles: ['confirmation'], language: 'fr' });
-  await fails(rpc(T, 'users.create', { name: 'Trop', email: em('trop'), password: 'Trop-Password-1', roles: ['confirmation'], language: 'fr' }), 400, /comptes actifs/);
+  await rpc(T, 'users.create', { phone: newPhone(), name: 'Agent Limite', email: em('lim1'), password: 'Limite-Pass-1', roles: ['confirmation'], language: 'fr' });
+  await fails(rpc(T, 'users.create', { phone: newPhone(), name: 'Trop', email: em('trop'), password: 'Trop-Password-1', roles: ['confirmation'], language: 'fr' }), 400, /comptes actifs/);
   ok('accounts at the limit → one more is refused with a clear message');
   const det = await prpc('p.shops.get', { id: sid });
   assert.equal(det.usage.users, u0 + 2);
@@ -525,7 +532,7 @@ await section('« Contacter Pilotix »: a store writes, Pilotix answers (by e-ma
   assert.equal((await must('/support', undefined, T)).find((x) => x.id === t1.id).status, 'closed');
   ok('the store answers again; Pilotix closes the conversation');
   const agent = em('agent');
-  await rpc(T, 'users.create', { name: 'Agent', email: agent, password: 'Agent-Pass-123', roles: ['confirmation'], language: 'fr' });
+  await rpc(T, 'users.create', { phone: newPhone(), name: 'Agent', email: agent, password: 'Agent-Pass-123', roles: ['confirmation'], language: 'fr' });
   ctx.agent = (await login(agent, 'Agent-Pass-123')).token;
   await fails(must('/support', undefined, ctx.agent), 403);
   ok('someone who is not an admin of the store cannot use it');
@@ -554,7 +561,7 @@ await section('The owner deletes a store (and only the owner)', async () => {
   const sid = ctx.signup1.fourth;
   const T = (await login(ctx.signup1.email, ctx.signup1.password, sid)).token;
   const other = em('admin2');
-  await rpc(T, 'users.create', { name: 'Admin Deux', email: other, password: 'Admin2-Password', roles: ['admin'], language: 'fr' });
+  await rpc(T, 'users.create', { phone: newPhone(), name: 'Admin Deux', email: other, password: 'Admin2-Password', roles: ['admin'], language: 'fr' });
   const a2 = await login(other, 'Admin2-Password');
   await fails(must('/auth/delete-store', { password: 'Admin2-Password', name: 'x' }, a2.token), 403);
   ok('another admin of the store cannot delete it');
@@ -637,7 +644,7 @@ await section('Confirmation agencies: « Créer mon agence », Pilotix’s check
   // the agency signs up like a store, with its own e-mail
   const n0 = mailCount();
   const email = em('agence');
-  await must('/auth/signup', { name: 'Samir Agence', email, password: 'Agence-Password-1', storeName: `Agence Rapide ${run}`, language: 'fr', terms: true, kind: 'agency' });
+  await must('/auth/signup', { name: 'Samir Agence', email, phone: newPhone(), password: 'Agence-Password-1', storeName: `Agence Rapide ${run}`, language: 'fr', terms: true, kind: 'agency' });
   const m = await mailTo(email, n0);
   assert.match(`${m.subject} ${m.text}`, /agence/i);
   const a = await must('/auth/signup/confirm', { token: linkToken(m, 'signup') });
@@ -653,7 +660,7 @@ await section('Confirmation agencies: « Créer mon agence », Pilotix’s check
   await fails(rpc(ctx.signup1.token, 'agency.home'), 403);
   ok('an agency’s space opens no store page; a store opens no agency page');
   await rpc(A, 'agency.prices', { prices: PR });
-  const nora = await rpc(A, 'users.create', { name: 'Nora Agent', email: em('nora'), password: 'Nora-Password-1', roles: ['confirmation'], language: 'fr' });
+  const nora = await rpc(A, 'users.create', { phone: newPhone(), name: 'Nora Agent', email: em('nora'), password: 'Nora-Password-1', roles: ['confirmation'], language: 'fr' });
   // the store: its code; the agency is not found before Pilotix checks it
   const sh = await rpc(ctx.signup1.token, 'partners.home');
   assert.match(sh.code, /^[A-Z2-9]{3}-[A-Z2-9]{3}$/);
@@ -732,7 +739,7 @@ await section('Marketers: « Marketer » on the sign-up page, Pilotix’s check,
   const PR = { perConfirmed: 0, perDelivered: 120, perUpsell: 0, monthly: 0, bonusRate: { min: 0, amount: 0 }, bonusVolume: { above: 0, amount: 0 }, perSuccess: 12000, profitRate: 10 };
   const n0 = mailCount();
   const email = em('marketer');
-  await must('/auth/signup', { name: 'Yacine Marketer', email, password: 'Marketer-Password-1', storeName: `Yacine Ads ${run}`, language: 'fr', terms: true, kind: 'marketer' });
+  await must('/auth/signup', { name: 'Yacine Marketer', email, phone: newPhone(), password: 'Marketer-Password-1', storeName: `Yacine Ads ${run}`, language: 'fr', terms: true, kind: 'marketer' });
   const m = await mailTo(email, n0);
   assert.match(`${m.subject} ${m.text}`, /marketer/i);
   const a = await must('/auth/signup/confirm', { token: linkToken(m, 'signup') });
@@ -746,8 +753,8 @@ await section('Marketers: « Marketer » on the sign-up page, Pilotix’s check,
   await fails(rpc(M, 'mk.overview', {}), 400, /vendeur/);
   await fails(rpc(M, 'orders.list', { pageSize: 5 }), 403);
   await rpc(M, 'agency.prices', { prices: PR });
-  await fails(rpc(M, 'users.create', { name: 'Agent', email: em('mk-agent'), password: 'Agent-Password-1', roles: ['confirmation'], language: 'fr' }), 400, /marketer/);
-  await rpc(M, 'users.create', { name: 'Nadir Marketer', email: em('nadir'), password: 'Nadir-Password-1', roles: ['marketer'], language: 'fr' });
+  await fails(rpc(M, 'users.create', { phone: newPhone(), name: 'Agent', email: em('mk-agent'), password: 'Agent-Password-1', roles: ['confirmation'], language: 'fr' }), 400, /marketer/);
+  await rpc(M, 'users.create', { phone: newPhone(), name: 'Nadir Marketer', email: em('nadir'), password: 'Nadir-Password-1', roles: ['marketer'], language: 'fr' });
   ok('a marketer’s space: its own prices and team (marketers only), no store page');
   // the store does not find it before Pilotix checks it; the control room lists it with the marketers only
   await fails(rpc(ctx.signup1.token, 'partners.find', { code: a.session.shop.code, kind: 'marketer' }), 400, /vérifié/);
@@ -790,7 +797,7 @@ await section('Marketers: « Marketer » on the sign-up page, Pilotix’s check,
   // sync of the team waits for the other (no « this e-mail already exists » clash in the store)
   for (let k = 0; k < 3; k++) {
     const burst = await Promise.all([
-      req('/rpc/users.create', { name: `Selma Marketer ${k}`, email: em(`selma${k}`), password: 'Selma-Password-1', roles: ['marketer'], language: 'fr' }, M),
+      req('/rpc/users.create', { phone: newPhone(), name: `Selma Marketer ${k}`, email: em(`selma${k}`), password: 'Selma-Password-1', roles: ['marketer'], language: 'fr' }, M),
       req('/rpc/partners.setWork', { id: link.id, tasks: ['marketing'], products: [pid] }, ctx.signup1.token),
       req('/rpc/partners.setWork', { id: link.id, tasks: ['marketing'], products: [pid] }, ctx.signup1.token),
     ]);
