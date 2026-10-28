@@ -14,6 +14,7 @@ import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { BillLines, BillsList, CountsLine, CountsRow, EndModal, Lead, LinkStatus, monthLabel, MonthPicker, PriceList, TaskChips, TaskPicker, useTp } from '../agency/parts';
 import type { PageProps } from '../registry';
+import { ProSearch, ProFindCard } from '../pro';
 import '../agency/agency.css';
 
 type Home = Out<'partners.home'>;
@@ -37,6 +38,7 @@ export function Agences({ sub }: PageProps) {
 /** « Marketers »: the marketers running the store's ads (#/marketers), one of them (#/marketers/<id>). */
 export function Marketers({ sub }: PageProps) {
   const id = sub && /^\d+$/.test(sub) ? Number(sub) : null;
+  if (sub === 'pro') return <ProSearch />;
   return id ? <AgencyDetail id={id} kind="marketer" /> : <AgencyList kind="marketer" />;
 }
 
@@ -64,6 +66,7 @@ function AgencyList({ kind }: { kind: PartnerKind }) {
         </section>
         <FindAgency key={kind} kind={kind} products={h.products} links={h.links} />
       </div>
+      {kind === 'marketer' && <ProFindCard />}
       {received.length > 0 && (
         <Card title={tp('store.received')} badge={<span className="nav-count nc-a">{received.length}</span>}>
           <div className="agx-links">
@@ -116,7 +119,7 @@ function AgencyList({ kind }: { kind: PartnerKind }) {
  * What other agencies already have, for one of these tasks: their products (they go to them), or every product.
  * Marketers share products (each one is judged on its own ad sets): nothing is taken.
  */
-function takenBy(links: AgencyLinkInfo[], exceptId: number | null, tasks: AgencyTask[], kind: PartnerKind = 'agency') {
+export function takenBy(links: AgencyLinkInfo[], exceptId: number | null, tasks: AgencyTask[], kind: PartnerKind = 'agency') {
   const map = new Map<number, string>();
   let all: string | null = null;
   if (kind === 'marketer') return { map, all };
@@ -129,7 +132,7 @@ function takenBy(links: AgencyLinkInfo[], exceptId: number | null, tasks: Agency
 }
 
 /** « Tous les produits (aussi les nouveaux) » or a choice of products (those of another agency are shown, not offered). */
-function ProductPicker({ products, value, onChange, taken, kind }: { products: Product[]; value: number[] | null; onChange: (v: number[] | null) => void; taken: ReturnType<typeof takenBy>; kind: PartnerKind }) {
+export function ProductPicker({ products, value, onChange, taken, kind }: { products: Product[]; value: number[] | null; onChange: (v: number[] | null) => void; taken: ReturnType<typeof takenBy>; kind: PartnerKind }) {
   const { t } = useTranslation();
   const tp = useTp(kind);
   const [q, setQ] = useState('');

@@ -12,6 +12,7 @@ import { useMedia } from '../../lib/useMedia';
 import { Card, ErrorBox, Icon, Kpis, Loading, Trend } from '../../ui/kit';
 import type { PageProps } from '../registry';
 import { ShopDoctor } from '../dashboard/Doctor';
+import { ProBanner } from '../pro/banner';
 import { Presence } from '../dashboard/Presence';
 import { LivreursTable } from '../dashboard/Livreurs';
 import { Board, MemberDetail, useBoardPeriod } from '../dashboard/board/Board';
@@ -43,6 +44,7 @@ export function Home(_: PageProps) {
         )}
       </section>
       {s.roles.includes('marketer') && featureIsOn('dashboard/doctor') && <ShopDoctor card />}
+      <ProBanner />
       </>
     );
   }

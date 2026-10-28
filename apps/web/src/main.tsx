@@ -65,6 +65,8 @@ const MARKETER_ALIASES: Record<string, [string, string?]> = { ...AGENCY_ALIASES,
 
 /** Pilotix's control room (#/platform): its own login and pages, loaded only when opened. */
 const PlatformApp = lazy(() => import('./pages/platform').then((m) => ({ default: m.PlatformApp })));
+/** Pilotix's public list of Pro marketers (#/pro, #/pro/MK-7K2Q), open to everyone. */
+const PublicPros = lazy(() => import('./pages/pro').then((m) => ({ default: m.PublicPros })));
 /** « Contacter Pilotix » (the store's administrators). */
 const Support = lazy(() => import('./pages/aide').then((m) => ({ default: m.Support })));
 
@@ -79,6 +81,13 @@ function App() {
     );
   // the terms of use and privacy page, open to everyone
   if (parts[0] === 'conditions') return <Legal />;
+  // the Pro marketers, open to everyone
+  if (parts[0] === 'pro')
+    return (
+      <Suspense fallback={<Loading />}>
+        <PublicPros code={parts[1]} />
+      </Suspense>
+    );
   if (!ready) return <Loading />;
   // the links of e-mails work logged in or not: new password, invitation (choose your password), sign-up, e-mail check
   if (parts[0] === 'reset' && parts[1]) return <ResetPassword token={parts[1]} />;

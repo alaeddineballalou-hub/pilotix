@@ -165,6 +165,7 @@ export const MARKETER_NAV: NavItem[] = [
   { id: 'marketing', icon: 'megaphone', roles: ['marketer'], subs: ['publicite', 'marketer'] },
   { id: 'vendeurs', icon: 'store', roles: [] },
   { id: 'facturation', icon: 'receipt', roles: [] },
+  { id: 'comptepro', icon: 'medal', roles: [] },
   { id: 'utilisateurs', icon: 'usercog', roles: [], manageUsers: true },
   { id: 'reglages', icon: 'settings', roles: [] },
   { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'securite'] },

@@ -120,6 +120,19 @@ export function Settings({ staff }: { staff: Staff }) {
             <input disabled={!owner} type="number" min={0} max={12} value={f.referral.months} onChange={(e) => setF({ ...f, referral: { ...f.referral, months: num(e.target.value, 0, 12) } })} />
           </Field>
         </Card>
+        <Card title={t('platform.pro.setTitle')} help={t('platform.pro.setHelp')}>
+          <label className="check">
+            <input disabled={!owner} type="checkbox" checked={f.pro.on} onChange={(e) => setF({ ...f, pro: { ...f.pro, on: e.target.checked } })} /> {t('platform.pro.setOn')}
+          </label>
+          <Field label={t('platform.pro.setPrice')}>
+            <input disabled={!owner} type="number" min={0} max={1000000} value={f.pro.price} onChange={(e) => setF({ ...f, pro: { ...f.pro, price: num(e.target.value, 0, 1000000) } })} />
+          </Field>
+          <p className="small muted">
+            <a href="#/pro" target="_blank" rel="noreferrer">
+              {t('platform.pro.setLink')}
+            </a>
+          </p>
+        </Card>
         <Card title={t('platform.set.secTitle')} help={t('platform.set.secHelp')}>
           <label className="check">
             <input disabled={!owner} type="checkbox" checked={f.security.twoStep} onChange={(e) => setF({ ...f, security: { twoStep: e.target.checked } })} /> {t('platform.set.secTwoStep')}

@@ -419,3 +419,4 @@ export const wilayaLabel = (id: number | null | undefined) => (id ? `${String(id
 export * from './sha256';
 export * from './landing';
 export * from './doctor';
+export * from './pro';

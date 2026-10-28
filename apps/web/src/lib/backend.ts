@@ -175,6 +175,10 @@ export const signupCode = (phone: string) => authRequest<PhoneSent>('/auth/signu
 /** The terms of use and privacy page (Pilotix's own text, else the app's standard one). */
 export const legalText = () => authRequest<{ text: string; company: string; email: string }>('/legal').catch(() => ({ text: '', company: 'Pilotix', email: '' }));
 
+/** Pilotix's list of Pro marketers (the public page #/pro), or one of them by its code. */
+export const publicPros = () => authRequest<{ pros: import('@pilotix/shared').ProCard[] }>('/pro');
+export const publicPro = (code: string) => authRequest<import('@pilotix/shared').ProCard>(`/pro/${encodeURIComponent(code)}`);
+
 /** The server's demo shop (its button on the login page), when Pilotix turned it on. */
 export const serverDemo = () =>
   authRequest<{ available: boolean; accounts: { key: string; name: string; role: string }[] }>('/auth/demo').catch(() => ({ available: false, accounts: [] as { key: string; name: string; role: string }[] }));

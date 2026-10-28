@@ -91,7 +91,7 @@ async function shopUserCtx(t: Tenancy, schema: string, email: string, password: 
 
 test('first start: the existing shop becomes shop #1, its admin the platform owner', async () => {
   const { t, applied, staff } = await server();
-  assert.deepEqual(applied.platform, ['p001_platform', 'p002_accounts_signup_domains', 'p003_accounts_privacy', 'p004_turnstile', 'p005_agencies', 'p006_marketers', 'p007_account_phone']);
+  assert.deepEqual(applied.platform, ['p001_platform', 'p002_accounts_signup_domains', 'p003_accounts_privacy', 'p004_turnstile', 'p005_agencies', 'p006_marketers', 'p007_account_phone', 'p008_pro_marketers']);
   assert.deepEqual(applied.public, []);
   const s1 = (await loadShop(t, { primary: true }))!;
   assert.equal(s1.schema, 'public');

@@ -520,8 +520,66 @@ export const PLATFORM_REGISTRY = {
         lastActiveAt: isoOrNull(r.last_active_at),
         activeLinks: num(r.active_links),
         pendingLinks: num(r.pending_links),
+        // Pro marketers: paid until (null: never), asked « Passer Pro » (waiting for staff), shown on the list
+        pro: r.kind === 'marketer' ? { until: isoOrNull(r.pro_until), askedAt: isoOrNull(r.pro_asked_at), active: !!r.pro_until && new Date(r.pro_until).getTime() > ctx.now() } : null,
       }));
   }),
+
+  /** Pro marketers: a payment received turns Pro on (or prolongs it) for `months`, from today or the end of the paid months. */
+  'p.pro.activate': pproc(
+    MANAGERS,
+    z.object({
+      id: Id,
+      months: z.number().int().min(1).max(36),
+      amount: z.number().int().min(0).max(100_000_000),
+      method: z.enum(PAYMENT_METHODS),
+      note: z.string().trim().max(500).optional(),
+    }),
+    async (ctx, i) => {
+      const s = await needShop(ctx, i.id);
+      if (s.kind !== 'marketer') throw bad('Le compte Pro est réservé aux espaces marketer');
+      const v = (await ctx.t.platform.query('SELECT agency_verified_at FROM platform.shops WHERE id = $1', [s.id]))[0];
+      if (!v?.agency_verified_at) throw bad('Vérifiez d’abord ce marketer');
+      const out = await ctx.t.platform.tx(async (db) => {
+        const p = (
+          await db.query(
+            `INSERT INTO platform.pro_payments (shop_id, amount, method, months, period_from, period_to, note, created_by)
+             SELECT $1, $2, $3, $4, x.f, x.f + make_interval(months => $4), $5, $6
+               FROM (SELECT GREATEST(now(), COALESCE(pro_until, now())) AS f FROM platform.shops WHERE id = $1 FOR UPDATE) x
+             RETURNING id, period_to`,
+            [s.id, i.amount, i.method, i.months, i.note || null, ctx.staff.id],
+          )
+        )[0];
+        await db.query('UPDATE platform.shops SET pro_until = $2, pro_asked_at = NULL WHERE id = $1', [s.id, p.period_to]);
+        return { id: num(p.id), until: isoOrNull(p.period_to) };
+      });
+      await audit(ctx, 'pro.activate', s.id, { months: i.months, amount: i.amount, method: i.method, until: out.until });
+      return out;
+    },
+  ),
+
+  /** Stops a marketer's Pro now (it leaves the list at once), or refuses its request. */
+  'p.pro.stop': pproc(MANAGERS, z.object({ id: Id }), async (ctx, i) => {
+    const s = await needShop(ctx, i.id);
+    if (s.kind !== 'marketer') throw bad('Le compte Pro est réservé aux espaces marketer');
+    await ctx.t.platform.query('UPDATE platform.shops SET pro_until = CASE WHEN pro_until > now() THEN now() ELSE pro_until END, pro_asked_at = NULL WHERE id = $1', [s.id]);
+    await audit(ctx, 'pro.stop', s.id, {});
+    return { ok: true };
+  }),
+
+  /** A marketer's Pro payments, the newest first. */
+  'p.pro.payments': pproc(MANAGERS, z.object({ id: Id }), async (ctx, i) =>
+    (await ctx.t.platform.query('SELECT * FROM platform.pro_payments WHERE shop_id = $1 ORDER BY id DESC LIMIT 50', [i.id])).map((r: any) => ({
+      id: num(r.id),
+      amount: num(r.amount),
+      method: r.method as string,
+      months: num(r.months),
+      from: new Date(r.period_from).toISOString(),
+      to: new Date(r.period_to).toISOString(),
+      note: (r.note as string | null) ?? null,
+      at: new Date(r.created_at).toISOString(),
+    })),
+  ),
 
   /** « Vérifier » a partner (it may then work with stores), or take the check back (its people stop at once). */
   'p.agencies.verify': pproc(MANAGERS, z.object({ id: Id, verified: z.boolean() }), async (ctx, i) => {
@@ -756,9 +814,10 @@ export const PLATFORM_REGISTRY = {
           facebookAppId: z.string().trim().max(40).regex(/^\d*$/, 'ID de l’app Facebook : des chiffres seulement'),
         })
         .optional(),
+      pro: z.object({ on: z.boolean(), price: z.number().int().min(0).max(1_000_000) }).optional(),
     }),
     async (ctx, i) => {
-      for (const k of ['trial', 'payment', 'notice', 'demo', 'signup', 'reminders', 'referral', 'security', 'company', 'legal', 'login', 'social'] as const) if (i[k]) await setPlatformSetting(ctx.t, k, i[k] as any);
+      for (const k of ['trial', 'payment', 'notice', 'demo', 'signup', 'reminders', 'referral', 'security', 'company', 'legal', 'login', 'social', 'pro'] as const) if (i[k]) await setPlatformSetting(ctx.t, k, i[k] as any);
       await audit(ctx, 'settings.save', null, { keys: Object.keys(i) });
       return platformSettings(ctx.t);
     },

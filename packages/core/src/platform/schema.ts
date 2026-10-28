@@ -446,6 +446,31 @@ CREATE INDEX IF NOT EXISTS phone_codes_account ON platform.phone_codes (account_
 CREATE INDEX IF NOT EXISTS phone_codes_phone ON platform.phone_codes (phone, created_at DESC);
 `;
 
+// Pro marketers: a marketer's space paid by the month (staff turn it on: control room › Marketers) shows on Pilotix's
+// list of marketers (the stores' search and the public page). Its own words (pro_profile), the numbers Pilotix last
+// counted across the stores its people worked for (pro_stats, counted again when older than a few hours), its paid
+// months (pro_payments) and its request (pro_asked_at: « Passer Pro », until staff answer).
+const P008 = `
+ALTER TABLE platform.shops ADD COLUMN IF NOT EXISTS pro_until    timestamptz;
+ALTER TABLE platform.shops ADD COLUMN IF NOT EXISTS pro_asked_at timestamptz;
+ALTER TABLE platform.shops ADD COLUMN IF NOT EXISTS pro_profile  jsonb;
+ALTER TABLE platform.shops ADD COLUMN IF NOT EXISTS pro_stats    jsonb;
+ALTER TABLE platform.shops ADD COLUMN IF NOT EXISTS pro_stats_at timestamptz;
+CREATE TABLE IF NOT EXISTS platform.pro_payments (
+  id          serial PRIMARY KEY,
+  shop_id     integer     NOT NULL REFERENCES platform.shops(id),
+  amount      integer     NOT NULL CHECK (amount >= 0),
+  method      text        NOT NULL,
+  months      integer     NOT NULL CHECK (months BETWEEN 1 AND 36),
+  period_from timestamptz NOT NULL,
+  period_to   timestamptz NOT NULL,
+  note        text,
+  created_by  integer,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS pro_payments_shop ON platform.pro_payments (shop_id, created_at DESC);
+`;
+
 export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p001_platform', P001],
   ['p002_accounts_signup_domains', P002],
@@ -454,6 +479,7 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p005_agencies', P005],
   ['p006_marketers', P006],
   ['p007_account_phone', P007],
+  ['p008_pro_marketers', P008],
 ];
 
 /** Creates or updates the platform's tables. */

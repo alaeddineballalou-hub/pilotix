@@ -24,7 +24,7 @@ import {
 import { APP_FILTER, Reflector } from '@nestjs/core';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import * as core from '@pilotix/core';
-import { DEMO_ACCOUNTS, DEMO_PASSWORD, maskPhone, normalizePhone, Session } from '@pilotix/shared';
+import { DEMO_ACCOUNTS, DEMO_PASSWORD, maskPhone, normalizePhone, ProCard, Session } from '@pilotix/shared';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { brotliCompressSync, constants as zlibConst, gzipSync } from 'node:zlib';
 import { z } from 'zod';
@@ -922,6 +922,31 @@ class ApiController {
   async legal() {
     const set = await this.core.settings();
     return { text: set.legal.text, company: set.company.name, email: set.company.email };
+  }
+
+  /**
+   * Pilotix's list of Pro marketers, open to everyone (the public page #/pro): their cards, the best rate first. Kept a
+   * minute (each card's numbers are counted again only every few hours).
+   */
+  private prosCache: { at: number; p: Promise<ProCard[]> } | null = null;
+  @Public()
+  @Get('pro')
+  async pros() {
+    if (!this.prosCache || Date.now() - this.prosCache.at > 60_000) {
+      const p = core.listPros(this.core.t, Date.now());
+      this.prosCache = { at: Date.now(), p };
+      p.catch(() => (this.prosCache = null));
+    }
+    return { pros: await this.prosCache.p };
+  }
+
+  /** One Pro marketer's card by its code (MK-7K2Q): its public page (#/pro/MK-7K2Q). */
+  @Public()
+  @Get('pro/:code')
+  async pro(@Param('code') code: string) {
+    const c = await core.proByCode(this.core.t, String(code ?? '').slice(0, 20), Date.now());
+    if (!c) throw new HttpException({ message: 'Aucun marketer Pro avec ce code' }, 404);
+    return c;
   }
 
   // ---------------------------------------------------------------- the shops' actions

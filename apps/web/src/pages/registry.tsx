@@ -62,6 +62,7 @@ export const AGENCY_PAGES: Record<string, ComponentType<PageProps>> = {
  */
 export const MARKETER_PAGES: Record<string, ComponentType<PageProps>> = {
   accueil: P(() => import('./marketer'), 'MarketerHome'),
+  comptepro: P(() => import('./pro'), 'MarketerPro'),
   marketing: P(() => import('./marketer'), 'MarketerAds'),
   vendeurs: AGENCY_PAGES.vendeurs,
   facturation: AGENCY_PAGES.facturation,

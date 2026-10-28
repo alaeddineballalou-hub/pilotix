@@ -359,7 +359,8 @@
     "facturation": "Billing",
     "utilisateurs": "Users",
     "reglages": "Settings",
-    "profil": "My profile"
+    "profil": "My profile",
+    "comptepro": "Pro account"
   },
   "acct": {
     "title": "Create an account",
