@@ -5,7 +5,7 @@
 set -euo pipefail
 DOMAIN="${1:-pilotix.online}"
 DIR=/opt/pilotix
-REPO=https://github.com/alaeddineballalou-hub/pilotix.git
+REPO=${PILOTIX_REPO:-git@github.com:alaeddineballalou-hub/pilotix.git}
 [ "$(id -u)" = 0 ] || { echo "Run as root (sudo)."; exit 1; }
 # never stop silently: say which line failed
 trap 'echo "ERROR: the installer stopped at line $LINENO. Send a screenshot of this screen." >&2' ERR

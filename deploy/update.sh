@@ -19,7 +19,7 @@ $C exec -T postgres pg_dump -U pilotix pilotix | gzip > "$B"
 echo "    $B ($(du -h "$B" | cut -f1))"
 
 echo "==> Latest code"
-git pull -q --ff-only
+git fetch -q origin && git reset -q --hard origin/main
 git log -1 --format='    %h %s'
 
 # the new version is built while the old one keeps running; the switch itself takes a few seconds
