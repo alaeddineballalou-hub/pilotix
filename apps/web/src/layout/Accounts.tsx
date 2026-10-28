@@ -422,8 +422,6 @@ export function Signup({ referral, kind: chosen }: { referral?: string; kind?: '
     const id = window.setTimeout(() => setWait((w) => w - 1), 1000);
     return () => window.clearTimeout(id);
   }, [wait]);
-  // wrong or already used: said under the field while it is typed
-  const check = usePhoneProblem(f.phone, DEMO_ONLY ? undefined : (p) => phoneCheck(p));
   const askCode = async () => {
     setError('');
     setCodeBusy(true);
@@ -444,6 +442,8 @@ export function Signup({ referral, kind: chosen }: { referral?: string; kind?: '
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
+  // wrong or already used: said under the field while it is typed
+  const check = usePhoneProblem(f.phone, DEMO_ONLY ? undefined : (p) => phoneCheck(p));
   useEffect(() => {
     // the preview (no server): the form is shown, nothing can be created
     if (DEMO_ONLY) setInfo({ open: true, trialDays: 14, site: '' });
