@@ -102,16 +102,20 @@ async function markFake(db: Db, orderId: number, reason: string | null, userId: 
   await guarded(db, async (db) => {
     const src = (
       await db.query(
-        `SELECT o.phone, COALESCE((SELECT fp FROM landing_submits WHERE order_id = o.id ORDER BY id DESC LIMIT 1), (SELECT device FROM landing_leads WHERE order_id = o.id ORDER BY id DESC LIMIT 1)) AS device
+        `SELECT o.phone,
+           COALESCE((SELECT fp FROM landing_submits WHERE order_id = o.id ORDER BY id DESC LIMIT 1), (SELECT device FROM landing_leads WHERE order_id = o.id ORDER BY id DESC LIMIT 1)) AS device,
+           COALESCE((SELECT fphash FROM landing_submits WHERE order_id = o.id ORDER BY id DESC LIMIT 1), (SELECT fphash FROM landing_leads WHERE order_id = o.id ORDER BY id DESC LIMIT 1)) AS fphash
          FROM orders o WHERE o.id = $1`,
         [orderId],
       )
     )[0];
     if (!src?.device) return;
     if ((await db.query(`SELECT 1 FROM fraud_marks WHERE order_id = $1 AND NOT lifted LIMIT 1`, [orderId])).length) return;
-    await db.query(`INSERT INTO fraud_marks (kind, value, reason, device, phone, order_id, by_user) VALUES ('device', $1, $2, $1, $3, $4, $5)`, [
+    // the mark carries the device key AND the browser fingerprint, so a cleared / private browser is still caught
+    await db.query(`INSERT INTO fraud_marks (kind, value, reason, device, fphash, phone, order_id, by_user) VALUES ('device', $1, $2, $1, $3, $4, $5, $6)`, [
       src.device,
       isCompetitorReason(reason) ? 'competitor' : 'fake',
+      src.fphash ?? null,
       src.phone ?? null,
       orderId,
       userId,
