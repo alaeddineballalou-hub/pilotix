@@ -10,6 +10,7 @@ import { Db, num } from '../db';
 import { bad, Ctx, proc } from '../rpc';
 import { FraudLevel, scoreOrder } from './fraud';
 import { deviceMarks, handCounts, phoneHistory, recentCounts } from './landing';
+import { landingSettings } from './landingquery';
 
 const H = 3600_000;
 const DAY = 24 * H;
@@ -78,8 +79,8 @@ export async function runAttackTest(ctx: Ctx, slug: string | null, level: FraudL
   const page = (
     await ctx.db.query(
       slug
-        ? `SELECT l.slug, l.product_id, l.fraud_level, l.turnstile_site_key FROM landing_pages l WHERE l.slug = $1`
-        : `SELECT l.slug, l.product_id, l.fraud_level, l.turnstile_site_key FROM landing_pages l WHERE l.active ORDER BY l.id LIMIT 1`,
+        ? `SELECT l.slug, l.product_id, l.fraud_level FROM landing_pages l WHERE l.slug = $1`
+        : `SELECT l.slug, l.product_id, l.fraud_level FROM landing_pages l WHERE l.active ORDER BY l.id LIMIT 1`,
       slug ? [slug] : [],
     )
   )[0];
@@ -87,7 +88,8 @@ export async function runAttackTest(ctx: Ctx, slug: string | null, level: FraudL
   const productId = num(page.product_id);
   const variantId = Number((await ctx.db.query(`SELECT id FROM product_variants WHERE product_id = $1 AND title <> '' AND active ORDER BY id LIMIT 1`, [productId]))[0]?.id ?? 0) || null;
   const fraudLevel = level ?? (['relaxed', 'normal', 'strict'].includes(page.fraud_level) ? page.fraud_level : 'normal');
-  const turnstileOn = !!String(page.turnstile_site_key ?? '').trim();
+  // Cloudflare is on when the shop set its own key, or when Pilotix placed one for the page's address
+  const turnstileOn = !!String((await landingSettings(ctx.db)).turnstileSiteKey ?? '').trim() || !!ctx.server?.turnstile;
 
   const rows: AttackRow[] = [];
   const ROLLBACK = Symbol('rollback');
