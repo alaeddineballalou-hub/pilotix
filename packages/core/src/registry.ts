@@ -7,6 +7,7 @@ import { archiveProcs } from './modules/archive';
 import { cashProcs } from './modules/cash';
 import { caissesProcs } from './modules/caisses';
 import { courierPayProcs } from './modules/courierpay';
+import { depotAlertProcs } from './modules/depotalerts';
 import { catalogProcs } from './modules/catalog';
 import { productImportProcs } from './modules/productimport';
 import { cmProcs } from './modules/cm';
@@ -54,6 +55,7 @@ export const REGISTRY = {
   ...cashProcs,
   ...caissesProcs,
   ...courierPayProcs,
+  ...depotAlertProcs,
   ...adminProcs,
   ...adsProcs,
   ...dellalProcs,

@@ -31,6 +31,7 @@ import { landingCounts, landingSettings, onLandingConf, onLandingFollow } from '
 import { lowStockCount } from './stockquery';
 import { agencyOf, agencyRowSql, andSql, queueSql } from './agencyscope';
 import { settleTickets } from './tickets';
+import { addDepotAlert, alertsDepot, DepotChange, itemsText } from './depotalerts';
 import { applyTrust, lookAlikeNote, lookAlikeOf } from './trust';
 
 export const STOPDESK_NOTE = '🏬 Ce client a refusé 2 colis : livraison au bureau (stop-desk) uniquement. Proposez-lui le stop-desk le plus proche.';
@@ -553,6 +554,11 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
     }
     const phone = input.phone !== undefined ? normalizePhone(input.phone) : cur.phone;
     if (!phone) throw bad('Numéro de téléphone algérien invalide');
+    // the depot still holds this order: what it looked like before (for the red alert of the depot)
+    const depotWatch = alertsDepot(ctx, cur.follow_status);
+    const before = depotWatch
+      ? { items: itemsText(await tx.query('SELECT name, variant_title, qty FROM order_items WHERE order_id = $1 ORDER BY id', [input.id])), company: cur.company_id ? ((await tx.query('SELECT name FROM delivery_companies WHERE id = $1', [cur.company_id]))[0]?.name ?? '') : '' }
+      : null;
     // a bureau delivery needs its bureau (stop desk); going back home forgets it
     if (input.isStopdesk === true && !(input.stopdeskId ?? (input.stopdeskId === undefined ? cur.stopdesk_id : null))) throw bad('Livraison au bureau : choisissez le bureau.');
     if (input.isStopdesk === false && input.stopdeskId === undefined) input = { ...input, stopdeskId: null };
@@ -612,7 +618,29 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
     const newTotal = subtotal - discount + fee;
     const moneyNote = newTotal !== num(cur.total) ? `Total ${num(cur.total)} → ${newTotal} DA (remise ${num(cur.discount)} → ${discount}, livraison ${num(cur.delivery_fee)} → ${fee})` : null;
     await addEvent(tx, input.id, ctx.session.profile.id, 'edit', moneyNote ? String(num(cur.total)) : null, moneyNote ? String(newTotal) : null, moneyNote);
-    return getOrder(ctx, input.id, tx);
+    const after = await getOrder(ctx, input.id, tx);
+    if (before) {
+      const place = (o: { wilayaId: number; commune: string; isStopdesk: boolean; stopdeskName?: string | null }) => `${String(o.wilayaId).padStart(2, '0')} · ${o.commune}${o.isStopdesk ? ` · bureau${o.stopdeskName ? ` ${o.stopdeskName}` : ''}` : ''}`;
+      const was = { wilayaId: num(cur.wilaya_id), commune: String(cur.commune ?? ''), isStopdesk: !!cur.is_stopdesk, stopdeskName: cur.stopdesk_id ? ((await tx.query('SELECT name FROM stopdesks WHERE id = $1', [cur.stopdesk_id]))[0]?.name ?? null) : null };
+      const nowCompany = after.companyId ? ((await tx.query('SELECT name FROM delivery_companies WHERE id = $1', [after.companyId]))[0]?.name ?? '') : '';
+      const ch: DepotChange[] = [];
+      const add = (field: DepotChange['field'], from: unknown, to: unknown) => {
+        const f = String(from ?? '').trim();
+        const tt = String(to ?? '').trim();
+        if (f !== tt) ch.push({ field, from: f || '—', to: tt || '—' });
+      };
+      add('items', before.items, itemsText(after.items));
+      add('customer', cur.customer_name, after.customerName);
+      add('phone', cur.phone, after.phone);
+      add('phone2', cur.phone2, after.phone2);
+      add('place', place(was), place({ wilayaId: after.wilayaId, commune: after.commune, isStopdesk: after.isStopdesk, stopdeskName: after.stopdeskId ? ((await tx.query('SELECT name FROM stopdesks WHERE id = $1', [after.stopdeskId]))[0]?.name ?? null) : null }));
+      add('address', cur.address, after.address);
+      add('company', before.company, nowCompany);
+      add('total', `${num(cur.total)} DA`, `${after.total} DA`);
+      add('note', cur.delivery_note, after.deliveryNote);
+      await addDepotAlert(tx, ctx, input.id, cur.follow_status, 'edit', ch);
+    }
+    return after;
   });
   ctx.emit({ type: 'order', id: order.id });
   return order;
@@ -682,6 +710,8 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
       await addEvent(tx, oid, me, 'conf_status', cur.conf_status, status, [input.reason, note].filter(Boolean).join(' — ') || null);
       // confirmed again after a cancel: back to the depot's « À préparer »
       if (confirmed && (!cur.follow_status || (cur.follow_status === 'cancelled' && !cur.shipped_at))) await addEvent(tx, oid, me, 'follow_status', cur.follow_status, 'to_prepare');
+      // the depot was preparing it: red alert « annulée — ne l'envoyez pas »
+      if (['cancelled', 'duplicate', 'wrong_number', 'fake'].includes(status) && alertsDepot(ctx, cur.follow_status)) await addDepotAlert(tx, ctx, oid, cur.follow_status, 'cancel', []);
       await onConfChange(tx, notify, cur, cur.conf_status, status, ctx.now());
       // Meta: an order from a landing page, confirmed by a person, is a real sale (never a blocked or fake one)
       await onLandingConf(tx, landing, cur, cur.conf_status, status, ctx.now(), input.reason ?? null, me);
