@@ -10,7 +10,8 @@
     "paie": "Paie des agents",
     "prix": "Prix de livraison",
     "canaux": "Canaux de vente",
-    "archive": "Archives"
+    "archive": "Archives",
+    "alertes": "Alertes dépôt"
   },
   "users": {
     "rolesTitle": "Rôles",
@@ -613,5 +614,13 @@
     "skippedN_other": "{{count}} non traités (voir la liste)",
     "usedList": "Utilisé : {{list}}",
     "untick": "Tout décocher"
+  },
+  "dalert": {
+    "title": "Alertes dépôt",
+    "help": "Quand une commande encore au dépôt est modifiée ou annulée, une alerte rouge bloque l’application de ces personnes jusqu’à ce qu’elles scannent le colis (annulée : son étiquette ; modifiée : l’ancienne étiquette puis la nouvelle).",
+    "nobody": "Aucun compte Dépôt pour l’instant.",
+    "all": "Personne de coché : tous les agents du dépôt reçoivent les alertes.",
+    "chosen_one": "{{count}} personne reçoit les alertes.",
+    "chosen_other": "{{count}} personnes reçoivent les alertes."
   }
 }

@@ -1,12 +1,20 @@
 // The depot's red alert: an order it still holds was changed (or cancelled) by someone else. It covers the whole app,
-// beeps every few seconds and vibrates the phone, until a depot agent fixes the parcel and taps « C'est corrigé ».
-import { useEffect, useState } from 'react';
+// beeps every few seconds and vibrates the phone, until the parcel is fixed — proven by scanning: a cancelled parcel's
+// label once; a changed parcel's old label, then (after printing it) its new label. A parcel at a courier: one scan.
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { rpc } from '../lib/backend';
 import { when } from '../lib/format';
 import { useAction, useRpc } from '../lib/query';
 import { alarm } from '../lib/sound';
 import { Icon } from '../ui/kit';
+import { toast } from '../ui/toast';
+import { printLabelItems } from '../pages/depot/labelPrint';
+import { useCouriers } from '../pages/depot/Labels';
+import { ring, startCamera } from '../pages/depot/scan';
 import './depotAlert.css';
+
+type Alert = NonNullable<ReturnType<typeof useRpc<'depot.alerts'>>['data']>[number];
 
 export function DepotAlert() {
   const { t } = useTranslation();
@@ -14,7 +22,6 @@ export function DepotAlert() {
   const list = q.data ?? [];
   const [k, setK] = useState(0);
   const a = list[Math.min(k, list.length - 1)];
-  const done = useAction('depot.alertDone', { success: t('depot.alert.fixedOk'), onDone: () => setK(0) });
   const open = list.length > 0;
 
   // the sound and the vibration, again and again, while an alert is open
@@ -105,18 +112,145 @@ export function DepotAlert() {
             <span className="ltr">{t('depot.alert.toCollect', { v: a.total.toLocaleString('fr-DZ') })}</span>
           </div>
         )}
-        {!cancel && <p className="pxda-todo">{a.status === 'prepared' ? t('depot.alert.todoPrepared') : t('depot.alert.todoToPrepare')}</p>}
+        <Steps a={a} />
       </div>
-      <div className="pxda-bar">
-        {list.length > 1 && (
+      {list.length > 1 && (
+        <div className="pxda-bar">
           <button type="button" className="pxda-next" onClick={() => setK((x) => (x + 1) % list.length)}>
             {t('depot.alert.next')}
           </button>
-        )}
-        <button type="button" className="pxda-ok" disabled={done.isPending} onClick={() => done.mutate({ id: a.id })}>
-          <Icon name="check" /> {cancel ? t('depot.alert.removed') : t('depot.alert.fixed')}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The scans that close the alert: the label on the parcel, then — a changed parcel with a new code — print and scan the new one. */
+function Steps({ a }: { a: Alert }) {
+  const { t } = useTranslation();
+  const c = useCouriers();
+  const [code, setCode] = useState('');
+  const [cam, setCam] = useState(false);
+  const [printed, setPrinted] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  const scan = useAction('depot.alertScan', {
+    silent: true,
+    onDone: (r) => {
+      ring('ok');
+      setCode('');
+      if (r.step === 'done') toast(t('depot.alert.fixedOk'), 'ok');
+    },
+  });
+  const two = !!a.newCode;
+  const step = !a.found ? 1 : printed ? 3 : 2;
+  const send = (v: string) => {
+    const x = v.trim();
+    if (!x || scan.isPending) return;
+    scan.mutate(
+      { id: a.id, code: x },
+      {
+        onError: (e) => {
+          ring('bad');
+          toast(e.message, 'bad', 6000);
+          setCode('');
+        },
+      },
+    );
+  };
+  useEffect(() => {
+    input.current?.focus();
+  }, [a.id, a.found, printed]);
+  const print = async () => {
+    try {
+      const o = await rpc('orders.get', { id: a.orderId });
+      await printLabelItems(t, [{ o, code: a.newCode! }], c?.shop ?? { name: '', sav: '' });
+      setPrinted(true);
+    } catch (e: any) {
+      toast(e.message, 'bad');
+    }
+  };
+  const row = (n: number, on: boolean, ok: boolean, title: string, sub?: string | null) => (
+    <li className={`${on ? 'on' : ''}${ok ? ' ok' : ''}`}>
+      <span className="pxda-sn">{ok ? <Icon name="check" /> : n}</span>
+      <span>
+        <b>{title}</b>
+        {sub && <small className="ltr">{sub}</small>}
+      </span>
+    </li>
+  );
+  return (
+    <div className="pxda-steps">
+      <ol>
+        {row(1, step === 1, a.found, a.kind === 'cancel' ? t('depot.alert.s.findCancel') : two ? t('depot.alert.s.findOld') : t('depot.alert.s.findOne'), a.oldCode)}
+        {two && row(2, step === 2, printed || false, t('depot.alert.s.print'), a.newCode)}
+        {two && row(3, step === 3, false, t('depot.alert.s.scanNew'), a.newCode)}
+      </ol>
+      {two && step >= 2 && (
+        <button type="button" className={`pxda-print${step === 2 ? ' on' : ''}`} onClick={print}>
+          <Icon name="printer" /> {printed ? t('depot.alert.reprint') : t('depot.alert.printNew')}
         </button>
-      </div>
+      )}
+      {(step !== 2 || !two) && (
+        <form
+          className="pxda-scan"
+          onSubmit={(e) => {
+            e.preventDefault();
+            send(code);
+          }}
+        >
+          <input
+            ref={input}
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder={step === 3 ? t('depot.alert.scanNewPh') : t('depot.alert.scanPh')}
+            aria-label={t('depot.alert.scanPh')}
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
+          />
+          <button type="button" className="pxda-cam" aria-label={t('depot.alert.camera')} onClick={() => setCam((v) => !v)}>
+            <Icon name="camera" />
+          </button>
+        </form>
+      )}
+      {cam && (step !== 2 || !two) && <Camera onCode={send} onClose={() => setCam(false)} />}
+    </div>
+  );
+}
+
+function Camera({ onCode, onClose }: { onCode: (c: string) => void; onClose: () => void }) {
+  const { t } = useTranslation();
+  const video = useRef<HTMLVideoElement>(null);
+  const [err, setErr] = useState(false);
+  useEffect(() => {
+    let stop: (() => void) | null = null;
+    let dead = false;
+    const seen = { code: '', at: 0 };
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setErr(true);
+      return;
+    }
+    startCamera(video.current!, (c) => {
+      const now = Date.now();
+      if (c === seen.code && now - seen.at < 3000) return;
+      seen.code = c;
+      seen.at = now;
+      onCode(c);
+    })
+      .then((s) => (dead ? s() : (stop = s)))
+      .catch(() => setErr(true));
+    return () => {
+      dead = true;
+      stop?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <div className="pxda-video">
+      {err ? <p>{t('scanner.camDenied')}</p> : <video ref={video} muted playsInline />}
+      <button type="button" onClick={onClose}>
+        {t('common.close')}
+      </button>
     </div>
   );
 }

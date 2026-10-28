@@ -297,10 +297,6 @@
     "dontSendSub": "Retirez le colis du dépôt et remettez les produits en stock.",
     "mustContain": "Le colis doit contenir",
     "toCollect": "À encaisser : {{v}} DA",
-    "todoPrepared": "Ouvrez le colis, corrigez-le, puis réimprimez l’étiquette si l’adresse ou le montant a changé.",
-    "todoToPrepare": "Préparez-le avec ces nouvelles informations.",
-    "fixed": "C’est corrigé",
-    "removed": "Colis retiré",
     "next": "Alerte suivante",
     "fixedOk": "Merci, c’est noté",
     "f": {
@@ -313,6 +309,18 @@
       "company": "Société",
       "total": "Montant",
       "note": "Note livreur"
-    }
+    },
+    "s": {
+      "findCancel": "Trouvez le colis et scannez son étiquette",
+      "findOld": "Trouvez le colis et scannez l’ancienne étiquette",
+      "findOne": "Trouvez le colis, corrigez-le et scannez son étiquette",
+      "print": "Imprimez la nouvelle étiquette et collez-la",
+      "scanNew": "Scannez la nouvelle étiquette"
+    },
+    "printNew": "Imprimer la nouvelle étiquette",
+    "reprint": "Réimprimer",
+    "scanPh": "Scannez (douchette) ou tapez le code",
+    "scanNewPh": "Scannez la nouvelle étiquette",
+    "camera": "Scanner avec la caméra"
   }
 }

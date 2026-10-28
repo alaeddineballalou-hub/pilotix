@@ -297,10 +297,6 @@
     "dontSendSub": "Take the parcel out and put the products back in stock.",
     "mustContain": "The parcel must contain",
     "toCollect": "To collect: {{v}} DA",
-    "todoPrepared": "Open the parcel, fix it, then reprint the label if the address or amount changed.",
-    "todoToPrepare": "Prepare it with this new information.",
-    "fixed": "It’s fixed",
-    "removed": "Parcel removed",
     "next": "Next alert",
     "fixedOk": "Thanks, noted",
     "f": {
@@ -313,6 +309,18 @@
       "company": "Company",
       "total": "Amount",
       "note": "Courier note"
-    }
+    },
+    "s": {
+      "findCancel": "Find the parcel and scan its label",
+      "findOld": "Find the parcel and scan the old label",
+      "findOne": "Find the parcel, fix it and scan its label",
+      "print": "Print the new label and stick it on",
+      "scanNew": "Scan the new label"
+    },
+    "printNew": "Print the new label",
+    "reprint": "Print again",
+    "scanPh": "Scan (scanner gun) or type the code",
+    "scanNewPh": "Scan the new label",
+    "camera": "Scan with the camera"
   }
 }

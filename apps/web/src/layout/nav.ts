@@ -95,7 +95,7 @@ export const NAV: NavItem[] = [
   { id: 'agences', icon: 'handshake', roles: [], onlyIf: partnersOn },
   // marketers running the store's ads (the same, on their own: a marketer has nothing to do with the agencies)
   { id: 'marketers', icon: 'trend', roles: [], onlyIf: partnersOn },
-  { id: 'management', icon: 'briefcase', roles: [], subs: ['statuts', 'paie', 'prix', 'canaux', 'archive'] },
+  { id: 'management', icon: 'briefcase', roles: [], subs: ['statuts', 'paie', 'prix', 'canaux', 'alertes', 'archive'] },
   { id: 'reglages', icon: 'settings', roles: [] },
   { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'parrainage', 'securite'] },
 ];

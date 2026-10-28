@@ -10,7 +10,8 @@
     "paie": "Agent pay",
     "prix": "Delivery prices",
     "canaux": "Sales channels",
-    "archive": "Archives"
+    "archive": "Archives",
+    "alertes": "Depot alerts"
   },
   "users": {
     "rolesTitle": "Roles",
@@ -613,5 +614,13 @@
     "skippedN_other": "{{count}} not done (see the list)",
     "usedList": "Used: {{list}}",
     "untick": "Untick all"
+  },
+  "dalert": {
+    "title": "Depot alerts",
+    "help": "When an order still at the depot is changed or cancelled, a red alert blocks these people’s app until they scan the parcel (cancelled: its label; changed: the old label, then the new one).",
+    "nobody": "No Depot account yet.",
+    "all": "Nobody ticked: every depot agent gets the alerts.",
+    "chosen_one": "{{count}} person gets the alerts.",
+    "chosen_other": "{{count}} people get the alerts."
   }
 }
