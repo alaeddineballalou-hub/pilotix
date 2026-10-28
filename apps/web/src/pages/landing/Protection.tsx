@@ -79,6 +79,7 @@ export function Protection() {
             <Pages pages={d.pages} />
           </div>
           <Marks marks={d.marks} />
+          <AttackTest />
         </>
       )}
     </>
@@ -332,6 +333,87 @@ function Marks({ marks }: { marks: Data['marks'] }) {
             </div>
           ))}
         </div>
+      )}
+    </section>
+  );
+}
+
+
+/** « Lancer un test d'attaque »: real attacks on a page (robots, pranks, competitors, refusers) + 100 real customers,
+ * run safely (nothing is saved), to see how much the protection catches. */
+function AttackTest() {
+  const { t } = useTranslation();
+  const pages = useRpc('landing.list', {});
+  const [slug, setSlug] = useState('');
+  const run = useAction('landing.attackTest', {});
+  const rep = run.data;
+  const go = () => run.mutate({ slug: slug || undefined });
+  const grp = (g: string) => (rep ? rep.rows.filter((x) => x.group === g) : []);
+  const groups = rep ? [...new Set(rep.rows.map((x) => x.group))] : [];
+  const bar = (x: { sent: number; blocked: number; review: number; passed: number }) => (
+    <span className="lp-at-bar" title={`${x.blocked} bloquées · ${x.review} à vérifier · ${x.passed} passées`}>
+      {x.blocked > 0 && <i className="b" style={{ flexGrow: x.blocked }} />}
+      {x.review > 0 && <i className="r" style={{ flexGrow: x.review }} />}
+      {x.passed > 0 && <i className="p" style={{ flexGrow: x.passed }} />}
+    </span>
+  );
+  return (
+    <section className="card pd-card lp-at">
+      <h2 className="lp-h2">
+        <Icon name="shield" /> {t('landing.at.title')}
+      </h2>
+      <p className="pd-note">{t('landing.at.help')}</p>
+      <div className="lp-at-tools">
+        <select value={slug} onChange={(e) => setSlug(e.target.value)} disabled={run.isPending}>
+          <option value="">{t('landing.at.firstPage')}</option>
+          {(pages.data ?? []).map((p) => (
+            <option key={p.id} value={p.slug}>
+              {p.title || p.productName} · /{p.slug}
+            </option>
+          ))}
+        </select>
+        <button type="button" className="btn primary" onClick={go} disabled={run.isPending}>
+          <Icon name="play" /> {run.isPending ? t('landing.at.running') : t('landing.at.run')}
+        </button>
+      </div>
+      {run.isPending && <p className="pd-note">{t('landing.at.wait')}</p>}
+      {run.error && <ErrorBox error={run.error} />}
+      {rep && (
+        <>
+          <div className="lp-at-head">
+            <span className={`chip ${rep.real.blocked === 0 ? 'lp-on' : 'lp-warn'}`}>
+              {t('landing.at.real', { passed: rep.real.sent - rep.real.blocked, total: rep.real.sent })}
+            </span>
+            <span className="chip">{t('landing.at.caught', { pct: pct((rep.total.blocked + rep.total.review) / Math.max(1, rep.total.sent)) })}</span>
+            {!rep.turnstileOn && <span className="chip lp-warn">{t('landing.at.noCf')}</span>}
+          </div>
+          <div className="lp-at-legend">
+            <span><i className="b" /> {t('landing.at.blocked')}</span>
+            <span><i className="r" /> {t('landing.at.review')}</span>
+            <span><i className="p" /> {t('landing.at.passed')}</span>
+          </div>
+          {groups.map((g) => (
+            <div key={g} className="lp-at-grp">
+              <h3>{g}</h3>
+              <table className="lp-at-tbl">
+                <tbody>
+                  {grp(g).map((x) => (
+                    <tr key={x.name}>
+                      <td className="lp-at-nm">
+                        <b dir="auto">{x.name}</b>
+                        <small>{x.how}</small>
+                      </td>
+                      <td className="lp-at-ct">{x.sent}</td>
+                      <td className="lp-at-bc">{bar(x)}</td>
+                      <td className="lp-at-pc">{x.attack ? `${Math.round(((x.blocked + x.review) / Math.max(1, x.sent)) * 100)} %` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+          <p className="pd-note lp-at-foot">{t('landing.at.foot')}</p>
+        </>
       )}
     </section>
   );

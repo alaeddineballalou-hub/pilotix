@@ -37,6 +37,7 @@ import { clientHomeFees, getSetting, setSetting } from '../settings';
 import { BOT_UA, FraudLevel, FraudReason, scoreOrder, verdictOf } from './fraud';
 import { lookAlikeOf, trustOf } from './trust';
 import { groupHtml, groupOf } from './landinggroups';
+import { runAttackTest } from './attacktest';
 import { checkPixels, PixelList, pixelsJson, pixelsOf, pixelTestCode, pixelToken, readPixels } from './pixels';
 import { ABANDONED, abandonCutoff, freeLandingSlug, landingCounts, landingSettings, LandingSettings, landingStore, queuePurchase, quickCreatePage, STORE_RESERVED } from './landingquery';
 import { sendInPreview } from './notify';
@@ -461,7 +462,7 @@ const adsetOf = (utm: Record<string, string> | null) => (utm?.adset_id && /^\d{5
 /** Meta's click id: the _fbc cookie, else made from the ad link's fbclid (fb.1.<ms>.<fbclid>). */
 const fbcOf = (cookie: string, sent: string, utm: Record<string, string> | null, now: number) => cookie || sent || (utm?.fbclid ? `fb.1.${now}.${utm.fbclid}` : '');
 
-async function phoneHistory(db: Db, phone: string | null, look?: { name: string; wilayaId: number | null; commune: string; device: string | null }) {
+export async function phoneHistory(db: Db, phone: string | null, look?: { name: string; wilayaId: number | null; commune: string; device: string | null }) {
   if (!phone) return { blacklisted: false, orders: 0, delivered: 0, returned: 0, cancelled: 0 };
   const c = (await db.query('SELECT id, blacklisted, blacklist_auto, delivered FROM customers WHERE phone = $1', [phone]))[0];
   // worked out live (not the stored count): the parcels refused since the last delivered one
@@ -484,7 +485,7 @@ async function phoneHistory(db: Db, phone: string | null, look?: { name: string;
   };
 }
 
-async function recentCounts(db: Db, a: { phone: string | null; productId: number; ip: string; device: string; now: number }) {
+export async function recentCounts(db: Db, a: { phone: string | null; productId: number; ip: string; device: string; now: number }) {
   const t = (ms: number) => isoAt(a.now - ms);
   const H = 3600_000;
   const r = (
@@ -504,7 +505,7 @@ async function recentCounts(db: Db, a: { phone: string | null; productId: number
 }
 
 /** the device marks agents left (« fausse commande », « concurrent »): fraud_marks */
-async function deviceMarks(db: Db, device: string, fphash: string | null, phone: string | null, now: number): Promise<{ competitor: boolean; fake30d: number; victimDevices: number }> {
+export async function deviceMarks(db: Db, device: string, fphash: string | null, phone: string | null, now: number): Promise<{ competitor: boolean; fake30d: number; victimDevices: number }> {
   // a mark follows the device key AND the browser fingerprint: a new stored id (cleared / private browser) is still caught
   const same = `(value = $1 AND $1 <> '') OR ($4::text IS NOT NULL AND fphash = $4)`;
   const r = (
@@ -528,7 +529,7 @@ const fullName = (n: string) => {
  * The competitor's hands: other numbers from this device, numbers that differ only in their last two digits, one full
  * name for many numbers, a sudden wave of one product in one wilaya, many brand-new devices behind one address.
  */
-async function handCounts(db: Db, a: { phone: string | null; productId: number; ip: string; device: string; fphash: string | null; name: string; wilayaId: number; now: number }) {
+export async function handCounts(db: Db, a: { phone: string | null; productId: number; ip: string; device: string; fphash: string | null; name: string; wilayaId: number; now: number }) {
   const t = (ms: number) => isoAt(a.now - ms);
   const H = 3600_000;
   const name = fullName(a.name);
@@ -1910,6 +1911,12 @@ export const landingProcs = {
   }),
 
   /** From « Protection »: a device seen attacking is marked « concurrent » by hand (all its next orders blocked), or freed again. */
+  'landing.attackTest': proc(
+    [...WHO],
+    z.object({ slug: z.string().max(80).optional(), level: z.enum(['relaxed', 'normal', 'strict']).optional() }),
+    (ctx, i) => runAttackTest(ctx, i.slug ?? null, (i.level ?? null) as any),
+  ),
+
   'landing.markDevice': proc([...WATCH], z.object({ device: z.string().min(1).max(200), on: z.boolean() }), async (ctx, i) => {
     if (i.on) {
       const had = (await ctx.db.query(`SELECT 1 FROM fraud_marks WHERE kind = 'device' AND value = $1 AND reason = 'competitor' AND NOT lifted LIMIT 1`, [i.device])).length;
