@@ -114,7 +114,8 @@ export async function runAttackTest(ctx: Ctx, slug: string | null, level: FraudL
 }
 
 async function runAll(tx: Db, cfg: { productId: number; variantId: number | null; fraudLevel: FraudLevel; rows: AttackRow[] }) {
-  const { productId, variantId, fraudLevel, rows } = cfg;
+  const { productId, fraudLevel, rows } = cfg;
+  void cfg.variantId;
   const r = rng(20261028);
   const pick = <T>(a: readonly T[]): T => a[Math.floor(r() * a.length)];
   const int = (a: number, b: number) => a + Math.floor(r() * (b - a + 1));
@@ -170,7 +171,7 @@ async function runAll(tx: Db, cfg: { productId: number; variantId: number | null
       ipCountry: 'DZ',
       ipWilaya: null,
       wilayaId: w,
-      behavior: v.noPage ? null : { scroll: Math.max(0, Math.min(100, scroll)), pasted: !!v.pasted, tz: v.tz ?? 'Africa/Algiers', touch: v.touch ?? 5, fromAd: v.ad !== false },
+      behavior: v.noPage ? null : { scroll: Math.max(0, Math.min(100, scroll ?? 50)), pasted: !!v.pasted, tz: v.tz ?? 'Africa/Algiers', touch: v.touch ?? 5, fromAd: v.ad !== false },
     };
     const res = scoreOrder(facts as any, fraudLevel);
     // record the submit so the next orders of a burst / wave see it (order_id null: no real order; rolled back anyway)
