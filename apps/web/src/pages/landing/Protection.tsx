@@ -345,9 +345,10 @@ function AttackTest() {
   const { t } = useTranslation();
   const pages = useRpc('landing.list', {});
   const [slug, setSlug] = useState('');
+  const [cf, setCf] = useState(true);
   const run = useAction('landing.attackTest', {});
   const rep = run.data;
-  const go = () => run.mutate({ slug: slug || undefined });
+  const go = () => run.mutate({ slug: slug || undefined, turnstile: cf ? 'on' : 'off' });
   const grp = (g: string) => (rep ? rep.rows.filter((x) => x.group === g) : []);
   const groups = rep ? [...new Set(rep.rows.map((x) => x.group))] : [];
   const bar = (x: { sent: number; blocked: number; review: number; passed: number }) => (
@@ -376,6 +377,10 @@ function AttackTest() {
           <Icon name="play" /> {run.isPending ? t('landing.at.running') : t('landing.at.run')}
         </button>
       </div>
+      <label className="check lp-at-cf">
+        <input type="checkbox" checked={cf} disabled={run.isPending} onChange={(e) => setCf(e.target.checked)} />
+        {t('landing.at.cf')}
+      </label>
       {run.isPending && <p className="pd-note">{t('landing.at.wait')}</p>}
       {run.error && <ErrorBox error={run.error} />}
       {rep && (
@@ -385,7 +390,7 @@ function AttackTest() {
               {t('landing.at.real', { passed: rep.real.sent - rep.real.blocked, total: rep.real.sent })}
             </span>
             <span className="chip">{t('landing.at.caught', { pct: pct((rep.total.blocked + rep.total.review) / Math.max(1, rep.total.sent)) })}</span>
-            {!rep.turnstileOn && <span className="chip lp-warn">{t('landing.at.noCf')}</span>}
+            <span className={`chip ${rep.turnstileOn ? 'lp-on' : ''}`}>{rep.turnstileOn ? t('landing.at.cfOn') : t('landing.at.cfOff')}</span>
           </div>
           <div className="lp-at-legend">
             <span><i className="b" /> {t('landing.at.blocked')}</span>

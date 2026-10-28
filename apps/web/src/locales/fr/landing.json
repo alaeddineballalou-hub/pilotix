@@ -606,10 +606,12 @@
     "wait": "Quelques secondes… on envoie des centaines de fausses commandes.",
     "real": "Vrais clients : {{passed}}/{{total}} passent",
     "caught": "Attaques arrêtées : {{pct}}",
-    "noCf": "Cloudflare était éteint ici : sur le vrai site il en bloque plus",
     "blocked": "Bloquées",
     "review": "À vérifier",
     "passed": "Passées",
-    "foot": "« Passées » ne veut pas dire perdues : une fausse commande qui passe est rattrapée plus tard (le client refuse le colis → score de confiance)."
+    "foot": "« Passées » ne veut pas dire perdues : une fausse commande qui passe est rattrapée plus tard (le client refuse le colis → score de confiance).",
+    "cf": "Simuler Cloudflare (comme sur le vrai site)",
+    "cfOn": "Avec Cloudflare",
+    "cfOff": "Sans Cloudflare"
   }
 }

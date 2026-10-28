@@ -24,7 +24,7 @@ const counts = async () => ({
 
 test('attack test: real attacks through the real scoring; real customers not blocked; nothing is saved', async () => {
   const before = await counts();
-  const rep: any = await call('landing.attackTest', marketer, {});
+  const rep: any = await call('landing.attackTest', marketer, { turnstile: 'off' });
   // real customers are the control group: none blocked
   assert.equal(rep.real.blocked, 0, 'real customers blocked');
   assert.ok(rep.real.sent >= 50);
@@ -37,4 +37,12 @@ test('attack test: real attacks through the real scoring; real customers not blo
   assert.ok(rep.total.blocked + rep.total.review > 0);
   // NOTHING persisted: the whole run was rolled back
   assert.deepEqual(await counts(), before, 'the test left rows behind');
+
+  // with Cloudflare simulated ON, the « smart robot » is caught (fails the invisible check), unlike without
+  const off = (await call('landing.attackTest', marketer, { turnstile: 'off' })) as any;
+  const on = (await call('landing.attackTest', marketer, { turnstile: 'on' })) as any;
+  const smart = (rep2: any) => rep2.rows.find((r: any) => r.name.includes('Robot intelligent'));
+  assert.equal(on.turnstileOn, true);
+  assert.ok(smart(on).blocked + smart(on).review > smart(off).blocked + smart(off).review, 'Cloudflare should catch more robots');
+  assert.deepEqual(await counts(), before, 'still nothing saved');
 });

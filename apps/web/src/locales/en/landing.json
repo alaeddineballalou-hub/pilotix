@@ -606,10 +606,12 @@
     "wait": "A few seconds… sending hundreds of fake orders.",
     "real": "Real customers: {{passed}}/{{total}} pass",
     "caught": "Attacks stopped: {{pct}}",
-    "noCf": "Cloudflare was off here: on the real site it blocks more",
     "blocked": "Blocked",
     "review": "To check",
     "passed": "Passed",
-    "foot": "« Passed » does not mean lost: a fake order that gets through is caught later (the customer refuses the parcel → trust score)."
+    "foot": "« Passed » does not mean lost: a fake order that gets through is caught later (the customer refuses the parcel → trust score).",
+    "cf": "Simulate Cloudflare (as on the live site)",
+    "cfOn": "With Cloudflare",
+    "cfOff": "Without Cloudflare"
   }
 }

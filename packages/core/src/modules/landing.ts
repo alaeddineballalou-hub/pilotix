@@ -1913,8 +1913,8 @@ export const landingProcs = {
   /** From « Protection »: a device seen attacking is marked « concurrent » by hand (all its next orders blocked), or freed again. */
   'landing.attackTest': proc(
     [...WHO],
-    z.object({ slug: z.string().max(80).optional(), level: z.enum(['relaxed', 'normal', 'strict']).optional() }),
-    (ctx, i) => runAttackTest(ctx, i.slug ?? null, (i.level ?? null) as any),
+    z.object({ slug: z.string().max(80).optional(), level: z.enum(['relaxed', 'normal', 'strict']).optional(), turnstile: z.enum(['auto', 'on', 'off']).default('auto') }),
+    (ctx, i) => runAttackTest(ctx, i.slug ?? null, (i.level ?? null) as any, i.turnstile),
   ),
 
   'landing.markDevice': proc([...WATCH], z.object({ device: z.string().min(1).max(200), on: z.boolean() }), async (ctx, i) => {
