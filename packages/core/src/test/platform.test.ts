@@ -35,6 +35,7 @@ import {
   deleteStoreByOwner,
   membershipsOf,
   newPhoneCode,
+  newSignupCode,
   passwordFromLink,
   PHONE_CODE,
   phoneStep,
@@ -608,23 +609,15 @@ test('Google / Facebook: a new person gets a proven account without a password; 
   assert.equal((await socialAccount(t, { email: 'lina@gmail.com', name: '' })).account.id, a.account.id);
 });
 
-test('phone of every account: required, one number = one account, proven by a WhatsApp code when it is on', async () => {
+test('phone of every account: required, one number = one account, proven once by a WhatsApp code when the account opens', async () => {
   const { t, p } = await server();
   const plan = (await p<any[]>('p.plans.list')).find((x) => x.code === 'pro');
   const made = await invite(t, p, { name: 'Tel Shop', ownerName: 'Rym', ownerEmail: 'rym@x.dz', planId: plan.id, trialDays: 7 }, 'Rym-Password-1');
   let rym = (await accountByEmail(t, 'rym@x.dz'))!;
-  // no number anywhere: asked (code off: no code)
+  // no number anywhere: asked at the first login (code off: the number only; code on: with its code)
   assert.deepEqual(await phoneStep(t, rym, false), { current: null, otp: false });
+  assert.deepEqual(await phoneStep(t, rym, true), { current: null, otp: true });
   await assert.rejects(setAccountPhone(t, rym.id, '0211234567', false), /Numéro invalide/);
-  rym = await setAccountPhone(t, rym.id, '+33 6 12 34 56 78', false);
-  assert.equal(rym.phone, '+33612345678');
-  assert.equal(await phoneStep(t, rym, false), null);
-  // code on: the number must be proven
-  assert.deepEqual(await phoneStep(t, rym, true), { current: '+33612345678', otp: true });
-  // another account cannot take it
-  const owner = (await accountByEmail(t, OWNER.email))!;
-  await assert.rejects(setAccountPhone(t, owner.id, '+33612345678', false), /déjà utilisé/);
-  await assert.rejects(newPhoneCode(t, owner, '+33 6 12 34 56 78'), /déjà utilisé/);
   // a code: one a minute, wrong code counted, the right one proves the number
   const now = Date.now();
   const c = await newPhoneCode(t, rym, '0770 12 34 56', now);
@@ -637,21 +630,48 @@ test('phone of every account: required, one number = one account, proven by a Wh
   rym = await checkPhoneCode(t, rym, '0770123456', c.code, now + 20_000);
   assert.equal(rym.phone, '0770123456');
   assert.equal(rym.phoneVerified, true);
+  // proven once: never asked again, code on or off
   assert.equal(await phoneStep(t, rym, true), null);
-  // a used code never works again
+  assert.equal(await phoneStep(t, rym, false), null);
   await assert.rejects(checkPhoneCode(t, rym, '0770123456', c.code, now + 30_000), /expiré/);
+  // another account cannot take it
+  const owner = (await accountByEmail(t, OWNER.email))!;
+  await assert.rejects(setAccountPhone(t, owner.id, '0770123456', false), /déjà utilisé/);
+  await assert.rejects(newPhoneCode(t, owner, '0770 12 34 56'), /déjà utilisé/);
+  await assert.rejects(newSignupCode(t, '0770123456'), /déjà utilisé/);
+  // a number from abroad, with its +
+  const o2 = await setAccountPhone(t, owner.id, '+33 6 12 34 56 78', false);
+  assert.equal(o2.phone, '+33612345678');
   // the stores of the person got the number
   for (const m of await membershipsOf(t, 'rym@x.dz')) {
     const s = (await loadShop(t, { id: m.shopId }))!;
     assert.equal((await t.shop(s.schema).query('SELECT phone FROM profiles WHERE id = $1', [m.profileId]))[0].phone, '0770123456');
   }
-  // code off: a number the person already has in a store is taken as theirs without asking
+  // a team member: phone required and nobody else's; code off, it becomes the account's without asking
   const ls = (await loadShop(t, { id: made.id }))!;
   const admin = await shopUserCtx(t, ls.schema, 'rym@x.dz', 'Rym-Password-1');
   const made2: any = await call('users.create', admin, { phone: '0550 99 88 77', name: 'Agent Tel', email: 'agent-tel@x.dz', password: 'agent-tel-1', roles: ['confirmation'] });
   await assert.rejects(call('users.create', admin, { phone: '0770123456', name: 'Agent Deux', email: 'agent-deux@x.dz', password: 'agent-deux-1', roles: ['confirmation'] }), /déjà utilisé/);
   await assert.rejects(call('users.create', admin, { phone: '', name: 'Agent Trois', email: 'agent-trois@x.dz', password: 'agent-trois-1', roles: ['confirmation'] }), /obligatoire/);
   const agent = (await attachProfile(t, ls.schema, made2.id))!.account;
+  // code on: the first login asks the code for the number the admin typed
+  assert.deepEqual(await phoneStep(t, agent, true), { current: '0550998877', otp: true });
   assert.equal(await phoneStep(t, agent, false), null);
   assert.equal((await accountByEmail(t, 'agent-tel@x.dz'))!.phone, '0550998877');
+});
+
+test('sign-up with the WhatsApp code on: the number is proven in the form, before the account exists', async () => {
+  const { t } = await server();
+  const form = { name: 'Sami', email: 'sami@x.dz', phone: '0661 55 44 33', password: 'sami-pass-1', storeName: 'Sami Shop', language: 'fr', terms: true };
+  await assert.rejects(startSignup(t, form, '1.2.3.4', Date.now(), { otp: true }), /Recevez le code/);
+  const now = Date.now();
+  const c = await newSignupCode(t, '0661554433', now);
+  await assert.rejects(newSignupCode(t, '0661554433', now + 1_000), /Attendez/);
+  await assert.rejects(startSignup(t, { ...form, phoneCode: c.code === '000000' ? '111111' : '000000' }, '1.2.3.4', now + 2_000, { otp: true }), /incorrect/);
+  const m = (await startSignup(t, { ...form, phoneCode: c.code }, '1.2.3.4', now + 3_000, { otp: true }))!;
+  assert.equal(m.kind, 'confirm');
+  const done: any = await confirmSignup(t, (m as any).token);
+  assert.equal(done.account.phone, '0661554433');
+  assert.equal(done.account.phoneVerified, true);
+  assert.equal(await phoneStep(t, done.account, true), null);
 });

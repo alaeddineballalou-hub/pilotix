@@ -1,7 +1,11 @@
-// The phone number of an account: required for every person who logs in, one number = one account, and proven with a
-// 6-digit code sent by WhatsApp once Pilotix turned the code on (control room › Réglages › Code WhatsApp).
-//   - Code off: the person only gives a number nobody else has (the number already in one of their stores counts).
-//   - Code on: the number must be proven once; until then the login stops at « Vérifiez votre numéro ».
+// The phone number of an account: required for every person who logs in, one number = one account, and proven ONCE,
+// when the account is opened, with a 6-digit code sent by WhatsApp once Pilotix turned the code on (control room ›
+// Réglages › Code WhatsApp). Never asked again at login.
+//   - Sign-up: the code is typed in the form, before the account exists.
+//   - An account without a number (a team member added by an admin, Google, an account from before): the first login
+//     stops at « Votre numéro » — code off, the number only (one already in one of their stores is taken without
+//     asking); code on, the number and its code.
+//   - An account that has its number: never asked anything.
 // The codes are kept hashed, live 10 minutes, allow 5 tries; one code a minute and 5 an hour per account.
 import { normalizeAccountPhone } from '@pilotix/shared';
 import { bad } from '../rpc';
@@ -63,7 +67,7 @@ async function knownPhone(t: Tenancy, acc: Account): Promise<string | null> {
   return null;
 }
 
-/** What the login still needs before the person enters: nothing (null), or their number (and its code when `otp`). */
+/** What the first login still needs before the person enters: nothing (null), or their number (and its code when `otp`). */
 export interface PhoneStep {
   /** the number already known (to prove), or null (the person types it) */
   current: string | null;
@@ -72,13 +76,15 @@ export interface PhoneStep {
 }
 
 /**
- * Must this person give (or prove) their number before entering? Code off: a number the person already gave in one of
- * their stores is taken as theirs, without asking. The demo accounts and closed accounts never are asked.
+ * Must this person give their number (and its code, when it is on) before entering? Only an account that has no number
+ * yet. Code off: a number the person already gave in one of their stores is taken as theirs, without asking. The demo
+ * accounts and closed accounts never are asked.
  */
 export async function phoneStep(t: Tenancy, acc: Account, otp: boolean): Promise<PhoneStep | null> {
   if (NO_ACCOUNT.test(acc.email)) return null;
-  if (acc.phone && (!otp || acc.phoneVerified)) return null;
-  const known = acc.phone ?? (await knownPhone(t, acc));
+  // the number is checked once, when the account gets it: never again
+  if (acc.phone) return null;
+  const known = await knownPhone(t, acc);
   if (!otp && known) {
     const ok = await setAccountPhone(t, acc.id, known, false).catch(() => null);
     if (ok) return null;
@@ -138,4 +144,45 @@ export async function checkPhoneCode(t: Tenancy, acc: Account, raw: string, code
   }
   await t.platform.query('UPDATE platform.phone_codes SET used_at = $2::timestamptz WHERE id = $1', [row.id, iso(now)]);
   return setAccountPhone(t, acc.id, phone, true);
+}
+
+// ---------------------------------------------------------------- the sign-up's code (before the account exists)
+/**
+ * A code for a number typed in the sign-up form: the number must be nobody's yet. 1 a minute and 5 an hour per number,
+ * whoever asks (nobody can flood a stranger's WhatsApp).
+ */
+export async function newSignupCode(t: Tenancy, raw: string, now = Date.now()): Promise<{ phone: string; code: string; id: number }> {
+  const phone = accountPhoneOrBad(raw);
+  if (await phoneTaken(t, phone, null)) throw bad(TAKEN);
+  const last = (await t.platform.query('SELECT created_at FROM platform.phone_codes WHERE phone = $1 AND account_id IS NULL ORDER BY created_at DESC LIMIT 1', [phone]))[0];
+  const since = last ? now - Date.parse(new Date(last.created_at).toISOString()) : Infinity;
+  if (since < PHONE_CODE.gapMs) throw bad(`Attendez ${Math.ceil((PHONE_CODE.gapMs - since) / 1000)} secondes avant de demander un nouveau code`);
+  const hour = Number((await t.platform.query('SELECT count(*)::int AS n FROM platform.phone_codes WHERE phone = $1 AND account_id IS NULL AND created_at > $2::timestamptz', [phone, iso(now - 3_600_000)]))[0]?.n ?? 0);
+  if (hour >= PHONE_CODE.perHour) throw bad('Trop de codes demandés pour ce numéro. Réessayez dans une heure.');
+  const code = sixDigits();
+  await t.platform.query('UPDATE platform.phone_codes SET used_at = $2::timestamptz WHERE phone = $1 AND account_id IS NULL AND used_at IS NULL', [phone, iso(now)]);
+  const r = await t.platform.query(
+    'INSERT INTO platform.phone_codes (account_id, phone, code_hash, created_at, expires_at) VALUES (NULL, $1, $2, $3::timestamptz, $4::timestamptz) RETURNING id',
+    [phone, await codeHash(0, phone, code), iso(now), iso(now + PHONE_CODE.ttlMs)],
+  );
+  return { phone, code, id: Number(r[0].id) };
+}
+
+/** The code typed in the sign-up form: right → the number is proven (the code is used up). */
+export async function checkSignupCode(t: Tenancy, phone: string, code: string, now = Date.now()): Promise<void> {
+  const typed = String(code ?? '').replace(/\D/g, '');
+  const row = (
+    await t.platform.query(
+      'SELECT id, code_hash, attempts FROM platform.phone_codes WHERE account_id IS NULL AND phone = $1 AND used_at IS NULL AND expires_at > $2::timestamptz ORDER BY created_at DESC LIMIT 1',
+      [phone, iso(now)],
+    )
+  )[0];
+  if (!row) throw bad(typed ? 'Ce code a expiré : demandez un nouveau code' : 'Recevez le code WhatsApp et tapez-le pour vérifier votre numéro');
+  if (Number(row.attempts) >= PHONE_CODE.tries) throw bad('Trop d’essais : demandez un nouveau code');
+  if (typed.length !== 6 || (await codeHash(0, phone, typed)) !== row.code_hash) {
+    const left = PHONE_CODE.tries - Number(row.attempts) - 1;
+    await t.platform.query('UPDATE platform.phone_codes SET attempts = attempts + 1 WHERE id = $1', [row.id]);
+    throw bad(left > 0 ? `Code incorrect (encore ${left} essai${left > 1 ? 's' : ''})` : 'Code incorrect : demandez un nouveau code');
+  }
+  await t.platform.query('UPDATE platform.phone_codes SET used_at = $2::timestamptz WHERE id = $1', [row.id, iso(now)]);
 }

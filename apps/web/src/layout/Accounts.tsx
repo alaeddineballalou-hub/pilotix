@@ -4,7 +4,7 @@
 // e-mail check link, and the terms of use and privacy page.
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ApiError, DEMO_ONLY, isPhone, legalText, PhoneSent, server, signup, signupInfo, StoreChoice, storeNameCheck, verifyEmail } from '../lib/backend';
+import { ApiError, DEMO_ONLY, isPhone, legalText, PhoneSent, server, signup, signupCode, SignupInfo, signupInfo, StoreChoice, storeNameCheck, verifyEmail } from '../lib/backend';
 import { useSession } from '../lib/session';
 import { Icon } from '../ui/kit';
 import { Modal } from '../ui/modal';
@@ -408,7 +408,31 @@ export function Signup({ referral, kind: chosen }: { referral?: string; kind?: '
   const [kind, setKind] = useState<Kind>(chosen ?? 'store');
   const tk = useKindT(kind);
   const partner = kind !== 'store';
-  const [info, setInfo] = useState<{ open: boolean; trialDays: number } | null>(null);
+  const [info, setInfo] = useState<SignupInfo | null>(null);
+  // the phone's WhatsApp code (when the server asks it): sent to which number, typed, seconds before another
+  const [codeSent, setCodeSent] = useState<PhoneSent | null>(null);
+  const [code, setCode] = useState('');
+  const [wait, setWait] = useState(0);
+  const [codeBusy, setCodeBusy] = useState(false);
+  useEffect(() => {
+    if (wait <= 0) return;
+    const id = window.setTimeout(() => setWait((w) => w - 1), 1000);
+    return () => window.clearTimeout(id);
+  }, [wait]);
+  const askCode = async () => {
+    setError('');
+    setCodeBusy(true);
+    try {
+      const r = await signupCode(f.phone.trim());
+      setCodeSent(r);
+      setCode('');
+      setWait(r.wait);
+    } catch (err: any) {
+      setError(err?.message || t('common.error'));
+    } finally {
+      setCodeBusy(false);
+    }
+  };
   // the referral code comes from the link (#/inscription/CODE): kept, not shown
   const [f, setF] = useState({ name: '', email: '', password: '', phone: '', referral: (referral ?? '').toUpperCase() });
   const [storeName, setStoreName] = useState('');
@@ -417,7 +441,7 @@ export function Signup({ referral, kind: chosen }: { referral?: string; kind?: '
   const [sent, setSent] = useState(false);
   useEffect(() => {
     // the preview (no server): the form is shown, nothing can be created
-    if (DEMO_ONLY) setInfo({ open: true, trialDays: 14 });
+    if (DEMO_ONLY) setInfo({ open: true, trialDays: 14, site: '' });
     else signupInfo().then(setInfo);
   }, []);
   const submit = async (e: FormEvent) => {
@@ -431,6 +455,7 @@ export function Signup({ referral, kind: chosen }: { referral?: string; kind?: '
         email: f.email.trim(),
         password: f.password,
         phone: f.phone.trim(),
+        ...(info?.phoneCode ? { phoneCode: code } : {}),
         // a store sign-up opens the account only: the first store is created right after, inside
         storeName: partner ? storeName.trim() : '',
         language: (['fr', 'en', 'ar'].includes(i18n.language) ? i18n.language : 'fr') as 'fr' | 'en' | 'ar',
@@ -501,9 +526,48 @@ export function Signup({ referral, kind: chosen }: { referral?: string; kind?: '
         </label>
         <label className="field">
           <span className="lab">{t('auth.phone')}</span>
-          <input dir="ltr" inputMode="tel" required minLength={9} maxLength={30} autoComplete="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} placeholder="0555 12 34 56" />
-          <span className="hint">{t('auth.phoneHint')}</span>
+          <input
+            dir="ltr"
+            inputMode="tel"
+            required
+            minLength={9}
+            maxLength={30}
+            autoComplete="tel"
+            value={f.phone}
+            onChange={(e) => {
+              setF({ ...f, phone: e.target.value });
+              // another number: its own code
+              if (codeSent) setCodeSent(null);
+            }}
+            placeholder="0555 12 34 56"
+          />
+          <span className="hint">{info?.phoneCode ? t('auth.phoneOtpHint') : t('auth.phoneHint')}</span>
         </label>
+        {info?.phoneCode && (
+          <div className="px-signup-otp">
+            <button type="button" className="btn" disabled={codeBusy || wait > 0 || f.phone.trim().length < 9} onClick={() => void askCode()}>
+              <Icon name="phone" /> {codeBusy ? '…' : wait > 0 ? t('auth.codeAgainIn', { s: wait }) : codeSent ? t('auth.codeAgain') : t('auth.codeSend')}
+            </button>
+            {codeSent && (
+              <label className="field">
+                <span className="lab">{t('auth.codeSent', { phone: codeSent.masked })}</span>
+                <input
+                  dir="ltr"
+                  className="px-otp"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  required
+                  pattern="[0-9]{6}"
+                  maxLength={6}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="••••••"
+                />
+                <span className="hint">{t('auth.codeHint', { min: Math.round(codeSent.ttl / 60) })}</span>
+              </label>
+            )}
+          </div>
+        )}
         <label className="field">
           <span className="lab">{t('login.password')}</span>
           <PasswordInput required minLength={8} maxLength={200} autoComplete="new-password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />
@@ -512,7 +576,7 @@ export function Signup({ referral, kind: chosen }: { referral?: string; kind?: '
           </span>
         </label>
         {error && <p className="form-err">{error}</p>}
-        <button className="pxa-submit" disabled={busy}>
+        <button className="pxa-submit" disabled={busy || (!!info?.phoneCode && (!codeSent || code.length !== 6))}>
           {busy ? '…' : partner ? tk('signupSubmit') : t('auth.createAccount')}
         </button>
         <p className="pxa-legalnote">

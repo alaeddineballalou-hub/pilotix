@@ -145,6 +145,8 @@ export interface SignupInfo {
   designs?: number[];
   /** the Google client id (control room); empty: no button */
   googleClientId?: string;
+  /** the form proves the phone with a WhatsApp code before the account is opened */
+  phoneCode?: boolean;
 }
 export const signupInfo = () => authRequest<SignupInfo>('/auth/signup').catch((): SignupInfo => ({ open: false, trialDays: 0, site: '', whatsapp: '' }));
 export const storeNameCheck = (name: string, slug?: string) =>
@@ -154,6 +156,8 @@ export interface SignupForm {
   email: string;
   password: string;
   phone?: string | null;
+  /** the WhatsApp code sent to the phone (when the server asks it) */
+  phoneCode?: string;
   storeName: string;
   slug?: string;
   language: 'fr' | 'en' | 'ar';
@@ -163,6 +167,8 @@ export interface SignupForm {
   kind?: 'store' | 'agency' | 'marketer';
 }
 export const signup = (f: SignupForm) => authRequest<{ ok: true }>('/auth/signup', f);
+/** « Recevoir le code »: a WhatsApp code to the phone typed in the sign-up form. */
+export const signupCode = (phone: string) => authRequest<PhoneSent>('/auth/signup/code', { phone });
 /** The terms of use and privacy page (Pilotix's own text, else the app's standard one). */
 export const legalText = () => authRequest<{ text: string; company: string; email: string }>('/legal').catch(() => ({ text: '', company: 'Pilotix', email: '' }));
 

@@ -424,15 +424,17 @@ ALTER TABLE platform.shops DROP CONSTRAINT IF EXISTS shops_kind_check;
 ALTER TABLE platform.shops ADD CONSTRAINT shops_kind_check CHECK (kind IN ('store', 'agency', 'marketer'));
 `;
 
-// Every account has its own phone number (one number = one account), proven by a code sent by WhatsApp when Pilotix
-// turned the code on (control room › Réglages). The codes: 6 digits, kept hashed, 10 minutes, 5 tries.
+// Every account has its own phone number (one number = one account), proven once, when the account is opened, by a
+// code sent by WhatsApp when Pilotix turned the code on (control room › Réglages). The codes: 6 digits, kept hashed, 10
+// minutes, 5 tries; a sign-up's code belongs to no account yet (account_id null).
 const P007 = `
 ALTER TABLE platform.accounts ADD COLUMN IF NOT EXISTS phone             text;
 ALTER TABLE platform.accounts ADD COLUMN IF NOT EXISTS phone_verified_at timestamptz;
 CREATE UNIQUE INDEX IF NOT EXISTS accounts_phone ON platform.accounts (phone) WHERE phone IS NOT NULL;
+ALTER TABLE platform.signup_requests ADD COLUMN IF NOT EXISTS phone_verified boolean NOT NULL DEFAULT false;
 CREATE TABLE IF NOT EXISTS platform.phone_codes (
   id         serial PRIMARY KEY,
-  account_id integer     NOT NULL REFERENCES platform.accounts(id) ON DELETE CASCADE,
+  account_id integer     REFERENCES platform.accounts(id) ON DELETE CASCADE,
   phone      text        NOT NULL,
   code_hash  text        NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -441,6 +443,7 @@ CREATE TABLE IF NOT EXISTS platform.phone_codes (
   used_at    timestamptz
 );
 CREATE INDEX IF NOT EXISTS phone_codes_account ON platform.phone_codes (account_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS phone_codes_phone ON platform.phone_codes (phone, created_at DESC);
 `;
 
 export const PLATFORM_MIGRATIONS: [string, string][] = [

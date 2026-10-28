@@ -392,8 +392,9 @@ class ApiController {
   }
 
   /**
-   * After the person is proven (password, Google / Facebook, sign-up link): their number first if it is missing (or not
-   * proven while the WhatsApp code is on), then the store asked for, their only store, or the picker.
+   * After the person is proven (password, Google, sign-up link): their number first when the account has none (with its
+   * WhatsApp code when it is on: checked once, when the account gets its number), then the store asked for, their only
+   * store, or the picker.
    */
   private async proceed(acc: core.Account, shop?: number) {
     const step = await core.phoneStep(this.core.t, acc, await otpOn(this.core));
@@ -766,6 +767,8 @@ class ApiController {
       // the sign-in page designs turned on in the control room (one is drawn at random on each visit)
       designs: [...new Set(set.login.designs)].filter((n) => n >= 1 && n <= 20),
       // « Continuer avec Google » (public id; empty: no button)
+      // the sign-up form asks the WhatsApp code of the number (control room › Réglages › Code WhatsApp)
+      phoneCode: await otpOn(this.core),
       googleClientId: set.social.googleClientId,
     };
   }
@@ -791,9 +794,30 @@ class ApiController {
     checkLogin(ipKey, 10);
     failedLogin(ipKey);
     if (!mailConfigured()) throw new HttpException({ message: 'Les inscriptions ne sont pas encore ouvertes sur ce serveur.' }, 503);
-    const m = await core.startSignup(this.core.t, body, core.expandIp(req.ip || ''));
+    const m = await core.startSignup(this.core.t, body, core.expandIp(req.ip || ''), Date.now(), { otp: await otpOn(this.core) });
     if (m) sendLater(m.kind === 'confirm' ? signupConfirmMail(m) : signupExistsMail(m), 'Sign-up');
     return { ok: true };
+  }
+
+  /**
+   * « Recevoir le code » in the sign-up form: a WhatsApp code to the number typed (nobody's yet), proven before the
+   * account exists. 10 per 15 minutes per address; 1 a minute and 5 an hour per number.
+   */
+  @Public()
+  @Post('auth/signup/code')
+  async signupCode(@Body() body: any, @Req() req: { ip?: string }) {
+    const ipKey = `signupcode:${ipOf(req)}`;
+    checkLogin(ipKey, 10);
+    failedLogin(ipKey);
+    if (!(await otpOn(this.core))) throw new core.AppError('bad_request', 'Pas de code à recevoir : continuez');
+    const c = await core.newSignupCode(this.core.t, String(body?.phone ?? '').slice(0, 30));
+    try {
+      await sendOtp(this.core, c.phone, c.code);
+    } catch (e) {
+      await core.dropPhoneCode(this.core.t, c.id);
+      throw new core.AppError('bad_request', (e as Error).message);
+    }
+    return { sent: true, phone: c.phone, masked: maskPhone(c.phone), wait: Math.round(core.PHONE_CODE.gapMs / 1000), ttl: Math.round(core.PHONE_CODE.ttlMs / 1000) };
   }
 
   /** The sign-up e-mail's link: the account and its store are made, the person is logged in. */
