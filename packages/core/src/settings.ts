@@ -53,6 +53,8 @@ export interface SettingsMap {
   goals: { monthlyRevenue: number };
   /** Caisse: the bank can be removed by a shop that does not use one */
   caisses: { bankHidden: boolean };
+  /** Dépôt alerts (an order still in the depot was changed or cancelled): who gets them; [] = every depot agent */
+  depotAlerts: { to: number[] };
   /** Order-list column presets: saved by an admin, shared with everyone, never edited (only deleted by an admin) */
   colPresets: { id: string; name: string; cols: string[]; by: string; at: string }[];
   /** The preset every team uses (set by an admin; only an admin changes the columns) */
@@ -83,6 +85,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   landing: { pixelId: '', testEventCode: '', purchaseAt: 'confirmed', abandonAfterMin: 20, autoCreate: false, ignored: [] },
   goals: { monthlyRevenue: 3_000_000 },
   caisses: { bankHidden: false },
+  depotAlerts: { to: [] },
   colPresets: [],
   colPresetActive: null,
 };

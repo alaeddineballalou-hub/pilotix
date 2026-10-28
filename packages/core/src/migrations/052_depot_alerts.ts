@@ -10,7 +10,11 @@ CREATE TABLE IF NOT EXISTS depot_alerts (
   created_by  bigint REFERENCES profiles(id) ON DELETE SET NULL,
   created_at  timestamptz NOT NULL DEFAULT now(),
   resolved_at timestamptz,
-  resolved_by bigint REFERENCES profiles(id) ON DELETE SET NULL
+  resolved_by bigint REFERENCES profiles(id) ON DELETE SET NULL,
+  -- fixed by scanning: the label the parcel carries (old_code), then — changed order — the new label (new_code)
+  old_code    text,
+  new_code    text,
+  old_scanned_at timestamptz
 );
 CREATE INDEX IF NOT EXISTS depot_alerts_open ON depot_alerts (created_at) WHERE resolved_at IS NULL;
 CREATE INDEX IF NOT EXISTS depot_alerts_order ON depot_alerts (order_id);
