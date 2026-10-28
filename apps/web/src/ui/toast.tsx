@@ -31,7 +31,7 @@ export function Toasts() {
     };
   }, []);
   return (
-    <div aria-live="polite" style={{ position: 'fixed', insetInline: 0, bottom: 'max(18px, env(safe-area-inset-bottom, 0px))', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, zIndex: 100, pointerEvents: 'none' }}>
+    <div aria-live="polite" style={{ position: 'fixed', insetInline: 0, bottom: 'max(18px, env(safe-area-inset-bottom, 0px))', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, zIndex: 10050, pointerEvents: 'none' }}>
       {list.map((t) => (
         <div key={t.id} className={`toast ${t.tone}`} role="status" style={{ position: 'static', transform: 'none' }}>
           {t.text}

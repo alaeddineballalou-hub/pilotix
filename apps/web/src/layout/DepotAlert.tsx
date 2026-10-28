@@ -127,11 +127,13 @@ function Steps({ a }: { a: Alert }) {
   const [code, setCode] = useState('');
   const [cam, setCam] = useState(false);
   const [printed, setPrinted] = useState(false);
+  const [err, setErr] = useState('');
   const input = useRef<HTMLInputElement>(null);
   const scan = useAction('depot.alertScan', {
     silent: true,
     onDone: (r) => {
       ring('ok');
+      setErr('');
       setCode('');
       if (r.step === 'done') toast(t('depot.alert.fixedOk'), 'ok');
     },
@@ -146,7 +148,7 @@ function Steps({ a }: { a: Alert }) {
       {
         onError: (e) => {
           ring('bad');
-          toast(e.message, 'bad', 6000);
+          setErr(e.message);
           setCode('');
         },
       },
@@ -207,6 +209,11 @@ function Steps({ a }: { a: Alert }) {
             <Icon name="camera" />
           </button>
         </form>
+      )}
+      {err && (
+        <p className="pxda-err" role="alert">
+          <Icon name="xcircle" /> {err}
+        </p>
       )}
       {cam && (step !== 2 || !two) && <Camera onCode={send} onClose={() => setCam(false)} />}
     </div>
