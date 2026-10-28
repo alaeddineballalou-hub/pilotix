@@ -1,0 +1,2 @@
+smtp sink on 2525 → /tmp/mails
+mail 1 → shots@pilotix.test : Pilotix : votre code 957139
