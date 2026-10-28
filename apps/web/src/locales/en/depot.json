@@ -284,5 +284,35 @@
     "wilaya": "Wilaya",
     "bulk": "Put in a bag",
     "bulkNone": "None of these parcels can go in a bag: not at ZR, already in a bag, or already picked up by the company"
+  },
+  "alert": {
+    "editTitle": "Order changed",
+    "editSub": "It is still at the depot: fix the parcel before it leaves.",
+    "cancelTitle": "Order cancelled",
+    "cancelSub": "It is still at the depot.",
+    "stagePrepared": "Already prepared",
+    "stageToPrepare": "To prepare",
+    "by": "By {{name}} · {{when}}",
+    "dontSend": "Don’t send it",
+    "dontSendSub": "Take the parcel out and put the products back in stock.",
+    "mustContain": "The parcel must contain",
+    "toCollect": "To collect: {{v}} DA",
+    "todoPrepared": "Open the parcel, fix it, then reprint the label if the address or amount changed.",
+    "todoToPrepare": "Prepare it with this new information.",
+    "fixed": "It’s fixed",
+    "removed": "Parcel removed",
+    "next": "Next alert",
+    "fixedOk": "Thanks, noted",
+    "f": {
+      "items": "Products",
+      "customer": "Customer",
+      "phone": "Phone",
+      "phone2": "Phone 2",
+      "place": "Delivery",
+      "address": "Address",
+      "company": "Company",
+      "total": "Amount",
+      "note": "Courier note"
+    }
   }
 }

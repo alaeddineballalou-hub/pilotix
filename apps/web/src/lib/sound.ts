@@ -28,3 +28,22 @@ export function chime() {
     o.stop(t + i * 0.16 + 0.3);
   }
 }
+
+/** an alarm the depot cannot miss: three sharp beeps (call it again every few seconds while the alert is open) */
+export function alarm() {
+  if (!audio || audio.state !== 'running') return;
+  const t = audio.currentTime;
+  for (let i = 0; i < 3; i++) {
+    const o = audio.createOscillator();
+    const g = audio.createGain();
+    o.type = 'square';
+    o.frequency.value = i % 2 ? 740 : 988;
+    const s = t + i * 0.22;
+    g.gain.setValueAtTime(0.0001, s);
+    g.gain.exponentialRampToValueAtTime(0.22, s + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, s + 0.16);
+    o.connect(g).connect(audio.destination);
+    o.start(s);
+    o.stop(s + 0.18);
+  }
+}

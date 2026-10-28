@@ -1,0 +1,38 @@
+/* The depot's red alert: above everything, nothing behind it can be reached. */
+.pxda { position: fixed; inset: 0; z-index: 10000; display: flex; flex-direction: column; gap: 12px; padding: calc(14px + env(safe-area-inset-top, 0px)) 14px calc(14px + env(safe-area-inset-bottom, 0px)); background: radial-gradient(120% 80% at 50% 0%, #E5483F, #A3211B 70%); color: #fff; overflow-y: auto; animation: pxda-pulse 1.6s ease-in-out infinite; }
+@keyframes pxda-pulse { 0%, 100% { box-shadow: inset 0 0 0 0 rgba(255, 255, 255, 0); } 50% { box-shadow: inset 0 0 0 10px rgba(255, 255, 255, .28); } }
+.pxda-top { display: flex; align-items: center; gap: 12px; max-width: 560px; width: 100%; margin: 0 auto; }
+.pxda-ic { flex: none; width: 52px; height: 52px; border-radius: 16px; background: #fff; color: #D6453D; display: grid; place-items: center; animation: pxda-shake 1.2s ease-in-out infinite; }
+.pxda-ic .bji { width: 28px; height: 28px; }
+@keyframes pxda-shake { 0%, 60%, 100% { transform: rotate(0); } 10%, 30%, 50% { transform: rotate(-9deg); } 20%, 40% { transform: rotate(9deg); } }
+.pxda-top > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pxda-top b { font-family: var(--f-display); font-size: 21px; font-weight: 900; letter-spacing: .01em; text-transform: uppercase; line-height: 1.15; }
+.pxda-top small { font-size: 13px; opacity: .92; }
+.pxda-n { flex: none; font-weight: 900; font-size: 13px; padding: 4px 10px; border-radius: 999px; background: rgba(255, 255, 255, .2); }
+.pxda-card { max-width: 560px; width: 100%; margin: 0 auto; background: #fff; color: #1B2A47; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 18px 40px rgba(0, 0, 0, .25); }
+.pxda-ref { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pxda-ref b { font-family: var(--f-display); font-size: 30px; font-weight: 900; letter-spacing: -.01em; }
+.pxda-stage { font-size: 12px; font-weight: 900; padding: 5px 10px; border-radius: 999px; background: #FFF1DC; color: #B26A00; }
+.pxda-stage.p { background: #FBE6E4; color: #D6453D; }
+.pxda-who { font-size: 14.5px; font-weight: 700; }
+.pxda-by { font-size: 12.5px; color: #7A7264; margin-top: -6px; }
+.pxda-ch { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pxda-ch li { border-radius: 14px; background: #FFF7F6; border: 1.5px solid #F4C6C2; padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; }
+.pxda-ch small { font-size: 11px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; color: #D6453D; }
+.pxda-ch s { font-size: 14px; color: #8A8173; text-decoration-color: #D6453D; text-decoration-thickness: 2px; }
+.pxda-ch b { font-size: 16.5px; font-weight: 900; color: #127A43; display: flex; align-items: flex-start; gap: 4px; line-height: 1.3; }
+.pxda-ch b .bji { flex: none; width: 16px; height: 16px; margin-top: 3px; }
+.pxda-now { border-radius: 14px; background: #F3F7FF; border: 1px solid #D5E0F5; padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; }
+.pxda-now small { font-size: 11px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; color: #1B2A47; opacity: .7; }
+.pxda-now b { font-size: 15px; }
+.pxda-now span { font-size: 13px; font-weight: 800; color: #1B2A47; }
+.pxda-todo { margin: 0; font-size: 13.5px; font-weight: 700; color: #1B2A47; line-height: 1.45; }
+.pxda-cancel { display: flex; gap: 12px; align-items: center; border-radius: 14px; background: #FBE6E4; padding: 14px; color: #A3211B; }
+.pxda-cancel .bji { flex: none; width: 34px; height: 34px; }
+.pxda-cancel b { display: block; font-size: 18px; font-weight: 900; }
+.pxda-cancel small { display: block; font-size: 13px; font-weight: 600; margin-top: 2px; color: #6B2420; }
+.pxda-bar { margin-top: auto; max-width: 560px; width: 100%; margin-inline: auto; display: flex; flex-direction: column; gap: 8px; }
+.pxda-ok { height: 60px; border-radius: 18px; border: 0; background: #fff; color: #127A43; font: inherit; font-size: 18px; font-weight: 900; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; box-shadow: 0 10px 24px rgba(0, 0, 0, .22); }
+.pxda-ok .bji { width: 22px; height: 22px; }
+.pxda-ok:disabled { opacity: .7; }
+.pxda-next { height: 46px; border-radius: 14px; border: 1.5px solid rgba(255, 255, 255, .6); background: transparent; color: #fff; font: inherit; font-size: 15px; font-weight: 800; cursor: pointer; }

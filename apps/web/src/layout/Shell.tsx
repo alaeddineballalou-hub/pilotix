@@ -19,6 +19,7 @@ import { Modal } from '../ui/modal';
 import { canSee, canSeeChild, NAV, NavItem } from './nav';
 import { AccountMenu } from './AccountMenu';
 import { ShopBanner } from './ShopBanner';
+import { DepotAlert } from './DepotAlert';
 
 const AgentBanner = lazy(() => import('../pages/confirmation/AgentBanner').then((m) => ({ default: m.AgentBanner })));
 
@@ -344,6 +345,7 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
             <AgentBanner />
           </Suspense>
         )}
+        {!partner && !isAdmin && roles.includes('depot') && <DepotAlert />}
         <main id="page" className="page">
           {/* Folded sidebar: only the parent items stay in the menu; a group's children move into a bar under the header. */}
           {folded && curGrp && (

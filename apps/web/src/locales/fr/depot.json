@@ -284,5 +284,35 @@
     "wilaya": "Wilaya",
     "bulk": "Mettre dans un sac",
     "bulkNone": "Aucun de ces colis ne peut aller dans un sac : pas chez ZR, déjà dans un sac, ou déjà pris par la société"
+  },
+  "alert": {
+    "editTitle": "Commande modifiée",
+    "editSub": "Elle est encore au dépôt : corrigez le colis avant qu’il parte.",
+    "cancelTitle": "Commande annulée",
+    "cancelSub": "Elle est encore au dépôt.",
+    "stagePrepared": "Déjà préparée",
+    "stageToPrepare": "À préparer",
+    "by": "Par {{name}} · {{when}}",
+    "dontSend": "Ne l’envoyez pas",
+    "dontSendSub": "Retirez le colis du dépôt et remettez les produits en stock.",
+    "mustContain": "Le colis doit contenir",
+    "toCollect": "À encaisser : {{v}} DA",
+    "todoPrepared": "Ouvrez le colis, corrigez-le, puis réimprimez l’étiquette si l’adresse ou le montant a changé.",
+    "todoToPrepare": "Préparez-le avec ces nouvelles informations.",
+    "fixed": "C’est corrigé",
+    "removed": "Colis retiré",
+    "next": "Alerte suivante",
+    "fixedOk": "Merci, c’est noté",
+    "f": {
+      "items": "Produits",
+      "customer": "Client",
+      "phone": "Téléphone",
+      "phone2": "Téléphone 2",
+      "place": "Livraison",
+      "address": "Adresse",
+      "company": "Société",
+      "total": "Montant",
+      "note": "Note livreur"
+    }
   }
 }
