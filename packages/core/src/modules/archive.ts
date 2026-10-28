@@ -33,6 +33,8 @@ export const USER_REFS: readonly Ref[] = [
   ['depot_restock', 'updated_by', 'stock'],
   ['pickup_bags', 'created_by', 'delivery'],
   ['parcel_changes', 'created_by', 'delivery'],
+  ['depot_alerts', 'created_by', 'orders'],
+  ['depot_alerts', 'resolved_by', 'orders'],
   ['claims', 'created_by', 'delivery'],
   ['claims', 'livreur_id', 'delivery'],
   ['complaints', 'created_by', 'delivery'],
