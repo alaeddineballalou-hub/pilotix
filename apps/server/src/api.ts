@@ -801,6 +801,20 @@ class ApiController {
   }
 
   /**
+   * While a phone is typed (sign-up form, « Votre numéro »): « invalid » (not a mobile), « taken » (another account's), or
+   * free. With the login's ticket, the person's own number is free for them. 60 per 15 minutes per address.
+   */
+  @Public()
+  @Post('auth/phone-check')
+  async phoneCheck(@Body() body: any, @Req() req: { ip?: string }) {
+    const ipKey = `phonecheck:${ipOf(req)}`;
+    checkLogin(ipKey, 60);
+    failedLogin(ipKey);
+    const acc = body?.ticket ? await this.ticketAccount(String(body.ticket)).catch(() => null) : null;
+    return core.phoneProblem(this.core.t, String(body?.phone ?? '').slice(0, 30), acc?.id ?? null);
+  }
+
+  /**
    * « Recevoir le code » in the sign-up form: a WhatsApp code to the number typed (nobody's yet), proven before the
    * account exists. 10 per 15 minutes per address; 1 a minute and 5 an hour per number.
    */

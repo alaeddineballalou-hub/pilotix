@@ -3,7 +3,9 @@ import { AgencySellerWork, expandRoles, LANGUAGES, Profile, Role, ROLES } from '
 import { FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { canSee, NAV } from '../../layout/nav';
+import { rpc } from '../../lib/backend';
 import { pageIsOn } from '../../lib/features';
+import { usePhoneProblem } from '../../lib/phoneCheck';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { when } from '../../lib/format';
@@ -304,6 +306,8 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
   const [manage, setManage] = useState(!!user?.canManageUsers);
   const [name, setName] = useState(user?.name ?? '');
   const [phone, setPhone] = useState(user?.phone ?? '');
+  // wrong, another person of the team, another Pilotix account: said under the field while it is typed
+  const phoneBad = usePhoneProblem(phone, (p) => rpc('users.phoneCheck', { phone: p, id: user?.id ?? null, email: email.trim() }));
   const [email, setEmail] = useState(user?.email ?? '');
   const [password, setPassword] = useState('');
   const [roles, setRoles] = useState<Role[]>(user?.roles ?? (role ? [role] : [agency && mk ? 'marketer' : 'confirmation']));
@@ -351,7 +355,7 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
           <button type="button" className="btn" onClick={onClose}>
             {t('admin.cancel')}
           </button>
-          <button type="submit" form="px-user-form" className="btn primary" disabled={busy}>
+          <button type="submit" form="px-user-form" className="btn primary" disabled={busy || !!phoneBad.problem}>
             {user ? t('admin.users.save') : t('admin.users.create')}
           </button>
         </>
@@ -362,8 +366,8 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
           <Field label={t('admin.users.name')}>
             <input value={name} onChange={(e) => setName(e.target.value)} required minLength={2} maxLength={120} autoComplete="off" />
           </Field>
-          <Field label={t('admin.users.phone')} hint={t('admin.users.phoneHint')}>
-            <input required minLength={9} value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" maxLength={30} className="ltr" placeholder="0550 00 00 00" />
+          <Field label={t('admin.users.phone')} hint={phoneBad.problem ? <span className="form-err">{t(`auth.phoneErr.${phoneBad.problem}`)}</span> : t('admin.users.phoneHint')}>
+            <input required minLength={9} aria-invalid={!!phoneBad.problem} value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" maxLength={30} className="ltr" placeholder="0550 00 00 00" />
           </Field>
           <Field label={t('admin.users.email')}>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="ltr" autoComplete="off" />

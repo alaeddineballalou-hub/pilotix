@@ -167,6 +167,9 @@ export interface SignupForm {
   kind?: 'store' | 'agency' | 'marketer';
 }
 export const signup = (f: SignupForm) => authRequest<{ ok: true }>('/auth/signup', f);
+/** While a phone is typed: not a mobile (« invalid »), another account's (« taken »), or free (null). */
+export const phoneCheck = (phone: string, ticket?: string) =>
+  authRequest<{ phone: string | null; problem: 'invalid' | 'taken' | null }>('/auth/phone-check', { phone, ...(ticket ? { ticket } : {}) });
 /** « Recevoir le code »: a WhatsApp code to the phone typed in the sign-up form. */
 export const signupCode = (phone: string) => authRequest<PhoneSent>('/auth/signup/code', { phone });
 /** The terms of use and privacy page (Pilotix's own text, else the app's standard one). */

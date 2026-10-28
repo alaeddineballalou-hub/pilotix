@@ -38,6 +38,7 @@ import {
   newSignupCode,
   passwordFromLink,
   PHONE_CODE,
+  phoneProblem,
   phoneStep,
   propagateProfilePassword,
   setAccountPhone,
@@ -653,6 +654,13 @@ test('phone of every account: required, one number = one account, proven once by
   const made2: any = await call('users.create', admin, { phone: '0550 99 88 77', name: 'Agent Tel', email: 'agent-tel@x.dz', password: 'agent-tel-1', roles: ['confirmation'] });
   await assert.rejects(call('users.create', admin, { phone: '0770123456', name: 'Agent Deux', email: 'agent-deux@x.dz', password: 'agent-deux-1', roles: ['confirmation'] }), /déjà utilisé/);
   await assert.rejects(call('users.create', admin, { phone: '', name: 'Agent Trois', email: 'agent-trois@x.dz', password: 'agent-trois-1', roles: ['confirmation'] }), /obligatoire/);
+  // checked while it is typed
+  assert.equal(((await call('users.phoneCheck', admin, { phone: '0770123456' })) as any).problem, 'team');
+  assert.equal(((await call('users.phoneCheck', admin, { phone: '0212' })) as any).problem, 'invalid');
+  assert.equal(((await call('users.phoneCheck', admin, { phone: '0551 22 33 44' })) as any).problem, null);
+  assert.deepEqual(await phoneProblem(t, '0770123456', null), { phone: '0770123456', problem: 'taken' });
+  assert.deepEqual(await phoneProblem(t, '0770123456', rym.id), { phone: '0770123456', problem: null });
+  assert.deepEqual(await phoneProblem(t, '12', null), { phone: null, problem: 'invalid' });
   const agent = (await attachProfile(t, ls.schema, made2.id))!.account;
   // code on: the first login asks the code for the number the admin typed
   assert.deepEqual(await phoneStep(t, agent, true), { current: '0550998877', otp: true });
