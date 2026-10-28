@@ -187,6 +187,11 @@ function Steps({ a }: { a: Alert }) {
           <Icon name="printer" /> {printed ? t('depot.alert.reprint') : t('depot.alert.printNew')}
         </button>
       )}
+      {err && (
+        <p className="pxda-err" role="alert">
+          <Icon name="xcircle" /> {err}
+        </p>
+      )}
       {(step !== 2 || !two) && (
         <form
           className="pxda-scan"
@@ -209,11 +214,6 @@ function Steps({ a }: { a: Alert }) {
             <Icon name="camera" />
           </button>
         </form>
-      )}
-      {err && (
-        <p className="pxda-err" role="alert">
-          <Icon name="xcircle" /> {err}
-        </p>
       )}
       {cam && (step !== 2 || !two) && <Camera onCode={send} onClose={() => setCam(false)} />}
     </div>

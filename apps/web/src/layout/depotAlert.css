@@ -62,6 +62,6 @@
 .pxda-video { display: flex; flex-direction: column; gap: 6px; }
 .pxda-video video { width: 100%; max-height: 40vh; border-radius: 12px; background: #000; }
 .pxda-video button { height: 38px; border-radius: 10px; border: 1px solid #E8E1D6; background: #fff; font: inherit; font-weight: 800; cursor: pointer; }
-.pxda-scan input::placeholder { font: 600 14px/1 inherit; font-family: inherit; letter-spacing: 0; color: #9A9184; }
+.pxda-scan input::placeholder { font-family: Inter, system-ui, sans-serif; font-size: 14px; font-weight: 600; letter-spacing: 0; color: #9A9184; }
 .pxda-err { margin: 0; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: #D6453D; color: #fff; font-size: 14px; font-weight: 800; animation: pxda-shake 0.4s ease-in-out 1; }
 .pxda-err .bji { flex: none; width: 18px; height: 18px; }
