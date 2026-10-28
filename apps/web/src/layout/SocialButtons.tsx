@@ -1,6 +1,6 @@
-// « Continuer avec Google / Facebook » on the sign-in and sign-up pages. The buttons are the providers' own (their
-// official logos and words); they show only when Pilotix put its Google client id / Facebook app id in the control
-// room (Paramètres → Connexion Google et Facebook). The provider gives a token, the server checks it with the provider.
+// « Continuer avec Google » on the sign-in and sign-up pages. The button is Google's own (its official logo and words);
+// it shows only when Pilotix put its Google client id in the control room (Paramètres → Connexion Google). Google
+// gives a token, the server checks it with Google.
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DEMO_ONLY, serverUrl, signupInfo } from '../lib/backend';
@@ -9,8 +9,6 @@ import { useSession } from '../lib/session';
 declare global {
   interface Window {
     google?: any;
-    FB?: any;
-    fbAsyncInit?: () => void;
   }
 }
 
@@ -32,14 +30,14 @@ function script(src: string) {
   return loaded.get(src)!;
 }
 
-/** the account type chosen on the sign-up page: the welcome step after Google/Facebook opens that kind */
+/** the account type chosen on the sign-up page: the welcome step after Google opens that kind */
 export const SOCIAL_KIND = 'px-social-kind';
 
 export function SocialButtons({ mode, kind, onError }: { mode: 'login' | 'signup'; kind?: string; onError: (m: string) => void }) {
   const { t, i18n } = useTranslation();
   const { loginSocial } = useSession();
-  const [ids, setIds] = useState<{ google: string; facebook: string } | null>(null);
-  const [busy, setBusy] = useState<'' | 'google' | 'facebook'>('');
+  const [ids, setIds] = useState<{ google: string } | null>(null);
+  const [busy, setBusy] = useState<'' | 'google'>('');
   const gRef = useRef<HTMLDivElement>(null);
   const kindRef = useRef(kind);
   kindRef.current = kind;
@@ -48,13 +46,13 @@ export function SocialButtons({ mode, kind, onError }: { mode: 'login' | 'signup
   useEffect(() => {
     if (DEMO_ONLY || !serverUrl()) return;
     let on = true;
-    signupInfo().then((r) => on && setIds({ google: r.googleClientId || '', facebook: r.facebookAppId || '' }));
+    signupInfo().then((r) => on && setIds({ google: r.googleClientId || '' }));
     return () => {
       on = false;
     };
   }, []);
 
-  const go = async (provider: 'google' | 'facebook', token: string) => {
+  const go = async (provider: 'google', token: string) => {
     onError('');
     setBusy(provider);
     try {
@@ -103,41 +101,10 @@ export function SocialButtons({ mode, kind, onError }: { mode: 'login' | 'signup
     };
   }, [ids?.google, mode, lang]);
 
-  // Facebook: its own button (XFBML), drawn by Facebook in the div; when it is done, the token
-  const fRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!ids?.facebook || !fRef.current) return;
-    const loc = lang === 'ar' ? 'ar_AR' : lang === 'en' ? 'en_US' : 'fr_FR';
-    let on = true;
-    (window as any).pxFbDone = () =>
-      window.FB?.getLoginStatus((r: any) => {
-        const token = r?.authResponse?.accessToken;
-        if (token) void goRef.current('facebook', token);
-      });
-    const draw = () => {
-      if (!on || !window.FB || !fRef.current) return;
-      if (!(window as any).pxFbInit) {
-        window.FB.init({ appId: ids.facebook, cookie: false, xfbml: false, version: 'v19.0' });
-        (window as any).pxFbInit = true;
-      }
-      const w = Math.min(400, Math.max(200, Math.round(fRef.current.parentElement?.clientWidth || 360)));
-      fRef.current.innerHTML = `<div class="fb-login-button" data-width="${w}" data-size="large" data-button-type="${mode === 'signup' ? 'continue_with' : 'login_with'}" data-layout="default" data-use-continue-as="false" data-scope="public_profile,email" data-onlogin="pxFbDone"></div>`;
-      window.FB.XFBML.parse(fRef.current);
-    };
-    window.fbAsyncInit = draw;
-    script(`https://connect.facebook.net/${loc}/sdk.js`)
-      .then(draw)
-      .catch(() => on && onError(t('auth.social.noScript')));
-    return () => {
-      on = false;
-    };
-  }, [ids?.facebook, mode, lang]);
-
-  if (!ids || (!ids.google && !ids.facebook)) return null;
+  if (!ids?.google) return null;
   return (
     <div className="pxa-social">
       {ids.google && <div className="pxa-g" ref={gRef} aria-busy={busy === 'google'} />}
-      {ids.facebook && <div className="pxa-f" ref={fRef} aria-busy={busy === 'facebook'} />}
       {busy && <p className="muted small pxa-social-wait">{t('auth.social.wait')}</p>}
       <div className="pxa-sep">{t('auth.social.orEmail')}</div>
     </div>

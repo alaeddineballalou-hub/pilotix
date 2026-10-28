@@ -418,12 +418,10 @@
     "legalHint": "Plain text, line breaks are kept.",
     "legalPh": "Leave empty to keep the standard text.",
     "legalLink": "See the page",
-    "socialTitle": "Google and Facebook sign-in",
-    "socialHelp": "Paste your Google ID and your Facebook ID here: the “Continue with Google” and “Continue with Facebook” buttons then show on the sign-in and sign-up pages. Leave empty to hide a button.",
+    "socialTitle": "Google sign-in",
+    "socialHelp": "Paste your Google client ID here: the “Continue with Google” button then shows on the sign-in and sign-up pages. Leave empty to hide it.",
     "socialGoogle": "Google — OAuth client ID",
-    "socialGoogleHint": "Google Cloud Console → Credentials → OAuth client ID “Web application”. Authorized JavaScript origin: {{site}}",
-    "socialFacebook": "Facebook — App ID",
-    "socialFacebookHint": "developers.facebook.com → My apps → Create app → “Facebook Login”. App domain: {{site}}. Switch the app to “Live”."
+    "socialGoogleHint": "Google Cloud Console → Credentials → OAuth client ID “Web application”. Authorized JavaScript origin: {{site}}"
   },
   "demo": {
     "none": "No demo shop yet",

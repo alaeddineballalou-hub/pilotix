@@ -126,10 +126,7 @@ export function Settings({ staff }: { staff: Staff }) {
         <Card title={t('platform.set.socialTitle')} help={t('platform.set.socialHelp')}>
           <div className="pp-form">
             <Field label={t('platform.set.socialGoogle')} hint={t('platform.set.socialGoogleHint', { site: location.origin })}>
-              <input disabled={!owner} dir="ltr" maxLength={200} value={f.social?.googleClientId ?? ''} onChange={(e) => setF({ ...f, social: { googleClientId: e.target.value.trim(), facebookAppId: f.social?.facebookAppId ?? '' } })} placeholder="1234567890-abc.apps.googleusercontent.com" />
-            </Field>
-            <Field label={t('platform.set.socialFacebook')} hint={t('platform.set.socialFacebookHint', { site: location.origin })}>
-              <input disabled={!owner} dir="ltr" inputMode="numeric" maxLength={30} value={f.social?.facebookAppId ?? ''} onChange={(e) => setF({ ...f, social: { googleClientId: f.social?.googleClientId ?? '', facebookAppId: e.target.value.replace(/\D/g, '') } })} placeholder="123456789012345" />
+              <input disabled={!owner} dir="ltr" maxLength={200} value={f.social?.googleClientId ?? ''} onChange={(e) => setF({ ...f, social: { googleClientId: e.target.value.trim(), facebookAppId: '' } })} placeholder="1234567890-abc.apps.googleusercontent.com" />
             </Field>
           </div>
         </Card>

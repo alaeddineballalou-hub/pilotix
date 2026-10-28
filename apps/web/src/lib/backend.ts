@@ -120,9 +120,8 @@ export interface SignupInfo {
   whatsapp?: string;
   /** the sign-in page designs turned on in the control room (missing: an older server, all of them) */
   designs?: number[];
-  /** the Google client id and the Facebook app id (control room); empty: no button */
+  /** the Google client id (control room); empty: no button */
   googleClientId?: string;
-  facebookAppId?: string;
 }
 export const signupInfo = () => authRequest<SignupInfo>('/auth/signup').catch((): SignupInfo => ({ open: false, trialDays: 0, site: '', whatsapp: '' }));
 export const storeNameCheck = (name: string, slug?: string) =>
@@ -205,8 +204,8 @@ class RemoteBackend implements Backend {
     const r = await this.req<{ token: string; session: Session } | PickInfo>('/auth/login', { email, password });
     return 'pick' in r ? r : this.enterWith(r);
   }
-  /** Google or Facebook: the provider's token, checked by the server; a new person gets an account. */
-  async socialLogin(provider: 'google' | 'facebook', token: string, language?: string): Promise<LoginResult> {
+  /** Google: its token, checked by the server; a new person gets an account. */
+  async socialLogin(provider: 'google', token: string, language?: string): Promise<LoginResult> {
     const r = await this.req<{ token: string; session: Session } | PickInfo>('/auth/social', { provider, token, language });
     return 'pick' in r ? r : this.enterWith(r);
   }

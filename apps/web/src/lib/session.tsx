@@ -12,8 +12,8 @@ interface SessionState {
   /** the password was right and the person has several stores (or none): the picker shows them */
   picker: PickInfo | null;
   login: (email: string, password: string) => Promise<void>;
-  /** with Google or Facebook (the provider's token) */
-  loginSocial: (provider: 'google' | 'facebook', token: string) => Promise<void>;
+  /** with Google (its token) */
+  loginSocial: (provider: 'google', token: string) => Promise<void>;
   /** the store chosen in the picker */
   pick: (shop: number) => Promise<void>;
   cancelPick: () => void;
@@ -110,7 +110,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (isPick(r)) setPicker(r);
     else enter(r);
   };
-  const loginSocial = async (provider: 'google' | 'facebook', token: string) => {
+  const loginSocial = async (provider: 'google', token: string) => {
     const r = await server.socialLogin(provider, token, store.get('lang') || undefined);
     if (isPick(r)) setPicker(r);
     else enter(r);
