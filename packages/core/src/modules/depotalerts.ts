@@ -1,5 +1,5 @@
 // Dépôt alerts: when someone outside the depot changes (products, address, phone, amount…) or cancels an order the depot
-// still holds (à préparer / préparée), the depot manager — or whoever the owner chose in Management › Alertes dépôt — gets
+// already prepared (préparée — « à préparer » was not picked yet: the change just applies), the depot manager — or whoever the owner chose in Management › Alertes dépôt — gets
 // a red alert, with a sound, that blocks the app until the parcel is fixed, proven by scanning:
 //  - cancelled: scan the parcel's label once (it was found and taken out);
 //  - changed: scan the old label (the parcel was found), print the new label (a new Pilotix code: the old one no longer
@@ -10,7 +10,8 @@ import { Db, iso, num } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
 import { getSetting, setSetting } from '../settings';
 
-export const DEPOT_STAGES = ['to_prepare', 'prepared'];
+/** only a parcel already prepared alerts: « à préparer » was not picked yet, the change just applies */
+export const DEPOT_STAGES = ['prepared'];
 export interface DepotChange {
   field: 'items' | 'customer' | 'phone' | 'phone2' | 'place' | 'address' | 'company' | 'total' | 'note';
   from: string;

@@ -42,10 +42,20 @@ test('a change from outside the depot: old label, then the new label closes it; 
   assert.equal((await mine(karim, id)).length, 0);
 });
 
+test('an order « à préparer » (not picked yet) just changes: no alert', async () => {
+  const admin = await as(EMAILS.admin);
+  const karim = await as(EMAILS.depot);
+  const o = (await db.query(`SELECT id FROM orders WHERE follow_status = 'to_prepare' ORDER BY id LIMIT 2`));
+  await call('orders.update', admin, { id: Number(o[0].id), address: 'Nouvelle adresse' });
+  await call('orders.setConf', admin, { ids: [Number(o[1].id)], status: 'cancelled', reason: 'Client a annulé' });
+  assert.equal((await mine(karim, Number(o[0].id))).length, 0);
+  assert.equal((await mine(karim, Number(o[1].id))).length, 0);
+});
+
 test('a cancelled order: one scan of its label; only the chosen people get the alerts', async () => {
   const admin = await as(EMAILS.admin);
   const karim = await as(EMAILS.depot);
-  const o = (await db.query(`SELECT id, COALESCE(tracking, own_tracking) AS code FROM orders WHERE follow_status = 'to_prepare' ORDER BY id LIMIT 1`))[0];
+  const o = (await db.query(`SELECT id, COALESCE(tracking, own_tracking) AS code FROM orders WHERE follow_status = 'prepared' ORDER BY id DESC LIMIT 1`))[0];
   const id = Number(o.id);
   await call('orders.setConf', admin, { ids: [id], status: 'cancelled', reason: 'Client a annulé' });
   const a = (await mine(karim, id))[0];

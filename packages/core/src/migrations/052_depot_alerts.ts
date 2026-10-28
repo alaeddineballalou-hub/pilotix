@@ -1,4 +1,4 @@
-// Dépôt alerts: an order still in the depot (à préparer / préparée) was changed or cancelled by someone outside the
+// Dépôt alerts: an order already prepared in the depot was changed or cancelled by someone outside the
 // depot — the depot agents get a red alert that blocks the app until they say the parcel is fixed.
 export default `
 CREATE TABLE IF NOT EXISTS depot_alerts (
