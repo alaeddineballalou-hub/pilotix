@@ -26,7 +26,10 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-audit --no-fund
-      - run: npm test
+      # a failing test shows as one annotation on the run (its name and the assertion), readable without the raw log
+      - run: |
+          set -o pipefail
+          npm test 2>&1 | tee test.log || { msg=$(grep -E "not ok|✖|Error|expected|actual|^\s+[-+] " test.log | head -60 | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g'); echo "::error title=Failing tests::$msg"; exit 1; }
 
   server:
     name: Server (PostgreSQL 16 + end-to-end test)
