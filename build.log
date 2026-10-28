@@ -1,0 +1,8 @@
+
+> @pilotix/shared@2.0.0 build
+> tsc -p tsconfig.json
+
+
+> @pilotix/core@3.0.0 build
+> tsc -p tsconfig.json
+

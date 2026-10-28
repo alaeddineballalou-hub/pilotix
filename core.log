@@ -1,0 +1,2088 @@
+
+> @pilotix/core@3.0.0 test
+> node --test 'dist/test/*.test.js'
+
+TAP version 13
+# Subtest: orders: the ad id and name, and the search by ad / ad set / campaign id
+ok 1 - orders: the ad id and name, and the search by ad / ad set / campaign id
+  ---
+  duration_ms: 4032.444239
+  type: 'test'
+  ...
+# Subtest: payroll: agents above / below threshold, upsell, managers by team, suivi, dépôt, livreurs light / heavy
+ok 2 - payroll: agents above / below threshold, upsell, managers by team, suivi, dépôt, livreurs light / heavy
+  ---
+  duration_ms: 6106.261734
+  type: 'test'
+  ...
+# Subtest: roles: non-admins are refused on admin procedures
+ok 3 - roles: non-admins are refused on admin procedures
+  ---
+  duration_ms: 1724.133379
+  type: 'test'
+  ...
+# Subtest: Meta token is write-only: never returned by any procedure
+ok 4 - Meta token is write-only: never returned by any procedure
+  ---
+  duration_ms: 607.270082
+  type: 'test'
+  ...
+# Subtest: ads: a marketer only sees his own ad sets; the owner sees all
+ok 5 - ads: a marketer only sees his own ad sets; the owner sees all
+  ---
+  duration_ms: 1192.143975
+  type: 'test'
+  ...
+# Subtest: ads rules: advice and diagnostics
+ok 6 - ads rules: advice and diagnostics
+  ---
+  duration_ms: 0.443718
+  type: 'test'
+  ...
+# Subtest: an agency: signs up, checked by Pilotix, works for a store on the products it is given
+ok 7 - an agency: signs up, checked by Pilotix, works for a store on the products it is given
+  ---
+  duration_ms: 9231.154442
+  type: 'test'
+  ...
+# Subtest: an agency asks a store: its prices for that store; the store chooses what it gives
+ok 8 - an agency asks a store: its prices for that store; the store chooses what it gives
+  ---
+  duration_ms: 5402.725443
+  type: 'test'
+  ...
+# Subtest: « Créer mon agence » from the account menu: one agency per person, never a store of the plan
+ok 9 - « Créer mon agence » from the account menu: one agency per person, never a store of the plan
+  ---
+  duration_ms: 3177.467513
+  type: 'test'
+  ...
+# Subtest: an agency works on several sellers: one at a time or all together, its people per seller and per product
+ok 10 - an agency works on several sellers: one at a time or all together, its people per seller and per product
+  ---
+  duration_ms: 10383.968984
+  type: 'test'
+  ...
+# Subtest: every column that points to an account, a product, a variant or a depot is known to the check
+ok 11 - every column that points to an account, a product, a variant or a depot is known to the check
+  ---
+  duration_ms: 4101.859658
+  type: 'test'
+  ...
+# Subtest: only administrators open the archives
+ok 12 - only administrators open the archives
+  ---
+  duration_ms: 863.229913
+  type: 'test'
+  ...
+# Subtest: accounts: archived = closed and out of the team list, kept in the history; deleted only when archived and never used
+ok 13 - accounts: archived = closed and out of the team list, kept in the history; deleted only when archived and never used
+  ---
+  duration_ms: 1361.278224
+  type: 'test'
+  ...
+# Subtest: products: not archived with stock left; archived = out of the lists but still found for old orders; deleted only when never used
+ok 14 - products: not archived with stock left; archived = out of the lists but still found for old orders; deleted only when never used
+  ---
+  duration_ms: 368.467664
+  type: 'test'
+  ...
+# Subtest: depots: never the default one nor one with stock; archived = out of every list; deleted only when never used
+ok 15 - depots: never the default one nor one with stock; archived = out of every list; deleted only when never used
+  ---
+  duration_ms: 314.670488
+  type: 'test'
+  ...
+# Subtest: attack simulator: robots, pranks, competitors, refusers — and real customers are not blocked
+ok 16 - attack simulator: robots, pranks, competitors, refusers — and real customers are not blocked # SKIP set RUN_ATTACK=1 to run the attack simulator
+  ---
+  duration_ms: 4338.255839
+  type: 'test'
+  ...
+# Subtest: attack test: real attacks through the real scoring; real customers not blocked; nothing is saved
+ok 17 - attack test: real attacks through the real scoring; real customers not blocked; nothing is saved
+  ---
+  duration_ms: 14673.892499
+  type: 'test'
+  ...
+# Subtest: orders.sync: a livreur or a marketer cannot change a confirmation status, nor note someone else’s parcel
+ok 18 - orders.sync: a livreur or a marketer cannot change a confirmation status, nor note someone else’s parcel
+  ---
+  duration_ms: 5597.003701
+  type: 'test'
+  ...
+# Subtest: a livreur cannot hand his parcel (and its cash) to another livreur
+ok 19 - a livreur cannot hand his parcel (and its cash) to another livreur
+  ---
+  duration_ms: 305.541921
+  type: 'test'
+  ...
+# Subtest: deleting an account: refused with parcels or cash in hand; with a money history the account is emptied, not deleted
+ok 20 - deleting an account: refused with parcels or cash in hand; with a money history the account is emptied, not deleted
+  ---
+  duration_ms: 1451.391582
+  type: 'test'
+  ...
+# Subtest: changing the password raises the token version (other sessions are logged out)
+ok 21 - changing the password raises the token version (other sessions are logged out)
+  ---
+  duration_ms: 861.285225
+  type: 'test'
+  ...
+# Subtest: the dollar rate: the owner sets it, a marketer cannot
+ok 22 - the dollar rate: the owner sets it, a marketer cannot
+  ---
+  duration_ms: 574.850106
+  type: 'test'
+  ...
+# Subtest: a marketer reads no customer (no names, phones, addresses)
+ok 23 - a marketer reads no customer (no names, phones, addresses)
+  ---
+  duration_ms: 288.739496
+  type: 'test'
+  ...
+# Subtest: a cancelled order confirmed again goes back to the depot’s « À préparer »
+ok 24 - a cancelled order confirmed again goes back to the depot’s « À préparer »
+  ---
+  duration_ms: 333.065866
+  type: 'test'
+  ...
+# Subtest: confirming needs the commune (home delivery), also outside the screen
+ok 25 - confirming needs the commune (home delivery), also outside the screen
+  ---
+  duration_ms: 318.836197
+  type: 'test'
+  ...
+# Subtest: « Commande suivante »: two agents at the same moment never get the same customer
+ok 26 - « Commande suivante »: two agents at the same moment never get the same customer
+  ---
+  duration_ms: 632.493928
+  type: 'test'
+  ...
+# Subtest: finished orders: a cashed delivery stays delivered; the depot cannot reopen a delivered order; the suivi needs a reason
+ok 27 - finished orders: a cashed delivery stays delivered; the depot cannot reopen a delivered order; the suivi needs a reason
+  ---
+  duration_ms: 611.964326
+  type: 'test'
+  ...
+# Subtest: stock leaves even when the courier reports « en livraison » straight from « Préparée »
+ok 28 - stock leaves even when the courier reports « en livraison » straight from « Préparée »
+  ---
+  duration_ms: 646.75831
+  type: 'test'
+  ...
+# Subtest: a parcel at an API courier or cashed: amount and address are frozen (« Modifier le colis » instead)
+ok 29 - a parcel at an API courier or cashed: amount and address are frozen (« Modifier le colis » instead)
+  ---
+  duration_ms: 310.37448
+  type: 'test'
+  ...
+# Subtest: phones: +213 0661…, 00213 0661… and 2130661… are read as 0661…
+ok 30 - phones: +213 0661…, 00213 0661… and 2130661… are read as 0661…
+  ---
+  duration_ms: 0.269616
+  type: 'test'
+  ...
+# Subtest: the courier sync does not undo the suivi’s alert
+ok 31 - the courier sync does not undo the suivi’s alert
+  ---
+  duration_ms: 654.722872
+  type: 'test'
+  ...
+# Subtest: two « Envoyer » at once send a parcel to the courier only once
+ok 32 - two « Envoyer » at once send a parcel to the courier only once
+  ---
+  duration_ms: 611.616432
+  type: 'test'
+  ...
+# Subtest: a claim is not created twice for the same reason
+ok 33 - a claim is not created twice for the same reason
+  ---
+  duration_ms: 303.547054
+  type: 'test'
+  ...
+# Subtest: a courier without API: its fee (from its tariff) is taken off when the parcel leaves
+ok 34 - a courier without API: its fee (from its tariff) is taken off when the parcel leaves
+  ---
+  duration_ms: 616.903658
+  type: 'test'
+  ...
+# Subtest: a ZR payment counts only the parcels not already received by hand
+ok 35 - a ZR payment counts only the parcels not already received by hand
+  ---
+  duration_ms: 610.362252
+  type: 'test'
+  ...
+# Subtest: two transfers at once cannot empty a caisse twice
+ok 36 - two transfers at once cannot empty a caisse twice
+  ---
+  duration_ms: 313.600605
+  type: 'test'
+  ...
+# Subtest: paying a supplier takes the money out of a caisse (an employee: his own caisse only)
+ok 37 - paying a supplier takes the money out of a caisse (an employee: his own caisse only)
+  ---
+  duration_ms: 612.817867
+  type: 'test'
+  ...
+# Subtest: an admin password reset or a deactivation logs the account out everywhere
+ok 38 - an admin password reset or a deactivation logs the account out everywhere
+  ---
+  duration_ms: 577.897285
+  type: 'test'
+  ...
+# Subtest: an SAV exchange puts back only the exchanged item, and only once
+ok 39 - an SAV exchange puts back only the exchanged item, and only once
+  ---
+  duration_ms: 646.449583
+  type: 'test'
+  ...
+# Subtest: a marketer-only account never sees customers (leads, blocked orders) nor staff emails / phones
+ok 40 - a marketer-only account never sees customers (leads, blocked orders) nor staff emails / phones
+  ---
+  duration_ms: 595.98711
+  type: 'test'
+  ...
+# Subtest: an employee cannot sell below the allowed price, nor take a colleague’s credit, nor erase a parcel that left
+ok 41 - an employee cannot sell below the allowed price, nor take a colleague’s credit, nor erase a parcel that left
+  ---
+  duration_ms: 955.400024
+  type: 'test'
+  ...
+# Subtest: prevOf: the period before is as long, and a running period is compared up to the same moment
+ok 42 - prevOf: the period before is as long, and a running period is compared up to the same moment
+  ---
+  duration_ms: 4855.654063
+  type: 'test'
+  ...
+# Subtest: confirmation board (admin): every team, the team adds up its members, days and reasons add up
+ok 43 - confirmation board (admin): every team, the team adds up its members, days and reasons add up
+  ---
+  duration_ms: 367.557366
+  type: 'test'
+  ...
+# Subtest: confirmation board: a manager sees only his team; one team chosen limits the members
+ok 44 - confirmation board: a manager sees only his team; one team chosen limits the members
+  ---
+  duration_ms: 1056.848234
+  type: 'test'
+  ...
+# Subtest: suivi, dépôt, livreurs and SAV boards add up like the orders and tickets tables
+ok 45 - suivi, dépôt, livreurs and SAV boards add up like the orders and tickets tables
+  ---
+  duration_ms: 359.064804
+  type: 'test'
+  ...
+# Subtest: stats.me: an agent sees their own day next to their own team, with their rank
+ok 46 - stats.me: an agent sees their own day next to their own team, with their rank
+  ---
+  duration_ms: 1600.380788
+  type: 'test'
+  ...
+# Subtest: money received from a company goes into the chosen caisse; cancelling takes it back out
+ok 47 - money received from a company goes into the chosen caisse; cancelling takes it back out
+  ---
+  duration_ms: 4813.174331
+  type: 'test'
+  ...
+# Subtest: expenses, entries and transfers move the balances; a transfer cannot exceed the balance
+ok 48 - expenses, entries and transfers move the balances; a transfer cannot exceed the balance
+  ---
+  duration_ms: 333.465152
+  type: 'test'
+  ...
+# Subtest: an employee uses only his caisse and hands it only to the main caisse
+ok 49 - an employee uses only his caisse and hands it only to the main caisse
+  ---
+  duration_ms: 312.882831
+  type: 'test'
+  ...
+# Subtest: the owner creates his own caisses, uses them, renames them and removes them (money moved first)
+ok 50 - the owner creates his own caisses, uses them, renames them and removes them (money moved first)
+  ---
+  duration_ms: 628.671547
+  type: 'test'
+  ...
+# Subtest: a shop that does not use a bank removes it, and can put it back
+ok 51 - a shop that does not use a bank removes it, and can put it back
+  ---
+  duration_ms: 317.849437
+  type: 'test'
+  ...
+# Subtest: roles: depot and admin manage stock, confirmation cannot
+ok 52 - roles: depot and admin manage stock, confirmation cannot
+  ---
+  duration_ms: 5331.708776
+  type: 'test'
+  ...
+# Subtest: stock: entry, count, loss write stock and movements; reserved = confirmed not shipped
+ok 53 - stock: entry, count, loss write stock and movements; reserved = confirmed not shipped
+  ---
+  duration_ms: 310.768058
+  type: 'test'
+  ...
+# Subtest: transfer keeps the total and refuses more than available
+ok 54 - transfer keeps the total and refuses more than available
+  ---
+  duration_ms: 309.99751
+  type: 'test'
+  ...
+# Subtest: alert threshold and "only missing" filter
+ok 55 - alert threshold and "only missing" filter
+  ---
+  duration_ms: 299.717947
+  type: 'test'
+  ...
+# Subtest: products: create with variants, packs, linked; rename and disable a variant; max discount is admin only
+ok 56 - products: create with variants, packs, linked; rename and disable a variant; max discount is admin only
+  ---
+  duration_ms: 606.587138
+  type: 'test'
+  ...
+# Subtest: products: the form's details and alert level; a stock entry with a new purchase price
+ok 57 - products: the form's details and alert level; a stock entry with a new purchase price
+  ---
+  duration_ms: 321.65034
+  type: 'test'
+  ...
+# Subtest: picking: quantities to prepare and stock
+ok 58 - picking: quantities to prepare and stock
+  ---
+  duration_ms: 292.923881
+  type: 'test'
+  ...
+# Subtest: scanner: dispatch, double scan, return (stock back), refusals
+ok 59 - scanner: dispatch, double scan, return (stock back), refusals
+  ---
+  duration_ms: 795.051836
+  type: 'test'
+  ...
+# Subtest: receive a return from the Retours page, and "Retirer" from dispatch
+ok 60 - receive a return from the Retours page, and "Retirer" from dispatch
+  ---
+  duration_ms: 422.99201
+  type: 'test'
+  ...
+# Subtest: demo comments: answered, private messages, hidden spam and phone, a complaint for the team
+ok 61 - demo comments: answered, private messages, hidden spam and phone, a complaint for the team
+  ---
+  duration_ms: 4386.548341
+  type: 'test'
+  ...
+# Subtest: the demo texts are clean Algerian Darija
+ok 62 - the demo texts are clean Algerian Darija
+  ---
+  duration_ms: 54.725563
+  type: 'test'
+  ...
+# Subtest: roles: sellers and marketers work the comments, settings are admin only
+ok 63 - roles: sellers and marketers work the comments, settings are admin only
+  ---
+  duration_ms: 1447.480994
+  type: 'test'
+  ...
+# Subtest: Meta comment webhooks: Facebook feed and Instagram comments, the page’s own comments left out
+ok 64 - Meta comment webhooks: Facebook feed and Instagram comments, the page’s own comments left out
+  ---
+  duration_ms: 0.684209
+  type: 'test'
+  ...
+# Subtest: a comment with Claude: hide → private message → public reply, sent to Meta; the conversation is keyed by the PSID
+ok 65 - a comment with Claude: hide → private message → public reply, sent to Meta; the conversation is keyed by the PSID
+  ---
+  duration_ms: 912.151395
+  type: 'test'
+  ...
+# Subtest: guardrails: no price in public, one private message per person and post, phones hidden, complaints never hidden
+ok 66 - guardrails: no price in public, one private message per person and post, phones hidden, complaints never hidden
+  ---
+  duration_ms: 986.512556
+  type: 'test'
+  ...
+# Subtest: a complaint always reaches the team: with a link it stays visible, with insults it is hidden
+ok 67 - a complaint always reaches the team: with a link it stays visible, with insults it is hidden
+  ---
+  duration_ms: 916.236129
+  type: 'test'
+  ...
+# Subtest: a private message that fails: no "answered in private" in public, and the comment stays to handle
+ok 68 - a private message that fails: no "answered in private" in public, and the comment stays to handle
+  ---
+  duration_ms: 1206.28875
+  type: 'test'
+  ...
+# Subtest: two comments of one person at the same time: one private message
+ok 69 - two comments of one person at the same time: one private message
+  ---
+  duration_ms: 977.339277
+  type: 'test'
+  ...
+# Subtest: the AI keeps failing: tried again, then left to a person
+ok 70 - the AI keeps failing: tried again, then left to a person
+  ---
+  duration_ms: 916.803372
+  type: 'test'
+  ...
+# Subtest: public replies never carry a price (when private), a phone number or a link; numbers in Arabic digits too
+ok 71 - public replies never carry a price (when private), a phone number or a link; numbers in Arabic digits too
+  ---
+  duration_ms: 0.90335
+  type: 'test'
+  ...
+# Subtest: the sweep: channels turned off wait without blocking the others
+ok 72 - the sweep: channels turned off wait without blocking the others
+  ---
+  duration_ms: 1404.779316
+  type: 'test'
+  ...
+# Subtest: the shop’s settings change the decision
+ok 73 - the shop’s settings change the decision
+  ---
+  duration_ms: 0.582928
+  type: 'test'
+  ...
+# Subtest: when the public reply fails, the comment shows the error; off or at night the agent waits
+ok 74 - when the public reply fails, the comment shows the error; off or at night the agent waits
+  ---
+  duration_ms: 1805.889847
+  type: 'test'
+  ...
+# Subtest: an unreadable AI answer falls back to the rules; Darija mistakes are rewritten
+ok 75 - an unreadable AI answer falls back to the rules; Darija mistakes are rewritten
+  ---
+  duration_ms: 1205.234967
+  type: 'test'
+  ...
+# Subtest: Dellal continues the sale: it sees the comment, and does not follow up a private message nobody answered
+ok 76 - Dellal continues the sale: it sees the comment, and does not follow up a private message nobody answered
+  ---
+  duration_ms: 893.015933
+  type: 'test'
+  ...
+# Subtest: tester, posts and results
+ok 77 - tester, posts and results
+  ---
+  duration_ms: 327.938978
+  type: 'test'
+  ...
+# Subtest: a person answers, writes in private, hides, ignores
+ok 78 - a person answers, writes in private, hides, ignores
+  ---
+  duration_ms: 920.448787
+  type: 'test'
+  ...
+# Subtest: confirmation.list returns only the statuses of the sub-page, with default sorts
+ok 79 - confirmation.list returns only the statuses of the sub-page, with default sorts
+  ---
+  duration_ms: 4917.382476
+  type: 'test'
+  ...
+# Subtest: filters: agent "none", wilaya, search
+ok 80 - filters: agent "none", wilaya, search
+  ---
+  duration_ms: 336.722496
+  type: 'test'
+  ...
+# Subtest: first-call deadlines: newest first, +pace per newer order, night counts from 9h
+ok 81 - first-call deadlines: newest first, +pace per newer order, night counts from 9h
+  ---
+  duration_ms: 0.53117
+  type: 'test'
+  ...
+# Subtest: period ranges follow Algiers days
+ok 82 - period ranges follow Algiers days
+  ---
+  duration_ms: 0.301965
+  type: 'test'
+  ...
+# Subtest: statistics: managers only, numbers add up
+ok 83 - statistics: managers only, numbers add up
+  ---
+  duration_ms: 606.624584
+  type: 'test'
+  ...
+# Subtest: Tentative 02 sets no_answer with two attempts; block blacklists the customer
+ok 84 - Tentative 02 sets no_answer with two attempts; block blacklists the customer
+  ---
+  duration_ms: 734.126359
+  type: 'test'
+  ...
+# Subtest: banner counts the agent orders and gives the next one
+ok 85 - banner counts the agent orders and gives the next one
+  ---
+  duration_ms: 297.85464
+  type: 'test'
+  ...
+# Subtest: list rows carry stock availability and statuses passed; admin can delete orders still at confirmation only
+ok 86 - list rows carry stock availability and statuses passed; admin can delete orders still at confirmation only
+  ---
+  duration_ms: 614.660744
+  type: 'test'
+  ...
+# Subtest: column presets: admin adds and deletes, others only read, names are unique, no edit
+ok 87 - column presets: admin adds and deletes, others only read, names are unique, no edit
+  ---
+  duration_ms: 2955.803528
+  type: 'test'
+  ...
+# Subtest: delivery choice: bureaus of a wilaya with who delivers, bureau needs a stop desk, home forgets it; catalog has stock
+ok 88 - delivery choice: bureaus of a wilaya with who delivers, bureau needs a stop desk, home forgets it; catalog has stock
+  ---
+  duration_ms: 2699.617259
+  type: 'test'
+  ...
+# Subtest: an agent changes the wilaya and commune of an order; the grid price follows the wilaya chosen
+ok 89 - an agent changes the wilaya and commune of an order; the grid price follows the wilaya chosen
+  ---
+  duration_ms: 2782.888657
+  type: 'test'
+  ...
+# seeded in 2767 ms
+# Subtest: login: wrong password refused, right one accepted
+ok 90 - login: wrong password refused, right one accepted
+  ---
+  duration_ms: 5445.330949
+  type: 'test'
+  ...
+# Subtest: vendeur gets confirmation, suivi, depot, marketer
+ok 91 - vendeur gets confirmation, suivi, depot, marketer
+  ---
+  duration_ms: 289.30142
+  type: 'test'
+  ...
+# Subtest: orders.list filters and paginates
+ok 92 - orders.list filters and paginates
+  ---
+  duration_ms: 313.848096
+  type: 'test'
+  ...
+# Subtest: create → confirm → prepare → ship (stock down) → return (stock back)
+ok 93 - create → confirm → prepare → ship (stock down) → return (stock back)
+  ---
+  duration_ms: 708.307799
+  type: 'test'
+  ...
+# Subtest: offline retry never applies twice
+ok 94 - offline retry never applies twice
+  ---
+  duration_ms: 311.573923
+  type: 'test'
+  ...
+# Subtest: livreur only sees own orders and cannot open others
+ok 95 - livreur only sees own orders and cannot open others
+  ---
+  duration_ms: 299.672264
+  type: 'test'
+  ...
+# Subtest: roles: confirmation cannot create users, admin can
+ok 96 - roles: confirmation cannot create users, admin can
+  ---
+  duration_ms: 862.812265
+  type: 'test'
+  ...
+# Subtest: counts for the menu
+ok 97 - counts for the menu
+  ---
+  duration_ms: 300.559405
+  type: 'test'
+  ...
+# Subtest: the sync asks ZR for the payment and imports a paid statement into the caisse, once
+ok 98 - the sync asks ZR for the payment and imports a paid statement into the caisse, once
+  ---
+  duration_ms: 4664.57032
+  type: 'test'
+  ...
+# Subtest: in the preview a ZR payment waits at the office; « Reçu » puts it in the chosen caisse
+ok 99 - in the preview a ZR payment waits at the office; « Reçu » puts it in the chosen caisse
+  ---
+  duration_ms: 335.544718
+  type: 'test'
+  ...
+# Subtest: delivery.send in demo mode gives a tracking number and keeps the follow status
+ok 100 - delivery.send in demo mode gives a tracking number and keeps the follow status
+  ---
+  duration_ms: 5155.715162
+  type: 'test'
+  ...
+# Subtest: delivery.send uses the server courier hook when present
+ok 101 - delivery.send uses the server courier hook when present
+  ---
+  duration_ms: 297.939449
+  type: 'test'
+  ...
+# Subtest: credentials are write-only: never returned, hasKeys says if they are set
+ok 102 - credentials are write-only: never returned, hasKeys says if they are set
+  ---
+  duration_ms: 586.855355
+  type: 'test'
+  ...
+# Subtest: delivery.sync advances parcels on the road (demo)
+ok 103 - delivery.sync advances parcels on the road (demo)
+  ---
+  duration_ms: 835.401799
+  type: 'test'
+  ...
+# Subtest: fees grid and status mapping
+ok 104 - fees grid and status mapping
+  ---
+  duration_ms: 294.675786
+  type: 'test'
+  ...
+# Subtest: cash.receive creates a versement and marks the orders cashed; cancel puts them back
+ok 105 - cash.receive creates a versement and marks the orders cashed; cancel puts them back
+  ---
+  duration_ms: 613.242512
+  type: 'test'
+  ...
+# Subtest: a livreur only sees his own round, cash and chat
+ok 106 - a livreur only sees his own round, cash and chat
+  ---
+  duration_ms: 919.910829
+  type: 'test'
+  ...
+# Subtest: route sheet and preview
+ok 107 - route sheet and preview
+  ---
+  duration_ms: 598.191087
+  type: 'test'
+  ...
+# Subtest: settings: admin only, secrets never returned, verify token created
+ok 108 - settings: admin only, secrets never returned, verify token created
+  ---
+  duration_ms: 4731.331803
+  type: 'test'
+  ...
+# Subtest: test chat (no AI): answers price, delivery fee, recap, then simulates the order
+ok 109 - test chat (no AI): answers price, delivery fee, recap, then simulates the order
+  ---
+  duration_ms: 464.055843
+  type: 'test'
+  ...
+# Subtest: a WhatsApp message: Dellal (AI) sells, the order lands in Confirmation › Nouvelles, linked to the conversation
+ok 110 - a WhatsApp message: Dellal (AI) sells, the order lands in Confirmation › Nouvelles, linked to the conversation
+  ---
+  duration_ms: 672.821032
+  type: 'test'
+  ...
+# Subtest: stock guard and handoff; a person takes over, then gives back to Dellal
+ok 111 - stock guard and handoff; a person takes over, then gives back to Dellal
+  ---
+  duration_ms: 926.983907
+  type: 'test'
+  ...
+# Subtest: Dellal off or at night: no answer
+ok 112 - Dellal off or at night: no answer
+  ---
+  duration_ms: 611.059248
+  type: 'test'
+  ...
+# Subtest: places, Meta webhook parsing and message splitting
+ok 113 - places, Meta webhook parsing and message splitting
+  ---
+  duration_ms: 4.737981
+  type: 'test'
+  ...
+# Subtest: the sales playbook reaches the AI; a pack quantity gets the pack price, a linked product is marked upsell
+ok 114 - the sales playbook reaches the AI; a pack quantity gets the pack price, a linked product is marked upsell
+  ---
+  duration_ms: 636.835692
+  type: 'test'
+  ...
+# Subtest: darija checker: other dialects and wrong phrases are caught; clean Algerian, Arabic script and mirroring pass
+ok 115 - darija checker: other dialects and wrong phrases are caught; clean Algerian, Arabic script and mirroring pass
+  ---
+  duration_ms: 24.86998
+  type: 'test'
+  ...
+# Subtest: a reply in another dialect is rewritten in Algerian Darija before it is sent; the shop list is in the instructions
+ok 116 - a reply in another dialect is rewritten in Algerian Darija before it is sent; the shop list is in the instructions
+  ---
+  duration_ms: 1529.354218
+  type: 'test'
+  ...
+# Subtest: the demo store gets its agency and its marketer, each with work to show
+ok 117 - the demo store gets its agency and its marketer, each with work to show
+  ---
+  duration_ms: 8056.69002
+  type: 'test'
+  ...
+# Subtest: a change from outside the depot: old label, then the new label closes it; the depot’s own edits don’t alert
+ok 118 - a change from outside the depot: old label, then the new label closes it; the depot’s own edits don’t alert
+  ---
+  duration_ms: 5075.645825
+  type: 'test'
+  ...
+# Subtest: an order « à préparer » (not picked yet) just changes: no alert
+ok 119 - an order « à préparer » (not picked yet) just changes: no alert
+  ---
+  duration_ms: 598.013298
+  type: 'test'
+  ...
+# Subtest: a cancelled order: one scan of its label; only the chosen people get the alerts
+ok 120 - a cancelled order: one scan of its label; only the chosen people get the alerts
+  ---
+  duration_ms: 879.556172
+  type: 'test'
+  ...
+# Subtest: an open alert rings on the phones of the people away from the app, not more than once a minute
+ok 121 - an open alert rings on the phones of the people away from the app, not more than once a minute
+  ---
+  duration_ms: 602.123293
+  type: 'test'
+  ...
+# Subtest: Envoyer au dispatch with a company that has an API: in « En dispatch » with the company’s own number
+ok 122 - Envoyer au dispatch with a company that has an API: in « En dispatch » with the company’s own number
+  ---
+  duration_ms: 5190.534312
+  type: 'test'
+  ...
+# Subtest: own livreurs keep the Pilotix number: nothing is sent
+ok 123 - own livreurs keep the Pilotix number: nothing is sent
+  ---
+  duration_ms: 307.052034
+  type: 'test'
+  ...
+# Subtest: another company in « En dispatch »: cancelled at the old one, sent to the new one with its number
+ok 124 - another company in « En dispatch »: cancelled at the old one, sent to the new one with its number
+  ---
+  duration_ms: 330.814238
+  type: 'test'
+  ...
+# Subtest: a company that refuses: the parcel stays in « En dispatch » without a number, the reason is given
+ok 125 - a company that refuses: the parcel stays in « En dispatch » without a number, the reason is given
+  ---
+  duration_ms: 634.162359
+  type: 'test'
+  ...
+# Subtest: « Retirer » on a parcel already at the company cancels it there and sends it back to « À préparer »
+ok 126 - « Retirer » on a parcel already at the company cancels it there and sends it back to « À préparer »
+  ---
+  duration_ms: 336.269646
+  type: 'test'
+  ...
+# Subtest: scanning: the company’s label dispatches; a Pilotix label (reference or Pilotix number) is refused as replaced
+ok 127 - scanning: the company’s label dispatches; a Pilotix label (reference or Pilotix number) is refused as replaced
+  ---
+  duration_ms: 358.716481
+  type: 'test'
+  ...
+# Subtest: demo data: parcels on the road with a company that has an API carry that company’s own number; own livreurs keep the Pilotix one
+ok 128 - demo data: parcels on the road with a company that has an API carry that company’s own number; own livreurs keep the Pilotix one
+  ---
+  duration_ms: 4085.725195
+  type: 'test'
+  ...
+# Subtest: labels: a company with an API gives its own label (link or PDF); none from a courier without labels; a stand-in in the preview
+ok 129 - labels: a company with an API gives its own label (link or PDF); none from a courier without labels; a stand-in in the preview
+  ---
+  duration_ms: 909.942798
+  type: 'test'
+  ...
+# Subtest: labels: ZR gives ONE PDF for all its parcels; a parcel it leaves out gets its reason
+ok 130 - labels: ZR gives ONE PDF for all its parcels; a parcel it leaves out gets its reason
+  ---
+  duration_ms: 603.107105
+  type: 'test'
+  ...
+# Subtest: the screens know which couriers give their own label: the others (Procolis…) print the Pilotix one
+ok 131 - the screens know which couriers give their own label: the others (Procolis…) print the Pilotix one
+  ---
+  duration_ms: 0.433532
+  type: 'test'
+  ...
+# Subtest: who may open Pilotix Doctor
+    # Subtest: admin and vendeur: yes, on the demo shop, with a well-formed answer
+    ok 1 - admin and vendeur: yes, on the demo shop, with a well-formed answer
+      ---
+      duration_ms: 615.362829
+      type: 'test'
+      ...
+    # Subtest: everybody else gets the part that is theirs
+    ok 2 - everybody else gets the part that is theirs
+      ---
+      duration_ms: 1776.873035
+      type: 'test'
+      ...
+    # Subtest: money only for the administrator
+    ok 3 - money only for the administrator
+      ---
+      duration_ms: 610.960075
+      type: 'test'
+      ...
+    # Subtest: a menu in the plans: on with the dashboard, can be turned off alone
+    ok 4 - a menu in the plans: on with the dashboard, can be turned off alone
+      ---
+      duration_ms: 0.494604
+      type: 'test'
+      ...
+    1..4
+ok 132 - who may open Pilotix Doctor
+  ---
+  duration_ms: 7857.648842
+  type: 'suite'
+  ...
+# Subtest: a new shop with nothing: no problem, nothing to judge, score 100
+ok 133 - a new shop with nothing: no problem, nothing to judge, score 100
+  ---
+  duration_ms: 2203.605837
+  type: 'test'
+  ...
+# Subtest: every problem is seen
+    # Subtest: the answer is well formed and the score is low
+    ok 1 - the answer is well formed and the score is low
+      ---
+      duration_ms: 0.453282
+      type: 'test'
+      ...
+    # Subtest: stock missing for confirmed orders (no_stock + prepared count, shelves do not)
+    ok 2 - stock missing for confirmed orders (no_stock + prepared count, shelves do not)
+      ---
+      duration_ms: 0.175354
+      type: 'test'
+      ...
+    # Subtest: stock running out in 2 days; the one that lasts 30 days is not listed
+    ok 3 - stock running out in 2 days; the one that lasts 30 days is not listed
+      ---
+      duration_ms: 0.235644
+      type: 'test'
+      ...
+    # Subtest: new orders not called: 25 (≥ 20 → urgent), the oldest 27 h; the one of 1 h is not late
+    ok 4 - new orders not called: 25 (≥ 20 → urgent), the oldest 27 h; the one of 1 h is not late
+      ---
+      duration_ms: 0.146611
+      type: 'test'
+      ...
+    # Subtest: late callbacks
+    ok 5 - late callbacks
+      ---
+      duration_ms: 0.097957
+      type: 'test'
+      ...
+    # Subtest: confirmation rate dropping: 80 % → 57.5 %
+    ok 6 - confirmation rate dropping: 80 % → 57.5 %
+      ---
+      duration_ms: 0.067552
+      type: 'test'
+      ...
+    # Subtest: fake orders: 6 of the orders of the week
+    ok 7 - fake orders: 6 of the orders of the week
+      ---
+      duration_ms: 0.054973
+      type: 'test'
+      ...
+    # Subtest: the agent far below the team is named, the good one is not
+    ok 8 - the agent far below the team is named, the good one is not
+      ---
+      duration_ms: 0.065188
+      type: 'test'
+      ...
+    # Subtest: confirmed but not shipped after 2 days
+    ok 9 - confirmed but not shipped after 2 days
+      ---
+      duration_ms: 0.050566
+      type: 'test'
+      ...
+    # Subtest: parcels stuck at the courier (recent news = not stuck)
+    ok 10 - parcels stuck at the courier (recent news = not stuck)
+      ---
+      duration_ms: 0.05343
+      type: 'test'
+      ...
+    # Subtest: open alerts (handled ones do not count)
+    ok 11 - open alerts (handled ones do not count)
+      ---
+      duration_ms: 0.037677
+      type: 'test'
+      ...
+    # Subtest: a wilaya that sends parcels back, and the returns rate
+    ok 12 - a wilaya that sends parcels back, and the returns rate
+      ---
+      duration_ms: 0.05355
+      type: 'test'
+      ...
+    # Subtest: delivered, not paid after 10 days, with the amount (admin)
+    ok 13 - delivered, not paid after 10 days, with the amount (admin)
+      ---
+      duration_ms: 0.044607
+      type: 'test'
+      ...
+    # Subtest: the vendeur sees the same problems, without the amount
+    ok 14 - the vendeur sees the same problems, without the amount
+      ---
+      duration_ms: 15.13059
+      type: 'test'
+      ...
+    1..14
+ok 134 - every problem is seen
+  ---
+  duration_ms: 2416.930067
+  type: 'suite'
+  ...
+# Subtest: a healthy shop: every check says OK
+ok 135 - a healthy shop: every check says OK
+  ---
+  duration_ms: 2427.074218
+  type: 'test'
+  ...
+# Subtest: one agent works well, another does not: each sees their own score; the suivi agent only their parcels
+ok 136 - one agent works well, another does not: each sees their own score; the suivi agent only their parcels
+  ---
+  duration_ms: 4533.123429
+  type: 'test'
+  ...
+# Subtest: borders and rows to ignore
+    # Subtest: notCalled: exactly 2 h is not late yet; 19 is "watch", 20 is "urgent"; a called order (attempts) is not "not called"
+    ok 1 - notCalled: exactly 2 h is not late yet; 19 is "watch", 20 is "urgent"; a called order (attempts) is not "not called"
+      ---
+      duration_ms: 2177.307432
+      type: 'test'
+      ...
+    # Subtest: notCalled: one order waiting 24 h is urgent on its own
+    ok 2 - notCalled: one order waiting 24 h is urgent on its own
+      ---
+      duration_ms: 2130.185095
+      type: 'test'
+      ...
+    # Subtest: callbacks less than 1 h late, or in the future, are fine
+    ok 3 - callbacks less than 1 h late, or in the future, are fine
+      ---
+      duration_ms: 2147.228555
+      type: 'test'
+      ...
+    # Subtest: stock: inactive products and services are ignored; two depots are added up
+    ok 4 - stock: inactive products and services are ignored; two depots are added up
+      ---
+      duration_ms: 2165.747351
+      type: 'test'
+      ...
+    # Subtest: stock: shipped orders no longer need the shelves; exchanges (SAV parcels) are not orders
+    ok 5 - stock: shipped orders no longer need the shelves; exchanges (SAV parcels) are not orders
+      ---
+      duration_ms: 2111.80257
+      type: 'test'
+      ...
+    # Subtest: negative stock (shipped more than counted) with orders waiting = missing
+    ok 6 - negative stock (shipped more than counted) with orders waiting = missing
+      ---
+      duration_ms: 2109.730688
+      type: 'test'
+      ...
+    # Subtest: rates need enough orders: 19 decided orders are "info", not a verdict
+    ok 7 - rates need enough orders: 19 decided orders are "info", not a verdict
+      ---
+      duration_ms: 2274.465225
+      type: 'test'
+      ...
+    # Subtest: confirmation: under 5 points down is OK, 5 to 15 is "watch", 15 and more is "urgent"
+    ok 8 - confirmation: under 5 points down is OK, 5 to 15 is "watch", 15 and more is "urgent"
+      ---
+      duration_ms: 6796.203394
+      type: 'test'
+      ...
+    # Subtest: returns: under 55 % delivered is urgent, under 70 % watch; a fall of 12 points is urgent even when high
+    ok 9 - returns: under 55 % delivered is urgent, under 70 % watch; a fall of 12 points is urgent even when high
+      ---
+      duration_ms: 13150.891217
+      type: 'test'
+      ...
+    # Subtest: orders drop: yesterday half of the usual = urgent, 35 % less = watch
+    ok 10 - orders drop: yesterday half of the usual = urgent, 35 % less = watch
+      ---
+      duration_ms: 6491.720331
+      type: 'test'
+      ...
+    # Subtest: parcels: news within 3 days or shipped less than 8 days ago = not stuck; delivered/returned never
+    ok 11 - parcels: news within 3 days or shipped less than 8 days ago = not stuck; delivered/returned never
+      ---
+      duration_ms: 2063.459458
+      type: 'test'
+      ...
+    # Subtest: cash: paid parcels and recent deliveries are fine
+    ok 12 - cash: paid parcels and recent deliveries are fine
+      ---
+      duration_ms: 2102.134553
+      type: 'test'
+      ...
+    # Subtest: wilayas need 12 parcels before a verdict
+    ok 13 - wilayas need 12 parcels before a verdict
+      ---
+      duration_ms: 2076.971482
+      type: 'test'
+      ...
+    # Subtest: agents need 20 decided orders before being compared
+    ok 14 - agents need 20 decided orders before being compared
+      ---
+      duration_ms: 2158.41289
+      type: 'test'
+      ...
+    1..14
+ok 137 - borders and rows to ignore
+  ---
+  duration_ms: 49957.56862
+  type: 'suite'
+  ...
+# Subtest: score: 15 per urgent, 5 per watch, never under 5; sort keeps the order inside a level
+ok 138 - score: 15 per urgent, 5 per watch, never under 5; sort keeps the order inside a level
+  ---
+  duration_ms: 0.203065
+  type: 'test'
+  ...
+# Subtest: own domain: cleaned, never the platform or another shop, ready once its DNS points to the server
+ok 139 - own domain: cleaned, never the platform or another shop, ready once its DNS points to the server
+  ---
+  duration_ms: 4420.128672
+  type: 'test'
+  ...
+# Subtest: an order goes straight to « Nouvelle » as a Landing order, with its ad link (UTM, ad set) and the variant’s own price
+ok 140 - an order goes straight to « Nouvelle » as a Landing order, with its ad link (UTM, ad set) and the variant’s own price
+  ---
+  duration_ms: 5026.115502
+  type: 'test'
+  ...
+# Subtest: Meta: a Purchase only when an agent confirms a landing order (never at submit, never twice)
+ok 141 - Meta: a Purchase only when an agent confirms a landing order (never at submit, never twice)
+  ---
+  duration_ms: 459.660932
+  type: 'test'
+  ...
+# Subtest: Meta: a blocked order is never a Purchase, even in « at order » mode; a borderline one waits for a person
+ok 142 - Meta: a blocked order is never a Purchase, even in « at order » mode; a borderline one waits for a person
+  ---
+  duration_ms: 243.912224
+  type: 'test'
+  ...
+# Subtest: Meta: the outbox sends hashed customer data through the Conversions API, and skips an order marked fake meanwhile
+ok 143 - Meta: the outbox sends hashed customer data through the Conversions API, and skips an order marked fake meanwhile
+  ---
+  duration_ms: 1139.190166
+  type: 'test'
+  ...
+# Subtest: abandoned: a number typed without ordering becomes a « Nouvelle » order after the delay, with no message to the customer
+ok 144 - abandoned: a number typed without ordering becomes a « Nouvelle » order after the delay, with no message to the customer
+  ---
+  duration_ms: 192.850517
+  type: 'test'
+  ...
+# Subtest: abandoned: a customer who orders is not added twice; one without wilaya waits in the list; a bot is never kept
+ok 145 - abandoned: a customer who orders is not added twice; one without wilaya waits in the list; a bot is never kept
+  ---
+  duration_ms: 565.084843
+  type: 'test'
+  ...
+# Subtest: products without a page: counted for marketers, one-click page, set aside, and made automatically when asked
+ok 146 - products without a page: counted for marketers, one-click page, set aside, and made automatically when asked
+  ---
+  duration_ms: 1255.193605
+  type: 'test'
+  ...
+# Subtest: stock: a sold-out variant is marked on the page (when asked), and still ordered if the page was open before
+ok 147 - stock: a sold-out variant is marked on the page (when asked), and still ordered if the page was open before
+  ---
+  duration_ms: 80.52581
+  type: 'test'
+  ...
+# Subtest: groups: saved, shown at their address, each product opens its own landing page
+ok 148 - groups: saved, shown at their address, each product opens its own landing page
+  ---
+  duration_ms: 4435.359027
+  type: 'test'
+  ...
+# Subtest: groups: the best seller the shop picks is shown big at the top
+ok 149 - groups: the best seller the shop picks is shown big at the top
+  ---
+  duration_ms: 22.271745
+  type: 'test'
+  ...
+# Subtest: groups: addresses are never shared with a landing page, a product only once
+ok 150 - groups: addresses are never shared with a landing page, a product only once
+  ---
+  duration_ms: 296.122933
+  type: 'test'
+  ...
+# Subtest: groups: the designs (tabs and search, sold out at the end, the editor preview)
+ok 151 - groups: the designs (tabs and search, sold out at the end, the editor preview)
+  ---
+  duration_ms: 17.469047
+  type: 'test'
+  ...
+# Subtest: a compressed picture: 720 width in the srcset, blurred placeholder behind the main photo, info back in the editor
+ok 152 - a compressed picture: 720 width in the srcset, blurred placeholder behind the main photo, info back in the editor
+  ---
+  duration_ms: 4427.590054
+  type: 'test'
+  ...
+# Subtest: the 720 file: its own when made, the 960 one for a picture from before
+ok 153 - the 720 file: its own when made, the 960 one for a picture from before
+  ---
+  duration_ms: 3.123881
+  type: 'test'
+  ...
+# Subtest: what the compressor sends is checked: bad quality scores, oversized placeholder, not base64
+ok 154 - what the compressor sends is checked: bad quality scores, oversized placeholder, not base64
+  ---
+  duration_ms: 1.115739
+  type: 'test'
+  ...
+# Subtest: the 320 width: in the srcset when made, added later to a picture from before (once), the 480 file until then
+ok 155 - the 320 width: in the srcset when made, added later to a picture from before (once), the 480 file until then
+  ---
+  duration_ms: 45.833413
+  type: 'test'
+  ...
+# Subtest: « Abandonnées »: every tab answers, with and without a search
+ok 156 - « Abandonnées »: every tab answers, with and without a search
+  ---
+  duration_ms: 5167.495784
+  type: 'test'
+  ...
+# Subtest: a customer who ordered and comes back (or whose lead arrives late) gets no second, silent order
+ok 157 - a customer who ordered and comes back (or whose lead arrives late) gets no second, silent order
+  ---
+  duration_ms: 170.901564
+  type: 'test'
+  ...
+# Subtest: a lead needs the page’s challenge; a number blocked as fake is not kept; a fake lead goes to « Commandes bloquées », not Commandes
+ok 158 - a lead needs the page’s challenge; a number blocked as fake is not kept; a fake lead goes to « Commandes bloquées », not Commandes
+  ---
+  duration_ms: 176.156862
+  type: 'test'
+  ...
+# Subtest: an abandoned order of a product without variants keeps its stock variant (reserved and shipped like the others)
+ok 159 - an abandoned order of a product without variants keeps its stock variant (reserved and shipped like the others)
+  ---
+  duration_ms: 117.197711
+  type: 'test'
+  ...
+# Subtest: the page left open: Pilotix adds the order, then the customer validates → one live order, the other cancelled as a duplicate
+ok 160 - the page left open: Pilotix adds the order, then the customer validates → one live order, the other cancelled as a duplicate
+  ---
+  duration_ms: 314.607943
+  type: 'test'
+  ...
+# Subtest: a corrected digit updates the same lead: no abandoned order for a stranger’s number
+ok 161 - a corrected digit updates the same lead: no abandoned order for a stranger’s number
+  ---
+  duration_ms: 146.800771
+  type: 'test'
+  ...
+# Subtest: two clicks on « Ajouter aux commandes » (or a click racing the job) make one order
+ok 162 - two clicks on « Ajouter aux commandes » (or a click racing the job) make one order
+  ---
+  duration_ms: 343.763693
+  type: 'test'
+  ...
+# Subtest: « Compléter »: a lead without wilaya becomes a silent order once the agent gives it
+ok 163 - « Compléter »: a lead without wilaya becomes a silent order once the agent gives it
+  ---
+  duration_ms: 420.690262
+  type: 'test'
+  ...
+# Subtest: Meta: the Purchase of an abandoned order carries the browser it came from; without a token events wait, then leave
+ok 164 - Meta: the Purchase of an abandoned order carries the browser it came from; without a token events wait, then leave
+  ---
+  duration_ms: 677.958714
+  type: 'test'
+  ...
+# Subtest: Meta: an event Meta refuses does not take the others down with it
+ok 165 - Meta: an event Meta refuses does not take the others down with it
+  ---
+  duration_ms: 823.651075
+  type: 'test'
+  ...
+# Subtest: « at order » mode: a borderline order counts once an agent confirms it
+ok 166 - « at order » mode: a borderline order counts once an agent confirms it
+  ---
+  duration_ms: 468.795925
+  type: 'test'
+  ...
+# Subtest: the page is one small HTML file with the form, the colour and the description
+ok 167 - the page is one small HTML file with the form, the colour and the description
+  ---
+  duration_ms: 4979.577601
+  type: 'test'
+  ...
+# Subtest: search engines: a description, its own address and share tags on the real page; the previews are not indexed
+ok 168 - search engines: a description, its own address and share tags on the real page; the previews are not indexed
+  ---
+  duration_ms: 18.786864
+  type: 'test'
+  ...
+# Subtest: llms.txt: a title, then a link to every live page with its price
+ok 169 - llms.txt: a title, then a link to every live page with its price
+  ---
+  duration_ms: 4.155504
+  type: 'test'
+  ...
+# Subtest: page address: site/<store>/<page>, the store from the shop name or chosen in Réglages, reserved names refused
+ok 170 - page address: site/<store>/<page>, the store from the shop name or chosen in Réglages, reserved names refused
+  ---
+  duration_ms: 310.479827
+  type: 'test'
+  ...
+# Subtest: a normal customer becomes a new order, at the page price
+ok 171 - a normal customer becomes a new order, at the page price
+  ---
+  duration_ms: 96.380047
+  type: 'test'
+  ...
+# Subtest: a bot gets the same answer, but no order: it waits in « Commandes bloquées » with its reasons
+ok 172 - a bot gets the same answer, but no order: it waits in « Commandes bloquées » with its reasons
+  ---
+  duration_ms: 53.079142
+  type: 'test'
+  ...
+# Subtest: the same challenge cannot be used twice, and a too-fast order counts against it
+ok 173 - the same challenge cannot be used twice, and a too-fast order counts against it
+  ---
+  duration_ms: 162.508057
+  type: 'test'
+  ...
+# Subtest: a blacklisted number alone is put to review; with one more signal it is blocked, and restoring makes a real order
+ok 174 - a blacklisted number alone is put to review; with one more signal it is blocked, and restoring makes a real order
+  ---
+  duration_ms: 461.565518
+  type: 'test'
+  ...
+# Subtest: the same product sent again within 48 h, still to call: one order, the change written on it for the agent
+ok 175 - the same product sent again within 48 h, still to call: one order, the change written on it for the agent
+  ---
+  duration_ms: 300.328575
+  type: 'test'
+  ...
+# Subtest: a competitor: one device sending a third number in an hour is blocked; a device agents marked « concurrent » too
+ok 176 - a competitor: one device sending a third number in an hour is blocked; a device agents marked « concurrent » too
+  ---
+  duration_ms: 711.773024
+  type: 'test'
+  ...
+# Subtest: signals: names, phones and the weighted score
+ok 177 - signals: names, phones and the weighted score
+  ---
+  duration_ms: 1.183211
+  type: 'test'
+  ...
+# Subtest: a marketer: its own account, checked by Pilotix, works for a store on the ad sets the store gives
+ok 178 - a marketer: its own account, checked by Pilotix, works for a store on the ad sets the store gives
+  ---
+  duration_ms: 6720.01554
+  type: 'test'
+  ...
+# Subtest: marketers and agencies never meet; several marketers can share a product
+ok 179 - marketers and agencies never meet; several marketers can share a product
+  ---
+  duration_ms: 5756.05348
+  type: 'test'
+  ...
+# Subtest: « Créer mon espace marketer » from a seller’s account: one per person, never a store of the plan
+ok 180 - « Créer mon espace marketer » from a seller’s account: one per person, never a store of the plan
+  ---
+  duration_ms: 3964.630637
+  type: 'test'
+  ...
+# Subtest: a product the store takes back takes its ad sets with it: out of the marketer’s view and of its bill
+ok 181 - a product the store takes back takes its ad sets with it: out of the marketer’s view and of its bill
+  ---
+  duration_ms: 5081.383724
+  type: 'test'
+  ...
+# Subtest: marketer payments: results, rules, assign, force, pay and unpay
+ok 182 - marketer payments: results, rules, assign, force, pay and unpay
+  ---
+  duration_ms: 7913.449444
+  type: 'test'
+  ...
+# Subtest: marketer payments: whole life, forgotten confirmations, missing dollar rate
+ok 183 - marketer payments: whole life, forgotten confirmations, missing dollar rate
+  ---
+  duration_ms: 4689.62463
+  type: 'test'
+  ...
+# Subtest: the default texts: Algerian Darija, cheap SMS, valid WhatsApp templates
+ok 184 - the default texts: Algerian Darija, cheap SMS, valid WhatsApp templates
+  ---
+  duration_ms: 5426.341779
+  type: 'test'
+  ...
+# Subtest: a new order: "received", then "confirmed" once; WhatsApp, or SMS when the number has no WhatsApp
+ok 185 - a new order: "received", then "confirmed" once; WhatsApp, or SMS when the number has no WhatsApp
+  ---
+  duration_ms: 748.818584
+  type: 'test'
+  ...
+# Subtest: delivery: shipped, with the livreur, failed attempt, cancelled by the livreur; at the desk; once each; delivered when on
+ok 186 - delivery: shipped, with the livreur, failed attempt, cancelled by the livreur; at the desk; once each; delivered when on
+  ---
+  duration_ms: 1846.266492
+  type: 'test'
+  ...
+# Subtest: the night: messages wait for 8:00, a newer step replaces the older one, "send now" sends at once
+ok 187 - the night: messages wait for 8:00, a newer step replaces the older one, "send now" sends at once
+  ---
+  duration_ms: 3065.364211
+  type: 'test'
+  ...
+# Subtest: a waiting message whose order moved on is not sent (no outdated news)
+ok 188 - a waiting message whose order moved on is not sent (no outdated news)
+  ---
+  duration_ms: 1200.501462
+  type: 'test'
+  ...
+# Subtest: no SMS sender: the list "to send by hand", marked as sent
+ok 189 - no SMS sender: the list "to send by hand", marked as sent
+  ---
+  duration_ms: 1010.43438
+  type: 'test'
+  ...
+# Subtest: server: Meta templates, WhatsApp, delivery statuses, fallback to SMS, the SMS gateway
+ok 190 - server: Meta templates, WhatsApp, delivery statuses, fallback to SMS, the SMS gateway
+  ---
+  duration_ms: 2617.414799
+  type: 'test'
+  ...
+# Subtest: answers: the delivery message shows in Message AI agent before the answer, Dellal knows the order
+ok 191 - answers: the delivery message shows in Message AI agent before the answer, Dellal knows the order
+  ---
+  duration_ms: 1043.436663
+  type: 'test'
+  ...
+# Subtest: an order taken by Message AI agent on WhatsApp: no "received" or "confirmed" message
+ok 192 - an order taken by Message AI agent on WhatsApp: no "received" or "confirmed" message
+  ---
+  duration_ms: 353.57793
+  type: 'test'
+  ...
+# Subtest: the demo: messages of the last days, answers, saved parcels; results
+ok 193 - the demo: messages of the last days, answers, saved parcels; results
+  ---
+  duration_ms: 603.987451
+  type: 'test'
+  ...
+# Subtest: roles: the follow-up team and the sellers see the messages; only an admin changes the settings
+ok 194 - roles: the follow-up team and the sellers see the messages; only an admin changes the settings
+  ---
+  duration_ms: 2608.357805
+  type: 'test'
+  ...
+# Subtest: review: the 1-hour SMS fallback that fails is tried again by SMS, never by WhatsApp again
+ok 195 - review: the 1-hour SMS fallback that fails is tried again by SMS, never by WhatsApp again
+  ---
+  duration_ms: 1503.205323
+  type: 'test'
+  ...
+# Subtest: review: the fallback checks the order again (no outdated SMS), and a status Meta sends early is kept
+ok 196 - review: the fallback checks the order again (no outdated SMS), and a status Meta sends early is kept
+  ---
+  duration_ms: 3007.39946
+  type: 'test'
+  ...
+# Subtest: review: nothing leaves in the night, even a message due before it; the SMS expires before the night
+ok 197 - review: nothing leaves in the night, even a message due before it; the SMS expires before the night
+  ---
+  duration_ms: 912.480765
+  type: 'test'
+  ...
+# Subtest: review: a run that died — not handed over goes back to the queue, handed over waits in Problems
+ok 198 - review: a run that died — not handed over goes back to the queue, handed over waits in Problems
+  ---
+  duration_ms: 924.755277
+  type: 'test'
+  ...
+# Subtest: review: a parcel leaving now is told even if the order waited weeks; old parcels are not
+ok 199 - review: a parcel leaving now is told even if the order waited weeks; old parcels are not
+  ---
+  duration_ms: 639.745007
+  type: 'test'
+  ...
+# Subtest: review: Dellal only sees the orders of the WhatsApp number writing, or of its own conversation
+ok 200 - review: Dellal only sees the orders of the WhatsApp number writing, or of its own conversation
+  ---
+  duration_ms: 325.338514
+  type: 'test'
+  ...
+# Subtest: review: an answer is the customer’s first message after the delivery message, not a later chat
+ok 201 - review: an answer is the customer’s first message after the delivery message, not a later chat
+  ---
+  duration_ms: 917.307955
+  type: 'test'
+  ...
+# Subtest: review: no sales follow-up to a customer who answered a delivery message
+ok 202 - review: no sales follow-up to a customer who answered a delivery message
+  ---
+  duration_ms: 939.653454
+  type: 'test'
+  ...
+# Subtest: orders.formData lists products with variants, stock and packs
+ok 203 - orders.formData lists products with variants, stock and packs
+  ---
+  duration_ms: 5252.257818
+  type: 'test'
+  ...
+# Subtest: orders.quote uses the client price grid and adds weight fees
+ok 204 - orders.quote uses the client price grid and adds weight fees
+  ---
+  duration_ms: 316.50075
+  type: 'test'
+  ...
+# Subtest: create an order with the quoted fee, discount capped, then an exchange at price 0
+ok 205 - create an order with the quoted fee, discount capped, then an exchange at price 0
+  ---
+  duration_ms: 635.727502
+  type: 'test'
+  ...
+# Subtest: customers: list, search, history and blacklist (role checked)
+ok 206 - customers: list, search, history and blacklist (role checked)
+  ---
+  duration_ms: 1202.433868
+  type: 'test'
+  ...
+# Subtest: orders.deliveredReport and companyFees add up
+ok 207 - orders.deliveredReport and companyFees add up
+  ---
+  duration_ms: 590.808797
+  type: 'test'
+  ...
+# Subtest: orders.cancelReport: cancellations by status, reason and agent; returns by company with their rate and cost
+ok 208 - orders.cancelReport: cancellations by status, reason and agent; returns by company with their rate and cost
+  ---
+  duration_ms: 1007.305256
+  type: 'test'
+  ...
+# Subtest: orders.list can be limited to a selection (export / print)
+ok 209 - orders.list can be limited to a selection (export / print)
+  ---
+  duration_ms: 302.43147
+  type: 'test'
+  ...
+# Subtest: every order has its own unique Pilotix tracking number, made at creation (old ones filled in), also on duplicates
+ok 210 - every order has its own unique Pilotix tracking number, made at creation (old ones filled in), also on duplicates
+  ---
+  duration_ms: 350.506338
+  type: 'test'
+  ...
+# Subtest: changing only the discount is still capped by the products of the order
+ok 211 - changing only the discount is still capped by the products of the order
+  ---
+  duration_ms: 341.662987
+  type: 'test'
+  ...
+# Subtest: password reset links
+ok 212 - password reset links
+  ---
+  duration_ms: 5657.286644
+  type: 'test'
+  ...
+# Subtest: team accounts: the administrator chooses who may create accounts and set passwords
+ok 213 - team accounts: the administrator chooses who may create accounts and set passwords
+  ---
+  duration_ms: 4377.031915
+  type: 'test'
+  ...
+# Subtest: the pick list shows only products and how many to take
+ok 214 - the pick list shows only products and how many to take
+  ---
+  duration_ms: 4605.398635
+  type: 'test'
+  ...
+# Subtest: taking fewer than needed serves whole lines, oldest first; rupture keeps the rest to bring
+ok 215 - taking fewer than needed serves whole lines, oldest first; rupture keeps the rest to bring
+  ---
+  duration_ms: 313.539378
+  type: 'test'
+  ...
+# Subtest: an order is ready only when all its products are taken, and then goes to dispatch as before
+ok 216 - an order is ready only when all its products are taken, and then goes to dispatch as before
+  ---
+  duration_ms: 348.20094
+  type: 'test'
+  ...
+# Subtest: pixels: named, one default per platform, chosen per page; tokens only by the administrator, never shown
+ok 217 - pixels: named, one default per platform, chosen per page; tokens only by the administrator, never shown
+  ---
+  duration_ms: 4396.621053
+  type: 'test'
+  ...
+# Subtest: pixels: a real order reaches the page’s Meta pixel and TikTok pixel from the server
+ok 218 - pixels: a real order reaches the page’s Meta pixel and TikTok pixel from the server
+  ---
+  duration_ms: 316.838626
+  type: 'test'
+  ...
+# Subtest: pixels: a deleted pixel — its pages take the default again
+ok 219 - pixels: a deleted pixel — its pages take the default again
+  ---
+  duration_ms: 12.581
+  type: 'test'
+  ...
+# Subtest: thank-you screen: the WhatsApp button with the shop’s own message (off by default)
+ok 220 - thank-you screen: the WhatsApp button with the shop’s own message (off by default)
+  ---
+  duration_ms: 33.805884
+  type: 'test'
+  ...
+# Subtest: pixels: a page sends to several pixels at once; its own WhatsApp button; TikTok URL parameters
+ok 221 - pixels: a page sends to several pixels at once; its own WhatsApp button; TikTok URL parameters
+  ---
+  duration_ms: 55.406514
+  type: 'test'
+  ...
+# Subtest: first start: the existing shop becomes shop \#1, its admin the platform owner
+ok 222 - first start: the existing shop becomes shop \#1, its admin the platform owner
+  ---
+  duration_ms: 3178.239499
+  type: 'test'
+  ...
+# Subtest: a new shop: its own schema, its own admin, nothing shared
+ok 223 - a new shop: its own schema, its own admin, nothing shared
+  ---
+  duration_ms: 3689.3297
+  type: 'test'
+  ...
+# Subtest: store names: one per shop, unique, the first part of its links (site/<store>/<page>)
+ok 224 - store names: one per shop, unique, the first part of its links (site/<store>/<page>)
+  ---
+  duration_ms: 3948.204839
+  type: 'test'
+  ...
+# Subtest: one e-mail, several stores: one account, one password, chosen by the person only
+ok 225 - one e-mail, several stores: one account, one password, chosen by the person only
+  ---
+  duration_ms: 8284.424989
+  type: 'test'
+  ...
+# Subtest: sign-up: confirmed by e-mail, the store on the trial plan, referral reward at the first payment
+ok 226 - sign-up: confirmed by e-mail, the store on the trial plan, referral reward at the first payment
+  ---
+  duration_ms: 4467.105186
+  type: 'test'
+  ...
+# Subtest: only the owner deletes a store; Pilotix cannot open it, only suspend it
+ok 227 - only the owner deletes a store; Pilotix cannot open it, only suspend it
+  ---
+  duration_ms: 3619.937409
+  type: 'test'
+  ...
+# Subtest: numbers only, and the plan limits: accounts, livreurs, orders per month, stores per owner
+ok 228 - numbers only, and the plan limits: accounts, livreurs, orders per month, stores per owner
+  ---
+  duration_ms: 3474.667196
+  type: 'test'
+  ...
+# Subtest: messages between a store and Pilotix; reminders once per end date
+ok 229 - messages between a store and Pilotix; reminders once per end date
+  ---
+  duration_ms: 2630.230479
+  type: 'test'
+  ...
+# Subtest: trial, grace, lock, payment
+ok 230 - trial, grace, lock, payment
+  ---
+  duration_ms: 2300.878793
+  type: 'test'
+  ...
+# Subtest: menus by plan, own changes per shop, enforced by the server
+ok 231 - menus by plan, own changes per shop, enforced by the server
+  ---
+  duration_ms: 3444.296939
+  type: 'test'
+  ...
+# Subtest: the plan limits active accounts
+ok 232 - the plan limits active accounts
+  ---
+  duration_ms: 3409.309291
+  type: 'test'
+  ...
+# Subtest: staff roles, plans, settings
+ok 233 - staff roles, plans, settings
+  ---
+  duration_ms: 3454.38174
+  type: 'test'
+  ...
+# Subtest: the demo shop: fake data, reset to the start, its accounts not in the login index
+ok 234 - the demo shop: fake data, reset to the start, its accounts not in the login index
+  ---
+  duration_ms: 8543.036728
+  type: 'test'
+  ...
+# Subtest: sign-up without a store: only the account; the first store, added inside, keeps the phone and the referral
+ok 235 - sign-up without a store: only the account; the first store, added inside, keeps the phone and the referral
+  ---
+  duration_ms: 2530.774306
+  type: 'test'
+  ...
+# Subtest: the sign-in page designs: all on by default; the control room keeps the ones turned on
+ok 236 - the sign-in page designs: all on by default; the control room keeps the ones turned on
+  ---
+  duration_ms: 1623.958663
+  type: 'test'
+  ...
+# Subtest: Google / Facebook: a new person gets a proven account without a password; the same e-mail finds it again
+ok 237 - Google / Facebook: a new person gets a proven account without a password; the same e-mail finds it again
+  ---
+  duration_ms: 2268.963454
+  type: 'test'
+  ...
+# Subtest: phone of every account: required, one number = one account, proven once by a WhatsApp code when the account opens
+ok 238 - phone of every account: required, one number = one account, proven once by a WhatsApp code when the account opens
+  ---
+  duration_ms: 3127.538905
+  type: 'test'
+  ...
+# Subtest: sign-up with the WhatsApp code on: the number is proven in the form, before the account exists
+ok 239 - sign-up with the WhatsApp code on: the number is proven in the form, before the account exists
+  ---
+  duration_ms: 2558.753738
+  type: 'test'
+  ...
+# Subtest: Pro marketers: ask, staff turn it on, the list, the numbers across stores, the invite
+ok 240 - Pro marketers: ask, staff turn it on, the list, the numbers across stores, the invite
+  ---
+  duration_ms: 8928.109906
+  type: 'test'
+  ...
+# Subtest: product options are saved and the variants made from them
+ok 241 - product options are saved and the variants made from them
+  ---
+  duration_ms: 3851.966966
+  type: 'test'
+  ...
+# Subtest: import: roles, preview = import, products, variants and stock entries
+ok 242 - import: roles, preview = import, products, variants and stock entries
+  ---
+  duration_ms: 4396.883305
+  type: 'test'
+  ...
+# Subtest: import: only the administrator sets the maximum discount; a variant line without a name is refused
+ok 243 - import: only the administrator sets the maximum discount; a variant line without a name is refused
+  ---
+  duration_ms: 306.154103
+  type: 'test'
+  ...
+# Subtest: profile, referrals, rules and account deletion
+ok 244 - profile, referrals, rules and account deletion
+  ---
+  duration_ms: 5204.205605
+  type: 'test'
+  ...
+# Subtest: réglé au téléphone: the ticket is born finished, with the satisfaction; unhappy needs the reason
+ok 245 - réglé au téléphone: the ticket is born finished, with the satisfaction; unhappy needs the reason
+  ---
+  duration_ms: 4988.697874
+  type: 'test'
+  ...
+# Subtest: after a delivered exchange: asked by a call; no answer is counted; unhappy reopens
+ok 246 - after a delivered exchange: asked by a call; no answer is counted; unhappy reopens
+  ---
+  duration_ms: 419.650296
+  type: 'test'
+  ...
+# Subtest: Moi / Personne / Tous counts
+ok 247 - Moi / Personne / Tous counts
+  ---
+  duration_ms: 310.33586
+  type: 'test'
+  ...
+# Subtest: sheet links, CSV and column guess
+ok 248 - sheet links, CSV and column guess
+  ---
+  duration_ms: 3.610396
+  type: 'test'
+  ...
+# Subtest: sheet channel: choose the columns, then each line becomes an order once
+ok 249 - sheet channel: choose the columns, then each line becomes an order once
+  ---
+  duration_ms: 4251.290854
+  type: 'test'
+  ...
+# Subtest: test orders: made with fake customers, then removed
+ok 250 - test orders: made with fake customers, then removed
+  ---
+  duration_ms: 2996.855998
+  type: 'test'
+  ...
+# Subtest: sheet channel: a line never becomes a second order
+ok 251 - sheet channel: a line never becomes a second order
+  ---
+  duration_ms: 2749.414577
+  type: 'test'
+  ...
+# Subtest: library data → an ad (Facebook page, ScrapeCreators and SearchAPI.io share the shape)
+ok 252 - library data → an ad (Facebook page, ScrapeCreators and SearchAPI.io share the shape)
+  ---
+  duration_ms: 4671.508707
+  type: 'test'
+  ...
+# Subtest: prices, links and shop builders read from an ad
+ok 253 - prices, links and shop builders read from an ad
+  ---
+  duration_ms: 2.88332
+  type: 'test'
+  ...
+# Subtest: the score only uses what the library shows
+ok 254 - the score only uses what the library shows
+  ---
+  duration_ms: 0.2787
+  type: 'test'
+  ...
+# Subtest: the demo shop shows competitors, its own ad, a brief and findings
+ok 255 - the demo shop shows competitors, its own ad, a brief and findings
+  ---
+  duration_ms: 22.983133
+  type: 'test'
+  ...
+# Subtest: extension: copies are grouped, own ads recognised, stopped ads and followed pages make alerts
+ok 256 - extension: copies are grouped, own ads recognised, stopped ads and followed pages make alerts
+  ---
+  duration_ms: 54.827142
+  type: 'test'
+  ...
+# Subtest: only admins choose the source and its keys; keys never come back
+ok 257 - only admins choose the source and its keys; keys never come back
+  ---
+  duration_ms: 7.057503
+  type: 'test'
+  ...
+# Subtest: paid source: the server searches every keyword, stores, reads sites; the daily scan runs once a day
+ok 258 - paid source: the server searches every keyword, stores, reads sites; the daily scan runs once a day
+  ---
+  duration_ms: 371.149364
+  type: 'test'
+  ...
+# Subtest: Claude reads the ads (page AI in the preview); without AI the keywords come from the product name
+ok 259 - Claude reads the ads (page AI in the preview); without AI the keywords come from the product name
+  ---
+  duration_ms: 14.844613
+  type: 'test'
+  ...
+# Subtest: a competitor's page: builder, price, crossed price, the order form
+ok 260 - a competitor's page: builder, price, crossed price, the order form
+  ---
+  duration_ms: 1.491014
+  type: 'test'
+  ...
+# Subtest: stats.now: counts match the orders table; money only for admin
+ok 261 - stats.now: counts match the orders table; money only for admin
+  ---
+  duration_ms: 5463.052324
+  type: 'test'
+  ...
+# Subtest: stats.overview + agents: period numbers are consistent
+ok 262 - stats.overview + agents: period numbers are consistent
+  ---
+  duration_ms: 304.449735
+  type: 'test'
+  ...
+# Subtest: livreur and marketer cannot read the home stats
+ok 263 - livreur and marketer cannot read the home stats
+  ---
+  duration_ms: 583.816012
+  type: 'test'
+  ...
+# Subtest: stats.livreurs / presence: admin sees livreurs, presence lists agents
+ok 264 - stats.livreurs / presence: admin sees livreurs, presence lists agents
+  ---
+  duration_ms: 306.459171
+  type: 'test'
+  ...
+# Subtest: dashboard: admin sees every area; a manager only his scope (Confirmation by default)
+ok 265 - dashboard: admin sees every area; a manager only his scope (Confirmation by default)
+  ---
+  duration_ms: 731.831592
+  type: 'test'
+  ...
+# Subtest: saveScope: admin only; manager then sees the new area
+ok 266 - saveScope: admin only; manager then sees the new area
+  ---
+  duration_ms: 585.741251
+  type: 'test'
+  ...
+# Subtest: saveTeams: vendeur moves an agent; a manager cannot
+ok 267 - saveTeams: vendeur moves an agent; a manager cannot
+  ---
+  duration_ms: 865.406092
+  type: 'test'
+  ...
+# Subtest: stats.overview2: dashboard overview adds up; goal is admin only
+ok 268 - stats.overview2: dashboard overview adds up; goal is admin only
+  ---
+  duration_ms: 920.69943
+  type: 'test'
+  ...
+# Subtest: roles: depot and admin, not confirmation
+ok 269 - roles: depot and admin, not confirmation
+  ---
+  duration_ms: 4924.522033
+  type: 'test'
+  ...
+# Subtest: prices: sale and purchase price for the depot, maximum discount for the administrator only
+ok 270 - prices: sale and purchase price for the depot, maximum discount for the administrator only
+  ---
+  duration_ms: 595.004866
+  type: 'test'
+  ...
+# Subtest: inventory: counted quantities become the stock in one go, untouched products stay, the record says what changed
+ok 271 - inventory: counted quantities become the stock in one go, untouched products stay, the record says what changed
+  ---
+  duration_ms: 314.716776
+  type: 'test'
+  ...
+# Subtest: transfer of many products: all or nothing, and the list pairs both sides
+ok 272 - transfer of many products: all or nothing, and the list pairs both sides
+  ---
+  duration_ms: 309.868286
+  type: 'test'
+  ...
+# Subtest: suppliers: create, no two with the same name, archive
+ok 273 - suppliers: create, no two with the same name, archive
+  ---
+  duration_ms: 299.604858
+  type: 'test'
+  ...
+# Subtest: purchase: stock comes in, the purchase price follows, payments up to the total
+ok 274 - purchase: stock comes in, the purchase price follows, payments up to the total
+  ---
+  duration_ms: 345.604457
+  type: 'test'
+  ...
+# Subtest: alerts: out of stock first, under the alert level next, with the last purchase
+ok 275 - alerts: out of stock first, under the alert level next, with the last purchase
+  ---
+  duration_ms: 323.58167
+  type: 'test'
+  ...
+# Subtest: suivi: counts and lists by tab
+ok 276 - suivi: counts and lists by tab
+  ---
+  duration_ms: 5324.974597
+  type: 'test'
+  ...
+# Subtest: suivi: swap moves the tracking and the company to the new order
+ok 277 - suivi: swap moves the tracking and the company to the new order
+  ---
+  duration_ms: 337.957481
+  type: 'test'
+  ...
+# Subtest: suivi: swap refused for the depot role
+ok 278 - suivi: swap refused for the depot role
+  ---
+  duration_ms: 292.307438
+  type: 'test'
+  ...
+# Subtest: suivi: treat an alert → back on the road with alert_traitee
+ok 279 - suivi: treat an alert → back on the road with alert_traitee
+  ---
+  duration_ms: 378.453392
+  type: 'test'
+  ...
+# Subtest: suivi: claims are saved with their status history
+ok 280 - suivi: claims are saved with their status history
+  ---
+  duration_ms: 606.802904
+  type: 'test'
+  ...
+# Subtest: suivi: a claim on a ZR parcel is created at ZR right away (API), then followed from Pilotix
+ok 281 - suivi: a claim on a ZR parcel is created at ZR right away (API), then followed from Pilotix
+  ---
+  duration_ms: 329.293269
+  type: 'test'
+  ...
+# Subtest: sav: create a ticket, then an exchange creates a linked order at the depot
+ok 282 - sav: create a ticket, then an exchange creates a linked order at the depot
+  ---
+  duration_ms: 357.326786
+  type: 'test'
+  ...
+# Subtest: sav: update status / responsable, and role checks
+ok 283 - sav: update status / responsable, and role checks
+  ---
+  duration_ms: 1177.584297
+  type: 'test'
+  ...
+# Subtest: the sales and ticket_parcels views have exactly the columns of orders
+ok 284 - the sales and ticket_parcels views have exactly the columns of orders
+  ---
+  duration_ms: 4689.091201
+  type: 'test'
+  ...
+# Subtest: ticket parcels are left out of order lists and counts, but the depot can list them
+ok 285 - ticket parcels are left out of order lists and counts, but the depot can list them
+  ---
+  duration_ms: 356.077089
+  type: 'test'
+  ...
+# Subtest: order stats ignore ticket parcels
+ok 286 - order stats ignore ticket parcels
+  ---
+  duration_ms: 310.447049
+  type: 'test'
+  ...
+# Subtest: sav.stats: tickets, parcels and money of their own
+ok 287 - sav.stats: tickets, parcels and money of their own
+  ---
+  duration_ms: 311.186366
+  type: 'test'
+  ...
+# Subtest: caisse: ticket money is a separate line
+ok 288 - caisse: ticket money is a separate line
+  ---
+  duration_ms: 294.199872
+  type: 'test'
+  ...
+# Subtest: SAV tariff: suggested on the ticket, editable by admin
+ok 289 - SAV tariff: suggested on the ticket, editable by admin
+  ---
+  duration_ms: 879.755708
+  type: 'test'
+  ...
+# Subtest: payroll: agents get no commission on ticket parcels
+ok 290 - payroll: agents get no commission on ticket parcels
+  ---
+  duration_ms: 314.622843
+  type: 'test'
+  ...
+# Subtest: ticket flow: En attente → Au dépôt → En livraison → Livré, and a return goes back to the depot then Annulé once scanned
+ok 291 - ticket flow: En attente → Au dépôt → En livraison → Livré, and a return goes back to the depot then Annulé once scanned
+  ---
+  duration_ms: 873.085895
+  type: 'test'
+  ...
+# Subtest: trust: 1 refusal, 2 → stop-desk only, 3 → blacklisted by Pilotix, a paid delivery forgives
+ok 292 - trust: 1 refusal, 2 → stop-desk only, 3 → blacklisted by Pilotix, a paid delivery forgives
+  ---
+  duration_ms: 4749.540822
+  type: 'test'
+  ...
+# Subtest: trust: a blacklist set by a person is never lifted by Pilotix
+ok 293 - trust: a blacklist set by a person is never lifted by Pilotix
+  ---
+  duration_ms: 74.130834
+  type: 'test'
+  ...
+# Subtest: trust: a driver problem proved by a claim does not count against the customer (once)
+ok 294 - trust: a driver problem proved by a claim does not count against the customer (once)
+  ---
+  duration_ms: 191.343426
+  type: 'test'
+  ...
+# Subtest: trust: a look-alike of a refuser is checked (🟡), and blacklisted at once if they refuse
+ok 295 - trust: a look-alike of a refuser is checked (🟡), and blacklisted at once if they refuse
+  ---
+  duration_ms: 219.459515
+  type: 'test'
+  ...
+# Subtest: trust: the landing page score (1 refusal 🟡, look-alike 🟡 even from an ad, blacklisted by Pilotix → blocked)
+ok 296 - trust: the landing page score (1 refusal 🟡, look-alike 🟡 even from an ad, blacklisted by Pilotix → blocked)
+  ---
+  duration_ms: 1.889185
+  type: 'test'
+  ...
+# Subtest: screen choices are saved per user, can be removed, and stay small
+ok 297 - screen choices are saved per user, can be removed, and stay small
+  ---
+  duration_ms: 4279.925777
+  type: 'test'
+  ...
+# Subtest: the demo keeps column presets and screen choices across a rebuilt database
+ok 298 - the demo keeps column presets and screen choices across a rebuilt database
+  ---
+  duration_ms: 6850.737014
+  type: 'test'
+  ...
+# Subtest: a preset saved by an admin is used by every team; only an admin changes it
+ok 299 - a preset saved by an admin is used by every team; only an admin changes it
+  ---
+  duration_ms: 3301.748061
+  type: 'test'
+  ...
+# Subtest: the rule: more pieces, a pack, an added or dearer product count; same price, cheaper or the customer’s own pack do not
+ok 300 - the rule: more pieces, a pack, an added or dearer product count; same price, cheaper or the customer’s own pack do not
+  ---
+  duration_ms: 4073.378314
+  type: 'test'
+  ...
+# Subtest: orders count their upsell by themselves when products change, and only then
+ok 301 - orders count their upsell by themselves when products change, and only then
+  ---
+  duration_ms: 686.215519
+  type: 'test'
+  ...
+# Subtest: always counted by Pilotix: a mark sent by a screen is not taken, a copy starts afresh, an exchange parcel never has one
+ok 302 - always counted by Pilotix: a mark sent by a screen is not taken, a copy starts afresh, an exchange parcel never has one
+  ---
+  duration_ms: 672.686878
+  type: 'test'
+  ...
+# Subtest: pickup bags (preview): a bag for the parcels handed over, its label, take one out, delete it
+ok 303 - pickup bags (preview): a bag for the parcels handed over, its label, take one out, delete it
+  ---
+  duration_ms: 5615.189269
+  type: 'test'
+  ...
+# Subtest: pickup bags (server): ZR makes the bag, refuses a parcel, then says how far it is
+ok 304 - pickup bags (server): ZR makes the bag, refuses a parcel, then says how far it is
+  ---
+  duration_ms: 628.19714
+  type: 'test'
+  ...
+# Subtest: exchange (server): sent to ZR as its own exchange; the return parcel’s number brings the old product back
+ok 305 - exchange (server): sent to ZR as its own exchange; the return parcel’s number brings the old product back
+  ---
+  duration_ms: 606.636244
+  type: 'test'
+  ...
+# Subtest: exchange (preview): a ZR exchange gets its new number and a return number
+ok 306 - exchange (preview): a ZR exchange gets its new number and a return number
+  ---
+  duration_ms: 298.905076
+  type: 'test'
+  ...
+# Subtest: exchange at ZR: its two parcels — the new product out, the old one back once it is delivered (preview, server)
+ok 307 - exchange at ZR: its two parcels — the new product out, the old one back once it is delivered (preview, server)
+  ---
+  duration_ms: 593.832513
+  type: 'test'
+  ...
+# Subtest: parcel at ZR (preview): its journey, livreur and return risk; a price change waits for ZR, then is applied
+ok 308 - parcel at ZR (preview): its journey, livreur and return risk; a price change waits for ZR, then is applied
+  ---
+  duration_ms: 330.915478
+  type: 'test'
+  ...
+# Subtest: swap at ZR (preview): what it costs in the same wilaya or another, while the parcel can still be given
+ok 309 - swap at ZR (preview): what it costs in the same wilaya or another, while the parcel can still be given
+  ---
+  duration_ms: 295.803256
+  type: 'test'
+  ...
+# Subtest: parcel at ZR (preview): home → stop desk, applied once ZR accepts; a request can be withdrawn
+ok 310 - parcel at ZR (preview): home → stop desk, applied once ZR accepts; a request can be withdrawn
+  ---
+  duration_ms: 318.978197
+  type: 'test'
+  ...
+# Subtest: parcel at ZR (server): the request goes to ZR, its refusal is kept and the order stays the same
+ok 311 - parcel at ZR (server): the request goes to ZR, its refusal is kept and the order stays the same
+  ---
+  duration_ms: 304.46051
+  type: 'test'
+  ...
+# Subtest: live statuses (webhook): turned on at ZR with a key; a call with the key re-reads only that parcel from ZR
+ok 312 - live statuses (webhook): turned on at ZR with a key; a call with the key re-reads only that parcel from ZR
+  ---
+  duration_ms: 619.528249
+  type: 'test'
+  ...
+# Subtest: payment request: another date, or withdrawn (preview)
+ok 313 - payment request: another date, or withdrawn (preview)
+  ---
+  duration_ms: 295.415342
+  type: 'test'
+  ...
+1..313
+# tests 342
+# suites 3
+# pass 341
+# fail 0
+# cancelled 0
+# skipped 1
+# todo 0
+# duration_ms 594829.687861
