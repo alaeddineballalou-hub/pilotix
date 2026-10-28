@@ -596,5 +596,20 @@
       "off": "Pas de bouton sur cette page"
     },
     "pageMessageHint": "Vide : le message des Réglages."
+  },
+  "at": {
+    "title": "Test d’attaque",
+    "help": "Lance de vraies attaques sur une landing page (robots, blagues, concurrents, refuseurs) plus 100 vrais clients, à travers la vraie protection, pour voir combien passe. Rien n’est enregistré : aucune vraie commande, aucun événement Meta.",
+    "firstPage": "La première landing page",
+    "run": "Lancer le test",
+    "running": "Test en cours…",
+    "wait": "Quelques secondes… on envoie des centaines de fausses commandes.",
+    "real": "Vrais clients : {{passed}}/{{total}} passent",
+    "caught": "Attaques arrêtées : {{pct}}",
+    "noCf": "Cloudflare était éteint ici : sur le vrai site il en bloque plus",
+    "blocked": "Bloquées",
+    "review": "À vérifier",
+    "passed": "Passées",
+    "foot": "« Passées » ne veut pas dire perdues : une fausse commande qui passe est rattrapée plus tard (le client refuse le colis → score de confiance)."
   }
 }
