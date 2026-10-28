@@ -1,0 +1,1 @@
+const s=(a,t=" + ")=>a.map(n=>`${n.qty>1?`${n.qty} × `:""}${n.name}`).join(t)||"—",o=(a,t=" + ")=>a.some(n=>n.variantTitle)?a.map(n=>n.variantTitle||"—").join(t):"—",r=a=>a.tracking||a.ownTracking||"";export{s as n,r as t,o as v};
