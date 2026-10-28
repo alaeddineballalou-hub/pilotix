@@ -59,9 +59,12 @@ export interface FraudFacts {
     ip10m: number;
     ip1h: number;
     device1h: number;
-    /** other phone numbers sent from this device (1 h, 24 h) */
+    /** other phone numbers sent from this device, by its stored id (1 h, 24 h) */
     deviceNumbers1h?: number;
     deviceNumbers24h?: number;
+    /** other phone numbers from the same physical device, by its fingerprint (survives a cleared / private browser) */
+    deviceNumbersFp1h?: number;
+    deviceNumbersFp24h?: number;
     /** other numbers of the last day that differ only in the last two digits (and whether one came from this device / address) */
     nearPhones24h?: number;
     nearSameSource?: boolean;
@@ -111,25 +114,33 @@ export interface FraudResult {
 }
 
 export const BOT_UA = /headless|phantomjs|selenium|webdriver|puppeteer|playwright|bot\b|crawler|spider|curl\/|wget\/|python-requests|python-urllib|aiohttp|go-http-client|java\/|okhttp\/[0-2]\.|axios\/|node-fetch|undici|httpclient|libwww|scrapy|postmanruntime|insomnia/i;
-const MASH = /(qwer|wert|asdf|sdfg|zxcv|azer|qsdf|wxcv|hjkl|uiop|poiu|lkjh|mlkj|azert|ytreza)/i;
+const MASH = /(qwer|wert|asdf|sdfg|zxcv|azer|qsdf|wxcv|hjkl|uiop|poiu|lkjh|mlkj|azert|ytreza|dfgh|fghj|ghjk|tyui|rtyu|ertz)/i;
 const LATIN_VOWELS = /[aeiouyéèêàâîôûäëïöü]/i;
+/** names a person types to skip the field: never a real customer */
+const JUNK_NAMES = new Set(['test', 'testt', 'tester', 'aze', 'azer', 'azerty', 'qwerty', 'qsdf', 'qsdfg', 'asdf', 'asdfg', 'abc', 'abcd', 'abcde', 'sdf', 'ddd', 'fff', 'ggg', 'aaa', 'bbb', 'ccc', 'xxx', 'xxxx', 'zzz', 'nom', 'name', 'client', 'prenom', 'fake', 'faux', 'xyz', 'wxc', 'wxcv', 'blabla', 'bla', 'rien', 'anonyme', 'anonymous', 'user', 'none', 'null', 'na', 'لالا', 'تست', 'فلان']);
 
 /** Name checks: digits, links, one letter repeated, keyboard mashing, consonant soup. */
-export function nameSignals(raw: string): FraudReason[] {
+export function nameSignals(raw: string, newNumber = true): FraudReason[] {
   const out: FraudReason[] = [];
   const name = raw.trim();
+  const words = name.split(/\s+/).filter(Boolean);
   const letters = name.replace(/[^\p{L}]/gu, '');
+  const flat = letters.toLowerCase();
   if (/(https?:|www\.|@|\.com\b)/i.test(name)) out.push({ code: 'name_link', points: 40 });
   if (/\d/.test(name)) out.push({ code: 'name_digits', points: 25 });
   if (letters.length < 3) out.push({ code: 'name_short', points: 25 });
+  // a name typed only to skip the field ("test", "azerty", "xxx"): a sure fake
+  if (JUNK_NAMES.has(flat) || words.every((w) => JUNK_NAMES.has(w.toLowerCase()))) out.push({ code: 'name_junk', points: 60 });
   if (/(\p{L})\1{3,}/u.test(name)) out.push({ code: 'name_repeat', points: 25 });
-  if (MASH.test(letters)) out.push({ code: 'name_keyboard', points: 30 });
+  if (MASH.test(letters)) out.push({ code: 'name_keyboard', points: 35 });
   else {
     // latin words: no vowel at all, or 5 consonants in a row ("xkcdfg"); Arabic script is not judged this way
-    const latin = name.split(/\s+/).filter((w) => /^[a-zà-ÿ'-]+$/i.test(w) && w.length >= 4);
-    if (latin.some((w) => !LATIN_VOWELS.test(w) || /[bcdfghjklmnpqrstvwxz]{5,}/i.test(w))) out.push({ code: 'name_gibberish', points: 25 });
+    const latin = words.filter((w) => /^[a-zà-ÿ'-]+$/i.test(w) && w.length >= 4);
+    if (latin.some((w) => !LATIN_VOWELS.test(w) || /[bcdfghjklmnpqrstvwxz]{5,}/i.test(w))) out.push({ code: 'name_gibberish', points: 30 });
   }
-  if (letters.length >= 3 && new Set(letters.toLowerCase()).size <= 2) out.push({ code: 'name_repeat', points: 20 });
+  if (letters.length >= 3 && new Set(flat).size <= 2) out.push({ code: 'name_repeat', points: 25 });
+  // real COD customers give a full name (two words); a single short word from a new number is a soft sign
+  if (newNumber && words.length === 1 && letters.length <= 6) out.push({ code: 'name_oneword', points: 15 });
   return dedupe(out);
 }
 
@@ -157,7 +168,7 @@ export function scoreOrder(f: FraudFacts, level: FraudLevel = 'normal'): FraudRe
   if (f.honeypot.trim()) add('honeypot', 100);
   if (!f.phone) add('phone_invalid', 100); // the page checks the format first: only a script sends a wrong one
   else r.push(...phoneSignals(f.phone));
-  r.push(...nameSignals(f.name));
+  r.push(...nameSignals(f.name, f.history.orders === 0));
 
   // 2. time and proof that the page really ran
   if (f.servedMs === null) add('no_challenge', 35);
@@ -188,12 +199,16 @@ export function scoreOrder(f: FraudFacts, level: FraudLevel = 'normal'): FraudRe
   else if (rc.ip1h >= 8) add('ip_many', 15);
   const dn1 = rc.deviceNumbers1h ?? 0;
   const dn24 = rc.deviceNumbers24h ?? 0;
-  if (dn1 >= 2 || dn24 >= 4) add('device_numbers', 100); // 3 numbers in an hour, 5 in a day, from one phone
+  // the same physical device, even with a new stored id each time (private browsing, cleared browser): the fingerprint
+  const fn1 = rc.deviceNumbersFp1h ?? 0;
+  const fn24 = rc.deviceNumbersFp24h ?? 0;
+  if (dn1 >= 2 || dn24 >= 4 || fn1 >= 4 || fn24 >= 6) add('device_numbers', 100); // 3 numbers in an hour, 5 in a day, from one phone
+  else if (fn1 >= 2 || fn24 >= 4) add('device_numbers_fp', 60); // same fingerprint, a few numbers: a person checks
   else if (dn24 >= 1) add('device_two', 15); // a family orders for two: a small sign only
   else if (rc.device1h >= 3) add('device_burst', 30);
   if ((rc.nearPhones24h ?? 0) >= 2 || ((rc.nearPhones24h ?? 0) >= 1 && rc.nearSameSource)) add('phone_near', 40);
   if ((rc.nameOtherPhones7d ?? 0) >= 2) add('name_reused', 30);
-  if (rc.wilayaWave) add('wilaya_wave', 30);
+  if (rc.wilayaWave) add('wilaya_wave', 45);
   if ((rc.newDevicesIp10m ?? 0) >= 5) add('device_rain', 30);
   const m = f.marks;
   if (m?.competitor) add('device_competitor', 100);

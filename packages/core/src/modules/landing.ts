@@ -504,13 +504,15 @@ async function recentCounts(db: Db, a: { phone: string | null; productId: number
 }
 
 /** the device marks agents left (« fausse commande », « concurrent »): fraud_marks */
-async function deviceMarks(db: Db, device: string, phone: string | null, now: number): Promise<{ competitor: boolean; fake30d: number; victimDevices: number }> {
+async function deviceMarks(db: Db, device: string, fphash: string | null, phone: string | null, now: number): Promise<{ competitor: boolean; fake30d: number; victimDevices: number }> {
+  // a mark follows the device key AND the browser fingerprint: a new stored id (cleared / private browser) is still caught
+  const same = `(value = $1 AND $1 <> '') OR ($4::text IS NOT NULL AND fphash = $4)`;
   const r = (
     await db.query(
-      `SELECT bool_or(reason = 'competitor' AND value = $1) AS c, count(*) FILTER (WHERE reason = 'fake' AND value = $1 AND at > $2)::int AS f,
+      `SELECT bool_or(reason = 'competitor' AND (${same})) AS c, count(*) FILTER (WHERE reason = 'fake' AND (${same}) AND at > $2)::int AS f,
               count(DISTINCT device) FILTER (WHERE $3::text IS NOT NULL AND phone = $3)::int AS v
-       FROM fraud_marks WHERE kind = 'device' AND NOT lifted AND ((value = $1 AND $1 <> '') OR ($3::text IS NOT NULL AND phone = $3))`,
-      [device, isoAt(now - 30 * 86_400_000), phone],
+       FROM fraud_marks WHERE kind = 'device' AND NOT lifted AND ((${same}) OR ($3::text IS NOT NULL AND phone = $3))`,
+      [device, isoAt(now - 30 * 86_400_000), phone, fphash],
     )
   )[0];
   return { competitor: !!r?.c, fake30d: num(r?.f), victimDevices: num(r?.v) };
@@ -526,7 +528,7 @@ const fullName = (n: string) => {
  * The competitor's hands: other numbers from this device, numbers that differ only in their last two digits, one full
  * name for many numbers, a sudden wave of one product in one wilaya, many brand-new devices behind one address.
  */
-async function handCounts(db: Db, a: { phone: string | null; productId: number; ip: string; device: string; name: string; wilayaId: number; now: number }) {
+async function handCounts(db: Db, a: { phone: string | null; productId: number; ip: string; device: string; fphash: string | null; name: string; wilayaId: number; now: number }) {
   const t = (ms: number) => isoAt(a.now - ms);
   const H = 3600_000;
   const name = fullName(a.name);
@@ -535,6 +537,8 @@ async function handCounts(db: Db, a: { phone: string | null; productId: number; 
       `SELECT
          (SELECT count(DISTINCT phone)::int FROM landing_submits WHERE $2 <> '' AND fp = $2 AND phone IS NOT NULL AND phone IS DISTINCT FROM $1 AND at > $4) AS dn1,
          (SELECT count(DISTINCT phone)::int FROM landing_submits WHERE $2 <> '' AND fp = $2 AND phone IS NOT NULL AND phone IS DISTINCT FROM $1 AND at > $5) AS dn24,
+         (SELECT count(DISTINCT phone)::int FROM landing_submits WHERE $14::text IS NOT NULL AND fphash = $14 AND phone IS NOT NULL AND phone IS DISTINCT FROM $1 AND at > $4) AS dnf1,
+         (SELECT count(DISTINCT phone)::int FROM landing_submits WHERE $14::text IS NOT NULL AND fphash = $14 AND phone IS NOT NULL AND phone IS DISTINCT FROM $1 AND at > $5) AS dnf24,
          (SELECT count(DISTINCT phone)::int FROM landing_submits WHERE $1::text IS NOT NULL AND left(phone, 8) = left($1, 8) AND phone <> $1 AND at > $5) AS near,
          (SELECT count(*)::int FROM landing_submits WHERE $1::text IS NOT NULL AND left(phone, 8) = left($1, 8) AND phone <> $1 AND at > $5 AND ((fp = $2 AND $2 <> '') OR (ip = $3 AND $3 <> ''))) AS near_src,
          (SELECT count(DISTINCT phone)::int FROM (
@@ -547,7 +551,7 @@ async function handCounts(db: Db, a: { phone: string | null; productId: number; 
             AND EXISTS (SELECT 1 FROM sales o WHERE o.id = s.order_id AND o.wilaya_id = $7)) AS wave_now,
          (SELECT count(*)::int FROM sales o WHERE o.wilaya_id = $7 AND o.channel = 'landing' AND o.created_at > $12 AND o.created_at <= $13
             AND EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.product_id = $10)) AS wave_week`,
-      [a.phone, a.device, a.ip, t(H), t(24 * H), name, a.wilayaId || 0, t(7 * 24 * H), t(10 * 60_000), a.productId, t(30 * 60_000), t(7 * 24 * H), t(H)],
+      [a.phone, a.device, a.ip, t(H), t(24 * H), name, a.wilayaId || 0, t(7 * 24 * H), t(10 * 60_000), a.productId, t(30 * 60_000), t(7 * 24 * H), t(H), a.fphash],
     )
   )[0];
   // the usual pace of this product in this wilaya: orders per half hour over the last week (the last hour aside)
@@ -556,6 +560,8 @@ async function handCounts(db: Db, a: { phone: string | null; productId: number; 
   return {
     deviceNumbers1h: num(r.dn1),
     deviceNumbers24h: num(r.dn24),
+    deviceNumbersFp1h: num(r.dnf1),
+    deviceNumbersFp24h: num(r.dnf24),
     nearPhones24h: num(r.near),
     nearSameSource: num(r.near_src) > 0,
     nameOtherPhones7d: num(r.names),
@@ -621,7 +627,7 @@ export const FRAUD_LABELS_FR: Record<string, string> = {
   returns_some: 'déjà un colis retourné', cancels_many: 'commandes souvent annulées', good_customer: 'bon client (livré)', qty_high: 'quantité très élevée', qty_some: 'quantité élevée',
   ip_abroad: 'IP hors d’Algérie', ip_wilaya: 'IP d’une autre wilaya', form_invalid: 'formulaire incomplet', recent_block: 'numéro bloqué comme faux (24 h)',
   turnstile_fail: 'Cloudflare : robot', mask_touch: 'téléphone sans écran tactile (masque)', mask_tz: 'fuseau horaire étranger', device_numbers: 'plusieurs numéros depuis le même appareil',
-  device_two: 'deux numéros depuis le même appareil', phone_near: 'numéros presque identiques', name_reused: 'même nom, numéros différents', wilaya_wave: 'vague de commandes dans cette wilaya',
+  device_two: 'deux numéros depuis le même appareil', device_numbers_fp: 'plusieurs numéros depuis le même appareil (même empreinte)', name_junk: 'nom bidon (test, azerty…)', name_oneword: 'un seul mot comme nom', phone_near: 'numéros presque identiques', name_reused: 'même nom, numéros différents', wilaya_wave: 'vague de commandes dans cette wilaya',
   device_rain: 'beaucoup de nouveaux appareils, même adresse', device_competitor: 'appareil marqué « concurrent »', device_fake_again: 'appareil déjà 2 fois en fausse commande',
   device_fake: 'appareil déjà en fausse commande', phone_victim: 'numéro utilisé dans de fausses commandes (vérifiez que c’est bien lui)', no_browse: 'directement au formulaire', read_page: 'a lu la page', phone_pasted: 'numéro collé', from_ad: 'vient de la pub',
   not_from_ad: 'ne vient pas de la pub', qty_unusual: 'quantité inhabituelle', merged: 'commande renvoyée : fusionnée',
@@ -715,6 +721,8 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
   const variant = pc.variants.find((v) => v.id === i.variant) ?? null;
   const ip = i.meta.ip ?? '';
   const device = i.did ? `d:${i.did}` : `f:${i.fp}:${ip}`;
+  // the stable device fingerprint (survives a cleared or private browser), kept apart from the device key above
+  const fphash = i.fp ? i.fp.slice(0, 24) : null;
   const servedMs = await checkChallenge(db, i.ch, i.slug, now);
   let pow: 'ok' | 'missing' | 'bad' | 'replay' = 'missing';
   if (i.pw && servedMs !== null) {
@@ -749,12 +757,12 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
       pow,
       userAgent: i.meta.ua ?? '',
       webdriver: i.wd,
-      recent: { ...(await recentCounts(db, { phone, productId, ip, device, now })), ...(await handCounts(db, { phone, productId, ip, device, name: i.name, wilayaId, now })) },
+      recent: { ...(await recentCounts(db, { phone, productId, ip, device, now })), ...(await handCounts(db, { phone, productId, ip, device, fphash, name: i.name, wilayaId, now })) },
       history: await phoneHistory(db, phone, { name: i.name, wilayaId: wilayaId || null, commune: i.commune, device: device || null }),
       ipCountry: i.meta.country ? i.meta.country.toUpperCase() : null,
       ipWilaya: ipWilaya(i.meta.city ?? '', i.meta.region ?? ''),
       wilayaId,
-      marks: await deviceMarks(db, device, phone, now),
+      marks: await deviceMarks(db, device, fphash, phone, now),
       qtyUsual: await usualQty(db, productId, now),
       turnstile: await turnstileOf(ctx, i.tt, i.tk, ip),
       behavior:
@@ -845,11 +853,11 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
     await linkSameCustomer(db, phone!, o.id, o.ref, now);
   }
   await db.query(
-    `INSERT INTO landing_submits (landing_id, product_id, phone, ip, fp, challenge, verdict, score, order_id, blocked_id, at, ua, fbp, fbc, url, utm, reasons, merged, ttp)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+    `INSERT INTO landing_submits (landing_id, product_id, phone, ip, fp, challenge, verdict, score, order_id, blocked_id, at, ua, fbp, fbc, url, utm, reasons, merged, ttp, fphash)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
     [l.id, productId, phone, ip || null, device, servedMs !== null ? i.ch : null, result.verdict, result.score, orderId, blockedId, isoAt(now),
       (i.meta.ua ?? '').slice(0, 500) || null, fbp || null, fbc || null, (i.meta.url || i.url || '').slice(0, 500) || null, i.utm ? JSON.stringify(i.utm) : null,
-      JSON.stringify(result.reasons), merged, i.ttp || null],
+      JSON.stringify(result.reasons), merged, i.ttp || null, fphash],
   );
   // Meta Purchase « when the order is received »: only a clear order (a borderline one counts once a person confirms it);
   // an order sent again is the same sale (queuePurchase is once per order anyway)
@@ -927,10 +935,10 @@ export async function captureLead(ctx: Ctx, i: z.infer<typeof CaptureInput>): Pr
   const leadId = num(
     (
       await db.query(
-        `INSERT INTO landing_leads (at, last_at, landing_id, product_id, variant_id, qty, unit_price, customer_name, phone, wilaya_id, commune, device, ip, ua, fbp, fbc, url, utm, view_id, ttp)
-         VALUES ($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id`,
+        `INSERT INTO landing_leads (at, last_at, landing_id, product_id, variant_id, qty, unit_price, customer_name, phone, wilaya_id, commune, device, ip, ua, fbp, fbc, url, utm, view_id, ttp, fphash)
+         VALUES ($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING id`,
         [isoAt(now), l.id, l.product_id, variantId, qty, unitPrice, name, phone, wilayaId, i.commune.trim(), device, ip || null, ua.slice(0, 500), fbp || null, fbc || null,
-          (i.meta.url || i.url || '').slice(0, 500) || null, i.utm ? JSON.stringify(i.utm) : null, i.vid || null, i.ttp || null],
+          (i.meta.url || i.url || '').slice(0, 500) || null, i.utm ? JSON.stringify(i.utm) : null, i.vid || null, i.ttp || null, i.fp ? i.fp.slice(0, 24) : null],
       )
     )[0].id,
   );
@@ -970,13 +978,13 @@ async function leadVerdict(db: Db, a: any, now: number) {
       webdriver: false,
       recent: {
         ...(await recentCounts(db, { phone, productId: num(a.product_id), ip: String(a.ip ?? ''), device: String(a.device ?? ''), now })),
-        ...(await handCounts(db, { phone, productId: num(a.product_id), ip: String(a.ip ?? ''), device: String(a.device ?? ''), name: String(a.customer_name ?? ''), wilayaId: num(a.wilaya_id), now })),
+        ...(await handCounts(db, { phone, productId: num(a.product_id), ip: String(a.ip ?? ''), device: String(a.device ?? ''), fphash: a.fphash ? String(a.fphash) : null, name: String(a.customer_name ?? ''), wilayaId: num(a.wilaya_id), now })),
       },
       history: await phoneHistory(db, phone, { name: String(a.customer_name ?? ''), wilayaId: numOrNull(a.wilaya_id), commune: String(a.commune ?? ''), device: a.device ? String(a.device) : null }),
       ipCountry: null,
       ipWilaya: null,
       wilayaId: num(a.wilaya_id),
-      marks: await deviceMarks(db, String(a.device ?? ''), phone, now),
+      marks: await deviceMarks(db, String(a.device ?? ''), a.fphash ? String(a.fphash) : null, phone, now),
     },
     (['relaxed', 'normal', 'strict'].includes(l?.fraud_level) ? l.fraud_level : 'normal') as FraudLevel,
   );
