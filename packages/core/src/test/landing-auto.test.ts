@@ -40,7 +40,7 @@ const solve = (ch: string) => {
 const rndPhone = () => `066${String(Math.floor(Math.random() * 1e7)).padStart(7, '0')}`;
 async function human(over: Record<string, unknown> = {}, phone = rndPhone()) {
   const ch = await makeChallenge(db, SLUG, Date.now() - 25_000);
-  return { slug: SLUG, name: custName(), phone, wilaya: 16, commune: 'Hydra', variant: variants[0].id, qty: 1, hp: '', ch, pw: solve(ch), t: 25_000, ki: 40, wd: false, fp: 'x', did: `d${Math.random()}`, vid: `v${Math.random().toString(36).slice(2, 8)}`, meta: { ip: `10.1.0.${Math.floor(Math.random() * 250)}`, ua: UA }, ...over };
+  return { slug: SLUG, name: custName(), phone, wilaya: 16, commune: 'Hydra', variant: variants[0].id, qty: 1, hp: '', ch, pw: solve(ch), t: 25_000, ki: 40, wd: false, fp: `fp${Math.random().toString(36).slice(2, 14)}`, did: `d${Math.random()}`, vid: `v${Math.random().toString(36).slice(2, 8)}`, meta: { ip: `10.1.0.${Math.floor(Math.random() * 250)}`, ua: UA }, ...over };
 }
 const orderOf = async (phone: string) => (await db.query(`SELECT * FROM orders WHERE phone = $1 ORDER BY id DESC`, [phone]))[0];
 const events = async (where: string, params: unknown[]) => db.query(`SELECT * FROM meta_events WHERE ${where} ORDER BY id`, params);

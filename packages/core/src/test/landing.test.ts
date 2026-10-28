@@ -39,7 +39,7 @@ const solve = (ch: string) => {
 async function human(over: Record<string, unknown> = {}, phone = `0661${String(Math.floor(Math.random() * 1e6)).padStart(6, '0')}`) {
   const t0 = Date.now() - 25_000;
   const ch = await makeChallenge(db, SLUG, t0);
-  return { slug: SLUG, name: custName(), phone, wilaya: 16, commune: 'Hydra', variant: variantId, qty: 1, hp: '', ch, pw: solve(ch), t: 25_000, ki: 40, wd: false, fp: 'abc', did: `d${Math.random()}`, meta: { ip: `10.0.0.${Math.floor(Math.random() * 250)}`, ua: UA }, ...over };
+  return { slug: SLUG, name: custName(), phone, wilaya: 16, commune: 'Hydra', variant: variantId, qty: 1, hp: '', ch, pw: solve(ch), t: 25_000, ki: 40, wd: false, fp: `fp${Math.random().toString(36).slice(2, 14)}`, did: `d${Math.random()}`, meta: { ip: `10.0.0.${Math.floor(Math.random() * 250)}`, ua: UA }, ...over };
 }
 
 test('the page is one small HTML file with the form, the colour and the description', async () => {

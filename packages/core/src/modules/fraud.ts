@@ -133,11 +133,9 @@ export function nameSignals(raw: string, newNumber = true): FraudReason[] {
   if (JUNK_NAMES.has(flat) || words.every((w) => JUNK_NAMES.has(w.toLowerCase()))) out.push({ code: 'name_junk', points: 60 });
   if (/(\p{L})\1{3,}/u.test(name)) out.push({ code: 'name_repeat', points: 25 });
   if (MASH.test(letters)) out.push({ code: 'name_keyboard', points: 35 });
-  else {
-    // latin words: no vowel at all, or 5 consonants in a row ("xkcdfg"); Arabic script is not judged this way
-    const latin = words.filter((w) => /^[a-zà-ÿ'-]+$/i.test(w) && w.length >= 4);
-    if (latin.some((w) => !LATIN_VOWELS.test(w) || /[bcdfghjklmnpqrstvwxz]{5,}/i.test(w))) out.push({ code: 'name_gibberish', points: 30 });
-  }
+  // latin words: no vowel at all, or 5 consonants in a row ("xkcdfg"); Arabic script is not judged this way
+  const latin = words.filter((w) => /^[a-zà-ÿ'-]+$/i.test(w) && w.length >= 4);
+  if (latin.some((w) => !LATIN_VOWELS.test(w) || /[bcdfghjklmnpqrstvwxz]{5,}/i.test(w))) out.push({ code: 'name_gibberish', points: 30 });
   if (letters.length >= 3 && new Set(flat).size <= 2) out.push({ code: 'name_repeat', points: 25 });
   // real COD customers give a full name (two words); a single short word from a new number is a soft sign
   if (newNumber && words.length === 1 && letters.length <= 6) out.push({ code: 'name_oneword', points: 15 });
