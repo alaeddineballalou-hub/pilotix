@@ -105,7 +105,7 @@ export function AuthShell({ children, wide }: { children: ReactNode; wide?: bool
       </footer>
     </main>
   );
-  const cls = `pxa pxt pxt-${theme.layout} pxt-s-${theme.side} pxt-id${theme.id}${theme.dark ? ' pxt-dark' : ''}`;
+  const cls = `pxa pxt pxt-${theme.layout} pxt-s-${theme.side} pxt-id${theme.id} pxt-new${theme.dark ? ' pxt-dark' : ''}`;
   return theme.layout === 'split' ? (
     <div className={cls} data-design={theme.id}>
       {side}
