@@ -71,7 +71,7 @@ export function DepotAlert() {
       <div className="pxda-card">
         <div className="pxda-ref">
           <b className="ltr">{a.ref}</b>
-          <span className={`pxda-stage ${a.status === 'prepared' ? 'p' : ''}`}>{a.status === 'prepared' ? t('depot.alert.stagePrepared') : t('depot.alert.stageToPrepare')}</span>
+          <span className={`pxda-stage ${a.stage === 'prepared' ? 'p' : ''}`}>{a.stage === 'prepared' ? t('depot.alert.stagePrepared') : t('depot.alert.stageToPrepare')}</span>
         </div>
         <div className="pxda-who">
           {a.customer} · <span className="ltr">{a.phone}</span>

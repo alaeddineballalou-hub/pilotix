@@ -617,7 +617,7 @@
   },
   "dalert": {
     "title": "Alertes dépôt",
-    "help": "Quand une commande encore au dépôt est modifiée ou annulée, une alerte rouge bloque l’application de ces personnes jusqu’à ce qu’elles scannent le colis (annulée : son étiquette ; modifiée : l’ancienne étiquette puis la nouvelle).",
+    "help": "Quand une commande déjà préparée est modifiée ou annulée, une alerte rouge bloque l’application de ces personnes jusqu’à ce qu’elles scannent le colis (annulée : son étiquette ; modifiée : l’ancienne étiquette puis la nouvelle). Une commande encore « À préparer » change simplement, sans alerte.",
     "nobody": "Aucun compte Dépôt pour l’instant.",
     "all": "Personne de coché : tous les agents du dépôt reçoivent les alertes.",
     "chosen_one": "{{count}} personne reçoit les alertes.",

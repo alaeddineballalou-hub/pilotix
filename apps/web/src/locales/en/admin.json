@@ -617,7 +617,7 @@
   },
   "dalert": {
     "title": "Depot alerts",
-    "help": "When an order still at the depot is changed or cancelled, a red alert blocks these people’s app until they scan the parcel (cancelled: its label; changed: the old label, then the new one).",
+    "help": "When an order already prepared is changed or cancelled, a red alert blocks these people’s app until they scan the parcel (cancelled: its label; changed: the old label, then the new one). An order still « to prepare » just changes, with no alert.",
     "nobody": "No Depot account yet.",
     "all": "Nobody ticked: every depot agent gets the alerts.",
     "chosen_one": "{{count}} person gets the alerts.",
