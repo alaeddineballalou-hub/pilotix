@@ -17,6 +17,7 @@ import { Demo } from './Demo';
 import { DoctorPage } from './Doctor';
 import { HealthPage } from './Health';
 import { Journal } from './Journal';
+import { LoginDesigns } from './LoginDesigns';
 import { Messages } from './Messages';
 import { Payments } from './Payments';
 import { Plans } from './Plans';
@@ -44,6 +45,7 @@ const SECTIONS: Section[] = [
   { id: 'health', icon: 'archive', roles: ['owner', 'manager'] },
   { id: 'staff', icon: 'users', roles: ['owner'] },
   { id: 'journal', icon: 'history', roles: ['owner', 'manager'] },
+  { id: 'designs', icon: 'image', roles: ['owner', 'manager'] },
   { id: 'settings', icon: 'settings' },
 ];
 
@@ -56,8 +58,8 @@ export function PlatformApp({ parts }: { parts: string[] }) {
       document.title = 'Pilotix';
     };
   }, []);
-  // the preview has no server: only the Doctor can be seen there, with an example
-  if (DEMO_ONLY) return parts[0] === 'doctor' ? <PlatformShell staff={DEMO_STAFF} parts={parts} demo onLogout={() => (location.hash = '#/accueil')} /> : <ServerOnly />;
+  // the preview has no server: only the Doctor and the sign-in designs can be seen there, with an example
+  if (DEMO_ONLY) return parts[0] === 'doctor' || parts[0] === 'designs' ? <PlatformShell staff={DEMO_STAFF} parts={parts} demo onLogout={() => (location.hash = '#/accueil')} /> : <ServerOnly />;
   if (!staff) return <PlatformLogin onDone={setStaff} />;
   // a receipt alone on its page (printed, or saved as PDF from the browser)
   if (parts[0] === 'receipt' && /^\d+$/.test(parts[1] ?? '')) return <Receipt id={Number(parts[1])} />;
@@ -204,6 +206,7 @@ function PlatformShell({ staff, parts, onLogout, demo }: { staff: Staff; parts: 
   else if (cur === 'staff') page = <StaffPage staff={staff} />;
   else if (cur === 'journal') page = <Journal />;
   else if (cur === 'settings') page = <Settings staff={staff} />;
+  else if (cur === 'designs') page = <LoginDesigns staff={staff} demo={demo} />;
   else page = <Dashboard staff={staff} />;
   return (
     <div className="shell pp-shell">

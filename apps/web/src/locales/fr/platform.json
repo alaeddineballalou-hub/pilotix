@@ -31,7 +31,8 @@
     "signups": "Inscriptions",
     "messages": "Messages",
     "health": "Sauvegardes",
-    "marketers": "Marketers"
+    "marketers": "Marketers",
+    "designs": "Pages de connexion"
   },
   "roles": {
     "owner": "Propriétaire",
@@ -562,5 +563,31 @@
   "kind": {
     "agency": "agence de confirmation",
     "marketer": "espace marketer"
+  },
+  "designs": {
+    "sub": "{{n}} design(s) allumé(s) sur {{total}}. À chaque visite, la page de connexion en montre un au hasard.",
+    "all": "Tout allumer",
+    "open": "Ouvrir la page de connexion",
+    "keepOne": "Gardez au moins un design allumé",
+    "n1": "L’ancienne carte, en 3D",
+    "n2": "Tableau de bord penché",
+    "n3": "Colis 3D qui tourne",
+    "n4": "Orbite autour du logo",
+    "n5": "Verre et couleurs qui bougent",
+    "n6": "Ville isométrique",
+    "n7": "Téléphone 3D",
+    "n8": "Tapis roulant",
+    "n9": "Routes sur la carte",
+    "n10": "Pile de commandes 3D",
+    "n11": "Nuit et lumière",
+    "n12": "Compteurs qui roulent",
+    "n13": "Tuiles animées",
+    "n14": "Boutique ou agence (3D)",
+    "n15": "Bandes qui défilent",
+    "n16": "Commande qui avance",
+    "n17": "Outils qui flottent",
+    "n18": "Logo géant",
+    "n19": "Calques en profondeur",
+    "n20": "Gros caractères"
   }
 }

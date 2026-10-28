@@ -658,7 +658,15 @@ class ApiController {
   @Get('auth/signup')
   async signupInfo() {
     const set = await this.core.settings();
-    return { open: set.signup.open && mailConfigured(), trialDays: set.trial.days, site: (config.publicUrl || '').replace(/^https?:\/\//, '') };
+    return {
+      open: set.signup.open && mailConfigured(),
+      trialDays: set.trial.days,
+      site: (config.publicUrl || '').replace(/^https?:\/\//, ''),
+      // the « Besoin d'aide ? WhatsApp » link of the sign-in pages
+      whatsapp: (set.payment.whatsapp || set.company.phone || '').trim(),
+      // the sign-in page designs turned on in the control room (one is drawn at random on each visit)
+      designs: [...new Set(set.login.designs)].filter((n) => n >= 1 && n <= 20),
+    };
   }
 
   /** Is a store name free? (the sign-up form checks while it is typed) */
@@ -703,6 +711,8 @@ class ApiController {
       throw e;
     }
     if ('exists' in r) return { exists: true, email: r.email };
+    // an account-only sign-up: the picker, where the person creates their first store
+    if (!r.shop) return this.picker(r.account);
     this.core.invalidate();
     return this.enter(r.shop.id, r.account.email);
   }

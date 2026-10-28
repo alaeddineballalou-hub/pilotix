@@ -1,0 +1,104 @@
+/* Sign-in / sign-up / password pages: form side + Pilotix showcase side (AuthShell.tsx). */
+.pxa { box-sizing: border-box; min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); background: var(--surface); }
+
+/* ---- the form side */
+.pxa-side { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; padding: 22px clamp(20px, 5vw, 64px) 18px; box-sizing: border-box; }
+.pxa-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pxa-logo { display: inline-flex; text-decoration: none; }
+.pxa-logo .brand-big { width: 118px; height: 42px; margin: 0; }
+.pxa-lang { display: flex; gap: 4px; }
+.pxa-lang button { border: 0; background: none; padding: 6px 8px; border-radius: 8px; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.pxa-lang button:hover { color: var(--ink); background: var(--raise); }
+.pxa-form { width: min(400px, 100%); margin: auto; padding: 28px 0; display: flex; flex-direction: column; gap: 16px; }
+.pxa-form.wide { width: min(480px, 100%); }
+.pxa-head { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+.pxa-head h1 { margin: 0; font-family: var(--f-display); font-size: clamp(28px, 3.2vw, 36px); font-weight: 700; line-height: 1.2; color: var(--ink); letter-spacing: -.01em; }
+.pxa mark { background: linear-gradient(transparent 58%, color-mix(in srgb, var(--orange, #F28B1E) 32%, transparent) 58%); color: inherit; font-weight: 800; padding: 0 2px; }
+.pxa-head p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.5; }
+.pxa .field { display: flex; flex-direction: column; gap: 7px; margin: 0; }
+.pxa .field .lab { font-size: 13.5px; font-weight: 700; color: var(--ink); }
+.pxa-labrow { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.pxa-labrow button, .pxa-labrow a { border: 0; background: none; padding: 0; font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; text-decoration: none; }
+.pxa-labrow button:hover, .pxa-labrow a:hover { color: var(--ink); text-decoration: underline; }
+.pxa .field input, .pxa .field select { box-sizing: border-box; width: 100%; height: 48px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); padding: 0 14px; font: inherit; font-size: 15px; color: var(--ink); transition: border-color .15s, box-shadow .15s; }
+.pxa .field input:focus, .pxa .field select:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 14%, transparent); }
+.pxa .field .hint { font-size: 12.5px; color: var(--muted); }
+.pxa-pw { position: relative; display: block; }
+.pxa-pw input { padding-inline-end: 46px !important; }
+.pxa-eye { position: absolute; inset-inline-end: 6px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border: 0; background: none; border-radius: 9px; color: var(--muted); cursor: pointer; display: grid; place-items: center; }
+.pxa-eye:hover { color: var(--ink); background: var(--raise); }
+.pxa-submit { height: 50px; width: 100%; border: 0; border-radius: 12px; background: #0E1B2E; color: #fff; font: inherit; font-size: 15.5px; font-weight: 700; cursor: pointer; transition: transform .1s, background .15s; }
+.pxa-submit:hover { background: var(--navy); }
+.pxa-submit:active { transform: translateY(1px); }
+.pxa-submit:disabled { opacity: .6; cursor: default; }
+.pxa-alt { text-align: center; font-size: 14px; color: var(--muted); margin: 6px 0 0; }
+.pxa-alt a { color: var(--ink); font-weight: 800; text-decoration: none; background: linear-gradient(transparent 62%, color-mix(in srgb, var(--orange, #F28B1E) 30%, transparent) 62%); }
+.pxa-alt2 { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; color: var(--muted); margin: 0; }
+.pxa-alt2 a { color: var(--navy); font-weight: 700; }
+.pxa-sep { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12.5px; margin: 4px 0; }
+.pxa-sep::before, .pxa-sep::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.pxa .form-err { margin: 0; }
+.pxa-note { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
+.pxa-back { border: 0; background: none; padding: 0; font: inherit; font-size: 14px; color: var(--navy); font-weight: 700; cursor: pointer; text-align: center; text-decoration: none; }
+.pxa-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 520px) { .pxa-grid2 { grid-template-columns: minmax(0, 1fr); } }
+.pxa .demo-accounts { margin: 6px 0 0; width: 100%; box-sizing: border-box; }
+.pxa-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.pxa-foot a { color: var(--ink); font-weight: 700; text-decoration: none; }
+.pxa-foot a:hover { text-decoration: underline; }
+.pxa-legal { display: flex; gap: 16px; }
+.pxa-legal a { font-weight: 500; color: var(--muted); }
+
+/* ---- smaller screens: one column (the designs put their picture above the form, authThemes.css) */
+@media (max-width: 960px) {
+  .pxa { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 480px) {
+  .pxa-side { padding: 16px 18px 14px; }
+  .pxa-form { padding: 18px 0; gap: 14px; }
+  .pxa .field input { font-size: 16px; }
+  .pxa-foot { justify-content: center; text-align: center; }
+}
+
+/* dark theme: the pictures stay as drawn, the form follows the theme */
+:root[data-theme="dark"] .pxa-submit { background: var(--orange, #F28B1E); color: #111; }
+
+/* sign-up: the trial badge, the password hint dot, the terms sentence */
+.pxa-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  order: -1;
+  margin: 0 0 -4px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #fff1e6;
+  color: #c2571a;
+  font-size: 13px;
+  font-weight: 600;
+}
+.pxa-badge svg { width: 15px; height: 15px; }
+.pxa-hint { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted, #6b7280); margin-top: 6px; }
+.pxa-hint i { width: 7px; height: 7px; border-radius: 50%; background: #c7ccd6; transition: background 0.2s; }
+.pxa-hint.ok i { background: #16a34a; }
+.pxa-hint.ok { color: #16a34a; }
+.pxa-legalnote { font-size: 12.5px; line-height: 1.55; color: var(--muted, #6b7280); text-align: center; margin: 4px 0 0; }
+.pxa-legalnote a { color: inherit; text-decoration: underline; }
+[data-theme='dark'] .pxa-badge { background: rgba(255, 140, 60, 0.14); color: #ffb27a; }
+
+/* « Connexion | Créer un compte » */
+.pxa-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 13px; background: var(--raise, #EEF0F4); }
+.pxa-tabs a { display: grid; place-items: center; height: 40px; border-radius: 10px; font-size: 14px; font-weight: 600; color: var(--muted); text-decoration: none; transition: background .2s, color .2s; }
+.pxa-tabs a:hover { color: var(--ink); }
+.pxa-tabs a.on { background: #1B2A47; color: #fff; font-weight: 800; box-shadow: 0 2px 6px rgb(14 27 46 / .18); }
+.pxt-dark .pxa-tabs a.on, :root[data-theme="dark"] .pxa-tabs a.on { background: #F7A823; color: #0E1B2E; }
+@media (max-width: 480px) { .pxa-tabs a { height: 44px; } }
+/* the account type of a sign-up */
+.pxa-kind select { appearance: none; -webkit-appearance: none; font-weight: 700; padding-inline-end: 40px !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235B6475' stroke-width='2.4'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center; }
+[dir='rtl'] .pxa-kind select { background-position: left 14px center; }
+.pxa-kind .hint { line-height: 1.45; }
+/* the tabs first, then the trial badge, then the title */
+.pxa-form > .pxa-tabs { order: -2; }

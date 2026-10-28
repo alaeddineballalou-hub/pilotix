@@ -31,7 +31,8 @@
     "signups": "Sign-ups",
     "messages": "Messages",
     "health": "Backups",
-    "marketers": "Marketers"
+    "marketers": "Marketers",
+    "designs": "Sign-in pages"
   },
   "roles": {
     "owner": "Owner",
@@ -562,5 +563,31 @@
   "kind": {
     "agency": "confirmation agency",
     "marketer": "marketer space"
+  },
+  "designs": {
+    "sub": "{{n}} of {{total}} designs on. Each visit of the sign-in page shows one of them at random.",
+    "all": "Turn all on",
+    "open": "Open the sign-in page",
+    "keepOne": "Keep at least one design on",
+    "n1": "The old card, in 3D",
+    "n2": "Tilted dashboard",
+    "n3": "Turning 3D parcel",
+    "n4": "Orbit around the logo",
+    "n5": "Glass and moving colours",
+    "n6": "Isometric city",
+    "n7": "3D phone",
+    "n8": "Conveyor belt",
+    "n9": "Routes on the map",
+    "n10": "3D stack of orders",
+    "n11": "Night and light",
+    "n12": "Rolling counters",
+    "n13": "Animated tiles",
+    "n14": "Store or agency (3D)",
+    "n15": "Scrolling bands",
+    "n16": "An order moving forward",
+    "n17": "Floating tools",
+    "n18": "Giant logo",
+    "n19": "Layers in depth",
+    "n20": "Big bold words"
   }
 }

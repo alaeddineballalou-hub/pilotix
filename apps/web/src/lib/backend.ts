@@ -112,7 +112,16 @@ export const linkKind = (token: string) => authRequest<{ kind: 'reset' | 'invite
 export const verifyEmail = (token: string) => authRequest<{ ok: true }>('/auth/verify', { token });
 
 // ---------------------------------------------------------------- « Créer ma boutique »
-export const signupInfo = () => authRequest<{ open: boolean; trialDays: number; site: string }>('/auth/signup').catch(() => ({ open: false, trialDays: 0, site: '' }));
+export interface SignupInfo {
+  open: boolean;
+  trialDays: number;
+  site: string;
+  /** the WhatsApp of the « Besoin d'aide ? » link */
+  whatsapp?: string;
+  /** the sign-in page designs turned on in the control room (missing: an older server, all of them) */
+  designs?: number[];
+}
+export const signupInfo = () => authRequest<SignupInfo>('/auth/signup').catch((): SignupInfo => ({ open: false, trialDays: 0, site: '', whatsapp: '' }));
 export const storeNameCheck = (name: string, slug?: string) =>
   authRequest<{ slug: string; free: boolean; reason: string | null }>(`/auth/store-name?name=${encodeURIComponent(name)}${slug ? `&slug=${encodeURIComponent(slug)}` : ''}`);
 export interface SignupForm {
@@ -209,9 +218,10 @@ class RemoteBackend implements Backend {
     return this.enterWith(await this.req<{ token: string; session: Session }>(ticket ? '/auth/add-store/ticket' : '/auth/add-store', { ...input, ...(ticket ? { ticket } : {}) }));
   }
   /** The sign-up e-mail's link: the store is made and entered (or « you already have an account »). */
-  async confirmSignup(token: string): Promise<Session | { exists: true; email: string }> {
-    const r = await this.req<{ token: string; session: Session } | { exists: true; email: string }>('/auth/signup/confirm', { token });
-    return 'exists' in r ? r : this.enterWith(r);
+  /** The sign-up e-mail's link: the store is made and entered, or (account-only sign-up) the picker to create it, or « you already have an account ». */
+  async confirmSignup(token: string): Promise<Session | PickInfo | { exists: true; email: string }> {
+    const r = await this.req<{ token: string; session: Session } | PickInfo | { exists: true; email: string }>('/auth/signup/confirm', { token });
+    return 'exists' in r ? r : 'pick' in r ? r : this.enterWith(r);
   }
   /** The e-mail check link (from the store picker: with its ticket). */
   verifySend(ticket?: string) {

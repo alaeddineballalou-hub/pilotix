@@ -749,9 +749,10 @@ export const PLATFORM_REGISTRY = {
       security: z.object({ twoStep: z.boolean() }).optional(),
       company: z.object({ name: z.string().trim().max(120), address: z.string().trim().max(300), phone: z.string().trim().max(40), email: z.string().trim().max(200), taxId: z.string().trim().max(80) }).optional(),
       legal: z.object({ text: z.string().max(30_000) }).optional(),
+      login: z.object({ designs: z.array(z.number().int().min(1).max(20)).min(1, 'Gardez au moins un design').max(20) }).optional(),
     }),
     async (ctx, i) => {
-      for (const k of ['trial', 'payment', 'notice', 'demo', 'signup', 'reminders', 'referral', 'security', 'company', 'legal'] as const) if (i[k]) await setPlatformSetting(ctx.t, k, i[k] as any);
+      for (const k of ['trial', 'payment', 'notice', 'demo', 'signup', 'reminders', 'referral', 'security', 'company', 'legal', 'login'] as const) if (i[k]) await setPlatformSetting(ctx.t, k, i[k] as any);
       await audit(ctx, 'settings.save', null, { keys: Object.keys(i) });
       return platformSettings(ctx.t);
     },

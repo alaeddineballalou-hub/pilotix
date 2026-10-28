@@ -10,6 +10,7 @@ import {
   accountByEmail,
   checkAccountPassword,
   completedResets,
+  ensureAccount,
   isAdminSomewhere,
   makeAccountToken,
   membershipsOf,
@@ -99,7 +100,8 @@ export const SignupInput = z.object({
   email: z.string().trim().email('E-mail invalide').max(200),
   password: z.string().min(8, 'Le mot de passe doit contenir au moins 8 caractères').max(200),
   phone: z.string().trim().max(30).nullable().optional(),
-  storeName: z.string().trim().min(2, 'Nom de la boutique : au moins 2 lettres').max(80),
+  /** empty (a store only): just the account; the person adds their first store once inside. A partner always gives its name. */
+  storeName: z.string().trim().max(80).default(''),
   slug: z.string().trim().toLowerCase().max(40).optional(),
   language: z.enum(['fr', 'en', 'ar']).default('fr'),
   referral: z.string().trim().toUpperCase().max(12).optional(),
@@ -133,9 +135,14 @@ export async function startSignup(t: Tenancy, raw: unknown, ip: string | null, n
   const partner = i.kind !== 'store';
   const email = normEmail(i.email);
   if (NO_ACCOUNT.test(email)) throw bad('E-mail invalide');
-  // a partner has no landing pages: the name in its links is made from its name
-  const name = await storeNameCheck(t, i.storeName, partner ? undefined : i.slug);
-  if (!name.free) throw bad(name.reason ?? 'Nom indisponible');
+  // a store without a name: only the account (the first store is added once inside); a partner always gives its name
+  const accountOnly = !partner && !i.storeName;
+  if (!accountOnly && i.storeName.length < 2) throw bad(partner ? 'Nom : au moins 2 lettres' : 'Nom de la boutique : au moins 2 lettres');
+  if (!accountOnly) {
+    // a partner has no landing pages: the name in its links is made from its name
+    const name = await storeNameCheck(t, i.storeName, partner ? undefined : i.slug);
+    if (!name.free) throw bad(name.reason ?? 'Nom indisponible');
+  }
   if (!partner && i.referral && !(await t.platform.query(`SELECT 1 FROM platform.shops WHERE referral_code = $1 AND status <> 'deleted'`, [i.referral])).length)
     throw bad('Code de parrainage inconnu (laissez vide si vous n’en avez pas)');
   // 3 sign-ups an hour per e-mail: nobody can fill someone's inbox
@@ -177,7 +184,7 @@ export async function startSignup(t: Tenancy, raw: unknown, ip: string | null, n
  * The link of the sign-up e-mail: the account and its store are made now (the e-mail is proven), on the trial plan.
  * `exists`: this e-mail got an account meanwhile (it logs in instead).
  */
-export async function confirmSignup(t: Tenancy, token: string, now = Date.now()): Promise<{ shop: Shop; account: Account } | { exists: true; email: string }> {
+export async function confirmSignup(t: Tenancy, token: string, now = Date.now()): Promise<{ shop: Shop | null; account: Account } | { exists: true; email: string }> {
   if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{20,100}$/.test(token)) throw bad('Ce lien n’est plus valable. Inscrivez-vous à nouveau.');
   const row = (
     await t.platform.query(
@@ -189,6 +196,11 @@ export async function confirmSignup(t: Tenancy, token: string, now = Date.now())
   if (await accountByEmail(t, row.email)) return { exists: true, email: row.email };
   const kind: 'store' | 'agency' | 'marketer' = row.kind === 'agency' || row.kind === 'marketer' ? row.kind : 'store';
   const partner = kind !== 'store';
+  // a store sign-up without a store name: only the account, proven; the person adds their first store from the picker
+  if (!partner && !String(row.store_name ?? '').trim()) {
+    const { account } = await ensureAccount(t, { email: row.email, name: row.name, language: row.language, passwordHash: row.password_hash, verified: true });
+    return { shop: null, account };
+  }
   const set = await platformSettings(t);
   // a partner (agency, marketer) is free (no plan, no trial); Pilotix checks it before it works with stores
   const plan = partner ? null : await startPlan(t, set);
@@ -247,18 +259,26 @@ export async function addStore(t: Tenancy, account: Account, raw: unknown, now =
   const name = await storeNameCheck(t, p.data.name, partner ? undefined : p.data.slug);
   if (!name.free) throw bad(name.reason ?? 'Nom indisponible');
   const plan = partner ? null : await startPlan(t, set);
+  // the first store after an account-only sign-up: the phone and the referral code given at sign-up
+  const first = !partner && (await ownedStores(t, account.id)) === 0;
+  const su = first
+    ? (await t.platform.query(`SELECT phone, referral_code FROM platform.signup_requests WHERE email = $1 AND used_at IS NOT NULL AND password_hash <> '-' AND shop_id IS NULL ORDER BY created_at DESC LIMIT 1`, [account.email]))[0]
+    : null;
+  const referrer = su?.referral_code ? ((await t.platform.query(`SELECT id FROM platform.shops WHERE referral_code = $1 AND status <> 'deleted'`, [su.referral_code]))[0]?.id ?? null) : null;
   const shop = await provisionShop(t, {
     name: p.data.name,
     slug: name.slug,
     planId: plan?.id ?? null,
     trialDays: set.trial.days,
-    owner: { name: account.name || account.email, email: account.email, language: account.language },
+    owner: { name: account.name || account.email, email: account.email, phone: su?.phone ?? null, language: account.language },
     verified: true,
     selfSignup: true,
+    referredBy: referrer ? Number(referrer) : null,
     kind,
     now,
   });
-  await journal(t, shop.id, partner ? `${kind}.added` : 'shop.added', account.email, { name: shop.name, plan: plan?.name ?? null });
+  if (referrer) await t.platform.query('INSERT INTO platform.referrals (referrer_shop_id, referred_shop_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [referrer, shop.id]);
+  await journal(t, shop.id, partner ? `${kind}.added` : 'shop.added', account.email, { name: shop.name, plan: plan?.name ?? null, referredBy: referrer });
   return shop;
 }
 
