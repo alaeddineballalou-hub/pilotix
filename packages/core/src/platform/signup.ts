@@ -227,6 +227,28 @@ export async function confirmSignup(t: Tenancy, token: string, now = Date.now())
   return { shop, account };
 }
 
+// ---------------------------------------------------------------- « Continuer avec Google / Facebook »
+/**
+ * A person proven by Google or Facebook (the server checked their token): their account, made now when they have none
+ * (a sign-up: the e-mail is proven by Google / Facebook, so no e-mail to confirm; no password — « Mot de passe oublié »
+ * gives one). They then enter their store, or the picker where a new person creates their first store.
+ */
+export async function socialAccount(t: Tenancy, p: { email: string; name: string; language?: string }): Promise<{ account: Account; created: boolean }> {
+  const email = normEmail(p.email);
+  if (!email || NO_ACCOUNT.test(email)) throw bad('Cet e-mail ne peut pas ouvrir de compte');
+  let acc = await accountByEmail(t, email);
+  let created = false;
+  if (!acc) {
+    const set = await platformSettings(t);
+    if (!set.signup.open) throw bad('Les inscriptions sont fermées pour le moment. Écrivez à Pilotix.');
+    const lang = p.language === 'en' || p.language === 'ar' ? p.language : 'fr';
+    ({ account: acc, created } = await ensureAccount(t, { email, name: (p.name || email.split('@')[0]).trim(), language: lang, passwordHash: null, verified: true }));
+  }
+  // the e-mail is proven now
+  await t.platform.query('UPDATE platform.accounts SET email_verified_at = COALESCE(email_verified_at, now()), last_login_at = now() WHERE id = $1', [acc.id]);
+  return { account: (await accountByEmail(t, email))!, created };
+}
+
 // ---------------------------------------------------------------- « Ajouter une boutique »
 export const AddStoreInput = z.object({
   name: z.string().trim().min(2, 'Nom de la boutique : au moins 2 lettres').max(80),

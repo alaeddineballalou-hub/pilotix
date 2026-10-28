@@ -10,6 +10,7 @@ import { Icon } from '../ui/kit';
 import { Modal } from '../ui/modal';
 import { toast } from '../ui/toast';
 import { AuthShell, AuthTabs, AuthTitle, PasswordInput } from './AuthShell';
+import { SOCIAL_KIND, SocialButtons } from './SocialButtons';
 import { BrandBig } from './PxWordmark';
 
 /** Leaves a page opened from an e-mail (its secret leaves the address bar and the history). */
@@ -72,7 +73,18 @@ export function StorePicker() {
   const [busy, setBusy] = useState<number | null>(null);
   // a new account (no store yet): the first store's form straight away
   const first = !!picker && !picker.stores.length && picker.canAddStore;
-  const [adding, setAdding] = useState<Kind | null>(first ? 'store' : null);
+  // after Google/Facebook on the sign-up page: the account type chosen there
+  const [adding, setAdding] = useState<Kind | null>(() => {
+    if (!first) return null;
+    let k: string | null = null;
+    try {
+      k = sessionStorage.getItem(SOCIAL_KIND);
+      sessionStorage.removeItem(SOCIAL_KIND);
+    } catch {}
+    if (k === 'agency' && picker?.canAddAgency) return 'agency';
+    if (k === 'marketer' && picker?.canAddMarketer) return 'marketer';
+    return 'store';
+  });
   if (!picker) return null;
   const go = async (id: number) => {
     setBusy(id);
@@ -363,6 +375,7 @@ export function Signup({ referral, kind: chosen }: { referral?: string; kind?: '
           </select>
           <span className="hint">{t(`agency.acct.${kind}.d`)}</span>
         </label>
+        <SocialButtons mode="signup" kind={kind} onError={setError} />
         {partner && (
           <label className="field">
             <span className="lab">{tk('name')}</span>

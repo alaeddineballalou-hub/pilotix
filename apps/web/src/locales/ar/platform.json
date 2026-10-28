@@ -449,7 +449,13 @@
     "legalText": "نصك",
     "legalHint": "نص بسيط، تُحفظ الأسطر الجديدة.",
     "legalPh": "اتركه فارغًا للإبقاء على النص القياسي.",
-    "legalLink": "عرض الصفحة"
+    "legalLink": "عرض الصفحة",
+    "socialTitle": "الدخول بـ Google و Facebook",
+    "socialHelp": "الصق هنا معرّف Google ومعرّف Facebook: يظهر بعدها زرّا «المتابعة بـ Google» و«المتابعة بـ Facebook» في صفحتَي الدخول والتسجيل. اتركه فارغًا لإخفاء الزر.",
+    "socialGoogle": "Google — معرّف عميل OAuth",
+    "socialGoogleHint": "Google Cloud Console ← Credentials ← OAuth client ID من نوع «Web application». المصدر المسموح: {{site}}",
+    "socialFacebook": "Facebook — معرّف التطبيق",
+    "socialFacebookHint": "developers.facebook.com ← My apps ← Create app ← «Facebook Login». نطاق التطبيق: {{site}}. ضع التطبيق في وضع «Live»."
   },
   "demo": {
     "none": "لا يوجد متجر تجريبي بعد",
