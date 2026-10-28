@@ -181,7 +181,7 @@ function Steps({ a }: { a: Alert }) {
     );
   };
   useEffect(() => {
-    input.current?.focus();
+    input.current?.focus({ preventScroll: true });
   }, [a.id, a.found, printed]);
   const print = async () => {
     try {
