@@ -31,8 +31,9 @@
 .pxda-cancel .bji { flex: none; width: 34px; height: 34px; }
 .pxda-cancel b { display: block; font-size: 18px; font-weight: 900; }
 .pxda-cancel small { display: block; font-size: 13px; font-weight: 600; margin-top: 2px; color: #6B2420; }
-.pxda-bar { margin-top: auto; max-width: 560px; width: 100%; margin-inline: auto; display: flex; flex-direction: column; gap: 8px; }
+.pxda-bar { position: sticky; bottom: calc(-14px - env(safe-area-inset-bottom, 0px)); margin: auto -14px calc(-14px - env(safe-area-inset-bottom, 0px)); padding: 14px 14px calc(14px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(180deg, rgba(163, 33, 27, 0), #A3211B 30%); display: flex; flex-direction: column; gap: 8px; }
+.pxda-bar > * { width: 100%; max-width: 560px; margin-inline: auto; }
 .pxda-ok { height: 60px; border-radius: 18px; border: 0; background: #fff; color: #127A43; font: inherit; font-size: 18px; font-weight: 900; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; box-shadow: 0 10px 24px rgba(0, 0, 0, .22); }
 .pxda-ok .bji { width: 22px; height: 22px; }
 .pxda-ok:disabled { opacity: .7; }
-.pxda-next { height: 46px; border-radius: 14px; border: 1.5px solid rgba(255, 255, 255, .6); background: transparent; color: #fff; font: inherit; font-size: 15px; font-weight: 800; cursor: pointer; }
+.pxda-next { order: 2; height: 42px; border-radius: 14px; border: 1.5px solid rgba(255, 255, 255, .6); background: transparent; color: #fff; font: inherit; font-size: 15px; font-weight: 800; cursor: pointer; }
