@@ -565,7 +565,7 @@ async function handCounts(db: Db, a: { phone: string | null; productId: number; 
     nearPhones24h: num(r.near),
     nearSameSource: num(r.near_src) > 0,
     nameOtherPhones7d: num(r.names),
-    wilayaWave: waveNow >= 6 && waveNow >= 3 * Math.max(usual, 2),
+    wilayaWave: waveNow >= 10     wilayaWave: waveNow >= 6 && waveNow >= 3 * Math.max(usual, 2),    wilayaWave: waveNow >= 6 && waveNow >= 3 * Math.max(usual, 2), waveNow >= 3 * Math.max(usual, 2),
     newDevicesIp10m: num(r.rain),
   };
 }
