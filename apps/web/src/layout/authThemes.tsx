@@ -891,7 +891,7 @@ function Reel({ to, delay = 0 }: { to: number; delay?: number }) {
   const digits = Array.from({ length: 11 + to }, (_, i) => i % 10);
   return (
     <span className="pxt-reel">
-      <span style={{ ['--to' as string]: `-${10 + to}em`, animationDelay: `${delay}s` } as CSSProperties}>
+      <span style={{ ['--to' as string]: `-${(10 + to) * 1.12}em`, animationDelay: `${delay}s` } as CSSProperties}>
         {digits.map((n, i) => (
           <i key={i}>{n}</i>
         ))}
