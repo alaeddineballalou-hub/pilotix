@@ -52,6 +52,8 @@ interface Visit {
   honeypot?: string;
   webdriver?: boolean;
   noPage?: boolean;
+  /** automation Cloudflare's invisible check would catch (a real browser driven by a script) */
+  bot?: boolean;
 }
 
 export interface AttackRow {
@@ -75,7 +77,7 @@ export interface AttackReport {
 }
 
 /** Runs the attack test for one landing page, entirely inside a rolled-back transaction. */
-export async function runAttackTest(ctx: Ctx, slug: string | null, level: FraudLevel): Promise<AttackReport> {
+export async function runAttackTest(ctx: Ctx, slug: string | null, level: FraudLevel, turnstile: 'auto' | 'on' | 'off'): Promise<AttackReport> {
   const page = (
     await ctx.db.query(
       slug
@@ -89,13 +91,14 @@ export async function runAttackTest(ctx: Ctx, slug: string | null, level: FraudL
   const variantId = Number((await ctx.db.query(`SELECT id FROM product_variants WHERE product_id = $1 AND title <> '' AND active ORDER BY id LIMIT 1`, [productId]))[0]?.id ?? 0) || null;
   const fraudLevel = level ?? (['relaxed', 'normal', 'strict'].includes(page.fraud_level) ? page.fraud_level : 'normal');
   // Cloudflare is on when the shop set its own key, or when Pilotix placed one for the page's address
-  const turnstileOn = !!String((await landingSettings(ctx.db)).turnstileSiteKey ?? '').trim() || !!ctx.server?.turnstile;
+  const configured = !!String((await landingSettings(ctx.db)).turnstileSiteKey ?? '').trim() || !!ctx.server?.turnstile;
+  const turnstileOn = turnstile === 'on' ? true : turnstile === 'off' ? false : configured;
 
   const rows: AttackRow[] = [];
   const ROLLBACK = Symbol('rollback');
   try {
     await ctx.db.tx(async (tx) => {
-      await runAll(tx, { productId, variantId, fraudLevel, rows });
+      await runAll(tx, { productId, variantId, fraudLevel, rows, turnstileOn });
       throw ROLLBACK; // nothing is ever saved
     });
   } catch (e) {
@@ -115,8 +118,8 @@ export async function runAttackTest(ctx: Ctx, slug: string | null, level: FraudL
   };
 }
 
-async function runAll(tx: Db, cfg: { productId: number; variantId: number | null; fraudLevel: FraudLevel; rows: AttackRow[] }) {
-  const { productId, fraudLevel, rows } = cfg;
+async function runAll(tx: Db, cfg: { productId: number; variantId: number | null; fraudLevel: FraudLevel; rows: AttackRow[]; turnstileOn: boolean }) {
+  const { productId, fraudLevel, rows, turnstileOn } = cfg;
   void cfg.variantId;
   const r = rng(20261028);
   const pick = <T>(a: readonly T[]): T => a[Math.floor(r() * a.length)];
@@ -170,6 +173,8 @@ async function runAll(tx: Db, cfg: { productId: number; variantId: number | null
       },
       history: await phoneHistory(tx, ph),
       marks: await deviceMarks(tx, device, fphash, ph, clock),
+      // Cloudflare's invisible check: a robot (driven browser / script) fails it; a real person — even a competitor — passes
+      turnstile: (turnstileOn ? ((v.noPage || v.webdriver || v.bot) && r() < 0.9 ? 'fail' : 'ok') : 'off') as 'ok' | 'fail' | 'off',
       ipCountry: 'DZ',
       ipWilaya: null,
       wilayaId: w,
@@ -212,7 +217,7 @@ async function runAll(tx: Db, cfg: { productId: number; variantId: number | null
   clock += 3 * DAY;
   await run('Robots', 'Robot rapide', 'envoie en 1 à 3 secondes', true, 25, () => ({ secs: int(1, 2), keys: 3, scroll: 0 }), () => 45_000);
   clock += 3 * DAY;
-  await run('Robots', 'Robot intelligent (imite un humain)', 'attend, tape, défile, Android, nouvelle IP et nouvel appareil à chaque fois', true, 60, () => ({ secs: int(20, 60) }), () => int(3, 15) * 60_000);
+  await run('Robots', 'Robot intelligent (imite un humain)', 'attend, tape, défile, Android, nouvelle IP et nouvel appareil à chaque fois', true, 60, () => ({ secs: int(20, 60), bot: true }), () => int(3, 15) * 60_000);
   clock += 3 * DAY;
 
   // 2. pranks
