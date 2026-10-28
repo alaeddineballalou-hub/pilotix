@@ -321,6 +321,9 @@
     "reprint": "Print again",
     "scanPh": "Scan (scanner gun) or type the code",
     "scanNewPh": "Scan the new label",
-    "camera": "Scan with the camera"
+    "camera": "Scan with the camera",
+    "pushAsk": "Turn on notifications: depot alerts will ring on this phone even when Pilotix is closed.",
+    "pushOn": "Turn on",
+    "pushDenied": "Notifications blocked: allow them for Pilotix in the browser settings, otherwise alerts only ring with the app open."
   }
 }

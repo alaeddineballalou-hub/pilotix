@@ -5,6 +5,7 @@ import type { Session } from '@pilotix/shared';
 import { Pool, PoolClient } from 'pg';
 import { config } from './config';
 import { turnstileCheck, turnstileSiteKey } from './turnstile';
+import { push, pushKeys } from './push';
 
 const PATH = Symbol('pilotix.search_path');
 type Client = PoolClient & { [PATH]?: string };
@@ -131,6 +132,8 @@ export class CoreService implements OnModuleDestroy {
   private listeners = new Set<(shopId: number, e: LiveEvent) => void>();
 
   readonly baseHooks: ServerHooks = {
+    pushKeys,
+    push,
     courier: async (action, args, ctx) => {
       const m = optional('@pilotix/core/dist/couriers');
       if (!m?.runCourier) throw new core.AppError('bad_request', 'Intégration des sociétés de livraison indisponible sur ce serveur');

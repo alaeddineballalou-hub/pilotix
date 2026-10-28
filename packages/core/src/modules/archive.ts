@@ -53,6 +53,7 @@ export const USER_REFS: readonly Ref[] = [
   ['conv_messages', 'user_id', 'messages'],
   ['cm_comments', 'handled_by', 'messages'],
   ['notifications', 'sent_by', 'messages'],
+  ['push_subs', 'profile_id', 'messages'],
   ['adsets', 'marketer_id', 'marketing'],
   ['ad_month_closes', 'closed_by', 'marketing'],
   ['marketer_prices', 'profile_id', 'marketing'],

@@ -29,21 +29,31 @@ export function chime() {
   }
 }
 
-/** an alarm the depot cannot miss: three sharp beeps (call it again every few seconds while the alert is open) */
+/** an alarm the depot cannot miss: a loud two-tone siren (call it again every few seconds while the alert is open) */
 export function alarm() {
   if (!audio || audio.state !== 'running') return;
   const t = audio.currentTime;
+  const master = audio.createGain();
+  master.gain.value = 0.55;
+  master.connect(audio.destination);
+  // a harsh siren: two sawtooth voices sweeping up and down, three times
   for (let i = 0; i < 3; i++) {
-    const o = audio.createOscillator();
-    const g = audio.createGain();
-    o.type = 'square';
-    o.frequency.value = i % 2 ? 740 : 988;
-    const s = t + i * 0.22;
-    g.gain.setValueAtTime(0.0001, s);
-    g.gain.exponentialRampToValueAtTime(0.22, s + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, s + 0.16);
-    o.connect(g).connect(audio.destination);
-    o.start(s);
-    o.stop(s + 0.18);
+    const s = t + i * 0.5;
+    for (const [type, detune] of [['sawtooth', 0], ['square', 7]] as const) {
+      const o = audio.createOscillator();
+      const g = audio.createGain();
+      o.type = type;
+      o.detune.value = detune;
+      o.frequency.setValueAtTime(650, s);
+      o.frequency.linearRampToValueAtTime(1450, s + 0.24);
+      o.frequency.linearRampToValueAtTime(650, s + 0.48);
+      g.gain.setValueAtTime(0.0001, s);
+      g.gain.exponentialRampToValueAtTime(0.5, s + 0.02);
+      g.gain.setValueAtTime(0.5, s + 0.44);
+      g.gain.exponentialRampToValueAtTime(0.0001, s + 0.49);
+      o.connect(g).connect(master);
+      o.start(s);
+      o.stop(s + 0.5);
+    }
   }
 }

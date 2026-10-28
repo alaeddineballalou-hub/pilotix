@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { Db, iso, num } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
 import { getSetting, setSetting } from '../settings';
+import { sendPush } from './push';
 
 /** only a parcel already prepared alerts: « à préparer » was not picked yet, the change just applies */
 export const DEPOT_STAGES = ['prepared'];
@@ -68,6 +69,14 @@ export async function addDepotAlert(db: Db, ctx: Ctx, orderId: number, stage: st
       newCode,
     ]);
   }
+}
+
+/** The people who get the alerts: those chosen in Management, else every depot agent (never the owner). */
+async function recipients(db: Db) {
+  const to = (await getSetting(db, 'depotAlerts')).to ?? [];
+  const rows = await db.query(`SELECT id FROM profiles WHERE active AND 'depot' = ANY(roles) AND NOT ('admin' = ANY(roles))`);
+  const all = rows.map((r: any) => num(r.id));
+  return to.length ? all.filter((x: number) => to.includes(x)) : all;
 }
 
 /** Who gets the alerts: the people chosen in Management; nobody chosen = every depot agent. */
@@ -137,6 +146,38 @@ export const depotAlertProcs = {
     if (code !== newCode) throw bad('Ce n’est pas la nouvelle étiquette de cette commande');
     return close('Dépôt : colis corrigé, nouvelle étiquette collée (scannée)');
   }),
+
+  /**
+   * Every minute (scheduled job): an open alert rings on the phones of the people who get it — again and again until they
+   * open the app (someone seen in the app this last minute hears the alarm there; no notification for them).
+   */
+  'depot.pushRun': proc([], z.object({}), async (ctx) => {
+    const open = await ctx.db.query(
+      `SELECT a.id, a.kind, o.ref, o.customer_name FROM depot_alerts a JOIN orders o ON o.id = a.order_id
+       WHERE a.resolved_at IS NULL AND (a.pushed_at IS NULL OR a.pushed_at < now() - interval '50 seconds') ORDER BY a.created_at`,
+    );
+    if (!open.length) return { sent: 0 };
+    const who = await recipients(ctx.db);
+    const away = who.length
+      ? (await ctx.db.query(`SELECT id FROM profiles WHERE id = ANY($1) AND (last_seen_at IS NULL OR last_seen_at < now() - interval '75 seconds' OR presence = 'idle')`, [who])).map((r: any) => num(r.id))
+      : [];
+    let sent = 0;
+    for (const a of open) {
+      const cancel = a.kind === 'cancel';
+      sent += await sendPush(ctx, away, {
+        title: cancel ? `🚨 ${a.ref} ANNULÉE — ne l’envoyez pas` : `🚨 ${a.ref} MODIFIÉE — corrigez le colis`,
+        body: `${a.customer_name} · ouvrez Pilotix et scannez le colis`,
+        tag: `depot-alert-${a.id}`,
+        url: '#/accueil',
+        alarm: true,
+      });
+      await ctx.db.query('UPDATE depot_alerts SET pushed_at = now(), pushes = pushes + 1 WHERE id = $1', [a.id]);
+    }
+    return { sent, alerts: open.length };
+  }),
+
+  /** Do I get the dépôt alerts? (then my phone is asked to ring for them) */
+  'depot.alertMine': proc(['depot'], z.object({}), async (ctx) => ({ mine: !ctx.session.isAdmin && (await isRecipient(ctx)) })),
 
   /** Management › Alertes dépôt: who gets them (the depot agents to choose from). */
   'depot.alertConfig': proc([], z.object({}), async (ctx) => {

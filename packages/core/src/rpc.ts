@@ -100,6 +100,9 @@ export interface ServerHooks {
   /** Google Sheets sales channel: the CSV text of a public sheet (docs.google.com only). */
   sheetCsv?: (url: string) => Promise<string>;
   hashPassword: (pw: string) => Promise<string>;
+  /** Web Push: a new key pair for the shop (once), and sending one notification to devices (gone: unsubscribed, to forget) */
+  pushKeys?: () => { publicKey: string; privateKey: string };
+  push?: (keys: { publicKey: string; privateKey: string }, subs: { endpoint: string; p256dh: string; auth: string }[], payload: Record<string, unknown>) => Promise<{ endpoint: string; ok: boolean; gone: boolean }[]>;
   /** the server's public address (PUBLIC_URL): couriers call it back (webhooks) */
   publicUrl?: string;
   /** the shop's public API address: PUBLIC_URL/api, or PUBLIC_URL/api/s/<shop> for a shop other than the first */

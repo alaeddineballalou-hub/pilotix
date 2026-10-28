@@ -7,6 +7,7 @@ import { rpc } from '../lib/backend';
 import { when } from '../lib/format';
 import { useAction, useRpc } from '../lib/query';
 import { alarm } from '../lib/sound';
+import { enablePush } from '../lib/push';
 import { Icon } from '../ui/kit';
 import { toast } from '../ui/toast';
 import { printLabelItems } from '../pages/depot/labelPrint';
@@ -15,6 +16,31 @@ import { ring, startCamera } from '../pages/depot/scan';
 import './depotAlert.css';
 
 type Alert = NonNullable<ReturnType<typeof useRpc<'depot.alerts'>>['data']>[number];
+
+/** This phone rings for the dépôt alerts even when Pilotix is closed: asked once (a tap is needed), kept after. */
+function PushAsk() {
+  const { t } = useTranslation();
+  const [state, setState] = useState<'on' | 'denied' | 'off' | 'unsupported' | null>(null);
+  const me = useRpc('depot.alertMine', {}, { staleTime: 5 * 60_000 }).data?.mine;
+  useEffect(() => {
+    if (!me) return;
+    enablePush(false)
+      .then(setState)
+      .catch(() => setState('unsupported'));
+  }, [me]);
+  if (state !== 'off' && state !== 'denied') return null;
+  return (
+    <div className="pxda-ask" role="status">
+      <Icon name="alert" />
+      <span>{state === 'denied' ? t('depot.alert.pushDenied') : t('depot.alert.pushAsk')}</span>
+      {state === 'off' && (
+        <button type="button" onClick={() => enablePush(true).then(setState).catch(() => setState('unsupported'))}>
+          {t('depot.alert.pushOn')}
+        </button>
+      )}
+    </div>
+  );
+}
 
 export function DepotAlert() {
   const { t } = useTranslation();
@@ -30,13 +56,13 @@ export function DepotAlert() {
     const ring = () => {
       alarm();
       try {
-        navigator.vibrate?.([300, 120, 300]);
+        navigator.vibrate?.([600, 150, 600, 150, 600]);
       } catch {
         /* no vibration */
       }
     };
     ring();
-    const id = window.setInterval(ring, 4000);
+    const id = window.setInterval(ring, 2500);
     return () => window.clearInterval(id);
   }, [open, list.length]);
 
@@ -50,7 +76,7 @@ export function DepotAlert() {
     };
   }, [open]);
 
-  if (!a) return null;
+  if (!a) return <PushAsk />;
   const cancel = a.kind === 'cancel';
   return (
     <div className="pxda" role="alertdialog" aria-modal="true" aria-labelledby="pxda-t">

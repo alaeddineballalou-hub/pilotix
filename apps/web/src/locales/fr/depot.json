@@ -321,6 +321,9 @@
     "reprint": "Réimprimer",
     "scanPh": "Scannez (douchette) ou tapez le code",
     "scanNewPh": "Scannez la nouvelle étiquette",
-    "camera": "Scanner avec la caméra"
+    "camera": "Scanner avec la caméra",
+    "pushAsk": "Activez les notifications : les alertes du dépôt sonneront sur ce téléphone même quand Pilotix est fermé.",
+    "pushOn": "Activer",
+    "pushDenied": "Notifications bloquées : autorisez-les pour Pilotix dans les réglages du navigateur, sinon les alertes ne sonnent que l’application ouverte."
   }
 }

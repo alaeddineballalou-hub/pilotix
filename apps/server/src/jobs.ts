@@ -33,6 +33,7 @@ const FEATURE: Record<string, string | null> = {
   'dellal-followups': 'pilotai/messages',
   'cm-sweep': 'pilotai/cm',
   'notify-run': 'pilotai/notify',
+  'depot-push': null,
   'spy-scan': 'marketing/spy',
   'sheets-sync': 'management/canaux',
 };
@@ -67,6 +68,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     if (name === 'dellal-followups') return call('dellal.followUps');
     if (name === 'cm-sweep') return call('cm.sweep');
     if (name === 'notify-run') return call('notify.run');
+    if (name === 'depot-push') return call('depot.pushRun');
     if (name === 'spy-scan') return call('spy.scan');
     if (name === 'sheets-sync') {
       const r: any[] = (await call('channels.sheet.syncAll')) as any[];
@@ -140,6 +142,8 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.queue.add('dellal-followups', {}, { repeat: { every: 15 * 60_000 }, jobId: 'dellal-followups', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('cm-sweep', {}, { repeat: { every: 3 * 60_000 }, jobId: 'cm-sweep', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('notify-run', {}, { repeat: { every: 60_000 }, jobId: 'notify-run', removeOnComplete: 20, removeOnFail: 50 });
+    // dépôt alerts: the phones of the people who get them ring again until they open the app
+    await this.queue.add('depot-push', {}, { repeat: { every: 30_000 }, jobId: 'depot-push', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('landing-run', {}, { repeat: { every: 60_000 }, jobId: 'landing-run', removeOnComplete: 20, removeOnFail: 50 });
     // Google Sheets every 2 minutes. Redis keeps repeat timers: one left from another interval (it was 10 minutes) is removed
     const SHEETS_EVERY = 2 * 60_000;

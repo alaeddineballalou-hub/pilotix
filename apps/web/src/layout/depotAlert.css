@@ -65,3 +65,9 @@
 .pxda-scan input::placeholder { font-family: Inter, system-ui, sans-serif; font-size: 14px; font-weight: 600; letter-spacing: 0; color: #9A9184; }
 .pxda-err { margin: 0; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: #D6453D; color: #fff; font-size: 14px; font-weight: 800; animation: pxda-shake 0.4s ease-in-out 1; }
 .pxda-err .bji { flex: none; width: 18px; height: 18px; }
+
+/* « turn on the notifications » for the people who get the dépôt alerts */
+.pxda-ask { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 10px; margin: 0 0 10px; padding: 10px 12px; border-radius: 14px; background: #FFF1DC; color: #8A4B00; font-size: 13.5px; font-weight: 700; border: 1px solid #F6D9A8; }
+.pxda-ask .bji { flex: none; width: 18px; height: 18px; color: #F28B1E; }
+.pxda-ask span { flex: 1; min-width: 0; line-height: 1.35; }
+.pxda-ask button { flex: none; height: 36px; padding: 0 14px; border-radius: 10px; border: 0; background: #F28B1E; color: #fff; font: inherit; font-weight: 900; cursor: pointer; }
