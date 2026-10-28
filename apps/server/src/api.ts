@@ -157,6 +157,7 @@ function visitorMeta(req: { ip?: string; headers: Record<string, string | undefi
     country: h['cf-ipcountry'] || h['x-vercel-ip-country'] || h['x-geo-country'] || '',
     city: decode(h['cf-ipcity'] || h['x-vercel-ip-city'] || h['x-geo-city'] || ''),
     region: h['cf-region'] || h['x-vercel-ip-country-region'] || h['x-geo-region'] || '',
+    asn: h['x-visitor-asn'] || h['cf-visitor-asn'] || '',
     fbp: cookie('_fbp'),
     fbc: cookie('_fbc'),
     url: h.referer || '',
