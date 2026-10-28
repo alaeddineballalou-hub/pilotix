@@ -4,7 +4,8 @@
 // e-mail check link, and the terms of use and privacy page.
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ApiError, DEMO_ONLY, isPhone, legalText, PhoneSent, server, signup, signupCode, SignupInfo, signupInfo, StoreChoice, storeNameCheck, verifyEmail } from '../lib/backend';
+import { ApiError, DEMO_ONLY, isPhone, legalText, phoneCheck, PhoneSent, server, signup, signupCode, SignupInfo, signupInfo, StoreChoice, storeNameCheck, verifyEmail } from '../lib/backend';
+import { usePhoneProblem } from '../lib/phoneCheck';
 import { useSession } from '../lib/session';
 import { Icon } from '../ui/kit';
 import { Modal } from '../ui/modal';
@@ -81,6 +82,8 @@ export function PhoneStep() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const codeRef = useRef<HTMLInputElement>(null);
+  // wrong or already used: said under the field while it is typed
+  const check = usePhoneProblem(phone, DEMO_ONLY || !info ? undefined : (p) => phoneCheck(p, info.ticket));
   // the seconds before another code can be asked
   useEffect(() => {
     if (wait <= 0) return;
@@ -116,8 +119,8 @@ export function PhoneStep() {
         {!sent ? (
           <label className="field">
             <span className="lab">{t('auth.phone')}</span>
-            <input dir="ltr" inputMode="tel" required minLength={9} maxLength={30} autoComplete="tel" autoFocus value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0555 12 34 56" />
-            <span className="hint">{info.otp ? t('auth.phoneOtpHint') : t('auth.phoneUnique')}</span>
+            <input dir="ltr" inputMode="tel" required minLength={9} maxLength={30} autoComplete="tel" autoFocus aria-invalid={!!check.problem} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0555 12 34 56" />
+            {check.problem ? <span className="form-err">{t(`auth.phoneErr.${check.problem}`)}</span> : <span className="hint">{info.otp ? t('auth.phoneOtpHint') : t('auth.phoneUnique')}</span>}
           </label>
         ) : (
           <>
@@ -144,7 +147,7 @@ export function PhoneStep() {
           </>
         )}
         {error && <p className="form-err">{error}</p>}
-        <button className="pxa-submit" disabled={busy || (!!sent && code.length !== 6)}>
+        <button className="pxa-submit" disabled={busy || (!!sent && code.length !== 6) || (!sent && !!check.problem)}>
           {busy ? '…' : sent ? t('auth.codeCheck') : info.otp ? t('auth.codeSend') : t('auth.phoneSave')}
         </button>
         {sent && (
@@ -419,6 +422,8 @@ export function Signup({ referral, kind: chosen }: { referral?: string; kind?: '
     const id = window.setTimeout(() => setWait((w) => w - 1), 1000);
     return () => window.clearTimeout(id);
   }, [wait]);
+  // wrong or already used: said under the field while it is typed
+  const check = usePhoneProblem(f.phone, DEMO_ONLY ? undefined : (p) => phoneCheck(p));
   const askCode = async () => {
     setError('');
     setCodeBusy(true);
@@ -540,12 +545,13 @@ export function Signup({ referral, kind: chosen }: { referral?: string; kind?: '
               if (codeSent) setCodeSent(null);
             }}
             placeholder="0555 12 34 56"
+            aria-invalid={!!check.problem}
           />
-          <span className="hint">{info?.phoneCode ? t('auth.phoneOtpHint') : t('auth.phoneHint')}</span>
+          {check.problem ? <span className="form-err">{t(`auth.phoneErr.${check.problem}`)}</span> : <span className="hint">{info?.phoneCode ? t('auth.phoneOtpHint') : t('auth.phoneHint')}</span>}
         </label>
         {info?.phoneCode && (
           <div className="px-signup-otp">
-            <button type="button" className="btn" disabled={codeBusy || wait > 0 || f.phone.trim().length < 9} onClick={() => void askCode()}>
+            <button type="button" className="btn" disabled={codeBusy || wait > 0 || f.phone.trim().length < 9 || !!check.problem || check.checking} onClick={() => void askCode()}>
               <Icon name="phone" /> {codeBusy ? '…' : wait > 0 ? t('auth.codeAgainIn', { s: wait }) : codeSent ? t('auth.codeAgain') : t('auth.codeSend')}
             </button>
             {codeSent && (
@@ -576,7 +582,7 @@ export function Signup({ referral, kind: chosen }: { referral?: string; kind?: '
           </span>
         </label>
         {error && <p className="form-err">{error}</p>}
-        <button className="pxa-submit" disabled={busy || (!!info?.phoneCode && (!codeSent || code.length !== 6))}>
+        <button className="pxa-submit" disabled={busy || !!check.problem || (!!info?.phoneCode && (!codeSent || code.length !== 6))}>
           {busy ? '…' : partner ? tk('signupSubmit') : t('auth.createAccount')}
         </button>
         <p className="pxa-legalnote">

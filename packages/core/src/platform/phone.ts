@@ -186,3 +186,11 @@ export async function checkSignupCode(t: Tenancy, phone: string, code: string, n
   }
   await t.platform.query('UPDATE platform.phone_codes SET used_at = $2::timestamptz WHERE id = $1', [row.id, iso(now)]);
 }
+
+/** Why a number cannot be an account's: not a mobile, or another account's. Checked while it is typed. */
+export type PhoneProblem = 'invalid' | 'taken';
+export async function phoneProblem(t: Tenancy, raw: string, accountId: number | null): Promise<{ phone: string | null; problem: PhoneProblem | null }> {
+  const phone = normalizeAccountPhone(String(raw ?? ''));
+  if (!phone) return { phone: null, problem: 'invalid' };
+  return { phone, problem: (await phoneTaken(t, phone, accountId)) ? 'taken' : null };
+}

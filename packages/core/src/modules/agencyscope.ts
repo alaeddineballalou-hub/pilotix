@@ -186,7 +186,7 @@ export const MARKETER_SELLER_PROCS = new Set(Object.keys(MARKETER_AGENT_PROCS).f
 export const sellerProcsOf = (kind: 'agency' | 'marketer') => (kind === 'marketer' ? MARKETER_SELLER_PROCS : SELLER_PROCS);
 
 /** What a partner's own space answers (its own team and account; the rest are the agency.* actions). */
-const AGENCY_SPACE = new Set(['me.get', 'me.language', 'me.password', 'me.ui', 'me.setUi', 'me.update', 'me.seen', 'me.delete', 'users.list', 'users.create', 'users.update', 'admin.users.resetPassword']);
+const AGENCY_SPACE = new Set(['me.get', 'me.language', 'me.password', 'me.ui', 'me.setUi', 'me.update', 'me.seen', 'me.delete', 'users.list', 'users.create', 'users.update', 'users.phoneCheck', 'admin.users.resetPassword']);
 
 /**
  * Checked before every action: a partner's space (agency, marketer) runs only its own actions; an agency's agent inside

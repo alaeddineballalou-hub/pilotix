@@ -143,6 +143,20 @@ async function agencyFields(ctx: Ctx, b: { roles?: string[]; sellers?: z.infer<t
 }
 
 export const usersProcs = {
+  /**
+   * « Is this number free? » while a team member's phone is typed (Utilisateurs): invalid, another person of the team,
+   * another Pilotix account — or free.
+   */
+  'users.phoneCheck': proc(null, z.object({ phone: z.string().max(30), id: z.number().int().positive().nullable().optional(), email: z.string().max(200).optional() }), async (ctx, i) => {
+    needUserManager(ctx);
+    try {
+      const phone = await teamPhone(ctx, i.phone, { id: i.id ?? null, email: i.email ?? '' });
+      return { phone, problem: null as null | 'invalid' | 'team' | 'taken' };
+    } catch (e: any) {
+      const m = String(e?.message ?? '');
+      return { phone: null, problem: /équipe/.test(m) ? ('team' as const) : /Pilotix/.test(m) ? ('taken' as const) : ('invalid' as const) };
+    }
+  }),
   'me.get': proc(null, z.object({}), async (ctx) => {
     const p = await profileById(ctx.db, ctx.session.profile.id);
     if (!p || !p.active) throw new AppError('unauthorized', 'Votre compte est désactivé');
