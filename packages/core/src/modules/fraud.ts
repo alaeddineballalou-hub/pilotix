@@ -20,7 +20,7 @@ export const FRAUD_THRESHOLDS: Record<FraudLevel, { review: number; block: numbe
 /** certain signals: the order is blocked whatever the good signals say */
 export const HARD_CODES = ['honeypot', 'phone_invalid', 'phone_repeat', 'phone_sequence', 'form_invalid', 'too_fast', 'pow_bad', 'pow_replay', 'webdriver', 'device_numbers', 'device_competitor', 'device_fake_again', 'recent_block', 'refuser_blocked'];
 /** never « allowed » alone: a person calls first (a customer who refused a parcel, a look-alike of a refuser) */
-export const YELLOW_CODES = ['refused_once', 'refused_twice', 'looks_like'];
+export const YELLOW_CODES = ['refused_once', 'refused_twice', 'looks_like', 'wilaya_wave'];
 
 /** what the page saw of the visitor (sent by the page with the order; absent for older pages and abandoned orders) */
 export interface FraudBehavior {
@@ -206,7 +206,7 @@ export function scoreOrder(f: FraudFacts, level: FraudLevel = 'normal'): FraudRe
   else if (rc.device1h >= 3) add('device_burst', 30);
   if ((rc.nearPhones24h ?? 0) >= 2 || ((rc.nearPhones24h ?? 0) >= 1 && rc.nearSameSource)) add('phone_near', 40);
   if ((rc.nameOtherPhones7d ?? 0) >= 2) add('name_reused', 30);
-  if (rc.wilayaWave) add('wilaya_wave', 45);
+  if (rc.wilayaWave) add('wilaya_wave', 25);
   if ((rc.newDevicesIp10m ?? 0) >= 5) add('device_rain', 30);
   const m = f.marks;
   if (m?.competitor) add('device_competitor', 100);
