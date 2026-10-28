@@ -596,5 +596,20 @@
       "off": "No button on this page"
     },
     "pageMessageHint": "Empty: the message from Settings."
+  },
+  "at": {
+    "title": "Attack test",
+    "help": "Launches real attacks on a landing page (robots, pranks, competitors, refusers) plus 100 real customers, through the real protection, to see how much gets through. Nothing is saved: no real order, no Meta event.",
+    "firstPage": "The first landing page",
+    "run": "Run the test",
+    "running": "Running…",
+    "wait": "A few seconds… sending hundreds of fake orders.",
+    "real": "Real customers: {{passed}}/{{total}} pass",
+    "caught": "Attacks stopped: {{pct}}",
+    "noCf": "Cloudflare was off here: on the real site it blocks more",
+    "blocked": "Blocked",
+    "review": "To check",
+    "passed": "Passed",
+    "foot": "« Passed » does not mean lost: a fake order that gets through is caught later (the customer refuses the parcel → trust score)."
   }
 }

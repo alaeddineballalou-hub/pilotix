@@ -331,3 +331,24 @@
 .lp-wa-ex { background: #e7fbe9; border-radius: 12px; padding: 10px 12px; font-size: 14px; }
 .lp-px-ticks { display: grid; gap: 4px; margin-top: 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
 .lp-px-ticks code { font-size: 12px; color: var(--muted); }
+
+/* Protection › attack test */
+.lp-at-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
+.lp-at-tools select { flex: 1 1 240px; }
+.lp-at-head { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 6px; }
+.lp-at-legend { display: flex; gap: 14px; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+.lp-at-legend i, .lp-at-bar i { display: inline-block; }
+.lp-at-legend i { width: 12px; height: 12px; border-radius: 3px; margin-inline-end: 4px; vertical-align: -1px; }
+.lp-at-grp h3 { font-size: 15px; margin: 12px 0 4px; }
+.lp-at-tbl { width: 100%; border-collapse: collapse; }
+.lp-at-tbl td { padding: 6px 8px; border-top: 1px solid var(--line); vertical-align: middle; }
+.lp-at-nm b { display: block; }
+.lp-at-nm small { color: var(--muted); font-size: 12px; }
+.lp-at-ct { text-align: center; font-weight: 700; width: 48px; }
+.lp-at-bc { width: 38%; }
+.lp-at-pc { text-align: end; font-weight: 800; width: 56px; white-space: nowrap; }
+.lp-at-bar { display: flex; height: 16px; border-radius: 6px; overflow: hidden; background: var(--raise); min-width: 80px; }
+.lp-at-bar i.b, .lp-at-legend i.b { background: #dc2626; }
+.lp-at-bar i.r, .lp-at-legend i.r { background: #f59e0b; }
+.lp-at-bar i.p, .lp-at-legend i.p { background: #16a34a; }
+.lp-at-foot { margin-top: 10px; }
