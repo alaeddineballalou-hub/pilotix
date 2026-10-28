@@ -32,6 +32,10 @@
 		reverse_proxy server:3000
 	}
 
+	# clean links for the terms and privacy page (Google and Facebook sign-in ask for them): the app's page #/conditions
+	@legal path /conditions /conditions/ /confidentialite /confidentialite/ /privacy /privacy/ /terms /terms/
+	redir @legal /#/conditions 302
+
 	# a product's page as customers see it: site/<store>/<page> (the app's own files all have a dot: never matched)
 	@store {
 		path_regexp page ^/([a-z0-9-]{2,40})/([a-z0-9-]{2,60})/?$
