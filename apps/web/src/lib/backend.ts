@@ -489,3 +489,11 @@ export function rpc<N extends ProcName>(name: N, input: In<N>, seller?: Seller |
   const s = seller === undefined ? ambientSeller() : seller === null ? undefined : seller;
   return backend.call(name, input, s);
 }
+
+// The browser demo only (data made up, in this page): its actions reachable from the console, to try a scenario fast
+// (e.g. change an order as the owner, then open the depot). Never on a real server.
+if (typeof window !== 'undefined')
+  (window as unknown as { pxDemo?: unknown }).pxDemo = (name: ProcName, input: unknown) => {
+    if (backend.kind !== 'demo') throw new Error('demo only');
+    return backend.call(name, input as never);
+  };
