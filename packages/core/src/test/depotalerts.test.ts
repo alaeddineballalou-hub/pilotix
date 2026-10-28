@@ -70,3 +70,32 @@ test('a cancelled order: one scan of its label; only the chosen people get the a
   assert.equal(((await call('depot.alertScan', karim, { id: a.id, code: o.code })) as any).step, 'done');
   await assert.rejects(call('depot.alerts', await as(EMAILS.conf), {}), /Accès refusé/);
 });
+
+test('an open alert rings on the phones of the people away from the app, not more than once a minute', async () => {
+  const sent: any[] = [];
+  const server = {
+    pushKeys: () => ({ publicKey: 'BPUBLIC', privateKey: 'PRIVATE' }),
+    push: async (_k: any, subs: any[], payload: any) => {
+      sent.push({ subs, payload });
+      return subs.map((s) => ({ endpoint: s.endpoint, ok: true, gone: false }));
+    },
+  } as any;
+  const admin = await (as as any)(EMAILS.admin, server);
+  const karim = await (as as any)(EMAILS.depot, server);
+  assert.equal(((await call('push.key', karim, {})) as any).key, 'BPUBLIC');
+  await call('push.subscribe', karim, { endpoint: 'https://push.example.com/abc', p256dh: 'BKEY-1234567890', auth: 'AUTH-1234' });
+  assert.equal(((await call('depot.alertMine', karim, {})) as any).mine, true);
+  const o = (await db.query(`SELECT id FROM orders WHERE follow_status = 'prepared' AND tracking IS NULL ORDER BY id DESC LIMIT 1`))[0];
+  await call('orders.update', admin, { id: Number(o.id), address: 'Rue des Frères, 12' });
+  await db.query(`UPDATE profiles SET last_seen_at = NULL WHERE email = $1`, [EMAILS.depot]);
+  const r: any = await call('depot.pushRun', admin, {});
+  assert.ok(r.sent >= 1);
+  assert.match(sent[0].payload.title, /MODIFIÉE/);
+  assert.equal(sent[0].subs[0].endpoint, 'https://push.example.com/abc');
+  const again: any = await call('depot.pushRun', admin, {});
+  assert.equal(again.sent, 0, 'not twice in the same minute');
+  // in the app right now: the alarm rings there, no notification
+  await db.query(`UPDATE depot_alerts SET pushed_at = NULL`);
+  await db.query(`UPDATE profiles SET last_seen_at = now(), presence = 'online' WHERE email = $1`, [EMAILS.depot]);
+  assert.equal(((await call('depot.pushRun', admin, {})) as any).sent, 0);
+});
