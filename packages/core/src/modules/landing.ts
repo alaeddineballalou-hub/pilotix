@@ -392,7 +392,7 @@ const utmOf = z.any().transform((v): Record<string, string> | null => {
 });
 /** what the server knows of the visitor (never from the page itself) */
 const Meta = z
-  .object({ ip: str(64), ua: str(500), country: str(4), city: str(80), region: str(80), fbp: str(200), fbc: str(600), url: str(500) })
+  .object({ ip: str(64), ua: str(500), country: str(4), city: str(80), region: str(80), asn: str(16), fbp: str(200), fbc: str(600), url: str(500) })
   .partial()
   .default({});
 
@@ -617,6 +617,29 @@ async function turnstileOf(ctx: Ctx, token: string, siteKey: string, ip: string)
 /** they came from an ad: Meta's click id or the ad link's parameters */
 const fromAdOf = (utm: Record<string, string> | null, fbc: string) => !!(fbc || utm?.fbclid || utm?.ad_id || utm?.adset_id || utm?.gclid || utm?.ttclid || /^(facebook|fb|ig|instagram|meta|tiktok)$/i.test(utm?.utm_source ?? ''));
 
+// Known data-center / hosting / VPN networks (ASN). A real COD customer orders from a phone carrier or home ISP, never
+// from these. Cloudflare must pass the visitor's ASN in the header X-Visitor-ASN (a free Transform Rule: set it to
+// ip.src.asnum). Without that header this list does nothing — the signal is simply off, nothing breaks.
+const HOSTING_ASNS = new Set<number>([
+  16509, 14618, 8987, // Amazon AWS
+  15169, 396982, 19527, // Google Cloud
+  8075, 8068, 8069, // Microsoft Azure
+  16276, 35540, // OVH
+  14061, // DigitalOcean
+  24940, 213230, // Hetzner
+  63949, 48429, // Akamai / Linode
+  20473, // Vultr / Choopa
+  9009, 51852, // M247
+  51167, // Contabo
+  45102, 37963, 132203, // Alibaba / Tencent
+  199524, 60068, 9009, // G-Core / CDN77 / M247
+]);
+/** true when the visitor's network is a known data-center / VPN (server-detected; the page cannot fake it) */
+function isHostingAsn(asn?: string): boolean {
+  const n = Number(String(asn ?? '').replace(/[^0-9]/g, ''));
+  return !!n && HOSTING_ASNS.has(n);
+}
+
 /** French labels of the reasons, for an order's internal note (the app shows its own translated labels). */
 export const FRAUD_LABELS_FR: Record<string, string> = {
   honeypot: 'champ piège rempli', phone_invalid: 'téléphone invalide', phone_repeat: 'téléphone répétitif', phone_sequence: 'téléphone en suite', phone_pattern: 'téléphone à motif (0660606060)',
@@ -627,7 +650,7 @@ export const FRAUD_LABELS_FR: Record<string, string> = {
   ip_many: 'beaucoup de commandes de la même IP', device_burst: 'rafale depuis le même appareil', blacklisted: 'numéro en liste noire', returns_many: 'refuse souvent ses colis',
   returns_some: 'déjà un colis retourné', cancels_many: 'commandes souvent annulées', good_customer: 'bon client (livré)', qty_high: 'quantité très élevée', qty_some: 'quantité élevée',
   ip_abroad: 'IP hors d’Algérie', ip_wilaya: 'IP d’une autre wilaya', form_invalid: 'formulaire incomplet', recent_block: 'numéro bloqué comme faux (24 h)',
-  turnstile_fail: 'Cloudflare : robot', mask_touch: 'téléphone sans écran tactile (masque)', mask_tz: 'fuseau horaire étranger', device_numbers: 'plusieurs numéros depuis le même appareil',
+  turnstile_fail: 'Cloudflare : robot', no_turnstile: 'contrôle Cloudflare non effectué', ip_hosting: 'réseau data-center / VPN (pas un client réel)', returns_serial: 'plusieurs colis refusés, aucun livré', mask_touch: 'téléphone sans écran tactile (masque)', mask_tz: 'fuseau horaire étranger', device_numbers: 'plusieurs numéros depuis le même appareil',
   device_two: 'deux numéros depuis le même appareil', device_numbers_fp: 'plusieurs numéros depuis le même appareil (même empreinte)', name_junk: 'nom bidon (test, azerty…)', name_oneword: 'un seul mot comme nom', phone_near: 'numéros presque identiques', name_reused: 'même nom, numéros différents', wilaya_wave: 'vague de commandes dans cette wilaya',
   device_rain: 'beaucoup de nouveaux appareils, même adresse', device_competitor: 'appareil marqué « concurrent »', device_fake_again: 'appareil déjà 2 fois en fausse commande',
   device_fake: 'appareil déjà en fausse commande', phone_victim: 'numéro utilisé dans de fausses commandes (vérifiez que c’est bien lui)', no_browse: 'directement au formulaire', read_page: 'a lu la page', phone_pasted: 'numéro collé', from_ad: 'vient de la pub',
@@ -766,6 +789,10 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
       marks: await deviceMarks(db, device, fphash, phone, now),
       qtyUsual: await usualQty(db, productId, now),
       turnstile: await turnstileOf(ctx, i.tt, i.tk, ip),
+      // the visitor's network is a data-center / VPN (server-seen ASN, cannot be faked by the page)
+      hosting: isHostingAsn(i.meta.asn),
+      // Pilotix manages Turnstile for every shop: if the robot check did not run here, that is itself a small warning
+      turnstileExpected: !!ctx.server?.turnstile,
       behavior:
         i.sc === null
           ? null

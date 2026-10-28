@@ -81,6 +81,10 @@ export interface FraudFacts {
   qtyUsual?: number | null;
   /** Cloudflare's invisible check: passed, failed, or not used */
   turnstile?: 'ok' | 'fail' | 'off';
+  /** the platform/shop has Turnstile set up, so the check SHOULD have run on this page */
+  turnstileExpected?: boolean;
+  /** the visitor's network is a known data-center / VPN (server-detected from the ASN; the page cannot fake it) */
+  hosting?: boolean;
   behavior?: FraudBehavior | null;
   /** what Pilotix knows of this phone */
   history: {
@@ -177,6 +181,9 @@ export function scoreOrder(f: FraudFacts, level: FraudLevel = 'normal'): FraudRe
   else if (f.pow === 'replay') add('pow_replay', 40);
   if (f.inputs === 0) add('no_typing', 15);
   if (f.turnstile === 'fail') add('turnstile_fail', 40);
+  // Turnstile should have protected this page but did not run (Cloudflare off / page not covered / forged request):
+  // a small warning only, never enough alone to block a real customer on a bad connection.
+  else if (f.turnstile === 'off' && f.turnstileExpected) add('no_turnstile', 20);
 
   // 3. robots and scripts, and a « mask » that does not fit (a phone with no touch screen…)
   if (!f.userAgent.trim()) add('ua_empty', 40);
@@ -234,6 +241,8 @@ export function scoreOrder(f: FraudFacts, level: FraudLevel = 'normal'): FraudRe
     else if (h.refusals === 1) add('refused_once', 40);
   } else if (h.returned >= 2 && h.returned >= h.delivered) add('returns_many', 35);
   else if (h.returned >= 1) add('returns_some', 10);
+  // learns from deliveries: a number that refused 3+ parcels and never took one is a serial refuser (a person checks)
+  if (h.returned >= 3 && h.delivered === 0) add('returns_serial', 50);
   if (h.lookAlike) add('looks_like', 40);
   if (h.cancelled >= 3 && h.delivered === 0) add('cancels_many', 20);
   // a customer who already received and paid: trusted (only a certain signal can block them)
@@ -244,6 +253,8 @@ export function scoreOrder(f: FraudFacts, level: FraudLevel = 'normal'): FraudRe
   if (f.qtyUsual && f.qty >= 3 && f.qty > f.qtyUsual * 2 && newNumber) add(f.qty > 10 ? 'qty_high' : 'qty_unusual', f.qty > 10 ? 50 : 30);
   else if (f.qty > 10) add('qty_high', 20);
   else if (f.qty > 5) add('qty_some', 10);
+  // a data-center / VPN network: not where a real COD customer orders from (server-detected, cannot be faked)
+  if (f.hosting) add('ip_hosting', 35);
   if (f.ipCountry && f.ipCountry !== 'DZ') add('ip_abroad', 15);
   else if (f.ipWilaya && f.ipWilaya !== f.wilayaId) add('ip_wilaya', 8);
 
