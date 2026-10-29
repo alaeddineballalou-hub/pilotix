@@ -6,6 +6,7 @@ import type { ShopCtx } from '../rpc';
 import { landingSettings, landingStore, STORE_RESERVED } from '../modules/landingquery';
 import { hashPassword } from '../modules/users';
 import { seedBase, seedDemo } from '../seed';
+import { seedPilotDemo } from '../seeds/pilot';
 import { DEFAULT_SETTINGS, setSetting } from '../settings';
 import { backfillAccounts, ensureAccount, ownedStores } from './accounts';
 import { ensureLoginTrigger, migratePlatform } from './schema';
@@ -526,6 +527,7 @@ export async function provisionShop(t: Tenancy, n: NewShop): Promise<Shop> {
 
 async function fillDemo(db: Db, name: string, now: number) {
   await seedDemo(db, { orders: 600, now });
+  await seedPilotDemo(db);
   await setSetting(db, 'shop', { ...DEFAULT_SETTINGS.shop, name });
 }
 

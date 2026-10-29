@@ -1444,6 +1444,7 @@ class ApiController {
     bg('landing.run'); // landing pages: abandoned orders, Meta events (in the background)
     bg('notify.run'); // Delivery AI agent: messages due (in the background)
     bg('depot.pushRun'); // dépôt alerts: ring the phones again (in the background)
+    bg('pilot.run'); // Pilot Auto Assign: private orders waiting too long go to the backup company (in the background)
     bg('spy.scan'); // AI Spy: the daily scan of competitors' ads, once a day (in the background)
     bg('channels.sheet.syncAll'); // Google Sheets channels: new lines become orders (in the background)
     return this.core.call(ref, 'delivery.sync', session, {}).catch((e) => ({ ok: false, message: e.message }));

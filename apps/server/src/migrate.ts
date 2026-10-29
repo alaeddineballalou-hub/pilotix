@@ -21,6 +21,7 @@ async function main() {
     const n = Number((await db.query('SELECT count(*)::int AS n FROM orders'))[0].n);
     if (n > 0) throw new Error('Database is not empty');
     await core.seedDemo(db, { orders: Number(process.env.DEMO_ORDERS || 1500) });
+    await core.seedPilotDemo(db);
     console.log('Demo data created.');
   } else {
     const applied = await core.migrateAll(t);

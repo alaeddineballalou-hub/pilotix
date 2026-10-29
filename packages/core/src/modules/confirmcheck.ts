@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { Db, num } from '../db';
 import { proc } from '../rpc';
 import { getSetting } from '../settings';
+import { type Pick, pilotMayRun, pilotPick } from './pilot';
 
 export type LineState = 'ok' | 'empty' | 'off';
 export interface CheckLine {
@@ -82,7 +83,7 @@ export async function checkLines(db: Db, lines: CheckLine[], orderId: number | n
 }
 
 /** Does a company serve this wilaya (at home / at a bureau)? Own delivery men, manual companies and companies without a tariff always do. */
-async function serves(db: Db, companyId: number, wilayaId: number, desk: boolean): Promise<{ ok: boolean; name: string | null }> {
+export async function serves(db: Db, companyId: number, wilayaId: number, desk: boolean): Promise<{ ok: boolean; name: string | null }> {
   const c = (
     await db.query(
       `SELECT c.name, c.kind, c.active, (SELECT count(*)::int FROM delivery_fees f WHERE f.company_id = c.id) AS n,
@@ -179,12 +180,34 @@ export const confirmCheckProcs = {
       isStopdesk: z.boolean(),
       stopdeskId: id.nullable().optional(),
       companyId: id.nullable().optional(),
+      /** the company on screen is the order's own (not chosen on this card): when the place or the products changed,
+       *  Pilot says who will take it once saved */
+      pilot: z.boolean().optional(),
     }),
     async (ctx, i) => {
       const lines = await checkLines(ctx.db, i.items, i.id ?? null);
-      const deliver = await deliverCheck(ctx.db, { wilayaId: i.wilayaId, commune: i.commune ?? null, isStopdesk: i.isStopdesk, stopdeskId: i.stopdeskId ?? null, companyId: i.companyId ?? null });
+      let companyId = i.companyId ?? null;
+      let pilot: Pick | null = null;
+      if (i.pilot && i.id) {
+        const cur = (await ctx.db.query('SELECT * FROM orders WHERE id = $1', [i.id]))[0];
+        const pids = [...new Set(i.items.map((x) => x.productId))].sort().join(',');
+        const had = cur ? (await ctx.db.query('SELECT DISTINCT product_id FROM order_items WHERE order_id = $1 AND product_id IS NOT NULL', [i.id])).map((r: any) => num(r.product_id)).sort().join(',') : '';
+        const moved =
+          !!cur &&
+          (num(cur.wilaya_id) !== (i.wilayaId ?? 0) ||
+            String(cur.commune ?? '').trim().toLowerCase() !== String(i.commune ?? '').trim().toLowerCase() ||
+            !!cur.is_stopdesk !== i.isStopdesk ||
+            (cur.stopdesk_id ? num(cur.stopdesk_id) : null) !== (i.stopdeskId ?? null) ||
+            pids !== had);
+        if (moved && (await pilotMayRun(ctx.db, cur))) {
+          pilot = await pilotPick(ctx.db, { wilayaId: i.wilayaId, commune: i.commune ?? null, isStopdesk: i.isStopdesk, stopdeskId: i.stopdeskId ?? null, productIds: i.items.map((x) => x.productId) });
+          companyId = pilot.companyId;
+        }
+      }
+      const deliver = await deliverCheck(ctx.db, { wilayaId: i.wilayaId, commune: i.commune ?? null, isStopdesk: i.isStopdesk, stopdeskId: i.stopdeskId ?? null, companyId });
       const off = lines.some((l) => l.state === 'off');
-      return { lines, deliver, off, noStock: lines.some((l) => l.state === 'empty'), canConfirm: lines.length > 0 && !off && deliver.ok };
+      const pilotName = pilot?.companyId ? ((await ctx.db.query('SELECT name FROM delivery_companies WHERE id = $1', [pilot.companyId]))[0]?.name ?? null) : null;
+      return { lines, deliver, off, noStock: lines.some((l) => l.state === 'empty'), canConfirm: lines.length > 0 && !off && deliver.ok, pilot: pilot ? { ...pilot, companyName: pilotName as string | null } : null };
     },
   ),
 };

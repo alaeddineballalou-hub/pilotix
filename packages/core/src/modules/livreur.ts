@@ -24,7 +24,7 @@ export async function checkedInToday(db: Db, now: number): Promise<Map<number, s
 }
 
 /** Admins and the people who assign (ticked in Utilisateurs): they hear about parcels taken by another livreur. */
-async function managers(db: Db): Promise<number[]> {
+export async function managers(db: Db): Promise<number[]> {
   return (await db.query(`SELECT id FROM profiles WHERE active AND ('admin' = ANY(roles) OR can_assign)`)).map((r: any) => num(r.id));
 }
 
@@ -99,19 +99,6 @@ export const livreurProcs = {
     )[0];
     return { at: iso(r.at) };
   }),
-
-  /** Management › Livreur: the ready messages (everyone reads them: the livreurs send them). */
-  'tournee.messages': proc(null, z.object({}), async (ctx) => ({ msgs: await getSetting(ctx.db, 'livreurMsgs') })),
-
-  /** Admin: the ready messages, in their order. */
-  'tournee.saveMessages': proc(
-    [],
-    z.object({ msgs: z.array(z.object({ id: z.string().min(1).max(40), label: z.string().trim().min(1, 'Donnez un nom au message').max(40), text: z.string().trim().min(1, 'Écrivez le message').max(600) })).max(20) }),
-    async (ctx, i) => {
-      await setSetting(ctx.db, 'livreurMsgs', i.msgs, ctx.session.profile.id);
-      return { ok: true };
-    },
-  ),
 
   /** « Prendre un colis »: the livreur scans it — in his hands, « En livraison ». */
   'tournee.take': proc(['livreur'], z.object({ code: z.string().min(1).max(100) }), (ctx, i) => takeParcel(ctx, i.code)),

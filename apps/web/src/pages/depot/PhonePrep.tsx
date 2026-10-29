@@ -24,6 +24,7 @@ import '../confirmation/phone.css';
 import '../suivi/phone.css';
 import './phone.css';
 import './dispatch.css';
+import { waitWhy } from '../../lib/pilot';
 
 type Row = Out<'depot.pickList'>[number];
 type Restock = { productId: number; variantId: number | null; name: string; variant: string; qty: number };
@@ -468,6 +469,7 @@ function AssignTab({ data, error, retry }: { data?: Assign; error: Error | null;
                     {wilayaName(o.wilayaId)}
                     {o.commune ? ` · ${o.commune}` : ''}
                     {privateTag(o) && <span className="as-tag">{t('depot.as.private')}</span>}
+                    {!o.companyId && waitWhy(t, o.pilotWhy) && <span className="as-tag why">{waitWhy(t, o.pilotWhy)}</span>}
                   </td>
                   <td className="as-prod">{o.items.map((i) => `${i.name}${i.variantTitle ? ` ${i.variantTitle}` : ''} ×${i.qty}`).join(' + ')}</td>
                   <td className="num ltr">{n(o.total)} DA</td>
@@ -493,6 +495,7 @@ function AssignTab({ data, error, retry }: { data?: Assign; error: Error | null;
                     <b>
                       <span className="ltr">{o.ref}</span> · {wilayaName(o.wilayaId)}
                       {privateTag(o) && <span className="as-tag">{t('depot.as.private')}</span>}
+                      {!o.companyId && waitWhy(t, o.pilotWhy) && <span className="as-tag why">{waitWhy(t, o.pilotWhy)}</span>}
                     </b>
                     <small>{o.items.map((i) => `${i.name}${i.variantTitle ? ` ${i.variantTitle}` : ''} ×${i.qty}`).join(' + ')}</small>
                     <small>

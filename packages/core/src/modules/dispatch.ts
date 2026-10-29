@@ -13,7 +13,8 @@ import { Db, iso, num } from '../db';
 import { bad, Ctx, forbidden, proc } from '../rpc';
 import { cancelParcel, sendOrders } from './delivery';
 import { tellLivreur } from './livreur';
-import { addEvent, getOrder, ordersProcs, setFollow } from './orders';
+import { addEvent, assignCompanies, getOrder, setFollow } from './orders';
+import { privateBackupRun } from './pilot';
 
 const id = z.number().int().positive();
 const API_COURIERS = API_COURIER_KINDS as readonly string[];
@@ -28,7 +29,7 @@ export const READY_SQL = `o.conf_status = 'confirmed' AND o.follow_status = 'to_
 export const canAssign = (ctx: Ctx) => ctx.session.isAdmin || !!ctx.session.profile.canAssign;
 
 /** The depot's own hands for a step the person was allowed to start (a manager choosing in « À attribuer »). */
-const asDepot = (ctx: Ctx): Ctx => (ctx.session.roles.includes('depot') ? ctx : { ...ctx, session: { ...ctx.session, roles: [...ctx.session.roles, 'depot'] } });
+export const asDepot = (ctx: Ctx): Ctx => (ctx.session.roles.includes('depot') ? ctx : { ...ctx, session: { ...ctx.session, roles: [...ctx.session.roles, 'depot'] } });
 
 /**
  * To « En dispatch »: optionally to another company first (its parcel elsewhere is cancelled), then « Préparée », then
@@ -46,11 +47,13 @@ export async function dispatchOrders(ctx: Ctx, ids: number[], companyId?: number
     );
     for (const r of moving) await cancelParcel(ctx, num(r.id)).catch((e) => fail(num(r.id), r.ref, e));
     list = list.filter((x) => !failed.some((f) => f.id === x));
-    if (list.length) await ordersProcs['orders.assignCompany'].run(ctx, { ids: list, companyId });
+    if (list.length) await assignCompanies(ctx, { ids: list, companyId }, { check: false });
   }
   const pick = async (sql: string, ...more: unknown[]) => (list.length ? (await ctx.db.query(sql, [list, ...more])).map((r: any) => num(r.id)) : []);
   const toMove = await pick(`SELECT id FROM orders WHERE id = ANY($1) AND follow_status = 'to_prepare'`);
   const moved = toMove.length ? (await setFollow(ctx, { ids: toMove, status: 'prepared' })).changed.length : 0;
+  // out of « À attribuer »: its waiting time starts again if it ever comes back
+  if (toMove.length) await ctx.db.query('UPDATE orders SET assign_wait_since = NULL WHERE id = ANY($1) AND follow_status = \'prepared\'', [toMove]);
   const toSend = await pick(
     `SELECT o.id FROM orders o JOIN delivery_companies c ON c.id = o.company_id
      WHERE o.id = ANY($1) AND o.follow_status = 'prepared' AND o.tracking IS NULL AND c.kind = ANY($2)`,
@@ -91,6 +94,9 @@ export async function autoDispatch(ctx: Ctx, ids?: number[]) {
     ids ? [ids] : [],
   );
   const go = rows.filter((r: any) => r.company_id && r.active && (r.kind !== 'own' || r.livreur_id)).map((r: any) => num(r.id));
+  // the others start waiting for a person in « À attribuer » (« Livraison privée » ones go to the backup company after a while)
+  const wait = rows.map((r: any) => num(r.id)).filter((x: number) => !go.includes(x));
+  if (wait.length) await ctx.db.query('UPDATE orders SET assign_wait_since = now() WHERE id = ANY($1) AND assign_wait_since IS NULL', [wait]);
   const r = go.length ? await dispatchOrders(asDepot(ctx), go) : { moved: 0, sent: 0, failed: [] };
   return { dispatched: r.moved, failed: r.failed, toAssign: rows.length - go.length };
 }
@@ -160,6 +166,7 @@ export const dispatchProcs = {
   /** « À attribuer » (the depot sees it; managers and admins choose). Ready orders with a company go first to « En dispatch ». */
   'depot.toAssign': proc(['depot'], z.object({}), async (ctx) => {
     await autoDispatch(ctx);
+    await privateBackupRun(asDepot(ctx));
     return { canAct: canAssign(ctx), rows: await toAssignList(ctx) };
   }),
 
@@ -172,7 +179,7 @@ export const dispatchProcs = {
     const ready = (await ctx.db.query(`SELECT o.id FROM orders o WHERE o.id = ANY($1) AND ${READY_SQL}`, [i.ids])).map((r: any) => num(r.id));
     if (!ready.length) throw bad('Ces commandes ne sont plus à attribuer');
     const dctx = asDepot(ctx);
-    await ordersProcs['orders.assignCompany'].run(dctx, { ids: ready, companyId: i.companyId, livreurId: c.kind === 'own' ? (i.livreurId ?? null) : null });
+    await assignCompanies(dctx, { ids: ready, companyId: i.companyId, livreurId: c.kind === 'own' ? (i.livreurId ?? null) : null }, { check: false });
     const r = await dispatchOrders(dctx, ready);
     // our own livreur: a notification on his phone (checked in today or not)
     if (c.kind === 'own' && i.livreurId) await tellLivreur(ctx, i.livreurId, ready.length);

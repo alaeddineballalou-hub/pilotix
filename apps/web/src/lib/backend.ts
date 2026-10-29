@@ -362,6 +362,7 @@ class DemoBackend implements Backend {
         await core.migrate(db, (sql) => t.exec('public', sql));
         this.progress('Création des commandes d’exemple…');
         await core.seedDemo(db, { orders: Number(import.meta.env.VITE_DEMO_ORDERS) || 1200 });
+        await core.seedPilotDemo(db);
         // the demo database is rebuilt on every reload: put back the column presets and screen choices kept in this browser
         await core.demoRestore(db, store.json<import('@pilotix/core').DemoKeep | null>('demo-keep', null)).catch(() => {});
         return { core, db, t };

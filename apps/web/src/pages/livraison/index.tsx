@@ -1,4 +1,5 @@
-// « Sociétés de livraison » (admin): Sociétés & tarifs · API Integration · Livreurs · Préférences.
+// « Sociétés de livraison » (admin): Sociétés & tarifs · Pilot Auto Assign · API Integration · Livreurs · Préférences.
+// The people ticked « règles Pilot » in Utilisateurs (not admins) see only Pilot Auto Assign.
 import { WILAYAS } from '@pilotix/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,12 +16,20 @@ import { printRouteSheet } from './print';
 import { useIsPhone } from '../../lib/useMedia';
 import { PhoneLivraison } from './Phone';
 import { Preferences } from './Preferences';
+import { Pilot } from './Pilot';
+import { useSession } from '../../lib/session';
 
 type Dialog = { kind: 'form'; draft: CompanyDraft; keysSet?: string[] } | { kind: 'fees' | 'desks' | 'statuses' | 'preview' | 'zr' | 'live'; company: Company } | null;
 
-export function Livraison({ sub }: PageProps) {
+export function Livraison(p: PageProps) {
+  const { session } = useSession();
+  if (session && !session.isAdmin) return <Pilot />;
+  return <LivraisonAdmin {...p} />;
+}
+
+function LivraisonAdmin({ sub }: PageProps) {
   const { t } = useTranslation();
-  const current = sub === 'api' || sub === 'livreurs' || sub === 'preferences' ? sub : 'societes';
+  const current = sub === 'api' || sub === 'livreurs' || sub === 'preferences' || sub === 'pilot' ? sub : 'societes';
   const q = useRpc('delivery.companies', {});
   const kinds = useRpc('delivery.kinds', {});
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -28,6 +37,7 @@ export function Livraison({ sub }: PageProps) {
 
   const items = [
     { key: 'societes', label: t('livraison.tabs.societes'), href: '#/livraison/societes' },
+    { key: 'pilot', label: t('livraison.tabs.pilot'), href: '#/livraison/pilot' },
     { key: 'api', label: t('livraison.tabs.api'), href: '#/livraison/api' },
     { key: 'livreurs', label: t('livraison.tabs.livreurs'), href: '#/livraison/livreurs' },
     { key: 'preferences', label: t('livraison.tabs.preferences'), href: '#/livraison/preferences' },
@@ -73,6 +83,7 @@ export function Livraison({ sub }: PageProps) {
     <>
       <StageBar items={items} current={current} flow={false} />
       {current === 'preferences' && <Preferences />}
+      {current === 'pilot' && <Pilot />}
       {current === 'societes' && (
         <>
           <Card

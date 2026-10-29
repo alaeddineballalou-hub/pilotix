@@ -32,6 +32,8 @@ export interface NavItem {
   hidden?: boolean;
   /** also shown to people the administrator allowed to create accounts and set passwords */
   manageUsers?: boolean;
+  /** also shown to the people who write the « Pilot Auto Assign » rules (ticked in Utilisateurs) */
+  rules?: boolean;
   /** menu children: the item is a group (Commandes, Pilot AI) */
   children?: NavChild[];
   /** pages of the group: it is highlighted on them, and shows its bar under the header when the sidebar is folded */
@@ -89,7 +91,7 @@ export const NAV: NavItem[] = [
   { id: 'caisse', icon: 'wallet', roles: [], subs: ['overview', 'due', 'done', 'livreurs', 'journal'] },
   // an employee's own caisse (money he received, his expenses, what he handed to the main caisse)
   { id: 'macaisse', icon: 'wallet', roles: ['confirmation', 'suivi', 'depot', 'agent_manager'], onlyIf: (_r, admin) => !admin },
-  { id: 'livraison', icon: 'truck', roles: [], subs: ['societes', 'api', 'livreurs', 'preferences'] },
+  { id: 'livraison', icon: 'truck', roles: [], subs: ['societes', 'pilot', 'api', 'livreurs', 'preferences'], rules: true },
   { id: 'utilisateurs', icon: 'usercog', roles: [], manageUsers: true, subs: ['roles', 'admins', 'vendeurs', 'agents', 'marketeurs', 'managers'] },
   // confirmation agencies working for the store (its code, requests both ways, contracts, numbers, payments)
   { id: 'agences', icon: 'handshake', roles: [], onlyIf: partnersOn },
@@ -103,11 +105,12 @@ export const NAV: NavItem[] = [
 /** A group's child: its own roles, or everyone who sees the group — and in the shop's plan. */
 export const canSeeChild = (c: NavChild, roles: Role[], isAdmin: boolean) => (isAdmin || !c.roles || c.roles.some((r) => roles.includes(r))) && pageIsOn(c.id);
 
-export function canSee(item: NavItem, roles: Role[], isAdmin: boolean, canManageUsers = false): boolean {
+export function canSee(item: NavItem, roles: Role[], isAdmin: boolean, canManageUsers = false, canRules = false): boolean {
   // a menu the shop's plan does not include is not shown to anyone, administrators included
   if (!pageIsOn(item.id)) return false;
   if (item.onlyIf && !item.onlyIf(roles, isAdmin)) return false;
   if (item.manageUsers && canManageUsers) return true;
+  if (item.rules && canRules) return true;
   if (item.roles === null || isAdmin) return true;
   return item.roles.some((r) => roles.includes(r));
 }

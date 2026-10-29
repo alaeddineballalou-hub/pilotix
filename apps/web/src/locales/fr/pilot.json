@@ -1,0 +1,26 @@
+{
+  "why": {
+    "conflict": "Règles {{a}} et {{b}} en conflit",
+    "nobody": "Personne ne livre ici",
+    "manual": "Manuel : à choisir"
+  },
+  "by": {
+    "rule": "Pilot · règle {{n}}",
+    "strict": "Pilot · règle stricte {{n}}",
+    "ruleGone": "Pilot · règle supprimée",
+    "default": "Société par défaut",
+    "hand": "Choisie à la main",
+    "bureau": "Bureau choisi",
+    "backup": "Société de secours (livraison privée en attente)",
+    "none": "À attribuer"
+  },
+  "card": {
+    "change": "Société de livraison",
+    "private": "Livraison privée",
+    "noHome": "ne livre pas ici",
+    "toAssign": "À attribuer (un manager choisit)",
+    "next": "Après enregistrement",
+    "yours": "Choisie sur cette carte",
+    "locked": "Règle stricte : seuls les managers et les admins la changent."
+  }
+}

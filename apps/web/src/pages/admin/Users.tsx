@@ -263,6 +263,11 @@ function RoleList({ role, onNew, onEdit, agency }: { role: Role | null; onNew: (
                           {t('admin.users.canAssignChip')}
                         </span>
                       )}
+                      {u.canRules && (
+                        <span className="chip" title={t('admin.users.canRulesHint')}>
+                          {t('admin.users.canRulesChip')}
+                        </span>
+                      )}
                       {u.id === ownerId && (
                         <span className="chip px-chip-owner" title={t('admin.users.ownerHint')}>
                           👑 {t('admin.users.owner')}
@@ -310,6 +315,7 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
   const [sellers, setSellers] = useState<AgencySellerWork[] | null>(user ? (user.agencySellers ?? null) : null);
   const [manage, setManage] = useState(!!user?.canManageUsers);
   const [assign, setAssign] = useState(!!user?.canAssign);
+  const [rules, setRules] = useState(!!user?.canRules);
   const [name, setName] = useState(user?.name ?? '');
   const [phone, setPhone] = useState(user?.phone ?? '');
   // wrong, another person of the team, another Pilotix account: said under the field while it is typed
@@ -344,7 +350,7 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
       language,
       livreurCompanyId: roles.includes('livreur') ? company : null,
       // only the administrator gives (or takes back) the right to handle accounts
-      ...(isAdmin ? { canManageUsers: manage && !roles.includes('admin'), canAssign: assign && !roles.includes('admin') } : {}),
+      ...(isAdmin ? { canManageUsers: manage && !roles.includes('admin'), canAssign: assign && !roles.includes('admin'), canRules: rules && !roles.includes('admin') } : {}),
       ...(agency ? { sellers } : {}),
     };
     if (user) update.mutate({ id: user.id, ...base, ...(password ? { password } : {}) });
@@ -408,6 +414,14 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
             <label className="row nowrap" style={{ gap: 8 }}>
               <input type="checkbox" checked={assign} onChange={(e) => setAssign(e.target.checked)} />
               {t('admin.users.canAssignLabel')}
+            </label>
+          </Field>
+        )}
+        {isAdmin && !roles.includes('admin') && (
+          <Field label={t('admin.users.canRules')} hint={t('admin.users.canRulesHint')}>
+            <label className="row nowrap" style={{ gap: 8 }}>
+              <input type="checkbox" checked={rules} onChange={(e) => setRules(e.target.checked)} />
+              {t('admin.users.canRulesLabel')}
             </label>
           </Field>
         )}

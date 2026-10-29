@@ -14,6 +14,7 @@ import { confirmCheckProcs } from './modules/confirmcheck';
 import { noStockProcs } from './modules/nostock';
 import { dispatchProcs } from './modules/dispatch';
 import { livreurProcs } from './modules/livreur';
+import { pilotProcs } from './modules/pilot';
 import { pushProcs } from './modules/push';
 import { catalogProcs } from './modules/catalog';
 import { productImportProcs } from './modules/productimport';
@@ -68,6 +69,7 @@ export const REGISTRY = {
   ...noStockProcs,
   ...dispatchProcs,
   ...livreurProcs,
+  ...pilotProcs,
   ...pushProcs,
   ...adminProcs,
   ...adsProcs,

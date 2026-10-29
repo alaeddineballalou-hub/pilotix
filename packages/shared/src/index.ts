@@ -169,6 +169,8 @@ export interface Profile {
   canManageUsers?: boolean;
   /** set by the administrator: gives orders a company or a livreur in the depot's « À attribuer » */
   canAssign?: boolean;
+  /** set by the administrator: writes the « Pilot Auto Assign » rules (Sociétés de livraison) */
+  canRules?: boolean;
   /** put in Management › Archives: out of the team list, kept in the history (always closed) */
   archived?: boolean;
   /** an agent of a confirmation agency working in this store (the agency manages the account) */
@@ -324,6 +326,12 @@ export interface Order {
   sendError?: string | null;
   /** cancelled while its parcel was at a courier that could not cancel it: to cancel in the courier's space */
   cancelByHand?: boolean;
+  /** « Pilot Auto Assign »: how the company was chosen ('rule' 'strict' 'default' 'bureau' 'hand' 'backup' 'none') */
+  pilotBy?: string | null;
+  /** the rule that chose it (its id: the number shown is its place in the rules) */
+  pilotRule?: string | null;
+  /** why it waits for a person: 'conflict:2,4' | 'nobody' | 'manual' */
+  pilotWhy?: string | null;
 }
 
 export interface OrderEvent {
@@ -426,4 +434,5 @@ export * from './sha256';
 export * from './landing';
 export * from './doctor';
 export * from './pro';
+export * from './pilot';
 export * from './colors';

@@ -1,0 +1,26 @@
+{
+  "why": {
+    "conflict": "Rules {{a}} and {{b}} clash",
+    "nobody": "Nobody delivers here",
+    "manual": "Manual: to choose"
+  },
+  "by": {
+    "rule": "Pilot · rule {{n}}",
+    "strict": "Pilot · strict rule {{n}}",
+    "ruleGone": "Pilot · deleted rule",
+    "default": "Default company",
+    "hand": "Chosen by hand",
+    "bureau": "Desk chosen",
+    "backup": "Backup company (private delivery waited)",
+    "none": "To assign"
+  },
+  "card": {
+    "change": "Delivery company",
+    "private": "Private delivery",
+    "noHome": "does not deliver here",
+    "toAssign": "To assign (a manager chooses)",
+    "next": "Once saved",
+    "yours": "Chosen on this card",
+    "locked": "Strict rule: only managers and admins change it."
+  }
+}

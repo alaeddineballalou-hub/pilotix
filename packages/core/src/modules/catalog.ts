@@ -5,7 +5,7 @@ import { Db, iso, num, numOrNull, Where } from '../db';
 import { bad, Ctx, forbidden, hasRole, notFound, proc, withActionLock } from '../rpc';
 import { getSetting } from '../settings';
 import { cancelParcel, sendOrders } from './delivery';
-import { getOrder, ordersProcs, setFollow } from './orders';
+import { assignCompanies, getOrder, setFollow } from './orders';
 import { landingSettings, quickCreatePage } from './landingquery';
 import { RESERVED } from './stockquery';
 import { releaseNoStock } from './nostock';
@@ -939,7 +939,7 @@ export const catalogProcs = {
     if (o.followStatus !== 'prepared') throw bad(`${o.ref} n’est pas en dispatch`);
     const kind = await companyKind(ctx.db, o.companyId);
     if (o.tracking && kind && API_COURIERS.includes(kind)) await cancelParcel(ctx, id);
-    await ordersProcs['orders.assignCompany'].run(ctx, { ids: [id], companyId: null, livreurId: null });
+    await assignCompanies(ctx, { ids: [id], companyId: null, livreurId: null }, { check: false });
     await setFollow(ctx, { ids: [id], status: 'to_prepare', note: 'société retirée (dépôt)' });
     return getOrder(ctx, id);
   }),

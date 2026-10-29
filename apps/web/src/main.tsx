@@ -142,7 +142,7 @@ function App() {
   }
   const item = nav.find((n) => n.id === page);
   const extra = space === 'store' && ['livrees', 'retournees'].includes(page ?? '') && pageIsOn(page ?? '');
-  const allowed = (item && canSee(item, session.roles, session.isAdmin, !!session.canManageUsers)) || (extra && (session.isAdmin || session.roles.some((r) => ['confirmation', 'suivi', 'depot'].includes(r))));
+  const allowed = (item && canSee(item, session.roles, session.isAdmin, !!session.canManageUsers, !!session.profile?.canRules)) || (extra && (session.isAdmin || session.roles.some((r) => ['confirmation', 'suivi', 'depot'].includes(r))));
   if (!page || !allowed || !pages[page]) {
     const home = homeOf();
     if (location.hash !== `#/${home}`) location.replace(`#/${home}`);

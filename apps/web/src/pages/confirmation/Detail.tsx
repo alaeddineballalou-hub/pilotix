@@ -12,6 +12,8 @@ import { da, fromLocalInput, wilayaName } from '../../lib/format';
 import i18n from '../../lib/i18n';
 import { Icon, Loading, StatusBadge } from '../../ui/kit';
 import { Float } from '../../ui/Float';
+import { mayChangeCompany, pilotLine } from '../../lib/pilot';
+import { useSession } from '../../lib/session';
 import { toast } from '../../ui/toast';
 import './check.css';
 
@@ -52,6 +54,11 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
   /** the delivery wilaya and commune (the agent can correct them) */
   const [wil, setWil] = useState(order.wilayaId);
   const [com, setCom] = useState(order.commune ?? '');
+  /** home delivery: the order's company, or one picked on this card (the Préférences say who may) */
+  const [co, setCo] = useState<number | null>(order.companyId);
+  const { session } = useSession();
+  const prefs = useRpc('prefs.get', {}, { staleTime: 5 * 60_000 });
+  const pg = useRpc('pilot.get', {}, { staleTime: 5 * 60_000 });
   const [geoPick, setGeoPick] = useState<null | 'wil' | 'com'>(null);
   const wilRef = useRef<HTMLButtonElement>(null);
   const comRef = useRef<HTMLButtonElement>(null);
@@ -99,7 +106,9 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
       commune: desk ? null : com || null,
       isStopdesk: desk,
       stopdeskId: desk ? deskId : null,
-      companyId: deskCompany ?? order.companyId ?? null,
+      companyId: deskCompany ?? (desk ? order.companyId : co) ?? null,
+      // the company was not picked on this card: Pilot says who takes the order once the new place / products are saved
+      pilot: !desk && co === order.companyId,
     },
     { staleTime: 10_000 },
   );
@@ -110,9 +119,10 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
     setDeskId(order.stopdeskId);
     setWil(order.wilayaId);
     setCom(order.commune ?? '');
+    setCo(order.companyId);
     setModeTouched(false);
     setErr('');
-  }, [initial, order.deliveryFee, order.isStopdesk, order.stopdeskId, order.wilayaId, order.commune]);
+  }, [initial, order.deliveryFee, order.isStopdesk, order.stopdeskId, order.wilayaId, order.commune, order.companyId]);
   // switching Domicile / Bureau puts that type's price from the grid
   useEffect(() => {
     if (modeTouched && modeFee.data?.fee != null) setFee(modeFee.data.fee);
@@ -125,7 +135,8 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
   const notesChanged = nOrigin !== (order.customerNote ?? '') || nLivreur !== (order.deliveryNote ?? '') || nTeam !== (order.internalNote ?? '');
   const geoChanged = wil !== order.wilayaId || com !== (order.commune ?? '');
   const clientChanged = cName.trim() !== order.customerName || cPhone.trim() !== order.phone || cPhone2.trim() !== (order.phone2 ?? '') || cAddr.trim() !== (order.address ?? '');
-  const dirty = key(L) !== key(initial) || fee !== order.deliveryFee || disc !== order.discount || notesChanged || geoChanged || clientChanged || desk !== order.isStopdesk || (desk && deskId !== order.stopdeskId);
+  const coChanged = !desk && co !== order.companyId;
+  const dirty = key(L) !== key(initial) || fee !== order.deliveryFee || disc !== order.discount || notesChanged || geoChanged || clientChanged || desk !== order.isStopdesk || (desk && deskId !== order.stopdeskId) || coChanged;
   /** another wilaya: pick its commune, forget a bureau of the old one, and take that wilaya's price from the grid */
   const pickWilaya = (w: number) => {
     setGeoPick(null);
@@ -138,7 +149,16 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
     setTimeout(() => setGeoPick('com'), 0);
   };
   const chosen = opts.data?.desks.find((d) => d.id === deskId) ?? null;
-  const company = opts.data?.companies.find((c) => c.id === (chosen?.companyId ?? order.companyId)) ?? null;
+  // at home: Pilot's choice for the place / products on screen (once saved), or the company of the card
+  const pilotNext = !desk ? (chk.data?.pilot ?? null) : null;
+  const homeCo = pilotNext ? pilotNext.companyId : co;
+  const company = opts.data?.companies.find((c) => c.id === (desk ? (chosen?.companyId ?? order.companyId) : homeCo)) ?? null;
+  const coWhy = pilotNext
+    ? `${t('pilot.card.next')} · ${pilotLine(t, pilotNext, pg.data?.rules ?? []) ?? ''}`
+    : coChanged
+      ? t('pilot.card.yours')
+      : pilotLine(t, { by: order.pilotBy, rule: order.pilotRule, why: order.pilotWhy }, pg.data?.rules ?? []);
+  const canCo = mayChangeCompany(session, prefs.data?.prefs, order);
   // can it be delivered? Bureau: the chosen bureau's company serves it. Domicile: the order's company (or any active one) delivers here.
   const served: boolean | null = !opts.data ? null : desk ? (chosen ? chosen.served : null) : company ? company.home : opts.data.companies.some((c) => c.home);
   const stockOf = (l: Line) => {
@@ -253,7 +273,7 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
       const notes = notesChanged ? { customerNote: nOrigin.trim() || null, deliveryNote: nLivreur.trim() || null, internalNote: nTeam.trim() || null } : {};
       const geo = geoChanged ? { wilayaId: wil, commune: com } : {};
       const client = clientChanged ? { customerName: cName.trim(), phone: cPhone.trim(), phone2: cPhone2.trim() || null, address: cAddr.trim() } : {};
-      await rpc('orders.update', { id: order.id, version: order.version, deliveryFee: fee, discount: disc, ...notes, ...geo, ...client, ...mode, ...(key(L) !== key(initial) ? { items: cartBody } : {}) });
+      await rpc('orders.update', { id: order.id, version: order.version, deliveryFee: fee, discount: disc, ...notes, ...geo, ...client, ...mode, ...(coChanged ? { companyId: co } : {}), ...(key(L) !== key(initial) ? { items: cartBody } : {}) });
       return true;
     } catch (e: any) {
       setErr(e.message);
@@ -522,7 +542,9 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
           ) : (
             <div className="qd6-desk">
               <span>
-                <b>{company?.name ?? t('confirmation.d.home')}</b> {order.address ? <small>· {order.address}</small> : null}
+                <b>{company ? (company.kind === 'own' ? t('pilot.card.private') : company.name) : homeCo === null ? t('pilot.card.toAssign') : t('confirmation.d.home')}</b>{' '}
+                {order.address ? <small>· {order.address}</small> : null}
+                {coWhy && <small className="qd6-why">{coWhy}</small>}
               </span>
               {served !== null && (
                 <span className={`qd5-served mini ${served ? 'ok' : 'bad'}`}>
@@ -531,6 +553,25 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
                 </span>
               )}
             </div>
+          )}
+          {!desk && editable && canCo && opts.data && (
+            <label className="qd6-co">
+              <small>{t('pilot.card.change')}</small>
+              <select value={co ?? ''} onChange={(e) => setCo(e.target.value ? Number(e.target.value) : null)}>
+                {co === null && <option value="">{t('pilot.card.toAssign')}</option>}
+                {opts.data.companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.kind === 'own' ? t('pilot.card.private') : c.name}
+                    {c.home ? '' : ` — ${t('pilot.card.noHome')}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {!desk && editable && !canCo && order.pilotBy === 'strict' && (
+            <p className="qd6-lock">
+              <Icon name="lock" /> {t('pilot.card.locked')}
+            </p>
           )}
           {phone && !desk && (
             <label className="qd6-fld wide qd6-addr">

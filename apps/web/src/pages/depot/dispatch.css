@@ -24,3 +24,5 @@
 .as-pick { display: flex; flex-direction: column; gap: 4px; }
 .as-pick select { min-height: 42px; font-weight: 700; }
 .bjm-n.bad { background: var(--c-bad-ink); color: #fff; }
+.as-tag.why { background: #FFF4E2; color: #8A5A00; }
+html[data-theme="dark"] .as-tag.why { background: rgba(247, 168, 35, .15); color: #F7C877; }

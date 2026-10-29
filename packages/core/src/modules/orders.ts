@@ -35,6 +35,7 @@ import { addDepotAlert, alertsDepot, DepotChange, itemsText } from './depotalert
 import { blockerText, checkLines, checkOrder, deliverCheck } from './confirmcheck';
 import { releaseNoStock } from './nostock';
 import { applyTrust, lookAlikeNote, lookAlikeOf } from './trust';
+import { companyLock, pilotMayRun, pilotPick, setPick, type Pick } from './pilot';
 
 export const STOPDESK_NOTE = '🏬 Ce client a refusé 2 colis : livraison au bureau (stop-desk) uniquement. Proposez-lui le stop-desk le plus proche.';
 
@@ -134,6 +135,9 @@ export function toOrder(r: any): Order {
     followAgencyId: numOrNull(r.follow_agency_id),
     sendError: (r.send_error as string | null) ?? null,
     cancelByHand: !!r.cancel_by_hand,
+    pilotBy: (r.pilot_by as string | null) ?? null,
+    pilotRule: (r.pilot_rule as string | null) ?? null,
+    pilotWhy: (r.pilot_why as string | null) ?? null,
   };
 }
 
@@ -487,11 +491,15 @@ export async function createOrder(
     const homeRefused = !!cust.stopdesk_only && !input.isStopdesk;
     // confirmed from the start (the AI seller): the same two checks as « Confirmer » — blocked: a person checks it;
     // a product with nothing left: confirmed « sans stock »
+    // who delivers it: the company a person typed, the chosen bureau's, or Pilot's (its rules, or the default company)
+    const pick: Pick = input.companyId
+      ? { companyId: input.companyId, by: 'hand', rule: null, why: null }
+      : await pilotPick(tx, { wilayaId: input.wilayaId ?? null, commune: input.commune ?? null, isStopdesk: !!input.isStopdesk, stopdeskId: input.stopdeskId ?? null, productIds: lines.map((l) => l.productId).filter((x): x is number => !!x) });
     let confWhy: string | null = null;
     let confNoStock = false;
     if (input.confirm) {
       const lc = await checkLines(tx, lines.map((l) => ({ productId: l.productId, variantId: l.variantId ?? null, qty: l.qty })), null);
-      const dc = await deliverCheck(tx, { wilayaId: input.wilayaId ?? null, commune: input.commune ?? null, isStopdesk: !!input.isStopdesk, stopdeskId: input.stopdeskId ?? null, companyId: input.companyId ?? null });
+      const dc = await deliverCheck(tx, { wilayaId: input.wilayaId ?? null, commune: input.commune ?? null, isStopdesk: !!input.isStopdesk, stopdeskId: input.stopdeskId ?? null, companyId: pick.companyId });
       confWhy = blockerText('', lc, dc);
       confNoStock = lc.some((l) => l.state === 'empty');
     }
@@ -508,19 +516,21 @@ export async function createOrder(
     const stamped = confirmed || conf === 'no_stock';
     const ref = (await tx.query(`SELECT 'PX' || nextval('order_ref_seq') AS r`))[0].r;
     const wh = (await tx.query('SELECT id FROM warehouses WHERE active ORDER BY is_default DESC, id LIMIT 1'))[0];
-    const defCompany = input.companyId ?? (await getSetting(tx, 'shop')).defaultCompanyId ?? null;
+    const defCompany = pick.companyId;
     const row = (
       await tx.query(
         `INSERT INTO orders (ref, created_by, customer_id, customer_name, phone, phone2, wilaya_id, commune, address, is_stopdesk, stopdesk_id, channel, source, utm,
            conf_status, agent_id, assigned_at, confirmed_at, follow_status, company_id, warehouse_id, subtotal, delivery_fee, discount, total,
-           customer_note, delivery_note, internal_note, is_exchange, original_order_id, has_upsell, upsell_value, orig_items, orig_discount, conversation_id, landing_id, adset_id, looks_like_customer_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38) RETURNING id`,
+           customer_note, delivery_note, internal_note, is_exchange, original_order_id, has_upsell, upsell_value, orig_items, orig_discount, conversation_id, landing_id, adset_id, looks_like_customer_id,
+           pilot_by, pilot_rule, pilot_why)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41) RETURNING id`,
         [ref, me, cust.id, input.customerName, phone, phone2, input.wilayaId, input.commune, input.address, input.isStopdesk, input.stopdeskId ?? null,
           input.channel, input.source ?? null, input.utm ? JSON.stringify(input.utm) : null,
           conf, stamped ? me : null, stamped ? new Date(ctx.now()).toISOString() : null, stamped ? new Date(ctx.now()).toISOString() : null,
           confirmed ? 'to_prepare' : null, defCompany, wh?.id ?? null, priced.subtotal, fee, input.discount, total,
           input.customerNote ?? null, input.deliveryNote ?? null, internalNote, input.isExchange, input.originalOrderId ?? null,
-          up.value > 0, up.value, JSON.stringify(orig), input.discount, opts.conversationId ?? null, opts.landingId ?? null, opts.adsetId ?? null, look?.id ?? null],
+          up.value > 0, up.value, JSON.stringify(orig), input.discount, opts.conversationId ?? null, opts.landingId ?? null, opts.adsetId ?? null, look?.id ?? null,
+          pick.by, pick.rule, pick.why],
       )
     )[0];
     const oid = num(row.id);
@@ -625,6 +635,35 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
     }
     const fee = input.deliveryFee ?? num(cur.delivery_fee);
     const v = <T>(k: keyof typeof input, col: string): T => (input[k] !== undefined ? (input[k] as T) : cur[col]);
+    // the company: a person changing it (when the Préférences allow it), the chosen bureau's, or Pilot again when the
+    // place or the products change (until the products are picked; never on an order given by hand)
+    const was = numOrNull(cur.company_id);
+    const want = input.companyId !== undefined ? (input.companyId ?? null) : was;
+    const nextIsDesk = !!v<boolean>('isStopdesk', 'is_stopdesk');
+    const nextDesk = nextIsDesk ? numOrNull(v<number | null>('stopdeskId', 'stopdesk_id')) : null;
+    let pick: Pick | null = null;
+    if (want !== was) {
+      const deskCo = nextDesk ? numOrNull((await tx.query('SELECT company_id FROM stopdesks WHERE id = $1', [nextDesk]))[0]?.company_id) : null;
+      if (deskCo !== null && deskCo === want) pick = { companyId: want, by: 'bureau', rule: null, why: null };
+      else {
+        const why = await companyLock(ctx, tx, cur);
+        if (why) throw bad(why);
+        pick = { companyId: want, by: 'hand', rule: null, why: null };
+      }
+    } else {
+      const ids = (ls: { productId: number | null }[]) => [...new Set(ls.map((l) => l.productId).filter(Boolean))].sort().join(',');
+      const itemsMoved = !!lines && ids(lines) !== ids(old);
+      const placeMoved =
+        (input.wilayaId !== undefined && input.wilayaId !== numOrNull(cur.wilaya_id)) ||
+        (input.commune !== undefined && String(input.commune ?? '').trim().toLowerCase() !== String(cur.commune ?? '').trim().toLowerCase()) ||
+        (input.isStopdesk !== undefined && !!input.isStopdesk !== !!cur.is_stopdesk) ||
+        (input.stopdeskId !== undefined && (input.stopdeskId ?? null) !== numOrNull(cur.stopdesk_id));
+      if ((itemsMoved || placeMoved) && (await pilotMayRun(tx, cur))) {
+        const pids = (await tx.query('SELECT DISTINCT product_id FROM order_items WHERE order_id = $1 AND product_id IS NOT NULL', [input.id])).map((r: any) => num(r.product_id));
+        pick = await pilotPick(tx, { wilayaId: numOrNull(v('wilayaId', 'wilaya_id')), commune: v<string | null>('commune', 'commune') ?? null, isStopdesk: nextIsDesk, stopdeskId: nextDesk, productIds: pids });
+      }
+    }
+    const companyNow = pick ? pick.companyId : want;
     await tx.query(
       `UPDATE orders SET customer_name=$2, phone=$3, phone2=$4, wilaya_id=$5, commune=$6, address=$7, is_stopdesk=$8, stopdesk_id=$9, company_id=$10,
          channel=$11, subtotal=$12, delivery_fee=$13, discount=$14, total=$15, customer_note=$16, delivery_note=$17, internal_note=$18,
@@ -632,10 +671,19 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
          orig_discount = CASE WHEN orig_items IS NULL THEN $21 ELSE orig_discount END, updated_at=now(), version=version+1 WHERE id=$1`,
       [input.id, v('customerName', 'customer_name'), phone, input.phone2 !== undefined ? (input.phone2 ? normalizePhone(input.phone2) : null) : cur.phone2,
         v('wilayaId', 'wilaya_id'), v('commune', 'commune'), v('address', 'address'), v('isStopdesk', 'is_stopdesk'), v('stopdeskId', 'stopdesk_id'),
-        v('companyId', 'company_id'), v('channel', 'channel'), subtotal, fee, discount, subtotal - discount + fee,
+        companyNow, v('channel', 'channel'), subtotal, fee, discount, subtotal - discount + fee,
         v('customerNote', 'customer_note'), v('deliveryNote', 'delivery_note'), v('internalNote', 'internal_note'),
         up.value, JSON.stringify(orig), origDiscount],
     );
+    if (pick) {
+      const moved = pick.companyId !== was;
+      await tx.query(
+        'UPDATE orders SET pilot_by = $2, pilot_rule = $3, pilot_why = $4, livreur_id = CASE WHEN $5 THEN NULL ELSE livreur_id END WHERE id = $1',
+        [input.id, pick.by, pick.rule, pick.why, moved],
+      );
+      const person = pick.by === 'hand' || pick.by === 'bureau';
+      if (moved) await addEvent(tx, input.id, person ? ctx.session.profile.id : null, 'company', was ? String(was) : null, pick.companyId ? String(pick.companyId) : null, pick.by === 'bureau' ? 'Bureau choisi' : person ? null : 'Pilot');
+    }
     // the history keeps what the money was and became (who lowered a total, and by how much)
     const newTotal = subtotal - discount + fee;
     const moneyNote = newTotal !== num(cur.total) ? `Total ${num(cur.total)} → ${newTotal} DA (remise ${num(cur.discount)} → ${discount}, livraison ${num(cur.delivery_fee)} → ${fee})` : null;
@@ -823,6 +871,45 @@ export async function setCourierCost(db: Db, orderIds: number[], force = false) 
         AND ($2 OR o.delivery_cost = 0)`,
     [orderIds, force],
   );
+}
+
+/**
+ * A person gives orders a company (and our own livreur): the rules of « Pilot Auto Assign » leave them alone from then
+ * on. `check`: the person must be allowed by the Préférences (who changes the company by hand, strict rules locked) —
+ * the depot's own steps (« À attribuer », « Autre société », « Retirer ») are checked where they start.
+ */
+export async function assignCompanies(ctx: Ctx, i: { ids: number[]; companyId: number | null; livreurId?: number | null }, opts: { check?: boolean } = {}) {
+  if (i.livreurId) {
+    const l = (await ctx.db.query('SELECT roles, active FROM profiles WHERE id = $1', [i.livreurId]))[0];
+    if (!l || !l.active || !(l.roles ?? []).includes('livreur')) throw bad('Ce livreur est introuvable');
+  }
+  const office = ctx.session.isAdmin || ctx.session.roles.includes('suivi') || ctx.session.roles.includes('depot');
+  await ctx.db.tx(async (tx) => {
+    for (const oid of i.ids) {
+      const cur = (await tx.query('SELECT ref, company_id, livreur_id, follow_status, tracking, shipped_at, cashed, pilot_by FROM orders WHERE id=$1 FOR UPDATE', [oid]))[0];
+      if (!cur) continue;
+      if (cur.tracking && cur.company_id && num(cur.company_id) !== i.companyId) throw bad('Colis déjà envoyé à une société : annulez-le d’abord');
+      // the livreur of a parcel decides who owes its cash: frozen once it is cashed or finished, and only the
+      // depot / suivi move a parcel that already left
+      const company = num(cur.company_id) !== (i.companyId ?? 0);
+      const moves = company || num(cur.livreur_id) !== (i.livreurId ?? 0);
+      if (moves && (cur.cashed || FOLLOW_FINAL.includes(cur.follow_status))) throw bad(`${cur.ref} est terminée ou encaissée : la société et le livreur ne changent plus`);
+      if (moves && cur.shipped_at && !office) throw bad(`${cur.ref} est déjà partie du dépôt`);
+      if (company && opts.check !== false) {
+        const why = await companyLock(ctx, tx, cur);
+        if (why) throw bad(`${cur.ref} : ${why}`);
+      }
+      await tx.query(
+        `UPDATE orders SET company_id=$2, livreur_id=$3, updated_at=now(),
+           pilot_by = CASE WHEN $4 THEN 'hand' ELSE pilot_by END, pilot_rule = CASE WHEN $4 THEN NULL ELSE pilot_rule END, pilot_why = CASE WHEN $4 THEN NULL ELSE pilot_why END
+         WHERE id=$1`,
+        [oid, i.companyId, i.livreurId ?? null, company],
+      );
+      await addEvent(tx, oid, ctx.session.profile.id, 'company', cur.company_id ? String(cur.company_id) : null, i.companyId ? String(i.companyId) : null);
+    }
+  });
+  ctx.emit({ type: 'orders' });
+  return { ok: true };
 }
 
 export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, opts: { system?: boolean } = {}) {
@@ -1338,29 +1425,7 @@ export const ordersProcs = {
     return { ok: true };
   }),
 
-  'orders.assignCompany': proc(['depot', 'suivi', 'confirmation'], z.object({ ids, companyId: id.nullable(), livreurId: id.nullable().optional() }), async (ctx, i) => {
-    if (i.livreurId) {
-      const l = (await ctx.db.query('SELECT roles, active FROM profiles WHERE id = $1', [i.livreurId]))[0];
-      if (!l || !l.active || !(l.roles ?? []).includes('livreur')) throw bad('Ce livreur est introuvable');
-    }
-    const office = ctx.session.isAdmin || ctx.session.roles.includes('suivi') || ctx.session.roles.includes('depot');
-    await ctx.db.tx(async (tx) => {
-      for (const oid of i.ids) {
-        const cur = (await tx.query('SELECT ref, company_id, livreur_id, follow_status, tracking, shipped_at, cashed FROM orders WHERE id=$1 FOR UPDATE', [oid]))[0];
-        if (!cur) continue;
-        if (cur.tracking && cur.company_id && num(cur.company_id) !== i.companyId) throw bad('Colis déjà envoyé à une société : annulez-le d’abord');
-        // the livreur of a parcel decides who owes its cash: frozen once it is cashed or finished, and only the
-        // depot / suivi move a parcel that already left
-        const moves = num(cur.company_id) !== (i.companyId ?? 0) || num(cur.livreur_id) !== (i.livreurId ?? 0);
-        if (moves && (cur.cashed || FOLLOW_FINAL.includes(cur.follow_status))) throw bad(`${cur.ref} est terminée ou encaissée : la société et le livreur ne changent plus`);
-        if (moves && cur.shipped_at && !office) throw bad(`${cur.ref} est déjà partie du dépôt`);
-        await tx.query('UPDATE orders SET company_id=$2, livreur_id=$3, updated_at=now() WHERE id=$1', [oid, i.companyId, i.livreurId ?? null]);
-        await addEvent(tx, oid, ctx.session.profile.id, 'company', cur.company_id ? String(cur.company_id) : null, i.companyId ? String(i.companyId) : null);
-      }
-    });
-    ctx.emit({ type: 'orders' });
-    return { ok: true };
-  }),
+  'orders.assignCompany': proc(['depot', 'suivi', 'confirmation'], z.object({ ids, companyId: id.nullable(), livreurId: id.nullable().optional() }), (ctx, i) => assignCompanies(ctx, i)),
 
   'orders.note': proc(null, z.object({ id, note: z.string().min(1).max(1000), field: z.enum(['event', 'internal', 'delivery', 'customer']).default('event') }), async (ctx, i) => {
     await getOrder(ctx, i.id);
