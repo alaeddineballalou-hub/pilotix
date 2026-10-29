@@ -1,4 +1,4 @@
-// Admin pages: Utilisateurs, Management (Statuts, Paie des agents, Prix de livraison, Canaux de vente, Archives), Réglages.
+// Admin pages: Utilisateurs, Management (Statuts, Paie des agents, Prix de livraison, Canaux de vente, Alertes dépôt, Archives), Réglages.
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PageProps } from '../registry';

@@ -59,6 +59,23 @@ export interface SettingsMap {
   colPresets: { id: string; name: string; cols: string[]; by: string; at: string }[];
   /** The preset every team uses (set by an admin; only an admin changes the columns) */
   colPresetActive: { id: string; at: number; by: string } | null;
+  /**
+   * Sociétés de livraison › Préférences: each seller's own choices (shown in « Mode avancé »).
+   *  - manualDefault: in « Manuel », the default company counts as chosen when the agent confirms (otherwise the order
+   *    waits in « À attribuer » for a manager);
+   *  - changeCompany: who may change an order's company by hand (admins always may);
+   *  - strictLock: an order placed by a strict « Pilot Auto Assign » rule is changed only by managers and admins;
+   *  - privateBackup: « Livraison privée » orders waiting in « À attribuer » longer than `hours` go to `companyId`, when
+   *    that company delivers there;
+   *  - noStockDays: a « sans stock » order waiting longer than this rings an alert.
+   */
+  prefs: {
+    manualDefault: boolean;
+    changeCompany: { confirmation: boolean; agency: boolean; depot: boolean; manager: boolean };
+    strictLock: boolean;
+    privateBackup: { on: boolean; hours: number; companyId: number | null };
+    noStockDays: number;
+  };
 }
 
 export const DEFAULT_SETTINGS: SettingsMap = {
@@ -88,6 +105,13 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   depotAlerts: { to: [] },
   colPresets: [],
   colPresetActive: null,
+  prefs: {
+    manualDefault: true,
+    changeCompany: { confirmation: true, agency: false, depot: false, manager: true },
+    strictLock: true,
+    privateBackup: { on: false, hours: 24, companyId: null },
+    noStockDays: 3,
+  },
 };
 
 export async function getSetting<K extends keyof SettingsMap>(db: Db, key: K): Promise<SettingsMap[K]> {

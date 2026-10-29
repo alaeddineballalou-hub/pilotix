@@ -4,6 +4,7 @@
 // Livreurs: one row each (where the tournée ends, parcels to ship / on the road), a tap opens call / edit / route sheet.
 import { ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Preferences } from './Preferences';
 import type { Out } from '../../lib/backend';
 import { wilaya } from '../../lib/format';
 import { useFullScreen } from '../../lib/fullScreen';
@@ -80,7 +81,7 @@ export function PhoneLivraison({
   onAdd,
   onSheet,
 }: {
-  current: 'societes' | 'api' | 'livreurs';
+  current: 'societes' | 'api' | 'livreurs' | 'preferences';
   companies: ReturnType<typeof useRpc<'delivery.companies'>>;
   kinds: ReturnType<typeof useRpc<'delivery.kinds'>>;
   onEdit: (c: Company) => void;
@@ -92,13 +93,15 @@ export function PhoneLivraison({
   return (
     <div className="pxl">
       <div className="pxv-own pxl-tabs" role="tablist">
-        {(['societes', 'api', 'livreurs'] as const).map((k) => (
+        {(['societes', 'api', 'livreurs', 'preferences'] as const).map((k) => (
           <a key={k} role="tab" aria-selected={current === k} className={current === k ? 'on' : ''} href={`#/livraison/${k}`}>
             {t(`livraison.ph.tab.${k}`)}
           </a>
         ))}
       </div>
-      {current === 'livreurs' ? (
+      {current === 'preferences' ? (
+        <Preferences />
+      ) : current === 'livreurs' ? (
         <Livreurs companies={companies.data ?? []} onSheet={onSheet} />
       ) : companies.error ? (
         <ErrorBox error={companies.error} onRetry={() => companies.refetch()} />

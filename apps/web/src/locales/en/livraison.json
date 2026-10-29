@@ -3,7 +3,8 @@
   "tabs": {
     "societes": "Companies & rates",
     "api": "API Integration",
-    "livreurs": "Couriers"
+    "livreurs": "Couriers",
+    "preferences": "Preferences"
   },
   "societes": {
     "title": "Delivery companies",
@@ -215,7 +216,8 @@
     "tab": {
       "societes": "Companies",
       "api": "API",
-      "livreurs": "Livreurs"
+      "livreurs": "Livreurs",
+      "preferences": "Preferences"
     },
     "companies": "Active companies",
     "missing_one": "{{count}} company without API keys: its parcels are not sent automatically.",
@@ -267,6 +269,57 @@
       "label": "Print {{name}}’s label",
       "fees": "Import the prices",
       "desks": "Import the offices (stop desks)"
+    }
+  },
+  "prefs": {
+    "title": "Preferences",
+    "help": "Your choices for the whole shop.",
+    "advanced": "Advanced mode",
+    "isRecommended": "Recommended choices",
+    "isCustom": "Changed choices",
+    "changedHint": "Different from the recommended choice",
+    "openHint": "Open advanced mode to change a choice.",
+    "gCompany": "Delivery company",
+    "manualDefault": "In Manual, the default company counts",
+    "manualDefaultHint": "The agent confirms: the order goes to the company on the card. If off, it waits in « À attribuer ».",
+    "change": "Who can change the company",
+    "changeHint": "By hand, on one order. Admins always can.",
+    "adminAlways": "Admins always can",
+    "who": {
+      "confirmation": "Confirmation agents",
+      "agency": "Agency agents",
+      "depot": "Depot",
+      "manager": "Agent managers",
+      "admin": "Admins"
+    },
+    "strictLock": "Strict rules locked",
+    "strictLockHint": "An order placed by a strict rule: only agent managers and admins change it.",
+    "gPrivate": "Private delivery",
+    "backup": "Backup company",
+    "backupHint": "A private order that waits too long goes to this company, if it delivers there.",
+    "after": "After",
+    "hours": "hours",
+    "backupCompany": "Backup company",
+    "pickCompany": "Pick a company…",
+    "pickCompanyFirst": "Pick the backup company.",
+    "gStock": "Stock",
+    "noStock": "« Out of stock » alert",
+    "noStockHint": "An out-of-stock order that waits too long rings an alert.",
+    "days": "days",
+    "reset": "Back to recommended choices",
+    "unsaved": "Not saved yet",
+    "allSaved": "Everything is saved",
+    "save": "Save",
+    "saved": "Preferences saved",
+    "sum": {
+      "manualOn": "It goes when the agent confirms.",
+      "manualOff": "The order waits in « À attribuer ».",
+      "strictOn": "Yes, locked.",
+      "strictOff": "No, anyone allowed can change them.",
+      "backupOn": "After {{hours}} h → {{company}}.",
+      "backupOff": "No, the order waits.",
+      "noStock_one": "After {{count}} day.",
+      "noStock_other": "After {{count}} days."
     }
   }
 }

@@ -1,4 +1,4 @@
-// « Sociétés de livraison » (admin): Sociétés & tarifs · API Integration · Livreurs.
+// « Sociétés de livraison » (admin): Sociétés & tarifs · API Integration · Livreurs · Préférences.
 import { WILAYAS } from '@pilotix/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,12 +14,13 @@ import { Company, CompanyDraft, CompanyForm, FeesModal, PreviewModal, StatusesMo
 import { printRouteSheet } from './print';
 import { useIsPhone } from '../../lib/useMedia';
 import { PhoneLivraison } from './Phone';
+import { Preferences } from './Preferences';
 
 type Dialog = { kind: 'form'; draft: CompanyDraft; keysSet?: string[] } | { kind: 'fees' | 'desks' | 'statuses' | 'preview' | 'zr' | 'live'; company: Company } | null;
 
 export function Livraison({ sub }: PageProps) {
   const { t } = useTranslation();
-  const current = sub === 'api' || sub === 'livreurs' ? sub : 'societes';
+  const current = sub === 'api' || sub === 'livreurs' || sub === 'preferences' ? sub : 'societes';
   const q = useRpc('delivery.companies', {});
   const kinds = useRpc('delivery.kinds', {});
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -29,6 +30,7 @@ export function Livraison({ sub }: PageProps) {
     { key: 'societes', label: t('livraison.tabs.societes'), href: '#/livraison/societes' },
     { key: 'api', label: t('livraison.tabs.api'), href: '#/livraison/api' },
     { key: 'livreurs', label: t('livraison.tabs.livreurs'), href: '#/livraison/livreurs' },
+    { key: 'preferences', label: t('livraison.tabs.preferences'), href: '#/livraison/preferences' },
   ];
 
   const edit = (c: Company) => setDialog({ kind: 'form', draft: { id: c.id, name: c.name, kind: c.kind, active: c.active, phone: c.phone ?? '', settings: { ...(c.settings as Record<string, unknown>) } }, keysSet: c.keysSet });
@@ -70,6 +72,7 @@ export function Livraison({ sub }: PageProps) {
   return (
     <>
       <StageBar items={items} current={current} flow={false} />
+      {current === 'preferences' && <Preferences />}
       {current === 'societes' && (
         <>
           <Card

@@ -3,7 +3,8 @@
   "tabs": {
     "societes": "Sociétés & tarifs",
     "api": "API Integration",
-    "livreurs": "Livreurs"
+    "livreurs": "Livreurs",
+    "preferences": "Préférences"
   },
   "societes": {
     "title": "Sociétés de livraison",
@@ -215,7 +216,8 @@
     "tab": {
       "societes": "Sociétés",
       "api": "API",
-      "livreurs": "Livreurs"
+      "livreurs": "Livreurs",
+      "preferences": "Préférences"
     },
     "companies": "Sociétés actives",
     "missing_one": "{{count}} société sans clés API : ses colis ne partent pas seuls.",
@@ -267,6 +269,57 @@
       "label": "Imprimer l’étiquette de {{name}}",
       "fees": "Importer les tarifs",
       "desks": "Importer les bureaux (stop desks)"
+    }
+  },
+  "prefs": {
+    "title": "Préférences",
+    "help": "Vos choix pour toute la boutique.",
+    "advanced": "Mode avancé",
+    "isRecommended": "Choix conseillés",
+    "isCustom": "Choix modifiés",
+    "changedHint": "Différent du choix conseillé",
+    "openHint": "Ouvrez le mode avancé pour changer un choix.",
+    "gCompany": "Société de livraison",
+    "manualDefault": "En Manuel, la société par défaut compte",
+    "manualDefaultHint": "L’agent confirme : la commande part chez la société de la carte. Sinon, elle attend dans « À attribuer ».",
+    "change": "Qui peut changer la société",
+    "changeHint": "À la main, sur une commande. Les admins peuvent toujours.",
+    "adminAlways": "Les admins peuvent toujours",
+    "who": {
+      "confirmation": "Agents de confirmation",
+      "agency": "Agents d’agence",
+      "depot": "Dépôt",
+      "manager": "Agent managers",
+      "admin": "Admins"
+    },
+    "strictLock": "Règles strictes verrouillées",
+    "strictLockHint": "Commande placée par une règle stricte : seuls les agent managers et les admins la changent.",
+    "gPrivate": "Livraison privée",
+    "backup": "Société de secours",
+    "backupHint": "Une commande privée qui attend trop part chez cette société, si elle livre là-bas.",
+    "after": "Après",
+    "hours": "heures",
+    "backupCompany": "Société de secours",
+    "pickCompany": "Choisir une société…",
+    "pickCompanyFirst": "Choisissez la société de secours.",
+    "gStock": "Stock",
+    "noStock": "Alerte « sans stock »",
+    "noStockHint": "Une commande sans stock qui attend trop longtemps sonne une alerte.",
+    "days": "jours",
+    "reset": "Remettre les choix conseillés",
+    "unsaved": "Pas encore enregistré",
+    "allSaved": "Tout est enregistré",
+    "save": "Enregistrer",
+    "saved": "Préférences enregistrées",
+    "sum": {
+      "manualOn": "Elle part quand l’agent confirme.",
+      "manualOff": "La commande attend dans « À attribuer ».",
+      "strictOn": "Oui, verrouillées.",
+      "strictOff": "Non, tout le monde peut les changer.",
+      "backupOn": "Après {{hours}} h → {{company}}.",
+      "backupOff": "Non, la commande attend.",
+      "noStock_one": "Après {{count}} jour.",
+      "noStock_other": "Après {{count}} jours."
     }
   }
 }

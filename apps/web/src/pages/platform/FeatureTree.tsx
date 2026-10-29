@@ -35,10 +35,12 @@ const SUB_LABEL: Record<string, string> = {
   'livraison/societes': 'livraison.tabs.societes',
   'livraison/api': 'livraison.tabs.api',
   'livraison/livreurs': 'livraison.tabs.livreurs',
+  'livraison/preferences': 'livraison.tabs.preferences',
   'management/statuts': 'admin.subs.statuts',
   'management/paie': 'admin.subs.paie',
   'management/prix': 'admin.subs.prix',
   'management/canaux': 'admin.subs.canaux',
+  'management/alertes': 'admin.subs.alertes',
   'management/archive': 'admin.subs.archive',
 };
 
