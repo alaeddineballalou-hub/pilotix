@@ -17,7 +17,7 @@ import type { CourierKind } from '@pilotix/shared';
 
 const id = z.number().int().positive();
 
-export const SUIVI_TABS = ['enlivraison', 'alertes', 'traites', 'livres', 'annules', 'swap', 'swapped'] as const;
+export const SUIVI_TABS = ['enlivraison', 'alertes', 'bloques', 'traites', 'livres', 'annules', 'swap', 'swapped'] as const;
 export type SuiviTab = (typeof SUIVI_TABS)[number];
 /** Where a parcel can be swapped from: it is still with the courier or the livreur. */
 export const SWAP_FROM = ['returning', 'failed', 'alert', 'out_for_delivery', 'shipped'] as const;
@@ -32,6 +32,9 @@ function tabFilter(tab: SuiviTab, now: number): Partial<ListInput> {
   switch (tab) {
     case 'enlivraison':
       return { follow: ['out_for_delivery', 'failed'], subStatusNot: 'alert_traitee', sort: 'shipped_at', dir: 'asc' };
+    case 'bloques':
+      // the ids come from stuckParcels (see suivi.list)
+      return { follow: ['shipped', 'out_for_delivery', 'failed', 'in_exchange'], sort: 'shipped_at', dir: 'asc' };
     case 'alertes':
       return { follow: ['alert'], sort: 'updated_at', dir: 'asc' };
     case 'traites':
@@ -118,6 +121,7 @@ export async function alertTries(db: Db, ids: number[], now: number): Promise<Ma
 }
 
 export interface SuiviRowExtra {
+  stuck?: StuckInfo | null;
   /** how the alert was treated: « Résolu » or « Perdu », and its motif (Management › Motifs du Suivi) */
   motif: { outcome: 'resolved' | 'lost'; label: string } | null;
   clock: AlertClock | null;
@@ -186,7 +190,10 @@ export async function suiviCounts(ctx: Ctx) {
   const clocks = await alertClocks(ctx.db, alertIds, ctx.now());
   const lateCall = [...clocks.values()].filter((c) => c.kind === 'call' && c.state === 'late').length;
   const lateSolve = [...clocks.values()].filter((c) => c.kind === 'solve' && c.state === 'late').length;
+  const stuckAll = await stuckParcels(ctx);
   return {
+    bloques: stuckAll.size,
+    bloquesTodo: [...stuckAll.values()].filter((x) => !x.handled).length,
     lateCall,
     lateSolve,
     enlivraison: num(r.enlivraison),
@@ -604,6 +611,66 @@ async function createClaim(ctx: Ctx, i: z.infer<typeof ClaimCreate>): Promise<Cl
 const MotifIn = z.object({ key: z.string().regex(/^[a-z0-9_]{1,40}$/), fr: z.string().trim().min(1).max(80), ar: z.string().trim().max(80).default(''), on: z.boolean(), client: z.boolean().optional(), date: z.boolean().optional() });
 const cleanMotif = (m: z.infer<typeof MotifIn>) => ({ key: m.key, fr: m.fr, ar: m.ar, on: m.on, ...(m.client ? { client: true } : {}), ...(m.date ? { date: true } : {}) });
 
+// ---------------------------------------------------------------- Bloqués
+/** On the road (with the company or our livreur), and not an alert: where a parcel can get stuck. */
+const ROAD = ['shipped', 'out_for_delivery', 'failed', 'in_exchange'];
+/** The last time the parcel moved: a status from the company, a delivery status, or when it left. */
+const LAST_MOVE = `GREATEST(o.ext_status_at, o.shipped_at, (SELECT max(e.at) FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status'))`;
+
+export interface StuckInfo {
+  /** whole days without news */
+  days: number;
+  since: string;
+  /** what the agent did since it stopped moving (relancé, réclamation, client rappelé), or null */
+  handled: string | null;
+  /** days before the claim by itself (0: due, null: done or the company has no API) */
+  autoClaimIn: number | null;
+}
+
+/** The stuck parcels (no new status for the Préférences' days), with how long and what the agent did. */
+export async function stuckParcels(ctx: Ctx, ids?: number[]): Promise<Map<number, StuckInfo>> {
+  const { days } = (await getPrefs(ctx.db)).suiviStuck;
+  const rows = await ctx.db.query(
+    `SELECT o.id, ${LAST_MOVE} AS since, co.kind,
+       (SELECT e.to_value FROM order_events e WHERE e.order_id = o.id AND e.kind = 'suivi_stuck' AND e.at >= ${LAST_MOVE} ORDER BY e.at DESC LIMIT 1) AS handled,
+       EXISTS (SELECT 1 FROM claims c WHERE c.order_id = o.id AND c.status <> 'resolved' AND c.created_at >= ${LAST_MOVE}) AS claimed
+       FROM orders o LEFT JOIN delivery_companies co ON co.id = o.company_id
+      WHERE o.follow_status = ANY($1) AND o.shipped_at IS NOT NULL AND ${LAST_MOVE} < now() - make_interval(days => $2)
+        ${ids ? 'AND o.id = ANY($3)' : ''}${andSql(queueSql(ctx, 'follow'))}`,
+    ids ? [ROAD, days, ids] : [ROAD, days],
+  );
+  const out = new Map<number, StuckInfo>();
+  for (const r of rows) {
+    const since = Date.parse(iso(r.since));
+    const d = Math.floor((ctx.now() - since) / 86_400_000);
+    const api = !!KINDS[r.kind as keyof typeof KINDS]?.claims;
+    out.set(num(r.id), { days: d, since: iso(r.since), handled: r.claimed ? (r.handled ?? 'claim') : (r.handled ?? null), autoClaimIn: !api || r.claimed ? null : Math.max(0, days + 2 - d) });
+  }
+  return out;
+}
+
+/** Bloqués still without news 2 days after: a claim « en retard » to the company through its API (once). */
+export async function stuckAutoClaims(ctx: Ctx) {
+  const stuck = await stuckParcels(ctx);
+  let made = 0;
+  const errors: string[] = [];
+  for (const [oid, s] of stuck) {
+    if (s.autoClaimIn !== 0) continue;
+    try {
+      const o = await getOrder(ctx, oid);
+      if (!o.tracking) continue;
+      const shop = (await getSetting(ctx.db, 'shop')).name;
+      const message = `Bonjour, le colis ${o.tracking} (${o.ref}) — ${o.customerName} ${o.phone} n’a plus de nouvelles depuis ${s.days} jours. Merci de nous dire où il en est et de le livrer. ${shop}`;
+      await createClaim(ctx, ClaimCreate.parse({ orderId: oid, reason: 'late', details: `Bloqué depuis ${s.days} jours (réclamation automatique)`, message, viaApi: true }));
+      made++;
+    } catch (e) {
+      errors.push(`${oid}: ${(e as Error).message}`);
+    }
+  }
+  if (made) ctx.emit({ type: 'orders' });
+  return { made, errors };
+}
+
 /** A parcel another agent took with « Alerte suivante » (15 minutes): he is calling, nobody else acts on it. */
 async function notLockedByOther(ctx: Ctx, oid: number) {
   const r = (await ctx.db.query(
@@ -617,7 +684,16 @@ export const suiviProcs = {
   'suivi.counts': proc(['suivi'], z.object({}), (ctx) => suiviCounts(ctx)),
 
   'suivi.list': proc(['suivi'], ListSuivi, async (ctx, i) => {
-    const page = await listOrders(ctx, ListInput.parse({ ...tabFilter(i.tab, ctx.now()), q: i.q, page: i.page, pageSize: i.pageSize }), { queue: 'follow' });
+    const stuck = i.tab === 'bloques' ? await stuckParcels(ctx) : null;
+    if (stuck && !stuck.size) return { rows: [], total: 0, page: 1, pageSize: i.pageSize ?? 50, extra: {} };
+    const page = await listOrders(ctx, ListInput.parse({ ...tabFilter(i.tab, ctx.now()), ...(stuck ? { ids: [...stuck.keys()].slice(0, 500) } : {}), q: i.q, page: i.page, pageSize: i.pageSize }), { queue: 'follow' });
+    if (stuck) {
+      const ex = await extras(ctx.db, page.rows, ctx.now());
+      for (const o of page.rows) if (ex[o.id]) ex[o.id].stuck = stuck.get(o.id) ?? null;
+      // the longest without news first
+      const rows = [...page.rows].sort((a, b) => (stuck.get(b.id)?.days ?? 0) - (stuck.get(a.id)?.days ?? 0));
+      return { ...page, rows, extra: ex };
+    }
     // the swap list only shows parcels that really left (still with the courier or the livreur)
     const rows = i.tab === 'swap' ? page.rows.filter((o) => o.shippedAt) : page.rows;
     return { ...page, rows, extra: await extras(ctx.db, rows, ctx.now()) };
@@ -673,6 +749,44 @@ export const suiviProcs = {
       )
     ).map((r: any) => ({ id: num(r.id), name: String(r.name), resolved: num(r.resolved), delivered: num(r.delivered), lost: num(r.lost), early: num(r.early), topLost: r.top_lost ? name('lost', String(r.top_lost), String(r.top_lost)) : null }));
     return { agents, resolved, lost, totalResolved: resolved.reduce((a, r) => a + r.count, 0), totalLost: lost.reduce((a, r) => a + r.count, 0) };
+  }),
+
+  /**
+   * Bloqués: what the agent did for a parcel without news — « relancé » (the company or the livreur, by phone),
+   * « réclamation » (a claim « en retard », through the API when the company has one) or « client rappelé ».
+   */
+  'suivi.stuckDone': proc(['suivi'], z.object({ id, action: z.enum(['relance', 'claim', 'client']), note: z.string().max(1000).nullable().optional() }), async (ctx, i) => {
+    const s = (await stuckParcels(ctx, [i.id])).get(i.id);
+    if (!s) throw bad('Ce colis n’est pas bloqué');
+    const me = ctx.session.profile.id;
+    let claim: Claim | null = null;
+    let claimError: string | null = null;
+    if (i.action === 'claim') {
+      const o = await getOrder(ctx, i.id);
+      const own = o.companyId ? (await ctx.db.query('SELECT kind FROM delivery_companies WHERE id = $1', [o.companyId]))[0]?.kind === 'own' : false;
+      const shop = (await getSetting(ctx.db, 'shop')).name;
+      try {
+        claim = await createClaim(
+          ctx,
+          ClaimCreate.parse({
+            orderId: i.id,
+            reason: 'late',
+            details: [`Bloqué depuis ${s.days} jours`, i.note?.trim()].filter(Boolean).join(' — '),
+            message: `Bonjour, le colis ${o.tracking ?? o.ref} (${o.ref}) — ${o.customerName} ${o.phone} n’a plus de nouvelles depuis ${s.days} jours. Merci de nous dire où il en est. ${shop}`,
+            toLivreur: own && !!o.livreurId,
+            viaApi: true,
+          }),
+        );
+      } catch (e) {
+        claimError = (e as Error).message;
+      }
+    }
+    const WHAT = { relance: 'Relancé', claim: 'Réclamation ouverte', client: 'Client rappelé' } as const;
+    await addEvent(ctx.db, i.id, me, 'suivi_stuck', String(s.days), i.action, [`Bloqué ${s.days} j : ${WHAT[i.action]}`, i.note?.trim()].filter(Boolean).join(' — '));
+    // the agent who handled it follows the parcel
+    await ctx.db.query('UPDATE orders SET follow_agent_id = COALESCE(follow_agent_id, $2), locked_by = NULL, locked_until = NULL WHERE id = $1', [i.id, me]);
+    ctx.emit({ type: 'order', id: i.id });
+    return { order: await getOrder(ctx, i.id), claim, claimError };
   }),
 
   /** Management › Motifs du Suivi: everyone reads them (the « Traiter » window), an admin changes them. */
@@ -769,11 +883,11 @@ export const suiviProcs = {
    * His own parcels first (once he acted on a parcel it stays his until it ends), then the alerts of nobody — or of an
    * agent not seen for 8 hours (off today) — the oldest alert first.
    */
-  'suivi.next': proc(['suivi'], z.object({ skip: z.array(id).max(200).default([]), release: id.nullable().optional() }), async (ctx, i) => {
+  'suivi.next': proc(['suivi'], z.object({ skip: z.array(id).max(200).default([]), release: id.nullable().optional(), only: z.enum(['stuck']).optional() }), async (ctx, i) => {
     const me = ctx.session.profile.id;
     if (i.release) await ctx.db.query('UPDATE orders SET locked_by = NULL, locked_until = NULL WHERE id = $1 AND locked_by = $2', [i.release, me]);
     // picked and locked in one statement: two agents pressing at the same time never get the same parcel
-    const r = await ctx.db.query(
+    const r = i.only === 'stuck' ? [] : await ctx.db.query(
       `UPDATE orders SET locked_by = $1, locked_until = now() + interval '15 minutes'
         WHERE id = (
           SELECT o.id FROM orders o LEFT JOIN profiles fa ON fa.id = o.follow_agent_id
@@ -786,9 +900,28 @@ export const suiviProcs = {
        RETURNING id`,
       [me, i.skip],
     );
-    if (!r[0]) return { id: null, order: null, extra: null };
-    const order = await getOrder(ctx, num(r[0].id));
-    return { id: order.id, order, extra: (await extras(ctx.db, [order], ctx.now()))[order.id] ?? null };
+    if (r[0]) {
+      const order = await getOrder(ctx, num(r[0].id));
+      return { id: order.id, kind: 'alert' as const, order, extra: (await extras(ctx.db, [order], ctx.now()))[order.id] ?? null };
+    }
+    // no alert left: the Bloqués nobody handled yet, the longest without news first
+    const stuck = [...(await stuckParcels(ctx)).entries()].filter(([oid, x]) => !x.handled && !i.skip.includes(oid)).sort((a, b) => b[1].days - a[1].days);
+    for (const [oid, x] of stuck) {
+      const got = await ctx.db.query(
+        `UPDATE orders o SET locked_by = $1, locked_until = now() + interval '15 minutes'
+           FROM (SELECT o2.id FROM orders o2 LEFT JOIN profiles fa ON fa.id = o2.follow_agent_id
+                  WHERE o2.id = $2 AND (o2.locked_until IS NULL OR o2.locked_until < now() OR o2.locked_by = $1)
+                    AND (o2.follow_agent_id IS NULL OR o2.follow_agent_id = $1 OR fa.last_seen_at IS NULL OR fa.last_seen_at < now() - interval '8 hours')
+                  FOR UPDATE OF o2 SKIP LOCKED) f
+          WHERE o.id = f.id RETURNING o.id`,
+        [me, oid],
+      );
+      if (!got[0]) continue;
+      const order = await getOrder(ctx, oid);
+      const ex = (await extras(ctx.db, [order], ctx.now()))[oid] ?? null;
+      return { id: oid, kind: 'stuck' as const, order, extra: ex ? { ...ex, stuck: x } : null };
+    }
+    return { id: null, kind: null, order: null, extra: null };
   }),
 
   /** Leaves the parcel taken with « Alerte suivante » (closed without acting): another agent may take it. */

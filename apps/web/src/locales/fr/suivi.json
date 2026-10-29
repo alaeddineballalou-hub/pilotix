@@ -6,7 +6,8 @@
     "livres": "Livrés",
     "annules": "Annulés",
     "reclamation": "Réclamation",
-    "swap": "Swap"
+    "swap": "Swap",
+    "bloques": "Bloqués"
   },
   "title": "Suivi des livraisons",
   "sync": "Mettre à jour depuis les sociétés",
@@ -18,7 +19,8 @@
     "alertes": "à traiter",
     "traites": "en route après l’alerte",
     "livres": "30 derniers jours",
-    "annules": "en retour + swappés"
+    "annules": "en retour + swappés",
+    "bloques": "sans nouvelles"
   },
   "help": {
     "enlivraison": "Colis sortis pour être livrés, et ceux dont une tentative a échoué. Un statut choisi dans Préférences › Alertes du Suivi les envoie dans Alertes. « Alerter » le fait à la main.",
@@ -26,14 +28,16 @@
     "traites": "Alertes déjà traitées : le colis est reparti. Il sort d’ici quand il est livré ou annulé.",
     "livres": "Colis livrés ces 30 derniers jours.",
     "annules": "Colis annulés par le client, encore chez ZR ou le livreur, en route vers le dépôt. Pour en donner un directement à un autre client : menu Suivi → Swap.",
-    "swap": "Donnez un colis annulé directement à un autre client au lieu de le faire revenir au dépôt. En dessous : les colis déjà swappés, avec « Copier pour ZR »."
+    "swap": "Donnez un colis annulé directement à un autre client au lieu de le faire revenir au dépôt. En dessous : les colis déjà swappés, avec « Copier pour ZR ».",
+    "bloques": "Colis sans nouveau statut depuis plusieurs jours (Préférences). Appelez la société, le livreur ou le client, puis dites ce que vous avez fait. Sans nouvelles 2 jours plus tard : une réclamation part toute seule (sociétés avec API)."
   },
   "empty": {
     "alertes": "Aucune alerte à traiter.",
     "traites": "Aucune alerte traitée en cours.",
     "livres": "Aucun colis livré ces 30 derniers jours.",
     "annules": "Aucun colis annulé en retour.",
-    "swap": "Aucun colis annulé chez ZR ou un livreur pour le moment."
+    "swap": "Aucun colis annulé chez ZR ou un livreur pour le moment.",
+    "bloques": "Aucun colis bloqué 👍"
   },
   "parcels": "{{count}} colis",
   "toSwap": "Colis à swapper",
@@ -611,5 +615,30 @@
     "otherVariant": "autre variante",
     "okSwap": "Perdu + swapper vers {{ref}}",
     "swapFee": "+ frais de swap {{v}}"
+  },
+  "stuck": {
+    "days": "Sans nouvelles · {{n}} j",
+    "done_relance": "Relancé",
+    "done_claim": "Réclamation ouverte",
+    "done_client": "Client rappelé",
+    "autoNow": "Réclamation auto aujourd’hui",
+    "autoIn": "Réclamation auto dans {{n}} j",
+    "title": "Colis bloqué {{ref}}",
+    "what": "Ce que vous avez fait",
+    "act_relance": "Relancé la société / le livreur",
+    "act_claim": "Ouvrir une réclamation",
+    "act_client": "Client rappelé",
+    "claimHint": "Une réclamation « en retard » part par le système de la société quand elle en a un ; sinon le message est prêt à envoyer.",
+    "notePh": "Ex. : ZR dit qu’il sort demain",
+    "ok": "Enregistrer",
+    "btn": "Traiter",
+    "saved": "{{ref}} : noté",
+    "next": "Bloqué suivant"
+  },
+  "stuckPref": {
+    "t": "Colis bloqué après",
+    "hint": "Sans nouveau statut de la société ou du livreur pendant ces jours : le colis va dans Suivi › Bloqués. 2 jours plus tard, une réclamation part toute seule.",
+    "days": "jours",
+    "sum": "Bloqué après {{n}} j"
   }
 }

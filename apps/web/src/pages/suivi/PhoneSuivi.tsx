@@ -11,6 +11,7 @@ import { useAction, useRpc } from '../../lib/query';
 import { Icon } from '../../ui/kit';
 import { Sheet, Tiles } from '../../ui/Sheet';
 import { Modal } from '../../ui/modal';
+import { StuckChips } from './Stuck';
 import { toast } from '../../ui/toast';
 import { eventText } from '../orders/OrderCard';
 import { ClaimRow, RemindApiModal, SendModal, useTarget } from './Claims';
@@ -21,7 +22,7 @@ import { ChangeKind, ChangeSheet, CourierPanel, useParcelInfo } from './CourierP
 import { useBackLayer } from '../../lib/backLayer';
 
 export type AlertClock = { kind: 'call' | 'solve'; dueAt: string; left: number; state: 'ok' | 'soon' | 'late' };
-export type PExtra = { motif?: { outcome: 'resolved' | 'lost'; label: string } | null; clock?: AlertClock | null; tries?: AlertTries | null; companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
+export type PExtra = { stuck?: import('./Stuck').StuckInfo | null; motif?: { outcome: 'resolved' | 'lost'; label: string } | null; clock?: AlertClock | null; tries?: AlertTries | null; companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
 
 /** Where the parcel is: 0 shipped, 1 on the road, 2 stopped (alert, failed, return…), 3 delivered. */
 function stageOf(o: Order): { at: number; stop: boolean } {
@@ -108,6 +109,11 @@ export function ParcelCards({ rows, extra, reasonOf, empty, onOpen }: { rows: Or
               {x?.motif && o.followStatus !== 'alert' && (
                 <div className="pxs-clk">
                   <MotifChip m={x.motif} />
+                </div>
+              )}
+              {x?.stuck && (
+                <div className="pxs-clk">
+                  <StuckChips s={x.stuck} />
                 </div>
               )}
               {x?.clock && (
@@ -260,8 +266,9 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose, onSkip }: 
         )}
         <CoBadge o={o} x={x} />
       </header>
-      {x?.clock && o.followStatus === 'alert' && (
+      {((x?.clock && o.followStatus === 'alert') || x?.stuck) && (
         <div className="pxs-clkbar">
+          <StuckChips s={x.stuck} />
           <ClockChip c={x.clock} />
           <TriesChip tr={x.tries} />
         </div>

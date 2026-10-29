@@ -128,7 +128,8 @@ test('« Alerte suivante »: the oldest alert, locked 15 minutes to the agent; h
   assert.equal(r6.id, b, 'his own parcel first');
   // nothing left
   const r7 = (await call('suivi.next', suivi, { skip: [a, b] })) as any;
-  assert.equal(r7.id, null);
+  assert.notEqual(r7.kind, 'alert', 'no alert left (then the Bloqués come)');
+  if (r7.id) await call('suivi.release', suivi, { id: r7.id });
 });
 
 test('the clock of an alert: the first call within 2 working hours, then solved within 24; late alerts counted for the manager', async () => {
@@ -281,4 +282,57 @@ test('« Perdu » with a swap: before the return, the parcel goes to a waiting o
   assert.deepEqual([rb.follow_status, rb.sub_status], ['out_for_delivery', 'livraison_swappe'], 'the new customer gets the parcel');
   const ev = (await db.query(`SELECT from_value, to_value FROM order_events WHERE order_id = $1 AND kind = 'suivi_motif'`, [a]))[0];
   assert.deepEqual([ev.from_value, ev.to_value], ['lost', 'refused']);
+});
+
+test('Bloqués: no new status for 3 days; the agent says what he did; 2 days later a claim by itself (company with an API)', async () => {
+  const suivi = await as(EMAILS.suivi);
+  // nothing left in alert, so « Alerte suivante » gives the Bloqués
+  await db.query(`UPDATE orders SET follow_status = 'out_for_delivery' WHERE follow_status = 'alert'`);
+  const zr = Number((await db.query(`SELECT id FROM delivery_companies WHERE kind = 'zr' LIMIT 1`))[0].id);
+  const mk = async (daysAgo: number, company?: number) => {
+    const id = await onRoad();
+    await db.query(`DELETE FROM order_events WHERE order_id = $1 AND kind IN ('follow_status', 'suivi_stuck')`, [id]);
+    await db.query(`DELETE FROM claims WHERE order_id = $1`, [id]);
+    await db.query(
+      `UPDATE orders SET shipped_at = now() - make_interval(days => $2), ext_status_at = now() - make_interval(days => $2), tracking = COALESCE(tracking, 'TRK' || id), company_id = COALESCE($3, company_id), locked_by = NULL, locked_until = NULL, follow_agent_id = NULL WHERE id = $1`,
+      [id, daysAgo, company ?? null],
+    );
+    return id;
+  };
+  const fresh = await mk(1);
+  const four = await mk(4);
+  const six = await mk(6, zr);
+  const l = (await call('suivi.list', suivi, { tab: 'bloques', pageSize: 500 })) as any;
+  const ids = l.rows.map((o: any) => o.id);
+  assert.ok(ids.includes(four) && ids.includes(six) && !ids.includes(fresh), 'only after 3 days without news');
+  assert.equal(l.extra[six].stuck.days, 6);
+  assert.equal(l.extra[six].stuck.autoClaimIn, 0, 'ZR: due now');
+  const c = (await call('suivi.counts', suivi, {})) as any;
+  assert.ok(c.bloques >= 2 && c.bloquesTodo >= 2);
+  // « Alerte suivante » with no alert: the longest without news
+  const n = (await call('suivi.next', suivi, { skip: [] })) as any;
+  assert.equal(n.kind, 'stuck');
+  assert.ok(n.extra.stuck.days >= 4);
+  await call('suivi.release', suivi, { id: n.id });
+  // the agent called the company: handled (not offered again), still listed
+  await call('suivi.stuckDone', suivi, { id: four, action: 'relance', note: 'ZR dit demain' });
+  const l2 = (await call('suivi.list', suivi, { tab: 'bloques', pageSize: 500 })) as any;
+  assert.equal(l2.extra[four].stuck.handled, 'relance');
+  const n2 = (await call('suivi.next', suivi, { skip: [six] })) as any;
+  assert.notEqual(n2.id, four);
+  if (n2.id) await call('suivi.release', suivi, { id: n2.id });
+  // the sync's step: a claim « en retard » by itself for the ZR parcel 6 days without news (once)
+  const admin3 = await as(EMAILS.admin);
+  const { stuckAutoClaims } = await import('../modules/suivi');
+  const r1 = await stuckAutoClaims(admin3);
+  assert.ok(r1.made >= 1, r1.errors.join(' | '));
+  const cl = (await db.query(`SELECT reason FROM claims WHERE order_id = $1`, [six]));
+  assert.deepEqual(cl.map((x: any) => x.reason), ['late']);
+  const r2 = await stuckAutoClaims(admin3);
+  assert.equal((await db.query(`SELECT count(*)::int AS n FROM claims WHERE order_id = $1`, [six]))[0].n, 1, 'once');
+  assert.ok(r2.made >= 0);
+  // a new status from the company: no longer stuck
+  await db.query(`UPDATE orders SET ext_status_at = now() WHERE id = $1`, [four]);
+  const l3 = (await call('suivi.list', suivi, { tab: 'bloques', pageSize: 500 })) as any;
+  assert.ok(!l3.rows.some((o: any) => o.id === four));
 });

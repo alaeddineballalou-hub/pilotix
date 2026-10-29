@@ -845,6 +845,8 @@ export const deliveryProcs = {
     await step('Demandes de modification', () => import('./parcels').then((m) => m.syncChanges(ctx)), null);
     await step('Sacs d’enlèvement', () => import('./pickup').then((m) => m.syncBags(ctx, i.companyId)), null);
     // the companies' payments (ZR): demande de paiement when money is ready, payments imported into the caisse
+    // Suivi › Bloqués: a parcel still without news 2 days after it was « bloqué »: a claim to its company by itself
+    if (!i.fast && !i.companyId && ctx.session.isAdmin) await step('Bloqués : réclamations', () => import('./suivi').then((m) => m.stuckAutoClaims(ctx)), null);
     const payments = i.companyId || !ctx.session.isAdmin ? [] : await step('Paiements des sociétés', () => import('./courierpay').then((m) => m.payRunAll(ctx)), [] as any[]);
     return {
       companies: out,

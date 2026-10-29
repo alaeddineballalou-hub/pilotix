@@ -338,7 +338,7 @@ export interface OrderEvent {
   at: string;
   userId: number | null;
   userName: string | null;
-  kind: 'created' | 'conf_status' | 'follow_status' | 'note' | 'call' | 'edit' | 'assign' | 'company' | 'cashed' | 'sub_status' | 'chat' | 'suivi_motif';
+  kind: 'created' | 'conf_status' | 'follow_status' | 'note' | 'call' | 'edit' | 'assign' | 'company' | 'cashed' | 'sub_status' | 'chat' | 'suivi_motif' | 'suivi_stuck';
   fromValue: string | null;
   toValue: string | null;
   note: string | null;

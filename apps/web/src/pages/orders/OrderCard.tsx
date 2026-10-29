@@ -483,6 +483,8 @@ export function eventText(t: (k: string, o?: any) => string, e: OrderEvent, user
       return `${t('orders.card.ev.company')} : ${e.fromValue ? `${company(e.fromValue)} → ` : ''}${company(e.toValue)}`;
     case 'sub_status':
       return t('orders.card.ev.sub_status') + (e.toValue ?? '—');
+    case 'suivi_stuck':
+      return e.note ?? t('orders.card.ev.suivi_stuck');
     case 'suivi_motif':
       return t(`orders.card.ev.motif_${e.fromValue === 'lost' ? 'lost' : 'resolved'}`, { m: e.note ?? e.toValue ?? '' });
     case 'chat': {

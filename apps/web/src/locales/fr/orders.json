@@ -360,7 +360,8 @@
       "sub_status": "Suivi : ",
       "chat": "Message",
       "motif_resolved": "Suivi : traité · Résolu · {{m}}",
-      "motif_lost": "Suivi : traité · Perdu · {{m}}"
+      "motif_lost": "Suivi : traité · Perdu · {{m}}",
+      "suivi_stuck": "Suivi : colis bloqué traité"
     },
     "addNote": "Ajouter une note",
     "noteSaved": "Note ajoutée",

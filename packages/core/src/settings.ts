@@ -111,6 +111,8 @@ export interface SettingsMap {
     suiviClock: { firstHours: number; solveHours: number };
     /** Suivi: the calls before « Client annule » (unless the customer himself cancels), at least `gapMinutes` apart */
     suiviTries: { calls: number; gapMinutes: number };
+    /** Suivi › Bloqués: a parcel with no new status for `days` days; 2 days later, a claim by itself (companies with an API) */
+    suiviStuck: { days: number };
   };
 }
 
@@ -177,6 +179,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
     livreurAlerts: ['failed:no_answer', 'failed:absent', 'returning:refused', 'returning:unreachable'],
     suiviClock: { firstHours: 2, solveHours: 24 },
     suiviTries: { calls: 3, gapMinutes: 60 },
+    suiviStuck: { days: 3 },
   },
 };
 

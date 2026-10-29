@@ -6,7 +6,8 @@
     "livres": "Delivered",
     "annules": "Cancelled",
     "reclamation": "Claims",
-    "swap": "Swap"
+    "swap": "Swap",
+    "bloques": "Stuck"
   },
   "title": "Delivery follow-up",
   "sync": "Update from the couriers",
@@ -18,7 +19,8 @@
     "alertes": "to handle",
     "traites": "back on the road after the alert",
     "livres": "last 30 days",
-    "annules": "returning + swapped"
+    "annules": "returning + swapped",
+    "bloques": "no news"
   },
   "help": {
     "enlivraison": "Parcels out for delivery, and those with a failed attempt. A status chosen in Preferences › Suivi alerts sends them to Alerts. “Alert” does it by hand.",
@@ -26,14 +28,16 @@
     "traites": "Alerts already handled: the parcel is back on the road. It leaves this list once delivered or cancelled.",
     "livres": "Parcels delivered in the last 30 days.",
     "annules": "Parcels cancelled by the customer, still with the courier or the livreur, on their way back to the depot. To give one directly to another customer: Suivi → Swap.",
-    "swap": "Give a cancelled parcel directly to another customer instead of bringing it back to the depot. Below: parcels already swapped, with « Copy for ZR »."
+    "swap": "Give a cancelled parcel directly to another customer instead of bringing it back to the depot. Below: parcels already swapped, with « Copy for ZR ».",
+    "bloques": "Parcels with no new status for several days (Preferences). Call the company, the livreur or the customer, then say what you did. Still no news 2 days later: a claim goes by itself (companies with an API)."
   },
   "empty": {
     "alertes": "No alert to handle.",
     "traites": "No handled alert in progress.",
     "livres": "No parcel delivered in the last 30 days.",
     "annules": "No cancelled parcel on its way back.",
-    "swap": "No cancelled parcel with a courier or a livreur right now."
+    "swap": "No cancelled parcel with a courier or a livreur right now.",
+    "bloques": "No stuck parcel 👍"
   },
   "parcels": "{{count}} parcels",
   "toSwap": "Parcels to swap",
@@ -611,5 +615,30 @@
     "otherVariant": "other variant",
     "okSwap": "Lost + swap to {{ref}}",
     "swapFee": "+ swap fee {{v}}"
+  },
+  "stuck": {
+    "days": "No news · {{n}} d",
+    "done_relance": "Followed up",
+    "done_claim": "Claim opened",
+    "done_client": "Customer called",
+    "autoNow": "Auto claim today",
+    "autoIn": "Auto claim in {{n}} d",
+    "title": "Stuck parcel {{ref}}",
+    "what": "What you did",
+    "act_relance": "Followed up the company / livreur",
+    "act_claim": "Open a claim",
+    "act_client": "Called the customer",
+    "claimHint": "A “late” claim goes through the company's system when it has one; otherwise the message is ready to send.",
+    "notePh": "E.g.: ZR says it goes out tomorrow",
+    "ok": "Save",
+    "btn": "Handle",
+    "saved": "{{ref}}: noted",
+    "next": "Next stuck parcel"
+  },
+  "stuckPref": {
+    "t": "Parcel stuck after",
+    "hint": "With no new status from the company or the livreur for these days, the parcel goes to Suivi › Stuck. 2 days later, a claim goes by itself.",
+    "days": "days",
+    "sum": "Stuck after {{n}} d"
   }
 }

@@ -94,7 +94,7 @@ export function Preferences() {
     ...(alerts.data ?? []).filter((c) => c.statuses.length).map((c) => `${c.name} : ${chipsOf(c).filter((x) => x.keys.some((k) => coOn(c).includes(k))).length}`),
     `${t('livraison.prefs.alerts.private')} : ${v.livreurAlerts.length}`,
   ].join(' · ');
-  const clockSum = `${t('livraison.prefs.alerts.clockSum', { first: v.suiviClock.firstHours, solve: v.suiviClock.solveHours })} · ${t('suivi.tries.sum', { n: v.suiviTries.calls, gap: v.suiviTries.gapMinutes })}`;
+  const clockSum = `${t('livraison.prefs.alerts.clockSum', { first: v.suiviClock.firstHours, solve: v.suiviClock.solveHours })} · ${t('suivi.tries.sum', { n: v.suiviTries.calls, gap: v.suiviTries.gapMinutes })} · ${t('suivi.stuckPref.sum', { n: v.suiviStuck.days })}`;
   const set = (p: Partial<Prefs>) => setDraft({ ...v, ...p });
   const backups = (companies.data ?? []).filter((c) => c.active && c.kind !== 'own');
   const backupName = backups.find((c) => c.id === v.privateBackup.companyId)?.name ?? '';
@@ -117,7 +117,7 @@ export function Preferences() {
       value: v.privateBackup.on ? t('livraison.prefs.sum.backupOn', { hours: v.privateBackup.hours, company: backupName || '…' }) : t('livraison.prefs.sum.backupOff'),
       changed: v.privateBackup.on !== rec.privateBackup.on,
     },
-    { icon: 'route', label: t('livraison.prefs.alerts.title'), value: `${clockSum} · ${alertSum}`, changed: JSON.stringify([...v.livreurAlerts].sort()) !== JSON.stringify([...rec.livreurAlerts].sort()) || JSON.stringify(v.suiviClock) !== JSON.stringify(rec.suiviClock) || JSON.stringify(v.suiviTries) !== JSON.stringify(rec.suiviTries) },
+    { icon: 'route', label: t('livraison.prefs.alerts.title'), value: `${clockSum} · ${alertSum}`, changed: JSON.stringify([...v.livreurAlerts].sort()) !== JSON.stringify([...rec.livreurAlerts].sort()) || JSON.stringify(v.suiviClock) !== JSON.stringify(rec.suiviClock) || JSON.stringify(v.suiviTries) !== JSON.stringify(rec.suiviTries) || v.suiviStuck.days !== rec.suiviStuck.days },
     { icon: 'alert', label: t('livraison.prefs.noStock'), value: t('livraison.prefs.sum.noStock', { count: v.noStockDays }), changed: v.noStockDays !== rec.noStockDays },
   ];
 
@@ -259,6 +259,25 @@ export function Preferences() {
           <section className="pf-group" aria-labelledby="pf-al-h">
             <h3 id="pf-al-h">{t('livraison.prefs.alerts.title')}</h3>
             <p className="pf-lead">{t('livraison.prefs.alerts.hint')}</p>
+            <div className="pf-row">
+              <span className="pf-text">
+                <b>{t('suivi.stuckPref.t')}</b>
+                <small>{t('suivi.stuckPref.hint')}</small>
+              </span>
+              <label className="pf-num">
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  step={1}
+                  inputMode="numeric"
+                  aria-label={t('suivi.stuckPref.t')}
+                  value={v.suiviStuck.days}
+                  onChange={(e) => set({ suiviStuck: { days: Math.max(1, Math.min(30, Math.round(Number(e.target.value) || 1))) } })}
+                />
+                <span>{t('suivi.stuckPref.days')}</span>
+              </label>
+            </div>
             <div className="pf-row">
               <span className="pf-text">
                 <b>{t('suivi.tries.calls')}</b>
