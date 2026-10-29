@@ -1,7 +1,8 @@
 // Pilot Auto Assign › « À corriger »: what keeps the rules from working.
 //  - Communes: an order's commune is matched to the official list by name (accents, spaces, dashes ignored) or its
-//    Arabic name; one written another way (« Bab Ezzouar ») is listed with the closest official name — corrected once,
-//    it is remembered (commune_aliases) and the waiting orders with it are fixed (Pilot chooses again for them).
+//    Arabic name, then by sound (« Bab Ezzouar » = « Bab Azzouar », when only one commune fits: listed under « Reconnues
+//    toutes seules » so a wrong match can be changed); one Pilotix cannot match is listed with the closest official
+//    name — corrected once, it is remembered (commune_aliases) and the waiting orders with it are fixed.
 //  - A company with an API whose tariffs were never imported (Pilot cannot know where it delivers).
 //  - Where a company delivers comes from the company itself (its tariffs and bureaus), imported again every night and
 //    with « Mettre à jour maintenant ». Our own livreurs' zone is set when they are set up (Livreurs).
@@ -29,13 +30,58 @@ function dist(a: string, b: string): number {
   return prev[n];
 }
 
-/** The official commune an order's text names in this wilaya (null: not recognized), the shop's corrections included. */
-export async function canonCommune(db: Db, wilayaId: number | null, text: string | null | undefined): Promise<string | null> {
+/** A commune name as it sounds: the usual ways of writing Algerian names in Latin letters (e/a/i/o/u, ou/u, dj/j,
+ *  sh/ch, q/k, double letters, « El »/« Al ») or in Arabic (hamza, ta marbuta, alif maqsura, harakat, « ال ») all give
+ *  the same key: « Bab Ezzouar », « Bab Azzouar » and « Bab Ezouar » are one name. */
+export function soundKey(s: string | null | undefined): string {
+  const raw = String(s ?? '').toLowerCase();
+  if (/[\u0600-\u06ff]/.test(raw)) {
+    return raw
+      .replace(/[\u064b-\u0652\u0640]/g, '')
+      .replace(/[أإآٱ]/g, 'ا')
+      .replace(/ة/g, 'ه')
+      .replace(/ى/g, 'ي')
+      .replace(/(^|\s)ال/g, '$1')
+      .replace(/[^\u0621-\u064a]/g, '')
+      .replace(/(.)\1+/g, '$1');
+  }
+  return normCommune(raw.replace(/(^|[\s-])(el|al|l)[\s-]+/g, '$1'))
+    .replace(/dj/g, 'j')
+    .replace(/sh/g, 'ch')
+    .replace(/q/g, 'k')
+    .replace(/[aeiouy]/g, '')
+    .replace(/(.)\1+/g, '$1');
+}
+
+/** The official commune a name is surely meant for, matched by Pilotix itself: the same sound key, or one letter off
+ *  (names of 6 letters or more) — only when exactly one commune of the wilaya fits, else null (left to « À corriger »). */
+export function autoCommune(wilayaId: number, text: string | null | undefined): string | null {
+  const k = soundKey(text);
+  if (!k || k.length < 2) return null;
+  const list = communesOf(wilayaId);
+  const same = [...new Set(list.filter((c) => soundKey(c[1]) === k || (c[2] && soundKey(c[2]) === k)).map((c) => c[1]))];
+  if (same.length) return same.length === 1 ? same[0] : null;
+  const n = normCommune(text);
+  if (n.length < 6 || /[\u0600-\u06ff]/.test(n)) return null;
+  const near = [...new Set(list.filter((c) => dist(n, normCommune(c[1])) <= 1).map((c) => c[1]))];
+  return near.length === 1 ? near[0] : null;
+}
+
+/** How an order's commune is recognized: the official name (French or Arabic), the shop's own correction, or matched by Pilotix. */
+export async function matchCommune(db: Db, wilayaId: number | null, text: string | null | undefined): Promise<{ commune: string; how: 'exact' | 'alias' | 'auto' } | null> {
   const n = normCommune(text);
   if (!wilayaId || !n) return null;
   const hit = communesOf(wilayaId).find((c) => normCommune(c[1]) === n || (c[2] && normCommune(c[2]) === n));
-  if (hit) return hit[1];
-  return ((await db.query('SELECT commune FROM commune_aliases WHERE wilaya_id = $1 AND alias = $2', [wilayaId, n]))[0]?.commune as string | undefined) ?? null;
+  if (hit) return { commune: hit[1], how: 'exact' };
+  const alias = (await db.query('SELECT commune FROM commune_aliases WHERE wilaya_id = $1 AND alias = $2', [wilayaId, n]))[0]?.commune as string | undefined;
+  if (alias) return { commune: alias, how: 'alias' };
+  const auto = autoCommune(wilayaId, text);
+  return auto ? { commune: auto, how: 'auto' } : null;
+}
+
+/** The official commune an order's text names in this wilaya (null: not recognized). */
+export async function canonCommune(db: Db, wilayaId: number | null, text: string | null | undefined): Promise<string | null> {
+  return (await matchCommune(db, wilayaId, text))?.commune ?? null;
 }
 
 /** The closest official commune (a suggestion for « À corriger »), or null when nothing is close. */
@@ -82,22 +128,27 @@ async function toFix(ctx: Ctx) {
       ORDER BY id DESC LIMIT 5000`,
     [since],
   );
-  const groups = new Map<string, { wilayaId: number; commune: string; count: number; orderIds: number[] }>();
-  const known = new Map<string, boolean>();
+  const groups = new Map<string, { wilayaId: number; commune: string; count: number; orderIds: number[]; to: string | null }>();
+  const seen = new Map<string, Awaited<ReturnType<typeof matchCommune>>>();
   for (const r of rows) {
     const w = num(r.wilaya_id);
     const key = `${w}|${normCommune(r.commune)}`;
-    if (!known.has(key)) known.set(key, !!(await canonCommune(ctx.db, w, r.commune)));
-    if (known.get(key)) continue;
-    const g = groups.get(key) ?? { wilayaId: w, commune: String(r.commune).trim(), count: 0, orderIds: [] };
+    if (!seen.has(key)) seen.set(key, await matchCommune(ctx.db, w, r.commune));
+    const m = seen.get(key);
+    if (m && m.how !== 'auto') continue;
+    const g = groups.get(key) ?? { wilayaId: w, commune: String(r.commune).trim(), count: 0, orderIds: [], to: m?.commune ?? null };
     g.count++;
     if (g.orderIds.length < 5) g.orderIds.push(num(r.id));
     groups.set(key, g);
   }
-  const communes = [...groups.values()].sort((a, b) => b.count - a.count).slice(0, 200).map((g) => ({ ...g, suggestion: closestCommune(g.wilayaId, g.commune) }));
+  const all = [...groups.values()].sort((a, b) => b.count - a.count);
+  // not recognized: to correct by hand (the closest name suggested)
+  const communes = all.filter((g) => !g.to).slice(0, 200).map(({ to: _, ...g }) => ({ ...g, suggestion: closestCommune(g.wilayaId, g.commune) }));
+  // matched by Pilotix itself: shown so a wrong match can be changed
+  const auto = all.filter((g) => g.to).slice(0, 200).map(({ to, ...g }) => ({ ...g, to: to as string }));
   // a company with an API whose tariffs were never imported: Pilot cannot know where it delivers
   const prices = (await companiesWithCoverage(ctx.db)).filter((c) => c.active && c.hasApi && !c.hasFees).map((c) => ({ companyId: c.id, name: c.name }));
-  return { communes, prices, refresh: await getSetting(ctx.db, 'coverageRefresh') };
+  return { communes, auto, prices, refresh: await getSetting(ctx.db, 'coverageRefresh') };
 }
 
 /** Tariffs and bureaus of every active company with an API, imported again (each company on its own: one failing does not stop the others). */

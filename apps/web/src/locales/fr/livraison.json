@@ -494,7 +494,7 @@
     "reset_one": "Remettre la liste de la société ({{count}} changement)",
     "reset_other": "Remettre la liste de la société ({{count}} changements)",
     "fixT": "À corriger",
-    "fixHint": "Les communes écrites autrement sur les commandes en attente : vos règles ne les reconnaissent pas. Corrigez une fois, Pilotix s’en souvient.",
+    "fixHint": "Pilotix reconnaît seul les communes écrites un peu autrement (« Bab Ezzouar » = « Bab Azzouar »). Celles-ci, il n’a pas pu : choisissez la bonne une fois, Pilotix s’en souvient.",
     "allGood": "Rien à corriger.",
     "orders_one": "{{count}} commande en attente",
     "orders_other": "{{count}} commandes en attente",
@@ -507,6 +507,11 @@
     "noFees": "Tarifs pas encore importés : touchez « Mettre à jour maintenant » ou remplissez-les à la main.",
     "missing": "Allumée sans prix : {{list}}",
     "toPrices": "Voir les tarifs",
-    "offShort": "éteinte"
+    "offShort": "éteinte",
+    "autoT_one": "{{count}} commune reconnue toute seule",
+    "autoT_other": "{{count}} communes reconnues toutes seules",
+    "autoHint": "Pilotix a trouvé la bonne commune. Si c’est faux, choisissez la bonne et touchez « Changer ».",
+    "change": "Changer",
+    "auto": "auto"
   }
 }
