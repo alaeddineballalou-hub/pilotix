@@ -1,0 +1,23 @@
+# Temporary (for Claude): can mail apps fetch the e-mail logo? Through Cloudflare (as Gmail's image proxy would) and
+# straight from the server.
+name: Origin check (temporary, for Claude)
+on:
+  push:
+    branches: ['check/origin']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: The e-mail logo
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          IP=$(getent ahostsv4 "$HOST" | awk 'NR==1{print $1}'); echo "::add-mask::$IP"
+          U=https://pilotix.online/email-logo.png
+          for ua in "Mozilla/5.0 (Windows NT 5.1; rv:11.0) Gecko Firefox/11.0 (via ggpht.com GoogleImageProxy)" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36" "curl/8"; do
+            r=$(curl -s -m 20 -A "$ua" -o /tmp/l -w '%{http_code} %{content_type} %{size_download}B' "$U"); echo "::notice title=Cloudflare, ${ua:0:40}::$r $(head -c 60 /tmp/l | tr -cd '[:print:]')"
+          done
+          r=$(curl -s -m 20 --resolve "pilotix.online:443:$IP" -o /tmp/d -w '%{http_code} %{content_type} %{size_download}B' "$U"); echo "::notice title=Straight from the server::$r"
