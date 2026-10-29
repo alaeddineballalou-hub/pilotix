@@ -38,8 +38,11 @@ jobs:
       - name: E-mails work on the server
         continue-on-error: true
         run: |
-          tail -n 15 update.log | sed 's/^/::notice title=Server update::/'
-          grep -h '^E-mail:' update.log
+          # the e-mail line first, as its own note (GitHub shows only 10 notes per step: the last lines were cut off)
+          # (the e-mail account's address is hidden: the run's notes can be seen by anyone while the code is public)
+          line=$(grep -h -A1 '^E-mail:' update.log | tr '\n' ' ' | sed -E 's/  +/ /g; s/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/***@***/g')
+          if grep -q '^E-mail: OK' update.log; then echo "::notice title=E-mail::$line"; else echo "::warning title=E-mail::${line:-no « E-mail: » line in the update}"; fi
+          grep -v '^E-mail:' update.log | tail -n 8 | sed -E 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/***@***/g; s/^/::notice title=Server update::/'
           grep -q '^E-mail: OK' update.log
 
       # the server checked itself during the update (on the server, before Cloudflare): the proof the new version runs,
