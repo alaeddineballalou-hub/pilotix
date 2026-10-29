@@ -22,6 +22,7 @@ import {
   Page,
   SALES_CHANNELS,
 } from '@pilotix/shared';
+import { officialCommune } from './coverage';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, Ctx, forbidden, hasRole, notFound, proc } from '../rpc';
@@ -460,6 +461,12 @@ export async function createOrder(
   if (!phone) throw bad('Numéro de téléphone algérien invalide');
   const phone2 = input.phone2 ? normalizePhone(input.phone2) : null;
   if (input.confirm && !hasRole(ctx.session, 'confirmation')) throw forbidden();
+  // the commune is always an official one: written another way (a Google Sheet, the AI seller, an API) Pilotix matches
+  // it by sound; none fits → left empty, the agent confirms it with the customer on the call (a bureau order keeps it)
+  if (input.wilayaId && String(input.commune ?? '').trim()) {
+    const c = officialCommune(input.wilayaId, input.commune);
+    if (c || !input.isStopdesk) input = { ...input, commune: c ?? '' };
+  }
   if (input.confirm && !input.isStopdesk && !String(input.commune ?? '').trim()) throw bad('Indiquez la commune avant de confirmer');
   const me = ctx.session.profile.id;
 

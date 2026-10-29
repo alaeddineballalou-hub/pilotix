@@ -175,7 +175,7 @@ test('only admins and the kinds of people ticked in Préférences write the rule
 });
 
 test('« Livraison privée » waiting too long in « À attribuer » goes to the backup company (when it delivers there)', async () => {
-  await save({ mode: 'auto', rules: [rule('r1', { wilayas: [16], communes: [{ w: 16, c: 'Bab Ezzouar' }], to: own, strict: true })] });
+  await save({ mode: 'auto', rules: [rule('r1', { wilayas: [16], communes: [{ w: 16, c: 'Bab Azzouar' }], to: own, strict: true })] });
   const a = await order(16, 'Bab Ezzouar');
   assert.equal(Number((await row(a.id)).company_id), own);
   await call('orders.setConf', admin, { ids: [a.id], status: 'confirmed' });

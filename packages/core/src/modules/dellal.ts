@@ -935,7 +935,7 @@ async function demoBrain(ctx: Ctx, req: AiRequest): Promise<AiResponse> {
       const fee = (await clientFee(ctx.db, place.wilayaId, /bureau|stop ?desk/i.test(all))) ?? 0;
       return say(`Récap : ${product.name}${variant.title ? ` ${variant.title}` : ''} à ${variant.price} DA + livraison ${fee} DA à ${place.commune ?? place.wilaya} = ${variant.price + fee} DA, au nom de ${name} (${ph}). Je confirme ?`);
     }
-    return use('create_order', { customer_name: name, phone: ph, wilaya: String(place.wilayaId), commune: place.commune ?? place.wilaya, stopdesk: /bureau|stop ?desk/i.test(all), items: [{ product_id: product.product_id, variant_id: variant.variant_id, qty: 1 }] });
+    return use('create_order', { customer_name: name, phone: ph, wilaya: String(place.wilayaId), commune: place.commune ?? '', stopdesk: /bureau|stop ?desk/i.test(all), items: [{ product_id: product.product_id, variant_id: variant.variant_id, qty: 1 }] });
   }
   if (place && !msgs.some((m) => Array.isArray(m.content)) && /livraison|tawsil|ch7al|combien|prix|التوصيل/i.test(text)) return use('delivery_fee', { wilaya: String(place.wilayaId), commune: place.commune ?? undefined });
   if (product && !variant && product.variants.length > 1) {

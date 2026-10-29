@@ -494,24 +494,11 @@
     "reset_one": "Back to the company's list ({{count}} change)",
     "reset_other": "Back to the company's list ({{count}} changes)",
     "fixT": "To fix",
-    "fixHint": "Pilotix recognizes communes written a bit differently by itself (“Bab Ezzouar” = “Bab Azzouar”). It could not for these: pick the right one once, Pilotix remembers.",
+    "fixHint": "What keeps Pilot from choosing well.",
     "allGood": "Nothing to fix.",
-    "orders_one": "{{count}} waiting order",
-    "orders_other": "{{count}} waiting orders",
-    "isWhich": "Which official commune?",
-    "pick": "Choose the commune…",
-    "suggested": "suggested",
-    "fix": "Fix",
-    "fixed_one": "{{count}} order fixed → {{c}}.",
-    "fixed_other": "{{count}} orders fixed → {{c}}.",
     "noFees": "Rates not imported yet: tap “Update now” or fill them in by hand.",
     "missing": "On without a price: {{list}}",
     "toPrices": "See the rates",
-    "offShort": "off",
-    "autoT_one": "{{count}} commune matched automatically",
-    "autoT_other": "{{count}} communes matched automatically",
-    "autoHint": "Pilotix found the right commune. If it is wrong, pick the right one and tap “Change”.",
-    "change": "Change",
-    "auto": "auto"
+    "offShort": "off"
   }
 }

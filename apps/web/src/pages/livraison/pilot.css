@@ -226,11 +226,3 @@ html[data-theme="dark"] .pl-miss { background: rgba(247, 168, 35, .08); }
 .pl-fx-t small { color: var(--muted); font-size: 12.5px; }
 .pl-fx-sel select { min-height: 38px; min-width: 200px; font-weight: 700; }
 @media (max-width: 640px) { .pl-ref { align-items: flex-start; } .pl-fx-sel, .pl-fx-sel select { width: 100%; } .pl-fix .btn { flex: 1; } }
-.pl-auto { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 10px; }
-.pl-auto > summary { cursor: pointer; font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 6px; list-style: none; padding: 4px 0; }
-.pl-auto > summary::-webkit-details-marker { display: none; }
-.pl-auto > summary .bji { width: 16px; height: 16px; color: var(--ok, #16a34a); }
-.pl-auto > summary::after { content: '▾'; margin-inline-start: 4px; color: var(--muted); }
-.pl-auto[open] > summary::after { content: '▴'; }
-.pl-auto > small { display: block; margin: 2px 0 8px; }
-.pl-fix li.is-auto > .bji { color: var(--ok, #16a34a); }

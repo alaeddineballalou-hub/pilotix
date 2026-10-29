@@ -20,7 +20,7 @@ import { Db, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, proc } from '../rpc';
 import { getSetting, setSetting } from '../settings';
 import { serves } from './confirmcheck';
-import { canonCommune, servedWilayas } from './coverage';
+import { officialCommune, servedWilayas } from './coverage';
 import { asDepot, dispatchOrders, READY_SQL } from './dispatch';
 import { managers } from './livreur';
 import { addEvent } from './orders';
@@ -90,8 +90,8 @@ export async function pilotPick(db: Db, o: PickInput, cache: PickCache = {}): Pr
   const place = { wilayaId: o.wilayaId, isStopdesk: o.isStopdesk };
   const usable = new Set<number>();
   for (const to of new Set(cfg.rules.filter((r) => r.on).map((r) => r.to))) if (await canTake(db, to, place, cache)) usable.add(to);
-  // the commune as the official list writes it (a spelling corrected in « Couverture › À corriger » is recognized)
-  const commune = (await canonCommune(db, o.wilayaId, o.commune)) ?? o.commune;
+  // the commune as the official list writes it (written another way: matched by sound)
+  const commune = officialCommune(o.wilayaId, o.commune) ?? o.commune;
   const res = pickRule(cfg, { wilayaId: o.wilayaId, commune, productIds: o.productIds }, (r) => usable.has(r.to));
   if ('rule' in res) return { companyId: res.rule.to, by: res.rule.strict ? 'strict' : 'rule', rule: res.rule.id, why: null };
   if ('conflict' in res) return { companyId: null, by: 'none', rule: null, why: `conflict:${ruleNumber(cfg.rules, res.conflict[0])},${ruleNumber(cfg.rules, res.conflict[1])}` };

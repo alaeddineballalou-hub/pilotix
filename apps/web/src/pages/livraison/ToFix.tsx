@@ -1,12 +1,7 @@
-// Pilot Auto Assign › « À corriger »: communes Pilotix could not match on waiting orders (the closest official name
-// suggested; those it matched by itself listed under « reconnues toutes seules », to change if wrong; corrected once, remembered, the orders fixed and Pilot chooses again), companies whose tariffs were never
-// imported, and « Mettre à jour maintenant » (tariffs and bureaus from the companies' systems, also every night).
-import { communesOf } from '@pilotix/shared';
-import { useState } from 'react';
+// Pilot Auto Assign › « À corriger »: companies whose tariffs were never imported (Pilot cannot know where they
+// deliver), and « Mettre à jour maintenant » (tariffs and bureaus from the companies' systems, also every night).
 import { useTranslation } from 'react-i18next';
-import type { Out } from '../../lib/backend';
-import { when, wilaya } from '../../lib/format';
-import i18n from '../../lib/i18n';
+import { when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { Icon, Loading } from '../../ui/kit';
 
@@ -41,15 +36,12 @@ export function ToFix() {
       )}
       {!f ? (
         <Loading />
-      ) : !f.communes.length && !f.prices.length ? (
+      ) : !f.prices.length ? (
         <p className="pl-ok">
           <Icon name="checkcircle" /> {t('livraison.cov.allGood')}
         </p>
       ) : (
         <ul className="pl-fix">
-          {f.communes.map((c) => (
-            <CommuneFix key={`${c.wilayaId}|${c.commune}`} c={c} />
-          ))}
           {f.prices.map((p) => (
             <li key={p.companyId}>
               <Icon name="coins" />
@@ -64,51 +56,6 @@ export function ToFix() {
           ))}
         </ul>
       )}
-      {!!f?.auto.length && (
-        <details className="pl-auto">
-          <summary>
-            <Icon name="checkcircle" /> {t('livraison.cov.autoT', { count: f.auto.length })}
-          </summary>
-          <small className="muted">{t('livraison.cov.autoHint')}</small>
-          <ul className="pl-fix">
-            {f.auto.map((c) => (
-              <CommuneFix key={`${c.wilayaId}|${c.commune}`} c={{ ...c, suggestion: c.to }} auto />
-            ))}
-          </ul>
-        </details>
-      )}
     </section>
-  );
-}
-
-function CommuneFix({ c, auto }: { c: Omit<Out<'coverage.toFix'>['communes'][number], 'suggestion'> & { suggestion: string | null }; auto?: boolean }) {
-  const { t } = useTranslation();
-  const [to, setTo] = useState(c.suggestion ?? '');
-  const fix = useAction('coverage.fixCommune', { success: (r) => t('livraison.cov.fixed', { count: r.fixed, c: r.commune }) });
-  return (
-    <li className={auto ? 'is-auto' : undefined}>
-      <Icon name={auto ? 'checkcircle' : 'flag'} />
-      <span className="pl-fx-t">
-        <b>
-          « {c.commune} »{auto && <> → {c.suggestion}</>} · {wilaya(c.wilayaId)}
-        </b>
-        <small>{t('livraison.cov.orders', { count: c.count })}</small>
-      </span>
-      <label className="pl-fx-sel">
-        <span className="sr-only">{t('livraison.cov.isWhich')}</span>
-        <select value={to} onChange={(e) => setTo(e.target.value)}>
-          <option value="">{t('livraison.cov.pick')}</option>
-          {communesOf(c.wilayaId).map((x) => (
-            <option key={x[1]} value={x[1]}>
-              {i18n.language === 'ar' && x[2] ? x[2] : x[1]}
-              {x[1] === c.suggestion ? ` — ${auto ? t('livraison.cov.auto') : t('livraison.cov.suggested')}` : ''}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button type="button" className="btn small primary" disabled={!to || fix.isPending || (auto && to === c.suggestion)} onClick={() => fix.mutate({ wilayaId: c.wilayaId, from: c.commune, to })}>
-        {auto ? t('livraison.cov.change') : t('livraison.cov.fix')}
-      </button>
-    </li>
   );
 }
