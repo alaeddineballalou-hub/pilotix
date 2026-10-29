@@ -541,5 +541,7 @@
       "absent": "Ask {{co}} to deliver again"
     },
     "keep": "Keep the parcel"
-  }
+  },
+  "nextNone": "No more alerts to handle for now 👍",
+  "skipNext": "Skip ›"
 }

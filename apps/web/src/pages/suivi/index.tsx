@@ -1,6 +1,6 @@
 import type { Order } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
 import { when, wilayaName, syncProblems } from '../../lib/format';
@@ -297,6 +297,32 @@ function List({ tab }: { tab: ListTab }) {
   const [mode, setMode] = useViewMode('suivi');
   const cards = phone || mode === 'cards';
   const [openId, setOpenId] = useState<number | null>(null);
+  // « Alerte suivante »: the most urgent alert, taken (15 minutes) by this agent; when it leaves the alerts, the next one
+  const [focus, setFocus] = useState<{ id: number; x: Extra | null } | null>(null);
+  const [nexting, setNexting] = useState(false);
+  const skip = useRef<number[]>([]);
+  const nextAlert = async () => {
+    setNexting(true);
+    try {
+      const r = await rpc('suivi.next', { skip: skip.current.slice(-200), release: focus?.id ?? null });
+      if (!r.id) {
+        setFocus(null);
+        toast(t('suivi.nextNone'), 'ok');
+        return;
+      }
+      skip.current.push(r.id);
+      setFocus({ id: r.id, x: (r.extra as Extra | null) ?? null });
+    } catch (e: any) {
+      toast(e?.message ?? String(e), 'bad');
+    } finally {
+      setNexting(false);
+    }
+  };
+  const closeFocus = () => {
+    if (focus) rpc('suivi.release', { id: focus.id }).catch(() => {});
+    setFocus(null);
+    skip.current = [];
+  };
   const run = (o: Order, action: 'cancel' | 'delivered' | 'realert') =>
     act.mutate({ id: o.id, action }, { onSuccess: () => toast(t(`suivi.msg.${action === 'cancel' ? 'cancelled' : action}`, { ref: o.ref }), 'ok') });
 
@@ -348,6 +374,11 @@ function List({ tab }: { tab: ListTab }) {
       <div className="card-head">
         <h2>{tab === 'swap' ? t('suivi.toSwap') : t(`suivi.tabs.${tab}`)}</h2>
         <span className="muted small">{q.data ? t('suivi.parcels', { count: q.data.rows.length }) : ''}</span>
+        {tab === 'alertes' && !cards && !!q.data?.rows.length && (
+          <button type="button" className="btn primary sv-next" disabled={nexting} onClick={nextAlert}>
+            {t('suivi.ph.next')} <Icon name="chevr" />
+          </button>
+        )}
         {!phone && <ViewSwitch mode={mode} onChange={setMode} />}
       </div>
       {q.isLoading ? (
@@ -376,7 +407,7 @@ function List({ tab }: { tab: ListTab }) {
             <>
               <ParcelCards rows={rows} extra={extra} reasonOf={reasonOf} empty={t(`suivi.empty.${tab}`)} onOpen={setOpenId} />
               {tab === 'alertes' && rows.length > 0 && (
-                <button type="button" className="pxp-next" onClick={() => setOpenId(rows[0].id)}>
+                <button type="button" className="pxp-next" disabled={nexting} onClick={nextAlert}>
                   {t('suivi.ph.next')}
                   <Icon name="chevr" />
                 </button>
@@ -396,6 +427,21 @@ function List({ tab }: { tab: ListTab }) {
         })()
       ) : (
         <ParcelTable rows={q.data?.rows ?? []} extra={extra} actions={actions} empty={t(`suivi.empty.${tab}`)} />
+      )}
+      {focus && (
+        <FocusAlert
+          id={focus.id}
+          x={focus.x}
+          onLeft={nextAlert}
+          onClose={closeFocus}
+          actions={(o) => [
+            { key: 'treat', label: t('suivi.ph.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) },
+            { key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: focus.x?.companyKind === 'own' }) },
+            { key: 'cancel', label: t('suivi.ph.cancel'), tone: 'bad', run: () => setDlg({ kind: 'cancel', o }) },
+            { key: 'skip', label: t('suivi.skipNext'), run: () => void nextAlert() },
+          ]}
+          onClaim={agency ? undefined : (o) => setDlg({ kind: 'claim', o, toLivreur: focus.x?.companyKind === 'own' })}
+        />
       )}
       {dlg?.kind === 'treat' && (phone ? <TreatSheet o={dlg.o} reason={reasonOf(dlg.o, extra[dlg.o.id])} onClose={() => setDlg(null)} /> : <TreatModal o={dlg.o} reason={reasonOf(dlg.o, extra[dlg.o.id])} onClose={() => setDlg(null)} />)}
       {dlg?.kind === 'cancel' && phone && (
@@ -428,6 +474,19 @@ function List({ tab }: { tab: ListTab }) {
       {dlg?.kind === 'claim' && <NewClaimModal pre={dlg.o} toLivreur={dlg.toLivreur} reason="relivrer" details={reasonOf(dlg.o, extra[dlg.o.id]) ? t('suivi.rec.alertDetails', { v: reasonOf(dlg.o, extra[dlg.o.id]) }) : ''} onClose={() => setDlg(null)} />}
     </div>
   );
+}
+
+/** The parcel taken with « Alerte suivante », kept fresh; once it is no longer an alert (treated, cancelled…), the next one. */
+function FocusAlert({ id, x, actions, onClaim, onLeft, onClose }: { id: number; x: Extra | null; actions: (o: Order) => ParcelAction[]; onClaim?: (o: Order) => void; onLeft: () => void; onClose: () => void }) {
+  const q = useRpc('orders.get', { id }, { refetchInterval: 20_000 });
+  const o = q.data;
+  const left = !!o && o.id === id && o.followStatus !== 'alert';
+  useEffect(() => {
+    if (left) onLeft();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [left, id]);
+  if (!o || o.id !== id || left) return null;
+  return <ParcelPage o={o} x={x ?? undefined} reason={reasonOf(o, x ?? undefined)} actions={actions(o)} onClaim={onClaim ? () => onClaim(o) : undefined} onClose={onClose} />;
 }
 
 /** Next to an alert: claim to the courier (copies the tracking), or call / write to our own livreur. */

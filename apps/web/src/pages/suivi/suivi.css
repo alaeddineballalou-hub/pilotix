@@ -9,3 +9,6 @@
 .bjr-tbl small.bjr-api.bad{color:var(--coral)}
 .bjr-ans{background:var(--raise);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13.5px;white-space:pre-wrap}
 .bjr-ans b{display:block;margin-bottom:4px;font-size:12px;color:var(--muted)}
+.card-head .sv-next { margin-inline-start: auto; display: inline-flex; align-items: center; gap: 6px; }
+.card-head .sv-next svg { width: 16px; height: 16px; }
+[dir="rtl"] .card-head .sv-next svg { transform: scaleX(-1); }

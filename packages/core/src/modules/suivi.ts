@@ -493,6 +493,15 @@ async function createClaim(ctx: Ctx, i: z.infer<typeof ClaimCreate>): Promise<Cl
   return made;
 }
 
+/** A parcel another agent took with « Alerte suivante » (15 minutes): he is calling, nobody else acts on it. */
+async function notLockedByOther(ctx: Ctx, oid: number) {
+  const r = (await ctx.db.query(
+    `SELECT o.ref, p.name FROM orders o JOIN profiles p ON p.id = o.locked_by WHERE o.id = $1 AND o.locked_until > now() AND o.locked_by <> $2 AND o.follow_status = 'alert'`,
+    [oid, ctx.session.profile.id],
+  ))[0];
+  if (r && !ctx.session.isAdmin) throw bad(`${r.ref} : ${r.name} s’en occupe en ce moment`);
+}
+
 export const suiviProcs = {
   'suivi.counts': proc(['suivi'], z.object({}), (ctx) => suiviCounts(ctx)),
 
@@ -507,6 +516,7 @@ export const suiviProcs = {
   'suivi.treat': proc(['suivi'], z.object({ id, what: z.enum(TREAT_WHAT), date: z.string().max(20).nullable().optional(), note: z.string().max(1000).nullable().optional() }), async (ctx, i) => {
     const cur = await getOrder(ctx, i.id);
     if (cur.followStatus !== 'alert') throw bad(`${cur.ref} n’est pas en alerte`);
+    await notLockedByOther(ctx, i.id);
     const WHAT: Record<string, string> = { date: 'Client joint : nouvelle date de livraison', adresse: 'Adresse ou téléphone corrigé', injoignable: 'Client injoignable : nouvel essai', autre: 'Autre' };
     const day = i.date ? `le ${i.date.slice(0, 10).split('-').reverse().join('/')}` : '';
     const text = [WHAT[i.what], day, i.note?.trim()].filter(Boolean).join(' · ');
@@ -517,6 +527,39 @@ export const suiviProcs = {
   }),
 
   /** Takes the suivi agent off an order (the order stays where it is; the next suivi agent who acts on it takes it). */
+  /**
+   * « Alerte suivante »: the most urgent alert for this agent, locked to him 15 minutes so nobody calls the same customer.
+   * His own parcels first (once he acted on a parcel it stays his until it ends), then the alerts of nobody — or of an
+   * agent not seen for 8 hours (off today) — the oldest alert first.
+   */
+  'suivi.next': proc(['suivi'], z.object({ skip: z.array(id).max(200).default([]), release: id.nullable().optional() }), async (ctx, i) => {
+    const me = ctx.session.profile.id;
+    if (i.release) await ctx.db.query('UPDATE orders SET locked_by = NULL, locked_until = NULL WHERE id = $1 AND locked_by = $2', [i.release, me]);
+    // picked and locked in one statement: two agents pressing at the same time never get the same parcel
+    const r = await ctx.db.query(
+      `UPDATE orders SET locked_by = $1, locked_until = now() + interval '15 minutes'
+        WHERE id = (
+          SELECT o.id FROM orders o LEFT JOIN profiles fa ON fa.id = o.follow_agent_id
+           WHERE o.follow_status = 'alert' AND NOT (o.id = ANY($2))
+             AND (o.locked_until IS NULL OR o.locked_until < now() OR o.locked_by = $1)
+             AND (o.follow_agent_id IS NULL OR o.follow_agent_id = $1 OR fa.last_seen_at IS NULL OR fa.last_seen_at < now() - interval '8 hours')${andSql(queueSql(ctx, 'follow'))}
+           ORDER BY (o.follow_agent_id = $1) DESC NULLS LAST,
+             (SELECT max(e.at) FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'alert') ASC NULLS FIRST, o.id
+           LIMIT 1 FOR UPDATE OF o SKIP LOCKED)
+       RETURNING id`,
+      [me, i.skip],
+    );
+    if (!r[0]) return { id: null, order: null, extra: null };
+    const order = await getOrder(ctx, num(r[0].id));
+    return { id: order.id, order, extra: (await extras(ctx.db, [order]))[order.id] ?? null };
+  }),
+
+  /** Leaves the parcel taken with « Alerte suivante » (closed without acting): another agent may take it. */
+  'suivi.release': proc(['suivi'], z.object({ id }), async (ctx, i) => {
+    await ctx.db.query('UPDATE orders SET locked_by = NULL, locked_until = NULL WHERE id = $1 AND (locked_by = $2 OR $3)', [i.id, ctx.session.profile.id, ctx.session.isAdmin]);
+    return { ok: true };
+  }),
+
   'suivi.unassign': proc(['suivi'], z.object({ id }), async (ctx, { id: oid }) => {
     const cur = (await ctx.db.query('SELECT follow_agent_id FROM orders WHERE id = $1', [oid]))[0];
     if (!cur) throw notFound('Commande introuvable');
@@ -536,6 +579,7 @@ export const suiviProcs = {
       realert: { status: 'alert', note: 'Nouvelle alerte' },
     } as const;
     const m = map[i.action];
+    await notLockedByOther(ctx, i.id);
     await setFollow(ctx, FollowInput.parse({ ids: [i.id], status: m.status, note: [m.note, i.note].filter(Boolean).join(' — ') }));
     return getOrder(ctx, i.id);
   }),

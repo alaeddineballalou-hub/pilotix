@@ -83,3 +83,50 @@ test('each delivery company: its statuses that send a parcel to Alertes are tick
   assert.equal(map.find((r) => r.status === 'Tentative échouée')?.own, 'alert');
   await assert.rejects(call('delivery.alertStatuses', liv, {}));
 });
+
+test('« Alerte suivante »: the oldest alert, locked 15 minutes to the agent; his own parcels first; nobody else acts on it meanwhile', async () => {
+  const suivi = await as(EMAILS.suivi);
+  const me = suivi.session.profile.id;
+  // two alerts nobody has: the older one comes first
+  const a = await onRoad();
+  const b = await onRoad();
+  await db.query(`UPDATE orders SET follow_status = 'alert', follow_agent_id = NULL, locked_by = NULL, locked_until = NULL WHERE follow_status = 'alert'`);
+  await db.query(`UPDATE orders SET follow_status = 'alert', follow_agent_id = NULL WHERE id = ANY($1)`, [[a, b]]);
+  await db.query(`INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, at) VALUES ($1, NULL, 'follow_status', 'out_for_delivery', 'alert', now() - interval '5 hours'), ($2, NULL, 'follow_status', 'out_for_delivery', 'alert', now() - interval '1 hour')`, [b, a]);
+  await db.query(`UPDATE orders SET follow_status = 'out_for_delivery' WHERE follow_status = 'alert' AND NOT (id = ANY($1))`, [[a, b]]);
+  const r1 = (await call('suivi.next', suivi, {})) as any;
+  assert.equal(r1.id, b, 'the oldest alert first');
+  assert.equal(r1.order.followStatus, 'alert');
+  const lock = (await db.query('SELECT locked_by FROM orders WHERE id = $1', [b]))[0];
+  assert.equal(lock.locked_by, me);
+  // a second suivi agent: he gets the other alert, and cannot act on b while it is taken
+  const confEmail = EMAILS.conf;
+  await db.query(`UPDATE profiles SET roles = array_append(roles, 'suivi') WHERE email = $1 AND NOT ('suivi' = ANY(roles))`, [confEmail]);
+  const two = await as(confEmail);
+  const r2 = (await call('suivi.next', two, {})) as any;
+  assert.equal(r2.id, a, 'never the same parcel');
+  await assert.rejects(call('suivi.act', two, { id: b, action: 'cancel' }), /s’en occupe/);
+  await call('suivi.release', two, { id: a });
+  // « Alerte suivante » again with nothing done on b: b is released and skipped, a comes
+  const r3 = (await call('suivi.next', suivi, { skip: [b], release: b })) as any;
+  assert.equal(r3.id, a);
+  assert.equal((await db.query('SELECT locked_by FROM orders WHERE id = $1', [b]))[0].locked_by, null, 'released');
+  // once he acted on a parcel it stays his while he works: the other agent does not get it
+  await call('suivi.release', suivi, { id: a });
+  await db.query('UPDATE orders SET follow_agent_id = $2 WHERE id = $1', [b, me]);
+  await db.query('UPDATE profiles SET last_seen_at = now() WHERE id = $1', [me]);
+  const r4 = (await call('suivi.next', two, {})) as any;
+  assert.equal(r4.id, a, 'his parcel stays his');
+  await call('suivi.release', two, { id: a });
+  // not seen for 8 hours (off today): his parcels go back to everyone
+  await db.query(`UPDATE profiles SET last_seen_at = now() - interval '9 hours' WHERE id = $1`, [me]);
+  const r5 = (await call('suivi.next', two, { skip: [a] })) as any;
+  assert.equal(r5.id, b);
+  await call('suivi.release', two, { id: b });
+  // his own first
+  const r6 = (await call('suivi.next', suivi, {})) as any;
+  assert.equal(r6.id, b, 'his own parcel first');
+  // nothing left
+  const r7 = (await call('suivi.next', suivi, { skip: [a, b] })) as any;
+  assert.equal(r7.id, null);
+});

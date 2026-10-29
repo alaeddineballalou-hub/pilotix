@@ -541,5 +541,7 @@
       "absent": "Demander à {{co}} de relivrer"
     },
     "keep": "Garder le colis"
-  }
+  },
+  "nextNone": "Plus d’alerte à traiter pour l’instant 👍",
+  "skipNext": "Passer ›"
 }
