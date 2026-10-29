@@ -25,6 +25,7 @@ import { PhoneOrder } from '../confirmation/PhoneList';
 import { currentLabel, SUB_TONE, telHref, waHref } from '../confirmation/shared';
 import type { PageProps } from '../registry';
 import { Suivi, TreatModal } from '../suivi';
+import { ScoreChip } from '../../ui/clientScore';
 
 /** « Confirmation » of an agency: one seller's screen, or every seller's orders together. */
 export function AgencyConfirmation(props: PageProps) {
@@ -169,6 +170,7 @@ function AllQueue({ sub }: { sub: Sub }) {
                     {r.deadline ? <Countdown d={r.deadline} short /> : <small className="muted">{when(r.createdAt)}</small>}
                   </span>
                   <b>{r.customerName}</b>
+                  {r.clientScore && <ScoreChip s={r.clientScore} short />}
                   <span className="muted small">
                     {namesOf(r.items)} · <span className="ltr">{da(r.total)}</span>
                   </span>
@@ -233,6 +235,7 @@ function AllQueue({ sub }: { sub: Sub }) {
                       </td>
                       <td data-l={t('confirmation.col.name')}>
                         <b>{r.customerName}</b>
+                        {r.clientScore && <ScoreChip s={r.clientScore} short />}
                         <a className="ltr agx-tel" href={telHref(r.phone)} onClick={() => r.seller && rpc('orders.logCall', { id: r.id }, r.seller.id).catch(() => {})}>
                           {r.phone}
                         </a>
@@ -389,6 +392,7 @@ function AllSuivi({ sub }: PageProps) {
                     </td>
                     <td data-l={t('confirmation.col.name')}>
                       <b>{o.customerName}</b>
+                      {o.clientScore && <ScoreChip s={o.clientScore} short />}
                       <a className="ltr agx-tel" href={telHref(o.phone)} onClick={() => o.seller && rpc('orders.logCall', { id: o.id }, o.seller.id).catch(() => {})}>
                         {o.phone}
                       </a>

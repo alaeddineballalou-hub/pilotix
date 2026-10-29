@@ -18,6 +18,7 @@ import '../confirmation/phone.css';
 import './phone.css';
 import { ChangeKind, ChangeSheet, CourierPanel, useParcelInfo } from './CourierPanel';
 import { useBackLayer } from '../../lib/backLayer';
+import { ScoreChip } from '../../ui/clientScore';
 
 export type PExtra = { companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
 
@@ -94,6 +95,7 @@ export function ParcelCards({ rows, extra, reasonOf, empty, onOpen }: { rows: Or
             <div className="pxs-card" role="button" tabIndex={0} onClick={() => onOpen(o.id)} onKeyDown={(e) => e.key === 'Enter' && onOpen(o.id)}>
               <div className="pxs-top">
                 <b className="pxp-name">{o.customerName}</b>
+                {o.clientScore && <ScoreChip s={o.clientScore} short />}
                 <CoBadge o={o} x={x} />
               </div>
               <Journey o={o} label={reasonOf(o, x)} />

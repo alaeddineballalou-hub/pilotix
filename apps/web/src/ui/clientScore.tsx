@@ -5,10 +5,10 @@ import { useTranslation } from 'react-i18next';
 import './clientScore.css';
 
 /** « 85/100 · Très fiable », coloured by level (a new customer is grey: nothing known yet) */
-export function ScoreChip({ s, short }: { s: ClientScore; short?: boolean }) {
+export function ScoreChip({ s, short }: { s: Pick<ClientScore, 'score' | 'level'>; short?: boolean }) {
   const { t } = useTranslation();
   return (
-    <span className={`cs-chip cs-${s.level}`} title={t('clients.score.help')}>
+    <span className={`cs-chip cs-${s.level}${short ? ' short' : ''}`} title={`${t(`clients.score.level.${s.level}`)} — ${t('clients.score.help')}`}>
       <b className="ltr">{s.score}</b>
       <small className="ltr">/100</small>
       {!short && <span>{t(`clients.score.level.${s.level}`)}</span>}

@@ -25,6 +25,7 @@ import {
 import { officialCommune } from './coverage';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
+import { CLIENT_FACT_COLS, ClientScore, scoresOf } from './clientscore';
 import { bad, Ctx, forbidden, hasRole, notFound, proc } from '../rpc';
 import { clientFee, getSetting } from '../settings';
 import { notifyContext, onConfChange, onFollowChange, onOrderCreated, sendInPreview } from './notify';
@@ -167,6 +168,21 @@ export async function peekNext(ctx: Ctx, skip: number[]): Promise<{ nextCallAt: 
 /** Our own livreurs: parcels not in their hands yet (before their scan) show no customer — only the parcel. */
 export const NOT_TAKEN = ['to_prepare', 'prepared', 'shipped'];
 export const hideCustomer = (o: Order): Order => (NOT_TAKEN.includes(String(o.followStatus)) ? { ...o, customerName: '', phone: '', phone2: null, address: '' } : o);
+
+/** Each order with its customer's score out of 100 (clientscore.ts): one query for all the customers of the page, the
+ *  network asked once. Not for a livreur who only sees his own deliveries (no customer data there). */
+export async function withClientScores<T extends Order>(ctx: Ctx, list: T[]): Promise<T[]> {
+  if (onlyOwnDeliveries(ctx)) return list;
+  const ids = [...new Set(list.map((o) => o.customerId).filter((x): x is number => !!x))];
+  if (!ids.length) return list;
+  const rows = await ctx.db.query(`SELECT c.id, c.phone, c.blacklisted, c.blacklist_auto, c.stopdesk_only, ${CLIENT_FACT_COLS} FROM customers c WHERE c.id = ANY($1::bigint[])`, [ids]);
+  const scores = await scoresOf(ctx, rows);
+  const by = new Map<number, ClientScore>(rows.map((r: any, k: number) => [num(r.id), scores[k]]));
+  return list.map((o) => {
+    const s = by.get(o.customerId);
+    return s ? { ...o, clientScore: { score: s.score, level: s.level } } : o;
+  });
+}
 
 export async function getOrder(ctx: Ctx, id: number, db: Db = ctx.db): Promise<Order> {
   if (noOrderAccess(ctx)) throw forbidden();
@@ -1388,9 +1404,12 @@ export async function cancelReport(ctx: Ctx, i: { from: string; to: string }) {
 // ---------------------------------------------------------------- the procedures
 export const ordersProcs = {
   ...orderExtraProcs(),
-  'orders.list': proc(null, ListInput, (ctx, f) => listOrders(ctx, f)),
+  'orders.list': proc(null, ListInput, async (ctx, f) => {
+    const p = await listOrders(ctx, f);
+    return { ...p, rows: await withClientScores(ctx, p.rows) };
+  }),
   'orders.counts': proc(null, z.object({}), (ctx) => orderCounts(ctx)),
-  'orders.get': proc(null, z.object({ id }), (ctx, { id }) => getOrder(ctx, id)),
+  'orders.get': proc(null, z.object({ id }), async (ctx, { id }) => (await withClientScores(ctx, [await getOrder(ctx, id)]))[0]),
   'orders.events': proc(null, z.object({ id }), async (ctx, { id }) => {
     await getOrder(ctx, id);
     const rows = await ctx.db.query(

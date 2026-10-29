@@ -24,6 +24,7 @@ import { CopyCode } from '../../ui/CopyCode';
 import { useIsPhone } from '../../lib/useMedia';
 import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
 import { CancelSheet, ParcelAction, ParcelCards, ParcelPage, TreatSheet } from './PhoneSuivi';
+import { ScoreChip } from '../../ui/clientScore';
 
 const LIST_TABS = ['alertes', 'traites', 'livres', 'annules', 'swap'] as const;
 type ListTab = (typeof LIST_TABS)[number];
@@ -167,7 +168,12 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
           </>
         );
       case 'name':
-        return o.customerName;
+        return (
+          <>
+            {o.customerName}
+            {o.clientScore && <ScoreChip s={o.clientScore} short />}
+          </>
+        );
       case 'phone':
         return <PhoneCell order={o} />;
       case 'wilaya':

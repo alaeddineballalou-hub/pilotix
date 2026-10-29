@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, Ctx, notFound, proc, withActionLock } from '../rpc';
 import { getSetting } from '../settings';
-import { addEvent, FollowInput, getOrder, listOrders, ListInput, setFollow } from './orders';
+import { addEvent, FollowInput, getOrder, listOrders, ListInput, setFollow, withClientScores } from './orders';
 import { agencyOf, andSql, queueSql } from './agencyscope';
 import { findOrders } from './sav';
 import { applyTrust, DRIVER_CLAIMS } from './trust';
@@ -495,7 +495,7 @@ export const suiviProcs = {
   'suivi.list': proc(['suivi'], ListSuivi, async (ctx, i) => {
     const page = await listOrders(ctx, ListInput.parse({ ...tabFilter(i.tab, ctx.now()), q: i.q, page: i.page, pageSize: i.pageSize }), { queue: 'follow' });
     // the swap list only shows parcels that really left (still with the courier or the livreur)
-    const rows = i.tab === 'swap' ? page.rows.filter((o) => o.shippedAt) : page.rows;
+    const rows = await withClientScores(ctx, i.tab === 'swap' ? page.rows.filter((o) => o.shippedAt) : page.rows);
     return { ...page, rows, extra: await extras(ctx.db, rows) };
   }),
 
