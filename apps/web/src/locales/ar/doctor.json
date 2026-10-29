@@ -467,7 +467,8 @@
     "demo-reset": "متجر العرض",
     "platform-reminders": "تذكيرات الاشتراك",
     "courier-watch": "شركات التوصيل: تغييرات API",
-    "turnstile-sync": "Cloudflare (الروبوتات): نطاقات المتاجر"
+    "turnstile-sync": "Cloudflare (الروبوتات): نطاقات المتاجر",
+    "pilot-ai-night": "Pilot AI: تعلم الليل"
   },
   "errs": {
     "title": "آخر الأخطاء",

@@ -65,7 +65,7 @@ step('server Doctor: the jobs');
   const t0 = s.startedAt;
   const st = (list, name) => list.find((j) => j.name === name)?.state;
   let l = s.jobList(t0 + MIN);
-  check(l.length === 12 && l.every((j) => j.state === 'waiting'), 'just started: every job is waiting', l.map((j) => j.state));
+  check(l.length === 13 && l.every((j) => j.state === 'waiting'), 'just started: every job is waiting', l.map((j) => j.state));
   l = s.jobList(t0 + 6 * MIN);
   check(st(l, 'notify-run') === 'late' && st(l, 'courier-sync') === 'waiting', 'a job never seen after 3 runs + 2 min is late; a slow one still waits', l);
   s.job('notify-run', true);
@@ -84,7 +84,7 @@ step('server Doctor: the jobs');
     encoding: 'utf8',
   });
   const offStates = JSON.parse(off.stdout.trim() || '[]');
-  check(offStates.length === 12 && offStates.every((x) => x === 'off'), 'without Redis every job is "off"', off.stderr || offStates);
+  check(offStates.length === 13 && offStates.every((x) => x === 'off'), 'without Redis every job is "off"', off.stderr || offStates);
 }
 
 // ---------------------------------------------------------------- 2. the logger
