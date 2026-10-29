@@ -25,7 +25,7 @@ import { useIsPhone } from '../../lib/useMedia';
 import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
 import { CancelSheet, ParcelAction, ParcelCards, ParcelPage, TreatSheet } from './PhoneSuivi';
 
-const LIST_TABS = ['alertes', 'traites', 'livres', 'annules', 'swap'] as const;
+const LIST_TABS = ['enlivraison', 'alertes', 'traites', 'livres', 'annules', 'swap'] as const;
 type ListTab = (typeof LIST_TABS)[number];
 type Sub = ListTab | 'reclamation';
 
@@ -63,6 +63,10 @@ function SuiviBar({ tab }: { tab: Sub }) {
   );
   return (
     <nav className="bjm-bar flow" aria-label="Étapes" data-g="suivi">
+      {item('enlivraison', c?.enlivraison ?? 0)}
+      <span className="bjm-ar" aria-hidden="true">
+        ›
+      </span>
       {item('alertes', c?.alertes ?? 0)}
       <span className="bjm-ar" aria-hidden="true">
         ›
@@ -98,6 +102,7 @@ function Head({ tab }: { tab: ListTab }) {
     }
   };
   const kpis: [ListTab, 'warn' | ''][] = [
+    ['enlivraison', ''],
     ['alertes', c?.alertes ? 'warn' : ''],
     ['traites', ''],
     ['livres', ''],
@@ -306,6 +311,14 @@ function List({ tab }: { tab: ListTab }) {
         </button>
         <button type="button" className="btn small ghost danger" onClick={() => setDlg({ kind: 'cancel', o })}>
           {t('suivi.act.cancel')}
+        </button>
+      </div>
+    );
+  if (tab === 'enlivraison')
+    actions = (o) => (
+      <div className="row nowrap px-sv-acts">
+        <button type="button" className="btn small" disabled={act.isPending} onClick={() => run(o, 'realert')}>
+          <Icon name="alert" /> {t('suivi.act.toAlert')}
         </button>
       </div>
     );

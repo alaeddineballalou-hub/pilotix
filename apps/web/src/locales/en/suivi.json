@@ -1,5 +1,6 @@
 {
   "tabs": {
+    "enlivraison": "Out for delivery",
     "alertes": "Alerts",
     "traites": "Handled",
     "livres": "Delivered",
@@ -13,13 +14,15 @@
   "syncFail": "Update failed: {{msg}}",
   "syncProblems": "{{count}} problem(s) with the couriers: {{list}}",
   "kpiSub": {
+    "enlivraison": "with the courier",
     "alertes": "to handle",
     "traites": "back on the road after the alert",
     "livres": "last 30 days",
     "annules": "returning + swapped"
   },
   "help": {
-    "alertes": "Parcels flagged by the courier or the livreur (customer absent, refused, address…). Handle them: call the customer, then « Handle » or « Customer cancels ».",
+    "enlivraison": "Parcels out for delivery, and those with a failed attempt. A status chosen in Preferences › Suivi alerts sends them to Alerts. “Alert” does it by hand.",
+    "alertes": "Parcels flagged by the delivery company or the livreur (the statuses chosen in Preferences › Suivi alerts). Call the customer, then “Treat” or “Customer cancels”.",
     "traites": "Alerts already handled: the parcel is back on the road. It leaves this list once delivered or cancelled.",
     "livres": "Parcels delivered in the last 30 days.",
     "annules": "Parcels cancelled by the customer, still with the courier or the livreur, on their way back to the depot. To give one directly to another customer: Suivi → Swap.",
@@ -66,7 +69,8 @@
     "call": "Call",
     "write": "Write to {{name}}",
     "claimSent": "Claim sent",
-    "remind": "Remind"
+    "remind": "Remind",
+    "toAlert": "Alert"
   },
   "zr": "ZR",
   "theLivreur": "the livreur",

@@ -90,6 +90,9 @@ export interface SettingsMap {
     rulesBy: { confirmation: boolean; agency: boolean; depot: boolean; manager: boolean };
     privateBackup: { on: boolean; hours: number; companyId: number | null };
     noStockDays: number;
+    /** « Livraison privée »: what the livreur says (« failed:no_answer », « returning:refused »…) that sends the parcel
+     *  to Suivi › Alertes instead (a suivi agent calls the customer first) */
+    livreurAlerts: string[];
   };
 }
 
@@ -135,6 +138,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
     rulesBy: { confirmation: false, agency: false, depot: false, manager: false },
     privateBackup: { on: false, hours: 24, companyId: null },
     noStockDays: 3,
+    livreurAlerts: ['failed:no_answer', 'failed:absent', 'returning:refused', 'returning:unreachable'],
   },
 };
 

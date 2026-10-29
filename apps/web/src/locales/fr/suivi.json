@@ -1,5 +1,6 @@
 {
   "tabs": {
+    "enlivraison": "En livraison",
     "alertes": "Alertes",
     "traites": "Traités",
     "livres": "Livrés",
@@ -13,13 +14,15 @@
   "syncFail": "Mise à jour impossible : {{msg}}",
   "syncProblems": "{{count}} problème(s) avec les sociétés : {{list}}",
   "kpiSub": {
+    "enlivraison": "chez le livreur",
     "alertes": "à traiter",
     "traites": "en route après l’alerte",
     "livres": "30 derniers jours",
     "annules": "en retour + swappés"
   },
   "help": {
-    "alertes": "Colis signalés par ZR ou le livreur (client absent, refus, adresse…). Traitez-les : appelez le client, puis « Traiter » ou « Client annule ».",
+    "enlivraison": "Colis sortis pour être livrés, et ceux dont une tentative a échoué. Un statut choisi dans Préférences › Alertes du Suivi les envoie dans Alertes. « Alerter » le fait à la main.",
+    "alertes": "Colis signalés par la société de livraison ou le livreur (les statuts choisis dans Préférences › Alertes du Suivi). Appelez le client, puis « Traiter » ou « Client annule ».",
     "traites": "Alertes déjà traitées : le colis est reparti. Il sort d’ici quand il est livré ou annulé.",
     "livres": "Colis livrés ces 30 derniers jours.",
     "annules": "Colis annulés par le client, encore chez ZR ou le livreur, en route vers le dépôt. Pour en donner un directement à un autre client : menu Suivi → Swap.",
@@ -66,7 +69,8 @@
     "call": "Appeler",
     "write": "Écrire à {{name}}",
     "claimSent": "Réclamation envoyée",
-    "remind": "Relancer"
+    "remind": "Relancer",
+    "toAlert": "Alerter"
   },
   "zr": "ZR",
   "theLivreur": "le livreur",

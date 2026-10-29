@@ -482,6 +482,36 @@ const SaveCompany = z.object({
 
 const FeeInput = z.object({ wilayaId: z.number().int().min(1).max(69), home: z.number().int().min(0).max(100000).nullable(), desk: z.number().int().min(0).max(100000).nullable(), returnFee: z.number().int().min(0).max(100000).nullable() });
 
+/** A company's statuses (seen on our parcels + its known ones) and what each one does here. */
+async function companyStatuses(ctx: Ctx, companyId: number) {
+    const c = await companyOr404(ctx.db, companyId);
+  const defaults = ADAPTERS[c.kind]?.statuses ?? {};
+  const seen = await ctx.db.query(
+    `SELECT ext_status AS s, count(*)::int AS n FROM orders WHERE company_id=$1 AND ext_status IS NOT NULL GROUP BY 1 ORDER BY 2 DESC LIMIT 300`,
+    [companyId],
+  );
+  // the courier's own list of statuses (ZR's workflow), with its words
+  let states: { key: string; label: string; color: string | null }[] = [];
+  if (KINDS[c.kind]?.zr && c.hasKeys) {
+    if (isDemo(ctx)) states = Object.keys(defaults).map((k) => ({ key: k, label: k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, ' '), color: null }));
+    else states = ((await courierOf(ctx)('states', { companyId }, ctx).catch(() => [])) as typeof states) ?? [];
+  }
+  const label = new Map(states.map((x) => [x.key, x.label]));
+  const names = [...new Set([...states.map((x) => x.key), ...seen.map((r: any) => r.s as string), ...Object.keys(c.statusMap), ...Object.keys(defaults)])];
+  return names.map((s) => ({
+    status: s,
+    label: label.get(s) ?? null,
+    parcels: num(seen.find((r: any) => r.s === s)?.n),
+    own: Object.prototype.hasOwnProperty.call(c.statusMap, s) ? c.statusMap[s] : undefined,
+    auto: resolveStatus(defaults, {}, { status: label.get(s) ?? s, key: s }) ?? null,
+  }));
+}
+
+/** What our statuses a courier status means once the seller's choices are applied. */
+const effective = (r: { own?: string; auto: string | null }) => (r.own !== undefined ? r.own : r.auto);
+/** Our statuses while the parcel is with the company: the courier statuses meaning one of them can be an alert. */
+const ON_ROAD = ['shipped', 'out_for_delivery', 'failed', 'returning', 'in_exchange'];
+
 export const deliveryProcs = {
   /** Courier kinds, provider cards and custom-API placeholders (for the forms). */
   // a company removed from Pilotix (control room) is no longer offered; a shop's own companies keep their kind
@@ -609,28 +639,45 @@ export const deliveryProcs = {
   }),
 
   /** Status mapping: the courier's statuses (seen on our parcels + its known ones) and what each one does here. */
-  'delivery.statuses': proc([], z.object({ companyId: id }), async (ctx, { companyId }) => {
-    const c = await companyOr404(ctx.db, companyId);
-    const defaults = ADAPTERS[c.kind]?.statuses ?? {};
-    const seen = await ctx.db.query(
-      `SELECT ext_status AS s, count(*)::int AS n FROM orders WHERE company_id=$1 AND ext_status IS NOT NULL GROUP BY 1 ORDER BY 2 DESC LIMIT 300`,
-      [companyId],
-    );
-    // the courier's own list of statuses (ZR's workflow), with its words
-    let states: { key: string; label: string; color: string | null }[] = [];
-    if (KINDS[c.kind]?.zr && c.hasKeys) {
-      if (isDemo(ctx)) states = Object.keys(defaults).map((k) => ({ key: k, label: k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, ' '), color: null }));
-      else states = ((await courierOf(ctx)('states', { companyId }, ctx).catch(() => [])) as typeof states) ?? [];
+  'delivery.statuses': proc([], z.object({ companyId: id }), (ctx, { companyId }) => companyStatuses(ctx, companyId)),
+
+  /** Préférences › Alertes du Suivi: each delivery company's statuses that can send a parcel to Suivi › Alertes, ticked when they do. */
+  'delivery.alertStatuses': proc([], z.object({}), async (ctx) => {
+    const cos = await ctx.db.query(`SELECT id, name FROM delivery_companies WHERE active AND kind NOT IN ('own') ORDER BY name`);
+    const out = [];
+    for (const c of cos) {
+      const rows = await companyStatuses(ctx, num(c.id));
+      out.push({
+        companyId: num(c.id),
+        name: String(c.name),
+        // only what happens while the parcel is with the company (not before it takes it, not once it ends); most seen first
+        statuses: rows
+          .filter((r) => effective(r) === 'alert' || ON_ROAD.includes(String(effective(r))))
+          .sort((x, y) => y.parcels - x.parcels)
+          .map((r) => ({ status: r.status, label: r.label, parcels: r.parcels, alert: effective(r) === 'alert' })),
+      });
     }
-    const label = new Map(states.map((x) => [x.key, x.label]));
-    const names = [...new Set([...states.map((x) => x.key), ...seen.map((r: any) => r.s as string), ...Object.keys(c.statusMap), ...Object.keys(defaults)])];
-    return names.map((s) => ({
-      status: s,
-      label: label.get(s) ?? null,
-      parcels: num(seen.find((r: any) => r.s === s)?.n),
-      own: Object.prototype.hasOwnProperty.call(c.statusMap, s) ? c.statusMap[s] : undefined,
-      auto: resolveStatus(defaults, {}, { status: label.get(s) ?? s, key: s }) ?? null,
-    }));
+    return out;
+  }),
+
+  /** Saves which of a company's statuses send a parcel to Suivi › Alertes (the other mappings stay as they are). */
+  'delivery.saveAlertStatuses': proc([], z.object({ companyId: id, alert: z.array(z.string().max(120)).max(200) }), async (ctx, i) => {
+    const cur = (await ctx.db.query('SELECT config FROM delivery_companies WHERE id=$1', [i.companyId]))[0];
+    if (!cur) throw notFound('Société introuvable');
+    const cfg = parseJson(cur.config);
+    const map: Record<string, string> = { ...(cfg.statusMap ?? {}) };
+    for (const r of await companyStatuses(ctx, i.companyId)) {
+      const want = i.alert.includes(r.status);
+      const now = effective(r) === 'alert';
+      if (want && !now) map[r.status] = 'alert';
+      // unticked: back to what the courier status means by itself, or still on the road when that is an alert
+      if (!want && now) {
+        if (r.auto === 'alert') map[r.status] = 'out_for_delivery';
+        else delete map[r.status];
+      }
+    }
+    await ctx.db.query('UPDATE delivery_companies SET config=$2 WHERE id=$1', [i.companyId, JSON.stringify({ ...cfg, statusMap: map })]);
+    return { ok: true };
   }),
 
   /** ZR from Pilotix: instant status updates (webhook) and ZR's prices for its services. */

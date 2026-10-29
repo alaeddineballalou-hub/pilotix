@@ -27,6 +27,7 @@ import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, Ctx, forbidden, hasRole, notFound, proc } from '../rpc';
 import { clientFee, getSetting } from '../settings';
+import { getPrefs } from './prefs';
 import { notifyContext, onConfChange, onFollowChange, onOrderCreated, sendInPreview } from './notify';
 import { landingCounts, landingSettings, onLandingConf, onLandingFollow } from './landingquery';
 import { lowStockCount } from './stockquery';
@@ -228,6 +229,8 @@ export const ListInput = z.object({
   /** SAV ticket parcels: left out of order lists unless asked for (the depot and livreurs see both) */
   tickets: z.enum(['exclude', 'include', 'only']).optional(),
   subStatus: z.string().max(40).optional(),
+  /** not with this sub-status (Suivi › En livraison: the treated alerts are in « Traités ») */
+  subStatusNot: z.string().max(40).optional(),
   /** only these orders (selection export / print) */
   ids: z.array(id).max(3000).optional(),
   /** back_at: when the parcel came back, or its last change while it is on its way back */
@@ -278,6 +281,7 @@ export async function listOrders(ctx: Ctx, f: ListInput, opts: { queue?: 'conf' 
   else if ((f.tickets ?? 'exclude') === 'exclude' && !f.ids?.length) w.add('NOT o.is_exchange');
   else if (f.tickets === 'only') w.add('o.is_exchange');
   if (f.subStatus) w.add('o.sub_status = ?', f.subStatus);
+  if (f.subStatusNot) w.add("COALESCE(o.sub_status, '') <> ?", f.subStatusNot);
   if (f.ids?.length) w.add('o.id = ANY(?)', f.ids);
   const dcol = f.dateField === 'back_at' ? 'coalesce(o.returned_at, o.returning_at, o.updated_at)' : `o.${f.dateField}`;
   if (f.from) w.add(`${dcol} >= ?`, f.from);
@@ -834,6 +838,8 @@ export const FollowInput = z.object({
   status: z.enum(FOLLOW_STATUSES),
   note: z.string().max(1000).nullable().optional(),
   reason: z.string().max(200).nullable().optional(),
+  /** the livreur's reason as a key (FAIL_REASONS / RETURN_REASONS): some send the parcel to Suivi › Alertes (Préférences) */
+  reasonKey: z.string().max(40).nullable().optional(),
   tracking: z.string().max(80).nullable().optional(),
   livreurId: id.nullable().optional(),
   subStatus: z.string().max(40).nullable().optional(),
@@ -930,6 +936,7 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
     if (!l || !l.active || !(l.roles ?? []).includes('livreur')) throw bad('Ce livreur est introuvable');
   }
   const changed: number[] = [];
+  let livreurAlerts: string[] | null = null;
   await ctx.db.tx(async (tx) => {
     if (await alreadyApplied(tx, input.clientId, me)) return;
     const notify = await notifyContext(tx);
@@ -940,7 +947,12 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
       if (own && num(cur.livreur_id) !== me) throw forbidden();
       if (!['confirmed', 'no_stock'].includes(cur.conf_status) && input.status !== 'cancelled') throw bad(`${cur.ref} n’est pas confirmée`);
       const from: FollowStatus | null = cur.follow_status;
-      const to = input.status;
+      let to: FollowStatus = input.status;
+      // « Livraison privée »: what the livreur said may send the parcel to Suivi › Alertes first (Préférences)
+      if ((to === 'failed' || to === 'returning') && input.reasonKey && cur.company_id && livreurAlerts === null)
+        livreurAlerts = (await getPrefs(tx)).livreurAlerts;
+      if ((to === 'failed' || to === 'returning') && input.reasonKey && livreurAlerts?.includes(`${to}:${input.reasonKey}`))
+        if ((await tx.query('SELECT kind FROM delivery_companies WHERE id = $1', [cur.company_id]))[0]?.kind === 'own') to = 'alert';
       const block = followBlock(ctx, cur, to, !!(input.reason || input.note));
       if (block) {
         // the courier sync / payment import skips such parcels instead of failing the whole batch

@@ -14,7 +14,7 @@ import type { CourierKind } from '@pilotix/shared';
 
 const id = z.number().int().positive();
 
-export const SUIVI_TABS = ['alertes', 'traites', 'livres', 'annules', 'swap', 'swapped'] as const;
+export const SUIVI_TABS = ['enlivraison', 'alertes', 'traites', 'livres', 'annules', 'swap', 'swapped'] as const;
 export type SuiviTab = (typeof SUIVI_TABS)[number];
 /** Where a parcel can be swapped from: it is still with the courier or the livreur. */
 export const SWAP_FROM = ['returning', 'failed', 'alert', 'out_for_delivery', 'shipped'] as const;
@@ -27,6 +27,8 @@ const DAY = 86_400_000;
 /** Filters of each Suivi tab, expressed with the orders list. */
 function tabFilter(tab: SuiviTab, now: number): Partial<ListInput> {
   switch (tab) {
+    case 'enlivraison':
+      return { follow: ['out_for_delivery', 'failed'], subStatusNot: 'alert_traitee', sort: 'shipped_at', dir: 'asc' };
     case 'alertes':
       return { follow: ['alert'], sort: 'updated_at', dir: 'asc' };
     case 'traites':
@@ -80,6 +82,7 @@ export async function suiviCounts(ctx: Ctx) {
   const r = (
     await ctx.db.query(
       `SELECT
+         count(*) FILTER (WHERE follow_status IN ('out_for_delivery','failed') AND COALESCE(sub_status,'') <> 'alert_traitee')::int AS enlivraison,
          count(*) FILTER (WHERE follow_status = 'alert')::int AS alertes,
          count(*) FILTER (WHERE sub_status = 'alert_traitee' AND follow_status IN ('out_for_delivery','shipped','failed'))::int AS traites,
          count(*) FILTER (WHERE follow_status = 'delivered' AND delivered_at >= $1)::int AS livres,
@@ -92,6 +95,7 @@ export async function suiviCounts(ctx: Ctx) {
   // a confirmation agency's agents do not handle the store's claims with its couriers
   const claims = agencyOf(ctx) !== null ? 0 : num((await ctx.db.query(`SELECT count(*)::int AS n FROM claims WHERE status <> 'resolved'`))[0]?.n);
   return {
+    enlivraison: num(r.enlivraison),
     alertes: num(r.alertes),
     traites: num(r.traites),
     livres: num(r.livres),

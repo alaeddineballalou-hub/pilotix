@@ -324,6 +324,18 @@
       "backupOff": "No, the order waits.",
       "noStock_one": "After {{count}} day.",
       "noStock_other": "After {{count}} days."
+    },
+    "alerts": {
+      "title": "Suivi alerts",
+      "hint": "When the company or the livreur gives one of these statuses, the parcel goes to Suivi › Alerts: a suivi agent calls the customer before it comes back.",
+      "coHint_one": "{{count}} status sends to Alerts. Tap to choose.",
+      "coHint_other": "{{count}} statuses send to Alerts. Tap to choose.",
+      "none": "No statuses: this company has no API.",
+      "private": "Private delivery",
+      "privHint_one": "{{count}} livreur answer sends to Alerts.",
+      "privHint_other": "{{count}} livreur answers send to Alerts.",
+      "failed": "Not delivered, I’ll come back",
+      "returning": "Back to the depot"
     }
   },
   "pilot": {

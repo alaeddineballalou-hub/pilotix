@@ -56,7 +56,7 @@ export async function takeParcel(ctx: Ctx, raw: string) {
       title: `${o.ref} : pris par ${myName}`,
       body: `Ce colis était à ${o.livreur_name ?? 'un autre livreur'}. L’argent est maintenant dû par ${myName}.`,
       tag: `taken-${oid}`,
-      url: '#/depot/enlivraison',
+      url: '#/suivi/enlivraison',
     });
   }
   if (status === 'prepared') await addEvent(ctx.db, oid, me, 'note', null, 'event', 'Pris sans le scan « Dispatchées » du dépôt');

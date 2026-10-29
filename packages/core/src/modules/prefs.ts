@@ -29,6 +29,7 @@ const prefsIn = z.object({
   rulesBy: z.object({ confirmation: z.boolean(), agency: z.boolean(), depot: z.boolean(), manager: z.boolean() }),
   privateBackup: z.object({ on: z.boolean(), hours: z.number().int().min(1).max(240), companyId: z.number().int().positive().nullable() }),
   noStockDays: z.number().int().min(1).max(30),
+  livreurAlerts: z.array(z.string().regex(/^(failed|returning):[a-z_]+$/)).max(20),
 });
 
 export const prefsProcs = {

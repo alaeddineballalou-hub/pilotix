@@ -324,6 +324,18 @@
       "backupOff": "Non, la commande attend.",
       "noStock_one": "Après {{count}} jour.",
       "noStock_other": "Après {{count}} jours."
+    },
+    "alerts": {
+      "title": "Alertes du Suivi",
+      "hint": "Quand la société ou le livreur donne un de ces statuts, le colis va dans Suivi › Alertes : un agent de suivi appelle le client avant le retour.",
+      "coHint_one": "{{count}} statut envoie en Alertes. Touchez pour choisir.",
+      "coHint_other": "{{count}} statuts envoient en Alertes. Touchez pour choisir.",
+      "none": "Pas de statuts : cette société n’a pas d’API.",
+      "private": "Livraison privée",
+      "privHint_one": "{{count}} réponse du livreur envoie en Alertes.",
+      "privHint_other": "{{count}} réponses du livreur envoient en Alertes.",
+      "failed": "Pas livrée, je repasse",
+      "returning": "Retour au dépôt"
     }
   },
   "pilot": {

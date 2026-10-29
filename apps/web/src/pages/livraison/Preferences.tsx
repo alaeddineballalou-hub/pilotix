@@ -1,9 +1,13 @@
 // Sociétés de livraison › Préférences: the seller's own choices. The simple view says what Pilotix does now, one short line each;
 // « Mode avancé » opens them to change, each with one short line of help. Saved for the whole shop (admin only).
+import { FAIL_REASONS, RETURN_REASONS } from '@pilotix/shared';
+import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Out } from '../../lib/backend';
+import { rpc, type Out } from '../../lib/backend';
 import { useAction, useRpc } from '../../lib/query';
+import { useSession } from '../../lib/session';
+import { toast } from '../../ui/toast';
 import { ErrorBox, Icon, Loading } from '../../ui/kit';
 import './prefs.css';
 
@@ -11,6 +15,22 @@ type Prefs = Out<'prefs.get'>['prefs'];
 type Who = keyof Prefs['changeCompany'];
 const WHO: Who[] = ['confirmation', 'agency', 'depot', 'manager'];
 const ADV_KEY = 'px-prefs-advanced';
+/** what the livreur can say on a parcel he did not deliver (« failed:no_answer », « returning:refused »…) */
+const LIVREUR_SAYS = [...FAIL_REASONS.map((r) => `failed:${r}`), ...RETURN_REASONS.map((r) => `returning:${r}`)];
+type CoAlerts = Out<'delivery.alertStatuses'>;
+/** One chip per name: a company can give the same status under its key and its words (« En livraison » twice) */
+function chipsOf(c: CoAlerts[number]) {
+  const by = new Map<string, { label: string; keys: string[]; parcels: number }>();
+  for (const x of c.statuses) {
+    const label = x.label || x.status;
+    const k = label.toLowerCase();
+    const g = by.get(k) ?? { label, keys: [], parcels: 0 };
+    g.keys.push(x.status);
+    g.parcels += x.parcels;
+    by.set(k, g);
+  }
+  return [...by.values()];
+}
 
 const same = (a: Prefs, b: Prefs) => JSON.stringify(a) === JSON.stringify(b);
 function readAdv(): boolean {
@@ -34,13 +54,46 @@ export function Preferences() {
   const companies = useRpc('admin.companies', {});
   const [adv, setAdv] = useState(readAdv);
   const [draft, setDraft] = useState<Prefs | null>(null);
-  const save = useAction('prefs.set', { success: t('livraison.prefs.saved'), onDone: () => setDraft(null) });
+  const save = useAction('prefs.set', { silent: true });
+  // Alertes du Suivi: each delivery company's statuses that send a parcel to Suivi › Alertes (saved with the rest)
+  const isAdmin = !!useSession().session?.isAdmin;
+  const alerts = useRpc('delivery.alertStatuses', {}, { enabled: isAdmin });
+  const [coDraft, setCoDraft] = useState<Record<number, string[]>>({});
+  const [busy, setBusy] = useState(false);
+  const qc = useQueryClient();
   if (q.isLoading) return <Loading />;
   if (q.error || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   const saved = q.data.prefs;
   const rec = q.data.recommended;
   const v = draft ?? saved;
-  const dirty = !same(v, saved);
+  const coSaved = (c: CoAlerts[number]) => c.statuses.filter((x) => x.alert).map((x) => x.status);
+  const coOn = (c: CoAlerts[number]) => coDraft[c.companyId] ?? coSaved(c);
+  const coChanged = (alerts.data ?? []).filter((c) => coDraft[c.companyId] && JSON.stringify([...coDraft[c.companyId]].sort()) !== JSON.stringify([...coSaved(c)].sort()));
+  const dirty = !same(v, saved) || coChanged.length > 0;
+  const cancel = () => (setDraft(null), setCoDraft({}));
+  const saveAll = async () => {
+    setBusy(true);
+    try {
+      for (const c of coChanged) await rpc('delivery.saveAlertStatuses', { companyId: c.companyId, alert: coDraft[c.companyId] });
+      if (!same(v, saved)) await save.mutateAsync(v);
+      toast(t('livraison.prefs.saved'), 'ok');
+      cancel();
+      qc.invalidateQueries();
+    } catch (e: any) {
+      toast(e?.message ?? String(e), 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const flip = (list: string[], k: string) => (list.includes(k) ? list.filter((x) => x !== k) : [...list, k]);
+  const sayLabel = (k: string) => {
+    const [st, r] = k.split(':');
+    return t(`status.${st === 'failed' ? 'failReason' : 'returnReason'}.${r}`);
+  };
+  const alertSum = [
+    ...(alerts.data ?? []).filter((c) => c.statuses.length).map((c) => `${c.name} : ${chipsOf(c).filter((x) => x.keys.some((k) => coOn(c).includes(k))).length}`),
+    `${t('livraison.prefs.alerts.private')} : ${v.livreurAlerts.length}`,
+  ].join(' · ');
   const set = (p: Partial<Prefs>) => setDraft({ ...v, ...p });
   const backups = (companies.data ?? []).filter((c) => c.active && c.kind !== 'own');
   const backupName = backups.find((c) => c.id === v.privateBackup.companyId)?.name ?? '';
@@ -63,6 +116,7 @@ export function Preferences() {
       value: v.privateBackup.on ? t('livraison.prefs.sum.backupOn', { hours: v.privateBackup.hours, company: backupName || '…' }) : t('livraison.prefs.sum.backupOff'),
       changed: v.privateBackup.on !== rec.privateBackup.on,
     },
+    { icon: 'route', label: t('livraison.prefs.alerts.title'), value: alertSum, changed: JSON.stringify([...v.livreurAlerts].sort()) !== JSON.stringify([...rec.livreurAlerts].sort()) },
     { icon: 'alert', label: t('livraison.prefs.noStock'), value: t('livraison.prefs.sum.noStock', { count: v.noStockDays }), changed: v.noStockDays !== rec.noStockDays },
   ];
 
@@ -201,6 +255,68 @@ export function Preferences() {
             )}
           </section>
 
+          <section className="pf-group" aria-labelledby="pf-al-h">
+            <h3 id="pf-al-h">{t('livraison.prefs.alerts.title')}</h3>
+            <p className="pf-lead">{t('livraison.prefs.alerts.hint')}</p>
+            {!isAdmin ? null : alerts.isLoading ? (
+              <Loading />
+            ) : alerts.error ? (
+              <ErrorBox error={alerts.error} onRetry={() => alerts.refetch()} />
+            ) : (
+              (alerts.data ?? []).map((c) => (
+                <div key={c.companyId} className="pf-row pf-col">
+                  <span className="pf-text">
+                    <b>
+                      <Icon name="truck" /> {c.name}
+                    </b>
+                    <small>{c.statuses.length ? t('livraison.prefs.alerts.coHint', { count: chipsOf(c).filter((x) => x.keys.some((k) => coOn(c).includes(k))).length }) : t('livraison.prefs.alerts.none')}</small>
+                  </span>
+                  {c.statuses.length > 0 && (
+                    <div className="pf-chips pf-chips-s" role="group" aria-label={c.name}>
+                      {chipsOf(c).map((x) => {
+                        const on = x.keys.some((k) => coOn(c).includes(k));
+                        const next = on ? coOn(c).filter((k) => !x.keys.includes(k)) : [...coOn(c), ...x.keys];
+                        return (
+                          <label key={x.keys[0]} className={`pf-chip ${on ? 'on' : ''}`}>
+                            <input type="checkbox" checked={on} onChange={() => setCoDraft({ ...coDraft, [c.companyId]: next })} />
+                            <Icon name="checkcircle" />
+                            {x.label}
+                            {x.parcels > 0 && <small className="pf-n ltr">{x.parcels}</small>}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+            <div className="pf-row pf-col">
+              <span className="pf-text">
+                <b>
+                  <Icon name="bike" /> {t('livraison.prefs.alerts.private')}
+                </b>
+                <small>{t('livraison.prefs.alerts.privHint', { count: v.livreurAlerts.length })}</small>
+              </span>
+              {(['failed', 'returning'] as const).map((st) => (
+                <div key={st} className="pf-say">
+                  <span className="pf-say-h">{t(`livraison.prefs.alerts.${st}`)}</span>
+                  <div className="pf-chips pf-chips-s" role="group" aria-label={t(`livraison.prefs.alerts.${st}`)}>
+                    {LIVREUR_SAYS.filter((k) => k.startsWith(`${st}:`)).map((k) => {
+                      const on = v.livreurAlerts.includes(k);
+                      return (
+                        <label key={k} className={`pf-chip ${on ? 'on' : ''}`}>
+                          <input type="checkbox" checked={on} onChange={() => set({ livreurAlerts: flip(v.livreurAlerts, k) })} />
+                          <Icon name="checkcircle" />
+                          {sayLabel(k)}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
           <section className="pf-group">
             <h3>{t('livraison.prefs.gStock')}</h3>
             <div className="pf-row">
@@ -235,11 +351,11 @@ export function Preferences() {
           {dirty && (
             <div className="pf-foot" role="region" aria-label={t('livraison.prefs.unsaved')}>
               <span className="pf-state">{t('livraison.prefs.unsaved')}</span>
-              <button type="button" className="btn" onClick={() => setDraft(null)}>
+              <button type="button" className="btn" onClick={cancel}>
                 {t('common.cancel')}
               </button>
-              <button type="button" className="btn primary" disabled={missingBackup || save.isPending} onClick={() => save.mutate(v)}>
-                {save.isPending ? '…' : t('livraison.prefs.save')}
+              <button type="button" className="btn primary" disabled={missingBackup || busy} onClick={saveAll}>
+                {busy ? '…' : t('livraison.prefs.save')}
               </button>
             </div>
           )}
