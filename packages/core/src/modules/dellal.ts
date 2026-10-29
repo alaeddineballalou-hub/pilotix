@@ -766,6 +766,8 @@ export interface AiRequest {
   system: string;
   /** the same text cut in blocks (shared, shop, conversation): the server caches each one */
   systemBlocks?: string[];
+  /** which AI agent asks (dellal, cm, spy): its cost is counted for the shop under that name (platform/aiusage.ts) */
+  feature?: 'dellal' | 'cm' | 'spy';
   messages: AiMsg[];
   tools: readonly { name: string; description: string; input_schema: unknown }[];
   max_tokens: number;
@@ -818,7 +820,7 @@ export async function runAgent(ctx: Ctx, convId: number, opts: { followUp?: bool
     return out;
   };
   const complete = (req: AiRequest): Promise<AiResponse> =>
-    inPage ? (inPage({ ...req, runTool }) as Promise<AiResponse>) : useAi ? (ctx.server!.dellal!('complete', req, ctx) as Promise<AiResponse>) : demoBrain(ctx, req);
+    inPage ? (inPage({ ...req, runTool }) as Promise<AiResponse>) : useAi ? (ctx.server!.dellal!('complete', { ...req, feature: 'dellal' }, ctx) as Promise<AiResponse>) : demoBrain(ctx, req);
   for (let round = 0; round < 6; round++) {
     const res = await complete({ model, system, systemBlocks: prompt.blocks, messages, tools: DELLAL_TOOLS, max_tokens: 1024 });
     usage = { input_tokens: usage.input_tokens + num(res.usage?.input_tokens), output_tokens: usage.output_tokens + num(res.usage?.output_tokens) };

@@ -535,7 +535,7 @@ async function ask(ctx: Ctx, system: string, user: string, maxTokens: number): P
   const keyed = await aiKeyed(ctx);
   if (!inPage && !keyed) return null;
   const s = await dellalSettings(ctx.db);
-  const req: AiRequest = { model: s.model, system, messages: [{ role: 'user', content: user }], tools: [], max_tokens: maxTokens };
+  const req: AiRequest = { model: s.model, system, messages: [{ role: 'user', content: user }], tools: [], max_tokens: maxTokens, feature: 'spy' };
   const res: AiResponse = inPage ? ((await inPage({ ...req, runTool: async () => ({}) })) as AiResponse) : ((await ctx.server!.dellal!('complete', req, ctx)) as AiResponse);
   return res.content
     .map((b) => (b.type === 'text' ? b.text : ''))

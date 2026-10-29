@@ -2,9 +2,10 @@
 // addresses are removed inside each shop). Here: Pilotix's own AI key and nightly budget, last night's report, the
 // coach's morning check (approve, edit or reject each lesson, with the anonymized chats behind it), and the lesson books
 // with their test: a new book is kept only if it sells at least as well (delivered orders per chat).
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { dateTime, n, when } from '../../lib/format';
+import { dateOnly, dateTime, n, when } from '../../lib/format';
+import { downloadCsv } from '../../lib/files';
 import { POut, Staff, usePAction, usePRpc } from '../../lib/platform';
 import { Card, ErrorBox, Field, Icon, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
@@ -34,6 +35,7 @@ export function PilotAiPage({ staff }: { staff: Staff }) {
         <SettingsCard d={d} manager={manager} />
         <NightCard d={d} />
       </div>
+      {manager && <CostCard />}
       <ShopsCard d={d} manager={manager} />
       <CoachCard items={d.candidates} />
       <BooksCard d={d} manager={manager} />
@@ -85,6 +87,155 @@ function SettingsCard({ d, manager }: { d: State; manager: boolean }) {
 }
 
 /** Which shops teach Dellal: chosen here only (their terms say it); turning one off deletes what was kept of its chats. */
+// ---------------------------------------------------------------- what each shop's AI costs (to bill it)
+type Costs = POut<'p.ai.costs'>;
+const FEATS = ['dellal', 'cm', 'spy'] as const;
+/** USD with cents; a few tenths of a cent still show (never « 0 » for something that cost) */
+const usd = (x: number) => (x > 0 && x < 0.01 ? '< 0.01 $' : `${x.toFixed(2)} $`);
+const thisMonth = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Algiers', year: 'numeric', month: '2-digit' }).format(new Date()).slice(0, 7);
+const shiftMonth = (m: string, k: number) => {
+  const [y, mo] = m.split('-').map(Number);
+  const d = new Date(Date.UTC(y, mo - 1 + k, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+};
+
+function CostCard() {
+  const { t, i18n } = useTranslation();
+  const [month, setMonth] = useState(thisMonth);
+  const q = usePRpc('p.ai.costs', { month });
+  const save = usePAction('p.ai.rate', { success: t('platform.saved') });
+  const [rate, setRate] = useState('');
+  const d = q.data;
+  useEffect(() => {
+    if (d) setRate(d.rate ? String(d.rate) : '');
+  }, [d?.rate]); // eslint-disable-line react-hooks/exhaustive-deps
+  const label = new Intl.DateTimeFormat(i18n.language === 'ar' ? 'ar-DZ' : i18n.language, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${month}-01T12:00:00Z`));
+  const csv = (c: Costs) =>
+    downloadCsv(`pilotix-ia-${c.month}.csv`, [
+      [t('platform.col.shop'), ...FEATS.map((f) => t(`platform.pilot.costs.f.${f}`)), t('platform.pilot.costs.total'), t('platform.pilot.costs.toBill')],
+      ...c.shops.map((s) => [s.name, ...FEATS.map((f) => s[f].usd.toFixed(4)), s.pilotixUsd.toFixed(4), s.da ?? '']),
+      [t('platform.pilot.costs.all'), ...FEATS.map((f) => c.shops.reduce((a, s) => a + s[f].usd, 0).toFixed(4)), c.total.usd.toFixed(4), c.total.da ?? ''],
+    ]);
+  return (
+    <Card title={t('platform.pilot.costs.title')} help={t('platform.pilot.costs.help')}>
+      <div className="pilot-cost-bar">
+        <div className="row" style={{ gap: 6, alignItems: 'center' }}>
+          <button type="button" className="btn small" aria-label={t('platform.pilot.costs.prev')} onClick={() => setMonth((m) => shiftMonth(m, -1))}>
+            <Icon name="chevl" />
+          </button>
+          <b className="pilot-cost-month">{label}</b>
+          <button type="button" className="btn small" aria-label={t('platform.pilot.costs.next')} disabled={month >= thisMonth()} onClick={() => setMonth((m) => shiftMonth(m, 1))}>
+            <Icon name="chevr" />
+          </button>
+        </div>
+        <form
+          className="row pilot-cost-rate"
+          style={{ gap: 6, alignItems: 'center' }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            save.mutate({ rate: Math.max(0, Number(rate.replace(',', '.')) || 0) });
+          }}
+        >
+          <span className="small">1 $ =</span>
+          <input type="number" className="ltr" min={0} max={10000} step={1} value={rate} placeholder="—" onChange={(e) => setRate(e.target.value)} aria-label={t('platform.pilot.costs.rate')} />
+          <span className="small">DA</span>
+          <button type="submit" className="btn small" disabled={save.isPending}>
+            {t('common.save')}
+          </button>
+        </form>
+      </div>
+      {q.isLoading ? (
+        <Loading />
+      ) : q.error || !d ? (
+        <ErrorBox error={q.error} onRetry={() => q.refetch()} />
+      ) : d.shops.length === 0 ? (
+        <p className="muted">{t('platform.pilot.costs.none')}</p>
+      ) : (
+        <div className="tbl-wrap">
+          <table className="tbl pp-tbl pilot-cost">
+            <thead>
+              <tr>
+                <th>{t('platform.col.shop')}</th>
+                {FEATS.map((f) => (
+                  <th key={f} className="num">
+                    {t(`platform.pilot.costs.f.${f}`)}
+                  </th>
+                ))}
+                <th className="num">{t('platform.pilot.costs.total')}</th>
+                {d.rate > 0 && <th className="num">{t('platform.pilot.costs.toBill')}</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {d.shops.map((s) => (
+                <tr key={s.id}>
+                  <td data-l={t('platform.col.shop')}>
+                    <a href={`#/platform/shops/${s.id}`}>{s.name}</a>
+                    {s.shopUsd > 0 && <small className="muted"> · {t('platform.pilot.costs.ownKey', { usd: usd(s.shopUsd) })}</small>}
+                  </td>
+                  {FEATS.map((f) => (
+                    <td key={f} className="num ltr" data-l={t(`platform.pilot.costs.f.${f}`)}>
+                      {s[f].calls ? (
+                        <>
+                          {usd(s[f].usd)}
+                          <small className="muted pilot-cost-n">{t('platform.pilot.costs.calls', { count: s[f].calls, n: n(s[f].calls) })}</small>
+                        </>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                  ))}
+                  <td className="num ltr" data-l={t('platform.pilot.costs.total')}>
+                    <b>{usd(s.pilotixUsd)}</b>
+                  </td>
+                  {d.rate > 0 && (
+                    <td className="num ltr" data-l={t('platform.pilot.costs.toBill')}>
+                      <b>{s.da === null ? '—' : `${n(s.da)} DA`}</b>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>
+                  <b>{t('platform.pilot.costs.all')}</b>
+                </td>
+                {FEATS.map((f) => (
+                  <td key={f} className="num ltr" data-l={t(`platform.pilot.costs.f.${f}`)}>
+                    {usd(d.shops.reduce((a, s) => a + s[f].usd, 0))}
+                  </td>
+                ))}
+                <td className="num ltr" data-l={t('platform.pilot.costs.total')}>
+                  <b>{usd(d.total.usd)}</b>
+                </td>
+                {d.rate > 0 && (
+                  <td className="num ltr" data-l={t('platform.pilot.costs.toBill')}>
+                    <b>{d.total.da === null ? '—' : `${n(d.total.da)} DA`}</b>
+                  </td>
+                )}
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+      {d && (
+        <div className="pilot-cost-foot">
+          <p className="small muted">
+            {t('platform.pilot.costs.night', { usd: usd(d.nightUsd) })}
+            {d.total.shopUsd > 0 && <> · {t('platform.pilot.costs.ownKeyAll', { usd: usd(d.total.shopUsd) })}</>}
+          </p>
+          <p className="small muted">{d.since ? t('platform.pilot.costs.since', { date: dateOnly(d.since) }) : t('platform.pilot.costs.notYet')}</p>
+          {d.shops.length > 0 && (
+            <button type="button" className="btn small" onClick={() => csv(d)}>
+              <Icon name="download" /> {t('platform.pilot.costs.csv')}
+            </button>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function ShopsCard({ d, manager }: { d: State; manager: boolean }) {
   const { t } = useTranslation();
   const [q, setQ] = useState('');

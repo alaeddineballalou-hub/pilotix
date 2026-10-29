@@ -587,6 +587,9 @@ class ApiController {
   @Public()
   @Get('domain-check')
   async domainAllowed(@Query('domain') domain: string, @Res() res: any) {
+    // the backup door (direct.<platform>, deploy/Caddyfile): the same app without Cloudflare, its certificate made at its first visit
+    const host = this.platformHost();
+    if (host && String(domain ?? '').trim().toLowerCase() === `direct.${host}`) return res.status(200).send('ok');
     const id = await core.shopIdByDomain(this.core.t, String(domain ?? ''));
     return res.status(id ? 200 : 404).send(id ? 'ok' : 'unknown');
   }

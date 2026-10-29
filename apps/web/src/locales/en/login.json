@@ -5,6 +5,7 @@
   "submit": "Log in",
   "server": "Server address",
   "serverHint": "Given by your administrator",
+  "backupDoor": "Pilotix backup door: it leads to the same server without going through Cloudflare. Use it only when pilotix.online does not open, with your e-mail and password.",
   "error": "Wrong email or password",
   "demo": "Demo",
   "demoText": "log in with a test account (invented data, nothing is sent):",

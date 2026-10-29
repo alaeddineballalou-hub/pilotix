@@ -85,6 +85,8 @@ r = await get('/auth/link/not-a-real-link');
 check(r.status === 200 && r.data?.kind === null, 'a wrong e-mail link is just « no longer valid »', r.data);
 r = await get('/domain-check?domain=no-such-shop.example');
 check(r.status === 404, 'no HTTPS certificate for a domain no shop has', r.status);
+r = await get(`/domain-check?domain=direct.${new URL(SITE).hostname}`);
+check(r.status === 200, 'the backup door (direct.<site>, without Cloudflare) may get its HTTPS certificate', r.status);
 r = await get('/llms.txt');
 check(r.status === 200 && /^# /.test(r.text), 'llms.txt for AI assistants', r.text.slice(0, 80));
 r = await get('/auth/demo');

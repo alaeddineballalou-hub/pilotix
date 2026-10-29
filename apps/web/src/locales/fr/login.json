@@ -5,6 +5,7 @@
   "submit": "Se connecter",
   "server": "Adresse du serveur",
   "serverHint": "Fournie par votre administrateur",
+  "backupDoor": "Porte de secours de Pilotix : elle mène au même serveur sans passer par Cloudflare. Utilisez-la seulement quand pilotix.online ne s’ouvre pas, avec votre e-mail et votre mot de passe.",
   "error": "Email ou mot de passe incorrect",
   "demo": "Démo",
   "demoText": "entrez avec un compte d’essai (données fictives, rien n’est envoyé) :",

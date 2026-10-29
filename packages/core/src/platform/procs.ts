@@ -45,6 +45,7 @@ import {
 import type { Tenancy } from './tenancy';
 import * as pilot from '../modules/pilotlearn';
 import { pilotConfig, savePilotConfig } from './pilotai';
+import { AI_FEATURES, aiBill, aiUsageOfMonth, aiUsageSince, monthOf, saveAiBill } from './aiusage';
 
 export const STAFF_ROLES = ['owner', 'manager', 'support'] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
@@ -1115,6 +1116,64 @@ export const PLATFORM_REGISTRY = {
     const r = await pilot.rollback(ctx.t.platform, ctx.staff.name || ctx.staff.email, { now: new Date(ctx.now()) });
     if (!r.ok) throw bad(lessonErr(r));
     await audit(ctx, 'pilot.rollback', null, {});
+    return r;
+  }),
+
+  /**
+   * What each shop's AI cost Pilotix in a month (Algeria's days), to bill it: Dellal, the CM AI agent and AI Spy, in USD
+   * at Anthropic's list price, and in DA at the owner's rate. Only answers paid with Pilotix's key count in « to bill »;
+   * answers a shop paid with its own key are shown apart. The night learning (Pilot AI) is Pilotix's own cost.
+   */
+  'p.ai.costs': pproc(MANAGERS, z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional() }), async (ctx, i) => {
+    const month = i.month ?? monthOf(ctx.now());
+    const [rows, since, bill, shops, nights] = await Promise.all([
+      aiUsageOfMonth(ctx.t, month),
+      aiUsageSince(ctx.t),
+      aiBill(ctx.t),
+      loadShops(ctx.t),
+      ctx.t.platform
+        .query(
+          `SELECT coalesce(sum(spend_usd), 0) AS usd FROM platform.pilot_nights
+            WHERE night >= ($1 || '-01')::date AND night < (($1 || '-01')::date + interval '1 month')`,
+          [month],
+        )
+        .catch(() => [{ usd: 0 }]),
+    ]);
+    const names = new Map(shops.map((s) => [s.id, s]));
+    type Line = { calls: number; usd: number };
+    const zero = (): Line => ({ calls: 0, usd: 0 });
+    const per = new Map<number, { dellal: Line; cm: Line; spy: Line; other: Line; pilotixUsd: number; shopUsd: number }>();
+    for (const r of rows) {
+      const p = per.get(r.shopId) ?? { dellal: zero(), cm: zero(), spy: zero(), other: zero(), pilotixUsd: 0, shopUsd: 0 };
+      if (r.payer === 'pilotix') {
+        p[r.feature].calls += r.calls;
+        p[r.feature].usd += r.usd;
+        p.pilotixUsd += r.usd;
+      } else p.shopUsd += r.usd;
+      per.set(r.shopId, p);
+    }
+    const list = [...per.entries()]
+      .map(([id, p]) => {
+        const s = names.get(id);
+        return { id, name: s?.name ?? `#${id}`, slug: s?.slug ?? '', ...p, da: bill.rate ? Math.round(p.pilotixUsd * bill.rate) : null };
+      })
+      .sort((a, b) => b.pilotixUsd - a.pilotixUsd || a.name.localeCompare(b.name));
+    const sum = (k: 'pilotixUsd' | 'shopUsd') => list.reduce((a, x) => a + x[k], 0);
+    const total = sum('pilotixUsd');
+    return {
+      month,
+      since,
+      rate: bill.rate,
+      features: AI_FEATURES,
+      shops: list,
+      total: { usd: total, da: bill.rate ? Math.round(total * bill.rate) : null, shopUsd: sum('shopUsd') },
+      nightUsd: num(nights[0]?.usd),
+    };
+  }),
+  /** The owner's billing rate: how many DA for 1 $ (0 = shown in USD only). */
+  'p.ai.rate': pproc(MANAGERS, z.object({ rate: z.number().min(0).max(10_000) }), async (ctx, i) => {
+    const r = await saveAiBill(ctx.t, { rate: i.rate });
+    await audit(ctx, 'ai.rate', null, { rate: r.rate });
     return r;
   }),
 };
