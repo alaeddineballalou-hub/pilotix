@@ -133,7 +133,7 @@ export interface ParcelAction {
   run: () => void;
 }
 
-export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Order; x?: PExtra; reason: string | null; actions: ParcelAction[]; onClaim?: () => void; onClose: () => void }) {
+export function ParcelPage({ o, x, reason, actions, onClaim, onClose, onSkip }: { o: Order; x?: PExtra; reason: string | null; actions: ParcelAction[]; onClaim?: () => void; onClose: () => void; onSkip?: () => void }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const meta = useRpc('orders.uiMeta', {}, { staleTime: 5 * 60_000 });
@@ -225,6 +225,11 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Ord
             {d !== null ? ` · ${t('suivi.ph.since', { n: d })}` : ''}
           </small>
         </div>
+        {onSkip && (
+          <button type="button" className="pxs-skip" onClick={onSkip}>
+            {t('suivi.skipNext')}
+          </button>
+        )}
         <CoBadge o={o} x={x} />
       </header>
 

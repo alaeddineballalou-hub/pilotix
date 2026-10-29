@@ -438,7 +438,6 @@ function List({ tab }: { tab: ListTab }) {
             { key: 'treat', label: t('suivi.ph.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) },
             { key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: focus.x?.companyKind === 'own' }) },
             { key: 'cancel', label: t('suivi.ph.cancel'), tone: 'bad', run: () => setDlg({ kind: 'cancel', o }) },
-            { key: 'skip', label: t('suivi.skipNext'), run: () => void nextAlert() },
           ]}
           onClaim={agency ? undefined : (o) => setDlg({ kind: 'claim', o, toLivreur: focus.x?.companyKind === 'own' })}
         />
@@ -486,7 +485,7 @@ function FocusAlert({ id, x, actions, onClaim, onLeft, onClose }: { id: number; 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [left, id]);
   if (!o || o.id !== id || left) return null;
-  return <ParcelPage o={o} x={x ?? undefined} reason={reasonOf(o, x ?? undefined)} actions={actions(o)} onClaim={onClaim ? () => onClaim(o) : undefined} onClose={onClose} />;
+  return <ParcelPage o={o} x={x ?? undefined} reason={reasonOf(o, x ?? undefined)} actions={actions(o)} onClaim={onClaim ? () => onClaim(o) : undefined} onClose={onClose} onSkip={onLeft} />;
 }
 
 /** Next to an alert: claim to the courier (copies the tracking), or call / write to our own livreur. */
