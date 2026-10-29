@@ -480,6 +480,20 @@ export async function createOrder(
   if (input.confirm && !input.isStopdesk && !String(input.commune ?? '').trim()) throw bad('Indiquez la commune avant de confirmer');
   const me = ctx.session.profile.id;
 
+  // the other channels get the landing pages' anti-fraud check too (no browser signals): reasons in the note, and
+  // what a landing page would block « À vérifier » when the order came by itself (worked out before the transaction:
+  // the Pilotix network is asked on the platform's own database)
+  const guard =
+    opts.guard && !input.isExchange
+      ? await channelGuard(ctx, db, {
+          phone,
+          name: input.customerName,
+          wilayaId: input.wilayaId ?? null,
+          commune: String(input.commune ?? ''),
+          productIds: input.items.map((l) => l.productId).filter((x): x is number => !!x),
+          qty: input.items.reduce((n, l) => n + l.qty, 0),
+        })
+      : null;
   const order = await db.tx(async (tx) => {
     const priced = await priceItems(tx, input.items, input.isExchange);
     if (input.discount > priced.maxDiscount) throw bad(`Remise trop élevée (maximum ${priced.maxDiscount} DA)`);
@@ -526,12 +540,6 @@ export async function createOrder(
     const look = num(cust.delivered) === 0 && !cust.blacklisted
       ? await lookAlikeOf(tx, { phone, name: input.customerName, wilayaId: input.wilayaId, commune: String(input.commune ?? ''), device: opts.device ?? null })
       : null;
-    // the other channels get the landing pages' anti-fraud check too (no browser signals): reasons in the note, and
-    // what a landing page would block « À vérifier » when the order came by itself
-    const guard =
-      opts.guard && !input.isExchange
-        ? await channelGuard(ctx, tx, { phone, name: input.customerName, wilayaId: input.wilayaId ?? null, commune: String(input.commune ?? ''), productIds: lines.map((l) => l.productId).filter((x): x is number => !!x), qty: lines.reduce((n, l) => n + l.qty, 0) })
-        : null;
     if (guard?.verdict === 'block' && opts.guard === 'check') conf = 'to_check';
     const trustNotes = [homeRefused ? STOPDESK_NOTE : '', look ? lookAlikeNote(look) : '', guard && guard.verdict !== 'allow' ? guardNote(guard, opts.guard!) : '', confWhy ? `Pas confirmée : ${confWhy}` : ''].filter(Boolean);
     const internalNote = [input.internalNote ?? '', ...trustNotes].filter(Boolean).join('\n') || null;
