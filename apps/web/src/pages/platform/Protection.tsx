@@ -79,6 +79,8 @@ export function ProtectionPage({ demo }: { demo?: boolean }) {
         <Kpi label={t('platform.prot.kCampaign')} value={n(tt.campaign)} sub={t('platform.prot.kCampaignSub')} icon="trend" />
       </Kpis>
 
+      <BuyerQuality s={s} period={period} />
+
       <div className="pp-prot-grid">
         <Card title={t('platform.prot.byDay')} actions={<Legend />} className="pp-prot-days">
           <DayBars days={days} start={firstNet} />
@@ -122,6 +124,9 @@ export function ProtectionPage({ demo }: { demo?: boolean }) {
                 <tr>
                   <th>{t('platform.prot.cStore')}</th>
                   <th className="num">{t('platform.prot.cOrders')}</th>
+                  <th className="num" title={t('platform.prot.qHelp', { count: OPEN_DAYS })}>
+                    {t('platform.prot.cGood')}
+                  </th>
                   <th className="num">{t('platform.prot.cCaught')}</th>
                   <th className="num">{t('platform.prot.cBlocked')}</th>
                   <th className="num">{t('platform.prot.cReview')}</th>
@@ -144,6 +149,12 @@ export function ProtectionPage({ demo }: { demo?: boolean }) {
                       </td>
                       <td className="num ltr" data-l={t('platform.prot.cOrders')}>
                         {n(x.orders)}
+                      </td>
+                      <td className="num" data-l={t('platform.prot.cGood')}>
+                        <span className="pp-two pp-two-r">
+                          <span className="ltr">{x.buyers ? pct(x.good / x.buyers, 1) : '—'}</span>
+                          <small className="muted ltr">{t('platform.prot.qOf', { n: n(x.good), buyers: n(x.buyers) })}</small>
+                        </span>
                       </td>
                       <td className="num" data-l={t('platform.prot.cCaught')}>
                         <span className="pp-two pp-two-r">
@@ -469,6 +480,187 @@ function Growth({ days, pick, label }: { days: Day[]; pick: Pick; label: string 
   );
 }
 
+/** the last days are not finished: agents are still confirming their orders */
+const OPEN_DAYS = 3;
+
+/** Are the buyers getting better or worse? Of 100 orders received (a customer sending the same order again counts once),
+ *  how many came from real buyers: confirmed by an agent, or delivered. Day by day, its 7-day average, and the period
+ *  against the one before. */
+function BuyerQuality({ s, period }: { s: Stats; period: Period }) {
+  const { t } = useTranslation();
+  const days = s.days;
+  const done = days.slice(0, Math.max(0, days.length - OPEN_DAYS));
+  const sum = (list: Day[], k: 'buyers' | 'good' | 'bad') => list.reduce((a, d) => a + d[k], 0);
+  const buyers = sum(done, 'buyers');
+  const now = buyers ? sum(done, 'good') / buyers : null;
+  const pv = s.previous && s.previous.buyers ? s.previous.good / s.previous.buyers : null;
+  const delta = now !== null && pv !== null ? (now - pv) * 100 : null;
+  const dir = delta === null ? null : Math.abs(delta) < 1 ? 'flat' : delta > 0 ? 'up' : 'down';
+  // the split, on the same finished days as the figure above it (one number, one meaning)
+  const tt = { buyers, good: sum(done, 'good'), bad: sum(done, 'bad') };
+  const other = Math.max(0, tt.buyers - tt.good - tt.bad);
+  const parts = [
+    { k: 'good', v: tt.good },
+    { k: 'bad', v: tt.bad },
+    { k: 'rest', v: other },
+  ] as const;
+  const pts = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(1).replace('.', document.documentElement.lang === 'en' ? '.' : ',')}`;
+  return (
+    <Card title={t('platform.prot.q')} help={t('platform.prot.qHelp', { count: OPEN_DAYS })} className="pp-q">
+      <div className="pp-q-grid">
+        <div className="pp-q-side">
+          <div className="pp-q-lead">
+            <b className="ltr">{now === null ? '—' : pct(now, 1)}</b>
+            <span>{t('platform.prot.qLead')}</span>
+          </div>
+          {dir ? (
+            <p className={`pp-q-trend ${dir}`}>
+              <span className="pp-q-dir">
+                {dir === 'up' ? '▲' : dir === 'down' ? '▼' : '='} {t(`platform.prot.qDir.${dir}`)}
+              </span>{' '}
+              <b className="pp-q-pts">
+                <span dir="ltr">{pts(delta!)}</span> {t('platform.prot.qPts')}
+              </b>{' '}
+              {t('platform.prot.qVs', { count: period, prev: pct(pv, 1) })}
+            </p>
+          ) : (
+            <p className="pp-q-trend muted">{t('platform.prot.qNoPrev')}</p>
+          )}
+          {tt.buyers > 0 && (
+            <>
+              <div className="pp-q-bar" role="img" aria-label={parts.map((p) => `${t(`platform.prot.qPart.${p.k}`)} ${pct(p.v / tt.buyers)}`).join(', ')}>
+                {parts.map((p) => (p.v ? <i key={p.k} className={`q-${p.k}`} style={{ flexGrow: p.v }} /> : null))}
+              </div>
+              <ul className="pp-q-parts">
+                {parts.map((p) => (
+                  <li key={p.k}>
+                    <i className={`q-${p.k}`} />
+                    <span>{t(`platform.prot.qPart.${p.k}`)}</span>
+                    <b className="ltr">{pct(p.v / tt.buyers, 1)}</b>
+                    <small className="ltr">{n(p.v)}</small>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+        <QualityLine days={days} />
+      </div>
+    </Card>
+  );
+}
+
+/** the buyers' quality day by day (thin grey), its 7-day average (the blue line), the unfinished last days dashed */
+function QualityLine({ days }: { days: Day[] }) {
+  const { t, i18n } = useTranslation();
+  const loc = useLoc();
+  const [box, size] = useBox();
+  const [hov, setHov] = useState<number | null>(null);
+  const W = Math.max(280, size.w || 640);
+  const H = 220;
+  const T = 10;
+  const B = 26;
+  const L = 44;
+  const R = 10;
+  const iw = W - L - R;
+  const ih = H - T - B;
+  const slot = iw / days.length;
+  const x = (i: number) => L + slot * (i + 0.5);
+  const open = days.length - OPEN_DAYS; // from this index on: not finished
+  // each finished day (the unfinished ones are only half counted yet: left out of the grey line)
+  const daily = days.map((d, i) => (d.buyers && i < open ? d.good / d.buyers : null));
+  const avgOn = days.length >= 14;
+  // the 7-day average: the days of the window up to this one (buyers added up, so a busy day weighs more)
+  const avg = days.map((_, i) => {
+    const w = days.slice(Math.max(0, i - 6), i + 1);
+    const b = w.reduce((a, d) => a + d.buyers, 0);
+    return b ? w.reduce((a, d) => a + d.good, 0) / b : null;
+  });
+  // drawn up to the last finished day only: the unfinished days would look like a fall that is not real
+  const main = (avgOn ? avg : days.map((d) => (d.buyers ? d.good / d.buyers : null))).map((v, i) => (i < open ? v : null));
+  // the scale follows the values (a rate, not a count: a rise of a few points must be seen), in steps of 5 or 10 points
+  const seen = [...daily, ...main].filter((v): v is number => v !== null);
+  const span = seen.length ? [Math.min(...seen), Math.max(...seen)] : [0, 1];
+  const step = span[1] - span[0] > 0.3 ? 0.1 : 0.05;
+  const lo = Math.max(0, Math.floor((span[0] - 0.02) / step) * step);
+  const hi = Math.min(1, Math.max(lo + 2 * step, Math.ceil((span[1] + 0.02) / step) * step));
+  const ticks = Array.from({ length: Math.round((hi - lo) / step) + 1 }, (_, i) => lo + i * step);
+  const y = (v: number) => T + ih - ((v - lo) / (hi - lo)) * ih;
+  const path = (vals: (number | null)[], from: number, to: number) => {
+    let d = '';
+    let prev = -2;
+    for (let i = from; i <= to; i++) {
+      const v = vals[i];
+      if (v === null || v === undefined) continue;
+      d += `${i === prev + 1 ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`;
+      prev = i;
+    }
+    return d;
+  };
+  const any = daily.some((v) => v !== null);
+  const h = hov === null ? null : days[hov];
+  return (
+    <div className="pp-chart pp-q-chart" ref={box} onMouseLeave={() => setHov(null)}>
+      {!any ? (
+        <p className="pp-chart-one muted">{t('platform.prot.qNone')}</p>
+      ) : (
+        <>
+          <span className="pp-lg pp-q-lg">
+            {avgOn && (
+              <span>
+                <i className="qd" /> {t('platform.prot.qDaily')}
+              </span>
+            )}
+            <span>
+              <i className="qa" /> {avgOn ? t('platform.prot.qAvg') : t('platform.prot.qDaily')}
+            </span>
+            <span>
+              <i className="qo" /> {t('platform.prot.qOpen')}
+            </span>
+          </span>
+          <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t('platform.prot.q')}>
+            {ticks.map((v, i) => (
+              <g key={i}>
+                <line className={i === 0 ? 'base' : 'g'} x1={L} x2={W - R} y1={y(v)} y2={y(v)} />
+                <text className="ax" x={L - 8} y={y(v) + 4} textAnchor="end">
+                  {Math.round(v * 100)} %
+                </text>
+              </g>
+            ))}
+            {open > 0 && open < days.length && <rect className="pp-q-open" x={L + slot * open} y={T} width={W - R - (L + slot * open)} height={ih} />}
+            {avgOn && <path className="qd" d={path(daily, 0, Math.max(0, open - 1))} />}
+            <path className="qa" d={path(main, 0, days.length - 1)} />
+            {h && main[hov!] !== null && main[hov!] !== undefined && <circle className="dt q" cx={x(hov!)} cy={y(main[hov!]!)} r={4} />}
+            <DateLabels days={days} x={x} iw={iw} L={L} R={R} W={W} Hy={H - 6} />
+            {days.map((d, i) => (
+              <rect key={d.day} x={L + slot * i} y={0} width={slot} height={H} fill="transparent" onMouseEnter={() => setHov(i)} onClick={() => setHov(i)} />
+            ))}
+          </svg>
+          {h && hov !== null && (
+            <div className="pp-tip" dir={i18n.dir()} style={{ left: `${Math.min(80, Math.max(20, (x(hov) / W) * 100))}%` }}>
+              <b>
+                {shortDayIn(loc, h.day)}
+                {hov >= open ? ` · ${t('platform.prot.qOpenShort')}` : ''}
+              </b>
+              <span>
+                {t('platform.prot.qPart.good')} <b className="ltr">{h.buyers ? pct(h.good / h.buyers, 1) : '—'}</b>
+              </span>
+              {avgOn && hov < open && (
+                <span className="pp-tip-sub">
+                  {t('platform.prot.qAvg')} <b className="ltr">{avg[hov] === null ? '—' : pct(avg[hov], 1)}</b>
+                </span>
+              )}
+              <span className="pp-tip-sub">
+                {t('platform.prot.qOf', { n: n(h.good), buyers: n(h.buyers) })}
+              </span>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ---- the preview's example (no server): a fixed, believable platform — about two dozen stores, the network started
 // 38 days ago and learns a little every day, two attack days. Marked « Exemple » on the page.
 const EXAMPLE_STORES = [
@@ -493,11 +685,11 @@ export function demoStats(period: Period, now = Date.now()): Stats {
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const START = 38;
   const all: Day[] = [];
-  for (let k = 89; k >= 0; k--) {
+  for (let k = 179; k >= 0; k--) {
     const day = algeriaDay(now - k * DAY);
     const friday = new Date(`${day}T12:00:00Z`).getUTCDay() === 5;
-    const grow = 1 + (89 - k) / 150;
-    const orders = Math.round((360 + rnd() * 140) * (friday ? 0.72 : 1) * grow);
+    const grow = 1 + (179 - k) / 300;
+    const orders = Math.round((330 + rnd() * 140) * (friday ? 0.72 : 1) * grow);
     const attack = k === 11 ? 2.7 : k === 47 ? 1.9 : 1;
     const blocked = Math.round(orders * (0.04 + rnd() * 0.018) * attack);
     const review = Math.round(orders * (0.055 + rnd() * 0.02) * (attack > 1 ? 1.5 : 1));
@@ -505,6 +697,13 @@ export function demoStats(period: Period, now = Date.now()): Stats {
     const age = START - k; // days since the network started
     const network = live ? Math.round((review + blocked) * Math.min(0.3, 0.05 + age * 0.0065)) : 0;
     const campaign = k === 11 ? Math.round(review * 0.42) : k === 47 ? Math.round(review * 0.3) : Math.round(rnd() * 4);
+    // the buyers: a few send the same order again; real ones slowly more (the fakes find fewer ways in), less on attack
+    // days; the last days are not finished (agents are still confirming)
+    const buyers = orders - Math.round(orders * 0.03);
+    const bad = Math.min(buyers, blocked + Math.round(review * 0.45));
+    const q = (0.5 + (179 - k) * 0.0008 + (rnd() - 0.5) * 0.05) / (attack > 1 ? 1.12 : 1);
+    const unfinished = k === 0 ? 0.5 : k === 1 ? 0.78 : k === 2 ? 0.92 : 1;
+    const good = Math.min(buyers - bad, Math.round(buyers * q * unfinished));
     all.push({
       day,
       orders,
@@ -512,6 +711,9 @@ export function demoStats(period: Period, now = Date.now()): Stats {
       review,
       network,
       campaign,
+      buyers,
+      good,
+      bad,
       stores: live ? 15 + Math.floor(age / 4) : null,
       sharing: live ? 7 + Math.floor(age / 3.8) : null,
       phones: live ? Math.round(160 + age * 27 + age * age * 0.18) : null,
@@ -519,30 +721,43 @@ export function demoStats(period: Period, now = Date.now()): Stats {
       agreed: live ? Math.round(4 + age * 1.15 + age * age * 0.031) : null,
     });
   }
+  type Count = Stats['totals'];
+  const KEYS: (keyof Count)[] = ['orders', 'blocked', 'review', 'network', 'campaign', 'buyers', 'good', 'bad'];
+  const add = (list: Day[]) => {
+    const c = Object.fromEntries(KEYS.map((k) => [k, 0])) as unknown as Count;
+    for (const d of list) for (const k of KEYS) c[k] += d[k];
+    return c;
+  };
   const days = all.slice(-period);
-  const totals = { orders: 0, blocked: 0, review: 0, network: 0, campaign: 0 };
-  for (const d of days) for (const k of Object.keys(totals) as (keyof typeof totals)[]) totals[k] += d[k];
+  const totals = add(days);
+  const previous = add(all.slice(-2 * period, -period));
   const last = all[all.length - 1];
   // each store's last 30 days: the same days, shared out (they add up to the 30-day totals)
-  const month = all.slice(-30);
-  const sum = (k: 'orders' | 'blocked' | 'review' | 'network' | 'campaign') => month.reduce((a, d) => a + d[k], 0);
+  const month = add(all.slice(-30));
   const count = last.stores!;
   const names = EXAMPLE_STORES.slice(0, count);
   const weight = names.map((_, i) => 1 / (1 + i * 0.22));
   const hit = names.map((_, i) => (i === 2 ? 3.4 : i === 9 ? 1.8 : 0.75 + ((i * 37) % 10) / 20));
-  const orders = split(sum('orders'), weight);
-  const blocked = split(sum('blocked'), weight.map((w, i) => w * hit[i]));
-  const review = split(sum('review'), weight.map((w, i) => w * hit[i]));
-  const network = split(sum('network'), weight.map((w, i) => w * (i < 6 ? 1.2 : 0.8)));
-  const campaign = split(sum('campaign'), weight.map((w, i) => w * (i === 2 ? 6 : 0.5)));
+  const by = (k: keyof Count, w: number[]) => split(month[k], w);
+  const per = {
+    orders: by('orders', weight),
+    blocked: by('blocked', weight.map((w, i) => w * hit[i])),
+    review: by('review', weight.map((w, i) => w * hit[i])),
+    network: by('network', weight.map((w, i) => w * (i < 6 ? 1.2 : 0.8))),
+    campaign: by('campaign', weight.map((w, i) => w * (i === 2 ? 6 : 0.5))),
+    buyers: by('buyers', weight),
+    good: by('good', weight.map((w, i) => w * (1.12 - 0.12 * hit[i] + ((i * 53) % 7) / 60))),
+    bad: by('bad', weight.map((w, i) => w * hit[i])),
+  };
   const sharing = last.sharing!;
   const shared = split(Math.round((last.phones! + last.devices!) * 1.12), weight.map((w, i) => (i < sharing ? w : 0)));
   return {
     network: { stores: count, sharing, phones: last.phones!, devices: last.devices!, agreed: last.agreed! },
     totals,
+    previous,
     days,
     stores: names
-      .map((name, i) => ({ id: 1000 + i, name, slug: name.toLowerCase().replace(/[^a-z]+/g, '-'), orders: orders[i], blocked: blocked[i], review: review[i], network: network[i], campaign: campaign[i], shared: shared[i] }))
+      .map((name, i) => ({ id: 1000 + i, name, slug: name.toLowerCase().replace(/[^a-z]+/g, '-'), shared: shared[i], ...(Object.fromEntries(KEYS.map((k) => [k, per[k][i]])) as unknown as Count) }))
       .sort((a, b) => b.orders - a.orders || a.name.localeCompare(b.name)),
     minSellers: 2,
     lastRunAt: new Date(now - 12 * 60_000).toISOString(),

@@ -520,6 +520,17 @@ CREATE TABLE IF NOT EXISTS platform.protection_stores (
 );
 `;
 
+// The buyers' quality, day by day and per store: the orders not sent again, those that turned out real (confirmed or
+// delivered) and those that turned out fake (blocked, or fake / wrong number for the agent).
+const P011 = `
+ALTER TABLE platform.protection_daily ADD COLUMN IF NOT EXISTS buyers integer NOT NULL DEFAULT 0;
+ALTER TABLE platform.protection_daily ADD COLUMN IF NOT EXISTS good integer NOT NULL DEFAULT 0;
+ALTER TABLE platform.protection_daily ADD COLUMN IF NOT EXISTS bad integer NOT NULL DEFAULT 0;
+ALTER TABLE platform.protection_stores ADD COLUMN IF NOT EXISTS buyers integer NOT NULL DEFAULT 0;
+ALTER TABLE platform.protection_stores ADD COLUMN IF NOT EXISTS good integer NOT NULL DEFAULT 0;
+ALTER TABLE platform.protection_stores ADD COLUMN IF NOT EXISTS bad integer NOT NULL DEFAULT 0;
+`;
+
 export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p001_platform', P001],
   ['p002_accounts_signup_domains', P002],
@@ -531,6 +542,7 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p008_pro_marketers', P008],
   ['p009_fraud_reputation', P009],
   ['p010_protection_history', P010],
+  ['p011_buyer_quality', P011],
 ];
 
 /** Creates or updates the platform's tables. */
