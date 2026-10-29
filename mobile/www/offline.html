@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <title>Pilotix</title>
+  <!--
+    "No internet" screen of the Pilotix app (capacitor.config.json → server.errorPath).
+    The app shows it when https://pilotix.online can't be opened. It must work with no
+    internet at all: no outside fonts, pictures or scripts. On Android it can't use
+    Capacitor plugins, so it only uses plain browser features.
+  -->
+  <style>
+    :root { --navy: #1B2A47; --navy-2: #24365A; --orange: #F7A823; --text: #FFFFFF; --soft: #C9D3E6; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--navy); color: var(--text); }
+    body {
+      font: 17px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Arabic", sans-serif;
+      display: flex; align-items: center; justify-content: center;
+      padding: calc(24px + env(safe-area-inset-top, 0px)) 24px calc(24px + env(safe-area-inset-bottom, 0px));
+      -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
+    }
+    main { width: 100%; max-width: 380px; text-align: center; }
+    .logo { width: 104px; height: 104px; margin: 0 auto 28px; display: block; border-radius: 26px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+    .dot { width: 64px; height: 64px; margin: 0 auto 18px; border-radius: 50%; background: var(--navy-2); display: grid; place-items: center; }
+    .dot svg { width: 30px; height: 30px; }
+    h1 { font-size: 24px; line-height: 1.3; margin: 0 0 10px; font-weight: 700; }
+    p { margin: 0 0 28px; color: var(--soft); }
+    button {
+      width: 100%; min-height: 56px; border: 0; border-radius: 18px; cursor: pointer;
+      background: var(--orange); color: var(--navy); font: inherit; font-size: 18px; font-weight: 700;
+      box-shadow: 0 8px 20px rgba(247,168,35,.25); transition: transform .1s ease;
+    }
+    button:active { transform: scale(.98); }
+    button[disabled] { opacity: .7; }
+    .status { margin-top: 16px; min-height: 24px; font-size: 15px; color: var(--soft); }
+    [dir="rtl"] body { font-size: 18px; }
+  </style>
+</head>
+<body>
+  <main>
+    <!-- the Pilotix app icon (same drawing as apps/web/public/icon.svg) -->
+    <svg class="logo" viewBox="0 0 512 512" aria-hidden="true"><mask id="m" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512"><rect width="512" height="512" rx="112" fill="#fff"/></mask><g mask="url(#m)"><rect width="512" height="512" fill="#1B2A47"/><path d="M0,250 C120,200 200,320 300,280 C380,248 440,230 512,250 V512 H0 Z" fill="#F7A823"/></g><path d="M146.00,296.00 C217.40,372.00 324.50,364.40 384.00,272.00 C324.50,319.18 217.40,326.78 146.00,296.00 Z" fill="#1B2A47"/><circle cx="186" cy="186" r="50" fill="#F7A823"/><path d="M290,186 H364" stroke="#F7A823" stroke-width="44" stroke-linecap="round" fill="none"/></svg>
+
+    <div class="dot" aria-hidden="true">
+      <!-- wifi with a slash (no internet) or a cloud (server not answering) -->
+      <svg id="ico-net" viewBox="0 0 24 24" fill="none" stroke="#F7A823" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.8a15 15 0 0 1 20 0"/><path d="M5 12.6a10 10 0 0 1 14 0"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/><circle cx="12" cy="20" r="1"/><path d="M3 3l18 18"/></svg>
+      <svg id="ico-srv" viewBox="0 0 24 24" fill="none" stroke="#F7A823" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.5 19H8a5 5 0 1 1 .9-9.9A6 6 0 0 1 20 11.5a3.75 3.75 0 0 1-2.5 7.5z"/><path d="M12 11v3"/><circle cx="12" cy="16.5" r=".6"/></svg>
+    </div>
+
+    <h1 id="title"></h1>
+    <p id="text"></p>
+    <button id="retry" type="button"></button>
+    <div class="status" id="status" aria-live="polite"></div>
+  </main>
+
+  <script>
+    (function () {
+      var SITE = 'https://pilotix.online/';
+      var WORDS = {
+        fr: {
+          netTitle: 'Pas de connexion internet',
+          netText: 'Vérifiez le Wi‑Fi ou la 4G. Pilotix se rouvre tout seul dès que la connexion revient.',
+          srvTitle: 'Pilotix revient dans un instant',
+          srvText: 'Le serveur est en mise à jour ou ne répond pas. On réessaie tout seul.',
+          retry: 'Réessayer',
+          trying: 'Connexion…',
+          waiting: 'En attente de la connexion…',
+          next: function (s) { return 'Nouvel essai dans ' + s + ' s'; }
+        },
+        ar: {
+          netTitle: 'لا يوجد اتصال بالإنترنت',
+          netText: 'تحقق من الواي فاي أو 4G. سيفتح Pilotix تلقائياً عند عودة الاتصال.',
+          srvTitle: 'Pilotix سيعود بعد لحظات',
+          srvText: 'الخادم قيد التحديث أو لا يستجيب. سنعيد المحاولة تلقائياً.',
+          retry: 'إعادة المحاولة',
+          trying: 'جارٍ الاتصال…',
+          waiting: 'في انتظار الاتصال…',
+          next: function (s) { return 'محاولة جديدة بعد ' + s + ' ثانية'; }
+        },
+        en: {
+          netTitle: 'No internet connection',
+          netText: 'Check your Wi‑Fi or mobile data. Pilotix opens again by itself when you are back online.',
+          srvTitle: 'Pilotix will be back in a moment',
+          srvText: 'The server is updating or not answering. We will keep trying.',
+          retry: 'Try again',
+          trying: 'Connecting…',
+          waiting: 'Waiting for the connection…',
+          next: function (s) { return 'Next try in ' + s + ' s'; }
+        }
+      };
+
+      var langs = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || 'fr']);
+      var lang = 'fr';
+      for (var i = 0; i < langs.length; i++) {
+        var l = String(langs[i] || '').slice(0, 2).toLowerCase();
+        if (WORDS[l]) { lang = l; break; }
+      }
+      var w = WORDS[lang];
+      document.documentElement.lang = lang;
+      document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+
+      var $ = function (id) { return document.getElementById(id); };
+      var btn = $('retry'), status = $('status');
+      btn.textContent = w.retry;
+
+      var timer = null, leaving = false;
+
+      function show(kind) {
+        var server = kind === 'server';
+        $('title').textContent = server ? w.srvTitle : w.netTitle;
+        $('text').textContent = server ? w.srvText : w.netText;
+        $('ico-net').hidden = server;
+        $('ico-srv').hidden = !server;
+      }
+
+      function open() {
+        if (leaving) return;
+        leaving = true;
+        btn.disabled = true;
+        status.textContent = w.trying;
+        location.replace(SITE);
+      }
+
+      // true when the phone can reach pilotix.online at all (any answer, even an error page)
+      function reachable() {
+        if (navigator.onLine === false) return Promise.resolve(false);
+        var ctrl = 'AbortController' in window ? new AbortController() : null;
+        var stop = setTimeout(function () { if (ctrl) ctrl.abort(); }, 8000);
+        return fetch(SITE + 'robots.txt?app=' + Date.now(), { mode: 'no-cors', cache: 'no-store', signal: ctrl ? ctrl.signal : undefined })
+          .then(function () { return true; }, function () { return false; })
+          .then(function (ok) { clearTimeout(stop); return ok; });
+      }
+
+      function countdown(seconds) {
+        clearInterval(timer);
+        var left = seconds;
+        status.textContent = w.next(left);
+        timer = setInterval(function () {
+          left -= 1;
+          if (left <= 0) { clearInterval(timer); open(); return; }
+          status.textContent = w.next(left);
+        }, 1000);
+      }
+
+      function check() {
+        reachable().then(function (ok) {
+          if (ok) {
+            // internet works, so the server itself had a problem: say so, and try again calmly
+            show('server');
+            countdown(15);
+          } else {
+            show('net');
+            clearInterval(timer);
+            status.textContent = w.waiting;
+            setTimeout(function () { reachable().then(function (back) { back ? open() : check(); }); }, 5000);
+          }
+        });
+      }
+
+      btn.addEventListener('click', open);
+      window.addEventListener('online', function () { setTimeout(open, 800); });
+
+      show('net');
+      check();
+    })();
+  </script>
+</body>
+</html>

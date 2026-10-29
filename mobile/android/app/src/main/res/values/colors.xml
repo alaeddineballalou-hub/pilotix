@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Pilotix brand colours -->
+    <color name="pilotix_navy">#1B2A47</color>
+    <color name="pilotix_orange">#F7A823</color>
+</resources>
