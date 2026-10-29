@@ -73,5 +73,24 @@
     "confirmFail": "Confirmer : je repasse",
     "confirmReturn": "Confirmer : retour au dépôt",
     "officeKnows": "Le bureau (Suivi) le voit tout de suite."
+  },
+  "tk": {
+    "morning": "Bonjour ! Vous travaillez aujourd’hui ?",
+    "morningHint": "Dites-le chaque matin : le manager sait qui est là pour lui donner les commandes.",
+    "iWork": "Je travaille aujourd’hui",
+    "inAt": "Vous travaillez aujourd’hui · pointé à {{time}}",
+    "take": "Prendre un colis",
+    "takeHint": "Scannez chaque colis que vous prenez : il passe « En livraison », son argent est à vous, et vous voyez le client.",
+    "codePh": "Étiquette ou réf. PX…",
+    "ok": "Prendre",
+    "cam": "Caméra",
+    "camOff": "Fermer",
+    "took": "{{ref}} est à vous : {{name}} · {{where}}",
+    "tookFrom": "{{ref}} est à vous (il était à {{from}}) : {{name}} · {{where}}",
+    "already": "{{ref}} est déjà dans votre tournée",
+    "pickup_one": "{{count}} colis à prendre au dépôt",
+    "pickup_other": "{{count}} colis à prendre au dépôt",
+    "onShelf": "Sur l’étagère (Dispatchées) : scannez-le",
+    "inDepot": "Encore au dépôt"
   }
 }

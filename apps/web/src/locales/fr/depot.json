@@ -366,7 +366,9 @@
     "waitNow_one": "{{count}} à attribuer",
     "waitNow_other": "{{count}} à attribuer",
     "refusedNow_one": "{{count}} refusée par la société",
-    "refusedNow_other": "{{count}} refusées par la société"
+    "refusedNow_other": "{{count}} refusées par la société",
+    "notIn": "pas encore pointé",
+    "askNotIn": "{{name}} n’a pas encore dit « Je travaille aujourd’hui ». Lui donner ces commandes quand même ? Il recevra une notification."
   },
   "da": {
     "title": "À régler en dispatch",

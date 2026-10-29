@@ -482,7 +482,9 @@
     "refusedNow_two": "اثنتان رفضتهما الشركة",
     "refusedNow_few": "{{count}} رفضتها الشركة",
     "refusedNow_many": "{{count}} رفضتها الشركة",
-    "refusedNow_other": "{{count}} رفضتها الشركة"
+    "refusedNow_other": "{{count}} رفضتها الشركة",
+    "notIn": "لم يسجّل بعد",
+    "askNotIn": "{{name}} لم يقل « أعمل اليوم » بعد. هل تعطيه هذه الطلبيات رغم ذلك؟ سيصله إشعار."
   },
   "da": {
     "title": "للمعالجة في الإرسال",

@@ -11,6 +11,7 @@ import { useFullScreen } from '../../lib/fullScreen';
 import { useAction, useRpc } from '../../lib/query';
 import { Icon, TicketTag } from '../../ui/kit';
 import { Chat } from './Chat';
+import { CheckIn, TakeBox } from './Take';
 import '../confirmation/phone.css';
 import '../sav/phone.css';
 import './phone.css';
@@ -51,6 +52,7 @@ export function PhoneTournee({ d, livreurId, self, onPrint }: { d: Data; livreur
 
   return (
     <div className="pxt">
+      {self && <CheckIn at={d.checkedInAt} />}
       <div className="pxt-money">
         <div>
           <small>{t('tournee.ph.toDeliver')}</small>
@@ -65,6 +67,8 @@ export function PhoneTournee({ d, livreurId, self, onPrint }: { d: Data; livreur
           <b className="ok">{d.deliveredToday}</b>
         </div>
       </div>
+
+      {self && d.pickup.length > 0 && <TakeBox />}
 
       {next ? (
         <Stop o={next} n={list.indexOf(next) + 1} shop={d.shop} />
@@ -103,7 +107,7 @@ export function PhoneTournee({ d, livreurId, self, onPrint }: { d: Data; livreur
         <section className="pxt-pick">
           <button type="button" className="pxt-pickh" aria-expanded={pickupOpen} onClick={() => setPickupOpen((v) => !v)}>
             <Icon name="package" />
-            <b>{t('tournee.ph.pickup', { n: d.pickup.length })}</b>
+            <b>{t('tournee.tk.pickup', { count: d.pickup.length })}</b>
             <Icon name={pickupOpen ? 'chevron' : 'chevr'} />
           </button>
           {pickupOpen && (
@@ -113,9 +117,11 @@ export function PhoneTournee({ d, livreurId, self, onPrint }: { d: Data; livreur
                   <span className="pxt-row">
                     <span className="pxt-rm">
                       <b>
-                        <span className="ltr">{o.ref}</span> · {o.customerName}
+                        <span className="ltr">{o.ref}</span>
+                        {o.customerName ? ` · ${o.customerName}` : ` · ${[o.commune, wilayaName(o.wilayaId)].filter(Boolean).join(' · ')}`}
                       </b>
                       <small>{o.items.map((i) => `${i.qty} × ${i.name}`).join(' + ')}</small>
+                      <small className="tk-state">{o.followStatus === 'shipped' ? t('tournee.tk.onShelf') : t('tournee.tk.inDepot')}</small>
                     </span>
                     <b className="ltr">{da(o.total)}</b>
                   </span>

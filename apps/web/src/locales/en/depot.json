@@ -366,7 +366,9 @@
     "waitNow_one": "{{count}} to assign",
     "waitNow_other": "{{count}} to assign",
     "refusedNow_one": "{{count}} refused by the company",
-    "refusedNow_other": "{{count}} refused by the company"
+    "refusedNow_other": "{{count}} refused by the company",
+    "notIn": "not checked in yet",
+    "askNotIn": "{{name}} has not said « I work today » yet. Give him these orders anyway? He will get a notification."
   },
   "da": {
     "title": "To fix in dispatch",

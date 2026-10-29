@@ -8,6 +8,7 @@ import { DEFAULT_TEMPLATE, PLACEHOLDERS, checkTemplate, custom } from '../courie
 import { fakeTracking, nextStep, word } from '../couriers/demo';
 import { CARDS, KINDS } from '../couriers/kinds';
 import { keysOk, loadCompany, loadParcels, resolveStatus } from '../couriers/load';
+import { checkedInToday } from './livreur';
 import type { Desk, ExchangeResult, FeeRow, LabelResult, PreviewResult, SendResult, TrackItem, TrackResult } from '../couriers/types';
 import { Db, iso, num, numOrNull } from '../db';
 import { bad, Ctx, notFound, proc, publicApi, takeActionLocks } from '../rpc';
@@ -378,7 +379,8 @@ const safeDate = (s: string | null | undefined) => {
 };
 
 // ---------------------------------------------------------------- livreurs and their round
-async function livreursList(db: Db) {
+async function livreursList(db: Db, now = Date.now()) {
+  const inToday = await checkedInToday(db, now);
   const rows = await db.query(
     `SELECT p.id, p.name, p.phone, p.email, p.active, p.livreur_company_id, c.name AS company_name, r.end_wilaya_id, r.end_commune,
        (SELECT count(*)::int FROM orders o WHERE o.livreur_id = p.id AND o.follow_status = ANY($1)) AS to_ship,
@@ -399,6 +401,8 @@ async function livreursList(db: Db) {
     endCommune: (r.end_commune ?? null) as string | null,
     toShip: num(r.to_ship),
     onRoad: num(r.on_road),
+    /** « Je travaille aujourd'hui » today: when (null: not yet) */
+    checkedInAt: inToday.get(num(r.id)) ?? null,
   }));
 }
 
@@ -411,8 +415,11 @@ function sortRound(list: Order[], endWilayaId: number | null, endCommune: string
 async function tournee(ctx: Ctx, livreurId: number) {
   const route = (await ctx.db.query('SELECT end_wilaya_id, end_commune FROM livreur_routes WHERE profile_id=$1', [livreurId]))[0];
   const list = (await listOrders(ctx, { livreurId, follow: ['to_prepare', 'prepared', 'shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange'], pageSize: 1000, page: 1, sort: 'updated_at', dir: 'desc', dateField: 'created_at', tickets: 'include' })).rows;
-  const toDeliver = sortRound(list.filter((o) => !TO_SHIP.includes(o.followStatus!)), numOrNull(route?.end_wilaya_id), route?.end_commune ?? null);
-  const pickup = list.filter((o) => TO_SHIP.includes(o.followStatus!));
+  // in his hands (after his scan): to deliver; still at the depot or on the shelf (« Dispatchées »): to take, by scanning
+  const notTaken = [...TO_SHIP, 'shipped'];
+  const toDeliver = sortRound(list.filter((o) => !notTaken.includes(o.followStatus!)), numOrNull(route?.end_wilaya_id), route?.end_commune ?? null);
+  const pickup = list.filter((o) => notTaken.includes(o.followStatus!));
+  const checkedInAt = (await checkedInToday(ctx.db, ctx.now())).get(livreurId) ?? null;
   const today = await ctx.db.query(
     `SELECT count(*)::int AS n, coalesce(sum(total),0)::int AS amount FROM orders
      WHERE livreur_id=$1 AND follow_status='delivered' AND delivered_at >= date_trunc('day', now() AT TIME ZONE 'Africa/Algiers') AT TIME ZONE 'Africa/Algiers'`,
@@ -428,6 +435,8 @@ async function tournee(ctx: Ctx, livreurId: number) {
     toDeliverAmount: toDeliver.reduce((s, o) => s + o.total, 0),
     deliveredToday: num(today[0]?.n),
     deliveredTodayAmount: num(today[0]?.amount),
+    /** « Je travaille aujourd'hui »: when he said it today (null: not yet) */
+    checkedInAt,
   };
 }
 
@@ -812,7 +821,7 @@ export const deliveryProcs = {
   }),
 
   /** Own livreurs (accounts with the Livreur role): Livreur, Compte, Fin de tournée, À expédier, En livraison. */
-  'delivery.livreurs': proc(['suivi', 'depot'], z.object({}), async (ctx) => livreursList(ctx.db)),
+  'delivery.livreurs': proc(['suivi', 'depot'], z.object({}), async (ctx) => livreursList(ctx.db, ctx.now())),
 
   'delivery.saveLivreur': proc([], z.object({ profileId: id, companyId: id.nullable().optional(), endWilayaId: z.number().int().min(1).max(69).nullable(), endCommune: z.string().max(120).nullable() }), async (ctx, i) => {
     const p = (await ctx.db.query(`SELECT id FROM profiles WHERE id=$1 AND 'livreur' = ANY(roles)`, [i.profileId]))[0];

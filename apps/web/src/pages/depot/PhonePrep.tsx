@@ -412,6 +412,9 @@ function AssignTab({ data, error, retry }: { data?: Assign; error: Error | null;
   const go = async () => {
     const [kind, a, b] = who.split(':');
     if (!kind || !ids.length) return;
+    // a livreur who did not say « Je travaille aujourd'hui »: asked once (he still gets a notification)
+    const lv = kind === 'l' ? lvs.find((l) => l.id === Number(a)) : undefined;
+    if (lv && !lv.checkedInAt && !window.confirm(t('depot.as.askNotIn', { name: lv.name }))) return;
     setBusy(true);
     try {
       const r = await rpc('depot.assign', kind === 'l' ? { ids, companyId: Number(b), livreurId: Number(a) } : { ids, companyId: Number(a) });
@@ -524,7 +527,7 @@ function AssignTab({ data, error, retry }: { data?: Assign; error: Error | null;
                 <optgroup label={t('depot.as.private')}>
                   {lvs.map((l) => (
                     <option key={l.id} value={`l:${l.id}:${l.companyId ?? own?.id}`}>
-                      {l.name}
+                      {l.checkedInAt ? `✓ ${l.name}` : `${l.name} — ${t('depot.as.notIn')}`}
                     </option>
                   ))}
                 </optgroup>

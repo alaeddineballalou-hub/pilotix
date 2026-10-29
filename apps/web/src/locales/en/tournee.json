@@ -73,5 +73,24 @@
     "confirmFail": "Confirm: I come back",
     "confirmReturn": "Confirm: back to the depot",
     "officeKnows": "The office (Suivi) sees it right away."
+  },
+  "tk": {
+    "morning": "Good morning! Are you working today?",
+    "morningHint": "Say it every morning: the manager knows who is here to give orders to.",
+    "iWork": "I work today",
+    "inAt": "You work today · checked in at {{time}}",
+    "take": "Take a parcel",
+    "takeHint": "Scan each parcel you take: it goes « En livraison », its cash is yours, and you see the customer.",
+    "codePh": "Label or ref. PX…",
+    "ok": "Take",
+    "cam": "Camera",
+    "camOff": "Close",
+    "took": "{{ref}} is yours: {{name}} · {{where}}",
+    "tookFrom": "{{ref}} is yours (it was {{from}}’s): {{name}} · {{where}}",
+    "already": "{{ref}} is already in your round",
+    "pickup_one": "{{count}} parcel to take at the depot",
+    "pickup_other": "{{count}} parcels to take at the depot",
+    "onShelf": "On the shelf (Dispatched): scan it",
+    "inDepot": "Still at the depot"
   }
 }

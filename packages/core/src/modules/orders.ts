@@ -159,6 +159,10 @@ export async function peekNext(ctx: Ctx, skip: number[]): Promise<{ nextCallAt: 
   return r ? { nextCallAt: isoOrNull(r.next_call_at), createdAt: iso(r.created_at) } : null;
 }
 
+/** Our own livreurs: parcels not in their hands yet (before their scan) show no customer — only the parcel. */
+export const NOT_TAKEN = ['to_prepare', 'prepared', 'shipped'];
+export const hideCustomer = (o: Order): Order => (NOT_TAKEN.includes(String(o.followStatus)) ? { ...o, customerName: '', phone: '', phone2: null, address: '' } : o);
+
 export async function getOrder(ctx: Ctx, id: number, db: Db = ctx.db): Promise<Order> {
   if (noOrderAccess(ctx)) throw forbidden();
   const r = (await db.query(`SELECT ${ORDER_COLS} ${ORDER_FROM} WHERE o.id = $1`, [id]))[0];
@@ -174,7 +178,7 @@ export async function getOrder(ctx: Ctx, id: number, db: Db = ctx.db): Promise<O
     const only = ctx.session.profile.agencyProducts;
     if (only && !only.includes(num((await db.query('SELECT route_product_id FROM orders WHERE id = $1', [id]))[0]?.route_product_id))) throw forbidden('Cette commande n’est pas pour vos produits');
   }
-  return o;
+  return onlyOwnDeliveries(ctx) ? hideCustomer(o) : o;
 }
 
 export async function addEvent(db: Db, orderId: number, userId: number | null, kind: OrderEvent['kind'], from: string | null, to: string | null, note?: string | null, data?: unknown) {
@@ -292,7 +296,8 @@ export async function listOrders(ctx: Ctx, f: ListInput, opts: { queue?: 'conf' 
   const limit = w.p(f.pageSize);
   const offset = w.p((f.page - 1) * f.pageSize);
   const rows = await ctx.db.query(`SELECT ${ORDER_COLS} ${ORDER_FROM} ${w.sql} ORDER BY o.${f.sort} ${f.dir} ${nulls}, o.id DESC LIMIT ${limit} OFFSET ${offset}`, w.params);
-  return { rows: rows.map(toOrder), total, page: f.page, pageSize: f.pageSize };
+  const list = rows.map(toOrder);
+  return { rows: onlyOwnDeliveries(ctx) ? list.map(hideCustomer) : list, total, page: f.page, pageSize: f.pageSize };
 }
 
 // ---------------------------------------------------------------- writing
@@ -848,6 +853,11 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
         if (opts.system) continue;
         throw bad(block);
       }
+      // our own livreurs: a parcel goes « En livraison » only by the livreur's own scan (« Ma tournée » › Prendre), so the
+      // shelf (« Dispatchées ») shows who took what — nobody else puts a parcel in his hands (an admin still can)
+      if (to === 'out_for_delivery' && !opts.system && !ctx.session.isAdmin && cur.company_id && ['to_prepare', 'prepared', 'shipped'].includes(String(from)))
+        if ((await tx.query('SELECT kind FROM delivery_companies WHERE id = $1', [cur.company_id]))[0]?.kind === 'own')
+          throw bad(`${cur.ref} : seul le livreur met le colis « En livraison », en le scannant dans « Ma tournée ».`);
       if (livreurId && cur.cashed) throw bad(`${cur.ref} est déjà encaissée : le livreur ne peut plus changer`);
       // the depot receives back a parcel that is coming back (or failed): never one « en livraison » or « livrée », else a
       // delivered parcel's cash would stop being owed and its goods would come back into stock on paper only

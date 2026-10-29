@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { Db, iso, num } from '../db';
 import { bad, Ctx, forbidden, proc } from '../rpc';
 import { cancelParcel, sendOrders } from './delivery';
+import { tellLivreur } from './livreur';
 import { addEvent, getOrder, ordersProcs, setFollow } from './orders';
 
 const id = z.number().int().positive();
@@ -173,6 +174,8 @@ export const dispatchProcs = {
     const dctx = asDepot(ctx);
     await ordersProcs['orders.assignCompany'].run(dctx, { ids: ready, companyId: i.companyId, livreurId: c.kind === 'own' ? (i.livreurId ?? null) : null });
     const r = await dispatchOrders(dctx, ready);
+    // our own livreur: a notification on his phone (checked in today or not)
+    if (c.kind === 'own' && i.livreurId) await tellLivreur(ctx, i.livreurId, ready.length);
     ctx.emit({ type: 'orders' });
     return { assigned: ready.length, ...r };
   }),
