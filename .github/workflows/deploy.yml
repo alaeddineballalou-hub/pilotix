@@ -55,7 +55,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      # straight to the server at its own address, not through Cloudflare: Cloudflare's bot protection answers
+      # « Just a moment… » to robots like this checker (its HTTPS certificate is the site's, so nothing else changes)
       - name: Check the live site
         env:
           SITE: ${{ vars.SITE_URL || 'https://pilotix.online' }}
-        run: node scripts/live-check.mjs
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          DOM=$(echo "$SITE" | sed -E 's#^https?://([^/:]+).*#\1#')
+          IP=$(getent ahostsv4 "$HOST" | awk 'NR==1{print $1}')
+          if [ -n "$IP" ]; then
+            echo "::add-mask::$IP"
+            echo "$IP $DOM" | sudo tee -a /etc/hosts >/dev/null
+            echo "Checking $DOM on the server itself (not through Cloudflare)"
+          fi
+          node scripts/live-check.mjs

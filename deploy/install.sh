@@ -78,10 +78,12 @@ fi
 echo "==> Building and starting (the first time takes 5-10 minutes)"
 C="docker compose -f deploy/docker-compose.yml --env-file deploy/.env"
 $C up -d --build
-for i in $(seq 1 60); do $C exec -T server wget -qO- http://localhost:3000/api/health >/dev/null 2>&1 && break; sleep 3; done
+# asked with node to 127.0.0.1 (busybox wget to « localhost » may try IPv6, where the server does not listen: it never
+# answered, so this waited the full 3 minutes on every update)
+HEALTH="fetch('http://127.0.0.1:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+for i in $(seq 1 60); do $C exec -T server node -e "$HEALTH" >/dev/null 2>&1 && break; sleep 3; done
 # said in one line the Deploy button reads: the proof the new version runs, checked here on the server itself
-# (from outside, Cloudflare's bot protection may answer « Just a moment… » instead of the site)
-if $C exec -T server wget -qO- http://localhost:3000/api/health >/dev/null 2>&1; then
+if $C exec -T server node -e "$HEALTH" >/dev/null 2>&1; then
   echo "Server: OK (the new version answers on the server itself)"
 else
   echo "Server: NOT ANSWERING on the server itself (see: $C logs --tail 80 server)"
