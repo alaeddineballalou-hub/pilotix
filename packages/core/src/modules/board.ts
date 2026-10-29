@@ -507,7 +507,7 @@ async function nowOf(ctx: Ctx, area: Area, ids: number[], team: Parts): Promise<
        FROM sales`,
       [new Date(ctx.now() - DAY).toISOString(), FOLLOW_ON_ROAD],
     );
-    const claims = num((await q1(`SELECT count(*)::int AS n FROM claims WHERE status <> 'resolved' AND created_at < $1`, [new Date(ctx.now() - 48 * H).toISOString()])).n);
+    const claims = num((await q1(`SELECT count(*)::int AS n FROM claims WHERE status NOT IN ('resolved', 'lost') AND created_at < $1`, [new Date(ctx.now() - 48 * H).toISOString()])).n);
     return [
       { key: 'alertsOld', n: num(r.old) },
       { key: 'alerts', n: num(r.alerts) },

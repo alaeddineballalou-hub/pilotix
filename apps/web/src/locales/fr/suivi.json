@@ -224,16 +224,21 @@
     "kResolved": "Réglées (7 j)",
     "kCompany": "en attente",
     "filters": {
-      "open": "En attente",
+      "open": "Ouvertes",
       "waiting": "En attente",
       "still_waiting": "Toujours en attente",
-      "resolved": "Réglé",
-      "all": "Toutes"
+      "resolved": "Résolues",
+      "all": "Toutes",
+      "todo": "À relancer (moi)",
+      "answered": "Réponse reçue",
+      "manager": "Manager",
+      "lost": "Perdues"
     },
     "status": {
       "waiting": "En attente",
       "still_waiting": "Toujours en attente",
-      "resolved": "Réglé"
+      "resolved": "Résolue",
+      "lost": "Perdue"
     },
     "col": {
       "claim": "Réclamation",
@@ -358,8 +363,21 @@
       "st": {
         "waiting": "En attente",
         "still_waiting": "Toujours",
-        "resolved": "Réglée"
+        "resolved": "Résolue",
+        "lost": "Perdue"
       }
+    },
+    "stage": {
+      "wait": "Réponse attendue · {{h}} h",
+      "answered": "Réponse reçue : à décider",
+      "relancer": "À relancer",
+      "manager": "Manager · {{n}} relances sans réponse"
+    },
+    "stageTip": {
+      "wait": "La société a 48 h pour répondre après chaque message.",
+      "answered": "La société a répondu : marquez Résolue ou Perdue, ou relancez.",
+      "relancer": "Pas de réponse en 48 h : relancez (WhatsApp, appel ou API).",
+      "manager": "2 relances sans réponse : le manager prend la main."
     }
   },
   "courier": {

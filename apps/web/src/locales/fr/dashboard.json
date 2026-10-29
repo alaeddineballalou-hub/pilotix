@@ -773,5 +773,15 @@
     "colLost": "Perdus",
     "colEarly": "Annulés trop tôt",
     "colTop": "Motif de perte le plus fréquent"
+  },
+  "claimsLate": {
+    "title": "Réclamations par société",
+    "sub": "Ouvertes, sans réponse après 48 h, et chez le manager.",
+    "company": "Société / livreur",
+    "open": "Ouvertes",
+    "late": "Sans réponse 48 h",
+    "manager": "Manager",
+    "oldest": "La plus ancienne",
+    "none": "Aucune réclamation ouverte 👍"
   }
 }

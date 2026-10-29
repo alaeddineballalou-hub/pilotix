@@ -2,6 +2,7 @@
 // to send for couriers without an API (WhatsApp first), the relance, the answer — and Suivi › Réclamation as an inbox
 // of cards with ZR's answers and one-tap actions.
 import type { Order } from '@pilotix/shared';
+import { ClaimStage } from './Claims';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
@@ -273,7 +274,7 @@ export function AnswerSheet({ c, name, onClose }: { c: ClaimRow; name: string; o
       </label>
       <fieldset className="pxk-q">
         <legend>{t('suivi.rec.statusLab')}</legend>
-        <Seg value={st} onChange={setSt} label={t('suivi.rec.statusLab')} items={(['waiting', 'still_waiting', 'resolved'] as const).map((s) => ({ k: s, label: t(`suivi.rec.ph.st.${s}`) }))} />
+        <Seg value={st} onChange={setSt} label={t('suivi.rec.statusLab')} items={(['waiting', 'still_waiting', 'resolved', 'lost'] as const).map((s) => ({ k: s, label: t(`suivi.rec.ph.st.${s}`) }))} />
       </fieldset>
       {c.notes.length > 0 && (
         <fieldset className="pxk-q">
@@ -292,8 +293,7 @@ export function AnswerSheet({ c, name, onClose }: { c: ClaimRow; name: string; o
   );
 }
 
-type Filt = 'open' | 'still_waiting' | 'resolved' | 'all';
-const LATE_MS = 48 * 3_600_000;
+type Filt = 'open' | 'todo' | 'manager' | 'resolved' | 'lost' | 'all';
 
 /** Suivi › Réclamation on a phone: the claims as cards — the problem, ZR's answer, and Relancer / Réglée / Réponse. */
 export function PhoneClaims({ target }: { target: 'company' | 'livreur' }) {
@@ -313,7 +313,7 @@ export function PhoneClaims({ target }: { target: 'company' | 'livreur' }) {
   }, [hasApi]);
   const rows = (q.data?.rows ?? []) as ClaimRow[];
   const counts = (q.data?.counts ?? {}) as Record<string, number>;
-  const late = (c: ClaimRow) => c.status !== 'resolved' && Date.now() - Date.parse(c.updatedAt) > LATE_MS;
+  const late = (c: ClaimRow) => c.stage === 'relancer' || c.stage === 'manager';
   const nLate = rows.filter(late).length;
   const nameOf = (c: ClaimRow) => (target === 'livreur' ? c.livreurName : c.companyName) ?? '—';
   const kindOf = (c: ClaimRow) => (target === 'livreur' ? 'own' : contacts?.companies.find((x: ClaimCompany) => x.id === c.companyId)?.kind ?? 'other');
@@ -351,7 +351,7 @@ export function PhoneClaims({ target }: { target: 'company' | 'livreur' }) {
         )}
       </div>
       <div className="pxr-f" role="tablist">
-        {(['open', 'still_waiting', 'resolved', 'all'] as const).map((k) => (
+        {(['open', 'todo', 'manager', 'resolved', 'lost', 'all'] as const).map((k) => (
           <button key={k} type="button" role="tab" aria-selected={filt === k} className={filt === k ? 'on' : ''} onClick={() => setFilt(k)}>
             {t(`suivi.rec.filters.${k}`)} <b className="ltr">{counts[k] ?? 0}</b>
           </button>
@@ -372,7 +372,7 @@ export function PhoneClaims({ target }: { target: 'company' | 'livreur' }) {
             const name = nameOf(c);
             const k = kindOf(c);
             return (
-              <li key={c.id} className={`pxr-c${late(c) ? ' late' : ''}${c.status === 'resolved' ? ' done' : ''}`}>
+              <li key={c.id} className={`pxr-c${late(c) ? ' late' : ''}${c.stage === 'done' ? ' done' : ''}`}>
                 <button type="button" className="pxr-cm" onClick={() => c.orderId && openOrder(c.orderId)}>
                   <span className="pxr-h">
                     <span className={`pxs-co k-${k}`} aria-hidden="true">
@@ -385,8 +385,12 @@ export function PhoneClaims({ target }: { target: 'company' | 'livreur' }) {
                   </span>
                   <span className="pxr-p">{t(`suivi.rec.reasons.${c.reason}`, { defaultValue: c.reason })}</span>
                   <small>
-                    {name} · <span className="ltr">{trackOf(c) || '—'}</span> · {c.sentAt ? t(`suivi.rec.status.${c.status}`) : t('suivi.rec.notSent')}
+                    {name} · <span className="ltr">{trackOf(c) || '—'}</span>
+                    {!c.sentAt && <> · {t('suivi.rec.notSent')}</>}
                   </small>
+                  <span className="pxr-stage">
+                    <ClaimStage c={c} />
+                  </span>
                 </button>
                 {c.extId ? (
                   <div className="pxr-zr">
@@ -399,7 +403,7 @@ export function PhoneClaims({ target }: { target: 'company' | 'livreur' }) {
                 ) : (
                   c.viaApi && c.extError && <p className="pxk-bad">{t('suivi.rec.apiRefusedShort', { name })} · {c.extError}</p>
                 )}
-                {c.status !== 'resolved' && (
+                {c.stage !== 'done' && (
                   <div className="pxr-a">
                     {c.viaApi && !c.extId && (c.extError || !c.sentAt) ? (
                       <button type="button" className="pxs-chip or" disabled={push.isPending} onClick={() => push.mutate({ id: c.id })}>

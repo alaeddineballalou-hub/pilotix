@@ -224,16 +224,21 @@
     "kResolved": "Settled (7 d)",
     "kCompany": "waiting",
     "filters": {
-      "open": "Waiting",
+      "open": "Open",
       "waiting": "Waiting",
       "still_waiting": "Still waiting",
-      "resolved": "Settled",
-      "all": "All"
+      "resolved": "Solved",
+      "all": "All",
+      "todo": "To follow up (me)",
+      "answered": "Answered",
+      "manager": "Manager",
+      "lost": "Lost"
     },
     "status": {
       "waiting": "Waiting",
       "still_waiting": "Still waiting",
-      "resolved": "Settled"
+      "resolved": "Solved",
+      "lost": "Lost"
     },
     "col": {
       "claim": "Claim",
@@ -358,8 +363,21 @@
       "st": {
         "waiting": "Waiting",
         "still_waiting": "Still",
-        "resolved": "Settled"
+        "resolved": "Solved",
+        "lost": "Lost"
       }
+    },
+    "stage": {
+      "wait": "Answer due · {{h}} h",
+      "answered": "Answered: to decide",
+      "relancer": "To follow up",
+      "manager": "Manager · {{n}} follow-ups, no answer"
+    },
+    "stageTip": {
+      "wait": "The company has 48 h to answer after each message.",
+      "answered": "The company answered: mark Solved or Lost, or follow up.",
+      "relancer": "No answer in 48 h: follow up (WhatsApp, call or API).",
+      "manager": "2 follow-ups without an answer: the manager takes over."
     }
   },
   "courier": {

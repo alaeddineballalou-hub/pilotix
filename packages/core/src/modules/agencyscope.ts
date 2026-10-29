@@ -155,6 +155,7 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'suivi.stuckDone': order('id'),
   'suivi.motifs': free,
   'suivi.motifStats': free,
+  'suivi.claimsLate': free,
   'suivi.next': free,
   'suivi.release': order('id'),
 };

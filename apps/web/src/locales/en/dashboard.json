@@ -773,5 +773,15 @@
     "colLost": "Lost",
     "colEarly": "Cancelled too early",
     "colTop": "Most frequent loss motif"
+  },
+  "claimsLate": {
+    "title": "Claims by company",
+    "sub": "Open, no answer after 48 h, and with the manager.",
+    "company": "Company / livreur",
+    "open": "Open",
+    "late": "No answer 48 h",
+    "manager": "Manager",
+    "oldest": "Oldest",
+    "none": "No open claim 👍"
   }
 }

@@ -2,6 +2,7 @@
 // parcels were then delivered, each « Perdu » motif with its share of the lost parcels (which reasons lose the most).
 import { useTranslation } from 'react-i18next';
 import { useRpc } from '../../lib/query';
+import { when } from '../../lib/format';
 import { Icon, Loading } from '../../ui/kit';
 
 export function SuiviMotifStats({ range }: { range: { from: string; to: string } }) {
@@ -97,6 +98,61 @@ export function SuiviMotifStats({ range }: { range: { from: string; to: string }
                   </tr>
                 );
               })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Dashboard › Suivi: per delivery company (and our livreurs), the open claims, those without an answer after 48 h, and those at the manager. */
+export function ClaimsLateCard() {
+  const { t } = useTranslation();
+  const q = useRpc('suivi.claimsLate', {}, { refetchInterval: 120_000 });
+  const rows = q.data ?? [];
+  return (
+    <section className="tb-mo" aria-labelledby="tb-cl-h">
+      <header>
+        <h3 id="tb-cl-h">
+          <Icon name="copy" /> {t('dashboard.claimsLate.title')}
+        </h3>
+        <small className="muted">{t('dashboard.claimsLate.sub')}</small>
+      </header>
+      {!q.data ? (
+        <Loading />
+      ) : !rows.length ? (
+        <p className="muted small">{t('dashboard.claimsLate.none')}</p>
+      ) : (
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>{t('dashboard.claimsLate.company')}</th>
+                <th className="num">{t('dashboard.claimsLate.open')}</th>
+                <th className="num">{t('dashboard.claimsLate.late')}</th>
+                <th className="num">{t('dashboard.claimsLate.manager')}</th>
+                <th>{t('dashboard.claimsLate.oldest')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.name}>
+                  <td data-l={t('dashboard.claimsLate.company')}>
+                    <b>{r.name}</b>
+                  </td>
+                  <td className="num" data-l={t('dashboard.claimsLate.open')}>
+                    {r.open}
+                  </td>
+                  <td className="num" data-l={t('dashboard.claimsLate.late')}>
+                    {r.late ? <span className="badge t-warn">{r.late}</span> : <span className="muted">0</span>}
+                  </td>
+                  <td className="num" data-l={t('dashboard.claimsLate.manager')}>
+                    {r.manager ? <span className="badge t-bad">{r.manager}</span> : <span className="muted">0</span>}
+                  </td>
+                  <td data-l={t('dashboard.claimsLate.oldest')}>{r.oldest ? when(r.oldest) : '—'}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

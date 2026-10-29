@@ -253,7 +253,7 @@ function AnswerDesk({ c, name, onClose }: { c: ClaimRow; name: string; onClose: 
         <label className="field">
           <span className="lab">{t('suivi.rec.statusLab')}</span>
           <select value={st} onChange={(e) => setSt(e.target.value as ClaimRow['status'])}>
-            {(['waiting', 'still_waiting', 'resolved'] as const).map((s) => (
+            {(['waiting', 'still_waiting', 'resolved', 'lost'] as const).map((s) => (
               <option key={s} value={s}>
                 {t(`suivi.rec.status.${s}`)}
               </option>
@@ -277,9 +277,22 @@ function AnswerDesk({ c, name, onClose }: { c: ClaimRow; name: string; onClose: 
 }
 
 /** Claims to the couriers (target company) or to our livreurs (target livreur). */
+/** Where a claim stands: waiting for the answer (time left), answered, « À relancer », « Manager », or ended. */
+export function ClaimStage({ c }: { c: ClaimRow }) {
+  const { t } = useTranslation();
+  if (!c.stage || c.stage === 'done') return <span className={`badge ${STATUS_TONE[c.status]}`}>{t(`suivi.rec.status.${c.status}`)}</span>;
+  const h = c.dueAt ? Math.max(0, Math.round((Date.parse(c.dueAt) - Date.now()) / 3_600_000)) : 0;
+  const tone = c.stage === 'manager' ? 't-bad' : c.stage === 'wait' ? 't-info' : 't-warn';
+  return (
+    <span className={`badge ${tone}`} title={t(`suivi.rec.stageTip.${c.stage}`)}>
+      {c.stage === 'wait' ? t('suivi.rec.stage.wait', { h }) : c.stage === 'manager' ? t('suivi.rec.stage.manager', { n: c.pushes ?? 0 }) : t(`suivi.rec.stage.${c.stage}`)}
+    </span>
+  );
+}
+
 export function ClaimsPanel({ target }: { target: 'company' | 'livreur' }) {
   const { t } = useTranslation();
-  const [filt, setFilt] = useState<'open' | 'waiting' | 'still_waiting' | 'resolved' | 'all'>('open');
+  const [filt, setFilt] = useState<'open' | 'todo' | 'answered' | 'manager' | 'resolved' | 'lost' | 'all'>('open');
   const q = useRpc('suivi.claims', { target, status: filt });
   const contacts = useRpc('suivi.contacts', {}).data;
   const [dlg, setDlg] = useState<{ kind: 'new' } | { kind: 'answer'; c: ClaimRow } | { kind: 'send'; c: ClaimRow; order: Order } | { kind: 'remindApi'; c: ClaimRow } | null>(null);
@@ -293,7 +306,7 @@ export function ClaimsPanel({ target }: { target: 'company' | 'livreur' }) {
   }, [hasApi]);
   const rows = (q.data?.rows ?? []) as ClaimRow[];
   const counts = q.data?.counts ?? {};
-  const late = (c: ClaimRow) => c.status !== 'resolved' && Date.now() - Date.parse(c.updatedAt) > 48 * 3_600_000;
+  const late = (c: ClaimRow) => c.stage === 'relancer' || c.stage === 'manager';
   const nameOf = (c: ClaimRow) => (target === 'livreur' ? c.livreurName : c.companyName) ?? '—';
   const remind = async (c: ClaimRow) => {
     if (c.extId) return setDlg({ kind: 'remindApi', c });
@@ -340,9 +353,9 @@ export function ClaimsPanel({ target }: { target: 'company' | 'livreur' }) {
           <span className="v ltr">{counts.open ?? '—'}</span>
           <span className="s">{t('suivi.rec.kWaitingSub')}</span>
         </div>
-        <div className={`kpi${rows.some(late) ? ' t-bad' : ''}`}>
+        <div className={`kpi${counts.late ? ' t-bad' : ''}`}>
           <span className="l">{t('suivi.rec.kLate')}</span>
-          <span className="v ltr">{filt === 'open' || filt === 'all' ? rows.filter(late).length : '—'}</span>
+          <span className="v ltr">{counts.late ?? '—'}</span>
           <span className="s">{t('suivi.rec.kLateSub')}</span>
         </div>
         <div className="kpi t-ok">
@@ -353,8 +366,8 @@ export function ClaimsPanel({ target }: { target: 'company' | 'livreur' }) {
       </div>
       <div className="card">
         <div className="bjp-tabs">
-          {(['open', 'still_waiting', 'resolved', 'all'] as const).map((k) => (
-            <button key={k} type="button" className={`tab${filt === k ? ' on' : ''}`} onClick={() => setFilt(k)}>
+          {(['open', 'todo', 'answered', 'manager', 'resolved', 'lost', 'all'] as const).map((k) => (
+            <button key={k} type="button" className={`tab${filt === k ? ' on' : ''}${k === 'manager' && counts.manager ? ' bad' : ''}`} onClick={() => setFilt(k)}>
               {t(`suivi.rec.filters.${k}`)} <b className="ltr">{counts[k] ?? 0}</b>
             </button>
           ))}
@@ -398,7 +411,7 @@ export function ClaimsPanel({ target }: { target: 'company' | 'livreur' }) {
                         {last?.text && <small>{last.text}</small>}
                       </td>
                       <td data-l={t('suivi.rec.col.sent')}>
-                        {c.sentAt ? <span className={late(c) ? 'bjr-late' : undefined}>{since(c.updatedAt)}</span> : <span className="muted small">{t('suivi.rec.notSent')}</span>}
+                        {c.sentAt ? <span className={late(c) ? 'bjr-late' : undefined}>{since(c.dueAt ? new Date(Date.parse(c.dueAt) - 48 * 3_600_000).toISOString() : c.updatedAt)}</span> : <span className="muted small">{t('suivi.rec.notSent')}</span>}
                         {c.extId ? (
                           <small className="bjr-api" title={c.extAnswer ?? undefined}>
                             {t('suivi.rec.apiNo', { name: c.companyName ?? '', n: c.extRef || '✓' })}
@@ -409,15 +422,15 @@ export function ClaimsPanel({ target }: { target: 'company' | 'livreur' }) {
                         )}
                       </td>
                       <td data-l={t('suivi.rec.col.status')}>
-                        <span className={`badge ${STATUS_TONE[c.status]}`}>{t(`suivi.rec.status.${c.status}`)}</span>
+                        <ClaimStage c={c} />
                       </td>
                       <td className="bjr-a" onClick={(e) => e.stopPropagation()}>
-                        {c.viaApi && !c.extId && c.status !== 'resolved' && (c.extError || !c.sentAt) && (
+                        {c.viaApi && !c.extId && c.stage !== 'done' && (c.extError || !c.sentAt) && (
                           <button type="button" className="bjp-ib" disabled={push.isPending} title={t(c.extError ? 'suivi.rec.apiRetry' : 'suivi.rec.apiSend', { name: c.companyName ?? '' })} aria-label={t(c.extError ? 'suivi.rec.apiRetry' : 'suivi.rec.apiSend', { name: c.companyName ?? '' })} onClick={() => push.mutate({ id: c.id })}>
                             <Icon name="send" />
                           </button>
                         )}
-                        {c.status !== 'resolved' &&
+                        {c.stage !== 'done' &&
                           (c.extId ? (
                             <button type="button" className="bjp-ib" title={t('suivi.rec.apiRemind', { name: c.companyName ?? '' })} aria-label={t('suivi.rec.apiRemind', { name: c.companyName ?? '' })} onClick={() => remind(c)}>
                               <Icon name="chat" />

@@ -336,3 +336,33 @@ test('Bloqués: no new status for 3 days; the agent says what he did; 2 days lat
   const l3 = (await call('suivi.list', suivi, { tab: 'bloques', pageSize: 500 })) as any;
   assert.ok(!l3.rows.some((o: any) => o.id === four));
 });
+
+test('Réclamations: 48 h for an answer, then « À relancer » for the agent who opened it, after 2 relances « Manager »; Résolue or Perdue ends it', async () => {
+  const suivi = await as(EMAILS.suivi);
+  const id = await onRoad();
+  await db.query(`DELETE FROM claims WHERE order_id = $1`, [id]);
+  const c = (await call('suivi.claimCreate', suivi, { orderId: id, reason: 'late', details: 'test', message: 'Bonjour', toLivreur: true, viaApi: false })) as any;
+  assert.equal(c.stage, 'wait');
+  // sent 50 hours ago, no answer: a task for him
+  await db.query(`UPDATE claims SET sent_at = now() - interval '50 hours', created_at = now() - interval '50 hours' WHERE id = $1`, [c.id]);
+  let l = (await call('suivi.claims', suivi, { target: 'livreur', status: 'todo' })) as any;
+  assert.ok(l.rows.some((x: any) => x.id === c.id && x.stage === 'relancer'));
+  assert.ok(l.counts.todo >= 1 && l.counts.late >= 1);
+  // he sends a relance: 48 h again
+  await call('suivi.claimUpdate', suivi, { id: c.id, sentVia: 'whatsapp' });
+  l = (await call('suivi.claims', suivi, { target: 'livreur', status: 'open' })) as any;
+  assert.equal(l.rows.find((x: any) => x.id === c.id).stage, 'wait');
+  assert.equal(l.rows.find((x: any) => x.id === c.id).pushes, 1);
+  // two relances long ago and still nothing: the manager
+  const old = new Date(Date.now() - 60 * 3_600_000).toISOString();
+  await db.query(`UPDATE claims SET sent_at = $3::timestamptz, notes = $2 WHERE id = $1`, [c.id, JSON.stringify([{ at: old, userId: null, text: 'Relance (WhatsApp)' }, { at: old, userId: null, text: 'Relance (téléphone)' }]), old]);
+  l = (await call('suivi.claims', suivi, { target: 'livreur', status: 'manager' })) as any;
+  assert.ok(l.rows.some((x: any) => x.id === c.id && x.stage === 'manager'));
+  const late = (await call('suivi.claimsLate', suivi, {})) as any[];
+  assert.ok(late.some((g) => g.manager >= 1 && g.late >= 1));
+  // the company never answered: « Perdue »
+  await call('suivi.claimUpdate', suivi, { id: c.id, status: 'lost', note: 'Aucune réponse' });
+  l = (await call('suivi.claims', suivi, { target: 'livreur', status: 'lost' })) as any;
+  assert.ok(l.rows.some((x: any) => x.id === c.id && x.stage === 'done'));
+  assert.ok(l.counts.lost >= 1);
+});

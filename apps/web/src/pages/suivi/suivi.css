@@ -32,3 +32,5 @@ td .sv-clock + .sv-clock { margin-inline-start: 4px; }
 .sv-early { display: inline-block; margin-top: 6px; color: var(--muted); font-size: 13px; text-decoration: underline; background: none; border: 0; padding: 0; cursor: pointer; }
 .sv-why { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; font-weight: 700; font-size: 14px; }
 .sv-why textarea { width: 100%; font: inherit; font-weight: 500; }
+.pxr-stage { display: block; margin-top: 6px; }
+.bjp-tabs .tab.bad b { background: var(--coral-soft, #FDE2DE); color: var(--coral, #C2410C); }
