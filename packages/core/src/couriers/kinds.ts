@@ -103,12 +103,12 @@ export const KINDS: Record<CourierKind, KindInfo> = {
     ],
   },
   maystro: {
-    kind: 'maystro', label: 'Maystro Delivery', api: true, fees: true, desks: false, cancel: true, label_: true, labels_: true, parcel: true, change: true, webhook: 'api',
+    kind: 'maystro', label: 'Maystro Delivery', api: true, fees: false, desks: false, cancel: true, label_: true, labels_: true, parcel: true, change: true, webhook: 'api',
     help: 'Maystro Delivery. Token API et identifiant de la boutique (store ID) : dans votre espace Maystro → Paramètres → API.',
     fields: [
       { key: 'token', label: 'Token API', type: 'secret' },
       { key: 'store_id', label: 'Store ID', type: 'secret' },
-      { key: 'base_url', label: 'Adresse de l’API', type: 'text', default: 'https://b.maystro-delivery.com/api' },
+      { key: 'base_url', label: 'Adresse de l’API', type: 'text', default: 'https://backend.maystro-delivery.com/api' },
     ],
   },
   zimou: {

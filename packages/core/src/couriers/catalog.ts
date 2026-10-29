@@ -56,6 +56,7 @@ const MISSING: Partial<Record<CourierKind, Partial<Record<CourierFeature, string
     swap: 'Pas d’échange par API trouvé chez Maystro : demander leur documentation.',
     payments: 'Pas d’API de versements trouvée.',
     desks: 'Pas de liste des bureaux par API.',
+    fees: 'Pas d’API des tarifs trouvée chez Maystro : à remplir à la main.',
     webhook: '',
   },
   zimou: {

@@ -83,7 +83,8 @@ export const elogistia: CourierAdapter = {
   statuses: STATUSES,
   async test(c) {
     needKeys(c, 'api_key');
-    const r = await api(c, 'getWilayas');
+    // getMunicipalities checks the key (401 « apiKey pas valide »); getWilayas answers 404 to a wrong key (checked Oct 2026)
+    const r = await api(c, 'getMunicipalities', { wilaya: 16 });
     if (!body(r).length) return { ok: false, message: `${c.name} n’a rien répondu : vérifiez la clé API` };
     return { ok: true, message: `Connexion réussie à ${c.name} (Elogistia).` };
   },

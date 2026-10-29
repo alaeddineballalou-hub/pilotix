@@ -253,11 +253,11 @@ export async function probeCouriers(): Promise<{ kind: string; ok: boolean; reac
       const t0 = Date.now();
       try {
         const r = await ADAPTERS[k.kind].test(c);
-        out.push({ kind: k.kind, ok: true, reached: true, message: r.ok ? 'L’API répond (elle a même accepté de fausses clés : à vérifier avec de vraies clés)' : r.message, ms: Date.now() - t0 });
+        out.push({ kind: k.kind, ok: true, reached: true, message: r.ok ? 'L’API répond (elle a même accepté de fausses clés : à vérifier avec de vraies clés)' : `L’API répond et refuse les fausses clés, comme prévu (${r.message.slice(0, 160)})`, ms: Date.now() - t0 });
       } catch (e: any) {
         const m = String(e?.message ?? 'Erreur');
         const down = /ne répond pas/.test(m) || e?.status === 502;
-        const refused = !down && /refuse|refusé|invalid|unauthori|non autoris|token|clé/i.test(m);
+        const refused = !down && /refuse|refusé|invalid|unauthori|non autoris|autorisation|pas valide|token|clé/i.test(m);
         out.push({ kind: k.kind, ok: refused, reached: !down, message: down ? m : refused ? `L’API répond et refuse les fausses clés, comme prévu (${m.slice(0, 160)})` : `L’API répond mais pas comme prévu : ${m.slice(0, 200)}`, ms: Date.now() - t0 });
       }
     }),
