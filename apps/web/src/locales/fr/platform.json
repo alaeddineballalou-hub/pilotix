@@ -877,6 +877,30 @@
       "neverText": "Il met la commande « à vérifier » : un agent appelle avant d’envoyer. Un client déjà livré et payé dans la boutique n’est jamais gêné.",
       "forget": "Il oublie avec le temps",
       "forgetText": "Mis à jour toutes les 30 minutes. Une marque de plus de 180 jours est oubliée, et si le client est livré ensuite, la boutique ne le signale plus."
-    }
+    },
+    "q": "Qualité des acheteurs",
+    "qHelp": "Sur 100 commandes reçues (un client qui renvoie la même commande compte une fois), combien venaient de vrais acheteurs : confirmées par un agent ou livrées. Les {{count}} derniers jours ne sont pas finis : les agents confirment encore.",
+    "qLead": "de vrais acheteurs",
+    "qDir": {
+      "up": "En hausse",
+      "down": "En baisse",
+      "flat": "Stable"
+    },
+    "qVs_one": "par rapport au jour d’avant ({{prev}})",
+    "qVs_other": "par rapport aux {{count}} jours d’avant ({{prev}})",
+    "qNoPrev": "Pas encore de période d’avant pour comparer : la tendance apparaît bientôt.",
+    "qPart": {
+      "good": "Vrais acheteurs",
+      "bad": "Faux (bloqués, fausses, faux numéros)",
+      "rest": "Autres (en attente, annulés, injoignables)"
+    },
+    "qDaily": "Chaque jour",
+    "qAvg": "Moyenne sur 7 jours",
+    "qOpen": "Pas fini (les agents confirment encore)",
+    "qOpenShort": "pas fini",
+    "qOf": "{{n}} sur {{buyers}}",
+    "qNone": "Pas encore assez de commandes finies pour mesurer.",
+    "cGood": "Vrais acheteurs",
+    "qPts": "pts"
   }
 }
