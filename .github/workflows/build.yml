@@ -124,9 +124,11 @@ jobs:
           git add -A && git commit -qm "Demo preview from ${GITHUB_SHA::7}"
           git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" artifact-build
 
+  # GitHub Pages is not turned on for this repository (the site is pilotix.online): the job ran red on every push.
+  # It runs only once Pages is on and the repository variable PAGES is set to « on » (Settings › Variables).
   pages:
     name: Website (GitHub Pages)
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && vars.PAGES == 'on'
     needs: web
     runs-on: ubuntu-latest
     permissions:
