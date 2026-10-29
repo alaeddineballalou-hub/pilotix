@@ -92,5 +92,25 @@
     "pickup_other": "{{count}} parcels to take at the depot",
     "onShelf": "On the shelf (Dispatched): scan it",
     "inDepot": "Still at the depot"
+  },
+  "ms": {
+    "inHand": "In hand",
+    "toReturn": "To bring back",
+    "backTitle_one": "{{count}} parcel to bring back to the depot",
+    "backTitle_other": "{{count}} parcels to bring back to the depot",
+    "exchangeBack": "Exchange: bring back the old product ({{items}})",
+    "refusedBack": "Refused: bring the parcel back to the depot",
+    "tagExchange": "Exchange",
+    "tagReturn": "Return",
+    "backHint": "The depot scans them when you come back: then they leave your list.",
+    "message": "Message",
+    "phoneCall": "Normal call",
+    "sms": "SMS",
+    "ready": "Ready messages",
+    "blank": "Blank message",
+    "goCall": "Call now",
+    "goWaCall": "Open WhatsApp to call",
+    "goWa": "Send on WhatsApp",
+    "goSms": "Send by SMS"
   }
 }

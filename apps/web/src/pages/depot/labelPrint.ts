@@ -135,7 +135,12 @@ html,body{margin:0!important;padding:0;background:#fff}
 .lbl-f span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lbl-f b{font-size:9.5pt}
 .lbl-f .lbl-sav{flex:none}
-.lbl-demo{margin:-1mm 0 2mm;border:.5mm dashed #000;border-radius:1.4mm;padding:1mm 2mm;font-size:8pt;font-weight:800;text-align:center}`;
+.lbl-demo{margin:-1mm 0 2mm;border:.5mm dashed #000;border-radius:1.4mm;padding:1mm 2mm;font-size:8pt;font-weight:800;text-align:center}
+.lbl-retb{margin:-1mm 0 2.4mm;background:#000;color:#fff;border-radius:1.8mm;padding:2.4mm 2mm;text-align:center;font-size:20pt;font-weight:900;letter-spacing:.06em;text-transform:uppercase}
+.lbl-retb small{display:block;margin-top:.6mm;font-size:9pt;font-weight:700;letter-spacing:0;text-transform:none}
+.lbl.ret .lbl-co{background:#fff;color:#000;border:.6mm solid #000}
+.lbl-cod.ret span{background:#fff;color:#000;border-inline-end:.7mm solid #000}
+.lbl-cod.ret b{font-size:13pt;display:flex;align-items:center;justify-content:flex-end}`;
 
 /** The label of one parcel. */
 function labelHtml(t: TFunction, z: Zx, { o, code, demo }: LabelItem, shop: LabelShop): string {
@@ -168,12 +173,42 @@ ${o.deliveryNote ? `<div class="lbl-note">${e(t('depot.labels.note'))} : ${e(o.d
 </section>`;
 }
 
+/** An exchange's second label: for the customer's old product, which the livreur brings back to the depot. */
+function returnLabelHtml(t: TFunction, z: Zx, { o, code }: LabelItem, shop: LabelShop): string {
+  const e = escapeHtml;
+  const items = o.items.map((i) => `${i.qty} × ${i.name}${i.variantTitle ? ` ${i.variantTitle}` : ''}`).join(' + ');
+  const phones = [o.phone, o.phone2].filter((p): p is string => !!p).map(phone).join(' · ');
+  return `<section class="lbl ret" dir="${i18n.dir()}">
+<div class="lbl-retb">${e(t('depot.labels.retTitle'))}<small>${e(t('depot.labels.retSub'))}</small></div>
+<div class="lbl-top"><div class="lbl-id">
+<div class="lbl-co">${e(shop.name)}<small>${e(t('depot.labels.retTo'))}</small></div>
+<div class="lbl-k">${e(t('depot.labels.order'))}</div>
+<div class="lbl-trk">${e(o.ref)}</div>
+${o.savRef ? `<div class="lbl-ref">${e(t('depot.labels.exchange', { ref: o.savRef }))}</div>` : ''}
+</div><div class="lbl-qr">${qrSvg(z, code)}</div></div>
+<div class="lbl-to"><div class="lbl-wil"><b>${String(o.wilayaId).padStart(2, '0')}</b><span>${e(wilayaName(o.wilayaId))}</span></div>
+<div class="lbl-who"><div class="lbl-k">${e(t('depot.labels.retFrom'))}</div>
+<div class="lbl-name">${e(o.customerName)}</div>
+<div class="lbl-ph"><bdi dir="ltr">${e(phones)}</bdi></div>
+${o.commune ? `<div class="lbl-com">${e(o.commune)}</div>` : ''}</div></div>
+<div class="lbl-s"><div class="lbl-k">${e(t('depot.labels.retWhat'))}</div><div class="lbl-it">${e(t('depot.labels.retWhatText', { items: items || '—' }))}</div></div>
+<div class="lbl-cod ret"><span>${e(t('depot.labels.retNoCash'))}</span><b>${e(t('depot.labels.retNoCashB'))}</b></div>
+<div class="lbl-bc">${code128Svg(code)}</div>
+<div class="lbl-code">${e(code)}</div>
+<div class="lbl-f"><span>${e(t('depot.labels.retScan'))}</span></div>
+</section>`;
+}
+
+/** An SAV exchange gets two labels: the parcel to deliver, and the old product to bring back. */
+const isExchange = (o: Order) => !!(o.isExchange || o.savRef);
+
 /** Prints these labels in one go, grouped by delivery company (the labels of one courier come out together). */
 export async function printLabelItems(t: TFunction, items: LabelItem[], shop: LabelShop): Promise<void> {
   if (!items.length) return;
   const z = await loadQr();
   const sorted = [...items].sort((a, b) => (a.o.companyName ?? '').localeCompare(b.o.companyName ?? '') || a.o.ref.localeCompare(b.o.ref, undefined, { numeric: true }));
-  printHtml(t('depot.labels.docTitle', { n: sorted.length }), `<style>${LABEL_CSS}</style>${sorted.map((it) => labelHtml(t, z, it, shop)).join('')}`);
+  const pages = sorted.flatMap((it) => [labelHtml(t, z, it, shop), ...(isExchange(it.o) ? [returnLabelHtml(t, z, it, shop)] : [])]);
+  printHtml(t('depot.labels.docTitle', { n: pages.length }), `<style>${LABEL_CSS}</style>${pages.join('')}`);
 }
 
 // ---------------------------------------------------------------- pickup bag (A4), the preview's stand-in for the courier's

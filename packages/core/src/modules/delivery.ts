@@ -21,7 +21,7 @@ function sameSecret(a: string, b: string): boolean {
 }
 import { getSetting } from '../settings';
 import { removedCouriers } from '../platform/courierWatch';
-import { addEvent, listOrders, setFollow } from './orders';
+import { addEvent, getOrder, listOrders, setFollow } from './orders';
 
 const id = z.number().int().positive();
 const ids = z.array(id).min(1).max(500);
@@ -420,6 +420,20 @@ async function tournee(ctx: Ctx, livreurId: number) {
   const toDeliver = sortRound(list.filter((o) => !notTaken.includes(o.followStatus!)), numOrNull(route?.end_wilaya_id), route?.end_commune ?? null);
   const pickup = list.filter((o) => notTaken.includes(o.followStatus!));
   const checkedInAt = (await checkedInToday(ctx.db, ctx.now())).get(livreurId) ?? null;
+  // in his hands, to bring back to the depot: parcels going back (« Retour au dépôt ») until the depot scans them, and
+  // the old product of each exchange he delivered until the depot receives it (a parts exchange brings nothing back)
+  const back = await ctx.db.query(
+    `SELECT o.id FROM orders o
+      WHERE o.livreur_id = $1 AND (
+        o.follow_status = 'returning'
+        OR (o.is_exchange AND o.follow_status IN ('delivered','in_exchange','exchanged') AND o.updated_at > $2::timestamptz
+            AND NOT EXISTS (SELECT 1 FROM complaints k WHERE k.exchange_order_id = o.id AND k.exchange_kind = 'parts')
+            AND NOT EXISTS (SELECT 1 FROM stock_movements m WHERE m.note = 'Échange ' || o.ref || ' : ancien produit reçu au dépôt')))
+      ORDER BY o.updated_at DESC LIMIT 100`,
+    [livreurId, new Date(ctx.now() - 30 * 86_400_000).toISOString()],
+  );
+  const toReturn = await Promise.all(back.map((r: any) => getOrder(ctx, num(r.id))));
+  const messages = await getSetting(ctx.db, 'livreurMessages');
   const today = await ctx.db.query(
     `SELECT count(*)::int AS n, coalesce(sum(total),0)::int AS amount FROM orders
      WHERE livreur_id=$1 AND follow_status='delivered' AND delivered_at >= date_trunc('day', now() AT TIME ZONE 'Africa/Algiers') AT TIME ZONE 'Africa/Algiers'`,
@@ -437,6 +451,12 @@ async function tournee(ctx: Ctx, livreurId: number) {
     deliveredTodayAmount: num(today[0]?.amount),
     /** « Je travaille aujourd'hui »: when he said it today (null: not yet) */
     checkedInAt,
+    /** to bring back to the depot: parcels going back, old products of exchanges */
+    toReturn,
+    /** parcels in his hands: to deliver + to bring back */
+    inHand: toDeliver.length + toReturn.length,
+    /** Management › Livreur: the one-tap messages */
+    messages,
   };
 }
 

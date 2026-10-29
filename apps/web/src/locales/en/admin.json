@@ -11,7 +11,8 @@
     "prix": "Delivery prices",
     "canaux": "Sales channels",
     "archive": "Archives",
-    "alertes": "Depot alerts"
+    "alertes": "Depot alerts",
+    "livreur": "Livreur"
   },
   "users": {
     "rolesTitle": "Roles",
@@ -626,5 +627,28 @@
     "all": "Nobody ticked: every depot agent gets the alerts.",
     "chosen_one": "{{count}} person gets the alerts.",
     "chosen_other": "{{count}} people get the alerts."
+  },
+  "lv": {
+    "title": "Livreur messages",
+    "help": "The livreur sends them in one tap from « Ma tournée » (Message, then WhatsApp or SMS). Words in braces are filled with the order.",
+    "name": "Message name",
+    "namePh": "On my way",
+    "text": "Message",
+    "remove": "Remove this message",
+    "vars": "Words filled by themselves",
+    "var": {
+      "nom": "The customer’s name",
+      "ref": "The order reference",
+      "montant": "The amount to pay",
+      "commune": "The commune",
+      "livreur": "The livreur’s name",
+      "boutique": "The shop’s name"
+    },
+    "add": "Add a message",
+    "reset": "Back to the starting messages",
+    "unsaved": "Not saved yet",
+    "fill": "Each message needs a name and words",
+    "save": "Save",
+    "saved": "Livreur messages saved"
   }
 }

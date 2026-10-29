@@ -11,7 +11,8 @@
     "prix": "Prix de livraison",
     "canaux": "Canaux de vente",
     "archive": "Archives",
-    "alertes": "Alertes dépôt"
+    "alertes": "Alertes dépôt",
+    "livreur": "Livreur"
   },
   "users": {
     "rolesTitle": "Rôles",
@@ -626,5 +627,28 @@
     "all": "Personne de coché : tous les agents du dépôt reçoivent les alertes.",
     "chosen_one": "{{count}} personne reçoit les alertes.",
     "chosen_other": "{{count}} personnes reçoivent les alertes."
+  },
+  "lv": {
+    "title": "Messages du livreur",
+    "help": "Le livreur les envoie en un geste depuis « Ma tournée » (Message, puis WhatsApp ou SMS). Les mots entre accolades sont remplis avec la commande.",
+    "name": "Nom du message",
+    "namePh": "J’arrive",
+    "text": "Message",
+    "remove": "Supprimer ce message",
+    "vars": "Mots remplis tout seuls",
+    "var": {
+      "nom": "Le nom du client",
+      "ref": "La référence de la commande",
+      "montant": "Le montant à payer",
+      "commune": "La commune",
+      "livreur": "Le nom du livreur",
+      "boutique": "Le nom de la boutique"
+    },
+    "add": "Ajouter un message",
+    "reset": "Remettre les messages de départ",
+    "unsaved": "Pas encore enregistré",
+    "fill": "Chaque message a besoin d’un nom et de mots",
+    "save": "Enregistrer",
+    "saved": "Messages du livreur enregistrés"
   }
 }

@@ -92,5 +92,25 @@
     "pickup_other": "{{count}} colis à prendre au dépôt",
     "onShelf": "Sur l’étagère (Dispatchées) : scannez-le",
     "inDepot": "Encore au dépôt"
+  },
+  "ms": {
+    "inHand": "En main",
+    "toReturn": "À retourner",
+    "backTitle_one": "{{count}} colis à rapporter au dépôt",
+    "backTitle_other": "{{count}} colis à rapporter au dépôt",
+    "exchangeBack": "Échange : rapportez l’ancien produit ({{items}})",
+    "refusedBack": "Refusé : rapportez le colis au dépôt",
+    "tagExchange": "Échange",
+    "tagReturn": "Retour",
+    "backHint": "Le dépôt les scanne à votre retour : ils sortent alors de votre liste.",
+    "message": "Message",
+    "phoneCall": "Appel normal",
+    "sms": "SMS",
+    "ready": "Messages prêts",
+    "blank": "Message vide",
+    "goCall": "Appeler maintenant",
+    "goWaCall": "Ouvrir WhatsApp pour appeler",
+    "goWa": "Envoyer sur WhatsApp",
+    "goSms": "Envoyer par SMS"
   }
 }

@@ -243,7 +243,16 @@
     "opened": "Ouverte",
     "fileN_one": "{{count}} étiquette dans un PDF",
     "fileN_other": "{{count}} étiquettes dans un seul PDF",
-    "demoStandIn": "Démo : remplace l’étiquette officielle de {{name}} (avec ses clés API, c’est la sienne qui s’imprime)"
+    "demoStandIn": "Démo : remplace l’étiquette officielle de {{name}} (avec ses clés API, c’est la sienne qui s’imprime)",
+    "retTitle": "Retour échange",
+    "retSub": "Ancien produit — à rapporter au dépôt",
+    "retTo": "À rapporter au dépôt",
+    "retFrom": "Repris chez",
+    "retWhat": "Ce qui revient",
+    "retWhatText": "L’ancien produit du client (échangé contre : {{items}})",
+    "retNoCash": "Rien à encaisser",
+    "retNoCashB": "sur cette étiquette",
+    "retScan": "Au dépôt : scannez cette étiquette dans Scanner › « Retour / Échange »."
   },
   "bags": {
     "title": "Sacs de ramassage · {{name}}",

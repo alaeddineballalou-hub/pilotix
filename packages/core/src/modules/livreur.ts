@@ -9,6 +9,7 @@
 import { z } from 'zod';
 import { Db, iso, num } from '../db';
 import { bad, Ctx, proc } from '../rpc';
+import { DEFAULT_SETTINGS, getSetting, setSetting } from '../settings';
 import { addEvent, getOrder, setFollow } from './orders';
 export { hideCustomer, NOT_TAKEN } from './orders';
 import { sendPush } from './push';
@@ -73,7 +74,21 @@ export async function tellLivreur(ctx: Ctx, livreurId: number, count: number) {
   });
 }
 
+const MessageIn = z.object({ id: z.string().trim().min(1).max(40), label: z.string().trim().min(1).max(40), text: z.string().trim().min(1).max(700) });
+
 export const livreurProcs = {
+  /** Management › Livreur: the one-tap messages (everyone reads them: the livreurs send them). */
+  'livreur.messages': proc(null, z.object({}), async (ctx) => ({ messages: await getSetting(ctx.db, 'livreurMessages'), defaults: DEFAULT_SETTINGS.livreurMessages })),
+  'livreur.messagesSet': proc([], z.object({ messages: z.array(MessageIn).max(20) }), async (ctx, i) => {
+    const ids = new Set<string>();
+    for (const m of i.messages) {
+      if (ids.has(m.id)) throw bad('Deux messages ont le même identifiant');
+      ids.add(m.id);
+    }
+    await setSetting(ctx.db, 'livreurMessages', i.messages, ctx.session.profile.id);
+    return { ok: true };
+  }),
+
   /** « Je travaille aujourd'hui ». */
   'tournee.checkIn': proc(['livreur'], z.object({}), async (ctx) => {
     const r = (
@@ -84,6 +99,19 @@ export const livreurProcs = {
     )[0];
     return { at: iso(r.at) };
   }),
+
+  /** Management › Livreur: the ready messages (everyone reads them: the livreurs send them). */
+  'tournee.messages': proc(null, z.object({}), async (ctx) => ({ msgs: await getSetting(ctx.db, 'livreurMsgs') })),
+
+  /** Admin: the ready messages, in their order. */
+  'tournee.saveMessages': proc(
+    [],
+    z.object({ msgs: z.array(z.object({ id: z.string().min(1).max(40), label: z.string().trim().min(1, 'Donnez un nom au message').max(40), text: z.string().trim().min(1, 'Écrivez le message').max(600) })).max(20) }),
+    async (ctx, i) => {
+      await setSetting(ctx.db, 'livreurMsgs', i.msgs, ctx.session.profile.id);
+      return { ok: true };
+    },
+  ),
 
   /** « Prendre un colis »: the livreur scans it — in his hands, « En livraison ». */
   'tournee.take': proc(['livreur'], z.object({ code: z.string().min(1).max(100) }), (ctx, i) => takeParcel(ctx, i.code)),

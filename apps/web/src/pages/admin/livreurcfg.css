@@ -1,0 +1,19 @@
+.lv { display: flex; flex-direction: column; gap: 14px; }
+.lv-head h2 { margin: 0; }
+.lv-head p { margin: 4px 0 0; }
+.lv-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 12px; }
+.lv-item { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); }
+.lv-item.on { border-color: var(--px-orange); box-shadow: 0 0 0 3px var(--px-orange-soft, #FFF4E2); }
+.lv-top { display: flex; align-items: center; gap: 8px; }
+.lv-n { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--px-orange-soft, #FFF4E2); font-weight: 800; font-size: 13px; color: var(--ink); }
+.lv-name { flex: 1; min-width: 0; font-weight: 800; }
+.lv-item textarea { width: 100%; resize: vertical; line-height: 1.45; }
+.lv-vars { display: flex; flex-wrap: wrap; gap: 6px; }
+.lv-var { border: 1px dashed var(--line); background: var(--field); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 12px; font-weight: 700; color: var(--muted); cursor: pointer; direction: ltr; }
+.lv-var:hover { border-color: var(--px-orange); color: var(--ink); }
+.lv-prev { display: flex; gap: 6px; margin: 0; padding: 8px 10px; border-radius: 10px; background: #F4FBF6; color: #0f5132; font-size: 12.5px; line-height: 1.45; }
+.lv-prev .bji { width: 15px; height: 15px; flex: none; margin-top: 2px; }
+.lv-add { display: flex; gap: 8px; flex-wrap: wrap; }
+.lv-foot { position: sticky; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 5; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 10px 12px; border: 1px solid var(--px-orange); border-radius: 14px; background: var(--surface); box-shadow: 0 12px 30px -18px rgba(15, 26, 46, .45); }
+.lv-state { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 700; color: var(--ink); }
+@media (max-width: 560px) { .lv-state { flex-basis: 100%; } .lv-foot .btn { flex: 1; } }

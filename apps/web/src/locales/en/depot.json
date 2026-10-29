@@ -243,7 +243,16 @@
     "opened": "Opened",
     "fileN_one": "{{count}} label in one PDF",
     "fileN_other": "{{count}} labels in a single PDF",
-    "demoStandIn": "Demo: stands in for {{name}}’s official label (with its API keys, its own label prints)"
+    "demoStandIn": "Demo: stands in for {{name}}’s official label (with its API keys, its own label prints)",
+    "retTitle": "Exchange return",
+    "retSub": "Old product — bring it back to the depot",
+    "retTo": "Bring back to the depot",
+    "retFrom": "Taken back from",
+    "retWhat": "What comes back",
+    "retWhatText": "The customer’s old product (exchanged for: {{items}})",
+    "retNoCash": "Nothing to collect",
+    "retNoCashB": "on this label",
+    "retScan": "At the depot: scan this label in Scanner › “Return / Exchange”."
   },
   "bags": {
     "title": "Pickup bags · {{name}}",

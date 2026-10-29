@@ -20,19 +20,12 @@
 .pxt-who small { font-size: 12.5px; color: var(--muted); }
 .pxt-note { display: flex; gap: 6px; align-items: flex-start; margin: 0; padding: 8px 10px; border-radius: 10px; background: #FFF8EC; border: 1px dashed #F7A823; font-size: 13px; }
 .pxt-note .bji { width: 15px; height: 15px; flex: none; margin-top: 2px; color: var(--c-accent-ink); }
-.pxt-c3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.pxt-c3 a { height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 800; font-size: 13.5px; text-decoration: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink) !important; }
-.pxt-c3 a .bji { width: 17px; height: 17px; }
-.pxt-c3 a.c { background: var(--c-ok-fill); border-color: var(--c-ok-line); color: #fff !important; }
-.pxt-c3 a.w { background: #25D366; border-color: #25D366; color: #fff !important; }
-.pxt-ph2 { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--c-ok-ink) !important; text-decoration: none; }
-.pxt-ph2 .bji { width: 14px; height: 14px; }
-.pxt-go { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; }
-.pxt-go button { height: 58px; border-radius: 14px; font: inherit; font-size: 16.5px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
-.pxt-go .bji { width: 20px; height: 20px; }
-.pxt-go .ok { border: 0; background: var(--c-ok-fill); color: #fff; box-shadow: 0 8px 20px rgba(31, 157, 87, .25); }
-.pxt-go .no { border: 1px solid #F5C6C2; background: var(--surface); color: var(--c-bad-ink); font-size: 15px; }
-.pxt-go button:disabled { opacity: .5; }
+.pxt-end { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; }
+.pxt-end button { height: 58px; border-radius: 14px; font: inherit; font-size: 16.5px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
+.pxt-end .bji { width: 20px; height: 20px; }
+.pxt-end .ok { border: 0; background: var(--c-ok-fill); color: #fff; box-shadow: 0 8px 20px rgba(31, 157, 87, .25); }
+.pxt-end .no { border: 1px solid #F5C6C2; background: var(--surface); color: var(--c-bad-ink); font-size: 15px; }
+.pxt-end button:disabled { opacity: .5; }
 .pxt-free { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 26px 12px; border-radius: 18px; background: var(--c-ok-tint); color: var(--c-ok-ink); text-align: center; }
 .pxt-free .bji { width: 34px; height: 34px; }
 .pxt-free small { color: var(--ink); }
@@ -95,3 +88,32 @@
 .tk-last.ok { background: var(--ok-soft, #E7F6EE); color: #0f7a45; }
 .tk-last.bad { background: var(--c-bad-tint); color: var(--c-bad-ink); }
 .tk-state { color: var(--muted); font-size: 11.5px; font-weight: 700; }
+
+/* counters: in hand · to deliver · to bring back / to collect (wide) · delivered */
+.pxt-money.five div.hand { background: #FFF4E2; border-color: #F7A823; }
+.pxt-money.five div.back { background: var(--c-warn-tint); border-color: var(--c-warn-ink); }
+.pxt-money.five div.back b { color: var(--c-warn-ink); }
+.pxt-money.five div.wide { grid-column: span 2; }
+/* « Appeler » / « Message »: each asks WhatsApp or the phone */
+.pxt-c2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.pxt-c2 button { height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; font: inherit; font-weight: 800; font-size: 15px; border: 1px solid var(--line); cursor: pointer; }
+.pxt-c2 button .bji { width: 18px; height: 18px; }
+.pxt-c2 button.c { background: var(--c-ok-fill); border-color: var(--c-ok-line); color: #fff; }
+.pxt-c2 button.m { background: #25D366; border-color: #25D366; color: #fff; }
+.pxv-btn.wa { background: #25D366 !important; border-color: #25D366 !important; color: #fff !important; }
+.pxv-btn.ok { background: var(--c-ok-fill) !important; border-color: var(--c-ok-fill) !important; color: #fff !important; }
+a.pxv-btn { display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; }
+.pxv-own button .bji { width: 16px; height: 16px; }
+.ms-list { display: flex; flex-direction: column; gap: 6px; max-height: 42vh; overflow: auto; }
+.ms-opt { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; }
+.ms-opt.on { border-color: #F7A823; background: #FFF4E2; }
+.ms-opt input { margin-top: 3px; accent-color: #F7A823; }
+.ms-opt span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ms-opt b { font-size: 14px; color: var(--ink); }
+.ms-opt small { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+/* to bring back to the depot */
+.ms-back .pxt-rows { border-radius: 14px; overflow: hidden; border: 1px solid var(--c-warn-ink); }
+.ms-tag { flex: none; align-self: center; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 800; white-space: nowrap; }
+.ms-tag.ex { background: #EEF2FF; color: #3F51B5; }
+.ms-tag.ret { background: var(--c-warn-tint); color: var(--c-warn-ink); }
+.ms-hint { margin: 6px 2px 0; font-size: 12px; color: var(--muted); }

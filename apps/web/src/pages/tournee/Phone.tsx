@@ -1,6 +1,8 @@
-// « Ma tournée » on phones (T1 + A + B): the money of the day on one line; the next stop in big (call, WhatsApp, Maps,
-// then Livrée / Pas livrée within thumb reach); the other stops as numbered rows (a tap makes one the current stop);
-// what to pick up at the depot; the office chat behind a bubble that counts the unread messages.
+// « Ma tournée » on phones (T1 + A + B): his counters (in hand, to deliver, to bring back, to collect, delivered); the
+// next stop in big (« Appeler » / « Message » — each asks WhatsApp or phone, « Message » offers the shop's ready
+// messages from Management › Livreur — then Livrée / Pas livrée within thumb reach); the other stops as numbered rows
+// (a tap makes one the current stop); what to bring back (refused parcels, old products of exchanges); what to take at
+// the depot; the office chat behind a bubble that counts the unread messages.
 // « Pas livrée » opens a sheet: I come back (failed) or back to the depot (return), the reason in one tap, a note.
 import { FAIL_REASONS, Order, phoneIntl, RETURN_REASONS } from '@pilotix/shared';
 import { useState } from 'react';
@@ -26,7 +28,15 @@ const seenAt = () => {
   }
 };
 
-const mapsLink = (o: Order) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([o.address, o.commune, wilayaName(o.wilayaId), 'Algérie'].filter(Boolean).join(', '))}`;
+/** A ready message with the customer's details in it: {nom} {ref} {montant} {commune} {livreur} {boutique}. */
+const fill = (text: string, o: Order, shop: string, livreur: string) =>
+  text
+    .replace(/\{nom\}/g, o.customerName)
+    .replace(/\{ref\}/g, o.ref)
+    .replace(/\{montant\}/g, String(o.total))
+    .replace(/\{commune\}/g, o.commune ?? '')
+    .replace(/\{livreur\}/g, livreur)
+    .replace(/\{boutique\}/g, shop);
 
 export function PhoneTournee({ d, livreurId, self, onPrint }: { d: Data; livreurId?: number; self: boolean; onPrint: () => void }) {
   const { t } = useTranslation();
@@ -53,12 +63,20 @@ export function PhoneTournee({ d, livreurId, self, onPrint }: { d: Data; livreur
   return (
     <div className="pxt">
       {self && <CheckIn at={d.checkedInAt} />}
-      <div className="pxt-money">
+      <div className="pxt-money five">
+        <div className="hand">
+          <small>{t('tournee.ms.inHand')}</small>
+          <b>{d.inHand}</b>
+        </div>
         <div>
           <small>{t('tournee.ph.toDeliver')}</small>
           <b>{list.length}</b>
         </div>
-        <div>
+        <div className={d.toReturn.length ? 'back' : ''}>
+          <small>{t('tournee.ms.toReturn')}</small>
+          <b>{d.toReturn.length}</b>
+        </div>
+        <div className="wide">
           <small>{t('tournee.ph.toCollect')}</small>
           <b className="ltr">{da(d.toDeliverAmount)}</b>
         </div>
@@ -71,7 +89,7 @@ export function PhoneTournee({ d, livreurId, self, onPrint }: { d: Data; livreur
       {self && d.pickup.length > 0 && <TakeBox />}
 
       {next ? (
-        <Stop o={next} n={list.indexOf(next) + 1} shop={d.shop} />
+        <Stop o={next} n={list.indexOf(next) + 1} shop={d.shop} livreur={d.livreur.name} messages={d.messages} />
       ) : (
         <div className="pxt-free">
           <Icon name="checkcircle" />
@@ -101,6 +119,28 @@ export function PhoneTournee({ d, livreurId, self, onPrint }: { d: Data; livreur
             ))}
           </ul>
         </>
+      )}
+
+      {d.toReturn.length > 0 && (
+        <section className="pxt-pick ms-back">
+          <div className="pxv-lbl">{t('tournee.ms.backTitle', { count: d.toReturn.length })}</div>
+          <ul className="pxt-rows">
+            {d.toReturn.map((o) => (
+              <li key={o.id}>
+                <span className="pxt-row">
+                  <span className="pxt-rm">
+                    <b>
+                      <span className="ltr">{o.ref}</span> · {o.customerName}
+                    </b>
+                    <small>{o.isExchange ? t('tournee.ms.exchangeBack', { items: o.items.map((i) => `${i.qty} × ${i.name}`).join(' + ') }) : t('tournee.ms.refusedBack')}</small>
+                  </span>
+                  <span className={`ms-tag ${o.isExchange ? 'ex' : 'ret'}`}>{o.isExchange ? t('tournee.ms.tagExchange') : t('tournee.ms.tagReturn')}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="ms-hint">{t('tournee.ms.backHint')}</p>
+        </section>
       )}
 
       {d.pickup.length > 0 && (
@@ -146,12 +186,12 @@ export function PhoneTournee({ d, livreurId, self, onPrint }: { d: Data; livreur
 }
 
 /** The current stop: everything within thumb reach. */
-function Stop({ o, n, shop }: { o: Order; n: number; shop: Data['shop'] }) {
+function Stop({ o, n, shop, livreur, messages }: { o: Order; n: number; shop: Data['shop']; livreur: string; messages: Data['messages'] }) {
   const { t } = useTranslation();
   const [ask, setAsk] = useState(false);
+  const [reach, setReach] = useState<'call' | 'message' | null>(null);
   const set = useAction('orders.setFollow', { success: (r) => (r.changed.length ? t('tournee.saved') : t('tournee.noChange')) });
   const call = useAction('orders.logCall', { silent: true });
-  const wa = `https://wa.me/${phoneIntl(o.phone)}?text=${encodeURIComponent((shop.whatsappTemplate || '').replace(/\{nom\}/g, o.customerName).replace(/\{boutique\}/g, shop.name).replace(/\{ref\}/g, o.ref))}`;
   const items = o.items.map((i) => `${i.qty} × ${i.name}${i.variantTitle ? ` ${i.variantTitle}` : ''}`).join(' + ');
   return (
     <section className="pxt-stop">
@@ -177,23 +217,15 @@ function Stop({ o, n, shop }: { o: Order; n: number; shop: Data['shop'] }) {
           <Icon name="info" /> {o.deliveryNote}
         </p>
       )}
-      <div className="pxt-c3">
-        <a className="c" href={`tel:${o.phone}`} onClick={() => call.mutate({ id: o.id })}>
+      <div className="pxt-c2">
+        <button type="button" className="c" onClick={() => setReach('call')}>
           <Icon name="phone" /> {t('tournee.ph.call')}
-        </a>
-        <a className="w" href={wa} target="_blank" rel="noopener noreferrer">
-          <Icon name="whatsapp" /> WhatsApp
-        </a>
-        <a href={mapsLink(o)} target="_blank" rel="noopener noreferrer">
-          <Icon name="navigation" /> Maps
-        </a>
+        </button>
+        <button type="button" className="m" onClick={() => setReach('message')}>
+          <Icon name="message" /> {t('tournee.ms.message')}
+        </button>
       </div>
-      {o.phone2 && (
-        <a className="pxt-ph2" href={`tel:${o.phone2}`}>
-          <Icon name="phone" /> {t('tournee.ph.phone2')} <span className="ltr">{o.phone2}</span>
-        </a>
-      )}
-      <div className="pxt-go">
+      <div className="pxt-end">
         <button
           type="button"
           className="ok"
@@ -207,7 +239,102 @@ function Stop({ o, n, shop }: { o: Order; n: number; shop: Data['shop'] }) {
         </button>
       </div>
       {ask && <NotDelivered o={o} onClose={() => setAsk(false)} />}
+      {reach && (
+        <Reach
+          o={o}
+          kind={reach}
+          texts={messages.map((m) => ({ id: m.id, label: m.label, text: fill(m.text, o, shop.name, livreur) }))}
+          onCall={() => call.mutate({ id: o.id })}
+          onClose={() => setReach(null)}
+        />
+      )}
     </section>
+  );
+}
+
+/**
+ * « Appeler » / « Message »: each time, WhatsApp or the phone. « Message » also offers the shop's ready messages
+ * (Management › Livreur), filled with this customer's details; a blank one is always there.
+ */
+function Reach({ o, kind, texts, onCall, onClose }: { o: Order; kind: 'call' | 'message'; texts: { id: string; label: string; text: string }[]; onCall: () => void; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [via, setVia] = useState<'wa' | 'phone'>('wa');
+  const [pick, setPick] = useState<string>(texts[0]?.id ?? '');
+  const phones = [o.phone, o.phone2].filter((p): p is string => !!p);
+  const [to, setTo] = useState(phones[0]);
+  const text = texts.find((x) => x.id === pick)?.text ?? '';
+  const href =
+    kind === 'call'
+      ? via === 'wa'
+        ? `https://wa.me/${phoneIntl(to)}`
+        : `tel:${to}`
+      : via === 'wa'
+        ? `https://wa.me/${phoneIntl(to)}${text ? `?text=${encodeURIComponent(text)}` : ''}`
+        : `sms:${to}${text ? `?body=${encodeURIComponent(text)}` : ''}`;
+  return (
+    <div className="pxv-sheet" role="dialog" aria-modal="true" aria-label={kind === 'call' ? t('tournee.ph.call') : t('tournee.ms.message')}>
+      <button type="button" className="pxv-dim" aria-label={t('common.close')} onClick={onClose} />
+      <div className="pxv-sh">
+        <span className="pxv-grab" aria-hidden="true" />
+        <div className="pxv-shh">
+          <b>
+            {kind === 'call' ? t('tournee.ph.call') : t('tournee.ms.message')} · {o.customerName}
+          </b>
+          <button type="button" className="pxp-back" aria-label={t('common.close')} onClick={onClose}>
+            <Icon name="x" />
+          </button>
+        </div>
+        <div className="pxv-own">
+          <button type="button" className={via === 'wa' ? 'on' : ''} aria-pressed={via === 'wa'} onClick={() => setVia('wa')}>
+            <Icon name="whatsapp" /> WhatsApp
+          </button>
+          <button type="button" className={via === 'phone' ? 'on' : ''} aria-pressed={via === 'phone'} onClick={() => setVia('phone')}>
+            <Icon name="phone" /> {kind === 'call' ? t('tournee.ms.phoneCall') : t('tournee.ms.sms')}
+          </button>
+        </div>
+        {phones.length > 1 && (
+          <div className="pxv-chips">
+            {phones.map((p) => (
+              <button key={p} type="button" className={`pxv-chip${to === p ? ' on' : ''}`} aria-pressed={to === p} onClick={() => setTo(p)}>
+                <span className="ltr">{p}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {kind === 'message' && (
+          <div className="ms-list" role="radiogroup" aria-label={t('tournee.ms.ready')}>
+            {texts.map((x) => (
+              <label key={x.id} className={`ms-opt${pick === x.id ? ' on' : ''}`}>
+                <input type="radio" name="ms" checked={pick === x.id} onChange={() => setPick(x.id)} />
+                <span>
+                  <b>{x.label}</b>
+                  <small>{x.text}</small>
+                </span>
+              </label>
+            ))}
+            <label className={`ms-opt${pick === '' ? ' on' : ''}`}>
+              <input type="radio" name="ms" checked={pick === ''} onChange={() => setPick('')} />
+              <span>
+                <b>{t('tournee.ms.blank')}</b>
+              </span>
+            </label>
+          </div>
+        )}
+        <a
+          className={`pxv-btn big ${via === 'wa' ? 'wa' : 'ok'}`}
+          href={href}
+          target={via === 'wa' ? '_blank' : undefined}
+          rel="noopener noreferrer"
+          onClick={() => {
+            if (kind === 'call') onCall();
+            onClose();
+          }}
+        >
+          <Icon name={via === 'wa' ? 'whatsapp' : kind === 'call' ? 'phone' : 'message'} />{' '}
+          {kind === 'call' ? (via === 'wa' ? t('tournee.ms.goWaCall') : t('tournee.ms.goCall')) : via === 'wa' ? t('tournee.ms.goWa') : t('tournee.ms.goSms')}
+        </a>
+      </div>
+    </div>
   );
 }
 

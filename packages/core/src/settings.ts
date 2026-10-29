@@ -69,6 +69,16 @@ export interface SettingsMap {
    *    that company delivers there;
    *  - noStockDays: a « sans stock » order waiting longer than this rings an alert.
    */
+  /**
+   * Management › Livreur: the ready messages our livreurs send a customer (WhatsApp or SMS) from « Ma tournée ».
+   * {nom} the customer, {ref} the order, {montant} what to pay, {commune}, {livreur}, {boutique}.
+   */
+  livreurMsgs: { id: string; label: string; text: string }[];
+  /**
+   * Management › Livreur: the messages a livreur sends a customer in one tap (WhatsApp or SMS) from « Ma tournée ».
+   * {nom} the customer, {ref} the order, {montant} what to pay, {commune}, {livreur} his name, {boutique} the shop.
+   */
+  livreurMessages: { id: string; label: string; text: string }[];
   prefs: {
     manualDefault: boolean;
     changeCompany: { confirmation: boolean; agency: boolean; depot: boolean; manager: boolean };
@@ -105,6 +115,19 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   depotAlerts: { to: [] },
   colPresets: [],
   colPresetActive: null,
+  livreurMsgs: [
+    { id: 'route', label: 'En route', text: 'Bonjour {nom}, c’est {livreur}, le livreur de {boutique}. Je suis en route avec votre commande {ref}, j’arrive bientôt.' },
+    { id: 'door', label: 'Devant chez vous', text: 'Bonjour {nom}, je suis devant chez vous avec votre commande {ref} ({montant}). Je vous attends.' },
+    { id: 'noanswer', label: 'Pas de réponse', text: 'Bonjour {nom}, je vous ai appelé pour votre commande {ref} de {boutique}, sans réponse. Rappelez-moi s’il vous plaît.' },
+    { id: 'tomorrow', label: 'Demain', text: 'Bonjour {nom}, je repasse demain pour votre commande {ref}. Merci de rester joignable.' },
+    { id: 'ar-route', label: 'راني جاي', text: 'السلام عليكم {nom}، معاك {livreur} موصّل {boutique}. راني جاي بطلبيتك {ref}، نوصل قريب.' },
+  ],
+  livreurMessages: [
+    { id: 'coming', label: 'J’arrive', text: 'Bonjour {nom}, je suis {livreur}, le livreur de {boutique}. J’arrive dans 15 minutes avec votre commande {ref} ({montant} DA).' },
+    { id: 'here', label: 'Je suis devant', text: 'Bonjour {nom}, je suis devant chez vous avec votre commande {ref}. Merci de sortir, le montant est de {montant} DA.' },
+    { id: 'noanswer', label: 'Pas de réponse', text: 'Bonjour {nom}, j’ai essayé de vous appeler pour votre commande {ref} ({boutique}). Rappelez-moi s’il vous plaît.' },
+    { id: 'tomorrow', label: 'Demain', text: 'Bonjour {nom}, je repasse demain pour votre commande {ref}. Merci de rester joignable.' },
+  ],
   prefs: {
     manualDefault: true,
     changeCompany: { confirmation: true, agency: false, depot: false, manager: true },

@@ -41,6 +41,7 @@ const SUB_LABEL: Record<string, string> = {
   'management/prix': 'admin.subs.prix',
   'management/canaux': 'admin.subs.canaux',
   'management/alertes': 'admin.subs.alertes',
+  'management/livreur': 'admin.subs.livreur',
   'management/archive': 'admin.subs.archive',
 };
 
