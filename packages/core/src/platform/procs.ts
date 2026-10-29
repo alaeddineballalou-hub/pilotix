@@ -10,6 +10,7 @@ import { hashPassword } from '../modules/users';
 import { courierCatalog } from '../couriers/catalog';
 import { clearCourierTestKeys, courierTestState, saveCourierTestKeys } from './courierTests';
 import { addWatchItems, courierUsage, removeCourier, removedCouriers, removeWatchItem, restoreCourier, setWatchStatus, watchState } from './courierWatch';
+import { protectionStats } from './reputation';
 import { syncAgency } from '../modules/agencies';
 import { accountById, makeAccountToken, sha256Hex } from './accounts';
 import { rewardReferrer, ReferralReward } from './reminders';
@@ -239,6 +240,13 @@ export const PLATFORM_REGISTRY = {
 
   /** The team's test keys of each company (which ones are set, never their values) and each one's last test. */
   'p.couriers.tests': pproc(ALL, z.object({}), async (ctx) => courierTestState(ctx.t)),
+
+  /**
+   * « Pilotix Protection System »: the protection of every store, as it grows — the network's size (numbers and devices
+   * the stores ended badly with, those 2 different businesses agree on), the landing orders of all stores day by day
+   * (blocked, to check, caught by the network), each store's last 30 days. Numbers only: no customer, no number.
+   */
+  'p.protection': pproc(MANAGERS, z.object({ days: z.union([z.literal(7), z.literal(30), z.literal(90)]).default(30) }), async (ctx, i) => protectionStats(ctx.t, ctx.now(), i.days)),
 
   /** Saves a company's test keys (an empty key keeps the saved one) and its settings (API address…). */
   'p.couriers.saveKeys': pproc(

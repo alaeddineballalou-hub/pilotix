@@ -22,6 +22,7 @@ import { LoginDesigns } from './LoginDesigns';
 import { Messages } from './Messages';
 import { Payments } from './Payments';
 import { Plans } from './Plans';
+import { ProtectionPage } from './Protection';
 import { Receipt } from './Receipt';
 import { Settings } from './Settings';
 import { Signups } from './Signups';
@@ -35,6 +36,7 @@ type Section = { id: string; icon: string; roles?: Staff['role'][] };
 const SECTIONS: Section[] = [
   { id: 'dashboard', icon: 'grid' },
   { id: 'doctor', icon: 'sparkles', roles: ['owner', 'manager'] },
+  { id: 'protection', icon: 'shield', roles: ['owner', 'manager'] },
   { id: 'shops', icon: 'store' },
   { id: 'couriers', icon: 'truck' },
   { id: 'agencies', icon: 'headset' },
@@ -60,8 +62,9 @@ export function PlatformApp({ parts }: { parts: string[] }) {
       document.title = 'Pilotix';
     };
   }, []);
-  // the preview has no server: only the Doctor and the sign-in designs can be seen there, with an example
-  if (DEMO_ONLY) return parts[0] === 'doctor' || parts[0] === 'designs' || parts[0] === 'couriers' ? <PlatformShell staff={DEMO_STAFF} parts={parts} demo onLogout={() => (location.hash = '#/accueil')} /> : <ServerOnly />;
+  // the preview has no server: only the Doctor, the sign-in designs, the delivery companies and the Protection System
+  // can be seen there, with an example
+  if (DEMO_ONLY) return ['doctor', 'designs', 'couriers', 'protection'].includes(parts[0] ?? '') ? <PlatformShell staff={DEMO_STAFF} parts={parts} demo onLogout={() => (location.hash = '#/accueil')} /> : <ServerOnly />;
   if (!staff) return <PlatformLogin onDone={setStaff} />;
   // a receipt alone on its page (printed, or saved as PDF from the browser)
   if (parts[0] === 'receipt' && /^\d+$/.test(parts[1] ?? '')) return <Receipt id={Number(parts[1])} />;
@@ -199,6 +202,7 @@ function PlatformShell({ staff, parts, onLogout, demo }: { staff: Staff; parts: 
   else if (cur === 'shops') page = <Shops staff={staff} creating={parts[1] === 'new'} filter={parts[1] === 'f' ? parts[2] : undefined} />;
   else if (cur === 'couriers') page = <CouriersPage demo={demo} />;
   else if (cur === 'doctor') page = <DoctorPage demo={demo} owner={demo || staff?.role === 'owner'} />;
+  else if (cur === 'protection') page = <ProtectionPage demo={demo} />;
   else if (cur === 'payments') page = <Payments staff={staff} />;
   else if (cur === 'signups') page = <Signups />;
   else if (cur === 'agencies') page = <Agencies staff={staff} />;
