@@ -1,17 +1,7 @@
 // Which addresses exist at a courier (made-up keys): 401/403 = the address exists (keys refused), 404 = no such address. Temporary.
 const M = (p, method = 'GET') => [`maystro ${method} ${p}`, `https://backend.maystro-delivery.com/api/${p}`, { Authorization: 'Token x' }, method];
 const calls = [
-  ...['stores/orders/', 'stores/orders/1/', 'stores/orders/1/history/', 'stores/orders/history_order/1', 'stores/orders/history_order/1/', 'orders/history_order/1', 'stores/history_order/1/',
-    'stores/orders/1/status/', 'stores/orders/status/', 'stores/orders/cancel/', 'stores/orders/bulk_cancel/', 'delivery/starter/starter_bordureau/', 'starter_bordureau/', 'stores/starter_bordureau/',
-    'base/delivery-prices/', 'base/communes/?wilaya=16', 'stores/hooks/costume/', 'stores/hooks/types/', 'stores/order_history/', 'stores/orders/1/history_order/',
-    'delivery/orders/1/', 'stores/orders/1/abort/', 'stores/orders/abort/', 'base/wilayas/?country=1'].map((p) => M(p)),
-  M('stores/orders/1/', 'PATCH'), M('stores/orders/1/status/', 'PATCH'), M('stores/orders/', 'POST'), M('delivery/starter/starter_bordureau/', 'POST'),
-  ['elogistia getMunicipalities', 'https://api.elogistia.com/getMunicipalities?key=x&wilaya=Alger'],
-  ['elogistia getWilayas name', 'https://api.elogistia.com/getWilayas?key=x&name=Alger'],
-  ['elogistia getTracking', 'https://api.elogistia.com/getTracking?key=x&tracking=1'],
-  ['elogistia getManyTracking', 'https://api.elogistia.com/getManyTracking?key=x&tracking=1'],
-  ['elogistia getAgences', 'https://api.elogistia.com/getAgences?key=x'],
-  ['elogistia getShippingCost', 'https://api.elogistia.com/getShippingCost?key=x'],
+  ...["base/communes", "base/commune/", "base/communes/1/", "base/wilayas/16/communes/", "base/wilayas/16/", "base/wilayas/", "base/delivery_prices/", "base/delivery-price/", "base/prices/", "delivery/prices/", "delivery/delivery_prices/", "stores/delivery_prices/", "base/delivery_price/", "delivery/price/", "stores/history_order/1/", "stores/orders/1/history_order/", "base/communes/?wilaya=16&country=1", "base/municipalities/", "base/cities/", "base/region/", "base/regions/", "base/zones/", "base/countries/", "delivery/starter/", "delivery/", "stores/", "base/"].map((p) => M(p)),
 ];
 for (const [name, url, headers, method] of calls) {
   try {
