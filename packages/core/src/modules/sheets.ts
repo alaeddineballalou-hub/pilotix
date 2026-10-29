@@ -270,7 +270,7 @@ async function orderFromLine(ctx: Ctx, ch: any, l: Line) {
     internalNote: twin ? `⚠️ Même numéro que ${twin.ref} (moins de 3 jours) : doublon possible` : null,
     confirm: false,
     isExchange: false,
-  });
+  }, ctx.db, { guard: 'check' });
 }
 
 /**

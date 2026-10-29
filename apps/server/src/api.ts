@@ -1112,6 +1112,7 @@ class ApiController {
     if (!phone) throw new core.AppError('bad_request', 'Téléphone invalide');
     const session = await this.core.systemSession(ref);
     const order: any = await this.core.call(ref, 'orders.create', session, {
+      via: 'api',
       customerName: String(body?.customer_name ?? body?.name ?? '').slice(0, 120) || 'Client',
       phone,
       phone2: body?.phone2 ? String(body.phone2) : null,

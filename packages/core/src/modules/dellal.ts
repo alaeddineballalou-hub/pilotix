@@ -524,7 +524,7 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
         internalNote: `Commande prise par ${settings.name} (conversation #${conv.id})`,
         confirm: settings.ordersTo === 'confirmed',
         isExchange: false,
-      }, ctx.db, { conversationId: conv.id, untrusted: conv.channel !== 'whatsapp' }); // linked from the start: no "we received your order" into this very chat
+      }, ctx.db, { conversationId: conv.id, untrusted: conv.channel !== 'whatsapp', guard: 'check' }); // linked from the start: no "we received your order" into this very chat
       await sendInPreview(ctx);
       await ctx.db.query(
         `UPDATE conversations SET order_id = $2, orders_count = orders_count + 1, phone = COALESCE(phone, $3), customer_name = COALESCE(customer_name, $4),

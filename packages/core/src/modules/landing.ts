@@ -683,7 +683,7 @@ export const FRAUD_LABELS_FR: Record<string, string> = {
   refused_once: 'a déjà refusé un colis', refused_twice: 'a refusé 2 colis (stop-desk uniquement)', refuser_blocked: 'refuse ses colis (liste noire automatique)',
   looks_like: 'ressemble à un client qui refuse ses colis',
 };
-const reasonsText = (rs: FraudReason[]) => rs.filter((r) => r.points > 0).map((r) => FRAUD_LABELS_FR[r.code] ?? r.code).join(', ');
+export const reasonsText = (rs: FraudReason[]) => rs.filter((r) => r.points > 0).map((r) => FRAUD_LABELS_FR[r.code] ?? r.code).join(', ');
 
 /** An order of this number for this lead's product, in the last 24 h before the lead or after it: not an abandoned order. */
 const ORDERED = (a: string) =>
@@ -725,7 +725,7 @@ async function replaceAutoOrder(db: Db, phone: string, productId: number, newOrd
 }
 
 /** signals that point to a competitor's team: the agent asks a check question and ships after a second call */
-const TEAM_CODES = ['device_two', 'device_burst', 'phone_near', 'name_reused', 'wilaya_wave', 'device_rain', 'device_fake', 'no_browse', 'phone_pasted', 'qty_unusual'];
+export const TEAM_CODES = ['device_two', 'device_burst', 'phone_near', 'name_reused', 'wilaya_wave', 'device_rain', 'device_fake', 'no_browse', 'phone_pasted', 'qty_unusual'];
 
 /** the note of a borderline order: the score and why, and what the agent does about it */
 function reviewNote(r: { score: number; reasons: FraudReason[] }): string {
