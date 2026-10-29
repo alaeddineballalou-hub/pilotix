@@ -512,6 +512,26 @@ const effective = (r: { own?: string; auto: string | null }) => (r.own !== undef
 /** Our statuses while the parcel is with the company: the courier statuses meaning one of them can be an alert. */
 const ON_ROAD = ['shipped', 'out_for_delivery', 'failed', 'returning', 'in_exchange'];
 
+/** A company's own price to swap a parcel to another customer (ZR's services), same wilaya or another; null when it has none. */
+export async function swapFees(ctx: Ctx, companyId: number): Promise<{ same: number | null; other: number | null }> {
+  const kind = (await ctx.db.query('SELECT kind FROM delivery_companies WHERE id = $1', [companyId]))[0]?.kind as keyof typeof KINDS | undefined;
+  if (!kind || !KINDS[kind]?.zr) return { same: null, other: null };
+  let list: { key: string; price: number }[] = [];
+  if (isDemo(ctx)) list = [{ key: 'swapSameCity', price: 200 }, { key: 'swapOtherCity', price: 350 }];
+  else {
+    try {
+      list = ((await courierOf(ctx)('services', { companyId }, ctx)) as { key: string; price: number }[] | null) ?? [];
+    } catch {
+      list = [];
+    }
+  }
+  const of = (k: string) => {
+    const v = list.find((x) => x.key === k)?.price;
+    return typeof v === 'number' && v > 0 ? v : null;
+  };
+  return { same: of('swapSameCity'), other: of('swapOtherCity') };
+}
+
 export const deliveryProcs = {
   /** Courier kinds, provider cards and custom-API placeholders (for the forms). */
   // a company removed from Pilotix (control room) is no longer offered; a shop's own companies keep their kind

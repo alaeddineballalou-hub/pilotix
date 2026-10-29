@@ -59,6 +59,48 @@ export function SuiviMotifStats({ range }: { range: { from: string; to: string }
           </div>
         </div>
       )}
+      {!!d?.agents.length && (
+        <div className="tbl-wrap tb-mo-ag">
+          <table className="tbl">
+            <caption>{t('dashboard.motifs.byAgent')}</caption>
+            <thead>
+              <tr>
+                <th>{t('dashboard.motifs.agent')}</th>
+                <th className="num">{t('dashboard.motifs.colResolved')}</th>
+                <th className="num">{t('dashboard.motifs.colDelivered')}</th>
+                <th className="num">{t('dashboard.motifs.colLost')}</th>
+                <th className="num">{t('dashboard.motifs.colEarly')}</th>
+                <th>{t('dashboard.motifs.colTop')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {d.agents.map((a) => {
+                const p = pct(a.delivered, a.resolved);
+                return (
+                  <tr key={a.id}>
+                    <td data-l={t('dashboard.motifs.agent')}>
+                      <b>{a.name}</b>
+                    </td>
+                    <td className="num" data-l={t('dashboard.motifs.colResolved')}>
+                      {a.resolved}
+                    </td>
+                    <td className="num" data-l={t('dashboard.motifs.colDelivered')}>
+                      {a.resolved ? <span className={`badge ${p >= 60 ? 't-ok' : p >= 35 ? 't-warn' : 't-bad'}`}>{`${a.delivered} · ${p} %`}</span> : '—'}
+                    </td>
+                    <td className="num" data-l={t('dashboard.motifs.colLost')}>
+                      {a.lost}
+                    </td>
+                    <td className="num" data-l={t('dashboard.motifs.colEarly')}>
+                      {a.early ? <span className="badge t-bad">{a.early}</span> : <span className="muted">0</span>}
+                    </td>
+                    <td data-l={t('dashboard.motifs.colTop')}>{a.topLost ?? <span className="muted">—</span>}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }

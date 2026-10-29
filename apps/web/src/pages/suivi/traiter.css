@@ -40,3 +40,4 @@
 .tr-fee { display: flex; flex-direction: column; align-items: flex-end; font-weight: 800; font-size: 13px; white-space: nowrap; }
 .tr-fee small { color: var(--ok); font-weight: 800; }
 .tr-fee.up small { color: var(--coral, #C2410C); }
+.tr-fee small.tr-swfee { color: var(--muted); font-weight: 700; }

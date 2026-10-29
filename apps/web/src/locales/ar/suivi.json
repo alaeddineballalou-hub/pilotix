@@ -625,6 +625,7 @@
     "sameCommune": "نفس البلدية",
     "sameWilaya": "نفس الولاية",
     "otherVariant": "متغيّر آخر",
-    "okSwap": "ضائع + تبديل إلى {{ref}}"
+    "okSwap": "ضائع + تبديل إلى {{ref}}",
+    "swapFee": "+ رسوم التبديل {{v}}"
   }
 }

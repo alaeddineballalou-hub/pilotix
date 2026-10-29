@@ -6,6 +6,7 @@ import { bad, Ctx, notFound, proc, withActionLock } from '../rpc';
 import { getSetting, setSetting } from '../settings';
 import { addWorkMinutes, workMinutes } from '@pilotix/shared';
 import { getPrefs } from './prefs';
+import { swapFees } from './delivery';
 import { addEvent, FollowInput, getOrder, listOrders, ListInput, setFollow } from './orders';
 import { agencyOf, andSql, queueSql } from './agencyscope';
 import { findOrders } from './sav';
@@ -221,6 +222,8 @@ async function swapCandidates(ctx: Ctx, fromId: number, q?: string) {
   // the parcel's company price to each candidate's place (home or bureau), next to what it costs now
   const fees = from.companyId ? await ctx.db.query('SELECT wilaya_id, home, desk FROM delivery_fees WHERE company_id = $1', [from.companyId]) : [];
   const now = num((await ctx.db.query('SELECT delivery_cost FROM orders WHERE id = $1', [fromId]))[0]?.delivery_cost);
+  // what the company itself charges to swap (ZR: same wilaya / another wilaya)
+  const sw = from.companyId ? await swapFees(ctx, from.companyId) : { same: null, other: null };
   const feeTo = (x: Order) => {
     const f = fees.find((r: any) => num(r.wilaya_id) === x.wilayaId);
     if (!f) return null;
@@ -234,7 +237,7 @@ async function swapCandidates(ctx: Ctx, fromId: number, q?: string) {
       const sameVariant = x.items.some((i) => i.variantId && variants.has(i.variantId));
       const sameProduct = x.items.some((i) => products.has(i.productId));
       const fee = feeTo(x);
-      return { ...x, sameWilaya: x.wilayaId === from.wilayaId, sameCommune: x.wilayaId === from.wilayaId && !!x.commune && norm(x.commune) === norm(from.commune), sameVariant, sameProduct, fee, feeDiff: fee !== null && now > 0 ? fee - now : null };
+      return { ...x, swapFee: x.wilayaId === from.wilayaId ? sw.same : sw.other, sameWilaya: x.wilayaId === from.wilayaId, sameCommune: x.wilayaId === from.wilayaId && !!x.commune && norm(x.commune) === norm(from.commune), sameVariant, sameProduct, fee, feeDiff: fee !== null && now > 0 ? fee - now : null };
     })
     .sort(
       (a, b) =>
@@ -653,7 +656,23 @@ export const suiviProcs = {
     const side = (out: 'resolved' | 'lost') => rows.filter((r: any) => r.outcome === out).map((r: any) => ({ key: String(r.key), label: name(out, String(r.key), String(r.label ?? r.key)), count: num(r.n), delivered: num(r.delivered) }));
     const resolved = side('resolved');
     const lost = side('lost');
-    return { resolved, lost, totalResolved: resolved.reduce((a, r) => a + r.count, 0), totalLost: lost.reduce((a, r) => a + r.count, 0) };
+    // each agent: what he treated, how many of his « Résolu » were then delivered, his « annulé trop tôt »
+    const agents = (
+      await ctx.db.query(
+        `SELECT e.user_id AS id, p.name,
+                count(DISTINCT e.order_id) FILTER (WHERE e.from_value = 'resolved')::int AS resolved,
+                count(DISTINCT e.order_id) FILTER (WHERE e.from_value = 'resolved' AND o.follow_status = 'delivered')::int AS delivered,
+                count(DISTINCT e.order_id) FILTER (WHERE e.from_value = 'lost')::int AS lost,
+                count(DISTINCT e.order_id) FILTER (WHERE e.from_value = 'lost' AND o.sub_status = 'annule_trop_tot')::int AS early,
+                (SELECT e2.to_value FROM order_events e2 WHERE e2.user_id = e.user_id AND e2.kind = 'suivi_motif' AND e2.from_value = 'lost' AND e2.at >= $1::timestamptz AND e2.at < $2::timestamptz
+                  GROUP BY 1 ORDER BY count(*) DESC LIMIT 1) AS top_lost
+           FROM order_events e JOIN orders o ON o.id = e.order_id JOIN profiles p ON p.id = e.user_id
+          WHERE e.kind = 'suivi_motif' AND e.at >= $1::timestamptz AND e.at < $2::timestamptz${andSql(queueSql(ctx, 'follow'))}
+          GROUP BY e.user_id, p.name ORDER BY count(DISTINCT e.order_id) DESC`,
+        [i.from, i.to],
+      )
+    ).map((r: any) => ({ id: num(r.id), name: String(r.name), resolved: num(r.resolved), delivered: num(r.delivered), lost: num(r.lost), early: num(r.early), topLost: r.top_lost ? name('lost', String(r.top_lost), String(r.top_lost)) : null }));
+    return { agents, resolved, lost, totalResolved: resolved.reduce((a, r) => a + r.count, 0), totalLost: lost.reduce((a, r) => a + r.count, 0) };
   }),
 
   /** Management › Motifs du Suivi: everyone reads them (the « Traiter » window), an admin changes them. */

@@ -765,6 +765,13 @@
     "lost_one": "Lost · {{count}} parcel",
     "lost_other": "Lost · {{count}} parcels",
     "delivered": "{{n}} delivered afterwards ({{p}} %)",
-    "share": "{{p}} % of the lost"
+    "share": "{{p}} % of the lost",
+    "byAgent": "By agent",
+    "agent": "Agent",
+    "colResolved": "Solved",
+    "colDelivered": "Delivered after",
+    "colLost": "Lost",
+    "colEarly": "Cancelled too early",
+    "colTop": "Most frequent loss motif"
   }
 }

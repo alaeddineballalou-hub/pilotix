@@ -789,6 +789,13 @@
     "lost_many": "ضائع · {{count}} طرداً",
     "lost_other": "ضائع · {{count}} طرد",
     "delivered": "{{n}} سُلّمت بعدها ({{p}} %)",
-    "share": "{{p}} % من الضائعة"
+    "share": "{{p}} % من الضائعة",
+    "byAgent": "حسب العون",
+    "agent": "العون",
+    "colResolved": "محلولة",
+    "colDelivered": "سُلّمت بعدها",
+    "colLost": "ضائعة",
+    "colEarly": "أُلغيت مبكراً",
+    "colTop": "أكثر سبب ضياع"
   }
 }

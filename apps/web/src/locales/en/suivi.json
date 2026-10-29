@@ -609,6 +609,7 @@
     "sameCommune": "same commune",
     "sameWilaya": "same wilaya",
     "otherVariant": "other variant",
-    "okSwap": "Lost + swap to {{ref}}"
+    "okSwap": "Lost + swap to {{ref}}",
+    "swapFee": "+ swap fee {{v}}"
   }
 }

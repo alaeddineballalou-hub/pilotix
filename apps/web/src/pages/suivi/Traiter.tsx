@@ -189,10 +189,11 @@ export function Traiter({ o, reason, tries, own, onClose }: { o: Order; reason: 
                             {!x.sameVariant ? ` · ${t('suivi.tr.otherVariant')}` : ''}
                           </small>
                         </span>
-                        {x.fee !== null && (
+                        {(x.fee !== null || x.swapFee !== null) && (
                           <span className={`tr-fee ${x.feeDiff && x.feeDiff > 0 ? 'up' : ''}`}>
-                            <span className="ltr">{da(x.fee)}</span>
+                            {x.fee !== null && <span className="ltr">{da(x.fee)}</span>}
                             {!!x.feeDiff && <small className="ltr">{x.feeDiff > 0 ? `+${da(x.feeDiff)}` : da(x.feeDiff)}</small>}
+                            {x.swapFee !== null && <small className="tr-swfee">{t('suivi.tr.swapFee', { v: da(x.swapFee) })}</small>}
                           </span>
                         )}
                       </label>

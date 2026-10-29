@@ -46,8 +46,12 @@ export async function seedSuiviMotifsDemo(db: Db): Promise<void> {
   const del = pick(await db.query(`SELECT id, delivered_at FROM orders WHERE follow_status = 'delivered' AND delivered_at > now() - interval '7 days' ORDER BY id DESC LIMIT 40`), 22);
   const road = await db.query(`SELECT id FROM orders WHERE follow_status = 'out_for_delivery' AND sub_status = 'alert_traitee' ORDER BY id DESC LIMIT 10`);
   const back = pick(await db.query(`SELECT id FROM orders WHERE follow_status IN ('returning', 'returned') AND updated_at > now() - interval '7 days' ORDER BY id DESC LIMIT 30`), 18);
+  // the demo's suivi agents (one does better than the others)
+  const agents = (await db.query(`SELECT id FROM profiles WHERE 'suivi' = ANY(roles) AND active ORDER BY id`)).map((r: any) => num(r.id));
+  let turn = 0;
+  const who = () => (agents.length ? agents[turn++ % agents.length] : null);
   const add = (id: number, out: string, m: [string, string], days: number) =>
-    db.query(`INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, note, at) VALUES ($1, NULL, 'suivi_motif', $2, $3, $4, now() - ($5 || ' days')::interval)`, [id, out, m[0], m[1], String(days)]);
+    db.query(`INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, note, at) VALUES ($1, $6, 'suivi_motif', $2, $3, $4, now() - ($5 || ' days')::interval)`, [id, out, m[0], m[1], String(days), who()]);
   // more « Nouvelle date » and « Client joint » saved; « Refus » and « Injoignable » lose the most
   const wR = [0, 0, 0, 1, 1, 2, 3, 4];
   const wL = [0, 0, 0, 1, 1, 1, 2, 3, 4];
@@ -55,6 +59,8 @@ export async function seedSuiviMotifsDemo(db: Db): Promise<void> {
   for (const r of del) await add(num(r.id), 'resolved', resolved[wR[k++ % wR.length]], 1 + (k % 5));
   for (const r of road) await add(num(r.id), 'resolved', resolved[wR[k++ % wR.length]], 1);
   for (const r of back) await add(num(r.id), 'lost', lost[wL[k++ % wL.length]], 1 + (k % 5));
+  // two cancelled before the agent's calls
+  for (const r of back.slice(0, 2)) await db.query(`UPDATE orders SET sub_status = 'annule_trop_tot' WHERE id = $1 AND follow_status = 'returning'`, [num(r.id)]);
   // some « Résolu » that still came back
   const lateBack = await db.query(`SELECT id FROM orders WHERE follow_status = 'returned' ORDER BY id LIMIT 5`);
   for (const r of lateBack) await add(num(r.id), 'resolved', resolved[k++ % 2], 3);

@@ -256,6 +256,8 @@ test('« Traiter »: Résolu (back on the road, the livreur asked to deliver aga
   assert.ok(nd && nd.count >= 1 && nd.delivered >= 1);
   assert.ok(st.lost.some((x: any) => x.key === 'refused' && x.count >= 1));
   assert.ok(st.totalLost >= 3);
+  const me = st.agents.find((x: any) => x.id === suivi.session.profile.id);
+  assert.ok(me && me.resolved >= 1 && me.lost >= 3 && me.early >= 1 && me.delivered >= 1, 'each agent: treated, delivered after, too early');
   await call('suivi.motifsSet', admin2, m);
 });
 
@@ -270,7 +272,7 @@ test('« Perdu » with a swap: before the return, the parcel goes to a waiting o
   await db.query('UPDATE order_items SET product_id = $2, variant_id = $3 WHERE order_id = $1', [a, it.product_id, it.variant_id]);
   const c = (await call('suivi.swapCandidates', suivi, { fromId: a })) as any;
   assert.ok(c.rows.some((x: any) => x.id === Number(b.id)));
-  assert.ok('fee' in c.rows[0] && 'sameCommune' in c.rows[0]);
+  assert.ok('fee' in c.rows[0] && 'sameCommune' in c.rows[0] && 'swapFee' in c.rows[0]);
   const r = (await call('suivi.resolve', suivi, { id: a, outcome: 'lost', motif: 'refused', swapTo: Number(b.id) })) as any;
   assert.ok(r.swap);
   const ra = (await db.query('SELECT follow_status, sub_status FROM orders WHERE id = $1', [a]))[0];

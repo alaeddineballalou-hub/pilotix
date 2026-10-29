@@ -122,3 +122,5 @@
 .tb-mo-d.good { color: var(--ok); }
 .tb-mo-d.mid { color: #9A4B00; }
 .tb-mo-d.bad { color: var(--coral, #C2410C); }
+.tb-mo-ag { margin-top: 14px; }
+.tb-mo-ag caption { text-align: start; font-weight: 800; font-size: 14px; padding: 0 0 8px; }

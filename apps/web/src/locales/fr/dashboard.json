@@ -765,6 +765,13 @@
     "lost_one": "Perdu · {{count}} colis",
     "lost_other": "Perdu · {{count}} colis",
     "delivered": "{{n}} livrés ensuite ({{p}} %)",
-    "share": "{{p}} % des perdus"
+    "share": "{{p}} % des perdus",
+    "byAgent": "Par agent",
+    "agent": "Agent",
+    "colResolved": "Résolus",
+    "colDelivered": "Livrés ensuite",
+    "colLost": "Perdus",
+    "colEarly": "Annulés trop tôt",
+    "colTop": "Motif de perte le plus fréquent"
   }
 }
