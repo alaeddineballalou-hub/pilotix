@@ -25,7 +25,7 @@ export { demoSnapshot, demoRestore } from './demoKeep';
 export type { DemoKeep } from './demoKeep';
 export type { PGliteLike } from './pglite';
 export type { ImportProduct, ImportResult } from './modules/productimport';
-export type { ClientFacts, ClientLevel, ClientReasonCode, ClientScore } from './modules/clientscore';
+export type { ClientFacts, ClientLevel, ClientReasonCode, ClientScore, ScoreRules } from './modules/clientscore';
 
 export { REGISTRY };
 export { courierCatalog, COURIER_FEATURES, isCompany } from './couriers/catalog';

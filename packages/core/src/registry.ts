@@ -22,6 +22,7 @@ import { productImportProcs } from './modules/productimport';
 import { cmProcs } from './modules/cm';
 import { confirmationProcs } from './modules/confirmation';
 import { customersProcs } from './modules/customers';
+import { clientScoreProcs } from './modules/clientscore';
 import { deliveryProcs } from './modules/delivery';
 import { dellalProcs } from './modules/dellal';
 import { landingProcs } from './modules/landing';
@@ -58,6 +59,7 @@ export const REGISTRY = {
   ...parcelsProcs,
   ...stockProcs,
   ...customersProcs,
+  ...clientScoreProcs,
   ...suiviProcs,
   ...savProcs,
   ...deliveryProcs,

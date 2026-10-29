@@ -1,6 +1,7 @@
 // Pilotix — rules and types shared by the core, the server and the app.
 // Mirrors the original Pilotix model: two status tracks per order (confirmation, then livraison).
 
+import type { ClientLevel, ClientReason } from './clientscore';
 export * from './timers';
 export * from './geo';
 export * from './demo';
@@ -315,7 +316,7 @@ export interface Order {
   /** a refuser this new number looks like (same device, or same name + commune) */
   looksLikePhone?: string | null;
   /** the customer's score out of 100 (what the protection knows about this number), in the lists and an order's page */
-  clientScore?: { score: number; level: 'new' | 'top' | 'good' | 'watch' | 'risk' } | null;
+  clientScore?: { score: number; level: ClientLevel; reasons: ClientReason[] } | null;
   /** the Meta ad's name (from the ads Pilotix reads), for the ad id in utm */
   adName?: string | null;
   agentName?: string | null;
@@ -434,6 +435,7 @@ export const wilayaLabel = (id: number | null | undefined) => (id ? `${String(id
 export * from './sha256';
 export * from './landing';
 export * from './doctor';
+export * from './clientscore';
 export * from './pro';
 export * from './pilot';
 export * from './colors';

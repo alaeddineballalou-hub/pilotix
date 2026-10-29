@@ -66,6 +66,16 @@
       "blacklist": "Blacklisted",
       "stopdesk": "Stop-desk only (refuses parcels)",
       "new": "New customer: no history yet"
+    },
+    "filter": "Filter by score",
+    "filterShort": "Customer score",
+    "allLevels": "All",
+    "emptyLevel": "No “{{level}}” customer yet.",
+    "ask": {
+      "title": "Risky customer — {{ref}}",
+      "lead": "This customer has often caused trouble. Read why before confirming.",
+      "no": "Don’t confirm",
+      "yes": "Confirm anyway"
     }
   }
 }

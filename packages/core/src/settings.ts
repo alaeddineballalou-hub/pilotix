@@ -1,4 +1,4 @@
-import { CallSettings, DEFAULT_CALL_SETTINGS, PILOT_DEFAULT, type PilotConfig } from '@pilotix/shared';
+import { CallSettings, DEFAULT_CALL_SETTINGS, DEFAULT_SCORE_RULES, PILOT_DEFAULT, type PilotConfig, type ScoreRules } from '@pilotix/shared';
 import type { Db } from './db';
 
 export interface SuiviMotif {
@@ -114,6 +114,8 @@ export interface SettingsMap {
     /** Suivi › Bloqués: a parcel with no new status for `days` days; 2 days later, a claim by itself (companies with an API) */
     suiviStuck: { days: number };
   };
+  /** Réglages › Score client: the points of the customer's score out of 100 (shared/clientscore.ts) */
+  clientScore: ScoreRules;
 }
 
 export const DEFAULT_SETTINGS: SettingsMap = {
@@ -181,6 +183,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
     suiviTries: { calls: 3, gapMinutes: 60 },
     suiviStuck: { days: 3 },
   },
+  clientScore: DEFAULT_SCORE_RULES,
 };
 
 export async function getSetting<K extends keyof SettingsMap>(db: Db, key: K): Promise<SettingsMap[K]> {

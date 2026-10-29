@@ -624,5 +624,7 @@
     "doneNoStock": "{{ref}} confirmed without stock",
     "fix": "Pick",
     "bulkDone": "{{ok}} saved · {{sans}} without stock · {{bl}} blocked"
-  }
+  },
+  "bestFirst": "Best customers first",
+  "bestFirstHelp": "Customers with the best score first: very reliable, reliable, then new ones, then the ones to watch. Click again to go back to the countdown."
 }

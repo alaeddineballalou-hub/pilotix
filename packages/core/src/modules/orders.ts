@@ -182,7 +182,7 @@ export async function withClientScores<T extends Order>(ctx: Ctx, list: T[]): Pr
   const by = new Map<number, ClientScore>(rows.map((r: any, k: number) => [num(r.id), scores[k]]));
   return list.map((o) => {
     const s = by.get(o.customerId);
-    return s ? { ...o, clientScore: { score: s.score, level: s.level } } : o;
+    return s ? { ...o, clientScore: { score: s.score, level: s.level, reasons: s.reasons } } : o;
   });
 }
 

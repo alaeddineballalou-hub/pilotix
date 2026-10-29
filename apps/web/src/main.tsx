@@ -11,6 +11,7 @@ import { ApiError } from './lib/backend';
 import { firstSubOn, hasPlanSubs, pageIsOn } from './lib/features';
 import './lib/i18n';
 import { ModalHost } from './lib/modals';
+import { RiskAskHost } from './ui/clientScore';
 import { initSeller } from './lib/seller';
 import { SessionProvider, useSession } from './lib/session';
 import { useCanRules } from './lib/pilot';
@@ -183,6 +184,7 @@ createRoot(document.getElementById('root')!).render(
       <SessionProvider>
         <App />
         <ModalHost />
+        <RiskAskHost />
         <Toasts />
       </SessionProvider>
     </QueryClientProvider>

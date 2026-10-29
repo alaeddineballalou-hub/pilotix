@@ -10,7 +10,7 @@ import { startTicketFor } from '../sav/NewTicket';
 import { useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { ErrorBox, Field, Icon, Loading, StatusBadge, TicketTag } from '../../ui/kit';
-import { ScoreCard } from '../../ui/clientScore';
+import { askRisk, ScoreCard } from '../../ui/clientScore';
 import { toast } from '../../ui/toast';
 import { confLabel, printOrder, telHref, waHref } from './shared';
 import './orders.css';
@@ -168,6 +168,9 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
             return;
           }
           if (CONF_NEEDS_DATE.includes(s) || CONF_NEEDS_REASON.includes(s)) setPanel({ kind: 'conf', status: s });
+          else if (s === 'confirmed' || s === 'no_stock') askRisk(o).then((ok) => {
+              if (ok) run(() => rpc('orders.setConf', { ids: [o.id], status: s }), t(`status.conf.${s}`));
+            });
           else run(() => rpc('orders.setConf', { ids: [o.id], status: s }), t(`status.conf.${s}`));
         }}
       >
