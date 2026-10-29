@@ -5,14 +5,14 @@ import { config } from './config';
 import { checkSmtp, mailConfigured } from './mail';
 
 async function main() {
-  if (!config.smtp.host) return console.log('E-mail: NOT SET UP (SMTP_HOST is empty in deploy/.env): no login codes, no reset links, no sign-ups');
+  if (!config.smtp.host) return console.log('E-mail: NOT SET UP (SMTP_HOST is empty in deploy/.env): no login codes, no reset links, no sign-ups. Set it: sudo bash /opt/pilotix/deploy/set-email.sh');
   if (!mailConfigured()) return console.log('E-mail: NOT SET UP (MAIL_FROM or PUBLIC_URL is empty in deploy/.env)');
   try {
     await checkSmtp();
     console.log(`E-mail: OK (${config.smtp.host}:${config.smtp.port}${config.smtp.user ? `, ${config.smtp.user}` : ''})`);
   } catch (e) {
     console.log(`E-mail: FAILED (${config.smtp.host}:${config.smtp.port}) — ${(e as Error).message}`);
-    console.log('        The control room asks a code sent by e-mail: fix SMTP_* in deploy/.env, or set PLATFORM_TWO_STEP=off there.');
+    console.log('        The control room asks a code sent by e-mail: fix it with « sudo bash /opt/pilotix/deploy/set-email.sh » on the server.');
   }
 }
 
