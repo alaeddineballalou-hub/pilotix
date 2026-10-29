@@ -12,6 +12,7 @@ import { Detail } from './Detail';
 import { currentLabel, telHref } from './shared';
 import { CONF_TONE } from '@pilotix/shared';
 import './phone.css';
+import { ScoreChip } from '../../ui/clientScore';
 
 /** a queue row: the order with its call countdown */
 type PRow = Order & { deadline?: Deadline | null };
@@ -53,6 +54,7 @@ export function PhoneCards({ rows, empty, onOpen }: { rows: PRow[]; empty: strin
               <div className="pxp-main">
                 <div className="pxp-top">
                   <b className="pxp-name">{o.customerName}</b>
+                  {o.clientScore && <ScoreChip s={o.clientScore} short />}
                   {o.deadline && <Countdown d={o.deadline} short />}
                 </div>
                 <div className="pxp-meta">

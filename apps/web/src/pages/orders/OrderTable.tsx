@@ -12,6 +12,7 @@ import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import { CopyCode } from '../../ui/CopyCode';
 import { TrustFlags } from './TrustFlags';
 import { AdChip } from './AdSource';
+import { ScoreChip } from '../../ui/clientScore';
 
 /** Built-in columns, in the original order. */
 export type OrderColumn = 'order' | 'client' | 'address' | 'products' | 'variant' | 'total' | 'conf' | 'follow' | 'company' | 'agent' | 'fagent' | 'phone' | 'wilaya' | 'since';
@@ -127,6 +128,7 @@ export function OrderTable(p: OrderTableProps) {
         return (
           <td key={c} data-l={label[c]}>
             {o.customerName}
+            {o.clientScore && <ScoreChip s={o.clientScore} short />}
             <small className="ltr">{o.phone}</small>
           </td>
         );

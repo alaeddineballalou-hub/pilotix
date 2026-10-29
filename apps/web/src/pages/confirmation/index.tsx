@@ -26,6 +26,7 @@ import { BULK_CHOICES, choiceLabel, currentLabel, ROW_CHOICES, StatusChoice, Sub
 import { ConfirmedStatsPage, StatsSection } from './Stats';
 import { useStatusChange } from './StatusDialog';
 import { CopyCode } from '../../ui/CopyCode';
+import { ScoreChip } from '../../ui/clientScore';
 
 type Row = NonNullable<ReturnType<typeof useList>['data']>['rows'][number];
 type SortKey = 'created_at' | 'confirmed_at' | 'next_call_at' | 'total' | 'customer_name' | 'deadline';
@@ -264,6 +265,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
         return (
           <>
             <b>{r.customerName}</b>
+            {r.clientScore && <ScoreChip s={r.clientScore} short />}
             {r.possibleDuplicate && <span className="flag dup">{t('confirmation.dup')}</span>}
             {r.blacklisted && <span className="flag">{t('confirmation.blacklist')}</span>}
           </>

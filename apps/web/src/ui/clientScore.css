@@ -28,3 +28,7 @@
 .cs-why li.down > span:first-child { color: var(--coral); }
 .cs-card.compact { padding: 10px 12px; gap: 8px; }
 .cs-card.compact .cs-big { font-size: 26px; }
+/* in a list, next to the name: small, never squeezed */
+.cs-chip.short { margin-inline-start: 6px; padding: 1px 7px; font-size: 11.5px; vertical-align: 1px; }
+.cs-chip.short b { font-size: 12px; }
+.cs-chip.short small { font-size: 10px; }

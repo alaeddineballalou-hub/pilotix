@@ -52,12 +52,22 @@ test('a blacklist or stop-desk caps the score', () => {
 test('the Clients list and a customer’s history carry the score', async () => {
   const s = await setup(60);
   const admin = await s.as(EMAILS.admin);
+  // the order lists (Confirmation, Suivi, Commandes) and an order's page carry it too; a livreur's never
+  const conf: any = await call('confirmation.list', await s.as(EMAILS.conf), { sub: 'nouvelles', page: 1, pageSize: 20 });
+  assert.ok(conf.rows.length > 0 && conf.rows.every((r: any) => r.clientScore && r.clientScore.score >= 0 && r.clientScore.score <= 100));
+  const suivi: any = await call('suivi.list', await s.as(EMAILS.suivi), { tab: 'livres', pageSize: 20 });
+  assert.ok(suivi.rows.every((r: any) => r.clientScore && ['new', 'top', 'good', 'watch', 'risk'].includes(r.clientScore.level)));
+  const all: any = await call('orders.list', admin, { pageSize: 5 });
+  const one: any = await call('orders.get', admin, { id: all.rows[0].id });
+  assert.deepEqual(one.clientScore, all.rows[0].clientScore);
+  const mine: any = await call('livreur.list', await s.as(EMAILS.livreur), {}).catch(() => null);
+  if (mine?.rows) assert.ok(mine.rows.every((r: any) => r.clientScore === undefined));
   const list: any = await call('customers.list', admin, { pageSize: 20 });
   assert.ok(list.rows.length > 0);
   for (const r of list.rows) {
     assert.ok(r.score.score >= 0 && r.score.score <= 100);
     assert.ok(['new', 'top', 'good', 'watch', 'risk'].includes(r.score.level));
   }
-  const one: any = await call('customers.history', admin, { id: list.rows[0].id });
-  assert.deepEqual(one.customer.score, list.rows[0].score);
+  const h: any = await call('customers.history', admin, { id: list.rows[0].id });
+  assert.deepEqual(h.customer.score, list.rows[0].score);
 });
