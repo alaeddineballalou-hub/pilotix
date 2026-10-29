@@ -4,7 +4,19 @@
 const SITE = (process.env.SITE || 'https://pilotix.online').replace(/\/+$/, '');
 const API = `${SITE}/api`;
 let failed = 0;
+// Cloudflare's bot protection may answer « Just a moment… » to this checker (a robot) instead of the site: that is
+// not the site being broken, only the checker not let in. Such answers are counted apart (a warning), never as failures.
+let blocked = 0;
+let lastChallenged = false;
+const isChallenge = (status, text, headers) =>
+  (status === 403 || status === 503 || status === 429) &&
+  (headers?.get?.('cf-mitigated') === 'challenge' || /Just a moment\.\.\.|challenge-platform|cf_chl_|cf-chl-/i.test(String(text ?? '')));
 const check = (cond, label, extra) => {
+  if (!cond && lastChallenged) {
+    blocked++;
+    console.log(`? ${label} — not checked: Cloudflare asked the checker « Just a moment… » (bot protection)`);
+    return;
+  }
   console.log(`${cond ? '✓' : '✗'} ${label}${extra !== undefined ? ` — ${typeof extra === 'string' ? extra : JSON.stringify(extra).slice(0, 300)}` : ''}`);
   if (!cond) {
     failed++;
@@ -21,7 +33,16 @@ async function get(path, opts = {}) {
   } catch {
     /* text */
   }
-  return { status: r.status, data, text, headers: r.headers };
+  lastChallenged = isChallenge(r.status, text, r.headers);
+  return { status: r.status, data, text, headers: r.headers, challenged: lastChallenged };
+}
+/** Cloudflare did not let the checker in at all: say so plainly (a warning, not a failure) and stop. The server checks
+ *  itself during the update (the « Server: » line of the Deploy run), which is the proof when this happens. */
+function stopBlocked(where) {
+  const msg = `Cloudflare's bot protection answered « Just a moment… » to this checker at ${where}: the site cannot be checked from outside (it is not broken). The server's own check is the « Server: » line of the update.`;
+  console.log(`\n⚠️  ${msg}`);
+  if (process.env.GITHUB_ACTIONS) console.log(`::warning title=Live check not possible::${msg}`);
+  process.exit(0);
 }
 const post = (path, body) => get(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) });
 const nobody = `nobody-${Date.now().toString(36)}@example.com`;
@@ -30,7 +51,9 @@ const nobody = `nobody-${Date.now().toString(36)}@example.com`;
 let up = false;
 let last = '';
 for (let i = 0; i < 30 && !up; i++) {
-  const h = await get('/health').catch((e) => ({ status: 0, text: String(e?.cause?.code || e?.cause?.message || e?.message || e) }));
+  const h = await get('/health').catch((e) => ({ status: 0, text: String(e?.cause?.code || e?.cause?.message || e?.message || e), challenged: false }));
+  // Cloudflare stops the checker: waiting will not change it
+  if (h.challenged) stopBlocked(`${SITE}/api/health`);
   up = h.status === 200;
   last = `${h.status} ${String(h.text ?? '').slice(0, 160)}`;
   if (!up) await new Promise((r) => setTimeout(r, 10_000));
@@ -76,5 +99,12 @@ for (const s of scripts) if (!found) found = (await get(`${SITE}${s}`)).text.inc
 check(found, 'the website is this version', scripts.join(' '));
 check(/data-skin="doux"/.test(r.text) && /family=Readex\+Pro/.test(r.text), 'the website shows the new look (Doux, Readex Pro)', r.text.match(/<html[^>]*>/)?.[0]);
 
-console.log(failed ? `\n❌ ${failed} check(s) failed on ${SITE}` : `\n✅ ${SITE}: the server and the website are live with this version`);
+if (blocked && process.env.GITHUB_ACTIONS) console.log(`::warning title=Live check::${blocked} check(s) not done: Cloudflare asked the checker « Just a moment… » (bot protection)`);
+console.log(
+  failed
+    ? `\n❌ ${failed} check(s) failed on ${SITE}`
+    : blocked
+      ? `\n✅ ${SITE}: what could be checked is live with this version (${blocked} check(s) stopped by Cloudflare's bot protection)`
+      : `\n✅ ${SITE}: the server and the website are live with this version`,
+);
 process.exit(failed ? 1 : 0);

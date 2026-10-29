@@ -42,6 +42,13 @@ jobs:
           grep -h '^E-mail:' update.log
           grep -q '^E-mail: OK' update.log
 
+      # the server checked itself during the update (on the server, before Cloudflare): the proof the new version runs,
+      # even when Cloudflare's bot protection does not let the outside check below in
+      - name: The new version answers on the server
+        run: |
+          grep -h '^Server:' update.log || echo "No « Server: » line in the update (an older install.sh)"
+          grep -q '^Server: OK' update.log
+
       # the real site, from outside, without changing anything in it: the server and the website are this version,
       # and each public door answers as it should (scripts/live-check.mjs)
       - uses: actions/checkout@v4

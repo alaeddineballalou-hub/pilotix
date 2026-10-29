@@ -79,6 +79,13 @@ echo "==> Building and starting (the first time takes 5-10 minutes)"
 C="docker compose -f deploy/docker-compose.yml --env-file deploy/.env"
 $C up -d --build
 for i in $(seq 1 60); do $C exec -T server wget -qO- http://localhost:3000/api/health >/dev/null 2>&1 && break; sleep 3; done
+# said in one line the Deploy button reads: the proof the new version runs, checked here on the server itself
+# (from outside, Cloudflare's bot protection may answer « Just a moment… » instead of the site)
+if $C exec -T server wget -qO- http://localhost:3000/api/health >/dev/null 2>&1; then
+  echo "Server: OK (the new version answers on the server itself)"
+else
+  echo "Server: NOT ANSWERING on the server itself (see: $C logs --tail 80 server)"
+fi
 
 # first administrator, asked until one exists (so a run that stopped half-way asks again next time)
 ADMINS=$($C exec -T postgres psql -U pilotix -d pilotix -tAc "SELECT count(*) FROM profiles WHERE 'admin' = ANY(roles)" 2>/dev/null | tr -dc '0-9' || true)
