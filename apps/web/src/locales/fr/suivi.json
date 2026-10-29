@@ -543,5 +543,17 @@
     "keep": "Garder le colis"
   },
   "nextNone": "Plus d’alerte à traiter pour l’instant 👍",
-  "skipNext": "Passer ›"
+  "skipNext": "Passer ›",
+  "clock": {
+    "call": "Appeler",
+    "solve": "Régler",
+    "late_call": "Appel en retard",
+    "late_solve": "En retard",
+    "h": "{{h}} h {{m}}",
+    "m": "{{m}} min",
+    "tip_call": "Temps pour le premier appel (heures de travail)",
+    "tip_solve": "Temps pour régler l’alerte : traiter, swapper ou annuler (heures de travail)",
+    "lateCount_one": "{{count}} alerte sans appel à temps",
+    "lateCount_other": "{{count}} alertes sans appel à temps"
+  }
 }

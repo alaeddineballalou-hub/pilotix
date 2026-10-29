@@ -335,7 +335,12 @@
       "privHint_one": "{{count}} livreur answer sends to Alerts.",
       "privHint_other": "{{count}} livreur answers send to Alerts.",
       "failed": "Not delivered, I’ll come back",
-      "returning": "Back to the depot"
+      "returning": "Back to the depot",
+      "clock": "The agent’s time",
+      "clockHint": "The same for every company and your livreurs. In working hours (your call slots): nights do not count.",
+      "first": "1st call within",
+      "solve": "Solved within",
+      "clockSum": "1st call within {{first}} h, solved within {{solve}} h"
     }
   },
   "pilot": {

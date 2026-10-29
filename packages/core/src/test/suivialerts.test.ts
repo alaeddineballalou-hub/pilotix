@@ -130,3 +130,37 @@ test('« Alerte suivante »: the oldest alert, locked 15 minutes to the agent; h
   const r7 = (await call('suivi.next', suivi, { skip: [a, b] })) as any;
   assert.equal(r7.id, null);
 });
+
+test('the clock of an alert: the first call within 2 working hours, then solved within 24; late alerts counted for the manager', async () => {
+  const suivi = await as(EMAILS.suivi);
+  const fresh = await onRoad();
+  const old = await onRoad();
+  await db.query(`UPDATE orders SET follow_status = 'alert', locked_by = NULL, locked_until = NULL WHERE id = ANY($1)`, [[fresh, old]]);
+  await db.query(
+    `INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, at) VALUES ($1, NULL, 'follow_status', 'out_for_delivery', 'alert', now()), ($2, NULL, 'follow_status', 'out_for_delivery', 'alert', now() - interval '3 days')`,
+    [fresh, old],
+  );
+  const before = (await call('suivi.counts', suivi, {})) as any;
+  const list = (await call('suivi.list', suivi, { tab: 'alertes', pageSize: 500 })) as any;
+  const cf = list.extra[fresh].clock;
+  const co = list.extra[old].clock;
+  assert.equal(cf.kind, 'call');
+  assert.equal(cf.state, 'ok');
+  assert.ok(cf.left > 100 && cf.left <= 120, 'two working hours');
+  assert.equal(co.kind, 'call');
+  assert.equal(co.state, 'late');
+  assert.ok(before.lateCall >= 1);
+  // a call is logged: the first call is done, the clock is now for solving it (24 working hours from the alert)
+  await call('orders.logCall', suivi, { id: old });
+  const after = (await call('suivi.list', suivi, { tab: 'alertes', pageSize: 500 })) as any;
+  assert.equal(after.extra[old].clock.kind, 'solve');
+  const c2 = (await call('suivi.counts', suivi, {})) as any;
+  assert.equal(c2.lateCall, before.lateCall - 1);
+  // the seller sets the times (Préférences)
+  const base = ((await call('prefs.get', admin, {})) as any).prefs;
+  assert.deepEqual(base.suiviClock, { firstHours: 2, solveHours: 24 });
+  await call('prefs.set', admin, { ...base, suiviClock: { firstHours: 1, solveHours: 8 } });
+  const l3 = (await call('suivi.list', suivi, { tab: 'alertes', pageSize: 500 })) as any;
+  assert.ok(l3.extra[fresh].clock.left <= 60);
+  await call('prefs.set', admin, base);
+});

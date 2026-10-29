@@ -87,3 +87,33 @@ export function nextDue(
   const at = next.open ? nextFrom : next.from;
   return { kind: at <= now ? 'now' : 'later', at };
 }
+
+// ---------------------------------------------------------------- working time (the shop's call slots)
+/** Working minutes between two moments: only the minutes inside the call slots count (nights and breaks do not). */
+export function workMinutes(from: number, to: number, s: CallSettings): number {
+  if (to <= from) return -workMinutes(to, from, s);
+  let total = 0;
+  for (let day = algiersDayStart(from); day < to; day += 86_400_000) {
+    for (const sl of s.slots) {
+      const a = Math.max(from, day + sl.from * 3_600_000);
+      const b = Math.min(to, day + sl.to * 3_600_000);
+      if (b > a) total += (b - a) / 60_000;
+    }
+  }
+  return total;
+}
+
+/** The moment `minutes` working minutes after `from` (counted inside the call slots only). */
+export function addWorkMinutes(from: number, minutes: number, s: CallSettings): number {
+  let left = minutes;
+  let t = from;
+  for (let guard = 0; guard < 400; guard++) {
+    const sl = slotAt(t, s);
+    const start = sl.open ? t : sl.from;
+    const room = (sl.to - start) / 60_000;
+    if (left <= room) return start + left * 60_000;
+    left -= room;
+    t = sl.to;
+  }
+  return t;
+}

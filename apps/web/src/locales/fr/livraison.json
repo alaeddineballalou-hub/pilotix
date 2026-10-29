@@ -335,7 +335,12 @@
       "privHint_one": "{{count}} réponse du livreur envoie en Alertes.",
       "privHint_other": "{{count}} réponses du livreur envoient en Alertes.",
       "failed": "Pas livrée, je repasse",
-      "returning": "Retour au dépôt"
+      "returning": "Retour au dépôt",
+      "clock": "Le temps de l’agent",
+      "clockHint": "Pareil pour toutes les sociétés et vos livreurs. En heures de travail (vos créneaux d’appel) : la nuit ne compte pas.",
+      "first": "1er appel en",
+      "solve": "Réglée en",
+      "clockSum": "1er appel en {{first}} h, réglée en {{solve}} h"
     }
   },
   "pilot": {

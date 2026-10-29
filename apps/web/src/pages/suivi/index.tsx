@@ -23,7 +23,7 @@ import { store } from '../../lib/store';
 import { CopyCode } from '../../ui/CopyCode';
 import { useIsPhone } from '../../lib/useMedia';
 import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
-import { CancelSheet, ParcelAction, ParcelCards, ParcelPage, TreatSheet } from './PhoneSuivi';
+import { AlertClock, CancelSheet, ClockChip, ParcelAction, ParcelCards, ParcelPage, TreatSheet } from './PhoneSuivi';
 
 const LIST_TABS = ['enlivraison', 'alertes', 'traites', 'livres', 'annules', 'swap'] as const;
 type ListTab = (typeof LIST_TABS)[number];
@@ -127,12 +127,17 @@ function Head({ tab }: { tab: ListTab }) {
           </a>
         ))}
       </div>
+      {!!c?.lateCall && (
+        <a className="sv-late" href="#/suivi/alertes">
+          <Icon name="alert" /> {t('suivi.clock.lateCount', { count: c.lateCall })}
+        </a>
+      )}
       <p className="muted small">{t(`suivi.help.${tab}`)}</p>
     </div>
   );
 }
 
-type Extra = { companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
+type Extra = { clock?: AlertClock | null; companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
 
 /** What the courier or the livreur said: the alert note while in alert, else the courier's own status. */
 const reasonOf = (o: Order, x?: Extra) => (o.followStatus === 'alert' ? x?.alertReason || o.extStatus : o.extStatus);
@@ -204,7 +209,12 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
         return <RemovableChip name={o.followAgentName} removeLabel={t('suivi.removeAgent')} disabled={unFollow.isPending} onRemove={() => unFollow.mutate({ id: o.id })} />;
       case 'since': {
         const d = daysSince(o.shippedAt);
-        return d === null ? '—' : <span className={`badge ${d >= 10 ? 't-bad' : d >= 5 ? 't-warn' : 't-info'} ltr`}>{t('suivi.days', { n: d })}</span>;
+        return (
+          <>
+            {d === null ? '—' : <span className={`badge ${d >= 10 ? 't-bad' : d >= 5 ? 't-warn' : 't-info'} ltr`}>{t('suivi.days', { n: d })}</span>}
+            {extra[o.id]?.clock && <ClockChip c={extra[o.id]!.clock} />}
+          </>
+        );
       }
       case 'passed':
         return (
@@ -431,7 +441,7 @@ function List({ tab }: { tab: ListTab }) {
       {focus && (
         <FocusAlert
           id={focus.id}
-          x={focus.x}
+          x={extra[focus.id] ?? focus.x}
           onLeft={nextAlert}
           onClose={closeFocus}
           actions={(o) => [

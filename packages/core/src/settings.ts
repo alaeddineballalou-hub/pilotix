@@ -93,6 +93,9 @@ export interface SettingsMap {
     /** « Livraison privée »: what the livreur says (« failed:no_answer », « returning:refused »…) that sends the parcel
      *  to Suivi › Alertes instead (a suivi agent calls the customer first) */
     livreurAlerts: string[];
+    /** Suivi's clock on every alert (same for every company and our livreurs), in working hours (the call slots):
+     *  the first call, then the alert solved (treated, swapped or cancelled) */
+    suiviClock: { firstHours: number; solveHours: number };
   };
 }
 
@@ -139,6 +142,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
     privateBackup: { on: false, hours: 24, companyId: null },
     noStockDays: 3,
     livreurAlerts: ['failed:no_answer', 'failed:absent', 'returning:refused', 'returning:unreachable'],
+    suiviClock: { firstHours: 2, solveHours: 24 },
   },
 };
 

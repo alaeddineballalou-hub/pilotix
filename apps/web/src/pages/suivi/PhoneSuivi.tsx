@@ -19,7 +19,8 @@ import './phone.css';
 import { ChangeKind, ChangeSheet, CourierPanel, useParcelInfo } from './CourierPanel';
 import { useBackLayer } from '../../lib/backLayer';
 
-export type PExtra = { companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
+export type AlertClock = { kind: 'call' | 'solve'; dueAt: string; left: number; state: 'ok' | 'soon' | 'late' };
+export type PExtra = { clock?: AlertClock | null; companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
 
 /** Where the parcel is: 0 shipped, 1 on the road, 2 stopped (alert, failed, return…), 3 delivered. */
 function stageOf(o: Order): { at: number; stop: boolean } {
@@ -103,11 +104,31 @@ export function ParcelCards({ rows, extra, reasonOf, empty, onOpen }: { rows: Or
                 </span>
                 {d !== null && <span className={`pxs-days t-${dayTone(d)}`}>{t('suivi.days', { n: d })}</span>}
               </div>
+              {x?.clock && (
+                <div className="pxs-clk">
+                  <ClockChip c={x.clock} />
+                </div>
+              )}
             </div>
           </li>
         );
       })}
     </ul>
+  );
+}
+
+/** « Appeler · 1 h 20 » / « Régler · 5 h » / « En retard · 40 min »: the alert's clock, in working time. */
+export function ClockChip({ c }: { c?: AlertClock | null }) {
+  const { t } = useTranslation();
+  if (!c) return null;
+  const m = Math.abs(c.left);
+  const dur = m >= 60 ? t('suivi.clock.h', { h: Math.floor(m / 60), m: String(Math.round(m % 60)).padStart(2, '0') }) : t('suivi.clock.m', { m: Math.max(1, Math.round(m)) });
+  const what = c.state === 'late' ? t(`suivi.clock.late_${c.kind}`) : t(`suivi.clock.${c.kind}`);
+  return (
+    <span className={`sv-clock ${c.state}`} title={t(`suivi.clock.tip_${c.kind}`)}>
+      <Icon name="clock" />
+      {what} · <span className="ltr">{dur}</span>
+    </span>
   );
 }
 
@@ -232,6 +253,11 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose, onSkip }: 
         )}
         <CoBadge o={o} x={x} />
       </header>
+      {x?.clock && o.followStatus === 'alert' && (
+        <div className="pxs-clkbar">
+          <ClockChip c={x.clock} />
+        </div>
+      )}
 
       <div className="pxp-ob pxs-ob">
         {/* the alert, where the parcel stopped, and what to do */}
@@ -260,7 +286,7 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose, onSkip }: 
         </section>
 
         <div className="pxs-cm">
-          <a className="pxs-call" href={`tel:${o.phone}`} onClick={() => rpc('orders.logCall', { id: o.id }).catch(() => {})}>
+          <a className="pxs-call" href={`tel:${o.phone}`} onClick={() => rpc('orders.logCall', { id: o.id }).then(() => qc.invalidateQueries(), () => {})}>
             <Icon name="phone" /> {t('suivi.act.call')}
           </a>
           <a className="pxs-wa" href={waLink(o.phone, waText)} target="_blank" rel="noopener">

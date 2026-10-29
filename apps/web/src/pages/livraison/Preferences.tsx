@@ -94,6 +94,7 @@ export function Preferences() {
     ...(alerts.data ?? []).filter((c) => c.statuses.length).map((c) => `${c.name} : ${chipsOf(c).filter((x) => x.keys.some((k) => coOn(c).includes(k))).length}`),
     `${t('livraison.prefs.alerts.private')} : ${v.livreurAlerts.length}`,
   ].join(' · ');
+  const clockSum = t('livraison.prefs.alerts.clockSum', { first: v.suiviClock.firstHours, solve: v.suiviClock.solveHours });
   const set = (p: Partial<Prefs>) => setDraft({ ...v, ...p });
   const backups = (companies.data ?? []).filter((c) => c.active && c.kind !== 'own');
   const backupName = backups.find((c) => c.id === v.privateBackup.companyId)?.name ?? '';
@@ -116,7 +117,7 @@ export function Preferences() {
       value: v.privateBackup.on ? t('livraison.prefs.sum.backupOn', { hours: v.privateBackup.hours, company: backupName || '…' }) : t('livraison.prefs.sum.backupOff'),
       changed: v.privateBackup.on !== rec.privateBackup.on,
     },
-    { icon: 'route', label: t('livraison.prefs.alerts.title'), value: alertSum, changed: JSON.stringify([...v.livreurAlerts].sort()) !== JSON.stringify([...rec.livreurAlerts].sort()) },
+    { icon: 'route', label: t('livraison.prefs.alerts.title'), value: `${clockSum} · ${alertSum}`, changed: JSON.stringify([...v.livreurAlerts].sort()) !== JSON.stringify([...rec.livreurAlerts].sort()) || JSON.stringify(v.suiviClock) !== JSON.stringify(rec.suiviClock) },
     { icon: 'alert', label: t('livraison.prefs.noStock'), value: t('livraison.prefs.sum.noStock', { count: v.noStockDays }), changed: v.noStockDays !== rec.noStockDays },
   ];
 
@@ -258,6 +259,42 @@ export function Preferences() {
           <section className="pf-group" aria-labelledby="pf-al-h">
             <h3 id="pf-al-h">{t('livraison.prefs.alerts.title')}</h3>
             <p className="pf-lead">{t('livraison.prefs.alerts.hint')}</p>
+            <div className="pf-row">
+              <span className="pf-text">
+                <b>{t('livraison.prefs.alerts.clock')}</b>
+                <small>{t('livraison.prefs.alerts.clockHint')}</small>
+              </span>
+              <span className="pf-clk">
+                <label className="pf-num">
+                  <span>{t('livraison.prefs.alerts.first')}</span>
+                  <input
+                    type="number"
+                    min={0.25}
+                    max={48}
+                    step={0.25}
+                    inputMode="decimal"
+                    aria-label={t('livraison.prefs.alerts.first')}
+                    value={v.suiviClock.firstHours}
+                    onChange={(e) => set({ suiviClock: { ...v.suiviClock, firstHours: Math.max(0.25, Math.min(48, Number(e.target.value) || 0.25)) } })}
+                  />
+                  <span>{t('livraison.prefs.hours')}</span>
+                </label>
+                <label className="pf-num">
+                  <span>{t('livraison.prefs.alerts.solve')}</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={168}
+                    step={1}
+                    inputMode="numeric"
+                    aria-label={t('livraison.prefs.alerts.solve')}
+                    value={v.suiviClock.solveHours}
+                    onChange={(e) => set({ suiviClock: { ...v.suiviClock, solveHours: Math.max(1, Math.min(168, Math.round(Number(e.target.value) || 1))) } })}
+                  />
+                  <span>{t('livraison.prefs.hours')}</span>
+                </label>
+              </span>
+            </div>
             {!isAdmin ? null : alerts.isLoading ? (
               <Loading />
             ) : alerts.error ? (

@@ -12,3 +12,11 @@
 .card-head .sv-next { margin-inline-start: auto; display: inline-flex; align-items: center; gap: 6px; }
 .card-head .sv-next svg { width: 16px; height: 16px; }
 [dir="rtl"] .card-head .sv-next svg { transform: scaleX(-1); }
+/* the alert's clock (working time): first call, then solved */
+.sv-clock { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 800; white-space: nowrap; background: var(--ok-soft); color: var(--ok); }
+.sv-clock svg { width: 13px; height: 13px; }
+.sv-clock.soon { background: var(--px-orange-soft); color: #9A4B00; }
+.sv-clock.late { background: var(--coral-soft, #FDE2DE); color: var(--coral, #C2410C); }
+td .sv-clock { margin-top: 4px; }
+.sv-late { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; margin: 4px 0; padding: 6px 12px; border-radius: 999px; background: var(--coral-soft, #FDE2DE); color: var(--coral, #C2410C); font-weight: 800; font-size: 13px; text-decoration: none; }
+.sv-late svg { width: 15px; height: 15px; }

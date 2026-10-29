@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, Ctx, notFound, proc, withActionLock } from '../rpc';
 import { getSetting } from '../settings';
+import { addWorkMinutes, workMinutes } from '@pilotix/shared';
+import { getPrefs } from './prefs';
 import { addEvent, FollowInput, getOrder, listOrders, ListInput, setFollow } from './orders';
 import { agencyOf, andSql, queueSql } from './agencyscope';
 import { findOrders } from './sav';
@@ -44,7 +46,42 @@ function tabFilter(tab: SuiviTab, now: number): Partial<ListInput> {
   }
 }
 
+/** The clock of an alert: the first call (until someone acts on it), then the alert solved; in working minutes. */
+export interface AlertClock {
+  kind: 'call' | 'solve';
+  dueAt: string;
+  /** working minutes left (negative: late by that much) */
+  left: number;
+  state: 'ok' | 'soon' | 'late';
+}
+
+/** The clock of each alert among these orders (first call, then solved), with the shop's call slots and Préférences. */
+export async function alertClocks(db: Db, ids: number[], now: number): Promise<Map<number, AlertClock>> {
+  const out = new Map<number, AlertClock>();
+  if (!ids.length) return out;
+  const calls = await getSetting(db, 'calls');
+  const clock = (await getPrefs(db)).suiviClock;
+  const rows = await db.query(
+    `SELECT o.id, a.at AS alert_at,
+       (SELECT min(e.at) FROM order_events e WHERE e.order_id = o.id AND e.at > a.at AND e.user_id IS NOT NULL) AS acted_at
+       FROM orders o
+       JOIN LATERAL (SELECT max(e.at) AS at FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'alert') a ON true
+      WHERE o.id = ANY($1) AND o.follow_status = 'alert'`,
+    [ids],
+  );
+  for (const r of rows) {
+    const start = r.alert_at ? Date.parse(iso(r.alert_at)) : now;
+    const kind: AlertClock['kind'] = r.acted_at ? 'solve' : 'call';
+    const total = (kind === 'call' ? clock.firstHours : clock.solveHours) * 60;
+    const due = addWorkMinutes(start, total, calls);
+    const left = Math.round(due > now ? workMinutes(now, due, calls) : -workMinutes(due, now, calls));
+    out.set(num(r.id), { kind, dueAt: new Date(due).toISOString(), left, state: left < 0 ? 'late' : left <= total * 0.25 ? 'soon' : 'ok' });
+  }
+  return out;
+}
+
 export interface SuiviRowExtra {
+  clock: AlertClock | null;
   companyKind: string | null;
   livreurPhone: string | null;
   claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null;
@@ -52,9 +89,10 @@ export interface SuiviRowExtra {
   alertReason: string | null;
 }
 
-async function extras(db: Db, orders: Order[]): Promise<Record<number, SuiviRowExtra>> {
+async function extras(db: Db, orders: Order[], now = Date.now()): Promise<Record<number, SuiviRowExtra>> {
   if (!orders.length) return {};
   const ids = orders.map((o) => o.id);
+  const clocks = await alertClocks(db, orders.filter((o) => o.followStatus === 'alert').map((o) => o.id), now);
   const rows = await db.query(
     `SELECT o.id, co.kind AS company_kind, lv.phone AS livreur_phone,
        (SELECT json_build_object('id', c.id, 'status', c.status, 'createdAt', c.created_at, 'sentAt', c.sent_at)
@@ -68,6 +106,7 @@ async function extras(db: Db, orders: Order[]): Promise<Record<number, SuiviRowE
   for (const r of rows) {
     const c = typeof r.claim === 'string' ? JSON.parse(r.claim) : r.claim;
     out[num(r.id)] = {
+      clock: clocks.get(num(r.id)) ?? null,
       companyKind: r.company_kind ?? null,
       livreurPhone: r.livreur_phone ?? null,
       claim: c ? { id: num(c.id), status: c.status, createdAt: iso(c.createdAt), sentAt: isoOrNull(c.sentAt) } : null,
@@ -94,7 +133,14 @@ export async function suiviCounts(ctx: Ctx) {
   )[0];
   // a confirmation agency's agents do not handle the store's claims with its couriers
   const claims = agencyOf(ctx) !== null ? 0 : num((await ctx.db.query(`SELECT count(*)::int AS n FROM claims WHERE status <> 'resolved'`))[0]?.n);
+  // the manager's red number: alerts nobody called in time
+  const alertIds = (await ctx.db.query(`SELECT o.id FROM orders o WHERE o.follow_status = 'alert'${andSql(queueSql(ctx, 'follow'))}`)).map((x: any) => num(x.id));
+  const clocks = await alertClocks(ctx.db, alertIds, ctx.now());
+  const lateCall = [...clocks.values()].filter((c) => c.kind === 'call' && c.state === 'late').length;
+  const lateSolve = [...clocks.values()].filter((c) => c.kind === 'solve' && c.state === 'late').length;
   return {
+    lateCall,
+    lateSolve,
     enlivraison: num(r.enlivraison),
     alertes: num(r.alertes),
     traites: num(r.traites),
@@ -509,7 +555,7 @@ export const suiviProcs = {
     const page = await listOrders(ctx, ListInput.parse({ ...tabFilter(i.tab, ctx.now()), q: i.q, page: i.page, pageSize: i.pageSize }), { queue: 'follow' });
     // the swap list only shows parcels that really left (still with the courier or the livreur)
     const rows = i.tab === 'swap' ? page.rows.filter((o) => o.shippedAt) : page.rows;
-    return { ...page, rows, extra: await extras(ctx.db, rows) };
+    return { ...page, rows, extra: await extras(ctx.db, rows, ctx.now()) };
   }),
 
   /** "Traiter" an alert: what was done, new date, note → back on the road with sub-status alert_traitee. */
@@ -551,7 +597,7 @@ export const suiviProcs = {
     );
     if (!r[0]) return { id: null, order: null, extra: null };
     const order = await getOrder(ctx, num(r[0].id));
-    return { id: order.id, order, extra: (await extras(ctx.db, [order]))[order.id] ?? null };
+    return { id: order.id, order, extra: (await extras(ctx.db, [order], ctx.now()))[order.id] ?? null };
   }),
 
   /** Leaves the parcel taken with « Alerte suivante » (closed without acting): another agent may take it. */

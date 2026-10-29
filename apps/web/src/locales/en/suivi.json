@@ -543,5 +543,17 @@
     "keep": "Keep the parcel"
   },
   "nextNone": "No more alerts to handle for now 👍",
-  "skipNext": "Skip ›"
+  "skipNext": "Skip ›",
+  "clock": {
+    "call": "Call",
+    "solve": "Solve",
+    "late_call": "Call late",
+    "late_solve": "Late",
+    "h": "{{h}} h {{m}}",
+    "m": "{{m}} min",
+    "tip_call": "Time for the first call (working hours)",
+    "tip_solve": "Time to solve the alert: treat, swap or cancel (working hours)",
+    "lateCount_one": "{{count}} alert not called in time",
+    "lateCount_other": "{{count}} alerts not called in time"
+  }
 }
