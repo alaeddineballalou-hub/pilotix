@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { Db, num } from '../db';
 import { bad, Ctx, proc } from '../rpc';
 import { FraudLevel, scoreOrder } from './fraud';
-import { deviceMarks, handCounts, phoneHistory, recentCounts } from './landing';
+import { campaignCounts, deviceMarks, handCounts, phoneHistory, recentCounts } from './landing';
 import { landingSettings } from './landingquery';
 
 const H = 3600_000;
@@ -54,6 +54,12 @@ interface Visit {
   noPage?: boolean;
   /** automation Cloudflare's invisible check would catch (a real browser driven by a script) */
   bot?: boolean;
+  /** le réseau Pilotix: this many OTHER sellers already ended badly with this number / device */
+  shared?: { sellers: number };
+  /** the ad set it came through (its recent orders, as the agents found them, are read in the test's world) */
+  campaign?: string;
+  /** made into an order when not blocked, as on the live page (rolled back): what a wave detector counts */
+  order?: boolean;
 }
 
 export interface AttackRow {
@@ -175,17 +181,33 @@ async function runAll(tx: Db, cfg: { productId: number; variantId: number | null
       marks: await deviceMarks(tx, device, fphash, ph, clock),
       // Cloudflare's invisible check: a robot (driven browser / script) fails it; a real person — even a competitor — passes
       turnstile: (turnstileOn ? ((v.noPage || v.webdriver || v.bot) && r() < 0.9 ? 'fail' : 'ok') : 'off') as 'ok' | 'fail' | 'off',
+      shared: v.shared ?? null,
+      campaign: v.campaign ? await campaignCounts(tx, v.campaign, clock) : null,
       ipCountry: 'DZ',
       ipWilaya: null,
       wilayaId: w,
       behavior: v.noPage ? null : { scroll: Math.max(0, Math.min(100, scroll ?? 50)), pasted: !!v.pasted, tz: v.tz ?? 'Africa/Algiers', touch: v.touch ?? 5, fromAd: v.ad !== false },
     };
     const res = scoreOrder(facts as any, fraudLevel);
-    // record the submit so the next orders of a burst / wave see it (order_id null: no real order; rolled back anyway)
+    // as on the live page, an order not blocked becomes a real order (rolled back): a wave is counted in orders
+    let orderId: number | null = null;
+    if (v.order && res.verdict !== 'block') {
+      const c = (await tx.query(`INSERT INTO customers (phone, name, wilaya_id) VALUES ($1, $2, $3) ON CONFLICT (phone) DO UPDATE SET name = EXCLUDED.name RETURNING id`, [ph, nm, w]))[0];
+      orderId = Number(
+        (
+          await tx.query(
+            `INSERT INTO orders (ref, customer_id, customer_name, phone, wilaya_id, commune, conf_status, subtotal, delivery_fee, discount, total, channel)
+             VALUES ('ATK' || nextval('order_ref_seq'), $1, $2, $3, $4, 'Centre', $5, 1000, 0, 0, 1000, 'landing') RETURNING id`,
+            [c.id, nm, ph, w, res.verdict === 'review' ? 'to_check' : 'new'],
+          )
+        )[0].id,
+      );
+    }
+    // record the submit so the next orders of a burst / wave see it (no real order unless made above; rolled back anyway)
     await tx.query(
-      `INSERT INTO landing_submits (landing_id, product_id, phone, ip, fp, fphash, verdict, score, at)
-       VALUES ((SELECT id FROM landing_pages WHERE product_id = $1 ORDER BY id LIMIT 1), $1, $2, $3, $4, $5, $6, $7, $8)`,
-      [productId, ph, ipv, device, fphash, res.verdict, res.score, new Date(clock).toISOString()],
+      `INSERT INTO landing_submits (landing_id, product_id, phone, ip, fp, fphash, verdict, score, at, order_id)
+       VALUES ((SELECT id FROM landing_pages WHERE product_id = $1 ORDER BY id LIMIT 1), $1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [productId, ph, ipv, device, fphash, res.verdict, res.score, new Date(clock).toISOString(), orderId],
     );
     return res.verdict;
   }
@@ -254,7 +276,34 @@ async function runAll(tx: Db, cfg: { productId: number; variantId: number | null
     await run('Concurrent à la main', 'Équipe intelligente — après « 🕵️ Concurrent »', 'la même équipe continue après que les agents ont marqué leurs commandes', true, 30, (k) => ({ fp: team[k % 10].fp, ua: team[k % 10].ua }), () => int(30, 90) * 60_000);
   }
   clock += 3 * DAY;
-  await run('Concurrent à la main', 'Vague dans une wilaya', '25 commandes du même produit dans la même wilaya en 30 min', true, 25, () => ({ wilaya: 31 }), () => 70_000);
+  await run('Concurrent à la main', 'Vague dans une wilaya', '25 commandes du même produit dans la même wilaya en 30 min', true, 25, () => ({ wilaya: 31, order: true }), () => 70_000);
+  clock += 3 * DAY;
+
+  // 3b. what was learned from real results: the smart robot / the paid team with real names and real numbers, that
+  //     nothing on the page can tell from a customer — caught by what happened to the same number / device / ad elsewhere
+  await run('Réseau Pilotix', 'Déjà signalé par 2 autres vendeurs', 'vrai nom, vrai numéro, vrai téléphone — mais 2 autres boutiques du réseau l’ont trouvé faux', true, 20, () => ({ shared: { sellers: 2 } }), () => int(10, 60) * 60_000);
+  clock += 3 * DAY;
+  {
+    // a wave through one ad: the agents already called its first orders and found 10 of them fake
+    const wave = 'atk-wave-adset';
+    for (let k = 0; k < 10; k++) {
+      const ph = phone();
+      const c = (await tx.query(`INSERT INTO customers (phone, name, wilaya_id) VALUES ($1, 'Faux Test', 16) RETURNING id`, [ph]))[0];
+      const o = (
+        await tx.query(
+          `INSERT INTO orders (ref, customer_id, customer_name, phone, wilaya_id, commune, conf_status, subtotal, delivery_fee, discount, total, channel)
+           VALUES ('ATK' || nextval('order_ref_seq'), $1, 'Faux Test', $2, 16, 'Kouba', 'fake', 1000, 0, 0, 1000, 'site') RETURNING id`,
+          [c.id, ph],
+        )
+      )[0];
+      await tx.query(
+        `INSERT INTO landing_submits (landing_id, product_id, phone, ip, fp, fphash, verdict, score, at, order_id, utm)
+         VALUES ((SELECT id FROM landing_pages WHERE product_id = $1 ORDER BY id LIMIT 1), $1, $2, $3, $4, $5, 'allow', 0, $6, $7, $8)`,
+        [productId, ph, ip(), `d:${rid()}`, rid().slice(0, 24), new Date(clock - H).toISOString(), o.id, JSON.stringify({ adset_id: wave, utm_source: 'facebook' })],
+      );
+    }
+    await run('Réseau Pilotix', 'Pub attaquée', 'une vague de vraies personnes par la même pub, dont les agents ont déjà trouvé les premières commandes fausses', true, 20, () => ({ campaign: wave }), () => int(5, 20) * 60_000);
+  }
   clock += 3 * DAY;
 
   // 4. refusers (parcels refused before)
