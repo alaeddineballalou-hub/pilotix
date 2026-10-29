@@ -4,9 +4,11 @@ import type { ClientScore } from '@pilotix/core';
 import { useTranslation } from 'react-i18next';
 import './clientScore.css';
 
-/** « 85/100 · Très fiable », coloured by level (a new customer is grey: nothing known yet) */
-export function ScoreChip({ s, short }: { s: Pick<ClientScore, 'score' | 'level'>; short?: boolean }) {
+/** « 85/100 · Très fiable », coloured by level. A new customer (nothing known yet) shows no chip in the order lists —
+ *  a grey badge on most rows said nothing and hid the ones that matter; the Clients page asks for it with `showNew`. */
+export function ScoreChip({ s, short, showNew }: { s: Pick<ClientScore, 'score' | 'level'>; short?: boolean; showNew?: boolean }) {
   const { t } = useTranslation();
+  if (s.level === 'new' && !showNew) return null;
   return (
     <span className={`cs-chip cs-${s.level}${short ? ' short' : ''}`} title={`${t(`clients.score.level.${s.level}`)} — ${t('clients.score.help')}`}>
       <b className="ltr">{s.score}</b>

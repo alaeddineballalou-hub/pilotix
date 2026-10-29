@@ -73,7 +73,7 @@ export function Clients(_: PageProps) {
                         {c.blacklisted && <span className="flag">{t('clients.black')}</span>}
                       </td>
                       <td data-l={t('clients.score.col')}>
-                        <ScoreChip s={c.score} />
+                        <ScoreChip s={c.score} showNew />
                       </td>
                       <td data-l={t('clients.col.phone')}>
                         <span className="ltr">{c.phone}</span>
