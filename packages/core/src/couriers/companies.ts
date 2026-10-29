@@ -33,7 +33,7 @@ export interface CourierCard {
 }
 
 /** White logos (made for dark backgrounds). */
-const DARK = new Set(['colilog', 'conexlog', 'fz-delivery', 'lihlih-express', 'mazaya-logistics', 'noest', 'ovred', 'packers', 'pdex', 'rj360', 'speed-mail', 'univer-delivery']);
+const DARK = new Set(['colilog', 'conexlog', 'fz-delivery', 'lihlih-express', 'mazaya-logistics', 'noest', 'ovred', 'packers', 'pdex', 'rj360', 'speed-mail', 'univer-delivery', 'we-can']);
 /** No logo found: their initials. */
 const NO_LOGO = new Set(['eco-rapide-express']);
 /** The most used, in this order. */

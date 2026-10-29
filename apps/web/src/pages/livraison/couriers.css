@@ -1,5 +1,5 @@
-/* Delivery companies' logos (« API Livraison », the companies' lists): each logo on a white plate, a white logo on
-   navy, initials when there is no logo. */
+/* Delivery companies' logos (« API Livraison », the companies' lists): light theme, each logo on the white card, a
+   white logo on navy, initials when there is no logo; dark theme below (no plate). */
 .px-cologo { flex: none; display: inline-flex; align-items: center; justify-content: flex-start; background: #fff; overflow: hidden; }
 .px-cologo img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
 .px-cologo.dark { background: #1B2A47; }
@@ -15,6 +15,16 @@
 .px-cologo.sm { width: 56px; height: 38px; padding: 4px 6px; border-radius: 10px; justify-content: center; border: 1px solid var(--line); }
 .px-cologo.sm.dark, .px-cologo.sm.none { border-color: transparent; }
 .px-cologo.sm.none { font-size: 12px; }
+
+/* dark theme: no plate at all — the logo's « on dark » version (its writing turned light) or a white logo sits on the
+   card like it does on the white card in the light theme; all logos start at the same edge; in the lists, a faint frame */
+:root[data-theme="dark"] .px-cologo, :root[data-theme="dark"] .px-cologo.dark { background: transparent; }
+:root[data-theme="dark"] .px-cologo.md.dark { padding: 6px 2px; }
+:root[data-theme="dark"] .px-cologo.sm, :root[data-theme="dark"] .px-cologo.sm.dark { background: rgba(255, 255, 255, .035); border-color: rgba(255, 255, 255, .09); }
+:root[data-theme="dark"] .px-cologo.none, :root[data-theme="dark"] .px-cologo.sm.none { background: color-mix(in srgb, var(--ink) 9%, transparent); color: var(--ink); }
+/* a logo without its « on dark » version: on a soft light plate */
+:root[data-theme="dark"] .px-cologo.plate, :root[data-theme="dark"] .px-cologo.sm.plate { background: #ECE8E1; }
+:root[data-theme="dark"] .px-cologo.md.plate { padding: 6px 8px; }
 
 /* « API Livraison » (computer): search, the most used, then A → Z — one card per company */
 .px-cpick { display: flex; flex-direction: column; gap: 10px; }

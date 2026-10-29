@@ -18,6 +18,8 @@ test('one card per company: unique, the platforms never shown, every logo there'
   for (const c of CARDS) {
     assert.ok(KINDS[c.kind]?.api, `${c.id}: an API kind`);
     if (c.logo) assert.ok(existsSync(join(LOGOS, `${c.logo}.webp`)), `${c.id}: couriers/${c.logo}.webp`);
+    // the dark theme shows a logo's « on dark » version (scripts/courier-logos-dark.py); a white logo as it is
+    if (c.logo && !c.dark) assert.ok(existsSync(join(LOGOS, 'dark', `${c.logo}.webp`)), `${c.id}: couriers/dark/${c.logo}.webp (run scripts/courier-logos-dark.py)`);
   }
   assert.ok(CARDS.filter((c) => c.logo).length >= 85, 'almost all have a logo');
   // the most used first, « Autre API » last
