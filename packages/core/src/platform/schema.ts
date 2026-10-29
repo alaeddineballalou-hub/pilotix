@@ -471,6 +471,23 @@ CREATE TABLE IF NOT EXISTS platform.pro_payments (
 CREATE INDEX IF NOT EXISTS pro_payments_shop ON platform.pro_payments (shop_id, created_at DESC);
 `;
 
+// The fake-order learning shared by every seller (« le réseau Pilotix », platform/reputation.ts): for each phone number
+// and each device, the stores that ended badly with it (agent found it fake / a wrong number, parcel refused, device
+// marked). Only a keyed hash of the number / the fingerprint is kept, never the number itself; owner_key is the business
+// (one owner's several stores count once). Rebuilt store by store by the job « fraud-reputation ».
+const P009 = `
+CREATE TABLE IF NOT EXISTS platform.fraud_reputation (
+  key         text        NOT NULL,
+  shop_id     integer     NOT NULL REFERENCES platform.shops(id) ON DELETE CASCADE,
+  owner_key   text        NOT NULL,
+  bad_n       integer     NOT NULL DEFAULT 1,
+  last_bad    timestamptz NOT NULL,
+  updated_at  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (key, shop_id)
+);
+CREATE INDEX IF NOT EXISTS fraud_reputation_shop ON platform.fraud_reputation (shop_id);
+`;
+
 export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p001_platform', P001],
   ['p002_accounts_signup_domains', P002],
@@ -480,6 +497,7 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p006_marketers', P006],
   ['p007_account_phone', P007],
   ['p008_pro_marketers', P008],
+  ['p009_fraud_reputation', P009],
 ];
 
 /** Creates or updates the platform's tables. */

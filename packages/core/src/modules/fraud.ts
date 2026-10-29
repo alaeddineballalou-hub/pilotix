@@ -20,7 +20,22 @@ export const FRAUD_THRESHOLDS: Record<FraudLevel, { review: number; block: numbe
 /** certain signals: the order is blocked whatever the good signals say */
 export const HARD_CODES = ['honeypot', 'phone_invalid', 'phone_repeat', 'phone_sequence', 'form_invalid', 'too_fast', 'pow_bad', 'pow_replay', 'webdriver', 'device_numbers', 'device_competitor', 'device_fake_again', 'recent_block', 'refuser_blocked'];
 /** never « allowed » alone: a person calls first (a customer who refused a parcel, a look-alike of a refuser) */
-export const YELLOW_CODES = ['refused_once', 'refused_twice', 'looks_like', 'wilaya_wave'];
+// (turnstile_fail: Cloudflare rejected the page's token — a robot, a forged or reused token; a real customer gets « ok »,
+// or « off » when the check could not run, so a person calling first costs real customers nothing)
+// (phone_pattern: 0660606060, 0770707070 — two digits only; a prank's favourite, rarely a real (vanity) number: a call
+// tells them apart)
+export const YELLOW_CODES = ['refused_once', 'refused_twice', 'looks_like', 'wilaya_wave', 'shared_bad', 'campaign_bad', 'turnstile_fail', 'phone_pattern'];
+/**
+ * learned from real results (other sellers of the network, this ad set's recent orders): they send the order to a
+ * person, and never tip it into the block list on their own
+ */
+export const LEARNED_CODES = ['shared_bad', 'campaign_bad'];
+/** the network warns only when this many different businesses agree (platform/reputation.ts) */
+export const SHARED_MIN_SELLERS = 2;
+/** an ad set is « attacked » when, of its recent orders the agents finished (at least this many)… */
+export const CAMPAIGN_MIN_DECIDED = 8;
+/** …at least this share were found fake or a wrong number */
+export const CAMPAIGN_FAKE_SHARE = 0.5;
 
 /** what the page saw of the visitor (sent by the page with the order; absent for older pages and abandoned orders) */
 export interface FraudBehavior {
@@ -85,6 +100,10 @@ export interface FraudFacts {
   turnstileExpected?: boolean;
   /** the visitor's network is a known data-center / VPN (server-detected from the ASN; the page cannot fake it) */
   hosting?: boolean;
+  /** the network: how many OTHER sellers (different businesses) ended badly with this number or device (null: off) */
+  shared?: { sellers: number } | null;
+  /** this ad set's orders of the last days that agents finished, and how many were fake / a wrong number (null: no ad) */
+  campaign?: { decided: number; fake: number } | null;
   behavior?: FraudBehavior | null;
   /** what Pilotix knows of this phone */
   history: {
@@ -258,10 +277,26 @@ export function scoreOrder(f: FraudFacts, level: FraudLevel = 'normal'): FraudRe
   if (f.ipCountry && f.ipCountry !== 'DZ') add('ip_abroad', 15);
   else if (f.ipWilaya && f.ipWilaya !== f.wilayaId) add('ip_wilaya', 8);
 
+  // 8. learned from real results: the network (2 different businesses at least ended badly with this number or device)
+  //    and this ad set (most of its recent orders found fake by the agents). A person calls first — it never blocks on
+  //    its own (below), and a customer who already received and paid here is not bothered.
+  const trusted = h.delivered >= 1 && (h.refusals ?? h.returned) === 0 && !h.blacklisted && !h.lookAlike;
+  if (!trusted) {
+    const sellers = f.shared?.sellers ?? 0;
+    if (sellers >= SHARED_MIN_SELLERS) add('shared_bad', sellers > SHARED_MIN_SELLERS ? 45 : 30);
+    const c = f.campaign;
+    if (c && c.decided >= CAMPAIGN_MIN_DECIDED && c.fake / c.decided >= CAMPAIGN_FAKE_SHARE) add('campaign_bad', 20);
+  }
+
   const reasons = dedupe(r).sort((a, b) => b.points - a.points);
   const hard = reasons.some((x) => HARD_CODES.includes(x.code));
-  const score = hard ? 100 : Math.max(0, Math.min(100, reasons.reduce((s, x) => s + x.points, 0)));
-  return { score, verdict: verdictOf(score, hard, reasons, level), reasons };
+  const raw = reasons.reduce((s, x) => s + x.points, 0);
+  const score = hard ? 100 : Math.max(0, Math.min(100, raw));
+  let verdict = verdictOf(score, hard, reasons, level);
+  // what was learned only ever sends to a person: without its points, would the order still be blocked?
+  const learned = reasons.filter((x) => LEARNED_CODES.includes(x.code)).reduce((s, x) => s + x.points, 0);
+  if (verdict === 'block' && !hard && learned > 0 && raw - learned < FRAUD_THRESHOLDS[level].block) verdict = 'review';
+  return { score, verdict, reasons };
 }
 
 export function verdictOf(score: number, hard: boolean, reasons: FraudReason[], level: FraudLevel): FraudVerdict {

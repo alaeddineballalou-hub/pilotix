@@ -43,6 +43,7 @@ import { ABANDONED, abandonCutoff, freeLandingSlug, landingCounts, landingSettin
 import { sendInPreview } from './notify';
 import { addEvent, createOrder, noOrderAccess } from './orders';
 import { ipPrefix } from '../net';
+import { sharedReputation } from '../platform/reputation';
 import { RESERVED } from './stockquery';
 
 const id = z.number().int().positive();
@@ -640,6 +641,29 @@ function isHostingAsn(asn?: string): boolean {
   return !!n && HOSTING_ASNS.has(n);
 }
 
+/** The ad an order came from: its ad set, else its ad, else the campaign name of the link; null when not from an ad. */
+export const campaignOf = (utm: Record<string, string> | null | undefined): string | null => utm?.adset_id || utm?.ad_id || utm?.utm_campaign || null;
+
+/**
+ * Learns from deliveries, per ad set: of this ad set's orders of the last 7 days that agents finished (confirmed,
+ * cancelled, fake…), how many were found fake or a wrong number. A wave of fake orders through one ad shows here, even
+ * when each order, alone, looks like a real customer (real names, real numbers). null: not from an ad.
+ */
+export async function campaignCounts(db: Db, campaign: string | null, now: number): Promise<{ decided: number; fake: number } | null> {
+  if (!campaign) return null;
+  const r = (
+    await db.query(
+      `SELECT count(*) FILTER (WHERE o.conf_status IN ('confirmed','no_stock','cancelled','duplicate','wrong_number','fake'))::int AS decided,
+              count(*) FILTER (WHERE o.conf_status IN ('fake','wrong_number'))::int AS fake
+         FROM landing_submits s JOIN orders o ON o.id = s.order_id
+        WHERE s.order_id IS NOT NULL AND s.at > $2
+          AND COALESCE(NULLIF(s.utm->>'adset_id', ''), NULLIF(s.utm->>'ad_id', ''), NULLIF(s.utm->>'utm_campaign', '')) = $1`,
+      [campaign, isoAt(now - 7 * 86_400_000)],
+    )
+  )[0];
+  return { decided: num(r?.decided), fake: num(r?.fake) };
+}
+
 /** French labels of the reasons, for an order's internal note (the app shows its own translated labels). */
 export const FRAUD_LABELS_FR: Record<string, string> = {
   honeypot: 'champ piège rempli', phone_invalid: 'téléphone invalide', phone_repeat: 'téléphone répétitif', phone_sequence: 'téléphone en suite', phone_pattern: 'téléphone à motif (0660606060)',
@@ -650,7 +674,8 @@ export const FRAUD_LABELS_FR: Record<string, string> = {
   ip_many: 'beaucoup de commandes de la même IP', device_burst: 'rafale depuis le même appareil', blacklisted: 'numéro en liste noire', returns_many: 'refuse souvent ses colis',
   returns_some: 'déjà un colis retourné', cancels_many: 'commandes souvent annulées', good_customer: 'bon client (livré)', qty_high: 'quantité très élevée', qty_some: 'quantité élevée',
   ip_abroad: 'IP hors d’Algérie', ip_wilaya: 'IP d’une autre wilaya', form_invalid: 'formulaire incomplet', recent_block: 'numéro bloqué comme faux (24 h)',
-  turnstile_fail: 'Cloudflare : robot', no_turnstile: 'contrôle Cloudflare non effectué', ip_hosting: 'réseau data-center / VPN (pas un client réel)', returns_serial: 'plusieurs colis refusés, aucun livré', mask_touch: 'téléphone sans écran tactile (masque)', mask_tz: 'fuseau horaire étranger', device_numbers: 'plusieurs numéros depuis le même appareil',
+  turnstile_fail: 'Cloudflare : robot', no_turnstile: 'contrôle Cloudflare non effectué', ip_hosting: 'réseau data-center / VPN (pas un client réel)', returns_serial: 'plusieurs colis refusés, aucun livré',
+  shared_bad: 'réseau Pilotix : signalé par 2 autres vendeurs ou plus', campaign_bad: 'pub attaquée : la plupart de ses commandes récentes étaient fausses', mask_touch: 'téléphone sans écran tactile (masque)', mask_tz: 'fuseau horaire étranger', device_numbers: 'plusieurs numéros depuis le même appareil',
   device_two: 'deux numéros depuis le même appareil', device_numbers_fp: 'plusieurs numéros depuis le même appareil (même empreinte)', name_junk: 'nom bidon (test, azerty…)', name_oneword: 'un seul mot comme nom', phone_near: 'numéros presque identiques', name_reused: 'même nom, numéros différents', wilaya_wave: 'vague de commandes dans cette wilaya',
   device_rain: 'beaucoup de nouveaux appareils, même adresse', device_competitor: 'appareil marqué « concurrent »', device_fake_again: 'appareil déjà 2 fois en fausse commande',
   device_fake: 'appareil déjà en fausse commande', phone_victim: 'numéro utilisé dans de fausses commandes (vérifiez que c’est bien lui)', no_browse: 'directement au formulaire', read_page: 'a lu la page', phone_pasted: 'numéro collé', from_ad: 'vient de la pub',
@@ -793,6 +818,10 @@ export async function submitOrder(ctx: Ctx, i: z.infer<typeof SubmitInput>): Pro
       hosting: isHostingAsn(i.meta.asn),
       // Pilotix manages Turnstile for every shop: if the robot check did not run here, that is itself a small warning
       turnstileExpected: !!ctx.server?.turnstile,
+      // le réseau Pilotix: how many OTHER sellers ended badly with this number or this device (2 needed to count)
+      shared: await sharedReputation(ctx, { phone, fphash }),
+      // this ad set's recent orders, as the agents found them
+      campaign: await campaignCounts(db, campaignOf(i.utm), now),
       behavior:
         i.sc === null
           ? null

@@ -10,3 +10,4 @@ export * from './reminders';
 export * from './procs';
 export * from './domains';
 export * from './courierTests';
+export * from './reputation';

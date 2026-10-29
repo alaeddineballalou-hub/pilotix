@@ -34,6 +34,13 @@ test('attack test: real attacks through the real scoring; real customers not blo
   // the smart team is blocked once the agents have marked it (fingerprint follows the device)
   const after = rep.rows.find((r: any) => r.name.includes('après'));
   assert.ok(after.blocked >= after.sent - 1, 'smart team after marking');
+  // what was learned from real results catches what nothing on the page tells from a customer: none passes, a person
+  // calls first (the network: 2 other sellers; an ad the agents found mostly fake)
+  for (const name of ['Déjà signalé par 2 autres vendeurs', 'Pub attaquée']) {
+    const row = rep.rows.find((r: any) => r.name === name);
+    assert.ok(row, name);
+    assert.equal(row.passed, 0, name);
+  }
   assert.ok(rep.total.blocked + rep.total.review > 0);
   // NOTHING persisted: the whole run was rolled back
   assert.deepEqual(await counts(), before, 'the test left rows behind');
