@@ -6,6 +6,7 @@ on:
   push:
     paths:
       - 'mobile/**'
+      - '!mobile/**/*.md' # notebook updates don't need a new app
       - '.github/workflows/mobile.yml'
   workflow_dispatch:
 

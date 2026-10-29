@@ -34,8 +34,8 @@ work never starts again from zero when a chat stops (usage limit, closed chat…
 | 1 | Base app (`mobile/`, Capacitor 8, Android project) | ✅ done 29 Oct 2026 |
 | 2 | Icon (winking face) and navy start screen | ✅ done 29 Oct 2026 |
 | 3 | Live pages (opens pilotix.online) + "no internet" screen | ✅ done 29 Oct 2026 |
-| 4 | GitHub builds the Android test app (`.github/workflows/mobile.yml`) | 🔨 first build running |
-| 5 | Owner installs the test app on his phone and checks it | ⏭️ next |
+| 4 | GitHub builds the Android test app (`.github/workflows/mobile.yml`) | ✅ done 29 Oct 2026 (build ok, APK 4.2 MB, signed) |
+| 5 | Owner installs the test app on his phone and checks it | 🔨 waiting for the owner's test |
 | 6 | One-tap calls (today a `tel:` link opens the phone's dialer with the number) | ⏭️ |
 | 7 | Notifications (needs the owner's Firebase project → `google-services.json`) | ⏭️ |
 | 8 | Scanner: test the website's camera scanner in the app (camera permission is in) | ⏭️ |
@@ -82,7 +82,19 @@ work never starts again from zero when a chat stops (usage limit, closed chat…
 - Top bar: nothing hidden under the phone's clock/battery.
 - If the "no internet" screen shows while the internet works, check Cloudflare (WAF rule / Bot Fight
   Mode) for the app's first page load.
+- Notifications: the website's own web push (`apps/web/public/sw.js`, `src/lib/push.ts`) can't work
+  inside an Android app (the WebView has no web push) → step 7 replaces it with Firebase in the app.
+  `sw.js` has no fetch/cache handler, so it doesn't get in the way of the live pages.
+
+## Good to know
+
+- Installing the test APK by hand ("sideloading") still works in Algeria. Google's developer
+  verification started 30 Sep 2026 only in Brazil, Indonesia, Singapore and Thailand, and goes
+  worldwide in 2027: by then the app must be registered to the owner's verified developer account
+  (his Play Console account covers it).
 
 ## Log
 
-- 29 Oct 2026: started (owner said "start now" instead of Monday). Steps 1–3 built; first GitHub build.
+- 29 Oct 2026: started (owner said "start now" instead of Monday). Steps 1–4 done: the app, icon,
+  start screen, no-internet screen, GitHub build + download link. Couldn't run it on a phone from the
+  cloud (no Android emulator there): the owner's phone test is next.
