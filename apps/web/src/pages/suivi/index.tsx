@@ -43,7 +43,7 @@ export function Suivi({ sub }: PageProps) {
       ) : (
         <>
           <Head tab={tab} />
-          <List tab={tab} />
+          <List key={tab} tab={tab} />
           {tab === 'swap' && <SwappedList />}
         </>
       )}

@@ -586,8 +586,8 @@ async function createClaim(ctx: Ctx, i: z.infer<typeof ClaimCreate>): Promise<Cl
   return made;
 }
 
-const MotifIn = z.object({ key: z.string().regex(/^[a-z0-9_]{1,40}$/), fr: z.string().trim().min(1).max(80), ar: z.string().trim().max(80).default(''), on: z.boolean(), client: z.boolean().optional() });
-const cleanMotif = (m: z.infer<typeof MotifIn>) => ({ key: m.key, fr: m.fr, ar: m.ar, on: m.on, ...(m.client ? { client: true } : {}) });
+const MotifIn = z.object({ key: z.string().regex(/^[a-z0-9_]{1,40}$/), fr: z.string().trim().min(1).max(80), ar: z.string().trim().max(80).default(''), on: z.boolean(), client: z.boolean().optional(), date: z.boolean().optional() });
+const cleanMotif = (m: z.infer<typeof MotifIn>) => ({ key: m.key, fr: m.fr, ar: m.ar, on: m.on, ...(m.client ? { client: true } : {}), ...(m.date ? { date: true } : {}) });
 
 /** A parcel another agent took with « Alerte suivante » (15 minutes): he is calling, nobody else acts on it. */
 async function notLockedByOther(ctx: Ctx, oid: number) {
@@ -623,6 +623,27 @@ export const suiviProcs = {
   }),
 
   /** Takes the suivi agent off an order (the order stays where it is; the next suivi agent who acts on it takes it). */
+  /**
+   * Dashboard › Suivi › « Motifs du Suivi »: what the alerts of the period ended with — each « Résolu » motif and how
+   * many of those parcels were then delivered, each « Perdu » motif and its share of the lost parcels.
+   */
+  'suivi.motifStats': proc(['suivi', 'agent_manager', 'vendeur'], z.object({ from: z.string().max(40), to: z.string().max(40) }), async (ctx, i) => {
+    const rows = await ctx.db.query(
+      `SELECT e.from_value AS outcome, e.to_value AS key, max(e.note) AS label, count(DISTINCT e.order_id)::int AS n,
+              count(DISTINCT e.order_id) FILTER (WHERE o.follow_status = 'delivered')::int AS delivered
+         FROM order_events e JOIN orders o ON o.id = e.order_id
+        WHERE e.kind = 'suivi_motif' AND e.at >= $1::timestamptz AND e.at < $2::timestamptz${andSql(queueSql(ctx, 'follow'))}
+        GROUP BY 1, 2 ORDER BY n DESC`,
+      [i.from, i.to],
+    );
+    const motifs = await getSetting(ctx.db, 'suiviMotifs');
+    const name = (out: string, k: string, fallback: string) => (out === 'resolved' ? motifs.resolved : motifs.lost).find((m) => m.key === k)?.fr ?? fallback;
+    const side = (out: 'resolved' | 'lost') => rows.filter((r: any) => r.outcome === out).map((r: any) => ({ key: String(r.key), label: name(out, String(r.key), String(r.label ?? r.key)), count: num(r.n), delivered: num(r.delivered) }));
+    const resolved = side('resolved');
+    const lost = side('lost');
+    return { resolved, lost, totalResolved: resolved.reduce((a, r) => a + r.count, 0), totalLost: lost.reduce((a, r) => a + r.count, 0) };
+  }),
+
   /** Management › Motifs du Suivi: everyone reads them (the « Traiter » window), an admin changes them. */
   'suivi.motifs': proc(null, z.object({}), async (ctx) => getSetting(ctx.db, 'suiviMotifs')),
   'suivi.motifsSet': proc(
@@ -655,7 +676,7 @@ export const suiviProcs = {
       /** « Perdu » before the calls, with a reason (the note) */
       early: z.boolean().optional(),
       /** « Résolu »: ask the delivery company (or our livreur) to deliver again */
-      relance: z.boolean().default(true),
+      relance: z.boolean().default(false),
     }),
     async (ctx, i) => {
       const cur = await getOrder(ctx, i.id);
@@ -664,6 +685,7 @@ export const suiviProcs = {
       const all = await getSetting(ctx.db, 'suiviMotifs');
       const m = (i.outcome === 'resolved' ? all.resolved : all.lost).find((x) => x.key === i.motif && x.on);
       if (!m) throw bad('Choisissez un motif');
+      if (i.outcome === 'resolved' && m.date && !i.date) throw bad(`« ${m.fr} » : choisissez la nouvelle date`);
       const day = i.date ? ` le ${i.date.slice(0, 10).split('-').reverse().join('/')}` : '';
       const note = i.note?.trim() ?? '';
       const me = ctx.session.profile.id;

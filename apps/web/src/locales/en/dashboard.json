@@ -755,5 +755,16 @@
     "fineMine": "Well done: everything is at target or at the team’s level.",
     "myNumbers": "My numbers",
     "rank": "Rank {{rank}} of {{of}}"
+  },
+  "motifs": {
+    "title": "Suivi motifs",
+    "sub": "How the period's alerts ended.",
+    "empty": "No treated alert in this period yet.",
+    "resolved_one": "Solved · {{count}} parcel",
+    "resolved_other": "Solved · {{count}} parcels",
+    "lost_one": "Lost · {{count}} parcel",
+    "lost_other": "Lost · {{count}} parcels",
+    "delivered": "{{n}} delivered afterwards ({{p}} %)",
+    "share": "{{p}} % of the lost"
   }
 }

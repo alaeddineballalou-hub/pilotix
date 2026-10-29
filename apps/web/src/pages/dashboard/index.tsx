@@ -1,4 +1,5 @@
 // Dashboard: one tab per area (Confirmation, Dépôt, Suivi, Livreurs, SAV). Managers only see the areas the admin gave them.
+import { SuiviMotifStats } from './SuiviMotifs';
 import { ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../lib/backend';
@@ -52,7 +53,8 @@ export function Dashboard({ sub }: PageProps) {
           }
         />
       )}
-      {(area === 'depot' || area === 'suivi' || area === 'sav') && <Board key={area} area={area} />}
+      {(area === 'depot' || area === 'sav') && <Board key={area} area={area} />}
+      {area === 'suivi' && <Board key={area} area="suivi" extra={(range) => <SuiviMotifStats range={range} />} />}
       {area === 'livreurs' && (
         <Board
           key={area}

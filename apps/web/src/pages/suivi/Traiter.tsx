@@ -28,7 +28,7 @@ export function Traiter({ o, reason, tries, own, onClose }: { o: Order; reason: 
   const [motif, setMotif] = useState('');
   const [date, setDate] = useState('');
   const [note, setNote] = useState('');
-  const [relance, setRelance] = useState(true);
+  const [relance, setRelance] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState<SentClaim | null>(null);
   const list = (out && motifs ? motifs[out] : []).filter((m) => m.on);
@@ -36,7 +36,8 @@ export function Traiter({ o, reason, tries, own, onClose }: { o: Order; reason: 
   const name = (m: { fr: string; ar: string }) => (i18n.language === 'ar' && m.ar ? m.ar : m.fr);
   const short = !!tries && tries.done < tries.need;
   const early = out === 'lost' && short && !!chosen && !chosen.client;
-  const ready = !!chosen && (!early || note.trim().length >= 3);
+  const needDate = out === 'resolved' && !!chosen?.date;
+  const ready = !!chosen && (!early || note.trim().length >= 3) && (!needDate || !!date);
   const how = own ? 'livreur' : api ? 'api' : 'direct';
 
   const go = async () => {
@@ -76,7 +77,7 @@ export function Traiter({ o, reason, tries, own, onClose }: { o: Order; reason: 
           </button>
           {out && (
             <button type="button" className={`btn ${out === 'lost' ? 'danger' : 'primary'}`} disabled={!ready || busy} onClick={go}>
-              {busy ? '…' : out === 'resolved' ? t('suivi.tr.okResolved') : early ? t('suivi.tries.cancelAnyway') : t('suivi.tr.okLost')}
+              {busy ? '…' : out === 'resolved' ? (relance && o.companyId ? t('suivi.tr.okResolved') : t('suivi.tr.okSolved')) : early ? t('suivi.tries.cancelAnyway') : t('suivi.tr.okLost')}
             </button>
           )}
         </>
@@ -115,7 +116,7 @@ export function Traiter({ o, reason, tries, own, onClose }: { o: Order; reason: 
           </fieldset>
           {out === 'resolved' && (
             <label className="tr-field">
-              <span>{t('suivi.tr.date')}</span>
+              <span>{needDate ? t('suivi.tr.dateNeeded') : t('suivi.tr.date')}</span>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </label>
           )}

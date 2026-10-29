@@ -755,5 +755,16 @@
     "fineMine": "Bravo : tout est à l’objectif ou au niveau de l’équipe.",
     "myNumbers": "Mes chiffres",
     "rank": "Rang {{rank}} sur {{of}}"
+  },
+  "motifs": {
+    "title": "Motifs du Suivi",
+    "sub": "Comment les alertes de la période se sont terminées.",
+    "empty": "Pas encore d’alerte traitée sur cette période.",
+    "resolved_one": "Résolu · {{count}} colis",
+    "resolved_other": "Résolu · {{count}} colis",
+    "lost_one": "Perdu · {{count}} colis",
+    "lost_other": "Perdu · {{count}} colis",
+    "delivered": "{{n}} livrés ensuite ({{p}} %)",
+    "share": "{{p}} % des perdus"
   }
 }

@@ -598,6 +598,8 @@
     "resolvedDone": "{{ref}} : traité, relancé",
     "lostDone": "{{ref}} : traité, perdu",
     "sentApi": "Relance envoyée à {{name}} ({{n}})",
-    "claimFail": "La relance n’est pas partie : {{msg}}"
+    "claimFail": "La relance n’est pas partie : {{msg}}",
+    "dateNeeded": "Nouvelle date (obligatoire pour ce motif)",
+    "okSolved": "Marquer résolu"
   }
 }

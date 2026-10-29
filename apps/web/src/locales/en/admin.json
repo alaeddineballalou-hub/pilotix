@@ -666,6 +666,8 @@
     "remove": "Remove",
     "add": "Add a motif",
     "needOne": "A name for every motif, and at least one active motif on each side.",
-    "saved": "Motifs saved"
+    "saved": "Motifs saved",
+    "date": "Date required",
+    "dateTip": "The agent must give the new date"
   }
 }

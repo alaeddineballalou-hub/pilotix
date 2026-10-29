@@ -598,6 +598,8 @@
     "resolvedDone": "{{ref}}: treated, relaunched",
     "lostDone": "{{ref}}: treated, lost",
     "sentApi": "Relaunch sent to {{name}} ({{n}})",
-    "claimFail": "The relaunch was not sent: {{msg}}"
+    "claimFail": "The relaunch was not sent: {{msg}}",
+    "dateNeeded": "New date (required for this motif)",
+    "okSolved": "Mark solved"
   }
 }

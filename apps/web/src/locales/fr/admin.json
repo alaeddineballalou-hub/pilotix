@@ -666,6 +666,8 @@
     "remove": "Retirer",
     "add": "Ajouter un motif",
     "needOne": "Un nom pour chaque motif, et au moins un motif actif de chaque côté.",
-    "saved": "Motifs enregistrés"
+    "saved": "Motifs enregistrés",
+    "date": "Date obligatoire",
+    "dateTip": "L’agent doit donner la nouvelle date"
   }
 }

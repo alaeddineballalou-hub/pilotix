@@ -7,6 +7,8 @@ export interface SuiviMotif {
   ar: string;
   on: boolean;
   client?: boolean;
+  /** « Résolu »: the agent must give the new delivery date */
+  date?: boolean;
 }
 
 /** Every setting with its default. Admin edits them in Management / Réglages. */
@@ -149,7 +151,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   coverageRefresh: { at: null, results: [] },
   suiviMotifs: {
     resolved: [
-      { key: 'new_date', fr: 'Nouvelle date de livraison', ar: 'موعد توصيل جديد', on: true },
+      { key: 'new_date', fr: 'Nouvelle date de livraison', ar: 'موعد توصيل جديد', on: true, date: true },
       { key: 'address', fr: 'Adresse corrigée', ar: 'تصحيح العنوان', on: true },
       { key: 'phone', fr: 'Téléphone corrigé', ar: 'تصحيح الهاتف', on: true },
       { key: 'reached', fr: 'Client joint, il attend', ar: 'تم الاتصال بالزبون، ينتظر', on: true },

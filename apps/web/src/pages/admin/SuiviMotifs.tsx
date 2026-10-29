@@ -41,6 +41,12 @@ export function SuiviMotifsCard() {
                   <input value={m.fr} maxLength={80} placeholder={t('admin.motifs.fr')} aria-label={t('admin.motifs.fr')} onChange={(e) => put(side, i, { fr: e.target.value })} />
                   <input value={m.ar} maxLength={80} dir="rtl" placeholder={t('admin.motifs.ar')} aria-label={t('admin.motifs.ar')} onChange={(e) => put(side, i, { ar: e.target.value })} />
                   <span className="mo-tools">
+                    {side === 'resolved' && (
+                      <label className="mo-client" title={t('admin.motifs.dateTip')}>
+                        <input type="checkbox" checked={!!m.date} onChange={(e) => put(side, i, { date: e.target.checked })} />
+                        {t('admin.motifs.date')}
+                      </label>
+                    )}
                     {side === 'lost' && (
                       <label className="mo-client" title={t('admin.motifs.clientTip')}>
                         <input type="checkbox" checked={!!m.client} onChange={(e) => put(side, i, { client: e.target.checked })} />

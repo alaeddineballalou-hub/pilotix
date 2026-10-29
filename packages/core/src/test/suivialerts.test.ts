@@ -222,7 +222,8 @@ test('« Traiter »: Résolu (back on the road, the livreur asked to deliver aga
   assert.ok(m.resolved.some((x: any) => x.key === 'new_date') && m.lost.some((x: any) => x.key === 'refused' && x.client));
   // Résolu: back on the road with the motif, and a claim « relivrer » to our livreur
   const a = await mk();
-  const r = (await call('suivi.resolve', suivi, { id: a, outcome: 'resolved', motif: 'new_date', date: '2026-11-02', note: 'après 14 h' })) as any;
+  await assert.rejects(call('suivi.resolve', suivi, { id: a, outcome: 'resolved', motif: 'new_date' }), /nouvelle date/, 'the date is required for this motif');
+  const r = (await call('suivi.resolve', suivi, { id: a, outcome: 'resolved', motif: 'new_date', date: '2026-11-02', note: 'après 14 h', relance: true })) as any;
   assert.equal(r.order.followStatus, 'out_for_delivery');
   assert.equal(r.order.subStatus, 'alert_traitee');
   assert.ok(r.claim, r.claimError ?? 'a claim');
@@ -248,5 +249,12 @@ test('« Traiter »: Résolu (back on the road, the livreur asked to deliver aga
   await assert.rejects(call('suivi.resolve', suivi, { id: d, outcome: 'lost', motif: 'price' }), /motif/);
   await call('suivi.resolve', suivi, { id: d, outcome: 'lost', motif: 'damaged' });
   assert.equal(await statusOf(d), 'returning');
+  // Dashboard: each motif's count, and the « Résolu » ones then delivered
+  await db.query(`UPDATE orders SET follow_status = 'delivered' WHERE id = $1`, [a]);
+  const st = (await call('suivi.motifStats', admin2, { from: new Date(Date.now() - 86_400_000).toISOString(), to: new Date(Date.now() + 86_400_000).toISOString() })) as any;
+  const nd = st.resolved.find((x: any) => x.key === 'new_date');
+  assert.ok(nd && nd.count >= 1 && nd.delivered >= 1);
+  assert.ok(st.lost.some((x: any) => x.key === 'refused' && x.count >= 1));
+  assert.ok(st.totalLost >= 3);
   await call('suivi.motifsSet', admin2, m);
 });

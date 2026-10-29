@@ -771,5 +771,24 @@
     "fineMine": "أحسنت: كل شيء عند الهدف أو بمستوى الفريق.",
     "myNumbers": "أرقامي",
     "rank": "المرتبة {{rank}} من {{of}}"
+  },
+  "motifs": {
+    "title": "أسباب المتابعة",
+    "sub": "كيف انتهت تنبيهات الفترة.",
+    "empty": "لا تنبيه معالج في هذه الفترة بعد.",
+    "resolved_zero": "تم الحل · {{count}} طرد",
+    "resolved_one": "تم الحل · طرد واحد",
+    "resolved_two": "تم الحل · طردان",
+    "resolved_few": "تم الحل · {{count}} طرود",
+    "resolved_many": "تم الحل · {{count}} طرداً",
+    "resolved_other": "تم الحل · {{count}} طرد",
+    "lost_zero": "ضائع · {{count}} طرد",
+    "lost_one": "ضائع · طرد واحد",
+    "lost_two": "ضائع · طردان",
+    "lost_few": "ضائع · {{count}} طرود",
+    "lost_many": "ضائع · {{count}} طرداً",
+    "lost_other": "ضائع · {{count}} طرد",
+    "delivered": "{{n}} سُلّمت بعدها ({{p}} %)",
+    "share": "{{p}} % من الضائعة"
   }
 }
