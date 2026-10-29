@@ -1,0 +1,82 @@
+{
+  "at": "2026-10-29T18:19:02.446Z",
+  "results": [
+    {
+      "kind": "ecom",
+      "ok": true,
+      "reached": true,
+      "message": "L’API répond et refuse les fausses clés, comme prévu (E-COM Delivery : Vous n'avez pas les autorisations nécessaires pour accéder)",
+      "ms": 997
+    },
+    {
+      "kind": "ecotrack",
+      "ok": true,
+      "reached": true,
+      "message": "L’API répond et refuse les fausses clés, comme prévu (EcoTrack refuse les clés API (Unauthenticated.). Vérifiez-les dans Sociétés de livraison.)",
+      "ms": 1462
+    },
+    {
+      "kind": "elogistia",
+      "ok": true,
+      "reached": true,
+      "message": "L’API répond et refuse les fausses clés, comme prévu (Elogistia refuse les clés API (Message : Votre apiKey n'est pas valide). Vérifiez-les dans Sociétés de livraison.)",
+      "ms": 737
+    },
+    {
+      "kind": "maystro",
+      "ok": true,
+      "reached": true,
+      "message": "L’API répond et refuse les fausses clés, comme prévu (Maystro Delivery refuse les clés API (Token non valide. — status_code : 401). Vérifiez-les dans Sociétés de livraison.)",
+      "ms": 483
+    },
+    {
+      "kind": "mdm",
+      "ok": true,
+      "reached": true,
+      "message": "L’API répond et refuse les fausses clés, comme prévu (MDM Express refuse les clés API (invalid access token — correlationId : 01a188e3-06a5-7000-8694-7c51f184cb50). Vérifiez-les dans Sociétés de livraison.)",
+      "ms": 1274
+    },
+    {
+      "kind": "near",
+      "ok": true,
+      "reached": true,
+      "message": "L’API répond et refuse les fausses clés, comme prévu (Near Delivery refuse les clés API (Unauthorized). Vérifiez-les dans Sociétés de livraison.)",
+      "ms": 1379
+    },
+    {
+      "kind": "noest",
+      "ok": true,
+      "reached": true,
+      "message": "L’API répond et refuse les fausses clés, comme prévu (NOEST Express refuse les clés API (Unauthenticated.). Vérifiez-les dans Sociétés de livraison.)",
+      "ms": 1287
+    },
+    {
+      "kind": "yalidine",
+      "ok": true,
+      "reached": true,
+      "message": "L’API répond et refuse les fausses clés, comme prévu (Yalidine : Invalid API ID format. It must be numeric and up to 20 characters.)",
+      "ms": 600
+    },
+    {
+      "kind": "zimou",
+      "ok": true,
+      "reached": true,
+      "message": "L’API répond et refuse les fausses clés, comme prévu (Zimou Express refuse les clés API (Unauthenticated.). Vérifiez-les dans Sociétés de livraison.)",
+      "ms": 1020
+    },
+    {
+      "kind": "zr",
+      "ok": true,
+      "reached": true,
+      "message": "L’API répond et refuse les fausses clés, comme prévu (ZR Express (nouvelle plateforme) refuse les clés API (Invalid API Key). Vérifiez-les dans Sociétés de livraison.)",
+      "ms": 1447
+    },
+    {
+      "kind": "zr_legacy",
+      "ok": true,
+      "reached": true,
+      "message": "L’API répond et refuse les fausses clés, comme prévu (ZR Express (ancienne : Procolis) : Clé non détectée S2)",
+      "ms": 585
+    }
+  ]
+}

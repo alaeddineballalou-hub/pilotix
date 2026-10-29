@@ -1,0 +1,83 @@
+48hr_courrier_express	401		{ "message": "Unauthenticated." }
+abex-sub	ERR		ENOTFOUND
+alania-express	401		{ "message": "Unauthenticated." }
+allo-livraison	401		{ "message": "Unauthenticated." }
+amana-speed	401		{ "message": "Unauthenticated." }
+anderson	404		{ "message": "" }
+aranex	401		{ "message": "Unauthenticated." }
+aredex-delivery	401		{ "message": "Unauthenticated." }
+atlas-express	401		{ "message": "Unauthenticated." }
+ba_express	401		{ "message": "Unauthenticated." }
+bfk-express	401		{ "message": "Unauthenticated." }
+boogi	401		{ "message": "Unauthenticated." }
+champion-logistics	401		{ "message": "Unauthenticated." }
+chronorex	401		{ "message": "Unauthenticated." }
+cirta-express	401		{ "message": "Unauthenticated." }
+colex	401		{ "message": "Unauthenticated." }
+colireli	401		{ "message": "Unauthenticated." }
+colizone	401		{ "message": "Unauthenticated." }
+conexlog	401		{ "message": "Unauthenticated." }
+coyote-express	401		{ "message": "Unauthenticated." }
+delivro-mail	401		{ "message": "Unauthenticated." }
+dhd	401		{ "message": "Unauthenticated." }
+dhd-old	301	https://platform.dhd-dz.com:443/api/v1/get/wilayas	<html> <head><title>301 Moved Permanently</title></head> <body> <center><h1>301 Moved Perm
+distazero	401		{ "message": "Unauthenticated." }
+easy-and-speed	429		{"error":{"message":"Rate limit per second exceeded, see header for more details","code":4
+eco-rapide-express	401		{ "message": "Unauthenticated." }
+economiqua	401		{"error":{"message":"API ID and\/or Token are wrong","code":401,"description":"Unauthorize
+ecotrack	404		{ "message": "" }
+elguide-delivery	401		{ "message": "Unauthenticated." }
+expedia-chrono	401		{ "message": "Unauthenticated." }
+fast-horse-express	401		{ "message": "Unauthenticated." }
+fret-direct	401		{ "message": "Unauthenticated." }
+fz-delivery	401		{ "message": "Unauthenticated." }
+golivri	401		{ "message": "Unauthenticated." }
+gs-ecommerce	401		{ "message": "Unauthenticated." }
+guepex	401		{"error":{"message":"API ID and\/or Token are wrong","code":401,"description":"Unauthorize
+hdd-express	401		{ "message": "Unauthenticated." }
+imir-logistics	401		{ "message": "Unauthenticated." }
+jaguar_livraison	401		{ "message": "Unauthenticated." }
+jo-express	401		{ "message": "Unauthenticated." }
+lihlih-express	401		{ "message": "Unauthenticated." }
+lynx	401		{ "message": "Unauthenticated." }
+major-ex	401		{ "message": "Unauthenticated." }
+mars-express	404		{ "message": "" }
+mazaya-logistics	401		{ "message": "Unauthenticated." }
+med-express	401		{ "message": "Unauthenticated." }
+mono	404		{ "message": "" }
+msmgo	401		{ "message": "Unauthenticated." }
+navex-delivery	401		{ "message": "Unauthenticated." }
+om-express	401		{ "message": "Unauthenticated." }
+on-time-express	401		{ "message": "Unauthenticated." }
+ovred	401		{ "message": "Unauthenticated." }
+packers	401		{ "message": "Unauthenticated." }
+pdex	401		{ "message": "Unauthenticated." }
+prest	401		{ "message": "Unauthenticated." }
+procolis	200		{ "Statut":"Cl\u00e9 non d\u00e9tect\u00e9e S2" }
+quick-delivery	401		{ "message": "Unauthenticated." }
+rb_livraison	401		{ "message": "Unauthenticated." }
+red-ex	401		{ "message": "Unauthenticated." }
+rex-livraison	401		{ "message": "Unauthenticated." }
+rihal-express	401		{ "message": "Unauthenticated." }
+rj_360_express	401		{ "message": "Unauthenticated." }
+rm_express	401		{ "message": "Unauthenticated." }
+rocket-delivery	401		{ "message": "Unauthenticated." }
+rs-express	401		{ "message": "Unauthenticated." }
+ruta-express	401		{ "message": "Unauthenticated." }
+salva-delivery	401		{ "message": "Unauthenticated." }
+samex	401		{ "message": "Unauthenticated." }
+sbl_express	401		{ "message": "Unauthenticated." }
+speed-mail	401		{ "message": "Unauthenticated." }
+sultan-colis-express	401		{ "message": "Unauthenticated." }
+swift_express	401		{ "message": "Unauthenticated." }
+tawsil-star	404		{ "message": "" }
+tsl-express	401		{ "message": "Unauthenticated." }
+univer-delivery	401		{ "message": "Unauthenticated." }
+vitrans	401		{ "message": "Unauthenticated." }
+wecan	401		{"error":{"message":"API ID and\/or Token are wrong","code":401,"description":"Unauthorize
+weewee_delivery	401		{ "message": "Unauthenticated." }
+win-delivery	401		{ "message": "Unauthenticated." }
+worldexpress	401		{ "message": "Unauthenticated." }
+yalidine	401		{"error":{"message":"API ID and\/or Token are wrong","code":401,"description":"Unauthorize
+yalitec	401		{"error":{"message":"API ID and\/or Token are wrong","code":401,"description":"Unauthorize
+zinya-tec	401		{ "message": "Unauthenticated." }
