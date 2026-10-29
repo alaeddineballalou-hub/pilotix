@@ -690,8 +690,8 @@ await section('Confirmation agencies: « Créer mon agence », Pilotix’s check
   assert.deepEqual(sellers.map((x) => x.id), [ctx.signup1.shopId]);
   ok('Nora lands in her agency; the seller is in her picker at the top, never opened by itself');
   // orders go by their first product: hers, and the store’s own
-  const o1 = await rpc(ctx.signup1.token, 'orders.create', { customerName: 'Client Agence', phone: '0661223311', wilayaId: 16, commune: 'Alger', items: [{ productId: pid, variantId: null, qty: 1 }] });
-  const o2 = await rpc(ctx.signup1.token, 'orders.create', { customerName: 'Client Boutique', phone: '0661223312', wilayaId: 16, commune: 'Alger', items: [{ productId: oid2, variantId: null, qty: 1 }] });
+  const o1 = await rpc(ctx.signup1.token, 'orders.create', { customerName: 'Client Agence', phone: '0661223311', wilayaId: 16, commune: 'Alger Centre', items: [{ productId: pid, variantId: null, qty: 1 }] });
+  const o2 = await rpc(ctx.signup1.token, 'orders.create', { customerName: 'Client Boutique', phone: '0661223312', wilayaId: 16, commune: 'Alger Centre', items: [{ productId: oid2, variantId: null, qty: 1 }] });
   assert.equal(o1.confAgencyId, agencyId);
   assert.equal(o2.confAgencyId, null);
   const S = ctx.signup1.shopId;
