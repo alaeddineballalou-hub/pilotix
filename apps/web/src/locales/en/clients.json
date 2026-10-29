@@ -28,5 +28,44 @@
   "unblack": "Remove from blacklist",
   "reason": "Reason (optional)",
   "reasonPh": "e.g. refuses parcels",
-  "updated": "Blacklist updated"
+  "updated": "Blacklist updated",
+  "score": {
+    "col": "Score",
+    "help": "The customer's score out of 100: everything the protection knows about this number in the shop (parcels delivered or refused, fake orders, blocked orders, marked devices) and the Pilotix network.",
+    "level": {
+      "new": "New",
+      "top": "Very reliable",
+      "good": "Reliable",
+      "watch": "Watch",
+      "risk": "Risky"
+    },
+    "say": {
+      "new": "No history yet: call as usual.",
+      "top": "Receives and pays for their parcels.",
+      "good": "Rather serious.",
+      "watch": "Confirm carefully before shipping.",
+      "risk": "High risk of a fake order or a refusal: check everything, or offer the stop-desk."
+    },
+    "why": {
+      "delivered_one": "{{count}} parcel delivered and paid",
+      "delivered_other": "{{count}} parcels delivered and paid",
+      "returned_one": "{{count}} parcel refused",
+      "returned_other": "{{count}} parcels refused",
+      "fake_one": "{{count}} fake order or wrong number",
+      "fake_other": "{{count}} fake orders or wrong numbers",
+      "cancelled_one": "{{count}} order cancelled",
+      "cancelled_other": "{{count}} orders cancelled",
+      "blocked_one": "{{count}} order blocked by the protection",
+      "blocked_other": "{{count}} orders blocked by the protection",
+      "review_one": "{{count}} order sent “to check”",
+      "review_other": "{{count}} orders sent “to check”",
+      "markFake": "A device of this customer marked “fake order”",
+      "markCompetitor": "A device of this customer marked “competitor”",
+      "network_one": "Flagged by {{count}} other seller (Pilotix network)",
+      "network_other": "Flagged by {{count}} other sellers (Pilotix network)",
+      "blacklist": "Blacklisted",
+      "stopdesk": "Stop-desk only (refuses parcels)",
+      "new": "New customer: no history yet"
+    }
+  }
 }
