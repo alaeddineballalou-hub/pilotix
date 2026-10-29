@@ -27,6 +27,17 @@ export interface CatalogCompany {
   fields: KindField[];
   /** settings this company needs on its platform (its own API address) */
   presets: Record<string, string>;
+  /** companies sharing a kind are told apart by their API address: 'guepex' = it contains « guepex »,
+   *  '!guepex,yalitec' = it contains neither (same rule as the shops' cards) */
+  host: string | null;
+}
+
+/** Is a shop's delivery company (its kind and API address) this control-room company? */
+export function isCompany(co: Pick<CatalogCompany, 'kind' | 'host'>, kind: string, baseUrl: string): boolean {
+  if (!co.kind || co.kind !== kind) return false;
+  if (!co.host) return true;
+  const url = String(baseUrl ?? '').toLowerCase();
+  return co.host.startsWith('!') ? co.host.slice(1).split(',').every((h) => !url.includes(h)) : url.includes(co.host);
 }
 
 /** What is known about each company's API beyond what Pilotix does (from its docs and open-source clients, Oct 2026). */
@@ -154,7 +165,7 @@ function itemsOf(kind: CourierKind): CatalogItem[] {
 
 /** Every company, Done / To do per feature. */
 export function courierCatalog(): CatalogCompany[] {
-  const one = (key: string, name: string, kind: CourierKind, platform: string | null = null, presets: Record<string, string> = {}): CatalogCompany => ({
+  const one = (key: string, name: string, kind: CourierKind, platform: string | null = null, presets: Record<string, string> = {}, host: string | null = null): CatalogCompany => ({
     key,
     name,
     kind,
@@ -162,12 +173,13 @@ export function courierCatalog(): CatalogCompany[] {
     items: itemsOf(kind),
     fields: KINDS[kind].fields,
     presets,
+    host,
   });
   return [
     one('zr', 'ZR Express', 'zr'),
-    one('yalidine', 'Yalidine', 'yalidine'),
-    one('guepex', 'Guepex', 'yalidine', 'Yalidine', { base_url: 'https://api.guepex.app/v1/' }),
-    one('yalitec', 'Yalitec', 'yalidine', 'Yalidine', { base_url: 'https://api.yalitec.me/v1/' }),
+    one('yalidine', 'Yalidine', 'yalidine', null, {}, '!guepex,yalitec'),
+    one('guepex', 'Guepex', 'yalidine', 'Yalidine', { base_url: 'https://api.guepex.app/v1/' }, 'guepex'),
+    one('yalitec', 'Yalitec', 'yalidine', 'Yalidine', { base_url: 'https://api.yalitec.me/v1/' }, 'yalitec'),
     one('maystro', 'Maystro Delivery', 'maystro'),
     one('ecotrack', 'DHD, Conexlog, Anderson, World Express… (30+)', 'ecotrack', 'EcoTrack', { base_url: 'https://dhd.ecotrack.dz' }),
     one('noest', 'NOEST Express', 'noest'),
@@ -184,6 +196,7 @@ export function courierCatalog(): CatalogCompany[] {
       platform: null,
       fields: [],
       presets: {},
+      host: null,
       items: COURIER_FEATURES.map((f) => ({ feature: f, done: false, note: 'Son API existe mais sa documentation n’est pas publique : la demander à Colivraison. En attendant, les boutiques l’ajoutent en « API personnalisée » ou « Société sans API ».' })),
     },
   ];

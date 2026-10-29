@@ -28,11 +28,12 @@ export interface CourierCheckResult {
 
 const json = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v ?? {});
 
-async function read<T>(t: Tenancy, key: string): Promise<Record<string, T>> {
+/** One control-room setting saved as JSON (an object keyed by company), {} when not saved yet. */
+export async function readSetting<T>(t: Tenancy, key: string): Promise<Record<string, T>> {
   const r = (await t.platform.query<{ value: unknown }>('SELECT value FROM platform.settings WHERE key = $1', [key]))[0];
   return (r ? json(r.value) : {}) as Record<string, T>;
 }
-async function write(t: Tenancy, key: string, value: unknown) {
+export async function writeSetting(t: Tenancy, key: string, value: unknown) {
   await t.platform.query(
     `INSERT INTO platform.settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
     [key, JSON.stringify(value)],
@@ -40,7 +41,7 @@ async function write(t: Tenancy, key: string, value: unknown) {
 }
 
 /** SERVER ONLY (never sent to a browser): every company's test keys, with their values. */
-export const courierTestKeys = (t: Tenancy) => read<CourierTestKeys>(t, KEYS);
+export const courierTestKeys = (t: Tenancy) => readSetting<CourierTestKeys>(t, KEYS);
 
 /** Saves a company's test keys: an empty secret keeps the one saved; settings replace the saved ones. */
 export async function saveCourierTestKeys(t: Tenancy, company: string, secret: Record<string, string>, settings: Record<string, unknown>, by: string | null) {
@@ -49,24 +50,24 @@ export async function saveCourierTestKeys(t: Tenancy, company: string, secret: R
   const merged: Record<string, string> = { ...old };
   for (const [k, v] of Object.entries(secret)) if (String(v ?? '').trim()) merged[k] = String(v).trim();
   all[company] = { secret: merged, settings, updatedAt: new Date().toISOString(), by };
-  await write(t, KEYS, all);
+  await writeSetting(t, KEYS, all);
 }
 
 export async function clearCourierTestKeys(t: Tenancy, company: string) {
   const all = await courierTestKeys(t);
   delete all[company];
-  await write(t, KEYS, all);
+  await writeSetting(t, KEYS, all);
   const res = await courierTestResults(t);
   delete res[company];
-  await write(t, RESULTS, res);
+  await writeSetting(t, RESULTS, res);
 }
 
-export const courierTestResults = (t: Tenancy) => read<CourierCheckResult>(t, RESULTS);
+export const courierTestResults = (t: Tenancy) => readSetting<CourierCheckResult>(t, RESULTS);
 
 export async function saveCourierTestResult(t: Tenancy, company: string, result: CourierCheckResult) {
   const all = await courierTestResults(t);
   all[company] = result;
-  await write(t, RESULTS, all);
+  await writeSetting(t, RESULTS, all);
 }
 
 /** What the page may see: which keys are set (never their values), the settings, the last test. */

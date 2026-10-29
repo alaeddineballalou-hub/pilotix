@@ -48,6 +48,8 @@ export const config = {
   twoStepOff: (process.env.PLATFORM_TWO_STEP || '').trim().toLowerCase() === 'off',
   /** Public address of this server (used to show webhook URLs). */
   publicUrl: (process.env.PUBLIC_URL || '').replace(/\/+$/, ''),
+  /** Optional: a GitHub token (no rights needed) for « Changements API » to read the open-source couriers' code more often. */
+  githubToken: (process.env.GITHUB_TOKEN || '').trim(),
   /**
    * E-mails ("mot de passe oublié"). Any SMTP server: Gmail (smtp.gmail.com, 465, an app password), Microsoft 365
    * (smtp.office365.com, 587), Brevo (smtp-relay.brevo.com, 587)… MAIL_FROM: "Pilotix <contact@your-shop.dz>".

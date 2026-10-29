@@ -285,3 +285,40 @@
 .pp-co-form { display: grid; gap: 10px; margin-top: 10px; }
 .pp-co-check { display: flex; gap: 8px; align-items: center; }
 .pp-co-wait { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; padding: 8px 12px; border-radius: 10px; margin: 0; }
+
+/* Delivery companies › removing one (asked twice) and « Supprimées » */
+.pp-co-del { padding-inline: 8px !important; color: var(--muted) !important; }
+.pp-co-del:hover:not(:disabled) { color: var(--coral) !important; background: var(--coral-soft) !important; }
+.pp-co-del svg { width: 16px; height: 16px; }
+.pp-co-sure { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 10px; font-weight: 700; color: var(--coral); }
+.pp-co-sure svg { flex: none; width: 18px; height: 18px; margin-top: 2px; }
+.pp-co-what { margin: 0 0 14px; padding-inline-start: 20px; display: grid; gap: 6px; color: var(--ink); }
+
+/* Delivery companies › « Changements API »: the to-do list of what changed at each company's API */
+.pp-co-watchhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.pp-co-watchhead > p { margin: 0; flex: 1 1 420px; }
+.pp-co-watchhead .pp-co-acts { margin: 0; }
+.pp-co-notes summary { cursor: pointer; }
+.pp-co-notes ul { margin: 6px 0 0; padding-inline-start: 20px; }
+.pp-co-todo { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.pp-co-line { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface, #fff); }
+.pp-co-line.open { border-inline-start: 4px solid var(--warn, #f59e0b); }
+.pp-co-line.resolved { opacity: 0.78; border-inline-start: 4px solid var(--ok, #16a34a); }
+.pp-co-kind { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--sky-soft, #e0f2fe); color: var(--navy); }
+.pp-co-kind svg { width: 18px; height: 18px; }
+.pp-co-kind.k-broken, .pp-co-kind.k-gone { background: var(--coral-soft, #fee2e2); color: var(--coral, #dc2626); }
+.pp-co-kind.k-fields, .pp-co-kind.k-docs { background: var(--warn-soft, #fef3c7); color: #92400e; }
+.pp-co-kind.k-manual { background: var(--px-orange-soft, #fff4e0); color: var(--navy); }
+.pp-co-body { display: grid; gap: 4px; min-width: 0; flex: 1; }
+.pp-co-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pp-co-tag { font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--raise, #f1f5f9); color: var(--muted); }
+.pp-co-state { font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; }
+.pp-co-state.open { background: var(--warn-soft, #fef3c7); color: #92400e; }
+.pp-co-state.resolved { background: var(--ok-soft, #dcfce7); color: #166534; }
+.pp-co-title { font-weight: 700; color: var(--ink); }
+.pp-co-detail { white-space: pre-line; overflow-wrap: anywhere; }
+.pp-co-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.pp-co-res { display: inline-flex; align-items: center; gap: 4px; }
+/* a long company name keeps its trash button at the end of the title row */
+.pp-co-grid .card-head { flex-wrap: nowrap; align-items: flex-start; }
+.pp-co-grid .card-head h2 { min-width: 0; }

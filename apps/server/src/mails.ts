@@ -304,6 +304,26 @@ export function staffCodeMail(m: { to: string; name: string; code: string }): Ma
   });
 }
 
+/** Control room › « Changements API »: the new lines found by the daily look, to the owner and the managers. */
+export function courierWatchMail(m: { to: string; name: string; items: { company: string; title: string }[] }): Mail {
+  const n = m.items.length;
+  const one = n === 1;
+  return mail(m.to, `Pilotix : ${one ? 'un changement' : `${n} changements`} d’API à vérifier`, {
+    l: 'fr',
+    title: 'Changements d’API',
+    icon: '🔔',
+    hello: hello('fr', m.name),
+    lines: [
+      `Pilotix a trouvé ${one ? 'un changement' : `${n} changements`} chez des sociétés de livraison.`,
+      `${one ? 'Il est' : 'Ils sont'} dans Sociétés de livraison › « Changements API » : regardez, puis marquez « Résolu ».`,
+    ],
+    box: m.items.slice(0, 12).map((i) => [i.company, i.title] as [string, string]),
+    button: { label: 'Ouvrir la liste', link: `${site()}/#/platform/couriers` },
+    after: n > 12 ? [`… et ${n - 12} de plus dans la liste.`] : [],
+    note: 'Cet e-mail part au plus une fois par jour, seulement quand quelque chose a changé.',
+  });
+}
+
 /** The e-mail of a control-room action (never shown to the staff: the server sends it). Receipts are made apart. */
 export function ownerMail(m: OwnerMail): Mail | null {
   if (m.kind === 'invite') return inviteMail(m);

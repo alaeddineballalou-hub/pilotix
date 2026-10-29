@@ -11,6 +11,8 @@ export * from './types';
 export { ADAPTERS } from './adapters';
 export { KINDS, CARDS } from './kinds';
 export { checkCourier } from './check';
+export { checkChanges, emptyWatchMemory, fieldChanges, watchCouriers, watchMemoryOf, WATCH_ADDRESSES, WATCH_DOCS, WATCH_REPOS } from './watch';
+export type { WatchMemory } from './watch';
 
 /** The common API of one connected company (spec: send, track, label, cancel, fees, stopdesks, test). */
 export function courierApi(c: CourierCompany): CourierApi {

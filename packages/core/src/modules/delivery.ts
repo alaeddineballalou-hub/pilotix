@@ -19,6 +19,7 @@ function sameSecret(a: string, b: string): boolean {
   return d === 0;
 }
 import { getSetting } from '../settings';
+import { removedCouriers } from '../platform/courierWatch';
 import { addEvent, listOrders, setFollow } from './orders';
 
 const id = z.number().int().positive();
@@ -449,7 +450,11 @@ const FeeInput = z.object({ wilayaId: z.number().int().min(1).max(69), home: z.n
 
 export const deliveryProcs = {
   /** Courier kinds, provider cards and custom-API placeholders (for the forms). */
-  'delivery.kinds': proc([], z.object({}), async () => ({ kinds: Object.values(KINDS), cards: CARDS, placeholders: PLACEHOLDERS, defaultTemplate: DEFAULT_TEMPLATE })),
+  // a company removed from Pilotix (control room) is no longer offered; a shop's own companies keep their kind
+  'delivery.kinds': proc([], z.object({}), async (ctx) => {
+    const removed = ctx.t ? await removedCouriers(ctx.t).catch(() => ({}) as Record<string, unknown>) : {};
+    return { kinds: Object.values(KINDS), cards: CARDS.filter((c) => !c.company || !(c.company in removed)), placeholders: PLACEHOLDERS, defaultTemplate: DEFAULT_TEMPLATE };
+  }),
 
   /** Companies with counts. Never returns API keys: only hasKeys / keysSet. Everyone can read the names (order forms). */
   'delivery.companies': proc(null, z.object({}), async (ctx) => {

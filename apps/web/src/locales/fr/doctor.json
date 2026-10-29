@@ -386,6 +386,7 @@
     "meta-sync": "Publicités Meta",
     "demo-reset": "Boutique démo",
     "platform-reminders": "Rappels d’abonnement",
+    "courier-watch": "Sociétés de livraison : changements API",
     "turnstile-sync": "Cloudflare (robots) : domaines des boutiques"
   },
   "errs": {

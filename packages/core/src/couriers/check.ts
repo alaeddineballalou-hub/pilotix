@@ -6,7 +6,8 @@ import { ADAPTERS } from './adapters';
 import { KINDS } from './kinds';
 import { helpers } from './load';
 import type { CourierCompany, Parcel } from './types';
-import { setDeadline } from './util';
+import { setDeadline, watchAnswers } from './util';
+import { endpointOf, jsonShape } from './watch';
 
 export interface CheckStep {
   step: string;
@@ -56,15 +57,16 @@ export async function checkCourier(
   secret: Record<string, string>,
   settings: Record<string, unknown>,
   opts: { deep?: boolean; name?: string } = {},
-): Promise<{ ok: boolean; steps: CheckStep[] }> {
+): Promise<{ ok: boolean; steps: CheckStep[]; shapes: Record<string, string[]> }> {
   const info = KINDS[kind];
   const a = ADAPTERS[kind];
   if (!info?.api || !a) throw new Error(`Pas d’API pour ce type de société : ${kind}`);
   const defaults: Record<string, unknown> = {};
   for (const f of info.fields) if (f.type !== 'secret' && f.default !== undefined && f.default !== '') defaults[f.key] = f.default;
+  // « (test) »: the name the answers are noted under is never one of a shop's companies
   const c: CourierCompany = {
     id: 0,
-    name: opts.name || info.label,
+    name: `${opts.name || info.label} (test)`,
     kind,
     secret,
     settings: { ...defaults, ...settings },
@@ -73,6 +75,12 @@ export async function checkCourier(
     cacheKey: `check:${kind}:${String(settings.base_url ?? '')}:${Object.values(secret).join('|').length}`,
   };
   const steps: CheckStep[] = [];
+  // the fields of each answer (for « Changements API »: new or missing fields since the last test)
+  const shapes: Record<string, string[]> = {};
+  const stop = watchAnswers(c.name, (method, url, data) => {
+    const ep = endpointOf(method, url);
+    shapes[ep] = [...new Set([...(shapes[ep] ?? []), ...jsonShape(data)])].sort().slice(0, 400);
+  });
   const run = async (step: string, fn: () => Promise<{ ok: boolean | null; detail: string }>, budget = 45_000) => {
     const t0 = Date.now();
     setDeadline(budget);
@@ -163,5 +171,6 @@ export async function checkCourier(
       if (steps.at(-1)?.ok === false) steps[steps.length - 1].detail += ` — annulez le colis ${item.tracking} vous-même chez la société`;
     }
   }
-  return { ok: steps.every((s) => s.ok !== false), steps };
+  stop();
+  return { ok: steps.every((s) => s.ok !== false), steps, shapes };
 }

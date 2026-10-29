@@ -88,6 +88,16 @@ export interface HttpOpts {
   timeout?: number;
 }
 
+/**
+ * Control room tests only: each JSON answer of one company (by the name its test runs under, never a shop's company),
+ * handed to the test so it can note the answer's fields — never their values.
+ */
+const answerWatchers = new Map<string, (method: string, url: string, data: unknown) => void>();
+export function watchAnswers(who: string, fn: (method: string, url: string, data: unknown) => void): () => void {
+  answerWatchers.set(who, fn);
+  return () => answerWatchers.delete(who);
+}
+
 /** fetch with timeout, one retry on 429, and French errors naming the courier. */
 export async function http(who: string, url: string, o: HttpOpts = {}, retried = false): Promise<any> {
   const headers: Record<string, string> = { Accept: o.binary ? 'application/pdf, */*' : 'application/json', ...(o.headers ?? {}) };
@@ -136,6 +146,14 @@ export async function http(who: string, url: string, o: HttpOpts = {}, retried =
     // the courier's whole answer goes to the server log: what the user sees is short, this shows everything
     console.warn(`[courier ${who}] ${o.method ?? (body ? 'POST' : 'GET')} ${url.replace(/[?#].*$/, '')} → ${res.status} ${(typeof data === 'string' ? data : JSON.stringify(data)).slice(0, 2000)}`);
     throw new CourierError(`${who} : ${errText(data) || `erreur ${res.status}`}`);
+  }
+  const watcher = answerWatchers.get(who);
+  if (watcher && data && typeof data === 'object') {
+    try {
+      watcher(o.method ?? (body ? 'POST' : 'GET'), url, data);
+    } catch {
+      /* a test's note never breaks the call */
+    }
   }
   return data;
 }

@@ -26,7 +26,7 @@ export type { PGliteLike } from './pglite';
 export type { ImportProduct, ImportResult } from './modules/productimport';
 
 export { REGISTRY };
-export { courierCatalog, COURIER_FEATURES } from './couriers/catalog';
+export { courierCatalog, COURIER_FEATURES, isCompany } from './couriers/catalog';
 export type { CatalogCompany, CatalogItem, CourierFeature } from './couriers/catalog';
 export type { KindField } from './couriers/kinds';
 export { syncAgency, syncLink, agencyCounts, monthBounds, monthNow } from './modules/agencies';

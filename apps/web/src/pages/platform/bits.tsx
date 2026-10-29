@@ -103,6 +103,16 @@ export function auditText(t: TFunction, a: AuditRow): string {
       return t('platform.log.demoCreate');
     case 'demo.reset':
       return t('platform.log.demoReset');
+    // Sociétés de livraison: test keys, a company removed / put back, « Changements API »
+    case 'couriers.keys':
+    case 'couriers.keysCleared':
+    case 'couriers.removed':
+    case 'couriers.restored':
+    case 'couriers.todoResolved':
+    case 'couriers.todoReopened':
+    case 'couriers.todoAdded':
+    case 'couriers.todoRemoved':
+      return t(`platform.log.${a.action.replace('.', '_')}`, { company: d.name ?? d.company ?? '', title: d.title ?? '' });
     default:
       return a.action;
   }

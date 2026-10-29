@@ -5,6 +5,7 @@ import { Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { config } from './config';
 import { CoreService, ShopRef } from './core.service';
+import { watchNow } from './courierWatch';
 import { doctorState } from './doctor';
 import { mailConfigured, sendMail } from './mail';
 import { reminderMail } from './mails';
@@ -24,6 +25,7 @@ import { syncTurnstile } from './turnstile';
  *  - AI Spy: competitors' Facebook ads (paid source), checked every hour, scanned once a day after the chosen hour
  *  - Pilotix: reminders e-mailed to stores' owners before their trial / paid period ends, and when a store locks (daily)
  *  - le réseau Pilotix: what every store learned about fake orders, shared anonymously with the others, every 30 minutes
+ *  - Pilotix: « Changements API », what changed at each delivery company's API (daily, 07:20; an e-mail when something did)
  *  - the demo shop starts again from fresh demo data every night
  * A job whose feature is not in a shop's plan is skipped for that shop.
  */
@@ -110,6 +112,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
           if (r.errors.length) this.log.warn(`fraud-reputation: ${r.errors.length} store(s) skipped: ${r.errors.slice(0, 5).join(' | ')}`);
           return { shops: r.shops, keys: r.keys };
         }
+        if (job.name === 'courier-watch') return watchNow(this.core, null);
         if (job.name === 'turnstile-sync') {
           // Cloudflare's widgets in step with the shops' domains (a shop stopped, a domain became ready…)
           const st = await syncTurnstile(this.core);
@@ -175,6 +178,8 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.queue.add('demo-reset', {}, { repeat: { pattern: '40 3 * * *' }, jobId: 'demo-reset', removeOnComplete: 10, removeOnFail: 20 });
     // every morning at 08:00 in Algeria (what the control room's settings say), whatever the server's time zone
     await this.queue.add('platform-reminders', {}, { repeat: { pattern: '0 8 * * *', tz: 'Africa/Algiers' }, jobId: 'platform-reminders', removeOnComplete: 20, removeOnFail: 50 });
+    // the delivery companies' APIs looked at every morning, before the work day (Algeria time)
+    await this.queue.add('courier-watch', {}, { repeat: { pattern: '20 7 * * *', tz: 'Africa/Algiers' }, jobId: 'courier-watch', removeOnComplete: 20, removeOnFail: 50 });
   }
 
   async onModuleDestroy() {

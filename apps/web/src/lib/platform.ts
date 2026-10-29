@@ -92,6 +92,8 @@ export interface CourierCheckResult {
 export const courierCheck = (company: string, deep: boolean) => req<CourierCheckResult>('/couriers/check', { company, deep });
 /** Every company with saved test keys, checked in the background (results arrive in p.couriers.tests). */
 export const courierCheckAll = () => req<{ startedAt: string; companies: string[] }>('/couriers/checkAll', {});
+/** « Changements API » › « Vérifier maintenant »: the whole look, in the background (the list arrives in p.couriers.state). */
+export const courierWatchNow = () => req<{ running: boolean; startedAt: string | null }>('/couriers/watch', {});
 
 /** Doctor: the server's health (owner and managers). */
 export const serverDoctor = () => req<ServerDoctorReport>('/doctor');

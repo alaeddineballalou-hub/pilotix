@@ -9,6 +9,7 @@ import { AppError, bad, forbidden, notFound } from '../rpc';
 import { hashPassword } from '../modules/users';
 import { courierCatalog } from '../couriers/catalog';
 import { clearCourierTestKeys, courierTestState, saveCourierTestKeys } from './courierTests';
+import { addWatchItems, courierUsage, removeCourier, removedCouriers, removeWatchItem, restoreCourier, setWatchStatus, watchState } from './courierWatch';
 import { syncAgency } from '../modules/agencies';
 import { accountById, makeAccountToken, sha256Hex } from './accounts';
 import { rewardReferrer, ReferralReward } from './reminders';
@@ -262,6 +263,72 @@ export const PLATFORM_REGISTRY = {
     return { ok: true };
   }),
 
+  /** Companies removed from Pilotix, and « Changements API » (the to-do list of what changed at each company's API). */
+  'p.couriers.state': pproc(ALL, z.object({}), async (ctx) => {
+    const [removed, watch] = await Promise.all([removedCouriers(ctx.t), watchState(ctx.t)]);
+    return { removed, watch: { items: watch.items, last: watch.last, running: watch.running } };
+  }),
+
+  /** How many stores use a company now (before removing it): a number, never which ones. */
+  'p.couriers.usage': pproc(MANAGERS, z.object({ company: z.string().max(40) }), async (ctx, i) => {
+    const co = courierCatalog().find((c) => c.key === i.company);
+    if (!co) throw bad('Société inconnue');
+    return { stores: await courierUsage(ctx.t, co) };
+  }),
+
+  /**
+   * Removes a company from Pilotix: the shops can no longer add it (those that use it keep it: their parcels keep
+   * moving). Asked twice on the page; `confirm` must be sent too. It can be put back (« Restaurer »).
+   */
+  'p.couriers.remove': pproc(MANAGERS, z.object({ company: z.string().max(40), confirm: z.literal(true) }), async (ctx, i) => {
+    const co = courierCatalog().find((c) => c.key === i.company);
+    if (!co) throw bad('Société inconnue');
+    await removeCourier(ctx.t, co.key, ctx.staff.name ?? null);
+    await audit(ctx, 'couriers.removed', null, { company: co.key, name: co.name });
+    return { ok: true };
+  }),
+
+  'p.couriers.restore': pproc(MANAGERS, z.object({ company: z.string().max(40) }), async (ctx, i) => {
+    const co = courierCatalog().find((c) => c.key === i.company);
+    if (!co) throw bad('Société inconnue');
+    await restoreCourier(ctx.t, co.key);
+    await audit(ctx, 'couriers.restored', null, { company: co.key, name: co.name });
+    return { ok: true };
+  }),
+
+  /** A line of « Changements API »: « Résolu », or « À faire » again. */
+  'p.couriers.todo.set': pproc(MANAGERS, z.object({ id: Id, status: z.enum(['open', 'resolved']) }), async (ctx, i) => {
+    const it = await setWatchStatus(ctx.t, i.id, i.status, ctx.staff.name ?? null);
+    if (!it) throw notFound('Ligne introuvable');
+    await audit(ctx, i.status === 'resolved' ? 'couriers.todoResolved' : 'couriers.todoReopened', null, { id: it.id, company: it.company, title: it.title });
+    return it;
+  }),
+
+  /** A line added by hand (a call to make, a question asked to a company…). */
+  'p.couriers.todo.add': pproc(
+    MANAGERS,
+    z.object({ company: z.string().max(40), title: z.string().trim().min(2).max(200), detail: z.string().trim().max(1500).default('') }),
+    async (ctx, i) => {
+      const co = courierCatalog().find((c) => c.key === i.company);
+      if (!co) throw bad('Société inconnue');
+      const key = `manual:${co.key}:${Date.now().toString(36)}`;
+      const [it] = await addWatchItems(ctx.t, [{ company: co.key, kind: 'manual', key, title: i.title, detail: i.detail, link: null, by: ctx.staff.name ?? null }]);
+      await audit(ctx, 'couriers.todoAdded', null, { id: it?.id, company: co.key, title: i.title });
+      return it;
+    },
+  ),
+
+  /** Removes a line added by hand (the lines Pilotix found are marked « Résolu », never removed). */
+  'p.couriers.todo.remove': pproc(MANAGERS, z.object({ id: Id }), async (ctx, i) => {
+    const st = await watchState(ctx.t);
+    const it = st.items.find((x) => x.id === i.id);
+    if (!it) throw notFound('Ligne introuvable');
+    if (it.kind !== 'manual') throw bad('Seules les lignes ajoutées à la main se suppriment : marquez celle-ci « Résolu »');
+    await removeWatchItem(ctx.t, i.id);
+    await audit(ctx, 'couriers.todoRemoved', null, { id: it.id, company: it.company, title: it.title });
+    return { ok: true };
+  }),
+
   'p.me.password': pproc(ALL, z.object({ current: z.string().min(1).max(200), next: z.string().min(10).max(200) }), async (ctx, i) => {
     const r = (await ctx.t.platform.query('SELECT password_hash FROM platform.staff WHERE id = $1', [ctx.staff.id]))[0];
     if (!r || !(await bcrypt.compare(i.current, r.password_hash))) throw bad('Mot de passe actuel incorrect');
@@ -306,6 +373,11 @@ export const PLATFORM_REGISTRY = {
         rate: recentStores.length ? Math.round((converted / recentStores.length) * 100) : null,
       },
       messages: await staffUnread(ctx.t),
+      // Sociétés de livraison › « Changements API » not resolved yet (companies still in Pilotix)
+      couriers: await (async () => {
+        const [w, gone] = await Promise.all([watchState(ctx.t), removedCouriers(ctx.t)]);
+        return w.items.filter((i) => i.status === 'open' && !gone[i.company]).length;
+      })(),
       overLimit: await (async () => {
         let n = 0;
         for (const s of await loadShops(ctx.t)) {

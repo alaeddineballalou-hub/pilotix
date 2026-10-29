@@ -18,6 +18,7 @@ import { dismissDoctor, serverDoctor } from './doctor';
 import { saveTurnstileConfig, syncTurnstile, turnstileStatus } from './turnstile';
 import { otpStatus, saveOtp, testOtp } from './otp';
 import { checkLogin, clearLogin, failedLogin } from './limits';
+import { couriers, runCheck, runCheckAll, testable, watchNow, watchRunning } from './courierWatch';
 import { mailConfigured, sendMail } from './mail';
 import { ownerMail, ReceiptData, receiptMail, staffCodeMail } from './mails';
 import { PUBLIC, Public } from './public';
@@ -70,7 +71,7 @@ export class PlatformGuard implements CanActivate {
 const LoginBody = z.object({ email: z.string().email().max(200), password: z.string().min(1).max(200), device: z.string().max(4000).optional() });
 const CodeBody = z.object({ ticket: z.string().max(4000), code: z.string().trim().regex(/^\d{6}$/, 'Code à 6 chiffres'), remember: z.boolean().default(false) });
 /** Actions that only read: everything else changes shops, so what the shops' requests keep is forgotten at once. */
-const READS = /^p\.(me|couriers|couriers\.tests|dashboard|shops\.(list|get)|payments\.(list|receipt)|plans\.list|staff\.list|settings\.get|audit\.list|demo\.get|signups\.list|support\.(list|get)|health\.db)$/;
+const READS = /^p\.(me|couriers|couriers\.(tests|state|usage)|dashboard|shops\.(list|get)|payments\.(list|receipt)|plans\.list|staff\.list|settings\.get|audit\.list|demo\.get|signups\.list|support\.(list|get)|health\.db)$/;
 /** These need e-mails: the owner gets a link (or a receipt) only by e-mail. */
 const NEEDS_MAIL = new Set(['p.shops.create', 'p.shops.resendInvite', 'p.payments.mailReceipt']);
 
@@ -260,40 +261,11 @@ export class PlatformController {
     throw new core.AppError('not_found', 'Action inconnue');
   }
 
-  /** The couriers' API module (server only), or an error saying it is missing. */
-  private couriers(): any {
-    let m: any = null;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      m = require('@pilotix/core/dist/couriers');
-    } catch {
-      m = null;
-    }
-    if (!m?.probeCouriers || !m?.checkCourier) throw new core.AppError('bad_request', 'Intégration des sociétés de livraison indisponible sur ce serveur');
-    return m;
-  }
-
-  /** One company checked with the team's saved test keys; its result is kept for the page. */
-  private async checkOne(company: string, deep: boolean): Promise<core.CourierCheckResult> {
-    const co = core.courierCatalog().find((c) => c.key === company && c.kind);
-    if (!co?.kind) throw new core.AppError('bad_request', 'Société inconnue');
-    const keys = (await core.courierTestKeys(this.core.t))[co.key];
-    if (!keys) throw new core.AppError('bad_request', `Ajoutez d’abord les clés de test de ${co.name}`);
-    // the company's own API address (Guepex, Yalitec, DHD…) unless the team typed another one
-    const settings: Record<string, unknown> = { ...co.presets };
-    for (const [k, v] of Object.entries(keys.settings ?? {})) if (v !== '' && v !== null && v !== undefined) settings[k] = v;
-    const r = await this.couriers().checkCourier(co.kind, keys.secret, settings, { deep, name: co.name });
-    const result: core.CourierCheckResult = { ok: r.ok, deep, at: new Date().toISOString(), steps: r.steps };
-    await core.saveCourierTestResult(this.core.t, co.key, result);
-    this.log.log(`Courier check ${co.key}${deep ? ' (full)' : ''}: ${r.ok ? 'OK' : 'FAILED'}`);
-    return result;
-  }
-
   /** Delivery companies: calls each one's API from this server with made-up keys (alive? reached?). Nothing is created. */
   @Post('couriers/test')
   async couriersTest(@Req() req: { staff: StaffSession }) {
     if (req.staff.role === 'support') throw new core.AppError('forbidden', 'Réservé aux responsables');
-    return { at: new Date().toISOString(), results: await this.couriers().probeCouriers() };
+    return { at: new Date().toISOString(), results: await couriers().probeCouriers() };
   }
 
   /** One company's API with the team's real test keys: connection, prices, offices, tracking (full: a real test parcel
@@ -303,26 +275,29 @@ export class PlatformController {
     if (req.staff.role === 'support') throw new core.AppError('forbidden', 'Réservé aux responsables');
     const b = z.object({ company: z.string().max(40), deep: z.boolean().default(false) }).safeParse(body ?? {});
     if (!b.success) throw new core.AppError('bad_request', 'Société manquante');
-    return this.checkOne(b.data.company, b.data.deep);
+    return runCheck(this.core, b.data.company, b.data.deep);
   }
 
-  /** Every company with saved test keys, checked in the background (the page reads the results as they come). */
+  /** Every company with saved test keys (not removed), checked in the background (the page reads the results as they come). */
   @Post('couriers/checkAll')
   async courierCheckAll(@Req() req: { staff: StaffSession }) {
     if (req.staff.role === 'support') throw new core.AppError('forbidden', 'Réservé aux responsables');
-    this.couriers();
-    const keys = await core.courierTestKeys(this.core.t);
-    const list = core.courierCatalog().filter((c) => c.kind && keys[c.key]).map((c) => c.key);
+    couriers();
+    const list = await testable(this.core);
     const startedAt = new Date().toISOString();
-    void (async () => {
-      // four at a time: quick, without asking any one company too much at once
-      const queue = [...list];
-      const worker = async () => {
-        for (let k = queue.shift(); k; k = queue.shift()) await this.checkOne(k, false).catch((e) => this.log.warn(`Courier check ${k}: ${(e as Error).message}`));
-      };
-      await Promise.all([worker(), worker(), worker(), worker()]);
-    })();
+    void runCheckAll(this.core, list).catch((e) => this.log.warn(`Courier checks: ${(e as Error).message}`));
     return { startedAt, companies: list };
+  }
+
+  /** « Changements API » › « Vérifier maintenant »: the whole look, in the background (the page reads the list again). */
+  @Post('couriers/watch')
+  async courierWatch(@Req() req: { staff: StaffSession }) {
+    if (req.staff.role === 'support') throw new core.AppError('forbidden', 'Réservé aux responsables');
+    couriers();
+    if (watchRunning()) return { running: true, startedAt: null };
+    const startedAt = new Date().toISOString();
+    void watchNow(this.core, req.staff.name || req.staff.email).catch((e) => this.log.warn(`Courier watch: ${(e as Error).message}`));
+    return { running: false, startedAt };
   }
 
   /** The server: database and stores' sizes (numbers only), the last backups, the disk space, the e-mails. */
