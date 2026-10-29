@@ -470,7 +470,7 @@ function Thread({ id, name, info, onInfo, onBack }: { id: number; name: string; 
 // ---------------------------------------------------------------- tester
 function Tester() {
   const { t } = useTranslation();
-  const [data, setData] = useState<{ messages: any[]; demo: boolean } | null>(null);
+  const [data, setData] = useState<{ messages: any[]; demo: boolean; platform?: boolean } | null>(null);
   const [body, setBody] = useState('');
   const [pending, setPending] = useState<string | null>(null);
   const send = useAction('dellal.test', { silent: false, onDone: (r) => (setData(r), setPending(null)) });
@@ -500,7 +500,7 @@ function Tester() {
         <div className="ai-try-in">
           <div className="ai-try-side">
             <p className="muted">{t('messages.tester.help', { name })}</p>
-            {shown?.demo && <div className="warnbox">{t(backend.kind === 'demo' ? 'messages.tester.demoPreview' : 'messages.tester.demoNoKey', { name })}</div>}
+            {shown?.demo && <div className="warnbox">{t(backend.kind === 'demo' ? 'messages.tester.demoPreview' : shown.platform ? 'messages.tester.demoPilot' : 'messages.tester.demoNoKey', { name })}</div>}
             {shown && !shown.demo && backend.kind === 'demo' && (
               <div className="okbox" style={{ fontWeight: 500 }}>
                 {t('messages.tester.inPage', { name })}
@@ -704,8 +704,8 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'de
         </Field>
       </Card>
 
-      {/* on Pilotix's server the AI is Pilotix's (Pilot AI, run from the control room): nothing to set in a shop */}
-      {!data.platform && (
+      {/* on Pilotix's server the AI is Pilotix's (Pilot AI, run from the control room): nothing to set in a shop (nor in its preview) */}
+      {!data.platform && backend.kind !== 'demo' && (
         <Card title={t('messages.settings.ai')} help={t('messages.settings.aiHelp')}>
           {secret('ai', t('messages.settings.aiKey'), 'sk-ant-…')}
           {!data.has.ai && <p className="muted small">{t('messages.settings.aiNone', { name: f.name })}</p>}

@@ -816,10 +816,15 @@ function Brief({ v, busy }: { v: View; busy: boolean }) {
           )}
           {b.demo && (
             <p className="note">
-              {t('spy.brief.plain')}{' '}
-              <a className="spy-a" href="#/marketing/spy/reglages">
-                {t('spy.settings')}
-              </a>
+              {t(v.platform ? 'spy.brief.plainPilot' : 'spy.brief.plain')}
+              {!v.platform && (
+                <>
+                  {' '}
+                  <a className="spy-a" href="#/marketing/spy/reglages">
+                    {t('spy.settings')}
+                  </a>
+                </>
+              )}
             </p>
           )}
         </>
@@ -1074,7 +1079,7 @@ function Sources({ v, source }: { v: View | null; source: string }) {
             <Icon name={source === 'extension' ? 'puzzle' : 'globe'} /> {t(`spy.set.src.${source}.name`)}
           </h3>
           <p>{t(`spy.src.via.${source}`)}</p>
-          <p className="note">{v?.ai ? t('spy.src.aiOn') : t('spy.src.aiOff')}</p>
+          <p className="note">{v?.platform ? t(v.ai ? 'spy.src.aiOnPilot' : 'spy.src.aiOffPilot') : v?.ai ? t('spy.src.aiOn') : t('spy.src.aiOff')}</p>
           <a className="spy-a" href="#/marketing/spy/reglages">
             {t('spy.src.change')}
           </a>

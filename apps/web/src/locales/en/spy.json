@@ -202,6 +202,7 @@
     "weak": "Weak point:",
     "notYet": "Claude has not read this ad yet.",
     "off": "AI is not on: add the Message AI agent’s Claude key.",
+    "offPilot": "Pilotix’s AI is not on yet.",
     "run": "Analyze with AI",
     "running": "Analyzing…",
     "done_one": "{{count}} ad analyzed",
@@ -250,7 +251,8 @@
     "copied": "Hook copied",
     "offer": "Price and offer",
     "page": "Your page",
-    "plain": "Without AI the brief is limited to figures. Add the Claude key for hooks and advice."
+    "plain": "Without AI the brief is limited to figures. Add the Claude key for hooks and advice.",
+    "plainPilot": "Without AI the brief is limited to figures. Hooks and advice come as soon as Pilotix turns the AI on."
   },
   "price": {
     "title": "Your price against the others",
@@ -299,7 +301,9 @@
       "searchapi": "The Pilotix server searches with your SearchAPI.io key, on demand and every morning. It also reads competitors’ sites (price, platform, form)."
     },
     "aiOn": "Claude (the Message AI agent’s key) reads every ad and prepares the brief.",
+    "aiOnPilot": "Claude (Pilotix’s AI) reads every ad and prepares the brief.",
     "aiOff": "AI is not on: no reading of the ads, no hooks.",
+    "aiOffPilot": "Pilotix’s AI is not on yet: no reading of the ads, no hooks.",
     "change": "Change source"
   },
   "set": {

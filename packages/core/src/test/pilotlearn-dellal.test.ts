@@ -123,3 +123,31 @@ test('which shops teach Dellal: the control room only (managers); unticking one 
   const g: any = await call('dellal.settings.get', await shopCtx(server([])), {});
   assert.equal(g.platform, true, 'on the platform server the shop AI card is hidden');
 });
+
+test('the CM AI agent and AI Spy answer with Pilot AI’s key too: on Pilotix’s server no shop brings a key', async () => {
+  const decision = JSON.stringify({ intent: 'question', hide: false, public_reply: 'Mar7ba bik ! Chouf l’inbox 📩', private_reply: 'Salam ! Waah kayen.', handoff: false, reason: 'Question' });
+  const reqs: any[] = [];
+  const on = await shopCtx(server(reqs, decision));
+  const cm: any = await call('cm.settings.get', on, {});
+  assert.equal(cm.meta.ai, true, 'the CM agent has an AI without a shop key');
+  assert.equal(cm.meta.platform, true);
+  const r: any = await call('cm.test', on, { body: 'kayen la taille 42 ?' });
+  assert.equal(r.by, 'ai', 'Claude decided (Pilot AI’s key), not the demo rules');
+  assert.equal(r.platform, true);
+  assert.equal(reqs.length, 1);
+  const spy: any = await call('spy.settings.get', on, {});
+  assert.equal(spy.ai, true, 'AI Spy reads the ads with Pilot AI');
+  assert.equal(spy.platform, true);
+
+  // Pilot AI off and no shop key: the demo rules, and the screens say Pilotix has not turned the AI on (no key to add)
+  await savePilotConfig(t, { enabled: false, maxUsd: 0.15, share: 0.2 });
+  const off = await shopCtx(server(reqs, decision));
+  assert.equal(((await call('cm.settings.get', off, {})) as any).meta.ai, false);
+  assert.equal(((await call('cm.test', off, { body: 'kayen la taille 42 ?' })) as any).by, 'demo');
+  assert.equal(reqs.length, 1, 'no AI request');
+  assert.equal(((await call('spy.settings.get', off, {})) as any).ai, false);
+  const d: any = await call('dellal.test', off, { body: 'salam' });
+  assert.equal(d.demo, true);
+  assert.equal(d.platform, true, 'the tester says Pilotix turns the AI on, not « add a key »');
+  await savePilotConfig(t, { enabled: true, maxUsd: 0.15, share: 0.2 });
+});

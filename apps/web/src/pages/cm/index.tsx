@@ -446,7 +446,7 @@ function Tester() {
         <div className="ai-try-in">
           <div className="ai-try-side">
             <p className="muted">{t('cm.tester.help')}</p>
-            {last && last.by === 'demo' && <div className="warnbox">{t(backend.kind === 'demo' ? 'cm.tester.demoPreview' : 'cm.tester.demoNoKey')}</div>}
+            {last && last.by === 'demo' && <div className="warnbox">{t(backend.kind === 'demo' ? 'cm.tester.demoPreview' : last.platform ? 'cm.tester.demoPilot' : 'cm.tester.demoNoKey')}</div>}
             {last && last.by === 'ai' && backend.kind === 'demo' && (
               <div className="okbox" style={{ fontWeight: 500 }}>
                 {t('cm.tester.inPage')}
@@ -725,8 +725,16 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'cm
           <dd className="ltr">{m.instagramId || '—'}</dd>
           <dt>{t('cm.settings.appSecret')}</dt>
           <dd>{m.appSecret ? <span className="cm-okc">✓ {t('cm.settings.connected')}</span> : <a href="#/messages/reglages">{t('cm.settings.appSecretNone')}</a>}</dd>
-          <dt>{t('cm.settings.ai')}</dt>
-          <dd>{m.ai ? <span className="cm-okc">✓ {t('cm.settings.connected')}</span> : <a href="#/messages/reglages">{t('cm.settings.aiNone')}</a>}</dd>
+          <dt>{t(m.platform ? 'cm.settings.aiPilot' : 'cm.settings.ai')}</dt>
+          <dd>
+            {m.ai ? (
+              <span className="cm-okc">✓ {t('cm.settings.connected')}</span>
+            ) : m.platform ? (
+              <span className="muted">{t('cm.settings.aiPilotOff')}</span>
+            ) : (
+              <a href="#/messages/reglages">{t('cm.settings.aiNone')}</a>
+            )}
+          </dd>
         </dl>
         <div className="dl-hook">
           <Field label={t('cm.settings.webhook')}>

@@ -147,7 +147,7 @@ export function SpyDetail({ ad, v }: { ad: SpyAd | null; v: View }) {
           </>
         ) : (
           <div className="spy-ai-none">
-            <p className="note">{v.ai ? t('spy.ai.notYet') : t('spy.ai.off')}</p>
+            <p className="note">{v.ai ? t('spy.ai.notYet') : t(v.platform ? 'spy.ai.offPilot' : 'spy.ai.off')}</p>
             <div className="row">
               <button type="button" className="btn small primary" disabled={analyze.isPending} onClick={() => analyze.mutate({ productId })}>
                 <Icon name="sparkles" /> {analyze.isPending ? t('spy.ai.running') : t('spy.ai.run')}

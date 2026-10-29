@@ -202,6 +202,7 @@
     "weak": "Point faible :",
     "notYet": "Claude n’a pas encore lu cette pub.",
     "off": "L’IA n’est pas activée : ajoutez la clé Claude du Message AI agent.",
+    "offPilot": "L’IA de Pilotix n’est pas encore activée.",
     "run": "Analyser avec l’IA",
     "running": "Analyse…",
     "done_one": "{{count}} pub analysée",
@@ -250,7 +251,8 @@
     "copied": "Accroche copiée",
     "offer": "Prix et offre",
     "page": "Votre page",
-    "plain": "Sans IA, le brief se limite aux chiffres. Ajoutez la clé Claude pour les accroches et les conseils."
+    "plain": "Sans IA, le brief se limite aux chiffres. Ajoutez la clé Claude pour les accroches et les conseils.",
+    "plainPilot": "Sans IA, le brief se limite aux chiffres. Les accroches et les conseils arrivent dès que Pilotix active l’IA."
   },
   "price": {
     "title": "Votre prix face aux autres",
@@ -299,7 +301,9 @@
       "searchapi": "Le serveur Pilotix cherche avec votre clé SearchAPI.io, à la demande et chaque matin. Il lit aussi les sites concurrents (prix, plateforme, formulaire)."
     },
     "aiOn": "Claude (clé du Message AI agent) lit chaque pub et prépare le brief.",
+    "aiOnPilot": "Claude (l’IA de Pilotix) lit chaque pub et prépare le brief.",
     "aiOff": "L’IA n’est pas activée : pas de lecture des pubs ni d’accroches.",
+    "aiOffPilot": "L’IA de Pilotix n’est pas encore activée : pas de lecture des pubs ni d’accroches.",
     "change": "Changer de source"
   },
   "set": {

@@ -611,6 +611,14 @@ export async function pilotOn(ctx: Ctx): Promise<boolean> {
   }
 }
 
+/**
+ * Claude answers on the server: Pilot AI's key (Pilotix's server: shops bring no key) or, without it, the shop's own key.
+ * Dellal, the CM AI agent and AI Spy all ask this, so a shop never needs a key of its own on Pilotix's server.
+ */
+export async function aiKeyed(ctx: Ctx): Promise<boolean> {
+  if (!ctx.server?.dellal) return false;
+  return (await pilotOn(ctx)) || !!(await dellalSecret(ctx.db, 'ai'));
+}
 
 /**
  * The sales playbook: how a seasoned Algerian e-commerce seller works a conversation (cash on delivery, Darija,
@@ -1139,7 +1147,7 @@ export const dellalProcs = {
       await addMessage(ctx.db, cid, { role: 'customer', body: i.body });
       out = await runAgent(ctx, cid);
     }
-    return { conversationId: cid, messages: await messagesOf(ctx.db, cid), demo: out ? out.demo : !((!ctx.server?.dellal && ctx.dellalAi) || (ctx.server?.dellal && (await dellalSecret(ctx.db, 'ai')))) };
+    return { conversationId: cid, messages: await messagesOf(ctx.db, cid), demo: out ? out.demo : !((!ctx.server?.dellal && ctx.dellalAi) || (await aiKeyed(ctx))), platform: !!ctx.t };
   }),
 
   /** Dellal's results over the last N days. */

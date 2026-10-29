@@ -12,6 +12,7 @@ import { getRaw, setRaw } from './admin';
 import { DELLAL_DARIJA, parseAvoid } from './darija';
 import {
   AiResponse,
+  aiKeyed,
   algeriaHour,
   Complete,
   conversationFromComment,
@@ -20,6 +21,7 @@ import {
   dellalSecret,
   dellalSettings,
   findPlace,
+  pilotOn,
   polishDarija,
   ProductInfo,
   searchProducts,
@@ -659,7 +661,7 @@ export async function decide(ctx: Ctx, f: CmFacts, s: CmSettings): Promise<CmRun
   const pre = preFilter(f, s);
   if (pre) return { decision: guard(pre, f, s), by: 'rule', model: null, usage, darija };
   const inPage = !ctx.server?.dellal && ctx.dellalAi ? ctx.dellalAi : null;
-  const useAi = !!inPage || (!!ctx.server?.dellal && !!(await dellalSecret(ctx.db, 'ai')));
+  const useAi = !!inPage || (await aiKeyed(ctx));
   if (!useAi) return { decision: guard(demoDecision(f), f, s), by: 'demo', model: null, usage, darija };
   const ds = await dellalSettings(ctx.db);
   const complete: Complete = (req) =>
@@ -905,7 +907,8 @@ const SettingsInput = z.object({
   channels: z.object({ facebook: z.boolean(), instagram: z.boolean(), tiktok: z.boolean() }),
 });
 
-async function settingsView(db: Db) {
+async function settingsView(ctx: Ctx) {
+  const db = ctx.db;
   const ds = await dellalSettings(db);
   return {
     settings: await cmSettings(db),
@@ -915,7 +918,9 @@ async function settingsView(db: Db) {
       verifyToken: ds.verifyToken,
       pageToken: !!(await dellalSecret(db, 'pageToken')),
       appSecret: !!(await dellalSecret(db, 'appSecret')),
-      ai: !!(await dellalSecret(db, 'ai')),
+      // Pilot AI's key on Pilotix's server (shops bring none), or the shop's own key elsewhere
+      ai: (await pilotOn(ctx)) || !!(await dellalSecret(db, 'ai')),
+      platform: !!ctx.t,
     },
   };
 }
@@ -1045,6 +1050,7 @@ export const cmProcs = {
         model: run.model,
         darija: run.darija,
         facts: { product: f.product?.name ?? null, place: f.place ? f.place.commune ?? f.place.wilaya : null, phone: f.phone, lang: f.lang, channel },
+        platform: !!ctx.t,
       };
     },
   ),
@@ -1138,12 +1144,12 @@ export const cmProcs = {
     };
   }),
 
-  'cm.settings.get': proc([], z.object({}), (ctx) => settingsView(ctx.db)),
+  'cm.settings.get': proc([], z.object({}), (ctx) => settingsView(ctx)),
 
   'cm.settings.save': proc([], SettingsInput, async (ctx, i) => {
     await setRaw(ctx.db, 'cm', { ...(await cmSettings(ctx.db)), ...i }, me(ctx));
     ctx.emit({ type: 'settings' });
-    return settingsView(ctx.db);
+    return settingsView(ctx);
   }),
 
   /** Server: a comment arrived (Meta webhook). Admin/system only. */
