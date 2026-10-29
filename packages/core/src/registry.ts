@@ -12,6 +12,7 @@ import { depotAlertProcs } from './modules/depotalerts';
 import { prefsProcs } from './modules/prefs';
 import { confirmCheckProcs } from './modules/confirmcheck';
 import { noStockProcs } from './modules/nostock';
+import { dispatchProcs } from './modules/dispatch';
 import { pushProcs } from './modules/push';
 import { catalogProcs } from './modules/catalog';
 import { productImportProcs } from './modules/productimport';
@@ -64,6 +65,7 @@ export const REGISTRY = {
   ...prefsProcs,
   ...confirmCheckProcs,
   ...noStockProcs,
+  ...dispatchProcs,
   ...pushProcs,
   ...adminProcs,
   ...adsProcs,

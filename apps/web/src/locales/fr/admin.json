@@ -109,7 +109,11 @@
     "copied": "Copié",
     "waText": "Bonjour {{name}}, voici vos accès Pilotix :\nSite : {{site}}\nEmail : {{email}}\nMot de passe : {{password}}\nChangez-le dans Mon profil après la connexion.",
     "resetNote": "Personne ne peut voir un ancien mot de passe, même pas Pilotix : il est caché. Donnez celui-ci à la personne (WhatsApp ou de vive voix) ; elle pourra le changer dans Mon profil.",
-    "phoneHint": "Obligatoire : son mobile à lui (un seul compte par numéro)."
+    "phoneHint": "Obligatoire : son mobile à lui (un seul compte par numéro).",
+    "canAssign": "À attribuer (dépôt)",
+    "canAssignHint": "Peut choisir la société ou le livreur des commandes prêtes sans société (Dépôt › À attribuer). Les admins le peuvent toujours.",
+    "canAssignLabel": "Peut attribuer les commandes",
+    "canAssignChip": "🚚 Attribue"
   },
   "status": {
     "groups": {

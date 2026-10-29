@@ -11,6 +11,7 @@ import { variantLook, VariantLook } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, num, numOrNull } from '../db';
 import { bad, Ctx, proc } from '../rpc';
+import { autoDispatch } from './dispatch';
 import { getOrder } from './orders';
 
 const id = z.number().int().positive();
@@ -117,7 +118,7 @@ export async function pick(ctx: Ctx, i: { productId: number; variantId: number |
     const after = await readyIds(tx);
     const fresh = after.filter((x) => !before.has(x));
     ctx.emit({ type: 'orders' });
-    return { served, waiting: left, missing, readyNow: fresh.length, ready: after.length };
+    return { served, waiting: left, missing, readyNow: fresh.length, ready: after.length, freshIds: fresh };
   });
 }
 
@@ -126,7 +127,16 @@ export const pickingProcs = {
   'depot.pickList': proc([...DEPOT], z.object({}), (ctx) => pickList(ctx.db)),
 
   /** "J'ai pris n" for one product; rupture: what is still missing goes on "À ramener au dépôt". */
-  'depot.pick': proc([...DEPOT], z.object({ productId: id, variantId: id.nullable(), qty: z.number().int().min(0).max(100_000), rupture: z.boolean().default(false) }), (ctx, i) => pick(ctx, i)),
+  'depot.pick': proc(
+    [...DEPOT],
+    z.object({ productId: id, variantId: id.nullable(), qty: z.number().int().min(0).max(100_000), rupture: z.boolean().default(false) }),
+    async (ctx, i) => {
+      const { freshIds, ...r } = await pick(ctx, i);
+      // picked whole: an order with a company goes to « En dispatch » by itself; the others wait in « À attribuer »
+      const d = freshIds.length ? await autoDispatch(ctx, freshIds) : { dispatched: 0, toAssign: 0, failed: [] };
+      return { ...r, dispatched: d.dispatched, toAssign: d.toAssign, refused: d.failed.length };
+    },
+  ),
 
   /** The orders that have all their products (phones, "En préparation"). */
   'depot.ready': proc([...DEPOT], z.object({}), async (ctx) => Promise.all((await readyIds(ctx.db)).slice(0, 200).map((oid) => getOrder(ctx, oid)))),

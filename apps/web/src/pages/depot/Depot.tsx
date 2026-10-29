@@ -16,6 +16,7 @@ import { CopyCode } from '../../ui/CopyCode';
 import { useIsPhone } from '../../lib/useMedia';
 import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
 import { PhonePrep } from './PhonePrep';
+import { DispatchAlerts } from './DispatchAlerts';
 import { PhoneDispatch, PhoneReturns, PhoneRoad } from './PhoneStages';
 import { LabelAction, LabelsBar, PrintSelected } from './Labels';
 import { BagBulk, BagsCard } from './Bags';
@@ -56,7 +57,7 @@ export function Depot({ sub }: PageProps) {
             )}
             <a className={`bjm-p ${stage === k ? 'on' : ''} ${k === 'retours' ? 'end' : ''}`} href={`#/depot/${k}`} aria-current={stage === k ? 'page' : undefined}>
               <span className="bjm-l">{phone && k === 'preparer' ? t('depot.ph.stage') : t(`depot.stage.${k}`)}</span>
-              {c && <b className="bjm-n ltr">{c[k]}</b>}
+              {c && <b className={`bjm-n ltr${k === 'prepares' && c.prepAlerts ? ' bad' : ''}`}>{c[k]}</b>}
             </a>
           </span>
         ))}
@@ -69,6 +70,7 @@ export function Depot({ sub }: PageProps) {
       )}
       <div className={(cards || stage === 'preparer') && !phone ? 'px-wide' : undefined}>
         {stage === 'preparer' && <PhonePrep />}
+        {stage === 'prepares' && <DispatchAlerts />}
         {stage === 'prepares' && (cards ? <PhoneDispatch /> : <Prepares />)}
         {stage === 'dispatchees' && (cards ? <PhoneRoad stage="dispatchees" /> : <Dispatchees />)}
         {stage === 'enlivraison' && (cards ? <PhoneRoad stage="enlivraison" /> : <EnLivraison />)}

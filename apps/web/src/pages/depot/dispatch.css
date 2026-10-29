@@ -1,0 +1,26 @@
+.da { display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px; }
+.da-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); }
+.da-row > .bji { width: 20px; height: 20px; flex: none; margin-top: 1px; }
+.da-row.bad { border-color: var(--c-bad-ink); background: var(--c-bad-tint); color: var(--c-bad-ink); }
+.da-row.warn { border-color: var(--c-warn-ink); background: var(--c-warn-tint); color: var(--c-warn-ink); }
+.da-row.info { color: var(--ink); }
+.da-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.da-who { font-size: 13.5px; color: var(--ink); }
+.da-why { font-size: 13px; font-weight: 700; line-height: 1.4; }
+.da-act { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.da-act select { min-height: 34px; max-width: 200px; }
+.da-late { margin: 6px 0 0; padding-inline-start: 18px; font-size: 13px; color: var(--muted); }
+@media (max-width: 640px) { .da-row { flex-wrap: wrap; } .da-act { flex-basis: 100%; justify-content: flex-start; } }
+
+/* « À attribuer »: the table on computers */
+.as-wrap { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); overflow: auto; }
+.as-tbl { width: 100%; }
+.as-tbl tbody tr { cursor: pointer; }
+.as-tbl tbody tr.on { background: var(--px-orange-soft, #FFF4E2); }
+.as-tbl .as-ck { width: 40px; }
+.as-tbl .as-prod { max-width: 360px; }
+.as-tbl .num { text-align: end; white-space: nowrap; }
+.as-tag { display: inline-flex; margin-inline-start: 8px; padding: 1px 8px; border-radius: 999px; background: #EEF2FF; color: #3F51B5; font-size: 11.5px; font-weight: 800; white-space: nowrap; }
+.as-pick { display: flex; flex-direction: column; gap: 4px; }
+.as-pick select { min-height: 42px; font-weight: 700; }
+.bjm-n.bad { background: var(--c-bad-ink); color: #fff; }

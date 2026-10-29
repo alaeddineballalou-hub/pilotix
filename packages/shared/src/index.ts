@@ -167,6 +167,8 @@ export interface Profile {
   referralCode?: string | null;
   /** set by the administrator: may create accounts and set passwords of the team (not administrators) */
   canManageUsers?: boolean;
+  /** set by the administrator: gives orders a company or a livreur in the depot's « À attribuer » */
+  canAssign?: boolean;
   /** put in Management › Archives: out of the team list, kept in the history (always closed) */
   archived?: boolean;
   /** an agent of a confirmation agency working in this store (the agency manages the account) */
@@ -318,6 +320,10 @@ export interface Order {
   companyName?: string | null;
   livreurName?: string | null;
   subStatus?: string | null;
+  /** the courier refused the parcel: why (« En dispatch » shows it with « Renvoyer » / « Autre société ») */
+  sendError?: string | null;
+  /** cancelled while its parcel was at a courier that could not cancel it: to cancel in the courier's space */
+  cancelByHand?: boolean;
 }
 
 export interface OrderEvent {

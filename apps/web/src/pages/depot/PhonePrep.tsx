@@ -1,8 +1,9 @@
 // Dépôt on phones, first stage: products first, then orders.
 // « À préparer »: only the products and how many to take (no customer, no order). "J'ai pris n" + OK.
 //   Fewer than needed: "Mettre en rupture" puts what is missing on « À ramener au dépôt » (Prévenir on WhatsApp).
-// « En préparation »: the orders that have all their products. Tick the packed ones, choose the delivery partner
-//   last, then « Envoyer au dispatch ».
+// « À attribuer »: the orders picked whole that have no company yet (or « Livraison privée » without a livreur) — a
+//   table on computers. Only managers (ticked in Utilisateurs) and admins choose; the order then goes to « En dispatch »
+//   by itself. An order picked whole that has a company goes there by itself, without this tab.
 // « Sans stock »: the orders confirmed while a product had nothing left, oldest first, with how long each waits (late
 //   after the shop's number of days). When stock comes back the oldest go to « À préparer » by themselves.
 // The cards are one per variant: the product photo, the product name, then the variant in a pill of its colour (the
@@ -13,15 +14,16 @@ import { CSSProperties, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../lib/backend';
 import { rpc } from '../../lib/backend';
-import { wilayaName } from '../../lib/format';
+import { n, wilayaName } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { ErrorBox, Icon, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
-import { useToDispatch } from './Depot';
+import { useIsPhone } from '../../lib/useMedia';
 import '../confirmation/phone.css';
 import '../suivi/phone.css';
 import './phone.css';
+import './dispatch.css';
 
 type Row = Out<'depot.pickList'>[number];
 type Restock = { productId: number; variantId: number | null; name: string; variant: string; qty: number };
@@ -29,9 +31,9 @@ const keyOf = (r: { productId: number; variantId: number | null }) => `${r.produ
 
 export function PhonePrep() {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<'pick' | 'ready' | 'nostock'>('pick');
+  const [tab, setTab] = useState<'pick' | 'assign' | 'nostock'>('pick');
   const list = useRpc('depot.pickList', {});
-  const ready = useRpc('depot.ready', {});
+  const assign = useRpc('depot.toAssign', {}, { refetchInterval: 60_000 });
   const counts = useRpc('depot.counts', {}, { refetchInterval: 60_000 });
   const ns = counts.data;
   const pieces = (list.data ?? []).reduce((s, r) => s + r.need, 0);
@@ -41,17 +43,17 @@ export function PhonePrep() {
         <button type="button" role="tab" aria-selected={tab === 'pick'} className={tab === 'pick' ? 'on' : ''} onClick={() => setTab('pick')}>
           {t('depot.ph.toPick')} <b>{list.data ? pieces : '…'}</b>
         </button>
-        <button type="button" role="tab" aria-selected={tab === 'ready'} className={tab === 'ready' ? 'on' : ''} onClick={() => setTab('ready')}>
-          {t('depot.ph.preparing')} <b>{ready.data ? ready.data.length : '…'}</b>
+        <button type="button" role="tab" aria-selected={tab === 'assign'} className={tab === 'assign' ? 'on' : ''} onClick={() => setTab('assign')}>
+          {t('depot.as.tab')} <b>{assign.data ? assign.data.rows.length : '…'}</b>
         </button>
         <button type="button" role="tab" aria-selected={tab === 'nostock'} className={tab === 'nostock' ? 'on' : ''} onClick={() => setTab('nostock')}>
           {t('depot.ns.tab')} <b className={ns?.noStockLate ? 'late' : ''}>{ns ? ns.noStock : '…'}</b>
         </button>
       </div>
       {tab === 'pick' ? (
-        <PickTab rows={list.data} error={list.error} retry={() => list.refetch()} onReady={() => setTab('ready')} />
-      ) : tab === 'ready' ? (
-        <ReadyTab rows={ready.data} error={ready.error} retry={() => ready.refetch()} />
+        <PickTab rows={list.data} error={list.error} retry={() => list.refetch()} onReady={() => setTab('assign')} />
+      ) : tab === 'assign' ? (
+        <AssignTab data={assign.data} error={assign.error} retry={() => assign.refetch()} />
       ) : (
         <NoStockTab />
       )}
@@ -159,7 +161,9 @@ function PickTab({ rows, error, retry, onReady }: { rows?: Row[]; error: Error |
       toast(
         [
           t('depot.ph.taken', { n: qty, name }),
-          res.readyNow ? t('depot.ph.readyNow', { count: res.readyNow }) : '',
+          res.dispatched ? t('depot.as.sentNow', { count: res.dispatched }) : '',
+          res.toAssign ? t('depot.as.waitNow', { count: res.toAssign }) : '',
+          res.refused ? t('depot.as.refusedNow', { count: res.refused }) : '',
           res.missing && rup ? t('depot.ph.toBring', { n: res.missing }) : res.missing ? t('depot.ph.stillToTake', { n: res.missing }) : '',
         ]
           .filter(Boolean)
@@ -232,7 +236,7 @@ function PickTab({ rows, error, retry, onReady }: { rows?: Row[]; error: Error |
         <div className="pxd-empty">
           <p className="muted">{t('depot.ph.nothingToPick')}</p>
           <button type="button" className="pxd-btn" onClick={onReady}>
-            {t('depot.ph.preparing')} ›
+            {t('depot.as.tab')} ›
           </button>
         </div>
       ) : (
@@ -380,37 +384,117 @@ function NotifyModal({ rows, onClose }: { rows: Restock[]; onClose: () => void }
 }
 
 // ---------------------------------------------------------------- En préparation
-function ReadyTab({ rows, error, retry }: { rows?: Order[]; error: Error | null; retry: () => void }) {
+type Assign = Out<'depot.toAssign'>;
+
+/** « À attribuer »: a table on computers (cards on phones); managers and admins tick orders and choose who delivers. */
+function AssignTab({ data, error, retry }: { data?: Assign; error: Error | null; retry: () => void }) {
   const { t } = useTranslation();
+  const phone = useIsPhone();
   const companies = useRpc('depot.companies', {});
+  const livreurs = useRpc('delivery.livreurs', {});
   const [sel, setSel] = useState<Set<number>>(new Set());
-  const [company, setCompany] = useState<number | null>(null);
-  const go = useToDispatch();
+  const [who, setWho] = useState('');
+  const [busy, setBusy] = useState(false);
+  const qc = useQueryClient();
   if (error) return <ErrorBox error={error} onRetry={retry} />;
-  if (!rows) return <Loading />;
+  if (!data) return <Loading />;
+  const { rows, canAct } = data;
   const ids = rows.map((o) => o.id).filter((x) => sel.has(x));
   const toggle = (oid: number) => setSel((s) => (s.has(oid) ? (s.delete(oid), new Set(s)) : new Set(s).add(oid)));
+  const all = ids.length === rows.length && rows.length > 0;
+  const cos = (companies.data ?? []).filter((c) => c.kind !== 'own');
+  const own = (companies.data ?? []).find((c) => c.kind === 'own');
+  const lvs = (livreurs.data ?? []).filter((l) => l.active && (l.companyId ?? own?.id));
+  const since = (o: Order) => {
+    const h = Math.max(0, Math.floor((Date.now() - new Date(o.confirmedAt ?? o.createdAt).getTime()) / 3_600_000));
+    return h < 24 ? t('depot.as.hours', { count: h }) : t('depot.as.days', { count: Math.floor(h / 24) });
+  };
+  const go = async () => {
+    const [kind, a, b] = who.split(':');
+    if (!kind || !ids.length) return;
+    setBusy(true);
+    try {
+      const r = await rpc('depot.assign', kind === 'l' ? { ids, companyId: Number(b), livreurId: Number(a) } : { ids, companyId: Number(a) });
+      toast([t('depot.as.done', { count: r.assigned }), r.failed.length ? t('depot.as.refusedNow', { count: r.failed.length }) : ''].filter(Boolean).join(' · '), r.failed.length ? 'bad' : 'ok');
+      setSel(new Set());
+      setWho('');
+      qc.invalidateQueries();
+    } catch (e: any) {
+      toast(e.message, 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const privateTag = (o: Order) => o.companyId && own && o.companyId === own.id;
   return (
     <>
-      <p className="muted small pxd-help">{t('depot.ph.readyHelp')}</p>
+      <p className="muted small pxd-help">{t(canAct ? 'depot.as.help' : 'depot.as.helpRead')}</p>
       {rows.length === 0 ? (
-        <p className="pxd-empty muted">{t('depot.ph.noneReady')}</p>
+        <p className="pxd-empty muted">{t('depot.as.none')}</p>
+      ) : !phone ? (
+        <div className="tbl-wrap as-wrap">
+          <table className="tbl as-tbl">
+            <thead>
+              <tr>
+                {canAct && (
+                  <th className="as-ck">
+                    <input type="checkbox" checked={all} aria-label={t('depot.ph.tickAll')} onChange={() => setSel(all ? new Set() : new Set(rows.map((o) => o.id)))} />
+                  </th>
+                )}
+                <th>{t('depot.as.colRef')}</th>
+                <th>{t('depot.as.colClient')}</th>
+                <th>{t('depot.as.colPlace')}</th>
+                <th>{t('depot.as.colProducts')}</th>
+                <th className="num">{t('depot.as.colTotal')}</th>
+                <th>{t('depot.as.colWait')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((o) => (
+                <tr key={o.id} className={sel.has(o.id) ? 'on' : ''} onClick={canAct ? () => toggle(o.id) : undefined}>
+                  {canAct && (
+                    <td className="as-ck" onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" checked={sel.has(o.id)} aria-label={o.ref} onChange={() => toggle(o.id)} />
+                    </td>
+                  )}
+                  <td className="ltr">
+                    <b>{o.ref}</b>
+                  </td>
+                  <td>{o.customerName}</td>
+                  <td>
+                    {wilayaName(o.wilayaId)}
+                    {o.commune ? ` · ${o.commune}` : ''}
+                    {privateTag(o) && <span className="as-tag">{t('depot.as.private')}</span>}
+                  </td>
+                  <td className="as-prod">{o.items.map((i) => `${i.name}${i.variantTitle ? ` ${i.variantTitle}` : ''} ×${i.qty}`).join(' + ')}</td>
+                  <td className="num ltr">{n(o.total)} DA</td>
+                  <td>{since(o)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : (
-        <ul className="pxd-list" style={{ paddingBottom: ids.length ? 230 : 20 }}>
+        <ul className="pxd-list" style={{ paddingBottom: ids.length ? 200 : 20 }}>
           {rows.map((o) => {
             const on = sel.has(o.id);
             return (
               <li key={o.id}>
-                <button type="button" className={`pxd-ord${on ? ' on' : ''}`} aria-pressed={on} onClick={() => toggle(o.id)}>
-                  <span className="pxd-cb" aria-hidden="true">
-                    {on && <Icon name="check" />}
-                  </span>
+                <button type="button" className={`pxd-ord${on ? ' on' : ''}`} aria-pressed={on} disabled={!canAct} onClick={() => toggle(o.id)}>
+                  {canAct && (
+                    <span className="pxd-cb" aria-hidden="true">
+                      {on && <Icon name="check" />}
+                    </span>
+                  )}
                   <span className="pxd-pn">
                     <b>
                       <span className="ltr">{o.ref}</span> · {wilayaName(o.wilayaId)}
-                      {o.source === 'sav' && <span className="pxd-sav">{t('depot.ph.savTag')}</span>}
+                      {privateTag(o) && <span className="as-tag">{t('depot.as.private')}</span>}
                     </b>
                     <small>{o.items.map((i) => `${i.name}${i.variantTitle ? ` ${i.variantTitle}` : ''} ×${i.qty}`).join(' + ')}</small>
+                    <small>
+                      {o.customerName} · {since(o)}
+                    </small>
                   </span>
                 </button>
               </li>
@@ -418,36 +502,37 @@ function ReadyTab({ rows, error, retry }: { rows?: Order[]; error: Error | null;
           })}
         </ul>
       )}
-      {ids.length > 0 && (
-        <div className="pxd-bar">
+      {canAct && ids.length > 0 && (
+        <div className="pxd-bar as-bar">
           <div className="pxd-brow">
             <b>{t('depot.ph.ticked', { count: ids.length })}</b>
-            <button type="button" className="linkish" onClick={() => setSel(ids.length === rows.length ? new Set() : new Set(rows.map((o) => o.id)))}>
-              {ids.length === rows.length ? t('depot.ph.untickAll') : t('depot.ph.tickAll')}
-            </button>
           </div>
-          <span className="pxd-lbl">{t('depot.ph.partner')}</span>
-          <div className="pxd-parts">
-            {(companies.data ?? []).map((c) => (
-              <button key={c.id} type="button" className={`pxs-chip${company === c.id ? ' sel' : ''}`} aria-pressed={company === c.id} onClick={() => setCompany(c.id)}>
-                {company === c.id && <Icon name="check" />}
-                {c.name}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            className="pxd-send"
-            disabled={!company || go.busy}
-            onClick={() =>
-              go.run(ids, company, () => {
-                setSel(new Set());
-                setCompany(null);
-              })
-            }
-          >
-            <Icon name="truck" /> {t('depot.ph.send', { count: ids.length })}
-            {company ? ` · ${(companies.data ?? []).find((c) => c.id === company)?.name ?? ''}` : ''}
+          <label className="as-pick">
+            <span className="pxd-lbl">{t('depot.as.who')}</span>
+            <select value={who} onChange={(e) => setWho(e.target.value)}>
+              <option value="">{t('depot.as.pick')}</option>
+              {cos.length > 0 && (
+                <optgroup label={t('depot.as.companies')}>
+                  {cos.map((c) => (
+                    <option key={c.id} value={`c:${c.id}`}>
+                      {c.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {lvs.length > 0 && (
+                <optgroup label={t('depot.as.private')}>
+                  {lvs.map((l) => (
+                    <option key={l.id} value={`l:${l.id}:${l.companyId ?? own?.id}`}>
+                      {l.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </label>
+          <button type="button" className="pxd-send" disabled={!who || busy} onClick={go}>
+            <Icon name="truck" /> {t('depot.as.go', { count: ids.length })}
           </button>
         </div>
       )}

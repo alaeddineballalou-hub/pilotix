@@ -9,6 +9,7 @@ import { getOrder, ordersProcs, setFollow } from './orders';
 import { landingSettings, quickCreatePage } from './landingquery';
 import { RESERVED } from './stockquery';
 import { releaseNoStock } from './nostock';
+import { dispatchOrders } from './dispatch';
 import { getPrefs } from './prefs';
 
 // ---------------------------------------------------------------- types
@@ -535,6 +536,16 @@ export async function depotCounts(db: Db, now = Date.now()) {
     retours: (c.returning ?? 0) + (c.in_exchange ?? 0),
     noStock: num(ns?.n),
     noStockLate: num(ns?.late),
+    // « En dispatch » problems: refused by the courier, to cancel by hand, waiting over 24 h
+    prepAlerts: num(
+      (
+        await db.query(
+          `SELECT count(*)::int AS n FROM orders
+            WHERE (follow_status = 'prepared' AND (send_error IS NOT NULL OR prepared_at <= $1::timestamptz)) OR cancel_by_hand`,
+          [new Date(now - 24 * 3_600_000).toISOString()],
+        )
+      )[0]?.n,
+    ),
   };
 }
 
@@ -939,40 +950,7 @@ export const catalogProcs = {
    * can be printed from then on. A parcel moving to another company is cancelled at the old one first. A parcel the
    * company refuses stays in « En dispatch », waiting for its number (send it again from there); the others go on.
    */
-  'depot.dispatch': proc([...DEPOT], z.object({ ids: z.array(id).min(1).max(500), companyId: id.optional() }), async (ctx, i) => {
-    const failed: { id: number; ref: string; error: string }[] = [];
-    const fail = (oid: number, ref: string, e: unknown) => failed.push({ id: oid, ref, error: (e as Error)?.message || 'Erreur' });
-    let ids = i.ids;
-    if (i.companyId) {
-      const moving = await ctx.db.query(
-        `SELECT o.id, o.ref FROM orders o JOIN delivery_companies c ON c.id = o.company_id
-         WHERE o.id = ANY($1) AND o.tracking IS NOT NULL AND o.company_id <> $2 AND c.kind = ANY($3)`,
-        [ids, i.companyId, API_COURIERS],
-      );
-      for (const r of moving) await cancelParcel(ctx, num(r.id)).catch((e) => fail(num(r.id), r.ref, e));
-      ids = ids.filter((x) => !failed.some((f) => f.id === x));
-      if (ids.length) await ordersProcs['orders.assignCompany'].run(ctx, { ids, companyId: i.companyId });
-    }
-    const pick = async (sql: string, ...more: unknown[]) => (ids.length ? (await ctx.db.query(sql, [ids, ...more])).map((r: any) => num(r.id)) : []);
-    const toMove = await pick(`SELECT id FROM orders WHERE id = ANY($1) AND follow_status = 'to_prepare'`);
-    const moved = toMove.length ? (await setFollow(ctx, { ids: toMove, status: 'prepared' })).changed.length : 0;
-    const toSend = await pick(
-      `SELECT o.id FROM orders o JOIN delivery_companies c ON c.id = o.company_id
-       WHERE o.id = ANY($1) AND o.follow_status = 'prepared' AND o.tracking IS NULL AND c.kind = ANY($2)`,
-      API_COURIERS,
-    );
-    let sent = 0;
-    if (toSend.length) {
-      try {
-        const r = await sendOrders(ctx, toSend);
-        sent = r.sent;
-        for (const x of r.results) if (!x.ok) fail(x.id, x.ref, new Error(x.error));
-      } catch (e) {
-        for (const r of await ctx.db.query('SELECT id, ref FROM orders WHERE id = ANY($1)', [toSend])) fail(num(r.id), r.ref, e);
-      }
-    }
-    return { moved, sent, failed };
-  }),
+  'depot.dispatch': proc([...DEPOT], z.object({ ids: z.array(id).min(1).max(500), companyId: id.optional() }), (ctx, i) => dispatchOrders(ctx, i.ids, i.companyId)),
 
   'depot.scan': proc([...DEPOT], z.object({ code: z.string().max(100).optional(), orderId: id.optional(), mode: z.enum(['dispatch', 'back', 'return', 'exchange']) }), (ctx, i) => scan(ctx, i)),
 

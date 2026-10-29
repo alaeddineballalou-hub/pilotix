@@ -69,17 +69,24 @@ test('taking fewer than needed serves whole lines, oldest first; rupture keeps t
   assert.equal((await linesOf(p.productId, p.variantId)).length, 0);
 });
 
-test('an order is ready only when all its products are taken, and then goes to dispatch as before', async () => {
+test('an order is ready only when all its products are taken; with a company it then goes to « En dispatch » by itself', async () => {
   const depot = await as(EMAILS.depot);
+  const withCompany = (
+    await db.query(`SELECT o.id FROM orders o JOIN delivery_companies c ON c.id = o.company_id AND c.active AND c.kind NOT IN ('own')
+                     WHERE o.conf_status = 'confirmed' AND o.follow_status = 'to_prepare'`)
+  ).map((r: any) => Number(r.id));
+  assert.ok(withCompany.length > 0);
   // take everything that is in stock
   for (const r of (await call('depot.pickList', depot, {})) as any[]) await call('depot.pick', depot, { productId: r.productId, variantId: r.variantId, qty: r.need, rupture: false });
-  const ready = (await call('depot.ready', depot, {})) as any[];
-  assert.ok(ready.length > 0);
-  for (const o of ready) {
+  // what waits now has every product taken, and no company (« À attribuer »)
+  for (const o of (await call('depot.ready', depot, {})) as any[]) {
     assert.equal(o.followStatus, 'to_prepare');
     const open = await db.query(`SELECT 1 FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = $1 AND NOT p.is_service AND i.picked_qty < i.qty`, [o.id]);
     assert.equal(open.length, 0);
+    assert.ok(!withCompany.includes(o.id), `${o.ref} has a company: it went to « En dispatch »`);
   }
+  const moved = (await db.query(`SELECT count(*)::int AS n FROM orders WHERE id = ANY($1) AND follow_status = 'prepared'`, [withCompany]))[0].n;
+  assert.ok(moved > 0, 'picked whole with a company: in « En dispatch »');
   const list = (await call('depot.pickList', depot, {})) as any[];
   assert.equal(list.length, 0, 'nothing left to take');
 });

@@ -132,6 +132,8 @@ export function toOrder(r: any): Order {
     version: num(r.version),
     confAgencyId: numOrNull(r.conf_agency_id),
     followAgencyId: numOrNull(r.follow_agency_id),
+    sendError: (r.send_error as string | null) ?? null,
+    cancelByHand: !!r.cancel_by_hand,
   };
 }
 
@@ -689,6 +691,8 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
   const blocked: { id: number; ref: string; reason: string }[] = [];
   /** confirmed orders cancelled here: their pieces are free again for « sans stock » orders */
   const freed: number[] = [];
+  /** cancelled with a parcel already created at a courier: cancelled there too, after this is saved */
+  const ghosts: number[] = [];
   await ctx.db.tx(async (tx) => {
     if (await alreadyApplied(tx, input.clientId, me)) return;
     const notify = await notifyContext(tx);
@@ -752,11 +756,14 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
       // Meta: an order from a landing page, confirmed by a person, is a real sale (never a blocked or fake one)
       await onLandingConf(tx, landing, cur, cur.conf_status, status, ctx.now(), input.reason ?? null, me);
       if (cur.conf_status === 'confirmed' && !confirmed && !cur.shipped_at) freed.push(oid);
+      if (['cancelled', 'duplicate', 'wrong_number', 'fake'].includes(status) && cur.follow_status === 'prepared') ghosts.push(oid);
       changed.push(oid);
     }
     if (freed.length)
       await releaseNoStock(tx, me, (await tx.query('SELECT DISTINCT variant_id FROM order_items WHERE order_id = ANY($1) AND variant_id IS NOT NULL', [freed])).map((r: any) => num(r.variant_id)));
   });
+  // a cancelled order's parcel at a courier: cancelled there by itself (or put on « À annuler à la main »)
+  if (ghosts.length) await (await import('./dispatch')).cancelGhosts(ctx, ghosts);
   await sendInPreview(ctx);
   ctx.emit({ type: 'orders' });
   return { changed, noStock, blocked };
@@ -899,6 +906,8 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
   });
   // SAV ticket parcels: delivered → ticket Livré, returned (scanned at the depot) → ticket Annulé
   if (['delivered', 'exchanged', 'returned'].includes(input.status) && (await settleTickets(ctx.db, me))) ctx.emit({ type: 'sav' });
+  // cancelled with its parcel at a courier: cancelled there too (or put on « À annuler à la main »)
+  if (input.status === 'cancelled' && changed.length) await (await import('./dispatch')).cancelGhosts(ctx, changed);
   await sendInPreview(ctx);
   ctx.emit({ type: 'orders' });
   return { changed };
