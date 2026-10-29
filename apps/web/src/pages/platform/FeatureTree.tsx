@@ -34,6 +34,7 @@ const SUB_LABEL: Record<string, string> = {
   'caisse/journal': 'caisse.ph.journal',
   'livraison/societes': 'livraison.tabs.societes',
   'livraison/pilot': 'livraison.tabs.pilot',
+  'livraison/couverture': 'livraison.tabs.couverture',
   'livraison/api': 'livraison.tabs.api',
   'livraison/livreurs': 'livraison.tabs.livreurs',
   'livraison/preferences': 'livraison.tabs.preferences',

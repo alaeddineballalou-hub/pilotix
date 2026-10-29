@@ -14,12 +14,13 @@
 //  - Who changes an order's company by hand: Préférences (agents, agency agents, depot, managers; admins always); with
 //    « Règles strictes verrouillées », an order placed by a strict rule only managers and admins.
 //  - Who writes the rules: admins, and the kinds of people ticked in Préférences (« Qui peut changer les règles Pilot »).
-import { ALL_WILAYAS, clashesOf, type Clash, personIs, pickRule, type PilotBy, type PilotConfig, type PilotRule, ruleNumber, WILAYAS } from '@pilotix/shared';
+import { clashesOf, type Clash, personIs, pickRule, type PilotBy, type PilotConfig, type PilotRule, ruleNumber, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, proc } from '../rpc';
 import { getSetting, setSetting } from '../settings';
 import { serves } from './confirmcheck';
+import { canonCommune, servedWilayas } from './coverage';
 import { asDepot, dispatchOrders, READY_SQL } from './dispatch';
 import { managers } from './livreur';
 import { addEvent } from './orders';
@@ -89,7 +90,9 @@ export async function pilotPick(db: Db, o: PickInput, cache: PickCache = {}): Pr
   const place = { wilayaId: o.wilayaId, isStopdesk: o.isStopdesk };
   const usable = new Set<number>();
   for (const to of new Set(cfg.rules.filter((r) => r.on).map((r) => r.to))) if (await canTake(db, to, place, cache)) usable.add(to);
-  const res = pickRule(cfg, { wilayaId: o.wilayaId, commune: o.commune, productIds: o.productIds }, (r) => usable.has(r.to));
+  // the commune as the official list writes it (a spelling corrected in « Couverture › À corriger » is recognized)
+  const commune = (await canonCommune(db, o.wilayaId, o.commune)) ?? o.commune;
+  const res = pickRule(cfg, { wilayaId: o.wilayaId, commune, productIds: o.productIds }, (r) => usable.has(r.to));
   if ('rule' in res) return { companyId: res.rule.to, by: res.rule.strict ? 'strict' : 'rule', rule: res.rule.id, why: null };
   if ('conflict' in res) return { companyId: null, by: 'none', rule: null, why: `conflict:${ruleNumber(cfg.rules, res.conflict[0])},${ruleNumber(cfg.rules, res.conflict[1])}` };
   if (def && (await canTake(db, def, place, cache))) return { companyId: def, by: 'default', rule: null, why: null };
@@ -265,12 +268,8 @@ export const pilotProcs = {
   /** The mode, the rules and their clashes, the companies (where each delivers at home), the products, the default. */
   'pilot.get': proc(null, z.object({}), async (ctx) => {
     const cfg = await pilotConfig(ctx.db);
-    const companies = await ctx.db.query(
-      `SELECT c.id, c.name, c.kind, c.active,
-              (SELECT count(*)::int FROM delivery_fees f WHERE f.company_id = c.id) AS n,
-              ARRAY(SELECT f.wilaya_id FROM delivery_fees f WHERE f.company_id = c.id AND f.home > 0 ORDER BY f.wilaya_id) AS home
-         FROM delivery_companies c ORDER BY c.active DESC, c.id`,
-    );
+    const companies = await ctx.db.query(`SELECT c.id, c.name, c.kind, c.active FROM delivery_companies c ORDER BY c.active DESC, c.id`);
+    const served = await servedWilayas(ctx.db);
     const products = await ctx.db.query(`SELECT id, name FROM products WHERE active AND NOT is_service ORDER BY name LIMIT 2000`);
     return {
       ...cfg,
@@ -278,10 +277,7 @@ export const pilotProcs = {
       found: clashesOf(cfg),
       canEdit: await canRules(ctx),
       defaultCompanyId: (await getSetting(ctx.db, 'shop')).defaultCompanyId ?? null,
-      companies: companies.map((c: any) => {
-        const free = c.kind === 'own' || c.kind === 'manual' || num(c.n) === 0;
-        return { id: num(c.id), name: String(c.name), kind: String(c.kind), active: !!c.active, own: c.kind === 'own', serves: free ? ALL_WILAYAS : (c.home ?? []).map(Number) };
-      }),
+      companies: companies.map((c: any) => ({ id: num(c.id), name: String(c.name), kind: String(c.kind), active: !!c.active, own: c.kind === 'own', serves: served.get(num(c.id)) ?? [] })),
       products: products.map((p: any) => ({ id: num(p.id), name: String(p.name) })),
     };
   }),

@@ -2,7 +2,9 @@
 .pxl { display: flex; flex-direction: column; gap: 10px; padding-bottom: 24px; }
 .pxl > *, .pxl-ob > * { flex-shrink: 0; }
 .pxl-ob { display: flex; flex-direction: column; gap: 10px; }
-.pxl-tabs a { flex: 1; height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 13px; font-weight: 700; color: var(--muted); text-decoration: none; }
+.pxl-tabs { overflow-x: auto; scrollbar-width: none; }
+.pxl-tabs::-webkit-scrollbar { display: none; }
+.pxl-tabs a { flex: 1 0 auto; padding: 0 12px; white-space: nowrap; height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 13px; font-weight: 700; color: var(--muted); text-decoration: none; }
 .pxl-tabs a.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 4px rgba(27, 42, 71, .12); }
 
 .pxl-sum { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }

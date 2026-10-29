@@ -6,6 +6,7 @@ import { ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Preferences } from './Preferences';
 import { Pilot } from './Pilot';
+import { Coverage } from './Coverage';
 import type { Out } from '../../lib/backend';
 import { wilaya } from '../../lib/format';
 import { useFullScreen } from '../../lib/fullScreen';
@@ -82,7 +83,7 @@ export function PhoneLivraison({
   onAdd,
   onSheet,
 }: {
-  current: 'societes' | 'pilot' | 'api' | 'livreurs' | 'preferences';
+  current: 'societes' | 'pilot' | 'couverture' | 'api' | 'livreurs' | 'preferences';
   companies: ReturnType<typeof useRpc<'delivery.companies'>>;
   kinds: ReturnType<typeof useRpc<'delivery.kinds'>>;
   onEdit: (c: Company) => void;
@@ -94,7 +95,7 @@ export function PhoneLivraison({
   return (
     <div className="pxl">
       <div className="pxv-own pxl-tabs" role="tablist">
-        {(['societes', 'pilot', 'api', 'livreurs', 'preferences'] as const).map((k) => (
+        {(['societes', 'pilot', 'couverture', 'api', 'livreurs', 'preferences'] as const).map((k) => (
           <a key={k} role="tab" aria-selected={current === k} className={current === k ? 'on' : ''} href={`#/livraison/${k}`}>
             {t(`livraison.ph.tab.${k}`)}
           </a>
@@ -104,6 +105,8 @@ export function PhoneLivraison({
         <Preferences />
       ) : current === 'pilot' ? (
         <Pilot />
+      ) : current === 'couverture' ? (
+        <Coverage />
       ) : current === 'livreurs' ? (
         <Livreurs companies={companies.data ?? []} onSheet={onSheet} />
       ) : companies.error ? (

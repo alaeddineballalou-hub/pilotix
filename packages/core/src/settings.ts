@@ -70,6 +70,8 @@ export interface SettingsMap {
    * seller's answers to clashes between rules.
    */
   pilot: PilotConfig;
+  /** Sociétés de livraison › Couverture: the last import of tariffs and bureaus from the companies' APIs */
+  coverageRefresh: { at: string | null; results: { companyId: number; name: string; ok: boolean; error: string | null }[] };
   /**
    * Sociétés de livraison › Préférences: each seller's own choices (shown in « Mode avancé »).
    *  - manualDefault: in « Manuel », the default company counts as chosen when the agent confirms (otherwise the order
@@ -125,6 +127,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
     { id: 'tomorrow', label: 'Demain', text: 'Bonjour {nom}, je repasse demain pour votre commande {ref}. Merci de rester joignable.' },
   ],
   pilot: PILOT_DEFAULT,
+  coverageRefresh: { at: null, results: [] },
   prefs: {
     manualDefault: true,
     changeCompany: { confirmation: true, agency: false, depot: false, manager: true },

@@ -1,5 +1,5 @@
 // Demo « Pilot Auto Assign » (the in-browser demo and the demo shop; not the tests' base data): five rules, two clashes
-// already answered, in « Pilot Auto Assign » mode.
+// already answered, in « Pilot Auto Assign » mode; « Livraison privée » covers the Algiers area and Oran.
 import { REGIONS } from '@pilotix/shared';
 import type { Db } from '../db';
 import { num } from '../db';
@@ -13,6 +13,10 @@ export async function seedPilotDemo(db: Db): Promise<void> {
   const own = by((c) => c.kind === 'own');
   const noest = by((c) => c.kind === 'noest') || zr;
   if (!yal || !zr || !own) return;
+  // « Livraison privée » covers the Algiers area and Oran (Couverture): the other wilayas switched off
+  const zone = [16, 9, 35, 42, 31];
+  for (let w = 1; w <= 69; w++)
+    if (!zone.includes(w)) await db.query('INSERT INTO company_wilayas (company_id, wilaya_id, on_) VALUES ($1,$2,false) ON CONFLICT DO NOTHING', [own, w]);
   const prods = await db.query(`SELECT id, name FROM products WHERE name IN ('Lit parapluie', 'Chaise haute évolutive') ORDER BY id`);
   const big = prods.map((p: any) => num(p.id));
   const alger = ['Kouba', 'Hydra', 'Bab Azzouar', 'Bordj El Kiffan', 'Rouiba'].map((c) => ({ w: 16, c }));

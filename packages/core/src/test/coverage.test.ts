@@ -1,0 +1,88 @@
+// Sociétés de livraison › « Couverture »: the seller's wilaya switches per company (the checks and Pilot follow them),
+// communes written another way corrected once and remembered, missing prices listed, tariffs imported again.
+import assert from 'node:assert/strict';
+import { before, test } from 'node:test';
+import { call, Ctx, Db } from '../index';
+import { canonCommune, closestCommune } from '../modules/coverage';
+import { EMAILS, setup } from './harness';
+
+let db: Db;
+let admin: Ctx;
+let as: (email: string) => Promise<Ctx>;
+let yal: number, zr: number, own: number;
+let X: { productId: number; variantId: number };
+
+before(async () => {
+  ({ db, as } = await setup(40));
+  admin = await as(EMAILS.admin);
+  const cos = await db.query('SELECT id, kind FROM delivery_companies');
+  const k = (kind: string) => Number(cos.find((c: any) => c.kind === kind)?.id);
+  [yal, zr, own] = [k('yalidine'), k('zr'), k('own')];
+  const r = (await db.query(`SELECT p.id, v.id AS vid FROM products p JOIN product_variants v ON v.product_id = p.id AND v.active WHERE p.active AND NOT p.is_service ORDER BY p.id, v.id LIMIT 1`))[0];
+  X = { productId: Number(r.id), variantId: Number(r.vid) };
+});
+
+let n = 0;
+const order = async (w: number, commune: string) =>
+  (await call('orders.create', admin, { customerName: `Client Couverture ${++n}`, phone: `0696${String(100000 + n).slice(-6)}`, wilayaId: w, commune, address: 'Rue 1', items: [{ ...X, qty: 1 }] })) as any;
+const check = (companyId: number, wilayaId: number, commune: string) =>
+  call('orders.confirmCheck', admin, { items: [{ ...X, variantId: X.variantId, qty: 1 }], wilayaId, commune, isStopdesk: false, companyId }) as Promise<any>;
+
+test('a wilaya switched off for a company: the check refuses it there, Pilot skips it; back to the company’s list', async () => {
+  assert.equal((await check(yal, 16, 'Hydra')).deliver.ok, true);
+  await call('coverage.set', admin, { companyId: yal, wilayas: [16], on: false });
+  const c = (await check(yal, 16, 'Hydra')).deliver;
+  assert.equal(c.ok, false);
+  assert.equal(c.why, 'company');
+  await call('pilot.save', admin, { mode: 'auto', rules: [{ id: 'r1', wilayas: [16], except: false, communes: [], products: [], to: yal, strict: true, on: true }], clashes: [], defaultCompanyId: zr });
+  const o = await order(16, 'Hydra');
+  assert.equal(Number((await db.query('SELECT company_id FROM orders WHERE id = $1', [o.id]))[0].company_id), zr, 'Yalidine switched off there: the default company');
+  await call('coverage.set', admin, { companyId: yal, wilayas: [16], on: null });
+  assert.equal((await check(yal, 16, 'Hydra')).deliver.ok, true);
+  const g = (await call('coverage.get', admin, {})) as any;
+  const y = g.companies.find((x: any) => x.id === yal);
+  assert.equal(y.wilayas.find((w: any) => w.w === 16).on, null);
+  assert.equal(g.companies.find((x: any) => x.id === own).free, true, 'our livreurs: everywhere by default');
+  await call('pilot.save', admin, { mode: 'manual', rules: [], clashes: [], defaultCompanyId: yal });
+});
+
+test('switched on where the company gives no price: it counts, and goes on « À corriger » (prices)', async () => {
+  await db.query('DELETE FROM delivery_fees WHERE company_id = $1 AND wilaya_id = 54', [zr]);
+  assert.equal((await check(zr, 54, 'In Guezzam')).deliver.ok, false);
+  await call('coverage.set', admin, { companyId: zr, wilayas: [54], on: true });
+  assert.equal((await check(zr, 54, 'In Guezzam')).deliver.ok, true);
+  const f = (await call('coverage.toFix', admin, {})) as any;
+  assert.deepEqual(f.prices.find((p: any) => p.companyId === zr)?.wilayas, [54]);
+});
+
+test('a commune written another way: on « À corriger » with the closest name; corrected once, remembered, orders fixed, Pilot matches it', async () => {
+  assert.equal(await canonCommune(db, 16, 'bab-azzouar'), 'Bab Azzouar');
+  assert.equal(await canonCommune(db, 16, 'باب الزوار'), 'Bab Azzouar', 'the Arabic name');
+  assert.equal(await canonCommune(db, 16, 'Bab Ezzouar'), null);
+  assert.equal(closestCommune(16, 'Bab Ezzouar'), 'Bab Azzouar');
+  await call('pilot.save', admin, {
+    mode: 'auto',
+    rules: [{ id: 'r1', wilayas: [16], except: false, communes: [{ w: 16, c: 'Bab Azzouar' }], products: [], to: own, strict: true, on: true }],
+    clashes: [],
+  });
+  const a = await order(16, 'Bab Ezzouar');
+  assert.equal(Number((await db.query('SELECT company_id FROM orders WHERE id = $1', [a.id]))[0].company_id), yal, 'not recognized yet: the default');
+  const f = (await call('coverage.toFix', admin, {})) as any;
+  const row = f.communes.find((c: any) => c.wilayaId === 16 && c.commune === 'Bab Ezzouar');
+  assert.ok(row && row.suggestion === 'Bab Azzouar' && row.count >= 1);
+  const r = (await call('coverage.fixCommune', admin, { wilayaId: 16, from: 'Bab Ezzouar', to: 'Bab Azzouar' })) as any;
+  assert.ok(r.fixed >= 1);
+  const after = (await db.query('SELECT commune, company_id FROM orders WHERE id = $1', [a.id]))[0];
+  assert.deepEqual([after.commune, Number(after.company_id)], ['Bab Azzouar', own], 'fixed, and Pilot chose again');
+  const b = await order(16, 'bab ezzouar');
+  assert.equal(Number((await db.query('SELECT company_id FROM orders WHERE id = $1', [b.id]))[0].company_id), own, 'remembered for the next orders');
+  await assert.rejects(call('coverage.fixCommune', admin, { wilayaId: 16, from: 'X', to: 'Oran' }), /n’est pas une commune/);
+  await call('pilot.save', admin, { mode: 'manual', rules: [], clashes: [] });
+});
+
+test('« Mettre à jour maintenant »: tariffs and bureaus of the companies with an API imported again; admin only', async () => {
+  const r = (await call('coverage.refresh', admin, {})) as any;
+  assert.ok(r.results.some((x: any) => x.companyId === yal && x.ok));
+  assert.ok(((await call('coverage.get', admin, {})) as any).refresh.at);
+  await assert.rejects(call('coverage.refresh', await as(EMAILS.conf), {}));
+});
