@@ -14,17 +14,67 @@ let deadline = 0;
 export const setDeadline = (ms: number) => (deadline = Date.now() + ms);
 export const timeUp = () => deadline > 0 && Date.now() > deadline;
 
-/** Short readable error from any API answer. */
+/**
+ * Short readable error from any API answer, with the courier's field-by-field reasons when it gives them.
+ * A general title alone (« One or more validation errors occurred ») tells the user nothing: the list of
+ * fields it refers to (errors / validationErrors / failures… under any key) is added after it.
+ */
 export function errText(e: unknown): string {
+  const main = mainErr(e);
+  if (!e || typeof e !== 'object') return main;
+  const details: string[] = [];
+  fieldErrs(e, '', details, 0);
+  const extra = [...new Set(details)].filter((d) => d && d !== main && !main.includes(d) && !(main && d.endsWith(` : ${main}`)));
+  return (extra.length ? `${main ? `${main} — ` : ''}${extra.join(' · ')}` : main).slice(0, 500);
+}
+
+const NOISE = new Set(['type', 'traceid', 'instance', 'status', 'statuscode', 'code', 'issuccess', 'isfailure', 'timestamp', 'title', 'detail', 'message', 'error_description', 'msg', 'requestid', 'path', 'method']);
+const NAME_KEYS = ['propertyName', 'field', 'fieldName', 'property', 'name', 'key', 'code'];
+const MSG_KEYS = ['errorMessage', 'message', 'description', 'detail', 'reason', 'error', 'msg'];
+
+/** Collects « field : reason » lines from a courier's error answer (dictionary or list form, nested). */
+function fieldErrs(v: unknown, field: string, out: string[], depth: number) {
+  if (depth > 5 || out.length > 12 || v === null || v === undefined) return;
+  if (typeof v === 'string' || typeof v === 'number') {
+    const s = clean(String(v));
+    if (s && field) out.push(`${field} : ${s}`);
+    return;
+  }
+  if (Array.isArray(v)) {
+    for (const x of v) fieldErrs(x, field, out, depth + 1);
+    return;
+  }
+  if (typeof v !== 'object') return;
+  const o = v as Record<string, unknown>;
+  // {propertyName: 'Phone', errorMessage: 'invalid'} → « Phone : invalid »
+  const nk = NAME_KEYS.find((k) => typeof o[k] === 'string' && o[k]);
+  const mk = MSG_KEYS.find((k) => typeof o[k] === 'string' && o[k] && k !== nk);
+  if (mk && depth > 0) {
+    out.push(`${nk ? `${o[nk]} : ` : field ? `${field} : ` : ''}${clean(String(o[mk]))}`);
+    return;
+  }
+  for (const [k, x] of Object.entries(o)) {
+    if (depth === 0 && NOISE.has(k.toLowerCase())) continue;
+    // container keys (errors, validationErrors, failures, extensions…) keep the field name of the level above
+    const container = /^(errors?|validationerrors|failures|details|extensions|value|data|result)$/i.test(k);
+    fieldErrs(x, container ? field : k, out, depth + 1);
+  }
+}
+
+const clean = (s: string) => s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+
+/** The answer's main sentence (as before). */
+function mainErr(e: unknown): string {
   if (!e) return '';
   if (typeof e === 'string') return e.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300);
-  if (Array.isArray(e)) return e.map(errText).filter(Boolean).join(' · ');
+  if (Array.isArray(e)) return e.map(mainErr).filter(Boolean).join(' · ');
   const o = e as any;
-  const t = o.detail || o.message || o.error_description || o.msg || (typeof o.error === 'string' ? o.error : null) || o.errors || o.title || o.error;
-  if (t) return typeof t === 'string' ? t : errText(t);
+  const t = o.detail || o.message || o.error_description || o.msg || o.description || (typeof o.error === 'string' ? o.error : null) || o.title || (o.errors ? null : o.error);
+  if (t) return typeof t === 'string' ? clean(t) : mainErr(t);
+  if (o.errors) return '';
   return Object.entries(o)
     .filter(([, v]) => typeof v === 'string' || Array.isArray(v))
-    .map(([k, v]) => `${k} : ${errText(v)}`)
+    .map(([k, v]) => `${k} : ${mainErr(v)}`)
     .join(' · ')
     .slice(0, 300);
 }
@@ -82,7 +132,11 @@ export async function http(who: string, url: string, o: HttpOpts = {}, retried =
   }
   if (res.status === 401 || res.status === 403) throw new CourierError(`${who} refuse les clés API (${errText(data) || res.status}). Vérifiez-les dans Sociétés de livraison.`);
   if (res.status === 429) throw new CourierError(`${who} : trop de demandes, réessayez dans une minute`, 429);
-  if (!res.ok) throw new CourierError(`${who} : ${errText(data) || `erreur ${res.status}`}`);
+  if (!res.ok) {
+    // the courier's whole answer goes to the server log: what the user sees is short, this shows everything
+    console.warn(`[courier ${who}] ${o.method ?? (body ? 'POST' : 'GET')} ${url.replace(/[?#].*$/, '')} → ${res.status} ${(typeof data === 'string' ? data : JSON.stringify(data)).slice(0, 2000)}`);
+    throw new CourierError(`${who} : ${errText(data) || `erreur ${res.status}`}`);
+  }
   return data;
 }
 

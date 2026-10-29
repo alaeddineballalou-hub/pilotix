@@ -330,20 +330,22 @@ async function requestChange(ctx: Ctx, i: z.infer<typeof ChangeIn>) {
   }
   let extId: string | null = null;
   let approved: boolean | null = null;
+  let direct = false;
   if (isDemo(ctx)) {
     extId = `demo-change-${Date.now()}`;
     approved = i.kind === 'phone' ? true : null;
   } else {
-    const r = (await courier(ctx, 'change', { companyId: num(o.company_id), orderId: num(o.id), change: input })) as { extId: string; approved: boolean | null };
+    const r = (await courier(ctx, 'change', { companyId: num(o.company_id), orderId: num(o.id), change: input })) as { extId: string; approved: boolean | null; direct?: boolean };
     extId = r.extId;
     approved = r.approved;
+    direct = !!r.direct;
   }
   const ins = await ctx.db.query(
     `INSERT INTO parcel_changes (order_id, company_id, ext_id, kind, old, new, status, note, created_by, decided_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
     [o.id, o.company_id, extId, i.kind, JSON.stringify(old), JSON.stringify(next), approved ? 'approved' : 'pending', i.note ?? null, ctx.session.profile.id, approved ? new Date().toISOString() : null],
   );
   const row = { ...ins[0], company_name: o.company_name };
-  await addEvent(ctx.db, num(o.id), ctx.session.profile.id, 'note', null, null, `Demande de modification envoyée à ${o.company_name} : ${describe(i.kind, old, next)}${i.note ? ` (${i.note})` : ''}`);
+  await addEvent(ctx.db, num(o.id), ctx.session.profile.id, 'note', null, null, `${direct ? `Modifié directement chez ${o.company_name} (colis pas encore enlevé)` : `Demande de modification envoyée à ${o.company_name}`} : ${describe(i.kind, old, next)}${i.note ? ` (${i.note})` : ''}`);
   if (approved) await applyChange(ctx, row);
   ctx.emit({ type: 'order', id: num(o.id) });
   return toChange((await ctx.db.query(`${CHANGES_SQL} WHERE ch.id = $1`, [row.id]))[0]);

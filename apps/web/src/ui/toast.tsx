@@ -13,6 +13,8 @@ const publish = () => subs.forEach((s) => s([...items]));
 
 /** Small message at the bottom of the screen (like the original app). */
 export function toast(text: string, tone: Tone = 'info', ms = 3500) {
+  // the same message already on screen is not shown twice (a double click, two answers saying the same)
+  if (items.some((x) => x.text === text && x.tone === tone)) return;
   const t = { id: nextId++, text, tone };
   items = [...items, t].slice(-3);
   publish();

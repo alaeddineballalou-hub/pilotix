@@ -330,8 +330,10 @@ async function parcelInfo(c: CourierCompany, it: TrackItem): Promise<ParcelInfo>
     situation: word(p?.situation),
     livreur: dp && (dp.firstName || dp.lastName) ? { name: [dp.firstName, dp.lastName].filter(Boolean).join(' '), phone: phoneOf(dp.phone), hub: dp.hub?.name ?? null } : null,
     risk: rm && rm.score != null ? { score: numOf(rm.score), level: rm.level ?? null, orders: numOf(rm.completedOrders), returns: numOf(rm.returns) } : null,
-    canModify: !!p?.isEligibleForModification,
-    canChangePhone: !!p?.isEligibleForPhoneChange,
+    // not locked yet (not picked up): everything can still be changed directly
+    canModify: p?.state?.isLocked === false || !!p?.isEligibleForModification,
+    canChangePhone: p?.state?.isLocked === false || !!p?.isEligibleForPhoneChange,
+    direct: p?.state?.isLocked === false,
     pendingChange: !!p?.hasActiveModificationRequest,
     modifications: n(p?.modificationCount),
     modificationLimit: n(p?.applicableModificationThreshold),
@@ -373,6 +375,62 @@ async function changeRequest(c: CourierCompany, i: ChangeInput, helpers: Helpers
   const cur = await http(c.name, url(c, `/parcels/${encodeURIComponent(i.item.extId || i.item.tracking)}`), { headers: h(c) });
   if (!cur?.id) throw new CourierError(`Colis ${i.item.tracking} introuvable chez ZR`);
   const parcelId = String(cur.id);
+  // A parcel ZR has not locked yet (not picked up) is changed DIRECTLY: ZR refuses a request for it
+  // (« … is not in a locked state and can be modified directly »). Instant, and it uses none of the parcel's changes.
+  if (cur.state?.isLocked === false) return changeDirect(c, i, helpers, p, cur);
+  try {
+    return await changeByRequest(c, i, helpers, p, cur);
+  } catch (e: any) {
+    if (/not in a locked state|modified directly/i.test(String(e?.message))) return changeDirect(c, i, helpers, p, cur);
+    throw e;
+  }
+}
+
+/** The new place of a parcel (stop desk or home), as for a new parcel. */
+async function changedPlace(c: CourierCompany, i: ChangeInput, helpers: Helpers, p: Parcel | null) {
+  if (!p) throw new CourierError('Commande introuvable');
+  const next: Parcel = {
+    ...p,
+    is_stopdesk: i.kind === 'delivery' ? !!i.stopdesk : p.is_stopdesk,
+    stopdesk_ext_id: i.kind === 'delivery' && i.stopdesk ? (i.hubExtId ?? null) : p.stopdesk_ext_id,
+    wilaya_id: i.wilayaId ?? p.wilaya_id,
+    commune: i.commune ?? p.commune,
+    address: i.address ?? p.address,
+  };
+  if (i.kind === 'address' && next.is_stopdesk) throw new CourierError('Colis livré en stop desk : changez plutôt le bureau (Domicile ↔ Stop desk)');
+  const { hubId, address } = await zrAddress(c, next, helpers);
+  return { next, hubId, address };
+}
+
+/** Changes a parcel that is not locked yet straight at ZR (amount, address / stop desk, phone). */
+async function changeDirect(c: CourierCompany, i: ChangeInput, helpers: Helpers, p: Parcel | null, cur: any) {
+  const parcelId = String(cur.id);
+  const at = (path: string, json: unknown) => http(c.name, url(c, `/parcels/${encodeURIComponent(parcelId)}/${path}`), { method: 'PATCH', headers: h(c), json });
+  if (i.kind === 'phone') {
+    if (!i.phone) throw new CourierError('Le nouveau numéro manque');
+    const phone = { number1: intl(i.phone), ...(i.phone2 ? { number2: intl(i.phone2) } : {}) };
+    await at('customer', { parcelId, name: cut(cur.customer?.name || p?.customer_name || 'Client', 100), phone });
+  } else if (i.kind === 'amount') {
+    if (i.amount == null || !(i.amount >= 0)) throw new CourierError('Le nouveau montant manque');
+    await at('amount', { parcelId, amount: Math.round(i.amount) });
+  } else {
+    const { next, hubId, address } = await changedPlace(c, i, helpers, p);
+    await at('deliveryAddress', { parcelId, deliveryAddress: address, ...(hubId ? { hubId } : {}) });
+    if (i.amount != null && i.amount >= 0) await at('amount', { parcelId, amount: Math.round(i.amount) });
+    if (i.kind === 'delivery') {
+      // Domicile ↔ Stop desk: checked on ZR's side, never shown as done when ZR kept the old type
+      const want = next.is_stopdesk ? 'pickup-point' : 'home';
+      const after = await http(c.name, url(c, `/parcels/${encodeURIComponent(parcelId)}`), { headers: h(c) }).catch(() => null);
+      const got = String(after?.deliveryType?.name ?? after?.deliveryType ?? '').toLowerCase();
+      if (got && got !== want) throw new CourierError(`ZR a changé l’adresse mais pas le type de livraison (${got}). Supprimez le colis et renvoyez-le, ou changez-le après l’enlèvement.`);
+    }
+  }
+  return { extId: `direct:${parcelId}:${Date.now()}`, approved: true, direct: true };
+}
+
+/** A modification request (parcel already locked at ZR): ZR validates it later. */
+async function changeByRequest(c: CourierCompany, i: ChangeInput, helpers: Helpers, p: Parcel | null, cur: any) {
+  const parcelId = String(cur.id);
   if (i.kind === 'phone') {
     if (!i.phone) throw new CourierError('Le nouveau numéro manque');
     const r = await http(c.name, url(c, '/parcel-modification-requests/phone'), {
@@ -390,18 +448,8 @@ async function changeRequest(c: CourierCompany, i: ChangeInput, helpers: Helpers
     if (i.amount == null || !(i.amount >= 0)) throw new CourierError('Le nouveau montant manque');
     body.amount = Math.round(i.amount);
   } else {
-    if (!p) throw new CourierError('Commande introuvable');
     // the new place: a stop desk (its hub) or a home address, as for a new parcel
-    const next: Parcel = {
-      ...p,
-      is_stopdesk: i.kind === 'delivery' ? !!i.stopdesk : p.is_stopdesk,
-      stopdesk_ext_id: i.kind === 'delivery' && i.stopdesk ? (i.hubExtId ?? null) : p.stopdesk_ext_id,
-      wilaya_id: i.wilayaId ?? p.wilaya_id,
-      commune: i.commune ?? p.commune,
-      address: i.address ?? p.address,
-    };
-    if (i.kind === 'address' && next.is_stopdesk) throw new CourierError('Colis livré en stop desk : changez plutôt le bureau (Domicile ↔ Stop desk)');
-    const { hubId, address } = await zrAddress(c, next, helpers);
+    const { next, hubId, address } = await changedPlace(c, i, helpers, p);
     body.deliveryAddress = address;
     body.deliveryType = next.is_stopdesk ? 'pickup-point' : 'home';
     if (hubId) body.hubId = hubId;

@@ -5,7 +5,7 @@
 // gives its own file).
 import type { Order } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { backend, rpc } from '../../lib/backend';
 import { useRpc } from '../../lib/query';
@@ -33,8 +33,11 @@ export function useSendToCompany() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const running = useRef(false);
   const send = async (ids: number[]) => {
-    if (!ids.length) return;
+    // a quick double click would send the same parcels twice (the button is disabled only after the next render)
+    if (!ids.length || running.current) return;
+    running.current = true;
     setBusy(true);
     try {
       const r = await rpc('delivery.send', { ids });
@@ -44,6 +47,7 @@ export function useSendToCompany() {
     } catch (e: any) {
       toast(e.message, 'bad');
     } finally {
+      running.current = false;
       setBusy(false);
       qc.invalidateQueries();
     }

@@ -247,7 +247,7 @@ function ChangeDialog({ o, d, initial, onClose }: { o: Order; d: Info; initial?:
           </p>
         </>
       )}
-      {kind !== 'phone' && info.modificationLimit != null && <p className="muted small">{t('suivi.courier.quotaMod', { n: info.modifications ?? 0, max: info.modificationLimit })}</p>}
+      {kind !== 'phone' && !info.direct && info.modificationLimit != null && <p className="muted small">{t('suivi.courier.quotaMod', { n: info.modifications ?? 0, max: info.modificationLimit })}</p>}
       <Field label={t('suivi.courier.note')}>
         <input value={f.note} maxLength={500} placeholder={t('suivi.courier.notePh')} onChange={(e) => f.setNote(e.target.value)} />
       </Field>
@@ -351,7 +351,7 @@ function ChangeSheetForm({ o, d, initial, onClose }: { o: Order; d: Info; initia
           <button type="button" className="pxk-go" disabled={f.busy || !f.ready || !!f.off(kind)} onClick={f.send}>
             <Icon name="send" className="flip" /> {f.busy ? t('suivi.courier.ph.sending', { name }) : t('suivi.courier.sendTo', { name })}
           </button>
-          <p className="pxk-fnote">{kind === 'phone' ? t('suivi.courier.ph.footPhone', { name }) : t('suivi.courier.ph.footAsk', { name })}</p>
+          <p className="pxk-fnote">{info.direct ? t('suivi.courier.ph.footDirect', { name }) : kind === 'phone' ? t('suivi.courier.ph.footPhone', { name }) : t('suivi.courier.ph.footAsk', { name })}</p>
         </>
       }
     >
@@ -495,7 +495,7 @@ function ChangeSheetForm({ o, d, initial, onClose }: { o: Order; d: Info; initia
             {!!info.phoneChangePrice && <span>{t('suivi.courier.cost', { v: da(info.phoneChangePrice) })}</span>}
           </>
         ) : (
-          info.modificationLimit != null && <Quota n={info.modifications ?? 0} max={info.modificationLimit} label={t('suivi.courier.quotaMod', { n: info.modifications ?? 0, max: info.modificationLimit })} />
+          !info.direct && info.modificationLimit != null && <Quota n={info.modifications ?? 0} max={info.modificationLimit} label={t('suivi.courier.quotaMod', { n: info.modifications ?? 0, max: info.modificationLimit })} />
         )}
       </div>
     </Sheet>

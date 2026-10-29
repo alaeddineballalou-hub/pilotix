@@ -241,6 +241,8 @@ export interface ParcelInfo {
   /** a modification request / a phone change can be made; one is already waiting */
   canModify: boolean;
   canChangePhone: boolean;
+  /** not locked at the courier yet: a change is made directly (instant, uses none of the parcel's changes) */
+  direct?: boolean;
   pendingChange: boolean;
   modifications: number | null;
   modificationLimit: number | null;
@@ -321,7 +323,7 @@ export interface CourierAdapter {
   /** One parcel as the courier sees it: journey, SMS, livreur, return risk, what can still be changed. */
   parcel?(c: CourierCompany, item: TrackItem): Promise<ParcelInfo>;
   /** Modification requests (price, home / stop desk, address, phone) and their answers. */
-  change?(c: CourierCompany, i: ChangeInput, h: Helpers, p: Parcel | null): Promise<{ extId: string; approved: boolean | null }>;
+  change?(c: CourierCompany, i: ChangeInput, h: Helpers, p: Parcel | null): Promise<{ extId: string; approved: boolean | null; direct?: boolean }>;
   changeStates?(c: CourierCompany, extIds: string[]): Promise<ChangeState[]>;
   /** withdraws a modification request the courier has not answered yet */
   changeCancel?(c: CourierCompany, extId: string): Promise<void>;

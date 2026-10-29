@@ -428,6 +428,7 @@
       "sending": "Sending to {{name}}…",
       "footPhone": "{{name}} applies the new number right away, and so does the order.",
       "footAsk": "{{name}} validates the request; the order changes as soon as it accepts.",
+      "footDirect": "Not picked up yet: {{name}} changes it right away, and so does the order. It does not use the parcel’s changes.",
       "freeDelivery": "Free delivery",
       "toDesk": "Stop desk",
       "toHome": "Home",

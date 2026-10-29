@@ -428,6 +428,7 @@
       "sending": "Envoi à {{name}}…",
       "footPhone": "{{name}} applique le nouveau numéro tout de suite, la commande aussi.",
       "footAsk": "{{name}} valide la demande ; la commande change dès qu’elle l’accepte.",
+      "footDirect": "Pas encore enlevé : {{name}} le change tout de suite, et la commande aussi. Cela n’utilise pas les modifications du colis.",
       "freeDelivery": "Livraison offerte",
       "toDesk": "Stop desk",
       "toHome": "Domicile",
