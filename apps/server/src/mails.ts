@@ -2,7 +2,7 @@
 // "mot de passe oublié" one: sign-up confirmation, invitation (choose your password), « a store was added to your
 // account », e-mail check, reminders before the end of a trial or a paid period, payment receipts, answers from
 // Pilotix, referral rewards and the control room's login code.
-import type { DueReminder, OwnerMail, ReferralReward } from '@pilotix/core';
+import type { DueReminder, OwnerMail, QualityAlert, ReferralReward } from '@pilotix/core';
 import { config } from './config';
 import { Mail } from './mail';
 
@@ -321,6 +321,27 @@ export function courierWatchMail(m: { to: string; name: string; items: { company
     button: { label: 'Ouvrir la liste', link: `${site()}/#/platform/couriers` },
     after: n > 12 ? [`… et ${n - 12} de plus dans la liste.`] : [],
     note: 'Cet e-mail part au plus une fois par jour, seulement quand quelque chose a changé.',
+  });
+}
+
+/** Control room › Pilotix Protection System: the buyers' quality fell by 5 points or more this week (once a week). */
+export function qualityAlertMail(m: { to: string; name: string; alert: QualityAlert }): Mail {
+  const a = m.alert;
+  const p = (v: number) => `${(v * 100).toFixed(1).replace('.', ',')} %`;
+  const pts = (w: { now: number; prev: number }) => `−${((w.prev - w.now) * 100).toFixed(1).replace('.', ',')} pts`;
+  const lines: string[] = [];
+  if (a.network) lines.push(`Toutes boutiques confondues : ${p(a.network.now)} de vrais acheteurs cette semaine, contre ${p(a.network.prev)} la semaine d’avant (${pts(a.network)}).`);
+  if (a.stores.length) lines.push(a.stores.length === 1 ? 'Une boutique a baissé de 5 points ou plus :' : `${a.stores.length} boutiques ont baissé de 5 points ou plus :`);
+  return mail(m.to, `Pilotix : la qualité des acheteurs baisse${a.network ? ` (${pts(a.network)})` : ''}`, {
+    l: 'fr',
+    title: 'Qualité des acheteurs en baisse',
+    icon: '📉',
+    hello: hello('fr', m.name),
+    lines: [`Semaine du ${day(a.week.from, 'fr')} au ${day(a.week.to, 'fr')} (les 3 derniers jours ne comptent pas : les agents confirment encore).`, ...lines],
+    box: a.stores.slice(0, 12).map((s) => [s.name, `${p(s.now)} (${pts(s)}, ${s.buyers} acheteurs)`] as [string, string]),
+    button: { label: 'Ouvrir Pilotix Protection System', link: `${site()}/#/platform/protection` },
+    after: a.stores.length > 12 ? [`… et ${a.stores.length - 12} de plus sur la page.`] : [],
+    note: 'Vrais acheteurs : commandes confirmées par un agent ou livrées, sur 100 commandes reçues. Cet e-mail part au plus une fois par semaine.',
   });
 }
 

@@ -14,6 +14,7 @@
 // Only real results are shared (agents' verdicts, marks, deliveries), never the machine's own guesses (blocked orders),
 // so one store's strict settings do not spread. The latest result wins in each store: a parcel delivered after a
 // refusal takes that store's « bad » back.
+import { algeriaDay, QUALITY_OPEN_DAYS, QUALITY_SQL, qualityOf } from '../modules/quality';
 import { hmacSha256Hex } from '@pilotix/shared';
 import type { Db } from '../db';
 import type { Ctx } from '../rpc';
@@ -166,11 +167,7 @@ export interface ProtectionCount {
 }
 const zero = (): ProtectionCount => ({ orders: 0, blocked: 0, review: 0, network: 0, campaign: 0, buyers: 0, good: 0, bad: 0 });
 const COUNTS = Object.keys(zero()) as (keyof ProtectionCount)[];
-/** an Algeria day ('YYYY-MM-DD'): Algeria is UTC+1 all year */
-export const algeriaDay = (ms: number) => new Date(ms + 3_600_000).toISOString().slice(0, 10);
-
-/** a real buyer: the agent confirmed the order, or it was delivered (as the store's own Protection page counts it) */
-const REAL = `(o.conf_status IN ('confirmed', 'no_stock') OR o.follow_status IN ('delivered', 'exchanged'))`;
+export { algeriaDay };
 
 /** A store's landing orders day by day (Algeria time), counted as its own Protection page counts them. */
 async function ordersByDay(db: Db, since: string): Promise<Map<string, ProtectionCount>> {
@@ -181,9 +178,7 @@ async function ordersByDay(db: Db, since: string): Promise<Map<string, Protectio
             count(*) FILTER (WHERE s.verdict = 'review' AND NOT s.merged)::int AS review,
             count(*) FILTER (WHERE s.reasons @> '[{"code":"shared_bad"}]')::int AS network,
             count(*) FILTER (WHERE s.reasons @> '[{"code":"campaign_bad"}]')::int AS campaign,
-            count(*) FILTER (WHERE NOT s.merged)::int AS buyers,
-            count(DISTINCT s.order_id) FILTER (WHERE s.verdict <> 'block' AND NOT s.merged AND ${REAL})::int AS good,
-            count(*) FILTER (WHERE NOT s.merged AND (s.verdict = 'block' OR o.conf_status IN ('fake', 'wrong_number')) AND NOT coalesce(${REAL}, false))::int AS bad
+            ${QUALITY_SQL}
        FROM landing_submits s LEFT JOIN orders o ON o.id = s.order_id
       WHERE s.at > $1 GROUP BY 1`,
     [since],
@@ -246,6 +241,94 @@ async function recordProtection(t: Tenancy, stores: { id: number; shared: number
   });
 }
 
+// ---- the alert: the buyers' quality fell by 5 points or more in a week (the whole platform, or one store) --------
+
+/** a fall of this many points (real buyers out of 100), week against the week before, raises the alert */
+export const QUALITY_DROP_PTS = 5;
+/** enough buyers both weeks for a fall to mean something */
+const ALERT_MIN_NETWORK = 100;
+const ALERT_MIN_STORE = 30;
+/** the e-mail goes at most once a week */
+const ALERT_EVERY = 7 * DAY;
+const ALERT_KEY = 'quality_alert';
+
+export interface QualityWeek {
+  /** real buyers out of 100 (0–1) this week and the week before, the buyers this week */
+  now: number;
+  prev: number;
+  buyers: number;
+}
+export interface QualityAlert {
+  /** when the last check ran */
+  at: string;
+  /** the 7 finished days compared (the last 3 days are not finished yet) */
+  week: { from: string; to: string };
+  /** the whole platform, when it fell; null when it did not */
+  network: QualityWeek | null;
+  /** the stores that fell, the biggest fall first */
+  stores: ({ id: number; name: string } & QualityWeek)[];
+  /** when the owner and the managers were last e-mailed about it */
+  mailedAt: string | null;
+}
+
+/** This week (the 7 finished days) against the week before, for every store and all of them together; kept for the
+ *  control room's banner and the weekly e-mail (takeQualityAlert). */
+async function checkQuality(t: Tenancy, stores: { id: number; days: Map<string, ProtectionCount> }[], now: number) {
+  const end = now - QUALITY_OPEN_DAYS * DAY;
+  const week = { from: algeriaDay(end - 6 * DAY), to: algeriaDay(end) };
+  const before = { from: algeriaDay(end - 13 * DAY), to: algeriaDay(end - 7 * DAY) };
+  const sumOf = (days: Map<string, ProtectionCount>, w: { from: string; to: string }) => {
+    const c = { buyers: 0, good: 0, bad: 0 };
+    for (const [d, v] of days) if (d >= w.from && d <= w.to) (c.buyers += v.buyers), (c.good += v.good), (c.bad += v.bad);
+    return c;
+  };
+  const fell = (cur: { buyers: number; good: number; bad: number }, old: { buyers: number; good: number; bad: number }, min: number): QualityWeek | null => {
+    const a = qualityOf(cur);
+    const b = qualityOf(old);
+    if (a === null || b === null || cur.buyers < min || old.buyers < min) return null;
+    return (b - a) * 100 >= QUALITY_DROP_PTS - 1e-9 ? { now: a, prev: b, buyers: cur.buyers } : null;
+  };
+  const all = { cur: { buyers: 0, good: 0, bad: 0 }, old: { buyers: 0, good: 0, bad: 0 } };
+  const down: { id: number; w: QualityWeek }[] = [];
+  for (const s of stores) {
+    const cur = sumOf(s.days, week);
+    const old = sumOf(s.days, before);
+    for (const k of ['buyers', 'good', 'bad'] as const) (all.cur[k] += cur[k]), (all.old[k] += old[k]);
+    const w = fell(cur, old, ALERT_MIN_STORE);
+    if (w) down.push({ id: s.id, w });
+  }
+  const names = down.length ? new Map((await t.platform.query(`SELECT id, name FROM platform.shops WHERE id = ANY($1::int[])`, [down.map((d) => d.id)])).map((r: any) => [Number(r.id), String(r.name)])) : new Map();
+  const prev = await qualityAlert(t);
+  const next: QualityAlert = {
+    at: new Date(now).toISOString(),
+    week,
+    network: fell(all.cur, all.old, ALERT_MIN_NETWORK),
+    stores: down
+      .map((d) => ({ id: d.id, name: names.get(d.id) ?? `#${d.id}`, ...d.w }))
+      .sort((a, b) => b.prev - b.now - (a.prev - a.now))
+      .slice(0, 20),
+    mailedAt: prev?.mailedAt ?? null,
+  };
+  await t.platform.query(`INSERT INTO platform.settings (key, value, updated_at) VALUES ($1, $2, now()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, [ALERT_KEY, JSON.stringify(next)]);
+}
+
+/** The last check (null before the first one). */
+export async function qualityAlert(t: Tenancy): Promise<QualityAlert | null> {
+  const v = (await t.platform.query(`SELECT value FROM platform.settings WHERE key = $1`, [ALERT_KEY]))[0]?.value;
+  const a = typeof v === 'string' ? JSON.parse(v) : v;
+  return a && typeof a === 'object' && a.week ? (a as QualityAlert) : null;
+}
+
+/** The alert to e-mail now (the quality fell, and no e-mail about it this week yet), marked as sent; else null. */
+export async function takeQualityAlert(t: Tenancy, now = Date.now()): Promise<QualityAlert | null> {
+  const a = await qualityAlert(t);
+  if (!a || (!a.network && !a.stores.length)) return null;
+  if (a.mailedAt && now - Date.parse(a.mailedAt) < ALERT_EVERY) return null;
+  const sent = { ...a, mailedAt: new Date(now).toISOString() };
+  await t.platform.query(`UPDATE platform.settings SET value = $2, updated_at = now() WHERE key = $1`, [ALERT_KEY, JSON.stringify(sent)]);
+  return sent;
+}
+
 export interface ProtectionDay extends ProtectionCount {
   day: string;
   /** the network that day (null: not recorded — before the network existed) */
@@ -268,6 +351,8 @@ export interface ProtectionStats {
   stores: ({ id: number; name: string; slug: string; shared: number } & ProtectionCount)[];
   minSellers: number;
   lastRunAt: string | null;
+  /** the buyers' quality fell by 5 points or more this week (shown while the last check says so) */
+  alert: QualityAlert | null;
 }
 
 /** What the control room shows: the network's size, the stopped orders day by day, each store. */
@@ -315,6 +400,7 @@ export async function protectionStats(t: Tenancy, now = Date.now(), period = 30)
     stores: stores.map((r: any) => ({ id: Number(r.id), name: String(r.name), slug: String(r.slug), shared: Number(r.shared), ...(Object.fromEntries(COUNTS.map((k) => [k, Number(r[k])])) as unknown as ProtectionCount) })),
     minSellers: REPUTATION_MIN_SELLERS,
     lastRunAt: at ? new Date(at).toISOString() : null,
+    alert: await qualityAlert(t).then((a) => (a && (a.network || a.stores.length) && now - Date.parse(a.at) < 2 * DAY ? a : null)),
   };
 }
 
@@ -343,6 +429,7 @@ export async function refreshReputation(t: Tenancy, now = Date.now()): Promise<{
   }
   // the control room's history; a problem there never stops the network itself
   await recordProtection(t, history, now).catch((e) => errors.push(`history: ${(e as Error).message}`));
+  await checkQuality(t, history, now).catch((e) => errors.push(`quality: ${(e as Error).message}`));
   return { shops: shops.length, keys, errors };
 }
 

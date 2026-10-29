@@ -216,3 +216,49 @@ test('signals: names, phones and the weighted score', () => {
   assert.equal(scoreOrder({ ...base, clientMs: 50_000, behavior: seen }).score, 0);
   assert.equal(scoreOrder({ ...base, clientMs: 9_000, behavior: { ...seen, scroll: 0, pasted: true, touch: 0, fromAd: false } }).verdict, 'review');
 });
+
+test('Protection: the buyers’ quality day by day, and each ad with its real buyers against the period before', async () => {
+  const c = (await db.query(`INSERT INTO customers (phone, name, wilaya_id) VALUES ('0770123400', 'Client Pub', 16) ON CONFLICT (phone) DO UPDATE SET name = EXCLUDED.name RETURNING id`))[0];
+  const order = async (conf: string, follow: string | null = null) =>
+    Number(
+      (
+        await db.query(
+          `INSERT INTO orders (ref, customer_id, customer_name, phone, wilaya_id, commune, conf_status, follow_status, subtotal, delivery_fee, discount, total, channel)
+           VALUES ('Q' || nextval('order_ref_seq'), $1, 'Client Pub', '0770123400', 16, 'Kouba', $2, $3, 1000, 0, 0, 1000, 'landing') RETURNING id`,
+          [c.id, conf, follow],
+        )
+      )[0].id,
+    );
+  const submit = (verdict: string, daysAgo: number, orderId: number | null, merged = false) =>
+    db.query(`INSERT INTO landing_submits (verdict, score, reasons, at, order_id, merged, utm) VALUES ($1, 0, '[]', $2, $3, $4, $5)`, [
+      verdict,
+      new Date(Date.now() - daysAgo * 86_400_000).toISOString(),
+      orderId,
+      merged,
+      JSON.stringify({ utm_source: 'facebook', utm_campaign: 'Bébé · Test', adset_id: 'qtest-adset' }),
+    ]);
+  await db.query(`INSERT INTO adsets (id, name, campaign) VALUES ('qtest-adset', 'Mamans Alger', 'Bébé · Test') ON CONFLICT (id) DO NOTHING`);
+  // 5 days ago, from the ad set: 2 real (confirmed, delivered), 1 fake for the agent, 1 blocked, the first one sent again
+  const first = await order('confirmed');
+  await submit('allow', 5, first);
+  await submit('allow', 5, first, true);
+  await submit('allow', 5, await order('confirmed', 'delivered'));
+  await submit('review', 5, await order('fake'));
+  await submit('block', 5, null);
+  // yesterday (not finished: agents still confirming) and 40 days ago (the period before)
+  await submit('allow', 1, await order('new'));
+  await submit('allow', 40, await order('confirmed'));
+
+  const p: any = await call('landing.protection', admin, { days: 30 });
+  assert.equal(p.quality.days.length, 30);
+  assert.equal(p.quality.days[29].day, p.quality.today);
+  const ad = p.ads.find((a: any) => a.key === 'qtest-adset');
+  assert.ok(ad, 'the ad set is listed');
+  // 6 orders this period; on the finished days: 4 buyers (one sent twice), 2 real, 2 fake; before: 1 buyer, real
+  assert.deepEqual([ad.name, ad.campaign, ad.orders, ad.buyers, ad.good, ad.bad], ['Mamans Alger', 'Bébé · Test', 6, 4, 2, 2]);
+  assert.deepEqual(ad.prev, { buyers: 1, good: 1, bad: 0 });
+  // the day itself, in the quality line
+  const d5 = p.quality.days[24];
+  assert.ok(d5.buyers >= 4 && d5.good >= 2 && d5.bad >= 2);
+  assert.ok(p.quality.previous && p.quality.previous.buyers >= 1);
+});

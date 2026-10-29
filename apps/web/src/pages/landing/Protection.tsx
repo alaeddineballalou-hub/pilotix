@@ -9,6 +9,7 @@ import { dateTime, n, pct, when } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { Empty, ErrorBox, Icon, Kpi, Kpis, Loading } from '../../ui/kit';
+import { AdQuality, BuyerQuality } from '../../ui/quality';
 import { PeriodSwitch } from '../ai/agent';
 
 type Data = Out<'landing.protection'>;
@@ -58,6 +59,8 @@ export function Protection() {
         <ErrorBox error={q.error} onRetry={() => q.refetch()} />
       ) : (
         <>
+          <BuyerQuality days={d.quality.days} previous={d.quality.previous} period={days} className="pd-card" />
+          <AdQuality ads={d.ads} period={days} className="pd-card" />
           <div className="lp-pr-grid">
             <section className="card pd-card">
               <h2 className="lp-h2">

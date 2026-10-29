@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Ctx, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, staffLogin, Tenancy } from '../index';
 import { FraudFacts, scoreOrder } from '../modules/fraud';
-import { algeriaDay, protectionStats, refreshReputation, sharedReputation } from '../platform/reputation';
+import { algeriaDay, protectionStats, qualityAlert, refreshReputation, sharedReputation, takeQualityAlert } from '../platform/reputation';
 
 const OWNER = { email: 'owner@reseau.dz', password: 'Owner-Password-1' };
 const DAY = 86_400_000;
@@ -219,4 +219,54 @@ test('the control room sees the protection grow: the network, the stopped orders
   // the same, through the control room's own action
   const viaProc = await p('p.protection', { days: 7 });
   assert.deepEqual(viaProc.totals, s.totals);
+});
+
+test('the alert: the buyers’ quality fell by 5 points or more this week — the platform and each store — e-mailed once a week', async () => {
+  const { t, store } = await world();
+  const a = await store('Maison Tlemcen', 't@maison.dz');
+  const b = await store('Maison Blida', 'b@blida.dz');
+  const now = Date.now();
+  let k = 0;
+  /** n landing orders `daysAgo` days ago, all with this agent's verdict */
+  const bulk = async (schema: string, n: number, conf: string, daysAgo: number) => {
+    const db = t.shop(schema);
+    const phone = `07709${String(++k).padStart(5, '0')}`;
+    const at = new Date(now - daysAgo * DAY).toISOString();
+    const c = (await db.query(`INSERT INTO customers (phone, name, wilaya_id) VALUES ($1, 'Client', 16) ON CONFLICT (phone) DO UPDATE SET name = EXCLUDED.name RETURNING id`, [phone]))[0];
+    await db.query(
+      `WITH o AS (INSERT INTO orders (ref, customer_id, customer_name, phone, wilaya_id, commune, conf_status, subtotal, delivery_fee, discount, total, channel, created_at)
+                  SELECT 'B' || nextval('order_ref_seq'), $1, 'Client', $2, 16, 'Kouba', $3, 1000, 0, 0, 1000, 'landing', $4 FROM generate_series(1, $5) RETURNING id)
+       INSERT INTO landing_submits (verdict, score, reasons, at, order_id) SELECT 'allow', 0, '[]', $4, id FROM o`,
+      [c.id, phone, conf, at, n],
+    );
+  };
+  // Tlemcen: 80 % real buyers the week before, 40 % this week; Blida: 75 % both weeks
+  await bulk(a.schema, 48, 'confirmed', 12);
+  await bulk(a.schema, 12, 'cancelled', 12);
+  await bulk(a.schema, 24, 'confirmed', 5);
+  await bulk(a.schema, 36, 'cancelled', 5);
+  await bulk(b.schema, 45, 'confirmed', 12);
+  await bulk(b.schema, 15, 'cancelled', 12);
+  await bulk(b.schema, 45, 'confirmed', 5);
+  await bulk(b.schema, 15, 'cancelled', 5);
+  // the last 3 days do not count (not finished): a flood of unconfirmed orders yesterday changes nothing
+  await bulk(b.schema, 50, 'new', 1);
+
+  await refreshReputation(t, now);
+  const al = await qualityAlert(t);
+  assert.ok(al);
+  assert.equal(al!.week.to, algeriaDay(now - 3 * DAY));
+  assert.equal(al!.week.from, algeriaDay(now - 9 * DAY));
+  // all stores together: 77.5 % → 57.5 %; Tlemcen fell, Blida did not
+  assert.deepEqual([Math.round(al!.network!.prev * 1000), Math.round(al!.network!.now * 1000), al!.network!.buyers], [775, 575, 120]);
+  assert.deepEqual(
+    al!.stores.map((s) => [s.name, Math.round(s.prev * 100), Math.round(s.now * 100)]),
+    [['Maison Tlemcen', 80, 40]],
+  );
+  assert.ok((await protectionStats(t, now, 30)).alert, 'the control room shows it');
+  // one e-mail, then none for a week, even if the check runs again
+  assert.ok(await takeQualityAlert(t, now));
+  await refreshReputation(t, now);
+  assert.equal(await takeQualityAlert(t, now + 60_000), null);
+  assert.ok(await takeQualityAlert(t, now + 8 * DAY));
 });
