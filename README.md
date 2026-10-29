@@ -15,7 +15,8 @@ packages/core     every business rule (orders, confirmation, depot, suivi, SAV, 
                   the SQL schema and migrations, the demo shop, and the tests
 apps/server       NestJS server: login, POST /api/rpc/:action (runs the core), live updates (Socket.IO),
                   website order webhook, courier sync and Meta Ads sync jobs
-apps/web          React app (website) — also the Android and iOS apps (Capacitor)
+apps/web          React app (website)
+mobile           Android and iOS apps (Capacitor): they open the live website and add phone powers
 docs/             build guide and the inventory of the original Pilotix screens
 ```
 
@@ -25,7 +26,8 @@ The same core runs in two places:
   The preview behaves exactly like the real app, with no server.
 
 Every change runs in CI: core rule tests, the server against a real PostgreSQL 16 with an end-to-end test,
-the web build, the website (GitHub Pages, with the demo), the Android APK and the preview.
+the web build, the website (GitHub Pages, with the demo) and the preview. The Android test app is built
+by `mobile.yml`, only when `mobile/` changes.
 
 ## Roles
 
@@ -84,12 +86,17 @@ Code: `packages/core/src/modules/pilotlearn.ts` (the engine), `apps/server/src/j
 
 ## Phone apps
 
+The apps live in `mobile/` (Capacitor 8). They open the live `https://pilotix.online`, so every website change
+shows in the apps with no new app version; only new phone powers (plugins), the icon or the name need one.
+Plan, steps and decisions: `mobile/PROGRESS.md`.
+
 ```bash
-npm run build -w @pilotix/web
-cd apps/web
-npx cap add android && npx cap open android     # Android Studio → Run
-npx cap add ios && npx cap open ios             # Xcode on a Mac → Run
+cd mobile && npm ci && npx cap sync android
+npx cap open android                            # Android Studio → Run
 ```
+
+GitHub builds the Android test app on every change in `mobile/` and puts it at
+`https://github.com/alaeddineballalou-hub/pilotix/releases/download/app-test/pilotix-test.apk`.
 
 ## Several shops on one server (Pilotix as a service)
 
