@@ -21,7 +21,7 @@ import { ChangeKind, ChangeSheet, CourierPanel, useParcelInfo } from './CourierP
 import { useBackLayer } from '../../lib/backLayer';
 
 export type AlertClock = { kind: 'call' | 'solve'; dueAt: string; left: number; state: 'ok' | 'soon' | 'late' };
-export type PExtra = { clock?: AlertClock | null; tries?: AlertTries | null; companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
+export type PExtra = { motif?: { outcome: 'resolved' | 'lost'; label: string } | null; clock?: AlertClock | null; tries?: AlertTries | null; companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
 
 /** Where the parcel is: 0 shipped, 1 on the road, 2 stopped (alert, failed, return…), 3 delivered. */
 function stageOf(o: Order): { at: number; stop: boolean } {
@@ -105,6 +105,11 @@ export function ParcelCards({ rows, extra, reasonOf, empty, onOpen }: { rows: Or
                 </span>
                 {d !== null && <span className={`pxs-days t-${dayTone(d)}`}>{t('suivi.days', { n: d })}</span>}
               </div>
+              {x?.motif && o.followStatus !== 'alert' && (
+                <div className="pxs-clk">
+                  <MotifChip m={x.motif} />
+                </div>
+              )}
               {x?.clock && (
                 <div className="pxs-clk">
                   <ClockChip c={x.clock} />
@@ -476,87 +481,6 @@ const isoDay = (plus: number) => {
 
 /** « Traiter » on a phone: what was done in four tiles, the new date in one tap, a note; at ZR a new address goes
  *  straight to ZR as a modification request. */
-export function TreatSheet({ o, reason, onClose }: { o: Order; reason: string | null; onClose: () => void }) {
-  const { t, i18n } = useTranslation();
-  const [what, setWhat] = useState<'date' | 'adresse' | 'injoignable' | 'autre'>('date');
-  const [date, setDate] = useState('');
-  const [pick, setPick] = useState(false);
-  const [note, setNote] = useState('');
-  const [zrOpen, setZrOpen] = useState(false);
-  const zr = useParcelInfo(o).data;
-  const treat = useAction('suivi.treat', {
-    onDone: () => {
-      toast(t('suivi.treat.done', { ref: o.ref }), 'ok');
-      onClose();
-    },
-  });
-  if (zrOpen) return <ChangeSheet o={o} kind={o.isStopdesk ? 'phone' : 'address'} onClose={onClose} />;
-  const name = zr?.companyName ?? o.companyName ?? '';
-  const canZr = !!zr?.supported && !!zr.info && (zr.info.canModify || zr.info.canChangePhone);
-  const day = (v: string) => new Intl.DateTimeFormat(i18n.language === 'ar' ? 'ar-DZ' : i18n.language, { weekday: 'short', day: 'numeric' }).format(new Date(`${v}T12:00:00`));
-  const d1 = isoDay(1);
-  const d2 = isoDay(2);
-  return (
-    <Sheet
-      title={t('suivi.treat.title', { ref: o.ref })}
-      sub={
-        <>
-          {reason || t('status.follow.alert')} · {o.customerName}
-        </>
-      }
-      onClose={onClose}
-      foot={
-        <button type="button" className="pxk-go" disabled={treat.isPending} onClick={() => treat.mutate({ id: o.id, what, date: date || null, note: note.trim() || null })}>
-          <Icon name="check" /> {t('suivi.treat.submit')}
-        </button>
-      }
-    >
-      <fieldset className="pxk-q">
-        <legend>{t('suivi.treat.ph.q')}</legend>
-        <Tiles
-          value={what}
-          onChange={setWhat}
-          label={t('suivi.treat.ph.q')}
-          items={[
-            { k: 'date', icon: 'calendar', label: t('suivi.treat.ph.date'), now: t('suivi.treat.ph.dateSub') },
-            { k: 'adresse', icon: 'navigation', label: t('suivi.treat.ph.adresse'), now: t('suivi.treat.ph.adresseSub') },
-            { k: 'injoignable', icon: 'phoneoff', label: t('suivi.treat.ph.injoignable'), now: t('suivi.treat.ph.injoignableSub') },
-            { k: 'autre', icon: 'chat', label: t('suivi.treat.ph.autre'), now: t('suivi.treat.ph.autreSub') },
-          ]}
-        />
-      </fieldset>
-      {what === 'adresse' && canZr && (
-        <div className="pxk-hint">
-          <span>{t('suivi.treat.ph.zrHint', { name })}</span>
-          <button type="button" onClick={() => setZrOpen(true)}>
-            <Icon name="pencil" /> {t('suivi.treat.ph.zrGo', { name })}
-          </button>
-        </div>
-      )}
-      {(what === 'date' || what === 'injoignable') && (
-        <fieldset className="pxk-q">
-          <legend>{t('suivi.treat.ph.when')}</legend>
-          <div className="pxk-chips">
-            <button type="button" className={`pxk-chip${date === d1 && !pick ? ' on' : ''}`} aria-pressed={date === d1 && !pick} onClick={() => (setDate(date === d1 ? '' : d1), setPick(false))}>
-              {t('suivi.treat.ph.tomorrow')} · {day(d1)}
-            </button>
-            <button type="button" className={`pxk-chip${date === d2 && !pick ? ' on' : ''}`} aria-pressed={date === d2 && !pick} onClick={() => (setDate(date === d2 ? '' : d2), setPick(false))}>
-              {day(d2)}
-            </button>
-            <button type="button" className={`pxk-chip${pick ? ' on' : ''}`} aria-pressed={pick} onClick={() => setPick(!pick)}>
-              <Icon name="calendar" /> {t('suivi.treat.ph.other')}
-            </button>
-          </div>
-          {pick && <input className="pxk-in" type="date" value={date} min={d1} aria-label={t('suivi.treat.ph.when')} onChange={(e) => setDate(e.target.value)} />}
-        </fieldset>
-      )}
-      <label className="pxk-q">
-        <b>{t('suivi.treat.note')}</b>
-        <textarea className="pxk-in" rows={2} value={note} maxLength={1000} placeholder={t('suivi.treat.notePh')} onChange={(e) => setNote(e.target.value)} />
-      </label>
-    </Sheet>
-  );
-}
 
 /** « Client annule » on a phone: what happens to the parcel, then the red button; « Garder » keeps it. */
 export type AlertTries = { done: number; need: number; nextAt: string | null };
@@ -644,6 +568,18 @@ export function CancelSheet({ o, tries, busy, onOk, onClose }: { o: Order; tries
         </p>
       )}
     </Modal>
+  );
+}
+
+/** « Traité · Résolu · Nouvelle date » on a treated parcel. */
+export function MotifChip({ m }: { m?: { outcome: 'resolved' | 'lost'; label: string } | null }) {
+  const { t } = useTranslation();
+  if (!m) return null;
+  return (
+    <span className={`sv-clock ${m.outcome === 'resolved' ? 'ok' : 'late'}`}>
+      <Icon name={m.outcome === 'resolved' ? 'checkcircle' : 'undo'} />
+      {t(`suivi.tr.${m.outcome}`)} · {m.label}
+    </span>
   );
 }
 

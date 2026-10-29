@@ -576,5 +576,28 @@
     "gap": "At least",
     "min": "min apart",
     "sum": "{{n}} calls, {{gap}} min apart"
+  },
+  "tr": {
+    "title": "Treat {{ref}}",
+    "resolved": "Solved",
+    "resolvedHint": "The customer still wants the parcel: delivery is asked again.",
+    "lost": "Lost",
+    "lostHint": "The customer no longer wants it: the parcel comes back.",
+    "motif": "The motif",
+    "date": "New date (if the customer gave one)",
+    "note": "Note (optional)",
+    "okResolved": "Relaunch",
+    "okLost": "Mark lost",
+    "clientOk": "The customer said it himself: allowed before the calls.",
+    "relance_api": "Ask {{name}} again automatically",
+    "relanceHint_api": "The request goes right away through its system.",
+    "relance_direct": "Write to {{name}} to deliver again",
+    "relanceHint_direct": "The message is ready: WhatsApp, e-mail or copy.",
+    "relance_livreur": "Tell the livreur {{name}}",
+    "relanceHint_livreur": "The message is ready for his WhatsApp.",
+    "resolvedDone": "{{ref}}: treated, relaunched",
+    "lostDone": "{{ref}}: treated, lost",
+    "sentApi": "Relaunch sent to {{name}} ({{n}})",
+    "claimFail": "The relaunch was not sent: {{msg}}"
   }
 }

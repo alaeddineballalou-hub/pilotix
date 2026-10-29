@@ -6,6 +6,8 @@ import { useAction, useRpc } from '../../lib/query';
 import { Card, ErrorBox, Field, Help, Icon, Loading, Tabs } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { ConfirmButton, IconBtn, intOf, Switch } from './bits';
+import { SuiviMotifsCard } from './SuiviMotifs';
+import './motifs.css';
 
 type Group = 'confirmation' | 'depot' | 'suivi' | 'livraison' | 'sav';
 const GROUPS: Group[] = ['confirmation', 'depot', 'suivi', 'livraison', 'sav'];
@@ -173,6 +175,7 @@ export function Statuts() {
         )}
         <p className="muted small">{t('admin.status.note')}</p>
       </div>
+      {group === 'suivi' && <SuiviMotifsCard />}
       <CallsCard />
       {edit && q.data && (
         <StatusForm

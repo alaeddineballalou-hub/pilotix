@@ -650,5 +650,22 @@
     "fill": "Each message needs a name and words",
     "save": "Save",
     "saved": "Livreur messages saved"
+  },
+  "motifs": {
+    "title": "Suivi motifs",
+    "help": "When the agent treats an alert, he picks “Solved” or “Lost”, then one of these motifs.",
+    "resolved": "Solved (relaunched)",
+    "resolvedHint": "The customer still wants the parcel: the company is asked again.",
+    "lost": "Lost",
+    "lostHint": "The parcel comes back. “The customer said it”: possible before the calls.",
+    "fr": "Name (French)",
+    "ar": "Name (Arabic)",
+    "client": "The customer said it",
+    "clientTip": "The customer cancels himself: the agent can pick it before his calls.",
+    "on": "{{name}} active",
+    "remove": "Remove",
+    "add": "Add a motif",
+    "needOne": "A name for every motif, and at least one active motif on each side.",
+    "saved": "Motifs saved"
   }
 }

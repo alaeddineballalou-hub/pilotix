@@ -1,6 +1,14 @@
 import { CallSettings, DEFAULT_CALL_SETTINGS, PILOT_DEFAULT, type PilotConfig } from '@pilotix/shared';
 import type { Db } from './db';
 
+export interface SuiviMotif {
+  key: string;
+  fr: string;
+  ar: string;
+  on: boolean;
+  client?: boolean;
+}
+
 /** Every setting with its default. Admin edits them in Management / Réglages. */
 export interface SettingsMap {
   /** savPhone: the shop's after-sales number, printed on the parcel labels */
@@ -82,6 +90,9 @@ export interface SettingsMap {
    *    that company delivers there;
    *  - noStockDays: a « sans stock » order waiting longer than this rings an alert.
    */
+  /** Management › Motifs du Suivi: why an alert ends « Résolu » (relancé) or « Perdu »; `client`: the customer said it
+   *  himself (a « Perdu » allowed before the agent's calls) */
+  suiviMotifs: { resolved: SuiviMotif[]; lost: SuiviMotif[] };
   prefs: {
     manualDefault: boolean;
     changeCompany: { confirmation: boolean; agency: boolean; depot: boolean; manager: boolean };
@@ -136,6 +147,24 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   ],
   pilot: PILOT_DEFAULT,
   coverageRefresh: { at: null, results: [] },
+  suiviMotifs: {
+    resolved: [
+      { key: 'new_date', fr: 'Nouvelle date de livraison', ar: 'موعد توصيل جديد', on: true },
+      { key: 'address', fr: 'Adresse corrigée', ar: 'تصحيح العنوان', on: true },
+      { key: 'phone', fr: 'Téléphone corrigé', ar: 'تصحيح الهاتف', on: true },
+      { key: 'reached', fr: 'Client joint, il attend', ar: 'تم الاتصال بالزبون، ينتظر', on: true },
+      { key: 'desk', fr: 'Livraison au bureau', ar: 'التوصيل إلى المكتب', on: true },
+      { key: 'other', fr: 'Autre', ar: 'أخرى', on: true },
+    ],
+    lost: [
+      { key: 'refused', fr: 'Refus du client', ar: 'رفض الزبون', on: true, client: true },
+      { key: 'unreachable', fr: 'Injoignable après les appels', ar: 'لا يمكن الوصول إليه بعد الاتصالات', on: true },
+      { key: 'price', fr: 'Prix ou frais trop chers', ar: 'السعر أو المصاريف مرتفعة', on: true, client: true },
+      { key: 'elsewhere', fr: 'A acheté ailleurs', ar: 'اشترى من مكان آخر', on: true, client: true },
+      { key: 'not_ordered', fr: 'N’a pas commandé', ar: 'لم يطلب', on: true, client: true },
+      { key: 'other', fr: 'Autre', ar: 'أخرى', on: true },
+    ],
+  },
   prefs: {
     manualDefault: true,
     changeCompany: { confirmation: true, agency: false, depot: false, manager: true },

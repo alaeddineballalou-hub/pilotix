@@ -576,5 +576,28 @@
     "gap": "Écart d’au moins",
     "min": "min",
     "sum": "{{n}} appels, à {{gap}} min d’écart"
+  },
+  "tr": {
+    "title": "Traiter {{ref}}",
+    "resolved": "Résolu",
+    "resolvedHint": "Le client veut toujours le colis : on relance la livraison.",
+    "lost": "Perdu",
+    "lostHint": "Le client ne veut plus : le colis revient.",
+    "motif": "Le motif",
+    "date": "Nouvelle date (si le client en a donné une)",
+    "note": "Note (facultatif)",
+    "okResolved": "Relancer",
+    "okLost": "Marquer perdu",
+    "clientOk": "Le client l’a dit lui-même : possible avant les appels.",
+    "relance_api": "Relancer {{name}} automatiquement",
+    "relanceHint_api": "La demande part tout de suite par son système.",
+    "relance_direct": "Écrire à {{name}} pour relivrer",
+    "relanceHint_direct": "Le message est prêt : WhatsApp, e-mail ou copie.",
+    "relance_livreur": "Prévenir le livreur {{name}}",
+    "relanceHint_livreur": "Le message est prêt pour son WhatsApp.",
+    "resolvedDone": "{{ref}} : traité, relancé",
+    "lostDone": "{{ref}} : traité, perdu",
+    "sentApi": "Relance envoyée à {{name}} ({{n}})",
+    "claimFail": "La relance n’est pas partie : {{msg}}"
   }
 }

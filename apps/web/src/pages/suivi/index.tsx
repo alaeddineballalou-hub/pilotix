@@ -23,7 +23,8 @@ import { store } from '../../lib/store';
 import { CopyCode } from '../../ui/CopyCode';
 import { useIsPhone } from '../../lib/useMedia';
 import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
-import { AlertClock, AlertTries, CancelSheet, ClockChip, TriesChip, ParcelAction, ParcelCards, ParcelPage, TreatSheet } from './PhoneSuivi';
+import { AlertClock, AlertTries, CancelSheet, ClockChip, TriesChip, ParcelAction, ParcelCards, ParcelPage, MotifChip } from './PhoneSuivi';
+import { Traiter } from './Traiter';
 
 const LIST_TABS = ['enlivraison', 'alertes', 'traites', 'livres', 'annules', 'swap'] as const;
 type ListTab = (typeof LIST_TABS)[number];
@@ -137,7 +138,7 @@ function Head({ tab }: { tab: ListTab }) {
   );
 }
 
-type Extra = { clock?: AlertClock | null; tries?: AlertTries | null; companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
+type Extra = { motif?: { outcome: 'resolved' | 'lost'; label: string } | null; clock?: AlertClock | null; tries?: AlertTries | null; companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
 
 /** What the courier or the livreur said: the alert note while in alert, else the courier's own status. */
 const reasonOf = (o: Order, x?: Extra) => (o.followStatus === 'alert' ? x?.alertReason || o.extStatus : o.extStatus);
@@ -225,7 +226,12 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
           </HistoryButton>
         );
       case 'status':
-        return <StatusBadge kind="follow" status={o.followStatus} />;
+        return (
+          <>
+            <StatusBadge kind="follow" status={o.followStatus} />
+            {extra[o.id]?.motif && <MotifChip m={extra[o.id]!.motif} />}
+          </>
+        );
     }
   };
   return (
@@ -346,9 +352,6 @@ function List({ tab }: { tab: ListTab }) {
         <button type="button" className="btn small primary" onClick={() => setDlg({ kind: 'treat', o })}>
           {t('suivi.act.treat')}
         </button>
-        <button type="button" className="btn small ghost danger" onClick={() => setDlg({ kind: 'cancel', o })}>
-          {t('suivi.act.cancel')}
-        </button>
       </div>
     );
   if (tab === 'enlivraison')
@@ -403,7 +406,7 @@ function List({ tab }: { tab: ListTab }) {
           const phoneActions = (o: Order): ParcelAction[] => {
             const claim: ParcelAction = { key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: extra[o.id]?.companyKind === 'own' }) };
             if (tab === 'alertes')
-              return [{ key: 'treat', label: t('suivi.ph.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) }, claim, { key: 'cancel', label: t('suivi.ph.cancel'), tone: 'bad', run: () => setDlg({ kind: 'cancel', o }) }];
+              return [{ key: 'treat', label: t('suivi.ph.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) }, claim];
             if (tab === 'traites')
               return [
                 { key: 'deliv', label: t('suivi.ph.deliv'), tone: 'ok', run: () => run(o, 'delivered') },
@@ -448,12 +451,19 @@ function List({ tab }: { tab: ListTab }) {
           actions={(o) => [
             { key: 'treat', label: t('suivi.ph.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) },
             { key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: focus.x?.companyKind === 'own' }) },
-            { key: 'cancel', label: t('suivi.ph.cancel'), tone: 'bad', run: () => setDlg({ kind: 'cancel', o }) },
           ]}
           onClaim={agency ? undefined : (o) => setDlg({ kind: 'claim', o, toLivreur: focus.x?.companyKind === 'own' })}
         />
       )}
-      {dlg?.kind === 'treat' && (phone ? <TreatSheet o={dlg.o} reason={reasonOf(dlg.o, extra[dlg.o.id])} onClose={() => setDlg(null)} /> : <TreatModal o={dlg.o} reason={reasonOf(dlg.o, extra[dlg.o.id])} onClose={() => setDlg(null)} />)}
+      {dlg?.kind === 'treat' && (
+        <Traiter
+          o={dlg.o}
+          reason={reasonOf(dlg.o, extra[dlg.o.id] ?? (focus?.id === dlg.o.id ? focus.x ?? undefined : undefined))}
+          tries={extra[dlg.o.id]?.tries ?? (focus?.id === dlg.o.id ? focus.x?.tries : null)}
+          own={(extra[dlg.o.id] ?? (focus?.id === dlg.o.id ? focus.x : null))?.companyKind === 'own'}
+          onClose={() => setDlg(null)}
+        />
+      )}
       {dlg?.kind === 'cancel' && (
         <CancelSheet
           o={dlg.o}
@@ -529,55 +539,9 @@ function AlertClaim({ o, x, onClaim }: { o: Order; x?: Extra; onClaim: (toLivreu
   );
 }
 
+/** « Traiter » an alert (also used by a confirmation agency's « Suivi »). */
 export function TreatModal({ o, reason, onClose }: { o: Order; reason: string | null; onClose: () => void }) {
-  const { t } = useTranslation();
-  const [what, setWhat] = useState<'date' | 'adresse' | 'injoignable' | 'autre'>('date');
-  const [date, setDate] = useState('');
-  const [note, setNote] = useState('');
-  const treat = useAction('suivi.treat', {
-    onDone: () => {
-      toast(t('suivi.treat.done', { ref: o.ref }), 'ok');
-      onClose();
-    },
-  });
-  return (
-    <Modal
-      title={t('suivi.treat.title', { ref: o.ref })}
-      onClose={onClose}
-      footer={
-        <>
-          <button className="btn" onClick={onClose}>
-            {t('common.cancel')}
-          </button>
-          <button className="btn primary" disabled={treat.isPending} onClick={() => treat.mutate({ id: o.id, what, date: date || null, note: note.trim() || null })}>
-            {t('suivi.treat.submit')}
-          </button>
-        </>
-      }
-    >
-      <p className="muted small">
-        {o.customerName} · <span className="ltr">{o.phone}</span> · {reason || t('status.follow.alert')}
-      </p>
-      <label className="field">
-        <span className="lab">{t('suivi.treat.what')}</span>
-        <select value={what} onChange={(e) => setWhat(e.target.value as typeof what)}>
-          {(['date', 'adresse', 'injoignable', 'autre'] as const).map((k) => (
-            <option key={k} value={k}>
-              {t(`suivi.treat.whats.${k}`)}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="field">
-        <span className="lab">{t('suivi.treat.date')}</span>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-      </label>
-      <label className="field">
-        <span className="lab">{t('suivi.treat.note')}</span>
-        <textarea rows={2} value={note} placeholder={t('suivi.treat.notePh')} onChange={(e) => setNote(e.target.value)} />
-      </label>
-    </Modal>
-  );
+  return <Traiter o={o} reason={reason} onClose={onClose} />;
 }
 
 /** Below the swap list: parcels already swapped, with « Copier pour ZR ». */

@@ -3,7 +3,7 @@ import type { Order, Page } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, Ctx, notFound, proc, withActionLock } from '../rpc';
-import { getSetting } from '../settings';
+import { getSetting, setSetting } from '../settings';
 import { addWorkMinutes, workMinutes } from '@pilotix/shared';
 import { getPrefs } from './prefs';
 import { addEvent, FollowInput, getOrder, listOrders, ListInput, setFollow } from './orders';
@@ -117,6 +117,8 @@ export async function alertTries(db: Db, ids: number[], now: number): Promise<Ma
 }
 
 export interface SuiviRowExtra {
+  /** how the alert was treated: « Résolu » or « Perdu », and its motif (Management › Motifs du Suivi) */
+  motif: { outcome: 'resolved' | 'lost'; label: string } | null;
   clock: AlertClock | null;
   tries: AlertTries | null;
   companyKind: string | null;
@@ -136,7 +138,8 @@ async function extras(db: Db, orders: Order[], now = Date.now()): Promise<Record
     `SELECT o.id, co.kind AS company_kind, lv.phone AS livreur_phone,
        (SELECT json_build_object('id', c.id, 'status', c.status, 'createdAt', c.created_at, 'sentAt', c.sent_at)
           FROM claims c WHERE c.order_id = o.id ORDER BY c.created_at DESC LIMIT 1) AS claim,
-       (SELECT e.note FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'alert' ORDER BY e.at DESC, e.id DESC LIMIT 1) AS alert_reason
+       (SELECT e.note FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'alert' ORDER BY e.at DESC, e.id DESC LIMIT 1) AS alert_reason,
+       (SELECT json_build_object('outcome', e.from_value, 'label', e.note) FROM order_events e WHERE e.order_id = o.id AND e.kind = 'suivi_motif' ORDER BY e.at DESC, e.id DESC LIMIT 1) AS motif
      FROM orders o LEFT JOIN delivery_companies co ON co.id = o.company_id LEFT JOIN profiles lv ON lv.id = o.livreur_id
      WHERE o.id = ANY($1)`,
     [ids],
@@ -145,6 +148,10 @@ async function extras(db: Db, orders: Order[], now = Date.now()): Promise<Record
   for (const r of rows) {
     const c = typeof r.claim === 'string' ? JSON.parse(r.claim) : r.claim;
     out[num(r.id)] = {
+      motif: (() => {
+        const m = typeof r.motif === 'string' ? JSON.parse(r.motif) : r.motif;
+        return m && (m.outcome === 'resolved' || m.outcome === 'lost') ? { outcome: m.outcome, label: String(m.label ?? '') } : null;
+      })(),
       clock: clocks.get(num(r.id)) ?? null,
       tries: tries.get(num(r.id)) ?? null,
       companyKind: r.company_kind ?? null,
@@ -579,6 +586,9 @@ async function createClaim(ctx: Ctx, i: z.infer<typeof ClaimCreate>): Promise<Cl
   return made;
 }
 
+const MotifIn = z.object({ key: z.string().regex(/^[a-z0-9_]{1,40}$/), fr: z.string().trim().min(1).max(80), ar: z.string().trim().max(80).default(''), on: z.boolean(), client: z.boolean().optional() });
+const cleanMotif = (m: z.infer<typeof MotifIn>) => ({ key: m.key, fr: m.fr, ar: m.ar, on: m.on, ...(m.client ? { client: true } : {}) });
+
 /** A parcel another agent took with « Alerte suivante » (15 minutes): he is calling, nobody else acts on it. */
 async function notLockedByOther(ctx: Ctx, oid: number) {
   const r = (await ctx.db.query(
@@ -613,6 +623,87 @@ export const suiviProcs = {
   }),
 
   /** Takes the suivi agent off an order (the order stays where it is; the next suivi agent who acts on it takes it). */
+  /** Management › Motifs du Suivi: everyone reads them (the « Traiter » window), an admin changes them. */
+  'suivi.motifs': proc(null, z.object({}), async (ctx) => getSetting(ctx.db, 'suiviMotifs')),
+  'suivi.motifsSet': proc(
+    [],
+    z.object({
+      resolved: z.array(MotifIn).min(1).max(30),
+      lost: z.array(MotifIn).min(1).max(30),
+    }),
+    async (ctx, i) => {
+      for (const list of [i.resolved, i.lost]) if (new Set(list.map((m) => m.key)).size !== list.length) throw bad('Deux motifs ont la même clé');
+      if (!i.resolved.some((m) => m.on) || !i.lost.some((m) => m.on)) throw bad('Gardez au moins un motif allumé de chaque côté');
+      await setSetting(ctx.db, 'suiviMotifs', { resolved: i.resolved.map(cleanMotif), lost: i.lost.map(cleanMotif) }, ctx.session.profile.id);
+      return { ok: true };
+    },
+  ),
+
+  /**
+   * « Traiter » an alert, after calling the customer: « Résolu » (relancé: back on the road, and the delivery company
+   * asked to deliver again — through its API, or a message to write, or our livreur) or « Perdu » (after the seller's
+   * calls, or the customer said it himself, or « annulé trop tôt » with a reason) — always with a motif.
+   */
+  'suivi.resolve': proc(
+    ['suivi'],
+    z.object({
+      id,
+      outcome: z.enum(['resolved', 'lost']),
+      motif: z.string().max(40),
+      date: z.string().max(20).nullable().optional(),
+      note: z.string().max(1000).nullable().optional(),
+      /** « Perdu » before the calls, with a reason (the note) */
+      early: z.boolean().optional(),
+      /** « Résolu »: ask the delivery company (or our livreur) to deliver again */
+      relance: z.boolean().default(true),
+    }),
+    async (ctx, i) => {
+      const cur = await getOrder(ctx, i.id);
+      if (cur.followStatus !== 'alert') throw bad(`${cur.ref} n’est pas en alerte`);
+      await notLockedByOther(ctx, i.id);
+      const all = await getSetting(ctx.db, 'suiviMotifs');
+      const m = (i.outcome === 'resolved' ? all.resolved : all.lost).find((x) => x.key === i.motif && x.on);
+      if (!m) throw bad('Choisissez un motif');
+      const day = i.date ? ` le ${i.date.slice(0, 10).split('-').reverse().join('/')}` : '';
+      const note = i.note?.trim() ?? '';
+      const me = ctx.session.profile.id;
+      if (i.outcome === 'resolved') {
+        await setFollow(ctx, FollowInput.parse({ ids: [i.id], status: 'out_for_delivery', subStatus: 'alert_traitee', note: ['Traité · Résolu · ' + m.fr + day, note].filter(Boolean).join(' — ') }));
+        await addEvent(ctx.db, i.id, me, 'suivi_motif', 'resolved', m.key, m.fr);
+        let claim: Claim | null = null;
+        let claimError: string | null = null;
+        if (i.relance && cur.companyId) {
+          try {
+            const own = (await ctx.db.query('SELECT kind FROM delivery_companies WHERE id = $1', [cur.companyId]))[0]?.kind === 'own';
+            const shop = (await getSetting(ctx.db, 'shop')).name;
+            const message = `Bonjour, merci de relivrer le colis ${cur.tracking ?? cur.ref} — ${cur.customerName} ${cur.phone}${cur.commune ? `, ${cur.commune}` : ''} : ${m.fr}${day}${note ? ` (${note})` : ''}. ${shop}`;
+            claim = await createClaim(ctx, ClaimCreate.parse({ orderId: i.id, reason: 'relivrer', details: `${m.fr}${day}${note ? ` — ${note}` : ''}`.slice(0, 1000), message, toLivreur: own && !!cur.livreurId, viaApi: true }));
+          } catch (e) {
+            claimError = (e as Error).message ?? 'Erreur';
+          }
+        }
+        ctx.emit({ type: 'order', id: i.id });
+        return { order: await getOrder(ctx, i.id), claim, claimError };
+      }
+      const tr = (await alertTries(ctx.db, [i.id], ctx.now())).get(i.id);
+      const enough = !!tr && tr.done >= tr.need;
+      const early = !enough && !m.client;
+      if (early && (!i.early || !note)) throw bad(`${cur.ref} : faites d’abord ${tr?.need ?? 3} appels (${tr?.done ?? 0} faits), ou dites pourquoi vous annulez avant`);
+      await setFollow(
+        ctx,
+        FollowInput.parse({
+          ids: [i.id],
+          status: 'returning',
+          subStatus: early ? 'annule_trop_tot' : null,
+          note: [`Traité · Perdu · ${m.fr}`, early ? `annulé trop tôt (${tr?.done ?? 0}/${tr?.need ?? 3} appels)` : '', note].filter(Boolean).join(' — '),
+        }),
+      );
+      await addEvent(ctx.db, i.id, me, 'suivi_motif', 'lost', m.key, m.fr);
+      ctx.emit({ type: 'order', id: i.id });
+      return { order: await getOrder(ctx, i.id), claim: null, claimError: null };
+    },
+  ),
+
   /**
    * « Alerte suivante »: the most urgent alert for this agent, locked to him 15 minutes so nobody calls the same customer.
    * His own parcels first (once he acted on a parcel it stays his until it ends), then the alerts of nobody — or of an

@@ -208,3 +208,45 @@ test('« Client annule » on an alert: after the seller\'s calls (far enough apa
   assert.equal(await statusOf(d), 'returning');
   await call('prefs.set', admin, base);
 });
+
+test('« Traiter »: Résolu (back on the road, the livreur asked to deliver again) or Perdu, always with a motif from Management', async () => {
+  const suivi = await as(EMAILS.suivi);
+  const mk = async () => {
+    const id = await onRoad();
+    await db.query(`UPDATE orders SET follow_status = 'alert', tracking = COALESCE(tracking, 'TRK' || id), locked_by = NULL, locked_until = NULL WHERE id = $1`, [id]);
+    await db.query(`INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, at) VALUES ($1, NULL, 'follow_status', 'out_for_delivery', 'alert', now() - interval '1 hour')`, [id]);
+    await db.query(`DELETE FROM claims WHERE order_id = $1`, [id]);
+    return id;
+  };
+  const m = (await call('suivi.motifs', suivi, {})) as any;
+  assert.ok(m.resolved.some((x: any) => x.key === 'new_date') && m.lost.some((x: any) => x.key === 'refused' && x.client));
+  // Résolu: back on the road with the motif, and a claim « relivrer » to our livreur
+  const a = await mk();
+  const r = (await call('suivi.resolve', suivi, { id: a, outcome: 'resolved', motif: 'new_date', date: '2026-11-02', note: 'après 14 h' })) as any;
+  assert.equal(r.order.followStatus, 'out_for_delivery');
+  assert.equal(r.order.subStatus, 'alert_traitee');
+  assert.ok(r.claim, r.claimError ?? 'a claim');
+  assert.equal(r.claim.reason, 'relivrer');
+  assert.ok(r.claim.livreurId, 'to our livreur');
+  const tl = (await call('suivi.list', suivi, { tab: 'traites', pageSize: 500 })) as any;
+  assert.deepEqual(tl.extra[a].motif, { outcome: 'resolved', label: 'Nouvelle date de livraison' });
+  // Perdu: the customer said it himself (no calls needed)
+  const b = await mk();
+  await call('suivi.resolve', suivi, { id: b, outcome: 'lost', motif: 'refused' });
+  assert.equal(await statusOf(b), 'returning');
+  // Perdu « injoignable » before the calls: refused, then « annulé trop tôt » with a reason
+  const c = await mk();
+  await assert.rejects(call('suivi.resolve', suivi, { id: c, outcome: 'lost', motif: 'unreachable' }), /appels/);
+  await call('suivi.resolve', suivi, { id: c, outcome: 'lost', motif: 'unreachable', early: true, note: 'numéro coupé' });
+  const rc = (await db.query('SELECT follow_status, sub_status FROM orders WHERE id = $1', [c]))[0];
+  assert.deepEqual([rc.follow_status, rc.sub_status], ['returning', 'annule_trop_tot']);
+  // the seller's motifs (Management): a motif switched off cannot be chosen
+  const admin2 = await as(EMAILS.admin);
+  await assert.rejects(call('suivi.motifsSet', suivi, m));
+  await call('suivi.motifsSet', admin2, { ...m, lost: [...m.lost.map((x: any) => (x.key === 'price' ? { ...x, on: false } : x)), { key: 'damaged', fr: 'Colis abîmé', ar: '', on: true, client: true }] });
+  const d = await mk();
+  await assert.rejects(call('suivi.resolve', suivi, { id: d, outcome: 'lost', motif: 'price' }), /motif/);
+  await call('suivi.resolve', suivi, { id: d, outcome: 'lost', motif: 'damaged' });
+  assert.equal(await statusOf(d), 'returning');
+  await call('suivi.motifsSet', admin2, m);
+});

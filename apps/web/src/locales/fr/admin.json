@@ -650,5 +650,22 @@
     "fill": "Chaque message a besoin d’un nom et de mots",
     "save": "Enregistrer",
     "saved": "Messages du livreur enregistrés"
+  },
+  "motifs": {
+    "title": "Motifs du Suivi",
+    "help": "Quand l’agent traite une alerte, il choisit « Résolu » ou « Perdu », puis un de ces motifs.",
+    "resolved": "Résolu (relancé)",
+    "resolvedHint": "Le client veut toujours le colis : la société est relancée.",
+    "lost": "Perdu",
+    "lostHint": "Le colis revient. « Le client l’a dit » : possible avant les appels.",
+    "fr": "Nom (français)",
+    "ar": "Nom (arabe)",
+    "client": "Le client l’a dit",
+    "clientTip": "Le client annule lui-même : l’agent peut le choisir avant ses appels.",
+    "on": "{{name}} actif",
+    "remove": "Retirer",
+    "add": "Ajouter un motif",
+    "needOne": "Un nom pour chaque motif, et au moins un motif actif de chaque côté.",
+    "saved": "Motifs enregistrés"
   }
 }
