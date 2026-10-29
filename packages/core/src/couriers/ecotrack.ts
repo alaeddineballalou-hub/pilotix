@@ -3,8 +3,15 @@
 // Ported from the original Pilotix adapter. Endpoints: GET validate/token, get/communes?wilaya_id=, POST create/order, POST valid/order,
 // get/orders/status?trackings=, get/tracking/info?tracking=, DELETE delete/order, get/order/label (PDF), get/fees.
 // EcoTrack allows ~50 requests/minute: we wait 1.25 s between calls.
+// Parcel page: get/tracking/info?tracking= (activity = journey; OrderInfo when given, else get/orders?tracking=). Changes: POST update/order
+// (query string, update field names: client, tel, tel2, adresse, commune, wilaya, montant, stop_desk, code_postal — they differ from
+// create/order), accepted only before the parcel is validated (error 10001 after). POST ask/for/order/return?tracking= (return),
+// POST add/maj?tracking=&content= (note). Exchange is sent at creation (type=2).
+// BEST GUESS (check with real keys): canModify = no activity yet past « order_information_received_by_carrier » / pre-pickup states
+// (EcoTrack gives no « validated » flag); the OrderInfo shape of get/tracking/info; the update field names (from vargo's rules, which
+// accept both client/nom_client, tel/telephone, wilaya/code_wilaya, product/produit).
 import { cacheKeyOf } from './types';
-import type { CourierAdapter, CourierCompany } from './types';
+import type { ChangeInput, CourierAdapter, CourierCompany, Helpers, Parcel, ParcelInfo } from './types';
 import { baseUrl, chunks, CourierError, cut, errText, flag, http, HttpOpts, humanize, needKeys, query, sleep, timeUp } from './util';
 
 const STATUSES: CourierAdapter['statuses'] = {
@@ -27,6 +34,111 @@ async function api(c: CourierCompany, path: string, q: Record<string, unknown> =
   await sleep(1250);
   if (!o.binary && r && r.success === false) throw new CourierError(`${c.name} : ${errText(r.message || r.errors) || 'refusé'}${r.error ? ` (${r.error})` : ''}`);
   return r;
+}
+
+/** EcoTrack wants 9–10 digit local numbers (0661…). */
+const localPhone = (v: string | null | undefined) => {
+  const d = String(v ?? '').replace(/\D/g, '').replace(/^00/, '').replace(/^213/, '');
+  return d ? (d.startsWith('0') ? d : `0${d}`) : '';
+};
+const PRE_PICKUP = new Set(['order_information_received_by_carrier', 'notification_on_order', 'prete_a_expedier', 'prete_a_preparer', 'en_ramassage', 'en_preparation_stock']);
+const eventAt = (x: any) => [x?.date, x?.time].filter(Boolean).join(' ');
+
+async function parcelInfo(c: CourierCompany, tracking: string): Promise<ParcelInfo> {
+  needKeys(c, 'token');
+  const r = await api(c, '/get/tracking/info', { tracking });
+  let o: any = r?.OrderInfo ?? r?.order ?? null;
+  if (!o) {
+    const l = await api(c, '/get/orders', { tracking }).catch(() => null);
+    o = (Array.isArray(l?.data) ? l.data : Object.values(l?.data ?? {})).find((x: any) => x && (!x.tracking || x.tracking === tracking)) ?? null;
+  }
+  const acts: any[] = (Array.isArray(r?.activity) ? r.activity : []).filter((x: any) => x?.status);
+  const last = acts.length ? acts[acts.length - 1] : null;
+  const lastKey = String(last?.status ?? o?.status ?? '');
+  const can = !lastKey || acts.every((x) => PRE_PICKUP.has(String(x.status)));
+  const n = (v: unknown) => (v === null || v === undefined || v === '' || isNaN(Number(v)) ? null : Number(v));
+  const desk = Number(o?.stop_desk) === 1;
+  return {
+    state: lastKey ? humanize(lastKey) : null,
+    color: null,
+    situation: last?.reason ?? null,
+    livreur: null,
+    risk: null,
+    canModify: can,
+    canChangePhone: can,
+    direct: can,
+    pendingChange: false,
+    modifications: null,
+    modificationLimit: null,
+    phoneChanges: null,
+    phoneChangeLimit: null,
+    phoneChangePrice: null,
+    delivery: {
+      type: o ? (desk ? 'Stop desk' : 'Domicile') : null,
+      hub: desk ? (o?.desk_commune ?? o?.commune ?? null) : null,
+      city: o?.wilaya ?? o?.wilaya_name ?? (o?.wilaya_id ? `Wilaya ${o.wilaya_id}` : null),
+      district: o?.commune ?? null,
+      street: o?.adresse ?? null,
+    },
+    amount: n(o?.montant),
+    deliveryPrice: n(o?.tarif_prestation),
+    returnPrice: n(o?.tarif_retour),
+    swap: null,
+    history: acts
+      .map((x) => ({
+        at: eventAt(x),
+        status: humanize(String(x.status)),
+        color: null,
+        hub: x.station ?? x.scanLocation ?? null,
+        by: x.driver ?? x.livreur ?? null,
+        comment: x.reason ?? x.remarque ?? null,
+        situations: [],
+      }))
+      .filter((x) => x.at)
+      .sort((x, y) => y.at.localeCompare(x.at)),
+    sms: [],
+  };
+}
+
+/** Changes a parcel straight at EcoTrack (update/order): only before EcoTrack validated it. */
+async function changeDirect(c: CourierCompany, i: ChangeInput, helpers: Helpers, p: Parcel | null) {
+  needKeys(c, 'token');
+  const body: Record<string, unknown> = { tracking: i.item.tracking };
+  if (i.kind === 'amount') {
+    if (i.amount == null || !(i.amount >= 0)) throw new CourierError('Le nouveau montant manque');
+    body.montant = Math.round(i.amount);
+  } else if (i.kind === 'phone') {
+    if (!i.phone) throw new CourierError('Le nouveau numéro manque');
+    body.tel = localPhone(i.phone);
+    if (i.phone2) body.tel2 = localPhone(i.phone2);
+  } else {
+    if (!p) throw new CourierError('Commande introuvable');
+    const toDesk = i.kind === 'delivery' ? !!i.stopdesk : p.is_stopdesk;
+    if (i.kind === 'address' && toDesk) throw new CourierError('Colis livré en stop desk : changez plutôt le bureau (Domicile ↔ Stop desk)');
+    const next: Parcel = { ...p, is_stopdesk: toDesk, wilaya_id: i.wilayaId ?? p.wilaya_id, commune: i.commune ?? p.commune, address: i.address ?? p.address };
+    const com = await helpers.communeName(
+      next,
+      async (w) => Object.values((await api(c, '/get/communes', { wilaya_id: w })) ?? {}).map((x: any) => ({ name: x.nom as string, id: x.code_postal, desk: Number(x.has_stop_desk) === 1 })),
+      `eco:${cacheKeyOf(c)}`,
+    );
+    if (!com) throw new CourierError(`Commune « ${next.commune} » introuvable chez ${c.name} : corrigez la commune`);
+    if (toDesk && com.desk === false) throw new CourierError(`${c.name} n’a pas de stop desk à ${com.name} : livraison à domicile ou autre commune`);
+    Object.assign(body, {
+      adresse: cut(next.address || com.name, 250),
+      commune: com.name,
+      wilaya: next.wilaya_id,
+      stop_desk: toDesk ? 1 : 0,
+      code_postal: toDesk ? com.id : undefined,
+    });
+    if (i.amount != null && i.amount >= 0) body.montant = Math.round(i.amount);
+  }
+  try {
+    await api(c, '/update/order', body, { method: 'POST' });
+  } catch (e: any) {
+    if (/10001/.test(String(e?.message))) throw new CourierError(`${c.name} : colis déjà validé, il ne peut plus être modifié par l’API. Changez-le depuis l’espace ${c.name} ou appelez la société.`);
+    throw e;
+  }
+  return { extId: i.item.tracking, approved: true, direct: true };
 }
 
 export const ecotrack: CourierAdapter = {
@@ -130,5 +242,23 @@ export const ecotrack: CourierAdapter = {
     return (r?.livraison ?? [])
       .map((x: any) => ({ wilayaId: Number(x.wilaya_id), home: Number(x.tarif) || null, desk: Number(x.tarif_stopdesk) || null, returnFee: ret.get(Number(x.wilaya_id)) ?? null }))
       .filter((x: any) => x.wilayaId >= 1 && x.wilayaId <= 69);
+  },
+  parcel(c, it) {
+    return parcelInfo(c, it.tracking);
+  },
+  change(c, i, helpers, p) {
+    return changeDirect(c, i, helpers, p);
+  },
+  async askReturn(c, it, note) {
+    needKeys(c, 'token');
+    await api(c, '/ask/for/order/return', { tracking: it.tracking }, { method: 'POST' });
+    // EcoTrack's return request has no comment field: the reason goes as a note (best effort)
+    if (String(note ?? '').trim()) await api(c, '/add/maj', { tracking: it.tracking, content: cut(String(note).trim(), 255) }, { method: 'POST' }).catch(() => undefined);
+  },
+  async note(c, it, text) {
+    needKeys(c, 'token');
+    const content = cut(String(text ?? '').trim(), 255);
+    if (!content) throw new CourierError('La note est vide');
+    await api(c, '/add/maj', { tracking: it.tracking, content }, { method: 'POST' });
   },
 };

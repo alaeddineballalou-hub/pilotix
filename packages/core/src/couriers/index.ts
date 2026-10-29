@@ -76,11 +76,20 @@ type Args = {
  * bagCreate {companyId, items} · bagAdd {companyId, bag, items} · bagRemove {companyId, bag, item} · bags {companyId} ·
  * bagLabel {companyId, bag: its number} · bagDrop {companyId, bag} · parcel {companyId, item} ·
  * change {companyId, orderId, change} · changeStates {companyId, extIds} · changeCancel {companyId, extId} · states / services {companyId} ·
- * webhookOn {companyId, url, key} · webhookOff / webhookGet {companyId, extId}.
+ * webhookOn {companyId, url, key} · webhookOff / webhookGet {companyId, extId} ·
+ * askReturn / retry / note {companyId, item, text}.
  */
 export async function runCourier(action: string, args: unknown, ctx: Ctx): Promise<unknown> {
   const a = args as Args;
   const c = await loadCompany(ctx.db, a.companyId);
+  if (action === 'askReturn' || action === 'retry' || action === 'note') {
+    const ad = ADAPTERS[c.kind];
+    const f = ad[action];
+    if (!f) throw new CourierError(`${c.name} : pas disponible par API avec cette société`);
+    setDeadline(60_000);
+    await f.call(ad, c, a.item!, a.text ?? '');
+    return { ok: true };
+  }
   const api = courierApi(c);
   setDeadline(action === 'track' || action === 'fees' ? 240_000 : 120_000);
   switch (action) {
@@ -221,4 +230,37 @@ export async function runCourier(action: string, args: unknown, ctx: Ctx): Promi
     default:
       throw new CourierError(`Action inconnue : ${action}`);
   }
+}
+
+/**
+ * Control room: is each courier's API alive? Calls its « test » with made-up keys from this server: an answer that
+ * refuses the keys proves the API is up and reached; no answer means the address is wrong or the API is down.
+ * No shop data is used and nothing is created at the courier.
+ */
+export async function probeCouriers(): Promise<{ kind: string; ok: boolean; reached: boolean; message: string; ms: number }[]> {
+  const { KINDS: K } = await import('./kinds');
+  const out: { kind: string; ok: boolean; reached: boolean; message: string; ms: number }[] = [];
+  const kinds = Object.values(K).filter((k) => k.api && k.kind !== 'custom');
+  await Promise.all(
+    kinds.map(async (k) => {
+      const secret: Record<string, string> = {};
+      const settings: Record<string, any> = {};
+      for (const f of k.fields) {
+        if (f.type === 'secret') secret[f.key] = 'pilotix-probe-0000';
+        else if (f.default !== undefined) settings[f.key] = f.default;
+      }
+      const c: CourierCompany = { id: 0, name: k.label, kind: k.kind, secret, settings, statusMap: {}, shop: { name: 'Pilotix', fromWilayaId: 16, fromWilaya: 'Alger' }, cacheKey: `probe-${k.kind}` };
+      const t0 = Date.now();
+      try {
+        const r = await ADAPTERS[k.kind].test(c);
+        out.push({ kind: k.kind, ok: true, reached: true, message: r.ok ? 'L’API répond (elle a même accepté de fausses clés : à vérifier avec de vraies clés)' : r.message, ms: Date.now() - t0 });
+      } catch (e: any) {
+        const m = String(e?.message ?? 'Erreur');
+        const down = /ne répond pas/.test(m) || e?.status === 502;
+        const refused = !down && /refuse|refusé|invalid|unauthori|non autoris|token|clé/i.test(m);
+        out.push({ kind: k.kind, ok: refused, reached: !down, message: down ? m : refused ? `L’API répond et refuse les fausses clés, comme prévu (${m.slice(0, 160)})` : `L’API répond mais pas comme prévu : ${m.slice(0, 200)}`, ms: Date.now() - t0 });
+      }
+    }),
+  );
+  return out.sort((x, y) => x.kind.localeCompare(y.kind));
 }

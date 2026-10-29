@@ -39,7 +39,8 @@
     "statuses": "Statuses",
     "test": "Test",
     "preview": "Send preview",
-    "zr": "{{name}} from Pilotix"
+    "zr": "{{name}} from Pilotix",
+    "live": "Without leaving Pilotix"
   },
   "kinds": {
     "own": "My courier",
@@ -181,7 +182,7 @@
   "zr": {
     "title": "{{name}} from Pilotix",
     "hookTitle": "Live statuses",
-    "hookHelp": "{{name}} tells Pilotix about every status change of a parcel: no more waiting for the automatic update (every 30 minutes).",
+    "hookHelp": "{{name}} tells Pilotix about every status change of a parcel: no more waiting for the automatic update (every 5 minutes).",
     "hookOn": "On",
     "hookOff": "Off",
     "turnOn": "Turn on",
@@ -245,5 +246,27 @@
     "noEnd": "Tour end not set",
     "call": "Call",
     "tourEnd": "End of the tour"
+  },
+  "live": {
+    "title": "{{name}} from Pilotix",
+    "poll": "{{name}} has no webhook: Pilotix asks it for your parcels’ statuses every {{n}} minutes, on its own.",
+    "manualHelp": "{{name}} tells Pilotix about every status change. Turn it on, then paste the address given into your {{name}} space (Développement → Webhooks).",
+    "newUrl": "New address",
+    "paste": "Paste this address into your {{name}} space → Développement → Webhooks (once):",
+    "copy": "Copy the address",
+    "copied": "Address copied",
+    "does": {
+      "send": "Send parcels to {{name}} (tracking number given)",
+      "track": "Track the parcels’ statuses",
+      "change": "Change a parcel’s price, address or phone",
+      "cancel": "Cancel a parcel not picked up yet",
+      "exchange": "Send an exchange (product to bring back)",
+      "askReturn": "Ask for a parcel’s return",
+      "retry": "Ask for a new delivery try",
+      "note": "Send a note to {{name}}’s agents",
+      "label": "Print {{name}}’s label",
+      "fees": "Import the prices",
+      "desks": "Import the offices (stop desks)"
+    }
   }
 }

@@ -28,6 +28,20 @@ export interface KindInfo {
   labels_?: boolean;
   /** the courier's other services through its API (ZR): pickup bags, exchanges, modification requests, parcel journey */
   zr?: boolean;
+  /** the parcel at the courier, seen and changed from Pilotix (journey, price / phone / address changes) */
+  parcel?: boolean;
+  /** price / address / phone changes of a parcel sent, from Pilotix */
+  change?: boolean;
+  /** asks the courier for a return / a new delivery try / adds a note for its agents, from Pilotix */
+  askReturn?: boolean;
+  retry?: boolean;
+  note?: boolean;
+  /** instant status updates: 'api' = turned on from Pilotix, 'manual' = the address is pasted in the courier's space */
+  webhook?: 'api' | 'manual';
+  /** the courier's money through its API: balance, payment requests, payments and their parcels */
+  payments?: boolean;
+  /** exchanges: 'api' = the courier's own exchange (new parcel + return parcel), 'create' = sent as an exchange parcel */
+  exchange?: 'api' | 'create';
 }
 
 export const KINDS: Record<CourierKind, KindInfo> = {
@@ -37,7 +51,7 @@ export const KINDS: Record<CourierKind, KindInfo> = {
     fields: [],
   },
   zr: {
-    kind: 'zr', label: 'ZR Express (nouvelle plateforme)', api: true, fees: true, desks: true, cancel: true, label_: true, claims: true, labels_: true, zr: true,
+    kind: 'zr', label: 'ZR Express (nouvelle plateforme)', api: true, fees: true, desks: true, cancel: true, label_: true, claims: true, labels_: true, zr: true, parcel: true, webhook: 'api', exchange: 'api', payments: true,
     help: 'Nouvelle plateforme ZR Express. Clé API et identifiant du compte (tenant) : dans votre espace ZR → Paramètres → API.',
     fields: [
       { key: 'api_key', label: 'Clé API (X-Api-Key)', type: 'secret' },
@@ -57,7 +71,7 @@ export const KINDS: Record<CourierKind, KindInfo> = {
     ],
   },
   yalidine: {
-    kind: 'yalidine', label: 'Yalidine', api: true, fees: true, desks: true, cancel: true, label_: true,
+    kind: 'yalidine', label: 'Yalidine', api: true, fees: true, desks: true, cancel: true, label_: true, parcel: true, change: true, webhook: 'manual', exchange: 'create',
     help: 'Yalidine, ou une société sur la même plateforme (ex. Guepex : changez seulement l’adresse). API ID et token : Yalidine → Développement → Gestionnaire d’API.',
     fields: [
       { key: 'api_id', label: 'API ID', type: 'secret' },
@@ -67,7 +81,7 @@ export const KINDS: Record<CourierKind, KindInfo> = {
     ],
   },
   ecotrack: {
-    kind: 'ecotrack', label: 'EcoTrack', api: true, fees: true, desks: false, cancel: true, label_: true,
+    kind: 'ecotrack', label: 'EcoTrack', api: true, fees: true, desks: false, cancel: true, label_: true, parcel: true, change: true, askReturn: true, note: true, exchange: 'create',
     help: 'Sociétés qui utilisent EcoTrack (DHD, Conexlog, Anderson, Areex, World Express…). Mettez l’adresse de leur site et le token API de votre compte chez eux.',
     fields: [
       { key: 'token', label: 'Token API', type: 'secret' },
@@ -78,7 +92,7 @@ export const KINDS: Record<CourierKind, KindInfo> = {
     ],
   },
   noest: {
-    kind: 'noest', label: 'NOEST Express', api: true, fees: true, desks: true, cancel: true, label_: true,
+    kind: 'noest', label: 'NOEST Express', api: true, fees: true, desks: true, cancel: true, label_: true, parcel: true, change: true, askReturn: true, retry: true, note: true, exchange: 'create',
     help: 'NOEST Express. Token API et « user GUID » : dans votre espace NOEST → API.',
     fields: [
       { key: 'api_token', label: 'Token API', type: 'secret' },
@@ -86,6 +100,71 @@ export const KINDS: Record<CourierKind, KindInfo> = {
       { key: 'base_url', label: 'Adresse de l’API', type: 'text', default: 'https://app.noest-dz.com' },
       { key: 'validate', label: 'Valider le colis dès l’envoi (sinon il reste en brouillon chez NOEST)', type: 'check', default: true },
       { key: 'can_open', label: 'Le client peut ouvrir le colis', type: 'check', default: false },
+    ],
+  },
+  maystro: {
+    kind: 'maystro', label: 'Maystro Delivery', api: true, fees: true, desks: false, cancel: true, label_: true, labels_: true, parcel: true, change: true, webhook: 'api',
+    help: 'Maystro Delivery. Token API et identifiant de la boutique (store ID) : dans votre espace Maystro → Paramètres → API.',
+    fields: [
+      { key: 'token', label: 'Token API', type: 'secret' },
+      { key: 'store_id', label: 'Store ID', type: 'secret' },
+      { key: 'base_url', label: 'Adresse de l’API', type: 'text', default: 'https://b.maystro-delivery.com/api' },
+    ],
+  },
+  zimou: {
+    kind: 'zimou', label: 'Zimou Express', api: true, fees: true, desks: true, cancel: true, label_: true, labels_: true, parcel: true, change: true, askReturn: true, note: true,
+    help: 'Zimou Express. Token API : dans votre espace Zimou → API.',
+    fields: [
+      { key: 'api_token', label: 'Token API', type: 'secret' },
+      { key: 'base_url', label: 'Adresse de l’API', type: 'text', default: 'https://zimou.express/api' },
+    ],
+  },
+  elogistia: {
+    kind: 'elogistia', label: 'Elogistia', api: true, fees: true, desks: true, cancel: true, label_: true, parcel: true,
+    help: 'Elogistia. Clé API : dans votre espace Elogistia → API.',
+    fields: [
+      { key: 'api_key', label: 'Clé API', type: 'secret' },
+      { key: 'base_url', label: 'Adresse de l’API', type: 'text', default: 'https://api.elogistia.com' },
+      { key: 'email', label: 'E-mail du client (demandé par Elogistia)', type: 'text', default: '', hint: 'Vide = une adresse Pilotix par défaut' },
+      { key: 'label_format', label: 'Format des étiquettes', type: 'text', default: '10x15', hint: '10x15 ou 15x20' },
+    ],
+  },
+  ecom: {
+    kind: 'ecom', label: 'E-COM Delivery', api: true, fees: false, desks: true, cancel: true, label_: false, parcel: true, change: true,
+    help: 'E-COM Delivery. Token et clé : dans votre espace E-COM → API.',
+    fields: [
+      { key: 'token', label: 'Token', type: 'secret' },
+      { key: 'key', label: 'Clé (key)', type: 'secret' },
+      { key: 'base_url', label: 'Adresse de l’API', type: 'text', default: 'https://ecom-dz.net' },
+      { key: 'validate', label: 'Colis « à expédier » dès l’envoi', type: 'check', default: true },
+    ],
+  },
+  mdm: {
+    kind: 'mdm', label: 'MDM Express', api: true, fees: false, desks: true, cancel: false, label_: true, labels_: true, parcel: true,
+    help: 'MDM Express. Clé API (x-api-key) et identifiant de la boutique (store ID) : dans votre espace MDM → API.',
+    fields: [
+      { key: 'api_key', label: 'Clé API (x-api-key)', type: 'secret' },
+      { key: 'store_id', label: 'Store ID', type: 'secret' },
+      { key: 'token', label: 'Token (si MDM vous en donne un)', type: 'secret' },
+      { key: 'base_url', label: 'Adresse de l’API', type: 'text', default: 'https://api.mdm.express' },
+      { key: 'label_format', label: 'Format des étiquettes', type: 'text', default: '', hint: 'A4, A5 ou A6 (vide = format de MDM)' },
+      { key: 'free_shipping', label: 'Livraison gratuite pour le client', type: 'check', default: false },
+      { key: 'can_open', label: 'Le client peut ouvrir le colis', type: 'check', default: false },
+      { key: 'fragile', label: 'Colis fragiles', type: 'check', default: false },
+    ],
+  },
+  near: {
+    kind: 'near', label: 'Near Delivery', api: true, fees: true, desks: true, cancel: true, label_: true, parcel: true, change: true, exchange: 'create',
+    help: 'Near Delivery (livraison en point relais seulement). ApiKey et ApiSecret : dans votre espace Near → API.',
+    fields: [
+      { key: 'api_key', label: 'ApiKey', type: 'secret' },
+      { key: 'api_secret', label: 'ApiSecret', type: 'secret' },
+      { key: 'base_url', label: 'Adresse de l’API', type: 'text', default: 'https://api.neardelivery.app/api/v1' },
+      { key: 'pickup_type', label: 'Remise des colis à Near', type: 'text', default: 'center', hint: 'center : vous déposez au centre Near · address : Near ramasse à votre adresse' },
+      { key: 'pickup_address', label: 'Votre adresse de ramassage', type: 'text', default: '', hint: 'Seulement si « address »' },
+      { key: 'sender_center_id', label: 'Votre centre Near (n°)', type: 'text', default: '' },
+      { key: 'return_center_id', label: 'Centre des retours / échanges (n°)', type: 'text', default: '' },
+      { key: 'size', label: 'Taille des colis', type: 'text', default: 'S', hint: 'S, M ou L' },
     ],
   },
   custom: {
@@ -108,11 +187,18 @@ export const CARDS: { title: string; sub: string; kind: CourierKind; settings?: 
   { title: 'ZR Express', sub: 'ZR Express (nouvelle plateforme)', kind: 'zr' },
   { title: 'ZR Express (Procolis)', sub: 'ZR Express (ancienne : Procolis)', kind: 'zr_legacy', host: '!abex' },
   { title: 'ABEX', sub: 'Plateforme Procolis', kind: 'zr_legacy', host: 'abex', settings: { base_url: 'https://abex.procolis.com/api_v1' } },
-  { title: 'Yalidine', sub: 'Yalidine', kind: 'yalidine', host: '!guepex' },
+  { title: 'Yalidine', sub: 'Yalidine', kind: 'yalidine', host: '!guepex,yalitec' },
   { title: 'Guepex', sub: 'Plateforme Yalidine', kind: 'yalidine', host: 'guepex', settings: { base_url: 'https://api.guepex.app/v1/' } },
   { title: 'NOEST Express', sub: 'NOEST Express', kind: 'noest' },
   { title: 'DHD Livraison', sub: 'Plateforme EcoTrack', kind: 'ecotrack', host: 'dhd', settings: { base_url: 'https://dhd.ecotrack.dz' } },
   { title: 'Autre société EcoTrack', sub: 'Conexlog, Anderson, World Express…', kind: 'ecotrack', host: '!dhd', settings: { base_url: '' } },
+  { title: 'Maystro Delivery', sub: 'Maystro Delivery', kind: 'maystro' },
+  { title: 'Zimou Express', sub: 'Zimou Express', kind: 'zimou' },
+  { title: 'Elogistia', sub: 'Elogistia', kind: 'elogistia' },
+  { title: 'E-COM Delivery', sub: 'E-COM Delivery', kind: 'ecom' },
+  { title: 'MDM Express', sub: 'MDM Express', kind: 'mdm' },
+  { title: 'Near Delivery', sub: 'Point relais seulement', kind: 'near' },
+  { title: 'Yalitec', sub: 'Plateforme Yalidine', kind: 'yalidine', host: 'yalitec', settings: { base_url: 'https://api.yalitec.me/v1/' } },
   { title: 'Autre API', sub: 'API personnalisée', kind: 'custom' },
 ];
 

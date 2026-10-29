@@ -32,7 +32,8 @@
     "messages": "Messages",
     "health": "Sauvegardes",
     "marketers": "Marketers",
-    "designs": "Pages de connexion"
+    "designs": "Pages de connexion",
+    "couriers": "Sociétés de livraison"
   },
   "roles": {
     "owner": "Propriétaire",
@@ -649,5 +650,37 @@
     "setOn": "Proposer le compte Pro",
     "setPrice": "Prix par mois (DA)",
     "setLink": "Voir la page publique des marketers Pro"
+  },
+  "co": {
+    "sub": "Ce que Pilotix fait par l’API de chaque société (Fait) et ce qui manque encore (À faire). Les boutiques font tout dans Pilotix, sans aller sur le site de la société.",
+    "test": "Tester toutes les API",
+    "testing": "Test en cours…",
+    "serverOnly": "Le test se fait depuis le serveur (pas dans l’aperçu).",
+    "companies": "Sociétés",
+    "done": "Fait",
+    "todo": "À faire",
+    "alive": "API qui répondent",
+    "up": "API OK",
+    "down": "Ne répond pas",
+    "odd": "Réponse inattendue",
+    "platform": "Plateforme {{name}}",
+    "noneDone": "Rien encore par API.",
+    "allDone": "Tout est fait pour cette société.",
+    "f": {
+      "create": "Créer le colis",
+      "tracking": "Suivi des statuts",
+      "webhook": "Mises à jour en direct (webhook)",
+      "modify": "Modifier (prix, adresse, téléphone)",
+      "cancel": "Annuler / supprimer",
+      "swap": "Échange (swap)",
+      "claim": "Réclamation",
+      "return": "Demander le retour",
+      "retry": "Nouvelle tentative",
+      "note": "Note à la société",
+      "label": "Étiquette",
+      "fees": "Tarifs",
+      "desks": "Bureaux (stop desks)",
+      "payments": "Paiements / versements"
+    }
   }
 }

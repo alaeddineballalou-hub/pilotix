@@ -13,7 +13,7 @@ import { syncTurnstile } from './turnstile';
 /**
  * Background work, outside user requests, for every shop that is active and paid (needs REDIS_URL; without it the app
  * works and these jobs are skipped — use POST /api/hooks/cron from an external scheduler instead):
- *  - courier status sync every 30 minutes
+ *  - courier status sync every 5 minutes (companies with live updates (webhook): every 30 minutes, in case one was lost)
  *  - Meta Ads insights sync every night
  *  - monthly partitions of the order history (every shop, even unpaid: their orders keep coming in)
  *  - Dellal follow-ups (one short message to customers who went quiet) every 15 minutes
@@ -53,7 +53,8 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     const call = (proc: string, input: unknown = {}) => this.core.call(ref, proc, session, input);
     const tag = `[${ref.shop.slug}]`;
     if (name === 'courier-sync') {
-      const r: any = await call('delivery.sync');
+      // every 5 minutes; the run at the top / half of the hour is the full one (webhook companies too)
+      const r: any = await call('delivery.sync', { fast: new Date().getMinutes() % 30 >= 5 });
       // parcels the courier could not answer for, failed steps: in the server log, not lost
       const bad = [...(r?.companies ?? []).flatMap((c: any) => [...(c.error ? [`${c.company}: ${c.error}`] : []), ...(c.errors ?? []).map((e: any) => `${e.ref}: ${e.error}`)]), ...(r?.steps ?? []).map((s: any) => `${s.step}: ${s.error}`)];
       if (bad.length) new Logger('Courier sync').warn(`${tag} ${bad.length} problem(s): ${bad.slice(0, 20).join(' | ')}`);
@@ -137,7 +138,13 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     });
     // the Doctor (control room) sees each job's last run
     this.worker.on('completed', (job) => doctorState.job(job.name, true));
-    await this.queue.add('courier-sync', {}, { repeat: { every: 30 * 60_000 }, jobId: 'courier-sync', removeOnComplete: 50, removeOnFail: 100 });
+    // couriers every 5 minutes (it was 30): Redis keeps the old repeat timer, removed here
+    try {
+      for (const r of await this.queue.getRepeatableJobs()) if (r.name === 'courier-sync' && Number(r.every) !== 5 * 60_000) await this.queue.removeRepeatableByKey(r.key);
+    } catch (e) {
+      this.log.warn(`courier-sync: old timer not removed (${(e as Error).message})`);
+    }
+    await this.queue.add('courier-sync', {}, { repeat: { every: 5 * 60_000 }, jobId: 'courier-sync', removeOnComplete: 50, removeOnFail: 100 });
     await this.queue.add('meta-sync', {}, { repeat: { pattern: '30 4 * * *' }, jobId: 'meta-sync', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('dellal-followups', {}, { repeat: { every: 15 * 60_000 }, jobId: 'dellal-followups', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('cm-sweep', {}, { repeat: { every: 3 * 60_000 }, jobId: 'cm-sweep', removeOnComplete: 20, removeOnFail: 50 });

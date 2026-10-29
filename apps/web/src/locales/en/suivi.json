@@ -471,6 +471,18 @@
         "b": "Customer’s other number",
         "c": "Typing mistake"
       }
+    },
+    "act": {
+      "askReturn": "Ask for a return",
+      "retry": "New delivery try",
+      "note": "Note to the company",
+      "send": "Send to {{name}}",
+      "ph_askReturn": "Reason for the return (optional)",
+      "ph_retry": "When / how to deliver (optional)",
+      "ph_note": "Your message to the company’s agents",
+      "done_askReturn": "Return asked to {{name}}",
+      "done_retry": "New try asked to {{name}}",
+      "done_note": "Note sent to {{name}}"
     }
   },
   "removeAgent": "Remove the follow-up agent",

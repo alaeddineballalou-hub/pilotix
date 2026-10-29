@@ -39,7 +39,8 @@
     "statuses": "Statuts",
     "test": "Tester",
     "preview": "Aperçu de l’envoi",
-    "zr": "{{name}} depuis Pilotix"
+    "zr": "{{name}} depuis Pilotix",
+    "live": "Sans quitter Pilotix"
   },
   "kinds": {
     "own": "Livreur à moi",
@@ -181,7 +182,7 @@
   "zr": {
     "title": "{{name}} depuis Pilotix",
     "hookTitle": "Statuts en direct",
-    "hookHelp": "{{name}} prévient Pilotix à chaque changement de statut d’un colis : plus besoin d’attendre la mise à jour automatique (toutes les 30 minutes).",
+    "hookHelp": "{{name}} prévient Pilotix à chaque changement de statut d’un colis : plus besoin d’attendre la mise à jour automatique (toutes les 5 minutes).",
     "hookOn": "Activés",
     "hookOff": "Désactivés",
     "turnOn": "Activer",
@@ -245,5 +246,27 @@
     "noEnd": "Fin de tournée non réglée",
     "call": "Appeler",
     "tourEnd": "Fin de tournée"
+  },
+  "live": {
+    "title": "{{name}} depuis Pilotix",
+    "poll": "{{name}} n’a pas de webhook : Pilotix lui demande les statuts de vos colis toutes les {{n}} minutes, tout seul.",
+    "manualHelp": "{{name}} prévient Pilotix à chaque changement de statut. Activez, puis collez l’adresse donnée dans votre espace {{name}} (Développement → Webhooks).",
+    "newUrl": "Nouvelle adresse",
+    "paste": "Collez cette adresse dans votre espace {{name}} → Développement → Webhooks (une seule fois) :",
+    "copy": "Copier l’adresse",
+    "copied": "Adresse copiée",
+    "does": {
+      "send": "Envoyer les colis à {{name}} (numéro de suivi automatique)",
+      "track": "Suivre les statuts des colis",
+      "change": "Changer le prix, l’adresse ou le téléphone d’un colis",
+      "cancel": "Annuler un colis pas encore ramassé",
+      "exchange": "Envoyer un échange (produit à récupérer)",
+      "askReturn": "Demander le retour d’un colis",
+      "retry": "Demander une nouvelle tentative de livraison",
+      "note": "Envoyer une note aux agents de {{name}}",
+      "label": "Imprimer l’étiquette de {{name}}",
+      "fees": "Importer les tarifs",
+      "desks": "Importer les bureaux (stop desks)"
+    }
   }
 }

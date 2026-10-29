@@ -67,6 +67,15 @@ export type Health = {
   server: { startedAt: string; node: string; memory: number; mail: boolean; jobs: boolean };
 };
 export const serverHealth = () => req<Health>('/health', undefined, 'GET');
+export interface CourierProbe {
+  kind: string;
+  ok: boolean;
+  reached: boolean;
+  message: string;
+  ms: number;
+}
+/** Calls every delivery company's API from the server (made-up keys: alive and reached?). */
+export const couriersTest = () => req<{ at: string; results: CourierProbe[] }>('/couriers/test', {});
 
 /** Doctor: the server's health (owner and managers). */
 export const serverDoctor = () => req<ServerDoctorReport>('/doctor');

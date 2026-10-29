@@ -70,7 +70,7 @@ export class PlatformGuard implements CanActivate {
 const LoginBody = z.object({ email: z.string().email().max(200), password: z.string().min(1).max(200), device: z.string().max(4000).optional() });
 const CodeBody = z.object({ ticket: z.string().max(4000), code: z.string().trim().regex(/^\d{6}$/, 'Code à 6 chiffres'), remember: z.boolean().default(false) });
 /** Actions that only read: everything else changes shops, so what the shops' requests keep is forgotten at once. */
-const READS = /^p\.(me|dashboard|shops\.(list|get)|payments\.(list|receipt)|plans\.list|staff\.list|settings\.get|audit\.list|demo\.get|signups\.list|support\.(list|get)|health\.db)$/;
+const READS = /^p\.(me|couriers|dashboard|shops\.(list|get)|payments\.(list|receipt)|plans\.list|staff\.list|settings\.get|audit\.list|demo\.get|signups\.list|support\.(list|get)|health\.db)$/;
 /** These need e-mails: the owner gets a link (or a receipt) only by e-mail. */
 const NEEDS_MAIL = new Set(['p.shops.create', 'p.shops.resendInvite', 'p.payments.mailReceipt']);
 
@@ -258,6 +258,21 @@ export class PlatformController {
       throw new core.AppError('bad_request', (e as Error).message);
     }
     throw new core.AppError('not_found', 'Action inconnue');
+  }
+
+  /** Delivery companies: calls each one's API from this server with made-up keys (alive? reached?). Nothing is created. */
+  @Post('couriers/test')
+  async couriersTest(@Req() req: { staff: StaffSession }) {
+    if (req.staff.role === 'support') throw new core.AppError('forbidden', 'Réservé aux responsables');
+    let m: any = null;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      m = require('@pilotix/core/dist/couriers');
+    } catch {
+      m = null;
+    }
+    if (!m?.probeCouriers) throw new core.AppError('bad_request', 'Intégration des sociétés de livraison indisponible sur ce serveur');
+    return { at: new Date().toISOString(), results: await m.probeCouriers() };
   }
 
   /** The server: database and stores' sizes (numbers only), the last backups, the disk space, the e-mails. */

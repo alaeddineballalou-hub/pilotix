@@ -127,3 +127,8 @@
 .pxz-tabs button.on b { background: rgb(255 255 255 / .2); }
 .pxz-tabs button:disabled { opacity: .45; cursor: default; }
 .pxz-exs .pxz-ex { padding: 0; border: 0; background: none; }
+
+/* ask the courier for a return / a new try / a note, from Pilotix */
+.pxz-xacts { display: grid; gap: 8px; margin-top: 8px; }
+.pxz-xform { display: grid; gap: 6px; }
+.pxz-xform textarea { width: 100%; resize: vertical; }

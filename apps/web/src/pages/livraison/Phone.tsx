@@ -19,7 +19,7 @@ import '../caisse/phone.css';
 import './phone.css';
 
 type Kinds = Out<'delivery.kinds'>;
-type Open = 'fees' | 'desks' | 'statuses' | 'preview' | 'zr';
+type Open = 'fees' | 'desks' | 'statuses' | 'preview' | 'zr' | 'live';
 type Livreur = Out<'delivery.livreurs'>[number];
 const isApi = (c: Company) => !['own', 'manual'].includes(c.kind);
 const short = (name: string) => name.replace(/express|livraison|coursier/gi, '').trim().slice(0, 3).toUpperCase() || name.slice(0, 2).toUpperCase();
@@ -228,6 +228,11 @@ function CompanyPage({ c, onClose, onEdit, onOpen, onSheet }: { c: Company; onCl
           <Icon name="sparkles" /> {t('livraison.act.zr', { name: c.name })}
         </button>
       )}
+      {api && c.kind !== 'zr' && c.kind !== 'custom' && (
+        <button type="button" className="pxv-btn nv big" onClick={() => onOpen('live', c)}>
+          <Icon name="sparkles" /> {t('livraison.act.live', { name: c.name })}
+        </button>
+      )}
       <div className="pxv-lbl">{t('livraison.ph.daily')}</div>
       <ul className="pxk-grp pxl-acts">
         {row('printer', t('livraison.act.sheet'), t('livraison.ph.sheetSub'), () => onSheet({ companyId: c.id }))}
@@ -285,7 +290,7 @@ function CarrierRows({ list, kinds, onPick }: { list: Company[]; kinds: Kinds; o
         const n = list.filter((c) => {
           if (c.kind !== card.kind) return false;
           if (!card.host) return true;
-          if (card.host.startsWith('!')) return !host(c).includes(card.host.slice(1));
+          if (card.host.startsWith('!')) return card.host.slice(1).split(',').every((h) => !host(c).includes(h));
           return host(c).includes(card.host);
         }).length;
         return (

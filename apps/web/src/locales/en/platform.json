@@ -32,7 +32,8 @@
     "messages": "Messages",
     "health": "Backups",
     "marketers": "Marketers",
-    "designs": "Sign-in pages"
+    "designs": "Sign-in pages",
+    "couriers": "Delivery companies"
   },
   "roles": {
     "owner": "Owner",
@@ -649,5 +650,37 @@
     "setOn": "Offer the Pro account",
     "setPrice": "Price a month (DA)",
     "setLink": "See the public page of Pro marketers"
+  },
+  "co": {
+    "sub": "What Pilotix does through each company’s API (Done) and what is still missing (To do). Shops do everything in Pilotix, never on the company’s site.",
+    "test": "Test every API",
+    "testing": "Testing…",
+    "serverOnly": "The test runs from the server (not in the preview).",
+    "companies": "Companies",
+    "done": "Done",
+    "todo": "To do",
+    "alive": "APIs answering",
+    "up": "API OK",
+    "down": "Not answering",
+    "odd": "Unexpected answer",
+    "platform": "{{name}} platform",
+    "noneDone": "Nothing through the API yet.",
+    "allDone": "Everything is done for this company.",
+    "f": {
+      "create": "Create the parcel",
+      "tracking": "Status tracking",
+      "webhook": "Live updates (webhook)",
+      "modify": "Change (price, address, phone)",
+      "cancel": "Cancel / delete",
+      "swap": "Exchange (swap)",
+      "claim": "Claim",
+      "return": "Ask for a return",
+      "retry": "New delivery try",
+      "note": "Note to the company",
+      "label": "Label",
+      "fees": "Prices",
+      "desks": "Offices (stop desks)",
+      "payments": "Payments / payouts"
+    }
   }
 }

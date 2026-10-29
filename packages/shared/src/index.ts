@@ -94,14 +94,14 @@ export const RETURN_REASONS = ['refused', 'unreachable', 'mismatch', 'wrong_addr
 export const SALES_CHANNELS = ['site', 'facebook', 'instagram', 'tiktok', 'appel', 'whatsapp', 'autre', 'landing'] as const;
 export type SalesChannel = (typeof SALES_CHANNELS)[number];
 
-export const COURIER_KINDS = ['own', 'zr', 'zr_legacy', 'yalidine', 'ecotrack', 'noest', 'custom', 'manual'] as const;
+export const COURIER_KINDS = ['own', 'zr', 'zr_legacy', 'yalidine', 'ecotrack', 'noest', 'maystro', 'zimou', 'elogistia', 'ecom', 'mdm', 'near', 'custom', 'manual'] as const;
 export type CourierKind = (typeof COURIER_KINDS)[number];
 /** Couriers Pilotix sends parcels to through their API: each gives the parcel its own tracking number, which replaces
  *  the Pilotix one (screens, labels, scanner). Own livreurs and companies without an API keep the Pilotix number. */
-export const API_COURIER_KINDS: readonly string[] = ['zr', 'zr_legacy', 'yalidine', 'ecotrack', 'noest', 'custom'] satisfies readonly CourierKind[];
+export const API_COURIER_KINDS: readonly string[] = ['zr', 'zr_legacy', 'yalidine', 'ecotrack', 'noest', 'maystro', 'zimou', 'elogistia', 'ecom', 'mdm', 'near', 'custom'] satisfies readonly CourierKind[];
 /** Couriers whose API gives the parcel its own label, printed instead of the Pilotix one. Procolis (zr_legacy) gives
  *  none; a custom API gives one when it answers with a label link (if not, the Pilotix label prints). */
-export const LABEL_COURIER_KINDS: readonly string[] = ['zr', 'yalidine', 'ecotrack', 'noest', 'custom'] satisfies readonly CourierKind[];
+export const LABEL_COURIER_KINDS: readonly string[] = ['zr', 'yalidine', 'ecotrack', 'noest', 'maystro', 'zimou', 'elogistia', 'ecom', 'mdm', 'near', 'custom'] satisfies readonly CourierKind[];
 
 // ---------------------------------------------------------------- SAV
 export const SAV_TYPES = ['defect', 'missing', 'wrong', 'late', 'notdelivered', 'refund', 'exchange', 'help', 'other'] as const;

@@ -2,8 +2,14 @@
 // (NOEST space → API). Base https://app.noest-dz.com/api/public.
 // Ported from the original Pilotix adapter. Endpoints: POST create/order, POST valid/order, POST get/trackings/info, POST delete/order,
 // GET get/order/label?tracking= (PDF), GET desks.
+// Parcel page: POST get/trackings/info (OrderInfo + activity). Changes: POST update/order {tracking, client, phone, phone_2, adresse,
+// wilaya_id, commune, montant, stop_desk, station_code} (only before pickup). POST ask/return, POST ask/new-tentative, POST add/maj
+// {tracking, content}. Exchange: type_id 2 at creation (NOEST docs: 1 Livraison, 2 Échange, 3 Pick up — vargo guesses 3 = exchange
+// « based on common usage » and 2 = fragile; we keep 2, the documented value).
+// BEST GUESS (check with real keys): canModify = no activity yet past upload / customer_validation; station_code on update/order
+// (vargo's update rules do not list it); the OrderInfo field names (tarif, stop_desk, station_code).
 // BEST GUESS (check with real keys): the fees endpoint — NOEST did not document one; we try /fees, /get/fees, /tarifs.
-import type { CourierAdapter, CourierCompany } from './types';
+import type { ChangeInput, CourierAdapter, CourierCompany, Parcel, ParcelInfo } from './types';
 import { baseUrl, chunks, CourierError, cut, errText, flag, http, HttpOpts, humanize, needKeys, sleep, timeUp } from './util';
 
 const STATUSES: CourierAdapter['statuses'] = {
@@ -26,6 +32,105 @@ async function api(c: CourierCompany, path: string, body?: Record<string, unknow
   await sleep(400);
   if (r && r.success === false) throw new CourierError(`${c.name} : ${errText(r.errors || r.message) || 'refusé'}`);
   return r;
+}
+
+/** NOEST wants 9–10 digit local numbers (0661…). */
+const localPhone = (v: string | null | undefined) => {
+  const d = String(v ?? '').replace(/\D/g, '').replace(/^00/, '').replace(/^213/, '');
+  return d ? (d.startsWith('0') ? d : `0${d}`) : '';
+};
+/** Events before the driver picks the parcel up: NOEST still accepts update/order. */
+const PRE_PICKUP = new Set(['upload', 'customer_validation']);
+
+async function parcelInfo(c: CourierCompany, tracking: string): Promise<ParcelInfo> {
+  needKeys(c, 'api_token', 'user_guid');
+  const r = await api(c, '/get/trackings/info', { trackings: [tracking] });
+  const x = r?.[tracking] ?? (Object.values(r ?? {}).find((v: any) => v && typeof v === 'object' && (v.OrderInfo?.tracking === tracking || v.activity)) as any);
+  if (!x) throw new CourierError(`Colis ${tracking} introuvable chez ${c.name}`);
+  const o = x.OrderInfo ?? {};
+  const acts: any[] = (Array.isArray(x.activity) ? x.activity : []).filter((a: any) => a && (a.event_key || a.event));
+  const known = acts.filter((a) => a.event_key in STATUSES);
+  const last = (known.length ? known : acts).at(-1);
+  const can = acts.every((a) => PRE_PICKUP.has(String(a.event_key)));
+  const n = (v: unknown) => (v === null || v === undefined || v === '' || isNaN(Number(v)) ? null : Number(v));
+  const desk = Number(o.stop_desk) === 1;
+  return {
+    state: last ? last.event || humanize(String(last.event_key)) : null,
+    color: null,
+    situation: null,
+    livreur: null,
+    risk: null,
+    canModify: can,
+    canChangePhone: can,
+    direct: can,
+    pendingChange: false,
+    modifications: null,
+    modificationLimit: null,
+    phoneChanges: null,
+    phoneChangeLimit: null,
+    phoneChangePrice: null,
+    delivery: {
+      type: x.OrderInfo ? (desk ? 'Stop desk' : 'Domicile') : null,
+      hub: desk ? (o.station_code ?? o.station ?? null) : null,
+      city: o.wilaya ?? (o.wilaya_id ? `Wilaya ${o.wilaya_id}` : null),
+      district: o.commune ?? null,
+      street: o.adresse ?? null,
+    },
+    amount: n(o.montant),
+    deliveryPrice: n(o.tarif ?? o.tarif_livraison),
+    returnPrice: n(o.tarif_retour),
+    swap: null,
+    history: acts
+      .map((a) => ({
+        at: String(a.date ?? a.created_at ?? ''),
+        status: String(a.event || humanize(String(a.event_key))),
+        color: null,
+        hub: a.location ?? a.station ?? null,
+        by: a.by ?? a.causer ?? a.driver ?? null,
+        comment: a.remarque ?? a.comment ?? null,
+        situations: [],
+      }))
+      .filter((a) => a.at)
+      .sort((a, b) => b.at.localeCompare(a.at)),
+    sms: [],
+  };
+}
+
+/** Changes a parcel straight at NOEST (update/order), before pickup. */
+async function changeDirect(c: CourierCompany, i: ChangeInput, p: Parcel | null) {
+  needKeys(c, 'api_token', 'user_guid');
+  const body: Record<string, unknown> = { tracking: i.item.tracking };
+  if (i.kind === 'amount') {
+    if (i.amount == null || !(i.amount >= 0)) throw new CourierError('Le nouveau montant manque');
+    body.montant = Math.round(i.amount);
+  } else if (i.kind === 'phone') {
+    if (!i.phone) throw new CourierError('Le nouveau numéro manque');
+    body.phone = localPhone(i.phone);
+    if (i.phone2) body.phone_2 = localPhone(i.phone2);
+  } else {
+    if (!p) throw new CourierError('Commande introuvable');
+    const toDesk = i.kind === 'delivery' ? !!i.stopdesk : p.is_stopdesk;
+    if (i.kind === 'address' && toDesk) throw new CourierError('Colis livré en stop desk : changez plutôt le bureau (Domicile ↔ Stop desk)');
+    const station = toDesk ? (i.kind === 'delivery' ? (i.hubExtId ?? null) : p.stopdesk_ext_id) : null;
+    if (toDesk && !station) throw new CourierError('Choisissez le bureau NOEST (stop desk)');
+    Object.assign(body, {
+      adresse: cut(i.address ?? p.address ?? i.commune ?? p.commune ?? '-', 250),
+      wilaya_id: i.wilayaId ?? (station ? parseInt(String(station), 10) || p.wilaya_id : p.wilaya_id),
+      commune: i.commune ?? p.commune ?? p.stopdesk_commune ?? '',
+      stop_desk: toDesk ? 1 : 0,
+      station_code: station ?? undefined,
+    });
+    if (i.amount != null && i.amount >= 0) body.montant = Math.round(i.amount);
+  }
+  try {
+    await api(c, '/update/order', body);
+  } catch (e: any) {
+    if (e instanceof CourierError && !/refuse les clés|ne répond pas|trop de demandes/.test(String(e.message))) {
+      throw new CourierError(`${c.name} refuse la modification (colis sans doute déjà ramassé) : ${String(e.message).replace(`${c.name} : `, '')}`);
+    }
+    throw e;
+  }
+  return { extId: i.item.tracking, approved: true, direct: true };
 }
 
 export const noest: CourierAdapter = {
@@ -111,5 +216,27 @@ export const noest: CourierAdapter = {
     return Object.keys(home)
       .map((w) => ({ wilayaId: Number(w), home: Number(home[w]?.tarif) || null, desk: Number(desk[w]?.tarif) || null, returnFee: Number(ret[w]?.tarif) || null }))
       .filter((x) => x.wilayaId >= 1 && x.wilayaId <= 69);
+  },
+  parcel(c, it) {
+    return parcelInfo(c, it.tracking);
+  },
+  change(c, i, _helpers, p) {
+    return changeDirect(c, i, p);
+  },
+  async askReturn(c, it, note) {
+    needKeys(c, 'api_token', 'user_guid');
+    await api(c, '/ask/return', { tracking: it.tracking });
+    if (String(note ?? '').trim()) await api(c, '/add/maj', { tracking: it.tracking, content: cut(String(note).trim(), 255) }).catch(() => undefined);
+  },
+  async retry(c, it, note) {
+    needKeys(c, 'api_token', 'user_guid');
+    await api(c, '/ask/new-tentative', { tracking: it.tracking });
+    if (String(note ?? '').trim()) await api(c, '/add/maj', { tracking: it.tracking, content: cut(String(note).trim(), 255) }).catch(() => undefined);
+  },
+  async note(c, it, text) {
+    needKeys(c, 'api_token', 'user_guid');
+    const content = cut(String(text ?? '').trim(), 255);
+    if (!content) throw new CourierError('La note est vide');
+    await api(c, '/add/maj', { tracking: it.tracking, content });
   },
 };

@@ -74,7 +74,13 @@ async function parcelOf(db: Db, orderId: number) {
   if (!o) throw notFound('Commande introuvable');
   return o;
 }
-const servesFrom = (o: any) => !!o.tracking && !!o.company_id && !!KINDS[o.kind as CourierKind]?.zr;
+const servesFrom = (o: any) => !!o.tracking && !!o.company_id && !!(KINDS[o.kind as CourierKind]?.zr || KINDS[o.kind as CourierKind]?.parcel);
+/** What else can be done from Pilotix with this parcel's courier (buttons of the parcel page). */
+const capsOf = (o: any) => {
+  const k = o.kind ? KINDS[o.kind as CourierKind] : undefined;
+  const on = !!o.tracking && !!o.company_id && !!k?.api;
+  return { askReturn: on && !!k?.askReturn, retry: on && !!k?.retry, note: on && !!k?.note, cancel: on && !!k?.cancel, zr: on && !!k?.zr };
+};
 
 // ---------------------------------------------------------------- the preview: ZR simulated from Pilotix's data
 const LIVREURS = [
@@ -357,7 +363,7 @@ export const parcelsProcs = {
     const o = await parcelOf(ctx.db, orderId);
     const changes = (await ctx.db.query(`${CHANGES_SQL} WHERE ch.order_id = $1 ORDER BY ch.created_at DESC`, [orderId])).map(toChange);
     const back = (await ctx.db.query('SELECT tracking, ext_id FROM parcel_returns WHERE order_id = $1', [orderId]))[0];
-    const base = { companyId: numOrNull(o.company_id), companyName: (o.company_name as string | null) ?? null, returnTracking: (back?.tracking as string | undefined) ?? null, changes };
+    const base = { companyId: numOrNull(o.company_id), companyName: (o.company_name as string | null) ?? null, returnTracking: (back?.tracking as string | undefined) ?? null, changes, caps: capsOf(o) };
     if (!servesFrom(o)) return { ...base, supported: false, info: null as ParcelInfo | null, returnInfo: null as ReturnLeg | null, error: null as string | null };
     const returnInfo = back ? await returnLeg(ctx, o, back) : null;
     if (isDemo(ctx)) return { ...base, supported: true, info: await demoInfo(ctx.db, o), returnInfo, error: null };
@@ -377,6 +383,22 @@ export const parcelsProcs = {
 
   /** The courier's answers to the requests still waiting (one order, or every one). */
   'parcel.changeSync': proc(['suivi', 'depot'], z.object({ orderId: id.optional() }), async (ctx, i) => syncChanges(ctx, i.orderId)),
+
+  /** Asks the courier for a return, a new delivery try, or leaves a note for its agents (from Pilotix, no courier site). */
+  'parcel.action': proc(['suivi'], z.object({ orderId: id, action: z.enum(['askReturn', 'retry', 'note']), text: z.string().trim().max(250).default('') }), async (ctx, i) =>
+    withActionLock(ctx.db, `parcelaction:${i.orderId}`, ctx.session.profile.id, 'Une demande est déjà en cours pour ce colis', async () => {
+      const o = await parcelOf(ctx.db, i.orderId);
+      const caps = capsOf(o);
+      if (!caps[i.action]) throw bad(`${o.company_name ?? 'Cette société'} : pas disponible depuis Pilotix pour ce colis`);
+      if (o.follow_status && FOLLOW_FINAL.includes(o.follow_status)) throw bad('Colis terminé');
+      if (i.action === 'note' && !i.text) throw bad('Écrivez la note');
+      if (!isDemo(ctx)) await courier(ctx, i.action, { companyId: num(o.company_id), item: { id: num(o.id), tracking: o.tracking, extId: o.ext_id ?? null }, text: i.text });
+      const what = i.action === 'askReturn' ? 'Retour demandé' : i.action === 'retry' ? 'Nouvelle tentative demandée' : 'Note envoyée';
+      await addEvent(ctx.db, num(o.id), ctx.session.profile.id, 'note', null, null, `${what} à ${o.company_name}${i.text ? ` : ${i.text}` : ''}`);
+      ctx.emit({ type: 'order', id: num(o.id) });
+      return { ok: true };
+    }),
+  ),
 
   /** Withdraws a request the courier has not answered yet. */
   'parcel.changeCancel': proc(['suivi'], z.object({ id }), async (ctx, i) => {

@@ -7,6 +7,7 @@ import { z, ZodTypeAny } from 'zod';
 import { isoOrNull, num, numOrNull } from '../db';
 import { AppError, bad, forbidden, notFound } from '../rpc';
 import { hashPassword } from '../modules/users';
+import { courierCatalog } from '../couriers/catalog';
 import { syncAgency } from '../modules/agencies';
 import { accountById, makeAccountToken, sha256Hex } from './accounts';
 import { rewardReferrer, ReferralReward } from './reminders';
@@ -230,6 +231,9 @@ function shopError(e: any): never {
 // ---------------------------------------------------------------- the actions
 export const PLATFORM_REGISTRY = {
   'p.me': pproc(ALL, z.object({}), async (ctx) => ctx.staff),
+
+  /** Delivery companies: what Pilotix does through each one's API (Done) and what is still missing (To do). */
+  'p.couriers': pproc(ALL, z.object({}), async () => courierCatalog()),
 
   'p.me.password': pproc(ALL, z.object({ current: z.string().min(1).max(200), next: z.string().min(10).max(200) }), async (ctx, i) => {
     const r = (await ctx.t.platform.query('SELECT password_hash FROM platform.staff WHERE id = $1', [ctx.staff.id]))[0];

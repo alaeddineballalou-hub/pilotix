@@ -26,6 +26,8 @@ export type { PGliteLike } from './pglite';
 export type { ImportProduct, ImportResult } from './modules/productimport';
 
 export { REGISTRY };
+export { courierCatalog, COURIER_FEATURES } from './couriers/catalog';
+export type { CatalogCompany, CatalogItem, CourierFeature } from './couriers/catalog';
 export { syncAgency, syncLink, agencyCounts, monthBounds, monthNow } from './modules/agencies';
 export { agencyGate, AGENCY_AGENT_PROCS, MARKETER_AGENT_PROCS, MARKETER_SELLER_PROCS, SELLER_PROCS, sellerProcsOf } from './modules/agencyscope';
 export { FANOUT_PROCS } from './modules/agencywork';

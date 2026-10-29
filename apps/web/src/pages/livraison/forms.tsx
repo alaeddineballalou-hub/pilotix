@@ -621,3 +621,112 @@ export function ZrModal({ company, onClose }: { company: Company; onClose: () =>
     </Modal>
   );
 }
+
+// ---------------------------------------------------------------- any other company: live updates and what Pilotix does
+const LIVE_DOES = ['send', 'track', 'change', 'cancel', 'exchange', 'askReturn', 'retry', 'note', 'label', 'fees', 'desks'] as const;
+
+/** What Pilotix does with this company (so its website is not needed), and its instant status updates when it has them. */
+export function LiveModal({ company, onClose }: { company: Company; onClose: () => void }) {
+  const { t } = useTranslation();
+  const kinds = useRpc('delivery.kinds', {});
+  const q = useRpc('delivery.live', { companyId: company.id });
+  const off = useAction('delivery.webhookOff', { success: t('livraison.zr.hookOffDone') });
+  const [busy, setBusy] = useState(false);
+  const [url, setUrl] = useState<string | null>(null);
+  const k = kinds.data?.kinds.find((x) => x.kind === company.kind);
+  const name = company.name;
+  const has = (d: (typeof LIVE_DOES)[number]) =>
+    !!k &&
+    (d === 'send' || d === 'track'
+      ? k.api
+      : d === 'change'
+        ? !!k.change
+        : d === 'cancel'
+          ? k.cancel
+          : d === 'exchange'
+            ? !!k.exchange
+            : d === 'askReturn'
+              ? !!k.askReturn
+              : d === 'retry'
+                ? !!k.retry
+                : d === 'note'
+                  ? !!k.note
+                  : d === 'label'
+                    ? k.label_
+                    : d === 'fees'
+                      ? k.fees
+                      : k.desks);
+  const turnOn = async () => {
+    setBusy(true);
+    try {
+      const r = await rpc('delivery.webhookOn', { companyId: company.id });
+      if (r.manual) setUrl(r.url);
+      else toast(t('livraison.zr.hookOnDone', { name }), 'ok');
+      q.refetch();
+    } catch (e: any) {
+      toast(e.message, 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const d = q.data;
+  return (
+    <Modal
+      sheet
+      title={t('livraison.live.title', { name })}
+      onClose={onClose}
+      wide
+      footer={
+        <button className="btn primary" onClick={onClose}>
+          {t('common.close')}
+        </button>
+      }
+    >
+      <ul className="lvz-does">
+        {LIVE_DOES.filter(has).map((x) => (
+          <li key={x}>
+            <Icon name="check" /> {t(`livraison.live.does.${x}`, { name })}
+          </li>
+        ))}
+      </ul>
+      {q.isLoading ? (
+        <Loading />
+      ) : q.error ? (
+        <ErrorBox error={q.error} />
+      ) : d ? (
+        <section className="lvz-sec">
+          <h3>{t('livraison.zr.hookTitle')}</h3>
+          {!d.mode ? (
+            <p className="muted small">{t('livraison.live.poll', { name, n: d.pollMinutes })}</p>
+          ) : (
+            <>
+              <p className="muted small">{d.mode === 'manual' ? t('livraison.live.manualHelp', { name }) : t('livraison.zr.hookHelp', { name })}</p>
+              <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span className={`badge ${d.on ? 't-ok' : 't-off'}`}>{d.on ? t('livraison.zr.hookOn') : t('livraison.zr.hookOff')}</span>
+                {d.on && (
+                  <button className="btn small" disabled={off.isPending} onClick={() => off.mutate({ companyId: company.id }, { onSuccess: () => (setUrl(null), q.refetch()) })}>
+                    {t('livraison.zr.turnOff')}
+                  </button>
+                )}
+                <button className="btn small primary" disabled={busy} onClick={turnOn}>
+                  {d.on && d.mode === 'manual' ? t('livraison.live.newUrl') : t('livraison.zr.turnOn')}
+                </button>
+              </div>
+              {url && (
+                <div className="lvz-url">
+                  <p className="small">{t('livraison.live.paste', { name })}</p>
+                  <p className="ltr small lvz-url-v" style={{ overflowWrap: 'anywhere' }}>
+                    <code>{url}</code>
+                  </p>
+                  <button className="btn small" onClick={() => navigator.clipboard?.writeText(url).then(() => toast(t('livraison.live.copied'), 'ok'))}>
+                    {t('livraison.live.copy')}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      ) : null}
+    </Modal>
+  );
+}

@@ -632,6 +632,7 @@ export function CourierPanel({ o, phone, onModify }: { o: Order; phone?: boolean
     return (
       <>
         <CourierBlock o={o} d={d} busy={busy || q.isFetching} refresh={refresh} withdraw={withdraw} onModify={open} />
+        <CourierActions o={o} d={d} />
         {sheet}
       </>
     );
@@ -709,6 +710,7 @@ export function CourierPanel({ o, phone, onModify }: { o: Order; phone?: boolean
           {!(info.canModify || info.canChangePhone) && <small className="muted">{t('suivi.courier.noChange', { name })}</small>}
         </div>
       )}
+      <CourierActions o={o} d={d} />
       {info && info.history.length > 0 && (
         <details className="pxz-more">
           <summary>{t('suivi.courier.journey', { name, n: info.history.length })}</summary>
@@ -723,6 +725,58 @@ export function CourierPanel({ o, phone, onModify }: { o: Order; phone?: boolean
       )}
       {sheet}
     </section>
+  );
+}
+
+/** Ask the courier for a return, a new delivery try, or leave a note for its agents — from Pilotix, never its site. */
+function CourierActions({ o, d }: { o: Order; d: Info }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState<'askReturn' | 'retry' | 'note' | null>(null);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const caps = d.caps;
+  const acts = (['askReturn', 'retry', 'note'] as const).filter((a) => caps?.[a]);
+  if (!acts.length) return null;
+  const name = d.companyName ?? '';
+  const send = async () => {
+    if (!open) return;
+    setBusy(true);
+    try {
+      await rpc('parcel.action', { orderId: o.id, action: open, text: text.trim() });
+      toast(t(`suivi.courier.act.done_${open}`, { name }), 'ok');
+      setOpen(null);
+      setText('');
+      qc.invalidateQueries();
+    } catch (e: any) {
+      toast(e.message, 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="pxz-xacts">
+      <div className="pxz-acts">
+        {acts.map((a) => (
+          <button key={a} type="button" className={`btn small${open === a ? ' primary' : ''}`} onClick={() => setOpen(open === a ? null : a)}>
+            <Icon name={a === 'askReturn' ? 'undo' : a === 'retry' ? 'refresh' : 'chat'} /> {t(`suivi.courier.act.${a}`)}
+          </button>
+        ))}
+      </div>
+      {open && (
+        <div className="pxz-xform">
+          <textarea rows={2} maxLength={250} value={text} placeholder={t(`suivi.courier.act.ph_${open}`)} onChange={(e) => setText(e.target.value)} />
+          <div className="pxz-acts">
+            <button type="button" className="btn small primary" disabled={busy || (open === 'note' && !text.trim())} onClick={send}>
+              {t('suivi.courier.act.send', { name })}
+            </button>
+            <button type="button" className="btn small ghost" onClick={() => setOpen(null)}>
+              {t('common.cancel')}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

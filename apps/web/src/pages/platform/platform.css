@@ -257,3 +257,18 @@
 .pp-switch input:checked + i::after { transform: translateX(18px); }
 [dir='rtl'] .pp-switch input:checked + i::after { transform: translateX(-18px); }
 .pp-switch input:focus-visible + i { outline: 2px solid #1B2A47; outline-offset: 2px; }
+
+/* Delivery companies: Done / To do per company */
+.pp-co-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+.pp-co-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.pp-co-list li { display: flex; gap: 10px; align-items: flex-start; }
+.pp-co-list li > div { display: grid; gap: 2px; min-width: 0; }
+.pp-co-ic { flex: none; width: 18px; height: 18px; margin-top: 2px; }
+.pp-co-list li.done .pp-co-ic { color: #16a34a; }
+.pp-co-list li.todo .pp-co-ic { color: #f59e0b; }
+.pp-co-probe { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+.pp-co-probe.ok { background: #dcfce7; color: #166534; }
+.pp-co-probe.bad { background: #fee2e2; color: #991b1b; }
+.pp-co-probe svg { width: 14px; height: 14px; }
+.pp-co-plat { font-size: 12px; color: var(--muted, #64748b); }
+.pp-co-msg { color: #991b1b; margin: 0 0 8px; }

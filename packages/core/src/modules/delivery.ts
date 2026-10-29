@@ -637,13 +637,15 @@ export const deliveryProcs = {
   /** Turns instant status updates on: ZR calls Pilotix on every status change (no waiting for the 30-minute sync). */
   'delivery.webhookOn': proc([], z.object({ companyId: id }), async (ctx, { companyId }) => {
     const c = await companyOr404(ctx.db, companyId);
-    if (!KINDS[c.kind]?.zr) throw bad(`${c.name} : pas disponible avec cette société`);
+    const mode = KINDS[c.kind]?.webhook;
+    if (!mode) throw bad(`${c.name} : pas de mises à jour en direct avec cette société (Pilotix lui demande les statuts toutes les 5 minutes)`);
     if (!c.hasKeys) throw bad(`Clés API manquantes pour ${c.name}`);
     const bytes = new Uint8Array(18);
     globalThis.crypto.getRandomValues(bytes);
     const key = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
     let extId = 'demo-hook';
-    if (!isDemo(ctx)) {
+    if (mode === 'manual') extId = 'manual';
+    else if (!isDemo(ctx)) {
       if (!publicApi(ctx)) throw bad('Adresse publique du serveur manquante (PUBLIC_URL) : la société ne saurait pas où prévenir Pilotix');
       const old = String((c.settings as any).webhook_id ?? '');
       if (old) await courierOf(ctx)('webhookOff', { companyId, extId: old }, ctx).catch(() => null);
@@ -655,13 +657,23 @@ export const deliveryProcs = {
          config = jsonb_set(COALESCE(config, '{}'::jsonb), '{settings}', COALESCE(config->'settings', '{}'::jsonb) || jsonb_build_object('webhook_id', $3::text)) WHERE id = $1`,
       [c.id, key, extId],
     );
-    return { ok: true };
+    // the courier's space asks for the address by hand (Yalidine: Développement → Webhooks): shown once, to paste there
+    const base = publicApi(ctx) || 'https://votre-serveur.dz/api';
+    return { ok: true, manual: mode === 'manual', url: `${base}/hooks/courier/${c.id}?key=${key}` };
+  }),
+
+  /** Instant status updates of one company: how it works with it, and whether it is on. */
+  'delivery.live': proc([], z.object({ companyId: id }), async (ctx, { companyId }) => {
+    const c = await companyOr404(ctx.db, companyId);
+    const mode = KINDS[c.kind]?.webhook ?? null;
+    const extId = String((c.settings as any).webhook_id ?? '') || null;
+    return { mode, on: !!extId, pollMinutes: 5 };
   }),
 
   'delivery.webhookOff': proc([], z.object({ companyId: id }), async (ctx, { companyId }) => {
     const c = await companyOr404(ctx.db, companyId);
     const extId = String((c.settings as any).webhook_id ?? '');
-    if (extId && !isDemo(ctx)) await courierOf(ctx)('webhookOff', { companyId, extId }, ctx);
+    if (extId && extId !== 'manual' && !isDemo(ctx)) await courierOf(ctx)('webhookOff', { companyId, extId }, ctx);
     await ctx.db.query(
       `UPDATE delivery_companies SET credentials = credentials - 'webhook_key', config = jsonb_set(COALESCE(config, '{}'::jsonb), '{settings}', COALESCE(config->'settings', '{}'::jsonb) - 'webhook_id') WHERE id = $1`,
       [c.id],
@@ -696,8 +708,12 @@ export const deliveryProcs = {
   'delivery.send': proc(['depot', 'suivi'], z.object({ ids, companyId: id.optional() }), async (ctx, i) => sendOrders(ctx, i.ids, i.companyId ?? null)),
 
   /** Asks every courier with an API for the status of its parcels on the road and updates them. */
-  'delivery.sync': proc(['suivi', 'depot'], z.object({ companyId: id.optional() }), async (ctx, i) => {
-    const list = (await companies(ctx.db)).filter((c) => c.active && KINDS[c.kind]?.api && c.hasKeys && (!i.companyId || c.id === i.companyId));
+  'delivery.sync': proc(['suivi', 'depot'], z.object({ companyId: id.optional(), fast: z.boolean().optional() }), async (ctx, i) => {
+    // fast (every 5 minutes): the companies that tell Pilotix themselves (webhook on) are left to their webhook and
+    // checked only in the full sync (every 30 minutes), in case a call was lost
+    const list = (await companies(ctx.db)).filter(
+      (c) => c.active && KINDS[c.kind]?.api && c.hasKeys && (!i.companyId || c.id === i.companyId) && !(i.fast && String((c.settings as any).webhook_id ?? '')),
+    );
     const out: { company: string; checked: number; changed: number; failed?: number; errors?: { ref: string; error: string }[]; error?: string }[] = [];
     for (const c of list) {
       try {

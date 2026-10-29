@@ -22,6 +22,18 @@ export function fakeTracking(kind: CourierKind, ref: string, salt = Date.now()):
       return `NOE-${d8}`;
     case 'ecotrack':
       return `ECO-${d8}`;
+    case 'maystro':
+      return `MAY${d8}`;
+    case 'zimou':
+      return `ZIM-${d8}`;
+    case 'elogistia':
+      return `ELO${d8}`;
+    case 'ecom':
+      return `ECM${d8}`;
+    case 'mdm':
+      return `MDM-${d8}`;
+    case 'near':
+      return `NEAR-${d8}`;
     default:
       return `TRK-${d8}`;
   }

@@ -329,6 +329,12 @@ export interface CourierAdapter {
   changeCancel?(c: CourierCompany, extId: string): Promise<void>;
   /** Sends an exchange: a new parcel to the customer and the courier's return parcel for the old product. */
   exchange?(c: CourierCompany, p: Parcel, original: TrackItem, h: Helpers): Promise<ExchangeResult>;
+  /** Asks the courier to send the parcel back to the shop (a return), from Pilotix. */
+  askReturn?(c: CourierCompany, item: TrackItem, note: string): Promise<void>;
+  /** Asks the courier for a new delivery try (nouvelle tentative), from Pilotix. */
+  retry?(c: CourierCompany, item: TrackItem, note: string): Promise<void>;
+  /** Adds a note / remark for the courier on the parcel (seen by its agents). */
+  note?(c: CourierCompany, item: TrackItem, text: string): Promise<void>;
   /** The courier's own list of statuses (its workflow), for the status mapping. */
   states?(c: CourierCompany): Promise<{ key: string; label: string; color: string | null }[]>;
   /** The courier's prices for its services (swap, phone change, labelling, office holding…). */

@@ -1,5 +1,5 @@
 // The order card of the original app: a drawer on the right with Client, Produits, Livraison, Historique and every action.
-import { canSetFollow, CANCEL_REASONS, CONF_TONE, FAKE_REASONS, CONF_NEEDS_DATE, CONF_NEEDS_REASON, ConfStatus, FAIL_REASONS, FOLLOW_FINAL, FOLLOW_STATUSES, FollowStatus, Order, OrderEvent, RETURN_REASONS } from '@pilotix/shared';
+import { API_COURIER_KINDS, canSetFollow, CANCEL_REASONS, CONF_TONE, FAKE_REASONS, CONF_NEEDS_DATE, CONF_NEEDS_REASON, ConfStatus, FAIL_REASONS, FOLLOW_FINAL, FOLLOW_STATUSES, FollowStatus, Order, OrderEvent, RETURN_REASONS } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,7 +22,7 @@ import { TrustFlags } from './TrustFlags';
 import { AdSection } from './AdSource';
 
 /** Courier kinds with an API (send / label / status / cancel go through the delivery procedures). */
-export const API_KINDS = ['zr', 'zr_legacy', 'yalidine', 'ecotrack', 'noest', 'custom'];
+export const API_KINDS: readonly string[] = API_COURIER_KINDS;
 const SHIPPED: (FollowStatus | null)[] = ['shipped', 'out_for_delivery', 'delivered', 'returning', 'returned', 'exchanged', 'lost', 'in_exchange'];
 const CONF_CHOICES: ConfStatus[] = ['confirmed', 'callback', 'postponed', 'no_stock', 'cancelled', 'wrong_number', 'fake', 'duplicate'];
 

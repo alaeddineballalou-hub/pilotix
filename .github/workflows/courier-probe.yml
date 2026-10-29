@@ -1,0 +1,30 @@
+# Calls every delivery company's API from GitHub's servers (made-up keys: alive and reached?) and keeps the answer on
+# the branch "courier-probe" (probe.json). Run: Actions > Courier API probe > Run workflow, or push to a probe/** branch.
+name: Courier API probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['probe/**']
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm run build -w @pilotix/shared && npm run build -w @pilotix/core
+      - run: node scripts/courier-probe.mjs > /tmp/probe.json && cat /tmp/probe.json
+      - name: Keep the answer on the courier-probe branch
+        run: |
+          mkdir /tmp/out && cp /tmp/probe.json /tmp/out/ && cd /tmp/out
+          git init -q -b courier-probe && git add probe.json
+          git -c user.name=pilotix-ci -c user.email=ci@pilotix.online commit -qm "Courier probe from ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" courier-probe

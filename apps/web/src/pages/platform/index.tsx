@@ -12,6 +12,7 @@ import { Field, Icon } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { can } from './bits';
 import { Agencies } from './Agencies';
+import { CouriersPage } from './Couriers';
 import { Dashboard } from './Dashboard';
 import { Demo } from './Demo';
 import { DoctorPage } from './Doctor';
@@ -35,6 +36,7 @@ const SECTIONS: Section[] = [
   { id: 'dashboard', icon: 'grid' },
   { id: 'doctor', icon: 'sparkles', roles: ['owner', 'manager'] },
   { id: 'shops', icon: 'store' },
+  { id: 'couriers', icon: 'truck' },
   { id: 'agencies', icon: 'headset' },
   { id: 'marketers', icon: 'trend' },
   { id: 'signups', icon: 'signup' },
@@ -59,7 +61,7 @@ export function PlatformApp({ parts }: { parts: string[] }) {
     };
   }, []);
   // the preview has no server: only the Doctor and the sign-in designs can be seen there, with an example
-  if (DEMO_ONLY) return parts[0] === 'doctor' || parts[0] === 'designs' ? <PlatformShell staff={DEMO_STAFF} parts={parts} demo onLogout={() => (location.hash = '#/accueil')} /> : <ServerOnly />;
+  if (DEMO_ONLY) return parts[0] === 'doctor' || parts[0] === 'designs' || parts[0] === 'couriers' ? <PlatformShell staff={DEMO_STAFF} parts={parts} demo onLogout={() => (location.hash = '#/accueil')} /> : <ServerOnly />;
   if (!staff) return <PlatformLogin onDone={setStaff} />;
   // a receipt alone on its page (printed, or saved as PDF from the browser)
   if (parts[0] === 'receipt' && /^\d+$/.test(parts[1] ?? '')) return <Receipt id={Number(parts[1])} />;
@@ -194,6 +196,7 @@ function PlatformShell({ staff, parts, onLogout, demo }: { staff: Staff; parts: 
   let page: ReactNode;
   if (cur === 'shops' && parts[1] && /^\d+$/.test(parts[1])) page = <ShopDetail id={Number(parts[1])} staff={staff} />;
   else if (cur === 'shops') page = <Shops staff={staff} creating={parts[1] === 'new'} filter={parts[1] === 'f' ? parts[2] : undefined} />;
+  else if (cur === 'couriers') page = <CouriersPage demo={demo} />;
   else if (cur === 'doctor') page = <DoctorPage demo={demo} owner={demo || staff?.role === 'owner'} />;
   else if (cur === 'payments') page = <Payments staff={staff} />;
   else if (cur === 'signups') page = <Signups />;

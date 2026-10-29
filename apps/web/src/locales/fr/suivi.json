@@ -471,6 +471,18 @@
         "b": "Autre numéro du client",
         "c": "Erreur de saisie"
       }
+    },
+    "act": {
+      "askReturn": "Demander le retour",
+      "retry": "Nouvelle tentative",
+      "note": "Note à la société",
+      "send": "Envoyer à {{name}}",
+      "ph_askReturn": "Raison du retour (facultatif)",
+      "ph_retry": "Quand / comment livrer (facultatif)",
+      "ph_note": "Votre message aux agents de la société",
+      "done_askReturn": "Retour demandé à {{name}}",
+      "done_retry": "Nouvelle tentative demandée à {{name}}",
+      "done_note": "Note envoyée à {{name}}"
     }
   },
   "removeAgent": "Retirer l’agent suivi",

@@ -1274,6 +1274,13 @@ class ApiController {
    * X-Pilotix-Key header). The parcel numbers are picked from the body, whatever its shape; their state is then read
    * again from the courier itself, so the body is only a hint.
    */
+  /** A courier checks the webhook address once (Yalidine: GET ?crc_token=… must be answered with the same token). */
+  @Public()
+  @Get(['hooks/courier/:companyId', 's/:shop/hooks/courier/:companyId'])
+  courierHookCheck(@Query('crc_token') crc: string) {
+    return String(crc ?? '').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 200);
+  }
+
   @Public()
   @Post(['hooks/courier/:companyId', 's/:shop/hooks/courier/:companyId'])
   async courierHook(@Param('shop') shop: string | undefined, @Param('companyId') companyId: string, @Query('key') qkey: string, @Headers('x-pilotix-key') hkey: string, @Body() body: unknown) {
