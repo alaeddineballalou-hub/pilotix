@@ -22,9 +22,10 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm run build -w @pilotix/shared && npm run build -w @pilotix/core
       - run: node scripts/courier-probe.mjs > /tmp/probe.json && cat /tmp/probe.json
+      - run: node scripts/courier-debug.mjs | tee /tmp/debug.txt
       - name: Keep the answer on the courier-probe branch
         run: |
-          mkdir /tmp/out && cp /tmp/probe.json /tmp/out/ && cd /tmp/out
-          git init -q -b courier-probe && git add probe.json
+          mkdir /tmp/out && cp /tmp/probe.json /tmp/debug.txt /tmp/out/ && cd /tmp/out
+          git init -q -b courier-probe && git add probe.json debug.txt
           git -c user.name=pilotix-ci -c user.email=ci@pilotix.online commit -qm "Courier probe from ${GITHUB_SHA::7}"
           git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" courier-probe
