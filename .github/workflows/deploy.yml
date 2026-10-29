@@ -38,6 +38,7 @@ jobs:
       - name: E-mails work on the server
         continue-on-error: true
         run: |
+          tail -n 15 update.log | sed 's/^/::notice title=Server update::/'
           grep -h '^E-mail:' update.log
           grep -q '^E-mail: OK' update.log
 

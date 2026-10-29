@@ -28,11 +28,14 @@ const nobody = `nobody-${Date.now().toString(36)}@example.com`;
 
 // the server answers (it may still be starting after the deploy: up to 5 minutes)
 let up = false;
+let last = '';
 for (let i = 0; i < 30 && !up; i++) {
-  up = (await get('/health').catch(() => ({ status: 0 }))).status === 200;
+  const h = await get('/health').catch((e) => ({ status: 0, text: String(e?.cause?.code || e?.cause?.message || e?.message || e) }));
+  up = h.status === 200;
+  last = `${h.status} ${String(h.text ?? '').slice(0, 160)}`;
   if (!up) await new Promise((r) => setTimeout(r, 10_000));
 }
-check(up, `${SITE}/api/health answers`);
+check(up, `${SITE}/api/health answers`, up ? undefined : last);
 if (!up) process.exit(1);
 
 let r = await get('/legal');
