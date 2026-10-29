@@ -10,6 +10,7 @@ import { CourierError, setDeadline } from './util';
 export * from './types';
 export { ADAPTERS } from './adapters';
 export { KINDS, CARDS } from './kinds';
+export { checkCourier } from './check';
 
 /** The common API of one connected company (spec: send, track, label, cancel, fees, stopdesks, test). */
 export function courierApi(c: CourierCompany): CourierApi {

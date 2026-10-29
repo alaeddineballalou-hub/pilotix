@@ -2,7 +2,7 @@
 // API (Done) and what is still missing (To do), with why. Pure data, built from the courier kinds (no network): the
 // shops' users do all of it inside Pilotix, never on the company's own site.
 import type { CourierKind } from '@pilotix/shared';
-import { KINDS, KindInfo } from './kinds';
+import { KindField, KINDS, KindInfo } from './kinds';
 
 export type CourierFeature =
   | 'create' | 'tracking' | 'modify' | 'cancel' | 'swap' | 'claim' | 'return' | 'retry' | 'note'
@@ -23,6 +23,10 @@ export interface CatalogCompany {
   kind: CourierKind | null;
   platform: string | null;
   items: CatalogItem[];
+  /** the keys and settings its API needs (the control room's test keys form) */
+  fields: KindField[];
+  /** settings this company needs on its platform (its own API address) */
+  presets: Record<string, string>;
 }
 
 /** What is known about each company's API beyond what Pilotix does (from its docs and open-source clients, Oct 2026). */
@@ -150,14 +154,22 @@ function itemsOf(kind: CourierKind): CatalogItem[] {
 
 /** Every company, Done / To do per feature. */
 export function courierCatalog(): CatalogCompany[] {
-  const one = (key: string, name: string, kind: CourierKind, platform: string | null = null): CatalogCompany => ({ key, name, kind, platform, items: itemsOf(kind) });
+  const one = (key: string, name: string, kind: CourierKind, platform: string | null = null, presets: Record<string, string> = {}): CatalogCompany => ({
+    key,
+    name,
+    kind,
+    platform,
+    items: itemsOf(kind),
+    fields: KINDS[kind].fields,
+    presets,
+  });
   return [
     one('zr', 'ZR Express', 'zr'),
     one('yalidine', 'Yalidine', 'yalidine'),
-    one('guepex', 'Guepex', 'yalidine', 'Yalidine'),
-    one('yalitec', 'Yalitec', 'yalidine', 'Yalidine'),
+    one('guepex', 'Guepex', 'yalidine', 'Yalidine', { base_url: 'https://api.guepex.app/v1/' }),
+    one('yalitec', 'Yalitec', 'yalidine', 'Yalidine', { base_url: 'https://api.yalitec.me/v1/' }),
     one('maystro', 'Maystro Delivery', 'maystro'),
-    one('ecotrack', 'DHD, Conexlog, Anderson, World Express… (30+)', 'ecotrack', 'EcoTrack'),
+    one('ecotrack', 'DHD, Conexlog, Anderson, World Express… (30+)', 'ecotrack', 'EcoTrack', { base_url: 'https://dhd.ecotrack.dz' }),
     one('noest', 'NOEST Express', 'noest'),
     one('zimou', 'Zimou Express', 'zimou'),
     one('elogistia', 'Elogistia', 'elogistia'),
@@ -170,6 +182,8 @@ export function courierCatalog(): CatalogCompany[] {
       name: 'Colivraison',
       kind: null,
       platform: null,
+      fields: [],
+      presets: {},
       items: COURIER_FEATURES.map((f) => ({ feature: f, done: false, note: 'Son API existe mais sa documentation n’est pas publique : la demander à Colivraison. En attendant, les boutiques l’ajoutent en « API personnalisée » ou « Société sans API ».' })),
     },
   ];

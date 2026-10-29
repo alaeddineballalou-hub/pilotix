@@ -76,6 +76,22 @@ export interface CourierProbe {
 }
 /** Calls every delivery company's API from the server (made-up keys: alive and reached?). */
 export const couriersTest = () => req<{ at: string; results: CourierProbe[] }>('/couriers/test', {});
+export interface CourierCheckStep {
+  step: string;
+  ok: boolean | null;
+  ms: number;
+  detail: string;
+}
+export interface CourierCheckResult {
+  ok: boolean;
+  deep: boolean;
+  at: string;
+  steps: CourierCheckStep[];
+}
+/** One company's API with the team's saved test keys (deep: a real test parcel created then cancelled). */
+export const courierCheck = (company: string, deep: boolean) => req<CourierCheckResult>('/couriers/check', { company, deep });
+/** Every company with saved test keys, checked in the background (results arrive in p.couriers.tests). */
+export const courierCheckAll = () => req<{ startedAt: string; companies: string[] }>('/couriers/checkAll', {});
 
 /** Doctor: the server's health (owner and managers). */
 export const serverDoctor = () => req<ServerDoctorReport>('/doctor');

@@ -8,6 +8,7 @@ import { isoOrNull, num, numOrNull } from '../db';
 import { AppError, bad, forbidden, notFound } from '../rpc';
 import { hashPassword } from '../modules/users';
 import { courierCatalog } from '../couriers/catalog';
+import { clearCourierTestKeys, courierTestState, saveCourierTestKeys } from './courierTests';
 import { syncAgency } from '../modules/agencies';
 import { accountById, makeAccountToken, sha256Hex } from './accounts';
 import { rewardReferrer, ReferralReward } from './reminders';
@@ -234,6 +235,32 @@ export const PLATFORM_REGISTRY = {
 
   /** Delivery companies: what Pilotix does through each one's API (Done) and what is still missing (To do). */
   'p.couriers': pproc(ALL, z.object({}), async () => courierCatalog()),
+
+  /** The team's test keys of each company (which ones are set, never their values) and each one's last test. */
+  'p.couriers.tests': pproc(ALL, z.object({}), async (ctx) => courierTestState(ctx.t)),
+
+  /** Saves a company's test keys (an empty key keeps the saved one) and its settings (API address…). */
+  'p.couriers.saveKeys': pproc(
+    MANAGERS,
+    z.object({ company: z.string().max(40), secret: z.record(z.string().max(500)).default({}), settings: z.record(z.union([z.string().max(500), z.boolean()])).default({}) }),
+    async (ctx, i) => {
+      const co = courierCatalog().find((c) => c.key === i.company);
+      if (!co?.kind) throw bad('Société inconnue');
+      const secretKeys = new Set(co.fields.filter((f) => f.type === 'secret').map((f) => f.key));
+      const otherKeys = new Set(co.fields.filter((f) => f.type !== 'secret').map((f) => f.key));
+      const secret = Object.fromEntries(Object.entries(i.secret).filter(([k]) => secretKeys.has(k)));
+      const settings = Object.fromEntries(Object.entries(i.settings).filter(([k]) => otherKeys.has(k)));
+      await saveCourierTestKeys(ctx.t, co.key, secret, settings, ctx.staff.name ?? null);
+      await audit(ctx, 'couriers.keys', null, { company: co.key });
+      return { ok: true };
+    },
+  ),
+
+  'p.couriers.clearKeys': pproc(MANAGERS, z.object({ company: z.string().max(40) }), async (ctx, i) => {
+    await clearCourierTestKeys(ctx.t, i.company);
+    await audit(ctx, 'couriers.keysCleared', null, { company: i.company });
+    return { ok: true };
+  }),
 
   'p.me.password': pproc(ALL, z.object({ current: z.string().min(1).max(200), next: z.string().min(10).max(200) }), async (ctx, i) => {
     const r = (await ctx.t.platform.query('SELECT password_hash FROM platform.staff WHERE id = $1', [ctx.staff.id]))[0];

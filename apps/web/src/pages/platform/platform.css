@@ -272,3 +272,16 @@
 .pp-co-probe svg { width: 14px; height: 14px; }
 .pp-co-plat { font-size: 12px; color: var(--muted, #64748b); }
 .pp-co-msg { color: #991b1b; margin: 0 0 8px; }
+
+/* Delivery companies › Tests: the team's test keys and each API's last test */
+.pp-co-keys { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.pp-co-acts { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.pp-co-deep { border: 1px solid #fcd34d; background: #fffbeb; border-radius: 10px; padding: 10px; margin-bottom: 10px; }
+.pp-co-deep p { margin: 0 0 8px; }
+.pp-co-when { margin: 4px 0 8px; }
+.pp-co-list li.bad .pp-co-ic { color: #dc2626; }
+.pp-co-list li.skip { opacity: 0.6; }
+.pp-co-list li.skip .pp-co-ic { color: #94a3b8; }
+.pp-co-form { display: grid; gap: 10px; margin-top: 10px; }
+.pp-co-check { display: flex; gap: 8px; align-items: center; }
+.pp-co-wait { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; padding: 8px 12px; border-radius: 10px; margin: 0; }
