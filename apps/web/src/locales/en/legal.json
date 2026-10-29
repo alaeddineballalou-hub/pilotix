@@ -29,5 +29,9 @@
     "t": "Contact us",
     "p": "A question about your data or these terms? Write to us at {{email}} or from “Contact Pilotix” in your store."
   },
-  "back": "Back"
+  "back": "Back",
+  "s2ai": {
+    "t": "Pilot AI: Dellal learns to sell better",
+    "p": "When Pilotix turns on Pilot AI for your shop, the chats of Dellal (the sales assistant) are read every night to teach it to sell better. Names, numbers, addresses, products and prices are removed inside your shop before anything is read; the Pilotix team may read these anonymous chats to approve lessons. Your prices, products and customers are never shown to other shops. You can ask at any time for your shop to stop taking part: what was kept is then deleted."
+  }
 }

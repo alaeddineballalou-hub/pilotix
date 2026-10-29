@@ -1033,15 +1033,20 @@ export const PLATFORM_REGISTRY = {
   /** Everything the Pilot AI page shows: settings (never the key), last night, lessons waiting, books and the test. */
   'p.pilot.state': pproc(ALL, z.object({}), async (ctx) => {
     const pdb = ctx.t.platform;
-    const [config, night, candidates, approved, books, sharing] = await Promise.all([
+    const [config, night, candidates, approved, books, sharing, shops] = await Promise.all([
       pilotConfig(ctx.t),
       pilot.lastNight(pdb),
       pilot.listCandidates(pdb, { status: 'candidate', limit: 50 }),
       pilot.listCandidates(pdb, { status: 'approved', limit: 50 }),
       pilot.listBooks(pdb),
       pdb.query(`SELECT count(DISTINCT shop_id)::int AS shops, count(*)::int AS cases FROM platform.pilot_cases`),
+      loadShops(ctx.t),
     ]);
-    return { config, night, candidates, approved, books, sharing: { shops: num(sharing[0]?.shops), cases: num(sharing[0]?.cases) } };
+    const per = new Map((await pdb.query(`SELECT shop_id, count(*)::int AS n FROM platform.pilot_cases GROUP BY shop_id`)).map((r: any) => [num(r.shop_id), num(r.n)]));
+    const stores = shops
+      .filter((s) => s.kind === 'store' && s.status !== 'archived' && s.status !== 'deleted' && !s.demo)
+      .map((s) => ({ id: s.id, name: s.name, slug: s.slug, share: config.shops.includes(s.id), cases: per.get(s.id) ?? 0 }));
+    return { config, night, candidates, approved, books, sharing: { shops: num(sharing[0]?.shops), cases: num(sharing[0]?.cases) }, shops: stores };
   }),
   'p.pilot.save': pproc(
     MANAGERS,
@@ -1054,6 +1059,15 @@ export const PLATFORM_REGISTRY = {
       return pilotConfig(ctx.t);
     },
   ),
+  /** Which shops teach Dellal: chosen here only. Turning a shop off deletes what Pilot AI kept of its chats at once. */
+  'p.pilot.share': pproc(MANAGERS, z.object({ shopId: z.number().int().positive(), share: z.boolean() }), async (ctx, i) => {
+    const c = await pilotConfig(ctx.t);
+    const shops = i.share ? [...new Set([...c.shops, i.shopId])] : c.shops.filter((x) => x !== i.shopId);
+    await savePilotConfig(ctx.t, { ...c, shops });
+    const forgot = i.share ? null : await pilot.forgetShop(ctx.t.platform, i.shopId);
+    await audit(ctx, 'pilot.share', i.shopId, { share: i.share });
+    return { shops, forgot };
+  }),
   /** The coach: approve (optionally with a new text), edit, or reject a lesson. Every text is checked again. */
   'p.pilot.lesson': pproc(
     ALL,

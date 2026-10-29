@@ -160,12 +160,6 @@
     "darijaPreferPh": "Mar7ba bik / biki\nSaha khouya / khti\nTkhalles ki testalem\nBla mziya",
     "darijaAvoid": "كلمات لا تُكتب أبدًا",
     "darijaAvoidHint": "كلمة في كل سطر. ضع الكلمة الصحيحة بعد سهم: « frero → khouya ».",
-    "darijaAvoidPh": "frero → khouya\nhabibti → khti",
-    "pilotHelp": "ذكاء Dellal الاصطناعي توفره Pilotix: لا تحتاج إلى وضع أي مفتاح.",
-    "pilotOn": "يجيب {{name}} بذكاء Pilotix الاصطناعي ويتحسن كل ليلة بفضل دروس يوافق عليها فريق Pilotix.",
-    "pilotOff": "ذكاء Pilotix غير مفعّل بعد: يجيب {{name}} بردود تجريبية.",
-    "pilotShare": "مشاركة محادثاتي لجعل Pilot AI أذكى",
-    "pilotShareOn": "كل ليلة تُقرأ محادثاتك بدون أسماء أو أرقام أو عناوين أو منتجات أو أسعار (تُحذف داخل متجرك). قد يقرأ فريق Pilotix هذه المحادثات المجهولة للموافقة على الدروس. لا تُعرض أسعارك ومنتجاتك وزبائنك أبدًا على المتاجر الأخرى.",
-    "pilotShareOff": "محادثاتك غير مشارَكة. إذا أوقفت المشاركة، يُحذف فورًا ما احتفظ به Pilot AI من محادثاتك."
+    "darijaAvoidPh": "frero → khouya\nhabibti → khti"
   }
 }

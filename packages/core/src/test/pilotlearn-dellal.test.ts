@@ -1,9 +1,9 @@
 // Pilot AI inside Dellal: Pilotix's key answers (the shop has none), the coach's lesson book sits in the shared cached
-// block, Haiku answers simple messages and Sonnet the hard ones, the chat's book is recorded, and the share switch
-// (turning it off forgets what Pilot AI kept of the shop's chats).
+// block, Haiku answers simple messages and Sonnet the hard ones, the chat's book is recorded; which shops teach Dellal is
+// chosen in the control room only (unticking one forgets what Pilot AI kept of its chats).
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
-import { call, Ctx, Db, ServerHooks } from '../index';
+import { call, Ctx, Db, PLATFORM_REGISTRY, ServerHooks } from '../index';
 import { PILOT_PLATFORM_SQL } from '../modules/pilotlearn';
 import { pilotConfig, pilotKey, savePilotConfig } from '../platform/pilotai';
 import type { Tenancy } from '../platform/tenancy';
@@ -18,6 +18,7 @@ before(async () => {
   ({ db, as } = await setup(150));
   await db.query('CREATE SCHEMA IF NOT EXISTS platform');
   await db.query(`CREATE TABLE IF NOT EXISTS platform.settings (key text PRIMARY KEY, value jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT now())`);
+  await db.query(`CREATE TABLE IF NOT EXISTS platform.audit (id bigserial PRIMARY KEY, at timestamptz NOT NULL DEFAULT now(), staff_id integer, staff_name text, shop_id integer, action text NOT NULL, details jsonb NOT NULL DEFAULT '{}')`);
   for (const s of PILOT_PLATFORM_SQL.split(/;\s*\n/).map((x) => x.trim()).filter(Boolean)) await db.query(s);
   t = { platform: db, shop: () => db, exec: async () => undefined };
 });
@@ -43,7 +44,7 @@ test('the key: kept in its own row, never in what the screens read; Pilot AI is 
   assert.equal(await pilotKey(t), null, 'on without a key: nothing to answer with');
   await savePilotConfig(t, { enabled: true, maxUsd: 9, share: 0.9 }, 'sk-ant-api03-test-key-0123456789');
   const c = await pilotConfig(t);
-  assert.deepEqual(c, { enabled: true, maxUsd: 5, share: 0.5, hasKey: true }, 'limits are clamped, the key is only "there"');
+  assert.deepEqual(c, { enabled: true, maxUsd: 5, share: 0.5, shops: [], hasKey: true }, 'limits are clamped, the key is only "there"');
   assert.ok(!JSON.stringify(c).includes('sk-ant'));
   assert.equal(await pilotKey(t), 'sk-ant-api03-test-key-0123456789');
   await savePilotConfig(t, { enabled: true, maxUsd: 0.15, share: 0.2 });
@@ -102,18 +103,23 @@ test('Pilot AI off: Dellal is back to the shop’s own key and model, no book, o
   await savePilotConfig(t, { enabled: true, maxUsd: 0.15, share: 0.2 });
 });
 
-test('share switch: admin only; turning it off deletes what Pilot AI kept of the shop', async () => {
-  const ctx = await shopCtx(server([]));
-  const conf = { ...(await as(EMAILS.conf, server([]))), t, shop: SHOP };
-  await assert.rejects(call('dellal.pilot.save', conf, { share: true }), /Accès refusé/);
-  const on: any = await call('dellal.pilot.save', ctx, { share: true });
-  assert.deepEqual(on, { share: true, on: true, platform: true });
-  await db.query(
-    `INSERT INTO platform.pilot_cases (shop_id, conv_id, outcome, transcript) VALUES (1, 999001, 'delivered', 'customer: <name> ch7al ?')`,
-  );
-  const off: any = await call('dellal.pilot.save', ctx, { share: false });
-  assert.equal(off.share, false);
-  assert.equal((await db.query('SELECT count(*)::int AS n FROM platform.pilot_cases WHERE shop_id = 1'))[0].n, 0);
-  const g: any = await call('dellal.pilot.get', ctx, {});
-  assert.equal(g.share, false);
+test('which shops teach Dellal: the control room only (managers); unticking one deletes what Pilot AI kept of it', async () => {
+  const run = (role: 'owner' | 'manager' | 'support', input: { shopId: number; share: boolean }) =>
+    (PLATFORM_REGISTRY as any)['p.pilot.share'].run({ t, staff: { id: 1, name: 'Coach', email: 'c@pilotix.online', role }, now: () => Date.now() }, input);
+  assert.deepEqual((PLATFORM_REGISTRY as any)['p.pilot.share'].roles, ['owner', 'manager'], 'support staff cannot choose');
+  assert.deepEqual((await run('owner', { shopId: 1, share: true })).shops, [1]);
+  assert.deepEqual((await run('manager', { shopId: 7, share: true })).shops, [1, 7]);
+  assert.deepEqual((await pilotConfig(t)).shops, [1, 7]);
+  await db.query(`INSERT INTO platform.pilot_cases (shop_id, conv_id, outcome, transcript) VALUES (7, 999001, 'delivered', 'C: <name> ch7al ?')`);
+  const off = await run('owner', { shopId: 7, share: false });
+  assert.deepEqual(off.shops, [1]);
+  assert.equal(off.forgot.cases, 1);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM platform.pilot_cases WHERE shop_id = 7'))[0].n, 0);
+  // saving the other settings keeps the list
+  await savePilotConfig(t, { enabled: true, maxUsd: 0.15, share: 0.2 });
+  assert.deepEqual((await pilotConfig(t)).shops, [1]);
+  // shops have no Pilot AI action of their own
+  await assert.rejects(call('dellal.pilot.save' as any, await shopCtx(server([])), { share: true }));
+  const g: any = await call('dellal.settings.get', await shopCtx(server([])), {});
+  assert.equal(g.platform, true, 'on the platform server the shop AI card is hidden');
 });

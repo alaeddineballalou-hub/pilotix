@@ -439,5 +439,6 @@ html[data-theme="dark"] .pp-prot { --pp-c-q: #3B9BC0; }
 .pilot-lesson textarea { width: 100%; resize: vertical; font: inherit; field-sizing: content; min-height: 3lh; }
 .pilot-page .btn { max-width: 100%; white-space: normal; text-align: start; }
 .pilot-note { flex: 1 1 160px; min-width: 0; }
+.pilot-search { width: 100%; margin-bottom: 8px; }
 .pilot-test { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 12px; }
 .pilot-transcript { white-space: pre-wrap; word-break: break-word; max-height: 55vh; overflow: auto; padding: 12px; border-radius: 10px; background: var(--raise); border: 1px solid var(--line); font-size: 13px; line-height: 1.5; }

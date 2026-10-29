@@ -34,6 +34,7 @@ export function PilotAiPage({ staff }: { staff: Staff }) {
         <SettingsCard d={d} manager={manager} />
         <NightCard d={d} />
       </div>
+      <ShopsCard d={d} manager={manager} />
       <CoachCard items={d.candidates} />
       <BooksCard d={d} manager={manager} />
     </div>
@@ -79,6 +80,35 @@ function SettingsCard({ d, manager }: { d: State; manager: boolean }) {
           )}
         </div>
       )}
+    </Card>
+  );
+}
+
+/** Which shops teach Dellal: chosen here only (their terms say it); turning one off deletes what was kept of its chats. */
+function ShopsCard({ d, manager }: { d: State; manager: boolean }) {
+  const { t } = useTranslation();
+  const [q, setQ] = useState('');
+  const share = usePAction('p.pilot.share', { success: t('platform.saved') });
+  const on = d.shops.filter((s) => s.share).length;
+  const list = d.shops.filter((s) => !q.trim() || `${s.name} ${s.slug}`.toLowerCase().includes(q.trim().toLowerCase()));
+  return (
+    <Card title={t('platform.pilot.shops')} badge={<span className="chip">{t('platform.pilot.shopsOn', { n: on, total: d.shops.length })}</span>} help={t('platform.pilot.shopsHelp')}>
+      {d.shops.length > 8 && <input className="pilot-search" value={q} placeholder={t('platform.searchShop')} onChange={(e) => setQ(e.target.value)} />}
+      <ul className="pp-mini">
+        {list.map((s) => (
+          <li key={s.id}>
+            <label className="check">
+              <input type="checkbox" disabled={!manager || share.isPending} checked={s.share} onChange={(e) => share.mutate({ shopId: s.id, share: e.target.checked })} />
+              <span className="pp-two">
+                <b>{s.name}</b>
+                <small className="muted ltr">{s.slug}</small>
+              </span>
+            </label>
+            <small className="muted">{t('platform.pilot.shopCases', { n: n(s.cases) })}</small>
+          </li>
+        ))}
+      </ul>
+      <p className="small muted">{t('platform.pilot.shopsOff')}</p>
     </Card>
   );
 }

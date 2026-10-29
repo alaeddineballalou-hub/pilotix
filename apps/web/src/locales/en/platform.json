@@ -993,6 +993,11 @@
       "lost": "Lost",
       "other": "Other"
     },
-    "legend": "C = the customer · D = Dellal · P = a person of the team"
+    "legend": "C = the customer · D = Dellal · P = a person of the team",
+    "shops": "Shops that teach Dellal",
+    "shopsOn": "{{n}} of {{total}}",
+    "shopsHelp": "Only you choose here which shops’ chats teach Dellal. Shops see no Pilot AI setting; their terms of use say it.",
+    "shopCases": "{{n}} chat(s) learned",
+    "shopsOff": "Unticking a shop deletes at once what Pilot AI kept of its chats."
   }
 }

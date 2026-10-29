@@ -223,9 +223,9 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       const now = new Date();
       let shops = 0;
       for (const ref of await this.core.jobShops()) {
-        if (ref.shop.demo || !featureOn(ref.rules.features, 'pilotai/messages')) continue;
+        // only the shops chosen in the control room (super admin) teach Dellal
+        if (ref.shop.demo || !conf.shops.includes(ref.shop.id) || !featureOn(ref.rules.features, 'pilotai/messages')) continue;
         try {
-          if (!(await core.pilotShare(ref.db))) continue;
           const since = await core.pilotLearn.pilotSince(pdb, ref.shop.id);
           const cases = await core.pilotLearn.collectCases(ref.db, { shopId: ref.shop.id, since, now, limit: 2000 });
           await core.pilotLearn.saveCases(pdb, cases);

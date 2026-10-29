@@ -993,6 +993,11 @@
       "lost": "Perdu",
       "other": "Autre"
     },
-    "legend": "C = le client · D = Dellal · P = une personne de l’équipe"
+    "legend": "C = le client · D = Dellal · P = une personne de l’équipe",
+    "shops": "Boutiques qui apprennent à Dellal",
+    "shopsOn": "{{n}} sur {{total}}",
+    "shopsHelp": "Vous seul choisissez ici les boutiques dont les conversations apprennent à Dellal. Les boutiques ne voient aucun réglage Pilot AI ; leurs conditions d'utilisation le disent.",
+    "shopCases": "{{n}} conversation(s) apprises",
+    "shopsOff": "Décocher une boutique supprime tout de suite ce que Pilot AI avait gardé de ses conversations."
   }
 }

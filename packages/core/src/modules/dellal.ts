@@ -11,7 +11,7 @@ import { getRaw, setRaw } from './admin';
 import { checkDarija, DARIJA_FIXER_SYSTEM, darijaRewritePrompt, DarijaIssue, DELLAL_DARIJA, fixDarija, parseAvoid } from './darija';
 import { markReply, noticeForConversation, ordersForDellal, sendInPreview } from './notify';
 import { createOrder } from './orders';
-import { bookFor, BookRef, forgetShop, pickModel } from './pilotlearn';
+import { bookFor, BookRef, pickModel } from './pilotlearn';
 import { pilotConfig } from '../platform/pilotai';
 
 // ---------------------------------------------------------------- settings and secrets
@@ -610,10 +610,7 @@ export async function pilotOn(ctx: Ctx): Promise<boolean> {
     return false;
   }
 }
-/** The shop agreed to share its chats (names, phones and addresses removed) so Pilot AI learns from them. */
-export async function pilotShare(db: Db): Promise<boolean> {
-  return !!(await getRaw<{ share?: boolean }>(db, 'pilot', {})).share;
-}
+
 
 /**
  * The sales playbook: how a seasoned Algerian e-commerce seller works a conversation (cash on delivery, Darija,
@@ -1182,7 +1179,7 @@ export const dellalProcs = {
   'dellal.settings.get': proc([], z.object({}), async (ctx) => {
     const cur = await getRaw<Partial<DellalSettings>>(ctx.db, 'dellal', {});
     if (!cur.verifyToken) await setRaw(ctx.db, 'dellal', { ...DEFAULT_DELLAL, ...cur, verifyToken: randomToken() }, me(ctx));
-    return { ...(await settingsView(ctx.db)), pilotAi: await pilotOn(ctx) };
+    return { ...(await settingsView(ctx.db)), pilotAi: await pilotOn(ctx), platform: !!ctx.t };
   }),
 
   'dellal.settings.save': proc([], SettingsInput, async (ctx, i) => {
@@ -1204,17 +1201,7 @@ export const dellalProcs = {
       }
     }
     ctx.emit({ type: 'settings' });
-    return { ...(await settingsView(ctx.db)), aiTest, pilotAi: await pilotOn(ctx) };
-  }),
-
-  /** Pilot AI for this shop: is it on (Pilotix's AI), and does the shop share its chats (personal data removed) to teach it. */
-  'dellal.pilot.get': proc([], z.object({}), async (ctx) => ({ share: await pilotShare(ctx.db), on: await pilotOn(ctx), platform: !!ctx.t })),
-  'dellal.pilot.save': proc([], z.object({ share: z.boolean() }), async (ctx, i) => {
-    await setRaw(ctx.db, 'pilot', { share: i.share }, me(ctx));
-    // sharing turned off: what Pilot AI kept of this shop's chats is deleted at once
-    if (!i.share && ctx.t && ctx.shop) await forgetShop(ctx.t.platform, ctx.shop.id);
-    ctx.emit({ type: 'settings' });
-    return { share: i.share, on: await pilotOn(ctx), platform: !!ctx.t };
+    return { ...(await settingsView(ctx.db)), aiTest, pilotAi: await pilotOn(ctx), platform: !!ctx.t };
   }),
 
   /** Server: a message arrived on a channel (webhooks). Admin/system only. */

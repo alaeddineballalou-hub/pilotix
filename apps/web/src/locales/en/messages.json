@@ -157,12 +157,6 @@
     "darijaPreferPh": "Mar7ba bik / biki\nSaha khouya / khti\nTkhalles ki testalem\nBla mziya",
     "darijaAvoid": "Words never to write",
     "darijaAvoidHint": "One per line. Put the right word after an arrow: “frero → khouya”.",
-    "darijaAvoidPh": "frero → khouya\nhabibti → khti",
-    "pilotHelp": "Dellal's AI is provided by Pilotix: you have no key to add.",
-    "pilotOn": "{{name}} answers with Pilotix's AI and gets better every night with lessons approved by the Pilotix team.",
-    "pilotOff": "Pilotix's AI is not on yet: {{name}} answers with its demo replies.",
-    "pilotShare": "Share my chats to make Pilot AI smarter",
-    "pilotShareOn": "Every night your chats are read without names, numbers, addresses, products or prices (they are removed inside your shop). The Pilotix team may read these anonymous chats to approve lessons. Your prices, products and customers are never shown to other shops.",
-    "pilotShareOff": "Your chats are not shared. If you stop sharing, what Pilot AI kept of your chats is deleted at once."
+    "darijaAvoidPh": "frero → khouya\nhabibti → khti"
   }
 }
