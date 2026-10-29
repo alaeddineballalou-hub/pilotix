@@ -600,6 +600,15 @@
     "sentApi": "Relaunch sent to {{name}} ({{n}})",
     "claimFail": "The relaunch was not sent: {{msg}}",
     "dateNeeded": "New date (required for this motif)",
-    "okSolved": "Mark solved"
+    "okSolved": "Mark solved",
+    "swapT": "Before the return: swap?",
+    "swapHint": "A waiting order of the same product can take this parcel: no return fee.",
+    "swapNone": "No waiting order for this product.",
+    "swapNo": "No swap, the parcel comes back",
+    "swapNoHint": "The parcel goes back to the depot.",
+    "sameCommune": "same commune",
+    "sameWilaya": "same wilaya",
+    "otherVariant": "other variant",
+    "okSwap": "Lost + swap to {{ref}}"
   }
 }

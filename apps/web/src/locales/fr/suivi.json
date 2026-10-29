@@ -600,6 +600,15 @@
     "sentApi": "Relance envoyée à {{name}} ({{n}})",
     "claimFail": "La relance n’est pas partie : {{msg}}",
     "dateNeeded": "Nouvelle date (obligatoire pour ce motif)",
-    "okSolved": "Marquer résolu"
+    "okSolved": "Marquer résolu",
+    "swapT": "Avant le retour : swapper ?",
+    "swapHint": "Une commande en attente du même produit peut prendre ce colis : pas de frais de retour.",
+    "swapNone": "Pas de commande en attente pour ce produit.",
+    "swapNo": "Pas de swap, le colis revient",
+    "swapNoHint": "Le colis repart au dépôt.",
+    "sameCommune": "même commune",
+    "sameWilaya": "même wilaya",
+    "otherVariant": "autre variante",
+    "okSwap": "Perdu + swapper vers {{ref}}"
   }
 }

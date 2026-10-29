@@ -218,16 +218,28 @@ async function swapCandidates(ctx: Ctx, fromId: number, q?: string) {
     rows = [];
     for (const r of ids) rows.push(await getOrder(ctx, num(r.id)));
   }
+  // the parcel's company price to each candidate's place (home or bureau), next to what it costs now
+  const fees = from.companyId ? await ctx.db.query('SELECT wilaya_id, home, desk FROM delivery_fees WHERE company_id = $1', [from.companyId]) : [];
+  const now = num((await ctx.db.query('SELECT delivery_cost FROM orders WHERE id = $1', [fromId]))[0]?.delivery_cost);
+  const feeTo = (x: Order) => {
+    const f = fees.find((r: any) => num(r.wilaya_id) === x.wilayaId);
+    if (!f) return null;
+    const v = x.isStopdesk ? num(f.desk) : num(f.home);
+    return v > 0 ? v : null;
+  };
+  const norm = (c: string | null | undefined) => String(c ?? '').toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]/g, '');
   const list = rows
     .filter((x) => x.id !== fromId && !x.shippedAt)
     .map((x) => {
       const sameVariant = x.items.some((i) => i.variantId && variants.has(i.variantId));
       const sameProduct = x.items.some((i) => products.has(i.productId));
-      return { ...x, sameWilaya: x.wilayaId === from.wilayaId, sameVariant, sameProduct };
+      const fee = feeTo(x);
+      return { ...x, sameWilaya: x.wilayaId === from.wilayaId, sameCommune: x.wilayaId === from.wilayaId && !!x.commune && norm(x.commune) === norm(from.commune), sameVariant, sameProduct, fee, feeDiff: fee !== null && now > 0 ? fee - now : null };
     })
     .sort(
       (a, b) =>
         Number(b.sameWilaya) - Number(a.sameWilaya) ||
+        Number(b.sameCommune) - Number(a.sameCommune) ||
         Number(a.followStatus === 'prepared') - Number(b.followStatus === 'prepared') ||
         Number(b.sameVariant) - Number(a.sameVariant) ||
         String(a.confirmedAt).localeCompare(String(b.confirmedAt)),
@@ -677,6 +689,8 @@ export const suiviProcs = {
       early: z.boolean().optional(),
       /** « Résolu »: ask the delivery company (or our livreur) to deliver again */
       relance: z.boolean().default(false),
+      /** « Perdu »: before the return, the parcel goes to this waiting order instead (swap) */
+      swapTo: id.nullable().optional(),
     }),
     async (ctx, i) => {
       const cur = await getOrder(ctx, i.id);
@@ -705,12 +719,17 @@ export const suiviProcs = {
           }
         }
         ctx.emit({ type: 'order', id: i.id });
-        return { order: await getOrder(ctx, i.id), claim, claimError };
+        return { order: await getOrder(ctx, i.id), claim, claimError, swap: null };
       }
       const tr = (await alertTries(ctx.db, [i.id], ctx.now())).get(i.id);
       const enough = !!tr && tr.done >= tr.need;
       const early = !enough && !m.client;
       if (early && (!i.early || !note)) throw bad(`${cur.ref} : faites d’abord ${tr?.need ?? 3} appels (${tr?.done ?? 0} faits), ou dites pourquoi vous annulez avant`);
+      if (i.swapTo) {
+        await addEvent(ctx.db, i.id, me, 'suivi_motif', 'lost', m.key, m.fr);
+        const swap = await swapParcel(ctx, i.id, i.swapTo, [`Traité · Perdu · ${m.fr}`, early ? 'annulé trop tôt' : '', note].filter(Boolean).join(' — '));
+        return { order: await getOrder(ctx, i.id), claim: null, claimError: null, swap };
+      }
       await setFollow(
         ctx,
         FollowInput.parse({
@@ -722,7 +741,7 @@ export const suiviProcs = {
       );
       await addEvent(ctx.db, i.id, me, 'suivi_motif', 'lost', m.key, m.fr);
       ctx.emit({ type: 'order', id: i.id });
-      return { order: await getOrder(ctx, i.id), claim: null, claimError: null };
+      return { order: await getOrder(ctx, i.id), claim: null, claimError: null, swap: null };
     },
   ),
 

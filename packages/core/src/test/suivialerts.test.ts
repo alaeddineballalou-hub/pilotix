@@ -258,3 +258,25 @@ test('« Traiter »: Résolu (back on the road, the livreur asked to deliver aga
   assert.ok(st.totalLost >= 3);
   await call('suivi.motifsSet', admin2, m);
 });
+
+test('« Perdu » with a swap: before the return, the parcel goes to a waiting order of the same product (same wilaya first, the price shown)', async () => {
+  const suivi = await as(EMAILS.suivi);
+  const a = await onRoad();
+  await db.query(`UPDATE orders SET follow_status = 'alert', tracking = COALESCE(tracking, 'TRK' || id), locked_by = NULL, locked_until = NULL WHERE id = $1`, [a]);
+  // a confirmed order still at the depot, and the parcel made of the same product
+  const b = (await db.query(`SELECT o.id FROM orders o WHERE o.conf_status = 'confirmed' AND NOT o.is_exchange AND o.id <> $1 ORDER BY o.id LIMIT 1`, [a]))[0];
+  await db.query(`UPDATE orders SET follow_status = 'to_prepare', sub_status = NULL, shipped_at = NULL, tracking = NULL, cashed = false WHERE id = $1`, [b.id]);
+  const it = (await db.query('SELECT product_id, variant_id FROM order_items WHERE order_id = $1 LIMIT 1', [b.id]))[0];
+  await db.query('UPDATE order_items SET product_id = $2, variant_id = $3 WHERE order_id = $1', [a, it.product_id, it.variant_id]);
+  const c = (await call('suivi.swapCandidates', suivi, { fromId: a })) as any;
+  assert.ok(c.rows.some((x: any) => x.id === Number(b.id)));
+  assert.ok('fee' in c.rows[0] && 'sameCommune' in c.rows[0]);
+  const r = (await call('suivi.resolve', suivi, { id: a, outcome: 'lost', motif: 'refused', swapTo: Number(b.id) })) as any;
+  assert.ok(r.swap);
+  const ra = (await db.query('SELECT follow_status, sub_status FROM orders WHERE id = $1', [a]))[0];
+  const rb = (await db.query('SELECT follow_status, sub_status FROM orders WHERE id = $1', [b.id]))[0];
+  assert.deepEqual([ra.follow_status, ra.sub_status], ['cancelled', 'annule_swappe'], 'the old customer: lost');
+  assert.deepEqual([rb.follow_status, rb.sub_status], ['out_for_delivery', 'livraison_swappe'], 'the new customer gets the parcel');
+  const ev = (await db.query(`SELECT from_value, to_value FROM order_events WHERE order_id = $1 AND kind = 'suivi_motif'`, [a]))[0];
+  assert.deepEqual([ev.from_value, ev.to_value], ['lost', 'refused']);
+});
