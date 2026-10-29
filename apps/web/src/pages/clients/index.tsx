@@ -6,6 +6,7 @@ import { da, n, when, wilayaName } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { Card, Empty, ErrorBox, Field, Loading, Pager, StatusBadge } from '../../ui/kit';
+import { ScoreCard, ScoreChip } from '../../ui/clientScore';
 import { Modal } from '../../ui/modal';
 import type { PageProps } from '../registry';
 
@@ -55,6 +56,7 @@ export function Clients(_: PageProps) {
                 <thead>
                   <tr>
                     <th>{t('clients.col.client')}</th>
+                    <th title={t('clients.score.help')}>{t('clients.score.col')}</th>
                     <th>{t('clients.col.phone')}</th>
                     <th>{t('clients.col.wilaya')}</th>
                     <th className="num">{t('clients.col.orders')}</th>
@@ -69,6 +71,9 @@ export function Clients(_: PageProps) {
                       <td data-l={t('clients.col.client')}>
                         <b>{c.name || '—'}</b>
                         {c.blacklisted && <span className="flag">{t('clients.black')}</span>}
+                      </td>
+                      <td data-l={t('clients.score.col')}>
+                        <ScoreChip s={c.score} showNew />
                       </td>
                       <td data-l={t('clients.col.phone')}>
                         <span className="ltr">{c.phone}</span>
@@ -150,6 +155,7 @@ function History({ id, onClose }: { id: number; onClose: () => void }) {
       ) : (
         <>
           {c!.blacklisted && <div className="badbox">{c!.blacklistReason ? t('clients.inBlackReason', { reason: c!.blacklistReason }) : t('clients.inBlack')}</div>}
+          <ScoreCard s={c!.score} />
           <p className="muted small">{t('clients.summary', { orders: c!.orders, delivered: c!.delivered, returned: c!.returned, cancelled: c!.cancelled })}</p>
           {asking && !c!.blacklisted && (
             <Field label={t('clients.reason')}>

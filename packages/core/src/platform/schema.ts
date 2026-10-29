@@ -1,6 +1,7 @@
 // The platform's tables (schema "platform"): the shops, their plans and payments, Pilotix staff, the e-mail → shop
 // index used at login, settings and the journal. Applied before every shop's own migrations.
 import type { Tenancy } from './tenancy';
+import { PILOT_PLATFORM_SQL } from '../modules/pilotlearn';
 
 const P001 = `
 CREATE SCHEMA IF NOT EXISTS platform;
@@ -488,6 +489,49 @@ CREATE TABLE IF NOT EXISTS platform.fraud_reputation (
 CREATE INDEX IF NOT EXISTS fraud_reputation_shop ON platform.fraud_reputation (shop_id);
 `;
 
+// The control room's « Pilotix Protection System » page: how the protection of every store grows, day by day (Algeria
+// days, 'YYYY-MM-DD'). The job « fraud-reputation » writes the landing orders of all stores (received, blocked, to check,
+// caught by the network, by an attacked ad) for the last 90 days, and the network's size once per day (null before the
+// network existed: the chart shows nothing rather than a made-up zero); and each store's last 30 days.
+const P010 = `
+ALTER TABLE platform.fraud_reputation ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'phone';
+CREATE TABLE IF NOT EXISTS platform.protection_daily (
+  day         text        PRIMARY KEY,
+  stores      integer,
+  sharing     integer,
+  phones      integer,
+  devices     integer,
+  agreed      integer,
+  orders      integer     NOT NULL DEFAULT 0,
+  blocked     integer     NOT NULL DEFAULT 0,
+  review      integer     NOT NULL DEFAULT 0,
+  network     integer     NOT NULL DEFAULT 0,
+  campaign    integer     NOT NULL DEFAULT 0,
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS platform.protection_stores (
+  shop_id     integer     PRIMARY KEY REFERENCES platform.shops(id) ON DELETE CASCADE,
+  orders      integer     NOT NULL DEFAULT 0,
+  blocked     integer     NOT NULL DEFAULT 0,
+  review      integer     NOT NULL DEFAULT 0,
+  network     integer     NOT NULL DEFAULT 0,
+  campaign    integer     NOT NULL DEFAULT 0,
+  shared      integer     NOT NULL DEFAULT 0,
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+`;
+
+// The buyers' quality, day by day and per store: the orders not sent again, those that turned out real (confirmed or
+// delivered) and those that turned out fake (blocked, or fake / wrong number for the agent).
+const P011 = `
+ALTER TABLE platform.protection_daily ADD COLUMN IF NOT EXISTS buyers integer NOT NULL DEFAULT 0;
+ALTER TABLE platform.protection_daily ADD COLUMN IF NOT EXISTS good integer NOT NULL DEFAULT 0;
+ALTER TABLE platform.protection_daily ADD COLUMN IF NOT EXISTS bad integer NOT NULL DEFAULT 0;
+ALTER TABLE platform.protection_stores ADD COLUMN IF NOT EXISTS buyers integer NOT NULL DEFAULT 0;
+ALTER TABLE platform.protection_stores ADD COLUMN IF NOT EXISTS good integer NOT NULL DEFAULT 0;
+ALTER TABLE platform.protection_stores ADD COLUMN IF NOT EXISTS bad integer NOT NULL DEFAULT 0;
+`;
+
 export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p001_platform', P001],
   ['p002_accounts_signup_domains', P002],
@@ -498,6 +542,10 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p007_account_phone', P007],
   ['p008_pro_marketers', P008],
   ['p009_fraud_reputation', P009],
+  ['p010_protection_history', P010],
+  ['p011_buyer_quality', P011],
+  // Pilot AI: what Dellal learns from every sharing shop's chats (modules/pilotlearn.ts)
+  ['p012_pilot_ai', PILOT_PLATFORM_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

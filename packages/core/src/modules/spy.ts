@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
 import { getRaw, setRaw } from './admin';
-import { AiRequest, AiResponse, dellalSecret, dellalSettings } from './dellal';
+import { AiRequest, AiResponse, aiKeyed, dellalSettings } from './dellal';
 
 // ---------------------------------------------------------------- settings and secrets
 export const SPY_SOURCES = ['extension', 'scrapecreators', 'searchapi'] as const;
@@ -532,7 +532,7 @@ async function finishSearch(ctx: Ctx, productId: number, since: string): Promise
 /** Claude's answer through the same path as Dellal (the page's Claude in the preview, the Dellal key on the server). */
 async function ask(ctx: Ctx, system: string, user: string, maxTokens: number): Promise<string | null> {
   const inPage = !ctx.server?.dellal && ctx.dellalAi ? ctx.dellalAi : null;
-  const keyed = !!ctx.server?.dellal && !!(await dellalSecret(ctx.db, 'ai'));
+  const keyed = await aiKeyed(ctx);
   if (!inPage && !keyed) return null;
   const s = await dellalSettings(ctx.db);
   const req: AiRequest = { model: s.model, system, messages: [{ role: 'user', content: user }], tools: [], max_tokens: maxTokens };
@@ -542,7 +542,7 @@ async function ask(ctx: Ctx, system: string, user: string, maxTokens: number): P
     .join('')
     .trim();
 }
-const aiOn = async (ctx: Ctx) => (!ctx.server?.dellal && !!ctx.dellalAi) || (!!ctx.server?.dellal && !!(await dellalSecret(ctx.db, 'ai')));
+const aiOn = async (ctx: Ctx) => (!ctx.server?.dellal && !!ctx.dellalAi) || (await aiKeyed(ctx));
 
 /** The first JSON value in a text (Claude sometimes wraps it in words or ``` fences). */
 export function jsonIn<T>(text: string | null): T | null {
@@ -870,6 +870,7 @@ export const spyProcs = {
       source: s.source,
       hasKey: isPaid(s.source) ? !!(await spyKey(ctx.db, s.source)) : true,
       ai: await aiOn(ctx),
+      platform: !!ctx.t,
       demo: !ctx.server,
     };
   }),
@@ -979,6 +980,7 @@ export const spyProcs = {
       settings: s,
       keys: { scrapecreators: !!(await spyKey(ctx.db, 'scrapecreators')), searchapi: !!(await spyKey(ctx.db, 'searchapi')) },
       ai: await aiOn(ctx),
+      platform: !!ctx.t,
       lastScan: (await getRaw<string>(ctx.db, 'spy_last_scan', '')) || null,
       demo: !ctx.server,
     };

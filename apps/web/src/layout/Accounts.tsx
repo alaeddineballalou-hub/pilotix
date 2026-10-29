@@ -679,7 +679,7 @@ export function Legal() {
   useEffect(() => {
     legalText().then(setD);
   }, []);
-  const sections = ['s1', 's2', 's3', 's4', 's5', 's6', 's7'] as const;
+  const sections = ['s1', 's2', 's2ai', 's3', 's4', 's5', 's6', 's7'] as const;
   return (
     <div className="px-legal">
       <article className="card">

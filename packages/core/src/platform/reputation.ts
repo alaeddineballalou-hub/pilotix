@@ -14,6 +14,7 @@
 // Only real results are shared (agents' verdicts, marks, deliveries), never the machine's own guesses (blocked orders),
 // so one store's strict settings do not spread. The latest result wins in each store: a parcel delivered after a
 // refusal takes that store's « bad » back.
+import { algeriaDay, QUALITY_OPEN_DAYS, QUALITY_SQL, qualityOf } from '../modules/quality';
 import { hmacSha256Hex } from '@pilotix/shared';
 import type { Db } from '../db';
 import type { Ctx } from '../rpc';
@@ -125,23 +126,282 @@ async function shareShop(t: Tenancy, s: LearningShop, pepper: string, since: str
   const keys: string[] = [];
   const counts: number[] = [];
   const lasts: string[] = [];
-  const add = (key: string, v: { n: number; last: number }) => {
+  const kinds: string[] = [];
+  const add = (key: string, kind: 'phone' | 'device', v: { n: number; last: number }) => {
     keys.push(key);
+    kinds.push(kind);
     counts.push(v.n);
     lasts.push(new Date(v.last).toISOString());
   };
-  for (const [phone, v] of phones) add(phoneKey(pepper, phone), v);
-  for (const [fp, v] of devices) add(deviceKey(pepper, fp), v);
+  for (const [phone, v] of phones) add(phoneKey(pepper, phone), 'phone', v);
+  for (const [fp, v] of devices) add(deviceKey(pepper, fp), 'device', v);
   await t.platform.tx(async (tx) => {
     await tx.query(`DELETE FROM platform.fraud_reputation WHERE shop_id = $1`, [s.id]);
     if (keys.length)
       await tx.query(
-        `INSERT INTO platform.fraud_reputation (key, shop_id, owner_key, bad_n, last_bad)
-         SELECT u.k, $1, $2, u.n, u.l FROM unnest($3::text[], $4::int[], $5::timestamptz[]) AS u(k, n, l)`,
-        [s.id, s.owner, keys, counts, lasts],
+        `INSERT INTO platform.fraud_reputation (key, shop_id, owner_key, bad_n, last_bad, kind)
+         SELECT u.k, $1, $2, u.n, u.l, u.c FROM unnest($3::text[], $4::int[], $5::timestamptz[], $6::text[]) AS u(k, n, l, c)`,
+        [s.id, s.owner, keys, counts, lasts, kinds],
       );
   });
   return keys.length;
+}
+
+// ---------------------------------------------------------------- the control room's « Pilotix Protection System »
+/** how many days of orders the history keeps recounting (older days keep their last count) */
+const HISTORY_DAYS = 90;
+const STORE_DAYS = 30;
+
+/** one day's (or a period's) landing orders, all stores added up */
+export interface ProtectionCount {
+  orders: number;
+  blocked: number;
+  review: number;
+  network: number;
+  campaign: number;
+  /** the buyers' quality: the orders not sent again (merged), those that turned out real (confirmed or delivered), and
+   *  those that turned out fake (blocked, or « fausse » / « faux numéro » for the agent). The rest: waiting, cancelled… */
+  buyers: number;
+  good: number;
+  bad: number;
+}
+const zero = (): ProtectionCount => ({ orders: 0, blocked: 0, review: 0, network: 0, campaign: 0, buyers: 0, good: 0, bad: 0 });
+const COUNTS = Object.keys(zero()) as (keyof ProtectionCount)[];
+export { algeriaDay };
+
+/** A store's landing orders day by day (Algeria time), counted as its own Protection page counts them. */
+async function ordersByDay(db: Db, since: string): Promise<Map<string, ProtectionCount>> {
+  const rows = await db.query(
+    `SELECT to_char(s.at AT TIME ZONE 'Africa/Algiers', 'YYYY-MM-DD') AS day,
+            count(*)::int AS orders,
+            count(*) FILTER (WHERE s.verdict = 'block')::int AS blocked,
+            count(*) FILTER (WHERE s.verdict = 'review' AND NOT s.merged)::int AS review,
+            count(*) FILTER (WHERE s.reasons @> '[{"code":"shared_bad"}]')::int AS network,
+            count(*) FILTER (WHERE s.reasons @> '[{"code":"campaign_bad"}]')::int AS campaign,
+            ${QUALITY_SQL}
+       FROM landing_submits s LEFT JOIN orders o ON o.id = s.order_id
+      WHERE s.at > $1 GROUP BY 1`,
+    [since],
+  );
+  return new Map(rows.map((r: any) => [String(r.day), Object.fromEntries(COUNTS.map((k) => [k, Number(r[k] ?? 0)])) as unknown as ProtectionCount]));
+}
+
+/** Writes the history: the days (all stores added up), today's size of the network, each store's last 30 days. */
+async function recordProtection(t: Tenancy, stores: { id: number; shared: number; days: Map<string, ProtectionCount> }[], now: number) {
+  const all = new Map<string, ProtectionCount>();
+  const recent = algeriaDay(now - (STORE_DAYS - 1) * DAY);
+  const perStore = stores.map((s) => {
+    const sum = zero();
+    for (const [day, c] of s.days) {
+      const d = all.get(day) ?? zero();
+      for (const k of COUNTS) {
+        d[k] += c[k];
+        if (day >= recent) sum[k] += c[k];
+      }
+      all.set(day, d);
+    }
+    return { id: s.id, shared: s.shared, ...sum };
+  });
+  const size = (
+    await t.platform.query(
+      `SELECT count(DISTINCT shop_id)::int AS sharing,
+              count(DISTINCT key) FILTER (WHERE kind = 'phone')::int AS phones,
+              count(DISTINCT key) FILTER (WHERE kind = 'device')::int AS devices,
+              (SELECT count(*)::int FROM (SELECT key FROM platform.fraud_reputation GROUP BY key HAVING count(DISTINCT owner_key) >= $1) a) AS agreed
+         FROM platform.fraud_reputation`,
+      [REPUTATION_MIN_SELLERS],
+    )
+  )[0];
+  const days = [...all.keys()];
+  const col = (k: keyof ProtectionCount) => days.map((d) => all.get(d)![k]);
+  const list = COUNTS.join(', ');
+  const set = COUNTS.map((k) => `${k} = EXCLUDED.${k}`).join(', ');
+  await t.platform.tx(async (tx) => {
+    if (days.length)
+      await tx.query(
+        `INSERT INTO platform.protection_daily (day, ${list}, updated_at)
+         SELECT u.*, now() FROM unnest($1::text[], ${COUNTS.map((_, i) => `$${i + 2}::int[]`).join(', ')}) AS u
+         ON CONFLICT (day) DO UPDATE SET ${set}, updated_at = now()`,
+        [days, ...COUNTS.map(col)],
+      );
+    // the network's size, once per day (the last run of the day wins)
+    await tx.query(
+      `INSERT INTO platform.protection_daily (day, stores, sharing, phones, devices, agreed, updated_at) VALUES ($1, $2, $3, $4, $5, $6, now())
+       ON CONFLICT (day) DO UPDATE SET stores = EXCLUDED.stores, sharing = EXCLUDED.sharing, phones = EXCLUDED.phones,
+         devices = EXCLUDED.devices, agreed = EXCLUDED.agreed, updated_at = now()`,
+      [algeriaDay(now), stores.length, Number(size?.sharing ?? 0), Number(size?.phones ?? 0), Number(size?.devices ?? 0), Number(size?.agreed ?? 0)],
+    );
+    await tx.query(`DELETE FROM platform.protection_stores`);
+    if (perStore.length)
+      await tx.query(
+        `INSERT INTO platform.protection_stores (shop_id, shared, ${list})
+         SELECT * FROM unnest($1::int[], $2::int[], ${COUNTS.map((_, i) => `$${i + 3}::int[]`).join(', ')})`,
+        [perStore.map((s) => s.id), perStore.map((s) => s.shared), ...COUNTS.map((k) => perStore.map((s) => s[k]))],
+      );
+  });
+}
+
+// ---- the alert: the buyers' quality fell by 5 points or more in a week (the whole platform, or one store) --------
+
+/** a fall of this many points (real buyers out of 100), week against the week before, raises the alert */
+export const QUALITY_DROP_PTS = 5;
+/** enough buyers both weeks for a fall to mean something */
+const ALERT_MIN_NETWORK = 100;
+const ALERT_MIN_STORE = 30;
+/** the e-mail goes at most once a week */
+const ALERT_EVERY = 7 * DAY;
+const ALERT_KEY = 'quality_alert';
+
+export interface QualityWeek {
+  /** real buyers out of 100 (0–1) this week and the week before, the buyers this week */
+  now: number;
+  prev: number;
+  buyers: number;
+}
+export interface QualityAlert {
+  /** when the last check ran */
+  at: string;
+  /** the 7 finished days compared (the last 3 days are not finished yet) */
+  week: { from: string; to: string };
+  /** the whole platform, when it fell; null when it did not */
+  network: QualityWeek | null;
+  /** the stores that fell, the biggest fall first */
+  stores: ({ id: number; name: string } & QualityWeek)[];
+  /** when the owner and the managers were last e-mailed about it */
+  mailedAt: string | null;
+}
+
+/** This week (the 7 finished days) against the week before, for every store and all of them together; kept for the
+ *  control room's banner and the weekly e-mail (takeQualityAlert). */
+async function checkQuality(t: Tenancy, stores: { id: number; days: Map<string, ProtectionCount> }[], now: number) {
+  const end = now - QUALITY_OPEN_DAYS * DAY;
+  const week = { from: algeriaDay(end - 6 * DAY), to: algeriaDay(end) };
+  const before = { from: algeriaDay(end - 13 * DAY), to: algeriaDay(end - 7 * DAY) };
+  const sumOf = (days: Map<string, ProtectionCount>, w: { from: string; to: string }) => {
+    const c = { buyers: 0, good: 0, bad: 0 };
+    for (const [d, v] of days) if (d >= w.from && d <= w.to) (c.buyers += v.buyers), (c.good += v.good), (c.bad += v.bad);
+    return c;
+  };
+  const fell = (cur: { buyers: number; good: number; bad: number }, old: { buyers: number; good: number; bad: number }, min: number): QualityWeek | null => {
+    const a = qualityOf(cur);
+    const b = qualityOf(old);
+    if (a === null || b === null || cur.buyers < min || old.buyers < min) return null;
+    return (b - a) * 100 >= QUALITY_DROP_PTS - 1e-9 ? { now: a, prev: b, buyers: cur.buyers } : null;
+  };
+  const all = { cur: { buyers: 0, good: 0, bad: 0 }, old: { buyers: 0, good: 0, bad: 0 } };
+  const down: { id: number; w: QualityWeek }[] = [];
+  for (const s of stores) {
+    const cur = sumOf(s.days, week);
+    const old = sumOf(s.days, before);
+    for (const k of ['buyers', 'good', 'bad'] as const) (all.cur[k] += cur[k]), (all.old[k] += old[k]);
+    const w = fell(cur, old, ALERT_MIN_STORE);
+    if (w) down.push({ id: s.id, w });
+  }
+  const names = down.length ? new Map((await t.platform.query(`SELECT id, name FROM platform.shops WHERE id = ANY($1::int[])`, [down.map((d) => d.id)])).map((r: any) => [Number(r.id), String(r.name)])) : new Map();
+  const prev = await qualityAlert(t);
+  const next: QualityAlert = {
+    at: new Date(now).toISOString(),
+    week,
+    network: fell(all.cur, all.old, ALERT_MIN_NETWORK),
+    stores: down
+      .map((d) => ({ id: d.id, name: names.get(d.id) ?? `#${d.id}`, ...d.w }))
+      .sort((a, b) => b.prev - b.now - (a.prev - a.now))
+      .slice(0, 20),
+    mailedAt: prev?.mailedAt ?? null,
+  };
+  await t.platform.query(`INSERT INTO platform.settings (key, value, updated_at) VALUES ($1, $2, now()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, [ALERT_KEY, JSON.stringify(next)]);
+}
+
+/** The last check (null before the first one). */
+export async function qualityAlert(t: Tenancy): Promise<QualityAlert | null> {
+  const v = (await t.platform.query(`SELECT value FROM platform.settings WHERE key = $1`, [ALERT_KEY]))[0]?.value;
+  const a = typeof v === 'string' ? JSON.parse(v) : v;
+  return a && typeof a === 'object' && a.week ? (a as QualityAlert) : null;
+}
+
+/** The alert to e-mail now (the quality fell, and no e-mail about it this week yet), marked as sent; else null. */
+export async function takeQualityAlert(t: Tenancy, now = Date.now()): Promise<QualityAlert | null> {
+  const a = await qualityAlert(t);
+  if (!a || (!a.network && !a.stores.length)) return null;
+  if (a.mailedAt && now - Date.parse(a.mailedAt) < ALERT_EVERY) return null;
+  const sent = { ...a, mailedAt: new Date(now).toISOString() };
+  await t.platform.query(`UPDATE platform.settings SET value = $2, updated_at = now() WHERE key = $1`, [ALERT_KEY, JSON.stringify(sent)]);
+  return sent;
+}
+
+export interface ProtectionDay extends ProtectionCount {
+  day: string;
+  /** the network that day (null: not recorded — before the network existed) */
+  stores: number | null;
+  sharing: number | null;
+  phones: number | null;
+  devices: number | null;
+  agreed: number | null;
+}
+
+export interface ProtectionStats {
+  /** the network now (null before its first run) */
+  network: { stores: number; sharing: number; phones: number; devices: number; agreed: number } | null;
+  /** the chosen period, all stores added up */
+  totals: ProtectionCount;
+  /** the period just before, the same length (to tell whether the buyers' quality rises or falls); null without history */
+  previous: ProtectionCount | null;
+  days: ProtectionDay[];
+  /** each store, its last 30 days */
+  stores: ({ id: number; name: string; slug: string; shared: number } & ProtectionCount)[];
+  minSellers: number;
+  lastRunAt: string | null;
+  /** the buyers' quality fell by 5 points or more this week (shown while the last check says so) */
+  alert: QualityAlert | null;
+}
+
+/** What the control room shows: the network's size, the stopped orders day by day, each store. */
+export async function protectionStats(t: Tenancy, now = Date.now(), period = 30): Promise<ProtectionStats> {
+  const from = algeriaDay(now - (period - 1) * DAY);
+  const rows = await t.platform.query(`SELECT * FROM platform.protection_daily WHERE day >= $1 ORDER BY day`, [from]);
+  const byDay = new Map(rows.map((r: any) => [String(r.day), r]));
+  const n = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+  const days: ProtectionDay[] = [];
+  const totals = zero();
+  for (let k = period - 1; k >= 0; k--) {
+    const day = algeriaDay(now - k * DAY);
+    const r: any = byDay.get(day);
+    const d: ProtectionDay = {
+      day,
+      ...(Object.fromEntries(COUNTS.map((k) => [k, Number(r?.[k] ?? 0)])) as unknown as ProtectionCount),
+      stores: n(r?.stores),
+      sharing: n(r?.sharing),
+      phones: n(r?.phones),
+      devices: n(r?.devices),
+      agreed: n(r?.agreed),
+    };
+    for (const key of COUNTS) totals[key] += d[key];
+    days.push(d);
+  }
+  const before = algeriaDay(now - (2 * period - 1) * DAY);
+  const prev: any = (
+    await t.platform.query(
+      `SELECT count(*)::int AS n, ${COUNTS.map((k) => `coalesce(sum(${k}), 0)::int AS ${k}`).join(', ')} FROM platform.protection_daily WHERE day >= $1 AND day < $2`,
+      [before, from],
+    )
+  )[0];
+  const previous = prev && Number(prev.n) > 0 && Number(prev.orders) > 0 ? (Object.fromEntries(COUNTS.map((k) => [k, Number(prev[k])])) as unknown as ProtectionCount) : null;
+  const last: any = (await t.platform.query(`SELECT * FROM platform.protection_daily WHERE stores IS NOT NULL ORDER BY day DESC LIMIT 1`))[0];
+  const stores = await t.platform.query(
+    `SELECT p.shop_id AS id, s.name, s.slug, p.shared, ${COUNTS.map((k) => `p.${k}`).join(', ')}
+       FROM platform.protection_stores p JOIN platform.shops s ON s.id = p.shop_id ORDER BY p.orders DESC, s.name`,
+  );
+  const at = (await t.platform.query(`SELECT max(updated_at) AS at FROM platform.protection_daily`))[0]?.at;
+  return {
+    network: last ? { stores: Number(last.stores), sharing: Number(last.sharing ?? 0), phones: Number(last.phones ?? 0), devices: Number(last.devices ?? 0), agreed: Number(last.agreed ?? 0) } : null,
+    totals,
+    previous,
+    days,
+    stores: stores.map((r: any) => ({ id: Number(r.id), name: String(r.name), slug: String(r.slug), shared: Number(r.shared), ...(Object.fromEntries(COUNTS.map((k) => [k, Number(r[k])])) as unknown as ProtectionCount) })),
+    minSellers: REPUTATION_MIN_SELLERS,
+    lastRunAt: at ? new Date(at).toISOString() : null,
+    alert: await qualityAlert(t).then((a) => (a && (a.network || a.stores.length) && now - Date.parse(a.at) < 2 * DAY ? a : null)),
+  };
 }
 
 /**
@@ -156,14 +416,45 @@ export async function refreshReputation(t: Tenancy, now = Date.now()): Promise<{
   await t.platform.query(`DELETE FROM platform.fraud_reputation WHERE NOT (shop_id = ANY($1::int[]))`, [shops.map((s) => s.id)]);
   let keys = 0;
   const errors: string[] = [];
+  const history: { id: number; shared: number; days: Map<string, ProtectionCount> }[] = [];
+  const historySince = new Date(now - HISTORY_DAYS * DAY).toISOString();
   for (const s of shops) {
     try {
-      keys += await shareShop(t, s, pepper, since);
+      const shared = await shareShop(t, s, pepper, since);
+      keys += shared;
+      history.push({ id: s.id, shared, days: await ordersByDay(t.shop(s.schema), historySince) });
     } catch (e) {
       errors.push(`shop ${s.id}: ${(e as Error).message}`);
     }
   }
+  // the control room's history; a problem there never stops the network itself
+  await recordProtection(t, history, now).catch((e) => errors.push(`history: ${(e as Error).message}`));
+  await checkQuality(t, history, now).catch((e) => errors.push(`quality: ${(e as Error).message}`));
   return { shops: shops.length, keys, errors };
+}
+
+/**
+ * The network's word on many customers at once (the Clients list, a customer's score): for each phone number, how many
+ * OTHER businesses ended badly with it in the last 180 days. null when there is no network here (see sharedReputation).
+ */
+export async function sharedSellersMany(ctx: Ctx, phones: string[]): Promise<Map<string, number> | null> {
+  const t = ctx.t;
+  const shop = ctx.shop;
+  if (!t || !shop || shop.demo) return null;
+  const list = [...new Set(phones.filter(Boolean))];
+  if (!list.length) return new Map();
+  try {
+    const pepper = await pepperOf(t);
+    const byKey = new Map(list.map((p) => [phoneKey(pepper, p), p]));
+    const rows = await t.platform.query(
+      `SELECT key, count(DISTINCT owner_key)::int AS n FROM platform.fraud_reputation
+        WHERE key = ANY($1::text[]) AND shop_id <> $2 AND last_bad > $3 GROUP BY key`,
+      [[...byKey.keys()], shop.id, new Date(ctx.now() - REPUTATION_DAYS * DAY).toISOString()],
+    );
+    return new Map(rows.map((r: any) => [byKey.get(String(r.key))!, Number(r.n)]));
+  } catch {
+    return null;
+  }
 }
 
 /**

@@ -7,6 +7,8 @@ import { useAction, useRpc } from '../../lib/query';
 import { da, wilaya } from '../../lib/format';
 import { Empty, ErrorBox, Field, Icon, Loading } from '../../ui/kit';
 import './zr.css';
+import { CourierLogo } from './CourierLogo';
+import { cardTitle } from './carriers';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 
@@ -29,6 +31,9 @@ export function CompanyForm({ initial, kinds, onClose, keysSet = [] }: { initial
   const [secret, setSecret] = useState<Record<string, string>>({});
   const [err, setErr] = useState('');
   const info = kinds.kinds.find((k) => k.kind === d.kind)!;
+  // made from a company's card (« API Livraison »): its logo, its own help, its API address set by Pilotix
+  const card = d.settings.card ? kinds.cards.find((c) => c.id === d.settings.card && c.kind === d.kind) ?? null : null;
+  const preset = new Set(Object.keys(card?.settings ?? {}));
   const set = (k: string, v: unknown) => setD((x) => ({ ...x, settings: { ...x.settings, [k]: v } }));
   const save = useAction('delivery.saveCompany', { success: t('livraison.saved'), onDone: onClose, silent: true });
   const isNew = !d.id;
@@ -54,7 +59,7 @@ export function CompanyForm({ initial, kinds, onClose, keysSet = [] }: { initial
 
   return (
     <Modal
-      title={isNew ? t('livraison.form.newTitle', { kind: info.label }) : t('livraison.form.editTitle', { name: initial.name })}
+      title={isNew ? (card ? t('livraison.form.connectTitle', { name: cardTitle(t, card) }) : t('livraison.form.newTitle', { kind: info.label })) : t('livraison.form.editTitle', { name: initial.name })}
       onClose={onClose}
       wide={d.kind === 'custom'}
       footer={
@@ -68,20 +73,29 @@ export function CompanyForm({ initial, kinds, onClose, keysSet = [] }: { initial
         </>
       }
     >
-      <p className="muted small">{info.help}</p>
+      {card ? (
+        <div className="px-coform-head">
+          <CourierLogo card={card} />
+          <p className="muted small">{card.help ?? info.help}</p>
+        </div>
+      ) : (
+        <p className="muted small">{info.help}</p>
+      )}
       <div className="grid2">
         <Field label={t('livraison.form.name')}>
-          <input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder={info.label} />
+          <input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder={card?.title ?? info.label} />
         </Field>
-        <Field label={t('livraison.form.kind')}>
-          <select value={d.kind} onChange={(e) => setD({ ...d, kind: e.target.value as CourierKind })}>
-            {COURIER_KINDS.map((k) => (
-              <option key={k} value={k}>
-                {t(`livraison.kinds.${k}`)}
-              </option>
-            ))}
-          </select>
-        </Field>
+        {!card && (
+          <Field label={t('livraison.form.kind')}>
+            <select value={d.kind} onChange={(e) => setD({ ...d, kind: e.target.value as CourierKind })}>
+              {COURIER_KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {t(`livraison.kinds.${k}`, { defaultValue: kinds.kinds.find((x) => x.kind === k)?.label ?? k })}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
         <Field label={t('livraison.form.phone')}>
           <input value={d.phone} inputMode="tel" onChange={(e) => setD({ ...d, phone: e.target.value })} />
         </Field>
@@ -91,7 +105,9 @@ export function CompanyForm({ initial, kinds, onClose, keysSet = [] }: { initial
       </div>
       {info.fields.length > 0 && <h3>{t('livraison.form.keys')}</h3>}
       <div className="grid2">
-        {info.fields.map((f) =>
+        {info.fields
+          .filter((f) => !preset.has(f.key))
+          .map((f) =>
           f.type === 'secret' ? (
             <Field key={f.key} label={f.label} hint={keysSet.includes(f.key) ? t('livraison.form.keySaved') : t('livraison.form.keyMissing')}>
               <input type="password" autoComplete="new-password" value={secret[f.key] ?? ''} placeholder={keysSet.includes(f.key) ? '••••••••' : ''} onChange={(e) => setSecret({ ...secret, [f.key]: e.target.value })} />

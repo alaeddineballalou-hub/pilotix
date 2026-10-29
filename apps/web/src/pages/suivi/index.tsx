@@ -26,6 +26,7 @@ import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
 import { AlertClock, AlertTries, CancelSheet, ClockChip, TriesChip, ParcelAction, ParcelCards, ParcelPage, MotifChip } from './PhoneSuivi';
 import { Traiter } from './Traiter';
 import { StuckChips, StuckDialog, type StuckInfo } from './Stuck';
+import { ScoreChip } from '../../ui/clientScore';
 
 const LIST_TABS = ['enlivraison', 'alertes', 'traites', 'bloques', 'livres', 'annules', 'swap'] as const;
 type ListTab = (typeof LIST_TABS)[number];
@@ -192,7 +193,12 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
           </>
         );
       case 'name':
-        return o.customerName;
+        return (
+          <>
+            {o.customerName}
+            {o.clientScore && <ScoreChip s={o.clientScore} short />}
+          </>
+        );
       case 'phone':
         return <PhoneCell order={o} />;
       case 'wilaya':

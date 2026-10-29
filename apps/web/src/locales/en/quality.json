@@ -1,0 +1,47 @@
+{
+  "title": "Buyer quality",
+  "help": "Out of 100 orders received (a customer sending the same order again counts once), how many came from real buyers: confirmed by an agent or delivered. The last {{count}} days are not finished: agents are still confirming.",
+  "lead": "real buyers",
+  "dir": {
+    "up": "Rising",
+    "down": "Falling",
+    "flat": "Stable"
+  },
+  "vs_one": "compared with the day before ({{prev}})",
+  "vs_other": "compared with the {{count}} days before ({{prev}})",
+  "noPrev": "No earlier period to compare with yet: the trend shows soon.",
+  "part": {
+    "good": "Real buyers",
+    "bad": "Fake (blocked, fake, wrong numbers)",
+    "rest": "Others (waiting, cancelled, unreachable)"
+  },
+  "daily": "Each day",
+  "avg": "7-day average",
+  "open": "Not finished (agents still confirming)",
+  "openShort": "not finished",
+  "of": "{{n}} of {{buyers}}",
+  "none": "Not enough finished orders to measure yet.",
+  "pts": "pts",
+  "short": "Choose 7 days or more: the last {{count}} days are not finished (agents are still confirming).",
+  "ads": {
+    "title": "Quality per ad",
+    "help": "For each ad (ad set): its orders, and on the finished days how many came from real buyers (confirmed or delivered) and how many were fake. The last {{count}} days do not count yet.",
+    "none": "No orders from an ad in this period. Add the URL parameters to your ads (Landing pages › Settings) to see them here.",
+    "best": "Best:",
+    "worst": "Weakest:",
+    "stop": "think about changing its audience or stopping it",
+    "cAd": "Ad",
+    "cOrders": "Orders",
+    "cBad": "Fake",
+    "cTrend_one": "Trend (day before)",
+    "cTrend_other": "Trend ({{count}} days before)",
+    "organic": "Not from an ad (direct, shares…)"
+  },
+  "alert": {
+    "title": "Buyer quality is falling",
+    "week": "Week of {{from}} to {{to}}:",
+    "all": "{{now}} real buyers across all shops, against {{prev}} the week before",
+    "buyers": "{{n}} buyers",
+    "mail": "The owner and the managers get an e-mail, at most once a week."
+  }
+}

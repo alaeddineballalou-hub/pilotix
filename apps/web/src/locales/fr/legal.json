@@ -29,5 +29,9 @@
     "t": "Nous contacter",
     "p": "Une question sur vos données ou sur ces conditions ? Écrivez-nous à {{email}} ou depuis « Contacter Pilotix » dans votre boutique."
   },
-  "back": "Retour"
+  "back": "Retour",
+  "s2ai": {
+    "t": "Pilot AI : Dellal apprend à mieux vendre",
+    "p": "Quand Pilotix active Pilot AI pour votre boutique, les conversations de Dellal (l’assistant de vente) sont relues chaque nuit pour lui apprendre à mieux vendre. Les noms, numéros, adresses, produits et prix sont retirés dans votre boutique avant toute lecture ; l’équipe Pilotix peut lire ces conversations anonymes pour valider les leçons. Vos prix, produits et clients ne sont jamais montrés aux autres boutiques. Vous pouvez demander à tout moment que votre boutique n’y participe plus : ce qui avait été gardé est alors supprimé."
+  }
 }

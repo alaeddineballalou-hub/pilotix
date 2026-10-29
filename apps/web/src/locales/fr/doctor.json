@@ -387,7 +387,8 @@
     "demo-reset": "Boutique démo",
     "platform-reminders": "Rappels d’abonnement",
     "courier-watch": "Sociétés de livraison : changements API",
-    "turnstile-sync": "Cloudflare (robots) : domaines des boutiques"
+    "turnstile-sync": "Cloudflare (robots) : domaines des boutiques",
+    "pilot-ai-night": "Pilot AI : apprentissage de la nuit"
   },
   "errs": {
     "title": "Dernières erreurs",

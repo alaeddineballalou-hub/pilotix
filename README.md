@@ -67,6 +67,21 @@ demo, a rule-based demo seller answers so the whole flow can be tried in Message
 Try it with the demo shop instead: `npm run seed:demo -w @pilotix/server` on an empty database
 (accounts `admin@demo.pilotix.dz`, `samira@demo.pilotix.dz`… password `demo-pilotix`), or open the preview / the website and pick a demo account.
 
+### Pilot AI (Dellal learns every night)
+
+One AI key for every shop, Pilotix's own (control room › Pilot AI): shops add no key. Dellal answers with Haiku and
+switches to Sonnet for the hard moments (price fight, trust fear, anger, big order, asking for a person). Its instructions
+are sent as three cached blocks (the part every shop shares with the coach's lesson book, the shop's part, the chat's part).
+
+Every night at 02:30 (Algeria), the chats of the shops that turned on « Partager mes conversations » (Messages › Réglages)
+are read inside each shop with names, phones, addresses, products and prices removed, and scored by what really happened:
+delivered and paid is the only win, a refused parcel is a loss, cancellations and returns keep the agent's reason, chats a
+person took over and won are gold, chats still waiting for delivery are kept until they end. One Message Batch (half
+price) under a hard nightly cap: Haiku reads the chats, Sonnet writes short habits, a safety check refuses prices, stock,
+delays, pressure or « I am human ». The coach approves, edits or rejects each habit in the control room; a new book is
+tried on a share of new chats and kept only if it gets at least as many parcels delivered (stopped by itself when worse).
+Code: `packages/core/src/modules/pilotlearn.ts` (the engine), `apps/server/src/jobs.ts` (the night), tests `pilotlearn*.test.ts`.
+
 ## Phone apps
 
 ```bash

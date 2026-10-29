@@ -1,0 +1,47 @@
+{
+  "title": "Qualité des acheteurs",
+  "help": "Sur 100 commandes reçues (un client qui renvoie la même commande compte une fois), combien venaient de vrais acheteurs : confirmées par un agent ou livrées. Les {{count}} derniers jours ne sont pas finis : les agents confirment encore.",
+  "lead": "de vrais acheteurs",
+  "dir": {
+    "up": "En hausse",
+    "down": "En baisse",
+    "flat": "Stable"
+  },
+  "vs_one": "par rapport au jour d’avant ({{prev}})",
+  "vs_other": "par rapport aux {{count}} jours d’avant ({{prev}})",
+  "noPrev": "Pas encore de période d’avant pour comparer : la tendance apparaît bientôt.",
+  "part": {
+    "good": "Vrais acheteurs",
+    "bad": "Faux (bloqués, fausses, faux numéros)",
+    "rest": "Autres (en attente, annulés, injoignables)"
+  },
+  "daily": "Chaque jour",
+  "avg": "Moyenne sur 7 jours",
+  "open": "Pas fini (les agents confirment encore)",
+  "openShort": "pas fini",
+  "of": "{{n}} sur {{buyers}}",
+  "none": "Pas encore assez de commandes finies pour mesurer.",
+  "pts": "pts",
+  "short": "Choisissez 7 jours ou plus : les {{count}} derniers jours ne sont pas finis (les agents confirment encore).",
+  "ads": {
+    "title": "Qualité par pub",
+    "help": "Pour chaque pub (ensemble de publicités) : ses commandes, et sur les jours finis combien venaient de vrais acheteurs (confirmées ou livrées) et combien étaient fausses. Les {{count}} derniers jours ne comptent pas encore.",
+    "none": "Aucune commande venue d’une pub sur cette période. Ajoutez les paramètres d’URL à vos pubs (Landing pages › Réglages) pour les voir ici.",
+    "best": "La meilleure :",
+    "worst": "La moins bonne :",
+    "stop": "pensez à changer son public ou à l’arrêter",
+    "cAd": "Pub",
+    "cOrders": "Commandes",
+    "cBad": "Fausses",
+    "cTrend_one": "Tendance (jour d’avant)",
+    "cTrend_other": "Tendance ({{count}} j d’avant)",
+    "organic": "Sans pub (direct, partage…)"
+  },
+  "alert": {
+    "title": "La qualité des acheteurs baisse",
+    "week": "Semaine du {{from}} au {{to}} :",
+    "all": "{{now}} de vrais acheteurs toutes boutiques confondues, contre {{prev}} la semaine d’avant",
+    "buyers": "{{n}} acheteurs",
+    "mail": "Le propriétaire et les managers reçoivent un e-mail, au plus une fois par semaine."
+  }
+}

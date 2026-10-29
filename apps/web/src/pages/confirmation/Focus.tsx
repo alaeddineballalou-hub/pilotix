@@ -14,6 +14,7 @@ import { Detail } from './Detail';
 import { choiceLabel, currentLabel, StatusChoice, telHref, waHref } from './shared';
 import { useStatusChange } from './StatusDialog';
 import { TrustFlags } from '../orders/TrustFlags';
+import { ScoreChip } from '../../ui/clientScore';
 
 const CHOICES: StatusChoice[] = ['confirmed', 'try1', 'callback', 'postponed', 'no_stock', 'cancelled', 'wrong_number', 'fake', 'duplicate'];
 const CLS: Partial<Record<StatusChoice, string>> = { confirmed: 'ok big', try1: 'big', no_stock: 'warn', cancelled: 'danger' };
@@ -115,6 +116,7 @@ export function Focus({ initialId, onClose, onNext, seller, allSellers }: { init
             {o.possibleDuplicate && <span className="flag dup">{t('confirmation.dup')}</span>}
             {o.blacklisted && <span className="flag">{t('confirmation.blacklist')}</span>}
             <TrustFlags o={o} />
+            {o.clientScore && <ScoreChip s={o.clientScore} />}
             <span className="muted small">
               {t('confirmation.focus.received', { when: when(o.createdAt), channel: t(`status.channel.${o.channel}`) })}
               {o.attempts ? ` · ${t('confirmation.focus.calls', { n: o.attempts })}` : ''}

@@ -1,7 +1,8 @@
 // The control room's « Sociétés de livraison » page: for every Algerian delivery company, what Pilotix does through its
 // API (Done) and what is still missing (To do), with why. Pure data, built from the courier kinds (no network): the
 // shops' users do all of it inside Pilotix, never on the company's own site.
-import type { CourierKind } from '@pilotix/shared';
+import { hostMatches, type CourierKind } from '@pilotix/shared';
+import { COMPANY_CARDS } from './companies';
 import { KindField, KINDS, KindInfo } from './kinds';
 
 export type CourierFeature =
@@ -27,18 +28,20 @@ export interface CatalogCompany {
   fields: KindField[];
   /** settings this company needs on its platform (its own API address) */
   presets: Record<string, string>;
-  /** companies sharing a kind are told apart by their API address: 'guepex' = it contains « guepex »,
-   *  '!guepex,yalitec' = it contains neither (same rule as the shops' cards) */
+  /** companies sharing a kind are told apart by the host of their API address: 'guepex.app' = it is (a sub-domain
+   *  of) guepex.app, '!a,b' = none of these (same rule as the shops' cards) */
   host: string | null;
 }
 
 /** Is a shop's delivery company (its kind and API address) this control-room company? */
 export function isCompany(co: Pick<CatalogCompany, 'kind' | 'host'>, kind: string, baseUrl: string): boolean {
-  if (!co.kind || co.kind !== kind) return false;
-  if (!co.host) return true;
-  const url = String(baseUrl ?? '').toLowerCase();
-  return co.host.startsWith('!') ? co.host.slice(1).split(',').every((h) => !url.includes(h)) : url.includes(co.host);
+  return !!co.kind && co.kind === kind && hostMatches(co.host, baseUrl);
 }
+
+/** The host rule of a shop's card (the Yalidine platform's companies are told apart by it). */
+const hostOf = (id: string) => COMPANY_CARDS.find((c) => c.id === id)?.host ?? null;
+/** How many EcoTrack companies a shop can pick. */
+const ECOTRACK_COUNT = COMPANY_CARDS.filter((c) => c.kind === 'ecotrack').length;
 
 /** What is known about each company's API beyond what Pilotix does (from its docs and open-source clients, Oct 2026). */
 const MISSING: Partial<Record<CourierKind, Partial<Record<CourierFeature, string>>>> = {
@@ -177,11 +180,11 @@ export function courierCatalog(): CatalogCompany[] {
   });
   return [
     one('zr', 'ZR Express', 'zr'),
-    one('yalidine', 'Yalidine', 'yalidine', null, {}, '!guepex,yalitec'),
-    one('guepex', 'Guepex', 'yalidine', 'Yalidine', { base_url: 'https://api.guepex.app/v1/' }, 'guepex'),
-    one('yalitec', 'Yalitec', 'yalidine', 'Yalidine', { base_url: 'https://api.yalitec.me/v1/' }, 'yalitec'),
+    one('yalidine', 'Yalidine', 'yalidine', null, {}, hostOf('yalidine')),
+    one('guepex', 'Guepex', 'yalidine', 'Yalidine', { base_url: 'https://api.guepex.app/v1/' }, hostOf('guepex')),
+    one('yalitec', 'Yalitec', 'yalidine', 'Yalidine', { base_url: 'https://api.yalitec.me/v1/' }, hostOf('yalitec')),
     one('maystro', 'Maystro Delivery', 'maystro'),
-    one('ecotrack', 'DHD, Conexlog, Anderson, World Express… (30+)', 'ecotrack', 'EcoTrack', { base_url: 'https://dhd.ecotrack.dz' }),
+    one('ecotrack', `DHD, Conexlog, World Express… (${ECOTRACK_COUNT} sociétés)`, 'ecotrack', 'EcoTrack', { base_url: 'https://platform.dhd-dz.com' }),
     one('noest', 'NOEST Express', 'noest'),
     one('zimou', 'Zimou Express', 'zimou'),
     one('elogistia', 'Elogistia', 'elogistia'),

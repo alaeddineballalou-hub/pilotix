@@ -28,5 +28,44 @@
   "unblack": "Retirer de la liste noire",
   "reason": "Raison (optionnel)",
   "reasonPh": "ex. refuse les colis",
-  "updated": "Liste noire mise à jour"
+  "updated": "Liste noire mise à jour",
+  "score": {
+    "col": "Score",
+    "help": "Score du client sur 100 : tout ce que la protection sait de ce numéro dans la boutique (colis livrés ou refusés, fausses commandes, commandes bloquées, appareils marqués) et le réseau Pilotix.",
+    "level": {
+      "new": "Nouveau",
+      "top": "Très fiable",
+      "good": "Fiable",
+      "watch": "À surveiller",
+      "risk": "Risqué"
+    },
+    "say": {
+      "new": "Pas encore d’historique : appelez normalement.",
+      "top": "Reçoit et paie ses colis.",
+      "good": "Plutôt sérieux.",
+      "watch": "Confirmez bien avant d’envoyer.",
+      "risk": "Fort risque de fausse commande ou de refus : vérifiez tout, ou proposez le stop-desk."
+    },
+    "why": {
+      "delivered_one": "{{count}} colis livré et payé",
+      "delivered_other": "{{count}} colis livrés et payés",
+      "returned_one": "{{count}} colis refusé",
+      "returned_other": "{{count}} colis refusés",
+      "fake_one": "{{count}} fausse commande ou faux numéro",
+      "fake_other": "{{count}} fausses commandes ou faux numéros",
+      "cancelled_one": "{{count}} commande annulée",
+      "cancelled_other": "{{count}} commandes annulées",
+      "blocked_one": "{{count}} commande bloquée par la protection",
+      "blocked_other": "{{count}} commandes bloquées par la protection",
+      "review_one": "{{count}} commande mise « à vérifier »",
+      "review_other": "{{count}} commandes mises « à vérifier »",
+      "markFake": "Un appareil de ce client marqué « fausse commande »",
+      "markCompetitor": "Un appareil de ce client marqué « concurrent »",
+      "network_one": "Signalé par {{count}} autre vendeur (réseau Pilotix)",
+      "network_other": "Signalé par {{count}} autres vendeurs (réseau Pilotix)",
+      "blacklist": "En liste noire",
+      "stopdesk": "Stop-desk seulement (refuse ses colis)",
+      "new": "Nouveau client : pas encore d’historique"
+    }
+  }
 }

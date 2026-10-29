@@ -11,6 +11,8 @@ import { getRaw, setRaw } from './admin';
 import { checkDarija, DARIJA_FIXER_SYSTEM, darijaRewritePrompt, DarijaIssue, DELLAL_DARIJA, fixDarija, parseAvoid } from './darija';
 import { markReply, noticeForConversation, ordersForDellal, sendInPreview } from './notify';
 import { createOrder } from './orders';
+import { bookFor, BookRef, pickModel } from './pilotlearn';
+import { pilotConfig } from '../platform/pilotai';
 
 // ---------------------------------------------------------------- settings and secrets
 export const DELLAL_CHANNELS = ['whatsapp', 'messenger', 'instagram', 'tiktok', 'test'] as const;
@@ -540,7 +542,12 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
 }
 
 // ---------------------------------------------------------------- the agent: prompt and loop
-async function systemPrompt(ctx: Ctx, conv: Conversation, s: DellalSettings, followUp: boolean) {
+/**
+ * Dellal's instructions in three blocks, from the most shared to the most personal, so the AI's cache reuses them:
+ * 1. the same for every shop (sales method, Darija, and the coach's lesson book of Pilot AI),
+ * 2. this shop (name, tone, rules, catalog), 3. this conversation (channel, date, the customer, the orders).
+ */
+async function systemPrompt(ctx: Ctx, conv: Conversation, s: DellalSettings, followUp: boolean, lessons = ''): Promise<{ text: string; blocks: string[] }> {
   const shop = await getSetting(ctx.db, 'shop');
   const catalog = (await searchProducts(ctx.db, null, 40))
     .map(
@@ -556,12 +563,15 @@ async function systemPrompt(ctx: Ctx, conv: Conversation, s: DellalSettings, fol
   // the orders of the WhatsApp number writing, or of this conversation (a number typed on Messenger proves nothing)
   const orders = conv.channel === 'test' ? '' : await ordersForDellal(ctx.db, conv.channel === 'whatsapp' ? conv.phone : null, conv.id);
   const today = new Date(ctx.now()).toISOString().slice(0, 10);
-  return [
-    `Tu es ${s.name}, le vendeur de la boutique « ${shop.name} » en Algérie. Tu réponds aux clients sur ${conv.channel === 'test' ? 'une conversation de test' : conv.channel}. Date : ${today}.`,
-    `Ton : ${s.tone}`,
-    `Langues : ${s.languages}. Réponds toujours dans la langue et le style du client (darija en lettres latines si le client écrit ainsi).`,
+  const shared = [
     DELLAL_PLAYBOOK.replace('${ORDER_NEXT}', s.ordersTo === 'new' ? 'après la commande, un conseiller l’appellera aussi pour confirmer.' : 'la commande part directement en préparation.'),
     DELLAL_DARIJA,
+    lessons.trim(),
+  ];
+  const own = [
+    `Tu es ${s.name}, le vendeur de la boutique « ${shop.name} » en Algérie.`,
+    `Ton : ${s.tone}`,
+    `Langues : ${s.languages}. Réponds toujours dans la langue et le style du client (darija en lettres latines si le client écrit ainsi).`,
     `Règles fixes :`,
     `- N'invente jamais un produit, un prix, une couleur, un stock ou un délai : utilise search_products et delivery_fee.`,
     `- Ne vends jamais une variante dont la quantité disponible est 0 : propose une autre variante.`,
@@ -576,12 +586,38 @@ async function systemPrompt(ctx: Ctx, conv: Conversation, s: DellalSettings, fol
     s.darijaPrefer.trim() ? `Expressions de la boutique (écrites par l’équipe, à utiliser quand elles vont) :\n${s.darijaPrefer.trim()}` : '',
     s.darijaAvoid.trim() ? `Mots et expressions que la boutique interdit (avec ce qu’il faut écrire à la place) :\n${s.darijaAvoid.trim()}` : '',
     `Catalogue (résumé, vérifie le stock avec search_products) :\n${catalog || '(vide)'}`,
+  ];
+  const chat = [
+    `Tu réponds aux clients sur ${conv.channel === 'test' ? 'une conversation de test' : conv.channel}. Date : ${today}.`,
     cust ? `Client connu : ${cust.name}, ${cust.orders} commande(s), ${cust.delivered} livrée(s), ${cust.returned} retour(s)${cust.blacklisted ? ', SUR LISTE NOIRE : ne prends pas de commande, passe la main' : ''}.` : '',
     orders,
     followUp ? `Le client ne répond plus depuis un moment : envoie UNE relance courte et aimable, sans insister.` : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
+  ];
+  const blocks = [shared, own, chat].map((b) => b.filter(Boolean).join('\n')).filter(Boolean);
+  return { text: blocks.join('\n'), blocks };
+}
+
+/**
+ * Pilot AI is on: Dellal answers with Pilotix's own key (no shop brings one) and uses the coach's lesson book. Only on the
+ * server, with the platform (ctx.t); the preview and a single-shop install keep the shop's own settings.
+ */
+export async function pilotOn(ctx: Ctx): Promise<boolean> {
+  if (!ctx.t || !ctx.server?.dellal || !ctx.shop) return false;
+  try {
+    const c = await pilotConfig(ctx.t);
+    return c.enabled && c.hasKey;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Claude answers on the server: Pilot AI's key (Pilotix's server: shops bring no key) or, without it, the shop's own key.
+ * Dellal, the CM AI agent and AI Spy all ask this, so a shop never needs a key of its own on Pilotix's server.
+ */
+export async function aiKeyed(ctx: Ctx): Promise<boolean> {
+  if (!ctx.server?.dellal) return false;
+  return (await pilotOn(ctx)) || !!(await dellalSecret(ctx.db, 'ai'));
 }
 
 /**
@@ -728,6 +764,8 @@ async function history(db: Db, convId: number): Promise<AiMsg[]> {
 export interface AiRequest {
   model: string;
   system: string;
+  /** the same text cut in blocks (shared, shop, conversation): the server caches each one */
+  systemBlocks?: string[];
   messages: AiMsg[];
   tools: readonly { name: string; description: string; input_schema: unknown }[];
   max_tokens: number;
@@ -749,10 +787,22 @@ export async function runAgent(ctx: Ctx, convId: number, opts: { followUp?: bool
   const messages = await history(ctx.db, convId);
   if (opts.followUp) messages.push({ role: 'user', content: '(Note système : le client n’a pas répondu. Envoie une seule relance courte.)' });
   if (!messages.length) return { reply: null, handoff: false, orderRef: null, demo: false, skipped: 'Aucun message' };
-  const system = await systemPrompt(ctx, conv, s, !!opts.followUp);
-  // in the Pilotix preview opened in Claude, the page's Claude answers (no key); on the server, Claude through the API key
+  // in the Pilotix preview opened in Claude, the page's Claude answers (no key); on the server, Claude through Pilotix's
+  // key (Pilot AI) or, on an install without it, the shop's own key
   const inPage = !ctx.server?.dellal && ctx.dellalAi ? ctx.dellalAi : null;
-  const useAi = !!inPage || (!!ctx.server?.dellal && !!(await dellalSecret(ctx.db, 'ai')));
+  const pilotAi = !inPage && (await pilotOn(ctx));
+  const useAi = !!inPage || pilotAi || (!!ctx.server?.dellal && !!(await dellalSecret(ctx.db, 'ai')));
+  // Pilot AI: the lesson book this chat uses (the same all chat long, recorded so its sales are measured), and the model:
+  // Haiku for the simple messages, Sonnet for the hard moments (price fight, trust, anger, big order, asking for a person)
+  let book: BookRef | null = null;
+  let model: string = s.model;
+  if (pilotAi) {
+    book = await bookFor(ctx.t!.platform, { shopId: ctx.shop!.id, convId, now: new Date(ctx.now()) }).catch(() => null);
+    const said = await ctx.db.query(`SELECT body, count(*) OVER ()::int AS n FROM conv_messages WHERE conversation_id = $1 AND role = 'customer' ORDER BY id DESC LIMIT 6`, [convId]);
+    model = pickModel({ recent: said.map((r: any) => String(r.body)).reverse(), turns: num(said[0]?.n) });
+  }
+  const prompt = await systemPrompt(ctx, conv, s, !!opts.followUp, book?.text ?? '');
+  const system = prompt.text;
 
   const texts: string[] = [];
   let handoff = false;
@@ -770,7 +820,7 @@ export async function runAgent(ctx: Ctx, convId: number, opts: { followUp?: bool
   const complete = (req: AiRequest): Promise<AiResponse> =>
     inPage ? (inPage({ ...req, runTool }) as Promise<AiResponse>) : useAi ? (ctx.server!.dellal!('complete', req, ctx) as Promise<AiResponse>) : demoBrain(ctx, req);
   for (let round = 0; round < 6; round++) {
-    const res = await complete({ model: s.model, system, messages, tools: DELLAL_TOOLS, max_tokens: 1024 });
+    const res = await complete({ model, system, systemBlocks: prompt.blocks, messages, tools: DELLAL_TOOLS, max_tokens: 1024 });
     usage = { input_tokens: usage.input_tokens + num(res.usage?.input_tokens), output_tokens: usage.output_tokens + num(res.usage?.output_tokens) };
     const uses = res.content.filter((b): b is Extract<AiResponse['content'][number], { type: 'tool_use' }> => b.type === 'tool_use');
     for (const b of res.content) if (b.type === 'text' && b.text.trim()) texts.push(b.text.trim());
@@ -790,7 +840,7 @@ export async function runAgent(ctx: Ctx, convId: number, opts: { followUp?: bool
   if (reply && useAi) {
     const avoid = parseAvoid(s.darijaAvoid);
     const customer = (await ctx.db.query(`SELECT body FROM conv_messages WHERE conversation_id = $1 AND role = 'customer' ORDER BY id DESC LIMIT 30`, [convId])).map((r: any) => r.body).join('\n');
-    const p = await polishDarija(complete, s.model, reply, { customer, avoid });
+    const p = await polishDarija(complete, model, reply, { customer, avoid });
     usage = { input_tokens: usage.input_tokens + p.usage.input_tokens, output_tokens: usage.output_tokens + p.usage.output_tokens };
     if (p.darija) {
       darija = p.darija;
@@ -807,7 +857,7 @@ export async function runAgent(ctx: Ctx, convId: number, opts: { followUp?: bool
         sendError = e?.message ?? 'Envoi impossible';
       }
     }
-    await addMessage(ctx.db, convId, { role: 'agent', body: reply, meta: { usage, demo: !useAi, model: inPage ? 'claude (page)' : useAi ? s.model : null, ...(darija ? { darija } : {}) }, sendError });
+    await addMessage(ctx.db, convId, { role: 'agent', body: reply, meta: { usage, demo: !useAi, model: inPage ? 'claude (page)' : useAi ? model : null, ...(darija ? { darija } : {}), ...(book ? { pilot: { bookId: book.bookId, version: book.version, arm: book.arm, testId: book.testId } } : {}) }, sendError });
   }
   if (opts.followUp) await ctx.db.query('UPDATE conversations SET followed_up = true WHERE id = $1', [convId]);
   ctx.emit({ type: 'chat', data: { dellal: convId } });
@@ -1097,7 +1147,7 @@ export const dellalProcs = {
       await addMessage(ctx.db, cid, { role: 'customer', body: i.body });
       out = await runAgent(ctx, cid);
     }
-    return { conversationId: cid, messages: await messagesOf(ctx.db, cid), demo: out ? out.demo : !((!ctx.server?.dellal && ctx.dellalAi) || (ctx.server?.dellal && (await dellalSecret(ctx.db, 'ai')))) };
+    return { conversationId: cid, messages: await messagesOf(ctx.db, cid), demo: out ? out.demo : !((!ctx.server?.dellal && ctx.dellalAi) || (await aiKeyed(ctx))), platform: !!ctx.t };
   }),
 
   /** Dellal's results over the last N days. */
@@ -1137,7 +1187,7 @@ export const dellalProcs = {
   'dellal.settings.get': proc([], z.object({}), async (ctx) => {
     const cur = await getRaw<Partial<DellalSettings>>(ctx.db, 'dellal', {});
     if (!cur.verifyToken) await setRaw(ctx.db, 'dellal', { ...DEFAULT_DELLAL, ...cur, verifyToken: randomToken() }, me(ctx));
-    return settingsView(ctx.db);
+    return { ...(await settingsView(ctx.db)), pilotAi: await pilotOn(ctx), platform: !!ctx.t };
   }),
 
   'dellal.settings.save': proc([], SettingsInput, async (ctx, i) => {
@@ -1159,7 +1209,7 @@ export const dellalProcs = {
       }
     }
     ctx.emit({ type: 'settings' });
-    return { ...(await settingsView(ctx.db)), aiTest };
+    return { ...(await settingsView(ctx.db)), aiTest, pilotAi: await pilotOn(ctx), platform: !!ctx.t };
   }),
 
   /** Server: a message arrived on a channel (webhooks). Admin/system only. */

@@ -7,7 +7,7 @@ import { getSetting, setSetting } from '../settings';
 import { addWorkMinutes, workMinutes } from '@pilotix/shared';
 import { getPrefs } from './prefs';
 import { swapFees } from './delivery';
-import { addEvent, FollowInput, getOrder, listOrders, ListInput, setFollow } from './orders';
+import { addEvent, FollowInput, getOrder, listOrders, ListInput, setFollow, withClientScores } from './orders';
 import { agencyOf, andSql, queueSql } from './agencyscope';
 import { findOrders } from './sav';
 import { applyTrust, DRIVER_CLAIMS } from './trust';
@@ -728,11 +728,11 @@ export const suiviProcs = {
       const ex = await extras(ctx.db, page.rows, ctx.now());
       for (const o of page.rows) if (ex[o.id]) ex[o.id].stuck = stuck.get(o.id) ?? null;
       // the longest without news first
-      const rows = [...page.rows].sort((a, b) => (stuck.get(b.id)?.days ?? 0) - (stuck.get(a.id)?.days ?? 0));
+      const rows = await withClientScores(ctx, [...page.rows].sort((a, b) => (stuck.get(b.id)?.days ?? 0) - (stuck.get(a.id)?.days ?? 0)));
       return { ...page, rows, extra: ex };
     }
     // the swap list only shows parcels that really left (still with the courier or the livreur)
-    const rows = i.tab === 'swap' ? page.rows.filter((o) => o.shippedAt) : page.rows;
+    const rows = await withClientScores(ctx, i.tab === 'swap' ? page.rows.filter((o) => o.shippedAt) : page.rows);
     return { ...page, rows, extra: await extras(ctx.db, rows, ctx.now()) };
   }),
 

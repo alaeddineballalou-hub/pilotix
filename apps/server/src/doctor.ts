@@ -33,6 +33,7 @@ export const JOB_EVERY: Record<string, number> = {
   'platform-reminders': D,
   'courier-watch': D,
   'turnstile-sync': 30 * MIN,
+  'pilot-ai-night': D,
 };
 
 interface Seen {

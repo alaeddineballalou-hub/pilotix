@@ -19,7 +19,16 @@
     "connected": "{{count}} connecté",
     "connect": "+ Connecter",
     "accounts": "Comptes connectés",
-    "none": "Aucun compte connecté : choisissez une société ci-dessus."
+    "none": "Aucun compte connecté : choisissez une société ci-dessus.",
+    "search": "Chercher une société",
+    "searchPh": "Nom de la société (ex. DHD, Guepex, Rocket…)",
+    "count_one": "{{count}} société",
+    "count_other": "{{count}} sociétés",
+    "found_one": "{{count}} trouvée",
+    "found_other": "{{count}} trouvées",
+    "popular": "Les plus utilisées",
+    "all": "Toutes les sociétés, de A à Z",
+    "noMatch": "Aucune société ne s’appelle « {{q}} ». Si la vôtre a une API, choisissez « Autre API »."
   },
   "col": {
     "company": "Société",
@@ -74,7 +83,8 @@
     "active": "Active",
     "keys": "Clés API",
     "keySaved": "Clé enregistrée : laissez vide pour la garder.",
-    "keyMissing": "Pas encore de clé."
+    "keyMissing": "Pas encore de clé.",
+    "connectTitle": "Connecter {{name}}"
   },
   "custom": {
     "s1": "1. Connexion",

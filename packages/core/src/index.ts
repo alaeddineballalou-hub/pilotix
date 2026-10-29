@@ -25,6 +25,7 @@ export { demoSnapshot, demoRestore } from './demoKeep';
 export type { DemoKeep } from './demoKeep';
 export type { PGliteLike } from './pglite';
 export type { ImportProduct, ImportResult } from './modules/productimport';
+export type { ClientFacts, ClientLevel, ClientReasonCode, ClientScore } from './modules/clientscore';
 
 export { REGISTRY };
 export { courierCatalog, COURIER_FEATURES, isCompany } from './couriers/catalog';
@@ -34,6 +35,8 @@ export { syncAgency, syncLink, agencyCounts, monthBounds, monthNow } from './mod
 export { agencyGate, AGENCY_AGENT_PROCS, MARKETER_AGENT_PROCS, MARKETER_SELLER_PROCS, SELLER_PROCS, sellerProcsOf } from './modules/agencyscope';
 export { FANOUT_PROCS } from './modules/agencywork';
 export { listPros, proByCode, computeProStats, STATS_HOURS } from './modules/pro';
+export * as pilotLearn from './modules/pilotlearn';
+export { pilotOn } from './modules/dellal';
 
 /** A partner's team changed (a person closed, given other roles): its people's accounts in the stores follow. */
 const AGENCY_TEAM = new Set(['users.create', 'users.update', 'admin.users.resetPassword', 'me.delete']);

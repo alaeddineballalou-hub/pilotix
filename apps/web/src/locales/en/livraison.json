@@ -19,7 +19,16 @@
     "connected": "{{count}} connected",
     "connect": "+ Connect",
     "accounts": "Connected accounts",
-    "none": "No account connected: pick a company above."
+    "none": "No account connected: pick a company above.",
+    "search": "Search a company",
+    "searchPh": "Company name (e.g. DHD, Guepex, Rocket…)",
+    "count_one": "{{count}} company",
+    "count_other": "{{count}} companies",
+    "found_one": "{{count}} found",
+    "found_other": "{{count}} found",
+    "popular": "Most used",
+    "all": "All companies, A to Z",
+    "noMatch": "No company is called « {{q}} ». If yours has an API, pick « Other API »."
   },
   "col": {
     "company": "Company",
@@ -74,7 +83,8 @@
     "active": "Active",
     "keys": "API keys",
     "keySaved": "Key saved: leave empty to keep it.",
-    "keyMissing": "No key yet."
+    "keyMissing": "No key yet.",
+    "connectTitle": "Connect {{name}}"
   },
   "custom": {
     "s1": "1. Connection",
@@ -517,5 +527,18 @@
     "missing": "On without a price: {{list}}",
     "toPrices": "See the rates",
     "offShort": "off"
+  },
+  "card": {
+    "custom": {
+      "title": "Other API",
+      "sub": "Any other company that has an API"
+    },
+    "near": {
+      "sub": "Pickup points only"
+    },
+    "zr-procolis": {
+      "title": "ZR Express (old platform)",
+      "sub": "Old platform (Procolis)"
+    }
   }
 }

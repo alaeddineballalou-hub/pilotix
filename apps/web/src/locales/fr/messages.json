@@ -71,6 +71,7 @@
     "help": "Parlez à {{name}} comme un client. Il utilise vos vrais produits, stocks et frais de livraison. Les commandes sont seulement simulées.",
     "demoPreview": "Aperçu : ces réponses viennent d’un vendeur de démonstration. Sur votre serveur, avec la clé IA, c’est Claude qui répond.",
     "demoNoKey": "Réponses de démonstration : ajoutez la clé de l’IA dans Réglages pour que {{name}} réponde avec Claude.",
+    "demoPilot": "Réponses de démonstration : l’IA de Pilotix n’est pas encore activée. Dès que Pilotix l’active, {{name}} répond avec Claude.",
     "inPage": "Dans cette page, {{name}} répond avec Claude (votre compte Claude), avec ses vraies instructions, les produits et les frais de livraison de la démo, et la vérification darija. Une réponse prend souvent 20 à 60 secondes.",
     "typing": "{{name}} écrit… {{s}} s",
     "quick": [

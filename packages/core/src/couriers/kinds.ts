@@ -82,10 +82,10 @@ export const KINDS: Record<CourierKind, KindInfo> = {
   },
   ecotrack: {
     kind: 'ecotrack', label: 'EcoTrack', api: true, fees: true, desks: false, cancel: true, label_: true, parcel: true, change: true, askReturn: true, note: true, exchange: 'create',
-    help: 'Sociétés qui utilisent EcoTrack (DHD, Conexlog, Anderson, Areex, World Express…). Mettez l’adresse de leur site et le token API de votre compte chez eux.',
+    help: 'Mettez l’adresse du site de votre société de livraison et le token API de votre compte chez elle.',
     fields: [
       { key: 'token', label: 'Token API', type: 'secret' },
-      { key: 'base_url', label: 'Adresse de la société', type: 'text', default: 'https://dhd.ecotrack.dz' },
+      { key: 'base_url', label: 'Adresse de la société', type: 'text', default: 'https://platform.dhd-dz.com' },
       { key: 'validate', label: 'Valider le colis dès l’envoi', type: 'check', default: true },
       { key: 'ask_collection', label: 'Demander le ramassage (sinon vous déposez les colis)', type: 'check', default: true },
       { key: 'fragile', label: 'Colis fragiles', type: 'check', default: false },
@@ -182,26 +182,9 @@ export const KINDS: Record<CourierKind, KindInfo> = {
   },
 };
 
-/** The provider cards of « API Integration » (several cards can share one kind, e.g. Guepex on Yalidine). */
-/** `company`: the control room's company (Sociétés de livraison) — a company removed there is no longer offered here. */
-export const CARDS: { title: string; sub: string; kind: CourierKind; settings?: Record<string, string>; host?: string; company?: string }[] = [
-  { title: 'ZR Express', sub: 'ZR Express (nouvelle plateforme)', kind: 'zr', company: 'zr' },
-  { title: 'ZR Express (Procolis)', sub: 'ZR Express (ancienne : Procolis)', kind: 'zr_legacy', host: '!abex', company: 'procolis' },
-  { title: 'ABEX', sub: 'Plateforme Procolis', kind: 'zr_legacy', host: 'abex', settings: { base_url: 'https://abex.procolis.com/api_v1' }, company: 'procolis' },
-  { title: 'Yalidine', sub: 'Yalidine', kind: 'yalidine', host: '!guepex,yalitec', company: 'yalidine' },
-  { title: 'Guepex', sub: 'Plateforme Yalidine', kind: 'yalidine', host: 'guepex', settings: { base_url: 'https://api.guepex.app/v1/' }, company: 'guepex' },
-  { title: 'NOEST Express', sub: 'NOEST Express', kind: 'noest', company: 'noest' },
-  { title: 'DHD Livraison', sub: 'Plateforme EcoTrack', kind: 'ecotrack', host: 'dhd', settings: { base_url: 'https://dhd.ecotrack.dz' }, company: 'ecotrack' },
-  { title: 'Autre société EcoTrack', sub: 'Conexlog, Anderson, World Express…', kind: 'ecotrack', host: '!dhd', settings: { base_url: '' }, company: 'ecotrack' },
-  { title: 'Maystro Delivery', sub: 'Maystro Delivery', kind: 'maystro', company: 'maystro' },
-  { title: 'Zimou Express', sub: 'Zimou Express', kind: 'zimou', company: 'zimou' },
-  { title: 'Elogistia', sub: 'Elogistia', kind: 'elogistia', company: 'elogistia' },
-  { title: 'E-COM Delivery', sub: 'E-COM Delivery', kind: 'ecom', company: 'ecom' },
-  { title: 'MDM Express', sub: 'MDM Express', kind: 'mdm', company: 'mdm' },
-  { title: 'Near Delivery', sub: 'Point relais seulement', kind: 'near', company: 'near' },
-  { title: 'Yalitec', sub: 'Plateforme Yalidine', kind: 'yalidine', host: 'yalitec', settings: { base_url: 'https://api.yalitec.me/v1/' }, company: 'yalitec' },
-  { title: 'Autre API', sub: 'API personnalisée', kind: 'custom' },
-];
+/** « API Livraison »: every company a shop can connect, one card each with its own logo (couriers/companies.ts). */
+export { COMPANY_CARDS as CARDS } from './companies';
+export type { CourierCard } from './companies';
 
 /** Secret keys a kind needs (all must be present for "clés OK"). */
 export const requiredKeys = (kind: CourierKind) => KINDS[kind]?.fields.filter((f) => f.type === 'secret' && f.key !== 'token2').map((f) => f.key) ?? [];

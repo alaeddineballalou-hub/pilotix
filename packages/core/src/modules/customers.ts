@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, notFound, proc } from '../rpc';
 import { addEvent } from './orders';
+import { CLIENT_FACT_COLS, ClientScore, scoresOf } from './clientscore';
 
 const id = z.number().int().positive();
 
@@ -19,6 +20,8 @@ export interface CustomerRow {
   cancelled: number;
   lastOrderAt: string | null;
   createdAt: string;
+  /** out of 100: what the protection knows about this number (clientscore.ts) */
+  score: ClientScore;
 }
 
 // Counts come from the orders themselves (always right, even after edits / merges).
@@ -27,9 +30,10 @@ const COLS = `c.*,
   (SELECT count(*)::int FROM sales o WHERE o.customer_id = c.id AND o.follow_status IN ('delivered','exchanged')) AS n_delivered,
   (SELECT count(*)::int FROM sales o WHERE o.customer_id = c.id AND o.follow_status IN ('returning','returned')) AS n_returned,
   (SELECT count(*)::int FROM sales o WHERE o.customer_id = c.id AND o.conf_status = ANY('{${CONF_DONE_BAD.join(',')}}')) AS n_cancelled,
-  (SELECT max(o.created_at) FROM sales o WHERE o.customer_id = c.id) AS last_at`;
+  (SELECT max(o.created_at) FROM sales o WHERE o.customer_id = c.id) AS last_at,
+  ${CLIENT_FACT_COLS}`;
 
-const toCustomer = (r: any): CustomerRow => ({
+const toCustomer = (r: any, score: ClientScore): CustomerRow => ({
   id: num(r.id),
   name: r.name,
   phone: r.phone,
@@ -42,6 +46,7 @@ const toCustomer = (r: any): CustomerRow => ({
   cancelled: num(r.n_cancelled),
   lastOrderAt: isoOrNull(r.last_at ?? r.last_order_at),
   createdAt: iso(r.created_at),
+  score,
 });
 
 const WHO = ['confirmation', 'suivi'] as const;
@@ -66,7 +71,8 @@ export const customersProcs = {
       const lim = w.p(f.pageSize);
       const off = w.p((f.page - 1) * f.pageSize);
       const rows = await ctx.db.query(`SELECT ${COLS} FROM customers c ${w.sql} ORDER BY c.last_order_at DESC NULLS LAST, c.id DESC LIMIT ${lim} OFFSET ${off}`, w.params);
-      return { rows: rows.map(toCustomer), total, page: f.page, pageSize: f.pageSize };
+      const scores = await scoresOf(ctx, rows);
+      return { rows: rows.map((r: any, k: number) => toCustomer(r, scores[k])), total, page: f.page, pageSize: f.pageSize };
     },
   ),
 
@@ -88,7 +94,7 @@ export const customersProcs = {
       [r.id, r.phone],
     );
     return {
-      customer: toCustomer(r),
+      customer: toCustomer(r, (await scoresOf(ctx, [r]))[0]),
       orders: orders.map((o: any) => ({
         id: num(o.id), ref: o.ref, createdAt: iso(o.created_at), total: num(o.total), confStatus: o.conf_status, followStatus: o.follow_status ?? null, attempts: num(o.attempts), itemsText: o.items_text ?? '', variantsText: o.variants_text ?? '',
       })),

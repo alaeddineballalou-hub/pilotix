@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Ctx, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, staffLogin, Tenancy } from '../index';
 import { FraudFacts, scoreOrder } from '../modules/fraud';
-import { refreshReputation, sharedReputation } from '../platform/reputation';
+import { algeriaDay, protectionStats, qualityAlert, refreshReputation, sharedReputation, sharedSellersMany, takeQualityAlert } from '../platform/reputation';
 
 const OWNER = { email: 'owner@reseau.dz', password: 'Owner-Password-1' };
 const DAY = 86_400_000;
@@ -28,18 +28,19 @@ async function world() {
     const s = (await t.platform.query(`SELECT id, schema_name FROM platform.shops WHERE id = $1`, [made.id]))[0];
     return { id: Number(s.id), schema: String(s.schema_name) };
   };
-  return { t, store };
+  return { t, store, p };
 }
 
 /** one finished order in a store: conf (the agent's verdict) / follow (the delivery), `daysAgo` days ago */
-async function order(t: Tenancy, schema: string, phone: string, o: { conf?: string; follow?: string; daysAgo?: number }) {
+async function order(t: Tenancy, schema: string, phone: string, o: { conf?: string; follow?: string; daysAgo?: number }): Promise<number> {
   const db = t.shop(schema);
   const c = (await db.query(`INSERT INTO customers (phone, name, wilaya_id) VALUES ($1, 'Client Test', 16) ON CONFLICT (phone) DO UPDATE SET name = EXCLUDED.name RETURNING id`, [phone]))[0];
-  await db.query(
+  const r = await db.query(
     `INSERT INTO orders (ref, customer_id, customer_name, phone, wilaya_id, commune, conf_status, follow_status, subtotal, delivery_fee, discount, total, channel, created_at)
-     VALUES ('T' || nextval('order_ref_seq'), $1, 'Client Test', $2, 16, 'Kouba', $3, $4, 1000, 0, 0, 1000, 'site', $5)`,
+     VALUES ('T' || nextval('order_ref_seq'), $1, 'Client Test', $2, 16, 'Kouba', $3, $4, 1000, 0, 0, 1000, 'site', $5) RETURNING id`,
     [c.id, phone, o.conf ?? 'confirmed', o.follow ?? null, new Date(Date.now() - (o.daysAgo ?? 1) * DAY).toISOString()],
   );
+  return Number(r[0].id);
 }
 
 /** an agent marks a device « 🕵️ Concurrent » in a store (its fingerprint, the same on every store's pages) */
@@ -162,4 +163,126 @@ test('the network and the attacked ad send to a person — never a block on thei
   // too few finished orders to tell, or mostly real customers: nothing
   assert.equal(scoreOrder({ ...base, campaign: { decided: 5, fake: 5 } }).verdict, 'allow');
   assert.equal(scoreOrder({ ...base, campaign: { decided: 20, fake: 4 } }).verdict, 'allow');
+});
+
+test('the control room sees the protection grow: the network, the stopped orders day by day, each store', async () => {
+  const { t, store, p } = await world();
+  const a = await store('Maison Alger', 'a@maison.dz');
+  const b = await store('Maison Oran', 'b@maison.dz');
+  const c = await store('Maison Sétif', 'c@maison.dz');
+  const now = Date.now();
+  /** a landing order seen by the protection: its verdict and its reasons, `ago` ms ago */
+  const submit = (schema: string, verdict: string, codes: string[], ago: number, o?: { order?: number; merged?: boolean }) =>
+    t
+      .shop(schema)
+      .query(`INSERT INTO landing_submits (verdict, score, reasons, at, order_id, merged) VALUES ($1, 0, $2, $3, $4, $5)`, [verdict, JSON.stringify(codes.map((code) => ({ code, points: 30 }))), new Date(now - ago).toISOString(), o?.order ?? null, !!o?.merged]);
+  // today at A: a real customer (confirmed, and sent again: one buyer), one held by the network (fake for the agent), one robot blocked
+  const real = await order(t, a.schema, '0770000001', { conf: 'confirmed' });
+  await submit(a.schema, 'allow', [], 60_000, { order: real });
+  await submit(a.schema, 'allow', [], 50_000, { order: real, merged: true });
+  await submit(a.schema, 'review', ['shared_bad'], 120_000, { order: await order(t, a.schema, '0770000002', { conf: 'fake' }) });
+  await submit(a.schema, 'block', ['honeypot'], 180_000);
+  // yesterday at B: one held because its ad was attacked (still waiting for the agent), one real customer (delivered)
+  await submit(b.schema, 'review', ['campaign_bad'], DAY + 60_000, { order: await order(t, b.schema, '0770000003', { conf: 'new' }) });
+  await submit(b.schema, 'allow', [], DAY + 120_000, { order: await order(t, b.schema, '0770000004', { conf: 'confirmed', follow: 'delivered' }) });
+  // 10 days ago at C (the week before): a real buyer
+  await submit(c.schema, 'allow', [], 10 * DAY, { order: await order(t, c.schema, '0770000005', { conf: 'confirmed', daysAgo: 10 }) });
+  // A and B both ended badly with the same number: the network now knows it, and 2 businesses agree
+  await order(t, a.schema, '0661557788', { conf: 'fake' });
+  await order(t, b.schema, '0661557788', { follow: 'returned' });
+
+  await refreshReputation(t, now);
+  await refreshReputation(t, now); // run again: nothing is counted twice
+  const s = await protectionStats(t, now, 7);
+
+  // the 3 stores + shop #1; A's « fausse » taught the network one more number (only A says so: not agreed)
+  assert.deepEqual(s.network, { stores: 4, sharing: 2, phones: 2, devices: 0, agreed: 1 });
+  // 6 orders, 5 buyers (one sent twice): 2 real (confirmed, delivered), 2 fake (blocked, « fausse »), 1 still waiting
+  assert.deepEqual(s.totals, { orders: 6, blocked: 1, review: 2, network: 1, campaign: 1, buyers: 5, good: 2, bad: 2 });
+  // the week before, for the trend: C's real buyer
+  assert.deepEqual(s.previous, { orders: 1, blocked: 0, review: 0, network: 0, campaign: 0, buyers: 1, good: 1, bad: 0 });
+  assert.equal(s.days.length, 7);
+  const today = s.days[6];
+  assert.equal(today.day, algeriaDay(now));
+  assert.deepEqual([today.orders, today.blocked, today.review, today.network, today.stores, today.agreed], [4, 1, 1, 1, 4, 1]);
+  assert.deepEqual([today.buyers, today.good, today.bad], [3, 1, 2]);
+  assert.deepEqual([today.sharing, today.phones, today.devices], [2, 2, 0]);
+  // the network's size is only known from its first day on (no made-up zeros before), even on a day with orders
+  assert.deepEqual([s.days[0].stores, s.days[0].phones, s.days[0].agreed], [null, null, null]);
+  assert.deepEqual([s.days[5].orders, s.days[5].stores, s.days[5].phones], [2, null, null]);
+  const sa = s.stores.find((x) => x.id === a.id)!;
+  assert.deepEqual([sa.name, sa.orders, sa.blocked, sa.review, sa.network, sa.buyers, sa.good, sa.bad], ['Maison Alger', 4, 1, 1, 1, 3, 1, 2]);
+  assert.ok(sa.shared >= 1);
+  assert.deepEqual([s.stores.find((x) => x.id === c.id)?.orders, s.stores.find((x) => x.id === c.id)?.good], [1, 1]);
+  assert.ok(s.lastRunAt);
+
+  // the same, through the control room's own action
+  const viaProc = await p('p.protection', { days: 7 });
+  assert.deepEqual(viaProc.totals, s.totals);
+});
+
+test('the alert: the buyers’ quality fell by 5 points or more this week — the platform and each store — e-mailed once a week', async () => {
+  const { t, store } = await world();
+  const a = await store('Maison Tlemcen', 't@maison.dz');
+  const b = await store('Maison Blida', 'b@blida.dz');
+  const now = Date.now();
+  let k = 0;
+  /** n landing orders `daysAgo` days ago, all with this agent's verdict */
+  const bulk = async (schema: string, n: number, conf: string, daysAgo: number) => {
+    const db = t.shop(schema);
+    const phone = `07709${String(++k).padStart(5, '0')}`;
+    const at = new Date(now - daysAgo * DAY).toISOString();
+    const c = (await db.query(`INSERT INTO customers (phone, name, wilaya_id) VALUES ($1, 'Client', 16) ON CONFLICT (phone) DO UPDATE SET name = EXCLUDED.name RETURNING id`, [phone]))[0];
+    await db.query(
+      `WITH o AS (INSERT INTO orders (ref, customer_id, customer_name, phone, wilaya_id, commune, conf_status, subtotal, delivery_fee, discount, total, channel, created_at)
+                  SELECT 'B' || nextval('order_ref_seq'), $1, 'Client', $2, 16, 'Kouba', $3, 1000, 0, 0, 1000, 'landing', $4 FROM generate_series(1, $5) RETURNING id)
+       INSERT INTO landing_submits (verdict, score, reasons, at, order_id) SELECT 'allow', 0, '[]', $4, id FROM o`,
+      [c.id, phone, conf, at, n],
+    );
+  };
+  // Tlemcen: 80 % real buyers the week before, 40 % this week; Blida: 75 % both weeks
+  await bulk(a.schema, 48, 'confirmed', 12);
+  await bulk(a.schema, 12, 'cancelled', 12);
+  await bulk(a.schema, 24, 'confirmed', 5);
+  await bulk(a.schema, 36, 'cancelled', 5);
+  await bulk(b.schema, 45, 'confirmed', 12);
+  await bulk(b.schema, 15, 'cancelled', 12);
+  await bulk(b.schema, 45, 'confirmed', 5);
+  await bulk(b.schema, 15, 'cancelled', 5);
+  // the last 3 days do not count (not finished): a flood of unconfirmed orders yesterday changes nothing
+  await bulk(b.schema, 50, 'new', 1);
+
+  await refreshReputation(t, now);
+  const al = await qualityAlert(t);
+  assert.ok(al);
+  assert.equal(al!.week.to, algeriaDay(now - 3 * DAY));
+  assert.equal(al!.week.from, algeriaDay(now - 9 * DAY));
+  // all stores together: 77.5 % → 57.5 %; Tlemcen fell, Blida did not
+  assert.deepEqual([Math.round(al!.network!.prev * 1000), Math.round(al!.network!.now * 1000), al!.network!.buyers], [775, 575, 120]);
+  assert.deepEqual(
+    al!.stores.map((s) => [s.name, Math.round(s.prev * 100), Math.round(s.now * 100)]),
+    [['Maison Tlemcen', 80, 40]],
+  );
+  assert.ok((await protectionStats(t, now, 30)).alert, 'the control room shows it');
+  // one e-mail, then none for a week, even if the check runs again
+  assert.ok(await takeQualityAlert(t, now));
+  await refreshReputation(t, now);
+  assert.equal(await takeQualityAlert(t, now + 60_000), null);
+  assert.ok(await takeQualityAlert(t, now + 8 * DAY));
+});
+
+test('many numbers at once (the Clients list): the same count as one by one', async () => {
+  const { t, store } = await world();
+  const a = await store('Boutique Annaba', 'a@annaba.dz');
+  const b = await store('Boutique Bejaia', 'b@bejaia.dz');
+  const c = await store('Boutique Chlef', 'c@chlef.dz');
+  await order(t, a.schema, '0661220011', { conf: 'fake' });
+  await order(t, b.schema, '0661220011', { conf: 'wrong_number' });
+  await order(t, a.schema, '0661220022', { conf: 'fake' });
+  await refreshReputation(t);
+  const ctx = { t, shop: { id: c.id, demo: false }, now: () => Date.now() } as unknown as Ctx;
+  const m = await sharedSellersMany(ctx, ['0661220011', '0661220022', '0661220033']);
+  assert.deepEqual([m!.get('0661220011'), m!.get('0661220022'), m!.get('0661220033') ?? 0], [2, 1, 0]);
+  assert.equal((await ask(t, c.id, { phone: '0661220011' }))?.sellers, 2);
+  assert.equal(await sharedSellersMany({ ...ctx, shop: { id: c.id, demo: true } } as unknown as Ctx, ['0661220011']), null);
 });

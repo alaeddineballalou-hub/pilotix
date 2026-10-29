@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, hasRole, proc } from '../rpc';
 import { clientFee, getSetting, setSetting } from '../settings';
-import { ConfInput, getOrder, ListInput, listOrders, setConf } from './orders';
+import { ConfInput, getOrder, ListInput, listOrders, setConf, withClientScores } from './orders';
 import { andSql, queueSql } from './agencyscope';
 
 // ---------------------------------------------------------------- sub-pages
@@ -283,7 +283,8 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
       const v: string[] = (Array.isArray(r.v) ? r.v : String(r.v ?? '').replace(/[{}]/g, '').split(',')).filter(Boolean);
       passedOf.set(num(r.order_id), v.filter((x, k) => k === 0 || v[k - 1] !== x));
     }
-  const rows: QueueRow[] = page.rows.map((o) => ({
+  const scored = await withClientScores(ctx, page.rows);
+  const rows: QueueRow[] = scored.map((o) => ({
     ...o,
     skus: [...new Set(o.items.map((it) => (it.variantId ? skuOf.get(it.variantId) : undefined)).filter((s): s is string => !!s))],
     creatorName: o.createdBy ? who.get(o.createdBy) ?? null : null,

@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
 import { wilaya } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
-import { Card, Empty, ErrorBox, Field, Loading, StageBar } from '../../ui/kit';
+import { Card, Empty, ErrorBox, Field, Icon, Loading, StageBar } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { LivreursCash } from '../caisse/LivreursCash';
@@ -18,6 +18,9 @@ import { PhoneLivraison } from './Phone';
 import { Preferences } from './Preferences';
 import { Pilot } from './Pilot';
 import { useSession } from '../../lib/session';
+import { Card as CarrierCard, cardSub, cardTitle, companyCount, countOf, draftOf, searchCards } from './carriers';
+import { CompanyLogo, CourierLogo } from './CourierLogo';
+import { courierCardOf } from '@pilotix/shared';
 
 type Dialog = { kind: 'form'; draft: CompanyDraft; keysSet?: string[] } | { kind: 'fees' | 'desks' | 'statuses' | 'preview' | 'zr' | 'live'; company: Company } | null;
 
@@ -95,7 +98,7 @@ function LivraisonAdmin({ sub }: PageProps) {
               </button>
             }
           />
-          <CompaniesCard q={q} withKind={false} onEdit={edit} onOpen={(kind, company) => setDialog({ kind, company })} />
+          <CompaniesCard q={q} cards={kinds.data?.cards} withKind={false} onEdit={edit} onOpen={(kind, company) => setDialog({ kind, company })} />
         </>
       )}
       {current === 'api' && (
@@ -107,30 +110,11 @@ function LivraisonAdmin({ sub }: PageProps) {
             <ErrorBox error={kinds.error || q.error} />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div className="carrier-grid">
-                {kinds.data!.cards.map((card) => {
-                  const host = (c: Company) => String((c.settings as any)?.base_url ?? '');
-                  const n = (q.data ?? []).filter((c) => {
-                    if (c.kind !== card.kind) return false;
-                    if (!card.host) return true;
-                    if (card.host.startsWith('!')) return card.host.slice(1).split(',').every((h) => !host(c).toLowerCase().includes(h));
-                    return host(c).toLowerCase().includes(card.host);
-                  }).length;
-                  return (
-                    <button
-                      key={card.title}
-                      type="button"
-                      className="kpi carrier"
-                      onClick={() => setDialog({ kind: 'form', draft: { name: card.kind === 'custom' || card.title.startsWith('Autre') ? '' : card.title, kind: card.kind, active: true, phone: '', settings: { ...(card.settings ?? {}) } } })}
-                    >
-                      <span className="v">{card.title}</span>
-                      <span className="s">{card.sub}</span>
-                      <span className={`badge t-${n ? 'ok' : 'info'}`}>{n ? t('livraison.api.connected', { count: n }) : t('livraison.api.connect')}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <CompaniesCard q={q} withKind onlyApi title={t('livraison.api.accounts')} onEdit={edit} onOpen={(kind, company) => setDialog({ kind, company })} />
+              {/* the accounts already connected first (the list of companies is long) */}
+              {(q.data ?? []).some((c) => !['own', 'manual'].includes(c.kind)) && (
+                <CompaniesCard q={q} cards={kinds.data!.cards} withKind onlyApi title={t('livraison.api.accounts')} onEdit={edit} onOpen={(kind, company) => setDialog({ kind, company })} />
+              )}
+              <CarrierPicker cards={kinds.data!.cards} list={q.data ?? []} onPick={(card) => setDialog({ kind: 'form', draft: draftOf(card) })} />
             </div>
           )}
         </>
@@ -142,8 +126,57 @@ function LivraisonAdmin({ sub }: PageProps) {
   );
 }
 
+/** « API Livraison »: every delivery company, one card each with its own logo — the most used first, then A → Z, and a
+ *  search (a company is also found by its platform, never shown). */
+function CarrierPicker({ cards, list, onPick }: { cards: CarrierCard[]; list: Company[]; onPick: (card: CarrierCard) => void }) {
+  const { t } = useTranslation();
+  const [query, setQuery] = useState('');
+  const searching = query.trim().length > 0;
+  const found = searchCards(cards, query);
+  const tile = (card: CarrierCard) => {
+    const n = countOf(card, cards, list);
+    return (
+      <button key={card.id} type="button" className={`px-carrier${n ? ' on' : ''}`} onClick={() => onPick(card)}>
+        <CourierLogo card={card} />
+        <b>{cardTitle(t, card)}</b>
+        {card.sub && <small>{cardSub(t, card)}</small>}
+        <span className={`badge t-${n ? 'ok' : 'info'}`}>{n ? t('livraison.api.connected', { count: n }) : t('livraison.api.connect')}</span>
+      </button>
+    );
+  };
+  return (
+    <div className="card px-cpick">
+      <div className="px-cpick-bar">
+        <label className="px-qsearch">
+          <Icon name="search" />
+          <input type="search" value={query} placeholder={t('livraison.api.searchPh')} aria-label={t('livraison.api.search')} onChange={(e) => setQuery(e.target.value)} />
+        </label>
+        <small>{searching ? t('livraison.api.found', { count: found.filter((c) => c.kind !== 'custom').length }) : t('livraison.api.count', { count: companyCount(cards) })}</small>
+      </div>
+      {searching ? (
+        found.length ? (
+          <div className="carrier-grid">{found.map(tile)}</div>
+        ) : (
+          <>
+            <p className="px-cpick-none">{t('livraison.api.noMatch', { q: query.trim() })}</p>
+            <div className="carrier-grid">{cards.filter((c) => c.kind === 'custom').map(tile)}</div>
+          </>
+        )
+      ) : (
+        <>
+          <h3>{t('livraison.api.popular')}</h3>
+          <div className="carrier-grid">{cards.filter((c) => c.top).map(tile)}</div>
+          <h3>{t('livraison.api.all')}</h3>
+          <div className="carrier-grid">{cards.filter((c) => !c.top).map(tile)}</div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function CompaniesCard({
   q,
+  cards,
   withKind,
   onlyApi,
   title,
@@ -151,6 +184,8 @@ function CompaniesCard({
   onOpen,
 }: {
   q: ReturnType<typeof useRpc<'delivery.companies'>>;
+  /** the companies' cards (their logos) */
+  cards: CarrierCard[] | undefined;
   withKind: boolean;
   onlyApi?: boolean;
   title?: string;
@@ -177,7 +212,6 @@ function CompaniesCard({
         <thead>
           <tr>
             <th>{t('livraison.col.company')}</th>
-            {withKind && <th>{t('livraison.col.name')}</th>}
             <th>{t('livraison.col.connection')}</th>
             <th className="num">{t('livraison.col.toShip')}</th>
             <th className="num">{t('livraison.col.onRoad')}</th>
@@ -191,10 +225,20 @@ function CompaniesCard({
             return (
               <tr key={c.id} className="clickable" onClick={() => onEdit(c)}>
                 <td data-l={t('livraison.col.company')}>
-                  <b>{withKind ? t(`livraison.kinds.${c.kind}`) : c.name}</b>
-                  <small>{t(`livraison.kindsLong.${c.kind}`)}</small>
+                  <span className="px-coname">
+                    {api ? (
+                      <CompanyLogo cards={cards} company={c} />
+                    ) : (
+                      <span className="px-cologo sm none">
+                        <Icon name={c.kind === 'own' ? 'bike' : 'truck'} />
+                      </span>
+                    )}
+                    <span>
+                      <b>{c.name}</b>
+                      {api ? cards && courierCardOf(cards, c)?.sub && <small>{cardSub(t, courierCardOf(cards, c)!)}</small> : <small>{t(`livraison.kindsLong.${c.kind}`)}</small>}
+                    </span>
+                  </span>
                 </td>
-                {withKind && <td data-l={t('livraison.col.name')}>{c.name}</td>}
                 <td data-l={t('livraison.col.connection')}>
                   {api ? <span className={`badge t-${c.hasKeys ? 'ok' : 'bad'}`}>{c.hasKeys ? t('livraison.keysOk') : t('livraison.keysMissing')}</span> : <span className="badge t-off">{t('livraison.noApi')}</span>}
                 </td>
