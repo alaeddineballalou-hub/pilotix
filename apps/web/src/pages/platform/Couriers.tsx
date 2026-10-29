@@ -10,6 +10,17 @@ import { dateTime } from '../../lib/format';
 import { CourierProbe, couriersTest, prpc } from '../../lib/platform';
 import { Card, ErrorBox, Icon, Kpi, Kpis, Loading, Tabs } from '../../ui/kit';
 
+/** Items with the same note shown once (« Réclamation · Retour · … » then the reason). */
+function groups(items: CatalogCompany['items']) {
+  const out: { features: string[]; note: string; done: boolean }[] = [];
+  for (const i of items) {
+    const g = out.find((x) => x.note === i.note && x.done === i.done);
+    if (g) g.features.push(i.feature);
+    else out.push({ features: [i.feature], note: i.note, done: i.done });
+  }
+  return out;
+}
+
 /** The catalog: from the server, or computed in the browser preview (same data, no network). */
 async function loadCatalog(): Promise<CatalogCompany[]> {
   if (DEMO_ONLY) return (await import('@pilotix/core')).courierCatalog();
@@ -96,12 +107,12 @@ export function CouriersPage({ demo }: { demo?: boolean }) {
               {p && !p.ok && <p className="small pp-co-msg">{p.message}</p>}
               {items.length ? (
                 <ul className="pp-co-list">
-                  {items.map((i) => (
-                    <li key={i.feature} className={i.done ? 'done' : 'todo'}>
-                      <Icon name={i.done ? 'checkcircle' : 'xcircle'} className="pp-co-ic" />
+                  {groups(items).map((g) => (
+                    <li key={g.features.join()} className={g.done ? 'done' : 'todo'}>
+                      <Icon name={g.done ? 'checkcircle' : 'xcircle'} className="pp-co-ic" />
                       <div>
-                        <b>{t(`platform.co.f.${i.feature}`)}</b>
-                        <span className="small muted">{i.note}</span>
+                        <b>{g.features.map((f) => t(`platform.co.f.${f}`)).join(' · ')}</b>
+                        <span className="small muted">{g.note}</span>
                       </div>
                     </li>
                   ))}

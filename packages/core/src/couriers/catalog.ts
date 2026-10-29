@@ -107,10 +107,14 @@ const MISSING: Partial<Record<CourierKind, Partial<Record<CourierFeature, string
     webhook: 'Pas de webhook : Pilotix demande les statuts toutes les 5 minutes.',
     payments: 'Pas d’API de versements.',
   },
-  zr_legacy: {
-    webhook: 'Ancienne plateforme : passez les boutiques sur la nouvelle plateforme ZR (webhooks, réclamations, échanges).',
+  zr: {
+    return: 'Pas d’appel « demander le retour » dans l’API ZR : passez par une réclamation ZR (faite depuis Pilotix).',
+    retry: 'Pas d’appel « nouvelle tentative » dans l’API ZR : passez par une réclamation ZR (faite depuis Pilotix).',
+    note: 'Pas de note libre dans l’API ZR : les messages passent par les réclamations ZR (faites depuis Pilotix).',
   },
 };
+/** Old ZR platform (Procolis): one reason for everything it lacks. */
+const LEGACY = 'Ancienne plateforme (Procolis) : son API ne le permet pas. Passez la boutique sur la nouvelle plateforme ZR.';
 
 const DONE: Record<CourierFeature, (k: KindInfo) => string | null> = {
   create: (k) => (k.api ? 'Pilotix crée le colis chez la société (bouton Envoyer).' : null),
@@ -139,7 +143,7 @@ function itemsOf(kind: CourierKind): CatalogItem[] {
   return COURIER_FEATURES.map((f) => {
     const done = DONE[f](k);
     if (done) return { feature: f, done: true, note: done };
-    const why = MISSING[kind]?.[f];
+    const why = kind === 'zr_legacy' ? LEGACY : MISSING[kind]?.[f];
     return { feature: f, done: false, note: why || 'Pas encore dans Pilotix : à vérifier dans la documentation API de la société.' };
   });
 }
@@ -166,7 +170,7 @@ export function courierCatalog(): CatalogCompany[] {
       name: 'Colivraison',
       kind: null,
       platform: null,
-      items: COURIER_FEATURES.map((f) => ({ feature: f, done: false, note: 'Pas de documentation API publique : demander à Colivraison sa documentation API (en attendant : « API personnalisée » ou « Société sans API »).' })),
+      items: COURIER_FEATURES.map((f) => ({ feature: f, done: false, note: 'Son API existe mais sa documentation n’est pas publique : la demander à Colivraison. En attendant, les boutiques l’ajoutent en « API personnalisée » ou « Société sans API ».' })),
     },
   ];
 }

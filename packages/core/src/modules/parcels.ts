@@ -93,9 +93,11 @@ const STEP_COLOR: Partial<Record<FollowStatus, string>> = { prepared: '#94a3b8',
 
 async function demoInfo(db: Db, o: any): Promise<ParcelInfo> {
   const kind = o.kind as CourierKind;
+  const isZr = !!KINDS[kind]?.zr;
+  const co = String(o.company_name ?? 'la société');
   const ev = await db.query(`SELECT kind, to_value, note, at FROM order_events WHERE order_id = $1 AND kind IN ('follow_status','company') ORDER BY at`, [o.id]);
   const f = o.follow_status as FollowStatus | null;
-  const hub = (w: number) => `Agence ZR ${wilayaName(w)}`;
+  const hub = (w: number) => (isZr ? `Agence ZR ${wilayaName(w)}` : `${co} ${wilayaName(w)}`);
   const history: ParcelInfo['history'] = [];
   const sent = ev.find((e: any) => e.kind === 'company' && /suivi/.test(e.note ?? ''));
   if (sent) history.push({ at: iso(sent.at), status: word(kind, 'prepared'), color: STEP_COLOR.prepared!, hub: null, by: null, comment: null, situations: [] });
@@ -106,7 +108,7 @@ async function demoInfo(db: Db, o: any): Promise<ParcelInfo> {
       at,
       status: word(kind, s).split(' · ')[0],
       color: STEP_COLOR[s] ?? null,
-      hub: s === 'shipped' ? 'Centre de tri ZR Alger' : hub(num(o.wilaya_id)),
+      hub: s === 'shipped' ? (isZr ? 'Centre de tri ZR Alger' : `${co} Alger`) : hub(num(o.wilaya_id)),
       by: s === 'out_for_delivery' || s === 'failed' || s === 'delivered' ? LIVREURS[num(o.id) % LIVREURS.length].slice(0, 2).join(' ') : null,
       comment: s === 'failed' ? e.note ?? null : null,
       situations: s === 'failed' ? [{ name: 'Client injoignable', at: new Date(Date.parse(at) + 15 * 60_000).toISOString() }] : [],
@@ -123,6 +125,34 @@ async function demoInfo(db: Db, o: any): Promise<ParcelInfo> {
   const lv = LIVREURS[num(o.id) % LIVREURS.length];
   const shippedAt = o.shipped_at ? Date.parse(new Date(o.shipped_at).toISOString()) : null;
   const sms: ParcelInfo['sms'] = [];
+  if (!isZr) {
+    // another company in the preview: its journey and what can still be changed (directly, before pickup)
+    const before = !f || f === 'prepared' || f === 'to_prepare';
+    const words = (o.ext_status && o.ext_status !== f ? String(o.ext_status) : f ? word(kind, f) : '').split(' · ');
+    return {
+      state: words[0] || null,
+      color: f ? STEP_COLOR[f] ?? null : null,
+      situation: words[1] ?? null,
+      livreur: null,
+      risk: null,
+      canModify: before && !!KINDS[kind]?.change,
+      canChangePhone: before && !!KINDS[kind]?.change,
+      direct: true,
+      pendingChange: false,
+      modifications: null,
+      modificationLimit: null,
+      phoneChanges: null,
+      phoneChangeLimit: null,
+      phoneChangePrice: null,
+      delivery: { type: o.is_stopdesk ? 'pickup-point' : 'home', hub: o.is_stopdesk ? o.sd_name ?? null : null, city: wilayaName(num(o.wilaya_id)), district: o.commune ?? null, street: o.address ?? null },
+      amount: num(o.total),
+      deliveryPrice: null,
+      returnPrice: null,
+      swap: null,
+      history,
+      sms: [],
+    };
+  }
   if (shippedAt) sms.push({ at: new Date(shippedAt + 40 * 60_000).toISOString(), phone: o.phone, message: `ZR Express : votre commande ${o.ref} est en route. Suivi ${o.tracking}.`, status: 'delivered' });
   const out = ev.find((e: any) => e.kind === 'follow_status' && e.to_value === 'out_for_delivery');
   if (out) sms.push({ at: iso(out.at), phone: o.phone, message: `ZR Express : votre colis ${o.tracking} arrive aujourd’hui. Livreur ${lv[0]} : ${lv[2]}.`, status: 'delivered' });
