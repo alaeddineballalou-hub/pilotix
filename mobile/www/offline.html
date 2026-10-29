@@ -22,9 +22,9 @@
       -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
     }
     main { width: 100%; max-width: 380px; text-align: center; }
-    .logo { width: 104px; height: 104px; margin: 0 auto 28px; display: block; border-radius: 26px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+    .logo { width: 104px; height: 104px; margin: 0 auto 28px; display: block; border-radius: 26px; box-shadow: 0 0 0 2px rgba(255,255,255,.10), 0 10px 30px rgba(0,0,0,.30); }
     .dot { width: 64px; height: 64px; margin: 0 auto 18px; border-radius: 50%; background: var(--navy-2); display: grid; place-items: center; }
-    .dot svg { width: 30px; height: 30px; }
+    .dot svg { width: 30px; height: 30px; display: block; }
     h1 { font-size: 24px; line-height: 1.3; margin: 0 0 10px; font-weight: 700; }
     p { margin: 0 0 28px; color: var(--soft); }
     button {
@@ -46,7 +46,7 @@
     <div class="dot" aria-hidden="true">
       <!-- wifi with a slash (no internet) or a cloud (server not answering) -->
       <svg id="ico-net" viewBox="0 0 24 24" fill="none" stroke="#F7A823" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.8a15 15 0 0 1 20 0"/><path d="M5 12.6a10 10 0 0 1 14 0"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/><circle cx="12" cy="20" r="1"/><path d="M3 3l18 18"/></svg>
-      <svg id="ico-srv" viewBox="0 0 24 24" fill="none" stroke="#F7A823" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.5 19H8a5 5 0 1 1 .9-9.9A6 6 0 0 1 20 11.5a3.75 3.75 0 0 1-2.5 7.5z"/><path d="M12 11v3"/><circle cx="12" cy="16.5" r=".6"/></svg>
+      <svg id="ico-srv" viewBox="0 0 24 24" fill="none" stroke="#F7A823" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.5 19H8a5 5 0 1 1 .9-9.9A6 6 0 0 1 20 11.5a3.75 3.75 0 0 1-2.5 7.5z"/><path d="M12 11v3"/><circle cx="12" cy="16.5" r=".6"/></svg>
     </div>
 
     <h1 id="title"></h1>
@@ -111,8 +111,9 @@
         var server = kind === 'server';
         $('title').textContent = server ? w.srvTitle : w.netTitle;
         $('text').textContent = server ? w.srvText : w.netText;
-        $('ico-net').hidden = server;
-        $('ico-srv').hidden = !server;
+        // (svg elements have no "hidden" switch, so use display)
+        $('ico-net').style.display = server ? 'none' : 'block';
+        $('ico-srv').style.display = server ? 'block' : 'none';
       }
 
       function open() {
