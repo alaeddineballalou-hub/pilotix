@@ -11,6 +11,7 @@ import { courierPayProcs } from './modules/courierpay';
 import { depotAlertProcs } from './modules/depotalerts';
 import { prefsProcs } from './modules/prefs';
 import { confirmCheckProcs } from './modules/confirmcheck';
+import { noStockProcs } from './modules/nostock';
 import { pushProcs } from './modules/push';
 import { catalogProcs } from './modules/catalog';
 import { productImportProcs } from './modules/productimport';
@@ -62,6 +63,7 @@ export const REGISTRY = {
   ...depotAlertProcs,
   ...prefsProcs,
   ...confirmCheckProcs,
+  ...noStockProcs,
   ...pushProcs,
   ...adminProcs,
   ...adsProcs,

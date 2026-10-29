@@ -325,5 +325,17 @@
     "pushAsk": "Activez les notifications : les alertes du dépôt sonneront sur ce téléphone même quand Pilotix est fermé.",
     "pushOn": "Activer",
     "pushDenied": "Notifications bloquées : autorisez-les pour Pilotix dans les réglages du navigateur, sinon les alertes ne sonnent que l’application ouverte."
+  },
+  "ns": {
+    "tab": "Sans stock",
+    "intro_one": "Confirmées sans stock. Quand le stock revient, les plus anciennes partent seules dans « À préparer ». Alerte après {{count}} jour.",
+    "intro_other": "Confirmées sans stock. Quand le stock revient, les plus anciennes partent seules dans « À préparer ». Alerte après {{count}} jours.",
+    "empty": "Aucune commande n’attend du stock.",
+    "today": "Aujourd’hui",
+    "days_one": "{{count}} jour",
+    "days_other": "{{count}} jours",
+    "left": "Manque · reste {{n}}",
+    "ok": "En stock",
+    "off": "Indisponible"
   }
 }

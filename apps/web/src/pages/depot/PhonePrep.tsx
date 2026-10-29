@@ -3,10 +3,15 @@
 //   Fewer than needed: "Mettre en rupture" puts what is missing on « À ramener au dépôt » (Prévenir on WhatsApp).
 // « En préparation »: the orders that have all their products. Tick the packed ones, choose the delivery partner
 //   last, then « Envoyer au dispatch ».
+// « Sans stock »: the orders confirmed while a product had nothing left, oldest first, with how long each waits (late
+//   after the shop's number of days). When stock comes back the oldest go to « À préparer » by themselves.
+// The cards are one per variant: the product photo, the product name, then the variant in a pill of its colour (the
+// card's edge has that colour too) — the picker takes by colour.
 import type { Order } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { CSSProperties, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { Out } from '../../lib/backend';
 import { rpc } from '../../lib/backend';
 import { wilayaName } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
@@ -18,15 +23,17 @@ import '../confirmation/phone.css';
 import '../suivi/phone.css';
 import './phone.css';
 
-type Row = { productId: number; variantId: number | null; name: string; variant: string; need: number; orders: number; stock: number; pool: number; restock: number };
+type Row = Out<'depot.pickList'>[number];
 type Restock = { productId: number; variantId: number | null; name: string; variant: string; qty: number };
 const keyOf = (r: { productId: number; variantId: number | null }) => `${r.productId}:${r.variantId ?? 0}`;
 
 export function PhonePrep() {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<'pick' | 'ready'>('pick');
+  const [tab, setTab] = useState<'pick' | 'ready' | 'nostock'>('pick');
   const list = useRpc('depot.pickList', {});
   const ready = useRpc('depot.ready', {});
+  const counts = useRpc('depot.counts', {}, { refetchInterval: 60_000 });
+  const ns = counts.data;
   const pieces = (list.data ?? []).reduce((s, r) => s + r.need, 0);
   return (
     <div className="pxd">
@@ -37,9 +44,93 @@ export function PhonePrep() {
         <button type="button" role="tab" aria-selected={tab === 'ready'} className={tab === 'ready' ? 'on' : ''} onClick={() => setTab('ready')}>
           {t('depot.ph.preparing')} <b>{ready.data ? ready.data.length : '…'}</b>
         </button>
+        <button type="button" role="tab" aria-selected={tab === 'nostock'} className={tab === 'nostock' ? 'on' : ''} onClick={() => setTab('nostock')}>
+          {t('depot.ns.tab')} <b className={ns?.noStockLate ? 'late' : ''}>{ns ? ns.noStock : '…'}</b>
+        </button>
       </div>
-      {tab === 'pick' ? <PickTab rows={list.data} error={list.error} retry={() => list.refetch()} onReady={() => setTab('ready')} /> : <ReadyTab rows={ready.data} error={ready.error} retry={() => ready.refetch()} />}
+      {tab === 'pick' ? (
+        <PickTab rows={list.data} error={list.error} retry={() => list.refetch()} onReady={() => setTab('ready')} />
+      ) : tab === 'ready' ? (
+        <ReadyTab rows={ready.data} error={ready.error} retry={() => ready.refetch()} />
+      ) : (
+        <NoStockTab />
+      )}
     </div>
+  );
+}
+
+/** What the picker reads first: the colour (and size), or the size, or the other values; '' = a product without variants. */
+function bigOf(r: Row): string {
+  const l = r.look;
+  return [l.color?.name, l.size, ...l.other].filter(Boolean).join(' · ') || r.variant;
+}
+/** How light a colour is (0 black … 1 white, WCAG relative luminance). */
+function lum(hex: string): number {
+  const n = parseInt(hex.slice(1), 16);
+  const lin = (c: number) => ((c /= 255) <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+}
+/** Black or white words on a colour: the one that reads best (WCAG contrast with white vs our ink). */
+const inkOn = (hex: string): 'dark' | 'light' => (1.05 / (lum(hex) + 0.05) >= (lum(hex) + 0.05) / 0.074 ? 'light' : 'dark');
+/** The variant in a pill of its colour (a size, or a colour we do not know: a plain pill). */
+function VariantPill({ r }: { r: Row }) {
+  const hex = r.look.color?.hex ?? null;
+  return (
+    <span className={`pk-var${hex ? ` has ${inkOn(hex)}` : ''}${hex && lum(hex) > 0.75 ? ' edge' : ''}`} style={hex ? ({ '--sw': hex } as CSSProperties) : undefined}>
+      {bigOf(r)}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------- Sans stock
+function NoStockTab() {
+  const { t } = useTranslation();
+  const q = useRpc('depot.noStock', {}, { refetchInterval: 60_000 });
+  if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
+  if (!q.data) return <Loading />;
+  const { list, days } = q.data;
+  return (
+    <>
+      <p className="ns-intro">
+        <Icon name="clock" />
+        <span>{t('depot.ns.intro', { count: days })}</span>
+      </p>
+      {!list.length ? (
+        <div className="pxd-empty">
+          <p className="muted">{t('depot.ns.empty')}</p>
+        </div>
+      ) : (
+        <ul className="pxd-list ns-list">
+          {list.map((o) => (
+            <li key={o.id} className={`ns-card${o.late ? ' late' : ''}`}>
+              <div className="ns-top">
+                <span className="ns-who">
+                  <b className="ltr">{o.ref}</b>
+                  <span>
+                    {o.customerName} · {wilayaName(o.wilayaId)}
+                  </span>
+                </span>
+                <span className={`ns-wait${o.late ? ' late' : ''}`}>
+                  {o.late && <Icon name="alert" />}
+                  {o.days === 0 ? t('depot.ns.today') : t('depot.ns.days', { count: o.days })}
+                </span>
+              </div>
+              <ul className="ns-items">
+                {o.items.map((i, k) => (
+                  <li key={k} className={i.missing ? 'miss' : ''}>
+                    <span>
+                      {i.name}
+                      {i.variant ? ` · ${i.variant}` : ''} <b className="ltr">×{i.qty}</b>
+                    </span>
+                    <em>{i.off ? t('depot.ns.off') : i.missing ? t('depot.ns.left', { n: i.left }) : t('depot.ns.ok')}</em>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   );
 }
 
@@ -152,7 +243,7 @@ function PickTab({ rows, error, retry, onReady }: { rows?: Row[]; error: Error |
             const low = r.stock < r.need;
             return (
               <li key={k}>
-                <div className={`pxd-card${isOpen ? ' open' : ''}`}>
+                <div className={`pxd-card pk-card${isOpen ? ' open' : ''}`} style={r.look.color?.hex ? ({ '--sw': r.look.color.hex } as CSSProperties) : undefined}>
                   <button
                     type="button"
                     className="pxd-top"
@@ -162,12 +253,12 @@ function PickTab({ rows, error, retry, onReady }: { rows?: Row[]; error: Error |
                       setTook(Math.min(r.need, Math.max(0, r.stock)) || r.need);
                     }}
                   >
-                    <span className="pxd-th" aria-hidden="true">
-                      <Icon name="package" />
+                    <span className="pk-ph" aria-hidden="true">
+                      {r.photo ? <img src={r.photo} alt="" loading="lazy" /> : <Icon name="package" />}
                     </span>
-                    <span className="pxd-pn">
-                      <b>{r.name}</b>
-                      {r.variant && <small>{r.variant}</small>}
+                    <span className="pxd-pn pk">
+                      <b className="pk-big">{r.name}</b>
+                      {bigOf(r) && <VariantPill r={r} />}
                       <em className={r.stock <= 0 ? 'bad' : low ? 'warn' : ''}>
                         {r.stock <= 0 ? t('depot.ph.noStock') : low ? t('depot.ph.lowStock', { n: r.stock }) : t('depot.ph.inStock', { n: r.stock })}
                         {r.restock > 0 && ` · ${t('depot.ph.onBring', { n: r.restock })}`}

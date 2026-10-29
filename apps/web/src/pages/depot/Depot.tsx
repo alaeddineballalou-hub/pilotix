@@ -61,14 +61,14 @@ export function Depot({ sub }: PageProps) {
           </span>
         ))}
       </nav>
-      {!phone && (
+      {/* the first stage is always cards (picking by variant); the switch is for the other stages */}
+      {!phone && stage !== 'preparer' && (
         <div className="px-vsw-row">
           <ViewSwitch mode={mode} onChange={setMode} />
         </div>
       )}
-      {stage === 'preparer' && !cards && <Card title={t(`depot.stage.${stage}`)} />}
-      <div className={cards && !phone ? 'px-wide' : undefined}>
-        {stage === 'preparer' && (cards ? <PhonePrep /> : <Preparer />)}
+      <div className={(cards || stage === 'preparer') && !phone ? 'px-wide' : undefined}>
+        {stage === 'preparer' && <PhonePrep />}
         {stage === 'prepares' && (cards ? <PhoneDispatch /> : <Prepares />)}
         {stage === 'dispatchees' && (cards ? <PhoneRoad stage="dispatchees" /> : <Dispatchees />)}
         {stage === 'enlivraison' && (cards ? <PhoneRoad stage="enlivraison" /> : <EnLivraison />)}

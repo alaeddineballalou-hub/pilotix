@@ -325,5 +325,17 @@
     "pushAsk": "Turn on notifications: depot alerts will ring on this phone even when Pilotix is closed.",
     "pushOn": "Turn on",
     "pushDenied": "Notifications blocked: allow them for Pilotix in the browser settings, otherwise alerts only ring with the app open."
+  },
+  "ns": {
+    "tab": "No stock",
+    "intro_one": "Confirmed without stock. When stock comes back, the oldest go to « À préparer » by themselves. Alert after {{count}} day.",
+    "intro_other": "Confirmed without stock. When stock comes back, the oldest go to « À préparer » by themselves. Alert after {{count}} days.",
+    "empty": "No order is waiting for stock.",
+    "today": "Today",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "left": "Missing · {{n}} left",
+    "ok": "In stock",
+    "off": "Unavailable"
   }
 }

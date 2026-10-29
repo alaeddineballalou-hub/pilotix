@@ -8,6 +8,8 @@ import { cancelParcel, sendOrders } from './delivery';
 import { getOrder, ordersProcs, setFollow } from './orders';
 import { landingSettings, quickCreatePage } from './landingquery';
 import { RESERVED } from './stockquery';
+import { releaseNoStock } from './nostock';
+import { getPrefs } from './prefs';
 
 // ---------------------------------------------------------------- types
 export interface CatalogVariant {
@@ -257,6 +259,8 @@ export async function moveStock(
   await db.query('INSERT INTO stock_movements (variant_id, warehouse_id, delta, reason, order_id, user_id, note, purchase_id, inventory_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)', [
     a.variantId, a.warehouseId, a.delta, a.reason, a.orderId ?? null, a.userId, a.note ?? null, a.purchaseId ?? null, a.inventoryId ?? null,
   ]);
+  // stock came in: the oldest « sans stock » orders it can now serve go to « À préparer »
+  if (a.delta > 0) await releaseNoStock(db, a.userId, [a.variantId]);
 }
 
 async function ensureVariantAndDepot(db: Db, variantId: number, warehouseId: number) {
@@ -507,7 +511,16 @@ export async function picking(db: Db): Promise<PickingRow[]> {
   }));
 }
 
-export async function depotCounts(db: Db) {
+export async function depotCounts(db: Db, now = Date.now()) {
+  // « Sans stock »: waiting orders, and those waiting longer than the shop's number of days (Préférences)
+  const days = (await getPrefs(db)).noStockDays;
+  const ns = (
+    await db.query(
+      `SELECT count(*)::int AS n, count(*) FILTER (WHERE COALESCE(confirmed_at, created_at) <= $1::timestamptz)::int AS late
+         FROM orders WHERE conf_status = 'no_stock' AND follow_status IS NULL`,
+      [new Date(now - days * 86_400_000).toISOString()],
+    )
+  )[0];
   const r = await db.query(
     `SELECT follow_status AS k, count(*)::int AS n FROM orders
      WHERE (conf_status = 'confirmed' AND follow_status IN ('to_prepare','prepared','shipped','out_for_delivery')) OR follow_status IN ('returning','in_exchange')
@@ -520,6 +533,8 @@ export async function depotCounts(db: Db) {
     dispatchees: c.shipped ?? 0,
     enlivraison: c.out_for_delivery ?? 0,
     retours: (c.returning ?? 0) + (c.in_exchange ?? 0),
+    noStock: num(ns?.n),
+    noStockLate: num(ns?.late),
   };
 }
 
@@ -888,7 +903,11 @@ export const catalogProcs = {
     (await ctx.db.query('SELECT id, name, kind FROM delivery_companies WHERE active ORDER BY lower(name)')).map((r: any) => ({ id: num(r.id), name: r.name as string, kind: r.kind as string })),
   ),
 
-  'depot.counts': proc([...DEPOT], z.object({}), (ctx) => depotCounts(ctx.db)),
+  'depot.counts': proc([...DEPOT], z.object({}), async (ctx) => {
+    // the depot looks every minute: « sans stock » orders the stock can now serve go to « À préparer » first
+    await releaseNoStock(ctx.db, null);
+    return depotCounts(ctx.db, ctx.now());
+  }),
 
   'depot.find': proc([...DEPOT], z.object({ code: z.string().min(1).max(100) }), (ctx, i) => findByCode(ctx, i.code)),
 

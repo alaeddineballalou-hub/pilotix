@@ -420,3 +420,4 @@ export * from './sha256';
 export * from './landing';
 export * from './doctor';
 export * from './pro';
+export * from './colors';

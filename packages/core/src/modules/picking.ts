@@ -7,6 +7,7 @@
 // - An order is ready once every one of its products (services aside) has been taken.
 // - "Mettre en rupture": what is still missing for that product goes on the list "À ramener au dépôt".
 //   The line leaves the list when the product is fully taken, or by hand ("Reçu").
+import { variantLook, VariantLook } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, num, numOrNull } from '../db';
 import { bad, Ctx, proc } from '../rpc';
@@ -30,18 +31,22 @@ export interface PickRow {
   pool: number;
   /** on the list "À ramener au dépôt" */
   restock: number;
+  /** the variant's colour and size, shown big on the card (the picker takes by colour) */
+  look: VariantLook;
+  /** the product's photo (a link or a small data: picture), null: none */
+  photo: string | null;
 }
 
 /** The products to take, most needed first: what the waiting orders still need. */
 export async function pickList(db: Db): Promise<PickRow[]> {
   const rows = await db.query(
-    `SELECT i.product_id, i.variant_id, p.name, COALESCE(v.title, i.variant_title, '') AS title,
+    `SELECT i.product_id, i.variant_id, p.name, COALESCE(v.title, i.variant_title, '') AS title, p.photo, p.options,
             sum(i.qty - i.picked_qty)::int AS need, count(DISTINCT o.id)::int AS orders,
             (SELECT COALESCE(sum(s.qty), 0)::int FROM stock s WHERE s.variant_id = i.variant_id) AS stock
      FROM order_items i JOIN orders o ON o.id = i.order_id JOIN products p ON p.id = i.product_id
      LEFT JOIN product_variants v ON v.id = i.variant_id
      WHERE o.conf_status = 'confirmed' AND o.follow_status = 'to_prepare' AND NOT p.is_service AND i.picked_qty < i.qty
-     GROUP BY i.product_id, i.variant_id, p.name, COALESCE(v.title, i.variant_title, '')
+     GROUP BY i.product_id, i.variant_id, p.name, COALESCE(v.title, i.variant_title, ''), p.photo, p.options
      ORDER BY lower(p.name), lower(COALESCE(v.title, i.variant_title, ''))`,
   );
   const pool = new Map((await db.query('SELECT product_id, variant_id, qty FROM depot_pick_pool WHERE qty > 0')).map((r: any) => [key(num(r.product_id), numOrNull(r.variant_id)), num(r.qty)]));
@@ -58,6 +63,8 @@ export async function pickList(db: Db): Promise<PickRow[]> {
       stock: num(r.stock),
       pool: pool.get(k) ?? 0,
       restock: rest.get(k) ?? 0,
+      look: variantLook((r.title as string) || '', (typeof r.options === 'string' ? JSON.parse(r.options) : r.options) ?? []),
+      photo: (r.photo as string | null) || null,
     };
   });
 }

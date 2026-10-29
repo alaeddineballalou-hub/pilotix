@@ -33,6 +33,7 @@ import { agencyOf, agencyRowSql, andSql, queueSql } from './agencyscope';
 import { settleTickets } from './tickets';
 import { addDepotAlert, alertsDepot, DepotChange, itemsText } from './depotalerts';
 import { blockerText, checkLines, checkOrder, deliverCheck } from './confirmcheck';
+import { releaseNoStock } from './nostock';
 import { applyTrust, lookAlikeNote, lookAlikeOf } from './trust';
 
 export const STOPDESK_NOTE = '🏬 Ce client a refusé 2 colis : livraison au bureau (stop-desk) uniquement. Proposez-lui le stop-desk le plus proche.';
@@ -686,6 +687,8 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
   const noStock: number[] = [];
   /** not confirmed: a product switched off, or we do not deliver there (several at once: the others go on) */
   const blocked: { id: number; ref: string; reason: string }[] = [];
+  /** confirmed orders cancelled here: their pieces are free again for « sans stock » orders */
+  const freed: number[] = [];
   await ctx.db.tx(async (tx) => {
     if (await alreadyApplied(tx, input.clientId, me)) return;
     const notify = await notifyContext(tx);
@@ -748,8 +751,11 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
       await onConfChange(tx, notify, cur, cur.conf_status, status, ctx.now());
       // Meta: an order from a landing page, confirmed by a person, is a real sale (never a blocked or fake one)
       await onLandingConf(tx, landing, cur, cur.conf_status, status, ctx.now(), input.reason ?? null, me);
+      if (cur.conf_status === 'confirmed' && !confirmed && !cur.shipped_at) freed.push(oid);
       changed.push(oid);
     }
+    if (freed.length)
+      await releaseNoStock(tx, me, (await tx.query('SELECT DISTINCT variant_id FROM order_items WHERE order_id = ANY($1) AND variant_id IS NOT NULL', [freed])).map((r: any) => num(r.variant_id)));
   });
   await sendInPreview(ctx);
   ctx.emit({ type: 'orders' });
@@ -872,6 +878,8 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
             it.variant_id, cur.warehouse_id, d, leaves ? 'shipped' : 'returned', oid, me,
           ]);
         }
+        // a parcel back in stock: the oldest « sans stock » orders it can serve go to « À préparer »
+        if (back) await releaseNoStock(tx, me, items.map((it: any) => num(it.variant_id)));
       }
       if (leaves || to === 'delivered') await setCourierCost(tx, [oid]);
       // counted once per order, even if the status goes back and forth
