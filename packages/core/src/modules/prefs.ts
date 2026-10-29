@@ -1,5 +1,5 @@
 // Sociétés de livraison › Préférences: each seller's own choices — how an order gets its delivery company in « Manuel », who may
-// change it by hand, whether strict rules are locked, the backup company for waiting « Livraison privée » orders, and
+// change it by hand, whether strict rules are locked, who writes the Pilot rules, the backup company for waiting « Livraison privée » orders, and
 // when a « sans stock » order rings. Everyone reads them (the screens follow them); only an admin changes them.
 import { z } from 'zod';
 import type { Db } from '../db';
@@ -17,6 +17,7 @@ export async function getPrefs(db: Db): Promise<Prefs> {
     ...d,
     ...p,
     changeCompany: { ...d.changeCompany, ...(p.changeCompany ?? {}) },
+    rulesBy: { ...d.rulesBy, ...(p.rulesBy ?? {}) },
     privateBackup: { ...d.privateBackup, ...(p.privateBackup ?? {}) },
   };
 }
@@ -25,6 +26,7 @@ const prefsIn = z.object({
   manualDefault: z.boolean(),
   changeCompany: z.object({ confirmation: z.boolean(), agency: z.boolean(), depot: z.boolean(), manager: z.boolean() }),
   strictLock: z.boolean(),
+  rulesBy: z.object({ confirmation: z.boolean(), agency: z.boolean(), depot: z.boolean(), manager: z.boolean() }),
   privateBackup: z.object({ on: z.boolean(), hours: z.number().int().min(1).max(240), companyId: z.number().int().positive().nullable() }),
   noStockDays: z.number().int().min(1).max(30),
 });

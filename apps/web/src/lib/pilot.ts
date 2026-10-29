@@ -1,9 +1,11 @@
-// « Pilot Auto Assign » on the order screens: how an order got its company, in one short line, and whether this person
-// may change it by hand (the same rule as the server: Préférences, strict rules locked).
-import { type PilotRule, readPilotWhy, ruleNumber, type Session } from '@pilotix/shared';
+// « Pilot Auto Assign » on the screens: how an order got its company, in one short line, whether this person may change
+// it by hand, and whether they write the rules (the same rules as the server: Préférences, strict rules locked).
+import { personIs, type PilotRule, readPilotWhy, ruleNumber, type Session, type WhoTicks } from '@pilotix/shared';
+import { useRpc } from './query';
+import { useSession } from './session';
 
 type T = (k: string, o?: Record<string, unknown>) => string;
-type Prefs = { changeCompany: { confirmation: boolean; agency: boolean; depot: boolean; manager: boolean }; strictLock: boolean };
+type Prefs = { changeCompany: WhoTicks; strictLock: boolean; rulesBy?: WhoTicks };
 
 /** Why an order waits for a person (« À attribuer »), or null. */
 export function waitWhy(t: T, why: string | null | undefined): string | null {
@@ -38,8 +40,18 @@ export function mayChangeCompany(s: Session | null, p: Prefs | undefined, o: { c
   if (!s) return false;
   if (s.isAdmin || !o.companyId) return true;
   if (!p) return false;
-  const manager = !!s.profile.canAssign && p.changeCompany.manager;
+  const manager = p.changeCompany.manager && personIs(s, { confirmation: false, agency: false, depot: false, manager: true });
   if (p.strictLock && o.pilotBy === 'strict') return manager;
-  const agency = s.profile.agencyId != null;
-  return manager || s.roles.includes('suivi') || (s.roles.includes('depot') && p.changeCompany.depot) || (s.roles.includes('confirmation') && (agency ? p.changeCompany.agency : p.changeCompany.confirmation));
+  return s.roles.includes('suivi') || personIs(s, p.changeCompany);
+}
+
+/** Does this person write the Pilot rules? Admins, and the kinds ticked in Préférences (the menu then shows the page). */
+export function useCanRules(): boolean {
+  const { session } = useSession();
+  const store = !session?.shop?.kind || session.shop.kind === 'store';
+  const q = useRpc('prefs.get', {}, { enabled: !!session && !session.isAdmin && store, staleTime: 5 * 60_000 });
+  if (!session) return false;
+  if (session.isAdmin) return true;
+  const by = q.data?.prefs.rulesBy;
+  return !!by && personIs(session, by);
 }

@@ -45,6 +45,7 @@ export function Preferences() {
   const backups = (companies.data ?? []).filter((c) => c.active && c.kind !== 'own');
   const backupName = backups.find((c) => c.id === v.privateBackup.companyId)?.name ?? '';
   const who = [...WHO.filter((k) => v.changeCompany[k]).map((k) => t(`livraison.prefs.who.${k}`)), t('livraison.prefs.who.admin')];
+  const rulesWho = [...WHO.filter((k) => v.rulesBy[k]).map((k) => t(`livraison.prefs.who.${k}`)), t('livraison.prefs.who.admin')];
   const missingBackup = v.privateBackup.on && !v.privateBackup.companyId;
   const flipAdv = () => {
     keepAdv(!adv);
@@ -55,6 +56,7 @@ export function Preferences() {
     { icon: 'truck', label: t('livraison.prefs.manualDefault'), value: t(v.manualDefault ? 'livraison.prefs.sum.manualOn' : 'livraison.prefs.sum.manualOff'), changed: v.manualDefault !== rec.manualDefault },
     { icon: 'usercog', label: t('livraison.prefs.change'), value: who.join(', '), changed: JSON.stringify(v.changeCompany) !== JSON.stringify(rec.changeCompany) },
     { icon: 'lock', label: t('livraison.prefs.strictLock'), value: t(v.strictLock ? 'livraison.prefs.sum.strictOn' : 'livraison.prefs.sum.strictOff'), changed: v.strictLock !== rec.strictLock },
+    { icon: 'sliders', label: t('livraison.prefs.rules'), value: rulesWho.join(', '), changed: JSON.stringify(v.rulesBy) !== JSON.stringify(rec.rulesBy) },
     {
       icon: 'clock',
       label: t('livraison.prefs.backup'),
@@ -135,6 +137,25 @@ export function Preferences() {
               </span>
               <input type="checkbox" role="switch" className="pf-sw" checked={v.strictLock} onChange={(e) => set({ strictLock: e.target.checked })} />
             </label>
+            <div className="pf-row pf-col">
+              <span className="pf-text">
+                <b>{t('livraison.prefs.rules')}</b>
+                <small>{t('livraison.prefs.rulesHint')}</small>
+              </span>
+              <div className="pf-chips" role="group" aria-label={t('livraison.prefs.rules')}>
+                {WHO.map((k) => (
+                  <label key={k} className={`pf-chip ${v.rulesBy[k] ? 'on' : ''}`}>
+                    <input type="checkbox" checked={v.rulesBy[k]} onChange={(e) => set({ rulesBy: { ...v.rulesBy, [k]: e.target.checked } })} />
+                    <Icon name="checkcircle" />
+                    {t(`livraison.prefs.who.${k}`)}
+                  </label>
+                ))}
+                <span className="pf-chip on fixed" title={t('livraison.prefs.adminAlways')}>
+                  <Icon name="lock" />
+                  {t('livraison.prefs.who.admin')}
+                </span>
+              </div>
+            </div>
           </section>
 
           <section className="pf-group">

@@ -13,8 +13,8 @@
 //    company, when it delivers there; otherwise they stay and the managers are told.
 //  - Who changes an order's company by hand: Préférences (agents, agency agents, depot, managers; admins always); with
 //    « Règles strictes verrouillées », an order placed by a strict rule only managers and admins.
-//  - Who writes the rules: admins, and the people ticked in Utilisateurs.
-import { ALL_WILAYAS, clashesOf, type Clash, pickRule, type PilotBy, type PilotConfig, type PilotRule, ruleNumber, WILAYAS } from '@pilotix/shared';
+//  - Who writes the rules: admins, and the kinds of people ticked in Préférences (« Qui peut changer les règles Pilot »).
+import { ALL_WILAYAS, clashesOf, type Clash, personIs, pickRule, type PilotBy, type PilotConfig, type PilotRule, ruleNumber, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, proc } from '../rpc';
@@ -127,23 +127,20 @@ export async function setPick(db: Db, cur: { id: number | string; company_id: un
 export async function companyLock(ctx: Ctx, db: Db, cur: { company_id: unknown; pilot_by?: string | null }): Promise<string | null> {
   if (ctx.session.isAdmin || !numOrNull(cur.company_id)) return null;
   const p = await getPrefs(db);
-  const manager = !!ctx.session.profile.canAssign && p.changeCompany.manager;
+  const manager = p.changeCompany.manager && personIs(ctx.session, { confirmation: false, agency: false, depot: false, manager: true });
   if (p.strictLock && cur.pilot_by === 'strict')
     return manager ? null : 'Société choisie par une règle stricte de Pilot : seuls les managers et les admins la changent.';
-  const roles = ctx.session.roles;
-  const agency = ctx.session.profile.agencyId != null;
-  const ok =
-    manager ||
-    roles.includes('suivi') ||
-    (roles.includes('depot') && p.changeCompany.depot) ||
-    (roles.includes('confirmation') && (agency ? p.changeCompany.agency : p.changeCompany.confirmation));
+  const ok = ctx.session.roles.includes('suivi') || personIs(ctx.session, p.changeCompany);
   return ok ? null : 'Vous ne pouvez pas changer la société de livraison de cette commande (Préférences).';
 }
 
 // ---------------------------------------------------------------- rules: checks, waiting orders
-const canRules = (ctx: Ctx) => ctx.session.isAdmin || !!ctx.session.profile.canRules;
-const needRules = (ctx: Ctx) => {
-  if (!canRules(ctx)) throw forbidden('Seuls les admins et les personnes cochées dans Utilisateurs changent les règles de Pilot');
+/** Admins, and the kinds of people ticked in Préférences (« Qui peut changer les règles Pilot »). */
+export async function canRules(ctx: Ctx): Promise<boolean> {
+  return ctx.session.isAdmin || personIs(ctx.session, (await getPrefs(ctx.db)).rulesBy);
+}
+const needRules = async (ctx: Ctx) => {
+  if (!(await canRules(ctx))) throw forbidden('Seuls les admins et les personnes choisies dans Préférences changent les règles de Pilot');
 };
 
 const RuleIn = z.object({
@@ -279,7 +276,7 @@ export const pilotProcs = {
       ...cfg,
       clashes: cfg.clashes,
       found: clashesOf(cfg),
-      canEdit: canRules(ctx),
+      canEdit: await canRules(ctx),
       defaultCompanyId: (await getSetting(ctx.db, 'shop')).defaultCompanyId ?? null,
       companies: companies.map((c: any) => {
         const free = c.kind === 'own' || c.kind === 'manual' || num(c.n) === 0;
@@ -291,7 +288,7 @@ export const pilotProcs = {
 
   /** Before saving: the clashes (with the answers given), and the waiting orders the new rules would move. */
   'pilot.preview': proc(null, ConfigIn, async (ctx, i) => {
-    needRules(ctx);
+    await needRules(ctx);
     const cfg = await cleanConfig(ctx.db, i);
     const { clashes, keep } = withAnswers(cfg);
     const moves = await waitingMoves(ctx.db, await pilotConfig(ctx.db), { ...cfg, clashes: keep });
@@ -305,7 +302,7 @@ export const pilotProcs = {
 
   /** Save the mode and the rules (every clash answered); `move`: the waiting orders follow the new rules too. */
   'pilot.save': proc(null, ConfigIn.extend({ move: z.boolean().default(false), defaultCompanyId: z.number().int().positive().nullable().optional() }), async (ctx, i) => {
-    needRules(ctx);
+    await needRules(ctx);
     const cfg = await cleanConfig(ctx.db, i);
     const { clashes, keep } = withAnswers(cfg);
     const open = clashes.find((c) => c.kind === 'ask' && !c.win);

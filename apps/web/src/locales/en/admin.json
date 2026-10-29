@@ -114,11 +114,7 @@
     "canAssign": "To assign (depot)",
     "canAssignHint": "Can choose the company or the livreur of ready orders without a company (Depot › To assign). Admins always can.",
     "canAssignLabel": "Can assign orders",
-    "canAssignChip": "🚚 Assigns",
-    "canRules": "Pilot rules (delivery)",
-    "canRulesHint": "Can write the Pilot Auto Assign rules (Delivery companies › Pilot Auto Assign). Admins always can.",
-    "canRulesLabel": "Can change the Pilot rules",
-    "canRulesChip": "🧭 Pilot rules"
+    "canAssignChip": "🚚 Assigns"
   },
   "status": {
     "groups": {

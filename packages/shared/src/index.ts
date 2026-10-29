@@ -169,8 +169,6 @@ export interface Profile {
   canManageUsers?: boolean;
   /** set by the administrator: gives orders a company or a livreur in the depot's « À attribuer » */
   canAssign?: boolean;
-  /** set by the administrator: writes the « Pilot Auto Assign » rules (Sociétés de livraison) */
-  canRules?: boolean;
   /** put in Management › Archives: out of the team list, kept in the history (always closed) */
   archived?: boolean;
   /** an agent of a confirmation agency working in this store (the agency manages the account) */

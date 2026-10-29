@@ -5,14 +5,12 @@
 //  - orders.pilot_rule: the rule that chose it; orders.pilot_why: why it waits for a person ('conflict:2,4', 'nobody',
 //    'manual');
 //  - orders.assign_wait_since: when it started waiting in « À attribuer » (the backup company takes « Livraison
-//    privée » orders that wait too long);
-//  - profiles.can_rules: the people (besides admins) who write the rules.
+//    privée » orders that wait too long).
 export default `
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS pilot_by text;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS pilot_rule text;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS pilot_why text;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS assign_wait_since timestamptz;
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS can_rules boolean NOT NULL DEFAULT false;
 -- the views keep exactly the columns of orders
 CREATE OR REPLACE VIEW sales AS SELECT * FROM orders WHERE NOT is_exchange;
 CREATE OR REPLACE VIEW ticket_parcels AS SELECT * FROM orders WHERE is_exchange;

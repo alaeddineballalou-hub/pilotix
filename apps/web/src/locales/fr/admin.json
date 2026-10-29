@@ -114,11 +114,7 @@
     "canAssign": "À attribuer (dépôt)",
     "canAssignHint": "Peut choisir la société ou le livreur des commandes prêtes sans société (Dépôt › À attribuer). Les admins le peuvent toujours.",
     "canAssignLabel": "Peut attribuer les commandes",
-    "canAssignChip": "🚚 Attribue",
-    "canRules": "Règles Pilot (livraison)",
-    "canRulesHint": "Peut écrire les règles de Pilot Auto Assign (Sociétés de livraison › Pilot Auto Assign). Les admins le peuvent toujours.",
-    "canRulesLabel": "Peut changer les règles Pilot",
-    "canRulesChip": "🧭 Règles Pilot"
+    "canAssignChip": "🚚 Attribue"
   },
   "status": {
     "groups": {

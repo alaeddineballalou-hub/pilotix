@@ -17,6 +17,7 @@ import { toast } from '../ui/toast';
 import { Field, Icon, StageBar, TicketTag } from '../ui/kit';
 import { Modal } from '../ui/modal';
 import { canSee, canSeeChild, NAV, NavItem } from './nav';
+import { useCanRules } from '../lib/pilot';
 import { AccountMenu } from './AccountMenu';
 import { ShopBanner } from './ShopBanner';
 const DepotAlert = lazy(() => import('./DepotAlert').then((m) => ({ default: m.DepotAlert })));
@@ -96,6 +97,7 @@ function Count({ v, tone }: { v: number; tone: string }) {
 export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { page: string; sub?: string; children: ReactNode; nav?: NavItem[]; space?: 'store' | 'agency' | 'marketer' }) {
   const { t, i18n } = useTranslation();
   const { session, logout, has: hasRole } = useSession();
+  const canRules = useCanRules();
   const agency = space === 'agency';
   // a partner's space (agency, marketer): no store-wide search nor « new order »; the seller picker instead
   const partner = space !== 'store';
@@ -166,7 +168,7 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
   const kids = (n: NavItem) =>
     (n.children ?? []).filter((c) => canSeeChild(c, roles, isAdmin) && (!agency || !work.loaded || (c.id === 'confirmation' ? work.tasks.has('confirmation') : c.id === 'suivi' ? work.tasks.has('suivi') : true)));
   // a group whose children are all out of the shop's plan is not shown
-  const items = nav.filter((n) => !n.hidden && canSee(n, roles, isAdmin, !!session!.canManageUsers, !!session!.profile?.canRules) && (!n.children || kids(n).length > 0));
+  const items = nav.filter((n) => !n.hidden && canSee(n, roles, isAdmin, !!session!.canManageUsers, canRules) && (!n.children || kids(n).length > 0));
   /** the group of the page on screen: its children show in a bar under the header when the sidebar is folded */
   const curGrp = items.find((n) => n.children && n.pages?.includes(page));
   /** the child of a group shown as current */

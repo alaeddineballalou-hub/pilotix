@@ -159,16 +159,19 @@ test('a new rule: « Déplacer les N commandes en attente aussi ? » — orders 
   assert.equal(Number((await row(b.id)).company_id), yal, 'given by hand: stays');
 });
 
-test('only admins and the people ticked in Utilisateurs write the rules', async () => {
+test('only admins and the kinds of people ticked in Préférences write the rules', async () => {
   const samira = await as(EMAILS.conf);
   const seen = (await call('pilot.get', samira, {})) as any;
   assert.equal(seen.canEdit, false, 'she sees the rules, without changing them');
   assert.ok(seen.companies.length && seen.products.length);
   assert.equal(((await call('pilot.get', admin, {})) as any).canEdit, true);
   await assert.rejects(call('pilot.save', samira, { mode: 'manual', rules: [], clashes: [] }), /Seuls les admins/);
-  await db.query(`UPDATE profiles SET can_rules = true WHERE email = $1`, [EMAILS.conf]);
-  await call('pilot.save', await as(EMAILS.conf), { mode: 'auto', rules: [], clashes: [] });
-  await db.query(`UPDATE profiles SET can_rules = false WHERE email = $1`, [EMAILS.conf]);
+  const p = ((await call('prefs.get', admin, {})) as any).prefs;
+  await call('prefs.set', admin, { ...p, rulesBy: { ...p.rulesBy, confirmation: true } });
+  assert.equal(((await call('pilot.get', samira, {})) as any).canEdit, true);
+  await call('pilot.save', samira, { mode: 'auto', rules: [], clashes: [] });
+  await call('prefs.set', admin, { ...p, rulesBy: { ...p.rulesBy, confirmation: false } });
+  await assert.rejects(call('pilot.save', samira, { mode: 'manual', rules: [], clashes: [] }), /Seuls les admins/);
 });
 
 test('« Livraison privée » waiting too long in « À attribuer » goes to the backup company (when it delivers there)', async () => {

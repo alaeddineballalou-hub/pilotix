@@ -19,6 +19,7 @@ test('a new shop starts with the recommended choices; everyone reads them', asyn
   assert.equal(r.prefs.manualDefault, true);
   assert.deepEqual(r.prefs.changeCompany, { confirmation: true, agency: false, depot: false, manager: true });
   assert.equal(r.prefs.strictLock, true);
+  assert.deepEqual(r.prefs.rulesBy, { confirmation: false, agency: false, depot: false, manager: false }, 'Pilot rules: admins only');
   assert.equal(r.prefs.privateBackup.on, false);
   assert.equal(r.prefs.noStockDays, 3);
 });

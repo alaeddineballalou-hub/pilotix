@@ -84,6 +84,8 @@ export interface SettingsMap {
     manualDefault: boolean;
     changeCompany: { confirmation: boolean; agency: boolean; depot: boolean; manager: boolean };
     strictLock: boolean;
+    /** who writes the « Pilot Auto Assign » rules (admins always) */
+    rulesBy: { confirmation: boolean; agency: boolean; depot: boolean; manager: boolean };
     privateBackup: { on: boolean; hours: number; companyId: number | null };
     noStockDays: number;
   };
@@ -127,6 +129,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
     manualDefault: true,
     changeCompany: { confirmation: true, agency: false, depot: false, manager: true },
     strictLock: true,
+    rulesBy: { confirmation: false, agency: false, depot: false, manager: false },
     privateBackup: { on: false, hours: 24, companyId: null },
     noStockDays: 3,
   },

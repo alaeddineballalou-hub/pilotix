@@ -114,11 +114,7 @@
     "canAssign": "الإسناد (المستودع)",
     "canAssignHint": "يستطيع اختيار الشركة أو الموصّل للطلبيات الجاهزة بدون شركة (المستودع › بانتظار الإسناد). المدراء يستطيعون دائمًا.",
     "canAssignLabel": "يستطيع إسناد الطلبيات",
-    "canAssignChip": "🚚 يُسند",
-    "canRules": "قواعد Pilot (التوصيل)",
-    "canRulesHint": "يمكنه كتابة قواعد Pilot Auto Assign (شركات التوصيل › Pilot Auto Assign). المدراء يستطيعون دائماً.",
-    "canRulesLabel": "يمكنه تغيير قواعد Pilot",
-    "canRulesChip": "🧭 قواعد Pilot"
+    "canAssignChip": "🚚 يُسند"
   },
   "status": {
     "groups": {

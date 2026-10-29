@@ -168,6 +168,24 @@ export function newRuleId(rules: PilotRule[]): string {
   return `r${n + 1}`;
 }
 
+/** The Préférences' ticks of people (who changes the company by hand, who changes the rules); admins always may. */
+export interface WhoTicks {
+  confirmation: boolean;
+  agency: boolean;
+  depot: boolean;
+  manager: boolean;
+}
+/**
+ * Is this person one of the ticked kinds? Managers: the « Agent manager » role or the « Peut attribuer » tick; agency
+ * agents: people of a confirmation agency; agents: the « Confirmation » role.
+ */
+export function personIs(s: { isAdmin: boolean; roles: readonly string[]; profile: { canAssign?: boolean; agencyId?: number | null } }, who: WhoTicks): boolean {
+  if (s.isAdmin) return true;
+  const manager = s.roles.includes('agent_manager') || !!s.profile.canAssign;
+  const agency = s.profile.agencyId != null;
+  return (manager && who.manager) || (s.roles.includes('depot') && who.depot) || (s.roles.includes('confirmation') && (agency ? who.agency : who.confirmation));
+}
+
 /** Why an order waits for a person (orders.pilot_why), as saved: 'conflict:2,4' | 'nobody' | 'manual'. */
 export function readPilotWhy(v: string | null | undefined): { kind: 'conflict'; a: number; b: number } | { kind: 'nobody' | 'manual' } | null {
   if (!v) return null;

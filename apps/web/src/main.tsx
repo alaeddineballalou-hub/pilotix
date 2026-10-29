@@ -13,6 +13,7 @@ import './lib/i18n';
 import { ModalHost } from './lib/modals';
 import { initSeller } from './lib/seller';
 import { SessionProvider, useSession } from './lib/session';
+import { useCanRules } from './lib/pilot';
 import { store } from './lib/store';
 import { AGENCY_PAGES, MARKETER_PAGES, PAGES } from './pages/registry';
 import { Loading } from './ui/kit';
@@ -73,6 +74,7 @@ const Support = lazy(() => import('./pages/aide').then((m) => ({ default: m.Supp
 function App() {
   const { session, ready, picker, phoneStep } = useSession();
   const parts = useHash();
+  const canRules = useCanRules();
   if (parts[0] === 'platform')
     return (
       <Suspense fallback={<Loading />}>
@@ -142,7 +144,7 @@ function App() {
   }
   const item = nav.find((n) => n.id === page);
   const extra = space === 'store' && ['livrees', 'retournees'].includes(page ?? '') && pageIsOn(page ?? '');
-  const allowed = (item && canSee(item, session.roles, session.isAdmin, !!session.canManageUsers, !!session.profile?.canRules)) || (extra && (session.isAdmin || session.roles.some((r) => ['confirmation', 'suivi', 'depot'].includes(r))));
+  const allowed = (item && canSee(item, session.roles, session.isAdmin, !!session.canManageUsers, canRules)) || (extra && (session.isAdmin || session.roles.some((r) => ['confirmation', 'suivi', 'depot'].includes(r))));
   if (!page || !allowed || !pages[page]) {
     const home = homeOf();
     if (location.hash !== `#/${home}`) location.replace(`#/${home}`);
