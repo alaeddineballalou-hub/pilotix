@@ -1,31 +1,22 @@
-// Raw answers of a few courier endpoints (made-up keys), to find the right addresses. Temporary.
+// Which addresses exist at a courier (made-up keys): 401/403 = the address exists (keys refused), 404 = no such address. Temporary.
+const M = (p, method = 'GET') => [`maystro ${method} ${p}`, `https://backend.maystro-delivery.com/api/${p}`, { Authorization: 'Token x' }, method];
 const calls = [
-  ['elogistia getWilayas key', 'https://api.elogistia.com/getWilayas?key=x'],
-  ['elogistia getWilayas nokey', 'https://api.elogistia.com/getWilayas'],
-  ['elogistia getWilayas/ key', 'https://api.elogistia.com/getWilayas/?key=x'],
+  ...['stores/orders/', 'stores/orders/1/', 'stores/orders/1/history/', 'stores/orders/history_order/1', 'stores/orders/history_order/1/', 'orders/history_order/1', 'stores/history_order/1/',
+    'stores/orders/1/status/', 'stores/orders/status/', 'stores/orders/cancel/', 'stores/orders/bulk_cancel/', 'delivery/starter/starter_bordureau/', 'starter_bordureau/', 'stores/starter_bordureau/',
+    'base/delivery-prices/', 'base/communes/?wilaya=16', 'stores/hooks/costume/', 'stores/hooks/types/', 'stores/order_history/', 'stores/orders/1/history_order/',
+    'delivery/orders/1/', 'stores/orders/1/abort/', 'stores/orders/abort/', 'base/wilayas/?country=1'].map((p) => M(p)),
+  M('stores/orders/1/', 'PATCH'), M('stores/orders/1/status/', 'PATCH'), M('stores/orders/', 'POST'), M('delivery/starter/starter_bordureau/', 'POST'),
   ['elogistia getMunicipalities', 'https://api.elogistia.com/getMunicipalities?key=x&wilaya=Alger'],
-  ['elogistia root', 'https://api.elogistia.com/'],
-  ['maystro b stock', 'https://b.maystro-delivery.com/api/stock/products/', { Authorization: 'Token x' }],
-  ['maystro b wilayas', 'https://b.maystro-delivery.com/api/base/wilayas/?country=1', { Authorization: 'Token x' }],
-  ['maystro b orders', 'https://b.maystro-delivery.com/api/orders/', { Authorization: 'Token x' }],
-  ['maystro b stores/orders', 'https://b.maystro-delivery.com/api/stores/orders/', { Authorization: 'Token x' }],
-  ['maystro backend wilayas', 'https://backend.maystro-delivery.com/api/base/wilayas/?country=1', { Authorization: 'Token x' }],
-  ['maystro backend orders', 'https://backend.maystro-delivery.com/api/orders/', { Authorization: 'Token x' }],
-  ['maystro backend stores/orders', 'https://backend.maystro-delivery.com/api/stores/orders/', { Authorization: 'Token x' }],
-  ['maystro backend stock', 'https://backend.maystro-delivery.com/api/stock/products/', { Authorization: 'Token x' }],
-  ['maystro backend stores/product', 'https://backend.maystro-delivery.com/api/stores/product/', { Authorization: 'Token x' }],
-  ['maystro backend hooks', 'https://backend.maystro-delivery.com/api/stores/hooks/types/', { Authorization: 'Token x' }],
-  ['ecom test', 'https://ecom-dz.net/Api_v1/Test', { Token: 'x', Key: 'y' }],
-  ['yalidine histories', 'https://api.yalidine.app/v1/histories/', { 'X-API-ID': '123', 'X-API-TOKEN': 'x' }],
-  ['yalitec wilayas', 'https://api.yalitec.me/v1/wilayas/', { 'X-API-ID': '123', 'X-API-TOKEN': 'x' }],
-  ['guepex wilayas', 'https://api.guepex.app/v1/wilayas/', { 'X-API-ID': '123', 'X-API-TOKEN': 'x' }],
-  ['colivraison', 'https://colivraison.express/'],
-  ['colivraison api', 'https://api.colivraison.express/'],
+  ['elogistia getWilayas name', 'https://api.elogistia.com/getWilayas?key=x&name=Alger'],
+  ['elogistia getTracking', 'https://api.elogistia.com/getTracking?key=x&tracking=1'],
+  ['elogistia getManyTracking', 'https://api.elogistia.com/getManyTracking?key=x&tracking=1'],
+  ['elogistia getAgences', 'https://api.elogistia.com/getAgences?key=x'],
+  ['elogistia getShippingCost', 'https://api.elogistia.com/getShippingCost?key=x'],
 ];
-for (const [name, url, headers] of calls) {
+for (const [name, url, headers, method] of calls) {
   try {
-    const r = await fetch(url, { headers: { Accept: 'application/json', ...(headers ?? {}) }, signal: AbortSignal.timeout(15000) });
-    const t = (await r.text()).replace(/\s+/g, ' ').slice(0, 300);
+    const r = await fetch(url, { method: method ?? 'GET', headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(headers ?? {}) }, body: method && method !== 'GET' ? '{}' : undefined, signal: AbortSignal.timeout(15000) });
+    const t = (await r.text()).replace(/\s+/g, ' ').slice(0, 160);
     console.log(`${name} → ${r.status} ${t}`);
   } catch (e) {
     console.log(`${name} → ERR ${e.message}`);
