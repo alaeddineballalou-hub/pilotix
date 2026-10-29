@@ -6,7 +6,10 @@ const API = `${SITE}/api`;
 let failed = 0;
 const check = (cond, label, extra) => {
   console.log(`${cond ? '✓' : '✗'} ${label}${extra !== undefined ? ` — ${typeof extra === 'string' ? extra : JSON.stringify(extra).slice(0, 300)}` : ''}`);
-  if (!cond) failed++;
+  if (!cond) {
+    failed++;
+    if (process.env.GITHUB_ACTIONS) console.log(`::error title=Live check::${label}${extra !== undefined ? ` — ${JSON.stringify(extra).slice(0, 300)}` : ''}`);
+  }
 };
 const note = (label) => console.log(`• ${label}`);
 async function get(path, opts = {}) {
