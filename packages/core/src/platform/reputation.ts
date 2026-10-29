@@ -434,6 +434,30 @@ export async function refreshReputation(t: Tenancy, now = Date.now()): Promise<{
 }
 
 /**
+ * The network's word on many customers at once (the Clients list, a customer's score): for each phone number, how many
+ * OTHER businesses ended badly with it in the last 180 days. null when there is no network here (see sharedReputation).
+ */
+export async function sharedSellersMany(ctx: Ctx, phones: string[]): Promise<Map<string, number> | null> {
+  const t = ctx.t;
+  const shop = ctx.shop;
+  if (!t || !shop || shop.demo) return null;
+  const list = [...new Set(phones.filter(Boolean))];
+  if (!list.length) return new Map();
+  try {
+    const pepper = await pepperOf(t);
+    const byKey = new Map(list.map((p) => [phoneKey(pepper, p), p]));
+    const rows = await t.platform.query(
+      `SELECT key, count(DISTINCT owner_key)::int AS n FROM platform.fraud_reputation
+        WHERE key = ANY($1::text[]) AND shop_id <> $2 AND last_bad > $3 GROUP BY key`,
+      [[...byKey.keys()], shop.id, new Date(ctx.now() - REPUTATION_DAYS * DAY).toISOString()],
+    );
+    return new Map(rows.map((r: any) => [byKey.get(String(r.key))!, Number(r.n)]));
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The network's word on a new order: how many OTHER sellers (different businesses) ended badly with this phone number or
  * this device in the last 180 days. null when there is no network here (the preview, tests, a single-shop install) or
  * for the demo shop: the signal is simply off. A seller only ever gets this count.

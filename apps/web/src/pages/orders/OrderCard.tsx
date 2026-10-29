@@ -10,6 +10,7 @@ import { startTicketFor } from '../sav/NewTicket';
 import { useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { ErrorBox, Field, Icon, Loading, StatusBadge, TicketTag } from '../../ui/kit';
+import { ScoreCard } from '../../ui/clientScore';
 import { toast } from '../../ui/toast';
 import { confLabel, printOrder, telHref, waHref } from './shared';
 import './orders.css';
@@ -325,6 +326,11 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
             </>
           )}
         </dl>
+        {h && (
+          <div className="oc-score">
+            <ScoreCard s={h.score} compact />
+          </div>
+        )}
         {h && h.orders > 1 && (
           <>
             <div className={h.returned > 0 ? 'badbox' : 'okbox'} style={{ marginTop: 10, cursor: 'default' }}>

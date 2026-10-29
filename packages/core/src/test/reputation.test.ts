@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Ctx, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, staffLogin, Tenancy } from '../index';
 import { FraudFacts, scoreOrder } from '../modules/fraud';
-import { algeriaDay, protectionStats, qualityAlert, refreshReputation, sharedReputation, takeQualityAlert } from '../platform/reputation';
+import { algeriaDay, protectionStats, qualityAlert, refreshReputation, sharedReputation, sharedSellersMany, takeQualityAlert } from '../platform/reputation';
 
 const OWNER = { email: 'owner@reseau.dz', password: 'Owner-Password-1' };
 const DAY = 86_400_000;
@@ -269,4 +269,20 @@ test('the alert: the buyers’ quality fell by 5 points or more this week — th
   await refreshReputation(t, now);
   assert.equal(await takeQualityAlert(t, now + 60_000), null);
   assert.ok(await takeQualityAlert(t, now + 8 * DAY));
+});
+
+test('many numbers at once (the Clients list): the same count as one by one', async () => {
+  const { t, store } = await world();
+  const a = await store('Boutique Annaba', 'a@annaba.dz');
+  const b = await store('Boutique Bejaia', 'b@bejaia.dz');
+  const c = await store('Boutique Chlef', 'c@chlef.dz');
+  await order(t, a.schema, '0661220011', { conf: 'fake' });
+  await order(t, b.schema, '0661220011', { conf: 'wrong_number' });
+  await order(t, a.schema, '0661220022', { conf: 'fake' });
+  await refreshReputation(t);
+  const ctx = { t, shop: { id: c.id, demo: false }, now: () => Date.now() } as unknown as Ctx;
+  const m = await sharedSellersMany(ctx, ['0661220011', '0661220022', '0661220033']);
+  assert.deepEqual([m!.get('0661220011'), m!.get('0661220022'), m!.get('0661220033') ?? 0], [2, 1, 0]);
+  assert.equal((await ask(t, c.id, { phone: '0661220011' }))?.sellers, 2);
+  assert.equal(await sharedSellersMany({ ...ctx, shop: { id: c.id, demo: true } } as unknown as Ctx, ['0661220011']), null);
 });
