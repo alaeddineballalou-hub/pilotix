@@ -1,6 +1,6 @@
 // Confirmation queue: lists with call deadlines, the agent banner, and the KPI blocks of
 // Nouvelles / En cours / Confirmées. Order changes go through modules/orders.ts.
-import { algiersDayStart, CallSettings, CONF_STATUSES, CONF_TODO, ConfStatus, nextDue, Order, slotAt } from '@pilotix/shared';
+import { algiersDayStart, CallSettings, CLIENT_LEVELS, CONF_STATUSES, CONF_TODO, ConfStatus, LEVEL_RANK, nextDue, Order, slotAt } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, hasRole, proc } from '../rpc';
@@ -204,8 +204,11 @@ const QueueInput = z.object({
   channel: ListInput.shape.channel,
   from: DATE.optional(),
   to: DATE.optional(),
-  /** deadline: the call countdown (most urgent first), only for Nouvelles and En cours */
-  sort: z.enum(['created_at', 'confirmed_at', 'next_call_at', 'total', 'customer_name', 'deadline']).optional(),
+  /** the customer's score level (Top / Bon / À surveiller / Risqué / Nouveau) */
+  level: z.enum(CLIENT_LEVELS).optional(),
+  /** deadline: the call countdown (most urgent first), only for Nouvelles and En cours · score: the best customers first
+   *  (desc: a customer we know is good, then a new one, then the ones to watch; the countdown decides between equals) */
+  sort: z.enum(['created_at', 'confirmed_at', 'next_call_at', 'total', 'customer_name', 'deadline', 'score']).optional(),
   dir: z.enum(['asc', 'desc']).optional(),
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(1).max(3000).default(50),
@@ -234,7 +237,12 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
   let sort = i.sort ?? def.sort;
   if (sort === 'deadline' && !queue) sort = 'created_at';
   const byDeadline = sort === 'deadline';
-  const dir = i.dir ?? (i.sort ? (i.sort === 'total' ? 'desc' : 'asc') : def.dir);
+  const byScore = sort === 'score';
+  const dir = i.dir ?? (i.sort ? (i.sort === 'total' || i.sort === 'score' ? 'desc' : 'asc') : def.dir);
+  // sorted or filtered by something the database does not hold (the countdown, the score): the whole list (3000 at
+  // most), sorted here, then the page cut
+  const whole = byDeadline || byScore || !!i.level;
+  const base = byDeadline || byScore ? (queue ? 'deadline' : def.sort === 'deadline' ? 'created_at' : def.sort) : sort;
   const found = await listOrders(ctx, {
     conf: i.status ? [i.status] : [...allowed],
     follow: i.sub === 'livrees' ? ['delivered'] : undefined,
@@ -248,10 +256,10 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
     dateField: 'created_at',
     from: i.from ? isoT(day(i.from)) : undefined,
     to: i.to ? isoT(day(i.to) + DAY) : undefined,
-    sort: byDeadline ? 'created_at' : (sort as Exclude<typeof sort, 'deadline'>),
-    dir: byDeadline ? 'asc' : dir,
-    page: byDeadline ? 1 : i.page,
-    pageSize: byDeadline ? 3000 : i.pageSize,
+    sort: base === 'deadline' ? 'created_at' : (base as Exclude<typeof sort, 'deadline' | 'score'>),
+    dir: base === 'deadline' ? 'asc' : byScore ? def.dir : dir,
+    page: whole ? 1 : i.page,
+    pageSize: whole ? 3000 : i.pageSize,
   }, { queue: 'conf' });
   let due = new Map<number, DueInfo>();
   if (queue) {
@@ -259,14 +267,30 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
     due = computeDue(await loadTodo(ctx.db, queueSql(ctx, 'conf')), calls, ctx.now());
   }
   let page = found;
-  if (byDeadline) {
-    // the countdown that shows: a waiting order counts from the end of its first slot
-    const key = (id: number) => {
-      const d = due.get(id)?.deadline;
-      return d ? (d.m === 'start' ? d.e ?? d.t : d.t) : Number.POSITIVE_INFINITY;
-    };
-    const all = [...found.rows].sort((a, b) => (key(a.id) - key(b.id)) * (dir === 'desc' ? -1 : 1) || a.id - b.id);
-    page = { ...found, page: i.page, pageSize: i.pageSize, rows: all.slice((i.page - 1) * i.pageSize, i.page * i.pageSize) };
+  let scoredAll = false;
+  if (whole) {
+    let all = [...found.rows];
+    if (base === 'deadline') {
+      // the countdown that shows: a waiting order counts from the end of its first slot
+      const key = (id: number) => {
+        const d = due.get(id)?.deadline;
+        return d ? (d.m === 'start' ? d.e ?? d.t : d.t) : Number.POSITIVE_INFINITY;
+      };
+      all.sort((a, b) => (key(a.id) - key(b.id)) * (byDeadline && dir === 'desc' ? -1 : 1) || a.id - b.id);
+    }
+    if (byScore || i.level) {
+      all = await withClientScores(ctx, all);
+      scoredAll = true;
+      // a customer with no score here (a livreur's own view) is « nouveau »
+      const lv = (o: Order) => o.clientScore?.level ?? 'new';
+      if (i.level) all = all.filter((o) => lv(o) === i.level);
+      if (byScore) {
+        const rank = (o: Order) => LEVEL_RANK[lv(o)] * 1000 + (o.clientScore?.score ?? 60);
+        // stable: between equals the countdown (or the list's own order) decides
+        all = all.map((o, k) => ({ o, k })).sort((a, b) => (rank(b.o) - rank(a.o)) * (dir === 'asc' ? -1 : 1) || a.k - b.k).map((x) => x.o);
+      }
+    }
+    page = { ...found, total: i.level ? all.length : found.total, page: i.page, pageSize: i.pageSize, rows: all.slice((i.page - 1) * i.pageSize, i.page * i.pageSize) };
   }
   const vids = [...new Set(page.rows.flatMap((o) => o.items.map((it) => it.variantId).filter((v): v is number => !!v)))];
   const skuOf = new Map<number, string>();
@@ -283,7 +307,7 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
       const v: string[] = (Array.isArray(r.v) ? r.v : String(r.v ?? '').replace(/[{}]/g, '').split(',')).filter(Boolean);
       passedOf.set(num(r.order_id), v.filter((x, k) => k === 0 || v[k - 1] !== x));
     }
-  const scored = await withClientScores(ctx, page.rows);
+  const scored = scoredAll ? page.rows : await withClientScores(ctx, page.rows);
   const rows: QueueRow[] = scored.map((o) => ({
     ...o,
     skus: [...new Set(o.items.map((it) => (it.variantId ? skuOf.get(it.variantId) : undefined)).filter((s): s is string => !!s))],

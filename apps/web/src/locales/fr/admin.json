@@ -669,5 +669,62 @@
     "saved": "Motifs enregistrés",
     "date": "Date obligatoire",
     "dateTip": "L’agent doit donner la nouvelle date"
+  },
+  "score": {
+    "title": "Score client",
+    "help": "Le score sur 100 que l’équipe voit à côté de chaque client. Ici vous choisissez combien de points chaque chose ajoute ou enlève. Les scores changent partout dès que vous enregistrez.",
+    "startA": "Un client commence à",
+    "start": "Points de départ",
+    "startB": "points. Ensuite :",
+    "col": {
+      "what": "Ce qui arrive",
+      "each": "Points à chaque fois",
+      "max": "Au plus"
+    },
+    "what": {
+      "delivered": "Colis livré et payé",
+      "returned": "Colis refusé",
+      "fake": "Fausse commande ou faux numéro",
+      "cancelled": "Commande annulée",
+      "blocked": "Commande bloquée par la protection",
+      "review": "Commande mise « à vérifier »",
+      "markFake": "Appareil marqué « fausse commande »",
+      "markCompetitor": "Appareil marqué « concurrent »",
+      "network": "Signalé par 2 autres vendeurs"
+    },
+    "eachOf": "Points à chaque fois : {{what}}",
+    "maxOf": "Au plus : {{what}}",
+    "noLimit": "sans limite",
+    "once": "une seule fois",
+    "networkMoreA": "puis",
+    "networkMore": "Points par vendeur de plus",
+    "networkMoreB": "par vendeur de plus",
+    "levelsTitle": "Les niveaux",
+    "from": "à partir de",
+    "below": "en dessous",
+    "levelFrom": "{{level}} à partir de",
+    "capsTitle": "Jamais plus haut que",
+    "cap": {
+      "blacklistAuto": "Liste noire (mise par la protection)",
+      "blacklistManual": "Liste noire (mise par une personne)",
+      "stopdesk": "Stop-desk seulement"
+    },
+    "tryTitle": "Essai avec vos points",
+    "ex": {
+      "d2": "2 colis livrés",
+      "d1": "1 colis livré",
+      "c1": "1 commande annulée",
+      "d1r1": "1 livré, 1 refusé",
+      "r1": "1 colis refusé",
+      "n2": "Signalé par 2 vendeurs",
+      "f1": "1 fausse commande"
+    },
+    "reset": "Remettre les points conseillés",
+    "saved": "Points du score enregistrés",
+    "err": {
+      "empty": "Remplissez chaque case (seul « Au plus » peut rester vide : sans limite).",
+      "range": "Chaque nombre va de 0 à 100.",
+      "levels": "Les niveaux doivent descendre : « Très fiable » au-dessus de « Fiable », au-dessus de « À surveiller »."
+    }
   }
 }

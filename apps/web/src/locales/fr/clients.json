@@ -66,6 +66,16 @@
       "blacklist": "En liste noire",
       "stopdesk": "Stop-desk seulement (refuse ses colis)",
       "new": "Nouveau client : pas encore d’historique"
+    },
+    "filter": "Filtrer par score",
+    "filterShort": "Score client",
+    "allLevels": "Tous",
+    "emptyLevel": "Aucun client « {{level}} » pour l’instant.",
+    "ask": {
+      "title": "Client risqué — {{ref}}",
+      "lead": "Ce client a souvent posé problème. Lisez pourquoi avant de confirmer.",
+      "no": "Ne pas confirmer",
+      "yes": "Confirmer quand même"
     }
   }
 }

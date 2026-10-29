@@ -1,9 +1,9 @@
-import { CONF_DONE_BAD, normalizePhone } from '@pilotix/shared';
+import { CLIENT_LEVELS, CONF_DONE_BAD, normalizePhone } from '@pilotix/shared';
 import { z } from 'zod';
 import { iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, notFound, proc } from '../rpc';
 import { addEvent } from './orders';
-import { CLIENT_FACT_COLS, ClientScore, scoresOf } from './clientscore';
+import { CLIENT_FACT_COLS, ClientScore, scoresAll, scoresOf } from './clientscore';
 
 const id = z.number().int().positive();
 
@@ -57,7 +57,14 @@ export const customersProcs = {
 
   'customers.list': proc(
     [...WHO],
-    z.object({ q: z.string().max(100).optional(), blacklisted: z.boolean().optional(), page: z.number().int().min(1).default(1), pageSize: z.number().int().min(1).max(500).default(60) }),
+    z.object({
+      q: z.string().max(100).optional(),
+      blacklisted: z.boolean().optional(),
+      /** only the customers of this score level (Top / Bon / À surveiller / Risqué / Nouveau) */
+      level: z.enum(CLIENT_LEVELS).optional(),
+      page: z.number().int().min(1).default(1),
+      pageSize: z.number().int().min(1).max(500).default(60),
+    }),
     async (ctx, f) => {
       const w = new Where();
       const q = f.q?.trim().replace(/[,()"*%]/g, ' ').trim();
@@ -67,6 +74,15 @@ export const customersProcs = {
         else w.add("c.name ILIKE '%' || ? || '%'", q);
       }
       if (f.blacklisted) w.add('c.blacklisted');
+      if (f.level) {
+        // the score is not in the database: every matching customer is scored (their facts counted once per table),
+        // the level kept, then the page cut in the same order as the list
+        const all = (await scoresAll(ctx, w.sql, w.params)).filter((x) => x.score.level === f.level).sort((a, b) => b.lastOrderAt - a.lastOrderAt || b.id - a.id);
+        const pageOf = all.slice((f.page - 1) * f.pageSize, f.page * f.pageSize);
+        const rows = pageOf.length ? await ctx.db.query(`SELECT ${COLS} FROM customers c WHERE c.id = ANY($1::bigint[])`, [pageOf.map((x) => x.id)]) : [];
+        const byId = new Map(rows.map((r: any) => [num(r.id), r]));
+        return { rows: pageOf.filter((x) => byId.has(x.id)).map((x) => toCustomer(byId.get(x.id), x.score)), total: all.length, page: f.page, pageSize: f.pageSize };
+      }
       const total = num((await ctx.db.query(`SELECT count(*)::int AS n FROM customers c ${w.sql}`, w.params))[0]?.n);
       const lim = w.p(f.pageSize);
       const off = w.p((f.page - 1) * f.pageSize);

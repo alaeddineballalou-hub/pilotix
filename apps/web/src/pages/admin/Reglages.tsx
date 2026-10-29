@@ -1,4 +1,4 @@
-// Réglages: Boutique · Dépôts · Commandes du site web (webhook) · Mise à jour automatique des colis (cron) · Meta Ads ·
+// Réglages: Boutique · Dépôts · Commandes du site web (webhook) · Mise à jour automatique des colis (cron) · Meta Ads · Score client ·
 // and for the store's owner only (a multi-shop server): delete the store and all its data.
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +13,7 @@ import { toast } from '../../ui/toast';
 import { ConfirmButton, intOf, WilayaOptions } from './bits';
 import { DepotForm, Wh } from './DepotForm';
 import { publicBase, SAMPLE_ORDER } from './Canaux';
+import { ScoreRulesCard } from './ScoreRules';
 
 export function ReglagesPage() {
   const q = useRpc('admin.settings.get', {});
@@ -27,6 +28,7 @@ export function ReglagesPage() {
       <WebCard webKey={s.webhook.key} />
       <CronCard cronKey={s.cron.key} last={s.lastSync} />
       <MetaCard meta={s.meta} />
+      <ScoreRulesCard />
       <DeleteStoreCard />
     </div>
   );
