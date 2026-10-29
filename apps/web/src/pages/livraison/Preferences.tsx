@@ -94,7 +94,7 @@ export function Preferences() {
     ...(alerts.data ?? []).filter((c) => c.statuses.length).map((c) => `${c.name} : ${chipsOf(c).filter((x) => x.keys.some((k) => coOn(c).includes(k))).length}`),
     `${t('livraison.prefs.alerts.private')} : ${v.livreurAlerts.length}`,
   ].join(' · ');
-  const clockSum = t('livraison.prefs.alerts.clockSum', { first: v.suiviClock.firstHours, solve: v.suiviClock.solveHours });
+  const clockSum = `${t('livraison.prefs.alerts.clockSum', { first: v.suiviClock.firstHours, solve: v.suiviClock.solveHours })} · ${t('suivi.tries.sum', { n: v.suiviTries.calls, gap: v.suiviTries.gapMinutes })}`;
   const set = (p: Partial<Prefs>) => setDraft({ ...v, ...p });
   const backups = (companies.data ?? []).filter((c) => c.active && c.kind !== 'own');
   const backupName = backups.find((c) => c.id === v.privateBackup.companyId)?.name ?? '';
@@ -117,7 +117,7 @@ export function Preferences() {
       value: v.privateBackup.on ? t('livraison.prefs.sum.backupOn', { hours: v.privateBackup.hours, company: backupName || '…' }) : t('livraison.prefs.sum.backupOff'),
       changed: v.privateBackup.on !== rec.privateBackup.on,
     },
-    { icon: 'route', label: t('livraison.prefs.alerts.title'), value: `${clockSum} · ${alertSum}`, changed: JSON.stringify([...v.livreurAlerts].sort()) !== JSON.stringify([...rec.livreurAlerts].sort()) || JSON.stringify(v.suiviClock) !== JSON.stringify(rec.suiviClock) },
+    { icon: 'route', label: t('livraison.prefs.alerts.title'), value: `${clockSum} · ${alertSum}`, changed: JSON.stringify([...v.livreurAlerts].sort()) !== JSON.stringify([...rec.livreurAlerts].sort()) || JSON.stringify(v.suiviClock) !== JSON.stringify(rec.suiviClock) || JSON.stringify(v.suiviTries) !== JSON.stringify(rec.suiviTries) },
     { icon: 'alert', label: t('livraison.prefs.noStock'), value: t('livraison.prefs.sum.noStock', { count: v.noStockDays }), changed: v.noStockDays !== rec.noStockDays },
   ];
 
@@ -259,6 +259,41 @@ export function Preferences() {
           <section className="pf-group" aria-labelledby="pf-al-h">
             <h3 id="pf-al-h">{t('livraison.prefs.alerts.title')}</h3>
             <p className="pf-lead">{t('livraison.prefs.alerts.hint')}</p>
+            <div className="pf-row">
+              <span className="pf-text">
+                <b>{t('suivi.tries.calls')}</b>
+                <small>{t('suivi.tries.callsHint')}</small>
+              </span>
+              <span className="pf-clk">
+                <label className="pf-num">
+                  <span>{t('suivi.tries.n')}</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    step={1}
+                    inputMode="numeric"
+                    aria-label={t('suivi.tries.n')}
+                    value={v.suiviTries.calls}
+                    onChange={(e) => set({ suiviTries: { ...v.suiviTries, calls: Math.max(1, Math.min(10, Math.round(Number(e.target.value) || 1))) } })}
+                  />
+                </label>
+                <label className="pf-num">
+                  <span>{t('suivi.tries.gap')}</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={1440}
+                    step={15}
+                    inputMode="numeric"
+                    aria-label={t('suivi.tries.gap')}
+                    value={v.suiviTries.gapMinutes}
+                    onChange={(e) => set({ suiviTries: { ...v.suiviTries, gapMinutes: Math.max(0, Math.min(1440, Math.round(Number(e.target.value) || 0))) } })}
+                  />
+                  <span>{t('suivi.tries.min')}</span>
+                </label>
+              </span>
+            </div>
             <div className="pf-row">
               <span className="pf-text">
                 <b>{t('livraison.prefs.alerts.clock')}</b>

@@ -555,5 +555,26 @@
     "tip_solve": "Time to solve the alert: treat, swap or cancel (working hours)",
     "lateCount_one": "{{count}} alert not called in time",
     "lateCount_other": "{{count}} alerts not called in time"
+  },
+  "tries": {
+    "count": "Calls {{done}} / {{need}}",
+    "left_one": "{{count}} more call before cancelling.",
+    "left_other": "{{count}} more calls before cancelling.",
+    "nextAt_one": "{{count}} more call, from {{at}}.",
+    "nextAt_other": "{{count}} more calls, the next one from {{at}}.",
+    "why": "Many customers answer the 2nd or 3rd call. A saved parcel means no return fee.",
+    "clientSaid": "The customer cancels himself",
+    "keepCalling": "I’ll call again later",
+    "earlyLink": "Cancel anyway, before the calls…",
+    "whyLabel": "Why cancel now?",
+    "whyPh": "E.g.: the customer told the livreur he no longer wants it…",
+    "earlyNote": "Managers will see it as “cancelled too early”.",
+    "cancelAnyway": "Cancel anyway",
+    "calls": "Calls before “Customer cancels”",
+    "callsHint": "How many calls the agent makes on an alert before he can cancel (unless the customer cancels himself). Two calls too close count as one.",
+    "n": "Calls",
+    "gap": "At least",
+    "min": "min apart",
+    "sum": "{{n}} calls, {{gap}} min apart"
   }
 }

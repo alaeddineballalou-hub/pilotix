@@ -23,7 +23,7 @@ import { store } from '../../lib/store';
 import { CopyCode } from '../../ui/CopyCode';
 import { useIsPhone } from '../../lib/useMedia';
 import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
-import { AlertClock, CancelSheet, ClockChip, ParcelAction, ParcelCards, ParcelPage, TreatSheet } from './PhoneSuivi';
+import { AlertClock, AlertTries, CancelSheet, ClockChip, TriesChip, ParcelAction, ParcelCards, ParcelPage, TreatSheet } from './PhoneSuivi';
 
 const LIST_TABS = ['enlivraison', 'alertes', 'traites', 'livres', 'annules', 'swap'] as const;
 type ListTab = (typeof LIST_TABS)[number];
@@ -137,7 +137,7 @@ function Head({ tab }: { tab: ListTab }) {
   );
 }
 
-type Extra = { clock?: AlertClock | null; companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
+type Extra = { clock?: AlertClock | null; tries?: AlertTries | null; companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
 
 /** What the courier or the livreur said: the alert note while in alert, else the courier's own status. */
 const reasonOf = (o: Order, x?: Extra) => (o.followStatus === 'alert' ? x?.alertReason || o.extStatus : o.extStatus);
@@ -213,6 +213,7 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
           <>
             {d === null ? '—' : <span className={`badge ${d >= 10 ? 't-bad' : d >= 5 ? 't-warn' : 't-info'} ltr`}>{t('suivi.days', { n: d })}</span>}
             {extra[o.id]?.clock && <ClockChip c={extra[o.id]!.clock} />}
+            {extra[o.id]?.tries && <TriesChip tr={extra[o.id]!.tries} />}
           </>
         );
       }
@@ -453,27 +454,14 @@ function List({ tab }: { tab: ListTab }) {
         />
       )}
       {dlg?.kind === 'treat' && (phone ? <TreatSheet o={dlg.o} reason={reasonOf(dlg.o, extra[dlg.o.id])} onClose={() => setDlg(null)} /> : <TreatModal o={dlg.o} reason={reasonOf(dlg.o, extra[dlg.o.id])} onClose={() => setDlg(null)} />)}
-      {dlg?.kind === 'cancel' && phone && (
+      {dlg?.kind === 'cancel' && (
         <CancelSheet
           o={dlg.o}
+          tries={dlg.o.followStatus === 'alert' ? extra[dlg.o.id]?.tries ?? (focus?.id === dlg.o.id ? focus.x?.tries : null) : null}
           busy={act.isPending}
           onClose={() => setDlg(null)}
-          onOk={() => {
-            run(dlg.o, 'cancel');
-            setDlg(null);
-          }}
-        />
-      )}
-      {dlg?.kind === 'cancel' && !phone && (
-        <ConfirmModal
-          title={t('suivi.cancelAsk', { ref: dlg.o.ref })}
-          text={t('suivi.cancelText')}
-          ok={t('suivi.act.cancel')}
-          danger
-          busy={act.isPending}
-          onClose={() => setDlg(null)}
-          onOk={() => {
-            run(dlg.o, 'cancel');
+          onOk={(by, note) => {
+            act.mutate({ id: dlg.o.id, action: 'cancel', by, note: note ?? null }, { onSuccess: () => toast(t('suivi.msg.cancelled', { ref: dlg.o.ref }), 'ok') });
             setDlg(null);
           }}
         />

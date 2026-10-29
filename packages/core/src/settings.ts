@@ -96,6 +96,8 @@ export interface SettingsMap {
     /** Suivi's clock on every alert (same for every company and our livreurs), in working hours (the call slots):
      *  the first call, then the alert solved (treated, swapped or cancelled) */
     suiviClock: { firstHours: number; solveHours: number };
+    /** Suivi: the calls before « Client annule » (unless the customer himself cancels), at least `gapMinutes` apart */
+    suiviTries: { calls: number; gapMinutes: number };
   };
 }
 
@@ -143,6 +145,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
     noStockDays: 3,
     livreurAlerts: ['failed:no_answer', 'failed:absent', 'returning:refused', 'returning:unreachable'],
     suiviClock: { firstHours: 2, solveHours: 24 },
+    suiviTries: { calls: 3, gapMinutes: 60 },
   },
 };
 

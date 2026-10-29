@@ -164,3 +164,47 @@ test('the clock of an alert: the first call within 2 working hours, then solved 
   assert.ok(l3.extra[fresh].clock.left <= 60);
   await call('prefs.set', admin, base);
 });
+
+test('« Client annule » on an alert: after the seller\'s calls (far enough apart), or the customer himself, or « annulé trop tôt » with a reason', async () => {
+  const suivi = await as(EMAILS.suivi);
+  const mk = async () => {
+    const id = await onRoad();
+    await db.query(`UPDATE orders SET follow_status = 'alert', locked_by = NULL, locked_until = NULL WHERE id = $1`, [id]);
+    await db.query(`INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, at) VALUES ($1, NULL, 'follow_status', 'out_for_delivery', 'alert', now() - interval '1 day')`, [id]);
+    return id;
+  };
+  const callAt = (id: number, ago: string) =>
+    db.query(`INSERT INTO order_events (order_id, user_id, kind, at) VALUES ($1, $2, 'call', now() - $3::interval)`, [id, suivi.session.profile.id, ago]);
+  // no call yet: refused, with how many are needed
+  const a = await mk();
+  await assert.rejects(call('suivi.act', suivi, { id: a, action: 'cancel' }), /3 appels \(0 faits\)/);
+  // three calls but two only 10 minutes apart: 2 tries count
+  await callAt(a, '5 hours');
+  await callAt(a, '4 hours 50 minutes');
+  await callAt(a, '2 hours');
+  const tr = ((await call('suivi.list', suivi, { tab: 'alertes', pageSize: 500 })) as any).extra[a].tries;
+  assert.deepEqual([tr.done, tr.need], [2, 3]);
+  await assert.rejects(call('suivi.act', suivi, { id: a, action: 'cancel' }), /2 faits/);
+  await callAt(a, '30 minutes');
+  await call('suivi.act', suivi, { id: a, action: 'cancel' });
+  assert.equal(await statusOf(a), 'returning');
+  // the customer himself cancels: always allowed
+  const b = await mk();
+  await call('suivi.act', suivi, { id: b, action: 'cancel', by: 'client' });
+  assert.equal(await statusOf(b), 'returning');
+  // before the tries: a reason is needed, and it shows as « annulé trop tôt »
+  const c = await mk();
+  await assert.rejects(call('suivi.act', suivi, { id: c, action: 'cancel', by: 'early' }));
+  await call('suivi.act', suivi, { id: c, action: 'cancel', by: 'early', note: 'Le client a bloqué le numéro' });
+  const rc = (await db.query('SELECT follow_status, sub_status FROM orders WHERE id = $1', [c]))[0];
+  assert.deepEqual([rc.follow_status, rc.sub_status], ['returning', 'annule_trop_tot']);
+  // the seller changes the number
+  const base = ((await call('prefs.get', admin, {})) as any).prefs;
+  assert.deepEqual(base.suiviTries, { calls: 3, gapMinutes: 60 });
+  await call('prefs.set', admin, { ...base, suiviTries: { calls: 1, gapMinutes: 0 } });
+  const d = await mk();
+  await callAt(d, '1 minute');
+  await call('suivi.act', suivi, { id: d, action: 'cancel' });
+  assert.equal(await statusOf(d), 'returning');
+  await call('prefs.set', admin, base);
+});

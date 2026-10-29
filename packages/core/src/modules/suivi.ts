@@ -80,8 +80,45 @@ export async function alertClocks(db: Db, ids: number[], now: number): Promise<M
   return out;
 }
 
+/** The calls made on an alert (since it became one), counted as tries only when far enough apart (Préférences). */
+export interface AlertTries {
+  done: number;
+  need: number;
+  /** when the next call counts as a new try (null: now, or all done) */
+  nextAt: string | null;
+}
+
+export async function alertTries(db: Db, ids: number[], now: number): Promise<Map<number, AlertTries>> {
+  const out = new Map<number, AlertTries>();
+  if (!ids.length) return out;
+  const { calls: need, gapMinutes } = (await getPrefs(db)).suiviTries;
+  const rows = await db.query(
+    `SELECT o.id, COALESCE(array_agg(c.at ORDER BY c.at) FILTER (WHERE c.at IS NOT NULL), '{}') AS calls
+       FROM orders o
+       LEFT JOIN LATERAL (SELECT max(e.at) AS at FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'alert') a ON true
+       LEFT JOIN order_events c ON c.order_id = o.id AND c.kind = 'call' AND c.user_id IS NOT NULL AND (a.at IS NULL OR c.at >= a.at)
+      WHERE o.id = ANY($1) GROUP BY o.id`,
+    [ids],
+  );
+  for (const r of rows) {
+    let done = 0;
+    let last = -Infinity;
+    for (const at of (r.calls ?? []) as (string | Date)[]) {
+      const t = Date.parse(iso(at));
+      if (t - last >= gapMinutes * 60_000) {
+        done++;
+        last = t;
+      }
+    }
+    const next = last + gapMinutes * 60_000;
+    out.set(num(r.id), { done: Math.min(done, need), need, nextAt: done >= need || next <= now ? null : new Date(next).toISOString() });
+  }
+  return out;
+}
+
 export interface SuiviRowExtra {
   clock: AlertClock | null;
+  tries: AlertTries | null;
   companyKind: string | null;
   livreurPhone: string | null;
   claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null;
@@ -92,7 +129,9 @@ export interface SuiviRowExtra {
 async function extras(db: Db, orders: Order[], now = Date.now()): Promise<Record<number, SuiviRowExtra>> {
   if (!orders.length) return {};
   const ids = orders.map((o) => o.id);
-  const clocks = await alertClocks(db, orders.filter((o) => o.followStatus === 'alert').map((o) => o.id), now);
+  const alertIds = orders.filter((o) => o.followStatus === 'alert').map((o) => o.id);
+  const clocks = await alertClocks(db, alertIds, now);
+  const tries = await alertTries(db, alertIds, now);
   const rows = await db.query(
     `SELECT o.id, co.kind AS company_kind, lv.phone AS livreur_phone,
        (SELECT json_build_object('id', c.id, 'status', c.status, 'createdAt', c.created_at, 'sentAt', c.sent_at)
@@ -107,6 +146,7 @@ async function extras(db: Db, orders: Order[], now = Date.now()): Promise<Record
     const c = typeof r.claim === 'string' ? JSON.parse(r.claim) : r.claim;
     out[num(r.id)] = {
       clock: clocks.get(num(r.id)) ?? null,
+      tries: tries.get(num(r.id)) ?? null,
       companyKind: r.company_kind ?? null,
       livreurPhone: r.livreur_phone ?? null,
       claim: c ? { id: num(c.id), status: c.status, createdAt: iso(c.createdAt), sentAt: isoOrNull(c.sentAt) } : null,
@@ -618,7 +658,35 @@ export const suiviProcs = {
   }),
 
   /** Client annule / Livré / Nouvelle alerte from the Suivi lists. */
-  'suivi.act': proc(['suivi'], z.object({ id, action: z.enum(['cancel', 'delivered', 'realert']), note: z.string().max(1000).nullable().optional() }), async (ctx, i) => {
+  'suivi.act': proc(
+    ['suivi'],
+    z.object({
+      id,
+      action: z.enum(['cancel', 'delivered', 'realert']),
+      note: z.string().max(1000).nullable().optional(),
+      /** « Client annule » on an alert: the customer said it himself (always allowed), or before the tries (a reason, « annulé trop tôt ») */
+      by: z.enum(['client', 'early']).optional(),
+    }),
+    async (ctx, i) => {
+    if (i.action === 'cancel') {
+      const cur = await getOrder(ctx, i.id);
+      if (cur.followStatus === 'alert') {
+        await notLockedByOther(ctx, i.id);
+        const tr = (await alertTries(ctx.db, [i.id], ctx.now())).get(i.id);
+        const enough = !!tr && tr.done >= tr.need;
+        if (!enough && i.by !== 'client') {
+          if (i.by !== 'early' || !i.note?.trim()) throw bad(`${cur.ref} : faites d’abord ${tr?.need ?? 3} appels (${tr?.done ?? 0} faits), ou dites pourquoi vous annulez avant`);
+        }
+        if (!enough && i.by === 'early') {
+          await setFollow(ctx, FollowInput.parse({ ids: [i.id], status: 'returning', subStatus: 'annule_trop_tot', note: `Annulé trop tôt (${tr?.done ?? 0}/${tr?.need ?? 3} appels) — ${i.note!.trim()}` }));
+          return getOrder(ctx, i.id);
+        }
+        if (i.by === 'client') {
+          await setFollow(ctx, FollowInput.parse({ ids: [i.id], status: 'returning', note: ['Le client annule lui-même (suivi)', i.note].filter(Boolean).join(' — ') }));
+          return getOrder(ctx, i.id);
+        }
+      }
+    }
     const map = {
       cancel: { status: 'returning', note: 'Annulé par le client (suivi)' },
       delivered: { status: 'delivered', note: 'Livré après alerte traitée' },
@@ -628,7 +696,8 @@ export const suiviProcs = {
     await notLockedByOther(ctx, i.id);
     await setFollow(ctx, FollowInput.parse({ ids: [i.id], status: m.status, note: [m.note, i.note].filter(Boolean).join(' — ') }));
     return getOrder(ctx, i.id);
-  }),
+    },
+  ),
 
   'suivi.swapCandidates': proc(['suivi'], z.object({ fromId: id, q: z.string().max(100).optional() }), (ctx, i) => swapCandidates(ctx, i.fromId, i.q)),
   'suivi.swap': proc(['suivi'], z.object({ fromId: id, toId: id, note: z.string().max(500).nullable().optional() }), (ctx, i) => swapParcel(ctx, i.fromId, i.toId, i.note)),

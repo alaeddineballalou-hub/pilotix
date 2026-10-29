@@ -20,3 +20,15 @@
 td .sv-clock { margin-top: 4px; }
 .sv-late { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; margin: 4px 0; padding: 6px 12px; border-radius: 999px; background: var(--coral-soft, #FDE2DE); color: var(--coral, #C2410C); font-weight: 800; font-size: 13px; text-decoration: none; }
 .sv-late svg { width: 15px; height: 15px; }
+.sv-clock.tries { background: var(--sky-soft, #E6EEF9); color: var(--navy, #0F1A2E); }
+.pxs-clk, .pxs-clkbar { gap: 6px; flex-wrap: wrap; }
+td .sv-clock + .sv-clock { margin-inline-start: 4px; }
+.sv-tries { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 12px 14px; margin: 8px 0; border-radius: 12px; border: 1px solid var(--line); background: var(--field); }
+.sv-tries.ok { border-color: var(--ok); }
+.sv-tries small { flex-basis: 100%; color: var(--muted); font-size: 13px; }
+.sv-dots { display: inline-flex; gap: 5px; }
+.sv-dots i { width: 12px; height: 12px; border-radius: 50%; background: var(--line); }
+.sv-dots i.on { background: var(--ok); }
+.sv-early { display: inline-block; margin-top: 6px; color: var(--muted); font-size: 13px; text-decoration: underline; background: none; border: 0; padding: 0; cursor: pointer; }
+.sv-why { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; font-weight: 700; font-size: 14px; }
+.sv-why textarea { width: 100%; font: inherit; font-weight: 500; }

@@ -417,7 +417,7 @@
     "cost": "coût {{v}}",
     "quotaMod": "{{n}}/{{max}} modifications utilisées pour ce colis",
     "note": "Pourquoi (pour l’historique)",
-    "notePh": "Ex. : le client a déménagé, remise accordée…",
+    "notePh": "Ex. : le client a déménagé, remise accordée…",
     "appliedNow": "Changé chez {{name}} et dans la commande",
     "sent": "Demande envoyée à {{name}} : la commande changera quand elle l’acceptera",
     "ph": {
@@ -555,5 +555,26 @@
     "tip_solve": "Temps pour régler l’alerte : traiter, swapper ou annuler (heures de travail)",
     "lateCount_one": "{{count}} alerte sans appel à temps",
     "lateCount_other": "{{count}} alertes sans appel à temps"
+  },
+  "tries": {
+    "count": "Appels {{done}} / {{need}}",
+    "left_one": "Encore {{count}} appel avant d’annuler.",
+    "left_other": "Encore {{count}} appels avant d’annuler.",
+    "nextAt_one": "Encore {{count}} appel, à partir de {{at}}.",
+    "nextAt_other": "Encore {{count}} appels, le prochain à partir de {{at}}.",
+    "why": "Beaucoup de clients répondent au 2e ou 3e appel. Un colis sauvé, c’est des frais de retour en moins.",
+    "clientSaid": "Le client annule lui-même",
+    "keepCalling": "Je rappelle plus tard",
+    "earlyLink": "Annuler quand même, avant les appels…",
+    "whyLabel": "Pourquoi annuler maintenant ?",
+    "whyPh": "Ex. : le client a dit au livreur qu’il ne veut plus…",
+    "earlyNote": "Les managers le verront comme « annulé trop tôt ».",
+    "cancelAnyway": "Annuler quand même",
+    "calls": "Appels avant « Client annule »",
+    "callsHint": "Le nombre d’appels de l’agent sur une alerte avant de pouvoir annuler (sauf si le client annule lui-même). Deux appels trop proches comptent pour un.",
+    "n": "Appels",
+    "gap": "Écart d’au moins",
+    "min": "min",
+    "sum": "{{n}} appels, à {{gap}} min d’écart"
   }
 }

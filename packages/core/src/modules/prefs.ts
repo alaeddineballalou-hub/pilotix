@@ -20,6 +20,7 @@ export async function getPrefs(db: Db): Promise<Prefs> {
     rulesBy: { ...d.rulesBy, ...(p.rulesBy ?? {}) },
     privateBackup: { ...d.privateBackup, ...(p.privateBackup ?? {}) },
     suiviClock: { ...d.suiviClock, ...(p.suiviClock ?? {}) },
+    suiviTries: { ...d.suiviTries, ...(p.suiviTries ?? {}) },
   };
 }
 
@@ -30,6 +31,7 @@ const prefsIn = z.object({
   rulesBy: z.object({ confirmation: z.boolean(), agency: z.boolean(), depot: z.boolean(), manager: z.boolean() }),
   privateBackup: z.object({ on: z.boolean(), hours: z.number().int().min(1).max(240), companyId: z.number().int().positive().nullable() }),
   noStockDays: z.number().int().min(1).max(30),
+  suiviTries: z.object({ calls: z.number().int().min(1).max(10), gapMinutes: z.number().int().min(0).max(1440) }),
   suiviClock: z.object({ firstHours: z.number().min(0.25).max(48), solveHours: z.number().min(1).max(168) }),
   livreurAlerts: z.array(z.string().regex(/^(failed|returning):[a-z_]+$/)).max(20),
 });

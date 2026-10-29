@@ -10,6 +10,7 @@ import { da, when, wilayaName } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { Icon } from '../../ui/kit';
 import { Sheet, Tiles } from '../../ui/Sheet';
+import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { eventText } from '../orders/OrderCard';
 import { ClaimRow, RemindApiModal, SendModal, useTarget } from './Claims';
@@ -20,7 +21,7 @@ import { ChangeKind, ChangeSheet, CourierPanel, useParcelInfo } from './CourierP
 import { useBackLayer } from '../../lib/backLayer';
 
 export type AlertClock = { kind: 'call' | 'solve'; dueAt: string; left: number; state: 'ok' | 'soon' | 'late' };
-export type PExtra = { clock?: AlertClock | null; companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
+export type PExtra = { clock?: AlertClock | null; tries?: AlertTries | null; companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
 
 /** Where the parcel is: 0 shipped, 1 on the road, 2 stopped (alert, failed, return…), 3 delivered. */
 function stageOf(o: Order): { at: number; stop: boolean } {
@@ -107,6 +108,7 @@ export function ParcelCards({ rows, extra, reasonOf, empty, onOpen }: { rows: Or
               {x?.clock && (
                 <div className="pxs-clk">
                   <ClockChip c={x.clock} />
+                  <TriesChip tr={x.tries} />
                 </div>
               )}
             </div>
@@ -256,6 +258,7 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose, onSkip }: 
       {x?.clock && o.followStatus === 'alert' && (
         <div className="pxs-clkbar">
           <ClockChip c={x.clock} />
+          <TriesChip tr={x.tries} />
         </div>
       )}
 
@@ -556,31 +559,102 @@ export function TreatSheet({ o, reason, onClose }: { o: Order; reason: string | 
 }
 
 /** « Client annule » on a phone: what happens to the parcel, then the red button; « Garder » keeps it. */
-export function CancelSheet({ o, busy, onOk, onClose }: { o: Order; busy: boolean; onOk: () => void; onClose: () => void }) {
+export type AlertTries = { done: number; need: number; nextAt: string | null };
+
+/**
+ * « Client annule » on an alert. After the seller's calls: one tap. Before: the customer himself cancels (always), or
+ * « Annuler quand même » with a reason — it shows as « annulé trop tôt » to the managers.
+ */
+export function CancelSheet({ o, tries, busy, onOk, onClose }: { o: Order; tries?: AlertTries | null; busy: boolean; onOk: (by?: 'client' | 'early', note?: string) => void; onClose: () => void }) {
   const { t } = useTranslation();
+  const [early, setEarly] = useState(false);
+  const [why, setWhy] = useState('');
+  const short = !!tries && tries.done < tries.need;
+  const left = short ? tries!.need - tries!.done : 0;
   return (
-    <Sheet
+    <Modal
+      sheet
       title={t('suivi.cancelAsk', { ref: o.ref })}
-      sub={
-        <>
-          {o.customerName} · <span className="ltr">{o.tracking || o.ref}</span>
-        </>
-      }
       onClose={onClose}
-      foot={
-        <>
-          <button type="button" className="pxk-go bad" disabled={busy} onClick={onOk}>
-            <Icon name="x" /> {t('suivi.act.cancel')}
-          </button>
-          <button type="button" className="pxk-go ghost" onClick={onClose}>
-            {t('suivi.ph.keep')}
-          </button>
-        </>
+      footer={
+        !short ? (
+          <>
+            <button type="button" className="btn ghost" onClick={onClose}>
+              {t('suivi.ph.keep')}
+            </button>
+            <button type="button" className="btn danger" disabled={busy} onClick={() => onOk()}>
+              <Icon name="x" /> {t('suivi.act.cancel')}
+            </button>
+          </>
+        ) : early ? (
+          <>
+            <button type="button" className="btn ghost" onClick={() => setEarly(false)}>
+              {t('common.back')}
+            </button>
+            <button type="button" className="btn danger" disabled={busy || why.trim().length < 3} onClick={() => onOk('early', why.trim())}>
+              {t('suivi.tries.cancelAnyway')}
+            </button>
+          </>
+        ) : (
+          <>
+            <button type="button" className="btn ghost" onClick={onClose}>
+              {t('suivi.tries.keepCalling')}
+            </button>
+            <button type="button" className="btn danger" disabled={busy} onClick={() => onOk('client')}>
+              {t('suivi.tries.clientSaid')}
+            </button>
+          </>
+        )
       }
     >
-      <p className="pxk-info">
-        <Icon name="undo" /> {t('suivi.cancelText')}
+      <p className="muted small">
+        {o.customerName} · <span className="ltr">{o.tracking || o.ref}</span>
       </p>
-    </Sheet>
+      {tries && (
+        <div className={`sv-tries ${short ? 'short' : 'ok'}`}>
+          <span className="sv-dots" aria-hidden="true">
+            {Array.from({ length: tries.need }, (_, k) => (
+              <i key={k} className={k < tries.done ? 'on' : ''} />
+            ))}
+          </span>
+          <b>{t('suivi.tries.count', { done: tries.done, need: tries.need })}</b>
+          {short && <small>{tries.nextAt ? t('suivi.tries.nextAt', { count: left, at: when(tries.nextAt) }) : t('suivi.tries.left', { count: left })}</small>}
+        </div>
+      )}
+      {short && !early && (
+        <>
+          <p className="pxk-info">
+            <Icon name="info" /> {t('suivi.tries.why')}
+          </p>
+          <button type="button" className="linklike sv-early" onClick={() => setEarly(true)}>
+            {t('suivi.tries.earlyLink')}
+          </button>
+        </>
+      )}
+      {short && early && (
+        <label className="sv-why">
+          <span>{t('suivi.tries.whyLabel')}</span>
+          <textarea rows={3} maxLength={500} value={why} autoFocus placeholder={t('suivi.tries.whyPh')} onChange={(e) => setWhy(e.target.value)} />
+          <small className="muted">{t('suivi.tries.earlyNote')}</small>
+        </label>
+      )}
+      {!short && (
+        <p className="pxk-info">
+          <Icon name="undo" /> {t('suivi.cancelText')}
+        </p>
+      )}
+    </Modal>
+  );
+}
+
+/** « Appels 1 / 3 » next to the alert's clock. */
+export function TriesChip({ tr }: { tr?: AlertTries | null }) {
+  const { t } = useTranslation();
+  if (!tr) return null;
+  return (
+    <span className={`sv-clock ${tr.done >= tr.need ? 'ok' : 'tries'}`}>
+      <Icon name="phone" />
+      {t('suivi.tries.count', { done: tr.done, need: tr.need })}
+    </span>
   );
 }
