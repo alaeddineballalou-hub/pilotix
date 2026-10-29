@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Ctx, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, staffLogin, Tenancy } from '../index';
 import { FraudFacts, scoreOrder } from '../modules/fraud';
-import { refreshReputation, sharedReputation } from '../platform/reputation';
+import { algeriaDay, protectionStats, refreshReputation, sharedReputation } from '../platform/reputation';
 
 const OWNER = { email: 'owner@reseau.dz', password: 'Owner-Password-1' };
 const DAY = 86_400_000;
@@ -28,7 +28,7 @@ async function world() {
     const s = (await t.platform.query(`SELECT id, schema_name FROM platform.shops WHERE id = $1`, [made.id]))[0];
     return { id: Number(s.id), schema: String(s.schema_name) };
   };
-  return { t, store };
+  return { t, store, p };
 }
 
 /** one finished order in a store: conf (the agent's verdict) / follow (the delivery), `daysAgo` days ago */
@@ -162,4 +162,49 @@ test('the network and the attacked ad send to a person — never a block on thei
   // too few finished orders to tell, or mostly real customers: nothing
   assert.equal(scoreOrder({ ...base, campaign: { decided: 5, fake: 5 } }).verdict, 'allow');
   assert.equal(scoreOrder({ ...base, campaign: { decided: 20, fake: 4 } }).verdict, 'allow');
+});
+
+test('the control room sees the protection grow: the network, the stopped orders day by day, each store', async () => {
+  const { t, store, p } = await world();
+  const a = await store('Maison Alger', 'a@maison.dz');
+  const b = await store('Maison Oran', 'b@maison.dz');
+  const c = await store('Maison Sétif', 'c@maison.dz');
+  const now = Date.now();
+  /** a landing order seen by the protection: its verdict and its reasons, `ago` ms ago */
+  const submit = (schema: string, verdict: string, codes: string[], ago: number) =>
+    t.shop(schema).query(`INSERT INTO landing_submits (verdict, score, reasons, at) VALUES ($1, 0, $2, $3)`, [verdict, JSON.stringify(codes.map((code) => ({ code, points: 30 }))), new Date(now - ago).toISOString()]);
+  // today at A: a real customer, one held by the network, one robot blocked
+  await submit(a.schema, 'allow', [], 60_000);
+  await submit(a.schema, 'review', ['shared_bad'], 120_000);
+  await submit(a.schema, 'block', ['honeypot'], 180_000);
+  // yesterday at B: one held because its ad was attacked, one real customer
+  await submit(b.schema, 'review', ['campaign_bad'], DAY + 60_000);
+  await submit(b.schema, 'allow', [], DAY + 120_000);
+  // A and B both ended badly with the same number: the network now knows it, and 2 businesses agree
+  await order(t, a.schema, '0661557788', { conf: 'fake' });
+  await order(t, b.schema, '0661557788', { follow: 'returned' });
+
+  await refreshReputation(t, now);
+  await refreshReputation(t, now); // run again: nothing is counted twice
+  const s = await protectionStats(t, now, 7);
+
+  assert.deepEqual(s.network, { stores: 4, sharing: 2, phones: 1, devices: 0, agreed: 1 }); // the 3 stores + shop #1
+  assert.deepEqual(s.totals, { orders: 5, blocked: 1, review: 2, network: 1, campaign: 1 });
+  assert.equal(s.days.length, 7);
+  const today = s.days[6];
+  assert.equal(today.day, algeriaDay(now));
+  assert.deepEqual([today.orders, today.blocked, today.review, today.network, today.stores, today.agreed], [3, 1, 1, 1, 4, 1]);
+  assert.deepEqual([today.sharing, today.phones, today.devices], [2, 1, 0]);
+  // the network's size is only known from its first day on (no made-up zeros before), even on a day with orders
+  assert.deepEqual([s.days[0].stores, s.days[0].phones, s.days[0].agreed], [null, null, null]);
+  assert.deepEqual([s.days[5].orders, s.days[5].stores, s.days[5].phones], [2, null, null]);
+  const sa = s.stores.find((x) => x.id === a.id)!;
+  assert.deepEqual([sa.name, sa.orders, sa.blocked, sa.review, sa.network], ['Maison Alger', 3, 1, 1, 1]);
+  assert.ok(sa.shared >= 1);
+  assert.equal(s.stores.find((x) => x.id === c.id)?.orders, 0);
+  assert.ok(s.lastRunAt);
+
+  // the same, through the control room's own action
+  const viaProc = await p('p.protection', { days: 7 });
+  assert.deepEqual(viaProc.totals, s.totals);
 });

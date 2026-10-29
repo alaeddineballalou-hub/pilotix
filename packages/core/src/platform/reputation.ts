@@ -125,23 +125,176 @@ async function shareShop(t: Tenancy, s: LearningShop, pepper: string, since: str
   const keys: string[] = [];
   const counts: number[] = [];
   const lasts: string[] = [];
-  const add = (key: string, v: { n: number; last: number }) => {
+  const kinds: string[] = [];
+  const add = (key: string, kind: 'phone' | 'device', v: { n: number; last: number }) => {
     keys.push(key);
+    kinds.push(kind);
     counts.push(v.n);
     lasts.push(new Date(v.last).toISOString());
   };
-  for (const [phone, v] of phones) add(phoneKey(pepper, phone), v);
-  for (const [fp, v] of devices) add(deviceKey(pepper, fp), v);
+  for (const [phone, v] of phones) add(phoneKey(pepper, phone), 'phone', v);
+  for (const [fp, v] of devices) add(deviceKey(pepper, fp), 'device', v);
   await t.platform.tx(async (tx) => {
     await tx.query(`DELETE FROM platform.fraud_reputation WHERE shop_id = $1`, [s.id]);
     if (keys.length)
       await tx.query(
-        `INSERT INTO platform.fraud_reputation (key, shop_id, owner_key, bad_n, last_bad)
-         SELECT u.k, $1, $2, u.n, u.l FROM unnest($3::text[], $4::int[], $5::timestamptz[]) AS u(k, n, l)`,
-        [s.id, s.owner, keys, counts, lasts],
+        `INSERT INTO platform.fraud_reputation (key, shop_id, owner_key, bad_n, last_bad, kind)
+         SELECT u.k, $1, $2, u.n, u.l, u.c FROM unnest($3::text[], $4::int[], $5::timestamptz[], $6::text[]) AS u(k, n, l, c)`,
+        [s.id, s.owner, keys, counts, lasts, kinds],
       );
   });
   return keys.length;
+}
+
+// ---------------------------------------------------------------- the control room's « Pilotix Protection System »
+/** how many days of orders the history keeps recounting (older days keep their last count) */
+const HISTORY_DAYS = 90;
+const STORE_DAYS = 30;
+
+/** one day's (or a period's) landing orders, all stores added up */
+export interface ProtectionCount {
+  orders: number;
+  blocked: number;
+  review: number;
+  network: number;
+  campaign: number;
+}
+const zero = (): ProtectionCount => ({ orders: 0, blocked: 0, review: 0, network: 0, campaign: 0 });
+/** an Algeria day ('YYYY-MM-DD'): Algeria is UTC+1 all year */
+export const algeriaDay = (ms: number) => new Date(ms + 3_600_000).toISOString().slice(0, 10);
+
+/** A store's landing orders day by day (Algeria time), counted as its own Protection page counts them. */
+async function ordersByDay(db: Db, since: string): Promise<Map<string, ProtectionCount>> {
+  const rows = await db.query(
+    `SELECT to_char(at AT TIME ZONE 'Africa/Algiers', 'YYYY-MM-DD') AS day,
+            count(*)::int AS orders,
+            count(*) FILTER (WHERE verdict = 'block')::int AS blocked,
+            count(*) FILTER (WHERE verdict = 'review' AND NOT merged)::int AS review,
+            count(*) FILTER (WHERE reasons @> '[{"code":"shared_bad"}]')::int AS network,
+            count(*) FILTER (WHERE reasons @> '[{"code":"campaign_bad"}]')::int AS campaign
+       FROM landing_submits WHERE at > $1 GROUP BY 1`,
+    [since],
+  );
+  return new Map(rows.map((r: any) => [String(r.day), { orders: Number(r.orders), blocked: Number(r.blocked), review: Number(r.review), network: Number(r.network), campaign: Number(r.campaign) }]));
+}
+
+/** Writes the history: the days (all stores added up), today's size of the network, each store's last 30 days. */
+async function recordProtection(t: Tenancy, stores: { id: number; shared: number; days: Map<string, ProtectionCount> }[], now: number) {
+  const all = new Map<string, ProtectionCount>();
+  const recent = algeriaDay(now - (STORE_DAYS - 1) * DAY);
+  const perStore = stores.map((s) => {
+    const sum = zero();
+    for (const [day, c] of s.days) {
+      const d = all.get(day) ?? zero();
+      for (const k of Object.keys(sum) as (keyof ProtectionCount)[]) {
+        d[k] += c[k];
+        if (day >= recent) sum[k] += c[k];
+      }
+      all.set(day, d);
+    }
+    return { id: s.id, shared: s.shared, ...sum };
+  });
+  const size = (
+    await t.platform.query(
+      `SELECT count(DISTINCT shop_id)::int AS sharing,
+              count(DISTINCT key) FILTER (WHERE kind = 'phone')::int AS phones,
+              count(DISTINCT key) FILTER (WHERE kind = 'device')::int AS devices,
+              (SELECT count(*)::int FROM (SELECT key FROM platform.fraud_reputation GROUP BY key HAVING count(DISTINCT owner_key) >= $1) a) AS agreed
+         FROM platform.fraud_reputation`,
+      [REPUTATION_MIN_SELLERS],
+    )
+  )[0];
+  const days = [...all.keys()];
+  const col = (k: keyof ProtectionCount) => days.map((d) => all.get(d)![k]);
+  await t.platform.tx(async (tx) => {
+    if (days.length)
+      await tx.query(
+        `INSERT INTO platform.protection_daily (day, orders, blocked, review, network, campaign, updated_at)
+         SELECT u.d, u.o, u.b, u.r, u.n, u.c, now() FROM unnest($1::text[], $2::int[], $3::int[], $4::int[], $5::int[], $6::int[]) AS u(d, o, b, r, n, c)
+         ON CONFLICT (day) DO UPDATE SET orders = EXCLUDED.orders, blocked = EXCLUDED.blocked, review = EXCLUDED.review,
+           network = EXCLUDED.network, campaign = EXCLUDED.campaign, updated_at = now()`,
+        [days, col('orders'), col('blocked'), col('review'), col('network'), col('campaign')],
+      );
+    // the network's size, once per day (the last run of the day wins)
+    await tx.query(
+      `INSERT INTO platform.protection_daily (day, stores, sharing, phones, devices, agreed, updated_at) VALUES ($1, $2, $3, $4, $5, $6, now())
+       ON CONFLICT (day) DO UPDATE SET stores = EXCLUDED.stores, sharing = EXCLUDED.sharing, phones = EXCLUDED.phones,
+         devices = EXCLUDED.devices, agreed = EXCLUDED.agreed, updated_at = now()`,
+      [algeriaDay(now), stores.length, Number(size?.sharing ?? 0), Number(size?.phones ?? 0), Number(size?.devices ?? 0), Number(size?.agreed ?? 0)],
+    );
+    await tx.query(`DELETE FROM platform.protection_stores`);
+    if (perStore.length)
+      await tx.query(
+        `INSERT INTO platform.protection_stores (shop_id, orders, blocked, review, network, campaign, shared)
+         SELECT * FROM unnest($1::int[], $2::int[], $3::int[], $4::int[], $5::int[], $6::int[], $7::int[])`,
+        [perStore.map((s) => s.id), perStore.map((s) => s.orders), perStore.map((s) => s.blocked), perStore.map((s) => s.review), perStore.map((s) => s.network), perStore.map((s) => s.campaign), perStore.map((s) => s.shared)],
+      );
+  });
+}
+
+export interface ProtectionDay extends ProtectionCount {
+  day: string;
+  /** the network that day (null: not recorded — before the network existed) */
+  stores: number | null;
+  sharing: number | null;
+  phones: number | null;
+  devices: number | null;
+  agreed: number | null;
+}
+
+export interface ProtectionStats {
+  /** the network now (null before its first run) */
+  network: { stores: number; sharing: number; phones: number; devices: number; agreed: number } | null;
+  /** the chosen period, all stores added up */
+  totals: ProtectionCount;
+  days: ProtectionDay[];
+  /** each store, its last 30 days */
+  stores: { id: number; name: string; slug: string; orders: number; blocked: number; review: number; network: number; campaign: number; shared: number }[];
+  minSellers: number;
+  lastRunAt: string | null;
+}
+
+/** What the control room shows: the network's size, the stopped orders day by day, each store. */
+export async function protectionStats(t: Tenancy, now = Date.now(), period = 30): Promise<ProtectionStats> {
+  const from = algeriaDay(now - (period - 1) * DAY);
+  const rows = await t.platform.query(`SELECT * FROM platform.protection_daily WHERE day >= $1 ORDER BY day`, [from]);
+  const byDay = new Map(rows.map((r: any) => [String(r.day), r]));
+  const n = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+  const days: ProtectionDay[] = [];
+  const totals = zero();
+  for (let k = period - 1; k >= 0; k--) {
+    const day = algeriaDay(now - k * DAY);
+    const r: any = byDay.get(day);
+    const d: ProtectionDay = {
+      day,
+      orders: Number(r?.orders ?? 0),
+      blocked: Number(r?.blocked ?? 0),
+      review: Number(r?.review ?? 0),
+      network: Number(r?.network ?? 0),
+      campaign: Number(r?.campaign ?? 0),
+      stores: n(r?.stores),
+      sharing: n(r?.sharing),
+      phones: n(r?.phones),
+      devices: n(r?.devices),
+      agreed: n(r?.agreed),
+    };
+    for (const key of Object.keys(totals) as (keyof ProtectionCount)[]) totals[key] += d[key];
+    days.push(d);
+  }
+  const last: any = (await t.platform.query(`SELECT * FROM platform.protection_daily WHERE stores IS NOT NULL ORDER BY day DESC LIMIT 1`))[0];
+  const stores = await t.platform.query(
+    `SELECT p.shop_id AS id, s.name, s.slug, p.orders, p.blocked, p.review, p.network, p.campaign, p.shared
+       FROM platform.protection_stores p JOIN platform.shops s ON s.id = p.shop_id ORDER BY p.orders DESC, s.name`,
+  );
+  const at = (await t.platform.query(`SELECT max(updated_at) AS at FROM platform.protection_daily`))[0]?.at;
+  return {
+    network: last ? { stores: Number(last.stores), sharing: Number(last.sharing ?? 0), phones: Number(last.phones ?? 0), devices: Number(last.devices ?? 0), agreed: Number(last.agreed ?? 0) } : null,
+    totals,
+    days,
+    stores: stores.map((r: any) => ({ id: Number(r.id), name: String(r.name), slug: String(r.slug), orders: Number(r.orders), blocked: Number(r.blocked), review: Number(r.review), network: Number(r.network), campaign: Number(r.campaign), shared: Number(r.shared) })),
+    minSellers: REPUTATION_MIN_SELLERS,
+    lastRunAt: at ? new Date(at).toISOString() : null,
+  };
 }
 
 /**
@@ -156,13 +309,19 @@ export async function refreshReputation(t: Tenancy, now = Date.now()): Promise<{
   await t.platform.query(`DELETE FROM platform.fraud_reputation WHERE NOT (shop_id = ANY($1::int[]))`, [shops.map((s) => s.id)]);
   let keys = 0;
   const errors: string[] = [];
+  const history: { id: number; shared: number; days: Map<string, ProtectionCount> }[] = [];
+  const historySince = new Date(now - HISTORY_DAYS * DAY).toISOString();
   for (const s of shops) {
     try {
-      keys += await shareShop(t, s, pepper, since);
+      const shared = await shareShop(t, s, pepper, since);
+      keys += shared;
+      history.push({ id: s.id, shared, days: await ordersByDay(t.shop(s.schema), historySince) });
     } catch (e) {
       errors.push(`shop ${s.id}: ${(e as Error).message}`);
     }
   }
+  // the control room's history; a problem there never stops the network itself
+  await recordProtection(t, history, now).catch((e) => errors.push(`history: ${(e as Error).message}`));
   return { shops: shops.length, keys, errors };
 }
 
