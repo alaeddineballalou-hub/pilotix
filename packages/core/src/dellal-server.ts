@@ -6,6 +6,9 @@ import { AppError, Ctx } from './rpc';
 import { AiRequest, AiResponse, DellalChannel, dellalSecret } from './modules/dellal';
 import { NOTIFY_SMS_SECRET, notifySettings } from './modules/notify';
 
+import { pilotKey } from './platform/pilotai';
+import type { PilotAiReq } from './modules/pilotlearn';
+
 const GRAPH = 'https://graph.facebook.com/v21.0';
 const ANTHROPIC = 'https://api.anthropic.com/v1/messages';
 
@@ -29,6 +32,46 @@ async function postJson(url: string, body: unknown, headers: Record<string, stri
     throw fail('bad_request', `${who} : ${m}`);
   }
   return data;
+}
+
+/**
+ * Pilot AI's night work as one Message Batch (half the normal price): sends the requests, checks the batch every minute
+ * (at most `maxWaitMs`, 6 hours by default), then returns the answers in the same order (null = that request failed;
+ * a batch that did not end in time is cancelled and every answer is null: those requests are not billed).
+ */
+export function pilotBatch(key: string, o: { maxWaitMs?: number; everyMs?: number } = {}) {
+  const headers = { 'x-api-key': key, 'anthropic-version': '2023-06-01' };
+  const who = 'IA (Anthropic, lot de nuit)';
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  return async (reqs: PilotAiReq[]): Promise<(string | null)[]> => {
+    if (!reqs.length) return [];
+    const requests = reqs.map((r, i) => ({ custom_id: `r${i}`, params: { model: r.model, max_tokens: r.maxTokens, system: r.system, messages: [{ role: 'user', content: r.user }] } }));
+    let b = await postJson(`${ANTHROPIC}/batches`, { requests }, headers, who, 'POST', 120_000);
+    const until = Date.now() + (o.maxWaitMs ?? 6 * 3_600_000);
+    while (b?.processing_status !== 'ended') {
+      if (Date.now() > until) {
+        await postJson(`${ANTHROPIC}/batches/${b.id}/cancel`, {}, headers, who).catch(() => null);
+        return reqs.map(() => null);
+      }
+      await wait(o.everyMs ?? 60_000);
+      b = await postJson(`${ANTHROPIC}/batches/${b.id}`, null, headers, who, 'GET').catch(() => b);
+    }
+    const out: (string | null)[] = reqs.map(() => null);
+    const res = await fetch(b.results_url, { headers, signal: AbortSignal.timeout(120_000) }).catch(() => null);
+    if (!res?.ok) return out;
+    for (const line of (await res.text()).split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const j = JSON.parse(line);
+        const i = Number(String(j.custom_id).slice(1));
+        if (j.result?.type === 'succeeded' && i >= 0 && i < out.length)
+          out[i] = (j.result.message?.content ?? []).map((c: any) => (c.type === 'text' ? c.text : '')).join('').trim() || null;
+      } catch {
+        // a broken line: that answer stays null
+      }
+    }
+    return out;
+  };
 }
 
 /** Splits a long reply on paragraph / sentence ends (Messenger: 2000 characters, WhatsApp: 4096). */
@@ -67,12 +110,15 @@ async function send(ctx: Ctx, a: { channel: DellalChannel; externalId: string; a
 }
 
 async function complete(ctx: Ctx, req: AiRequest): Promise<AiResponse> {
-  const key = await dellalSecret(ctx.db, 'ai');
+  // Pilot AI: Pilotix's own key for every shop (the control room); otherwise, on an install without it, the shop's key
+  const key = (ctx.t ? await pilotKey(ctx.t).catch(() => null) : null) || (await dellalSecret(ctx.db, 'ai'));
   if (!key) throw new AppError('bad_request', 'Clé API de l’IA manquante (Messages › Réglages).');
-  // Dellal's instructions are long and identical for every message of a conversation: cache them (tools + system),
-  // so each following message is billed mostly at the cached rate.
-  const { tools, ...rest } = req;
-  const body = { ...rest, ...(tools?.length ? { tools } : {}), system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }] };
+  // Dellal's instructions are long: each block is cached on its own (the part every shop shares, this shop's part, this
+  // conversation's part), so a new chat reuses the first two and each following message is billed mostly at the cached rate.
+  const { tools, systemBlocks, ...rest } = req;
+  const blocks = (systemBlocks ?? []).filter((b) => b.trim()).slice(0, 4);
+  const system = (blocks.length ? blocks : [req.system]).map((text) => ({ type: 'text', text, cache_control: { type: 'ephemeral' } }));
+  const body = { ...rest, ...(tools?.length ? { tools } : {}), system };
   const data = await postJson(ANTHROPIC, body, { 'x-api-key': key, 'anthropic-version': '2023-06-01' }, 'IA (Anthropic)', 'POST', 180_000);
   return { content: data.content ?? [], stop_reason: data.stop_reason ?? 'end_turn', usage: data.usage };
 }

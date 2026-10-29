@@ -1,6 +1,7 @@
 // The platform's tables (schema "platform"): the shops, their plans and payments, Pilotix staff, the e-mail → shop
 // index used at login, settings and the journal. Applied before every shop's own migrations.
 import type { Tenancy } from './tenancy';
+import { PILOT_PLATFORM_SQL } from '../modules/pilotlearn';
 
 const P001 = `
 CREATE SCHEMA IF NOT EXISTS platform;
@@ -543,6 +544,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p009_fraud_reputation', P009],
   ['p010_protection_history', P010],
   ['p011_buyer_quality', P011],
+  // Pilot AI: what Dellal learns from every sharing shop's chats (modules/pilotlearn.ts)
+  ['p012_pilot_ai', PILOT_PLATFORM_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

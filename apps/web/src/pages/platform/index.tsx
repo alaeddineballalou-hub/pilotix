@@ -21,6 +21,7 @@ import { Journal } from './Journal';
 import { LoginDesigns } from './LoginDesigns';
 import { Messages } from './Messages';
 import { Payments } from './Payments';
+import { PilotAiPage } from './PilotAi';
 import { Plans } from './Plans';
 import { ProtectionPage } from './Protection';
 import { Receipt } from './Receipt';
@@ -37,6 +38,7 @@ const SECTIONS: Section[] = [
   { id: 'dashboard', icon: 'grid' },
   { id: 'doctor', icon: 'sparkles', roles: ['owner', 'manager'] },
   { id: 'protection', icon: 'shield', roles: ['owner', 'manager'] },
+  { id: 'pilot', icon: 'sparkles' },
   { id: 'shops', icon: 'store' },
   { id: 'couriers', icon: 'truck' },
   { id: 'agencies', icon: 'headset' },
@@ -204,6 +206,7 @@ function PlatformShell({ staff, parts, onLogout, demo }: { staff: Staff; parts: 
   else if (cur === 'doctor') page = <DoctorPage demo={demo} owner={demo || staff?.role === 'owner'} />;
   else if (cur === 'protection') page = <ProtectionPage demo={demo} />;
   else if (cur === 'payments') page = <Payments staff={staff} />;
+  else if (cur === 'pilot') page = <PilotAiPage staff={staff} />;
   else if (cur === 'signups') page = <Signups />;
   else if (cur === 'agencies') page = <Agencies staff={staff} />;
   else if (cur === 'marketers') page = <Agencies staff={staff} kind="marketer" />;

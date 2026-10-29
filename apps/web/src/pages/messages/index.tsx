@@ -578,6 +578,22 @@ function Results() {
   );
 }
 
+// ---------------------------------------------------------------- Pilot AI (the shop's side)
+/** Pilot AI: the AI is Pilotix's (no key here); the shop chooses to share its chats, without personal data, to teach it. */
+function PilotCard({ name, on, share }: { name: string; on: boolean; share: boolean }) {
+  const { t } = useTranslation();
+  const save = useAction('dellal.pilot.save', { success: t('messages.settings.saved') });
+  return (
+    <Card title="Pilot AI" help={t('messages.settings.pilotHelp')}>
+      <p className={on ? '' : 'muted'}>{on ? t('messages.settings.pilotOn', { name }) : t('messages.settings.pilotOff', { name })}</p>
+      <label className="check">
+        <input type="checkbox" checked={share} disabled={save.isPending} onChange={(e) => save.mutate({ share: e.target.checked })} /> {t('messages.settings.pilotShare')}
+      </label>
+      <p className="muted small">{t(share ? 'messages.settings.pilotShareOn' : 'messages.settings.pilotShareOff')}</p>
+    </Card>
+  );
+}
+
 // ---------------------------------------------------------------- settings (admin)
 type Secret = 'ai' | 'appSecret' | 'pageToken' | 'waToken' | 'tiktokToken';
 
@@ -590,6 +606,7 @@ function Settings() {
 
 function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'dellal.settings.get'>>['data']> }) {
   const { t } = useTranslation();
+  const pilot = useRpc('dellal.pilot.get', {});
   const [f, setF] = useState(data.settings);
   const [sec, setSec] = useState<Partial<Record<Secret, string | null>>>({});
   const save = useAction('dellal.settings.save', {
@@ -704,10 +721,15 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'de
         </Field>
       </Card>
 
-      <Card title={t('messages.settings.ai')} help={t('messages.settings.aiHelp')}>
-        {secret('ai', t('messages.settings.aiKey'), 'sk-ant-…')}
-        {!data.has.ai && <p className="muted small">{t('messages.settings.aiNone', { name: f.name })}</p>}
-      </Card>
+      {/* on Pilotix's server the AI is Pilotix's (Pilot AI): the shop adds no key, it only chooses to share its chats */}
+      {pilot.data?.platform ? (
+        <PilotCard name={f.name} on={pilot.data.on} share={pilot.data.share} />
+      ) : (
+        <Card title={t('messages.settings.ai')} help={t('messages.settings.aiHelp')}>
+          {secret('ai', t('messages.settings.aiKey'), 'sk-ant-…')}
+          {!data.has.ai && <p className="muted small">{t('messages.settings.aiNone', { name: f.name })}</p>}
+        </Card>
+      )}
 
       <Card title={t('messages.settings.channels')} help={t('messages.settings.channelsHelp')}>
         <div className="dl-hook">

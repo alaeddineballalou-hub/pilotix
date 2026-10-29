@@ -392,3 +392,52 @@ html body .pp-prot .kpi.big .v { font-size: 36px !important; }
 .pp-q-alert li .ltr { font-weight: 800; font-variant-numeric: tabular-nums; }
 .pp-q-alert li small { color: var(--coral); font-weight: 700; }
 .pp-q-alert-n { color: var(--muted); font-size: 12px; }
+/* the buyers' quality (Protection System): real buyers in blue — told apart from the coral fakes even with colour
+   blindness (checked on the light and dark surfaces) — the rest grey */
+.pp-prot { --pp-c-q: #127A9E; }
+html[data-theme="dark"] .pp-prot { --pp-c-q: #3B9BC0; }
+@media (prefers-color-scheme: dark) { html:not([data-theme="light"]) .pp-prot { --pp-c-q: #3B9BC0; } }
+.pp-q-grid { display: grid; grid-template-columns: minmax(250px, 1fr) minmax(0, 2.4fr); gap: 24px; align-items: start; }
+@media (max-width: 900px) { .pp-q-grid { grid-template-columns: minmax(0, 1fr); } }
+.pp-q-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.pp-q-lead { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.pp-q-lead b { font-size: 36px; font-weight: 900; line-height: 1.05; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.pp-q-lead span { font-size: 14px; color: var(--muted); font-weight: 600; }
+.pp-q-trend { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--muted); }
+.pp-q-dir { font-weight: 800; }
+.pp-q-pts { font-weight: 800; font-variant-numeric: tabular-nums; }
+.pp-q-trend.up .pp-q-dir, .pp-q-trend.up .pp-q-pts { color: var(--ok); }
+.pp-q-trend.down .pp-q-dir, .pp-q-trend.down .pp-q-pts { color: var(--coral); }
+.pp-q-trend.flat .pp-q-dir { color: var(--ink); }
+.pp-q-bar { display: flex; gap: 2px; height: 12px; border-radius: 999px; overflow: hidden; }
+.pp-q-bar i { display: block; min-width: 3px; }
+.q-good { background: var(--pp-c-q); }
+.q-bad { background: var(--pp-c-b); }
+.q-rest { background: var(--pp-c-p); }
+.pp-q-parts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.pp-q-parts li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto 52px; align-items: baseline; gap: 8px; padding: 4px 0; font-size: 13px; }
+.pp-q-parts i { width: 10px; height: 10px; border-radius: 2px; align-self: center; }
+.pp-q-parts span { color: var(--muted); min-width: 0; }
+.pp-q-parts b { font-variant-numeric: tabular-nums; color: var(--ink); text-align: end; }
+.pp-q-parts small { font-size: 12px; color: var(--muted); text-align: end; font-variant-numeric: tabular-nums; }
+.pp-q-chart { display: flex; flex-direction: column; gap: 6px; }
+.pp-q-lg { justify-content: flex-end; }
+.pp-lg i.qa { background: var(--pp-c-q); height: 3px; width: 14px; border-radius: 2px; }
+.pp-lg i.qd { background: color-mix(in srgb, var(--muted) 55%, transparent); height: 2px; width: 14px; border-radius: 2px; }
+.pp-lg i.qo { background: color-mix(in srgb, var(--muted) 16%, transparent); width: 14px; height: 10px; border-radius: 2px; }
+.pp-chart path.qa { fill: none; stroke: var(--pp-c-q); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.pp-chart path.qd { fill: none; stroke: color-mix(in srgb, var(--muted) 45%, transparent); stroke-width: 1.5; stroke-linejoin: round; }
+.pp-chart .pp-q-open { fill: color-mix(in srgb, var(--muted) 7%, transparent); }
+.pp-chart .dt.q { stroke: var(--pp-c-q); }
+/* Pilot AI: last night's outcomes, the coach's lessons, the anonymized chat behind a lesson, the running test */
+.pilot-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.pilot-page .chip.o-delivered { background: var(--ok-soft); color: var(--ok); }
+.pilot-page .chip.o-refused, .pilot-page .chip.o-cancelled { background: var(--coral-soft); color: var(--coral); }
+.pilot-page .chip.o-fake, .pilot-page .chip.o-pending { background: var(--warn-soft); color: var(--warn); }
+.pilot-lessons { display: flex; flex-direction: column; gap: 12px; }
+.pilot-lesson { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--raise); }
+.pilot-lesson textarea { width: 100%; resize: vertical; font: inherit; field-sizing: content; min-height: 3lh; }
+.pilot-page .btn { max-width: 100%; white-space: normal; text-align: start; }
+.pilot-note { flex: 1 1 160px; min-width: 0; }
+.pilot-test { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 12px; }
+.pilot-transcript { white-space: pre-wrap; word-break: break-word; max-height: 55vh; overflow: auto; padding: 12px; border-radius: 10px; background: var(--raise); border: 1px solid var(--line); font-size: 13px; line-height: 1.5; }

@@ -43,6 +43,8 @@ import {
   toPlan,
 } from './shops';
 import type { Tenancy } from './tenancy';
+import * as pilot from '../modules/pilotlearn';
+import { pilotConfig, savePilotConfig } from './pilotai';
 
 export const STAFF_ROLES = ['owner', 'manager', 'support'] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
@@ -1026,7 +1028,99 @@ export const PLATFORM_REGISTRY = {
     await audit(ctx, 'demo.reset', s.id, {});
     return { ok: true };
   }),
+
+  // ---------------------------------------------------------------- Pilot AI (Dellal's learning): settings, the coach, books
+  /** Everything the Pilot AI page shows: settings (never the key), last night, lessons waiting, books and the test. */
+  'p.pilot.state': pproc(ALL, z.object({}), async (ctx) => {
+    const pdb = ctx.t.platform;
+    const [config, night, candidates, approved, books, sharing] = await Promise.all([
+      pilotConfig(ctx.t),
+      pilot.lastNight(pdb),
+      pilot.listCandidates(pdb, { status: 'candidate', limit: 50 }),
+      pilot.listCandidates(pdb, { status: 'approved', limit: 50 }),
+      pilot.listBooks(pdb),
+      pdb.query(`SELECT count(DISTINCT shop_id)::int AS shops, count(*)::int AS cases FROM platform.pilot_cases`),
+    ]);
+    return { config, night, candidates, approved, books, sharing: { shops: num(sharing[0]?.shops), cases: num(sharing[0]?.cases) } };
+  }),
+  'p.pilot.save': pproc(
+    MANAGERS,
+    z.object({ enabled: z.boolean(), maxUsd: z.number().min(0).max(5), share: z.number().min(0.05).max(0.5), key: z.string().max(300).nullable().optional() }),
+    async (ctx, i) => {
+      const key = i.key === undefined ? undefined : i.key === null ? null : i.key.trim() || undefined;
+      if (typeof key === 'string' && !/^sk-ant-[A-Za-z0-9_-]{20,}$/.test(key)) throw bad('Clé Anthropic invalide (elle commence par sk-ant-)');
+      await savePilotConfig(ctx.t, { enabled: i.enabled, maxUsd: i.maxUsd, share: i.share }, key);
+      await audit(ctx, 'pilot.settings', null, { enabled: i.enabled, maxUsd: i.maxUsd, share: i.share, key: key === undefined ? 'kept' : key === null ? 'removed' : 'new' });
+      return pilotConfig(ctx.t);
+    },
+  ),
+  /** The coach: approve (optionally with a new text), edit, or reject a lesson. Every text is checked again. */
+  'p.pilot.lesson': pproc(
+    ALL,
+    z.object({ id: z.number().int().positive(), action: z.enum(['approve', 'edit', 'reject']), text: z.string().max(400).optional(), note: z.string().max(300).optional() }),
+    async (ctx, i) => {
+      const by = ctx.staff.name || ctx.staff.email;
+      const pdb = ctx.t.platform;
+      const r =
+        i.action === 'reject'
+          ? await pilot.rejectLesson(pdb, i.id, by, i.note)
+          : i.action === 'edit'
+            ? await pilot.editLesson(pdb, i.id, by, i.text ?? '')
+            : await pilot.approveLesson(pdb, i.id, by, i.text);
+      if (!r.ok) throw bad(lessonErr(r));
+      return r;
+    },
+  ),
+  /** One anonymized chat behind a lesson (the coach checks the evidence). */
+  'p.pilot.case': pproc(ALL, z.object({ shopId: z.number().int().positive(), convId: z.number().int().positive() }), async (ctx, i) => {
+    const c = await pilot.caseText(ctx.t.platform, i.shopId, i.convId);
+    if (!c) throw notFound('Conversation introuvable');
+    return c;
+  }),
+  /** A new book from the approved lessons: tried on a share of new chats against the current one. */
+  'p.pilot.publish': pproc(MANAGERS, z.object({ note: z.string().max(300).optional() }), async (ctx, i) => {
+    const c = await pilotConfig(ctx.t);
+    const r = await pilot.publishBook(ctx.t.platform, { by: ctx.staff.name || ctx.staff.email, share: c.share, note: i.note, now: new Date(ctx.now()) });
+    if (!r.ok) throw bad(lessonErr(r));
+    await audit(ctx, 'pilot.publish', null, { book: (r as any).bookId ?? null });
+    return r;
+  }),
+  'p.pilot.promote': pproc(MANAGERS, z.object({ testId: z.number().int().positive() }), async (ctx, i) => {
+    const r = await pilot.promote(ctx.t.platform, i.testId, ctx.staff.name || ctx.staff.email, { now: new Date(ctx.now()) });
+    if (!r.ok) throw bad(lessonErr(r));
+    await audit(ctx, 'pilot.promote', null, { test: i.testId });
+    return r;
+  }),
+  'p.pilot.stop': pproc(MANAGERS, z.object({ testId: z.number().int().positive(), reason: z.string().max(300).optional() }), async (ctx, i) => {
+    const r = await pilot.stopTest(ctx.t.platform, i.testId, ctx.staff.name || ctx.staff.email, i.reason, { now: new Date(ctx.now()) });
+    if (!r.ok) throw bad(lessonErr(r));
+    await audit(ctx, 'pilot.stop', null, { test: i.testId });
+    return r;
+  }),
+  'p.pilot.rollback': pproc(MANAGERS, z.object({}), async (ctx) => {
+    const r = await pilot.rollback(ctx.t.platform, ctx.staff.name || ctx.staff.email, { now: new Date(ctx.now()) });
+    if (!r.ok) throw bad(lessonErr(r));
+    await audit(ctx, 'pilot.rollback', null, {});
+    return r;
+  }),
 };
+
+/** The engine's refusals, in the control room's words. */
+const LESSON_ERR: Record<string, string> = {
+  who: 'Personne connectée inconnue',
+  not_found: 'Introuvable',
+  empty: 'Le texte est vide',
+  lint: 'Cette leçon n’est pas sûre',
+  duplicate: 'Cette leçon existe déjà',
+  no_change: 'Rien à changer : aucune leçon approuvée de plus que le livre actuel',
+  not_approved: 'Seules les leçons approuvées entrent dans un livre',
+  test_running: 'Un test est déjà en cours : arrêtez-le ou attendez son résultat',
+  not_running: 'Aucun test en cours',
+  not_proven: 'Le test n’a pas encore prouvé que le nouveau livre vend au moins aussi bien',
+  nothing_to_roll_back: 'Pas de livre précédent',
+};
+const lessonErr = (r: { error?: string; problems?: string[] }) =>
+  (LESSON_ERR[r.error ?? ''] ?? 'Impossible') + (r.problems?.length ? ` (${r.problems.join(', ')})` : '');
 
 /** Everything a payment's receipt shows. */
 async function receiptOf(t: Tenancy, id: number) {

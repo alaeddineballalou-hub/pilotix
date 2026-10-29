@@ -29,6 +29,7 @@ import { syncTurnstile } from './turnstile';
  *  - Pilot Auto Assign: « Livraison privée » orders waiting too long in « À attribuer » go to the backup company, every 5 minutes
  *  - Couverture: the tariffs and bureaus of the companies with an API imported again, every night
  *  - the demo shop starts again from fresh demo data every night
+ *  - Pilot AI: every night, the chats of the shops that share them (personal data removed) teach Dellal (one Message Batch)
  * A job whose feature is not in a shop's plan is skipped for that shop.
  */
 const FEATURE: Record<string, string | null> = {
@@ -133,6 +134,11 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
           if (st.lastError) throw new Error(st.lastError);
           return { domains: st.domains, widgets: st.widgets.length };
         }
+        if (job.name === 'pilot-ai-night') {
+          // started on its own: the AI batch can take a while and must not hold the other jobs (one worker)
+          void this.pilotNight();
+          return { started: true };
+        }
         if (job.name === 'demo-reset') {
           for (const s of await core.loadShops(this.core.t))
             if (s.demo && !s.primary && s.status === 'active') {
@@ -192,10 +198,55 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.queue.add('partitions', {}, { repeat: { pattern: '0 3 1 * *' }, jobId: 'partitions', removeOnComplete: 10 });
     // 03:40 UTC = 04:40 in Algeria: nobody is visiting the demo
     await this.queue.add('demo-reset', {}, { repeat: { pattern: '40 3 * * *' }, jobId: 'demo-reset', removeOnComplete: 10, removeOnFail: 20 });
+    // 02:30 in Algeria: Dellal learns from the day's chats while nobody is buying; the coach finds the lessons in the morning
+    await this.queue.add('pilot-ai-night', {}, { repeat: { pattern: '30 2 * * *', tz: 'Africa/Algiers' }, jobId: 'pilot-ai-night', removeOnComplete: 20, removeOnFail: 50 });
     // every morning at 08:00 in Algeria (what the control room's settings say), whatever the server's time zone
     await this.queue.add('platform-reminders', {}, { repeat: { pattern: '0 8 * * *', tz: 'Africa/Algiers' }, jobId: 'platform-reminders', removeOnComplete: 20, removeOnFail: 50 });
     // the delivery companies' APIs looked at every morning, before the work day (Algeria time)
     await this.queue.add('courier-watch', {}, { repeat: { pattern: '20 7 * * *', tz: 'Africa/Algiers' }, jobId: 'courier-watch', removeOnComplete: 20, removeOnFail: 50 });
+  }
+
+  private pilotBusy = false;
+  /**
+   * Pilot AI, every night: each sharing shop's new or changed chats go to the platform (names, phones, addresses removed
+   * inside the shop), then Dellal's learning runs once for all (scores, the AI batch, lessons for the coach, the test).
+   */
+  private async pilotNight(): Promise<void> {
+    if (this.pilotBusy) return;
+    this.pilotBusy = true;
+    const log = new Logger('Pilot AI');
+    try {
+      const t = this.core.t;
+      const conf = await core.pilotConfig(t);
+      if (!conf.enabled) return;
+      const pdb = t.platform;
+      const now = new Date();
+      let shops = 0;
+      for (const ref of await this.core.jobShops()) {
+        if (ref.shop.demo || !featureOn(ref.rules.features, 'pilotai/messages')) continue;
+        try {
+          if (!(await core.pilotShare(ref.db))) continue;
+          const since = await core.pilotLearn.pilotSince(pdb, ref.shop.id);
+          const cases = await core.pilotLearn.collectCases(ref.db, { shopId: ref.shop.id, since, now, limit: 2000 });
+          await core.pilotLearn.saveCases(pdb, cases);
+          await core.pilotLearn.pilotAdvance(pdb, ref.shop.id, core.pilotLearn.nextSince(cases, { limit: 2000, now, since }));
+          shops++;
+        } catch (e) {
+          log.warn(`[${ref.shop.slug}] ${(e as Error).message}`);
+        }
+      }
+      const key = await core.pilotKey(t);
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const batch = key ? require('@pilotix/core/dist/dellal-server').pilotBatch(key) : null;
+      const r = await core.pilotLearn.learnNight(pdb, batch, { now: new Date(), maxUsd: conf.maxUsd });
+      log.log(`${shops} shop(s) · ${r.cases.total} chat(s) · ${r.spend.line}`);
+      doctorState.job('pilot-ai-night', true);
+    } catch (e) {
+      doctorState.job('pilot-ai-night', false, (e as Error).message);
+      log.error(`failed: ${(e as Error).message}`);
+    } finally {
+      this.pilotBusy = false;
+    }
   }
 
   async onModuleDestroy() {

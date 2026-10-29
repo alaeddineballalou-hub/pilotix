@@ -175,7 +175,7 @@ check(
   it('config'),
 );
 check(['ok', 'warn'].includes(it('silentShops')?.level) && !(it('silentShops').list ?? []).some((l) => /démo|demo/i.test(l.label)), 'silent shops checked (the demo shop is never counted)', it('silentShops'));
-check(R.jobs.length === 12 && R.jobs.every((j) => ['ok', 'late', 'failing', 'waiting', 'off'].includes(j.state)), 'the 12 jobs with a state', R.jobs);
+check(R.jobs.length === 13 && R.jobs.every((j) => ['ok', 'late', 'failing', 'waiting', 'off'].includes(j.state)), 'the 13 jobs with a state', R.jobs);
 check(R.errors.some((e) => e.level === 'warn' && /TRUST_PROXY/.test(e.message)), 'a warning the server wrote shows in the report', R.errors);
 for (const i of R.items) for (const l of i.list ?? []) check(Number.isFinite(l.n) && typeof l.label === 'string', `${i.id}: a clean line`, l);
 

@@ -34,6 +34,8 @@ export { syncAgency, syncLink, agencyCounts, monthBounds, monthNow } from './mod
 export { agencyGate, AGENCY_AGENT_PROCS, MARKETER_AGENT_PROCS, MARKETER_SELLER_PROCS, SELLER_PROCS, sellerProcsOf } from './modules/agencyscope';
 export { FANOUT_PROCS } from './modules/agencywork';
 export { listPros, proByCode, computeProStats, STATS_HOURS } from './modules/pro';
+export * as pilotLearn from './modules/pilotlearn';
+export { pilotOn, pilotShare } from './modules/dellal';
 
 /** A partner's team changed (a person closed, given other roles): its people's accounts in the stores follow. */
 const AGENCY_TEAM = new Set(['users.create', 'users.update', 'admin.users.resetPassword', 'me.delete']);

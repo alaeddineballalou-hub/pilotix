@@ -12,3 +12,4 @@ export * from './domains';
 export * from './courierTests';
 export * from './reputation';
 export * from './courierWatch';
+export * from './pilotai';

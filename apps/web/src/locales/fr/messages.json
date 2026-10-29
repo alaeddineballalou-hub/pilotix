@@ -157,6 +157,12 @@
     "darijaPreferPh": "Mar7ba bik / biki\nSaha khouya / khti\nTkhalles ki testalem\nBla mziya",
     "darijaAvoid": "Mots à ne jamais écrire",
     "darijaAvoidHint": "Un par ligne. Mettez le bon mot après une flèche : « frero → khouya ».",
-    "darijaAvoidPh": "frero → khouya\nhabibti → khti"
+    "darijaAvoidPh": "frero → khouya\nhabibti → khti",
+    "pilotHelp": "L'IA de Dellal est fournie par Pilotix : vous n'avez aucune clé à mettre.",
+    "pilotOn": "{{name}} répond avec l'IA de Pilotix, et devient meilleur chaque nuit grâce aux leçons validées par l'équipe Pilotix.",
+    "pilotOff": "L'IA de Pilotix n'est pas encore active : {{name}} répond avec ses réponses de démonstration.",
+    "pilotShare": "Partager mes conversations pour rendre Pilot AI plus intelligent",
+    "pilotShareOn": "Chaque nuit, vos conversations sont lues sans noms, numéros, adresses, produits ni prix (ils sont retirés dans votre boutique). L'équipe Pilotix peut lire ces conversations anonymes pour valider les leçons. Vos prix, produits et clients ne sont jamais montrés aux autres boutiques.",
+    "pilotShareOff": "Vos conversations ne sont pas partagées. Si vous arrêtez le partage, ce que Pilot AI avait gardé de vos conversations est supprimé tout de suite."
   }
 }
