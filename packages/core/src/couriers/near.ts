@@ -1,8 +1,10 @@
 // Near Delivery. Auth: headers ApiKey: <api_key> and ApiSecret: <api_secret>. Base https://api.neardelivery.app/api/v1.
 // Near delivers ONLY to pickup points (buralistes / centres): the customer collects the parcel there; no home delivery.
 // Endpoints (from vargo's NearDelivery driver): POST parcels {parcels:[…]} → {data:[{tracking_number, id|parcel_id}]} (create),
-// PATCH parcels/{id} (change), DELETE parcels/{id} (cancel), GET track/{tracking} → {data:{current_status, current_status_value…}},
-// GET parcels/{tracking}/status-history/sender → {data:[{current_status:{name, code}, occurred_at, center}]},
+// PATCH parcels/{id} (change), DELETE parcels/{id} (cancel), GET sender/parcels/{tracking} → {data:{current_status, current_status_value…}},
+// GET sender/parcels/{tracking}/status-history → {data:[{current_status:{name, code}, occurred_at, center}]}.
+// CHECKED from the internet (Oct 2026): vargo's track/{tracking} and parcels/{tracking}/status-history/sender do NOT exist
+// (route not found); sender/parcels/{tracking} and sender/parcels/{tracking}/status-history do.
 // GET sender/parcels/{tracking}/bordereau (label PDF), GET sender/delivery-fees, GET sender/wilayas → {data:[{code, name,
 // communes:[{id, code, name}]}]}, GET sender/buralists and sender/centers → {data:[{id, center_name, address, commune_code,
 // wilaya_code, phone}]}.
@@ -124,7 +126,7 @@ function itemsFor(p: Parcel, total: number) {
 
 /** Near's own parcel id: kept at sending, else read from its tracking. */
 async function trackInfo(c: CourierCompany, tracking: string) {
-  const d = dataOf(await api(c, `track/${encodeURIComponent(tracking)}`));
+  const d = dataOf(await api(c, `sender/parcels/${encodeURIComponent(tracking)}`));
   const x = Array.isArray(d) ? d[0] : d;
   if (!x || typeof x !== 'object') throw new CourierError(`Colis ${tracking} introuvable chez ${c.name}`);
   return x;
@@ -212,7 +214,7 @@ export const near: CourierAdapter = {
   async parcel(c, it): Promise<ParcelInfo> {
     keys(c);
     const x = await trackInfo(c, it.tracking);
-    const hist = await api(c, `parcels/${encodeURIComponent(it.tracking)}/status-history/sender`).catch((e) => (String(e?.message).includes('refuse les clés') ? Promise.reject(e) : null));
+    const hist = await api(c, `sender/parcels/${encodeURIComponent(it.tracking)}/status-history`).catch((e) => (String(e?.message).includes('refuse les clés') ? Promise.reject(e) : null));
     const s = statusOf(x.current_status_value, x.current_status);
     const rc = x.recipient && typeof x.recipient === 'object' ? x.recipient : {};
     const bur = x.buralist ?? x.pickup_point ?? x.center ?? null;

@@ -9,7 +9,7 @@
 // BEST GUESS (check with real keys):
 // - getManyTracking: its parameters are not in vargo; we send tracking=<t1,t2,…> and group the events by their Tracking,
 //   then fall back to getTracking one by one for the parcels it did not answer.
-// - getOrders/{tracking} (path form, as given); falls back to getOrders?tracking= (the form vargo really calls).
+// - getOrders?tracking= (checked from the internet: the path form getOrders/{tracking} does not exist).
 // - price = total − delivery fee, with the fee in fraisDeLivraison (vargo sends product prices + fraisDeLivraison apart).
 // - wilaya sent by its NAME (vargo's test sends « Alger »); the stop desk is chosen by Elogistia from the commune
 //   (insertCommande takes no office id: stop_desk 2 = desk, 1 = home).
@@ -71,10 +71,8 @@ async function history(c: CourierCompany, tracking: string) {
 }
 
 async function order(c: CourierCompany, tracking: string) {
-  const r = await api(c, `getOrders/${encodeURIComponent(tracking)}`).catch((e) => {
-    if (String(e.message).includes('refuse les clés')) throw e;
-    return api(c, 'getOrders', { tracking });
-  });
+  // getOrders?tracking= (checked Oct 2026: the path form getOrders/{tracking} does not exist)
+  const r = await api(c, 'getOrders', { tracking });
   const list = body(r);
   return list.find((x) => String(x?.Tracking ?? x?.tracking ?? '') === tracking) ?? list[0] ?? (r && !Array.isArray(r) && (r.Tracking || r.tracking) ? r : null);
 }
