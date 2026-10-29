@@ -13,6 +13,7 @@ import i18n from '../../lib/i18n';
 import { Icon, Loading, StatusBadge } from '../../ui/kit';
 import { Float } from '../../ui/Float';
 import { toast } from '../../ui/toast';
+import './check.css';
 
 interface Line {
   productId: number;
@@ -86,6 +87,22 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
   const [modeTouched, setModeTouched] = useState(false);
   const opts = useRpc('confirmation.deskOptions', { wilayaId: wil }, { staleTime: 5 * 60_000 });
   const modeFee = useRpc('confirmation.gridFee', { id: order.id, isStopdesk: desk, ...(wil !== order.wilayaId ? { wilayaId: wil } : {}) }, { staleTime: 60_000 });
+  // the two checks before « Confirmer » (the server runs the same ones): each product's state, and whether we deliver
+  // there — for the cart and the place as they are on screen, saved or not
+  const deskCompany = desk && deskId ? (opts.data?.desks.find((d) => d.id === deskId)?.companyId ?? null) : null;
+  const chk = useRpc(
+    'orders.confirmCheck',
+    {
+      id: order.id,
+      items: L.map((l) => ({ productId: l.productId, variantId: l.variantId ?? null, qty: l.qty })),
+      wilayaId: wil ?? null,
+      commune: desk ? null : com || null,
+      isStopdesk: desk,
+      stopdeskId: desk ? deskId : null,
+      companyId: deskCompany ?? order.companyId ?? null,
+    },
+    { staleTime: 10_000 },
+  );
   useEffect(() => {
     setL(initial);
     setFee(order.deliveryFee);
@@ -188,6 +205,41 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
     const n = stockOf(l);
     return n !== null && n < l.qty;
   });
+  const C = chk.data;
+  // the check's answer for a cart line (undefined: the check is not back yet for this cart)
+  const lineOf = (i: number) => {
+    const c = C?.lines[i];
+    const l = L[i];
+    return c && l && c.productId === l.productId && c.variantId === (l.variantId ?? null) ? c : undefined;
+  };
+  const lineState = (i: number) => lineOf(i)?.state;
+  const lineLeft = (i: number) => lineOf(i)?.available;
+  const wName = (w: number | null) => (w ? `${String(w).padStart(2, '0')} ${wilayaName(w)}` : '');
+  /** why « Confirmer » is off, or what « Confirmer sans stock » means — one short line under the totals */
+  const chkNote: { tone: 'bad' | 'warn'; text: string; fix?: () => void } | null = !C
+    ? out.length
+      ? { tone: 'warn', text: t('confirmation.d6.warn', { names: out.map((l) => l.name).join(', ') }) }
+      : null
+    : !L.length
+      ? { tone: 'bad', text: t('confirmation.d.keepOne') }
+      : C.off
+        ? { tone: 'bad', text: t('confirmation.chk.offNote', { names: C.lines.filter((x) => x.state === 'off').map((x) => x.name).join(', ') }) }
+        : !C.deliver.ok
+          ? C.deliver.why === 'commune'
+            ? { tone: 'bad', text: t('confirmation.chk.commune'), fix: () => setGeoPick('com') }
+            : C.deliver.why === 'wilaya'
+              ? { tone: 'bad', text: t('confirmation.chk.wilaya'), fix: () => setGeoPick('wil') }
+              : C.deliver.why === 'desk'
+                ? { tone: 'bad', text: t('confirmation.chk.desk'), fix: () => setPicker(true) }
+                : C.deliver.why === 'company'
+                  ? { tone: 'bad', text: t(C.deliver.desk ? 'confirmation.chk.companyDesk' : 'confirmation.chk.companyHome', { co: C.deliver.companyName ?? '', w: wName(C.deliver.wilayaId) }) }
+                  : { tone: 'bad', text: t(C.deliver.desk ? 'confirmation.chk.nobodyDesk' : 'confirmation.chk.nobodyHome', { w: wName(C.deliver.wilayaId) }) }
+          : C.noStock
+            ? { tone: 'warn', text: t(order.confStatus === 'no_stock' ? 'confirmation.chk.stillNote' : 'confirmation.chk.noStockNote', { names: C.lines.filter((x) => x.state === 'empty').map((x) => x.name).join(', ') }) }
+            : null;
+  const blockedNow = !!C && (!C.canConfirm || !L.length);
+  const sansStock = !!C && C.canConfirm && C.noStock;
+  const stillNoStock = sansStock && order.confStatus === 'no_stock';
   const cartBody = L.map((l) => ({ productId: l.productId, variantId: l.variantId, qty: l.qty, unitPrice: l.unitPrice, isUpsell: l.isUpsell }));
   /** Saves the cart and the delivery when they changed (before any status change). Returns false when it could not. */
   const saveFirst = async (): Promise<boolean> => {
@@ -226,6 +278,8 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
     }
   };
   const confirm = () => run(() => rpc('orders.setConf', { ids: [order.id], status: 'confirmed' }), t('confirmation.d6.confirmed', { ref: order.ref }));
+  /** nothing left for a product: confirmed « sans stock », it waits for stock (oldest first) before the depot */
+  const confirmNoStock = () => run(() => rpc('orders.setConf', { ids: [order.id], status: 'no_stock' }), t('confirmation.chk.doneNoStock', { ref: order.ref }));
 
   return (
     <div className={`qd2-main qd3 qd5 qd6${phone ? ' qd6-ph' : ''}`}>
@@ -301,7 +355,7 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
             const pk = p?.packs.find((x) => x.qty === l.qty && Math.round(x.price / x.qty) === Math.round(l.unitPrice));
             const n = stockOf(l);
             return (
-              <div key={`${l.productId}-${l.variantId}-${i}`} className="qd6-line">
+              <div key={`${l.productId}-${l.variantId}-${i}`} className={`qd6-line${lineState(i) === 'off' ? ' off' : ''}`}>
                 <span className="qd6-thumb" aria-hidden="true">
                   <Icon name="package" />
                 </span>
@@ -325,11 +379,25 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
                     {p && <span className="ltr">{p.variants.find((v) => v.id === l.variantId)?.sku ?? p.sku}</span>}
                   </div>
                 </div>
-                {n !== null && (
-                  <span className={`qd5-stock ${n >= l.qty ? 'ok' : 'bad'}`}>
+                {lineState(i) === 'off' ? (
+                  <span className="qd5-stock off">
                     <i />
-                    {n >= l.qty ? t('confirmation.d6.inStock', { n }) : t('confirmation.d6.outStock', { n })}
+                    {t('confirmation.chk.off')}
                   </span>
+                ) : lineLeft(i) !== undefined ? (
+                  lineLeft(i) !== null && (
+                    <span className={`qd5-stock ${lineState(i) === 'ok' ? 'ok' : 'bad'}`}>
+                      <i />
+                      {lineState(i) === 'ok' ? t('confirmation.d6.inStock', { n: lineLeft(i) }) : t('confirmation.chk.left', { n: lineLeft(i) })}
+                    </span>
+                  )
+                ) : (
+                  n !== null && (
+                    <span className={`qd5-stock ${n >= l.qty ? 'ok' : 'bad'}`}>
+                      <i />
+                      {n >= l.qty ? t('confirmation.d6.inStock', { n }) : t('confirmation.d6.outStock', { n })}
+                    </span>
+                  )
                 )}
                 <div className="qd2-qty">
                   <button type="button" className="btn qd2-st" aria-label={t('confirmation.d.minus')} disabled={!editable || l.qty <= 1} onClick={() => upd(i, { qty: Math.max(1, l.qty - 1) })}>
@@ -516,10 +584,20 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
             <dd className="ltr">{da(sub + fee - disc)}</dd>
           </div>
         </dl>
-        {out.length > 0 && (
-          <div className="qd6-warn" role="alert">
-            <Icon name="alert" />
-            <span>{t('confirmation.d6.warn', { names: out.map((l) => l.name).join(', ') })}</span>
+        {chkNote && (
+          <div className={`qd6-warn ${chkNote.tone}`} role="alert">
+            <Icon name={chkNote.tone === 'bad' ? 'alert' : 'clock'} />
+            <span>
+              {chkNote.text}
+              {chkNote.fix && editable && (
+                <>
+                  {' '}
+                  <button type="button" className="qd6-fix" onClick={chkNote.fix}>
+                    {t('confirmation.chk.fix')}
+                  </button>
+                </>
+              )}
+            </span>
           </div>
         )}
         {err && <p className="form-err">{err}</p>}
@@ -571,9 +649,15 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
         </button>}
         {order.confStatus !== 'confirmed' && !(phone && canSave) && (
           <>
-            <button type="button" className="qd6-cta" disabled={busy || !editable} title={t('confirmation.d6.hint')} onClick={confirm}>
-              <Icon name="checkcircle" />
-              {t('confirmation.d6.confirm')}
+            <button
+              type="button"
+              className={`qd6-cta${sansStock ? ' sans' : ''}`}
+              disabled={busy || !editable || blockedNow || stillNoStock}
+              title={blockedNow && chkNote ? chkNote.text : t('confirmation.d6.hint')}
+              onClick={sansStock ? confirmNoStock : confirm}
+            >
+              <Icon name={sansStock ? 'clock' : 'checkcircle'} />
+              {stillNoStock ? t('confirmation.chk.still') : sansStock ? t('confirmation.chk.confirmNoStock') : t('confirmation.d6.confirm')}
             </button>
           </>
         )}

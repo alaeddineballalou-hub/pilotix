@@ -605,5 +605,24 @@
     "detail": "Confirmation en détail",
     "after": "Après la confirmation",
     "afterHelp": "Ce que sont devenues les commandes confirmées sur la période : au dépôt, en route, livrées, retours."
+  },
+  "chk": {
+    "off": "Indisponible",
+    "left": "Sans stock · reste {{n}}",
+    "offNote": "Indisponible : {{names}}. Changez le produit ou annulez la commande.",
+    "commune": "Choisissez la commune pour confirmer.",
+    "wilaya": "Choisissez la wilaya pour confirmer.",
+    "desk": "Choisissez le bureau (stop-desk) pour confirmer.",
+    "companyHome": "{{co}} ne livre pas à domicile à {{w}}. Changez la société ou le mode de livraison.",
+    "companyDesk": "{{co}} ne livre pas au bureau à {{w}}. Changez la société ou le mode de livraison.",
+    "nobodyHome": "Aucune société ne livre à domicile à {{w}}.",
+    "nobodyDesk": "Aucune société ne livre au bureau à {{w}}.",
+    "noStockNote": "Pas assez de stock pour {{names}} : la commande sera « Confirmée sans stock » et attendra le stock.",
+    "stillNote": "Toujours pas de stock pour {{names}} : la commande attend (les plus anciennes d’abord).",
+    "still": "Toujours sans stock",
+    "confirmNoStock": "Confirmer sans stock",
+    "doneNoStock": "{{ref}} confirmée sans stock",
+    "fix": "Choisir",
+    "bulkDone": "{{ok}} enregistrées · {{sans}} sans stock · {{bl}} bloquées"
   }
 }

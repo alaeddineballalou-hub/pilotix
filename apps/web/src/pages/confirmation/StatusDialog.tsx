@@ -34,7 +34,16 @@ export function useStatusChange() {
     const ids = rows.map((r) => r.id);
     try {
       if (choice.startsWith('try')) await rpc('confirmation.setTry', { ids, n: Number(choice.slice(3)), note: extra.note ?? null });
-      else await rpc('orders.setConf', { ids, status: choice as ConfStatus, nextCallAt: extra.nextCallAt ?? null, note: extra.note ?? null, reason: extra.reason ?? null });
+      else {
+        const r = await rpc('orders.setConf', { ids, status: choice as ConfStatus, nextCallAt: extra.nextCallAt ?? null, note: extra.note ?? null, reason: extra.reason ?? null });
+        // confirming: the blocked ones stay (a product switched off, no delivery there), nothing left → « sans stock »
+        if ((choice === 'confirmed' || choice === 'no_stock') && (r.blocked.length || r.noStock.length)) {
+          const sum = t('confirmation.chk.bulkDone', { ok: r.changed.length, sans: r.noStock.length, bl: r.blocked.length });
+          toast(r.blocked.length ? `${sum} — ${r.blocked[0].reason}${r.blocked.length > 1 ? ` (+${r.blocked.length - 1})` : ''}` : sum, r.blocked.length ? 'bad' : 'ok');
+          qc.invalidateQueries();
+          return true;
+        }
+      }
       const label = choiceLabel(t, choice);
       toast(rows.length === 1 ? `${rows[0].ref} → ${label}` : t('confirmation.bulkDone', { n: rows.length, label }), ['cancelled', 'fake', 'wrong_number'].includes(choice) ? 'bad' : 'ok');
       qc.invalidateQueries();

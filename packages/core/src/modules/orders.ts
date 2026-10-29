@@ -32,6 +32,7 @@ import { lowStockCount } from './stockquery';
 import { agencyOf, agencyRowSql, andSql, queueSql } from './agencyscope';
 import { settleTickets } from './tickets';
 import { addDepotAlert, alertsDepot, DepotChange, itemsText } from './depotalerts';
+import { blockerText, checkLines, checkOrder, deliverCheck } from './confirmcheck';
 import { applyTrust, lookAlikeNote, lookAlikeOf } from './trust';
 
 export const STOPDESK_NOTE = '🏬 Ce client a refusé 2 colis : livraison au bureau (stop-desk) uniquement. Proposez-lui le stop-desk le plus proche.';
@@ -476,14 +477,27 @@ export async function createOrder(
     // a blacklisted number is always checked by a person first, even when the order comes « confirmed » (AI seller)
     // refused 2 parcels: only at the desk. A home delivery is not confirmed by itself (AI seller), a person checks it
     const homeRefused = !!cust.stopdesk_only && !input.isStopdesk;
-    const conf: ConfStatus = cust.blacklisted || (homeRefused && input.confirm) ? 'to_check' : input.confirm ? 'confirmed' : 'new';
+    // confirmed from the start (the AI seller): the same two checks as « Confirmer » — blocked: a person checks it;
+    // a product with nothing left: confirmed « sans stock »
+    let confWhy: string | null = null;
+    let confNoStock = false;
+    if (input.confirm) {
+      const lc = await checkLines(tx, lines.map((l) => ({ productId: l.productId, variantId: l.variantId ?? null, qty: l.qty })), null);
+      const dc = await deliverCheck(tx, { wilayaId: input.wilayaId ?? null, commune: input.commune ?? null, isStopdesk: !!input.isStopdesk, stopdeskId: input.stopdeskId ?? null, companyId: input.companyId ?? null });
+      confWhy = blockerText('', lc, dc);
+      confNoStock = lc.some((l) => l.state === 'empty');
+    }
+    const conf: ConfStatus =
+      cust.blacklisted || (homeRefused && input.confirm) || confWhy ? 'to_check' : input.confirm ? (confNoStock ? 'no_stock' : 'confirmed') : 'new';
     // a number that never received a parcel and looks like a refuser (same device, same name + commune): 🟡, never blocked
     const look = num(cust.delivered) === 0 && !cust.blacklisted
       ? await lookAlikeOf(tx, { phone, name: input.customerName, wilayaId: input.wilayaId, commune: String(input.commune ?? ''), device: opts.device ?? null })
       : null;
-    const trustNotes = [homeRefused ? STOPDESK_NOTE : '', look ? lookAlikeNote(look) : ''].filter(Boolean);
+    const trustNotes = [homeRefused ? STOPDESK_NOTE : '', look ? lookAlikeNote(look) : '', confWhy ? `Pas confirmée : ${confWhy}` : ''].filter(Boolean);
     const internalNote = [input.internalNote ?? '', ...trustNotes].filter(Boolean).join('\n') || null;
     const confirmed = conf === 'confirmed';
+    // « sans stock » is confirmed too (by this person, now): it only waits for stock before the depot
+    const stamped = confirmed || conf === 'no_stock';
     const ref = (await tx.query(`SELECT 'PX' || nextval('order_ref_seq') AS r`))[0].r;
     const wh = (await tx.query('SELECT id FROM warehouses WHERE active ORDER BY is_default DESC, id LIMIT 1'))[0];
     const defCompany = input.companyId ?? (await getSetting(tx, 'shop')).defaultCompanyId ?? null;
@@ -495,7 +509,7 @@ export async function createOrder(
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38) RETURNING id`,
         [ref, me, cust.id, input.customerName, phone, phone2, input.wilayaId, input.commune, input.address, input.isStopdesk, input.stopdeskId ?? null,
           input.channel, input.source ?? null, input.utm ? JSON.stringify(input.utm) : null,
-          conf, confirmed ? me : null, confirmed ? new Date(ctx.now()).toISOString() : null, confirmed ? new Date(ctx.now()).toISOString() : null,
+          conf, stamped ? me : null, stamped ? new Date(ctx.now()).toISOString() : null, stamped ? new Date(ctx.now()).toISOString() : null,
           confirmed ? 'to_prepare' : null, defCompany, wh?.id ?? null, priced.subtotal, fee, input.discount, total,
           input.customerNote ?? null, input.deliveryNote ?? null, internalNote, input.isExchange, input.originalOrderId ?? null,
           up.value > 0, up.value, JSON.stringify(orig), input.discount, opts.conversationId ?? null, opts.landingId ?? null, opts.adsetId ?? null, look?.id ?? null],
@@ -504,7 +518,7 @@ export async function createOrder(
     const oid = num(row.id);
     await insertItems(tx, oid, lines);
     // SAV exchange parcels stay with the store's team (they are not sales)
-    if (!input.isExchange) await routeToAgencies(tx, oid, lines[0]?.productId, confirmed);
+    if (!input.isExchange) await routeToAgencies(tx, oid, lines[0]?.productId, stamped);
     await addEvent(tx, oid, me, 'created', null, conf, input.isExchange ? `Échange de la commande #${input.originalOrderId}` : null);
     if (confirmed) await addEvent(tx, oid, me, 'follow_status', null, 'to_prepare');
     for (const n of trustNotes) await addEvent(tx, oid, null, 'note', null, 'event', n);
@@ -668,6 +682,10 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
   const me = ctx.session.profile.id;
   const calls = await getSetting(ctx.db, 'calls');
   const changed: number[] = [];
+  /** confirmed « sans stock » (nothing left for one of their products) */
+  const noStock: number[] = [];
+  /** not confirmed: a product switched off, or we do not deliver there (several at once: the others go on) */
+  const blocked: { id: number; ref: string; reason: string }[] = [];
   await ctx.db.tx(async (tx) => {
     if (await alreadyApplied(tx, input.clientId, me)) return;
     const notify = await notifyContext(tx);
@@ -685,27 +703,42 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
         status = 'cancelled';
         note = `Annulée automatiquement après ${attempts} appels sans réponse`;
       }
-      const confirmed = status === 'confirmed';
-      // the depot and the courier need where to deliver (also checked here, not only on the screen: bulk confirm)
-      if (confirmed && cur.conf_status !== 'confirmed') {
-        if (!cur.is_stopdesk && !String(cur.commune ?? '').trim()) throw bad('Indiquez la commune avant de confirmer');
+      // confirming (one or many at once): every product can go and we deliver there (also checked here, not only on
+      // the screen). Blocked: refused (one order) or left as it is (several: the others go on). A product with nothing
+      // left: confirmed « sans stock », it waits.
+      if ((status === 'confirmed' || status === 'no_stock') && cur.conf_status !== status) {
+        const chk = await checkOrder(tx, oid);
+        let why = chk.blocker;
         // refused 2 parcels: only at the desk (lifted once they receive and pay one)
-        if (!cur.is_stopdesk && !cur.is_exchange && (await tx.query('SELECT stopdesk_only FROM customers WHERE id = $1', [cur.customer_id]))[0]?.stopdesk_only)
-          throw bad(`${cur.ref} : ce client a refusé 2 colis, il est livré au bureau (stop-desk) uniquement. Choisissez un stop-desk avant de confirmer.`);
+        if (!why && !cur.is_stopdesk && !cur.is_exchange && (await tx.query('SELECT stopdesk_only FROM customers WHERE id = $1', [cur.customer_id]))[0]?.stopdesk_only)
+          why = `${cur.ref} : ce client a refusé 2 colis, il est livré au bureau (stop-desk) uniquement. Choisissez un stop-desk avant de confirmer.`;
+        if (!why && status === 'confirmed' && chk.noStock) {
+          status = 'no_stock';
+          noStock.push(oid);
+          if (cur.conf_status === 'no_stock') why = `${cur.ref} : toujours pas de stock, la commande reste « sans stock ».`;
+        }
+        if (why) {
+          if (input.ids.length === 1) throw bad(why);
+          if (cur.conf_status !== 'no_stock' || status !== 'no_stock') blocked.push({ id: oid, ref: cur.ref, reason: why });
+          continue;
+        }
       }
+      const confirmed = status === 'confirmed';
+      // « sans stock » is confirmed too: the agent's call is done, the order only waits for stock before the depot
+      const stamped = confirmed || status === 'no_stock';
       const nowIso = new Date(ctx.now()).toISOString();
       await tx.query(
         `UPDATE orders SET conf_status=$2, attempts=$3,
            last_call_at = CASE WHEN $4 THEN $5::timestamptz ELSE last_call_at END,
            next_call_at = $6,
            agent_id = COALESCE(agent_id, $7), assigned_at = COALESCE(assigned_at, $5::timestamptz),
-           confirmed_at = CASE WHEN $8 THEN COALESCE(confirmed_at, $5::timestamptz) ELSE confirmed_at END,
+           confirmed_at = CASE WHEN $9 THEN COALESCE(confirmed_at, $5::timestamptz) ELSE confirmed_at END,
            follow_status = CASE WHEN $8 AND (follow_status IS NULL OR (follow_status = 'cancelled' AND shipped_at IS NULL)) THEN 'to_prepare'
                                 WHEN $2 IN ('cancelled','duplicate','wrong_number','fake') AND follow_status IN ('to_prepare','prepared') THEN 'cancelled'
                                 ELSE follow_status END,
            updated_at=now(), version=version+1
          WHERE id=$1`,
-        [oid, status, attempts, isCallFail || confirmed || CONF_NEEDS_DATE.includes(status), nowIso, CONF_NEEDS_DATE.includes(status) ? input.nextCallAt : null, me, confirmed],
+        [oid, status, attempts, isCallFail || stamped || CONF_NEEDS_DATE.includes(status), nowIso, CONF_NEEDS_DATE.includes(status) ? input.nextCallAt : null, me, confirmed, stamped],
       );
       await addEvent(tx, oid, me, 'conf_status', cur.conf_status, status, [input.reason, note].filter(Boolean).join(' — ') || null);
       // confirmed again after a cancel: back to the depot's « À préparer »
@@ -720,7 +753,7 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
   });
   await sendInPreview(ctx);
   ctx.emit({ type: 'orders' });
-  return { changed };
+  return { changed, noStock, blocked };
 }
 
 export const FollowInput = z.object({

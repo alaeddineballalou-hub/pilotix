@@ -605,5 +605,24 @@
     "detail": "Confirmation in detail",
     "after": "After confirmation",
     "afterHelp": "What became of the orders confirmed in the period: at the depot, on the road, delivered, returns."
+  },
+  "chk": {
+    "off": "Unavailable",
+    "left": "Out of stock · {{n}} left",
+    "offNote": "Unavailable: {{names}}. Change the product or cancel the order.",
+    "commune": "Pick the commune to confirm.",
+    "wilaya": "Pick the wilaya to confirm.",
+    "desk": "Pick the desk (stop-desk) to confirm.",
+    "companyHome": "{{co}} does not deliver to homes in {{w}}. Change the company or the delivery type.",
+    "companyDesk": "{{co}} has no desk delivery in {{w}}. Change the company or the delivery type.",
+    "nobodyHome": "No company delivers to homes in {{w}}.",
+    "nobodyDesk": "No company delivers to a desk in {{w}}.",
+    "noStockNote": "Not enough stock for {{names}}: the order will be « Confirmed, no stock » and wait for stock.",
+    "stillNote": "Still no stock for {{names}}: the order waits (oldest first).",
+    "still": "Still no stock",
+    "confirmNoStock": "Confirm without stock",
+    "doneNoStock": "{{ref}} confirmed without stock",
+    "fix": "Pick",
+    "bulkDone": "{{ok}} saved · {{sans}} without stock · {{bl}} blocked"
   }
 }

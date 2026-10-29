@@ -1,0 +1,6 @@
+.qd5-stock.off { color: var(--muted); background: var(--chip-bg, rgba(15, 26, 46, .07)); }
+.qd6-line.off .qd6-thumb, .qd6-line.off .qd6-pn, .qd6-line.off .qd6-price { opacity: .5; }
+.qd6-warn.warn { background: var(--c-warn-tint); color: var(--c-warn-ink); }
+.qd6-warn .qd6-fix { border: 0; background: none; padding: 0; font: inherit; font-weight: 800; color: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.qd6-cta.sans { background: var(--c-warn-tint); color: var(--c-warn-ink); box-shadow: inset 0 0 0 1.5px currentColor; }
+.qd6.qd6-ph .qd6-bar .qd6-cta.sans { background: var(--c-warn-tint); color: var(--c-warn-ink); box-shadow: inset 0 0 0 1.5px currentColor; }
