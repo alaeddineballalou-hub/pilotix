@@ -20,22 +20,30 @@ function parse(raw) {
     const i = line.indexOf(':');
     if (i > 0) h[line.slice(0, i).toLowerCase()] = line.slice(i + 1).trim();
   }
-  const out = { to: h.to, from: decodeWord(h.from || ''), subject: decodeWord(h.subject || ''), text: '', html: '' };
-  const ct = h['content-type'] || '';
-  const b = ct.match(/boundary="?([^";]+)"?/);
-  const part = (hdrs, content) => {
-    const enc = (hdrs.match(/content-transfer-encoding:\s*(\S+)/i) || [])[1] || '';
-    const txt = /base64/i.test(enc) ? Buffer.from(content.replace(/\s+/g, ''), 'base64').toString('utf8') : content;
-    if (/text\/html/i.test(hdrs)) out.html = txt;
-    else out.text = txt;
-  };
-  if (b) {
-    for (const p of body.split(`--${b[1]}`)) {
-      const [ph, ...pb] = p.split(/\r?\n\r?\n/);
-      if (!/content-type/i.test(ph)) continue;
-      part(ph, pb.join('\n'));
+  const out = { to: h.to, from: decodeWord(h.from || ''), subject: decodeWord(h.subject || ''), text: '', html: '', inline: [] };
+  // one part: a multipart is opened (an e-mail with its logo inside is multipart/related around multipart/alternative)
+  const walk = (hdrs, content) => {
+    const type = (hdrs.match(/content-type:\s*([^;\s]+)/i) || [])[1] || 'text/plain';
+    const b = hdrs.match(/boundary="?([^";\r\n]+)"?/i);
+    if (/^multipart\//i.test(type) && b) {
+      for (const p of content.split(`--${b[1]}`)) {
+        // headers, a blank line, then the content as it is (a part may itself hold parts, blank lines included)
+        const x = p.replace(/^\r?\n/, '');
+        const i = x.search(/\r?\n\r?\n/);
+        const ph = i < 0 ? x : x.slice(0, i);
+        if (!/content-type/i.test(ph)) continue;
+        walk(ph.replace(/\r?\n[ \t]+/g, ' '), i < 0 ? '' : x.slice(i).replace(/^\r?\n\r?\n/, ''));
+      }
+      return;
     }
-  } else part(`content-type: ${ct}\ncontent-transfer-encoding: ${h['content-transfer-encoding'] || ''}`, body);
+    const enc = (hdrs.match(/content-transfer-encoding:\s*(\S+)/i) || [])[1] || '';
+    if (/^text\/(html|plain)$/i.test(type)) {
+      const txt = /base64/i.test(enc) ? Buffer.from(content.replace(/\s+/g, ''), 'base64').toString('utf8') : content;
+      if (/html/i.test(type)) out.html = txt;
+      else out.text = txt;
+    } else out.inline.push({ type, cid: (hdrs.match(/content-id:\s*<([^>]+)>/i) || [])[1] || null, bytes: Buffer.from(content.replace(/\s+/g, ''), 'base64').length });
+  };
+  walk(`content-type: ${h['content-type'] || 'text/plain'}\ncontent-transfer-encoding: ${h['content-transfer-encoding'] || ''}`, body);
   return out;
 }
 

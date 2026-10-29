@@ -2,9 +2,30 @@
 // Port 465: TLS from the start. Other ports (587): STARTTLS, which is required except towards localhost:
 // a password or a reset link never travels unencrypted.
 import { randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import * as net from 'node:net';
+import { join } from 'node:path';
 import * as tls from 'node:tls';
 import { config } from './config';
+
+/**
+ * The Pilotix logo at the top of the e-mails travels INSIDE each e-mail (an inline image, cid:logo@pilotix). Linked
+ * from the site instead, mail apps showed a broken image: Cloudflare's bot protection answers « Just a moment… » to
+ * their image fetchers (Gmail's image proxy…). The templates keep the site's address; it is swapped here.
+ */
+const LOGO_CID = 'logo@pilotix';
+const LOGO: Buffer | null = (() => {
+  for (const p of [join(__dirname, '..', 'assets', 'email-logo.png'), join(process.cwd(), 'apps', 'server', 'assets', 'email-logo.png')]) {
+    try {
+      return readFileSync(p);
+    } catch {
+      /* next place */
+    }
+  }
+  return null;
+})();
+const LOGO_SRC = /src="[^"]*\/email-logo\.png"/g;
+const HAS_LOGO = /src="[^"]*\/email-logo\.png"/;
 
 export interface Mail {
   to: string;
@@ -42,10 +63,35 @@ export function buildMessage(from: string, m: Mail, now = new Date()): string {
     `Message-ID: <${randomBytes(16).toString('hex')}@${domain}>`,
     'MIME-Version: 1.0',
   ];
-  const part = (type: string, body: string) => [`--${boundary}`, `Content-Type: ${type}; charset=UTF-8`, 'Content-Transfer-Encoding: base64', '', wrap(b64(body))].join('\r\n');
-  const body = m.html
-    ? [`Content-Type: multipart/alternative; boundary="${boundary}"`, '', part('text/plain', m.text), part('text/html', m.html), `--${boundary}--`, ''].join('\r\n')
-    : ['Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', wrap(b64(m.text))].join('\r\n');
+  const part = (b: string, type: string, body: string) => [`--${b}`, `Content-Type: ${type}; charset=UTF-8`, 'Content-Transfer-Encoding: base64', '', wrap(b64(body))].join('\r\n');
+  // the logo inside the e-mail when the HTML shows it (multipart/related: the text, the HTML, then the image)
+  const withLogo = !!m.html && !!LOGO && HAS_LOGO.test(m.html);
+  const html = withLogo ? m.html!.replace(LOGO_SRC, `src="cid:${LOGO_CID}"`) : m.html;
+  let body: string;
+  if (html && withLogo) {
+    const rel = `${boundary}-r`;
+    body = [
+      `Content-Type: multipart/related; boundary="${rel}"; type="multipart/alternative"`,
+      '',
+      `--${rel}`,
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      '',
+      part(boundary, 'text/plain', m.text),
+      part(boundary, 'text/html', html),
+      `--${boundary}--`,
+      `--${rel}`,
+      'Content-Type: image/png; name="pilotix.png"',
+      'Content-Transfer-Encoding: base64',
+      `Content-ID: <${LOGO_CID}>`,
+      'Content-Disposition: inline; filename="pilotix.png"',
+      '',
+      wrap(LOGO!.toString('base64')),
+      `--${rel}--`,
+      '',
+    ].join('\r\n');
+  } else if (html) {
+    body = [`Content-Type: multipart/alternative; boundary="${boundary}"`, '', part(boundary, 'text/plain', m.text), part(boundary, 'text/html', html), `--${boundary}--`, ''].join('\r\n');
+  } else body = ['Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', wrap(b64(m.text))].join('\r\n');
   return [...head, body].join('\r\n');
 }
 
