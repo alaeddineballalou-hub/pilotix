@@ -1,5 +1,5 @@
-// Sociétés de livraison › « Couverture »: the seller's wilaya switches per company (the checks and Pilot follow them),
-// communes written another way corrected once and remembered, missing prices listed, tariffs imported again.
+// Pilot Auto Assign › « À corriger »: communes written another way corrected once and remembered, companies whose
+// tariffs were never imported, tariffs imported again.
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
@@ -25,34 +25,13 @@ before(async () => {
 let n = 0;
 const order = async (w: number, commune: string) =>
   (await call('orders.create', admin, { customerName: `Client Couverture ${++n}`, phone: `0696${String(100000 + n).slice(-6)}`, wilayaId: w, commune, address: 'Rue 1', items: [{ ...X, qty: 1 }] })) as any;
-const check = (companyId: number, wilayaId: number, commune: string) =>
-  call('orders.confirmCheck', admin, { items: [{ ...X, variantId: X.variantId, qty: 1 }], wilayaId, commune, isStopdesk: false, companyId }) as Promise<any>;
 
-test('a wilaya switched off for a company: the check refuses it there, Pilot skips it; back to the company’s list', async () => {
-  assert.equal((await check(yal, 16, 'Hydra')).deliver.ok, true);
-  await call('coverage.set', admin, { companyId: yal, wilayas: [16], on: false });
-  const c = (await check(yal, 16, 'Hydra')).deliver;
-  assert.equal(c.ok, false);
-  assert.equal(c.why, 'company');
-  await call('pilot.save', admin, { mode: 'auto', rules: [{ id: 'r1', wilayas: [16], except: false, communes: [], products: [], to: yal, strict: true, on: true }], clashes: [], defaultCompanyId: zr });
-  const o = await order(16, 'Hydra');
-  assert.equal(Number((await db.query('SELECT company_id FROM orders WHERE id = $1', [o.id]))[0].company_id), zr, 'Yalidine switched off there: the default company');
-  await call('coverage.set', admin, { companyId: yal, wilayas: [16], on: null });
-  assert.equal((await check(yal, 16, 'Hydra')).deliver.ok, true);
-  const g = (await call('coverage.get', admin, {})) as any;
-  const y = g.companies.find((x: any) => x.id === yal);
-  assert.equal(y.wilayas.find((w: any) => w.w === 16).on, null);
-  assert.equal(g.companies.find((x: any) => x.id === own).free, true, 'our livreurs: everywhere by default');
-  await call('pilot.save', admin, { mode: 'manual', rules: [], clashes: [], defaultCompanyId: yal });
-});
-
-test('switched on where the company gives no price: it counts, and goes on « À corriger » (prices)', async () => {
-  await db.query('DELETE FROM delivery_fees WHERE company_id = $1 AND wilaya_id = 54', [zr]);
-  assert.equal((await check(zr, 54, 'In Guezzam')).deliver.ok, false);
-  await call('coverage.set', admin, { companyId: zr, wilayas: [54], on: true });
-  assert.equal((await check(zr, 54, 'In Guezzam')).deliver.ok, true);
+test('a company with an API whose tariffs were never imported goes on « À corriger »', async () => {
+  await db.query('DELETE FROM delivery_fees WHERE company_id = $1', [zr]);
   const f = (await call('coverage.toFix', admin, {})) as any;
-  assert.deepEqual(f.prices.find((p: any) => p.companyId === zr)?.wilayas, [54]);
+  assert.ok(f.prices.some((p: any) => p.companyId === zr));
+  await call('coverage.refresh', admin, {});
+  assert.ok(!((await call('coverage.toFix', admin, {})) as any).prices.some((p: any) => p.companyId === zr), 'imported again');
 });
 
 test('a commune written another way: on « À corriger » with the closest name; corrected once, remembered, orders fixed, Pilot matches it', async () => {
@@ -80,9 +59,9 @@ test('a commune written another way: on « À corriger » with the closest name;
   await call('pilot.save', admin, { mode: 'manual', rules: [], clashes: [] });
 });
 
-test('« Mettre à jour maintenant »: tariffs and bureaus of the companies with an API imported again; admin only', async () => {
+test('« Mettre à jour maintenant »: tariffs and bureaus of the companies with an API imported again; rule writers only', async () => {
   const r = (await call('coverage.refresh', admin, {})) as any;
   assert.ok(r.results.some((x: any) => x.companyId === yal && x.ok));
-  assert.ok(((await call('coverage.get', admin, {})) as any).refresh.at);
+  assert.ok(((await call('coverage.toFix', admin, {})) as any).refresh.at);
   await assert.rejects(call('coverage.refresh', await as(EMAILS.conf), {}));
 });

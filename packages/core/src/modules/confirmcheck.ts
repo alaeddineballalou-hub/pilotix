@@ -88,15 +88,12 @@ export async function serves(db: Db, companyId: number, wilayaId: number, desk: 
     await db.query(
       `SELECT c.name, c.kind, c.active, (SELECT count(*)::int FROM delivery_fees f WHERE f.company_id = c.id) AS n,
               (SELECT f.home FROM delivery_fees f WHERE f.company_id = c.id AND f.wilaya_id = $2) AS home,
-              (SELECT f.desk FROM delivery_fees f WHERE f.company_id = c.id AND f.wilaya_id = $2) AS desk,
-              (SELECT w.on_ FROM company_wilayas w WHERE w.company_id = c.id AND w.wilaya_id = $2) AS on_
+              (SELECT f.desk FROM delivery_fees f WHERE f.company_id = c.id AND f.wilaya_id = $2) AS desk
          FROM delivery_companies c WHERE c.id = $1`,
       [companyId, wilayaId],
     )
   )[0];
   if (!c) return { ok: false, name: null };
-  // the seller's switch (Sociétés de livraison › Couverture) first, then the company's own list
-  if (c.on_ !== null && c.on_ !== undefined) return { ok: !!c.active && !!c.on_, name: c.name as string };
   const free = c.kind === 'own' || c.kind === 'manual' || num(c.n) === 0;
   return { ok: !!c.active && (free || num(desk ? c.desk : c.home) > 0), name: c.name as string };
 }

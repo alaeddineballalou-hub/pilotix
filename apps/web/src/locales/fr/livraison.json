@@ -3,7 +3,6 @@
   "tabs": {
     "societes": "Sociétés & tarifs",
     "pilot": "Pilot Auto Assign",
-    "couverture": "Couverture",
     "api": "API Integration",
     "livreurs": "Livreurs",
     "preferences": "Préférences"
@@ -218,7 +217,6 @@
     "tab": {
       "societes": "Sociétés",
       "pilot": "Pilot",
-      "couverture": "Couverture",
       "api": "API",
       "livreurs": "Livreurs",
       "preferences": "Préférences"
@@ -450,7 +448,16 @@
     "whyDefault": "société par défaut",
     "whyConflict": "règles {{a}} et {{b}} en conflit",
     "whyNobody": "personne ne livre ici",
-    "whyManual": "mode Manuel"
+    "whyManual": "mode Manuel",
+    "warnServeNames": "{{co}} ne livre pas ici (pas de prix) : {{list}}. Là-bas, la règle suivante décide.",
+    "missT_one": "{{co}} ne livre pas dans {{count}} de ces wilayas",
+    "missT_other": "{{co}} ne livre pas dans {{count}} de ces wilayas",
+    "missWhy": "Pas de prix chez cette société pour ces wilayas : elle refuserait les colis.",
+    "missSend": "Envoyer ces wilayas à",
+    "missPick": "Choisir une autre société…",
+    "missAll": "livre partout là",
+    "missSome": "livre dans {{count}} sur {{all}}",
+    "missBtn": "Créer la règle"
   },
   "cov": {
     "title": "Couverture",
@@ -487,7 +494,7 @@
     "reset_one": "Remettre la liste de la société ({{count}} changement)",
     "reset_other": "Remettre la liste de la société ({{count}} changements)",
     "fixT": "À corriger",
-    "fixHint": "Les communes écrites autrement et les prix manquants. Corrigez une fois : Pilotix s’en souvient.",
+    "fixHint": "Les communes écrites autrement sur les commandes en attente : vos règles ne les reconnaissent pas. Corrigez une fois, Pilotix s’en souvient.",
     "allGood": "Rien à corriger.",
     "orders_one": "{{count}} commande en attente",
     "orders_other": "{{count}} commandes en attente",

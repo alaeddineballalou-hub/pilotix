@@ -1,22 +1,19 @@
-// Sociétés de livraison › « Couverture »: where each company — and « Livraison privée » — delivers.
-//  - Each wilaya starts from the company's own list (a price there for home / bureau; our livreurs, companies without
-//    an API tariff and manual companies: everywhere). The seller switches wilayas on or off; switching on a place
-//    the company gives no price for warns that parcels may be refused. Pilot and the confirm check follow the switches.
+// Pilot Auto Assign › « À corriger »: what keeps the rules from working.
 //  - Communes: an order's commune is matched to the official list by name (accents, spaces, dashes ignored) or its
-//    Arabic name; one written another way goes on « À corriger » with the closest official name — corrected once, it
-//    is remembered (commune_aliases) and the waiting orders with it are fixed (Pilot chooses again for them).
-//  - Missing prices go on « À corriger » too. Every night (and « Mettre à jour maintenant ») the tariffs and the bureaus
-//    of the companies with an API are imported again.
+//    Arabic name; one written another way (« Bab Ezzouar ») is listed with the closest official name — corrected once,
+//    it is remembered (commune_aliases) and the waiting orders with it are fixed (Pilot chooses again for them).
+//  - A company with an API whose tariffs were never imported (Pilot cannot know where it delivers).
+//  - Where a company delivers comes from the company itself (its tariffs and bureaus), imported again every night and
+//    with « Mettre à jour maintenant ». Our own livreurs' zone is set when they are set up (Livreurs).
 import { ALL_WILAYAS, communesOf, normCommune, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
 import { KINDS } from '../couriers/kinds';
 import { Db, num, numOrNull } from '../db';
-import { bad, Ctx, proc } from '../rpc';
+import { bad, Ctx, forbidden, proc } from '../rpc';
 import { getSetting, setSetting } from '../settings';
 import { deliveryProcs } from './delivery';
-import { pilotMayRun, pilotPick, setPick } from './pilot';
+import { canRules, pilotMayRun, pilotPick, setPick } from './pilot';
 
-const id = z.number().int().positive();
 const wid = z.number().int().min(1).max(69);
 
 /** Levenshtein distance (short strings: commune names). */
@@ -53,28 +50,24 @@ export function closestCommune(wilayaId: number, text: string): string | null {
   return best && best.d <= Math.max(2, Math.round(n.length * 0.3)) ? best.c : null;
 }
 
-/** Each company: its kind, whether it delivers everywhere by itself, its prices, and the seller's switches. */
+/** Each company: whether it delivers everywhere by itself, and its prices. */
 async function companiesWithCoverage(db: Db) {
   const cos = await db.query('SELECT id, name, kind, active FROM delivery_companies ORDER BY active DESC, id');
   const fees = await db.query('SELECT company_id, wilaya_id, home, desk FROM delivery_fees');
-  const sw = await db.query('SELECT company_id, wilaya_id, on_ FROM company_wilayas');
   return cos.map((c: any) => {
     const cid = num(c.id);
     const mine = fees.filter((f: any) => num(f.company_id) === cid);
     const price = new Map(mine.map((f: any) => [num(f.wilaya_id), { home: num(f.home), desk: num(f.desk) }]));
     const free = c.kind === 'own' || c.kind === 'manual' || !mine.length;
-    const on = new Map(sw.filter((s: any) => num(s.company_id) === cid).map((s: any) => [num(s.wilaya_id), !!s.on_]));
     const wilayas = ALL_WILAYAS.map((w) => {
       const p = price.get(w) ?? null;
-      const list = free || !!p && (p.home > 0 || p.desk > 0);
-      const sw1 = on.has(w) ? on.get(w)! : null;
-      return { w, home: p ? p.home : null, desk: p ? p.desk : null, list, on: sw1, served: sw1 ?? list };
+      return { w, home: p ? p.home : null, desk: p ? p.desk : null, served: free || (!!p && (p.home > 0 || p.desk > 0)) };
     });
-    return { id: cid, name: String(c.name), kind: String(c.kind), active: !!c.active, own: c.kind === 'own', free, hasApi: !!KINDS[c.kind as keyof typeof KINDS]?.fees, wilayas };
+    return { id: cid, name: String(c.name), kind: String(c.kind), active: !!c.active, own: c.kind === 'own', free, hasApi: !!KINDS[c.kind as keyof typeof KINDS]?.fees, hasFees: mine.length > 0, wilayas };
   });
 }
 
-/** The wilayas a company delivers to now (its list, then the seller's switches). */
+/** The wilayas each company delivers to (a price there; our livreurs and companies without tariffs: everywhere). */
 export async function servedWilayas(db: Db): Promise<Map<number, number[]>> {
   return new Map((await companiesWithCoverage(db)).map((c) => [c.id, c.wilayas.filter((w) => w.served).map((w) => w.w)]));
 }
@@ -102,18 +95,9 @@ async function toFix(ctx: Ctx) {
     groups.set(key, g);
   }
   const communes = [...groups.values()].sort((a, b) => b.count - a.count).slice(0, 200).map((g) => ({ ...g, suggestion: closestCommune(g.wilayaId, g.commune) }));
-  const prices: { companyId: number; name: string; wilayas: number[]; none: boolean }[] = [];
-  for (const c of await companiesWithCoverage(ctx.db)) {
-    if (!c.active || c.own || c.kind === 'manual') continue;
-    const hasFees = c.wilayas.some((w) => w.home !== null);
-    if (!hasFees) {
-      if (c.hasApi) prices.push({ companyId: c.id, name: c.name, wilayas: [], none: true });
-      continue;
-    }
-    const missing = c.wilayas.filter((w) => w.on === true && !(w.home ?? 0)).map((w) => w.w);
-    if (missing.length) prices.push({ companyId: c.id, name: c.name, wilayas: missing, none: false });
-  }
-  return { communes, prices };
+  // a company with an API whose tariffs were never imported: Pilot cannot know where it delivers
+  const prices = (await companiesWithCoverage(ctx.db)).filter((c) => c.active && c.hasApi && !c.hasFees).map((c) => ({ companyId: c.id, name: c.name }));
+  return { communes, prices, refresh: await getSetting(ctx.db, 'coverageRefresh') };
 }
 
 /** Tariffs and bureaus of every active company with an API, imported again (each company on its own: one failing does not stop the others). */
@@ -137,28 +121,16 @@ export async function refreshCoverage(ctx: Ctx) {
   return { at, results };
 }
 
+const canFix = async (ctx: Ctx) => {
+  if (!(await canRules(ctx))) throw forbidden('Seuls les admins et les personnes choisies dans Préférences corrigent les communes');
+};
+
 export const coverageProcs = {
-  /** Every company (and « Livraison privée »): each wilaya — its price, the company's list, the seller's switch. */
-  'coverage.get': proc([], z.object({}), async (ctx) => ({ companies: await companiesWithCoverage(ctx.db), refresh: await getSetting(ctx.db, 'coverageRefresh') })),
-
-  /** Switch wilayas on / off for one company; null: back to the company's own list. */
-  'coverage.set': proc([], z.object({ companyId: id, wilayas: z.array(wid).min(1).max(69), on: z.boolean().nullable() }), async (ctx, i) => {
-    if (!(await ctx.db.query('SELECT 1 FROM delivery_companies WHERE id = $1', [i.companyId]))[0]) throw bad('Société introuvable');
-    for (const w of i.wilayas) {
-      if (i.on === null) await ctx.db.query('DELETE FROM company_wilayas WHERE company_id = $1 AND wilaya_id = $2', [i.companyId, w]);
-      else
-        await ctx.db.query(
-          'INSERT INTO company_wilayas (company_id, wilaya_id, on_) VALUES ($1,$2,$3) ON CONFLICT (company_id, wilaya_id) DO UPDATE SET on_ = EXCLUDED.on_, updated_at = now()',
-          [i.companyId, w, i.on],
-        );
-    }
-    return { ok: true };
-  }),
-
-  'coverage.toFix': proc([], z.object({}), (ctx) => toFix(ctx)),
+  'coverage.toFix': proc(null, z.object({}), async (ctx) => (await canFix(ctx), toFix(ctx))),
 
   /** « Corriger »: this commune is that official one — remembered, and the waiting orders with it fixed (Pilot chooses again). */
-  'coverage.fixCommune': proc([], z.object({ wilayaId: wid, from: z.string().trim().min(1).max(120), to: z.string().trim().min(1).max(120) }), async (ctx, i) => {
+  'coverage.fixCommune': proc(null, z.object({ wilayaId: wid, from: z.string().trim().min(1).max(120), to: z.string().trim().min(1).max(120) }), async (ctx, i) => {
+    await canFix(ctx);
     const official = communesOf(i.wilayaId).find((c) => normCommune(c[1]) === normCommune(i.to));
     if (!official) throw bad(`« ${i.to} » n’est pas une commune de ${WILAYAS[i.wilayaId - 1] ?? 'cette wilaya'}`);
     const alias = normCommune(i.from);
@@ -183,6 +155,6 @@ export const coverageProcs = {
   }),
 
   /** « Mettre à jour maintenant » (and every night): tariffs and bureaus from the companies' APIs. */
-  'coverage.refresh': proc([], z.object({}), (ctx) => refreshCoverage(ctx)),
+  'coverage.refresh': proc(null, z.object({}), async (ctx) => (await canFix(ctx), refreshCoverage(ctx))),
 };
 

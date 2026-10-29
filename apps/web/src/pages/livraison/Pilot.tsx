@@ -16,6 +16,7 @@ import { ErrorBox, Icon, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import './pilot.css';
+import { ToFix } from './ToFix';
 
 type Data = Out<'pilot.get'>;
 type Co = Data['companies'][number];
@@ -80,8 +81,9 @@ export function Pilot() {
       setBusy(false);
     }
   };
-  const putRule = (r: PilotRule, index: number | null) => {
-    const rules = index === null ? [...v.rules, r] : v.rules.map((x, k) => (k === index ? r : x));
+  const putRule = (r: PilotRule, index: number | null, extra?: PilotRule) => {
+    const add = extra ? [r, extra] : [r];
+    const rules = index === null ? [...v.rules, ...add] : v.rules.flatMap((x, k) => (k === index ? add : [x]));
     set({ rules });
     setEdit(null);
   };
@@ -231,6 +233,8 @@ export function Pilot() {
         </section>
       )}
 
+      {v.mode === 'auto' && canEdit && <ToFix />}
+
       {v.mode === 'auto' && <Tester cfg={v} data={d} />}
 
       {dirty && canEdit && (
@@ -252,7 +256,7 @@ export function Pilot() {
           cfg={v}
           data={d}
           onClose={() => setEdit(null)}
-          onKeep={(r) => putRule(r, edit.index)}
+          onKeep={(r, extra) => putRule(r, edit.index, extra)}
         />
       )}
       {ask && (
@@ -366,7 +370,8 @@ function RuleRow(p: {
   const chips = placeChips(t, r);
   const covered = r.except ? ALL_WILAYAS.filter((w) => !r.wilayas.includes(w)) : r.wilayas.length ? r.wilayas : ALL_WILAYAS;
   const serves = new Set(co?.serves ?? []);
-  const missing = covered.filter((w) => !serves.has(w)).length;
+  const miss = covered.filter((w) => !serves.has(w));
+  const missing = miss.length;
   return (
     <li className={`pl-rule${r.on ? '' : ' off'}`}>
       <span className="pl-n">{p.n}</span>
@@ -419,15 +424,51 @@ function RuleRow(p: {
       )}
       {co && co.active && missing > 0 && (
         <p className="pl-warn soft">
-          <Icon name="info" /> {t('livraison.pilot.warnServe', { co: co.name, count: missing })}
+          <Icon name="info" /> {t('livraison.pilot.warnServeNames', { co: co.name, list: namesOf(miss) })}
         </p>
       )}
     </li>
   );
 }
 
+/** « Tamanrasset, Illizi, Djanet +4 » */
+const namesOf = (ws: number[], max = 5) => `${ws.slice(0, max).map((w) => wilayaName(w)).join(', ')}${ws.length > max ? ` +${ws.length - max}` : ''}`;
+
+/** In the rule editor: the wilayas its company does not deliver to (no price there), by name, and « send them to another company ». */
+function MissingBox({ co, missing, data, onSplit }: { co: Co; missing: number[]; data: Data; onSplit: (alt: number) => void }) {
+  const { t } = useTranslation();
+  const others = data.companies.filter((c) => c.active && c.id !== co.id && !c.own);
+  const full = (c: Co) => missing.every((w) => c.serves.includes(w));
+  const [alt, setAlt] = useState<number | ''>(others.find(full)?.id ?? '');
+  return (
+    <div className="pl-miss" role="note">
+      <p>
+        <Icon name="alert" /> <b>{t('livraison.pilot.missT', { co: co.own ? t('livraison.pilot.private') : co.name, count: missing.length })}</b>
+      </p>
+      <p className="pl-miss-list">{namesOf(missing, 12)}</p>
+      <p className="pl-miss-why">{t('livraison.pilot.missWhy')}</p>
+      <div className="pl-miss-act">
+        <label>
+          <span>{t('livraison.pilot.missSend')}</span>
+          <select value={alt} onChange={(e) => setAlt(e.target.value ? Number(e.target.value) : '')}>
+            <option value="">{t('livraison.pilot.missPick')}</option>
+            {others.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} — {full(c) ? t('livraison.pilot.missAll') : t('livraison.pilot.missSome', { count: missing.filter((w) => c.serves.includes(w)).length, all: missing.length })}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="button" className="btn small primary" disabled={!alt} onClick={() => alt && onSplit(alt)}>
+          {t('livraison.pilot.missBtn')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- the rule editor
-function RuleEditor({ initial, index, cfg, data, onClose, onKeep }: { initial: PilotRule; index: number | null; cfg: Cfg; data: Data; onClose: () => void; onKeep: (r: PilotRule) => void }) {
+function RuleEditor({ initial, index, cfg, data, onClose, onKeep }: { initial: PilotRule; index: number | null; cfg: Cfg; data: Data; onClose: () => void; onKeep: (r: PilotRule, extra?: PilotRule) => void }) {
   const { t } = useTranslation();
   const [r, setR] = useState<PilotRule>(initial);
   const [open, setOpen] = useState<number | null>(null);
@@ -520,9 +561,18 @@ function RuleEditor({ initial, index, cfg, data, onClose, onKeep }: { initial: P
             </label>
           </div>
           {missing.length > 0 && co && (
-            <p className="pl-note">
-              <Icon name="info" /> {t('livraison.pilot.warnServe', { co: co.name, count: missing.length })}
-            </p>
+            <MissingBox
+              co={co}
+              missing={missing}
+              data={data}
+              onSplit={(alt) => {
+                // the rule keeps the wilayas its company delivers to; the others go to « alt » in a rule of their own
+                const main: PilotRule = r.except || !r.wilayas.length ? { ...r, except: true, wilayas: [...new Set([...(r.except ? r.wilayas : []), ...missing])].sort((a, b) => a - b), communes: [] } : { ...r, wilayas: r.wilayas.filter((w) => !missing.includes(w)), communes: r.communes.filter((c) => !missing.includes(c.w)) };
+                const ids = [...cfg.rules, main];
+                const extra: PilotRule = { id: newRuleId(ids), wilayas: missing, except: false, communes: [], products: r.products, to: alt, strict: r.strict, on: true };
+                onKeep(main, extra);
+              }}
+            />
           )}
         </section>
 

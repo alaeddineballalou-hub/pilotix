@@ -1,4 +1,4 @@
-// « Sociétés de livraison » (admin): Sociétés & tarifs · Pilot Auto Assign · Couverture · API Integration · Livreurs · Préférences.
+// « Sociétés de livraison » (admin): Sociétés & tarifs · Pilot Auto Assign · API Integration · Livreurs · Préférences.
 // The people ticked « règles Pilot » in Utilisateurs (not admins) see only Pilot Auto Assign.
 import { WILAYAS } from '@pilotix/shared';
 import { useState } from 'react';
@@ -17,7 +17,6 @@ import { useIsPhone } from '../../lib/useMedia';
 import { PhoneLivraison } from './Phone';
 import { Preferences } from './Preferences';
 import { Pilot } from './Pilot';
-import { Coverage } from './Coverage';
 import { useSession } from '../../lib/session';
 
 type Dialog = { kind: 'form'; draft: CompanyDraft; keysSet?: string[] } | { kind: 'fees' | 'desks' | 'statuses' | 'preview' | 'zr' | 'live'; company: Company } | null;
@@ -30,7 +29,7 @@ export function Livraison(p: PageProps) {
 
 function LivraisonAdmin({ sub }: PageProps) {
   const { t } = useTranslation();
-  const current = sub === 'api' || sub === 'livreurs' || sub === 'preferences' || sub === 'pilot' || sub === 'couverture' ? sub : 'societes';
+  const current = sub === 'api' || sub === 'livreurs' || sub === 'preferences' || sub === 'pilot' ? sub : 'societes';
   const q = useRpc('delivery.companies', {});
   const kinds = useRpc('delivery.kinds', {});
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -39,7 +38,6 @@ function LivraisonAdmin({ sub }: PageProps) {
   const items = [
     { key: 'societes', label: t('livraison.tabs.societes'), href: '#/livraison/societes' },
     { key: 'pilot', label: t('livraison.tabs.pilot'), href: '#/livraison/pilot' },
-    { key: 'couverture', label: t('livraison.tabs.couverture'), href: '#/livraison/couverture' },
     { key: 'api', label: t('livraison.tabs.api'), href: '#/livraison/api' },
     { key: 'livreurs', label: t('livraison.tabs.livreurs'), href: '#/livraison/livreurs' },
     { key: 'preferences', label: t('livraison.tabs.preferences'), href: '#/livraison/preferences' },
@@ -86,7 +84,6 @@ function LivraisonAdmin({ sub }: PageProps) {
       <StageBar items={items} current={current} flow={false} />
       {current === 'preferences' && <Preferences />}
       {current === 'pilot' && <Pilot />}
-      {current === 'couverture' && <Coverage />}
       {current === 'societes' && (
         <>
           <Card

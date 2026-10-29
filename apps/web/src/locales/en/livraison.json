@@ -3,7 +3,6 @@
   "tabs": {
     "societes": "Companies & rates",
     "pilot": "Pilot Auto Assign",
-    "couverture": "Coverage",
     "api": "API Integration",
     "livreurs": "Couriers",
     "preferences": "Preferences"
@@ -218,7 +217,6 @@
     "tab": {
       "societes": "Companies",
       "pilot": "Pilot",
-      "couverture": "Coverage",
       "api": "API",
       "livreurs": "Livreurs",
       "preferences": "Preferences"
@@ -450,7 +448,16 @@
     "whyDefault": "default company",
     "whyConflict": "rules {{a}} and {{b}} clash",
     "whyNobody": "nobody delivers here",
-    "whyManual": "Manual mode"
+    "whyManual": "Manual mode",
+    "warnServeNames": "{{co}} does not deliver here (no price): {{list}}. There, the next rule decides.",
+    "missT_one": "{{co}} does not deliver to {{count}} of these wilayas",
+    "missT_other": "{{co}} does not deliver to {{count}} of these wilayas",
+    "missWhy": "This company has no price for these wilayas: it would refuse the parcels.",
+    "missSend": "Send these wilayas to",
+    "missPick": "Choose another company…",
+    "missAll": "delivers to all of them",
+    "missSome": "delivers to {{count}} of {{all}}",
+    "missBtn": "Create the rule"
   },
   "cov": {
     "title": "Coverage",
@@ -487,7 +494,7 @@
     "reset_one": "Back to the company's list ({{count}} change)",
     "reset_other": "Back to the company's list ({{count}} changes)",
     "fixT": "To fix",
-    "fixHint": "Communes written another way and missing prices. Fix once: Pilotix remembers.",
+    "fixHint": "Communes written another way on waiting orders: your rules do not recognize them. Fix once, Pilotix remembers.",
     "allGood": "Nothing to fix.",
     "orders_one": "{{count}} waiting order",
     "orders_other": "{{count}} waiting orders",
