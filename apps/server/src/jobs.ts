@@ -8,7 +8,7 @@ import { CoreService, ShopRef } from './core.service';
 import { watchNow } from './courierWatch';
 import { doctorState } from './doctor';
 import { mailConfigured, sendMail } from './mail';
-import { reminderMail } from './mails';
+import { qualityAlertMail, reminderMail } from './mails';
 import { syncTurnstile } from './turnstile';
 
 /**
@@ -116,6 +116,14 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
           // le réseau Pilotix: what every store learned about fake orders, shared (as anonymous hashes) with the others
           const r = await core.refreshReputation(this.core.t);
           if (r.errors.length) this.log.warn(`fraud-reputation: ${r.errors.length} store(s) skipped: ${r.errors.slice(0, 5).join(' | ')}`);
+          // the buyers' quality fell by 5 points or more this week: the owner and the managers hear it, once a week
+          if (mailConfigured()) {
+            const alert = await core.takeQualityAlert(this.core.t);
+            if (alert) {
+              const staff = await this.core.t.platform.query<{ name: string; email: string }>(`SELECT name, email FROM platform.staff WHERE active AND role IN ('owner', 'manager')`);
+              for (const s of staff) await sendMail(qualityAlertMail({ to: s.email, name: s.name, alert })).catch((e) => this.log.warn(`quality alert to ${s.email}: ${e?.message || e}`));
+            }
+          }
           return { shops: r.shops, keys: r.keys };
         }
         if (job.name === 'courier-watch') return watchNow(this.core, null);

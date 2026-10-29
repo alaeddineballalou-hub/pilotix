@@ -2,11 +2,13 @@
 // size day by day (stores, the numbers and devices it knows, those 2 sellers agree on), the suspicious orders spotted
 // across all stores, and each store's last 30 days. Counts only: the network keeps secret fingerprints, never a phone
 // number, a name or an address. The preview (no server) shows a fixed example, marked as such.
-import { ReactNode, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { n, pct, since } from '../../lib/format';
 import { POut, usePRpc } from '../../lib/platform';
+import { Axis, DateLabels, shortDay, shortDayIn, ticksFor, useBox, useLoc } from '../../ui/chart';
 import { Card, ErrorBox, Icon, Kpi, Kpis, Loading, Tabs } from '../../ui/kit';
+import { BuyerQuality, OPEN_DAYS } from '../../ui/quality';
 import { Empty } from './bits';
 
 type Stats = POut<'p.protection'>;
@@ -70,6 +72,7 @@ export function ProtectionPage({ demo }: { demo?: boolean }) {
       </div>
       {demo && <p className="pp-prot-demo">{t('platform.prot.demoNote')}</p>}
       {!net && <p className="pp-warn">{t('platform.prot.starting')}</p>}
+      {s.alert && <QualityAlertBox a={s.alert} />}
 
       <Kpis>
         <Kpi label={t('platform.prot.kCaught')} value={n(caught)} sub={t('platform.prot.kCaughtSub', { rate: tt.orders ? pct(caught / tt.orders, 1) : '—', orders: n(tt.orders) })} icon="shield" big />
@@ -79,7 +82,7 @@ export function ProtectionPage({ demo }: { demo?: boolean }) {
         <Kpi label={t('platform.prot.kCampaign')} value={n(tt.campaign)} sub={t('platform.prot.kCampaignSub')} icon="trend" />
       </Kpis>
 
-      <BuyerQuality s={s} period={period} />
+      <BuyerQuality days={days} previous={s.previous} period={period} />
 
       <div className="pp-prot-grid">
         <Card title={t('platform.prot.byDay')} actions={<Legend />} className="pp-prot-days">
@@ -124,8 +127,8 @@ export function ProtectionPage({ demo }: { demo?: boolean }) {
                 <tr>
                   <th>{t('platform.prot.cStore')}</th>
                   <th className="num">{t('platform.prot.cOrders')}</th>
-                  <th className="num" title={t('platform.prot.qHelp', { count: OPEN_DAYS })}>
-                    {t('platform.prot.cGood')}
+                  <th className="num" title={t('quality.help', { count: OPEN_DAYS })}>
+                    {t('quality.part.good')}
                   </th>
                   <th className="num">{t('platform.prot.cCaught')}</th>
                   <th className="num">{t('platform.prot.cBlocked')}</th>
@@ -150,10 +153,10 @@ export function ProtectionPage({ demo }: { demo?: boolean }) {
                       <td className="num ltr" data-l={t('platform.prot.cOrders')}>
                         {n(x.orders)}
                       </td>
-                      <td className="num" data-l={t('platform.prot.cGood')}>
+                      <td className="num" data-l={t('quality.part.good')}>
                         <span className="pp-two pp-two-r">
                           <span className="ltr">{x.buyers ? pct(x.good / x.buyers, 1) : '—'}</span>
-                          <small className="muted ltr">{t('platform.prot.qOf', { n: n(x.good), buyers: n(x.buyers) })}</small>
+                          <small className="muted ltr">{t('quality.of', { n: n(x.good), buyers: n(x.buyers) })}</small>
                         </span>
                       </td>
                       <td className="num" data-l={t('platform.prot.cCaught')}>
@@ -210,83 +213,45 @@ export function ProtectionPage({ demo }: { demo?: boolean }) {
   );
 }
 
-const delta = (v: number) => (v > 0 ? `+${n(v)}` : v < 0 ? `−${n(-v)}` : '0');
-
-function useLoc() {
-  const { i18n } = useTranslation();
-  return i18n.language === 'ar' ? 'ar-DZ' : i18n.language === 'en' ? 'en-GB' : 'fr-FR';
-}
-const shortDayIn = (loc: string, day: string) => new Intl.DateTimeFormat(loc, { day: 'numeric', month: 'short', timeZone: 'UTC', numberingSystem: 'latn' } as Intl.DateTimeFormatOptions).format(Date.parse(day));
-function shortDay(day: string) {
-  const lang = document.documentElement.lang;
-  return shortDayIn(lang === 'ar' ? 'ar-DZ' : lang === 'en' ? 'en-GB' : 'fr-FR', day);
-}
-
-/** drawn at the size it is shown, so its words keep their size (a phone, a half row, a full row) */
-function useBox() {
-  const ref = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState({ w: 0, h: 0 });
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    setBox({ w: Math.round(r.width), h: Math.round(r.height) });
-    const ro = new ResizeObserver(([e]) => setBox({ w: Math.round(e.contentRect.width), h: Math.round(e.contentRect.height) }));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  return [ref, box] as const;
-}
-
-/** round steps from 0 (1, 2, 5, 10, 20…), 4 or 5 of them, the top tick above the highest value */
-function ticksFor(max: number): number[] {
-  const m = Math.max(3, max);
-  let step = 1;
-  for (let k = 0; k < 30; k++) {
-    step = [1, 2, 5][k % 3] * 10 ** Math.floor(k / 3);
-    if (Math.floor(m / step) + 1 <= 5) break;
-  }
-  const top = (Math.floor(m / step) + 1) * step;
-  return Array.from({ length: top / step + 1 }, (_, i) => i * step);
-}
-
-/** which days get a date under the axis: the last one, then every few days back, on one regular step */
-function labelStep(count: number, width: number): number {
-  const fit = Math.max(2, Math.min(8, Math.floor(width / 64)));
-  const raw = Math.ceil(count / fit);
-  return [1, 2, 3, 5, 7, 10, 14, 15, 20, 30].find((s) => s >= raw) ?? raw;
-}
-
-function Axis({ ticks, y, L, R, W }: { ticks: number[]; y: (v: number) => number; L: number; R: number; W: number }) {
-  return (
-    <>
-      {ticks.map((v, i) => (
-        <g key={v}>
-          <line className={i === 0 ? 'base' : 'g'} x1={L} x2={W - R} y1={y(v)} y2={y(v)} />
-          <text className="ax" x={L - 8} y={y(v) + 4} textAnchor="end">
-            {n(v)}
-          </text>
-        </g>
-      ))}
-    </>
-  );
-}
-
-function DateLabels({ days, x, iw, L, R, W, Hy }: { days: Day[]; x: (i: number) => number; iw: number; L: number; R: number; W: number; Hy: number }) {
+/** The buyers' quality fell by 5 points or more this week (the whole platform, or some stores): said on top, in red. */
+function QualityAlertBox({ a }: { a: NonNullable<Stats['alert']> }) {
+  const { t } = useTranslation();
   const loc = useLoc();
-  const step = labelStep(days.length, iw);
+  const fall = (w: { now: number; prev: number }) => `−${((w.prev - w.now) * 100).toFixed(1).replace('.', document.documentElement.lang === 'en' ? '.' : ',')}`;
   return (
-    <>
-      {days.map((d, i) =>
-        (days.length - 1 - i) % step === 0 ? (
-          <text key={d.day} className="ax" x={x(i)} y={Hy} textAnchor={x(i) < L + 24 ? 'start' : x(i) > W - R - 24 ? 'end' : 'middle'}>
-            {shortDayIn(loc, d.day)}
-          </text>
-        ) : null,
+    <div className="pp-q-alert" role="alert">
+      <b>
+        <Icon name="alert" /> {t('quality.alert.title')}
+      </b>
+      <p>
+        {t('quality.alert.week', { from: shortDayIn(loc, a.week.from), to: shortDayIn(loc, a.week.to) })}{' '}
+        {a.network && (
+          <>
+            {t('quality.alert.all', { now: pct(a.network.now, 1), prev: pct(a.network.prev, 1) })} (<span dir="ltr">{fall(a.network)}</span> {t('quality.pts')}).
+          </>
+        )}
+      </p>
+      {a.stores.length > 0 && (
+        <ul>
+          {a.stores.slice(0, 8).map((x) => (
+            <li key={x.id}>
+              <a href={`#/platform/shops/${x.id}`}>
+                <b>{x.name}</b>
+              </a>
+              <span className="ltr">{pct(x.now, 1)}</span>
+              <small>
+                <span dir="ltr">{fall(x)}</span> {t('quality.pts')} · {t('quality.alert.buyers', { n: n(x.buyers) })}
+              </small>
+            </li>
+          ))}
+        </ul>
       )}
-    </>
+      <small className="pp-q-alert-n">{t('quality.alert.mail')}</small>
+    </div>
   );
 }
+
+const delta = (v: number) => (v > 0 ? `+${n(v)}` : v < 0 ? `−${n(-v)}` : '0');
 
 function Legend() {
   const { t } = useTranslation();
@@ -480,187 +445,6 @@ function Growth({ days, pick, label }: { days: Day[]; pick: Pick; label: string 
   );
 }
 
-/** the last days are not finished: agents are still confirming their orders */
-const OPEN_DAYS = 3;
-
-/** Are the buyers getting better or worse? Of 100 orders received (a customer sending the same order again counts once),
- *  how many came from real buyers: confirmed by an agent, or delivered. Day by day, its 7-day average, and the period
- *  against the one before. */
-function BuyerQuality({ s, period }: { s: Stats; period: Period }) {
-  const { t } = useTranslation();
-  const days = s.days;
-  const done = days.slice(0, Math.max(0, days.length - OPEN_DAYS));
-  const sum = (list: Day[], k: 'buyers' | 'good' | 'bad') => list.reduce((a, d) => a + d[k], 0);
-  const buyers = sum(done, 'buyers');
-  const now = buyers ? sum(done, 'good') / buyers : null;
-  const pv = s.previous && s.previous.buyers ? s.previous.good / s.previous.buyers : null;
-  const delta = now !== null && pv !== null ? (now - pv) * 100 : null;
-  const dir = delta === null ? null : Math.abs(delta) < 1 ? 'flat' : delta > 0 ? 'up' : 'down';
-  // the split, on the same finished days as the figure above it (one number, one meaning)
-  const tt = { buyers, good: sum(done, 'good'), bad: sum(done, 'bad') };
-  const other = Math.max(0, tt.buyers - tt.good - tt.bad);
-  const parts = [
-    { k: 'good', v: tt.good },
-    { k: 'bad', v: tt.bad },
-    { k: 'rest', v: other },
-  ] as const;
-  const pts = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(1).replace('.', document.documentElement.lang === 'en' ? '.' : ',')}`;
-  return (
-    <Card title={t('platform.prot.q')} help={t('platform.prot.qHelp', { count: OPEN_DAYS })} className="pp-q">
-      <div className="pp-q-grid">
-        <div className="pp-q-side">
-          <div className="pp-q-lead">
-            <b className="ltr">{now === null ? '—' : pct(now, 1)}</b>
-            <span>{t('platform.prot.qLead')}</span>
-          </div>
-          {dir ? (
-            <p className={`pp-q-trend ${dir}`}>
-              <span className="pp-q-dir">
-                {dir === 'up' ? '▲' : dir === 'down' ? '▼' : '='} {t(`platform.prot.qDir.${dir}`)}
-              </span>{' '}
-              <b className="pp-q-pts">
-                <span dir="ltr">{pts(delta!)}</span> {t('platform.prot.qPts')}
-              </b>{' '}
-              {t('platform.prot.qVs', { count: period, prev: pct(pv, 1) })}
-            </p>
-          ) : (
-            <p className="pp-q-trend muted">{t('platform.prot.qNoPrev')}</p>
-          )}
-          {tt.buyers > 0 && (
-            <>
-              <div className="pp-q-bar" role="img" aria-label={parts.map((p) => `${t(`platform.prot.qPart.${p.k}`)} ${pct(p.v / tt.buyers)}`).join(', ')}>
-                {parts.map((p) => (p.v ? <i key={p.k} className={`q-${p.k}`} style={{ flexGrow: p.v }} /> : null))}
-              </div>
-              <ul className="pp-q-parts">
-                {parts.map((p) => (
-                  <li key={p.k}>
-                    <i className={`q-${p.k}`} />
-                    <span>{t(`platform.prot.qPart.${p.k}`)}</span>
-                    <b className="ltr">{pct(p.v / tt.buyers, 1)}</b>
-                    <small className="ltr">{n(p.v)}</small>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
-        <QualityLine days={days} />
-      </div>
-    </Card>
-  );
-}
-
-/** the buyers' quality day by day (thin grey), its 7-day average (the blue line), the unfinished last days dashed */
-function QualityLine({ days }: { days: Day[] }) {
-  const { t, i18n } = useTranslation();
-  const loc = useLoc();
-  const [box, size] = useBox();
-  const [hov, setHov] = useState<number | null>(null);
-  const W = Math.max(280, size.w || 640);
-  const H = 220;
-  const T = 10;
-  const B = 26;
-  const L = 44;
-  const R = 10;
-  const iw = W - L - R;
-  const ih = H - T - B;
-  const slot = iw / days.length;
-  const x = (i: number) => L + slot * (i + 0.5);
-  const open = days.length - OPEN_DAYS; // from this index on: not finished
-  // each finished day (the unfinished ones are only half counted yet: left out of the grey line)
-  const daily = days.map((d, i) => (d.buyers && i < open ? d.good / d.buyers : null));
-  const avgOn = days.length >= 14;
-  // the 7-day average: the days of the window up to this one (buyers added up, so a busy day weighs more)
-  const avg = days.map((_, i) => {
-    const w = days.slice(Math.max(0, i - 6), i + 1);
-    const b = w.reduce((a, d) => a + d.buyers, 0);
-    return b ? w.reduce((a, d) => a + d.good, 0) / b : null;
-  });
-  // drawn up to the last finished day only: the unfinished days would look like a fall that is not real
-  const main = (avgOn ? avg : days.map((d) => (d.buyers ? d.good / d.buyers : null))).map((v, i) => (i < open ? v : null));
-  // the scale follows the values (a rate, not a count: a rise of a few points must be seen), in steps of 5 or 10 points
-  const seen = [...daily, ...main].filter((v): v is number => v !== null);
-  const span = seen.length ? [Math.min(...seen), Math.max(...seen)] : [0, 1];
-  const step = span[1] - span[0] > 0.3 ? 0.1 : 0.05;
-  const lo = Math.max(0, Math.floor((span[0] - 0.02) / step) * step);
-  const hi = Math.min(1, Math.max(lo + 2 * step, Math.ceil((span[1] + 0.02) / step) * step));
-  const ticks = Array.from({ length: Math.round((hi - lo) / step) + 1 }, (_, i) => lo + i * step);
-  const y = (v: number) => T + ih - ((v - lo) / (hi - lo)) * ih;
-  const path = (vals: (number | null)[], from: number, to: number) => {
-    let d = '';
-    let prev = -2;
-    for (let i = from; i <= to; i++) {
-      const v = vals[i];
-      if (v === null || v === undefined) continue;
-      d += `${i === prev + 1 ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`;
-      prev = i;
-    }
-    return d;
-  };
-  const any = daily.some((v) => v !== null);
-  const h = hov === null ? null : days[hov];
-  return (
-    <div className="pp-chart pp-q-chart" ref={box} onMouseLeave={() => setHov(null)}>
-      {!any ? (
-        <p className="pp-chart-one muted">{t('platform.prot.qNone')}</p>
-      ) : (
-        <>
-          <span className="pp-lg pp-q-lg">
-            {avgOn && (
-              <span>
-                <i className="qd" /> {t('platform.prot.qDaily')}
-              </span>
-            )}
-            <span>
-              <i className="qa" /> {avgOn ? t('platform.prot.qAvg') : t('platform.prot.qDaily')}
-            </span>
-            <span>
-              <i className="qo" /> {t('platform.prot.qOpen')}
-            </span>
-          </span>
-          <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t('platform.prot.q')}>
-            {ticks.map((v, i) => (
-              <g key={i}>
-                <line className={i === 0 ? 'base' : 'g'} x1={L} x2={W - R} y1={y(v)} y2={y(v)} />
-                <text className="ax" x={L - 8} y={y(v) + 4} textAnchor="end">
-                  {Math.round(v * 100)} %
-                </text>
-              </g>
-            ))}
-            {open > 0 && open < days.length && <rect className="pp-q-open" x={L + slot * open} y={T} width={W - R - (L + slot * open)} height={ih} />}
-            {avgOn && <path className="qd" d={path(daily, 0, Math.max(0, open - 1))} />}
-            <path className="qa" d={path(main, 0, days.length - 1)} />
-            {h && main[hov!] !== null && main[hov!] !== undefined && <circle className="dt q" cx={x(hov!)} cy={y(main[hov!]!)} r={4} />}
-            <DateLabels days={days} x={x} iw={iw} L={L} R={R} W={W} Hy={H - 6} />
-            {days.map((d, i) => (
-              <rect key={d.day} x={L + slot * i} y={0} width={slot} height={H} fill="transparent" onMouseEnter={() => setHov(i)} onClick={() => setHov(i)} />
-            ))}
-          </svg>
-          {h && hov !== null && (
-            <div className="pp-tip" dir={i18n.dir()} style={{ left: `${Math.min(80, Math.max(20, (x(hov) / W) * 100))}%` }}>
-              <b>
-                {shortDayIn(loc, h.day)}
-                {hov >= open ? ` · ${t('platform.prot.qOpenShort')}` : ''}
-              </b>
-              <span>
-                {t('platform.prot.qPart.good')} <b className="ltr">{h.buyers ? pct(h.good / h.buyers, 1) : '—'}</b>
-              </span>
-              {avgOn && hov < open && (
-                <span className="pp-tip-sub">
-                  {t('platform.prot.qAvg')} <b className="ltr">{avg[hov] === null ? '—' : pct(avg[hov], 1)}</b>
-                </span>
-              )}
-              <span className="pp-tip-sub">
-                {t('platform.prot.qOf', { n: n(h.good), buyers: n(h.buyers) })}
-              </span>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
 // ---- the preview's example (no server): a fixed, believable platform — about two dozen stores, the network started
 // 38 days ago and learns a little every day, two attack days. Marked « Exemple » on the page.
 const EXAMPLE_STORES = [
@@ -761,5 +545,13 @@ export function demoStats(period: Period, now = Date.now()): Stats {
       .sort((a, b) => b.orders - a.orders || a.name.localeCompare(b.name)),
     minSellers: 2,
     lastRunAt: new Date(now - 12 * 60_000).toISOString(),
+    // the example's attacked store: its buyers' quality fell this week
+    alert: {
+      at: new Date(now - 12 * 60_000).toISOString(),
+      week: { from: algeriaDay(now - 9 * DAY), to: algeriaDay(now - 3 * DAY) },
+      network: null,
+      stores: [{ id: 1002, name: names[2], now: 0.512, prev: 0.588, buyers: 312 }],
+      mailedAt: new Date(now - 2 * DAY).toISOString(),
+    },
   };
 }

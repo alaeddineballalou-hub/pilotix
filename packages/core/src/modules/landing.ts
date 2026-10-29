@@ -9,6 +9,7 @@
 //   server: InitiateCheckout for an abandoned order, Purchase only for a real order (received, confirmed or delivered,
 //   as chosen), never for a blocked one;
 // - the products still without a page (menu badge, one-click page, automatic page for each new product).
+import { AD_KEY_SQL, algeriaDay, QUALITY_OPEN_DAYS, QUALITY_SQL } from './quality';
 import {
   CONF_DONE_BAD,
   CONF_TODO,
@@ -1915,6 +1916,61 @@ export const landingProcs = {
        FROM fraud_marks m LEFT JOIN orders o ON o.id = m.order_id LEFT JOIN profiles u ON u.id = m.by_user
        WHERE NOT m.lifted ORDER BY m.at DESC LIMIT 12`,
     );
+    // the buyers' quality: every day of the period (and the period before, for the trend), then each ad
+    const today = algeriaDay(now);
+    const dayAt = (k: number) => algeriaDay(now - k * 86_400_000);
+    const fromDay = dayAt(i.days - 1);
+    const prevDay = dayAt(2 * i.days - 1);
+    const doneDay = dayAt(QUALITY_OPEN_DAYS); // the last finished day
+    const qDays = await db.query(
+      `SELECT to_char(s.at AT TIME ZONE 'Africa/Algiers', 'YYYY-MM-DD') AS day, ${QUALITY_SQL}
+         FROM landing_submits s LEFT JOIN orders o ON o.id = s.order_id
+        WHERE s.at > $1 GROUP BY 1`,
+      [isoAt(now - (2 * i.days + 1) * 86_400_000)],
+    );
+    const qBy = new Map(qDays.map((r: any) => [String(r.day), { buyers: num(r.buyers), good: num(r.good), bad: num(r.bad) }]));
+    const qualityDays = Array.from({ length: i.days }, (_, k) => {
+      const day = dayAt(i.days - 1 - k);
+      return { day, ...(qBy.get(day) ?? { buyers: 0, good: 0, bad: 0 }) };
+    });
+    const qPrev = { buyers: 0, good: 0, bad: 0 };
+    for (const [day, c] of qBy) if (day >= prevDay && day < fromDay) (qPrev.buyers += c.buyers), (qPrev.good += c.good), (qPrev.bad += c.bad);
+    // each ad: its orders of the period, its buyers' quality on the finished days, and the same before (the trend)
+    const adRows = await db.query(
+      `SELECT ${AD_KEY_SQL} AS k,
+              to_char(s.at AT TIME ZONE 'Africa/Algiers', 'YYYY-MM-DD') >= $2 AS cur,
+              to_char(s.at AT TIME ZONE 'Africa/Algiers', 'YYYY-MM-DD') <= $3 AS done,
+              count(*)::int AS orders, ${QUALITY_SQL},
+              max(COALESCE(NULLIF(s.utm->>'utm_campaign', ''), NULLIF(o.utm->>'utm_campaign', ''))) AS campaign
+         FROM landing_submits s LEFT JOIN orders o ON o.id = s.order_id
+        WHERE s.at > $1 AND to_char(s.at AT TIME ZONE 'Africa/Algiers', 'YYYY-MM-DD') >= $4
+        GROUP BY 1, 2, 3`,
+      [isoAt(now - (2 * i.days + 1) * 86_400_000), fromDay, doneDay, prevDay],
+    );
+    const ads = new Map<string, { key: string | null; campaign: string | null; orders: number; buyers: number; good: number; bad: number; prev: { buyers: number; good: number; bad: number } }>();
+    for (const r of adRows) {
+      const key = r.k ? String(r.k) : null;
+      const id = key ?? '';
+      const a = ads.get(id) ?? { key, campaign: null, orders: 0, buyers: 0, good: 0, bad: 0, prev: { buyers: 0, good: 0, bad: 0 } };
+      if (r.campaign && !a.campaign) a.campaign = String(r.campaign);
+      if (r.cur) {
+        a.orders += num(r.orders);
+        if (r.done) (a.buyers += num(r.buyers)), (a.good += num(r.good)), (a.bad += num(r.bad));
+      } else (a.prev.buyers += num(r.buyers)), (a.prev.good += num(r.good)), (a.prev.bad += num(r.bad));
+      ads.set(id, a);
+    }
+    const keys = [...ads.values()].map((a) => a.key).filter((k): k is string => !!k);
+    const adNames = new Map<string, { name: string; campaign: string | null }>();
+    if (keys.length) {
+      for (const r of await db.query(`SELECT id, name, campaign FROM adsets WHERE id = ANY($1::text[])`, [keys])) adNames.set(String(r.id), { name: String(r.name), campaign: r.campaign ?? null });
+      for (const r of await db.query(`SELECT a.id, a.name, s.name AS adset FROM ads a LEFT JOIN adsets s ON s.id = a.adset_id WHERE a.id = ANY($1::text[])`, [keys]))
+        if (!adNames.has(String(r.id))) adNames.set(String(r.id), { name: String(r.adset ?? r.name), campaign: null });
+    }
+    const adList = [...ads.values()]
+      .filter((a) => a.orders > 0)
+      .sort((x, y) => Number(!x.key) - Number(!y.key) || y.orders - x.orders)
+      .slice(0, 13)
+      .map((a) => ({ ...a, name: a.key ? adNames.get(a.key)?.name ?? a.key : null, campaign: (a.key && adNames.get(a.key)?.campaign) || a.campaign }));
     const short = (k: string) => (k.length > 12 ? `${k.slice(0, 4)}…${k.slice(-5)}` : k);
     const mask = (p: string) => (hide ? PII_HIDDEN : p);
     const attack = (r: any, kind: 'device' | 'numbers') => ({
@@ -1949,6 +2005,10 @@ export const landingProcs = {
         competitor: num(handled?.competitor),
       },
       series: days.map((r: any) => ({ day: String(r.day), allowed: num(r.allowed), review: num(r.review), blocked: num(r.blocked) })),
+      /** the buyers' quality day by day (every day of the period), and the period before (null: no orders then) */
+      quality: { today, days: qualityDays, previous: qPrev.buyers ? qPrev : null },
+      /** each ad (its ad set, else its ad or the campaign of the link; key null: orders not from an ad), the most orders first */
+      ads: adList,
       hours: Array.from({ length: 24 }, (_, h) => num(hours.find((r: any) => num(r.h) === h)?.n)),
       reasons: reasons.map((r: any) => ({ code: String(r.code), blocked: num(r.blocked), review: num(r.review) })),
       pages: pages.map((r: any) => ({ slug: String(r.slug), title: String(r.title ?? r.slug), submits: num(r.submits), review: num(r.review), blocked: num(r.blocked) })),

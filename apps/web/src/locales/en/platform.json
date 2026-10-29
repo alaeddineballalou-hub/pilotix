@@ -877,30 +877,6 @@
       "neverText": "It puts the order “to check”: an agent calls before shipping. A customer already delivered and paid in the shop is never bothered.",
       "forget": "It forgets over time",
       "forgetText": "Updated every 30 minutes. A mark older than 180 days is forgotten, and if the customer is delivered later, the shop stops flagging them."
-    },
-    "q": "Buyer quality",
-    "qHelp": "Out of 100 orders received (a customer sending the same order again counts once), how many came from real buyers: confirmed by an agent or delivered. The last {{count}} days are not finished: agents are still confirming.",
-    "qLead": "real buyers",
-    "qDir": {
-      "up": "Rising",
-      "down": "Falling",
-      "flat": "Stable"
-    },
-    "qVs_one": "compared with the day before ({{prev}})",
-    "qVs_other": "compared with the {{count}} days before ({{prev}})",
-    "qNoPrev": "No earlier period to compare with yet: the trend shows soon.",
-    "qPart": {
-      "good": "Real buyers",
-      "bad": "Fake (blocked, fake, wrong numbers)",
-      "rest": "Others (waiting, cancelled, unreachable)"
-    },
-    "qDaily": "Each day",
-    "qAvg": "7-day average",
-    "qOpen": "Not finished (agents still confirming)",
-    "qOpenShort": "not finished",
-    "qOf": "{{n}} of {{buyers}}",
-    "qNone": "Not enough finished orders to measure yet.",
-    "cGood": "Real buyers",
-    "qPts": "pts"
+    }
   }
 }
