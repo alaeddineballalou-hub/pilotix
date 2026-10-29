@@ -14,6 +14,9 @@ import { Empty, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { LivreursCash } from '../caisse/LivreursCash';
 import type { Company, CompanyDraft } from './forms';
+import { cardSub, cardTitle, countOf, draftOf, searchCards } from './carriers';
+import { CompanyLogo, CourierLogo } from './CourierLogo';
+import { courierCardOf } from '@pilotix/shared';
 import '../confirmation/phone.css';
 import '../suivi/phone.css';
 import '../sav/phone.css';
@@ -158,12 +161,11 @@ function Companies({ list, kinds, onEdit, onOpen, onAdd, onSheet }: { list: Comp
           {sorted.map((x) => (
             <li key={x.id} className={x.active ? '' : 'off'}>
               <button type="button" onClick={() => setCur(x.id)}>
-                <span className={`pxs-co k-${x.kind} pxl-co`}>{x.kind === 'own' ? <Icon name="bike" /> : short(x.name)}</span>
+                {isApi(x) ? <CompanyLogo cards={kinds.cards} company={x} /> : <span className={`pxs-co k-${x.kind} pxl-co`}>{x.kind === 'own' ? <Icon name="bike" /> : short(x.name)}</span>}
                 <span className="pxk-rm">
                   <b>{x.name}</b>
                   <small>
                     <Conn c={x} />
-                    {x.kind !== 'manual' && x.kind !== 'own' && x.name !== t(`livraison.kinds.${x.kind}`) ? ` ${t(`livraison.kinds.${x.kind}`)}` : ''}
                   </small>
                 </span>
                 <span className="pxl-nums">
@@ -189,14 +191,16 @@ function Companies({ list, kinds, onEdit, onOpen, onAdd, onSheet }: { list: Comp
         <Icon name="plus" /> {t('livraison.ph.add')}
       </button>
       {add && <AddSheet kinds={kinds} list={list} onClose={() => setAdd(false)} onPick={(d) => (setAdd(false), onAdd(d))} />}
-      {c && <CompanyPage c={c} onClose={() => setCur(null)} onEdit={onEdit} onOpen={onOpen} onSheet={onSheet} />}
+      {c && <CompanyPage c={c} cards={kinds.cards} onClose={() => setCur(null)} onEdit={onEdit} onOpen={onOpen} onSheet={onSheet} />}
     </>
   );
 }
 
-function CompanyPage({ c, onClose, onEdit, onOpen, onSheet }: { c: Company; onClose: () => void; onEdit: (c: Company) => void; onOpen: (k: Open, c: Company) => void; onSheet: (by: { companyId?: number }) => void }) {
+function CompanyPage({ c, cards, onClose, onEdit, onOpen, onSheet }: { c: Company; cards: Kinds['cards']; onClose: () => void; onEdit: (c: Company) => void; onOpen: (k: Open, c: Company) => void; onSheet: (by: { companyId?: number }) => void }) {
   const { t } = useTranslation();
   const api = isApi(c);
+  // an API company is shown as itself (DHD, Guepex…), never by its platform (« EcoTrack », « Yalidine »)
+  const card = api ? courierCardOf(cards, c) : null;
   const test = useAction('delivery.test', { silent: true, onDone: (r) => toast(r.message, r.ok ? 'ok' : 'bad', 6000) });
   const row = (icon: string, label: string, sub: string | null, onClick: () => void, tone = '') => (
     <li>
@@ -213,7 +217,7 @@ function CompanyPage({ c, onClose, onEdit, onOpen, onSheet }: { c: Company; onCl
     </li>
   );
   return (
-    <Page title={c.name} sub={t(`livraison.kindsLong.${c.kind}`)} right={<Conn c={c} />} onClose={onClose}>
+    <Page title={c.name} sub={api ? (card?.sub ? cardSub(t, card) : undefined) : t(`livraison.kindsLong.${c.kind}`)} right={<Conn c={c} />} onClose={onClose}>
       <section className="pxl-sum">
         <div>
           <small>{t('livraison.col.toShip')}</small>
@@ -287,35 +291,42 @@ function AddSheet({ kinds, list, onClose, onPick }: { kinds: Kinds; list: Compan
   );
 }
 
+/** Every delivery company, one row each with its own logo (a search above: the list is long). */
 function CarrierRows({ list, kinds, onPick }: { list: Company[]; kinds: Kinds; onPick: (d: CompanyDraft) => void }) {
   const { t } = useTranslation();
-  const host = (c: Company) => String((c.settings as any)?.base_url ?? '').toLowerCase();
+  const [q, setQ] = useState('');
+  const found = searchCards(kinds.cards, q);
+  const shown = found.length ? found : kinds.cards.filter((c) => c.kind === 'custom');
   return (
-    <ul className="pxk-grp">
-      {kinds.cards.map((card) => {
-        const n = list.filter((c) => {
-          if (c.kind !== card.kind) return false;
-          if (!card.host) return true;
-          if (card.host.startsWith('!')) return card.host.slice(1).split(',').every((h) => !host(c).includes(h));
-          return host(c).includes(card.host);
-        }).length;
-        return (
-          <li key={card.title}>
-            <button
-              type="button"
-              onClick={() => onPick({ name: card.kind === 'custom' || card.title.startsWith('Autre') ? '' : card.title, kind: card.kind, active: true, phone: '', settings: { ...(card.settings ?? {}) } })}
-            >
-              <span className={`pxs-co k-${card.kind} pxl-co`}>{short(card.title)}</span>
-              <span className="pxk-rm">
-                <b>{card.title}</b>
-                <small>{card.sub}</small>
-              </span>
-              {n ? <span className="pxl-st ok">{t('livraison.api.connected', { count: n })}</span> : <span className="pxl-plus">{t('livraison.ph.connect')}</span>}
-            </button>
-          </li>
-        );
-      })}
-    </ul>
+    <>
+      <input
+        className="pxv-search pxl-csearch"
+        type="search"
+        value={q}
+        placeholder={t('livraison.api.searchPh')}
+        aria-label={t('livraison.api.search')}
+        enterKeyHint="search"
+        onChange={(e) => setQ(e.target.value)}
+      />
+      {!found.length && <p className="pxv-help">{t('livraison.api.noMatch', { q: q.trim() })}</p>}
+      <ul className="pxk-grp">
+        {shown.map((card) => {
+          const n = countOf(card, kinds.cards, list);
+          return (
+            <li key={card.id}>
+              <button type="button" onClick={() => onPick(draftOf(card))}>
+                <CourierLogo card={card} size="sm" />
+                <span className="pxk-rm">
+                  <b>{cardTitle(t, card)}</b>
+                  {card.sub && <small>{cardSub(t, card)}</small>}
+                </span>
+                {n ? <span className="pxl-st ok">{t('livraison.api.connected', { count: n })}</span> : <span className="pxl-plus">{t('livraison.ph.connect')}</span>}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }
 
@@ -333,10 +344,10 @@ function Carriers({ list, kinds, onAdd, onOpen }: { list: Company[]; kinds: Kind
             {mine.map((c) => (
               <li key={c.id} className={c.active ? '' : 'off'}>
                 <button type="button" onClick={() => onOpen(c)}>
-                  <span className={`pxs-co k-${c.kind} pxl-co`}>{short(c.name)}</span>
+                  <CompanyLogo cards={kinds.cards} company={c} />
                   <span className="pxk-rm">
                     <b>{c.name}</b>
-                    <small>{t(`livraison.kindsLong.${c.kind}`)}</small>
+                    {courierCardOf(kinds.cards, c)?.sub && <small>{cardSub(t, courierCardOf(kinds.cards, c)!)}</small>}
                   </span>
                   <Conn c={c} />
                 </button>

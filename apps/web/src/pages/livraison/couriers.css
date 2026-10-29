@@ -1,0 +1,44 @@
+/* Delivery companies' logos (« API Livraison », the companies' lists): each logo on a white plate, a white logo on
+   navy, initials when there is no logo. */
+.px-cologo { flex: none; display: inline-flex; align-items: center; justify-content: flex-start; background: #fff; overflow: hidden; }
+.px-cologo img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
+.px-cologo.dark { background: #1B2A47; }
+.px-cologo.none { justify-content: center; background: #F3EEE6; color: #1B2A47; font-weight: 900; letter-spacing: .03em; }
+
+/* the picker's cards: a plate as wide as the card */
+.px-cologo.md { width: 100%; height: 52px; padding: 6px 2px; border-radius: 10px; }
+.px-cologo.md.dark, .px-cologo.md.none { padding: 6px 10px; }
+.px-cologo.md img { max-height: 40px; }
+.px-cologo.md.none { justify-content: flex-start; font-size: 18px; }
+
+/* a row (lists of companies, phones) */
+.px-cologo.sm { width: 56px; height: 38px; padding: 4px 6px; border-radius: 10px; justify-content: center; border: 1px solid var(--line); }
+.px-cologo.sm.dark, .px-cologo.sm.none { border-color: transparent; }
+.px-cologo.sm.none { font-size: 12px; }
+
+/* « API Livraison » (computer): search, the most used, then A → Z — one card per company */
+.px-cpick { display: flex; flex-direction: column; gap: 10px; }
+.px-cpick-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.px-cpick-bar .px-qsearch { flex: 0 1 420px; }
+.px-cpick-bar small { color: var(--muted); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.px-cpick h3 { margin: 12px 0 2px; font-size: 14px; font-weight: 800; color: var(--muted); }
+.px-cpick .carrier-grid { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 10px; }
+.px-cpick-none { margin: 0; color: var(--muted); font-size: 14px; }
+.px-carrier { display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-width: 0; padding: 10px 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); font: inherit; text-align: start; cursor: pointer; transition: border-color .15s ease-out, box-shadow .15s ease-out; }
+.px-carrier:hover { border-color: var(--navy); box-shadow: 0 2px 10px rgba(27, 42, 71, .08); }
+.px-carrier:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
+.px-carrier.on { border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
+.px-carrier > b { font-size: 14.5px; font-weight: 800; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.px-carrier > small { margin-top: -5px; font-size: 12px; line-height: 1.3; color: var(--muted); }
+.px-carrier > .badge { align-self: flex-start; margin-top: auto; }
+
+/* a company in the lists: its logo, then its name */
+.px-coname { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.px-coname > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+
+/* the company's form: its logo above */
+.px-coform-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.px-coform-head .px-cologo.md { width: 160px; }
+
+/* phones: the search above the list */
+.pxl-csearch { margin: 0 0 8px; }

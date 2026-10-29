@@ -1,4 +1,4 @@
-// EcoTrack platform: DHD (https://dhd.ecotrack.dz), Conexlog, Anderson, Areex, World Express… (each company has its own address).
+// EcoTrack platform: DHD (https://platform.dhd-dz.com), Conexlog, Areex, World Express… (each company has its own address).
 // Auth: Authorization: Bearer <token> (also passed as api_token where the API asks). Base <company address>/api/v1.
 // Ported from the original Pilotix adapter. Endpoints: GET validate/token, get/communes?wilaya_id=, POST create/order, POST valid/order,
 // get/orders/status?trackings=, get/tracking/info?tracking=, DELETE delete/order, get/order/label (PDF), get/fees.
@@ -28,9 +28,11 @@ const STATUSES: CourierAdapter['statuses'] = {
 };
 
 async function api(c: CourierCompany, path: string, q: Record<string, unknown> = {}, o: HttpOpts = {}) {
-  if (!c.settings.base_url) throw new CourierError(`Mettez l’adresse de ${c.name} (ex. https://dhd.ecotrack.dz) dans Sociétés de livraison`);
+  if (!c.settings.base_url) throw new CourierError(`Mettez l’adresse de ${c.name} (ex. https://platform.dhd-dz.com) dans Sociétés de livraison`);
   const qs = query(q);
-  const r = await http(c.name, baseUrl(c, '', '/api/v1') + path + (qs ? `?${qs}` : ''), { ...o, headers: { Authorization: `Bearer ${String(c.secret.token ?? '').trim()}`, ...(o.headers ?? {}) } });
+  // DHD moved (dhd.ecotrack.dz answers « 301 », and a POST that follows a 301 becomes a GET): its new address
+  const base = baseUrl(c, '', '/api/v1').replace(/^https?:\/\/dhd\.ecotrack\.dz\b/i, 'https://platform.dhd-dz.com');
+  const r = await http(c.name, base + path + (qs ? `?${qs}` : ''), { ...o, headers: { Authorization: `Bearer ${String(c.secret.token ?? '').trim()}`, ...(o.headers ?? {}) } });
   await sleep(1250);
   if (!o.binary && r && r.success === false) throw new CourierError(`${c.name} : ${errText(r.message || r.errors) || 'refusé'}${r.error ? ` (${r.error})` : ''}`);
   return r;

@@ -15,7 +15,8 @@ const STATUSES: CourierAdapter['statuses'] = {
   'Retour de Dispatche': 'returning', 'Retour Livreur': 'returning', 'Retour Navette': 'returning', 'Retour Stock': 'returned',
 };
 const h = (c: CourierCompany) => ({ token: String(c.secret.token ?? '').trim(), key: String(c.secret.key ?? '').trim() });
-const url = (c: CourierCompany, p: string) => baseUrl(c, 'https://procolis.com/api_v1') + p;
+// ABEX was once saved with abex.procolis.com, an address that does not exist: every Procolis company is on procolis.com
+const url = (c: CourierCompany, p: string) => baseUrl(c, 'https://procolis.com/api_v1').replace(/^https?:\/\/abex\.procolis\.com\b/i, 'https://procolis.com') + p;
 
 export const procolis: CourierAdapter = {
   statuses: STATUSES,

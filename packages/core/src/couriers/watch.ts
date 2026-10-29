@@ -347,7 +347,7 @@ export const WATCH_ADDRESSES: Record<string, WatchAddresses> = {
     list: ['GET /base/wilayas/?country=1', 'POST /stores/orders/', 'GET /stores/orders/1/', 'PATCH /stores/orders/1/', 'GET /stores/history_order/1/', 'POST /delivery/starter/starter_bordureau/', 'GET /stores/hooks/types/', 'GET /stores/hooks/costume/'],
   },
   ecotrack: {
-    base: 'https://dhd.ecotrack.dz/api/v1',
+    base: 'https://platform.dhd-dz.com/api/v1',
     headers: BEARER,
     list: [
       'POST /add/maj',
