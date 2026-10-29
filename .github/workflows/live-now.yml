@@ -1,0 +1,24 @@
+# Temporary (for Claude): is pilotix.online answering right now? Through Cloudflare and straight from the server.
+# Reads only: nothing on the server changes.
+name: Live now (temporary, for Claude)
+on:
+  push:
+    branches: ['check/live-now']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Is the site up?
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          IP=$(getent ahostsv4 "$HOST" | awk 'NR==1{print $1}'); echo "::add-mask::$IP"
+          for p in / /api/auth/demo /api/platform/health; do
+            r=$(curl -s -m 25 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0" -o /tmp/b -w '%{http_code} %{time_total}s' "https://pilotix.online$p" || echo "curl failed $?")
+            echo "::notice title=Cloudflare $p::$r $(head -c 140 /tmp/b 2>/dev/null | tr -cd '[:print:]')"
+            r=$(curl -s -m 25 --resolve "pilotix.online:443:$IP" -o /tmp/d -w '%{http_code} %{time_total}s' "https://pilotix.online$p" || echo "curl failed $?")
+            echo "::notice title=Server $p::$r $(head -c 140 /tmp/d 2>/dev/null | tr -cd '[:print:]')"
+          done
