@@ -644,8 +644,10 @@ export const deliveryProcs = {
     globalThis.crypto.getRandomValues(bytes);
     const key = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
     let extId = 'demo-hook';
-    if (mode === 'manual') extId = 'manual';
-    else if (!isDemo(ctx)) {
+    if (mode === 'manual') {
+      if (!isDemo(ctx) && !publicApi(ctx)) throw bad('Adresse publique du serveur manquante (PUBLIC_URL) : la société ne saurait pas où prévenir Pilotix');
+      extId = 'manual';
+    } else if (!isDemo(ctx)) {
       if (!publicApi(ctx)) throw bad('Adresse publique du serveur manquante (PUBLIC_URL) : la société ne saurait pas où prévenir Pilotix');
       const old = String((c.settings as any).webhook_id ?? '');
       if (old) await courierOf(ctx)('webhookOff', { companyId, extId: old }, ctx).catch(() => null);
