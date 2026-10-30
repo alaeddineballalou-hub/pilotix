@@ -260,7 +260,7 @@ export async function logProductChange(
 /** Adds `delta` to the stock of a variant in a depot and writes the movement. Use inside a transaction. */
 export async function moveStock(
   db: Db,
-  a: { variantId: number; warehouseId: number; delta: number; reason: string; orderId?: number | null; userId: number | null; note?: string | null; purchaseId?: number | null; inventoryId?: number | null },
+  a: { variantId: number; warehouseId: number; delta: number; reason: string; orderId?: number | null; userId: number | null; note?: string | null; purchaseId?: number | null; inventoryId?: number | null; unitCost?: number | null },
 ) {
   if (!a.delta) return;
   await db.query(
@@ -268,8 +268,8 @@ export async function moveStock(
      ON CONFLICT (variant_id, warehouse_id) DO UPDATE SET qty = stock.qty + EXCLUDED.qty`,
     [a.variantId, a.warehouseId, a.delta],
   );
-  await db.query('INSERT INTO stock_movements (variant_id, warehouse_id, delta, reason, order_id, user_id, note, purchase_id, inventory_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)', [
-    a.variantId, a.warehouseId, a.delta, a.reason, a.orderId ?? null, a.userId, a.note ?? null, a.purchaseId ?? null, a.inventoryId ?? null,
+  await db.query('INSERT INTO stock_movements (variant_id, warehouse_id, delta, reason, order_id, user_id, note, purchase_id, inventory_id, unit_cost) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)', [
+    a.variantId, a.warehouseId, a.delta, a.reason, a.orderId ?? null, a.userId, a.note ?? null, a.purchaseId ?? null, a.inventoryId ?? null, a.unitCost ?? null,
   ]);
   // stock came in: the oldest « sans stock » orders it can now serve go to « À préparer »
   if (a.delta > 0) await releaseNoStock(db, a.userId, [a.variantId]);
@@ -324,17 +324,24 @@ export async function stockMove(ctx: Ctx, i: z.infer<typeof MoveInput>) {
     const delta = i.kind === 'entry' ? i.qty : i.kind === 'loss' ? -i.qty : i.qty - cur;
     let note = i.note || null;
     if (i.kind === 'entry' && i.unitCost != null) {
-      // the supplier changed its price: this entry's price is the product's purchase price from now on
-      const p = (await tx.query('SELECT p.id, p.cost FROM products p JOIN product_variants v ON v.product_id = p.id WHERE v.id = $1 FOR UPDATE OF p', [i.variantId]))[0];
-      const old = num(p.cost);
-      if (old !== i.unitCost) {
-        await tx.query('UPDATE products SET cost = $2 WHERE id = $1', [p.id, i.unitCost]);
-        await logProductChange(tx, num(p.id), ctx.session.profile.id, { cost: old }, { cost: i.unitCost }, 'Entrée de stock');
+      // Cost is specific to the received variant. Never reprice other variants.
+      // The immutable receipt cost is also stored on the stock movement itself.
+      const variant = (await tx.query(
+        'SELECT v.id, v.cost, v.title, p.id AS product_id, p.cost AS product_cost FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id = $1 FOR UPDATE OF v',
+        [i.variantId],
+      ))[0];
+      if (numOrNull(variant.cost) !== i.unitCost)
+        await tx.query('UPDATE product_variants SET cost = $2 WHERE id = $1', [i.variantId, i.unitCost]);
+      // Products without named variants retain their product-level cost display.
+      if (!variant.title && num(variant.product_cost) !== i.unitCost) {
+        await tx.query('UPDATE products SET cost=$2 WHERE id=$1', [variant.product_id, i.unitCost]);
+        await logProductChange(tx, num(variant.product_id), ctx.session.profile.id,
+          { cost: variant.product_cost }, { cost: i.unitCost }, 'Entrée de stock');
       }
-      const price = old !== i.unitCost ? `Prix d’achat ${old} → ${i.unitCost} DA` : `Prix d’achat ${i.unitCost} DA`;
+      const price = `Prix d’achat du lot ${i.unitCost} DA/unité`;
       note = note ? `${note} — ${price}` : price;
     }
-    await moveStock(tx, { variantId: i.variantId, warehouseId: i.warehouseId, delta, reason: i.kind, userId: ctx.session.profile.id, note });
+    await moveStock(tx, { variantId: i.variantId, warehouseId: i.warehouseId, delta, reason: i.kind, userId: ctx.session.profile.id, note, unitCost: i.kind === 'entry' ? i.unitCost : null });
     return { qty: cur + delta, delta };
   });
   ctx.emit({ type: 'stock' });
