@@ -207,3 +207,32 @@ test('receive a return from the Retours page, and "Retirer" from dispatch', asyn
   assert.equal(back.followStatus, 'to_prepare');
   assert.equal(back.tracking, null);
 });
+
+
+test('paid montage, per-variant availability and zero-stock confirmation rules', async () => {
+  const admin = await as(EMAILS.admin);
+  const p: any = await call('catalog.saveProduct', admin, {
+    name: 'Montage option test product', price: 10000, cost: 6000, weightKg: 5,
+    variants: [{ title: 'Gris', price: 10000, cost: 6000 }],
+    services: [{ name: 'Montage', price: 1500, cost: 500 }],
+  });
+  assert.equal(p.services.length, 1);
+  const svc: any = (await call('catalog.product', admin, { id: p.services[0].id }));
+  assert.equal(svc.isService, true);
+  assert.equal(svc.price, 1500);
+  assert.equal(svc.cost, 500);
+  assert.equal(svc.weightKg, 0);
+  assert.ok(p.linked.includes(svc.id));
+  const variant = p.variants.find((v: any) => v.title === 'Gris');
+  const { checkLines } = await import('../modules/confirmcheck');
+  const line = [{ productId: p.id, variantId: variant.id, qty: 1 }];
+  assert.equal((await checkLines(db, line, null))[0].state, 'empty');
+  await call('catalog.setAvailability', admin, { variantId: variant.id, active: false });
+  assert.equal((await checkLines(db, line, null))[0].state, 'off');
+  await call('catalog.setAvailability', admin, { variantId: variant.id, active: true });
+  assert.equal((await checkLines(db, line, null))[0].state, 'empty');
+  await call('catalog.setAvailability', admin, { productId: p.id, active: false });
+  assert.equal((await checkLines(db, line, null))[0].state, 'off');
+  const updated: any = await call('catalog.product', admin, { id: svc.id });
+  assert.equal(updated.active, false);
+});

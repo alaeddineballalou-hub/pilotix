@@ -613,3 +613,25 @@ a.chip.lp-nolp:hover { text-decoration: underline; }
   .pd-imp-lines { display: none; }
   .pd-imp-row .pd-name, .pd-imp-vars, .pd-imp-msgs { grid-column: 1 / -1; }
 }
+
+/* Expanded product variant list, displayed directly under the product row. */
+.pd-product-group { border-bottom: 1px solid var(--line, #e0e4eb); }
+.pd-product-group > .pd-prows { border-bottom: 0; }
+.pd-variant-detail { margin: 0 14px 14px; border: 1px solid var(--line, #dfe3eb); border-radius: 10px; overflow-x: auto; }
+.pd-variant-head, .pd-variant-line { display: grid; grid-template-columns: minmax(120px, 1.3fr) minmax(95px, 1fr) 125px 125px 90px 100px; align-items: center; gap: 10px; padding: 10px 14px; min-width: 720px; }
+.pd-variant-head { background: var(--surface-alt, #f4f6f9); font-weight: 700; font-size: 11px; text-transform: uppercase; }
+.pd-variant-line + .pd-variant-line { border-top: 1px solid var(--line, #e0e4eb); }
+.pd-variant-line > span { font-size: 13px; }
+.pd-availability { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.pd-availability input[type=checkbox] { width: 17px; height: 17px; cursor: pointer; }
+
+/* Compact accessible ON/OFF switch matching the product catalog reference. */
+.pd-availability { position: relative; white-space: nowrap; }
+.pd-availability input[type=checkbox] { position: absolute; opacity: 0; width: 38px; height: 22px; margin: 0; }
+.pd-switch-track { display: inline-flex; position: relative; width: 38px; height: 22px; background: #a2a8b4; border-radius: 50px; transition: background .15s; }
+.pd-switch-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; background: white; border-radius: 50%; box-shadow: 0 1px 3px #0003; transition: transform .15s; }
+.pd-availability input:checked + .pd-switch-track { background: #8055d6; }
+.pd-availability input:checked + .pd-switch-track::after { transform: translateX(16px); }
+.pd-availability input:focus-visible + .pd-switch-track { outline: 3px solid var(--accent, #e69a30); outline-offset: 2px; }
+.pd-availability input:disabled + .pd-switch-track { opacity: .5; cursor: not-allowed; }
+.pd-switch-state { font-size: 11px; color: var(--muted); font-weight: 700; }
