@@ -464,3 +464,5 @@ export * from './pilot';
 export * from './colors';
 
 export * from './compensation';
+
+export * from './management-plans';
