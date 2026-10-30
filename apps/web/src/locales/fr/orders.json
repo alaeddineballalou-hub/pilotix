@@ -405,7 +405,7 @@
     "feesApi": "d’après l’API {{name}}",
     "feesPaid": "retenu par {{name}} au paiement",
     "feesRule": "d’après vos tarifs",
-    "feesHeavier": "Pesé {{kg}} kg par {{name}} (déclaré {{declared}} kg)"
+    "feesHeavier": "Pesé {{kg}} kg par {{name}} : surpoids compté"
   },
   "ph": {
     "per": {

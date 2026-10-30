@@ -57,8 +57,8 @@ function CourierFeesRow({ o }: { o: Order }) {
     w ? t('orders.card.feesWeight', { v: da(w), kg: kg ?? '?' }) : kg ? t('orders.card.feesKg', { kg }) : null,
     t(f.byRule ? 'orders.card.feesRule' : f.exact ? 'orders.card.feesPaid' : 'orders.card.feesApi', { name }),
   ].filter(Boolean);
-  // the company weighed it heavier than Pilotix declared (its products' weight) and took a weight fee for it
-  const heavier = w > 0 && f.kg !== null && f.kg > f.declaredKg;
+  // the company weighed it and took a weight fee for it (only its weight counts, not the products')
+  const heavier = w > 0 && f.kg !== null;
   return (
     <>
       <dt>{t('orders.card.courierFees', { name })}</dt>

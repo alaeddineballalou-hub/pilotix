@@ -37,13 +37,13 @@ export function weightRuleOf(kind: unknown, config: unknown): WeightRule {
 export const weightRuleSet = (kind: unknown, config: unknown) => kind === 'own' || kind === 'zr' || kind === 'zr_legacy' || feesByApi(kind) || !!typedRule(cfgOf(config));
 
 /**
- * The weight fee Pilotix counts for a parcel of a company that does not weigh it by API: its « Surpoids » rule on the
- * weight declared (the products', whole kilos) — the same way as ZR: 5 kg free → 6 kg 50 DA. None for ZR (its own
+ * The weight fee Pilotix counts for a parcel of a company without its prices by API: its « Surpoids » rule on the weight
+ * the company found (whole kilos, like ZR: 5 kg free → 6 kg 50 DA); none while it has not said it, none for ZR (its own
  * weight fee comes from its API) nor for our own livreurs.
  */
-export function ruleFee(kind: unknown, rule: WeightRule, productsKg: unknown): number {
-  if (kind === 'own' || feesByApi(kind)) return 0;
-  return weightFee(declaredKg(productsKg), rule);
+export function ruleFee(kind: unknown, rule: WeightRule, kg: unknown): number {
+  if (kind === 'own' || feesByApi(kind) || !(Number(kg) > 0)) return 0;
+  return weightFee(Number(kg), rule);
 }
 
 /** ZR weighs in whole kilos (no comma): 5 kg → none above, 6 kg → 1 kg above. */
@@ -138,10 +138,11 @@ export async function applyPayFees(db: Db, companyId: number, lines: { tracking:
   return n;
 }
 
-/** The weight a parcel is counted at: the one its company found (its tracking answer), else the products' weight. */
-export function knownKg(courierFees: unknown, productsKg: unknown): number {
+/** The weight a parcel is counted at: only the one its company found (its answers); 0 until it says it — the products'
+ *  weight never counts (`_productsKg` kept for the callers). */
+export function knownKg(courierFees: unknown, _productsKg?: unknown): number {
   const kg = courierFeesOf(courierFees)?.kg;
-  return kg !== null && kg !== undefined && kg > 0 ? kg : Number(productsKg) || 0;
+  return kg !== null && kg !== undefined && kg > 0 ? kg : 0;
 }
 
 /**
@@ -162,6 +163,8 @@ export async function saveCourierWeight(db: Db, orderId: number, kind: unknown, 
   if (!o) return false;
   const cur = courierFeesOf(o.courier_fees);
   if (cur && wholeKg(cur.kg) === wholeKg(kg)) return false;
+  // its own prices already came for this parcel: kept, with the new weight
+  if (cur && (cur.delivery !== null || cur.ret !== null)) return saveCourierFees(db, orderId, { delivery: cur.delivery, ret: cur.ret, kg }, 'track', rule, nowIso);
   const before = ruleFee(kind, rule, knownKg(o.courier_fees, o.kg));
   const next: CourierFees = cur ? { ...cur, kg, at: nowIso } : { delivery: null, ret: null, kg, weight: null, est: 0, estRet: 0, at: nowIso, src: 'track' };
   const d = ruleFee(kind, rule, kg) - before;

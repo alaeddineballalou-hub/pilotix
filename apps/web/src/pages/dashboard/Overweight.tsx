@@ -1,5 +1,5 @@
-// Dashboard › Suivi › « Surpoids » : the period's parcels a company weighed heavier than Pilotix declared and took a
-// weight fee for (its API: ZR, whole kilos, 50 DA a kg above 5 kg) — per product, how many, the weights, what it cost.
+// Dashboard › Suivi › « Surpoids » : the period's parcels a company took a weight fee for, on the weight it found (only
+// its weight counts, never the products') — per product, how many, the weights found, what it cost.
 import { useTranslation } from 'react-i18next';
 import { useRpc } from '../../lib/query';
 import { da } from '../../lib/format';
@@ -26,7 +26,7 @@ export function OverweightStats({ range }: { range: { from: string; to: string }
         <>
           <p className="tb-ow-sum">
             <b className="ltr">{da(d.total.fees)}</b>
-            <span>{t('dashboard.over.sum', { count: d.total.parcels, kg: d.total.extraKg })}</span>
+            <span>{t('dashboard.over.sum', { count: d.total.parcels })}</span>
           </p>
           <div className="tbl-wrap">
             <table className="tbl">
@@ -34,7 +34,6 @@ export function OverweightStats({ range }: { range: { from: string; to: string }
                 <tr>
                   <th>{t('dashboard.over.product')}</th>
                   <th className="num">{t('dashboard.over.parcels')}</th>
-                  <th className="num">{t('dashboard.over.declared')}</th>
                   <th className="num">{t('dashboard.over.weighed')}</th>
                   <th className="num">{t('dashboard.over.fees')}</th>
                 </tr>
@@ -47,9 +46,6 @@ export function OverweightStats({ range }: { range: { from: string; to: string }
                     </td>
                     <td className="num" data-l={t('dashboard.over.parcels')}>
                       <span className="ltr">{p.parcels}</span>
-                    </td>
-                    <td className="num" data-l={t('dashboard.over.declared')}>
-                      <span className="ltr">{t('dashboard.over.kg', { n: String(Math.round(p.productKg * 10) / 10).replace('.', ',') })}</span>
                     </td>
                     <td className="num" data-l={t('dashboard.over.weighed')}>
                       <span className="ltr">{kg(p.zrMin, p.zrMax)}</span>

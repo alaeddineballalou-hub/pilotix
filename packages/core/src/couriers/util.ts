@@ -266,8 +266,28 @@ export function weightIn(...objs: unknown[]): number | null {
   }
   return null;
 }
-/** A tracking answer's « the company weighed it X kg » (no prices: its price list counts). */
+/** A price a company wrote for this parcel (DA): the first of these keys it gives; 0 is a price (a free return). */
+export function priceIn(keys: string[], ...objs: unknown[]): number | null {
+  for (const o of objs) {
+    if (!o || typeof o !== 'object') continue;
+    for (const k of keys) {
+      const raw = (o as any)[k];
+      if (raw === null || raw === undefined || raw === '') continue;
+      const v = typeof raw === 'string' ? Number(raw.replace(/\s/g, '').replace(',', '.').replace(/[^\d.]/g, '')) : Number(raw);
+      if (isFinite(v) && v >= 0) return Math.round(v);
+    }
+  }
+  return null;
+}
+const DELIVERY_KEYS = ['delivery_fee', 'delivery_price', 'deliveryPrice', 'shipping_fee', 'frais_livraison', 'tarif_livraison'];
+const RETURN_KEYS = ['return_fee', 'return_price', 'returnPrice', 'retour_fee', 'frais_retour', 'tarif_retour', 'taxe_retour'];
+/**
+ * What a tracking answer says the company charges for this parcel: its delivery price, its return price (0: a free
+ * return) and the weight it found — counted instead of the price list and of the products' weight.
+ */
 export const weighed = (...objs: unknown[]) => {
   const kg = weightIn(...objs);
-  return kg === null ? {} : { costs: { delivery: null, ret: null, kg } };
+  const delivery = priceIn(DELIVERY_KEYS, ...objs);
+  const ret = priceIn(RETURN_KEYS, ...objs);
+  return kg === null && delivery === null && ret === null ? {} : { costs: { delivery, ret, kg } };
 };

@@ -270,9 +270,9 @@ async function sendOrdersLocked(ctx: Ctx, orderIds: number[], forceCompanyId?: n
         continue;
       }
       const f: any = fees.get(num(r.wilaya_id));
-      // the company's own price for this parcel when its answer gives it (ZR), else its price list + its « Surpoids »
-      // on the weight declared (whole kilos: 5 kg free → 6 kg 50 DA)
-      const cost = s.costs?.delivery ?? (f ? num(r.is_stopdesk ? f.desk : f.home) + ruleFee(kind, await rule(), r.kg) : null);
+      // the company's own price for this parcel when its answer gives it (ZR), else its price list; its « Surpoids »
+      // comes once it says the weight it found (never from the products' weight)
+      const cost = s.costs?.delivery ?? (f ? num(r.is_stopdesk ? f.desk : f.home) : null);
       const status = word(kind, 'prepared');
       await ctx.db.query(
         `UPDATE orders SET company_id=$2, tracking=$3, ext_id=$4, label_url=$5, ext_status=$6, ext_status_at=now(),
@@ -400,6 +400,20 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[]) {
      WHERE company_id = $1 AND tracking IS NOT NULL AND follow_status = ANY($2) ${onlyIds ? 'AND id = ANY($3)' : ''} ORDER BY ext_status_at NULLS FIRST LIMIT 2000`,
     onlyIds ? [c.id, SYNCABLE, onlyIds] : [c.id, SYNCABLE],
   );
+  // parcels just finished (delivered, returned, swapped): asked once more for the weight the company found — that is the
+  // one it charges (Pilotix never counts the products' weight); their status is left alone
+  const ended =
+    c.kind === 'own' || onlyIds
+      ? []
+      : await ctx.db.query(
+          `SELECT id, ref, tracking, ext_id, follow_status, sub_status, ext_status FROM orders
+           WHERE company_id = $1 AND tracking IS NOT NULL AND livreur_id IS NULL AND follow_status IN ('delivered','returned','exchanged')
+             AND (courier_fees->>'final') IS NULL AND coalesce(courier_fees->>'src', '') <> 'pay'
+             AND coalesce(delivered_at, returned_at, updated_at) > $2::timestamptz ORDER BY id DESC LIMIT 300`,
+          [c.id, new Date(ctx.now() - 30 * 86_400_000).toISOString()],
+        );
+  const endedIds = new Set(ended.map((p: any) => num(p.id)));
+  parcels.push(...ended);
   if (!parcels.length) return { company: c.name, checked: 0, changed: 0, fees: 0 };
   let answers: TrackResult[];
   if (isDemo(ctx)) {
@@ -409,6 +423,10 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[]) {
     const costs = c.kind !== 'own' && KINDS[c.kind]?.api ? await demoCosts(ctx, c.id, parcels.map((p: any) => num(p.id)), true) : new Map<number, CourierCosts>();
     if (!feesByApi(c.kind)) for (const [k, v] of costs) costs.set(k, { delivery: null, ret: null, kg: v.kg });
     for (const p of parcels) {
+      if (endedIds.has(num(p.id))) {
+        answers.push({ id: num(p.id), status: p.ext_status ?? '', at: null, ...(costs.has(num(p.id)) ? { costs: costs.get(num(p.id)) } : {}) });
+        continue;
+      }
       const next = nextStep(p.follow_status, !!p.tracking);
       if (next) answers.push({ id: num(p.id), status: word(c.kind, next), mapped: next, at: new Date(ctx.now()).toISOString(), ...(costs.has(num(p.id)) ? { costs: costs.get(num(p.id)) } : {}) });
     }
@@ -433,8 +451,16 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[]) {
     const to = resolveStatus(defaults, c.statusMap, a);
     // what the company charges for it (its prices, the weight it counted): counted instead of the price list
     // (a company without its prices by API only says the weight it found: its « Surpoids » counts on that weight)
-    if (a.costs && feesByApi(c.kind) && (await saveCourierFees(ctx.db, a.id, a.costs, 'track', await rule(), new Date(ctx.now()).toISOString()))) feesChanged++;
-    else if (a.costs?.kg && !feesByApi(c.kind) && (await saveCourierWeight(ctx.db, a.id, c.kind, await rule(), a.costs.kg, new Date(ctx.now()).toISOString()))) feesChanged++;
+    // its own prices for the parcel (delivery, return — 0 for a free return) come first, like ZR's; with only a weight,
+    // its price list + its « Surpoids » on that weight
+    const priced = !!a.costs && (feesByApi(c.kind) || a.costs.delivery !== null || a.costs.ret !== null);
+    if (priced && (await saveCourierFees(ctx.db, a.id, a.costs!, 'track', await rule(), new Date(ctx.now()).toISOString()))) feesChanged++;
+    else if (!priced && a.costs?.kg && (await saveCourierWeight(ctx.db, a.id, c.kind, await rule(), a.costs.kg, new Date(ctx.now()).toISOString()))) feesChanged++;
+    // a finished parcel: only its weight (read once)
+    if (endedIds.has(a.id)) {
+      await ctx.db.query(`UPDATE orders SET courier_fees = coalesce(courier_fees, '{}'::jsonb) || '{"final":true}'::jsonb WHERE id = $1`, [a.id]);
+      continue;
+    }
     if (a.status !== p.ext_status) {
       await ctx.db.query('UPDATE orders SET ext_status=$2, ext_status_at=COALESCE($3::timestamptz, now()), updated_at=now() WHERE id=$1', [a.id, a.status.slice(0, 200), safeDate(a.at)]);
       changed++;
@@ -791,7 +817,7 @@ export const deliveryProcs = {
         const fee = f ? (back ? f.weightRet : f.weight) : byRule;
         return { id: num(r.id), ref: String(r.ref), company: String(r.company), declared, zr, fee, back, exact: !!f?.exact };
       })
-      .filter((x: any) => x.zr !== null && x.zr > x.declared && x.fee > 0);
+      .filter((x: any) => x.zr !== null && x.fee > 0);
     // each parcel under its heaviest product
     const items = heavy.length
       ? await ctx.db.query(`SELECT it.order_id, p.id, p.name, p.weight_kg, it.qty FROM order_items it JOIN products p ON p.id = it.product_id WHERE it.order_id = ANY($1)`, [heavy.map((x: any) => x.id)])

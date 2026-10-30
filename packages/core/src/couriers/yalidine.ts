@@ -229,7 +229,7 @@ export const yalidine: CourierAdapter = {
     const out = [];
     for (const group of chunks(items, 50)) {
       if (timeUp()) break;
-      const rows = await all(c, `parcels/?fields=tracking,last_status,date_last_status,weight&tracking=${group.map((g) => encodeURIComponent(g.tracking)).join(',')}`);
+      const rows = await all(c, `parcels/?fields=tracking,last_status,date_last_status,weight,delivery_fee,taxe_retour,return_fee&tracking=${group.map((g) => encodeURIComponent(g.tracking)).join(',')}`);
       for (const r of rows) {
         const it = group.find((g) => g.tracking === r.tracking);
         if (it && r.last_status) out.push({ id: it.id, status: r.last_status, at: r.date_last_status ?? null, ...weighed(r) });

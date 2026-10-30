@@ -405,7 +405,7 @@
     "feesApi": "from {{name}}’s API",
     "feesPaid": "taken by {{name}} in its payment",
     "feesRule": "from your rates",
-    "feesHeavier": "Weighed {{kg}} kg by {{name}} (declared {{declared}} kg)"
+    "feesHeavier": "Weighed {{kg}} kg by {{name}}: overweight counted"
   },
   "ph": {
     "per": {

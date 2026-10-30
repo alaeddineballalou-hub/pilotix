@@ -1729,11 +1729,11 @@ export const ordersProcs = {
     // declared, on the delivery and — its rule says so — on the return
     if (!courierFees && row?.tracking && !row.livreur_id && row.home !== null && row.home !== undefined) {
       const rule = weightRuleOf(row.kind, row.config);
-      if (rule.perKg > 0 && row.kind !== 'own' && !feesByApi(row.kind)) {
-        // the weight its company found (« Pesé 7 kg par Yalidine (déclaré 5 kg) »), else the one declared
-        const w = ruleFee(row.kind, rule, knownKg(row.courier_fees, row.kg));
-        const found = wholeKg(courierFeesOf(row.courier_fees)?.kg);
-        courierFees = { delivery: num(row.is_stopdesk ? row.desk : row.home), ret: num(row.return_fee), weight: w, weightRet: rule.onReturn ? w : 0, kg: found ?? declaredKg(row.kg), declaredKg: declaredKg(row.kg), exact: false, byRule: true };
+      // once its company said the weight it found (« Pesé 7 kg par Yalidine »): the products' weight never counts
+      const found = wholeKg(courierFeesOf(row.courier_fees)?.kg);
+      if (rule.perKg > 0 && row.kind !== 'own' && !feesByApi(row.kind) && found !== null) {
+        const w = ruleFee(row.kind, rule, knownKg(row.courier_fees));
+        courierFees = { delivery: num(row.is_stopdesk ? row.desk : row.home), ret: num(row.return_fee), weight: w, weightRet: rule.onReturn ? w : 0, kg: found, declaredKg: declaredKg(row.kg), exact: false, byRule: true };
       }
     }
     return { ...o, pay: await payOf(ctx.db, o), courierFees };
