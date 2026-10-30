@@ -120,6 +120,10 @@ export const NOT_REFS: readonly string[] = [
   'spy_events.product_id',
   // which agency gets this product (goes with the product: removed when it is deleted)
   'agency_routes.product_id',
+  // « J'ai pris » kept a few seconds for « Annuler » (not history)
+  'depot_pick_log.user_id',
+  'depot_pick_log.product_id',
+  'depot_pick_log.variant_id',
 ];
 
 const KIND = z.enum(ARCHIVE_KINDS);

@@ -162,11 +162,14 @@ test('scanner: dispatch, double scan, return (stock back), refusals', async () =
   assert.match(((await call('depot.scan', depot, { code: 'PX90006', mode: 'dispatch' })) as any).why, /étiquette Pilotix ne suffit pas/);
   assert.match(((await call('depot.scan', depot, { code: 'PX90007', mode: 'dispatch' })) as any).why, /Pas encore préparée/);
   assert.match(((await call('depot.scan', depot, { code: 'INCONNU-1', mode: 'dispatch' })) as any).why, /n’existe pas/);
-  const pick: any = await call('depot.scan', depot, { code: '0555990014', mode: 'dispatch' });
-  assert.equal(pick.kind, 'pick');
-  assert.equal(pick.list.length, 2);
-  const chosen: any = await call('depot.scan', depot, { orderId: pick.list[0].id, code: '0555990014', mode: 'dispatch' });
-  assert.equal(chosen.kind, 'ok');
+  // « Expédier » only on the parcel's own label: a phone number finds orders but never sends one
+  const byPhone: any = await call('depot.scan', depot, { code: '0555990014', mode: 'dispatch' });
+  assert.equal(byPhone.kind, 'bad');
+  assert.match(byPhone.why, /pas l’étiquette/);
+  const two = await db.query(`SELECT id FROM orders WHERE phone = '0555990014' ORDER BY id`);
+  assert.equal(two.length, 2);
+  const chosen: any = await call('depot.scan', depot, { orderId: Number(two[0].id), code: '', mode: 'dispatch' });
+  assert.equal(chosen.kind, 'ok', chosen.why);
 
   const o20 = (await db.query(`SELECT o.id, i.variant_id, o.warehouse_id FROM orders o JOIN order_items i ON i.order_id = o.id WHERE o.ref = 'PX90020'`))[0];
   const s0 = await qty(Number(o20.variant_id), Number(o20.warehouse_id));
