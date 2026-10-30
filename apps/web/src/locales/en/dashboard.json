@@ -783,5 +783,22 @@
     "manager": "Manager",
     "oldest": "Oldest",
     "none": "No open claim 👍"
+  },
+  "risk": {
+    "title": "“Risky” customers confirmed",
+    "sub": "Each agent who confirmed a “Risky” customer anyway, and what became of those parcels.",
+    "empty": "No “Risky” customer confirmed in this period.",
+    "agent": "Agent",
+    "n": "Confirmed",
+    "delivered": "Delivered",
+    "returned": "Returned",
+    "cancelled": "Cancelled / lost",
+    "open": "In progress",
+    "rate": "Returns",
+    "auto": "Automatic",
+    "avg": "average score {{n}}/100",
+    "total": "Total",
+    "base": "All parcels confirmed in the period: {{p}} % returned ({{r}} of {{f}} finished).",
+    "baseNone": "No finished parcel in this period yet to compare."
   }
 }

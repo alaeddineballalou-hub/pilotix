@@ -193,6 +193,7 @@ function PlatformShell({ staff, parts, onLogout, demo }: { staff: Staff; parts: 
   const dash = usePRpc('p.dashboard', {}, { refetchInterval: 60_000, enabled: !demo });
   const unread = dash.data?.messages ?? 0;
   const changes = dash.data?.couriers ?? 0;
+  const lessons = dash.data?.pilot ?? 0;
   const cur = sections.find((s) => s.id === parts[0])?.id ?? 'dashboard';
   useEffect(() => setNavOpen(false), [parts.join('/')]);
   useEffect(() => {
@@ -235,6 +236,7 @@ function PlatformShell({ staff, parts, onLogout, demo }: { staff: Staff; parts: 
               <span className="nav-l">{t(`platform.nav.${s.id}`)}</span>
               {s.id === 'messages' && unread > 0 && <span className="nav-count ltr">{unread}</span>}
               {s.id === 'couriers' && changes > 0 && <span className="nav-count ltr">{changes}</span>}
+              {s.id === 'pilot' && lessons > 0 && <span className="nav-count ltr">{lessons}</span>}
             </a>
           ))}
           <a href="#/accueil" className="nav-item pp-back">

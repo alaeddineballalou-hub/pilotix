@@ -14,6 +14,7 @@ import { Icon, Loading, StatusBadge } from '../../ui/kit';
 import { Float } from '../../ui/Float';
 import { mayChangeCompany, pilotLine } from '../../lib/pilot';
 import { useSession } from '../../lib/session';
+import { hasMouse } from '../../lib/useMedia';
 import { toast } from '../../ui/toast';
 import './check.css';
 import { askRisk } from '../../ui/clientScore';
@@ -1083,7 +1084,7 @@ function PickList({ anchor, title, searchPh, items, current, onPick, onClose }: 
           onKeyDown={(e) => {
             if (e.key === 'Enter' && list[0]) onPick(list[0].value);
           }}
-          autoFocus
+          autoFocus={hasMouse()}
         />
       </div>
       <div role="listbox" aria-label={title} ref={box}>
@@ -1112,7 +1113,7 @@ function DeskMenu({ anchor, wilaya, desks, current, onPick, onClose }: { anchor:
       <div className="pxf-head">
         <b>{t('confirmation.dl.pickTitle', { w: wilaya })}</b>
         <small>{t('confirmation.dl.pickSub', { n: desks.length })}</small>
-        {desks.length > 4 && <input type="search" className="pxf-q" placeholder={t('confirmation.dl.searchPh')} aria-label={t('confirmation.dl.searchPh')} value={q} onChange={(e) => setQ(e.target.value)} autoFocus />}
+        {desks.length > 4 && <input type="search" className="pxf-q" placeholder={t('confirmation.dl.searchPh')} aria-label={t('confirmation.dl.searchPh')} value={q} onChange={(e) => setQ(e.target.value)} autoFocus={hasMouse()} />}
       </div>
       <div role="listbox" aria-label={t('confirmation.dl.pickTitle', { w: wilaya })}>
         {list.length === 0 && <p className="pxf-none">{t('confirmation.dl.none')}</p>}

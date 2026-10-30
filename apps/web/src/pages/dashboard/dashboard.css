@@ -124,3 +124,10 @@
 .tb-mo-d.bad { color: var(--coral, #C2410C); }
 .tb-mo-ag { margin-top: 14px; }
 .tb-mo-ag caption { text-align: start; font-weight: 800; font-size: 14px; padding: 0 0 8px; }
+/* Dashboard › Confirmation › Clients « Risqué » confirmés (RiskConfirms.tsx) */
+.tb-rk h3 svg { color: var(--coral, #C2410C); }
+.tb-rk td small { display: block; font-size: 12px; margin-top: 1px; }
+.tb-rk tfoot th, .tb-rk tfoot td { border-top: 1.5px solid var(--line); font-weight: 800; }
+.tb-rk tfoot th { text-align: start; }
+.tb-rk-bad { color: var(--coral, #C2410C); }
+.tb-rk-base { margin: 10px 0 0; }

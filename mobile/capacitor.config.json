@@ -1,0 +1,30 @@
+{
+  "appId": "com.pilotix.app",
+  "appName": "Pilotix",
+  "webDir": "www",
+  "backgroundColor": "#1B2A47",
+  "appendUserAgent": "PilotixApp",
+  "server": {
+    "allowNavigation": [
+      "pilotix.online",
+      "direct.pilotix.online"
+    ],
+    "errorPath": "offline.html"
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1500,
+      "launchAutoHide": true,
+      "launchFadeOutDuration": 300,
+      "backgroundColor": "#1B2A47",
+      "showSpinner": false
+    },
+    "SystemBars": {
+      "insetsHandling": "disable",
+      "style": "DARK"
+    }
+  }
+}

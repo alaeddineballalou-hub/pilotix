@@ -302,6 +302,22 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number } =
   }
   const bad = [...customers.values()].filter((c) => c.returned >= 2);
   if (bad.length) await db.query(`UPDATE customers SET blacklisted = true, blacklist_reason = 'Refuse les colis' WHERE id = ANY($1)`, [bad.map((c) => c.id)]);
+  // « Confirmer quand même »: agents who confirmed customers the score called « Risqué » (Dashboard › Confirmation)
+  const risky = await db.query(
+    `(SELECT o.id, o.agent_id, o.confirmed_at, c.returned FROM orders o JOIN customers c ON c.id = o.customer_id
+       WHERE NOT o.is_exchange AND o.confirmed_at IS NOT NULL AND o.agent_id IS NOT NULL AND c.returned >= 1 ORDER BY o.confirmed_at DESC LIMIT 30)
+     UNION
+     (SELECT o.id, o.agent_id, o.confirmed_at, c.returned FROM orders o JOIN customers c ON c.id = o.customer_id
+       WHERE NOT o.is_exchange AND o.confirmed_at IS NOT NULL AND o.agent_id IS NOT NULL AND c.orders >= 1
+         AND o.follow_status = 'delivered' AND o.confirmed_at > $1::timestamptz ORDER BY o.confirmed_at DESC LIMIT 9)`,
+    [iso(now - 5 * 86_400_000)],
+  );
+  await bulkInsert(
+    db,
+    'risk_confirms',
+    ['order_id', 'user_id', 'score', 'reasons', 'at'],
+    risky.map((o: any) => [num(o.id), num(o.agent_id), 8 + (num(o.id) % 26), JSON.stringify(num(o.returned) ? [{ code: 'returned', points: -18 * num(o.returned), n: num(o.returned) }] : [{ code: 'network', points: -25, n: 3 }]), new Date(o.confirmed_at).toISOString()]),
+  );
 
   // a few SAV tickets, alerts handled, a chat with a livreur, a cash handover
   const someDelivered = await db.query(`SELECT id, customer_name, phone FROM orders WHERE follow_status='delivered' ORDER BY delivered_at DESC LIMIT 12`);

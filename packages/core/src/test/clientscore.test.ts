@@ -149,3 +149,72 @@ test('Confirmation › best customers first, and a filter by level', async () =>
   // each order carries the reasons of its score (the warning before confirming a risky customer)
   assert.ok(base.rows.every((r: any) => !r.clientScore || (Array.isArray(r.clientScore.reasons) && r.clientScore.reasons.length > 0)));
 });
+
+test('« Confirmer quand même »: a « Risqué » customer confirmed is kept with who did it, once; Dashboard shows it per agent', async () => {
+  const s = await setup(60);
+  const admin = await s.as(EMAILS.admin);
+  const conf = await s.as(EMAILS.conf);
+  const start = new Date(Date.now() - 60_000).toISOString();
+  // new orders that can be confirmed: home delivery with a commune; their customers blacklisted (score 5: « Risqué »)
+  const cands = await s.db.query(`SELECT o.id, o.customer_id FROM orders o JOIN customers c ON c.id = o.customer_id
+     WHERE o.conf_status = 'new' AND NOT o.is_exchange AND coalesce(o.commune, '') <> '' AND NOT c.stopdesk_only ORDER BY o.id LIMIT 8`);
+  let done: number | null = null;
+  for (const o of cands) {
+    await call('customers.setBlacklist', admin, { id: Number(o.customer_id), on: true, reason: 'test' });
+    const r: any = await call('orders.setConf', conf, { ids: [Number(o.id)], status: 'confirmed' }).catch(() => null);
+    if (r?.changed?.includes(Number(o.id))) {
+      done = Number(o.id);
+      break;
+    }
+  }
+  assert.ok(done, 'one order confirmed');
+  const kept = await s.db.query('SELECT user_id, score, reasons FROM risk_confirms WHERE order_id = $1', [done]);
+  assert.equal(kept.length, 1);
+  assert.equal(Number(kept[0].user_id), conf.session.profile.id);
+  assert.ok(Number(kept[0].score) <= 10);
+  // a customer who is not « Risqué »: nothing kept
+  const good = (await s.db.query(`SELECT o.id FROM orders o JOIN customers c ON c.id = o.customer_id WHERE o.conf_status = 'new' AND NOT c.blacklisted AND NOT c.stopdesk_only AND coalesce(o.commune, '') <> '' AND c.returned = 0 ORDER BY o.id DESC LIMIT 1`))[0];
+  if (good) {
+    const one: any = await call('orders.get', admin, { id: Number(good.id) });
+    await call('orders.setConf', conf, { ids: [Number(good.id)], status: 'confirmed' }).catch(() => null);
+    if (one.clientScore?.level !== 'risk') assert.equal((await s.db.query('SELECT 1 FROM risk_confirms WHERE order_id = $1', [Number(good.id)])).length, 0);
+  }
+  // confirmed again later (back to « new », confirmed again): still once
+  await s.db.query("UPDATE orders SET conf_status = 'new', follow_status = NULL WHERE id = $1", [done]);
+  await call('orders.setConf', conf, { ids: [done!], status: 'confirmed' }).catch(() => null);
+  assert.equal((await s.db.query('SELECT 1 FROM risk_confirms WHERE order_id = $1', [done])).length, 1);
+  const stats: any = await call('confirmation.riskStats', admin, { from: start, to: new Date(Date.now() + 60_000).toISOString() });
+  const me = stats.agents.find((a: any) => a.id === conf.session.profile.id);
+  assert.ok(me && me.n >= 1 && me.open + me.delivered + me.returned + me.cancelled === me.n);
+  assert.equal(stats.total.n, stats.agents.reduce((a: number, x: any) => a + x.n, 0));
+  assert.ok(stats.baseline.delivered >= 0 && stats.baseline.returned >= 0);
+  await assert.rejects(call('confirmation.riskStats', conf, { from: start, to: new Date().toISOString() }));
+});
+
+test('Commandes › sorted by score in the database: the same order as the scores shown, every page, with the shop’s points', async () => {
+  const s = await setup(60);
+  const admin = await s.as(EMAILS.admin);
+  const rank = (r: any) => LEVEL_RANK[(r.clientScore?.level ?? 'new') as ClientLevel] * 1000 + (r.clientScore?.score ?? 60);
+  const check = async () => {
+    const all: any = await call('orders.list', admin, { sort: 'created_at', pageSize: 3000 });
+    const best: any = await call('orders.list', admin, { sort: 'score', dir: 'desc', pageSize: 3000 });
+    assert.equal(best.total, all.total);
+    assert.equal(best.rows.length, all.rows.length);
+    assert.deepEqual(new Set(best.rows.map((r: any) => r.id)), new Set(all.rows.map((r: any) => r.id)));
+    for (let k = 1; k < best.rows.length; k++) assert.ok(rank(best.rows[k - 1]) >= rank(best.rows[k]), `${k}: ${rank(best.rows[k - 1])} < ${rank(best.rows[k])}`);
+    const worst: any = await call('orders.list', admin, { sort: 'score', dir: 'asc', pageSize: 3000 });
+    for (let k = 1; k < worst.rows.length; k++) assert.ok(rank(worst.rows[k - 1]) <= rank(worst.rows[k]));
+    const p3: any = await call('orders.list', admin, { sort: 'score', dir: 'desc', page: 3, pageSize: 7 });
+    assert.deepEqual(p3.rows.map((r: any) => r.id), best.rows.slice(14, 21).map((r: any) => r.id));
+    // with filters too (only cancelled ones)
+    const f: any = await call('orders.list', admin, { sort: 'score', conf: ['cancelled'], pageSize: 3000 });
+    assert.ok(f.rows.every((r: any) => r.confStatus === 'cancelled'));
+    for (let k = 1; k < f.rows.length; k++) assert.ok(rank(f.rows[k - 1]) >= rank(f.rows[k]));
+    return best.rows.map((r: any) => r.clientScore?.level ?? 'new');
+  };
+  const levels = await check();
+  assert.ok(new Set(levels).size >= 3, `levels seen: ${[...new Set(levels)].join(',')}`);
+  // the seller's own points: the database follows them
+  await call('clientscore.setRules', admin, { ...DEFAULT_SCORE_RULES, base: 50, returned: { each: 30, max: 45 }, cancelled: { each: 9, max: null }, levels: { top: 90, good: 62, watch: 41 } });
+  await check();
+});

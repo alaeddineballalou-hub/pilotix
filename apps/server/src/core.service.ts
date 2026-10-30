@@ -4,6 +4,8 @@ import type { Ctx, Db, LiveEvent, PCtx, PlatformSettings, ServerHooks, Shop, Sho
 import type { Session } from '@pilotix/shared';
 import { Pool, PoolClient } from 'pg';
 import { config } from './config';
+import { mailConfigured, sendMail } from './mail';
+import { pilotRestMail } from './mails';
 import { turnstileCheck, turnstileSiteKey } from './turnstile';
 import { push, pushKeys } from './push';
 
@@ -130,6 +132,32 @@ export class CoreService implements OnModuleDestroy {
   readonly t = poolTenancy(this.pool);
   private readonly log = new Logger('Core');
   private listeners = new Set<(shopId: number, e: LiveEvent) => void>();
+  /** Pilot AI's daily limit: looked at most every 10 seconds (many answers can come at once), and once after the last one */
+  private pilotRestAt = 0;
+  private pilotRestLater: NodeJS.Timeout | null = null;
+
+  /** Today's limit just reached: one e-mail to the owner and the managers (core.takePilotRestAlert says it once a day). */
+  private async pilotRestCheck(t: Tenancy): Promise<void> {
+    const wait = this.pilotRestAt + 10_000 - Date.now();
+    if (wait > 0) {
+      // too soon: look again when the 10 seconds are over (the answer that reached the limit may be the day's last one)
+      if (!this.pilotRestLater) {
+        this.pilotRestLater = setTimeout(() => ((this.pilotRestLater = null), void this.pilotRestCheck(t)), wait + 50);
+        this.pilotRestLater.unref?.();
+      }
+      return;
+    }
+    this.pilotRestAt = Date.now();
+    try {
+      const hit = await core.takePilotRestAlert(t);
+      if (!hit || !mailConfigured()) return;
+      this.log.warn(`Pilot AI: today's limit reached (${hit.usd.toFixed(2)} $ of ${hit.dayUsd} $): the AI rests until midnight`);
+      const staff = await t.platform.query<{ name: string; email: string }>(`SELECT name, email FROM platform.staff WHERE active AND role IN ('owner', 'manager')`);
+      for (const s of staff) await sendMail(pilotRestMail({ to: s.email, name: s.name, ...hit })).catch((e) => this.log.warn(`limit e-mail to ${s.email}: ${e?.message || e}`));
+    } catch (e) {
+      this.log.warn(`Pilot AI limit check: ${(e as Error).message}`);
+    }
+  }
 
   readonly baseHooks: ServerHooks = {
     pushKeys,
@@ -147,7 +175,10 @@ export class CoreService implements OnModuleDestroy {
     dellal: async (action, args, ctx) => {
       const m = optional('@pilotix/core/dist/dellal-server');
       if (!m?.runDellal) throw new core.AppError('bad_request', 'Dellal indisponible sur ce serveur');
-      return m.runDellal(action, args, ctx);
+      const out = await m.runDellal(action, args, ctx);
+      // Pilot AI: an answer may have reached today's limit; the owner and the managers hear it (once a day)
+      if (action === 'complete' && ctx.t) void this.pilotRestCheck(ctx.t);
+      return out;
     },
     spy: async (action, args, ctx) => {
       const m = optional('@pilotix/core/dist/spy-server');
@@ -353,6 +384,7 @@ export class CoreService implements OnModuleDestroy {
   }
 
   async onModuleDestroy() {
+    if (this.pilotRestLater) clearTimeout(this.pilotRestLater);
     await this.pool.end();
   }
 }

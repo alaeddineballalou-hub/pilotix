@@ -15,7 +15,8 @@ packages/core     every business rule (orders, confirmation, depot, suivi, SAV, 
                   the SQL schema and migrations, the demo shop, and the tests
 apps/server       NestJS server: login, POST /api/rpc/:action (runs the core), live updates (Socket.IO),
                   website order webhook, courier sync and Meta Ads sync jobs
-apps/web          React app (website) — also the Android and iOS apps (Capacitor)
+apps/web          React app (website)
+mobile           Android and iOS apps (Capacitor): they open the live website and add phone powers
 docs/             build guide and the inventory of the original Pilotix screens
 ```
 
@@ -25,7 +26,8 @@ The same core runs in two places:
   The preview behaves exactly like the real app, with no server.
 
 Every change runs in CI: core rule tests, the server against a real PostgreSQL 16 with an end-to-end test,
-the web build, the website (GitHub Pages, with the demo), the Android APK and the preview.
+the web build, the website (GitHub Pages, with the demo) and the preview. The Android test app is built
+by `mobile.yml`, only when `mobile/` changes.
 
 ## Roles
 
@@ -82,6 +84,12 @@ delays, pressure or « I am human ». The coach approves, edits or rejects each 
 tried on a share of new chats and kept only if it gets at least as many parcels delivered (stopped by itself when worse).
 Code: `packages/core/src/modules/pilotlearn.ts` (the engine), `apps/server/src/jobs.ts` (the night), tests `pilotlearn*.test.ts`.
 
+**Daily limit** (Pilot AI › Réglages, 3 $ by default, 0 = none): the most Pilotix's key spends on live answers in one
+day, every shop together (Algeria's day). Reached: the AI rests until midnight as if Pilot AI were off (Dellal and the CM
+AI agent answer with their simple rules, AI Spy waits; an answer already started finishes), and the owner and the managers
+get one e-mail that day. When Pilotix pays, the CM AI agent and AI Spy answer with Haiku whatever the shop chose. After the
+night, when lessons wait, every control-room member gets the coach's note by e-mail, and the menu shows how many wait.
+
 **AI cost per shop** (control room › Pilot AI, owners and managers): every answer Claude gives on the server (Dellal, CM AI
 agent, AI Spy) is counted per shop, day, agent and payer (Pilotix's key or the shop's own) at Anthropic's list price, in
 `platform.ai_usage`. The card shows each month per shop in USD, and in DA at the rate the owner types (1 $ = … DA), with a
@@ -98,12 +106,17 @@ The record shows the server's address publicly, as a shop's own domain already d
 
 ## Phone apps
 
+The apps live in `mobile/` (Capacitor 8). They open the live `https://pilotix.online`, so every website change
+shows in the apps with no new app version; only new phone powers (plugins), the icon or the name need one.
+Plan, steps and decisions: `mobile/PROGRESS.md`.
+
 ```bash
-npm run build -w @pilotix/web
-cd apps/web
-npx cap add android && npx cap open android     # Android Studio → Run
-npx cap add ios && npx cap open ios             # Xcode on a Mac → Run
+cd mobile && npm ci && npx cap sync android
+npx cap open android                            # Android Studio → Run
 ```
+
+GitHub builds the Android test app on every change in `mobile/` and puts it at
+`https://github.com/alaeddineballalou-hub/pilotix/releases/download/app-test/pilotix-test.apk`.
 
 ## Several shops on one server (Pilotix as a service)
 

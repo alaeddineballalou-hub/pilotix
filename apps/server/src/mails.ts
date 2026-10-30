@@ -324,6 +324,61 @@ export function courierWatchMail(m: { to: string; name: string; items: { company
   });
 }
 
+// ---------------------------------------------------------------- Pilot AI (to the control room's staff, in French)
+const usd = (v: number) => `${v.toFixed(2).replace('.', ',')} $`;
+const PILOT_TOPIC: Record<string, string> = {
+  price: 'Prix',
+  trust: 'Confiance',
+  fee: 'Livraison (frais)',
+  delay: 'Délai',
+  product: 'Produit',
+  address: 'Adresse',
+  closing: 'Conclure',
+  anger: 'Client fâché',
+  big: 'Grosse commande',
+  followup: 'Relance',
+  language: 'Langue',
+  handoff: 'Passer à l’équipe',
+  fake: 'Fausses commandes',
+  other: 'Autre',
+};
+
+/** Pilot AI › the daily limit of the live answers is reached (once a day): to the owner and the managers. */
+export function pilotRestMail(m: { to: string; name: string; usd: number; dayUsd: number }): Mail {
+  return mail(m.to, `Pilotix : l’IA a atteint sa limite du jour (${usd(m.dayUsd)})`, {
+    l: 'fr',
+    title: 'Limite du jour atteinte',
+    icon: '⏸️',
+    hello: hello('fr', m.name),
+    lines: [
+      `Aujourd’hui, l’IA de vos boutiques a dépensé ${usd(m.usd)} avec la clé de Pilotix : la limite de ${usd(m.dayUsd)} par jour est atteinte.`,
+      'Jusqu’à minuit (heure d’Algérie), Dellal répond avec ses règles simples, le CM AI agent aussi, et AI Spy attend. Demain matin, tout repart seul.',
+      'Pour continuer tout de suite, augmentez la limite dans Pilot AI › Réglages.',
+    ],
+    button: { label: 'Ouvrir Pilot AI', link: `${site()}/#/platform/pilot` },
+    note: 'Cet e-mail part au plus une fois par jour, seulement quand la limite est atteinte.',
+  });
+}
+
+/** Pilot AI › after the night: lessons wait for the coach (approve, correct or reject). */
+export function pilotCoachMail(m: { to: string; name: string; waiting: number; fresh: number; lessons: { topic: string; text: string }[] }): Mail {
+  const one = m.waiting === 1;
+  return mail(m.to, `Pilotix : ${one ? 'une leçon' : `${m.waiting} leçons`} de Dellal à valider`, {
+    l: 'fr',
+    title: 'Leçons à valider',
+    icon: '🌙',
+    hello: hello('fr', m.name),
+    lines: [
+      m.fresh ? `Cette nuit, Dellal a appris ${m.fresh === 1 ? 'une nouvelle leçon' : `${m.fresh} nouvelles leçons`} des vraies conversations.` : 'Des leçons de Dellal attendent toujours votre réponse.',
+      `${one ? 'Elle attend' : `${m.waiting} leçons attendent`} votre accord dans Pilot AI › À valider : approuvez, corrigez ou rejetez. Rien n’entre dans Dellal sans vous.`,
+    ],
+    box: m.lessons.slice(0, 5).map((l) => [PILOT_TOPIC[l.topic] ?? l.topic, l.text.length > 160 ? `${l.text.slice(0, 157)}…` : l.text] as [string, string]),
+    button: { label: 'Valider les leçons', link: `${site()}/#/platform/pilot` },
+    after: m.waiting > 5 ? [`… et ${m.waiting - 5} de plus dans Pilot AI.`] : [],
+    note: 'Cet e-mail part après l’apprentissage de la nuit, seulement quand des leçons attendent.',
+  });
+}
+
 /** Control room › Pilotix Protection System: the buyers' quality fell by 5 points or more this week (once a week). */
 export function qualityAlertMail(m: { to: string; name: string; alert: QualityAlert }): Mail {
   const a = m.alert;

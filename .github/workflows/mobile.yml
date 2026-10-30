@@ -1,0 +1,73 @@
+name: Pilotix app
+
+# Builds the Android test app when something in mobile/ changes.
+# Website-only changes build nothing here: the app opens the live pilotix.online, so they show up in the app by themselves.
+on:
+  push:
+    paths:
+      - 'mobile/**'
+      - '!mobile/**/*.md' # notebook updates don't need a new app
+      - '.github/workflows/mobile.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Android test app
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # puts the APK on the "app-test" download page (Releases)
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+          cache-dependency-path: |
+            mobile/android/*.gradle*
+            mobile/android/app/*.gradle*
+            mobile/android/gradle/wrapper/gradle-wrapper.properties
+      - run: npm ci --no-audit --no-fund
+      # the small « Pilotix app · test N (abc1234) » line at the bottom of the app's start and error pages
+      - run: echo "window.PILOTIX_BUILD = 'test ${GITHUB_RUN_NUMBER} (${GITHUB_SHA::7})';" > www/build.js
+      - run: npx cap sync android
+      # The same test key on every build lets a new test app install over the old one.
+      # It is used only when the secret ANDROID_TEST_KEYSTORE_BASE64 exists (Settings › Secrets and variables › Actions).
+      - name: Test signing key
+        env:
+          KEY: ${{ secrets.ANDROID_TEST_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEY" ]; then mkdir -p ~/.android && echo "$KEY" | base64 -d > ~/.android/debug.keystore && echo "test key: fixed"; else echo "test key: new one for this build (add the secret to keep it)"; fi
+      - name: Build the test app
+        working-directory: mobile/android
+        run: ./gradlew assembleDebug --no-daemon
+      - run: cp android/app/build/outputs/apk/debug/app-debug.apk pilotix-test.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pilotix-android-test
+          path: mobile/pilotix-test.apk
+      # one stable link for the latest test app:
+      # https://github.com/<owner>/<repo>/releases/download/app-test/pilotix-test.apk
+      - name: Put it on the download page
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES="Test version of the Pilotix Android app, from ${GITHUB_REF_NAME} (${GITHUB_SHA::7}), $(date -u '+%Y-%m-%d %H:%M') UTC.
+          To install: open this page on the Android phone, tap pilotix-test.apk, then Install (allow Chrome to install apps if the phone asks)."
+          gh release delete app-test --yes --cleanup-tag || true
+          gh release create app-test pilotix-test.apk --target "$GITHUB_SHA" --prerelease --title "Pilotix app (test version)" --notes "$NOTES"

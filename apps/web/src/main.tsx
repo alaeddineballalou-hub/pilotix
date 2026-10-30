@@ -26,10 +26,13 @@ import './styles/pilotix.css';
 import './styles/responsive.css';
 import './styles/ux.css';
 import './styles/skins.css';
+import './styles/app.css';
 
 applyTheme(store.get('theme') as 'light' | 'dark' | null);
 // the Pilotix look (styles/skins.css); also set in index.html so the first paint already has it
 document.documentElement.setAttribute('data-skin', 'doux');
+// inside the Pilotix phone app (mobile/: its web view adds « PilotixApp » to the user agent): styles/app.css
+if (/\bPilotixApp\b/.test(navigator.userAgent)) document.documentElement.classList.add('in-app');
 installEdgeScroll();
 
 const qc = new QueryClient({

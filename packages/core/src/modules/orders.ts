@@ -25,7 +25,7 @@ import {
 import { officialCommune } from './coverage';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
-import { CLIENT_FACT_COLS, ClientScore, scoresOf } from './clientscore';
+import { CLIENT_FACT_COLS, ClientScore, orderIdsByScore, recordRiskConfirms, scoresOf } from './clientscore';
 import { bad, Ctx, forbidden, hasRole, notFound, proc } from '../rpc';
 import { clientFee, getSetting } from '../settings';
 import { getPrefs } from './prefs';
@@ -258,7 +258,8 @@ export const ListInput = z.object({
   from: dateStr.optional(),
   to: dateStr.optional(),
   sort: z
-    .enum(['created_at', 'confirmed_at', 'next_call_at', 'updated_at', 'total', 'customer_name', 'wilaya_id', 'shipped_at', 'delivered_at', 'ref', 'conf_status', 'follow_status'])
+    /** score: the customer's score (best first in desc; the newest first between equals) */
+    .enum(['created_at', 'confirmed_at', 'next_call_at', 'updated_at', 'total', 'customer_name', 'wilaya_id', 'shipped_at', 'delivered_at', 'ref', 'conf_status', 'follow_status', 'score'])
     .default('created_at'),
   dir: z.enum(['asc', 'desc']).default('desc'),
   page: z.number().int().min(1).default(1),
@@ -320,9 +321,17 @@ export async function listOrders(ctx: Ctx, f: ListInput, opts: { queue?: 'conf' 
   }
   const nulls = f.sort === 'next_call_at' ? (f.dir === 'asc' ? 'NULLS FIRST' : 'NULLS LAST') : f.dir === 'desc' ? 'NULLS LAST' : 'NULLS FIRST';
   const total = num((await ctx.db.query(`SELECT count(*)::int AS n FROM orders o ${w.sql}`, w.params))[0]?.n);
+  if (f.sort === 'score' && !onlyOwnDeliveries(ctx)) {
+    // the score is not a column: the page's ids sorted by it in the database, then the orders read
+    const pick = await orderIdsByScore(ctx, w.sql, w.params, f.dir, f.pageSize, (f.page - 1) * f.pageSize);
+    const got = pick.length ? await ctx.db.query(`SELECT ${ORDER_COLS} ${ORDER_FROM} WHERE o.id = ANY($1::bigint[])`, [pick]) : [];
+    const by = new Map(got.map((r: any) => [num(r.id), r]));
+    return { rows: pick.filter((x) => by.has(x)).map((x) => toOrder(by.get(x))), total, page: f.page, pageSize: f.pageSize };
+  }
   const limit = w.p(f.pageSize);
   const offset = w.p((f.page - 1) * f.pageSize);
-  const rows = await ctx.db.query(`SELECT ${ORDER_COLS} ${ORDER_FROM} ${w.sql} ORDER BY o.${f.sort} ${f.dir} ${nulls}, o.id DESC LIMIT ${limit} OFFSET ${offset}`, w.params);
+  const col = f.sort === 'score' ? 'created_at' : f.sort;
+  const rows = await ctx.db.query(`SELECT ${ORDER_COLS} ${ORDER_FROM} ${w.sql} ORDER BY o.${col} ${f.dir} ${nulls}, o.id DESC LIMIT ${limit} OFFSET ${offset}`, w.params);
   const list = rows.map(toOrder);
   return { rows: onlyOwnDeliveries(ctx) ? list.map(hideCustomer) : list, total, page: f.page, pageSize: f.pageSize };
 }
@@ -593,6 +602,8 @@ export async function createOrder(
     if (!opts.silent) await onOrderCreated(tx, { id: oid, phone, conf_status: conf, is_exchange: input.isExchange }, ctx.now());
     return getOrder(ctx, oid, tx);
   });
+  // made already confirmed (by an agent): a « Risqué » customer is kept like « Confirmer quand même »
+  if (!order.isExchange && (order.confStatus === 'confirmed' || order.confStatus === 'no_stock')) await recordRiskConfirms(ctx, [order.id], me, db);
   ctx.emit({ type: 'orders' });
   // Affectation automatique: an order to call gets its agent at once (when the shop turned it on)
   if (!input.isExchange && !order.agentId && (CONF_TODO as string[]).includes(order.confStatus)) {
@@ -800,6 +811,8 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
   const freed: number[] = [];
   /** cancelled with a parcel already created at a courier: cancelled there too, after this is saved */
   const ghosts: number[] = [];
+  /** confirmed now (they were not): a « Risqué » customer among them is kept (« Confirmer quand même ») */
+  const fresh: number[] = [];
   await ctx.db.tx(async (tx) => {
     if (await alreadyApplied(tx, input.clientId, me)) return;
     const notify = await notifyContext(tx);
@@ -840,6 +853,7 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
       const confirmed = status === 'confirmed';
       // « sans stock » is confirmed too: the agent's call is done, the order only waits for stock before the depot
       const stamped = confirmed || status === 'no_stock';
+      if (stamped && cur.conf_status !== 'confirmed' && cur.conf_status !== 'no_stock') fresh.push(oid);
       const nowIso = new Date(ctx.now()).toISOString();
       await tx.query(
         `UPDATE orders SET conf_status=$2, attempts=$3,
@@ -871,6 +885,7 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
   });
   // a cancelled order's parcel at a courier: cancelled there by itself (or put on « À annuler à la main »)
   if (ghosts.length) await (await import('./dispatch')).cancelGhosts(ctx, ghosts);
+  await recordRiskConfirms(ctx, fresh.filter((x) => changed.includes(x)), me);
   await sendInPreview(ctx);
   ctx.emit({ type: 'orders' });
   return { changed, noStock, blocked };

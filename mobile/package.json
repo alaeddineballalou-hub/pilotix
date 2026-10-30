@@ -1,0 +1,22 @@
+{
+  "name": "pilotix-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pilotix Android + iPhone app: a native shell that loads the live https://pilotix.online pages and gives them phone powers",
+  "scripts": {
+    "sync": "cap sync",
+    "sync:android": "cap sync android",
+    "sync:ios": "cap sync ios",
+    "assets": "capacitor-assets generate --assetPath resources --iconBackgroundColor '#1B2A47' --iconBackgroundColorDark '#1B2A47' --splashBackgroundColor '#1B2A47' --splashBackgroundColorDark '#1B2A47'"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.6.0",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.6.0",
+    "@capacitor/ios": "8.6.0",
+    "@capacitor/splash-screen": "8.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.0"
+  }
+}

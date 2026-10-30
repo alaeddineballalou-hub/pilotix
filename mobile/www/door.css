@@ -1,0 +1,30 @@
+/* Pilotix app: start page (index.html) and error page (offline.html). No outside fonts or pictures: it must work offline. */
+:root { --navy: #1B2A47; --navy-2: #24365A; --orange: #F7A823; --text: #FFFFFF; --soft: #C9D3E6; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--navy); color: var(--text); }
+body {
+  font: 17px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Arabic", sans-serif;
+  display: flex; align-items: center; justify-content: center;
+  padding: calc(24px + env(safe-area-inset-top, 0px)) 24px calc(24px + env(safe-area-inset-bottom, 0px));
+  -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
+}
+main { width: 100%; max-width: 380px; text-align: center; }
+.logo { width: 104px; height: 104px; margin: 0 auto 28px; display: block; border-radius: 26px; box-shadow: 0 0 0 2px rgba(255,255,255,.10), 0 10px 30px rgba(0,0,0,.30); }
+.dot { width: 64px; height: 64px; margin: 0 auto 18px; border-radius: 50%; background: var(--navy-2); display: grid; place-items: center; }
+.dot svg { width: 30px; height: 30px; display: block; }
+.spin { width: 34px; height: 34px; border-radius: 50%; border: 4px solid rgba(247,168,35,.25); border-top-color: var(--orange); animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+h1 { font-size: 24px; line-height: 1.3; margin: 0 0 10px; font-weight: 700; }
+p { margin: 0 0 28px; color: var(--soft); }
+p:empty { display: none; }
+button {
+  width: 100%; min-height: 56px; border: 0; border-radius: 18px; cursor: pointer;
+  background: var(--orange); color: var(--navy); font: inherit; font-size: 18px; font-weight: 700;
+  box-shadow: 0 8px 20px rgba(247,168,35,.25); transition: transform .1s ease;
+}
+button:active { transform: scale(.98); }
+button[disabled] { opacity: .7; }
+.status { margin-top: 16px; min-height: 24px; font-size: 15px; color: var(--soft); }
+.build { position: fixed; left: 0; right: 0; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); font-size: 12px; color: rgba(201,211,230,.55); text-align: center; direction: ltr; }
+[hidden] { display: none !important; }
+[dir="rtl"] body { font-size: 18px; }
