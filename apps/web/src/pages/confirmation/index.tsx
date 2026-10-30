@@ -623,7 +623,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                 )}
                 {(() => {
                   const cur = rows.find((r) => open.has(r.id));
-                  return cur ? <PhoneOrder order={cur} wa={wa(cur)} onClose={() => setOpen(new Set())} onDone={goNext} /> : null;
+                  return cur ? <PhoneOrder order={cur} onClose={() => setOpen(new Set())} onDone={goNext} /> : null;
                 })()}
               </>
             ) : (

@@ -22,7 +22,7 @@ import { Countdown } from '../confirmation/Countdown';
 import { Detail } from '../confirmation/Detail';
 import { Focus } from '../confirmation/Focus';
 import { PhoneOrder } from '../confirmation/PhoneList';
-import { currentLabel, SUB_TONE, telHref, waHref } from '../confirmation/shared';
+import { currentLabel, SUB_TONE, telHref } from '../confirmation/shared';
 import type { PageProps } from '../registry';
 import { Suivi, TreatModal } from '../suivi';
 import { ScoreChip } from '../../ui/clientScore';
@@ -184,7 +184,7 @@ function AllQueue({ sub }: { sub: Sub }) {
           </ul>
           {cur && cur.seller && (
             <SellerScope seller={cur.seller.id}>
-              <PhoneOrder order={cur} wa={waHref(cur.phone, '', { nom: cur.customerName, boutique: cur.seller.name, ref: cur.ref })} onClose={() => setOpen(null)} onDone={() => goNext(keyOf(cur))} />
+              <PhoneOrder order={cur} onClose={() => setOpen(null)} onDone={() => goNext(keyOf(cur))} />
             </SellerScope>
           )}
         </>

@@ -1,8 +1,9 @@
-import type { OrderEvent } from '@pilotix/shared';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { phoneIntl, type OrderEvent } from '@pilotix/shared';
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { when } from '../../lib/format';
+import { hasMouse } from '../../lib/useMedia';
 import { rpc } from '../../lib/backend';
 import { useRpc } from '../../lib/query';
 import { telHref, waHref } from './shared';
@@ -116,15 +117,11 @@ export function PhoneCell({ order }: { order: { id: number; ref: string; phone: 
   );
 }
 
-/** Small menu under the message icon: SMS or WhatsApp. The ready message is copied, then the app opens with it filled in. */
-function MsgMenu({ order, anchor, onClose }: { order: { ref: string; phone: string; customerName: string }; anchor: HTMLElement; onClose: () => void }) {
-  const { t } = useTranslation();
-  const meta = useRpc('orders.uiMeta', {}, { staleTime: 5 * 60_000 });
+/** The small box under a call or message button: placed under the button (above it when there is no room), closed by a
+ * tap elsewhere (on a touch screen that tap only closes it), a scroll or Échap. Used on computers (phone column) and on phones (order cards and the opened order). */
+function ChoiceBox({ anchor, onClose, label, children }: { anchor: HTMLElement; onClose: () => void; label: string; children: ReactNode }) {
   const box = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ top: -9999, left: -9999 });
-  const tpl = meta.data?.whatsappTemplate ?? 'Bonjour {nom}, ici {boutique} à propos de votre commande {ref}.';
-  const vars = { nom: order.customerName, boutique: meta.data?.shopName ?? 'Pilotix', ref: order.ref };
-  const text = tpl.replace(/\{(nom|boutique|ref)\}/g, (_, k: 'nom' | 'boutique' | 'ref') => vars[k]);
   useLayoutEffect(() => {
     const a = anchor.getBoundingClientRect();
     const w = box.current?.offsetWidth ?? 260;
@@ -132,21 +129,54 @@ function MsgMenu({ order, anchor, onClose }: { order: { ref: string; phone: stri
     const top = a.bottom + 6 + h > window.innerHeight - 8 ? a.top - h - 6 : a.bottom + 6;
     setPos({ top: Math.max(8, top), left: Math.min(Math.max(8, a.left + a.width / 2 - w / 2), window.innerWidth - w - 8) });
   }, [anchor]);
+  // touch screens: an invisible veil takes the tap that closes the box, so it doesn't also open what is under it
+  const touch = !hasMouse();
   useEffect(() => {
-    const down = (e: MouseEvent) => !box.current?.contains(e.target as Node) && !anchor.contains(e.target as Node) && onClose();
     const key = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    document.addEventListener('mousedown', down);
     document.addEventListener('keydown', key);
-    return () => (document.removeEventListener('mousedown', down), document.removeEventListener('keydown', key));
-  }, [anchor, onClose]);
+    if (touch) return () => document.removeEventListener('keydown', key);
+    const outside = (e: Event) => !box.current?.contains(e.target as Node) && !anchor.contains(e.target as Node) && onClose();
+    const scroll = (e: Event) => !box.current?.contains(e.target as Node) && onClose();
+    document.addEventListener('pointerdown', outside);
+    window.addEventListener('scroll', scroll, true);
+    return () => (document.removeEventListener('keydown', key), document.removeEventListener('pointerdown', outside), window.removeEventListener('scroll', scroll, true));
+  }, [anchor, onClose, touch]);
+  return createPortal(
+    // a portal still sends its clicks up to the React parents (an order card would open): keep them here
+    <>
+      {touch && (
+        <div
+          className="px-msg-veil"
+          aria-hidden="true"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+        />
+      )}
+      <div ref={box} className="px-msg" role="menu" aria-label={label} style={{ top: pos.top, left: pos.left }} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+        {children}
+      </div>
+    </>,
+    document.body,
+  );
+}
+
+/** Small menu under the message icon: SMS or WhatsApp. The ready message is copied, then the app opens with it filled in. */
+export function MsgMenu({ order, anchor, onClose }: { order: { ref: string; phone: string; customerName: string }; anchor: HTMLElement; onClose: () => void }) {
+  const { t } = useTranslation();
+  const meta = useRpc('orders.uiMeta', {}, { staleTime: 5 * 60_000 });
+  const tpl = meta.data?.whatsappTemplate ?? 'Bonjour {nom}, ici {boutique} à propos de votre commande {ref}.';
+  const vars = { nom: order.customerName, boutique: meta.data?.shopName ?? 'Pilotix', ref: order.ref };
+  const text = tpl.replace(/\{(nom|boutique|ref)\}/g, (_, k: 'nom' | 'boutique' | 'ref') => vars[k]);
   const go = async (href: string) => {
     const ok = await copyText(text);
     if (ok) toast(t('confirmation.msg.copied'), 'ok');
     window.open(href, '_blank', 'noopener');
     onClose();
   };
-  return createPortal(
-    <div ref={box} className="px-msg" role="menu" aria-label={t('confirmation.message')} style={{ top: pos.top, left: pos.left }}>
+  return (
+    <ChoiceBox anchor={anchor} onClose={onClose} label={t('confirmation.message')}>
       <div className="px-msg-h">{t('confirmation.msg.how')}</div>
       <button type="button" role="menuitem" className="px-msg-it" onClick={() => go(`sms:${order.phone}?body=${encodeURIComponent(text)}`)}>
         <span className="px-msg-ic sms">
@@ -167,7 +197,40 @@ function MsgMenu({ order, anchor, onClose }: { order: { ref: string; phone: stri
         </span>
       </button>
       <div className="px-msg-txt">{text}</div>
-    </div>,
-    document.body,
+    </ChoiceBox>
+  );
+}
+
+/** Small menu under a call button (phones): a normal phone call, or WhatsApp (its chat opens: one more tap on 📞 calls).
+ * Either way the call is counted on the order, like the direct call button on computers. */
+export function CallMenu({ order, anchor, onClose }: { order: { id: number; phone: string }; anchor: HTMLElement; onClose: () => void }) {
+  const { t } = useTranslation();
+  // the link opens the phone app or WhatsApp first; the menu closes right after
+  const counted = () => {
+    rpc('orders.logCall', { id: order.id }).catch(() => {});
+    setTimeout(onClose, 0);
+  };
+  return (
+    <ChoiceBox anchor={anchor} onClose={onClose} label={t('confirmation.call')}>
+      <div className="px-msg-h">{t('confirmation.callBy.how')}</div>
+      <a role="menuitem" className="px-msg-it" href={telHref(order.phone)} onClick={counted}>
+        <span className="px-msg-ic tel">
+          <Icon name="phone" />
+        </span>
+        <span>
+          <b>{t('confirmation.callBy.phone')}</b>
+          <small>{t('confirmation.callBy.phoneSub')}</small>
+        </span>
+      </a>
+      <a role="menuitem" className="px-msg-it" href={`https://wa.me/${phoneIntl(order.phone)}`} target="_blank" rel="noopener" onClick={counted}>
+        <span className="px-msg-ic wa">
+          <Icon name="whatsapp" />
+        </span>
+        <span>
+          <b>WhatsApp</b>
+          <small>{t('confirmation.callBy.waSub')}</small>
+        </span>
+      </a>
+    </ChoiceBox>
   );
 }

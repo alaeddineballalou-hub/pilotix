@@ -757,6 +757,10 @@ html body .qcard .qacts .qa-info > .linkish { display: inline-flex; align-items:
 .px-msg-ic .bji { width: 16px; height: 16px; vertical-align: 0; }
 .px-msg-ic.sms { background: var(--px-navy, #1B2A47); }
 .px-msg-ic.wa { background: #25D366; }
+.px-msg-ic.tel { background: var(--c-ok-fill, #15803D); }
+/* touch screens: takes the tap that closes the call / message menu (it doesn't reach the page) */
+.px-msg-veil { position: fixed; inset: 0; z-index: 2147481999; background: transparent; }
+a.px-msg-it { text-decoration: none; }
 .px-msg-txt { margin: 6px 4px 2px; padding: 8px 10px; border-radius: 10px; background: var(--sky-soft, #eef2f8); font-size: 12px; line-height: 1.4; color: var(--muted); }
 /* tracking number: press to copy, a small "Copié" bubble answers */
 .px-copy-wrap { position: relative; display: inline-flex; align-items: center; }
