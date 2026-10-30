@@ -98,6 +98,18 @@ export async function serves(db: Db, companyId: number, wilayaId: number, desk: 
   return { ok: !!c.active && (free || num(desk ? c.desk : c.home) > 0), name: c.name as string };
 }
 
+/** Delivered at a bureau with no bureau chosen while that wilaya has bureaus (of the order's company, or of any active
+ *  company when it has none yet): the courier refuses a stop-desk parcel without its bureau. */
+async function deskMissing(db: Db, o: { wilayaId: number | null; isStopdesk: boolean; stopdeskId: number | null; companyId: number | null }) {
+  if (!o.isStopdesk || o.stopdeskId || !o.wilayaId) return false;
+  const there = await db.query(
+    `SELECT 1 FROM stopdesks s JOIN delivery_companies c ON c.id = s.company_id AND c.active
+      WHERE s.wilaya_id = $1 AND ($2::bigint IS NULL OR s.company_id = $2) LIMIT 1`,
+    [o.wilayaId, o.companyId],
+  );
+  return !!there[0];
+}
+
 /** Can this order be delivered where it says? */
 export async function deliverCheck(
   db: Db,
@@ -116,11 +128,12 @@ export async function deliverCheck(
   companyId = companyId ?? (await getSetting(db, 'shop')).defaultCompanyId ?? null;
   if (companyId) {
     const s = await serves(db, companyId, o.wilayaId, o.isStopdesk);
+    if (s.ok && (await deskMissing(db, o))) return { ...base, companyId, companyName: s.name, ok: false, why: 'desk' };
     return { ...base, companyId, companyName: s.name, ok: s.ok, why: s.ok ? null : 'company' };
   }
   // no company yet (it gets one later): one of the active companies must deliver there
   const all = await db.query('SELECT id FROM delivery_companies WHERE active');
-  for (const c of all) if ((await serves(db, num(c.id), o.wilayaId, o.isStopdesk)).ok) return { ...base, ok: true, why: null };
+  for (const c of all) if ((await serves(db, num(c.id), o.wilayaId, o.isStopdesk)).ok) return (await deskMissing(db, o)) ? { ...base, ok: false, why: 'desk' } : { ...base, ok: true, why: null };
   return { ...base, ok: !all.length, why: all.length ? 'nobody' : null };
 }
 

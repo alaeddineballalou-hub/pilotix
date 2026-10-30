@@ -163,7 +163,7 @@ export function Focus({ initialId, onClose, onNext, seller, allSellers }: { init
                 type="button"
                 className={`btn ${CLS[c] ?? ''}`}
                 onClick={async () => {
-                  const ch: StatusChoice = c === 'try1' ? (`try${Math.min(3, o.attempts + 1)}` as StatusChoice) : c;
+                  const ch: StatusChoice = c === 'try1' ? (`try${Math.min(30, o.attempts + 1)}` as StatusChoice) : c;
                   if (c === 'confirmed' || c === 'no_stock') {
                     await change([o], ch, { onSaved: after });
                     return;

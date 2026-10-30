@@ -639,5 +639,7 @@
     "chip": "🔒 {{name}}",
     "mgr": "{{name}} is on this order right now. You can still change it."
   },
-  "mineEmpty": "No order of yours here. Press « Next order » to take the most urgent one."
+  "mineEmpty": "No order of yours here. Press « Next order » to take the most urgent one.",
+  "autoCancelled": "{{ref}} cancelled automatically: {{n}} unanswered calls",
+  "autoCancelledN": "{{n}} orders cancelled automatically (too many unanswered calls)"
 }

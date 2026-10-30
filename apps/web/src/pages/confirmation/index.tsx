@@ -340,8 +340,11 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
           '—'
         );
       case 'status': {
-        const cur: StatusChoice = r.confStatus === 'no_answer' ? (`try${Math.min(3, Math.max(1, r.attempts))}` as StatusChoice) : r.confStatus;
-        const opts = [{ value: cur, label: currentLabel(t, r.confStatus, r.attempts) }, ...ROW_CHOICES.filter((x) => x !== cur).map((x) => ({ value: x, label: choiceLabel(t, x, true) }))];
+        const cur: StatusChoice = r.confStatus === 'no_answer' ? (`try${Math.min(30, Math.max(1, r.attempts))}` as StatusChoice) : r.confStatus;
+        // « Tentative 0N »: always this order's next call (its count never goes back)
+        const nextTry = `try${Math.min(30, r.attempts + 1)}` as StatusChoice;
+        const choices = ROW_CHOICES.map((x) => (x === 'try1' ? nextTry : x)).filter((x) => x !== cur);
+        const opts = [{ value: cur, label: currentLabel(t, r.confStatus, r.attempts) }, ...choices.map((x) => ({ value: x, label: choiceLabel(t, x, true) }))];
         return (
           <StatusSelect
             value={cur}

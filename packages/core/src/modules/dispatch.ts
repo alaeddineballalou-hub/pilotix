@@ -50,13 +50,14 @@ export async function dispatchOrders(ctx: Ctx, ids: number[], companyId?: number
     if (list.length) await assignCompanies(ctx, { ids: list, companyId }, { check: false });
   }
   const pick = async (sql: string, ...more: unknown[]) => (list.length ? (await ctx.db.query(sql, [list, ...more])).map((r: any) => num(r.id)) : []);
-  const toMove = await pick(`SELECT id FROM orders WHERE id = ANY($1) AND follow_status = 'to_prepare'`);
+  // only confirmed orders leave the depot (one sent back to be called again never goes out)
+  const toMove = await pick(`SELECT id FROM orders WHERE id = ANY($1) AND follow_status = 'to_prepare' AND (conf_status = 'confirmed' OR is_exchange)`);
   const moved = toMove.length ? (await setFollow(ctx, { ids: toMove, status: 'prepared' })).changed.length : 0;
   // out of « À attribuer »: its waiting time starts again if it ever comes back
   if (toMove.length) await ctx.db.query('UPDATE orders SET assign_wait_since = NULL WHERE id = ANY($1) AND follow_status = \'prepared\'', [toMove]);
   const toSend = await pick(
     `SELECT o.id FROM orders o JOIN delivery_companies c ON c.id = o.company_id
-     WHERE o.id = ANY($1) AND o.follow_status = 'prepared' AND o.tracking IS NULL AND c.kind = ANY($2)`,
+     WHERE o.id = ANY($1) AND o.follow_status = 'prepared' AND (o.conf_status = 'confirmed' OR o.is_exchange) AND o.tracking IS NULL AND c.kind = ANY($2)`,
     API_COURIERS,
   );
   let sent = 0;

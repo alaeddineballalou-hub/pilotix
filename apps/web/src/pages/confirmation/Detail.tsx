@@ -293,8 +293,11 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
     setBusy(true);
     try {
       if (!(await saveFirst())) return false;
-      await fn();
-      toast(okMsg, tone);
+      const res = (await fn()) as { autoCancelled?: { ref: string; attempts: number }[] } | undefined;
+      // « Annuler après N appels sans réponse »: the order was cancelled, not just one more attempt
+      const auto = res?.autoCancelled?.[0];
+      if (auto) toast(t('confirmation.autoCancelled', { ref: auto.ref, n: auto.attempts }), 'bad');
+      else toast(okMsg, tone);
       qc.invalidateQueries();
       onDone?.(order.id);
       return true;
@@ -786,7 +789,7 @@ function StatusMenu({ order, busy, pending, onPick }: { order: Order; busy: bool
   }, [step]);
   const label = (c: string) => t(`status.conf.${c}`);
   const shortDate = (d: string) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : '');
-  const nextTry = Math.min(9, (order.attempts || 0) + 1);
+  const nextTry = Math.min(30, (order.attempts || 0) + 1);
   const done = (p: Pend) => (onPick(p), setStep(null), setReason(''), setNote(''));
   const pickAsk = (s: 'cancelled' | 'postponed' | 'callback') => {
     setStep(s);
