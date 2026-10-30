@@ -897,6 +897,9 @@ export const catalogProcs = {
         const product = (await tx.query('SELECT id FROM products WHERE id = $1 AND archived_at IS NULL FOR UPDATE', [i.productId]))[0];
         if (!product) throw notFound('Produit introuvable');
         await tx.query('UPDATE products SET active = $2 WHERE id = $1', [i.productId, i.active]);
+        const addons = (await tx.query('SELECT services FROM products WHERE id = $1', [i.productId]))[0]?.services ?? [];
+        const services = typeof addons === 'string' ? JSON.parse(addons) : addons;
+        for (const service of services) await tx.query('UPDATE products SET active = $2 WHERE id = $1 AND is_service', [service.id, i.active]);
       } else {
         const variant = (await tx.query('SELECT v.id FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id = $1 AND p.archived_at IS NULL FOR UPDATE OF v', [i.variantId]))[0];
         if (!variant) throw notFound('Variante introuvable');
