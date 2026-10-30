@@ -332,7 +332,7 @@ export function VariantOptions({
             {others.map((v) => (
               <div key={v.id} className={`item-row bjpv-row ${v.active ? '' : 'dim'}`}>
                 <input value={v.title} aria-label={t('produits.form.variants')} onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, title: e.target.value } : x)))} />
-                <span className="muted small">Uses product pricing</span>
+                <span className="muted small">{(v.photo || basePhoto) && <img src={v.photo || basePhoto} alt="" style={{ width: 34, height: 34, objectFit: 'contain' }} />} <input type="file" accept="image/*" aria-label={`Photo ${v.title}`} onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; try { const photo = await onPhotoFile(file); setVars((prev) => prev.map((x) => x.id === v.id ? { ...x, photo } : x)); } catch { /* Keep previous photo */ } }} /></span>
                 <input type="number" min={0} step={0.1} value={v.weightKg} placeholder="Weight (kg)" aria-label="Weight" onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, weightKg: e.target.value } : x)))} />
                 <input type="number" min={0} step={1} value={v.alertQty} placeholder="Minimum stock" aria-label="Minimum stock" onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, alertQty: e.target.value } : x)))} />
                 <select value={v.feeGrid} aria-label="Delivery grid" onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, feeGrid: e.target.value } : x)))}><option value="">Product default</option>{feeGrids.map((g) => <option key={g} value={g}>{g}</option>)}</select>
