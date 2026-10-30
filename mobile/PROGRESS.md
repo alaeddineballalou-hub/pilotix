@@ -73,6 +73,13 @@ on from the first step that isn't ✅.
   written by mobile.yml).
 - Icons and start screens: `python3 scripts/make-icons.py` (from `mobile/`) makes them from
   `mobile/resources/icon-only.png` and `logo.png`. Run it again if the icon changes.
+- The website knows it runs inside the app: `apps/web/src/main.tsx` puts the class `in-app` on `<html>` when
+  the user agent has `PilotixApp`. Used by `apps/web/src/styles/app.css`: no text selection on titles, labels
+  and buttons inside the app (long press showed « Copy · Select all · Share », owner 30 Oct); fields, chat
+  messages (`.ai-txt`), codes (`user-select: all`) and `.selectable` stay selectable. Use `html.in-app` for
+  future app-only website changes (e.g. hiding the Google button).
+- Website lists (Confirmation › Wilaya, Commune, Bureau): no automatic keyboard on touch screens
+  (`hasMouse()` in `apps/web/src/lib/useMedia.ts`), 30 Oct.
 - Android permissions: `INTERNET`, `CAMERA` (camera optional), `POST_NOTIFICATIONS` (asked when the app
   opens, Android 13+: `MainActivity.java`; Android stops asking after two « Don't allow »).
 - The backup door needs the DNS record `direct` (A, DNS only / grey cloud) in Cloudflare: the owner's
@@ -120,6 +127,8 @@ on from the first step that isn't ✅.
 
 ## Log
 
+- 30 Oct 2026, 07:04: owner: titles could be selected by a long press → off inside the app (website side, live).
+  Test 6 (navy bars) built; the owner's screenshot still looked like test 5 (white bars).
 - 30 Oct 2026, 06:43: the owner added the `direct` DNS line; on his Wi‑Fi (pilotix.online still cut) the app
   opened Pilotix through the backup door by itself ✅. His screenshot showed the login page under the
   phone's bars → fixed (pages between the bars).
