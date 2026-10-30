@@ -394,7 +394,8 @@
     "dup": "Possible duplicate: another open order with this number",
     "historyMore": "See the full history ({{n}} orders)",
     "historyLess": "Hide the history",
-    "historyThis": "this order"
+    "historyThis": "this order",
+    "pay": "Payment"
   },
   "ph": {
     "per": {
@@ -519,5 +520,12 @@
     "noIdAd": "Came from an ad, but with no ID: add the « URL parameters » to each Meta ad (Landing pages › Settings).",
     "noAd": "No ad recognised (direct visit, or an ad without « URL parameters »).",
     "searchHint": "Tip: type the ad ID in the orders search to see all its orders."
+  },
+  "pay": {
+    "waiting": "Not received yet",
+    "collected": "Collected by {{name}}: it will pay you",
+    "ready": "Paid by {{name}}: to pick up",
+    "received": "Money received",
+    "ref": "payment {{ref}}"
   }
 }

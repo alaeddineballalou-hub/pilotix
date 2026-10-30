@@ -51,7 +51,8 @@
     "test": "Tester",
     "preview": "Aperçu de l’envoi",
     "zr": "{{name}} depuis Pilotix",
-    "live": "Sans quitter Pilotix"
+    "live": "Sans quitter Pilotix",
+    "alerts": "Alertes"
   },
   "kinds": {
     "own": "Livreur à moi",
@@ -126,7 +127,24 @@
     "returnFee": "Retour",
     "import": "Importer depuis la société",
     "imported": "{{count}} wilayas importées",
-    "saved": "Tarifs enregistrés"
+    "saved": "Tarifs enregistrés",
+    "apiTitle": "Prix de l’API de {{name}}",
+    "apiHelp": "Ils viennent de {{name}} et ne se changent pas ici : Pilotix les reprend tout seul chaque nuit et quand vous connectez la société. Si {{name}} change ses prix, ils changent ici aussi.",
+    "syncedAt": "Mis à jour {{when}}",
+    "changed_one": "{{count}} prix a changé",
+    "changed_other": "{{count}} prix ont changé",
+    "unchanged": "aucun prix n’a changé",
+    "never": "Pas encore pris de l’API.",
+    "error": "La dernière mise à jour n’a pas marché : {{error}}",
+    "refresh": "Mettre à jour maintenant",
+    "refreshed_one": "Prix repris de l’API : {{count}} a changé",
+    "refreshed_other": "Prix repris de l’API : {{count}} ont changé",
+    "swapTitle": "Frais d’échange (swap)",
+    "swapHelp": "Ce que la société prend pour donner un colis à un autre client. Ajouté au coût de la commande qui reçoit le colis.",
+    "swapSame": "Même wilaya",
+    "swapOther": "Autre wilaya",
+    "swapApi": "De l’API de {{name}}",
+    "swapSaved": "Frais d’échange enregistrés"
   },
   "desks": {
     "title": "Stop desks · {{name}}",
@@ -259,7 +277,8 @@
     "endsAt": "Finit à",
     "noEnd": "Fin de tournée non réglée",
     "call": "Appeler",
-    "tourEnd": "Fin de tournée"
+    "tourEnd": "Fin de tournée",
+    "alertsSub": "Les statuts qui envoient la commande dans Alertes"
   },
   "live": {
     "title": "{{name}} depuis Pilotix",
@@ -523,9 +542,21 @@
     "fixT": "À corriger",
     "fixHint": "Ce qui empêche Pilot de bien choisir.",
     "allGood": "Rien à corriger.",
-    "noFees": "Tarifs pas encore importés : touchez « Mettre à jour maintenant » ou remplissez-les à la main.",
+    "noFees": "Tarifs pas encore pris de l’API de la société : touchez « Mettre à jour maintenant ».",
     "missing": "Allumée sans prix : {{list}}",
     "toPrices": "Voir les tarifs",
     "offShort": "éteinte"
+  },
+  "alertsCo": {
+    "title": "Alertes · {{name}}",
+    "help": "Choisissez un ou plusieurs statuts de {{name}} : une commande qui reçoit l’un d’eux va dans Suivi › Alertes.",
+    "empty": "Pas encore de statut : ils arrivent avec les premiers colis envoyés à {{name}}.",
+    "parcels_one": "{{count}} colis",
+    "parcels_other": "{{count}} colis",
+    "on_one": "{{count}} statut envoie la commande dans Alertes",
+    "on_other": "{{count}} statuts envoient la commande dans Alertes",
+    "none": "Aucun statut choisi : {{name}} n’enverra aucune commande dans Alertes.",
+    "saved": "Alertes enregistrées",
+    "also": "Aussi dans Préférences › Alertes du Suivi."
   }
 }

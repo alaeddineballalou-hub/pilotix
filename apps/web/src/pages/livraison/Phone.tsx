@@ -25,7 +25,7 @@ import '../caisse/phone.css';
 import './phone.css';
 
 type Kinds = Out<'delivery.kinds'>;
-type Open = 'fees' | 'desks' | 'statuses' | 'preview' | 'zr' | 'live';
+type Open = 'fees' | 'desks' | 'statuses' | 'alerts' | 'preview' | 'zr' | 'live';
 type Livreur = Out<'delivery.livreurs'>[number];
 const isApi = (c: Company) => !['own', 'manual'].includes(c.kind);
 const short = (name: string) => name.replace(/express|livraison|coursier/gi, '').trim().slice(0, 3).toUpperCase() || name.slice(0, 2).toUpperCase();
@@ -256,6 +256,7 @@ function CompanyPage({ c, cards, onClose, onEdit, onOpen, onSheet }: { c: Compan
           <ul className="pxk-grp pxl-acts">
             {row('refresh', t('livraison.act.test'), test.isPending ? t('livraison.ph.testing') : t('livraison.ph.testSub'), () => !test.isPending && test.mutate({ companyId: c.id }), 'gr')}
             {row('route', t('livraison.act.statuses'), t('livraison.ph.statusesSub'), () => onOpen('statuses', c))}
+            {row('alert', t('livraison.act.alerts'), t('livraison.ph.alertsSub'), () => onOpen('alerts', c))}
             {row('search', t('livraison.act.preview'), t('livraison.ph.previewSub'), () => onOpen('preview', c))}
           </ul>
         </>

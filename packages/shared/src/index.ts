@@ -242,6 +242,18 @@ export interface OrderItem {
   isUpsell: boolean;
 }
 
+/**
+ * The money of a delivered parcel, step by step: not paid yet → the company has it (its status « Encaissé » /
+ * « Recouvert ») → the company paid it (a ZR payment to pick up) → received (in a caisse).
+ */
+export interface OrderPay {
+  step: 'waiting' | 'collected' | 'ready' | 'received';
+  /** when it reached this step, when known */
+  at: string | null;
+  /** the company's payment it is in (ZR), when known */
+  ref: string | null;
+}
+
 export interface Order {
   id: number;
   ref: string;
@@ -320,6 +332,8 @@ export interface Order {
   looksLikePhone?: string | null;
   /** the customer's score out of 100 (what the protection knows about this number), in the lists and an order's page */
   clientScore?: { score: number; level: ClientLevel; reasons: ClientReason[] } | null;
+  /** the order card: where the money of a delivered parcel is (see OrderPay) */
+  pay?: OrderPay | null;
   /** the Meta ad's name (from the ads Pilotix reads), for the ad id in utm */
   adName?: string | null;
   agentName?: string | null;

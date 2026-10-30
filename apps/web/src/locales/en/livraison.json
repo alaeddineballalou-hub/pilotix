@@ -51,7 +51,8 @@
     "test": "Test",
     "preview": "Send preview",
     "zr": "{{name}} from Pilotix",
-    "live": "Without leaving Pilotix"
+    "live": "Without leaving Pilotix",
+    "alerts": "Alerts"
   },
   "kinds": {
     "own": "My courier",
@@ -126,7 +127,24 @@
     "returnFee": "Return",
     "import": "Import from the company",
     "imported": "{{count}} wilayas imported",
-    "saved": "Rates saved"
+    "saved": "Rates saved",
+    "apiTitle": "Prices from {{name}}’s API",
+    "apiHelp": "They come from {{name}} and can’t be changed here: Pilotix takes them again by itself every night and when you connect the company. If {{name}} changes its prices, they change here too.",
+    "syncedAt": "Updated {{when}}",
+    "changed_one": "{{count}} price changed",
+    "changed_other": "{{count}} prices changed",
+    "unchanged": "no price changed",
+    "never": "Not taken from the API yet.",
+    "error": "The last update didn’t work: {{error}}",
+    "refresh": "Update now",
+    "refreshed_one": "Prices taken from the API: {{count}} changed",
+    "refreshed_other": "Prices taken from the API: {{count}} changed",
+    "swapTitle": "Swap fees",
+    "swapHelp": "What the company takes to give a parcel to another customer. Added to the cost of the order that gets the parcel.",
+    "swapSame": "Same wilaya",
+    "swapOther": "Other wilaya",
+    "swapApi": "From {{name}}’s API",
+    "swapSaved": "Swap fees saved"
   },
   "desks": {
     "title": "Stop desks · {{name}}",
@@ -259,7 +277,8 @@
     "endsAt": "Ends in",
     "noEnd": "Tour end not set",
     "call": "Call",
-    "tourEnd": "End of the tour"
+    "tourEnd": "End of the tour",
+    "alertsSub": "The statuses that send the order to Alerts"
   },
   "live": {
     "title": "{{name}} from Pilotix",
@@ -523,7 +542,7 @@
     "fixT": "To fix",
     "fixHint": "What keeps Pilot from choosing well.",
     "allGood": "Nothing to fix.",
-    "noFees": "Rates not imported yet: tap “Update now” or fill them in by hand.",
+    "noFees": "Rates not taken from the company’s API yet: tap “Update now”.",
     "missing": "On without a price: {{list}}",
     "toPrices": "See the rates",
     "offShort": "off"
@@ -540,5 +559,17 @@
       "title": "ZR Express (old platform)",
       "sub": "Old platform (Procolis)"
     }
+  },
+  "alertsCo": {
+    "title": "Alerts · {{name}}",
+    "help": "Pick one or more of {{name}}’s statuses: an order that gets one of them goes to Follow-up › Alerts.",
+    "empty": "No status yet: they come with the first parcels sent to {{name}}.",
+    "parcels_one": "{{count}} parcel",
+    "parcels_other": "{{count}} parcels",
+    "on_one": "{{count}} status sends the order to Alerts",
+    "on_other": "{{count}} statuses send the order to Alerts",
+    "none": "No status picked: {{name}} will send no order to Alerts.",
+    "saved": "Alerts saved",
+    "also": "Also in Preferences › Suivi alerts."
   }
 }

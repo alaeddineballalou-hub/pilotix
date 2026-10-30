@@ -19,6 +19,8 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   // NOEST tariffs + stop desks for ZR and NOEST
   const fees = await db.query('SELECT wilaya_id, home, desk, return_fee FROM delivery_fees WHERE company_id = $1', [yal]);
   for (const f of fees) await db.query('INSERT INTO delivery_fees (company_id, wilaya_id, home, desk, return_fee) VALUES ($1,$2,$3,$4,$5)', [noest, f.wilaya_id, num(f.home) - 50, num(f.desk) - 50, 150]);
+  // the API companies' prices were taken from their API in the night (« Tarifs » says when)
+  await db.query(`UPDATE delivery_companies SET config = config || $2::jsonb WHERE id = ANY($1::bigint[])`, [[yal, zr, noest], JSON.stringify({ feesSync: { at: new Date(now - 6 * 3_600_000).toISOString(), changed: 0, error: null } })]);
   const desks: [number, string][] = [[16, 'Bab Ezzouar'], [16, 'Kouba'], [31, 'Bir El Djir'], [25, 'Constantine'], [9, 'Blida'], [19, 'Sétif']];
   for (const [k, [w, c]] of desks.entries()) {
     await db.query('INSERT INTO stopdesks (company_id, wilaya_id, commune, name, address, ext_id) VALUES ($1,$2,$3,$4,$5,$6)', [zr, w, c, `ZR ${c}`, 'Agence ZR', `zr-hub-${k + 1}`]);

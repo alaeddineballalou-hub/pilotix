@@ -16,6 +16,7 @@ import {
   Order,
   OrderEvent,
   OrderItem,
+  OrderPay,
   OrigLine,
   origOf,
   upsellOf,
@@ -185,6 +186,27 @@ export async function withClientScores<T extends Order>(ctx: Ctx, list: T[]): Pr
     const s = by.get(o.customerId);
     return s ? { ...o, clientScore: { score: s.score, level: s.level, reasons: s.reasons } } : o;
   });
+}
+
+/** A courier status saying the company holds the parcel's money (ZR « Encaissé », « Recouvert »), not « to cash ». */
+const COLLECTED_RE = /encaiss[eé](?![a-zà-ÿ])|recouvr/i;
+
+/**
+ * The order card: where the money of a delivered parcel is — not paid yet → the company has it (its status) → the
+ * company paid it (a ZR payment still to pick up, its parcels known) → received (cashed, with the payment it came in).
+ */
+export async function payOf(db: Db, o: Order): Promise<OrderPay | null> {
+  const paymentOf = async () =>
+    o.companyId && o.tracking
+      ? ((await db.query(`SELECT ref, ext_id, done, at FROM courier_payments WHERE company_id = $1 AND lines @> $2::jsonb ORDER BY at DESC NULLS LAST, id DESC LIMIT 1`, [o.companyId, JSON.stringify([{ tracking: o.tracking }])]))[0] ?? null)
+      : null;
+  const refOf = (p: any) => (p ? String(p.ref ?? '').trim() || String(p.ext_id ?? '').slice(0, 8) || null : null);
+  if (o.cashed) return { step: 'received', at: o.cashedAt, ref: refOf(await paymentOf()) };
+  if (o.followStatus !== 'delivered') return null;
+  const p = await paymentOf();
+  if (p) return { step: 'ready', at: isoOrNull(p.at), ref: refOf(p) };
+  if (o.extStatus && COLLECTED_RE.test(o.extStatus)) return { step: 'collected', at: null, ref: null };
+  return { step: 'waiting', at: null, ref: null };
 }
 
 export async function getOrder(ctx: Ctx, id: number, db: Db = ctx.db): Promise<Order> {
@@ -1464,7 +1486,10 @@ export const ordersProcs = {
     return { ...p, rows: await withClientScores(ctx, p.rows) };
   }),
   'orders.counts': proc(null, z.object({}), (ctx) => orderCounts(ctx)),
-  'orders.get': proc(null, z.object({ id }), async (ctx, { id }) => (await withClientScores(ctx, [await getOrder(ctx, id)]))[0]),
+  'orders.get': proc(null, z.object({ id }), async (ctx, { id }) => {
+    const o = (await withClientScores(ctx, [await getOrder(ctx, id)]))[0];
+    return { ...o, pay: await payOf(ctx.db, o) };
+  }),
   'orders.events': proc(null, z.object({ id }), async (ctx, { id }) => {
     const o = await getOrder(ctx, id);
     let rows = await ctx.db.query(

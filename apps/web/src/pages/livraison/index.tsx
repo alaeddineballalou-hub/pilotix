@@ -11,7 +11,7 @@ import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { LivreursCash } from '../caisse/LivreursCash';
 import type { PageProps } from '../registry';
-import { Company, CompanyDraft, CompanyForm, FeesModal, PreviewModal, StatusesModal, StopdesksModal, ZrModal, LiveModal } from './forms';
+import { AlertsModal, Company, CompanyDraft, CompanyForm, FeesModal, PreviewModal, StatusesModal, StopdesksModal, ZrModal, LiveModal } from './forms';
 import { printRouteSheet } from './print';
 import { useIsPhone } from '../../lib/useMedia';
 import { PhoneLivraison } from './Phone';
@@ -22,7 +22,7 @@ import { Card as CarrierCard, cardSub, cardTitle, companyCount, countOf, draftOf
 import { CompanyLogo, CourierLogo } from './CourierLogo';
 import { courierCardOf } from '@pilotix/shared';
 
-type Dialog = { kind: 'form'; draft: CompanyDraft; keysSet?: string[] } | { kind: 'fees' | 'desks' | 'statuses' | 'preview' | 'zr' | 'live'; company: Company } | null;
+type Dialog = { kind: 'form'; draft: CompanyDraft; keysSet?: string[] } | { kind: 'fees' | 'desks' | 'statuses' | 'alerts' | 'preview' | 'zr' | 'live'; company: Company } | null;
 
 export function Livraison(p: PageProps) {
   const { session } = useSession();
@@ -56,6 +56,7 @@ function LivraisonAdmin({ sub }: PageProps) {
       {dialog?.kind === 'desks' && <StopdesksModal company={dialog.company} onClose={close} />}
       {dialog?.kind === 'statuses' && <StatusesModal company={dialog.company} onClose={close} />}
       {dialog?.kind === 'preview' && <PreviewModal company={dialog.company} onClose={close} />}
+      {dialog?.kind === 'alerts' && <AlertsModal company={dialog.company} onClose={close} />}
       {dialog?.kind === 'zr' && <ZrModal company={dialog.company} onClose={close} />}
       {dialog?.kind === 'live' && <LiveModal company={dialog.company} onClose={close} />}
     </>
@@ -190,7 +191,7 @@ function CompaniesCard({
   onlyApi?: boolean;
   title?: string;
   onEdit: (c: Company) => void;
-  onOpen: (k: 'fees' | 'desks' | 'statuses' | 'preview' | 'zr' | 'live', c: Company) => void;
+  onOpen: (k: 'fees' | 'desks' | 'statuses' | 'alerts' | 'preview' | 'zr' | 'live', c: Company) => void;
 }) {
   const { t } = useTranslation();
   const test = useAction('delivery.test', { silent: true, onDone: (r) => toast(r.message, r.ok ? 'ok' : 'bad', 6000) });
@@ -261,9 +262,12 @@ function CompaniesCard({
                     <button className="btn small" onClick={() => onOpen('fees', c)}>
                       {t('livraison.act.fees')}
                     </button>
-                    <button className="btn small" onClick={() => sheet(c)}>
-                      {t('livraison.act.sheet')}
-                    </button>
+                    {/* API Integration: no route sheet nor send preview (the company has the parcels by its API) */}
+                    {!withKind && (
+                      <button className="btn small" onClick={() => sheet(c)}>
+                        {t('livraison.act.sheet')}
+                      </button>
+                    )}
                     {api && (
                       <button className="btn small" onClick={() => onOpen('desks', c)}>
                         {t('livraison.act.desks')}
@@ -275,11 +279,16 @@ function CompaniesCard({
                       </button>
                     )}
                     {api && (
+                      <button className="btn small" onClick={() => onOpen('alerts', c)}>
+                        {t('livraison.act.alerts')}
+                      </button>
+                    )}
+                    {api && (
                       <button className="btn small" disabled={test.isPending} onClick={() => test.mutate({ companyId: c.id })}>
                         {t('livraison.act.test')}
                       </button>
                     )}
-                    {api && (
+                    {api && !withKind && (
                       <button className="btn small" onClick={() => onOpen('preview', c)}>
                         {t('livraison.act.preview')}
                       </button>

@@ -58,3 +58,7 @@
 .ad-chip span { overflow: hidden; text-overflow: ellipsis; }
 .ad-v { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; word-break: break-all; }
 .ad-copy { width: 28px; height: 28px; }
+
+/* the order card › Livraison › Paiement: the step, then when and which payment */
+.px-pay { display: inline-flex; align-items: center; gap: 4px 8px; flex-wrap: wrap; }
+.px-pay small { font-size: 12px; }
