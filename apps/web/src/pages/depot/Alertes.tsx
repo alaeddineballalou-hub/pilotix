@@ -150,7 +150,7 @@ export function Alertes() {
               </div>
             ))}
           </div>
-        )
+        )}
         <p className="pd-note">{t('produits.alerts.help')}</p>
       </section>
       {chosen.length > 0 && (
