@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { da, dateTime, n } from '../../lib/format';
 import { featureIsOn, pageIsOn } from '../../lib/features';
 import { openOrder } from '../../lib/modals';
-import { useRpc } from '../../lib/query';
+import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { Empty, ErrorBox, Icon, Kpi, Kpis, Loading, Pager } from '../../ui/kit';
 import { Filters, SearchBox, SectionHeader } from '../ai/agent';
@@ -63,11 +63,14 @@ function StockTab() {
   const [f, setF] = useState<StockFilter>('all');
   const [wh, setWh] = useState('');
   const [dlg, setDlg] = useState<Dialog>(null);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const availability = useAction('catalog.setAvailability', { success: 'Disponibilité mise à jour' });
   const st = useRpc('catalog.stock', { withHidden: true });
   const inDepot = (st.data ?? []).filter((r) => !wh || r.warehouseId === Number(wh));
   const found = inDepot.filter((r) => !q.trim() || matches(q, nameOf(r), r.sku));
   const test: Record<StockFilter, (r: StockRowT) => boolean> = { all: isListed, low: isLow, out: isOut, hidden: isHidden };
   const list = found.filter(test[f]);
+  const groups = [...new Map(list.map((r) => [r.productId, r.productName])).entries()].map(([productId, productName]) => ({ productId, productName, rows: list.filter((r) => r.productId === productId) }));
   const sum = (fn: (r: StockRowT) => number) => inDepot.reduce((s, r) => s + fn(r), 0);
   const value = sum((r) => Math.max(0, r.qty) * r.cost);
   const pieces = sum((r) => Math.max(0, r.qty));
@@ -114,7 +117,18 @@ function StockTab() {
               <span />
             </div>
             <div className="pd-rows">
-              {list.map((r) => (
+              {groups.map((group) => (
+                <div key={group.productId}>
+                  <div className="pd-row pd-stock" style={{ alignItems: 'center' }}>
+                    <button type="button" className="btn small ghost" aria-expanded={expanded.has(group.productId)} onClick={() => setExpanded((old) => { const next = new Set(old); next.has(group.productId) ? next.delete(group.productId) : next.add(group.productId); return next; })}>
+                      <Icon name={expanded.has(group.productId) ? 'chevron-down' : 'chevron-right'} /> {group.productName} ({group.rows.length})
+                    </button>
+                    <span className="num">{n(group.rows.reduce((v, r) => v + r.qty, 0))} in stock</span>
+                    <span className="num">{n(group.rows.reduce((v, r) => v + r.reserved, 0))} reserved</span>
+                    <span className="num">{n(group.rows.reduce((v, r) => v + r.available, 0))} available</span>
+                    <button type="button" className="btn small" disabled={availability.isPending} onClick={() => availability.mutate({ productId: group.productId, active: !group.rows[0].productActive })}>{group.rows[0].productActive ? 'Turn product OFF' : 'Turn product ON'}</button>
+                  </div>
+                  {expanded.has(group.productId) && group.rows.map((r) => (
                 <div key={`${r.variantId}-${r.warehouseId}`} className={`pd-row pd-stock ${many ? 'many' : ''} ${isHidden(r) ? 'dim' : ''}`}>
                   <span className="pd-name">
                     <b>{nameOf(r)}</b>
@@ -139,6 +153,7 @@ function StockTab() {
                     <span className="ltr">{da(r.cost)}</span>
                   </span>
                   <span className="pd-acts">
+                    <button type="button" className="btn small ghost" disabled={availability.isPending} onClick={() => availability.mutate({ variantId: r.variantId, active: !r.variantActive })}>{r.variantActive ? 'Turn OFF' : 'Turn ON'}</button>
                     <button className="btn small" onClick={() => setDlg({ kind: 'entry', row: r })}>
                       <Icon name="plus" />
                       {t('produits.stock.entry')}
@@ -154,6 +169,8 @@ function StockTab() {
                       ]}
                     />
                   </span>
+                </div>
+                  ))}
                 </div>
               ))}
             </div>
