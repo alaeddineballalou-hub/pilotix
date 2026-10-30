@@ -307,7 +307,20 @@ export async function stockMove(ctx: Ctx, i: z.infer<typeof MoveInput>) {
   if (i.kind !== 'count' && i.qty < 1) throw bad('Quantité invalide');
   const r = await ctx.db.tx(async (tx) => {
     await ensureVariantAndDepot(tx, i.variantId, i.warehouseId);
-    const cur = await currentQty(tx, i.variantId, i.warehouseId);
+    // Lock even when this variant has no stock row yet. This serializes concurrent
+    // counts/losses/entries and prevents two losses from both reading the same balance.
+    await tx.query(
+      `INSERT INTO stock (variant_id, warehouse_id, qty) VALUES ($1, $2, 0)
+       ON CONFLICT (variant_id, warehouse_id) DO NOTHING`,
+      [i.variantId, i.warehouseId],
+    );
+    const locked = (await tx.query(
+      'SELECT qty FROM stock WHERE variant_id = $1 AND warehouse_id = $2 FOR UPDATE',
+      [i.variantId, i.warehouseId],
+    ))[0];
+    const cur = num(locked.qty);
+    if (i.kind === 'loss' && i.qty > cur)
+      throw bad(`Stock insuffisant : ${cur} disponible(s), ${i.qty} demandé(s)`);
     const delta = i.kind === 'entry' ? i.qty : i.kind === 'loss' ? -i.qty : i.qty - cur;
     let note = i.note || null;
     if (i.kind === 'entry' && i.unitCost != null) {

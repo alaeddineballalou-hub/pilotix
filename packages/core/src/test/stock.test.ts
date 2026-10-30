@@ -187,3 +187,44 @@ test('alerts: out of stock first, under the alert level next, with the last purc
   assert.equal(((await call('orders.counts', depot, {})) as any).lowStock, all.length);
   await call('catalog.setAlert', depot, { variantId: y.vid, warehouseId: wid, alertQty: 0 });
 });
+
+
+test('manual stock adjustments: reject oversize losses without a movement and preserve balances', async () => {
+  const depot = await as(EMAILS.depot);
+  const wid = await mainDepot();
+  const [v] = await someVariants(1);
+  const beforeQty = await qty(v.vid, wid);
+  const beforeMovements = Number((await db.query(
+    "SELECT count(*) AS n FROM stock_movements WHERE variant_id=$1 AND warehouse_id=$2 AND reason='loss'",
+    [v.vid, wid],
+  ))[0].n);
+  await assert.rejects(
+    call('catalog.move', depot, { variantId: v.vid, warehouseId: wid, kind: 'loss', qty: beforeQty + 1, note: 'Too many damaged' }),
+    /Stock insuffisant/,
+  );
+  assert.equal(await qty(v.vid, wid), beforeQty, 'no negative stock');
+  const afterMovements = Number((await db.query(
+    "SELECT count(*) AS n FROM stock_movements WHERE variant_id=$1 AND warehouse_id=$2 AND reason='loss'",
+    [v.vid, wid],
+  ))[0].n);
+  assert.equal(afterMovements, beforeMovements, 'rejected movement has no audit entry');
+  if (beforeQty >= 1) {
+    const result: any = await call('catalog.move', depot, { variantId: v.vid, warehouseId: wid, kind: 'loss', qty: 1, note: 'Damaged piece' });
+    assert.equal(result.qty, beforeQty - 1);
+    assert.equal(await qty(v.vid, wid), beforeQty - 1);
+  }
+});
+
+test('concurrent manual losses cannot both consume the same last unit', async () => {
+  const depot = await as(EMAILS.depot);
+  const wid = await mainDepot();
+  const [v] = await someVariants(1);
+  await call('catalog.move', depot, { variantId: v.vid, warehouseId: wid, kind: 'count', qty: 1, note: 'Concurrency test setup' });
+  const requests = await Promise.allSettled([
+    call('catalog.move', depot, { variantId: v.vid, warehouseId: wid, kind: 'loss', qty: 1 }),
+    call('catalog.move', depot, { variantId: v.vid, warehouseId: wid, kind: 'loss', qty: 1 }),
+  ]);
+  assert.equal(requests.filter((r) => r.status === 'fulfilled').length, 1);
+  assert.equal(requests.filter((r) => r.status === 'rejected').length, 1);
+  assert.equal(await qty(v.vid, wid), 0);
+});
