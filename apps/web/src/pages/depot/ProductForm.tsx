@@ -418,8 +418,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
           </div>
         </section>
 
-        <details className="pf-sec pf-more" open={services.length > 0 || (!!p && (packs.length > 0 || hasParts || linked.size > 0))}>
-          <summary>{t('produits.form.more')}</summary>
+        <section className="pf-sec">
         <h3>Additional paid services</h3>
         <p className="muted small">Optional add-ons such as Montage are offered in new orders as linked services. They have a selling price and a service cost and do not consume physical stock.</p>
         <div className="items-ed">
@@ -433,6 +432,10 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
           ))}
           <button type="button" className="btn small" onClick={() => setServices((old) => [...old, { name: '', price: '', cost: '' }])}>+ Add paid service</button>
         </div>
+        </section>
+
+        <details className="pf-sec pf-more" open={services.length > 0 || (!!p && (packs.length > 0 || hasParts || linked.size > 0))}>
+          <summary>{t('produits.form.more')}</summary>
         <h3>{t('produits.form.parts')}</h3>
         <Field label={t('produits.form.hasParts')}>
           <select value={hasParts ? 'yes' : 'no'} onChange={(e) => setHasParts(e.target.value === 'yes')}>
