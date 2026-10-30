@@ -778,7 +778,6 @@ export function AgencySettings(_: PageProps) {
   const kind = usePartnerKind();
   const q = useHome();
   const [p, setP] = useState<AgencyPrices | null>(null);
-  const save = useAction('agency.prices', { success: t('agency.pricesSaved') });
   useEffect(() => {
     if (q.data && p === null) setP(q.data.agency.prices ?? NO_AGENCY_PRICES);
   }, [q.data, p]);
