@@ -59,7 +59,9 @@ export interface CatalogProduct {
   /** Taille, Couleur, Genre…: the options the variants are made from (empty: variants typed one by one) */
   options: ProductOption[];
   variants: CatalogVariant[];
+  services: ProductService[];
 }
+export interface ProductService { id: number; name: string; price: number; cost: number; }
 export interface ProductOption {
   name: string;
   values: string[];
@@ -147,6 +149,7 @@ function toProduct(p: any, vars: any[]): CatalogProduct {
     alertQty: num(p.alert_qty),
     defaultCompanyId: numOrNull(p.default_company_id),
     options: j(p.options),
+    services: j(p.services),
     variants: vars.map((v) => ({ id: num(v.id), productId: num(v.product_id), title: v.title, sku: v.sku, price: numOrNull(v.price), cost: numOrNull(v.cost), maxDiscount: numOrNull(v.max_discount), weightKg: numOrNull(v.weight_kg), alertQty: numOrNull(v.alert_qty), feeGrid: v.fee_grid ?? null, active: !!v.active })),
   };
 }
@@ -368,6 +371,8 @@ export const ProductInput = z.object({
   packs: z.array(PackInput).max(20).default([]),
   linked: z.array(id).max(50).default([]),
   parts: z.array(z.object({ name: z.string().trim().min(1).max(120), max: z.number().int().min(1).max(999).nullable().optional() })).max(50).default([]),
+  /** Optional paid services such as montage; each becomes a linked stock-free service product. */
+  services: z.array(z.object({ id: id.optional(), name: z.string().trim().min(1).max(120), price: z.number().int().min(0).max(100_000_000), cost: z.number().int().min(0).max(100_000_000) })).max(20).optional(),
   feeGrid: z.string().trim().max(80).nullable().optional(),
   barcode: z.string().trim().max(120).nullable().optional(),
   brand: z.string().trim().max(120).nullable().optional(),
@@ -422,7 +427,7 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
       const dup = (await tx.query('SELECT id FROM products WHERE sku = $1', [sku]))[0];
       if (dup && num(dup.id) !== i.id) throw bad(`Le SKU « ${sku} » est déjà utilisé`);
     } else sku = cur?.sku ?? (await freeSku(tx, 'products', slug(i.name)));
-    const linked = [...new Set(i.linked)].filter((x) => x !== i.id);
+    let linked = [...new Set(i.linked)].filter((x) => x !== i.id);
     if (i.options) {
       const names = i.options.map((o) => o.name.toLowerCase());
       if (new Set(names).size !== names.length) throw bad('Deux options ont le même nom');
@@ -432,6 +437,33 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
       }
     }
     const options = i.options === undefined ? (cur ? (typeof cur.options === 'string' ? JSON.parse(cur.options) : cur.options ?? []) : []) : i.options;
+    // Paid add-ons are real service products: selecting one in an order adds a priced,
+    // stock-free order line with its own purchase cost and retained order history.
+    const previousServices: ProductService[] = cur ? (typeof cur.services === 'string' ? JSON.parse(cur.services) : cur.services ?? []) : [];
+    let services: ProductService[] = previousServices;
+    if (i.services !== undefined) {
+      if (new Set(i.services.map((s) => s.name.trim().toLowerCase())).size !== i.services.length) throw bad('Deux services portent le même nom');
+      services = [];
+      const oldIds = new Set(previousServices.map((s) => Number(s.id)));
+      for (const service of i.services) {
+        if (service.id && !oldIds.has(service.id)) throw bad('Service non lié à ce produit');
+        const serviceName = `${service.name.trim()} — ${i.name}`;
+        let serviceId = service.id;
+        if (serviceId) {
+          await tx.query('UPDATE products SET name=$2, price=$3, cost=$4, active=$5 WHERE id=$1 AND is_service', [serviceId, serviceName, service.price, service.cost, i.active]);
+        } else {
+          const serviceSku = await freeSku(tx, 'products', `${sku}-SERVICE-${slug(service.name)}`);
+          const created = (await tx.query('INSERT INTO products (name, sku, price, cost, is_service, active, fixed_price, max_discount) VALUES ($1,$2,$3,$4,true,$5,true,0) RETURNING id', [serviceName, serviceSku, service.price, service.cost, i.active]))[0];
+          serviceId = num(created.id);
+          await tx.query("INSERT INTO product_variants (product_id, title, sku, active) VALUES ($1, '', $2, true)", [serviceId, await freeSku(tx, 'product_variants', `${serviceSku}-1`)]);
+        }
+        services.push({ id: serviceId!, name: service.name.trim(), price: service.price, cost: service.cost });
+      }
+      const live = new Set(services.map((s) => s.id));
+      for (const old of previousServices) if (!live.has(Number(old.id))) await tx.query('UPDATE products SET active=false WHERE id=$1 AND is_service', [old.id]);
+      linked = [...new Set([...linked.filter((lid) => !oldIds.has(lid)), ...services.map((s) => s.id)])];
+    }
+
     // fields not sent keep their value (older callers send only the first ones)
     const keep = <T,>(v: T | undefined, col: string): T | null => (v === undefined ? (cur?.[col] ?? null) : (v as any) === '' ? null : v);
     const extra = [keep(i.barcode, 'barcode'), keep(i.brand, 'brand'), keep(i.externalId, 'external_id'), keep(i.pageUrl, 'page_url'), keep(i.sellerId, 'seller_id'), keep(i.description, 'description'), i.alertQty ?? num(cur?.alert_qty), keep(i.defaultCompanyId, 'default_company_id')];
@@ -441,17 +473,17 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
       await logProductChange(tx, i.id!, ctx.session.profile.id, { price: cur.price, cost: cur.cost, max_discount: cur.max_discount }, { price: i.price, cost: i.cost, max_discount: maxDiscount }, 'Fiche produit');
       await tx.query(
         `UPDATE products SET name=$2, sku=$3, price=$4, cost=$5, weight_kg=$6, photo=$7, is_service=$8, active=$9, fixed_price=$10, max_discount=$11, packs=$12, linked=$13, parts=$14, fee_grid=$15,
-         barcode=$16, brand=$17, external_id=$18, page_url=$19, seller_id=$20, description=$21, alert_qty=$22, default_company_id=$23, options=$24 WHERE id=$1`,
-        [i.id, ...vals, JSON.stringify(options)],
+         barcode=$16, brand=$17, external_id=$18, page_url=$19, seller_id=$20, description=$21, alert_qty=$22, default_company_id=$23, options=$24, services=$25 WHERE id=$1`,
+        [i.id, ...vals, JSON.stringify(options), JSON.stringify(services)],
       );
       productId = i.id!;
     } else {
       productId = num(
         (await tx.query(
           `INSERT INTO products (name, sku, price, cost, weight_kg, photo, is_service, active, fixed_price, max_discount, packs, linked, parts, fee_grid,
-                                 barcode, brand, external_id, page_url, seller_id, description, alert_qty, default_company_id, options)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) RETURNING id`,
-          [...vals, JSON.stringify(options)],
+                                 barcode, brand, external_id, page_url, seller_id, description, alert_qty, default_company_id, options, services)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24) RETURNING id`,
+          [...vals, JSON.stringify(options), JSON.stringify(services)],
         ))[0].id,
       );
     }
