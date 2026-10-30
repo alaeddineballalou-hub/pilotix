@@ -10,7 +10,8 @@ work never starts again from zero when a chat stops (usage limit, closed chat…
 
 1. **Live pages.** The app has no copy of the screens: it opens `https://pilotix.online` (the same
    server, database and code as the website). A website change shows in the app the next time it opens,
-   on Android and iPhone, with nothing to download.
+   on Android and iPhone, with nothing to download. When Cloudflare's road is cut, it opens the backup
+   door `https://direct.pilotix.online` by itself (same app and server, without Cloudflare).
 2. **Phone powers inside the app:** calls, notifications, camera scanner, icon. The website "asks" the
    app to use them.
 3. **Auto-check for app updates:** only needed when a new phone power is added (rare). The app asks the
@@ -33,11 +34,11 @@ work never starts again from zero when a chat stops (usage limit, closed chat…
 |---|------|-------|
 | 1 | Base app (`mobile/`, Capacitor 8, Android project) | ✅ done 29 Oct 2026 |
 | 2 | Icon (winking face) and navy start screen | ✅ done 29 Oct 2026 |
-| 3 | Live pages (opens pilotix.online) + "no internet" screen | ✅ done 29 Oct 2026 |
+| 3 | Live pages (opens pilotix.online) + "no internet" screen | ✅ done 29 Oct 2026, doors 30 Oct |
 | 4 | GitHub builds the Android test app (`.github/workflows/mobile.yml`) | ✅ done 29 Oct 2026 (build ok, APK 4.2 MB, signed) |
-| 5 | Owner installs the test app on his phone and checks it | 🔨 waiting for the owner's test |
+| 5 | Owner installs the test app on his phone and checks it | 🔨 1st test 30 Oct: pilotix.online unreachable from his Wi‑Fi → app now picks a door; 2nd test waiting |
 | 6 | One-tap calls (today a `tel:` link opens the phone's dialer with the number) | ⏭️ |
-| 7 | Notifications (needs the owner's Firebase project → `google-services.json`) | ⏭️ |
+| 7 | Notifications: the app asks for permission at start ✅ (30 Oct); sending them needs the owner's Firebase project → `google-services.json` | 🔨 |
 | 8 | Scanner: test the website's camera scanner in the app (camera permission is in) | ⏭️ |
 | 9 | Auto-update check (server says the minimum app version) | ⏭️ |
 | 10 | iPhone (`npx cap add ios`, Mac build on GitHub, Apple account) | ⏭️ |
@@ -47,18 +48,29 @@ work never starts again from zero when a chat stops (usage limit, closed chat…
 - App folder: `mobile/` (its own `package.json`, not part of the website's npm workspaces).
   Capacitor **8.6.0** (Android minSdk 24, target/compile SDK 36). Plugins: `@capacitor/app`,
   `@capacitor/splash-screen`.
-- `mobile/capacitor.config.json`: `server.url = https://pilotix.online`, `server.errorPath = offline.html`,
-  `appendUserAgent = PilotixApp` (the website/server can tell it runs inside the app),
+- `mobile/capacitor.config.json`: no `server.url`. The app starts on its own page `www/index.html`, and
+  `www/door.js` asks both doors at once (5 s max): `https://pilotix.online` wins when it answers, else
+  `https://direct.pilotix.online` (the backup door). `server.allowNavigation` = both hosts, so they stay
+  inside the app and get Capacitor's bridge (Android lists allowNavigation hosts in its local server, so
+  their pages are fetched with the WebView's cookies and get the bridge). `server.errorPath = offline.html`
+  (same `door.js`: tries the other door first; « server » message + 15 s wait when pages fail twice in a
+  minute). `appendUserAgent = PilotixApp` (the website/server can tell it runs inside the app),
   navy `#1B2A47` background, start screen 1.5 s, `SystemBars` insets `css` + style `DEFAULT`
   (the website already pads with `env(safe-area-inset-*)` and has `viewport-fit=cover`).
 - App ID: **`com.pilotix.app`** (it was already in the old setup). ⚠️ It can never change once the app
   is on Google Play: confirm it with the owner before the first Play upload.
-- `mobile/www/offline.html`: the "no internet" screen (FR / AR / EN from the phone's language). It tries
-  again by itself, and says "Pilotix revient dans un instant" when the internet works but the server
-  doesn't answer (deploy, Cloudflare check…).
+- Screens of `door.js` (FR / AR / EN from the phone's language): « Connexion à Pilotix… » (spinner),
+  « Pas de connexion internet » (the phone's internet is down: checked with Google's
+  `connectivitycheck.gstatic.com/generate_204`), « Pilotix ne répond pas sur cette connexion » (internet
+  works but no door answers: try 4G), « Pilotix revient dans un instant » (the server itself fails).
+  It keeps trying by itself. The bottom line shows the build: « Pilotix app · test N (sha) » (`www/build.js`,
+  written by mobile.yml).
 - Icons and start screens: `python3 scripts/make-icons.py` (from `mobile/`) makes them from
   `mobile/resources/icon-only.png` and `logo.png`. Run it again if the icon changes.
-- Android permissions: `INTERNET`, `CAMERA` (camera optional).
+- Android permissions: `INTERNET`, `CAMERA` (camera optional), `POST_NOTIFICATIONS` (asked when the app
+  opens, Android 13+: `MainActivity.java`; Android stops asking after two « Don't allow »).
+- The backup door needs the DNS record `direct` (A, DNS only / grey cloud) in Cloudflare: the owner's
+  step from the Pilot AI chat (30 Oct). Without it, the app just uses the main door.
 - How the live pages work on Android: Capacitor fetches the page's HTML itself (with the WebView's
   cookies) and adds its bridge, so plugins work on pilotix.online. Other links (WhatsApp, other sites)
   open outside the app. `tel:` links open the dialer.
@@ -73,6 +85,10 @@ work never starts again from zero when a chat stops (usage limit, closed chat…
   Without it, uninstall the old test app before installing a new one.
 
 ## To test on the phone (things a website-in-an-app can get wrong)
+
+- **Google sign-in can't work inside the app** (Google blocks sign-in in apps' web views, and
+  accounts.google.com opens outside the app): sign in with e-mail and password. Later: hide the Google
+  button when the user agent has `PilotixApp`, or add a native Google sign-in.
 
 - Login stays after closing and opening the app.
 - Camera scanner (Dépôt / Suivi): the phone asks for the camera once.
@@ -95,6 +111,10 @@ work never starts again from zero when a chat stops (usage limit, closed chat…
 
 ## Log
 
+- 30 Oct 2026: owner's 1st test (video): the app opened, but pilotix.online didn't answer from his Wi‑Fi
+  (his computer had the same timeout; his speed test was 140 Mbps) and the app wrongly said « No internet ».
+  Fixed: start page + doors + true messages + build number. Owner asked: « the app should ask for
+  permission for notification » → done at app start.
 - 29 Oct 2026: started (owner said "start now" instead of Monday). Steps 1–4 done: the app, icon,
   start screen, no-internet screen, GitHub build + download link. Couldn't run it on a phone from the
   cloud (no Android emulator there): the owner's phone test is next.

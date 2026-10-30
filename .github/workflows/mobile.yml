@@ -43,6 +43,8 @@ jobs:
             mobile/android/app/*.gradle*
             mobile/android/gradle/wrapper/gradle-wrapper.properties
       - run: npm ci --no-audit --no-fund
+      # the small « Pilotix app · test N (abc1234) » line at the bottom of the app's start and error pages
+      - run: echo "window.PILOTIX_BUILD = 'test ${GITHUB_RUN_NUMBER} (${GITHUB_SHA::7})';" > www/build.js
       - run: npx cap sync android
       # The same test key on every build lets a new test app install over the old one.
       # It is used only when the secret ANDROID_TEST_KEYSTORE_BASE64 exists (Settings › Secrets and variables › Actions).

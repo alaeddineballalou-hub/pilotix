@@ -41,4 +41,6 @@
     <!-- camera: the website's parcel scanner (Dépôt, Suivi) uses it inside the app -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <!-- notifications (new orders, dépôt alerts…): Android 13+ asks the person when the app opens -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

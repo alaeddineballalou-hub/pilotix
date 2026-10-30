@@ -5,7 +5,10 @@
   "backgroundColor": "#1B2A47",
   "appendUserAgent": "PilotixApp",
   "server": {
-    "url": "https://pilotix.online",
+    "allowNavigation": [
+      "pilotix.online",
+      "direct.pilotix.online"
+    ],
     "errorPath": "offline.html"
   },
   "android": {
