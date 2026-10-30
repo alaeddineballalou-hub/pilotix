@@ -881,7 +881,7 @@
     }
   },
   "pilot": {
-    "sub": "Dellal apprend chaque nuit des conversations des boutiques qui les partagent (sans noms, numéros ni adresses). Votre équipe valide chaque leçon le matin ; un nouveau livre n'est gardé que s'il fait livrer au moins autant de colis.",
+    "sub": "Les agents IA des boutiques, tous sur la clé IA de Pilotix (une boutique n’apporte jamais la sienne) : Dellal vend dans les messages, CM AI répond aux commentaires, Spy AI surveille les concurrents.",
     "settings": "Réglages",
     "on": "Actif",
     "off": "Arrêté",
@@ -997,7 +997,10 @@
       "duplicate": "Doublon",
       "no_stock": "Rupture",
       "lost": "Perdu",
-      "other": "Autre"
+      "other": "Autre",
+      "handoff_unanswered": "Passée à l’équipe, sans réponse",
+      "wrong_number": "Mauvais numéro",
+      "fake": "Fausse commande"
     },
     "legend": "C = le client · D = Dellal · P = une personne de l’équipe",
     "shops": "Boutiques qui apprennent à Dellal",
@@ -1028,7 +1031,213 @@
       "night": "Apprentissage de nuit (Pilot AI, pour toutes les boutiques) : {{usd}}",
       "since": "Compté depuis le {{date}}.",
       "notYet": "Le compteur démarre à la première réponse de l'IA.",
-      "csv": "Télécharger (CSV)"
+      "csv": "Télécharger (CSV)",
+      "managers": "Le coût de l’IA par boutique est visible par les responsables."
+    },
+    "tabs": {
+      "dellal": "Dellal AI",
+      "cm": "CM AI",
+      "spy": "Spy AI",
+      "settings": "Réglages & coûts"
+    },
+    "board": {
+      "title": "Les ventes de Dellal",
+      "help": "Les conversations commencées dans la période (heure d’Algérie) et ce qu’elles sont devenues. Conversion : sur 100 conversations, combien ont donné une commande. Ventes réelles : combien ont donné un colis livré et payé — la seule vraie victoire, celle dont Dellal apprend ; elle se compte quand les colis ont eu {{days}} jours pour arriver. Les conversations de test ne comptent pas.",
+      "days": "{{days}} jours",
+      "shop": "Boutique",
+      "allShops": "Toutes les boutiques ({{n}})",
+      "product": "Produit",
+      "allProducts": "Tous les produits",
+      "productNeedsShop": "Produit : d’abord une boutique",
+      "loading": "Mise à jour…",
+      "everyShop": "toutes les boutiques",
+      "skipped": "Ces boutiques n’ont pas pu être lues, elles ne comptent pas ici : {{names}}.",
+      "none": "Aucune conversation sur les {{days}} derniers jours ({{scope}}).",
+      "find": "Sur les {{days}} derniers jours ({{scope}}), {{rate}} des conversations de Dellal ont donné une commande :",
+      "findVs": "par rapport aux {{days}} jours d’avant ({{rate}}).",
+      "findNoPrev": "pas de conversations les {{days}} jours d’avant pour comparer.",
+      "dir": {
+        "up": "en hausse de {{pts}} pts",
+        "down": "en baisse de {{pts}} pts",
+        "flat": "stable"
+      },
+      "pts": "pts",
+      "vsPrev": "par rapport à la période d’avant (même durée)",
+      "k": {
+        "chats": "Conversations",
+        "conversion": "Conversion",
+        "conversionHelp": "Sur 100 conversations, combien ont donné une commande (un doublon ne compte pas).",
+        "ofChats": "{{n}} sur {{of}}",
+        "realSales": "Ventes réelles",
+        "realSalesHelp": "Sur 100 conversations, combien ont donné un colis livré et payé. Seules les conversations de plus de {{days}} jours comptent : les plus récentes attendent encore leurs colis.",
+        "tooEarly": "trop tôt : les colis des {{days}} derniers jours sont en route",
+        "deliveredRate": "Livrées",
+        "deliveredRateHelp": "Des commandes terminées, la part livrée (les autres : refusées, annulées, fausses ou mauvais numéro).",
+        "ended": "{{ok}} livrées, {{lost}} perdues",
+        "revenue": "CA livré",
+        "pending_one": "{{n}} commande encore en cours",
+        "pending_other": "{{n}} commandes encore en cours",
+        "basket": "Panier moyen",
+        "handed": "Passées à l’équipe",
+        "handedHelp": "La part des conversations que Dellal a passées à une personne (ou qu’une personne a reprises). Moins, c’est un Dellal plus autonome.",
+        "handedN_one": "{{n}} conversation",
+        "handedN_other": "{{n}} conversations",
+        "cost": "Coût IA par commande",
+        "costHelp": "Ce que la clé de Pilotix a payé pour Dellal dans la période, divisé par les commandes. Visible par les responsables seulement.",
+        "costOf": "{{usd}} en tout",
+        "costTotal": "en tout (un produit seul ne peut pas être séparé)",
+        "costAll": "Coût IA",
+        "calls_one": "{{n}} réponse de l’IA",
+        "calls_other": "{{n}} réponses de l’IA"
+      },
+      "open": "colis encore en route ({{days}} derniers jours)",
+      "avg7": "chaque point : les 7 jours jusqu’à ce jour",
+      "perDay": "un point par jour",
+      "perWeek": "un point par semaine",
+      "week": "Semaine du {{day}}",
+      "onRoad": "colis en route",
+      "tip": "{{chats}} conversations · {{orders}} avec commande",
+      "noLine": "Pas encore assez de conversations pour tracer la courbe.",
+      "chartLabel": "Courbe de la conversion ({{conv}}) et des ventes réelles ({{real}}) dans la période",
+      "by": {
+        "shop": "Par boutique",
+        "product": "Par produit",
+        "channel": "Par canal"
+      },
+      "col": {
+        "shop": "Boutique",
+        "product": "Produit",
+        "channel": "Canal",
+        "orders": "Commandes"
+      },
+      "go": {
+        "shop": "Cliquez une boutique pour voir ses produits.",
+        "product": "Cliquez un produit pour voir ses canaux (WhatsApp, Messenger…)."
+      },
+      "ch": {
+        "whatsapp": "WhatsApp",
+        "messenger": "Messenger",
+        "instagram": "Instagram",
+        "tiktok": "TikTok"
+      }
+    },
+    "why": {
+      "title": "Où Dellal peut progresser",
+      "help": "Les conversations terminées sans vente que Pilot AI a relues la nuit (seulement les boutiques qui enseignent Dellal, sans noms ni numéros), par raison. La première raison est la meilleure piste pour la prochaine leçon.",
+      "none": "Pas encore de conversations relues sur les {{days}} derniers jours. Pilot AI relit chaque nuit les conversations terminées des boutiques qui enseignent Dellal.",
+      "lead_one": "{{n}} conversation terminée sans vente, relue par Pilot AI sur les {{days}} derniers jours :",
+      "lead_other": "{{n}} conversations terminées sans vente, relues par Pilot AI sur les {{days}} derniers jours :",
+      "tip": {
+        "no_order": "Piste : la plupart partent sans commander. Le coach peut approuver des leçons pour relancer et conclure plus tôt.",
+        "refused": "Piste : des colis refusés. Des leçons pour bien redire le total, la taille et l’adresse avant de commander peuvent aider.",
+        "cancelled": "Piste : des commandes annulées. Des leçons pour bien vérifier la commande avec le client peuvent aider.",
+        "fake": "Piste : de fausses commandes. Des leçons pour repérer poliment les clients pas sérieux peuvent aider.",
+        "other": "Le coach transforme ces raisons en leçons chaque matin."
+      }
+    },
+    "learn": {
+      "title": "Comment Dellal apprend",
+      "help": "Le cycle de Pilot AI, chaque jour. Les chiffres viennent du moteur lui-même : ce dessin dit toujours la vérité.",
+      "lead": "Dellal ne change jamais tout seul. Chaque jour, il vend ; chaque nuit, Pilot AI regarde ce qui a vraiment marché ; chaque matin, une personne décide ; puis les colis livrés jugent.",
+      "day": {
+        "when": "LE JOUR",
+        "what": "Dellal vend",
+        "text": "Il répond aux clients avec sa méthode et le livre de leçons du moment. Chaque conversation garde la version du livre qu’elle a reçue."
+      },
+      "night": {
+        "when": "LA NUIT · 02:30",
+        "what": "Pilot AI relit",
+        "text": "Les conversations terminées, sans noms ni numéros. Un colis livré = une victoire, un colis refusé = une perte. Il écrit des leçons courtes."
+      },
+      "morning": {
+        "when": "LE MATIN",
+        "what": "Le coach décide",
+        "text": "Une personne de l’équipe Pilotix lit chaque leçon avec les conversations derrière elle : approuver, corriger ou refuser."
+      },
+      "test": {
+        "when": "LE TEST",
+        "what": "Les colis jugent",
+        "text": "Le nouveau livre est essayé sur {{share}} % des nouvelles conversations. Après {{days}} jours, il est gardé seulement s’il fait livrer au moins autant."
+      },
+      "again": "Puis ça recommence : chaque nuit, Dellal apprend un peu plus.",
+      "scoreTitle": "La note de chaque conversation",
+      "scoreLead": "Quand une conversation est terminée, Pilot AI lui donne une note selon ce qu’est devenu le colis :",
+      "score": {
+        "delivered": "Livré et payé",
+        "exchanged": "Échangé",
+        "refused": "Refusé à la livraison",
+        "wrong_number": "Mauvais numéro",
+        "cancelled": "Annulé",
+        "no_order": "Pas de commande"
+      },
+      "gold": "Une conversation reprise par une personne de l’équipe puis livrée est un « exemple en or » : elle compte {{gold}} fois.",
+      "rulesTitle": "Les règles, en mots simples",
+      "rule": {
+        "win": "Seul un colis livré et payé est une vraie victoire : une commande refusée coûte de l’argent à la boutique.",
+        "safe": "Une leçon est courte, sans chiffres, prix, remises ni promesses : sinon elle est bloquée avant même d’arriver au coach.",
+        "short": "Le livre reste court (environ une page) : les leçons les plus utiles passent en premier. Le coach n’a jamais plus de {{open}} leçons à lire à la fois.",
+        "brain": "À chaque message, Dellal choisit son cerveau : Haiku (rapide et économique) pour les messages simples, Sonnet (plus fort) pour les moments difficiles : prix, confiance, colère, grosse commande, demande d’un humain.",
+        "test": "Le test compare au moins {{min}} conversations de chaque côté, âgées de {{days}} jours (le temps des livraisons), pendant {{max}} jours au plus. Un livre qui fait clairement moins bien est arrêté tout seul.",
+        "budget": "La nuit a un budget : {{usd}} $ au plus (onglet Réglages & coûts)."
+      }
+    },
+    "book": {
+      "title": "Le livre d’instructions de Dellal",
+      "help": "Le fichier est préparé sur le serveur au moment du clic : il contient toujours la dernière version (méthode de vente, règles de darija, livre de leçons en service et livre en test).",
+      "what": "Tout ce que Dellal lit avant de répondre, dans toutes les boutiques : sa méthode de vente, ses règles de darija et le livre de leçons approuvé par le coach.",
+      "since_one": "en service depuis le {{date}} · {{n}} leçon",
+      "since_other": "en service depuis le {{date}} · {{n}} leçons",
+      "base": "Pas encore de livre de leçons : Dellal vend avec sa méthode de base.",
+      "testing": "En test : v{{v}} sur {{share}} % des nouvelles conversations.",
+      "download": "Télécharger (.txt)",
+      "read": "Lire ici",
+      "always": "Chaque téléchargement donne la dernière version : rien à mettre à jour à la main."
+    },
+    "cm": {
+      "title": "CM AI — les commentaires",
+      "help": "Les commentaires laissés sous les publications et les pubs Facebook et Instagram des boutiques, et ce que CM AI en a fait : réponse publique, message privé (qui ouvre une conversation avec Dellal), commentaire caché (numéro de téléphone, insulte) ou passé à l’équipe.",
+      "find": "Sur les {{days}} derniers jours, CM AI a traité {{n}} commentaires : {{answered}} ont reçu une réponse publique, {{privates}} messages privés envoyés, {{hidden}} cachés.",
+      "none": "Aucun commentaire sur les {{days}} derniers jours.",
+      "k": {
+        "comments": "Commentaires",
+        "answered": "Réponse publique",
+        "answeredN": "{{n}} réponses",
+        "privates": "Messages privés",
+        "privatesSub": "envoyés en privé",
+        "leads": "Contacts",
+        "leadsSub": "conversation ou numéro",
+        "leadsHelp": "Les commentaires qui ont donné un contact : un message privé qui ouvre une conversation avec Dellal, ou un numéro laissé (le commentaire est alors caché).",
+        "hidden": "Cachés",
+        "hiddenSub": "numéros, insultes, spam",
+        "handed": "À l’équipe",
+        "team": "{{n}} traités par une personne",
+        "errors": "Erreurs"
+      },
+      "perDay": "Commentaires par jour",
+      "perWeek": "Commentaires par semaine"
+    },
+    "spy": {
+      "title": "Spy AI — les concurrents",
+      "help": "Les produits que les boutiques font surveiller, les pubs des concurrents que Spy AI a trouvées (celles des boutiques elles-mêmes ne comptent pas), lues par l’IA, et les alertes des pages suivies (nouvelle pub, prix changé, pub arrêtée).",
+      "find": "Spy AI surveille {{watched}} produits dans {{shops}} boutique(s) : {{ads}} pubs de concurrents connues, dont {{fresh}} nouvelles sur les {{days}} derniers jours.",
+      "none": "Aucun produit surveillé pour l’instant.",
+      "note": "Nouvelles pubs et alertes : dans la période choisie. Les autres chiffres : aujourd’hui.",
+      "k": {
+        "watched": "Produits surveillés",
+        "watchedSub": "aujourd’hui",
+        "ads": "Pubs concurrentes",
+        "activeN": "{{n}} encore actives",
+        "active": "Actives",
+        "newAds": "Nouvelles pubs",
+        "analysed": "Lues par l’IA",
+        "briefs": "Fiches produit",
+        "briefsSub": "résumés de la concurrence",
+        "followed": "Pages suivies",
+        "alertsN_one": "{{n}} alerte dans la période",
+        "alertsN_other": "{{n}} alertes dans la période",
+        "alerts": "Alertes",
+        "newAdsSub": "sur les {{days}} derniers jours"
+      }
     }
   }
 }

@@ -95,6 +95,18 @@ agent, AI Spy) is counted per shop, day, agent and payer (Pilotix's key or the s
 `platform.ai_usage`. The card shows each month per shop in USD, and in DA at the rate the owner types (1 $ = … DA), with a
 CSV to bill. Code: `packages/core/src/platform/aiusage.ts`, counted in `dellal-server.ts › complete()`.
 
+**The tabs** (control room › Pilot AI): **Dellal AI** — its sales over 7, 30 or 90 days, every shop, one shop or one of
+its products: the chats that started in the period and what became of them (conversion: of 100 chats, how many ended
+with an order; real sales: how many with a parcel delivered and paid, counted once the parcels had 7 days to arrive),
+against the period before, day by day (a 7-day average for 30 days, weeks for 90), per shop › product › channel, and why
+chats ended without a sale (what Pilot AI read at night); how Dellal learns, drawn (day, night, morning, test) with its
+rules in simple words, always the engine's own numbers; its instruction book (method, Darija, the lesson book in service
+and the one in test) put together at each download, so it is always the latest; then last night, the coach and the books.
+**CM AI** (the comments it answered, sent in private, hid or handed to the team), **Spy AI** (products watched, the
+competitors' ads found and read, the alerts), **Réglages & coûts** (the key, the limits, the cost per shop). The AI
+cost is shown to owners and managers only. Code: `packages/core/src/platform/aiboard.ts` (`p.dellal.board`,
+`p.cm.board`, `p.spy.board`, `p.pilot.bookText`), `apps/web/src/pages/platform/PilotBoards.tsx`, `PilotLearn.tsx`.
+
 ### Backup door (direct.pilotix.online)
 
 When Cloudflare's road from a country is cut (the site times out there while the server is fine), the team can use

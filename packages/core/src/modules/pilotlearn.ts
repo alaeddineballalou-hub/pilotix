@@ -31,6 +31,8 @@ export const PILOT = {
 };
 /** Score of a finished chat: delivered and paid is the only real win; a refused parcel costs money. */
 export const SCORE = { delivered: 1, exchanged: 0.5, refused: -0.5, cancelled: -0.15, wrong_number: -0.3 };
+/** a chat a person took over and that ended delivered: a gold example, it counts this many times */
+export const GOLD_WEIGHT = 2.5;
 
 export const PILOT_PLATFORM_SQL = `
 CREATE SCHEMA IF NOT EXISTS platform;
@@ -382,7 +384,7 @@ export function classify(f: Facts): Verdict {
   if (!r.done && f.changedAt !== undefined && f.now - f.changedAt >= PILOT.staleDays * DAY) r = v('stale', r.reason, true, 0, 0);
   if (f.takeover && r.outcome === 'delivered') {
     r.gold = true; // a person took over and the parcel was delivered: a gold example
-    r.weight = 2.5;
+    r.weight = GOLD_WEIGHT;
   }
   return r;
 }

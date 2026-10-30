@@ -46,6 +46,7 @@ import type { Tenancy } from './tenancy';
 import * as pilot from '../modules/pilotlearn';
 import { pilotConfig, pilotToday, savePilotConfig } from './pilotai';
 import { AI_FEATURES, aiBill, aiUsageOfMonth, aiUsageSince, monthOf, saveAiBill } from './aiusage';
+import { cmBoard, dellalBoard, dellalBookText, spyBoard } from './aiboard';
 
 export const STAFF_ROLES = ['owner', 'manager', 'support'] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
@@ -217,6 +218,8 @@ export type OwnerMail =
   | { kind: 'reward'; to: string; name: string; language: string; reward: ReferralReward }
   | { kind: 'answer'; to: string; name: string; language: string; shop: string; subject: string; body: string };
 const Id = z.number().int().positive();
+/** a dashboard of the AI agents: its period and, optionally, one shop */
+const BoardInput = z.object({ days: z.union([z.literal(7), z.literal(30), z.literal(90)]).default(30), shopId: Id.optional() });
 const Features = z.array(z.string().max(60)).max(200);
 
 const SLUG_HELP = 'Nom dans les liens invalide : 2 à 40 lettres minuscules, chiffres et tirets (ex. ma-boutique)';
@@ -1050,7 +1053,9 @@ export const PLATFORM_REGISTRY = {
     const stores = shops
       .filter((s) => s.kind === 'store' && s.status !== 'archived' && s.status !== 'deleted' && !s.demo)
       .map((s) => ({ id: s.id, name: s.name, slug: s.slug, share: config.shops.includes(s.id), cases: per.get(s.id) ?? 0 }));
-    return { config, today, night, candidates, approved, books, sharing: { shops: num(sharing[0]?.shops), cases: num(sharing[0]?.cases) }, shops: stores };
+    // the learning's rules, for the page that explains them in simple words (always the engine's own numbers)
+    const rules = { score: pilot.SCORE, gold: pilot.GOLD_WEIGHT, minPass: pilot.PILOT.minPass, matureDays: pilot.PILOT.matureDays, maxTestDays: pilot.PILOT.maxTestDays, maxOpen: pilot.PILOT.maxOpen };
+    return { config, today, night, candidates, approved, books, sharing: { shops: num(sharing[0]?.shops), cases: num(sharing[0]?.cases) }, shops: stores, rules };
   }),
   'p.pilot.save': pproc(
     MANAGERS,
@@ -1180,6 +1185,20 @@ export const PLATFORM_REGISTRY = {
       nightUsd: num(nights[0]?.usd),
     };
   }),
+  // ---------------------------------------------------------------- Pilot AI › Dellal AI, CM AI, Spy AI: the dashboards
+  /**
+   * Dellal over the last 7, 30 or 90 days, every shop or one shop (and then one of its products): the chats that started
+   * in the period, the share that ended with an order and with a parcel delivered, day by day, against the period before;
+   * each shop / product / channel; why chats ended without a sale (the chats Pilot AI read). The AI cost: managers only.
+   */
+  'p.dellal.board': pproc(ALL, BoardInput.extend({ productId: z.number().int().positive().optional() }), async (ctx, i) =>
+    dellalBoard(ctx.t, { ...i, now: ctx.now(), costs: ctx.staff.role !== 'support' }),
+  ),
+  'p.cm.board': pproc(ALL, BoardInput, async (ctx, i) => cmBoard(ctx.t, { ...i, now: ctx.now(), costs: ctx.staff.role !== 'support' })),
+  'p.spy.board': pproc(ALL, BoardInput, async (ctx, i) => spyBoard(ctx.t, { ...i, now: ctx.now(), costs: ctx.staff.role !== 'support' })),
+  /** Dellal's instruction book as one text file, put together now: a download is always the latest version. */
+  'p.pilot.bookText': pproc(ALL, z.object({}), async (ctx) => dellalBookText(ctx.t, ctx.now())),
+
   /** The owner's billing rate: how many DA for 1 $ (0 = shown in USD only). */
   'p.ai.rate': pproc(MANAGERS, z.object({ rate: z.number().min(0).max(10_000) }), async (ctx, i) => {
     const r = await saveAiBill(ctx.t, { rate: i.rate });
