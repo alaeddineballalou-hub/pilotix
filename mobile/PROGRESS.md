@@ -3,8 +3,8 @@
 This file is the notebook for building the phone app. It is updated after every small step, so the
 work never starts again from zero when a chat stops (usage limit, closed chat…).
 
-**To continue in a new chat, say: "continue Pilotix app".** Claude then reads this file on the branch
-`mobile-app` (or on `main` once the app is pushed) and goes on from the first step that isn't ✅.
+**To continue in a new chat, say: "continue Pilotix app".** Claude then reads this file on `main` and goes
+on from the first step that isn't ✅.
 
 ## How the app works (the plan, 4 parts)
 
@@ -21,9 +21,11 @@ work never starts again from zero when a chat stops (usage limit, closed chat…
 
 ## Rules for this work
 
-- Work on the branch **`mobile-app`**. Save to GitHub often (small commits, every finished piece).
-- Nothing goes to `main` / pilotix.online until the owner says **"push"**. When it goes to main,
-  also refresh the Pilotix artifact (standing rule for every Pilotix push/deploy).
+- The app lives on **`main`** (merged 30 Oct 2026). Save to GitHub often (small commits, every finished
+  piece); a side branch is fine while a piece is half done.
+- Owner's standing rule (29 Oct 2026): push and deploy every change we agree on, without waiting for
+  « push ». App-only changes (`mobile/`) need no server deploy: GitHub builds the test app by itself.
+  When the website changes too, deploy it and refresh the Pilotix artifact (standing rule).
 - Commits are authored `alaeddineballalou-hub <alaeddineballalou@gmail.com>`, with **no** Claude
   attribution lines.
 - Explain everything to the owner in very simple words, and end with 5 choices.
