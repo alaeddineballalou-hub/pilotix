@@ -20,6 +20,7 @@ import type { PageProps } from '../registry';
 import { Countdown, useNow } from './Countdown';
 import { Detail } from './Detail';
 import { Focus } from './Focus';
+import { HeldChip } from './hold';
 import { useIsPhone } from '../../lib/useMedia';
 import { PhoneCards, PhoneOrder } from './PhoneList';
 import { BULK_CHOICES, choiceLabel, currentLabel, ROW_CHOICES, StatusChoice, Sub, SUB_STATUSES, SUB_TONE, SUBS, telHref, toneOf, waHref } from './shared';
@@ -267,6 +268,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
         return (
           <>
             <b>{r.customerName}</b>
+            <HeldChip o={r} />
             {r.clientScore && <ScoreChip s={r.clientScore} short />}
             {r.possibleDuplicate && <span className="flag dup">{t('confirmation.dup')}</span>}
             {r.blacklisted && <span className="flag">{t('confirmation.blacklist')}</span>}
@@ -365,21 +367,38 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
       if (tr) window.scrollTo({ top: tr.getBoundingClientRect().top + window.scrollY - 76, behavior: 'smooth' });
     }, 60);
   };
-  /** The order after this one in the table (or the first one), opened in place. */
-  const goNext = (fromId?: number) => {
-    const i = fromId === undefined ? -1 : rows.findIndex((r) => r.id === fromId);
-    const rest = rows.filter((r) => r.id !== fromId);
-    const nx = (i >= 0 ? rows.slice(i + 1).find((r) => r.id !== fromId) : undefined) ?? (fromId === undefined ? rows[0] : rest[0]);
-    if (!nx) {
-      openOnly(null);
-      toast(t('confirmation.noNext'), 'ok');
-      return;
+  /** « Commande suivante »: the server picks the next order to call and keeps it for me 10 minutes (orders.next), so
+   *  two agents never get the same customer; it opens in the table when it is on this page, else on its own. */
+  const nextSkip = useRef<number[]>([]);
+  const nextBusy = useRef(false);
+  const goNext = async (fromId?: number) => {
+    if (nextBusy.current) return;
+    nextBusy.current = true;
+    try {
+      if (fromId !== undefined) nextSkip.current.push(fromId);
+      const r = await rpc('orders.next', { skip: nextSkip.current.slice(-200) });
+      if (!r.id) {
+        openOnly(null);
+        toast(t('confirmation.noNext'), 'ok');
+        return;
+      }
+      nextSkip.current.push(r.id);
+      if (rows.some((x) => x.id === r.id)) openOnly(r.id);
+      else {
+        openOnly(null);
+        setFocus(r.id);
+      }
+    } catch (e: any) {
+      toast(e.message, 'bad');
+    } finally {
+      nextBusy.current = false;
     }
-    openOnly(nx.id);
   };
   const toggleOpen = (id: number) => setOpen((s) => (s.has(id) ? (s.delete(id), new Set(s)) : new Set(s).add(id)));
   const allOn = rows.length > 0 && rows.every((r) => sel.has(r.id));
   const canNext = (sub === 'nouvelles' || sub === 'attente') && has('confirmation');
+  /** an agent sees only the orders given to him; managers and the owner see more */
+  const seesAll = has('agent_manager', 'vendeur');
   // "Commande suivante" lives in the top header (Shell): it asks this list to open the next order
   useEffect(() => {
     if (!canNext) return;
@@ -614,8 +633,8 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                     </div>
                   );
                 })()}
-                <PhoneCards rows={rows} empty={t('confirmation.ph.empty')} onOpen={(id) => setOpen(new Set([id]))} />
-                {canNext && rows.length > 0 && (
+                <PhoneCards rows={rows} empty={canNext && !seesAll ? t('confirmation.mineEmpty') : t('confirmation.ph.empty')} onOpen={(id) => setOpen(new Set([id]))} />
+                {canNext && (
                   <button type="button" className="pxp-next" onClick={() => goNext([...open].pop())}>
                     {t('confirmation.ph.next')}
                     <Icon name="chevr" />
@@ -657,7 +676,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                   {!rows.length && (
                     <tr>
                       <td colSpan={cols.length + 3} className="empty">
-                        {t(`confirmation.empty.${sub}`)}
+                        {canNext && !seesAll ? t('confirmation.mineEmpty') : t(`confirmation.empty.${sub}`)}
                       </td>
                     </tr>
                   )}

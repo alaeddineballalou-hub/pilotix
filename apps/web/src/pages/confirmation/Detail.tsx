@@ -18,6 +18,7 @@ import { hasMouse } from '../../lib/useMedia';
 import { toast } from '../../ui/toast';
 import './check.css';
 import { askRisk } from '../../ui/clientScore';
+import { useHold } from './hold';
 
 interface Line {
   productId: number;
@@ -46,6 +47,11 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
   const qc = useQueryClient();
   const cat = useCatalog();
   const grid = useRpc('confirmation.gridFee', { id: order.id }, { staleTime: 60_000 });
+  /** another agent has this order open: he works on it, this card only shows it */
+  const heldBy = useHold(order);
+  const { has: hasRole } = useSession();
+  /** a manager or the owner may still act on it (to unblock it) */
+  const mgrHold = hasRole('agent_manager', 'vendeur');
   const initial = useMemo<Line[]>(() => order.items.map((i) => ({ productId: i.productId, variantId: i.variantId, name: i.name, variantTitle: i.variantTitle, qty: i.qty, unitPrice: i.unitPrice, isUpsell: i.isUpsell })), [order]);
   const [L, setL] = useState<Line[]>(initial);
   const [fee, setFee] = useState(order.deliveryFee);
@@ -306,6 +312,11 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
 
   return (
     <div className={`qd2-main qd3 qd5 qd6${phone ? ' qd6-ph' : ''}`}>
+      {heldBy !== null && (
+        <p className="warnbox qd6-held" role="status">
+          🔒 {t(mgrHold ? 'confirmation.hold.mgr' : heldBy ? 'confirmation.hold.by' : 'confirmation.hold.other', { name: heldBy || '?' })}
+        </p>
+      )}
       <div className="qd6-grid">
       {phone && (
         <section className="qd6-card qd6-client" aria-label={t('confirmation.ph.client')}>

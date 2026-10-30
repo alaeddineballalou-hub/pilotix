@@ -3,6 +3,7 @@
 import type { Order } from '@pilotix/shared';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { HeldChip } from './hold';
 import { da, when, wilayaName } from '../../lib/format';
 import { namesOf } from '../../lib/items';
 import { Icon } from '../../ui/kit';
@@ -57,6 +58,7 @@ export function PhoneCards({ rows, empty, onOpen }: { rows: PRow[]; empty: strin
               <div className="pxp-main">
                 <div className="pxp-top">
                   <b className="pxp-name">{o.customerName}</b>
+                  <HeldChip o={o} />
                   {o.clientScore && <ScoreChip s={o.clientScore} short />}
                   {o.deadline && <Countdown d={o.deadline} short />}
                 </div>

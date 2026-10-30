@@ -105,8 +105,8 @@ test('statistics: managers only, numbers add up', async () => {
 
 test('Tentative 02 sets no_answer with two attempts; block blacklists the customer', async () => {
   const ctx = await as(EMAILS.conf);
-  const nv: any = await call('confirmation.list', ctx, { sub: 'nouvelles', pageSize: 2 });
-  const o = nv.rows[0];
+  // an agent sees only her own orders: « Commande suivante » gives her one
+  const o: any = await call('orders.next', ctx, {});
   await call('confirmation.setTry', ctx, { ids: [o.id], n: 2 });
   const cur: any = await call('orders.get', ctx, { id: o.id });
   assert.equal(cur.confStatus, 'no_answer');

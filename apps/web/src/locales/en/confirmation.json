@@ -632,5 +632,12 @@
     "bulkDone": "{{ok}} saved · {{sans}} without stock · {{bl}} blocked"
   },
   "bestFirst": "Best customers first",
-  "bestFirstHelp": "Customers with the best score first: very reliable, reliable, then new ones, then the ones to watch. Click again to go back to the countdown."
+  "bestFirstHelp": "Customers with the best score first: very reliable, reliable, then new ones, then the ones to watch. Click again to go back to the countdown.",
+  "hold": {
+    "by": "Taken by {{name}}: you can only look at it.",
+    "other": "Taken by another agent: you can only look at it.",
+    "chip": "🔒 {{name}}",
+    "mgr": "{{name}} is on this order right now. You can still change it."
+  },
+  "mineEmpty": "No order of yours here. Press « Next order » to take the most urgent one."
 }

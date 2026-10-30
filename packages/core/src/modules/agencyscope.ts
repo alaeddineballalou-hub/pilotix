@@ -62,11 +62,32 @@ function productSql(ctx: Ctx, alias: string): string {
  * SQL of one work queue (confirmation or suivi): an agency's agent gets its agency's orders, the store's own agents
  * the orders no agency handles, managers and administrators every order ('').
  */
-export function queueSql(ctx: Ctx, task: 'conf' | 'follow', alias = 'o'): string {
+export function queueSql(ctx: Ctx, task: 'conf' | 'follow', alias = 'o', opts: { free?: boolean } = {}): string {
   const a = agencyOf(ctx);
+  // an agency's people: the agency shares its orders out itself (step « Agences »)
   if (a !== null) return ctx.session.roles.includes(ROLE[task]) ? `${alias}.${COL[task]} = ${a}${productSql(ctx, alias)}` : 'false';
-  if (ctx.session.isAdmin || hasRole(ctx.session, 'agent_manager', 'vendeur')) return '';
-  return `${alias}.${COL[task]} IS NULL`;
+  const who = task === 'conf' ? confSeeSql(ctx, alias, !!opts.free) : '';
+  const join = (x: string) => [x, who].filter(Boolean).join(' AND ');
+  if (ctx.session.isAdmin || hasRole(ctx.session, 'agent_manager', 'vendeur')) return who;
+  return join(`${alias}.${COL[task]} IS NULL`);
+}
+
+/**
+ * Who sees which orders in Confirmation:
+ * - the owner (Vendeur) and the administrators: every order of the shop ('');
+ * - an agent manager: the orders of his team's agents and his own, and the orders no agent has yet (to give them out),
+ *   never another agent manager's team;
+ * - an agent: only the orders given to him. `free`: also the orders nobody has yet (« Commande suivante » gives the
+ *   most urgent one, and it becomes his).
+ */
+export function confSeeSql(ctx: Ctx, alias = 'o', free = false): string {
+  if (ctx.session.isAdmin || ctx.session.roles.includes('vendeur')) return '';
+  const me = Number(ctx.session.profile.id);
+  // built into SQL: only a whole positive number goes there
+  if (!Number.isSafeInteger(me) || me <= 0) throw forbidden();
+  if (ctx.session.roles.includes('agent_manager'))
+    return `(${alias}.agent_id IS NULL OR ${alias}.agent_id = ${me} OR ${alias}.agent_id IN (SELECT a.v::bigint FROM settings s, jsonb_array_elements(CASE WHEN jsonb_typeof(s.value) = 'array' THEN s.value ELSE '[]'::jsonb END) t, jsonb_array_elements_text(COALESCE(t->'agentIds', '[]'::jsonb)) a(v) WHERE s.key = 'teams' AND (t->>'managerId') = '${me}'))`;
+  return free ? `(${alias}.agent_id IS NULL OR ${alias}.agent_id = ${me})` : `${alias}.agent_id = ${me}`;
 }
 
 /** `sql` with one more condition (WHERE … AND cond), for queries written with a WHERE already or none. */

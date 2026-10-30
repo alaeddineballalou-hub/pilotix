@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, hasRole, proc } from '../rpc';
 import { clientFee, getSetting, setSetting } from '../settings';
-import { ConfInput, getOrder, ListInput, listOrders, setConf, withClientScores } from './orders';
+import { ConfInput, getOrder, holdOrder, ListInput, listOrders, setConf, withClientScores } from './orders';
 import { andSql, queueSql } from './agencyscope';
 
 // ---------------------------------------------------------------- sub-pages
@@ -610,6 +610,7 @@ async function banner(ctx: Ctx) {
   const now = ctx.now();
   const me = ctx.session.profile.id;
   const calls = await getSetting(ctx.db, 'calls');
+  // what this person sees: an agent his own orders (the same numbers as his lists)
   const todo = await loadTodo(ctx.db, queueSql(ctx, 'conf'));
   const due = computeDue(todo, calls, now);
   const L = todo.map((o) => ({ o, d: due.get(o.id)! }));
@@ -776,6 +777,9 @@ export const confirmationProcs = {
     ctx.emit({ type: 'orders' });
     return { customers: cids.length };
   }),
+
+  /** An order opened from a list: kept for this agent 10 minutes; held by another agent: who has it. */
+  'confirmation.hold': proc(['confirmation'], z.object({ id }), (ctx, { id }) => holdOrder(ctx, id)),
 
   /** Gives back the order taken with orders.next (another agent can take it). */
   'confirmation.release': proc(['confirmation'], z.object({ id }), async (ctx, { id }) => {
