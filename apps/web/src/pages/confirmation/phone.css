@@ -16,7 +16,7 @@
 .pxp-prod { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pxp-st { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
 .pxp-st small { color: var(--muted); font-size: 12px; }
-.pxp-call { flex: none; width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--c-ok-fill); color: #fff !important; text-decoration: none; }
+.pxp-call { flex: none; width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--c-ok-fill); color: #fff !important; text-decoration: none; border: 0; padding: 0; cursor: pointer; font: inherit; }
 .pxp-call .bji, .pxp-call svg { width: 20px; height: 20px; }
 .pxp-call:active { filter: brightness(.92); }
 .pxp-next { position: fixed; z-index: 30; left: 12px; right: 12px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); height: 54px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--c-accent-grad); color: var(--c-on-accent); font: inherit; font-size: 16px; font-weight: 800; box-shadow: 0 10px 24px rgba(242, 139, 30, .4); cursor: pointer; }
@@ -33,7 +33,9 @@
 .pxp-ot b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pxp-ot small { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pxp-call.big { width: 42px; height: 42px; border-radius: 12px; }
-.pxp-wa { flex: none; width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: #25D366; color: #fff !important; }
+.pxp-wa { flex: none; width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: #25D366; color: #fff !important; border: 0; padding: 0; cursor: pointer; font: inherit; }
+/* the call / message choice is open */
+.pxp-call.on, .pxp-wa.on { box-shadow: 0 0 0 3px var(--q-accent, #F7A823); }
 .pxp-wa .bji { width: 20px; height: 20px; }
 .pxp-ob { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px 12px 120px; overscroll-behavior: contain; }
 

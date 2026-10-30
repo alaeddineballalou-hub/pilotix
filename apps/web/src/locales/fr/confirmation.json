@@ -444,6 +444,12 @@
     "waSub": "Ouvre la discussion WhatsApp",
     "copied": "Message copié : collez-le si besoin"
   },
+  "callBy": {
+    "how": "Appeler par…",
+    "phone": "Téléphone",
+    "phoneSub": "Appel normal",
+    "waSub": "Ouvre la discussion : touchez 📞 pour appeler"
+  },
   "dl": {
     "title": "Livraison",
     "needDesk": "Livraison au bureau : choisissez le bureau avant d’enregistrer.",

@@ -444,6 +444,12 @@
     "waSub": "Opens the WhatsApp chat",
     "copied": "Message copied: paste it if needed"
   },
+  "callBy": {
+    "how": "Call with…",
+    "phone": "Phone",
+    "phoneSub": "Normal call",
+    "waSub": "Opens the chat: tap 📞 to call"
+  },
   "dl": {
     "title": "Delivery",
     "needDesk": "Bureau delivery: choose the bureau before saving.",
