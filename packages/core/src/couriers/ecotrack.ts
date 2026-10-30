@@ -12,7 +12,7 @@
 // accept both client/nom_client, tel/telephone, wilaya/code_wilaya, product/produit).
 import { cacheKeyOf } from './types';
 import type { ChangeInput, CourierAdapter, CourierCompany, Helpers, Parcel, ParcelInfo } from './types';
-import { baseUrl, chunks, CourierError, cut, errText, flag, http, HttpOpts, humanize, needKeys, query, sleep, timeUp } from './util';
+import { baseUrl, chunks, CourierError, cut, errText, flag, http, HttpOpts, humanize, needKeys, query, sleep, timeUp, weighed } from './util';
 
 const STATUSES: CourierAdapter['statuses'] = {
   order_information_received_by_carrier: null, picked: 'shipped', accepted_by_carrier: 'shipped', dispatched_to_driver: 'out_for_delivery',
@@ -206,7 +206,7 @@ export const ecotrack: CourierAdapter = {
           const x = data[it.tracking];
           if (!x?.status) continue;
           const last = Array.isArray(x.activity) && x.activity.length ? x.activity[x.activity.length - 1] : null;
-          out.push({ id: it.id, key: x.status, status: humanize(String(x.status)) + (last?.reason ? ` · ${last.reason}` : ''), at: last ? [last.date, last.time].filter(Boolean).join(' ') : null });
+          out.push({ id: it.id, key: x.status, status: humanize(String(x.status)) + (last?.reason ? ` · ${last.reason}` : ''), at: last ? [last.date, last.time].filter(Boolean).join(' ') : null, ...weighed(x, x.order) });
           done.add(it.id);
         }
       }
@@ -219,7 +219,7 @@ export const ecotrack: CourierAdapter = {
       try {
         const r = await api(c, '/get/tracking/info', { tracking: it.tracking });
         const last = (r?.activity ?? []).at(-1);
-        if (last?.status) out.push({ id: it.id, key: last.status, status: humanize(String(last.status)), at: [last.date, last.time].filter(Boolean).join(' ') || null });
+        if (last?.status) out.push({ id: it.id, key: last.status, status: humanize(String(last.status)), at: [last.date, last.time].filter(Boolean).join(' ') || null, ...weighed(r, r?.order) });
       } catch (e: any) {
         if (e.status === 429) break;
       }

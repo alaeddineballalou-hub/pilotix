@@ -137,3 +137,40 @@ export async function applyPayFees(db: Db, companyId: number, lines: { tracking:
   }
   return n;
 }
+
+/** The weight a parcel is counted at: the one its company found (its tracking answer), else the products' weight. */
+export function knownKg(courierFees: unknown, productsKg: unknown): number {
+  const kg = courierFeesOf(courierFees)?.kg;
+  return kg !== null && kg !== undefined && kg > 0 ? kg : Number(productsKg) || 0;
+}
+
+/**
+ * A company without its prices by API that says the weight it found (Yalidine, NOEST, Ecotrack…): kept on the parcel
+ * (« Pesé 7 kg par … »), and while its money is not received its cost follows — its « Surpoids » on that weight instead
+ * of the products'. Returns whether something changed.
+ */
+export async function saveCourierWeight(db: Db, orderId: number, kind: unknown, rule: WeightRule, kg: number, nowIso: string): Promise<boolean> {
+  if (!(kg > 0)) return false;
+  const o = (
+    await db.query(
+      `SELECT o.courier_fees, o.cashed, o.delivery_cost, o.livreur_id,
+         (SELECT coalesce(sum(p.weight_kg * i.qty), 0) FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = o.id) AS kg
+       FROM orders o WHERE o.id = $1`,
+      [orderId],
+    )
+  )[0];
+  if (!o) return false;
+  const cur = courierFeesOf(o.courier_fees);
+  if (cur && wholeKg(cur.kg) === wholeKg(kg)) return false;
+  const before = ruleFee(kind, rule, knownKg(o.courier_fees, o.kg));
+  const next: CourierFees = cur ? { ...cur, kg, at: nowIso } : { delivery: null, ret: null, kg, weight: null, est: 0, estRet: 0, at: nowIso, src: 'track' };
+  const d = ruleFee(kind, rule, kg) - before;
+  const moves = d !== 0 && !o.cashed && num(o.delivery_cost) > 0 && !o.livreur_id;
+  await db.query(`UPDATE orders SET courier_fees = $2, delivery_cost = CASE WHEN $3 THEN GREATEST(0, delivery_cost + $4::int) ELSE delivery_cost END WHERE id = $1`, [
+    orderId,
+    JSON.stringify(next),
+    moves,
+    d,
+  ]);
+  return true;
+}

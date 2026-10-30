@@ -7,6 +7,7 @@ import { call, Ctx, Db } from '../index';
 import { ordersOf } from '../modules/ads';
 import { apiFees, ruleFee, saveCourierFees, weightFee, weightRuleOf, ZR_WEIGHT } from '../modules/courierfees';
 import { setCourierCost } from '../modules/orders';
+import { weightIn } from '../couriers/util';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -256,4 +257,63 @@ test('« Tarifs › Surpoids » of Yalidine: saved, the unpaid parcels follow, s
   info = await call('delivery.feesInfo', admin, { companyId: yal });
   assert.deepEqual(info.weight, { freeKg: 5, perKg: 0, onReturn: true, locked: false, set: true });
   assert.equal(((await call('orders.get', admin, { id: Number(o.id) })) as any).courierFees, null);
+});
+
+test('the weight a company found, in its tracking answer: its real / billed weight first, grams read as kilos', () => {
+  assert.equal(weightIn({ weight: 6 }), 6);
+  assert.equal(weightIn({ weight: '5,5' }), 5.5);
+  assert.equal(weightIn({ weight: 3, real_weight: 8 }), 8);
+  assert.equal(weightIn({ poids: '7 kg' }), 7);
+  assert.equal(weightIn({ weight: 6500 }), 6.5);
+  assert.equal(weightIn({ weight: 0 }, { poids: 4 }), 4);
+  assert.equal(weightIn({ status: 'Livré' }), null);
+  assert.equal(weightIn(null, undefined), null);
+});
+
+test('Yalidine says it weighed a parcel 9 kg (declared 6): its « Surpoids » counts 9 kg — cost, order card, Surpoids card, return', async () => {
+  const yal = Number((await one(`SELECT id FROM delivery_companies WHERE kind = 'yalidine' LIMIT 1`)).id);
+  await db.query(`UPDATE delivery_companies SET credentials = '{"api_id":"a","api_token":"t"}', active = true WHERE id = $1`, [yal]);
+  const admin0 = await as(EMAILS.admin);
+  await call('delivery.saveWeightRule', admin0, { companyId: yal, freeKg: 5, perKg: 50, onReturn: true });
+  const prod = await one(`SELECT id FROM products ORDER BY id LIMIT 1`);
+  await db.query(`UPDATE products SET weight_kg = 6 WHERE id = $1`, [prod.id]);
+  const o = await one(
+    `SELECT o.id, o.tracking, o.is_stopdesk, f.home, f.desk FROM orders o JOIN delivery_fees f ON f.company_id = o.company_id AND f.wilaya_id = o.wilaya_id
+      WHERE o.company_id = $1 AND o.follow_status IN ('shipped','out_for_delivery') AND NOT o.cashed AND o.livreur_id IS NULL AND o.tracking IS NOT NULL ORDER BY o.id DESC LIMIT 1`,
+    [yal],
+  );
+  await db.query(`DELETE FROM order_items WHERE order_id = $1 AND id <> (SELECT min(id) FROM order_items WHERE order_id = $1)`, [o.id]);
+  await db.query(`UPDATE order_items SET product_id = $2, variant_id = NULL, qty = 1 WHERE order_id = $1`, [o.id, prod.id]);
+  const tariff = Number(o.is_stopdesk ? o.desk : o.home);
+  // declared 6 kg: 50 DA
+  await db.query('UPDATE orders SET delivery_cost = $2, courier_fees = NULL WHERE id = $1', [o.id, tariff + 50]);
+  const server = {
+    courier: async (action: string, args: any) => {
+      if (action === 'track') return args.items.filter((it: any) => Number(it.id) === Number(o.id)).map((it: any) => ({ id: it.id, status: 'Livré', at: null, costs: { delivery: null, ret: null, kg: 9 } }));
+      throw new Error('unexpected ' + action);
+    },
+  } as any;
+  const admin = await as(EMAILS.admin, server);
+  await call('delivery.sync', admin, { companyId: yal });
+  const cost = Number((await one('SELECT delivery_cost FROM orders WHERE id = $1', [o.id])).delivery_cost);
+  assert.equal(cost, tariff + 200, 'weighed 9 kg: 4 kilos above 5');
+  const card: any = await call('orders.get', admin, { id: Number(o.id) });
+  assert.deepEqual(
+    { weight: card.courierFees.weight, kg: card.courierFees.kg, declaredKg: card.courierFees.declaredKg, byRule: card.courierFees.byRule },
+    { weight: 200, kg: 9, declaredKg: 6, byRule: true },
+  );
+  const fees: any = await call('orders.companyFees', admin, { ids: [Number(o.id)] });
+  assert.equal(fees[o.id].extra, 200);
+  // the same weight again: nothing moves
+  await call('delivery.sync', admin, { companyId: yal });
+  assert.equal(Number((await one('SELECT delivery_cost FROM orders WHERE id = $1', [o.id])).delivery_cost), tariff + 200);
+  // Dashboard › « Surpoids des colis »: the parcel is there (9 kg found, 6 declared, 200 DA)
+  const d = await one('SELECT delivered_at FROM orders WHERE id = $1', [o.id]);
+  if (d.delivered_at) {
+    const at = new Date(d.delivered_at).getTime();
+    const r: any = await call('delivery.overweight', admin, { from: new Date(at - 86_400_000).toISOString(), to: new Date(at + 86_400_000).toISOString() });
+    const p = r.parcels.find((x: any) => x.id === Number(o.id));
+    assert.ok(p, 'in the Surpoids card');
+    assert.deepEqual({ zr: p.zr, declared: p.declared, fee: p.fee }, { zr: 9, declared: 6, fee: 200 });
+  }
 });

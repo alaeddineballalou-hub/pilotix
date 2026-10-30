@@ -4,7 +4,7 @@
 // Procolis has no API to cancel, print labels or list stop desks.
 // Note: the field "Confrimee" is spelled this way in Procolis' API (not a typo of ours).
 import type { CourierAdapter, CourierCompany } from './types';
-import { baseUrl, chunks, CourierError, cut, flag, http, needKeys, timeUp } from './util';
+import { baseUrl, chunks, CourierError, cut, flag, http, needKeys, timeUp, weighed } from './util';
 
 const STATUSES: CourierAdapter['statuses'] = {
   'En Preparation': null, 'En traitement - Pret a expedie': null, Dispatcher: 'shipped', 'Au Bureau': 'shipped', 'En livraison': 'out_for_delivery',
@@ -66,7 +66,7 @@ export const procolis: CourierAdapter = {
       const r = await http(c.name, url(c, '/lire'), { method: 'POST', headers: h(c), json: { Colis: group.map((g) => ({ Tracking: g.tracking })) } });
       for (const x of r?.Colis ?? []) {
         const it = group.find((g) => String(g.tracking) === String(x.Tracking));
-        if (it && x.Situation) out.push({ id: it.id, status: String(x.Situation).trim(), at: x.DateH_Action ?? null });
+        if (it && x.Situation) out.push({ id: it.id, status: String(x.Situation).trim(), at: x.DateH_Action ?? null, ...weighed(x, { poids: x.Poids, weight: x.Weight }) });
       }
     }
     return out;

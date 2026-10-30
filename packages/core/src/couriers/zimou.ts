@@ -13,7 +13,7 @@
 // changed (only 1 « Nouveau »).
 import { cacheKeyOf } from './types';
 import type { ChangeInput, CourierAdapter, CourierCompany, Desk, Helpers, Parcel, ParcelInfo, TrackItem, TrackResult } from './types';
-import { baseUrl, chunks, CourierError, cut, errText, http, HttpOpts, needKeys, query, sleep, splitName, timeUp } from './util';
+import { baseUrl, chunks, CourierError, cut, errText, http, HttpOpts, needKeys, query, sleep, splitName, timeUp, weighed } from './util';
 
 const LABELS: Record<string, string> = {
   '1': 'Nouveau', '2': 'Expédié', '3': 'Livré', '4': 'Retourné', '5': 'Annulé', '6': 'En cours de livraison', '7': 'Centre de tri', '8': 'Échoué',
@@ -236,7 +236,7 @@ export const zimou: CourierAdapter = {
           const key = typeof x === 'object' ? statusKey(x) || statusWord(x) : String(x);
           if (!key) continue;
           const words = typeof x === 'object' ? statusWord(x) : LABELS[key] || key;
-          out.push({ id: it.id, key, status: words || key, at: typeof x === 'object' ? (x.updated_at ?? x.status_updated_at ?? null) : null });
+          out.push({ id: it.id, key, status: words || key, at: typeof x === 'object' ? (x.updated_at ?? x.status_updated_at ?? null) : null, ...weighed(x) });
           done.add(it.id);
         }
       }
@@ -249,7 +249,7 @@ export const zimou: CourierAdapter = {
       try {
         const p = await pkg(c, it);
         const key = statusKey(p) || statusWord(p);
-        if (key) out.push({ id: it.id, key, status: statusWord(p) || key, at: p.updated_at ?? null });
+        if (key) out.push({ id: it.id, key, status: statusWord(p) || key, at: p.updated_at ?? null, ...weighed(p) });
       } catch (e: any) {
         if (refused(e)) throw e;
         out.push({ id: it.id, status: '', error: String(e?.message ?? 'Erreur').slice(0, 200) });

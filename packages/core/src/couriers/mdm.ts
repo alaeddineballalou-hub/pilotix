@@ -11,7 +11,7 @@
 // the order fields read back (client, destination.cityName/stateName, isStopDesk, stopDesk, deliveryPrice).
 import { cacheKeyOf } from './types';
 import type { CourierAdapter, CourierCompany, Desk, ParcelInfo, TrackItem } from './types';
-import { baseUrl, chunks, CourierError, cut, errText, flag, http, HttpOpts, humanize, needKeys, query, sleep, splitName, timeUp } from './util';
+import { baseUrl, chunks, CourierError, cut, errText, flag, http, HttpOpts, humanize, needKeys, query, sleep, splitName, timeUp, weighed } from './util';
 
 const STATUSES: CourierAdapter['statuses'] = {
   pending: null, confirmed: null, shipped: 'shipped', delivered: 'delivered', cancelled: null, returned: 'returned', expired: null, archived: null,
@@ -149,7 +149,7 @@ export const mdm: CourierAdapter = {
       for (const it of group) {
         const x = byTracking.get(it.tracking);
         if (!x?.status) continue;
-        out.push({ id: it.id, key: String(x.status), status: word(x.status) ?? String(x.status), at: x.statusDate ?? x.updatedAt ?? null });
+        out.push({ id: it.id, key: String(x.status), status: word(x.status) ?? String(x.status), at: x.statusDate ?? x.updatedAt ?? null, ...weighed(x) });
       }
     }
     return out;

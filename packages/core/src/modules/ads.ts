@@ -16,7 +16,7 @@ import { Db, isoOrNull, num } from '../db';
 import { bad, Ctx, forbidden, hasRole, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
 import { getRaw, setRaw } from './admin';
-import { ruleFee, weightRuleOf, type WeightRule } from './courierfees';
+import { knownKg, ruleFee, weightRuleOf, type WeightRule } from './courierfees';
 
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const Ym = z.string().regex(/^\d{4}-\d{2}$/);
@@ -197,7 +197,8 @@ export async function ordersOf(db: Db, productIds: number[], from: string, to: s
               (SELECT df.return_fee FROM delivery_fees df WHERE df.company_id = o.company_id AND df.wilaya_id = o.wilaya_id), 0) AS return_fee,
             -- a return priced by the price list: the weight declared, for the company's « Surpoids » on the return
             CASE WHEN o.follow_status IN ('returned', 'lost') AND o.courier_fees->>'ret' IS NULL AND o.livreur_id IS NULL
-                 THEN (SELECT COALESCE(sum(p.weight_kg * i.qty), 0) FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = o.id) END AS ret_kg
+                 THEN (SELECT COALESCE(sum(p.weight_kg * i.qty), 0) FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = o.id) END AS ret_kg,
+            o.courier_fees AS cf
      FROM sales o JOIN firsts f ON f.order_id = o.id
      WHERE f.product_id = ANY($1) AND o.created_at >= $2 AND o.created_at < $3 AND o.conf_status <> 'duplicate'`,
     [productIds, dayStart(from), dayStart(addDays(to, 1))],
@@ -209,7 +210,7 @@ export async function ordersOf(db: Db, productIds: number[], from: string, to: s
     for (const o of rows) {
       const c = o.company_id ? rules.get(num(o.company_id)) : undefined;
       if (o.ret_kg === null || o.ret_kg === undefined || !c?.rule.onReturn) continue;
-      o.return_fee = num(o.return_fee) + ruleFee(c.kind, c.rule, o.ret_kg);
+      o.return_fee = num(o.return_fee) + ruleFee(c.kind, c.rule, knownKg(o.cf, o.ret_kg));
     }
   }
   return rows;

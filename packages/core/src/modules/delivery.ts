@@ -22,7 +22,7 @@ function sameSecret(a: string, b: string): boolean {
 import { getSetting } from '../settings';
 import { removedCouriers } from '../platform/courierWatch';
 import { addEvent, getOrder, listOrders, setFollow } from './orders';
-import { apiFees, companyWeightRule, declaredKg, feesByApi, ruleFee, saveCourierFees, weightRuleOf, weightRuleSet, wholeKg, type WeightRule } from './courierfees';
+import { apiFees, companyWeightRule, courierFeesOf, declaredKg, feesByApi, knownKg, ruleFee, saveCourierFees, saveCourierWeight, weightRuleOf, weightRuleSet, wholeKg, type WeightRule } from './courierfees';
 
 const id = z.number().int().positive();
 const ids = z.array(id).min(1).max(500);
@@ -405,7 +405,9 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[]) {
   if (isDemo(ctx)) {
     answers = [];
     // a company whose API gives its prices: its statuses bring them, with the weight it counted
-    const costs = feesByApi(c.kind) ? await demoCosts(ctx, c.id, parcels.map((p: any) => num(p.id)), true) : new Map<number, CourierCosts>();
+    // the others say the weight they found (their price list counts)
+    const costs = c.kind !== 'own' && KINDS[c.kind]?.api ? await demoCosts(ctx, c.id, parcels.map((p: any) => num(p.id)), true) : new Map<number, CourierCosts>();
+    if (!feesByApi(c.kind)) for (const [k, v] of costs) costs.set(k, { delivery: null, ret: null, kg: v.kg });
     for (const p of parcels) {
       const next = nextStep(p.follow_status, !!p.tracking);
       if (next) answers.push({ id: num(p.id), status: word(c.kind, next), mapped: next, at: new Date(ctx.now()).toISOString(), ...(costs.has(num(p.id)) ? { costs: costs.get(num(p.id)) } : {}) });
@@ -430,7 +432,9 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[]) {
     }
     const to = resolveStatus(defaults, c.statusMap, a);
     // what the company charges for it (its prices, the weight it counted): counted instead of the price list
-    if (a.costs && (await saveCourierFees(ctx.db, a.id, a.costs, 'track', await rule(), new Date(ctx.now()).toISOString()))) feesChanged++;
+    // (a company without its prices by API only says the weight it found: its « Surpoids » counts on that weight)
+    if (a.costs && feesByApi(c.kind) && (await saveCourierFees(ctx.db, a.id, a.costs, 'track', await rule(), new Date(ctx.now()).toISOString()))) feesChanged++;
+    else if (a.costs?.kg && !feesByApi(c.kind) && (await saveCourierWeight(ctx.db, a.id, c.kind, await rule(), a.costs.kg, new Date(ctx.now()).toISOString()))) feesChanged++;
     if (a.status !== p.ext_status) {
       await ctx.db.query('UPDATE orders SET ext_status=$2, ext_status_at=COALESCE($3::timestamptz, now()), updated_at=now() WHERE id=$1', [a.id, a.status.slice(0, 200), safeDate(a.at)]);
       changed++;
@@ -739,14 +743,15 @@ export const deliveryProcs = {
         await tx.query('UPDATE delivery_companies SET config=$2 WHERE id=$1', [i.companyId, JSON.stringify({ ...cfg, overweight: next })]);
         // its parcels sent and not paid yet: the weight fee in their cost follows the new rule
         const open = await tx.query(
-          `SELECT o.id, (SELECT coalesce(sum(p.weight_kg * it.qty), 0) FROM order_items it JOIN products p ON p.id = it.product_id WHERE it.order_id = o.id) AS kg
+          `SELECT o.id, o.courier_fees, (SELECT coalesce(sum(p.weight_kg * it.qty), 0) FROM order_items it JOIN products p ON p.id = it.product_id WHERE it.order_id = o.id) AS kg
            FROM orders o WHERE o.company_id = $1 AND NOT o.cashed AND o.delivery_cost > 0 AND o.livreur_id IS NULL`,
           [i.companyId],
         );
         const ids: number[] = [];
         const diffs: number[] = [];
         for (const o of open) {
-          const d = ruleFee(row.kind, next, o.kg) - ruleFee(row.kind, old, o.kg);
+          const kg = knownKg(o.courier_fees, o.kg);
+          const d = ruleFee(row.kind, next, kg) - ruleFee(row.kind, old, kg);
           if (d) {
             ids.push(num(o.id));
             diffs.push(d);
@@ -762,11 +767,11 @@ export const deliveryProcs = {
 
   /**
    * Dashboard › Suivi › « Surpoids » : the period's parcels a company weighed heavier than Pilotix declared and took a
-   * weight fee for (its API: ZR) — per product (the heaviest one of each parcel), how many, the weights, what it cost.
+   * weight fee for (ZR by its API; another company that says the weight it found, by its « Surpoids ») — per product (the heaviest one of each parcel), how many, the weights, what it cost.
    */
   'delivery.overweight': proc(['suivi', 'agent_manager', 'vendeur'], z.object({ from: z.string().max(40), to: z.string().max(40) }), async (ctx, i) => {
     const rows = await ctx.db.query(
-      `SELECT o.id, o.ref, o.follow_status, o.courier_fees, co.name AS company,
+      `SELECT o.id, o.ref, o.follow_status, o.courier_fees, co.name AS company, co.kind, co.config,
          (SELECT coalesce(sum(p.weight_kg * it.qty), 0) FROM order_items it JOIN products p ON p.id = it.product_id WHERE it.order_id = o.id) AS kg
        FROM sales o JOIN delivery_companies co ON co.id = o.company_id
        WHERE (o.courier_fees->>'kg') IS NOT NULL
@@ -777,10 +782,13 @@ export const deliveryProcs = {
     const heavy = rows
       .map((r: any) => {
         const f = apiFees(r.courier_fees);
-        const zr = wholeKg(f?.kg);
+        const zr = wholeKg(courierFeesOf(r.courier_fees)?.kg);
         const declared = declaredKg(r.kg);
         const back = r.follow_status !== 'delivered';
-        const fee = f ? (back ? f.weightRet : f.weight) : 0;
+        // ZR: its own weight fee; another company that said the weight it found: its « Surpoids » on that weight
+        const rule = weightRuleOf(r.kind, r.config);
+        const byRule = back && !rule.onReturn ? 0 : ruleFee(r.kind, rule, zr ?? 0);
+        const fee = f ? (back ? f.weightRet : f.weight) : byRule;
         return { id: num(r.id), ref: String(r.ref), company: String(r.company), declared, zr, fee, back, exact: !!f?.exact };
       })
       .filter((x: any) => x.zr !== null && x.zr > x.declared && x.fee > 0);

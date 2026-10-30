@@ -18,7 +18,7 @@
 // - Dates come as « dd/mm/yyyy hh:mm:ss » and are turned into « yyyy-mm-dd hh:mm:ss ».
 import { cacheKeyOf } from './types';
 import type { CourierAdapter, CourierCompany, ParcelInfo, TrackItem, TrackResult } from './types';
-import { baseUrl, chunks, CourierError, cut, errText, flag, http, HttpOpts, needKeys, sleep, timeUp } from './util';
+import { baseUrl, chunks, CourierError, cut, errText, flag, http, HttpOpts, needKeys, sleep, timeUp, weighed } from './util';
 
 const STATUSES: CourierAdapter['statuses'] = {
   // Avancement (stage)
@@ -141,7 +141,7 @@ export const ecom: CourierAdapter = {
     const push = (it: TrackItem, x: any) => {
       const s = statusOf(x);
       if (!s) return;
-      out.push({ id: it.id, key: s.key, status: s.status, at: when(x.Date_Action_D ?? x.Date_last_status ?? x.Date_Création_D ?? x.Date_Création) || null });
+      out.push({ id: it.id, key: s.key, status: s.status, at: when(x.Date_Action_D ?? x.Date_last_status ?? x.Date_Création_D ?? x.Date_Création) || null, ...weighed(x) });
       done.add(it.id);
     };
     let many = true;

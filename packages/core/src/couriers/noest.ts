@@ -10,7 +10,7 @@
 // (vargo's update rules do not list it); the OrderInfo field names (tarif, stop_desk, station_code).
 // BEST GUESS (check with real keys): the fees endpoint — NOEST did not document one; we try /fees, /get/fees, /tarifs.
 import type { ChangeInput, CourierAdapter, CourierCompany, Parcel, ParcelInfo } from './types';
-import { baseUrl, chunks, CourierError, cut, errText, flag, http, HttpOpts, humanize, needKeys, sleep, timeUp } from './util';
+import { baseUrl, chunks, CourierError, cut, errText, flag, http, HttpOpts, humanize, needKeys, sleep, timeUp, weighed } from './util';
 
 const STATUSES: CourierAdapter['statuses'] = {
   upload: null, customer_validation: null, validation_collect_colis: null, pickedup: 'shipped', validation_reception_admin: 'shipped', validation_reception: 'shipped',
@@ -179,7 +179,7 @@ export const noest: CourierAdapter = {
         const acts = (x.activity ?? []).filter((a: any) => a?.event_key);
         const known = acts.filter((a: any) => a.event_key in STATUSES);
         const last = (known.length ? known : acts).at(-1);
-        if (last) out.push({ id: it.id, key: last.event_key, status: last.event || humanize(last.event_key), at: last.date ?? null });
+        if (last) out.push({ id: it.id, key: last.event_key, status: last.event || humanize(last.event_key), at: last.date ?? null, ...weighed(x.OrderInfo, x.order_info, x) });
       }
     }
     return out;

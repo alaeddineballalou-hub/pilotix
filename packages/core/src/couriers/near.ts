@@ -18,7 +18,7 @@
 // is_return with return_center_id; the fees answer shape (one wilaya per call, recipient_wilaya filter); status code values.
 import { cacheKeyOf } from './types';
 import type { CourierAdapter, CourierCompany, Desk, FeeRow, Parcel, ParcelInfo, TrackItem } from './types';
-import { baseUrl, CourierError, cut, errText, http, HttpOpts, humanize, needKeys, query, sleep, timeUp } from './util';
+import { baseUrl, CourierError, cut, errText, http, HttpOpts, humanize, needKeys, query, sleep, timeUp, weighed } from './util';
 
 // status code (current_status_value) and names (vargo's NearDeliveryParcelStatus)
 type Follow = CourierAdapter['statuses'][string];
@@ -203,7 +203,7 @@ export const near: CourierAdapter = {
       try {
         const x = await trackInfo(c, it.tracking);
         const s = statusOf(x.current_status_value, x.current_status);
-        if (s) out.push({ id: it.id, key: s.key, status: s.status, at: x.updated_at ?? x.status_updated_at ?? null });
+        if (s) out.push({ id: it.id, key: s.key, status: s.status, at: x.updated_at ?? x.status_updated_at ?? null, ...weighed(x) });
       } catch (e: any) {
         if (e?.status === 429 || String(e?.message).includes('refuse les clés')) throw e;
         out.push({ id: it.id, status: '', error: String(e?.message || 'erreur') });

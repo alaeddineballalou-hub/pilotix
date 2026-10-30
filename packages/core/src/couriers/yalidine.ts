@@ -11,7 +11,7 @@
 import { NEW_WILAYA_PARENT } from '@pilotix/shared';
 import { cacheKeyOf } from './types';
 import type { ChangeInput, CourierAdapter, CourierCompany, Helpers, Parcel, ParcelInfo } from './types';
-import { baseUrl, chunks, CourierError, cut, http, HttpOpts, needKeys, sleep, splitName, timeUp } from './util';
+import { baseUrl, chunks, CourierError, cut, http, HttpOpts, needKeys, sleep, splitName, timeUp, weighed } from './util';
 
 const STATUSES: CourierAdapter['statuses'] = {
   'Pas encore expédié': null, 'A vérifier': null, 'En préparation': null, 'Pas encore ramassé': null, 'Prêt à expédier': null, 'En passation': null,
@@ -229,10 +229,10 @@ export const yalidine: CourierAdapter = {
     const out = [];
     for (const group of chunks(items, 50)) {
       if (timeUp()) break;
-      const rows = await all(c, `parcels/?fields=tracking,last_status,date_last_status&tracking=${group.map((g) => encodeURIComponent(g.tracking)).join(',')}`);
+      const rows = await all(c, `parcels/?fields=tracking,last_status,date_last_status,weight&tracking=${group.map((g) => encodeURIComponent(g.tracking)).join(',')}`);
       for (const r of rows) {
         const it = group.find((g) => g.tracking === r.tracking);
-        if (it && r.last_status) out.push({ id: it.id, status: r.last_status, at: r.date_last_status ?? null });
+        if (it && r.last_status) out.push({ id: it.id, status: r.last_status, at: r.date_last_status ?? null, ...weighed(r) });
       }
     }
     return out;

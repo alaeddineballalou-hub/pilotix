@@ -248,3 +248,26 @@ export function bestMatch(name: string, list: string[]): string | null {
   }
   return null;
 }
+
+/**
+ * The weight a company found for a parcel, in its tracking answer (kg): the real / billed weight first, else the parcel's
+ * weight (it writes the one it weighed there). null when the answer has none. Grams (« 6500 ») are read as kilos.
+ */
+const WEIGHT_KEYS = ['real_weight', 'weight_real', 'actual_weight', 'billable_weight', 'billed_weight', 'effective_weight', 'poids_reel', 'poids_facture', 'weight', 'poids', 'weight_kg', 'kg'];
+export function weightIn(...objs: unknown[]): number | null {
+  for (const o of objs) {
+    if (!o || typeof o !== 'object') continue;
+    for (const k of WEIGHT_KEYS) {
+      const raw = (o as any)[k];
+      const v = typeof raw === 'string' ? Number(raw.replace(',', '.').replace(/[^\d.]/g, '')) : Number(raw);
+      if (raw === null || raw === undefined || raw === '' || !isFinite(v) || v <= 0) continue;
+      return v >= 500 ? Math.round(v / 100) / 10 : v;
+    }
+  }
+  return null;
+}
+/** A tracking answer's « the company weighed it X kg » (no prices: its price list counts). */
+export const weighed = (...objs: unknown[]) => {
+  const kg = weightIn(...objs);
+  return kg === null ? {} : { costs: { delivery: null, ret: null, kg } };
+};
