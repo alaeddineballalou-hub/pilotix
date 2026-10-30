@@ -44,7 +44,7 @@ import {
 } from './shops';
 import type { Tenancy } from './tenancy';
 import * as pilot from '../modules/pilotlearn';
-import { pilotConfig, savePilotConfig } from './pilotai';
+import { pilotConfig, pilotToday, savePilotConfig } from './pilotai';
 import { AI_FEATURES, aiBill, aiUsageOfMonth, aiUsageSince, monthOf, saveAiBill } from './aiusage';
 
 export const STAFF_ROLES = ['owner', 'manager', 'support'] as const;
@@ -384,6 +384,8 @@ export const PLATFORM_REGISTRY = {
         rate: recentStores.length ? Math.round((converted / recentStores.length) * 100) : null,
       },
       messages: await staffUnread(ctx.t),
+      // Pilot AI › lessons waiting for the coach (the menu shows the number)
+      pilot: num((await ctx.t.platform.query(`SELECT count(*)::int AS n FROM platform.pilot_lessons WHERE status = 'candidate'`).catch(() => [{ n: 0 }]))[0]?.n),
       // Sociétés de livraison › « Changements API » not resolved yet (companies still in Pilotix)
       couriers: await (async () => {
         const [w, gone] = await Promise.all([watchState(ctx.t), removedCouriers(ctx.t)]);
@@ -1034,8 +1036,9 @@ export const PLATFORM_REGISTRY = {
   /** Everything the Pilot AI page shows: settings (never the key), last night, lessons waiting, books and the test. */
   'p.pilot.state': pproc(ALL, z.object({}), async (ctx) => {
     const pdb = ctx.t.platform;
-    const [config, night, candidates, approved, books, sharing, shops] = await Promise.all([
-      pilotConfig(ctx.t),
+    const config = await pilotConfig(ctx.t);
+    const [today, night, candidates, approved, books, sharing, shops] = await Promise.all([
+      pilotToday(ctx.t, config),
       pilot.lastNight(pdb),
       pilot.listCandidates(pdb, { status: 'candidate', limit: 50 }),
       pilot.listCandidates(pdb, { status: 'approved', limit: 50 }),
@@ -1047,16 +1050,23 @@ export const PLATFORM_REGISTRY = {
     const stores = shops
       .filter((s) => s.kind === 'store' && s.status !== 'archived' && s.status !== 'deleted' && !s.demo)
       .map((s) => ({ id: s.id, name: s.name, slug: s.slug, share: config.shops.includes(s.id), cases: per.get(s.id) ?? 0 }));
-    return { config, night, candidates, approved, books, sharing: { shops: num(sharing[0]?.shops), cases: num(sharing[0]?.cases) }, shops: stores };
+    return { config, today, night, candidates, approved, books, sharing: { shops: num(sharing[0]?.shops), cases: num(sharing[0]?.cases) }, shops: stores };
   }),
   'p.pilot.save': pproc(
     MANAGERS,
-    z.object({ enabled: z.boolean(), maxUsd: z.number().min(0).max(5), share: z.number().min(0.05).max(0.5), key: z.string().max(300).nullable().optional() }),
+    z.object({
+      enabled: z.boolean(),
+      maxUsd: z.number().min(0).max(5),
+      share: z.number().min(0.05).max(0.5),
+      /** the daily limit of the live answers, every shop together (0 = none); not sent: kept */
+      dayUsd: z.number().min(0).max(200).optional(),
+      key: z.string().max(300).nullable().optional(),
+    }),
     async (ctx, i) => {
       const key = i.key === undefined ? undefined : i.key === null ? null : i.key.trim() || undefined;
       if (typeof key === 'string' && !/^sk-ant-[A-Za-z0-9_-]{20,}$/.test(key)) throw bad('Clé Anthropic invalide (elle commence par sk-ant-)');
-      await savePilotConfig(ctx.t, { enabled: i.enabled, maxUsd: i.maxUsd, share: i.share }, key);
-      await audit(ctx, 'pilot.settings', null, { enabled: i.enabled, maxUsd: i.maxUsd, share: i.share, key: key === undefined ? 'kept' : key === null ? 'removed' : 'new' });
+      await savePilotConfig(ctx.t, { enabled: i.enabled, maxUsd: i.maxUsd, share: i.share, dayUsd: i.dayUsd }, key);
+      await audit(ctx, 'pilot.settings', null, { enabled: i.enabled, maxUsd: i.maxUsd, share: i.share, dayUsd: i.dayUsd, key: key === undefined ? 'kept' : key === null ? 'removed' : 'new' });
       return pilotConfig(ctx.t);
     },
   ),

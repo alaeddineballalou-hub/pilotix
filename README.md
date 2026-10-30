@@ -84,6 +84,12 @@ delays, pressure or « I am human ». The coach approves, edits or rejects each 
 tried on a share of new chats and kept only if it gets at least as many parcels delivered (stopped by itself when worse).
 Code: `packages/core/src/modules/pilotlearn.ts` (the engine), `apps/server/src/jobs.ts` (the night), tests `pilotlearn*.test.ts`.
 
+**Daily limit** (Pilot AI › Réglages, 3 $ by default, 0 = none): the most Pilotix's key spends on live answers in one
+day, every shop together (Algeria's day). Reached: the AI rests until midnight as if Pilot AI were off (Dellal and the CM
+AI agent answer with their simple rules, AI Spy waits; an answer already started finishes), and the owner and the managers
+get one e-mail that day. When Pilotix pays, the CM AI agent and AI Spy answer with Haiku whatever the shop chose. After the
+night, when lessons wait, every control-room member gets the coach's note by e-mail, and the menu shows how many wait.
+
 **AI cost per shop** (control room › Pilot AI, owners and managers): every answer Claude gives on the server (Dellal, CM AI
 agent, AI Spy) is counted per shop, day, agent and payer (Pilotix's key or the shop's own) at Anthropic's list price, in
 `platform.ai_usage`. The card shows each month per shop in USD, and in DA at the rate the owner types (1 $ = … DA), with a

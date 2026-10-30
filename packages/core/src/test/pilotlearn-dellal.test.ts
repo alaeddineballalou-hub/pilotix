@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db, PLATFORM_REGISTRY, ServerHooks } from '../index';
 import { PILOT_PLATFORM_SQL } from '../modules/pilotlearn';
-import { pilotConfig, pilotKey, savePilotConfig } from '../platform/pilotai';
+import { pilotConfig, pilotKey, pilotLiveKey, pilotToday, savePilotConfig, takePilotRestAlert } from '../platform/pilotai';
+import { AI_USAGE_SQL, recordAiUsage } from '../platform/aiusage';
 import type { Tenancy } from '../platform/tenancy';
 import { EMAILS, setup } from './harness';
 
@@ -20,6 +21,7 @@ before(async () => {
   await db.query(`CREATE TABLE IF NOT EXISTS platform.settings (key text PRIMARY KEY, value jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT now())`);
   await db.query(`CREATE TABLE IF NOT EXISTS platform.audit (id bigserial PRIMARY KEY, at timestamptz NOT NULL DEFAULT now(), staff_id integer, staff_name text, shop_id integer, action text NOT NULL, details jsonb NOT NULL DEFAULT '{}')`);
   for (const s of PILOT_PLATFORM_SQL.split(/;\s*\n/).map((x) => x.trim()).filter(Boolean)) await db.query(s);
+  for (const s of AI_USAGE_SQL.split(/;\s*\n/).map((x) => x.trim()).filter(Boolean)) await db.query(s);
   t = { platform: db, shop: () => db, exec: async () => undefined };
 });
 
@@ -44,7 +46,7 @@ test('the key: kept in its own row, never in what the screens read; Pilot AI is 
   assert.equal(await pilotKey(t), null, 'on without a key: nothing to answer with');
   await savePilotConfig(t, { enabled: true, maxUsd: 9, share: 0.9 }, 'sk-ant-api03-test-key-0123456789');
   const c = await pilotConfig(t);
-  assert.deepEqual(c, { enabled: true, maxUsd: 5, share: 0.5, shops: [], hasKey: true }, 'limits are clamped, the key is only "there"');
+  assert.deepEqual(c, { enabled: true, maxUsd: 5, share: 0.5, shops: [], dayUsd: 3, hasKey: true }, 'limits are clamped (3 $ a day by default), the key is only "there"');
   assert.ok(!JSON.stringify(c).includes('sk-ant'));
   assert.equal(await pilotKey(t), 'sk-ant-api03-test-key-0123456789');
   await savePilotConfig(t, { enabled: true, maxUsd: 0.15, share: 0.2 });
@@ -150,4 +152,55 @@ test('the CM AI agent and AI Spy answer with Pilot AI’s key too: on Pilotix’
   assert.equal(d.demo, true);
   assert.equal(d.platform, true, 'the tester says Pilotix turns the AI on, not « add a key »');
   await savePilotConfig(t, { enabled: true, maxUsd: 0.15, share: 0.2 });
+});
+
+test('the daily limit: reached, the AI rests until midnight as if Pilot AI were off; one e-mail a day; raised, it answers again', async () => {
+  await savePilotConfig(t, { enabled: true, maxUsd: 0.15, share: 0.2, dayUsd: 1 });
+  assert.equal((await pilotConfig(t)).dayUsd, 1);
+  // 600,000 Sonnet input tokens = 1.20 $ paid by Pilotix today: over the 1 $ limit
+  await recordAiUsage(t, { shopId: SHOP.id, feature: 'dellal', model: 'claude-sonnet-5-5', payer: 'pilotix', usage: { input_tokens: 600_000 } });
+  // what a shop paid with its own key does not count
+  await recordAiUsage(t, { shopId: SHOP.id, feature: 'dellal', model: 'claude-sonnet-5-5', payer: 'shop', usage: { input_tokens: 9_000_000 } });
+  const today = await pilotToday(t);
+  assert.equal(today.usd.toFixed(2), '1.20');
+  assert.equal(today.rest, true);
+  const reqs: any[] = [];
+  const ctx = await shopCtx(server(reqs, JSON.stringify({ intent: 'question', hide: false, public_reply: 'Chouf l’inbox', private_reply: 'Salam', handoff: false, reason: 'x' })));
+  assert.equal(((await call('dellal.settings.get', ctx, {})) as any).pilotAi, false, 'resting: as if Pilot AI were off');
+  assert.equal(((await call('cm.test', ctx, { body: 'kayen la taille 42 ?' })) as any).by, 'demo');
+  assert.equal(reqs.length, 0, 'no AI request while resting');
+  assert.equal(await pilotLiveKey(t), null, 'no key for a new answer');
+  assert.equal(await pilotKey(t), 'sk-ant-api03-test-key-0123456789', 'an answer already started keeps it (and the night learning has its own budget)');
+  // the owner hears it once a day
+  const hit = await takePilotRestAlert(t);
+  assert.ok(hit && hit.dayUsd === 1 && hit.usd > 1);
+  assert.equal(await takePilotRestAlert(t), null, 'not twice the same day');
+  // raised: it answers again; 0 = no limit
+  await savePilotConfig(t, { enabled: true, maxUsd: 0.15, share: 0.2, dayUsd: 5 });
+  assert.equal(((await call('dellal.settings.get', ctx, {})) as any).pilotAi, true);
+  assert.equal(await takePilotRestAlert(t), null);
+  await savePilotConfig(t, { enabled: true, maxUsd: 0.15, share: 0.2, dayUsd: 0 });
+  assert.equal((await pilotToday(t)).rest, false);
+  // saving without the limit keeps it
+  await savePilotConfig(t, { enabled: true, maxUsd: 0.15, share: 0.2, dayUsd: 2 });
+  await savePilotConfig(t, { enabled: true, maxUsd: 0.15, share: 0.2 });
+  assert.equal((await pilotConfig(t)).dayUsd, 2);
+  await db.query('DELETE FROM platform.ai_usage');
+  await savePilotConfig(t, { enabled: true, maxUsd: 0.15, share: 0.2, dayUsd: 3 });
+});
+
+test('when Pilotix pays, the CM AI agent and AI Spy answer with Haiku, whatever model the shop chose', async () => {
+  const decision = JSON.stringify({ intent: 'question', hide: false, public_reply: 'Mar7ba !', private_reply: 'Salam', handoff: false, reason: 'x' });
+  const reqs: any[] = [];
+  const ctx = await shopCtx(server(reqs, decision));
+  assert.equal(((await call('dellal.settings.get', ctx, {})) as any).settings?.model ?? 'claude-sonnet-5-5', 'claude-sonnet-5-5');
+  await call('cm.test', ctx, { body: 'kayen la taille 42 ?' });
+  const cm = reqs.find((r) => r.feature === 'cm');
+  assert.equal(cm.model, 'claude-haiku-5-5');
+  assert.equal(cm.pilot, true, 'the job started on Pilotix’s key keeps it to its end');
+  const product = (await db.query('SELECT id FROM products ORDER BY id LIMIT 1'))[0];
+  await call('spy.keywords.suggest', ctx, { productId: Number(product.id) }).catch(() => null);
+  const spy = reqs.find((r) => r.feature === 'spy');
+  assert.ok(spy, 'AI Spy asked Claude');
+  assert.equal(spy.model, 'claude-haiku-5-5');
 });

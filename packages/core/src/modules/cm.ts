@@ -21,6 +21,7 @@ import {
   dellalSecret,
   dellalSettings,
   findPlace,
+  PILOT_CHEAP_MODEL,
   pilotOn,
   polishDarija,
   ProductInfo,
@@ -664,10 +665,13 @@ export async function decide(ctx: Ctx, f: CmFacts, s: CmSettings): Promise<CmRun
   const useAi = !!inPage || (await aiKeyed(ctx));
   if (!useAi) return { decision: guard(demoDecision(f), f, s), by: 'demo', model: null, usage, darija };
   const ds = await dellalSettings(ctx.db);
+  // Pilotix's key pays: Haiku, whatever the shop chose (about 20 × cheaper); the shop's own key: the shop's model
+  const pilot = !inPage && (await pilotOn(ctx));
+  const model = pilot ? PILOT_CHEAP_MODEL : ds.model;
   const complete: Complete = (req) =>
-    inPage ? (inPage({ ...req, runTool: async () => ({ error: 'Pas d’outil ici' }) }) as Promise<AiResponse>) : (ctx.server!.dellal!('complete', { ...req, feature: 'cm' }, ctx) as Promise<AiResponse>);
+    inPage ? (inPage({ ...req, runTool: async () => ({ error: 'Pas d’outil ici' }) }) as Promise<AiResponse>) : (ctx.server!.dellal!('complete', { ...req, feature: 'cm', pilot }, ctx) as Promise<AiResponse>);
   const userLine = `Commentaire${f.author ? ` de ${f.author}` : ''} : « ${f.body.slice(0, 1500)} »`;
-  const res = await complete({ model: ds.model, system: cmSystem(f, s), messages: [{ role: 'user', content: userLine }], tools: [], max_tokens: 800 });
+  const res = await complete({ model, system: cmSystem(f, s), messages: [{ role: 'user', content: userLine }], tools: [], max_tokens: 800 });
   usage.input_tokens += num(res.usage?.input_tokens);
   usage.output_tokens += num(res.usage?.output_tokens);
   const read = readDecision(res.content.map((b) => (b.type === 'text' ? b.text : '')).join(''));
@@ -677,7 +681,7 @@ export async function decide(ctx: Ctx, f: CmFacts, s: CmSettings): Promise<CmRun
   const avoid = parseAvoid(ds.darijaAvoid);
   for (const k of ['publicReply', 'privateReply'] as const) {
     if (!d[k]) continue;
-    const p = await polishDarija(complete, ds.model, d[k], { customer: f.body, avoid });
+    const p = await polishDarija(complete, model, d[k], { customer: f.body, avoid });
     usage.input_tokens += p.usage.input_tokens;
     usage.output_tokens += p.usage.output_tokens;
     d[k] = p.text;

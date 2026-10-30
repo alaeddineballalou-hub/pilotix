@@ -6,7 +6,7 @@ import { AppError, Ctx } from './rpc';
 import { AiRequest, AiResponse, DellalChannel, dellalSecret } from './modules/dellal';
 import { NOTIFY_SMS_SECRET, notifySettings } from './modules/notify';
 
-import { pilotKey } from './platform/pilotai';
+import { pilotKey, pilotLiveKey } from './platform/pilotai';
 import { recordAiUsage } from './platform/aiusage';
 import type { PilotAiReq } from './modules/pilotlearn';
 
@@ -112,12 +112,13 @@ async function send(ctx: Ctx, a: { channel: DellalChannel; externalId: string; a
 
 async function complete(ctx: Ctx, req: AiRequest): Promise<AiResponse> {
   // Pilot AI: Pilotix's own key for every shop (the control room); otherwise, on an install without it, the shop's key
-  const pilot = ctx.t ? await pilotKey(ctx.t).catch(() => null) : null;
+  // a job that started on Pilotix's key keeps it to its end; otherwise Pilotix's key only while today's limit is not reached
+  const pilot = ctx.t ? await (req.pilot ? pilotKey(ctx.t) : pilotLiveKey(ctx.t)).catch(() => null) : null;
   const key = pilot || (await dellalSecret(ctx.db, 'ai'));
   if (!key) throw new AppError('bad_request', 'Clé API de l’IA manquante (Messages › Réglages).');
   // Dellal's instructions are long: each block is cached on its own (the part every shop shares, this shop's part, this
   // conversation's part), so a new chat reuses the first two and each following message is billed mostly at the cached rate.
-  const { tools, systemBlocks, feature, ...rest } = req;
+  const { tools, systemBlocks, feature, pilot: _pilot, ...rest } = req;
   const blocks = (systemBlocks ?? []).filter((b) => b.trim()).slice(0, 4);
   const system = (blocks.length ? blocks : [req.system]).map((text) => ({ type: 'text', text, cache_control: { type: 'ephemeral' } }));
   const body = { ...rest, ...(tools?.length ? { tools } : {}), system };

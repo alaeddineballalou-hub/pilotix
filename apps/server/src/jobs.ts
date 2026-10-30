@@ -8,7 +8,7 @@ import { CoreService, ShopRef } from './core.service';
 import { watchNow } from './courierWatch';
 import { doctorState } from './doctor';
 import { mailConfigured, sendMail } from './mail';
-import { qualityAlertMail, reminderMail } from './mails';
+import { pilotCoachMail, qualityAlertMail, reminderMail } from './mails';
 import { syncTurnstile } from './turnstile';
 
 /**
@@ -238,9 +238,18 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       const key = await core.pilotKey(t);
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const batch = key ? require('@pilotix/core/dist/dellal-server').pilotBatch(key) : null;
-      const r = await core.pilotLearn.learnNight(pdb, batch, { now: new Date(), maxUsd: conf.maxUsd });
+      const startedAt = new Date();
+      const r = await core.pilotLearn.learnNight(pdb, batch, { now: startedAt, maxUsd: conf.maxUsd });
       log.log(`${shops} shop(s) · ${r.cases.total} chat(s) · ${r.spend.line}`);
       doctorState.job('pilot-ai-night', true);
+      // the coach's morning note: lessons wait for an answer (every active staff member: anyone of them may approve)
+      if (mailConfigured()) {
+        const d = await core.pilotCoachDigest(t, startedAt);
+        if (d.waiting > 0) {
+          const staff = await t.platform.query<{ name: string; email: string }>(`SELECT name, email FROM platform.staff WHERE active`);
+          for (const s of staff) await sendMail(pilotCoachMail({ to: s.email, name: s.name, ...d })).catch((e) => log.warn(`coach note to ${s.email}: ${e?.message || e}`));
+        }
+      }
     } catch (e) {
       doctorState.job('pilot-ai-night', false, (e as Error).message);
       log.error(`failed: ${(e as Error).message}`);

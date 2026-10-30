@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, staffLogin } from '../index';
 import { runDellal } from '../dellal-server';
 import { aiCostUsd, aiPrice, aiUsageOfMonth, monthOf, recordAiUsage } from '../platform/aiusage';
-import { savePilotConfig } from '../platform/pilotai';
+import { pilotCoachDigest, savePilotConfig } from '../platform/pilotai';
 import { setRaw } from '../modules/admin';
 import { DELLAL_SECRETS } from '../modules/dellal';
 import { loadShop } from '../platform/shops';
@@ -132,11 +132,17 @@ test('the server’s AI call counts each answer for its shop, under its agent, p
     await runDellal('complete', { ...req, feature: 'cm' }, ctx as any);
     assert.equal(sent[0].key, 'sk-ant-api03-pilotix-key-0123456789');
     assert.equal(sent[0].body.feature, undefined, 'the agent’s name is not sent to Anthropic');
+    // today's limit reached: a new job gets no Pilotix key (and the shop has none: refused); a job that started keeps it
+    await savePilotConfig(t, { enabled: true, maxUsd: 0.15, share: 0.2, dayUsd: 0.0001 });
+    await assert.rejects(runDellal('complete', { ...req, feature: 'cm' }, ctx as any), /Clé API/);
+    await runDellal('complete', { ...req, feature: 'cm', pilot: true }, ctx as any);
+    assert.equal(sent[1].key, 'sk-ant-api03-pilotix-key-0123456789');
+    assert.equal(sent[1].body.pilot, undefined, 'not sent to Anthropic');
     // Pilot AI without its key: the shop's own key answers, counted as paid by the shop
     await savePilotConfig(t, { enabled: true, maxUsd: 0.15, share: 0.2 }, null);
     await setRaw(db, DELLAL_SECRETS.ai, 'sk-ant-api03-shop-own-key-0123456789');
     await runDellal('complete', { ...req, feature: 'dellal' }, ctx as any);
-    assert.equal(sent[1].key, 'sk-ant-api03-shop-own-key-0123456789');
+    assert.equal(sent[2].key, 'sk-ant-api03-shop-own-key-0123456789');
     // no agent name: « other »
     await runDellal('complete', req, ctx as any);
   } finally {
@@ -144,10 +150,41 @@ test('the server’s AI call counts each answer for its shop, under its agent, p
   }
   const rows = await t.platform.query(`SELECT feature, payer, calls, input_tokens, cache_read, usd FROM platform.ai_usage WHERE shop_id = $1`, [s1.id]);
   const cm = rows.find((r: any) => r.feature === 'cm' && r.payer === 'pilotix')!;
-  assert.equal(Number(cm.calls), 1);
+  assert.equal(Number(cm.calls), 2);
   assert.ok(rows.some((r: any) => r.feature === 'dellal' && r.payer === 'shop'), 'the shop’s own key: paid by the shop');
   assert.ok(rows.some((r: any) => r.feature === 'other' && r.payer === 'shop'));
-  assert.equal(Number(cm.input_tokens), 1200);
-  assert.equal(Number(cm.cache_read), 3000);
-  assert.equal(Number(cm.usd).toFixed(6), aiCostUsd('claude-haiku-5-5', { input_tokens: 1200, output_tokens: 80, cache_read_input_tokens: 3000 }).toFixed(6));
+  assert.equal(Number(cm.input_tokens), 2400);
+  assert.equal(Number(cm.cache_read), 6000);
+  assert.equal(Number(cm.usd).toFixed(6), (2 * aiCostUsd('claude-haiku-5-5', { input_tokens: 1200, output_tokens: 80, cache_read_input_tokens: 3000 })).toFixed(6));
+});
+
+test('control room: today’s spend against the daily limit, the lessons waiting in the menu, the coach’s morning note', async () => {
+  const { t, p } = await server();
+  const s1 = (await loadShop(t, { primary: true }))!;
+  await savePilotConfig(t, { enabled: true, maxUsd: 0.15, share: 0.2, dayUsd: 1 }, 'sk-ant-api03-pilotix-key-0123456789');
+  await recordAiUsage(t, { shopId: s1.id, feature: 'dellal', model: 'claude-sonnet-5-5', payer: 'pilotix', usage: { input_tokens: 200_000 } }); // 0.40 $
+  let st = await p('p.pilot.state', {});
+  assert.equal(st.config.dayUsd, 1);
+  assert.equal(st.today.usd.toFixed(2), '0.40');
+  assert.equal(st.today.rest, false);
+  await recordAiUsage(t, { shopId: s1.id, feature: 'cm', model: 'claude-sonnet-5-5', payer: 'pilotix', usage: { input_tokens: 400_000 } }); // +0.80 $
+  st = await p('p.pilot.state', {});
+  assert.equal(st.today.rest, true, 'over the limit: resting');
+  // the limit is saved with the other settings (managers), and kept when not sent
+  await p('p.pilot.save', { enabled: true, maxUsd: 0.15, share: 0.2, dayUsd: 4 });
+  assert.equal((await p('p.pilot.state', {})).today.rest, false);
+  await p('p.pilot.save', { enabled: true, maxUsd: 0.15, share: 0.2 });
+  assert.equal((await p('p.pilot.state', {})).config.dayUsd, 4);
+
+  // lessons waiting: the menu's number and the coach's note (tonight's new ones apart, the first five)
+  const since = new Date(Date.now() - 60_000);
+  await t.platform.query(`INSERT INTO platform.pilot_lessons (topic, text, status, prio, fp, created_at) VALUES ('price', 'Donner le total avec la livraison dès la première réponse.', 'candidate', 2, 'fp1', now() - interval '2 days')`);
+  await t.platform.query(`INSERT INTO platform.pilot_lessons (topic, text, status, prio, fp) VALUES ('trust', 'Rappeler qu’on paie à la livraison.', 'candidate', 1, 'fp2')`);
+  await t.platform.query(`INSERT INTO platform.pilot_lessons (topic, text, status, prio, fp) VALUES ('fee', 'Déjà approuvée.', 'approved', 1, 'fp3')`);
+  assert.equal((await p('p.dashboard', {})).pilot, 2);
+  const d = await pilotCoachDigest(t, since);
+  assert.equal(d.waiting, 2);
+  assert.equal(d.fresh, 1, 'one came tonight');
+  assert.equal(d.lessons[0].topic, 'price', 'the most important first');
+  assert.equal((await pilotCoachDigest(t)).fresh, 0);
 });

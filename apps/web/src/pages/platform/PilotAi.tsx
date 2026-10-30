@@ -48,12 +48,19 @@ function SettingsCard({ d, manager }: { d: State; manager: boolean }) {
   const [on, setOn] = useState(d.config.enabled);
   const [max, setMax] = useState(String(d.config.maxUsd));
   const [share, setShare] = useState(String(Math.round(d.config.share * 100)));
+  const [day, setDay] = useState(String(d.config.dayUsd));
   const [key, setKey] = useState('');
   const save = usePAction('p.pilot.save', { success: t('platform.saved'), onDone: () => setKey('') });
-  const send = (k?: string | null) => save.mutate({ enabled: on, maxUsd: Number(max) || 0, share: (Number(share) || 20) / 100, ...(k !== undefined ? { key: k } : {}) });
+  const send = (k?: string | null) =>
+    save.mutate({ enabled: on, maxUsd: Number(max) || 0, share: (Number(share) || 20) / 100, dayUsd: Math.max(0, Number(day.replace(',', '.')) || 0), ...(k !== undefined ? { key: k } : {}) });
   const ready = d.config.enabled && d.config.hasKey;
+  const rest = ready && d.today.rest;
+  const usd = (x: number) => `${x.toFixed(2)} $`;
   return (
-    <Card title={t('platform.pilot.settings')} badge={<span className={`chip ${ready ? 'pp-chip-ok' : 'pp-chip-warn'}`}>{ready ? t('platform.pilot.on') : t('platform.pilot.off')}</span>}>
+    <Card
+      title={t('platform.pilot.settings')}
+      badge={<span className={`chip ${ready && !rest ? 'pp-chip-ok' : 'pp-chip-warn'}`}>{rest ? t('platform.pilot.resting') : ready ? t('platform.pilot.on') : t('platform.pilot.off')}</span>}
+    >
       <p className="small muted">{t('platform.pilot.settingsText')}</p>
       <label className="check">
         <input type="checkbox" disabled={!manager} checked={on} onChange={(e) => setOn(e.target.checked)} /> {t('platform.pilot.enable')}
@@ -61,6 +68,14 @@ function SettingsCard({ d, manager }: { d: State; manager: boolean }) {
       <Field label={t('platform.pilot.key')} hint={d.config.hasKey ? t('platform.pilot.keySaved') : t('platform.pilot.keyHint')}>
         <input type="password" className="ltr" autoComplete="off" disabled={!manager} value={key} placeholder={d.config.hasKey ? '••••••••' : 'sk-ant-…'} onChange={(e) => setKey(e.target.value)} />
       </Field>
+      <Field label={t('platform.pilot.dayUsd')} hint={t('platform.pilot.dayUsdHint')}>
+        <input type="number" className="ltr" min={0} max={200} step={0.5} disabled={!manager} value={day} onChange={(e) => setDay(e.target.value)} />
+      </Field>
+      {rest ? (
+        <p className="warnbox">{t('platform.pilot.restText', { usd: usd(d.today.usd), max: usd(d.today.dayUsd) })}</p>
+      ) : (
+        <p className="small muted">{d.today.dayUsd > 0 ? t('platform.pilot.today', { usd: usd(d.today.usd), max: usd(d.today.dayUsd) }) : t('platform.pilot.todayNoLimit', { usd: usd(d.today.usd) })}</p>
+      )}
       <div className="grid2">
         <Field label={t('platform.pilot.maxUsd')} hint={t('platform.pilot.maxUsdHint')}>
           <input type="number" className="ltr" min={0} max={5} step={0.05} disabled={!manager} value={max} onChange={(e) => setMax(e.target.value)} />
@@ -86,7 +101,6 @@ function SettingsCard({ d, manager }: { d: State; manager: boolean }) {
   );
 }
 
-/** Which shops teach Dellal: chosen here only (their terms say it); turning one off deletes what was kept of its chats. */
 // ---------------------------------------------------------------- what each shop's AI costs (to bill it)
 type Costs = POut<'p.ai.costs'>;
 const FEATS = ['dellal', 'cm', 'spy'] as const;
@@ -236,6 +250,7 @@ function CostCard() {
   );
 }
 
+/** Which shops teach Dellal: chosen here only (their terms say it); turning one off deletes what was kept of its chats. */
 function ShopsCard({ d, manager }: { d: State; manager: boolean }) {
   const { t } = useTranslation();
   const [q, setQ] = useState('');

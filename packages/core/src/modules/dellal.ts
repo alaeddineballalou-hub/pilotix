@@ -12,7 +12,7 @@ import { checkDarija, DARIJA_FIXER_SYSTEM, darijaRewritePrompt, DarijaIssue, DEL
 import { markReply, noticeForConversation, ordersForDellal, sendInPreview } from './notify';
 import { createOrder } from './orders';
 import { bookFor, BookRef, pickModel } from './pilotlearn';
-import { pilotConfig } from '../platform/pilotai';
+import { pilotConfig, pilotToday } from '../platform/pilotai';
 
 // ---------------------------------------------------------------- settings and secrets
 export const DELLAL_CHANNELS = ['whatsapp', 'messenger', 'instagram', 'tiktok', 'test'] as const;
@@ -605,11 +605,15 @@ export async function pilotOn(ctx: Ctx): Promise<boolean> {
   if (!ctx.t || !ctx.server?.dellal || !ctx.shop) return false;
   try {
     const c = await pilotConfig(ctx.t);
-    return c.enabled && c.hasKey;
+    // today's limit reached (every shop together): the AI rests until midnight, as if Pilot AI were off
+    return c.enabled && c.hasKey && !(await pilotToday(ctx.t, c)).rest;
   } catch {
     return false;
   }
 }
+
+/** The model of the CM AI agent and AI Spy when Pilotix pays: Haiku (about 20 × cheaper than Sonnet). */
+export const PILOT_CHEAP_MODEL = 'claude-haiku-5-5';
 
 /**
  * Claude answers on the server: Pilot AI's key (Pilotix's server: shops bring no key) or, without it, the shop's own key.
@@ -768,6 +772,8 @@ export interface AiRequest {
   systemBlocks?: string[];
   /** which AI agent asks (dellal, cm, spy): its cost is counted for the shop under that name (platform/aiusage.ts) */
   feature?: 'dellal' | 'cm' | 'spy';
+  /** Pilotix's key pays this job (decided once at its start: a daily limit reached in the middle never cuts an answer in two) */
+  pilot?: boolean;
   messages: AiMsg[];
   tools: readonly { name: string; description: string; input_schema: unknown }[];
   max_tokens: number;
@@ -820,7 +826,7 @@ export async function runAgent(ctx: Ctx, convId: number, opts: { followUp?: bool
     return out;
   };
   const complete = (req: AiRequest): Promise<AiResponse> =>
-    inPage ? (inPage({ ...req, runTool }) as Promise<AiResponse>) : useAi ? (ctx.server!.dellal!('complete', { ...req, feature: 'dellal' }, ctx) as Promise<AiResponse>) : demoBrain(ctx, req);
+    inPage ? (inPage({ ...req, runTool }) as Promise<AiResponse>) : useAi ? (ctx.server!.dellal!('complete', { ...req, feature: 'dellal', pilot: pilotAi }, ctx) as Promise<AiResponse>) : demoBrain(ctx, req);
   for (let round = 0; round < 6; round++) {
     const res = await complete({ model, system, systemBlocks: prompt.blocks, messages, tools: DELLAL_TOOLS, max_tokens: 1024 });
     usage = { input_tokens: usage.input_tokens + num(res.usage?.input_tokens), output_tokens: usage.output_tokens + num(res.usage?.output_tokens) };

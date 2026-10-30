@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
 import { getRaw, setRaw } from './admin';
-import { AiRequest, AiResponse, aiKeyed, dellalSettings } from './dellal';
+import { AiRequest, AiResponse, aiKeyed, dellalSettings, PILOT_CHEAP_MODEL, pilotOn } from './dellal';
 
 // ---------------------------------------------------------------- settings and secrets
 export const SPY_SOURCES = ['extension', 'scrapecreators', 'searchapi'] as const;
@@ -535,7 +535,9 @@ async function ask(ctx: Ctx, system: string, user: string, maxTokens: number): P
   const keyed = await aiKeyed(ctx);
   if (!inPage && !keyed) return null;
   const s = await dellalSettings(ctx.db);
-  const req: AiRequest = { model: s.model, system, messages: [{ role: 'user', content: user }], tools: [], max_tokens: maxTokens, feature: 'spy' };
+  // Pilotix's key pays: Haiku, whatever the shop chose (about 20 × cheaper); the shop's own key: the shop's model
+  const pilot = !inPage && (await pilotOn(ctx));
+  const req: AiRequest = { model: pilot ? PILOT_CHEAP_MODEL : s.model, system, messages: [{ role: 'user', content: user }], tools: [], max_tokens: maxTokens, feature: 'spy', pilot };
   const res: AiResponse = inPage ? ((await inPage({ ...req, runTool: async () => ({}) })) as AiResponse) : ((await ctx.server!.dellal!('complete', req, ctx)) as AiResponse);
   return res.content
     .map((b) => (b.type === 'text' ? b.text : ''))
