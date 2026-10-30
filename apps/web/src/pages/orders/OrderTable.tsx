@@ -15,14 +15,14 @@ import { AdChip } from './AdSource';
 import { ScoreChip } from '../../ui/clientScore';
 
 /** Built-in columns, in the original order. */
-export type OrderColumn = 'order' | 'client' | 'address' | 'products' | 'variant' | 'total' | 'conf' | 'follow' | 'company' | 'agent' | 'fagent' | 'phone' | 'wilaya' | 'since';
-export const DEFAULT_COLUMNS: OrderColumn[] = ['order', 'client', 'address', 'products', 'variant', 'total', 'conf', 'follow', 'company', 'agent', 'fagent'];
+export type OrderColumn = 'order' | 'client' | 'score' | 'address' | 'products' | 'variant' | 'total' | 'conf' | 'follow' | 'company' | 'agent' | 'fagent' | 'phone' | 'wilaya' | 'since';
+export const DEFAULT_COLUMNS: OrderColumn[] = ['order', 'client', 'score', 'address', 'products', 'variant', 'total', 'conf', 'follow', 'company', 'agent', 'fagent'];
 
 /** Column → orders.list sort key (when sortable). */
 const SORT_KEY: Partial<Record<OrderColumn, OrderSort>> = {
-  order: 'created_at', client: 'customer_name', address: 'wilaya_id', wilaya: 'wilaya_id', total: 'total', conf: 'conf_status', follow: 'follow_status', since: 'updated_at',
+  order: 'created_at', client: 'customer_name', score: 'score', address: 'wilaya_id', wilaya: 'wilaya_id', total: 'total', conf: 'conf_status', follow: 'follow_status', since: 'updated_at',
 };
-export type OrderSort = 'created_at' | 'confirmed_at' | 'next_call_at' | 'updated_at' | 'total' | 'customer_name' | 'wilaya_id' | 'shipped_at' | 'delivered_at' | 'ref' | 'conf_status' | 'follow_status';
+export type OrderSort = 'created_at' | 'confirmed_at' | 'next_call_at' | 'updated_at' | 'total' | 'customer_name' | 'wilaya_id' | 'shipped_at' | 'delivered_at' | 'ref' | 'conf_status' | 'follow_status' | 'score';
 
 /** A column given by the screen using the table (e.g. "Frais société"). */
 export interface ExtraColumn {
@@ -87,7 +87,7 @@ export function OrderTable(p: OrderTableProps) {
 
   const label: Record<OrderColumn, string> = useMemo(
     () => ({
-      order: t('orders.col.order'), client: t('orders.col.client'), address: t('orders.col.address'), products: t('orders.col.products'), variant: t('orders.col.variant'), total: t('orders.col.total'),
+      order: t('orders.col.order'), client: t('orders.col.client'), score: t('clients.score.col'), address: t('orders.col.address'), products: t('orders.col.products'), variant: t('orders.col.variant'), total: t('orders.col.total'),
       conf: t('orders.col.conf'), follow: t('orders.col.follow'), company: t('orders.col.tracking'), agent: t('orders.col.agent'), fagent: t('orders.col.fagent'), phone: t('orders.col.phone'),
       wilaya: t('orders.col.wilaya'), since: t('orders.col.since'),
     }),
@@ -128,8 +128,16 @@ export function OrderTable(p: OrderTableProps) {
         return (
           <td key={c} data-l={label[c]}>
             {o.customerName}
-            {o.clientScore && <ScoreChip s={o.clientScore} short />}
+            {/* the score has its own column here (sortable); a screen without it shows it next to the name */}
+            {o.clientScore && !cols.includes('score') && <ScoreChip s={o.clientScore} short />}
             <small className="ltr">{o.phone}</small>
+          </td>
+        );
+      case 'score':
+        // a new customer (nothing known yet): no chip, as in every list
+        return (
+          <td key={c} data-l={label[c]} title={o.clientScore ? `${t(`clients.score.level.${o.clientScore.level}`)} — ${t('clients.score.help')}` : undefined}>
+            {o.clientScore && o.clientScore.level !== 'new' ? <ScoreChip s={o.clientScore} /> : <span className="muted">—</span>}
           </td>
         );
       case 'phone':
