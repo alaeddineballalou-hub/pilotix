@@ -68,3 +68,6 @@
 .px-cfees small { font-size: 12px; line-height: 1.35; }
 /* « Frais société » column: the fee comes from the company's API */
 .px-api-tag { margin-inline-start: 6px; padding: 0 6px; border-radius: 99px; font-size: 10.5px; font-weight: 800; letter-spacing: .02em; color: var(--c-info-ink, #2F5BD3); background: var(--c-info-tint, #EEF3FF); }
+/* the company weighed it heavier than declared */
+.px-heavier { display: inline-flex; align-items: center; gap: 5px; margin-top: 3px; padding: 2px 8px; border-radius: 8px; font-size: 12px; font-weight: 700; color: var(--c-warn-ink, #8A5A00); background: var(--c-warn-tint, #FFF2DA); width: fit-content; }
+.px-heavier svg { width: 14px; height: 14px; flex: none; }

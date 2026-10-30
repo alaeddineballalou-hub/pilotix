@@ -29,8 +29,19 @@ export function weightRuleOf(kind: unknown, config: unknown): WeightRule {
   return kind === 'zr' || kind === 'zr_legacy' ? ZR_WEIGHT : NONE;
 }
 
-/** The weight fee for this many kg: every kg started above the free ones. */
-export const weightFee = (kg: number | null | undefined, r: WeightRule) => (kg && r.perKg > 0 && kg > r.freeKg + 1e-9 ? Math.ceil(kg - r.freeKg - 1e-9) * r.perKg : 0);
+/** ZR weighs in whole kilos (no comma): 5 kg → none above, 6 kg → 1 kg above. */
+export const wholeKg = (kg: number | null | undefined) => (kg && isFinite(kg) && kg > 0 ? Math.round(kg) : null);
+
+/** The weight fee for this weight: every whole kilo above the free ones (ZR: 5 kg → 0, 6 kg → 50 DA, 7 kg → 100 DA). */
+export function weightFee(kg: number | null | undefined, r: WeightRule): number {
+  const w = wholeKg(kg);
+  if (w === null || r.perKg <= 0) return 0;
+  const above = w - Math.round(r.freeKg);
+  return above > 0 ? above * r.perKg : 0;
+}
+
+/** The weight Pilotix declares to the courier for a parcel: its products' weight, whole kilos, at least 1 kg. */
+export const declaredKg = (productsKg: unknown) => Math.max(1, Math.round(Number(productsKg) || 0));
 
 /** orders.courier_fees */
 export interface CourierFees {

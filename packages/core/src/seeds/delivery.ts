@@ -1,5 +1,5 @@
 import { FOLLOW_ON_ROAD } from '@pilotix/shared';
-import { fakeTracking, word } from '../couriers/demo';
+import { fakeTracking, word, zrWeighs } from '../couriers/demo';
 import { WILAYAS } from '@pilotix/shared';
 import type { Db } from '../db';
 import { num } from '../db';
@@ -97,7 +97,8 @@ export async function seedZrFees(db: Db, now: number): Promise<void> {
   const at = new Date(now - 3 * 3_600_000).toISOString();
   for (const p of zrParcels) {
     if (p.home === null) continue;
-    const kg = Math.round(Number(p.kg) * 100) / 100 || null;
+    // ZR weighs in whole kilos; one heavy parcel in three it finds 2 kg heavier than what was declared
+    const kg = zrWeighs(num(p.id), p.kg);
     const fee = weightFee(kg, ZR_WEIGHT);
     const delivery = num(p.is_stopdesk ? p.desk : p.home);
     const fees = { delivery, ret: num(p.return_fee), kg, weight: p.cashed ? fee : null, est: fee, estRet: fee, at, src: p.cashed ? 'pay' : 'track' };

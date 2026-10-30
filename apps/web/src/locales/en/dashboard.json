@@ -800,5 +800,20 @@
     "total": "Total",
     "base": "All parcels confirmed in the period: {{p}} % returned ({{r}} of {{f}} finished).",
     "baseNone": "No finished parcel in this period yet to compare."
+  },
+  "over": {
+    "title": "Overweight parcels",
+    "sub": "The parcels the company weighed heavier than the weight Pilotix declared, and its weight fees (ZR: 50 DA a kilo above 5 kg).",
+    "empty": "No parcel weighed heavier than declared in this period.",
+    "sum_one": "{{count}} parcel weighed heavier · +{{kg}} kg in all",
+    "sum_other": "{{count}} parcels weighed heavier · +{{kg}} kg in all",
+    "product": "Product",
+    "parcels": "Parcels",
+    "declared": "Product weight",
+    "weighed": "Weighed by the company",
+    "fees": "Weight fees",
+    "kg": "{{n}} kg",
+    "kgRange": "{{a}} – {{b}} kg",
+    "note": "Each parcel counts under its heaviest product. The fees are exact once the company has paid; before that, they are counted from the weight it found."
   }
 }

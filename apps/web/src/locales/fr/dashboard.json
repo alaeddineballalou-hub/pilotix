@@ -800,5 +800,20 @@
     "total": "Total",
     "base": "Sur tous les colis confirmés de la période : {{p}} % de retours ({{r}} sur {{f}} terminés).",
     "baseNone": "Pas encore de colis terminé sur cette période pour comparer."
+  },
+  "over": {
+    "title": "Surpoids des colis",
+    "sub": "Les colis que la société a pesés plus lourds que le poids déclaré par Pilotix, et ses frais de poids (ZR : 50 DA par kilo au-dessus de 5 kg).",
+    "empty": "Aucun colis pesé plus lourd que déclaré sur cette période.",
+    "sum_one": "{{count}} colis pesé plus lourd · +{{kg}} kg en tout",
+    "sum_other": "{{count}} colis pesés plus lourds · +{{kg}} kg en tout",
+    "product": "Produit",
+    "parcels": "Colis",
+    "declared": "Poids du produit",
+    "weighed": "Pesé par la société",
+    "fees": "Frais de poids",
+    "kg": "{{n}} kg",
+    "kgRange": "{{a}} – {{b}} kg",
+    "note": "Chaque colis compte sous son produit le plus lourd. Les frais sont exacts une fois la société payée ; avant, ils sont comptés depuis le poids qu’elle a trouvé."
   }
 }

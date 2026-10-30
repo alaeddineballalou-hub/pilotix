@@ -403,7 +403,8 @@
     "feesWeight": "weight {{v}} ({{kg}} kg)",
     "feesKg": "{{kg}} kg",
     "feesApi": "from {{name}}’s API",
-    "feesPaid": "taken by {{name}} in its payment"
+    "feesPaid": "taken by {{name}} in its payment",
+    "feesHeavier": "Weighed {{kg}} kg by {{name}} (declared {{declared}} kg)"
   },
   "ph": {
     "per": {

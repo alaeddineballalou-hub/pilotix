@@ -18,11 +18,14 @@ const one = async (sql: string, args: unknown[] = []) => (await db.query(sql, ar
 const zrId = async () => Number((await one(`SELECT id FROM delivery_companies WHERE kind = 'zr' LIMIT 1`)).id);
 const now = () => new Date().toISOString();
 
-test('ZR’s weight fee: 50 DA a kg started above 5 kg, on the delivery and the return; a company’s own rule wins', () => {
+test('ZR’s weight fee: whole kilos (no comma) — 5 kg → 0, 6 kg → 50 DA, 7 kg → 100 DA; a company’s own rule wins', () => {
   assert.deepEqual(weightRuleOf('zr', {}), ZR_WEIGHT);
   assert.equal(weightFee(5, ZR_WEIGHT), 0);
-  assert.equal(weightFee(5.01, ZR_WEIGHT), 50);
-  assert.equal(weightFee(7.2, ZR_WEIGHT), 150);
+  assert.equal(weightFee(6, ZR_WEIGHT), 50);
+  assert.equal(weightFee(7, ZR_WEIGHT), 100);
+  // a weight the API writes as a decimal (5.0, 6.000001) is its whole kilo
+  assert.equal(weightFee(5.0000001, ZR_WEIGHT), 0);
+  assert.equal(weightFee(5.999999, ZR_WEIGHT), 50);
   assert.equal(weightFee(null, ZR_WEIGHT), 0);
   assert.deepEqual(weightRuleOf('yalidine', {}), { freeKg: 0, perKg: 0, onReturn: true });
   assert.deepEqual(weightRuleOf('zr', { overweight: { freeKg: 3, perKg: 40, onReturn: false } }), { freeKg: 3, perKg: 40, onReturn: false });
@@ -33,13 +36,13 @@ test('the courier’s numbers: counted from the weight it found, exact once it p
   const o = await one(`SELECT id FROM orders WHERE company_id = $1 AND follow_status = 'out_for_delivery' AND NOT cashed ORDER BY id LIMIT 1`, [zr]);
   const id = Number(o.id);
   await db.query('UPDATE orders SET courier_fees = NULL WHERE id = $1', [id]);
-  // a status: ZR weighed it 7.2 kg (declared under 5): 150 DA of weight fee counted on the 400 DA delivery
-  assert.equal(await saveCourierFees(db, id, { delivery: 400, ret: 250, kg: 7.2 }, 'track', ZR_WEIGHT, now()), true);
+  // a status: ZR weighed it 8 kg (declared under 5): 150 DA of weight fee counted on the 400 DA delivery
+  assert.equal(await saveCourierFees(db, id, { delivery: 400, ret: 250, kg: 8 }, 'track', ZR_WEIGHT, now()), true);
   assert.equal(Number((await one('SELECT delivery_cost FROM orders WHERE id = $1', [id])).delivery_cost), 550);
   let f = apiFees((await one('SELECT courier_fees FROM orders WHERE id = $1', [id])).courier_fees)!;
   assert.deepEqual({ delivery: f.delivery, ret: f.ret, weight: f.weight, weightRet: f.weightRet, exact: f.exact }, { delivery: 400, ret: 250, weight: 150, weightRet: 150, exact: false });
   // the same answer again: nothing changes
-  assert.equal(await saveCourierFees(db, id, { delivery: 400, ret: 250, kg: 7.2 }, 'track', ZR_WEIGHT, now()), false);
+  assert.equal(await saveCourierFees(db, id, { delivery: 400, ret: 250, kg: 8 }, 'track', ZR_WEIGHT, now()), false);
   // its payment: the exact weight fee (100 DA) — a later status keeps it
   await saveCourierFees(db, id, { delivery: 400, ret: 250, kg: 7, weight: 100 }, 'pay', ZR_WEIGHT, now());
   await saveCourierFees(db, id, { delivery: 400, ret: 250, kg: 9 }, 'track', ZR_WEIGHT, now());
@@ -86,7 +89,7 @@ test('the status sync and ZR’s payment lines bring its prices, weight and weig
   await db.query('UPDATE orders SET courier_fees = NULL WHERE id = $1', [id]);
   const server = {
     courier: async (action: string, args: any) => {
-      if (action === 'track') return args.items.filter((it: any) => Number(it.id) === id).map((it: any) => ({ id: it.id, key: 'vers_wilaya', status: 'Vers wilaya', at: null, costs: { delivery: 450, ret: 250, kg: 6.3 } }));
+      if (action === 'track') return args.items.filter((it: any) => Number(it.id) === id).map((it: any) => ({ id: it.id, key: 'vers_wilaya', status: 'Vers wilaya', at: null, costs: { delivery: 450, ret: 250, kg: 7 } }));
       throw new Error('unexpected ' + action);
     },
   } as any;
@@ -95,9 +98,11 @@ test('the status sync and ZR’s payment lines bring its prices, weight and weig
   const fees: any = await call('orders.companyFees', admin, { ids: [id] });
   assert.deepEqual({ fee: fees[id].fee, extra: fees[id].extra }, { fee: 450 + 100, extra: 100 });
   const card: any = await call('orders.get', admin, { id });
-  assert.deepEqual(card.courierFees, { delivery: 450, ret: 250, weight: 100, weightRet: 100, kg: 6.3, exact: false });
+  const { declaredKg, ...rest } = card.courierFees;
+  assert.deepEqual(rest, { delivery: 450, ret: 250, weight: 100, weightRet: 100, kg: 7, exact: false });
+  assert.ok(declaredKg >= 1, 'the weight Pilotix declared to ZR');
 
-  // ZR pays a delivered parcel: its line says what it took on it (« weightCost » 200 DA for 8.5 kg): exact on the order
+  // ZR pays a delivered parcel: its line says what it took on it (« weightCost » 200 DA for 9 kg): exact on the order
   const d = await one(`SELECT id, tracking FROM orders WHERE company_id = $1 AND follow_status = 'delivered' AND NOT cashed AND tracking IS NOT NULL ORDER BY id DESC LIMIT 1`, [zr]);
   const at = now();
   const payer = {
@@ -105,13 +110,41 @@ test('the status sync and ZR’s payment lines bring its prices, weight and weig
       if (action === 'payBalance') return { paid: 0, ready: 0, delivered: 0, notReady: 0 };
       if (action === 'payRequests') return [];
       if (action === 'payments') return [{ extId: 'CF-P1', ref: 'PAY-CF1', amount: 1000, status: 'Accepted', done: true, at, doneAt: at, requestId: null, place: 'Hub', details: {} }];
-      if (action === 'payLines') return [{ tracking: d.tracking, customer: 'X', type: 'Livré', amount: 1000, costs: 200, comment: null, fees: { delivery: 400, ret: 250, kg: 8.5, weight: 200 } }];
+      if (action === 'payLines') return [{ tracking: d.tracking, customer: 'X', type: 'Livré', amount: 1000, costs: 200, comment: null, fees: { delivery: 400, ret: 250, kg: 9, weight: 200 } }];
       throw new Error('unexpected ' + action);
     },
   } as any;
   await call('caisse.paySync', await as(EMAILS.admin, payer), { companyId: zr });
   const paid: any = await call('orders.get', admin, { id: Number(d.id) });
-  assert.deepEqual(paid.courierFees, { delivery: 400, ret: 250, weight: 200, weightRet: 200, kg: 8.5, exact: true });
+  const { declaredKg: _d, ...got } = paid.courierFees;
+  assert.deepEqual(got, { delivery: 400, ret: 250, weight: 200, weightRet: 200, kg: 9, exact: true });
   assert.equal(paid.deliveryCost, 600, 'its cost is ZR’s, taken before the money came in');
   assert.equal(paid.cashed, true);
+});
+
+test('Dashboard › Suivi › « Surpoids »: the parcels ZR weighed heavier than declared, per product, and what it cost', async () => {
+  const zr = await zrId();
+  const suivi = await as(EMAILS.suivi);
+  const o = await one(`SELECT o.id, o.delivered_at FROM orders o WHERE o.company_id = $1 AND o.follow_status = 'delivered' ORDER BY o.id LIMIT 1`, [zr]);
+  const prod = await one(`SELECT id, name FROM products WHERE weight_kg > 0 ORDER BY weight_kg LIMIT 1`);
+  await db.query(`DELETE FROM order_items WHERE order_id = $1 AND id <> (SELECT min(id) FROM order_items WHERE order_id = $1)`, [o.id]);
+  await db.query(`UPDATE order_items SET product_id = $2, variant_id = NULL, qty = 1 WHERE order_id = $1`, [o.id, prod.id]);
+  // declared 1 kg (a light product), ZR weighed 8 kg: 150 DA
+  await db.query(`UPDATE orders SET courier_fees = $2 WHERE id = $1`, [o.id, JSON.stringify({ delivery: 400, ret: 250, kg: 8, weight: null, est: 150, estRet: 150, at: now(), src: 'track' })]);
+  const day = new Date(o.delivered_at).toISOString().slice(0, 10);
+  const range = { from: `${day}T00:00:00.000Z`, to: new Date(Date.parse(`${day}T00:00:00.000Z`) + 86_400_000).toISOString() };
+  const r: any = await call('delivery.overweight', suivi, range);
+  const p = r.parcels.find((x: any) => x.id === Number(o.id));
+  assert.ok(p, 'the parcel is there');
+  assert.equal(p.zr, 8);
+  assert.equal(p.fee, 150);
+  assert.ok(p.declared < 8);
+  const g = r.products.find((x: any) => x.productId === Number(prod.id));
+  assert.ok(g && g.parcels >= 1 && g.fees >= 150 && g.zrMax >= 8);
+  assert.ok(r.total.fees >= 150 && r.total.parcels >= 1);
+  // ZR weighed it as declared: not there
+  await db.query(`UPDATE orders SET courier_fees = $2 WHERE id = $1`, [o.id, JSON.stringify({ delivery: 400, ret: 250, kg: p.declared, weight: 0, est: 0, estRet: 0, at: now(), src: 'pay' })]);
+  const again: any = await call('delivery.overweight', suivi, range);
+  assert.ok(!again.parcels.some((x: any) => x.id === Number(o.id)));
+  await assert.rejects(call('delivery.overweight', await as(EMAILS.conf), range), /Accès refusé/);
 });

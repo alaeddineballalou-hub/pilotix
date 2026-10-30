@@ -66,3 +66,9 @@ export function nextStep(cur: FollowStatus, hasTracking: boolean, r = Math.rando
       return null;
   }
 }
+
+/** Browser preview: the weight ZR counts for a parcel — whole kilos, one heavy parcel (4 kg or more) in three 2 kg more. */
+export const zrWeighs = (orderId: number, productsKg: unknown) => {
+  const d = Math.max(1, Math.round(Number(productsKg) || 0));
+  return d + (d >= 4 && orderId % 3 === 0 ? 2 : 0);
+};

@@ -131,3 +131,10 @@
 .tb-rk tfoot th { text-align: start; }
 .tb-rk-bad { color: var(--coral, #C2410C); }
 .tb-rk-base { margin: 10px 0 0; }
+
+/* Dashboard › Suivi › « Surpoids des colis »: the total, then one line per product */
+.tb-ow-sum { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 0 0 10px; }
+.tb-ow-sum b { font-size: 22px; color: var(--c-warn-ink, #8A5A00); font-variant-numeric: tabular-nums; }
+.tb-ow-sum span { color: var(--muted); font-weight: 700; }
+.tb-ow .tbl td.num { font-variant-numeric: tabular-nums; }
+.tb-ow-note { margin: 8px 0 0; }

@@ -42,7 +42,7 @@ import { blockerText, checkLines, checkOrder, deliverCheck } from './confirmchec
 import { releaseNoStock } from './nostock';
 import { applyTrust, lookAlikeNote, lookAlikeOf } from './trust';
 import { companyLock, pilotMayRun, pilotPick, setPick, type Pick } from './pilot';
-import { apiFees, feesByApi, weightRuleOf } from './courierfees';
+import { apiFees, declaredKg, feesByApi, weightRuleOf, wholeKg } from './courierfees';
 
 export const STOPDESK_NOTE = '🏬 Ce client a refusé 2 colis : livraison au bureau (stop-desk) uniquement. Proposez-lui le stop-desk le plus proche.';
 
@@ -1493,8 +1493,15 @@ export const ordersProcs = {
   'orders.counts': proc(null, z.object({}), (ctx) => orderCounts(ctx)),
   'orders.get': proc(null, z.object({ id }), async (ctx, { id }) => {
     const o = (await withClientScores(ctx, [await getOrder(ctx, id)]))[0];
-    const fees = apiFees((await ctx.db.query('SELECT courier_fees FROM orders WHERE id = $1', [id]))[0]?.courier_fees);
-    const courierFees = fees ? { delivery: fees.delivery, ret: fees.ret, weight: fees.weight, weightRet: fees.weightRet, kg: fees.kg, exact: fees.exact } : null;
+    const row = (
+      await ctx.db.query(
+        `SELECT courier_fees, (SELECT coalesce(sum(p.weight_kg * i.qty), 0) FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = $1) AS kg FROM orders WHERE id = $1`,
+        [id],
+      )
+    )[0];
+    const fees = apiFees(row?.courier_fees);
+    // with what Pilotix declared to the company (its products' weight): « ZR a pesé 7 kg (déclaré 4 kg) »
+    const courierFees = fees ? { delivery: fees.delivery, ret: fees.ret, weight: fees.weight, weightRet: fees.weightRet, kg: wholeKg(fees.kg), declaredKg: declaredKg(row?.kg), exact: fees.exact } : null;
     return { ...o, pay: await payOf(ctx.db, o), courierFees };
   }),
   'orders.events': proc(null, z.object({ id }), async (ctx, { id }) => {

@@ -336,7 +336,7 @@ export interface Order {
   pay?: OrderPay | null;
   /** the order card: what the courier itself charges for this parcel, from its API — its delivery / return price, the
    *  weight it counted and its weight fee (exact once it paid) */
-  courierFees?: { delivery: number | null; ret: number | null; weight: number; weightRet: number; kg: number | null; exact: boolean } | null;
+  courierFees?: { delivery: number | null; ret: number | null; weight: number; weightRet: number; kg: number | null; declaredKg: number; exact: boolean } | null;
   /** the Meta ad's name (from the ads Pilotix reads), for the ad id in utm */
   adName?: string | null;
   agentName?: string | null;

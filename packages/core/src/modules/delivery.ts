@@ -5,7 +5,7 @@ import { COURIER_KINDS, CourierKind, FOLLOW_ON_ROAD, FollowStatus, Order, Sessio
 import { z } from 'zod';
 import { ADAPTERS } from '../couriers/adapters';
 import { DEFAULT_TEMPLATE, PLACEHOLDERS, checkTemplate, custom } from '../couriers/custom';
-import { fakeTracking, nextStep, word } from '../couriers/demo';
+import { fakeTracking, nextStep, word, zrWeighs } from '../couriers/demo';
 import { CARDS, KINDS } from '../couriers/kinds';
 import { keysOk, loadCompany, loadParcels, resolveStatus } from '../couriers/load';
 import { checkedInToday } from './livreur';
@@ -22,7 +22,7 @@ function sameSecret(a: string, b: string): boolean {
 import { getSetting } from '../settings';
 import { removedCouriers } from '../platform/courierWatch';
 import { addEvent, getOrder, listOrders, setFollow } from './orders';
-import { companyWeightRule, feesByApi, saveCourierFees, type WeightRule } from './courierfees';
+import { apiFees, companyWeightRule, declaredKg, feesByApi, saveCourierFees, wholeKg, type WeightRule } from './courierfees';
 
 const id = z.number().int().positive();
 const ids = z.array(id).min(1).max(500);
@@ -388,7 +388,7 @@ async function demoCosts(ctx: Ctx, companyId: number, ids: number[], weighed: bo
      FROM orders o JOIN delivery_fees f ON f.company_id = $1 AND f.wilaya_id = o.wilaya_id WHERE o.id = ANY($2)`,
     [companyId, ids],
   );
-  return new Map(rows.map((r: any) => [num(r.id), { delivery: num(r.is_stopdesk ? r.desk : r.home), ret: num(r.return_fee), kg: weighed ? Math.round(Number(r.kg) * 100) / 100 || null : null }]));
+  return new Map(rows.map((r: any) => [num(r.id), { delivery: num(r.is_stopdesk ? r.desk : r.home), ret: num(r.return_fee), kg: weighed ? zrWeighs(num(r.id), r.kg) : null }]));
 }
 
 // ---------------------------------------------------------------- status sync
@@ -705,6 +705,57 @@ export const deliveryProcs = {
     const cfg = parseJson((await ctx.db.query('SELECT config FROM delivery_companies WHERE id=$1', [companyId]))[0]?.config);
     const s: Partial<FeesSync> = cfg.feesSync ?? {};
     return { api: !!KINDS[c.kind].fees, syncedAt: s.at ?? null, changed: s.changed ?? null, error: s.error ?? null, swap: await swapFees(ctx, companyId) };
+  }),
+
+  /**
+   * Dashboard › Suivi › « Surpoids » : the period's parcels a company weighed heavier than Pilotix declared and took a
+   * weight fee for (its API: ZR) — per product (the heaviest one of each parcel), how many, the weights, what it cost.
+   */
+  'delivery.overweight': proc(['suivi', 'agent_manager', 'vendeur'], z.object({ from: z.string().max(40), to: z.string().max(40) }), async (ctx, i) => {
+    const rows = await ctx.db.query(
+      `SELECT o.id, o.ref, o.follow_status, o.courier_fees, co.name AS company,
+         (SELECT coalesce(sum(p.weight_kg * it.qty), 0) FROM order_items it JOIN products p ON p.id = it.product_id WHERE it.order_id = o.id) AS kg
+       FROM sales o JOIN delivery_companies co ON co.id = o.company_id
+       WHERE (o.courier_fees->>'kg') IS NOT NULL
+         AND ((o.follow_status = 'delivered' AND o.delivered_at >= $1 AND o.delivered_at < $2)
+           OR (o.follow_status IN ('returning','returned') AND coalesce(o.returned_at, o.returning_at, o.updated_at) >= $1 AND coalesce(o.returned_at, o.returning_at, o.updated_at) < $2))`,
+      [i.from, i.to],
+    );
+    const heavy = rows
+      .map((r: any) => {
+        const f = apiFees(r.courier_fees);
+        const zr = wholeKg(f?.kg);
+        const declared = declaredKg(r.kg);
+        const back = r.follow_status !== 'delivered';
+        const fee = f ? (back ? f.weightRet : f.weight) : 0;
+        return { id: num(r.id), ref: String(r.ref), company: String(r.company), declared, zr, fee, back, exact: !!f?.exact };
+      })
+      .filter((x: any) => x.zr !== null && x.zr > x.declared && x.fee > 0);
+    // each parcel under its heaviest product
+    const items = heavy.length
+      ? await ctx.db.query(`SELECT it.order_id, p.id, p.name, p.weight_kg, it.qty FROM order_items it JOIN products p ON p.id = it.product_id WHERE it.order_id = ANY($1)`, [heavy.map((x: any) => x.id)])
+      : [];
+    const main = new Map<number, any>();
+    for (const it of items) {
+      const cur = main.get(num(it.order_id));
+      if (!cur || Number(it.weight_kg) * num(it.qty) > Number(cur.weight_kg) * num(cur.qty)) main.set(num(it.order_id), it);
+    }
+    const by = new Map<number, { productId: number; name: string; productKg: number; parcels: number; zrMin: number; zrMax: number; fees: number }>();
+    for (const x of heavy) {
+      const it = main.get(x.id);
+      if (!it) continue;
+      const g = by.get(num(it.id)) ?? { productId: num(it.id), name: String(it.name), productKg: Number(it.weight_kg) || 0, parcels: 0, zrMin: x.zr!, zrMax: x.zr!, fees: 0 };
+      g.parcels++;
+      g.zrMin = Math.min(g.zrMin, x.zr!);
+      g.zrMax = Math.max(g.zrMax, x.zr!);
+      g.fees += x.fee;
+      by.set(g.productId, g);
+    }
+    return {
+      total: { parcels: heavy.length, fees: heavy.reduce((s: number, x: any) => s + x.fee, 0), extraKg: heavy.reduce((s: number, x: any) => s + (x.zr! - x.declared), 0) },
+      products: [...by.values()].sort((a, b) => b.fees - a.fees || b.parcels - a.parcels),
+      parcels: heavy.sort((a: any, b: any) => b.fee - a.fee).slice(0, 30),
+    };
   }),
 
   /** A company's swap fees typed by hand (when it does not give them by API); nothing for our own livreurs. */

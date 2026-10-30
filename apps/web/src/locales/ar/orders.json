@@ -403,7 +403,8 @@
     "feesWeight": "الوزن {{v}} ({{kg}} كغ)",
     "feesKg": "{{kg}} كغ",
     "feesApi": "حسب API ‏{{name}}",
-    "feesPaid": "خصمتها {{name}} عند الدفع"
+    "feesPaid": "خصمتها {{name}} عند الدفع",
+    "feesHeavier": "وزنته {{name}} {{kg}} كغ (المصرّح {{declared}} كغ)"
   },
   "ph": {
     "per": {
