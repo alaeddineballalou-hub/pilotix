@@ -23,6 +23,9 @@ export interface CatalogVariant {
   price: number | null;
   cost: number | null;
   maxDiscount: number | null;
+  weightKg: number | null;
+  alertQty: number | null;
+  feeGrid: string | null;
   active: boolean;
 }
 export interface Part {
@@ -144,7 +147,7 @@ function toProduct(p: any, vars: any[]): CatalogProduct {
     alertQty: num(p.alert_qty),
     defaultCompanyId: numOrNull(p.default_company_id),
     options: j(p.options),
-    variants: vars.map((v) => ({ id: num(v.id), productId: num(v.product_id), title: v.title, sku: v.sku, price: numOrNull(v.price), cost: numOrNull(v.cost), maxDiscount: numOrNull(v.max_discount), active: !!v.active })),
+    variants: vars.map((v) => ({ id: num(v.id), productId: num(v.product_id), title: v.title, sku: v.sku, price: numOrNull(v.price), cost: numOrNull(v.cost), maxDiscount: numOrNull(v.max_discount), weightKg: numOrNull(v.weight_kg), alertQty: numOrNull(v.alert_qty), feeGrid: v.fee_grid ?? null, active: !!v.active })),
   };
 }
 
@@ -197,11 +200,11 @@ export async function stockRows(db: Db, f: z.infer<typeof StockInput>): Promise<
     const q = f.q.trim();
     w.add(`((p.name || ' ' || v.title) ILIKE '%' || ? || '%' OR v.sku ILIKE '%' || ? || '%' OR p.sku ILIKE '%' || ? || '%')`, q, q, q);
   }
-  if (f.missingOnly) w.add('COALESCE(s.qty, 0) - COALESCE(r.n, 0) <= COALESCE(s.alert_qty, 0)');
+  if (f.missingOnly) w.add('COALESCE(s.qty, 0) - COALESCE(r.n, 0) <= COALESCE(s.alert_qty, v.alert_qty, p.alert_qty, 0)');
   const rows = await db.query(
     `WITH r AS (${RESERVED})
      SELECT v.id AS variant_id, p.id AS product_id, p.name, v.title, v.sku, wh.id AS wid, wh.name AS wname,
-            COALESCE(s.qty, 0) AS qty, COALESCE(s.alert_qty, 0) AS alert_qty, COALESCE(r.n, 0) AS reserved, p.cost, p.active AS pactive, v.active AS vactive
+            COALESCE(s.qty, 0) AS qty, COALESCE(s.alert_qty, v.alert_qty, p.alert_qty, 0) AS alert_qty, COALESCE(r.n, 0) AS reserved, COALESCE(v.cost, p.cost) AS cost, p.active AS pactive, v.active AS vactive
      FROM product_variants v JOIN products p ON p.id = v.product_id CROSS JOIN warehouses wh
      LEFT JOIN stock s ON s.variant_id = v.id AND s.warehouse_id = wh.id
      LEFT JOIN r ON r.variant_id = v.id AND r.wid = wh.id
@@ -344,6 +347,9 @@ const VariantInput = z.object({
   price: z.number().int().min(0).max(100_000_000).nullable().optional(),
   cost: z.number().int().min(0).max(100_000_000).nullable().optional(),
   maxDiscount: z.number().int().min(0).max(100_000_000).nullable().optional(),
+  weightKg: z.number().min(0).max(1000).nullable().optional(),
+  alertQty: z.number().int().min(0).max(1_000_000).nullable().optional(),
+  feeGrid: z.string().trim().max(80).nullable().optional(),
   active: z.boolean().default(true),
 });
 export const ProductInput = z.object({
@@ -462,12 +468,23 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
         const old = existing.find((e: any) => num(e.id) === v.id);
         if (!old) throw bad('Variante d’un autre produit');
         if (!ctx.session.isAdmin && v.maxDiscount !== undefined && v.maxDiscount !== numOrNull(old.max_discount)) throw forbidden('Seul l’administrateur modifie la remise maximale');
-        await tx.query('UPDATE product_variants SET title=$2, sku=$3, price=$4, active=$5, cost=$6, max_discount=$7 WHERE id=$1', [v.id, v.title.trim(), vsku || old.sku, v.price === undefined ? old.price : v.price, v.active, v.cost === undefined ? old.cost : v.cost, v.maxDiscount === undefined ? old.max_discount : v.maxDiscount]);
+        await tx.query('UPDATE product_variants SET title=$2, sku=$3, price=$4, active=$5, cost=$6, max_discount=$7, weight_kg=$8, alert_qty=$9, fee_grid=$10 WHERE id=$1', [v.id, v.title.trim(), vsku || old.sku, v.price === undefined ? old.price : v.price, v.active, v.cost === undefined ? old.cost : v.cost, v.maxDiscount === undefined ? old.max_discount : v.maxDiscount, v.weightKg === undefined ? old.weight_kg : v.weightKg, v.alertQty === undefined ? old.alert_qty : v.alertQty, v.feeGrid === undefined ? old.fee_grid : v.feeGrid]);
       } else {
         vsku ||= await freeSku(tx, 'product_variants', `${sku}-${slug(v.title).slice(0, 12)}`);
         if (!ctx.session.isAdmin && v.maxDiscount != null) throw forbidden('Seul l’administrateur modifie la remise maximale');
-        await tx.query('INSERT INTO product_variants (product_id, title, sku, price, active, cost, max_discount) VALUES ($1,$2,$3,$4,$5,$6,$7)', [productId, v.title.trim(), vsku, v.price ?? null, v.active, v.cost ?? null, v.maxDiscount ?? null]);
+        await tx.query('INSERT INTO product_variants (product_id, title, sku, price, active, cost, max_discount, weight_kg, alert_qty, fee_grid) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)', [productId, v.title.trim(), vsku, v.price ?? null, v.active, v.cost ?? null, v.maxDiscount ?? null, v.weightKg ?? null, v.alertQty ?? null, v.feeGrid ?? null]);
       }
+    }
+    // Update per-depot thresholds only when a variant's minimum stock changes.
+    for (const v of named) {
+      if (v.alertQty == null) continue;
+      const saved = (await tx.query('SELECT id FROM product_variants WHERE product_id=$1 AND title=$2 LIMIT 1', [productId, v.title.trim()]))[0];
+      if (!saved) continue;
+      const old = existing.find((e: any) => num(e.id) === num(saved.id));
+      if (old && numOrNull(old.alert_qty) === v.alertQty) continue;
+      await tx.query(`INSERT INTO stock (variant_id, warehouse_id, qty, alert_qty)
+        SELECT $1, id, 0, $2 FROM warehouses WHERE active
+        ON CONFLICT (variant_id, warehouse_id) DO UPDATE SET alert_qty = EXCLUDED.alert_qty`, [saved.id, v.alertQty]);
     }
     // A product always has at least one variant: the "no variant" one ('') when no named one is active.
     const after = await tx.query('SELECT id, title, active FROM product_variants WHERE product_id = $1', [productId]);
