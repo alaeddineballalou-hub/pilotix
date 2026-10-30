@@ -78,7 +78,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
     alertQty: String(p?.alertQty ?? 0),
     defaultCompanyId: p?.defaultCompanyId ? String(p.defaultCompanyId) : '',
   });
-  const [vars, setVars] = useState<VRow[]>(() => (p?.variants ?? []).filter((v: any) => v.title !== '').map((v: any) => ({ id: v.id, title: v.title, sku: v.sku, price: v.price === null ? '' : String(v.price), active: v.active })));
+  const [vars, setVars] = useState<VRow[]>(() => (p?.variants ?? []).filter((v: any) => v.title !== '').map((v: any) => ({ id: v.id, title: v.title, sku: v.sku, price: v.price === null ? '' : String(v.price), cost: v.cost == null ? '' : String(v.cost), maxDiscount: v.maxDiscount == null ? '' : String(v.maxDiscount), active: v.active })));
   // Options (Taille, Couleur, Fille / Garçon…): the variants are made from them. A product made before, with variants typed
   // one by one, keeps that list until « Organiser en options » is chosen.
   const [opts, setOpts] = useState<Opt[]>(() => (p?.options ?? []).map((o: Opt) => ({ name: o.name, values: [...o.values] })));
@@ -127,6 +127,8 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
     if (optMode && opts.some((o) => !o.name.trim() && o.values.length)) return toast(t('produits.form.opt.needName'), 'bad');
     if (combos.length > MAX_COMBOS) return toast(t('produits.form.opt.tooMany', { count: combos.length }), 'bad');
     const price = (v: VRow) => (v.price === '' ? null : Math.round(Number(v.price) || 0));
+    const cost = (v: VRow) => (v.cost === '' ? null : Math.max(0, Math.round(Number(v.cost) || 0)));
+    const maxDiscount = (v: VRow) => (v.maxDiscount === '' ? null : Math.max(0, Math.round(Number(v.maxDiscount) || 0)));
     const base = f.sku.trim() || f.name.trim();
     const want = new Set(combos.map((c) => titleOf(c).toLowerCase()));
     const variants = optMode
@@ -134,11 +136,11 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
           // one per combination: a new one only when ticked; one already saved keeps its id (and is switched off when unticked)
           ...combos.flatMap((c) => {
             const v = vars.find((x) => x.title.trim().toLowerCase() === titleOf(c).toLowerCase());
-            return v && (v.id || v.active) ? [{ id: v.id, title: titleOf(c), sku: v.sku.trim() || (v.id ? null : skuOf(base, c)), price: price(v), active: v.active }] : [];
+            return v && (v.id || v.active) ? [{ id: v.id, title: titleOf(c), sku: v.sku.trim() || (v.id ? null : skuOf(base, c)), price: price(v), cost: cost(v), maxDiscount: maxDiscount(v), active: v.active }] : [];
           }),
-          ...vars.filter((v) => v.id && !want.has(v.title.trim().toLowerCase())).map((v) => ({ id: v.id, title: v.title.trim(), sku: v.sku.trim() || null, price: price(v), active: v.active })),
+          ...vars.filter((v) => v.id && !want.has(v.title.trim().toLowerCase())).map((v) => ({ id: v.id, title: v.title.trim(), sku: v.sku.trim() || null, price: price(v), cost: cost(v), maxDiscount: maxDiscount(v), active: v.active })),
         ]
-      : vars.filter((v) => v.title.trim() || v.id).map((v) => ({ id: v.id, title: v.title.trim(), sku: v.sku.trim() || null, price: price(v), active: v.active }));
+      : vars.filter((v) => v.title.trim() || v.id).map((v) => ({ id: v.id, title: v.title.trim(), sku: v.sku.trim() || null, price: price(v), cost: cost(v), maxDiscount: maxDiscount(v), active: v.active }));
     save.mutate({
       id: p?.id,
       name: f.name.trim(),
@@ -327,7 +329,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
                   <Icon name="layers" />
                   {t('produits.form.opt.organize')}
                 </button>
-                <button type="button" className="btn small primary" onClick={() => setVars([...vars, { title: '', sku: '', price: '', active: true }])}>
+                <button type="button" className="btn small primary" onClick={() => setVars([...vars, { title: '', sku: '', price: '', cost: '', maxDiscount: '', active: true }])}>
                   <Icon name="plus" />
                   {t('produits.form.addVariant')}
                 </button>
@@ -335,7 +337,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
             )}
           </div>
           {optMode ? (
-            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseSku={f.sku.trim() || f.name.trim()} used={usedValues} skipped={skipped} />
+            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseSku={f.sku.trim() || f.name.trim()} used={usedValues} skipped={skipped} admin={admin} />
           ) : (
             <>
               {vars.length ? (
@@ -345,6 +347,8 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
                       <input aria-label={t('produits.form.variants')} value={v.title} placeholder={t('produits.form.variantPh')} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, title: e.target.value } : x)))} />
                       <input aria-label="SKU" className="ltr" value={v.sku} placeholder="SKU" onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, sku: e.target.value } : x)))} />
                       <input type="number" min={0} step={50} aria-label={t('produits.form.variantPrice')} value={v.price} placeholder={t('produits.form.variantPrice')} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, price: e.target.value } : x)))} />
+                      <input type="number" min={0} step={50} aria-label="Purchase price" value={v.cost} placeholder="Purchase price" onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, cost: e.target.value } : x)))} />
+                      <input type="number" min={0} step={50} aria-label="Max. discount" disabled={!admin} value={v.maxDiscount} placeholder="Max. discount" onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, maxDiscount: e.target.value } : x)))} />
                       <label className="check">
                         <input type="checkbox" checked={v.active} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, active: e.target.checked } : x)))} />
                         {t('produits.form.variantActive')}

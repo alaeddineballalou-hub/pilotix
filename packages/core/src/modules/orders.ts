@@ -418,7 +418,7 @@ async function priceItems(db: Db, items: z.infer<typeof ItemInput>[], freePrice 
     });
   }
   const vids = items.map((i) => i.variantId).filter((v): v is number => !!v);
-  const vars = vids.length ? await db.query('SELECT id, product_id, title, price FROM product_variants WHERE id = ANY($1)', [vids]) : [];
+  const vars = vids.length ? await db.query('SELECT id, product_id, title, price, cost, max_discount FROM product_variants WHERE id = ANY($1)', [vids]) : [];
   const P = new Map(prods.map((p: any) => [num(p.id), p]));
   const V = new Map(vars.map((v: any) => [num(v.id), v]));
   let maxDiscount = 0;
@@ -442,11 +442,12 @@ async function priceItems(db: Db, items: z.infer<typeof ItemInput>[], freePrice 
       const ref = Math.min(num(listPrice), ...packs.map((k) => Math.floor(num(k.price) / num(k.qty))), ...(had === undefined ? [] : [had]));
       priceCut += Math.max(0, ref - num(unit)) * i.qty;
     }
-    if (p.max_discount === null) unlimited = true;
-    else maxDiscount += num(p.max_discount) * i.qty;
+    const discountLimit = v?.max_discount ?? p.max_discount;
+    if (discountLimit === null) unlimited = true;
+    else maxDiscount += num(discountLimit) * i.qty;
     weight += Number(p.weight_kg) * i.qty;
     grid = grid ?? p.fee_grid;
-    return { productId: i.productId, variantId: i.variantId ?? null, name: p.name, variantTitle: v?.title ?? '', qty: i.qty, unitPrice: num(unit), purchasePrice: num(p.cost), isUpsell: !!i.isUpsell };
+    return { productId: i.productId, variantId: i.variantId ?? null, name: p.name, variantTitle: v?.title ?? '', qty: i.qty, unitPrice: num(unit), purchasePrice: num(v?.cost ?? p.cost), isUpsell: !!i.isUpsell };
   });
   const subtotal = lines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
   return { lines, subtotal, maxDiscount: unlimited ? subtotal : maxDiscount, weight, grid, priceCut };
