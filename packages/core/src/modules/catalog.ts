@@ -854,6 +854,29 @@ export const catalogProcs = {
 
   'catalog.saveProduct': proc([...DEPOT], ProductInput, (ctx, i) => saveProduct(ctx, i)),
 
+  /** Fast availability switch: physically available stock stays recorded when an item is switched off. */
+  'catalog.setAvailability': proc([...DEPOT], z.object({
+    productId: id.optional(),
+    variantId: id.optional(),
+    active: z.boolean(),
+  }).refine((x) => Number(!!x.productId) + Number(!!x.variantId) === 1, 'Choisissez un produit ou une variante'), async (ctx, i) => {
+    await ctx.db.tx(async (tx) => {
+      if (i.productId) {
+        const product = (await tx.query('SELECT id FROM products WHERE id = $1 AND archived_at IS NULL FOR UPDATE', [i.productId]))[0];
+        if (!product) throw notFound('Produit introuvable');
+        await tx.query('UPDATE products SET active = $2 WHERE id = $1', [i.productId, i.active]);
+      } else {
+        const variant = (await tx.query('SELECT v.id FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id = $1 AND p.archived_at IS NULL FOR UPDATE OF v', [i.variantId]))[0];
+        if (!variant) throw notFound('Variante introuvable');
+        await tx.query('UPDATE product_variants SET active = $2 WHERE id = $1', [i.variantId, i.active]);
+      }
+    });
+    ctx.emit({ type: 'stock' });
+    return { ok: true };
+  }),
+
+
+
   /** Admin: maximum discount per piece for several products at once (the "Remise maximale" card). */
   'catalog.setMaxDiscounts': proc([], z.object({ items: z.array(z.object({ id, maxDiscount: z.number().int().min(0).max(100_000_000).nullable() })).max(2000) }), async (ctx, i) => {
     await ctx.db.tx(async (tx) => {
