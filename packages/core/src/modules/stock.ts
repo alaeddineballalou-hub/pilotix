@@ -324,20 +324,23 @@ export async function createPurchase(ctx: Ctx, i: z.infer<typeof PurchaseInput>)
     }
     for (const l of i.lines) {
       await tx.query('INSERT INTO purchase_lines (purchase_id, variant_id, qty, unit_cost) VALUES ($1,$2,$3,$4)', [pid, l.variantId, l.qty, l.unitCost]);
-      await moveStock(tx, { variantId: l.variantId, warehouseId: w.id, delta: l.qty, reason: 'purchase', userId: me(ctx), note: `Achat ${ref}${supplier ? ` — ${supplier}` : ''}`, purchaseId: pid });
+      await moveStock(tx, { variantId: l.variantId, warehouseId: w.id, delta: l.qty, reason: 'purchase', userId: me(ctx), note: `Achat ${ref}${supplier ? ` — ${supplier}` : ''}`, purchaseId: pid, unitCost: l.unitCost });
     }
     if (i.updateCost) {
-      // several variants of one product in the purchase: the product's purchase price is their average
-      const by = new Map<number, { q: number; v: number }>();
-      for (const l of i.lines) {
-        const p = vars.get(l.variantId)!.productId;
-        const a = by.get(p) ?? { q: 0, v: 0 };
-        by.set(p, { q: a.q + l.qty, v: a.v + l.qty * l.unitCost });
-      }
-      for (const [p, a] of by) {
-        const before = (await tx.query('SELECT cost FROM products WHERE id = $1', [p]))[0];
-        await tx.query('UPDATE products SET cost = $2 WHERE id = $1', [p, Math.round(a.v / a.q)]);
-        await logProductChange(tx, p, me(ctx), { cost: before?.cost }, { cost: Math.round(a.v / a.q) }, `Achat ${ref}`);
+      // Show the last purchase cost per variant; all historic receipt costs
+      // remain unchanged on purchase_lines and stock_movements.
+      for (const line of i.lines) {
+        const row = (await tx.query(
+          'SELECT v.title, p.id AS product_id, p.cost AS product_cost FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id=$1 FOR UPDATE OF v',
+          [line.variantId],
+        ))[0];
+        await tx.query('UPDATE product_variants SET cost=$2 WHERE id=$1', [line.variantId, line.unitCost]);
+        // Maintain legacy product-level cost only for a plain (non-named) variant.
+        if (!row.title && num(row.product_cost) !== line.unitCost) {
+          await tx.query('UPDATE products SET cost=$2 WHERE id=$1', [row.product_id, line.unitCost]);
+          await logProductChange(tx, num(row.product_id), me(ctx),
+            { cost: row.product_cost }, { cost: line.unitCost }, `Achat ${ref}`);
+        }
       }
     }
     return pid;
