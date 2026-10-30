@@ -110,6 +110,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
   // Archiver (administrators): out of the lists, kept for the orders; deleted later from Management › Archives
   const archive = useAction('archive.set', { success: (r) => (r.done ? t('produits.form.archived') : t('produits.form.archiveStock')), onDone: (r) => r.done && onClose() });
   const canArchive = !!p && admin && pageIsOn('management', 'archive');
+  const removeProduct = useAction('archive.removeProduct', { success: 'Produit supprimé', onDone: () => onClose() });
   const set = (k: keyof typeof f, v: string | boolean) => setF({ ...f, [k]: v });
   const brands = [...new Set((all.data ?? []).map((x) => x.brand).filter((x): x is string => !!x))].sort();
   const others = (all.data ?? []).filter((x) => !x.isService && x.id !== p?.id);
@@ -135,7 +136,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
     const weightKg = (v: VRow) => v.weightKg === '' ? null : Number(v.weightKg);
     const alertQty = (v: VRow) => v.alertQty === '' ? null : Math.round(Number(v.alertQty));
     const feeGrid = (v: VRow) => v.feeGrid || null;
-    const photo = (_v: VRow) => null;
+    const photo = (v: VRow) => v.photo.trim() || null;
     const base = f.sku.trim() || f.name.trim();
     const want = new Set(combos.map((c) => titleOf(c).toLowerCase()));
     const variants = optMode
@@ -192,6 +193,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
       onClose={onClose}
       footer={
         <>
+          {!!p && admin && <ConfirmButton className="btn danger ghost" disabled={removeProduct.isPending} question={`Delete ${p.name} permanently? This is only allowed for unused products.`} onConfirm={() => removeProduct.mutate({ id: p.id })}><Icon name="trash" /> Delete product</ConfirmButton>}
           {canArchive && (
             <ConfirmButton className="btn ghost" disabled={archive.isPending} question={t('produits.form.archiveAsk')} onConfirm={() => archive.mutate({ kind: 'products', ids: [p.id], archived: true })}>
               <Icon name="archive" /> {t('produits.form.archive')}
@@ -354,7 +356,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
             )}
           </div>
           {optMode ? (
-            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseCost={Number(f.cost) || 0} baseSku={f.sku.trim() || f.name.trim()} basePhoto={f.photo} baseDiscount={f.maxDiscount === '' ? null : Number(f.maxDiscount) || 0} admin={admin} used={usedValues} skipped={skipped} feeGrids={grids.data?.grids ?? []} />
+            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseCost={Number(f.cost) || 0} baseSku={f.sku.trim() || f.name.trim()} basePhoto={f.photo} baseDiscount={f.maxDiscount === '' ? null : Number(f.maxDiscount) || 0} admin={admin} used={usedValues} skipped={skipped} feeGrids={grids.data?.grids ?? []} onPhotoFile={thumb} />
           ) : (
             <>
               {vars.length ? (
@@ -362,7 +364,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
                   {vars.map((v, i) => (
                     <div key={v.id ?? `n${i}`} className="item-row bjpv-row">
                       <input aria-label={t('produits.form.variants')} value={v.title} placeholder={t('produits.form.variantPh')} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, title: e.target.value } : x)))} />
-                      <span className="muted small">{f.photo && <img src={f.photo} alt="" style={{ width: 32, height: 32, objectFit: 'contain', verticalAlign: 'middle' }} />} Margin: {da(Number(v.price || f.price || 0) - Number(v.cost || f.cost || 0))}</span>
+                      <span className="muted small">{(v.photo || f.photo) && <img src={v.photo || f.photo} alt="" style={{ width: 32, height: 32, objectFit: 'contain', verticalAlign: 'middle' }} />} <input type="file" accept="image/*" aria-label={`Photo ${v.title}`} onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; try { const photo = await thumb(file); setVars((old) => old.map((x,k) => k === i ? { ...x, photo } : x)); } catch { toast(t('produits.form.photoBad'), 'bad'); } }} /> Margin: {da(Number(v.price || f.price || 0) - Number(v.cost || f.cost || 0))}</span>
                       <input className="ltr" aria-label={`SKU ${v.title}`} placeholder="Variant SKU" value={v.sku} onChange={(e) => setVars(vars.map((x, k) => k === i ? { ...x, sku: e.target.value } : x))} />
                       <input type="number" min={0} step={50} aria-label={`Purchase price ${v.title}`} value={v.cost} placeholder={f.cost || 'Purchase (DA)'} onChange={(e) => setVars(vars.map((x, k) => k === i ? { ...x, cost: e.target.value } : x))} />
                       <input type="number" min={0} step={50} aria-label={`Selling price ${v.title}`} value={v.price} placeholder={f.price || 'Sale (DA)'} onChange={(e) => setVars(vars.map((x, k) => k === i ? { ...x, price: e.target.value } : x))} />
