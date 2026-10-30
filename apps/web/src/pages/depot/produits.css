@@ -624,3 +624,14 @@ a.chip.lp-nolp:hover { text-decoration: underline; }
 .pd-variant-line > span { font-size: 13px; }
 .pd-availability { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .pd-availability input[type=checkbox] { width: 17px; height: 17px; cursor: pointer; }
+
+/* Compact accessible ON/OFF switch matching the product catalog reference. */
+.pd-availability { position: relative; white-space: nowrap; }
+.pd-availability input[type=checkbox] { position: absolute; opacity: 0; width: 38px; height: 22px; margin: 0; }
+.pd-switch-track { display: inline-flex; position: relative; width: 38px; height: 22px; background: #a2a8b4; border-radius: 50px; transition: background .15s; }
+.pd-switch-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; background: white; border-radius: 50%; box-shadow: 0 1px 3px #0003; transition: transform .15s; }
+.pd-availability input:checked + .pd-switch-track { background: #8055d6; }
+.pd-availability input:checked + .pd-switch-track::after { transform: translateX(16px); }
+.pd-availability input:focus-visible + .pd-switch-track { outline: 3px solid var(--accent, #e69a30); outline-offset: 2px; }
+.pd-availability input:disabled + .pd-switch-track { opacity: .5; cursor: not-allowed; }
+.pd-switch-state { font-size: 11px; color: var(--muted); font-weight: 700; }
