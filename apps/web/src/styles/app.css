@@ -1,0 +1,17 @@
+/*
+ * Inside the Pilotix phone app (html.in-app, set in main.tsx when the user agent has « PilotixApp »: mobile/).
+ * It should feel like an app, not a web page: a long press on a title, a label or a button no longer selects it
+ * (« Copy · Select all · Share »). What is made to be copied still is: the fields you type in, the chat messages,
+ * the codes (user-select: all) and anything marked .selectable.
+ */
+html.in-app {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+html.in-app :is(input, textarea, select, [contenteditable]:not([contenteditable='false']), .ai-txt, .selectable) {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
