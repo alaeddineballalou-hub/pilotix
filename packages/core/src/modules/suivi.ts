@@ -3,7 +3,10 @@ import type { Order, Page } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, Ctx, notFound, proc, withActionLock } from '../rpc';
-import { getSetting } from '../settings';
+import { getSetting, setSetting } from '../settings';
+import { addWorkMinutes, workMinutes } from '@pilotix/shared';
+import { getPrefs } from './prefs';
+import { swapFees } from './delivery';
 import { addEvent, FollowInput, getOrder, listOrders, ListInput, setFollow, withClientScores } from './orders';
 import { agencyOf, andSql, queueSql } from './agencyscope';
 import { findOrders } from './sav';
@@ -14,11 +17,13 @@ import type { CourierKind } from '@pilotix/shared';
 
 const id = z.number().int().positive();
 
-export const SUIVI_TABS = ['alertes', 'traites', 'livres', 'annules', 'swap', 'swapped'] as const;
+export const SUIVI_TABS = ['enlivraison', 'alertes', 'bloques', 'traites', 'livres', 'annules', 'swap', 'swapped'] as const;
 export type SuiviTab = (typeof SUIVI_TABS)[number];
 /** Where a parcel can be swapped from: it is still with the courier or the livreur. */
 export const SWAP_FROM = ['returning', 'failed', 'alert', 'out_for_delivery', 'shipped'] as const;
-export const CLAIM_STATUSES = ['waiting', 'still_waiting', 'resolved'] as const;
+export const CLAIM_STATUSES = ['waiting', 'still_waiting', 'resolved', 'lost'] as const;
+/** a claim is over: « Résolue » (money or parcel back) or « Perdue » (refused, or never answered) */
+const CLAIM_DONE = `('resolved', 'lost')`;
 export const CLAIM_REASONS = ['relivrer', 'late', 'nocall', 'fakedeliv', 'fakeret', 'address', 'damaged', 'money', 'noreturn', 'other'] as const;
 export const TREAT_WHAT = ['date', 'adresse', 'injoignable', 'autre'] as const;
 
@@ -27,6 +32,11 @@ const DAY = 86_400_000;
 /** Filters of each Suivi tab, expressed with the orders list. */
 function tabFilter(tab: SuiviTab, now: number): Partial<ListInput> {
   switch (tab) {
+    case 'enlivraison':
+      return { follow: ['out_for_delivery', 'failed'], subStatusNot: 'alert_traitee', sort: 'shipped_at', dir: 'asc' };
+    case 'bloques':
+      // the ids come from stuckParcels (see suivi.list)
+      return { follow: ['shipped', 'out_for_delivery', 'failed', 'in_exchange'], sort: 'shipped_at', dir: 'asc' };
     case 'alertes':
       return { follow: ['alert'], sort: 'updated_at', dir: 'asc' };
     case 'traites':
@@ -42,7 +52,82 @@ function tabFilter(tab: SuiviTab, now: number): Partial<ListInput> {
   }
 }
 
+/** The clock of an alert: the first call (until someone acts on it), then the alert solved; in working minutes. */
+export interface AlertClock {
+  kind: 'call' | 'solve';
+  dueAt: string;
+  /** working minutes left (negative: late by that much) */
+  left: number;
+  state: 'ok' | 'soon' | 'late';
+}
+
+/** The clock of each alert among these orders (first call, then solved), with the shop's call slots and Préférences. */
+export async function alertClocks(db: Db, ids: number[], now: number): Promise<Map<number, AlertClock>> {
+  const out = new Map<number, AlertClock>();
+  if (!ids.length) return out;
+  const calls = await getSetting(db, 'calls');
+  const clock = (await getPrefs(db)).suiviClock;
+  const rows = await db.query(
+    `SELECT o.id, a.at AS alert_at,
+       (SELECT min(e.at) FROM order_events e WHERE e.order_id = o.id AND e.at > a.at AND e.user_id IS NOT NULL) AS acted_at
+       FROM orders o
+       JOIN LATERAL (SELECT max(e.at) AS at FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'alert') a ON true
+      WHERE o.id = ANY($1) AND o.follow_status = 'alert'`,
+    [ids],
+  );
+  for (const r of rows) {
+    const start = r.alert_at ? Date.parse(iso(r.alert_at)) : now;
+    const kind: AlertClock['kind'] = r.acted_at ? 'solve' : 'call';
+    const total = (kind === 'call' ? clock.firstHours : clock.solveHours) * 60;
+    const due = addWorkMinutes(start, total, calls);
+    const left = Math.round(due > now ? workMinutes(now, due, calls) : -workMinutes(due, now, calls));
+    out.set(num(r.id), { kind, dueAt: new Date(due).toISOString(), left, state: left < 0 ? 'late' : left <= total * 0.25 ? 'soon' : 'ok' });
+  }
+  return out;
+}
+
+/** The calls made on an alert (since it became one), counted as tries only when far enough apart (Préférences). */
+export interface AlertTries {
+  done: number;
+  need: number;
+  /** when the next call counts as a new try (null: now, or all done) */
+  nextAt: string | null;
+}
+
+export async function alertTries(db: Db, ids: number[], now: number): Promise<Map<number, AlertTries>> {
+  const out = new Map<number, AlertTries>();
+  if (!ids.length) return out;
+  const { calls: need, gapMinutes } = (await getPrefs(db)).suiviTries;
+  const rows = await db.query(
+    `SELECT o.id, COALESCE(array_agg(c.at ORDER BY c.at) FILTER (WHERE c.at IS NOT NULL), '{}') AS calls
+       FROM orders o
+       LEFT JOIN LATERAL (SELECT max(e.at) AS at FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'alert') a ON true
+       LEFT JOIN order_events c ON c.order_id = o.id AND c.kind = 'call' AND c.user_id IS NOT NULL AND (a.at IS NULL OR c.at >= a.at)
+      WHERE o.id = ANY($1) GROUP BY o.id`,
+    [ids],
+  );
+  for (const r of rows) {
+    let done = 0;
+    let last = -Infinity;
+    for (const at of (r.calls ?? []) as (string | Date)[]) {
+      const t = Date.parse(iso(at));
+      if (t - last >= gapMinutes * 60_000) {
+        done++;
+        last = t;
+      }
+    }
+    const next = last + gapMinutes * 60_000;
+    out.set(num(r.id), { done: Math.min(done, need), need, nextAt: done >= need || next <= now ? null : new Date(next).toISOString() });
+  }
+  return out;
+}
+
 export interface SuiviRowExtra {
+  stuck?: StuckInfo | null;
+  /** how the alert was treated: « Résolu » or « Perdu », and its motif (Management › Motifs du Suivi) */
+  motif: { outcome: 'resolved' | 'lost'; label: string } | null;
+  clock: AlertClock | null;
+  tries: AlertTries | null;
   companyKind: string | null;
   livreurPhone: string | null;
   claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null;
@@ -50,14 +135,18 @@ export interface SuiviRowExtra {
   alertReason: string | null;
 }
 
-async function extras(db: Db, orders: Order[]): Promise<Record<number, SuiviRowExtra>> {
+async function extras(db: Db, orders: Order[], now = Date.now()): Promise<Record<number, SuiviRowExtra>> {
   if (!orders.length) return {};
   const ids = orders.map((o) => o.id);
+  const alertIds = orders.filter((o) => o.followStatus === 'alert').map((o) => o.id);
+  const clocks = await alertClocks(db, alertIds, now);
+  const tries = await alertTries(db, alertIds, now);
   const rows = await db.query(
     `SELECT o.id, co.kind AS company_kind, lv.phone AS livreur_phone,
        (SELECT json_build_object('id', c.id, 'status', c.status, 'createdAt', c.created_at, 'sentAt', c.sent_at)
           FROM claims c WHERE c.order_id = o.id ORDER BY c.created_at DESC LIMIT 1) AS claim,
-       (SELECT e.note FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'alert' ORDER BY e.at DESC, e.id DESC LIMIT 1) AS alert_reason
+       (SELECT e.note FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'alert' ORDER BY e.at DESC, e.id DESC LIMIT 1) AS alert_reason,
+       (SELECT json_build_object('outcome', e.from_value, 'label', e.note) FROM order_events e WHERE e.order_id = o.id AND e.kind = 'suivi_motif' ORDER BY e.at DESC, e.id DESC LIMIT 1) AS motif
      FROM orders o LEFT JOIN delivery_companies co ON co.id = o.company_id LEFT JOIN profiles lv ON lv.id = o.livreur_id
      WHERE o.id = ANY($1)`,
     [ids],
@@ -66,6 +155,12 @@ async function extras(db: Db, orders: Order[]): Promise<Record<number, SuiviRowE
   for (const r of rows) {
     const c = typeof r.claim === 'string' ? JSON.parse(r.claim) : r.claim;
     out[num(r.id)] = {
+      motif: (() => {
+        const m = typeof r.motif === 'string' ? JSON.parse(r.motif) : r.motif;
+        return m && (m.outcome === 'resolved' || m.outcome === 'lost') ? { outcome: m.outcome, label: String(m.label ?? '') } : null;
+      })(),
+      clock: clocks.get(num(r.id)) ?? null,
+      tries: tries.get(num(r.id)) ?? null,
       companyKind: r.company_kind ?? null,
       livreurPhone: r.livreur_phone ?? null,
       claim: c ? { id: num(c.id), status: c.status, createdAt: iso(c.createdAt), sentAt: isoOrNull(c.sentAt) } : null,
@@ -80,6 +175,7 @@ export async function suiviCounts(ctx: Ctx) {
   const r = (
     await ctx.db.query(
       `SELECT
+         count(*) FILTER (WHERE follow_status IN ('out_for_delivery','failed') AND COALESCE(sub_status,'') <> 'alert_traitee')::int AS enlivraison,
          count(*) FILTER (WHERE follow_status = 'alert')::int AS alertes,
          count(*) FILTER (WHERE sub_status = 'alert_traitee' AND follow_status IN ('out_for_delivery','shipped','failed'))::int AS traites,
          count(*) FILTER (WHERE follow_status = 'delivered' AND delivered_at >= $1)::int AS livres,
@@ -90,8 +186,19 @@ export async function suiviCounts(ctx: Ctx) {
     )
   )[0];
   // a confirmation agency's agents do not handle the store's claims with its couriers
-  const claims = agencyOf(ctx) !== null ? 0 : num((await ctx.db.query(`SELECT count(*)::int AS n FROM claims WHERE status <> 'resolved'`))[0]?.n);
+  const claims = agencyOf(ctx) !== null ? 0 : num((await ctx.db.query(`SELECT count(*)::int AS n FROM claims WHERE status NOT IN ${CLAIM_DONE}`))[0]?.n);
+  // the manager's red number: alerts nobody called in time
+  const alertIds = (await ctx.db.query(`SELECT o.id FROM orders o WHERE o.follow_status = 'alert'${andSql(queueSql(ctx, 'follow'))}`)).map((x: any) => num(x.id));
+  const clocks = await alertClocks(ctx.db, alertIds, ctx.now());
+  const lateCall = [...clocks.values()].filter((c) => c.kind === 'call' && c.state === 'late').length;
+  const lateSolve = [...clocks.values()].filter((c) => c.kind === 'solve' && c.state === 'late').length;
+  const stuckAll = await stuckParcels(ctx);
   return {
+    bloques: stuckAll.size,
+    bloquesTodo: [...stuckAll.values()].filter((x) => !x.handled).length,
+    lateCall,
+    lateSolve,
+    enlivraison: num(r.enlivraison),
     alertes: num(r.alertes),
     traites: num(r.traites),
     livres: num(r.livres),
@@ -121,16 +228,30 @@ async function swapCandidates(ctx: Ctx, fromId: number, q?: string) {
     rows = [];
     for (const r of ids) rows.push(await getOrder(ctx, num(r.id)));
   }
+  // the parcel's company price to each candidate's place (home or bureau), next to what it costs now
+  const fees = from.companyId ? await ctx.db.query('SELECT wilaya_id, home, desk FROM delivery_fees WHERE company_id = $1', [from.companyId]) : [];
+  const now = num((await ctx.db.query('SELECT delivery_cost FROM orders WHERE id = $1', [fromId]))[0]?.delivery_cost);
+  // what the company itself charges to swap (ZR: same wilaya / another wilaya)
+  const sw = from.companyId ? await swapFees(ctx, from.companyId) : { same: null, other: null };
+  const feeTo = (x: Order) => {
+    const f = fees.find((r: any) => num(r.wilaya_id) === x.wilayaId);
+    if (!f) return null;
+    const v = x.isStopdesk ? num(f.desk) : num(f.home);
+    return v > 0 ? v : null;
+  };
+  const norm = (c: string | null | undefined) => String(c ?? '').toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]/g, '');
   const list = rows
     .filter((x) => x.id !== fromId && !x.shippedAt)
     .map((x) => {
       const sameVariant = x.items.some((i) => i.variantId && variants.has(i.variantId));
       const sameProduct = x.items.some((i) => products.has(i.productId));
-      return { ...x, sameWilaya: x.wilayaId === from.wilayaId, sameVariant, sameProduct };
+      const fee = feeTo(x);
+      return { ...x, swapFee: x.wilayaId === from.wilayaId ? sw.same : sw.other, sameWilaya: x.wilayaId === from.wilayaId, sameCommune: x.wilayaId === from.wilayaId && !!x.commune && norm(x.commune) === norm(from.commune), sameVariant, sameProduct, fee, feeDiff: fee !== null && now > 0 ? fee - now : null };
     })
     .sort(
       (a, b) =>
         Number(b.sameWilaya) - Number(a.sameWilaya) ||
+        Number(b.sameCommune) - Number(a.sameCommune) ||
         Number(a.followStatus === 'prepared') - Number(b.followStatus === 'prepared') ||
         Number(b.sameVariant) - Number(a.sameVariant) ||
         String(a.confirmedAt).localeCompare(String(b.confirmedAt)),
@@ -199,7 +320,21 @@ async function swapTarget(ctx: Ctx, fromId: number) {
 }
 
 // ---------------------------------------------------------------- claims
+/**
+ * Where a claim stands: the company has 48 h to answer after each message; no answer → « À relancer » (a task for
+ * the agent who opened it); still no answer after 2 relances → « Manager » (red); an answer → the agent decides;
+ * « Résolue » or « Perdue » ends it.
+ */
+export type ClaimStage = 'wait' | 'answered' | 'relancer' | 'manager' | 'done';
+export const CLAIM_WAIT_H = 48;
+export const CLAIM_PUSHES = 2;
+
 export interface Claim {
+  stage: ClaimStage;
+  /** relances sent (by WhatsApp / e-mail / phone, or through the API) */
+  pushes: number;
+  /** when the company should have answered the last message */
+  dueAt: string;
   id: number;
   ref: string;
   orderId: number | null;
@@ -239,9 +374,18 @@ const CLAIM_SELECT = `SELECT c.*, o.ref AS order_ref, o.tracking, o.customer_nam
   FROM claims c LEFT JOIN orders o ON o.id = c.order_id LEFT JOIN delivery_companies co ON co.id = c.company_id
   LEFT JOIN profiles lv ON lv.id = c.livreur_id LEFT JOIN profiles cb ON cb.id = c.created_by`;
 
-function toClaim(r: any): Claim {
+function toClaim(r: any, now = Date.now()): Claim {
   const notes = typeof r.notes === 'string' ? JSON.parse(r.notes) : r.notes ?? [];
+  const relances = (notes as { at: string; text: string }[]).filter((n) => /^Relance/.test(n.text ?? ''));
+  const last = Math.max(Date.parse(iso(r.sent_at ?? r.created_at)), ...relances.map((n) => Date.parse(n.at)).filter((x) => !Number.isNaN(x)));
+  const due = last + CLAIM_WAIT_H * 3_600_000;
+  const done = r.status === 'resolved' || r.status === 'lost';
+  const answered = !!(r.ext_answer && String(r.ext_answer).trim());
+  const stage: ClaimStage = done ? 'done' : answered ? 'answered' : now < due ? 'wait' : relances.length >= CLAIM_PUSHES ? 'manager' : 'relancer';
   return {
+    stage,
+    pushes: relances.length,
+    dueAt: new Date(due).toISOString(),
     id: num(r.id),
     ref: claimRef(num(r.id)),
     orderId: numOrNull(r.order_id),
@@ -330,7 +474,7 @@ async function pushClaim(ctx: Ctx, cid: number, categoryId: string | null): Prom
 async function syncClaims(ctx: Ctx, onlyId?: number) {
   const rows = await ctx.db.query(
     `SELECT c.id, c.company_id, c.ext_id, c.ext_status, c.ext_answer, c.notes, c.order_id, c.status FROM claims c
-     WHERE c.ext_id IS NOT NULL AND c.status <> 'resolved' ${onlyId ? 'AND c.id = $1' : ''} ORDER BY c.updated_at LIMIT 200`,
+     WHERE c.ext_id IS NOT NULL AND c.status NOT IN ${CLAIM_DONE} ${onlyId ? 'AND c.id = $1' : ''} ORDER BY c.updated_at LIMIT 200`,
     onlyId ? [onlyId] : [],
   );
   let changed = 0;
@@ -385,7 +529,7 @@ async function getClaim(db: Db, cid: number) {
 
 const ClaimsInput = z.object({
   target: z.enum(['company', 'livreur', 'all']).default('all'),
-  status: z.enum([...CLAIM_STATUSES, 'open', 'all']).default('all'),
+  status: z.enum([...CLAIM_STATUSES, 'open', 'all', 'todo', 'manager', 'answered']).default('all'),
   orderId: id.optional(),
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(1).max(500).default(100),
@@ -398,17 +542,29 @@ async function listClaims(ctx: Ctx, f: z.infer<typeof ClaimsInput>): Promise<Pag
   if (f.orderId) w.add('c.order_id = ?', f.orderId);
   const base = w.sql;
   const cnt = await ctx.db.query(`SELECT c.status AS k, count(*)::int AS n FROM claims c ${base} GROUP BY 1`, w.params);
-  const counts: Record<string, number> = { waiting: 0, still_waiting: 0, resolved: 0 };
+  const counts: Record<string, number> = { waiting: 0, still_waiting: 0, resolved: 0, lost: 0 };
   for (const r of cnt) counts[r.k] = num(r.n);
   counts.open = counts.waiting + counts.still_waiting;
-  counts.all = counts.open + counts.resolved;
-  if (f.status === 'open') w.add(`c.status <> 'resolved'`);
+  counts.all = counts.open + counts.resolved + counts.lost;
+  // the stages are worked out from the open claims: « À relancer » (the agent's own), « Manager »
+  const me = ctx.session.profile.id;
+  const open = (await ctx.db.query(`${CLAIM_SELECT} ${base ? `${base} AND` : 'WHERE'} c.status NOT IN ${CLAIM_DONE} ORDER BY c.created_at`, w.params)).map((r: any) => toClaim(r, ctx.now()));
+  const mine = (c: Claim) => c.createdBy === me || ctx.session.isAdmin;
+  counts.todo = open.filter((c) => c.stage === 'relancer' && mine(c)).length;
+  counts.answered = open.filter((c) => c.stage === 'answered').length;
+  counts.manager = open.filter((c) => c.stage === 'manager').length;
+  counts.late = open.filter((c) => c.stage === 'relancer' || c.stage === 'manager').length;
+  if (f.status === 'todo' || f.status === 'manager' || f.status === 'answered') {
+    const pick = open.filter((c) => (f.status === 'todo' ? c.stage === 'relancer' && mine(c) : c.stage === f.status));
+    return { rows: pick.slice((f.page - 1) * f.pageSize, f.page * f.pageSize), total: pick.length, page: f.page, pageSize: f.pageSize, counts };
+  }
+  if (f.status === 'open') w.add(`c.status NOT IN ${CLAIM_DONE}`);
   else if (f.status !== 'all') w.add('c.status = ?', f.status);
   const total = num((await ctx.db.query(`SELECT count(*)::int AS n FROM claims c ${w.sql}`, w.params))[0]?.n);
   const lim = w.p(f.pageSize);
   const off = w.p((f.page - 1) * f.pageSize);
   const rows = await ctx.db.query(`${CLAIM_SELECT} ${w.sql} ORDER BY c.created_at DESC, c.id DESC LIMIT ${lim} OFFSET ${off}`, w.params);
-  return { rows: rows.map(toClaim), total, page: f.page, pageSize: f.pageSize, counts };
+  return { rows: rows.map((r: any) => toClaim(r, ctx.now())), total, page: f.page, pageSize: f.pageSize, counts };
 }
 
 const ClaimCreate = z.object({
@@ -433,7 +589,7 @@ const ClaimUpdate = z.object({
   message: z.string().min(1).max(4000).optional(),
 });
 
-const CLAIM_STATUS_FR: Record<string, string> = { waiting: 'En attente', still_waiting: 'Toujours en attente', resolved: 'Réglée' };
+const CLAIM_STATUS_FR: Record<string, string> = { waiting: 'En attente', still_waiting: 'Toujours en attente', resolved: 'Résolue', lost: 'Perdue' };
 const VIA_FR: Record<string, string> = { whatsapp: 'WhatsApp', email: 'e-mail', copy: 'copié', phone: 'téléphone' };
 
 // ---------------------------------------------------------------- procedures
@@ -447,7 +603,7 @@ const ListSuivi = z.object({
 /** A new claim on an order (one open claim per reason: a second click or the same claim again is refused). */
 async function createClaim(ctx: Ctx, i: z.infer<typeof ClaimCreate>): Promise<Claim> {
   const o = await getOrder(ctx, i.orderId);
-  const open = (await ctx.db.query(`SELECT id FROM claims WHERE order_id = $1 AND reason = $2 AND status <> 'resolved' LIMIT 1`, [i.orderId, i.reason]))[0];
+  const open = (await ctx.db.query(`SELECT id FROM claims WHERE order_id = $1 AND reason = $2 AND status NOT IN ${CLAIM_DONE} LIMIT 1`, [i.orderId, i.reason]))[0];
   if (open) throw bad(`${o.ref} a déjà une réclamation ouverte pour ce motif (${claimRef(num(open.id))})`);
   const me = ctx.session.profile.id;
   let companyId: number | null = null;
@@ -489,20 +645,102 @@ async function createClaim(ctx: Ctx, i: z.infer<typeof ClaimCreate>): Promise<Cl
   return made;
 }
 
+const MotifIn = z.object({ key: z.string().regex(/^[a-z0-9_]{1,40}$/), fr: z.string().trim().min(1).max(80), ar: z.string().trim().max(80).default(''), on: z.boolean(), client: z.boolean().optional(), date: z.boolean().optional() });
+const cleanMotif = (m: z.infer<typeof MotifIn>) => ({ key: m.key, fr: m.fr, ar: m.ar, on: m.on, ...(m.client ? { client: true } : {}), ...(m.date ? { date: true } : {}) });
+
+// ---------------------------------------------------------------- Bloqués
+/** On the road (with the company or our livreur), and not an alert: where a parcel can get stuck. */
+const ROAD = ['shipped', 'out_for_delivery', 'failed', 'in_exchange'];
+/** The last time the parcel moved: a status from the company, a delivery status, or when it left. */
+const LAST_MOVE = `GREATEST(o.ext_status_at, o.shipped_at, (SELECT max(e.at) FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status'))`;
+
+export interface StuckInfo {
+  /** whole days without news */
+  days: number;
+  since: string;
+  /** what the agent did since it stopped moving (relancé, réclamation, client rappelé), or null */
+  handled: string | null;
+  /** days before the claim by itself (0: due, null: done or the company has no API) */
+  autoClaimIn: number | null;
+}
+
+/** The stuck parcels (no new status for the Préférences' days), with how long and what the agent did. */
+export async function stuckParcels(ctx: Ctx, ids?: number[]): Promise<Map<number, StuckInfo>> {
+  const { days } = (await getPrefs(ctx.db)).suiviStuck;
+  const rows = await ctx.db.query(
+    `SELECT o.id, ${LAST_MOVE} AS since, co.kind,
+       (SELECT e.to_value FROM order_events e WHERE e.order_id = o.id AND e.kind = 'suivi_stuck' AND e.at >= ${LAST_MOVE} ORDER BY e.at DESC LIMIT 1) AS handled,
+       EXISTS (SELECT 1 FROM claims c WHERE c.order_id = o.id AND c.status NOT IN ${CLAIM_DONE} AND c.created_at >= ${LAST_MOVE}) AS claimed
+       FROM orders o LEFT JOIN delivery_companies co ON co.id = o.company_id
+      WHERE o.follow_status = ANY($1) AND o.shipped_at IS NOT NULL AND ${LAST_MOVE} < now() - make_interval(days => $2)
+        ${ids ? 'AND o.id = ANY($3)' : ''}${andSql(queueSql(ctx, 'follow'))}`,
+    ids ? [ROAD, days, ids] : [ROAD, days],
+  );
+  const out = new Map<number, StuckInfo>();
+  for (const r of rows) {
+    const since = Date.parse(iso(r.since));
+    const d = Math.floor((ctx.now() - since) / 86_400_000);
+    const api = !!KINDS[r.kind as keyof typeof KINDS]?.claims;
+    out.set(num(r.id), { days: d, since: iso(r.since), handled: r.claimed ? (r.handled ?? 'claim') : (r.handled ?? null), autoClaimIn: !api || r.claimed ? null : Math.max(0, days + 2 - d) });
+  }
+  return out;
+}
+
+/** Bloqués still without news 2 days after: a claim « en retard » to the company through its API (once). */
+export async function stuckAutoClaims(ctx: Ctx) {
+  const stuck = await stuckParcels(ctx);
+  let made = 0;
+  const errors: string[] = [];
+  for (const [oid, s] of stuck) {
+    if (s.autoClaimIn !== 0) continue;
+    try {
+      const o = await getOrder(ctx, oid);
+      if (!o.tracking) continue;
+      const shop = (await getSetting(ctx.db, 'shop')).name;
+      const message = `Bonjour, le colis ${o.tracking} (${o.ref}) — ${o.customerName} ${o.phone} n’a plus de nouvelles depuis ${s.days} jours. Merci de nous dire où il en est et de le livrer. ${shop}`;
+      await createClaim(ctx, ClaimCreate.parse({ orderId: oid, reason: 'late', details: `Bloqué depuis ${s.days} jours (réclamation automatique)`, message, viaApi: true }));
+      made++;
+    } catch (e) {
+      errors.push(`${oid}: ${(e as Error).message}`);
+    }
+  }
+  if (made) ctx.emit({ type: 'orders' });
+  return { made, errors };
+}
+
+/** A parcel another agent took with « Alerte suivante » (15 minutes): he is calling, nobody else acts on it. */
+async function notLockedByOther(ctx: Ctx, oid: number) {
+  const r = (await ctx.db.query(
+    `SELECT o.ref, p.name FROM orders o JOIN profiles p ON p.id = o.locked_by WHERE o.id = $1 AND o.locked_until > now() AND o.locked_by <> $2 AND o.follow_status = 'alert'`,
+    [oid, ctx.session.profile.id],
+  ))[0];
+  if (r && !ctx.session.isAdmin) throw bad(`${r.ref} : ${r.name} s’en occupe en ce moment`);
+}
+
 export const suiviProcs = {
   'suivi.counts': proc(['suivi'], z.object({}), (ctx) => suiviCounts(ctx)),
 
   'suivi.list': proc(['suivi'], ListSuivi, async (ctx, i) => {
-    const page = await listOrders(ctx, ListInput.parse({ ...tabFilter(i.tab, ctx.now()), q: i.q, page: i.page, pageSize: i.pageSize }), { queue: 'follow' });
+    const stuck = i.tab === 'bloques' ? await stuckParcels(ctx) : null;
+    if (stuck && !stuck.size) return { rows: [], total: 0, page: 1, pageSize: i.pageSize ?? 50, extra: {} };
+    const page = await listOrders(ctx, ListInput.parse({ ...tabFilter(i.tab, ctx.now()), ...(stuck ? { ids: [...stuck.keys()].slice(0, 500) } : {}), q: i.q, page: i.page, pageSize: i.pageSize }), { queue: 'follow' });
+    if (stuck) {
+      const ex = await extras(ctx.db, page.rows, ctx.now());
+      for (const o of page.rows) if (ex[o.id]) ex[o.id].stuck = stuck.get(o.id) ?? null;
+      // the longest without news first
+      const rows = await withClientScores(ctx, [...page.rows].sort((a, b) => (stuck.get(b.id)?.days ?? 0) - (stuck.get(a.id)?.days ?? 0)));
+      return { ...page, rows, extra: ex };
+    }
     // the swap list only shows parcels that really left (still with the courier or the livreur)
     const rows = await withClientScores(ctx, i.tab === 'swap' ? page.rows.filter((o) => o.shippedAt) : page.rows);
-    return { ...page, rows, extra: await extras(ctx.db, rows) };
+    return { ...page, rows, extra: await extras(ctx.db, rows, ctx.now()) };
   }),
 
   /** "Traiter" an alert: what was done, new date, note → back on the road with sub-status alert_traitee. */
   'suivi.treat': proc(['suivi'], z.object({ id, what: z.enum(TREAT_WHAT), date: z.string().max(20).nullable().optional(), note: z.string().max(1000).nullable().optional() }), async (ctx, i) => {
     const cur = await getOrder(ctx, i.id);
     if (cur.followStatus !== 'alert') throw bad(`${cur.ref} n’est pas en alerte`);
+    await notLockedByOther(ctx, i.id);
     const WHAT: Record<string, string> = { date: 'Client joint : nouvelle date de livraison', adresse: 'Adresse ou téléphone corrigé', injoignable: 'Client injoignable : nouvel essai', autre: 'Autre' };
     const day = i.date ? `le ${i.date.slice(0, 10).split('-').reverse().join('/')}` : '';
     const text = [WHAT[i.what], day, i.note?.trim()].filter(Boolean).join(' · ');
@@ -513,6 +751,222 @@ export const suiviProcs = {
   }),
 
   /** Takes the suivi agent off an order (the order stays where it is; the next suivi agent who acts on it takes it). */
+  /**
+   * Dashboard › Suivi › « Motifs du Suivi »: what the alerts of the period ended with — each « Résolu » motif and how
+   * many of those parcels were then delivered, each « Perdu » motif and its share of the lost parcels.
+   */
+  'suivi.motifStats': proc(['suivi', 'agent_manager', 'vendeur'], z.object({ from: z.string().max(40), to: z.string().max(40) }), async (ctx, i) => {
+    const rows = await ctx.db.query(
+      `SELECT e.from_value AS outcome, e.to_value AS key, max(e.note) AS label, count(DISTINCT e.order_id)::int AS n,
+              count(DISTINCT e.order_id) FILTER (WHERE o.follow_status = 'delivered')::int AS delivered
+         FROM order_events e JOIN orders o ON o.id = e.order_id
+        WHERE e.kind = 'suivi_motif' AND e.at >= $1::timestamptz AND e.at < $2::timestamptz${andSql(queueSql(ctx, 'follow'))}
+        GROUP BY 1, 2 ORDER BY n DESC`,
+      [i.from, i.to],
+    );
+    const motifs = await getSetting(ctx.db, 'suiviMotifs');
+    const name = (out: string, k: string, fallback: string) => (out === 'resolved' ? motifs.resolved : motifs.lost).find((m) => m.key === k)?.fr ?? fallback;
+    const side = (out: 'resolved' | 'lost') => rows.filter((r: any) => r.outcome === out).map((r: any) => ({ key: String(r.key), label: name(out, String(r.key), String(r.label ?? r.key)), count: num(r.n), delivered: num(r.delivered) }));
+    const resolved = side('resolved');
+    const lost = side('lost');
+    // each agent: what he treated, how many of his « Résolu » were then delivered, his « annulé trop tôt »
+    const agents = (
+      await ctx.db.query(
+        `SELECT e.user_id AS id, p.name,
+                count(DISTINCT e.order_id) FILTER (WHERE e.from_value = 'resolved')::int AS resolved,
+                count(DISTINCT e.order_id) FILTER (WHERE e.from_value = 'resolved' AND o.follow_status = 'delivered')::int AS delivered,
+                count(DISTINCT e.order_id) FILTER (WHERE e.from_value = 'lost')::int AS lost,
+                count(DISTINCT e.order_id) FILTER (WHERE e.from_value = 'lost' AND o.sub_status = 'annule_trop_tot')::int AS early,
+                (SELECT e2.to_value FROM order_events e2 WHERE e2.user_id = e.user_id AND e2.kind = 'suivi_motif' AND e2.from_value = 'lost' AND e2.at >= $1::timestamptz AND e2.at < $2::timestamptz
+                  GROUP BY 1 ORDER BY count(*) DESC LIMIT 1) AS top_lost
+           FROM order_events e JOIN orders o ON o.id = e.order_id JOIN profiles p ON p.id = e.user_id
+          WHERE e.kind = 'suivi_motif' AND e.at >= $1::timestamptz AND e.at < $2::timestamptz${andSql(queueSql(ctx, 'follow'))}
+          GROUP BY e.user_id, p.name ORDER BY count(DISTINCT e.order_id) DESC`,
+        [i.from, i.to],
+      )
+    ).map((r: any) => ({ id: num(r.id), name: String(r.name), resolved: num(r.resolved), delivered: num(r.delivered), lost: num(r.lost), early: num(r.early), topLost: r.top_lost ? name('lost', String(r.top_lost), String(r.top_lost)) : null }));
+    return { agents, resolved, lost, totalResolved: resolved.reduce((a, r) => a + r.count, 0), totalLost: lost.reduce((a, r) => a + r.count, 0) };
+  }),
+
+  /**
+   * Bloqués: what the agent did for a parcel without news — « relancé » (the company or the livreur, by phone),
+   * « réclamation » (a claim « en retard », through the API when the company has one) or « client rappelé ».
+   */
+  'suivi.stuckDone': proc(['suivi'], z.object({ id, action: z.enum(['relance', 'claim', 'client']), note: z.string().max(1000).nullable().optional() }), async (ctx, i) => {
+    const s = (await stuckParcels(ctx, [i.id])).get(i.id);
+    if (!s) throw bad('Ce colis n’est pas bloqué');
+    const me = ctx.session.profile.id;
+    let claim: Claim | null = null;
+    let claimError: string | null = null;
+    if (i.action === 'claim') {
+      const o = await getOrder(ctx, i.id);
+      const own = o.companyId ? (await ctx.db.query('SELECT kind FROM delivery_companies WHERE id = $1', [o.companyId]))[0]?.kind === 'own' : false;
+      const shop = (await getSetting(ctx.db, 'shop')).name;
+      try {
+        claim = await createClaim(
+          ctx,
+          ClaimCreate.parse({
+            orderId: i.id,
+            reason: 'late',
+            details: [`Bloqué depuis ${s.days} jours`, i.note?.trim()].filter(Boolean).join(' — '),
+            message: `Bonjour, le colis ${o.tracking ?? o.ref} (${o.ref}) — ${o.customerName} ${o.phone} n’a plus de nouvelles depuis ${s.days} jours. Merci de nous dire où il en est. ${shop}`,
+            toLivreur: own && !!o.livreurId,
+            viaApi: true,
+          }),
+        );
+      } catch (e) {
+        claimError = (e as Error).message;
+      }
+    }
+    const WHAT = { relance: 'Relancé', claim: 'Réclamation ouverte', client: 'Client rappelé' } as const;
+    await addEvent(ctx.db, i.id, me, 'suivi_stuck', String(s.days), i.action, [`Bloqué ${s.days} j : ${WHAT[i.action]}`, i.note?.trim()].filter(Boolean).join(' — '));
+    // the agent who handled it follows the parcel
+    await ctx.db.query('UPDATE orders SET follow_agent_id = COALESCE(follow_agent_id, $2), locked_by = NULL, locked_until = NULL WHERE id = $1', [i.id, me]);
+    ctx.emit({ type: 'order', id: i.id });
+    return { order: await getOrder(ctx, i.id), claim, claimError };
+  }),
+
+  /** Management › Motifs du Suivi: everyone reads them (the « Traiter » window), an admin changes them. */
+  'suivi.motifs': proc(null, z.object({}), async (ctx) => getSetting(ctx.db, 'suiviMotifs')),
+  'suivi.motifsSet': proc(
+    [],
+    z.object({
+      resolved: z.array(MotifIn).min(1).max(30),
+      lost: z.array(MotifIn).min(1).max(30),
+    }),
+    async (ctx, i) => {
+      for (const list of [i.resolved, i.lost]) if (new Set(list.map((m) => m.key)).size !== list.length) throw bad('Deux motifs ont la même clé');
+      if (!i.resolved.some((m) => m.on) || !i.lost.some((m) => m.on)) throw bad('Gardez au moins un motif allumé de chaque côté');
+      await setSetting(ctx.db, 'suiviMotifs', { resolved: i.resolved.map(cleanMotif), lost: i.lost.map(cleanMotif) }, ctx.session.profile.id);
+      return { ok: true };
+    },
+  ),
+
+  /**
+   * « Traiter » an alert, after calling the customer: « Résolu » (relancé: back on the road, and the delivery company
+   * asked to deliver again — through its API, or a message to write, or our livreur) or « Perdu » (after the seller's
+   * calls, or the customer said it himself, or « annulé trop tôt » with a reason) — always with a motif.
+   */
+  'suivi.resolve': proc(
+    ['suivi'],
+    z.object({
+      id,
+      outcome: z.enum(['resolved', 'lost']),
+      motif: z.string().max(40),
+      date: z.string().max(20).nullable().optional(),
+      note: z.string().max(1000).nullable().optional(),
+      /** « Perdu » before the calls, with a reason (the note) */
+      early: z.boolean().optional(),
+      /** « Résolu »: ask the delivery company (or our livreur) to deliver again */
+      relance: z.boolean().default(false),
+      /** « Perdu »: before the return, the parcel goes to this waiting order instead (swap) */
+      swapTo: id.nullable().optional(),
+    }),
+    async (ctx, i) => {
+      const cur = await getOrder(ctx, i.id);
+      if (cur.followStatus !== 'alert') throw bad(`${cur.ref} n’est pas en alerte`);
+      await notLockedByOther(ctx, i.id);
+      const all = await getSetting(ctx.db, 'suiviMotifs');
+      const m = (i.outcome === 'resolved' ? all.resolved : all.lost).find((x) => x.key === i.motif && x.on);
+      if (!m) throw bad('Choisissez un motif');
+      if (i.outcome === 'resolved' && m.date && !i.date) throw bad(`« ${m.fr} » : choisissez la nouvelle date`);
+      const day = i.date ? ` le ${i.date.slice(0, 10).split('-').reverse().join('/')}` : '';
+      const note = i.note?.trim() ?? '';
+      const me = ctx.session.profile.id;
+      if (i.outcome === 'resolved') {
+        await setFollow(ctx, FollowInput.parse({ ids: [i.id], status: 'out_for_delivery', subStatus: 'alert_traitee', note: ['Traité · Résolu · ' + m.fr + day, note].filter(Boolean).join(' — ') }));
+        await addEvent(ctx.db, i.id, me, 'suivi_motif', 'resolved', m.key, m.fr);
+        let claim: Claim | null = null;
+        let claimError: string | null = null;
+        if (i.relance && cur.companyId) {
+          try {
+            const own = (await ctx.db.query('SELECT kind FROM delivery_companies WHERE id = $1', [cur.companyId]))[0]?.kind === 'own';
+            const shop = (await getSetting(ctx.db, 'shop')).name;
+            const message = `Bonjour, merci de relivrer le colis ${cur.tracking ?? cur.ref} — ${cur.customerName} ${cur.phone}${cur.commune ? `, ${cur.commune}` : ''} : ${m.fr}${day}${note ? ` (${note})` : ''}. ${shop}`;
+            claim = await createClaim(ctx, ClaimCreate.parse({ orderId: i.id, reason: 'relivrer', details: `${m.fr}${day}${note ? ` — ${note}` : ''}`.slice(0, 1000), message, toLivreur: own && !!cur.livreurId, viaApi: true }));
+          } catch (e) {
+            claimError = (e as Error).message ?? 'Erreur';
+          }
+        }
+        ctx.emit({ type: 'order', id: i.id });
+        return { order: await getOrder(ctx, i.id), claim, claimError, swap: null };
+      }
+      const tr = (await alertTries(ctx.db, [i.id], ctx.now())).get(i.id);
+      const enough = !!tr && tr.done >= tr.need;
+      const early = !enough && !m.client;
+      if (early && (!i.early || !note)) throw bad(`${cur.ref} : faites d’abord ${tr?.need ?? 3} appels (${tr?.done ?? 0} faits), ou dites pourquoi vous annulez avant`);
+      if (i.swapTo) {
+        await addEvent(ctx.db, i.id, me, 'suivi_motif', 'lost', m.key, m.fr);
+        const swap = await swapParcel(ctx, i.id, i.swapTo, [`Traité · Perdu · ${m.fr}`, early ? 'annulé trop tôt' : '', note].filter(Boolean).join(' — '));
+        return { order: await getOrder(ctx, i.id), claim: null, claimError: null, swap };
+      }
+      await setFollow(
+        ctx,
+        FollowInput.parse({
+          ids: [i.id],
+          status: 'returning',
+          subStatus: early ? 'annule_trop_tot' : null,
+          note: [`Traité · Perdu · ${m.fr}`, early ? `annulé trop tôt (${tr?.done ?? 0}/${tr?.need ?? 3} appels)` : '', note].filter(Boolean).join(' — '),
+        }),
+      );
+      await addEvent(ctx.db, i.id, me, 'suivi_motif', 'lost', m.key, m.fr);
+      ctx.emit({ type: 'order', id: i.id });
+      return { order: await getOrder(ctx, i.id), claim: null, claimError: null, swap: null };
+    },
+  ),
+
+  /**
+   * « Alerte suivante »: the most urgent alert for this agent, locked to him 15 minutes so nobody calls the same customer.
+   * His own parcels first (once he acted on a parcel it stays his until it ends), then the alerts of nobody — or of an
+   * agent not seen for 8 hours (off today) — the oldest alert first.
+   */
+  'suivi.next': proc(['suivi'], z.object({ skip: z.array(id).max(200).default([]), release: id.nullable().optional(), only: z.enum(['stuck']).optional() }), async (ctx, i) => {
+    const me = ctx.session.profile.id;
+    if (i.release) await ctx.db.query('UPDATE orders SET locked_by = NULL, locked_until = NULL WHERE id = $1 AND locked_by = $2', [i.release, me]);
+    // picked and locked in one statement: two agents pressing at the same time never get the same parcel
+    const r = i.only === 'stuck' ? [] : await ctx.db.query(
+      `UPDATE orders SET locked_by = $1, locked_until = now() + interval '15 minutes'
+        WHERE id = (
+          SELECT o.id FROM orders o LEFT JOIN profiles fa ON fa.id = o.follow_agent_id
+           WHERE o.follow_status = 'alert' AND NOT (o.id = ANY($2))
+             AND (o.locked_until IS NULL OR o.locked_until < now() OR o.locked_by = $1)
+             AND (o.follow_agent_id IS NULL OR o.follow_agent_id = $1 OR fa.last_seen_at IS NULL OR fa.last_seen_at < now() - interval '8 hours')${andSql(queueSql(ctx, 'follow'))}
+           ORDER BY (o.follow_agent_id = $1) DESC NULLS LAST,
+             (SELECT max(e.at) FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'alert') ASC NULLS FIRST, o.id
+           LIMIT 1 FOR UPDATE OF o SKIP LOCKED)
+       RETURNING id`,
+      [me, i.skip],
+    );
+    if (r[0]) {
+      const order = await getOrder(ctx, num(r[0].id));
+      return { id: order.id, kind: 'alert' as const, order, extra: (await extras(ctx.db, [order], ctx.now()))[order.id] ?? null };
+    }
+    // no alert left: the Bloqués nobody handled yet, the longest without news first
+    const stuck = [...(await stuckParcels(ctx)).entries()].filter(([oid, x]) => !x.handled && !i.skip.includes(oid)).sort((a, b) => b[1].days - a[1].days);
+    for (const [oid, x] of stuck) {
+      const got = await ctx.db.query(
+        `UPDATE orders o SET locked_by = $1, locked_until = now() + interval '15 minutes'
+           FROM (SELECT o2.id FROM orders o2 LEFT JOIN profiles fa ON fa.id = o2.follow_agent_id
+                  WHERE o2.id = $2 AND (o2.locked_until IS NULL OR o2.locked_until < now() OR o2.locked_by = $1)
+                    AND (o2.follow_agent_id IS NULL OR o2.follow_agent_id = $1 OR fa.last_seen_at IS NULL OR fa.last_seen_at < now() - interval '8 hours')
+                  FOR UPDATE OF o2 SKIP LOCKED) f
+          WHERE o.id = f.id RETURNING o.id`,
+        [me, oid],
+      );
+      if (!got[0]) continue;
+      const order = await getOrder(ctx, oid);
+      const ex = (await extras(ctx.db, [order], ctx.now()))[oid] ?? null;
+      return { id: oid, kind: 'stuck' as const, order, extra: ex ? { ...ex, stuck: x } : null };
+    }
+    return { id: null, kind: null, order: null, extra: null };
+  }),
+
+  /** Leaves the parcel taken with « Alerte suivante » (closed without acting): another agent may take it. */
+  'suivi.release': proc(['suivi'], z.object({ id }), async (ctx, i) => {
+    await ctx.db.query('UPDATE orders SET locked_by = NULL, locked_until = NULL WHERE id = $1 AND (locked_by = $2 OR $3)', [i.id, ctx.session.profile.id, ctx.session.isAdmin]);
+    return { ok: true };
+  }),
+
   'suivi.unassign': proc(['suivi'], z.object({ id }), async (ctx, { id: oid }) => {
     const cur = (await ctx.db.query('SELECT follow_agent_id FROM orders WHERE id = $1', [oid]))[0];
     if (!cur) throw notFound('Commande introuvable');
@@ -525,16 +979,46 @@ export const suiviProcs = {
   }),
 
   /** Client annule / Livré / Nouvelle alerte from the Suivi lists. */
-  'suivi.act': proc(['suivi'], z.object({ id, action: z.enum(['cancel', 'delivered', 'realert']), note: z.string().max(1000).nullable().optional() }), async (ctx, i) => {
+  'suivi.act': proc(
+    ['suivi'],
+    z.object({
+      id,
+      action: z.enum(['cancel', 'delivered', 'realert']),
+      note: z.string().max(1000).nullable().optional(),
+      /** « Client annule » on an alert: the customer said it himself (always allowed), or before the tries (a reason, « annulé trop tôt ») */
+      by: z.enum(['client', 'early']).optional(),
+    }),
+    async (ctx, i) => {
+    if (i.action === 'cancel') {
+      const cur = await getOrder(ctx, i.id);
+      if (cur.followStatus === 'alert') {
+        await notLockedByOther(ctx, i.id);
+        const tr = (await alertTries(ctx.db, [i.id], ctx.now())).get(i.id);
+        const enough = !!tr && tr.done >= tr.need;
+        if (!enough && i.by !== 'client') {
+          if (i.by !== 'early' || !i.note?.trim()) throw bad(`${cur.ref} : faites d’abord ${tr?.need ?? 3} appels (${tr?.done ?? 0} faits), ou dites pourquoi vous annulez avant`);
+        }
+        if (!enough && i.by === 'early') {
+          await setFollow(ctx, FollowInput.parse({ ids: [i.id], status: 'returning', subStatus: 'annule_trop_tot', note: `Annulé trop tôt (${tr?.done ?? 0}/${tr?.need ?? 3} appels) — ${i.note!.trim()}` }));
+          return getOrder(ctx, i.id);
+        }
+        if (i.by === 'client') {
+          await setFollow(ctx, FollowInput.parse({ ids: [i.id], status: 'returning', note: ['Le client annule lui-même (suivi)', i.note].filter(Boolean).join(' — ') }));
+          return getOrder(ctx, i.id);
+        }
+      }
+    }
     const map = {
       cancel: { status: 'returning', note: 'Annulé par le client (suivi)' },
       delivered: { status: 'delivered', note: 'Livré après alerte traitée' },
       realert: { status: 'alert', note: 'Nouvelle alerte' },
     } as const;
     const m = map[i.action];
+    await notLockedByOther(ctx, i.id);
     await setFollow(ctx, FollowInput.parse({ ids: [i.id], status: m.status, note: [m.note, i.note].filter(Boolean).join(' — ') }));
     return getOrder(ctx, i.id);
-  }),
+    },
+  ),
 
   'suivi.swapCandidates': proc(['suivi'], z.object({ fromId: id, q: z.string().max(100).optional() }), (ctx, i) => swapCandidates(ctx, i.fromId, i.q)),
   'suivi.swap': proc(['suivi'], z.object({ fromId: id, toId: id, note: z.string().max(500).nullable().optional() }), (ctx, i) => swapParcel(ctx, i.fromId, i.toId, i.note)),
@@ -560,6 +1044,22 @@ export const suiviProcs = {
   'suivi.findOrders': proc(['suivi', 'confirmation', 'depot'], z.object({ q: z.string().min(2).max(100) }), (ctx, { q }) =>
     findOrders(ctx, q, 8, (w) => w.add('(o.company_id IS NOT NULL AND (o.tracking IS NOT NULL OR o.livreur_id IS NOT NULL))')),
   ),
+
+  /** Dashboard › Suivi: per delivery company (and our livreurs), the open claims, those without an answer after 48 h, and those at the manager. */
+  'suivi.claimsLate': proc(['suivi', 'agent_manager', 'vendeur'], z.object({}), async (ctx) => {
+    const rows = (await ctx.db.query(`${CLAIM_SELECT} WHERE c.status NOT IN ${CLAIM_DONE}`)).map((r: any) => toClaim(r, ctx.now()));
+    const by = new Map<string, { name: string; open: number; late: number; manager: number; oldest: string | null }>();
+    for (const c of rows) {
+      const name = c.livreurId ? c.livreurName ?? '—' : c.companyName ?? '—';
+      const g = by.get(name) ?? { name, open: 0, late: 0, manager: 0, oldest: null };
+      g.open++;
+      if (c.stage === 'relancer' || c.stage === 'manager') g.late++;
+      if (c.stage === 'manager') g.manager++;
+      if (!g.oldest || c.createdAt < g.oldest) g.oldest = c.createdAt;
+      by.set(name, g);
+    }
+    return [...by.values()].sort((a, b) => b.late - a.late || b.open - a.open);
+  }),
 
   'suivi.claims': proc(['suivi', 'confirmation', 'depot'], ClaimsInput, (ctx, f) => listClaims(ctx, f)),
 

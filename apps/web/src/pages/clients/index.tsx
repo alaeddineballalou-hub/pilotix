@@ -1,12 +1,12 @@
 // Clients: search, "Liste noire seulement", order history and blacklist — as in the original app.
-import { CONF_TONE } from '@pilotix/shared';
+import { CONF_TONE, type ClientLevel } from '@pilotix/shared';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, n, when, wilayaName } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { Card, Empty, ErrorBox, Field, Loading, Pager, StatusBadge } from '../../ui/kit';
-import { ScoreCard, ScoreChip } from '../../ui/clientScore';
+import { LevelPicker, ScoreCard, ScoreChip } from '../../ui/clientScore';
 import { Modal } from '../../ui/modal';
 import type { PageProps } from '../registry';
 
@@ -23,12 +23,13 @@ export function Clients(_: PageProps) {
   const { t } = useTranslation();
   const [q, setQ] = useState('');
   const [black, setBlack] = useState(false);
+  const [level, setLevel] = useState<ClientLevel | undefined>(undefined);
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(60);
   const [open, setOpen] = useState<number | null>(null);
   const dq = useDebounced(q);
-  useEffect(() => setPage(1), [dq, black]);
-  const list = useRpc('customers.list', { q: dq || undefined, blacklisted: black || undefined, page, pageSize: size });
+  useEffect(() => setPage(1), [dq, black, level]);
+  const list = useRpc('customers.list', { q: dq || undefined, blacklisted: black || undefined, level, page, pageSize: size });
   const rows = list.data?.rows;
 
   return (
@@ -43,12 +44,13 @@ export function Clients(_: PageProps) {
             {t('clients.onlyBlack')}
           </label>
         </div>
+        <LevelPicker value={level} onChange={setLevel} className="cl-levels" />
         {list.error ? (
           <ErrorBox error={list.error} onRetry={() => list.refetch()} />
         ) : !rows ? (
           <Loading />
         ) : rows.length === 0 ? (
-          <Empty>{t('clients.empty')}</Empty>
+          <Empty>{level ? t('clients.score.emptyLevel', { level: t(`clients.score.level.${level}`) }) : t('clients.empty')}</Empty>
         ) : (
           <div>
             <div className="tbl-wrap">

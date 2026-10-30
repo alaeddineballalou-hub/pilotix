@@ -442,3 +442,11 @@ html[data-theme="dark"] .pp-prot { --pp-c-q: #3B9BC0; }
 .pilot-search { width: 100%; margin-bottom: 8px; }
 .pilot-test { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 12px; }
 .pilot-transcript { white-space: pre-wrap; word-break: break-word; max-height: 55vh; overflow: auto; padding: 12px; border-radius: 10px; background: var(--raise); border: 1px solid var(--line); font-size: 13px; line-height: 1.5; }
+/* Pilot AI › what each shop's AI costs */
+.pilot-cost-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
+.pilot-cost-month { min-width: 130px; text-align: center; text-transform: capitalize; }
+.pilot-cost-bar .pilot-cost-rate { flex-wrap: nowrap; }
+.pilot-cost-bar .pilot-cost-rate input[type=number] { width: 96px; flex: 0 0 96px; }
+.pilot-cost .pilot-cost-n { display: block; font-size: 11px; }
+@media (min-width: 761px) { .pilot-cost tfoot td { border-top: 2px solid var(--line); } }
+.pilot-cost-foot { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 10px; }

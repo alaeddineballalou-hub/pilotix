@@ -1,0 +1,16 @@
+/* Management › Motifs du Suivi */
+.mo-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr)); gap: 14px; margin-top: 10px; }
+.mo-side { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--surface); display: flex; flex-direction: column; gap: 8px; }
+.mo-side h4 { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 15px; }
+.mo-side h4 svg { width: 17px; height: 17px; }
+.mo-side.resolved h4 svg { color: var(--ok); }
+.mo-side.lost h4 svg { color: var(--coral, #C2410C); }
+.mo-side ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.mo-side li { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; align-items: center; }
+.mo-side li.dim input { opacity: .55; }
+.mo-side li input[type="text"], .mo-side li > input { min-height: 38px; min-width: 0; }
+.mo-tools { display: inline-flex; align-items: center; gap: 6px; }
+.mo-client { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; cursor: pointer; }
+.mo-side > .btn { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; }
+.mo-foot { margin-top: 12px; align-items: center; }
+@media (max-width: 560px) { .mo-side li { grid-template-columns: 1fr 1fr; } .mo-tools { grid-column: 1 / -1; justify-content: flex-end; } }

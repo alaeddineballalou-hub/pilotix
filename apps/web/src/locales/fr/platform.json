@@ -998,6 +998,31 @@
     "shopsOn": "{{n}} sur {{total}}",
     "shopsHelp": "Vous seul choisissez ici les boutiques dont les conversations apprennent à Dellal. Les boutiques ne voient aucun réglage Pilot AI ; leurs conditions d'utilisation le disent.",
     "shopCases": "{{n}} conversation(s) apprises",
-    "shopsOff": "Décocher une boutique supprime tout de suite ce que Pilot AI avait gardé de ses conversations."
+    "shopsOff": "Décocher une boutique supprime tout de suite ce que Pilot AI avait gardé de ses conversations.",
+    "costs": {
+      "title": "Coût de l'IA par boutique",
+      "help": "Ce que l'IA de chaque boutique vous a coûté ce mois-ci (Message AI agent, CM AI agent, AI Spy), au prix d'Anthropic, avec votre clé Pilotix. Facturez ce montant à chaque boutique (ou plus).",
+      "prev": "Mois précédent",
+      "next": "Mois suivant",
+      "rate": "Combien de DA pour 1 $",
+      "none": "Aucune réponse de l'IA payée par Pilotix ce mois-ci.",
+      "f": {
+        "dellal": "Message AI agent",
+        "cm": "CM AI agent",
+        "spy": "AI Spy",
+        "other": "Autre"
+      },
+      "total": "Total",
+      "toBill": "À facturer",
+      "all": "Toutes les boutiques",
+      "calls_one": "{{n}} réponse",
+      "calls_other": "{{n}} réponses",
+      "ownKey": "sa propre clé : {{usd}} (pas à facturer)",
+      "ownKeyAll": "payé avec la clé des boutiques : {{usd}} (pas à facturer)",
+      "night": "Apprentissage de nuit (Pilot AI, pour toutes les boutiques) : {{usd}}",
+      "since": "Compté depuis le {{date}}.",
+      "notYet": "Le compteur démarre à la première réponse de l'IA.",
+      "csv": "Télécharger (CSV)"
+    }
   }
 }

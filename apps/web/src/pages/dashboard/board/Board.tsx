@@ -26,7 +26,7 @@ export function useBoardPeriod(key = 'dash.tb', initial: AnyPeriod = '7d') {
   return { period, setPeriod, custom, setCustom, range };
 }
 
-export function Board({ area, extra, range, compact }: { area: AreaKey; extra?: ReactNode; range?: { from: string; to: string }; compact?: boolean }) {
+export function Board({ area, extra, range, compact }: { area: AreaKey; extra?: ReactNode | ((range: { from: string; to: string }) => ReactNode); range?: { from: string; to: string }; compact?: boolean }) {
   const { t } = useTranslation();
   const { session } = useSession();
   const phone = useIsPhone();
@@ -116,7 +116,7 @@ export function Board({ area, extra, range, compact }: { area: AreaKey; extra?: 
           </div>
           )}
           {!compact && b.groups.length > 0 && <Groups area={area} def={def} b={b} onPick={setTeamId} />}
-          {extra}
+          {typeof extra === 'function' ? extra(range ?? per.range) : extra}
         </div>
       )}
       {open && b && <MemberSheet area={area} def={def} m={open} b={b} presence={presence.get(open.id ?? -1)} onClose={() => setOpen(null)} />}

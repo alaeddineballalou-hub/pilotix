@@ -650,5 +650,81 @@
     "fill": "Each message needs a name and words",
     "save": "Save",
     "saved": "Livreur messages saved"
+  },
+  "motifs": {
+    "title": "Suivi motifs",
+    "help": "When the agent treats an alert, he picks “Solved” or “Lost”, then one of these motifs.",
+    "resolved": "Solved (relaunched)",
+    "resolvedHint": "The customer still wants the parcel: the company is asked again.",
+    "lost": "Lost",
+    "lostHint": "The parcel comes back. “The customer said it”: possible before the calls.",
+    "fr": "Name (French)",
+    "ar": "Name (Arabic)",
+    "client": "The customer said it",
+    "clientTip": "The customer cancels himself: the agent can pick it before his calls.",
+    "on": "{{name}} active",
+    "remove": "Remove",
+    "add": "Add a motif",
+    "needOne": "A name for every motif, and at least one active motif on each side.",
+    "saved": "Motifs saved",
+    "date": "Date required",
+    "dateTip": "The agent must give the new date"
+  },
+  "score": {
+    "title": "Customer score",
+    "help": "The score out of 100 your team sees next to each customer. Here you choose how many points each thing adds or takes off. Scores change everywhere as soon as you save.",
+    "startA": "A customer starts at",
+    "start": "Starting points",
+    "startB": "points. Then:",
+    "col": {
+      "what": "What happens",
+      "each": "Points each time",
+      "max": "At most"
+    },
+    "what": {
+      "delivered": "Parcel delivered and paid",
+      "returned": "Parcel refused",
+      "fake": "Fake order or wrong number",
+      "cancelled": "Order cancelled",
+      "blocked": "Order blocked by the protection",
+      "review": "Order sent “to check”",
+      "markFake": "Device marked “fake order”",
+      "markCompetitor": "Device marked “competitor”",
+      "network": "Flagged by 2 other sellers"
+    },
+    "eachOf": "Points each time: {{what}}",
+    "maxOf": "At most: {{what}}",
+    "noLimit": "no limit",
+    "once": "only once",
+    "networkMoreA": "then",
+    "networkMore": "Points per extra seller",
+    "networkMoreB": "per extra seller",
+    "levelsTitle": "The levels",
+    "from": "from",
+    "below": "below",
+    "levelFrom": "{{level}} from",
+    "capsTitle": "Never higher than",
+    "cap": {
+      "blacklistAuto": "Blacklist (put by the protection)",
+      "blacklistManual": "Blacklist (put by a person)",
+      "stopdesk": "Stop-desk only"
+    },
+    "tryTitle": "Try your points",
+    "ex": {
+      "d2": "2 parcels delivered",
+      "d1": "1 parcel delivered",
+      "c1": "1 order cancelled",
+      "d1r1": "1 delivered, 1 refused",
+      "r1": "1 parcel refused",
+      "n2": "Flagged by 2 sellers",
+      "f1": "1 fake order"
+    },
+    "reset": "Back to the recommended points",
+    "saved": "Score points saved",
+    "err": {
+      "empty": "Fill in every box (only “At most” may stay empty: no limit).",
+      "range": "Each number goes from 0 to 100.",
+      "levels": "The levels must go down: “Very reliable” above “Reliable”, above “Watch”."
+    }
   }
 }

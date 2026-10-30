@@ -379,7 +379,7 @@ function NotDelivered({ o, onClose }: { o: Order; onClose: () => void }) {
           type="button"
           className={`pxv-btn big ${kind === 'failed' ? 'warn' : 'bad'}`}
           disabled={!reason || set.isPending}
-          onClick={() => set.mutate({ ids: [o.id], status: kind, reason: label(reason), note: note.trim() || null, clientId: `tr-${o.id}-${kind}-${Date.now()}` })}
+          onClick={() => set.mutate({ ids: [o.id], status: kind, reason: label(reason), reasonKey: reason, note: note.trim() || null, clientId: `tr-${o.id}-${kind}-${Date.now()}` })}
         >
           {kind === 'failed' ? t('tournee.ph.confirmFail') : t('tournee.ph.confirmReturn')}
         </button>

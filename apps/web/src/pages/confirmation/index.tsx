@@ -1,5 +1,5 @@
 // Confirmation: Nouvelles › En cours › Confirmées (+ Terminées). Same screens as the original app.
-import { SALES_CHANNELS, SalesChannel, WILAYAS } from '@pilotix/shared';
+import { CLIENT_LEVELS, SALES_CHANNELS, SalesChannel, WILAYAS, type ClientLevel } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { Fragment, ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -29,7 +29,7 @@ import { CopyCode } from '../../ui/CopyCode';
 import { ScoreChip } from '../../ui/clientScore';
 
 type Row = NonNullable<ReturnType<typeof useList>['data']>['rows'][number];
-type SortKey = 'created_at' | 'confirmed_at' | 'next_call_at' | 'total' | 'customer_name' | 'deadline';
+type SortKey = 'created_at' | 'confirmed_at' | 'next_call_at' | 'total' | 'customer_name' | 'deadline' | 'score';
 type ColKey = 'order' | 'source' | 'tracking' | 'creator' | 'channel' | 'product' | 'variant' | 'sku' | 'chrono' | 'name' | 'phone' | 'wilaya' | 'commune' | 'agent' | 'fagent' | 'total' | 'time' | 'created' | 'stock' | 'desk' | 'passed' | 'confirmed' | 'follow' | 'next' | 'status';
 interface Filters {
   wilayaId?: number;
@@ -39,6 +39,8 @@ interface Filters {
   variantId?: number;
   channel?: SalesChannel;
   status?: string;
+  /** the customer's score level */
+  level?: ClientLevel;
   from?: string;
   to?: string;
 }
@@ -445,6 +447,20 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
               <span className="px-qb-tx">{t('common.filters')}</span>
               {nFilters ? <b className="px-qb-n">{nFilters}</b> : null}
             </button>
+            {/* the best customers first (a customer known good, then a new one, then the ones to watch); again: back to the clock */}
+            <button
+              type="button"
+              className={`px-qb px-qb-l ${sort === 'score' ? 'on' : ''}`}
+              aria-pressed={sort === 'score'}
+              title={t('confirmation.bestFirstHelp')}
+              onClick={() => {
+                setSort(sort === 'score' ? DEFAULT_SORT[sub] : { sort: 'score', dir: 'desc' });
+                setPage(1);
+              }}
+            >
+              <Icon name="medal" />
+              <span className="px-qb-tx">{t('confirmation.bestFirst')}</span>
+            </button>
             <DensitySwitch value={dens} onChange={setDens} />
             <ColumnMenu
               order={order}
@@ -541,6 +557,16 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                 {SALES_CHANNELS.map((c) => (
                   <option key={c} value={c}>
                     {t(`status.channel.${c}`)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={t('clients.score.filterShort')}>
+              <select value={f.level ?? ''} onChange={(e) => setFilter({ level: (e.target.value || undefined) as ClientLevel | undefined })}>
+                <option value="">{t('common.all')}</option>
+                {CLIENT_LEVELS.map((l) => (
+                  <option key={l} value={l}>
+                    {t(`clients.score.level.${l}`)}
                   </option>
                 ))}
               </select>

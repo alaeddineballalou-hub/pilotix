@@ -2,6 +2,7 @@
 // index used at login, settings and the journal. Applied before every shop's own migrations.
 import type { Tenancy } from './tenancy';
 import { PILOT_PLATFORM_SQL } from '../modules/pilotlearn';
+import { AI_USAGE_SQL } from './aiusage';
 
 const P001 = `
 CREATE SCHEMA IF NOT EXISTS platform;
@@ -546,6 +547,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p011_buyer_quality', P011],
   // Pilot AI: what Dellal learns from every sharing shop's chats (modules/pilotlearn.ts)
   ['p012_pilot_ai', PILOT_PLATFORM_SQL],
+  // what each shop's AI costs (Dellal, CM AI agent, AI Spy), counted by dellal-server › complete() (platform/aiusage.ts)
+  ['p013_ai_usage', AI_USAGE_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

@@ -16,6 +16,7 @@ import { mayChangeCompany, pilotLine } from '../../lib/pilot';
 import { useSession } from '../../lib/session';
 import { toast } from '../../ui/toast';
 import './check.css';
+import { askRisk } from '../../ui/clientScore';
 
 interface Line {
   productId: number;
@@ -297,9 +298,10 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
       setBusy(false);
     }
   };
-  const confirm = () => run(() => rpc('orders.setConf', { ids: [order.id], status: 'confirmed' }), t('confirmation.d6.confirmed', { ref: order.ref }));
+  // a « Risqué » customer: the agent reads why first, and chooses
+  const confirm = async () => (await askRisk(order)) && run(() => rpc('orders.setConf', { ids: [order.id], status: 'confirmed' }), t('confirmation.d6.confirmed', { ref: order.ref }));
   /** nothing left for a product: confirmed « sans stock », it waits for stock (oldest first) before the depot */
-  const confirmNoStock = () => run(() => rpc('orders.setConf', { ids: [order.id], status: 'no_stock' }), t('confirmation.chk.doneNoStock', { ref: order.ref }));
+  const confirmNoStock = async () => (await askRisk(order)) && run(() => rpc('orders.setConf', { ids: [order.id], status: 'no_stock' }), t('confirmation.chk.doneNoStock', { ref: order.ref }));
 
   return (
     <div className={`qd2-main qd3 qd5 qd6${phone ? ' qd6-ph' : ''}`}>

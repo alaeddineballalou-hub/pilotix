@@ -10,7 +10,7 @@ import { startTicketFor } from '../sav/NewTicket';
 import { useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { ErrorBox, Field, Icon, Loading, StatusBadge, TicketTag } from '../../ui/kit';
-import { ScoreCard } from '../../ui/clientScore';
+import { askRisk, ScoreCard } from '../../ui/clientScore';
 import { toast } from '../../ui/toast';
 import { confLabel, printOrder, telHref, waHref } from './shared';
 import './orders.css';
@@ -168,6 +168,9 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
             return;
           }
           if (CONF_NEEDS_DATE.includes(s) || CONF_NEEDS_REASON.includes(s)) setPanel({ kind: 'conf', status: s });
+          else if (s === 'confirmed' || s === 'no_stock') askRisk(o).then((ok) => {
+              if (ok) run(() => rpc('orders.setConf', { ids: [o.id], status: s }), t(`status.conf.${s}`));
+            });
           else run(() => rpc('orders.setConf', { ids: [o.id], status: s }), t(`status.conf.${s}`));
         }}
       >
@@ -489,6 +492,10 @@ export function eventText(t: (k: string, o?: any) => string, e: OrderEvent, user
       return `${t('orders.card.ev.company')} : ${e.fromValue ? `${company(e.fromValue)} → ` : ''}${company(e.toValue)}`;
     case 'sub_status':
       return t('orders.card.ev.sub_status') + (e.toValue ?? '—');
+    case 'suivi_stuck':
+      return e.note ?? t('orders.card.ev.suivi_stuck');
+    case 'suivi_motif':
+      return t(`orders.card.ev.motif_${e.fromValue === 'lost' ? 'lost' : 'resolved'}`, { m: e.note ?? e.toValue ?? '' });
     case 'chat': {
       // Delivery AI agent: what was sent to the customer (channel → case), or the customer's answer
       if (!e.fromValue) return t('orders.card.ev.chat');

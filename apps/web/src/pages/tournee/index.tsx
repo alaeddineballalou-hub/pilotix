@@ -114,8 +114,8 @@ function ParcelCard({ o, shop, actions }: { o: Order; shop: { name: string; what
   const call = useAction('orders.logCall', { silent: true });
   const items = o.items.map((i) => `${i.qty} × ${i.name}${i.variantTitle ? ` ${i.variantTitle}` : ''}`).join(' + ');
   const wa = `https://wa.me/${phoneIntl(o.phone)}?text=${encodeURIComponent((shop.whatsappTemplate || '').replace(/\{nom\}/g, o.customerName).replace(/\{boutique\}/g, shop.name).replace(/\{ref\}/g, o.ref))}`;
-  const go = (status: 'out_for_delivery' | 'delivered' | 'failed' | 'returning', why?: string) =>
-    set.mutate({ ids: [o.id], status, reason: why || null, note: note.trim() || null, clientId: `tr-${o.id}-${status}-${Date.now()}` });
+  const go = (status: 'out_for_delivery' | 'delivered' | 'failed' | 'returning', why?: string, key?: string) =>
+    set.mutate({ ids: [o.id], status, reason: why || null, reasonKey: key ?? null, note: note.trim() || null, clientId: `tr-${o.id}-${status}-${Date.now()}` });
   const reasons = ask === 'failed' ? FAIL_REASONS : RETURN_REASONS;
   const focus = o.followStatus === 'out_for_delivery';
   return (
@@ -181,7 +181,7 @@ function ParcelCard({ o, shop, actions }: { o: Order; shop: { name: string; what
               </div>
               <textarea rows={2} placeholder={t('tournee.notePh')} value={note} onChange={(e) => setNote(e.target.value)} aria-label={t('common.note')} />
               <div className="row" style={{ marginTop: 8 }}>
-                <button className={`btn ${ask === 'failed' ? 'warn' : 'danger'}`} disabled={!reason || set.isPending} onClick={() => go(ask, t(`status.${ask === 'failed' ? 'failReason' : 'returnReason'}.${reason}`))}>
+                <button className={`btn ${ask === 'failed' ? 'warn' : 'danger'}`} disabled={!reason || set.isPending} onClick={() => go(ask, t(`status.${ask === 'failed' ? 'failReason' : 'returnReason'}.${reason}`), reason)}>
                   {ask === 'failed' ? t('tournee.confirmFail') : t('tournee.confirmReturn')}
                 </button>
                 <button className="btn" onClick={() => setAsk(null)}>

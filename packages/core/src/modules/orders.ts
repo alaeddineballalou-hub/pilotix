@@ -28,6 +28,8 @@ import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { CLIENT_FACT_COLS, ClientScore, scoresOf } from './clientscore';
 import { bad, Ctx, forbidden, hasRole, notFound, proc } from '../rpc';
 import { clientFee, getSetting } from '../settings';
+import { getPrefs } from './prefs';
+import { channelGuard, guardNote, type GuardMode } from './guard';
 import { notifyContext, onConfChange, onFollowChange, onOrderCreated, sendInPreview } from './notify';
 import { landingCounts, landingSettings, onLandingConf, onLandingFollow } from './landingquery';
 import { lowStockCount } from './stockquery';
@@ -180,7 +182,7 @@ export async function withClientScores<T extends Order>(ctx: Ctx, list: T[]): Pr
   const by = new Map<number, ClientScore>(rows.map((r: any, k: number) => [num(r.id), scores[k]]));
   return list.map((o) => {
     const s = by.get(o.customerId);
-    return s ? { ...o, clientScore: { score: s.score, level: s.level } } : o;
+    return s ? { ...o, clientScore: { score: s.score, level: s.level, reasons: s.reasons } } : o;
   });
 }
 
@@ -244,6 +246,8 @@ export const ListInput = z.object({
   /** SAV ticket parcels: left out of order lists unless asked for (the depot and livreurs see both) */
   tickets: z.enum(['exclude', 'include', 'only']).optional(),
   subStatus: z.string().max(40).optional(),
+  /** not with this sub-status (Suivi › En livraison: the treated alerts are in « Traités ») */
+  subStatusNot: z.string().max(40).optional(),
   /** only these orders (selection export / print) */
   ids: z.array(id).max(3000).optional(),
   /** back_at: when the parcel came back, or its last change while it is on its way back */
@@ -294,6 +298,7 @@ export async function listOrders(ctx: Ctx, f: ListInput, opts: { queue?: 'conf' 
   else if ((f.tickets ?? 'exclude') === 'exclude' && !f.ids?.length) w.add('NOT o.is_exchange');
   else if (f.tickets === 'only') w.add('o.is_exchange');
   if (f.subStatus) w.add('o.sub_status = ?', f.subStatus);
+  if (f.subStatusNot) w.add("COALESCE(o.sub_status, '') <> ?", f.subStatusNot);
   if (f.ids?.length) w.add('o.id = ANY(?)', f.ids);
   const dcol = f.dateField === 'back_at' ? 'coalesce(o.returned_at, o.returning_at, o.updated_at)' : `o.${f.dateField}`;
   if (f.from) w.add(`${dcol} >= ?`, f.from);
@@ -348,6 +353,8 @@ export const OrderInput = z.object({
   customerNote: z.string().max(1000).nullable().optional(),
   deliveryNote: z.string().max(1000).nullable().optional(),
   internalNote: z.string().max(1000).nullable().optional(),
+  /** sent by the shop's site through its webhook (the order came by itself: the anti-fraud check can put it « À vérifier ») */
+  via: z.enum(['api']).optional(),
   confirm: z.boolean().default(false),
   isExchange: z.boolean().default(false),
   originalOrderId: id.nullable().optional(),
@@ -471,6 +478,9 @@ export async function createOrder(
     silent?: boolean;
     /** the landing page's device key: a new number on a refuser's device is a look-alike */
     device?: string | null;
+    /** the anti-fraud check of the other channels (guard.ts): « note » writes the reasons; « check » also puts what a
+     *  landing page would block « À vérifier » (an order coming by itself: a Google Sheet, the AI seller, the site) */
+    guard?: GuardMode;
   } = {},
 ): Promise<Order> {
   const phone = normalizePhone(input.phone);
@@ -486,6 +496,20 @@ export async function createOrder(
   if (input.confirm && !input.isStopdesk && !String(input.commune ?? '').trim()) throw bad('Indiquez la commune avant de confirmer');
   const me = ctx.session.profile.id;
 
+  // the other channels get the landing pages' anti-fraud check too (no browser signals): reasons in the note, and
+  // what a landing page would block « À vérifier » when the order came by itself (worked out before the transaction:
+  // the Pilotix network is asked on the platform's own database)
+  const guard =
+    opts.guard && !input.isExchange
+      ? await channelGuard(ctx, db, {
+          phone,
+          name: input.customerName,
+          wilayaId: input.wilayaId ?? null,
+          commune: String(input.commune ?? ''),
+          productIds: input.items.map((l) => l.productId).filter((x): x is number => !!x),
+          qty: input.items.reduce((n, l) => n + l.qty, 0),
+        })
+      : null;
   const order = await db.tx(async (tx) => {
     const priced = await priceItems(tx, input.items, input.isExchange);
     if (input.discount > priced.maxDiscount) throw bad(`Remise trop élevée (maximum ${priced.maxDiscount} DA)`);
@@ -526,13 +550,14 @@ export async function createOrder(
       confWhy = blockerText('', lc, dc);
       confNoStock = lc.some((l) => l.state === 'empty');
     }
-    const conf: ConfStatus =
+    let conf: ConfStatus =
       cust.blacklisted || (homeRefused && input.confirm) || confWhy ? 'to_check' : input.confirm ? (confNoStock ? 'no_stock' : 'confirmed') : 'new';
     // a number that never received a parcel and looks like a refuser (same device, same name + commune): 🟡, never blocked
     const look = num(cust.delivered) === 0 && !cust.blacklisted
       ? await lookAlikeOf(tx, { phone, name: input.customerName, wilayaId: input.wilayaId, commune: String(input.commune ?? ''), device: opts.device ?? null })
       : null;
-    const trustNotes = [homeRefused ? STOPDESK_NOTE : '', look ? lookAlikeNote(look) : '', confWhy ? `Pas confirmée : ${confWhy}` : ''].filter(Boolean);
+    if (guard?.verdict === 'block' && opts.guard === 'check') conf = 'to_check';
+    const trustNotes = [homeRefused ? STOPDESK_NOTE : '', look ? lookAlikeNote(look) : '', guard && guard.verdict !== 'allow' ? guardNote(guard, opts.guard!) : '', confWhy ? `Pas confirmée : ${confWhy}` : ''].filter(Boolean);
     const internalNote = [input.internalNote ?? '', ...trustNotes].filter(Boolean).join('\n') || null;
     const confirmed = conf === 'confirmed';
     // « sans stock » is confirmed too (by this person, now): it only waits for stock before the depot
@@ -850,6 +875,8 @@ export const FollowInput = z.object({
   status: z.enum(FOLLOW_STATUSES),
   note: z.string().max(1000).nullable().optional(),
   reason: z.string().max(200).nullable().optional(),
+  /** the livreur's reason as a key (FAIL_REASONS / RETURN_REASONS): some send the parcel to Suivi › Alertes (Préférences) */
+  reasonKey: z.string().max(40).nullable().optional(),
   tracking: z.string().max(80).nullable().optional(),
   livreurId: id.nullable().optional(),
   subStatus: z.string().max(40).nullable().optional(),
@@ -946,6 +973,7 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
     if (!l || !l.active || !(l.roles ?? []).includes('livreur')) throw bad('Ce livreur est introuvable');
   }
   const changed: number[] = [];
+  let livreurAlerts: string[] | null = null;
   await ctx.db.tx(async (tx) => {
     if (await alreadyApplied(tx, input.clientId, me)) return;
     const notify = await notifyContext(tx);
@@ -956,7 +984,12 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
       if (own && num(cur.livreur_id) !== me) throw forbidden();
       if (!['confirmed', 'no_stock'].includes(cur.conf_status) && input.status !== 'cancelled') throw bad(`${cur.ref} n’est pas confirmée`);
       const from: FollowStatus | null = cur.follow_status;
-      const to = input.status;
+      let to: FollowStatus = input.status;
+      // « Livraison privée »: what the livreur said may send the parcel to Suivi › Alertes first (Préférences)
+      if ((to === 'failed' || to === 'returning') && input.reasonKey && cur.company_id && livreurAlerts === null)
+        livreurAlerts = (await getPrefs(tx)).livreurAlerts;
+      if ((to === 'failed' || to === 'returning') && input.reasonKey && livreurAlerts?.includes(`${to}:${input.reasonKey}`))
+        if ((await tx.query('SELECT kind FROM delivery_companies WHERE id = $1', [cur.company_id]))[0]?.kind === 'own') to = 'alert';
       const block = followBlock(ctx, cur, to, !!(input.reason || input.note));
       if (block) {
         // the courier sync / payment import skips such parcels instead of failing the whole batch
@@ -1425,7 +1458,7 @@ export const ordersProcs = {
     // an exchange leaves free (the customer only pays the delivery): it is made by the SAV (sav.exchange), from a real
     // ticket — never typed as a free order to anyone. Only the administrator may type one directly.
     if (i.isExchange && !ctx.session.isAdmin) throw forbidden('Un échange se fait depuis le SAV');
-    const o = await createOrder(ctx, { ...i, items: i.items.map((x) => ({ ...x, isUpsell: false })) });
+    const o = await createOrder(ctx, { ...i, items: i.items.map((x) => ({ ...x, isUpsell: false })) }, ctx.db, { guard: i.via === 'api' ? 'check' : 'note' });
     await sendInPreview(ctx);
     return o;
   }),

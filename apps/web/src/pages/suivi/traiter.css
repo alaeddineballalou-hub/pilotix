@@ -1,0 +1,43 @@
+/* « Traiter »: Résolu or Perdu, then a motif */
+.tr-who { margin: 0 0 10px; }
+.tr-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tr-out { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 16px; border-radius: 16px; border: 2px solid var(--line); background: var(--surface); text-align: start; cursor: pointer; font: inherit; color: var(--ink); }
+.tr-out svg { width: 22px; height: 22px; }
+.tr-out b { font-size: 17px; }
+.tr-out small { color: var(--muted); font-size: 13px; line-height: 1.4; }
+.tr-out.resolved svg { color: var(--ok); }
+.tr-out.lost svg { color: var(--coral, #C2410C); }
+.tr-out.resolved:hover, .tr-out.resolved:focus-visible { border-color: var(--ok); background: var(--ok-soft); }
+.tr-out.lost:hover, .tr-out.lost:focus-visible { border-color: var(--coral, #C2410C); background: var(--coral-soft, #FDE2DE); }
+.tr-badge { align-self: flex-start; width: fit-content; display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-weight: 800; font-size: 13px; }
+.tr-badge svg { width: 15px; height: 15px; }
+.tr-badge.resolved { background: var(--ok-soft); color: var(--ok); }
+.tr-badge.lost { background: var(--coral-soft, #FDE2DE); color: var(--coral, #C2410C); }
+.tr-motifs { border: 0; padding: 0; margin: 12px 0 4px; display: flex; flex-wrap: wrap; gap: 8px; }
+.tr-motifs legend { font-weight: 800; font-size: 14px; margin-bottom: 8px; padding: 0; }
+.tr-chip { position: relative; display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--field); font-weight: 700; font-size: 14px; cursor: pointer; }
+.tr-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.tr-chip.on { border-color: var(--px-orange); background: var(--px-orange-soft); }
+.tr-chip:focus-within { outline: 2px solid var(--px-orange); outline-offset: 2px; }
+.tr-field { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; font-weight: 700; font-size: 14px; }
+.tr-field input, .tr-field textarea { font: inherit; font-weight: 500; }
+.tr-relance { display: flex; align-items: flex-start; gap: 10px; margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: var(--field); border: 1px solid var(--line); cursor: pointer; }
+.tr-relance input { margin-top: 3px; width: 18px; height: 18px; }
+.tr-relance span { display: flex; flex-direction: column; gap: 2px; }
+.tr-relance small { color: var(--muted); font-size: 12.5px; }
+@media (max-width: 420px) { .tr-two { grid-template-columns: 1fr; } }
+.tr-swap { border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin: 12px 0 0; display: flex; flex-direction: column; gap: 6px; }
+.tr-swap legend { display: inline-flex; align-items: center; gap: 6px; padding: 0 4px; font-weight: 800; font-size: 14px; }
+.tr-swap legend svg { width: 16px; height: 16px; }
+.tr-swap ul { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tr-sw { position: relative; display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--field); cursor: pointer; }
+.tr-sw input { position: absolute; opacity: 0; pointer-events: none; }
+.tr-sw.on { border-color: var(--px-orange); background: var(--px-orange-soft); }
+.tr-sw:focus-within { outline: 2px solid var(--px-orange); outline-offset: 2px; }
+.tr-sw > span:first-of-type { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.tr-sw b { font-size: 14px; }
+.tr-sw small { color: var(--muted); font-size: 12.5px; }
+.tr-fee { display: flex; flex-direction: column; align-items: flex-end; font-weight: 800; font-size: 13px; white-space: nowrap; }
+.tr-fee small { color: var(--ok); font-weight: 800; }
+.tr-fee.up small { color: var(--coral, #C2410C); }
+.tr-fee small.tr-swfee { color: var(--muted); font-weight: 700; }

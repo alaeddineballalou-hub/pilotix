@@ -12,6 +12,7 @@ import { ErrorBox, Field, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import './orders.css';
+import { askRisk } from '../../ui/clientScore';
 
 type FormData = Out<'orders.formData'>;
 type Product = FormData['products'][number];
@@ -305,6 +306,8 @@ function Form({ data, order, original, title, onClose, onSaved, prefill }: Order
       setTimeout(() => errRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 0);
       return;
     }
+    // confirming a « Risqué » customer: the agent reads why first
+    if (confirm && order && !(await askRisk(order))) return;
     setBusy(true);
     const payload = {
       customerName: name.trim(),

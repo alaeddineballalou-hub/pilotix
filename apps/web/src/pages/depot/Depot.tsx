@@ -21,11 +21,13 @@ import { PhoneDispatch, PhoneReturns, PhoneRoad } from './PhoneStages';
 import { LabelAction, LabelsBar, PrintSelected } from './Labels';
 import { BagBulk, BagsCard } from './Bags';
 
-const STAGES = ['preparer', 'prepares', 'dispatchees', 'enlivraison', 'retours'] as const;
+// « En livraison » moved to Suivi (the parcels on the road are the suivi's work); an old link goes there
+const STAGES = ['preparer', 'prepares', 'dispatchees', 'retours'] as const;
 type Stage = (typeof STAGES)[number];
 
 export function Depot({ sub }: PageProps) {
   const { t } = useTranslation();
+  if (sub === 'enlivraison') location.replace('#/suivi/enlivraison');
   const stage: Stage = (STAGES as readonly string[]).includes(sub ?? '') ? (sub as Stage) : 'preparer';
   const counts = useRpc('depot.counts', {}, { refetchInterval: 60_000 });
   const c = counts.data;
@@ -73,7 +75,6 @@ export function Depot({ sub }: PageProps) {
         {stage === 'prepares' && <DispatchAlerts />}
         {stage === 'prepares' && (cards ? <PhoneDispatch /> : <Prepares />)}
         {stage === 'dispatchees' && (cards ? <PhoneRoad stage="dispatchees" /> : <Dispatchees />)}
-        {stage === 'enlivraison' && (cards ? <PhoneRoad stage="enlivraison" /> : <EnLivraison />)}
         {stage === 'retours' && (cards ? <PhoneReturns /> : <Retours />)}
       </div>
     </>
@@ -347,33 +348,6 @@ function Dispatchees() {
                   {h < 1 ? t('depot.lessThanHour') : h < 48 ? t('depot.hours', { n: Math.floor(h) }) : t('depot.days', { n: Math.floor(h / 24) })}
                 </span>
               );
-            },
-          },
-        ]}
-      />
-    </>
-  );
-}
-
-function EnLivraison() {
-  const { t } = useTranslation();
-  return (
-    <>
-      <DepotOrderList
-        title={t('depot.lists.enlivraison')}
-        help={t('depot.help.enlivraison')}
-        follow={['out_for_delivery']}
-        sort="shipped_at"
-        hide={['conf', 'follow']}
-        compact
-        extra={[
-          {
-            label: t('depot.cols.leftSince'),
-            num: true,
-            cell: (o) => {
-              if (!o.shippedAt) return '—';
-              const d = Math.floor((Date.now() - Date.parse(o.shippedAt)) / 86_400_000);
-              return <span className={`badge ${d >= 7 ? 't-bad' : d >= 4 ? 't-warn' : 't-info'}`}>{d < 1 ? t('depot.today') : t('depot.days', { n: d })}</span>;
             },
           },
         ]}

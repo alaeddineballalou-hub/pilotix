@@ -75,14 +75,28 @@ One AI key for every shop, Pilotix's own (control room › Pilot AI): shops add 
 switches to Sonnet for the hard moments (price fight, trust fear, anger, big order, asking for a person). Its instructions
 are sent as three cached blocks (the part every shop shares with the coach's lesson book, the shop's part, the chat's part).
 
-Every night at 02:30 (Algeria), the chats of the shops that turned on « Partager mes conversations » (Messages › Réglages)
-are read inside each shop with names, phones, addresses, products and prices removed, and scored by what really happened:
+Every night at 02:30 (Algeria), the chats of the shops ticked in the control room (Pilot AI › Shops that teach Dellal;
+shops see no Pilot AI setting) are read inside each shop with names, phones, addresses, products and prices removed, and scored by what really happened:
 delivered and paid is the only win, a refused parcel is a loss, cancellations and returns keep the agent's reason, chats a
 person took over and won are gold, chats still waiting for delivery are kept until they end. One Message Batch (half
 price) under a hard nightly cap: Haiku reads the chats, Sonnet writes short habits, a safety check refuses prices, stock,
 delays, pressure or « I am human ». The coach approves, edits or rejects each habit in the control room; a new book is
 tried on a share of new chats and kept only if it gets at least as many parcels delivered (stopped by itself when worse).
 Code: `packages/core/src/modules/pilotlearn.ts` (the engine), `apps/server/src/jobs.ts` (the night), tests `pilotlearn*.test.ts`.
+
+**AI cost per shop** (control room › Pilot AI, owners and managers): every answer Claude gives on the server (Dellal, CM AI
+agent, AI Spy) is counted per shop, day, agent and payer (Pilotix's key or the shop's own) at Anthropic's list price, in
+`platform.ai_usage`. The card shows each month per shop in USD, and in DA at the rate the owner types (1 $ = … DA), with a
+CSV to bill. Code: `packages/core/src/platform/aiusage.ts`, counted in `dellal-server.ts › complete()`.
+
+### Backup door (direct.pilotix.online)
+
+When Cloudflare's road from a country is cut (the site times out there while the server is fine), the team can use
+`https://direct.<domain>`: the same app and server, reached straight, without Cloudflare. Setup, once: in Cloudflare › DNS,
+add an **A** record named `direct` with the server's address (the same as the main record) and **DNS only** (grey cloud).
+Caddy makes its certificate at the first visit (the server allows that one name, `domain-check`); the app opened there talks
+to that same address (`BACKUP_DOOR` in `apps/web/src/lib/backend.ts`); Google sign-in is hidden there (e-mail and password).
+The record shows the server's address publicly, as a shop's own domain already does.
 
 ## Phone apps
 

@@ -587,6 +587,9 @@ class ApiController {
   @Public()
   @Get('domain-check')
   async domainAllowed(@Query('domain') domain: string, @Res() res: any) {
+    // the backup door (direct.<platform>, deploy/Caddyfile): the same app without Cloudflare, its certificate made at its first visit
+    const host = this.platformHost();
+    if (host && String(domain ?? '').trim().toLowerCase() === `direct.${host}`) return res.status(200).send('ok');
     const id = await core.shopIdByDomain(this.core.t, String(domain ?? ''));
     return res.status(id ? 200 : 404).send(id ? 'ok' : 'unknown');
   }
@@ -1112,6 +1115,7 @@ class ApiController {
     if (!phone) throw new core.AppError('bad_request', 'Téléphone invalide');
     const session = await this.core.systemSession(ref);
     const order: any = await this.core.call(ref, 'orders.create', session, {
+      via: 'api',
       customerName: String(body?.customer_name ?? body?.name ?? '').slice(0, 120) || 'Client',
       phone,
       phone2: body?.phone2 ? String(body.phone2) : null,

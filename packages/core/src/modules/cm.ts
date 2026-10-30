@@ -665,7 +665,7 @@ export async function decide(ctx: Ctx, f: CmFacts, s: CmSettings): Promise<CmRun
   if (!useAi) return { decision: guard(demoDecision(f), f, s), by: 'demo', model: null, usage, darija };
   const ds = await dellalSettings(ctx.db);
   const complete: Complete = (req) =>
-    inPage ? (inPage({ ...req, runTool: async () => ({ error: 'Pas d’outil ici' }) }) as Promise<AiResponse>) : (ctx.server!.dellal!('complete', req, ctx) as Promise<AiResponse>);
+    inPage ? (inPage({ ...req, runTool: async () => ({ error: 'Pas d’outil ici' }) }) as Promise<AiResponse>) : (ctx.server!.dellal!('complete', { ...req, feature: 'cm' }, ctx) as Promise<AiResponse>);
   const userLine = `Commentaire${f.author ? ` de ${f.author}` : ''} : « ${f.body.slice(0, 1500)} »`;
   const res = await complete({ model: ds.model, system: cmSystem(f, s), messages: [{ role: 'user', content: userLine }], tools: [], max_tokens: 800 });
   usage.input_tokens += num(res.usage?.input_tokens);

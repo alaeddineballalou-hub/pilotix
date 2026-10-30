@@ -998,6 +998,31 @@
     "shopsOn": "{{n}} of {{total}}",
     "shopsHelp": "Only you choose here which shops’ chats teach Dellal. Shops see no Pilot AI setting; their terms of use say it.",
     "shopCases": "{{n}} chat(s) learned",
-    "shopsOff": "Unticking a shop deletes at once what Pilot AI kept of its chats."
+    "shopsOff": "Unticking a shop deletes at once what Pilot AI kept of its chats.",
+    "costs": {
+      "title": "AI cost per shop",
+      "help": "What each shop's AI cost you this month (Message AI agent, CM AI agent, AI Spy), at Anthropic's price, with your Pilotix key. Bill each shop this amount (or more).",
+      "prev": "Previous month",
+      "next": "Next month",
+      "rate": "How many DA for 1 $",
+      "none": "No AI answers paid by Pilotix this month.",
+      "f": {
+        "dellal": "Message AI agent",
+        "cm": "CM AI agent",
+        "spy": "AI Spy",
+        "other": "Other"
+      },
+      "total": "Total",
+      "toBill": "To bill",
+      "all": "All shops",
+      "calls_one": "{{n}} answer",
+      "calls_other": "{{n}} answers",
+      "ownKey": "its own key: {{usd}} (not to bill)",
+      "ownKeyAll": "paid with the shops' own keys: {{usd}} (not to bill)",
+      "night": "Night learning (Pilot AI, for all shops): {{usd}}",
+      "since": "Counted since {{date}}.",
+      "notYet": "The counter starts with the AI's first answer.",
+      "csv": "Download (CSV)"
+    }
   }
 }

@@ -1,11 +1,13 @@
 {
   "tabs": {
+    "enlivraison": "Out for delivery",
     "alertes": "Alerts",
     "traites": "Handled",
     "livres": "Delivered",
     "annules": "Cancelled",
     "reclamation": "Claims",
-    "swap": "Swap"
+    "swap": "Swap",
+    "bloques": "Stuck"
   },
   "title": "Delivery follow-up",
   "sync": "Update from the couriers",
@@ -13,24 +15,29 @@
   "syncFail": "Update failed: {{msg}}",
   "syncProblems": "{{count}} problem(s) with the couriers: {{list}}",
   "kpiSub": {
+    "enlivraison": "with the courier",
     "alertes": "to handle",
     "traites": "back on the road after the alert",
     "livres": "last 30 days",
-    "annules": "returning + swapped"
+    "annules": "returning + swapped",
+    "bloques": "no news"
   },
   "help": {
-    "alertes": "Parcels flagged by the courier or the livreur (customer absent, refused, address…). Handle them: call the customer, then « Handle » or « Customer cancels ».",
+    "enlivraison": "Parcels out for delivery, and those with a failed attempt. A status chosen in Preferences › Suivi alerts sends them to Alerts. “Alert” does it by hand.",
+    "alertes": "Parcels flagged by the delivery company or the livreur (the statuses chosen in Preferences › Suivi alerts). Call the customer, then “Treat” or “Customer cancels”.",
     "traites": "Alerts already handled: the parcel is back on the road. It leaves this list once delivered or cancelled.",
     "livres": "Parcels delivered in the last 30 days.",
     "annules": "Parcels cancelled by the customer, still with the courier or the livreur, on their way back to the depot. To give one directly to another customer: Suivi → Swap.",
-    "swap": "Give a cancelled parcel directly to another customer instead of bringing it back to the depot. Below: parcels already swapped, with « Copy for ZR »."
+    "swap": "Give a cancelled parcel directly to another customer instead of bringing it back to the depot. Below: parcels already swapped, with « Copy for ZR ».",
+    "bloques": "Parcels with no new status for several days (Preferences). Call the company, the livreur or the customer, then say what you did. Still no news 2 days later: a claim goes by itself (companies with an API)."
   },
   "empty": {
     "alertes": "No alert to handle.",
     "traites": "No handled alert in progress.",
     "livres": "No parcel delivered in the last 30 days.",
     "annules": "No cancelled parcel on its way back.",
-    "swap": "No cancelled parcel with a courier or a livreur right now."
+    "swap": "No cancelled parcel with a courier or a livreur right now.",
+    "bloques": "No stuck parcel 👍"
   },
   "parcels": "{{count}} parcels",
   "toSwap": "Parcels to swap",
@@ -66,7 +73,8 @@
     "call": "Call",
     "write": "Write to {{name}}",
     "claimSent": "Claim sent",
-    "remind": "Remind"
+    "remind": "Remind",
+    "toAlert": "Alert"
   },
   "zr": "ZR",
   "theLivreur": "the livreur",
@@ -216,16 +224,21 @@
     "kResolved": "Settled (7 d)",
     "kCompany": "waiting",
     "filters": {
-      "open": "Waiting",
+      "open": "Open",
       "waiting": "Waiting",
       "still_waiting": "Still waiting",
-      "resolved": "Settled",
-      "all": "All"
+      "resolved": "Solved",
+      "all": "All",
+      "todo": "To follow up (me)",
+      "answered": "Answered",
+      "manager": "Manager",
+      "lost": "Lost"
     },
     "status": {
       "waiting": "Waiting",
       "still_waiting": "Still waiting",
-      "resolved": "Settled"
+      "resolved": "Solved",
+      "lost": "Lost"
     },
     "col": {
       "claim": "Claim",
@@ -350,8 +363,21 @@
       "st": {
         "waiting": "Waiting",
         "still_waiting": "Still",
-        "resolved": "Settled"
+        "resolved": "Solved",
+        "lost": "Lost"
       }
+    },
+    "stage": {
+      "wait": "Answer due · {{h}} h",
+      "answered": "Answered: to decide",
+      "relancer": "To follow up",
+      "manager": "Manager · {{n}} follow-ups, no answer"
+    },
+    "stageTip": {
+      "wait": "The company has 48 h to answer after each message.",
+      "answered": "The company answered: mark Solved or Lost, or follow up.",
+      "relancer": "No answer in 48 h: follow up (WhatsApp, call or API).",
+      "manager": "2 follow-ups without an answer: the manager takes over."
     }
   },
   "courier": {
@@ -537,5 +563,100 @@
       "absent": "Ask {{co}} to deliver again"
     },
     "keep": "Keep the parcel"
+  },
+  "nextNone": "No more alerts to handle for now 👍",
+  "skipNext": "Skip ›",
+  "clock": {
+    "call": "Call",
+    "solve": "Solve",
+    "late_call": "Call late",
+    "late_solve": "Late",
+    "h": "{{h}} h {{m}}",
+    "m": "{{m}} min",
+    "tip_call": "Time for the first call (working hours)",
+    "tip_solve": "Time to solve the alert: treat, swap or cancel (working hours)",
+    "lateCount_one": "{{count}} alert not called in time",
+    "lateCount_other": "{{count}} alerts not called in time"
+  },
+  "tries": {
+    "count": "Calls {{done}} / {{need}}",
+    "left_one": "{{count}} more call before cancelling.",
+    "left_other": "{{count}} more calls before cancelling.",
+    "nextAt_one": "{{count}} more call, from {{at}}.",
+    "nextAt_other": "{{count}} more calls, the next one from {{at}}.",
+    "why": "Many customers answer the 2nd or 3rd call. A saved parcel means no return fee.",
+    "clientSaid": "The customer cancels himself",
+    "keepCalling": "I’ll call again later",
+    "earlyLink": "Cancel anyway, before the calls…",
+    "whyLabel": "Why cancel now?",
+    "whyPh": "E.g.: the customer told the livreur he no longer wants it…",
+    "earlyNote": "Managers will see it as “cancelled too early”.",
+    "cancelAnyway": "Cancel anyway",
+    "calls": "Calls before “Customer cancels”",
+    "callsHint": "How many calls the agent makes on an alert before he can cancel (unless the customer cancels himself). Two calls too close count as one.",
+    "n": "Calls",
+    "gap": "At least",
+    "min": "min apart",
+    "sum": "{{n}} calls, {{gap}} min apart"
+  },
+  "tr": {
+    "title": "Treat {{ref}}",
+    "resolved": "Solved",
+    "resolvedHint": "The customer still wants the parcel: delivery is asked again.",
+    "lost": "Lost",
+    "lostHint": "The customer no longer wants it: the parcel comes back.",
+    "motif": "The motif",
+    "date": "New date (if the customer gave one)",
+    "note": "Note (optional)",
+    "okResolved": "Relaunch",
+    "okLost": "Mark lost",
+    "clientOk": "The customer said it himself: allowed before the calls.",
+    "relance_api": "Ask {{name}} again automatically",
+    "relanceHint_api": "The request goes right away through its system.",
+    "relance_direct": "Write to {{name}} to deliver again",
+    "relanceHint_direct": "The message is ready: WhatsApp, e-mail or copy.",
+    "relance_livreur": "Tell the livreur {{name}}",
+    "relanceHint_livreur": "The message is ready for his WhatsApp.",
+    "resolvedDone": "{{ref}}: treated, relaunched",
+    "lostDone": "{{ref}}: treated, lost",
+    "sentApi": "Relaunch sent to {{name}} ({{n}})",
+    "claimFail": "The relaunch was not sent: {{msg}}",
+    "dateNeeded": "New date (required for this motif)",
+    "okSolved": "Mark solved",
+    "swapT": "Before the return: swap?",
+    "swapHint": "A waiting order of the same product can take this parcel: no return fee.",
+    "swapNone": "No waiting order for this product.",
+    "swapNo": "No swap, the parcel comes back",
+    "swapNoHint": "The parcel goes back to the depot.",
+    "sameCommune": "same commune",
+    "sameWilaya": "same wilaya",
+    "otherVariant": "other variant",
+    "okSwap": "Lost + swap to {{ref}}",
+    "swapFee": "+ swap fee {{v}}"
+  },
+  "stuck": {
+    "days": "No news · {{n}} d",
+    "done_relance": "Followed up",
+    "done_claim": "Claim opened",
+    "done_client": "Customer called",
+    "autoNow": "Auto claim today",
+    "autoIn": "Auto claim in {{n}} d",
+    "title": "Stuck parcel {{ref}}",
+    "what": "What you did",
+    "act_relance": "Followed up the company / livreur",
+    "act_claim": "Open a claim",
+    "act_client": "Called the customer",
+    "claimHint": "A “late” claim goes through the company's system when it has one; otherwise the message is ready to send.",
+    "notePh": "E.g.: ZR says it goes out tomorrow",
+    "ok": "Save",
+    "btn": "Handle",
+    "saved": "{{ref}}: noted",
+    "next": "Next stuck parcel"
+  },
+  "stuckPref": {
+    "t": "Parcel stuck after",
+    "hint": "With no new status from the company or the livreur for these days, the parcel goes to Suivi › Stuck. 2 days later, a claim goes by itself.",
+    "days": "days",
+    "sum": "Stuck after {{n}} d"
   }
 }

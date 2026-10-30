@@ -1,11 +1,13 @@
 {
   "tabs": {
+    "enlivraison": "En livraison",
     "alertes": "Alertes",
     "traites": "Traités",
     "livres": "Livrés",
     "annules": "Annulés",
     "reclamation": "Réclamation",
-    "swap": "Swap"
+    "swap": "Swap",
+    "bloques": "Bloqués"
   },
   "title": "Suivi des livraisons",
   "sync": "Mettre à jour depuis les sociétés",
@@ -13,24 +15,29 @@
   "syncFail": "Mise à jour impossible : {{msg}}",
   "syncProblems": "{{count}} problème(s) avec les sociétés : {{list}}",
   "kpiSub": {
+    "enlivraison": "chez le livreur",
     "alertes": "à traiter",
     "traites": "en route après l’alerte",
     "livres": "30 derniers jours",
-    "annules": "en retour + swappés"
+    "annules": "en retour + swappés",
+    "bloques": "sans nouvelles"
   },
   "help": {
-    "alertes": "Colis signalés par ZR ou le livreur (client absent, refus, adresse…). Traitez-les : appelez le client, puis « Traiter » ou « Client annule ».",
+    "enlivraison": "Colis sortis pour être livrés, et ceux dont une tentative a échoué. Un statut choisi dans Préférences › Alertes du Suivi les envoie dans Alertes. « Alerter » le fait à la main.",
+    "alertes": "Colis signalés par la société de livraison ou le livreur (les statuts choisis dans Préférences › Alertes du Suivi). Appelez le client, puis « Traiter » ou « Client annule ».",
     "traites": "Alertes déjà traitées : le colis est reparti. Il sort d’ici quand il est livré ou annulé.",
     "livres": "Colis livrés ces 30 derniers jours.",
     "annules": "Colis annulés par le client, encore chez ZR ou le livreur, en route vers le dépôt. Pour en donner un directement à un autre client : menu Suivi → Swap.",
-    "swap": "Donnez un colis annulé directement à un autre client au lieu de le faire revenir au dépôt. En dessous : les colis déjà swappés, avec « Copier pour ZR »."
+    "swap": "Donnez un colis annulé directement à un autre client au lieu de le faire revenir au dépôt. En dessous : les colis déjà swappés, avec « Copier pour ZR ».",
+    "bloques": "Colis sans nouveau statut depuis plusieurs jours (Préférences). Appelez la société, le livreur ou le client, puis dites ce que vous avez fait. Sans nouvelles 2 jours plus tard : une réclamation part toute seule (sociétés avec API)."
   },
   "empty": {
     "alertes": "Aucune alerte à traiter.",
     "traites": "Aucune alerte traitée en cours.",
     "livres": "Aucun colis livré ces 30 derniers jours.",
     "annules": "Aucun colis annulé en retour.",
-    "swap": "Aucun colis annulé chez ZR ou un livreur pour le moment."
+    "swap": "Aucun colis annulé chez ZR ou un livreur pour le moment.",
+    "bloques": "Aucun colis bloqué 👍"
   },
   "parcels": "{{count}} colis",
   "toSwap": "Colis à swapper",
@@ -66,7 +73,8 @@
     "call": "Appeler",
     "write": "Écrire à {{name}}",
     "claimSent": "Réclamation envoyée",
-    "remind": "Relancer"
+    "remind": "Relancer",
+    "toAlert": "Alerter"
   },
   "zr": "ZR",
   "theLivreur": "le livreur",
@@ -216,16 +224,21 @@
     "kResolved": "Réglées (7 j)",
     "kCompany": "en attente",
     "filters": {
-      "open": "En attente",
+      "open": "Ouvertes",
       "waiting": "En attente",
       "still_waiting": "Toujours en attente",
-      "resolved": "Réglé",
-      "all": "Toutes"
+      "resolved": "Résolues",
+      "all": "Toutes",
+      "todo": "À relancer (moi)",
+      "answered": "Réponse reçue",
+      "manager": "Manager",
+      "lost": "Perdues"
     },
     "status": {
       "waiting": "En attente",
       "still_waiting": "Toujours en attente",
-      "resolved": "Réglé"
+      "resolved": "Résolue",
+      "lost": "Perdue"
     },
     "col": {
       "claim": "Réclamation",
@@ -350,8 +363,21 @@
       "st": {
         "waiting": "En attente",
         "still_waiting": "Toujours",
-        "resolved": "Réglée"
+        "resolved": "Résolue",
+        "lost": "Perdue"
       }
+    },
+    "stage": {
+      "wait": "Réponse attendue · {{h}} h",
+      "answered": "Réponse reçue : à décider",
+      "relancer": "À relancer",
+      "manager": "Manager · {{n}} relances sans réponse"
+    },
+    "stageTip": {
+      "wait": "La société a 48 h pour répondre après chaque message.",
+      "answered": "La société a répondu : marquez Résolue ou Perdue, ou relancez.",
+      "relancer": "Pas de réponse en 48 h : relancez (WhatsApp, appel ou API).",
+      "manager": "2 relances sans réponse : le manager prend la main."
     }
   },
   "courier": {
@@ -413,7 +439,7 @@
     "cost": "coût {{v}}",
     "quotaMod": "{{n}}/{{max}} modifications utilisées pour ce colis",
     "note": "Pourquoi (pour l’historique)",
-    "notePh": "Ex. : le client a déménagé, remise accordée…",
+    "notePh": "Ex. : le client a déménagé, remise accordée…",
     "appliedNow": "Changé chez {{name}} et dans la commande",
     "sent": "Demande envoyée à {{name}} : la commande changera quand elle l’acceptera",
     "ph": {
@@ -537,5 +563,100 @@
       "absent": "Demander à {{co}} de relivrer"
     },
     "keep": "Garder le colis"
+  },
+  "nextNone": "Plus d’alerte à traiter pour l’instant 👍",
+  "skipNext": "Passer ›",
+  "clock": {
+    "call": "Appeler",
+    "solve": "Régler",
+    "late_call": "Appel en retard",
+    "late_solve": "En retard",
+    "h": "{{h}} h {{m}}",
+    "m": "{{m}} min",
+    "tip_call": "Temps pour le premier appel (heures de travail)",
+    "tip_solve": "Temps pour régler l’alerte : traiter, swapper ou annuler (heures de travail)",
+    "lateCount_one": "{{count}} alerte sans appel à temps",
+    "lateCount_other": "{{count}} alertes sans appel à temps"
+  },
+  "tries": {
+    "count": "Appels {{done}} / {{need}}",
+    "left_one": "Encore {{count}} appel avant d’annuler.",
+    "left_other": "Encore {{count}} appels avant d’annuler.",
+    "nextAt_one": "Encore {{count}} appel, à partir de {{at}}.",
+    "nextAt_other": "Encore {{count}} appels, le prochain à partir de {{at}}.",
+    "why": "Beaucoup de clients répondent au 2e ou 3e appel. Un colis sauvé, c’est des frais de retour en moins.",
+    "clientSaid": "Le client annule lui-même",
+    "keepCalling": "Je rappelle plus tard",
+    "earlyLink": "Annuler quand même, avant les appels…",
+    "whyLabel": "Pourquoi annuler maintenant ?",
+    "whyPh": "Ex. : le client a dit au livreur qu’il ne veut plus…",
+    "earlyNote": "Les managers le verront comme « annulé trop tôt ».",
+    "cancelAnyway": "Annuler quand même",
+    "calls": "Appels avant « Client annule »",
+    "callsHint": "Le nombre d’appels de l’agent sur une alerte avant de pouvoir annuler (sauf si le client annule lui-même). Deux appels trop proches comptent pour un.",
+    "n": "Appels",
+    "gap": "Écart d’au moins",
+    "min": "min",
+    "sum": "{{n}} appels, à {{gap}} min d’écart"
+  },
+  "tr": {
+    "title": "Traiter {{ref}}",
+    "resolved": "Résolu",
+    "resolvedHint": "Le client veut toujours le colis : on relance la livraison.",
+    "lost": "Perdu",
+    "lostHint": "Le client ne veut plus : le colis revient.",
+    "motif": "Le motif",
+    "date": "Nouvelle date (si le client en a donné une)",
+    "note": "Note (facultatif)",
+    "okResolved": "Relancer",
+    "okLost": "Marquer perdu",
+    "clientOk": "Le client l’a dit lui-même : possible avant les appels.",
+    "relance_api": "Relancer {{name}} automatiquement",
+    "relanceHint_api": "La demande part tout de suite par son système.",
+    "relance_direct": "Écrire à {{name}} pour relivrer",
+    "relanceHint_direct": "Le message est prêt : WhatsApp, e-mail ou copie.",
+    "relance_livreur": "Prévenir le livreur {{name}}",
+    "relanceHint_livreur": "Le message est prêt pour son WhatsApp.",
+    "resolvedDone": "{{ref}} : traité, relancé",
+    "lostDone": "{{ref}} : traité, perdu",
+    "sentApi": "Relance envoyée à {{name}} ({{n}})",
+    "claimFail": "La relance n’est pas partie : {{msg}}",
+    "dateNeeded": "Nouvelle date (obligatoire pour ce motif)",
+    "okSolved": "Marquer résolu",
+    "swapT": "Avant le retour : swapper ?",
+    "swapHint": "Une commande en attente du même produit peut prendre ce colis : pas de frais de retour.",
+    "swapNone": "Pas de commande en attente pour ce produit.",
+    "swapNo": "Pas de swap, le colis revient",
+    "swapNoHint": "Le colis repart au dépôt.",
+    "sameCommune": "même commune",
+    "sameWilaya": "même wilaya",
+    "otherVariant": "autre variante",
+    "okSwap": "Perdu + swapper vers {{ref}}",
+    "swapFee": "+ frais de swap {{v}}"
+  },
+  "stuck": {
+    "days": "Sans nouvelles · {{n}} j",
+    "done_relance": "Relancé",
+    "done_claim": "Réclamation ouverte",
+    "done_client": "Client rappelé",
+    "autoNow": "Réclamation auto aujourd’hui",
+    "autoIn": "Réclamation auto dans {{n}} j",
+    "title": "Colis bloqué {{ref}}",
+    "what": "Ce que vous avez fait",
+    "act_relance": "Relancé la société / le livreur",
+    "act_claim": "Ouvrir une réclamation",
+    "act_client": "Client rappelé",
+    "claimHint": "Une réclamation « en retard » part par le système de la société quand elle en a un ; sinon le message est prêt à envoyer.",
+    "notePh": "Ex. : ZR dit qu’il sort demain",
+    "ok": "Enregistrer",
+    "btn": "Traiter",
+    "saved": "{{ref}} : noté",
+    "next": "Bloqué suivant"
+  },
+  "stuckPref": {
+    "t": "Colis bloqué après",
+    "hint": "Sans nouveau statut de la société ou du livreur pendant ces jours : le colis va dans Suivi › Bloqués. 2 jours plus tard, une réclamation part toute seule.",
+    "days": "jours",
+    "sum": "Bloqué après {{n}} j"
   }
 }

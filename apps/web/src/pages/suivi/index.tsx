@@ -1,6 +1,6 @@
 import type { Order } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
 import { when, wilayaName, syncProblems } from '../../lib/format';
@@ -23,10 +23,12 @@ import { store } from '../../lib/store';
 import { CopyCode } from '../../ui/CopyCode';
 import { useIsPhone } from '../../lib/useMedia';
 import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
-import { CancelSheet, ParcelAction, ParcelCards, ParcelPage, TreatSheet } from './PhoneSuivi';
+import { AlertClock, AlertTries, CancelSheet, ClockChip, TriesChip, ParcelAction, ParcelCards, ParcelPage, MotifChip } from './PhoneSuivi';
+import { Traiter } from './Traiter';
+import { StuckChips, StuckDialog, type StuckInfo } from './Stuck';
 import { ScoreChip } from '../../ui/clientScore';
 
-const LIST_TABS = ['alertes', 'traites', 'livres', 'annules', 'swap'] as const;
+const LIST_TABS = ['enlivraison', 'alertes', 'traites', 'bloques', 'livres', 'annules', 'swap'] as const;
 type ListTab = (typeof LIST_TABS)[number];
 type Sub = ListTab | 'reclamation';
 
@@ -43,7 +45,7 @@ export function Suivi({ sub }: PageProps) {
       ) : (
         <>
           <Head tab={tab} />
-          <List tab={tab} />
+          <List key={tab} tab={tab} />
           {tab === 'swap' && <SwappedList />}
         </>
       )}
@@ -56,6 +58,17 @@ function SuiviBar({ tab }: { tab: Sub }) {
   const { t } = useTranslation();
   const agency = !!useSession().session?.profile.agencyId;
   const c = useRpc('suivi.counts', {}, { refetchInterval: 60_000 }).data;
+  // a phone shows a few steps at a time: the current one is brought into view
+  const bar = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = bar.current;
+    const on = el?.querySelector<HTMLElement>('.bjm-p.on');
+    if (!el || !on || el.scrollWidth <= el.clientWidth + 1) return;
+    const r = el.getBoundingClientRect();
+    const b = on.getBoundingClientRect();
+    if (b.left >= r.left + 8 && b.right <= r.right - 8) return;
+    el.scrollBy({ left: b.left + b.width / 2 - (r.left + r.width / 2) });
+  }, [tab]);
   const item = (k: Sub, count?: number, x = false) => (
     <a className={`bjm-p ${tab === k ? 'on' : ''} ${x ? 'x' : ''}`} href={`#/suivi/${k}`} data-k={k} aria-current={tab === k ? 'page' : undefined}>
       <span className="bjm-l">{t(`suivi.tabs.${k}`)}</span>
@@ -63,13 +76,18 @@ function SuiviBar({ tab }: { tab: Sub }) {
     </a>
   );
   return (
-    <nav className="bjm-bar flow" aria-label="Étapes" data-g="suivi">
+    <nav ref={bar} className="bjm-bar flow" aria-label="Étapes" data-g="suivi">
+      {item('enlivraison', c?.enlivraison ?? 0)}
+      <span className="bjm-ar" aria-hidden="true">
+        ›
+      </span>
       {item('alertes', c?.alertes ?? 0)}
       <span className="bjm-ar" aria-hidden="true">
         ›
       </span>
       {item('traites', c?.traites ?? 0)}
       <span className="bjm-sep" aria-hidden="true" />
+      {item('bloques', c?.bloquesTodo ?? 0, true)}
       {item('annules', c?.annules ?? 0, true)}
       {!agency && item('reclamation', undefined, true)}
       {!agency && item('swap', c?.swap ?? 0, true)}
@@ -99,8 +117,10 @@ function Head({ tab }: { tab: ListTab }) {
     }
   };
   const kpis: [ListTab, 'warn' | ''][] = [
+    ['enlivraison', ''],
     ['alertes', c?.alertes ? 'warn' : ''],
     ['traites', ''],
+    ['bloques', c?.bloquesTodo ? 'warn' : ''],
     ['livres', ''],
     ['annules', ''],
   ];
@@ -118,17 +138,22 @@ function Head({ tab }: { tab: ListTab }) {
         {kpis.map(([k, tone]) => (
           <a key={k} className={`kpi${k === tab ? ' bjsv-on' : ''}${tone ? ` t-${tone}` : ''}`} href={`#/suivi/${k}`}>
             <span className="l">{t(`suivi.tabs.${k}`)}</span>
-            <span className="v ltr">{c ? c[k] : '—'}</span>
+            <span className="v ltr">{c ? (k === 'bloques' ? c.bloquesTodo : c[k]) : '—'}</span>
             <span className="s">{t(`suivi.kpiSub.${k}`)}</span>
           </a>
         ))}
       </div>
+      {!!c?.lateCall && (
+        <a className="sv-late" href="#/suivi/alertes">
+          <Icon name="alert" /> {t('suivi.clock.lateCount', { count: c.lateCall })}
+        </a>
+      )}
       <p className="muted small">{t(`suivi.help.${tab}`)}</p>
     </div>
   );
 }
 
-type Extra = { companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
+type Extra = { stuck?: StuckInfo | null; motif?: { outcome: 'resolved' | 'lost'; label: string } | null; clock?: AlertClock | null; tries?: AlertTries | null; companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
 
 /** What the courier or the livreur said: the alert note while in alert, else the courier's own status. */
 const reasonOf = (o: Order, x?: Extra) => (o.followStatus === 'alert' ? x?.alertReason || o.extStatus : o.extStatus);
@@ -205,7 +230,14 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
         return <RemovableChip name={o.followAgentName} removeLabel={t('suivi.removeAgent')} disabled={unFollow.isPending} onRemove={() => unFollow.mutate({ id: o.id })} />;
       case 'since': {
         const d = daysSince(o.shippedAt);
-        return d === null ? '—' : <span className={`badge ${d >= 10 ? 't-bad' : d >= 5 ? 't-warn' : 't-info'} ltr`}>{t('suivi.days', { n: d })}</span>;
+        return (
+          <>
+            {d === null ? '—' : <span className={`badge ${d >= 10 ? 't-bad' : d >= 5 ? 't-warn' : 't-info'} ltr`}>{t('suivi.days', { n: d })}</span>}
+            {extra[o.id]?.clock && <ClockChip c={extra[o.id]!.clock} />}
+            {extra[o.id]?.tries && <TriesChip tr={extra[o.id]!.tries} />}
+            {extra[o.id]?.stuck && <StuckChips s={extra[o.id]!.stuck} />}
+          </>
+        );
       }
       case 'passed':
         return (
@@ -215,7 +247,12 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
           </HistoryButton>
         );
       case 'status':
-        return <StatusBadge kind="follow" status={o.followStatus} />;
+        return (
+          <>
+            <StatusBadge kind="follow" status={o.followStatus} />
+            {extra[o.id]?.motif && <MotifChip m={extra[o.id]!.motif} />}
+          </>
+        );
     }
   };
   return (
@@ -284,6 +321,7 @@ type Dialog =
   | { kind: 'swap'; o: Order }
   | { kind: 'claim'; o: Order; toLivreur: boolean }
   | { kind: 'sheet'; data: SwapResult & { fresh?: boolean } }
+  | { kind: 'stuck'; o: Order }
   | null;
 
 function List({ tab }: { tab: ListTab }) {
@@ -298,6 +336,32 @@ function List({ tab }: { tab: ListTab }) {
   const [mode, setMode] = useViewMode('suivi');
   const cards = phone || mode === 'cards';
   const [openId, setOpenId] = useState<number | null>(null);
+  // « Alerte suivante »: the most urgent alert, taken (15 minutes) by this agent; when it leaves the alerts, the next one
+  const [focus, setFocus] = useState<{ id: number; x: Extra | null; kind: 'alert' | 'stuck' } | null>(null);
+  const [nexting, setNexting] = useState(false);
+  const skip = useRef<number[]>([]);
+  const nextAlert = async () => {
+    setNexting(true);
+    try {
+      const r = await rpc('suivi.next', { skip: skip.current.slice(-200), release: focus?.id ?? null, ...(tab === 'bloques' ? { only: 'stuck' as const } : {}) });
+      if (!r.id) {
+        setFocus(null);
+        toast(t('suivi.nextNone'), 'ok');
+        return;
+      }
+      skip.current.push(r.id);
+      setFocus({ id: r.id, x: (r.extra as Extra | null) ?? null, kind: r.kind === 'stuck' ? 'stuck' : 'alert' });
+    } catch (e: any) {
+      toast(e?.message ?? String(e), 'bad');
+    } finally {
+      setNexting(false);
+    }
+  };
+  const closeFocus = () => {
+    if (focus) rpc('suivi.release', { id: focus.id }).catch(() => {});
+    setFocus(null);
+    skip.current = [];
+  };
   const run = (o: Order, action: 'cancel' | 'delivered' | 'realert') =>
     act.mutate({ id: o.id, action }, { onSuccess: () => toast(t(`suivi.msg.${action === 'cancel' ? 'cancelled' : action}`, { ref: o.ref }), 'ok') });
 
@@ -310,8 +374,21 @@ function List({ tab }: { tab: ListTab }) {
         <button type="button" className="btn small primary" onClick={() => setDlg({ kind: 'treat', o })}>
           {t('suivi.act.treat')}
         </button>
-        <button type="button" className="btn small ghost danger" onClick={() => setDlg({ kind: 'cancel', o })}>
-          {t('suivi.act.cancel')}
+      </div>
+    );
+  if (tab === 'enlivraison')
+    actions = (o) => (
+      <div className="row nowrap px-sv-acts">
+        <button type="button" className="btn small" disabled={act.isPending} onClick={() => run(o, 'realert')}>
+          <Icon name="alert" /> {t('suivi.act.toAlert')}
+        </button>
+      </div>
+    );
+  if (tab === 'bloques')
+    actions = (o) => (
+      <div className="row nowrap px-sv-acts">
+        <button type="button" className="btn small primary" onClick={() => setDlg({ kind: 'stuck', o })}>
+          {t('suivi.stuck.btn')}
         </button>
       </div>
     );
@@ -341,6 +418,11 @@ function List({ tab }: { tab: ListTab }) {
       <div className="card-head">
         <h2>{tab === 'swap' ? t('suivi.toSwap') : t(`suivi.tabs.${tab}`)}</h2>
         <span className="muted small">{q.data ? t('suivi.parcels', { count: q.data.rows.length }) : ''}</span>
+        {(tab === 'alertes' || tab === 'bloques') && !cards && !!q.data?.rows.length && (
+          <button type="button" className="btn primary sv-next" disabled={nexting} onClick={nextAlert}>
+            {tab === 'bloques' ? t('suivi.stuck.next') : t('suivi.ph.next')} <Icon name="chevr" />
+          </button>
+        )}
         {!phone && <ViewSwitch mode={mode} onChange={setMode} />}
       </div>
       {q.isLoading ? (
@@ -354,7 +436,7 @@ function List({ tab }: { tab: ListTab }) {
           const phoneActions = (o: Order): ParcelAction[] => {
             const claim: ParcelAction = { key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: extra[o.id]?.companyKind === 'own' }) };
             if (tab === 'alertes')
-              return [{ key: 'treat', label: t('suivi.ph.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) }, claim, { key: 'cancel', label: t('suivi.ph.cancel'), tone: 'bad', run: () => setDlg({ kind: 'cancel', o }) }];
+              return [{ key: 'treat', label: t('suivi.ph.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) }, claim];
             if (tab === 'traites')
               return [
                 { key: 'deliv', label: t('suivi.ph.deliv'), tone: 'ok', run: () => run(o, 'delivered') },
@@ -362,15 +444,16 @@ function List({ tab }: { tab: ListTab }) {
                 { key: 'realert', label: t('suivi.ph.realert'), run: () => run(o, 'realert') },
                 { key: 'cancelled', label: t('suivi.ph.cancelled'), tone: 'bad', run: () => run(o, 'cancel') },
               ];
+            if (tab === 'bloques') return [{ key: 'stuck', label: t('suivi.stuck.btn'), tone: 'main', run: () => setDlg({ kind: 'stuck', o }) }, claim];
             if (tab === 'swap') return [{ key: 'swap', label: t('suivi.act.swap'), tone: 'main', run: () => setDlg({ kind: 'swap', o }) }, claim];
             return [claim];
           };
           return (
             <>
               <ParcelCards rows={rows} extra={extra} reasonOf={reasonOf} empty={t(`suivi.empty.${tab}`)} onOpen={setOpenId} />
-              {tab === 'alertes' && rows.length > 0 && (
-                <button type="button" className="pxp-next" onClick={() => setOpenId(rows[0].id)}>
-                  {t('suivi.ph.next')}
+              {(tab === 'alertes' || tab === 'bloques') && rows.length > 0 && (
+                <button type="button" className="pxp-next" disabled={nexting} onClick={nextAlert}>
+                  {tab === 'bloques' ? t('suivi.stuck.next') : t('suivi.ph.next')}
                   <Icon name="chevr" />
                 </button>
               )}
@@ -390,28 +473,48 @@ function List({ tab }: { tab: ListTab }) {
       ) : (
         <ParcelTable rows={q.data?.rows ?? []} extra={extra} actions={actions} empty={t(`suivi.empty.${tab}`)} />
       )}
-      {dlg?.kind === 'treat' && (phone ? <TreatSheet o={dlg.o} reason={reasonOf(dlg.o, extra[dlg.o.id])} onClose={() => setDlg(null)} /> : <TreatModal o={dlg.o} reason={reasonOf(dlg.o, extra[dlg.o.id])} onClose={() => setDlg(null)} />)}
-      {dlg?.kind === 'cancel' && phone && (
-        <CancelSheet
-          o={dlg.o}
-          busy={act.isPending}
-          onClose={() => setDlg(null)}
-          onOk={() => {
-            run(dlg.o, 'cancel');
-            setDlg(null);
-          }}
+      {focus && (
+        <FocusAlert
+          kind={focus.kind}
+          id={focus.id}
+          x={extra[focus.id] ?? focus.x}
+          onLeft={nextAlert}
+          onClose={closeFocus}
+          actions={(o) => [
+            focus.kind === 'stuck'
+              ? { key: 'stuck', label: t('suivi.stuck.btn'), tone: 'main', run: () => setDlg({ kind: 'stuck', o }) }
+              : { key: 'treat', label: t('suivi.ph.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) },
+            { key: 'claim', label: t('suivi.ph.claimBtn'), run: () => setDlg({ kind: 'claim', o, toLivreur: focus.x?.companyKind === 'own' }) },
+          ]}
+          onClaim={agency ? undefined : (o) => setDlg({ kind: 'claim', o, toLivreur: focus.x?.companyKind === 'own' })}
         />
       )}
-      {dlg?.kind === 'cancel' && !phone && (
-        <ConfirmModal
-          title={t('suivi.cancelAsk', { ref: dlg.o.ref })}
-          text={t('suivi.cancelText')}
-          ok={t('suivi.act.cancel')}
-          danger
+      {dlg?.kind === 'stuck' && (
+        <StuckDialog
+          o={dlg.o}
+          s={extra[dlg.o.id]?.stuck ?? (focus?.id === dlg.o.id ? focus.x?.stuck : null)}
+          own={(extra[dlg.o.id] ?? (focus?.id === dlg.o.id ? focus.x : null))?.companyKind === 'own'}
+          onClose={() => setDlg(null)}
+          onDone={() => (focus?.id === dlg.o.id ? void nextAlert() : undefined)}
+        />
+      )}
+      {dlg?.kind === 'treat' && (
+        <Traiter
+          o={dlg.o}
+          reason={reasonOf(dlg.o, extra[dlg.o.id] ?? (focus?.id === dlg.o.id ? focus.x ?? undefined : undefined))}
+          tries={extra[dlg.o.id]?.tries ?? (focus?.id === dlg.o.id ? focus.x?.tries : null)}
+          own={(extra[dlg.o.id] ?? (focus?.id === dlg.o.id ? focus.x : null))?.companyKind === 'own'}
+          onClose={() => setDlg(null)}
+        />
+      )}
+      {dlg?.kind === 'cancel' && (
+        <CancelSheet
+          o={dlg.o}
+          tries={dlg.o.followStatus === 'alert' ? extra[dlg.o.id]?.tries ?? (focus?.id === dlg.o.id ? focus.x?.tries : null) : null}
           busy={act.isPending}
           onClose={() => setDlg(null)}
-          onOk={() => {
-            run(dlg.o, 'cancel');
+          onOk={(by, note) => {
+            act.mutate({ id: dlg.o.id, action: 'cancel', by, note: note ?? null }, { onSuccess: () => toast(t('suivi.msg.cancelled', { ref: dlg.o.ref }), 'ok') });
             setDlg(null);
           }}
         />
@@ -421,6 +524,19 @@ function List({ tab }: { tab: ListTab }) {
       {dlg?.kind === 'claim' && <NewClaimModal pre={dlg.o} toLivreur={dlg.toLivreur} reason="relivrer" details={reasonOf(dlg.o, extra[dlg.o.id]) ? t('suivi.rec.alertDetails', { v: reasonOf(dlg.o, extra[dlg.o.id]) }) : ''} onClose={() => setDlg(null)} />}
     </div>
   );
+}
+
+/** The parcel taken with « Alerte suivante », kept fresh; once it is no longer an alert (treated, cancelled…), the next one. */
+function FocusAlert({ kind, id, x, actions, onClaim, onLeft, onClose }: { kind: 'alert' | 'stuck'; id: number; x: Extra | null; actions: (o: Order) => ParcelAction[]; onClaim?: (o: Order) => void; onLeft: () => void; onClose: () => void }) {
+  const q = useRpc('orders.get', { id }, { refetchInterval: 20_000 });
+  const o = q.data;
+  const left = !!o && o.id === id && (kind === 'alert' ? o.followStatus !== 'alert' : !['shipped', 'out_for_delivery', 'failed', 'in_exchange'].includes(String(o.followStatus)));
+  useEffect(() => {
+    if (left) onLeft();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [left, id]);
+  if (!o || o.id !== id || left) return null;
+  return <ParcelPage o={o} x={x ?? undefined} reason={reasonOf(o, x ?? undefined)} actions={actions(o)} onClaim={onClaim ? () => onClaim(o) : undefined} onClose={onClose} onSkip={onLeft} />;
 }
 
 /** Next to an alert: claim to the courier (copies the tracking), or call / write to our own livreur. */
@@ -466,55 +582,9 @@ function AlertClaim({ o, x, onClaim }: { o: Order; x?: Extra; onClaim: (toLivreu
   );
 }
 
+/** « Traiter » an alert (also used by a confirmation agency's « Suivi »). */
 export function TreatModal({ o, reason, onClose }: { o: Order; reason: string | null; onClose: () => void }) {
-  const { t } = useTranslation();
-  const [what, setWhat] = useState<'date' | 'adresse' | 'injoignable' | 'autre'>('date');
-  const [date, setDate] = useState('');
-  const [note, setNote] = useState('');
-  const treat = useAction('suivi.treat', {
-    onDone: () => {
-      toast(t('suivi.treat.done', { ref: o.ref }), 'ok');
-      onClose();
-    },
-  });
-  return (
-    <Modal
-      title={t('suivi.treat.title', { ref: o.ref })}
-      onClose={onClose}
-      footer={
-        <>
-          <button className="btn" onClick={onClose}>
-            {t('common.cancel')}
-          </button>
-          <button className="btn primary" disabled={treat.isPending} onClick={() => treat.mutate({ id: o.id, what, date: date || null, note: note.trim() || null })}>
-            {t('suivi.treat.submit')}
-          </button>
-        </>
-      }
-    >
-      <p className="muted small">
-        {o.customerName} · <span className="ltr">{o.phone}</span> · {reason || t('status.follow.alert')}
-      </p>
-      <label className="field">
-        <span className="lab">{t('suivi.treat.what')}</span>
-        <select value={what} onChange={(e) => setWhat(e.target.value as typeof what)}>
-          {(['date', 'adresse', 'injoignable', 'autre'] as const).map((k) => (
-            <option key={k} value={k}>
-              {t(`suivi.treat.whats.${k}`)}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="field">
-        <span className="lab">{t('suivi.treat.date')}</span>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-      </label>
-      <label className="field">
-        <span className="lab">{t('suivi.treat.note')}</span>
-        <textarea rows={2} value={note} placeholder={t('suivi.treat.notePh')} onChange={(e) => setNote(e.target.value)} />
-      </label>
-    </Modal>
-  );
+  return <Traiter o={o} reason={reason} onClose={onClose} />;
 }
 
 /** Below the swap list: parcels already swapped, with « Copier pour ZR ». */

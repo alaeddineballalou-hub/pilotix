@@ -1,5 +1,15 @@
-import { CallSettings, DEFAULT_CALL_SETTINGS, PILOT_DEFAULT, type PilotConfig } from '@pilotix/shared';
+import { CallSettings, DEFAULT_CALL_SETTINGS, DEFAULT_SCORE_RULES, PILOT_DEFAULT, type PilotConfig, type ScoreRules } from '@pilotix/shared';
 import type { Db } from './db';
+
+export interface SuiviMotif {
+  key: string;
+  fr: string;
+  ar: string;
+  on: boolean;
+  client?: boolean;
+  /** « Résolu »: the agent must give the new delivery date */
+  date?: boolean;
+}
 
 /** Every setting with its default. Admin edits them in Management / Réglages. */
 export interface SettingsMap {
@@ -82,6 +92,9 @@ export interface SettingsMap {
    *    that company delivers there;
    *  - noStockDays: a « sans stock » order waiting longer than this rings an alert.
    */
+  /** Management › Motifs du Suivi: why an alert ends « Résolu » (relancé) or « Perdu »; `client`: the customer said it
+   *  himself (a « Perdu » allowed before the agent's calls) */
+  suiviMotifs: { resolved: SuiviMotif[]; lost: SuiviMotif[] };
   prefs: {
     manualDefault: boolean;
     changeCompany: { confirmation: boolean; agency: boolean; depot: boolean; manager: boolean };
@@ -90,7 +103,19 @@ export interface SettingsMap {
     rulesBy: { confirmation: boolean; agency: boolean; depot: boolean; manager: boolean };
     privateBackup: { on: boolean; hours: number; companyId: number | null };
     noStockDays: number;
+    /** « Livraison privée »: what the livreur says (« failed:no_answer », « returning:refused »…) that sends the parcel
+     *  to Suivi › Alertes instead (a suivi agent calls the customer first) */
+    livreurAlerts: string[];
+    /** Suivi's clock on every alert (same for every company and our livreurs), in working hours (the call slots):
+     *  the first call, then the alert solved (treated, swapped or cancelled) */
+    suiviClock: { firstHours: number; solveHours: number };
+    /** Suivi: the calls before « Client annule » (unless the customer himself cancels), at least `gapMinutes` apart */
+    suiviTries: { calls: number; gapMinutes: number };
+    /** Suivi › Bloqués: a parcel with no new status for `days` days; 2 days later, a claim by itself (companies with an API) */
+    suiviStuck: { days: number };
   };
+  /** Réglages › Score client: the points of the customer's score out of 100 (shared/clientscore.ts) */
+  clientScore: ScoreRules;
 }
 
 export const DEFAULT_SETTINGS: SettingsMap = {
@@ -128,6 +153,24 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   ],
   pilot: PILOT_DEFAULT,
   coverageRefresh: { at: null, results: [] },
+  suiviMotifs: {
+    resolved: [
+      { key: 'new_date', fr: 'Nouvelle date de livraison', ar: 'موعد توصيل جديد', on: true, date: true },
+      { key: 'address', fr: 'Adresse corrigée', ar: 'تصحيح العنوان', on: true },
+      { key: 'phone', fr: 'Téléphone corrigé', ar: 'تصحيح الهاتف', on: true },
+      { key: 'reached', fr: 'Client joint, il attend', ar: 'تم الاتصال بالزبون، ينتظر', on: true },
+      { key: 'desk', fr: 'Livraison au bureau', ar: 'التوصيل إلى المكتب', on: true },
+      { key: 'other', fr: 'Autre', ar: 'أخرى', on: true },
+    ],
+    lost: [
+      { key: 'refused', fr: 'Refus du client', ar: 'رفض الزبون', on: true, client: true },
+      { key: 'unreachable', fr: 'Injoignable après les appels', ar: 'لا يمكن الوصول إليه بعد الاتصالات', on: true },
+      { key: 'price', fr: 'Prix ou frais trop chers', ar: 'السعر أو المصاريف مرتفعة', on: true, client: true },
+      { key: 'elsewhere', fr: 'A acheté ailleurs', ar: 'اشترى من مكان آخر', on: true, client: true },
+      { key: 'not_ordered', fr: 'N’a pas commandé', ar: 'لم يطلب', on: true, client: true },
+      { key: 'other', fr: 'Autre', ar: 'أخرى', on: true },
+    ],
+  },
   prefs: {
     manualDefault: true,
     changeCompany: { confirmation: true, agency: false, depot: false, manager: true },
@@ -135,7 +178,12 @@ export const DEFAULT_SETTINGS: SettingsMap = {
     rulesBy: { confirmation: false, agency: false, depot: false, manager: false },
     privateBackup: { on: false, hours: 24, companyId: null },
     noStockDays: 3,
+    livreurAlerts: ['failed:no_answer', 'failed:absent', 'returning:refused', 'returning:unreachable'],
+    suiviClock: { firstHours: 2, solveHours: 24 },
+    suiviTries: { calls: 3, gapMinutes: 60 },
+    suiviStuck: { days: 3 },
   },
+  clientScore: DEFAULT_SCORE_RULES,
 };
 
 export async function getSetting<K extends keyof SettingsMap>(db: Db, key: K): Promise<SettingsMap[K]> {

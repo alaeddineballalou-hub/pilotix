@@ -755,5 +755,33 @@
     "fineMine": "Well done: everything is at target or at the team’s level.",
     "myNumbers": "My numbers",
     "rank": "Rank {{rank}} of {{of}}"
+  },
+  "motifs": {
+    "title": "Suivi motifs",
+    "sub": "How the period's alerts ended.",
+    "empty": "No treated alert in this period yet.",
+    "resolved_one": "Solved · {{count}} parcel",
+    "resolved_other": "Solved · {{count}} parcels",
+    "lost_one": "Lost · {{count}} parcel",
+    "lost_other": "Lost · {{count}} parcels",
+    "delivered": "{{n}} delivered afterwards ({{p}} %)",
+    "share": "{{p}} % of the lost",
+    "byAgent": "By agent",
+    "agent": "Agent",
+    "colResolved": "Solved",
+    "colDelivered": "Delivered after",
+    "colLost": "Lost",
+    "colEarly": "Cancelled too early",
+    "colTop": "Most frequent loss motif"
+  },
+  "claimsLate": {
+    "title": "Claims by company",
+    "sub": "Open, no answer after 48 h, and with the manager.",
+    "company": "Company / livreur",
+    "open": "Open",
+    "late": "No answer 48 h",
+    "manager": "Manager",
+    "oldest": "Oldest",
+    "none": "No open claim 👍"
   }
 }

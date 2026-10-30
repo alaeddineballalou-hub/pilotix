@@ -100,13 +100,33 @@ export const FIXED_SERVER = !!import.meta.env.VITE_API_URL && /^https?:$/.test(l
 export function serverUrl(): string {
   return ((FIXED_SERVER ? '' : store.get('server')) || import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
 }
+
+/**
+ * The backup door: the same app and server at direct.<platform> (pilotix.online → direct.pilotix.online), reached
+ * WITHOUT Cloudflare, for when Cloudflare's road from a country is cut. Opened there, the app talks to the address it
+ * was opened from (the platform's own address may be the one that does not answer); the links it shows keep the
+ * platform's address (serverUrl).
+ */
+export const BACKUP_DOOR =
+  FIXED_SERVER &&
+  (() => {
+    try {
+      return location.hostname === `direct.${new URL(import.meta.env.VITE_API_URL).hostname}`;
+    } catch {
+      return false;
+    }
+  })();
+/** Where the app sends its requests and opens its live updates: the server's address, or the backup door it was opened from. */
+export function apiUrl(): string {
+  return BACKUP_DOOR ? location.origin : serverUrl();
+}
 export function setServerUrl(url: string) {
   store.set('server', url.trim().replace(/\/+$/, '') || null);
 }
 
 /** "Mot de passe oublié" (no login): asks the server, at its own address, without a session. */
 async function authRequest<T>(path: string, body?: unknown): Promise<T> {
-  const base = serverUrl();
+  const base = apiUrl();
   if (!base) throw new ApiError(0, 'Adresse du serveur manquante');
   let res: Response;
   try {
@@ -207,7 +227,7 @@ class RemoteBackend implements Backend {
   }
 
   private async req<T>(path: string, body?: unknown, extra?: Record<string, string>): Promise<T> {
-    const base = serverUrl();
+    const base = apiUrl();
     if (!base) throw new ApiError(0, 'Adresse du serveur manquante');
     // the token this request carries: an answer to an older one (a store just left or deleted) does not log out
     const sent = this.token;
@@ -324,7 +344,7 @@ class RemoteBackend implements Backend {
   private async connect() {
     this.socket?.disconnect();
     const { io } = await import('socket.io-client');
-    const s = io(serverUrl(), { path: '/live', auth: { token: this.token }, transports: ['websocket', 'polling'], reconnectionDelayMax: 10_000 });
+    const s = io(apiUrl(), { path: '/live', auth: { token: this.token }, transports: ['websocket', 'polling'], reconnectionDelayMax: 10_000 });
     s.on('event', (e: LiveEvent) => this.listeners.forEach((l) => l(e)));
     this.socket = s;
   }

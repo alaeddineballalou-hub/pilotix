@@ -32,3 +32,29 @@
 .cs-chip.short { margin-inline-start: 6px; padding: 1px 7px; font-size: 11.5px; vertical-align: 1px; }
 .cs-chip.short b { font-size: 12px; }
 .cs-chip.short small { font-size: 10px; }
+
+/* Clients › filter by level: one at a time; the chosen one wears the colours of its chip */
+.cs-levels { display: flex; flex-wrap: wrap; gap: 6px; }
+.cs-lvbtn { --cs: var(--muted); display: inline-flex; align-items: center; gap: 7px; min-height: 32px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; transition: background-color 0.15s ease-out, border-color 0.15s ease-out; }
+.cs-lvbtn i { width: 8px; height: 8px; border-radius: 50%; background: var(--cs); flex: none; }
+.cs-lvbtn.cs-top { --cs: var(--ok); }
+.cs-lvbtn.cs-good { --cs: var(--navy); }
+.cs-lvbtn.cs-watch { --cs: var(--warn); }
+.cs-lvbtn.cs-risk { --cs: var(--coral); }
+.cs-lvbtn:hover { border-color: color-mix(in srgb, var(--cs) 50%, var(--line)); }
+.cs-lvbtn:focus-visible { outline: 2px solid var(--cs); outline-offset: 2px; }
+.cs-lvbtn.cs-all:focus-visible { outline-color: var(--ink); }
+.cs-lvbtn.on { background: var(--raise); border-color: color-mix(in srgb, var(--ink) 55%, transparent); }
+.cs-lvbtn.on.cs-top { background: var(--ok-soft); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.cs-lvbtn.on.cs-good { background: var(--sky-soft); color: var(--navy); border-color: color-mix(in srgb, var(--navy) 32%, transparent); }
+.cs-lvbtn.on.cs-watch { background: var(--warn-soft); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.cs-lvbtn.on.cs-risk { background: var(--coral-soft); color: var(--coral); border-color: color-mix(in srgb, var(--coral) 45%, transparent); }
+.cs-lvbtn.on.cs-new { color: var(--ink); }
+
+/* before confirming a « Risqué » customer: above every other dialog, the safe answer focused */
+.cs-ask-wrap { position: fixed; inset: 0; z-index: 70; background: rgb(15 26 46 / 0.5); display: grid; place-items: center; padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); }
+.modal-wrap .modal.cs-ask { width: min(460px, 100%); max-height: 100%; display: flex; flex-direction: column; }
+.cs-ask .modal-head h2 { display: flex; align-items: center; gap: 8px; color: var(--coral); }
+.cs-ask .modal-body { overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.cs-ask-lead { margin: 0; font-size: 14.5px; line-height: 1.45; color: var(--ink); }
+.cs-levels.cl-levels { margin: 12px 0 14px; }

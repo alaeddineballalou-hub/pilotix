@@ -12,7 +12,7 @@ import { claimText, ClaimCompany } from './common';
 export const CLAIM_REASONS = ['relivrer', 'late', 'nocall', 'fakedeliv', 'fakeret', 'address', 'damaged', 'money', 'noreturn', 'other'] as const;
 export type Reason = (typeof CLAIM_REASONS)[number];
 export type Via = 'whatsapp' | 'email' | 'copy' | 'phone';
-export const STATUS_TONE: Record<string, string> = { waiting: 't-warn', still_waiting: 't-bad', resolved: 't-ok' };
+export const STATUS_TONE: Record<string, string> = { waiting: 't-warn', still_waiting: 't-bad', resolved: 't-ok', lost: 't-bad' };
 export const REASON_ICON: Record<Reason, string> = { relivrer: 'refresh', late: 'clock', nocall: 'phoneoff', fakedeliv: 'package', fakeret: 'undo', address: 'navigation', damaged: 'boxminus', money: 'coins', noreturn: 'truck', other: 'chat' };
 
 export interface Target {
@@ -46,7 +46,10 @@ export interface ClaimRow {
   companyId: number | null;
   reason: string;
   details: string;
-  status: 'waiting' | 'still_waiting' | 'resolved';
+  status: 'waiting' | 'still_waiting' | 'resolved' | 'lost';
+  stage?: 'wait' | 'answered' | 'relancer' | 'manager' | 'done';
+  pushes?: number;
+  dueAt?: string;
   notes: { at: string; text: string; status?: string | null }[];
   createdAt: string;
   updatedAt: string;

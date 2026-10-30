@@ -7,7 +7,8 @@
 	}
 }
 
-{$DOMAIN}, www.{$DOMAIN} {
+# The platform's site (the app, its server, the shops' pages): the same at its own address and at the backup door.
+(platform) {
 	encode zstd gzip
 
 	header {
@@ -67,6 +68,20 @@
 		try_files {path} /index.html
 		file_server
 	}
+}
+
+{$DOMAIN}, www.{$DOMAIN} {
+	import platform
+}
+
+# The backup door: the same site at direct.<domain>, reached WITHOUT Cloudflare (its DNS record is « DNS only »,
+# pointing straight here), for when Cloudflare's road from a country is cut. The app opened there talks to that same
+# address (apps/web backend.ts › BACKUP_DOOR). Its certificate is asked for at its first visit (the server allows it).
+direct.{$DOMAIN} {
+	tls {
+		on_demand
+	}
+	import platform
 }
 
 # A shop's own domain: its landing pages (https://myshop.com/<page>; the server finds the shop by the name asked for).

@@ -10,6 +10,8 @@ import { da, when, wilayaName } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { Icon } from '../../ui/kit';
 import { Sheet, Tiles } from '../../ui/Sheet';
+import { Modal } from '../../ui/modal';
+import { StuckChips } from './Stuck';
 import { toast } from '../../ui/toast';
 import { eventText } from '../orders/OrderCard';
 import { ClaimRow, RemindApiModal, SendModal, useTarget } from './Claims';
@@ -20,7 +22,8 @@ import { ChangeKind, ChangeSheet, CourierPanel, useParcelInfo } from './CourierP
 import { useBackLayer } from '../../lib/backLayer';
 import { ScoreChip } from '../../ui/clientScore';
 
-export type PExtra = { companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
+export type AlertClock = { kind: 'call' | 'solve'; dueAt: string; left: number; state: 'ok' | 'soon' | 'late' };
+export type PExtra = { stuck?: import('./Stuck').StuckInfo | null; motif?: { outcome: 'resolved' | 'lost'; label: string } | null; clock?: AlertClock | null; tries?: AlertTries | null; companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
 
 /** Where the parcel is: 0 shipped, 1 on the road, 2 stopped (alert, failed, return…), 3 delivered. */
 function stageOf(o: Order): { at: number; stop: boolean } {
@@ -105,11 +108,42 @@ export function ParcelCards({ rows, extra, reasonOf, empty, onOpen }: { rows: Or
                 </span>
                 {d !== null && <span className={`pxs-days t-${dayTone(d)}`}>{t('suivi.days', { n: d })}</span>}
               </div>
+              {x?.motif && o.followStatus !== 'alert' && (
+                <div className="pxs-clk">
+                  <MotifChip m={x.motif} />
+                </div>
+              )}
+              {x?.stuck && (
+                <div className="pxs-clk">
+                  <StuckChips s={x.stuck} />
+                </div>
+              )}
+              {x?.clock && (
+                <div className="pxs-clk">
+                  <ClockChip c={x.clock} />
+                  <TriesChip tr={x.tries} />
+                </div>
+              )}
             </div>
           </li>
         );
       })}
     </ul>
+  );
+}
+
+/** « Appeler · 1 h 20 » / « Régler · 5 h » / « En retard · 40 min »: the alert's clock, in working time. */
+export function ClockChip({ c }: { c?: AlertClock | null }) {
+  const { t } = useTranslation();
+  if (!c) return null;
+  const m = Math.abs(c.left);
+  const dur = m >= 60 ? t('suivi.clock.h', { h: Math.floor(m / 60), m: String(Math.round(m % 60)).padStart(2, '0') }) : t('suivi.clock.m', { m: Math.max(1, Math.round(m)) });
+  const what = c.state === 'late' ? t(`suivi.clock.late_${c.kind}`) : t(`suivi.clock.${c.kind}`);
+  return (
+    <span className={`sv-clock ${c.state}`} title={t(`suivi.clock.tip_${c.kind}`)}>
+      <Icon name="clock" />
+      {what} · <span className="ltr">{dur}</span>
+    </span>
   );
 }
 
@@ -135,7 +169,7 @@ export interface ParcelAction {
   run: () => void;
 }
 
-export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Order; x?: PExtra; reason: string | null; actions: ParcelAction[]; onClaim?: () => void; onClose: () => void }) {
+export function ParcelPage({ o, x, reason, actions, onClaim, onClose, onSkip }: { o: Order; x?: PExtra; reason: string | null; actions: ParcelAction[]; onClaim?: () => void; onClose: () => void; onSkip?: () => void }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const meta = useRpc('orders.uiMeta', {}, { staleTime: 5 * 60_000 });
@@ -227,8 +261,20 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Ord
             {d !== null ? ` · ${t('suivi.ph.since', { n: d })}` : ''}
           </small>
         </div>
+        {onSkip && (
+          <button type="button" className="pxs-skip" onClick={onSkip}>
+            {t('suivi.skipNext')}
+          </button>
+        )}
         <CoBadge o={o} x={x} />
       </header>
+      {((x?.clock && o.followStatus === 'alert') || x?.stuck) && (
+        <div className="pxs-clkbar">
+          <StuckChips s={x.stuck} />
+          <ClockChip c={x.clock} />
+          <TriesChip tr={x.tries} />
+        </div>
+      )}
 
       <div className="pxp-ob pxs-ob">
         {/* the alert, where the parcel stopped, and what to do */}
@@ -257,7 +303,7 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose }: { o: Ord
         </section>
 
         <div className="pxs-cm">
-          <a className="pxs-call" href={`tel:${o.phone}`} onClick={() => rpc('orders.logCall', { id: o.id }).catch(() => {})}>
+          <a className="pxs-call" href={`tel:${o.phone}`} onClick={() => rpc('orders.logCall', { id: o.id }).then(() => qc.invalidateQueries(), () => {})}>
             <Icon name="phone" /> {t('suivi.act.call')}
           </a>
           <a className="pxs-wa" href={waLink(o.phone, waText)} target="_blank" rel="noopener">
@@ -444,114 +490,116 @@ const isoDay = (plus: number) => {
 
 /** « Traiter » on a phone: what was done in four tiles, the new date in one tap, a note; at ZR a new address goes
  *  straight to ZR as a modification request. */
-export function TreatSheet({ o, reason, onClose }: { o: Order; reason: string | null; onClose: () => void }) {
-  const { t, i18n } = useTranslation();
-  const [what, setWhat] = useState<'date' | 'adresse' | 'injoignable' | 'autre'>('date');
-  const [date, setDate] = useState('');
-  const [pick, setPick] = useState(false);
-  const [note, setNote] = useState('');
-  const [zrOpen, setZrOpen] = useState(false);
-  const zr = useParcelInfo(o).data;
-  const treat = useAction('suivi.treat', {
-    onDone: () => {
-      toast(t('suivi.treat.done', { ref: o.ref }), 'ok');
-      onClose();
-    },
-  });
-  if (zrOpen) return <ChangeSheet o={o} kind={o.isStopdesk ? 'phone' : 'address'} onClose={onClose} />;
-  const name = zr?.companyName ?? o.companyName ?? '';
-  const canZr = !!zr?.supported && !!zr.info && (zr.info.canModify || zr.info.canChangePhone);
-  const day = (v: string) => new Intl.DateTimeFormat(i18n.language === 'ar' ? 'ar-DZ' : i18n.language, { weekday: 'short', day: 'numeric' }).format(new Date(`${v}T12:00:00`));
-  const d1 = isoDay(1);
-  const d2 = isoDay(2);
+
+/** « Client annule » on a phone: what happens to the parcel, then the red button; « Garder » keeps it. */
+export type AlertTries = { done: number; need: number; nextAt: string | null };
+
+/**
+ * « Client annule » on an alert. After the seller's calls: one tap. Before: the customer himself cancels (always), or
+ * « Annuler quand même » with a reason — it shows as « annulé trop tôt » to the managers.
+ */
+export function CancelSheet({ o, tries, busy, onOk, onClose }: { o: Order; tries?: AlertTries | null; busy: boolean; onOk: (by?: 'client' | 'early', note?: string) => void; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [early, setEarly] = useState(false);
+  const [why, setWhy] = useState('');
+  const short = !!tries && tries.done < tries.need;
+  const left = short ? tries!.need - tries!.done : 0;
   return (
-    <Sheet
-      title={t('suivi.treat.title', { ref: o.ref })}
-      sub={
-        <>
-          {reason || t('status.follow.alert')} · {o.customerName}
-        </>
-      }
+    <Modal
+      sheet
+      title={t('suivi.cancelAsk', { ref: o.ref })}
       onClose={onClose}
-      foot={
-        <button type="button" className="pxk-go" disabled={treat.isPending} onClick={() => treat.mutate({ id: o.id, what, date: date || null, note: note.trim() || null })}>
-          <Icon name="check" /> {t('suivi.treat.submit')}
-        </button>
+      footer={
+        !short ? (
+          <>
+            <button type="button" className="btn ghost" onClick={onClose}>
+              {t('suivi.ph.keep')}
+            </button>
+            <button type="button" className="btn danger" disabled={busy} onClick={() => onOk()}>
+              <Icon name="x" /> {t('suivi.act.cancel')}
+            </button>
+          </>
+        ) : early ? (
+          <>
+            <button type="button" className="btn ghost" onClick={() => setEarly(false)}>
+              {t('common.back')}
+            </button>
+            <button type="button" className="btn danger" disabled={busy || why.trim().length < 3} onClick={() => onOk('early', why.trim())}>
+              {t('suivi.tries.cancelAnyway')}
+            </button>
+          </>
+        ) : (
+          <>
+            <button type="button" className="btn ghost" onClick={onClose}>
+              {t('suivi.tries.keepCalling')}
+            </button>
+            <button type="button" className="btn danger" disabled={busy} onClick={() => onOk('client')}>
+              {t('suivi.tries.clientSaid')}
+            </button>
+          </>
+        )
       }
     >
-      <fieldset className="pxk-q">
-        <legend>{t('suivi.treat.ph.q')}</legend>
-        <Tiles
-          value={what}
-          onChange={setWhat}
-          label={t('suivi.treat.ph.q')}
-          items={[
-            { k: 'date', icon: 'calendar', label: t('suivi.treat.ph.date'), now: t('suivi.treat.ph.dateSub') },
-            { k: 'adresse', icon: 'navigation', label: t('suivi.treat.ph.adresse'), now: t('suivi.treat.ph.adresseSub') },
-            { k: 'injoignable', icon: 'phoneoff', label: t('suivi.treat.ph.injoignable'), now: t('suivi.treat.ph.injoignableSub') },
-            { k: 'autre', icon: 'chat', label: t('suivi.treat.ph.autre'), now: t('suivi.treat.ph.autreSub') },
-          ]}
-        />
-      </fieldset>
-      {what === 'adresse' && canZr && (
-        <div className="pxk-hint">
-          <span>{t('suivi.treat.ph.zrHint', { name })}</span>
-          <button type="button" onClick={() => setZrOpen(true)}>
-            <Icon name="pencil" /> {t('suivi.treat.ph.zrGo', { name })}
-          </button>
+      <p className="muted small">
+        {o.customerName} · <span className="ltr">{o.tracking || o.ref}</span>
+      </p>
+      {tries && (
+        <div className={`sv-tries ${short ? 'short' : 'ok'}`}>
+          <span className="sv-dots" aria-hidden="true">
+            {Array.from({ length: tries.need }, (_, k) => (
+              <i key={k} className={k < tries.done ? 'on' : ''} />
+            ))}
+          </span>
+          <b>{t('suivi.tries.count', { done: tries.done, need: tries.need })}</b>
+          {short && <small>{tries.nextAt ? t('suivi.tries.nextAt', { count: left, at: when(tries.nextAt) }) : t('suivi.tries.left', { count: left })}</small>}
         </div>
       )}
-      {(what === 'date' || what === 'injoignable') && (
-        <fieldset className="pxk-q">
-          <legend>{t('suivi.treat.ph.when')}</legend>
-          <div className="pxk-chips">
-            <button type="button" className={`pxk-chip${date === d1 && !pick ? ' on' : ''}`} aria-pressed={date === d1 && !pick} onClick={() => (setDate(date === d1 ? '' : d1), setPick(false))}>
-              {t('suivi.treat.ph.tomorrow')} · {day(d1)}
-            </button>
-            <button type="button" className={`pxk-chip${date === d2 && !pick ? ' on' : ''}`} aria-pressed={date === d2 && !pick} onClick={() => (setDate(date === d2 ? '' : d2), setPick(false))}>
-              {day(d2)}
-            </button>
-            <button type="button" className={`pxk-chip${pick ? ' on' : ''}`} aria-pressed={pick} onClick={() => setPick(!pick)}>
-              <Icon name="calendar" /> {t('suivi.treat.ph.other')}
-            </button>
-          </div>
-          {pick && <input className="pxk-in" type="date" value={date} min={d1} aria-label={t('suivi.treat.ph.when')} onChange={(e) => setDate(e.target.value)} />}
-        </fieldset>
+      {short && !early && (
+        <>
+          <p className="pxk-info">
+            <Icon name="info" /> {t('suivi.tries.why')}
+          </p>
+          <button type="button" className="linklike sv-early" onClick={() => setEarly(true)}>
+            {t('suivi.tries.earlyLink')}
+          </button>
+        </>
       )}
-      <label className="pxk-q">
-        <b>{t('suivi.treat.note')}</b>
-        <textarea className="pxk-in" rows={2} value={note} maxLength={1000} placeholder={t('suivi.treat.notePh')} onChange={(e) => setNote(e.target.value)} />
-      </label>
-    </Sheet>
+      {short && early && (
+        <label className="sv-why">
+          <span>{t('suivi.tries.whyLabel')}</span>
+          <textarea rows={3} maxLength={500} value={why} autoFocus placeholder={t('suivi.tries.whyPh')} onChange={(e) => setWhy(e.target.value)} />
+          <small className="muted">{t('suivi.tries.earlyNote')}</small>
+        </label>
+      )}
+      {!short && (
+        <p className="pxk-info">
+          <Icon name="undo" /> {t('suivi.cancelText')}
+        </p>
+      )}
+    </Modal>
   );
 }
 
-/** « Client annule » on a phone: what happens to the parcel, then the red button; « Garder » keeps it. */
-export function CancelSheet({ o, busy, onOk, onClose }: { o: Order; busy: boolean; onOk: () => void; onClose: () => void }) {
+/** « Traité · Résolu · Nouvelle date » on a treated parcel. */
+export function MotifChip({ m }: { m?: { outcome: 'resolved' | 'lost'; label: string } | null }) {
   const { t } = useTranslation();
+  if (!m) return null;
   return (
-    <Sheet
-      title={t('suivi.cancelAsk', { ref: o.ref })}
-      sub={
-        <>
-          {o.customerName} · <span className="ltr">{o.tracking || o.ref}</span>
-        </>
-      }
-      onClose={onClose}
-      foot={
-        <>
-          <button type="button" className="pxk-go bad" disabled={busy} onClick={onOk}>
-            <Icon name="x" /> {t('suivi.act.cancel')}
-          </button>
-          <button type="button" className="pxk-go ghost" onClick={onClose}>
-            {t('suivi.ph.keep')}
-          </button>
-        </>
-      }
-    >
-      <p className="pxk-info">
-        <Icon name="undo" /> {t('suivi.cancelText')}
-      </p>
-    </Sheet>
+    <span className={`sv-clock ${m.outcome === 'resolved' ? 'ok' : 'late'}`}>
+      <Icon name={m.outcome === 'resolved' ? 'checkcircle' : 'undo'} />
+      {t(`suivi.tr.${m.outcome}`)} · {m.label}
+    </span>
+  );
+}
+
+/** « Appels 1 / 3 » next to the alert's clock. */
+export function TriesChip({ tr }: { tr?: AlertTries | null }) {
+  const { t } = useTranslation();
+  if (!tr) return null;
+  return (
+    <span className={`sv-clock ${tr.done >= tr.need ? 'ok' : 'tries'}`}>
+      <Icon name="phone" />
+      {t('suivi.tries.count', { done: tr.done, need: tr.need })}
+    </span>
   );
 }

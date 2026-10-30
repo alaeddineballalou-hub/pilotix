@@ -358,7 +358,10 @@
       "company": "Company",
       "cashed": "Cashed",
       "sub_status": "Tracking: ",
-      "chat": "Message"
+      "chat": "Message",
+      "motif_resolved": "Suivi: treated · Solved · {{m}}",
+      "motif_lost": "Suivi: treated · Lost · {{m}}",
+      "suivi_stuck": "Suivi: stuck parcel handled"
     },
     "addNote": "Add a note",
     "noteSaved": "Note added",

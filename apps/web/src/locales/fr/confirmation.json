@@ -624,5 +624,7 @@
     "doneNoStock": "{{ref}} confirmée sans stock",
     "fix": "Choisir",
     "bulkDone": "{{ok}} enregistrées · {{sans}} sans stock · {{bl}} bloquées"
-  }
+  },
+  "bestFirst": "Meilleurs clients d’abord",
+  "bestFirstHelp": "Les clients au meilleur score en premier : très fiables, fiables, puis les nouveaux, puis ceux à surveiller. Cliquez encore pour revenir au chrono."
 }

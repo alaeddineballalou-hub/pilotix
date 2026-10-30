@@ -4,7 +4,7 @@ import type { ServerDoctorReport } from '@pilotix/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient, UseQueryOptions } from '@tanstack/react-query';
 import type { z } from 'zod';
 import { toast } from '../ui/toast';
-import { ApiError, serverUrl } from './backend';
+import { ApiError, apiUrl } from './backend';
 import { store } from './store';
 
 type Reg = PlatformRegistry;
@@ -17,7 +17,7 @@ let token = store.get('ptoken');
 let onLogout: () => void = () => {};
 export const setOnStaffLogout = (fn: () => void) => (onLogout = fn);
 
-const base = () => (serverUrl() || window.location.origin).replace(/\/+$/, '');
+const base = () => (apiUrl() || window.location.origin).replace(/\/+$/, '');
 
 async function req<T>(path: string, body?: unknown, method: 'GET' | 'POST' = 'POST'): Promise<T> {
   let res: Response;

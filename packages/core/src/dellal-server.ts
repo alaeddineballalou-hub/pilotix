@@ -7,6 +7,7 @@ import { AiRequest, AiResponse, DellalChannel, dellalSecret } from './modules/de
 import { NOTIFY_SMS_SECRET, notifySettings } from './modules/notify';
 
 import { pilotKey } from './platform/pilotai';
+import { recordAiUsage } from './platform/aiusage';
 import type { PilotAiReq } from './modules/pilotlearn';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
@@ -111,15 +112,18 @@ async function send(ctx: Ctx, a: { channel: DellalChannel; externalId: string; a
 
 async function complete(ctx: Ctx, req: AiRequest): Promise<AiResponse> {
   // Pilot AI: Pilotix's own key for every shop (the control room); otherwise, on an install without it, the shop's key
-  const key = (ctx.t ? await pilotKey(ctx.t).catch(() => null) : null) || (await dellalSecret(ctx.db, 'ai'));
+  const pilot = ctx.t ? await pilotKey(ctx.t).catch(() => null) : null;
+  const key = pilot || (await dellalSecret(ctx.db, 'ai'));
   if (!key) throw new AppError('bad_request', 'Clé API de l’IA manquante (Messages › Réglages).');
   // Dellal's instructions are long: each block is cached on its own (the part every shop shares, this shop's part, this
   // conversation's part), so a new chat reuses the first two and each following message is billed mostly at the cached rate.
-  const { tools, systemBlocks, ...rest } = req;
+  const { tools, systemBlocks, feature, ...rest } = req;
   const blocks = (systemBlocks ?? []).filter((b) => b.trim()).slice(0, 4);
   const system = (blocks.length ? blocks : [req.system]).map((text) => ({ type: 'text', text, cache_control: { type: 'ephemeral' } }));
   const body = { ...rest, ...(tools?.length ? { tools } : {}), system };
   const data = await postJson(ANTHROPIC, body, { 'x-api-key': key, 'anthropic-version': '2023-06-01' }, 'IA (Anthropic)', 'POST', 180_000);
+  // what this answer cost, counted for the shop (control room › Pilot AI › AI cost per shop: Pilotix bills it)
+  if (ctx.t && ctx.shop) await recordAiUsage(ctx.t, { shopId: ctx.shop.id, feature, model: String(req.model || data.model), payer: pilot ? 'pilotix' : 'shop', usage: data.usage });
   return { content: data.content ?? [], stop_reason: data.stop_reason ?? 'end_turn', usage: data.usage };
 }
 

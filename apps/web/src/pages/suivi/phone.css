@@ -219,3 +219,7 @@ body:has(.pxs-page) .modal-wrap, body:has(.pxp-order) .modal-wrap { z-index: 90 
 .pxw-bar { flex: 1; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
 .pxw-bar i { display: block; height: 100%; border-radius: 4px; background: var(--c-ok-fill); transition: width .2s; }
 @media (prefers-reduced-motion: reduce) { .pxw-bar i { transition: none; } }
+.pxs-skip { flex: none; min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--field); color: var(--ink); font-weight: 800; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.pxs-skip:hover { border-color: var(--px-orange); }
+.pxs-clk { display: flex; margin-top: 8px; }
+.pxs-clkbar { display: flex; justify-content: center; padding: 8px 12px 0; }
