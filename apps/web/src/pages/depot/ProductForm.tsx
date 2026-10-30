@@ -352,7 +352,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
             )}
           </div>
           {optMode ? (
-            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseCost={Number(f.cost) || 0} used={usedValues} skipped={skipped} feeGrids={grids.data?.grids ?? []} />
+            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseCost={Number(f.cost) || 0} baseSku={f.sku.trim() || f.name.trim()} basePhoto={f.photo} baseDiscount={f.maxDiscount === '' ? null : Number(f.maxDiscount) || 0} used={usedValues} skipped={skipped} feeGrids={grids.data?.grids ?? []} />
           ) : (
             <>
               {vars.length ? (
@@ -360,7 +360,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
                   {vars.map((v, i) => (
                     <div key={v.id ?? `n${i}`} className="item-row bjpv-row">
                       <input aria-label={t('produits.form.variants')} value={v.title} placeholder={t('produits.form.variantPh')} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, title: e.target.value } : x)))} />
-                      <span className="muted small">Product pricing &amp; photo apply</span>
+                      <span className="muted small" title="Shared product prices — edit in Pricing & margins">{f.photo && <img src={f.photo} alt="" style={{ width: 32, height: 32, objectFit: 'contain', verticalAlign: 'middle' }} />} SKU: {v.sku || skuOf(f.sku.trim() || f.name.trim(), [v.title])} · Achat: {da(Number(f.cost) || 0)} · Vente: {da(Number(f.price) || 0)} · Remise: {f.maxDiscount === '' ? '—' : da(Number(f.maxDiscount) || 0)} · Marge: {da((Number(f.price) || 0) - (Number(f.cost) || 0))}</span>
                       <input type="number" min={0} step={0.1} aria-label="Weight" value={v.weightKg} placeholder="Weight (kg)" onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, weightKg: e.target.value } : x)))} />
                       <input type="number" min={0} step={1} aria-label="Minimum stock" value={v.alertQty} placeholder="Minimum stock" onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, alertQty: e.target.value } : x)))} />
                       <select aria-label="Delivery grid" value={v.feeGrid} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, feeGrid: e.target.value } : x)))}><option value="">Product default</option>{(grids.data?.grids ?? []).map((g) => <option key={g} value={g}>{g}</option>)}</select>
