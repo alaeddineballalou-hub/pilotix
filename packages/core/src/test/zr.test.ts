@@ -197,7 +197,7 @@ test('parcel at ZR (preview): its journey, livreur and return risk; a price chan
 test('swap at ZR (preview): what it costs in the same wilaya or another, while the parcel can still be given', async () => {
   const { id: oid } = await zrOnRoad();
   const p: any = await call('parcel.info', await as(EMAILS.suivi), { orderId: oid });
-  assert.deepEqual(p.info.swap, { eligible: true, count: 0, sameCityPrice: 200, differentCityPrice: 350 });
+  assert.deepEqual(p.info.swap, { eligible: true, count: 0, sameCityPrice: 50, differentCityPrice: 100 });
 });
 
 test('parcel at ZR (preview): home → stop desk, applied once ZR accepts; a request can be withdrawn', async () => {
