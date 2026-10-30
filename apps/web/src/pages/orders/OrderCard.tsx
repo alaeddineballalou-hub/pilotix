@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
-import { da, fromLocalInput, toLocalInput, when, wilaya } from '../../lib/format';
+import { da, dateOnly, fromLocalInput, toLocalInput, when, wilaya } from '../../lib/format';
 import { closeModal, openOrder, openOrderForm } from '../../lib/modals';
 import { startTicketFor } from '../sav/NewTicket';
 import { useRpc } from '../../lib/query';
@@ -37,6 +37,9 @@ export async function callOptional(name: string, input: unknown): Promise<{ ok: 
 }
 
 type Panel = null | { kind: 'conf'; status: ConfStatus } | { kind: 'follow'; status: FollowStatus } | { kind: 'company' } | { kind: 'note' } | { kind: 'blacklist' } | { kind: 'cancelParcel' };
+
+/** The payment of a delivered parcel: waiting (grey) → the company has it (blue) → paid, to pick up (orange) → received (green). */
+const PAY_TONE = { waiting: 'off', collected: 'info', ready: 'warn', received: 'ok' } as const;
 
 export default function OrderCard({ id, onClose }: { id: number; onClose: () => void }) {
   const { t } = useTranslation();
@@ -420,6 +423,17 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
             <>
               <dt>{t('orders.card.extStatus')}</dt>
               <dd>{o.extStatus}</dd>
+            </>
+          )}
+          {o.pay && (
+            <>
+              <dt>{t('orders.card.pay')}</dt>
+              <dd>
+                <span className="px-pay">
+                  <span className={`badge t-${PAY_TONE[o.pay.step]}`}>{t(`orders.pay.${o.pay.step}`, { name: o.companyName ?? '' })}</span>
+                  {(o.pay.at || o.pay.ref) && <small className="muted">{[o.pay.at ? dateOnly(o.pay.at) : null, o.pay.ref ? t('orders.pay.ref', { ref: o.pay.ref }) : null].filter(Boolean).join(' · ')}</small>}
+                </span>
+              </dd>
             </>
           )}
           {o.deliveryAttempts > 0 && (

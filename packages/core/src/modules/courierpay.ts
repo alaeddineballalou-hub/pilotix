@@ -119,6 +119,15 @@ export async function payRun(ctx: Ctx, companyId: number) {
       [companyId, p.extId, p.ref, p.amount, p.status, p.done, p.at, p.doneAt, p.place, p.requestId, JSON.stringify(p.details)],
     );
   }
+  // still to pick up: its parcels known now, so each order shows « Payé par ZR · à récupérer » (the next run tries again)
+  for (const w of await ctx.db.query('SELECT id, ext_id FROM courier_payments WHERE company_id = $1 AND NOT done AND lines IS NULL ORDER BY at DESC LIMIT 5', [companyId])) {
+    try {
+      const lines = (await courier(ctx, 'payLines', { companyId, extId: w.ext_id })) as PayLine[];
+      await ctx.db.query('UPDATE courier_payments SET lines = $2 WHERE id = $1 AND lines IS NULL', [w.id, JSON.stringify(lines)]);
+    } catch {
+      // not now
+    }
+  }
   // handed over and not in a caisse yet → imported now
   const todo = await ctx.db.query('SELECT id FROM courier_payments WHERE company_id = $1 AND done AND imported_at IS NULL ORDER BY at', [companyId]);
   for (const t of todo) {

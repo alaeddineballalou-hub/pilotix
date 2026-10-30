@@ -52,3 +52,40 @@
 
 /* phones: the search above the list */
 .pxl-csearch { margin: 0 0 8px; }
+
+/* « Tarifs » of a company with prices by API: they come from it (locked), when they were taken, « Mettre à jour » */
+.px-fees-api { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; margin-bottom: 10px; border: 1px solid color-mix(in srgb, var(--c-info-ink, #2F5BD3) 22%, var(--line)); border-radius: 12px; background: var(--c-info-tint, #EEF3FF); }
+.px-fees-api > div { flex: 1; min-width: 0; }
+.px-fees-api b { display: block; font-size: 14.5px; }
+.px-fees-api p { margin: 3px 0 0; font-size: 13px; line-height: 1.45; color: var(--ink); }
+.px-fees-api .btn { flex: none; }
+.px-fees-lock { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: var(--surface); color: var(--c-info-ink, #2F5BD3); }
+.px-fees-sync { color: var(--muted) !important; font-weight: 600; }
+.px-fees-sync.bad { color: var(--c-bad-ink, #B3261E) !important; }
+.px-fees-ro td .ltr { font-variant-numeric: tabular-nums; }
+
+/* swap fees (a parcel given to another customer): same wilaya, other wilaya */
+.px-swapfees { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; padding: 10px 14px; margin-bottom: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--raise, var(--surface)); }
+.px-swapfees-head { display: flex; flex-direction: column; min-width: 200px; flex: 1 1 260px; }
+.px-swapfees-head b { font-size: 14px; }
+.px-swapfees-head small { color: var(--muted); font-size: 12.5px; line-height: 1.35; }
+.px-swapfees-row { display: flex; align-items: center; gap: 10px 18px; flex-wrap: wrap; }
+.px-swapfee { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; color: var(--muted); font-weight: 700; }
+.px-swapfee b { font-size: 16px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.px-swapfee-in { display: flex; align-items: center; gap: 6px; }
+.px-swapfees .px-swapfee-in input { flex: none; width: 92px; min-width: 0; text-align: end; }
+.px-swapfee-in small { color: var(--muted); font-weight: 700; }
+.px-swapfees-api { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; font-weight: 700; }
+
+/* « Alertes » of a company: its statuses, one or many ticked → Suivi › Alertes */
+.px-alerts { list-style: none; margin: 10px 0 6px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.px-alert { display: flex; align-items: flex-start; gap: 10px; min-height: 52px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); cursor: pointer; transition: border-color .15s ease-out, background-color .15s ease-out; }
+.px-alert:hover { border-color: color-mix(in srgb, var(--c-warn-ink, #8A5A00) 45%, var(--line)); }
+.px-alert:focus-within { outline: 2px solid var(--navy); outline-offset: 2px; }
+.px-alert.on { border-color: color-mix(in srgb, var(--c-warn-ink, #8A5A00) 55%, var(--line)); background: var(--c-warn-tint, #FFF2DA); }
+.px-alert input { flex: none; width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--px-orange, #F7A823); }
+.px-alert span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.px-alert b { font-size: 14px; line-height: 1.3; overflow-wrap: anywhere; }
+.px-alert small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.px-alerts-sum { margin: 4px 0 0; color: var(--muted); font-weight: 700; }
+.px-alerts-sum.none { color: var(--c-warn-ink, #8A5A00); }

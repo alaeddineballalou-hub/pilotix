@@ -76,9 +76,12 @@ test('delivery.sync advances parcels on the road (demo)', async () => {
 
 test('fees grid and status mapping', async () => {
   const admin = await as(EMAILS.admin);
+  // a company with prices by API: they are its own, never typed here
   const yal = await companyId('yalidine');
-  await call('delivery.saveFees', admin, { companyId: yal, rows: [{ wilayaId: 16, home: 350, desk: 250, returnFee: 100 }] });
-  const fees: any[] = (await call('delivery.fees', admin, { companyId: yal })) as any[];
+  await assert.rejects(call('delivery.saveFees', admin, { companyId: yal, rows: [{ wilayaId: 16, home: 350, desk: 250, returnFee: 100 }] }), /viennent de son API/);
+  const man = await companyId('manual');
+  await call('delivery.saveFees', admin, { companyId: man, rows: [{ wilayaId: 16, home: 350, desk: 250, returnFee: 100 }] });
+  const fees: any[] = (await call('delivery.fees', admin, { companyId: man })) as any[];
   assert.equal(fees.length, 69);
   assert.deepEqual(fees[15], { wilayaId: 16, name: 'Alger', home: 350, desk: 250, returnFee: 100 });
   assert.equal(resolveStatus(ADAPTERS.yalidine.statuses, {}, { status: 'Livré' }), 'delivered');

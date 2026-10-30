@@ -178,7 +178,7 @@ async function demoInfo(db: Db, o: any): Promise<ParcelInfo> {
     deliveryPrice: null,
     returnPrice: null,
     // the preview: the prices shown in Livraison › ZR Express; a parcel can be given to someone else until it is back
-    swap: { eligible: f !== 'delivered' && f !== 'returned' && f !== 'exchanged', count: 0, sameCityPrice: 200, differentCityPrice: 350 },
+    swap: { eligible: f !== 'delivered' && f !== 'returned' && f !== 'exchanged', count: 0, sameCityPrice: 50, differentCityPrice: 100 },
     history,
     sms,
   };

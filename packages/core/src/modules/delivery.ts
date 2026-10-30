@@ -116,8 +116,13 @@ async function feesOf(db: Db, companyId: number) {
   });
 }
 
-async function saveFeeRows(db: Db, companyId: number, rows: FeeRow[]) {
+/** `all`: the rows are the company's whole list (its API): a wilaya it no longer prices loses its price here too. */
+async function saveFeeRows(db: Db, companyId: number, rows: FeeRow[], all = false) {
   await db.tx(async (tx) => {
+    if (all) {
+      const kept = rows.filter((r) => r.wilayaId >= 1 && r.wilayaId <= 69 && !(r.home === null && r.desk === null && r.returnFee === null)).map((r) => r.wilayaId);
+      await tx.query('DELETE FROM delivery_fees WHERE company_id=$1 AND NOT (wilaya_id = ANY($2::int[]))', [companyId, kept]);
+    }
     for (const r of rows) {
       if (!(r.wilayaId >= 1 && r.wilayaId <= 69)) continue;
       if (r.home === null && r.desk === null && r.returnFee === null) {
@@ -131,6 +136,48 @@ async function saveFeeRows(db: Db, companyId: number, rows: FeeRow[]) {
       );
     }
   });
+}
+
+/** The last time a company's prices came from its API: when, how many changed, or why it failed (the « Tarifs » window). */
+interface FeesSync {
+  at: string | null;
+  changed: number | null;
+  error: string | null;
+}
+async function setFeesSync(db: Db, companyId: number, s: Partial<FeesSync>) {
+  const cfg = parseJson((await db.query('SELECT config FROM delivery_companies WHERE id=$1', [companyId]))[0]?.config);
+  const cur: FeesSync = { at: null, changed: null, error: null, ...(cfg.feesSync ?? {}) };
+  await db.query('UPDATE delivery_companies SET config=$2 WHERE id=$1', [companyId, JSON.stringify({ ...cfg, feesSync: { ...cur, ...s } })]);
+}
+
+/**
+ * A company's prices taken again from its API (browser preview: a realistic grid) — the only way they change for a
+ * company that has them by API (« Tarifs » cannot edit them): when it is connected, every night, and « Mettre à jour ».
+ */
+export async function importFeesNow(ctx: Ctx, companyId: number) {
+  const c = await companyOr404(ctx.db, companyId);
+  if (!KINDS[c.kind].fees) throw bad(`${c.name} : import des tarifs non disponible, remplissez-les à la main`);
+  const before = await feesOf(ctx.db, companyId);
+  let rows: FeeRow[];
+  try {
+    if (isDemo(ctx)) {
+      const f = c.kind === 'zr' ? 0.95 : c.kind === 'noest' ? 0.9 : 1;
+      rows = WILAYAS.map((_, k) => {
+        const d = DEFAULT_FEES(k + 1);
+        return { wilayaId: k + 1, home: Math.round((d.home * f) / 50) * 50, desk: Math.round((d.desk * f) / 50) * 50, returnFee: d.returnFee };
+      });
+    } else rows = (await courierOf(ctx)('fees', { companyId }, ctx)) as FeeRow[];
+    // an empty answer is a hiccup, not « delivers nowhere »: the prices we have stay
+    if (!rows.some((r) => r.home !== null || r.desk !== null)) throw bad(`${c.name} n’a renvoyé aucun prix : les prix d’avant restent`);
+  } catch (e: any) {
+    await setFeesSync(ctx.db, companyId, { error: String(e?.message ?? e).slice(0, 300) });
+    throw e;
+  }
+  await saveFeeRows(ctx.db, companyId, rows, true);
+  const after = await feesOf(ctx.db, companyId);
+  const changed = after.filter((r, k) => r.home !== before[k].home || r.desk !== before[k].desk || r.returnFee !== before[k].returnFee).length;
+  await setFeesSync(ctx.db, companyId, { at: new Date(ctx.now()).toISOString(), changed, error: null });
+  return { imported: rows.length, changed, rows: after };
 }
 
 // ---------------------------------------------------------------- sending
@@ -512,12 +559,23 @@ const effective = (r: { own?: string; auto: string | null }) => (r.own !== undef
 /** Our statuses while the parcel is with the company: the courier statuses meaning one of them can be an alert. */
 const ON_ROAD = ['shipped', 'out_for_delivery', 'failed', 'returning', 'in_exchange'];
 
-/** A company's own price to swap a parcel to another customer (ZR's services), same wilaya or another; null when it has none. */
-export async function swapFees(ctx: Ctx, companyId: number): Promise<{ same: number | null; other: number | null }> {
-  const kind = (await ctx.db.query('SELECT kind FROM delivery_companies WHERE id = $1', [companyId]))[0]?.kind as keyof typeof KINDS | undefined;
-  if (!kind || !KINDS[kind]?.zr) return { same: null, other: null };
+/** What couriers usually take to give a parcel to another customer (swap): in the same wilaya, to another one. */
+export const SWAP_DEFAULT = { same: 50, other: 100 } as const;
+
+/**
+ * A company's price to swap a parcel to another customer, same wilaya or another: ZR's own by its API (locked), else
+ * the company's typed in « Tarifs », else 50 / 100 DA; none for our own livreurs.
+ */
+export async function swapFees(ctx: Ctx, companyId: number): Promise<{ same: number | null; other: number | null; fromApi: boolean }> {
+  const c = (await ctx.db.query('SELECT kind, config FROM delivery_companies WHERE id = $1', [companyId]))[0];
+  const kind = c?.kind as keyof typeof KINDS | undefined;
+  if (!kind || kind === 'own') return { same: null, other: null, fromApi: false };
+  const own = parseJson(c.config).swap ?? {};
+  const pick = (v: unknown, d: number) => (typeof v === 'number' && v >= 0 ? v : d);
+  const typed = { same: pick(own.same, SWAP_DEFAULT.same), other: pick(own.other, SWAP_DEFAULT.other), fromApi: false };
+  if (!KINDS[kind]?.zr) return typed;
   let list: { key: string; price: number }[] = [];
-  if (isDemo(ctx)) list = [{ key: 'swapSameCity', price: 200 }, { key: 'swapOtherCity', price: 350 }];
+  if (isDemo(ctx)) list = [{ key: 'swapSameCity', price: 50 }, { key: 'swapOtherCity', price: 100 }];
   else {
     try {
       list = ((await courierOf(ctx)('services', { companyId }, ctx)) as { key: string; price: number }[] | null) ?? [];
@@ -529,7 +587,9 @@ export async function swapFees(ctx: Ctx, companyId: number): Promise<{ same: num
     const v = list.find((x) => x.key === k)?.price;
     return typeof v === 'number' && v > 0 ? v : null;
   };
-  return { same: of('swapSameCity'), other: of('swapOtherCity') };
+  const same = of('swapSameCity');
+  const other = of('swapOtherCity');
+  return same !== null && other !== null ? { same, other, fromApi: true } : typed;
 }
 
 export const deliveryProcs = {
@@ -578,8 +638,12 @@ export const deliveryProcs = {
         cid = num(r[0].id);
       }
     });
+    // a company with prices by API: its prices come at once (new, or its keys just typed); a failure is shown in « Tarifs »
+    const saved = await companyOr404(ctx.db, cid!);
+    if (KINDS[saved.kind].fees && saved.active && (saved.hasKeys || isDemo(ctx)) && (!i.id || Object.keys(newKeys).length > 0))
+      await importFeesNow(ctx, cid!).catch(() => null);
     ctx.emit({ type: 'settings' });
-    return companyOr404(ctx.db, cid!);
+    return saved;
   }),
 
   'delivery.removeCompany': proc([], z.object({ id }), async (ctx, { id: cid }) => {
@@ -597,26 +661,33 @@ export const deliveryProcs = {
   /** What the company charges per wilaya (home / stop desk / return). All 69 wilayas, null = not set. */
   'delivery.fees': proc(['depot', 'suivi', 'confirmation'], z.object({ companyId: id }), async (ctx, { companyId }) => feesOf(ctx.db, companyId)),
 
+  /** Prices typed by hand: only for a company without prices by API (those of an API company are its own, see importFeesNow). */
   'delivery.saveFees': proc([], z.object({ companyId: id, rows: z.array(FeeInput).max(69) }), async (ctx, i) => {
-    await companyOr404(ctx.db, i.companyId);
+    const c = await companyOr404(ctx.db, i.companyId);
+    if (KINDS[c.kind].fees) throw bad(`Les prix de ${c.name} viennent de son API : ils ne se changent pas à la main (Pilotix les reprend tout seul chaque nuit)`);
     await saveFeeRows(ctx.db, i.companyId, i.rows);
     return feesOf(ctx.db, i.companyId);
   }),
 
-  /** Imports the tariffs from the courier's API (demo: a realistic grid). */
-  'delivery.importFees': proc([], z.object({ companyId: id }), async (ctx, { companyId }) => {
+  /** Takes the prices from the courier's API now (demo: a realistic grid). */
+  'delivery.importFees': proc([], z.object({ companyId: id }), async (ctx, { companyId }) => importFeesNow(ctx, companyId)),
+
+  /** The « Tarifs » window: whether the prices come from the API (locked) and their last update, and the swap fees. */
+  'delivery.feesInfo': proc(['depot', 'suivi', 'confirmation'], z.object({ companyId: id }), async (ctx, { companyId }) => {
     const c = await companyOr404(ctx.db, companyId);
-    if (!KINDS[c.kind].fees) throw bad(`${c.name} : import des tarifs non disponible, remplissez-les à la main`);
-    let rows: FeeRow[];
-    if (isDemo(ctx)) {
-      const f = c.kind === 'zr' ? 0.95 : c.kind === 'noest' ? 0.9 : 1;
-      rows = WILAYAS.map((_, k) => {
-        const d = DEFAULT_FEES(k + 1);
-        return { wilayaId: k + 1, home: Math.round((d.home * f) / 50) * 50, desk: Math.round((d.desk * f) / 50) * 50, returnFee: d.returnFee };
-      });
-    } else rows = (await courierOf(ctx)('fees', { companyId }, ctx)) as FeeRow[];
-    await saveFeeRows(ctx.db, companyId, rows);
-    return { imported: rows.length, rows: await feesOf(ctx.db, companyId) };
+    const cfg = parseJson((await ctx.db.query('SELECT config FROM delivery_companies WHERE id=$1', [companyId]))[0]?.config);
+    const s: Partial<FeesSync> = cfg.feesSync ?? {};
+    return { api: !!KINDS[c.kind].fees, syncedAt: s.at ?? null, changed: s.changed ?? null, error: s.error ?? null, swap: await swapFees(ctx, companyId) };
+  }),
+
+  /** A company's swap fees typed by hand (when it does not give them by API); nothing for our own livreurs. */
+  'delivery.saveSwapFees': proc([], z.object({ companyId: id, same: z.number().int().min(0).max(100_000), other: z.number().int().min(0).max(100_000) }), async (ctx, i) => {
+    const row = (await ctx.db.query('SELECT name, kind, config FROM delivery_companies WHERE id=$1', [i.companyId]))[0];
+    if (!row) throw notFound('Société introuvable');
+    if (row.kind === 'own') throw bad('Vos livreurs : pas de frais d’échange');
+    if ((await swapFees(ctx, i.companyId)).fromApi) throw bad(`Les frais d’échange de ${row.name} viennent de son API : ils ne se changent pas à la main`);
+    await ctx.db.query('UPDATE delivery_companies SET config=$2 WHERE id=$1', [i.companyId, JSON.stringify({ ...parseJson(row.config), swap: { same: i.same, other: i.other } })]);
+    return swapFees(ctx, i.companyId);
   }),
 
   'delivery.stopdesks': proc(null, z.object({ companyId: id, wilayaId: z.number().int().min(1).max(69).optional() }), async (ctx, i) => {
@@ -711,8 +782,8 @@ export const deliveryProcs = {
         webhook: { on: !!extId, extId, url: extId ? `https://votre-serveur.dz/api/hooks/courier/${c.id}` : null, error: null as string | null },
         hookUrl: `https://votre-serveur.dz/api/hooks/courier/${c.id}`,
         services: [
-          { key: 'swapSameCity', label: 'Échange (même wilaya)', price: 200 },
-          { key: 'swapOtherCity', label: 'Échange (autre wilaya)', price: 350 },
+          { key: 'swapSameCity', label: 'Échange (même wilaya)', price: 50 },
+          { key: 'swapOtherCity', label: 'Échange (autre wilaya)', price: 100 },
           { key: 'phoneChange', label: 'Changement de téléphone', price: 50 },
           { key: 'labeling', label: 'Étiquetage', price: 30 },
           { key: 'weighting', label: 'Pesée', price: 20 },

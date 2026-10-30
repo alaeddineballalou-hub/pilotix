@@ -1,10 +1,10 @@
 // Dialogs of « Sociétés de livraison »: company form (keys, custom API), tariffs grid, stop desks, status mapping, send preview, test.
 import { COURIER_KINDS, CourierKind, FOLLOW_STATUSES, WILAYAS } from '@pilotix/shared';
-import { useEffect, useMemo, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Out, rpc } from '../../lib/backend';
 import { useAction, useRpc } from '../../lib/query';
-import { da, wilaya } from '../../lib/format';
+import { da, dateTime, wilaya } from '../../lib/format';
 import { Empty, ErrorBox, Field, Icon, Loading } from '../../ui/kit';
 import './zr.css';
 import { CourierLogo } from './CourierLogo';
@@ -238,50 +238,142 @@ export function CompanyForm({ initial, kinds, onClose, keysSet = [] }: { initial
 }
 
 // ---------------------------------------------------------------- tariffs
+/**
+ * « Tarifs »: a company with prices by API shows them as they are (they cannot be typed: Pilotix takes them again every
+ * night, at connection and with « Mettre à jour maintenant »); any other company's prices are typed here. Its swap fees
+ * above: ZR's from its API, else typed (50 / 100 DA at first).
+ */
 export function FeesModal({ company, onClose }: { company: Company; onClose: () => void }) {
   const { t } = useTranslation();
   const q = useRpc('delivery.fees', { companyId: company.id });
+  const info = useRpc('delivery.feesInfo', { companyId: company.id });
+  const locked = !!info.data?.api;
   const [rows, setRows] = useState<Record<number, { home: string; desk: string; returnFee: string }>>({});
   const [filter, setFilter] = useState('');
   const save = useAction('delivery.saveFees', { success: t('livraison.fees.saved'), onDone: onClose });
-  const imp = useAction('delivery.importFees', { success: (r) => t('livraison.fees.imported', { count: r.imported }) });
+  const imp = useAction('delivery.importFees', { success: (r) => t('livraison.fees.refreshed', { count: r.changed }) });
   useEffect(() => {
     if (q.data) setRows(Object.fromEntries(q.data.map((r) => [r.wilayaId, { home: r.home?.toString() ?? '', desk: r.desk?.toString() ?? '', returnFee: r.returnFee?.toString() ?? '' }])));
   }, [q.data]);
   const val = (s: string) => (s.trim() === '' ? null : Math.max(0, Math.round(Number(s) || 0)));
   const fillAll = (k: 'home' | 'desk' | 'returnFee', v: string) => setRows((x) => Object.fromEntries(Object.entries(x).map(([w, r]) => [w, { ...r, [k]: r[k] || v }])));
   const list = WILAYAS.map((_, i) => i + 1).filter((w) => !filter || wilaya(w).toLowerCase().includes(filter.toLowerCase()));
+  const byW = new Map((q.data ?? []).map((r) => [r.wilayaId, r]));
+  const s = info.data;
+  // the swap fees typed here (not ZR's: those come from its API)
+  const [swapEdit, setSwapEdit] = useState<{ same: string; other: string } | null>(null);
+  const swapSave = useAction('delivery.saveSwapFees', { success: t('livraison.fees.swapSaved'), onDone: () => setSwapEdit(null) });
+  const swapNow = { same: String(s?.swap.same ?? ''), other: String(s?.swap.other ?? '') };
+  const swapV = swapEdit ?? swapNow;
+  const swapChanged = !!s && !s.swap.fromApi && (swapV.same !== swapNow.same || swapV.other !== swapNow.other) && swapV.same !== '' && swapV.other !== '';
+  const saveSwap = () => swapSave.mutateAsync({ companyId: company.id, same: Number(swapV.same), other: Number(swapV.other) });
   return (
     <Modal
       title={t('livraison.fees.title', { name: company.name })}
       onClose={onClose}
       wide
       footer={
-        <>
-          {company.kind !== 'own' && company.kind !== 'manual' && company.kind !== 'custom' && (
-            <button className="btn" disabled={imp.isPending} onClick={() => imp.mutate({ companyId: company.id })}>
-              {imp.isPending ? t('common.loading') : t('livraison.fees.import')}
+        locked ? (
+          <>
+            <span className="grow" />
+            <button className="btn" onClick={onClose}>
+              {t('common.close')}
             </button>
-          )}
-          <span className="grow" />
-          <button className="btn" onClick={onClose}>
-            {t('common.cancel')}
-          </button>
-          <button className="btn primary" disabled={save.isPending} onClick={() => save.mutate({ companyId: company.id, rows: Object.entries(rows).map(([w, r]) => ({ wilayaId: Number(w), home: val(r.home), desk: val(r.desk), returnFee: val(r.returnFee) })) })}>
-            {t('common.save')}
-          </button>
-        </>
+          </>
+        ) : (
+          <>
+            <span className="grow" />
+            <button className="btn" onClick={onClose}>
+              {t('common.cancel')}
+            </button>
+            <button
+              className="btn primary"
+              disabled={save.isPending || swapSave.isPending || info.isLoading}
+              onClick={async () => {
+                if (swapChanged) await saveSwap().catch(() => null);
+                save.mutate({ companyId: company.id, rows: Object.entries(rows).map(([w, r]) => ({ wilayaId: Number(w), home: val(r.home), desk: val(r.desk), returnFee: val(r.returnFee) })) });
+              }}
+            >
+              {t('common.save')}
+            </button>
+          </>
+        )
       }
     >
-      <p className="muted small">{t('livraison.fees.help')}</p>
+      {locked && s ? (
+        <div className="px-fees-api">
+          <span className="px-fees-lock" aria-hidden="true">
+            <Icon name="lock" />
+          </span>
+          <div>
+            <b>{t('livraison.fees.apiTitle', { name: company.name })}</b>
+            <p>{t('livraison.fees.apiHelp', { name: company.name })}</p>
+            <p className={`px-fees-sync${s.error ? ' bad' : ''}`}>
+              {s.error
+                ? t('livraison.fees.error', { error: s.error })
+                : s.syncedAt
+                  ? `${t('livraison.fees.syncedAt', { when: dateTime(s.syncedAt) })} · ${s.changed ? t('livraison.fees.changed', { count: s.changed }) : t('livraison.fees.unchanged')}`
+                  : t('livraison.fees.never')}
+            </p>
+          </div>
+          <button className="btn small" disabled={imp.isPending} onClick={() => imp.mutate({ companyId: company.id })}>
+            {imp.isPending ? t('common.loading') : t('livraison.fees.refresh')}
+          </button>
+        </div>
+      ) : (
+        <p className="muted small">{t('livraison.fees.help')}</p>
+      )}
+      {s && s.swap.same !== null && (
+        <SwapFees
+          company={company}
+          swap={s.swap}
+          value={swapV}
+          onChange={setSwapEdit}
+          action={
+            // prices locked (no « Enregistrer » below): the swap fees have their own, once changed
+            locked && swapChanged ? (
+              <button className="btn small primary" disabled={swapSave.isPending} onClick={() => saveSwap().catch(() => null)}>
+                {t('common.save')}
+              </button>
+            ) : null
+          }
+        />
+      )}
       <div className="row">
         <input type="search" aria-label={t('livraison.fees.search')} placeholder={t('livraison.fees.search')} value={filter} onChange={(e) => setFilter(e.target.value)} style={{ maxWidth: 260 }} />
-        <span className="muted small">{t('livraison.fees.fillHint')}</span>
+        {!locked && <span className="muted small">{t('livraison.fees.fillHint')}</span>}
       </div>
-      {q.isLoading ? (
+      {q.isLoading || info.isLoading ? (
         <Loading />
       ) : q.error ? (
         <ErrorBox error={q.error} onRetry={() => q.refetch()} />
+      ) : locked ? (
+        <div className="tbl-wrap" style={{ maxHeight: '50vh', overflow: 'auto' }}>
+          <table className="tbl px-fees-ro">
+            <thead>
+              <tr>
+                <th>{t('livraison.fees.wilaya')}</th>
+                {(['home', 'desk', 'returnFee'] as const).map((k) => (
+                  <th key={k} className="num">
+                    {t(`livraison.fees.${k}`)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((w) => (
+                <tr key={w}>
+                  <td data-l={t('livraison.fees.wilaya')}>{wilaya(w)}</td>
+                  {(['home', 'desk', 'returnFee'] as const).map((k) => (
+                    <td key={k} className="num" data-l={t(`livraison.fees.${k}`)}>
+                      <span className="ltr">{da(byW.get(w)?.[k] ?? null)}</span>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : (
         <div className="tbl-wrap" style={{ maxHeight: '55vh', overflow: 'auto' }}>
           <table className="tbl">
@@ -318,6 +410,134 @@ export function FeesModal({ company, onClose }: { company: Company; onClose: () 
             </tbody>
           </table>
         </div>
+      )}
+    </Modal>
+  );
+}
+
+/**
+ * A company's swap fees (a parcel given to another customer): same wilaya, other wilaya — ZR's from its API (shown), else
+ * typed here (saved with « Tarifs », or by `action` when the prices themselves are locked).
+ */
+function SwapFees({ company, swap, value, onChange, action }: { company: Company; swap: Out<'delivery.feesInfo'>['swap']; value: { same: string; other: string }; onChange: (v: { same: string; other: string }) => void; action?: ReactNode }) {
+  const { t } = useTranslation();
+  const field = (label: string, k: 'same' | 'other') => (
+    <label className="px-swapfee">
+      <span>{label}</span>
+      <span className="px-swapfee-in">
+        <input className="ltr" inputMode="numeric" value={value[k]} aria-label={`${t('livraison.fees.swapTitle')} · ${label}`} onChange={(e) => onChange({ ...value, [k]: e.target.value.replace(/[^\d]/g, '') })} />
+        <small>DA</small>
+      </span>
+    </label>
+  );
+  return (
+    <section className="px-swapfees">
+      <div className="px-swapfees-head">
+        <b>{t('livraison.fees.swapTitle')}</b>
+        <small>{t('livraison.fees.swapHelp')}</small>
+      </div>
+      {swap.fromApi ? (
+        <div className="px-swapfees-row">
+          <span className="px-swapfee">
+            <span>{t('livraison.fees.swapSame')}</span>
+            <b className="ltr">{da(swap.same)}</b>
+          </span>
+          <span className="px-swapfee">
+            <span>{t('livraison.fees.swapOther')}</span>
+            <b className="ltr">{da(swap.other)}</b>
+          </span>
+          <small className="px-swapfees-api">
+            <Icon name="lock" /> {t('livraison.fees.swapApi', { name: company.name })}
+          </small>
+        </div>
+      ) : (
+        <div className="px-swapfees-row">
+          {field(t('livraison.fees.swapSame'), 'same')}
+          {field(t('livraison.fees.swapOther'), 'other')}
+          {action}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------- alerts
+/**
+ * « Alertes » of one company: which of its statuses send an order to Suivi › Alertes — one or many (the same choice as
+ * Préférences › Alertes du Suivi). A status written the same way under a few codes is one choice.
+ */
+export function AlertsModal({ company, onClose }: { company: Company; onClose: () => void }) {
+  const { t } = useTranslation();
+  const q = useRpc('delivery.alertStatuses', {});
+  const save = useAction('delivery.saveAlertStatuses', { success: t('livraison.alertsCo.saved'), onDone: onClose });
+  const mine = q.data?.find((c) => c.companyId === company.id);
+  const chips = useMemo(() => {
+    const by = new Map<string, { key: string; label: string; codes: string[]; parcels: number; on: boolean }>();
+    for (const x of mine?.statuses ?? []) {
+      const label = x.label || x.status;
+      const key = label.toLowerCase();
+      const g = by.get(key) ?? { key, label, codes: [], parcels: 0, on: false };
+      g.codes.push(x.status);
+      g.parcels += x.parcels;
+      g.on = g.on || x.alert;
+      by.set(key, g);
+    }
+    return [...by.values()];
+  }, [mine]);
+  const [picked, setPicked] = useState<Set<string> | null>(null);
+  const chosen = picked ?? new Set(chips.filter((c) => c.on).map((c) => c.key));
+  const flip = (k: string) => {
+    const next = new Set(chosen);
+    if (next.has(k)) next.delete(k);
+    else next.add(k);
+    setPicked(next);
+  };
+  const codes = chips.filter((c) => chosen.has(c.key)).flatMap((c) => c.codes);
+  return (
+    <Modal
+      title={t('livraison.alertsCo.title', { name: company.name })}
+      onClose={onClose}
+      wide
+      footer={
+        <>
+          <small className="muted">{t('livraison.alertsCo.also')}</small>
+          <span className="grow" />
+          <button className="btn" onClick={onClose}>
+            {t('common.cancel')}
+          </button>
+          <button className="btn primary" disabled={save.isPending || !mine || picked === null} onClick={() => save.mutate({ companyId: company.id, alert: codes })}>
+            {t('common.save')}
+          </button>
+        </>
+      }
+    >
+      <p className="muted small">{t('livraison.alertsCo.help', { name: company.name })}</p>
+      {q.isLoading ? (
+        <Loading />
+      ) : q.error ? (
+        <ErrorBox error={q.error} onRetry={() => q.refetch()} />
+      ) : !chips.length ? (
+        <Empty>{t('livraison.alertsCo.empty', { name: company.name })}</Empty>
+      ) : (
+        <>
+          <ul className="px-alerts">
+            {chips.map((c) => {
+              const on = chosen.has(c.key);
+              return (
+                <li key={c.key}>
+                  <label className={`px-alert${on ? ' on' : ''}`}>
+                    <input type="checkbox" checked={on} onChange={() => flip(c.key)} />
+                    <span>
+                      <b>{c.label}</b>
+                      <small>{t('livraison.alertsCo.parcels', { count: c.parcels })}</small>
+                    </span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+          <p className={`small px-alerts-sum${chosen.size ? '' : ' none'}`}>{chosen.size ? t('livraison.alertsCo.on', { count: chosen.size }) : t('livraison.alertsCo.none', { name: company.name })}</p>
+        </>
       )}
     </Modal>
   );

@@ -263,6 +263,13 @@ async function swapCandidates(ctx: Ctx, fromId: number, q?: string) {
 export async function swapParcel(ctx: Ctx, fromId: number, toId: number, note?: string | null) {
   if (fromId === toId) throw bad('Choisissez une autre commande');
   const me = ctx.session.profile.id;
+  // what the company takes to give its parcel to another customer (same wilaya or another): on the new order's cost
+  const heads = await ctx.db.query('SELECT id, company_id, wilaya_id FROM orders WHERE id = ANY($1::bigint[])', [[fromId, toId]]);
+  const a0 = heads.find((r: any) => num(r.id) === fromId);
+  const b0 = heads.find((r: any) => num(r.id) === toId);
+  const sameWilaya = !!a0 && !!b0 && num(a0.wilaya_id) === num(b0.wilaya_id);
+  const sw = a0?.company_id ? await swapFees(ctx, num(a0.company_id)) : null;
+  const swapFee = (sw ? (sameWilaya ? sw.same : sw.other) : null) ?? 0;
   const res = await ctx.db.tx(async (tx) => {
     const A = (await tx.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [fromId]))[0];
     const B = (await tx.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [toId]))[0];
@@ -276,7 +283,7 @@ export async function swapParcel(ctx: Ctx, fromId: number, toId: number, note?: 
       `UPDATE orders SET company_id=$2, delivery_cost=$3, tracking=$4, ext_id=$5, label_url=$6, ext_status=NULL, ext_status_at=NULL,
          warehouse_id=COALESCE($7, warehouse_id), livreur_id=$8, follow_status='out_for_delivery', sub_status='livraison_swappe',
          prepared_at=COALESCE(prepared_at, $9::timestamptz), shipped_at=$9::timestamptz, updated_at=now(), version=version+1 WHERE id=$1`,
-      [B.id, A.company_id, num(A.delivery_cost) || num(B.delivery_cost), A.tracking, A.ext_id, A.label_url, A.warehouse_id, A.livreur_id, nowIso],
+      [B.id, A.company_id, (num(A.delivery_cost) || num(B.delivery_cost)) + swapFee, A.tracking, A.ext_id, A.label_url, A.warehouse_id, A.livreur_id, nowIso],
     );
     await tx.query(
       `UPDATE orders SET follow_status='cancelled', sub_status='annule_swappe', tracking=NULL, ext_id=NULL, label_url=NULL, ext_status=NULL, ext_status_at=NULL,
@@ -287,7 +294,8 @@ export async function swapParcel(ctx: Ctx, fromId: number, toId: number, note?: 
     await addEvent(tx, num(A.id), me, 'follow_status', A.follow_status, 'cancelled', `Colis swappé vers ${B.ref}${n}`, { swap_to: num(B.id), tracking: A.tracking });
     await addEvent(tx, num(A.id), me, 'sub_status', A.sub_status, 'annule_swappe', null);
     const was = B.follow_status === 'prepared' ? ' · était En dispatch (emballée) : colis à défaire' : ' · retirée de En préparation';
-    await addEvent(tx, num(B.id), me, 'follow_status', B.follow_status, 'out_for_delivery', `Colis swappé depuis ${A.ref} (${A.tracking ?? '—'})${was}${n}`, { swap_from: num(A.id), tracking: A.tracking });
+    const fee = swapFee ? ` · frais d’échange ${swapFee} DA (${sameWilaya ? 'même wilaya' : 'autre wilaya'})` : '';
+    await addEvent(tx, num(B.id), me, 'follow_status', B.follow_status, 'out_for_delivery', `Colis swappé depuis ${A.ref} (${A.tracking ?? '—'})${was}${fee}${n}`, { swap_from: num(A.id), tracking: A.tracking, swap_fee: swapFee });
     await addEvent(tx, num(B.id), me, 'sub_status', B.sub_status, 'livraison_swappe', null);
     const kind = A.company_id ? (await tx.query('SELECT kind FROM delivery_companies WHERE id=$1', [A.company_id]))[0]?.kind ?? null : null;
     return {

@@ -394,7 +394,8 @@
     "dup": "Doublon possible : une autre commande en cours avec ce numéro",
     "historyMore": "Voir tout l’historique ({{n}} commandes)",
     "historyLess": "Masquer l’historique",
-    "historyThis": "cette commande"
+    "historyThis": "cette commande",
+    "pay": "Paiement"
   },
   "ph": {
     "per": {
@@ -519,5 +520,12 @@
     "noIdAd": "Vient d’une pub, mais sans ID : ajoutez les « Paramètres d’URL » dans chaque pub Meta (Landing pages › Réglages).",
     "noAd": "Pas de pub reconnue (visite directe, ou pub sans « Paramètres d’URL »).",
     "searchHint": "Astuce : tapez l’ID de la pub dans la recherche des commandes pour voir toutes ses commandes."
+  },
+  "pay": {
+    "waiting": "Pas encore reçu",
+    "collected": "Encaissé par {{name}} : il va vous payer",
+    "ready": "Payé par {{name}} : à récupérer",
+    "received": "Argent reçu",
+    "ref": "paiement {{ref}}"
   }
 }
