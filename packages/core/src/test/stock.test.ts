@@ -136,11 +136,20 @@ test('purchase: stock comes in, the purchase price follows, payments up to the t
   assert.equal(r.due, 50_000);
   assert.equal(r.lineItems.length, 2);
   assert.equal(await qty(va.id, wid), qa + 10);
-  // two variants of one product: the purchase price is their weighted average
-  assert.equal(((await call('catalog.product', depot, { id: p.id })) as any).cost, 1750);
+  // Each variant keeps its own latest unit cost; a purchase never averages
+  // unrelated variant costs into the parent product.
+  const afterReceipt: any = await call('catalog.product', depot, { id: p.id });
+  assert.equal(afterReceipt.variants.find((v: any) => v.id === va.id).cost, 1000);
+  assert.equal(afterReceipt.variants.find((v: any) => v.id === vb.id).cost, 2000);
+  assert.equal(afterReceipt.cost, p.cost);
   const mv: any = await call('catalog.movements', depot, { variantId: va.id, pageSize: 1 });
   assert.equal(mv.rows[0].reason, 'purchase');
   assert.equal(mv.rows[0].purchaseRef, r.ref);
+  const receipt = (await db.query(
+    'SELECT unit_cost FROM stock_movements WHERE purchase_id = $1 AND variant_id = $2 ORDER BY id DESC LIMIT 1',
+    [r.id, va.id],
+  ))[0];
+  assert.equal(Number(receipt.unit_cost), 1000);
   await assert.rejects(call('purchases.pay', depot, { id: r.id, paid: 70_001 }), /dépasse/);
   const paid: any = await call('purchases.pay', depot, { id: r.id, paid: 70_000 });
   assert.equal(paid.due, 0);
@@ -157,7 +166,7 @@ test('purchase: stock comes in, the purchase price follows, payments up to the t
   assert.equal(unpaid.total, unpaid.summary.unpaid);
   assert.ok(!unpaid.rows.some((x: any) => x.id === r.id), 'paid in full');
   await call('purchases.create', depot, { supplierId: null, warehouseId: wid, lines: [{ variantId: va.id, qty: 1, unitCost: 1 }], updateCost: false });
-  assert.equal(((await call('catalog.product', depot, { id: p.id })) as any).cost, 1750);
+  assert.equal(((await call('catalog.product', depot, { id: p.id })) as any).variants.find((v: any) => v.id === va.id).cost, 1000);
   await assert.rejects(call('purchases.create', depot, { supplierId: null, warehouseId: wid, lines: [{ variantId: va.id, qty: 1, unitCost: 100 }], paid: 200 }), /dépasse/);
   const service = (await db.query('SELECT v.id FROM product_variants v JOIN products p ON p.id = v.product_id WHERE p.is_service LIMIT 1'))[0];
   if (service) await assert.rejects(call('purchases.create', depot, { supplierId: null, warehouseId: wid, lines: [{ variantId: Number(service.id), qty: 1, unitCost: 100 }] }), /service/);
