@@ -105,6 +105,7 @@ function ChiefTop() {
   const waiting = h.links.filter((l) => l.status === 'pending' && l.requestedBy === 'store');
   return (
     <>
+      <div className="card agx-hero"><div className="agx-hero-t"><b>{h.agency.name}</b><span className="agx-code">{h.agency.code ? <CopyCode code={h.agency.code} /> : '—'}</span></div></div>
       {!h.agency.verified && (
         <section className="card agx-banner" role="status">
           <Icon name="hourglass" />
@@ -116,7 +117,7 @@ function ChiefTop() {
                 <Icon name="checkcircle" /> {t('agency.home.step1')}
               </li>
               <li className={priced ? 'done' : ''}>
-                <Icon name={priced ? 'checkcircle' : 'tag'} /> <a href="#/reglages">{t('agency.home.step2')}</a>
+                <Icon name={priced ? 'checkcircle' : 'tag'} /> <a href="#/facturation">{t('agency.home.step2')}</a>
               </li>
               <li className={agents > 0 ? 'done' : ''}>
                 <Icon name={agents > 0 ? 'checkcircle' : 'users'} /> <a href="#/utilisateurs">{t('agency.home.step3')}</a>
@@ -271,7 +272,7 @@ function SellerList() {
   );
 }
 
-/** « Ajouter un vendeur »: its code, then the tasks and the prices for it. */
+/** « Ajouter un vendeur »: use the rates saved under Facturation, never ask for rates in invitations. */
 function FindStore({ h }: { h: Home }) {
   const { t } = useTranslation();
   const tp = useTp();
@@ -279,7 +280,6 @@ function FindStore({ h }: { h: Home }) {
   const [code, setCode] = useState('');
   const [found, setFound] = useState<Out<'agency.find'> | null>(null);
   const [tasks, setTasks] = useState<AgencyTask[]>(kind === 'marketer' ? ['marketing'] : ['confirmation']);
-  const [prices, setPrices] = useState<AgencyPrices>(h.agency.prices ?? NO_AGENCY_PRICES);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const ask = useAction('agency.request', { success: t('agency.requestSent'), onDone: () => (setFound(null), setCode('')) });
@@ -290,7 +290,6 @@ function FindStore({ h }: { h: Home }) {
     setBusy(true);
     try {
       setFound(await rpc('agency.find', { code }));
-      setPrices(h.agency.prices ?? NO_AGENCY_PRICES);
     } catch (x: any) {
       setErr(x?.message ?? t('common.error'));
     } finally {
@@ -326,16 +325,12 @@ function FindStore({ h }: { h: Home }) {
                   <TaskPicker value={tasks} onChange={setTasks} />
                 </Field>
               )}
-              <div className="agx-sub">
-                <b>{t('agency.pricesFor', { store: found.store.name })}</b>
-                <Lead>{t('agency.pricesForText')}</Lead>
-                <PriceEditor value={prices} onChange={setPrices} />
-              </div>
+              {!hasPrice(h.agency.prices ?? NO_AGENCY_PRICES) && <p className="agx-note warn">{t('agency.store.noPriceYet')} <a href="#/facturation">{t('agency.mnav.facturation')}</a></p>}
               <div className="row agx-actions">
                 <button type="button" className="btn" onClick={() => setFound(null)}>
                   {t('common.cancel')}
                 </button>
-                <button type="button" className="btn primary" disabled={!tasks.length || !hasPrice(prices) || ask.isPending || !h.agency.verified} onClick={() => ask.mutate({ storeId: found.store.id, tasks, prices })}>
+                <button type="button" className="btn primary" disabled={!tasks.length || !hasPrice(h.agency.prices ?? NO_AGENCY_PRICES) || ask.isPending || !h.agency.verified} onClick={() => ask.mutate({ storeId: found.store.id, tasks })}>
                   <Icon name="send" /> {t('agency.sendRequest')}
                 </button>
               </div>
@@ -628,6 +623,23 @@ function PricesModal({ l, onClose }: { l: AgencyLinkInfo; onClose: () => void })
   );
 }
 
+/** Agency-wide tariff editor: the only place to set the default rate used for new invitations. */
+function AgencyRates() {
+  const { t } = useTranslation();
+  const q = useHome();
+  const [p, setP] = useState<AgencyPrices | null>(null);
+  const save = useAction('agency.prices', { success: t('agency.pricesSaved') });
+  useEffect(() => { if (q.data && p === null) setP(q.data.agency.prices ?? NO_AGENCY_PRICES); }, [q.data, p]);
+  if (!q.data || !p) return null;
+  return <Card title={t('agency.tarifs.title')} help={t('agency.tarifs.help')}>
+    <Lead>{t('agency.tarifs.text')}</Lead>
+    <PriceEditor value={p} onChange={setP} />
+    <div className="row agx-actions">
+      <button type="button" className="btn primary" disabled={save.isPending || !hasPrice(p)} onClick={() => save.mutate({ prices: p })}>{t('common.save')}</button>
+    </div>
+  </Card>;
+}
+
 // ---------------------------------------------------------------- Facturation
 /** Each seller's month: its numbers, what they make, and the payment: asked → paid (the seller) → received (us). */
 export function Facturation(_: PageProps) {
@@ -645,6 +657,7 @@ export function Facturation(_: PageProps) {
   const total = rows.reduce((s, r) => s + r.bill.total, 0);
   return (
     <div className="agx-page">
+      {!mk && <AgencyRates />}
       <Card title={t('agency.fact.title', { m: monthLabel(month, i18n.language) })} help={tp('fact.help')} actions={<MonthPicker value={month} max={max} onChange={setMonth} />}>
         <Kpis>
           <KpiBox icon="coins" label={t('agency.fact.total')} value={da(total)} sub={t('agency.fact.totalSub', { count: rows.length })} />
@@ -777,6 +790,7 @@ export function AgencySettings(_: PageProps) {
     <div className="agx-page">
       <section className="card agx-hero">
         <div className="agx-hero-t">
+          <strong>{q.data!.agency.name}</strong>
           <small>{tp('home.yourCode')}</small>
           <span className="agx-code">{q.data!.agency.code ? <CopyCode code={q.data!.agency.code} /> : '—'}</span>
           <p className="muted">{tp('home.codeText')}</p>
@@ -786,15 +800,7 @@ export function AgencySettings(_: PageProps) {
         </a>
       </section>
       <div className="agx-grid-2">
-        <Card title={t('agency.tarifs.title')} help={t('agency.tarifs.help')}>
-          <Lead>{tp('tarifs.text')}</Lead>
-          <PriceEditor value={p} onChange={setP} />
-          <div className="row agx-actions">
-            <button type="button" className="btn primary" disabled={save.isPending || !hasPrice(p)} onClick={() => save.mutate({ prices: p })}>
-              {t('common.save')}
-            </button>
-          </div>
-        </Card>
+        <Card title={t('agency.tarifs.title')}><p><a href="#/facturation">{t('agency.mnav.facturation')}</a></p></Card>
         <Card title={t('agency.tarifs.example')} help={t('agency.tarifs.exampleHelp')}>
           <Lead>
             {kind === 'marketer'
