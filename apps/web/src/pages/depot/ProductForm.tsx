@@ -79,7 +79,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
     alertQty: String(p?.alertQty ?? 0),
     defaultCompanyId: p?.defaultCompanyId ? String(p.defaultCompanyId) : '',
   });
-  const [vars, setVars] = useState<VRow[]>(() => (p?.variants ?? []).filter((v: any) => v.title !== '').map((v: any) => ({ id: v.id, title: v.title, sku: v.sku, price: v.price === null ? '' : String(v.price), cost: v.cost == null ? '' : String(v.cost), maxDiscount: v.maxDiscount == null ? '' : String(v.maxDiscount), weightKg: v.weightKg == null ? '' : String(v.weightKg), alertQty: v.alertQty == null ? '' : String(v.alertQty), feeGrid: v.feeGrid ?? '', active: v.active })));
+  const [vars, setVars] = useState<VRow[]>(() => (p?.variants ?? []).filter((v: any) => v.title !== '').map((v: any) => ({ id: v.id, title: v.title, sku: v.sku, price: v.price === null ? '' : String(v.price), cost: v.cost == null ? '' : String(v.cost), maxDiscount: v.maxDiscount == null ? '' : String(v.maxDiscount), weightKg: v.weightKg == null ? '' : String(v.weightKg), alertQty: v.alertQty == null ? '' : String(v.alertQty), feeGrid: v.feeGrid ?? '', photo: v.photo ?? '', active: v.active })));
   // Options (Taille, Couleur, Fille / Garçon…): the variants are made from them. A product made before, with variants typed
   // one by one, keeps that list until « Organiser en options » is chosen.
   const [opts, setOpts] = useState<Opt[]>(() => (p?.options ?? []).map((o: Opt) => ({ name: o.name, values: [...o.values] })));
@@ -135,6 +135,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
     const weightKg = (v: VRow) => v.weightKg === '' ? null : Number(v.weightKg);
     const alertQty = (v: VRow) => v.alertQty === '' ? null : Math.round(Number(v.alertQty));
     const feeGrid = (v: VRow) => v.feeGrid || null;
+    const photo = (v: VRow) => v.photo || null;
     const base = f.sku.trim() || f.name.trim();
     const want = new Set(combos.map((c) => titleOf(c).toLowerCase()));
     const variants = optMode
@@ -142,11 +143,11 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
           // one per combination: a new one only when ticked; one already saved keeps its id (and is switched off when unticked)
           ...combos.flatMap((c) => {
             const v = vars.find((x) => x.title.trim().toLowerCase() === titleOf(c).toLowerCase());
-            return v && (v.id || v.active) ? [{ id: v.id, title: titleOf(c), sku: v.sku.trim() || (v.id ? null : skuOf(base, c)), price: price(v), cost: cost(v), maxDiscount: maxDiscount(v), weightKg: weightKg(v), alertQty: alertQty(v), feeGrid: feeGrid(v), active: v.active }] : [];
+            return v && (v.id || v.active) ? [{ id: v.id, title: titleOf(c), sku: v.sku.trim() || (v.id ? null : skuOf(base, c)), price: price(v), cost: cost(v), maxDiscount: maxDiscount(v), weightKg: weightKg(v), alertQty: alertQty(v), feeGrid: feeGrid(v), photo: photo(v), active: v.active }] : [];
           }),
-          ...vars.filter((v) => v.id && !want.has(v.title.trim().toLowerCase())).map((v) => ({ id: v.id, title: v.title.trim(), sku: v.sku.trim() || null, price: price(v), cost: cost(v), maxDiscount: maxDiscount(v), weightKg: weightKg(v), alertQty: alertQty(v), feeGrid: feeGrid(v), active: v.active })),
+          ...vars.filter((v) => v.id && !want.has(v.title.trim().toLowerCase())).map((v) => ({ id: v.id, title: v.title.trim(), sku: v.sku.trim() || null, price: price(v), cost: cost(v), maxDiscount: maxDiscount(v), weightKg: weightKg(v), alertQty: alertQty(v), feeGrid: feeGrid(v), photo: photo(v), active: v.active })),
         ]
-      : vars.filter((v) => v.title.trim() || v.id).map((v) => ({ id: v.id, title: v.title.trim(), sku: v.sku.trim() || null, price: price(v), cost: cost(v), maxDiscount: maxDiscount(v), weightKg: weightKg(v), alertQty: alertQty(v), feeGrid: feeGrid(v), active: v.active }));
+      : vars.filter((v) => v.title.trim() || v.id).map((v) => ({ id: v.id, title: v.title.trim(), sku: v.sku.trim() || null, price: price(v), cost: cost(v), maxDiscount: maxDiscount(v), weightKg: weightKg(v), alertQty: alertQty(v), feeGrid: feeGrid(v), photo: photo(v), active: v.active }));
     if (variantPricing && !p && variants.some((v) => v.active && (v.price == null || v.cost == null))) return toast('Enter selling and purchase prices for each active variant.', 'bad');
     if (services.some((s) => !s.name.trim() || s.price === '' || s.cost === '')) return toast('Enter a name, selling price and service cost for each additional service.', 'bad');
     save.mutate({
@@ -215,9 +216,9 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
             <Field label={<Req>{t('produits.form.name')}</Req>}>
               <input required value={f.name} onChange={(e) => set('name', e.target.value)} />
             </Field>
-            <Field label={t('produits.form.sku')} hint={!p ? t('produits.form.skuAuto') : undefined}>
+            {!variantPricing && <Field label={t('produits.form.sku')} hint={!p ? t('produits.form.skuAuto') : undefined}>
               <input className="ltr" value={f.sku} onChange={(e) => set('sku', e.target.value)} />
-            </Field>
+            </Field>}
             <Field label={t('produits.form.barcode')}>
               <input className="ltr" value={f.barcode} onChange={(e) => set('barcode', e.target.value)} />
             </Field>
@@ -339,7 +340,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
                   <Icon name="layers" />
                   {t('produits.form.opt.organize')}
                 </button>
-                <button type="button" className="btn small primary" onClick={() => setVars([...vars, { title: '', sku: '', price: '', cost: '', maxDiscount: '', weightKg: '', alertQty: '', feeGrid: '', active: true }])}>
+                <button type="button" className="btn small primary" onClick={() => setVars([...vars, { title: '', sku: '', price: '', cost: '', maxDiscount: '', weightKg: '', alertQty: '', feeGrid: '', photo: '', active: true }])}>
                   <Icon name="plus" />
                   {t('produits.form.addVariant')}
                 </button>
@@ -347,7 +348,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
             )}
           </div>
           {optMode ? (
-            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseCost={Number(f.cost) || 0} baseSku={f.sku.trim() || f.name.trim()} used={usedValues} skipped={skipped} admin={admin} feeGrids={grids.data?.grids ?? []} />
+            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseCost={Number(f.cost) || 0} baseSku={f.sku.trim() || f.name.trim()} used={usedValues} skipped={skipped} admin={admin} feeGrids={grids.data?.grids ?? []} onPhotoFile={thumb} />
           ) : (
             <>
               {vars.length ? (
@@ -355,6 +356,8 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
                   {vars.map((v, i) => (
                     <div key={v.id ?? `n${i}`} className="item-row bjpv-row">
                       <input aria-label={t('produits.form.variants')} value={v.title} placeholder={t('produits.form.variantPh')} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, title: e.target.value } : x)))} />
+                      {v.photo && <img src={v.photo} alt={v.title} style={{ width: 42, height: 42, objectFit: 'contain' }} />}
+                      <input type="file" accept="image/*" aria-label={`Picture ${v.title}`} onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; try { const photo = await thumb(file); setVars((prev) => prev.map((x, k) => k === i ? { ...x, photo } : x)); } catch { toast(t('produits.form.photoBad'), 'bad'); } }} />
                       <input aria-label="SKU" className="ltr" value={v.sku} placeholder="SKU" onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, sku: e.target.value } : x)))} />
                       <input type="number" min={0} step={50} aria-label={t('produits.form.variantPrice')} value={v.price} placeholder={t('produits.form.variantPrice')} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, price: e.target.value } : x)))} />
                       <input type="number" min={0} step={50} aria-label="Purchase price" value={v.cost} placeholder="Purchase price" onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, cost: e.target.value } : x)))} />
