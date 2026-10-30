@@ -613,3 +613,14 @@ a.chip.lp-nolp:hover { text-decoration: underline; }
   .pd-imp-lines { display: none; }
   .pd-imp-row .pd-name, .pd-imp-vars, .pd-imp-msgs { grid-column: 1 / -1; }
 }
+
+/* Expanded product variant list, displayed directly under the product row. */
+.pd-product-group { border-bottom: 1px solid var(--line, #e0e4eb); }
+.pd-product-group > .pd-prows { border-bottom: 0; }
+.pd-variant-detail { margin: 0 14px 14px; border: 1px solid var(--line, #dfe3eb); border-radius: 10px; overflow-x: auto; }
+.pd-variant-head, .pd-variant-line { display: grid; grid-template-columns: minmax(120px, 1.3fr) minmax(95px, 1fr) 125px 125px 90px 100px; align-items: center; gap: 10px; padding: 10px 14px; min-width: 720px; }
+.pd-variant-head { background: var(--surface-alt, #f4f6f9); font-weight: 700; font-size: 11px; text-transform: uppercase; }
+.pd-variant-line + .pd-variant-line { border-top: 1px solid var(--line, #e0e4eb); }
+.pd-variant-line > span { font-size: 13px; }
+.pd-availability { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.pd-availability input[type=checkbox] { width: 17px; height: 17px; cursor: pointer; }
