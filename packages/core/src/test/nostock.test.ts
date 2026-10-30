@@ -35,7 +35,7 @@ const waitingOrder = async (qty: number) => {
   return Number(o.id);
 };
 const state = async (id: number) => (await db.query('SELECT conf_status, follow_status FROM orders WHERE id = $1', [id]))[0];
-const entry = (qty: number) => call('catalog.move', karim, { variantId: X.variantId, warehouseId: wh, kind: 'entry', qty });
+const entry = (qty: number) => call('catalog.move', karim, { variantId: X.variantId, warehouseId: wh, kind: 'entry', qty, unitCost: 1000 });
 
 test('stock comes back: the oldest that can be served whole goes to « À préparer » by itself', async () => {
   const a = await waitingOrder(1);
