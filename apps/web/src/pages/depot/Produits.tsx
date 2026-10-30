@@ -288,6 +288,7 @@ function ProductsTab() {
                 onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), setEdit(p.id))}
               >
                 <span className="a-name pd-prod">
+                  {detailed.length > 0 && <button type="button" className="btn small ghost" aria-label={openProduct.has(p.id) ? `Collapse ${p.name} variants` : `Expand ${p.name} variants`} aria-expanded={openProduct.has(p.id)} onClick={(e) => { e.stopPropagation(); toggleOpen(p.id); }}>{openProduct.has(p.id) ? '▾' : '▸'}</button>}
                   <span className="pd-thumb" aria-hidden="true">
                     {p.photo ? <img src={p.photo} alt="" loading="lazy" /> : <Icon name={p.isService ? 'sparkles' : 'package'} />}
                   </span>
@@ -309,11 +310,7 @@ function ProductsTab() {
                   </span>
                 </span>
                 <span className="a-vars pd-vars">
-                  {detailed.length > 0 && (
-                    <button type="button" className="btn small ghost" style={{ marginBottom: 4 }} aria-expanded={openProduct.has(p.id)} onClick={(e) => { e.stopPropagation(); toggleOpen(p.id); }}>
-                      {openProduct.has(p.id) ? '▾' : '▸'} {detailed.length} variants
-                    </button>
-                  )}
+                  {detailed.length > 0 && <small>{detailed.length} variants</small>}
                   {p.options.length ? (
                     // made from options (Taille, Couleur…): the options, not 20 names
                     <span className="pd-opts">
@@ -368,7 +365,7 @@ function ProductsTab() {
                   </div>
                   {detailed.map((v) => (
                     <div key={v.id} className="pd-variant-line">
-                      <b>{v.title}</b>
+                      <b style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{v.photo && <img src={v.photo} alt="" style={{ width: 38, height: 38, objectFit: 'contain', borderRadius: 5 }} />}{v.title}</b>
                       <span className="ltr">{v.sku}</span>
                       <span>{da(v.cost ?? p.cost)}</span>
                       <span>{da(v.price ?? p.price)}</span>
