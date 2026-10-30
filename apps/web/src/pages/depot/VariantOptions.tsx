@@ -269,7 +269,7 @@ export function VariantOptions({
                     <th key={k}>{o.name}</th>
                   ))}
                   <th>Photo</th>
-                  <th>SKU</th>
+                  <th>Variant SKU</th>
                   <th>Purchase (DA)</th>
                   <th>Sale (DA)</th>
                   <th>Max. discount (DA)</th>
@@ -295,7 +295,7 @@ export function VariantOptions({
                         </td>
                       ))}
                       <td data-l="Photo">{basePhoto ? <img src={basePhoto} alt="" style={{ width: 42, height: 42, borderRadius: 6, objectFit: 'contain' }} /> : <Icon name="package" />}</td>
-                      <td data-l="SKU"><span className="ltr" title="Unique variant SKU generated from product SKU">{v.sku || skuOf(baseSku, c)}</span></td>
+                      <td data-l="Variant SKU"><input className="ltr" value={v.sku} placeholder={skuOf(baseSku, c)} aria-label={`SKU ${title}`} onChange={(e) => editRow(title, { sku: e.target.value })} /></td>
                       <td data-l="Purchase (DA)"><span className="ltr">{bidi(da(baseCost))}</span></td>
                       <td data-l="Sale (DA)"><span className="ltr">{bidi(da(basePrice))}</span></td>
                       <td data-l="Max. discount (DA)"><span className="ltr">{baseDiscount === null ? '—' : bidi(da(baseDiscount))}</span></td>
