@@ -19,6 +19,7 @@ interface PartRow {
   name: string;
   max: string;
 }
+interface ServiceRow { id?: number; name: string; price: string; cost: string; }
 
 /** a field the form cannot be saved without */
 const Req = ({ children }: { children: ReactNode }) => (
@@ -90,6 +91,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
     return new Set(combosOf(p?.options ?? []).map((c) => titleOf(c).toLowerCase()).filter((x) => !saved.has(x)));
   });
   const [packs, setPacks] = useState<PackRow[]>(() => (p?.packs ?? []).map((x: any) => ({ qty: String(x.qty), price: String(x.price) })));
+  const [services, setServices] = useState<ServiceRow[]>(() => (p?.services ?? []).map((s: any) => ({ id: s.id, name: s.name, price: String(s.price), cost: String(s.cost) })));
   const [hasParts, setHasParts] = useState((p?.parts ?? []).length > 0);
   const [parts, setParts] = useState<PartRow[]>(() => (p?.parts ?? []).map((x: any) => ({ name: x.name, max: x.max === null ? '' : String(x.max) })));
   const [linked, setLinked] = useState<Set<number>>(() => new Set(p?.linked ?? []));
@@ -146,6 +148,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
         ]
       : vars.filter((v) => v.title.trim() || v.id).map((v) => ({ id: v.id, title: v.title.trim(), sku: v.sku.trim() || null, price: price(v), cost: cost(v), maxDiscount: maxDiscount(v), weightKg: weightKg(v), alertQty: alertQty(v), feeGrid: feeGrid(v), active: v.active }));
     if (variantPricing && !p && variants.some((v) => v.active && (v.price == null || v.cost == null))) return toast('Enter selling and purchase prices for each active variant.', 'bad');
+    if (services.some((s) => !s.name.trim() || s.price === '' || s.cost === '')) return toast('Enter a name, selling price and service cost for each additional service.', 'bad');
     save.mutate({
       id: p?.id,
       name: f.name.trim(),
@@ -172,6 +175,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
       packs: packs.filter((x) => Number(x.qty) > 1 && Number(x.price) > 0).map((x) => ({ qty: Math.round(Number(x.qty)), price: Math.round(Number(x.price)) })),
       linked: [...linked],
       parts: hasParts ? parts.filter((x) => x.name.trim()).map((x) => ({ name: x.name.trim(), max: x.max === '' ? null : Math.round(Number(x.max)) || null })) : [],
+      services: services.map((x) => ({ id: x.id, name: x.name.trim(), price: Math.round(Number(x.price)), cost: Math.round(Number(x.cost)) })),
     });
   };
 
@@ -414,8 +418,21 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
           </div>
         </section>
 
-        <details className="pf-sec pf-more" open={!!p && (packs.length > 0 || hasParts || linked.size > 0)}>
+        <details className="pf-sec pf-more" open={services.length > 0 || (!!p && (packs.length > 0 || hasParts || linked.size > 0))}>
           <summary>{t('produits.form.more')}</summary>
+        <h3>Additional paid services</h3>
+        <p className="muted small">Optional add-ons such as Montage are offered in new orders as linked services. They have a selling price and a service cost and do not consume physical stock.</p>
+        <div className="items-ed">
+          {services.map((sv, index) => (
+            <div key={sv.id ?? `new-${index}`} className="item-row bjpt-row">
+              <input aria-label="Service name" placeholder="Montage" value={sv.name} onChange={(e) => setServices((old) => old.map((x, k) => k === index ? { ...x, name: e.target.value } : x))} />
+              <input aria-label="Service selling price (DA)" type="number" min={0} step={50} placeholder="Selling price (DA)" value={sv.price} onChange={(e) => setServices((old) => old.map((x, k) => k === index ? { ...x, price: e.target.value } : x))} />
+              <input aria-label="Service cost (DA)" type="number" min={0} step={50} placeholder="Service cost (DA)" value={sv.cost} onChange={(e) => setServices((old) => old.map((x, k) => k === index ? { ...x, cost: e.target.value } : x))} />
+              <button type="button" className="icon-btn" aria-label="Remove service" onClick={() => setServices((old) => old.filter((_, k) => k !== index))}>✕</button>
+            </div>
+          ))}
+          <button type="button" className="btn small" onClick={() => setServices((old) => [...old, { name: '', price: '', cost: '' }])}>+ Add paid service</button>
+        </div>
         <h3>{t('produits.form.parts')}</h3>
         <Field label={t('produits.form.hasParts')}>
           <select value={hasParts ? 'yes' : 'no'} onChange={(e) => setHasParts(e.target.value === 'yes')}>
