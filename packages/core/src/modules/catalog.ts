@@ -496,7 +496,7 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
     if (!i.isService && i.alertQty !== undefined && (!cur || i.alertQty !== num(cur.alert_qty)))
       await tx.query(
         `INSERT INTO stock (variant_id, warehouse_id, qty, alert_qty)
-         SELECT v.id, w.id, 0, $2 FROM product_variants v CROSS JOIN warehouses w WHERE v.product_id = $1 AND w.active
+         SELECT v.id, w.id, 0, $2 FROM product_variants v CROSS JOIN warehouses w WHERE v.product_id = $1 AND w.active AND v.alert_qty IS NULL
          ON CONFLICT (variant_id, warehouse_id) DO UPDATE SET alert_qty = EXCLUDED.alert_qty`,
         [productId, i.alertQty],
       );
