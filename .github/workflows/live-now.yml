@@ -1,5 +1,4 @@
-# Temporary (for Claude): is pilotix.online answering right now? Through Cloudflare and straight from the server.
-# Reads only: nothing on the server changes.
+# Temporary (for Claude): is the backup door (direct.pilotix.online) set up and answering? Reads only.
 name: Live now (temporary, for Claude)
 on:
   push:
@@ -11,14 +10,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Is the site up?
+      - name: Backup door
         env:
           HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
           IP=$(getent ahostsv4 "$HOST" | awk 'NR==1{print $1}'); echo "::add-mask::$IP"
-          for p in / /api/auth/demo /api/platform/health; do
-            r=$(curl -s -m 25 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0" -o /tmp/b -w '%{http_code} %{time_total}s' "https://pilotix.online$p" || echo "curl failed $?")
-            echo "::notice title=Cloudflare $p::$r $(head -c 140 /tmp/b 2>/dev/null | tr -cd '[:print:]')"
-            r=$(curl -s -m 25 --resolve "pilotix.online:443:$IP" -o /tmp/d -w '%{http_code} %{time_total}s' "https://pilotix.online$p" || echo "curl failed $?")
-            echo "::notice title=Server $p::$r $(head -c 140 /tmp/d 2>/dev/null | tr -cd '[:print:]')"
-          done
+          D=$(dig +short A direct.pilotix.online @1.1.1.1 | tail -1)
+          if [ -n "$D" ]; then echo "::add-mask::$D"; fi
+          if [ -z "$D" ]; then echo "::notice title=DNS::direct.pilotix.online has no A record yet"
+          elif [ "$D" = "$IP" ]; then echo "::notice title=DNS::direct.pilotix.online points straight to the server (DNS only)"
+          else echo "::notice title=DNS::direct.pilotix.online has an A record, but not the server's address (orange cloud, or another address)"; fi
+          r=$(curl -s -m 40 -o /tmp/b -w '%{http_code}' https://direct.pilotix.online/api/auth/demo || echo "curl failed $?")
+          echo "::notice title=HTTPS direct::$r $(head -c 100 /tmp/b 2>/dev/null | tr -cd '[:print:]')"
+          h=$(curl -sI -m 30 https://direct.pilotix.online/ 2>/dev/null | grep -i '^server:\|^cf-ray:' | tr -d '\r' | tr '\n' ' ')
+          echo "::notice title=Headers::${h:-none}"
