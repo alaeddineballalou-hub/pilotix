@@ -5,7 +5,7 @@ import { useAction, useRpc } from '../../lib/query';
 
 const money=(x:number)=>Math.round(x).toLocaleString('fr-FR')+' DA';
 const number=(x:string)=>Math.max(0,Number(x)||0);
-const FIELD: React.CSSProperties={maxWidth:220};
+const FIELD={maxWidth:220};
 type Plan={id:number;kind:'billing'|'agent';name:string;configuration:ManagementPlanConfig;active:boolean};
 export function ManagementPlans(){
   const q=useRpc('management.plans',{});
