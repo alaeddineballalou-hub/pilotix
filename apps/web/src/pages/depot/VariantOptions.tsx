@@ -14,6 +14,9 @@ export interface VRow {
   price: string;
   cost: string;
   maxDiscount: string;
+  weightKg: string;
+  alertQty: string;
+  feeGrid: string;
   active: boolean;
 }
 export interface Opt {
@@ -50,7 +53,7 @@ export function reconcile(prev: VRow[], opts: Opt[], skipped: Set<string> = new 
   const want = new Set(combos.map((c) => low(titleOf(c))));
   const keep = prev.filter((v) => v.id || want.has(low(v.title)));
   const have = new Set(keep.map((v) => low(v.title)));
-  const add = combos.filter((c) => !have.has(low(titleOf(c)))).map((c) => ({ title: titleOf(c), sku: '', price: '', cost: '', maxDiscount: '', active: !skipped.has(low(titleOf(c))) }));
+  const add = combos.filter((c) => !have.has(low(titleOf(c)))).map((c) => ({ title: titleOf(c), sku: '', price: '', cost: '', maxDiscount: '', weightKg: '', alertQty: '', feeGrid: '', active: !skipped.has(low(titleOf(c))) }));
   return add.length || keep.length !== prev.length ? [...keep, ...add] : prev;
 }
 
@@ -127,6 +130,7 @@ export function VariantOptions({
   used,
   skipped,
   admin,
+  feeGrids,
 }: {
   opts: Opt[];
   setOpts: (o: Opt[]) => void;
@@ -139,6 +143,7 @@ export function VariantOptions({
   /** combinations the saved product does not have (unticked when it was saved) */
   skipped: Set<string>;
   admin: boolean;
+  feeGrids: string[];
 }) {
   const { t } = useTranslation();
   const combos = useMemo(() => combosOf(opts), [opts]);
@@ -162,9 +167,9 @@ export function VariantOptions({
   // « Mettre le prix … » for all variants, or those with one value (e.g. every 16P)
   const [bulkOn, setBulkOn] = useState('*');
   const [bulkPrice, setBulkPrice] = useState('');
-  const [bulkField, setBulkField] = useState<'price' | 'cost' | 'maxDiscount'>('price');
+  const [bulkField, setBulkField] = useState<'price' | 'cost' | 'maxDiscount' | 'weightKg' | 'alertQty' | 'feeGrid'>('price');
   const applyBulk = () => {
-    if (bulkPrice === '') return;
+    if (bulkPrice === '' || (bulkField !== 'feeGrid' && (!Number.isFinite(Number(bulkPrice)) || Number(bulkPrice) < 0))) return;
     const [k, v] = bulkOn === '*' ? [-1, ''] : [Number(bulkOn.split('|')[0]), bulkOn.slice(bulkOn.indexOf('|') + 1)];
     const hit = new Set(combos.filter((c) => k < 0 || low(c[k]) === low(v)).map((c) => low(titleOf(c))));
     setVars((prev) => prev.map((x) => (hit.has(low(x.title)) ? { ...x, [bulkField]: bulkPrice } : x)));
@@ -238,12 +243,15 @@ export function VariantOptions({
                   )),
                 )}
               </select>
-              <select value={bulkField} onChange={(e) => setBulkField(e.target.value as 'price' | 'cost' | 'maxDiscount')} aria-label="Price field">
+              <select value={bulkField} onChange={(e) => setBulkField(e.target.value as 'price' | 'cost' | 'maxDiscount' | 'weightKg' | 'alertQty' | 'feeGrid')} aria-label="Price field">
                 <option value="price">Selling price</option>
                 <option value="cost">Purchase price</option>
                 {admin && <option value="maxDiscount">Max. discount</option>}
+                <option value="weightKg">Weight (kg)</option>
+                <option value="alertQty">Minimum stock</option>
+                <option value="feeGrid">Delivery grid</option>
               </select>
-              <input type="number" min={0} step={50} value={bulkPrice} placeholder={String(basePrice || '')} aria-label={t('produits.form.opt.colPrice')} onChange={(e) => setBulkPrice(e.target.value)} />
+              {bulkField === 'feeGrid' ? <select value={bulkPrice} onChange={(e) => setBulkPrice(e.target.value)} aria-label="Delivery grid"><option value="">Product default</option>{feeGrids.map((g) => <option key={g} value={g}>{g}</option>)}</select> : <input type="number" min={0} step={bulkField === 'weightKg' ? 0.1 : bulkField === 'alertQty' ? 1 : 50} value={bulkPrice} placeholder={String(basePrice || '')} aria-label="Bulk value" onChange={(e) => setBulkPrice(e.target.value)} />}
               <button type="button" className="btn small" disabled={bulkPrice === ''} onClick={applyBulk}>
                 {t('produits.form.opt.bulkApply')}
               </button>
@@ -261,6 +269,10 @@ export function VariantOptions({
                   <th>{t('produits.form.opt.colPrice')}</th>
                   <th>Purchase price (DA)</th>
                   <th>Max. discount (DA)</th>
+                  <th>Weight (kg)</th>
+                  <th>Minimum stock</th>
+                  <th>Delivery grid</th>
+                  <th>Margin (DA)</th>
                 </tr>
               </thead>
               <tbody>
@@ -286,6 +298,10 @@ export function VariantOptions({
                       </td>
                       <td data-l="Purchase price (DA)"><input type="number" min={0} step={50} value={v.cost} aria-label={`Purchase price ${title}`} onChange={(e) => editRow(title, { cost: e.target.value })} /></td>
                       <td data-l="Max. discount (DA)"><input type="number" min={0} step={50} value={v.maxDiscount} disabled={!admin} aria-label={`Max. discount ${title}`} onChange={(e) => editRow(title, { maxDiscount: e.target.value })} /></td>
+                      <td data-l="Weight (kg)"><input type="number" min={0} max={1000} step={0.1} value={v.weightKg} aria-label={`Weight ${title}`} onChange={(e) => editRow(title, { weightKg: e.target.value })} /></td>
+                      <td data-l="Minimum stock"><input type="number" min={0} step={1} value={v.alertQty} aria-label={`Minimum stock ${title}`} onChange={(e) => editRow(title, { alertQty: e.target.value })} /></td>
+                      <td data-l="Delivery grid"><select value={v.feeGrid} aria-label={`Delivery grid ${title}`} onChange={(e) => editRow(title, { feeGrid: e.target.value })}><option value="">Product default</option>{feeGrids.map((g) => <option key={g} value={g}>{g}</option>)}</select></td>
+                      <td data-l="Margin (DA)">{v.price !== '' && v.cost !== '' ? bidi(da(Number(v.price) - Number(v.cost))) : '—'}</td>
                     </tr>
                   );
                 })}
@@ -308,6 +324,9 @@ export function VariantOptions({
                 <input type="number" min={0} step={50} value={v.price} placeholder={t('produits.form.variantPrice')} aria-label={t('produits.form.variantPrice')} onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, price: e.target.value } : x)))} />
                 <input type="number" min={0} step={50} value={v.cost} placeholder="Purchase price" aria-label="Purchase price" onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, cost: e.target.value } : x)))} />
                 <input type="number" min={0} step={50} value={v.maxDiscount} disabled={!admin} placeholder="Max. discount" aria-label="Max. discount" onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, maxDiscount: e.target.value } : x)))} />
+                <input type="number" min={0} step={0.1} value={v.weightKg} placeholder="Weight (kg)" aria-label="Weight" onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, weightKg: e.target.value } : x)))} />
+                <input type="number" min={0} step={1} value={v.alertQty} placeholder="Minimum stock" aria-label="Minimum stock" onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, alertQty: e.target.value } : x)))} />
+                <select value={v.feeGrid} aria-label="Delivery grid" onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, feeGrid: e.target.value } : x)))}><option value="">Product default</option>{feeGrids.map((g) => <option key={g} value={g}>{g}</option>)}</select>
                 <label className="check">
                   <input type="checkbox" checked={v.active} onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, active: e.target.checked } : x)))} />
                   {t('produits.form.variantActive')}
