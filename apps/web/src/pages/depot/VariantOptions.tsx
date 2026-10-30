@@ -128,10 +128,8 @@ export function VariantOptions({
   setVars,
   basePrice,
   baseCost,
-  baseSku,
   used,
   skipped,
-  admin,
   feeGrids,
 }: {
   opts: Opt[];
@@ -140,12 +138,10 @@ export function VariantOptions({
   setVars: (fn: (v: VRow[]) => VRow[]) => void;
   basePrice: number;
   baseCost: number;
-  baseSku: string;
   /** values already used by the shop's other products, by option name (suggestions) */
   used: Map<string, string[]>;
   /** combinations the saved product does not have (unticked when it was saved) */
   skipped: Set<string>;
-  admin: boolean;
   feeGrids: string[];
  }) {
   const { t } = useTranslation();
@@ -170,7 +166,7 @@ export function VariantOptions({
   // « Mettre le prix … » for all variants, or those with one value (e.g. every 16P)
   const [bulkOn, setBulkOn] = useState('*');
   const [bulkPrice, setBulkPrice] = useState('');
-  const [bulkField, setBulkField] = useState<'price' | 'cost' | 'maxDiscount' | 'weightKg' | 'alertQty' | 'feeGrid'>('weightKg');
+  const [bulkField, setBulkField] = useState<'weightKg' | 'alertQty' | 'feeGrid'>('weightKg');
   const applyBulk = () => {
     if (bulkPrice === '' || (bulkField !== 'feeGrid' && (!Number.isFinite(Number(bulkPrice)) || Number(bulkPrice) < 0))) return;
     const [k, v] = bulkOn === '*' ? [-1, ''] : [Number(bulkOn.split('|')[0]), bulkOn.slice(bulkOn.indexOf('|') + 1)];
@@ -246,9 +242,7 @@ export function VariantOptions({
                   )),
                 )}
               </select>
-              <select value={bulkField} onChange={(e) => setBulkField(e.target.value as 'price' | 'cost' | 'maxDiscount' | 'weightKg' | 'alertQty' | 'feeGrid')} aria-label="Price field">
-                <option value="price" disabled>Set in product pricing</option>
-                <option value="cost" disabled>Set in product pricing</option>
+              <select value={bulkField} onChange={(e) => setBulkField(e.target.value as 'weightKg' | 'alertQty' | 'feeGrid')} aria-label="Price field">
                 
                 <option value="weightKg">Weight (kg)</option>
                 <option value="alertQty">Minimum stock</option>
