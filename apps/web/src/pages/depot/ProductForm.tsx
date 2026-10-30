@@ -145,6 +145,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
           ...vars.filter((v) => v.id && !want.has(v.title.trim().toLowerCase())).map((v) => ({ id: v.id, title: v.title.trim(), sku: v.sku.trim() || null, price: price(v), cost: cost(v), maxDiscount: maxDiscount(v), weightKg: weightKg(v), alertQty: alertQty(v), feeGrid: feeGrid(v), active: v.active })),
         ]
       : vars.filter((v) => v.title.trim() || v.id).map((v) => ({ id: v.id, title: v.title.trim(), sku: v.sku.trim() || null, price: price(v), cost: cost(v), maxDiscount: maxDiscount(v), weightKg: weightKg(v), alertQty: alertQty(v), feeGrid: feeGrid(v), active: v.active }));
+    if (variantPricing && !p && variants.some((v) => v.active && (v.price == null || v.cost == null))) return toast('Enter selling and purchase prices for each active variant.', 'bad');
     save.mutate({
       id: p?.id,
       name: f.name.trim(),
@@ -342,7 +343,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
             )}
           </div>
           {optMode ? (
-            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseSku={f.sku.trim() || f.name.trim()} used={usedValues} skipped={skipped} admin={admin} feeGrids={grids.data?.grids ?? []} />
+            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseCost={Number(f.cost) || 0} baseSku={f.sku.trim() || f.name.trim()} used={usedValues} skipped={skipped} admin={admin} feeGrids={grids.data?.grids ?? []} />
           ) : (
             <>
               {vars.length ? (
