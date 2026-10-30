@@ -16,11 +16,12 @@ export const SUB_STATUSES: Record<Sub, ConfStatus[]> = {
 export const SUB_TONE: Record<Sub, Tone> = { nouvelles: 'info', attente: 'mid', confirmees: 'ok', livrees: 'ok', terminees: 'off' };
 
 /** Values of the status pickers: real statuses plus "try1..3" (= no answer, attempt N). */
-export type StatusChoice = ConfStatus | 'try1' | 'try2' | 'try3';
-/** Row pill options, in the original order. */
-export const ROW_CHOICES: StatusChoice[] = ['new', 'to_check', 'try1', 'try2', 'try3', 'callback', 'postponed', 'no_stock', 'confirmed', 'cancelled', 'duplicate', 'wrong_number', 'fake'];
+export type StatusChoice = ConfStatus | `try${number}`;
+/** Row pill options, in the original order (try1 = the order's next attempt, « Tentative 0N »). */
+export const ROW_CHOICES: StatusChoice[] = ['new', 'to_check', 'try1', 'callback', 'postponed', 'no_stock', 'confirmed', 'cancelled', 'duplicate', 'wrong_number', 'fake'];
 /** Toolbar "Statut de confirmation" options. */
-export const BULK_CHOICES: StatusChoice[] = ['to_check', 'try1', 'try2', 'try3', 'callback', 'postponed', 'cancelled', 'duplicate', 'wrong_number', 'fake'];
+/** « Pas de réponse » here: one more call for each order (its own count goes on: never reset to 01). */
+export const BULK_CHOICES: StatusChoice[] = ['to_check', 'no_answer', 'callback', 'postponed', 'cancelled', 'duplicate', 'wrong_number', 'fake'];
 
 /** Label of a choice; `pill` adds "…" for choices that ask something and ✓ for confirmed. */
 export function choiceLabel(t: TFunction, c: StatusChoice, pill = false): string {

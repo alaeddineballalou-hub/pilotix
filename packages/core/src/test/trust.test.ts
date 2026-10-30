@@ -63,7 +63,9 @@ test('trust: 1 refusal, 2 → stop-desk only, 3 → blacklisted by Pilotix, a pa
   await call('orders.setConf', admin, { ids: [home.id], status: 'cancelled', reason: 'test' });
 
   // at the desk it goes; refused a 3rd time → blacklisted, automatically
-  const desk = await order(ph, { isStopdesk: true });
+  // at a bureau (chosen before confirming: the courier needs it)
+  const sd = (await db.query(`SELECT s.id, s.company_id FROM stopdesks s JOIN delivery_companies c ON c.id = s.company_id AND c.active WHERE s.wilaya_id = 16 ORDER BY s.id LIMIT 1`))[0];
+  const desk = await order(ph, { isStopdesk: true, ...(sd ? { stopdeskId: Number(sd.id), companyId: Number(sd.company_id) } : {}) });
   assert.equal(desk.confStatus, 'confirmed');
   await refuse(desk.id);
   c = await cust(ph);
@@ -73,7 +75,7 @@ test('trust: 1 refusal, 2 → stop-desk only, 3 → blacklisted by Pilotix, a pa
   assert.match(c.blacklist_reason, /Refuse ses colis/);
 
   // they receive and pay one (checked by a person first) → forgiven
-  const paid = await order(ph, { isStopdesk: true });
+  const paid = await order(ph, { isStopdesk: true, ...(sd ? { stopdeskId: Number(sd.id), companyId: Number(sd.company_id) } : {}) });
   assert.equal(paid.confStatus, 'to_check');
   await call('orders.setConf', admin, { ids: [paid.id], status: 'confirmed' });
   await ship(paid.id);

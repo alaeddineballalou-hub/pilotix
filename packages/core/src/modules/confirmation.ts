@@ -763,10 +763,9 @@ export const confirmationProcs = {
   }),
 
   /** "Tentative 01/02/03": no answer, with the attempt number set. */
-  'confirmation.setTry': proc(['confirmation'], z.object({ ids, n: z.number().int().min(1).max(9), note: z.string().max(1000).nullable().optional() }), async (ctx, i) => {
-    const r = await setConf(ctx, ConfInput.parse({ ids: i.ids, status: 'no_answer', note: i.note ?? null }));
-    await ctx.db.query(`UPDATE orders SET attempts = $2 WHERE id = ANY($1) AND conf_status = 'no_answer'`, [r.changed, i.n]);
-    return r;
+  'confirmation.setTry': proc(['confirmation'], z.object({ ids, n: z.number().int().min(1).max(30), note: z.string().max(1000).nullable().optional() }), async (ctx, i) => {
+    // the number of this call, never lower than the calls already made + 1 (so « Annuler après N appels » can be reached)
+    return setConf(ctx, ConfInput.parse({ ids: i.ids, status: 'no_answer', note: i.note ?? null, tryN: i.n }));
   }),
 
   /** Blacklists the customers of these orders ("Bloquer le client"). */

@@ -816,6 +816,8 @@ export const ConfInput = z.object({
   reason: z.string().max(200).nullable().optional(),
   nextCallAt: dateStr.nullable().optional(),
   clientId: z.string().min(8).max(64).optional(),
+  /** « Tentative 0N »: the number of this call (never lower than the calls already made + 1) */
+  tryN: z.number().int().min(1).max(30).optional(),
 });
 
 async function alreadyApplied(db: Db, clientId: string | undefined, userId: number) {
@@ -872,6 +874,8 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
   const ghosts: number[] = [];
   /** confirmed now (they were not): a « Risqué » customer among them is kept (« Confirmer quand même ») */
   const fresh: number[] = [];
+  /** cancelled by themselves: « Annuler automatiquement après N appels sans réponse » (Réglages › Boutique) */
+  const autoCancelled: { id: number; ref: string; attempts: number }[] = [];
   await ctx.db.tx(async (tx) => {
     if (await alreadyApplied(tx, input.clientId, me)) return;
     const notify = await notifyContext(tx);
@@ -900,11 +904,12 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
         throw bad('Commande déjà expédiée : changez plutôt le statut de livraison');
       let status = input.status;
       const isCallFail = status === 'no_answer' || status === 'busy';
-      const attempts = num(cur.attempts) + (isCallFail ? 1 : 0);
+      const attempts = isCallFail ? Math.max(num(cur.attempts) + 1, input.tryN ?? 0) : num(cur.attempts);
       let note = input.note ?? null;
       if (isCallFail && calls.cancelAfterNoAnswer > 0 && attempts >= calls.cancelAfterNoAnswer) {
         status = 'cancelled';
         note = `Annulée automatiquement après ${attempts} appels sans réponse`;
+        autoCancelled.push({ id: oid, ref: cur.ref, attempts });
       }
       // confirming (one or many at once): every product can go and we deliver there (also checked here, not only on
       // the screen). Blocked: refused (one order) or left as it is (several: the others go on). A product with nothing
@@ -939,21 +944,26 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
            confirmed_at = CASE WHEN $9 THEN COALESCE(confirmed_at, $5::timestamptz) ELSE confirmed_at END,
            follow_status = CASE WHEN $8 AND (follow_status IS NULL OR (follow_status = 'cancelled' AND shipped_at IS NULL)) THEN 'to_prepare'
                                 WHEN $2 IN ('cancelled','duplicate','wrong_number','fake') AND follow_status IN ('to_prepare','prepared') THEN 'cancelled'
+                                WHEN $2 = ANY($10) AND follow_status IN ('to_prepare','prepared') THEN NULL
                                 ELSE follow_status END,
            updated_at=now(), version=version+1
          WHERE id=$1`,
-        [oid, status, attempts, isCallFail || stamped || CONF_NEEDS_DATE.includes(status), nowIso, CONF_NEEDS_DATE.includes(status) ? input.nextCallAt : null, me, confirmed, stamped],
+        [oid, status, attempts, isCallFail || stamped || CONF_NEEDS_DATE.includes(status), nowIso, CONF_NEEDS_DATE.includes(status) ? input.nextCallAt : null, me, confirmed, stamped, CONF_TODO],
       );
       await addEvent(tx, oid, me, 'conf_status', cur.conf_status, status, [input.reason, note].filter(Boolean).join(' — ') || null);
       // confirmed again after a cancel: back to the depot's « À préparer »
       if (confirmed && (!cur.follow_status || (cur.follow_status === 'cancelled' && !cur.shipped_at))) await addEvent(tx, oid, me, 'follow_status', cur.follow_status, 'to_prepare');
-      // the depot was preparing it: red alert « annulée — ne l'envoyez pas »
-      if (['cancelled', 'duplicate', 'wrong_number', 'fake'].includes(status) && alertsDepot(ctx, cur.follow_status)) await addDepotAlert(tx, ctx, oid, cur.follow_status, 'cancel', []);
+      // the depot was preparing it: red alert « annulée — ne l'envoyez pas » (also when it goes back to be called again:
+      // it leaves the depot until it is confirmed again)
+      const leavesDepot = ['cancelled', 'duplicate', 'wrong_number', 'fake'].includes(status) || ((CONF_TODO as string[]).includes(status) && ['to_prepare', 'prepared'].includes(cur.follow_status));
+      if (leavesDepot && alertsDepot(ctx, cur.follow_status)) await addDepotAlert(tx, ctx, oid, cur.follow_status, 'cancel', []);
+      if ((CONF_TODO as string[]).includes(status) && ['to_prepare', 'prepared'].includes(cur.follow_status))
+        await addEvent(tx, oid, me, 'follow_status', cur.follow_status, null);
       await onConfChange(tx, notify, cur, cur.conf_status, status, ctx.now());
       // Meta: an order from a landing page, confirmed by a person, is a real sale (never a blocked or fake one)
       await onLandingConf(tx, landing, cur, cur.conf_status, status, ctx.now(), input.reason ?? null, me);
       if (cur.conf_status === 'confirmed' && !confirmed && !cur.shipped_at) freed.push(oid);
-      if (['cancelled', 'duplicate', 'wrong_number', 'fake'].includes(status) && cur.follow_status === 'prepared') ghosts.push(oid);
+      if (leavesDepot && cur.follow_status === 'prepared') ghosts.push(oid);
       changed.push(oid);
     }
     if (freed.length)
@@ -964,7 +974,7 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
   await recordRiskConfirms(ctx, fresh.filter((x) => changed.includes(x)), me);
   await sendInPreview(ctx);
   ctx.emit({ type: 'orders' });
-  return { changed, noStock, blocked };
+  return { changed, noStock, blocked, autoCancelled };
 }
 
 export const FollowInput = z.object({

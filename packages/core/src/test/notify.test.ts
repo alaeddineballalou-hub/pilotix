@@ -152,12 +152,14 @@ test('delivery: shipped, with the livreur, failed attempt, cancelled by the livr
   assert.match(n[4].body, /tannulat 3and le livreur/);
 
   // at the desk (stop desk)
-  const d = await newOrder(conf, { confirm: true, isStopdesk: true, commune: 'Hydra' });
+  // a bureau is chosen before confirming (the courier needs it)
+  const desk = (await db.query(`SELECT s.id, s.company_id FROM stopdesks s JOIN delivery_companies c ON c.id = s.company_id AND c.active WHERE s.wilaya_id = 16 ORDER BY s.id LIMIT 1`))[0];
+  const d = await newOrder(conf, { confirm: true, isStopdesk: true, commune: 'Hydra', ...(desk ? { stopdeskId: Number(desk.id), companyId: Number(desk.company_id) } : {}) });
   await go('shipped', [d.id]);
   await go('out_for_delivery', [d.id]);
   const dn = await notes(d.id);
   assert.equal(dn[2].kind, 'stopdesk');
-  assert.match(dn[2].body, /rahi testennakom f le bureau .*Hydra\. Jibou [\d ]+ DA bach testalmouha\./);
+  assert.match(dn[2].body, /rahi testennakom f le bureau .+\. Jibou [\d ]+ DA bach testalmouha\./);
 
   // back at the depot, lost, exchanged…: no message
   await go('returned');

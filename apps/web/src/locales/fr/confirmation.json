@@ -639,5 +639,7 @@
     "chip": "🔒 {{name}}",
     "mgr": "{{name}} est sur cette commande en ce moment. Vous pouvez quand même la changer."
   },
-  "mineEmpty": "Aucune commande à vous ici. Appuyez sur « Commande suivante » pour prendre la plus urgente."
+  "mineEmpty": "Aucune commande à vous ici. Appuyez sur « Commande suivante » pour prendre la plus urgente.",
+  "autoCancelled": "{{ref}} annulée automatiquement : {{n}} appels sans réponse",
+  "autoCancelledN": "{{n}} commandes annulées automatiquement (trop d’appels sans réponse)"
 }

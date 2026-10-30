@@ -33,9 +33,23 @@ export function useStatusChange() {
   const apply = async (rows: Target[], choice: StatusChoice, extra: { nextCallAt?: string; note?: string | null; reason?: string | null } = {}) => {
     const ids = rows.map((r) => r.id);
     try {
-      if (choice.startsWith('try')) await rpc('confirmation.setTry', { ids, n: Number(choice.slice(3)), note: extra.note ?? null });
-      else {
+      if (choice.startsWith('try')) {
+        const r = await rpc('confirmation.setTry', { ids, n: Number(choice.slice(3)), note: extra.note ?? null });
+        // « Annuler après N appels sans réponse »: say it was cancelled, not « Tentative 0N »
+        if (r.autoCancelled.length) {
+          const a = r.autoCancelled[0];
+          toast(r.autoCancelled.length === 1 ? t('confirmation.autoCancelled', { ref: a.ref, n: a.attempts }) : t('confirmation.autoCancelledN', { n: r.autoCancelled.length }), 'bad');
+          qc.invalidateQueries();
+          return true;
+        }
+      } else {
         const r = await rpc('orders.setConf', { ids, status: choice as ConfStatus, nextCallAt: extra.nextCallAt ?? null, note: extra.note ?? null, reason: extra.reason ?? null });
+        if (r.autoCancelled.length) {
+          const a = r.autoCancelled[0];
+          toast(r.autoCancelled.length === 1 ? t('confirmation.autoCancelled', { ref: a.ref, n: a.attempts }) : t('confirmation.autoCancelledN', { n: r.autoCancelled.length }), 'bad');
+          qc.invalidateQueries();
+          return true;
+        }
         // confirming: the blocked ones stay (a product switched off, no delivery there), nothing left → « sans stock »
         if ((choice === 'confirmed' || choice === 'no_stock') && (r.blocked.length || r.noStock.length)) {
           const sum = t('confirmation.chk.bulkDone', { ok: r.changed.length, sans: r.noStock.length, bl: r.blocked.length });
