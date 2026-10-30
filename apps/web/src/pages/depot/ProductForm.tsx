@@ -434,8 +434,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
         </div>
         </section>
 
-        <details className="pf-sec pf-more" open={services.length > 0 || (!!p && (packs.length > 0 || hasParts || linked.size > 0))}>
-          <summary>{t('produits.form.more')}</summary>
+        <section className="pf-sec">
         <h3>{t('produits.form.parts')}</h3>
         <Field label={t('produits.form.hasParts')}>
           <select value={hasParts ? 'yes' : 'no'} onChange={(e) => setHasParts(e.target.value === 'yes')}>
@@ -463,6 +462,10 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
           </div>
         )}
 
+        </section>
+
+        <details className="pf-sec pf-more" open={services.length > 0 || (!!p && (packs.length > 0 || hasParts || linked.size > 0))}>
+          <summary>{t('produits.form.more')}</summary>
         <h3>{t('produits.form.upsell')}</h3>
         <p className="muted small">{t('produits.form.upsellHelp')}</p>
         <div className="items-ed">
