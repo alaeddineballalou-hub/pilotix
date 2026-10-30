@@ -605,8 +605,9 @@ export async function createOrder(
   // made already confirmed (by an agent): a « Risqué » customer is kept like « Confirmer quand même »
   if (!order.isExchange && (order.confStatus === 'confirmed' || order.confStatus === 'no_stock')) await recordRiskConfirms(ctx, [order.id], me, db);
   ctx.emit({ type: 'orders' });
-  // Affectation automatique: an order to call gets its agent at once (when the shop turned it on)
-  if (!input.isExchange && !order.agentId && (CONF_TODO as string[]).includes(order.confStatus)) {
+  // Affectation automatique: an order to call gets its agent at once (when the shop turned it on) — not inside the
+  // caller's own transaction (a page left open, a restored order): the job every minute gives that one
+  if (db === ctx.db && !input.isExchange && !order.agentId && (CONF_TODO as string[]).includes(order.confStatus)) {
     const r = await assignNow(ctx, 'conf', order.id);
     if (r?.assigned) return getOrder(ctx, order.id);
   }
