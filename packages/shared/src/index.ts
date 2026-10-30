@@ -462,3 +462,5 @@ export * from './clientscore';
 export * from './pro';
 export * from './pilot';
 export * from './colors';
+
+export * from './compensation';
