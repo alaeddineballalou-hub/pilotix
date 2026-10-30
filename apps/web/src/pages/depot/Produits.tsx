@@ -357,7 +357,7 @@ function ProductsTab() {
                 <span className="a-state">
                   <label className="pd-availability" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                     <input type="checkbox" checked={p.active} disabled={availability.isPending} aria-label={`Product ${p.name} available for orders`} onChange={(e) => availability.mutate({ productId: p.id, active: e.target.checked })} />
-                    <span className={p.active ? 'badge t-ok' : 'badge t-off'}>{p.active ? 'ON' : 'OFF'}</span>
+                    <span className="pd-switch-track" aria-hidden="true" /> <span className="pd-switch-state">{p.active ? "ON" : "OFF"}</span>
                   </label>
                 </span>
               </div>
@@ -375,7 +375,7 @@ function ProductsTab() {
                       <span>{n(stockByVariant.get(v.id) ?? 0)}</span>
                       <label className="pd-availability">
                         <input type="checkbox" checked={v.active} disabled={availability.isPending || !p.active} aria-label={`Variant ${v.title} available for orders`} onChange={(e) => availability.mutate({ variantId: v.id, active: e.target.checked })} />
-                        <span className={v.active && p.active ? 'badge t-ok' : 'badge t-off'}>{v.active && p.active ? 'ON' : 'OFF'}</span>
+                        <span className="pd-switch-track" aria-hidden="true" /> <span className="pd-switch-state">{v.active && p.active ? "ON" : "OFF"}</span>
                       </label>
                     </div>
                   ))}
