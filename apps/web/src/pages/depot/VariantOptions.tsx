@@ -17,6 +17,7 @@ export interface VRow {
   weightKg: string;
   alertQty: string;
   feeGrid: string;
+  photo: string;
   active: boolean;
 }
 export interface Opt {
@@ -53,7 +54,7 @@ export function reconcile(prev: VRow[], opts: Opt[], skipped: Set<string> = new 
   const want = new Set(combos.map((c) => low(titleOf(c))));
   const keep = prev.filter((v) => v.id || want.has(low(v.title)));
   const have = new Set(keep.map((v) => low(v.title)));
-  const add = combos.filter((c) => !have.has(low(titleOf(c)))).map((c) => ({ title: titleOf(c), sku: '', price: '', cost: '', maxDiscount: '', weightKg: '', alertQty: '', feeGrid: '', active: !skipped.has(low(titleOf(c))) }));
+  const add = combos.filter((c) => !have.has(low(titleOf(c)))).map((c) => ({ title: titleOf(c), sku: '', price: '', cost: '', maxDiscount: '', weightKg: '', alertQty: '', feeGrid: '', photo: '', active: !skipped.has(low(titleOf(c))) }));
   return add.length || keep.length !== prev.length ? [...keep, ...add] : prev;
 }
 
@@ -132,6 +133,7 @@ export function VariantOptions({
   skipped,
   admin,
   feeGrids,
+  onPhotoFile,
 }: {
   opts: Opt[];
   setOpts: (o: Opt[]) => void;
@@ -146,6 +148,7 @@ export function VariantOptions({
   skipped: Set<string>;
   admin: boolean;
   feeGrids: string[];
+  onPhotoFile: (file: File) => Promise<string>;
 }) {
   const { t } = useTranslation();
   const combos = useMemo(() => combosOf(opts), [opts]);
@@ -267,6 +270,7 @@ export function VariantOptions({
                   {usedOpts.map((o, k) => (
                     <th key={k}>{o.name}</th>
                   ))}
+                  <th>Picture</th>
                   <th>{t('produits.form.opt.colSku')}</th>
                   <th>{t('produits.form.opt.colPrice')}</th>
                   <th>Purchase price (DA)</th>
@@ -292,8 +296,15 @@ export function VariantOptions({
                           <span className="po-chip po-chip-s">{x}</span>
                         </td>
                       ))}
+                      <td data-l="Picture">
+                        {v.photo && <img src={v.photo} alt={title} style={{ width: 42, height: 42, objectFit: 'contain', borderRadius: 6 }} />}
+                        <input type="file" accept="image/*" aria-label={`Picture ${title}`} onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; try { editRow(title, { photo: await onPhotoFile(file) }); } catch { /* Invalid image: keep previous picture. */ } }} />
+                        {v.photo && <button type="button" className="btn small ghost" onClick={() => editRow(title, { photo: '' })}>×</button>}
+                      </td>
                       <td data-l={t('produits.form.opt.colSku')}>
-                        <input className="ltr" value={v.sku} placeholder={v.id ? '' : skuOf(baseSku, c)} aria-label={`SKU ${title}`} onChange={(e) => editRow(title, { sku: e.target.value })} />
+                        {v.photo && <img src={v.photo} alt={v.title} style={{ width: 42, height: 42, objectFit: 'contain' }} />}
+                <input type="file" accept="image/*" aria-label={`Picture ${v.title}`} onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; try { const photo = await onPhotoFile(file); setVars((prev) => prev.map((x) => (x === v ? { ...x, photo } : x))); } catch { /* Keep previous image */ } }} />
+                <input className="ltr" value={v.sku} placeholder={v.id ? '' : skuOf(baseSku, c)} aria-label={`SKU ${title}`} onChange={(e) => editRow(title, { sku: e.target.value })} />
                       </td>
                       <td data-l={t('produits.form.opt.colPrice')}>
                         <input type="number" min={0} step={50} value={v.price} placeholder={basePrice ? bidi(da(basePrice)) : ''} aria-label={`${t('produits.form.opt.colPrice')} ${title}`} onChange={(e) => editRow(title, { price: e.target.value })} />
