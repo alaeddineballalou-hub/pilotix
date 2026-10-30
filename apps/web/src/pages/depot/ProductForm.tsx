@@ -220,9 +220,11 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
             <Field label={<Req>{t('produits.form.name')}</Req>}>
               <input required value={f.name} onChange={(e) => set('name', e.target.value)} />
             </Field>
-            <Field label={t('produits.form.sku')} hint={!p ? t('produits.form.skuAuto') : undefined}>
-              <input className="ltr" value={f.sku} onChange={(e) => set('sku', e.target.value)} />
-            </Field>
+            {!variantPricing && (
+              <Field label={t('produits.form.sku')} hint={!p ? t('produits.form.skuAuto') : undefined}>
+                <input className="ltr" value={f.sku} onChange={(e) => set('sku', e.target.value)} />
+              </Field>
+            )}
             <Field label={t('produits.form.barcode')}>
               <input className="ltr" value={f.barcode} onChange={(e) => set('barcode', e.target.value)} />
             </Field>
