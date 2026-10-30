@@ -13,12 +13,13 @@ export function MoveDialog({ kind, row, onClose }: { kind: 'entry' | 'count' | '
   const [qty, setQty] = useState<number | ''>(kind === 'count' ? row.qty : '');
   const [note, setNote] = useState('');
   // an entry carries its purchase price: products change price from one delivery to the next
-  const [cost, setCost] = useState<number | ''>(row.cost);
+  const [cost, setCost] = useState<number | ''>('');
   const move = useAction('catalog.move', { success: t('produits.stock.updated'), onDone: onClose });
   const submit = () => {
     if (qty === '' || qty < (kind === 'count' ? 0 : 1)) return toast(t('produits.stock.invalidQty'), 'bad');
     if (kind === 'count' && qty === row.qty) return onClose();
-    move.mutate({ variantId: row.variantId, warehouseId: row.warehouseId, kind, qty, note: note.trim() || null, ...(kind === 'entry' && cost !== '' ? { unitCost: cost } : {}) });
+    if (kind === 'entry' && (cost === '' || !Number.isInteger(cost) || cost < 0)) return toast('Saisissez le prix d’achat de cette entrée de stock.', 'bad');
+    move.mutate({ variantId: row.variantId, warehouseId: row.warehouseId, kind, qty, note: note.trim() || null, ...(kind === 'entry' ? { unitCost: cost } : {}) });
   };
   const after = qty === '' ? null : kind === 'entry' ? row.qty + qty : kind === 'loss' ? row.qty - qty : qty;
   return (
@@ -30,7 +31,7 @@ export function MoveDialog({ kind, row, onClose }: { kind: 'entry' | 'count' | '
           <button className="btn" onClick={onClose}>
             {t('common.cancel')}
           </button>
-          <button className="btn primary" disabled={move.isPending || qty === ''} onClick={submit}>
+          <button className="btn primary" disabled={move.isPending || qty === '' || (kind === 'entry' && cost === '')} onClick={submit}>
             {t('common.save')}
           </button>
         </>
@@ -56,7 +57,7 @@ export function MoveDialog({ kind, row, onClose }: { kind: 'entry' | 'count' | '
           )}
         </p>
         {kind === 'entry' && (
-          <Field label={t('produits.stock.entryCost')} hint={cost !== '' && cost !== row.cost ? t('produits.stock.entryCostChange', { from: bidi(da(row.cost)), to: bidi(da(cost)) }) : t('produits.stock.entryCostHint')}>
+          <Field label={<>{t('produits.stock.entryCost')} <b aria-label="required">*</b></>} hint={cost !== '' && cost !== row.cost ? t('produits.stock.entryCostChange', { from: bidi(da(row.cost)), to: bidi(da(cost)) }) : `Obligatoire à chaque entrée. Dernier prix : ${da(row.cost)}.`}>
             <MoneyInput value={cost} changed={cost !== '' && cost !== row.cost} label={t('produits.stock.entryCost')} onChange={setCost} />
           </Field>
         )}
