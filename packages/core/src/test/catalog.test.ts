@@ -39,7 +39,7 @@ test('stock: entry, count, loss write stock and movements; reserved = confirmed 
   assert.equal(r.reserved, reserved);
   assert.equal(r.available, r.qty - r.reserved);
 
-  await call('catalog.move', depot, { variantId: r.variantId, warehouseId: wid, kind: 'entry', qty: 7, note: 'Arrivage' });
+  await call('catalog.move', depot, { variantId: r.variantId, warehouseId: wid, kind: 'entry', qty: 7, unitCost: 1200, note: 'Arrivage' });
   assert.equal(await qty(r.variantId, wid), before + 7);
   await call('catalog.move', depot, { variantId: r.variantId, warehouseId: wid, kind: 'loss', qty: 2 });
   assert.equal(await qty(r.variantId, wid), before + 5);
