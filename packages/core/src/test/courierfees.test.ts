@@ -4,7 +4,9 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
-import { apiFees, saveCourierFees, weightFee, weightRuleOf, ZR_WEIGHT } from '../modules/courierfees';
+import { ordersOf } from '../modules/ads';
+import { apiFees, ruleFee, saveCourierFees, weightFee, weightRuleOf, ZR_WEIGHT } from '../modules/courierfees';
+import { setCourierCost } from '../modules/orders';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -147,4 +149,111 @@ test('Dashboard › Suivi › « Surpoids »: the parcels ZR weighed heavier tha
   const again: any = await call('delivery.overweight', suivi, range);
   assert.ok(!again.parcels.some((x: any) => x.id === Number(o.id)));
   await assert.rejects(call('delivery.overweight', await as(EMAILS.conf), range), /Accès refusé/);
+});
+
+test('another company’s « Surpoids » (Tarifs): whole kilos like ZR, on the delivery and the return; never for ZR nor our livreurs', () => {
+  const rule = { freeKg: 5, perKg: 50, onReturn: true };
+  // the weight declared, whole kilos: 5,4 kg → 5 kg (nothing), 5,6 kg → 6 kg (50 DA), 7,4 kg → 7 kg (100 DA)
+  assert.equal(ruleFee('yalidine', rule, 5.4), 0);
+  assert.equal(ruleFee('yalidine', rule, 5.6), 50);
+  assert.equal(ruleFee('noest', rule, 7.4), 100);
+  assert.equal(ruleFee('manual', rule, 0), 0);
+  // ZR gives its own weight fee by its API; our own livreurs take none
+  assert.equal(ruleFee('zr', ZR_WEIGHT, 9), 0);
+  assert.equal(ruleFee('own', rule, 9), 0);
+  // the old ZR (Procolis) has no API for it: ZR's rule on the weight declared
+  assert.equal(ruleFee('zr_legacy', weightRuleOf('zr_legacy', {}), 6), 50);
+});
+
+test('« Tarifs › Surpoids » of Yalidine: saved, the unpaid parcels follow, sending counts it, the order card and the profit show it (return too)', async () => {
+  const yal = Number((await one(`SELECT id FROM delivery_companies WHERE kind = 'yalidine' LIMIT 1`)).id);
+  const zr = await zrId();
+  const admin = await as(EMAILS.admin);
+  const suivi = await as(EMAILS.suivi);
+
+  // ZR's is its own (locked), Yalidine's is not set yet, our livreurs have none
+  let info: any = await call('delivery.feesInfo', admin, { companyId: zr });
+  assert.deepEqual(info.weight, { freeKg: 5, perKg: 50, onReturn: true, locked: true, set: true });
+  await assert.rejects(call('delivery.saveWeightRule', admin, { companyId: zr, freeKg: 3, perKg: 10, onReturn: false }), /API/);
+  const own = await one(`SELECT id FROM delivery_companies WHERE kind = 'own' LIMIT 1`);
+  if (own) {
+    assert.equal(((await call('delivery.feesInfo', admin, { companyId: Number(own.id) })) as any).weight, null);
+    await assert.rejects(call('delivery.saveWeightRule', admin, { companyId: Number(own.id), freeKg: 5, perKg: 50, onReturn: true }), /livreurs/);
+  }
+  info = await call('delivery.feesInfo', admin, { companyId: yal });
+  assert.deepEqual(info.weight, { freeKg: 0, perKg: 0, onReturn: true, locked: false, set: false });
+  await assert.rejects(call('delivery.saveWeightRule', suivi, { companyId: yal, freeKg: 5, perKg: 50, onReturn: true }), /Accès refusé/);
+
+  // a heavy product: 7,4 kg declared → 7 kg → 2 kilos above 5 → 100 DA
+  const prod = await one(`SELECT id FROM products ORDER BY id DESC LIMIT 1`);
+  await db.query(`UPDATE products SET weight_kg = 7.4 WHERE id = $1`, [prod.id]);
+  const heavy = async (orderId: unknown) => {
+    await db.query(`DELETE FROM order_items WHERE order_id = $1 AND id <> (SELECT min(id) FROM order_items WHERE order_id = $1)`, [orderId]);
+    await db.query(`UPDATE order_items SET product_id = $2, variant_id = NULL, qty = 1 WHERE order_id = $1`, [orderId, prod.id]);
+  };
+  // a parcel on its way, not paid: its cost so far is the price list's
+  const o = await one(
+    `SELECT o.id, o.delivery_cost, o.is_stopdesk, f.home, f.desk, f.return_fee FROM orders o JOIN delivery_fees f ON f.company_id = o.company_id AND f.wilaya_id = o.wilaya_id
+      WHERE o.company_id = $1 AND o.follow_status IN ('shipped','out_for_delivery') AND NOT o.cashed AND o.delivery_cost > 0 AND o.livreur_id IS NULL AND o.tracking IS NOT NULL ORDER BY o.id LIMIT 1`,
+    [yal],
+  );
+  await heavy(o.id);
+  const tariff = Number(o.is_stopdesk ? o.desk : o.home);
+  await db.query('UPDATE orders SET delivery_cost = $2, courier_fees = NULL WHERE id = $1', [o.id, tariff]);
+  const saved: any = await call('delivery.saveWeightRule', admin, { companyId: yal, freeKg: 5, perKg: 50, onReturn: true });
+  assert.deepEqual(saved.weight, { freeKg: 5, perKg: 50, onReturn: true, locked: false, set: true });
+  assert.ok(saved.moved >= 1, 'the unpaid parcels follow');
+  const cost = async (id: unknown) => Number((await one('SELECT delivery_cost FROM orders WHERE id = $1', [id])).delivery_cost);
+  assert.equal(await cost(o.id), tariff + 100);
+  // « Frais société » and the order card: price list + 100 DA of weight (7 kg declared)
+  const fees: any = await call('orders.companyFees', suivi, { ids: [Number(o.id)] });
+  assert.deepEqual({ fee: fees[o.id].fee, extra: fees[o.id].extra, fromApi: fees[o.id].fromApi }, { fee: tariff + 100, extra: 100, fromApi: false });
+  const card: any = await call('orders.get', admin, { id: Number(o.id) });
+  assert.deepEqual(card.courierFees, { delivery: tariff, ret: Number(o.return_fee), weight: 100, weightRet: 100, kg: 7, declaredKg: 7, exact: false, byRule: true });
+  // not on the return any more: the delivery keeps it, the return does not
+  const noRet: any = await call('delivery.saveWeightRule', admin, { companyId: yal, freeKg: 5, perKg: 50, onReturn: false });
+  assert.equal(await cost(o.id), tariff + 100);
+  assert.equal(noRet.moved, 0);
+  assert.equal(((await call('orders.get', admin, { id: Number(o.id) })) as any).courierFees.weightRet, 0);
+  // free up to 6 kg: 50 DA (one kilo above), the cost moves by −50
+  await call('delivery.saveWeightRule', admin, { companyId: yal, freeKg: 6, perKg: 50, onReturn: true });
+  assert.equal(await cost(o.id), tariff + 50);
+  // the cost computed again (its place changed): price list + weight
+  await db.query('UPDATE orders SET delivery_cost = 0 WHERE id = $1', [o.id]);
+  await setCourierCost(db, [Number(o.id)]);
+  assert.equal(await cost(o.id), tariff + 50);
+  await call('delivery.saveWeightRule', admin, { companyId: yal, freeKg: 5, perKg: 50, onReturn: true });
+  assert.equal(await cost(o.id), tariff + 100);
+
+  // sending a heavy parcel to Yalidine: its cost is the price list + 100 DA
+  const p = await one(`SELECT id, wilaya_id, is_stopdesk FROM orders WHERE conf_status = 'confirmed' AND follow_status = 'prepared' AND tracking IS NULL AND wilaya_id IN (SELECT wilaya_id FROM delivery_fees WHERE company_id = $1) ORDER BY id LIMIT 1`, [yal]);
+  await heavy(p.id);
+  await db.query('UPDATE orders SET company_id = $2, livreur_id = NULL WHERE id = $1', [p.id, yal]);
+  const r: any = await call('delivery.send', admin, { ids: [Number(p.id)] });
+  assert.equal(r.sent, 1, JSON.stringify(r));
+  const pf = await one('SELECT home, desk FROM delivery_fees WHERE company_id = $1 AND wilaya_id = $2', [yal, p.wilaya_id]);
+  assert.equal(await cost(p.id), Number(p.is_stopdesk ? pf.desk : pf.home) + 100);
+
+  // a parcel that came back: the profit counts the return price + the weight fee on the return
+  const b = await one(`SELECT o.id, o.created_at, f.return_fee FROM sales o JOIN delivery_fees f ON f.company_id = o.company_id AND f.wilaya_id = o.wilaya_id WHERE o.company_id = $1 AND o.follow_status = 'returned' AND o.livreur_id IS NULL ORDER BY o.id LIMIT 1`, [yal]);
+  await heavy(b.id);
+  await db.query('UPDATE orders SET courier_fees = NULL WHERE id = $1', [b.id]);
+  // its creation day, one day around (Algiers days)
+  const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  const at = new Date(b.created_at).getTime();
+  const back = async () => (await ordersOf(db, [Number(prod.id)], dayOf(at - 86_400_000), dayOf(at + 86_400_000))).find((x: any) => Number(x.id) === Number(b.id));
+  assert.equal(Number((await back()).return_fee), Number(b.return_fee) + 100);
+  await call('delivery.saveWeightRule', admin, { companyId: yal, freeKg: 5, perKg: 50, onReturn: false });
+  assert.equal(Number((await back()).return_fee), Number(b.return_fee));
+  // the Bilan no longer asks for Yalidine (its « Surpoids » is set), nor for ZR
+  const range = { from: '2020-01-01T00:00:00.000Z', to: '2100-01-01T00:00:00.000Z' };
+  const rep: any = await call('orders.deliveredReport', suivi, range);
+  const yname = (await one('SELECT name FROM delivery_companies WHERE id = $1', [yal])).name;
+  assert.ok(!rep.noOverweightRule.includes(yname));
+  // « No » (it takes none): the weight leaves the unpaid parcels' cost
+  await call('delivery.saveWeightRule', admin, { companyId: yal, freeKg: 5, perKg: 0, onReturn: true });
+  assert.equal(await cost(o.id), tariff);
+  info = await call('delivery.feesInfo', admin, { companyId: yal });
+  assert.deepEqual(info.weight, { freeKg: 5, perKg: 0, onReturn: true, locked: false, set: true });
+  assert.equal(((await call('orders.get', admin, { id: Number(o.id) })) as any).courierFees, null);
 });

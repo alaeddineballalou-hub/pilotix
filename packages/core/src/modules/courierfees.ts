@@ -20,13 +20,30 @@ export interface WeightRule {
 export const ZR_WEIGHT: WeightRule = { freeKg: 5, perKg: 50, onReturn: true };
 const NONE: WeightRule = { freeKg: 0, perKg: 0, onReturn: true };
 
-/** A company's weight rule: its own (config « overweight »), else ZR's for ZR, else none. */
-export function weightRuleOf(kind: unknown, config: unknown): WeightRule {
-  const cfg = (typeof config === 'string' ? JSON.parse(config) : config ?? {}) as any;
+const cfgOf = (config: unknown) => (typeof config === 'string' ? JSON.parse(config) : config ?? {}) as any;
+const typedRule = (cfg: any) => {
   const w = cfg.overweight ?? cfg.weight;
-  if (w && (w.perKg ?? w.per_kg) !== undefined)
-    return { freeKg: Number(w.freeKg ?? w.free_kg ?? 0) || 0, perKg: Number(w.perKg ?? w.per_kg ?? 0) || 0, onReturn: w.onReturn !== false && w.on_return !== false };
+  return w && (w.perKg ?? w.per_kg) !== undefined ? w : null;
+};
+
+/** A company's weight rule: its own (config « overweight », typed in « Tarifs › Surpoids »), else ZR's for ZR, else none. */
+export function weightRuleOf(kind: unknown, config: unknown): WeightRule {
+  const w = typedRule(cfgOf(config));
+  if (w) return { freeKg: Number(w.freeKg ?? w.free_kg ?? 0) || 0, perKg: Number(w.perKg ?? w.per_kg ?? 0) || 0, onReturn: w.onReturn !== false && w.on_return !== false };
   return kind === 'zr' || kind === 'zr_legacy' ? ZR_WEIGHT : NONE;
+}
+
+/** Whether a company's « Surpoids » is decided: typed (even « none »), ZR's own, or our own livreurs (they take none). */
+export const weightRuleSet = (kind: unknown, config: unknown) => kind === 'own' || kind === 'zr' || kind === 'zr_legacy' || feesByApi(kind) || !!typedRule(cfgOf(config));
+
+/**
+ * The weight fee Pilotix counts for a parcel of a company that does not weigh it by API: its « Surpoids » rule on the
+ * weight declared (the products', whole kilos) — the same way as ZR: 5 kg free → 6 kg 50 DA. None for ZR (its own
+ * weight fee comes from its API) nor for our own livreurs.
+ */
+export function ruleFee(kind: unknown, rule: WeightRule, productsKg: unknown): number {
+  if (kind === 'own' || feesByApi(kind)) return 0;
+  return weightFee(declaredKg(productsKg), rule);
 }
 
 /** ZR weighs in whole kilos (no comma): 5 kg → none above, 6 kg → 1 kg above. */

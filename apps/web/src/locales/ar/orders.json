@@ -404,6 +404,7 @@
     "feesKg": "{{kg}} كغ",
     "feesApi": "حسب API ‏{{name}}",
     "feesPaid": "خصمتها {{name}} عند الدفع",
+    "feesRule": "حسب أسعارك",
     "feesHeavier": "وزنته {{name}} {{kg}} كغ (المصرّح {{declared}} كغ)"
   },
   "ph": {

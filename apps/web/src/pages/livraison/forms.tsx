@@ -6,6 +6,7 @@ import { Out, rpc } from '../../lib/backend';
 import { useAction, useRpc } from '../../lib/query';
 import { da, dateTime, wilaya } from '../../lib/format';
 import { Empty, ErrorBox, Field, Icon, Loading } from '../../ui/kit';
+import { Seg } from '../../ui/Sheet';
 import './zr.css';
 import { CourierLogo } from './CourierLogo';
 import { cardTitle } from './carriers';
@@ -267,6 +268,17 @@ export function FeesModal({ company, onClose }: { company: Company; onClose: () 
   const swapV = swapEdit ?? swapNow;
   const swapChanged = !!s && !s.swap.fromApi && (swapV.same !== swapNow.same || swapV.other !== swapNow.other) && swapV.same !== '' && swapV.other !== '';
   const saveSwap = () => swapSave.mutateAsync({ companyId: company.id, same: Number(swapV.same), other: Number(swapV.other) });
+  // its « Surpoids » (not ZR's: ZR weighs each parcel and gives its weight fee by its API)
+  const [wEdit, setWEdit] = useState<WeightValue | null>(null);
+  const wSave = useAction('delivery.saveWeightRule', {
+    success: (r) => (r.moved ? t('livraison.fees.weightSavedMoved', { count: r.moved }) : t('livraison.fees.weightSaved')),
+    onDone: () => setWEdit(null),
+  });
+  const wNow = weightValue(s?.weight ?? null);
+  const wV = wEdit ?? wNow;
+  const wChanged = !!s?.weight && !s.weight.locked && weightKey(wV) !== weightKey(wNow) && (wV.on !== 'yes' || (wV.free !== '' && wV.per !== ''));
+  const saveWeight = () =>
+    wSave.mutateAsync({ companyId: company.id, freeKg: wV.on === 'yes' ? Number(wV.free) : Number(wNow.free) || 5, perKg: wV.on === 'yes' ? Number(wV.per) : 0, onReturn: wV.ret });
   return (
     <Modal
       title={t('livraison.fees.title', { name: company.name })}
@@ -288,9 +300,10 @@ export function FeesModal({ company, onClose }: { company: Company; onClose: () 
             </button>
             <button
               className="btn primary"
-              disabled={save.isPending || swapSave.isPending || info.isLoading}
+              disabled={save.isPending || swapSave.isPending || wSave.isPending || info.isLoading}
               onClick={async () => {
                 if (swapChanged) await saveSwap().catch(() => null);
+                if (wChanged) await saveWeight().catch(() => null);
                 save.mutate({ companyId: company.id, rows: Object.entries(rows).map(([w, r]) => ({ wilayaId: Number(w), home: val(r.home), desk: val(r.desk), returnFee: val(r.returnFee) })) });
               }}
             >
@@ -333,6 +346,22 @@ export function FeesModal({ company, onClose }: { company: Company; onClose: () 
             // prices locked (no « Enregistrer » below): the swap fees have their own, once changed
             locked && swapChanged ? (
               <button className="btn small primary" disabled={swapSave.isPending} onClick={() => saveSwap().catch(() => null)}>
+                {t('common.save')}
+              </button>
+            ) : null
+          }
+        />
+      )}
+      {s?.weight && (
+        <WeightFees
+          company={company}
+          weight={s.weight}
+          value={wV}
+          onChange={setWEdit}
+          action={
+            // prices locked (no « Enregistrer » below): the « Surpoids » has its own, once changed
+            locked && wChanged ? (
+              <button className="btn small primary" disabled={wSave.isPending} onClick={() => saveWeight().catch(() => null)}>
                 {t('common.save')}
               </button>
             ) : null
@@ -455,6 +484,95 @@ function SwapFees({ company, swap, value, onChange, action }: { company: Company
           {field(t('livraison.fees.swapSame'), 'same')}
           {field(t('livraison.fees.swapOther'), 'other')}
           {action}
+        </div>
+      )}
+    </section>
+  );
+}
+
+type WeightInfo = NonNullable<Out<'delivery.feesInfo'>['weight']>;
+/** « Surpoids » being typed: does the company take one (not decided yet: neither), free kilos, DA a kilo above, on the return. */
+type WeightValue = { on: 'yes' | 'no' | 'unset'; free: string; per: string; ret: boolean };
+const weightValue = (w: WeightInfo | null): WeightValue =>
+  !w || !w.set
+    ? { on: 'unset', free: '5', per: '50', ret: true }
+    : w.perKg > 0
+      ? { on: 'yes', free: String(w.freeKg), per: String(w.perKg), ret: w.onReturn }
+      : { on: 'no', free: String(w.freeKg || 5), per: '50', ret: w.onReturn };
+const weightKey = (v: WeightValue) => (v.on === 'yes' ? `yes:${v.free}:${v.per}:${v.ret}` : v.on);
+
+/**
+ * A company's « Surpoids »: what it takes above some kilos — counted in whole kilos like ZR (5 kg free → 6 kg: one kilo
+ * above) — on the delivery and, ticked, on the return too. ZR's is its own (it weighs each parcel, its API gives the fee).
+ */
+function WeightFees({ company, weight, value, onChange, action }: { company: Company; weight: WeightInfo; value: WeightValue; onChange: (v: WeightValue) => void; action?: ReactNode }) {
+  const { t } = useTranslation();
+  const free = Number(value.free) || 0;
+  const per = Number(value.per) || 0;
+  const field = (label: string, k: 'free' | 'per', unit: string) => (
+    <label className="px-swapfee">
+      <span>{label}</span>
+      <span className="px-swapfee-in">
+        <input className="ltr" inputMode="numeric" value={value[k]} aria-label={`${t('livraison.fees.weightTitle')} · ${label}`} onChange={(e) => onChange({ ...value, [k]: e.target.value.replace(/[^\d]/g, '').slice(0, 6) })} />
+        <small>{unit}</small>
+      </span>
+    </label>
+  );
+  return (
+    <section className="px-swapfees px-weightfees">
+      <div className="px-swapfees-head">
+        <b>{t('livraison.fees.weightTitle')}</b>
+        <small>{t('livraison.fees.weightHelp')}</small>
+      </div>
+      {weight.locked ? (
+        <div className="px-swapfees-row">
+          <span className="px-swapfee">
+            <span>{t('livraison.fees.weightFree')}</span>
+            <b className="ltr">{t('livraison.fees.weightKg', { kg: weight.freeKg })}</b>
+          </span>
+          <span className="px-swapfee">
+            <span>{t('livraison.fees.weightPer')}</span>
+            <b className="ltr">{da(weight.perKg)}</b>
+          </span>
+          <span className="px-swapfee">
+            <span>{t('livraison.fees.weightReturn')}</span>
+            <b>{weight.onReturn ? t('livraison.fees.weightYes') : t('livraison.fees.weightNo')}</b>
+          </span>
+          <small className="px-swapfees-api">
+            <Icon name="lock" /> {t('livraison.fees.weightApi', { name: company.name })}
+          </small>
+        </div>
+      ) : (
+        <div className="px-weightfees-body">
+          <div className="px-weightfees-ask">
+            <span>{t('livraison.fees.weightAsk')}</span>
+            <Seg<WeightValue['on']>
+              label={t('livraison.fees.weightAsk')}
+              value={value.on}
+              onChange={(on) => onChange({ ...value, on })}
+              items={[
+                { k: 'no', label: t('livraison.fees.weightNo') },
+                { k: 'yes', label: t('livraison.fees.weightYes') },
+              ]}
+            />
+            {value.on === 'unset' && <small className="px-weightfees-unset">{t('livraison.fees.weightUnset')}</small>}
+          </div>
+          {value.on === 'yes' && (
+            <div className="px-swapfees-row">
+              {field(t('livraison.fees.weightFree'), 'free', 'kg')}
+              {field(t('livraison.fees.weightPer'), 'per', 'DA')}
+              <label className="px-weightfees-ret">
+                <input type="checkbox" checked={value.ret} onChange={(e) => onChange({ ...value, ret: e.target.checked })} />
+                <span>{t('livraison.fees.weightReturn')}</span>
+              </label>
+            </div>
+          )}
+          {value.on === 'yes' && per > 0 && (
+            <small className="px-weightfees-ex">
+              {t(value.ret ? 'livraison.fees.weightExampleRet' : 'livraison.fees.weightExample', { kg: free + 2, fee: da(2 * per) })}
+            </small>
+          )}
+          {action && <div className="px-weightfees-act">{action}</div>}
         </div>
       )}
     </section>

@@ -169,7 +169,7 @@
     "recv": "Net to receive",
     "recvS": "not cashed − its fees − return fees",
     "noTariff": "⚠ {{n}} parcels without a price for their wilaya: fee taken from the order. Complete Delivery companies → Prices.",
-    "noRule": "Overweight not set for: {{list}} (Delivery companies → Prices → Overweight).",
+    "noRule": "Overweight not set for: {{list}} (Delivery companies → Rates → Overweight).",
     "how": "Fees computed automatically: the courier price for the wilaya (home or stop desk), return price, and overweight = each kg above the included weight × price per kg (product weights in Products & stock).",
     "howCompany": "“Cashed by the courier” = what customers paid to the courier or driver. “Net to receive” = not cashed − delivery fees and overweight of these parcels − return fees of the period.",
     "colCompany": "Company",
@@ -404,6 +404,7 @@
     "feesKg": "{{kg}} kg",
     "feesApi": "from {{name}}’s API",
     "feesPaid": "taken by {{name}} in its payment",
+    "feesRule": "from your rates",
     "feesHeavier": "Weighed {{kg}} kg by {{name}} (declared {{declared}} kg)"
   },
   "ph": {

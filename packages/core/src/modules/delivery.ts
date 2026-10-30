@@ -22,7 +22,7 @@ function sameSecret(a: string, b: string): boolean {
 import { getSetting } from '../settings';
 import { removedCouriers } from '../platform/courierWatch';
 import { addEvent, getOrder, listOrders, setFollow } from './orders';
-import { apiFees, companyWeightRule, declaredKg, feesByApi, saveCourierFees, wholeKg, type WeightRule } from './courierfees';
+import { apiFees, companyWeightRule, declaredKg, feesByApi, ruleFee, saveCourierFees, weightRuleOf, weightRuleSet, wholeKg, type WeightRule } from './courierfees';
 
 const id = z.number().int().positive();
 const ids = z.array(id).min(1).max(500);
@@ -202,7 +202,8 @@ export async function sendOrders(ctx: Ctx, orderIds: number[], forceCompanyId?: 
 async function sendOrdersLocked(ctx: Ctx, orderIds: number[], forceCompanyId?: number | null) {
   const rows = await ctx.db.query(
     `SELECT o.id, o.ref, o.company_id, o.conf_status, o.follow_status, o.tracking, o.wilaya_id, o.is_stopdesk, c.kind, c.active, c.name AS company_name,
-       o.is_exchange, o.original_order_id, oo.company_id AS orig_company, oo.tracking AS orig_tracking, oo.ext_id AS orig_ext
+       o.is_exchange, o.original_order_id, oo.company_id AS orig_company, oo.tracking AS orig_tracking, oo.ext_id AS orig_ext,
+       (SELECT coalesce(sum(p.weight_kg * it.qty), 0) FROM order_items it JOIN products p ON p.id = it.product_id WHERE it.order_id = o.id) AS kg
      FROM orders o LEFT JOIN delivery_companies c ON c.id = COALESCE($2::bigint, o.company_id) LEFT JOIN orders oo ON oo.id = o.original_order_id
      WHERE o.id = ANY($1) ORDER BY o.id`,
     [orderIds, forceCompanyId ?? null],
@@ -269,8 +270,9 @@ async function sendOrdersLocked(ctx: Ctx, orderIds: number[], forceCompanyId?: n
         continue;
       }
       const f: any = fees.get(num(r.wilaya_id));
-      // the company's own price for this parcel when its answer gives it (ZR), else its price list
-      const cost = s.costs?.delivery ?? (f ? num(r.is_stopdesk ? f.desk : f.home) : null);
+      // the company's own price for this parcel when its answer gives it (ZR), else its price list + its « Surpoids »
+      // on the weight declared (whole kilos: 5 kg free → 6 kg 50 DA)
+      const cost = s.costs?.delivery ?? (f ? num(r.is_stopdesk ? f.desk : f.home) + ruleFee(kind, await rule(), r.kg) : null);
       const status = word(kind, 'prepared');
       await ctx.db.query(
         `UPDATE orders SET company_id=$2, tracking=$3, ext_id=$4, label_url=$5, ext_status=$6, ext_status_at=now(),
@@ -619,6 +621,15 @@ export async function swapFees(ctx: Ctx, companyId: number): Promise<{ same: num
   return same !== null && other !== null ? { same, other, fromApi: true } : typed;
 }
 
+/**
+ * A company's « Surpoids » for « Tarifs »: its rule (free kilos, DA a kilo above, also on the return), whether it is ZR's
+ * own (locked: ZR weighs each parcel and gives its weight fee by its API) and whether it was set; none for our livreurs.
+ */
+function weightOf(kind: string, cfg: unknown) {
+  if (kind === 'own') return null;
+  return { ...weightRuleOf(kind, cfg), locked: feesByApi(kind), set: weightRuleSet(kind, cfg) };
+}
+
 export const deliveryProcs = {
   /** Courier kinds, provider cards and custom-API placeholders (for the forms). */
   // a company removed from Pilotix (control room) is no longer offered; a shop's own companies keep their kind
@@ -699,13 +710,55 @@ export const deliveryProcs = {
   /** Takes the prices from the courier's API now (demo: a realistic grid). */
   'delivery.importFees': proc([], z.object({ companyId: id }), async (ctx, { companyId }) => importFeesNow(ctx, companyId)),
 
-  /** The « Tarifs » window: whether the prices come from the API (locked) and their last update, and the swap fees. */
+  /** The « Tarifs » window: whether the prices come from the API (locked) and their last update, the swap fees, the « Surpoids ». */
   'delivery.feesInfo': proc(['depot', 'suivi', 'confirmation'], z.object({ companyId: id }), async (ctx, { companyId }) => {
     const c = await companyOr404(ctx.db, companyId);
     const cfg = parseJson((await ctx.db.query('SELECT config FROM delivery_companies WHERE id=$1', [companyId]))[0]?.config);
     const s: Partial<FeesSync> = cfg.feesSync ?? {};
-    return { api: !!KINDS[c.kind].fees, syncedAt: s.at ?? null, changed: s.changed ?? null, error: s.error ?? null, swap: await swapFees(ctx, companyId) };
+    return { api: !!KINDS[c.kind].fees, syncedAt: s.at ?? null, changed: s.changed ?? null, error: s.error ?? null, swap: await swapFees(ctx, companyId), weight: weightOf(c.kind, cfg) };
   }),
+
+  /**
+   * A company's « Surpoids » typed in « Tarifs »: free up to `freeKg`, then `perKg` DA for every whole kilo above, on the
+   * delivery and — `onReturn` — on the return too (perKg 0: it takes none). Not ZR's (it weighs each parcel and gives its
+   * weight fee by its API) nor our own livreurs'. The parcels not paid yet follow: their cost (the caisse, the profit)
+   * drops the old weight fee and takes the new one.
+   */
+  'delivery.saveWeightRule': proc(
+    [],
+    z.object({ companyId: id, freeKg: z.number().int().min(0).max(100), perKg: z.number().int().min(0).max(100_000), onReturn: z.boolean() }),
+    async (ctx, i) => {
+      const row = (await ctx.db.query('SELECT name, kind, config FROM delivery_companies WHERE id=$1', [i.companyId]))[0];
+      if (!row) throw notFound('Société introuvable');
+      if (row.kind === 'own') throw bad('Vos livreurs : pas de surpoids');
+      if (feesByApi(row.kind)) throw bad(`${row.name} pèse lui-même chaque colis : son surpoids vient de son API`);
+      const cfg = parseJson(row.config);
+      const old = weightRuleOf(row.kind, cfg);
+      const next: WeightRule = { freeKg: i.freeKg, perKg: i.perKg, onReturn: i.onReturn };
+      const moved = await ctx.db.tx(async (tx) => {
+        await tx.query('UPDATE delivery_companies SET config=$2 WHERE id=$1', [i.companyId, JSON.stringify({ ...cfg, overweight: next })]);
+        // its parcels sent and not paid yet: the weight fee in their cost follows the new rule
+        const open = await tx.query(
+          `SELECT o.id, (SELECT coalesce(sum(p.weight_kg * it.qty), 0) FROM order_items it JOIN products p ON p.id = it.product_id WHERE it.order_id = o.id) AS kg
+           FROM orders o WHERE o.company_id = $1 AND NOT o.cashed AND o.delivery_cost > 0 AND o.livreur_id IS NULL`,
+          [i.companyId],
+        );
+        const ids: number[] = [];
+        const diffs: number[] = [];
+        for (const o of open) {
+          const d = ruleFee(row.kind, next, o.kg) - ruleFee(row.kind, old, o.kg);
+          if (d) {
+            ids.push(num(o.id));
+            diffs.push(d);
+          }
+        }
+        if (ids.length) await tx.query('UPDATE orders o SET delivery_cost = GREATEST(0, o.delivery_cost + v.d) FROM unnest($1::bigint[], $2::int[]) AS v(id, d) WHERE o.id = v.id', [ids, diffs]);
+        return ids.length;
+      });
+      if (moved) ctx.emit({ type: 'orders' });
+      return { weight: weightOf(row.kind, { ...cfg, overweight: next }), moved };
+    },
+  ),
 
   /**
    * Dashboard › Suivi › « Surpoids » : the period's parcels a company weighed heavier than Pilotix declared and took a

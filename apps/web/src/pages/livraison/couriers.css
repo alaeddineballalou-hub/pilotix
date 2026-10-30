@@ -62,6 +62,12 @@
 .px-fees-lock { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: var(--surface); color: var(--c-info-ink, #2F5BD3); }
 .px-fees-sync { color: var(--muted) !important; font-weight: 600; }
 .px-fees-sync.bad { color: var(--c-bad-ink, #B3261E) !important; }
+/* phones: the text takes the whole width, « Mettre à jour maintenant » goes under it */
+@media (max-width: 640px) {
+  .px-fees-api { flex-wrap: wrap; }
+  .px-fees-api > div { flex: 1 1 calc(100% - 44px); }
+  .px-fees-api .btn { margin-inline-start: 44px; }
+}
 .px-fees-ro td .ltr { font-variant-numeric: tabular-nums; }
 
 /* swap fees (a parcel given to another customer): same wilaya, other wilaya */
@@ -76,6 +82,18 @@
 .px-swapfees .px-swapfee-in input { flex: none; width: 92px; min-width: 0; text-align: end; }
 .px-swapfee-in small { color: var(--muted); font-weight: 700; }
 .px-swapfees-api { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; font-weight: 700; }
+
+/* « Surpoids » of a company: does it take one (Non | Oui), free kilos, DA a kilo above, on the return too */
+.px-weightfees { align-items: flex-start; }
+.px-weightfees-body { display: flex; flex-direction: column; gap: 10px; flex: 1 1 360px; min-width: 0; }
+.px-weightfees-ask { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; font-size: 13px; font-weight: 700; }
+.px-weightfees-ask .pxk-seg { flex: none; width: 176px; padding: 3px; }
+.px-weightfees-ask .pxk-seg button { min-height: 36px; font-size: 13.5px; }
+.px-weightfees-unset { color: var(--c-warn-ink, #8A5A00); font-size: 12px; font-weight: 700; }
+.px-weightfees-ret { align-self: flex-end; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.px-weightfees-ret input { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--px-orange, #F7A823); }
+.px-weightfees-ex { color: var(--muted); font-size: 12.5px; font-weight: 600; }
+.px-weightfees-act { display: flex; }
 
 /* « Alertes » of a company: its statuses, one or many ticked → Suivi › Alertes */
 .px-alerts { list-style: none; margin: 10px 0 6px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }

@@ -40,7 +40,8 @@ type Panel = null | { kind: 'conf'; status: ConfStatus } | { kind: 'follow'; sta
 
 /**
  * What the company itself charges for this parcel, from its API (ZR): its delivery price — or its return price for a
- * parcel coming back — and its weight fee for the weight it counted; « retenu au paiement » once it paid (exact).
+ * parcel coming back — and its weight fee for the weight it counted; « retenu au paiement » once it paid (exact). A
+ * company without that API whose « Surpoids » is set: its price list + its weight fee on the weight declared.
  */
 function CourierFeesRow({ o }: { o: Order }) {
   const { t } = useTranslation();
@@ -54,7 +55,7 @@ function CourierFeesRow({ o }: { o: Order }) {
   const parts = [
     t(back ? 'orders.card.feesReturn' : 'orders.card.feesDelivery', { v: da(base) }),
     w ? t('orders.card.feesWeight', { v: da(w), kg: kg ?? '?' }) : kg ? t('orders.card.feesKg', { kg }) : null,
-    t(f.exact ? 'orders.card.feesPaid' : 'orders.card.feesApi', { name }),
+    t(f.byRule ? 'orders.card.feesRule' : f.exact ? 'orders.card.feesPaid' : 'orders.card.feesApi', { name }),
   ].filter(Boolean);
   // the company weighed it heavier than Pilotix declared (its products' weight) and took a weight fee for it
   const heavier = w > 0 && f.kg !== null && f.kg > f.declaredKg;

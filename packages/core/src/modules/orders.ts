@@ -42,7 +42,7 @@ import { blockerText, checkLines, checkOrder, deliverCheck } from './confirmchec
 import { releaseNoStock } from './nostock';
 import { applyTrust, lookAlikeNote, lookAlikeOf } from './trust';
 import { companyLock, pilotMayRun, pilotPick, setPick, type Pick } from './pilot';
-import { apiFees, declaredKg, feesByApi, weightRuleOf, wholeKg } from './courierfees';
+import { apiFees, declaredKg, feesByApi, ruleFee, weightRuleOf, weightRuleSet, wholeKg } from './courierfees';
 
 export const STOPDESK_NOTE = '🏬 Ce client a refusé 2 colis : livraison au bureau (stop-desk) uniquement. Proposez-lui le stop-desk le plus proche.';
 
@@ -953,19 +953,23 @@ export function followBlock(ctx: Ctx, cur: any, to: FollowStatus, hasReason: boo
 }
 
 /**
- * The courier's fee for these parcels, from the company's tariff (home or bureau, by wilaya). Set when the parcel
- * leaves for every kind of company (not only those with an API), so the caisse never counts the full COD as cash
- * received. `force`: computed again (the place changed); otherwise only where none was set yet.
+ * The courier's fee for these parcels, from the company's tariff (home or bureau, by wilaya) + its « Surpoids » on the
+ * weight declared (whole kilos). Set when the parcel leaves for every kind of company (not only those with an API), so
+ * the caisse never counts the full COD as cash received. `force`: computed again (the place changed); otherwise only
+ * where none was set yet.
  */
 export async function setCourierCost(db: Db, orderIds: number[], force = false) {
   if (!orderIds.length) return;
-  await db.query(
-    `UPDATE orders o SET delivery_cost = CASE WHEN o.is_stopdesk THEN f.desk ELSE f.home END
-       FROM delivery_fees f
-      WHERE o.id = ANY($1) AND f.company_id = o.company_id AND f.wilaya_id = o.wilaya_id AND NOT o.cashed
-        AND ($2 OR o.delivery_cost = 0)`,
+  const rows = await db.query(
+    `SELECT o.id, CASE WHEN o.is_stopdesk THEN f.desk ELSE f.home END AS tariff, co.kind, co.config,
+       (SELECT coalesce(sum(p.weight_kg * it.qty), 0) FROM order_items it JOIN products p ON p.id = it.product_id WHERE it.order_id = o.id) AS kg
+       FROM orders o JOIN delivery_fees f ON f.company_id = o.company_id AND f.wilaya_id = o.wilaya_id JOIN delivery_companies co ON co.id = o.company_id
+      WHERE o.id = ANY($1) AND NOT o.cashed AND ($2 OR o.delivery_cost = 0)`,
     [orderIds, force],
   );
+  if (!rows.length) return;
+  const costs = rows.map((r: any) => num(r.tariff) + ruleFee(r.kind, weightRuleOf(r.kind, r.config), r.kg));
+  await db.query('UPDATE orders o SET delivery_cost = v.c FROM unnest($1::bigint[], $2::int[]) AS v(id, c) WHERE o.id = v.id', [rows.map((r: any) => num(r.id)), costs]);
 }
 
 /**
@@ -1195,17 +1199,22 @@ interface CompanyRule {
   perKg: number;
   onReturn: boolean;
 }
-async function companyRules(db: Db): Promise<{ fees: Map<string, CompanyRule>; over: Map<number, { freeKg: number; perKg: number; onReturn: boolean }> }> {
+async function companyRules(db: Db): Promise<{ fees: Map<string, CompanyRule>; over: Map<number, { freeKg: number; perKg: number; onReturn: boolean }>; ruled: Set<number> }> {
   const comps = await db.query('SELECT id, kind, config FROM delivery_companies');
   const over = new Map<number, { freeKg: number; perKg: number; onReturn: boolean }>();
+  // the companies whose « Surpoids » is decided (typed, ZR's own, our livreurs): the Bilan does not ask for them
+  const ruled = new Set<number>();
   // its own rule, else ZR's (50 DA a kg above 5 kg, also on a return)
-  for (const c of comps) over.set(num(c.id), weightRuleOf(c.kind, c.config));
+  for (const c of comps) {
+    over.set(num(c.id), weightRuleOf(c.kind, c.config));
+    if (weightRuleSet(c.kind, c.config)) ruled.add(num(c.id));
+  }
   const fees = new Map<string, CompanyRule>();
   for (const f of await db.query('SELECT company_id, wilaya_id, home, desk, return_fee FROM delivery_fees')) {
     const o = over.get(num(f.company_id)) ?? { freeKg: 0, perKg: 0, onReturn: true };
     fees.set(`${num(f.company_id)}:${num(f.wilaya_id)}`, { home: num(f.home), desk: num(f.desk), ret: num(f.return_fee), ...o });
   }
-  return { fees, over };
+  return { fees, over, ruled };
 }
 function parcelFees(o: any, R: Awaited<ReturnType<typeof companyRules>>) {
   if (!o.company_id) return { liv: 0, ret: 0, extra: 0, extraRet: 0, kg: Number(o.kg) || 0, fromTariff: false, fromApi: false };
@@ -1218,11 +1227,12 @@ function parcelFees(o: any, R: Awaited<ReturnType<typeof companyRules>>) {
     const liv = api.delivery ?? base ?? (num(o.delivery_cost) || num(o.delivery_fee));
     return { liv, ret: api.ret ?? f?.ret ?? 0, extra: api.weight, extraRet: api.weightRet, kg: api.kg ?? (Number(o.kg) || 0), fromTariff: true, fromApi: true };
   }
-  const liv = base ?? (num(o.delivery_cost) || num(o.delivery_fee));
   const kg = Number(o.kg) || 0;
-  // a company whose API gives the weight fee: none guessed from the products (it may not weigh the parcel again)
-  const over = !feesByApi(o.company_kind) && rule.perKg > 0 && kg > rule.freeKg ? Math.ceil(kg - rule.freeKg - 1e-9) : 0;
-  const extra = over * rule.perKg;
+  // its « Surpoids » on the weight declared, whole kilos like ZR (5 kg free → 6 kg 50 DA), on the delivery and — its
+  // rule says so — on the return; a company whose API gives the weight fee: none guessed from the products
+  const extra = ruleFee(o.company_kind, rule, kg);
+  // no price list for this wilaya: the parcel's cost as kept (it already holds the weight fee)
+  const liv = base ?? Math.max(0, (num(o.delivery_cost) || num(o.delivery_fee)) - (num(o.delivery_cost) ? extra : 0));
   return { liv, ret: f?.ret ?? 0, extra, extraRet: rule.onReturn ? extra : 0, kg, fromTariff: base !== null, fromApi: false };
 }
 const FEE_COLS = `o.id, o.ref, o.total, o.delivery_fee, o.delivery_cost, o.courier_fees, o.company_id, o.wilaya_id, o.is_stopdesk, o.cashed, co.name AS company, co.kind AS company_kind,
@@ -1389,7 +1399,7 @@ export async function deliveredReport(ctx: Ctx, i: { from: string; to: string },
       }
       if (!x.fromTariff && o.company_id) z.noTariff++;
     }
-    if (o.company_id && !(R.over.get(num(o.company_id))?.perKg)) noRule.add(o.company ?? '—');
+    if (o.company_id && !R.ruled.has(num(o.company_id))) noRule.add(o.company ?? '—');
   }
   for (const o of B) {
     const x = parcelFees(o, R);
@@ -1495,13 +1505,28 @@ export const ordersProcs = {
     const o = (await withClientScores(ctx, [await getOrder(ctx, id)]))[0];
     const row = (
       await ctx.db.query(
-        `SELECT courier_fees, (SELECT coalesce(sum(p.weight_kg * i.qty), 0) FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = $1) AS kg FROM orders WHERE id = $1`,
+        `SELECT o.courier_fees, o.tracking, o.livreur_id, o.is_stopdesk, co.kind, co.config, f.home, f.desk, f.return_fee,
+           (SELECT coalesce(sum(p.weight_kg * i.qty), 0) FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = o.id) AS kg
+         FROM orders o LEFT JOIN delivery_companies co ON co.id = o.company_id LEFT JOIN delivery_fees f ON f.company_id = o.company_id AND f.wilaya_id = o.wilaya_id
+         WHERE o.id = $1`,
         [id],
       )
     )[0];
     const fees = apiFees(row?.courier_fees);
     // with what Pilotix declared to the company (its products' weight): « ZR a pesé 7 kg (déclaré 4 kg) »
-    const courierFees = fees ? { delivery: fees.delivery, ret: fees.ret, weight: fees.weight, weightRet: fees.weightRet, kg: wholeKg(fees.kg), declaredKg: declaredKg(row?.kg), exact: fees.exact } : null;
+    let courierFees: Order['courierFees'] = fees
+      ? { delivery: fees.delivery, ret: fees.ret, weight: fees.weight, weightRet: fees.weightRet, kg: wholeKg(fees.kg), declaredKg: declaredKg(row?.kg), exact: fees.exact }
+      : null;
+    // a company without its fees by API whose « Surpoids » is set (Tarifs): its price list + its weight fee on the weight
+    // declared, on the delivery and — its rule says so — on the return
+    if (!courierFees && row?.tracking && !row.livreur_id && row.home !== null && row.home !== undefined) {
+      const rule = weightRuleOf(row.kind, row.config);
+      if (rule.perKg > 0 && row.kind !== 'own' && !feesByApi(row.kind)) {
+        const w = ruleFee(row.kind, rule, row.kg);
+        const dk = declaredKg(row.kg);
+        courierFees = { delivery: num(row.is_stopdesk ? row.desk : row.home), ret: num(row.return_fee), weight: w, weightRet: rule.onReturn ? w : 0, kg: dk, declaredKg: dk, exact: false, byRule: true };
+      }
+    }
     return { ...o, pay: await payOf(ctx.db, o), courierFees };
   }),
   'orders.events': proc(null, z.object({ id }), async (ctx, { id }) => {

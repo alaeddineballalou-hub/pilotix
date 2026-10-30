@@ -140,7 +140,22 @@
     "swapSame": "نفس الولاية",
     "swapOther": "ولاية أخرى",
     "swapApi": "من API ‏{{name}}",
-    "swapSaved": "حُفظت رسوم التبديل"
+    "swapSaved": "حُفظت رسوم التبديل",
+    "weightTitle": "الوزن الزائد",
+    "weightHelp": "ما تأخذه الشركة زيادةً على الطرد الثقيل. يحسب Pilotix بالكيلوغرامات الكاملة مثل ZR: ‏5 كغ = لا شيء، 6 كغ = كيلو واحد زائد.",
+    "weightAsk": "هل تأخذ هذه الشركة رسوم الوزن الزائد؟",
+    "weightNo": "لا",
+    "weightYes": "نعم",
+    "weightUnset": "لم يُضبط بعد",
+    "weightFree": "مجاني حتى",
+    "weightPer": "لكل كيلو زائد",
+    "weightKg": "{{kg}} كغ",
+    "weightReturn": "على الإرجاع أيضًا",
+    "weightExample": "مثال: طرد {{kg}} كغ ← {{fee}} عند التوصيل",
+    "weightExampleRet": "مثال: طرد {{kg}} كغ ← {{fee}} عند التوصيل و{{fee}} عند الإرجاع",
+    "weightApi": "‏{{name}} تزن كل طرد: المبلغ الدقيق يأتي من API الخاص بها",
+    "weightSaved": "حُفظ الوزن الزائد",
+    "weightSavedMoved": "حُفظ الوزن الزائد · حُدّث {{count}} طرد لم يُدفع بعد"
   },
   "desks": {
     "title": "مكاتب الاستلام · {{name}}",
