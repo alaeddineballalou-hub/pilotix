@@ -1,4 +1,4 @@
-# Temporary (for Claude): is the backup door (direct.pilotix.online) set up and answering? Reads only.
+# Temporary (for Claude): does the live site serve the newest control room (Pilot AI tabs)? Reads only.
 name: Live now (temporary, for Claude)
 on:
   push:
@@ -10,17 +10,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Backup door
-        env:
-          HOST: ${{ secrets.DEPLOY_HOST }}
+      - name: Pilot AI tabs on the live site
         run: |
-          IP=$(getent ahostsv4 "$HOST" | awk 'NR==1{print $1}'); echo "::add-mask::$IP"
-          D=$(dig +short A direct.pilotix.online @1.1.1.1 | tail -1)
-          if [ -n "$D" ]; then echo "::add-mask::$D"; fi
-          if [ -z "$D" ]; then echo "::notice title=DNS::direct.pilotix.online has no A record yet"
-          elif [ "$D" = "$IP" ]; then echo "::notice title=DNS::direct.pilotix.online points straight to the server (DNS only)"
-          else echo "::notice title=DNS::direct.pilotix.online has an A record, but not the server's address (orange cloud, or another address)"; fi
-          r=$(curl -s -m 40 -o /tmp/b -w '%{http_code}' https://direct.pilotix.online/api/auth/demo || echo "curl failed $?")
-          echo "::notice title=HTTPS direct::$r $(head -c 100 /tmp/b 2>/dev/null | tr -cd '[:print:]')"
-          h=$(curl -sI -m 30 https://direct.pilotix.online/ 2>/dev/null | grep -i '^server:\|^cf-ray:' | tr -d '\r' | tr '\n' ' ')
-          echo "::notice title=Headers::${h:-none}"
+          curl -s -m 40 https://pilotix.online/ -o /tmp/index.html || echo "::notice title=Site::index not reached"
+          found=0
+          for a in $(grep -o 'assets/[A-Za-z0-9._-]*\.js' /tmp/index.html | sort -u); do
+            curl -s -m 60 "https://pilotix.online/$a" -o /tmp/a.js || continue
+            if grep -q 'p.dellal.board' /tmp/a.js; then found=1; fi
+          done
+          # the control room is in its own chunk: look in every chunk the entry names too
+          for a in $(cat /tmp/a.js 2>/dev/null | grep -o 'assets/[A-Za-z0-9._-]*\.js' | sort -u | head -80); do
+            curl -s -m 60 "https://pilotix.online/$a" -o /tmp/c.js || continue
+            if grep -q 'p.dellal.board' /tmp/c.js; then found=1; fi
+          done
+          echo "::notice title=Pilot AI tabs::$([ $found = 1 ] && echo 'live (p.dellal.board in the served app)' || echo 'not found in the served app')"
+          r=$(curl -s -m 30 -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' https://pilotix.online/api/platform/rpc/p.dellal.board || echo failed)
+          echo "::notice title=API p.dellal.board without a session::$r (401 = the route is there and asks for a login)"
