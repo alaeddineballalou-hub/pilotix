@@ -131,6 +131,7 @@ export function VariantOptions({
   baseSku,
   basePhoto,
   baseDiscount,
+  admin,
   used,
   skipped,
   feeGrids,
@@ -144,6 +145,7 @@ export function VariantOptions({
   baseSku: string;
   basePhoto: string;
   baseDiscount: number | null;
+  admin: boolean;
   /** values already used by the shop's other products, by option name (suggestions) */
   used: Map<string, string[]>;
   /** combinations the saved product does not have (unticked when it was saved) */
@@ -172,7 +174,7 @@ export function VariantOptions({
   // « Mettre le prix … » for all variants, or those with one value (e.g. every 16P)
   const [bulkOn, setBulkOn] = useState('*');
   const [bulkPrice, setBulkPrice] = useState('');
-  const [bulkField, setBulkField] = useState<'weightKg' | 'alertQty' | 'feeGrid'>('weightKg');
+  const [bulkField, setBulkField] = useState<'price' | 'cost' | 'maxDiscount' | 'weightKg' | 'alertQty' | 'feeGrid'>('price');
   const applyBulk = () => {
     if (bulkPrice === '' || (bulkField !== 'feeGrid' && (!Number.isFinite(Number(bulkPrice)) || Number(bulkPrice) < 0))) return;
     const [k, v] = bulkOn === '*' ? [-1, ''] : [Number(bulkOn.split('|')[0]), bulkOn.slice(bulkOn.indexOf('|') + 1)];
@@ -248,8 +250,11 @@ export function VariantOptions({
                   )),
                 )}
               </select>
-              <select value={bulkField} onChange={(e) => setBulkField(e.target.value as 'weightKg' | 'alertQty' | 'feeGrid')} aria-label="Price field">
+              <select value={bulkField} onChange={(e) => setBulkField(e.target.value as 'price' | 'cost' | 'maxDiscount' | 'weightKg' | 'alertQty' | 'feeGrid')} aria-label="Price field">
                 
+                <option value="price">Selling price</option>
+                <option value="cost">Purchase price</option>
+                {admin && <option value="maxDiscount">Maximum discount</option>}
                 <option value="weightKg">Weight (kg)</option>
                 <option value="alertQty">Minimum stock</option>
                 <option value="feeGrid">Delivery grid</option>
@@ -296,13 +301,13 @@ export function VariantOptions({
                       ))}
                       <td data-l="Photo">{basePhoto ? <img src={basePhoto} alt="" style={{ width: 42, height: 42, borderRadius: 6, objectFit: 'contain' }} /> : <Icon name="package" />}</td>
                       <td data-l="Variant SKU"><input className="ltr" value={v.sku} placeholder={skuOf(baseSku, c)} aria-label={`SKU ${title}`} onChange={(e) => editRow(title, { sku: e.target.value })} /></td>
-                      <td data-l="Purchase (DA)"><span className="ltr">{bidi(da(baseCost))}</span></td>
-                      <td data-l="Sale (DA)"><span className="ltr">{bidi(da(basePrice))}</span></td>
-                      <td data-l="Max. discount (DA)"><span className="ltr">{baseDiscount === null ? '—' : bidi(da(baseDiscount))}</span></td>
+                      <td data-l="Purchase (DA)"><input type="number" min={0} step={50} value={v.cost} placeholder={baseCost ? String(baseCost) : 'Required'} aria-label={`Purchase price ${title}`} onChange={(e) => editRow(title, { cost: e.target.value })} /></td>
+                      <td data-l="Sale (DA)"><input type="number" min={0} step={50} value={v.price} placeholder={basePrice ? String(basePrice) : 'Required'} aria-label={`Selling price ${title}`} onChange={(e) => editRow(title, { price: e.target.value })} /></td>
+                      <td data-l="Max. discount (DA)"><input type="number" min={0} step={50} disabled={!admin} value={v.maxDiscount} placeholder={baseDiscount === null ? 'No limit' : String(baseDiscount)} aria-label={`Max. discount ${title}`} onChange={(e) => editRow(title, { maxDiscount: e.target.value })} /></td>
                       <td data-l="Weight (kg)"><input type="number" min={0} max={1000} step={0.1} value={v.weightKg} aria-label={`Weight ${title}`} onChange={(e) => editRow(title, { weightKg: e.target.value })} /></td>
                       <td data-l="Minimum stock"><input type="number" min={0} step={1} value={v.alertQty} aria-label={`Minimum stock ${title}`} onChange={(e) => editRow(title, { alertQty: e.target.value })} /></td>
                       <td data-l="Delivery grid"><select value={v.feeGrid} aria-label={`Delivery grid ${title}`} onChange={(e) => editRow(title, { feeGrid: e.target.value })}><option value="">Product default</option>{feeGrids.map((g) => <option key={g} value={g}>{g}</option>)}</select></td>
-                      <td data-l="Margin (DA)">{bidi(da(basePrice - baseCost))}</td>
+                      <td data-l="Margin (DA)">{bidi(da(Number(v.price === '' ? basePrice : v.price) - Number(v.cost === '' ? baseCost : v.cost)))}</td>
                     </tr>
                   );
                 })}

@@ -125,13 +125,13 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
 
   const submit = () => {
     if (!f.name.trim()) return toast(t('produits.form.needName'), 'bad');
-    if (f.price === '' || f.cost === '' || (!variantPricing && f.alertQty === '')) return toast(t('produits.form.needRequired'), 'bad');
+    if (!variantPricing && (f.price === '' || f.cost === '' || f.alertQty === '')) return toast(t('produits.form.needRequired'), 'bad');
     const combos = optMode ? combosOf(opts) : [];
     if (optMode && opts.some((o) => !o.name.trim() && o.values.length)) return toast(t('produits.form.opt.needName'), 'bad');
     if (combos.length > MAX_COMBOS) return toast(t('produits.form.opt.tooMany', { count: combos.length }), 'bad');
-    const price = (_v: VRow) => null;
-    const cost = (_v: VRow) => null;
-    const maxDiscount = (_v: VRow) => null;
+    const price = (v: VRow) => v.price === '' ? null : Math.round(Number(v.price));
+    const cost = (v: VRow) => v.cost === '' ? null : Math.round(Number(v.cost));
+    const maxDiscount = (v: VRow) => v.maxDiscount === '' ? null : Math.round(Number(v.maxDiscount));
     const weightKg = (v: VRow) => v.weightKg === '' ? null : Number(v.weightKg);
     const alertQty = (v: VRow) => v.alertQty === '' ? null : Math.round(Number(v.alertQty));
     const feeGrid = (v: VRow) => v.feeGrid || null;
@@ -148,18 +148,18 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
           ...vars.filter((v) => v.id && !want.has(v.title.trim().toLowerCase())).map((v) => ({ id: v.id, title: v.title.trim(), sku: v.sku.trim() || null, price: price(v), cost: cost(v), maxDiscount: maxDiscount(v), weightKg: weightKg(v), alertQty: alertQty(v), feeGrid: feeGrid(v), photo: photo(v), active: v.active })),
         ]
       : vars.filter((v) => v.title.trim() || v.id).map((v) => ({ id: v.id, title: v.title.trim(), sku: v.sku.trim() || null, price: price(v), cost: cost(v), maxDiscount: maxDiscount(v), weightKg: weightKg(v), alertQty: alertQty(v), feeGrid: feeGrid(v), photo: photo(v), active: v.active }));
-    // Prices, discount and picture are product-level fields. Legacy variant overrides
-    // are cleared only after an explicit confirmation to avoid silent repricing.
-    if (p && vars.some((v) => v.price !== '' || v.cost !== '' || v.maxDiscount !== '' || v.photo !== '')) {
-      if (!window.confirm('Existing variant-specific prices, discounts and photos will be replaced by the product values. Continue?')) return;
+    // Keep legacy variant overrides. Blank fields inherit the existing product pricing.
+    // New products with variants must have an explicit sale and purchase price per active variant.
+    if (variantPricing && !p && variants.some((v) => v.active && (v.price == null || v.cost == null))) {
+      return toast('Enter purchase and selling prices for every active variant.', 'bad');
     }
     if (services.some((s) => !s.name.trim() || s.price === '' || s.cost === '')) return toast('Enter a name, selling price and service cost for each additional service.', 'bad');
     save.mutate({
       id: p?.id,
       name: f.name.trim(),
       sku: f.sku.trim() || null,
-      price: Math.round(Number(f.price) || 0),
-      cost: Math.round(Number(f.cost) || 0),
+      price: variantPricing && !p ? (variants.find((v) => v.active)?.price ?? 0) : Math.round(Number(f.price) || 0),
+      cost: variantPricing && !p ? (variants.find((v) => v.active)?.cost ?? 0) : Math.round(Number(f.cost) || 0),
       weightKg: Number(f.weightKg) || 0,
       photo: f.photo.trim() || null,
       isService: f.isService,
@@ -259,7 +259,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
         </section>
 
         <div className="pf-two">
-          <section className="pf-sec">
+          {!variantPricing && <section className="pf-sec">
             <h3>{t('produits.form.pricing')}</h3>
             <div className="grid2">
               <Field label={<Req>{t('produits.form.cost')}</Req>}>
@@ -290,10 +290,10 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
               <input type="checkbox" checked={f.fixedPrice} onChange={(e) => set('fixedPrice', e.target.checked)} />
               {t('produits.form.fixedPrice')}
             </label>
-          </section>
+          </section>}
 
-          <section className="pf-sec">
-            <h3>{variantPricing ? 'Shared product settings' : t('produits.form.logistics')}</h3>
+          <section className="pf-sec" style={variantPricing ? { gridColumn: '1 / -1' } : undefined}>
+            <h3>{variantPricing ? 'Product availability & delivery' : t('produits.form.logistics')}</h3>
             <div className="grid2">
               {!variantPricing && <><Field label={<Req>{t('produits.form.alertQty')}</Req>} hint={t('produits.form.alertQtyHint')}>
                 <input type="number" min={0} step={1} disabled={f.isService} value={f.alertQty} onChange={(e) => set('alertQty', e.target.value)} />
@@ -354,7 +354,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
             )}
           </div>
           {optMode ? (
-            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseCost={Number(f.cost) || 0} baseSku={f.sku.trim() || f.name.trim()} basePhoto={f.photo} baseDiscount={f.maxDiscount === '' ? null : Number(f.maxDiscount) || 0} used={usedValues} skipped={skipped} feeGrids={grids.data?.grids ?? []} />
+            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseCost={Number(f.cost) || 0} baseSku={f.sku.trim() || f.name.trim()} basePhoto={f.photo} baseDiscount={f.maxDiscount === '' ? null : Number(f.maxDiscount) || 0} admin={admin} used={usedValues} skipped={skipped} feeGrids={grids.data?.grids ?? []} />
           ) : (
             <>
               {vars.length ? (
@@ -362,8 +362,11 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
                   {vars.map((v, i) => (
                     <div key={v.id ?? `n${i}`} className="item-row bjpv-row">
                       <input aria-label={t('produits.form.variants')} value={v.title} placeholder={t('produits.form.variantPh')} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, title: e.target.value } : x)))} />
-                      <span className="muted small" title="Shared product prices — edit in Pricing & margins">{f.photo && <img src={f.photo} alt="" style={{ width: 32, height: 32, objectFit: 'contain', verticalAlign: 'middle' }} />} SKU: {v.sku || skuOf(f.sku.trim() || f.name.trim(), [v.title])} · Achat: {da(Number(f.cost) || 0)} · Vente: {da(Number(f.price) || 0)} · Remise: {f.maxDiscount === '' ? '—' : da(Number(f.maxDiscount) || 0)} · Marge: {da((Number(f.price) || 0) - (Number(f.cost) || 0))}</span>
+                      <span className="muted small">{f.photo && <img src={f.photo} alt="" style={{ width: 32, height: 32, objectFit: 'contain', verticalAlign: 'middle' }} />} Margin: {da(Number(v.price || f.price || 0) - Number(v.cost || f.cost || 0))}</span>
                       <input className="ltr" aria-label={`SKU ${v.title}`} placeholder="Variant SKU" value={v.sku} onChange={(e) => setVars(vars.map((x, k) => k === i ? { ...x, sku: e.target.value } : x))} />
+                      <input type="number" min={0} step={50} aria-label={`Purchase price ${v.title}`} value={v.cost} placeholder={f.cost || 'Purchase (DA)'} onChange={(e) => setVars(vars.map((x, k) => k === i ? { ...x, cost: e.target.value } : x))} />
+                      <input type="number" min={0} step={50} aria-label={`Selling price ${v.title}`} value={v.price} placeholder={f.price || 'Sale (DA)'} onChange={(e) => setVars(vars.map((x, k) => k === i ? { ...x, price: e.target.value } : x))} />
+                      <input type="number" min={0} step={50} disabled={!admin} aria-label={`Maximum discount ${v.title}`} value={v.maxDiscount} placeholder={f.maxDiscount || 'Max. discount'} onChange={(e) => setVars(vars.map((x, k) => k === i ? { ...x, maxDiscount: e.target.value } : x))} />
                       <input type="number" min={0} step={0.1} aria-label="Weight" value={v.weightKg} placeholder="Weight (kg)" onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, weightKg: e.target.value } : x)))} />
                       <input type="number" min={0} step={1} aria-label="Minimum stock" value={v.alertQty} placeholder="Minimum stock" onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, alertQty: e.target.value } : x)))} />
                       <select aria-label="Delivery grid" value={v.feeGrid} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, feeGrid: e.target.value } : x)))}><option value="">Product default</option>{(grids.data?.grids ?? []).map((g) => <option key={g} value={g}>{g}</option>)}</select>
