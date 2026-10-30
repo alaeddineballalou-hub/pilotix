@@ -80,6 +80,8 @@
 .pxz-av { flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: #0E7C3A; color: #fff; font-size: 13px; font-weight: 800; }
 .pxz-call { flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--c-ok-fill); color: #fff !important; box-shadow: 0 6px 14px rgb(31 157 87 / .25); }
 .pxz-call .bji { width: 19px; height: 19px; }
+button.pxz-call { border: 0; padding: 0; cursor: pointer; font: inherit; }
+.pxz-call.on { box-shadow: 0 0 0 3px var(--q-accent, #F7A823); }
 /* the customer's return risk, as a meter */
 .pxz-risk { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font-size: 13px; }
 .pxz-risk b { font-size: 13px; }

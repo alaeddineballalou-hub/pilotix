@@ -1,7 +1,7 @@
 // Phones: the queue as compact cards (name, chrono, product, status, call button);
 // a tap opens the whole order full screen, where every part of it can be changed (Detail in phone mode).
 import type { Order } from '@pilotix/shared';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, when, wilayaName } from '../../lib/format';
 import { namesOf } from '../../lib/items';
@@ -9,7 +9,8 @@ import { Icon } from '../../ui/kit';
 import { Countdown, Deadline } from './Countdown';
 import { Detail } from './Detail';
 import { currentLabel } from './shared';
-import { CallMenu, MsgMenu } from './History';
+import { AskCall, AskMsg } from './History';
+import { rpc } from '../../lib/backend';
 import { CONF_TONE } from '@pilotix/shared';
 import './phone.css';
 import { ScoreChip } from '../../ui/clientScore';
@@ -26,41 +27,20 @@ const variantsLine = (o: Order) =>
 /** "Appeler": asks first, a normal phone call or WhatsApp (like the message button on computers); the call is counted. */
 function CallButton({ o, big }: { o: Order; big?: boolean }) {
   const { t } = useTranslation();
-  const [btn, setBtn] = useState<HTMLButtonElement | null>(null);
-  const [open, setOpen] = useState(false);
   return (
-    <>
-      <button
-        type="button"
-        ref={setBtn}
-        className={`pxp-call${big ? ' big' : ''}${open ? ' on' : ''}`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label={`${t('confirmation.call')} ${o.customerName} ${o.phone}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen((v) => !v);
-        }}
-      >
-        <Icon name="phone" />
-      </button>
-      {open && btn && <CallMenu order={o} anchor={btn} onClose={() => setOpen(false)} />}
-    </>
+    <AskCall phone={o.phone} className={`pxp-call${big ? ' big' : ''}`} label={`${t('confirmation.call')} ${o.customerName} ${o.phone}`} onCall={() => rpc('orders.logCall', { id: o.id }).catch(() => {})}>
+      <Icon name="phone" />
+    </AskCall>
   );
 }
 
 /** "Message": asks SMS or WhatsApp, with the shop's ready message (the same menu as on computers). */
 function MsgButton({ o }: { o: Order }) {
   const { t } = useTranslation();
-  const [btn, setBtn] = useState<HTMLButtonElement | null>(null);
-  const [open, setOpen] = useState(false);
   return (
-    <>
-      <button type="button" ref={setBtn} className={`pxp-wa${open ? ' on' : ''}`} aria-haspopup="menu" aria-expanded={open} aria-label={t('confirmation.msgNum', { p: o.phone })} onClick={() => setOpen((v) => !v)}>
-        <Icon name="message" />
-      </button>
-      {open && btn && <MsgMenu order={o} anchor={btn} onClose={() => setOpen(false)} />}
-    </>
+    <AskMsg order={o} className="pxp-wa" label={t('confirmation.msgNum', { p: o.phone })}>
+      <Icon name="message" />
+    </AskMsg>
   );
 }
 

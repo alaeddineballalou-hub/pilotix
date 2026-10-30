@@ -15,7 +15,8 @@ import { StuckChips } from './Stuck';
 import { toast } from '../../ui/toast';
 import { eventText } from '../orders/OrderCard';
 import { ClaimRow, RemindApiModal, SendModal, useTarget } from './Claims';
-import { daysSince, waLink } from './common';
+import { daysSince } from './common';
+import { AskCall, AskMsg } from '../confirmation/History';
 import '../confirmation/phone.css';
 import './phone.css';
 import { ChangeKind, ChangeSheet, CourierPanel, useParcelInfo } from './CourierPanel';
@@ -303,12 +304,13 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose, onSkip }: 
         </section>
 
         <div className="pxs-cm">
-          <a className="pxs-call" href={`tel:${o.phone}`} onClick={() => rpc('orders.logCall', { id: o.id }).then(() => qc.invalidateQueries(), () => {})}>
+          {/* both ask first, phone or WhatsApp / SMS or WhatsApp, like Confirmation */}
+          <AskCall phone={o.phone} className="pxs-call" label={`${t('suivi.act.call')} ${o.customerName} ${o.phone}`} onCall={() => rpc('orders.logCall', { id: o.id }).then(() => qc.invalidateQueries(), () => {})}>
             <Icon name="phone" /> {t('suivi.act.call')}
-          </a>
-          <a className="pxs-wa" href={waLink(o.phone, waText)} target="_blank" rel="noopener">
-            <Icon name="whatsapp" /> {t('suivi.ph.message')}
-          </a>
+          </AskCall>
+          <AskMsg order={o} ready={waText} className="pxs-wa" label={`${t('suivi.ph.message')} ${o.phone}`}>
+            <Icon name="message" /> {t('suivi.ph.message')}
+          </AskMsg>
         </div>
 
         {/* the réclamation: the open one with Relancer / Réglée, or a way to make one */}
