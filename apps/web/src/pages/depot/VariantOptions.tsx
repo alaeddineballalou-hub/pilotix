@@ -126,6 +126,7 @@ export function VariantOptions({
   vars,
   setVars,
   basePrice,
+  baseCost,
   baseSku,
   used,
   skipped,
@@ -137,6 +138,7 @@ export function VariantOptions({
   vars: VRow[];
   setVars: (fn: (v: VRow[]) => VRow[]) => void;
   basePrice: number;
+  baseCost: number;
   baseSku: string;
   /** values already used by the shop's other products, by option name (suggestions) */
   used: Map<string, string[]>;
@@ -301,7 +303,7 @@ export function VariantOptions({
                       <td data-l="Weight (kg)"><input type="number" min={0} max={1000} step={0.1} value={v.weightKg} aria-label={`Weight ${title}`} onChange={(e) => editRow(title, { weightKg: e.target.value })} /></td>
                       <td data-l="Minimum stock"><input type="number" min={0} step={1} value={v.alertQty} aria-label={`Minimum stock ${title}`} onChange={(e) => editRow(title, { alertQty: e.target.value })} /></td>
                       <td data-l="Delivery grid"><select value={v.feeGrid} aria-label={`Delivery grid ${title}`} onChange={(e) => editRow(title, { feeGrid: e.target.value })}><option value="">Product default</option>{feeGrids.map((g) => <option key={g} value={g}>{g}</option>)}</select></td>
-                      <td data-l="Margin (DA)">{v.price !== '' && v.cost !== '' ? bidi(da(Number(v.price) - Number(v.cost))) : '—'}</td>
+                      <td data-l="Margin (DA)">{(v.price !== '' || basePrice > 0) && (v.cost !== '' || baseCost > 0) ? bidi(da(Number(v.price || basePrice) - Number(v.cost || baseCost))) : '—'}</td>
                     </tr>
                   );
                 })}
