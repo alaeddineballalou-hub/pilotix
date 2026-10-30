@@ -138,9 +138,9 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
             const v = vars.find((x) => x.title.trim().toLowerCase() === titleOf(c).toLowerCase());
             return v && (v.id || v.active) ? [{ id: v.id, title: titleOf(c), sku: v.sku.trim() || (v.id ? null : skuOf(base, c)), price: price(v), cost: cost(v), maxDiscount: maxDiscount(v), active: v.active }] : [];
           }),
-          ...vars.filter((v) => v.id && !want.has(v.title.trim().toLowerCase())).map((v) => ({ id: v.id, title: v.title.trim(), sku: v.sku.trim() || null, price: price(v), active: v.active })),
+          ...vars.filter((v) => v.id && !want.has(v.title.trim().toLowerCase())).map((v) => ({ id: v.id, title: v.title.trim(), sku: v.sku.trim() || null, price: price(v), cost: cost(v), maxDiscount: maxDiscount(v), active: v.active })),
         ]
-      : vars.filter((v) => v.title.trim() || v.id).map((v) => ({ id: v.id, title: v.title.trim(), sku: v.sku.trim() || null, price: price(v), active: v.active }));
+      : vars.filter((v) => v.title.trim() || v.id).map((v) => ({ id: v.id, title: v.title.trim(), sku: v.sku.trim() || null, price: price(v), cost: cost(v), maxDiscount: maxDiscount(v), active: v.active }));
     save.mutate({
       id: p?.id,
       name: f.name.trim(),
