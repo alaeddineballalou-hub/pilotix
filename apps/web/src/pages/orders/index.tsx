@@ -492,7 +492,10 @@ function useDeliveredExtra() {
           return (
             <>
               <b className="ltr">{da(f.fee)}</b>
-              <small>{f.extra ? t('orders.overweight', { v: da(f.extra) }) : `${String(f.kg).replace('.', ',')} kg`}</small>
+              <small>
+                {f.extra ? t('orders.overweight', { v: da(f.extra) }) : `${String(f.kg).replace('.', ',')} kg`}
+                {f.fromApi && <span className="px-api-tag">{t('orders.col.feeApi')}</span>}
+              </small>
             </>
           );
         },

@@ -74,7 +74,8 @@
     "since": "Depuis",
     "variant": "Variante",
     "fagent": "Agent suivi",
-    "tracking": "N° de suivi"
+    "tracking": "N° de suivi",
+    "feeApi": "API"
   },
   "flag": {
     "dup": "DOUBLON ?",
@@ -395,7 +396,14 @@
     "historyMore": "Voir tout l’historique ({{n}} commandes)",
     "historyLess": "Masquer l’historique",
     "historyThis": "cette commande",
-    "pay": "Paiement"
+    "pay": "Paiement",
+    "courierFees": "Frais {{name}}",
+    "feesDelivery": "livraison {{v}}",
+    "feesReturn": "retour {{v}}",
+    "feesWeight": "poids {{v}} ({{kg}} kg)",
+    "feesKg": "{{kg}} kg",
+    "feesApi": "d’après l’API {{name}}",
+    "feesPaid": "retenu par {{name}} au paiement"
   },
   "ph": {
     "per": {

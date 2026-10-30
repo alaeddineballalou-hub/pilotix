@@ -74,7 +74,8 @@
     "since": "منذ",
     "variant": "المتغير",
     "fagent": "وكيل المتابعة",
-    "tracking": "رقم التتبع"
+    "tracking": "رقم التتبع",
+    "feeApi": "API"
   },
   "flag": {
     "dup": "مكررة ؟",
@@ -395,7 +396,14 @@
     "historyMore": "عرض كل السجل ({{n}} طلبيات)",
     "historyLess": "إخفاء السجل",
     "historyThis": "هذه الطلبية",
-    "pay": "الدفع"
+    "pay": "الدفع",
+    "courierFees": "رسوم {{name}}",
+    "feesDelivery": "التوصيل {{v}}",
+    "feesReturn": "الإرجاع {{v}}",
+    "feesWeight": "الوزن {{v}} ({{kg}} كغ)",
+    "feesKg": "{{kg}} كغ",
+    "feesApi": "حسب API ‏{{name}}",
+    "feesPaid": "خصمتها {{name}} عند الدفع"
   },
   "ph": {
     "per": {

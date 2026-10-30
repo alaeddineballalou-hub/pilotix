@@ -3,6 +3,7 @@ import { fakeTracking, word } from '../couriers/demo';
 import { WILAYAS } from '@pilotix/shared';
 import type { Db } from '../db';
 import { num } from '../db';
+import { weightFee, ZR_WEIGHT } from '../modules/courierfees';
 
 /** Demo couriers: NOEST + a company without API next to Yalidine / ZR, stop desks, courier statuses, livreurs' rounds. */
 export async function seed(db: Db, users: Record<string, number>, now: number): Promise<void> {
@@ -77,4 +78,29 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   const today = await db.query(`SELECT id FROM orders WHERE follow_status = 'delivered' AND livreur_id = $1 ORDER BY delivered_at DESC LIMIT 1`, [users.livreur]);
   if (today.length) await db.query(`UPDATE orders SET delivered_at = $2, cashed = false, cashed_at = NULL WHERE id = $1`, [today[0].id, new Date(now - 2 * 3_600_000).toISOString()]);
   await db.query(`UPDATE orders SET delivery_note = 'Appeler avant de venir, 2e étage' WHERE id = (SELECT id FROM orders WHERE livreur_id = $1 AND follow_status = 'out_for_delivery' ORDER BY id LIMIT 1)`, [users.livreur]);
+}
+
+/**
+ * ZR's own fees for its parcels (its API): its prices, the weight it counted (the products' real one) and its weight
+ * fee, 50 DA a kg above 5 kg — exact for the parcels whose money came in. Run once ZR's parcels and the caisse are made.
+ */
+export async function seedZrFees(db: Db, now: number): Promise<void> {
+  const zr = num((await db.query(`SELECT id FROM delivery_companies WHERE kind = 'zr' ORDER BY id LIMIT 1`))[0]?.id);
+  if (!zr) return;
+  const zrParcels = await db.query(
+    `SELECT o.id, o.is_stopdesk, o.cashed, f.home, f.desk, f.return_fee,
+       (SELECT coalesce(sum(p.weight_kg * i.qty), 0) FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = o.id) AS kg
+     FROM orders o LEFT JOIN delivery_fees f ON f.company_id = o.company_id AND f.wilaya_id = o.wilaya_id
+     WHERE o.company_id = $1 AND o.tracking IS NOT NULL`,
+    [zr],
+  );
+  const at = new Date(now - 3 * 3_600_000).toISOString();
+  for (const p of zrParcels) {
+    if (p.home === null) continue;
+    const kg = Math.round(Number(p.kg) * 100) / 100 || null;
+    const fee = weightFee(kg, ZR_WEIGHT);
+    const delivery = num(p.is_stopdesk ? p.desk : p.home);
+    const fees = { delivery, ret: num(p.return_fee), kg, weight: p.cashed ? fee : null, est: fee, estRet: fee, at, src: p.cashed ? 'pay' : 'track' };
+    await db.query('UPDATE orders SET courier_fees = $2, delivery_cost = $3 WHERE id = $1', [p.id, JSON.stringify(fees), delivery + fee]);
+  }
 }

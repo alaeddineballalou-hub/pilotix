@@ -42,6 +42,7 @@ import { blockerText, checkLines, checkOrder, deliverCheck } from './confirmchec
 import { releaseNoStock } from './nostock';
 import { applyTrust, lookAlikeNote, lookAlikeOf } from './trust';
 import { companyLock, pilotMayRun, pilotPick, setPick, type Pick } from './pilot';
+import { apiFees, feesByApi, weightRuleOf } from './courierfees';
 
 export const STOPDESK_NOTE = '🏬 Ce client a refusé 2 colis : livraison au bureau (stop-desk) uniquement. Proposez-lui le stop-desk le plus proche.';
 
@@ -1195,13 +1196,10 @@ interface CompanyRule {
   onReturn: boolean;
 }
 async function companyRules(db: Db): Promise<{ fees: Map<string, CompanyRule>; over: Map<number, { freeKg: number; perKg: number; onReturn: boolean }> }> {
-  const comps = await db.query('SELECT id, config FROM delivery_companies');
+  const comps = await db.query('SELECT id, kind, config FROM delivery_companies');
   const over = new Map<number, { freeKg: number; perKg: number; onReturn: boolean }>();
-  for (const c of comps) {
-    const cfg = typeof c.config === 'string' ? JSON.parse(c.config) : c.config ?? {};
-    const w = cfg.overweight ?? cfg.weight ?? {};
-    over.set(num(c.id), { freeKg: Number(w.freeKg ?? w.free_kg ?? 0) || 0, perKg: Number(w.perKg ?? w.per_kg ?? 0) || 0, onReturn: w.onReturn !== false && w.on_return !== false });
-  }
+  // its own rule, else ZR's (50 DA a kg above 5 kg, also on a return)
+  for (const c of comps) over.set(num(c.id), weightRuleOf(c.kind, c.config));
   const fees = new Map<string, CompanyRule>();
   for (const f of await db.query('SELECT company_id, wilaya_id, home, desk, return_fee FROM delivery_fees')) {
     const o = over.get(num(f.company_id)) ?? { freeKg: 0, perKg: 0, onReturn: true };
@@ -1210,17 +1208,24 @@ async function companyRules(db: Db): Promise<{ fees: Map<string, CompanyRule>; o
   return { fees, over };
 }
 function parcelFees(o: any, R: Awaited<ReturnType<typeof companyRules>>) {
-  if (!o.company_id) return { liv: 0, ret: 0, extra: 0, extraRet: 0, kg: Number(o.kg) || 0, fromTariff: false };
+  if (!o.company_id) return { liv: 0, ret: 0, extra: 0, extraRet: 0, kg: Number(o.kg) || 0, fromTariff: false, fromApi: false };
   const f = R.fees.get(`${num(o.company_id)}:${num(o.wilaya_id)}`);
   const rule = R.over.get(num(o.company_id)) ?? { freeKg: 0, perKg: 0, onReturn: true };
   const base = f ? (o.is_stopdesk ? f.desk : f.home) : null;
+  // the courier's own numbers for this parcel (its API: its prices, the weight it counted, its weight fee) come first
+  const api = apiFees(o.courier_fees);
+  if (api) {
+    const liv = api.delivery ?? base ?? (num(o.delivery_cost) || num(o.delivery_fee));
+    return { liv, ret: api.ret ?? f?.ret ?? 0, extra: api.weight, extraRet: api.weightRet, kg: api.kg ?? (Number(o.kg) || 0), fromTariff: true, fromApi: true };
+  }
   const liv = base ?? (num(o.delivery_cost) || num(o.delivery_fee));
   const kg = Number(o.kg) || 0;
-  const over = rule.perKg > 0 && kg > rule.freeKg ? Math.ceil(kg - rule.freeKg - 1e-9) : 0;
+  // a company whose API gives the weight fee: none guessed from the products (it may not weigh the parcel again)
+  const over = !feesByApi(o.company_kind) && rule.perKg > 0 && kg > rule.freeKg ? Math.ceil(kg - rule.freeKg - 1e-9) : 0;
   const extra = over * rule.perKg;
-  return { liv, ret: f?.ret ?? 0, extra, extraRet: rule.onReturn ? extra : 0, kg, fromTariff: base !== null };
+  return { liv, ret: f?.ret ?? 0, extra, extraRet: rule.onReturn ? extra : 0, kg, fromTariff: base !== null, fromApi: false };
 }
-const FEE_COLS = `o.id, o.ref, o.total, o.delivery_fee, o.delivery_cost, o.company_id, o.wilaya_id, o.is_stopdesk, o.cashed, co.name AS company, co.kind AS company_kind,
+const FEE_COLS = `o.id, o.ref, o.total, o.delivery_fee, o.delivery_cost, o.courier_fees, o.company_id, o.wilaya_id, o.is_stopdesk, o.cashed, co.name AS company, co.kind AS company_kind,
   (SELECT coalesce(sum(p.weight_kg * i.qty), 0) FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = o.id) AS kg`;
 
 function orderExtraProcs() {
@@ -1319,13 +1324,13 @@ function orderExtraProcs() {
 
     /** What the courier charges for these parcels (column "Frais société"). */
     'orders.companyFees': proc(['confirmation', 'suivi', 'depot'], z.object({ ids: z.array(id).max(500) }), async (ctx, { ids }) => {
-      if (!ids.length) return {} as Record<string, { fee: number; extra: number; kg: number; fromTariff: boolean }>;
+      if (!ids.length) return {} as Record<string, { fee: number; extra: number; kg: number; fromTariff: boolean; fromApi: boolean }>;
       const R = await companyRules(ctx.db);
       const rows = await ctx.db.query(`SELECT ${FEE_COLS} FROM orders o LEFT JOIN delivery_companies co ON co.id = o.company_id WHERE o.id = ANY($1)`, [ids]);
-      const out: Record<string, { fee: number; extra: number; kg: number; fromTariff: boolean }> = {};
+      const out: Record<string, { fee: number; extra: number; kg: number; fromTariff: boolean; fromApi: boolean }> = {};
       for (const o of rows) {
         const x = parcelFees(o, R);
-        out[String(num(o.id))] = { fee: o.company_id ? x.liv + x.extra : 0, extra: x.extra, kg: Math.round(x.kg * 10) / 10, fromTariff: x.fromTariff };
+        out[String(num(o.id))] = { fee: o.company_id ? x.liv + x.extra : 0, extra: x.extra, kg: Math.round(x.kg * 10) / 10, fromTariff: x.fromTariff, fromApi: x.fromApi };
       }
       return out;
     }),
@@ -1488,7 +1493,9 @@ export const ordersProcs = {
   'orders.counts': proc(null, z.object({}), (ctx) => orderCounts(ctx)),
   'orders.get': proc(null, z.object({ id }), async (ctx, { id }) => {
     const o = (await withClientScores(ctx, [await getOrder(ctx, id)]))[0];
-    return { ...o, pay: await payOf(ctx.db, o) };
+    const fees = apiFees((await ctx.db.query('SELECT courier_fees FROM orders WHERE id = $1', [id]))[0]?.courier_fees);
+    const courierFees = fees ? { delivery: fees.delivery, ret: fees.ret, weight: fees.weight, weightRet: fees.weightRet, kg: fees.kg, exact: fees.exact } : null;
+    return { ...o, pay: await payOf(ctx.db, o), courierFees };
   }),
   'orders.events': proc(null, z.object({ id }), async (ctx, { id }) => {
     const o = await getOrder(ctx, id);

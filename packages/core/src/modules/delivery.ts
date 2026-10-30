@@ -9,7 +9,7 @@ import { fakeTracking, nextStep, word } from '../couriers/demo';
 import { CARDS, KINDS } from '../couriers/kinds';
 import { keysOk, loadCompany, loadParcels, resolveStatus } from '../couriers/load';
 import { checkedInToday } from './livreur';
-import type { Desk, ExchangeResult, FeeRow, LabelResult, PreviewResult, SendResult, TrackItem, TrackResult } from '../couriers/types';
+import type { CourierCosts, Desk, ExchangeResult, FeeRow, LabelResult, PreviewResult, SendResult, TrackItem, TrackResult } from '../couriers/types';
 import { Db, iso, num, numOrNull } from '../db';
 import { bad, Ctx, notFound, proc, publicApi, takeActionLocks } from '../rpc';
 
@@ -22,6 +22,7 @@ function sameSecret(a: string, b: string): boolean {
 import { getSetting } from '../settings';
 import { removedCouriers } from '../platform/courierWatch';
 import { addEvent, getOrder, listOrders, setFollow } from './orders';
+import { companyWeightRule, feesByApi, saveCourierFees, type WeightRule } from './courierfees';
 
 const id = z.number().int().positive();
 const ids = z.array(id).min(1).max(500);
@@ -229,8 +230,11 @@ async function sendOrdersLocked(ctx: Ctx, orderIds: number[], forceCompanyId?: n
     const returns = new Map<number, { tracking: string; extId: string | null }>();
     const cred = isDemo(ctx) ? parseJson((await ctx.db.query('SELECT credentials FROM delivery_companies WHERE id=$1', [companyId]))[0]?.credentials) : null;
     if (plain.length && isDemo(ctx)) {
+      const costs = feesByApi(kind) ? await demoCosts(ctx, companyId, plain.map((r) => num(r.id)), false) : new Map<number, CourierCosts>();
       sent = plain.map((r) =>
-        keysOk(kind, cred) ? { id: num(r.id), ok: true as const, tracking: fakeTracking(kind, r.ref), extId: null, labelUrl: null } : { id: num(r.id), ok: false as const, error: `Clés API manquantes pour ${list[0].company_name}` },
+        keysOk(kind, cred)
+          ? { id: num(r.id), ok: true as const, tracking: fakeTracking(kind, r.ref), extId: null, labelUrl: null, ...(costs.has(num(r.id)) ? { costs: costs.get(num(r.id)) } : {}) }
+          : { id: num(r.id), ok: false as const, error: `Clés API manquantes pour ${list[0].company_name}` },
       );
     } else if (plain.length) {
       sent = (await courierOf(ctx)('send', { companyId, ids: plain.map((r) => num(r.id)) }, ctx)) as typeof sent;
@@ -252,6 +256,8 @@ async function sendOrdersLocked(ctx: Ctx, orderIds: number[], forceCompanyId?: n
       }
     }
     const fees = new Map((await ctx.db.query('SELECT wilaya_id, home, desk FROM delivery_fees WHERE company_id=$1', [companyId])).map((f: any) => [num(f.wilaya_id), f]));
+    let weightRule: WeightRule | null = null;
+    const rule = async () => (weightRule ??= await companyWeightRule(ctx.db, companyId));
     for (const s of sent) {
       const r = list.find((x) => num(x.id) === s.id)!;
       if (!s.ok) {
@@ -263,13 +269,15 @@ async function sendOrdersLocked(ctx: Ctx, orderIds: number[], forceCompanyId?: n
         continue;
       }
       const f: any = fees.get(num(r.wilaya_id));
-      const cost = f ? num(r.is_stopdesk ? f.desk : f.home) : null;
+      // the company's own price for this parcel when its answer gives it (ZR), else its price list
+      const cost = s.costs?.delivery ?? (f ? num(r.is_stopdesk ? f.desk : f.home) : null);
       const status = word(kind, 'prepared');
       await ctx.db.query(
         `UPDATE orders SET company_id=$2, tracking=$3, ext_id=$4, label_url=$5, ext_status=$6, ext_status_at=now(),
            delivery_cost = COALESCE($7, delivery_cost), send_error = NULL, send_error_at = NULL, updated_at=now(), version=version+1 WHERE id=$1`,
         [s.id, companyId, s.tracking, s.extId, s.labelUrl, status, cost],
       );
+      if (s.costs) await saveCourierFees(ctx.db, s.id, s.costs, 'send', await rule(), new Date(ctx.now()).toISOString());
       const back = returns.get(s.id);
       if (back)
         await ctx.db.query(
@@ -371,6 +379,18 @@ async function companyLabels(ctx: Ctx, orderIds: number[]): Promise<LabelFile[]>
   return out;
 }
 
+/** Browser preview: what a company with prices by API (ZR) would answer — its price for the place, and once it has the
+ *  parcel, the weight it counts (the products' real one). */
+async function demoCosts(ctx: Ctx, companyId: number, ids: number[], weighed: boolean): Promise<Map<number, CourierCosts>> {
+  const rows = await ctx.db.query(
+    `SELECT o.id, o.is_stopdesk, f.home, f.desk, f.return_fee,
+       (SELECT coalesce(sum(p.weight_kg * i.qty), 0) FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = o.id) AS kg
+     FROM orders o JOIN delivery_fees f ON f.company_id = $1 AND f.wilaya_id = o.wilaya_id WHERE o.id = ANY($2)`,
+    [companyId, ids],
+  );
+  return new Map(rows.map((r: any) => [num(r.id), { delivery: num(r.is_stopdesk ? r.desk : r.home), ret: num(r.return_fee), kg: weighed ? Math.round(Number(r.kg) * 100) / 100 || null : null }]));
+}
+
 // ---------------------------------------------------------------- status sync
 async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[]) {
   const parcels = await ctx.db.query(
@@ -378,13 +398,15 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[]) {
      WHERE company_id = $1 AND tracking IS NOT NULL AND follow_status = ANY($2) ${onlyIds ? 'AND id = ANY($3)' : ''} ORDER BY ext_status_at NULLS FIRST LIMIT 2000`,
     onlyIds ? [c.id, SYNCABLE, onlyIds] : [c.id, SYNCABLE],
   );
-  if (!parcels.length) return { company: c.name, checked: 0, changed: 0 };
+  if (!parcels.length) return { company: c.name, checked: 0, changed: 0, fees: 0 };
   let answers: TrackResult[];
   if (isDemo(ctx)) {
     answers = [];
+    // a company whose API gives its prices: its statuses bring them, with the weight it counted
+    const costs = feesByApi(c.kind) ? await demoCosts(ctx, c.id, parcels.map((p: any) => num(p.id)), true) : new Map<number, CourierCosts>();
     for (const p of parcels) {
       const next = nextStep(p.follow_status, !!p.tracking);
-      if (next) answers.push({ id: num(p.id), status: word(c.kind, next), mapped: next, at: new Date(ctx.now()).toISOString() });
+      if (next) answers.push({ id: num(p.id), status: word(c.kind, next), mapped: next, at: new Date(ctx.now()).toISOString(), ...(costs.has(num(p.id)) ? { costs: costs.get(num(p.id)) } : {}) });
     }
   } else {
     const items: TrackItem[] = parcels.map((p: any) => ({ id: num(p.id), tracking: p.tracking, extId: p.ext_id }));
@@ -393,6 +415,9 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[]) {
   const defaults = ADAPTERS[c.kind]?.statuses ?? {};
   const byStatus = new Map<FollowStatus, number[]>();
   let changed = 0;
+  let feesChanged = 0;
+  let weightRule: WeightRule | null = null;
+  const rule = async () => (weightRule ??= await companyWeightRule(ctx.db, c.id));
   const errors: { ref: string; error: string }[] = [];
   for (const a of answers) {
     const p = parcels.find((x: any) => num(x.id) === a.id);
@@ -402,6 +427,8 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[]) {
       continue;
     }
     const to = resolveStatus(defaults, c.statusMap, a);
+    // what the company charges for it (its prices, the weight it counted): counted instead of the price list
+    if (a.costs && (await saveCourierFees(ctx.db, a.id, a.costs, 'track', await rule(), new Date(ctx.now()).toISOString()))) feesChanged++;
     if (a.status !== p.ext_status) {
       await ctx.db.query('UPDATE orders SET ext_status=$2, ext_status_at=COALESCE($3::timestamptz, now()), updated_at=now() WHERE id=$1', [a.id, a.status.slice(0, 200), safeDate(a.at)]);
       changed++;
@@ -417,7 +444,7 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[]) {
   for (const [status, list] of byStatus) {
     changed += (await setFollow(sys, { ids: list, status, note: `Statut ${c.name}` }, { system: true })).changed.length;
   }
-  return { company: c.name, checked: parcels.length, changed, failed: errors.length, errors: errors.slice(0, 20) };
+  return { company: c.name, checked: parcels.length, changed, fees: feesChanged, failed: errors.length, errors: errors.slice(0, 20) };
 }
 const safeDate = (s: string | null | undefined) => {
   if (!s) return null;

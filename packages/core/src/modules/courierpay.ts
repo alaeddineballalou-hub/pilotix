@@ -11,6 +11,7 @@ import { iso, isoOrNull, num } from '../db';
 import { bad, Ctx, notFound, proc, withActionLock } from '../rpc';
 import { CAISSE_KEY_RE, CaisseKey, caisseLabelOf, checkCaisse, receive } from './cash';
 import { setFollow } from './orders';
+import { applyPayFees } from './courierfees';
 
 const isDemo = (ctx: Ctx) => !ctx.server;
 const sys = (ctx: Ctx): Ctx => ({ ...ctx, session: { ...ctx.session, roles: [...ctx.session.roles, 'admin'], isAdmin: true } });
@@ -124,6 +125,8 @@ export async function payRun(ctx: Ctx, companyId: number) {
     try {
       const lines = (await courier(ctx, 'payLines', { companyId, extId: w.ext_id })) as PayLine[];
       await ctx.db.query('UPDATE courier_payments SET lines = $2 WHERE id = $1 AND lines IS NULL', [w.id, JSON.stringify(lines)]);
+      // what ZR took on each parcel (its prices, its weight fee): the orders' fees are exact now
+      await applyPayFees(ctx.db, companyId, lines, new Date(ctx.now()).toISOString());
     } catch {
       // not now
     }
@@ -192,6 +195,8 @@ async function importPaymentTx(ctx: Ctx, payId: number, into: string) {
     lines = isDemo(ctx) ? [] : ((await courier(ctx, 'payLines', { companyId, extId: p.ext_id })) as PayLine[]);
     await ctx.db.query('UPDATE courier_payments SET lines = $2 WHERE id = $1', [payId, JSON.stringify(lines)]);
   }
+  // what the company took on each parcel (its prices, its weight fee): exact on the orders before they are received
+  await applyPayFees(ctx.db, companyId, lines, new Date(ctx.now()).toISOString());
   const tracks = [...new Set(lines.filter((l) => l.tracking && l.amount > 0).map((l) => l.tracking!))];
   const orders = tracks.length ? await ctx.db.query('SELECT id, tracking, follow_status, cashed FROM orders WHERE company_id = $1 AND tracking = ANY($2) FOR UPDATE', [companyId, tracks]) : [];
   const unpaid = orders.filter((o: any) => !o.cashed);

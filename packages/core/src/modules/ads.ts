@@ -189,7 +189,11 @@ export async function ordersOf(db: Db, productIds: number[], from: string, to: s
      SELECT o.id, o.created_at, o.conf_status, o.follow_status, o.total, o.delivery_cost, o.has_upsell, o.company_id, o.wilaya_id, f.product_id,
             (SELECT COALESCE(sum(i.qty * i.purchase_price), 0) FROM order_items i WHERE i.order_id = o.id) AS achat,
             (SELECT COALESCE(sum(i.qty), 0) FROM order_items i WHERE i.order_id = o.id) AS qty,
-            COALESCE((SELECT df.return_fee FROM delivery_fees df WHERE df.company_id = o.company_id AND df.wilaya_id = o.wilaya_id), 0) AS return_fee
+            -- the return fee the company itself counted (its API: price + weight fee), else its price list
+            COALESCE(
+              CASE WHEN o.courier_fees->>'ret' IS NOT NULL
+                   THEN (o.courier_fees->>'ret')::numeric + COALESCE((o.courier_fees->>'weight')::numeric, (o.courier_fees->>'estRet')::numeric, 0) END,
+              (SELECT df.return_fee FROM delivery_fees df WHERE df.company_id = o.company_id AND df.wilaya_id = o.wilaya_id), 0) AS return_fee
      FROM sales o JOIN firsts f ON f.order_id = o.id
      WHERE f.product_id = ANY($1) AND o.created_at >= $2 AND o.created_at < $3 AND o.conf_status <> 'duplicate'`,
     [productIds, dayStart(from), dayStart(addDays(to, 1))],
