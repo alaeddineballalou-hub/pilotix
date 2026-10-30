@@ -783,5 +783,22 @@
     "manager": "Manager",
     "oldest": "La plus ancienne",
     "none": "Aucune réclamation ouverte 👍"
+  },
+  "risk": {
+    "title": "Clients « Risqué » confirmés",
+    "sub": "Chaque agent qui a confirmé un client « Risqué » quand même, et ce que sont devenus ces colis.",
+    "empty": "Aucun client « Risqué » confirmé sur cette période.",
+    "agent": "Agent",
+    "n": "Confirmés",
+    "delivered": "Livrés",
+    "returned": "Retournés",
+    "cancelled": "Annulés / perdus",
+    "open": "En cours",
+    "rate": "Retours",
+    "auto": "Automatique",
+    "avg": "score moyen {{n}}/100",
+    "total": "Total",
+    "base": "Sur tous les colis confirmés de la période : {{p}} % de retours ({{r}} sur {{f}} terminés).",
+    "baseNone": "Pas encore de colis terminé sur cette période pour comparer."
   }
 }

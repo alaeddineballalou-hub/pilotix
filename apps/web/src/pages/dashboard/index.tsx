@@ -1,5 +1,6 @@
 // Dashboard: one tab per area (Confirmation, Dépôt, Suivi, Livreurs, SAV). Managers only see the areas the admin gave them.
 import { ClaimsLateCard, SuiviMotifStats } from './SuiviMotifs';
+import { RiskConfirmStats } from './RiskConfirms';
 import { ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../lib/backend';
@@ -43,14 +44,17 @@ export function Dashboard({ sub }: PageProps) {
         <Board
           key={area}
           area="confirmation"
-          extra={
-            (m.canEditTeams || m.canEditScope) && (
-              <Fold icon="usercog" title={t('dashboard.tb.settings')} sub={t('dashboard.tb.settingsSub')}>
-                {m.canEditTeams && <TeamEditor meta={m} />}
-                {m.canEditScope && <ScopeCard meta={m} />}
-              </Fold>
-            )
-          }
+          extra={(range) => (
+            <>
+              <RiskConfirmStats range={range} />
+              {(m.canEditTeams || m.canEditScope) && (
+                <Fold icon="usercog" title={t('dashboard.tb.settings')} sub={t('dashboard.tb.settingsSub')}>
+                  {m.canEditTeams && <TeamEditor meta={m} />}
+                  {m.canEditScope && <ScopeCard meta={m} />}
+                </Fold>
+              )}
+            </>
+          )}
         />
       )}
       {(area === 'depot' || area === 'sav') && <Board key={area} area={area} />}
