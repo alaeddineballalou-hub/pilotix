@@ -365,10 +365,10 @@ function ProductsTab() {
                   </div>
                   {detailed.map((v) => (
                     <div key={v.id} className="pd-variant-line">
-                      <b style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{v.photo && <img src={v.photo} alt="" style={{ width: 38, height: 38, objectFit: 'contain', borderRadius: 5 }} />}{v.title}</b>
+                      <b style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{p.photo && <img src={p.photo} alt="" style={{ width: 38, height: 38, objectFit: 'contain', borderRadius: 5 }} />}{v.title}</b>
                       <span className="ltr">{v.sku}</span>
-                      <span>{da(v.cost ?? p.cost)}</span>
-                      <span>{da(v.price ?? p.price)}</span>
+                      <span>{da(p.cost)}</span>
+                      <span>{da(p.price)}</span>
                       <span>{n(stockByVariant.get(v.id) ?? 0)}</span>
                       <label className="pd-availability">
                         <input type="checkbox" checked={v.active} disabled={availability.isPending || !p.active} aria-label={`Variant ${v.title} available for orders`} onChange={(e) => availability.mutate({ variantId: v.id, active: e.target.checked })} />
