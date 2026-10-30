@@ -352,7 +352,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
             )}
           </div>
           {optMode ? (
-            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseCost={Number(f.cost) || 0} baseSku={f.sku.trim() || f.name.trim()} used={usedValues} skipped={skipped} admin={admin} feeGrids={grids.data?.grids ?? []} />
+            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseCost={Number(f.cost) || 0} used={usedValues} skipped={skipped} feeGrids={grids.data?.grids ?? []} />
           ) : (
             <>
               {vars.length ? (
