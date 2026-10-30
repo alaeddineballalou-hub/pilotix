@@ -1,4 +1,5 @@
 import { CONF_DONE_BAD, CONF_TODO, Language, LANGUAGES, normalizePhone } from '@pilotix/shared';
+import { useSwipeMenu } from './swipeMenu';
 import { lazy, ReactNode, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { backend, rpc } from '../lib/backend';
@@ -160,6 +161,7 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
   }, []);
 
   useEffect(() => setNavOpen(false), [page, sub]);
+  useSwipeMenu(navOpen, setNavOpen);
   useEffect(() => {
     document.body.classList.toggle('nav-open', navOpen);
   }, [navOpen]);
