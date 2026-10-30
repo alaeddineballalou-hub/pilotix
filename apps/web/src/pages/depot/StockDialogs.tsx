@@ -19,7 +19,7 @@ export function MoveDialog({ kind, row, onClose }: { kind: 'entry' | 'count' | '
     if (qty === '' || qty < (kind === 'count' ? 0 : 1)) return toast(t('produits.stock.invalidQty'), 'bad');
     if (kind === 'count' && qty === row.qty) return onClose();
     if (kind === 'entry' && (cost === '' || !Number.isInteger(cost) || cost < 0)) return toast('Saisissez le prix d’achat de cette entrée de stock.', 'bad');
-    move.mutate({ variantId: row.variantId, warehouseId: row.warehouseId, kind, qty, note: note.trim() || null, ...(kind === 'entry' ? { unitCost: cost } : {}) });
+    move.mutate({ variantId: row.variantId, warehouseId: row.warehouseId, kind, qty, note: note.trim() || null, ...(kind === 'entry' ? { unitCost: Number(cost) } : {}) });
   };
   const after = qty === '' ? null : kind === 'entry' ? row.qty + qty : kind === 'loss' ? row.qty - qty : qty;
   return (
