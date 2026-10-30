@@ -14,7 +14,7 @@
 // unknown ones are shown as-is and can be mapped by hand with the "Statuts" button.
 import { cacheKeyOf } from './types';
 import type { BagAdded, BagInfo, ChangeInput, ChangeState, ClaimCategory, ClaimState, CourierAdapter, CourierBags, CourierCompany, Desk, Helpers, Parcel, ParcelInfo, TrackItem } from './types';
-import { baseUrl, bestMatch, CourierError, cut, http, intl, needKeys, timeUp } from './util';
+import { baseUrl, bestMatch, CourierError, cut, http, intl, needKeys, sleep, timeUp } from './util';
 
 const STATUSES: CourierAdapter['statuses'] = {
   commande_recue: null, en_traitement: null, appel_confirmation: null, commande_confirmee: null, en_preparation: null, pret_a_expedier: null,
@@ -552,6 +552,26 @@ const webhook: NonNullable<CourierAdapter['webhook']> = {
   },
 };
 
+/** An answer that does not say whether ZR made the parcel: none in time, a network cut, or ZR's own server error. */
+const unsure = (e: any) => e?.status === 502 || /: erreur 5\d\d$/.test(String(e?.message ?? ''));
+/** how long ZR is given to finish a parcel it was slow to make, before Pilotix looks for it (tests set it to 0) */
+export let lateWaitMs = 3000;
+export const setLateWait = (ms: number) => void (lateWaitMs = ms);
+
+/** The parcel ZR already has for this order (its externalId is the order's reference), or null. */
+async function parcelOfOrder(c: CourierCompany, ref: string) {
+  let r: any;
+  try {
+    r = await http(c.name, url(c, `/parcels/search/global?keyword=${encodeURIComponent(ref)}&top=10`), { headers: h(c) });
+  } catch (e: any) {
+    if (keysRefused(e)) throw e;
+    return null;
+  }
+  const list: any[] = Array.isArray(r) ? r : (r?.items ?? r?.parcels ?? []);
+  const x = list.find((p) => String(p?.externalId ?? '') === ref);
+  return x?.id ? { tracking: String(x.trackingNumber || x.id), extId: String(x.id), labelUrl: null } : null;
+}
+
 export const zr: CourierAdapter = {
   statuses: STATUSES,
   payments,
@@ -570,10 +590,28 @@ export const zr: CourierAdapter = {
   },
   async create(c, p, helpers) {
     needKeys(c, 'api_key', 'tenant');
-    const r = await http(c.name, url(c, '/parcels'), { method: 'POST', headers: h(c), json: await parcelBody(c, p, helpers) });
+    // sent again after a failed try: ZR may have made the parcel anyway (its answer came too late) — taken back, never made twice
+    if (p.retry) {
+      const had = await parcelOfOrder(c, p.ref);
+      if (had) return had;
+    }
+    const body = await parcelBody(c, p, helpers);
+    let r: any;
+    try {
+      r = await http(c.name, url(c, '/parcels'), { method: 'POST', headers: h(c), json: body });
+    } catch (e: any) {
+      // no answer in time (or ZR's own server error): ZR may have made the parcel anyway — looked for at once, by itself
+      if (!unsure(e)) throw e;
+      await sleep(lateWaitMs);
+      const had = await parcelOfOrder(c, p.ref);
+      if (had) return had;
+      throw e;
+    }
     const id = r?.id || r?.parcelId;
     if (!id) throw new CourierError('ZR n’a pas renvoyé d’identifiant de colis');
-    const tracking = r?.trackingNumber || (await http(c.name, url(c, `/parcels/${id}`), { headers: h(c) })).trackingNumber;
+    // the parcel exists now: a failed look-up of its number must not make Pilotix think it was refused
+    let tracking = r?.trackingNumber as string | undefined;
+    if (!tracking) tracking = (await http(c.name, url(c, `/parcels/${id}`), { headers: h(c) }).catch(() => null))?.trackingNumber;
     return { tracking: tracking || String(id), extId: String(id), labelUrl: null, costs: costsOf(r) };
   },
   // an SAV exchange: ZR delivers the new parcel and makes its own return parcel for the old product

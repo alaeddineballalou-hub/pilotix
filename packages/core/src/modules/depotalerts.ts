@@ -10,6 +10,7 @@ import { Db, iso, num } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
 import { getSetting, setSetting } from '../settings';
 import { sendPush } from './push';
+import { ScanLang, scanT } from './scantext';
 
 /** only a parcel already prepared alerts: « à préparer » was not picked yet, the change just applies */
 export const DEPOT_STAGES = ['prepared'];
@@ -31,14 +32,16 @@ const norm = (c: string) => String(c || '').trim().replace(/\s+/g, '').toUpperCa
  * One open alert per order: new changes are added to it (an older change to the same thing keeps its first « avant »).
  * A changed order without a courier's code gets a new Pilotix code (its new label); the code on the parcel is kept.
  */
-export async function addDepotAlert(db: Db, ctx: Ctx, orderId: number, stage: string, kind: 'edit' | 'cancel', changes: DepotChange[]) {
+export async function addDepotAlert(db: Db, ctx: Ctx, orderId: number, stage: string, kind: 'edit' | 'cancel', changes: DepotChange[], cancelledCode?: string | null) {
   if (kind === 'edit' && !changes.length) return;
   const o = (await db.query('SELECT tracking, own_tracking FROM orders WHERE id = $1', [orderId]))[0];
   const open = (await db.query('SELECT id, kind, changes, old_code FROM depot_alerts WHERE order_id = $1 AND resolved_at IS NULL ORDER BY id DESC LIMIT 1', [orderId]))[0];
   // the code printed on the parcel now (an open alert already knows it: the parcel has not been relabelled yet)
-  const onParcel = (open?.old_code as string | null) ?? (o?.tracking || o?.own_tracking || null);
+  // (a parcel just cancelled at its old company still carries that company's label)
+  const onParcel = (open?.old_code as string | null) ?? (cancelledCode || o?.tracking || o?.own_tracking || null);
   let newCode: string | null = null;
-  if (kind === 'edit' && !o?.tracking) {
+  // (a parcel moved to another company: one scan of the old label is enough — the new company's label is then stuck on)
+  if (kind === 'edit' && !o?.tracking && !cancelledCode) {
     newCode = (await db.query('UPDATE orders SET own_tracking = px_next_tracking(), updated_at = now() WHERE id = $1 RETURNING own_tracking', [orderId]))[0]?.own_tracking ?? null;
   }
   if (open) {
@@ -72,7 +75,7 @@ export async function addDepotAlert(db: Db, ctx: Ctx, orderId: number, stage: st
 }
 
 /** The people who get the alerts: those chosen in Management, else every depot agent (never the owner). */
-async function recipients(db: Db) {
+export async function recipients(db: Db) {
   const to = (await getSetting(db, 'depotAlerts')).to ?? [];
   const rows = await db.query(`SELECT id FROM profiles WHERE active AND 'depot' = ANY(roles) AND NOT ('admin' = ANY(roles))`);
   const all = rows.map((r: any) => num(r.id));
@@ -190,3 +193,22 @@ export const depotAlertProcs = {
     return { ok: true };
   }),
 };
+
+/**
+ * Someone tried to send (dispatch scan) or take (livreur) a parcel whose red alert is still open: refused, and the
+ * people who get the alerts are told at once. Returns the refusal text, or null when no alert is open.
+ */
+export async function blockedByAlert(ctx: Ctx, orderId: number, ref: string, how: 'dispatch' | 'livreur', lang: ScanLang = 'fr'): Promise<string | null> {
+  const a = (await ctx.db.query('SELECT kind FROM depot_alerts WHERE order_id = $1 AND resolved_at IS NULL ORDER BY id DESC LIMIT 1', [orderId]))[0];
+  if (!a) return null;
+  const who = ctx.session.profile.name;
+  const to = (await recipients(ctx.db)).filter((x) => x !== ctx.session.profile.id);
+  await sendPush(ctx, to, {
+    title: `🚨 ${ref} : ${who} a essayé de ${how === 'livreur' ? 'le prendre' : 'l’expédier'}`,
+    body: a.kind === 'cancel' ? 'Commande annulée : retirez le colis et scannez son étiquette.' : 'Commande modifiée : réglez l’alerte rouge avant qu’il parte.',
+    tag: `depot-alert-try-${orderId}`,
+    url: '#/accueil',
+    alarm: true,
+  });
+  return scanT(lang, a.kind === 'cancel' ? 'alertCancel' : 'alertEdit', { ref });
+}

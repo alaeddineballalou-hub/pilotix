@@ -86,6 +86,8 @@ async function readyIds(db: Db): Promise<number[]> {
 export async function pick(ctx: Ctx, i: { productId: number; variantId: number | null; qty: number; rupture: boolean }) {
   return ctx.db.tx(async (tx) => {
     const vid = i.variantId ?? null;
+    // two « J'ai pris » for the same product at the same moment: one after the other, so the pool is never counted twice
+    await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`pick:${i.productId}:${vid ?? 0}`]);
     const poolRow = (await tx.query('SELECT qty FROM depot_pick_pool WHERE product_id = $1 AND variant_id IS NOT DISTINCT FROM $2', [i.productId, vid]))[0];
     let left = i.qty + (poolRow ? num(poolRow.qty) : 0);
     const lines = await tx.query(
@@ -98,10 +100,12 @@ export async function pick(ctx: Ctx, i: { productId: number; variantId: number |
     if (!lines.length) throw bad('Plus rien à prendre pour ce produit.');
     const before = new Set(await readyIds(tx));
     let served = 0;
+    const touched: { id: number; order: number; from: number }[] = [];
     for (const l of lines) {
       const need = num(l.qty) - num(l.picked_qty);
       if (need > left) continue;
       await tx.query('UPDATE order_items SET picked_qty = qty WHERE id = $1', [l.id]);
+      touched.push({ id: num(l.id), order: num(l.order_id), from: num(l.picked_qty) });
       left -= need;
       served += need;
     }
@@ -111,6 +115,13 @@ export async function pick(ctx: Ctx, i: { productId: number; variantId: number |
     // what is still missing: on the list "À ramener au dépôt", or off it when everything was taken
     const missing = Math.max(0, needAll - served - left);
     const had = (await tx.query('SELECT qty FROM depot_restock WHERE product_id = $1 AND variant_id IS NOT DISTINCT FROM $2', [i.productId, vid]))[0];
+    // what this pick changed, kept a few seconds so it can be undone (« Annuler »)
+    const log = (
+      await tx.query(
+        'INSERT INTO depot_pick_log (user_id, product_id, variant_id, qty, served, pool_before, restock_before) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id',
+        [ctx.session.profile.id, i.productId, vid, i.qty, JSON.stringify(touched), poolRow ? num(poolRow.qty) : 0, had ? num(had.qty) : null],
+      )
+    )[0];
     if (missing === 0 || i.rupture || had) await tx.query('DELETE FROM depot_restock WHERE product_id = $1 AND variant_id IS NOT DISTINCT FROM $2', [i.productId, vid]);
     // rupture: the whole shortfall; already on the list: kept, never more than what is still missing
     const keep = missing === 0 ? 0 : i.rupture ? missing : had ? Math.min(num(had.qty), missing) : 0;
@@ -118,25 +129,83 @@ export async function pick(ctx: Ctx, i: { productId: number; variantId: number |
     const after = await readyIds(tx);
     const fresh = after.filter((x) => !before.has(x));
     ctx.emit({ type: 'orders' });
-    return { served, waiting: left, missing, readyNow: fresh.length, ready: after.length, freshIds: fresh };
+    return { served, waiting: left, missing, readyNow: fresh.length, ready: after.length, freshIds: fresh, logId: num(log.id) };
   });
+}
+
+/** How long a « J'ai pris » can be undone (the phone shows « Annuler » 3 seconds; a slow network gets a little more). */
+const UNDO_MS = 15_000;
+
+/** « Annuler » right after a « J'ai pris »: everything it changed goes back as it was. */
+export async function unpick(ctx: Ctx, logId: number) {
+  return ctx.db.tx(async (tx) => {
+    const l = (await tx.query('SELECT * FROM depot_pick_log WHERE id = $1 FOR UPDATE', [logId]))[0];
+    if (!l || num(l.user_id) !== ctx.session.profile.id) throw bad('Rien à annuler.');
+    if (l.undone_at) return { ok: true };
+    if (l.done_at || Date.parse(String(l.created_at)) < ctx.now() - UNDO_MS) throw bad('Trop tard pour annuler : les commandes sont déjà parties en dispatch.');
+    const vid = numOrNull(l.variant_id);
+    await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`pick:${num(l.product_id)}:${vid ?? 0}`]);
+    const later = (await tx.query('SELECT 1 FROM depot_pick_log WHERE product_id = $1 AND variant_id IS NOT DISTINCT FROM $2 AND id > $3 AND undone_at IS NULL LIMIT 1', [l.product_id, vid, logId]))[0];
+    if (later) throw bad('Quelqu’un a déjà pris ce produit après vous : corrigez avec le responsable.');
+    const served = (typeof l.served === 'string' ? JSON.parse(l.served) : l.served ?? []) as { id: number; order: number; from: number }[];
+    if (served.length) {
+      const moved = (await tx.query(`SELECT 1 FROM orders WHERE id = ANY($1) AND follow_status IS DISTINCT FROM 'to_prepare' LIMIT 1`, [served.map((x) => x.order)]))[0];
+      if (moved) throw bad('Trop tard pour annuler : une commande est déjà partie en dispatch.');
+    }
+    for (const x of served) await tx.query('UPDATE order_items SET picked_qty = $2 WHERE id = $1', [x.id, x.from]);
+    await tx.query('DELETE FROM depot_pick_pool WHERE product_id = $1 AND variant_id IS NOT DISTINCT FROM $2', [l.product_id, vid]);
+    if (num(l.pool_before) > 0) await tx.query('INSERT INTO depot_pick_pool (product_id, variant_id, qty) VALUES ($1, $2, $3)', [l.product_id, vid, num(l.pool_before)]);
+    await tx.query('DELETE FROM depot_restock WHERE product_id = $1 AND variant_id IS NOT DISTINCT FROM $2', [l.product_id, vid]);
+    if (l.restock_before !== null) await tx.query('INSERT INTO depot_restock (product_id, variant_id, qty, updated_by) VALUES ($1, $2, $3, $4)', [l.product_id, vid, num(l.restock_before), ctx.session.profile.id]);
+    await tx.query('UPDATE depot_pick_log SET undone_at = now() WHERE id = $1', [logId]);
+    ctx.emit({ type: 'orders' });
+    return { ok: true };
+  });
+}
+
+/** The « Annuler » time is over: the orders picked whole go on (« En dispatch » with a company, else « À attribuer »). */
+export async function pickDone(ctx: Ctx, logId: number) {
+  const l = (await ctx.db.query('UPDATE depot_pick_log SET done_at = now() WHERE id = $1 AND done_at IS NULL AND undone_at IS NULL RETURNING served', [logId]))[0];
+  if (!l) return { dispatched: 0, toAssign: 0, refused: 0 };
+  const served = (typeof l.served === 'string' ? JSON.parse(l.served) : l.served ?? []) as { order: number }[];
+  const ready = new Set(await readyIds(ctx.db));
+  const ids = [...new Set(served.map((x) => x.order))].filter((x) => ready.has(x));
+  const d = ids.length ? await autoDispatch(ctx, ids) : { dispatched: 0, toAssign: 0, failed: [] };
+  return { dispatched: d.dispatched, toAssign: d.toAssign, refused: d.failed.length };
+}
+
+/** Picks whose « Annuler » time passed without « OK » (the phone was closed): their orders go on now. */
+async function pickSweep(ctx: Ctx) {
+  const old = await ctx.db.query(`SELECT id FROM depot_pick_log WHERE done_at IS NULL AND undone_at IS NULL AND created_at < $1::timestamptz ORDER BY id LIMIT 50`, [new Date(ctx.now() - UNDO_MS).toISOString()]);
+  for (const r of old) await pickDone(ctx, num(r.id));
 }
 
 export const pickingProcs = {
   /** The products to take (phones, "À préparer"). */
-  'depot.pickList': proc([...DEPOT], z.object({}), (ctx) => pickList(ctx.db)),
+  'depot.pickList': proc([...DEPOT], z.object({}), async (ctx) => {
+    await pickSweep(ctx);
+    return pickList(ctx.db);
+  }),
 
   /** "J'ai pris n" for one product; rupture: what is still missing goes on "À ramener au dépôt". */
   'depot.pick': proc(
     [...DEPOT],
-    z.object({ productId: id, variantId: id.nullable(), qty: z.number().int().min(0).max(100_000), rupture: z.boolean().default(false) }),
+    // undo: the phone shows « Annuler » a few seconds; the orders picked whole go on with « depot.pickDone » after it
+    z.object({ productId: id, variantId: id.nullable(), qty: z.number().int().min(0).max(100_000), rupture: z.boolean().default(false), undo: z.boolean().default(false) }),
     async (ctx, i) => {
       const { freshIds, ...r } = await pick(ctx, i);
+      if (i.undo) return { ...r, dispatched: 0, toAssign: 0, refused: 0 };
+      await ctx.db.query('UPDATE depot_pick_log SET done_at = now() WHERE id = $1', [r.logId]);
       // picked whole: an order with a company goes to « En dispatch » by itself; the others wait in « À attribuer »
       const d = freshIds.length ? await autoDispatch(ctx, freshIds) : { dispatched: 0, toAssign: 0, failed: [] };
       return { ...r, dispatched: d.dispatched, toAssign: d.toAssign, refused: d.failed.length };
     },
   ),
+
+  /** « Annuler » right after « J'ai pris ». */
+  'depot.pickUndo': proc([...DEPOT], z.object({ id }), (ctx, i) => unpick(ctx, i.id)),
+  /** The « Annuler » time is over: the orders picked whole go on. */
+  'depot.pickDone': proc([...DEPOT], z.object({ id }), (ctx, i) => pickDone(ctx, i.id)),
 
   /** The orders that have all their products (phones, "En préparation"). */
   'depot.ready': proc([...DEPOT], z.object({}), async (ctx) => Promise.all((await readyIds(ctx.db)).slice(0, 200).map((oid) => getOrder(ctx, oid)))),

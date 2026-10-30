@@ -10,7 +10,7 @@
 // card's edge has that colour too) — the picker takes by colour.
 import type { Order } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { CSSProperties, useState } from 'react';
+import { CSSProperties, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../lib/backend';
 import { rpc } from '../../lib/backend';
@@ -149,42 +149,86 @@ function PickTab({ rows, error, retry, onReady }: { rows?: Row[]; error: Error |
   const [busy, setBusy] = useState(false);
   const [notify, setNotify] = useState(false);
   const [showList, setShowList] = useState(false);
+  // « Vous avez pris … ? » before counting
+  const [sure, setSure] = useState<Row | null>(null);
+  // « Annuler » for 3 seconds after « J'ai pris »
+  const [undo, setUndo] = useState<{ id: number; text: string } | null>(null);
+  // a quick double tap would count the same units twice (the button is disabled only after the next render)
+  const running = useRef(false);
   const done = useAction('depot.restockDone', { success: t('depot.ph.received') });
+
+  // the « Annuler » time is over: the orders picked whole go on (« En dispatch », or « À attribuer »)
+  useEffect(() => {
+    if (!undo) return;
+    const timer = setTimeout(async () => {
+      setUndo(null);
+      try {
+        const d = await rpc('depot.pickDone', { id: undo.id });
+        const parts = [
+          d.dispatched ? t('depot.as.sentNow', { count: d.dispatched }) : '',
+          d.toAssign ? t('depot.as.waitNow', { count: d.toAssign }) : '',
+          d.refused ? t('depot.as.refusedNow', { count: d.refused }) : '',
+        ].filter(Boolean);
+        if (parts.length) toast(parts.join(' · '), d.refused ? 'bad' : 'ok');
+      } catch (e: any) {
+        toast(e.message, 'bad');
+      } finally {
+        qc.invalidateQueries();
+      }
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [undo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (error) return <ErrorBox error={error} onRetry={retry} />;
   if (!rows) return <Loading />;
 
   const send = async (r: Row, qty: number, rup: boolean) => {
+    if (running.current) return;
+    running.current = true;
     setBusy(true);
     try {
-      const res = await rpc('depot.pick', { productId: r.productId, variantId: r.variantId, qty, rupture: rup });
+      const res = await rpc('depot.pick', { productId: r.productId, variantId: r.variantId, qty, rupture: rup, undo: true });
       const name = `${r.name}${r.variant ? ` ${r.variant}` : ''}`;
-      toast(
-        [
+      setUndo({
+        id: res.logId,
+        text: [
           t('depot.ph.taken', { n: qty, name }),
-          res.dispatched ? t('depot.as.sentNow', { count: res.dispatched }) : '',
-          res.toAssign ? t('depot.as.waitNow', { count: res.toAssign }) : '',
-          res.refused ? t('depot.as.refusedNow', { count: res.refused }) : '',
           res.missing && rup ? t('depot.ph.toBring', { n: res.missing }) : res.missing ? t('depot.ph.stillToTake', { n: res.missing }) : '',
         ]
           .filter(Boolean)
           .join(' · '),
-        'ok',
-      );
+      });
       setOpen(null);
       setAsk(null);
+      setSure(null);
       qc.invalidateQueries();
     } catch (e: any) {
       toast(e.message, 'bad');
     } finally {
+      running.current = false;
       setBusy(false);
+    }
+  };
+  const cancelPick = async () => {
+    if (!undo || running.current) return;
+    running.current = true;
+    const id = undo.id;
+    setUndo(null);
+    try {
+      await rpc('depot.pickUndo', { id });
+      toast(t('depot.ph.undone'), 'ok');
+    } catch (e: any) {
+      toast(e.message, 'bad');
+    } finally {
+      running.current = false;
+      qc.invalidateQueries();
     }
   };
   const ok = (r: Row) => {
     if (took < r.need) {
       setRupture(true);
       setAsk(r);
-    } else send(r, took, false);
+    } else setSure(r);
   };
   const rs = (restock.data ?? []) as Restock[];
 
@@ -345,6 +389,33 @@ function PickTab({ rows, error, retry, onReady }: { rows?: Row[]; error: Error |
             </button>
           </div>
         </Modal>
+      )}
+      {sure && (
+        <Modal
+          title={t('depot.ph.sureTitle', { n: took, name: `${sure.name}${sure.variant ? ` ${sure.variant}` : ''}` })}
+          onClose={() => setSure(null)}
+          footer={
+            <>
+              <button type="button" className="btn" onClick={() => setSure(null)}>
+                {t('depot.ph.sureNo')}
+              </button>
+              <button type="button" className="btn ok" disabled={busy} onClick={() => send(sure, took, false)}>
+                <Icon name="check" /> {t('depot.ph.sureYes')}
+              </button>
+            </>
+          }
+        >
+          <p className="muted small">{t('depot.ph.sureHint')}</p>
+        </Modal>
+      )}
+      {undo && (
+        <div className="pxd-undo" role="status">
+          <span>{undo.text}</span>
+          <button type="button" className="btn small" onClick={cancelPick}>
+            {t('depot.ph.undo')}
+          </button>
+          <i className="pxd-undo-bar" aria-hidden="true" />
+        </div>
       )}
       {notify && <NotifyModal rows={rs} onClose={() => setNotify(false)} />}
     </>

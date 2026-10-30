@@ -1,7 +1,7 @@
 // « Dispatchées »: the pickup bags (sacs de ramassage) of the companies that take them from Pilotix (ZR Express). The
 // parcels handed over go in a bag made here; its label is printed from here; the company says how many it has processed.
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { backend, rpc } from '../../lib/backend';
 import type { Out } from '../../lib/backend';
@@ -148,6 +148,7 @@ function CompanyBags({ c, phone }: { c: Company; phone?: boolean }) {
   const qc = useQueryClient();
   const label = useBagLabel();
   const [busy, setBusy] = useState(false);
+  const running = useRef(false);
   const [open, setOpen] = useState<Bag | null>(null);
   const [all, setAll] = useState(false);
   // a bag made today that the company has not started: new parcels can go in it
@@ -155,6 +156,9 @@ function CompanyBags({ c, phone }: { c: Company; phone?: boolean }) {
   const shown = all ? c.bags : c.bags.slice(0, phone ? 2 : 4);
 
   const make = async (into: Bag | null) => {
+    // a quick double click would ask for two bags (the button is disabled only after the next render)
+    if (running.current) return;
+    running.current = true;
     const w = label.prepare();
     setBusy(true);
     try {
@@ -167,6 +171,7 @@ function CompanyBags({ c, phone }: { c: Company; phone?: boolean }) {
       w?.close();
       toast(e.message, 'bad');
     } finally {
+      running.current = false;
       setBusy(false);
     }
   };
@@ -267,12 +272,15 @@ export function BagBulk({ ids, done }: { ids: number[]; done: () => void }) {
   const qc = useQueryClient();
   const label = useBagLabel();
   const [busy, setBusy] = useState(false);
+  const running = useRef(false);
   return (
     <button
       type="button"
       className="btn small"
       disabled={busy}
       onClick={async () => {
+        if (running.current) return;
+        running.current = true;
         const w = label.prepare();
         setBusy(true);
         try {
@@ -296,6 +304,7 @@ export function BagBulk({ ids, done }: { ids: number[]; done: () => void }) {
           w?.close();
           toast(e.message, 'bad');
         } finally {
+          running.current = false;
           setBusy(false);
         }
       }}

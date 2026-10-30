@@ -17,9 +17,10 @@ const toPrepare = async (n: number) =>
   (await db.query(`SELECT id FROM orders WHERE conf_status = 'confirmed' AND follow_status = 'to_prepare' AND tracking IS NULL AND NOT is_exchange ORDER BY id DESC LIMIT $1`, [n])).map((r: any) => Number(r.id));
 /** Sends parcels to ZR and hands them over (Dispatchées), as the depot does. */
 async function handedToZr(n: number) {
-  const depot = await as(EMAILS.depot);
+  const admin = await as(EMAILS.admin);
   const ids = await toPrepare(n);
-  await call('depot.dispatch', depot, { ids, companyId: await companyId('zr') });
+  await db.query('UPDATE order_items SET picked_qty = qty WHERE order_id = ANY($1)', [ids]);
+  await call('depot.dispatch', admin, { ids, companyId: await companyId('zr') });
   await db.query(`UPDATE orders SET follow_status = 'shipped', shipped_at = now(), ext_status_at = now() - interval '5 minutes' WHERE id = ANY($1)`, [ids]);
   return ids;
 }

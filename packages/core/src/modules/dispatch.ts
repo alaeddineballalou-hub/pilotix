@@ -80,6 +80,33 @@ export async function dispatchOrders(ctx: Ctx, ids: number[], companyId?: number
   return { moved, sent, failed };
 }
 
+/**
+ * « Envoyer au dispatch » and « Société… » (the depot's own buttons): an order leaves « À préparer » only once all its
+ * products are picked, and with a company (our own delivery: with its livreur). Choosing the company of an order still
+ * in « À préparer » is « À attribuer »'s job: managers and admins only. « Autre société » in « En dispatch » stays the
+ * depot's (a refused parcel), but never to our own delivery without a livreur.
+ */
+export async function checkDispatch(ctx: Ctx, ids: number[], companyId?: number) {
+  const target = companyId ? (await ctx.db.query('SELECT kind, active FROM delivery_companies WHERE id = $1', [companyId]))[0] : null;
+  if (companyId && (!target || !target.active)) throw bad('Société introuvable');
+  const rows = await ctx.db.query(
+    `SELECT o.id, o.ref, o.follow_status, o.company_id, o.livreur_id, c.kind, (${READY_SQL}) AS ready
+       FROM orders o LEFT JOIN delivery_companies c ON c.id = o.company_id WHERE o.id = ANY($1)`,
+    [ids],
+  );
+  for (const r of rows) {
+    if (r.follow_status !== 'to_prepare' && r.follow_status !== 'prepared') continue;
+    const kind = companyId ? target.kind : r.kind;
+    // (a new company forgets the livreur: our own delivery then needs « À attribuer »)
+    if (kind === 'own' && (companyId ? num(r.company_id) !== companyId || !r.livreur_id : !r.livreur_id))
+      throw bad(`${r.ref} : Livraison privée sans livreur — choisissez-le dans « À attribuer »`);
+    if (r.follow_status !== 'to_prepare') continue;
+    if (!r.ready) throw bad(`${r.ref} : tous ses produits ne sont pas encore pris (« J’ai pris »)`);
+    if (companyId && num(r.company_id) !== companyId && !canAssign(ctx)) throw forbidden('Seuls les managers et les admins choisissent la société (« À attribuer »)');
+    if (!companyId && !r.company_id) throw bad(`${r.ref} : pas encore de société — elle se choisit dans « À attribuer »`);
+  }
+}
+
 /** A parcel the courier refused: the reason stays on the order (shown in « En dispatch ») and in its history. */
 export async function keepRefusal(db: Db, orderId: number, error: string, userId: number | null) {
   const had = (await db.query('SELECT send_error FROM orders WHERE id = $1', [orderId]))[0]?.send_error;

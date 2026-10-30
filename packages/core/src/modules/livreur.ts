@@ -10,8 +10,9 @@ import { z } from 'zod';
 import { Db, iso, num } from '../db';
 import { bad, Ctx, proc } from '../rpc';
 import { DEFAULT_SETTINGS, getSetting, setSetting } from '../settings';
-import { addEvent, getOrder, setFollow } from './orders';
+import { addEvent, getOrder, setFollow, handsText, inHands } from './orders';
 export { hideCustomer, NOT_TAKEN } from './orders';
+import { blockedByAlert } from './depotalerts';
 import { sendPush } from './push';
 
 /** Today in Algeria (UTC+1, no summer time), as YYYY-MM-DD. */
@@ -48,8 +49,19 @@ export async function takeParcel(ctx: Ctx, raw: string) {
   if (from === me && ['out_for_delivery', 'failed', 'alert', 'in_exchange'].includes(status)) return { already: true, order: await getOrder(ctx, num(o.id)), from: null };
   if (!['prepared', 'shipped', 'out_for_delivery', 'failed', 'alert'].includes(status)) throw bad(`${o.ref} n’est pas à livrer.`);
   const oid = num(o.id);
+  // already in another livreur's hands (his scan, his cash): it never changes hands — only « Demander le retour »
+  const hands = (await inHands(ctx.db, [oid]))[0];
+  if (hands && hands.livreurId !== me) throw bad(handsText(hands));
+  // its red alert is still open (changed or cancelled after packing): he does not take it, the alert people are told
+  const held = await blockedByAlert(ctx, oid, o.ref, 'livreur');
+  if (held) throw bad(held);
   const myName = ctx.session.profile.name;
-  await ctx.db.query('UPDATE orders SET livreur_id = $2, updated_at = now(), version = version + 1 WHERE id = $1', [oid, me]);
+  // only if nobody took it in the meantime (two scans at the same moment: one wins)
+  const won = await ctx.db.query(
+    'UPDATE orders SET livreur_id = $2, updated_at = now(), version = version + 1 WHERE id = $1 AND livreur_id IS NOT DISTINCT FROM $3 AND follow_status = $4 RETURNING id',
+    [oid, me, from, status],
+  );
+  if (!won.length) throw bad(`${o.ref} vient d’être pris par quelqu’un d’autre.`);
   if (from && from !== me) {
     await addEvent(ctx.db, oid, me, 'note', null, 'event', `Pris par ${myName} au lieu de ${o.livreur_name ?? 'un autre livreur'}`);
     await sendPush(ctx, await managers(ctx.db), {

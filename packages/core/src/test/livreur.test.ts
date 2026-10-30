@@ -101,7 +101,9 @@ test('« À retourner »: a parcel going back and the old product of an exchange
   const ex: any = await call('sav.exchange', suivi, { id: t.id, kind: 'same', lines: [{ itemId: g.order.items[0].id, qty: 1 }], deliveryFee: 300 });
   const x = Number(ex.order.id);
   await call('orders.assignCompany', admin, { ids: [x], companyId: own, livreurId: lamineId });
-  for (const status of ['prepared', 'out_for_delivery', 'delivered']) await call('orders.setFollow', admin, { ids: [x], status });
+  for (const status of ['prepared', 'out_for_delivery']) await call('orders.setFollow', admin, { ids: [x], status });
+  // in his hands now: only he marks it delivered
+  await call('orders.setFollow', lamine, { ids: [x], status: 'delivered' });
   const t1 = (await call('delivery.tournee', lamine, {})) as any;
   const back = t1.toReturn.map((r: any) => r.id);
   assert.ok(back.includes(o.id), 'the refused parcel');

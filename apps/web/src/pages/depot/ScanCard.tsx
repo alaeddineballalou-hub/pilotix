@@ -12,6 +12,9 @@ import { trackOf } from '../../lib/items';
 import { useIsPhone } from '../../lib/useMedia';
 import './stages.css';
 
+/** The scanner answers in the worker's language. */
+const scanLang = (l: string | undefined): 'fr' | 'en' | 'ar' => (l?.startsWith('ar') ? 'ar' : l?.startsWith('en') ? 'en' : 'fr');
+
 type Kind = 'ok' | 'bad' | 'warn';
 interface Shown {
   kind: Kind | 'pick' | 'busy' | 'idle';
@@ -31,7 +34,7 @@ const last = { code: '', at: 0 };
  *  On a phone the camera is the only way to scan: one big button, no douchette box; the camera stays open and shows
  *  the result of each parcel it reads. */
 export function ScanCard({ mode, onBack, autoCamera }: { mode: Mode; onBack?: () => void; autoCamera?: boolean }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const qc = useQueryClient();
   const phone = useIsPhone();
   const inp = useRef<HTMLInputElement>(null);
@@ -66,7 +69,7 @@ export function ScanCard({ mode, onBack, autoCamera }: { mode: Mode; onBack?: ()
       setShown({ kind: 'busy', code: j.code });
       let v: Shown;
       try {
-        const r = await rpc('depot.scan', { code: j.code, orderId: j.orderId, mode });
+        const r = await rpc('depot.scan', { code: j.code, orderId: j.orderId, mode, lang: scanLang(i18n.language) });
         v = { kind: r.kind as Shown['kind'], code: r.code || j.code, why: r.why, fix: r.fix, order: r.order ?? null, list: r.list };
       } catch (e: any) {
         v = { kind: 'bad', code: j.code, why: t('scanner.refused', { msg: e?.message ?? '' }), fix: t('scanner.refusedFix') };

@@ -236,66 +236,6 @@ export function useToDispatch() {
   return { run, busy };
 }
 
-function DispatchBulk({ ids, done }: { ids: number[]; done: () => void }) {
-  const { t } = useTranslation();
-  const companies = useRpc('depot.companies', {});
-  const [company, setCompany] = useState('');
-  const go = useToDispatch();
-  return (
-    <>
-      <select aria-label={t('depot.toDispatch.partner')} value={company} style={{ width: 'auto' }} disabled={go.busy} onChange={(e) => setCompany(e.target.value)}>
-        <option value="">{t('depot.toDispatch.partner')}</option>
-        {companies.data?.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.name}
-          </option>
-        ))}
-      </select>
-      <button className="btn small ok" disabled={!company || go.busy} onClick={() => go.run(ids, Number(company), done)}>
-        {t('depot.toDispatch.button')} ›
-      </button>
-    </>
-  );
-}
-
-function DispatchRow({ o }: { o: Order }) {
-  const { t } = useTranslation();
-  const companies = useRpc('depot.companies', {});
-  const go = useToDispatch();
-  if (o.companyId)
-    return (
-      <button className="btn small ok" disabled={go.busy} onClick={() => go.run([o.id], null)}>
-        {t('depot.toDispatch.button')} ›
-      </button>
-    );
-  return (
-    <select aria-label={t('depot.toDispatch.partner')} value="" style={{ width: 'auto' }} disabled={go.busy} onChange={(e) => e.target.value && go.run([o.id], Number(e.target.value))}>
-      <option value="">{t('depot.toDispatch.partner')}</option>
-      {companies.data?.map((c) => (
-        <option key={c.id} value={c.id}>
-          {c.name}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-function Preparer() {
-  const { t } = useTranslation();
-  return (
-    <>
-      <ToBuy />
-      <DepotOrderList
-        title={t('depot.lists.preparer')}
-        follow={['to_prepare']}
-        sort="confirmed_at"
-        bulk={(ids, clear) => <DispatchBulk ids={ids} done={clear} />}
-        actions={(o) => <DispatchRow o={o} />}
-      />
-    </>
-  );
-}
-
 // ---------------------------------------------------------------- En dispatch
 function Prepares() {
   const { t } = useTranslation();

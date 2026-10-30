@@ -53,6 +53,8 @@ export interface Parcel {
   is_exchange: boolean;
   tracking: string | null;
   ext_id: string | null;
+  /** an earlier try failed (refused, or no answer in time): the courier may have made the parcel anyway */
+  retry?: boolean;
 }
 
 /** What the courier itself charges for one parcel, from its API (ZR): it counts instead of the price list. */

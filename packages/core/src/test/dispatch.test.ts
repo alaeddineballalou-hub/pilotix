@@ -12,12 +12,18 @@ let as: (email: string, server?: Ctx['server']) => Promise<Ctx>;
 
 before(async () => {
   ({ db, as } = await setup(400));
+  // Karim runs the depot here: he may choose the company (« À attribuer »), like a manager ticked in Utilisateurs
+  await db.query(`UPDATE profiles SET can_assign = true WHERE email = $1`, [EMAILS.depot]);
 });
 
 const companyId = async (kind: string) => Number((await db.query('SELECT id FROM delivery_companies WHERE kind = $1 ORDER BY id LIMIT 1', [kind]))[0].id);
 const row = async (id: number) => (await db.query('SELECT follow_status, tracking, own_tracking, company_id FROM orders WHERE id = $1', [id]))[0];
-const toPrepare = async (n: number) =>
-  (await db.query(`SELECT id FROM orders WHERE conf_status = 'confirmed' AND follow_status = 'to_prepare' AND tracking IS NULL AND NOT is_exchange ORDER BY id LIMIT $1`, [n])).map((r: any) => Number(r.id));
+/** orders still « À préparer », all their products picked (« J'ai pris »): ready to leave */
+const toPrepare = async (n: number) => {
+  const ids = (await db.query(`SELECT id FROM orders WHERE conf_status = 'confirmed' AND follow_status = 'to_prepare' AND tracking IS NULL AND NOT is_exchange ORDER BY id LIMIT $1`, [n])).map((r: any) => Number(r.id));
+  await db.query('UPDATE order_items SET picked_qty = qty WHERE order_id = ANY($1)', [ids]);
+  return ids;
+};
 
 test('Envoyer au dispatch with a company that has an API: in « En dispatch » with the company’s own number', async () => {
   const depot = await as(EMAILS.depot);
@@ -42,8 +48,9 @@ test('Envoyer au dispatch with a company that has an API: in « En dispatch » w
 test('own livreurs keep the Pilotix number: nothing is sent', async () => {
   const depot = await as(EMAILS.depot);
   const own = await companyId('own');
+  const livreur = Number((await db.query(`SELECT id FROM profiles WHERE email = $1`, [EMAILS.livreur]))[0].id);
   const [a] = await toPrepare(1);
-  const r: any = await call('depot.dispatch', depot, { ids: [a], companyId: own });
+  const r: any = await call('depot.assign', depot, { ids: [a], companyId: own, livreurId: livreur });
   assert.deepEqual([r.moved, r.sent, r.failed.length], [1, 0, 0]);
   const o = await row(a);
   assert.equal(o.follow_status, 'prepared');

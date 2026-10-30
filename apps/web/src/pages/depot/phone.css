@@ -123,3 +123,13 @@ html:root[data-theme="dark"] .pxd-tabs button:not(.on) b { background: rgba(255,
 .pxd-tabs { overflow-x: auto; scrollbar-width: none; }
 .pxd-tabs::-webkit-scrollbar { display: none; }
 .pxd-tabs button { flex: 1 0 auto; white-space: nowrap; padding: 0 12px; }
+
+/* « Annuler » for 3 seconds after « J'ai pris » */
+.pxd-undo { position: fixed; inset-inline: 12px; bottom: max(18px, env(safe-area-inset-bottom, 0px)); z-index: 10040; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: var(--ink, #1f2937); color: #fff; box-shadow: 0 10px 30px rgb(0 0 0 / 0.25); overflow: hidden; }
+.pxd-undo > span { flex: 1; min-width: 0; font-weight: 600; }
+.pxd-undo .btn { flex: none; background: #fff; color: #111; border-color: transparent; font-weight: 700; }
+.pxd-undo-bar { position: absolute; inset-inline-start: 0; bottom: 0; height: 3px; width: 100%; background: var(--ok, #22c55e); transform-origin: left; animation: pxd-undo 3s linear forwards; }
+[dir='rtl'] .pxd-undo-bar { transform-origin: right; }
+@keyframes pxd-undo { to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .pxd-undo-bar { animation: none; } }
+@media (min-width: 720px) { .pxd-undo { inset-inline: auto; inset-inline-end: 24px; width: 420px; } }

@@ -7,7 +7,7 @@ import { KINDS } from '../couriers/kinds';
 import { keysOk } from '../couriers/load';
 import type { BagAdded, BagInfo, LabelResult, TrackItem } from '../couriers/types';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
-import { bad, Ctx, notFound, proc } from '../rpc';
+import { bad, Ctx, notFound, proc, withActionLock } from '../rpc';
 import { addEvent } from './orders';
 
 const id = z.number().int().positive();
@@ -79,7 +79,12 @@ async function waitingOf(db: Db, companyId: number, onlyIds?: number[]) {
 }
 
 /** Puts parcels in a bag: a new one (bagId null) or one already made. Returns what went in and what the courier refused. */
-async function fill(ctx: Ctx, companyId: number, bagId: number | null, ids: number[] | null) {
+/** One bag at a time per company: a double click on « Créer un sac », or two people at once, never make two bags. */
+function fill(ctx: Ctx, companyId: number, bagId: number | null, ids: number[] | null) {
+  return withActionLock(ctx.db, `bag:${companyId}`, ctx.session.profile.id, 'Un sac est déjà en cours pour cette société : attendez un instant', () => fillNow(ctx, companyId, bagId, ids));
+}
+
+async function fillNow(ctx: Ctx, companyId: number, bagId: number | null, ids: number[] | null) {
   const company = (await bagCompanies(ctx, companyId))[0];
   if (!company) throw bad('Cette société ne fait pas de sacs de ramassage depuis Pilotix');
   const rows = await waitingOf(ctx.db, companyId, ids ?? undefined);

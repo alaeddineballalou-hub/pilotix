@@ -9,7 +9,9 @@ import { assignCompanies, getOrder, setFollow } from './orders';
 import { landingSettings, quickCreatePage } from './landingquery';
 import { RESERVED } from './stockquery';
 import { releaseNoStock } from './nostock';
-import { dispatchOrders } from './dispatch';
+import { blockedByAlert } from './depotalerts';
+import { atIn, confIn, dayIn, followIn, ScanLang, scanT } from './scantext';
+import { checkDispatch, dispatchOrders } from './dispatch';
 import { getPrefs } from './prefs';
 
 // ---------------------------------------------------------------- types
@@ -587,45 +589,51 @@ async function companyKind(db: Db, companyId: number | null) {
 export type ScanMode = 'dispatch' | 'back' | 'return' | 'exchange';
 
 /** The rules of the depot scanner for one order. Changes the order when the parcel is good. */
-export async function scanRules(ctx: Ctx, o: Order, code: string, mode: ScanMode): Promise<ScanResult> {
+export async function scanRules(ctx: Ctx, o: Order, code: string, mode: ScanMode, lang: ScanLang = 'fr'): Promise<ScanResult> {
   const bad_ = (why: string, fix?: string): ScanResult => ({ kind: 'bad', code, order: o, why, fix });
+  const T = (k: Parameters<typeof scanT>[1], v?: Record<string, string | number>) => scanT(lang, k, v);
+  const st = (x: Order) => followIn(lang, x.followStatus);
+  const co = (x: Order) => x.companyName ?? T('company');
   const f = o.followStatus;
   if (mode === 'back') {
     // a ticket parcel that came back undelivered is a return; a delivered one brings the old product back
-    if (o.isExchange) return scanRules(ctx, o, code, f === 'returning' ? 'return' : 'exchange');
+    if (o.isExchange) return scanRules(ctx, o, code, f === 'returning' ? 'return' : 'exchange', lang);
     if (f && ['delivered', 'exchanged', 'in_exchange'].includes(f)) {
       const x = await ctx.db.query('SELECT id FROM orders WHERE original_order_id = $1 LIMIT 1', [o.id]);
-      if (x[0]) return scanRules(ctx, o, code, 'exchange');
+      if (x[0]) return scanRules(ctx, o, code, 'exchange', lang);
     }
-    return scanRules(ctx, o, code, 'return');
+    return scanRules(ctx, o, code, 'return', lang);
   }
   if (mode === 'dispatch') {
-    if (f && LEFT.includes(f)) return bad_(`Déjà dispatchée${o.shippedAt ? ` le ${dayFr(o.shippedAt)}` : ''} (statut : ${fol(o)}).`, 'Double scan ou étiquette en double : mettez ce colis de côté.');
-    if (o.confStatus !== 'confirmed') return bad_(`Commande « ${confFr[o.confStatus] ?? o.confStatus} » : elle ne doit pas partir.`, 'Ne pas expédier. Remettez les produits en place.');
-    if (f === 'cancelled') return bad_('Livraison annulée.', 'Ne pas expédier.');
-    if (!o.companyId) return bad_('Aucune société ni livreur choisi.', 'Choisissez la société ou le livreur dans la commande, puis scannez de nouveau.');
+    if (f && LEFT.includes(f)) return bad_(T('already', { at: atIn(lang, o.shippedAt), status: st(o) }), T('alreadyFix'));
+    if (o.confStatus !== 'confirmed') return bad_(T('notConfirmed', { conf: confIn(lang, o.confStatus) }), T('notConfirmedFix'));
+    if (f === 'cancelled') return bad_(T('cancelled'), T('dontSend'));
+    if (!o.companyId) return bad_(T('noCompany'), T('noCompanyFix'));
     const kind = await companyKind(ctx.db, o.companyId);
     const api = !!kind && API_COURIERS.includes(kind);
-    if (api && !o.tracking) return bad_(`Pas encore envoyée à ${o.companyName ?? 'la société'} : l’étiquette Pilotix ne suffit pas.`, 'Envoyez-la d’abord à la société, puis collez l’étiquette qu’elle donne.');
+    if (api && !o.tracking) return bad_(T('notSent', { company: co(o) }), T('notSentFix'));
     // a Pilotix label (order reference or Pilotix number) on a parcel the company gave its own number to
     const is = (c: string | null | undefined) => !!c && c.toUpperCase() === code.toUpperCase();
     if (api && o.tracking && !is(o.tracking) && (is(o.ref) || is(o.ownTracking)))
-      return bad_(`Étiquette Pilotix remplacée : la commande a été envoyée à ${o.companyName ?? 'la société'} avec son propre suivi.`, `Collez l’étiquette de la société ${o.tracking} et scannez-la.`);
+      return bad_(T('replaced', { company: co(o) }), T('replacedFix', { tracking: o.tracking }));
     if (o.isExchange && (await ctx.db.query('SELECT 1 FROM parcel_returns WHERE order_id = $1 AND upper(tracking) = upper($2)', [o.id, code]))[0])
-      return bad_('Étiquette de retour de l’échange : elle sert au retour de l’ancien produit.', `Scannez l’étiquette du nouveau colis (${o.tracking ?? o.ref}).`);
-    if (f !== 'prepared') return bad_(`Pas encore préparée (statut : ${fol(o)}).`, 'Préparez-la et marquez-la « Préparée » avant de la remettre.');
+      return bad_(T('returnLabel'), T('returnLabelFix', { code: o.tracking ?? o.ref }));
+    if (f !== 'prepared') return bad_(T('notPrepared', { status: st(o) }), T('notPreparedFix'));
+    // its red alert is still open (changed or cancelled since it was packed): it never leaves, the alert people are told
+    const held = await blockedByAlert(ctx, o.id, o.ref, 'dispatch', lang);
+    if (held) return bad_(held, T('alertFix'));
     // Own livreur / no API: the scanned label becomes the tracking number when the order has none.
     const tracking = !o.tracking && code.toUpperCase() !== o.ref.toUpperCase() ? code : null;
     await setFollow(ctx, { ids: [o.id], status: 'shipped', note: 'scan dispatch', tracking });
-    return { kind: 'ok', code, order: await getOrder(ctx, o.id), why: 'Bonne pour le dispatch. Passée « Expédiée ».', did: 'dispatch' };
+    return { kind: 'ok', code, order: await getOrder(ctx, o.id), why: T('okDispatch'), did: 'dispatch' };
   }
   if (mode === 'return') {
-    if (o.isExchange && f !== 'returning') return bad_('C’est un colis d’échange, pas un retour.', 'Scannez-le avec « Retour / Échange » : l’ancien produit sera remis en stock.');
-    if (f === 'returned') return bad_(`Retour déjà reçu${o.returnedAt ? ` le ${dayFr(o.returnedAt)}` : ''}.`, 'Double scan : ce colis est déjà compté.');
-    if (f === 'delivered') return bad_('Livrée selon Pilotix, pas en retour.', 'Gardez le colis de côté et vérifiez avec la société : le client a peut-être payé.');
-    if (f !== 'returning') return bad_(`Pas marquée « Retour en cours » (statut : ${fol(o)}).`, 'Vérifiez avec la société avant d’accepter ce retour.');
+    if (o.isExchange && f !== 'returning') return bad_(T('exchangeNotReturn'), T('exchangeNotReturnFix'));
+    if (f === 'returned') return bad_(T('returnAlready', { at: atIn(lang, o.returnedAt) }), T('returnAlreadyFix'));
+    if (f === 'delivered') return bad_(T('deliveredNotReturn'), T('deliveredNotReturnFix'));
+    if (f !== 'returning') return bad_(T('notReturning', { status: st(o) }), T('notReturningFix'));
     await setFollow(ctx, { ids: [o.id], status: 'returned', note: 'reçu au dépôt (scan)' });
-    return { kind: 'ok', code, order: await getOrder(ctx, o.id), why: `Retour reçu. Stock remis : ${itemsText(o) || 'produits'}.`, did: 'return' };
+    return { kind: 'ok', code, order: await getOrder(ctx, o.id), why: T('okReturn', { items: itemsText(o) || T('products') }), did: 'return' };
   }
   // exchange: the exchange parcel brings back the products of the original order
   let x: Order | null = o;
@@ -633,19 +641,19 @@ export async function scanRules(ctx: Ctx, o: Order, code: string, mode: ScanMode
     const r = await ctx.db.query('SELECT id FROM orders WHERE original_order_id = $1 ORDER BY id DESC LIMIT 1', [o.id]);
     x = r[0] ? await getOrder(ctx, num(r[0].id)) : null;
   }
-  if (!x) return bad_('Ce n’est pas une commande d’échange.', 'Si le colis est revenu, choisissez « Retour / Échange » : un retour normal sera reçu.');
+  if (!x) return bad_(T('notExchange'), T('notExchangeFix'));
   const orig = x.originalOrderId ? await getOrder(ctx, x.originalOrderId).catch(() => null) : null;
-  if (!orig) return { kind: 'bad', code, order: x, why: `Échange ${x.ref} sans commande d’origine : impossible de savoir quel produit revient.`, fix: 'Remettez l’ancien produit en stock à la main (Produits & stock).' };
+  if (!orig) return { kind: 'bad', code, order: x, why: T('noOrig', { ref: x.ref }), fix: T('byHandFix') };
   const tag = `Échange ${x.ref} : ancien produit reçu au dépôt`;
   if (!x.followStatus || !['delivered', 'in_exchange', 'exchanged'].includes(x.followStatus))
-    return { kind: 'bad', code, order: x, why: `L’échange ${x.ref} n’est pas encore fait chez le client (statut : ${fol(x)}).`, fix: 'L’ancien produit ne peut pas être revenu. Vérifiez l’étiquette.' };
+    return { kind: 'bad', code, order: x, why: T('exNotDone', { ref: x.ref, status: st(x) }), fix: T('exNotDoneFix') };
   // what really comes back: the lines the SAV exchanged (kept on the ticket), not the whole original order;
   // a parts exchange brings nothing back (the article stays with the customer)
   const tk = (await ctx.db.query('SELECT exchange_kind, exchange_back FROM complaints WHERE exchange_order_id = $1 ORDER BY id DESC LIMIT 1', [x.id]))[0];
-  if (tk?.exchange_kind === 'parts') return { kind: 'bad', code, order: x, why: `Échange de pièces ${x.ref} : l’article reste chez le client, rien ne revient en stock.`, fix: 'Rien à remettre en stock.' };
+  if (tk?.exchange_kind === 'parts') return { kind: 'bad', code, order: x, why: T('parts', { ref: x.ref }), fix: T('nothingBack') };
   const kept = tk?.exchange_back ? ((typeof tk.exchange_back === 'string' ? JSON.parse(tk.exchange_back) : tk.exchange_back) as { variantId: number; qty: number }[]) : null;
   const items = kept ? kept.map((b) => ({ variantId: num(b.variantId) as number | null, qty: num(b.qty) })) : orig.items.filter((i) => i.variantId).map((i) => ({ variantId: i.variantId, qty: i.qty }));
-  if (!items.length) return { kind: 'bad', code, order: x, why: `La commande d’origine ${orig.ref} n’a pas de produit à remettre.`, fix: 'Remettez l’ancien produit en stock à la main.' };
+  if (!items.length) return { kind: 'bad', code, order: x, why: T('origEmpty', { ref: orig.ref }), fix: T('byHandShortFix') };
   const wh = orig.warehouseId ?? (await defaultWarehouse(ctx.db));
   if (!wh) throw bad('Aucun dépôt actif');
   // the check and the stock move under one lock: two scanners at once never put it back twice
@@ -657,37 +665,47 @@ export async function scanRules(ctx: Ctx, o: Order, code: string, mode: ScanMode
       return null;
     }),
   );
-  if (done) return { kind: 'bad', code, order: x, why: `Échange déjà reçu le ${dayFr(iso(done.created_at))}${done.name ? ` par ${done.name}` : ''}.`, fix: 'Double scan : l’ancien produit est déjà en stock.' };
+  if (done) return { kind: 'bad', code, order: x, why: T('exAlready', { at: dayIn(lang, iso(done.created_at)), by: done.name ? T('by', { name: done.name }) : '' }), fix: T('exAlreadyFix') };
   ctx.emit({ type: 'stock' });
-  const backText = kept ? `${items.reduce((s, i) => s + i.qty, 0)} article(s) échangé(s)` : itemsText(orig);
-  return { kind: 'ok', code, order: x, why: `Échange reçu. Ancien produit remis en stock : ${backText}.`, fix: `Commande d’origine : ${orig.ref}.`, did: 'exchange' };
+  // the first order: delivered and paid, then exchanged — « Échangée » (money kept, never counted as a return)
+  if (orig.followStatus === 'delivered' || orig.followStatus === 'in_exchange')
+    // (a follow-up status: set for the depot as the suivi would)
+    await setFollow({ ...ctx, session: { ...ctx.session, roles: [...ctx.session.roles, 'suivi'] } }, { ids: [orig.id], status: 'exchanged', note: `Ancien produit revenu avec l’échange ${x.ref}` }, { system: true });
+  const backText = kept ? T('exchangedItems', { n: items.reduce((s, i) => s + i.qty, 0) }) : itemsText(orig);
+  return { kind: 'ok', code, order: x, why: T('okExchange', { items: backText }), fix: T('okExchangeFix', { ref: orig.ref }), did: 'exchange' };
 }
 
-export async function scan(ctx: Ctx, i: { code?: string; orderId?: number; mode: ScanMode }): Promise<ScanResult> {
+export async function scan(ctx: Ctx, i: { code?: string; orderId?: number; mode: ScanMode; lang?: ScanLang }): Promise<ScanResult> {
   const code = cleanCode(i.code ?? '');
+  const lang = i.lang ?? 'fr';
+  const T = (k: Parameters<typeof scanT>[1], v?: Record<string, string | number>) => scanT(lang, k, v);
   try {
     if (i.orderId) {
       const o = await getOrder(ctx, i.orderId);
-      return await scanRules(ctx, o, code || o.tracking || o.ref, i.mode);
+      return await scanRules(ctx, o, code || o.tracking || o.ref, i.mode, lang);
     }
-    if (!code) throw bad('Code vide');
+    if (!code) return { kind: 'bad', code, why: T('emptyCode') };
     const list = await findByCode(ctx, code);
     const exact = list.find((o) => (o.tracking ?? '').toUpperCase() === code.toUpperCase() || o.ownTracking.toUpperCase() === code.toUpperCase() || o.ref.toUpperCase() === code.toUpperCase());
     // the courier's return parcel of an exchange (its own number) brings the old product back
     const back = exact ? null : (await ctx.db.query('SELECT order_id FROM parcel_returns WHERE upper(tracking) = upper($1) LIMIT 1', [code]))[0];
+    // « Expédier »: a parcel leaves only on its own label (barcode or QR code); a phone number or a partial code never sends it
+    if (i.mode === 'dispatch' && !exact && !back && list.length)
+      return { kind: 'bad', code, why: T('notLabel'), fix: T('notLabelFix') };
     const o = exact ?? (back ? list.find((x) => x.id === num(back.order_id)) : undefined) ?? (list.length === 1 ? list[0] : null);
-    if (!o && list.length > 1) return { kind: 'pick', code, why: 'Plusieurs commandes avec ce code : choisissez la bonne.', list };
+    if (!o && list.length > 1) return { kind: 'pick', code, why: T('pick'), list };
     if (!o)
       return {
         kind: 'bad',
         code,
-        why: 'Ce code n’existe pas dans Pilotix.',
-        fix: 'Vérifiez que toute l’étiquette a été scannée. Si la commande a été modifiée, cherchez-la par le téléphone du client et utilisez la nouvelle étiquette.',
+        why: T('unknown'),
+        fix: T('unknownFix'),
       };
-    return await scanRules(ctx, o, code, i.mode);
+    return await scanRules(ctx, o, code, i.mode, lang);
   } catch (e: any) {
-    if (e?.code === 'forbidden') return { kind: 'bad', code, why: `Action refusée : ${e.message}`, fix: 'Votre compte n’a pas le rôle Dépôt pour ce changement.' };
-    if (e?.code === 'bad_request' || e?.code === 'not_found') return { kind: 'bad', code, why: `Action refusée : ${e.message}`, fix: 'Ouvrez la commande pour voir le problème.' };
+    if (e?.code === 'forbidden') return { kind: 'bad', code, why: T('forbidden', { msg: e.message }), fix: T('forbiddenFix') };
+    // (the real reason, and what to do with the parcel)
+    if (e?.code === 'bad_request' || e?.code === 'not_found') return { kind: 'bad', code, why: e.message, fix: T('blockedFix') };
     throw e;
   }
 }
@@ -950,9 +968,17 @@ export const catalogProcs = {
    * can be printed from then on. A parcel moving to another company is cancelled at the old one first. A parcel the
    * company refuses stays in « En dispatch », waiting for its number (send it again from there); the others go on.
    */
-  'depot.dispatch': proc([...DEPOT], z.object({ ids: z.array(id).min(1).max(500), companyId: id.optional() }), (ctx, i) => dispatchOrders(ctx, i.ids, i.companyId)),
+  'depot.dispatch': proc([...DEPOT], z.object({ ids: z.array(id).min(1).max(500), companyId: id.optional() }), async (ctx, i) => {
+    await checkDispatch(ctx, i.ids, i.companyId);
+    return dispatchOrders(ctx, i.ids, i.companyId);
+  }),
 
-  'depot.scan': proc([...DEPOT], z.object({ code: z.string().max(100).optional(), orderId: id.optional(), mode: z.enum(['dispatch', 'back', 'return', 'exchange']) }), (ctx, i) => scan(ctx, i)),
+  'depot.scan': proc(
+    [...DEPOT],
+    // lang: the answer in the worker's language (French, English, Arabic)
+    z.object({ code: z.string().max(100).optional(), orderId: id.optional(), mode: z.enum(['dispatch', 'back', 'return', 'exchange']), lang: z.enum(['fr', 'en', 'ar']).optional() }),
+    (ctx, i) => scan(ctx, i),
+  ),
 
   /** Demo only: the list of scanner test parcels. */
   'depot.testParcels': proc([...DEPOT], z.object({}), async (ctx) => {

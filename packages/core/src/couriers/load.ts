@@ -87,6 +87,7 @@ export async function loadParcels(db: Db, ids: number[]): Promise<Parcel[]> {
       is_exchange: !!r.is_exchange,
       tracking: r.tracking,
       ext_id: r.ext_id,
+      retry: !!r.send_error,
     };
   });
 }
