@@ -10,6 +10,7 @@ import type { Order } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AskCall, AskMsg } from '../confirmation/History';
 import { rpc } from '../../lib/backend';
 import type { Out } from '../../lib/backend';
 import { da, dur, when, wilayaName } from '../../lib/format';
@@ -20,7 +21,6 @@ import { ZrExchange } from '../suivi/CourierPanel';
 import { useSession } from '../../lib/session';
 import { ErrorBox, Icon, Loading, StatusBadge } from '../../ui/kit';
 import { toast } from '../../ui/toast';
-import { waLink } from '../suivi/common';
 import { NEW_TYPES, takePendingOrder } from './NewTicket';
 import { useStaff } from './staff';
 import '../confirmation/phone.css';
@@ -275,12 +275,13 @@ function SatCard({ x, onOpen }: { x: Ticket; onOpen: () => void }) {
         </button>
         {x.phone && (
           <>
-            <a className="pxp-call big" href={`tel:${x.phone}`} aria-label={t('sav.ph.call')}>
+            {/* both ask first, phone or WhatsApp / SMS or WhatsApp, like Confirmation and Suivi */}
+            <AskCall phone={x.phone} className="pxp-call big" label={t('sav.ph.call')}>
               <Icon name="phone" />
-            </a>
-            <a className="pxp-wa" href={waLink(x.phone, t('sav.ph.waSat', { nom: x.customerName ?? '' }))} target="_blank" rel="noopener" aria-label="WhatsApp">
-              <Icon name="whatsapp" />
-            </a>
+            </AskCall>
+            <AskMsg order={{ ref: x.exchangeRef ?? '', phone: x.phone, customerName: x.customerName ?? '' }} ready={t('sav.ph.waSat', { nom: x.customerName ?? '' })} className="pxp-wa" label={t('confirmation.msgNum', { p: x.phone })}>
+              <Icon name="message" />
+            </AskMsg>
           </>
         )}
       </div>
@@ -785,12 +786,12 @@ function TicketPage({ id, onClose, onOpen }: { id: number; onClose: () => void; 
           </span>
           {x.phone && (
             <>
-              <a className="pxp-call big" href={`tel:${x.phone}`} aria-label={t('sav.ph.call')}>
+              <AskCall phone={x.phone} className="pxp-call big" label={t('sav.ph.call')}>
                 <Icon name="phone" />
-              </a>
-              <a className="pxp-wa" href={waLink(x.phone, t('sav.ph.waText', { nom: x.customerName ?? '', ref: x.ref }))} target="_blank" rel="noopener" aria-label="WhatsApp">
-                <Icon name="whatsapp" />
-              </a>
+              </AskCall>
+              <AskMsg order={{ ref: x.ref, phone: x.phone, customerName: x.customerName ?? '' }} ready={t('sav.ph.waText', { nom: x.customerName ?? '', ref: x.ref })} className="pxp-wa" label={t('confirmation.msgNum', { p: x.phone })}>
+                <Icon name="message" />
+              </AskMsg>
             </>
           )}
         </section>

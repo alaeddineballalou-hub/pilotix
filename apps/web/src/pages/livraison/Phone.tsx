@@ -4,6 +4,7 @@
 // Livreurs: one row each (where the tournée ends, parcels to ship / on the road), a tap opens call / edit / route sheet.
 import { ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AskCall } from '../confirmation/History';
 import { Preferences } from './Preferences';
 import { Pilot } from './Pilot';
 import type { Out } from '../../lib/backend';
@@ -423,9 +424,9 @@ function LivreurPage({ l, companies, onClose, onSheet }: { l: Livreur; companies
       sub={l.active ? l.email : t('livraison.livreurs.noAccount')}
       right={
         l.phone ? (
-          <a className="pxp-call" href={`tel:${l.phone}`} aria-label={t('livraison.ph.call')}>
+          <AskCall phone={l.phone} className="pxp-call" label={t('livraison.ph.call')}>
             <Icon name="phone" />
-          </a>
+          </AskCall>
         ) : undefined
       }
       onClose={onClose}
