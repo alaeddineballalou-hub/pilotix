@@ -587,6 +587,11 @@ export async function createOrder(
       : null;
   const order = await db.tx(async (tx) => {
     const priced = await priceItems(tx, input.items, input.isExchange);
+    // New orders cannot contain disabled products or variants. Stock shortages are
+    // intentionally different: enabled items are allowed into "confirmed without stock".
+    const availability = await checkLines(tx, priced.lines.map((l) => ({ productId: l.productId, variantId: l.variantId, qty: l.qty })), null);
+    const off = availability.find((l) => l.state === 'off');
+    if (off) throw bad(`« ${off.name} » est indisponible. Choisissez un autre produit ou annulez la commande.`);
     if (input.discount > priced.maxDiscount) throw bad(`Remise trop élevée (maximum ${priced.maxDiscount} DA)`);
     // a lower unit price typed by an employee is a discount: together they stay within the products' maximum
     // (prices worked out by Pilotix itself — a landing page, the AI seller — are already the shop's own prices)
