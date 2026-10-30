@@ -21,6 +21,8 @@ export interface CatalogVariant {
   title: string;
   sku: string;
   price: number | null;
+  cost: number | null;
+  maxDiscount: number | null;
   active: boolean;
 }
 export interface Part {
@@ -142,7 +144,7 @@ function toProduct(p: any, vars: any[]): CatalogProduct {
     alertQty: num(p.alert_qty),
     defaultCompanyId: numOrNull(p.default_company_id),
     options: j(p.options),
-    variants: vars.map((v) => ({ id: num(v.id), productId: num(v.product_id), title: v.title, sku: v.sku, price: numOrNull(v.price), active: !!v.active })),
+    variants: vars.map((v) => ({ id: num(v.id), productId: num(v.product_id), title: v.title, sku: v.sku, price: numOrNull(v.price), cost: numOrNull(v.cost), maxDiscount: numOrNull(v.max_discount), active: !!v.active })),
   };
 }
 
@@ -340,6 +342,8 @@ const VariantInput = z.object({
   title: z.string().trim().max(120),
   sku: z.string().trim().max(120).nullable().optional(),
   price: z.number().int().min(0).max(100_000_000).nullable().optional(),
+  cost: z.number().int().min(0).max(100_000_000).nullable().optional(),
+  maxDiscount: z.number().int().min(0).max(100_000_000).nullable().optional(),
   active: z.boolean().default(true),
 });
 export const ProductInput = z.object({
@@ -457,10 +461,12 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
       if (v.id) {
         const old = existing.find((e: any) => num(e.id) === v.id);
         if (!old) throw bad('Variante d’un autre produit');
-        await tx.query('UPDATE product_variants SET title=$2, sku=$3, price=$4, active=$5 WHERE id=$1', [v.id, v.title.trim(), vsku || old.sku, v.price ?? null, v.active]);
+        if (!ctx.session.isAdmin && v.maxDiscount !== undefined && v.maxDiscount !== numOrNull(old.max_discount)) throw forbidden('Seul l’administrateur modifie la remise maximale');
+        await tx.query('UPDATE product_variants SET title=$2, sku=$3, price=$4, active=$5, cost=$6, max_discount=$7 WHERE id=$1', [v.id, v.title.trim(), vsku || old.sku, v.price === undefined ? old.price : v.price, v.active, v.cost === undefined ? old.cost : v.cost, v.maxDiscount === undefined ? old.max_discount : v.maxDiscount]);
       } else {
         vsku ||= await freeSku(tx, 'product_variants', `${sku}-${slug(v.title).slice(0, 12)}`);
-        await tx.query('INSERT INTO product_variants (product_id, title, sku, price, active) VALUES ($1,$2,$3,$4,$5)', [productId, v.title.trim(), vsku, v.price ?? null, v.active]);
+        if (!ctx.session.isAdmin && v.maxDiscount != null) throw forbidden('Seul l’administrateur modifie la remise maximale');
+        await tx.query('INSERT INTO product_variants (product_id, title, sku, price, active, cost, max_discount) VALUES ($1,$2,$3,$4,$5,$6,$7)', [productId, v.title.trim(), vsku, v.price ?? null, v.active, v.cost ?? null, v.maxDiscount ?? null]);
       }
     }
     // A product always has at least one variant: the "no variant" one ('') when no named one is active.
