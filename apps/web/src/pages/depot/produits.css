@@ -635,3 +635,12 @@ a.chip.lp-nolp:hover { text-decoration: underline; }
 .pd-availability input:focus-visible + .pd-switch-track { outline: 3px solid var(--accent, #e69a30); outline-offset: 2px; }
 .pd-availability input:disabled + .pd-switch-track { opacity: .5; cursor: not-allowed; }
 .pd-switch-state { font-size: 11px; color: var(--muted); font-weight: 700; }
+
+/* Product overview: compact variant-count badge and readable expanded variant grid. */
+.pd-variant-count { display:inline-flex; padding:4px 9px; border-radius:99px; background:var(--warn-soft); color:var(--warn); font-weight:700; font-size:12px; white-space:nowrap; }
+.pd-variant-head, .pd-variant-line { grid-template-columns:minmax(180px,1.5fr) minmax(120px,1fr) 74px 104px 104px 104px 100px 62px 88px; min-width:1060px; }
+.pd-variant-line .pd-variant-photo { width:42px; height:42px; object-fit:contain; border-radius:8px; background:var(--surface); border:1px solid var(--line); }
+.pd-variant-detail { margin-top:0; background:var(--surface); }
+.pd-variant-line:nth-child(even) { background:var(--raise); }
+.pd-variant-line .ltr { white-space:nowrap; }
+.pd-variant-line b { font-size:12.5px; }
