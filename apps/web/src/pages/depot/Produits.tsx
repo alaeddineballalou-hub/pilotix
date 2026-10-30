@@ -275,7 +275,6 @@ function ProductsTab() {
             <span className="a-state">{t('produits.products.state')}</span>
           </div>
           {rows.map((p) => {
-            const vars = p.variants.filter((v) => v.title && v.active).map((v) => v.title);
             const detailed = p.variants.filter((v) => v.title);
             return (
               <div key={p.id} className="pd-product-group">
@@ -295,7 +294,7 @@ function ProductsTab() {
                   <span className="pd-name">
                     <b>{p.name}</b>
                     <small>
-                      <span className="ltr">{p.sku}</span>
+                      {detailed.length === 0 && <span className="ltr">{p.sku}</span>}
                       {p.isService && <span className="chip">{t('produits.products.service')}</span>}
                       {p.parts.length > 0 && <span className="chip">{t('produits.products.parts', { n: p.parts.length })}</span>}
                       {cov.data && p.active && !p.isService && !pages.has(p.id) && !ignored.has(p.id) &&
@@ -310,22 +309,8 @@ function ProductsTab() {
                   </span>
                 </span>
                 <span className="a-vars pd-vars">
-                  {detailed.length > 0 && <small>{detailed.length} variants</small>}
-                  {p.options.length ? (
-                    // made from options (Taille, Couleur…): the options, not 20 names
-                    <span className="pd-opts">
-                      {p.options.map((o) => (
-                        <bdi key={o.name}>
-                          <b>{o.name}</b> {o.values.join(', ')}
-                        </bdi>
-                      ))}
-                      <small>{t('produits.form.opt.count', { count: vars.length })}</small>
-                    </span>
-                  ) : vars.length ? (
-                    <bdi>{vars.join(', ')}</bdi>
-                  ) : (
-                    <span className="pd-none">—</span>
-                  )}
+                  {detailed.length > 0 && <span className="pd-variant-count">{detailed.length} variants</span>}
+                  {detailed.length === 0 && <span className="pd-none">—</span>}
                 </span>
                 <span className="pd-sub">
                   <span className="a-price num" data-l={t('produits.prices.sale')}>
@@ -361,14 +346,17 @@ function ProductsTab() {
               {openProduct.has(p.id) && detailed.length > 0 && (
                 <div className="pd-variant-detail" aria-label={`Variants of ${p.name}`}>
                   <div className="pd-variant-head">
-                    <span>Variant</span><span>SKU</span><span>Purchase (DA)</span><span>Sale (DA)</span><span>Stock</span><span>Available</span>
+                    <span>Variant / Photo</span><span>SKU</span><span>Weight</span><span>Purchase</span><span>Sale</span><span>Margin</span><span>Max. discount</span><span>Stock</span><span>Status</span>
                   </div>
                   {detailed.map((v) => (
                     <div key={v.id} className="pd-variant-line">
-                      <b style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{p.photo && <img src={p.photo} alt="" style={{ width: 38, height: 38, objectFit: 'contain', borderRadius: 5 }} />}{v.title}</b>
+                      <b style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{p.photo ? <img src={p.photo} alt="" className="pd-variant-photo" /> : <Icon name="package" />}{v.title}</b>
                       <span className="ltr">{v.sku}</span>
-                      <span>{da(p.cost)}</span>
-                      <span>{da(p.price)}</span>
+                      <span>{v.weightKg == null ? '—' : `${v.weightKg} kg`}</span>
+                      <span className="ltr">{da(p.cost)}</span>
+                      <span className="ltr">{da(p.price)}</span>
+                      <span className="ltr">{da(p.price - p.cost)}</span>
+                      <span className="ltr">{p.maxDiscount == null ? '—' : da(p.maxDiscount)}</span>
                       <span>{n(stockByVariant.get(v.id) ?? 0)}</span>
                       <label className="pd-availability">
                         <input type="checkbox" checked={v.active} disabled={availability.isPending || !p.active} aria-label={`Variant ${v.title} available for orders`} onChange={(e) => availability.mutate({ variantId: v.id, active: e.target.checked })} />
