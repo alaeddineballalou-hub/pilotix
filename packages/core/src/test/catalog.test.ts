@@ -50,7 +50,7 @@ test('stock: entry, count, loss write stock and movements; reserved = confirmed 
   assert.deepEqual(mv.rows.map((m: any) => m.reason), ['count', 'loss', 'entry']);
   assert.equal(mv.rows[0].delta, 3 - (before + 5));
   // sum of movements of a fresh variant equals its stock
-  await assert.rejects(call('catalog.move', depot, { variantId: r.variantId, warehouseId: wid, kind: 'entry', qty: 0 }), /Quantité/);
+  await assert.rejects(call('catalog.move', depot, { variantId: r.variantId, warehouseId: wid, kind: 'entry', qty: 0, unitCost: 1200 }), /Quantité/);
 });
 
 test('transfer keeps the total and refuses more than available', async () => {
@@ -133,7 +133,7 @@ test('products: the form\'s details and alert level; a stock entry with a new pu
   assert.equal(((await call('catalog.product', depot, { id: p.id })) as any).cost, 1700);
   assert.equal(await qty(vid, wid), 5);
   const mv: any = await call('catalog.movements', depot, { q: p.sku });
-  assert.match(mv.rows[0].note, /1500 → 1700/);
+  assert.match(mv.rows[0].note, /Prix d’achat du lot 1700 DA\/unité/);
 });
 
 test('picking: quantities to prepare and stock', async () => {
