@@ -38,7 +38,7 @@ on from the first step that isn't ✅.
 | 2 | Icon (winking face) and navy start screen | ✅ done 29 Oct 2026 |
 | 3 | Live pages (opens pilotix.online) + "no internet" screen | ✅ done 29 Oct 2026, doors 30 Oct |
 | 4 | GitHub builds the Android test app (`.github/workflows/mobile.yml`) | ✅ done 29 Oct 2026 (build ok, APK 4.2 MB, signed) |
-| 5 | Owner installs the test app on his phone and checks it | 🔨 1st test 30 Oct: pilotix.online unreachable from his Wi‑Fi → app now picks a door; 2nd test waiting |
+| 5 | Owner installs the test app on his phone and checks it | 🔨 30 Oct: doors ✅ (backup door opened by itself); bars fix in the next test |
 | 6 | One-tap calls (today a `tel:` link opens the phone's dialer with the number) | ⏭️ |
 | 7 | Notifications: the app asks for permission at start ✅ (30 Oct); sending them needs the owner's Firebase project → `google-services.json` | 🔨 |
 | 8 | Scanner: test the website's camera scanner in the app (camera permission is in) | ⏭️ |
@@ -57,8 +57,12 @@ on from the first step that isn't ✅.
   their pages are fetched with the WebView's cookies and get the bridge). `server.errorPath = offline.html`
   (same `door.js`: tries the other door first; « server » message + 15 s wait when pages fail twice in a
   minute). `appendUserAgent = PilotixApp` (the website/server can tell it runs inside the app),
-  navy `#1B2A47` background, start screen 1.5 s, `SystemBars` insets `css` + style `DEFAULT`
-  (the website already pads with `env(safe-area-inset-*)` and has `viewport-fit=cover`).
+  navy `#1B2A47` background, start screen 1.5 s.
+- Phone bars: `SystemBars.insetsHandling = disable` + style `DARK`; `MainActivity.keepPagesBetweenTheBars()`
+  pads the WebView's parent by the bars (and the keyboard), so every page sits between the top bar and
+  the bottom buttons, on navy bars with light icons, and the page's safe-area values are 0. (Before,
+  WebView 140+ with the site's `viewport-fit=cover` drew pages under the bars: the login page's chat
+  bubbles were under the clock, owner's screenshot 30 Oct.) Keyboard: `adjustResize`.
 - App ID: **`com.pilotix.app`** (it was already in the old setup). ⚠️ It can never change once the app
   is on Google Play: confirm it with the owner before the first Play upload.
 - Screens of `door.js` (FR / AR / EN from the phone's language): « Connexion à Pilotix… » (spinner),
@@ -106,6 +110,9 @@ on from the first step that isn't ✅.
 
 ## Good to know
 
+- A one-off branch `check-doors` (a workflow that checks both doors' DNS and answers from GitHub) is still
+  on GitHub: this session couldn't delete it. Push to it to run the check again, or delete it on GitHub.
+
 - Installing the test APK by hand ("sideloading") still works in Algeria. Google's developer
   verification started 30 Sep 2026 only in Brazil, Indonesia, Singapore and Thailand, and goes
   worldwide in 2027: by then the app must be registered to the owner's verified developer account
@@ -113,6 +120,9 @@ on from the first step that isn't ✅.
 
 ## Log
 
+- 30 Oct 2026, 06:43: the owner added the `direct` DNS line; on his Wi‑Fi (pilotix.online still cut) the app
+  opened Pilotix through the backup door by itself ✅. His screenshot showed the login page under the
+  phone's bars → fixed (pages between the bars).
 - 30 Oct 2026: owner's 1st test (video): the app opened, but pilotix.online didn't answer from his Wi‑Fi
   (his computer had the same timeout; his speed test was 140 Mbps) and the app wrongly said « No internet ».
   Fixed: start page + doors + true messages + build number. Owner asked: « the app should ask for

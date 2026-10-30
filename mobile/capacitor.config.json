@@ -23,8 +23,8 @@
       "showSpinner": false
     },
     "SystemBars": {
-      "insetsHandling": "css",
-      "style": "DEFAULT"
+      "insetsHandling": "disable",
+      "style": "DARK"
     }
   }
 }
