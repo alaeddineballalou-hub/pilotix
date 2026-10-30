@@ -32,6 +32,7 @@ function prefillOf(rows: AlertRow[]): PurchasePrefill {
 export function Alertes() {
   const { t } = useTranslation();
   const [f, setF] = useState<AlertFilter>('all');
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [wh, setWh] = useState('');
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [buy, setBuy] = useState<PurchasePrefill | null>(null);
@@ -39,6 +40,7 @@ export function Alertes() {
   const al = useRpc('catalog.alerts', { warehouseId: wh ? Number(wh) : undefined });
   const all = al.data ?? [];
   const list = all.filter((a) => f === 'all' || a.level === f);
+  const groups = [...new Map(list.map((a) => [a.productId, a.productName])).entries()].map(([productId, productName]) => ({ productId, productName, rows: list.filter((a) => a.productId === productId) }));
   const chosen = all.filter((a) => sel.has(keyOf(a)));
   const toggle = (a: AlertRow) => setSel((s) => (s.has(keyOf(a)) ? (s.delete(keyOf(a)), new Set(s)) : new Set(s).add(keyOf(a))));
   return (
@@ -67,7 +69,12 @@ export function Alertes() {
           </div>
         ) : (
           <div className="pd-alerts">
-            {list.map((a) => {
+            {groups.map((group) => (
+              <div key={group.productId} className="pd-card">
+                <button type="button" className="btn ghost" aria-expanded={expanded.has(group.productId)} onClick={() => setExpanded((old) => { const next = new Set(old); next.has(group.productId) ? next.delete(group.productId) : next.add(group.productId); return next; })}>
+                  <Icon name={expanded.has(group.productId) ? "chevron-down" : "chevron-right"} /> {group.productName} · {group.rows.length} variants to reorder
+                </button>
+                {expanded.has(group.productId) && group.rows.map((a) => {
               const perDay = a.sold30 / 30;
               const days = perDay > 0 ? Math.max(0, Math.floor(a.available / perDay)) : null;
               const on = sel.has(keyOf(a));
@@ -139,9 +146,11 @@ export function Alertes() {
                   </div>
                 </article>
               );
-            })}
+                })}
+              </div>
+            ))}
           </div>
-        )}
+        )
         <p className="pd-note">{t('produits.alerts.help')}</p>
       </section>
       {chosen.length > 0 && (
