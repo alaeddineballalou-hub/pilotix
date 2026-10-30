@@ -135,6 +135,7 @@ export function VariantOptions({
   used,
   skipped,
   feeGrids,
+  onPhotoFile,
 }: {
   opts: Opt[];
   setOpts: (o: Opt[]) => void;
@@ -151,6 +152,7 @@ export function VariantOptions({
   /** combinations the saved product does not have (unticked when it was saved) */
   skipped: Set<string>;
   feeGrids: string[];
+  onPhotoFile: (file: File) => Promise<string>;
  }) {
   const { t } = useTranslation();
   const combos = useMemo(() => combosOf(opts), [opts]);
@@ -299,7 +301,11 @@ export function VariantOptions({
                           <span className="po-chip po-chip-s">{x}</span>
                         </td>
                       ))}
-                      <td data-l="Photo">{basePhoto ? <img src={basePhoto} alt="" style={{ width: 42, height: 42, borderRadius: 6, objectFit: 'contain' }} /> : <Icon name="package" />}</td>
+                      <td data-l="Photo">
+                        {(v.photo || basePhoto) ? <img src={v.photo || basePhoto} alt="" style={{ width: 42, height: 42, borderRadius: 6, objectFit: 'contain' }} /> : <Icon name="package" />}
+                        <input type="file" accept="image/*" aria-label={`Upload photo for ${title}`} onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; try { editRow(title, { photo: await onPhotoFile(file) }); } catch { /* Retain previous photo on invalid upload */ } }} />
+                        {v.photo && <button className="btn small ghost" type="button" aria-label={`Remove photo for ${title}`} onClick={() => editRow(title, { photo: '' })}>×</button>}
+                      </td>
                       <td data-l="Variant SKU"><input className="ltr" value={v.sku} placeholder={skuOf(baseSku, c)} aria-label={`SKU ${title}`} onChange={(e) => editRow(title, { sku: e.target.value })} /></td>
                       <td data-l="Purchase (DA)"><input type="number" min={0} step={50} value={v.cost} placeholder={baseCost ? String(baseCost) : 'Required'} aria-label={`Purchase price ${title}`} onChange={(e) => editRow(title, { cost: e.target.value })} /></td>
                       <td data-l="Sale (DA)"><input type="number" min={0} step={50} value={v.price} placeholder={basePrice ? String(basePrice) : 'Required'} aria-label={`Selling price ${title}`} onChange={(e) => editRow(title, { price: e.target.value })} /></td>
