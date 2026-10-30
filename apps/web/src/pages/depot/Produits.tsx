@@ -275,7 +275,6 @@ function ProductsTab() {
             <span className="a-state">{t('produits.products.state')}</span>
           </div>
           {rows.map((p) => {
-            const vars = p.variants.filter((v) => v.title && v.active).map((v) => v.title);
             const detailed = p.variants.filter((v) => v.title);
             return (
               <div key={p.id} className="pd-product-group">
