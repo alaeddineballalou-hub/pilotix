@@ -313,6 +313,14 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
         </span>
       ),
     );
+  if (session?.isAdmin) actions.push(
+    <button key="delete" className="btn small danger ghost" disabled={busy} onClick={() => {
+      if (!window.confirm(`Delete order ${o.ref} permanently? Only unshipped orders without SAV history can be deleted.`)) return;
+      run(async () => { await rpc('orders.delete', { ids: [o.id] }); onClose(); }, 'Order deleted');
+    }}>
+      <Icon name="trash" /> Delete order
+    </button>,
+  );
   actions.push(
     <button key="print" className="btn small" onClick={() => printOrder(t, o, look.data?.shopName ?? '')}>
       {t('orders.card.print')}

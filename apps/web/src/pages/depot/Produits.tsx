@@ -350,7 +350,7 @@ function ProductsTab() {
                   </div>
                   {detailed.map((v) => (
                     <div key={v.id} className="pd-variant-line">
-                      <b style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{p.photo ? <img src={p.photo} alt="" className="pd-variant-photo" /> : <Icon name="package" />}{v.title}</b>
+                      <b style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{(v.photo || p.photo) ? <img src={v.photo || p.photo || ''} alt="" className="pd-variant-photo" /> : <Icon name="package" />}{v.title}</b>
                       <span className="ltr">{v.sku}</span>
                       <span>{v.weightKg == null ? '—' : `${v.weightKg} kg`}</span>
                       <span className="ltr">{da(p.cost)}</span>

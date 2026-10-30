@@ -4,7 +4,7 @@
 // (closed: the administrator opens it again as usual).
 import { z } from 'zod';
 import { Db, isoOrNull, num } from '../db';
-import { bad, Ctx, proc } from '../rpc';
+import { bad, forbidden, Ctx, proc } from '../rpc';
 import { getSetting, setSetting } from '../settings';
 
 export const ARCHIVE_KINDS = ['users', 'products', 'warehouses'] as const;
@@ -364,6 +364,24 @@ export async function archiveDelete(ctx: Ctx, kind: ArchiveKind, ids: number[]):
 
 // ---------------------------------------------------------------- procedures (administrators)
 export const archiveProcs = {
+  'archive.removeProduct': proc([], z.object({ id: z.number().int().positive() }), async (ctx, input) => {
+    if (!ctx.session.isAdmin) throw forbidden('Seul un administrateur peut supprimer un produit');
+    const product = (await ctx.db.query('SELECT id, name FROM products WHERE id=$1 AND archived_at IS NULL', [input.id]))[0];
+    if (!product) throw bad('Produit introuvable ou déjà archivé');
+    const activeOrder = (await ctx.db.query(
+      `SELECT o.ref FROM order_items i JOIN orders o ON o.id=i.order_id
+       WHERE i.product_id=$1 AND o.conf_status <> 'cancelled'
+       AND (o.follow_status IS NULL OR o.follow_status NOT IN ('cancelled','delivered','returned','exchanged','lost'))
+       LIMIT 1`, [input.id]))[0];
+    if (activeOrder) throw bad(`Impossible de supprimer : produit lié à une commande active (${activeOrder.ref})`);
+    const uses = await usesOf(ctx.db, 'products', [input.id]);
+    if ((uses.get(input.id) ?? []).length) throw bad('Impossible de supprimer : ce produit est lié à des commandes ou à un historique. Archivez-le plutôt.');
+    const archived = await archiveSet(ctx, 'products', [input.id], true);
+    if (!archived.done) throw bad('Impossible de supprimer : vérifiez le stock du produit');
+    const result = await archiveDelete(ctx, 'products', [input.id]);
+    if (!result.deleted) throw bad('Impossible de supprimer : ce produit est utilisé');
+    return { deleted: 1 };
+  }),
   'archive.list': proc([], ListInput, (ctx, i) => archiveList(ctx, i)),
   'archive.set': proc([], IdsInput.extend({ archived: z.boolean() }), (ctx, i) => archiveSet(ctx, i.kind, i.ids, i.archived)),
   'archive.delete': proc([], IdsInput, async (ctx, i) => {
