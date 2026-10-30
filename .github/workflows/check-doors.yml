@@ -1,0 +1,21 @@
+name: Check the doors (one-off)
+on:
+  push:
+    branches: [check-doors]
+permissions:
+  contents: read
+jobs:
+  doors:
+    runs-on: ubuntu-latest
+    steps:
+      - name: DNS and answers of both doors, seen from outside Algeria
+        run: |
+          note() { echo "::notice title=$1::$2"; }
+          note "NS pilotix.online" "$(dig +short NS pilotix.online @1.1.1.1 | tr '\n' ' ')"
+          note "A pilotix.online" "$(dig +short A pilotix.online @1.1.1.1 | tr '\n' ' ')"
+          note "A direct (1.1.1.1)" "$(dig +short A direct.pilotix.online @1.1.1.1 | tr '\n' ' ')|end"
+          note "A direct (8.8.8.8)" "$(dig +short A direct.pilotix.online @8.8.8.8 | tr '\n' ' ')|end"
+          for u in https://pilotix.online/robots.txt https://direct.pilotix.online/robots.txt; do
+            r=$(curl -sS -o /dev/null --max-time 40 -w "http=%{http_code} ip=%{remote_ip} time=%{time_total}s" "$u" 2>&1 | tr '\n' ' ')
+            note "GET $u" "$r"
+          done
