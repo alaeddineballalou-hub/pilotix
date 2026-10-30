@@ -300,6 +300,10 @@ export const MoveInput = z.object({
 });
 
 export async function stockMove(ctx: Ctx, i: z.infer<typeof MoveInput>) {
+  if (i.kind === 'entry') {
+    if (!ctx.session.isAdmin && !hasRole(ctx.session, 'depot')) throw forbidden('Seuls l’administrateur et le dépôt peuvent saisir un prix d’achat');
+    if (i.unitCost == null) throw bad('Prix d’achat obligatoire pour chaque entrée de stock');
+  }
   if (i.kind !== 'count' && i.qty < 1) throw bad('Quantité invalide');
   const r = await ctx.db.tx(async (tx) => {
     await ensureVariantAndDepot(tx, i.variantId, i.warehouseId);
