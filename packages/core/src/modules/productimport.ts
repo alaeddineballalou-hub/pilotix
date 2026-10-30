@@ -192,7 +192,7 @@ export async function importProducts(ctx: Ctx, i: z.infer<typeof ImportInput>): 
         const sv = saved.variants.find((x) => x.title === v.title);
         try {
           if (!sv) throw new Error('variante introuvable');
-          await stockMove(ctx, { variantId: sv.id, warehouseId: warehouse.id, kind: 'entry', qty: v.stock, note: 'Import Excel' });
+          await stockMove(ctx, { variantId: sv.id, warehouseId: warehouse.id, kind: 'entry', qty: v.stock, unitCost: p.cost, note: 'Import Excel' });
         } catch (e) {
           p.warnings.push(`Ligne ${v.line} : stock initial non enregistré (${(e as Error).message})`);
         }
