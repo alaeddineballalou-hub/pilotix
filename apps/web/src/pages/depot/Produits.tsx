@@ -64,7 +64,6 @@ function StockTab() {
   const [wh, setWh] = useState('');
   const [dlg, setDlg] = useState<Dialog>(null);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
-  const availability = useAction('catalog.setAvailability', { success: 'Disponibilité mise à jour' });
   const st = useRpc('catalog.stock', { withHidden: true });
   const inDepot = (st.data ?? []).filter((r) => !wh || r.warehouseId === Number(wh));
   const found = inDepot.filter((r) => !q.trim() || matches(q, nameOf(r), r.sku));
@@ -126,7 +125,7 @@ function StockTab() {
                     <span className="num">{n(group.rows.reduce((v, r) => v + r.qty, 0))} in stock</span>
                     <span className="num">{n(group.rows.reduce((v, r) => v + r.reserved, 0))} reserved</span>
                     <span className="num">{n(group.rows.reduce((v, r) => v + r.available, 0))} available</span>
-                    <button type="button" className="btn small" disabled={availability.isPending} onClick={() => availability.mutate({ productId: group.productId, active: !group.rows[0].productActive })}>{group.rows[0].productActive ? 'Turn product OFF' : 'Turn product ON'}</button>
+
                   </div>
                   {expanded.has(group.productId) && group.rows.map((r) => (
                 <div key={`${r.variantId}-${r.warehouseId}`} className={`pd-row pd-stock ${many ? 'many' : ''} ${isHidden(r) ? 'dim' : ''}`}>
@@ -153,7 +152,7 @@ function StockTab() {
                     <span className="ltr">{da(r.cost)}</span>
                   </span>
                   <span className="pd-acts">
-                    <button type="button" className="btn small ghost" disabled={availability.isPending} onClick={() => availability.mutate({ variantId: r.variantId, active: !r.variantActive })}>{r.variantActive ? 'Turn OFF' : 'Turn ON'}</button>
+
                     <button className="btn small" onClick={() => setDlg({ kind: 'entry', row: r })}>
                       <Icon name="plus" />
                       {t('produits.stock.entry')}
@@ -190,6 +189,8 @@ function ProductsTab() {
   const { t } = useTranslation();
   const [q, setQ] = useState('');
   const [f, setF] = useState<ProdFilter>('active');
+  const [openProduct, setOpenProduct] = useState<Set<number>>(new Set());
+  const availability = useAction('catalog.setAvailability', { success: 'Disponibilité mise à jour' });
   const prods = useRpc('catalog.products', {});
   const st = useRpc('catalog.stock', { withHidden: true });
   const [edit, setEdit] = useState<number | 'new' | null>(null);
@@ -211,6 +212,9 @@ function ProductsTab() {
   const found = all.filter((p) => !q.trim() || matches(q, p.name, p.sku, ...p.variants.map((v) => `${v.title} ${v.sku}`)));
   const test: Record<ProdFilter, (p: (typeof all)[number]) => boolean> = { active: (p) => p.active, hidden: (p) => !p.active, service: (p) => p.isService, all: () => true };
   const rows = found.filter(test[f]);
+  const stockByVariant = new Map<number, number>();
+  for (const r of st.data ?? []) stockByVariant.set(r.variantId, (stockByVariant.get(r.variantId) ?? 0) + r.available);
+  const toggleOpen = (id: number) => setOpenProduct((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
   return (
     <section className="card pd-card">
       <Toolbar
@@ -272,9 +276,10 @@ function ProductsTab() {
           </div>
           {rows.map((p) => {
             const vars = p.variants.filter((v) => v.title && v.active).map((v) => v.title);
+            const detailed = p.variants.filter((v) => v.title);
             return (
+              <div key={p.id} className="pd-product-group">
               <div
-                key={p.id}
                 className={`pd-row pd-prows pd-click ${p.active ? '' : 'dim'}`}
                 role="button"
                 tabIndex={0}
@@ -304,6 +309,11 @@ function ProductsTab() {
                   </span>
                 </span>
                 <span className="a-vars pd-vars">
+                  {detailed.length > 0 && (
+                    <button type="button" className="btn small ghost" style={{ marginBottom: 4 }} aria-expanded={openProduct.has(p.id)} onClick={(e) => { e.stopPropagation(); toggleOpen(p.id); }}>
+                      {openProduct.has(p.id) ? '▾' : '▸'} {detailed.length} variants
+                    </button>
+                  )}
                   {p.options.length ? (
                     // made from options (Taille, Couleur…): the options, not 20 names
                     <span className="pd-opts">
@@ -344,7 +354,33 @@ function ProductsTab() {
                     <span className="ltr">{p.isService ? '—' : n(stock.get(p.id) ?? 0)}</span>
                   </span>
                 </span>
-                <span className="a-state">{p.active ? <span className="badge t-ok">{t('produits.products.active')}</span> : <span className="badge t-off">{t('produits.products.hidden')}</span>}</span>
+                <span className="a-state">
+                  <label className="pd-availability" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={p.active} disabled={availability.isPending} aria-label={`Product ${p.name} available for orders`} onChange={(e) => availability.mutate({ productId: p.id, active: e.target.checked })} />
+                    <span className={p.active ? 'badge t-ok' : 'badge t-off'}>{p.active ? 'ON' : 'OFF'}</span>
+                  </label>
+                </span>
+              </div>
+              {openProduct.has(p.id) && detailed.length > 0 && (
+                <div className="pd-variant-detail" aria-label={`Variants of ${p.name}`}>
+                  <div className="pd-variant-head">
+                    <span>Variant</span><span>SKU</span><span>Purchase (DA)</span><span>Sale (DA)</span><span>Stock</span><span>Available</span>
+                  </div>
+                  {detailed.map((v) => (
+                    <div key={v.id} className="pd-variant-line">
+                      <b>{v.title}</b>
+                      <span className="ltr">{v.sku}</span>
+                      <span>{da(v.cost ?? p.cost)}</span>
+                      <span>{da(v.price ?? p.price)}</span>
+                      <span>{n(stockByVariant.get(v.id) ?? 0)}</span>
+                      <label className="pd-availability">
+                        <input type="checkbox" checked={v.active} disabled={availability.isPending || !p.active} aria-label={`Variant ${v.title} available for orders`} onChange={(e) => availability.mutate({ variantId: v.id, active: e.target.checked })} />
+                        <span className={v.active && p.active ? 'badge t-ok' : 'badge t-off'}>{v.active && p.active ? 'ON' : 'OFF'}</span>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )}
               </div>
             );
           })}
