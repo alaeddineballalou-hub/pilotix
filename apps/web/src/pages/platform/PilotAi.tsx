@@ -1,28 +1,39 @@
-// Pilot AI (control room): Dellal learns every night from the chats of the shops that share them (names, phones and
-// addresses are removed inside each shop). Here: Pilotix's own AI key and nightly budget, last night's report, the
-// coach's morning check (approve, edit or reject each lesson, with the anonymized chats behind it), and the lesson books
-// with their test: a new book is kept only if it sells at least as well (delivered orders per chat).
+// Pilot AI (control room): the shops' AI agents, all on Pilotix's own AI key (shops never bring one). Four tabs:
+// Dellal AI (its sales dashboard: conversion and real sales per shop, product and channel, why chats end without a sale;
+// how it learns, drawn; its instruction book to download, always the latest; last night, the coach's morning check of
+// each lesson, the lesson books and their test), CM AI (the comments it handled), Spy AI (the competitors it watches),
+// and Settings & costs (the key, the daily limit, the night budget, what each shop's AI costs to bill it).
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { dateOnly, dateTime, n, when } from '../../lib/format';
 import { downloadCsv } from '../../lib/files';
 import { POut, Staff, usePAction, usePRpc } from '../../lib/platform';
-import { Card, ErrorBox, Field, Icon, Loading } from '../../ui/kit';
+import { Card, ErrorBox, Field, Icon, Loading, Tabs } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { can } from './bits';
+import { BoardDays, CmBoard, DellalBoard, SpyBoard } from './PilotBoards';
+import { BookCard, LearnCard } from './PilotLearn';
 
 type State = POut<'p.pilot.state'>;
 type Lesson = State['candidates'][number];
 const OUTCOMES = ['delivered', 'refused', 'cancelled', 'fake', 'no_order', 'pending', 'stale'] as const;
 const pct = (k: number, total: number) => (total ? `${((k / total) * 100).toFixed(1)} %` : '—');
+const TABS = ['dellal', 'cm', 'spy', 'settings'] as const;
+type Tab = (typeof TABS)[number];
 
-export function PilotAiPage({ staff }: { staff: Staff }) {
+export function PilotAiPage({ staff, tab }: { staff: Staff; tab?: string }) {
   const { t } = useTranslation();
   const q = usePRpc('p.pilot.state', {}, { refetchInterval: 60_000 });
+  // the period and the shop stay the same from one tab to the next
+  const [days, setDays] = useState<BoardDays>(30);
+  const [shopId, setShopId] = useState<number | null>(null);
+  const cur: Tab = (TABS as readonly string[]).includes(tab ?? '') ? (tab as Tab) : 'dellal';
   if (q.isLoading) return <Loading />;
   if (q.error || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   const d = q.data;
   const manager = can(staff, 'manager');
+  const go = (v: Tab) => (location.hash = v === 'dellal' ? '#/platform/pilot' : `#/platform/pilot/${v}`);
+  const board = { days, onDays: setDays, shopId, onShop: setShopId, manager };
   return (
     <div className="pp-stack pilot-page">
       <div className="pp-head">
@@ -31,14 +42,35 @@ export function PilotAiPage({ staff }: { staff: Staff }) {
           <p className="muted">{t('platform.pilot.sub')}</p>
         </div>
       </div>
-      <div className="pp-grid">
-        <SettingsCard d={d} manager={manager} />
-        <NightCard d={d} />
+      <div className="pilot-tabs">
+        <Tabs
+          value={cur}
+          onChange={go}
+          items={TABS.map((k) => ({ value: k, label: t(`platform.pilot.tabs.${k}`), ...(k === 'dellal' && d.candidates.length ? { count: d.candidates.length } : {}) }))}
+        />
       </div>
-      {manager && <CostCard />}
-      <ShopsCard d={d} manager={manager} />
-      <CoachCard items={d.candidates} />
-      <BooksCard d={d} manager={manager} />
+      {cur === 'dellal' && (
+        <>
+          <DellalBoard {...board} aside={<BookCard d={d} />} />
+          <LearnCard d={d} />
+          <div className="pp-grid">
+            <NightCard d={d} />
+            <ShopsCard d={d} manager={manager} />
+          </div>
+          <CoachCard items={d.candidates} />
+          <BooksCard d={d} manager={manager} />
+        </>
+      )}
+      {cur === 'cm' && <CmBoard {...board} />}
+      {cur === 'spy' && <SpyBoard {...board} />}
+      {cur === 'settings' && (
+        <>
+          <div className="pilot-settings">
+            <SettingsCard d={d} manager={manager} />
+          </div>
+          {manager ? <CostCard /> : <p className="muted small">{t('platform.pilot.costs.managers')}</p>}
+        </>
+      )}
     </div>
   );
 }

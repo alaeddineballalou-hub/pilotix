@@ -881,7 +881,7 @@
     }
   },
   "pilot": {
-    "sub": "Every night Dellal learns from the chats of the shops that share them (no names, numbers or addresses). Your team approves each lesson in the morning; a new book is kept only if it gets at least as many parcels delivered.",
+    "sub": "The shops’ AI agents, all on Pilotix’s own AI key (a shop never brings its own): Dellal sells in the chats, CM AI answers the comments, Spy AI watches the competitors.",
     "settings": "Settings",
     "on": "On",
     "off": "Off",
@@ -997,7 +997,10 @@
       "duplicate": "Duplicate",
       "no_stock": "Out of stock",
       "lost": "Lost",
-      "other": "Other"
+      "other": "Other",
+      "handoff_unanswered": "Handed to the team, no answer",
+      "wrong_number": "Wrong number",
+      "fake": "Fake order"
     },
     "legend": "C = the customer · D = Dellal · P = a person of the team",
     "shops": "Shops that teach Dellal",
@@ -1028,7 +1031,213 @@
       "night": "Night learning (Pilot AI, for all shops): {{usd}}",
       "since": "Counted since {{date}}.",
       "notYet": "The counter starts with the AI's first answer.",
-      "csv": "Download (CSV)"
+      "csv": "Download (CSV)",
+      "managers": "Each shop’s AI cost is visible to managers."
+    },
+    "tabs": {
+      "dellal": "Dellal AI",
+      "cm": "CM AI",
+      "spy": "Spy AI",
+      "settings": "Settings & costs"
+    },
+    "board": {
+      "title": "Dellal’s sales",
+      "help": "The chats that started in the period (Algeria time) and what became of them. Conversion: out of 100 chats, how many ended with an order. Real sales: how many ended with a parcel delivered and paid — the only real win, the one Dellal learns from; it is counted once the parcels had {{days}} days to arrive. Test chats do not count.",
+      "days": "{{days}} days",
+      "shop": "Shop",
+      "allShops": "All shops ({{n}})",
+      "product": "Product",
+      "allProducts": "All products",
+      "productNeedsShop": "Product: pick a shop first",
+      "loading": "Updating…",
+      "everyShop": "all shops",
+      "skipped": "These shops could not be read and do not count here: {{names}}.",
+      "none": "No chats in the last {{days}} days ({{scope}}).",
+      "find": "Over the last {{days}} days ({{scope}}), {{rate}} of Dellal’s chats ended with an order:",
+      "findVs": "compared with the {{days}} days before ({{rate}}).",
+      "findNoPrev": "no chats in the {{days}} days before to compare with.",
+      "dir": {
+        "up": "up {{pts}} pts",
+        "down": "down {{pts}} pts",
+        "flat": "steady"
+      },
+      "pts": "pts",
+      "vsPrev": "compared with the period before (same length)",
+      "k": {
+        "chats": "Chats",
+        "conversion": "Conversion",
+        "conversionHelp": "Out of 100 chats, how many ended with an order (a duplicate does not count).",
+        "ofChats": "{{n}} of {{of}}",
+        "realSales": "Real sales",
+        "realSalesHelp": "Out of 100 chats, how many ended with a parcel delivered and paid. Only chats older than {{days}} days count: the newest are still waiting for their parcels.",
+        "tooEarly": "too early: the parcels of the last {{days}} days are on the road",
+        "deliveredRate": "Delivered",
+        "deliveredRateHelp": "Of the orders that ended, the share delivered (the others: refused, cancelled, fake or wrong number).",
+        "ended": "{{ok}} delivered, {{lost}} lost",
+        "revenue": "Delivered sales",
+        "pending_one": "{{n}} order still on its way",
+        "pending_other": "{{n}} orders still on their way",
+        "basket": "Average order",
+        "handed": "Handed to the team",
+        "handedHelp": "The share of chats Dellal handed to a person (or that a person took over). Lower means a more independent Dellal.",
+        "handedN_one": "{{n}} chat",
+        "handedN_other": "{{n}} chats",
+        "cost": "AI cost per order",
+        "costHelp": "What Pilotix’s key paid for Dellal in the period, divided by the orders. Managers only.",
+        "costOf": "{{usd}} in all",
+        "costTotal": "in all (one product cannot be told apart)",
+        "costAll": "AI cost",
+        "calls_one": "{{n}} AI answer",
+        "calls_other": "{{n}} AI answers"
+      },
+      "open": "parcels still on the road (last {{days}} days)",
+      "avg7": "each point: the 7 days up to that day",
+      "perDay": "one point a day",
+      "perWeek": "one point a week",
+      "week": "Week of {{day}}",
+      "onRoad": "parcels on the road",
+      "tip": "{{chats}} chats · {{orders}} with an order",
+      "noLine": "Not enough chats yet to draw the line.",
+      "chartLabel": "Line of the conversion ({{conv}}) and the real sales ({{real}}) in the period",
+      "by": {
+        "shop": "By shop",
+        "product": "By product",
+        "channel": "By channel"
+      },
+      "col": {
+        "shop": "Shop",
+        "product": "Product",
+        "channel": "Channel",
+        "orders": "Orders"
+      },
+      "go": {
+        "shop": "Click a shop to see its products.",
+        "product": "Click a product to see its channels (WhatsApp, Messenger…)."
+      },
+      "ch": {
+        "whatsapp": "WhatsApp",
+        "messenger": "Messenger",
+        "instagram": "Instagram",
+        "tiktok": "TikTok"
+      }
+    },
+    "why": {
+      "title": "Where Dellal can improve",
+      "help": "The chats that ended without a sale that Pilot AI read at night (only the shops that teach Dellal, no names or numbers), by reason. The first reason is the best lead for the next lesson.",
+      "none": "No chats read in the last {{days}} days yet. Every night Pilot AI reads the finished chats of the shops that teach Dellal.",
+      "lead_one": "{{n}} chat ended without a sale, read by Pilot AI in the last {{days}} days:",
+      "lead_other": "{{n}} chats ended without a sale, read by Pilot AI in the last {{days}} days:",
+      "tip": {
+        "no_order": "Lead: most leave without ordering. The coach can approve lessons to follow up and close sooner.",
+        "refused": "Lead: refused parcels. Lessons to repeat the total, the size and the address before ordering can help.",
+        "cancelled": "Lead: cancelled orders. Lessons to check the order with the customer can help.",
+        "fake": "Lead: fake orders. Lessons to politely spot customers who are not serious can help.",
+        "other": "Every morning the coach turns these reasons into lessons."
+      }
+    },
+    "learn": {
+      "title": "How Dellal learns",
+      "help": "Pilot AI’s loop, every day. The numbers come from the engine itself: this drawing always tells the truth.",
+      "lead": "Dellal never changes on its own. Every day it sells; every night Pilot AI looks at what really worked; every morning a person decides; then the delivered parcels judge.",
+      "day": {
+        "when": "THE DAY",
+        "what": "Dellal sells",
+        "text": "It answers customers with its method and the current lesson book. Each chat keeps the version of the book it got."
+      },
+      "night": {
+        "when": "THE NIGHT · 02:30",
+        "what": "Pilot AI reads",
+        "text": "The finished chats, with no names or numbers. A delivered parcel = a win, a refused parcel = a loss. It writes short lessons."
+      },
+      "morning": {
+        "when": "THE MORNING",
+        "what": "The coach decides",
+        "text": "Someone on the Pilotix team reads each lesson with the chats behind it: approve, edit or reject."
+      },
+      "test": {
+        "when": "THE TEST",
+        "what": "The parcels judge",
+        "text": "The new book is tried on {{share}} % of new chats. After {{days}} days it is kept only if it gets at least as many parcels delivered."
+      },
+      "again": "Then it starts again: every night Dellal learns a little more.",
+      "scoreTitle": "Each chat’s score",
+      "scoreLead": "When a chat is finished, Pilot AI scores it by what became of the parcel:",
+      "score": {
+        "delivered": "Delivered and paid",
+        "exchanged": "Exchanged",
+        "refused": "Refused at delivery",
+        "wrong_number": "Wrong number",
+        "cancelled": "Cancelled",
+        "no_order": "No order"
+      },
+      "gold": "A chat a teammate took over that then got delivered is a “gold example”: it counts {{gold}} times.",
+      "rulesTitle": "The rules, in simple words",
+      "rule": {
+        "win": "Only a parcel delivered and paid is a real win: a refused order costs the shop money.",
+        "safe": "A lesson is short, with no numbers, prices, discounts or promises: otherwise it is blocked before it even reaches the coach.",
+        "short": "The book stays short (about one page): the most useful lessons come first. The coach never has more than {{open}} lessons to read at once.",
+        "brain": "For each message Dellal picks its brain: Haiku (fast and cheap) for simple messages, Sonnet (stronger) for hard moments: price, trust, anger, a big order, asking for a person.",
+        "test": "The test compares at least {{min}} chats on each side, {{days}} days old (the time deliveries take), for {{max}} days at most. A book that clearly does worse is stopped on its own.",
+        "budget": "The night has a budget: {{usd}} $ at most (Settings & costs tab)."
+      }
+    },
+    "book": {
+      "title": "Dellal’s instruction book",
+      "help": "The file is put together on the server when you click: it always holds the latest version (sales method, Darija rules, the lesson book in service and the one in test).",
+      "what": "Everything Dellal reads before answering, in every shop: its sales method, its Darija rules and the lesson book the coach approved.",
+      "since_one": "in service since {{date}} · {{n}} lesson",
+      "since_other": "in service since {{date}} · {{n}} lessons",
+      "base": "No lesson book yet: Dellal sells with its basic method.",
+      "testing": "In test: v{{v}} on {{share}} % of new chats.",
+      "download": "Download (.txt)",
+      "read": "Read here",
+      "always": "Every download gives the latest version: nothing to update by hand."
+    },
+    "cm": {
+      "title": "CM AI — the comments",
+      "help": "The comments left under the shops’ Facebook and Instagram posts and ads, and what CM AI did with them: a public reply, a private message (which opens a chat with Dellal), a hidden comment (a phone number, an insult) or handed to the team.",
+      "find": "Over the last {{days}} days CM AI handled {{n}} comments: {{answered}} got a public reply, {{privates}} private messages sent, {{hidden}} hidden.",
+      "none": "No comments in the last {{days}} days.",
+      "k": {
+        "comments": "Comments",
+        "answered": "Public reply",
+        "answeredN": "{{n}} replies",
+        "privates": "Private messages",
+        "privatesSub": "sent privately",
+        "leads": "Contacts",
+        "leadsSub": "a chat or a number",
+        "leadsHelp": "The comments that gave a contact: a private message that opens a chat with Dellal, or a number left (the comment is then hidden).",
+        "hidden": "Hidden",
+        "hiddenSub": "numbers, insults, spam",
+        "handed": "To the team",
+        "team": "{{n}} handled by a person",
+        "errors": "Errors"
+      },
+      "perDay": "Comments per day",
+      "perWeek": "Comments per week"
+    },
+    "spy": {
+      "title": "Spy AI — the competitors",
+      "help": "The products the shops have watched, the competitors’ ads Spy AI found (the shops’ own ads do not count), read by the AI, and the alerts of the pages followed (new ad, price changed, ad stopped).",
+      "find": "Spy AI watches {{watched}} products in {{shops}} shop(s): {{ads}} competitor ads known, {{fresh}} of them new in the last {{days}} days.",
+      "none": "No product watched yet.",
+      "note": "New ads and alerts: in the chosen period. The other figures: today.",
+      "k": {
+        "watched": "Products watched",
+        "watchedSub": "today",
+        "ads": "Competitor ads",
+        "activeN": "{{n}} still running",
+        "active": "Running",
+        "newAds": "New ads",
+        "analysed": "Read by the AI",
+        "briefs": "Product briefs",
+        "briefsSub": "summaries of the competition",
+        "followed": "Pages followed",
+        "alertsN_one": "{{n}} alert in the period",
+        "alertsN_other": "{{n}} alerts in the period",
+        "alerts": "Alerts",
+        "newAdsSub": "in the last {{days}} days"
+      }
     }
   }
 }

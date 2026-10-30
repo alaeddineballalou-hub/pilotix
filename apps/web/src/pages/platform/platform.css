@@ -450,3 +450,89 @@ html[data-theme="dark"] .pp-prot { --pp-c-q: #3B9BC0; }
 .pilot-cost .pilot-cost-n { display: block; font-size: 11px; }
 @media (min-width: 761px) { .pilot-cost tfoot td { border-top: 2px solid var(--line); } }
 .pilot-cost-foot { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 10px; }
+
+/* ---------------------------------------------------------------- Pilot AI › the agents' dashboards (PilotBoards.tsx)
+   Figures as type (no tiles, no icons), one finding in words, conversion (blue) and real sales (amber) on one % scale:
+   the colours of the charts (ui/chart.css), checked for colour blindness on the light and dark surfaces. */
+/* four short tabs: on a phone they wrap rather than hide one behind the edge (the app's tabs scroll sideways) */
+.pilot-tabs .tabs { gap: 8px; flex-wrap: wrap !important; overflow: visible !important; }
+.pilot-settings { max-width: 880px; }
+.pilot-settings > .card { margin: 0; }
+.pb-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.pb-bar .tabs { flex-wrap: nowrap; }
+.pb-sel { height: 36px; min-width: 0; flex: 0 1 260px; max-width: 100%; font-size: 14px; }
+@media (max-width: 560px) { .pb-sel { flex: 1 1 100%; } }
+.pb-busy { margin-inline-start: auto; }
+.pb-find { margin: 0; font-size: 15.5px; line-height: 1.55; color: var(--ink); max-width: 80ch; }
+.pb-find-up b { color: var(--ok); }
+.pb-find-down b { color: var(--coral); }
+.pb-figs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 22px; padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+@media (min-width: 820px) { .pb-figs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.pb-fig { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pb-fig-l { font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.pb-fig-v { font-size: 26px; font-weight: 850; line-height: 1.1; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -0.015em; overflow-wrap: anywhere; }
+@media (max-width: 560px) { .pb-fig-v { font-size: 21px; } }
+.pb-fig-s { font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+.pb-delta { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pb-delta.good { color: var(--ok); }
+.pb-delta.bad { color: var(--coral); }
+.pb-delta.flat { color: var(--ink); }
+.pb-chart { display: flex; flex-direction: column; gap: 6px; }
+.pb-chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 14px; }
+.pp-lg i.pb-k-conv, .pp-tip i.pb-k-conv { background: var(--pp-c-q); width: 14px; height: 3px; border-radius: 2px; }
+.pp-lg i.pb-k-real, .pp-tip i.pb-k-real { background: var(--pp-c-r); width: 14px; height: 3px; border-radius: 2px; }
+.pp-chart path.pb-l-conv, .pp-chart path.pb-l-real { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.pp-chart path.pb-l-conv { stroke: var(--pp-c-q); }
+.pp-chart path.pb-l-real { stroke: var(--pp-c-r); }
+.pp-chart .pb-d-conv, .pp-chart .pb-d-real { stroke: var(--surface); stroke-width: 2; }
+.pp-chart .pb-d-conv { fill: var(--pp-c-q); }
+.pp-chart .pb-d-real { fill: var(--pp-c-r); }
+.pp-chart .pb-cross { stroke: color-mix(in srgb, var(--muted) 50%, transparent); stroke-width: 1; stroke-dasharray: 3 3; }
+.pp-chart .pb-end { fill: var(--ink); font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pp-chart .pb-bar-c { fill: var(--pp-c-q); }
+.pp-chart .pb-bar-c.on { fill: color-mix(in srgb, var(--pp-c-q) 78%, var(--ink)); }
+.pb-break { display: flex; flex-direction: column; gap: 8px; }
+.pb-h { margin: 0; font-size: 14.5px; font-weight: 800; color: var(--ink); }
+.pb-go { border: 0; background: none; padding: 0; font: inherit; font-weight: 700; color: var(--navy); cursor: pointer; text-align: start; }
+.pb-go:hover, .pb-go:focus-visible { text-decoration: underline; }
+.pb-tbl td { font-variant-numeric: tabular-nums; }
+.pb-why-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.pb-why-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto 40px; gap: 5px 10px; align-items: baseline; }
+.pb-why-l { font-size: 13.5px; min-width: 0; color: var(--ink); }
+.pb-why-v { font-size: 14px; color: var(--ink); text-align: end; font-variant-numeric: tabular-nums; }
+.pb-why-n { font-size: 12px; color: var(--muted); text-align: end; font-variant-numeric: tabular-nums; }
+.pb-why-bar { grid-column: 1 / -1; display: block; height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--muted) 14%, transparent); overflow: hidden; }
+.pb-why-bar > i { display: block; height: 100%; border-radius: 999px; background: color-mix(in srgb, var(--ink) 58%, var(--surface)); }
+
+/* how Dellal learns (PilotLearn.tsx): four stations on a track that goes round; the dot runs it unless motion is reduced */
+.pl-lead { margin: 0; font-size: 15px; line-height: 1.55; color: var(--ink); max-width: 82ch; }
+.pl-stage { position: relative; margin-top: 4px; }
+.pl-track { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
+.pl-line { fill: none; stroke: color-mix(in srgb, var(--pp-c-q) 45%, var(--line)); stroke-width: 2; stroke-linejoin: round; }
+.pl-arrow { fill: none; stroke: var(--pp-c-q); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pl-run { fill: var(--pp-c-r); stroke: var(--surface); stroke-width: 2; }
+.pl-steps { position: relative; list-style: none; margin: 0; padding: 0 22px 34px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 18px; }
+.pl-step { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; min-width: 0; }
+.pl-dot { position: relative; z-index: 1; width: 34px; height: 34px; flex: none; border-radius: 50%; display: grid; place-items: center; margin-bottom: 8px; background: var(--surface); border: 2px solid var(--pp-c-q); color: var(--ink); font-weight: 900; font-size: 14.5px; }
+.pl-when { font-size: 12px; font-weight: 800; color: var(--muted); letter-spacing: .03em; }
+.pl-what { font-size: 15.5px; color: var(--ink); }
+.pl-text { font-size: 13px; line-height: 1.5; color: var(--muted); max-width: 32ch; }
+@media (max-width: 760px) {
+  .pl-steps { grid-template-columns: minmax(0, 1fr); gap: 20px; padding: 26px 8px 30px; padding-inline-start: 40px; }
+  .pl-step { display: grid; grid-template-columns: 34px minmax(0, 1fr); column-gap: 12px; row-gap: 2px; align-items: start; text-align: start; }
+  .pl-dot { grid-row: 1 / span 3; margin: 0; }
+  .pl-text { max-width: none; }
+}
+.pl-again { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--muted); }
+.pl-rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px 30px; padding-top: 14px; border-top: 1px solid var(--line); }
+.pl-rules > div { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.pl-rules p { margin: 0; }
+.pl-score { border-collapse: collapse; width: 100%; max-width: 380px; font-size: 13.5px; }
+.pl-score td { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.pl-score td.num { text-align: end; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pl-plus { color: var(--ok); }
+.pl-minus { color: var(--coral); }
+.pl-list { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 7px; font-size: 13.5px; line-height: 1.5; }
+.pl-book-v { margin: 0; font-size: 15px; }
+.pl-book-v b { font-size: 18px; margin-inline-end: 4px; }
+.pl-book-text { max-height: 70vh; font-size: 12.5px; }

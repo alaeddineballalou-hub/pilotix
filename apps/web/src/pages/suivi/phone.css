@@ -51,10 +51,13 @@
 
 /* call / message */
 .pxs-cm { display: flex; gap: 8px; }
-.pxs-cm a { flex: 1; height: 48px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; color: #fff !important; text-decoration: none; font-weight: 800; font-size: 15px; }
+.pxs-cm a, .pxs-cm button { border: 0; cursor: pointer; font-family: inherit; }
+.pxs-cm a, .pxs-cm button { flex: 1; height: 48px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; color: #fff !important; text-decoration: none; font-weight: 800; font-size: 15px; }
 .pxs-cm .bji { width: 18px; height: 18px; }
 .pxs-call { background: var(--c-ok-fill); box-shadow: 0 6px 16px rgba(31, 157, 87, .25); }
 .pxs-wa { background: #25D366; }
+/* the call / message choice is open */
+.pxs-call.on, .pxs-wa.on { box-shadow: 0 0 0 3px var(--q-accent, #F7A823); }
 
 /* réclamation */
 .pxs-rc { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 14px; background: #FFF8EC; border: 1px solid #F6DDB0; color: var(--ink); }

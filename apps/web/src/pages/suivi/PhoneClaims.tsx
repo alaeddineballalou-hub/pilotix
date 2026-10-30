@@ -5,6 +5,7 @@ import type { Order } from '@pilotix/shared';
 import { ClaimStage } from './Claims';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AskCall } from '../confirmation/History';
 import { rpc } from '../../lib/backend';
 import { since, when } from '../../lib/format';
 import { trackOf } from '../../lib/items';
@@ -179,9 +180,9 @@ export function SendSheet(p: { claim: SentClaim; order: Order | null; target: Ta
               </a>
             )}
             {target.phone && (
-              <a className="pxk-go ghost" href={`tel:${target.phone}`}>
+              <AskCall phone={target.phone} className="pxk-go ghost" label={`${t('suivi.rec.ph.call')} ${target.phone}`}>
                 <Icon name="phone" /> {t('suivi.rec.ph.call')}
-              </a>
+              </AskCall>
             )}
           </div>
         </>

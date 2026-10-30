@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { when } from '../../lib/format';
 import { hasMouse } from '../../lib/useMedia';
+import { useBackLayer } from '../../lib/backLayer';
 import { rpc } from '../../lib/backend';
 import { useRpc } from '../../lib/query';
 import { telHref, waHref } from './shared';
@@ -144,6 +145,7 @@ function ChoiceBox({ anchor, onClose, label, children }: { anchor: HTMLElement; 
   return createPortal(
     // a portal still sends its clicks up to the React parents (an order card would open): keep them here
     <>
+      {touch && <BackCloses onClose={onClose} />}
       {touch && (
         <div
           className="px-msg-veil"
@@ -162,11 +164,18 @@ function ChoiceBox({ anchor, onClose, label, children }: { anchor: HTMLElement; 
   );
 }
 
+/** The phone's back button closes the open menu, not the page under it. */
+function BackCloses({ onClose }: { onClose: () => void }) {
+  useBackLayer(() => onClose());
+  return null;
+}
+
 /** Small menu under the message icon: SMS or WhatsApp. The ready message is copied, then the app opens with it filled in. */
-export function MsgMenu({ order, anchor, onClose }: { order: { ref: string; phone: string; customerName: string }; anchor: HTMLElement; onClose: () => void }) {
+export function MsgMenu({ order, anchor, onClose, ready }: { order: { ref: string; phone: string; customerName: string }; anchor: HTMLElement; onClose: () => void; ready?: string }) {
   const { t } = useTranslation();
   const meta = useRpc('orders.uiMeta', {}, { staleTime: 5 * 60_000 });
-  const tpl = meta.data?.whatsappTemplate ?? 'Bonjour {nom}, ici {boutique} à propos de votre commande {ref}.';
+  // `ready`: a page's own message (Suivi); otherwise the shop's template from Réglages
+  const tpl = ready ?? meta.data?.whatsappTemplate ?? 'Bonjour {nom}, ici {boutique} à propos de votre commande {ref}.';
   const vars = { nom: order.customerName, boutique: meta.data?.shopName ?? 'Pilotix', ref: order.ref };
   const text = tpl.replace(/\{(nom|boutique|ref)\}/g, (_, k: 'nom' | 'boutique' | 'ref') => vars[k]);
   const go = async (href: string) => {
@@ -202,18 +211,18 @@ export function MsgMenu({ order, anchor, onClose }: { order: { ref: string; phon
 }
 
 /** Small menu under a call button (phones): a normal phone call, or WhatsApp (its chat opens: one more tap on 📞 calls).
- * Either way the call is counted on the order, like the direct call button on computers. */
-export function CallMenu({ order, anchor, onClose }: { order: { id: number; phone: string }; anchor: HTMLElement; onClose: () => void }) {
+ * `onCall` runs when a way is picked (Confirmation and Suivi count the call on the order). */
+export function CallMenu({ phone, anchor, onClose, onCall }: { phone: string; anchor: HTMLElement; onClose: () => void; onCall?: () => void }) {
   const { t } = useTranslation();
   // the link opens the phone app or WhatsApp first; the menu closes right after
-  const counted = () => {
-    rpc('orders.logCall', { id: order.id }).catch(() => {});
+  const picked = () => {
+    onCall?.();
     setTimeout(onClose, 0);
   };
   return (
     <ChoiceBox anchor={anchor} onClose={onClose} label={t('confirmation.call')}>
       <div className="px-msg-h">{t('confirmation.callBy.how')}</div>
-      <a role="menuitem" className="px-msg-it" href={telHref(order.phone)} onClick={counted}>
+      <a role="menuitem" className="px-msg-it" href={telHref(phone)} onClick={picked}>
         <span className="px-msg-ic tel">
           <Icon name="phone" />
         </span>
@@ -222,7 +231,7 @@ export function CallMenu({ order, anchor, onClose }: { order: { id: number; phon
           <small>{t('confirmation.callBy.phoneSub')}</small>
         </span>
       </a>
-      <a role="menuitem" className="px-msg-it" href={`https://wa.me/${phoneIntl(order.phone)}`} target="_blank" rel="noopener" onClick={counted}>
+      <a role="menuitem" className="px-msg-it" href={`https://wa.me/${phoneIntl(phone)}`} target="_blank" rel="noopener" onClick={picked}>
         <span className="px-msg-ic wa">
           <Icon name="whatsapp" />
         </span>
@@ -232,5 +241,55 @@ export function CallMenu({ order, anchor, onClose }: { order: { id: number; phon
         </span>
       </a>
     </ChoiceBox>
+  );
+}
+
+/** A call button that asks first (phone or WhatsApp). The page keeps its own look through `className`. */
+export function AskCall({ phone, className, label, onCall, children }: { phone: string; className: string; label: string; onCall?: () => void; children: ReactNode }) {
+  const [btn, setBtn] = useState<HTMLButtonElement | null>(null);
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        ref={setBtn}
+        className={`${className}${open ? ' on' : ''}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={label}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+      >
+        {children}
+      </button>
+      {open && btn && <CallMenu phone={phone} anchor={btn} onCall={onCall} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+/** A message button that asks first (SMS or WhatsApp), with the ready message. */
+export function AskMsg({ order, ready, className, label, children }: { order: { ref: string; phone: string; customerName: string }; ready?: string; className: string; label: string; children: ReactNode }) {
+  const [btn, setBtn] = useState<HTMLButtonElement | null>(null);
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        ref={setBtn}
+        className={`${className}${open ? ' on' : ''}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={label}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+      >
+        {children}
+      </button>
+      {open && btn && <MsgMenu order={order} ready={ready} anchor={btn} onClose={() => setOpen(false)} />}
+    </>
   );
 }

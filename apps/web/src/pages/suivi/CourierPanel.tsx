@@ -7,6 +7,7 @@ import { communesOf } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AskCall } from '../confirmation/History';
 import { rpc } from '../../lib/backend';
 import type { Out } from '../../lib/backend';
 import { da, when, wilaya, wilayaName } from '../../lib/format';
@@ -871,9 +872,9 @@ function CourierBlock({ o, d, busy, refresh, withdraw, onModify }: { o: Order; d
             </small>
           </span>
           {info.livreur.phone && (
-            <a className="pxz-call" href={`tel:${info.livreur.phone.replace(/\s/g, '')}`} aria-label={t('suivi.courier.ph.callLivreur', { name: info.livreur.name })}>
+            <AskCall phone={info.livreur.phone.replace(/\s/g, '')} className="pxz-call" label={t('suivi.courier.ph.callLivreur', { name: info.livreur.name })}>
               <Icon name="phone" />
-            </a>
+            </AskCall>
           )}
         </div>
       )}
