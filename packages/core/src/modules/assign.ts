@@ -23,7 +23,7 @@ const AGENCY_COL: Record<Area, string> = { conf: 'conf_agency_id', follow: 'foll
 const ONLINE_MS = 3 * 60_000;
 export const MODE_FR: Record<AssignArea['mode'], string> = { manual: 'manuel', turn: 'tour de rôle', load: 'moins chargé', smart: 'smart' };
 
-export const AGENT_DEFAULT: AssignAgent = { out: false, weight: 1, channels: [], products: [], from: null, to: null, langs: [], senior: false };
+export const AGENT_DEFAULT: AssignAgent = { out: false, weight: 1, channels: [], products: [], from: null, to: null, langs: [], senior: false, shops: [] };
 
 /** The shop's choices, every missing one filled with the default (a choice added later starts there). */
 export async function getAssign(db: Db): Promise<Assign> {
@@ -44,20 +44,27 @@ export interface Agent {
   /** on line and not on a call */
   free: boolean;
   cfg: AssignAgent;
+  email: string;
   load: number;
+  /** of `load`: his open items in the owner's other boutiques (one maximum for all) */
+  elsewhere: number;
+  /** he gets nothing from this boutique (his « boutiques » leave it out) */
+  notHere: boolean;
   /** when he was last given something (ms), to break ties */
   lastAt: number;
 }
 
+/** An agent's open items (p: his profile, $2: the statuses that do not count). */
+const loadOf = (area: Area) =>
+  area === 'conf'
+    ? `(SELECT count(*)::int FROM orders o WHERE o.agent_id = p.id AND NOT (o.conf_status = ANY($2)) AND o.shipped_at IS NULL)`
+    : `(SELECT count(*)::int FROM orders o WHERE o.follow_agent_id = p.id AND o.follow_status = 'alert' AND NOT (o.follow_status = ANY($2)))`;
+
 /** The agents of an area with their state now: on line, free, open items, last item given. */
 export async function agentsOf(db: Db, area: Area, cfg: Assign, now: number): Promise<Agent[]> {
   const a = cfg[area];
-  const loadSql =
-    area === 'conf'
-      ? `(SELECT count(*)::int FROM orders o WHERE o.agent_id = p.id AND NOT (o.conf_status = ANY($2)) AND o.shipped_at IS NULL)`
-      : `(SELECT count(*)::int FROM orders o WHERE o.follow_agent_id = p.id AND o.follow_status = 'alert' AND NOT (o.follow_status = ANY($2)))`;
   const rows = await db.query(
-    `SELECT p.id, p.name, p.agency_id, p.agency_products, p.presence, p.last_seen_at, ${loadSql} AS load,
+    `SELECT p.id, p.name, p.email, p.agency_id, p.agency_products, p.presence, p.last_seen_at, ${loadOf(area)} AS load,
             (SELECT max(e.at) FROM order_events e WHERE e.kind = 'assign' AND e.user_id IS NULL AND e.to_value = p.id::text AND e.at > now() - interval '2 days') AS last_at
        FROM profiles p WHERE p.active AND $1 = ANY(p.roles) ORDER BY p.id`,
     [ROLE[area], a.excluded],
@@ -74,7 +81,10 @@ export async function agentsOf(db: Db, area: Area, cfg: Assign, now: number): Pr
       online,
       free: online && r.presence !== 'call',
       cfg: { ...AGENT_DEFAULT, ...(cfg.agents[String(r.id)] ?? {}) },
+      email: String(r.email ?? '').toLowerCase(),
       load: num(r.load),
+      elsewhere: 0,
+      notHere: false,
       lastAt: r.last_at ? Date.parse(new Date(r.last_at).toISOString()) : 0,
     };
   });
@@ -101,6 +111,7 @@ export interface Item {
 /** Why an agent cannot get this item now (null: he can). */
 export function cannot(a: Agent, item: Item, area: AssignArea, now: number): string | null {
   if (a.cfg.out) return 'hors répartition';
+  if (a.notHere) return 'pas cette boutique';
   if (!a.online) return 'pas en ligne';
   if (!inHours(a.cfg, now)) return 'hors de ses heures';
   if (item.agencyId === null ? a.agencyId !== null : a.agencyId !== item.agencyId) return 'pas son agence';
@@ -250,6 +261,61 @@ async function giveBack(db: Db, area: Area, a: AssignArea, list: Agent[], now: n
   return rows.length;
 }
 
+// ---------------------------------------------------------------- the owner's other boutiques
+/** A boutique of the same owner (each has its own data; a person may have an account in several). */
+export interface Sister {
+  id: number;
+  name: string;
+  schema: string;
+  current: boolean;
+}
+
+/** The boutiques of this store's owner, this one included ([] alone, in the browser preview, or for an agency). */
+export async function sisterShops(ctx: Ctx): Promise<Sister[]> {
+  const t = ctx.t;
+  if (!t || !ctx.shop) return [];
+  const rows = await t.platform.query(
+    `SELECT s.id, s.name, s.schema_name FROM platform.shops s
+      WHERE s.kind = 'store' AND s.status NOT IN ('archived', 'deleted') AND s.owner_account_id IS NOT NULL
+        AND s.owner_account_id = (SELECT owner_account_id FROM platform.shops WHERE id = $1) ORDER BY s.id`,
+    [ctx.shop.id],
+  );
+  if (rows.length < 2) return [];
+  return rows.map((r: any) => ({ id: num(r.id), name: String(r.name), schema: String(r.schema_name), current: num(r.id) === ctx.shop!.id }));
+}
+
+/** Each person's accounts in the other boutiques: e-mail → [shop id, his profile id there, his open items there]. */
+async function sisterAccounts(ctx: Ctx, area: Area, sisters: Sister[], emails: string[], excluded: string[]) {
+  const out = new Map<string, { shop: number; profile: number; load: number }[]>();
+  if (!emails.length) return out;
+  for (const sh of sisters) {
+    if (sh.current) continue;
+    const rows = await ctx
+      .t!.shop(sh.schema)
+      .query(`SELECT p.id, lower(p.email) AS email, ${loadOf(area)} AS load FROM profiles p WHERE p.active AND lower(p.email) = ANY($1)`, [emails, excluded])
+      .catch(() => []);
+    for (const r of rows as any[]) out.set(r.email, [...(out.get(r.email) ?? []), { shop: sh.id, profile: num(r.id), load: num(r.load) }]);
+  }
+  return out;
+}
+
+/**
+ * Agents who also work in the owner's other boutiques: one maximum for all (their open items there count here), and
+ * nothing from this boutique when their « boutiques » leave it out.
+ */
+export async function withSisters(ctx: Ctx, area: Area, list: Agent[], a: AssignArea, sisters?: Sister[]) {
+  const sis = sisters ?? (await sisterShops(ctx));
+  const here = sis.find((x) => x.current)?.id;
+  const acc = sis.length ? await sisterAccounts(ctx, area, sis, list.map((x) => x.email).filter(Boolean), a.excluded) : new Map();
+  for (const x of list) {
+    const want = x.cfg.shops;
+    x.notHere = !!here && want.length > 0 && !want.includes(here);
+    x.elsewhere = (acc.get(x.email) ?? []).filter((o: { shop: number }) => !want.length || want.includes(o.shop)).reduce((n: number, o: { load: number }) => n + o.load, 0);
+    x.load += x.elsewhere;
+  }
+  return { sisters: sis, accounts: acc };
+}
+
 /** One run for an area: gives back what absent agents never touched, then gives the waiting items. */
 export async function runArea(ctx: Ctx, area: Area, ids?: number[], cfgIn?: Assign) {
   const cfg = cfgIn ?? (await getAssign(ctx.db));
@@ -257,6 +323,7 @@ export async function runArea(ctx: Ctx, area: Area, ids?: number[], cfgIn?: Assi
   if (a.mode === 'manual') return { assigned: 0, back: 0, waiting: 0 };
   const now = ctx.now();
   const list = await agentsOf(ctx.db, area, cfg, now);
+  await withSisters(ctx, area, list, a);
   const back = ids ? 0 : await giveBack(ctx.db, area, a, list, now);
   const items = await waiting(ctx.db, area, ids);
   const turns = { ...(await getSetting(ctx.db, 'autoAssignTurn')) };
@@ -292,6 +359,24 @@ export async function assignNow(ctx: Ctx, area: Area, id: number) {
   }
 }
 
+/** An agent's « boutiques » are the same everywhere: written in his account of each of the owner's boutiques. */
+async function shareShops(ctx: Ctx, agents: Record<string, AssignAgent>) {
+  const sis = (await sisterShops(ctx)).filter((x) => !x.current);
+  const ids = Object.keys(agents).map(Number);
+  if (!sis.length || !ids.length) return;
+  const rows = await ctx.db.query('SELECT id, lower(email) AS email FROM profiles WHERE id = ANY($1)', [ids]);
+  const byEmail = new Map<string, number[]>(rows.map((r: any) => [String(r.email), agents[String(r.id)].shops]));
+  for (const sh of sis) {
+    const db = ctx.t!.shop(sh.schema);
+    const there = await db.query('SELECT id, lower(email) AS email FROM profiles WHERE lower(email) = ANY($1)', [[...byEmail.keys()]]).catch(() => []);
+    if (!there.length) continue;
+    const cur = await getSetting(db, 'autoAssign');
+    const next = { ...cur, agents: { ...(cur.agents ?? {}) } };
+    for (const r of there as any[]) next.agents[String(r.id)] = { ...AGENT_DEFAULT, ...(next.agents[String(r.id)] ?? {}), shops: byEmail.get(String(r.email)) ?? [] };
+    await setSetting(db, 'autoAssign', next);
+  }
+}
+
 const AreaIn = z.object({
   mode: z.enum(['manual', 'turn', 'load', 'smart']),
   by: z.enum(['all', 'channel', 'product']),
@@ -312,6 +397,7 @@ const AgentIn = z.object({
   to: z.number().min(0).max(24).nullable(),
   langs: z.array(z.string().max(10)).max(5),
   senior: z.boolean(),
+  shops: z.array(z.number().int().positive()).max(50).default([]),
 });
 
 export const assignProcs = {
@@ -320,12 +406,17 @@ export const assignProcs = {
     const cfg = await getAssign(ctx.db);
     const now = ctx.now();
     const [conf, follow] = await Promise.all([agentsOf(ctx.db, 'conf', cfg, now), agentsOf(ctx.db, 'follow', cfg, now)]);
+    const sisters = await sisterShops(ctx);
+    const sc = await withSisters(ctx, 'conf', conf, cfg.conf, sisters);
+    const sf = await withSisters(ctx, 'follow', follow, cfg.follow, sisters);
+    const here = sisters.find((x) => x.current)?.id;
+    const shopsOf = (x: Agent) => (here ? [here, ...[...(sc.accounts.get(x.email) ?? []), ...(sf.accounts.get(x.email) ?? [])].map((o) => o.shop)] : []);
     const waitingNow = {
       conf: num((await ctx.db.query(`SELECT count(*)::int AS n FROM orders WHERE agent_id IS NULL AND conf_status = ANY($1) AND NOT is_exchange AND created_at > now() - interval '30 days'`, [CONF_TODO]))[0]?.n),
       follow: num((await ctx.db.query(`SELECT count(*)::int AS n FROM orders WHERE follow_agent_id IS NULL AND follow_status = 'alert'`))[0]?.n),
     };
-    const pub = (x: Agent) => ({ id: x.id, name: x.name, online: x.online, free: x.free, presence: x.presence, load: x.load, agency: x.agencyId !== null, inHours: inHours(x.cfg, now) });
-    return { cfg, conf: conf.map(pub), follow: follow.map(pub), waiting: waitingNow };
+    const pub = (x: Agent) => ({ id: x.id, name: x.name, online: x.online, free: x.free, presence: x.presence, load: x.load, agency: x.agencyId !== null, inHours: inHours(x.cfg, now), elsewhere: x.elsewhere, shops: [...new Set(shopsOf(x))] });
+    return { cfg, conf: conf.map(pub), follow: follow.map(pub), waiting: waitingNow, shops: sisters.map((x) => ({ id: x.id, name: x.name, current: x.current })) };
   }),
 
   'assign.set': proc(
@@ -334,6 +425,7 @@ export const assignProcs = {
     async (ctx, i) => {
       for (const [k, v] of Object.entries(i.agents)) if (v.from !== null && v.to !== null && v.from === v.to) throw bad(`Agent ${k} : l’heure de début et de fin sont pareilles`);
       await setSetting(ctx.db, 'autoAssign', i, ctx.session.profile.id);
+      await shareShops(ctx, i.agents);
       return { ok: true };
     },
   ),

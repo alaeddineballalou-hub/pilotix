@@ -17,8 +17,23 @@ type AreaCfg = Cfg['conf'];
 type AgentCfg = Cfg['agents'][string];
 type Tab = 'conf' | 'follow' | 'agents';
 const MODES: AreaCfg['mode'][] = ['manual', 'turn', 'load'];
-const MODE_ICON: Record<string, string> = { manual: 'pencil', turn: 'refresh', load: 'sliders', smart: 'sparkles' };
-const AGENT0: AgentCfg = { out: false, weight: 1, channels: [], products: [], from: null, to: null, langs: [], senior: false };
+const MODE_ICON: Record<string, string> = {
+  manual: 'pencil',
+  turn: 'refresh',
+  load: 'sliders',
+  smart: 'sparkles',
+};
+const AGENT0: AgentCfg = {
+  out: false,
+  weight: 1,
+  channels: [],
+  products: [],
+  from: null,
+  to: null,
+  langs: [],
+  senior: false,
+  shops: [],
+};
 
 export function Affectation() {
   const { t } = useTranslation();
@@ -27,16 +42,32 @@ export function Affectation() {
   const [tab, setTab] = useState<Tab>('conf');
   const [draft, setDraft] = useState<Cfg | null>(null);
   const [pick, setPick] = useState<number | null>(null);
-  const save = useAction('assign.set', { success: t('admin.aa.saved'), onDone: () => setDraft(null) });
-  const run = useAction('assign.run', { success: (r) => t('admin.aa.ran', { n: r.conf.assigned + r.follow.assigned, b: r.conf.back + r.follow.back }) });
+  const save = useAction('assign.set', {
+    success: t('admin.aa.saved'),
+    onDone: () => setDraft(null),
+  });
+  const run = useAction('assign.run', {
+    success: (r) =>
+      t('admin.aa.ran', {
+        n: r.conf.assigned + r.follow.assigned,
+        b: r.conf.back + r.follow.back,
+      }),
+  });
   if (q.isLoading) return <Loading />;
   if (q.error || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   const d = q.data;
   const v = draft ?? d.cfg;
   const dirty = !!draft && JSON.stringify(draft) !== JSON.stringify(d.cfg);
   const setArea = (k: 'conf' | 'follow', p: Partial<AreaCfg>) => setDraft({ ...v, [k]: { ...v[k], ...p } });
-  const agentOf = (id: number): AgentCfg => ({ ...AGENT0, ...(v.agents[String(id)] ?? {}) });
-  const setAgent = (id: number, p: Partial<AgentCfg>) => setDraft({ ...v, agents: { ...v.agents, [String(id)]: { ...agentOf(id), ...p } } });
+  const agentOf = (id: number): AgentCfg => ({
+    ...AGENT0,
+    ...(v.agents[String(id)] ?? {}),
+  });
+  const setAgent = (id: number, p: Partial<AgentCfg>) =>
+    setDraft({
+      ...v,
+      agents: { ...v.agents, [String(id)]: { ...agentOf(id), ...p } },
+    });
   // the line of the turns: the manager's order, then the others
   const people = [...new Map([...d.conf, ...d.follow].map((x) => [x.id, x])).values()];
   const ordered = [...people].sort((a, b) => {
@@ -88,23 +119,6 @@ export function Affectation() {
               </div>
             </div>
           )}
-          {a.mode === 'load' && k === 'conf' && (
-            <div className="pf-row pf-col">
-              <span className="pf-text">
-                <b>{t('admin.aa.excluded')}</b>
-                <small>{t('admin.aa.excludedHint')}</small>
-              </span>
-              <div className="pf-chips pf-chips-s">
-                {CONF_STATUSES.map((s) => (
-                  <label key={s} className={`pf-chip ${a.excluded.includes(s) ? 'on' : ''}`}>
-                    <input type="checkbox" checked={a.excluded.includes(s)} onChange={() => setArea(k, { excluded: a.excluded.includes(s) ? a.excluded.filter((x) => x !== s) : [...a.excluded, s] })} />
-                    <Icon name="checkcircle" />
-                    {t(`status.conf.${s}`)}
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
         </section>
 
         {a.mode !== 'manual' && (
@@ -119,22 +133,77 @@ export function Affectation() {
                 <input type="checkbox" role="switch" className="pf-sw" checked={a[r]} onChange={(e) => setArea(k, { [r]: e.target.checked })} />
               </label>
             ))}
+          </section>
+        )}
+
+        {a.mode !== 'manual' && (
+          <section className="pf-group">
+            <h3>{t('admin.aa.limits')}</h3>
             <div className="pf-row">
               <span className="pf-text">
                 <b>{t('admin.aa.max')}</b>
                 <small>{t('admin.aa.maxHint')}</small>
               </span>
               <label className="pf-num">
-                <input type="number" min={0} max={500} inputMode="numeric" aria-label={t('admin.aa.max')} value={a.max} onChange={(e) => setArea(k, { max: Math.max(0, Math.min(500, Math.round(Number(e.target.value) || 0))) })} />
+                <input
+                  type="number"
+                  min={0}
+                  max={500}
+                  inputMode="numeric"
+                  aria-label={t('admin.aa.max')}
+                  value={a.max}
+                  onChange={(e) =>
+                    setArea(k, {
+                      max: Math.max(0, Math.min(500, Math.round(Number(e.target.value) || 0))),
+                    })
+                  }
+                />
               </label>
             </div>
+            {k === 'conf' && (
+              <div className="pf-row pf-col">
+                <span className="pf-text">
+                  <b>{t('admin.aa.excluded')}</b>
+                  <small>{t('admin.aa.excludedHint')}</small>
+                </span>
+                <div className="pf-chips pf-chips-s">
+                  {CONF_STATUSES.map((s) => (
+                    <label key={s} className={`pf-chip ${a.excluded.includes(s) ? 'on' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={a.excluded.includes(s)}
+                        onChange={() =>
+                          setArea(k, {
+                            excluded: a.excluded.includes(s) ? a.excluded.filter((x) => x !== s) : [...a.excluded, s],
+                          })
+                        }
+                      />
+                      <Icon name="checkcircle" />
+                      {t(`status.conf.${s}`)}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="pf-row">
               <span className="pf-text">
                 <b>{t('admin.aa.offline')}</b>
                 <small>{t('admin.aa.offlineHint')}</small>
               </span>
               <label className="pf-num">
-                <input type="number" min={5} max={240} inputMode="numeric" aria-label={t('admin.aa.offline')} value={a.offlineMin} onChange={(e) => setArea(k, { offlineMin: Math.max(5, Math.min(240, Math.round(Number(e.target.value) || 15))) })} />
+                <input
+                  type="number"
+                  min={5}
+                  max={240}
+                  inputMode="numeric"
+                  aria-label={t('admin.aa.offline')}
+                  value={a.offlineMin}
+                  onChange={(e) =>
+                    setArea(k, {
+                      offlineMin: Math.max(5, Math.min(240, Math.round(Number(e.target.value) || 15))),
+                    })
+                  }
+                />
                 <span>{t('admin.aa.min')}</span>
               </label>
             </div>
@@ -150,7 +219,13 @@ export function Affectation() {
             <span>
               <b className="ltr">{on.length}</b> {t('admin.aa.onlineN', { count: on.length })}
             </span>
-            <button type="button" className="btn primary small" disabled={run.isPending || a.mode === 'manual' || dirty} onClick={() => run.mutate({})} title={dirty ? t('admin.aa.saveFirst') : undefined}>
+            <button
+              type="button"
+              className="btn primary small"
+              disabled={run.isPending || a.mode === 'manual' || dirty}
+              onClick={() => run.mutate({})}
+              title={dirty ? t('admin.aa.saveFirst') : undefined}
+            >
               <Icon name="refresh" /> {t('admin.aa.runNow')}
             </button>
           </div>
@@ -160,7 +235,7 @@ export function Affectation() {
                 <span className={`aa-dot ${x.online ? (x.free ? 'ok' : 'call') : 'off'}`} title={t(x.online ? (x.free ? 'admin.aa.st.free' : 'admin.aa.st.call') : 'admin.aa.st.off')} />
                 <b>{x.name}</b>
                 <small>{agentOf(x.id).out ? t('admin.aa.st.out') : !x.inHours ? t('admin.aa.st.hours') : t(x.online ? (x.free ? 'admin.aa.st.free' : 'admin.aa.st.call') : 'admin.aa.st.off')}</small>
-                <span className="aa-load ltr" title={t('admin.aa.loadTip')}>
+                <span className="aa-load ltr" title={x.elsewhere ? t('admin.aa.elsewhere', { n: x.elsewhere }) : t('admin.aa.loadTip')}>
                   {x.load}
                   {a.max > 0 ? ` / ${a.max}` : ''}
                 </span>
@@ -240,7 +315,16 @@ export function Affectation() {
                         </select>
                       </td>
                       <td data-l={t('admin.aa.col.hours')} className="aa-hours">
-                        <select value={c.from ?? ''} aria-label={t('admin.aa.from')} onChange={(e) => setAgent(x.id, { from: e.target.value === '' ? null : Number(e.target.value), to: e.target.value === '' ? null : c.to ?? 17 })}>
+                        <select
+                          value={c.from ?? ''}
+                          aria-label={t('admin.aa.from')}
+                          onChange={(e) =>
+                            setAgent(x.id, {
+                              from: e.target.value === '' ? null : Number(e.target.value),
+                              to: e.target.value === '' ? null : (c.to ?? 17),
+                            })
+                          }
+                        >
                           <option value="">{t('admin.aa.anyTime')}</option>
                           {Array.from({ length: 24 }, (_, h) => (
                             <option key={h} value={h}>
@@ -264,7 +348,13 @@ export function Affectation() {
                       <td data-l={t('admin.aa.col.access')} className="aa-acc">
                         <button type="button" className="aa-accb" onClick={() => setPick(x.id)}>
                           <Icon name="pencil" />
-                          {c.channels.length || c.products.length ? t('admin.aa.limited', { c: c.channels.length, p: c.products.length }) : t('admin.aa.all')}
+                          {c.channels.length || c.products.length
+                            ? t('admin.aa.limited', {
+                                c: c.channels.length,
+                                p: c.products.length,
+                              })
+                            : t('admin.aa.all')}
+                          {x.shops.length > 1 && <span className="aa-shopn">{t('admin.aa.shopsN', { n: c.shops.length ? c.shops.filter((id) => x.shops.includes(id)).length : x.shops.length })}</span>}
                         </button>
                       </td>
                     </tr>
@@ -281,6 +371,7 @@ export function Affectation() {
           name={people.find((x) => x.id === pick)?.name ?? ''}
           value={agentOf(pick)}
           products={products}
+          shops={d.shops.filter((b) => people.find((x) => x.id === pick)?.shops.includes(b.id))}
           onClose={() => setPick(null)}
           onSave={(p) => {
             setAgent(pick, p);
@@ -305,10 +396,25 @@ export function Affectation() {
 }
 
 /** What an agent may get: some sales channels and products (none ticked: everything). */
-function AccessModal({ name, value, products, onClose, onSave }: { name: string; value: AgentCfg; products: { id: number; name: string }[]; onClose: () => void; onSave: (p: Partial<AgentCfg>) => void }) {
+function AccessModal({
+  name,
+  value,
+  products,
+  shops,
+  onClose,
+  onSave,
+}: {
+  name: string;
+  value: AgentCfg;
+  products: { id: number; name: string }[];
+  shops: { id: number; name: string; current: boolean }[];
+  onClose: () => void;
+  onSave: (p: Partial<AgentCfg>) => void;
+}) {
   const { t } = useTranslation();
   const [ch, setCh] = useState<string[]>(value.channels);
   const [pr, setPr] = useState<number[]>(value.products);
+  const [sh, setSh] = useState<number[]>(value.shops);
   const flip = <T,>(l: T[], x: T) => (l.includes(x) ? l.filter((y) => y !== x) : [...l, x]);
   return (
     <Modal
@@ -320,13 +426,29 @@ function AccessModal({ name, value, products, onClose, onSave }: { name: string;
           <button type="button" className="btn ghost" onClick={onClose}>
             {t('common.cancel')}
           </button>
-          <button type="button" className="btn primary" onClick={() => onSave({ channels: ch, products: pr })}>
+          <button type="button" className="btn primary" onClick={() => onSave({ channels: ch, products: pr, shops: sh })}>
             {t('admin.aa.done')}
           </button>
         </>
       }
     >
       <p className="muted small">{t('admin.aa.accessHint')}</p>
+      {shops.length > 1 && (
+        <>
+          <h4 className="aa-h4">{t('admin.aa.shops')}</h4>
+          <p className="muted small">{t('admin.aa.shopsHint')}</p>
+          <div className="pf-chips pf-chips-s">
+            {shops.map((b) => (
+              <label key={b.id} className={`pf-chip ${sh.includes(b.id) ? 'on' : ''}`}>
+                <input type="checkbox" checked={sh.includes(b.id)} onChange={() => setSh(flip(sh, b.id))} />
+                <Icon name="checkcircle" />
+                {b.name}
+                {b.current && <small className="muted"> · {t('admin.aa.thisShop')}</small>}
+              </label>
+            ))}
+          </div>
+        </>
+      )}
       <h4 className="aa-h4">{t('admin.aa.channels')}</h4>
       <div className="pf-chips pf-chips-s">
         {SALES_CHANNELS.map((c) => (

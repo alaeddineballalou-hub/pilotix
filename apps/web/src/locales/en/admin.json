@@ -758,8 +758,8 @@
       "channel": "Channel",
       "product": "Product"
     },
-    "excluded": "Not counted as workload",
-    "excludedHint": "Orders in these statuses don't count as open work.",
+    "excluded": "Statuses not counted",
+    "excludedHint": "These orders count neither in the maximum nor in the workload (e.g. confirmed: the work is done).",
     "rules": "Rules",
     "rule": {
       "sameClient": "Same agent for a returning client",
@@ -773,8 +773,8 @@
       "speedFirst": "An agent not on a call gets the fresh order first.",
       "hideHistory": "The new agent doesn't see the previous agent's notes."
     },
-    "max": "Maximum per agent",
-    "maxHint": "Beyond this he gets nothing more (0 = no limit).",
+    "max": "Maximum orders at once",
+    "maxHint": "Open orders an agent can hold at the same time. Beyond this he gets nothing more (0 = no limit).",
     "offline": "Take back after an absence of",
     "offlineHint": "His untouched orders go to the others.",
     "min": "min",
@@ -801,7 +801,7 @@
       "in": "In the split",
       "weight": "Share",
       "hours": "Hours",
-      "access": "Channels and products"
+      "access": "Access (boutiques, channels, products)"
     },
     "up": "Move up",
     "down": "Move down",
@@ -819,6 +819,12 @@
       "conf": "Confirmation",
       "follow": "Follow-up",
       "agents": "Agents"
-    }
+    },
+    "limits": "Limits",
+    "shops": "Boutiques",
+    "shopsHint": "He works in several of your boutiques: tick where he gets orders. His maximum counts all his open orders from these boutiques.",
+    "thisShop": "this one",
+    "shopsN": "{{n}} boutiques",
+    "elsewhere": "Of which {{n}} in your other boutiques"
   }
 }

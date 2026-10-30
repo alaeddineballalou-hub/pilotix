@@ -758,8 +758,8 @@
       "channel": "Canal",
       "product": "Produit"
     },
-    "excluded": "Ne compte pas dans la charge",
-    "excludedHint": "Les commandes dans ces statuts ne comptent pas comme du travail en cours.",
+    "excluded": "Statuts qui ne comptent pas",
+    "excludedHint": "Ces commandes ne comptent ni dans le maximum ni dans la charge (ex. confirmée : le travail est fait).",
     "rules": "Règles",
     "rule": {
       "sameClient": "Même agent pour un client qui revient",
@@ -773,8 +773,8 @@
       "speedFirst": "Un agent qui n’est pas en appel reçoit la commande fraîche d’abord.",
       "hideHistory": "Le nouvel agent ne voit pas les notes de l’ancien."
     },
-    "max": "Maximum par agent",
-    "maxHint": "Au-delà, il ne reçoit plus rien (0 = sans limite).",
+    "max": "Maximum de commandes à la fois",
+    "maxHint": "Commandes ouvertes qu’un agent peut avoir en même temps. Au-delà, il ne reçoit plus rien (0 = sans limite).",
     "offline": "Reprendre après une absence de",
     "offlineHint": "Ses commandes pas encore touchées repartent aux autres.",
     "min": "min",
@@ -801,7 +801,7 @@
       "in": "Dans la répartition",
       "weight": "Part",
       "hours": "Horaires",
-      "access": "Canaux et produits"
+      "access": "Accès (boutiques, canaux, produits)"
     },
     "up": "Monter",
     "down": "Descendre",
@@ -819,6 +819,12 @@
       "conf": "Confirmation",
       "follow": "Suivi",
       "agents": "Agents"
-    }
+    },
+    "limits": "Limites",
+    "shops": "Boutiques",
+    "shopsHint": "Il travaille dans plusieurs de vos boutiques : cochez celles où il reçoit des commandes. Son maximum compte toutes ses commandes ouvertes de ces boutiques.",
+    "thisShop": "celle-ci",
+    "shopsN": "{{n}} boutiques",
+    "elsewhere": "Dont {{n}} dans vos autres boutiques"
   }
 }

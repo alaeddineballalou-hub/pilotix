@@ -45,6 +45,8 @@ export interface AssignAgent {
   langs: string[];
   /** gets the priority / risky orders first */
   senior: boolean;
+  /** the owner's boutiques he gets orders from, when he works in several (empty: all of them) — kept the same in each */
+  shops: number[];
 }
 
 /** Every setting with its default. Admin edits them in Management / Réglages. */

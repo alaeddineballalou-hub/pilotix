@@ -59,3 +59,5 @@
   .aa-tbl td.aa-w, .aa-tbl td.aa-hours, .aa-tbl td.aa-acc { grid-column: 1 / -1; justify-content: space-between; }
   .aa-tbl td.aa-w::before, .aa-tbl td.aa-hours::before, .aa-tbl td.aa-acc::before { margin-inline-end: auto; }
 }
+.aa { padding-bottom: 90px; }
+.aa-shopn { margin-inline-start: 4px; padding: 1px 7px; border-radius: 999px; background: var(--sky-soft); color: var(--navy); font-size: 11.5px; font-weight: 800; }
