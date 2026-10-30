@@ -7,6 +7,7 @@
     "marketeurs": "Marketeurs",
     "managers": "Agent managers",
     "statuts": "Statuts",
+    "affectation": "Affectation",
     "paie": "Paie des agents",
     "prix": "Prix de livraison",
     "canaux": "Canaux de vente",
@@ -725,6 +726,99 @@
       "empty": "Remplissez chaque case (seul « Au plus » peut rester vide : sans limite).",
       "range": "Chaque nombre va de 0 à 100.",
       "levels": "Les niveaux doivent descendre : « Très fiable » au-dessus de « Fiable », au-dessus de « À surveiller »."
+    }
+  },
+  "aa": {
+    "title": "Affectation automatique",
+    "help": "Qui reçoit chaque nouvelle commande (Confirmation) et chaque nouvelle alerte (Suivi), sans que personne ne choisisse.",
+    "saved": "Affectation enregistrée",
+    "ran": "{{n}} donnée(s) · {{b}} reprise(s)",
+    "tab": {
+      "conf": "Config Confirmation",
+      "follow": "Config Suivi",
+      "agents": "Agents"
+    },
+    "how": "Comment répartir ?",
+    "mode": {
+      "manual": "Manuel",
+      "turn": "Tour de rôle",
+      "load": "Moins chargé",
+      "smart": "Intelligent"
+    },
+    "modeHint": {
+      "manual": "Personne n’est choisi : les agents prennent eux-mêmes.",
+      "turn": "Chacun son tour, dans l’ordre de l’onglet Agents.",
+      "load": "À celui qui a le moins de commandes ouvertes.",
+      "smart": "Au meilleur agent pour cette commande."
+    },
+    "by": "Tour de rôle séparé par",
+    "byHint": "Un tour pour tout, ou un tour par canal ou par produit.",
+    "byOpt": {
+      "all": "Tout ensemble",
+      "channel": "Canal",
+      "product": "Produit"
+    },
+    "excluded": "Ne compte pas dans la charge",
+    "excludedHint": "Les commandes dans ces statuts ne comptent pas comme du travail en cours.",
+    "rules": "Règles",
+    "rule": {
+      "sameClient": "Même agent pour un client qui revient",
+      "respectAccess": "Respecter canaux et produits de chaque agent",
+      "speedFirst": "Priorité à l’agent libre",
+      "hideHistory": "Cacher l’historique quand on réaffecte"
+    },
+    "ruleHint": {
+      "sameClient": "Il connaît déjà le client : la commande lui revient s’il est en ligne.",
+      "respectAccess": "Un agent limité à TikTok ne reçoit que TikTok.",
+      "speedFirst": "Un agent qui n’est pas en appel reçoit la commande fraîche d’abord.",
+      "hideHistory": "Le nouvel agent ne voit pas les notes de l’ancien."
+    },
+    "max": "Maximum par agent",
+    "maxHint": "Au-delà, il ne reçoit plus rien (0 = sans limite).",
+    "offline": "Reprendre après une absence de",
+    "offlineHint": "Ses commandes pas encore touchées repartent aux autres.",
+    "min": "min",
+    "now": "En ce moment",
+    "waitingConf": "commande(s) sans agent",
+    "waitingFollow": "alerte(s) sans agent",
+    "onlineN_one": "agent en ligne",
+    "onlineN_other": "agents en ligne",
+    "runNow": "Répartir maintenant",
+    "saveFirst": "Enregistrez d’abord",
+    "loadTip": "Commandes ouvertes / maximum",
+    "st": {
+      "free": "Libre",
+      "call": "En appel",
+      "off": "Hors ligne",
+      "out": "Hors répartition",
+      "hours": "Hors horaires"
+    },
+    "agentsT": "Agents",
+    "agentsHint": "L’ordre sert au tour de rôle. ×2 = reçoit deux fois plus. Les horaires et les accès limitent ce qu’il reçoit.",
+    "col": {
+      "order": "Ordre",
+      "agent": "Agent",
+      "in": "Dans la répartition",
+      "weight": "Part",
+      "hours": "Horaires",
+      "access": "Canaux et produits"
+    },
+    "up": "Monter",
+    "down": "Descendre",
+    "from": "De",
+    "to": "À",
+    "anyTime": "Toute la journée",
+    "all": "Tout",
+    "limited": "{{c}} canal(aux) · {{p}} produit(s)",
+    "accessT": "Ce que reçoit {{name}}",
+    "accessHint": "Rien de coché = il reçoit tout.",
+    "channels": "Canaux",
+    "products": "Produits",
+    "done": "Valider",
+    "role": {
+      "conf": "Confirmation",
+      "follow": "Suivi",
+      "agents": "Agents"
     }
   }
 }

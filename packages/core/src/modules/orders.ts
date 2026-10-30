@@ -30,6 +30,7 @@ import { bad, Ctx, forbidden, hasRole, notFound, proc } from '../rpc';
 import { clientFee, getSetting } from '../settings';
 import { getPrefs } from './prefs';
 import { channelGuard, guardNote, type GuardMode } from './guard';
+import { assignNow, getAssign } from './assign';
 import { notifyContext, onConfChange, onFollowChange, onOrderCreated, sendInPreview } from './notify';
 import { landingCounts, landingSettings, onLandingConf, onLandingFollow } from './landingquery';
 import { lowStockCount } from './stockquery';
@@ -593,6 +594,11 @@ export async function createOrder(
     return getOrder(ctx, oid, tx);
   });
   ctx.emit({ type: 'orders' });
+  // Affectation automatique: an order to call gets its agent at once (when the shop turned it on)
+  if (!input.isExchange && !order.agentId && (CONF_TODO as string[]).includes(order.confStatus)) {
+    const r = await assignNow(ctx, 'conf', order.id);
+    if (r?.assigned) return getOrder(ctx, order.id);
+  }
   return order;
 }
 
@@ -1444,11 +1450,23 @@ export const ordersProcs = {
   'orders.counts': proc(null, z.object({}), (ctx) => orderCounts(ctx)),
   'orders.get': proc(null, z.object({ id }), async (ctx, { id }) => (await withClientScores(ctx, [await getOrder(ctx, id)]))[0]),
   'orders.events': proc(null, z.object({ id }), async (ctx, { id }) => {
-    await getOrder(ctx, id);
-    const rows = await ctx.db.query(
+    const o = await getOrder(ctx, id);
+    let rows = await ctx.db.query(
       'SELECT e.*, p.name AS user_name FROM order_events e LEFT JOIN profiles p ON p.id = e.user_id WHERE e.order_id = $1 ORDER BY e.at, e.id',
       [id],
     );
+    // Affectation automatique › « réinitialiser l'historique »: an agent given an order again sees it from his turn
+    // (its creation and its notes stay); managers see everything
+    const me = ctx.session.profile.id;
+    if (!ctx.session.isAdmin && !hasRole(ctx.session, 'agent_manager', 'vendeur')) {
+      const cfg = await getAssign(ctx.db);
+      const mine = o.agentId === me && cfg.conf.hideHistory ? 'conf' : o.followAgentId === me && cfg.follow.hideHistory ? 'follow' : null;
+      if (mine) {
+        const since = (await ctx.db.query(`SELECT max(at) AS at FROM order_events WHERE order_id = $1 AND kind = 'assign' AND to_value = $2`, [id, String(me)]))[0]?.at;
+        const before = rows.some((r: any) => r.kind === 'assign' && r.to_value !== String(me) && since && Date.parse(new Date(r.at).toISOString()) < Date.parse(new Date(since).toISOString()));
+        if (since && before) rows = rows.filter((r: any) => r.kind === 'created' || (r.kind === 'note' && r.user_id === null) || Date.parse(new Date(r.at).toISOString()) >= Date.parse(new Date(since).toISOString()));
+      }
+    }
     return rows.map(
       (r: any): OrderEvent => ({ id: num(r.id), orderId: num(r.order_id), at: iso(r.at), userId: numOrNull(r.user_id), userName: r.user_name, kind: r.kind, fromValue: r.from_value, toValue: r.to_value, note: r.note }),
     );

@@ -27,6 +27,7 @@ import { syncTurnstile } from './turnstile';
  *  - le réseau Pilotix: what every store learned about fake orders, shared anonymously with the others, every 30 minutes
  *  - Pilotix: « Changements API », what changed at each delivery company's API (daily, 07:20; an e-mail when something did)
  *  - Pilot Auto Assign: « Livraison privée » orders waiting too long in « À attribuer » go to the backup company, every 5 minutes
+ *  - Affectation automatique: waiting orders and alerts get an agent on line, absent agents give back what they never touched, every minute
  *  - Couverture: the tariffs and bureaus of the companies with an API imported again, every night
  *  - the demo shop starts again from fresh demo data every night
  *  - Pilot AI: every night, the chats of the shops that share them (personal data removed) teach Dellal (one Message Batch)
@@ -41,6 +42,7 @@ const FEATURE: Record<string, string | null> = {
   'notify-run': 'pilotai/notify',
   'depot-push': null,
   'pilot-run': null,
+  'assign-run': null,
   'coverage-refresh': null,
   'spy-scan': 'marketing/spy',
   'sheets-sync': 'management/canaux',
@@ -79,6 +81,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     if (name === 'notify-run') return call('notify.run');
     if (name === 'depot-push') return call('depot.pushRun');
     if (name === 'pilot-run') return call('pilot.run');
+    if (name === 'assign-run') return call('assign.run');
     if (name === 'coverage-refresh') return call('coverage.refresh');
     if (name === 'spy-scan') return call('spy.scan');
     if (name === 'sheets-sync') {
@@ -183,6 +186,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.queue.add('depot-push', {}, { repeat: { every: 30_000 }, jobId: 'depot-push', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('coverage-refresh', {}, { repeat: { pattern: '20 2 * * *', tz: 'Africa/Algiers' }, jobId: 'coverage-refresh', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('pilot-run', {}, { repeat: { every: 5 * 60_000 }, jobId: 'pilot-run', removeOnComplete: 20, removeOnFail: 50 });
+    await this.queue.add('assign-run', {}, { repeat: { every: 60_000 }, jobId: 'assign-run', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('landing-run', {}, { repeat: { every: 60_000 }, jobId: 'landing-run', removeOnComplete: 20, removeOnFail: 50 });
     // Google Sheets every 2 minutes. Redis keeps repeat timers: one left from another interval (it was 10 minutes) is removed
     const SHEETS_EVERY = 2 * 60_000;

@@ -12,13 +12,14 @@ import { Paie } from './Paie';
 import { Prix } from './Prix';
 import { ReglagesPage } from './Reglages';
 import { Statuts } from './Statuts';
+import { Affectation } from './Affectation';
 import { UsersPage } from './Users';
 
 export function Utilisateurs({ sub, rest }: PageProps) {
   return <UsersPage sub={sub} rest={rest} />;
 }
 
-const MGMT = ['statuts', 'paie', 'prix', 'canaux', 'alertes', 'livreur', 'archive'] as const;
+const MGMT = ['statuts', 'affectation', 'paie', 'prix', 'canaux', 'alertes', 'livreur', 'archive'] as const;
 const ARCHIVE_KINDS = ['users', 'products', 'warehouses'] as const;
 export function Management({ sub, rest }: PageProps) {
   const { t } = useTranslation();
@@ -28,7 +29,7 @@ export function Management({ sub, rest }: PageProps) {
   return (
     <>
       <StageBar flow={false} current={cur} items={MGMT.filter((k) => pageIsOn('management', k)).map((k) => ({ key: k, label: t(`admin.subs.${k}`), href: `#/management/${k}` }))} />
-      {cur === 'statuts' ? <Statuts /> : cur === 'paie' ? <Paie /> : cur === 'prix' ? <Prix /> : cur === 'canaux' ? <Canaux /> : cur === 'alertes' ? <DepotAlertsCfg /> : cur === 'livreur' ? <LivreurCfg /> : <Archive key={kind ?? 'users'} initial={kind} />}
+      {cur === 'statuts' ? <Statuts /> : cur === 'affectation' ? <Affectation /> : cur === 'paie' ? <Paie /> : cur === 'prix' ? <Prix /> : cur === 'canaux' ? <Canaux /> : cur === 'alertes' ? <DepotAlertsCfg /> : cur === 'livreur' ? <LivreurCfg /> : <Archive key={kind ?? 'users'} initial={kind} />}
     </>
   );
 }

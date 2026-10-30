@@ -11,6 +11,42 @@ export interface SuiviMotif {
   date?: boolean;
 }
 
+/** Affectation automatique: how a new order (Confirmation) or a new alert (Suivi) gets its agent (assign.ts). */
+export interface AssignArea {
+  /** manual: nobody is given anything; turn: one each in turn; load: the least busy; smart: the most likely to succeed */
+  mode: 'manual' | 'turn' | 'load' | 'smart';
+  /** the turns (and the « smart » learning) are kept per sales channel, per product, or for all */
+  by: 'all' | 'channel' | 'product';
+  /** statuses that do not count in an agent's work (« moins chargé »), e.g. confirmed */
+  excluded: string[];
+  /** open items an agent may hold (0: no limit) */
+  max: number;
+  /** an agent not seen for these minutes gives back what he never touched */
+  offlineMin: number;
+  sameClient: boolean;
+  respectAccess: boolean;
+  hideHistory: boolean;
+  /** a fresh item goes first to an agent online and not on a call */
+  speedFirst: boolean;
+}
+
+export interface AssignAgent {
+  /** taken out of the split (the manager), until the date (YYYY-MM-DD, Algiers) or for good (null with out=true) */
+  out: boolean;
+  /** an agent counts ×1, ×2, ×3 in the turns */
+  weight: number;
+  /** what he may get (empty: everything) */
+  channels: string[];
+  products: number[];
+  /** his hours, Algiers time (null: any time) */
+  from: number | null;
+  to: number | null;
+  /** languages he speaks besides Darija/French, e.g. kab (Kabyle) */
+  langs: string[];
+  /** gets the priority / risky orders first */
+  senior: boolean;
+}
+
 /** Every setting with its default. Admin edits them in Management / Réglages. */
 export interface SettingsMap {
   /** savPhone: the shop's after-sales number, printed on the parcel labels */
@@ -92,6 +128,9 @@ export interface SettingsMap {
    *    that company delivers there;
    *  - noStockDays: a « sans stock » order waiting longer than this rings an alert.
    */
+  autoAssign: { conf: AssignArea; follow: AssignArea; agents: Record<string, AssignAgent>; order: number[] };
+  /** where each turn stands (Tour de rôle): per area and scope, the last agent and how many he got in a row */
+  autoAssignTurn: Record<string, { last: number | null; n: number }>;
   /** Management › Motifs du Suivi: why an alert ends « Résolu » (relancé) or « Perdu »; `client`: the customer said it
    *  himself (a « Perdu » allowed before the agent's calls) */
   suiviMotifs: { resolved: SuiviMotif[]; lost: SuiviMotif[] };
@@ -153,6 +192,13 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   ],
   pilot: PILOT_DEFAULT,
   coverageRefresh: { at: null, results: [] },
+  autoAssign: {
+    conf: { mode: 'manual', by: 'all', excluded: ['confirmed', 'no_stock', 'cancelled', 'duplicate', 'wrong_number', 'fake'], max: 30, offlineMin: 15, sameClient: true, respectAccess: true, hideHistory: false, speedFirst: true },
+    follow: { mode: 'manual', by: 'all', excluded: [], max: 15, offlineMin: 15, sameClient: true, respectAccess: true, hideHistory: false, speedFirst: true },
+    agents: {},
+    order: [],
+  },
+  autoAssignTurn: {},
   suiviMotifs: {
     resolved: [
       { key: 'new_date', fr: 'Nouvelle date de livraison', ar: 'موعد توصيل جديد', on: true, date: true },

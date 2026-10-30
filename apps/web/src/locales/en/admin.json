@@ -7,6 +7,7 @@
     "marketeurs": "Marketers",
     "managers": "Agent managers",
     "statuts": "Statuses",
+    "affectation": "Assignment",
     "paie": "Agent pay",
     "prix": "Delivery prices",
     "canaux": "Sales channels",
@@ -725,6 +726,99 @@
       "empty": "Fill in every box (only “At most” may stay empty: no limit).",
       "range": "Each number goes from 0 to 100.",
       "levels": "The levels must go down: “Very reliable” above “Reliable”, above “Watch”."
+    }
+  },
+  "aa": {
+    "title": "Automatic assignment",
+    "help": "Who gets each new order (Confirmation) and each new alert (Follow-up), without anyone choosing.",
+    "saved": "Assignment saved",
+    "ran": "{{n}} given · {{b}} taken back",
+    "tab": {
+      "conf": "Confirmation setup",
+      "follow": "Follow-up setup",
+      "agents": "Agents"
+    },
+    "how": "How to split?",
+    "mode": {
+      "manual": "Manual",
+      "turn": "Round robin",
+      "load": "Least busy",
+      "smart": "Smart"
+    },
+    "modeHint": {
+      "manual": "Nobody is picked: agents take orders themselves.",
+      "turn": "Each in turn, in the Agents tab order.",
+      "load": "To whoever has the fewest open orders.",
+      "smart": "To the best agent for this order."
+    },
+    "by": "Separate turns by",
+    "byHint": "One turn for everything, or one per channel or product.",
+    "byOpt": {
+      "all": "Everything",
+      "channel": "Channel",
+      "product": "Product"
+    },
+    "excluded": "Not counted as workload",
+    "excludedHint": "Orders in these statuses don't count as open work.",
+    "rules": "Rules",
+    "rule": {
+      "sameClient": "Same agent for a returning client",
+      "respectAccess": "Respect each agent's channels and products",
+      "speedFirst": "Free agent first",
+      "hideHistory": "Hide history on reassignment"
+    },
+    "ruleHint": {
+      "sameClient": "He already knows the client: the order goes back to him if online.",
+      "respectAccess": "An agent limited to TikTok only gets TikTok.",
+      "speedFirst": "An agent not on a call gets the fresh order first.",
+      "hideHistory": "The new agent doesn't see the previous agent's notes."
+    },
+    "max": "Maximum per agent",
+    "maxHint": "Beyond this he gets nothing more (0 = no limit).",
+    "offline": "Take back after an absence of",
+    "offlineHint": "His untouched orders go to the others.",
+    "min": "min",
+    "now": "Right now",
+    "waitingConf": "order(s) without agent",
+    "waitingFollow": "alert(s) without agent",
+    "onlineN_one": "agent online",
+    "onlineN_other": "agents online",
+    "runNow": "Split now",
+    "saveFirst": "Save first",
+    "loadTip": "Open orders / maximum",
+    "st": {
+      "free": "Free",
+      "call": "On a call",
+      "off": "Offline",
+      "out": "Not in split",
+      "hours": "Off hours"
+    },
+    "agentsT": "Agents",
+    "agentsHint": "The order is used for round robin. ×2 = gets twice as much. Hours and access limit what he gets.",
+    "col": {
+      "order": "Order",
+      "agent": "Agent",
+      "in": "In the split",
+      "weight": "Share",
+      "hours": "Hours",
+      "access": "Channels and products"
+    },
+    "up": "Move up",
+    "down": "Move down",
+    "from": "From",
+    "to": "To",
+    "anyTime": "All day",
+    "all": "All",
+    "limited": "{{c}} channel(s) · {{p}} product(s)",
+    "accessT": "What {{name}} gets",
+    "accessHint": "Nothing ticked = he gets everything.",
+    "channels": "Channels",
+    "products": "Products",
+    "done": "Done",
+    "role": {
+      "conf": "Confirmation",
+      "follow": "Follow-up",
+      "agents": "Agents"
     }
   }
 }

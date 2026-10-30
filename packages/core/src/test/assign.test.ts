@@ -1,92 +1,117 @@
-// Dépôt, from « À préparer » to « En dispatch »: picked whole with a company → « En dispatch » by itself; no company →
-// « À attribuer », where only managers (ticked) and admins choose; a parcel the courier refuses stays in « En dispatch »
-// with the reason and « Renvoyer »; a cancelled order's parcel is cancelled at the courier by itself.
+// Affectation automatique (piece A): a new order gets its agent at once — tour de rôle (an agent ×2 gets two in a
+// row), moins chargé, only agents on line and in their hours, under their maximum, allowed on the channel; a known
+// customer goes back to his agent; a free agent before one on a call; an absent agent gives back what he never touched.
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
+let as: (e: string) => Promise<Ctx>;
 let admin: Ctx;
-let as: (email: string) => Promise<Ctx>;
 let X: { productId: number; variantId: number };
-let manual: number;
-let noest: number;
+let ids: number[] = [];
+let base: any;
 
 before(async () => {
   ({ db, as } = await setup(40));
   admin = await as(EMAILS.admin);
-  const wh = Number((await db.query('SELECT id FROM warehouses WHERE active ORDER BY is_default DESC, id LIMIT 1'))[0].id);
-  const r = (await db.query(`SELECT p.id, v.id AS vid FROM products p JOIN product_variants v ON v.product_id = p.id AND v.active WHERE p.active AND NOT p.is_service ORDER BY p.id DESC, v.id LIMIT 1`))[0];
+  const r = (await db.query(`SELECT p.id, v.id AS vid FROM products p JOIN product_variants v ON v.product_id = p.id AND v.active WHERE p.active AND NOT p.is_service ORDER BY p.id, v.id LIMIT 1`))[0];
   X = { productId: Number(r.id), variantId: Number(r.vid) };
-  await db.query('INSERT INTO stock (variant_id, warehouse_id, qty) VALUES ($1, $2, 500) ON CONFLICT (variant_id, warehouse_id) DO UPDATE SET qty = 500', [X.variantId, wh]);
-  manual = Number((await db.query(`SELECT id FROM delivery_companies WHERE kind = 'manual' ORDER BY id LIMIT 1`))[0].id);
-  noest = Number((await db.query(`SELECT id FROM delivery_companies WHERE kind = 'noest' ORDER BY id LIMIT 1`))[0].id);
-  await db.query(`UPDATE settings SET value = jsonb_set(value, '{defaultCompanyId}', 'null') WHERE key = 'shop'`);
+  ids = (await db.query(`SELECT id FROM profiles WHERE active AND 'confirmation' = ANY(roles) AND agency_id IS NULL ORDER BY id`)).map((x: any) => Number(x.id));
+  base = ((await call('assign.get', admin, {})) as any).cfg;
+  // nothing waiting from the demo: only this test's orders get agents
+  await db.query(`UPDATE orders SET agent_id = (SELECT min(id) FROM profiles WHERE 'confirmation' = ANY(roles)) WHERE agent_id IS NULL`);
 });
 
 let n = 0;
-const phone = () => `0695${String(600000 + ++n).slice(-6)}`;
-/** a confirmed order of one piece; the depot then picks everything waiting for that variant */
-async function confirmed(companyId: number | null) {
-  const o = (await call('orders.create', admin, { customerName: `Attrib${n} Test`, phone: phone(), wilayaId: 16, commune: 'Kouba', items: [{ ...X, qty: 1 }], ...(companyId ? { companyId } : {}) })) as any;
-  await call('orders.setConf', admin, { ids: [o.id], status: 'confirmed' });
-  if (!companyId) await db.query('UPDATE orders SET company_id = NULL WHERE id = $1', [o.id]);
-  return Number(o.id);
-}
-const pickAll = async (karim: Ctx) => {
-  const row = ((await call('depot.pickList', karim, {})) as any[]).find((r) => r.variantId === X.variantId);
-  return row ? ((await call('depot.pick', karim, { productId: X.productId, variantId: X.variantId, qty: row.need })) as any) : null;
-};
-const st = async (id: number) => (await db.query('SELECT follow_status, tracking, send_error, company_id, cancel_by_hand FROM orders WHERE id = $1', [id]))[0];
+const order = async (phone?: string, extra: object = {}) =>
+  (await call('orders.create', admin, { customerName: `Client Auto ${++n}`, phone: phone ?? `0670${String(100000 + n).slice(-6)}`, wilayaId: 16, commune: 'Kouba', address: 'Rue 1', items: [{ ...X, qty: 1 }], ...extra })) as any;
+const online = (who: number[], presence = 'online') => db.query(`UPDATE profiles SET last_seen_at = now(), presence = $2 WHERE id = ANY($1)`, [who, presence]);
+const offline = (who: number[], min = 30) => db.query(`UPDATE profiles SET last_seen_at = now() - make_interval(mins => $2) WHERE id = ANY($1)`, [who, min]);
+const save = (conf: object, extra: object = {}) => call('assign.set', admin, { ...base, conf: { ...base.conf, ...conf }, ...extra });
 
-test('picked whole: with a company → « En dispatch » by itself; without → « À attribuer »', async () => {
-  const karim = await as(EMAILS.depot);
-  const withCo = await confirmed(manual);
-  const without = await confirmed(null);
-  const r = await pickAll(karim);
-  assert.ok(r.dispatched >= 1);
-  assert.equal((await st(withCo)).follow_status, 'prepared');
-  assert.equal((await st(without)).follow_status, 'to_prepare');
-  const list = (await call('depot.toAssign', karim, {})) as any;
-  assert.ok(list.rows.some((o: any) => o.id === without));
-  assert.equal(list.canAct, false, 'a depot agent sees it, a manager or an admin chooses');
-  await assert.rejects(call('depot.assign', karim, { ids: [without], companyId: manual }), /managers et les admins/);
-  // ticked in Utilisateurs: he chooses too
-  await call('users.update', admin, { id: karim.session.profile.id, canAssign: true });
-  const karim2 = await as(EMAILS.depot);
-  assert.equal(((await call('depot.toAssign', karim2, {})) as any).canAct, true);
-  await call('depot.assign', karim2, { ids: [without], companyId: manual });
-  assert.deepEqual([(await st(without)).follow_status, Number((await st(without)).company_id)], ['prepared', manual]);
+test('manual by default: nobody is given anything', async () => {
+  assert.equal(base.conf.mode, 'manual');
+  const o = await order();
+  assert.equal(o.agentId, null);
 });
 
-test('refused by the courier: stays in « En dispatch » with the reason; « Renvoyer » sends it once it is fixed', async () => {
-  const karim = await as(EMAILS.depot);
-  await db.query(`UPDATE delivery_companies SET credentials = '{}' WHERE id = $1`, [noest]);
-  const o = await confirmed(noest);
-  await pickAll(karim);
-  const s = await st(o);
-  assert.equal(s.follow_status, 'prepared');
-  assert.equal(s.tracking, null);
-  assert.match(s.send_error ?? '', /Clés API manquantes/);
-  const alerts = (await call('depot.dispatchAlerts', karim, {})) as any;
-  assert.ok(alerts.refused.some((x: any) => x.id === o && /Clés API/.test(x.error)));
-  assert.ok(((await call('depot.counts', karim, {})) as any).prepAlerts >= 1);
-  await db.query(`UPDATE delivery_companies SET credentials = '{"demo":true}' WHERE id = $1`, [noest]);
-  await call('depot.resend', karim, { ids: [o] });
-  const after = await st(o);
-  assert.ok(after.tracking, 'sent');
-  assert.equal(after.send_error, null);
+test('tour de rôle: one each in turn among the agents on line; ×2 gets two in a row', async () => {
+  assert.ok(ids.length >= 3, 'three confirmation agents in the demo');
+  const [a, b, c] = ids;
+  await offline(ids);
+  await online([a, b]);
+  await save({ mode: 'turn', max: 0 }, { order: [a, b, c] });
+  const got = [];
+  for (let k = 0; k < 4; k++) got.push((await order()).agentId);
+  assert.deepEqual(new Set(got), new Set([a, b]), 'never the agent not on line');
+  assert.equal(got.filter((x) => x === a).length, 2);
+  await save({ mode: 'turn', max: 0 }, { order: [a, b, c], agents: { [a]: { out: false, weight: 2, channels: [], products: [], from: null, to: null, langs: [], senior: false } } });
+  const got2 = [];
+  for (let k = 0; k < 6; k++) got2.push((await order()).agentId);
+  assert.equal(got2.filter((x) => x === a).length, 4, 'a ×2 gets twice as many');
 });
 
-test('a cancelled order: its parcel at the courier is cancelled there by itself', async () => {
-  const karim = await as(EMAILS.depot);
-  const o = await confirmed(noest);
-  await pickAll(karim);
-  assert.ok((await st(o)).tracking, 'its parcel is at the courier');
-  await call('orders.setConf', admin, { ids: [o], status: 'cancelled', reason: 'test' });
-  const s = await st(o);
-  assert.equal(s.follow_status, 'cancelled');
-  assert.equal(s.tracking, null, 'cancelled at the courier');
-  assert.equal(s.cancel_by_hand, false);
+test('moins chargé, maximum, same customer, a free agent first', async () => {
+  const [a, b] = ids;
+  await offline(ids);
+  await online([a, b]);
+  await save({ mode: 'load', max: 0, speedFirst: true, sameClient: true });
+  await db.query(`UPDATE orders SET agent_id = NULL WHERE agent_id = ANY($1) AND conf_status = 'new' AND created_at > now() - interval '1 hour'`, [[a, b]]);
+  // a has 3 open orders, b none: b gets it
+  for (let k = 0; k < 3; k++) await db.query(`UPDATE orders SET agent_id = $1 WHERE id = $2`, [a, (await order()).id]);
+  await db.query(`UPDATE orders SET agent_id = $1 WHERE agent_id IS NULL AND created_at > now() - interval '1 hour'`, [a]);
+  const o1 = await order('0671000001');
+  assert.equal(o1.agentId, b);
+  // the same customer orders again: the same agent, whatever the load
+  const o2 = await order('0671000001');
+  assert.equal(o2.agentId, b);
+  // b on a call, a free: a (speed first)
+  await online([b], 'call');
+  const o3 = await order();
+  assert.equal(o3.agentId, a);
+  // a at his maximum: b, even on a call
+  const load = Number((await db.query(`SELECT count(*)::int AS n FROM orders WHERE agent_id = $1 AND conf_status IN ('new','to_check','no_answer','busy','callback','postponed') AND shipped_at IS NULL`, [a]))[0].n);
+  await save({ mode: 'load', max: load, speedFirst: true });
+  const o4 = await order();
+  assert.equal(o4.agentId, b);
+  // everyone full: it waits
+  await save({ mode: 'load', max: 1 });
+  const o5 = await order();
+  assert.equal(o5.agentId, null);
+});
+
+test('respect the channels; an absent agent gives back what he never touched', async () => {
+  const [a, b] = ids;
+  await offline(ids);
+  await online([a, b]);
+  const ag = (channels: string[]) => ({ out: false, weight: 1, channels, products: [], from: null, to: null, langs: [], senior: false });
+  await save({ mode: 'load', max: 0, offlineMin: 15 }, { agents: { [a]: ag(['facebook']), [b]: ag([]) } });
+  const o = await order(undefined, { channel: 'tiktok' });
+  assert.equal(o.agentId, b, 'a only takes Facebook');
+  // b leaves: his untouched order goes back to the queue, then to a — no, a only takes Facebook: it waits
+  await offline([b], 20);
+  const r = (await call('assign.run', admin, {})) as any;
+  assert.ok(r.conf.back >= 1);
+  assert.equal((await db.query('SELECT agent_id FROM orders WHERE id = $1', [o.id]))[0].agent_id, null);
+  // the history says why
+  const ev = await db.query(`SELECT note FROM order_events WHERE order_id = $1 AND kind = 'note' ORDER BY at DESC LIMIT 1`, [o.id]);
+  assert.match(ev[0].note, /agent absent/);
+  // a now takes everything: it goes to him
+  await save({ mode: 'load', max: 0 }, { agents: {} });
+  await call('assign.run', admin, {});
+  assert.equal(Number((await db.query('SELECT agent_id FROM orders WHERE id = $1', [o.id]))[0].agent_id), a);
+});
+
+test('Suivi: a new alert goes to a suivi agent on line', async () => {
+  const s = (await as(EMAILS.suivi)).session.profile.id;
+  await online([s]);
+  await call('assign.set', admin, { ...base, follow: { ...base.follow, mode: 'load', max: 0 } });
+  const o = (await db.query(`SELECT id FROM orders WHERE shipped_at IS NOT NULL AND follow_status = 'out_for_delivery' LIMIT 1`))[0];
+  await db.query(`UPDATE orders SET follow_status = 'alert', follow_agent_id = NULL WHERE id = $1`, [o.id]);
+  await call('assign.run', admin, {});
+  const r = (await db.query('SELECT follow_agent_id FROM orders WHERE id = $1', [o.id]))[0];
+  assert.ok(r.follow_agent_id !== null);
+  await call('assign.set', admin, base);
 });
