@@ -6,6 +6,9 @@ name: Deploy to the server
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Pilotix CI"]
+    types: [completed]
 
 concurrency:
   group: deploy
@@ -16,6 +19,9 @@ permissions:
 
 jobs:
   deploy:
+    # One release only: the exact merge commit title gates automated deployment.
+    # Normal deployments still use the Run workflow button.
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_commit.message, 'feat: variant logistics fields [deploy-variant-20261030]'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
