@@ -450,10 +450,10 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
         const serviceName = `${service.name.trim()} — ${i.name}`;
         let serviceId = service.id;
         if (serviceId) {
-          await tx.query('UPDATE products SET name=$2, price=$3, cost=$4, active=$5 WHERE id=$1 AND is_service', [serviceId, serviceName, service.price, service.cost, i.active]);
+          await tx.query('UPDATE products SET name=$2, price=$3, cost=$4, active=$5, weight_kg=0 WHERE id=$1 AND is_service', [serviceId, serviceName, service.price, service.cost, i.active]);
         } else {
           const serviceSku = await freeSku(tx, 'products', `${sku}-SERVICE-${slug(service.name)}`);
-          const created = (await tx.query('INSERT INTO products (name, sku, price, cost, is_service, active, fixed_price, max_discount) VALUES ($1,$2,$3,$4,true,$5,true,0) RETURNING id', [serviceName, serviceSku, service.price, service.cost, i.active]))[0];
+          const created = (await tx.query('INSERT INTO products (name, sku, price, cost, is_service, active, fixed_price, max_discount, weight_kg) VALUES ($1,$2,$3,$4,true,$5,true,0,0) RETURNING id', [serviceName, serviceSku, service.price, service.cost, i.active]))[0];
           serviceId = num(created.id);
           await tx.query("INSERT INTO product_variants (product_id, title, sku, active) VALUES ($1, '', $2, true)", [serviceId, await freeSku(tx, 'product_variants', `${serviceSku}-1`)]);
         }
