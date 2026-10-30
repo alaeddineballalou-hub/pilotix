@@ -128,6 +128,9 @@ export function VariantOptions({
   setVars,
   basePrice,
   baseCost,
+  baseSku,
+  basePhoto,
+  baseDiscount,
   used,
   skipped,
   feeGrids,
@@ -138,6 +141,9 @@ export function VariantOptions({
   setVars: (fn: (v: VRow[]) => VRow[]) => void;
   basePrice: number;
   baseCost: number;
+  baseSku: string;
+  basePhoto: string;
+  baseDiscount: number | null;
   /** values already used by the shop's other products, by option name (suggestions) */
   used: Map<string, string[]>;
   /** combinations the saved product does not have (unticked when it was saved) */
@@ -262,6 +268,11 @@ export function VariantOptions({
                   {usedOpts.map((o, k) => (
                     <th key={k}>{o.name}</th>
                   ))}
+                  <th>Photo</th>
+                  <th>SKU</th>
+                  <th>Purchase (DA)</th>
+                  <th>Sale (DA)</th>
+                  <th>Max. discount (DA)</th>
                   <th>Weight (kg)</th>
                   <th>Minimum stock</th>
                   <th>Delivery grid</th>
@@ -283,6 +294,11 @@ export function VariantOptions({
                           <span className="po-chip po-chip-s">{x}</span>
                         </td>
                       ))}
+                      <td data-l="Photo">{basePhoto ? <img src={basePhoto} alt="" style={{ width: 42, height: 42, borderRadius: 6, objectFit: 'contain' }} /> : <Icon name="package" />}</td>
+                      <td data-l="SKU"><span className="ltr" title="Unique variant SKU generated from product SKU">{v.sku || skuOf(baseSku, c)}</span></td>
+                      <td data-l="Purchase (DA)"><span className="ltr">{bidi(da(baseCost))}</span></td>
+                      <td data-l="Sale (DA)"><span className="ltr">{bidi(da(basePrice))}</span></td>
+                      <td data-l="Max. discount (DA)"><span className="ltr">{baseDiscount === null ? '—' : bidi(da(baseDiscount))}</span></td>
                       <td data-l="Weight (kg)"><input type="number" min={0} max={1000} step={0.1} value={v.weightKg} aria-label={`Weight ${title}`} onChange={(e) => editRow(title, { weightKg: e.target.value })} /></td>
                       <td data-l="Minimum stock"><input type="number" min={0} step={1} value={v.alertQty} aria-label={`Minimum stock ${title}`} onChange={(e) => editRow(title, { alertQty: e.target.value })} /></td>
                       <td data-l="Delivery grid"><select value={v.feeGrid} aria-label={`Delivery grid ${title}`} onChange={(e) => editRow(title, { feeGrid: e.target.value })}><option value="">Product default</option>{feeGrids.map((g) => <option key={g} value={g}>{g}</option>)}</select></td>
