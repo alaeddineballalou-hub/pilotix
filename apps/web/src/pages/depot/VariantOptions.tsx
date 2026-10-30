@@ -126,6 +126,7 @@ export function VariantOptions({
   baseSku,
   used,
   skipped,
+  admin,
 }: {
   opts: Opt[];
   setOpts: (o: Opt[]) => void;
@@ -137,6 +138,7 @@ export function VariantOptions({
   used: Map<string, string[]>;
   /** combinations the saved product does not have (unticked when it was saved) */
   skipped: Set<string>;
+  admin: boolean;
 }) {
   const { t } = useTranslation();
   const combos = useMemo(() => combosOf(opts), [opts]);
@@ -239,7 +241,7 @@ export function VariantOptions({
               <select value={bulkField} onChange={(e) => setBulkField(e.target.value as 'price' | 'cost' | 'maxDiscount')} aria-label="Price field">
                 <option value="price">Selling price</option>
                 <option value="cost">Purchase price</option>
-                <option value="maxDiscount">Max. discount</option>
+                {admin && <option value="maxDiscount">Max. discount</option>}
               </select>
               <input type="number" min={0} step={50} value={bulkPrice} placeholder={String(basePrice || '')} aria-label={t('produits.form.opt.colPrice')} onChange={(e) => setBulkPrice(e.target.value)} />
               <button type="button" className="btn small" disabled={bulkPrice === ''} onClick={applyBulk}>
@@ -283,7 +285,7 @@ export function VariantOptions({
                         <input type="number" min={0} step={50} value={v.price} placeholder={basePrice ? bidi(da(basePrice)) : ''} aria-label={`${t('produits.form.opt.colPrice')} ${title}`} onChange={(e) => editRow(title, { price: e.target.value })} />
                       </td>
                       <td data-l="Purchase price (DA)"><input type="number" min={0} step={50} value={v.cost} aria-label={`Purchase price ${title}`} onChange={(e) => editRow(title, { cost: e.target.value })} /></td>
-                      <td data-l="Max. discount (DA)"><input type="number" min={0} step={50} value={v.maxDiscount} aria-label={`Max. discount ${title}`} onChange={(e) => editRow(title, { maxDiscount: e.target.value })} /></td>
+                      <td data-l="Max. discount (DA)"><input type="number" min={0} step={50} value={v.maxDiscount} disabled={!admin} aria-label={`Max. discount ${title}`} onChange={(e) => editRow(title, { maxDiscount: e.target.value })} /></td>
                     </tr>
                   );
                 })}
@@ -305,7 +307,7 @@ export function VariantOptions({
                 <input className="ltr" value={v.sku} placeholder="SKU" aria-label="SKU" onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, sku: e.target.value } : x)))} />
                 <input type="number" min={0} step={50} value={v.price} placeholder={t('produits.form.variantPrice')} aria-label={t('produits.form.variantPrice')} onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, price: e.target.value } : x)))} />
                 <input type="number" min={0} step={50} value={v.cost} placeholder="Purchase price" aria-label="Purchase price" onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, cost: e.target.value } : x)))} />
-                <input type="number" min={0} step={50} value={v.maxDiscount} placeholder="Max. discount" aria-label="Max. discount" onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, maxDiscount: e.target.value } : x)))} />
+                <input type="number" min={0} step={50} value={v.maxDiscount} disabled={!admin} placeholder="Max. discount" aria-label="Max. discount" onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, maxDiscount: e.target.value } : x)))} />
                 <label className="check">
                   <input type="checkbox" checked={v.active} onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, active: e.target.checked } : x)))} />
                   {t('produits.form.variantActive')}
