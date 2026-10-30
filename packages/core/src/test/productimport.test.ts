@@ -59,7 +59,7 @@ test('import: roles, preview = import, products, variants and stock entries', as
   const red = ts.variants.find((v: any) => v.title === 'Rouge');
   assert.equal(await stockOf(red.id), 10);
   const mv: any = await call('catalog.movements', admin, { variantId: red.id, pageSize: 5 });
-  assert.deepEqual(mv.rows.map((m: any) => [m.reason, m.delta, m.note]), [['entry', 10, 'Import Excel']]);
+  assert.deepEqual(mv.rows.map((m: any) => [m.reason, m.delta, m.note]), [['entry', 10, 'Import Excel — Prix d’achat du lot 800 DA/unité']]);
   const watch: any = await call('catalog.product', admin, { id: by(done, 'Montre Import').productId });
   assert.deepEqual(watch.variants.map((v: any) => v.title), ['']);
   assert.equal(await stockOf(watch.variants[0].id), 7);
