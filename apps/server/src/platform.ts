@@ -71,7 +71,7 @@ export class PlatformGuard implements CanActivate {
 const LoginBody = z.object({ email: z.string().email().max(200), password: z.string().min(1).max(200), device: z.string().max(4000).optional() });
 const CodeBody = z.object({ ticket: z.string().max(4000), code: z.string().trim().regex(/^\d{6}$/, 'Code à 6 chiffres'), remember: z.boolean().default(false) });
 /** Actions that only read: everything else changes shops, so what the shops' requests keep is forgotten at once. */
-const READS = /^p\.(me|couriers|couriers\.(tests|state|usage)|dashboard|shops\.(list|get)|payments\.(list|receipt)|plans\.list|staff\.list|settings\.get|audit\.list|demo\.get|signups\.list|support\.(list|get)|health\.db)$/;
+const READS = /^p\.(me|couriers|couriers\.(tests|state|usage)|dashboard|shops\.(list|get)|payments\.(list|receipt)|plans\.list|staff\.list|settings\.get|audit\.list|demo\.get|signups\.list|support\.(list|get)|health\.db|pilot\.(state|case|bookText)|(dellal|cm|spy)\.board|ai\.costs)$/;
 /** These need e-mails: the owner gets a link (or a receipt) only by e-mail. */
 const NEEDS_MAIL = new Set(['p.shops.create', 'p.shops.resendInvite', 'p.payments.mailReceipt']);
 
