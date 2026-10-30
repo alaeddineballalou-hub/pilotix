@@ -167,7 +167,8 @@ test('an agency: signs up, checked by Pilotix, works for a store on the products
   await call('users.create', admin, { phone: tph(), name: 'Samia', email: 'samia@oran.dz', password: PW, roles: ['confirmation'] });
   const own = await as(t, shop.id, 'samia@oran.dz', PW);
   const o3 = await order(admin, shop.products.VELO, '0661000003');
-  assert.deepEqual(((await call('confirmation.list', own, { sub: 'nouvelles' })) as any).rows.map((o: any) => o.id), [o2.id]);
+  // she sees only the orders given to her (none yet); « Commande suivante » gives her the free one no agency handles
+  assert.deepEqual(((await call('confirmation.list', own, { sub: 'nouvelles' })) as any).rows.map((o: any) => o.id), []);
   assert.equal(((await call('orders.next', own, {})) as any).id, o2.id);
   // the administrator sees every order, the team list without the agency's agents (unless asked)
   assert.equal(((await call('confirmation.list', admin, { sub: 'nouvelles' })) as any).rows.length, 2);

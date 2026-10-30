@@ -632,5 +632,12 @@
     "bulkDone": "{{ok}} enregistrées · {{sans}} sans stock · {{bl}} bloquées"
   },
   "bestFirst": "Meilleurs clients d’abord",
-  "bestFirstHelp": "Les clients au meilleur score en premier : très fiables, fiables, puis les nouveaux, puis ceux à surveiller. Cliquez encore pour revenir au chrono."
+  "bestFirstHelp": "Les clients au meilleur score en premier : très fiables, fiables, puis les nouveaux, puis ceux à surveiller. Cliquez encore pour revenir au chrono.",
+  "hold": {
+    "by": "Commande prise par {{name}} : vous pouvez seulement la regarder.",
+    "other": "Commande prise par un autre agent : vous pouvez seulement la regarder.",
+    "chip": "🔒 {{name}}",
+    "mgr": "{{name}} est sur cette commande en ce moment. Vous pouvez quand même la changer."
+  },
+  "mineEmpty": "Aucune commande à vous ici. Appuyez sur « Commande suivante » pour prendre la plus urgente."
 }

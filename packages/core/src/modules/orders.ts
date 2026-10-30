@@ -55,7 +55,9 @@ const ORDER_COLS = `o.*,
   (SELECT lk.phone FROM customers lk WHERE lk.id = o.looks_like_customer_id) AS looks_like_phone,
   CASE WHEN o.utm->>'ad_id' IS NOT NULL THEN (SELECT ad.name FROM ads ad WHERE ad.id = o.utm->>'ad_id') END AS ad_name,
   EXISTS (SELECT 1 FROM sales d WHERE d.phone = o.phone AND d.id <> o.id AND d.conf_status = ANY('{to_check,new,no_answer,busy,callback,postponed,confirmed,no_stock}')
-          AND (d.follow_status IS NULL OR d.follow_status IN ('to_prepare','prepared')) AND d.created_at > o.created_at - interval '15 days') AS possible_dup`;
+          AND (d.follow_status IS NULL OR d.follow_status IN ('to_prepare','prepared')) AND d.created_at > o.created_at - interval '15 days') AS possible_dup,
+  CASE WHEN o.locked_until > now() THEN o.locked_by END AS lock_id,
+  CASE WHEN o.locked_until > now() THEN (SELECT lp.name FROM profiles lp WHERE lp.id = o.locked_by) END AS lock_name`;
 
 const ORDER_FROM = `FROM orders o
   JOIN customers c ON c.id = o.customer_id
@@ -130,6 +132,7 @@ export function toOrder(r: any): Order {
     looksLikePhone: r.looks_like_phone ?? null,
     adName: r.ad_name ?? null,
     agentName: r.agent_name ?? null,
+    lockedBy: r.lock_id ? { id: num(r.lock_id), name: (r.lock_name as string | null) ?? '', until: iso(r.locked_until) } : null,
     followAgentName: r.follow_agent_name ?? null,
     companyName: r.company_name ?? null,
     livreurName: r.livreur_name ?? null,
@@ -159,7 +162,7 @@ export const noOrderAccess = (ctx: Ctx) => {
 
 /** The orders an agent may take now with « Commande suivante », the most urgent first ($1 to-do statuses, $2 the agent, $3 skipped). */
 const nextFrom = (ctx: Ctx) => `FROM orders o WHERE conf_status = ANY($1) AND (agent_id IS NULL OR agent_id = $2) AND NOT (id = ANY($3))
-  AND (next_call_at IS NULL OR next_call_at <= now()) AND (locked_until IS NULL OR locked_until < now() OR locked_by = $2)${andSql(queueSql(ctx, 'conf'))}
+  AND (next_call_at IS NULL OR next_call_at <= now()) AND (locked_until IS NULL OR locked_until < now() OR locked_by = $2)${andSql(queueSql(ctx, 'conf', 'o', { free: true }))}
   ORDER BY (next_call_at IS NOT NULL) DESC, next_call_at ASC, created_at ASC`;
 
 /** What « Commande suivante » would give this agent (nothing taken): to choose between several stores. */
@@ -798,6 +801,38 @@ async function alreadyApplied(db: Db, clientId: string | undefined, userId: numb
   return r.length === 0;
 }
 
+/** An admin or a manager may change an order another agent holds (to unblock it); an agent may not. */
+export const mayOverrideHold = (ctx: Ctx) => ctx.session.isAdmin || ctx.session.roles.some((r) => r === 'agent_manager' || r === 'vendeur');
+
+/** Keeps an order for this agent 10 minutes (opened from a list): his other held orders are given back. Held by another
+ *  agent: nothing changes, and the answer says who has it. */
+export async function holdOrder(ctx: Ctx, id: number): Promise<{ ok: boolean; by: string | null; until: string | null }> {
+  const me = ctx.session.profile.id;
+  return ctx.db.tx(async (tx) => {
+    const got = await tx.query(
+      `UPDATE orders SET locked_by = $2, locked_until = now() + interval '10 minutes'
+        WHERE id = $1 AND conf_status = ANY($3) AND (locked_until IS NULL OR locked_until < now() OR locked_by = $2)${andSql(queueSql(ctx, 'conf', 'orders', { free: true }))}
+       RETURNING id`,
+      [id, me, CONF_TODO],
+    );
+    if (got[0]) {
+      await tx.query(`UPDATE orders SET locked_by = NULL, locked_until = NULL WHERE locked_by = $1 AND id <> $2 AND conf_status = ANY($3)`, [me, id, CONF_TODO]);
+      return { ok: true, by: null, until: null };
+    }
+    // not taken: another agent has it open, or it is given to another agent (an order no longer to call: nothing to keep)
+    const r = (
+      await tx.query(
+        `SELECT CASE WHEN o.locked_until > now() AND o.locked_by <> $2 THEN o.locked_until END AS until,
+                CASE WHEN o.locked_until > now() AND o.locked_by <> $2 THEN lp.name ELSE ap.name END AS name,
+                (o.locked_until > now() AND o.locked_by <> $2) OR (o.agent_id IS NOT NULL AND o.agent_id <> $2) AS taken
+           FROM orders o LEFT JOIN profiles lp ON lp.id = o.locked_by LEFT JOIN profiles ap ON ap.id = o.agent_id WHERE o.id = $1`,
+        [id, me],
+      )
+    )[0];
+    return r?.taken ? { ok: false, by: (r.name as string | null) ?? '', until: isoOrNull(r.until) } : { ok: true, by: null, until: null };
+  });
+}
+
 export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
   if (CONF_NEEDS_DATE.includes(input.status) && !input.nextCallAt) throw bad('Choisissez la date du prochain appel');
   if (CONF_NEEDS_REASON.includes(input.status) && !input.reason) throw bad('Indiquez la raison');
@@ -819,8 +854,25 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
     const notify = await notifyContext(tx);
     const landing = await landingSettings(tx);
     for (const oid of input.ids) {
-      const cur = (await tx.query('SELECT id, ref, customer_id, conf_status, follow_status, shipped_at, attempts, agent_id, phone, is_exchange, landing_id, commune, is_stopdesk, stopdesk_id FROM orders WHERE id = $1 FOR UPDATE', [oid]))[0];
+      const cur = (await tx.query(`SELECT id, ref, customer_id, conf_status, follow_status, shipped_at, attempts, agent_id, phone, is_exchange, landing_id, commune, is_stopdesk, stopdesk_id,
+         CASE WHEN locked_until > now() AND locked_by <> $2 THEN (SELECT p.name FROM profiles p WHERE p.id = locked_by) END AS held_by
+         FROM orders WHERE id = $1 FOR UPDATE`, [oid, me]))[0];
       if (!cur) continue;
+      // another agent has this order open (« Commande suivante » or opened from a list, 10 minutes): only he changes it
+      // (an admin or a manager can still act on it)
+      // an agent changes only his own orders and the ones nobody has yet (an agent manager, the owner: any he sees)
+      if (!mayOverrideHold(ctx) && ctx.session.profile.agencyId == null && cur.agent_id != null && num(cur.agent_id) !== me) {
+        const why = `${cur.ref} : cette commande est donnée à un autre agent`;
+        if (input.ids.length === 1) throw bad(why);
+        blocked.push({ id: oid, ref: cur.ref, reason: why });
+        continue;
+      }
+      if (cur.held_by != null && !mayOverrideHold(ctx)) {
+        const why = `${cur.ref} : ${cur.held_by || 'un autre agent'} est sur cette commande`;
+        if (input.ids.length === 1) throw bad(why);
+        blocked.push({ id: oid, ref: cur.ref, reason: why });
+        continue;
+      }
       if (cur.follow_status && !['to_prepare', 'prepared', 'cancelled'].includes(cur.follow_status) && input.status !== 'confirmed')
         throw bad('Commande déjà expédiée : changez plutôt le statut de livraison');
       let status = input.status;

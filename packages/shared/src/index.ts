@@ -323,6 +323,8 @@ export interface Order {
   /** the Meta ad's name (from the ads Pilotix reads), for the ad id in utm */
   adName?: string | null;
   agentName?: string | null;
+  /** the agent who has this order open now (« Commande suivante » or opened from a list, 10 minutes), when it is not over */
+  lockedBy?: { id: number; name: string; until: string } | null;
   followAgentName?: string | null;
   companyName?: string | null;
   livreurName?: string | null;
