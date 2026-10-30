@@ -166,7 +166,9 @@
     store.set('pxDoor', door.id);
     btn.disabled = true;
     status.textContent = door.id === 'backup' ? w.backup : w.trying;
-    location.replace(door.url);
+    // the start animation (splash.js) finishes first
+    var leave = function () { location.replace(door.url); };
+    if (window.PILOTIX_SPLASH) window.PILOTIX_SPLASH.then(leave); else leave();
   }
 
   function countdown(seconds, then) {

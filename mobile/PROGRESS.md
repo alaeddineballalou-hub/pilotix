@@ -58,6 +58,7 @@ on from the first step that isn't ✅.
   (same `door.js`: tries the other door first; « server » message + 15 s wait when pages fail twice in a
   minute). `appendUserAgent = PilotixApp` (the website/server can tell it runs inside the app),
   navy `#1B2A47` background, start screen 1.5 s.
+- Start animation (owner's choice 19 « La livraison », 30 Oct 2026): `www/splash.js` on the start page. The wordmark enters eyes first, the smile becomes a dotted road, the orange dot drives along it and delivers the winking icon onto the page's own `.logo`. Whole once a day (~2.9 s), the short end later that day (~1.7 s); `door.js` waits for `window.PILOTIX_SPLASH` before opening Pilotix. Native start screen cut to 0.2 s. The 20 choices were made in a scratch file (not in the repo).
 - Phone bars: `SystemBars.insetsHandling = disable` + style `DARK`; `MainActivity.keepPagesBetweenTheBars()`
   pads the WebView's parent by the bars (and the keyboard), so every page sits between the top bar and
   the bottom buttons, on navy bars with light icons, and the page's safe-area values are 0. (Before,
