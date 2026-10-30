@@ -8,21 +8,25 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - name: Pilot AI tabs on the live site
         run: |
-          curl -s -m 40 https://pilotix.online/ -o /tmp/index.html || echo "::notice title=Site::index not reached"
-          found=0
-          for a in $(grep -o 'assets/[A-Za-z0-9._-]*\.js' /tmp/index.html | sort -u); do
-            curl -s -m 60 "https://pilotix.online/$a" -o /tmp/a.js || continue
-            if grep -q 'p.dellal.board' /tmp/a.js; then found=1; fi
+          code=$(curl -s -m 40 -A 'Mozilla/5.0' -o /tmp/index.html -w '%{http_code}' https://pilotix.online/ || echo failed)
+          echo "::notice title=Site index::$code"
+          # every script of the app, followed from the page (the control room is a chunk loaded later)
+          mkdir -p /tmp/js; : > /tmp/seen
+          grep -o 'assets/[A-Za-z0-9._-]*\.js' /tmp/index.html | sort -u > /tmp/todo
+          n=0
+          while [ -s /tmp/todo ] && [ $n -lt 200 ]; do
+            a=$(head -1 /tmp/todo); sed -i 1d /tmp/todo
+            grep -qx "$a" /tmp/seen && continue
+            echo "$a" >> /tmp/seen; n=$((n+1))
+            f="/tmp/js/$(basename "$a")"
+            curl -s -m 60 -A 'Mozilla/5.0' "https://pilotix.online/$a" -o "$f" || continue
+            grep -o 'assets/[A-Za-z0-9._-]*\.js' "$f" | sort -u | while read b; do grep -qx "$b" /tmp/seen || echo "$b" >> /tmp/todo; done
+            grep -o '"[A-Za-z0-9._-]*\.js"' "$f" | tr -d '"' | grep -E '^[A-Za-z0-9_-]+-[A-Za-z0-9_-]{8}\.js$' | sed 's#^#assets/#' | while read b; do grep -qx "$b" /tmp/seen || echo "$b" >> /tmp/todo; done
           done
-          # the control room is in its own chunk: look in every chunk the entry names too
-          for a in $(cat /tmp/a.js 2>/dev/null | grep -o 'assets/[A-Za-z0-9._-]*\.js' | sort -u | head -80); do
-            curl -s -m 60 "https://pilotix.online/$a" -o /tmp/c.js || continue
-            if grep -q 'p.dellal.board' /tmp/c.js; then found=1; fi
-          done
-          echo "::notice title=Pilot AI tabs::$([ $found = 1 ] && echo 'live (p.dellal.board in the served app)' || echo 'not found in the served app')"
-          r=$(curl -s -m 30 -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' https://pilotix.online/api/platform/rpc/p.dellal.board || echo failed)
-          echo "::notice title=API p.dellal.board without a session::$r (401 = the route is there and asks for a login)"
+          hit=$(grep -l 'p.dellal.board' /tmp/js/*.js 2>/dev/null | head -1)
+          echo "::notice title=Scripts read::$n"
+          echo "::notice title=Pilot AI tabs::$([ -n "$hit" ] && echo "live (in $(basename "$hit"))" || echo 'not found')"
