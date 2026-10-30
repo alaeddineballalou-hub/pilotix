@@ -26,7 +26,7 @@ async function activeDepot(db: Db, warehouseId: number) {
 /** The variants of `ids` (each one once), with their product; refuses services, which have no stock. */
 async function stockable(db: Db, ids: number[]) {
   if (new Set(ids).size !== ids.length) throw bad('Un produit est en double dans la liste');
-  const rows = await db.query('SELECT v.id, v.title, p.id AS pid, p.name, p.cost, p.is_service FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id = ANY($1)', [ids]);
+  const rows = await db.query('SELECT v.id, v.title, p.id AS pid, p.name, COALESCE(v.cost, p.cost) AS cost, p.is_service FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id = ANY($1)', [ids]);
   const by = new Map<number, { productId: number; label: string; cost: number }>();
   for (const r of rows) {
     if (r.is_service) throw bad(`« ${r.name} » est un service : il n’a pas de stock`);
@@ -425,7 +425,7 @@ export const stockProcs = {
   'catalog.depots': proc([...DEPOT], z.object({}), async (ctx) => {
     const rows = await ctx.db.query(
       `SELECT wh.*, COALESCE(sum(s.qty) FILTER (WHERE s.qty > 0), 0)::bigint AS pieces, count(s.variant_id) FILTER (WHERE s.qty > 0)::int AS products,
-              COALESCE(sum(s.qty::bigint * p.cost) FILTER (WHERE s.qty > 0), 0)::bigint AS value
+              COALESCE(sum(s.qty::bigint * COALESCE(v.cost, p.cost)) FILTER (WHERE s.qty > 0), 0)::bigint AS value
        FROM warehouses wh LEFT JOIN stock s ON s.warehouse_id = wh.id LEFT JOIN product_variants v ON v.id = s.variant_id LEFT JOIN products p ON p.id = v.product_id
        WHERE wh.archived_at IS NULL
        GROUP BY wh.id ORDER BY wh.active DESC, wh.is_default DESC, wh.id`,
