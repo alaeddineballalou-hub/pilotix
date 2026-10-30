@@ -337,7 +337,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
             )}
           </div>
           {optMode ? (
-            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseSku={f.sku.trim() || f.name.trim()} used={usedValues} skipped={skipped} />
+            <VariantOptions opts={opts} setOpts={setOpts} vars={vars} setVars={setVars} basePrice={Number(f.price) || 0} baseSku={f.sku.trim() || f.name.trim()} used={usedValues} skipped={skipped} admin={admin} />
           ) : (
             <>
               {vars.length ? (
@@ -348,7 +348,7 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
                       <input aria-label="SKU" className="ltr" value={v.sku} placeholder="SKU" onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, sku: e.target.value } : x)))} />
                       <input type="number" min={0} step={50} aria-label={t('produits.form.variantPrice')} value={v.price} placeholder={t('produits.form.variantPrice')} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, price: e.target.value } : x)))} />
                       <input type="number" min={0} step={50} aria-label="Purchase price" value={v.cost} placeholder="Purchase price" onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, cost: e.target.value } : x)))} />
-                      <input type="number" min={0} step={50} aria-label="Max. discount" value={v.maxDiscount} placeholder="Max. discount" onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, maxDiscount: e.target.value } : x)))} />
+                      <input type="number" min={0} step={50} aria-label="Max. discount" disabled={!admin} value={v.maxDiscount} placeholder="Max. discount" onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, maxDiscount: e.target.value } : x)))} />
                       <label className="check">
                         <input type="checkbox" checked={v.active} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, active: e.target.checked } : x)))} />
                         {t('produits.form.variantActive')}
