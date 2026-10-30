@@ -1854,6 +1854,7 @@ export const ordersProcs = {
 
   /** "Supprimer" (admin): only orders still at the confirmation stage (not sent to the depot), not SAV parcels, without ticket or claim. */
   'orders.delete': proc([], z.object({ ids: z.array(id).min(1).max(500) }), async (ctx, { ids }) => {
+    if (!ctx.session.isAdmin) throw forbidden('Seul un administrateur peut supprimer une commande');
     await ctx.db.tx(async (tx) => {
       const rows = await tx.query('SELECT id, ref, follow_status, is_exchange FROM orders WHERE id = ANY($1) FOR UPDATE', [ids]);
       for (const r of rows) {
