@@ -109,7 +109,7 @@ const openAlert = async (id: number) => (await db.query(`SELECT kind, old_code F
 
 test('leak 4: cancelled by Confirmation — the early parcel is deleted at the company and the depot gets the red alert', async () => {
   const p = await earlyParcel();
-  await call('orders.setConf', await as(EMAILS.conf), { ids: [p.id], status: 'cancelled', reason: 'test' });
+  await call('orders.setConf', await as(EMAILS.admin), { ids: [p.id], status: 'cancelled', reason: 'test' });
   const o = await row(p.id);
   assert.equal(o.follow_status, 'cancelled');
   assert.ok(o.tracking === null || o.cancel_by_hand, 'deleted at the company, or listed to cancel by hand');
@@ -273,7 +273,7 @@ test('leak 9: an order cancelled while being picked — what was taken goes back
     const l = await firstLine(a);
     await db.query('UPDATE order_items SET picked_qty = qty WHERE id = $1', [l.id]);
     const before = await pool(l.productId, l.variantId);
-    if (cancel === 'conf') await call('orders.setConf', await as(EMAILS.conf), { ids: [a], status: 'cancelled', reason: 'test' });
+    if (cancel === 'conf') await call('orders.setConf', await as(EMAILS.admin), { ids: [a], status: 'cancelled', reason: 'test' });
     else await call('orders.setFollow', await as(EMAILS.suivi), { ids: [a], status: 'cancelled', reason: 'test' });
     assert.equal(await pool(l.productId, l.variantId), before + l.qty, cancel);
     assert.equal(Number((await db.query('SELECT COALESCE(sum(picked_qty),0)::int AS p FROM order_items WHERE order_id = $1', [a]))[0].p), 0);
