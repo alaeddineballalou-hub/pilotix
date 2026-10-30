@@ -17,6 +17,7 @@ export interface VRow {
   weightKg: string;
   alertQty: string;
   feeGrid: string;
+  photo: string;
   active: boolean;
 }
 export interface Opt {
@@ -53,7 +54,7 @@ export function reconcile(prev: VRow[], opts: Opt[], skipped: Set<string> = new 
   const want = new Set(combos.map((c) => low(titleOf(c))));
   const keep = prev.filter((v) => v.id || want.has(low(v.title)));
   const have = new Set(keep.map((v) => low(v.title)));
-  const add = combos.filter((c) => !have.has(low(titleOf(c)))).map((c) => ({ title: titleOf(c), sku: '', price: '', cost: '', maxDiscount: '', weightKg: '', alertQty: '', feeGrid: '', active: !skipped.has(low(titleOf(c))) }));
+  const add = combos.filter((c) => !have.has(low(titleOf(c)))).map((c) => ({ title: titleOf(c), sku: '', price: '', cost: '', maxDiscount: '', weightKg: '', alertQty: '', feeGrid: '', photo: '', active: !skipped.has(low(titleOf(c))) }));
   return add.length || keep.length !== prev.length ? [...keep, ...add] : prev;
 }
 
@@ -127,10 +128,8 @@ export function VariantOptions({
   setVars,
   basePrice,
   baseCost,
-  baseSku,
   used,
   skipped,
-  admin,
   feeGrids,
 }: {
   opts: Opt[];
@@ -139,14 +138,12 @@ export function VariantOptions({
   setVars: (fn: (v: VRow[]) => VRow[]) => void;
   basePrice: number;
   baseCost: number;
-  baseSku: string;
   /** values already used by the shop's other products, by option name (suggestions) */
   used: Map<string, string[]>;
   /** combinations the saved product does not have (unticked when it was saved) */
   skipped: Set<string>;
-  admin: boolean;
   feeGrids: string[];
-}) {
+ }) {
   const { t } = useTranslation();
   const combos = useMemo(() => combosOf(opts), [opts]);
   const key = JSON.stringify(opts);
@@ -169,7 +166,7 @@ export function VariantOptions({
   // « Mettre le prix … » for all variants, or those with one value (e.g. every 16P)
   const [bulkOn, setBulkOn] = useState('*');
   const [bulkPrice, setBulkPrice] = useState('');
-  const [bulkField, setBulkField] = useState<'price' | 'cost' | 'maxDiscount' | 'weightKg' | 'alertQty' | 'feeGrid'>('price');
+  const [bulkField, setBulkField] = useState<'weightKg' | 'alertQty' | 'feeGrid'>('weightKg');
   const applyBulk = () => {
     if (bulkPrice === '' || (bulkField !== 'feeGrid' && (!Number.isFinite(Number(bulkPrice)) || Number(bulkPrice) < 0))) return;
     const [k, v] = bulkOn === '*' ? [-1, ''] : [Number(bulkOn.split('|')[0]), bulkOn.slice(bulkOn.indexOf('|') + 1)];
@@ -245,10 +242,8 @@ export function VariantOptions({
                   )),
                 )}
               </select>
-              <select value={bulkField} onChange={(e) => setBulkField(e.target.value as 'price' | 'cost' | 'maxDiscount' | 'weightKg' | 'alertQty' | 'feeGrid')} aria-label="Price field">
-                <option value="price">Selling price</option>
-                <option value="cost">Purchase price</option>
-                {admin && <option value="maxDiscount">Max. discount</option>}
+              <select value={bulkField} onChange={(e) => setBulkField(e.target.value as 'weightKg' | 'alertQty' | 'feeGrid')} aria-label="Price field">
+                
                 <option value="weightKg">Weight (kg)</option>
                 <option value="alertQty">Minimum stock</option>
                 <option value="feeGrid">Delivery grid</option>
@@ -267,10 +262,6 @@ export function VariantOptions({
                   {usedOpts.map((o, k) => (
                     <th key={k}>{o.name}</th>
                   ))}
-                  <th>{t('produits.form.opt.colSku')}</th>
-                  <th>{t('produits.form.opt.colPrice')}</th>
-                  <th>Purchase price (DA)</th>
-                  <th>Max. discount (DA)</th>
                   <th>Weight (kg)</th>
                   <th>Minimum stock</th>
                   <th>Delivery grid</th>
@@ -292,18 +283,10 @@ export function VariantOptions({
                           <span className="po-chip po-chip-s">{x}</span>
                         </td>
                       ))}
-                      <td data-l={t('produits.form.opt.colSku')}>
-                        <input className="ltr" value={v.sku} placeholder={v.id ? '' : skuOf(baseSku, c)} aria-label={`SKU ${title}`} onChange={(e) => editRow(title, { sku: e.target.value })} />
-                      </td>
-                      <td data-l={t('produits.form.opt.colPrice')}>
-                        <input type="number" min={0} step={50} value={v.price} placeholder={basePrice ? bidi(da(basePrice)) : ''} aria-label={`${t('produits.form.opt.colPrice')} ${title}`} onChange={(e) => editRow(title, { price: e.target.value })} />
-                      </td>
-                      <td data-l="Purchase price (DA)"><input type="number" min={0} step={50} value={v.cost} aria-label={`Purchase price ${title}`} onChange={(e) => editRow(title, { cost: e.target.value })} /></td>
-                      <td data-l="Max. discount (DA)"><input type="number" min={0} step={50} value={v.maxDiscount} disabled={!admin} aria-label={`Max. discount ${title}`} onChange={(e) => editRow(title, { maxDiscount: e.target.value })} /></td>
                       <td data-l="Weight (kg)"><input type="number" min={0} max={1000} step={0.1} value={v.weightKg} aria-label={`Weight ${title}`} onChange={(e) => editRow(title, { weightKg: e.target.value })} /></td>
                       <td data-l="Minimum stock"><input type="number" min={0} step={1} value={v.alertQty} aria-label={`Minimum stock ${title}`} onChange={(e) => editRow(title, { alertQty: e.target.value })} /></td>
                       <td data-l="Delivery grid"><select value={v.feeGrid} aria-label={`Delivery grid ${title}`} onChange={(e) => editRow(title, { feeGrid: e.target.value })}><option value="">Product default</option>{feeGrids.map((g) => <option key={g} value={g}>{g}</option>)}</select></td>
-                      <td data-l="Margin (DA)">{(v.price !== '' || basePrice > 0) && (v.cost !== '' || baseCost > 0) ? bidi(da(Number(v.price || basePrice) - Number(v.cost || baseCost))) : '—'}</td>
+                      <td data-l="Margin (DA)">{bidi(da(basePrice - baseCost))}</td>
                     </tr>
                   );
                 })}
@@ -322,10 +305,7 @@ export function VariantOptions({
             {others.map((v) => (
               <div key={v.id} className={`item-row bjpv-row ${v.active ? '' : 'dim'}`}>
                 <input value={v.title} aria-label={t('produits.form.variants')} onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, title: e.target.value } : x)))} />
-                <input className="ltr" value={v.sku} placeholder="SKU" aria-label="SKU" onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, sku: e.target.value } : x)))} />
-                <input type="number" min={0} step={50} value={v.price} placeholder={t('produits.form.variantPrice')} aria-label={t('produits.form.variantPrice')} onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, price: e.target.value } : x)))} />
-                <input type="number" min={0} step={50} value={v.cost} placeholder="Purchase price" aria-label="Purchase price" onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, cost: e.target.value } : x)))} />
-                <input type="number" min={0} step={50} value={v.maxDiscount} disabled={!admin} placeholder="Max. discount" aria-label="Max. discount" onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, maxDiscount: e.target.value } : x)))} />
+                <span className="muted small">Uses product pricing</span>
                 <input type="number" min={0} step={0.1} value={v.weightKg} placeholder="Weight (kg)" aria-label="Weight" onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, weightKg: e.target.value } : x)))} />
                 <input type="number" min={0} step={1} value={v.alertQty} placeholder="Minimum stock" aria-label="Minimum stock" onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, alertQty: e.target.value } : x)))} />
                 <select value={v.feeGrid} aria-label="Delivery grid" onChange={(e) => setVars((prev) => prev.map((x) => (x.id === v.id ? { ...x, feeGrid: e.target.value } : x)))}><option value="">Product default</option>{feeGrids.map((g) => <option key={g} value={g}>{g}</option>)}</select>
