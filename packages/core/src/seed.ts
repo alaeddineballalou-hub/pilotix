@@ -13,7 +13,7 @@ import { seed as seed_stock } from './seeds/stock';
 import { seed as seed_customers } from './seeds/customers';
 import { seed as seed_suivi } from './seeds/suivi';
 import { seed as seed_sav } from './seeds/sav';
-import { seed as seed_delivery } from './seeds/delivery';
+import { seed as seed_delivery, seedZrFees } from './seeds/delivery';
 import { seed as seed_zr } from './seeds/zr';
 import { seed as seed_cash } from './seeds/cash';
 import { seed as seed_admin } from './seeds/admin';
@@ -363,6 +363,7 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number } =
   await seed_delivery(db, users, now);
   await seed_zr(db, users, now);
   await seed_cash(db, users, now);
+  await seedZrFees(db, now);
   await seed_admin(db, users, now);
   await seed_ads(db, users, now);
   await seed_dellal(db, users, now);

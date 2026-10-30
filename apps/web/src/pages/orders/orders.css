@@ -62,3 +62,9 @@
 /* the order card › Livraison › Paiement: the step, then when and which payment */
 .px-pay { display: inline-flex; align-items: center; gap: 4px 8px; flex-wrap: wrap; }
 .px-pay small { font-size: 12px; }
+
+/* the order card › Livraison › « Frais ZR »: the company's own fee for this parcel (its API), then what it is made of */
+.px-cfees { display: inline-flex; flex-direction: column; gap: 1px; }
+.px-cfees small { font-size: 12px; line-height: 1.35; }
+/* « Frais société » column: the fee comes from the company's API */
+.px-api-tag { margin-inline-start: 6px; padding: 0 6px; border-radius: 99px; font-size: 10.5px; font-weight: 800; letter-spacing: .02em; color: var(--c-info-ink, #2F5BD3); background: var(--c-info-tint, #EEF3FF); }

@@ -55,10 +55,24 @@ export interface Parcel {
   ext_id: string | null;
 }
 
+/** What the courier itself charges for one parcel, from its API (ZR): it counts instead of the price list. */
+export interface CourierCosts {
+  /** its delivery price */
+  delivery: number | null;
+  /** its return price */
+  ret: number | null;
+  /** the weight it counts (kg) — it may weigh the parcel again */
+  kg?: number | null;
+  /** its weight fee (DA), exact once it pays (ZR « weightCost ») */
+  weight?: number | null;
+}
+
 export interface SendResult {
   tracking: string;
   extId: string | null;
   labelUrl: string | null;
+  /** the courier's own prices for this parcel, when its answer gives them */
+  costs?: CourierCosts;
 }
 
 export interface TrackItem {
@@ -76,6 +90,8 @@ export interface TrackResult {
   at?: string | null;
   /** adapter's own decision for special cases (e.g. ZR "isReturn"); undefined = use the maps */
   mapped?: FollowStatus | null;
+  /** the courier's own prices and weight for this parcel, when it gives them */
+  costs?: CourierCosts;
   /** the courier could not answer for this parcel (not found, error): reported, the parcel is left as it is */
   error?: string;
 }
@@ -173,6 +189,8 @@ export interface PayLine {
   /** extra costs the courier took on this parcel (weight, exchange, phone change) */
   costs: number;
   comment: string | null;
+  /** what it took on this parcel, item by item (ZR): its delivery / return price, the weight it counted and its weight fee */
+  fees?: CourierCosts;
 }
 export interface PayStatement {
   extId: string;

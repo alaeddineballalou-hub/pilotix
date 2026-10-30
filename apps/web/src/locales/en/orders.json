@@ -74,7 +74,8 @@
     "since": "Since",
     "variant": "Variant",
     "fagent": "Follow-up agent",
-    "tracking": "Tracking no."
+    "tracking": "Tracking no.",
+    "feeApi": "API"
   },
   "flag": {
     "dup": "DUPLICATE?",
@@ -395,7 +396,14 @@
     "historyMore": "See the full history ({{n}} orders)",
     "historyLess": "Hide the history",
     "historyThis": "this order",
-    "pay": "Payment"
+    "pay": "Payment",
+    "courierFees": "{{name}} fees",
+    "feesDelivery": "delivery {{v}}",
+    "feesReturn": "return {{v}}",
+    "feesWeight": "weight {{v}} ({{kg}} kg)",
+    "feesKg": "{{kg}} kg",
+    "feesApi": "from {{name}}’s API",
+    "feesPaid": "taken by {{name}} in its payment"
   },
   "ph": {
     "per": {

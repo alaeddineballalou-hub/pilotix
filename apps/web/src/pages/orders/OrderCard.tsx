@@ -38,6 +38,37 @@ export async function callOptional(name: string, input: unknown): Promise<{ ok: 
 
 type Panel = null | { kind: 'conf'; status: ConfStatus } | { kind: 'follow'; status: FollowStatus } | { kind: 'company' } | { kind: 'note' } | { kind: 'blacklist' } | { kind: 'cancelParcel' };
 
+/**
+ * What the company itself charges for this parcel, from its API (ZR): its delivery price — or its return price for a
+ * parcel coming back — and its weight fee for the weight it counted; « retenu au paiement » once it paid (exact).
+ */
+function CourierFeesRow({ o }: { o: Order }) {
+  const { t } = useTranslation();
+  const f = o.courierFees!;
+  const back = o.followStatus === 'returning' || o.followStatus === 'returned';
+  const base = back ? f.ret : f.delivery;
+  if (base === null) return null;
+  const w = back ? f.weightRet : f.weight;
+  const name = o.companyName ?? '';
+  const kg = f.kg !== null ? String(Math.round(f.kg * 10) / 10).replace('.', ',') : null;
+  const parts = [
+    t(back ? 'orders.card.feesReturn' : 'orders.card.feesDelivery', { v: da(base) }),
+    w ? t('orders.card.feesWeight', { v: da(w), kg: kg ?? '?' }) : kg ? t('orders.card.feesKg', { kg }) : null,
+    t(f.exact ? 'orders.card.feesPaid' : 'orders.card.feesApi', { name }),
+  ].filter(Boolean);
+  return (
+    <>
+      <dt>{t('orders.card.courierFees', { name })}</dt>
+      <dd>
+        <span className="px-cfees">
+          <b className="ltr">{da(base + w)}</b>
+          <small className="muted">{parts.join(' · ')}</small>
+        </span>
+      </dd>
+    </>
+  );
+}
+
 /** The payment of a delivered parcel: waiting (grey) → the company has it (blue) → paid, to pick up (orange) → received (green). */
 const PAY_TONE = { waiting: 'off', collected: 'info', ready: 'warn', received: 'ok' } as const;
 
@@ -425,6 +456,7 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
               <dd>{o.extStatus}</dd>
             </>
           )}
+          {o.courierFees && <CourierFeesRow o={o} />}
           {o.pay && (
             <>
               <dt>{t('orders.card.pay')}</dt>

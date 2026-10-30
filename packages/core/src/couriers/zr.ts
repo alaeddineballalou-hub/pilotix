@@ -100,6 +100,10 @@ async function loadClaimCats(c: CourierCompany): Promise<ClaimCategory[]> {
 // totals (parcels delivered / cancelled, refunds, labeling, office holding, storage) and acceptedAt, PUT /supplier-payment/{id}
 // (we received it), POST /treasury-transactions/search/supplier-payment/by-supplier-payment/{id} → one line per parcel.
 const numOf = (v: unknown) => Math.round(Number(v) || 0);
+const priceOf = (v: unknown) => (v == null || v === '' || !isFinite(Number(v)) ? null : Math.round(Number(v)));
+const kgOf = (v: unknown) => (v == null || v === '' || !isFinite(Number(v)) || Number(v) <= 0 ? null : Math.round(Number(v) * 100) / 100);
+/** What ZR charges for a parcel (its create answer, the parcel itself): its delivery and return price, the weight it counts. */
+const costsOf = (p: any) => ({ delivery: priceOf(p?.deliveryPrice), ret: priceOf(p?.returnPrice), kg: kgOf(p?.weight?.effectiveWeight ?? p?.weight?.weight) });
 const DONE = /(accept|pay[ée]|paid|valid|termin|complet|done|re[çc]u)/i;
 async function pages(c: CourierCompany, path: string, json: Record<string, unknown>, max = 5) {
   const out: any[] = [];
@@ -170,6 +174,8 @@ const payments: NonNullable<CourierAdapter['payments']> = {
       amount: numOf(x.amount),
       costs: numOf(x.weightCost) + numOf(x.swapCost) + numOf(x.phoneChangeCost),
       comment: x.comment ?? null,
+      // the parcel's own prices and ZR's weight fee on it (« weightCost »: 50 DA a kg above 5 kg, also on a return)
+      fees: { delivery: priceOf(x.parcel?.deliveryPrice), ret: priceOf(x.parcel?.returnPrice), kg: kgOf(x.parcel?.weight), weight: numOf(x.weightCost) },
     }));
   },
   async accept(c, extId) {
@@ -568,7 +574,7 @@ export const zr: CourierAdapter = {
     const id = r?.id || r?.parcelId;
     if (!id) throw new CourierError('ZR n’a pas renvoyé d’identifiant de colis');
     const tracking = r?.trackingNumber || (await http(c.name, url(c, `/parcels/${id}`), { headers: h(c) })).trackingNumber;
-    return { tracking: tracking || String(id), extId: String(id), labelUrl: null };
+    return { tracking: tracking || String(id), extId: String(id), labelUrl: null, costs: costsOf(r) };
   },
   // an SAV exchange: ZR delivers the new parcel and makes its own return parcel for the old product
   async exchange(c, p, original, helpers) {
@@ -602,7 +608,7 @@ export const zr: CourierAdapter = {
       if (!key) continue;
       const situation = r.situation && (r.situation.name || r.situation.description);
       const mapped = STATUSES[key];
-      out.push({ id: it.id, key, status: (r.state.description || key) + (situation ? ` · ${situation}` : ''), at: r.lastStateUpdateAt ?? null, mapped: r.isReturn && mapped !== 'returned' ? ('returning' as const) : undefined });
+      out.push({ id: it.id, key, status: (r.state.description || key) + (situation ? ` · ${situation}` : ''), at: r.lastStateUpdateAt ?? null, mapped: r.isReturn && mapped !== 'returned' ? ('returning' as const) : undefined, costs: costsOf(r) });
     }
     return out;
   },
