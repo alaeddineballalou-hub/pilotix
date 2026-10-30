@@ -28,6 +28,8 @@ export interface AssignArea {
   hideHistory: boolean;
   /** a fresh item goes first to an agent online and not on a call */
   speedFirst: boolean;
+  /** a woman customer (her first name, or a product for women) goes to a woman agent when one can take it */
+  womenToWomen: boolean;
 }
 
 export interface AssignAgent {
@@ -47,6 +49,8 @@ export interface AssignAgent {
   senior: boolean;
   /** the owner's boutiques he gets orders from, when he works in several (empty: all of them) — kept the same in each */
   shops: number[];
+  /** a woman (women customers go to her first when « femmes avec femmes » is on) */
+  woman: boolean;
 }
 
 /** Every setting with its default. Admin edits them in Management / Réglages. */
@@ -130,7 +134,7 @@ export interface SettingsMap {
    *    that company delivers there;
    *  - noStockDays: a « sans stock » order waiting longer than this rings an alert.
    */
-  autoAssign: { conf: AssignArea; follow: AssignArea; agents: Record<string, AssignAgent>; order: number[] };
+  autoAssign: { conf: AssignArea; follow: AssignArea; agents: Record<string, AssignAgent>; order: number[]; womenProducts: number[] };
   /** where each turn stands (Tour de rôle): per area and scope, the last agent and how many he got in a row */
   autoAssignTurn: Record<string, { last: number | null; n: number }>;
   /** Management › Motifs du Suivi: why an alert ends « Résolu » (relancé) or « Perdu »; `client`: the customer said it
@@ -195,10 +199,11 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   pilot: PILOT_DEFAULT,
   coverageRefresh: { at: null, results: [] },
   autoAssign: {
-    conf: { mode: 'manual', by: 'all', excluded: ['confirmed', 'no_stock', 'cancelled', 'duplicate', 'wrong_number', 'fake'], max: 30, offlineMin: 15, sameClient: true, respectAccess: true, hideHistory: false, speedFirst: true },
-    follow: { mode: 'manual', by: 'all', excluded: [], max: 15, offlineMin: 15, sameClient: true, respectAccess: true, hideHistory: false, speedFirst: true },
+    conf: { mode: 'manual', by: 'all', excluded: ['confirmed', 'no_stock', 'cancelled', 'duplicate', 'wrong_number', 'fake'], max: 30, offlineMin: 15, sameClient: true, respectAccess: true, hideHistory: false, speedFirst: true, womenToWomen: false },
+    follow: { mode: 'manual', by: 'all', excluded: [], max: 15, offlineMin: 15, sameClient: true, respectAccess: true, hideHistory: false, speedFirst: true, womenToWomen: false },
     agents: {},
     order: [],
+    womenProducts: [],
   },
   autoAssignTurn: {},
   suiviMotifs: {

@@ -5,6 +5,7 @@ import type { ClientLevel, ClientReason } from './clientscore';
 export * from './timers';
 export * from './geo';
 export * from './demo';
+export * from './names';
 export * from './upsell';
 export * from './features';
 export * from './agency';
@@ -171,6 +172,8 @@ export interface Profile {
   canManageUsers?: boolean;
   /** set by the administrator: gives orders a company or a livreur in the depot's « À attribuer » */
   canAssign?: boolean;
+  /** set by the administrator: opens Management › Affectation and changes it */
+  canAffect?: boolean;
   /** put in Management › Archives: out of the team list, kept in the history (always closed) */
   archived?: boolean;
   /** an agent of a confirmation agency working in this store (the agency manages the account) */

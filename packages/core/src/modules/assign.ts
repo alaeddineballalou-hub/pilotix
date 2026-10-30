@@ -7,10 +7,10 @@
 //    their agency's orders and products. A fresh item goes first to someone not already on a call.
 //  - A known customer goes back to the agent who has his other open order.
 //  - An agent not seen for « offlineMin » minutes gives back what he got automatically and never touched.
-import { algiersHour, CONF_TODO } from '@pilotix/shared';
+import { algiersHour, CONF_TODO, isWomanName } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, num, numOrNull } from '../db';
-import { bad, Ctx, proc } from '../rpc';
+import { bad, Ctx, forbidden, proc } from '../rpc';
 import { AssignAgent, AssignArea, DEFAULT_SETTINGS, getSetting, setSetting, SettingsMap } from '../settings';
 import { addEvent } from './orders';
 
@@ -23,7 +23,7 @@ const AGENCY_COL: Record<Area, string> = { conf: 'conf_agency_id', follow: 'foll
 const ONLINE_MS = 3 * 60_000;
 export const MODE_FR: Record<AssignArea['mode'], string> = { manual: 'manuel', turn: 'tour de rôle', load: 'moins chargé', smart: 'smart' };
 
-export const AGENT_DEFAULT: AssignAgent = { out: false, weight: 1, channels: [], products: [], from: null, to: null, langs: [], senior: false, shops: [] };
+export const AGENT_DEFAULT: AssignAgent = { out: false, weight: 1, channels: [], products: [], from: null, to: null, langs: [], senior: false, shops: [], woman: false };
 
 /** The shop's choices, every missing one filled with the default (a choice added later starts there). */
 export async function getAssign(db: Db): Promise<Assign> {
@@ -31,7 +31,7 @@ export async function getAssign(db: Db): Promise<Assign> {
   const d = DEFAULT_SETTINGS.autoAssign;
   const agents: Record<string, AssignAgent> = {};
   for (const [k, v] of Object.entries(s.agents ?? {})) agents[k] = { ...AGENT_DEFAULT, ...v };
-  return { conf: { ...d.conf, ...(s.conf ?? {}) }, follow: { ...d.follow, ...(s.follow ?? {}) }, agents, order: s.order ?? [] };
+  return { conf: { ...d.conf, ...(s.conf ?? {}) }, follow: { ...d.follow, ...(s.follow ?? {}) }, agents, order: s.order ?? [], womenProducts: s.womenProducts ?? [] };
 }
 
 export interface Agent {
@@ -99,6 +99,9 @@ export function inHours(c: AssignAgent, now: number): boolean {
 
 export interface Item {
   id: number;
+  /** a woman customer (her first name, or a product for women) */
+  woman?: boolean;
+  name?: string;
   phone: string;
   channel: string;
   agencyId: number | null;
@@ -147,6 +150,11 @@ export function pickAgent(
     if (same) return { agent: same, why: 'même client' };
   }
   let why = MODE_FR[a.mode];
+  // « femmes avec femmes »: a woman customer to a woman agent, when one can take her (else as usual)
+  if (a.womenToWomen && item.woman && ok.some((x) => x.cfg.woman)) {
+    ok = ok.filter((x) => x.cfg.woman);
+    why += ' · cliente → agente';
+  }
   if (a.speedFirst && ok.some((x) => x.free)) {
     if (ok.some((x) => !x.free)) why += ' · libre';
     ok = ok.filter((x) => x.free);
@@ -192,7 +200,7 @@ async function waiting(db: Db, area: Area, ids?: number[]): Promise<Item[]> {
       ? `o.agent_id IS NULL AND o.conf_status = ANY($1) AND NOT o.is_exchange AND o.created_at > now() - interval '30 days'`
       : `o.follow_agent_id IS NULL AND o.follow_status = 'alert' AND $1::text[] IS NOT NULL`;
   const rows = await db.query(
-    `SELECT o.id, o.phone, o.channel, o.${AGENCY_COL[area]} AS agency, o.route_product_id, o.total, o.wilaya_id,
+    `SELECT o.id, o.phone, o.customer_name, o.channel, o.${AGENCY_COL[area]} AS agency, o.route_product_id, o.total, o.wilaya_id,
             ARRAY(SELECT DISTINCT i.product_id FROM order_items i WHERE i.order_id = o.id AND i.product_id IS NOT NULL) AS products
        FROM orders o WHERE ${where} ${ids ? 'AND o.id = ANY($2)' : ''} ORDER BY o.created_at LIMIT 300`,
     ids ? [CONF_TODO, ids] : [CONF_TODO],
@@ -200,6 +208,7 @@ async function waiting(db: Db, area: Area, ids?: number[]): Promise<Item[]> {
   return rows.map((r: any) => ({
     id: num(r.id),
     phone: String(r.phone ?? ''),
+    name: String(r.customer_name ?? ''),
     channel: String(r.channel ?? ''),
     agencyId: numOrNull(r.agency),
     productIds: (r.products ?? []).map(num),
@@ -329,6 +338,8 @@ export async function runArea(ctx: Ctx, area: Area, ids?: number[], cfgIn?: Assi
   const turns = { ...(await getSetting(ctx.db, 'autoAssignTurn')) };
   const score = a.mode === 'smart' ? await smartScorer(ctx.db, area) : undefined;
   let assigned = 0;
+  const forWomen = new Set(cfg.womenProducts);
+  for (const it of items) it.woman = isWomanName(it.name) || it.productIds.some((p) => forWomen.has(p));
   for (const it of items) {
     const prev = a.sameClient ? await prevAgent(ctx.db, area, it) : null;
     const pick = pickAgent(list, it, area, cfg, turns, now, { prev, score: score ? (x) => score(x, it) : undefined });
@@ -387,6 +398,7 @@ const AreaIn = z.object({
   respectAccess: z.boolean(),
   hideHistory: z.boolean(),
   speedFirst: z.boolean(),
+  womenToWomen: z.boolean().default(false),
 });
 const AgentIn = z.object({
   out: z.boolean(),
@@ -398,11 +410,18 @@ const AgentIn = z.object({
   langs: z.array(z.string().max(10)).max(5),
   senior: z.boolean(),
   shops: z.array(z.number().int().positive()).max(50).default([]),
+  woman: z.boolean().default(false),
 });
+
+/** Administrators, and the people they ticked (« Peut régler l’affectation »). */
+function needAffect(ctx: Ctx) {
+  if (!ctx.session.isAdmin && !ctx.session.profile.canAffect) throw forbidden('Seul l’administrateur (ou une personne qu’il a choisie) règle l’affectation');
+}
 
 export const assignProcs = {
   /** The settings and every agent of both areas with their state now (on line, open items, his own settings). */
-  'assign.get': proc(['agent_manager', 'vendeur'], z.object({}), async (ctx) => {
+  'assign.get': proc(null, z.object({}), async (ctx) => {
+    needAffect(ctx);
     const cfg = await getAssign(ctx.db);
     const now = ctx.now();
     const [conf, follow] = await Promise.all([agentsOf(ctx.db, 'conf', cfg, now), agentsOf(ctx.db, 'follow', cfg, now)]);
@@ -420,9 +439,10 @@ export const assignProcs = {
   }),
 
   'assign.set': proc(
-    ['agent_manager', 'vendeur'],
-    z.object({ conf: AreaIn, follow: AreaIn, agents: z.record(AgentIn), order: z.array(z.number().int().positive()).max(500) }),
+    null,
+    z.object({ conf: AreaIn, follow: AreaIn, agents: z.record(AgentIn), order: z.array(z.number().int().positive()).max(500), womenProducts: z.array(z.number().int().positive()).max(500).default([]) }),
     async (ctx, i) => {
+      needAffect(ctx);
       for (const [k, v] of Object.entries(i.agents)) if (v.from !== null && v.to !== null && v.from === v.to) throw bad(`Agent ${k} : l’heure de début et de fin sont pareilles`);
       await setSetting(ctx.db, 'autoAssign', i, ctx.session.profile.id);
       await shareShops(ctx, i.agents);
@@ -431,7 +451,8 @@ export const assignProcs = {
   ),
 
   /** « Répartir maintenant », and the job every minute: both areas. */
-  'assign.run': proc(['agent_manager', 'vendeur'], z.object({}), async (ctx) => {
+  'assign.run': proc(null, z.object({}), async (ctx) => {
+    needAffect(ctx);
     const cfg = await getAssign(ctx.db);
     return { conf: await runArea(ctx, 'conf', undefined, cfg), follow: await runArea(ctx, 'follow', undefined, cfg) };
   }),

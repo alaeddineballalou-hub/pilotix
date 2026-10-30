@@ -115,7 +115,11 @@
     "canAssign": "À attribuer (dépôt)",
     "canAssignHint": "Peut choisir la société ou le livreur des commandes prêtes sans société (Dépôt › À attribuer). Les admins le peuvent toujours.",
     "canAssignLabel": "Peut attribuer les commandes",
-    "canAssignChip": "🚚 Attribue"
+    "canAssignChip": "🚚 Attribue",
+    "canAffect": "Affectation automatique",
+    "canAffectHint": "Peut ouvrir Management › Affectation et régler qui reçoit les commandes et les alertes. Les admins le peuvent toujours.",
+    "canAffectLabel": "Peut régler l’affectation",
+    "canAffectChip": "🔀 Affectation"
   },
   "status": {
     "groups": {
@@ -765,13 +769,15 @@
       "sameClient": "Même agent pour un client qui revient",
       "respectAccess": "Respecter canaux et produits de chaque agent",
       "speedFirst": "Priorité à l’agent libre",
-      "hideHistory": "Cacher l’historique quand on réaffecte"
+      "hideHistory": "Cacher l’historique quand on réaffecte",
+      "womenToWomen": "Femmes avec femmes"
     },
     "ruleHint": {
       "sameClient": "Il connaît déjà le client : la commande lui revient s’il est en ligne.",
       "respectAccess": "Un agent limité à TikTok ne reçoit que TikTok.",
       "speedFirst": "Un agent qui n’est pas en appel reçoit la commande fraîche d’abord.",
-      "hideHistory": "Le nouvel agent ne voit pas les notes de l’ancien."
+      "hideHistory": "Le nouvel agent ne voit pas les notes de l’ancien.",
+      "womenToWomen": "Une cliente (prénom de femme ou produit pour femmes) va à une agente, quand une agente peut la prendre."
     },
     "max": "Maximum de commandes à la fois",
     "maxHint": "Commandes ouvertes qu’un agent peut avoir en même temps. Au-delà, il ne reçoit plus rien (0 = sans limite).",
@@ -801,7 +807,8 @@
       "in": "Dans la répartition",
       "weight": "Part",
       "hours": "Horaires",
-      "access": "Accès (boutiques, canaux, produits)"
+      "access": "Accès (boutiques, canaux, produits)",
+      "woman": "Agente"
     },
     "up": "Monter",
     "down": "Descendre",
@@ -825,6 +832,9 @@
     "shopsHint": "Il travaille dans plusieurs de vos boutiques : cochez celles où il reçoit des commandes. Son maximum compte toutes ses commandes ouvertes de ces boutiques.",
     "thisShop": "celle-ci",
     "shopsN": "{{n}} boutiques",
-    "elsewhere": "Dont {{n}} dans vos autres boutiques"
+    "elsewhere": "Dont {{n}} dans vos autres boutiques",
+    "womenProducts": "Produits pour femmes",
+    "womenProductsHint": "Ces produits vont toujours à une agente. Cochez les agentes dans l’onglet Agents ({{n}} cochée(s)).",
+    "isWoman": "Femme"
   }
 }

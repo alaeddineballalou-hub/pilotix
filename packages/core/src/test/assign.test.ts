@@ -115,3 +115,44 @@ test('Suivi: a new alert goes to a suivi agent on line', async () => {
   assert.ok(r.follow_agent_id !== null);
   await call('assign.set', admin, base);
 });
+
+test('femmes avec femmes: a woman customer (first name or product for women) goes to a woman agent', async () => {
+  const { isWomanName } = await import('@pilotix/shared');
+  assert.ok(isWomanName('Fatima Zohra'));
+  assert.ok(isWomanName('Benali Amina'), 'family name first');
+  assert.ok(isWomanName('أمينة بن علي'));
+  assert.ok(isWomanName('Mme Kaci'));
+  assert.ok(!isWomanName('Mohamed Amine'));
+  assert.ok(!isWomanName('Nour Eddine'));
+  const [a, b] = ids;
+  await offline(ids);
+  await online([a, b]);
+  const ag = (woman: boolean) => ({ out: false, weight: 1, channels: [], products: [], from: null, to: null, langs: [], senior: false, shops: [], woman });
+  await save({ mode: 'load', max: 0, womenToWomen: true }, { agents: { [a]: ag(false), [b]: ag(true) } });
+  // b is busier: a man customer goes to a, a woman to b anyway
+  await db.query(`UPDATE orders SET agent_id = $1 WHERE agent_id = ANY($2)`, [ids[2], [a, b]]);
+  await db.query(`UPDATE orders SET agent_id = $1 WHERE id IN (SELECT id FROM orders WHERE agent_id = $2 AND conf_status = 'new' AND shipped_at IS NULL LIMIT 3)`, [b, ids[2]]);
+  assert.equal((await order(undefined, { customerName: 'Karim Haddad' })).agentId, a);
+  const w = await order(undefined, { customerName: 'Amina Haddad' });
+  assert.equal(w.agentId, b, 'a woman customer to the woman agent');
+  const ev = await db.query(`SELECT note FROM order_events WHERE order_id = $1 AND kind = 'assign' ORDER BY at DESC LIMIT 1`, [w.id]);
+  assert.match(ev[0].note, /cliente → agente/);
+  // a product for women
+  await save({ mode: 'load', max: 0, womenToWomen: true }, { agents: { [a]: ag(false), [b]: ag(true) }, womenProducts: [X.productId] });
+  assert.equal((await order(undefined, { customerName: 'Client Ali' })).agentId, b);
+  // no woman agent on line: as usual
+  await offline([b]);
+  assert.equal((await order(undefined, { customerName: 'Samira Kaci' })).agentId, a);
+  await save({ mode: 'manual' }, { agents: {}, womenProducts: [] });
+});
+
+test('only administrators and the people they ticked open the Affectation', async () => {
+  const m = await as(EMAILS.manager);
+  await assert.rejects(call('assign.get', m, {}), /administrateur/);
+  await call('users.update', admin, { id: m.session.profile.id, canAffect: true });
+  const m2 = await as(EMAILS.manager);
+  assert.ok(((await call('assign.get', m2, {})) as any).cfg);
+  // only the administrator gives that right
+  await assert.rejects(call('users.update', m2, { id: (await as(EMAILS.conf)).session.profile.id, canAffect: true }));
+  await call('users.update', admin, { id: m.session.profile.id, canAffect: false });
+});

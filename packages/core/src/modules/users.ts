@@ -19,6 +19,7 @@ export const toProfile = (r: any): Profile => ({
   referralCode: r.referral_code ?? null,
   canManageUsers: !!r.can_manage_users,
   canAssign: !!r.can_assign,
+  canAffect: !!r.can_affect,
   archived: !!r.archived_at,
   agencyId: numOrNull(r.agency_id),
   agencyProducts: idsOrNull(r.agency_products),
@@ -41,10 +42,10 @@ async function needCanEdit(ctx: Ctx, id: number) {
   if (!t) throw notFound();
   if ((t.roles as string[]).includes('admin') || t.can_manage_users) throw forbidden('Seul l’administrateur peut modifier ce compte');
 }
-function needGrantable(ctx: Ctx, b: { roles?: string[]; canManageUsers?: boolean; canAssign?: boolean }) {
+function needGrantable(ctx: Ctx, b: { roles?: string[]; canManageUsers?: boolean; canAssign?: boolean; canAffect?: boolean }) {
   if (ctx.session.isAdmin) return;
   if (b.roles?.includes('admin')) throw forbidden('Seul l’administrateur peut donner le rôle Administrateur');
-  if (b.canManageUsers !== undefined || b.canAssign !== undefined) throw forbidden('Seul l’administrateur peut donner ce droit');
+  if (b.canManageUsers !== undefined || b.canAssign !== undefined || b.canAffect !== undefined) throw forbidden('Seul l’administrateur peut donner ce droit');
 }
 
 /** The shop's plan allows N active accounts (a multi-shop server): one more is refused beyond that. */
@@ -121,6 +122,7 @@ const NewUser = z.object({
   canManageUsers: z.boolean().optional(),
   /** gives orders a company or a livreur in the depot's « À attribuer » (admins always can) */
   canAssign: z.boolean().optional(),
+  canAffect: z.boolean().optional(),
   /** in a partner's space (agency, marketer): the sellers this person works for, and the products (null: every seller) */
   sellers: z
     .array(z.object({ store: z.number().int().positive(), products: z.array(z.number().int().positive()).max(2000).nullable() }))
@@ -363,8 +365,8 @@ export const usersProcs = {
     try {
       const r = (
         await ctx.db.query(
-          'INSERT INTO profiles (name, email, phone, password_hash, roles, language, livreur_company_id, can_manage_users, agency_sellers, can_assign) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *',
-          [b.name, b.email.toLowerCase(), phone, await hashPassword(b.password), b.roles, b.language, b.livreurCompanyId ?? null, !!b.canManageUsers && !b.roles.includes('admin'), sellers ? JSON.stringify(sellers) : null, !!b.canAssign && !b.roles.includes('admin')],
+          'INSERT INTO profiles (name, email, phone, password_hash, roles, language, livreur_company_id, can_manage_users, agency_sellers, can_assign, can_affect) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *',
+          [b.name, b.email.toLowerCase(), phone, await hashPassword(b.password), b.roles, b.language, b.livreurCompanyId ?? null, !!b.canManageUsers && !b.roles.includes('admin'), sellers ? JSON.stringify(sellers) : null, !!b.canAssign && !b.roles.includes('admin'), !!b.canAffect && !b.roles.includes('admin')],
         )
       )[0];
       return toProfile(r);
@@ -397,8 +399,9 @@ export const usersProcs = {
              roles=COALESCE($6,roles), language=COALESCE($7,language), active=COALESCE($8,active), livreur_company_id=COALESCE($9,livreur_company_id),
              can_manage_users = CASE WHEN 'admin' = ANY(COALESCE($6,roles)) THEN false ELSE COALESCE($10,can_manage_users) END,
              can_assign = CASE WHEN 'admin' = ANY(COALESCE($6,roles)) THEN false ELSE COALESCE($11,can_assign) END,
+             can_affect = CASE WHEN 'admin' = ANY(COALESCE($6,roles)) THEN false ELSE COALESCE($12,can_affect) END,
              token_version = token_version + CASE WHEN $5::text IS NOT NULL OR $8 = false THEN 1 ELSE 0 END WHERE id=$1 RETURNING *`,
-          [b.id, b.name ?? null, b.email?.toLowerCase() ?? null, phone, b.password ? await hashPassword(b.password) : null, b.roles ?? null, b.language ?? null, b.active ?? null, b.livreurCompanyId ?? null, b.canManageUsers ?? null, b.canAssign ?? null],
+          [b.id, b.name ?? null, b.email?.toLowerCase() ?? null, phone, b.password ? await hashPassword(b.password) : null, b.roles ?? null, b.language ?? null, b.active ?? null, b.livreurCompanyId ?? null, b.canManageUsers ?? null, b.canAssign ?? null, b.canAffect ?? null],
         )
       )[0];
     } catch (e: any) {

@@ -33,6 +33,7 @@ const AGENT0: AgentCfg = {
   langs: [],
   senior: false,
   shops: [],
+  woman: false,
 };
 
 export function Affectation() {
@@ -124,7 +125,7 @@ export function Affectation() {
         {a.mode !== 'manual' && (
           <section className="pf-group">
             <h3>{t('admin.aa.rules')}</h3>
-            {(['sameClient', 'respectAccess', 'speedFirst', 'hideHistory'] as const).map((r) => (
+            {(['sameClient', 'respectAccess', 'speedFirst', 'womenToWomen', 'hideHistory'] as const).map((r) => (
               <label key={r} className="pf-row">
                 <span className="pf-text">
                   <b>{t(`admin.aa.rule.${r}`)}</b>
@@ -133,6 +134,23 @@ export function Affectation() {
                 <input type="checkbox" role="switch" className="pf-sw" checked={a[r]} onChange={(e) => setArea(k, { [r]: e.target.checked })} />
               </label>
             ))}
+            {a.womenToWomen && (
+              <div className="pf-row pf-col aa-women">
+                <span className="pf-text">
+                  <b>{t('admin.aa.womenProducts')}</b>
+                  <small>{t('admin.aa.womenProductsHint', { n: people.filter((x) => agentOf(x.id).woman).length })}</small>
+                </span>
+                <div className="pf-chips pf-chips-s aa-prods">
+                  {products.map((p) => (
+                    <label key={p.id} className={`pf-chip ${v.womenProducts.includes(p.id) ? 'on' : ''}`}>
+                      <input type="checkbox" checked={v.womenProducts.includes(p.id)} onChange={() => setDraft({ ...v, womenProducts: v.womenProducts.includes(p.id) ? v.womenProducts.filter((y) => y !== p.id) : [...v.womenProducts, p.id] })} />
+                      <Icon name="checkcircle" />
+                      {p.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
         )}
 
@@ -278,6 +296,7 @@ export function Affectation() {
                   <th>{t('admin.aa.col.order')}</th>
                   <th>{t('admin.aa.col.agent')}</th>
                   <th>{t('admin.aa.col.in')}</th>
+                  <th>{t('admin.aa.col.woman')}</th>
                   <th>{t('admin.aa.col.weight')}</th>
                   <th>{t('admin.aa.col.hours')}</th>
                   <th>{t('admin.aa.col.access')}</th>
@@ -304,6 +323,12 @@ export function Affectation() {
                       </td>
                       <td data-l={t('admin.aa.col.in')} className="aa-in">
                         <input type="checkbox" role="switch" className="pf-sw" aria-label={t('admin.aa.col.in')} checked={!c.out} onChange={(e) => setAgent(x.id, { out: !e.target.checked })} />
+                      </td>
+                      <td data-l={t('admin.aa.col.woman')} className="aa-w">
+                        <label className="aa-fem">
+                          <input type="checkbox" checked={c.woman} onChange={(e) => setAgent(x.id, { woman: e.target.checked })} />
+                          {t('admin.aa.isWoman')}
+                        </label>
                       </td>
                       <td data-l={t('admin.aa.col.weight')} className="aa-w">
                         <select value={c.weight} aria-label={t('admin.aa.col.weight')} onChange={(e) => setAgent(x.id, { weight: Number(e.target.value) })}>

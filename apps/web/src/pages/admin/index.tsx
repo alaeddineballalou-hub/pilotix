@@ -1,6 +1,7 @@
 // Admin pages: Utilisateurs, Management (Statuts, Paie des agents, Prix de livraison, Canaux de vente, Alertes dépôt, Archives), Réglages.
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSession } from '../../lib/session';
 import type { PageProps } from '../registry';
 import { pageIsOn } from '../../lib/features';
 import { useAction, useRpc } from '../../lib/query';
@@ -23,12 +24,15 @@ const MGMT = ['statuts', 'affectation', 'paie', 'prix', 'canaux', 'alertes', 'li
 const ARCHIVE_KINDS = ['users', 'products', 'warehouses'] as const;
 export function Management({ sub, rest }: PageProps) {
   const { t } = useTranslation();
-  const cur = (MGMT as readonly string[]).includes(sub ?? '') ? (sub as (typeof MGMT)[number]) : 'statuts';
+  const { session } = useSession();
+  // not an administrator: let in for the Affectation only
+  const mine = session?.isAdmin ? MGMT : (['affectation'] as const);
+  const cur = (mine as readonly string[]).includes(sub ?? '') ? (sub as (typeof MGMT)[number]) : mine[0];
   // #/management/archive/<users|products|warehouses> opens that list
   const kind = (ARCHIVE_KINDS as readonly string[]).includes(rest?.[0] ?? '') ? (rest![0] as (typeof ARCHIVE_KINDS)[number]) : undefined;
   return (
     <>
-      <StageBar flow={false} current={cur} items={MGMT.filter((k) => pageIsOn('management', k)).map((k) => ({ key: k, label: t(`admin.subs.${k}`), href: `#/management/${k}` }))} />
+      <StageBar flow={false} current={cur} items={mine.filter((k) => pageIsOn('management', k)).map((k) => ({ key: k, label: t(`admin.subs.${k}`), href: `#/management/${k}` }))} />
       {cur === 'statuts' ? <Statuts /> : cur === 'affectation' ? <Affectation /> : cur === 'paie' ? <Paie /> : cur === 'prix' ? <Prix /> : cur === 'canaux' ? <Canaux /> : cur === 'alertes' ? <DepotAlertsCfg /> : cur === 'livreur' ? <LivreurCfg /> : <Archive key={kind ?? 'users'} initial={kind} />}
     </>
   );

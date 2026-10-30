@@ -115,7 +115,11 @@
     "canAssign": "To assign (depot)",
     "canAssignHint": "Can choose the company or the livreur of ready orders without a company (Depot › To assign). Admins always can.",
     "canAssignLabel": "Can assign orders",
-    "canAssignChip": "🚚 Assigns"
+    "canAssignChip": "🚚 Assigns",
+    "canAffect": "Automatic assignment",
+    "canAffectHint": "Can open Management › Assignment and set who gets orders and alerts. Admins always can.",
+    "canAffectLabel": "Can set the assignment",
+    "canAffectChip": "🔀 Assignment"
   },
   "status": {
     "groups": {
@@ -765,13 +769,15 @@
       "sameClient": "Same agent for a returning client",
       "respectAccess": "Respect each agent's channels and products",
       "speedFirst": "Free agent first",
-      "hideHistory": "Hide history on reassignment"
+      "hideHistory": "Hide history on reassignment",
+      "womenToWomen": "Women with women"
     },
     "ruleHint": {
       "sameClient": "He already knows the client: the order goes back to him if online.",
       "respectAccess": "An agent limited to TikTok only gets TikTok.",
       "speedFirst": "An agent not on a call gets the fresh order first.",
-      "hideHistory": "The new agent doesn't see the previous agent's notes."
+      "hideHistory": "The new agent doesn't see the previous agent's notes.",
+      "womenToWomen": "A woman customer (woman's first name or a product for women) goes to a woman agent, when one can take her."
     },
     "max": "Maximum orders at once",
     "maxHint": "Open orders an agent can hold at the same time. Beyond this he gets nothing more (0 = no limit).",
@@ -801,7 +807,8 @@
       "in": "In the split",
       "weight": "Share",
       "hours": "Hours",
-      "access": "Access (boutiques, channels, products)"
+      "access": "Access (boutiques, channels, products)",
+      "woman": "Woman agent"
     },
     "up": "Move up",
     "down": "Move down",
@@ -825,6 +832,9 @@
     "shopsHint": "He works in several of your boutiques: tick where he gets orders. His maximum counts all his open orders from these boutiques.",
     "thisShop": "this one",
     "shopsN": "{{n}} boutiques",
-    "elsewhere": "Of which {{n}} in your other boutiques"
+    "elsewhere": "Of which {{n}} in your other boutiques",
+    "womenProducts": "Products for women",
+    "womenProductsHint": "These products always go to a woman agent. Tick the women agents in the Agents tab ({{n}} ticked).",
+    "isWoman": "Woman"
   }
 }

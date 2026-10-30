@@ -34,6 +34,8 @@ export interface NavItem {
   manageUsers?: boolean;
   /** also shown to the people who write the « Pilot Auto Assign » rules (ticked in Utilisateurs) */
   rules?: boolean;
+  /** also shown to the people the administrator lets set the Affectation automatique */
+  affect?: boolean;
   /** menu children: the item is a group (Commandes, Pilot AI) */
   children?: NavChild[];
   /** pages of the group: it is highlighted on them, and shows its bar under the header when the sidebar is folded */
@@ -97,7 +99,7 @@ export const NAV: NavItem[] = [
   { id: 'agences', icon: 'handshake', roles: [], onlyIf: partnersOn },
   // marketers running the store's ads (the same, on their own: a marketer has nothing to do with the agencies)
   { id: 'marketers', icon: 'trend', roles: [], onlyIf: partnersOn },
-  { id: 'management', icon: 'briefcase', roles: [], subs: ['statuts', 'affectation', 'paie', 'prix', 'canaux', 'alertes', 'livreur', 'archive'] },
+  { id: 'management', icon: 'briefcase', roles: [], affect: true, subs: ['statuts', 'affectation', 'paie', 'prix', 'canaux', 'alertes', 'livreur', 'archive'] },
   { id: 'reglages', icon: 'settings', roles: [] },
   { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'parrainage', 'securite'] },
 ];
@@ -105,12 +107,14 @@ export const NAV: NavItem[] = [
 /** A group's child: its own roles, or everyone who sees the group — and in the shop's plan. */
 export const canSeeChild = (c: NavChild, roles: Role[], isAdmin: boolean) => (isAdmin || !c.roles || c.roles.some((r) => roles.includes(r))) && pageIsOn(c.id);
 
-export function canSee(item: NavItem, roles: Role[], isAdmin: boolean, canManageUsers = false, canRules = false): boolean {
+export function canSee(item: NavItem, roles: Role[], isAdmin: boolean, canManageUsers = false, canRules = false, canAffect = false): boolean {
   // a menu the shop's plan does not include is not shown to anyone, administrators included
   if (!pageIsOn(item.id)) return false;
   if (item.onlyIf && !item.onlyIf(roles, isAdmin)) return false;
   if (item.manageUsers && canManageUsers) return true;
   if (item.rules && canRules) return true;
+  // Management, for the people the administrator lets set the Affectation (that page only)
+  if (item.affect && canAffect) return true;
   if (item.roles === null || isAdmin) return true;
   return item.roles.some((r) => roles.includes(r));
 }
