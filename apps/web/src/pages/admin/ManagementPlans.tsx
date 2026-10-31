@@ -7,15 +7,15 @@ const money=(x:number)=>Math.round(x).toLocaleString('fr-FR')+' DA';
 const number=(x:string)=>Math.max(0,Number(x)||0);
 const FIELD={maxWidth:220};
 type Plan={id:number;kind:'billing'|'agent';name:string;configuration:ManagementPlanConfig;active:boolean};
-export function ManagementPlans(){
+export function ManagementPlans({ agency = false, initialKind = 'billing' }: { agency?: boolean; initialKind?: 'billing'|'agent' } = {}){
   const q=useRpc('management.plans',{});
-  const products=useRpc('catalog.search',{q:'',limit:100});
+  const products=useRpc('catalog.search',{q:'',limit:100},{enabled:!agency});
   const users=useRpc('users.list',{activeOnly:true});
   const save=useAction('management.planSave',{success:'Plan enregistré',onDone:()=>setDirty(false)});
   const clone=useAction('management.planClone',{success:'Plan dupliqué'});
   const archive=useAction('management.planArchive',{success:'Plan archivé'});
   const assign=useAction('management.planAssign',{success:'Affectation enregistrée'});
-  const [kind,setKind]=useState<'billing'|'agent'>('billing');
+  const [kind,setKind]=useState<'billing'|'agent'>(initialKind);
   const [editing,setEditing]=useState<Plan|null>(null);
   const [dirty,setDirty]=useState(false);
   const [price,setPrice]=useState(16950);
@@ -32,15 +32,15 @@ export function ManagementPlans(){
   let previewError='';
   try {if(p) preview=simulateManagementPlan(p,{productPrice:price,operations:count,upsells,incrementalValue:incremental})}catch(e){previewError=e instanceof Error?e.message:'Configuration invalide'}
   const invalid=!!p&&(p.upsell.enabled&&p.upsell.method==='double'&&(p.method==='none'||p.trigger!=='confirmed'));
-  const targets=kind==='billing'?(products.data??[]).map(x=>({id:x.id,name:x.name})): (users.data??[]).filter(x=>x.roles.some(r=>r==='confirmation'||r==='suivi'||r==='agent_manager')).map(x=>({id:x.id,name:x.name}));
+  const targets=agency && kind==='billing'?[]:kind==='billing'?(products.data??[]).map(x=>({id:x.id,name:x.name})): (users.data??[]).filter(x=>x.roles.some(r=>r==='confirmation'||r==='suivi'||r==='agent_manager')).map(x=>({id:x.id,name:x.name}));
   const assignKind=kind==='billing'?'product':'agent';
   return <div className="agx-page" style={{display:'grid',gap:16}}>
     <section className="card">
       <h2>Plans de paiement</h2>
       <p className="muted">Créez un plan, définissez ses règles, puis affectez-le aux {kind==='billing'?'produits':'agents'}. Les montants facturés et les salaires restent séparés.</p>
       <div className="row agx-actions">
-        <button className={'btn '+(kind==='billing'?'primary':'')} onClick={()=>setKind('billing')}>Facturation</button>
-        <button className={'btn '+(kind==='agent'?'primary':'')} onClick={()=>setKind('agent')}>Agent Pay</button>
+        {!agency && <button className={'btn '+(kind==='billing'?'primary':'')} onClick={()=>setKind('billing')}>Facturation</button>}
+        {!agency && <button className={'btn '+(kind==='agent'?'primary':'')} onClick={()=>setKind('agent')}>Agent Pay</button>}
         <button className="btn" onClick={start}>+ Créer un plan</button>
       </div>
       {q.isLoading?<p>Chargement…</p>:q.error?<p className="form-err">{q.error.message}</p>:<div className="agx-pe-grid">{plans.map(x=><button type="button" key={x.id} className="btn" onClick={()=>select(x)} style={{textAlign:'left'}}>{x.name} · {x.configuration.method==='tier'?'Tranches':x.configuration.method==='percent'?'%':x.configuration.method==='fixed'?'Fixe':'Forfait'}</button>)}</div>}
@@ -82,7 +82,7 @@ export function ManagementPlans(){
       {previewError?<p className="form-err">{previewError}</p>:preview&&<div><p>Forfait/salaire : <b>{money(preview.monthly)}</b></p><p>Commissions : <b>{money(preview.main)}</b></p><p>Bonus : <b>{money(preview.bonus)}</b></p><p>Upsell : <b>{money(preview.upsell)}</b></p><h2>Total : {money(preview.total)}</h2></div>}
     </section>}
     <section className="card"><h2>Affecter les plans</h2><p className="muted">{kind==='billing'?'Sélectionnez un plan par produit.':'Sélectionnez un plan par agent.'} Une affectation ne modifie pas les opérations historiques.</p>
-      {targets.length===0?<p className="muted">Aucun élément disponible.</p>:<div style={{display:'grid',gap:12}}>{targets.map(target=>{
+      {agency && kind==='billing' ? <p className="muted">Ces plans sont sauvegardés dans l’agence. Les factures et contrats vendeurs existants conservent leurs tarifs actuels jusqu’à la validation de la liaison automatique.</p> : targets.length===0?<p className="muted">Aucun élément disponible.</p>:<div style={{display:'grid',gap:12}}>{targets.map(target=>{
         const current=q.data?.assignments.find(a=>a.targetKind===assignKind&&a.targetId===target.id)?.planId;
         return <label className="field" key={target.id}><span className="lab">{target.name}</span><select value={current??''} disabled={assign.isPending} onChange={e=>assign.mutate({targetKind:assignKind,targetId:target.id,planId:e.target.value?Number(e.target.value):null})}>
           <option value="">Aucun plan</option>{plans.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}
