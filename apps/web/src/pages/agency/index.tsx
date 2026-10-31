@@ -644,6 +644,7 @@ function AgencyRates() {
 // ---------------------------------------------------------------- Facturation
 /** Each seller's month: its numbers, what they make, and the payment: asked → paid (the seller) → received (us). */
 export function Facturation(_: PageProps) {
+  const { session } = useSession();
   const { t, i18n } = useTranslation();
   const tp = useTp();
   const mk = usePartnerKind() === 'marketer';
@@ -658,7 +659,7 @@ export function Facturation(_: PageProps) {
   const total = rows.reduce((s, r) => s + r.bill.total, 0);
   return (
     <div className="agx-page">
-      {!mk && <>
+      {!mk && session?.isAdmin && <>
         <ManagementPlans agency initialKind="billing" />
         <details className="card"><summary><strong>Ancien tarif — contrats et invitations existants</strong></summary><p className="muted">Ces tarifs restent utilisés pour les factures en cours. Les nouveaux plans ne remplacent pas encore automatiquement les contrats existants.</p><AgencyRates /></details>
       </>}
