@@ -16,7 +16,7 @@ const Config = z.object({
 const Kind = z.enum(['billing','agent']);
 const Id = z.number().int().positive();
 function needSellerAdmin(ctx: any) {
-  if (ctx.shop?.kind === 'agency' || ctx.shop?.kind === 'marketer' || !ctx.session?.isAdmin) throw forbidden('Réservé à l’administrateur de la boutique');
+  if (ctx.shop?.kind === 'marketer' || !ctx.session?.isAdmin) throw forbidden('Réservé à l’administrateur de la boutique ou de l’agence');
 }
 function validPlan(c: z.infer<typeof Config>) {
   if (c.method === 'percent' && c.rate > 100) throw bad('Le pourcentage ne peut pas dépasser 100');
