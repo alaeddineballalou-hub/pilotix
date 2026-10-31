@@ -18,6 +18,7 @@ import { Card, Empty, ErrorBox, Field, Icon, Kpis, Loading } from '../../ui/kit'
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { UsersPage } from '../admin/Users';
+import { ManagementPlans } from '../admin/ManagementPlans';
 import { KpiBox } from '../dashboard/util';
 import type { PageProps } from '../registry';
 import { BillLines, billOf, BillsList, CountsLine, CountsRow, EndModal, Lead, LinkStatus, monthLabel, MonthPicker, PriceEditor, PriceList, TaskChips, TaskPicker, usePartnerKind, useTp } from './parts';
@@ -657,7 +658,10 @@ export function Facturation(_: PageProps) {
   const total = rows.reduce((s, r) => s + r.bill.total, 0);
   return (
     <div className="agx-page">
-      {!mk && <AgencyRates />}
+      {!mk && <>
+        <ManagementPlans agency initialKind="billing" />
+        <details className="card"><summary><strong>Ancien tarif — contrats et invitations existants</strong></summary><p className="muted">Ces tarifs restent utilisés pour les factures en cours. Les nouveaux plans ne remplacent pas encore automatiquement les contrats existants.</p><AgencyRates /></details>
+      </>}
       <Card title={t('agency.fact.title', { m: monthLabel(month, i18n.language) })} help={tp('fact.help')} actions={<MonthPicker value={month} max={max} onChange={setMonth} />}>
         <Kpis>
           <KpiBox icon="coins" label={t('agency.fact.total')} value={da(total)} sub={t('agency.fact.totalSub', { count: rows.length })} />
@@ -762,7 +766,11 @@ export function Facturation(_: PageProps) {
 // ---------------------------------------------------------------- Utilisateurs
 /** The store's Utilisateurs page, for the agency's people: their roles, and the sellers and products of each one. */
 export function AgencyUsers({ sub, rest }: PageProps) {
-  return <UsersPage sub={sub} rest={rest} agency />;
+  const { session } = useSession();
+  return <div className="agx-page">
+    {session?.isAdmin && <ManagementPlans agency initialKind="agent" />}
+    <UsersPage sub={sub} rest={rest} agency />
+  </div>;
 }
 
 // ---------------------------------------------------------------- Réglages
