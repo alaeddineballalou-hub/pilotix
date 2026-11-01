@@ -89,7 +89,7 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
         <div className="ppm-row"><h2>{editing.id?'Configuration du plan':'Nouveau plan'}</h2>{planLinked&&<span className="ppm-pill">🔒 Plan affecté</span>}</div>
         {planLinked&&<p className="agx-note">Ce plan est déjà associé. Dupliquez-le pour changer les prix : les contrats et opérations antérieurs gardent leurs montants.</p>}
         <div className="ppm-grid">
-          <label className="field"><span className="lab">Nom du plan</span><input disabled={!canEdit} value={editing.name} onChange={e=>setEditing(p=>p?{...p,name:e.target.value}:p)}/></label>
+          <label className="field"><span className="lab">Nom du plan</span><input disabled={!canEdit} maxLength={100} value={editing.name} onChange={e=>setEditing(p=>p?{...p,name:e.target.value}:p)}/></label>
           <label className="field"><span className="lab">Mode de calcul</span><select disabled={!canEdit} value={editing.configuration.method} onChange={e=>patch({method:e.target.value as ManagementPlanConfig['method']})}>
             {MODES.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
           {editing.configuration.method!=='none'&&<label className="field"><span className="lab">Commission principale déclenchée</span><select disabled={!canEdit} value={editing.configuration.trigger} onChange={e=>patch({trigger:e.target.value as 'confirmed'|'delivered'})}>
@@ -162,17 +162,17 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
         <div className="ppm-row"><h2>{bonusEditing.id?'Modifier le bonus':'Créer un bonus'}</h2>{bonusLinked&&<span className="ppm-pill">🔒 Affecté</span>}</div>
         {bonusLinked&&<p className="agx-note">Bonus affecté : dupliquez-le pour modifier les règles sans changer les objectifs historiques.</p>}
         <div className="ppm-grid">
-          <label className="field"><span className="lab">Nom du bonus</span><input disabled={bonusLinked} value={bonusEditing.name} onChange={e=>setBonusEditing(b=>b?{...b,name:e.target.value}:b)}/></label>
+          <label className="field"><span className="lab">Nom du bonus</span><input disabled={bonusLinked} maxLength={100} value={bonusEditing.name} onChange={e=>setBonusEditing(b=>b?{...b,name:e.target.value}:b)}/></label>
           <label className="field"><span className="lab">Destinataire</span><select disabled={bonusLinked} value={bonusEditing.kind} onChange={e=>setBonusEditing(b=>b?{...b,kind:e.target.value as Kind}:b)}>
             <option value="billing">Facturation Seller</option><option value="agent">Agent Pay</option></select></label>
           <label className="field"><span className="lab">Opérations comptabilisées</span><select disabled={bonusLinked} value={bonusEditing.trigger} onChange={e=>setBonusEditing(b=>b?{...b,trigger:e.target.value as 'confirmed'|'delivered'}:b)}>
             <option value="confirmed">Confirmées</option><option value="delivered">Livrées</option></select></label>
-          <label className="field"><span className="lab">Objectif (opérations)</span><input type="number" min={1} disabled={bonusLinked} value={bonusEditing.threshold} onChange={e=>setBonusEditing(b=>b?{...b,threshold:int(e.target.value)}:b)}/></label>
-          <label className="field"><span className="lab">Montant du bonus (DA)</span><input type="number" min={0} disabled={bonusLinked} value={bonusEditing.amount} onChange={e=>setBonusEditing(b=>b?{...b,amount:nn(e.target.value)}:b)}/></label>
+          <label className="field"><span className="lab">Objectif (opérations)</span><input type="number" min={1} max={1000000} disabled={bonusLinked} value={bonusEditing.threshold} onChange={e=>setBonusEditing(b=>b?{...b,threshold:int(e.target.value)}:b)}/></label>
+          <label className="field"><span className="lab">Montant du bonus (DA)</span><input type="number" min={0} max={10000000} disabled={bonusLinked} value={bonusEditing.amount} onChange={e=>setBonusEditing(b=>b?{...b,amount:nn(e.target.value)}:b)}/></label>
         </div>
         <p className="muted">Le bonus est compté une seule fois par destinataire et par mois dès que le seuil est atteint. Un bonus Facturation Seller doit être accepté par le vendeur.</p>
         <div className="row agx-actions">
-          <button className="btn primary" disabled={bonusLinked||saveBonus.isPending||!bonusEditing.name.trim()||bonusEditing.threshold<1} onClick={saveB}>Enregistrer</button>
+          <button className="btn primary" disabled={bonusLinked||saveBonus.isPending||!bonusEditing.name.trim()||bonusEditing.name.length>100||bonusEditing.threshold<1||bonusEditing.threshold>1000000||bonusEditing.amount>10000000} onClick={saveB}>Enregistrer</button>
           <button className="btn" disabled={!bonusEditing.id||cloneBonus.isPending} onClick={()=>cloneBonus.mutate({id:bonusEditing.id!},{onSuccess:()=>setBonusEditing(null)})}>Dupliquer</button>
           <button className="btn" disabled={!bonusEditing.id||bonusLinked||deleteBonus.isPending} onClick={()=>{if(confirm('Supprimer ce bonus non affecté ?'))deleteBonus.mutate({id:bonusEditing.id!},{onSuccess:()=>setBonusEditing(null)})}}>Supprimer</button>
         </div>
@@ -214,7 +214,8 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
   </div>;
 }
 function getPlanError(p:ManagementPlanConfig,name:string) {
-  if(!name.trim())return 'Nom obligatoire';
+  if(!name.trim()||name.length>100)return 'Nom obligatoire (maximum 100 caractères)';
+  if([p.rate,p.monthly,p.upsell.rate,...planPriceBrackets(p).map(t=>t.amount)].some(v=>!Number.isFinite(v)||v<0||v>10000000))return 'Montant invalide (0 à 10 000 000 DA)';
   if(p.method==='percent'&&p.rate>100)return 'Pourcentage supérieur à 100 %';
   if(p.method==='tier'){const err=validatePriceBrackets(planPriceBrackets(p));if(err)return err}
   if(p.upsell.enabled&&['double','qty'].includes(p.upsell.method)&&p.method==='none')return 'Double / QTY nécessite une commission principale';
