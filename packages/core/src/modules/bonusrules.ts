@@ -10,6 +10,13 @@ const Kind=z.enum(['billing','agent']);
 const Trigger=z.enum(['confirmed','delivered']);
 const Target=z.enum(['seller','agent']);
 
+/** Seller-facing summary of accepted and pending independent bonus rules. */
+export async function sellerBonusTerms(t:{shop:(schema:string)=>{query:(sql:string,params?:unknown[])=>Promise<any[]>}},agencySchema:string,linkId:number){
+  const db=t.shop(agencySchema);
+  const current=await db.query("SELECT b.id,b.name,b.trigger,b.threshold,b.amount,a.status FROM management_bonus_assignments a JOIN management_bonus_rules b ON b.id=a.bonus_id WHERE a.target_kind='seller' AND a.target_id=$1 ORDER BY b.name",[linkId]);
+  return current.map(b=>({id:num(b.id),name:String(b.name),trigger:b.trigger as 'confirmed'|'delivered',threshold:num(b.threshold),amount:num(b.amount),status:String(b.status)}));
+}
+
 export const bonusProcs={
   'management.bonuses':proc([],z.object({}),async ctx=>{
     agencyAdmin(ctx);
