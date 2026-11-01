@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { proc, forbidden, bad, notFound } from '../rpc';
-import { DEFAULT_MANAGEMENT_PLAN, simulateManagementPlan } from '@pilotix/shared';
+import { DEFAULT_MANAGEMENT_PLAN, simulateManagementPlan, validatePriceTiers } from '@pilotix/shared';
 
 const Amount = z.number().finite().min(0).max(10_000_000);
 const Pct = z.number().finite().min(0).max(100);
@@ -8,7 +8,7 @@ const Config = z.object({
   method: z.enum(['none','fixed','percent','tier']),
   trigger: z.enum(['confirmed','delivered']),
   rate: Amount,
-  tiers: z.tuple([Amount,Amount,Amount]),
+  tiers: z.array(z.object({from:z.number().int().min(0),to:z.number().int().min(0).nullable(),amount:Amount})).min(1).max(100),
   monthly: Amount,
   bonus: z.object({ enabled:z.boolean(),threshold:z.number().int().min(0).max(1_000_000),amount:Amount }),
   upsell: z.object({ enabled:z.boolean(),method:z.enum(['double','fixed','percent']),rate:Amount,trigger:z.enum(['confirmed','delivered']) }),
@@ -22,15 +22,23 @@ function validPlan(c: z.infer<typeof Config>) {
   if (c.method === 'percent' && c.rate > 100) throw bad('Le pourcentage ne peut pas dépasser 100');
   if (c.upsell.method === 'percent' && c.upsell.rate > 100) throw bad('Le pourcentage upsell ne peut pas dépasser 100');
   if (c.upsell.enabled && c.upsell.method === 'double' && (c.method === 'none' || c.trigger !== 'confirmed')) throw bad('Double confirmation nécessite une commission de confirmation');
+  if(c.method==='tier'){const err=validatePriceTiers(c.tiers);if(err)throw bad(err);}
   // Validate with the same calculator used for the UI simulation.
   simulateManagementPlan(c, {productPrice:16950,operations:1,upsells:1,incrementalValue:1000});
+}
+function normalizeConfig(c: any) {
+  if (Array.isArray(c?.tiers) && c.tiers.every((x:unknown)=>typeof x==='number')) {
+    const values=c.tiers;
+    c={...c,tiers:values.map((amount:number,i:number)=>({from:i===0?0:i===1?10000:20000,to:i===0?9999:i===1?19999:null,amount}))};
+  }
+  return c;
 }
 export const managementPlanProcs = {
   'management.plans': proc([], z.object({}), async ctx => {
     needSellerAdmin(ctx);
     const plans = await ctx.db.query('SELECT id, kind, name, configuration, active FROM management_payment_plans ORDER BY id DESC');
     const assignments = await ctx.db.query('SELECT target_kind, target_id, plan_id FROM management_plan_assignments');
-    return { plans: plans.map(p=>({id:Number(p.id),kind:p.kind,name:p.name,configuration:typeof p.configuration==='string'?JSON.parse(p.configuration):p.configuration,active:p.active})),
+    return { plans: plans.map(p=>({id:Number(p.id),kind:p.kind,name:p.name,configuration:normalizeConfig(typeof p.configuration==='string'?JSON.parse(p.configuration):p.configuration),active:p.active})),
       assignments:assignments.map(a=>({targetKind:a.target_kind as string,targetId:Number(a.target_id),planId:Number(a.plan_id)})) };
   }),
   'management.planSave': proc([], z.object({ id:Id.optional(),kind:Kind,name:z.string().trim().min(1).max(100),configuration:Config }), async (ctx,i) => {
