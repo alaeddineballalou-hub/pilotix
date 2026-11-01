@@ -43,6 +43,7 @@ import { releaseNoStock } from './nostock';
 import { applyTrust, lookAlikeNote, lookAlikeOf } from './trust';
 import { companyLock, pilotMayRun, pilotPick, setPick, type Pick } from './pilot';
 import { apiFees, courierFeesOf, declaredKg, feesByApi, knownKg, ruleFee, weightRuleOf, weightRuleSet, wholeKg } from './courierfees';
+import { assignedProductIds, seesPurchaseCosts } from './productscope';
 
 export const STOPDESK_NOTE = '🏬 Ce client a refusé 2 colis : livraison au bureau (stop-desk) uniquement. Proposez-lui le stop-desk le plus proche.';
 
@@ -1371,7 +1372,7 @@ export async function orderCounts(ctx: Ctx) {
   const sav = num((await ctx.db.query(`SELECT count(*)::int AS n FROM complaints WHERE status IN ('open','progress')`))[0]?.n);
   const uncashed = num((await ctx.db.query(`SELECT count(*)::int AS n FROM sales WHERE follow_status='delivered' AND NOT cashed`))[0]?.n);
   const subs = await ctx.db.query<{ k: string; n: number }>(`SELECT sub_status AS k, count(*)::int AS n FROM sales WHERE sub_status IS NOT NULL GROUP BY 1`);
-  const lowStock = await lowStockCount(ctx.db);
+  const lowStock = seesPurchaseCosts(ctx) ? await lowStockCount(ctx.db) : 0;
   // SAV ticket parcels have their own counts (depot work, on the road, money not yet cashed)
   const tk = (
     await ctx.db.query(
@@ -1456,13 +1457,14 @@ function orderExtraProcs() {
   return {
     /** Everything the order form needs: products (variants, stock, packs, linked), companies, stop desks, settings. */
     'orders.formData': proc(['confirmation', 'suivi', 'depot'], z.object({}), async (ctx) => {
-      const prods = await ctx.db.query('SELECT id, name, sku, price, fixed_price, max_discount, packs, linked, active, is_service, fee_grid, weight_kg FROM products ORDER BY name');
+      const allowed = await assignedProductIds(ctx);
+      const prods = await ctx.db.query(`SELECT id, name, sku, price, fixed_price, max_discount, packs, linked, active, is_service, fee_grid, weight_kg FROM products WHERE archived_at IS NULL${allowed ? ' AND id = ANY($1)' : ''} ORDER BY name`, allowed ? [allowed] : []);
       const vars = await ctx.db.query(
         `SELECT v.id, v.product_id, v.title, v.sku, v.price, v.active,
            coalesce((SELECT sum(s.qty) FROM stock s WHERE s.variant_id = v.id), 0) AS qty,
            coalesce((SELECT sum(i.qty) FROM order_items i JOIN orders o ON o.id = i.order_id
                      WHERE i.variant_id = v.id AND o.conf_status IN ('confirmed','no_stock') AND o.follow_status IN ('to_prepare','prepared')), 0) AS reserved
-         FROM product_variants v ORDER BY v.product_id, v.id`,
+         FROM product_variants v WHERE v.product_id = ANY($1) ORDER BY v.product_id, v.id`, [prods.map((p) => num(p.id))],
       );
       const byP = new Map<number, any[]>();
       for (const v of vars) {
@@ -1473,7 +1475,7 @@ function orderExtraProcs() {
       const parse = (x: any) => (typeof x === 'string' ? JSON.parse(x) : x ?? []);
       const products = prods.map((p: any) => ({
         id: num(p.id), name: p.name, sku: p.sku, price: num(p.price), fixedPrice: !!p.fixed_price, maxDiscount: numOrNull(p.max_discount),
-        packs: parse(p.packs).map((k: any) => ({ qty: num(k.qty), price: num(k.price) })) as { qty: number; price: number }[], linked: ((p.linked ?? []) as unknown[]).map(num), active: !!p.active, isService: !!p.is_service,
+        packs: parse(p.packs).map((k: any) => ({ qty: num(k.qty), price: num(k.price) })) as { qty: number; price: number }[], linked: ((p.linked ?? []) as unknown[]).map(num).filter((id) => allowed === null || allowed.includes(id)), active: !!p.active, isService: !!p.is_service,
         variants: (byP.get(num(p.id)) ?? []) as { id: number; title: string; sku: string; price: number | null; active: boolean; stock: number }[],
       }));
       const companies = (await ctx.db.query('SELECT id, name, kind, active FROM delivery_companies ORDER BY name')).map((c: any) => ({ id: num(c.id), name: c.name, kind: c.kind, active: !!c.active }));

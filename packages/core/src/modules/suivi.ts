@@ -2,7 +2,7 @@
 import type { Order, Page } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
-import { bad, Ctx, notFound, proc, withActionLock } from '../rpc';
+import { bad, Ctx, hasRole, notFound, proc, withActionLock } from '../rpc';
 import { getSetting, setSetting } from '../settings';
 import { addWorkMinutes, workMinutes } from '@pilotix/shared';
 import { getPrefs } from './prefs';
@@ -28,12 +28,15 @@ export const CLAIM_REASONS = ['relivrer', 'late', 'nocall', 'fakedeliv', 'fakere
 export const TREAT_WHAT = ['date', 'adresse', 'injoignable', 'autre'] as const;
 
 const DAY = 86_400_000;
+// The delivery overview includes every active parcel; Alertes remains its strict alert-only subset.
+const IN_DELIVERY = ['shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange'] as const;
+const readQueue = (ctx: Ctx) => hasRole(ctx.session, 'suivi') ? 'follow' as const : 'conf' as const;
 
 /** Filters of each Suivi tab, expressed with the orders list. */
 function tabFilter(tab: SuiviTab, now: number): Partial<ListInput> {
   switch (tab) {
     case 'enlivraison':
-      return { follow: ['out_for_delivery', 'failed'], subStatusNot: 'alert_traitee', sort: 'shipped_at', dir: 'asc' };
+      return { follow: [...IN_DELIVERY], sort: 'shipped_at', dir: 'asc' };
     case 'bloques':
       // the ids come from stuckParcels (see suivi.list)
       return { follow: ['shipped', 'out_for_delivery', 'failed', 'in_exchange'], sort: 'shipped_at', dir: 'asc' };
@@ -175,20 +178,20 @@ export async function suiviCounts(ctx: Ctx) {
   const r = (
     await ctx.db.query(
       `SELECT
-         count(*) FILTER (WHERE follow_status IN ('out_for_delivery','failed') AND COALESCE(sub_status,'') <> 'alert_traitee')::int AS enlivraison,
+         count(*) FILTER (WHERE follow_status IN ('shipped','out_for_delivery','failed','alert','in_exchange'))::int AS enlivraison,
          count(*) FILTER (WHERE follow_status = 'alert')::int AS alertes,
          count(*) FILTER (WHERE sub_status = 'alert_traitee' AND follow_status IN ('out_for_delivery','shipped','failed'))::int AS traites,
          count(*) FILTER (WHERE follow_status = 'delivered' AND delivered_at >= $1)::int AS livres,
          count(*) FILTER (WHERE follow_status = 'returning')::int AS returning,
          count(*) FILTER (WHERE follow_status = 'cancelled' AND sub_status = 'annule_swappe')::int AS swapped
-       FROM sales o WHERE follow_status IS NOT NULL${andSql(queueSql(ctx, 'follow'))}`,
+       FROM sales o WHERE follow_status IS NOT NULL${andSql(queueSql(ctx, readQueue(ctx)))}`,
       [d30],
     )
   )[0];
   // a confirmation agency's agents do not handle the store's claims with its couriers
-  const claims = agencyOf(ctx) !== null ? 0 : num((await ctx.db.query(`SELECT count(*)::int AS n FROM claims WHERE status NOT IN ${CLAIM_DONE}`))[0]?.n);
+  const claims = agencyOf(ctx) !== null || !hasRole(ctx.session, 'suivi') ? 0 : num((await ctx.db.query(`SELECT count(*)::int AS n FROM claims WHERE status NOT IN ${CLAIM_DONE}`))[0]?.n);
   // the manager's red number: alerts nobody called in time
-  const alertIds = (await ctx.db.query(`SELECT o.id FROM orders o WHERE o.follow_status = 'alert'${andSql(queueSql(ctx, 'follow'))}`)).map((x: any) => num(x.id));
+  const alertIds = (await ctx.db.query(`SELECT o.id FROM orders o WHERE o.follow_status = 'alert'${andSql(queueSql(ctx, readQueue(ctx)))}`)).map((x: any) => num(x.id));
   const clocks = await alertClocks(ctx.db, alertIds, ctx.now());
   const lateCall = [...clocks.values()].filter((c) => c.kind === 'call' && c.state === 'late').length;
   const lateSolve = [...clocks.values()].filter((c) => c.kind === 'solve' && c.state === 'late').length;
@@ -681,7 +684,7 @@ export async function stuckParcels(ctx: Ctx, ids?: number[]): Promise<Map<number
        EXISTS (SELECT 1 FROM claims c WHERE c.order_id = o.id AND c.status NOT IN ${CLAIM_DONE} AND c.created_at >= ${LAST_MOVE}) AS claimed
        FROM orders o LEFT JOIN delivery_companies co ON co.id = o.company_id
       WHERE o.follow_status = ANY($1) AND o.shipped_at IS NOT NULL AND ${LAST_MOVE} < now() - make_interval(days => $2)
-        ${ids ? 'AND o.id = ANY($3)' : ''}${andSql(queueSql(ctx, 'follow'))}`,
+        ${ids ? 'AND o.id = ANY($3)' : ''}${andSql(queueSql(ctx, readQueue(ctx)))}`,
     ids ? [ROAD, days, ids] : [ROAD, days],
   );
   const out = new Map<number, StuckInfo>();
@@ -726,12 +729,12 @@ async function notLockedByOther(ctx: Ctx, oid: number) {
 }
 
 export const suiviProcs = {
-  'suivi.counts': proc(['suivi'], z.object({}), (ctx) => suiviCounts(ctx)),
+  'suivi.counts': proc(['suivi', 'confirmation'], z.object({}), (ctx) => suiviCounts(ctx)),
 
-  'suivi.list': proc(['suivi'], ListSuivi, async (ctx, i) => {
+  'suivi.list': proc(['suivi', 'confirmation'], ListSuivi, async (ctx, i) => {
     const stuck = i.tab === 'bloques' ? await stuckParcels(ctx) : null;
     if (stuck && !stuck.size) return { rows: [], total: 0, page: 1, pageSize: i.pageSize ?? 50, extra: {} };
-    const page = await listOrders(ctx, ListInput.parse({ ...tabFilter(i.tab, ctx.now()), ...(stuck ? { ids: [...stuck.keys()].slice(0, 500) } : {}), q: i.q, page: i.page, pageSize: i.pageSize }), { queue: 'follow' });
+    const page = await listOrders(ctx, ListInput.parse({ ...tabFilter(i.tab, ctx.now()), ...(stuck ? { ids: [...stuck.keys()].slice(0, 500) } : {}), q: i.q, page: i.page, pageSize: i.pageSize }), { queue: readQueue(ctx) });
     if (stuck) {
       const ex = await extras(ctx.db, page.rows, ctx.now());
       for (const o of page.rows) if (ex[o.id]) ex[o.id].stuck = stuck.get(o.id) ?? null;

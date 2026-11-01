@@ -5,6 +5,7 @@ import { agencyGate, sellerProcsOf } from './modules/agencyscope';
 import { syncAgency } from './modules/agencies';
 import { sellerCall } from './modules/agencywork';
 import { stopAgentPlan } from './modules/planledger';
+import { requireAssignedProducts, seesPurchaseCosts, withoutPurchaseCosts } from './modules/productscope';
 
 export * from './db';
 export * from './rpc';
@@ -42,7 +43,14 @@ export { pilotOn } from './modules/dellal';
 /** A partner's team changed (a person closed, given other roles): its people's accounts in the stores follow. */
 const AGENCY_TEAM = new Set(['users.create', 'users.update', 'admin.users.resetPassword', 'me.delete']);
 
-const run = (ctx: Ctx, name: string, input: unknown) => dispatch(REGISTRY as unknown as Record<string, Procedure>, name, ctx, input, agencyGate);
+const run = async (ctx: Ctx, name: string, input: unknown) => {
+  const out = await dispatch(REGISTRY as unknown as Record<string, Procedure>, name, ctx, input, async (n, c, i: any) => {
+    await agencyGate(n, c, i);
+    if (['orders.quote', 'orders.create', 'orders.update'].includes(n) && i.items?.length)
+      await requireAssignedProducts(c, i.items.map((l: any) => l.productId));
+  });
+  return seesPurchaseCosts(ctx) ? out : withoutPurchaseCosts(out);
+};
 
 /** Runs one named action for the logged-in user, with role checks, input validation and the agencies' limits. */
 export async function call(name: string, ctx: Ctx, input: unknown) {

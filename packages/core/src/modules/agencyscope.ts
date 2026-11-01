@@ -157,6 +157,7 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'confirmation.counts': free,
   'confirmation.list': free,
   'confirmation.catalog': free,
+  'catalog.assigned': free,
   'confirmation.deskOptions': free,
   'confirmation.mine': free,
   'confirmation.banner': free,

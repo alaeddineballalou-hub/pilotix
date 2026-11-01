@@ -15,7 +15,7 @@
   "syncFail": "Mise à jour impossible : {{msg}}",
   "syncProblems": "{{count}} problème(s) avec les sociétés : {{list}}",
   "kpiSub": {
-    "enlivraison": "chez le livreur",
+    "enlivraison": "tous les colis en cours",
     "alertes": "à traiter",
     "traites": "en route après l’alerte",
     "livres": "30 derniers jours",
@@ -23,7 +23,7 @@
     "bloques": "sans nouvelles"
   },
   "help": {
-    "enlivraison": "Colis sortis pour être livrés, et ceux dont une tentative a échoué. Un statut choisi dans Préférences › Alertes du Suivi les envoie dans Alertes. « Alerter » le fait à la main.",
+    "enlivraison": "Tous les colis en cours de livraison, y compris les alertes et les alertes traitées. L’onglet Alertes affiche uniquement les colis en alerte.",
     "alertes": "Colis signalés par la société de livraison ou le livreur (les statuts choisis dans Préférences › Alertes du Suivi). Appelez le client, puis « Traiter » ou « Client annule ».",
     "traites": "Alertes déjà traitées : le colis est reparti. Il sort d’ici quand il est livré ou annulé.",
     "livres": "Colis livrés ces 30 derniers jours.",
@@ -37,7 +37,8 @@
     "livres": "Aucun colis livré ces 30 derniers jours.",
     "annules": "Aucun colis annulé en retour.",
     "swap": "Aucun colis annulé chez ZR ou un livreur pour le moment.",
-    "bloques": "Aucun colis bloqué 👍"
+    "bloques": "Aucun colis bloqué 👍",
+    "enlivraison": "Aucun colis en cours de livraison."
   },
   "parcels": "{{count}} colis",
   "toSwap": "Colis à swapper",

@@ -49,6 +49,7 @@ export const AGENCY_PAGES: Record<string, ComponentType<PageProps>> = {
   accueil: P(() => import('./agency'), 'AgencyHome'),
   confirmation: P(() => import('./agency/work'), 'AgencyConfirmation'),
   suivi: P(() => import('./agency/work'), 'AgencySuivi'),
+  produits: P(() => import('./depot/AssignedCatalog'), 'AgencyProducts'),
   vendeurs: P(() => import('./agency'), 'Vendeurs'),
   facturation: P(() => import('./agency'), 'Facturation'),
   utilisateurs: P(() => import('./agency'), 'AgencyUsers'),

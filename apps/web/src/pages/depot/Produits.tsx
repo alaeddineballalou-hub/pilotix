@@ -21,12 +21,18 @@ import { ProductForm } from './ProductForm';
 import { AlertDialog, MoveDialog, TransferDialog } from './StockDialogs';
 import { bidi, Delta, DepotSelect, LevelBar, matches, nameOf, RowMenu, StockRowT, Toolbar, useDepots } from './stockui';
 import './produits.css';
+import { AssignedCatalog } from './AssignedCatalog';
 
 const TABS = ['stock', 'inventaire', 'produits', 'mouvements', 'alertes', 'achats', 'depots'] as const;
 type Tab = (typeof TABS)[number];
 const ICONS: Record<Tab, string> = { stock: 'package', inventaire: 'clipboard', produits: 'tag', mouvements: 'swap', alertes: 'alert', achats: 'receipt', depots: 'building' };
 
-export function Produits({ sub, rest }: PageProps) {
+export function Produits(props: PageProps) {
+  const { session, has } = useSession();
+  return !session?.profile.agencyId && has('depot') ? <DepotProduits {...props} /> : <AssignedCatalog {...props} />;
+}
+
+function DepotProduits({ sub, rest }: PageProps) {
   const { t } = useTranslation();
   // the former « Prix » tab lives in Produits now
   const tab: Tab = sub === 'prix' ? 'produits' : (TABS as readonly string[]).includes(sub ?? '') ? (sub as Tab) : 'stock';

@@ -352,6 +352,22 @@ test('an agency works on several sellers: one at a time or all together, its peo
   assert.deepEqual([two.total, two.rows.map((o: any) => o.id)], [4, [cb.id, vb.id]]);
   assert.equal(((await call('confirmation.counts', await ctxOf('ali@centre.dz', 'all'), {})) as any).nouvelles, 4);
   assert.equal(((await call('orders.counts', await ctxOf('ali@centre.dz', 'all'), {})) as any).all, 4);
+  // The working catalog follows each person's products and sellers, even when ids repeat across tenants.
+  const noraCatalog: any = await call('catalog.assigned', await ctxOf('nora@centre.dz', 'all'), {});
+  assert.deepEqual(noraCatalog.rows.map((r: any) => [r.seller.id, r.id]), [[a.id, a.products.VELO]]);
+  const combinedCatalog: any = await call('catalog.assigned', { ...chief, seller: 'all' }, { pageSize: 2, page: 2 });
+  assert.equal(combinedCatalog.total, 5);
+  assert.equal(combinedCatalog.rows.length, 2);
+  assert.ok(combinedCatalog.rows.every((r: any) => !('cost' in r) && !('reserved' in r)));
+  await assert.rejects(call('catalog.assigned', await ctxOf('nora@centre.dz', b.id), {}), /ne travaillez pas pour ce vendeur/);
+  // Confirmation-only people can read delivery progress for the orders they confirm.
+  await a.db.query("UPDATE orders SET follow_status='shipped', shipped_at=now() WHERE id=$1", [va.id]);
+  const road: any = await call('suivi.list', await ctxOf('nora@centre.dz', 'all'), { tab: 'enlivraison' });
+  assert.deepEqual(road.rows.map((r: any) => [r.seller.id, r.id]), [[a.id, va.id]]);
+  assert.equal(((await call('suivi.counts', await ctxOf('nora@centre.dz', 'all'), {})) as any).enlivraison, 1);
+  assert.equal(((await call('suivi.list', await ctxOf('nora@centre.dz', 'all'), { tab: 'alertes' })) as any).total, 0);
+  await assert.rejects(call('suivi.act', await ctxOf('nora@centre.dz', a.id), { id: va.id, action: 'realert' }), /Accès refusé/);
+  await a.db.query('UPDATE orders SET follow_status=NULL, shipped_at=NULL WHERE id=$1', [va.id]);
   // « Commande suivante » over every seller: the customer who waits the most first, then the next one elsewhere
   const ali = await ctxOf('ali@centre.dz', 'all');
   const n1: any = await call('orders.next', ali, {});
@@ -387,4 +403,12 @@ test('an agency works on several sellers: one at a time or all together, its peo
     ['Sport Shop', 0, 0, null],
   ]);
   await assert.rejects(call('agency.billing', await ctxOf('ali@centre.dz'), {}), /Accès refusé/);
+  // A merged page after the seller's 500-row limit must still contain all its parcels.
+  await a.db.query(`INSERT INTO orders (ref, customer_id, customer_name, phone, wilaya_id, conf_status, follow_status, conf_agency_id, route_product_id, shipped_at)
+    SELECT 'PAGE' || n::text, o.customer_id, o.customer_name, o.phone, o.wilaya_id, 'new', 'shipped', $2, $3, now() + n * interval '1 second'
+    FROM orders o CROSS JOIN generate_series(1,505) n WHERE o.id=$1`, [pa.id, ag.id, a.products.POUS]);
+  const finalPage: any = await call('suivi.list', { ...chief, seller: 'all' }, { tab: 'enlivraison', page: 6, pageSize: 100 });
+  assert.equal(finalPage.total, 505); assert.equal(finalPage.rows.length, 5);
+  assert.equal(finalPage.rows[0].ref, 'PAGE501');
+  await assert.rejects(call('suivi.list', { ...chief, seller: 'all' }, { tab: 'enlivraison', page: -1 }), /Pagination invalide/);
 });

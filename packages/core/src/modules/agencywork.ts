@@ -111,6 +111,7 @@ const CONF_KEY: Record<string, Key> = {
   customer_name: (r) => (r.customerName ? String(r.customerName).toLowerCase() : null),
 };
 const SUIVI_SORT: Record<string, { key: Key; dir: 'asc' | 'desc' }> = {
+  enlivraison: { key: (r) => r.shippedAt ?? null, dir: 'asc' },
   alertes: { key: (r) => r.updatedAt ?? null, dir: 'asc' },
   traites: { key: (r) => r.updatedAt ?? null, dir: 'desc' },
   livres: { key: (r) => r.deliveredAt ?? null, dir: 'desc' },
@@ -122,6 +123,8 @@ const SUIVI_SORT: Record<string, { key: Key; dir: 'asc' | 'desc' }> = {
 interface Fan {
   /** what each store is asked (a list: its first rows, up to the page asked) */
   input?: (i: any) => any;
+  /** Read enough pages from each seller for the requested merged page, even beyond its API page limit. */
+  paged?: { defaultSize: number };
   merge: (parts: Part[], i: any) => any;
 }
 const sum: Fan = { merge: (parts) => sumDeep(parts.map((p) => p.out)) };
@@ -148,6 +151,11 @@ const mkAll: Fan = {
 };
 
 const FANOUT: Record<string, Fan> = {
+  'catalog.assigned': {
+    paged: { defaultSize: 50 },
+    input: (i) => ({ ...i, page: 1, pageSize: Math.min(3000, (i?.page ?? 1) * (i?.pageSize ?? 50)) }),
+    merge: (parts, i) => mergeRows(parts, (r) => String(r.name).toLowerCase(), 'asc', i?.page ?? 1, i?.pageSize ?? 50),
+  },
   'orders.counts': sum,
   'confirmation.counts': sum,
   'confirmation.mine': sum,
@@ -165,6 +173,7 @@ const FANOUT: Record<string, Fan> = {
     },
   },
   'suivi.list': {
+    paged: { defaultSize: 300 },
     input: (i) => ({ ...i, page: 1, pageSize: Math.min(500, (i?.page ?? 1) * (i?.pageSize ?? 300)) }),
     merge: (parts, i) => {
       const o = SUIVI_SORT[i?.tab] ?? SUIVI_SORT.alertes;
@@ -193,9 +202,25 @@ export async function sellerCall(name: string, ctx: Ctx, input: unknown, run: Ru
   if (name === 'orders.next') return nextAll(ctx, input, run);
   const fan = FANOUT[name];
   if (!fan) throw bad('Choisissez un vendeur en haut de la page pour cette action');
+  if (fan.paged && !z.object({ page: z.number().int().positive().optional(), pageSize: z.number().int().positive().max(name === 'catalog.assigned' ? 3000 : 500).optional() }).safeParse(input ?? {}).success)
+    throw bad('Pagination invalide');
   const work = await sellerWork(ctx);
   const asked = fan.input ? fan.input(input) : input;
-  const done = await Promise.allSettled(work.map(async (w) => ({ seller: sellerOf(w.L), out: await run(await storeCtx(ctx, w), name, asked) })));
+  const done = await Promise.allSettled(work.map(async (w) => {
+    const sc = await storeCtx(ctx, w);
+    let out: any = await run(sc, name, asked);
+    if (fan.paged) {
+      const raw = input as any;
+      const wanted = (raw?.page ?? 1) * (raw?.pageSize ?? fan.paged.defaultSize);
+      let nextPage = 2;
+      while (out.rows.length < Math.min(wanted, out.total)) {
+        const more: any = await run(sc, name, { ...(asked as any), page: nextPage++ });
+        if (!more.rows.length) break;
+        out = { ...out, rows: [...out.rows, ...more.rows], extra: { ...out.extra, ...more.extra } };
+      }
+    }
+    return { seller: sellerOf(w.L), out };
+  }));
   const parts = done.flatMap((d) => (d.status === 'fulfilled' ? [d.value] : []));
   // a store that cannot answer (locked, a task it does not give) is left out; all of them: the first reason
   if (!parts.length && done.length) throw (done[0] as PromiseRejectedResult).reason;

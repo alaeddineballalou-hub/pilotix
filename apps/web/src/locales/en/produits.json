@@ -536,5 +536,12 @@
       "weightKg": "Weight (kg)",
       "maxDiscount": "Max discount"
     }
+  },
+  "assigned": {
+    "about": "View your assigned products and their availability.",
+    "search": "Search for a product or variant…",
+    "empty": "No assigned products or no matching results.",
+    "off": "Unavailable",
+    "available": "Available"
   }
 }

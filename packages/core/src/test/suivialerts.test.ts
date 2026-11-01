@@ -56,17 +56,20 @@ test('what the livreur says sends the parcel to Alertes, or not, as the Préfér
   await call('prefs.set', admin, base);
 });
 
-test('Suivi › En livraison: the parcels on the road, without the treated alerts; counted', async () => {
+test('Suivi › En livraison includes treated alerts; Alertes contains alerts only; counts agree', async () => {
   const a = await onRoad();
   const b = await onRoad();
   await db.query(`UPDATE orders SET sub_status = 'alert_traitee' WHERE id = $1`, [b]);
   const suivi = await as(EMAILS.suivi);
   const r = (await call('suivi.list', suivi, { tab: 'enlivraison', pageSize: 500 })) as any;
   const ids = r.rows.map((o: any) => o.id);
-  assert.ok(ids.includes(a) && !ids.includes(b));
-  assert.ok(r.rows.every((o: any) => ['out_for_delivery', 'failed'].includes(o.followStatus)));
+  assert.ok(ids.includes(a) && ids.includes(b));
+  assert.ok(r.rows.every((o: any) => ['shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange'].includes(o.followStatus)));
   const c = (await call('suivi.counts', suivi, {})) as any;
-  assert.ok(c.enlivraison >= 1);
+  assert.equal(c.enlivraison, r.total);
+  const alerts = await call('suivi.list', suivi, { tab: 'alertes', pageSize: 500 }) as any;
+  assert.ok(alerts.rows.every((o: any) => o.followStatus === 'alert'));
+  assert.equal(alerts.total, c.alertes);
 });
 
 test('each delivery company: its statuses that send a parcel to Alertes are ticked; changed, the others stay', async () => {

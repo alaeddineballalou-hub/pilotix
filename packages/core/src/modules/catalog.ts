@@ -13,6 +13,7 @@ import { blockedByAlert } from './depotalerts';
 import { atIn, confIn, dayIn, followIn, ScanLang, scanT } from './scantext';
 import { checkDispatch, dispatchOrders } from './dispatch';
 import { getPrefs } from './prefs';
+import { assignedProductIds } from './productscope';
 
 // ---------------------------------------------------------------- types
 export interface CatalogVariant {
@@ -888,12 +889,39 @@ const DEPOT = ['depot'] as const;
 export const catalogProcs = {
   'catalog.ping': proc(null, z.object({}), async () => ({ ok: true })),
 
-  'catalog.warehouses': proc(null, z.object({ all: z.boolean().default(false) }), async (ctx, i): Promise<Warehouse[]> => {
+  'catalog.warehouses': proc([...DEPOT], z.object({ all: z.boolean().default(false) }), async (ctx, i): Promise<Warehouse[]> => {
     const rows = await ctx.db.query(`SELECT * FROM warehouses ${i.all ? 'WHERE archived_at IS NULL' : 'WHERE active'} ORDER BY is_default DESC, id`);
     return rows.map((r: any) => ({ id: num(r.id), name: r.name, wilayaId: num(r.wilaya_id), commune: r.commune, address: r.address, isDefault: !!r.is_default, active: !!r.active }));
   }),
 
   'catalog.products': proc([...DEPOT], z.object({ q: z.string().max(100).optional(), activeOnly: z.boolean().default(false) }), (ctx, i) => listProducts(ctx.db, i)),
+
+  /** Read-only working catalog. No costs, physical totals, reservations, depots or movements. */
+  'catalog.assigned': proc(['confirmation', 'suivi'], z.object({ q: z.string().max(100).default(''), page: id.default(1), pageSize: id.max(3000).default(50) }), async (ctx, i) => {
+    const allowed = await assignedProductIds(ctx);
+    const w = new Where();
+    w.add('p.archived_at IS NULL');
+    if (allowed) w.add('p.id = ANY(?)', allowed);
+    if (i.q.trim()) w.add(`(p.name ILIKE '%' || ? || '%' OR p.sku ILIKE '%' || ? || '%' OR EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND (v.title ILIKE '%' || ? || '%' OR v.sku ILIKE '%' || ? || '%')))`, i.q.trim(), i.q.trim(), i.q.trim(), i.q.trim());
+    const total = num((await ctx.db.query(`SELECT count(*)::int AS n FROM products p ${w.sql}`, w.params))[0]?.n);
+    const limit = w.p(i.pageSize), offset = w.p((i.page - 1) * i.pageSize);
+    const products = await ctx.db.query(`SELECT p.id, p.name, p.sku, p.price, p.photo, p.description, p.active, p.is_service FROM products p ${w.sql} ORDER BY lower(p.name), p.id LIMIT ${limit} OFFSET ${offset}`, w.params);
+    const variants = products.length ? await ctx.db.query(
+      `WITH r AS (${RESERVED}) SELECT v.id, v.product_id, v.title, v.sku, v.price, v.photo, v.active,
+       GREATEST(0, COALESCE((SELECT sum(s.qty) FROM stock s JOIN warehouses wh ON wh.id=s.warehouse_id WHERE s.variant_id=v.id AND wh.active),0)
+         - COALESCE((SELECT sum(r.n) FROM r JOIN warehouses wh ON wh.id=r.wid WHERE r.variant_id=v.id AND wh.active),0))::int AS available
+       FROM product_variants v WHERE v.product_id = ANY($1) ORDER BY v.id`, [products.map((p) => num(p.id))],
+    ) : [];
+    return { total, page: i.page, pageSize: i.pageSize, rows: products.map((p) => ({
+      id: num(p.id), name: String(p.name), sku: String(p.sku), price: num(p.price), photo: p.photo as string | null,
+      description: p.description as string | null, active: !!p.active, isService: !!p.is_service,
+      seller: null as { id: number; name: string } | null,
+      variants: variants.filter((v) => num(v.product_id) === num(p.id)).map((v) => ({
+        id: num(v.id), title: String(v.title), sku: String(v.sku), price: numOrNull(v.price) ?? num(p.price),
+        photo: v.photo as string | null, active: !!p.active && !!v.active, available: p.is_service ? null : p.active && v.active ? num(v.available) : 0,
+      })),
+    })) };
+  }),
 
   'catalog.product': proc([...DEPOT], z.object({ id }), async (ctx, { id }) => {
     const p = (await listProducts(ctx.db, { ids: [id] }))[0];
@@ -1009,7 +1037,9 @@ export const catalogProcs = {
 
   /** Product picker of the order forms: active products with variants, packs, linked products and available stock. */
   'catalog.search': proc(null, z.object({ q: z.string().max(100).default(''), ids: z.array(id).max(100).optional(), limit: z.number().int().min(1).max(100).default(30) }), async (ctx, i) => {
-    const prods = (await listProducts(ctx.db, { q: i.q, ids: i.ids, activeOnly: !i.ids })).slice(0, i.limit);
+    const allowed = await assignedProductIds(ctx);
+    const ids = allowed === null ? i.ids : i.ids ? i.ids.filter((p) => allowed.includes(p)) : allowed;
+    const prods = (await listProducts(ctx.db, { q: i.q, ids, activeOnly: !i.ids })).slice(0, i.limit);
     if (!prods.length) return [];
     const vids = prods.flatMap((p) => p.variants.map((v) => v.id));
     const st = await ctx.db.query(
@@ -1022,6 +1052,8 @@ export const catalogProcs = {
     const seeCost = ctx.session.isAdmin || hasRole(ctx.session, 'depot', 'vendeur');
     return prods.map((p) => ({
       ...p,
+      linked: allowed === null ? p.linked : p.linked.filter((id) => allowed.includes(id)),
+      services: allowed === null ? p.services : p.services.filter((s) => allowed.includes(s.id)),
       cost: seeCost ? p.cost : 0,
       variants: p.variants
         .filter((v) => v.active || i.ids)
