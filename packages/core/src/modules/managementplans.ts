@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { proc, forbidden, bad, notFound } from '../rpc';
-import { simulateManagementPlan } from '@pilotix/shared';
+import { simulateManagementPlan, validatePriceBrackets } from '@pilotix/shared';
 
 import { agencyAdmin, agencyPayroll, billingTargets, json, period, proposeBilling } from './planledger';
 
@@ -12,6 +12,7 @@ const Config = z.object({
   rate: Amount,
   tiers: z.tuple([Amount,Amount,Amount]),
   thresholds: z.tuple([Amount,Amount]).optional(),
+  ranges: z.array(z.object({from:z.number().int().min(0),to:z.number().int().min(0).nullable(),amount:Amount})).min(1).max(100).optional(),
   monthly: Amount,
   bonus: z.object({ enabled:z.boolean(),threshold:z.number().int().min(0).max(1_000_000),amount:Amount }),
   upsell: z.object({ enabled:z.boolean(),method:z.enum(['double','fixed','percent']),rate:Amount,trigger:z.enum(['confirmed','delivered']) }),
@@ -25,6 +26,7 @@ function validPlan(c: z.infer<typeof Config>) {
   if (c.method === 'percent' && c.rate > 100) throw bad('Le pourcentage ne peut pas dépasser 100');
   if (c.upsell.method === 'percent' && c.upsell.rate > 100) throw bad('Le pourcentage upsell ne peut pas dépasser 100');
   if (c.upsell.enabled && c.upsell.method === 'double' && (c.method === 'none' || c.trigger !== 'confirmed')) throw bad('Double confirmation nécessite une commission de confirmation');
+  if(c.method==='tier'&&c.ranges){const err=validatePriceBrackets(c.ranges);if(err)throw bad(err);}
   // Validate with the same calculator used for the UI simulation.
   try { simulateManagementPlan(c, {productPrice:16950,operations:1,upsells:1,incrementalValue:1000}); }
   catch(e) { throw bad(e instanceof Error?e.message:'Configuration invalide'); }
