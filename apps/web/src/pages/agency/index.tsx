@@ -90,9 +90,27 @@ function HomeBody() {
           </Kpis>
         )}
       </section>
+      {!s.isAdmin&&<MyAgentBonuses />}
       {s.isAdmin && <ChiefMonth />}
     </div>
   );
+}
+
+/** Agent-visible offers; read-only, strictly scoped to the current agency profile. */
+function MyAgentBonuses(){
+  const q=useRpc('management.myBonuses',{}, {refetchInterval:15000});
+  return <section className="card ppm-panel" aria-label="Mes bonus">
+    <div className="ppm-row"><div><h2>Mes bonus</h2><p className="muted">Primes offertes par l'agence · sur les opérations à venir</p></div>
+      <span className="ppm-pill clear">Agent Pay</span></div>
+    {q.isLoading&&<p className="muted">Chargement des bonus…</p>}
+    {q.error&&<p className="form-err" role="alert">{q.error.message}</p>}
+    {q.data?.bonuses.length===0&&<p className="agx-note">Aucun bonus actif. Les nouveaux bonus apparaîtront ici après affectation par l'agence.</p>}
+    <div className="ppm-cards">{q.data?.bonuses.map(b=><div key={b.id} className="ppm-plan-card">
+      <b>{b.name}</b><strong>{Math.round(b.amount).toLocaleString('fr-FR')} DA</strong>
+      <small>Objectif : {b.threshold} commandes {b.trigger==='confirmed'?'confirmées':'livrées'}</small>
+      <span className="ppm-pill clear">Bonus affecté</span>
+    </div>)}</div>
+  </section>;
 }
 
 /** The chief: Pilotix's check (and what is left to do before it), the agency's code, the sellers who asked. */
