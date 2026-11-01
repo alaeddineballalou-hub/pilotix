@@ -38,8 +38,12 @@ test('V2 agency billing, agent payroll and separately accepted bonuses use real 
   const original=(await seller.db.query('SELECT orig_items FROM orders WHERE id=$1',[order.id]))[0].orig_items;
   assert.equal(Number((typeof original==='string'?JSON.parse(original):original)[0].qty),5);
   await seller.db.query('UPDATE order_items SET qty=7 WHERE order_id=$1',[order.id]);
-  await seller.db.query("UPDATE orders SET conf_status='confirmed',confirmed_at=$2,agent_id=$3,conf_agency_id=$4,follow_status='delivered',delivered_at=$5,follow_agent_id=$3,follow_agency_id=$4,upsell_value=20000,has_upsell=true WHERE id=$1",[order.id,new Date(clock+1000).toISOString(),mapped,agency.id,new Date(clock+2000).toISOString()]);
-  clock+=3000;
+  await seller.db.query("UPDATE orders SET conf_status='confirmed',confirmed_at=$2,agent_id=$3,conf_agency_id=$4,follow_status='to_prepare',upsell_value=20000,has_upsell=true WHERE id=$1",[order.id,new Date(clock+1000).toISOString(),mapped,agency.id]);
+  clock+=1500;
+  assert.equal((await rpc(seller,'partners.link',{id:link.id})).bill.total,100,'confirmation only earns base 100 even after qty increased');
+  assert.equal((await rpc(chief,'management.payroll',{month:ym(clock)})).total,100,'no upsell prime before delivery');
+  await seller.db.query("UPDATE orders SET follow_status='delivered',delivered_at=$2,follow_agent_id=$3,follow_agency_id=$4 WHERE id=$1",[order.id,new Date(clock+1000).toISOString(),mapped,agency.id]);
+  clock+=1500;
   const beforeBill=(await rpc(seller,'partners.link',{id:link.id})).bill;
   assert.equal(beforeBill.total,300,'5 -> 7 units: one normal 100 DA and two extra at 100 DA');
   assert.equal((await rpc(chief,'management.payroll',{month:ym(clock)})).total,300);
