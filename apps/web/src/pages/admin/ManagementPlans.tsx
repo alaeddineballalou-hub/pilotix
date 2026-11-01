@@ -56,8 +56,19 @@ export function ManagementPlans({ agency = false, initialKind = 'billing' }: { a
         {(p.method==='fixed'||p.method==='percent')&&<label className="field"><span className="lab">{p.method==='fixed'?'Tarif (DA)':'Pourcentage (%)'}</span><input style={FIELD} type="number" min={0} max={p.method==='percent'?100:10000000} value={p.rate} onChange={e=>change({rate:number(e.target.value)})}/></label>}
         <label className="field"><span className="lab">{kind==='agent'?'Salaire mensuel (DA)':'Forfait mensuel client (DA)'}</span><input style={FIELD} type="number" min={0} value={p.monthly} onChange={e=>change({monthly:number(e.target.value)})}/></label>
       </div>
-      {p.method==='tier'&&<fieldset className="agx-bonus"><legend>Tranches du prix produit</legend><div className="agx-pe-grid">{['0–9 999 DA','10 000–19 999 DA','20 000+ DA'].map((title,i)=><label key={i} className="field"><span className="lab">{title}</span><input style={FIELD} type="number" min={0} value={p.tiers[i]} onChange={e=>change({tiers:p.tiers.map((x,j)=>j===i?number(e.target.value):x) as [number,number,number]})}/></label>)}</div></fieldset>}
-      <fieldset className="agx-bonus"><legend><label><input type="checkbox" checked={p.bonus.enabled} onChange={e=>change({bonus:{...p.bonus,enabled:e.target.checked}})}/> Bonus optionnel</label></legend>
+      {p.method==='tier'&&<fieldset className="agx-bonus"><legend>Tranches du prix produit</legend>
+        <p className="muted small">Modifiez les limites et les tarifs. Les tranches doivent se suivre sans chevauchement ni trou. La dernière reste sans limite.</p>
+        <div style={{display:'grid',gap:10}}>
+        {p.tiers.map((t,i)=><div key={i} style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'end'}}>
+          <label className="field" style={{flex:'1 1 100px'}}><span className="lab">De (DA)</span><input type="number" min={0} step={1} value={t.from} onChange={e=>change({tiers:p.tiers.map((x,j)=>j===i?{...x,from:number(e.target.value)}:x)})}/></label>
+          <label className="field" style={{flex:'1 1 100px'}}><span className="lab">À (DA)</span><input type="number" min={t.from} step={1} placeholder="Sans limite" disabled={i===p.tiers.length-1} value={t.to===null?'':t.to} onChange={e=>change({tiers:p.tiers.map((x,j)=>j===i?{...x,to:e.target.value===''?null:number(e.target.value)}:x)})}/></label>
+          <label className="field" style={{flex:'1 1 100px'}}><span className="lab">Tarif (DA)</span><input type="number" min={0} value={t.amount} onChange={e=>change({tiers:p.tiers.map((x,j)=>j===i?{...x,amount:number(e.target.value)}:x)})}/></label>
+          <button type="button" className="btn" disabled={p.tiers.length===1} onClick={()=>change({tiers:p.tiers.filter((_,j)=>j!==i).map((x,j,a)=>j===a.length-1?{...x,to:null}:x)})}>Supprimer</button>
+        </div>)}
+        </div>
+        <button type="button" className="btn" disabled={p.tiers.length>=100} onClick={()=>{const prev=p.tiers[p.tiers.length-1];const from=prev.from+10000;change({tiers:[...p.tiers.slice(0,-1),{...prev,to:from-1},{from,to:null,amount:0}]})}}>+ Ajouter une tranche</button>
+      </fieldset>}
+            <fieldset className="agx-bonus"><legend><label><input type="checkbox" checked={p.bonus.enabled} onChange={e=>change({bonus:{...p.bonus,enabled:e.target.checked}})}/> Bonus optionnel</label></legend>
         {p.bonus.enabled&&<div className="agx-pe-grid"><label className="field"><span className="lab">Objectif : nombre d'opérations</span><input type="number" min={0} value={p.bonus.threshold} onChange={e=>change({bonus:{...p.bonus,threshold:number(e.target.value)}})}/></label><label className="field"><span className="lab">Prime unique (DA)</span><input type="number" min={0} value={p.bonus.amount} onChange={e=>change({bonus:{...p.bonus,amount:number(e.target.value)}})}/></label></div>}
       </fieldset>
       <fieldset className="agx-bonus"><legend><label><input type="checkbox" checked={p.upsell.enabled} onChange={e=>change({upsell:{...p.upsell,enabled:e.target.checked}})}/> Upsell optionnel</label></legend>
