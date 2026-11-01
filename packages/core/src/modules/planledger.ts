@@ -27,27 +27,48 @@ function chosen(terms:Term[], target:number, at:string):Term|undefined {
 }
 const cutoff = (to:string, now:number) => new Date(Math.min(Date.parse(to)-1,now)).toISOString();
 function inRange(at:any, from:string, to:string) { return !!at && iso(at)>=from && iso(at)<to; }
-interface Operation { price:number; product:number; upsell:number; confirmed:string|null; delivered:string|null; row:any; }
+interface Operation { price:number; product:number; upsell:number; originalQty:number; deliveredQty:number; confirmed:string|null; delivered:string|null; row:any; }
 async function operations(db:Db, agency:number, from:string, to:string):Promise<Operation[]> {
-  const rows=await db.query(`SELECT o.*, (SELECT unit_price FROM order_items WHERE order_id=o.id ORDER BY id LIMIT 1) AS first_price,
-    (SELECT product_id FROM order_items WHERE order_id=o.id ORDER BY id LIMIT 1) AS first_product
+  const rows=await db.query(`SELECT o.*,
+    (SELECT jsonb_agg(jsonb_build_object('productId',i.product_id,'variantId',i.variant_id,'qty',i.qty,'unitPrice',i.unit_price,'isUpsell',i.is_upsell) ORDER BY i.id)
+       FROM order_items i WHERE i.order_id=o.id) AS live_items
     FROM sales o WHERE (o.conf_agency_id=$1 OR o.follow_agency_id=$1)
     AND ((o.confirmed_at >= $2 AND o.confirmed_at < $3) OR (o.delivered_at >= $2 AND o.delivered_at < $3))`,[agency,from,to]);
-  return rows.map(r=>{
-    const original=json(r.orig_items)?.[0];
-    return {price:num(original?.unitPrice??r.first_price), product:num(r.route_product_id??original?.productId??r.first_product),upsell:num(r.upsell_value),
-      confirmed:r.confirmed_at?iso(r.confirmed_at):null,delivered:r.delivered_at&&['delivered','exchanged'].includes(r.follow_status)?iso(r.delivered_at):null,row:r};
-  });
+  const result:Operation[]=[];
+  for(const r of rows){
+    const current=json(r.live_items) as {productId:number;variantId:number|null;qty:number;unitPrice:number;isUpsell:boolean}[]|null;
+    const originals=json(r.orig_items) as {productId:number;variantId:number|null;qty:number;unitPrice:number}[]|null;
+    const live=current??[];
+    // An older order without a snapshot has no reliable quantity-increase evidence: use the live quantity as baseline.
+    const before=originals??live.filter(i=>!i.isUpsell);
+    const key=(i:{productId:number;variantId:number|null})=>String(i.productId)+':'+String(i.variantId??'');
+    const grouped=new Map<string,{product:number;price:number;originalQty:number;deliveredQty:number}>();
+    for(const i of before){
+      const k=key(i);const e=grouped.get(k)??{product:num(i.productId),price:num(i.unitPrice),originalQty:0,deliveredQty:0};
+      e.originalQty+=num(i.qty);grouped.set(k,e);
+    }
+    for(const i of live){
+      const k=key(i);const e=grouped.get(k)??{product:num(i.productId),price:num(i.unitPrice),originalQty:0,deliveredQty:0};
+      e.deliveredQty+=num(i.qty);grouped.set(k,e);
+    }
+    for(const e of grouped.values()) {
+      if(e.originalQty<=0&&e.deliveredQty<=0)continue;
+      result.push({price:e.price,product:e.product,originalQty:e.originalQty,deliveredQty:e.deliveredQty,upsell:num(r.upsell_value),
+        confirmed:r.confirmed_at?iso(r.confirmed_at):null,
+        delivered:r.delivered_at&&['delivered','exchanged'].includes(r.follow_status)?iso(r.delivered_at):null,row:r});
+    }
+  }
+  return result;
 }
 interface Bucket { term:Term; main:number; upsell:number; count:number; upsells:number; }
 function addEvent(buckets:Map<number,Bucket>, t:Term, o:Operation, event:'confirmed'|'delivered', upsellOwner=true) {
   if(!t.config) return;
   const p=t.config;
   const main=p.trigger===event;
-  const up=upsellOwner&&o.upsell>0&&p.upsell.enabled&&p.upsell.trigger===event;
+  const up=upsellOwner&&p.upsell.enabled&&(p.upsell.ruleVersion===2 ? (event==='delivered'&&o.deliveredQty>o.originalQty) : (o.upsell>0&&p.upsell.trigger===event));
   if(!main&&!up) return;
   const calc=simulateManagementPlan({...p,monthly:0,bonus:{...p.bonus,enabled:false}},
-    {productPrice:o.price,operations:main?1:0,upsells:up?1:0,incrementalValue:o.upsell});
+    {productPrice:o.price,operations:main?1:0,upsells:up?1:0,incrementalValue:o.upsell,originalQty:o.originalQty,deliveredQty:o.deliveredQty});
   const b=buckets.get(t.id)??{term:t,main:0,upsell:0,count:0,upsells:0};
   b.main+=calc.main; b.upsell+=calc.upsell;b.count+=main?1:0;b.upsells+=up?1:0;buckets.set(t.id,b);
 }
