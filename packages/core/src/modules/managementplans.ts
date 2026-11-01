@@ -72,7 +72,7 @@ export const managementPlanProcs = {
       const old = (await ctx.db.query('SELECT kind FROM management_payment_plans WHERE id=$1 AND active=true',[i.id]))[0];
       if (!old) throw notFound('Plan introuvable');
       if (old.kind !== i.kind) throw bad('Le type de plan ne peut pas changer');
-      if((await livePlanIds(ctx,ctx.db)).has(i.id))throw bad('Plan actif : dupliquez-le avant modification');
+      if((await livePlanIds(ctx,ctx.db)).has(i.id))throw bad('Plan affecté (contrat actif) : dupliquez-le avant modification');
       await ctx.db.query('UPDATE management_payment_plans SET name=$2,configuration=$3,updated_at=now() WHERE id=$1',[i.id,i.name,JSON.stringify(i.configuration)]);
       return { id:i.id };
     }
