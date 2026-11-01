@@ -68,14 +68,16 @@ test('agency payment plans: real dispatch, tenant isolation, seller acceptance, 
     await assert.rejects(rpc(outsider,'management.billingPropose',{linkId:link.id,productId:0,planId:billing.id}),/introuvable/);
     await assert.rejects(rpc(outsider,'partners.decidePlan',{id:link.id,termId:proposal.id,accept:true}),/agence/);
     // Editing a template never changes a proposal the seller is about to accept.
-    await rpc(chief,'management.planSave',{id:billing.id,name:'Billing 200',kind:'billing',configuration:config(200)});
+    await assert.rejects(rpc(chief,'management.planSave',{id:billing.id,name:'Billing 200',kind:'billing',configuration:config(200)}),/Plan affecté/);
+    const updatedBilling=await rpc(chief,'management.planSave',{name:'Billing 200',kind:'billing',configuration:config(200)});
     await rpc(seller,'partners.decidePlan',{id:link.id,termId:proposal.id,accept:true});
     clock+=2000;await event(product1,clock,3000); // accepted snapshot is still 100
     detail=await rpc(seller,'partners.link',{id:link.id});assert.equal(detail.bill.total,105);
     let pay=await rpc(chief,'management.payroll',{month:monthOf(clock)});assert.equal(pay.rows.find((p:any)=>p.id===agent.id).total,30340);
-    await rpc(chief,'management.planSave',{id:agentPlan.id,name:'Agent 40',kind:'agent',configuration:config(40,{monthly:35000})});
+    await assert.rejects(rpc(chief,'management.planSave',{id:agentPlan.id,name:'Agent 40',kind:'agent',configuration:config(40,{monthly:35000})}),/Plan affecté/);
+    const updatedAgent=await rpc(chief,'management.planSave',{name:'Agent 40',kind:'agent',configuration:config(40,{monthly:35000})});
     assert.equal((await rpc(chief,'management.payroll',{month:monthOf(clock)})).total,30340);
-    clock+=2000;await rpc(chief,'management.planAssign',{targetKind:'agent',targetId:agent.id,planId:agentPlan.id});
+    clock+=2000;await rpc(chief,'management.planAssign',{targetKind:'agent',targetId:agent.id,planId:updatedAgent.id});
     const tier=await rpc(chief,'management.planSave',{name:'Product tiers',kind:'billing',configuration:config(0,{method:'tier',thresholds:[5000,15000],tiers:[10,30,70]})});
     await rpc(chief,'management.billingPropose',{linkId:link.id,productId:product2,planId:tier.id});
     detail=await rpc(seller,'partners.link',{id:link.id});const specific=detail.planTerms.find((p:any)=>p.status==='pending');
@@ -88,7 +90,7 @@ test('agency payment plans: real dispatch, tenant isolation, seller acceptance, 
     const seller2=await as(second);
     const secondProduct=Number((await seller2.db.query("INSERT INTO products(name,sku,price) VALUES('Second product','SECOND',8000) RETURNING id"))[0].id);
     await rpc(chief,'agency.prices',{prices:NO_AGENCY_PRICES});
-    const link2=await rpc(chief,'agency.request',{storeId:second.id,tasks:['confirmation'],planId:billing.id});
+    const link2=await rpc(chief,'agency.request',{storeId:second.id,tasks:['confirmation'],planId:updatedBilling.id});
     assert.equal((await rpc(seller2,'partners.link',{id:link2.id})).planTerms[0].configuration.rate,200);
     await rpc(seller2,'partners.answer',{id:link2.id,accept:true,products:null});
     clock+=2000;await event(secondProduct,clock,0,seller2);
@@ -122,8 +124,9 @@ test('agency payment plans: real dispatch, tenant isolation, seller acceptance, 
     assert.equal((await rpc(seller,'partners.link',{id:link.id})).bill.total,480);
     // Switching from confirmation pay to delivery pay must not pay a second base fee on an old order.
     clock+=2000;
-    await rpc(chief,'management.planSave',{id:agentPlan.id,name:'Delivered 55',kind:'agent',configuration:config(55,{trigger:'delivered',monthly:35000})});
-    await rpc(chief,'management.planAssign',{targetKind:'agent',targetId:agent.id,planId:agentPlan.id});
+    await assert.rejects(rpc(chief,'management.planSave',{id:updatedAgent.id,name:'Delivered 55',kind:'agent',configuration:config(55,{trigger:'delivered',monthly:35000})}),/Plan affecté/);
+    const deliveredAgent=await rpc(chief,'management.planSave',{name:'Delivered 55',kind:'agent',configuration:config(55,{trigger:'delivered',monthly:35000})});
+    await rpc(chief,'management.planAssign',{targetKind:'agent',targetId:agent.id,planId:deliveredAgent.id});
     await seller.db.query('UPDATE orders SET delivered_at=$2 WHERE id=$1',[nextOrder,new Date(clock+1000).toISOString()]);
     assert.equal((await rpc(chief,'management.payroll',{month:monthOf(clock)})).total,35040);
     clock+=2000;await event(product1,clock);
