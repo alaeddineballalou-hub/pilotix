@@ -27,7 +27,7 @@ function chosen(terms:Term[], target:number, at:string):Term|undefined {
 }
 const cutoff = (to:string, now:number) => new Date(Math.min(Date.parse(to)-1,now)).toISOString();
 function inRange(at:any, from:string, to:string) { return !!at && iso(at)>=from && iso(at)<to; }
-interface Operation { price:number; product:number; upsell:number; originalQty:number; deliveredQty:number; confirmed:string|null; delivered:string|null; row:any; }
+interface Operation { price:number; product:number; primary:boolean; upsell:number; originalQty:number; deliveredQty:number; confirmed:string|null; delivered:string|null; row:any; }
 async function operations(db:Db, agency:number, from:string, to:string):Promise<Operation[]> {
   const rows=await db.query(`SELECT o.*,
     (SELECT jsonb_agg(jsonb_build_object('productId',i.product_id,'variantId',i.variant_id,'qty',i.qty,'unitPrice',i.unit_price,'isUpsell',i.is_upsell) ORDER BY i.id)
@@ -51,11 +51,13 @@ async function operations(db:Db, agency:number, from:string, to:string):Promise<
       const k=key(i);const e=grouped.get(k)??{product:num(i.productId),price:num(i.unitPrice),originalQty:0,deliveredQty:0};
       e.deliveredQty+=num(i.qty);grouped.set(k,e);
     }
+    let primary=true;
     for(const e of grouped.values()) {
       if(e.originalQty<=0&&e.deliveredQty<=0)continue;
-      result.push({price:e.price,product:e.product,originalQty:e.originalQty,deliveredQty:e.deliveredQty,upsell:num(r.upsell_value),
+      result.push({price:e.price,product:e.product,primary,originalQty:e.originalQty,deliveredQty:e.deliveredQty,upsell:num(r.upsell_value),
         confirmed:r.confirmed_at?iso(r.confirmed_at):null,
         delivered:r.delivered_at&&['delivered','exchanged'].includes(r.follow_status)?iso(r.delivered_at):null,row:r});
+      primary=false;
     }
   }
   return result;
@@ -64,8 +66,9 @@ interface Bucket { term:Term; main:number; upsell:number; count:number; upsells:
 function addEvent(buckets:Map<number,Bucket>, t:Term, o:Operation, event:'confirmed'|'delivered', upsellOwner=true) {
   if(!t.config) return;
   const p=t.config;
-  const main=p.trigger===event;
-  const up=upsellOwner&&p.upsell.enabled&&(p.upsell.ruleVersion===2 ? (event==='delivered'&&o.deliveredQty>o.originalQty) : (o.upsell>0&&p.upsell.trigger===event));
+  // Old contracts were per order; modern rules can assess each distinct product line.
+  const main=p.trigger===event&&(p.upsell.ruleVersion===2||o.primary);
+  const up=upsellOwner&&p.upsell.enabled&&(p.upsell.ruleVersion===2 ? (event==='delivered'&&o.deliveredQty>o.originalQty) : (o.primary&&o.upsell>0&&p.upsell.trigger===event));
   if(!main&&!up) return;
   const calc=simulateManagementPlan({...p,monthly:0,bonus:{...p.bonus,enabled:false}},
     {productPrice:o.price,operations:main?1:0,upsells:up?1:0,incrementalValue:o.upsell,originalQty:o.originalQty,deliveredQty:o.deliveredQty});
@@ -132,6 +135,7 @@ export async function contractBill(t:Tenancy,L:Link,month:string,counts:AgencyCo
   const terms=rows.map(r=>term(r,'product_id'));
   const old:AgencyCounts={...NO_COUNTS,received:counts.received,returned:counts.returned};
   const buckets=new Map<number,Bucket>();
+  const oldEvents=new Set<string>();
   for(const o of allOps) {
     for(const event of ['confirmed','delivered'] as const) {
       const at=o[event];
@@ -142,8 +146,11 @@ export async function contractBill(t:Tenancy,L:Link,month:string,counts:AgencyCo
       const original=o.confirmed?chosen(terms,o.product,o.confirmed):undefined;
       const use=original?.config?original:chosen(terms,o.product,at!);
       if(use?.config) addEvent(buckets,use,o,event);
-      else if(event==='confirmed') old.confirmed++;
-      else {old.delivered++;if(o.upsell>0)old.upsells++;}
+      else if(!oldEvents.has(String(o.row.id)+':'+event)) {
+        oldEvents.add(String(o.row.id)+':'+event);
+        if(event==='confirmed')old.confirmed++;
+        else{old.delivered++;if(o.upsell>0)old.upsells++;}
+      }
     }
   }
   const end=cutoff(to,Math.min(now,L.info.endedAt?Date.parse(L.info.endedAt)-1:now));
