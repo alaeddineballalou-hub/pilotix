@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { DEFAULT_MANAGEMENT_PLAN, planPriceBrackets, simulateManagementPlan, type ManagementPlanConfig, validatePriceBrackets } from '@pilotix/shared';
 import { useAction, useRpc } from '../../lib/query';
 import { BillLines } from '../agency/parts';
+import pilotixLogo from '../../assets/logo-dark.svg';
 
 type Kind='billing'|'agent';
 type Tab=Kind|'bonus'|'assignment';
@@ -65,7 +66,7 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
   const agentRows=(users.data??[]).filter(u=>u.roles.some(r=>['confirmation','suivi','agent_manager'].includes(r)));
   return <div className="ppm agx-page">
     <header className="ppm-head">
-      <div className="ppm-brand"><span className="ppm-mark">✦</span><div><b>Plans de paiement</b><small>Confirmation Agency · Management</small></div></div>
+      <div className="ppm-brand"><img src={pilotixLogo} alt="Pilotix" className="ppm-real-logo"/><div><b>Plans de paiement</b><small>Confirmation Agency · Management</small></div></div>
       <span className="ppm-live">Pilotix</span>
     </header>
     <nav className="ppm-tabs" aria-label="Plans de paiement">
