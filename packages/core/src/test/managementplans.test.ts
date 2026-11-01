@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_MANAGEMENT_PLAN, simulateManagementPlan, type ManagementPlanConfig } from '@pilotix/shared';
+import { DEFAULT_MANAGEMENT_PLAN, simulateManagementPlan, validatePriceBrackets, type ManagementPlanConfig } from '@pilotix/shared';
 const input={productPrice:16950,operations:100,upsells:10,incrementalValue:3000};
 
 test('fixed confirmation and double-confirmation upsell pays one additional fee per upsell',()=>{
@@ -24,4 +24,16 @@ test('invalid double confirmation, duplicated outcome and unsafe negative values
   const invalid:ManagementPlanConfig={...DEFAULT_MANAGEMENT_PLAN,method:'none',upsell:{enabled:true,method:'double',rate:0,trigger:'delivered'}};
   assert.throws(()=>simulateManagementPlan(invalid,input),/Double confirmation/);
   assert.throws(()=>simulateManagementPlan(DEFAULT_MANAGEMENT_PLAN,{...input,operations:-1}),/invalide/i);
+});
+
+test('FIX 01: flexible boundaries, unlimited last tranche and calculation',()=>{
+ const ranges=[{from:0,to:4999,amount:20},{from:5000,to:34999,amount:80},{from:35000,to:null,amount:200}];
+ assert.equal(validatePriceBrackets(ranges),null);
+ const plan:ManagementPlanConfig={...DEFAULT_MANAGEMENT_PLAN,method:'tier',ranges};
+ for(const [price,fee] of [[0,20],[4999,20],[5000,80],[34999,80],[35000,200],[999999,200]]){
+   assert.equal(simulateManagementPlan(plan,{...input,productPrice:price,operations:1,upsells:0}).main,fee);
+ }
+ assert.match(validatePriceBrackets([{from:0,to:5,amount:1},{from:7,to:null,amount:2}])!,/non couvert/);
+ assert.match(validatePriceBrackets([{from:0,to:5,amount:1},{from:5,to:null,amount:2}])!,/chevauchantes/);
+ assert.match(validatePriceBrackets([{from:0,to:5,amount:1}])!,/sans limite/);
 });
