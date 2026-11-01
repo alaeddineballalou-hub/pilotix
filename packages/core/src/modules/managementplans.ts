@@ -33,12 +33,43 @@ function validPlan(c: z.infer<typeof Config>) {
   try { simulateManagementPlan(c, {productPrice:16950,operations:1,upsells:1,incrementalValue:1000}); }
   catch(e) { throw bad(e instanceof Error?e.message:'Configuration invalide'); }
 }
+/**
+ * Only current seller terms block tariff deletion. Accepted history from ended
+ * contracts or replaced tariffs remains immutable for invoices, never a live assignment.
+ */
+const LIVE_SELLER_TERMS = `
+  SELECT bt.plan_id, bt.link_id, bt.product_id, bt.status, s.name AS seller_name
+  FROM management_billing_terms bt
+  JOIN platform.agency_links l ON l.id=bt.link_id AND l.status='active'
+  JOIN platform.shops s ON s.id=l.store_id
+  WHERE l.agency_id=$1 AND bt.plan_id IS NOT NULL
+    AND (bt.status='pending' OR (bt.status='accepted' AND NOT EXISTS (
+      SELECT 1 FROM management_billing_terms newer
+      WHERE newer.link_id=bt.link_id AND newer.product_id=bt.product_id
+        AND newer.status='accepted'
+        AND (newer.effective_at > bt.effective_at
+          OR (newer.effective_at=bt.effective_at AND newer.id>bt.id))
+    )))
+`;
+async function liveSellerBlockers(ctx: any, db = ctx.db) {
+  if (ctx.shop?.kind !== 'agency') return [] as {planId:number;linkId:number;productId:number;status:string;sellerName:string}[];
+  const rows = await db.query(LIVE_SELLER_TERMS,[ctx.shop.id]);
+  return rows.map((r:any)=>({planId:Number(r.plan_id),linkId:Number(r.link_id),
+    productId:Number(r.product_id),status:String(r.status),sellerName:String(r.seller_name)}));
+}
+async function currentPlanAssigned(ctx:any, id:number, db=ctx.db) {
+  const attached=(await db.query('SELECT 1 FROM management_plan_assignments WHERE plan_id=$1 LIMIT 1',[id])).length>0;
+  return attached || (await liveSellerBlockers(ctx,db)).some(b=>b.planId===id);
+}
+
 export const managementPlanProcs = {
   'management.plans': proc([], z.object({}), async ctx => {
     needSellerAdmin(ctx);
     const plans = await ctx.db.query('SELECT id, kind, name, configuration, active FROM management_payment_plans ORDER BY id DESC');
     const assignments = await ctx.db.query('SELECT target_kind, target_id, plan_id FROM management_plan_assignments');
-    return { plans: plans.map(p=>({id:Number(p.id),kind:p.kind,name:p.name,configuration:typeof p.configuration==='string'?JSON.parse(p.configuration):p.configuration,active:p.active})),
+    const billingBlockers = await liveSellerBlockers(ctx);
+    const history = await ctx.db.query('SELECT plan_id FROM management_billing_terms WHERE plan_id IS NOT NULL UNION SELECT plan_id FROM management_agent_terms WHERE plan_id IS NOT NULL');
+    return { billingBlockers, historicalPlanIds: history.map(r=>Number(r.plan_id)), plans: plans.map(p=>({id:Number(p.id),kind:p.kind,name:p.name,configuration:typeof p.configuration==='string'?JSON.parse(p.configuration):p.configuration,active:p.active})),
       assignments:assignments.map(a=>({targetKind:a.target_kind as string,targetId:Number(a.target_id),planId:Number(a.plan_id)})) };
   }),
   'management.planSave': proc([], z.object({ id:Id.optional(),kind:Kind,name:z.string().trim().min(1).max(100),configuration:Config }), async (ctx,i) => {
@@ -47,7 +78,7 @@ export const managementPlanProcs = {
       const old = (await ctx.db.query('SELECT kind FROM management_payment_plans WHERE id=$1 AND active=true',[i.id]))[0];
       if (!old) throw notFound('Plan introuvable');
       if (old.kind !== i.kind) throw bad('Le type de plan ne peut pas changer');
-      if((await ctx.db.query("SELECT 1 FROM management_plan_assignments WHERE plan_id=$1 UNION ALL SELECT 1 FROM management_billing_terms WHERE plan_id=$1 AND status IN ('pending','accepted') LIMIT 1",[i.id])).length)throw bad('Plan affecté : dupliquez-le avant modification');
+      if(await currentPlanAssigned(ctx,i.id))throw bad('Plan affecté à un vendeur ou agent actif : dupliquez-le avant modification');
       await ctx.db.query('UPDATE management_payment_plans SET name=$2,configuration=$3,updated_at=now() WHERE id=$1',[i.id,i.name,JSON.stringify(i.configuration)]);
       return { id:i.id };
     }
@@ -92,8 +123,7 @@ export const managementPlanProcs = {
     return ctx.db.tx(async db=>{
       const p=(await db.query('SELECT id FROM management_payment_plans WHERE id=$1 AND active FOR UPDATE',[i.id]))[0];
       if(!p)throw notFound('Plan introuvable');
-      const active=(await db.query("SELECT 1 FROM management_plan_assignments WHERE plan_id=$1 UNION ALL SELECT 1 FROM management_billing_terms WHERE plan_id=$1 AND status IN ('pending','accepted') LIMIT 1",[i.id])).length;
-      if(active)throw bad('Plan affecté : retirez les affectations avant de supprimer');
+      if(await currentPlanAssigned(ctx,i.id,db))throw bad('Plan affecté à un vendeur ou agent actif : retirez les affectations avant de supprimer');
       const history=(await db.query("SELECT 1 FROM management_billing_terms WHERE plan_id=$1 UNION ALL SELECT 1 FROM management_agent_terms WHERE plan_id=$1 LIMIT 1",[i.id])).length;
       if(history)await db.query('UPDATE management_payment_plans SET active=false,updated_at=now() WHERE id=$1',[i.id]);
       else await db.query('DELETE FROM management_payment_plans WHERE id=$1',[i.id]);
@@ -102,8 +132,7 @@ export const managementPlanProcs = {
   }),
   'management.planArchive': proc([],z.object({id:Id}),async(ctx,i)=>{
     needSellerAdmin(ctx);
-    const refs=(await ctx.db.query(`SELECT (SELECT count(*) FROM management_plan_assignments WHERE plan_id=$1) + (SELECT count(*) FROM management_billing_terms WHERE plan_id=$1 AND status='pending') AS n`,[i.id]))[0]?.n;
-    if(Number(refs)>0) throw bad('Retirez les affectations avant d’archiver le plan');
+    if(await currentPlanAssigned(ctx,i.id))throw bad('Retirez les affectations actives avant d’archiver le plan');
     await ctx.db.query('UPDATE management_payment_plans SET active=false,updated_at=now() WHERE id=$1',[i.id]);
     return {ok:true};
   }),
