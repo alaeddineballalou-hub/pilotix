@@ -233,3 +233,6 @@ html[data-skin][data-theme] .card.agx-danger { border: 1.5px solid var(--c-bad-t
 .ppm-payrow{border:1px solid var(--line);border-radius:10px;padding:12px;margin-block:6px}
 .ppm-payrow summary{cursor:pointer;font-size:14px}
 @media(max-width:600px){.ppm-head{padding:16px}.ppm-brand b{font-size:20px}.ppm-tab{flex:1 1 43%;padding:10px 6px;font-size:12px}.ppm-tier-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.ppm-tier{padding:10px}.ppm-tier-grid .lab{font-size:11px}.ppm-row h2{font-size:19px}}
+
+.ppm-real-logo{width:124px;height:54px;object-fit:contain;flex:none}
+@media(max-width:600px){.ppm-real-logo{width:90px;height:42px}}
