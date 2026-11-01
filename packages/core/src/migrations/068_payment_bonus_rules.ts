@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS management_bonus_assignments (
   target_kind text NOT NULL CHECK (target_kind IN ('seller','agent')),
   target_id bigint NOT NULL,
   bonus_id bigint NOT NULL REFERENCES management_bonus_rules(id) ON DELETE RESTRICT,
+  status text NOT NULL DEFAULT 'accepted' CHECK (status IN ('pending','accepted')),
   PRIMARY KEY(target_kind,target_id,bonus_id)
 );
 CREATE INDEX IF NOT EXISTS management_bonus_assignments_bonus ON management_bonus_assignments(bonus_id);
