@@ -7,7 +7,7 @@ export function PlanSummary({plan:p}:{plan:ManagementPlanConfig|null}) {
     p.method==='tier'?brackets.map(b=>da(b.from)+' – '+(b.to===null?'∞':da(b.to))+' : '+da(b.amount)).join(' · '):'Sans prime par opération';
   const extra=!p.upsell.enabled?'':p.upsell.method==='double'?'Double confirmation (une prime supplémentaire)':
     p.upsell.method==='qty'?'QTY (une prime par quantité supplémentaire livrée)':
-    p.upsell.method==='percent'?p.upsell.rate+' % du prix unitaire du produit':
+    p.upsell.method==='percent'?p.upsell.rate+(p.upsell.ruleVersion===2?' % du prix unitaire du produit':' % de la valeur ajoutée (ancien)'):
     'Montant fixe '+da(p.upsell.rate);
   return <div className="small">
     <p><b>{p.method==='none'?'Salaire / forfait fixe':p.method==='tier'?'Système de paliers de prix':p.method==='fixed'?'Salaire + Prime fixe':'Salaire + Prime en pourcentage'}</b>
