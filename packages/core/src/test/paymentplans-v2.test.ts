@@ -70,5 +70,39 @@ test('V2 agency billing, agent payroll and separately accepted bonuses use real 
   await rpc(chief,'management.bonusAssign',{targetKind:'seller',targetId:link.id,bonusId:sBonus.id,enabled:false});
   const removed=await rpc(chief,'management.bonusDelete',{id:sBonus.id});
   assert.equal(removed.archived,true,'historical bonuses are archived, never destructively deleted');
+
+  // A tariff is editable/removable only when no CURRENT seller or agent uses it.
+  const unused=await rpc(chief,'management.planSave',{name:'Unused tariff',kind:'billing',configuration:cfg('fixed',50)});
+  assert.equal((await rpc(chief,'management.planDelete',{id:unused.id})).archived,false,'never-used plan is deleted permanently');
+  const replacement=await rpc(chief,'management.planSave',{name:'Replacement tariff',kind:'billing',configuration:cfg('double')});
+  await rpc(chief,'management.billingPropose',{linkId:link.id,productId:0,planId:replacement.id});
+  const pendingBlocks=(await rpc(chief,'management.plans')).billingBlockers;
+  assert.ok(pendingBlocks.some((b:any)=>b.planId===replacement.id&&b.status==='pending'),'pending proposal blocks deletion');
+  assert.ok(pendingBlocks.some((b:any)=>b.planId===billPlan.id&&b.status==='accepted'),'old accepted tariff remains active before the replacement is accepted');
+  await assert.rejects(rpc(chief,'management.planDelete',{id:replacement.id}),/affecté/);
+  const nextProposal=(await rpc(seller,'partners.link',{id:link.id})).planTerms.find((x:any)=>x.status==='pending'&&x.name==='Replacement tariff');
+  assert.ok(nextProposal,'replacement proposal is displayed to the seller');
+  await rpc(seller,'partners.decidePlan',{id:link.id,termId:nextProposal.id,accept:true});
+  const afterReplace=(await rpc(chief,'management.plans'));
+  assert.ok(afterReplace.billingBlockers.some((b:any)=>b.planId===replacement.id&&b.status==='accepted'));
+  assert.ok(!afterReplace.billingBlockers.some((b:any)=>b.planId===billPlan.id),'superseded accepted terms no longer block the old template');
+  assert.ok(afterReplace.historicalPlanIds.includes(billPlan.id),'old plan is recorded as historically used');
+  await rpc(chief,'management.planSave',{id:billPlan.id,name:'Seller QTY historical',kind:'billing',configuration:cfg('qty')});
+  const oldArchived=await rpc(chief,'management.planDelete',{id:billPlan.id});
+  assert.equal(oldArchived.archived,true,'old plan is archived, never removed from accepted contract copies');
+  assert.equal((await rpc(seller,'partners.link',{id:link.id})).bill.total,1100,'archiving old tariff must not reprice past orders');
+  await assert.rejects(rpc(chief,'management.planDelete',{id:replacement.id}),/affecté/);
+  // Pending product-specific proposals also stop blocking when their seller's contract ends.
+  const pendingProduct=await rpc(chief,'management.planSave',{name:'Pending product tariff',kind:'billing',configuration:cfg('fixed',75)});
+  await rpc(chief,'management.billingPropose',{linkId:link.id,productId:product,planId:pendingProduct.id});
+  await assert.rejects(rpc(chief,'management.planDelete',{id:pendingProduct.id}),/affecté/);
+  await rpc(chief,'agency.end',{id:link.id});
+  const afterEnd=(await rpc(chief,'management.plans'));
+  assert.ok(!afterEnd.billingBlockers.some((b:any)=>b.planId===replacement.id||b.planId===pendingProduct.id),'ended seller releases accepted and pending plan associations');
+  assert.ok(afterEnd.historicalPlanIds.includes(replacement.id),'ended contract tariff history is retained');
+  assert.equal((await rpc(chief,'management.planDelete',{id:replacement.id})).archived,true);
+  assert.equal((await rpc(chief,'management.planDelete',{id:pendingProduct.id})).archived,true);
+  await assert.rejects(rpc(chief,'management.planDelete',{id:agentPlan.id}),/affecté/,'active agent plans must remain protected');
+
  }finally{await pg.close()}
 });

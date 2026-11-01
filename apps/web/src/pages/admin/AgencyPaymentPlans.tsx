@@ -46,10 +46,11 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
   const plans=(q.data?.plans??[]).filter(p=>p.active) as Plan[];
   const bonuses=(bq.data?.rules??[]).filter(b=>b.active) as Bonus[];
   const selectedPlan=editing?plans.find(p=>p.id===editing.id):undefined;
+  const sellerBlockers=(q.data?.billingBlockers??[]).filter(b=>b.planId===selectedPlan?.id);
   const planLinked=!!selectedPlan && (
-    (q.data?.assignments??[]).some(a=>a.planId===selectedPlan.id) ||
-    (contracts.data??[]).some(c=>c.terms.some(t=>t.planId===selectedPlan.id && t.status!=='rejected'))
+    (q.data?.assignments??[]).some(a=>a.planId===selectedPlan.id) || sellerBlockers.length>0
   );
+  const usedHistorically=!!selectedPlan && (q.data?.historicalPlanIds??[]).includes(selectedPlan.id);
   const bonusLinked=!!bonusEditing?.id && (bq.data?.assignments??[]).some(a=>a.bonusId===bonusEditing.id);
   const planError=editing?getPlanError(editing.configuration,editing.name):'';
   const canEdit=!!editing&&!planLinked;
@@ -57,12 +58,12 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
   const patch=(change:Partial<ManagementPlanConfig>)=>{
     setEditing(p=>p?{...p,configuration:{...p.configuration,...change}}:p);setError('');
   };
-  const selectPlan=(p:Plan)=>{const linked=(q.data?.assignments??[]).some(a=>a.planId===p.id)||(contracts.data??[]).some(c=>c.terms.some(t=>t.planId===p.id&&t.status!=='rejected'));setEditing({id:p.id,kind:p.kind,name:p.name,configuration:linked?copy(p.configuration):editable(p.configuration)});setError('')};
+  const selectPlan=(p:Plan)=>{const linked=(q.data?.assignments??[]).some(a=>a.planId===p.id)||(q.data?.billingBlockers??[]).some(b=>b.planId===p.id);setEditing({id:p.id,kind:p.kind,name:p.name,configuration:linked?copy(p.configuration):editable(p.configuration)});setError('')};
   const newPlan=(kind:Kind)=>{setEditing({id:null,kind,name:'Nouveau plan',configuration:blankPlan()});setError('')};
   const selectBonus=(b:Bonus)=>{setBonusEditing({id:b.id,kind:b.kind,name:b.name,trigger:b.trigger,threshold:b.threshold,amount:b.amount});setError('')};
   const newBonus=()=>{setBonusEditing({id:null,kind:'agent',name:'Nouveau bonus',trigger:'confirmed',threshold:100,amount:0});setError('')};
   const saveCurrent=()=>{if(!editing||planError||planLinked)return;save.mutate({...(editing.id?{id:editing.id}:{}),kind:editing.kind,name:editing.name,configuration:editing.configuration},{onSuccess:r=>setEditing(p=>p?{...p,id:r.id}:p)})};
-  const removeCurrent=()=>{if(!editing?.id||planLinked)return;if(!confirm('Supprimer ce plan non affecté ? Les historiques seront conservés.'))return;remove.mutate({id:editing.id},{onSuccess:()=>setEditing(null)})};
+  const removeCurrent=()=>{if(!editing?.id||planLinked)return;if(!confirm(usedHistorically?'Archiver cette tarification ? Les factures historiques restent conservées.':'Supprimer définitivement cette tarification non utilisée ?'))return;remove.mutate({id:editing.id},{onSuccess:()=>setEditing(null)})};
   const saveB=()=>{if(!bonusEditing||bonusLinked||!bonusEditing.name.trim()||bonusEditing.threshold<1)return;saveBonus.mutate({...(bonusEditing.id?{id:bonusEditing.id}:{}),...bonusEditing,id:bonusEditing.id??undefined},{onSuccess:r=>setBonusEditing(p=>p?{...p,id:r.id}:p)})};
   useEffect(()=>{setEditing(null);setBonusEditing(null);setError('')},[tab]);
   const agentRows=(users.data??[]).filter(u=>u.roles.some(r=>['confirmation','suivi','agent_manager'].includes(r)));
@@ -83,13 +84,20 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
           <div className="ppm-cards">{plans.filter(p=>p.kind===tab).map(p=>
             <button key={p.id} type="button" className={'ppm-plan-card '+(editing?.id===p.id?'on':'')} onClick={()=>selectPlan(p)}>
               <b>{p.name}</b><small>{MODES.find(m=>m[0]===p.configuration.method)?.[1]}</small>
-              {(q.data?.assignments??[]).some(a=>a.planId===p.id)||(contracts.data??[]).some(c=>c.terms.some(t=>t.planId===p.id&&t.status!=='rejected'))?
-                <span className="ppm-pill">Affecté</span>:<span className="ppm-pill clear">Libre</span>}
+              {(q.data?.assignments??[]).some(a=>a.planId===p.id)||(q.data?.billingBlockers??[]).some(b=>b.planId===p.id)?
+                <span className="ppm-pill">Affecté</span>:(q.data?.historicalPlanIds??[]).includes(p.id)?
+                <span className="ppm-pill clear">Ancien contrat</span>:<span className="ppm-pill clear">Libre</span>}
             </button>)}</div>}
       </section>
       {editing&&editing.kind===tab&&<section className="card ppm-panel">
         <div className="ppm-row"><h2>{editing.id?'Configuration du plan':'Nouveau plan'}</h2>{planLinked&&<span className="ppm-pill">🔒 Plan affecté</span>}</div>
-        {planLinked&&<p className="agx-note">Ce plan est déjà associé. Dupliquez-le pour changer les prix : les contrats et opérations antérieurs gardent leurs montants.</p>}
+        {planLinked&&<div className="agx-note">
+          Ce plan est actuellement associé. Dupliquez-le pour changer les prix ; les contrats et opérations antérieurs gardent leurs montants.
+          {sellerBlockers.length>0&&<ul>{sellerBlockers.map(b=><li key={b.linkId+':'+b.productId+':'+b.status}>
+            {b.sellerName} · {b.productId?'Produit #'+b.productId:'Plan général'} · {b.status==='pending'?'En attente vendeur':'Accepté'}
+          </li>)}</ul>}
+        </div>}
+        {!planLinked&&usedHistorically&&<p className="agx-note">Ancien contrat : aucune affectation active. Vous pouvez modifier le modèle ou l’archiver sans modifier les factures historiques.</p>}
         {legacyReadOnly&&selectedPlan&&<div className="agx-note"><b>Conditions historiques acceptées (non modifiables)</b><PlanSummary plan={selectedPlan.configuration}/></div>}
         <div className="ppm-grid">
           <label className="field"><span className="lab">Nom du plan</span><input disabled={!canEdit} maxLength={100} value={editing.name} onChange={e=>setEditing(p=>p?{...p,name:e.target.value}:p)}/></label>
@@ -138,7 +146,7 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
         <div className="row agx-actions">
           <button type="button" className="btn primary" disabled={!canEdit||!!planError||save.isPending} onClick={saveCurrent}>Enregistrer</button>
           <button type="button" className="btn" disabled={!editing.id||clone.isPending} onClick={()=>clone.mutate({id:editing.id!},{onSuccess:()=>setEditing(null)})}>Dupliquer</button>
-          <button type="button" className="btn" disabled={!editing.id||planLinked||remove.isPending} onClick={removeCurrent}>Supprimer</button>
+          <button type="button" className="btn" disabled={!editing.id||planLinked||remove.isPending} onClick={removeCurrent}>{usedHistorically?'Archiver':'Supprimer'}</button>
         </div>
       </section>}
       {tab==='agent'&&<section className="card ppm-panel">
