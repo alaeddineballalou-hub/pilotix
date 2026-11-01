@@ -60,7 +60,7 @@ export const bonusProcs={
     });
   }),
   'management.bonusAssign':proc([],z.object({targetKind:Target,targetId:Id,bonusId:Id,enabled:z.boolean()}),async(ctx,i)=>{
-    const t=agencyAdmin(ctx);
+    agencyAdmin(ctx);
     return ctx.db.tx(async db=>{
       const rule=(await db.query('SELECT * FROM management_bonus_rules WHERE id=$1 AND active FOR UPDATE',[i.bonusId]))[0];
       if(!rule)throw notFound('Bonus introuvable');
@@ -69,7 +69,7 @@ export const bonusProcs={
         const agent=(await db.query('SELECT id,active,agency_id,roles FROM profiles WHERE id=$1',[i.targetId]))[0];
         if(!agent||!agent.active||agent.agency_id||!agent.roles.some((r:string)=>['confirmation','suivi','agent_manager'].includes(r)))throw bad('Agent actif introuvable');
       }else{
-        const seller=(await t.platform.query("SELECT id FROM platform.agency_links WHERE id=$1 AND agency_id=$2 AND status='active'",[i.targetId,ctx.shop!.id]))[0];
+        const seller=(await db.query("SELECT id FROM platform.agency_links WHERE id=$1 AND agency_id=$2 AND status='active'",[i.targetId,ctx.shop!.id]))[0];
         if(!seller)throw notFound('Contrat vendeur actif introuvable');
       }
       const current=(await db.query('SELECT status FROM management_bonus_assignments WHERE target_kind=$1 AND target_id=$2 AND bonus_id=$3 FOR UPDATE',[i.targetKind,i.targetId,i.bonusId]))[0];
