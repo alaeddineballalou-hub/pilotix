@@ -213,7 +213,7 @@ export const MARKETER_SELLER_PROCS = new Set(Object.keys(MARKETER_AGENT_PROCS).f
 /** The actions a partner's space runs inside its sellers' stores. */
 export const sellerProcsOf = (kind: 'agency' | 'marketer') => (kind === 'marketer' ? MARKETER_SELLER_PROCS : SELLER_PROCS);
 
-const MANAGEMENT_PROCS = new Set(['management.plans', 'management.planSave', 'management.planClone', 'management.planAssign', 'management.planArchive', 'management.billingTargets', 'management.billingPropose', 'management.payroll', 'management.payrollClose']);
+const MANAGEMENT_PROCS = new Set(['management.plans', 'management.planSave', 'management.planClone', 'management.planAssign', 'management.planArchive', 'management.planDelete', 'management.bonuses', 'management.bonusSave', 'management.bonusClone', 'management.bonusDelete', 'management.bonusAssign', 'management.billingTargets', 'management.billingPropose', 'management.payroll', 'management.payrollClose']);
 
 /** What a partner's own space answers (its own team and account; the rest are the agency.* actions). */
 const AGENCY_SPACE = new Set(['me.get', 'me.language', 'me.password', 'me.ui', 'me.setUi', 'me.update', 'me.seen', 'me.delete', 'users.list', 'users.create', 'users.update', 'users.phoneCheck', 'admin.users.resetPassword']);
