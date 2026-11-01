@@ -130,8 +130,10 @@ export const bonusProcs={
     const rows=await ctx.db.query(`
       SELECT b.id,b.name,b.trigger,b.threshold,b.amount,a.status
       FROM management_bonus_assignments a JOIN management_bonus_rules b ON b.id=a.bonus_id
+      LEFT JOIN platform.agency_links l ON l.id=b.source_link_id AND l.agency_id=$2
       WHERE a.target_kind='agent' AND a.target_id=$1 AND a.status='accepted' AND b.active
-      ORDER BY b.id DESC`,[ctx.session.profile.id]);
+        AND (b.source_link_id IS NULL OR l.status='active')
+      ORDER BY b.id DESC`,[ctx.session.profile.id,ctx.shop!.id]);
     return {bonuses:rows.map(b=>({id:num(b.id),name:String(b.name),trigger:b.trigger as 'confirmed'|'delivered',
       threshold:num(b.threshold),amount:num(b.amount)}))};
   }),
