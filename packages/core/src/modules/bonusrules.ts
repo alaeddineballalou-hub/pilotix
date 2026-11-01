@@ -125,7 +125,7 @@ export const bonusProcs={
     });
   }),
   /** Read-only, per-agent visibility. Neither seller billing nor another agent's bonus leaks to this response. */
-  'management.myBonuses':proc([],z.object({}),async ctx=>{
+  'management.myBonuses':proc(null,z.object({}),async ctx=>{
     if(ctx.shop?.kind!=='agency'||!ctx.session.profile.id)throw forbidden();
     const rows=await ctx.db.query(`
       SELECT b.id,b.name,b.trigger,b.threshold,b.amount,a.status
