@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { DEFAULT_MANAGEMENT_PLAN, NO_AGENCY_PRICES, simulateManagementPlan } from '@pilotix/shared';
 import { call, Ctx, login, migrate, migrateAll, pgliteTenancy, seedBase, shopCtx, shopStatus, provisionShop, loadShop, storeChoices } from '../index';
 
+import migration from '../migrations/067_agency_plan_terms';
+
 const PW='Agency-Owner-Password-123';
 const config=(rate:number,extra:any={})=>({...structuredClone(DEFAULT_MANAGEMENT_PLAN),rate,...extra});
 const monthOf=(ms:number)=>new Date(ms+3600000).toISOString().slice(0,7);
@@ -36,6 +38,8 @@ test('agency payment plans: real dispatch, tenant isolation, seller acceptance, 
     let agentEmail='nora@example.dz';
     const agent=await rpc(chief,'users.create',{name:'Nora',email:'nora@example.dz',phone:'0710000002',password:PW,roles:['confirmation']});
     await rpc(chief,'management.planAssign',{targetKind:'agent',targetId:agent.id,planId:agentPlan.id});
+    await t.exec(agency.schema,migration);
+    assert.equal(Number((await chief.db.query('SELECT count(*) AS n FROM management_agent_terms WHERE profile_id=$1',[agent.id]))[0].n),1,'repeating a migration does not duplicate assignment copies');
     await assert.rejects(rpc(chief,'management.planAssign',{targetKind:'agent',targetId:chief.session.profile.id,planId:agentPlan.id}),/agent actif/);
     await assert.rejects(rpc(chief,'management.planAssign',{targetKind:'agent',targetId:agent.id,planId:billing.id}),/incompatible/);
     await assert.rejects(rpc(chief,'management.planArchive',{id:agentPlan.id}),/affectations/);
