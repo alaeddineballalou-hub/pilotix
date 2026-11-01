@@ -23,7 +23,7 @@ export interface ManagementSimulation {
   upsells: number;
   incrementalValue: number;
 }
-export function validateManagementPriceBrackets(tiers: ManagementPriceBracket[]): string | null {
+export function validatePriceTiers(tiers: ManagementPriceBracket[]): string | null {
   if (!tiers.length) return 'Ajoutez au moins une tranche';
   if (tiers.length > 100) return 'Maximum 100 tranches';
   for (let i=0;i<tiers.length;i++){
@@ -41,7 +41,7 @@ export function simulateManagementPlan(p: ManagementPlanConfig, s: ManagementSim
   if (![s.productPrice,s.operations,s.upsells,s.incrementalValue,p.monthly,p.rate,...p.tiers.map(t=>t.amount),p.bonus.threshold,p.bonus.amount,p.upsell.rate].every(nonnegative)) throw new Error('Valeur invalide');
   if (!Number.isInteger(s.operations) || !Number.isInteger(s.upsells)) throw new Error('Quantité invalide');
   if ((p.method === 'percent' && p.rate > 100) || (p.upsell.method === 'percent' && p.upsell.rate > 100)) throw new Error('Pourcentage invalide');
-  if (p.method === 'tier') { const error = validateManagementPriceBrackets(p.tiers); if (error) throw new Error(error); }
+  if (p.method === 'tier') { const error = validatePriceTiers(p.tiers); if (error) throw new Error(error); }
   const fee = p.method === 'fixed' ? p.rate : p.method === 'percent' ? s.productPrice*p.rate/100 : p.method === 'tier' ? (p.tiers.find(t=>s.productPrice >= t.from && (t.to === null || s.productPrice <= t.to))?.amount ?? 0) : 0;
   if (p.upsell.enabled && p.upsell.method === 'double' && (p.method === 'none' || p.trigger !== 'confirmed')) throw new Error('Double confirmation nécessite une commission de confirmation');
   const upsellFee = !p.upsell.enabled ? 0 : p.upsell.method === 'double' ? fee : p.upsell.method === 'fixed' ? p.upsell.rate : s.incrementalValue*p.upsell.rate/100;
