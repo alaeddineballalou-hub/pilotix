@@ -187,3 +187,49 @@ html[data-skin][data-theme] .card.agx-danger { border: 1.5px solid var(--c-bad-t
 /* products already given to another agency */
 .agx-taken { opacity: 0.6; }
 .agx-taken .chip { margin-inline-start: auto; }
+
+/* Pilotix payment plans — navy / orange, responsive, four independent tabs. */
+.ppm{width:100%;max-width:1180px;gap:16px}
+.ppm-head{background:#132038;color:#fff;border-radius:18px;padding:22px 24px;display:grid;gap:16px;box-shadow:0 12px 30px rgba(19,32,56,.12)}
+.ppm-brand{display:flex;align-items:center;gap:12px}
+.ppm-brand b{display:block;color:white;font:700 24px var(--f-display,inherit)}
+.ppm-brand small{display:block;color:#cad6e8;margin-top:4px;font-size:12px}
+.ppm-mark{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;color:#132038;background:linear-gradient(135deg,#f08a0c,#fdb52a);font-size:26px}
+.ppm-live{justify-self:end;font-weight:800;color:#fdb52a;font-size:13px;letter-spacing:.04em}
+.ppm-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0}
+.ppm-tabs.sub{padding:4px;background:var(--chip-bg,var(--bg));border-radius:12px}
+.ppm-tab{appearance:none;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:11px 18px;border-radius:12px;font:700 13px var(--f-display,inherit);cursor:pointer;min-height:44px}
+.ppm-tab.on{background:linear-gradient(110deg,#f08a0c,#fdb52a);border-color:#f08a0c;color:#132038;box-shadow:0 4px 12px rgba(240,138,12,.15)}
+.ppm-head+.ppm-tabs{margin-top:0}
+.ppm-panel{gap:16px}
+.ppm-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ppm-row h2,.ppm-row h3{margin:0}
+.ppm-row .muted{margin:4px 0 0}
+.ppm-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(235px,1fr));gap:16px}
+.ppm-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.ppm-plan-card{text-align:start;display:grid;justify-items:start;align-content:start;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:15px;cursor:pointer;color:var(--ink)}
+.ppm-plan-card:hover,.ppm-plan-card.on{border-color:#f08a0c;box-shadow:0 0 0 2px rgba(240,138,12,.08)}
+.ppm-plan-card b{font-size:15px}.ppm-plan-card small{color:var(--c-muted);font-size:12px}
+.ppm-pill{font-size:11px;border-radius:999px;padding:4px 9px;background:var(--c-warn-tint,#fff1db);color:var(--c-warn-ink,#985a0d);font-weight:750}
+.ppm-pill.clear{background:var(--c-ok-tint,#e5f5ed);color:var(--c-ok-ink,#166a41)}
+.ppm-section{border-top:1px solid var(--line);padding-top:18px;display:grid;gap:12px}
+.ppm-section h3,.ppm-section h4{margin:0}
+.ppm-tier{background:var(--chip-bg,var(--bg));border:1px solid var(--line);padding:14px;border-radius:13px;display:grid;gap:12px}
+.ppm-tier-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.ppm-tier-grid input{width:100%;min-width:0}
+.ppm-infinity{display:grid;place-items:center;min-height:42px;border:1px solid var(--line);border-radius:9px;font-size:21px;font-weight:800}
+.ppm-add{justify-self:stretch;border:1px dashed #f08a0c!important;color:var(--c-accent-ink,#b76508);min-height:44px}
+.ppm-toggle{display:flex;align-items:center;gap:9px;font-weight:700}
+.ppm-up-modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.ppm-up-mode{display:flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:12px;padding:14px 12px;cursor:pointer;background:var(--card);font-size:13px;font-weight:650}
+.ppm-up-mode.on{border-color:#f08a0c;background:var(--c-accent-tint,#fff2dc)}
+.ppm-input{max-width:360px}
+.ppm-assignment{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin-block:8px}
+.ppm-assignment .field{flex:1 1 260px}
+.ppm-slot{border-top:1px solid var(--line);padding:14px 0}
+.ppm-slot:first-of-type{border-top:0}
+.ppm-pending{display:block;color:var(--c-warn-ink);margin-top:6px}
+.ppm-bonus-active{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-radius:9px;background:var(--chip-bg,var(--bg));padding:10px 12px}
+.ppm-payrow{border:1px solid var(--line);border-radius:10px;padding:12px;margin-block:6px}
+.ppm-payrow summary{cursor:pointer;font-size:14px}
+@media(max-width:600px){.ppm-head{padding:16px}.ppm-brand b{font-size:20px}.ppm-tab{flex:1 1 43%;padding:10px 6px;font-size:12px}.ppm-tier-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.ppm-tier{padding:10px}.ppm-tier-grid .lab{font-size:11px}.ppm-row h2{font-size:19px}}
