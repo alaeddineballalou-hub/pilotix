@@ -422,6 +422,7 @@ function AgencyDetail({ id, kind }: { id: number; kind: PartnerKind }) {
   const [modal, setModal] = useState<'work' | 'end' | null>(null);
   const yes = useAction('partners.acceptPrices', { success: t('agency.store.pricesAccepted') });
   const decidePlan=useAction('partners.decidePlan',{success:'Réponse enregistrée'});
+  const decideBonus=useAction('partners.decideBonus',{success:'Réponse bonus enregistrée'});
   const paid = useAction('partners.billPaid', { success: t('agency.store.paidSaved') });
   if (q.isLoading && !q.data) return <Loading />;
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
@@ -450,6 +451,15 @@ function AgencyDetail({ id, kind }: { id: number; kind: PartnerKind }) {
         </div>
       </section>
       {d.planTerms.filter(p=>p.status==='pending').map(p=><section key={p.id} className="card agx-banner"><div><h3>Nouveau plan proposé : {p.name}</h3><p>{p.productName} · Applicable aux prochaines opérations après votre acceptation.</p><PlanSummary plan={p.configuration}/><div className="row agx-actions"><button className="btn" disabled={decidePlan.isPending} onClick={()=>decidePlan.mutate({id,termId:p.id,accept:false})}>Refuser</button><button className="btn primary" disabled={decidePlan.isPending} onClick={()=>decidePlan.mutate({id,termId:p.id,accept:true})}>Accepter le plan</button></div></div></section>)}
+      {d.bonusTerms.filter(b=>b.status==='pending').map(b=><section key={b.id} className="card agx-banner"><div>
+        <h3>Bonus proposé : {b.name}</h3>
+        <p>Objectif : {b.threshold} commandes {b.trigger==='confirmed'?'confirmées':'livrées'} · Montant : {b.amount.toLocaleString('fr-FR')} DA. Ce bonus est facturé uniquement après votre accord.</p>
+        <div className="row agx-actions">
+          <button className="btn" disabled={decideBonus.isPending} onClick={()=>decideBonus.mutate({linkId:id,bonusId:b.id,accept:false})}>Refuser</button>
+          <button className="btn primary" disabled={decideBonus.isPending} onClick={()=>decideBonus.mutate({linkId:id,bonusId:b.id,accept:true})}>Accepter le bonus</button>
+        </div>
+      </div></section>)}
+      {d.bonusTerms.some(b=>b.status==='accepted')&&<details className="card"><summary>Bonus de l'agence acceptés</summary>{d.bonusTerms.filter(b=>b.status==='accepted').map(b=><p key={b.id}><b>{b.name}</b> · {b.threshold} commandes {b.trigger==='confirmed'?'confirmées':'livrées'} · {b.amount.toLocaleString('fr-FR')} DA</p>)}</details>}
       {d.planTerms.some(p=>p.status==='accepted')&&<details className="card"><summary>Historique des plans acceptés</summary>{d.planTerms.filter(p=>p.status==='accepted').map(p=><div key={p.id}><h4>{p.productName} · {p.name} · {p.effectiveAt?new Date(p.effectiveAt).toLocaleString('fr-FR'):''}</h4><PlanSummary plan={p.configuration}/></div>)}</details>}
       {l.pricesNew && live && (
         <section className="card agx-banner" role="status">
