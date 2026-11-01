@@ -39,6 +39,7 @@ import { Db, iso, isoOrNull, num } from '../db';
 import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
 import { cleanPrices } from '../platform/shops';
 import { sellersOrNull } from './agencyscope';
+import { contractBill, contractTerms, decideTerms } from './planledger';
 import { marketerMonth } from './marketers';
 import { SCHEMA_RE, type Tenancy } from '../platform/tenancy';
 
@@ -498,8 +499,9 @@ async function linkDetail(t: Tenancy, L: Link, month: string, now: number) {
   await withAgents(t, [L]);
   const { from, to } = monthBounds(month);
   const counts = await linkCounts(t, L, month, now);
-  const bill = partnerBill(L.info.kind, L.info.prices, counts, { monthly: workedIn(L.info, from, to) });
-  return { link: L.info, month, counts, bill, bills: await billsOf(t, L.info.id) };
+  const saved = (await billsOf(t,L.info.id)).find(b=>b.month===month);
+  const bill = saved ? {lines:saved.lines,total:saved.amount} : await contractBill(t,L,month,counts,now);
+  return { link: L.info, month, counts:saved?.counts??counts, bill, bills: await billsOf(t, L.info.id), planTerms:await contractTerms(t,L) };
 }
 
 /** This month's numbers of each link that works (or worked) with someone. */
@@ -510,7 +512,8 @@ async function monthCounts(t: Tenancy, links: Link[], now: number) {
   for (const L of links) {
     if (!L.info.startedAt || !L.storeOk || !workedIn(L.info, from, to)) continue;
     const c = await linkCounts(t, L, month, now);
-    out[String(L.info.id)] = { ...c, total: partnerBill(L.info.kind, L.info.prices, c, { monthly: true }).total };
+    const saved=(await billsOf(t,L.info.id)).find(b=>b.month===month);
+    out[String(L.info.id)] = { ...(saved?.counts??c), total: saved?.amount??(await contractBill(t,L,month,c,now)).total };
   }
   return { month, counts: out };
 }
@@ -576,7 +579,8 @@ export const agencyProcs = {
       if (!workedIn(L.info, from, to)) continue;
       const counts = await linkCounts(t, L, month, ctx.now());
       const b = (await t.platform.query('SELECT * FROM platform.agency_bills WHERE link_id = $1 AND month = $2', [L.info.id, month]))[0];
-      rows.push({ link: L.info, counts, bill: partnerBill(L.info.kind, L.info.prices, counts, { monthly: true }), request: b ? toBill(b) : null });
+      const saved=b?toBill(b):null;
+      rows.push({ link:L.info, counts:saved?.counts??counts, bill:saved?{lines:saved.lines,total:saved.amount}:await contractBill(t,L,month,counts,ctx.now()), request:saved });
     }
     return { month, rows };
   }),
@@ -598,22 +602,23 @@ export const agencyProcs = {
   }),
 
   /** Asks a store to work with it: the tasks and the prices for this store (its usual prices to start with). */
-  'agency.request': proc([], z.object({ storeId: Id, tasks: Tasks, prices: PricesIn.optional() }), async (ctx, i) => {
+  'agency.request': proc([], z.object({ storeId: Id, tasks: Tasks, prices: PricesIn.optional(), planId:Id.optional() }), async (ctx, i) => {
     const { t, id, kind } = asAgency(ctx);
     const a = await agencyRow(t, id);
     if (!a.verified) throw bad(notVerified(kind));
     const tasks = tasksFor(kind, i.tasks);
-    const prices = cleanPrices(i.prices ?? a.prices ?? NO_AGENCY_PRICES, kind);
-    if (!hasPrice(prices)) throw bad('Écrivez d’abord vos prix (au moins un montant)');
+    const template=i.planId?(await ctx.db.query("SELECT * FROM management_payment_plans WHERE id=$1 AND active AND kind='billing'",[i.planId]))[0]:null;
+    if(i.planId&&(!template||kind!=='agency'))throw bad('Plan de facturation incompatible ou inactif');
+    const prices = cleanPrices(template?NO_AGENCY_PRICES:i.prices ?? a.prices ?? NO_AGENCY_PRICES, kind);
+    if (!template&&!hasPrice(prices)) throw bad('Écrivez d’abord vos prix (au moins un montant)');
     const s = (await t.platform.query(`SELECT id FROM platform.shops WHERE id = $1 AND kind = 'store' AND NOT is_demo AND status = 'active'`, [i.storeId]))[0];
     if (!s) throw notFound('Boutique introuvable');
     try {
-      const r = (
-        await t.platform.query(
-          `INSERT INTO platform.agency_links (agency_id, store_id, requested_by, requester, tasks, prices) VALUES ($1, $2, 'agency', $3, $4, $5) RETURNING id`,
-          [id, i.storeId, requesterOf(ctx), JSON.stringify(tasks), JSON.stringify(prices)],
-        )
-      )[0];
+      const r=await ctx.db.tx(async db=>{
+        const made=(await db.query(`INSERT INTO platform.agency_links (agency_id, store_id, requested_by, requester, tasks, prices) VALUES ($1,$2,'agency',$3,$4,$5) RETURNING id`,[id,i.storeId,requesterOf(ctx),JSON.stringify(tasks),JSON.stringify(prices)]))[0];
+        if(template)await db.query(`INSERT INTO management_billing_terms(link_id,product_id,plan_id,name,configuration,proposed_at) VALUES($1,0,$2,$3,$4,$5)`,[made.id,template.id,template.name,JSON.stringify(json(template.configuration)),new Date(ctx.now()).toISOString()]);
+        return made;
+      });
       return { id: num(r.id) };
     } catch (e: any) {
       if (String(e?.code) === '23505' || /unique|duplicate/i.test(String(e?.message))) throw bad('Une demande ou un contrat existe déjà avec cette boutique');
@@ -735,14 +740,14 @@ export const agencyProcs = {
     if (!L.info.startedAt) throw bad('Ce lien n’a pas encore commencé');
     if (i.month > monthNow(ctx.now())) throw bad('Ce mois n’a pas commencé');
     if (i.month < monthNow(Date.parse(L.info.startedAt))) throw bad('Le contrat n’avait pas commencé ce mois-là');
+    const existing=(await t.platform.query('SELECT amount,status FROM platform.agency_bills WHERE link_id=$1 AND month=$2',[L.info.id,i.month]))[0];
+    if(existing){if(existing.status!=='requested')throw bad('Ce mois est déjà payé');return {ok:true,amount:num(existing.amount)};}
     const d = await linkDetail(t, L, i.month, ctx.now());
     if (d.bill.total <= 0) throw bad('Rien à demander pour ce mois');
-    const cur = (await t.platform.query('SELECT id, status FROM platform.agency_bills WHERE link_id = $1 AND month = $2', [L.info.id, i.month]))[0];
-    if (cur && cur.status !== 'requested') throw bad('Ce mois est déjà payé');
     const details = JSON.stringify({ lines: d.bill.lines, counts: d.counts, prices: L.info.prices });
-    if (cur) await t.platform.query('UPDATE platform.agency_bills SET amount = $2, details = $3, requested_at = now() WHERE id = $1', [cur.id, d.bill.total, details]);
-    else await t.platform.query('INSERT INTO platform.agency_bills (link_id, month, amount, details) VALUES ($1, $2, $3, $4) ON CONFLICT (link_id, month) DO NOTHING', [L.info.id, i.month, d.bill.total, details]);
-    return { ok: true, amount: d.bill.total };
+    await t.platform.query('INSERT INTO platform.agency_bills (link_id, month, amount, details) VALUES ($1, $2, $3, $4) ON CONFLICT (link_id, month) DO NOTHING', [L.info.id, i.month, d.bill.total, details]);
+    const saved=(await t.platform.query('SELECT amount FROM platform.agency_bills WHERE link_id=$1 AND month=$2',[L.info.id,i.month]))[0];
+    return { ok: true, amount: num(saved.amount) };
   }),
 
   /** « Argent reçu »: the agency confirms the store's payment. */
@@ -825,8 +830,12 @@ export const agencyProcs = {
     const products = await checkProducts(ctx.db, i.products === undefined ? null : i.products);
     const why = await clash(t, ctx.db, id, L.info.id, tasks, products, L.info.kind);
     if (why) throw bad(why);
-    await t.platform.query('UPDATE platform.agency_links SET tasks = $2, products = $3 WHERE id = $1 AND status = $4', [L.info.id, JSON.stringify(tasks), products === null ? null : JSON.stringify(products), 'pending']);
-    if (!(await setStatus(t, L.info.id, 'pending', 'active', ', started_at = now()'))) throw bad('Cette demande n’attend plus votre réponse');
+    await t.shop(L.agencySchema).tx(async db=>{
+      const changed=await db.query(`UPDATE platform.agency_links SET tasks=$2,products=$3,status='active',started_at=$4,answered_at=$4 WHERE id=$1 AND status='pending' RETURNING id`,[L.info.id,JSON.stringify(tasks),products===null?null:JSON.stringify(products),new Date(ctx.now()).toISOString()]);
+      if(!changed.length)throw bad('Cette demande n’attend plus votre réponse');
+      // The seller has reviewed the invitation's saved plan before accepting the contract.
+      await db.query(`UPDATE management_billing_terms SET status='accepted',effective_at=$2 WHERE link_id=$1 AND status='pending'`,[L.info.id,new Date(ctx.now()).toISOString()]);
+    });
     return { ok: true, problems: await syncLink(t, L.info.id) };
   }),
 
@@ -850,6 +859,12 @@ export const agencyProcs = {
     if (why) throw bad(why);
     await t.platform.query('UPDATE platform.agency_links SET tasks = $2, products = $3 WHERE id = $1', [L.info.id, JSON.stringify(tasks), products === null ? null : JSON.stringify(products)]);
     return { ok: true, problems: L.info.status === 'active' ? await syncLink(t, L.info.id) : [] };
+  }),
+
+  /** A new payment plan starts only after the seller accepts the immutable proposal. */
+  'partners.decidePlan': proc([],z.object({id:Id,termId:Id,accept:z.boolean()}),async(ctx,i)=>{
+    const {t,id}=asStore(ctx);
+    return decideTerms(ctx,await storeLink(t,id,i.id),i.termId,i.accept);
   }),
 
   /** Yes to the agency's new prices (no: the old prices stay; the store can also end the contract). */

@@ -213,6 +213,8 @@ export const MARKETER_SELLER_PROCS = new Set(Object.keys(MARKETER_AGENT_PROCS).f
 /** The actions a partner's space runs inside its sellers' stores. */
 export const sellerProcsOf = (kind: 'agency' | 'marketer') => (kind === 'marketer' ? MARKETER_SELLER_PROCS : SELLER_PROCS);
 
+const MANAGEMENT_PROCS = new Set(['management.plans', 'management.planSave', 'management.planClone', 'management.planAssign', 'management.planArchive', 'management.billingTargets', 'management.billingPropose', 'management.payroll', 'management.payrollClose']);
+
 /** What a partner's own space answers (its own team and account; the rest are the agency.* actions). */
 const AGENCY_SPACE = new Set(['me.get', 'me.language', 'me.password', 'me.ui', 'me.setUi', 'me.update', 'me.seen', 'me.delete', 'users.list', 'users.create', 'users.update', 'users.phoneCheck', 'admin.users.resetPassword']);
 
@@ -225,6 +227,8 @@ export async function agencyGate(name: string, ctx: Ctx, input: unknown): Promis
   const kind = ctx.shop?.kind;
   if (kind === 'agency' || kind === 'marketer') {
     if (name.startsWith('agency.') || AGENCY_SPACE.has(name)) return;
+    // Only these plan actions belong to the agency itself; role checks still run before this gate.
+    if (kind === 'agency' && MANAGEMENT_PROCS.has(name)) return;
     if (sellerProcsOf(kind).has(name)) throw bad('Choisissez un vendeur en haut de la page');
     throw forbidden(kind === 'agency' ? 'Pas dans l’espace d’une agence' : 'Pas dans l’espace d’un marketer');
   }

@@ -20,6 +20,7 @@ type Ref = readonly [table: string, column: string, use: UseKind];
 
 /** Every column that points to an account (profiles.id): an account found in one of them did some work. */
 export const USER_REFS: readonly Ref[] = [
+  ['management_agent_terms', 'profile_id', 'history'],
   ['orders', 'agent_id', 'orders'],
   ['risk_confirms', 'user_id', 'orders'],
   ['orders', 'created_by', 'orders'],
@@ -106,6 +107,8 @@ export const WAREHOUSE_REFS: readonly Ref[] = [
  * its empty stock lines, AI Spy's notes on a product, a password link), or only say who changed a setting.
  */
 export const NOT_REFS: readonly string[] = [
+  // A seller's product id in an agency schema, not a reference to this schema's products table.
+  'management_billing_terms.product_id',
   'password_resets.profile_id',
   'action_locks.user_id',
   'settings.updated_by',

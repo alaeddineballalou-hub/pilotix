@@ -19,6 +19,7 @@ import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { UsersPage } from '../admin/Users';
 import { ManagementPlans } from '../admin/ManagementPlans';
+import { PlanSummary } from '../admin/PlanSummary';
 import { KpiBox } from '../dashboard/util';
 import type { PageProps } from '../registry';
 import { BillLines, billOf, BillsList, CountsLine, CountsRow, EndModal, Lead, LinkStatus, monthLabel, MonthPicker, PriceEditor, PriceList, TaskChips, TaskPicker, usePartnerKind, useTp } from './parts';
@@ -278,6 +279,9 @@ function FindStore({ h }: { h: Home }) {
   const { t } = useTranslation();
   const tp = useTp();
   const kind = usePartnerKind();
+  const templates=useRpc('management.plans',{}, {enabled:kind==='agency'});
+  const [planId,setPlanId]=useState<number|null>(null);
+  const offered=templates.data?.plans.find(p=>p.id===planId);
   const [code, setCode] = useState('');
   const [found, setFound] = useState<Out<'agency.find'> | null>(null);
   const [tasks, setTasks] = useState<AgencyTask[]>(kind === 'marketer' ? ['marketing'] : ['confirmation']);
@@ -326,12 +330,13 @@ function FindStore({ h }: { h: Home }) {
                   <TaskPicker value={tasks} onChange={setTasks} />
                 </Field>
               )}
-              {!hasPrice(h.agency.prices ?? NO_AGENCY_PRICES) && <p className="agx-note warn">{t('agency.store.noPriceYet')} <a href="#/facturation">{t('agency.mnav.facturation')}</a></p>}
+              {kind==='agency'&&<Field label="Plan de facturation proposé"><select value={planId??''} onChange={e=>setPlanId(e.target.value?Number(e.target.value):null)}><option value="">Tarif historique de l’agence</option>{templates.data?.plans.filter(p=>p.kind==='billing'&&p.active).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>{offered&&<PlanSummary plan={offered.configuration}/>}</Field>}
+              {!planId&&!hasPrice(h.agency.prices ?? NO_AGENCY_PRICES) && <p className="agx-note warn">{t('agency.store.noPriceYet')} <a href="#/facturation">{t('agency.mnav.facturation')}</a></p>}
               <div className="row agx-actions">
                 <button type="button" className="btn" onClick={() => setFound(null)}>
                   {t('common.cancel')}
                 </button>
-                <button type="button" className="btn primary" disabled={!tasks.length || !hasPrice(h.agency.prices ?? NO_AGENCY_PRICES) || ask.isPending || !h.agency.verified} onClick={() => ask.mutate({ storeId: found.store.id, tasks })}>
+                <button type="button" className="btn primary" disabled={!tasks.length || (!planId&&!hasPrice(h.agency.prices ?? NO_AGENCY_PRICES)) || ask.isPending || !h.agency.verified} onClick={() => ask.mutate({ storeId: found.store.id, tasks, ...(planId?{planId}:{}) })}>
                   <Icon name="send" /> {t('agency.sendRequest')}
                 </button>
               </div>
@@ -769,7 +774,7 @@ export function Facturation(_: PageProps) {
 export function AgencyUsers({ sub, rest }: PageProps) {
   const { session } = useSession();
   return <div className="agx-page">
-    {session?.isAdmin && <ManagementPlans agency initialKind="agent" />}
+    {session?.isAdmin && session.shop?.kind==='agency' && <ManagementPlans agency initialKind="agent" />}
     <UsersPage sub={sub} rest={rest} agency />
   </div>;
 }
