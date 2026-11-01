@@ -3,6 +3,7 @@ import { adminProcs } from './modules/admin';
 import { adsProcs } from './modules/ads';
 import { agencyProcs } from './modules/agencies';
 import { managementPlanProcs } from './modules/managementplans';
+import { bonusProcs } from './modules/bonusrules';
 import { proProcs } from './modules/pro';
 import { agencyWorkProcs } from './modules/agencywork';
 import { archiveProcs } from './modules/archive';
@@ -91,6 +92,7 @@ export const REGISTRY = {
   ...archiveProcs,
   ...agencyProcs,
   ...managementPlanProcs,
+  ...bonusProcs,
   ...proProcs,
   ...agencyWorkProcs,
 };
