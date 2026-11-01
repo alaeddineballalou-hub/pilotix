@@ -21,7 +21,7 @@ test('V2 agency billing, agent payroll and separately accepted bonuses use real 
   const chief=await ctx(agency),seller=await ctx(store);
   const rpc=(c:Ctx,n:string,i:any={})=>call(n,c,i) as Promise<any>;
   await t.platform.query('UPDATE platform.shops SET agency_verified_at=now() WHERE id=$1',[agency.id]);
-  await rpc(chief,'agency.prices',{prices:{...NO_AGENCY_PRICES,perConfirmed:0}});
+  await rpc(chief,'agency.prices',{prices:{...NO_AGENCY_PRICES,perConfirmed:5}});
   const product=Number((await seller.db.query("INSERT INTO products(name,sku,price) VALUES('Velo','VELO-V2',10000) RETURNING id"))[0].id);
   const created=await rpc(chief,'users.create',{name:'Nora',email:'nora-ppm@example.dz',phone:'0712345678',password:PW,roles:['confirmation']});
   const link=await rpc(chief,'agency.request',{storeId:store.id,tasks:['confirmation','suivi']});
