@@ -21,6 +21,7 @@ type Ref = readonly [table: string, column: string, use: UseKind];
 /** Every column that points to an account (profiles.id): an account found in one of them did some work. */
 export const USER_REFS: readonly Ref[] = [
   ['management_agent_terms', 'profile_id', 'history'],
+  ['management_bonus_offers', 'agent_id', 'history'],
   ['orders', 'agent_id', 'orders'],
   ['risk_confirms', 'user_id', 'orders'],
   ['orders', 'created_by', 'orders'],

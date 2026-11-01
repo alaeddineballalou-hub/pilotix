@@ -91,10 +91,13 @@ function planLines(buckets:Map<number,Bucket>, active:Term[]):BillLine[] {
   return lines;
 }
 
-export interface BonusEvent {id:string;at:string;event:'confirmed'|'delivered'}
+export interface BonusEvent {id:string;at:string;event:'confirmed'|'delivered';linkId?:number}
 /** Independent bonuses are counted once per recipient and month using effective-dated snapshots. */
 export async function bonusLines(db:Db,targetKind:'seller'|'agent',targetId:number,events:BonusEvent[],end:string):Promise<BillLine[]> {
-  const rows=await db.query('SELECT * FROM management_bonus_terms WHERE target_kind=$1 AND target_id=$2 AND effective_at<=$3 ORDER BY effective_at,id',[targetKind,targetId,end]);
+  const rows=await db.query(`SELECT t.*,b.source_link_id FROM management_bonus_terms t
+    JOIN management_bonus_rules b ON b.id=t.bonus_id
+    WHERE t.target_kind=$1 AND t.target_id=$2 AND t.effective_at<=$3
+    ORDER BY t.effective_at,t.id`,[targetKind,targetId,end]);
   const ids=[...new Set(rows.map(r=>num(r.bonus_id)))];const lines:BillLine[]=[];
   for(const id of ids){
     const versions=rows.filter(r=>num(r.bonus_id)===id);
@@ -105,7 +108,10 @@ export async function bonusLines(db:Db,targetKind:'seller'|'agent',targetId:numb
     for(const event of events){
       if(event.at>end)continue;
       const rule=versions.filter(r=>iso(r.effective_at)<=event.at).at(-1);
-      if(rule?.enabled && rule.trigger===event.event)counted.add(event.id+':'+event.event);
+      // Agent bonuses offered after a seller's request apply ONLY to that seller's contract.
+      if(rule?.enabled && rule.trigger===event.event &&
+        (targetKind!=='agent'||rule.source_link_id===null||num(rule.source_link_id)===event.linkId))
+        counted.add(event.id+':'+event.event);
     }
     const threshold=num(current.threshold),amount=num(current.amount);
     if(counted.size>=threshold&&amount>0)lines.push({key:'plan',label:current.name+' · Bonus indépendant ('+counted.size+'/'+threshold+')',qty:1,price:amount,amount});
@@ -238,23 +244,30 @@ export async function agencyPayroll(ctx:Ctx,month:string) {
   if(frozen)return {month,rows:json(frozen.details) as {id:number;name:string;operations:number;lines:BillLine[];total:number}[],total:num(frozen.total),closedAt:iso(frozen.closed_at)};
   const people=await ctx.db.query('SELECT id,name,email FROM profiles WHERE agency_id IS NULL ORDER BY name');
   const terms=(await ctx.db.query('SELECT * FROM management_agent_terms WHERE effective_at<$1 ORDER BY effective_at,id',[to])).map(r=>term(r,'profile_id'));
-  const links=await t.platform.query(`SELECT DISTINCT s.schema_name FROM platform.agency_links l JOIN platform.shops s ON s.id=l.store_id WHERE l.agency_id=$1 AND l.started_at IS NOT NULL AND s.status<>'deleted'`,[ctx.shop!.id]);
+  const links=await t.platform.query(`SELECT l.id,s.schema_name,l.started_at,l.ended_at
+    FROM platform.agency_links l JOIN platform.shops s ON s.id=l.store_id
+    WHERE l.agency_id=$1 AND l.started_at IS NOT NULL AND s.status<>'deleted'`,[ctx.shop!.id]);
+  const bySchema=new Map<string,any[]>();
+  for(const l of links)bySchema.set(String(l.schema_name),[...(bySchema.get(String(l.schema_name))??[]),l]);
   const byEmail=new Map(people.map(p=>[String(p.email).toLowerCase(),num(p.id)]));
   const buckets=new Map<number,Map<number,Bucket>>();
   const allBonusEvents=new Map<number,BonusEvent[]>();
-  for(const l of links) {
-    const db=t.shop(l.schema_name);
+  for(const [schema,contractLinks] of bySchema) {
+    const db=t.shop(schema);
     const profiles=await db.query('SELECT id,email,agency_profile_id FROM profiles WHERE agency_id=$1',[ctx.shop!.id]);
     const owned=new Set(people.map(p=>num(p.id)));
     const ids=new Map(profiles.map(p=>[num(p.id),owned.has(num(p.agency_profile_id))?num(p.agency_profile_id):byEmail.get(String(p.email).toLowerCase())]));
     for(const o of await operations(db,ctx.shop!.id,from,to))for(const event of ['confirmed','delivered'] as const) {
       const at=o[event];if(!inRange(at,from,to))continue;
+      const link=contractLinks.find(l=>iso(l.started_at)<=at!&&(!l.ended_at||at!<iso(l.ended_at)));
+      // Do not credit an operation to an ended or not-yet-started seller contract.
+      if(!link)continue;
       const actors=new Set<number>();
       const conf=num(o.row.conf_agency_id)===ctx.shop!.id?ids.get(num(o.row.agent_id)):undefined;
       if(conf)actors.add(conf);
       if(event==='delivered'&&num(o.row.follow_agency_id)===ctx.shop!.id){const f=ids.get(num(o.row.follow_agent_id));if(f)actors.add(f);}
       for(const id of actors){
-        const es=allBonusEvents.get(id)??[];es.push({id:String(o.row.id),at:at!,event});allBonusEvents.set(id,es);
+        const es=allBonusEvents.get(id)??[];es.push({id:String(o.row.id),at:at!,event,linkId:num(link.id)});allBonusEvents.set(id,es);
         const history=terms.filter(t=>t.target===id);
         const original=id===conf&&o.confirmed?chosen(history,id,o.confirmed):undefined;
         const use=original?.config?original:chosen(history,id,at!);if(!use?.config)continue;

@@ -48,27 +48,52 @@ test('V2 agency billing, agent payroll and separately accepted bonuses use real 
   assert.equal(beforeBill.total,300,'5 -> 7 units: one normal 100 DA and two extra at 100 DA');
   assert.equal((await rpc(chief,'management.payroll',{month:ym(clock)})).total,300);
   await assert.rejects(rpc(chief,'management.planDelete',{id:billPlan.id}),/affecté/);
-  const aBonus=await rpc(chief,'management.bonusSave',{kind:'agent',name:'Prime 1 livraison',trigger:'delivered',threshold:1,amount:500});
-  await rpc(chief,'management.bonusAssign',{targetKind:'agent',targetId:created.id,bonusId:aBonus.id,enabled:true});
-  const sBonus=await rpc(chief,'management.bonusSave',{kind:'billing',name:'Bonus 1 livraison',trigger:'delivered',threshold:1,amount:700});
-  const pending=await rpc(chief,'management.bonusAssign',{targetKind:'seller',targetId:link.id,bonusId:sBonus.id,enabled:true});
-  assert.equal(pending.status,'pending','seller must approve bonus');
-  assert.equal((await rpc(seller,'partners.link',{id:link.id})).bill.total,300,'pending seller bonus cannot be billed');
-  assert.equal((await rpc(chief,'management.payroll',{month:ym(clock)})).total,300,'bonus effective only for future operations');
-  await rpc(seller,'partners.decideBonus',{linkId:link.id,bonusId:sBonus.id,accept:true});
-  const bonusTerms=(await rpc(seller,'partners.link',{id:link.id})).bonusTerms;
-  assert.equal(bonusTerms.find((x:any)=>x.id===sBonus.id).status,'accepted');
-  await assert.rejects(rpc(chief,'management.bonusDelete',{id:sBonus.id}),/affectations/);
-  // A second eligible delivery after the seller accepts unlocks the independent monthly bonus.
+  // Seller owns the request, agency owns the acceptance and agent's offered amount.
+  await assert.rejects(rpc(chief,'management.bonusSave',{kind:'billing',name:'Forbidden agency proposal',trigger:'delivered',threshold:1,amount:700}),/vendeur/);
+  const request=await rpc(seller,'partners.requestBonus',{linkId:link.id,name:'Seller delivery objective',trigger:'delivered',threshold:1,amount:700});
+  assert.equal(request.status,'pending');
+  const listed=(await rpc(chief,'management.bonuses')).requests.find((x:any)=>x.id===request.id);
+  assert.equal(listed.status,'pending');
+  assert.equal(listed.sellerName,'Example Seller');
+  assert.equal((await rpc(seller,'partners.link',{id:link.id})).bonusTerms.find((x:any)=>x.id===request.id).status,'pending');
+  await assert.rejects(rpc(seller,'partners.decideBonus',{linkId:link.id,bonusId:request.id,accept:true}),/agence/);
+  await assert.rejects(rpc(chief,'management.bonusOfferAgent',{linkId:link.id,bonusId:request.id,agentId:created.id,amount:500}),/accepter/);
+  await rpc(chief,'management.bonusRespond',{linkId:link.id,bonusId:request.id,accept:true});
+  assert.equal((await rpc(seller,'partners.link',{id:link.id})).bonusTerms.find((x:any)=>x.id===request.id).status,'accepted');
+  const agentOffer=await rpc(chief,'management.bonusOfferAgent',{linkId:link.id,bonusId:request.id,agentId:created.id,amount:500});
+  const own=await ctx(agency,'nora-ppm@example.dz');
+  assert.deepEqual((await rpc(own,'management.myBonuses')).bonuses.map((x:any)=>x.amount),[500],
+    'agent sees agency-offered bonus immediately, never the seller amount');
+  await assert.rejects(rpc(chief,'management.bonusOfferAgent',{linkId:link.id,bonusId:request.id,agentId:created.id,amount:900}),/déjà/);
+  assert.equal((await rpc(seller,'partners.link',{id:link.id})).bill.total,300,'no retroactive seller bonus');
+  assert.equal((await rpc(chief,'management.payroll',{month:ym(clock)})).total,300,'no retroactive agent bonus');
+  // A new eligible delivery AFTER acceptance unlocks one agency bonus and one agent bonus.
   clock+=5000;
   const second=await rpc(seller,'orders.create',{customerName:'Client2',phone:'0661556601',wilayaId:31,commune:'Oran',items:[{productId:product,variantId:null,qty:5}]});
   await seller.db.query("UPDATE orders SET conf_status='confirmed',confirmed_at=$2,agent_id=$3,conf_agency_id=$4,follow_status='delivered',delivered_at=$5,follow_agent_id=$3,follow_agency_id=$4 WHERE id=$1",[second.id,new Date(clock+1000).toISOString(),mapped,agency.id,new Date(clock+2000).toISOString()]);
   clock+=3000;
   assert.equal((await rpc(seller,'partners.link',{id:link.id})).bill.total,1100,'300 + 100 + 700 seller bonus once');
   assert.equal((await rpc(chief,'management.payroll',{month:ym(clock)})).total,900,'300 + 100 + 500 agent bonus once');
-  // Seller bonus changes affect only the future, without altering earlier accepted contract snapshots.
-  await rpc(chief,'management.bonusAssign',{targetKind:'seller',targetId:link.id,bonusId:sBonus.id,enabled:false});
-  const removed=await rpc(chief,'management.bonusDelete',{id:sBonus.id});
-  assert.equal(removed.archived,true,'historical bonuses are archived, never destructively deleted');
+  // Rejecting a separate seller request does not bill or expose it to an agent.
+  const rejected=await rpc(seller,'partners.requestBonus',{linkId:link.id,name:'Refused objective',trigger:'confirmed',threshold:1,amount:800});
+  await rpc(chief,'management.bonusRespond',{linkId:link.id,bonusId:rejected.id,accept:false});
+  assert.equal((await rpc(seller,'partners.link',{id:link.id})).bonusTerms.find((x:any)=>x.id===rejected.id).status,'rejected');
+  await assert.rejects(rpc(chief,'management.bonusOfferAgent',{linkId:link.id,bonusId:rejected.id,agentId:created.id,amount:300}),/accepter/);
+  // Accepted historical tariff is no longer active once a NEW one is accepted.
+  const replacement=await rpc(chief,'management.planSave',{name:'New seller tariff',kind:'billing',configuration:cfg('double')});
+  await rpc(chief,'management.billingPropose',{linkId:link.id,productId:0,planId:replacement.id});
+  const pending=(await rpc(seller,'partners.link',{id:link.id})).planTerms.find((x:any)=>x.status==='pending');
+  await rpc(seller,'partners.decidePlan',{id:link.id,termId:pending.id,accept:true});
+  const before=(await rpc(chief,'management.plans')).blockedPlanIds;
+  assert.ok(before.includes(replacement.id)&&!before.includes(billPlan.id),'only the latest accepted tariff blocks deletion');
+  assert.equal((await rpc(chief,'management.planDelete',{id:billPlan.id})).archived,true,
+    'superseded plan is archived even while seller contract is active');
+  await rpc(chief,'agency.end',{id:link.id});
+  assert.ok(!(await rpc(chief,'management.plans')).blockedPlanIds.includes(replacement.id),
+    'ended contract cannot hold the tariff hostage');
+  assert.equal((await rpc(chief,'management.planDelete',{id:replacement.id})).archived,true,
+    'closing seller contract releases tariff while preserving history');
+  assert.equal((await rpc(own,'management.myBonuses')).bonuses.length,0,'ended seller bonus disappears from active agent offers');
+  assert.ok(agentOffer.id>0);
  }finally{await pg.close()}
 });

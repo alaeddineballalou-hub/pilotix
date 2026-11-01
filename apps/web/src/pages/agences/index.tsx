@@ -8,6 +8,7 @@ import { FormEvent, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Out, rpc } from '../../lib/backend';
 import { useAction, useRpc } from '../../lib/query';
+import { useSession } from '../../lib/session';
 import { CopyCode } from '../../ui/CopyCode';
 import { Card, Empty, ErrorBox, Field, Icon, Loading } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
@@ -420,9 +421,15 @@ function AgencyDetail({ id, kind }: { id: number; kind: PartnerKind }) {
   const tp = useTp(kind);
   const home = useRpc('partners.home', {});
   const [modal, setModal] = useState<'work' | 'end' | null>(null);
+  const {session}=useSession();
+  const [bonusName,setBonusName]=useState('');
+  const [bonusEvent,setBonusEvent]=useState<'confirmed'|'delivered'>('delivered');
+  const [bonusGoal,setBonusGoal]=useState('100');
+  const [bonusAmount,setBonusAmount]=useState('');
+  const requestBonus=useAction('partners.requestBonus',{success:'Bonus demandé à l’agence : en attente de sa décision',
+    onDone:()=>{setBonusName('');setBonusAmount('')}});
   const yes = useAction('partners.acceptPrices', { success: t('agency.store.pricesAccepted') });
   const decidePlan=useAction('partners.decidePlan',{success:'Réponse enregistrée'});
-  const decideBonus=useAction('partners.decideBonus',{success:'Réponse bonus enregistrée'});
   const paid = useAction('partners.billPaid', { success: t('agency.store.paidSaved') });
   if (q.isLoading && !q.data) return <Loading />;
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
@@ -451,15 +458,32 @@ function AgencyDetail({ id, kind }: { id: number; kind: PartnerKind }) {
         </div>
       </section>
       {d.planTerms.filter(p=>p.status==='pending').map(p=><section key={p.id} className="card agx-banner"><div><h3>Nouveau plan proposé : {p.name}</h3><p>{p.productName} · Applicable aux prochaines opérations après votre acceptation.</p><PlanSummary plan={p.configuration}/><div className="row agx-actions"><button className="btn" disabled={decidePlan.isPending} onClick={()=>decidePlan.mutate({id,termId:p.id,accept:false})}>Refuser</button><button className="btn primary" disabled={decidePlan.isPending} onClick={()=>decidePlan.mutate({id,termId:p.id,accept:true})}>Accepter le plan</button></div></div></section>)}
-      {d.bonusTerms.filter(b=>b.status==='pending').map(b=><section key={b.id} className="card agx-banner"><div>
-        <h3>Bonus proposé : {b.name}</h3>
-        <p>Objectif : {b.threshold} commandes {b.trigger==='confirmed'?'confirmées':'livrées'} · Montant : {b.amount.toLocaleString('fr-FR')} DA. Ce bonus est facturé uniquement après votre accord.</p>
-        <div className="row agx-actions">
-          <button className="btn" disabled={decideBonus.isPending} onClick={()=>decideBonus.mutate({linkId:id,bonusId:b.id,accept:false})}>Refuser</button>
-          <button className="btn primary" disabled={decideBonus.isPending} onClick={()=>decideBonus.mutate({linkId:id,bonusId:b.id,accept:true})}>Accepter le bonus</button>
+      {l.kind==='agency'&&live&&session?.isAdmin&&<section className="card ppm-panel">
+        <div className="ppm-row"><div><h2>Demander un bonus à l'agence</h2>
+          <p className="muted">Vous proposez l'objectif et le montant. L'agence accepte ou refuse ; si elle accepte, elle choisit séparément le bonus à offrir à son agent.</p>
+        </div><span className="ppm-pill">Demande vendeur</span></div>
+        <div className="ppm-grid">
+          <label className="field"><span className="lab">Nom du bonus</span><input maxLength={100} value={bonusName} onChange={e=>setBonusName(e.target.value)} placeholder="Bonus objectif livraison"/></label>
+          <label className="field"><span className="lab">Opérations</span>
+            <select value={bonusEvent} onChange={e=>setBonusEvent(e.target.value as 'confirmed'|'delivered')}>
+              <option value="confirmed">Commandes confirmées</option><option value="delivered">Commandes livrées</option>
+            </select></label>
+          <label className="field"><span className="lab">Objectif (opérations)</span><input type="number" min={1} max={1000000} value={bonusGoal} onChange={e=>setBonusGoal(e.target.value)}/></label>
+          <label className="field"><span className="lab">Montant proposé à l'agence (DA)</span><input type="number" min={1} max={10000000} value={bonusAmount} onChange={e=>setBonusAmount(e.target.value)}/></label>
         </div>
-      </div></section>)}
-      {d.bonusTerms.some(b=>b.status==='accepted')&&<details className="card"><summary>Bonus de l'agence acceptés</summary>{d.bonusTerms.filter(b=>b.status==='accepted').map(b=><p key={b.id}><b>{b.name}</b> · {b.threshold} commandes {b.trigger==='confirmed'?'confirmées':'livrées'} · {b.amount.toLocaleString('fr-FR')} DA</p>)}</details>}
+        <button className="btn primary" type="button"
+          disabled={requestBonus.isPending||!bonusName.trim()||!Number.isSafeInteger(Number(bonusGoal))||Number(bonusGoal)<1||Number(bonusGoal)>1000000||!Number.isSafeInteger(Number(bonusAmount))||Number(bonusAmount)<1||Number(bonusAmount)>10000000}
+          onClick={()=>requestBonus.mutate({linkId:id,name:bonusName.trim(),trigger:bonusEvent,threshold:Number(bonusGoal),amount:Number(bonusAmount)})}>
+          Envoyer la demande de bonus
+        </button>
+      </section>}
+      {l.kind==='agency'&&d.bonusTerms.length>0&&<section className="card ppm-panel">
+        <h3>Mes demandes de bonus</h3>
+        {d.bonusTerms.map(b=><div className="ppm-bonus-active" key={b.id}>
+          <div><b>{b.name}</b><p className="muted small">{b.threshold} commandes {b.trigger==='confirmed'?'confirmées':'livrées'} · {b.amount.toLocaleString('fr-FR')} DA</p></div>
+          <span className={'ppm-pill '+(b.status==='accepted'?'clear':'')}>{b.status==='accepted'?'Acceptée':b.status==='pending'?'En attente':b.status==='rejected'?'Refusée':'Historique'}</span>
+        </div>)}
+      </section>}
       {d.planTerms.some(p=>p.status==='accepted')&&<details className="card"><summary>Historique des plans acceptés</summary>{d.planTerms.filter(p=>p.status==='accepted').map(p=><div key={p.id}><h4>{p.productName} · {p.name} · {p.effectiveAt?new Date(p.effectiveAt).toLocaleString('fr-FR'):''}</h4><PlanSummary plan={p.configuration}/></div>)}</details>}
       {l.pricesNew && live && (
         <section className="card agx-banner" role="status">
