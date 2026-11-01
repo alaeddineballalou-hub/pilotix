@@ -95,8 +95,9 @@ export async function bonusLines(db:Db,targetKind:'seller'|'agent',targetId:numb
   const ids=[...new Set(rows.map(r=>num(r.bonus_id)))];const lines:BillLine[]=[];
   for(const id of ids){
     const versions=rows.filter(r=>num(r.bonus_id)===id);
-    const current=versions[versions.length-1];
-    if(!current?.enabled)continue;
+    // Unassigning mid-month cannot erase an objective already earned before removal.
+    const current=versions.filter(v=>v.enabled).at(-1);
+    if(!current)continue;
     const counted=new Set<string>();
     for(const event of events){
       if(event.at>end)continue;
