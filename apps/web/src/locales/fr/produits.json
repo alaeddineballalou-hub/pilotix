@@ -536,5 +536,12 @@
       "weightKg": "Poids (kg)",
       "maxDiscount": "Remise max"
     }
+  },
+  "assigned": {
+    "about": "Consultez les produits qui vous sont confiés et leur disponibilité.",
+    "search": "Rechercher un produit ou une variante…",
+    "empty": "Aucun produit attribué ou aucun résultat.",
+    "off": "Indisponible",
+    "available": "Disponible"
   }
 }

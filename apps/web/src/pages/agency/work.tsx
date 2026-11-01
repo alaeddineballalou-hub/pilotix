@@ -42,9 +42,10 @@ export function AgencyConfirmation(props: PageProps) {
 /** « Suivi » of an agency: one seller's screen, or every seller's parcels together. */
 export function AgencySuivi(props: PageProps) {
   const seller = useSeller();
+  const work = useSellers();
   return (
     <SellerScope seller={seller}>
-      <AgentView>
+      <AgentView tasks={[...work.tasks]}>
         <NotGiven task="suivi">{seller === 'all' ? <AllSuivi {...props} /> : <Suivi key={seller} {...props} />}</NotGiven>
       </AgentView>
     </SellerScope>
@@ -57,7 +58,7 @@ function NotGiven({ task, children }: { task: 'confirmation' | 'suivi'; children
   const w = useSellers();
   if (!w.loaded) return <Loading />;
   if (!w.list.length) return <Empty>{t('agency.home.noWhere')}</Empty>;
-  if (w.tasks.has(task)) return <>{children}</>;
+  if (w.tasks.has(task) || (task === 'suivi' && w.tasks.has('confirmation'))) return <>{children}</>;
   return (
     <Empty>
       <p>{w.one ? t(`agency.work.notGiven.${task}`, { seller: w.one.name }) : t(`agency.work.noneGives.${task}`)}</p>
@@ -326,15 +327,20 @@ function FocusAll({ onClose }: { onClose: () => void }) {
 }
 
 // ---------------------------------------------------------------- Suivi, every seller
-type Tab = 'alertes' | 'traites' | 'livres' | 'annules';
-const TABS: Tab[] = ['alertes', 'traites', 'livres', 'annules'];
+type Tab = 'enlivraison' | 'alertes' | 'traites' | 'livres' | 'annules';
+const TABS: Tab[] = ['enlivraison', 'alertes', 'traites', 'livres', 'annules'];
 type SuiviRow = Out<'suivi.list'>['rows'][number] & { seller?: { id: number; name: string }; extra?: { alertReason: string | null } | null };
 
 function AllSuivi({ sub }: PageProps) {
   const { t } = useTranslation();
-  const tab: Tab = TABS.includes(sub as Tab) ? (sub as Tab) : 'alertes';
+  const { has } = useSession();
+  const work = useSellers();
+  const canFollow = has('suivi');
+  const tab: Tab = TABS.includes(sub as Tab) ? (sub as Tab) : 'enlivraison';
+  const [page, setPage] = useState(1);
+  useEffect(() => setPage(1), [tab]);
   const c = useRpc('suivi.counts', {}, { refetchInterval: 60_000 }).data;
-  const q = useRpc('suivi.list', { tab }, { refetchInterval: 60_000 });
+  const q = useRpc('suivi.list', { tab, page, pageSize: 100 }, { refetchInterval: 60_000 });
   const [treat, setTreat] = useState<SuiviRow | null>(null);
   const [cancel, setCancel] = useState<SuiviRow | null>(null);
   const [busy, setBusy] = useState(false);
@@ -370,7 +376,7 @@ function AllSuivi({ sub }: PageProps) {
                   <th>{t('confirmation.col.wilaya')}</th>
                   <th>{t('confirmation.col.follow')}</th>
                   <th className="wide">{t('agency.work.reason')}</th>
-                  {tab === 'alertes' && <th />}
+                  {tab === 'alertes' && canFollow && <th />}
                 </tr>
               </thead>
               <tbody>
@@ -413,14 +419,16 @@ function AllSuivi({ sub }: PageProps) {
                     <td className="wide px-cw" data-l={t('agency.work.reason')}>
                       <div className="px-clamp">{reason(o) || <span className="muted">—</span>}</div>
                     </td>
-                    {tab === 'alertes' && (
+                    {tab === 'alertes' && canFollow && (
                       <td className="agx-row-act">
+                        {work.list.find((s) => s.id === o.seller?.id)?.tasks.includes('suivi') && <>
                         <button type="button" className="btn small primary" onClick={() => setTreat(o)}>
                           {t('suivi.act.treat')}
                         </button>
                         <button type="button" className="btn small ghost danger" onClick={() => setCancel(o)}>
                           {t('suivi.act.cancel')}
                         </button>
+                        </>}
                       </td>
                     )}
                   </tr>
@@ -430,6 +438,7 @@ function AllSuivi({ sub }: PageProps) {
           </div>
         )}
       </div>
+      {q.data && <Pager page={page} pageSize={100} total={q.data.total} onPage={setPage} />}
       {treat && treat.seller && (
         <SellerScope seller={treat.seller.id}>
           <TreatModal o={treat} reason={reason(treat)} onClose={() => setTreat(null)} />

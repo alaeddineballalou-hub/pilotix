@@ -145,7 +145,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
  * agency's chief and supervisors do the confirmation and the suivi, its agents their own task; a marketer's people the
  * ads of their ad sets. Nobody is the store's administrator (no store settings, no new orders).
  */
-export function AgentView({ children }: { children: ReactNode }) {
+export function AgentView({ children, tasks }: { children: ReactNode; tasks?: readonly string[] }) {
   const s = useContext(Ctx);
   const value = useMemo(() => {
     if (!s.session) return s;
@@ -159,9 +159,9 @@ export function AgentView({ children }: { children: ReactNode }) {
         : lead
           ? ['confirmation', 'suivi']
           : own.filter((r) => r === 'confirmation' || r === 'suivi')
-    ) as Role[];
+    ).filter((r) => !tasks || tasks.includes(r)) as Role[];
     const session: Session = { ...s.session, isAdmin: false, canManageUsers: false, roles, profile: { ...s.session.profile, agencyId: s.session.shop?.id ?? -1 } };
     return { ...s, session, has: (...want: Role[]) => want.some((r) => roles.includes(r)) };
-  }, [s]);
+  }, [s, tasks]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
