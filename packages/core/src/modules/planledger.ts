@@ -209,9 +209,13 @@ export async function stopAgentPlan(ctx:Ctx,id:number) {
   await ctx.db.tx(async db=>{
     const p=(await db.query('SELECT active,roles FROM profiles WHERE id=$1 FOR UPDATE',[id]))[0];
     if(p?.active&&p.roles.some((r:string)=>['confirmation','suivi','agent_manager'].includes(r)))return;
-    if(!(await db.query("SELECT 1 FROM management_plan_assignments WHERE target_kind='agent' AND target_id=$1",[id])).length)return;
-    await db.query('INSERT INTO management_agent_terms(profile_id,plan_id,name,configuration,effective_at) VALUES($1,NULL,$2,NULL,$3)',[id,'Affectation terminée',new Date(ctx.now()).toISOString()]);
-    await db.query("DELETE FROM management_plan_assignments WHERE target_kind='agent' AND target_id=$1",[id]);
+    if((await db.query("SELECT 1 FROM management_plan_assignments WHERE target_kind='agent' AND target_id=$1",[id])).length){
+      await db.query('INSERT INTO management_agent_terms(profile_id,plan_id,name,configuration,effective_at) VALUES($1,NULL,$2,NULL,$3)',[id,'Affectation terminée',new Date(ctx.now()).toISOString()]);
+      await db.query("DELETE FROM management_plan_assignments WHERE target_kind='agent' AND target_id=$1",[id]);
+    }
+    const bs=await db.query("SELECT b.* FROM management_bonus_assignments a JOIN management_bonus_rules b ON b.id=a.bonus_id WHERE a.target_kind='agent' AND a.target_id=$1",[id]);
+    for(const b of bs)await db.query('INSERT INTO management_bonus_terms(target_kind,target_id,bonus_id,name,trigger,threshold,amount,enabled,effective_at) VALUES($1,$2,$3,$4,$5,$6,$7,false,$8)',['agent',id,b.id,b.name,b.trigger,b.threshold,b.amount,new Date(ctx.now()).toISOString()]);
+    if(bs.length)await db.query("DELETE FROM management_bonus_assignments WHERE target_kind='agent' AND target_id=$1",[id]);
   });
 }
 /** A fixed monthly salary is counted once if its assignment worked in this month, including a final month. */
