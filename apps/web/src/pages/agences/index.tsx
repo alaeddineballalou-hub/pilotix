@@ -16,6 +16,7 @@ import { BillLines, BillsList, CountsLine, CountsRow, EndModal, Lead, LinkStatus
 import type { PageProps } from '../registry';
 import { ProSearch, ProFindCard } from '../pro';
 import '../agency/agency.css';
+import { PlanSummary } from '../admin/PlanSummary';
 
 type Home = Out<'partners.home'>;
 type Product = Home['products'][number];
@@ -338,6 +339,7 @@ function ReceivedFromAgency({ l, products, links }: { l: AgencyLinkInfo; product
   const tp = useTp(l.kind);
   const [open, setOpen] = useState(false);
   const answer = useAction('partners.answer', { success: t('agency.answered') });
+  const offer=useRpc('partners.link',{id:l.id},{enabled:l.kind==='agency'});
   return (
     <article className="agx-link">
       <header>
@@ -351,11 +353,13 @@ function ReceivedFromAgency({ l, products, links }: { l: AgencyLinkInfo; product
         <small className="muted">{t('agency.store.theirPrices')}</small>
         <PriceList p={l.prices} compact kind={l.kind} />
       </div>
+      {offer.data?.planTerms.filter(p=>p.status==='pending').map(p=><div key={p.id} className="agx-note"><b>Plan inclus : {p.name}</b><PlanSummary plan={p.configuration}/><p>Accepter le contrat accepte ce plan pour les prochaines opérations.</p></div>)}
+      {offer.error&&<p className="form-err">{offer.error.message}</p>}
       <div className="row agx-actions">
         <button type="button" className="btn" disabled={answer.isPending} onClick={() => answer.mutate({ id: l.id, accept: false })}>
           {t('agency.refuse')}
         </button>
-        <button type="button" className="btn primary" onClick={() => setOpen(true)}>
+        <button type="button" className="btn primary" disabled={l.kind==='agency'&&(offer.isLoading||!!offer.error)} onClick={() => setOpen(true)}>
           <Icon name="check" /> {t('agency.accept')}
         </button>
       </div>
@@ -417,6 +421,7 @@ function AgencyDetail({ id, kind }: { id: number; kind: PartnerKind }) {
   const home = useRpc('partners.home', {});
   const [modal, setModal] = useState<'work' | 'end' | null>(null);
   const yes = useAction('partners.acceptPrices', { success: t('agency.store.pricesAccepted') });
+  const decidePlan=useAction('partners.decidePlan',{success:'Réponse enregistrée'});
   const paid = useAction('partners.billPaid', { success: t('agency.store.paidSaved') });
   if (q.isLoading && !q.data) return <Loading />;
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
@@ -444,6 +449,8 @@ function AgencyDetail({ id, kind }: { id: number; kind: PartnerKind }) {
           </div>
         </div>
       </section>
+      {d.planTerms.filter(p=>p.status==='pending').map(p=><section key={p.id} className="card agx-banner"><div><h3>Nouveau plan proposé : {p.name}</h3><p>{p.productName} · Applicable aux prochaines opérations après votre acceptation.</p><PlanSummary plan={p.configuration}/><div className="row agx-actions"><button className="btn" disabled={decidePlan.isPending} onClick={()=>decidePlan.mutate({id,termId:p.id,accept:false})}>Refuser</button><button className="btn primary" disabled={decidePlan.isPending} onClick={()=>decidePlan.mutate({id,termId:p.id,accept:true})}>Accepter le plan</button></div></div></section>)}
+      {d.planTerms.some(p=>p.status==='accepted')&&<details className="card"><summary>Historique des plans acceptés</summary>{d.planTerms.filter(p=>p.status==='accepted').map(p=><div key={p.id}><h4>{p.productName} · {p.name} · {p.effectiveAt?new Date(p.effectiveAt).toLocaleString('fr-FR'):''}</h4><PlanSummary plan={p.configuration}/></div>)}</details>}
       {l.pricesNew && live && (
         <section className="card agx-banner" role="status">
           <Icon name="tag" />

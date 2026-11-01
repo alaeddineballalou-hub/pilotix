@@ -67,9 +67,10 @@ export interface AgencyCounts {
 
 export const NO_COUNTS: AgencyCounts = { received: 0, confirmed: 0, delivered: 0, returned: 0, upsells: 0, adsets: 0, spend: 0, orders: 0, net: 0, successes: 0 };
 
-export type BillLineKey = 'perConfirmed' | 'perDelivered' | 'perUpsell' | 'monthly' | 'bonusRate' | 'bonusVolume' | 'perSuccess' | 'profitRate';
+export type BillLineKey = 'plan' | 'perConfirmed' | 'perDelivered' | 'perUpsell' | 'monthly' | 'bonusRate' | 'bonusVolume' | 'perSuccess' | 'profitRate';
 /** One line of a bill: qty × price (profitRate: qty is the net profit in DA, price the %). */
 export interface BillLine {
+  label?: string;
   key: BillLineKey;
   qty: number;
   price: number;

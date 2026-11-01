@@ -56,5 +56,10 @@ test('the demo store gets its agency and its marketer, each with work to show', 
   assert.equal(rows.rows.length, 3);
   assert.equal(rows.rows.filter((r: any) => r.final && r.ok).length, 1);
   const billing: any = await call('agency.billing', chiefM, {});
-  assert.ok(billing.rows[0].bill.total > 0);
+  // A new month can legitimately have spend and no earned commission yet.
+  assert.ok(Number.isFinite(billing.rows[0].bill.total) && billing.rows[0].bill.total >= 0);
+  const completed = mkBills.bills[0];
+  assert.ok(completed.amount > 0, 'the completed demo month has an earned bill');
+  const previous: any = await call('agency.billing', chiefM, { month: completed.month });
+  assert.equal(previous.rows[0].bill.total, completed.amount, 'an issued bill keeps the saved amount');
 });

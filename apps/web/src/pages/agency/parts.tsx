@@ -312,9 +312,9 @@ export function BillLines({ lines, total, kind }: { lines: BillLine[]; total: nu
   return (
     <table className="agx-bill">
       <tbody>
-        {lines.map((l) => (
-          <tr key={l.key}>
-            <td>{tp(`line.${l.key}`)}</td>
+        {lines.map((l, index) => (
+          <tr key={`${l.key}-${index}`}>
+            <td>{l.label ?? tp(`line.${l.key}`)}</td>
             <td className="ltr num">{l.key === 'monthly' ? '' : l.key === 'profitRate' ? `${n(l.price)} % × ${da(l.qty)}` : `${n(l.qty)} × ${da(l.price)}`}</td>
             <td className="ltr num">{da(l.amount)}</td>
           </tr>

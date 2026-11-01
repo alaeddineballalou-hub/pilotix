@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { proc, forbidden, bad, notFound } from '../rpc';
-import { DEFAULT_MANAGEMENT_PLAN, simulateManagementPlan } from '@pilotix/shared';
+import { simulateManagementPlan } from '@pilotix/shared';
+
+import { agencyAdmin, agencyPayroll, billingTargets, json, period, proposeBilling } from './planledger';
 
 const Amount = z.number().finite().min(0).max(10_000_000);
 const Pct = z.number().finite().min(0).max(100);
@@ -9,6 +11,7 @@ const Config = z.object({
   trigger: z.enum(['confirmed','delivered']),
   rate: Amount,
   tiers: z.tuple([Amount,Amount,Amount]),
+  thresholds: z.tuple([Amount,Amount]).optional(),
   monthly: Amount,
   bonus: z.object({ enabled:z.boolean(),threshold:z.number().int().min(0).max(1_000_000),amount:Amount }),
   upsell: z.object({ enabled:z.boolean(),method:z.enum(['double','fixed','percent']),rate:Amount,trigger:z.enum(['confirmed','delivered']) }),
@@ -23,7 +26,8 @@ function validPlan(c: z.infer<typeof Config>) {
   if (c.upsell.method === 'percent' && c.upsell.rate > 100) throw bad('Le pourcentage upsell ne peut pas dépasser 100');
   if (c.upsell.enabled && c.upsell.method === 'double' && (c.method === 'none' || c.trigger !== 'confirmed')) throw bad('Double confirmation nécessite une commission de confirmation');
   // Validate with the same calculator used for the UI simulation.
-  simulateManagementPlan(c, {productPrice:16950,operations:1,upsells:1,incrementalValue:1000});
+  try { simulateManagementPlan(c, {productPrice:16950,operations:1,upsells:1,incrementalValue:1000}); }
+  catch(e) { throw bad(e instanceof Error?e.message:'Configuration invalide'); }
 }
 export const managementPlanProcs = {
   'management.plans': proc([], z.object({}), async ctx => {
@@ -36,7 +40,7 @@ export const managementPlanProcs = {
   'management.planSave': proc([], z.object({ id:Id.optional(),kind:Kind,name:z.string().trim().min(1).max(100),configuration:Config }), async (ctx,i) => {
     needSellerAdmin(ctx); validPlan(i.configuration);
     if (i.id) {
-      const old = (await ctx.db.query('SELECT kind FROM management_payment_plans WHERE id=$1',[i.id]))[0];
+      const old = (await ctx.db.query('SELECT kind FROM management_payment_plans WHERE id=$1 AND active=true',[i.id]))[0];
       if (!old) throw notFound('Plan introuvable');
       if (old.kind !== i.kind) throw bad('Le type de plan ne peut pas changer');
       await ctx.db.query('UPDATE management_payment_plans SET name=$2,configuration=$3,updated_at=now() WHERE id=$1',[i.id,i.name,JSON.stringify(i.configuration)]);
@@ -49,22 +53,38 @@ export const managementPlanProcs = {
     needSellerAdmin(ctx);
     const old=(await ctx.db.query('SELECT kind,name,configuration FROM management_payment_plans WHERE id=$1',[i.id]))[0];
     if (!old) throw notFound('Plan introuvable');
-    const r=(await ctx.db.query("INSERT INTO management_payment_plans(kind,name,configuration) VALUES($1,$2,$3) RETURNING id",[old.kind,old.name+' — Copie',JSON.stringify(old.configuration)]))[0];
+    const r=(await ctx.db.query("INSERT INTO management_payment_plans(kind,name,configuration) VALUES($1,$2,$3) RETURNING id",[old.kind,old.name+' — Copie',JSON.stringify(json(old.configuration))]))[0];
     return {id:Number(r.id)};
   }),
   'management.planAssign': proc([], z.object({targetKind:z.enum(['product','agent']),targetId:Id,planId:Id.nullable()}), async (ctx,i)=>{
     needSellerAdmin(ctx);
-    if (i.planId===null){await ctx.db.query('DELETE FROM management_plan_assignments WHERE target_kind=$1 AND target_id=$2',[i.targetKind,i.targetId]);return {ok:true};}
-    const plan=(await ctx.db.query('SELECT kind FROM management_payment_plans WHERE id=$1 AND active=true',[i.planId]))[0];
-    if (!plan || plan.kind !== (i.targetKind==='agent'?'agent':'billing')) throw bad('Plan incompatible ou inactif');
-    const target= i.targetKind==='product' ? (await ctx.db.query('SELECT id FROM products WHERE id=$1',[i.targetId]))[0] : (await ctx.db.query('SELECT id FROM profiles WHERE id=$1',[i.targetId]))[0];
-    if(!target) throw notFound('Utilisateur ou produit introuvable');
-    await ctx.db.query('INSERT INTO management_plan_assignments(target_kind,target_id,plan_id) VALUES($1,$2,$3) ON CONFLICT(target_kind,target_id) DO UPDATE SET plan_id=EXCLUDED.plan_id,updated_at=now()',[i.targetKind,i.targetId,i.planId]);
+    if(ctx.shop?.kind==='agency' && i.targetKind==='product') throw bad('Affectez un plan au contrat vendeur et à ses produits');
+    await ctx.db.tx(async db=>{
+      const target=(await db.query(i.targetKind==='product'?'SELECT id FROM products WHERE id=$1 FOR UPDATE':'SELECT id,roles,agency_id,active FROM profiles WHERE id=$1 FOR UPDATE',[i.targetId]))[0];
+      if(!target)throw notFound('Utilisateur ou produit introuvable');
+      if(i.targetKind==='agent' && (target.agency_id || !target.active || !target.roles.some((r:string)=>['confirmation','suivi','agent_manager'].includes(r)))) throw bad('Choisissez un agent actif de votre équipe');
+      const plan=i.planId===null?null:(await db.query('SELECT * FROM management_payment_plans WHERE id=$1 AND active=true',[i.planId]))[0];
+      if(i.planId!==null && (!plan || plan.kind!==(i.targetKind==='agent'?'agent':'billing')))throw bad('Plan incompatible ou inactif');
+      if(i.targetKind==='agent') await db.query('INSERT INTO management_agent_terms(profile_id,plan_id,name,configuration,effective_at) VALUES($1,$2,$3,$4,$5)',[i.targetId,i.planId,plan?.name??'Aucun plan',plan?JSON.stringify(json(plan.configuration)):null,new Date(ctx.now()).toISOString()]);
+      if(i.planId===null)await db.query('DELETE FROM management_plan_assignments WHERE target_kind=$1 AND target_id=$2',[i.targetKind,i.targetId]);
+      else await db.query('INSERT INTO management_plan_assignments(target_kind,target_id,plan_id) VALUES($1,$2,$3) ON CONFLICT(target_kind,target_id) DO UPDATE SET plan_id=EXCLUDED.plan_id,updated_at=now()',[i.targetKind,i.targetId,i.planId]);
+    });
+    return {ok:true};
+  }),
+  'management.billingTargets': proc([],z.object({}),billingTargets),
+  'management.billingPropose': proc([],z.object({linkId:Id,productId:z.number().int().min(0).default(0),planId:Id.nullable()}),proposeBilling),
+  'management.payroll': proc([],z.object({month:z.string()}),(ctx,i)=>agencyPayroll(ctx,i.month)),
+  'management.payrollClose': proc([],z.object({month:z.string()}),async(ctx,i)=>{
+    agencyAdmin(ctx);
+    const {to}=period(i.month);
+    if(Date.parse(to)>ctx.now())throw bad('Attendez la fin du mois avant de valider la paie');
+    const pay=await agencyPayroll(ctx,i.month);
+    if(!pay.closedAt)await ctx.db.query('INSERT INTO management_payrolls(month,details,total,closed_at) VALUES($1,$2,$3,$4) ON CONFLICT(month) DO NOTHING',[i.month,JSON.stringify(pay.rows),pay.total,new Date(ctx.now()).toISOString()]);
     return {ok:true};
   }),
   'management.planArchive': proc([],z.object({id:Id}),async(ctx,i)=>{
     needSellerAdmin(ctx);
-    const refs=(await ctx.db.query('SELECT count(*)::int AS n FROM management_plan_assignments WHERE plan_id=$1',[i.id]))[0]?.n;
+    const refs=(await ctx.db.query(`SELECT (SELECT count(*) FROM management_plan_assignments WHERE plan_id=$1) + (SELECT count(*) FROM management_billing_terms WHERE plan_id=$1 AND status='pending') AS n`,[i.id]))[0]?.n;
     if(Number(refs)>0) throw bad('Retirez les affectations avant d’archiver le plan');
     await ctx.db.query('UPDATE management_payment_plans SET active=false,updated_at=now() WHERE id=$1',[i.id]);
     return {ok:true};

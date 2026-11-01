@@ -39,8 +39,8 @@ export function AccountMenu({ session, onLogout, lang, onTheme }: { session: Ses
       <button type="button" className="px-me-btn" aria-haspopup="menu" aria-expanded={open} aria-label={t('shell.account', { name: p.name })} onClick={() => setOpen((v) => !v)}>
         <Avatar p={p} />
         <span className="px-me-t">
-          <b>{p.name}</b>
-          <small>{shop && shop.stores > 0 ? shop.name : role}</small>
+          <b>{shop?.name || p.name}</b>
+          <small>{shop ? `${p.name} · ${role}` : role}</small>
         </span>
         {shop && shop.supportUnread > 0 && <span className="px-me-dot" aria-hidden="true" />}
         <Icon name="chevron" className="px-me-ch" />
