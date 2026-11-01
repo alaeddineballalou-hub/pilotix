@@ -349,21 +349,21 @@ async function syncAgencyLink(db: Db, L: Link, people: AgencyPerson[], on: boole
     for (const pid of L.info.products ?? [null]) await db.query('INSERT INTO agency_routes (agency_id, task, product_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [A, task, pid]);
   // its people who work for this seller: an account in the store with the tasks they can do (the chief and its
   // managers: every task the seller gives) and, when the chief chose, their products there
-  const want = new Map<string, { name: string; hash: string; language: string; roles: AgencyTask[]; products: number[] | null }>();
+  const want = new Map<string, { name: string; hash: string; language: string; profileId:number; roles: AgencyTask[]; products: number[] | null }>();
   for (const p of people) {
     const w = workFor(p, L.info.store.id);
     if (!w) continue;
     const roles = tasks.filter((k) => isLead(p.roles) || p.roles.includes(k));
     // products the seller no longer gives fall out (none left: the person stops working here)
     const products = w.products && L.info.products ? w.products.filter((x) => L.info.products!.includes(x)) : w.products;
-    if (roles.length && (!products || products.length)) want.set(p.email, { name: p.name, hash: p.hash, language: p.language, roles, products });
+    if (roles.length && (!products || products.length)) want.set(p.email, { name: p.name, hash: p.hash, language: p.language, profileId:p.id, roles, products });
   }
   for (const [email, w] of want) {
-    const cur = (await db.query('SELECT id, agency_id FROM profiles WHERE lower(email) = $1', [email]))[0];
+    const cur = (await db.query('SELECT id,agency_id FROM profiles WHERE lower(email)=$1',[email]))[0] ?? (await db.query('SELECT id,agency_id FROM profiles WHERE agency_id=$1 AND agency_profile_id=$2 ORDER BY id LIMIT 1',[A,w.profileId]))[0];
     if (!cur)
-      await db.query('INSERT INTO profiles (name, email, password_hash, roles, language, agency_id, agency_products, active) VALUES ($1, $2, $3, $4, $5, $6, $7, true)', [w.name, email, w.hash, w.roles, w.language, A, w.products]);
+      await db.query('INSERT INTO profiles (name, email, password_hash, roles, language, agency_id, agency_products, agency_profile_id, active) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)', [w.name, email, w.hash, w.roles, w.language, A, w.products,w.profileId]);
     else if (num(cur.agency_id) === A)
-      await db.query('UPDATE profiles SET name = $2, roles = $3, password_hash = $4, agency_products = $5, active = true, archived_at = NULL WHERE id = $1', [cur.id, w.name, w.roles, w.hash, w.products]);
+      await db.query('UPDATE profiles SET name = $2, roles = $3, password_hash = $4, agency_products = $5, agency_profile_id=$6, email=$7, active = true, archived_at = NULL WHERE id = $1', [cur.id, w.name, w.roles, w.hash, w.products,w.profileId,email]);
     else problems.push(`${w.name} (${email}) a déjà un compte dans ${L.info.store.name} : il ne peut pas y travailler pour l’agence`);
   }
   // the others of this agency: closed now (their sessions end)
@@ -438,6 +438,13 @@ async function releaseStuck(db: Db, agencyId: number) {
 
 /** Every link of an agency follows it (checked, suspended, its team changed). */
 export async function syncAgency(t: Tenancy, agencyId: number): Promise<void> {
+  // Also stamp inactive people and ended contracts before a profile is renamed/anonymised.
+  const own=(await t.platform.query('SELECT schema_name,kind FROM platform.shops WHERE id=$1',[agencyId]))[0];
+  if(own?.kind==='agency') {
+    const people=await t.shop(own.schema_name).query('SELECT id,email FROM profiles WHERE agency_id IS NULL');
+    const stores=await t.platform.query(`SELECT DISTINCT s.schema_name FROM platform.agency_links l JOIN platform.shops s ON s.id=l.store_id WHERE l.agency_id=$1 AND s.status<>'deleted'`,[agencyId]);
+    for(const store of stores)await t.shop(store.schema_name).query(`UPDATE profiles p SET agency_profile_id=x.id FROM unnest($2::bigint[],$3::text[]) x(id,email) WHERE p.agency_id=$1 AND p.agency_profile_id IS NULL AND lower(p.email)=lower(x.email)`,[agencyId,people.map(p=>p.id),people.map(p=>p.email)]);
+  }
   const rows = await t.platform.query(`SELECT id FROM platform.agency_links WHERE agency_id = $1 AND status = 'active' ORDER BY id`, [agencyId]);
   for (const r of rows as any[]) await syncLink(t, num(r.id));
 }

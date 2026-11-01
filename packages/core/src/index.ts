@@ -4,6 +4,7 @@ import { REGISTRY } from './registry';
 import { agencyGate, sellerProcsOf } from './modules/agencyscope';
 import { syncAgency } from './modules/agencies';
 import { sellerCall } from './modules/agencywork';
+import { stopAgentPlan } from './modules/planledger';
 
 export * from './db';
 export * from './rpc';
@@ -49,7 +50,10 @@ export async function call(name: string, ctx: Ctx, input: unknown) {
   const kind = ctx.shop?.kind;
   const partner = kind === 'agency' || kind === 'marketer';
   if (partner && ctx.seller !== undefined && sellerProcsOf(kind).has(name)) return sellerCall(name, ctx, input, run);
+  // Stamp existing seller profiles with their stable agency identity before an e-mail change.
+  if(partner && kind==='agency' && ctx.t && ((name==='users.update' && (ctx.session.isAdmin||ctx.session.canManageUsers))||name==='me.delete')) await syncAgency(ctx.t,ctx.shop!.id);
   const out = await run(ctx, name, input);
+  if(partner && kind==='agency' && (name==='users.update'||name==='me.delete')) await stopAgentPlan(ctx,name==='me.delete'?ctx.session.profile.id:(input as {id:number}).id);
   if (partner && ctx.t && AGENCY_TEAM.has(name)) await syncAgency(ctx.t, ctx.shop!.id);
   return out;
 }

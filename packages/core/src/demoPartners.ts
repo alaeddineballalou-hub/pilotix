@@ -118,7 +118,8 @@ export async function seedDemoPartners(t: Tenancy, opts: { now?: number } = {}):
   const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
   for (const s of sets) {
     await sdb.query('INSERT INTO adsets (id, name, campaign, product_ids, marketer_id, status) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO NOTHING', [s.id, s.name, s.campaign, [s.product], s.who, s.status]);
-    for (let d = s.days; d >= 1; d--) {
+// Include today so the partner dashboard also has data on the first day of a month.
+    for (let d = s.days; d >= 0; d--) {
       if (s.stopAfter && s.days - d >= s.stopAfter) break;
       const day = new Date(now - d * DAY + 3_600_000).toISOString().slice(0, 10);
       const spend = Math.round(s.usd * (0.8 + rnd() * 0.4) * 100);

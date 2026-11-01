@@ -33,6 +33,7 @@ test('agency payment plans: real dispatch, tenant isolation, seller acceptance, 
     await assert.rejects(rpc(chief,'management.planSave',{name:'Bad',kind:'billing',configuration:config(1,{thresholds:[20000,10000]})}),/Tranches invalides/);
     await assert.rejects(rpc(chief,'management.planAssign',{targetKind:'product',targetId:1,planId:billing.id}),/contrat vendeur/);
     await chief.db.query("UPDATE profiles SET phone='0710000001' WHERE id=$1",[chief.session.profile.id]);
+    let agentEmail='nora@example.dz';
     const agent=await rpc(chief,'users.create',{name:'Nora',email:'nora@example.dz',phone:'0710000002',password:PW,roles:['confirmation']});
     await rpc(chief,'management.planAssign',{targetKind:'agent',targetId:agent.id,planId:agentPlan.id});
     await assert.rejects(rpc(chief,'management.planAssign',{targetKind:'agent',targetId:chief.session.profile.id,planId:agentPlan.id}),/agent actif/);
@@ -47,10 +48,10 @@ test('agency payment plans: real dispatch, tenant isolation, seller acceptance, 
     const product2=Number((await seller.db.query("INSERT INTO products(name,sku,price) VALUES('Poussette','POUS',22000) RETURNING id"))[0].id);
     const link=await rpc(chief,'agency.request',{storeId:store.id,tasks:['confirmation']});
     await rpc(seller,'partners.answer',{id:link.id,accept:true,products:null});
-    const mapped=Number((await seller.db.query('SELECT id FROM profiles WHERE email=$1 AND agency_id=$2',['nora@example.dz',agency.id]))[0].id);
+    const mapped=Number((await seller.db.query('SELECT id FROM profiles WHERE email=$1 AND agency_id=$2',[agentEmail,agency.id]))[0].id);
     const event=async(product:number,at:number,upsell=0,sc:Ctx=seller)=>{
       const order=await rpc(sc,'orders.create',{customerName:'Client',phone:`0661${String(++phone).padStart(6,'0')}`,wilayaId:31,commune:'Oran',items:[{productId:product,variantId:null,qty:1}]});
-      const who=Number((await sc.db.query('SELECT id FROM profiles WHERE email=$1 AND agency_id=$2',['nora@example.dz',agency.id]))[0].id);
+      const who=Number((await sc.db.query('SELECT id FROM profiles WHERE email=$1 AND agency_id=$2',[agentEmail,agency.id]))[0].id);
       await sc.db.query("UPDATE orders SET conf_status='confirmed',confirmed_at=$2,agent_id=$3,conf_agency_id=$4,follow_status='delivered',delivered_at=$5,upsell_value=$6,has_upsell=$7 WHERE id=$1",[order.id,new Date(at).toISOString(),who,agency.id,new Date(at+1000).toISOString(),upsell,upsell>0]);
       return order.id;
     };
@@ -90,6 +91,11 @@ test('agency payment plans: real dispatch, tenant isolation, seller acceptance, 
     assert.equal((await rpc(seller2,'partners.link',{id:link2.id})).bill.total,200);
     assert.equal((await rpc(chief,'management.payroll',{month:monthOf(clock)})).total,35420);
     await assert.rejects(rpc(seller2,'partners.decidePlan',{id:link.id,termId:specific.id,accept:true}),/introuvable/);
+    // E-mail changes must preserve seller profile ids and all earned commissions.
+    agentEmail='nora.changed@example.dz';
+    await rpc(chief,'users.update',{id:agent.id,email:agentEmail});
+    assert.equal(Number((await seller.db.query('SELECT id FROM profiles WHERE agency_id=$1 AND agency_profile_id=$2',[agency.id,agent.id]))[0].id),mapped);
+    assert.equal((await rpc(chief,'management.payroll',{month:monthOf(clock)})).total,35420);
     // An issued invoice cannot be silently repriced or augmented by new operations.
     await rpc(chief,'agency.billRequest',{id:link.id,month:monthOf(clock)});
     clock+=2000;await event(product1,clock);
@@ -118,6 +124,11 @@ test('agency payment plans: real dispatch, tenant isolation, seller acceptance, 
     assert.equal((await rpc(chief,'management.payroll',{month:monthOf(clock)})).total,35040);
     clock+=2000;await event(product1,clock);
     assert.equal((await rpc(chief,'management.payroll',{month:monthOf(clock)})).total,35095);
+    // Deactivating an agent keeps earned pay and the final month's salary, but stops later salaries.
+    clock+=2000;await rpc(chief,'users.update',{id:agent.id,active:false});
+    assert.equal((await rpc(chief,'management.payroll',{month:monthOf(clock)})).total,35095);
+    clock=Date.parse(periodEnd(monthOf(clock)))+1000;
+    assert.equal((await rpc(chief,'management.payroll',{month:monthOf(clock)})).total,0);
     // A marketer is not an agency. Same owner identity does not bypass workspace permissions.
     const mk=await provisionShop(t,{name:'Media Buyer',owner,password:PW,verified:true,kind:'marketer',planId:null,trialDays:0});
     await assert.rejects(rpc(await as(mk),'management.plans'),/espace d’un marketer/);

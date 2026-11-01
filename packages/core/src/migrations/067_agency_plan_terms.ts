@@ -1,5 +1,8 @@
 // Assignment revisions keep old operations on their old rules. No existing contract or pay is changed.
 export default `
+-- Stable identity of a partner employee in a seller schema; points to the partner, never a local profile.
+ALTER TABLE profiles ADD COLUMN agency_profile_id bigint;
+CREATE INDEX profiles_agency_person ON profiles(agency_id,agency_profile_id) WHERE agency_profile_id IS NOT NULL;
 CREATE TABLE management_agent_terms (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   profile_id bigint NOT NULL REFERENCES profiles(id),

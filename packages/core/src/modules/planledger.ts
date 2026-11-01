@@ -151,6 +151,22 @@ export async function decideTerms(ctx:Ctx,L:Link,termId:number,accept:boolean) {
   return {ok:true};
 }
 
+/** Closing an employee closes future assignment accrual, while keeping their history. */
+export async function stopAgentPlan(ctx:Ctx,id:number) {
+  await ctx.db.tx(async db=>{
+    const p=(await db.query('SELECT active,roles FROM profiles WHERE id=$1 FOR UPDATE',[id]))[0];
+    if(p?.active&&p.roles.some((r:string)=>['confirmation','suivi','agent_manager'].includes(r)))return;
+    if(!(await db.query("SELECT 1 FROM management_plan_assignments WHERE target_kind='agent' AND target_id=$1",[id])).length)return;
+    await db.query('INSERT INTO management_agent_terms(profile_id,plan_id,name,configuration,effective_at) VALUES($1,NULL,$2,NULL,$3)',[id,'Affectation terminée',new Date(ctx.now()).toISOString()]);
+    await db.query("DELETE FROM management_plan_assignments WHERE target_kind='agent' AND target_id=$1",[id]);
+  });
+}
+/** A fixed monthly salary is counted once if its assignment worked in this month, including a final month. */
+function salaryTerm(history:Term[],from:string,end:string):Term|undefined {
+  const sorted=[...history].sort((a,b)=>a.at.localeCompare(b.at)||a.id-b.id);
+  return sorted.filter((t,i)=>t.config&&t.at<=end&&(!sorted[i+1]||sorted[i+1].at>from)&&(sorted[i+1]?.at!==t.at)).pop();
+}
+
 export async function agencyPayroll(ctx:Ctx,month:string) {
   const t=agencyAdmin(ctx);const {from,to}=period(month);
   const frozen=(await ctx.db.query('SELECT details,closed_at,total FROM management_payrolls WHERE month=$1',[month]))[0];
@@ -162,8 +178,9 @@ export async function agencyPayroll(ctx:Ctx,month:string) {
   const buckets=new Map<number,Map<number,Bucket>>();
   for(const l of links) {
     const db=t.shop(l.schema_name);
-    const profiles=await db.query('SELECT id,email FROM profiles WHERE agency_id=$1',[ctx.shop!.id]);
-    const ids=new Map(profiles.map(p=>[num(p.id),byEmail.get(String(p.email).toLowerCase())]));
+    const profiles=await db.query('SELECT id,email,agency_profile_id FROM profiles WHERE agency_id=$1',[ctx.shop!.id]);
+    const owned=new Set(people.map(p=>num(p.id)));
+    const ids=new Map(profiles.map(p=>[num(p.id),owned.has(num(p.agency_profile_id))?num(p.agency_profile_id):byEmail.get(String(p.email).toLowerCase())]));
     for(const o of await operations(db,ctx.shop!.id,from,to))for(const event of ['confirmed','delivered'] as const) {
       const at=o[event];if(!inRange(at,from,to))continue;
       const actors=new Set<number>();
@@ -177,7 +194,7 @@ export async function agencyPayroll(ctx:Ctx,month:string) {
     }
   }
   const rows=people.filter(p=>terms.some(t=>t.target===num(p.id))).map(p=>{
-    const id=num(p.id);const active=chosen(terms.filter(t=>t.target===id),id,cutoff(to,ctx.now()));
+    const id=num(p.id);const active=salaryTerm(terms.filter(t=>t.target===id),from,cutoff(to,ctx.now()));
     const b=buckets.get(id)??new Map<number,Bucket>();
     const lines=planLines(b,active?[active]:[]);
     return {id,name:String(p.name),operations:[...b.values()].reduce((n,b)=>n+b.count,0),lines,total:lines.reduce((n,l)=>n+l.amount,0)};
