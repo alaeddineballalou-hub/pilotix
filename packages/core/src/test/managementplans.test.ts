@@ -37,3 +37,21 @@ test('FIX 01: flexible boundaries, unlimited last tranche and calculation',()=>{
  assert.match(validatePriceBrackets([{from:0,to:5,amount:1},{from:5,to:null,amount:2}])!,/chevauchantes/);
  assert.match(validatePriceBrackets([{from:0,to:5,amount:1}])!,/sans limite/);
 });
+
+test('payment plans V2: delivery-only QTY, Double, Percent and Fixed upsell, always unit price',()=>{
+  const base={...structuredClone(DEFAULT_MANAGEMENT_PLAN),method:'fixed' as const,rate:100,bonus:{enabled:false,threshold:100,amount:0}};
+  const simulation={productPrice:10000,operations:1,upsells:1,incrementalValue:200000,originalQty:5,deliveredQty:7};
+  const calc=(method:'double'|'qty'|'percent'|'fixed',rate=0,deliveredQty=7)=>simulateManagementPlan({
+    ...base,upsell:{enabled:true,method,rate,trigger:'delivered',ruleVersion:2},
+  },{...simulation,deliveredQty});
+  assert.equal(calc('double').upsell,100);
+  assert.equal(calc('double').total,200);
+  assert.equal(calc('double',0,20).total,200,'Double caps at one extra base commission');
+  assert.equal(calc('qty').upsell,200,'5 original, 7 delivered -> 2 additional commission units');
+  assert.equal(calc('qty').total,300,'base 100 + 2 extra units x 100');
+  assert.equal(calc('percent',2).upsell,200,'2% of 10,000 DA unit price, not order total or incremental sales');
+  assert.equal(calc('fixed',75).upsell,75);
+  assert.equal(calc('qty',0,5).upsell,0,'no quantity increase, no upsell');
+  assert.equal(calc('percent',2,4).upsell,0,'fewer delivered units, no upsell');
+  assert.throws(()=>simulateManagementPlan({...base,upsell:{enabled:true,method:'qty',rate:0,trigger:'confirmed',ruleVersion:2}},simulation),/livraison/);
+});

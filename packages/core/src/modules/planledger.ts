@@ -27,27 +27,51 @@ function chosen(terms:Term[], target:number, at:string):Term|undefined {
 }
 const cutoff = (to:string, now:number) => new Date(Math.min(Date.parse(to)-1,now)).toISOString();
 function inRange(at:any, from:string, to:string) { return !!at && iso(at)>=from && iso(at)<to; }
-interface Operation { price:number; product:number; upsell:number; confirmed:string|null; delivered:string|null; row:any; }
+interface Operation { price:number; product:number; primary:boolean; upsell:number; originalQty:number; deliveredQty:number; confirmed:string|null; delivered:string|null; row:any; }
 async function operations(db:Db, agency:number, from:string, to:string):Promise<Operation[]> {
-  const rows=await db.query(`SELECT o.*, (SELECT unit_price FROM order_items WHERE order_id=o.id ORDER BY id LIMIT 1) AS first_price,
-    (SELECT product_id FROM order_items WHERE order_id=o.id ORDER BY id LIMIT 1) AS first_product
+  const rows=await db.query(`SELECT o.*,
+    (SELECT jsonb_agg(jsonb_build_object('productId',i.product_id,'variantId',i.variant_id,'qty',i.qty,'unitPrice',i.unit_price,'isUpsell',i.is_upsell) ORDER BY i.id)
+       FROM order_items i WHERE i.order_id=o.id) AS live_items
     FROM sales o WHERE (o.conf_agency_id=$1 OR o.follow_agency_id=$1)
     AND ((o.confirmed_at >= $2 AND o.confirmed_at < $3) OR (o.delivered_at >= $2 AND o.delivered_at < $3))`,[agency,from,to]);
-  return rows.map(r=>{
-    const original=json(r.orig_items)?.[0];
-    return {price:num(original?.unitPrice??r.first_price), product:num(r.route_product_id??original?.productId??r.first_product),upsell:num(r.upsell_value),
-      confirmed:r.confirmed_at?iso(r.confirmed_at):null,delivered:r.delivered_at&&['delivered','exchanged'].includes(r.follow_status)?iso(r.delivered_at):null,row:r};
-  });
+  const result:Operation[]=[];
+  for(const r of rows){
+    const current=json(r.live_items) as {productId:number;variantId:number|null;qty:number;unitPrice:number;isUpsell:boolean}[]|null;
+    const originals=json(r.orig_items) as {productId:number;variantId:number|null;qty:number;unitPrice:number}[]|null;
+    const live=current??[];
+    // An older order without a snapshot has no reliable quantity-increase evidence: use the live quantity as baseline.
+    const before=originals??live.filter(i=>!i.isUpsell);
+    const key=(i:{productId:number;variantId:number|null})=>String(i.productId)+':'+String(i.variantId??'');
+    const grouped=new Map<string,{product:number;price:number;originalQty:number;deliveredQty:number}>();
+    for(const i of before){
+      const k=key(i);const e=grouped.get(k)??{product:num(i.productId),price:num(i.unitPrice),originalQty:0,deliveredQty:0};
+      e.originalQty+=num(i.qty);grouped.set(k,e);
+    }
+    for(const i of live){
+      const k=key(i);const e=grouped.get(k)??{product:num(i.productId),price:num(i.unitPrice),originalQty:0,deliveredQty:0};
+      e.deliveredQty+=num(i.qty);grouped.set(k,e);
+    }
+    let primary=true;
+    for(const e of grouped.values()) {
+      if(e.originalQty<=0&&e.deliveredQty<=0)continue;
+      result.push({price:e.price,product:e.product,primary,originalQty:e.originalQty,deliveredQty:e.deliveredQty,upsell:num(r.upsell_value),
+        confirmed:r.confirmed_at?iso(r.confirmed_at):null,
+        delivered:r.delivered_at&&['delivered','exchanged'].includes(r.follow_status)?iso(r.delivered_at):null,row:r});
+      primary=false;
+    }
+  }
+  return result;
 }
 interface Bucket { term:Term; main:number; upsell:number; count:number; upsells:number; }
 function addEvent(buckets:Map<number,Bucket>, t:Term, o:Operation, event:'confirmed'|'delivered', upsellOwner=true) {
   if(!t.config) return;
   const p=t.config;
-  const main=p.trigger===event;
-  const up=upsellOwner&&o.upsell>0&&p.upsell.enabled&&p.upsell.trigger===event;
+  // Old contracts were per order; modern rules can assess each distinct product line.
+  const main=p.trigger===event&&(p.upsell.ruleVersion===2||o.primary);
+  const up=upsellOwner&&p.upsell.enabled&&(p.upsell.ruleVersion===2 ? (event==='delivered'&&o.deliveredQty>o.originalQty) : (o.primary&&o.upsell>0&&p.upsell.trigger===event));
   if(!main&&!up) return;
   const calc=simulateManagementPlan({...p,monthly:0,bonus:{...p.bonus,enabled:false}},
-    {productPrice:o.price,operations:main?1:0,upsells:up?1:0,incrementalValue:o.upsell});
+    {productPrice:o.price,operations:main?1:0,upsells:up?1:0,incrementalValue:o.upsell,originalQty:o.originalQty,deliveredQty:o.deliveredQty});
   const b=buckets.get(t.id)??{term:t,main:0,upsell:0,count:0,upsells:0};
   b.main+=calc.main; b.upsell+=calc.upsell;b.count+=main?1:0;b.upsells+=up?1:0;buckets.set(t.id,b);
 }
@@ -67,6 +91,27 @@ function planLines(buckets:Map<number,Bucket>, active:Term[]):BillLine[] {
   return lines;
 }
 
+export interface BonusEvent {id:string;at:string;event:'confirmed'|'delivered'}
+/** Independent bonuses are counted once per recipient and month using effective-dated snapshots. */
+export async function bonusLines(db:Db,targetKind:'seller'|'agent',targetId:number,events:BonusEvent[],end:string):Promise<BillLine[]> {
+  const rows=await db.query('SELECT * FROM management_bonus_terms WHERE target_kind=$1 AND target_id=$2 AND effective_at<=$3 ORDER BY effective_at,id',[targetKind,targetId,end]);
+  const ids=[...new Set(rows.map(r=>num(r.bonus_id)))];const lines:BillLine[]=[];
+  for(const id of ids){
+    const versions=rows.filter(r=>num(r.bonus_id)===id);
+    // Unassigning mid-month cannot erase an objective already earned before removal.
+    const current=versions.filter(v=>v.enabled).at(-1);
+    if(!current)continue;
+    const counted=new Set<string>();
+    for(const event of events){
+      if(event.at>end)continue;
+      const rule=versions.filter(r=>iso(r.effective_at)<=event.at).at(-1);
+      if(rule?.enabled && rule.trigger===event.event)counted.add(event.id+':'+event.event);
+    }
+    const threshold=num(current.threshold),amount=num(current.amount);
+    if(counted.size>=threshold&&amount>0)lines.push({key:'plan',label:current.name+' · Bonus indépendant ('+counted.size+'/'+threshold+')',qty:1,price:amount,amount});
+  }
+  return lines;
+}
 /** A contract's actual bill, using accepted rules at the time of each operation. */
 export async function contractBill(t:Tenancy,L:Link,month:string,counts:AgencyCounts,now:number) {
   const {from,to}=period(month);
@@ -74,11 +119,24 @@ export async function contractBill(t:Tenancy,L:Link,month:string,counts:AgencyCo
   const legacy=()=>partnerBill(L.info.kind,L.info.prices,counts,{monthly});
   if(L.info.kind!=='agency'||!L.storeOk) return legacy();
   const rows=await t.shop(L.agencySchema).query(`SELECT * FROM management_billing_terms WHERE link_id=$1 AND status='accepted' AND effective_at<$2 ORDER BY effective_at,id`,[L.info.id,to]);
-  if(!rows.length) return legacy();
+  const allOps=await operations(t.shop(L.storeSchema),L.info.agency.id,from,to);
+  const monthEvents:BonusEvent[]=[];
+  for(const o of allOps)for(const event of ['confirmed','delivered'] as const){
+    const at=o[event];
+    if(!inRange(at,from,to)||at!<L.info.startedAt!||(L.info.endedAt&&at!>=L.info.endedAt))continue;
+    if(event==='confirmed'&&num(o.row.conf_agency_id)!==L.info.agency.id)continue;
+    if(event==='delivered'&&num(o.row.follow_agency_id)!==L.info.agency.id)continue;
+    monthEvents.push({id:String(o.row.id),at:at!,event});
+  }
+  const bonuses=await bonusLines(t.shop(L.agencySchema),'seller',L.info.id,monthEvents,cutoff(to,now));
+  if(!rows.length) {
+    const b=legacy();const lines=[...b.lines,...bonuses];return {lines,total:lines.reduce((n,l)=>n+l.amount,0)};
+  }
   const terms=rows.map(r=>term(r,'product_id'));
   const old:AgencyCounts={...NO_COUNTS,received:counts.received,returned:counts.returned};
   const buckets=new Map<number,Bucket>();
-  for(const o of await operations(t.shop(L.storeSchema),L.info.agency.id,from,to)) {
+  const oldEvents=new Set<string>();
+  for(const o of allOps) {
     for(const event of ['confirmed','delivered'] as const) {
       const at=o[event];
       if(!inRange(at,from,to)||at!<L.info.startedAt!||(L.info.endedAt&&at!>=L.info.endedAt)) continue;
@@ -88,15 +146,18 @@ export async function contractBill(t:Tenancy,L:Link,month:string,counts:AgencyCo
       const original=o.confirmed?chosen(terms,o.product,o.confirmed):undefined;
       const use=original?.config?original:chosen(terms,o.product,at!);
       if(use?.config) addEvent(buckets,use,o,event);
-      else if(event==='confirmed') old.confirmed++;
-      else {old.delivered++;if(o.upsell>0)old.upsells++;}
+      else if(!oldEvents.has(String(o.row.id)+':'+event)) {
+        oldEvents.add(String(o.row.id)+':'+event);
+        if(event==='confirmed')old.confirmed++;
+        else{old.delivered++;if(o.upsell>0)old.upsells++;}
+      }
     }
   }
   const end=cutoff(to,Math.min(now,L.info.endedAt?Date.parse(L.info.endedAt)-1:now));
   const active=[...new Set(terms.map(t=>t.target))].map(target=>terms.filter(t=>t.target===target&&t.at<=end).sort((a,b)=>b.at.localeCompare(a.at)||b.id-a.id)[0]).filter((t):t is Term=>!!t);
   const defaultPlan=active.find(t=>t.target===0);
   const oldBill=partnerBill('agency',{...L.info.prices,monthly:defaultPlan?.config?0:L.info.prices.monthly},old,{monthly});
-  const lines=[...oldBill.lines,...planLines(buckets,active)];
+  const lines=[...oldBill.lines,...planLines(buckets,active),...bonuses];
   return {lines,total:lines.reduce((n,l)=>n+l.amount,0)};
 }
 
@@ -156,9 +217,13 @@ export async function stopAgentPlan(ctx:Ctx,id:number) {
   await ctx.db.tx(async db=>{
     const p=(await db.query('SELECT active,roles FROM profiles WHERE id=$1 FOR UPDATE',[id]))[0];
     if(p?.active&&p.roles.some((r:string)=>['confirmation','suivi','agent_manager'].includes(r)))return;
-    if(!(await db.query("SELECT 1 FROM management_plan_assignments WHERE target_kind='agent' AND target_id=$1",[id])).length)return;
-    await db.query('INSERT INTO management_agent_terms(profile_id,plan_id,name,configuration,effective_at) VALUES($1,NULL,$2,NULL,$3)',[id,'Affectation terminée',new Date(ctx.now()).toISOString()]);
-    await db.query("DELETE FROM management_plan_assignments WHERE target_kind='agent' AND target_id=$1",[id]);
+    if((await db.query("SELECT 1 FROM management_plan_assignments WHERE target_kind='agent' AND target_id=$1",[id])).length){
+      await db.query('INSERT INTO management_agent_terms(profile_id,plan_id,name,configuration,effective_at) VALUES($1,NULL,$2,NULL,$3)',[id,'Affectation terminée',new Date(ctx.now()).toISOString()]);
+      await db.query("DELETE FROM management_plan_assignments WHERE target_kind='agent' AND target_id=$1",[id]);
+    }
+    const bs=await db.query("SELECT b.* FROM management_bonus_assignments a JOIN management_bonus_rules b ON b.id=a.bonus_id WHERE a.target_kind='agent' AND a.target_id=$1",[id]);
+    for(const b of bs)await db.query('INSERT INTO management_bonus_terms(target_kind,target_id,bonus_id,name,trigger,threshold,amount,enabled,effective_at) VALUES($1,$2,$3,$4,$5,$6,$7,false,$8)',['agent',id,b.id,b.name,b.trigger,b.threshold,b.amount,new Date(ctx.now()).toISOString()]);
+    if(bs.length)await db.query("DELETE FROM management_bonus_assignments WHERE target_kind='agent' AND target_id=$1",[id]);
   });
 }
 /** A fixed monthly salary is counted once if its assignment worked in this month, including a final month. */
@@ -176,6 +241,7 @@ export async function agencyPayroll(ctx:Ctx,month:string) {
   const links=await t.platform.query(`SELECT DISTINCT s.schema_name FROM platform.agency_links l JOIN platform.shops s ON s.id=l.store_id WHERE l.agency_id=$1 AND l.started_at IS NOT NULL AND s.status<>'deleted'`,[ctx.shop!.id]);
   const byEmail=new Map(people.map(p=>[String(p.email).toLowerCase(),num(p.id)]));
   const buckets=new Map<number,Map<number,Bucket>>();
+  const allBonusEvents=new Map<number,BonusEvent[]>();
   for(const l of links) {
     const db=t.shop(l.schema_name);
     const profiles=await db.query('SELECT id,email,agency_profile_id FROM profiles WHERE agency_id=$1',[ctx.shop!.id]);
@@ -187,17 +253,20 @@ export async function agencyPayroll(ctx:Ctx,month:string) {
       const conf=num(o.row.conf_agency_id)===ctx.shop!.id?ids.get(num(o.row.agent_id)):undefined;
       if(conf)actors.add(conf);
       if(event==='delivered'&&num(o.row.follow_agency_id)===ctx.shop!.id){const f=ids.get(num(o.row.follow_agent_id));if(f)actors.add(f);}
-      for(const id of actors){const history=terms.filter(t=>t.target===id);
+      for(const id of actors){
+        const es=allBonusEvents.get(id)??[];es.push({id:String(o.row.id),at:at!,event});allBonusEvents.set(id,es);
+        const history=terms.filter(t=>t.target===id);
         const original=id===conf&&o.confirmed?chosen(history,id,o.confirmed):undefined;
         const use=original?.config?original:chosen(history,id,at!);if(!use?.config)continue;
         const b=buckets.get(id)??new Map<number,Bucket>();addEvent(b,use,o,event,id===conf);buckets.set(id,b);}
     }
   }
-  const rows=people.filter(p=>terms.some(t=>t.target===num(p.id))).map(p=>{
+  const rows=[];
+  for(const p of people.filter(p=>terms.some(t=>t.target===num(p.id))||allBonusEvents.has(num(p.id)))) {
     const id=num(p.id);const active=salaryTerm(terms.filter(t=>t.target===id),from,cutoff(to,ctx.now()));
     const b=buckets.get(id)??new Map<number,Bucket>();
-    const lines=planLines(b,active?[active]:[]);
-    return {id,name:String(p.name),operations:[...b.values()].reduce((n,b)=>n+b.count,0),lines,total:lines.reduce((n,l)=>n+l.amount,0)};
-  });
+    const lines=[...planLines(b,active?[active]:[]),...await bonusLines(ctx.db,'agent',id,allBonusEvents.get(id)??[],cutoff(to,ctx.now()))];
+    rows.push({id,name:String(p.name),operations:[...b.values()].reduce((n,b)=>n+b.count,0),lines,total:lines.reduce((n,l)=>n+l.amount,0)});
+  }
   return {month,rows,total:rows.reduce((n,r)=>n+r.total,0),closedAt:null as string|null};
 }

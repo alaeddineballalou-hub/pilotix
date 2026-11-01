@@ -15,7 +15,7 @@ const Config = z.object({
   ranges: z.array(z.object({from:z.number().int().min(0),to:z.number().int().min(0).nullable(),amount:Amount})).min(1).max(100).optional(),
   monthly: Amount,
   bonus: z.object({ enabled:z.boolean(),threshold:z.number().int().min(0).max(1_000_000),amount:Amount }),
-  upsell: z.object({ enabled:z.boolean(),method:z.enum(['double','fixed','percent']),rate:Amount,trigger:z.enum(['confirmed','delivered']) }),
+  upsell: z.object({ enabled:z.boolean(),method:z.enum(['double','qty','fixed','percent']),rate:Amount,trigger:z.enum(['confirmed','delivered']),ruleVersion:z.literal(2).optional() }),
 }).strict();
 const Kind = z.enum(['billing','agent']);
 const Id = z.number().int().positive();
@@ -25,7 +25,9 @@ function needSellerAdmin(ctx: any) {
 function validPlan(c: z.infer<typeof Config>) {
   if (c.method === 'percent' && c.rate > 100) throw bad('Le pourcentage ne peut pas dépasser 100');
   if (c.upsell.method === 'percent' && c.upsell.rate > 100) throw bad('Le pourcentage upsell ne peut pas dépasser 100');
-  if (c.upsell.enabled && c.upsell.method === 'double' && (c.method === 'none' || c.trigger !== 'confirmed')) throw bad('Double confirmation nécessite une commission de confirmation');
+  if (c.upsell.enabled && ['double','qty'].includes(c.upsell.method) && (c.method === 'none' || (!c.upsell.ruleVersion && c.trigger !== 'confirmed'))) throw bad('Double confirmation ou QTY nécessite une commission principale');
+  if (c.upsell.ruleVersion===2 && c.upsell.enabled && c.upsell.trigger!=='delivered') throw bad('Upsell uniquement à la livraison');
+  if (c.upsell.ruleVersion===2 && c.bonus.enabled) throw bad('Configurez les bonus dans leur onglet séparé');
   if(c.method==='tier'&&c.ranges){const err=validatePriceBrackets(c.ranges);if(err)throw bad(err);}
   // Validate with the same calculator used for the UI simulation.
   try { simulateManagementPlan(c, {productPrice:16950,operations:1,upsells:1,incrementalValue:1000}); }
@@ -45,6 +47,7 @@ export const managementPlanProcs = {
       const old = (await ctx.db.query('SELECT kind FROM management_payment_plans WHERE id=$1 AND active=true',[i.id]))[0];
       if (!old) throw notFound('Plan introuvable');
       if (old.kind !== i.kind) throw bad('Le type de plan ne peut pas changer');
+      if((await ctx.db.query("SELECT 1 FROM management_plan_assignments WHERE plan_id=$1 UNION ALL SELECT 1 FROM management_billing_terms WHERE plan_id=$1 AND status IN ('pending','accepted') LIMIT 1",[i.id])).length)throw bad('Plan affecté : dupliquez-le avant modification');
       await ctx.db.query('UPDATE management_payment_plans SET name=$2,configuration=$3,updated_at=now() WHERE id=$1',[i.id,i.name,JSON.stringify(i.configuration)]);
       return { id:i.id };
     }
@@ -83,6 +86,19 @@ export const managementPlanProcs = {
     const pay=await agencyPayroll(ctx,i.month);
     if(!pay.closedAt)await ctx.db.query('INSERT INTO management_payrolls(month,details,total,closed_at) VALUES($1,$2,$3,$4) ON CONFLICT(month) DO NOTHING',[i.month,JSON.stringify(pay.rows),pay.total,new Date(ctx.now()).toISOString()]);
     return {ok:true};
+  }),
+  'management.planDelete': proc([],z.object({id:Id}),async(ctx,i)=>{
+    needSellerAdmin(ctx);
+    return ctx.db.tx(async db=>{
+      const p=(await db.query('SELECT id FROM management_payment_plans WHERE id=$1 AND active FOR UPDATE',[i.id]))[0];
+      if(!p)throw notFound('Plan introuvable');
+      const active=(await db.query("SELECT 1 FROM management_plan_assignments WHERE plan_id=$1 UNION ALL SELECT 1 FROM management_billing_terms WHERE plan_id=$1 AND status IN ('pending','accepted') LIMIT 1",[i.id])).length;
+      if(active)throw bad('Plan affecté : retirez les affectations avant de supprimer');
+      const history=(await db.query("SELECT 1 FROM management_billing_terms WHERE plan_id=$1 UNION ALL SELECT 1 FROM management_agent_terms WHERE plan_id=$1 LIMIT 1",[i.id])).length;
+      if(history)await db.query('UPDATE management_payment_plans SET active=false,updated_at=now() WHERE id=$1',[i.id]);
+      else await db.query('DELETE FROM management_payment_plans WHERE id=$1',[i.id]);
+      return {ok:true,archived:!!history};
+    });
   }),
   'management.planArchive': proc([],z.object({id:Id}),async(ctx,i)=>{
     needSellerAdmin(ctx);

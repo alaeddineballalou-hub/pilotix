@@ -40,6 +40,7 @@ import { bad, Ctx, forbidden, notFound, proc } from '../rpc';
 import { cleanPrices } from '../platform/shops';
 import { sellersOrNull } from './agencyscope';
 import { contractBill, contractTerms, decideTerms } from './planledger';
+import { sellerBonusTerms } from './bonusrules';
 import { marketerMonth } from './marketers';
 import { SCHEMA_RE, type Tenancy } from '../platform/tenancy';
 
@@ -508,7 +509,7 @@ async function linkDetail(t: Tenancy, L: Link, month: string, now: number) {
   const counts = await linkCounts(t, L, month, now);
   const saved = (await billsOf(t,L.info.id)).find(b=>b.month===month);
   const bill = saved ? {lines:saved.lines,total:saved.amount} : await contractBill(t,L,month,counts,now);
-  return { link: L.info, month, counts:saved?.counts??counts, bill, bills: await billsOf(t, L.info.id), planTerms:await contractTerms(t,L) };
+  return { link: L.info, month, counts:saved?.counts??counts, bill, bills: await billsOf(t, L.info.id), planTerms:await contractTerms(t,L), bonusTerms: L.info.kind==='agency'?await sellerBonusTerms(t,L.agencySchema,L.info.id):[] };
 }
 
 /** This month's numbers of each link that works (or worked) with someone. */

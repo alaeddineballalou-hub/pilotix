@@ -4,12 +4,16 @@ import { DEFAULT_MANAGEMENT_PLAN, ManagementPlanConfig, simulateManagementPlan, 
 import { useAction, useRpc } from '../../lib/query';
 import { PlanSummary } from './PlanSummary';
 import { BillLines } from '../agency/parts';
+import { AgencyPaymentPlans } from './AgencyPaymentPlans';
 
 const money=(x:number)=>Math.round(x).toLocaleString('fr-FR')+' DA';
 const number=(x:string)=>Math.max(0,Number(x)||0);
 const FIELD={maxWidth:220};
 type Plan={id:number;kind:'billing'|'agent';name:string;configuration:ManagementPlanConfig;active:boolean};
 export function ManagementPlans({ agency = false, initialKind = 'billing' }: { agency?: boolean; initialKind?: 'billing'|'agent' } = {}){
+  return agency?<AgencyPaymentPlans initialKind={initialKind}/>:<StoreManagementPlans agency={agency} initialKind={initialKind}/>;
+}
+function StoreManagementPlans({ agency = false, initialKind = 'billing' }: { agency?: boolean; initialKind?: 'billing'|'agent' } = {}){
   const [month,setMonth]=useState(()=>{const d=new Date(Date.now()+3600000);return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`});
   const q=useRpc('management.plans',{});
   const contracts=useRpc('management.billingTargets',{}, {enabled:agency&&initialKind==='billing'});

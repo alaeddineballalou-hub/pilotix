@@ -1,11 +1,18 @@
-import type { ManagementPlanConfig } from '@pilotix/shared';
+import { planPriceBrackets, type ManagementPlanConfig } from '@pilotix/shared';
 const da=(n:number)=>n.toLocaleString('fr-FR')+' DA';
 export function PlanSummary({plan:p}:{plan:ManagementPlanConfig|null}) {
-  if(!p)return <p>Tarif historique du contrat. Pour un produit, le plan général du contrat s’applique s’il existe.</p>;
-  const b=p.thresholds??[10000,20000];
+  if(!p)return <p>Tarif historique du contrat. Si un produit n'a pas de tarif particulier, le plan général s'applique.</p>;
+  const brackets=planPriceBrackets(p);
+  const main=p.method==='fixed'?da(p.rate):p.method==='percent'?p.rate+' % du prix unitaire produit':
+    p.method==='tier'?brackets.map(b=>da(b.from)+' – '+(b.to===null?'∞':da(b.to))+' : '+da(b.amount)).join(' · '):'Sans prime par opération';
+  const extra=!p.upsell.enabled?'':p.upsell.method==='double'?'Double confirmation (une prime supplémentaire)':
+    p.upsell.method==='qty'?'QTY (une prime par quantité supplémentaire livrée)':
+    p.upsell.method==='percent'?p.upsell.rate+(p.upsell.ruleVersion===2?' % du prix unitaire du produit':' % de la valeur ajoutée (ancien)'):
+    'Montant fixe '+da(p.upsell.rate);
   return <div className="small">
-    <p>{p.method==='none'?'Forfait uniquement':`${p.trigger==='confirmed'?'À la confirmation':'À la livraison'} : `}{p.method==='fixed'?da(p.rate):p.method==='percent'?`${p.rate} % du prix produit`:p.method==='tier'?`Prix < ${da(b[0])} : ${da(p.tiers[0])} · Prix < ${da(b[1])} : ${da(p.tiers[1])} · Au-delà : ${da(p.tiers[2])}`:''}</p>
-    <p>Forfait mensuel : {da(p.monthly)}{p.bonus.enabled?` · Prime : ${da(p.bonus.amount)} dès ${p.bonus.threshold} opérations`:''}</p>
-    {p.upsell.enabled&&<p>Upsell {p.upsell.trigger==='confirmed'?'à la confirmation':'à la livraison'} : {p.upsell.method==='double'?'une commission de confirmation supplémentaire':p.upsell.method==='percent'?`${p.upsell.rate} % de la valeur ajoutée`:da(p.upsell.rate)}</p>}
+    <p><b>{p.method==='none'?'Salaire / forfait fixe':p.method==='tier'?'Système de paliers de prix':p.method==='fixed'?'Salaire + Prime fixe':'Salaire + Prime en pourcentage'}</b>
+      {p.method!=='none'?' · '+(p.trigger==='confirmed'?'Confirmation':'Livraison'):''} : {main}</p>
+    <p>Montant mensuel : {da(p.monthly)}{p.bonus.enabled?' · Bonus historique : '+da(p.bonus.amount)+' dès '+p.bonus.threshold+' opérations':''}</p>
+    {p.upsell.enabled&&<p><b>Upsell :</b> {extra} · {p.upsell.ruleVersion===2?'Uniquement à la livraison':'Selon les anciennes conditions acceptées'}</p>}
   </div>;
 }
