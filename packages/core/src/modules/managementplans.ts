@@ -9,6 +9,7 @@ const Config = z.object({
   trigger: z.enum(['confirmed','delivered']),
   rate: Amount,
   tiers: z.tuple([Amount,Amount,Amount]),
+  brackets: z.array(z.object({min:z.number().int().min(0),max:z.number().int().min(0).nullable(),fee:Amount})).min(1).max(30).optional(),
   monthly: Amount,
   bonus: z.object({ enabled:z.boolean(),threshold:z.number().int().min(0).max(1_000_000),amount:Amount }),
   upsell: z.object({ enabled:z.boolean(),method:z.enum(['double','fixed','percent']),rate:Amount,trigger:z.enum(['confirmed','delivered']) }),

@@ -1,6 +1,6 @@
 // Management > Plans (seller account only). Stored on the server, never browser-local.
 import { useEffect, useState } from 'react';
-import { DEFAULT_MANAGEMENT_PLAN, ManagementPlanConfig, simulateManagementPlan } from '@pilotix/shared';
+import { DEFAULT_MANAGEMENT_PLAN, ManagementPlanConfig, priceBrackets, simulateManagementPlan } from '@pilotix/shared';
 import { useAction, useRpc } from '../../lib/query';
 
 const money=(x:number)=>Math.round(x).toLocaleString('fr-FR')+' DA';
@@ -56,7 +56,22 @@ export function ManagementPlans({ agency = false, initialKind = 'billing' }: { a
         {(p.method==='fixed'||p.method==='percent')&&<label className="field"><span className="lab">{p.method==='fixed'?'Tarif (DA)':'Pourcentage (%)'}</span><input style={FIELD} type="number" min={0} max={p.method==='percent'?100:10000000} value={p.rate} onChange={e=>change({rate:number(e.target.value)})}/></label>}
         <label className="field"><span className="lab">{kind==='agent'?'Salaire mensuel (DA)':'Forfait mensuel client (DA)'}</span><input style={FIELD} type="number" min={0} value={p.monthly} onChange={e=>change({monthly:number(e.target.value)})}/></label>
       </div>
-      {p.method==='tier'&&<fieldset className="agx-bonus"><legend>Tranches du prix produit</legend><div className="agx-pe-grid">{['0–9 999 DA','10 000–19 999 DA','20 000+ DA'].map((title,i)=><label key={i} className="field"><span className="lab">{title}</span><input style={FIELD} type="number" min={0} value={p.tiers[i]} onChange={e=>change({tiers:p.tiers.map((x,j)=>j===i?number(e.target.value):x) as [number,number,number]})}/></label>)}</div></fieldset>}
+      {p.method==='tier'&&<fieldset className="agx-bonus"><legend>Tranches du prix produit</legend>
+        <p className="muted small">Modifiez la limite supérieure de chaque tranche. La tranche suivante commence automatiquement à +1 DA. La dernière n'a pas de plafond.</p>
+        <div style={{display:'grid',gap:10}}>{priceBrackets(p).map((b,i,all)=><div key={i} style={{display:'flex',gap:10,alignItems:'end',flexWrap:'wrap'}}>
+          <label className="field" style={{flex:'1 1 120px'}}><span className="lab">De (DA)</span><input type="number" value={b.min} readOnly title="Calculé depuis la tranche précédente"/></label>
+          <label className="field" style={{flex:'1 1 120px'}}><span className="lab">Jusqu'à (DA)</span>{i===all.length-1?<input value="Sans limite" readOnly/>:<input type="number" min={b.min} step={1} value={b.max??''} onChange={e=>{
+            const max=number(e.target.value); const items=all.map(x=>({...x}));items[i].max=max;items[i+1].min=max+1;change({brackets:items});
+          }}/>}</label>
+          <label className="field" style={{flex:'1 1 120px'}}><span className="lab">Tarif (DA)</span><input type="number" min={0} value={b.fee} onChange={e=>change({brackets:all.map((x,j)=>j===i?{...x,fee:number(e.target.value)}:x)})}/></label>
+          {all.length>1&&<button type="button" className="btn" title="Supprimer cette tranche" onClick={()=>{
+            const items=all.filter((_,j)=>j!==i).map(x=>({...x})); for(let j=0;j<items.length;j++){items[j].min=j===0?0:(items[j-1].max??0)+1;items[j].max=j===items.length-1?null:items[j].max;}change({brackets:items});
+          }}>Supprimer</button>}
+        </div>)}</div>
+        <button type="button" className="btn" disabled={priceBrackets(p).length>=30} onClick={()=>{
+          const all=priceBrackets(p).map(x=>({...x}));const last=all[all.length-1];const cut=last.min+10000-1;last.max=cut;all.push({min:cut+1,max:null,fee:last.fee});change({brackets:all});
+        }}>+ Ajouter une tranche</button>
+      </fieldset>}
       <fieldset className="agx-bonus"><legend><label><input type="checkbox" checked={p.bonus.enabled} onChange={e=>change({bonus:{...p.bonus,enabled:e.target.checked}})}/> Bonus optionnel</label></legend>
         {p.bonus.enabled&&<div className="agx-pe-grid"><label className="field"><span className="lab">Objectif : nombre d'opérations</span><input type="number" min={0} value={p.bonus.threshold} onChange={e=>change({bonus:{...p.bonus,threshold:number(e.target.value)}})}/></label><label className="field"><span className="lab">Prime unique (DA)</span><input type="number" min={0} value={p.bonus.amount} onChange={e=>change({bonus:{...p.bonus,amount:number(e.target.value)}})}/></label></div>}
       </fieldset>
