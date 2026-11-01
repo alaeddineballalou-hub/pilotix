@@ -92,7 +92,7 @@ export const managementPlanProcs = {
     return ctx.db.tx(async db=>{
       const p=(await db.query('SELECT id FROM management_payment_plans WHERE id=$1 AND active FOR UPDATE',[i.id]))[0];
       if(!p)throw notFound('Plan introuvable');
-      const active=(await db.query("SELECT 1 FROM management_plan_assignments WHERE plan_id=$1 UNION ALL SELECT 1 FROM management_billing_terms WHERE plan_id=$1 AND status='pending' LIMIT 1",[i.id])).length;
+      const active=(await db.query("SELECT 1 FROM management_plan_assignments WHERE plan_id=$1 UNION ALL SELECT 1 FROM management_billing_terms WHERE plan_id=$1 AND status IN ('pending','accepted') LIMIT 1",[i.id])).length;
       if(active)throw bad('Plan affecté : retirez les affectations avant de supprimer');
       const history=(await db.query("SELECT 1 FROM management_billing_terms WHERE plan_id=$1 UNION ALL SELECT 1 FROM management_agent_terms WHERE plan_id=$1 LIMIT 1",[i.id])).length;
       if(history)await db.query('UPDATE management_payment_plans SET active=false,updated_at=now() WHERE id=$1',[i.id]);
