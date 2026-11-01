@@ -1,6 +1,6 @@
 // Templates are separate from their immutable assignments and accepted seller contracts.
 import { useEffect, useState } from 'react';
-import { DEFAULT_MANAGEMENT_PLAN, ManagementPlanConfig, simulateManagementPlan } from '@pilotix/shared';
+import { DEFAULT_MANAGEMENT_PLAN, ManagementPlanConfig, simulateManagementPlan, planPriceBrackets } from '@pilotix/shared';
 import { useAction, useRpc } from '../../lib/query';
 import { PlanSummary } from './PlanSummary';
 import { BillLines } from '../agency/parts';
@@ -39,7 +39,7 @@ export function ManagementPlans({ agency = false, initialKind = 'billing' }: { a
   let preview:ReturnType<typeof simulateManagementPlan>|null=null;
   let previewError='';
   try {if(p) preview=simulateManagementPlan(p,{productPrice:price,operations:count,upsells,incrementalValue:incremental})}catch(e){previewError=e instanceof Error?e.message:'Configuration invalide'}
-  const bounds=p?.thresholds??[10000,20000];
+  const brackets=p?planPriceBrackets(p):[];
   const invalid=!!p&&(p.upsell.enabled&&p.upsell.method==='double'&&(p.method==='none'||p.trigger!=='confirmed'));
   const targets=agency && kind==='billing'?[]:kind==='billing'?(products.data??[]).map(x=>({id:x.id,name:x.name})): (users.data??[]).filter(x=>x.roles.some(r=>r==='confirmation'||r==='suivi'||r==='agent_manager')).map(x=>({id:x.id,name:x.name}));
   const assignKind=kind==='billing'?'product':'agent';
@@ -66,10 +66,18 @@ export function ManagementPlans({ agency = false, initialKind = 'billing' }: { a
         <label className="field"><span className="lab">{kind==='agent'?'Salaire mensuel (DA)':'Forfait mensuel client (DA)'}</span><input style={FIELD} type="number" min={0} value={p.monthly} onChange={e=>change({monthly:number(e.target.value)})}/></label>
       </div>
       {p.method==='tier'&&<fieldset className="agx-bonus"><legend>Tranches du prix produit</legend>
-        <div className="agx-pe-grid">{bounds.map((bound,i)=><label key={i} className="field"><span className="lab">Début de la tranche {i+2} (DA)</span><input type="number" min={1} value={bound} onChange={e=>change({thresholds:bounds.map((x,j)=>j===i?number(e.target.value):x) as [number,number]})}/></label>)}</div>
-        <div className="agx-pe-grid">{[`Prix < ${money(bounds[0])}`,`${money(bounds[0])} ≤ prix < ${money(bounds[1])}`,`Prix ≥ ${money(bounds[1])}`].map((title,i)=><label key={i} className="field"><span className="lab">{title}</span><input type="number" min={0} value={p.tiers[i]} onChange={e=>change({tiers:p.tiers.map((x,j)=>j===i?number(e.target.value):x) as [number,number,number]})}/></label>)}</div>
+        <p className="muted small">Modifiez les limites et les tarifs. Les tranches se suivent sans chevauchement ni trou.</p>
+        <div style={{display:'grid',gap:10}}>
+          {brackets.map((t,i)=><div key={i} style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'end'}}>
+            <label className="field" style={{flex:'1 1 100px'}}><span className="lab">De (DA)</span><input type="number" step={1} min={0} value={t.from} onChange={e=>change({ranges:brackets.map((x,j)=>j===i?{...x,from:number(e.target.value)}:x)})}/></label>
+            <label className="field" style={{flex:'1 1 100px'}}><span className="lab">À (DA)</span><input type="number" step={1} min={t.from} placeholder="Sans limite" disabled={i===brackets.length-1} value={t.to??''} onChange={e=>change({ranges:brackets.map((x,j)=>j===i?{...x,to:e.target.value===''?null:number(e.target.value)}:x)})}/></label>
+            <label className="field" style={{flex:'1 1 100px'}}><span className="lab">Tarif (DA)</span><input type="number" min={0} value={t.amount} onChange={e=>change({ranges:brackets.map((x,j)=>j===i?{...x,amount:number(e.target.value)}:x)})}/></label>
+            <button type="button" className="btn" disabled={brackets.length===1} onClick={()=>change({ranges:brackets.filter((_,j)=>j!==i).map((x,j,a)=>j===a.length-1?{...x,to:null}:x)})}>Supprimer</button>
+          </div>)}
+        </div>
+        <button type="button" className="btn" disabled={brackets.length>=100} onClick={()=>{const prev=brackets[brackets.length-1];const from=prev.from+10000;change({ranges:[...brackets.slice(0,-1),{...prev,to:from-1},{from,to:null,amount:0}]})}}>+ Ajouter une tranche</button>
       </fieldset>}
-      <fieldset className="agx-bonus"><legend><label><input type="checkbox" checked={p.bonus.enabled} onChange={e=>change({bonus:{...p.bonus,enabled:e.target.checked}})}/> Bonus optionnel</label></legend>
+            <fieldset className="agx-bonus"><legend><label><input type="checkbox" checked={p.bonus.enabled} onChange={e=>change({bonus:{...p.bonus,enabled:e.target.checked}})}/> Bonus optionnel</label></legend>
         {p.bonus.enabled&&<div className="agx-pe-grid"><label className="field"><span className="lab">Objectif : nombre d'opérations</span><input type="number" min={0} value={p.bonus.threshold} onChange={e=>change({bonus:{...p.bonus,threshold:number(e.target.value)}})}/></label><label className="field"><span className="lab">Prime unique (DA)</span><input type="number" min={0} value={p.bonus.amount} onChange={e=>change({bonus:{...p.bonus,amount:number(e.target.value)}})}/></label></div>}
       </fieldset>
       <fieldset className="agx-bonus"><legend><label><input type="checkbox" checked={p.upsell.enabled} onChange={e=>change({upsell:{...p.upsell,enabled:e.target.checked}})}/> Upsell optionnel</label></legend>

@@ -2,6 +2,7 @@
 export type ManagementPlanKind = 'billing' | 'agent';
 export type ManagementFeeMethod = 'none' | 'fixed' | 'percent' | 'tier';
 export type ManagementUpsellMethod = 'double' | 'fixed' | 'percent';
+export interface EditablePriceBracket {from:number;to:number|null;amount:number}
 export interface ManagementPlanConfig {
   method: ManagementFeeMethod;
   trigger: 'confirmed' | 'delivered';
@@ -9,6 +10,8 @@ export interface ManagementPlanConfig {
   tiers: [number, number, number];
   /** Upper bounds of the first two price brackets (defaults preserve existing plans). */
   thresholds?: [number, number];
+  /** Variable-length editable ranges; legacy plans use tiers+thresholds. */
+  ranges?: EditablePriceBracket[];
   monthly: number;
   bonus: { enabled: boolean; threshold: number; amount: number };
   upsell: { enabled: boolean; method: ManagementUpsellMethod; rate: number; trigger: 'confirmed' | 'delivered' };
@@ -24,14 +27,34 @@ export interface ManagementSimulation {
   upsells: number;
   incrementalValue: number;
 }
+export function planPriceBrackets(p: ManagementPlanConfig): EditablePriceBracket[] {
+  if(p.ranges) return p.ranges;
+  const [a,b]=p.thresholds??[10000,20000];
+  return [{from:0,to:a-1,amount:p.tiers[0]},{from:a,to:b-1,amount:p.tiers[1]},{from:b,to:null,amount:p.tiers[2]}];
+}
+export function validatePriceBrackets(ranges: EditablePriceBracket[]): string|null {
+  if(!ranges.length || ranges.length>100) return 'Entre 1 et 100 tranches nécessaires';
+  for(let i=0;i<ranges.length;i++){
+    const r=ranges[i];
+    if(!Number.isSafeInteger(r.from)||r.from<0||!Number.isFinite(r.amount)||r.amount<0||r.amount>10000000||
+      (r.to!==null&&(!Number.isSafeInteger(r.to)||r.to<r.from)))return 'Tranche invalide';
+    if(i===0&&r.from!==0)return 'La première tranche commence à 0';
+    if(i>0){const prev=ranges[i-1];if(prev.to===null)return 'Une tranche sans limite doit être la dernière';
+      if(r.from!==prev.to+1)return r.from<=prev.to?'Tranches chevauchantes':'Intervalle non couvert';}
+    if(i===ranges.length-1&&r.to!==null)return 'La dernière tranche doit être sans limite';
+  }
+  return null;
+}
 export function simulateManagementPlan(p: ManagementPlanConfig, s: ManagementSimulation) {
   const nonnegative = (v: number) => Number.isFinite(v) && v >= 0;
   if (![s.productPrice,s.operations,s.upsells,s.incrementalValue,p.monthly,p.rate,...p.tiers,p.bonus.threshold,p.bonus.amount,p.upsell.rate].every(nonnegative)) throw new Error('Valeur invalide');
   if (!Number.isInteger(s.operations) || !Number.isInteger(s.upsells)) throw new Error('Quantité invalide');
   if ((p.method === 'percent' && p.rate > 100) || (p.upsell.method === 'percent' && p.upsell.rate > 100)) throw new Error('Pourcentage invalide');
   const bounds = p.thresholds ?? [10000,20000];
-  if (bounds.length !== 2 || !bounds.every(nonnegative) || bounds[0] <= 0 || bounds[1] <= bounds[0]) throw new Error('Tranches invalides : les seuils doivent être croissants');
-  const fee = p.method === 'fixed' ? p.rate : p.method === 'percent' ? s.productPrice*p.rate/100 : p.method === 'tier' ? p.tiers[s.productPrice < bounds[0] ? 0 : s.productPrice < bounds[1] ? 1 : 2] : 0;
+  if (!p.ranges && (bounds.length !== 2 || !bounds.every(nonnegative) || bounds[0] <= 0 || bounds[1] <= bounds[0])) throw new Error('Tranches invalides : les seuils doivent être croissants');
+  const brackets=planPriceBrackets(p);
+  if(p.method==='tier'){const err=validatePriceBrackets(brackets);if(err)throw new Error(err);}
+  const fee = p.method === 'fixed' ? p.rate : p.method === 'percent' ? s.productPrice*p.rate/100 : p.method === 'tier' ? (brackets.find(r=>s.productPrice>=r.from&&(r.to===null||s.productPrice<=r.to))?.amount??0) : 0;
   if (p.upsell.enabled && p.upsell.method === 'double' && (p.method === 'none' || p.trigger !== 'confirmed')) throw new Error('Double confirmation nécessite une commission de confirmation');
   const upsellFee = !p.upsell.enabled ? 0 : p.upsell.method === 'double' ? fee : p.upsell.method === 'fixed' ? p.upsell.rate : s.incrementalValue*p.upsell.rate/100;
   const main = Math.round(fee)*s.operations;
