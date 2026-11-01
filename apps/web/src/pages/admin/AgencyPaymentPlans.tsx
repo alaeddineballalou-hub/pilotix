@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { DEFAULT_MANAGEMENT_PLAN, planPriceBrackets, simulateManagementPlan, type ManagementPlanConfig, validatePriceBrackets } from '@pilotix/shared';
 import { useAction, useRpc } from '../../lib/query';
 import { BillLines } from '../agency/parts';
+import { PlanSummary } from './PlanSummary';
 import pilotixLogo from '../../assets/logo-dark.svg';
 
 type Kind='billing'|'agent';
@@ -52,10 +53,11 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
   const bonusLinked=!!bonusEditing?.id && (bq.data?.assignments??[]).some(a=>a.bonusId===bonusEditing.id);
   const planError=editing?getPlanError(editing.configuration,editing.name):'';
   const canEdit=!!editing&&!planLinked;
+  const legacyReadOnly=!!planLinked&&!!selectedPlan&&selectedPlan.configuration.upsell.ruleVersion!==2;
   const patch=(change:Partial<ManagementPlanConfig>)=>{
     setEditing(p=>p?{...p,configuration:{...p.configuration,...change}}:p);setError('');
   };
-  const selectPlan=(p:Plan)=>{setEditing({id:p.id,kind:p.kind,name:p.name,configuration:editable(p.configuration)});setError('')};
+  const selectPlan=(p:Plan)=>{const linked=(q.data?.assignments??[]).some(a=>a.planId===p.id)||(contracts.data??[]).some(c=>c.terms.some(t=>t.planId===p.id&&t.status!=='rejected'));setEditing({id:p.id,kind:p.kind,name:p.name,configuration:linked?copy(p.configuration):editable(p.configuration)});setError('')};
   const newPlan=(kind:Kind)=>{setEditing({id:null,kind,name:'Nouveau plan',configuration:blankPlan()});setError('')};
   const selectBonus=(b:Bonus)=>{setBonusEditing({id:b.id,kind:b.kind,name:b.name,trigger:b.trigger,threshold:b.threshold,amount:b.amount});setError('')};
   const newBonus=()=>{setBonusEditing({id:null,kind:'agent',name:'Nouveau bonus',trigger:'confirmed',threshold:100,amount:0});setError('')};
@@ -88,6 +90,7 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
       {editing&&editing.kind===tab&&<section className="card ppm-panel">
         <div className="ppm-row"><h2>{editing.id?'Configuration du plan':'Nouveau plan'}</h2>{planLinked&&<span className="ppm-pill">🔒 Plan affecté</span>}</div>
         {planLinked&&<p className="agx-note">Ce plan est déjà associé. Dupliquez-le pour changer les prix : les contrats et opérations antérieurs gardent leurs montants.</p>}
+        {legacyReadOnly&&selectedPlan&&<div className="agx-note"><b>Conditions historiques acceptées (non modifiables)</b><PlanSummary plan={selectedPlan.configuration}/></div>}
         <div className="ppm-grid">
           <label className="field"><span className="lab">Nom du plan</span><input disabled={!canEdit} maxLength={100} value={editing.name} onChange={e=>setEditing(p=>p?{...p,name:e.target.value}:p)}/></label>
           <label className="field"><span className="lab">Mode de calcul</span><select disabled={!canEdit} value={editing.configuration.method} onChange={e=>patch({method:e.target.value as ManagementPlanConfig['method']})}>
@@ -113,12 +116,12 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
           <button type="button" className="btn ppm-add" disabled={!canEdit||planPriceBrackets(editing.configuration).length>=100} onClick={()=>patch({ranges:addRange(planPriceBrackets(editing.configuration))})}>+ Ajouter un palier</button>
         </div>}
         <div className="ppm-section">
-          <div className="ppm-row"><h3>Prime Upsell</h3><span className="ppm-pill">Livrée uniquement</span></div>
+          <div className="ppm-row"><h3>Prime Upsell</h3><span className="ppm-pill">{legacyReadOnly?'Conditions historiques':'Livrée uniquement'}</span></div>
           <label className="ppm-toggle"><input type="checkbox" disabled={!canEdit} checked={editing.configuration.upsell.enabled} onChange={e=>patch({upsell:{...editing.configuration.upsell,enabled:e.target.checked,trigger:'delivered',ruleVersion:2}})}/> Activer la prime Upsell</label>
           {editing.configuration.upsell.enabled&&<>
             <div className="ppm-up-modes">{UPS.map(([value,label])=>
               <label key={value} className={'ppm-up-mode '+(editing.configuration.upsell.method===value?'on':'')}>
-                <input type="radio" name="ppm-upsell" disabled={!canEdit} checked={editing.configuration.upsell.method===value} onChange={()=>patch({upsell:{...editing.configuration.upsell,method:value,trigger:'delivered',ruleVersion:2}})}/><span>{label}</span>
+                <input type="radio" name="ppm-upsell" disabled={!canEdit} checked={editing.configuration.upsell.method===value} onChange={()=>patch({upsell:{...editing.configuration.upsell,method:value,trigger:'delivered',ruleVersion:2}})}/><span>{legacyReadOnly&&value==='percent'?'Pourcentage de la valeur ajoutée (ancien)':label}</span>
               </label>)}</div>
             {(editing.configuration.upsell.method==='percent'||editing.configuration.upsell.method==='fixed')&&
               <label className="field ppm-input"><span className="lab">{editing.configuration.upsell.method==='percent'?'Pourcentage du prix unitaire (%)':'Montant fixe upsell (DA)'}</span>
