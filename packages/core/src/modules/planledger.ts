@@ -88,6 +88,26 @@ function planLines(buckets:Map<number,Bucket>, active:Term[]):BillLine[] {
   return lines;
 }
 
+export interface BonusEvent {id:string;at:string;event:'confirmed'|'delivered'}
+/** Independent bonuses are counted once per recipient and month using effective-dated snapshots. */
+export async function bonusLines(db:Db,targetKind:'seller'|'agent',targetId:number,events:BonusEvent[],end:string):Promise<BillLine[]> {
+  const rows=await db.query('SELECT * FROM management_bonus_terms WHERE target_kind=$1 AND target_id=$2 AND effective_at<=$3 ORDER BY effective_at,id',[targetKind,targetId,end]);
+  const ids=[...new Set(rows.map(r=>num(r.bonus_id)))];const lines:BillLine[]=[];
+  for(const id of ids){
+    const versions=rows.filter(r=>num(r.bonus_id)===id);
+    const current=versions[versions.length-1];
+    if(!current?.enabled)continue;
+    const counted=new Set<string>();
+    for(const event of events){
+      if(event.at>end)continue;
+      const rule=versions.filter(r=>iso(r.effective_at)<=event.at).at(-1);
+      if(rule?.enabled && rule.trigger===event.event)counted.add(event.id+':'+event.event);
+    }
+    const threshold=num(current.threshold),amount=num(current.amount);
+    if(counted.size>=threshold&&amount>0)lines.push({key:'plan',label:current.name+' · Bonus indépendant ('+counted.size+'/'+threshold+')',qty:1,price:amount,amount});
+  }
+  return lines;
+}
 /** A contract's actual bill, using accepted rules at the time of each operation. */
 export async function contractBill(t:Tenancy,L:Link,month:string,counts:AgencyCounts,now:number) {
   const {from,to}=period(month);
@@ -95,11 +115,23 @@ export async function contractBill(t:Tenancy,L:Link,month:string,counts:AgencyCo
   const legacy=()=>partnerBill(L.info.kind,L.info.prices,counts,{monthly});
   if(L.info.kind!=='agency'||!L.storeOk) return legacy();
   const rows=await t.shop(L.agencySchema).query(`SELECT * FROM management_billing_terms WHERE link_id=$1 AND status='accepted' AND effective_at<$2 ORDER BY effective_at,id`,[L.info.id,to]);
-  if(!rows.length) return legacy();
+  const allOps=await operations(t.shop(L.storeSchema),L.info.agency.id,from,to);
+  const monthEvents:BonusEvent[]=[];
+  for(const o of allOps)for(const event of ['confirmed','delivered'] as const){
+    const at=o[event];
+    if(!inRange(at,from,to)||at!<L.info.startedAt!||(L.info.endedAt&&at!>=L.info.endedAt))continue;
+    if(event==='confirmed'&&num(o.row.conf_agency_id)!==L.info.agency.id)continue;
+    if(event==='delivered'&&num(o.row.follow_agency_id)!==L.info.agency.id)continue;
+    monthEvents.push({id:String(o.row.id),at:at!,event});
+  }
+  const bonuses=await bonusLines(t.shop(L.agencySchema),'seller',L.info.id,monthEvents,cutoff(to,now));
+  if(!rows.length) {
+    const b=legacy();const lines=[...b.lines,...bonuses];return {lines,total:lines.reduce((n,l)=>n+l.amount,0)};
+  }
   const terms=rows.map(r=>term(r,'product_id'));
   const old:AgencyCounts={...NO_COUNTS,received:counts.received,returned:counts.returned};
   const buckets=new Map<number,Bucket>();
-  for(const o of await operations(t.shop(L.storeSchema),L.info.agency.id,from,to)) {
+  for(const o of allOps) {
     for(const event of ['confirmed','delivered'] as const) {
       const at=o[event];
       if(!inRange(at,from,to)||at!<L.info.startedAt!||(L.info.endedAt&&at!>=L.info.endedAt)) continue;
@@ -117,7 +149,7 @@ export async function contractBill(t:Tenancy,L:Link,month:string,counts:AgencyCo
   const active=[...new Set(terms.map(t=>t.target))].map(target=>terms.filter(t=>t.target===target&&t.at<=end).sort((a,b)=>b.at.localeCompare(a.at)||b.id-a.id)[0]).filter((t):t is Term=>!!t);
   const defaultPlan=active.find(t=>t.target===0);
   const oldBill=partnerBill('agency',{...L.info.prices,monthly:defaultPlan?.config?0:L.info.prices.monthly},old,{monthly});
-  const lines=[...oldBill.lines,...planLines(buckets,active)];
+  const lines=[...oldBill.lines,...planLines(buckets,active),...bonuses];
   return {lines,total:lines.reduce((n,l)=>n+l.amount,0)};
 }
 
@@ -197,6 +229,7 @@ export async function agencyPayroll(ctx:Ctx,month:string) {
   const links=await t.platform.query(`SELECT DISTINCT s.schema_name FROM platform.agency_links l JOIN platform.shops s ON s.id=l.store_id WHERE l.agency_id=$1 AND l.started_at IS NOT NULL AND s.status<>'deleted'`,[ctx.shop!.id]);
   const byEmail=new Map(people.map(p=>[String(p.email).toLowerCase(),num(p.id)]));
   const buckets=new Map<number,Map<number,Bucket>>();
+  const allBonusEvents=new Map<number,BonusEvent[]>();
   for(const l of links) {
     const db=t.shop(l.schema_name);
     const profiles=await db.query('SELECT id,email,agency_profile_id FROM profiles WHERE agency_id=$1',[ctx.shop!.id]);
@@ -208,17 +241,20 @@ export async function agencyPayroll(ctx:Ctx,month:string) {
       const conf=num(o.row.conf_agency_id)===ctx.shop!.id?ids.get(num(o.row.agent_id)):undefined;
       if(conf)actors.add(conf);
       if(event==='delivered'&&num(o.row.follow_agency_id)===ctx.shop!.id){const f=ids.get(num(o.row.follow_agent_id));if(f)actors.add(f);}
-      for(const id of actors){const history=terms.filter(t=>t.target===id);
+      for(const id of actors){
+        const es=allBonusEvents.get(id)??[];es.push({id:String(o.row.id),at:at!,event});allBonusEvents.set(id,es);
+        const history=terms.filter(t=>t.target===id);
         const original=id===conf&&o.confirmed?chosen(history,id,o.confirmed):undefined;
         const use=original?.config?original:chosen(history,id,at!);if(!use?.config)continue;
         const b=buckets.get(id)??new Map<number,Bucket>();addEvent(b,use,o,event,id===conf);buckets.set(id,b);}
     }
   }
-  const rows=people.filter(p=>terms.some(t=>t.target===num(p.id))).map(p=>{
+  const rows=[];
+  for(const p of people.filter(p=>terms.some(t=>t.target===num(p.id))||allBonusEvents.has(num(p.id)))) {
     const id=num(p.id);const active=salaryTerm(terms.filter(t=>t.target===id),from,cutoff(to,ctx.now()));
     const b=buckets.get(id)??new Map<number,Bucket>();
-    const lines=planLines(b,active?[active]:[]);
-    return {id,name:String(p.name),operations:[...b.values()].reduce((n,b)=>n+b.count,0),lines,total:lines.reduce((n,l)=>n+l.amount,0)};
-  });
+    const lines=[...planLines(b,active?[active]:[]),...await bonusLines(ctx.db,'agent',id,allBonusEvents.get(id)??[],cutoff(to,ctx.now()))];
+    rows.push({id,name:String(p.name),operations:[...b.values()].reduce((n,b)=>n+b.count,0),lines,total:lines.reduce((n,l)=>n+l.amount,0)});
+  }
   return {month,rows,total:rows.reduce((n,r)=>n+r.total,0),closedAt:null as string|null};
 }
