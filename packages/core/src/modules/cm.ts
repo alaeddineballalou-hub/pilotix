@@ -10,6 +10,7 @@ import { bad, Ctx, hasRole, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
 import { getRaw, setRaw } from './admin';
 import { DELLAL_DARIJA, parseAvoid } from './darija';
+import { darijaGuide } from './darijabook';
 import { lahjaAvoid, lahjaBlocks, lahjaFor, LahjaWord } from './lahja';
 import {
   AiResponse,
@@ -596,7 +597,7 @@ function productLine(p: ProductInfo): string {
 }
 
 /** The CM's instructions: the shop's settings, how to decide, the Darija guide and lessons, and the facts of this comment. */
-export function cmSystem(f: CmFacts, s: CmSettings, lahja: { all: LahjaWord[]; own: LahjaWord[] } = { all: [], own: [] }): string {
+export function cmSystem(f: CmFacts, s: CmSettings, lahja: { all: LahjaWord[]; own: LahjaWord[] } = { all: [], own: [] }, guide: string = DELLAL_DARIJA): string {
   const privateRule = !s.sendPrivate
     ? 'NON : private_reply toujours vide ; en public, invite la personne à vous écrire en privé.'
     : f.alreadyPrivate
@@ -631,7 +632,7 @@ export function cmSystem(f: CmFacts, s: CmSettings, lahja: { all: LahjaWord[]; o
     `8. Réponse publique : une seule phrase courte (15 mots au plus) en ${LANG_NAME[f.lang]}, comme le commentaire, polie, sans numéro, adresse, nom complet ni détail de commande. Genre inconnu : formes du pluriel (jawbnakom, ta3kom, جاوبناكم).`,
     '9. N’invente rien : prix, couleurs, stock et délais viennent des informations ci-dessous. Si le produit de la publication est inconnu, demande en privé lequel les intéresse.',
     '',
-    DELLAL_DARIJA,
+    guide,
     lahjaBlocks(lahja).shared,
     lahjaBlocks(lahja).own,
     '',
@@ -677,7 +678,8 @@ export async function decide(ctx: Ctx, f: CmFacts, s: CmSettings): Promise<CmRun
   const userLine = `Commentaire${f.author ? ` de ${f.author}` : ''} : « ${f.body.slice(0, 1500)} »`;
   // the shop's Darija lessons and Pilotix's (modules/lahja.ts): in the instructions, and in the check below
   const lahja = await lahjaFor(ctx.db, ctx.t?.platform ?? null, ctx.shop?.id ?? null);
-  const res = await complete({ model, system: cmSystem(f, s, lahja), messages: [{ role: 'user', content: userLine }], tools: [], max_tokens: 800 });
+  const guide = await darijaGuide(ctx.t?.platform ?? null);
+  const res = await complete({ model, system: cmSystem(f, s, lahja, guide), messages: [{ role: 'user', content: userLine }], tools: [], max_tokens: 800 });
   usage.input_tokens += num(res.usage?.input_tokens);
   usage.output_tokens += num(res.usage?.output_tokens);
   const read = readDecision(res.content.map((b) => (b.type === 'text' ? b.text : '')).join(''));

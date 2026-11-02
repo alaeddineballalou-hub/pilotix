@@ -6,7 +6,6 @@
 // Dellal's instruction book (its method, its Darija rules and the lesson book the coach approved) is put together at
 // each download, so a download is always the latest version.
 import type { Db } from '../db';
-import { DELLAL_DARIJA } from '../modules/darija';
 import { DELLAL_PLAYBOOK } from '../modules/dellal';
 import { PILOT } from '../modules/pilotlearn';
 import { loadShops } from './shops';
@@ -612,20 +611,19 @@ export async function dellalBookText(t: Tenancy, now: Date | number = Date.now()
   const rule = '─'.repeat(64);
   const head = (title: string) => ['', rule, title, rule, ''];
   const share = (b: any) => Math.round(n(b.share) * 100);
-  const lines: string[] = ['DELLAL — LE LIVRE D’INSTRUCTIONS', ''];
-  lines.push(champ ? `Livre de leçons : version ${champ.version}, en service depuis le ${frDay(updatedAt!)} (${lessonsOf(champ)} leçon(s)).` : 'Pas encore de livre de leçons : Dellal vend avec sa méthode de base.');
+  const lines: string[] = ['DELLAL — LE LIVRE DE VENTE', ''];
+  lines.push(champ ? `Livre de leçons de vente : version ${champ.version}, en service depuis le ${frDay(updatedAt!)} (${lessonsOf(champ)} leçon(s)).` : 'Pas encore de livre de leçons : Dellal vend avec sa méthode de base.');
   if (test) lines.push(`En test : la version ${test.version}, essayée sur ${share(test)} % des nouvelles conversations.`);
   lines.push(
     `Fichier préparé le ${frDay(new Date(now))} : chaque téléchargement donne la dernière version.`,
     '',
-    'Avant chaque réponse, Dellal lit dans cet ordre : 1. la méthode de vente, 2. les règles de la darija, 3. le livre de',
-    'leçons approuvé par le coach. Chaque boutique ajoute ensuite sa propre partie (son nom, son ton, ses langues, ses règles,',
-    'son catalogue et la conversation en cours) : cette partie n’est pas dans ce fichier.',
+    'Ce livre est celui de la VENTE : avant chaque réponse, Dellal lit 1. la méthode de vente, 2. le livre de leçons de vente',
+    'approuvé par le coach. La darija a son propre livre (Pilot AI › Tester & leçons › Leçons › Darija, « Télécharger le livre',
+    'de darija »). Chaque boutique ajoute ensuite sa propre partie (son nom, son ton, ses langues, ses règles, son catalogue et',
+    'la conversation en cours) : cette partie n’est pas dans ce fichier.',
     ...head('1. LA MÉTHODE DE VENTE (la même pour toutes les boutiques)'),
     DELLAL_PLAYBOOK.replace('${ORDER_NEXT}', 'selon la boutique, la commande part en préparation ou un conseiller appelle pour confirmer.').trim(),
-    ...head('2. LA DARIJA ALGÉRIENNE'),
-    DELLAL_DARIJA.trim(),
-    ...head(champ ? `3. LE LIVRE DE LEÇONS — version ${champ.version}` : '3. LE LIVRE DE LEÇONS'),
+    ...head(champ ? `2. LE LIVRE DE LEÇONS DE VENTE — version ${champ.version}` : '2. LE LIVRE DE LEÇONS DE VENTE'),
     champ && String(champ.text).trim() ? String(champ.text).trim() : 'Aucune leçon approuvée pour l’instant.',
   );
   if (test)

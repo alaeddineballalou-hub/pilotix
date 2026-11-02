@@ -80,3 +80,10 @@
 
 /* the lesson editor scrolls into view with a little room under its buttons */
 .lj-edit { scroll-margin-bottom: 14px; }
+
+/* a voice note: the line above its text (Gemini wrote it, is reading it, could not, or the reading is off) */
+.ai-voice { display: flex; align-items: center; gap: 5px; margin-bottom: 3px; color: var(--muted); font-size: 11.5px; font-weight: 700; }
+.ai-voice .bji { width: 13px; height: 13px; }
+.ai-voice-done .bji { color: var(--ai-dot-2, var(--ai-tint-ink)); }
+.ai-voice-failed, .ai-voice-off { color: var(--c-bad-ink, var(--coral)); }
+.ai-voice-read { margin-inline: 0; }

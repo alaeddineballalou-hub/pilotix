@@ -195,5 +195,15 @@
     "more": "See all {{n}}",
     "less": "See less",
     "fromComment": "reply to a comment"
+  },
+  "voice": {
+    "label": "Voice note",
+    "done": "written by the AI",
+    "pending": "reading…",
+    "failed": "not understood",
+    "off": "voice reading is off",
+    "read": "Write this voice note as text",
+    "reading": "Reading…",
+    "readDone": "Voice note written as text"
   }
 }

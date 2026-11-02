@@ -86,6 +86,7 @@ function PilotAiInner({ staff, tab, demo }: { staff: Staff; tab?: string; demo: 
         <>
           <div className="pilot-settings">
             <SettingsCard d={d} manager={manager} />
+            <VoiceCard manager={manager} />
           </div>
           {manager ? <CostCard /> : <p className="muted small">{t('platform.pilot.costs.managers')}</p>}
         </>
@@ -147,6 +148,58 @@ function SettingsCard({ d, manager }: { d: State; manager: boolean }) {
             </button>
           )}
         </div>
+      )}
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------- voice notes: Google Gemini writes them as text for Dellal
+function VoiceCard({ manager }: { manager: boolean }) {
+  const { t } = useTranslation();
+  const q = usePilotRpc('p.pilot.voice', {});
+  const k = 'platform.pilot.voice.';
+  const d = q.data;
+  const [on, setOn] = useState(false);
+  const [model, setModel] = useState('gemini-flash-latest');
+  const [key, setKey] = useState('');
+  useEffect(() => {
+    if (!d) return;
+    setOn(d.enabled);
+    setModel(d.model);
+  }, [d?.enabled, d?.model]); // eslint-disable-line react-hooks/exhaustive-deps
+  const save = usePilotAction('p.pilot.voiceSave', { success: t('platform.saved'), onDone: () => setKey('') });
+  const send = (kk?: string | null) => save.mutate({ enabled: on, model: model.trim() || 'gemini-flash-latest', ...(kk !== undefined ? { key: kk } : {}) });
+  const ready = !!d?.enabled && !!d?.hasKey;
+  return (
+    <Card title={t(k + 'title')} badge={d && <span className={`chip ${ready ? 'pp-chip-ok' : 'pp-chip-warn'}`}>{ready ? t('platform.pilot.on') : t('platform.pilot.off')}</span>}>
+      <p className="small muted">{t(k + 'text')}</p>
+      {!d ? (
+        <p className="muted small">{q.error?.message ?? '…'}</p>
+      ) : (
+        <>
+          <label className="check">
+            <input type="checkbox" disabled={!manager} checked={on} onChange={(e) => setOn(e.target.checked)} /> {t(k + 'enable')}
+          </label>
+          <Field label={t(k + 'key')} hint={d.hasKey ? t(k + 'keySaved') : t(k + 'keyHint')}>
+            <input type="password" className="ltr" autoComplete="off" disabled={!manager} value={key} placeholder={d.hasKey ? '••••••••' : 'AIza…'} onChange={(e) => setKey(e.target.value)} />
+          </Field>
+          <Field label={t(k + 'model')} hint={t(k + 'modelHint')}>
+            <input className="ltr" maxLength={60} disabled={!manager} value={model} onChange={(e) => setModel(e.target.value)} />
+          </Field>
+          <p className="small muted">{t(k + 'today', { count: d.today.calls, n: n(d.today.calls), usd: `${d.today.usd.toFixed(d.today.usd > 0 && d.today.usd < 0.01 ? 4 : 2)} $` })}</p>
+          {manager && (
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+              <button type="button" className="btn primary" disabled={save.isPending} onClick={() => send(key.trim() || undefined)}>
+                <Icon name="check" /> {t('common.save')}
+              </button>
+              {d.hasKey && (
+                <button type="button" className="btn" disabled={save.isPending} onClick={() => send(null)}>
+                  {t('platform.pilot.keyRemove')}
+                </button>
+              )}
+            </div>
+          )}
+        </>
       )}
     </Card>
   );

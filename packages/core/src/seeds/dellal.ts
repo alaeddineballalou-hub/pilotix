@@ -17,7 +17,7 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   await db.query(`INSERT INTO settings (key, value) VALUES ('dellal', $1) ON CONFLICT (key) DO NOTHING`, [JSON.stringify({ enabled: true, verifyToken: 'dellal-demo-verify-token' })]);
   const name = p ? `${p.name}${p.title ? ` ${p.title}` : ''}` : 'la poussette';
   const price = p ? p.price : 12900;
-  const convs: { channel: string; ext: string; name: string; phone?: string | null; mode: string; reason?: string; orderId?: number | null; source?: string; at: number; msgs: [string, string, number?][] }[] = [
+  const convs: { channel: string; ext: string; name: string; phone?: string | null; mode: string; reason?: string; orderId?: number | null; source?: string; at: number; msgs: [string, string, number?, object?][] }[] = [
     {
       channel: 'whatsapp', ext: order ? '213' + String(order.phone).slice(1) : '213661234518', name: order?.customer_name ?? 'Karim', phone: order?.phone ?? null, mode: 'ai', orderId: order ? num(order.id) : null, source: 'pub « Bébé confort »', at: now - 25 * 60_000,
       msgs: [
@@ -59,6 +59,17 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
         ['staff', 'Bonjour Yacine, j’ai appelé le livreur : votre colis passe demain matin. Désolée pour l’attente.', users.suivi],
       ],
     },
+    // voice notes: Gemini wrote the first one as text before Dellal read it; the second one it could not understand
+    {
+      channel: 'whatsapp', ext: '213770445566', name: 'Sofiane K.', phone: '0770445566', mode: 'ai', at: now - 8 * 60_000,
+      msgs: [
+        ['customer', 'Salam, wesh kayna la chaise haute f l couleur grise ? w ch7al tousel l Blida ?', undefined, { voice: { status: 'done', seconds: 7, lang: 'dz', model: 'gemini-flash-latest' } }],
+        ['tool', 'delivery_fee Blida → domicile 500 DA · bureau 350 DA'],
+        ['agent', 'Wa 3likoum salam 😊 Ih, la chaise haute kayna f gris. La livraison l Blida 500 DA l dar wela 350 DA f l bureau, w tkhalass ki testalem. Nsajjelhalek ?'],
+        ['customer', '[message vocal envoyé]', undefined, { voice: { status: 'failed', error: 'audio pas clair' } }],
+        ['agent', 'Smahli, ma 9dertch nesma3 l vocal mlih 🙏 Tqder tktebli wach t7eb ?'],
+      ],
+    },
     {
       channel: 'tiktok', ext: 'tt-demo-1', name: 'yacine_dz', mode: 'ai', at: now - 5 * 60_000,
       msgs: [['customer', 'chhal livraison l Oran ?']],
@@ -72,8 +83,8 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
       [c.channel, c.ext, c.name, c.phone ?? null, c.mode, c.reason ?? null, c.mode === 'human' ? users.suivi : null, c.orderId ?? null, c.orderId ? 1 : 0, c.source ?? null, iso(c.at), last[1].slice(0, 140), last[0] === 'customer' ? 1 : 0, iso(c.at - c.msgs.length * 60_000)],
     );
     const cid = num(r[0].id);
-    for (const [k, [role, body, uid]] of c.msgs.entries())
-      await db.query('INSERT INTO conv_messages (conversation_id, role, body, user_id, created_at) VALUES ($1,$2,$3,$4,$5)', [cid, role, body, uid ?? null, iso(c.at - (c.msgs.length - k) * 45_000)]);
+    for (const [k, [role, body, uid, meta]] of c.msgs.entries())
+      await db.query('INSERT INTO conv_messages (conversation_id, role, body, user_id, meta, created_at) VALUES ($1,$2,$3,$4,$5,$6)', [cid, role, body, uid ?? null, meta ? JSON.stringify(meta) : null, iso(c.at - (c.msgs.length - k) * 45_000)]);
     if (c.orderId) await db.query('UPDATE orders SET conversation_id = $2 WHERE id = $1', [c.orderId, cid]);
   }
 }

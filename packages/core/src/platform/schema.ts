@@ -4,6 +4,7 @@ import type { Tenancy } from './tenancy';
 import { PILOT_PLATFORM_SQL } from '../modules/pilotlearn';
 import { AI_USAGE_SQL } from './aiusage';
 import { LAHJA_PLATFORM_SQL } from '../modules/lahja';
+import { DARIJA_BOOK_SQL } from '../modules/darijabook';
 
 const P001 = `
 CREATE SCHEMA IF NOT EXISTS platform;
@@ -552,6 +553,7 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p013_ai_usage', AI_USAGE_SQL],
   // Darija (lahja) lessons: the shops' corrections and what Dellal learned, waiting for Pilotix; the ones every shop uses
   ['p014_lahja', LAHJA_PLATFORM_SQL],
+  ['p015_darija_book', DARIJA_BOOK_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

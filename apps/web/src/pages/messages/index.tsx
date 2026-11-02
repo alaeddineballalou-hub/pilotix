@@ -17,6 +17,7 @@ import { AgentHeader, Filters, initials, PeriodSwitch, SaveBar, SearchBox, useEd
 import type { PageProps } from '../registry';
 import { Bubbles, Composer } from './chat';
 import { LahjaCard, LahjaFix } from './lahja';
+import { VoiceRead } from './voice';
 import './messages.css';
 
 type Channel = 'whatsapp' | 'messenger' | 'instagram' | 'tiktok' | 'test';
@@ -259,7 +260,16 @@ function Thread({ id, name, info, onInfo, onBack }: { id: number; name: string; 
             </button>
           </div>
         )}
-        <Bubbles messages={messages} name={name} foot={(m) => <LahjaFix m={m} name={name} />} />
+        <Bubbles
+          messages={messages}
+          name={name}
+          foot={(m) => (
+            <>
+              <LahjaFix m={m} name={name} />
+              <VoiceRead m={m} />
+            </>
+          )}
+        />
         <Composer value={body} onChange={setBody} onSend={submit} placeholder={t('messages.thread.write')} busy={reply.isPending} />
       </section>
       <aside className="ai-side" aria-label={t('messages.side.customer')}>

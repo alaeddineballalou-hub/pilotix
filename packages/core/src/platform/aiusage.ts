@@ -67,7 +67,7 @@ export function aiCostUsd(model: string, u: AiUsage | null | undefined): number 
 /** Adds one answer to the shop's day (Algeria's date). Never throws: counting must not stop an answer. */
 export async function recordAiUsage(
   t: Tenancy,
-  a: { shopId: number; feature?: string | null; model: string; payer: AiPayer; usage: AiUsage | null | undefined; at?: Date },
+  a: { shopId: number; feature?: string | null; model: string; payer: AiPayer; usage: AiUsage | null | undefined; at?: Date; /** the cost already worked out (another AI than Claude: Gemini for voice notes) */ usd?: number },
 ): Promise<void> {
   try {
     const lab = a.feature === LAB_FEATURE;
@@ -95,7 +95,7 @@ export async function recordAiUsage(
         tok(u.output_tokens),
         tok(u.cache_read_input_tokens),
         tok(u.cache_creation_input_tokens),
-        aiCostUsd(a.model, u),
+        a.usd !== undefined && Number.isFinite(a.usd) ? Math.max(0, a.usd) : aiCostUsd(a.model, u),
       ],
     );
   } catch {

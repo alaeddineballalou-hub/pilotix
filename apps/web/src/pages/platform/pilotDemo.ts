@@ -494,6 +494,82 @@ const DARIJA_CASES: { conv: number; c?: string; d?: string; chat: string }[] = [
   { conv: 7102, c: 'wesh, mazal kayen le collier doré ?', chat: 'C: wesh, mazal kayen le collier doré ?\nD: Ih mazal 👍 b <price>, w la livraison l Oran <price>.\nC: saha nakhdou\nD: Mlih ! 3tini smiytek w numéro ta3ek.' },
   { conv: 7103, c: 'Salam wesh rakom, ch7al la livraison l Oran ?', d: 'Wach men couleur t7abi : doré wela argenté ?', chat: 'C: Salam wesh rakom, ch7al la livraison l Oran ?\nD: La livraison l Oran <price>, tkhalsi ki testalmi. Wach men couleur t7abi : doré wela argenté ?\nC: doré' },
 ];
+/** the Darija book of the example: the real guide's chapters (a few lines each), its versions */
+const DEMO_BOOK = {
+  "title": "DARIJA ALGÉRIENNE — comment écrire (algérien, pas marocain, tunisien, libyen, égyptien ni du Moyen-Orient)",
+  "chapters": [
+    {
+      "title": "Registre",
+      "text": "- Le client écrit en darija → réponds en darija avec les mots français du commerce : prix, livraison, commande, colis, couleur, taille, disponible, qualité, promotion, stop desk, bureau. Pas de longues phrases entières en français : des clients algériens le reprochent aux vendeurs (« rak tbi3 f Dzayer wela f França ? »). Français complet seulement si le client écrit en français.\n- Même écriture que le client dès le premier message : lettres latines avec chiffres (arabizi) ou lettres arabes. En lettres arabes, darija simple, jamais l’arabe classique de service client (pas « أي لون تفضل؟ », mais « واش من لون تحب؟ »).\n- Arabizi algérien : 3 = ع, 7 = ح, 9 = ق (et non ص comme au Moyen-Orient), 5 ou kh = خ, gh = غ, dj = ج, ch = ش, ou = و. En lettres arabes, l’algérien écrit aussi ڨ pour le son g. Garde une seule orthographe dans un message : toujours 9 pour ق (9bel, 9oddam), toujours kh pour خ (ydkhol, khti), pas « q » ni « 5 » mélangés."
+    },
+    {
+      "title": "Les mots algériens compris partout (utilise ceux-là)",
+      "text": "- maintenant : dorka / drk (دركا) · beaucoup : bezzaf (بزاف) · bien, bon : mlih (مليح) · un peu : chwiya (شوية)\n- quoi : wach (واش) · où : win (وين) · lequel : wach men (واش من) · comment : kifach (كيفاش) · combien : ch7al, b ch7al (شحال، بشحال) · quand : wa9tach (وقتاش) · qui : chkoun (شكون) · pourquoi : 3lach (علاش)\n- je veux : n7ab (نحب) ou bghit · il y a : kayen / kayna (كاين / كاينة) · il n’y a pas : makach (ماكاش) · mais : bessah (بصح) · seulement : ghir (غير) · comme : kima (كيما) · tout : ga3 (ڨاع) · pour que : bach (باش) · si : ila / ida · quand (lorsque) : ki (كي)"
+    },
+    {
+      "title": "Grammaire en bref",
+      "text": "- Présent : je n- (nab3atlek, nchouf), tu (homme) t- (t7ab, tkhalles), tu (femme) t-…-i (t7abi, tkhallsi), il y- (yji, yousel), nous n-…-ou (nab3toulek), vous / poli t-…-ou (t7abou), ils y-…-ou.\n- Verbes français à l’algérienne : n + verbe + i → ncommandi, nconfirmi, nannuli, nréservi (« nréservilek ? »), ytéléphonilek ; au pluriel -iw : tcommandiw, tconfirmiw (jamais « tcommandou »).\n- Arriver : wsel → yousel / tousel (le colis yousel, la commande tousel). Livrer quelque chose à quelqu’un : wassel → ywassel (« ywasslek la commande »). N’écris pas « ywasel » pour « arriver »."
+    },
+    {
+      "title": "Homme, femme ou on ne sait pas",
+      "text": "- Homme : rak, nta, t-…, khouya, smahli. Femme : raki, nti, t-…-i, khti ou madame, smahili. Jamais de formes masculines à une femme.\n- Genre inconnu : écris au pluriel (rakom, tkhallsou, ab3touli) ou avec des formes neutres (ta3ek, 3andek). Ne devine pas le genre d’après un prénom ambigu. N’utilise pas « ntouma » pour une seule personne.\n- Reste cohérent dans tout le message, sans exception :"
+    },
+    {
+      "title": "Tournures sûres de vendeur (H = vues chez des vendeurs ou clients algériens ; les autres sont courantes, à confirmer par l’équipe)",
+      "text": "- Accueil : « Wa 3likoum salam, mar7ba bik / biki / bikom 😊 » · disponible : « ih, kayen ✅ » (kayna pour un mot féminin) · plusieurs couleurs : « kayna f zouj couleurs : gris chiné w vert sauge »\n- Prix et total : « La poussette b 12 900 DA. El total 13 300 DA b la livraison, tkhalles ki testalem » (tkhallsi pour une femme, tkhallsou au pluriel)\n- Rassurer : « ma tkhafch / ma tkhafich », « ma kan walou », « machi mouchkil », « khalliha 3liya », « rani m3ak / m3aki », « rahi f triq », « ida 7abit tsa9si 3la kach 7aja, rani hna »"
+    },
+    {
+      "title": "À ne jamais écrire",
+      "text": "- Mots d’autres dialectes : daba (→ dorka), wakha (→ d’accord / mlih), 3afak, dyal (→ ta3), kan- + verbe (kanbghi → n7ab), achnou, barcha (→ bezzaf), famma (→ kayen), chnowa, mouch (→ machi), aslema, hlba, keda (→ hakka), aywa (→ ih), 3ayez, delwa2ti, kwayes (→ mlih), shlonak, abshir, wayed, baddi, kifak, hek, halla2.\n- Faux ou déplacé : « ma3andek 7a9 » (= tu as tort ; dire « 3andek l7a9 »), « mrid » (malade) pour parler au client, habibti, 3omri, ya ghzala, zella, louza, bomba, « enti chaba » (drague) — « chaba » seulement pour un produit.\n- Politique, misère, régions, religion : yetnahaw ga3, hogra, harraga, zawali, « prix spécial zawali », blagues sur une région ou une ville, « wallah » pour prouver la qualité, « inchallah » à la place d’un vrai délai."
+    },
+    {
+      "title": "Régions",
+      "text": "- Comprends les formes régionales du client : qaddach / gaddach (Est), mnih (Oran), ktir (Centre, Ouest), yezzi (Annaba), fin (où), wah (Ouest, Sud) ou ih (Est, Centre). Tu peux les reprendre s’il les emploie ; sinon écris la forme comprise partout (partie B).\n- Kabylie : à « Azul », réponds « Azul, tanemirt » puis continue en français simple."
+    },
+    {
+      "title": "Exemples (le ton à viser ; les produits et les prix sont des exemples : prends toujours ceux du catalogue et des outils)",
+      "text": "Client (genre inconnu) : « slm, ch7al le sac à langer ? »\nToi : « Wa 3likoum salam, mar7ba bikom 😊 Le sac à langer b 4 500 DA, kayen f zouj couleurs : noir w camel, w tkhallsou ki testalmou. Wach men wilaya bach n9olkom ch7al la livraison ? »\nClient (homme) : « ghalia bezzaf »"
+    }
+  ]
+} as { title: string; chapters: { title: string; text: string }[] };
+function darijaBook() {
+  const to = today();
+  const at = (k: number, h = 9) => new Date(Date.parse(`${add(to, -k)}T0${h}:00:00Z`)).toISOString();
+  const lessons = [
+    { id: 27, words: [{ use: '', not: 'habibi' }] },
+    { id: 30, words: [{ use: 'khouya' }] },
+  ];
+  const book = { id: 7, version: 7, title: DEMO_BOOK.title, chapters: DEMO_BOOK.chapters, lessons, kind: 'lessons', note: 'Leçon ajoutée par Pilotix : « khouya »', by: 'Alaeddine', at: at(5) };
+  const v = (version: number, kind: string, note: string, by: string, k: number, chapters: number, nl: number) => ({ version, live: version === 7, kind, note, by, at: at(k, 9 - (version % 5)), chapters, lessons: nl });
+  const versions = [
+    v(7, 'lessons', 'Leçon ajoutée par Pilotix : « khouya »', 'Alaeddine', 5, 8, 2),
+    v(6, 'lessons', 'Leçon acceptée : jamais « habibi »', 'Sara', 8, 8, 1),
+    v(5, 'edit', 'Chapitre F : « wakha » ne se dit pas à un client', 'Alaeddine', 9, 8, 0),
+    v(4, 'restore', 'Retour à la version 2', 'Alaeddine', 11, 8, 0),
+    v(3, 'edit', 'Essai : un chapitre « Mots de l’Est »', 'Sara', 12, 9, 0),
+    v(2, 'edit', 'Chapitre B : « dorka », pas « daba »', 'Alaeddine', 14, 8, 0),
+    v(1, 'first', 'Première version : le guide de darija de Pilotix', 'Pilotix', 20, 8, 0),
+  ];
+  return { book, versions };
+}
+function darijaFile(version?: number) {
+  const { book } = darijaBook();
+  const mark = (i: number) => String.fromCharCode(65 + i);
+  const text = [
+    'DELLAL & CM AI — LE LIVRE DE DARIJA',
+    '',
+    `Version ${version ?? book.version} (exemple de l’aperçu).`,
+    '',
+    book.title,
+    '',
+    ...book.chapters.map((c, i) => `${mark(i)}. ${c.title}\n${c.text}\n`),
+    'LEÇONS DE DARIJA POUR TOUTES LES BOUTIQUES',
+    '- n’écris jamais « habibi »',
+    '- utilise « khouya » quand ça va',
+    '',
+  ].join('\n');
+  return { version: version ?? book.version, text };
+}
 function lahjaState() {
   const to = today();
   const at = (k: number, h = 9) => new Date(Date.parse(`${add(to, -k)}T0${h}:00:00Z`)).toISOString();
@@ -566,6 +642,12 @@ export function demoAnswer(name: string, input: any): unknown {
       return { ok: true, id: ++added, topic: input?.topic, text: input?.text };
     case 'p.lahja.state':
       return lahjaState();
+    case 'p.darija.book':
+      return darijaBook();
+    case 'p.pilot.voice':
+      return { enabled: true, model: 'gemini-flash-latest', hasKey: true, today: { calls: 14, usd: 0.0124 } };
+    case 'p.darija.file':
+      return darijaFile(input?.version);
     case 'p.lahja.add':
       return { ok: true, id: ++added, words: input?.words ?? wordsChanged(String(input?.before ?? ''), String(input?.after ?? '')) };
     case 'p.pilot.state':

@@ -74,7 +74,7 @@ const CodeBody = z.object({ ticket: z.string().max(4000), code: z.string().trim(
  * Actions that only read (or only touch what no shop's request keeps: Pilot AI's test chat, lessons chat, Darija lessons): everything
  * else changes shops, so what the shops' requests keep is forgotten at once.
  */
-const READS = /^p\.(me|couriers|couriers\.(tests|state|usage)|dashboard|shops\.(list|get)|payments\.(list|receipt)|plans\.list|staff\.list|settings\.get|audit\.list|demo\.get|signups\.list|support\.(list|get)|health\.db|pilot\.(state|case|bookText|try|teach)|lahja\.(state|decide|decideMany|add)|dellal\.(board|more|books)|(cm|spy)\.board|ai\.costs)$/;
+const READS = /^p\.(me|couriers|couriers\.(tests|state|usage)|dashboard|shops\.(list|get)|payments\.(list|receipt)|plans\.list|staff\.list|settings\.get|audit\.list|demo\.get|signups\.list|support\.(list|get)|health\.db|pilot\.(state|case|bookText|try|teach|voice|voiceSave)|lahja\.(state|decide|decideMany|add)|darija\.(book|save|restore|file)|dellal\.(board|more|books)|(cm|spy)\.board|ai\.costs)$/;
 /** These need e-mails: the owner gets a link (or a receipt) only by e-mail. */
 const NEEDS_MAIL = new Set(['p.shops.create', 'p.shops.resendInvite', 'p.payments.mailReceipt']);
 

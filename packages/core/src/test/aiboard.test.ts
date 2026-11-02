@@ -255,7 +255,10 @@ test('Dellal’s instruction book: its method, its Darija and the lesson book in
   const { t, p, support } = await server();
   let b = await p('p.pilot.bookText', {});
   assert.equal(b.version, null);
-  assert.match(b.text, /^DELLAL — LE LIVRE D’INSTRUCTIONS/);
+  assert.match(b.text, /^DELLAL — LE LIVRE DE VENTE/);
+  // the sales book only: the Darija rules are in the Darija book (modules/darijabook.ts)
+  assert.doesNotMatch(b.text, /A\. Registre/);
+  assert.match(b.text, /La darija a son propre livre/);
   assert.match(b.text, /Pas encore de livre de leçons/);
   assert.match(b.text, /MÉTHODE DE VENTE/);
   assert.match(b.text, /DARIJA ALGÉRIENNE/);

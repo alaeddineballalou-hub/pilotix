@@ -195,5 +195,15 @@
     "more": "Voir les {{n}}",
     "less": "Voir moins",
     "fromComment": "réponse à un commentaire"
+  },
+  "voice": {
+    "label": "Message vocal",
+    "done": "écrit par l’IA",
+    "pending": "lecture…",
+    "failed": "pas compris",
+    "off": "lecture des vocaux éteinte",
+    "read": "Écrire ce vocal en texte",
+    "reading": "Lecture…",
+    "readDone": "Vocal écrit en texte"
   }
 }

@@ -10,6 +10,20 @@ import './messages.css';
 
 export type Msg = { id: number; role: string; body: string; userName: string | null; sendError: string | null; at: string; meta: any };
 
+/** 0:07 */
+const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s) % 60).padStart(2, '0')}`;
+/** « Message vocal · 0:07 · écrit par l’IA » above a voice note's text (or: reading, not understood, reading off) */
+function VoiceLine({ v }: { v: { status?: string; seconds?: number | null } }) {
+  const { t } = useTranslation();
+  const st = ['done', 'pending', 'failed', 'off'].includes(String(v.status)) ? String(v.status) : 'pending';
+  return (
+    <span className={`ai-voice ai-voice-${st}`}>
+      <Icon name="mic" /> {t('messages.voice.label')}
+      {v.seconds ? <bdi className="ltr"> · {mmss(v.seconds)}</bdi> : null} · {t(`messages.voice.${st}`)}
+    </span>
+  );
+}
+
 /** The messages of a conversation, grouped by author, with the day between them; `foot`: a quiet line under a message. */
 export function Bubbles({
   messages,
@@ -67,6 +81,8 @@ export function Bubbles({
           </span>
         )}
         <div className="ai-bub">
+          {/* a voice note: Gemini wrote it as text (or could not) before Dellal read it */}
+          {m.role === 'customer' && m.meta?.voice && <VoiceLine v={m.meta.voice} />}
           <span className="ai-txt" dir="auto">
             {m.body}
           </span>

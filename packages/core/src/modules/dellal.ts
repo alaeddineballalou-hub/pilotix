@@ -8,7 +8,8 @@ import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { AppError, Ctx, notFound, proc } from '../rpc';
 import { clientFee, getSetting } from '../settings';
 import { getRaw, setRaw } from './admin';
-import { checkDarija, DARIJA_FIXER_SYSTEM, darijaRewritePrompt, DarijaIssue, DELLAL_DARIJA, fixDarija, parseAvoid } from './darija';
+import { checkDarija, DARIJA_FIXER_SYSTEM, darijaRewritePrompt, DarijaIssue, fixDarija, parseAvoid } from './darija';
+import { darijaGuide } from './darijabook';
 import { markReply, noticeForConversation, ordersForDellal, sendInPreview } from './notify';
 import { createOrder } from './orders';
 import { anonymize, bookFor, BookRef, pickModel } from './pilotlearn';
@@ -194,6 +195,11 @@ export const IncomingInput = z.object({
   text: z.string().min(1).max(4000),
   messageId: z.string().max(200).nullable().optional(),
   source: z.string().max(200).nullable().optional(),
+  /** a voice note: where the server fetches it to write it as text (dellal-server › transcribe) */
+  media: z
+    .object({ kind: z.literal('audio'), id: z.string().max(200).optional(), url: z.string().max(2000).optional(), mime: z.string().max(100).optional() })
+    .nullable()
+    .optional(),
 });
 
 /** Stores one customer message (creating the conversation the first time). Returns null for a duplicate. */
@@ -220,7 +226,8 @@ export async function receiveMessage(ctx: Ctx, m: z.infer<typeof IncomingInput>)
     // conversation just before their answer, so the team and Dellal see what they answer.
     const notice = phone ? await noticeForConversation(tx, phone, id) : null;
     if (notice) await addMessage(tx, id, { role: 'agent', body: notice.body, at: notice.sentAt, meta: { notify: notice.kind, notifyId: notice.id, ref: notice.ref, via: notice.channel }, quiet: true });
-    const mid = await addMessage(tx, id, { role: 'customer', body: m.text, externalId: m.messageId ?? null });
+    const voice = m.media?.kind === 'audio' && (m.media.id || m.media.url) ? { voice: { status: 'pending', ...(m.media.id ? { id: m.media.id } : {}), ...(m.media.url ? { url: m.media.url } : {}), ...(m.media.mime ? { mime: m.media.mime } : {}) } } : undefined;
+    const mid = await addMessage(tx, id, { role: 'customer', body: m.text, externalId: m.messageId ?? null, ...(voice ? { meta: voice } : {}) });
     // their first words after the message are their answer to it (later ones belong to the conversation)
     if (mid && phone && notice) await markReply(tx, phone, m.text, 'whatsapp');
     return mid ? { conversationId: id, messageId: mid } : null;
@@ -573,7 +580,8 @@ async function systemPrompt(
   const today = new Date(ctx.now()).toISOString().slice(0, 10);
   const shared = [
     DELLAL_PLAYBOOK.replace('${ORDER_NEXT}', s.ordersTo === 'new' ? 'après la commande, un conseiller l’appellera aussi pour confirmer.' : 'la commande part directement en préparation.'),
-    DELLAL_DARIJA,
+    // the Darija book in service (Pilot AI › Tester & leçons › Leçons › Darija; the guide of the code without the platform)
+    await darijaGuide(ctx.t?.platform ?? null),
     lahjaBlocks(lahja).shared,
     lessons.trim(),
   ];
@@ -756,10 +764,15 @@ async function history(db: Db, convId: number): Promise<AiMsg[]> {
     const role = r.role === 'customer' ? 'user' : 'assistant';
     // a conversation opened from a comment starts with the public comment, then the private message of the CM AI agent
     const post = r.meta?.comment ? String(r.meta.comment.post ?? '').slice(0, 120) : '';
+    const voice = r.role === 'customer' ? r.meta?.voice : null;
     const text =
       r.role === 'staff'
         ? `[équipe] ${r.body}`
-        : r.meta?.comment
+        : voice
+          ? voice.status === 'done'
+            ? `[message vocal, écrit en texte par l’IA : un mot peut être mal entendu] ${r.body}`
+            : '[message vocal que tu ne peux pas écouter : dis-le simplement et demande au client de l’écrire, ou de répondre par écrit à ta question]'
+          : r.meta?.comment
           ? `[commentaire public sous la publication${post ? ` « ${post} »` : ''}] ${r.body}`
           : r.meta?.notify
             ? `[message automatique de suivi de la commande ${r.meta.ref ?? ''}] ${r.body}`
@@ -796,6 +809,52 @@ export interface AiResponse {
   demo?: boolean;
 }
 
+// ---------------------------------------------------------------- voice notes
+export type VoiceMeta = { status: 'pending' | 'done' | 'failed' | 'off'; id?: string; url?: string; mime?: string; seconds?: number | null; lang?: string | null; model?: string | null; error?: string; at?: string };
+/**
+ * Writes the customer's voice notes of a conversation as text (on the server: Google Gemini, Pilotix's key): the message's
+ * text becomes what they said, so Dellal and the team read it. The newest 5 waiting ones; `ids`: only these (the « Écrire
+ * ce vocal » button of Messages, even after a failure). The way the customer writes (Arabic letters or Latin letters with
+ * 3/7/9) is taken from their typed messages.
+ */
+export async function hearVoices(ctx: Ctx, convId: number, ids?: number[]): Promise<number> {
+  if (!ctx.server?.dellal) return 0;
+  const rows: any[] = (
+    await ctx.db.query(
+      ids?.length
+        ? `SELECT id, meta FROM conv_messages WHERE conversation_id = $1 AND role = 'customer' AND meta ? 'voice' AND id = ANY($2::bigint[]) ORDER BY id`
+        : `SELECT id, meta FROM conv_messages WHERE conversation_id = $1 AND role = 'customer' AND meta->'voice'->>'status' = 'pending' ORDER BY id DESC LIMIT 5`,
+      ids?.length ? [convId, ids] : [convId],
+    )
+  ).sort((a, b) => num(a.id) - num(b.id));
+  if (!rows.length) return 0;
+  const conv = (await ctx.db.query('SELECT channel FROM conversations WHERE id = $1', [convId]))[0];
+  const typed = await ctx.db.query(`SELECT body FROM conv_messages WHERE conversation_id = $1 AND role = 'customer' AND NOT COALESCE(meta ? 'voice', false) ORDER BY id DESC LIMIT 6`, [convId]).catch(() => []);
+  const script = typed.some((r: any) => /[\u0600-\u06FF]/.test(String(r.body))) ? 'arabic' : 'latin';
+  let heard = 0;
+  for (const r of rows) {
+    const v: VoiceMeta = r.meta?.voice ?? { status: 'pending' };
+    let out: any;
+    try {
+      out = await ctx.server.dellal('transcribe', { channel: conv?.channel, media: { id: v.id, url: v.url, mime: v.mime }, script }, ctx);
+    } catch (e: any) {
+      out = { ok: false, error: String(e?.message ?? e) };
+    }
+    const at = new Date(ctx.now()).toISOString();
+    if (out?.ok && String(out.text ?? '').trim()) {
+      const next: VoiceMeta = { ...v, status: 'done', seconds: out.seconds ?? null, lang: out.lang ?? null, model: out.model ?? null, at };
+      delete next.error;
+      await ctx.db.query(`UPDATE conv_messages SET body = $2, meta = jsonb_set(COALESCE(meta, '{}'::jsonb), '{voice}', $3::jsonb) WHERE id = $1`, [r.id, String(out.text).trim().slice(0, 4000), JSON.stringify(next)]);
+      heard++;
+    } else {
+      const off = out?.error === 'off' || out?.error === 'no_platform';
+      await ctx.db.query(`UPDATE conv_messages SET meta = jsonb_set(COALESCE(meta, '{}'::jsonb), '{voice}', $2::jsonb) WHERE id = $1`, [r.id, JSON.stringify({ ...v, status: off ? 'off' : 'failed', error: String(out?.error ?? 'error').slice(0, 200), at })]);
+    }
+  }
+  ctx.emit({ type: 'chat', data: { dellal: convId } });
+  return heard;
+}
+
 /** Runs Dellal on a conversation: reads it, uses its tools, writes (and sends) its answer. */
 /**
  * `book` / `lab`: the control room's test chat (Pilot AI › Test & lessons) brings the lesson book it chose (in service, in
@@ -810,6 +869,8 @@ export async function runAgent(
   const check = await shouldAnswer(ctx, convId);
   if (!check.ok) return { reply: null, handoff: false, orderRef: null, demo: false, skipped: check.why };
   const s = await dellalSettings(ctx.db);
+  // the customer's voice notes, written as text first (Gemini, on the server), so Dellal reads what they said
+  if (ctx.server?.dellal) await hearVoices(ctx, convId).catch(() => undefined);
   let conv = await getConv(ctx.db, convId);
   const test = conv.channel === 'test';
   const messages = await history(ctx.db, convId);
@@ -1243,6 +1304,18 @@ export const dellalProcs = {
     const m = (await ctx.db.query(`SELECT id, conversation_id, role, body FROM conv_messages WHERE id = $1`, [i.messageId]))[0];
     if (!m || m.role !== 'agent') throw notFound('Message de Dellal introuvable');
     return saveShopLahja(ctx, { before: String(m.body), after: i.after, conversationId: num(m.conversation_id), messageId: num(m.id) });
+  }),
+
+  /** Messages: « Écrire ce vocal » — a voice note Dellal did not read (paused, a person answers, or it failed): written now. */
+  'dellal.voice.read': proc([...SELLERS], z.object({ messageId: id }), async (ctx, i) => {
+    const m = (await ctx.db.query(`SELECT id, conversation_id, meta FROM conv_messages WHERE id = $1 AND role = 'customer'`, [i.messageId]))[0];
+    if (!m?.meta?.voice) throw notFound('Message vocal introuvable');
+    if (!ctx.server?.dellal) throw new AppError('bad_request', 'Les messages vocaux se lisent sur le serveur de Pilotix (pas dans l’aperçu).');
+    await hearVoices(ctx, num(m.conversation_id), [num(m.id)]);
+    const after = (await ctx.db.query(`SELECT body, meta FROM conv_messages WHERE id = $1`, [m.id]))[0];
+    const v: VoiceMeta = after?.meta?.voice ?? { status: 'failed' };
+    if (v.status !== 'done') throw new AppError('bad_request', v.status === 'off' ? 'La lecture des messages vocaux est éteinte (Pilotix › Pilot AI › Réglages).' : `Message vocal pas compris (${v.error ?? 'erreur'}).`);
+    return { body: String(after.body), voice: v };
   }),
 
   /** This shop's Darija lessons: its team's (with what Pilotix decided), what Dellal learned from its customers, and Pilotix's. */

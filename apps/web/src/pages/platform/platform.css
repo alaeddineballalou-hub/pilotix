@@ -457,7 +457,7 @@ html[data-theme="dark"] .pp-prot { --pp-c-q: #3B9BC0; }
    the colours of the charts (ui/chart.css), checked for colour blindness on the light and dark surfaces. */
 /* four short tabs: on a phone they wrap rather than hide one behind the edge (the app's tabs scroll sideways) */
 .pilot-tabs .tabs { gap: 8px; flex-wrap: wrap !important; overflow: visible !important; }
-.pilot-settings { max-width: 880px; }
+.pilot-settings { max-width: 880px; display: flex; flex-direction: column; gap: 16px; }
 .pilot-settings > .card { margin: 0; }
 .pb-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
 .pb-bar .tabs { flex-wrap: nowrap; }
@@ -668,3 +668,54 @@ html[data-theme="dark"] .pp-prot { --pp-c-q: #3B9BC0; }
 mark.pl-dj-hit { padding: 0 2px; border-radius: 4px; background: var(--ai-tint); color: var(--ai-tint-ink); font-weight: 700; }
 mark.pl-dj-gone { padding: 0 2px; border-radius: 4px; background: none; color: inherit; text-decoration: line-through; text-decoration-thickness: 2px; text-decoration-color: var(--c-bad-ink, var(--coral)); }
 .pl-dj-anon { margin: 0; color: var(--muted); font-size: 12px; }
+
+/* ---- Darija book (Leçons › Darija): the rules Dellal and CM AI read, in chapters; its versions */
+.pl-db { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border: 1px solid var(--ai-tint-line); border-radius: 14px; background: color-mix(in srgb, var(--ai-tint) 45%, var(--surface)); }
+.pl-db-wait { min-height: 132px; }
+.pl-db-top { display: flex; align-items: flex-start; gap: 12px; }
+.pl-db-ic { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 11px; background: var(--surface); color: var(--ai-tint-ink); border: 1px solid var(--ai-tint-line); }
+.pl-db-ic .bji { width: 20px; height: 20px; }
+.pl-db h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; font-size: 15.5px; }
+.pl-db-v { padding: 1px 8px; border-radius: 999px; background: var(--surface); border: 1px solid var(--ai-tint-line); color: var(--ai-tint-ink); font-size: 12.5px; font-weight: 800; }
+.pl-db-help { margin: 2px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.pl-db-meta { margin: 0; font-size: 13px; font-weight: 600; }
+.pl-db-last { margin: 0; color: var(--muted); font-size: 12.5px; }
+.pl-db-do { display: flex; flex-wrap: wrap; gap: 8px; }
+/* reading */
+.pl-db-read { display: flex; flex-direction: column; gap: 16px; }
+.pl-db-intro { margin: 0; font-weight: 700; line-height: 1.45; }
+.pl-db-toc { display: flex; flex-wrap: wrap; gap: 6px; }
+.pl-db-toc-i { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12.5px; cursor: pointer; }
+.pl-db-toc-i span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
+.pl-db-toc-i b { color: var(--ai-tint-ink); }
+.pl-db-toc-i .bji { width: 13px; height: 13px; }
+.pl-db-toc-i:hover { border-color: var(--ai-tint-line); }
+.pl-db-ch { scroll-margin-top: 12px; }
+.pl-db-ch h4 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 14.5px; }
+.pl-db-l { display: inline-grid; place-items: center; flex: none; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 8px; background: var(--ai-tint); color: var(--ai-tint-ink); font-size: 13px; font-weight: 800; }
+.pl-db-l .bji { width: 14px; height: 14px; }
+.pl-db-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13.5px; line-height: 1.55; }
+.pl-db-words { display: flex; flex-wrap: wrap; gap: 6px; }
+/* editing */
+.pl-db-edit { display: flex; flex-direction: column; gap: 14px; }
+.pl-db-f { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.pl-db-ech { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+.pl-db-eh { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.pl-db-eh input { height: 38px; font-weight: 700; }
+.pl-db-ech textarea { width: 100%; resize: vertical; padding: 9px 12px; border-radius: 10px; font: inherit; font-size: 13.5px; line-height: 1.5; }
+.pl-db-ech .btn:disabled { visibility: hidden; }
+.pl-db-add { align-self: flex-start; }
+.pl-db-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; width: 100%; }
+.pl-db-foot input { flex: 1 1 220px; min-width: 0; height: 38px; }
+.pl-db-foot > span:first-child { flex: 1 1 auto; font-weight: 700; }
+.pl-db-size { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.pl-db-size.over { color: var(--c-bad-ink, var(--coral)); font-weight: 700; }
+/* versions */
+.pl-db-vs { list-style: none; margin: 0; padding: 0; }
+.pl-db-vs > li { display: flex; flex-direction: column; gap: 5px; padding: 12px 0; border-top: 1px solid var(--line); }
+.pl-db-vs > li:first-child { border-top: 0; padding-top: 0; }
+.pl-db-vh { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.pl-db-kind { color: var(--muted); font-size: 12.5px; font-weight: 700; }
+.pl-db-vn { margin: 0; font-size: 13.5px; }
+.pl-db-ask { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--raise); }
+.pl-db-ask p { margin: 0; font-size: 13px; line-height: 1.45; }

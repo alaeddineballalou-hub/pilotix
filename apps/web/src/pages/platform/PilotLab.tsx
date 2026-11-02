@@ -20,6 +20,7 @@ import { toast } from '../../ui/toast';
 import { Bubbles, Composer, Msg, Typing } from '../messages/chat';
 import { LahjaWord, LahjaWords } from '../messages/lahja';
 import { CaseModal } from './pilotCase';
+import { DarijaBookCard } from './DarijaBook';
 import { PilotDemo, usePilotAction, usePilotCall, usePilotRpc } from './pilotDemo';
 
 type State = POut<'p.pilot.state'>;
@@ -79,7 +80,7 @@ export function LabTab({ d, manager }: { d: State; manager: boolean }) {
           <TryCard d={d} book={book} onBook={setBook} />
         </div>
         <div className="pl-lab-pane pl-lab-teach">
-          <LessonsCard d={d} onTry={tryNext} />
+          <LessonsCard d={d} onTry={tryNext} manager={manager} />
         </div>
       </div>
       <NextCard d={d} manager={manager} />
@@ -256,7 +257,7 @@ function TryCard({ d, book, onBook }: { d: State; book: Book; onBook: (b: Book) 
 }
 
 // ---------------------------------------------------------------- Lessons: Sales | Darija
-function LessonsCard({ d, onTry }: { d: State; onTry: () => void }) {
+function LessonsCard({ d, onTry, manager }: { d: State; onTry: () => void; manager: boolean }) {
   const { t } = useTranslation();
   const [kind, setKind] = useState<'sales' | 'darija'>('sales');
   const k = 'platform.pilot.lab.lessons.';
@@ -272,7 +273,7 @@ function LessonsCard({ d, onTry }: { d: State; onTry: () => void }) {
           ]}
         />
       </div>
-      {kind === 'sales' ? <TeachChat d={d} onTry={onTry} /> : <DarijaPane />}
+      {kind === 'sales' ? <TeachChat d={d} onTry={onTry} /> : <DarijaPane manager={manager} />}
     </Card>
   );
 }
@@ -486,7 +487,7 @@ const blank = (): LahjaWord => ({ use: '', not: '' });
 const tidy = (rows: LahjaWord[]): LahjaWord[] =>
   rows.map((r) => ({ use: r.use.trim(), ...(r.not?.trim() ? { not: r.not.trim() } : {}) })).filter((r) => r.use || r.not);
 
-function DarijaPane() {
+function DarijaPane({ manager }: { manager: boolean }) {
   const { t } = useTranslation();
   const q = usePilotRpc('p.lahja.state', {});
   const k = 'platform.pilot.lab.darija.';
@@ -524,6 +525,7 @@ function DarijaPane() {
   };
   return (
     <div className="pl-dj">
+      <DarijaBookCard manager={manager} />
       <p className="small muted pl-lab-kind-note">{t(k + 'help')}</p>
       {q.isLoading ? (
         <p className="muted">{t('platform.pilot.lab.try.loading')}</p>

@@ -44,10 +44,11 @@ import {
 } from './shops';
 import type { Tenancy } from './tenancy';
 import * as pilot from '../modules/pilotlearn';
-import { pilotConfig, pilotToday, savePilotConfig } from './pilotai';
+import { pilotConfig, pilotToday, savePilotConfig, saveVoiceConfig, voiceConfig, voiceToday, VOICE_MODEL } from './pilotai';
 import { AI_FEATURES, aiBill, aiLabOfMonth, aiUsageOfMonth, aiUsageSince, monthOf, saveAiBill } from './aiusage';
 import { pilotTry } from '../modules/dellal';
-import { addCoachLahja, decideLahja, decideManyLahja, LAHJA_NO_CHANGE, lahjaErr, lahjaState, lahjaWaiting } from '../modules/lahja';
+import { addCoachLahja, decideLahja, decideManyLahja, LAHJA_NO_CHANGE, lahjaErr, lahjaState, lahjaWaiting, LahjaWord } from '../modules/lahja';
+import { darijaBookFile, darijaBookLive, darijaErr, darijaVersions, restoreDarijaBook, saveDarijaBook, snapshotDarijaLessons } from '../modules/darijabook';
 import { cmBoard, dellalBoard, dellalBooks, dellalBookText, dellalMore, spyBoard } from './aiboard';
 
 export const STAFF_ROLES = ['owner', 'manager', 'support'] as const;
@@ -1083,6 +1084,20 @@ export const PLATFORM_REGISTRY = {
       return pilotConfig(ctx.t);
     },
   ),
+  /** Voice notes (Google Gemini writes them as text before Dellal reads them): on or off, the model, the key; today's count. */
+  'p.pilot.voice': pproc(ALL, z.object({}), async (ctx) => ({ ...(await voiceConfig(ctx.t)), today: await voiceToday(ctx.t) })),
+  'p.pilot.voiceSave': pproc(
+    MANAGERS,
+    z.object({ enabled: z.boolean(), model: z.string().trim().max(60), key: z.string().max(300).nullable().optional() }),
+    async (ctx, i) => {
+      const key = i.key === undefined ? undefined : i.key === null ? null : i.key.trim() || undefined;
+      if (typeof key === 'string' && !/^AIza[0-9A-Za-z_-]{30,}$/.test(key)) throw bad('Clé Google invalide (elle commence par AIza, sur aistudio.google.com)');
+      if (!VOICE_MODEL.test(i.model)) throw bad('Nom de modèle Gemini invalide (exemple : gemini-flash-latest)');
+      await saveVoiceConfig(ctx.t, { enabled: i.enabled, model: i.model }, key);
+      await audit(ctx, 'pilot.voice', null, { enabled: i.enabled, model: i.model, key: key === undefined ? 'kept' : key === null ? 'removed' : 'new' });
+      return { ...(await voiceConfig(ctx.t)), today: await voiceToday(ctx.t) };
+    },
+  ),
   /** Which shops teach Dellal: chosen here only. Turning a shop off deletes what Pilot AI kept of its chats at once. */
   'p.pilot.share': pproc(MANAGERS, z.object({ shopId: z.number().int().positive(), share: z.boolean() }), async (ctx, i) => {
     const c = await pilotConfig(ctx.t);
@@ -1161,6 +1176,7 @@ export const PLATFORM_REGISTRY = {
       const r = await decideLahja(ctx.t.platform, { ...i, by: ctx.staff.name || ctx.staff.email, now: new Date(ctx.now()) });
       if (!r.ok) throw bad(r.problems?.length ? lahjaErr(r.problems) : LAHJA_ERR[r.error ?? ''] ?? 'Impossible');
       await audit(ctx, `pilot.lahja.${i.action}`, null, { id: i.id });
+      if (i.action !== 'refuse') await bookAfter(ctx, `${i.action === 'approve' ? 'Leçon acceptée' : 'Leçon retirée'} : ${wordsNote(r.words ?? (await lessonWords(ctx, i.id)))}`);
       return r;
     },
   ),
@@ -1171,6 +1187,7 @@ export const PLATFORM_REGISTRY = {
   'p.lahja.decideMany': pproc(ALL, z.object({ ids: z.array(Id).min(1).max(200), action: z.enum(['approve', 'refuse']) }), async (ctx, i) => {
     const r = await decideManyLahja(ctx.t.platform, { ids: i.ids, action: i.action, by: ctx.staff.name || ctx.staff.email, now: new Date(ctx.now()) });
     for (const id of r.done) await audit(ctx, `pilot.lahja.${i.action}`, null, { id, many: true });
+    if (i.action === 'approve' && r.done.length) await bookAfter(ctx, `${r.done.length} leçon(s) acceptée(s) ensemble`);
     return {
       done: r.done,
       failed: r.failed.map((f) => ({ id: f.id, error: f.problems?.length ? lahjaErr(f.problems) : LAHJA_ERR[f.error] ?? 'Impossible' })),
@@ -1188,9 +1205,45 @@ export const PLATFORM_REGISTRY = {
       const r = await addCoachLahja(ctx.t.platform, { ...i, by: ctx.staff.name || ctx.staff.email, now: new Date(ctx.now()) });
       if (!r.ok) throw bad(r.problems?.length ? lahjaErr(r.problems) : LAHJA_ERR[r.error ?? ''] ?? 'Impossible');
       await audit(ctx, 'pilot.lahja.add', null, { id: r.id });
+      await bookAfter(ctx, `Leçon ajoutée par Pilotix : ${wordsNote(r.words ?? [])}`);
       return r;
     },
   ),
+
+  // ---------------------------------------------------------------- Pilot AI › Tester & leçons › Leçons › Darija: the Darija book (modules/darijabook.ts)
+  /** The book in service (its rules, in chapters, and the lessons for every shop) and its versions. */
+  'p.darija.book': pproc(ALL, z.object({}), async (ctx) => {
+    const book = await darijaBookLive(ctx.t.platform, new Date(ctx.now()));
+    return { book, versions: await darijaVersions(ctx.t.platform) };
+  }),
+  /** Pilotix edits the rules: a new version, used at once by Dellal and the CM AI agent in every shop. */
+  'p.darija.save': pproc(
+    MANAGERS,
+    z.object({
+      title: z.string().max(400).optional(),
+      chapters: z.array(z.object({ title: z.string().max(400), text: z.string().max(12000) })).min(1).max(40),
+      note: z.string().max(300).optional(),
+    }),
+    async (ctx, i) => {
+      const r = await saveDarijaBook(ctx.t.platform, { ...i, by: ctx.staff.name || ctx.staff.email, now: new Date(ctx.now()) });
+      if (!r.ok) throw bad(r.problems?.length ? darijaErr(r.problems) : r.error === 'who' ? 'Personne connectée inconnue' : 'Impossible');
+      await audit(ctx, 'pilot.darija.save', null, { version: r.book!.version });
+      return { version: r.book!.version };
+    },
+  ),
+  /** Back to an older version (its rules and its lessons): a new version, used at once. */
+  'p.darija.restore': pproc(MANAGERS, z.object({ version: z.number().int().positive() }), async (ctx, i) => {
+    const r = await restoreDarijaBook(ctx.t.platform, { version: i.version, by: ctx.staff.name || ctx.staff.email, now: new Date(ctx.now()) });
+    if (!r.ok) throw bad(r.error === 'not_found' ? 'Version introuvable' : r.error === 'already_live' ? 'Cette version est déjà en service' : 'Impossible');
+    await audit(ctx, 'pilot.darija.restore', null, { from: i.version, version: r.book!.version });
+    return { version: r.book!.version };
+  }),
+  /** The book as a file: the one in service, or an older version. */
+  'p.darija.file': pproc(ALL, z.object({ version: z.number().int().positive().optional() }), async (ctx, i) => {
+    const f = await darijaBookFile(ctx.t.platform, { version: i.version, now: new Date(ctx.now()) });
+    if (!f) throw notFound('Version introuvable');
+    return f;
+  }),
 
   // ---------------------------------------------------------------- Pilot AI › Test & lessons
   /**
@@ -1332,6 +1385,17 @@ const LESSON_ERR: Record<string, string> = {
   not_proven: 'Le test n’a pas encore prouvé que le nouveau livre vend au moins aussi bien',
   nothing_to_roll_back: 'Pas de livre précédent',
 };
+/** « wakha » → « saha », never « habibi »: a lesson's words in one line, for the book's version note. */
+const wordsNote = (ws: LahjaWord[]) =>
+  ws.map((w) => (w.not ? (w.use ? `« ${w.not} » → « ${w.use} »` : `jamais « ${w.not} »`) : `« ${w.use} »`)).join(', ').slice(0, 250) || '—';
+const lessonWords = async (ctx: PCtx, id: number): Promise<LahjaWord[]> => {
+  const r = (await ctx.t.platform.query('SELECT words FROM platform.lahja WHERE id = $1', [id]))[0];
+  return Array.isArray(r?.words) ? (r.words as LahjaWord[]) : [];
+};
+/** The lessons for every shop changed: the Darija book gets a new version (a failure never undoes the decision). */
+async function bookAfter(ctx: PCtx, note: string) {
+  await snapshotDarijaLessons(ctx.t.platform, { by: ctx.staff.name || ctx.staff.email, note, now: new Date(ctx.now()) }).catch(() => null);
+}
 const LAHJA_ERR: Record<string, string> = {
   who: 'Personne connectée inconnue',
   not_found: 'Leçon introuvable',

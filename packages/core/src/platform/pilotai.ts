@@ -107,6 +107,59 @@ export async function savePilotConfig(t: Tenancy, c: Omit<PilotConfig, 'shops' |
   else if (typeof key === 'string' && key.trim()) await t.platform.query(up, [KEY_ROW, JSON.stringify({ key: key.trim() })]);
 }
 
+// ---------------------------------------------------------------- voice notes (Google Gemini writes them as text)
+/**
+ * Customers' voice notes: Claude cannot listen, so Google Gemini writes each one as text, the way the customer writes
+ * (Darija in Latin letters with 3/7/9, or Arabic letters), before Dellal reads it. Pilotix's own Google key (shops never
+ * bring one); what it costs is counted for the shop with its Dellal answers, and inside the same daily limit.
+ */
+export interface VoiceConfig {
+  enabled: boolean;
+  /** the Gemini model (an alias like gemini-flash-latest follows Google's newest Flash) */
+  model: string;
+}
+export const VOICE_DEFAULTS: VoiceConfig = { enabled: false, model: 'gemini-flash-latest' };
+const VOICE_ROW = 'pilot_voice';
+const VOICE_KEY_ROW = 'pilot_voice_key';
+export const VOICE_MODEL = /^[a-z0-9][a-z0-9.\-]{2,59}$/;
+
+export async function voiceConfig(t: Tenancy): Promise<VoiceConfig & { hasKey: boolean }> {
+  const rows = await t.platform.query<{ key: string; value: unknown }>('SELECT key, value FROM platform.settings WHERE key = ANY($1)', [[VOICE_ROW, VOICE_KEY_ROW]]);
+  const conf = rows.find((r) => r.key === VOICE_ROW);
+  const key = rows.find((r) => r.key === VOICE_KEY_ROW);
+  const c = { ...VOICE_DEFAULTS, ...(conf ? json(conf.value) : {}) } as VoiceConfig;
+  return { enabled: !!c.enabled, model: VOICE_MODEL.test(String(c.model)) ? String(c.model) : VOICE_DEFAULTS.model, hasKey: !!(key && String(json(key.value)?.key || '').trim()) };
+}
+
+/** Saves the voice settings; `key`: a new Google key, null to remove it, undefined to keep it. */
+export async function saveVoiceConfig(t: Tenancy, c: VoiceConfig, key?: string | null): Promise<void> {
+  const up = `INSERT INTO platform.settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`;
+  await t.platform.query(up, [VOICE_ROW, JSON.stringify({ enabled: !!c.enabled, model: VOICE_MODEL.test(String(c.model)) ? String(c.model) : VOICE_DEFAULTS.model })]);
+  if (key === null) await t.platform.query('DELETE FROM platform.settings WHERE key = $1', [VOICE_KEY_ROW]);
+  else if (typeof key === 'string' && key.trim()) await t.platform.query(up, [VOICE_KEY_ROW, JSON.stringify({ key: key.trim() })]);
+}
+
+/**
+ * Server only: the Google key and model for a voice note, when voice notes are on and Pilot AI is not resting (the daily
+ * limit counts them too). null: off, no key, or resting.
+ */
+export async function voiceKey(t: Tenancy): Promise<{ key: string; model: string } | null> {
+  const v = await voiceConfig(t);
+  if (!v.enabled || !v.hasKey) return null;
+  if ((await pilotToday(t)).rest) return null;
+  const r = (await t.platform.query<{ value: unknown }>('SELECT value FROM platform.settings WHERE key = $1', [VOICE_KEY_ROW]))[0];
+  const key = (r && String(json(r.value)?.key || '').trim()) || null;
+  return key ? { key, model: v.model } : null;
+}
+
+/** Voice notes written today (Algeria's day), every shop together: how many, and what they cost. */
+export async function voiceToday(t: Tenancy): Promise<{ calls: number; usd: number }> {
+  const r = await t.platform
+    .query<{ calls: unknown; usd: unknown }>(`SELECT coalesce(sum(calls), 0) AS calls, coalesce(sum(usd), 0) AS usd FROM platform.ai_usage WHERE model LIKE 'gemini:%' AND day = (now() AT TIME ZONE 'Africa/Algiers')::date`)
+    .catch(() => [{ calls: 0, usd: 0 }]);
+  return { calls: Number(r[0]?.calls) || 0, usd: Number(r[0]?.usd) || 0 };
+}
+
 /** The coach's morning note: how many lessons wait for an answer, how many came since `since` (tonight), the first five. */
 export async function pilotCoachDigest(t: Tenancy, since?: Date): Promise<{ waiting: number; fresh: number; lessons: { topic: string; text: string }[] }> {
   const [n, top] = await Promise.all([
