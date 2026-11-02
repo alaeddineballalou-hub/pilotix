@@ -5,7 +5,7 @@
 import { COMMUNES, normalizePhone, SalesChannel, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
-import { Ctx, notFound, proc } from '../rpc';
+import { AppError, Ctx, notFound, proc } from '../rpc';
 import { clientFee, getSetting } from '../settings';
 import { getRaw, setRaw } from './admin';
 import { checkDarija, DARIJA_FIXER_SYSTEM, darijaRewritePrompt, DarijaIssue, DELLAL_DARIJA, fixDarija, parseAvoid } from './darija';
@@ -770,8 +770,9 @@ export interface AiRequest {
   system: string;
   /** the same text cut in blocks (shared, shop, conversation): the server caches each one */
   systemBlocks?: string[];
-  /** which AI agent asks (dellal, cm, spy): its cost is counted for the shop under that name (platform/aiusage.ts) */
-  feature?: 'dellal' | 'cm' | 'spy';
+  /** which AI agent asks (dellal, cm, spy): its cost is counted for the shop under that name (platform/aiusage.ts); pilot:
+   * Pilot AI's own work in the control room (the test chat), Pilotix's cost, never billed to the shop */
+  feature?: 'dellal' | 'cm' | 'spy' | 'pilot';
   /** Pilotix's key pays this job (decided once at its start: a daily limit reached in the middle never cuts an answer in two) */
   pilot?: boolean;
   messages: AiMsg[];
@@ -786,7 +787,16 @@ export interface AiResponse {
 }
 
 /** Runs Dellal on a conversation: reads it, uses its tools, writes (and sends) its answer. */
-export async function runAgent(ctx: Ctx, convId: number, opts: { followUp?: boolean } = {}): Promise<{ reply: string | null; handoff: boolean; orderRef: string | null; demo: boolean; skipped?: string }> {
+/**
+ * `book` / `lab`: the control room's test chat (Pilot AI › Test & lessons) brings the lesson book it chose (in service, in
+ * test, the next one, none): it is used as is and never recorded (test chats are not measured), and the answer is Pilot
+ * AI's own cost.
+ */
+export async function runAgent(
+  ctx: Ctx,
+  convId: number,
+  opts: { followUp?: boolean; book?: BookRef | null; lab?: string } = {},
+): Promise<{ reply: string | null; handoff: boolean; orderRef: string | null; demo: boolean; skipped?: string }> {
   const check = await shouldAnswer(ctx, convId);
   if (!check.ok) return { reply: null, handoff: false, orderRef: null, demo: false, skipped: check.why };
   const s = await dellalSettings(ctx.db);
@@ -805,7 +815,7 @@ export async function runAgent(ctx: Ctx, convId: number, opts: { followUp?: bool
   let book: BookRef | null = null;
   let model: string = s.model;
   if (pilotAi) {
-    book = await bookFor(ctx.t!.platform, { shopId: ctx.shop!.id, convId, now: new Date(ctx.now()) }).catch(() => null);
+    book = opts.book !== undefined ? opts.book : await bookFor(ctx.t!.platform, { shopId: ctx.shop!.id, convId, now: new Date(ctx.now()) }).catch(() => null);
     const said = await ctx.db.query(`SELECT body, count(*) OVER ()::int AS n FROM conv_messages WHERE conversation_id = $1 AND role = 'customer' ORDER BY id DESC LIMIT 6`, [convId]);
     model = pickModel({ recent: said.map((r: any) => String(r.body)).reverse(), turns: num(said[0]?.n) });
   }
@@ -826,7 +836,7 @@ export async function runAgent(ctx: Ctx, convId: number, opts: { followUp?: bool
     return out;
   };
   const complete = (req: AiRequest): Promise<AiResponse> =>
-    inPage ? (inPage({ ...req, runTool }) as Promise<AiResponse>) : useAi ? (ctx.server!.dellal!('complete', { ...req, feature: 'dellal', pilot: pilotAi }, ctx) as Promise<AiResponse>) : demoBrain(ctx, req);
+    inPage ? (inPage({ ...req, runTool }) as Promise<AiResponse>) : useAi ? (ctx.server!.dellal!('complete', { ...req, feature: opts.lab ? 'pilot' : 'dellal', pilot: pilotAi }, ctx) as Promise<AiResponse>) : demoBrain(ctx, req);
   for (let round = 0; round < 6; round++) {
     const res = await complete({ model, system, systemBlocks: prompt.blocks, messages, tools: DELLAL_TOOLS, max_tokens: 1024 });
     usage = { input_tokens: usage.input_tokens + num(res.usage?.input_tokens), output_tokens: usage.output_tokens + num(res.usage?.output_tokens) };
@@ -865,7 +875,7 @@ export async function runAgent(ctx: Ctx, convId: number, opts: { followUp?: bool
         sendError = e?.message ?? 'Envoi impossible';
       }
     }
-    await addMessage(ctx.db, convId, { role: 'agent', body: reply, meta: { usage, demo: !useAi, model: inPage ? 'claude (page)' : useAi ? model : null, ...(darija ? { darija } : {}), ...(book ? { pilot: { bookId: book.bookId, version: book.version, arm: book.arm, testId: book.testId } } : {}) }, sendError });
+    await addMessage(ctx.db, convId, { role: 'agent', body: reply, meta: { usage, demo: !useAi, model: inPage ? 'claude (page)' : useAi ? model : null, ...(darija ? { darija } : {}), ...(book ? { pilot: { bookId: book.bookId, version: book.version, arm: book.arm, testId: book.testId, ...(opts.lab ? { lab: opts.lab } : {}) } } : {}) }, sendError });
   }
   if (opts.followUp) await ctx.db.query('UPDATE conversations SET followed_up = true WHERE id = $1', [convId]);
   ctx.emit({ type: 'chat', data: { dellal: convId } });
@@ -873,6 +883,25 @@ export async function runAgent(ctx: Ctx, convId: number, opts: { followUp?: bool
 }
 
 const rawConv = async (db: Db, id: number) => (await db.query('SELECT * FROM conversations WHERE id = $1', [id]))[0];
+
+/**
+ * Pilot AI › Test & lessons (control room): a Pilotix person talks to Dellal as a customer of this shop, with the lesson
+ * book they chose. Their own test chat in the shop (channel test: never sent to anyone, never counted, never in the shop's
+ * lists, orders only pretend); always on Pilotix's key (Pilot AI), never on a key of the shop.
+ */
+export async function pilotTry(ctx: Ctx, i: { staffId: number; name: string; body: string; reset: boolean; book: BookRef | null; lab: string }) {
+  const ext = `pilot-${i.staffId}`;
+  let c = (await ctx.db.query(`SELECT id FROM conversations WHERE channel = 'test' AND external_id = $1`, [ext]))[0];
+  if (!c) c = (await ctx.db.query(`INSERT INTO conversations (channel, external_id, customer_name, created_by) VALUES ('test',$1,$2,$3) RETURNING id`, [ext, i.name, me(ctx)]))[0];
+  const cid = num(c.id);
+  if (i.reset) await ctx.db.query('DELETE FROM conv_messages WHERE conversation_id = $1', [cid]);
+  if (i.body) {
+    if (!(await pilotOn(ctx))) throw new AppError('bad_request', 'Pilot AI est éteint ou se repose (limite du jour atteinte) : ce test répond avec la clé de Pilotix.');
+    await addMessage(ctx.db, cid, { role: 'customer', body: i.body });
+    await runAgent(ctx, cid, { book: i.book, lab: i.lab });
+  }
+  return { conversationId: cid, messages: await messagesOf(ctx.db, cid) };
+}
 
 export type Complete = (req: AiRequest) => Promise<AiResponse>;
 export interface DarijaReport {

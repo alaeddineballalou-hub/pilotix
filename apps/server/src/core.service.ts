@@ -365,7 +365,26 @@ export class CoreService implements OnModuleDestroy {
   }
 
   platformCtx(staff: StaffSession): PCtx {
-    return { t: this.t, staff, now: () => Date.now() };
+    return {
+      t: this.t,
+      staff,
+      now: () => Date.now(),
+      // Pilot AI › Test & lessons: Dellal answers in a shop as for a customer (the shop's system), and Pilot AI's own
+      // questions go to Claude on Pilotix's key
+      shop: (id) => this.platformShop(id),
+      ai: async (req) => {
+        const m = optional('@pilotix/core/dist/dellal-server');
+        if (!m?.pilotComplete) throw new core.AppError('bad_request', 'Pilot AI indisponible sur ce serveur');
+        return m.pilotComplete(this.t, req);
+      },
+    };
+  }
+
+  /** A store as its own system, for the control room (Pilot AI's test chat): live, not archived or deleted. */
+  private async platformShop(id: number): Promise<Ctx> {
+    const ref = await this.shop({ id });
+    if (!ref || ref.shop.kind !== 'store' || ref.shop.status === 'archived' || ref.shop.status === 'deleted') throw new core.AppError('not_found', 'Boutique introuvable');
+    return this.ctx(ref, await this.systemSession(ref));
   }
 
   // ---------------------------------------------------------------- live updates (per shop)

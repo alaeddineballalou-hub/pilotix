@@ -2,11 +2,11 @@
 // (Dellal answers, a person can take over), a "Tester Dellal" chat, Dellal's results, and its settings (admin).
 // The inbox has three columns on a computer (conversations, the conversation, the customer), two on a tablet
 // (the customer opens as a panel) and one on a phone, where a conversation takes the whole screen.
-import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMenuCounts } from '../../layout/Shell';
 import { backend, serverUrl, shopApi } from '../../lib/backend';
-import { clock, da, dayLabel, n, sameDay, shortWhen } from '../../lib/format';
+import { da, n, shortWhen } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
@@ -15,6 +15,7 @@ import { Card, ErrorBox, Field, Icon, Kpi, Kpis, Loading, StatusBadge } from '..
 import { toast } from '../../ui/toast';
 import { AgentHeader, Filters, initials, PeriodSwitch, SaveBar, SearchBox, useEdges, useFillHeight } from '../ai/agent';
 import type { PageProps } from '../registry';
+import { Bubbles, Composer } from './chat';
 import './messages.css';
 
 type Channel = 'whatsapp' | 'messenger' | 'instagram' | 'tiktok' | 'test';
@@ -182,143 +183,6 @@ function ConvRow({ c, on, name, onClick }: { c: Conv; on: boolean; name: string;
         </span>
       </span>
     </button>
-  );
-}
-
-type Msg = { id: number; role: string; body: string; userName: string | null; sendError: string | null; at: string; meta: any };
-
-/** The messages of a conversation, grouped by author, with the day between them. */
-function Bubbles({ messages, name, pending }: { messages: Msg[]; name: string; pending?: string | null }) {
-  const { t } = useTranslation();
-  const box = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    box.current?.scrollTo({ top: box.current.scrollHeight });
-  }, [messages.length, pending]);
-  const author = (m: Msg) => (m.role === 'customer' ? t('messages.thread.customer') : m.role === 'agent' ? (m.meta?.cm ? t('nav.cm') : m.meta?.notify ? t('nav.notify') : name) : m.userName ?? t('messages.thread.team'));
-  const rows: ReactNode[] = [];
-  let prev: Msg | null = null;
-  for (const m of messages) {
-    if (!prev || !sameDay(prev.at, m.at)) {
-      rows.push(
-        <span key={`d${m.id}`} className="ai-day">
-          {dayLabel(m.at)}
-        </span>,
-      );
-      prev = null;
-    }
-    if (m.role === 'tool') {
-      rows.push(
-        <span key={m.id} className="dl-tool ltr">
-          {m.body}
-        </span>,
-      );
-      prev = m;
-      continue;
-    }
-    const first = !prev || prev.role === 'tool' || author(prev) !== author(m) || !!m.meta?.notify || !!m.meta?.comment;
-    const kind = m.role === 'customer' ? 'in' : m.role === 'agent' ? 'out bot' : 'out team';
-    rows.push(
-      <div key={m.id} className={`ai-msg ${kind} ${first ? 'first' : ''}`}>
-        {first && (
-          <span className="ai-who">
-            {m.role === 'agent' && <Icon name="sparkles" />}
-            {author(m)}
-            {/* a delivery message (Delivery AI agent) the customer answered */}
-            {m.meta?.notify && <span className="ai-tag">{t(`notify.kind.${m.meta.notify}`, { defaultValue: '' })}</span>}
-            {/* a conversation opened from a comment: the public comment, then the CM AI agent's private message */}
-            {m.meta?.comment && <span className="ai-tag">{t('messages.thread.comment')}</span>}
-            {m.role === 'agent' && m.meta?.demo && <span className="ai-tag">{t('messages.thread.demo')}</span>}
-          </span>
-        )}
-        <div className="ai-bub">
-          <span className="ai-txt" dir="auto">
-            {m.body}
-          </span>
-          <time dateTime={m.at}>{clock(m.at)}</time>
-        </div>
-        {m.sendError && <small className="ai-err">⚠ {m.sendError}</small>}
-      </div>,
-    );
-    prev = m;
-  }
-  const lastIsCustomer = prev?.role === 'customer';
-  return (
-    <div className="ai-msgs" ref={box} aria-live="polite">
-      {!messages.length && !pending && <span className="ai-note-m">{t('messages.thread.empty')}</span>}
-      {rows}
-      {pending && (
-        <>
-          <div className={`ai-msg in ${lastIsCustomer ? '' : 'first'}`}>
-            {!lastIsCustomer && <span className="ai-who">{t('messages.thread.customer')}</span>}
-            <div className="ai-bub">
-              <span className="ai-txt" dir="auto">
-                {pending}
-              </span>
-            </div>
-          </div>
-          <Typing name={name} />
-        </>
-      )}
-    </div>
-  );
-}
-
-/** "Dellal écrit… 12 s" while the answer is on its way. */
-function Typing({ name }: { name: string }) {
-  const { t } = useTranslation();
-  const [s, setS] = useState(0);
-  useEffect(() => {
-    const t0 = Date.now();
-    const id = window.setInterval(() => setS(Math.round((Date.now() - t0) / 1000)), 1000);
-    return () => window.clearInterval(id);
-  }, []);
-  return (
-    <div className="ai-msg out bot first wait">
-      <span className="ai-who">
-        <Icon name="sparkles" />
-        {name}
-      </span>
-      <div className="ai-bub">
-        <span className="ai-txt">{t('messages.tester.typing', { name, s })}</span>
-      </div>
-    </div>
-  );
-}
-
-/** The message box: grows with the text; Enter sends, Shift + Enter goes to the line. */
-function Composer({ value, onChange, onSend, placeholder, busy, children }: { value: string; onChange: (v: string) => void; onSend: () => void; placeholder: string; busy: boolean; children?: ReactNode }) {
-  const { t } = useTranslation();
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(140, Math.max(44, el.scrollHeight + 3))}px`;
-  }, [value]);
-  return (
-    <div className="ai-cmp">
-      {children}
-      <div className="ai-cmp-r">
-        <textarea
-          ref={ref}
-          rows={1}
-          dir="auto"
-          aria-label={placeholder}
-          placeholder={placeholder}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              onSend();
-            }
-          }}
-        />
-        <button type="button" className="btn primary ai-send" title={t('messages.thread.send')} aria-label={t('messages.thread.send')} disabled={!value.trim() || busy} onClick={onSend}>
-          <Icon name="send" />
-        </button>
-      </div>
-    </div>
   );
 }
 

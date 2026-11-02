@@ -1639,3 +1639,225 @@ export async function listBooks(pdb: Db) {
     test: t ? { id: num(t.id), championId: t.champion_id === null ? null : num(t.champion_id), challengerId: num(t.challenger_id), share: num(t.share), verdict: String(t.verdict), why: t.why as string | null, stats: t.stats, startedAt: iso(t.started_at) } : null,
   };
 }
+
+// ---------------------------------------------------------------- 7. the lab (control room › Pilot AI › Test & lessons)
+export const BOOK_CHOICES = ['live', 'test', 'next', 'none'] as const;
+export type BookChoice = (typeof BOOK_CHOICES)[number];
+const NO_BOOK: BookRef = { bookId: null, version: 0, arm: 'A', testId: null, text: '', tokens: 0 };
+const nextVersion = async (pdb: Db): Promise<number> => num((await pdb.query('SELECT COALESCE(max(version), 0) AS v FROM platform.pilot_books'))[0].v) + 1;
+const approvedLessons = (pdb: Db): Promise<Row[]> =>
+  pdb.query(`SELECT id, topic, text, prio, source, evidence, by_user, created_at, decided_at FROM platform.pilot_lessons WHERE status = 'approved' ORDER BY id DESC`);
+const asBookLessons = (rows: Row[]): BookLesson[] => rows.map((r) => ({ id: num(r.id), topic: String(r.topic), text: String(r.text), prio: num(r.prio) }));
+
+/**
+ * The book a test chat of the control room uses: the one in service, the one in test (null: no test running), the next one
+ * (every approved lesson, as « Publish » would make it now) or none. Never recorded as an exposure: test chats are not measured.
+ */
+export async function bookChoice(pdb: Db, kind: BookChoice): Promise<BookRef | null> {
+  if (kind === 'none') return NO_BOOK;
+  if (kind === 'next') {
+    const v = await nextVersion(pdb);
+    const c = compileBook(v, asBookLessons(await approvedLessons(pdb)));
+    return { bookId: null, version: v, arm: 'B', testId: null, text: c.text, tokens: c.tokens };
+  }
+  const b: Row | undefined = (
+    await pdb.query(
+      kind === 'test'
+        ? `SELECT b.id, b.version, b.text, b.tokens, t.id AS test_id FROM platform.pilot_tests t JOIN platform.pilot_books b ON b.id = t.challenger_id WHERE t.status = 'running'`
+        : `SELECT id, version, text, tokens, NULL AS test_id FROM platform.pilot_books WHERE status = 'champion' ORDER BY promoted_at DESC NULLS LAST, id DESC LIMIT 1`,
+    )
+  )[0];
+  if (!b) return kind === 'test' ? null : NO_BOOK;
+  return { bookId: num(b.id), version: num(b.version), arm: kind === 'test' ? 'B' : 'A', testId: b.test_id === null || b.test_id === undefined ? null : num(b.test_id), text: String(b.text), tokens: num(b.tokens) };
+}
+
+/**
+ * What « Publish » would make now: its version, how many lessons fit, and the approved lessons that are not in the book
+ * in service yet (newest first), with who wrote them; `changed`: publishing would give a different book.
+ */
+export async function nextBook(pdb: Db) {
+  const champ: Row | undefined = (await pdb.query(`SELECT lesson_ids FROM platform.pilot_books WHERE status = 'champion' ORDER BY promoted_at DESC NULLS LAST, id DESC LIMIT 1`))[0];
+  const inBook = new Set<number>(champ ? (champ.lesson_ids as unknown[]).map((x) => num(x)) : []);
+  const rows = await approvedLessons(pdb);
+  const version = await nextVersion(pdb);
+  const c = compileBook(version, asBookLessons(rows));
+  const used = new Set(c.used);
+  const fresh = rows
+    .filter((r) => !inBook.has(num(r.id)))
+    .map((r) => ({
+      id: num(r.id),
+      topic: String(r.topic),
+      text: String(r.text),
+      source: String(r.source),
+      meaning: typeof r.evidence?.meaning === 'string' ? (r.evidence.meaning as string) : null,
+      by: r.by_user as string | null,
+      at: iso(r.decided_at ?? r.created_at),
+      fits: used.has(num(r.id)),
+    }));
+  const gone = [...inBook].filter((id) => !rows.some((r) => num(r.id) === id)).length;
+  return { version, lessons: c.used.length, dropped: c.dropped.length, fresh, changed: !!c.used.length && (fresh.some((f) => f.fits) || gone > 0) };
+}
+
+/** a coach's own lesson goes before the ones the nights found (the book keeps the best-ranked when it is full) */
+export const COACH_PRIO = 1000;
+/**
+ * A lesson the coach wrote in the lessons chat: the same checks as every lesson, approved by its author at once (they
+ * checked it before clicking « Add »), then it waits for the next book, which is tested on a share of new chats like any
+ * other. A lesson the coach once refused comes back; one that is already there (or nearly) is refused.
+ */
+export async function addCoachLesson(pdb: Db, o: { by: string; topic: string; text: string; meaning?: string | null; now?: Date }): Promise<Ack> {
+  if (noWho(o.by)) return { ok: false, error: 'who' };
+  const topic = TOPICS.includes(o.topic) ? o.topic : 'other';
+  const text = String(o.text ?? '').replace(/\s+/g, ' ').trim();
+  if (!text) return { ok: false, error: 'empty' };
+  const lint = lintLesson(text);
+  if (!lint.ok) return { ok: false, error: 'lint', problems: lint.problems };
+  const have: Row[] = await pdb.query(`SELECT id, text FROM platform.pilot_lessons WHERE status IN ('candidate', 'approved')`);
+  const twin = have.find((h) => similar(String(h.text), text) >= 0.6);
+  if (twin) return { ok: false, error: 'duplicate', id: num(twin.id), text: String(twin.text) };
+  const at = (o.now ?? new Date()).toISOString();
+  const meaning = String(o.meaning ?? '').replace(/\s+/g, ' ').trim().slice(0, 500);
+  const ins: Row[] = await pdb.query(
+    `INSERT INTO platform.pilot_lessons (topic, text, status, source, prio, evidence, fp, by_user, created_at, decided_at)
+     VALUES ($1, $2, 'approved', 'coach', $3, $4::jsonb, $5, $6, $7::timestamptz, $7::timestamptz)
+     ON CONFLICT (fp) DO UPDATE SET topic = EXCLUDED.topic, text = EXCLUDED.text, status = 'approved', source = 'coach', prio = EXCLUDED.prio,
+       evidence = EXCLUDED.evidence, by_user = EXCLUDED.by_user, decided_at = EXCLUDED.decided_at, note = NULL
+       WHERE platform.pilot_lessons.status = 'rejected'
+     RETURNING id`,
+    [topic, text, COACH_PRIO, JSON.stringify({ coach: true, ...(meaning ? { meaning } : {}) }), lessonFp(text), o.by, at],
+  );
+  if (!ins.length) return { ok: false, error: 'duplicate' };
+  const id = num(ins[0].id);
+  await logAct(pdb, o.by, 'write', String(id), text, new Date(at));
+  return { ok: true, id, topic, text };
+}
+
+// the lessons chat: the coach writes in their own words, Pilot AI proposes one lesson that passes the checks
+export type TeachMsg = { from: 'coach' | 'pilot'; text: string };
+export type TeachAsk = (req: { model: string; system: string; messages: { role: 'user' | 'assistant'; content: string }[]; max_tokens: number }) => Promise<{ content: { type: string; text?: string }[] }>;
+export type TeachLesson = { topic: string; text: string; meaning: string; ok: boolean; problems: string[]; twin: { id: number; text: string } | null };
+export const TEACH_MODEL = 'claude-sonnet-5-5';
+const TEACH_LANG: Record<string, string> = { fr: 'French', en: 'English', ar: 'Arabic (simple Modern Standard Arabic)' };
+/** each check in plain words, for the second try */
+export const LINT_WHY: Record<string, string> = {
+  too_short: 'it is too short (at least 25 characters)',
+  too_long: 'it is too long (at most 300 characters)',
+  number: 'it has a digit, a percent sign or a currency sign',
+  money: 'it names money',
+  discount: 'it talks about a discount, a gift, something free or a better price',
+  amount: 'it has an amount written in words',
+  stock: 'it talks about stock or scarcity',
+  fee: 'it changes or promises something about the delivery fee',
+  delay: 'it names a time, a day or a delay',
+  speed: 'it promises a fast delivery',
+  pressure: 'it pushes the customer (urgency, last chance, what other customers do)',
+  human: 'it makes Dellal claim to be a person or hide that it is an AI',
+  override: 'it tells Dellal to skip its rules or its tools, or to promise',
+  identity: 'it has a link or a placeholder',
+  price_needs_tool: 'it talks about price or fees without saying that the figure comes from the tool',
+  proper_noun: 'it has a name (a person, a brand or a place)',
+};
+
+function teachSystem(lang: string, have: Row[]): string {
+  const known = have.length ? have.map((h) => `- [${h.topic}] ${h.text}`).join('\n') : '- (none yet)';
+  const L = TEACH_LANG[lang] ?? 'French';
+  return `You are Pilot AI, the assistant of the coach at Pilotix. Dellal is an AI sales agent that answers the customers of Algerian cash-on-delivery shops on WhatsApp, Messenger and Instagram (in Darija, French or Arabic). Dellal follows a lesson book: short habits about HOW to talk. The coach (a Pilotix person) tells you, in their own words and any language, a habit Dellal should have. Your job: turn it into ONE lesson that passes the automatic checks, or explain simply why it cannot be a lesson.
+
+A lesson:
+- is written in English: one or two short sentences, between 25 and 300 characters;
+- says how Dellal talks or acts in one moment ("When the customer ..., ..." works well);
+- has no digits, no amounts, no prices, no money words, no percentages;
+- never promises or invents: no discount, gift, free delivery, stock or scarcity, delivery delay or speed, urgency, pressure or "other customers" claims;
+- never makes Dellal say it is a person, never tells it to hide that it is an AI;
+- never tells Dellal to skip its rules or its tools: prices, delivery fees, delays and stock always come from its tools, so a lesson about price or fees says to use the tool for the figure;
+- has no names of people, brands, shops or places, and no links.
+
+Topics: price, trust, fee, delay, product, address, closing, anger, big (a big order), followup, language, handoff (passing the chat to a person), fake (fake orders), other.
+
+Lessons already in the book or waiting (never propose the same idea again; if the coach's idea is already there, say so):
+${known}
+
+Answer ONLY with one JSON object, no other text:
+{"reply": "...", "lesson": {"topic": "...", "text": "...", "meaning": "..."}}
+- "reply": one to three short sentences to the coach, in ${L}, in very simple words: what you understood and what to do now (read the lesson, then click Add, or say what to change). If the idea cannot be a safe lesson (a price, a promise, a delay...), say why simply and offer a safe version.
+- "lesson": null when there is nothing to add (a greeting, a question, an idea that cannot be safe, or one that is already in the book).
+- "meaning": the same lesson in ${L}, so the coach can check it.`;
+}
+function teachJson(s: string): Row | null {
+  const m = String(s ?? '').match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  try {
+    const j = JSON.parse(m[0]);
+    return j && typeof j === 'object' ? (j as Row) : null;
+  } catch {
+    return null;
+  }
+}
+const textOf = (r: { content: { type: string; text?: string }[] }): string =>
+  (r.content ?? [])
+    .filter((b) => b.type === 'text')
+    .map((b) => b.text ?? '')
+    .join('\n')
+    .trim();
+const oneLine = (s: unknown, max: number): string => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+
+/**
+ * One turn of the lessons chat. Pilot AI reads the coach's words (the chat so far) and the lessons already there, and
+ * proposes one lesson in the book's form; the checks run on it, and a lesson that fails gets one more try told why. Nothing
+ * is saved here: the coach adds it (addCoachLesson) after reading it.
+ */
+export async function teachTurn(ask: TeachAsk, pdb: Db, i: { messages: TeachMsg[]; lang: string }): Promise<{ reply: string; lesson: TeachLesson | null }> {
+  const have: Row[] = await pdb.query(`SELECT id, topic, text FROM platform.pilot_lessons WHERE status IN ('approved', 'candidate') ORDER BY prio DESC, id DESC LIMIT 40`);
+  const system = teachSystem(i.lang, have);
+  // the API wants turns that alternate, starting with the coach: merge two in a row, drop what comes before the coach
+  const msgs: { role: 'user' | 'assistant'; content: string }[] = [];
+  for (const m of i.messages.slice(-16)) {
+    const role = m.from === 'coach' ? 'user' : 'assistant';
+    const text = String(m.text ?? '').trim().slice(0, 2000);
+    if (!text || (!msgs.length && role === 'assistant')) continue;
+    const last = msgs[msgs.length - 1];
+    if (last && last.role === role) last.content += '\n\n' + text;
+    else msgs.push({ role, content: text });
+  }
+  if (!msgs.length || msgs[msgs.length - 1].role !== 'user') return { reply: '', lesson: null };
+  const first = textOf(await ask({ model: TEACH_MODEL, system, messages: msgs, max_tokens: 700 }));
+  const j = teachJson(first);
+  if (!j) return { reply: oneLine(first, 800), lesson: null };
+  const reply = oneLine(j.reply, 800);
+  const pick = (x: Row | null) => (x?.lesson && typeof x.lesson === 'object' && String(x.lesson.text ?? '').trim() ? (x.lesson as Row) : null);
+  let l = pick(j);
+  if (!l) return { reply, lesson: null };
+  let text = oneLine(l.text, 400);
+  let lint = lintLesson(text);
+  if (!lint.ok) {
+    const why = lint.problems.map((p) => LINT_WHY[p] ?? p).join('; ');
+    const again = teachJson(
+      textOf(
+        await ask({
+          model: TEACH_MODEL,
+          system,
+          messages: [...msgs, { role: 'assistant', content: first }, { role: 'user', content: `The lesson failed the automatic checks: ${why}. Rewrite only the lesson so that it passes, with the same meaning. Answer with the same JSON.` }],
+          max_tokens: 700,
+        }),
+      ),
+    );
+    const l2 = pick(again);
+    if (l2) {
+      l = l2;
+      text = oneLine(l.text, 400);
+      lint = lintLesson(text);
+    }
+  }
+  const twin = have.find((h) => similar(String(h.text), text) >= 0.6);
+  return {
+    reply,
+    lesson: {
+      topic: TOPICS.includes(String(l.topic)) ? String(l.topic) : 'other',
+      text,
+      meaning: oneLine(l.meaning, 500),
+      ok: lint.ok,
+      problems: lint.problems,
+      twin: twin ? { id: num(twin.id), text: String(twin.text) } : null,
+    },
+  };
+}

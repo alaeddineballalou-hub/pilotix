@@ -1,8 +1,9 @@
-// Pilot AI (control room): the shops' AI agents, all on Pilotix's own AI key (shops never bring one). Four tabs:
+// Pilot AI (control room): the shops' AI agents, all on Pilotix's own AI key (shops never bring one). Five tabs:
 // Dellal AI (its sales dashboard: conversion and real sales per shop, product and channel, why chats end without a sale;
 // how it learns, drawn; its instruction book to download, always the latest; last night, the coach's morning check of
-// each lesson, the lesson books and their test), CM AI (the comments it handled), Spy AI (the competitors it watches),
-// and Settings & costs (the key, the daily limit, the night budget, what each shop's AI costs to bill it).
+// each lesson, the lesson books and their test), Test & lessons (talk to Dellal as a customer with the book of your
+// choice; teach it a lesson in your own words: PilotLab.tsx), CM AI (the comments it handled), Spy AI (the competitors it
+// watches), and Settings & costs (the key, the daily limit, the night budget, what each shop's AI costs to bill it).
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { dateOnly, dateTime, n, when } from '../../lib/format';
@@ -15,12 +16,13 @@ import { Modal } from '../../ui/modal';
 import { can } from './bits';
 import { BoardDays, CmBoard, DellalBoard, SpyBoard } from './PilotBoards';
 import { BookCard, LearnCard } from './PilotLearn';
+import { LabTab } from './PilotLab';
 
 type State = POut<'p.pilot.state'>;
 type Lesson = State['candidates'][number];
 const OUTCOMES = ['delivered', 'refused', 'cancelled', 'fake', 'no_order', 'pending', 'stale'] as const;
 const pct = (k: number, total: number) => (total ? `${((k / total) * 100).toFixed(1)} %` : '—');
-const TABS = ['dellal', 'cm', 'spy', 'settings'] as const;
+const TABS = ['dellal', 'lab', 'cm', 'spy', 'settings'] as const;
 type Tab = (typeof TABS)[number];
 
 export function PilotAiPage({ staff, tab, demo }: { staff: Staff; tab?: string; demo?: boolean }) {
@@ -73,6 +75,7 @@ function PilotAiInner({ staff, tab, demo }: { staff: Staff; tab?: string; demo: 
           <BooksCard d={d} manager={manager} />
         </>
       )}
+      {cur === 'lab' && <LabTab d={d} manager={manager} />}
       {cur === 'cm' && <CmBoard {...board} />}
       {cur === 'spy' && <SpyBoard {...board} />}
       {cur === 'settings' && (
@@ -280,6 +283,7 @@ function CostCard() {
         <div className="pilot-cost-foot">
           <p className="small muted">
             {t('platform.pilot.costs.night', { usd: usd(d.nightUsd) })}
+            {d.labUsd > 0 && <> · {t('platform.pilot.costs.lab', { usd: usd(d.labUsd) })}</>}
             {d.total.shopUsd > 0 && <> · {t('platform.pilot.costs.ownKeyAll', { usd: usd(d.total.shopUsd) })}</>}
           </p>
           <p className="small muted">{d.since ? t('platform.pilot.costs.since', { date: dateOnly(d.since) }) : t('platform.pilot.costs.notYet')}</p>

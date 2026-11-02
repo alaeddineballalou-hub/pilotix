@@ -1033,13 +1033,15 @@
       "since": "Compté depuis le {{date}}.",
       "notYet": "Le compteur démarre à la première réponse de l'IA.",
       "csv": "Télécharger (CSV)",
-      "managers": "Le coût de l’IA par boutique est visible par les responsables."
+      "managers": "Le coût de l’IA par boutique est visible par les responsables.",
+      "lab": "Tests et leçons (Pilot AI) : {{usd}}"
     },
     "tabs": {
       "dellal": "Dellal AI",
       "cm": "CM AI",
       "spy": "Spy AI",
-      "settings": "Réglages & coûts"
+      "settings": "Réglages & coûts",
+      "lab": "Tester & leçons"
     },
     "board": {
       "title": "Les ventes de Dellal",
@@ -1342,6 +1344,86 @@
       "note": "Exemple : chiffres inventés pour l’aperçu. Sur votre serveur, cette page montre les vrais chiffres de vos boutiques.",
       "noSave": "Exemple : rien n’est enregistré dans l’aperçu.",
       "open": "Voir Pilot AI (exemple)"
+    },
+    "lab": {
+      "try": {
+        "title": "Tester Dellal",
+        "help": "Écrivez comme un client : Dellal répond avec les produits et les prix de la boutique choisie, et le livre de leçons choisi. Rien n’est envoyé à un vrai client, les commandes sont pour de faux et rien n’entre dans les chiffres. Payé par Pilotix, jamais facturé à la boutique.",
+        "shop": "Boutique",
+        "book": "Livre de leçons",
+        "live": "En service v{{v}}",
+        "liveNone": "En service : méthode de base",
+        "test": "En test v{{v}}",
+        "next": "Prochain v{{v}}",
+        "none": "Sans leçons",
+        "reset": "Nouvelle conversation",
+        "write": "Écrivez comme un client…",
+        "note": "Rien n’est envoyé à un client · commandes pour de faux · payé par Pilotix",
+        "noShop": "Aucune boutique à tester pour l’instant.",
+        "used": {
+          "live": "livre v{{v}}",
+          "test": "livre en test v{{v}}",
+          "next": "prochain livre v{{v}}",
+          "none": "sans leçons",
+          "base": "méthode de base"
+        },
+        "failed": "La réponse n’est pas arrivée. Réessayez.",
+        "empty": "Écrivez un premier message, ou touchez un exemple.",
+        "tag": "Test",
+        "loading": "Chargement de la conversation…"
+      },
+      "teach": {
+        "title": "Apprendre une leçon",
+        "help": "Dites avec vos mots ce que Dellal doit faire (français, darija ou arabe). Pilot AI l’écrit comme une leçon courte du livre et vérifie les règles : pas de chiffres, pas de prix, pas de promesses. Vous la lisez, puis vous l’ajoutez : elle entre dans le prochain livre, essayé sur une partie des nouvelles conversations.",
+        "hello": "Écrivez ce que Dellal doit faire, avec vos mots. Je l’écris comme une leçon courte : vous la lisez, puis vous l’ajoutez au prochain livre.",
+        "write": "Ce que Dellal doit faire…",
+        "examples": [
+          "Quand le client dit que c’est cher, Dellal doit d’abord demander avec quoi il compare",
+          "Si le client a peur d’une arnaque, rappeler qu’il paie seulement à la réception du colis",
+          "Avant de confirmer, relire l’adresse complète au client"
+        ],
+        "ok": "Respecte les règles",
+        "bad": "Ne respecte pas les règles :",
+        "twin": "Une leçon presque pareille existe déjà :",
+        "add": "Ajouter au livre",
+        "added": "Ajoutée au prochain livre (v{{v}})",
+        "addedToast": "Leçon ajoutée au prochain livre",
+        "tryIt": "L’essayer dans le test",
+        "clear": "Effacer",
+        "failed": "Pilot AI n’a pas répondu. Réessayez.",
+        "coach": "Coach"
+      },
+      "lint": {
+        "too_short": "trop courte",
+        "too_long": "trop longue (300 caractères au plus)",
+        "number": "un chiffre, un % ou une devise",
+        "money": "parle d’argent",
+        "discount": "une remise, un cadeau ou du gratuit",
+        "amount": "un montant écrit en lettres",
+        "stock": "parle du stock",
+        "fee": "promet quelque chose sur les frais de livraison",
+        "delay": "un jour, une heure ou un délai",
+        "speed": "promet une livraison rapide",
+        "pressure": "pousse le client (urgence, dernière chance)",
+        "human": "fait dire à Dellal qu’il est une personne",
+        "override": "dit à Dellal d’oublier ses règles ou ses outils",
+        "identity": "un lien ou un champ à remplir",
+        "price_needs_tool": "parle du prix sans dire que le chiffre vient de l’outil",
+        "proper_noun": "un nom (personne, marque ou lieu)"
+      },
+      "next": {
+        "title": "Prochain livre v{{v}}",
+        "help": "Les leçons approuvées qui ne sont pas encore dans le livre en service. « Publier » fait le nouveau livre et l’essaie sur une partie des nouvelles conversations ; les colis livrés décident s’il reste.",
+        "empty": "Aucune nouvelle leçon : ajoutez-en une avec le chat « Apprendre une leçon ».",
+        "wrote": "écrite par {{by}} · {{date}}",
+        "found": "trouvée la nuit, approuvée par {{by}} · {{date}}",
+        "noRoom": "ne tient pas dans le livre",
+        "remove": "Retirer",
+        "publish": "Publier le livre v{{v}}",
+        "publishNote": "Il sera essayé sur {{share}} % des nouvelles conversations.",
+        "testRunning": "Un test est en cours (v{{v}}) : le prochain livre partira quand il sera fini.",
+        "managers": "Un manager publie le livre."
+      }
     }
   }
 }

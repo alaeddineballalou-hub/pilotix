@@ -684,6 +684,8 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--navy); }
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
 .tab { border: 1.5px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px; font-weight: 700; font-size: 13.5px; cursor: pointer; }
 .tab b { font-weight: 800; margin-left: 4px; color: var(--muted); }
+/* right to left: the number (a left-to-right island) sits on the label's left, so the gap is on its right */
+[dir="rtl"] .tab b { margin-left: 0; margin-right: 4px; }
 .tab.on { background: var(--navy); border-color: var(--navy); color: var(--on-navy); } .tab.on b { color: var(--on-navy); }
 
 /* ---------------------------------------------------------------- dialogs, drawer, toasts */

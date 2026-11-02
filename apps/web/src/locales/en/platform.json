@@ -1033,13 +1033,15 @@
       "since": "Counted since {{date}}.",
       "notYet": "The counter starts with the AI's first answer.",
       "csv": "Download (CSV)",
-      "managers": "Each shop’s AI cost is visible to managers."
+      "managers": "Each shop’s AI cost is visible to managers.",
+      "lab": "Tests and lessons (Pilot AI): {{usd}}"
     },
     "tabs": {
       "dellal": "Dellal AI",
       "cm": "CM AI",
       "spy": "Spy AI",
-      "settings": "Settings & costs"
+      "settings": "Settings & costs",
+      "lab": "Test & lessons"
     },
     "board": {
       "title": "Dellal’s sales",
@@ -1342,6 +1344,86 @@
       "note": "Example: made-up figures for the preview. On your server this page shows your shops’ real figures.",
       "noSave": "Example: nothing is saved in the preview.",
       "open": "See Pilot AI (example)"
+    },
+    "lab": {
+      "try": {
+        "title": "Test Dellal",
+        "help": "Write like a customer: Dellal answers with the products and prices of the shop you pick, and the lesson book you pick. Nothing is sent to a real customer, orders are pretend, and nothing counts in the numbers. Paid by Pilotix, never billed to the shop.",
+        "shop": "Shop",
+        "book": "Lesson book",
+        "live": "In use v{{v}}",
+        "liveNone": "In use: base method",
+        "test": "In test v{{v}}",
+        "next": "Next v{{v}}",
+        "none": "No lessons",
+        "reset": "New chat",
+        "write": "Write like a customer…",
+        "note": "Nothing sent to a customer · pretend orders · paid by Pilotix",
+        "noShop": "No shop to test yet.",
+        "used": {
+          "live": "book v{{v}}",
+          "test": "test book v{{v}}",
+          "next": "next book v{{v}}",
+          "none": "no lessons",
+          "base": "base method"
+        },
+        "failed": "The answer did not arrive. Try again.",
+        "empty": "Write a first message, or tap an example.",
+        "tag": "Test",
+        "loading": "Loading the chat…"
+      },
+      "teach": {
+        "title": "Teach a lesson",
+        "help": "Say in your own words what Dellal should do (French, Darija or Arabic). Pilot AI writes it as a short lesson for the book and checks the rules: no numbers, no prices, no promises. You read it, then add it: it goes into the next book, tried on a share of new chats.",
+        "hello": "Write what Dellal should do, in your own words. I write it as a short lesson: you read it, then add it to the next book.",
+        "write": "What Dellal should do…",
+        "examples": [
+          "When the customer says it is expensive, Dellal should first ask what they compare it with",
+          "If the customer fears a scam, remind them they pay only when the parcel arrives",
+          "Before confirming, read the full address back to the customer"
+        ],
+        "ok": "Follows the rules",
+        "bad": "Breaks the rules:",
+        "twin": "An almost identical lesson is already there:",
+        "add": "Add to the book",
+        "added": "Added to the next book (v{{v}})",
+        "addedToast": "Lesson added to the next book",
+        "tryIt": "Try it in the test chat",
+        "clear": "Clear",
+        "failed": "Pilot AI did not answer. Try again.",
+        "coach": "Coach"
+      },
+      "lint": {
+        "too_short": "too short",
+        "too_long": "too long (300 characters at most)",
+        "number": "a digit, a % or a currency",
+        "money": "talks about money",
+        "discount": "a discount, a gift or something free",
+        "amount": "an amount written in words",
+        "stock": "talks about stock",
+        "fee": "promises something about the delivery fee",
+        "delay": "a day, an hour or a delay",
+        "speed": "promises a fast delivery",
+        "pressure": "pushes the customer (urgency, last chance)",
+        "human": "makes Dellal say it is a person",
+        "override": "tells Dellal to skip its rules or tools",
+        "identity": "a link or a blank to fill",
+        "price_needs_tool": "talks about price without saying the figure comes from the tool",
+        "proper_noun": "a name (person, brand or place)"
+      },
+      "next": {
+        "title": "Next book v{{v}}",
+        "help": "Approved lessons that are not in the book in use yet. « Publish » makes the new book and tries it on a share of new chats; delivered parcels decide if it stays.",
+        "empty": "No new lesson: add one with the « Teach a lesson » chat.",
+        "wrote": "written by {{by}} · {{date}}",
+        "found": "found at night, approved by {{by}} · {{date}}",
+        "noRoom": "does not fit in the book",
+        "remove": "Remove",
+        "publish": "Publish book v{{v}}",
+        "publishNote": "It will be tried on {{share}} % of new chats.",
+        "testRunning": "A test is running (v{{v}}): the next book goes out when it ends.",
+        "managers": "A manager publishes the book."
+      }
     }
   }
 }

@@ -9,6 +9,7 @@ import { NOTIFY_SMS_SECRET, notifySettings } from './modules/notify';
 import { pilotKey, pilotLiveKey } from './platform/pilotai';
 import { recordAiUsage } from './platform/aiusage';
 import type { PilotAiReq } from './modules/pilotlearn';
+import type { Tenancy } from './platform/tenancy';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
 const ANTHROPIC = 'https://api.anthropic.com/v1/messages';
@@ -125,6 +126,19 @@ async function complete(ctx: Ctx, req: AiRequest): Promise<AiResponse> {
   const data = await postJson(ANTHROPIC, body, { 'x-api-key': key, 'anthropic-version': '2023-06-01' }, 'IA (Anthropic)', 'POST', 180_000);
   // what this answer cost, counted for the shop (control room › Pilot AI › AI cost per shop: Pilotix bills it)
   if (ctx.t && ctx.shop) await recordAiUsage(ctx.t, { shopId: ctx.shop.id, feature, model: String(req.model || data.model), payer: pilot ? 'pilotix' : 'shop', usage: data.usage });
+  return { content: data.content ?? [], stop_reason: data.stop_reason ?? 'end_turn', usage: data.usage };
+}
+
+/**
+ * Pilot AI's own questions in the control room (the lessons chat): Pilotix's key only, counted as Pilot AI's own cost (no
+ * shop pays it). Plain text, no tools.
+ */
+export async function pilotComplete(t: Tenancy, req: { model: string; system: string; messages: { role: 'user' | 'assistant'; content: string }[]; max_tokens: number }): Promise<AiResponse> {
+  const key = await pilotKey(t).catch(() => null);
+  if (!key) throw new AppError('bad_request', 'Pilot AI est éteint ou sans clé (Pilot AI › Réglages & coûts).');
+  const body = { model: req.model, max_tokens: req.max_tokens, system: req.system, messages: req.messages };
+  const data = await postJson(ANTHROPIC, body, { 'x-api-key': key, 'anthropic-version': '2023-06-01' }, 'IA (Anthropic)', 'POST', 120_000);
+  await recordAiUsage(t, { shopId: 0, feature: 'pilot', model: String(req.model || data.model), payer: 'pilotix', usage: data.usage });
   return { content: data.content ?? [], stop_reason: data.stop_reason ?? 'end_turn', usage: data.usage };
 }
 

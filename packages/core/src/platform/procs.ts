@@ -5,7 +5,7 @@ import { DEMO_ACCOUNTS, FEATURE_KEYS } from '@pilotix/shared';
 import bcrypt from 'bcryptjs';
 import { z, ZodTypeAny } from 'zod';
 import { isoOrNull, num, numOrNull } from '../db';
-import { AppError, bad, forbidden, notFound } from '../rpc';
+import { AppError, bad, Ctx, forbidden, notFound } from '../rpc';
 import { hashPassword } from '../modules/users';
 import { courierCatalog } from '../couriers/catalog';
 import { clearCourierTestKeys, courierTestState, saveCourierTestKeys } from './courierTests';
@@ -45,7 +45,8 @@ import {
 import type { Tenancy } from './tenancy';
 import * as pilot from '../modules/pilotlearn';
 import { pilotConfig, pilotToday, savePilotConfig } from './pilotai';
-import { AI_FEATURES, aiBill, aiUsageOfMonth, aiUsageSince, monthOf, saveAiBill } from './aiusage';
+import { AI_FEATURES, aiBill, aiLabOfMonth, aiUsageOfMonth, aiUsageSince, monthOf, saveAiBill } from './aiusage';
+import { pilotTry } from '../modules/dellal';
 import { cmBoard, dellalBoard, dellalBooks, dellalBookText, dellalMore, spyBoard } from './aiboard';
 
 export const STAFF_ROLES = ['owner', 'manager', 'support'] as const;
@@ -61,6 +62,10 @@ export interface PCtx {
   t: Tenancy;
   staff: StaffSession;
   now: () => number;
+  /** the server only: a shop as its own system (Pilot AI › Test & lessons: Dellal answers there as for a customer) */
+  shop?: (shopId: number) => Promise<Ctx>;
+  /** the server only: Pilot AI's own question to Claude, on Pilotix's key (the lessons chat) */
+  ai?: pilot.TeachAsk;
 }
 
 export interface PProcedure<S extends ZodTypeAny = ZodTypeAny, R = unknown> {
@@ -1040,12 +1045,13 @@ export const PLATFORM_REGISTRY = {
   'p.pilot.state': pproc(ALL, z.object({}), async (ctx) => {
     const pdb = ctx.t.platform;
     const config = await pilotConfig(ctx.t);
-    const [today, night, candidates, approved, books, sharing, shops] = await Promise.all([
+    const [today, night, candidates, approved, books, next, sharing, shops] = await Promise.all([
       pilotToday(ctx.t, config),
       pilot.lastNight(pdb),
       pilot.listCandidates(pdb, { status: 'candidate', limit: 50 }),
       pilot.listCandidates(pdb, { status: 'approved', limit: 50 }),
       pilot.listBooks(pdb),
+      pilot.nextBook(pdb),
       pdb.query(`SELECT count(DISTINCT shop_id)::int AS shops, count(*)::int AS cases FROM platform.pilot_cases`),
       loadShops(ctx.t),
     ]);
@@ -1055,7 +1061,7 @@ export const PLATFORM_REGISTRY = {
       .map((s) => ({ id: s.id, name: s.name, slug: s.slug, share: config.shops.includes(s.id), cases: per.get(s.id) ?? 0 }));
     // the learning's rules, for the page that explains them in simple words (always the engine's own numbers)
     const rules = { score: pilot.SCORE, gold: pilot.GOLD_WEIGHT, minPass: pilot.PILOT.minPass, matureDays: pilot.PILOT.matureDays, maxTestDays: pilot.PILOT.maxTestDays, maxOpen: pilot.PILOT.maxOpen };
-    return { config, today, night, candidates, approved, books, sharing: { shops: num(sharing[0]?.shops), cases: num(sharing[0]?.cases) }, shops: stores, rules };
+    return { config, today, night, candidates, approved, books, next, sharing: { shops: num(sharing[0]?.shops), cases: num(sharing[0]?.cases) }, shops: stores, rules };
   }),
   'p.pilot.save': pproc(
     MANAGERS,
@@ -1134,6 +1140,48 @@ export const PLATFORM_REGISTRY = {
     return r;
   }),
 
+  // ---------------------------------------------------------------- Pilot AI › Test & lessons
+  /**
+   * Talk to Dellal as a customer of one shop, with the lesson book in service, in test, the next one (every approved
+   * lesson, before « Publish ») or none. The person's own test chat in that shop: never sent, never counted, Pilotix's key.
+   */
+  'p.pilot.try': pproc(
+    ALL,
+    z.object({ shopId: Id, book: z.enum(pilot.BOOK_CHOICES).default('live'), body: z.string().trim().max(2000).default(''), reset: z.boolean().default(false) }),
+    async (ctx, i) => {
+      if (!ctx.shop) throw bad('Le test de Dellal n’est disponible que sur le serveur');
+      const s = (await loadShops(ctx.t)).find((x) => x.id === i.shopId);
+      if (!s || s.kind !== 'store' || s.status === 'archived' || s.status === 'deleted') throw notFound('Boutique introuvable');
+      const book = await pilot.bookChoice(ctx.t.platform, i.book);
+      if (!book) throw bad('Aucun livre en test en ce moment');
+      const r = await pilotTry(await ctx.shop(i.shopId), { staffId: ctx.staff.id, name: ctx.staff.name || 'Pilotix', body: i.body, reset: i.reset, book, lab: i.book });
+      return { ...r, book: { kind: i.book, version: book.version, empty: !book.text } };
+    },
+  ),
+  /** The lessons chat: Pilot AI turns the coach's own words into one lesson and checks it (nothing is saved here). */
+  'p.pilot.teach': pproc(
+    ALL,
+    z.object({
+      messages: z.array(z.object({ from: z.enum(['coach', 'pilot']), text: z.string().max(2000) })).min(1).max(40),
+      lang: z.enum(['fr', 'en', 'ar']).default('fr'),
+    }),
+    async (ctx, i) => {
+      if (!ctx.ai) throw bad('Pilot AI n’est disponible que sur le serveur');
+      return pilot.teachTurn(ctx.ai, ctx.t.platform, i);
+    },
+  ),
+  /** « Add »: the coach's lesson, checked again, approved by its author; it goes into the next book (tested like any book). */
+  'p.pilot.addLesson': pproc(
+    ALL,
+    z.object({ topic: z.string().max(20), text: z.string().max(400), meaning: z.string().max(500).optional() }),
+    async (ctx, i) => {
+      const r = await pilot.addCoachLesson(ctx.t.platform, { by: ctx.staff.name || ctx.staff.email, topic: i.topic, text: i.text, meaning: i.meaning ?? null, now: new Date(ctx.now()) });
+      if (!r.ok) throw bad(lessonErr(r));
+      await audit(ctx, 'pilot.lesson.add', null, { id: r.id });
+      return r;
+    },
+  ),
+
   /**
    * What each shop's AI cost Pilotix in a month (Algeria's days), to bill it: Dellal, the CM AI agent and AI Spy, in USD
    * at Anthropic's list price, and in DA at the owner's rate. Only answers paid with Pilotix's key count in « to bill »;
@@ -1141,7 +1189,7 @@ export const PLATFORM_REGISTRY = {
    */
   'p.ai.costs': pproc(MANAGERS, z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional() }), async (ctx, i) => {
     const month = i.month ?? monthOf(ctx.now());
-    const [rows, since, bill, shops, nights] = await Promise.all([
+    const [rows, since, bill, shops, nights, lab] = await Promise.all([
       aiUsageOfMonth(ctx.t, month),
       aiUsageSince(ctx.t),
       aiBill(ctx.t),
@@ -1153,6 +1201,7 @@ export const PLATFORM_REGISTRY = {
           [month],
         )
         .catch(() => [{ usd: 0 }]),
+      aiLabOfMonth(ctx.t, month),
     ]);
     const names = new Map(shops.map((s) => [s.id, s]));
     type Line = { calls: number; usd: number };
@@ -1183,6 +1232,8 @@ export const PLATFORM_REGISTRY = {
       shops: list,
       total: { usd: total, da: bill.rate ? Math.round(total * bill.rate) : null, shopUsd: sum('shopUsd') },
       nightUsd: num(nights[0]?.usd),
+      /** Pilot AI › Test & lessons: Pilotix's own cost, in no shop's bill */
+      labUsd: lab.usd,
     };
   }),
   // ---------------------------------------------------------------- Pilot AI › Dellal AI, CM AI, Spy AI: the dashboards

@@ -23,6 +23,8 @@ CREATE INDEX IF NOT EXISTS ai_usage_shop ON platform.ai_usage (shop_id, day);
 `;
 
 export const AI_FEATURES = ['dellal', 'cm', 'spy', 'other'] as const;
+/** Pilot AI's own work in the control room (the test chat, the lessons chat): Pilotix's cost, never billed to a shop */
+export const LAB_FEATURE = 'pilot';
 export type AiFeature = (typeof AI_FEATURES)[number];
 export type AiPayer = 'pilotix' | 'shop';
 /** Anthropic's usage block (as the Messages API returns it). */
@@ -68,8 +70,10 @@ export async function recordAiUsage(
   a: { shopId: number; feature?: string | null; model: string; payer: AiPayer; usage: AiUsage | null | undefined; at?: Date },
 ): Promise<void> {
   try {
-    if (!Number.isInteger(a.shopId) || a.shopId <= 0) return;
-    const feature = (AI_FEATURES as readonly string[]).includes(String(a.feature)) ? String(a.feature) : 'other';
+    const lab = a.feature === LAB_FEATURE;
+    // shop 0: Pilot AI's own questions that belong to no shop (the lessons chat)
+    if (!Number.isInteger(a.shopId) || a.shopId < 0 || (a.shopId === 0 && !lab)) return;
+    const feature = lab ? LAB_FEATURE : (AI_FEATURES as readonly string[]).includes(String(a.feature)) ? String(a.feature) : 'other';
     const u = a.usage ?? {};
     await t.platform.query(
       `INSERT INTO platform.ai_usage (day, shop_id, feature, model, payer, calls, input_tokens, output_tokens, cache_read, cache_write, usd)
@@ -112,15 +116,15 @@ export type AiCostRow = {
   usd: number;
 };
 
-/** The month's answers per shop, feature and payer (Algeria's days). */
+/** The month's answers per shop, feature and payer (Algeria's days); Pilot AI's own work (the lab) is apart. */
 export async function aiUsageOfMonth(t: Tenancy, month: string): Promise<AiCostRow[]> {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error('mois invalide');
   const rows = await t.platform.query(
     `SELECT shop_id, feature, payer, sum(calls)::bigint AS calls, sum(usd) AS usd
        FROM platform.ai_usage
-      WHERE day >= ($1 || '-01')::date AND day < (($1 || '-01')::date + interval '1 month')
+      WHERE day >= ($1 || '-01')::date AND day < (($1 || '-01')::date + interval '1 month') AND feature <> $2
       GROUP BY shop_id, feature, payer`,
-    [month],
+    [month, LAB_FEATURE],
   );
   return rows.map((r: any) => ({
     shopId: Number(r.shop_id),
@@ -129,6 +133,19 @@ export async function aiUsageOfMonth(t: Tenancy, month: string): Promise<AiCostR
     calls: Number(r.calls) || 0,
     usd: Number(r.usd) || 0,
   }));
+}
+
+/** What Pilot AI's own work cost in the month (the test chat and the lessons chat of the control room): Pilotix's. */
+export async function aiLabOfMonth(t: Tenancy, month: string): Promise<{ calls: number; usd: number }> {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error('mois invalide');
+  const r = await t.platform
+    .query(
+      `SELECT coalesce(sum(calls), 0)::bigint AS calls, coalesce(sum(usd), 0) AS usd FROM platform.ai_usage
+        WHERE feature = $2 AND day >= ($1 || '-01')::date AND day < (($1 || '-01')::date + interval '1 month')`,
+      [month, LAB_FEATURE],
+    )
+    .catch(() => [{ calls: 0, usd: 0 }]);
+  return { calls: Number(r[0]?.calls) || 0, usd: Number(r[0]?.usd) || 0 };
 }
 
 /** The first day anything was counted (the counter started with this version). */

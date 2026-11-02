@@ -378,6 +378,17 @@ function state() {
       ],
       test: { id: 3, championId: 2, challengerId: 3, share: 0.2, verdict: 'wait', why: null, stats: {}, startedAt: at(3) },
     },
+    // the next book: v4 (v3 is in test), a lesson found at night and one the coach wrote in « Teach a lesson »
+    next: {
+      version: 4,
+      lessons: 11,
+      dropped: 0,
+      changed: true,
+      fresh: [
+        { id: 8, topic: 'address', text: 'Before confirming, read the full address back to the customer in one line and wait for a clear yes.', source: 'coach', meaning: 'Avant de confirmer, relire l’adresse complète au client en une ligne et attendre un oui clair.', by: 'Alaeddine', at: at(0, 8), fits: true },
+        { id: 1, topic: 'trust', text: 'Quand le client a peur d’une arnaque, rappelle tôt qu’il ne paie rien avant de recevoir le colis.', source: 'ai', meaning: null, by: 'Sara', at: at(3), fits: true },
+      ],
+    },
     sharing: { shops: 3, cases: 123 },
     shops: [
       ...SHOPS.map((s) => ({ id: s.id, name: s.name, slug: s.slug, share: true, cases: 41 })),
@@ -401,7 +412,7 @@ function costs(i: { month?: string }) {
       : [];
   const rate = 250;
   const usd = list.reduce((a, s) => a + s.pilotixUsd, 0);
-  return { month, since: `${month}-01`, rate, features: ['dellal', 'cm', 'spy', 'other'], shops: list.map((s) => ({ ...s, da: Math.round(s.pilotixUsd * rate) })), total: { usd, da: Math.round(usd * rate), shopUsd: 0 }, nightUsd: 0.11 };
+  return { month, since: `${month}-01`, rate, features: ['dellal', 'cm', 'spy', 'other'], shops: list.map((s) => ({ ...s, da: Math.round(s.pilotixUsd * rate) })), total: { usd, da: Math.round(usd * rate), shopUsd: 0 }, nightUsd: 0.11, labUsd: 0.06 };
 }
 
 const BOOK = `DELLAL — LE LIVRE D’INSTRUCTIONS (exemple de l’aperçu)
@@ -416,9 +427,74 @@ préparés au moment du clic.
 - [closing] Avant de prendre la commande, fais écrire le nom, la commune et un repère.
 `;
 
+// ---------------------------------------------------------------- « Test & lessons » in the preview (no AI, no server)
+let tryChat: { id: number; role: string; body: string; userName: string | null; sendError: string | null; at: string; meta: any }[] = [];
+let tryId = 0;
+const VERSIONS: Record<string, number> = { live: 2, test: 3, next: 4, none: 0 };
+/** Dellal's answer in the example: a few real-looking replies by what the customer asked; « no lessons » is plainer */
+function tryReply(text: string, book: string): { body: string; model: string } {
+  const f = text.toLowerCase();
+  const item = /poussette|عرب/.test(f) ? 'la poussette' : 'la montre Atlas';
+  if (/arnaque|confian|kha?ef|n5af|tkhaf|scam|خاي|نصب|ثق/.test(f))
+    return {
+      model: 'claude-sonnet-5-5',
+      body:
+        book === 'none'
+          ? 'Ma tkhafch, la boutique sérieuse. Tkhalass ki yjik le colis.'
+          : '3andek l7a9 tkhaf, w hadi 7aja mli7a 👍 Ma tkhalass walou 9bel ma tchouf le colis f yeddik. T7eb nwerilek tsawer s7a7 ?',
+    };
+  if (/gros|wholesale|pi[eè]ces|قطعة|جملة/.test(f))
+    return { model: 'claude-sonnet-5-5', body: 'Mli7 bezzaf 👍 Commande en gros, nb3at talab ta3ek l l\'équipe bach y3tiwk le prix ta3 l gros. 3tini smiytek w numéro ta3ek.' };
+  if (/livr|twsil|tawsil|wilaya|توصيل|ولاي/.test(f))
+    return { model: 'claude-haiku-5-5', body: 'Nwesslou l Oran 👍 Le prix w l wa9t ta3 la livraison ykhrjou men l\'outil : 3tini la commune ta3ek w n9ollek.' };
+  if (/ch7al|prix|soum|ghal|cher|سعر|بكم|شحال/.test(f))
+    return { model: 'claude-sonnet-5-5', body: `${item[0].toUpperCase()}${item.slice(1)} b ${item === 'la poussette' ? '12 500' : '3 500'} DA. Men ayya wilaya nta ? Bach n9ollek le prix ta3 la livraison w win tjik.` };
+  if (/photo|tsawer|tswer|video|صور|تصاور/.test(f)) return { model: 'claude-haiku-5-5', body: `Akid ! Hado tsawer s7a7 ta3 ${item} 📸 Ay loun 3jbek ktar ?` };
+  return { model: 'claude-haiku-5-5', body: 'Wa 3alikoum salam 👋 mar7ba bik ! Wach t7eb t3ref ? N9der nb3atlek tsawer w le prix m3a la livraison.' };
+}
+function tryAnswer(i: { shopId: number; book?: string; body?: string; reset?: boolean }) {
+  const book = i.book ?? 'live';
+  if (i.reset) tryChat = [];
+  if (i.body?.trim()) {
+    const now = new Date().toISOString();
+    const r = tryReply(i.body, book);
+    tryChat.push({ id: ++tryId, role: 'customer', body: i.body.trim(), userName: null, sendError: null, at: now, meta: null });
+    tryChat.push({ id: ++tryId, role: 'agent', body: r.body, userName: null, sendError: null, at: now, meta: { model: r.model, pilot: { version: VERSIONS[book] ?? 2, lab: book } } });
+  }
+  return { conversationId: 1, messages: [...tryChat], book: { kind: book, version: VERSIONS[book] ?? 2, empty: book === 'none' } };
+}
+type Said = { topic: string; text: string; meaning: Record<string, string> };
+const TEACH: [RegExp, Said][] = [
+  [/remise|r[ée]duc|discount|gratuit|cadeau|free|تخفيض|هدي|مجان/, { topic: 'price', text: 'When the customer asks for a better price, ask calmly what they compare it with, then repeat the one benefit they asked about.', meaning: { fr: 'Quand le client demande un meilleur prix, lui demander calmement avec quoi il compare, puis rappeler l’avantage qu’il a demandé.', en: 'When the customer asks for a better price, ask calmly what they compare it with, then repeat the one benefit they asked about.', ar: 'إذا طلب الزبون سعرًا أفضل، يسأله بهدوء مع ماذا يقارن، ثم يذكّره بالميزة التي سأل عنها.' } }],
+  [/cher|prix|ghal|expensive|price|غال|سعر/, { topic: 'price', text: 'When the customer says it is expensive, first ask calmly what they compare it with, then repeat the one benefit they asked about.', meaning: { fr: 'Quand le client dit que c’est cher, lui demander d’abord calmement avec quoi il compare, puis rappeler l’avantage qu’il a demandé.', en: 'When the customer says it is expensive, first ask calmly what they compare it with, then repeat the one benefit they asked about.', ar: 'إذا قال الزبون إنه غالٍ، يسأله أولًا بهدوء مع ماذا يقارن، ثم يذكّره بالميزة التي سأل عنها.' } }],
+  [/arnaque|peur|confian|scam|fear|trust|خاف|احتيال|نصب/, { topic: 'trust', text: 'When the customer fears a scam, thank them for being careful, then explain that they pay only when the parcel is in their hands.', meaning: { fr: 'Quand le client a peur d’une arnaque, le remercier d’être prudent, puis expliquer qu’il paie seulement quand il a le colis en main.', en: 'When the customer fears a scam, thank them for being careful, then explain that they pay only when the parcel is in their hands.', ar: 'إذا خاف الزبون من الاحتيال، يشكره على حذره، ثم يشرح أنه يدفع فقط عندما يكون الطرد بين يديه.' } }],
+  [/photo|tsawer|picture|صور/, { topic: 'product', text: 'When the customer asks for photos, send the real photos from the product tool and ask which color they prefer.', meaning: { fr: 'Quand le client demande des photos, envoyer les vraies photos de l’outil produit et demander quelle couleur il préfère.', en: 'When the customer asks for photos, send the real photos from the product tool and ask which color they prefer.', ar: 'إذا طلب الزبون صورًا، يرسل الصور الحقيقية من أداة المنتجات ويسأله أي لون يفضّل.' } }],
+];
+const TEACH_DEFAULT: Said = { topic: 'address', text: 'Before confirming, read the full address back to the customer in one line and wait for a clear yes.', meaning: { fr: 'Avant de confirmer, relire l’adresse complète au client en une ligne et attendre un oui clair.', en: 'Before confirming, read the full address back to the customer in one line and wait for a clear yes.', ar: 'قبل التأكيد، يعيد قراءة العنوان الكامل على الزبون في سطر واحد وينتظر موافقة واضحة.' } };
+const TEACH_REPLY: Record<string, { ok: string; safe: string }> = {
+  fr: { ok: 'Compris ! Voici la leçon. Lisez-la, puis cliquez sur « Ajouter au livre ».', safe: 'Dellal ne peut pas promettre de remise ni de cadeau. Voici une version sûre de votre idée :' },
+  en: { ok: 'Got it! Here is the lesson. Read it, then click « Add to the book ».', safe: 'Dellal cannot promise a discount or a gift. Here is a safe version of your idea:' },
+  ar: { ok: 'فهمت! هذا هو الدرس. اقرأه، ثم اضغط «أضِف إلى الكتاب».', safe: 'لا يستطيع Dellal أن يعد بتخفيض أو هدية. هذه نسخة آمنة من فكرتك:' },
+};
+function teachAnswer(i: { messages: { from: string; text: string }[]; lang?: string }) {
+  const lang = i.lang && TEACH_REPLY[i.lang] ? i.lang : 'fr';
+  const said = [...i.messages].reverse().find((m) => m.from === 'coach')?.text.toLowerCase() ?? '';
+  const hit = TEACH.find(([re]) => re.test(said));
+  const l = hit ? hit[1] : TEACH_DEFAULT;
+  const safe = hit === TEACH[0];
+  return { reply: safe ? TEACH_REPLY[lang].safe : TEACH_REPLY[lang].ok, lesson: { topic: l.topic, text: l.text, meaning: l.meaning[lang], ok: true, problems: [] as string[], twin: null } };
+}
+let added = 900;
+
 /** the example answer of one control-room call (the Pilot AI page's reads) */
 export function demoAnswer(name: string, input: any): unknown {
   switch (name) {
+    case 'p.pilot.try':
+      return tryAnswer(input ?? {});
+    case 'p.pilot.teach':
+      return teachAnswer(input ?? { messages: [] });
+    case 'p.pilot.addLesson':
+      return { ok: true, id: ++added, topic: input?.topic, text: input?.text };
     case 'p.pilot.state':
       return state();
     case 'p.dellal.board':

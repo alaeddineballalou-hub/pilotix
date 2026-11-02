@@ -565,3 +565,57 @@ html[data-theme="dark"] .pp-prot { --pp-c-q: #3B9BC0; }
 .pp-chart path.pb-l-dash { stroke-dasharray: 5 4; }
 .pp-chart .pb-x { font-weight: 700; fill: var(--ink); }
 .pp-chart .pb-d-conv.on, .pp-chart .pb-d-real.on { stroke-width: 2.5; }
+
+/* ---- Pilot AI › Test & lessons: the test chat and the lessons chat side by side (one at a time on a phone, chosen with
+   the switch), the next book under them. The chats are the shop's own chat pieces (messages/chat.tsx, ai/ai.css). */
+.pl-lab-switch { display: none; }
+.pl-lab { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.pl-lab-pane { min-width: 0; scroll-margin-top: 84px; }
+.pl-lab-card { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.pl-lab-ctl { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 16px; min-width: 0; }
+.pl-lab-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.pl-lab-field > span { color: var(--muted); font-size: 12.5px; font-weight: 700; }
+.pl-lab-field select { min-width: 200px; max-width: 100%; height: 40px; }
+.pl-lab-book { flex: 1 1 100%; }
+/* the book picker wraps (a shared phone rule makes every tab row scroll sideways, !important) */
+.pl-lab-book .tabs { flex-wrap: wrap !important; overflow: visible !important; }
+.pl-lab-chat { height: min(640px, 72vh); box-shadow: none; }
+.pl-used { margin: 4px 8px 0; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.pl-lab-err { display: flex; align-items: center; gap: 8px; margin: 0; padding: 9px 14px; background: var(--surface); border-top: 1px solid var(--line); color: var(--coral); font-size: 13px; font-weight: 600; line-height: 1.4; }
+.pl-lab-err .bji { flex: none; width: 16px; height: 16px; }
+.pl-lab-note { margin: 0; }
+/* the lesson Pilot AI proposes, inside its message: a part of the bubble, set apart by one line */
+.ai-msg.pl-prop-msg { max-width: min(94%, 560px); }
+.pl-prop { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 2px; padding-top: 10px; border-top: 1px solid var(--ai-tint-line); }
+.pl-prop-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.pl-prop-text { margin: 0; color: var(--ink); font-size: 14.5px; font-weight: 650; line-height: 1.5; text-align: left; }
+.pl-prop-mean { margin: 0; color: var(--ai-tint-ink); font-size: 13.5px; line-height: 1.5; }
+.pl-prop-ok { display: inline-flex; align-items: center; gap: 6px; color: var(--ok); font-size: 13px; font-weight: 700; }
+.pl-prop-ok .bji { width: 15px; height: 15px; }
+.pl-prop-no { margin: 0; color: var(--coral); font-size: 13px; line-height: 1.45; }
+.pl-prop-do { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 2px; }
+.pl-prop-do .btn { height: 38px; }
+/* the next book: the lessons waiting for it, then « Publish » */
+.pl-next { list-style: none; margin: 0; padding: 0; }
+.pl-next li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 6px 14px; padding: 12px 0; border-top: 1px solid var(--line); }
+.pl-next li:first-child { border-top: 0; padding-top: 4px; }
+.pl-next-txt { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.pl-next-txt > p, .pl-next-txt > small { align-self: stretch; }
+.pl-next-txt p { margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.pl-next-txt p[lang="en"] { text-align: left; }
+.pl-next-mean { color: var(--muted); font-size: 13.5px; }
+.pl-next-txt small { color: var(--muted); font-size: 12.5px; }
+.pl-next-room { color: var(--warn); font-weight: 700; }
+.pl-next-empty { margin: 0; padding: 12px 14px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); }
+.pl-next-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 14px; }
+.pl-next-foot p { margin: 0; }
+@media (max-width: 1100px) {
+  /* one chat at a time: the switch says which */
+  .pl-lab-switch { display: block; }
+  .pl-lab { grid-template-columns: minmax(0, 1fr); }
+  .pl-lab[data-pane="try"] > .pl-lab-teach, .pl-lab[data-pane="teach"] > .pl-lab-try { display: none; }
+}
+@media (max-width: 560px) {
+  .pl-lab-field, .pl-lab-field select { width: 100%; }
+  .pl-lab-chat { height: min(600px, 76dvh); }
+}
