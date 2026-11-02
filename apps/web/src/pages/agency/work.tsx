@@ -368,7 +368,9 @@ function AllSuivi({ sub }: PageProps) {
   const { has } = useSession();
   const work = useSellers();
   const canFollow = has('suivi');
-  const tab: Tab = TABS.includes(sub as Tab) ? (sub as Tab) : 'enlivraison';
+  const asked: Tab = TABS.includes(sub as Tab) ? (sub as Tab) : 'enlivraison';
+  // a confirmation agent (no suivi): En livraison, Livré, Annulé — no alerts
+  const tab: Tab = !canFollow && !['enlivraison', 'livres', 'annules'].includes(asked) ? 'enlivraison' : asked;
   const [page, setPage] = useState(1);
   useEffect(() => setPage(1), [tab]);
   const c = useRpc('suivi.counts', {}, { refetchInterval: 60_000 }).data;

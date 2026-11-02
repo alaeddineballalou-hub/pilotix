@@ -44,7 +44,9 @@ export function Suivi({ sub }: PageProps) {
   const { has } = useSession();
   // the claims with couriers and the swaps: the store's suivi agents and the agencies (on their own orders)
   const tabs: readonly string[] = !has('suivi') && !agency ? LIST_TABS.filter((k) => k !== 'swap') : [...LIST_TABS, 'reclamation'];
-  const tab: Sub = tabs.includes(sub ?? '') ? (sub as Sub) : 'enlivraison';
+  const asked: Sub = tabs.includes(sub ?? '') ? (sub as Sub) : 'enlivraison';
+  // an agency's confirmation agent (no suivi): En livraison, Livré, Annulé — to watch its orders move (no alert, claim, swap)
+  const tab: Sub = agency && !has('suivi') && !['enlivraison', 'livres', 'annules'].includes(asked) ? 'enlivraison' : asked;
   return (
     <>
       <SuiviBar tab={tab} />
@@ -102,13 +104,13 @@ function SuiviBar({ tab }: { tab: Sub }) {
         ) : step === 'road' ? (
           <>
             {item('enlivraison', c?.enlivraison ?? 0)}
-            <span className="bjm-sep" aria-hidden="true" />
-            {item('bloques', c?.bloquesTodo ?? 0, true)}
+            {has('suivi') && <span className="bjm-sep" aria-hidden="true" />}
+            {has('suivi') && item('bloques', c?.bloquesTodo ?? 0, true)}
           </>
         ) : step === 'annules' || step === 'swap' ? (
           <>
             {item('annules', c?.annules ?? 0)}
-            <span className="bjm-sep" aria-hidden="true" />
+            {has('suivi') && <span className="bjm-sep" aria-hidden="true" />}
             {has('suivi') && item('swap', c?.swap ?? 0, true)}
           </>
         ) : (

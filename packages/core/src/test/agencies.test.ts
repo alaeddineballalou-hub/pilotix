@@ -365,11 +365,17 @@ test('an agency works on several sellers: one at a time or all together, its peo
   const road: any = await call('suivi.list', await ctxOf('nora@centre.dz', 'all'), { tab: 'enlivraison' });
   assert.deepEqual(road.rows.map((r: any) => [r.seller.id, r.id]), [[a.id, va.id]]);
   assert.equal(((await call('suivi.counts', await ctxOf('nora@centre.dz', 'all'), {})) as any).enlivraison, 1);
+  // Lina does suivi: an alert leaves her « En livraison » for her « Alertes »
+  await b.db.query("UPDATE orders SET follow_status='alert', shipped_at=now() WHERE id=$1", [cb.id]);
+  const lb1 = await ctxOf('lina@centre.dz', b.id);
+  assert.ok(!((await call('suivi.list', lb1, { tab: 'enlivraison' })) as any).rows.some((r: any) => r.id === cb.id));
+  assert.ok(((await call('suivi.list', lb1, { tab: 'alertes' })) as any).rows.some((r: any) => r.id === cb.id));
+  await b.db.query('UPDATE orders SET follow_status=NULL, shipped_at=NULL WHERE id=$1', [cb.id]);
   assert.equal(((await call('suivi.list', await ctxOf('nora@centre.dz', 'all'), { tab: 'alertes' })) as any).total, 0);
-  // flagged as an alert: it leaves the agency's « En livraison » and goes to its « Suivi » (Alertes)
+  // flagged as an alert: Nora (confirmation only, no Alertes) still watches it in « En livraison »
   await a.db.query("UPDATE orders SET follow_status='alert' WHERE id=$1", [va.id]);
-  assert.equal(((await call('suivi.list', await ctxOf('nora@centre.dz', 'all'), { tab: 'enlivraison' })) as any).total, 0);
-  assert.equal(((await call('suivi.counts', await ctxOf('nora@centre.dz', 'all'), {})) as any).enlivraison, 0);
+  assert.equal(((await call('suivi.list', await ctxOf('nora@centre.dz', 'all'), { tab: 'enlivraison' })) as any).total, 1);
+  assert.equal(((await call('suivi.counts', await ctxOf('nora@centre.dz', 'all'), {})) as any).enlivraison, 1);
   assert.equal(((await call('suivi.list', await ctxOf('nora@centre.dz', 'all'), { tab: 'alertes' })) as any).total, 1);
   // Réclamations and Swap: on the agency's own orders only (Nora: the Vélo; the Poussette is not hers)
   const [cOwn] = await a.db.query(`INSERT INTO claims (order_id, reason, message) VALUES ($1, 'late', 'x') RETURNING id`, [va.id]);

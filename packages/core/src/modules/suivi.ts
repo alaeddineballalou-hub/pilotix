@@ -37,7 +37,8 @@ const readQueue = (ctx: Ctx) => hasRole(ctx.session, 'suivi') ? 'follow' as cons
 function tabFilter(tab: SuiviTab, now: number, agency = false): Partial<ListInput> {
   switch (tab) {
     case 'enlivraison':
-      // a confirmation agency: only the parcels with no problem — one flagged as an alert moves to its « Suivi »
+      // an agency's suivi agent: only the parcels with no problem — one flagged as an alert moves to its « Alertes »;
+      // its confirmation agent (no Alertes) sees every parcel of its orders on the road
       return { follow: agency ? IN_DELIVERY.filter((s) => s !== 'alert') : [...IN_DELIVERY], sort: 'shipped_at', dir: 'asc' };
     case 'bloques':
       // the ids come from stuckParcels (see suivi.list)
@@ -179,8 +180,8 @@ async function extras(db: Db, orders: Order[], now = Date.now()): Promise<Record
 
 export async function suiviCounts(ctx: Ctx) {
   const d30 = new Date(ctx.now() - 30 * DAY).toISOString();
-  // a confirmation agency's « En livraison »: no alert in it (alerts are its « Suivi »)
-  const onRoad = agencyOf(ctx) !== null ? `'shipped','out_for_delivery','failed','in_exchange'` : `'shipped','out_for_delivery','failed','alert','in_exchange'`;
+  // an agency's suivi agent: « En livraison » without the alerts (they are its « Alertes »); a confirmation agent: all
+  const onRoad = agencyOf(ctx) !== null && hasRole(ctx.session, 'suivi') ? `'shipped','out_for_delivery','failed','in_exchange'` : `'shipped','out_for_delivery','failed','alert','in_exchange'`;
   const r = (
     await ctx.db.query(
       `SELECT
@@ -761,7 +762,7 @@ export const suiviProcs = {
     const splitIds = split ? (i.tab === 'alertes_new' ? split.fresh : split.working) : null;
     if (splitIds && !splitIds.length) return { rows: [], total: 0, page: 1, pageSize: i.pageSize ?? 50, extra: {} };
     const ids = stuck ? [...stuck.keys()].slice(0, 500) : splitIds ? splitIds.slice(0, 500) : null;
-    const page = await listOrders(ctx, ListInput.parse({ ...tabFilter(i.tab, ctx.now(), agencyOf(ctx) !== null), ...(ids ? { ids } : {}), q: i.q, page: i.page, pageSize: i.pageSize }), { queue: readQueue(ctx) });
+    const page = await listOrders(ctx, ListInput.parse({ ...tabFilter(i.tab, ctx.now(), agencyOf(ctx) !== null && hasRole(ctx.session, 'suivi')), ...(ids ? { ids } : {}), q: i.q, page: i.page, pageSize: i.pageSize }), { queue: readQueue(ctx) });
     if (stuck) {
       const ex = await extras(ctx.db, page.rows, ctx.now());
       for (const o of page.rows) if (ex[o.id]) ex[o.id].stuck = stuck.get(o.id) ?? null;
