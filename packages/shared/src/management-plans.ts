@@ -2,8 +2,11 @@
 export type ManagementPlanKind = 'billing' | 'agent';
 export type ManagementFeeMethod = 'none' | 'fixed' | 'percent' | 'tier';
 export type ManagementUpsellMethod = 'double' | 'qty' | 'fixed' | 'percent';
+export type AgentPlanTask = 'confirmation' | 'suivi';
 export interface EditablePriceBracket {from:number;to:number|null;amount:number}
 export interface ManagementPlanConfig {
+  /** Agent Pay only. Plans created before task selection belong to confirmation. */
+  agentTask?: AgentPlanTask;
   method: ManagementFeeMethod;
   trigger: 'confirmed' | 'delivered';
   rate: number;
@@ -30,6 +33,7 @@ export interface ManagementSimulation {
   originalQty?: number;
   deliveredQty?: number;
 }
+export const agentPlanTask = (p: ManagementPlanConfig): AgentPlanTask => p.agentTask ?? 'confirmation';
 export function planPriceBrackets(p: ManagementPlanConfig): EditablePriceBracket[] {
   if(p.ranges) return p.ranges;
   const [a,b]=p.thresholds??[10000,20000];
@@ -49,6 +53,11 @@ export function validatePriceBrackets(ranges: EditablePriceBracket[]): string|nu
   return null;
 }
 export function simulateManagementPlan(p: ManagementPlanConfig, s: ManagementSimulation) {
+  // A suivi plan cannot earn upsell, including old or forged configuration copies.
+  if (p.agentTask === 'suivi') {
+    if (p.trigger !== 'delivered') throw new Error('Un plan de suivi est rémunéré à la livraison');
+    p = { ...p, upsell: { ...p.upsell, enabled: false, rate: 0 } };
+  }
   const nonnegative = (v: number) => Number.isFinite(v) && v >= 0;
   if (![s.productPrice,s.operations,s.upsells,s.incrementalValue,p.monthly,p.rate,...p.tiers,p.bonus.threshold,p.bonus.amount,p.upsell.rate,...(s.originalQty===undefined?[]:[s.originalQty]),...(s.deliveredQty===undefined?[]:[s.deliveredQty])].every(nonnegative)) throw new Error('Valeur invalide');
   if (!Number.isInteger(s.operations) || !Number.isInteger(s.upsells) || (s.originalQty!==undefined&&!Number.isInteger(s.originalQty)) || (s.deliveredQty!==undefined&&!Number.isInteger(s.deliveredQty))) throw new Error('Quantité invalide');

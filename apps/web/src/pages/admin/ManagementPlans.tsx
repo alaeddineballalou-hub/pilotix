@@ -1,6 +1,6 @@
 // Templates are separate from their immutable assignments and accepted seller contracts.
 import { useEffect, useState } from 'react';
-import { DEFAULT_MANAGEMENT_PLAN, ManagementPlanConfig, simulateManagementPlan, planPriceBrackets } from '@pilotix/shared';
+import { agentPlanTask, DEFAULT_MANAGEMENT_PLAN, ManagementPlanConfig, simulateManagementPlan, planPriceBrackets } from '@pilotix/shared';
 import { useAction, useRpc } from '../../lib/query';
 import { PlanSummary } from './PlanSummary';
 import { BillLines } from '../agency/parts';
@@ -34,12 +34,13 @@ function StoreManagementPlans({ agency = false, initialKind = 'billing' }: { age
   const [upsells,setUpsells]=useState(10);
   const [incremental,setIncremental]=useState(3000);
   const plans=(q.data?.plans??[]).filter(x=>x.kind===kind&&x.active);
-  const select=(p:Plan)=>{setEditing({...p,configuration:structuredClone(p.configuration)});setDirty(false)};
+  const select=(p:Plan)=>{setEditing({...p,configuration:{...structuredClone(p.configuration),...(p.kind==='agent'?{agentTask:agentPlanTask(p.configuration)}:{})}});setDirty(false)};
   const change=(patch:Partial<ManagementPlanConfig>)=>{setEditing(e=>e?{...e,configuration:{...e.configuration,...patch}}:e);setDirty(true)};
-  const start=()=>{setEditing({id:0,kind,name:'Nouveau plan',configuration:structuredClone(DEFAULT_MANAGEMENT_PLAN),active:true});setDirty(true)};
+  const start=()=>{setEditing({id:0,kind,name:'Nouveau plan',configuration:{...structuredClone(DEFAULT_MANAGEMENT_PLAN),...(kind==='agent'?{agentTask:'confirmation' as const}:{})},active:true});setDirty(true)};
   useEffect(()=>{setEditing(null);setDirty(false)},[kind]);
   const changeKind=(next:'billing'|'agent')=>{if(!dirty||confirm('Quitter les modifications non enregistrées ?'))setKind(next)};
   const p=editing?.configuration;
+  const suiviPlan=kind==='agent'&&p&&agentPlanTask(p)==='suivi';
   let preview:ReturnType<typeof simulateManagementPlan>|null=null;
   let previewError='';
   try {if(p) preview=simulateManagementPlan(p,{productPrice:price,operations:count,upsells,incrementalValue:incremental})}catch(e){previewError=e instanceof Error?e.message:'Configuration invalide'}
@@ -62,10 +63,15 @@ function StoreManagementPlans({ agency = false, initialKind = 'billing' }: { age
       <h2>{editing.id?'Modifier':'Nouveau plan'} — {editing.name}</h2>
       <div className="agx-pe-grid">
         <label className="field"><span className="lab">Nom du plan</span><input value={editing.name} maxLength={100} onChange={e=>{setEditing(x=>x?{...x,name:e.target.value}:x);setDirty(true)}} /></label>
+        {kind==='agent'&&<label className="field"><span className="lab">Type de plan Agent Pay</span><select value={agentPlanTask(p)} onChange={e=>{
+          const task=e.target.value as 'confirmation'|'suivi';
+          change({agentTask:task,...(task==='suivi'?{trigger:'delivered',upsell:{...p.upsell,enabled:false,rate:0,trigger:'delivered',ruleVersion:2}}:{})});
+        }}><option value="confirmation">Plan de confirmation</option><option value="suivi">Plan de suivi</option></select></label>}
         <label className="field"><span className="lab">Mode de calcul</span><select value={p.method} onChange={e=>change({method:e.target.value as ManagementPlanConfig['method']})}>
           <option value="fixed">Montant fixe par opération</option><option value="percent">Pourcentage du prix produit</option><option value="tier">Tranches de prix</option><option value="none">Forfait / salaire uniquement</option>
         </select></label>
-        {p.method!=='none'&&<label className="field"><span className="lab">Événement rémunéré</span><select value={p.trigger} onChange={e=>change({trigger:e.target.value as 'confirmed'|'delivered'})}><option value="confirmed">Commande confirmée</option><option value="delivered">Commande livrée</option></select></label>}
+        {p.method!=='none'&&!suiviPlan&&<label className="field"><span className="lab">Événement rémunéré</span><select value={p.trigger} onChange={e=>change({trigger:e.target.value as 'confirmed'|'delivered'})}><option value="confirmed">Commande confirmée</option><option value="delivered">Commande livrée</option></select></label>}
+        {suiviPlan&&<p className="agx-note">Commande livrée · agent de suivi attribué à la commande uniquement.</p>}
         {(p.method==='fixed'||p.method==='percent')&&<label className="field"><span className="lab">{p.method==='fixed'?'Tarif (DA)':'Pourcentage (%)'}</span><input style={FIELD} type="number" min={0} max={p.method==='percent'?100:10000000} value={p.rate} onChange={e=>change({rate:number(e.target.value)})}/></label>}
         <label className="field"><span className="lab">{kind==='agent'?'Salaire mensuel (DA)':'Forfait mensuel client (DA)'}</span><input style={FIELD} type="number" min={0} value={p.monthly} onChange={e=>change({monthly:number(e.target.value)})}/></label>
       </div>
@@ -84,13 +90,13 @@ function StoreManagementPlans({ agency = false, initialKind = 'billing' }: { age
             <fieldset className="agx-bonus"><legend><label><input type="checkbox" checked={p.bonus.enabled} onChange={e=>change({bonus:{...p.bonus,enabled:e.target.checked}})}/> Bonus optionnel</label></legend>
         {p.bonus.enabled&&<div className="agx-pe-grid"><label className="field"><span className="lab">Objectif : nombre d'opérations</span><input type="number" min={0} value={p.bonus.threshold} onChange={e=>change({bonus:{...p.bonus,threshold:number(e.target.value)}})}/></label><label className="field"><span className="lab">Prime unique (DA)</span><input type="number" min={0} value={p.bonus.amount} onChange={e=>change({bonus:{...p.bonus,amount:number(e.target.value)}})}/></label></div>}
       </fieldset>
-      <fieldset className="agx-bonus"><legend><label><input type="checkbox" checked={p.upsell.enabled} onChange={e=>change({upsell:{...p.upsell,enabled:e.target.checked}})}/> Upsell optionnel</label></legend>
+      {!suiviPlan&&<fieldset className="agx-bonus"><legend><label><input type="checkbox" checked={p.upsell.enabled} onChange={e=>change({upsell:{...p.upsell,enabled:e.target.checked}})}/> Upsell optionnel</label></legend>
         {p.upsell.enabled&&<div className="agx-pe-grid"><label className="field"><span className="lab">Plan upsell</span><select value={p.upsell.method} onChange={e=>change({upsell:{...p.upsell,method:e.target.value as ManagementPlanConfig['upsell']['method']}})}>
           <option value="double">Double confirmation (tarif confirmation une 2e fois)</option><option value="fixed">Montant fixe par upsell</option><option value="percent">Pourcentage de la vente ajoutée</option>
         </select></label>
         {p.upsell.method!=='double'&&<label className="field"><span className="lab">{p.upsell.method==='percent'?'Pourcentage (%)':'Montant par upsell (DA)'}</span><input type="number" min={0} value={p.upsell.rate} onChange={e=>change({upsell:{...p.upsell,rate:number(e.target.value)}})}/></label>}
         <label className="field"><span className="lab">Éligibilité upsell</span><select value={p.upsell.trigger} onChange={e=>change({upsell:{...p.upsell,trigger:e.target.value as 'confirmed'|'delivered'}})}><option value="delivered">Après livraison</option><option value="confirmed">À la confirmation</option></select></label></div>}
-      </fieldset>
+      </fieldset>}
       {invalid&&<p className="form-err">Double confirmation nécessite une commission de confirmation active.</p>}
       <div className="row agx-actions">
         <button className="btn primary" disabled={save.isPending||!dirty||!editing.name.trim()||!!previewError||invalid} onClick={()=>save.mutate({...(editing.id?{id:editing.id}:{}),kind,name:editing.name,configuration:p})}>Enregistrer le plan</button>
@@ -101,9 +107,9 @@ function StoreManagementPlans({ agency = false, initialKind = 'billing' }: { age
     {p&&<section className="card">
       <h2>Simulation (sans modifier les factures)</h2>
       <div className="agx-pe-grid">
-        {([['Prix du produit',price,setPrice],['Opérations éligibles',count,setCount],['Nombre d’upsells',upsells,setUpsells],['Valeur ajoutée / upsell',incremental,setIncremental]] as const).map(([label,value,set],i)=><label className="field" key={i}><span className="lab">{label}</span><input type="number" min={0} value={value} onChange={e=>set(number(e.target.value))}/></label>)}
+        {([['Prix du produit',price,setPrice],[suiviPlan?'Commandes livrées attribuées':'Opérations éligibles',count,setCount],['Nombre d’upsells',upsells,setUpsells],['Valeur ajoutée / upsell',incremental,setIncremental]] as const).filter((_,i)=>!suiviPlan||i<2).map(([label,value,set],i)=><label className="field" key={i}><span className="lab">{label}</span><input type="number" min={0} value={value} onChange={e=>set(number(e.target.value))}/></label>)}
       </div>
-      {previewError?<p className="form-err">{previewError}</p>:preview&&<div><p>Forfait/salaire : <b>{money(preview.monthly)}</b></p><p>Commissions : <b>{money(preview.main)}</b></p><p>Bonus : <b>{money(preview.bonus)}</b></p><p>Upsell : <b>{money(preview.upsell)}</b></p><h2>Total : {money(preview.total)}</h2></div>}
+      {previewError?<p className="form-err">{previewError}</p>:preview&&<div><p>Forfait/salaire : <b>{money(preview.monthly)}</b></p><p>Commissions : <b>{money(preview.main)}</b></p><p>Bonus : <b>{money(preview.bonus)}</b></p>{!suiviPlan&&<p>Upsell : <b>{money(preview.upsell)}</b></p>}<h2>Total : {money(preview.total)}</h2></div>}
     </section>}
     <section className="card"><h2>Affecter les plans</h2>
       <p className="muted">{agency&&kind==='billing'?'Le vendeur doit accepter chaque proposition dans Agences → son contrat. Les nouveaux tarifs commencent à son acceptation.':`Sélectionnez un plan par ${kind==='billing'?'produit':'agent'} et cliquez sur Appliquer.`} Une commande confirmée sous un plan conserve ce plan jusqu’à sa livraison. Les opérations antérieures conservent leurs règles. Modifier un modèle ne change pas ses affectations : réaffectez-le pour appliquer une nouvelle version.</p>

@@ -3,7 +3,10 @@ on:
   pull_request:
     paths:
       - 'packages/core/**'
+      - 'packages/shared/**'
       - 'apps/web/src/pages/admin/AgencyPaymentPlans.tsx'
+      - 'apps/web/src/pages/admin/ManagementPlans.tsx'
+      - 'apps/web/src/pages/admin/PlanSummary.tsx'
       - 'apps/web/src/pages/agences/index.tsx'
       - 'apps/web/src/pages/agency/index.tsx'
       - '.github/workflows/payment-bonus-regression.yml'
@@ -19,5 +22,5 @@ jobs:
           node-version: 22
       - run: npm install --no-audit --no-fund
       - run: npm run build -w @pilotix/shared && npm run build -w @pilotix/core
-      - name: Contract termination, seller bonuses, agent payroll and archival safety
-        run: node --test packages/core/dist/test/agencyplans.test.js packages/core/dist/test/paymentplans-v2.test.js packages/core/dist/test/archive.test.js
+      - name: Assigned confirmation and suivi pay, seller bonuses and archival safety
+        run: node --test packages/core/dist/test/agent-pay-tasks.test.js packages/core/dist/test/agencyplans.test.js packages/core/dist/test/paymentplans-v2.test.js packages/core/dist/test/managementplans.test.js packages/core/dist/test/archive.test.js
