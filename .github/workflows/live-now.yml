@@ -1,4 +1,4 @@
-# Temporary (for Claude): does the live site serve the newest control room (Pilot AI tabs)? Reads only.
+# Temporary (for Claude): does the live site serve the newest Dellal AI page (speed, hours, per ad, versions, learning bench)? Reads only.
 name: Live now (temporary, for Claude)
 on:
   push:
@@ -27,6 +27,10 @@ jobs:
             grep -o 'assets/[A-Za-z0-9._-]*\.js' "$f" | sort -u | while read b; do grep -qx "$b" /tmp/seen || echo "$b" >> /tmp/todo; done
             grep -o '"[A-Za-z0-9._-]*\.js"' "$f" | tr -d '"' | grep -E '^[A-Za-z0-9_-]+-[A-Za-z0-9_-]{8}\.js$' | sed 's#^#assets/#' | while read b; do grep -qx "$b" /tmp/seen || echo "$b" >> /tmp/todo; done
           done
-          hit=$(grep -l 'p.dellal.board' /tmp/js/*.js 2>/dev/null | head -1)
           echo "::notice title=Scripts read::$n"
-          echo "::notice title=Pilot AI tabs::$([ -n "$hit" ] && echo "live (in $(basename "$hit"))" || echo 'not found')"
+          for m in p.dellal.more p.dellal.books pl-bstep pb-heat; do
+            hit=$(grep -l "$m" /tmp/js/*.js 2>/dev/null | head -1)
+            echo "::notice title=$m::$([ -n "$hit" ] && echo "live (in $(basename "$hit"))" || echo 'not found')"
+          done
+          css=$(grep -o 'assets/[A-Za-z0-9._-]*\.css' /tmp/index.html | head -1); echo "::notice title=Main css::$css"
+          art=$(ls /tmp/js | grep -c '^art-ltr-'); echo "::notice title=Learning bench picture loaded by the page::$art"
