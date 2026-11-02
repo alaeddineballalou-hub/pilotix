@@ -839,6 +839,17 @@
     "isWoman": "Femme",
     "helpAgency": "Les commandes confiées à votre agence, dans chaque boutique où vous travaillez, vont à vos agents sans que personne ne choisisse.",
     "sellers": "Vendeurs",
-    "sellersHint": "Il travaille pour plusieurs de vos vendeurs : cochez ceux dont il reçoit les commandes."
+    "sellersHint": "Il travaille pour plusieurs de vos vendeurs : cochez ceux dont il reçoit les commandes.",
+    "when": "Quand choisir l’agent ?",
+    "whenOpt": {
+      "alert": "Sur alerte",
+      "shipped": "Dès l’expédition"
+    },
+    "whenHint": {
+      "alert": "Un agent est choisi seulement quand l’alerte du colis arrive. Les colis sans problème n’ont personne.",
+      "shipped": "Chaque colis a son agent dès qu’il part : il le suit jusqu’à la livraison."
+    },
+    "toConfirmer": "À celui qui a confirmé la commande",
+    "toConfirmerHint": "S’il fait aussi le Suivi et qu’il peut la prendre (en ligne, pas au maximum). Sinon, à un autre agent par la répartition."
   }
 }

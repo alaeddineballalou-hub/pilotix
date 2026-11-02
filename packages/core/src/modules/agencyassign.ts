@@ -40,7 +40,7 @@ export const agencyAssignProcs = {
       const db = ctx.t!.shop(s.schema);
       try {
         waiting.conf += num((await db.query(`SELECT count(*)::int AS n FROM orders WHERE conf_agency_id = $1 AND agent_id IS NULL AND conf_status = ANY($2) AND NOT is_exchange AND created_at > now() - interval '30 days'`, [agencyId, CONF_TODO]))[0]?.n);
-        waiting.follow += num((await db.query(`SELECT count(*)::int AS n FROM orders WHERE follow_agency_id = $1 AND follow_agent_id IS NULL AND follow_status = 'alert'`, [agencyId]))[0]?.n);
+        waiting.follow += num((await db.query(`SELECT count(*)::int AS n FROM orders WHERE follow_agency_id = $1 AND follow_agent_id IS NULL AND follow_status = ANY($2)`, [agencyId, cfg.follow.when === 'shipped' ? ['shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange'] : ['alert']]))[0]?.n);
         for (const area of ['conf', 'follow'] as const) {
           const rows = await db.query(`SELECT lower(p.email) AS email, ${loadOf(area)} AS load FROM profiles p WHERE p.active AND p.agency_id = $1`, [agencyId, cfg[area].excluded]);
           for (const r of rows as any[]) {

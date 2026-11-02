@@ -64,3 +64,4 @@
 .aa-fem { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .aa-fem input { width: 18px; height: 18px; accent-color: var(--px-orange); }
 .aa-women { border-top: 1px dashed var(--line); padding-top: 12px; }
+.aa-modes-2 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }

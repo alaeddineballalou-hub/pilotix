@@ -30,6 +30,10 @@ export interface AssignArea {
   speedFirst: boolean;
   /** a woman customer (her first name, or a product for women) goes to a woman agent when one can take it */
   womenToWomen: boolean;
+  /** Suivi: an agent is chosen when the parcel's alert fires, or as soon as it is shipped */
+  when: 'alert' | 'shipped';
+  /** Suivi: the agent who confirmed the order gets it when he does Suivi and can take it (else the split) */
+  toConfirmer: boolean;
 }
 
 export interface AssignAgent {
@@ -199,8 +203,8 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   pilot: PILOT_DEFAULT,
   coverageRefresh: { at: null, results: [] },
   autoAssign: {
-    conf: { mode: 'manual', by: 'all', excluded: ['confirmed', 'no_stock', 'cancelled', 'duplicate', 'wrong_number', 'fake'], max: 30, offlineMin: 15, sameClient: true, respectAccess: true, hideHistory: false, speedFirst: true, womenToWomen: false },
-    follow: { mode: 'manual', by: 'all', excluded: [], max: 15, offlineMin: 15, sameClient: true, respectAccess: true, hideHistory: false, speedFirst: true, womenToWomen: false },
+    conf: { mode: 'manual', by: 'all', excluded: ['confirmed', 'no_stock', 'cancelled', 'duplicate', 'wrong_number', 'fake'], max: 30, offlineMin: 15, sameClient: true, respectAccess: true, hideHistory: false, speedFirst: true, womenToWomen: false, when: 'alert', toConfirmer: false },
+    follow: { mode: 'manual', by: 'all', excluded: [], max: 15, offlineMin: 15, sameClient: true, respectAccess: true, hideHistory: false, speedFirst: true, womenToWomen: false, when: 'alert', toConfirmer: false },
     agents: {},
     order: [],
     womenProducts: [],

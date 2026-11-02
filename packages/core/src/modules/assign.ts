@@ -110,6 +110,8 @@ export interface Item {
   routeProduct: number | null;
   total: number;
   wilayaId: number | null;
+  /** Suivi: the parcel is in alert now */
+  alert?: boolean;
 }
 
 /** Why an agent cannot get this item now (null: he can). */
@@ -146,9 +148,9 @@ export function pickAgent(
   const a = cfg[area];
   let ok = list.filter((x) => !o.skip?.includes(x.id) && cannot(x, item, a, now) === null);
   if (!ok.length) return null;
-  if (a.sameClient && o.prev) {
+  if (o.prev) {
     const same = ok.find((x) => x.id === o.prev);
-    if (same) return { agent: same, why: 'même client' };
+    if (same) return { agent: same, why: area === 'follow' && a.toConfirmer ? 'a confirmé la commande' : 'même client' };
   }
   let why = MODE_FR[a.mode];
   // « femmes avec femmes »: a woman customer to a woman agent, when one can take her (else as usual)
@@ -199,11 +201,12 @@ async function waiting(db: Db, area: Area, ids?: number[]): Promise<Item[]> {
   const where =
     area === 'conf'
       ? `o.agent_id IS NULL AND o.conf_status = ANY($1) AND NOT o.is_exchange AND o.created_at > now() - interval '30 days'`
-      : `o.follow_agent_id IS NULL AND o.follow_status = 'alert' AND $1::text[] IS NOT NULL`;
+      : // every parcel on the road with no agent, alerts first (« Dès l'expédition » takes them all, « Sur alerte » the alerts)
+        `o.follow_agent_id IS NULL AND o.follow_status = ANY('{shipped,out_for_delivery,failed,alert,in_exchange}'::text[]) AND $1::text[] IS NOT NULL`;
   const rows = await db.query(
-    `SELECT o.id, o.phone, o.customer_name, o.channel, o.${AGENCY_COL[area]} AS agency, o.route_product_id, o.total, o.wilaya_id,
+    `SELECT o.id, o.phone, o.customer_name, o.channel, o.${AGENCY_COL[area]} AS agency, o.route_product_id, o.total, o.wilaya_id, o.follow_status,
             ARRAY(SELECT DISTINCT i.product_id FROM order_items i WHERE i.order_id = o.id AND i.product_id IS NOT NULL) AS products
-       FROM orders o WHERE ${where} ${ids ? 'AND o.id = ANY($2)' : ''} ORDER BY o.created_at LIMIT 300`,
+       FROM orders o WHERE ${where} ${ids ? 'AND o.id = ANY($2)' : ''} ORDER BY ${area === 'follow' ? "(o.follow_status = 'alert') DESC, " : ''}o.created_at LIMIT 300`,
     ids ? [CONF_TODO, ids] : [CONF_TODO],
   );
   return rows.map((r: any) => ({
@@ -216,16 +219,30 @@ async function waiting(db: Db, area: Area, ids?: number[]): Promise<Item[]> {
     routeProduct: numOrNull(r.route_product_id),
     total: num(r.total),
     wilayaId: numOrNull(r.wilaya_id),
+    alert: r.follow_status === 'alert',
   }));
 }
 
-/** The agent of the customer's other open item (same phone), if any. */
-async function prevAgent(db: Db, area: Area, item: Item): Promise<number | null> {
-  const r =
-    area === 'conf'
-      ? await db.query(`SELECT agent_id FROM orders WHERE phone = $1 AND id <> $2 AND agent_id IS NOT NULL AND conf_status = ANY($3) ORDER BY created_at DESC LIMIT 1`, [item.phone, item.id, CONF_TODO])
-      : await db.query(`SELECT agent_id FROM orders WHERE id = $1`, [item.id]);
-  return numOrNull(r[0]?.agent_id);
+/**
+ * The agent the item should go back to, if he can take it: Confirmation, the agent of the customer's other open order;
+ * Suivi, the agent who confirmed it (« à celui qui a confirmé »), else the Suivi agent of the customer's other parcel.
+ */
+async function prevAgent(db: Db, area: Area, item: Item, a: AssignArea): Promise<number | null> {
+  if (area === 'conf') {
+    if (!a.sameClient) return null;
+    const r = await db.query(`SELECT agent_id FROM orders WHERE phone = $1 AND id <> $2 AND agent_id IS NOT NULL AND conf_status = ANY($3) ORDER BY created_at DESC LIMIT 1`, [item.phone, item.id, CONF_TODO]);
+    return numOrNull(r[0]?.agent_id);
+  }
+  if (a.toConfirmer) {
+    const r = await db.query(`SELECT agent_id FROM orders WHERE id = $1`, [item.id]);
+    if (r[0]?.agent_id) return numOrNull(r[0].agent_id);
+  }
+  if (!a.sameClient) return null;
+  const r = await db.query(
+    `SELECT follow_agent_id FROM orders WHERE phone = $1 AND id <> $2 AND follow_agent_id IS NOT NULL AND follow_status = ANY('{shipped,out_for_delivery,failed,alert,in_exchange}'::text[]) ORDER BY created_at DESC LIMIT 1`,
+    [item.phone, item.id],
+  );
+  return numOrNull(r[0]?.follow_agent_id);
 }
 
 /** Gives the item to the agent (only if it still has none) and writes it in the history. */
@@ -333,8 +350,10 @@ async function giveItems(ctx: Ctx, area: Area, items: Item[], list: Agent[], cfg
   const forWomen = new Set(cfg.womenProducts);
   let assigned = 0;
   for (const it of items) {
+    // « Sur alerte »: a parcel with no alert waits for one
+    if (area === 'follow' && a.when !== 'shipped' && !it.alert) continue;
     it.woman = isWomanName(it.name) || it.productIds.some((p) => forWomen.has(p));
-    const prev = a.sameClient ? await prevAgent(ctx.db, area, it) : null;
+    const prev = await prevAgent(ctx.db, area, it, a);
     const pick = pickAgent(list, it, area, cfg, turns, now, { prev, score: score ? (x) => score(x, it) : undefined });
     if (!pick) continue;
     if (await giveTo(ctx.db, area, it.id, pick.agent.id, pick.why)) {
@@ -481,6 +500,8 @@ export const AreaIn = z.object({
   hideHistory: z.boolean(),
   speedFirst: z.boolean(),
   womenToWomen: z.boolean().default(false),
+  when: z.enum(['alert', 'shipped']).default('alert'),
+  toConfirmer: z.boolean().default(false),
 });
 export const AgentIn = z.object({
   out: z.boolean(),
@@ -514,7 +535,7 @@ export const assignProcs = {
     const shopsOf = (x: Agent) => (here ? [here, ...[...(sc.accounts.get(x.email) ?? []), ...(sf.accounts.get(x.email) ?? [])].map((o) => o.shop)] : []);
     const waitingNow = {
       conf: num((await ctx.db.query(`SELECT count(*)::int AS n FROM orders WHERE agent_id IS NULL AND conf_status = ANY($1) AND NOT is_exchange AND created_at > now() - interval '30 days'`, [CONF_TODO]))[0]?.n),
-      follow: num((await ctx.db.query(`SELECT count(*)::int AS n FROM orders WHERE follow_agent_id IS NULL AND follow_status = 'alert'`))[0]?.n),
+      follow: num((await ctx.db.query(`SELECT count(*)::int AS n FROM orders WHERE follow_agent_id IS NULL AND follow_status = ANY($1)`, [cfg.follow.when === 'shipped' ? ['shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange'] : ['alert']]))[0]?.n),
     };
     const pub = (x: Agent) => ({ id: x.id, name: x.name, online: x.online, free: x.free, presence: x.presence, load: x.load, agency: x.agencyId !== null, inHours: inHours(x.cfg, now), elsewhere: x.elsewhere, shops: [...new Set(shopsOf(x))] });
     return { cfg, conf: conf.map(pub), follow: follow.map(pub), waiting: waitingNow, shops: sisters.map((x) => ({ id: x.id, name: x.name, current: x.current })) };

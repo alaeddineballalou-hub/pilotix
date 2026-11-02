@@ -839,6 +839,17 @@
     "isWoman": "Woman",
     "helpAgency": "Orders given to your agency, in every shop you work for, go to your agents without anyone choosing.",
     "sellers": "Sellers",
-    "sellersHint": "He works for several of your sellers: tick the ones he gets orders from."
+    "sellersHint": "He works for several of your sellers: tick the ones he gets orders from.",
+    "when": "When to choose the agent?",
+    "whenOpt": {
+      "alert": "On alert",
+      "shipped": "As soon as shipped"
+    },
+    "whenHint": {
+      "alert": "An agent is chosen only when the parcel's alert arrives. Parcels with no problem have nobody.",
+      "shipped": "Each parcel gets its agent as soon as it leaves: he follows it until delivery."
+    },
+    "toConfirmer": "To the agent who confirmed the order",
+    "toConfirmerHint": "If he also does Follow-up and can take it (online, not at his maximum). Otherwise to another agent by the split."
   }
 }

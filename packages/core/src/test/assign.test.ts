@@ -116,6 +116,39 @@ test('Suivi: a new alert goes to a suivi agent on line', async () => {
   await call('assign.set', admin, base);
 });
 
+test('Suivi « Sur alerte » waits for the alert; « Dès l\'expédition » takes the parcel at once; « à celui qui a confirmé »', async () => {
+  const sv = (await as(EMAILS.suivi)).session.profile.id;
+  await online([sv]);
+  // a parcel on the road, no alert, nobody on it; the agent who confirmed it also does Suivi
+  const o = (await db.query(`SELECT id FROM orders WHERE shipped_at IS NOT NULL AND follow_status = 'out_for_delivery' ORDER BY id DESC LIMIT 1`))[0];
+  await db.query(`UPDATE orders SET follow_agent_id = NULL WHERE follow_agent_id IS NULL OR id = $1`, [o.id]);
+  // nothing else on the road is free (only this test's parcel)
+  await db.query(`UPDATE orders SET follow_agent_id = $1 WHERE follow_agent_id IS NULL AND id <> $2 AND follow_status IS NOT NULL`, [sv, o.id]);
+  const who = async () => (await db.query('SELECT follow_agent_id FROM orders WHERE id = $1', [o.id]))[0].follow_agent_id;
+  await call('assign.set', admin, { ...base, follow: { ...base.follow, mode: 'load', max: 0, when: 'alert' } });
+  await call('assign.run', admin, {});
+  assert.equal(await who(), null, '« Sur alerte »: no alert, nobody yet');
+  await call('assign.set', admin, { ...base, follow: { ...base.follow, mode: 'load', max: 0, when: 'shipped' } });
+  await call('assign.run', admin, {});
+  assert.equal(Number(await who()), sv, '« Dès l\'expédition »: taken at once');
+  // « à celui qui a confirmé »: the confirmer, made a Suivi agent too and on line, gets the alert
+  const conf = ids[1];
+  await db.query(`UPDATE profiles SET roles = array_append(roles, 'suivi') WHERE id = $1 AND NOT ('suivi' = ANY(roles))`, [conf]);
+  await online([conf, sv]);
+  await db.query(`UPDATE orders SET agent_id = $2, follow_agent_id = NULL, follow_status = 'alert' WHERE id = $1`, [o.id, conf]);
+  await call('assign.set', admin, { ...base, follow: { ...base.follow, mode: 'load', max: 0, when: 'alert', toConfirmer: true } });
+  await call('assign.run', admin, {});
+  assert.equal(Number(await who()), conf);
+  // he cannot take it (out of the split): another Suivi agent
+  await db.query(`UPDATE orders SET follow_agent_id = NULL WHERE id = $1`, [o.id]);
+  await call('assign.set', admin, { ...base, follow: { ...base.follow, mode: 'load', max: 0, when: 'alert', toConfirmer: true }, agents: { [conf]: { out: true, weight: 1, channels: [], products: [], from: null, to: null, langs: [], senior: false, shops: [], woman: false } } });
+  await call('assign.run', admin, {});
+  assert.notEqual(Number(await who()), conf);
+  assert.notEqual(await who(), null);
+  await db.query(`UPDATE profiles SET roles = array_remove(roles, 'suivi') WHERE id = $1`, [conf]);
+  await call('assign.set', admin, base);
+});
+
 test('femmes avec femmes: a woman customer (first name or product for women) goes to a woman agent', async () => {
   const { isWomanName } = await import('@pilotix/shared');
   assert.ok(isWomanName('Fatima Zohra'));

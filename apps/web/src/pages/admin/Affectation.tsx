@@ -125,6 +125,29 @@ export function Affectation({ agency = false }: { agency?: boolean } = {}) {
           )}
         </section>
 
+        {a.mode !== 'manual' && k === 'follow' && (
+          <section className="pf-group">
+            <h3>{t('admin.aa.when')}</h3>
+            <div className="aa-modes aa-modes-2" role="radiogroup" aria-label={t('admin.aa.when')}>
+              {(['alert', 'shipped'] as const).map((w) => (
+                <label key={w} className={`aa-mode ${a.when === w ? 'on' : ''}`}>
+                  <input type="radio" name="aa-when" checked={a.when === w} onChange={() => setArea(k, { when: w })} />
+                  <Icon name={w === 'alert' ? 'alert' : 'truck'} />
+                  <b>{t(`admin.aa.whenOpt.${w}`)}</b>
+                  <small>{t(`admin.aa.whenHint.${w}`)}</small>
+                </label>
+              ))}
+            </div>
+            <label className="pf-row">
+              <span className="pf-text">
+                <b>{t('admin.aa.toConfirmer')}</b>
+                <small>{t('admin.aa.toConfirmerHint')}</small>
+              </span>
+              <input type="checkbox" role="switch" className="pf-sw" checked={a.toConfirmer} onChange={(e) => setArea(k, { toConfirmer: e.target.checked })} />
+            </label>
+          </section>
+        )}
+
         {a.mode !== 'manual' && (
           <section className="pf-group">
             <h3>{t('admin.aa.rules')}</h3>
