@@ -1180,6 +1180,22 @@
         "brain": "À chaque message, Dellal choisit son cerveau : Haiku (rapide et économique) pour les messages simples, Sonnet (plus fort) pour les moments difficiles : prix, confiance, colère, grosse commande, demande d’un humain.",
         "test": "Le test compare au moins {{min}} conversations de chaque côté, âgées de {{days}} jours (le temps des livraisons), pendant {{max}} jours au plus. Un livre qui fait clairement moins bien est arrêté tout seul.",
         "budget": "La nuit a un budget : {{usd}} $ au plus (onglet Réglages & coûts)."
+      },
+      "bench": {
+        "name": "Le banc d’apprentissage",
+        "hint": "Cliquez une étape · ← →",
+        "aria": "Le banc d’apprentissage de Dellal : les flèches gauche et droite passent d’une étape à l’autre.",
+        "keyBook": "Le livre de leçons (la version que Dellal utilise)",
+        "keyWon": "Colis livré : une victoire",
+        "keyLost": "Refusé ou annulé : une perte",
+        "read": {
+          "day": "Jour · livre v{{v}} · {{n}} conversations",
+          "night": "02:30 · {{delivered}} livrés, {{refused}} refusés, {{cancelled}} annulés → note {{score}}",
+          "morning": "Matin · leçon approuvée → livre v{{v}}",
+          "test": "Test · {{share}} % des conversations · jour {{n}}/{{days}}",
+          "kept": "B {{b}} contre A {{a}} livrés sur 100 → gardé, v{{v}}",
+          "stopped": "B {{b}} contre A {{a}} livrés sur 100 → arrêté, retour à v{{v}}"
+        }
       }
     },
     "book": {
@@ -1239,6 +1255,93 @@
         "alerts": "Alertes",
         "newAdsSub": "sur les {{days}} derniers jours"
       }
+    },
+    "more": {
+      "none": "Aucune conversation sur les {{days}} derniers jours.",
+      "speed": {
+        "title": "Vitesse de réponse",
+        "help": "Le temps entre le premier message du client et la première réponse de Dellal (il attend 2 secondes que le client finisse d’écrire). Chaque ligne montre combien de conversations ont eu ce temps de réponse, et la part qui a commandé.",
+        "median": "réponse médiane de Dellal",
+        "medianSub": "La moitié des clients ont leur réponse en moins de {{s}}.",
+        "under1": "Sous 1 minute",
+        "p90": "9 clients sur 10 en moins de",
+        "team": "L’équipe, après un passage de main",
+        "teamSub_one": "médiane · {{answered}} réponse pour {{n}} passage",
+        "teamSub_other": "médiane · {{answered}} réponses pour {{n}} passages",
+        "byStep": "Conversations et conversion selon le temps de réponse",
+        "find": "Répondus en moins de 30 s : {{fast}} commandent ; après 5 minutes : {{slow}}.",
+        "cols": "Chaque ligne : le nombre de conversations, puis la part qui a commandé.",
+        "head": {
+          "chats": "conv.",
+          "conv": "conversion"
+        }
+      },
+      "step": {
+        "30": "moins de 30 s",
+        "60": "30 s à 1 min",
+        "300": "1 à 5 min",
+        "1800": "5 à 30 min",
+        "later": "plus de 30 min",
+        "none": "pas de réponse de Dellal"
+      },
+      "hours": {
+        "title": "Les meilleures heures",
+        "help": "Le jour et l’heure (Algérie) où les conversations ont commencé. Commandes : où naissent le plus de commandes. Conversion : où les clients commandent le plus souvent (une case de moins de {{min}} conversations est rayée : trop peu pour juger).",
+        "m": {
+          "ordered": "Commandes",
+          "conversion": "Conversion",
+          "chats": "Conversations"
+        },
+        "find": "Le plus de commandes arrive entre {{from}} et {{to}} ({{share}} des commandes).",
+        "noOrder": "Pas encore de commande dans la période.",
+        "best": "Meilleur moment : {{day}} vers {{hour}}, où {{rate}} des conversations commandent ({{chats}} conversations).",
+        "tip": "{{chats}} conversations · {{orders}} commandes · {{rate}}",
+        "hover": "Passez sur une case pour voir ses chiffres.",
+        "few": "peu",
+        "many": "beaucoup",
+        "thin": "Les cases rayées ont moins de {{min}} conversations : trop peu pour juger la conversion."
+      },
+      "ads": {
+        "title": "Par publicité",
+        "help": "Ce qui a fait commencer chaque conversation : une pub Meta (Messenger, Instagram, WhatsApp), un commentaire auquel CM AI a répondu en privé, ou rien (le client a écrit de lui-même). Les ventes réelles comptent les conversations de plus de {{days}} jours. La dépense vient de Publicité (Meta) de chaque boutique.",
+        "col": "Publicité",
+        "direct": "Sans publicité (message direct)",
+        "comment": "Commentaire · « {{label}} »",
+        "adId": "Pub {{id}}",
+        "kind": {
+          "ad": "Pub Meta",
+          "comment": "Commentaire (CM AI)",
+          "direct": "Le client a écrit de lui-même",
+          "other": "Autre source"
+        },
+        "spend": "Dépense",
+        "costPerSale": "Coût par vente réelle",
+        "best": "Meilleure pub :",
+        "worst": "La plus faible :",
+        "perSale": "{{usd}} par vente réelle",
+        "ofRipe": "{{sold}} colis livrés sur {{of}} conversations de plus de 7 jours",
+        "note": "Dépense : Publicité (Meta) de chaque boutique, en $, sur la période. Une pub WhatsApp sans numéro de pub montre son titre, sans dépense.",
+        "noteSupport": "La dépense pub est visible par les responsables."
+      },
+      "books": {
+        "title": "Dellal s’améliore-t-il ?",
+        "help": "Les conversations des 180 derniers jours selon le livre de leçons qu’elles ont reçu : la méthode de base (avant le premier livre), puis chaque version. Les ventes réelles comptent les conversations de plus de {{days}} jours.",
+        "base": "Méthode de base",
+        "col": "Version",
+        "when": "Utilisée",
+        "inTest": "en test",
+        "find": "Ventes réelles : {{a}} avec « {{from}} », {{b}} avec {{to}} (le livre actuel).",
+        "findOne": "Chaque nouveau livre est comparé au précédent sur les colis livrés.",
+        "none": "Pas encore de conversations avec Pilot AI.",
+        "tip": "{{chats}} conversations · {{sold}} colis livrés sur {{ripe}}",
+        "fair": "La comparaison la plus juste est le test en cours : mêmes jours, conversations tirées au hasard ({{share}} % pour le nouveau livre). D’une version à l’autre, les jours, les pubs et la saison changent aussi.",
+        "fairNone": "D’une version à l’autre, les jours, les pubs et la saison changent aussi : le test (mêmes jours, conversations tirées au hasard) est la comparaison la plus juste."
+      }
+    },
+    "demo": {
+      "note": "Exemple : chiffres inventés pour l’aperçu. Sur votre serveur, cette page montre les vrais chiffres de vos boutiques.",
+      "noSave": "Exemple : rien n’est enregistré dans l’aperçu.",
+      "open": "Voir Pilot AI (exemple)"
     }
   }
 }

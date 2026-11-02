@@ -505,25 +505,8 @@ html[data-theme="dark"] .pp-prot { --pp-c-q: #3B9BC0; }
 .pb-why-bar { grid-column: 1 / -1; display: block; height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--muted) 14%, transparent); overflow: hidden; }
 .pb-why-bar > i { display: block; height: 100%; border-radius: 999px; background: color-mix(in srgb, var(--ink) 58%, var(--surface)); }
 
-/* how Dellal learns (PilotLearn.tsx): four stations on a track that goes round; the dot runs it unless motion is reduced */
+/* how Dellal learns (PilotLearn.tsx): the learning bench is in learn/bench.css; here the words around it */
 .pl-lead { margin: 0; font-size: 15px; line-height: 1.55; color: var(--ink); max-width: 82ch; }
-.pl-stage { position: relative; margin-top: 4px; }
-.pl-track { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
-.pl-line { fill: none; stroke: color-mix(in srgb, var(--pp-c-q) 45%, var(--line)); stroke-width: 2; stroke-linejoin: round; }
-.pl-arrow { fill: none; stroke: var(--pp-c-q); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.pl-run { fill: var(--pp-c-r); stroke: var(--surface); stroke-width: 2; }
-.pl-steps { position: relative; list-style: none; margin: 0; padding: 0 22px 34px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 18px; }
-.pl-step { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; min-width: 0; }
-.pl-dot { position: relative; z-index: 1; width: 34px; height: 34px; flex: none; border-radius: 50%; display: grid; place-items: center; margin-bottom: 8px; background: var(--surface); border: 2px solid var(--pp-c-q); color: var(--ink); font-weight: 900; font-size: 14.5px; }
-.pl-when { font-size: 12px; font-weight: 800; color: var(--muted); letter-spacing: .03em; }
-.pl-what { font-size: 15.5px; color: var(--ink); }
-.pl-text { font-size: 13px; line-height: 1.5; color: var(--muted); max-width: 32ch; }
-@media (max-width: 760px) {
-  .pl-steps { grid-template-columns: minmax(0, 1fr); gap: 20px; padding: 26px 8px 30px; padding-inline-start: 40px; }
-  .pl-step { display: grid; grid-template-columns: 34px minmax(0, 1fr); column-gap: 12px; row-gap: 2px; align-items: start; text-align: start; }
-  .pl-dot { grid-row: 1 / span 3; margin: 0; }
-  .pl-text { max-width: none; }
-}
 .pl-again { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--muted); }
 .pl-rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px 30px; padding-top: 14px; border-top: 1px solid var(--line); }
 .pl-rules > div { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
@@ -537,3 +520,48 @@ html[data-theme="dark"] .pp-prot { --pp-c-q: #3B9BC0; }
 .pl-book-v { margin: 0; font-size: 15px; }
 .pl-book-v b { font-size: 18px; margin-inline-end: 4px; }
 .pl-book-text { max-height: 70vh; font-size: 12.5px; }
+
+/* Dellal, more (PilotInsights.tsx): reply speed, the hours that buy (one blue, light to dark: a count is a magnitude),
+   each ad, the lesson book versions (the test dashed: not proven yet) */
+.pb-duo { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(0, 2fr); gap: 16px; align-items: start; }
+.pb-duo > .card { margin: 0; }
+@media (max-width: 1100px) { .pb-duo { grid-template-columns: minmax(0, 1fr); } }
+.pb-lead { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.pb-lead b { font-size: 36px; font-weight: 900; line-height: 1.05; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.pb-lead span { font-size: 14px; color: var(--muted); font-weight: 600; }
+.pb-facts { margin: 0; display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.pb-facts > div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.pb-facts dt { font-size: 13.5px; color: var(--ink); min-width: 0; }
+.pb-facts dt small { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.pb-facts dd { margin: 0; font-size: 19px; font-weight: 850; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pb-find-two { display: flex; flex-wrap: wrap; gap: 4px 22px; }
+.pb-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.pb-steps li { display: grid; grid-template-columns: minmax(0, 1fr) 48px 60px; gap: 4px 10px; align-items: baseline; font-size: 13.5px; }
+.pb-steps-head span { font-size: 11.5px; font-weight: 700; color: var(--muted); text-align: end; }
+.pb-steps-l { color: var(--ink); min-width: 0; }
+.pb-steps-n { text-align: end; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.pb-steps-c { text-align: end; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+.pb-steps-bar { grid-column: 1 / -1; display: block; height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--muted) 14%, transparent); overflow: hidden; }
+.pb-steps-bar > i { display: block; height: 100%; border-radius: 999px; background: var(--pp-c-q); }
+.pb-hours-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pb-hours-top .tabs { flex-wrap: wrap; }
+.pb-heat-wrap { overflow-x: auto; padding-bottom: 2px; }
+.pb-heat { direction: ltr; display: grid; grid-template-columns: 46px repeat(24, minmax(15px, 1fr)); gap: 3px; min-width: 500px; }
+.pb-heat-h { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pb-heat-d { font-size: 12px; color: var(--muted); font-weight: 700; align-self: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pb-heat-c { aspect-ratio: 1; min-height: 15px; border: 0; padding: 0; border-radius: 4px; background: color-mix(in srgb, var(--muted) 9%, var(--surface)); cursor: pointer; }
+.pb-heat-c[data-lv] { background: color-mix(in srgb, var(--pp-c-q) var(--lv), var(--surface)); }
+.pb-heat-c.thin { background-image: repeating-linear-gradient(45deg, color-mix(in srgb, var(--muted) 34%, transparent) 0 1px, transparent 1px 4px); }
+.pb-heat-c.on, .pb-heat-c:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.pb-heat-foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 16px; font-size: 13px; min-height: 22px; }
+.pb-heat-key { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: var(--muted); }
+.pb-heat-key i { display: inline-block; width: 14px; height: 10px; border-radius: 2px; background: color-mix(in srgb, var(--pp-c-q) var(--lv), var(--surface)); }
+.pb-ad { display: inline-flex; flex-direction: column; gap: 2px; min-width: 0; max-width: 380px; }
+.pb-ad b { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pb-ad small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pb-row-quiet .pb-ad b { color: var(--muted); }
+.pb-good { color: var(--ok); }
+.pb-bad { color: var(--coral); }
+.pp-chart path.pb-l-dash { stroke-dasharray: 5 4; }
+.pp-chart .pb-x { font-weight: 700; fill: var(--ink); }
+.pp-chart .pb-d-conv.on, .pp-chart .pb-d-real.on { stroke-width: 2.5; }

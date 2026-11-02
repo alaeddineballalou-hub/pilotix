@@ -7,7 +7,9 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { dateOnly, dateTime, n, when } from '../../lib/format';
 import { downloadCsv } from '../../lib/files';
-import { POut, Staff, usePAction, usePRpc } from '../../lib/platform';
+import type { POut, Staff } from '../../lib/platform';
+import { PilotDemo, usePilotAction, usePilotRpc } from './pilotDemo';
+import { VersionsCard } from './PilotInsights';
 import { Card, ErrorBox, Field, Icon, Loading, Tabs } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { can } from './bits';
@@ -21,9 +23,17 @@ const pct = (k: number, total: number) => (total ? `${((k / total) * 100).toFixe
 const TABS = ['dellal', 'cm', 'spy', 'settings'] as const;
 type Tab = (typeof TABS)[number];
 
-export function PilotAiPage({ staff, tab }: { staff: Staff; tab?: string }) {
+export function PilotAiPage({ staff, tab, demo }: { staff: Staff; tab?: string; demo?: boolean }) {
+  return (
+    <PilotDemo.Provider value={!!demo}>
+      <PilotAiInner staff={staff} tab={tab} demo={!!demo} />
+    </PilotDemo.Provider>
+  );
+}
+
+function PilotAiInner({ staff, tab, demo }: { staff: Staff; tab?: string; demo: boolean }) {
   const { t } = useTranslation();
-  const q = usePRpc('p.pilot.state', {}, { refetchInterval: 60_000 });
+  const q = usePilotRpc('p.pilot.state', {}, { refetchInterval: 60_000 });
   // the period and the shop stay the same from one tab to the next
   const [days, setDays] = useState<BoardDays>(30);
   const [shopId, setShopId] = useState<number | null>(null);
@@ -42,6 +52,7 @@ export function PilotAiPage({ staff, tab }: { staff: Staff; tab?: string }) {
           <p className="muted">{t('platform.pilot.sub')}</p>
         </div>
       </div>
+      {demo && <p className="pp-prot-demo">{t('platform.pilot.demo.note')}</p>}
       <div className="pilot-tabs">
         <Tabs
           value={cur}
@@ -53,6 +64,7 @@ export function PilotAiPage({ staff, tab }: { staff: Staff; tab?: string }) {
         <>
           <DellalBoard {...board} aside={<BookCard d={d} />} />
           <LearnCard d={d} />
+          <VersionsCard shopId={shopId} />
           <div className="pp-grid">
             <NightCard d={d} />
             <ShopsCard d={d} manager={manager} />
@@ -82,7 +94,7 @@ function SettingsCard({ d, manager }: { d: State; manager: boolean }) {
   const [share, setShare] = useState(String(Math.round(d.config.share * 100)));
   const [day, setDay] = useState(String(d.config.dayUsd));
   const [key, setKey] = useState('');
-  const save = usePAction('p.pilot.save', { success: t('platform.saved'), onDone: () => setKey('') });
+  const save = usePilotAction('p.pilot.save', { success: t('platform.saved'), onDone: () => setKey('') });
   const send = (k?: string | null) =>
     save.mutate({ enabled: on, maxUsd: Number(max) || 0, share: (Number(share) || 20) / 100, dayUsd: Math.max(0, Number(day.replace(',', '.')) || 0), ...(k !== undefined ? { key: k } : {}) });
   const ready = d.config.enabled && d.config.hasKey;
@@ -148,8 +160,8 @@ const shiftMonth = (m: string, k: number) => {
 function CostCard() {
   const { t, i18n } = useTranslation();
   const [month, setMonth] = useState(thisMonth);
-  const q = usePRpc('p.ai.costs', { month });
-  const save = usePAction('p.ai.rate', { success: t('platform.saved') });
+  const q = usePilotRpc('p.ai.costs', { month });
+  const save = usePilotAction('p.ai.rate', { success: t('platform.saved') });
   const [rate, setRate] = useState('');
   const d = q.data;
   useEffect(() => {
@@ -286,7 +298,7 @@ function CostCard() {
 function ShopsCard({ d, manager }: { d: State; manager: boolean }) {
   const { t } = useTranslation();
   const [q, setQ] = useState('');
-  const share = usePAction('p.pilot.share', { success: t('platform.saved') });
+  const share = usePilotAction('p.pilot.share', { success: t('platform.saved') });
   const on = d.shops.filter((s) => s.share).length;
   const list = d.shops.filter((s) => !q.trim() || `${s.name} ${s.slug}`.toLowerCase().includes(q.trim().toLowerCase()));
   return (
@@ -373,7 +385,7 @@ function LessonRow({ l, onCase }: { l: Lesson; onCase: (c: [number, number]) => 
   const { t } = useTranslation();
   const [text, setText] = useState(l.text);
   const [note, setNote] = useState('');
-  const act = usePAction('p.pilot.lesson', { success: t('platform.saved') });
+  const act = usePilotAction('p.pilot.lesson', { success: t('platform.saved') });
   const ev = (l.evidence ?? {}) as { wins?: number; losses?: number; gold?: number; shops?: number; reasons?: Record<string, number>; cases?: [number, number][] };
   const reasons = Object.entries(ev.reasons ?? {})
     .filter(([k]) => k !== 'none')
@@ -419,7 +431,7 @@ function LessonRow({ l, onCase }: { l: Lesson; onCase: (c: [number, number]) => 
 
 function CaseModal({ shopId, convId, onClose }: { shopId: number; convId: number; onClose: () => void }) {
   const { t } = useTranslation();
-  const q = usePRpc('p.pilot.case', { shopId, convId });
+  const q = usePilotRpc('p.pilot.case', { shopId, convId });
   return (
     <Modal title={t('platform.pilot.chatTitle')} onClose={onClose} sheet>
       {q.isLoading ? (
@@ -444,10 +456,10 @@ function CaseModal({ shopId, convId, onClose }: { shopId: number; convId: number
 
 function BooksCard({ d, manager }: { d: State; manager: boolean }) {
   const { t } = useTranslation();
-  const publish = usePAction('p.pilot.publish', { success: t('platform.pilot.published') });
-  const promote = usePAction('p.pilot.promote', { success: t('platform.saved') });
-  const stop = usePAction('p.pilot.stop', { success: t('platform.saved') });
-  const back = usePAction('p.pilot.rollback', { success: t('platform.saved') });
+  const publish = usePilotAction('p.pilot.publish', { success: t('platform.pilot.published') });
+  const promote = usePilotAction('p.pilot.promote', { success: t('platform.saved') });
+  const stop = usePilotAction('p.pilot.stop', { success: t('platform.saved') });
+  const back = usePilotAction('p.pilot.rollback', { success: t('platform.saved') });
   const { books, test } = d.books;
   const champion = books.find((b) => b.status === 'champion') ?? null;
   const rep = d.night?.test && test && d.night.test.id === test.id ? d.night.test : null;

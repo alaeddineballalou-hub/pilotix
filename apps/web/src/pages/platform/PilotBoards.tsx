@@ -6,7 +6,9 @@
 import { Fragment, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, n, pct } from '../../lib/format';
-import { POut, usePRpc } from '../../lib/platform';
+import type { POut } from '../../lib/platform';
+import { usePilotRpc } from './pilotDemo';
+import { AdsCard, HoursCard, SpeedCard } from './PilotInsights';
 import { DateLabels, shortDayIn, ticksFor, Axis, useBox, useLoc } from '../../ui/chart';
 import { Card, ErrorBox, Loading, Tabs } from '../../ui/kit';
 
@@ -124,7 +126,9 @@ export function BoardBar({
 export function DellalBoard({ days, onDays, shopId, onShop, manager, aside }: { days: BoardDays; onDays: (d: BoardDays) => void; shopId: number | null; onShop: (id: number | null) => void; manager: boolean; aside?: React.ReactNode }) {
   const { t } = useTranslation();
   const [productId, setProductId] = useState<number | null>(null);
-  const q = usePRpc('p.dellal.board', { days, ...(shopId ? { shopId } : {}), ...(shopId && productId ? { productId } : {}) }, { refetchInterval: 5 * 60_000 });
+  const input = { days, ...(shopId ? { shopId } : {}), ...(shopId && productId ? { productId } : {}) };
+  const q = usePilotRpc('p.dellal.board', input, { refetchInterval: 5 * 60_000 });
+  const more = usePilotRpc('p.dellal.more', input, { refetchInterval: 5 * 60_000 });
   const d = q.data;
   const pickShop = (id: number | null) => {
     setProductId(null);
@@ -189,6 +193,13 @@ export function DellalBoard({ days, onDays, shopId, onShop, manager, aside }: { 
         {d ? <WhyCard d={d} /> : null}
         {aside}
       </div>
+      {more.data && (
+        <div className="pb-duo">
+          <SpeedCard d={more.data} />
+          <HoursCard d={more.data} />
+        </div>
+      )}
+      {more.data && <AdsCard d={more.data} manager={manager} />}
     </>
   );
 }
@@ -451,7 +462,7 @@ function WhyCard({ d }: { d: Dellal }) {
 // ---------------------------------------------------------------- CM AI agent
 export function CmBoard({ days, onDays, shopId, onShop, manager }: { days: BoardDays; onDays: (d: BoardDays) => void; shopId: number | null; onShop: (id: number | null) => void; manager: boolean }) {
   const { t } = useTranslation();
-  const q = usePRpc('p.cm.board', { days, ...(shopId ? { shopId } : {}) }, { refetchInterval: 5 * 60_000 });
+  const q = usePilotRpc('p.cm.board', { days, ...(shopId ? { shopId } : {}) }, { refetchInterval: 5 * 60_000 });
   const d = q.data;
   return (
     <Card title={t('platform.pilot.cm.title')} help={t('platform.pilot.cm.help')} className="pb-card">
@@ -576,7 +587,7 @@ function bar(x: number, y: number, w: number, h: number) {
 // ---------------------------------------------------------------- AI Spy
 export function SpyBoard({ days, onDays, shopId, onShop, manager }: { days: BoardDays; onDays: (d: BoardDays) => void; shopId: number | null; onShop: (id: number | null) => void; manager: boolean }) {
   const { t } = useTranslation();
-  const q = usePRpc('p.spy.board', { days, ...(shopId ? { shopId } : {}) }, { refetchInterval: 5 * 60_000 });
+  const q = usePilotRpc('p.spy.board', { days, ...(shopId ? { shopId } : {}) }, { refetchInterval: 5 * 60_000 });
   const d = q.data;
   const cols = ['watched', 'ads', 'active', 'newAds', 'analysed', 'briefs', 'followed', 'alerts'] as const;
   return (

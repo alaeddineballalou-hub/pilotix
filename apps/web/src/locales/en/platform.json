@@ -1180,6 +1180,22 @@
         "brain": "For each message Dellal picks its brain: Haiku (fast and cheap) for simple messages, Sonnet (stronger) for hard moments: price, trust, anger, a big order, asking for a person.",
         "test": "The test compares at least {{min}} chats on each side, {{days}} days old (the time deliveries take), for {{max}} days at most. A book that clearly does worse is stopped on its own.",
         "budget": "The night has a budget: {{usd}} $ at most (Settings & costs tab)."
+      },
+      "bench": {
+        "name": "The learning bench",
+        "hint": "Click a step · ← →",
+        "aria": "Dellal’s learning bench: the left and right arrows go from step to step.",
+        "keyBook": "The lesson book (the version Dellal uses)",
+        "keyWon": "Parcel delivered: a win",
+        "keyLost": "Refused or cancelled: a loss",
+        "read": {
+          "day": "Day · book v{{v}} · {{n}} chats",
+          "night": "02:30 · {{delivered}} delivered, {{refused}} refused, {{cancelled}} cancelled → score {{score}}",
+          "morning": "Morning · lesson approved → book v{{v}}",
+          "test": "Test · {{share}} % of chats · day {{n}}/{{days}}",
+          "kept": "B {{b}} vs A {{a}} delivered per 100 → kept, v{{v}}",
+          "stopped": "B {{b}} vs A {{a}} delivered per 100 → stopped, back to v{{v}}"
+        }
       }
     },
     "book": {
@@ -1239,6 +1255,93 @@
         "alerts": "Alerts",
         "newAdsSub": "in the last {{days}} days"
       }
+    },
+    "more": {
+      "none": "No chats in the last {{days}} days.",
+      "speed": {
+        "title": "Reply speed",
+        "help": "The time between the customer’s first message and Dellal’s first answer (it waits 2 seconds for the customer to finish typing). Each line shows how many chats got that reply time, and the share that ordered.",
+        "median": "Dellal’s median reply",
+        "medianSub": "Half the customers get their answer in less than {{s}}.",
+        "under1": "Under 1 minute",
+        "p90": "9 customers in 10 within",
+        "team": "The team, after a hand-over",
+        "teamSub_one": "median · {{answered}} answer for {{n}} hand-over",
+        "teamSub_other": "median · {{answered}} answers for {{n}} hand-overs",
+        "byStep": "Chats and conversion by reply time",
+        "find": "Answered within 30 s: {{fast}} order; after 5 minutes: {{slow}}.",
+        "cols": "Each line: the number of chats, then the share that ordered.",
+        "head": {
+          "chats": "chats",
+          "conv": "conversion"
+        }
+      },
+      "step": {
+        "30": "under 30 s",
+        "60": "30 s to 1 min",
+        "300": "1 to 5 min",
+        "1800": "5 to 30 min",
+        "later": "over 30 min",
+        "none": "no answer from Dellal"
+      },
+      "hours": {
+        "title": "The best hours",
+        "help": "The day and hour (Algeria) the chats started. Orders: where most orders come from. Conversion: where customers order most often (a cell with fewer than {{min}} chats is striped: too few to tell).",
+        "m": {
+          "ordered": "Orders",
+          "conversion": "Conversion",
+          "chats": "Chats"
+        },
+        "find": "Most orders come between {{from}} and {{to}} ({{share}} of orders).",
+        "noOrder": "No orders in the period yet.",
+        "best": "Best moment: {{day}} around {{hour}}, where {{rate}} of chats order ({{chats}} chats).",
+        "tip": "{{chats}} chats · {{orders}} orders · {{rate}}",
+        "hover": "Point at a cell to see its figures.",
+        "few": "few",
+        "many": "many",
+        "thin": "Striped cells have fewer than {{min}} chats: too few to judge the conversion."
+      },
+      "ads": {
+        "title": "By ad",
+        "help": "What started each chat: a Meta ad (Messenger, Instagram, WhatsApp), a comment CM AI answered in private, or nothing (the customer wrote on their own). Real sales count chats older than {{days}} days. The spend comes from each shop’s Ads (Meta).",
+        "col": "Ad",
+        "direct": "No ad (direct message)",
+        "comment": "Comment · “{{label}}”",
+        "adId": "Ad {{id}}",
+        "kind": {
+          "ad": "Meta ad",
+          "comment": "Comment (CM AI)",
+          "direct": "The customer wrote on their own",
+          "other": "Other source"
+        },
+        "spend": "Spend",
+        "costPerSale": "Cost per real sale",
+        "best": "Best ad:",
+        "worst": "Weakest:",
+        "perSale": "{{usd}} per real sale",
+        "ofRipe": "{{sold}} parcels delivered out of {{of}} chats older than 7 days",
+        "note": "Spend: each shop’s Ads (Meta), in $, over the period. A WhatsApp ad without its ad number shows its title, without spend.",
+        "noteSupport": "Ad spend is visible to managers."
+      },
+      "books": {
+        "title": "Is Dellal getting better?",
+        "help": "The chats of the last 180 days by the lesson book they got: the base method (before the first book), then each version. Real sales count chats older than {{days}} days.",
+        "base": "Base method",
+        "col": "Version",
+        "when": "Used",
+        "inTest": "in test",
+        "find": "Real sales: {{a}} with “{{from}}”, {{b}} with {{to}} (the current book).",
+        "findOne": "Each new book is compared with the one before on delivered parcels.",
+        "none": "No chats with Pilot AI yet.",
+        "tip": "{{chats}} chats · {{sold}} parcels delivered out of {{ripe}}",
+        "fair": "The fairest comparison is the running test: the same days, chats split at random ({{share}} % for the new book). From one version to the next, the days, the ads and the season change too.",
+        "fairNone": "From one version to the next, the days, the ads and the season change too: the test (the same days, chats split at random) is the fairest comparison."
+      }
+    },
+    "demo": {
+      "note": "Example: made-up figures for the preview. On your server this page shows your shops’ real figures.",
+      "noSave": "Example: nothing is saved in the preview.",
+      "open": "See Pilot AI (example)"
     }
   }
 }

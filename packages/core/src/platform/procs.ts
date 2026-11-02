@@ -46,7 +46,7 @@ import type { Tenancy } from './tenancy';
 import * as pilot from '../modules/pilotlearn';
 import { pilotConfig, pilotToday, savePilotConfig } from './pilotai';
 import { AI_FEATURES, aiBill, aiUsageOfMonth, aiUsageSince, monthOf, saveAiBill } from './aiusage';
-import { cmBoard, dellalBoard, dellalBookText, spyBoard } from './aiboard';
+import { cmBoard, dellalBoard, dellalBooks, dellalBookText, dellalMore, spyBoard } from './aiboard';
 
 export const STAFF_ROLES = ['owner', 'manager', 'support'] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
@@ -1194,6 +1194,14 @@ export const PLATFORM_REGISTRY = {
   'p.dellal.board': pproc(ALL, BoardInput.extend({ productId: z.number().int().positive().optional() }), async (ctx, i) =>
     dellalBoard(ctx.t, { ...i, now: ctx.now(), costs: ctx.staff.role !== 'support' }),
   ),
+  /** Dellal, more: how fast it answers, the hours the chats buy, each ad that started chats (its spend: managers only). */
+  'p.dellal.more': pproc(ALL, BoardInput.extend({ productId: z.number().int().positive().optional() }), async (ctx, i) => {
+    const r = await dellalMore(ctx.t, { ...i, now: ctx.now() });
+    if (ctx.staff.role !== 'support') return r;
+    return { ...r, ads: r.ads.map((a) => ({ ...a, spendUsd: null, costPerSale: null })) };
+  }),
+  /** Is Dellal getting better: each lesson book's chats (last 180 days), their conversion and real sales. */
+  'p.dellal.books': pproc(ALL, z.object({ shopId: Id.optional() }), async (ctx, i) => dellalBooks(ctx.t, { ...i, now: ctx.now() })),
   'p.cm.board': pproc(ALL, BoardInput, async (ctx, i) => cmBoard(ctx.t, { ...i, now: ctx.now(), costs: ctx.staff.role !== 'support' })),
   'p.spy.board': pproc(ALL, BoardInput, async (ctx, i) => spyBoard(ctx.t, { ...i, now: ctx.now(), costs: ctx.staff.role !== 'support' })),
   /** Dellal's instruction book as one text file, put together now: a download is always the latest version. */
