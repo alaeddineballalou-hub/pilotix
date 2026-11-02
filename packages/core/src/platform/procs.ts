@@ -47,7 +47,7 @@ import * as pilot from '../modules/pilotlearn';
 import { pilotConfig, pilotToday, savePilotConfig } from './pilotai';
 import { AI_FEATURES, aiBill, aiLabOfMonth, aiUsageOfMonth, aiUsageSince, monthOf, saveAiBill } from './aiusage';
 import { pilotTry } from '../modules/dellal';
-import { addCoachLahja, decideLahja, LAHJA_NO_CHANGE, lahjaErr, lahjaState, lahjaWaiting } from '../modules/lahja';
+import { addCoachLahja, decideLahja, decideManyLahja, LAHJA_NO_CHANGE, lahjaErr, lahjaState, lahjaWaiting } from '../modules/lahja';
 import { cmBoard, dellalBoard, dellalBooks, dellalBookText, dellalMore, spyBoard } from './aiboard';
 
 export const STAFF_ROLES = ['owner', 'manager', 'support'] as const;
@@ -1164,6 +1164,18 @@ export const PLATFORM_REGISTRY = {
       return r;
     },
   ),
+  /**
+   * Several waiting lessons at once (the review's tick boxes), as they are: accepted for every shop, or refused. Each one is
+   * decided on its own; one that does not pass the checks stays waiting and comes back with the reason.
+   */
+  'p.lahja.decideMany': pproc(ALL, z.object({ ids: z.array(Id).min(1).max(200), action: z.enum(['approve', 'refuse']) }), async (ctx, i) => {
+    const r = await decideManyLahja(ctx.t.platform, { ids: i.ids, action: i.action, by: ctx.staff.name || ctx.staff.email, now: new Date(ctx.now()) });
+    for (const id of r.done) await audit(ctx, `pilot.lahja.${i.action}`, null, { id, many: true });
+    return {
+      done: r.done,
+      failed: r.failed.map((f) => ({ id: f.id, error: f.problems?.length ? lahjaErr(f.problems) : LAHJA_ERR[f.error] ?? 'Impossible' })),
+    };
+  }),
   /** Pilotix's own Darija lesson: a correction of Dellal's message in the control room's test chat (or words): every shop at once. */
   'p.lahja.add': pproc(
     ALL,

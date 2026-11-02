@@ -9,6 +9,7 @@ import { makeSession } from '../rpc';
 import { profileById } from '../modules/users';
 import { getRaw, setRaw } from '../modules/admin';
 import { checkLahjaWords, lahjaDiff, lahjaFor, learnLahja } from '../modules/lahja';
+import { cmSystem, DEFAULT_CM } from '../modules/cm';
 import { savePilotConfig } from '../platform/pilotai';
 import { loadShops } from '../platform/shops';
 import type { Tenancy } from '../platform/tenancy';
@@ -198,10 +199,89 @@ test('the night: Dellal learns only words the chats prove; used in its shop at o
   const wesh = st.waiting.find((x: any) => x.words[0].use === 'wesh');
   const jal = st.waiting.find((x: any) => x.words[0].use === '3la jal');
   assert.equal(wesh.source, 'dellal');
+  // the review shows the lines that prove it: customers who write « wesh » (one per chat), Dellal writing « wach »
+  assert.equal(wesh.samples.c.length, 3);
+  assert.equal(wesh.samples.d.length, 2);
+  assert.ok(wesh.samples.c.every((x: any) => /\bwesh\b/.test(x.line) && x.conv >= 5000 && x.conv < 5012));
+  assert.equal(new Set(wesh.samples.c.map((x: any) => x.conv)).size, 3, 'three different chats');
+  assert.ok(wesh.samples.d.every((x: any) => /\bwach\b/.test(x.line)));
+  assert.match((await p('p.pilot.case', { shopId, convId: wesh.samples.c[0].conv })).transcript, /wesh khouya/);
+  assert.deepEqual(jal.samples.d, [], 'nothing to drop: no line of Dellal');
+  assert.match(jal.samples.c[0].line, /3la jal/);
+  // and the shop never gets those lines
+  assert.ok(!JSON.stringify(await call('dellal.lahja.list', shop, {})).includes('mazal kayen'));
   await p('p.lahja.decide', { id: wesh.id, action: 'refuse', note: 'pas partout' });
   await p('p.lahja.decide', { id: jal.id, action: 'approve' });
   assert.ok(!(await lahjaFor(db, pdb, shopId)).own.some((w) => w.use === 'wesh'));
   assert.deepEqual((await lahjaFor(other, pdb, 999)).all, [{ use: '3la jal' }]);
   // the next night does not propose them again
   assert.equal((await learnLahja(pdb, run, new Date(NOW))).proposed, 0);
+});
+
+test('CM AI agent: « Leçon de darija » under one of its replies; the reply never changes; its instructions carry the lessons', async () => {
+  const post = (await db.query(`INSERT INTO cm_posts (channel, external_id, caption) VALUES ('facebook', 'p-lahja', 'La poussette') RETURNING id`))[0].id;
+  const add = async (ext: string, reply: string, by: object | null, team = false) =>
+    (
+      await db.query(
+        `INSERT INTO cm_comments (post_id, channel, external_id, author_id, author_name, body, status, public_reply, private_reply, handled_by, meta)
+         VALUES ($1, 'facebook', $2, 'u-1', 'Karim', 'ch7al ?', 'answered', $3, $4, $5, $6::jsonb) RETURNING id`,
+        [post, ext, reply, 'Wakha khouya, rani b3atlek f privé 👍', team ? (await db.query(`SELECT id FROM profiles ORDER BY id LIMIT 1`))[0].id : null, by ? JSON.stringify(by) : null],
+      )
+    )[0].id as number;
+  const ai = await add('c-ai', 'Wakha, jawbnakom f privé 👍', { by: 'ai' });
+  const r: any = await call('cm.lahja.add', shop, { id: ai, which: 'public', after: 'Saha, jawbnakom f privé 👍' });
+  assert.deepEqual(r.words, [{ use: 'Saha', not: 'Wakha' }]);
+  assert.equal(r.review, 'waiting');
+  // the reply that was sent does not change
+  assert.equal((await db.query(`SELECT public_reply FROM cm_comments WHERE id = $1`, [ai]))[0].public_reply, 'Wakha, jawbnakom f privé 👍');
+  // the private reply too, and the review knows where it comes from
+  await call('cm.lahja.add', shop, { id: ai, which: 'private', after: 'Wakha khouya, rani nb3atlek f privé 👍' });
+  const st: any = await p('p.lahja.state');
+  const fromCm = st.waiting.filter((x: any) => x.via === 'cm');
+  assert.equal(fromCm.length, 2);
+  assert.ok(fromCm.some((x: any) => x.words.some((w: any) => w.use === 'Saha' && w.not === 'Wakha')));
+  const mine: any = await call('dellal.lahja.list', shop, {});
+  assert.equal(mine.own.filter((x: any) => x.via === 'cm').length, 2);
+  // used at once in this shop (Dellal and the CM AI agent)
+  assert.ok((await lahjaFor(db, t.platform, shopId)).own.some((w) => w.use === 'Saha'));
+  // a reply the team wrote is not the agent's Darija
+  const team = await add('c-team', 'Wakha, jawbnakom', null, true);
+  await assert.rejects(call('cm.lahja.add', shop, { id: team, which: 'public', after: 'Saha, jawbnakom' }), /introuvable/);
+  // the CM AI agent's instructions carry the lessons (every shop's, then the shop's own)
+  const facts: any = { shop: 'B', channel: 'facebook', isAd: false, caption: null, product: null, catalog: [], place: null, phone: null, alreadyPrivate: false, alreadyPublic: false, tooOld: false, parent: null, lang: 'dz', author: null, body: 'ch7al ?' };
+  const sys = cmSystem(facts, DEFAULT_CM, { all: [{ use: 'khouya' }], own: [{ use: 'Saha', not: 'Wakha' }] });
+  assert.match(sys, /LEÇONS DE DARIJA \(validées par Pilotix pour toutes les boutiques\) :\n- utilise « khouya »/);
+  assert.match(sys, /LEÇONS DE DARIJA DE LA BOUTIQUE[^\n]*\n- écris « Saha » au lieu de « Wakha »/);
+  assert.doesNotMatch(cmSystem(facts, DEFAULT_CM), /LEÇONS DE DARIJA/);
+});
+
+test('the review: several lessons accepted or refused at once; one that fails stays waiting and says why', async () => {
+  const pdb = t.platform;
+  const ids: number[] = [];
+  for (const [use, not] of [['bezzaf', 'ktir'], ['dorka', 'drk'], ['3la jal', null]] as const)
+    ids.push(
+      Number(
+        (
+          await pdb.query(`INSERT INTO platform.lahja (shop_id, source, status, own, words) VALUES ($1, 'seller', 'waiting', true, $2::jsonb) RETURNING id`, [
+            shopId,
+            JSON.stringify([not ? { use, not } : { use }]),
+          ])
+        )[0].id,
+      ),
+    );
+  // one that no longer passes the checks (a number crept in): it stays waiting
+  const bad = Number((await pdb.query(`INSERT INTO platform.lahja (shop_id, source, status, own, words) VALUES ($1, 'seller', 'waiting', true, '[{"use":"500 wakha"}]'::jsonb) RETURNING id`, [shopId]))[0].id);
+  const r: any = await p('p.lahja.decideMany', { ids: [ids[0], ids[1], bad], action: 'approve' });
+  assert.deepEqual(r.done.sort(), [ids[0], ids[1]].sort());
+  assert.equal(r.failed.length, 1);
+  assert.equal(r.failed[0].id, bad);
+  assert.match(r.failed[0].error, /nombre/);
+  assert.equal((await pdb.query(`SELECT status FROM platform.lahja WHERE id = $1`, [bad]))[0].status, 'waiting');
+  const all = (await lahjaFor(other, pdb, 999)).all.map((w) => w.use);
+  assert.ok(all.includes('bezzaf') && all.includes('dorka'));
+  // refused together; one already decided is said, not changed
+  const r2: any = await p('p.lahja.decideMany', { ids: [ids[2], ids[0]], action: 'refuse' });
+  assert.deepEqual(r2.done, [ids[2]]);
+  assert.match(r2.failed[0].error, /n’attend plus/);
+  assert.equal((await pdb.query(`SELECT status FROM platform.lahja WHERE id = $1`, [ids[0]]))[0].status, 'approved');
 });

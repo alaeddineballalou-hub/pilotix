@@ -106,3 +106,8 @@
 .cm-soon { opacity: .6; cursor: default; }
 .cm-conn { max-width: 520px; margin: 8px 0 14px; }
 .cm-okc { color: var(--ok); font-weight: 700; }
+
+/* « Leçon de darija » under the agent's replies: the lesson editor of Messages (messages.css), at the reply's start */
+.cm-act .lj-open, .cm-act .lj-done { align-self: flex-start; margin: 2px 0 0; padding-inline: 0; }
+.cm-act .lj-edit { width: 100%; margin-top: 4px; }
+.cm-acts.by-ai .cm-act .lj-open { color: var(--ai-tint-ink); }

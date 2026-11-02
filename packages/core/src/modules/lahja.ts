@@ -1,6 +1,7 @@
 // Darija (lahja) lessons: how Dellal should say things in Algerian Darija, taught by the people who read its messages.
-//  - A shop's team corrects one of Dellal's messages (Messages, or its test chat): the words they changed become a lesson
-//    that Dellal uses at once in that shop, and that goes to Pilotix for review.
+//  - A shop's team corrects one of Dellal's messages (Messages, or its test chat) or one of the CM AI agent's replies to a
+//    comment: the words they changed become a lesson that Dellal and the CM AI agent use at once in that shop, and that goes
+//    to Pilotix for review.
 //  - Every night Pilot AI reads how each sharing shop's customers write and proposes up to 3 lessons for that shop
 //    (« Dellal learned »): used at once in that shop, reviewed the same way; a refused one stops in its shop too.
 //  - Pilotix accepts (as is or modified) or refuses: an accepted lesson is used by every shop, and no shop can turn it off.
@@ -160,6 +161,11 @@ export function lahjaLines(words: LahjaWord[]): string {
     .map((w) => (w.not ? (w.use ? `- écris « ${w.use} » au lieu de « ${w.not} »` : `- n’écris jamais « ${w.not} »`) : `- utilise « ${w.use} » quand ça va`))
     .join('\n');
 }
+/** The two blocks of the instructions (Dellal's and the CM AI agent's): Pilotix's lessons for every shop, the shop's own. */
+export const lahjaBlocks = (l: { all: LahjaWord[]; own: LahjaWord[] }): { shared: string; own: string } => ({
+  shared: l.all.length ? `LEÇONS DE DARIJA (validées par Pilotix pour toutes les boutiques) :\n${lahjaLines(l.all)}` : '',
+  own: l.own.length ? `LEÇONS DE DARIJA DE LA BOUTIQUE (corrections de l’équipe et ce que tu as appris de ses clients) :\n${lahjaLines(l.own)}` : '',
+});
 /** The words the Darija check removes from every reply (with the right one to put back when there is one). */
 export const lahjaAvoid = (words: LahjaWord[]): { term: string; use?: string }[] => words.filter((w) => w.not && w.not.length >= 2).map((w) => ({ term: w.not!, use: w.use || undefined }));
 
@@ -210,6 +216,20 @@ export type LahjaItem = {
   decidedBy: string | null;
   at: string;
   decidedAt: string | null;
+  /** a word Dellal learned: a few lines of the chats that prove it (names, numbers and prices hidden), for Pilotix only */
+  samples: LahjaSamples;
+  /** a shop's correction: of a message (Message AI agent) or of a reply to a comment (CM AI agent) */
+  via: 'messages' | 'cm' | null;
+};
+export type LahjaSample = { conv: number; line: string };
+export type LahjaSamples = { c: LahjaSample[]; d: LahjaSample[] };
+const samplesOf = (e: Row | null | undefined): LahjaSamples => {
+  const one = (x: unknown): LahjaSample[] =>
+    (Array.isArray(x) ? x : [])
+      .filter((y) => y && typeof y === 'object' && typeof (y as Row).line === 'string')
+      .map((y) => ({ conv: num((y as Row).conv), line: String((y as Row).line).slice(0, 220) }))
+      .slice(0, 3);
+  return { c: one(e?.samples?.c), d: one(e?.samples?.d) };
 };
 const item = (r: Row, names: Map<number, string>): LahjaItem => ({
   id: num(r.id),
@@ -227,6 +247,8 @@ const item = (r: Row, names: Map<number, string>): LahjaItem => ({
   decidedBy: (r.decided_by as string | null) ?? null,
   at: iso(r.created_at),
   decidedAt: isoOrNull(r.decided_at),
+  samples: samplesOf(r.evidence),
+  via: r.source !== 'seller' ? null : r.evidence?.via === 'cm' ? 'cm' : 'messages',
 });
 
 /** What waits for Pilotix (oldest first) and what every shop uses (newest first). */
@@ -266,6 +288,21 @@ export async function decideLahja(pdb: Db, o: { id: number; action: 'approve' | 
   return { ok: true, id: o.id };
 }
 
+/**
+ * Several lessons waiting at once (the review's tick boxes): accepted as they are, or refused. Each one is decided on its own:
+ * one that does not pass the checks stays waiting and says why; the others are decided.
+ */
+export async function decideManyLahja(pdb: Db, o: { ids: number[]; action: 'approve' | 'refuse'; by: string; now?: Date }): Promise<{ done: number[]; failed: { id: number; error: string; problems?: LahjaProblem[] }[] }> {
+  const done: number[] = [];
+  const failed: { id: number; error: string; problems?: LahjaProblem[] }[] = [];
+  for (const id of [...new Set(o.ids)].slice(0, 200)) {
+    const r = await decideLahja(pdb, { id, action: o.action, by: o.by, now: o.now });
+    if (r.ok) done.push(id);
+    else failed.push({ id, error: r.error ?? 'error', ...(r.problems ? { problems: r.problems } : {}) });
+  }
+  return { done, failed };
+}
+
 /** Pilotix's own lesson (a correction in the control room's test chat, or words typed): every shop uses it at once. */
 export async function addCoachLahja(pdb: Db, o: { by: string; before?: string; after?: string; words?: LahjaWord[]; now?: Date }): Promise<LahjaAck> {
   if (!String(o.by || '').trim()) return { ok: false, error: 'who' };
@@ -297,7 +334,24 @@ const sideLines = (transcript: string, side: 'C' | 'D'): string[] =>
     .filter((l) => l.startsWith(side + ':'))
     .map((l) => l.slice(2).trim())
     .filter(Boolean);
-const wordIn = (w: string, text: string) => new RegExp(`(?<![\\p{L}\\p{N}])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+')}(?![\\p{L}\\p{N}])`, 'iu').test(text);
+const wordRe = (w: string) => new RegExp(`(?<![\\p{L}\\p{N}])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+')}(?![\\p{L}\\p{N}])`, 'iu');
+const wordIn = (w: string, text: string) => wordRe(w).test(text);
+/** A line as a person reads it in the review: at most 160 characters, cut around the word. */
+function around(line: string, w: string, max = 160): string {
+  const s = line.replace(/\s+/g, ' ').trim();
+  if (s.length <= max) return s;
+  const at = wordRe(w).exec(s)?.index ?? 0;
+  const start = Math.max(0, Math.min(at - 50, s.length - max));
+  return `${start > 0 ? '…' : ''}${s.slice(start, start + max).trim()}${start + max < s.length ? '…' : ''}`;
+}
+/** The first line of each chat that has the word (one per chat), at most `k`. */
+const linesWith = (cases: { conv: number; c: string[]; d: string[] }[], side: 'c' | 'd', w: string, k: number): LahjaSample[] =>
+  cases
+    .flatMap((x) => {
+      const l = x[side].find((y) => wordIn(w, y));
+      return l ? [{ conv: x.conv, line: around(l, w) }] : [];
+    })
+    .slice(0, k);
 
 /**
  * One request per active sharing shop (its customers' lines from the last two weeks, anonymized): at most 3 words each. A
@@ -317,16 +371,16 @@ export async function learnLahja(pdb: Db, run: (reqs: LahjaReq[]) => Promise<(st
   const waiting = new Map<number, number>(
     (await pdb.query(`SELECT shop_id, count(*)::int AS n FROM platform.lahja WHERE source = 'dellal' AND status = 'waiting' GROUP BY shop_id`)).map((r: Row) => [num(r.shop_id), num(r.n)]),
   );
-  const jobs: { shopId: number; cases: { c: string[]; d: string[] }[]; req: LahjaReq }[] = [];
+  const jobs: { shopId: number; cases: { conv: number; c: string[]; d: string[] }[]; req: LahjaReq }[] = [];
   for (const s of shops) {
     const shopId = num(s.shop_id);
     if ((waiting.get(shopId) ?? 0) >= N.waitingCap) continue;
     const rows: Row[] = await pdb.query(
-      `SELECT transcript FROM platform.pilot_cases WHERE shop_id = $1 AND transcript <> '' AND NOT redacted AND COALESCE(last_at, changed_at) >= $2::timestamptz
+      `SELECT conv_id, transcript FROM platform.pilot_cases WHERE shop_id = $1 AND transcript <> '' AND NOT redacted AND COALESCE(last_at, changed_at) >= $2::timestamptz
         ORDER BY COALESCE(last_at, changed_at) DESC LIMIT 120`,
       [shopId, since],
     );
-    const cases = rows.map((r) => ({ c: sideLines(r.transcript, 'C'), d: sideLines(r.transcript, 'D') }));
+    const cases = rows.map((r) => ({ conv: num(r.conv_id), c: sideLines(r.transcript, 'C'), d: sideLines(r.transcript, 'D') }));
     const cl = cases.flatMap((x) => x.c.map((l) => l.slice(0, 160))).slice(0, 60);
     const dl = cases.flatMap((x) => x.d.map((l) => l.slice(0, 200))).slice(0, 25);
     if (cl.length < 10) continue;
@@ -367,7 +421,7 @@ export async function learnLahja(pdb: Db, run: (reqs: LahjaReq[]) => Promise<(st
       known.add(`${shopId}:${lahjaKey(w)}`);
       await pdb.query(
         `INSERT INTO platform.lahja (shop_id, source, status, own, words, note, evidence, created_at) VALUES ($1, 'dellal', 'waiting', true, $2::jsonb, $3, $4::jsonb, $5::timestamptz)`,
-        [shopId, JSON.stringify([w]), clean(raw?.why) || null, JSON.stringify({ customers, chats: cases.length }), now.toISOString()],
+        [shopId, JSON.stringify([w]), clean(raw?.why) || null, JSON.stringify({ customers, chats: cases.length, samples: { c: linesWith(cases, 'c', w.use, 3), d: w.not ? linesWith(cases, 'd', w.not, 2) : [] } }), now.toISOString()],
       );
       kept++;
       proposed++;

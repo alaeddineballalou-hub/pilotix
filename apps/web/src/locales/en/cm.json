@@ -222,5 +222,8 @@
     "save": "Save",
     "appSecret": "Meta app secret",
     "appSecretNone": "Required: without it, comments are not handled (Message AI agent › Settings)"
+  },
+  "lahja": {
+    "fixHelp": "The reply that was sent does not change: write how CM AI should have said it. The words you change become a lesson, for CM AI and Dellal."
   }
 }

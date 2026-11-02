@@ -193,6 +193,7 @@
     "all": "Pilotix's lessons for every shop",
     "allEmpty": "No lesson for every shop yet.",
     "more": "See all {{n}}",
-    "less": "See less"
+    "less": "See less",
+    "fromComment": "reply to a comment"
   }
 }

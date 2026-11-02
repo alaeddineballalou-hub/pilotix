@@ -10,7 +10,7 @@ import { bad, Ctx, hasRole, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
 import { getRaw, setRaw } from './admin';
 import { DELLAL_DARIJA, parseAvoid } from './darija';
-import { lahjaAvoid, lahjaFor } from './lahja';
+import { lahjaAvoid, lahjaBlocks, lahjaFor, LahjaWord } from './lahja';
 import {
   AiResponse,
   aiKeyed,
@@ -26,6 +26,7 @@ import {
   pilotOn,
   polishDarija,
   ProductInfo,
+  saveShopLahja,
   searchProducts,
   strip,
 } from './dellal';
@@ -594,8 +595,8 @@ function productLine(p: ProductInfo): string {
   return `#${p.product_id} ${p.name} : ${p.price} DA${vs ? ` · variantes : ${vs}` : ''}${p.packs.length ? ` · packs : ${p.packs.map((k) => `${k.qty} pour ${k.price} DA`).join(', ')}` : ''}`;
 }
 
-/** The CM's instructions: the shop's settings, how to decide, the Darija guide, and the facts of this comment. */
-export function cmSystem(f: CmFacts, s: CmSettings): string {
+/** The CM's instructions: the shop's settings, how to decide, the Darija guide and lessons, and the facts of this comment. */
+export function cmSystem(f: CmFacts, s: CmSettings, lahja: { all: LahjaWord[]; own: LahjaWord[] } = { all: [], own: [] }): string {
   const privateRule = !s.sendPrivate
     ? 'NON : private_reply toujours vide ; en public, invite la personne à vous écrire en privé.'
     : f.alreadyPrivate
@@ -631,6 +632,8 @@ export function cmSystem(f: CmFacts, s: CmSettings): string {
     '9. N’invente rien : prix, couleurs, stock et délais viennent des informations ci-dessous. Si le produit de la publication est inconnu, demande en privé lequel les intéresse.',
     '',
     DELLAL_DARIJA,
+    lahjaBlocks(lahja).shared,
+    lahjaBlocks(lahja).own,
     '',
     'Informations :',
     `- Publication : ${f.caption ? `« ${f.caption.slice(0, 600)} »` : '(texte inconnu)'}`,
@@ -672,15 +675,16 @@ export async function decide(ctx: Ctx, f: CmFacts, s: CmSettings): Promise<CmRun
   const complete: Complete = (req) =>
     inPage ? (inPage({ ...req, runTool: async () => ({ error: 'Pas d’outil ici' }) }) as Promise<AiResponse>) : (ctx.server!.dellal!('complete', { ...req, feature: 'cm', pilot }, ctx) as Promise<AiResponse>);
   const userLine = `Commentaire${f.author ? ` de ${f.author}` : ''} : « ${f.body.slice(0, 1500)} »`;
-  const res = await complete({ model, system: cmSystem(f, s), messages: [{ role: 'user', content: userLine }], tools: [], max_tokens: 800 });
+  // the shop's Darija lessons and Pilotix's (modules/lahja.ts): in the instructions, and in the check below
+  const lahja = await lahjaFor(ctx.db, ctx.t?.platform ?? null, ctx.shop?.id ?? null);
+  const res = await complete({ model, system: cmSystem(f, s, lahja), messages: [{ role: 'user', content: userLine }], tools: [], max_tokens: 800 });
   usage.input_tokens += num(res.usage?.input_tokens);
   usage.output_tokens += num(res.usage?.output_tokens);
   const read = readDecision(res.content.map((b) => (b.type === 'text' ? b.text : '')).join(''));
   if (!read) return { decision: guard({ ...demoDecision(f), reason: 'Réponse de l’IA illisible : règles de secours' }, f, s), by: 'demo', model: null, usage, darija };
   const d = guard(read, f, s);
   // the Algerian Darija check, as for Dellal's messages
-  // the shop's word list, its Darija lessons and Pilotix's (modules/lahja.ts)
-  const lahja = await lahjaFor(ctx.db, ctx.t?.platform ?? null, ctx.shop?.id ?? null);
+  // the shop's word list, its Darija lessons and Pilotix's
   const avoid = [...parseAvoid(ds.darijaAvoid), ...lahjaAvoid([...lahja.own, ...lahja.all])];
   for (const k of ['publicReply', 'privateReply'] as const) {
     if (!d[k]) continue;
@@ -983,6 +987,18 @@ export const cmProcs = {
   }),
 
   /** A person answers in public. */
+  /**
+   * « Leçon de darija » under one of the agent's replies (public or private): the words the team member changed become a
+   * Darija lesson of the shop (Dellal and the CM AI agent use it at once; Pilotix reviews it). The reply that was sent never
+   * changes.
+   */
+  'cm.lahja.add': proc([...CM_ROLES], z.object({ id, which: z.enum(['public', 'private']), after: z.string().trim().min(1).max(2000) }), async (ctx, i) => {
+    const c = (await ctx.db.query(`SELECT id, public_reply, private_reply, handled_by, conversation_id, meta FROM cm_comments WHERE id = $1`, [i.id]))[0];
+    const text = c ? String((i.which === 'public' ? c.public_reply : c.private_reply) ?? '') : '';
+    // the agent's reply only: one the team wrote is not the agent's Darija
+    if (!c || !text.trim() || c.handled_by || !c.meta?.by) throw notFound('Réponse du CM AI introuvable');
+    return saveShopLahja(ctx, { before: text, after: i.after, commentId: num(c.id), conversationId: i.which === 'private' ? numOrNull(c.conversation_id) : null });
+  }),
   'cm.reply': proc([...CM_ROLES], z.object({ id, body: z.string().trim().min(1).max(1000) }), async (ctx, i) => {
     const row = await rawComment(ctx.db, i.id);
     let sendError: string | null = null;

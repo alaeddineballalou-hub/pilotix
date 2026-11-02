@@ -11,6 +11,7 @@
 // Under them, the next book: the sales lessons waiting for it, and « Publish ».
 import { useQueryClient } from '@tanstack/react-query';
 import { Fragment, useContext, useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { clock, dateOnly, n } from '../../lib/format';
 import type { POut } from '../../lib/platform';
@@ -18,6 +19,7 @@ import { Card, Icon, Tabs } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { Bubbles, Composer, Msg, Typing } from '../messages/chat';
 import { LahjaWord, LahjaWords } from '../messages/lahja';
+import { CaseModal } from './pilotCase';
 import { PilotDemo, usePilotAction, usePilotCall, usePilotRpc } from './pilotDemo';
 
 type State = POut<'p.pilot.state'>;
@@ -489,6 +491,37 @@ function DarijaPane() {
   const q = usePilotRpc('p.lahja.state', {});
   const k = 'platform.pilot.lab.darija.';
   const d = q.data;
+  // tick boxes: several lessons accepted or refused at once; one that fails stays ticked, with the reason in its row
+  const [sel, setSel] = useState<Set<number>>(() => new Set());
+  const [errs, setErrs] = useState<Map<number, string>>(() => new Map());
+  const [chat, setChat] = useState<[number, number] | null>(null);
+  const doing = useRef<'approve' | 'refuse'>('approve');
+  const many = usePilotAction('p.lahja.decideMany', {
+    onDone: (r) => {
+      if (r.done.length) toast(t(k + (doing.current === 'approve' ? 'acceptedMany' : 'refusedMany'), { count: r.done.length, n: n(r.done.length) }), 'ok');
+      if (r.failed.length) toast(t(k + 'failedMany', { count: r.failed.length, n: n(r.failed.length) }), 'bad');
+      setErrs(new Map(r.failed.map((f) => [f.id, f.error])));
+      setSel(new Set(r.failed.map((f) => f.id)));
+    },
+  });
+  const waiting = d?.waiting ?? [];
+  const picked = waiting.filter((l) => sel.has(l.id)).map((l) => l.id);
+  const all = waiting.length > 0 && picked.length === waiting.length;
+  const allBox = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (allBox.current) allBox.current.indeterminate = picked.length > 0 && !all;
+  }, [picked.length, all]);
+  const pick = (id: number, on: boolean) =>
+    setSel((x) => {
+      const y = new Set(x);
+      if (on) y.add(id);
+      else y.delete(id);
+      return y;
+    });
+  const decide = (action: 'approve' | 'refuse') => {
+    doing.current = action;
+    many.mutate({ ids: picked, action });
+  };
   return (
     <div className="pl-dj">
       <p className="small muted pl-lab-kind-note">{t(k + 'help')}</p>
@@ -507,11 +540,35 @@ function DarijaPane() {
             {!d.waiting.length ? (
               <p className="pl-next-empty">{t(k + 'waitingEmpty')}</p>
             ) : (
-              <ul className="pl-dj-list">
-                {d.waiting.map((l) => (
-                  <WaitingRow key={l.id} l={l} />
-                ))}
-              </ul>
+              <>
+                {d.waiting.length > 1 && (
+                  <label className="pl-dj-all">
+                    <input ref={allBox} type="checkbox" checked={all} onChange={(e) => setSel(e.target.checked ? new Set(waiting.map((l) => l.id)) : new Set())} />
+                    <span>{t(k + 'pickAll', { n: n(d.waiting.length) })}</span>
+                  </label>
+                )}
+                <ul className="pl-dj-list">
+                  {d.waiting.map((l) => (
+                    <WaitingRow key={l.id} l={l} picked={d.waiting.length > 1 ? sel.has(l.id) : null} onPick={(on) => pick(l.id, on)} err={errs.get(l.id) ?? null} onChat={(conv) => l.shopId && setChat([l.shopId, conv])} />
+                  ))}
+                </ul>
+                {picked.length > 0 && (
+                  <div className="pl-dj-bar" role="group" aria-label={t(k + 'picked', { count: picked.length, n: n(picked.length) })}>
+                    <span className="pl-dj-bar-l">
+                      <b>{t(k + 'picked', { count: picked.length, n: n(picked.length) })}</b>
+                      <button type="button" className="linkbtn" disabled={many.isPending} onClick={() => setSel(new Set())}>
+                        {t(k + 'unpick')}
+                      </button>
+                    </span>
+                    <button type="button" className="btn primary small" disabled={many.isPending} onClick={() => decide('approve')}>
+                      {t(k + 'accept')}
+                    </button>
+                    <button type="button" className="btn ghost small" disabled={many.isPending} onClick={() => decide('refuse')}>
+                      {t(k + 'refuse')}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </section>
           <AddWords />
@@ -531,6 +588,7 @@ function DarijaPane() {
           </section>
         </>
       )}
+      {chat && <CaseModal shopId={chat[0]} convId={chat[1]} onClose={() => setChat(null)} />}
     </div>
   );
 }
@@ -557,21 +615,23 @@ function From({ l }: { l: LahjaItem }) {
   );
 }
 
-function WaitingRow({ l }: { l: LahjaItem }) {
+function WaitingRow({ l, picked, onPick, err, onChat }: { l: LahjaItem; picked: boolean | null; onPick: (on: boolean) => void; err: string | null; onChat: (conv: number) => void }) {
   const { t } = useTranslation();
   const k = 'platform.pilot.lab.darija.';
   const decide = usePilotAction('p.lahja.decide', { success: (r) => t(r.words ? k + 'acceptedToast' : k + 'refusedToast') });
   const [edit, setEdit] = useState<LahjaWord[] | null>(null);
   const busy = decide.isPending;
   return (
-    <li>
+    <li className={picked ? 'pl-dj-on' : undefined}>
       <div className="pl-dj-head">
+        {picked !== null && <input type="checkbox" className="pl-dj-check" checked={picked} aria-label={t(k + 'pickOne')} onChange={(e) => onPick(e.target.checked)} />}
         <span className={`chip pl-dj-src pl-dj-${l.source}`}>{t(`${k}src.${l.source}`)}</span>
+        {l.via === 'cm' && <span className="chip pl-dj-via">{t(k + 'viaCm')}</span>}
         <From l={l} />
       </div>
       {(l.before || l.after) && (
         <dl className="pl-dj-pair">
-          <dt>{t(k + 'before')}</dt>
+          <dt>{t(k + (l.via === 'cm' ? 'beforeCm' : 'before'))}</dt>
           <dd dir="auto">{l.before}</dd>
           <dt>{t(k + 'after')}</dt>
           <dd dir="auto">{l.after}</dd>
@@ -583,6 +643,12 @@ function WaitingRow({ l }: { l: LahjaItem }) {
         <LahjaWords words={l.words} />
       )}
       {l.note && <p className="pl-dj-note" dir="auto">{l.note}</p>}
+      {l.source === 'dellal' && <Proof l={l} onChat={onChat} />}
+      {err && (
+        <p className="pl-dj-err" role="alert">
+          <Icon name="alert" /> {err}
+        </p>
+      )}
       <div className="pl-dj-do">
         {edit ? (
           <>
@@ -609,6 +675,54 @@ function WaitingRow({ l }: { l: LahjaItem }) {
       </div>
       {l.source === 'dellal' && !edit && <p className="small muted pl-dj-note">{t(k + 'refusedNote')}</p>}
     </li>
+  );
+}
+
+/** A line of a chat with each place the word is written marked (struck when it is the word to drop). */
+function Marked({ line, word, gone = false }: { line: string; word: string; gone?: boolean }) {
+  const esc = word.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+  if (!esc) return <>{line}</>;
+  const out: ReactNode[] = [];
+  let last = 0;
+  for (const m of line.matchAll(new RegExp(`(^|[^\\p{L}\\p{N}])(${esc})(?![\\p{L}\\p{N}])`, 'giu'))) {
+    const at = (m.index ?? 0) + m[1].length;
+    out.push(line.slice(last, at), <mark key={at} className={gone ? 'pl-dj-gone' : 'pl-dj-hit'}>{m[2]}</mark>);
+    last = at + m[2].length;
+  }
+  out.push(line.slice(last));
+  return <>{out}</>;
+}
+
+/** What proves a word Dellal learned: lines of its customers that have it, lines of Dellal that have the word to drop. */
+function Proof({ l, onChat }: { l: LahjaItem; onChat: (conv: number) => void }) {
+  const { t } = useTranslation();
+  const k = 'platform.pilot.lab.darija.';
+  const w = l.words[0];
+  const { c, d } = l.samples;
+  if (!w || (!c.length && !d.length)) return null;
+  const side = (title: string, lines: typeof c, word: string, gone: boolean, who: 'c' | 'd') => (
+    <div className={`pl-dj-side pl-dj-${who}`}>
+      <p className="pl-dj-side-h">{title}</p>
+      <ul>
+        {lines.map((x, i) => (
+          <li key={i}>
+            <q dir="auto">
+              <Marked line={x.line} word={word} gone={gone} />
+            </q>
+            <button type="button" className="linkbtn" onClick={() => onChat(x.conv)}>
+              {t(k + 'seeChat')}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+  return (
+    <div className="pl-dj-proof">
+      {c.length > 0 && side(t(k + 'proofCustomers', { shop: l.shop ?? '—' }), c, w.use, false, 'c')}
+      {d.length > 0 && w.not && side(t(k + 'proofDellal'), d, w.not, true, 'd')}
+      <p className="pl-dj-anon">{t('platform.pilot.anonymous')}</p>
+    </div>
   );
 }
 

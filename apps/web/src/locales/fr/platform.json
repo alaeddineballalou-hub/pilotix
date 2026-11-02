@@ -1467,7 +1467,23 @@
         "acceptedToast": "Acceptée : toutes les boutiques l’utilisent",
         "refusedToast": "Refusée",
         "removedToast": "Retirée de toutes les boutiques",
-        "addedToast": "Leçon de darija ajoutée pour toutes les boutiques"
+        "addedToast": "Leçon de darija ajoutée pour toutes les boutiques",
+        "pickAll": "Tout choisir ({{n}})",
+        "pickOne": "Choisir cette leçon",
+        "picked_one": "{{n}} leçon choisie",
+        "picked_other": "{{n}} leçons choisies",
+        "unpick": "Tout décocher",
+        "acceptedMany_one": "{{n}} leçon acceptée : toutes les boutiques l’utilisent",
+        "acceptedMany_other": "{{n}} leçons acceptées : toutes les boutiques les utilisent",
+        "refusedMany_one": "{{n}} leçon refusée",
+        "refusedMany_other": "{{n}} leçons refusées",
+        "failedMany_one": "{{n}} leçon reste à valider : la raison est dans sa ligne",
+        "failedMany_other": "{{n}} leçons restent à valider : la raison est dans leur ligne",
+        "viaCm": "Commentaire",
+        "beforeCm": "CM AI a écrit",
+        "proofCustomers": "Les clients de {{shop}} écrivent",
+        "proofDellal": "Dellal écrit",
+        "seeChat": "Voir la discussion"
       }
     }
   }

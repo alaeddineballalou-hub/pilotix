@@ -12,7 +12,7 @@ import { checkDarija, DARIJA_FIXER_SYSTEM, darijaRewritePrompt, DarijaIssue, DEL
 import { markReply, noticeForConversation, ordersForDellal, sendInPreview } from './notify';
 import { createOrder } from './orders';
 import { anonymize, bookFor, BookRef, pickModel } from './pilotlearn';
-import { asWords, checkLahjaWords, LAHJA_NO_CHANGE, LAHJA_PERSONAL, lahjaAvoid, lahjaDiff, lahjaErr, lahjaFor, lahjaLines, LahjaWord } from './lahja';
+import { asWords, checkLahjaWords, LAHJA_NO_CHANGE, LAHJA_PERSONAL, lahjaAvoid, lahjaBlocks, lahjaDiff, lahjaErr, lahjaFor, LahjaWord } from './lahja';
 import { pilotConfig, pilotToday } from '../platform/pilotai';
 
 // ---------------------------------------------------------------- settings and secrets
@@ -574,7 +574,7 @@ async function systemPrompt(
   const shared = [
     DELLAL_PLAYBOOK.replace('${ORDER_NEXT}', s.ordersTo === 'new' ? 'après la commande, un conseiller l’appellera aussi pour confirmer.' : 'la commande part directement en préparation.'),
     DELLAL_DARIJA,
-    lahja.all.length ? `LEÇONS DE DARIJA (validées par Pilotix pour toutes les boutiques) :\n${lahjaLines(lahja.all)}` : '',
+    lahjaBlocks(lahja).shared,
     lessons.trim(),
   ];
   const own = [
@@ -594,7 +594,7 @@ async function systemPrompt(
     s.notes.trim() ? `Informations de la boutique :\n${s.notes.trim()}` : '',
     s.darijaPrefer.trim() ? `Expressions de la boutique (écrites par l’équipe, à utiliser quand elles vont) :\n${s.darijaPrefer.trim()}` : '',
     s.darijaAvoid.trim() ? `Mots et expressions que la boutique interdit (avec ce qu’il faut écrire à la place) :\n${s.darijaAvoid.trim()}` : '',
-    lahja.own.length ? `LEÇONS DE DARIJA DE LA BOUTIQUE (corrections de l’équipe et ce que tu as appris de ses clients) :\n${lahjaLines(lahja.own)}` : '',
+    lahjaBlocks(lahja).own,
     `Catalogue (résumé, vérifie le stock avec search_products) :\n${catalog || '(vide)'}`,
   ];
   const chat = [
@@ -1114,6 +1114,41 @@ async function settingsView(db: Db) {
   return { settings: s, has, models: DELLAL_MODELS };
 }
 
+/**
+ * A shop's Darija lesson: the words a team member changed in one of the agents' messages (Dellal's in Messages, or the CM AI
+ * agent's reply to a comment). The message that was sent never changes. The lesson works at once in this shop (Dellal and the
+ * CM AI agent) and goes to Pilotix for review (names, numbers and prices hidden); only its words ever reach other shops.
+ */
+export async function saveShopLahja(
+  ctx: Ctx,
+  o: { before: string; after: string; conversationId?: number | null; messageId?: number | null; commentId?: number | null },
+): Promise<{ id: number; words: LahjaWord[]; review: 'waiting' | 'local' }> {
+  const words = lahjaDiff(o.before, o.after);
+  if (!words.length) throw new AppError('bad_request', LAHJA_NO_CHANGE);
+  const chk = checkLahjaWords(words);
+  if (!chk.ok) throw new AppError('bad_request', lahjaErr(chk.problems));
+  // nothing personal becomes a lesson: a word the anonymizer would hide (a name, a phone, a price) is not Darija
+  if (words.some((w) => /<(?:name|phone|email|link|handle|addr|price|n|product|id)>/.test(anonymize(`${w.use} ${w.not ?? ''}`)))) throw new AppError('bad_request', LAHJA_PERSONAL);
+  const ins = await ctx.db.query(
+    `INSERT INTO dellal_lahja (words, before, after, conversation_id, message_id, comment_id, created_by) VALUES ($1::jsonb, $2, $3, $4, $5, $6, $7) RETURNING id`,
+    [JSON.stringify(words), o.before, o.after, o.conversationId ?? null, o.messageId ?? null, o.commentId ?? null, me(ctx)],
+  );
+  const lessonId = num(ins[0].id);
+  let review: 'waiting' | 'local' = 'local';
+  if (ctx.t && ctx.shop) {
+    try {
+      await ctx.t.platform.query(
+        `INSERT INTO platform.lahja (shop_id, shop_lesson_id, source, status, own, words, before, after, by_user, evidence) VALUES ($1, $2, 'seller', 'waiting', true, $3::jsonb, $4, $5, $6, $7::jsonb)`,
+        [ctx.shop.id, lessonId, JSON.stringify(words), anonymize(o.before).slice(0, 2000), anonymize(o.after).slice(0, 2000), ctx.session.profile.name, JSON.stringify({ via: o.commentId ? 'cm' : 'messages' })],
+      );
+      review = 'waiting';
+    } catch {
+      /* Pilotix does not see it yet: it still works in this shop */
+    }
+  }
+  return { id: lessonId, words, review };
+}
+
 export const dellalProcs = {
   /** The inbox: conversations of every channel, newest first, with the counts of the tabs. */
   'dellal.inbox': proc(
@@ -1207,36 +1242,13 @@ export const dellalProcs = {
   'dellal.lahja.add': proc([...SELLERS], z.object({ messageId: id, after: z.string().trim().min(1).max(2000) }), async (ctx, i) => {
     const m = (await ctx.db.query(`SELECT id, conversation_id, role, body FROM conv_messages WHERE id = $1`, [i.messageId]))[0];
     if (!m || m.role !== 'agent') throw notFound('Message de Dellal introuvable');
-    const words = lahjaDiff(String(m.body), i.after);
-    if (!words.length) throw new AppError('bad_request', LAHJA_NO_CHANGE);
-    const chk = checkLahjaWords(words);
-    if (!chk.ok) throw new AppError('bad_request', lahjaErr(chk.problems));
-    // nothing personal becomes a lesson: a word the anonymizer would hide (a name, a phone, a price) is not Darija
-    if (words.some((w) => /<(?:name|phone|email|link|handle|addr|price|n|product|id)>/.test(anonymize(`${w.use} ${w.not ?? ''}`)))) throw new AppError('bad_request', LAHJA_PERSONAL);
-    const ins = await ctx.db.query(
-      `INSERT INTO dellal_lahja (words, before, after, conversation_id, message_id, created_by) VALUES ($1::jsonb, $2, $3, $4, $5, $6) RETURNING id`,
-      [JSON.stringify(words), String(m.body), i.after, num(m.conversation_id), num(m.id), me(ctx)],
-    );
-    const lessonId = num(ins[0].id);
-    let review: 'waiting' | 'local' = 'local';
-    if (ctx.t && ctx.shop) {
-      try {
-        await ctx.t.platform.query(
-          `INSERT INTO platform.lahja (shop_id, shop_lesson_id, source, status, own, words, before, after, by_user) VALUES ($1, $2, 'seller', 'waiting', true, $3::jsonb, $4, $5, $6)`,
-          [ctx.shop.id, lessonId, JSON.stringify(words), anonymize(String(m.body)).slice(0, 2000), anonymize(i.after).slice(0, 2000), ctx.session.profile.name],
-        );
-        review = 'waiting';
-      } catch {
-        /* Pilotix does not see it yet: it still works in this shop */
-      }
-    }
-    return { id: lessonId, words, review };
+    return saveShopLahja(ctx, { before: String(m.body), after: i.after, conversationId: num(m.conversation_id), messageId: num(m.id) });
   }),
 
   /** This shop's Darija lessons: its team's (with what Pilotix decided), what Dellal learned from its customers, and Pilotix's. */
   'dellal.lahja.list': proc([...SELLERS], z.object({}), async (ctx) => {
     const rows = await ctx.db.query(
-      `SELECT l.id, l.words, l.before, l.after, l.created_at, p.name AS by_name FROM dellal_lahja l LEFT JOIN profiles p ON p.id = l.created_by
+      `SELECT l.id, l.words, l.before, l.after, l.comment_id, l.created_at, p.name AS by_name FROM dellal_lahja l LEFT JOIN profiles p ON p.id = l.created_by
         WHERE l.active ORDER BY l.id DESC LIMIT 200`,
     );
     const status = new Map<number, string>();
@@ -1260,7 +1272,16 @@ export const dellalProcs = {
     }
     return {
       platform,
-      own: rows.map((r: any) => ({ id: num(r.id), words: asWords(r.words), before: String(r.before), after: String(r.after), by: (r.by_name as string | null) ?? null, at: iso(r.created_at), review: status.get(num(r.id)) ?? 'local' })),
+      own: rows.map((r: any) => ({
+        id: num(r.id),
+        words: asWords(r.words),
+        before: String(r.before),
+        after: String(r.after),
+        via: (r.comment_id ? 'cm' : 'messages') as 'cm' | 'messages',
+        by: (r.by_name as string | null) ?? null,
+        at: iso(r.created_at),
+        review: status.get(num(r.id)) ?? 'local',
+      })),
       learned,
       all,
     };

@@ -222,5 +222,8 @@
     "save": "Enregistrer",
     "appSecret": "Clé secrète de l’application Meta",
     "appSecretNone": "Obligatoire : sans elle, les commentaires ne sont pas traités (Message AI agent › Réglages)"
+  },
+  "lahja": {
+    "fixHelp": "La réponse envoyée ne change pas : écrivez comment CM AI aurait dû l’écrire. Les mots que vous changez deviennent une leçon, pour CM AI et Dellal."
   }
 }
