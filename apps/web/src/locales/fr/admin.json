@@ -836,6 +836,9 @@
     "elsewhere": "Dont {{n}} dans vos autres boutiques",
     "womenProducts": "Produits pour femmes",
     "womenProductsHint": "Ces produits vont toujours à une agente. Cochez les agentes dans l’onglet Agents ({{n}} cochée(s)).",
-    "isWoman": "Femme"
+    "isWoman": "Femme",
+    "helpAgency": "Les commandes confiées à votre agence, dans chaque boutique où vous travaillez, vont à vos agents sans que personne ne choisisse.",
+    "sellers": "Vendeurs",
+    "sellersHint": "Il travaille pour plusieurs de vos vendeurs : cochez ceux dont il reçoit les commandes."
   }
 }

@@ -36,18 +36,21 @@ const AGENT0: AgentCfg = {
   woman: false,
 };
 
-export function Affectation() {
+/** `agency`: a confirmation agency's own page (Facturation › Affectation): its orders in every store, its agents. */
+export function Affectation({ agency = false }: { agency?: boolean } = {}) {
   const { t } = useTranslation();
-  const q = useRpc('assign.get', {}, { refetchInterval: 30_000 });
-  const products = (useRpc('catalog.search', { limit: 100 }).data ?? []).map((p) => ({ id: p.id, name: p.name }));
+  // the same page and the same answers; the agency's own actions in its space
+  const P = (agency ? { get: 'agency.assign.get', set: 'agency.assign.set', run: 'agency.assign.run' } : { get: 'assign.get', set: 'assign.set', run: 'assign.run' }) as { get: 'assign.get'; set: 'assign.set'; run: 'assign.run' };
+  const q = useRpc(P.get, {}, { refetchInterval: 30_000 });
+  const products = (useRpc('catalog.search', { limit: 100 }, { enabled: !agency }).data ?? []).map((p) => ({ id: p.id, name: p.name }));
   const [tab, setTab] = useState<Tab>('conf');
   const [draft, setDraft] = useState<Cfg | null>(null);
   const [pick, setPick] = useState<number | null>(null);
-  const save = useAction('assign.set', {
+  const save = useAction(P.set, {
     success: t('admin.aa.saved'),
     onDone: () => setDraft(null),
   });
-  const run = useAction('assign.run', {
+  const run = useAction(P.run, {
     success: (r) =>
       t('admin.aa.ran', {
         n: r.conf.assigned + r.follow.assigned,
@@ -134,7 +137,7 @@ export function Affectation() {
                 <input type="checkbox" role="switch" className="pf-sw" checked={a[r]} onChange={(e) => setArea(k, { [r]: e.target.checked })} />
               </label>
             ))}
-            {a.womenToWomen && (
+            {a.womenToWomen && products.length > 0 && (
               <div className="pf-row pf-col aa-women">
                 <span className="pf-text">
                   <b>{t('admin.aa.womenProducts')}</b>
@@ -270,7 +273,7 @@ export function Affectation() {
       <div className="pf-head">
         <div className="pf-title">
           <h2>{t('admin.aa.title')}</h2>
-          <p className="muted">{t('admin.aa.help')}</p>
+          <p className="muted">{t(agency ? 'admin.aa.helpAgency' : 'admin.aa.help')}</p>
         </div>
       </div>
       <div className="aa-tabs" role="tablist">
@@ -460,8 +463,8 @@ function AccessModal({
       <p className="muted small">{t('admin.aa.accessHint')}</p>
       {shops.length > 1 && (
         <>
-          <h4 className="aa-h4">{t('admin.aa.shops')}</h4>
-          <p className="muted small">{t('admin.aa.shopsHint')}</p>
+          <h4 className="aa-h4">{t(shops.some((b) => b.current) ? 'admin.aa.shops' : 'admin.aa.sellers')}</h4>
+          <p className="muted small">{t(shops.some((b) => b.current) ? 'admin.aa.shopsHint' : 'admin.aa.sellersHint')}</p>
           <div className="pf-chips pf-chips-s">
             {shops.map((b) => (
               <label key={b.id} className={`pf-chip ${sh.includes(b.id) ? 'on' : ''}`}>
@@ -484,16 +487,25 @@ function AccessModal({
           </label>
         ))}
       </div>
-      <h4 className="aa-h4">{t('admin.aa.products')}</h4>
-      <div className="pf-chips pf-chips-s aa-prods">
-        {products.map((p) => (
-          <label key={p.id} className={`pf-chip ${pr.includes(p.id) ? 'on' : ''}`}>
-            <input type="checkbox" checked={pr.includes(p.id)} onChange={() => setPr(flip(pr, p.id))} />
-            <Icon name="checkcircle" />
-            {p.name}
-          </label>
-        ))}
-      </div>
+      {products.length > 0 && (
+        <>
+          <h4 className="aa-h4">{t('admin.aa.products')}</h4>
+          <div className="pf-chips pf-chips-s aa-prods">
+            {products.map((p) => (
+              <label key={p.id} className={`pf-chip ${pr.includes(p.id) ? 'on' : ''}`}>
+                <input type="checkbox" checked={pr.includes(p.id)} onChange={() => setPr(flip(pr, p.id))} />
+                <Icon name="checkcircle" />
+                {p.name}
+              </label>
+            ))}
+          </div>
+        </>
+      )}
     </Modal>
   );
+}
+
+/** A confirmation agency's « Affectation » (its menu, under Facturation): its orders in every store, to its own agents. */
+export function AgencyAffectation() {
+  return <Affectation agency />;
 }

@@ -836,6 +836,9 @@
     "elsewhere": "Of which {{n}} in your other boutiques",
     "womenProducts": "Products for women",
     "womenProductsHint": "These products always go to a woman agent. Tick the women agents in the Agents tab ({{n}} ticked).",
-    "isWoman": "Woman"
+    "isWoman": "Woman",
+    "helpAgency": "Orders given to your agency, in every shop you work for, go to your agents without anyone choosing.",
+    "sellers": "Sellers",
+    "sellersHint": "He works for several of your sellers: tick the ones he gets orders from."
   }
 }

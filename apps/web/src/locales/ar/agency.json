@@ -7,7 +7,8 @@
     "profil": "ملفي",
     "facturation": "الفوترة",
     "utilisateurs": "المستخدمون",
-    "reglages": "الإعدادات"
+    "reglages": "الإعدادات",
+    "affectation": "التوزيع"
   },
   "badge": "وكالة",
   "create": "إنشاء وكالتي",
@@ -364,7 +365,8 @@
     "utilisateurs": "المستخدمون",
     "reglages": "الإعدادات",
     "profil": "ملفي",
-    "comptepro": "حساب Pro"
+    "comptepro": "حساب Pro",
+    "affectation": "التوزيع"
   },
   "acct": {
     "title": "إنشاء حساب",

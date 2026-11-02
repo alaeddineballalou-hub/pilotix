@@ -157,6 +157,7 @@ export const AGENCY_NAV: NavItem[] = [
   { id: 'produits', icon: 'layers', roles: ['confirmation', 'suivi', 'agent_manager'], subs: ['produits', 'stock'] },
   { id: 'vendeurs', icon: 'store', roles: [] },
   { id: 'facturation', icon: 'receipt', roles: [] },
+  { id: 'affectation', icon: 'users', roles: [] },
   { id: 'utilisateurs', icon: 'usercog', roles: [], manageUsers: true },
   { id: 'reglages', icon: 'settings', roles: [] },
   { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'securite'] },

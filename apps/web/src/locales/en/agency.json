@@ -7,7 +7,8 @@
     "profil": "My profile",
     "facturation": "Billing",
     "utilisateurs": "Users",
-    "reglages": "Settings"
+    "reglages": "Settings",
+    "affectation": "Assignment"
   },
   "badge": "Agency",
   "create": "Create my agency",
@@ -360,7 +361,8 @@
     "utilisateurs": "Users",
     "reglages": "Settings",
     "profil": "My profile",
-    "comptepro": "Pro account"
+    "comptepro": "Pro account",
+    "affectation": "Assignment"
   },
   "acct": {
     "title": "Create an account",

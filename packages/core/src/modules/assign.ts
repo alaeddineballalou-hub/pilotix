@@ -13,14 +13,15 @@ import { Db, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, proc } from '../rpc';
 import { AssignAgent, AssignArea, DEFAULT_SETTINGS, getSetting, setSetting, SettingsMap } from '../settings';
 import { addEvent } from './orders';
+import { loadShop } from '../platform/shops';
 
 export type Area = 'conf' | 'follow';
 type Assign = SettingsMap['autoAssign'];
 
-const ROLE: Record<Area, string> = { conf: 'confirmation', follow: 'suivi' };
+export const ROLE: Record<Area, string> = { conf: 'confirmation', follow: 'suivi' };
 const COL: Record<Area, string> = { conf: 'agent_id', follow: 'follow_agent_id' };
 const AGENCY_COL: Record<Area, string> = { conf: 'conf_agency_id', follow: 'follow_agency_id' };
-const ONLINE_MS = 3 * 60_000;
+export const ONLINE_MS = 3 * 60_000;
 export const MODE_FR: Record<AssignArea['mode'], string> = { manual: 'manuel', turn: 'tour de rôle', load: 'moins chargé', smart: 'smart' };
 
 export const AGENT_DEFAULT: AssignAgent = { out: false, weight: 1, channels: [], products: [], from: null, to: null, langs: [], senior: false, shops: [], woman: false };
@@ -55,7 +56,7 @@ export interface Agent {
 }
 
 /** An agent's open items (p: his profile, $2: the statuses that do not count). */
-const loadOf = (area: Area) =>
+export const loadOf = (area: Area) =>
   area === 'conf'
     ? `(SELECT count(*)::int FROM orders o WHERE o.agent_id = p.id AND NOT (o.conf_status = ANY($2)) AND o.shipped_at IS NULL)`
     : `(SELECT count(*)::int FROM orders o WHERE o.follow_agent_id = p.id AND o.follow_status = 'alert' AND NOT (o.follow_status = ANY($2)))`;
@@ -325,22 +326,14 @@ export async function withSisters(ctx: Ctx, area: Area, list: Agent[], a: Assign
   return { sisters: sis, accounts: acc };
 }
 
-/** One run for an area: gives back what absent agents never touched, then gives the waiting items. */
-export async function runArea(ctx: Ctx, area: Area, ids?: number[], cfgIn?: Assign) {
-  const cfg = cfgIn ?? (await getAssign(ctx.db));
+/** Gives the items to the agents of `list` under `cfg` (one run); the agents' loads are kept up to date. */
+async function giveItems(ctx: Ctx, area: Area, items: Item[], list: Agent[], cfg: Assign, turns: SettingsMap['autoAssignTurn'], now: number) {
   const a = cfg[area];
-  if (a.mode === 'manual') return { assigned: 0, back: 0, waiting: 0 };
-  const now = ctx.now();
-  const list = await agentsOf(ctx.db, area, cfg, now);
-  await withSisters(ctx, area, list, a);
-  const back = ids ? 0 : await giveBack(ctx.db, area, a, list, now);
-  const items = await waiting(ctx.db, area, ids);
-  const turns = { ...(await getSetting(ctx.db, 'autoAssignTurn')) };
   const score = a.mode === 'smart' ? await smartScorer(ctx.db, area) : undefined;
-  let assigned = 0;
   const forWomen = new Set(cfg.womenProducts);
-  for (const it of items) it.woman = isWomanName(it.name) || it.productIds.some((p) => forWomen.has(p));
+  let assigned = 0;
   for (const it of items) {
+    it.woman = isWomanName(it.name) || it.productIds.some((p) => forWomen.has(p));
     const prev = a.sameClient ? await prevAgent(ctx.db, area, it) : null;
     const pick = pickAgent(list, it, area, cfg, turns, now, { prev, score: score ? (x) => score(x, it) : undefined });
     if (!pick) continue;
@@ -350,7 +343,96 @@ export async function runArea(ctx: Ctx, area: Area, ids?: number[], cfgIn?: Assi
       assigned++;
     }
   }
-  if (a.mode === 'turn') await setSetting(ctx.db, 'autoAssignTurn', turns);
+  return assigned;
+}
+
+/**
+ * A confirmation agency's own « Affectation » for its orders in this store (null: it has none, or it is on Manuel):
+ * its settings and its people as the agency sees them (on line in the agency's space), as their accounts in this store.
+ */
+async function agencyPlan(ctx: Ctx, area: Area, agencyId: number, now: number): Promise<{ cfg: Assign; list: Agent[]; adb: Db } | null> {
+  const t = ctx.t;
+  if (!t) return null;
+  const s = await loadShop(t, { id: agencyId }).catch(() => null);
+  if (!s || s.kind !== 'agency') return null;
+  const adb = t.shop(s.schema);
+  const cfg = await getAssign(adb);
+  if (cfg[area].mode === 'manual') return null;
+  const team = await adb.query(`SELECT id, lower(email) AS email, presence, last_seen_at FROM profiles WHERE active AND $1 = ANY(roles)`, [ROLE[area]]);
+  const byEmail = new Map<string, any>(team.map((r: any) => [String(r.email), r]));
+  const rows = await ctx.db.query(
+    `SELECT p.id, p.name, lower(p.email) AS email, p.agency_products, ${loadOf(area)} AS load,
+            (SELECT max(e.at) FROM order_events e WHERE e.kind = 'assign' AND e.user_id IS NULL AND e.to_value = p.id::text AND e.at > now() - interval '2 days') AS last_at
+       FROM profiles p WHERE p.active AND p.agency_id = $1 ORDER BY p.id`,
+    [agencyId, cfg[area].excluded],
+  );
+  const list: Agent[] = [];
+  for (const r of rows as any[]) {
+    const me = byEmail.get(String(r.email));
+    if (!me) continue;
+    const seen = me.last_seen_at ? Date.parse(new Date(me.last_seen_at).toISOString()) : 0;
+    const online = now - seen < ONLINE_MS && me.presence !== 'idle';
+    const c = { ...AGENT_DEFAULT, ...(cfg.agents[String(me.id)] ?? {}) };
+    list.push({
+      id: num(r.id),
+      name: String(r.name),
+      agencyId,
+      agencyProducts: Array.isArray(r.agency_products) ? r.agency_products.map(num) : null,
+      presence: String(me.presence ?? ''),
+      online,
+      free: online && me.presence !== 'call',
+      cfg: c,
+      email: String(r.email),
+      load: num(r.load),
+      elsewhere: 0,
+      notHere: !!ctx.shop && c.shops.length > 0 && !c.shops.includes(ctx.shop.id),
+      lastAt: r.last_at ? Date.parse(new Date(r.last_at).toISOString()) : 0,
+    });
+  }
+  // the order of the turns: the agency's people, as their accounts here
+  const ids = new Map(list.map((x) => [x.email, x.id]));
+  const order = cfg.order.map((aid) => ids.get(String(team.find((m: any) => num(m.id) === aid)?.email ?? ''))).filter((x): x is number => !!x);
+  return { cfg: { ...cfg, order }, list, adb };
+}
+
+/**
+ * One run for an area: the store's own orders under the store's settings, an agency's orders under the agency's own
+ * (Facturation › Affectation in its space); gives back what absent agents never touched, then gives the waiting items.
+ */
+export async function runArea(ctx: Ctx, area: Area, ids?: number[], cfgIn?: Assign, only?: { agency: number }) {
+  const cfg = cfgIn ?? (await getAssign(ctx.db));
+  const a = cfg[area];
+  const now = ctx.now();
+  const items = (await waiting(ctx.db, area, ids)).filter((x) => !only || x.agencyId === only.agency);
+  let assigned = 0;
+  let back = 0;
+  // the store's own orders
+  const own = items.filter((x) => x.agencyId === null);
+  if (a.mode !== 'manual' && !only) {
+    const list = (await agentsOf(ctx.db, area, cfg, now)).filter((x) => x.agencyId === null);
+    await withSisters(ctx, area, list, a);
+    if (!ids) back += await giveBack(ctx.db, area, a, list, now);
+    const turns = { ...(await getSetting(ctx.db, 'autoAssignTurn')) };
+    assigned += await giveItems(ctx, area, own, list, cfg, turns, now);
+    if (a.mode === 'turn') await setSetting(ctx.db, 'autoAssignTurn', turns);
+  }
+  // each agency's orders, under the agency's own settings
+  const agencies = [...new Set(items.map((x) => x.agencyId).filter((x): x is number => x !== null))];
+  if (only && !agencies.includes(only.agency)) agencies.push(only.agency);
+  if (!ids && ctx.t && !only) {
+    // an agency with nothing waiting may still have to take back what an absent agent never touched
+    const more = await ctx.db.query(`SELECT DISTINCT agency_id FROM profiles WHERE active AND agency_id IS NOT NULL`).catch(() => []);
+    for (const r of more as any[]) if (!agencies.includes(num(r.agency_id))) agencies.push(num(r.agency_id));
+  }
+  for (const ag of agencies) {
+    const plan = await agencyPlan(ctx, area, ag, now).catch(() => null);
+    if (!plan) continue;
+    if (!ids) back += await giveBack(ctx.db, area, plan.cfg[area], plan.list, now);
+    const turns = { ...(await getSetting(plan.adb, 'autoAssignTurn')) };
+    const mine = items.filter((x) => x.agencyId === ag);
+    if (mine.length) assigned += await giveItems(ctx, area, mine, plan.list, plan.cfg, turns, now);
+    if (plan.cfg[area].mode === 'turn') await setSetting(plan.adb, 'autoAssignTurn', turns);
+  }
   if (assigned || back) ctx.emit({ type: 'orders' });
   return { assigned, back, waiting: items.length - assigned };
 }
@@ -388,7 +470,7 @@ async function shareShops(ctx: Ctx, agents: Record<string, AssignAgent>) {
   }
 }
 
-const AreaIn = z.object({
+export const AreaIn = z.object({
   mode: z.enum(['manual', 'turn', 'load', 'smart']),
   by: z.enum(['all', 'channel', 'product']),
   excluded: z.array(z.string().max(40)).max(40),
@@ -400,7 +482,7 @@ const AreaIn = z.object({
   speedFirst: z.boolean(),
   womenToWomen: z.boolean().default(false),
 });
-const AgentIn = z.object({
+export const AgentIn = z.object({
   out: z.boolean(),
   weight: z.number().int().min(1).max(3),
   channels: z.array(z.string().max(30)).max(20),
