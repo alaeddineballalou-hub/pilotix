@@ -1,7 +1,7 @@
 // Control room › Sociétés de livraison, on the server: the API tests with the team's test keys (one company, or all of
 // them in the background), and « Changements API »: the daily look (07:20, Algeria time, or « Vérifier maintenant »)
 // at what changed at each company — its documentation, the open-source code that follows its API, its API addresses,
-// the tests with keys. What it finds goes to the to-do list; after the daily look, the owner and the managers get one
+// the tests with keys, and the problems the shops meet with each API. What it finds goes to the to-do list; after the daily look, the owner and the managers get one
 // e-mail listing the new lines (none when nothing changed).
 import { Logger } from '@nestjs/common';
 import * as core from '@pilotix/core';
@@ -124,6 +124,9 @@ export async function watchNow(c: CoreService, by: string | null): Promise<{ add
     );
     // the tests with the team's keys
     added.push(...(await runCheckAll(c, await testable(c))));
+    // what the shops meet with each API (no weight, no prices, refused parcels, prices not taken): numbers only
+    const shops = await core.shopsApiProblems(c.t);
+    added.push(...(await serial(() => core.addWatchItems(c.t, shops.found, { fixed: shops.fixed }))));
   } catch (e) {
     notes.push(`Erreur : ${(e as Error).message}`.slice(0, 300));
     log.error(`look failed: ${(e as Error).message}`);

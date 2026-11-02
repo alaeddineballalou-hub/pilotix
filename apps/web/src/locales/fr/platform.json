@@ -780,6 +780,7 @@
       "gone": "Adresse disparue",
       "broken": "Test cassé",
       "fields": "Champs",
+      "shops": "Vu dans les boutiques",
       "manual": "Ajoutée à la main"
     },
     "remove": "Supprimer {{name}} de Pilotix",

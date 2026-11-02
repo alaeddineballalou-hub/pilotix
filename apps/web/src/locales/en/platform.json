@@ -780,6 +780,7 @@
       "gone": "Address gone",
       "broken": "Test broken",
       "fields": "Fields",
+      "shops": "Seen in the shops",
       "manual": "Added by hand"
     },
     "remove": "Remove {{name}} from Pilotix",

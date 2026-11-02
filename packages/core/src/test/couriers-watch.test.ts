@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import { checkChanges, commitCompanies, docDiff, docLines, endpointOf, fieldChanges, jsonShape, lookAddresses, watchCouriers, watchMemoryOf, WATCH_REPOS } from '../couriers/watch';
-import { addWatchItems, call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, staffLogin, watchState } from '../index';
+import { addWatchItems, call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, shopsApiProblems, staffLogin, watchState } from '../index';
 
 const real = globalThis.fetch;
 afterEach(() => (globalThis.fetch = real));
@@ -215,4 +215,33 @@ test('« Changements API »: lines added once while not resolved, Résolu / Non 
   // the control room's menu counts the lines not resolved
   const dash: any = await platformCall('p.dashboard', pctx, {});
   assert.equal(dash.couriers, (await watchState(t)).items.filter((i) => i.status === 'open').length);
+});
+
+test('« Vu dans les boutiques »: no weight, no prices, refused parcels, prices not taken — one line per company; gone = closed', async () => {
+  const { t } = await server();
+  const db = t.shop('public');
+  const [noest] = await db.query<any>(`INSERT INTO delivery_companies (name, kind, active, config) VALUES ('NOEST', 'noest', true, '{"settings":{},"feesSync":{"error":"401 Unauthorized"}}') RETURNING id`);
+  const cust = (await db.query<any>(`INSERT INTO customers (phone, name) VALUES ('0555000000', 'X') RETURNING id`))[0].id;
+  const add = (n: number, fees: object | null, err: string | null = null) =>
+    db.query(
+      `INSERT INTO orders (ref, customer_id, customer_name, phone, wilaya_id, company_id, follow_status, courier_fees, send_error, send_error_at)
+       SELECT 'T' || g || $5, $1, 'X', '0555000000', 16, $2, 'delivered', $3::jsonb, $4, CASE WHEN $4::text IS NULL THEN NULL ELSE now() END FROM generate_series(1, $6) g`,
+      [cust, noest.id, fees ? JSON.stringify(fees) : null, err, err ? 'e' : 'f', n],
+    );
+  await add(6, { final: true });
+  await add(3, null, 'Commune introuvable PX123');
+  let r = await shopsApiProblems(t);
+  const keys = r.found.map((f) => f.key).sort();
+  assert.deepEqual(keys, ['shops:fees:noest', 'shops:prices:noest', 'shops:refused:noest', 'shops:weight:noest']);
+  const refused = r.found.find((f) => f.key === 'shops:refused:noest')!;
+  assert.match(refused.detail, /3 colis refusés/);
+  assert.ok(!/PX123/.test(refused.detail), 'no order number');
+  assert.ok(r.found.every((f) => f.kind === 'shops' && f.company === 'noest'));
+  // its answers now give the weight and the prices: those two close
+  await db.query(`UPDATE orders SET courier_fees = '{"final":true,"kg":6,"delivery":450,"ret":0}' WHERE ref LIKE 'T%f' AND ref <> 'T1f'`);
+  r = await shopsApiProblems(t);
+  assert.ok(r.fixed.includes('shops:weight:noest') && r.fixed.includes('shops:prices:noest'));
+  await addWatchItems(t, r.found, { fixed: r.fixed });
+  const st = await watchState(t);
+  assert.ok(st.items.some((i) => i.key === 'shops:refused:noest' && i.status === 'open'));
 });

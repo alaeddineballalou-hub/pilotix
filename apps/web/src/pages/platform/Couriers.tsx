@@ -59,8 +59,10 @@ function demoWatch(): AdminState['watch'] {
   });
   return {
     running: null,
-    last: { at: ago(3), by: null, companies: 14, added: 2, notes: [] },
+    last: { at: ago(1), by: null, companies: 14, added: 4, notes: [] },
     items: [
+      line(6, 'noest', 'shops', 'Ses réponses ne donnent pas le poids', 'Vu dans 3 boutiques : 214 colis finis ces 14 jours (livrés, retournés, échangés), aucun avec le poids trouvé par la société. Le surpoids ne peut pas être compté. Chercher où elle met le poids dans sa réponse (couriers/noest.ts).', null, 1),
+      line(5, 'yalidine', 'shops', 'Colis refusés par son API', '17 colis refusés ces 14 jours dans 2 boutiques. Raisons les plus vues : « Commune introuvable » (11) · « Numéro de téléphone invalide » (6).', null, 2),
       line(4, 'zr', 'docs', 'La documentation API a changé', 'Documentation API ZR Express\nAjouté (1) : « Cancel a claim: Cancels a claim that is still open »', 'https://docs.zrexpress.app/', 3),
       line(3, 'yalidine', 'code', 'Le code open-source qui suit son API a changé', 'Vargo (code open-source de 90+ sociétés) : « Yalidine: new stop desk fields » — 2 fichiers : YalidineExpressDriver.php, YalidineParcelMapper.php', 'https://github.com/KaziSTM/vargo', 3),
       line(2, 'noest', 'broken', 'Le test « Connexion » ne marche plus', 'Il marchait au test d’avant. Réponse de la société : NOEST Express (test) refuse les clés API (401).', null, 30, true),
@@ -307,7 +309,7 @@ function RemovedTab({ gone, removed, server }: { gone: CatalogCompany[]; removed
   );
 }
 
-const KIND_ICON: Record<string, string> = { docs: 'clipboard', code: 'puzzle', gone: 'ban', broken: 'xcircle', fields: 'columns', manual: 'user' };
+const KIND_ICON: Record<string, string> = { docs: 'clipboard', code: 'puzzle', gone: 'ban', broken: 'xcircle', fields: 'columns', shops: 'store', manual: 'user' };
 
 /** « Changements API »: what changed at each company's API, « Non résolu » until someone marks it « Résolu ». */
 function ChangesTab({ list, lines, watch, server, looking, onLook }: { list: CatalogCompany[]; lines: WatchItem[]; watch: AdminState['watch'] | undefined; server: boolean; looking: boolean; onLook: () => void }) {
