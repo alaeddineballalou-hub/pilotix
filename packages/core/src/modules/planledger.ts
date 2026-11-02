@@ -1,5 +1,5 @@
 // Effective-dated, immutable assignment copies. Editing a template never reprices past work.
-import { AgencyCounts, BillLine, ManagementPlanConfig, NO_COUNTS, partnerBill, simulateManagementPlan } from '@pilotix/shared';
+import { agentPlanTask, AgencyCounts, BillLine, ManagementPlanConfig, NO_COUNTS, partnerBill, simulateManagementPlan } from '@pilotix/shared';
 import { Db, iso, num } from '../db';
 import { bad, Ctx, forbidden, notFound } from '../rpc';
 import type { Tenancy } from '../platform/tenancy';
@@ -67,8 +67,8 @@ function addEvent(buckets:Map<number,Bucket>, t:Term, o:Operation, event:'confir
   if(!t.config) return;
   const p=t.config;
   // Old contracts were per order; modern rules can assess each distinct product line.
-  const main=p.trigger===event&&(p.upsell.ruleVersion===2||o.primary);
-  const up=upsellOwner&&p.upsell.enabled&&(p.upsell.ruleVersion===2 ? (event==='delivered'&&o.deliveredQty>o.originalQty) : (o.primary&&o.upsell>0&&p.upsell.trigger===event));
+  const main=p.trigger===event&&(p.agentTask==='suivi'?o.primary:p.upsell.ruleVersion===2||o.primary);
+  const up=p.agentTask!=='suivi'&&upsellOwner&&p.upsell.enabled&&(p.upsell.ruleVersion===2 ? (event==='delivered'&&o.deliveredQty>o.originalQty) : (o.primary&&o.upsell>0&&p.upsell.trigger===event));
   if(!main&&!up) return;
   const calc=simulateManagementPlan({...p,monthly:0,bonus:{...p.bonus,enabled:false}},
     {productPrice:o.price,operations:main?1:0,upsells:up?1:0,incrementalValue:o.upsell,originalQty:o.originalQty,deliveredQty:o.deliveredQty});
@@ -256,22 +256,28 @@ export async function agencyPayroll(ctx:Ctx,month:string) {
     const db=t.shop(schema);
     const profiles=await db.query('SELECT id,email,agency_profile_id FROM profiles WHERE agency_id=$1',[ctx.shop!.id]);
     const owned=new Set(people.map(p=>num(p.id)));
-    const ids=new Map(profiles.map(p=>[num(p.id),owned.has(num(p.agency_profile_id))?num(p.agency_profile_id):byEmail.get(String(p.email).toLowerCase())]));
+    const ids=new Map(profiles.map(p=>[num(p.id),p.agency_profile_id==null?byEmail.get(String(p.email).toLowerCase()):owned.has(num(p.agency_profile_id))?num(p.agency_profile_id):undefined]));
     for(const o of await operations(db,ctx.shop!.id,from,to))for(const event of ['confirmed','delivered'] as const) {
       const at=o[event];if(!inRange(at,from,to))continue;
       const link=contractLinks.find(l=>iso(l.started_at)<=at!&&(!l.ended_at||at!<iso(l.ended_at)));
       // Do not credit an operation to an ended or not-yet-started seller contract.
       if(!link)continue;
-      const actors=new Set<number>();
       const conf=num(o.row.conf_agency_id)===ctx.shop!.id?ids.get(num(o.row.agent_id)):undefined;
-      if(conf)actors.add(conf);
-      if(event==='delivered'&&num(o.row.follow_agency_id)===ctx.shop!.id){const f=ids.get(num(o.row.follow_agent_id));if(f)actors.add(f);}
-      for(const id of actors){
-        const es=allBonusEvents.get(id)??[];es.push({id:String(o.row.id),at:at!,event,linkId:num(link.id)});allBonusEvents.set(id,es);
+      const follow=event==='delivered'&&num(o.row.follow_agency_id)===ctx.shop!.id?ids.get(num(o.row.follow_agent_id)):undefined;
+      // An assignment to one task never earns the other task's commission, even for dual-role agents.
+      for(const [task,id] of [['confirmation',conf],['suivi',follow]] as const){
+        if(!id)continue;
         const history=terms.filter(t=>t.target===id);
-        const original=id===conf&&o.confirmed?chosen(history,id,o.confirmed):undefined;
-        const use=original?.config?original:chosen(history,id,at!);if(!use?.config)continue;
-        const b=buckets.get(id)??new Map<number,Bucket>();addEvent(b,use,o,event,id===conf);buckets.set(id,b);}
+        const current=chosen(history,id,at!);
+        // Confirmation and its later upsell keep the plan that existed when this order was confirmed.
+        const use=task==='confirmation'&&o.confirmed?chosen(history,id,o.confirmed):current;
+        const bonusConfig=current?.config??use?.config;
+        if(!bonusConfig||agentPlanTask(bonusConfig)===task){
+          const es=allBonusEvents.get(id)??[];es.push({id:String(o.row.id),at:at!,event,linkId:num(link.id)});allBonusEvents.set(id,es);
+        }
+        if(!use?.config||agentPlanTask(use.config)!==task)continue;
+        const scoped={...use,config:{...use.config,agentTask:task}};
+        const b=buckets.get(id)??new Map<number,Bucket>();addEvent(b,scoped,o,event,task==='confirmation');buckets.set(id,b);}
     }
   }
   const rows=[];

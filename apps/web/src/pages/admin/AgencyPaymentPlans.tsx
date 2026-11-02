@@ -1,6 +1,6 @@
 // Payment plans workspace for the Confirmation Agency. Templates, bonuses and assignments are separate.
 import { useEffect, useState } from 'react';
-import { DEFAULT_MANAGEMENT_PLAN, planPriceBrackets, simulateManagementPlan, type ManagementPlanConfig, validatePriceBrackets } from '@pilotix/shared';
+import { agentPlanTask, DEFAULT_MANAGEMENT_PLAN, expandRoles, planPriceBrackets, simulateManagementPlan, type ManagementPlanConfig, validatePriceBrackets } from '@pilotix/shared';
 import { useAction, useRpc } from '../../lib/query';
 import { BillLines } from '../agency/parts';
 import { PlanSummary } from './PlanSummary';
@@ -16,7 +16,7 @@ const int=(v:string)=>Math.floor(nn(v));
 const copy=<T,>(x:T):T=>structuredClone(x);
 const MODES=[['fixed','Salaire + Prime fixe'],['percent','Salaire + Prime en pourcentage'],['tier','Système de paliers de prix'],['none','Salaire fixe']] as const;
 const UPS=[['double','Double confirmation'],['qty','QTY — Quantité supplémentaire'],['percent','Pourcentage du prix unitaire'],['fixed','Montant fixe']] as const;
-const blankPlan=():ManagementPlanConfig=>({...copy(DEFAULT_MANAGEMENT_PLAN),bonus:{enabled:false,threshold:100,amount:0},upsell:{enabled:false,method:'double',rate:0,trigger:'delivered',ruleVersion:2}});
+const blankPlan=(kind:Kind):ManagementPlanConfig=>({...copy(DEFAULT_MANAGEMENT_PLAN),...(kind==='agent'?{agentTask:'confirmation' as const}:{}),bonus:{enabled:false,threshold:100,amount:0},upsell:{enabled:false,method:'double',rate:0,trigger:'delivered',ruleVersion:2}});
 const editable=(p:ManagementPlanConfig):ManagementPlanConfig=>({...copy(p),ranges:copy(planPriceBrackets(p)),bonus:{...p.bonus,enabled:false},upsell:{...p.upsell,method:p.upsell.method==='qty'?'qty':p.upsell.method,trigger:'delivered',ruleVersion:2}});
 const ym=()=>{const d=new Date(Date.now()+3600000);return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')};
 
@@ -48,12 +48,13 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
   const offers=bq.data?.offers??[];
   const planError=editing?getPlanError(editing.configuration,editing.name):'';
   const canEdit=!!editing&&!planLinked;
+  const suiviPlan=editing?.kind==='agent'&&agentPlanTask(editing.configuration)==='suivi';
   const legacyReadOnly=!!planLinked&&!!selectedPlan&&selectedPlan.configuration.upsell.ruleVersion!==2;
   const patch=(change:Partial<ManagementPlanConfig>)=>{
     setEditing(p=>p?{...p,configuration:{...p.configuration,...change}}:p);setError('');
   };
-  const selectPlan=(p:Plan)=>{const linked=(q.data?.blockedPlanIds??[]).includes(p.id);setEditing({id:p.id,kind:p.kind,name:p.name,configuration:linked?copy(p.configuration):editable(p.configuration)});setError('')};
-  const newPlan=(kind:Kind)=>{setEditing({id:null,kind,name:'Nouveau plan',configuration:blankPlan()});setError('')};
+  const selectPlan=(p:Plan)=>{const linked=(q.data?.blockedPlanIds??[]).includes(p.id);const config=p.kind==='agent'?{...p.configuration,agentTask:agentPlanTask(p.configuration)}:p.configuration;setEditing({id:p.id,kind:p.kind,name:p.name,configuration:linked?copy(config):editable(config)});setError('')};
+  const newPlan=(kind:Kind)=>{setEditing({id:null,kind,name:'Nouveau plan',configuration:blankPlan(kind)});setError('')};
   const saveCurrent=()=>{if(!editing||planError||planLinked)return;save.mutate({...(editing.id?{id:editing.id}:{}),kind:editing.kind,name:editing.name,configuration:editing.configuration},{onSuccess:r=>setEditing(p=>p?{...p,id:r.id}:p)})};
   const removeCurrent=()=>{if(!editing?.id||planLinked)return;if(!confirm(planHistorical?'Archiver cette tarification de l’ancien contrat ? L’historique sera conservé.':'Supprimer cette tarification non affectée ?'))return;remove.mutate({id:editing.id},{onSuccess:()=>setEditing(null)})};
   useEffect(()=>{setEditing(null);setError('')},[tab]);
@@ -74,7 +75,7 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
         {q.isLoading?<p>Chargement…</p>:q.error?<p className="form-err">{q.error.message}</p>:
           <div className="ppm-cards">{plans.filter(p=>p.kind===tab).map(p=>
             <button key={p.id} type="button" className={'ppm-plan-card '+(editing?.id===p.id?'on':'')} onClick={()=>selectPlan(p)}>
-              <b>{p.name}</b><small>{MODES.find(m=>m[0]===p.configuration.method)?.[1]}</small>
+              <b>{p.name}</b>{p.kind==='agent'&&<small>{agentPlanTask(p.configuration)==='suivi'?'Plan de suivi':'Plan de confirmation'}</small>}<small>{MODES.find(m=>m[0]===p.configuration.method)?.[1]}</small>
               {(q.data?.blockedPlanIds??[]).includes(p.id)?
                 <span className="ppm-pill">Affecté</span>:(q.data?.historicPlanIds??[]).includes(p.id)?
                 <span className="ppm-pill clear">Ancien contrat</span>:<span className="ppm-pill clear">Libre</span>}
@@ -87,11 +88,16 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
         {legacyReadOnly&&selectedPlan&&<div className="agx-note"><b>Conditions historiques acceptées (non modifiables)</b><PlanSummary plan={selectedPlan.configuration}/></div>}
         <div className="ppm-grid">
           <label className="field"><span className="lab">Nom du plan</span><input disabled={!canEdit} maxLength={100} value={editing.name} onChange={e=>setEditing(p=>p?{...p,name:e.target.value}:p)}/></label>
+          {tab==='agent'&&<label className="field"><span className="lab">Type de plan Agent Pay</span><select disabled={!canEdit} value={agentPlanTask(editing.configuration)} onChange={e=>{
+            const task=e.target.value as 'confirmation'|'suivi';
+            patch({agentTask:task,...(task==='suivi'?{trigger:'delivered',upsell:{...editing.configuration.upsell,enabled:false,rate:0,trigger:'delivered',ruleVersion:2}}:{})});
+          }}><option value="confirmation">Plan de confirmation</option><option value="suivi">Plan de suivi</option></select></label>}
           <label className="field"><span className="lab">Mode de calcul</span><select disabled={!canEdit} value={editing.configuration.method} onChange={e=>patch({method:e.target.value as ManagementPlanConfig['method']})}>
             {MODES.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
-          {editing.configuration.method!=='none'&&<label className="field"><span className="lab">Commission principale déclenchée</span><select disabled={!canEdit} value={editing.configuration.trigger} onChange={e=>patch({trigger:e.target.value as 'confirmed'|'delivered'})}>
+          {editing.configuration.method!=='none'&&!suiviPlan&&<label className="field"><span className="lab">Commission principale déclenchée</span><select disabled={!canEdit} value={editing.configuration.trigger} onChange={e=>patch({trigger:e.target.value as 'confirmed'|'delivered'})}>
             <option value="confirmed">Commande confirmée</option><option value="delivered">Commande livrée</option></select></label>}
-          {(editing.configuration.method==='fixed'||editing.configuration.method==='percent')&&<label className="field"><span className="lab">{editing.configuration.method==='fixed'?'Prime fixe / opération (DA)':'Prime (% du prix unitaire produit)'}</span>
+          {suiviPlan&&<p className="agx-note">Une commission par commande livrée attribuée à cet agent en suivi.</p>}
+          {(editing.configuration.method==='fixed'||editing.configuration.method==='percent')&&<label className="field"><span className="lab">{editing.configuration.method==='fixed'?(suiviPlan?'Prime fixe / commande livrée (DA)':'Prime fixe / opération (DA)'):'Prime (% du prix unitaire produit)'}</span>
             <input disabled={!canEdit} type="number" min={0} max={editing.configuration.method==='percent'?100:10000000} value={editing.configuration.rate} onChange={e=>patch({rate:nn(e.target.value)})}/></label>}
           <label className="field"><span className="lab">{tab==='agent'?'Salaire fixe mensuel (DA)':'Forfait mensuel vendeur (DA)'}</span>
             <input disabled={!canEdit} type="number" min={0} value={editing.configuration.monthly} onChange={e=>patch({monthly:nn(e.target.value)})}/></label>
@@ -109,7 +115,7 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
           </div>)}
           <button type="button" className="btn ppm-add" disabled={!canEdit||planPriceBrackets(editing.configuration).length>=100} onClick={()=>patch({ranges:addRange(planPriceBrackets(editing.configuration))})}>+ Ajouter un palier</button>
         </div>}
-        <div className="ppm-section">
+        {!suiviPlan&&<div className="ppm-section">
           <div className="ppm-row"><h3>Prime Upsell</h3><span className="ppm-pill">{legacyReadOnly?'Conditions historiques':'Livrée uniquement'}</span></div>
           <label className="ppm-toggle"><input type="checkbox" disabled={!canEdit} checked={editing.configuration.upsell.enabled} onChange={e=>patch({upsell:{...editing.configuration.upsell,enabled:e.target.checked,trigger:'delivered',ruleVersion:2}})}/> Activer la prime Upsell</label>
           {editing.configuration.upsell.enabled&&<>
@@ -126,7 +132,8 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
               {editing.configuration.upsell.method==='fixed'?'Fixe : une prime fixe par ligne produit avec quantité augmentée.':''}
               {' '}Prime générée uniquement après livraison, sans double paiement de la commission principale.</p>
           </>}
-        </div>
+        </div>}
+        {tab==='agent'&&!suiviPlan&&<p className="agx-note">Commissions uniquement sur les commandes attribuées à cet agent en confirmation.</p>}
         {planError&&<p className="form-err" role="alert">{planError}</p>}
         {error&&<p className="form-err" role="alert">{error}</p>}
         <div className="row agx-actions">
@@ -137,6 +144,7 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
       </section>}
       {tab==='agent'&&<section className="card ppm-panel">
         <div className="ppm-row"><h2>Paie des agents</h2><label className="field"><span className="lab">Mois</span><input type="month" value={month} onChange={e=>setMonth(e.target.value)}/></label></div>
+        <p className="muted">Chaque plan rémunère uniquement les commandes attribuées à l’agent pour la confirmation ou le suivi.</p>
         {payroll.isLoading?<p>Chargement…</p>:payroll.error?<p className="form-err">{payroll.error.message}</p>:payroll.data&&<>
           {payroll.data.rows.map(row=><details key={row.id} className="ppm-payrow"><summary>{row.name} · {row.operations} opérations · <b>{currency(row.total)}</b></summary><BillLines lines={row.lines} total={row.total}/></details>)}
           {!payroll.data.rows.length&&<p>Aucune rémunération enregistrée pour ce mois.</p>}
@@ -220,7 +228,7 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
         {!agentRows.length&&<section className="card ppm-panel">Aucun agent actif disponible.</section>}
         {agentRows.map(u=><section key={u.id} className="card ppm-panel">
           <h3>{u.name}</h3>
-          <PlanAssignment label="Plan de rémunération" plans={plans.filter(p=>p.kind==='agent')}
+          <PlanAssignment label="Plan de rémunération" plans={plans.filter(p=>p.kind==='agent'&&expandRoles(u.roles).includes(agentPlanTask(p.configuration)))}
             current={q.data?.assignments.find(a=>a.targetKind==='agent'&&a.targetId===u.id)?.planId??null}
             busy={assign.isPending} action="Affecter" onApply={id=>assign.mutate({targetKind:'agent',targetId:u.id,planId:id})}/>
           <div className="ppm-section"><h4>Bonus visibles par l'agent</h4>
@@ -235,6 +243,8 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
   </div>;
 }
 function getPlanError(p:ManagementPlanConfig,name:string) {
+  if(p.agentTask==='suivi'&&p.trigger!=='delivered')return 'Un plan de suivi est rémunéré à la livraison';
+  if(p.agentTask==='suivi'&&p.upsell.enabled)return 'Les plans de suivi ne comptent pas les upsells';
   if(!name.trim()||name.length>100)return 'Nom obligatoire (maximum 100 caractères)';
   if([p.rate,p.monthly,p.upsell.rate,...planPriceBrackets(p).map(t=>t.amount)].some(v=>!Number.isFinite(v)||v<0||v>10000000))return 'Montant invalide (0 à 10 000 000 DA)';
   if(p.method==='percent'&&p.rate>100)return 'Pourcentage supérieur à 100 %';
@@ -261,6 +271,6 @@ function PlanAssignment({label,plans,current,onApply,busy,action}:{label:string;
   const [value,setValue]=useState(current===null?'':String(current));
   useEffect(()=>setValue(current===null?'':String(current)),[current]);
   return <div className="ppm-assignment"><label className="field"><span className="lab">{label}</span><select value={value} disabled={busy} onChange={e=>setValue(e.target.value)}>
-    <option value="">Aucun plan / retirer</option>{plans.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+    <option value="">Aucun plan / retirer</option>{plans.map(p=><option key={p.id} value={p.id}>{p.name}{p.kind==='agent'?' · '+(agentPlanTask(p.configuration)==='suivi'?'Suivi':'Confirmation'):''}</option>)}
   </select></label><button className="btn" disabled={busy} onClick={()=>onApply(value?Number(value):null)}>{action}</button></div>;
 }

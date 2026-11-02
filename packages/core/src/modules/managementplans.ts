@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import { proc, forbidden, bad, notFound } from '../rpc';
-import { simulateManagementPlan, validatePriceBrackets } from '@pilotix/shared';
+import { agentPlanTask, expandRoles, simulateManagementPlan, validatePriceBrackets } from '@pilotix/shared';
 
 import { agencyAdmin, agencyPayroll, billingTargets, json, period, proposeBilling } from './planledger';
 
 const Amount = z.number().finite().min(0).max(10_000_000);
 const Pct = z.number().finite().min(0).max(100);
 const Config = z.object({
+  agentTask: z.enum(['confirmation','suivi']).optional(),
   method: z.enum(['none','fixed','percent','tier']),
   trigger: z.enum(['confirmed','delivered']),
   rate: Amount,
@@ -44,7 +45,12 @@ async function livePlanIds(ctx:any, db:any):Promise<Set<number>> {
 function needSellerAdmin(ctx: any) {
   if (ctx.shop?.kind === 'marketer' || !ctx.session?.isAdmin) throw forbidden('Réservé à l’administrateur de la boutique ou de l’agence');
 }
-function validPlan(c: z.infer<typeof Config>) {
+function validPlan(c: z.infer<typeof Config>, kind: 'billing'|'agent') {
+  if (kind === 'billing' && c.agentTask !== undefined) throw bad('Le type confirmation / suivi est réservé aux plans Agent Pay');
+  if (kind === 'agent' && agentPlanTask(c) === 'suivi') {
+    if (c.trigger !== 'delivered') throw bad('Un plan de suivi est rémunéré à la livraison');
+    if (c.upsell.enabled) throw bad('Les plans de suivi ne comptent pas les upsells');
+  }
   if (c.method === 'percent' && c.rate > 100) throw bad('Le pourcentage ne peut pas dépasser 100');
   if (c.upsell.method === 'percent' && c.upsell.rate > 100) throw bad('Le pourcentage upsell ne peut pas dépasser 100');
   if (c.upsell.enabled && ['double','qty'].includes(c.upsell.method) && (c.method === 'none' || (!c.upsell.ruleVersion && c.trigger !== 'confirmed'))) throw bad('Double confirmation ou QTY nécessite une commission principale');
@@ -67,16 +73,18 @@ export const managementPlanProcs = {
       assignments:assignments.map(a=>({targetKind:a.target_kind as string,targetId:Number(a.target_id),planId:Number(a.plan_id)})) };
   }),
   'management.planSave': proc([], z.object({ id:Id.optional(),kind:Kind,name:z.string().trim().min(1).max(100),configuration:Config }), async (ctx,i) => {
-    needSellerAdmin(ctx); validPlan(i.configuration);
+    needSellerAdmin(ctx);
+    const configuration = i.kind === 'agent' ? { ...i.configuration, agentTask: agentPlanTask(i.configuration) } : i.configuration;
+    validPlan(configuration, i.kind);
     if (i.id) {
       const old = (await ctx.db.query('SELECT kind FROM management_payment_plans WHERE id=$1 AND active=true',[i.id]))[0];
       if (!old) throw notFound('Plan introuvable');
       if (old.kind !== i.kind) throw bad('Le type de plan ne peut pas changer');
       if((await livePlanIds(ctx,ctx.db)).has(i.id))throw bad('Plan affecté (contrat actif) : dupliquez-le avant modification');
-      await ctx.db.query('UPDATE management_payment_plans SET name=$2,configuration=$3,updated_at=now() WHERE id=$1',[i.id,i.name,JSON.stringify(i.configuration)]);
+      await ctx.db.query('UPDATE management_payment_plans SET name=$2,configuration=$3,updated_at=now() WHERE id=$1',[i.id,i.name,JSON.stringify(configuration)]);
       return { id:i.id };
     }
-    const saved=(await ctx.db.query('INSERT INTO management_payment_plans (kind,name,configuration) VALUES ($1,$2,$3) RETURNING id',[i.kind,i.name,JSON.stringify(i.configuration)]))[0];
+    const saved=(await ctx.db.query('INSERT INTO management_payment_plans (kind,name,configuration) VALUES ($1,$2,$3) RETURNING id',[i.kind,i.name,JSON.stringify(configuration)]))[0];
     return { id:Number(saved.id) };
   }),
   'management.planClone': proc([], z.object({id:Id}), async (ctx,i) => {
@@ -95,7 +103,14 @@ export const managementPlanProcs = {
       if(i.targetKind==='agent' && (target.agency_id || !target.active || !target.roles.some((r:string)=>['confirmation','suivi','agent_manager'].includes(r)))) throw bad('Choisissez un agent actif de votre équipe');
       const plan=i.planId===null?null:(await db.query('SELECT * FROM management_payment_plans WHERE id=$1 AND active=true',[i.planId]))[0];
       if(i.planId!==null && (!plan || plan.kind!==(i.targetKind==='agent'?'agent':'billing')))throw bad('Plan incompatible ou inactif');
-      if(i.targetKind==='agent') await db.query('INSERT INTO management_agent_terms(profile_id,plan_id,name,configuration,effective_at) VALUES($1,$2,$3,$4,$5)',[i.targetId,i.planId,plan?.name??'Aucun plan',plan?JSON.stringify(json(plan.configuration)):null,new Date(ctx.now()).toISOString()]);
+      const config = plan ? json(plan.configuration) : null;
+      if (i.targetKind === 'agent' && config) {
+        validPlan(config, 'agent');
+        const task = agentPlanTask(config);
+        if (!expandRoles(target.roles).includes(task)) throw bad(`Ce plan de ${task} nécessite un agent avec le rôle ${task}`);
+        config.agentTask = task;
+      }
+      if(i.targetKind==='agent') await db.query('INSERT INTO management_agent_terms(profile_id,plan_id,name,configuration,effective_at) VALUES($1,$2,$3,$4,$5)',[i.targetId,i.planId,plan?.name??'Aucun plan',config?JSON.stringify(config):null,new Date(ctx.now()).toISOString()]);
       if(i.planId===null)await db.query('DELETE FROM management_plan_assignments WHERE target_kind=$1 AND target_id=$2',[i.targetKind,i.targetId]);
       else await db.query('INSERT INTO management_plan_assignments(target_kind,target_id,plan_id) VALUES($1,$2,$3) ON CONFLICT(target_kind,target_id) DO UPDATE SET plan_id=EXCLUDED.plan_id,updated_at=now()',[i.targetKind,i.targetId,i.planId]);
     });
