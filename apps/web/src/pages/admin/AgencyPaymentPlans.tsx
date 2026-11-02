@@ -98,7 +98,7 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
         </div>
         {editing.configuration.method==='tier'&&<div className="ppm-section">
           <div className="ppm-row"><h3>Système de paliers de prix</h3><small>{planPriceBrackets(editing.configuration).length} paliers</small></div>
-          <p className="muted">Limites modifiables · aucun trou ni chevauchement · dernier palier illimité.</p>
+          <p className="muted">Limites modifiables · aucun trou ni chevauchement · dernier palier illimité. Le calcul utilise le prix unitaire du produit, jamais le total de la commande.</p>
           {planPriceBrackets(editing.configuration).map((t,i,all)=><div key={i} className="ppm-tier">
             <div className="ppm-row"><b>Palier {i+1}</b><button className="btn small" type="button" disabled={!canEdit||all.length===1} onClick={()=>patch({ranges:removeRange(all,i)})}>Supprimer</button></div>
             <div className="ppm-tier-grid">
@@ -124,7 +124,7 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
               {editing.configuration.upsell.method==='qty'?'QTY : prime supplémentaire = (QTY livrée − QTY initiale) × commission normale.':''}
               {editing.configuration.upsell.method==='percent'?'Pourcentage : prime supplémentaire = prix UNITAIRE produit × taux / 100. Jamais sur le total de commande.':''}
               {editing.configuration.upsell.method==='fixed'?'Fixe : une prime fixe par ligne produit avec quantité augmentée.':''}
-              {' '}Prime générée uniquement après livraison, sans double paiement de la commission principale.</p>
+              {' '}Prime générée uniquement après livraison, sur la ligne produit concernée. Une confirmation déjà payée est conservée et n'est pas payée une deuxième fois.</p>
           </>}
         </div>
         {planError&&<p className="form-err" role="alert">{planError}</p>}
