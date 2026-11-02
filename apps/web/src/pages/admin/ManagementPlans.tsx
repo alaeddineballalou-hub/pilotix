@@ -107,9 +107,9 @@ function StoreManagementPlans({ agency = false, initialKind = 'billing' }: { age
     {p&&<section className="card">
       <h2>Simulation (sans modifier les factures)</h2>
       <div className="agx-pe-grid">
-        {([['Prix du produit',price,setPrice],['Opérations éligibles',count,setCount],['Nombre d’upsells',upsells,setUpsells],['Valeur ajoutée / upsell',incremental,setIncremental]] as const).map(([label,value,set],i)=><label className="field" key={i}><span className="lab">{label}</span><input type="number" min={0} value={value} onChange={e=>set(number(e.target.value))}/></label>)}
+        {([['Prix du produit',price,setPrice],[suiviPlan?'Commandes livrées attribuées':'Opérations éligibles',count,setCount],['Nombre d’upsells',upsells,setUpsells],['Valeur ajoutée / upsell',incremental,setIncremental]] as const).filter((_,i)=>!suiviPlan||i<2).map(([label,value,set],i)=><label className="field" key={i}><span className="lab">{label}</span><input type="number" min={0} value={value} onChange={e=>set(number(e.target.value))}/></label>)}
       </div>
-      {previewError?<p className="form-err">{previewError}</p>:preview&&<div><p>Forfait/salaire : <b>{money(preview.monthly)}</b></p><p>Commissions : <b>{money(preview.main)}</b></p><p>Bonus : <b>{money(preview.bonus)}</b></p><p>Upsell : <b>{money(preview.upsell)}</b></p><h2>Total : {money(preview.total)}</h2></div>}
+      {previewError?<p className="form-err">{previewError}</p>:preview&&<div><p>Forfait/salaire : <b>{money(preview.monthly)}</b></p><p>Commissions : <b>{money(preview.main)}</b></p><p>Bonus : <b>{money(preview.bonus)}</b></p>{!suiviPlan&&<p>Upsell : <b>{money(preview.upsell)}</b></p>}<h2>Total : {money(preview.total)}</h2></div>}
     </section>}
     <section className="card"><h2>Affecter les plans</h2>
       <p className="muted">{agency&&kind==='billing'?'Le vendeur doit accepter chaque proposition dans Agences → son contrat. Les nouveaux tarifs commencent à son acceptation.':`Sélectionnez un plan par ${kind==='billing'?'produit':'agent'} et cliquez sur Appliquer.`} Une commande confirmée sous un plan conserve ce plan jusqu’à sa livraison. Les opérations antérieures conservent leurs règles. Modifier un modèle ne change pas ses affectations : réaffectez-le pour appliquer une nouvelle version.</p>
