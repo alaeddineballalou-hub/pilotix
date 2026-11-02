@@ -647,23 +647,6 @@ function PricesModal({ l, onClose }: { l: AgencyLinkInfo; onClose: () => void })
   );
 }
 
-/** Agency-wide tariff editor: the only place to set the default rate used for new invitations. */
-function AgencyRates() {
-  const { t } = useTranslation();
-  const q = useHome();
-  const [p, setP] = useState<AgencyPrices | null>(null);
-  const save = useAction('agency.prices', { success: t('agency.pricesSaved') });
-  useEffect(() => { if (q.data && p === null) setP(q.data.agency.prices ?? NO_AGENCY_PRICES); }, [q.data, p]);
-  if (!q.data || !p) return null;
-  return <Card title={t('agency.tarifs.title')} help={t('agency.tarifs.help')}>
-    <Lead>{t('agency.tarifs.text')}</Lead>
-    <PriceEditor value={p} onChange={setP} />
-    <div className="row agx-actions">
-      <button type="button" className="btn primary" disabled={save.isPending || !hasPrice(p)} onClick={() => save.mutate({ prices: p })}>{t('common.save')}</button>
-    </div>
-  </Card>;
-}
-
 // ---------------------------------------------------------------- Facturation
 /** Each seller's month: its numbers, what they make, and the payment: asked → paid (the seller) → received (us). */
 export function Facturation(_: PageProps) {
@@ -682,10 +665,7 @@ export function Facturation(_: PageProps) {
   const total = rows.reduce((s, r) => s + r.bill.total, 0);
   return (
     <div className="agx-page">
-      {!mk && session?.isAdmin && <>
-        <ManagementPlans agency initialKind="billing" />
-        <details className="card"><summary><strong>Ancien tarif — contrats et invitations existants</strong></summary><p className="muted">Ces tarifs restent utilisés pour les factures en cours. Les nouveaux plans ne remplacent pas encore automatiquement les contrats existants.</p><AgencyRates /></details>
-      </>}
+      {!mk && session?.isAdmin && <ManagementPlans agency initialKind="billing" />}
       <Card title={t('agency.fact.title', { m: monthLabel(month, i18n.language) })} help={tp('fact.help')} actions={<MonthPicker value={month} max={max} onChange={setMonth} />}>
         <Kpis>
           <KpiBox icon="coins" label={t('agency.fact.total')} value={da(total)} sub={t('agency.fact.totalSub', { count: rows.length })} />
