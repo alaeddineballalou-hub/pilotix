@@ -13,6 +13,7 @@ import { CopyCode } from '../../ui/CopyCode';
 import { Card, ErrorBox, Field, Icon, Kpi, Kpis, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { AgentHeader, Filters, initials, PeriodSwitch, SaveBar, SearchBox, useEdges } from '../ai/agent';
+import { CmLahjaFix } from '../messages/lahja';
 import type { PageProps } from '../registry';
 import '../messages/messages.css';
 import './cm.css';
@@ -192,6 +193,8 @@ function CommentCard({ c, busy }: { c: Comment; busy: boolean }) {
   const open = c.status === 'new' || c.status === 'handoff' || c.status === 'error';
   const junk = c.intent === 'spam' || c.intent === 'insult';
   const blur = c.hidden && !reveal;
+  // the agent wrote the replies (not the team): « Leçon de darija » under each
+  const agent = !!c.by && c.by !== 'team';
   const by = c.by === 'team' ? (c.handledBy ? t('cm.by.teamName', { name: c.handledBy }) : t('cm.by.team')) : c.by ? t(`cm.by.${c.by}`) : null;
   const submit = () => {
     const v = text.trim();
@@ -246,6 +249,7 @@ function CommentCard({ c, busy }: { c: Comment; busy: boolean }) {
               <span>
                 <small>{t('cm.feed.public')}</small>
                 <span dir="auto">{c.publicReply}</span>
+                {agent && <CmLahjaFix id={c.id} which="public" sent={c.publicReply} />}
               </span>
             </div>
           )}
@@ -263,6 +267,7 @@ function CommentCard({ c, busy }: { c: Comment; busy: boolean }) {
                   )}
                 </small>
                 <span dir="auto">{c.privateReply}</span>
+                {agent && <CmLahjaFix id={c.id} which="private" sent={c.privateReply} />}
               </span>
             </div>
           )}

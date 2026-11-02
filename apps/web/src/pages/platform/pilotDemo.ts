@@ -379,7 +379,7 @@ function state() {
       test: { id: 3, championId: 2, challengerId: 3, share: 0.2, verdict: 'wait', why: null, stats: {}, startedAt: at(3) },
     },
     // the next book: v4 (v3 is in test), a lesson found at night and one the coach wrote in « Teach a lesson »
-    lahjaWaiting: 2,
+    lahjaWaiting: 3,
     next: {
       version: 4,
       lessons: 11,
@@ -488,14 +488,36 @@ function teachAnswer(i: { messages: { from: string; text: string }[]; lang?: str
 let added = 900;
 
 // Darija lessons in the preview: two waiting (a shop's team, what Dellal learned at night), two for every shop
+/** the chats behind the word Dellal learned in the example (names, numbers and prices hidden, like the real ones) */
+const DARIJA_CASES: { conv: number; c?: string; d?: string; chat: string }[] = [
+  { conv: 7101, c: 'wesh 3andkom la bague en argent ?', d: 'Wach t7ab tchouf tsawer ta3 la bague ?', chat: 'C: wesh 3andkom la bague en argent ?\nD: Wa 3alikoum salam ! Ih kayna, b <price>. Wach t7ab tchouf tsawer ta3 la bague ?\nC: ih wesh, b3atli\nD: Hadi tsawer s7a7 📸 Men ayya wilaya nta ?\nC: Oran' },
+  { conv: 7102, c: 'wesh, mazal kayen le collier doré ?', chat: 'C: wesh, mazal kayen le collier doré ?\nD: Ih mazal 👍 b <price>, w la livraison l Oran <price>.\nC: saha nakhdou\nD: Mlih ! 3tini smiytek w numéro ta3ek.' },
+  { conv: 7103, c: 'Salam wesh rakom, ch7al la livraison l Oran ?', d: 'Wach men couleur t7abi : doré wela argenté ?', chat: 'C: Salam wesh rakom, ch7al la livraison l Oran ?\nD: La livraison l Oran <price>, tkhalsi ki testalmi. Wach men couleur t7abi : doré wela argenté ?\nC: doré' },
+];
 function lahjaState() {
   const to = today();
   const at = (k: number, h = 9) => new Date(Date.parse(`${add(to, -k)}T0${h}:00:00Z`)).toISOString();
-  const row = (o: Record<string, unknown>) => ({ shopId: null, shop: null, own: false, before: '', after: '', note: null, evidence: {}, by: null, decidedBy: null, decidedAt: null, ...o });
+  const row = (o: Record<string, unknown>) => ({ shopId: null, shop: null, own: false, before: '', after: '', note: null, evidence: {}, by: null, decidedBy: null, decidedAt: null, samples: { c: [], d: [] }, via: o.source === 'seller' ? 'messages' : null, ...o });
   return {
     waiting: [
       row({ id: 41, shopId: 1, shop: 'Boutique Alaeddine', source: 'seller', status: 'waiting', own: true, words: [{ use: 'saha', not: 'wakha' }], before: 'Wakha, nb3atlek tsawer ta3 la poussette.', after: 'Saha, nb3atlek tsawer ta3 la poussette.', by: 'Sara', at: at(0, 8) }),
-      row({ id: 42, shopId: 7, shop: 'Bijoux Oran', source: 'dellal', status: 'waiting', own: true, words: [{ use: 'wesh', not: 'wach' }], note: 'Les clients d’Oran écrivent « wesh », pas « wach »', evidence: { customers: 14, chats: 61 }, at: at(0, 2) }),
+      row({
+        id: 42,
+        shopId: 7,
+        shop: 'Bijoux Oran',
+        source: 'dellal',
+        status: 'waiting',
+        own: true,
+        words: [{ use: 'wesh', not: 'wach' }],
+        note: 'Les clients d’Oran écrivent « wesh », pas « wach »',
+        evidence: { customers: 14, chats: 61 },
+        samples: {
+          c: DARIJA_CASES.filter((x) => x.c).map((x) => ({ conv: x.conv, line: x.c! })),
+          d: DARIJA_CASES.filter((x) => x.d).map((x) => ({ conv: x.conv, line: x.d! })),
+        },
+        at: at(0, 2),
+      }),
+      row({ id: 43, shopId: 3, shop: 'Maison Sétif', source: 'seller', via: 'cm', status: 'waiting', own: true, words: [{ use: 'inbox', not: 'privé' }], before: 'Ahlan ! Jawbnakom f privé 👍', after: 'Ahlan ! Jawbnakom f inbox 👍', by: 'Karim', at: at(1, 7) }),
     ],
     approved: [
       row({ id: 30, source: 'coach', status: 'approved', words: [{ use: 'khouya' }], before: 'Mar7ba bik, wach t7ab ?', after: 'Mar7ba bik khouya, wach t7ab ?', by: 'Alaeddine', decidedBy: 'Alaeddine', at: at(5), decidedAt: at(5) }),
@@ -562,13 +584,16 @@ export function demoAnswer(name: string, input: any): unknown {
       return costs(input ?? {});
     case 'p.pilot.bookText':
       return { version: 2, updatedAt: new Date(Date.now() - 9 * DAY).toISOString(), testVersion: 3, lessons: 7, text: BOOK };
-    case 'p.pilot.case':
+    case 'p.pilot.case': {
+      const dj = DARIJA_CASES.find((x) => x.conv === input?.convId);
+      if (dj) return { outcome: 'delivered', reason: null, takeover: false, transcript: dj.chat };
       return {
         outcome: 'delivered',
         reason: null,
         takeover: false,
         transcript: 'C: Salam, ch7al la montre ?\nD: Wa 3alikoum salam ! La montre Atlas b 3500 DA, w la livraison l Sétif 400 DA. T7eb nwerilek video ?\nC: Ih wach rak t9oul\nD: Hadi video ta3 client. Twesslek f 48 sa3a, w tkhalass ghir ki tchouf la montre.\nC: Ok n7eb nakhodha\nD: Mlih ! 3tini smiytek, l commune w l numéro.',
       };
+    }
     default:
       return null;
   }

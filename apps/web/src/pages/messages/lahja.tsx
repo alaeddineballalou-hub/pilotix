@@ -1,6 +1,6 @@
-// Darija (lahja) lessons in a shop. « Leçon de darija » under one of Dellal's messages: write how Dellal should have said
-// it (the message that was sent never changes); the words you change become a lesson that Dellal uses at once in this shop,
-// and that Pilotix checks for every shop. Messages › Réglages lists them, with what Dellal learned from the shop's
+// Darija (lahja) lessons in a shop. « Leçon de darija » under one of Dellal's messages, or under one of the CM AI agent's
+// replies to a comment: write how it should have said it (what was sent never changes); the words you change become a
+// lesson that Dellal and the CM AI agent use at once in this shop, and that Pilotix checks for every shop. Messages › Réglages lists them, with what Dellal learned from the shop's
 // customers and Pilotix's lessons for every shop. The words are drawn the same way in the control room.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -32,21 +32,18 @@ export function LahjaWords({ words, className = '' }: { words: LahjaWord[]; clas
   );
 }
 
-/** Under one of Dellal's messages: write it the right way, the changed words become a lesson. */
-export function LahjaFix({ m, name = 'Dellal' }: { m: Msg; name?: string }) {
+type Saved = { words: LahjaWord[]; review: string };
+
+/**
+ * The editor under one of the agents' messages (Dellal's message, or the CM AI agent's reply to a comment): write it the
+ * right way; the changed words become a lesson. What was sent never changes.
+ */
+function FixBox({ sent, help, busy, done, onSave }: { sent: string; help: string; busy: boolean; done: Saved | null; onSave: (after: string) => void }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const [text, setText] = useState(m.body);
-  const [done, setDone] = useState<{ words: LahjaWord[]; review: string } | null>(null);
+  const [text, setText] = useState(sent);
   const area = useRef<HTMLTextAreaElement>(null);
   const box = useRef<HTMLDivElement>(null);
-  const add = useAction('dellal.lahja.add', {
-    onDone: (r) => {
-      setDone({ words: r.words, review: r.review });
-      setOpen(false);
-      toast(t(r.review === 'waiting' ? 'messages.lahja.addedPilotix' : 'messages.lahja.added'), 'ok');
-    },
-  });
   useLayoutEffect(() => {
     const el = area.current;
     if (!el) return;
@@ -57,7 +54,6 @@ export function LahjaFix({ m, name = 'Dellal' }: { m: Msg; name?: string }) {
   useEffect(() => {
     if (open) box.current?.scrollIntoView({ block: 'nearest', behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }, [open]);
-  if (m.role !== 'agent' || m.meta?.demo) return null;
   if (done)
     return (
       <div className="lj-done">
@@ -69,13 +65,13 @@ export function LahjaFix({ m, name = 'Dellal' }: { m: Msg; name?: string }) {
     );
   if (!open)
     return (
-      <button type="button" className="lj-open" onClick={() => (setText(m.body), setOpen(true))}>
+      <button type="button" className="lj-open" onClick={() => (setText(sent), setOpen(true))}>
         <Icon name="languages" /> {t('messages.lahja.fix')}
       </button>
     );
   return (
     <div ref={box} className="lj-edit">
-      <p>{t('messages.lahja.fixHelp', { name })}</p>
+      <p>{help}</p>
       <textarea
         ref={area}
         dir="auto"
@@ -88,15 +84,34 @@ export function LahjaFix({ m, name = 'Dellal' }: { m: Msg; name?: string }) {
         onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
       />
       <div className="lj-edit-do">
-        <button type="button" className="btn primary small" disabled={add.isPending || !text.trim() || text.trim() === m.body.trim()} onClick={() => add.mutate({ messageId: m.id, after: text.trim() })}>
+        <button type="button" className="btn primary small" disabled={busy || !text.trim() || text.trim() === sent.trim()} onClick={() => onSave(text.trim())}>
           {t('messages.lahja.save')}
         </button>
-        <button type="button" className="btn ghost small" disabled={add.isPending} onClick={() => setOpen(false)}>
+        <button type="button" className="btn ghost small" disabled={busy} onClick={() => setOpen(false)}>
           {t('messages.lahja.cancel')}
         </button>
       </div>
     </div>
   );
+}
+
+const savedToast = (t: (k: string) => string, r: Saved) => toast(t(r.review === 'waiting' ? 'messages.lahja.addedPilotix' : 'messages.lahja.added'), 'ok');
+
+/** Under one of Dellal's messages: write it the right way, the changed words become a lesson. */
+export function LahjaFix({ m, name = 'Dellal' }: { m: Msg; name?: string }) {
+  const { t } = useTranslation();
+  const [done, setDone] = useState<Saved | null>(null);
+  const add = useAction('dellal.lahja.add', { onDone: (r) => (setDone(r), savedToast(t, r)) });
+  if (m.role !== 'agent' || m.meta?.demo) return null;
+  return <FixBox sent={m.body} help={t('messages.lahja.fixHelp', { name })} busy={add.isPending} done={done} onSave={(after) => add.mutate({ messageId: m.id, after })} />;
+}
+
+/** Under one of the CM AI agent's replies to a comment (public or private): the same lesson, the reply never changes. */
+export function CmLahjaFix({ id, which, sent }: { id: number; which: 'public' | 'private'; sent: string }) {
+  const { t } = useTranslation();
+  const [done, setDone] = useState<Saved | null>(null);
+  const add = useAction('cm.lahja.add', { onDone: (r) => (setDone(r), savedToast(t, r)) });
+  return <FixBox sent={sent} help={t('cm.lahja.fixHelp')} busy={add.isPending} done={done} onSave={(after) => add.mutate({ id, which, after })} />;
 }
 
 /** Messages › Réglages: this shop's Darija lessons, what Dellal learned from its customers, Pilotix's for every shop. */
@@ -126,7 +141,8 @@ export function LahjaCard({ name }: { name: string }) {
                     <div>
                       <LahjaWords words={l.words} />
                       <small>
-                        <bdi>{l.by ?? '—'}</bdi> · <bdi>{dateOnly(l.at)}</bdi> · <span className={`lj-st lj-st-${l.review}`}>{t(`${k}review.${l.review}`, { defaultValue: l.review })}</span>
+                        <bdi>{l.by ?? '—'}</bdi> · <bdi>{dateOnly(l.at)}</bdi>
+                        {l.via === 'cm' && <> · {t(k + 'fromComment')}</>} · <span className={`lj-st lj-st-${l.review}`}>{t(`${k}review.${l.review}`, { defaultValue: l.review })}</span>
                       </small>
                     </div>
                     <button type="button" className="btn ghost small" disabled={remove.isPending} onClick={() => remove.mutate({ id: l.id })}>

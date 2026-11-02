@@ -1499,7 +1499,19 @@
         "acceptedToast": "قُبل: كل المتاجر تستعمله",
         "refusedToast": "رُفض",
         "removedToast": "حُذف من كل المتاجر",
-        "addedToast": "أُضيف درس الدارجة لكل المتاجر"
+        "addedToast": "أُضيف درس الدارجة لكل المتاجر",
+        "pickAll": "اختر الكل ({{n}})",
+        "pickOne": "اختر هذا الدرس",
+        "picked": "{{n}} دروس مختارة",
+        "unpick": "إلغاء الاختيار",
+        "acceptedMany": "قُبلت {{n}} دروس: كل المتاجر تستعملها",
+        "refusedMany": "رُفضت {{n}} دروس",
+        "failedMany": "{{n}} دروس ما زالت للمراجعة: السبب في سطرها",
+        "viaCm": "تعليق",
+        "beforeCm": "كتب CM AI",
+        "proofCustomers": "زبائن {{shop}} يكتبون",
+        "proofDellal": "Dellal يكتب",
+        "seeChat": "شاهد المحادثة"
       }
     }
   }

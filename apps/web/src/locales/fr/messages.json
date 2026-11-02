@@ -193,6 +193,7 @@
     "all": "Leçons de Pilotix pour toutes les boutiques",
     "allEmpty": "Pas encore de leçon pour toutes les boutiques.",
     "more": "Voir les {{n}}",
-    "less": "Voir moins"
+    "less": "Voir moins",
+    "fromComment": "réponse à un commentaire"
   }
 }

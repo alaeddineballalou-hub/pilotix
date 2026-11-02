@@ -1467,7 +1467,23 @@
         "acceptedToast": "Accepted: every shop uses it",
         "refusedToast": "Refused",
         "removedToast": "Removed from every shop",
-        "addedToast": "Darija lesson added for every shop"
+        "addedToast": "Darija lesson added for every shop",
+        "pickAll": "Pick all ({{n}})",
+        "pickOne": "Pick this lesson",
+        "picked_one": "{{n}} lesson picked",
+        "picked_other": "{{n}} lessons picked",
+        "unpick": "Clear",
+        "acceptedMany_one": "{{n}} lesson accepted: every shop uses it",
+        "acceptedMany_other": "{{n}} lessons accepted: every shop uses them",
+        "refusedMany_one": "{{n}} lesson refused",
+        "refusedMany_other": "{{n}} lessons refused",
+        "failedMany_one": "{{n}} lesson is still to review: the reason is in its row",
+        "failedMany_other": "{{n}} lessons are still to review: the reason is in their rows",
+        "viaCm": "Comment",
+        "beforeCm": "CM AI wrote",
+        "proofCustomers": "{{shop}}’s customers write",
+        "proofDellal": "Dellal writes",
+        "seeChat": "See the chat"
       }
     }
   }

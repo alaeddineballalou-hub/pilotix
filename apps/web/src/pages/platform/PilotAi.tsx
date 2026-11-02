@@ -12,11 +12,11 @@ import type { POut, Staff } from '../../lib/platform';
 import { PilotDemo, usePilotAction, usePilotRpc } from './pilotDemo';
 import { VersionsCard } from './PilotInsights';
 import { Card, ErrorBox, Field, Icon, Loading, Tabs } from '../../ui/kit';
-import { Modal } from '../../ui/modal';
 import { can } from './bits';
 import { BoardDays, CmBoard, DellalBoard, SpyBoard } from './PilotBoards';
 import { BookCard, LearnCard } from './PilotLearn';
 import { LabTab } from './PilotLab';
+import { CaseModal } from './pilotCase';
 
 type State = POut<'p.pilot.state'>;
 type Lesson = State['candidates'][number];
@@ -434,31 +434,6 @@ function LessonRow({ l, onCase }: { l: Lesson; onCase: (c: [number, number]) => 
         ))}
       </div>
     </div>
-  );
-}
-
-function CaseModal({ shopId, convId, onClose }: { shopId: number; convId: number; onClose: () => void }) {
-  const { t } = useTranslation();
-  const q = usePilotRpc('p.pilot.case', { shopId, convId });
-  return (
-    <Modal title={t('platform.pilot.chatTitle')} onClose={onClose} sheet>
-      {q.isLoading ? (
-        <Loading />
-      ) : q.error || !q.data ? (
-        <ErrorBox error={q.error} />
-      ) : (
-        <>
-          <p className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
-            <span className={`chip o-${q.data.outcome}`}>{t(`platform.pilot.outcome.${q.data.outcome}`, { defaultValue: q.data.outcome })}</span>
-            {q.data.reason && <span className="chip">{t(`platform.pilot.reason.${q.data.reason}`, { defaultValue: q.data.reason })}</span>}
-            {q.data.takeover && <span className="chip pp-chip-ok">{t('platform.pilot.takeover')}</span>}
-          </p>
-          <pre className="pilot-transcript">{q.data.transcript}</pre>
-          <p className="small muted">{t('platform.pilot.legend')}</p>
-          <p className="small muted">{t('platform.pilot.anonymous')}</p>
-        </>
-      )}
-    </Modal>
   );
 }
 
