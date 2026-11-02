@@ -86,7 +86,7 @@ function SuiviBar({ tab }: { tab: Sub }) {
   );
   // a confirmation agency: the tabs of the step chosen in its menu (En livraison · Alertes · Livré · Annulé)
   if (agency) {
-    const step = ['alertes', 'alertes_new', 'alertes_encours', 'traites'].includes(tab) ? 'alert' : tab === 'bloques' || tab === 'enlivraison' ? 'road' : tab;
+    const step = ['alertes', 'alertes_new', 'alertes_encours', 'traites', 'reclamation'].includes(tab) ? 'alert' : tab === 'bloques' || tab === 'enlivraison' ? 'road' : tab;
     return (
       <nav ref={bar} className="bjm-bar flow" aria-label="Étapes" data-g="suivi">
         {step === 'alert' ? (
@@ -96,6 +96,8 @@ function SuiviBar({ tab }: { tab: Sub }) {
             {item('alertes_encours', c?.alertes_encours ?? 0)}
             <span className="bjm-ar" aria-hidden="true">›</span>
             {item('traites', c?.traites ?? 0)}
+            <span className="bjm-sep" aria-hidden="true" />
+            {item('reclamation', c?.claims, true)}
           </>
         ) : step === 'road' ? (
           <>
@@ -109,8 +111,6 @@ function SuiviBar({ tab }: { tab: Sub }) {
             <span className="bjm-sep" aria-hidden="true" />
             {has('suivi') && item('swap', c?.swap ?? 0, true)}
           </>
-        ) : step === 'reclamation' ? (
-          item('reclamation', c?.claims)
         ) : (
           item(tab, c?.livres ?? 0)
         )}

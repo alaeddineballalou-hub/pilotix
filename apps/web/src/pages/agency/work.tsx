@@ -58,15 +58,24 @@ export function AgencySuivi(props: PageProps) {
 function PickSeller({ what }: { what: string }) {
   const { t } = useTranslation();
   const w = useSellers();
+  const c = useRpc('suivi.counts', {}, { refetchInterval: 60_000 }).data as Record<string, number> | undefined;
+  const links = what === 'reclamation' ? stepLinks('traites') : ['annules', 'swap'];
   return (
-    <Empty>
+    <>
+      <StageBar
+        flow={false}
+        items={links.map((k) => ({ key: k, label: t(k === 'traites' ? 'suivi.tabs.traitesAlert' : `suivi.tabs.${k}`), href: `#/suivi/${k}`, count: k === 'reclamation' || k === 'swap' ? undefined : c?.[k] }))}
+        current={what}
+      />
+      <Empty>
       <p>{t('agency.work.pickSeller', { what: t(`suivi.tabs.${what}`) })}</p>
       {w.list.length === 1 && (
         <button type="button" className="btn primary" onClick={() => setSeller(w.list[0].id)}>
           <Icon name="store" /> {w.list[0].name}
         </button>
       )}
-    </Empty>
+      </Empty>
+    </>
   );
 }
 
@@ -349,6 +358,8 @@ type Tab = 'enlivraison' | 'alertes' | 'alertes_new' | 'alertes_encours' | 'trai
 const TABS: Tab[] = ['enlivraison', 'alertes', 'alertes_new', 'alertes_encours', 'traites', 'livres', 'annules'];
 /** the tabs of the step chosen in the agency's menu: En livraison · Alertes (new, in progress, handled) · Livré · Annulé */
 const stepTabs = (tab: Tab): Tab[] => (['alertes', 'alertes_new', 'alertes_encours', 'traites'].includes(tab) ? ['alertes_new', 'alertes_encours', 'traites'] : [tab]);
+/** the step's links: Alertes also has « Réclamation » (with one seller chosen) */
+const stepLinks = (tab: Tab): string[] => (stepTabs(tab).includes('traites') ? [...stepTabs(tab), 'reclamation'] : stepTabs(tab));
 const alertTab = (tab: Tab) => tab === 'alertes' || tab === 'alertes_new' || tab === 'alertes_encours';
 type SuiviRow = Out<'suivi.list'>['rows'][number] & { seller?: { id: number; name: string }; extra?: { alertReason: string | null } | null };
 
@@ -370,7 +381,7 @@ function AllSuivi({ sub }: PageProps) {
   const reason = (o: SuiviRow) => (o.followStatus === 'alert' ? o.extra?.alertReason || o.extStatus : o.extStatus);
   return (
     <>
-      <StageBar flow={false} items={stepTabs(tab).map((k) => ({ key: k, label: t(k === 'traites' ? 'suivi.tabs.traitesAlert' : `suivi.tabs.${k}`), href: `#/suivi/${k}`, count: c?.[k] }))} current={tab} />
+      <StageBar flow={false} items={stepLinks(tab).map((k) => ({ key: k, label: t(k === 'traites' ? 'suivi.tabs.traitesAlert' : `suivi.tabs.${k}`), href: `#/suivi/${k}`, count: k === 'reclamation' ? undefined : c?.[k as Tab] }))} current={tab} />
       <div className="card agx-all">
         <div className="card-head">
           <h2>

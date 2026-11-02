@@ -151,14 +151,12 @@ export const AGENCY_NAV: NavItem[] = [
     pages: ['confirmation', 'suivi'],
     children: [
       // the parcel's way: confirmed → on the road with no problem → an alert (new, in progress, handled) → delivered → cancelled
-      // (and swapped to another customer); then its claims
+      // (and swapped to another customer); the claims with the companies are in Alertes
       { id: 'confirmation', href: '#/confirmation', count: 'conf', tone: 'nc-n', icon: 'phone', roles: ['confirmation', 'agent_manager'] },
       { id: 'enlivraison', href: '#/suivi/enlivraison', icon: 'truck', roles: ['suivi', 'confirmation', 'agent_manager'], match: { page: 'suivi', subs: ['enlivraison', 'bloques'] } },
-      { id: 'alertes', href: '#/suivi/alertes_new', count: 'suivi', tone: 'nc-a', icon: 'alert', roles: ['suivi', 'confirmation', 'agent_manager'], match: { page: 'suivi', subs: ['alertes', 'alertes_new', 'alertes_encours', 'traites'] } },
+      { id: 'alertes', href: '#/suivi/alertes_new', count: 'suivi', tone: 'nc-a', icon: 'alert', roles: ['suivi', 'confirmation', 'agent_manager'], match: { page: 'suivi', subs: ['alertes', 'alertes_new', 'alertes_encours', 'traites', 'reclamation'] } },
       { id: 'livrees', href: '#/suivi/livres', icon: 'checkcircle', roles: ['suivi', 'confirmation', 'agent_manager'], match: { page: 'suivi', subs: ['livres'] } },
       { id: 'annulees', href: '#/suivi/annules', icon: 'xcircle', roles: ['suivi', 'confirmation', 'agent_manager'], match: { page: 'suivi', subs: ['annules', 'swap'] } },
-      // claims with the delivery companies on the agency's orders
-      { id: 'reclamation', href: '#/suivi/reclamation', icon: 'flag', roles: ['suivi', 'confirmation', 'agent_manager'], match: { page: 'suivi', subs: ['reclamation'] } },
     ],
   },
   { id: 'confirmation', icon: 'phone', roles: ['confirmation', 'agent_manager'], subs: ['nouvelles', 'attente', 'confirmees'], flow: true, hidden: true },
