@@ -33,10 +33,11 @@ const IN_DELIVERY = ['shipped', 'out_for_delivery', 'failed', 'alert', 'in_excha
 const readQueue = (ctx: Ctx) => hasRole(ctx.session, 'suivi') ? 'follow' as const : 'conf' as const;
 
 /** Filters of each Suivi tab, expressed with the orders list. */
-function tabFilter(tab: SuiviTab, now: number): Partial<ListInput> {
+function tabFilter(tab: SuiviTab, now: number, agency = false): Partial<ListInput> {
   switch (tab) {
     case 'enlivraison':
-      return { follow: [...IN_DELIVERY], sort: 'shipped_at', dir: 'asc' };
+      // a confirmation agency: only the parcels with no problem — one flagged as an alert moves to its « Suivi »
+      return { follow: agency ? IN_DELIVERY.filter((s) => s !== 'alert') : [...IN_DELIVERY], sort: 'shipped_at', dir: 'asc' };
     case 'bloques':
       // the ids come from stuckParcels (see suivi.list)
       return { follow: ['shipped', 'out_for_delivery', 'failed', 'in_exchange'], sort: 'shipped_at', dir: 'asc' };
@@ -175,10 +176,12 @@ async function extras(db: Db, orders: Order[], now = Date.now()): Promise<Record
 
 export async function suiviCounts(ctx: Ctx) {
   const d30 = new Date(ctx.now() - 30 * DAY).toISOString();
+  // a confirmation agency's « En livraison »: no alert in it (alerts are its « Suivi »)
+  const onRoad = agencyOf(ctx) !== null ? `'shipped','out_for_delivery','failed','in_exchange'` : `'shipped','out_for_delivery','failed','alert','in_exchange'`;
   const r = (
     await ctx.db.query(
       `SELECT
-         count(*) FILTER (WHERE follow_status IN ('shipped','out_for_delivery','failed','alert','in_exchange'))::int AS enlivraison,
+         count(*) FILTER (WHERE follow_status IN (${onRoad}))::int AS enlivraison,
          count(*) FILTER (WHERE follow_status = 'alert')::int AS alertes,
          count(*) FILTER (WHERE sub_status = 'alert_traitee' AND follow_status IN ('out_for_delivery','shipped','failed'))::int AS traites,
          count(*) FILTER (WHERE follow_status = 'delivered' AND delivered_at >= $1)::int AS livres,
@@ -734,7 +737,7 @@ export const suiviProcs = {
   'suivi.list': proc(['suivi', 'confirmation'], ListSuivi, async (ctx, i) => {
     const stuck = i.tab === 'bloques' ? await stuckParcels(ctx) : null;
     if (stuck && !stuck.size) return { rows: [], total: 0, page: 1, pageSize: i.pageSize ?? 50, extra: {} };
-    const page = await listOrders(ctx, ListInput.parse({ ...tabFilter(i.tab, ctx.now()), ...(stuck ? { ids: [...stuck.keys()].slice(0, 500) } : {}), q: i.q, page: i.page, pageSize: i.pageSize }), { queue: readQueue(ctx) });
+    const page = await listOrders(ctx, ListInput.parse({ ...tabFilter(i.tab, ctx.now(), agencyOf(ctx) !== null), ...(stuck ? { ids: [...stuck.keys()].slice(0, 500) } : {}), q: i.q, page: i.page, pageSize: i.pageSize }), { queue: readQueue(ctx) });
     if (stuck) {
       const ex = await extras(ctx.db, page.rows, ctx.now());
       for (const o of page.rows) if (ex[o.id]) ex[o.id].stuck = stuck.get(o.id) ?? null;

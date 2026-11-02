@@ -366,6 +366,11 @@ test('an agency works on several sellers: one at a time or all together, its peo
   assert.deepEqual(road.rows.map((r: any) => [r.seller.id, r.id]), [[a.id, va.id]]);
   assert.equal(((await call('suivi.counts', await ctxOf('nora@centre.dz', 'all'), {})) as any).enlivraison, 1);
   assert.equal(((await call('suivi.list', await ctxOf('nora@centre.dz', 'all'), { tab: 'alertes' })) as any).total, 0);
+  // flagged as an alert: it leaves the agency's « En livraison » and goes to its « Suivi » (Alertes)
+  await a.db.query("UPDATE orders SET follow_status='alert' WHERE id=$1", [va.id]);
+  assert.equal(((await call('suivi.list', await ctxOf('nora@centre.dz', 'all'), { tab: 'enlivraison' })) as any).total, 0);
+  assert.equal(((await call('suivi.counts', await ctxOf('nora@centre.dz', 'all'), {})) as any).enlivraison, 0);
+  assert.equal(((await call('suivi.list', await ctxOf('nora@centre.dz', 'all'), { tab: 'alertes' })) as any).total, 1);
   await assert.rejects(call('suivi.act', await ctxOf('nora@centre.dz', a.id), { id: va.id, action: 'realert' }), /Accès refusé/);
   await a.db.query('UPDATE orders SET follow_status=NULL, shipped_at=NULL WHERE id=$1', [va.id]);
   // « Commande suivante » over every seller: the customer who waits the most first, then the next one elsewhere

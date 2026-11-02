@@ -168,13 +168,17 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
 
   /** a group's children this user sees (an agency: the work its sellers give it) */
   const kids = (n: NavItem) =>
-    (n.children ?? []).filter((c) => canSeeChild(c, roles, isAdmin) && (!agency || !work.loaded || (c.id === 'confirmation' ? work.tasks.has('confirmation') : c.id === 'suivi' ? work.tasks.has('suivi') || work.tasks.has('confirmation') : true)));
+    (n.children ?? []).filter((c) => canSeeChild(c, roles, isAdmin) && (!agency || !work.loaded || (c.id === 'confirmation' ? work.tasks.has('confirmation') : ['suivi', 'enlivraison', 'livrees', 'annulees'].includes(c.id) ? work.tasks.has('suivi') || work.tasks.has('confirmation') : true)));
   // a group whose children are all out of the shop's plan is not shown
   const items = nav.filter((n) => !n.hidden && canSee(n, roles, isAdmin, !!session!.canManageUsers, canRules, !!session!.profile.canAffect) && (!n.children || kids(n).length > 0));
   /** the group of the page on screen: its children show in a bar under the header when the sidebar is folded */
   const curGrp = items.find((n) => n.children && n.pages?.includes(page));
   /** the child of a group shown as current */
-  const childOn = (n: NavItem, id: string) => id === page || (page === n.id && sub === id);
+  const childOn = (n: NavItem, id: string) => {
+    const c = n.children?.find((x) => x.id === id);
+    if (c?.match) return page === c.match.page && c.match.subs.includes(sub ?? '');
+    return id === page || (page === n.id && sub === id);
+  };
   // each group remembers whether it is open (Commandes keeps its old key)
   const grpKey = (id: string) => (id === 'commandes' ? 'cmdgrp' : `grp-${id}`);
   const [grpOpen, setGrpOpen] = useState<Record<string, boolean>>(() => Object.fromEntries(nav.filter((n) => n.children).map((n) => [n.id, store.get(grpKey(n.id)) !== 'closed'])));

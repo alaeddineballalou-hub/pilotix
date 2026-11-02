@@ -29,6 +29,7 @@
   "sub": {
     "confirmation": "Confirmation",
     "depot": "Depot",
+    "enlivraison": "Out for delivery",
     "suivi": "Follow-up",
     "livrees": "Delivered",
     "annulees": "Cancelled",

@@ -151,7 +151,7 @@ function Head({ tab }: { tab: ListTab }) {
           <Icon name="alert" /> {t('suivi.clock.lateCount', { count: c.lateCall })}
         </a>
       )}
-      <p className="muted small">{t(`suivi.help.${tab}`)}</p>
+      <p className="muted small">{t(agency && tab === 'enlivraison' ? 'suivi.help.enlivraisonAgency' : `suivi.help.${tab}`)}</p>
     </div>
   );
 }

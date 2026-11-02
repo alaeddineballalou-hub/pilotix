@@ -24,6 +24,7 @@
   },
   "help": {
     "enlivraison": "All parcels in active delivery, including alerts and treated alerts. The Alerts tab contains only parcels in alert.",
+    "enlivraisonAgency": "Parcels on the road with no problem. As soon as a parcel is flagged as an alert, it moves to « Follow-up ».",
     "alertes": "Parcels flagged by the delivery company or the livreur (the statuses chosen in Preferences › Suivi alerts). Call the customer, then “Treat” or “Customer cancels”.",
     "traites": "Alerts already handled: the parcel is back on the road. It leaves this list once delivered or cancelled.",
     "livres": "Parcels delivered in the last 30 days.",

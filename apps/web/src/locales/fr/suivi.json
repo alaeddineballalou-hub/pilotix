@@ -24,6 +24,7 @@
   },
   "help": {
     "enlivraison": "Tous les colis en cours de livraison, y compris les alertes et les alertes traitées. L’onglet Alertes affiche uniquement les colis en alerte.",
+    "enlivraisonAgency": "Les colis en route sans problème. Dès qu’un colis est signalé en alerte, il passe dans « Suivi ».",
     "alertes": "Colis signalés par la société de livraison ou le livreur (les statuts choisis dans Préférences › Alertes du Suivi). Appelez le client, puis « Traiter » ou « Client annule ».",
     "traites": "Alertes déjà traitées : le colis est reparti. Il sort d’ici quand il est livré ou annulé.",
     "livres": "Colis livrés ces 30 derniers jours.",
