@@ -349,7 +349,12 @@ export function parseMetaWebhook(body: any): Incoming[] {
             name: names.get(String(m.from)) || null,
             text: text.slice(0, 4000),
             messageId: m.id ? String(m.id) : null,
-            source: m.referral?.headline ? `pub « ${String(m.referral.headline).slice(0, 80)} »` : m.referral?.source_id ? `pub ${m.referral.source_id}` : null,
+            // the ad's id (to find what it cost) and its title (what Dellal and the team read)
+            source: m.referral?.source_id
+              ? `pub ${m.referral.source_id}${m.referral?.headline ? ` « ${String(m.referral.headline).slice(0, 80)} »` : ''}`
+              : m.referral?.headline
+                ? `pub « ${String(m.referral.headline).slice(0, 80)} »`
+                : null,
           });
         }
       }

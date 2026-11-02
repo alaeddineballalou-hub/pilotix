@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, staffLogin } from '../index';
-import { boardPeriod } from '../platform/aiboard';
+import { boardPeriod, chatSource } from '../platform/aiboard';
 import { recordAiUsage } from '../platform/aiusage';
 import { loadShop } from '../platform/shops';
 
@@ -31,17 +31,35 @@ let ext = 0;
 /** a chat of the shop: its channel, when it started, the product Dellal found first, its orders */
 async function chat(
   db: any,
-  o: { channel?: string; at: string; mode?: string; found?: number[]; orders?: { conf?: string; follow?: string | null; total: number; lines: [number, number, number][] }[] },
+  o: {
+    channel?: string;
+    at: string;
+    mode?: string;
+    source?: string | null;
+    found?: number[];
+    /** Dellal's first answer, so many seconds after the customer's first message */
+    reply?: number;
+    /** handed to the team so many seconds after the start; a person writes `team` seconds later */
+    handoff?: { after: number; team?: number };
+    orders?: { conf?: string; follow?: string | null; total: number; lines: [number, number, number][] }[];
+  },
 ) {
   const c = (
-    await db.query(`INSERT INTO conversations (channel, external_id, mode, created_at, last_message_at) VALUES ($1, $2, $3, $4, $4) RETURNING id`, [
+    await db.query(`INSERT INTO conversations (channel, external_id, mode, source, created_at, last_message_at) VALUES ($1, $2, $3, $4, $5, $5) RETURNING id`, [
       o.channel ?? 'whatsapp',
       `ext-${++ext}`,
       o.mode ?? 'ai',
+      o.source ?? null,
       o.at,
     ])
   )[0].id;
+  const later = (sec: number) => new Date(Date.parse(o.at) + sec * 1000).toISOString();
   await db.query(`INSERT INTO conv_messages (conversation_id, role, body, created_at) VALUES ($1, 'customer', 'salam', $2)`, [c, o.at]);
+  if (o.reply !== undefined) await db.query(`INSERT INTO conv_messages (conversation_id, role, body, created_at) VALUES ($1, 'agent', 'Salam ! Kifach nqder n3awnek ?', $2)`, [c, later(o.reply)]);
+  if (o.handoff) {
+    await db.query(`INSERT INTO conv_messages (conversation_id, role, body, meta, created_at) VALUES ($1, 'tool', 'handoff', '{"tool":"handoff"}', $2)`, [c, later(o.handoff.after)]);
+    if (o.handoff.team !== undefined) await db.query(`INSERT INTO conv_messages (conversation_id, role, body, created_at) VALUES ($1, 'staff', 'Bonjour, je prends la suite.', $2)`, [c, later(o.handoff.after + o.handoff.team)]);
+  }
   if (o.found)
     await db.query(`INSERT INTO conv_messages (conversation_id, role, body, meta, created_at) VALUES ($1, 'tool', 'search_products', $2, $3)`, [
       c,
@@ -263,4 +281,111 @@ test('Dellal’s instruction book: its method, its Darija and the lesson book in
   b = await p('p.pilot.bookText', {});
   assert.equal(b.testVersion, null);
   assert.ok(!b.text.includes('Rappeler le paiement'));
+});
+
+test('what started a chat: an ad (its id, its title), a comment CM AI answered, nothing', () => {
+  assert.deepEqual(chatSource('pub 120210000000001'), { kind: 'ad', adId: '120210000000001', label: null });
+  assert.deepEqual(chatSource('pub 120210000000001 « Vélo enfant »'), { kind: 'ad', adId: '120210000000001', label: 'Vélo enfant' });
+  assert.deepEqual(chatSource('pub « Vélo enfant »'), { kind: 'ad', adId: null, label: 'Vélo enfant' });
+  assert.deepEqual(chatSource('Commentaire Facebook (pub) · « Promo montre »'), { kind: 'comment', adId: null, label: 'Promo montre' });
+  assert.deepEqual(chatSource('Commentaire Instagram'), { kind: 'comment', adId: null, label: 'Instagram' });
+  assert.deepEqual(chatSource(null), { kind: 'direct', adId: null, label: null });
+  assert.equal(chatSource('shortlink').kind, 'other');
+});
+
+test('Dellal, more: how fast it answers (slow answers sell less), the hours that buy, each ad with what it cost', async () => {
+  const { t, p, support } = await server();
+  const db = t.shop('public');
+  const [p1] = (await db.query(`INSERT INTO products (name, sku, price) VALUES ('Montre Atlas', 'MA-1', 3500) RETURNING id`)).map((r: any) => Number(r.id));
+  await db.query(`INSERT INTO ads (id, adset_id, name) VALUES ('120210000000001', 'as1', 'Vidéo montre — octobre')`);
+  await db.query(`INSERT INTO ad_daily (day, ad_id, adset_id, spend_cents) VALUES ('2026-10-04', '120210000000001', 'as1', 1500), ('2026-10-05', '120210000000001', 'as1', 500), ('2026-09-20', '120210000000001', 'as1', 9900)`);
+  const sold = { follow: 'delivered', total: 4000, lines: [[p1, 1, 3500]] as [number, number, number][] };
+  // Monday 5 October, 21:10 in Algeria (20:10 UTC): two chats from the video ad, answered in 8 s and 20 s, one sold
+  await chat(db, { at: '2026-10-05T20:10:00Z', source: 'pub 120210000000001', reply: 8, orders: [sold] });
+  await chat(db, { at: '2026-10-05T20:40:00Z', source: 'pub 120210000000001 « Montre Atlas »', reply: 20 });
+  // a WhatsApp ad with only its title, answered after 3 minutes, an order still on the road
+  await chat(db, { at: '2026-10-06T09:00:00Z', source: 'pub « Vélo enfant »', reply: 180, orders: [{ follow: 'shipped', total: 3000, lines: [[p1, 1, 3000]] }] });
+  // a comment CM AI answered in private; no ad: answered after 40 minutes
+  await chat(db, { at: '2026-10-07T12:00:00Z', source: 'Commentaire Facebook (pub) · « Promo montre »', reply: 2400 });
+  await chat(db, { at: '2026-10-08T12:00:00Z', reply: 45, orders: [sold] });
+  // never answered by Dellal: handed to the team after 30 s, a person wrote 10 minutes later
+  await chat(db, { at: '2026-10-09T12:00:00Z', handoff: { after: 30, team: 600 } });
+  // handed, nobody answered
+  await chat(db, { at: '2026-10-10T12:00:00Z', reply: 5, handoff: { after: 60 } });
+
+  const m = await p('p.dellal.more', { days: 30 });
+  assert.equal(m.speed.answered, 6);
+  assert.equal(m.speed.unanswered, 1);
+  assert.equal(m.speed.median, 32.5, 'half the customers had their answer within 32.5 s');
+  assert.equal(m.speed.underMinute, 66.7);
+  assert.deepEqual(
+    m.speed.steps.map((x: any) => [x.max, x.chats, x.ordered]),
+    [
+      [30, 3, 1],
+      [60, 1, 1],
+      [300, 1, 1],
+      [1800, 0, 0],
+      [null, 1, 0],
+    ],
+  );
+  assert.deepEqual(m.speed.none, { chats: 1, ordered: 0, conversion: 0 });
+  assert.deepEqual(m.speed.team, { chats: 1, median: 600, handed: 2 });
+  // the hours (Algeria): Monday (1) at 21:00 holds the two video chats
+  const mon = m.hours.find((h: any) => h.dow === 1 && h.hour === 21);
+  assert.deepEqual(mon, { dow: 1, hour: 21, chats: 2, ordered: 1 });
+  assert.equal(m.hours.reduce((a: number, h: any) => a + h.chats, 0), 7);
+  // each ad: the same ad id with or without its title is one ad, named as in Publicité, with its spend in the period
+  const video = m.ads.find((a: any) => a.adId === '120210000000001');
+  assert.equal(video.label, 'Vidéo montre — octobre');
+  assert.deepEqual([video.chats, video.ordered, video.conversion, video.ripeChats, video.sold, video.realSales, video.revenue], [2, 1, 50, 2, 1, 50, 4000]);
+  assert.equal(video.spendUsd, 20, 'only the days of the period');
+  assert.equal(video.costPerSale, 20);
+  const bike = m.ads.find((a: any) => a.label === 'Vélo enfant');
+  assert.deepEqual([bike.kind, bike.adId, bike.spendUsd, bike.costPerSale], ['ad', null, null, null]);
+  assert.equal(m.ads.find((a: any) => a.kind === 'comment').label, 'Promo montre');
+  assert.equal(m.ads.find((a: any) => a.kind === 'direct').chats, 3);
+  assert.equal(m.ads[0].adId, '120210000000001', 'the ad with the most chats first');
+  assert.equal(m.ads[m.ads.length - 1].kind, 'direct', 'the chats without an ad last');
+  // the coach sees the sales, not the money spent
+  const s = await p('p.dellal.more', { days: 30 }, support);
+  assert.equal(s.ads.find((a: any) => a.adId === '120210000000001').spendUsd, null);
+  // one product: only its chats
+  const one = await p('p.dellal.more', { days: 30, shopId: (await loadShop(t, { primary: true }))!.id, productId: p1 });
+  assert.equal(one.speed.answered, 3);
+});
+
+test('is Dellal getting better: each lesson book’s chats, conversion and real sales (the base method first)', async () => {
+  const { t, p } = await server();
+  const shop = (await loadShop(t, { primary: true }))!;
+  const db = t.shop('public');
+  const [p1] = (await db.query(`INSERT INTO products (name, sku, price) VALUES ('Montre Atlas', 'MA-1', 3500) RETURNING id`)).map((r: any) => Number(r.id));
+  const sold = { follow: 'delivered', total: 4000, lines: [[p1, 1, 3500]] as [number, number, number][] };
+  const v1 = (await t.platform.query(`INSERT INTO platform.pilot_books (version, status, lesson_ids, text, promoted_at) VALUES (1, 'champion', '[1]', 'LEÇONS v1', '2026-10-01T09:00:00Z') RETURNING id`))[0].id;
+  const v2 = (await t.platform.query(`INSERT INTO platform.pilot_books (version, status, lesson_ids, text) VALUES (2, 'testing', '[1,2]', 'LEÇONS v2') RETURNING id`))[0].id;
+  await t.platform.query(`INSERT INTO platform.pilot_tests (champion_id, challenger_id, share, status, started_at) VALUES ($1, $2, 0.2, 'running', '2026-10-20T09:00:00Z')`, [v1, v2]);
+  const seen = (conv: number, book: number | null, at: string, arm = 'A') =>
+    t.platform.query(`INSERT INTO platform.pilot_exposure (shop_id, conv_id, book_id, arm, at) VALUES ($1, $2, $3, $4, $5)`, [shop.id, conv, book, arm, at]);
+  // the base method (September): 4 chats, 1 sold
+  for (const [k, o] of [[1, [sold]], [2, []], [3, []], [4, []]] as const) await seen(await chat(db, { at: `2026-09-1${k}T10:00:00Z`, orders: o as any }), null, `2026-09-1${k}T10:00:00Z`);
+  // book v1 (October): 3 chats, 2 sold; one more too new for its parcel
+  for (const [k, o] of [[2, [sold]], [3, [sold]], [4, []]] as const) await seen(await chat(db, { at: `2026-10-0${k}T10:00:00Z`, orders: o as any }), Number(v1), `2026-10-0${k}T10:00:00Z`);
+  await seen(await chat(db, { at: '2026-10-28T10:00:00Z', orders: [{ follow: 'shipped', total: 3000, lines: [[p1, 1, 3000]] }] }), Number(v1), '2026-10-28T10:00:00Z');
+  // book v2 in test: 1 chat
+  await seen(await chat(db, { at: '2026-10-21T10:00:00Z', orders: [sold] }), Number(v2), '2026-10-21T10:00:00Z', 'B');
+  // a test chat is never counted
+  await seen(await chat(db, { channel: 'test', at: '2026-10-21T11:00:00Z', orders: [sold] }), Number(v2), '2026-10-21T11:00:00Z', 'B');
+
+  const b = await p('p.dellal.books', {});
+  assert.deepEqual(
+    b.versions.map((v: any) => [v.version, v.status, v.chats, v.ordered, v.ripeChats, v.sold, v.realSales]),
+    [
+      [0, 'base', 4, 1, 4, 1, 25],
+      [1, 'champion', 4, 3, 3, 2, 66.7],
+      [2, 'testing', 1, 1, 1, 1, 100],
+    ],
+  );
+  assert.equal(b.versions[1].from, '2026-10-02T10:00:00.000Z');
+  assert.equal(b.test.challengerId, Number(v2));
+  assert.equal(b.test.share, 0.2);
+  assert.equal((await p('p.dellal.books', { shopId: 999 })).versions.length, 0);
 });

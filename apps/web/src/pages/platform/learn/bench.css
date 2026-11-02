@@ -1,0 +1,108 @@
+/* The learning bench in Pilotix colours: the Anatomy kit's tones (iso.css) taken from the page's own surface and ink, so
+   it fits the light and the dark theme. Dark is the kit's default; the light theme comes with data-theme="light". */
+.pl-iso.iso {
+  --anatomy-page: var(--surface);
+  --anatomy-card: var(--surface);
+  --anatomy-paper: var(--surface);
+  --anatomy-text: var(--ink);
+  --anatomy-strong: var(--ink);
+  --anatomy-muted: var(--muted);
+  --anatomy-face: color-mix(in srgb, var(--surface) 90%, #ffffff);
+  --anatomy-top: color-mix(in srgb, var(--surface) 88%, #ffffff);
+  --anatomy-shade-0: color-mix(in srgb, var(--surface) 72%, #000000);
+  --anatomy-shade-1: color-mix(in srgb, var(--surface) 86%, #000000);
+  --anatomy-shade-2: color-mix(in srgb, var(--surface) 96%, #ffffff);
+  --anatomy-shade-3: color-mix(in srgb, var(--surface) 92%, #ffffff);
+  --anatomy-hi: color-mix(in srgb, var(--ink) 86%, var(--surface));
+  --anatomy-mid: color-mix(in srgb, var(--ink) 42%, var(--surface));
+  --anatomy-lo: color-mix(in srgb, var(--ink) 22%, var(--surface));
+  --anatomy-faint: color-mix(in srgb, var(--ink) 12%, var(--surface));
+  --anatomy-lit: #F7A823;
+  --anatomy-lit-top: color-mix(in srgb, var(--surface) 76%, #F7A823);
+  --anatomy-lit-shade: color-mix(in srgb, var(--surface) 87%, #F7A823);
+  --anatomy-halo: #000000;
+  --anatomy-halo-opacity: 0.55;
+  --anatomy-dot: var(--ink);
+  --anatomy-green: var(--ok);
+  --anatomy-red: var(--coral);
+  --pl-warm: #F7A823;
+  --pl-glow: 0.2;
+  margin: 0;
+}
+.pl-iso.iso[data-theme="light"] {
+  --anatomy-face: color-mix(in srgb, var(--surface) 70%, #ffffff);
+  --anatomy-top: color-mix(in srgb, var(--surface) 60%, #ffffff);
+  --anatomy-shade-0: color-mix(in srgb, var(--surface) 85%, #6b5236);
+  --anatomy-shade-1: color-mix(in srgb, var(--surface) 90%, #6b5236);
+  --anatomy-shade-2: color-mix(in srgb, var(--surface) 94%, #6b5236);
+  --anatomy-shade-3: color-mix(in srgb, var(--surface) 97.5%, #6b5236);
+  --anatomy-hi: color-mix(in srgb, var(--ink) 92%, var(--surface));
+  --anatomy-mid: color-mix(in srgb, var(--ink) 50%, var(--surface));
+  --anatomy-lo: color-mix(in srgb, var(--ink) 30%, var(--surface));
+  --anatomy-faint: color-mix(in srgb, var(--ink) 15%, var(--surface));
+  --anatomy-lit: #D2740A;
+  --anatomy-lit-top: color-mix(in srgb, var(--surface) 88%, #F7A823);
+  --anatomy-lit-shade: color-mix(in srgb, var(--surface) 78%, #F7A823);
+  --anatomy-halo: #7a6450;
+  --anatomy-halo-opacity: 0.3;
+  --pl-warm: #F28C1B;
+  --pl-glow: 0.16;
+}
+.pl-iso .iso-plate { padding: 44px 18px 40px; border-radius: 14px; box-shadow: 0 0 0 1px var(--line); }
+.pl-iso .iso-plate-corners { inset: 16px 18px; }
+.pl-iso .iso-plate-corner { font-size: 10.5px; }
+.pl-iso .iso-plate-corner[data-corner="readout"] { max-width: calc(100% - 210px); overflow: hidden; text-overflow: ellipsis; text-align: end; }
+:root[lang="ar"] .pl-iso .iso-plate-corner { font-family: var(--f, system-ui), sans-serif; letter-spacing: 0; text-transform: none; font-size: 11.5px; }
+.pl-iso .iso-stage { outline: none; border-radius: 10px; }
+.pl-iso .iso-stage:focus-visible { box-shadow: 0 0 0 2px var(--pl-warm); }
+.pl-iso .iso-svg { max-width: 860px; }
+
+/* the parts that change */
+.pl-iso .pl-bub { transition: fill 0.25s, stroke 0.25s; fill: transparent; }
+.pl-iso .pl-bub[data-tone="hi"] { fill: color-mix(in srgb, var(--anatomy-hi) 16%, transparent); }
+.pl-iso .pl-bub[data-tone="lo"] { fill: color-mix(in srgb, var(--anatomy-lo) 18%, transparent); }
+.pl-iso .pl-mast[data-on] > .iso-top { fill: var(--pl-warm); }
+.pl-iso .pl-mast[data-on] > .iso-edge { stroke: var(--pl-warm); }
+.pl-iso .pl-glow { fill: var(--pl-warm); stroke: none; filter: blur(8px); }
+.pl-iso .pl-glow:not([opacity="0"]) { fill-opacity: var(--pl-glow); }
+.pl-iso .pl-bulb[data-on] { stroke: var(--pl-warm); }
+.pl-iso .pl-tok-won > .iso-edge, .pl-iso .pl-tok-won > .iso-crease { stroke: var(--anatomy-green); }
+.pl-iso .pl-tok-won > .iso-top { fill: color-mix(in srgb, var(--anatomy-green) 34%, var(--anatomy-paper)); }
+.pl-iso .pl-tok-won > .iso-shade { fill: color-mix(in srgb, var(--anatomy-green) 22%, var(--anatomy-shade-1)); }
+.pl-iso .pl-tok-lost > .iso-edge, .pl-iso .pl-tok-lost > .iso-crease { stroke: var(--anatomy-red); }
+.pl-iso .pl-tok-lost > .iso-top { fill: color-mix(in srgb, var(--anatomy-red) 32%, var(--anatomy-paper)); }
+.pl-iso .pl-tok-lost > .iso-shade { fill: color-mix(in srgb, var(--anatomy-red) 20%, var(--anatomy-shade-1)); }
+.pl-iso .pl-flag > .iso-edge { stroke: var(--anatomy-green); }
+.pl-iso .pl-flag > .iso-shade, .pl-iso .pl-flag > .iso-top { fill: color-mix(in srgb, var(--anatomy-green) 38%, var(--anatomy-paper)); }
+
+/* the four steps under the bench: a button each (the station's moment, what happens), the one playing is marked */
+.pl-bsteps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.pl-bstep { display: grid; grid-template-columns: auto 1fr; align-items: start; gap: 2px 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; text-align: start; cursor: pointer; transition: border-color 0.2s, background 0.2s, box-shadow 0.2s; }
+.pl-bstep:hover { border-color: color-mix(in srgb, var(--pl-warm, #F7A823) 55%, var(--line)); }
+.pl-bstep[data-on] { border-color: var(--pl-warm, #F7A823); background: color-mix(in srgb, var(--pl-warm, #F7A823) 9%, var(--surface)); box-shadow: 0 0 0 1px var(--pl-warm, #F7A823) inset; }
+.pl-bstep:focus-visible { outline: 2px solid var(--pl-warm, #F7A823); outline-offset: 2px; }
+.pl-bstep-n { grid-row: span 2; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 9%, var(--surface)); font-weight: 700; font-size: 12px; font-variant-numeric: tabular-nums; }
+.pl-bstep[data-on] .pl-bstep-n { background: var(--pl-warm, #F7A823); color: #1B2A47; }
+.pl-bstep-when { font-size: 10.5px; letter-spacing: 0.06em; color: var(--muted); }
+.pl-bstep-what { font-weight: 700; font-size: 13px; line-height: 1.3; }
+.pl-bcap { margin: 10px 2px 0; min-height: 3.1em; color: var(--ink); font-size: 14.5px; line-height: 1.55; max-width: 92ch; }
+.pl-bkeys { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 8px 2px 0; color: var(--muted); font-size: 12.5px; }
+.pl-bkey { display: inline-flex; align-items: center; gap: 7px; }
+.pl-bkey i { flex: none; width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid currentColor; }
+.pl-bkey i.k-book { border-radius: 2px; border-color: var(--pl-warm, #F7A823); background: color-mix(in srgb, var(--pl-warm, #F7A823) 22%, transparent); }
+.pl-bkey i.k-won { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 30%, transparent); }
+.pl-bkey i.k-lost { border-color: var(--coral); background: color-mix(in srgb, var(--coral) 28%, transparent); }
+.pl-bench-wait { aspect-ratio: 760 / 368; border-radius: 14px; box-shadow: 0 0 0 1px var(--line); background: var(--surface); }
+@media (max-width: 720px) {
+  .pl-bsteps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  /* a phone: the picture follows the book (bench.ts), the readout may take two lines */
+  .pl-iso .iso-plate { padding: 38px 0 52px; overflow: hidden; }
+  .pl-iso .iso-plate-corners { inset: 14px 14px 12px; }
+  .pl-iso .iso-plate-corner[data-corner="hint"] { display: none; }
+  .pl-iso .iso-plate-corner[data-corner="readout"] { inset-inline: 0; max-width: none; white-space: normal; text-align: start; line-height: 1.35; overflow: visible; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pl-iso .pl-bub, .pl-bstep { transition: none; }
+}

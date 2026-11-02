@@ -64,9 +64,9 @@ export function PlatformApp({ parts }: { parts: string[] }) {
       document.title = 'Pilotix';
     };
   }, []);
-  // the preview has no server: only the Doctor, the sign-in designs, the delivery companies and the Protection System
-  // can be seen there, with an example
-  if (DEMO_ONLY) return ['doctor', 'designs', 'couriers', 'protection'].includes(parts[0] ?? '') ? <PlatformShell staff={DEMO_STAFF} parts={parts} demo onLogout={() => (location.hash = '#/accueil')} /> : <ServerOnly />;
+  // the preview has no server: only the Doctor, the sign-in designs, the delivery companies, the Protection System and
+  // Pilot AI can be seen there, with an example
+  if (DEMO_ONLY) return ['doctor', 'designs', 'couriers', 'protection', 'pilot'].includes(parts[0] ?? '') ? <PlatformShell staff={DEMO_STAFF} parts={parts} demo onLogout={() => (location.hash = '#/accueil')} /> : <ServerOnly />;
   if (!staff) return <PlatformLogin onDone={setStaff} />;
   // a receipt alone on its page (printed, or saved as PDF from the browser)
   if (parts[0] === 'receipt' && /^\d+$/.test(parts[1] ?? '')) return <Receipt id={Number(parts[1])} />;
@@ -92,6 +92,9 @@ function ServerOnly() {
         <BrandBig />
         <h2 className="login-title">{t('platform.title')}</h2>
         <p className="login-note">{t('platform.serverOnly')}</p>
+        <a className="login-link" href="#/platform/pilot">
+          {t('platform.pilot.demo.open')}
+        </a>
         <a className="login-link" href="#/accueil">
           {t('platform.backToShop')}
         </a>
@@ -207,7 +210,7 @@ function PlatformShell({ staff, parts, onLogout, demo }: { staff: Staff; parts: 
   else if (cur === 'doctor') page = <DoctorPage demo={demo} owner={demo || staff?.role === 'owner'} />;
   else if (cur === 'protection') page = <ProtectionPage demo={demo} />;
   else if (cur === 'payments') page = <Payments staff={staff} />;
-  else if (cur === 'pilot') page = <PilotAiPage staff={staff} tab={parts[1]} />;
+  else if (cur === 'pilot') page = <PilotAiPage staff={staff} tab={parts[1]} demo={demo} />;
   else if (cur === 'signups') page = <Signups />;
   else if (cur === 'agencies') page = <Agencies staff={staff} />;
   else if (cur === 'marketers') page = <Agencies staff={staff} kind="marketer" />;
