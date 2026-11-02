@@ -1,6 +1,6 @@
 // Payment plans workspace for the Confirmation Agency. Templates, bonuses and assignments are separate.
 import { useEffect, useState } from 'react';
-import { agentPlanTask, DEFAULT_MANAGEMENT_PLAN, expandRoles, planPriceBrackets, simulateManagementPlan, type ManagementPlanConfig, validatePriceBrackets } from '@pilotix/shared';
+import { agentPlanTask, DEFAULT_MANAGEMENT_PLAN, expandRoles, planPriceBrackets, simulateManagementPlan, type ManagementPlanConfig, type Role, validatePriceBrackets } from '@pilotix/shared';
 import { useAction, useRpc } from '../../lib/query';
 import { BillLines } from '../agency/parts';
 import { PlanSummary } from './PlanSummary';
@@ -228,7 +228,7 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
         {!agentRows.length&&<section className="card ppm-panel">Aucun agent actif disponible.</section>}
         {agentRows.map(u=><section key={u.id} className="card ppm-panel">
           <h3>{u.name}</h3>
-          <PlanAssignment label="Plan de rémunération" plans={plans.filter(p=>p.kind==='agent'&&expandRoles(u.roles).includes(agentPlanTask(p.configuration)))}
+          <PlanAssignment label="Plan de rémunération" plans={plans.filter(p=>p.kind==='agent')} agentRoles={u.roles}
             current={q.data?.assignments.find(a=>a.targetKind==='agent'&&a.targetId===u.id)?.planId??null}
             busy={assign.isPending} action="Affecter" onApply={id=>assign.mutate({targetKind:'agent',targetId:u.id,planId:id})}/>
           <div className="ppm-section"><h4>Bonus visibles par l'agent</h4>
@@ -267,10 +267,11 @@ function removeRange(all:{from:number;to:number|null;amount:number}[],i:number){
   if(i===0)next[0].from=0;else if(i===all.length-1)next[next.length-1].to=null;else next[i-1].to=all[i].to;
   return next;
 }
-function PlanAssignment({label,plans,current,onApply,busy,action}:{label:string;plans:Plan[];current:number|null;onApply:(id:number|null)=>void;busy:boolean;action:string}){
+function PlanAssignment({label,plans,current,onApply,busy,action,agentRoles}:{label:string;plans:Plan[];current:number|null;onApply:(id:number|null)=>void;busy:boolean;action:string;agentRoles?:Role[]}){
   const [value,setValue]=useState(current===null?'':String(current));
   useEffect(()=>setValue(current===null?'':String(current)),[current]);
+  const incompatible=(p:Plan)=>p.kind==='agent'&&!!agentRoles&&!expandRoles(agentRoles).includes(agentPlanTask(p.configuration));
   return <div className="ppm-assignment"><label className="field"><span className="lab">{label}</span><select value={value} disabled={busy} onChange={e=>setValue(e.target.value)}>
-    <option value="">Aucun plan / retirer</option>{plans.map(p=><option key={p.id} value={p.id}>{p.name}{p.kind==='agent'?' · '+(agentPlanTask(p.configuration)==='suivi'?'Suivi':'Confirmation'):''}</option>)}
-  </select></label><button className="btn" disabled={busy} onClick={()=>onApply(value?Number(value):null)}>{action}</button></div>;
+    <option value="">Aucun plan / retirer</option>{plans.map(p=><option key={p.id} value={p.id} disabled={incompatible(p)}>{p.name}{p.kind==='agent'?' · '+(agentPlanTask(p.configuration)==='suivi'?'Suivi':'Confirmation'):''}{incompatible(p)?' (rôle incompatible)':''}</option>)}
+  </select></label><button className="btn" disabled={busy||plans.some(p=>String(p.id)===value&&incompatible(p))} onClick={()=>onApply(value?Number(value):null)}>{action}</button></div>;
 }
