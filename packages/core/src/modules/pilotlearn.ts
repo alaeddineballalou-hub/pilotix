@@ -9,6 +9,7 @@
  */
 import { sha256Hex } from '@pilotix/shared';
 import { Db, num, iso, isoOrNull } from '../db';
+import { learnLahja } from './lahja';
 
 // ---------------------------------------------------------------- settings
 export const PILOT = {
@@ -1084,7 +1085,7 @@ export type NightReport = {
   cases: { total: number; byOutcome: Record<string, number>; pending: number; stale: number; gold: number };
   stats: { overall: Row; topics: Row[]; reasons: Row[]; langs: Row[] };
   test: TestReport | null;
-  ai: { enabled: boolean; haiku: PhaseRep; sonnet: PhaseRep };
+  ai: { enabled: boolean; haiku: PhaseRep; sonnet: PhaseRep; lahja?: PhaseRep & { proposed: number } };
   lessons: { proposed: number; rejectedByLint: number; duplicates: number; seeds: number; open: number };
   /** usd = estimated cost of this run; reservedUsd = its worst case kept on the ledger; nightUsd = the whole night so far (all runs). */
   spend: { usd: number; reservedUsd: number; nightUsd: number; maxUsd: number; capHit: boolean; line: string };
@@ -1214,6 +1215,27 @@ async function haikuPhase(pdb: Db, batch: PilotBatch, B: Budget, now: Date, rep:
        FROM jsonb_to_recordset($1::jsonb) AS x(shop_id int, conv_id bigint, insight jsonb) WHERE p.shop_id = x.shop_id AND p.conv_id = x.conv_id`,
       [JSON.stringify(upd), now.toISOString()],
     );
+}
+
+/**
+ * Dellal's Darija: what each active sharing shop's customers write that Dellal should write too (modules/lahja.ts), on at
+ * most 15 % of the night's cap, after the sales lessons. The requests the cap cuts wait for another night.
+ */
+async function lahjaPhase(pdb: Db, batch: PilotBatch, B: Budget, now: Date, rep: PhaseRep & { proposed: number }): Promise<void> {
+  const r = await learnLahja(
+    pdb,
+    async (reqs) => {
+      const res = await runPhase(pdb, batch, B, reqs, 0.15);
+      B.usd += res.usd;
+      rep.asked = res.sent.length;
+      rep.cut = res.cut;
+      rep.usd = r6(res.usd);
+      rep.ok = res.out.filter((x) => x !== null).length;
+      return reqs.map((_, i) => (i < res.sent.length ? res.out[i] : null));
+    },
+    now,
+  );
+  rep.proposed = r.proposed;
 }
 
 async function sonnetPhase(pdb: Db, batch: PilotBatch, B: Budget, now: Date, rep: PhaseRep, les: NightReport['lessons'], notes: string[]): Promise<void> {
@@ -1387,14 +1409,18 @@ async function nightWork(
   const test = await judgeRunning(pdb, now);
   if (test && test.stopped) notes.push(`Test ${test.id} stopped by itself: ${test.why}`);
   if (test && !test.stopped && test.verdict === 'pass') notes.push(`Test ${test.id} is proven not worse: the coach can keep it`);
+  const lahja: PhaseRep & { proposed: number } = { asked: 0, ok: 0, cut: 0, usd: 0, proposed: 0 };
   if (batch) {
     await haikuPhase(pdb, batch, B, now, haiku);
     await sonnetPhase(pdb, batch, B, now, sonnet, les, notes);
+    // the sales lessons never depend on it: a Darija phase that fails (its table not there yet) is only noted
+    await lahjaPhase(pdb, batch, B, now, lahja).catch((e) => notes.push(`Darija phase skipped: ${String(e?.message ?? e).slice(0, 120)}`));
+    if (lahja.proposed) notes.push(`${lahja.proposed} Darija lessons learned from the shops' customers: used in their shop, waiting for Pilotix`);
   } else {
     notes.push('No AI tonight (no batch): numbers and test bookkeeping only');
     await seedPhase(pdb, now, stats.reasons, les);
   }
-  const capHit = haiku.cut > 0 || sonnet.cut > 0;
+  const capHit = haiku.cut > 0 || sonnet.cut > 0 || lahja.cut > 0;
   if (capHit) notes.push(`Spending cap reached: ${haiku.cut} Haiku and ${sonnet.cut} Sonnet requests wait for tomorrow`);
   if (B.back > 0) await pdb.query(`UPDATE platform.pilot_budget SET spent_micro = GREATEST(0, spent_micro - $2::bigint), updated_at = now() WHERE night = $1::date`, [B.night, B.back]);
   const usd = r6(B.usd);
@@ -1406,7 +1432,7 @@ async function nightWork(
     cases: await caseCounts(pdb),
     stats,
     test,
-    ai: { enabled: !!batch, haiku, sonnet },
+    ai: { enabled: !!batch, haiku, sonnet, lahja },
     lessons: les,
     spend: { usd, reservedUsd: booked, nightUsd: total, maxUsd: cap, capHit, line: line(usd, booked, total) },
     notes,

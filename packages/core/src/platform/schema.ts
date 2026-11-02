@@ -3,6 +3,7 @@
 import type { Tenancy } from './tenancy';
 import { PILOT_PLATFORM_SQL } from '../modules/pilotlearn';
 import { AI_USAGE_SQL } from './aiusage';
+import { LAHJA_PLATFORM_SQL } from '../modules/lahja';
 
 const P001 = `
 CREATE SCHEMA IF NOT EXISTS platform;
@@ -549,6 +550,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p012_pilot_ai', PILOT_PLATFORM_SQL],
   // what each shop's AI costs (Dellal, CM AI agent, AI Spy), counted by dellal-server › complete() (platform/aiusage.ts)
   ['p013_ai_usage', AI_USAGE_SQL],
+  // Darija (lahja) lessons: the shops' corrections and what Dellal learned, waiting for Pilotix; the ones every shop uses
+  ['p014_lahja', LAHJA_PLATFORM_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

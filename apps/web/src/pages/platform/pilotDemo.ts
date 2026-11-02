@@ -379,6 +379,7 @@ function state() {
       test: { id: 3, championId: 2, challengerId: 3, share: 0.2, verdict: 'wait', why: null, stats: {}, startedAt: at(3) },
     },
     // the next book: v4 (v3 is in test), a lesson found at night and one the coach wrote in « Teach a lesson »
+    lahjaWaiting: 2,
     next: {
       version: 4,
       lessons: 11,
@@ -486,6 +487,52 @@ function teachAnswer(i: { messages: { from: string; text: string }[]; lang?: str
 }
 let added = 900;
 
+// Darija lessons in the preview: two waiting (a shop's team, what Dellal learned at night), two for every shop
+function lahjaState() {
+  const to = today();
+  const at = (k: number, h = 9) => new Date(Date.parse(`${add(to, -k)}T0${h}:00:00Z`)).toISOString();
+  const row = (o: Record<string, unknown>) => ({ shopId: null, shop: null, own: false, before: '', after: '', note: null, evidence: {}, by: null, decidedBy: null, decidedAt: null, ...o });
+  return {
+    waiting: [
+      row({ id: 41, shopId: 1, shop: 'Boutique Alaeddine', source: 'seller', status: 'waiting', own: true, words: [{ use: 'saha', not: 'wakha' }], before: 'Wakha, nb3atlek tsawer ta3 la poussette.', after: 'Saha, nb3atlek tsawer ta3 la poussette.', by: 'Sara', at: at(0, 8) }),
+      row({ id: 42, shopId: 7, shop: 'Bijoux Oran', source: 'dellal', status: 'waiting', own: true, words: [{ use: 'wesh', not: 'wach' }], note: 'Les clients d’Oran écrivent « wesh », pas « wach »', evidence: { customers: 14, chats: 61 }, at: at(0, 2) }),
+    ],
+    approved: [
+      row({ id: 30, source: 'coach', status: 'approved', words: [{ use: 'khouya' }], before: 'Mar7ba bik, wach t7ab ?', after: 'Mar7ba bik khouya, wach t7ab ?', by: 'Alaeddine', decidedBy: 'Alaeddine', at: at(5), decidedAt: at(5) }),
+      row({ id: 27, shopId: 12, shop: 'Maison Sétif', source: 'seller', status: 'approved', own: true, words: [{ use: '', not: 'habibi' }], before: 'Salam habibi, kifach n3awnek ?', after: 'Salam, kifach n3awnek ?', by: 'Karim', decidedBy: 'Sara', at: at(9), decidedAt: at(8) }),
+    ],
+  };
+}
+/** the words a person changed (the same rule as the server, short): replaced, added or removed runs of at most 4 words */
+function wordsChanged(before: string, after: string) {
+  const tok = (x: string) => x.match(/[\p{L}\p{N}'’]+/gu) ?? [];
+  const a = tok(before);
+  const b = tok(after);
+  const low = (w: string) => w.toLowerCase();
+  const dp = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) dp[i][j] = low(a[i]) === low(b[j]) ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  const out: { use: string; not?: string }[] = [];
+  let del: string[] = [];
+  let ins: string[] = [];
+  const flush = () => {
+    if ((del.length || ins.length) && del.length <= 4 && ins.length <= 4 && ![...del, ...ins].some((w) => /^\d+$/.test(w))) out.push(del.length ? { use: ins.join(' '), not: del.join(' ') } : { use: ins.join(' ') });
+    del = [];
+    ins = [];
+  };
+  let i = 0;
+  let j = 0;
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && low(a[i]) === low(b[j])) {
+      flush();
+      i++;
+      j++;
+    } else if (j < b.length && (i >= a.length || dp[i][j + 1] >= dp[i + 1][j])) ins.push(b[j++]);
+    else del.push(a[i++]);
+  }
+  flush();
+  return out.slice(0, 6);
+}
+
 /** the example answer of one control-room call (the Pilot AI page's reads) */
 export function demoAnswer(name: string, input: any): unknown {
   switch (name) {
@@ -495,6 +542,10 @@ export function demoAnswer(name: string, input: any): unknown {
       return teachAnswer(input ?? { messages: [] });
     case 'p.pilot.addLesson':
       return { ok: true, id: ++added, topic: input?.topic, text: input?.text };
+    case 'p.lahja.state':
+      return lahjaState();
+    case 'p.lahja.add':
+      return { ok: true, id: ++added, words: input?.words ?? wordsChanged(String(input?.before ?? ''), String(input?.after ?? '')) };
     case 'p.pilot.state':
       return state();
     case 'p.dellal.board':

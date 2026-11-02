@@ -1423,6 +1423,51 @@
         "publishNote": "It will be tried on {{share}} % of new chats.",
         "testRunning": "A test is running (v{{v}}): the next book goes out when it ends.",
         "managers": "A manager publishes the book."
+      },
+      "lessons": {
+        "title": "Lessons",
+        "help": "Two kinds of lessons. Sales: how Dellal sells, written here only. Darija: how it speaks; shops make them (and Dellal learns some from their customers) for themselves, you decide if every shop keeps them.",
+        "sales": "Sales",
+        "darija": "Darija"
+      },
+      "darija": {
+        "help": "A shop's Darija lesson works at once in that shop. Accepted here, it works in every shop, and no shop can turn it off.",
+        "waiting": "To review",
+        "waitingEmpty": "Nothing to review. The shops' lessons and what Dellal learns at night arrive here.",
+        "approved": "For every shop",
+        "approvedEmpty": "No lesson for every shop yet.",
+        "src": {
+          "seller": "Shop",
+          "dellal": "Learned by Dellal",
+          "coach": "Pilotix"
+        },
+        "fromDellal": "from its customers",
+        "customers_one": "{{n}} customer writes it",
+        "customers_other": "{{n}} customers write it",
+        "before": "Dellal wrote",
+        "after": "Written by the team",
+        "accept": "Accept for every shop",
+        "modify": "Modify",
+        "refuse": "Refuse",
+        "saveAccept": "Save and accept",
+        "cancel": "Cancel",
+        "remove": "Remove",
+        "not": "Don't write…",
+        "use": "Write…",
+        "addRow": "Add a word",
+        "removeRow": "Remove this word",
+        "addTitle": "Add words for every shop",
+        "add": "Add for every shop",
+        "addHint": "Or, in « Test Dellal », tap « Darija lesson » under an answer.",
+        "refusedNote": "Refused, a lesson Dellal learned also stops in its shop.",
+        "fix": "Darija lesson",
+        "fixHelp": "The answer does not change: write how Dellal should have said it. The changed words become a lesson for every shop.",
+        "fixSave": "Make it for every shop",
+        "fixDone": "Lesson added for every shop",
+        "acceptedToast": "Accepted: every shop uses it",
+        "refusedToast": "Refused",
+        "removedToast": "Removed from every shop",
+        "addedToast": "Darija lesson added for every shop"
       }
     }
   }

@@ -59,7 +59,11 @@ function PilotAiInner({ staff, tab, demo }: { staff: Staff; tab?: string; demo: 
         <Tabs
           value={cur}
           onChange={go}
-          items={TABS.map((k) => ({ value: k, label: t(`platform.pilot.tabs.${k}`), ...(k === 'dellal' && d.candidates.length ? { count: d.candidates.length } : {}) }))}
+          items={TABS.map((k) => ({
+            value: k,
+            label: t(`platform.pilot.tabs.${k}`),
+            ...(k === 'dellal' && d.candidates.length ? { count: d.candidates.length } : k === 'lab' && d.lahjaWaiting ? { count: d.lahjaWaiting } : {}),
+          }))}
         />
       </div>
       {cur === 'dellal' && (

@@ -466,6 +466,8 @@ html[data-theme="light"] .tab.on b, html[data-theme="light"] .tab[aria-selected=
 html:not([data-theme="dark"]) .px-folded .side .nav-count { box-shadow: 0 0 0 2px #FFFFFF !important; }
 html:not([data-theme="dark"]) .tab.on b, html:not([data-theme="dark"]) .tab[aria-selected="true"] b { background: #FFFFFF !important; color: var(--c-accent-ink) !important; border-radius: 999px; padding: 0 6px; }
 }
+/* dark: the count of the selected tab keeps the same pill shape as in light */
+html[data-theme="dark"] .tab.on b, html[data-theme="dark"] .tab[aria-selected="true"] b { border-radius: 999px; padding: 0 6px; }
 
 
 /* "?" help: a small brand badge everywhere; the note is one floating bubble (portal), readable, never clipped */

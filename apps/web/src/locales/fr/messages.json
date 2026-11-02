@@ -159,5 +159,40 @@
     "darijaAvoid": "Mots à ne jamais écrire",
     "darijaAvoidHint": "Un par ligne. Mettez le bon mot après une flèche : « frero → khouya ».",
     "darijaAvoidPh": "frero → khouya\nhabibti → khti"
+  },
+  "lahja": {
+    "fix": "Leçon de darija",
+    "fixHelp": "Le message envoyé ne change pas : écrivez comment {{name}} aurait dû le dire. Les mots que vous changez deviennent une leçon.",
+    "save": "Créer la leçon",
+    "cancel": "Annuler",
+    "added": "Leçon de darija ajoutée : Dellal l’utilise dès maintenant dans votre boutique.",
+    "addedPilotix": "Leçon de darija ajoutée : Dellal l’utilise dès maintenant dans votre boutique, et Pilotix la vérifie pour toutes les boutiques.",
+    "doneLocal": "Utilisée dès maintenant dans votre boutique",
+    "doneWaiting": "Utilisée dès maintenant dans votre boutique · envoyée à Pilotix",
+    "instead": "au lieu de",
+    "never": "jamais",
+    "removed": "Leçon retirée de votre boutique",
+    "title": "Leçons de darija",
+    "help": "Comment {{name}} doit parler darija. Sous un message de {{name}}, touchez « Leçon de darija » et écrivez-le comme il fallait : les mots changés deviennent une leçon, utilisée tout de suite dans votre boutique. Pilotix les vérifie : une leçon acceptée sert à toutes les boutiques.",
+    "own": "Vos leçons",
+    "empty": "Pas encore de leçon. Dans une conversation, touchez « Leçon de darija » sous un message de {{name}}.",
+    "review": {
+      "local": "Dans votre boutique",
+      "waiting": "En attente chez Pilotix",
+      "approved": "Pour toutes les boutiques",
+      "refused": "Gardée pour votre boutique",
+      "removed": "Gardée pour votre boutique",
+      "withdrawn": "Dans votre boutique"
+    },
+    "remove": "Retirer",
+    "learned": "Apprises par {{name}} de vos clients",
+    "learnedEmpty": "Rien pour l’instant : chaque nuit, {{name}} regarde comment vos clients écrivent.",
+    "learnedNote": "{{name}} les utilise déjà dans votre boutique ; Pilotix décide si toutes les boutiques les gardent.",
+    "customers_one": "{{n}} client l’écrit",
+    "customers_other": "{{n}} clients l’écrivent",
+    "all": "Leçons de Pilotix pour toutes les boutiques",
+    "allEmpty": "Pas encore de leçon pour toutes les boutiques.",
+    "more": "Voir les {{n}}",
+    "less": "Voir moins"
   }
 }

@@ -10,6 +10,7 @@ import { bad, Ctx, hasRole, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
 import { getRaw, setRaw } from './admin';
 import { DELLAL_DARIJA, parseAvoid } from './darija';
+import { lahjaAvoid, lahjaFor } from './lahja';
 import {
   AiResponse,
   aiKeyed,
@@ -678,7 +679,9 @@ export async function decide(ctx: Ctx, f: CmFacts, s: CmSettings): Promise<CmRun
   if (!read) return { decision: guard({ ...demoDecision(f), reason: 'Réponse de l’IA illisible : règles de secours' }, f, s), by: 'demo', model: null, usage, darija };
   const d = guard(read, f, s);
   // the Algerian Darija check, as for Dellal's messages
-  const avoid = parseAvoid(ds.darijaAvoid);
+  // the shop's word list, its Darija lessons and Pilotix's (modules/lahja.ts)
+  const lahja = await lahjaFor(ctx.db, ctx.t?.platform ?? null, ctx.shop?.id ?? null);
+  const avoid = [...parseAvoid(ds.darijaAvoid), ...lahjaAvoid([...lahja.own, ...lahja.all])];
   for (const k of ['publicReply', 'privateReply'] as const) {
     if (!d[k]) continue;
     const p = await polishDarija(complete, model, d[k], { customer: f.body, avoid });

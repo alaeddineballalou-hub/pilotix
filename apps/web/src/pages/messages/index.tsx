@@ -16,6 +16,7 @@ import { toast } from '../../ui/toast';
 import { AgentHeader, Filters, initials, PeriodSwitch, SaveBar, SearchBox, useEdges, useFillHeight } from '../ai/agent';
 import type { PageProps } from '../registry';
 import { Bubbles, Composer } from './chat';
+import { LahjaCard, LahjaFix } from './lahja';
 import './messages.css';
 
 type Channel = 'whatsapp' | 'messenger' | 'instagram' | 'tiktok' | 'test';
@@ -258,7 +259,7 @@ function Thread({ id, name, info, onInfo, onBack }: { id: number; name: string; 
             </button>
           </div>
         )}
-        <Bubbles messages={messages} name={name} />
+        <Bubbles messages={messages} name={name} foot={(m) => <LahjaFix m={m} name={name} />} />
         <Composer value={body} onChange={setBody} onSend={submit} placeholder={t('messages.thread.write')} busy={reply.isPending} />
       </section>
       <aside className="ai-side" aria-label={t('messages.side.customer')}>
@@ -393,7 +394,7 @@ function Tester() {
                 <span className="ai-hide-s">{t('messages.tester.reset')}</span>
               </button>
             </div>
-            {init.isLoading ? <Loading /> : <Bubbles messages={shown?.messages ?? []} name={name} pending={pending} />}
+            {init.isLoading ? <Loading /> : <Bubbles messages={shown?.messages ?? []} name={name} pending={pending} foot={(m) => <LahjaFix m={m} name={name} />} />}
             <Composer value={body} onChange={setBody} onSend={() => submit()} placeholder={t('messages.tester.write')} busy={send.isPending}>
               <div className="ai-quick" ref={row}>
                 {quick.map((x) => (
@@ -567,6 +568,8 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'de
           <textarea rows={4} maxLength={4000} className="ltr" value={f.darijaAvoid} placeholder={t('messages.settings.darijaAvoidPh')} onChange={(e) => set('darijaAvoid', e.target.value)} />
         </Field>
       </Card>
+
+      <LahjaCard name={f.name} />
 
       {/* on Pilotix's server the AI is Pilotix's (Pilot AI, run from the control room): nothing to set in a shop (nor in its preview) */}
       {!data.platform && backend.kind !== 'demo' && (

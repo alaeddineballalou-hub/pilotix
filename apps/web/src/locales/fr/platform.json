@@ -1423,6 +1423,51 @@
         "publishNote": "Il sera essayé sur {{share}} % des nouvelles conversations.",
         "testRunning": "Un test est en cours (v{{v}}) : le prochain livre partira quand il sera fini.",
         "managers": "Un manager publie le livre."
+      },
+      "lessons": {
+        "title": "Leçons",
+        "help": "Deux sortes de leçons. Vente : comment Dellal vend, écrites ici seulement. Darija : comment il parle ; les boutiques en créent (et Dellal en apprend de leurs clients) pour elles-mêmes, vous décidez si toutes les boutiques les gardent.",
+        "sales": "Vente",
+        "darija": "Darija"
+      },
+      "darija": {
+        "help": "Une leçon de darija d’une boutique sert tout de suite dans cette boutique. Acceptée ici, elle sert à toutes les boutiques, et aucune ne peut l’enlever.",
+        "waiting": "À valider",
+        "waitingEmpty": "Rien à valider. Les leçons des boutiques et ce que Dellal apprend la nuit arrivent ici.",
+        "approved": "Pour toutes les boutiques",
+        "approvedEmpty": "Pas encore de leçon pour toutes les boutiques.",
+        "src": {
+          "seller": "Boutique",
+          "dellal": "Appris par Dellal",
+          "coach": "Pilotix"
+        },
+        "fromDellal": "de ses clients",
+        "customers_one": "{{n}} client l’écrit",
+        "customers_other": "{{n}} clients l’écrivent",
+        "before": "Dellal a écrit",
+        "after": "Écrit par l’équipe",
+        "accept": "Accepter pour toutes les boutiques",
+        "modify": "Modifier",
+        "refuse": "Refuser",
+        "saveAccept": "Enregistrer et accepter",
+        "cancel": "Annuler",
+        "remove": "Retirer",
+        "not": "N’écris pas…",
+        "use": "Écris…",
+        "addRow": "Ajouter un mot",
+        "removeRow": "Enlever ce mot",
+        "addTitle": "Ajouter des mots pour toutes les boutiques",
+        "add": "Ajouter pour toutes les boutiques",
+        "addHint": "Ou, dans « Tester Dellal », touchez « Leçon de darija » sous une réponse.",
+        "refusedNote": "Refusée, une leçon apprise par Dellal s’arrête aussi dans sa boutique.",
+        "fix": "Leçon de darija",
+        "fixHelp": "La réponse ne change pas : écrivez comment Dellal aurait dû le dire. Les mots changés deviennent une leçon pour toutes les boutiques.",
+        "fixSave": "Créer pour toutes les boutiques",
+        "fixDone": "Leçon ajoutée pour toutes les boutiques",
+        "acceptedToast": "Acceptée : toutes les boutiques l’utilisent",
+        "refusedToast": "Refusée",
+        "removedToast": "Retirée de toutes les boutiques",
+        "addedToast": "Leçon de darija ajoutée pour toutes les boutiques"
       }
     }
   }

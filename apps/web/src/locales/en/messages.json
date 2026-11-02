@@ -159,5 +159,40 @@
     "darijaAvoid": "Words never to write",
     "darijaAvoidHint": "One per line. Put the right word after an arrow: “frero → khouya”.",
     "darijaAvoidPh": "frero → khouya\nhabibti → khti"
+  },
+  "lahja": {
+    "fix": "Darija lesson",
+    "fixHelp": "The message that was sent does not change: write how {{name}} should have said it. The words you change become a lesson.",
+    "save": "Make the lesson",
+    "cancel": "Cancel",
+    "added": "Darija lesson added: Dellal uses it now in your shop.",
+    "addedPilotix": "Darija lesson added: Dellal uses it now in your shop, and Pilotix checks it for every shop.",
+    "doneLocal": "Used now in your shop",
+    "doneWaiting": "Used now in your shop · sent to Pilotix",
+    "instead": "instead of",
+    "never": "never",
+    "removed": "Lesson removed from your shop",
+    "title": "Darija lessons",
+    "help": "How {{name}} should speak Darija. Under one of {{name}}'s messages, tap « Darija lesson » and write it the right way: the changed words become a lesson, used at once in your shop. Pilotix checks them: an accepted lesson serves every shop.",
+    "own": "Your lessons",
+    "empty": "No lesson yet. In a conversation, tap « Darija lesson » under one of {{name}}'s messages.",
+    "review": {
+      "local": "In your shop",
+      "waiting": "Waiting at Pilotix",
+      "approved": "For every shop",
+      "refused": "Kept for your shop",
+      "removed": "Kept for your shop",
+      "withdrawn": "In your shop"
+    },
+    "remove": "Remove",
+    "learned": "Learned by {{name}} from your customers",
+    "learnedEmpty": "Nothing yet: every night, {{name}} looks at how your customers write.",
+    "learnedNote": "{{name}} already uses them in your shop; Pilotix decides if every shop keeps them.",
+    "customers_one": "{{n}} customer writes it",
+    "customers_other": "{{n}} customers write it",
+    "all": "Pilotix's lessons for every shop",
+    "allEmpty": "No lesson for every shop yet.",
+    "more": "See all {{n}}",
+    "less": "See less"
   }
 }

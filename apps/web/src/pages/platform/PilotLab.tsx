@@ -2,18 +2,23 @@
 //  - Test Dellal: write like a customer of the shop you pick; Dellal answers with that shop's products and prices and the
 //    lesson book you pick (in service, in test, the next one, none). Your own test chat in that shop: never sent, never
 //    counted, paid by Pilotix (never billed to the shop).
-//  - Teach a lesson: say in your own words what Dellal should do; Pilot AI writes it as a short lesson and checks the rules,
-//    you read it and add it. It waits in the next book, which is tested on a share of new chats like any book.
-// Under them, the next book: the lessons waiting for it, and « Publish ».
+//  - Lessons, two kinds in two tabs:
+//    · Sales (how Dellal sells, written here only): say it in your own words; Pilot AI writes it as a short lesson and checks
+//      the rules, you read it and add it. It waits in the next book, tested on a share of new chats like any book.
+//    · Darija (how Dellal speaks): the shops' lessons (their team's corrections, what Dellal learned from their customers),
+//      used at once in their own shop, wait here: accept (as is or modified), every shop uses it; refuse, the others never
+//      see it. Pilotix's own: « Darija lesson » under an answer of the test chat, or words typed here: every shop at once.
+// Under them, the next book: the sales lessons waiting for it, and « Publish ».
 import { useQueryClient } from '@tanstack/react-query';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { Fragment, useContext, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { clock, dateOnly, n } from '../../lib/format';
 import type { POut } from '../../lib/platform';
 import { Card, Icon, Tabs } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { Bubbles, Composer, Msg, Typing } from '../messages/chat';
-import { PilotDemo, usePilotAction, usePilotCall } from './pilotDemo';
+import { LahjaWord, LahjaWords } from '../messages/lahja';
+import { PilotDemo, usePilotAction, usePilotCall, usePilotRpc } from './pilotDemo';
 
 type State = POut<'p.pilot.state'>;
 type Book = 'live' | 'test' | 'next' | 'none';
@@ -63,7 +68,7 @@ export function LabTab({ d, manager }: { d: State; manager: boolean }) {
           onChange={setPane}
           items={[
             { value: 'try', label: t('platform.pilot.lab.try.title') },
-            { value: 'teach', label: t('platform.pilot.lab.teach.title') },
+            { value: 'teach', label: t('platform.pilot.lab.lessons.title'), ...(d.lahjaWaiting ? { count: d.lahjaWaiting } : {}) },
           ]}
         />
       </div>
@@ -72,7 +77,7 @@ export function LabTab({ d, manager }: { d: State; manager: boolean }) {
           <TryCard d={d} book={book} onBook={setBook} />
         </div>
         <div className="pl-lab-pane pl-lab-teach">
-          <TeachCard d={d} onTry={tryNext} />
+          <LessonsCard d={d} onTry={tryNext} />
         </div>
       </div>
       <NextCard d={d} manager={manager} />
@@ -166,10 +171,13 @@ function TryCard({ d, book, onBook }: { d: State; book: Book; onBook: (b: Book) 
     const used = p.lab === 'none' ? t(k + 'none') : p.lab === 'test' ? t(k + 'test', { v: p.version }) : p.lab === 'next' ? t(k + 'next', { v: p.version }) : p.version ? t(k + 'live', { v: p.version }) : t(k + 'base');
     const model = /sonnet/i.test(String(m.meta.model)) ? 'Sonnet' : /haiku/i.test(String(m.meta.model)) ? 'Haiku' : null;
     return (
-      <small className="pl-used">
-        {used}
-        {model && <> · {model}</>}
-      </small>
+      <>
+        <small className="pl-used">
+          {used}
+          {model && <> · {model}</>}
+        </small>
+        <CoachFix m={m} />
+      </>
     );
   };
 
@@ -245,8 +253,30 @@ function TryCard({ d, book, onBook }: { d: State; book: Book; onBook: (b: Book) 
   );
 }
 
-// ---------------------------------------------------------------- Teach a lesson
-function TeachCard({ d, onTry }: { d: State; onTry: () => void }) {
+// ---------------------------------------------------------------- Lessons: Sales | Darija
+function LessonsCard({ d, onTry }: { d: State; onTry: () => void }) {
+  const { t } = useTranslation();
+  const [kind, setKind] = useState<'sales' | 'darija'>('sales');
+  const k = 'platform.pilot.lab.lessons.';
+  return (
+    <Card title={t(k + 'title')} help={t(k + 'help')} className="pl-lab-card">
+      <div className="pl-lab-kind">
+        <Tabs
+          value={kind}
+          onChange={setKind}
+          items={[
+            { value: 'sales', label: t(k + 'sales') },
+            { value: 'darija', label: t(k + 'darija'), ...(d.lahjaWaiting ? { count: d.lahjaWaiting } : {}) },
+          ]}
+        />
+      </div>
+      {kind === 'sales' ? <TeachChat d={d} onTry={onTry} /> : <DarijaPane />}
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------- Sales: teach a lesson in your own words
+function TeachChat({ d, onTry }: { d: State; onTry: () => void }) {
   const { t, i18n } = useTranslation();
   const call = usePilotCall();
   const demo = useContext(PilotDemo);
@@ -312,7 +342,8 @@ function TeachCard({ d, onTry }: { d: State; onTry: () => void }) {
   };
 
   return (
-    <Card title={t('platform.pilot.lab.teach.title')} help={t('platform.pilot.lab.teach.help')} className="pl-lab-card">
+    <>
+      <p className="small muted pl-lab-kind-note">{t('platform.pilot.lab.teach.help')}</p>
       <div className="ai-phone pl-lab-chat">
         <div className="ai-phone-h">
           <span className="ai-face on" aria-hidden="true">
@@ -383,7 +414,7 @@ function TeachCard({ d, onTry }: { d: State; onTry: () => void }) {
           )}
         </Composer>
       </div>
-    </Card>
+    </>
   );
 }
 
@@ -441,6 +472,267 @@ function Proposal({ line, version, adding, onAdd, onTry }: { line: Line; version
             </button>
           )
         )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- Darija: the review queue, the lessons for every shop
+type LahjaItem = POut<'p.lahja.state'>['waiting'][number];
+const blank = (): LahjaWord => ({ use: '', not: '' });
+/** the rows a person edits, cleaned for the server (an empty « write » with a word to drop = never write it) */
+const tidy = (rows: LahjaWord[]): LahjaWord[] =>
+  rows.map((r) => ({ use: r.use.trim(), ...(r.not?.trim() ? { not: r.not.trim() } : {}) })).filter((r) => r.use || r.not);
+
+function DarijaPane() {
+  const { t } = useTranslation();
+  const q = usePilotRpc('p.lahja.state', {});
+  const k = 'platform.pilot.lab.darija.';
+  const d = q.data;
+  return (
+    <div className="pl-dj">
+      <p className="small muted pl-lab-kind-note">{t(k + 'help')}</p>
+      {q.isLoading ? (
+        <p className="muted">{t('platform.pilot.lab.try.loading')}</p>
+      ) : q.error || !d ? (
+        <p className="pl-lab-err" role="alert">
+          <Icon name="alert" /> {q.error?.message}
+        </p>
+      ) : (
+        <>
+          <section>
+            <h3>
+              {t(k + 'waiting')} {d.waiting.length > 0 && <span className="chip pp-chip-warn">{n(d.waiting.length)}</span>}
+            </h3>
+            {!d.waiting.length ? (
+              <p className="pl-next-empty">{t(k + 'waitingEmpty')}</p>
+            ) : (
+              <ul className="pl-dj-list">
+                {d.waiting.map((l) => (
+                  <WaitingRow key={l.id} l={l} />
+                ))}
+              </ul>
+            )}
+          </section>
+          <AddWords />
+          <section>
+            <h3>
+              {t(k + 'approved')} <span className="chip">{n(d.approved.length)}</span>
+            </h3>
+            {!d.approved.length ? (
+              <p className="pl-next-empty">{t(k + 'approvedEmpty')}</p>
+            ) : (
+              <ul className="pl-dj-list pl-dj-done">
+                {d.approved.map((l) => (
+                  <ApprovedRow key={l.id} l={l} />
+                ))}
+              </ul>
+            )}
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Where a lesson comes from: a shop's team, Dellal (from a shop's customers), Pilotix; each part keeps its own direction */
+function From({ l }: { l: LahjaItem }) {
+  const { t } = useTranslation();
+  const k = 'platform.pilot.lab.darija.';
+  const customers = Number(l.evidence?.customers) || 0;
+  const parts = [
+    ...(l.source === 'coach' ? ['Pilotix', l.by ?? '—'] : l.source === 'dellal' ? [l.shop ?? '—', t(k + 'fromDellal')] : [l.shop ?? '—', l.by ?? '—']),
+    dateOnly(l.decidedAt ?? l.at),
+    ...(customers > 0 ? [t(k + 'customers', { count: customers, n: n(customers) })] : []),
+  ];
+  return (
+    <small className="pl-dj-from">
+      {parts.map((x, i) => (
+        <Fragment key={i}>
+          {i > 0 && ' · '}
+          <bdi>{x}</bdi>
+        </Fragment>
+      ))}
+    </small>
+  );
+}
+
+function WaitingRow({ l }: { l: LahjaItem }) {
+  const { t } = useTranslation();
+  const k = 'platform.pilot.lab.darija.';
+  const decide = usePilotAction('p.lahja.decide', { success: (r) => t(r.words ? k + 'acceptedToast' : k + 'refusedToast') });
+  const [edit, setEdit] = useState<LahjaWord[] | null>(null);
+  const busy = decide.isPending;
+  return (
+    <li>
+      <div className="pl-dj-head">
+        <span className={`chip pl-dj-src pl-dj-${l.source}`}>{t(`${k}src.${l.source}`)}</span>
+        <From l={l} />
+      </div>
+      {(l.before || l.after) && (
+        <dl className="pl-dj-pair">
+          <dt>{t(k + 'before')}</dt>
+          <dd dir="auto">{l.before}</dd>
+          <dt>{t(k + 'after')}</dt>
+          <dd dir="auto">{l.after}</dd>
+        </dl>
+      )}
+      {edit ? (
+        <WordsEditor rows={edit} onRows={setEdit} />
+      ) : (
+        <LahjaWords words={l.words} />
+      )}
+      {l.note && <p className="pl-dj-note" dir="auto">{l.note}</p>}
+      <div className="pl-dj-do">
+        {edit ? (
+          <>
+            <button type="button" className="btn primary small" disabled={busy || !tidy(edit).length} onClick={() => decide.mutate({ id: l.id, action: 'approve', words: tidy(edit) })}>
+              {t(k + 'saveAccept')}
+            </button>
+            <button type="button" className="btn ghost small" disabled={busy} onClick={() => setEdit(null)}>
+              {t(k + 'cancel')}
+            </button>
+          </>
+        ) : (
+          <>
+            <button type="button" className="btn primary small" disabled={busy} onClick={() => decide.mutate({ id: l.id, action: 'approve' })}>
+              {t(k + 'accept')}
+            </button>
+            <button type="button" className="btn small" disabled={busy} onClick={() => setEdit(l.words.map((w) => ({ use: w.use, not: w.not ?? '' })))}>
+              <Icon name="pencil" /> {t(k + 'modify')}
+            </button>
+            <button type="button" className="btn ghost small" disabled={busy} onClick={() => decide.mutate({ id: l.id, action: 'refuse' })}>
+              {t(k + 'refuse')}
+            </button>
+          </>
+        )}
+      </div>
+      {l.source === 'dellal' && !edit && <p className="small muted pl-dj-note">{t(k + 'refusedNote')}</p>}
+    </li>
+  );
+}
+
+function ApprovedRow({ l }: { l: LahjaItem }) {
+  const { t } = useTranslation();
+  const k = 'platform.pilot.lab.darija.';
+  const decide = usePilotAction('p.lahja.decide', { success: t(k + 'removedToast') });
+  return (
+    <li>
+      <div>
+        <LahjaWords words={l.words} />
+        <From l={l} />
+      </div>
+      <button type="button" className="btn ghost small" disabled={decide.isPending} onClick={() => decide.mutate({ id: l.id, action: 'remove' })}>
+        {t(k + 'remove')}
+      </button>
+    </li>
+  );
+}
+
+/** Word rows: « don't write » and « write » (one of the two may stay empty) */
+function WordsEditor({ rows, onRows }: { rows: LahjaWord[]; onRows: (r: LahjaWord[]) => void }) {
+  const { t } = useTranslation();
+  const k = 'platform.pilot.lab.darija.';
+  const put = (i: number, f: keyof LahjaWord, v: string) => onRows(rows.map((r, j) => (j === i ? { ...r, [f]: v } : r)));
+  return (
+    <div className="pl-dj-edit">
+      {rows.map((r, i) => (
+        <div key={i} className="pl-dj-row">
+          <input dir="auto" maxLength={60} value={r.not ?? ''} placeholder={t(k + 'not')} aria-label={t(k + 'not')} onChange={(e) => put(i, 'not', e.target.value)} />
+          <span className="lj-arrow" aria-hidden="true">
+            →
+          </span>
+          <input dir="auto" maxLength={60} value={r.use} placeholder={t(k + 'use')} aria-label={t(k + 'use')} onChange={(e) => put(i, 'use', e.target.value)} />
+          <button type="button" className="btn ghost small" aria-label={t(k + 'removeRow')} title={t(k + 'removeRow')} disabled={rows.length < 2} onClick={() => onRows(rows.filter((_, j) => j !== i))}>
+            <Icon name="xcircle" />
+          </button>
+        </div>
+      ))}
+      {rows.length < 6 && (
+        <button type="button" className="linkbtn" onClick={() => onRows([...rows, blank()])}>
+          {t(k + 'addRow')}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Pilotix's own words, for every shop at once */
+function AddWords() {
+  const { t } = useTranslation();
+  const k = 'platform.pilot.lab.darija.';
+  const [rows, setRows] = useState<LahjaWord[]>([blank()]);
+  const add = usePilotAction('p.lahja.add', { success: t(k + 'addedToast'), onDone: () => setRows([blank()]) });
+  return (
+    <section className="pl-dj-add">
+      <h3>{t(k + 'addTitle')}</h3>
+      <WordsEditor rows={rows} onRows={setRows} />
+      <div className="pl-dj-do">
+        <button type="button" className="btn small" disabled={add.isPending || !tidy(rows).length} onClick={() => add.mutate({ words: tidy(rows) })}>
+          {t(k + 'add')}
+        </button>
+        <span className="small muted">{t(k + 'addHint')}</span>
+      </div>
+    </section>
+  );
+}
+
+/** Under an answer of the control room's test chat: write it the right way, the changed words are every shop's at once. */
+function CoachFix({ m }: { m: Msg }) {
+  const { t } = useTranslation();
+  const k = 'platform.pilot.lab.darija.';
+  const call = usePilotCall();
+  const qc = useQueryClient();
+  const demo = useContext(PilotDemo);
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState(m.body);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<LahjaWord[] | null>(null);
+  const box = useRef<HTMLDivElement>(null);
+  // the editor opens at the bottom of the chat: bring its buttons into view
+  useEffect(() => {
+    if (open) box.current?.scrollIntoView({ block: 'nearest', behavior: still() ? 'auto' : 'smooth' });
+  }, [open]);
+  if (done)
+    return (
+      <div className="lj-done">
+        <Icon name="checkcircle" />
+        <span>
+          <LahjaWords words={done} /> <small>{t(k + 'fixDone')}</small>
+        </span>
+      </div>
+    );
+  if (!open)
+    return (
+      <button type="button" className="lj-open" onClick={() => (setText(m.body), setOpen(true))}>
+        <Icon name="languages" /> {t(k + 'fix')}
+      </button>
+    );
+  const save = async () => {
+    setBusy(true);
+    try {
+      const r = await call('p.lahja.add', { before: m.body, after: text.trim() });
+      setDone((r.words ?? []) as LahjaWord[]);
+      setOpen(false);
+      if (!demo) await qc.invalidateQueries({ queryKey: ['p', 'p.lahja.state'] });
+      toast(t(k + 'addedToast'), 'ok');
+    } catch (e: any) {
+      toast(e?.message || t('platform.pilot.lab.try.failed'), 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div ref={box} className="lj-edit">
+      <p>{t(k + 'fixHelp')}</p>
+      <textarea dir="auto" rows={3} maxLength={2000} value={text} aria-label={t(k + 'fix')} autoFocus onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)} />
+      <div className="lj-edit-do">
+        <button type="button" className="btn primary small" disabled={busy || !text.trim() || text.trim() === m.body.trim()} onClick={save}>
+          {t(k + 'fixSave')}
+        </button>
+        <button type="button" className="btn ghost small" disabled={busy} onClick={() => setOpen(false)}>
+          {t(k + 'cancel')}
+        </button>
       </div>
     </div>
   );

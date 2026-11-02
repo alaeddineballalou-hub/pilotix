@@ -11,7 +11,8 @@ import { getRaw, setRaw } from './admin';
 import { checkDarija, DARIJA_FIXER_SYSTEM, darijaRewritePrompt, DarijaIssue, DELLAL_DARIJA, fixDarija, parseAvoid } from './darija';
 import { markReply, noticeForConversation, ordersForDellal, sendInPreview } from './notify';
 import { createOrder } from './orders';
-import { bookFor, BookRef, pickModel } from './pilotlearn';
+import { anonymize, bookFor, BookRef, pickModel } from './pilotlearn';
+import { asWords, checkLahjaWords, LAHJA_NO_CHANGE, LAHJA_PERSONAL, lahjaAvoid, lahjaDiff, lahjaErr, lahjaFor, lahjaLines, LahjaWord } from './lahja';
 import { pilotConfig, pilotToday } from '../platform/pilotai';
 
 // ---------------------------------------------------------------- settings and secrets
@@ -547,7 +548,14 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
  * 1. the same for every shop (sales method, Darija, and the coach's lesson book of Pilot AI),
  * 2. this shop (name, tone, rules, catalog), 3. this conversation (channel, date, the customer, the orders).
  */
-async function systemPrompt(ctx: Ctx, conv: Conversation, s: DellalSettings, followUp: boolean, lessons = ''): Promise<{ text: string; blocks: string[] }> {
+async function systemPrompt(
+  ctx: Ctx,
+  conv: Conversation,
+  s: DellalSettings,
+  followUp: boolean,
+  lessons = '',
+  lahja: { all: LahjaWord[]; own: LahjaWord[] } = { all: [], own: [] },
+): Promise<{ text: string; blocks: string[] }> {
   const shop = await getSetting(ctx.db, 'shop');
   const catalog = (await searchProducts(ctx.db, null, 40))
     .map(
@@ -566,6 +574,7 @@ async function systemPrompt(ctx: Ctx, conv: Conversation, s: DellalSettings, fol
   const shared = [
     DELLAL_PLAYBOOK.replace('${ORDER_NEXT}', s.ordersTo === 'new' ? 'après la commande, un conseiller l’appellera aussi pour confirmer.' : 'la commande part directement en préparation.'),
     DELLAL_DARIJA,
+    lahja.all.length ? `LEÇONS DE DARIJA (validées par Pilotix pour toutes les boutiques) :\n${lahjaLines(lahja.all)}` : '',
     lessons.trim(),
   ];
   const own = [
@@ -585,6 +594,7 @@ async function systemPrompt(ctx: Ctx, conv: Conversation, s: DellalSettings, fol
     s.notes.trim() ? `Informations de la boutique :\n${s.notes.trim()}` : '',
     s.darijaPrefer.trim() ? `Expressions de la boutique (écrites par l’équipe, à utiliser quand elles vont) :\n${s.darijaPrefer.trim()}` : '',
     s.darijaAvoid.trim() ? `Mots et expressions que la boutique interdit (avec ce qu’il faut écrire à la place) :\n${s.darijaAvoid.trim()}` : '',
+    lahja.own.length ? `LEÇONS DE DARIJA DE LA BOUTIQUE (corrections de l’équipe et ce que tu as appris de ses clients) :\n${lahjaLines(lahja.own)}` : '',
     `Catalogue (résumé, vérifie le stock avec search_products) :\n${catalog || '(vide)'}`,
   ];
   const chat = [
@@ -819,7 +829,8 @@ export async function runAgent(
     const said = await ctx.db.query(`SELECT body, count(*) OVER ()::int AS n FROM conv_messages WHERE conversation_id = $1 AND role = 'customer' ORDER BY id DESC LIMIT 6`, [convId]);
     model = pickModel({ recent: said.map((r: any) => String(r.body)).reverse(), turns: num(said[0]?.n) });
   }
-  const prompt = await systemPrompt(ctx, conv, s, !!opts.followUp, book?.text ?? '');
+  const lahja = await lahjaFor(ctx.db, ctx.t?.platform ?? null, ctx.shop?.id ?? null);
+  const prompt = await systemPrompt(ctx, conv, s, !!opts.followUp, book?.text ?? '', lahja);
   const system = prompt.text;
 
   const texts: string[] = [];
@@ -856,7 +867,7 @@ export async function runAgent(
   // Algerian Darija check: words of another dialect, wrong phrases, the shop's banned list → one rewrite, then a safe fix.
   let darija: DarijaReport | null = null;
   if (reply && useAi) {
-    const avoid = parseAvoid(s.darijaAvoid);
+    const avoid = [...parseAvoid(s.darijaAvoid), ...lahjaAvoid([...lahja.own, ...lahja.all])];
     const customer = (await ctx.db.query(`SELECT body FROM conv_messages WHERE conversation_id = $1 AND role = 'customer' ORDER BY id DESC LIMIT 30`, [convId])).map((r: any) => r.body).join('\n');
     const p = await polishDarija(complete, model, reply, { customer, avoid });
     usage = { input_tokens: usage.input_tokens + p.usage.input_tokens, output_tokens: usage.output_tokens + p.usage.output_tokens };
@@ -1185,6 +1196,92 @@ export const dellalProcs = {
       out = await runAgent(ctx, cid);
     }
     return { conversationId: cid, messages: await messagesOf(ctx.db, cid), demo: out ? out.demo : !((!ctx.server?.dellal && ctx.dellalAi) || (await aiKeyed(ctx))), platform: !!ctx.t };
+  }),
+
+  // ---------------------------------------------------------------- Darija lessons (modules/lahja.ts)
+  /**
+   * « Leçon de darija »: a team member writes how Dellal should have said one of its messages. The message that was sent
+   * never changes: the words they changed become a lesson, used at once by this shop's Dellal and CM AI agent; on Pilotix's
+   * server it also goes to Pilotix, who can make it every shop's (anonymized: only the words travel to other shops).
+   */
+  'dellal.lahja.add': proc([...SELLERS], z.object({ messageId: id, after: z.string().trim().min(1).max(2000) }), async (ctx, i) => {
+    const m = (await ctx.db.query(`SELECT id, conversation_id, role, body FROM conv_messages WHERE id = $1`, [i.messageId]))[0];
+    if (!m || m.role !== 'agent') throw notFound('Message de Dellal introuvable');
+    const words = lahjaDiff(String(m.body), i.after);
+    if (!words.length) throw new AppError('bad_request', LAHJA_NO_CHANGE);
+    const chk = checkLahjaWords(words);
+    if (!chk.ok) throw new AppError('bad_request', lahjaErr(chk.problems));
+    // nothing personal becomes a lesson: a word the anonymizer would hide (a name, a phone, a price) is not Darija
+    if (words.some((w) => /<(?:name|phone|email|link|handle|addr|price|n|product|id)>/.test(anonymize(`${w.use} ${w.not ?? ''}`)))) throw new AppError('bad_request', LAHJA_PERSONAL);
+    const ins = await ctx.db.query(
+      `INSERT INTO dellal_lahja (words, before, after, conversation_id, message_id, created_by) VALUES ($1::jsonb, $2, $3, $4, $5, $6) RETURNING id`,
+      [JSON.stringify(words), String(m.body), i.after, num(m.conversation_id), num(m.id), me(ctx)],
+    );
+    const lessonId = num(ins[0].id);
+    let review: 'waiting' | 'local' = 'local';
+    if (ctx.t && ctx.shop) {
+      try {
+        await ctx.t.platform.query(
+          `INSERT INTO platform.lahja (shop_id, shop_lesson_id, source, status, own, words, before, after, by_user) VALUES ($1, $2, 'seller', 'waiting', true, $3::jsonb, $4, $5, $6)`,
+          [ctx.shop.id, lessonId, JSON.stringify(words), anonymize(String(m.body)).slice(0, 2000), anonymize(i.after).slice(0, 2000), ctx.session.profile.name],
+        );
+        review = 'waiting';
+      } catch {
+        /* Pilotix does not see it yet: it still works in this shop */
+      }
+    }
+    return { id: lessonId, words, review };
+  }),
+
+  /** This shop's Darija lessons: its team's (with what Pilotix decided), what Dellal learned from its customers, and Pilotix's. */
+  'dellal.lahja.list': proc([...SELLERS], z.object({}), async (ctx) => {
+    const rows = await ctx.db.query(
+      `SELECT l.id, l.words, l.before, l.after, l.created_at, p.name AS by_name FROM dellal_lahja l LEFT JOIN profiles p ON p.id = l.created_by
+        WHERE l.active ORDER BY l.id DESC LIMIT 200`,
+    );
+    const status = new Map<number, string>();
+    let learned: { id: number; words: LahjaWord[]; note: string | null; customers: number; at: string }[] = [];
+    let all: { id: number; words: LahjaWord[]; mine: boolean; at: string | null }[] = [];
+    const platform = !!(ctx.t && ctx.shop);
+    if (platform) {
+      try {
+        const pdb = ctx.t!.platform;
+        for (const r of await pdb.query(`SELECT shop_lesson_id, status FROM platform.lahja WHERE shop_id = $1 AND source = 'seller' AND shop_lesson_id IS NOT NULL`, [ctx.shop!.id]))
+          status.set(num(r.shop_lesson_id), String(r.status));
+        learned = (await pdb.query(`SELECT id, words, note, evidence, created_at FROM platform.lahja WHERE shop_id = $1 AND source = 'dellal' AND own AND status = 'waiting' ORDER BY id DESC LIMIT 100`, [ctx.shop!.id])).map(
+          (r: any) => ({ id: num(r.id), words: asWords(r.words), note: r.note ?? null, customers: num(r.evidence?.customers), at: iso(r.created_at) }),
+        );
+        all = (await pdb.query(`SELECT id, words, shop_id, decided_at FROM platform.lahja WHERE status = 'approved' ORDER BY decided_at DESC NULLS LAST, id DESC LIMIT 300`)).map(
+          (r: any) => ({ id: num(r.id), words: asWords(r.words), mine: num(r.shop_id) === ctx.shop!.id, at: isoOrNull(r.decided_at) }),
+        );
+      } catch {
+        /* the platform's table is not there yet */
+      }
+    }
+    return {
+      platform,
+      own: rows.map((r: any) => ({ id: num(r.id), words: asWords(r.words), before: String(r.before), after: String(r.after), by: (r.by_name as string | null) ?? null, at: iso(r.created_at), review: status.get(num(r.id)) ?? 'local' })),
+      learned,
+      all,
+    };
+  }),
+
+  /** Stop one of this shop's Darija lessons here (its team's, or one Dellal learned and Pilotix has not decided yet). */
+  'dellal.lahja.remove': proc([...SELLERS], z.object({ id, learned: z.boolean().default(false) }), async (ctx, i) => {
+    if (i.learned) {
+      if (!ctx.t || !ctx.shop) throw notFound('Leçon introuvable');
+      const r = await ctx.t.platform.query(
+        `UPDATE platform.lahja SET own = false, status = CASE WHEN status = 'waiting' THEN 'withdrawn' ELSE status END WHERE id = $1 AND shop_id = $2 AND source = 'dellal' RETURNING id`,
+        [i.id, ctx.shop.id],
+      );
+      if (!r.length) throw notFound('Leçon introuvable');
+      return { ok: true };
+    }
+    const r = await ctx.db.query(`UPDATE dellal_lahja SET active = false WHERE id = $1 AND active RETURNING id`, [i.id]);
+    if (!r.length) throw notFound('Leçon introuvable');
+    // still waiting for Pilotix: it leaves the queue (one already accepted stays every shop's: Pilotix decided)
+    if (ctx.t && ctx.shop) await ctx.t.platform.query(`UPDATE platform.lahja SET status = 'withdrawn' WHERE shop_id = $1 AND shop_lesson_id = $2 AND status = 'waiting'`, [ctx.shop.id, i.id]).catch(() => null);
+    return { ok: true };
   }),
 
   /** Dellal's results over the last N days. */

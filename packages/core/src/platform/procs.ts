@@ -47,6 +47,7 @@ import * as pilot from '../modules/pilotlearn';
 import { pilotConfig, pilotToday, savePilotConfig } from './pilotai';
 import { AI_FEATURES, aiBill, aiLabOfMonth, aiUsageOfMonth, aiUsageSince, monthOf, saveAiBill } from './aiusage';
 import { pilotTry } from '../modules/dellal';
+import { addCoachLahja, decideLahja, LAHJA_NO_CHANGE, lahjaErr, lahjaState, lahjaWaiting } from '../modules/lahja';
 import { cmBoard, dellalBoard, dellalBooks, dellalBookText, dellalMore, spyBoard } from './aiboard';
 
 export const STAFF_ROLES = ['owner', 'manager', 'support'] as const;
@@ -1045,7 +1046,7 @@ export const PLATFORM_REGISTRY = {
   'p.pilot.state': pproc(ALL, z.object({}), async (ctx) => {
     const pdb = ctx.t.platform;
     const config = await pilotConfig(ctx.t);
-    const [today, night, candidates, approved, books, next, sharing, shops] = await Promise.all([
+    const [today, night, candidates, approved, books, next, sharing, shops, lahja] = await Promise.all([
       pilotToday(ctx.t, config),
       pilot.lastNight(pdb),
       pilot.listCandidates(pdb, { status: 'candidate', limit: 50 }),
@@ -1054,6 +1055,7 @@ export const PLATFORM_REGISTRY = {
       pilot.nextBook(pdb),
       pdb.query(`SELECT count(DISTINCT shop_id)::int AS shops, count(*)::int AS cases FROM platform.pilot_cases`),
       loadShops(ctx.t),
+      lahjaWaiting(pdb).catch(() => 0),
     ]);
     const per = new Map((await pdb.query(`SELECT shop_id, count(*)::int AS n FROM platform.pilot_cases GROUP BY shop_id`)).map((r: any) => [num(r.shop_id), num(r.n)]));
     const stores = shops
@@ -1061,7 +1063,7 @@ export const PLATFORM_REGISTRY = {
       .map((s) => ({ id: s.id, name: s.name, slug: s.slug, share: config.shops.includes(s.id), cases: per.get(s.id) ?? 0 }));
     // the learning's rules, for the page that explains them in simple words (always the engine's own numbers)
     const rules = { score: pilot.SCORE, gold: pilot.GOLD_WEIGHT, minPass: pilot.PILOT.minPass, matureDays: pilot.PILOT.matureDays, maxTestDays: pilot.PILOT.maxTestDays, maxOpen: pilot.PILOT.maxOpen };
-    return { config, today, night, candidates, approved, books, next, sharing: { shops: num(sharing[0]?.shops), cases: num(sharing[0]?.cases) }, shops: stores, rules };
+    return { config, today, night, candidates, approved, books, next, lahjaWaiting: lahja, sharing: { shops: num(sharing[0]?.shops), cases: num(sharing[0]?.cases) }, shops: stores, rules };
   }),
   'p.pilot.save': pproc(
     MANAGERS,
@@ -1139,6 +1141,44 @@ export const PLATFORM_REGISTRY = {
     await audit(ctx, 'pilot.rollback', null, {});
     return r;
   }),
+
+  // ---------------------------------------------------------------- Pilot AI › Test & lessons › Darija (modules/lahja.ts)
+  /** The Darija lessons waiting for Pilotix (the shops' corrections, what Dellal learned) and the ones every shop uses. */
+  'p.lahja.state': pproc(ALL, z.object({}), async (ctx) => {
+    const names = new Map((await loadShops(ctx.t)).map((s) => [s.id, s.name]));
+    return lahjaState(ctx.t.platform, names);
+  }),
+  /** Accept (as it is, or with the words modified): every shop uses it. Refuse: the other shops never see it. Remove an accepted one. */
+  'p.lahja.decide': pproc(
+    ALL,
+    z.object({
+      id: Id,
+      action: z.enum(['approve', 'refuse', 'remove']),
+      words: z.array(z.object({ use: z.string().max(80), not: z.string().max(80).optional() })).min(1).max(6).optional(),
+      note: z.string().max(300).optional(),
+    }),
+    async (ctx, i) => {
+      const r = await decideLahja(ctx.t.platform, { ...i, by: ctx.staff.name || ctx.staff.email, now: new Date(ctx.now()) });
+      if (!r.ok) throw bad(r.problems?.length ? lahjaErr(r.problems) : LAHJA_ERR[r.error ?? ''] ?? 'Impossible');
+      await audit(ctx, `pilot.lahja.${i.action}`, null, { id: i.id });
+      return r;
+    },
+  ),
+  /** Pilotix's own Darija lesson: a correction of Dellal's message in the control room's test chat (or words): every shop at once. */
+  'p.lahja.add': pproc(
+    ALL,
+    z.object({
+      before: z.string().max(2000).optional(),
+      after: z.string().max(2000).optional(),
+      words: z.array(z.object({ use: z.string().max(80), not: z.string().max(80).optional() })).max(6).optional(),
+    }),
+    async (ctx, i) => {
+      const r = await addCoachLahja(ctx.t.platform, { ...i, by: ctx.staff.name || ctx.staff.email, now: new Date(ctx.now()) });
+      if (!r.ok) throw bad(r.problems?.length ? lahjaErr(r.problems) : LAHJA_ERR[r.error ?? ''] ?? 'Impossible');
+      await audit(ctx, 'pilot.lahja.add', null, { id: r.id });
+      return r;
+    },
+  ),
 
   // ---------------------------------------------------------------- Pilot AI › Test & lessons
   /**
@@ -1279,6 +1319,14 @@ const LESSON_ERR: Record<string, string> = {
   not_running: 'Aucun test en cours',
   not_proven: 'Le test n’a pas encore prouvé que le nouveau livre vend au moins aussi bien',
   nothing_to_roll_back: 'Pas de livre précédent',
+};
+const LAHJA_ERR: Record<string, string> = {
+  who: 'Personne connectée inconnue',
+  not_found: 'Leçon introuvable',
+  not_waiting: 'Cette leçon n’attend plus de décision',
+  not_approved: 'Seule une leçon acceptée pour toutes les boutiques peut être retirée',
+  no_change: LAHJA_NO_CHANGE,
+  duplicate: 'Ces mots sont déjà une leçon pour toutes les boutiques',
 };
 const lessonErr = (r: { error?: string; problems?: string[] }) =>
   (LESSON_ERR[r.error ?? ''] ?? 'Impossible') + (r.problems?.length ? ` (${r.problems.join(', ')})` : '');
