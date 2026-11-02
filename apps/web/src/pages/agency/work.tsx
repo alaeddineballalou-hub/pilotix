@@ -46,9 +46,27 @@ export function AgencySuivi(props: PageProps) {
   return (
     <SellerScope seller={seller}>
       <AgentView tasks={[...work.tasks]}>
-        <NotGiven task="suivi">{seller === 'all' ? <AllSuivi {...props} /> : <Suivi key={seller} {...props} />}</NotGiven>
+        <NotGiven task="suivi">
+          {seller !== 'all' ? <Suivi key={seller} {...props} /> : props.sub === 'swap' || props.sub === 'reclamation' ? <PickSeller what={props.sub} /> : <AllSuivi {...props} />}
+        </NotGiven>
       </AgentView>
     </SellerScope>
+  );
+}
+
+/** Réclamations and Swap are done in one seller's store at a time: choose it at the top. */
+function PickSeller({ what }: { what: string }) {
+  const { t } = useTranslation();
+  const w = useSellers();
+  return (
+    <Empty>
+      <p>{t('agency.work.pickSeller', { what: t(`suivi.tabs.${what}`) })}</p>
+      {w.list.length === 1 && (
+        <button type="button" className="btn primary" onClick={() => setSeller(w.list[0].id)}>
+          <Icon name="store" /> {w.list[0].name}
+        </button>
+      )}
+    </Empty>
   );
 }
 

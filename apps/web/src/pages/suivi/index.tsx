@@ -40,10 +40,10 @@ type ListTab = (typeof LIST_TABS)[number];
 type Sub = ListTab | 'reclamation';
 
 export function Suivi({ sub }: PageProps) {
-  // a confirmation agency's agents follow the parcels; the claims with couriers and the swaps stay the store's
   const agency = useInAgency();
   const { has } = useSession();
-  const tabs: readonly string[] = agency || !has('suivi') ? LIST_TABS.filter((k) => k !== 'swap') : [...LIST_TABS, 'reclamation'];
+  // the claims with couriers and the swaps: the store's suivi agents and the agencies (on their own orders)
+  const tabs: readonly string[] = !has('suivi') && !agency ? LIST_TABS.filter((k) => k !== 'swap') : [...LIST_TABS, 'reclamation'];
   const tab: Sub = tabs.includes(sub ?? '') ? (sub as Sub) : 'enlivraison';
   return (
     <>
@@ -103,8 +103,16 @@ function SuiviBar({ tab }: { tab: Sub }) {
             <span className="bjm-sep" aria-hidden="true" />
             {item('bloques', c?.bloquesTodo ?? 0, true)}
           </>
+        ) : step === 'annules' || step === 'swap' ? (
+          <>
+            {item('annules', c?.annules ?? 0)}
+            <span className="bjm-sep" aria-hidden="true" />
+            {has('suivi') && item('swap', c?.swap ?? 0, true)}
+          </>
+        ) : step === 'reclamation' ? (
+          item('reclamation', c?.claims)
         ) : (
-          item(tab, tab === 'livres' ? (c?.livres ?? 0) : (c?.annules ?? 0))
+          item(tab, c?.livres ?? 0)
         )}
       </nav>
     );

@@ -113,6 +113,19 @@ const order =
   (ctx, i) =>
     ownOrders(ctx, nums(i?.[key]));
 
+/** A claim (Réclamations) on one of the agency's orders. */
+const claim =
+  (key: string): Gate =>
+  async (ctx, i) => {
+    const ids = nums(i?.[key]);
+    if (!ids.length) return;
+    const rows = await ctx.db.query('SELECT order_id FROM claims WHERE id = ANY($1)', [ids]);
+    if (rows.length !== ids.length || rows.some((r: any) => !r.order_id)) throw forbidden('Cette réclamation n’est pas sur une commande de votre agence');
+    await ownOrders(ctx, rows.map((r: any) => num(r.order_id)));
+  };
+/** Both orders of a swap (the parcel coming back, the order that gets it) are the agency's. */
+const swapPair: Gate = (ctx, i) => ownOrders(ctx, [...nums(i?.fromId), ...nums(i?.toId)]);
+
 /** A customer the agency calls (one of its orders): by id or phone. */
 const customer: Gate = async (ctx, i) => {
   const phone = typeof i?.phone === 'string' ? normalizePhone(i.phone) : null;
@@ -180,6 +193,22 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'suivi.claimsLate': free,
   'suivi.next': free,
   'suivi.release': order('id'),
+  // Swap: a parcel coming back given to another of the agency's orders
+  'suivi.swapCandidates': order('fromId'),
+  'suivi.swap': swapPair,
+  'suivi.swapTarget': order('id'),
+  // Réclamations with the delivery companies, on the agency's orders
+  'suivi.contacts': free,
+  'suivi.findOrders': free,
+  'suivi.claims': free,
+  'suivi.claimCreate': order('orderId'),
+  'suivi.claimPush': claim('id'),
+  'suivi.claimCategories': free,
+  'suivi.claimRemind': claim('id'),
+  'suivi.claimSync': claim('id'),
+  'suivi.claimUpdate': claim('id'),
+  'parcel.info': order('orderId'),
+  'parcel.changeSync': order('orderId'),
 };
 
 /**

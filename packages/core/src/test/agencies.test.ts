@@ -371,6 +371,16 @@ test('an agency works on several sellers: one at a time or all together, its peo
   assert.equal(((await call('suivi.list', await ctxOf('nora@centre.dz', 'all'), { tab: 'enlivraison' })) as any).total, 0);
   assert.equal(((await call('suivi.counts', await ctxOf('nora@centre.dz', 'all'), {})) as any).enlivraison, 0);
   assert.equal(((await call('suivi.list', await ctxOf('nora@centre.dz', 'all'), { tab: 'alertes' })) as any).total, 1);
+  // Réclamations and Swap: on the agency's own orders only (Nora: the Vélo; the Poussette is not hers)
+  const [cOwn] = await a.db.query(`INSERT INTO claims (order_id, reason, message) VALUES ($1, 'late', 'x') RETURNING id`, [va.id]);
+  const [cOther] = await a.db.query(`INSERT INTO claims (order_id, reason, message) VALUES ($1, 'late', 'y') RETURNING id`, [pa.id]);
+  const noraA = await ctxOf('nora@centre.dz', a.id);
+  assert.deepEqual(((await call('suivi.claims', noraA, {})) as any).rows.map((c: any) => c.id), [Number(cOwn.id)]);
+  await assert.rejects(call('suivi.claimUpdate', noraA, { id: Number(cOther.id), note: 'z' }), /pas sur une commande de votre agence|pas confiée à votre agence/);
+  await call('suivi.claimUpdate', noraA, { id: Number(cOwn.id), note: 'appelé' });
+  await assert.rejects(call('suivi.claimCreate', noraA, { orderId: pa.id, reason: 'late', message: 'm' }), /pas confiée à votre agence/);
+  await assert.rejects(call('suivi.swapTarget', noraA, { id: pa.id }), /pas confiée à votre agence|Accès refusé/);
+  await a.db.query('DELETE FROM claims WHERE id = ANY($1)', [[cOwn.id, cOther.id]]);
   await assert.rejects(call('suivi.act', await ctxOf('nora@centre.dz', a.id), { id: va.id, action: 'realert' }), /Accès refusé/);
   await a.db.query('UPDATE orders SET follow_status=NULL, shipped_at=NULL WHERE id=$1', [va.id]);
   // « Commande suivante » over every seller: the customer who waits the most first, then the next one elsewhere

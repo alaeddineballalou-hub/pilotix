@@ -36,7 +36,8 @@
     "annulees": "Cancelled",
     "messages": "Message AI agent",
     "cm": "CM AI agent",
-    "notify": "Delivery AI agent"
+    "notify": "Delivery AI agent",
+    "reclamation": "Claims"
   },
   "profil": "My profile",
   "marketer": "Marketer",
