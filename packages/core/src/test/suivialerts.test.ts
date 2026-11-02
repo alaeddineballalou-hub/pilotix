@@ -369,3 +369,20 @@ test('Réclamations: 48 h for an answer, then « À relancer » for the agent wh
   assert.ok(l.rows.some((x: any) => x.id === c.id && x.stage === 'done'));
   assert.ok(l.counts.lost >= 1);
 });
+
+test('Alertes: « Nouvelles alertes » (nobody acted since it came) and « Alertes en cours » (someone called, wrote a note…)', async () => {
+  const suivi = await as(EMAILS.suivi);
+  const o = (await db.query(`SELECT id FROM orders WHERE follow_status IN ('shipped','out_for_delivery') ORDER BY id LIMIT 1`))[0];
+  const id = Number(o.id);
+  await db.query(`UPDATE orders SET follow_status = 'alert' WHERE id = $1`, [id]);
+  await db.query(`INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, at) SELECT $1, NULL, 'follow_status', 'shipped', 'alert', coalesce(max(at), now()) + interval '1 minute' FROM order_events WHERE order_id = $1`, [id]);
+  const ids = async (tab: string) => ((await call('suivi.list', suivi, { tab, pageSize: 500 })) as any).rows.map((r: any) => r.id);
+  assert.ok((await ids('alertes_new')).includes(id));
+  assert.ok(!(await ids('alertes_encours')).includes(id));
+  // someone acts on it (a note): it is in progress
+  await db.query(`INSERT INTO order_events (order_id, user_id, kind, to_value, at) SELECT $1, $2::bigint, 'note', 'Client appelé', max(at) + interval '1 minute' FROM order_events WHERE order_id = $1`, [id, suivi.session.profile.id]);
+  assert.ok(!(await ids('alertes_new')).includes(id));
+  assert.ok((await ids('alertes_encours')).includes(id));
+  const c: any = await call('suivi.counts', suivi, {});
+  assert.equal(c.alertes_new + c.alertes_encours, c.alertes);
+});

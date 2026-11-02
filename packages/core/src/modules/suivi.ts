@@ -17,7 +17,8 @@ import type { CourierKind } from '@pilotix/shared';
 
 const id = z.number().int().positive();
 
-export const SUIVI_TABS = ['enlivraison', 'alertes', 'bloques', 'traites', 'livres', 'annules', 'swap', 'swapped'] as const;
+// alertes_new / alertes_encours: the alerts nobody acted on yet, and those someone is working on (a call, a note…)
+export const SUIVI_TABS = ['enlivraison', 'alertes', 'alertes_new', 'alertes_encours', 'bloques', 'traites', 'livres', 'annules', 'swap', 'swapped'] as const;
 export type SuiviTab = (typeof SUIVI_TABS)[number];
 /** Where a parcel can be swapped from: it is still with the courier or the livreur. */
 export const SWAP_FROM = ['returning', 'failed', 'alert', 'out_for_delivery', 'shipped'] as const;
@@ -42,6 +43,8 @@ function tabFilter(tab: SuiviTab, now: number, agency = false): Partial<ListInpu
       // the ids come from stuckParcels (see suivi.list)
       return { follow: ['shipped', 'out_for_delivery', 'failed', 'in_exchange'], sort: 'shipped_at', dir: 'asc' };
     case 'alertes':
+    case 'alertes_new':
+    case 'alertes_encours':
       return { follow: ['alert'], sort: 'updated_at', dir: 'asc' };
     case 'traites':
       return { follow: ['out_for_delivery', 'shipped', 'failed'], subStatus: 'alert_traitee', sort: 'updated_at', dir: 'desc' };
@@ -198,6 +201,7 @@ export async function suiviCounts(ctx: Ctx) {
   const clocks = await alertClocks(ctx.db, alertIds, ctx.now());
   const lateCall = [...clocks.values()].filter((c) => c.kind === 'call' && c.state === 'late').length;
   const lateSolve = [...clocks.values()].filter((c) => c.kind === 'solve' && c.state === 'late').length;
+  const alertesNew = [...clocks.values()].filter((c) => c.kind === 'call').length;
   const stuckAll = await stuckParcels(ctx);
   return {
     bloques: stuckAll.size,
@@ -206,6 +210,8 @@ export async function suiviCounts(ctx: Ctx) {
     lateSolve,
     enlivraison: num(r.enlivraison),
     alertes: num(r.alertes),
+    alertes_new: alertesNew,
+    alertes_encours: Math.max(0, num(r.alertes) - alertesNew),
     traites: num(r.traites),
     livres: num(r.livres),
     annules: num(r.returning) + num(r.swapped),
@@ -731,13 +737,26 @@ async function notLockedByOther(ctx: Ctx, oid: number) {
   if (r && !ctx.session.isAdmin) throw bad(`${r.ref} : ${r.name} s’en occupe en ce moment`);
 }
 
+/** The alerts in this person's reach: nobody acted on it since it came (new), or someone did (in progress). */
+async function alertSplit(ctx: Ctx): Promise<{ fresh: number[]; working: number[] }> {
+  const ids = (await ctx.db.query(`SELECT o.id FROM orders o WHERE o.follow_status = 'alert'${andSql(queueSql(ctx, readQueue(ctx)))}`)).map((x: any) => num(x.id));
+  const clocks = await alertClocks(ctx.db, ids, ctx.now());
+  const fresh = ids.filter((id: number) => (clocks.get(id)?.kind ?? 'call') === 'call');
+  return { fresh, working: ids.filter((id: number) => !fresh.includes(id)) };
+}
+
 export const suiviProcs = {
   'suivi.counts': proc(['suivi', 'confirmation'], z.object({}), (ctx) => suiviCounts(ctx)),
 
   'suivi.list': proc(['suivi', 'confirmation'], ListSuivi, async (ctx, i) => {
     const stuck = i.tab === 'bloques' ? await stuckParcels(ctx) : null;
     if (stuck && !stuck.size) return { rows: [], total: 0, page: 1, pageSize: i.pageSize ?? 50, extra: {} };
-    const page = await listOrders(ctx, ListInput.parse({ ...tabFilter(i.tab, ctx.now(), agencyOf(ctx) !== null), ...(stuck ? { ids: [...stuck.keys()].slice(0, 500) } : {}), q: i.q, page: i.page, pageSize: i.pageSize }), { queue: readQueue(ctx) });
+    // new alerts (nobody acted since it came) / alerts in progress (someone called, wrote a note…)
+    const split = i.tab === 'alertes_new' || i.tab === 'alertes_encours' ? await alertSplit(ctx) : null;
+    const splitIds = split ? (i.tab === 'alertes_new' ? split.fresh : split.working) : null;
+    if (splitIds && !splitIds.length) return { rows: [], total: 0, page: 1, pageSize: i.pageSize ?? 50, extra: {} };
+    const ids = stuck ? [...stuck.keys()].slice(0, 500) : splitIds ? splitIds.slice(0, 500) : null;
+    const page = await listOrders(ctx, ListInput.parse({ ...tabFilter(i.tab, ctx.now(), agencyOf(ctx) !== null), ...(ids ? { ids } : {}), q: i.q, page: i.page, pageSize: i.pageSize }), { queue: readQueue(ctx) });
     if (stuck) {
       const ex = await extras(ctx.db, page.rows, ctx.now());
       for (const o of page.rows) if (ex[o.id]) ex[o.id].stuck = stuck.get(o.id) ?? null;

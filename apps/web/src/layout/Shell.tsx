@@ -168,7 +168,7 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
 
   /** a group's children this user sees (an agency: the work its sellers give it) */
   const kids = (n: NavItem) =>
-    (n.children ?? []).filter((c) => canSeeChild(c, roles, isAdmin) && (!agency || !work.loaded || (c.id === 'confirmation' ? work.tasks.has('confirmation') : ['suivi', 'enlivraison', 'livrees', 'annulees'].includes(c.id) ? work.tasks.has('suivi') || work.tasks.has('confirmation') : true)));
+    (n.children ?? []).filter((c) => canSeeChild(c, roles, isAdmin) && (!agency || !work.loaded || (c.id === 'confirmation' ? work.tasks.has('confirmation') : ['suivi', 'alertes', 'enlivraison', 'livrees', 'annulees'].includes(c.id) ? work.tasks.has('suivi') || work.tasks.has('confirmation') : true)));
   // a group whose children are all out of the shop's plan is not shown
   const items = nav.filter((n) => !n.hidden && canSee(n, roles, isAdmin, !!session!.canManageUsers, canRules, !!session!.profile.canAffect) && (!n.children || kids(n).length > 0));
   /** the group of the page on screen: its children show in a bar under the header when the sidebar is folded */

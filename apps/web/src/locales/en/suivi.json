@@ -2,7 +2,10 @@
   "tabs": {
     "enlivraison": "Out for delivery",
     "alertes": "Alerts",
+    "alertes_new": "New alerts",
+    "alertes_encours": "Alerts in progress",
     "traites": "Handled",
+    "traitesAlert": "Handled alerts",
     "livres": "Delivered",
     "annules": "Cancelled",
     "reclamation": "Claims",
@@ -24,8 +27,10 @@
   },
   "help": {
     "enlivraison": "All parcels in active delivery, including alerts and treated alerts. The Alerts tab contains only parcels in alert.",
-    "enlivraisonAgency": "Parcels on the road with no problem. As soon as a parcel is flagged as an alert, it moves to « Follow-up ».",
+    "enlivraisonAgency": "Parcels on the road with no problem. As soon as a parcel is flagged as an alert, it moves to « Alerts ».",
     "alertes": "Parcels flagged by the delivery company or the livreur (the statuses chosen in Preferences › Suivi alerts). Call the customer, then “Treat” or “Customer cancels”.",
+    "alertes_new": "Alerts nobody has worked on yet: call the customer.",
+    "alertes_encours": "Alerts someone is already working on (a call, a note…). Finish with « Treat » or « Customer cancels ».",
     "traites": "Alerts already handled: the parcel is back on the road. It leaves this list once delivered or cancelled.",
     "livres": "Parcels delivered in the last 30 days.",
     "annules": "Parcels cancelled by the customer, still with the courier or the livreur, on their way back to the depot. To give one directly to another customer: Suivi → Swap.",
@@ -34,6 +39,8 @@
   },
   "empty": {
     "alertes": "No alert to handle.",
+    "alertes_new": "No new alerts.",
+    "alertes_encours": "No alerts in progress.",
     "traites": "No handled alert in progress.",
     "livres": "No parcel delivered in the last 30 days.",
     "annules": "No cancelled parcel on its way back.",

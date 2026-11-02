@@ -28,13 +28,20 @@ import { Traiter } from './Traiter';
 import { StuckChips, StuckDialog, type StuckInfo } from './Stuck';
 import { ScoreChip } from '../../ui/clientScore';
 
-const LIST_TABS = ['enlivraison', 'alertes', 'traites', 'bloques', 'livres', 'annules', 'swap'] as const;
+const LIST_TABS = ['enlivraison', 'alertes', 'alertes_new', 'alertes_encours', 'traites', 'bloques', 'livres', 'annules', 'swap'] as const;
+/** the alert lists: all of them, the new ones (nobody acted yet), the ones in progress */
+/** in a confirmation agency's space (its agents, its chief) */
+const useInAgency = () => {
+  const s = useSession().session;
+  return s?.shop?.kind === 'agency' || !!s?.profile.agencyId;
+};
+const isAlertTab = (tab: string) => tab === 'alertes' || tab === 'alertes_new' || tab === 'alertes_encours';
 type ListTab = (typeof LIST_TABS)[number];
 type Sub = ListTab | 'reclamation';
 
 export function Suivi({ sub }: PageProps) {
   // a confirmation agency's agents follow the parcels; the claims with couriers and the swaps stay the store's
-  const agency = !!useSession().session?.profile.agencyId;
+  const agency = useInAgency();
   const { has } = useSession();
   const tabs: readonly string[] = agency || !has('suivi') ? LIST_TABS.filter((k) => k !== 'swap') : [...LIST_TABS, 'reclamation'];
   const tab: Sub = tabs.includes(sub ?? '') ? (sub as Sub) : 'enlivraison';
@@ -57,7 +64,7 @@ export function Suivi({ sub }: PageProps) {
 /** "Alertes › Traités | Annulés  Réclamation  Swap" — same markup as the original stage bar. */
 function SuiviBar({ tab }: { tab: Sub }) {
   const { t } = useTranslation();
-  const agency = !!useSession().session?.profile.agencyId;
+  const agency = useInAgency();
   const { has } = useSession();
   const c = useRpc('suivi.counts', {}, { refetchInterval: 60_000 }).data;
   // a phone shows a few steps at a time: the current one is brought into view
@@ -73,10 +80,35 @@ function SuiviBar({ tab }: { tab: Sub }) {
   }, [tab]);
   const item = (k: Sub, count?: number, x = false) => (
     <a className={`bjm-p ${tab === k ? 'on' : ''} ${x ? 'x' : ''}`} href={`#/suivi/${k}`} data-k={k} aria-current={tab === k ? 'page' : undefined}>
-      <span className="bjm-l">{t(`suivi.tabs.${k}`)}</span>
+      <span className="bjm-l">{t(agency && k === 'traites' ? 'suivi.tabs.traitesAlert' : `suivi.tabs.${k}`)}</span>
       {count !== undefined && <b className="bjm-n ltr">{count}</b>}
     </a>
   );
+  // a confirmation agency: the tabs of the step chosen in its menu (En livraison · Alertes · Livré · Annulé)
+  if (agency) {
+    const step = ['alertes', 'alertes_new', 'alertes_encours', 'traites'].includes(tab) ? 'alert' : tab === 'bloques' || tab === 'enlivraison' ? 'road' : tab;
+    return (
+      <nav ref={bar} className="bjm-bar flow" aria-label="Étapes" data-g="suivi">
+        {step === 'alert' ? (
+          <>
+            {item('alertes_new', c?.alertes_new ?? 0)}
+            <span className="bjm-ar" aria-hidden="true">›</span>
+            {item('alertes_encours', c?.alertes_encours ?? 0)}
+            <span className="bjm-ar" aria-hidden="true">›</span>
+            {item('traites', c?.traites ?? 0)}
+          </>
+        ) : step === 'road' ? (
+          <>
+            {item('enlivraison', c?.enlivraison ?? 0)}
+            <span className="bjm-sep" aria-hidden="true" />
+            {item('bloques', c?.bloquesTodo ?? 0, true)}
+          </>
+        ) : (
+          item(tab, tab === 'livres' ? (c?.livres ?? 0) : (c?.annules ?? 0))
+        )}
+      </nav>
+    );
+  }
   return (
     <nav ref={bar} className="bjm-bar flow" aria-label="Étapes" data-g="suivi">
       {item('enlivraison', c?.enlivraison ?? 0)}
@@ -100,7 +132,7 @@ function SuiviBar({ tab }: { tab: Sub }) {
 function Head({ tab }: { tab: ListTab }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const agency = !!useSession().session?.profile.agencyId;
+  const agency = useInAgency();
   const { has } = useSession();
   const c = useRpc('suivi.counts', {}).data;
   const [busy, setBusy] = useState(false);
@@ -330,7 +362,7 @@ type Dialog =
 
 function List({ tab }: { tab: ListTab }) {
   const { t } = useTranslation();
-  const agency = !!useSession().session?.profile.agencyId;
+  const agency = useInAgency();
   const { has } = useSession();
   const canFollow = has('suivi');
   const [page, setPage] = useState(1);
@@ -374,7 +406,7 @@ function List({ tab }: { tab: ListTab }) {
 
   const extra = (q.data?.extra ?? {}) as Record<number, Extra>;
   let actions: ((o: Order) => ReactNode) | undefined;
-  if (tab === 'alertes')
+  if (isAlertTab(tab))
     actions = (o) => (
       <div className="row nowrap px-sv-acts">
         {!agency && <AlertClaim o={o} x={extra[o.id]} onClaim={(toLivreur) => setDlg({ kind: 'claim', o, toLivreur })} />}
@@ -424,7 +456,7 @@ function List({ tab }: { tab: ListTab }) {
       <div className="card-head">
         <h2>{tab === 'swap' ? t('suivi.toSwap') : t(`suivi.tabs.${tab}`)}</h2>
         <span className="muted small">{q.data ? t('suivi.parcels', { count: q.data.rows.length }) : ''}</span>
-        {canFollow && (tab === 'alertes' || tab === 'bloques') && !cards && !!q.data?.rows.length && (
+        {canFollow && (isAlertTab(tab) || tab === 'bloques') && !cards && !!q.data?.rows.length && (
           <button type="button" className="btn primary sv-next" disabled={nexting} onClick={nextAlert}>
             {tab === 'bloques' ? t('suivi.stuck.next') : t('suivi.ph.next')} <Icon name="chevr" />
           </button>
@@ -445,7 +477,7 @@ function List({ tab }: { tab: ListTab }) {
             if (tab === 'enlivraison') return [o.followStatus === 'alert'
               ? { key: 'treat', label: t('suivi.act.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) }
               : { key: 'realert', label: t('suivi.act.toAlert'), run: () => run(o, 'realert') }];
-            if (tab === 'alertes')
+            if (isAlertTab(tab))
               return [{ key: 'treat', label: t('suivi.ph.treat'), tone: 'main', run: () => setDlg({ kind: 'treat', o }) }, ...(!agency ? [claim] : [])];
             if (tab === 'traites')
               return [
@@ -461,7 +493,7 @@ function List({ tab }: { tab: ListTab }) {
           return (
             <>
               <ParcelCards rows={rows} extra={extra} reasonOf={reasonOf} empty={t(`suivi.empty.${tab}`)} onOpen={setOpenId} />
-              {canFollow && (tab === 'alertes' || tab === 'bloques') && rows.length > 0 && (
+              {canFollow && (isAlertTab(tab) || tab === 'bloques') && rows.length > 0 && (
                 <button type="button" className="pxp-next" disabled={nexting} onClick={nextAlert}>
                   {tab === 'bloques' ? t('suivi.stuck.next') : t('suivi.ph.next')}
                   <Icon name="chevr" />

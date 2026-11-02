@@ -327,8 +327,11 @@ function FocusAll({ onClose }: { onClose: () => void }) {
 }
 
 // ---------------------------------------------------------------- Suivi, every seller
-type Tab = 'enlivraison' | 'alertes' | 'traites' | 'livres' | 'annules';
-const TABS: Tab[] = ['enlivraison', 'alertes', 'traites', 'livres', 'annules'];
+type Tab = 'enlivraison' | 'alertes' | 'alertes_new' | 'alertes_encours' | 'traites' | 'livres' | 'annules';
+const TABS: Tab[] = ['enlivraison', 'alertes', 'alertes_new', 'alertes_encours', 'traites', 'livres', 'annules'];
+/** the tabs of the step chosen in the agency's menu: En livraison · Alertes (new, in progress, handled) · Livré · Annulé */
+const stepTabs = (tab: Tab): Tab[] => (['alertes', 'alertes_new', 'alertes_encours', 'traites'].includes(tab) ? ['alertes_new', 'alertes_encours', 'traites'] : [tab]);
+const alertTab = (tab: Tab) => tab === 'alertes' || tab === 'alertes_new' || tab === 'alertes_encours';
 type SuiviRow = Out<'suivi.list'>['rows'][number] & { seller?: { id: number; name: string }; extra?: { alertReason: string | null } | null };
 
 function AllSuivi({ sub }: PageProps) {
@@ -349,17 +352,17 @@ function AllSuivi({ sub }: PageProps) {
   const reason = (o: SuiviRow) => (o.followStatus === 'alert' ? o.extra?.alertReason || o.extStatus : o.extStatus);
   return (
     <>
-      <StageBar flow={false} items={TABS.map((k) => ({ key: k, label: t(`suivi.tabs.${k}`), href: `#/suivi/${k}`, count: c?.[k] }))} current={tab} />
+      <StageBar flow={false} items={stepTabs(tab).map((k) => ({ key: k, label: t(k === 'traites' ? 'suivi.tabs.traitesAlert' : `suivi.tabs.${k}`), href: `#/suivi/${k}`, count: c?.[k] }))} current={tab} />
       <div className="card agx-all">
         <div className="card-head">
           <h2>
-            {t(`suivi.tabs.${tab}`)} <span className="badge ltr">{n(q.data?.total ?? 0)}</span>
+            {t(tab === 'traites' ? 'suivi.tabs.traitesAlert' : `suivi.tabs.${tab}`)} <span className="badge ltr">{n(q.data?.total ?? 0)}</span>
           </h2>
           <span className="chip agx-all-chip">
             <Icon name="store" /> {t('agency.pick.allShort')}
           </span>
         </div>
-        <p className="muted small">{t(`suivi.help.${tab}`)}</p>
+        <p className="muted small">{t(tab === 'enlivraison' ? 'suivi.help.enlivraisonAgency' : `suivi.help.${tab}`)}</p>
         {q.error ? (
           <ErrorBox error={q.error} onRetry={() => q.refetch()} />
         ) : !q.data ? (
@@ -376,7 +379,7 @@ function AllSuivi({ sub }: PageProps) {
                   <th>{t('confirmation.col.wilaya')}</th>
                   <th>{t('confirmation.col.follow')}</th>
                   <th className="wide">{t('agency.work.reason')}</th>
-                  {tab === 'alertes' && canFollow && <th />}
+                  {alertTab(tab) && canFollow && <th />}
                 </tr>
               </thead>
               <tbody>
@@ -419,7 +422,7 @@ function AllSuivi({ sub }: PageProps) {
                     <td className="wide px-cw" data-l={t('agency.work.reason')}>
                       <div className="px-clamp">{reason(o) || <span className="muted">—</span>}</div>
                     </td>
-                    {tab === 'alertes' && canFollow && (
+                    {alertTab(tab) && canFollow && (
                       <td className="agx-row-act">
                         {work.list.find((s) => s.id === o.seller?.id)?.tasks.includes('suivi') && <>
                         <button type="button" className="btn small primary" onClick={() => setTreat(o)}>
