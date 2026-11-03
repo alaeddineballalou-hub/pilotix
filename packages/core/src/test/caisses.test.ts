@@ -99,3 +99,16 @@ test('a shop that does not use a bank removes it, and can put it back', async ()
   await call('caisse.restoreBank', admin, {});
   assert.ok(((await call('caisse.list', admin, {})) as any).some((x: any) => x.key === 'bank'));
 });
+
+
+test('cash receive refuses unknown or duplicate order IDs without partially cashing valid orders', async () => {
+  const admin = await as(EMAILS.admin);
+  const due: any = await call('cash.due', admin, {});
+  const one = due.groups.flatMap((g: any) => g.orders)[0];
+  assert.ok(one, 'seed must contain a delivered unpaid order');
+  const invalidId = 2_000_000_000;
+  await assert.rejects(call('cash.receive', admin, { ids: [one.id, invalidId] }), /introuvables/);
+  await assert.rejects(call('cash.receive', admin, { ids: [one.id, one.id] }), /plusieurs fois/);
+  const stillDue: any = await call('cash.due', admin, {});
+  assert.ok(stillDue.groups.some((g: any) => g.orders.some((o: any) => o.id === one.id)));
+});
