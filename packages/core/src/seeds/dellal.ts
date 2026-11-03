@@ -15,11 +15,6 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   const fee = order ? num(order.delivery_fee) : 400;
   const place = order ? `${order.commune || 'votre commune'}` : 'Kouba';
   await db.query(`INSERT INTO settings (key, value) VALUES ('dellal', $1) ON CONFLICT (key) DO NOTHING`, [JSON.stringify({ enabled: true, verifyToken: 'dellal-demo-verify-token' })]);
-  // the preview's linked Facebook account (Pilot AI › Comptes, modules/social.ts): its Page and its ad account, used here
-  await db.query(`INSERT INTO settings (key, value) VALUES ('social_page', $1), ('social_ads', $2) ON CONFLICT (key) DO NOTHING`, [
-    JSON.stringify({ linkId: 1, assetId: 11, pageId: '104920331', name: 'Bébé Confort DZ', igId: '1784104920331', igUsername: 'bebeconfort.dz', picture: null, account: 'Alaeddine Benali', at: iso(now) }),
-    JSON.stringify({ linkId: 1, assetId: 13, adAccountId: '120211887', name: 'Bébé Confort — publicité', currency: 'USD', account: 'Alaeddine Benali', at: iso(now) }),
-  ]);
   const name = p ? `${p.name}${p.title ? ` ${p.title}` : ''}` : 'la poussette';
   // the high chair's sales guide (seeds/catalog.ts): Dellal reads it before answering a question about the product
   const chair = num((await db.query(`SELECT id FROM products WHERE sku = 'PX-CHA'`))[0]?.id);

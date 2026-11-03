@@ -826,6 +826,20 @@ async function demoRemove(ctx: Ctx, linkId: number) {
   d.links = d.links.filter((x) => x.id !== linkId);
   return demoList(ctx);
 }
+/**
+ * The browser preview's boutique uses its sample account's Page and ad account from the start (Message AI agent ›
+ * Réglages shows the Page): written once by the page (lib/backend.ts), never on a server.
+ */
+export async function seedSocialPreview(db: Db, now = Date.now()) {
+  const at = new Date(now).toISOString();
+  await db.query(`INSERT INTO settings (key, value) VALUES ($1, $2), ($3, $4) ON CONFLICT (key) DO NOTHING`, [
+    SOCIAL_KEYS.page,
+    JSON.stringify({ linkId: 1, assetId: 11, pageId: '104920331', name: 'Bébé Confort DZ', igId: '1784104920331', igUsername: 'bebeconfort.dz', picture: null, account: 'Alaeddine Benali', at }),
+    SOCIAL_KEYS.ads,
+    JSON.stringify({ linkId: 1, assetId: 13, adAccountId: '120211887', name: 'Bébé Confort — publicité', currency: 'USD', account: 'Alaeddine Benali', at }),
+  ]);
+}
+
 /** Tests: the preview's sample account from scratch. */
 export const resetSocialDemo = () => {
   demo = null;

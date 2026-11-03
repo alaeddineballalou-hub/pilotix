@@ -47,8 +47,7 @@ test('settings: admin only, secrets never returned, verify token created', async
   assert.equal(cleared.has.ai, true);
   // the Page token is no longer pasted by hand: it comes from a linked account (Pilot AI › Comptes)
   await assert.rejects(call('dellal.settings.save', admin, { ...s.settings, secrets: { pageToken: 'EAAB-page' } }), /secrets\.pageToken/);
-  // the preview's Page comes from its sample linked account (seeds/dellal.ts)
-  assert.equal(cleared.page?.name, 'Bébé Confort DZ');
+  assert.equal(cleared.page, null, 'no Page linked: none shown');
 });
 
 test('test chat (no AI), whole order: answers price, delivery fee, recap, then simulates the order', async () => {

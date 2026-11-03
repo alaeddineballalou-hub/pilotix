@@ -388,6 +388,8 @@ class DemoBackend implements Backend {
         this.progress('Création des commandes d’exemple…');
         await core.seedDemo(db, { orders: Number(import.meta.env.VITE_DEMO_ORDERS) || 1200 });
         await core.seedPilotDemo(db);
+        // Pilot AI › Comptes: the sample linked account's Page and ad account, used by this boutique
+        await core.seedSocialPreview(db);
         // the demo database is rebuilt on every reload: put back the column presets and screen choices kept in this browser
         await core.demoRestore(db, store.json<import('@pilotix/core').DemoKeep | null>('demo-keep', null)).catch(() => {});
         return { core, db, t };

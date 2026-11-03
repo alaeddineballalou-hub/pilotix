@@ -1357,7 +1357,7 @@ class ApiController {
     const m = optionalDellal();
     // a boutique whose Page comes from a linked account (Pilot AI › Comptes) gets its Page's messages and comments from
     // Pilotix's own webhook (hooks/meta-app): here, only WhatsApp (its own Meta app), so nothing is answered twice
-    const linked = (await db.query(`SELECT 1 FROM settings WHERE key = 'social_page'`)).length > 0;
+    const linked = (await this.core.t.platform.query(`SELECT 1 FROM platform.social_uses WHERE shop_id = $1 AND kind = 'page'`, [ref.shop.id]).catch(() => [])).length > 0;
     const all: any[] = m?.parseMetaWebhook ? m.parseMetaWebhook(body) : [];
     const list = linked ? all.filter((x) => x?.channel === 'whatsapp') : all;
     // comments make the page act in public (reply, hide): only from a webhook signed with the Meta app secret
