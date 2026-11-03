@@ -113,6 +113,10 @@
     "never": "Jamais",
     "afterH_one": "Après {{count}} heure",
     "afterH_other": "Après {{count}} heures",
+    "autoOrder": "Commande avec le numéro seul",
+    "autoOrderHint": "Le client a donné son numéro puis ne répond plus : après ce temps, {{name}} envoie sa commande dans Confirmation › Nouvelles avec son numéro et le produit demandé, et l’équipe l’appelle.",
+    "afterMin_one": "Après {{count}} min",
+    "afterMin_other": "Après {{count}} min",
     "model": "Modèle d’IA",
     "modelHint": "Sonnet : le bon équilibre. Haiku : moins cher. Opus : le plus fin.",
     "models": {

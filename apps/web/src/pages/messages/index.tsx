@@ -546,6 +546,16 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'de
               ))}
             </select>
           </Field>
+          <Field label={t('messages.settings.autoOrder')} hint={t('messages.settings.autoOrderHint', { name: f.name })}>
+            <select value={f.autoOrderMinutes} onChange={(e) => set('autoOrderMinutes', Number(e.target.value))}>
+              <option value={0}>{t('messages.settings.never')}</option>
+              {[10, 20, 30, 60].map((m) => (
+                <option key={m} value={m}>
+                  {t('messages.settings.afterMin', { count: m })}
+                </option>
+              ))}
+            </select>
+          </Field>
           <Field label={t('messages.settings.model')} hint={t('messages.settings.modelHint')}>
             <select value={f.model} onChange={(e) => set('model', e.target.value as typeof f.model)}>
               {data.models.map((m) => (

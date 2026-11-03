@@ -4,7 +4,8 @@
 // wilaya and product with a note of what he wants, so the team calls him, and keeps that order up to date when he changes
 // something; « Commande complète » takes the whole order in the chat. In both, a question Dellal cannot answer is never
 // guessed: it asks for the customer's number so the team calls him back, and after two asks gives the shop's customer-service
-// number. The same rules run on the server (Claude through ctx.server.dellal) and in
+// number; and a customer who gave his number then went quiet (20 min) gets his order all the same, with that number and
+// the product he asked about, for the team to call (runAutoOrders). The same rules run on the server (Claude through ctx.server.dellal) and in
 // the browser preview (a small rule-based "demo brain" with the same tools, so the demo shows the whole flow).
 import { COMMUNES, CONF_TODO, normalizePhone, SalesChannel, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
@@ -47,6 +48,9 @@ export interface DellalSettings {
   allowDiscount: boolean;
   /** one follow-up when the customer goes quiet, after N hours (0 = off) */
   followUpHours: number;
+  /** the customer gave his number, then went quiet for N minutes without an order: the order goes in by itself with his
+   *  number and the product he asked about, the team calls him (0 = off; both versions) */
+  autoOrderMinutes: number;
   /** answer between 23:00 and 08:00 (Algeria) */
   nightReplies: boolean;
   /** shop knowledge: warranty, sizes, FAQ… */
@@ -77,6 +81,7 @@ export const DEFAULT_DELLAL: DellalSettings = {
   model: 'claude-sonnet-5-5',
   allowDiscount: false,
   followUpHours: 3,
+  autoOrderMinutes: 20,
   nightReplies: true,
   notes: '',
   handoffTopics: 'Réclamation ou colis en retard\nAchat en gros\nLe client demande à parler à une personne',
@@ -683,6 +688,8 @@ async function updateFromChat(t: ToolCtx, input: any): Promise<any> {
         [open.id],
       );
     }
+    // the order Pilotix made by itself from his number: what he gives now is no longer « à demander »
+    if ((change.wilayaId || lines) && (await isAutoOrder(ctx.db, conv.id, open.id))) await clearAutoNotes(ctx.db, open.id, { wilaya: !!change.wilayaId, variant: !!lines, ...(lines ? { want: wantOf(after.items) } : {}) });
     // the order's history says what the customer changed in the chat
     const was = (a: unknown, b: unknown) => `${String(a ?? '').trim() || '—'} → ${String(b ?? '').trim() || '—'}`;
     const what: string[] = [];
@@ -821,6 +828,34 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
       const sub = items.reduce((s: number, i) => s + (i.unitPrice ?? ps.find((p) => p.product_id === i.productId)?.variants.find((v) => v.variant_id === i.variantId)?.price ?? 0) * i.qty, 0);
       const fee = (await clientFee(ctx.db, place.wilayaId, !!input?.stopdesk)) ?? 0;
       return { ok: true, test: true, ref: 'TEST', total: sub - discount + fee, delivery_fee: fee, ...(v1 ? { next: V001_NEXT } : {}), note: 'Mode test : aucune vraie commande créée.' };
+    }
+    // the whole order, and Pilotix already made one by itself from his number while he was quiet: that one is completed,
+    // never a second one (it stays in Nouvelles: the team calls about it anyway)
+    const open = !v1 ? await openOrder(ctx.db, conv, false) : null;
+    if (open?.id && (await isAutoOrder(ctx.db, conv.id, open.id))) {
+      try {
+        const cur = (await ctx.db.query('SELECT customer_note FROM orders WHERE id = $1', [open.id]))[0];
+        const q = await customerFee(ctx.db, place.wilayaId, !!input?.stopdesk, items.map((l) => ({ productId: l.productId, qty: l.qty })));
+        const note = [String(cur?.customer_note ?? '').replace(' · Wilaya à demander', '').replace(' · Variante à confirmer', '').trim(), input?.note ? String(input.note).trim() : ''].filter(Boolean).join(' · ');
+        const after = await updateOrder(ctx, {
+          id: open.id,
+          customerName: name,
+          phone,
+          wilayaId: place.wilayaId,
+          commune: String(input?.commune ?? place.commune ?? '').slice(0, 120),
+          address: String(input?.address ?? '').slice(0, 300),
+          isStopdesk: !!input?.stopdesk,
+          items: items.map(({ productId, variantId, qty, unitPrice, isUpsell }) => ({ productId, variantId, qty, ...(unitPrice ? { unitPrice } : {}), ...(isUpsell ? { isUpsell } : {}) })),
+          discount,
+          customerNote: note.slice(0, 1000) || null,
+          ...(q.fee !== null ? { deliveryFee: q.fee } : {}),
+        });
+        await clearAutoNotes(ctx.db, open.id, { wilaya: true, variant: true, want: wantOf(after.items) });
+        await addEvent(ctx.db, open.id, null, 'note', null, null, `${settings.name} : le client est revenu dans le chat et a donné toute sa commande`);
+        return { ok: true, ref: after.ref, total: after.total, delivery_fee: after.deliveryFee, next: 'Un conseiller va appeler pour confirmer.' };
+      } catch (e: any) {
+        return { error: e?.message ?? 'Commande refusée' };
+      }
     }
     try {
       const o = await createOrder(ctx, {
@@ -1622,6 +1657,174 @@ export async function runFollowUps(ctx: Ctx): Promise<{ sent: number }> {
   return { sent };
 }
 
+// ---------------------------------------------------------------- the number is enough: an order when he goes quiet
+/** How far back a quiet chat is still picked up: a server stopped a few hours loses nothing, and turning the rule on
+ *  never turns a shop's old chats into orders. */
+const AUTO_ORDER_WINDOW_H = 6;
+
+/** The product the customer asked about in a chat: the last one he named, else the last one Dellal looked up for him. */
+async function askedProduct(db: Db, said: string[], tools: any[]): Promise<{ product: ProductInfo; variant: ProductInfo['variants'][number] | null } | null> {
+  let product: ProductInfo | null = null;
+  for (const line of said) {
+    const hit = (await searchProducts(db, line, 1))[0];
+    if (hit && strip(line).split(/\s+/).some((w) => w.length >= 4 && strip(hit.name).includes(w))) product = hit;
+  }
+  if (!product)
+    for (const m of [...tools].reverse()) {
+      const t = m.meta?.tool;
+      const found = m.meta?.result?.products ?? [];
+      const pid = t === 'product_guide' ? Number(m.meta?.input?.product_id) : t === 'search_products' && found.length === 1 ? Number(found[0].product_id) : 0;
+      if (!pid) continue;
+      product = (await searchProducts(db, null, 1000)).find((p) => p.product_id === pid) ?? null;
+      if (product) break;
+    }
+  if (!product) return null;
+  const all = strip(said.join('\n'));
+  const variant = product.variants.find((v) => v.title && all.includes(strip(v.title))) ?? (product.variants.length === 1 ? product.variants[0] : null);
+  return { product, variant };
+}
+
+/** The order of this chat that Pilotix made by itself (runAutoOrders), if that is the one. */
+async function isAutoOrder(db: Db, convId: number, orderId: number | null): Promise<boolean> {
+  if (!orderId) return false;
+  return !!(await db.query(`SELECT 1 FROM conv_messages WHERE conversation_id = $1 AND role = 'tool' AND meta->>'tool' = 'auto_order' AND meta->'result'->>'id' = $2 LIMIT 1`, [convId, String(orderId)]))[0];
+}
+
+/** That order now knows the wilaya, or the colour / size: its « à demander » notes go, and « Veut : » says his choice. */
+async function clearAutoNotes(db: Db, orderId: number, o: { wilaya?: boolean; variant?: boolean; want?: string }) {
+  const cur = (await db.query('SELECT customer_note, internal_note FROM orders WHERE id = $1', [orderId]))[0];
+  if (!cur) return;
+  let note = String(cur.customer_note ?? '');
+  let inside = String(cur.internal_note ?? '');
+  if (o.wilaya) {
+    note = note.replace(' · Wilaya à demander', '');
+    inside = inside.replace(/^⚠️ Wilaya inconnue[^.]*\. /, '');
+  }
+  if (o.variant) note = note.replace(' · Variante à confirmer', '');
+  if (o.want) note = note.replace(/^Veut : [^·]*?(?= · |$)/, `Veut : ${o.want}`);
+  await db.query(`UPDATE orders SET customer_note = $2, internal_note = $3${o.wilaya ? ', wilaya_guess = NULL' : ''} WHERE id = $1`, [orderId, note.trim().slice(0, 1000) || null, inside.trim().slice(0, 1000) || null]);
+}
+
+/** « Poussette Gris, Chaise haute × 2 »: what an order holds, for its « Veut : » note. */
+const wantOf = (items: { name: string; variantTitle?: string | null; qty: number }[]) => items.map((i) => `${i.name}${i.variantTitle ? ` ${i.variantTitle}` : ''}${i.qty > 1 ? ` × ${i.qty}` : ''}`).join(', ');
+
+/** One quiet chat: its order with what is known (his number, the product he asked about), or why not. */
+async function autoOrderOf(ctx: Ctx, s: DellalSettings, row: any): Promise<{ ref: string | null; why?: string }> {
+  const db = ctx.db;
+  const msgs = (await db.query(`SELECT role, body, meta FROM conv_messages WHERE conversation_id = $1 ORDER BY id DESC LIMIT 80`, [row.id])).reverse();
+  const said = msgs.filter((m: any) => m.role === 'customer').map((m: any) => String(m.body ?? '')).slice(-20);
+  // his number: the last one he typed, else the conversation's (WhatsApp, or the one he gave for a call back)
+  let phone: string | null = null;
+  for (const t of [...said].reverse()) {
+    const hit = t.match(PHONE_RE)?.[0];
+    phone = hit ? normalizePhone(hit) : null;
+    if (phone) break;
+  }
+  phone ??= row.phone ? normalizePhone(String(row.phone)) : null;
+  if (!phone) return { ref: null, why: 'no_number' };
+  const asked = await askedProduct(db, said, msgs.filter((m: any) => m.role === 'tool'));
+  if (!asked) return { ref: null, why: 'no_product' };
+  const { product } = asked;
+  const variant = asked.variant ?? product.variants.find((v) => v.available > 0) ?? product.variants[0];
+  if (!variant) return { ref: null, why: 'no_variant' };
+  const guessed = !asked.variant && product.variants.length > 1;
+  // the wilaya he said (or that Dellal priced the delivery for); none → the shop's own, for now, said loud in the notes
+  let place = findPlace([...said].reverse().find((l) => findPlace(l)) ?? '');
+  if (!place)
+    for (const m of [...msgs].reverse())
+      if (m.role === 'tool' && m.meta?.tool === 'delivery_fee' && m.meta?.input?.wilaya && (place = findPlace(String(m.meta.input.wilaya)))) break;
+  const wilayaId = place?.wilayaId ?? (await getSetting(db, 'shop')).fromWilayaId;
+  const name = String(row.customer_name ?? '').trim();
+  const customerName = name.length >= 2 ? name.slice(0, 120) : 'Client';
+  // a call back that went quiet: its question goes with the order
+  const question = row.mode === 'handoff' ? (String(row.handoff_reason ?? '').match(/sa question : « (.*) »$/)?.[1] ?? null) : null;
+  const want = `${product.name}${variant.title ? ` ${variant.title}` : ''}`;
+  const todo = [!place && 'la wilaya', guessed && 'la couleur ou la taille', customerName === 'Client' && 'le prénom', 'la commune et l’adresse'].filter(Boolean);
+  const customerNote = [`Veut : ${want}`, question && `Question : ${question}`, !place && 'Wilaya à demander', guessed && 'Variante à confirmer'].filter(Boolean).join(' · ');
+  const internalNote =
+    (!place ? `⚠️ Wilaya inconnue : ${WILAYAS[wilayaId - 1]} mise en attendant, à corriger avant de confirmer. ` : '') +
+    `Commande auto (${s.name}) : le client a donné son numéro puis ne répond plus depuis ${s.autoOrderMinutes} min (conversation #${row.id}). À appeler pour compléter : ${todo.join(', ')}.`;
+  try {
+    const o = await createOrder(
+      ctx,
+      {
+        customerName,
+        phone,
+        wilayaId,
+        commune: place?.commune ?? '',
+        address: '',
+        isStopdesk: false,
+        channel: ORDER_CHANNEL[row.channel as DellalChannel] ?? 'autre',
+        source: `${s.name} · ${row.channel} · commande auto`.slice(0, 120),
+        items: [{ productId: product.product_id, variantId: variant.variant_id, qty: 1 }],
+        discount: 0,
+        customerNote: customerNote.slice(0, 1000),
+        internalNote: internalNote.slice(0, 1000),
+        confirm: false,
+        isExchange: false,
+      },
+      db,
+      // the customer did not send it: no « we received your order » message
+      { conversationId: num(row.id), untrusted: row.channel !== 'whatsapp', guard: 'check', silent: true },
+    );
+    // the shop's wilaya is only there for now: the order is not confirmed until someone asks him (confirmcheck.ts)
+    if (!place) await db.query('UPDATE orders SET wilaya_guess = $2 WHERE id = $1', [o.id, wilayaId]);
+    await db.query(
+      `UPDATE conversations SET order_id = $2, orders_count = orders_count + 1, phone = COALESCE(phone, $3),
+         customer_id = COALESCE(customer_id, (SELECT id FROM customers WHERE phone = $3)) WHERE id = $1`,
+      [row.id, o.id, phone],
+    );
+    await addMessage(db, num(row.id), { role: 'tool', body: `commande auto → ${o.ref} · ${phone} · ${want}${place ? '' : ' · wilaya à demander'}`, meta: { tool: 'auto_order', result: { ok: true, id: o.id, ref: o.ref } } });
+    ctx.emit({ type: 'chat', data: { dellal: num(row.id) } });
+    return { ref: o.ref };
+  } catch (e: any) {
+    const why = String(e?.message ?? e).slice(0, 200);
+    await addMessage(db, num(row.id), { role: 'tool', body: `commande auto → refusée : ${why}`, meta: { tool: 'auto_order', result: { error: why } } });
+    return { ref: null, why };
+  }
+}
+
+/**
+ * Both versions: the customer gave his number (or writes on WhatsApp) and asked about a product, then went quiet for
+ * `autoOrderMinutes` while Dellal waited for his answer, with no order yet (or Dellal took his number for a call back):
+ * the order goes to Confirmation › Nouvelles by itself, with his number and the product he asked about, and the team
+ * calls him to complete it. What is missing is said in its notes: no wilaya → the shop's own wilaya for now, « Wilaya à
+ * demander »; several colours or sizes and none chosen → one of them, « Variante à confirmer ». Nothing is sent to the
+ * customer. A chat is looked at once, and again only after the customer writes again. Every minute on the server; in
+ * the browser preview, when the inbox is read.
+ */
+export async function runAutoOrders(ctx: Ctx): Promise<{ ordered: number; skipped: number }> {
+  const s = await dellalSettings(ctx.db);
+  if (!s.enabled || !s.autoOrderMinutes) return { ordered: 0, skipped: 0 };
+  const now = ctx.now();
+  const quiet = new Date(now - s.autoOrderMinutes * 60_000).toISOString();
+  const oldest = new Date(now - s.autoOrderMinutes * 60_000 - AUTO_ORDER_WINDOW_H * 3_600_000).toISOString();
+  const rows = await ctx.db.query(
+    `SELECT c.* FROM conversations c
+     WHERE c.channel <> 'test' AND c.order_id IS NULL
+       AND (c.mode = 'ai' OR (c.mode = 'handoff' AND c.handoff_reason LIKE 'À rappeler au %'))
+       AND c.last_message_at < $1 AND c.last_message_at > $2
+       AND (c.auto_checked_at IS NULL OR c.auto_checked_at < COALESCE(c.last_customer_at, c.created_at))
+       AND (SELECT role FROM conv_messages m WHERE m.conversation_id = c.id AND m.role <> 'tool' ORDER BY id DESC LIMIT 1) = 'agent'
+       -- a customer answering a delivery message (Delivery AI agent) already ordered
+       AND NOT EXISTS (SELECT 1 FROM conv_messages m WHERE m.conversation_id = c.id AND m.meta ? 'notify')
+     ORDER BY c.last_message_at LIMIT 50`,
+    [quiet, oldest],
+  );
+  let ordered = 0;
+  for (const r of rows) {
+    // two runs never take the same chat: the first one marks it
+    const mine = await ctx.db.query(`UPDATE conversations SET auto_checked_at = now() WHERE id = $1 AND order_id IS NULL AND (auto_checked_at IS NULL OR auto_checked_at < COALESCE(last_customer_at, created_at)) RETURNING id`, [r.id]);
+    if (!mine[0]) continue;
+    const out = await autoOrderOf(ctx, s, r).catch(() => ({ ref: null }));
+    if (out.ref) ordered++;
+  }
+  return { ordered, skipped: rows.length - ordered };
+}
+
+/** In the browser preview nothing runs in the background: the quiet chats become orders when the inbox is read. */
+const inPreview = (ctx: Ctx) => !ctx.server && typeof (globalThis as { window?: unknown }).window !== 'undefined';
+
 // ---------------------------------------------------------------- actions
 const id = z.number().int().positive();
 const SELLERS = ['confirmation'] as const;
@@ -1645,6 +1848,7 @@ const SettingsInput = z.object({
   model: z.enum(DELLAL_MODELS),
   allowDiscount: z.boolean(),
   followUpHours: z.number().int().min(0).max(22),
+  autoOrderMinutes: z.number().int().min(0).max(240).default(20),
   nightReplies: z.boolean(),
   notes: z.string().max(6000),
   handoffTopics: z.string().max(2000),
@@ -1709,6 +1913,7 @@ export const dellalProcs = {
     [...SELLERS],
     z.object({ tab: z.enum(['all', 'handoff', 'ai', 'orders']).default('all'), channel: z.enum(DELLAL_CHANNELS).optional(), q: z.string().max(100).optional(), limit: z.number().int().min(1).max(200).default(80) }),
     async (ctx, i) => {
+      if (inPreview(ctx)) await runAutoOrders(ctx).catch(() => null);
       const w: string[] = [`c.channel <> 'test'`];
       const p: unknown[] = [];
       if (i.channel) w.push(`c.channel = $${p.push(i.channel)}`);
@@ -1939,6 +2144,8 @@ export const dellalProcs = {
   'dellal.answer': proc([], z.object({ id }), (ctx, { id }) => runAgent(ctx, id)),
   /** Server (every 15 min): one follow-up for quiet customers. */
   'dellal.followUps': proc([], z.object({}), (ctx) => runFollowUps(ctx)),
+  /** Every minute on the server: the quiet chats with the customer's number become orders (runAutoOrders). */
+  'dellal.autoOrders': proc([], z.object({}), (ctx) => runAutoOrders(ctx)),
   /** Server: the webhook verify token and which channel a page / number id belongs to. */
   'dellal.routing': proc([], z.object({}), async (ctx) => {
     const s = await dellalSettings(ctx.db);

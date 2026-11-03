@@ -255,7 +255,9 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
       : C.off
         ? { tone: 'bad', text: t('confirmation.chk.offNote', { names: C.lines.filter((x) => x.state === 'off').map((x) => x.name).join(', ') }) }
         : !C.deliver.ok
-          ? C.deliver.why === 'commune'
+          ? C.deliver.why === 'guess'
+            ? { tone: 'bad', text: t('confirmation.chk.guess', { w: wName(C.deliver.wilayaId) }), fix: () => setGeoPick('wil') }
+            : C.deliver.why === 'commune'
             ? { tone: 'bad', text: t('confirmation.chk.commune'), fix: () => setGeoPick('com') }
             : C.deliver.why === 'wilaya'
               ? { tone: 'bad', text: t('confirmation.chk.wilaya'), fix: () => setGeoPick('wil') }

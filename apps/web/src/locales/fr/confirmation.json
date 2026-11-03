@@ -618,6 +618,7 @@
     "offNote": "Indisponible : {{names}}. Changez le produit ou annulez la commande.",
     "commune": "Choisissez la commune pour confirmer.",
     "wilaya": "Choisissez la wilaya pour confirmer.",
+    "guess": "Le client n’a jamais donné sa wilaya ({{w}} est mise en attendant) : demandez-la, puis choisissez sa wilaya et sa commune pour confirmer.",
     "desk": "Choisissez le bureau (stop-desk) pour confirmer.",
     "companyHome": "{{co}} ne livre pas à domicile à {{w}}. Changez la société ou le mode de livraison.",
     "companyDesk": "{{co}} ne livre pas au bureau à {{w}}. Changez la société ou le mode de livraison.",

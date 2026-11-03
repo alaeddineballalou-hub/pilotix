@@ -113,6 +113,10 @@
     "never": "Never",
     "afterH_one": "After {{count}} hour",
     "afterH_other": "After {{count}} hours",
+    "autoOrder": "Order with just the number",
+    "autoOrderHint": "The customer gave their number, then stopped answering: after this time, {{name}} sends their order to Confirmation › New with the number and the product they asked about, and the team calls them.",
+    "afterMin_one": "After {{count}} min",
+    "afterMin_other": "After {{count}} min",
     "model": "AI model",
     "modelHint": "Sonnet: the right balance. Haiku: cheaper. Opus: the sharpest.",
     "models": {

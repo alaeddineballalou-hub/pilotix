@@ -18,6 +18,7 @@ import { syncTurnstile } from './turnstile';
  *  - Meta Ads insights sync every night
  *  - monthly partitions of the order history (every shop, even unpaid: their orders keep coming in)
  *  - Dellal follow-ups (one short message to customers who went quiet) every 15 minutes
+ *  - Dellal: a quiet chat with the customer's number becomes an order (Confirmation › Nouvelles), every minute
  *  - CM AI agent: comments still waiting (missed after a restart, or held during the night) every 3 minutes
  *  - Delivery AI agent: the customers' order messages that are due (WhatsApp, SMS) every minute
  *  - Landing pages: abandoned orders (list, Commandes, reminder) and Meta Conversions API events, every minute
@@ -38,6 +39,7 @@ const FEATURE: Record<string, string | null> = {
   'meta-sync': 'marketing/publicite',
   'landing-run': 'landing',
   'dellal-followups': 'pilotai/messages',
+  'dellal-autoorders': 'pilotai/messages',
   'cm-sweep': 'pilotai/cm',
   'notify-run': 'pilotai/notify',
   'depot-push': null,
@@ -77,6 +79,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     }
     if (name === 'landing-run') return call('landing.run');
     if (name === 'dellal-followups') return call('dellal.followUps');
+    if (name === 'dellal-autoorders') return call('dellal.autoOrders');
     if (name === 'cm-sweep') return call('cm.sweep');
     if (name === 'notify-run') return call('notify.run');
     if (name === 'depot-push') return call('depot.pushRun');
@@ -180,6 +183,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.queue.add('courier-sync', {}, { repeat: { every: 5 * 60_000 }, jobId: 'courier-sync', removeOnComplete: 50, removeOnFail: 100 });
     await this.queue.add('meta-sync', {}, { repeat: { pattern: '30 4 * * *' }, jobId: 'meta-sync', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('dellal-followups', {}, { repeat: { every: 15 * 60_000 }, jobId: 'dellal-followups', removeOnComplete: 20, removeOnFail: 50 });
+    await this.queue.add('dellal-autoorders', {}, { repeat: { every: 60_000 }, jobId: 'dellal-autoorders', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('cm-sweep', {}, { repeat: { every: 3 * 60_000 }, jobId: 'cm-sweep', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('notify-run', {}, { repeat: { every: 60_000 }, jobId: 'notify-run', removeOnComplete: 20, removeOnFail: 50 });
     // dépôt alerts: the phones of the people who get them ring again until they open the app

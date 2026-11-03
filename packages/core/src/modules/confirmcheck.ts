@@ -5,10 +5,12 @@
 //  2. we deliver there: wilaya, commune (home), and the company — the order's, the bureau's, or the
 //     default one — serves that wilaya at home / at a bureau (a courier with a tariff needs a price there; own
 //     delivery men, manual companies and companies without a tariff always do). No company yet: one of them must.
+//     An order whose customer never said his wilaya (Message AI agent, « Commande avec le numéro seul »: the shop's own
+//     wilaya put in for now, orders.wilaya_guess) waits until someone asks him: another wilaya, or a commune / bureau.
 // The order card asks the same question (orders.confirmCheck) before the agent presses « Confirmer ».
 import { WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
-import { Db, num } from '../db';
+import { Db, num, numOrNull } from '../db';
 import { proc } from '../rpc';
 import { getSetting } from '../settings';
 import { type Pick, pilotMayRun, pilotPick } from './pilot';
@@ -27,7 +29,7 @@ export interface LineCheck {
   /** what is left for this order (null: a service, no stock) */
   available: number | null;
 }
-export type DeliverWhy = 'wilaya' | 'commune' | 'desk' | 'company' | 'nobody';
+export type DeliverWhy = 'wilaya' | 'guess' | 'commune' | 'desk' | 'company' | 'nobody';
 export interface DeliverCheck {
   ok: boolean;
   why: DeliverWhy | null;
@@ -113,10 +115,12 @@ async function deskMissing(db: Db, o: { wilayaId: number | null; isStopdesk: boo
 /** Can this order be delivered where it says? */
 export async function deliverCheck(
   db: Db,
-  o: { wilayaId: number | null; commune: string | null; isStopdesk: boolean; stopdeskId: number | null; companyId: number | null },
+  o: { wilayaId: number | null; commune: string | null; isStopdesk: boolean; stopdeskId: number | null; companyId: number | null; guess?: number | null },
 ): Promise<DeliverCheck> {
   const base = { companyId: null as number | null, companyName: null as string | null, wilayaId: o.wilayaId, desk: o.isStopdesk };
   if (!o.wilayaId) return { ...base, ok: false, why: 'wilaya' };
+  // the customer never said his wilaya: still the one put in for now, and no commune or bureau chosen with him
+  if (o.guess && o.wilayaId === o.guess && !(o.isStopdesk ? o.stopdeskId : String(o.commune ?? '').trim())) return { ...base, ok: false, why: 'guess' };
   if (!o.isStopdesk && !String(o.commune ?? '').trim()) return { ...base, ok: false, why: 'commune' };
   let companyId = o.companyId;
   // a bureau chosen: its company (a bureau not chosen yet: the order's company must have bureaus there)
@@ -150,6 +154,8 @@ export function blockerText(ref: string, lines: LineCheck[], d: DeliverCheck): s
   switch (d.why) {
     case 'wilaya':
       return `${pre}choisissez la wilaya avant de confirmer.`;
+    case 'guess':
+      return `${pre}le client n’a jamais donné sa wilaya (commande avec le numéro seul) : demandez-la, puis choisissez sa wilaya et sa commune avant de confirmer.`;
     case 'commune':
       return `${pre}indiquez la commune avant de confirmer.`;
     case 'desk':
@@ -163,7 +169,7 @@ export function blockerText(ref: string, lines: LineCheck[], d: DeliverCheck): s
 
 /** The checks of a saved order (setConf runs them on each order it confirms). */
 export async function checkOrder(db: Db, orderId: number) {
-  const o = (await db.query('SELECT ref, wilaya_id, commune, is_stopdesk, stopdesk_id, company_id FROM orders WHERE id = $1', [orderId]))[0];
+  const o = (await db.query('SELECT ref, wilaya_id, commune, is_stopdesk, stopdesk_id, company_id, wilaya_guess FROM orders WHERE id = $1', [orderId]))[0];
   const items = await db.query('SELECT product_id, variant_id, qty FROM order_items WHERE order_id = $1 ORDER BY id', [orderId]);
   const lines = await checkLines(
     db,
@@ -176,6 +182,7 @@ export async function checkOrder(db: Db, orderId: number) {
     isStopdesk: !!o?.is_stopdesk,
     stopdeskId: o?.stopdesk_id ? num(o.stopdesk_id) : null,
     companyId: o?.company_id ? num(o.company_id) : null,
+    guess: o?.wilaya_guess ? num(o.wilaya_guess) : null,
   });
   return { lines, deliver, blocker: blockerText(o?.ref ?? `#${orderId}`, lines, deliver), noStock: lines.some((l) => l.state === 'empty') };
 }
@@ -217,7 +224,8 @@ export const confirmCheckProcs = {
           companyId = pilot.companyId;
         }
       }
-      const deliver = await deliverCheck(ctx.db, { wilayaId: i.wilayaId, commune: i.commune ?? null, isStopdesk: i.isStopdesk, stopdeskId: i.stopdeskId ?? null, companyId });
+      const guess = i.id ? numOrNull((await ctx.db.query('SELECT wilaya_guess FROM orders WHERE id = $1', [i.id]))[0]?.wilaya_guess) : null;
+      const deliver = await deliverCheck(ctx.db, { wilayaId: i.wilayaId, commune: i.commune ?? null, isStopdesk: i.isStopdesk, stopdeskId: i.stopdeskId ?? null, companyId, guess });
       const off = lines.some((l) => l.state === 'off');
       const pilotName = pilot?.companyId ? ((await ctx.db.query('SELECT name FROM delivery_companies WHERE id = $1', [pilot.companyId]))[0]?.name ?? null) : null;
       return { lines, deliver, off, noStock: lines.some((l) => l.state === 'empty'), canConfirm: lines.length > 0 && !off && deliver.ok, pilot: pilot ? { ...pilot, companyName: pilotName as string | null } : null };

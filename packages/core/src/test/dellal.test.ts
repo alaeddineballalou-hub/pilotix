@@ -323,6 +323,143 @@ test('a question Dellal cannot answer (AI, both versions): never a guess; the nu
   await call('dellal.settings.save', admin, { ...g.settings, enabled: true, version: '001', servicePhone: '', secrets: {} });
 });
 
+test('the number is enough: a customer who gave it, then went quiet 20 min, gets his order with the product he asked about (both versions)', async () => {
+  const admin = await as(EMAILS.admin);
+  const g: any = await call('dellal.settings.get', admin, {});
+  assert.equal(g.settings.autoOrderMinutes, 20, 'on by default, after 20 minutes');
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, nightReplies: true, version: '001', secrets: {} });
+  const pv = await db.query(`SELECT p.id AS pid, v.id AS vid, v.title FROM products p JOIN product_variants v ON v.product_id = p.id WHERE p.name = 'Poussette canne pliable' AND v.active ORDER BY v.id`);
+  for (const v of pv) await db.query(`INSERT INTO stock (variant_id, warehouse_id, qty) VALUES ($1, (SELECT id FROM warehouses ORDER BY is_default DESC, id LIMIT 1), 50) ON CONFLICT (variant_id, warehouse_id) DO UPDATE SET qty = stock.qty + 50`, [v.vid]);
+  const pid = Number(pv[0].pid);
+  const gris = pv.find((v: any) => v.title === 'Gris');
+  assert.ok(pv.length > 1 && gris, 'the stroller has several colours, grey among them');
+  const quiet = (id: number, min = 25) => db.query(`UPDATE conversations SET last_message_at = now() - make_interval(mins => $2), last_customer_at = now() - make_interval(mins => $2 + 1) WHERE id = $1`, [id, min]);
+  const orderOf = async (id: number) => (await db.query('SELECT * FROM orders WHERE conversation_id = $1', [id]));
+  const lastResult = (req: any) => JSON.parse(req.messages[req.messages.length - 1].content[0].content);
+  const res: any[] = [];
+  const text = (t: string) => ({ content: [{ type: 'text', text: t }], stop_reason: 'end_turn' });
+  const use = (name: string, input: any) => ({ content: [{ type: 'tool_use', id: `ao_${name}_${res.length}`, name, input }], stop_reason: 'tool_use' });
+  const reply = (t: string) => (req: any) => (res.push(lastResult(req)), text(t));
+
+  // Messenger, Version 001: his number, the stroller, then nothing — no wilaya, no colour
+  const sys = await as(
+    EMAILS.admin,
+    fakeServer(
+      [
+        text('La poussette est à 12 900 DA. Tu es de quelle wilaya ?'),
+        text('Merci ! Tu es de quelle wilaya ?'),
+        use('update_order', { wilaya: 'Sétif', items: [{ product_id: pid, variant_id: Number(gris.vid), qty: 1 }] }),
+        reply('C’est noté, la grise pour Sétif.'),
+      ],
+      [],
+    ),
+  );
+  const m: any = await call('dellal.receive', sys, { channel: 'messenger', externalId: 'psid-auto-1', accountId: 'page-1', name: 'Amine T.', text: 'ch7al la poussette ?', messageId: 'ao_1' });
+  await call('dellal.answer', sys, { id: m.conversationId });
+  await call('dellal.receive', sys, { channel: 'messenger', externalId: 'psid-auto-1', text: '0661 77 88 99', messageId: 'ao_2' });
+  await call('dellal.answer', sys, { id: m.conversationId });
+  await quiet(m.conversationId, 10);
+  await call('dellal.autoOrders', admin, {});
+  assert.equal((await orderOf(m.conversationId)).length, 0, 'quiet for 10 minutes only: nothing yet');
+  await quiet(m.conversationId);
+  const run: any = await call('dellal.autoOrders', admin, {});
+  assert.ok(run.ordered >= 1);
+  let os = await orderOf(m.conversationId);
+  assert.equal(os.length, 1);
+  let o = os[0];
+  assert.equal(o.phone, '0661778899');
+  assert.equal(o.customer_name, 'Amine T.');
+  assert.ok(['new', 'to_check'].includes(o.conf_status), 'in Confirmation, for the team to call');
+  assert.equal(Number(o.wilaya_id), (await getSetting(db, 'shop')).fromWilayaId, 'no wilaya: the shop’s own, for now');
+  assert.match(o.customer_note, /^Veut : Poussette canne pliable .+ · Wilaya à demander · Variante à confirmer$/);
+  assert.match(o.internal_note, /^⚠️ Wilaya inconnue : .+ mise en attendant, à corriger avant de confirmer\. Commande auto \(Dellal\) : le client a donné son numéro puis ne répond plus depuis 20 min/);
+  const items = await db.query('SELECT product_id, variant_title FROM order_items WHERE order_id = $1', [o.id]);
+  assert.deepEqual(items.map((i: any) => Number(i.product_id)), [pid]);
+  const c: any = await call('dellal.conversation', admin, { id: m.conversationId });
+  assert.equal(c.conversation.orderId, Number(o.id));
+  assert.ok(c.messages.some((x: any) => x.role === 'tool' && x.body === `commande auto → ${o.ref} · 0661778899 · Poussette canne pliable ${items[0].variant_title} · wilaya à demander`));
+  assert.equal(((await call('dellal.autoOrders', admin, {})) as any).ordered, 0, 'never twice');
+  // the shop's wilaya is only there for now: nobody confirms the order before asking him
+  assert.equal(Number(o.wilaya_guess), Number(o.wilaya_id));
+  await assert.rejects(call('orders.setConf', admin, { ids: [Number(o.id)], status: 'confirmed' }), /le client n’a jamais donné sa wilaya/);
+  const lines = (await db.query('SELECT product_id, variant_id, qty FROM order_items WHERE order_id = $1', [o.id])).map((l: any) => ({ productId: Number(l.product_id), variantId: Number(l.variant_id), qty: Number(l.qty) }));
+  const here = { id: Number(o.id), items: lines, wilayaId: Number(o.wilaya_id), isStopdesk: false };
+  assert.equal(((await call('orders.confirmCheck', admin, { ...here, commune: null })) as any).deliver.why, 'guess', 'the order card says why');
+  assert.notEqual(((await call('orders.confirmCheck', admin, { ...here, commune: 'Kouba' })) as any).deliver.why, 'guess', 'a commune chosen with him: free');
+  assert.notEqual(((await call('orders.confirmCheck', admin, { ...here, wilayaId: 19, commune: null })) as any).deliver.why, 'guess', 'another wilaya: free');
+  // he comes back with his wilaya and his colour: the same order, and nothing is « à demander » any more
+  await call('dellal.receive', sys, { channel: 'messenger', externalId: 'psid-auto-1', text: 'ana f Sétif, nheb la grise', messageId: 'ao_3' });
+  await call('dellal.answer', sys, { id: m.conversationId });
+  assert.equal(res[0].ok, true);
+  os = await orderOf(m.conversationId);
+  assert.equal(os.length, 1);
+  o = os[0];
+  assert.equal(Number(o.wilaya_id), 19);
+  assert.equal(o.customer_note, 'Veut : Poussette canne pliable Gris', 'his own colour, and nothing left « à demander »');
+  assert.match(o.internal_note, /^Commande auto/);
+  assert.equal(o.wilaya_guess, null, 'he said his wilaya: the order can be confirmed once called');
+
+  // WhatsApp, the whole order: the number writing, the grey one, Oran — then he comes back and gives the rest
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, nightReplies: true, version: 'full', secrets: {} });
+  const sys2 = await as(
+    EMAILS.admin,
+    fakeServer(
+      [
+        text('12 900 DA, livraison à Oran 650 DA. Ton nom et ta commune ?'),
+        use('create_order', { customer_name: 'Rania Bensalem', phone: '0661909098', wilaya: 'Oran', commune: 'Bir El Djir', stopdesk: false, items: [{ product_id: pid, variant_id: Number(gris.vid), qty: 1 }] }),
+        reply('C’est noté ✅'),
+      ],
+      [],
+    ),
+  );
+  const w: any = await call('dellal.receive', sys2, { channel: 'whatsapp', externalId: '213661909098', accountId: '1098', name: 'Rania', text: 'Salam, la poussette grise l Oran ch7al ?', messageId: 'wamid.ao1' });
+  await call('dellal.answer', sys2, { id: w.conversationId });
+  await quiet(w.conversationId);
+  await call('dellal.autoOrders', admin, {});
+  o = (await orderOf(w.conversationId))[0];
+  assert.ok(o, 'WhatsApp: the number writing is enough');
+  assert.deepEqual([o.phone, Number(o.wilaya_id), o.customer_name], ['0661909098', 31, 'Rania']);
+  assert.equal(o.customer_note, 'Veut : Poussette canne pliable Gris', 'the wilaya and the colour he said');
+  assert.doesNotMatch(o.internal_note, /Wilaya inconnue/);
+  const autoRef = o.ref;
+  await call('dellal.receive', sys2, { channel: 'whatsapp', externalId: '213661909098', text: 'Rania Bensalem, Bir El Djir, oui', messageId: 'wamid.ao2' });
+  await call('dellal.answer', sys2, { id: w.conversationId });
+  assert.deepEqual([res[1].ok, res[1].ref], [true, autoRef], 'the order Pilotix made is completed, not a second one');
+  os = await orderOf(w.conversationId);
+  assert.equal(os.length, 1);
+  assert.deepEqual([os[0].customer_name, os[0].commune], ['Rania Bensalem', 'Bir El Djir']);
+
+  // a call back that went quiet: its question goes with the order
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, nightReplies: true, version: '001', secrets: {} });
+  const sys3 = await as(EMAILS.admin, fakeServer([use('callback', { question: 'la poussette tetplia f la voiture ?', phone: '0550 44 55 66' }), reply('Un conseiller t’appelle.')], []));
+  const cb: any = await call('dellal.receive', sys3, { channel: 'messenger', externalId: 'psid-auto-2', accountId: 'page-1', text: 'la poussette tetplia f la voiture ? 0550445566', messageId: 'ao_cb' });
+  await call('dellal.answer', sys3, { id: cb.conversationId });
+  await quiet(cb.conversationId);
+  await call('dellal.autoOrders', admin, {});
+  o = (await orderOf(cb.conversationId))[0];
+  assert.ok(o);
+  assert.match(o.customer_note, /^Veut : Poussette canne pliable .+ · Question : la poussette tetplia f la voiture \? · Wilaya à demander · Variante à confirmer$/);
+
+  // not when: he wrote last, no product, or the rule is off
+  const sys4 = await as(EMAILS.admin, fakeServer([text('Salam ! Tu cherches quoi ?')], []));
+  const np: any = await call('dellal.receive', sys4, { channel: 'messenger', externalId: 'psid-auto-3', accountId: 'page-1', text: 'salam 0770 12 12 12', messageId: 'ao_np' });
+  await call('dellal.answer', sys4, { id: np.conversationId });
+  const last: any = await call('dellal.receive', sys4, { channel: 'messenger', externalId: 'psid-auto-4', accountId: 'page-1', text: 'ch7al la poussette ? 0770 13 13 13', messageId: 'ao_last' });
+  for (const id of [np.conversationId, last.conversationId]) await quiet(id);
+  await call('dellal.autoOrders', admin, {});
+  assert.equal((await orderOf(np.conversationId)).length, 0, 'no product asked about');
+  assert.ok((await db.query('SELECT auto_checked_at FROM conversations WHERE id = $1', [np.conversationId]))[0].auto_checked_at, 'looked at once');
+  assert.equal((await orderOf(last.conversationId)).length, 0, 'he wrote last: Dellal has not answered him');
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, version: '001', autoOrderMinutes: 0, secrets: {} });
+  const sys5 = await as(EMAILS.admin, fakeServer([text('12 900 DA. Ta wilaya ?')], []));
+  const off: any = await call('dellal.receive', sys5, { channel: 'messenger', externalId: 'psid-auto-5', accountId: 'page-1', text: 'ch7al la poussette ? 0770 14 14 14', messageId: 'ao_off' });
+  await call('dellal.answer', sys5, { id: off.conversationId });
+  await quiet(off.conversationId);
+  assert.deepEqual(await call('dellal.autoOrders', admin, {}), { ordered: 0, skipped: 0 });
+  assert.equal((await orderOf(off.conversationId)).length, 0, 'off');
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, version: '001', autoOrderMinutes: 20, secrets: {} });
+});
+
 test('a WhatsApp message: Dellal (AI) sells, the order lands in Confirmation › Nouvelles, linked to the conversation', async () => {
   const sent: any[] = [];
   const admin = await as(EMAILS.admin);
