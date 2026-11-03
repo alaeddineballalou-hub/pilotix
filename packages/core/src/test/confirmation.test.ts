@@ -139,12 +139,14 @@ test('list rows carry stock availability and statuses passed; admin can delete o
   assert.ok(l.rows.every((r: any) => r.stock === null || r.stock === 'ok' || r.stock === 'short'));
   const fresh: any = await call('confirmation.list', admin, { sub: 'nouvelles', pageSize: 1 });
   const id = fresh.rows[0].id;
+  const pilotixCode = (await db.query('SELECT own_tracking FROM orders WHERE id = $1', [id]))[0]?.own_tracking;
+  assert.match(pilotixCode, /^PXT\\d{8}$/, 'a new order already has a Pilotix tracking number, not a shipping record');
   await assert.rejects(call('orders.delete', await as(EMAILS.conf), { ids: [id] }), /refusé/);
   const r: any = await call('orders.delete', admin, { ids: [id] });
   assert.equal(r.deleted, 1);
   assert.equal((await db.query('SELECT count(*)::int n FROM orders WHERE id = $1', [id]))[0].n, 0);
   const shipped = (await db.query(`SELECT id FROM orders WHERE follow_status = 'shipped' LIMIT 1`))[0];
-  await assert.rejects(call('orders.delete', admin, { ids: [Number(shipped.id)] }), /dépôt ou en livraison/);
+  await assert.rejects(call('orders.delete', admin, { ids: [Number(shipped.id)] }), /historique de livraison/);
 });
 
 test('column presets: admin adds and deletes, others only read, names are unique, no edit', async () => {
