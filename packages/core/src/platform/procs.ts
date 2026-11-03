@@ -48,6 +48,7 @@ import { pilotConfig, pilotToday, savePilotConfig, saveVoiceConfig, voiceConfig,
 import { AI_FEATURES, aiBill, aiLabOfMonth, aiUsageOfMonth, aiUsageSince, monthOf, saveAiBill } from './aiusage';
 import { pilotTry } from '../modules/dellal';
 import { addCoachLahja, decideLahja, decideManyLahja, LAHJA_NO_CHANGE, lahjaErr, lahjaState, lahjaWaiting, LahjaWord } from '../modules/lahja';
+import { forgetVocab, importVocab, learnVocab, removeVocab, saveVocab, vocabBlock, vocabCounts, vocabFor, vocabList, VOCAB } from '../modules/vocab';
 import { darijaBookFile, darijaBookLive, darijaErr, darijaVersions, restoreDarijaBook, saveDarijaBook, snapshotDarijaLessons } from '../modules/darijabook';
 import { cmBoard, dellalBoard, dellalBooks, dellalBookText, dellalMore, spyBoard } from './aiboard';
 
@@ -1175,6 +1176,9 @@ export const PLATFORM_REGISTRY = {
     async (ctx, i) => {
       const r = await decideLahja(ctx.t.platform, { ...i, by: ctx.staff.name || ctx.staff.email, now: new Date(ctx.now()) });
       if (!r.ok) throw bad(r.problems?.length ? lahjaErr(r.problems) : LAHJA_ERR[r.error ?? ''] ?? 'Impossible');
+      // the vocabulary book: an accepted lesson writes its words in it, a removed one takes them back
+      if (i.action === 'approve') await learnVocab(ctx.t.platform, { lahjaId: i.id, words: r.words ?? (await lessonWords(ctx, i.id)), source: 'learned', by: ctx.staff.name || ctx.staff.email });
+      if (i.action === 'remove') await forgetVocab(ctx.t.platform, i.id);
       await audit(ctx, `pilot.lahja.${i.action}`, null, { id: i.id });
       if (i.action !== 'refuse') await bookAfter(ctx, `${i.action === 'approve' ? 'Leçon acceptée' : 'Leçon retirée'} : ${wordsNote(r.words ?? (await lessonWords(ctx, i.id)))}`);
       return r;
@@ -1186,7 +1190,10 @@ export const PLATFORM_REGISTRY = {
    */
   'p.lahja.decideMany': pproc(ALL, z.object({ ids: z.array(Id).min(1).max(200), action: z.enum(['approve', 'refuse']) }), async (ctx, i) => {
     const r = await decideManyLahja(ctx.t.platform, { ids: i.ids, action: i.action, by: ctx.staff.name || ctx.staff.email, now: new Date(ctx.now()) });
-    for (const id of r.done) await audit(ctx, `pilot.lahja.${i.action}`, null, { id, many: true });
+    for (const id of r.done) {
+      if (i.action === 'approve') await learnVocab(ctx.t.platform, { lahjaId: id, words: await lessonWords(ctx, id), source: 'learned', by: ctx.staff.name || ctx.staff.email });
+      await audit(ctx, `pilot.lahja.${i.action}`, null, { id, many: true });
+    }
     if (i.action === 'approve' && r.done.length) await bookAfter(ctx, `${r.done.length} leçon(s) acceptée(s) ensemble`);
     return {
       done: r.done,
@@ -1204,6 +1211,7 @@ export const PLATFORM_REGISTRY = {
     async (ctx, i) => {
       const r = await addCoachLahja(ctx.t.platform, { ...i, by: ctx.staff.name || ctx.staff.email, now: new Date(ctx.now()) });
       if (!r.ok) throw bad(r.problems?.length ? lahjaErr(r.problems) : LAHJA_ERR[r.error ?? ''] ?? 'Impossible');
+      if (r.id) await learnVocab(ctx.t.platform, { lahjaId: r.id, words: r.words ?? [], source: 'coach', by: ctx.staff.name || ctx.staff.email });
       await audit(ctx, 'pilot.lahja.add', null, { id: r.id });
       await bookAfter(ctx, `Leçon ajoutée par Pilotix : ${wordsNote(r.words ?? [])}`);
       return r;
@@ -1243,6 +1251,42 @@ export const PLATFORM_REGISTRY = {
     const f = await darijaBookFile(ctx.t.platform, { version: i.version, now: new Date(ctx.now()) });
     if (!f) throw notFound('Version introuvable');
     return f;
+  }),
+
+  // ---------------------------------------------------------------- Pilot AI › Tester & leçons › Leçons › Vocabulaire (modules/vocab.ts)
+  /** A page of the vocabulary book (a search, a chapter, a source), its counts and its chapters. */
+  'p.vocab.list': pproc(
+    ALL,
+    z.object({ q: z.string().max(100).optional(), topic: z.string().max(200).optional(), source: z.enum(['book', 'learned', 'coach']).optional(), offset: z.number().int().min(0).default(0), limit: z.number().int().min(1).max(VOCAB.pageMax).default(100) }),
+    async (ctx, i) => ({ ...(await vocabList(ctx.t.platform, i)), counts: await vocabCounts(ctx.t.platform) }),
+  ),
+  /** Pilotix's book in (a Markdown file: its tables): its words added to the book, or the book's own words replaced. */
+  'p.vocab.import': pproc(MANAGERS, z.object({ text: z.string().min(1).max(VOCAB.maxImport), replace: z.boolean().default(false) }), async (ctx, i) => {
+    const r = await importVocab(ctx.t.platform, { ...i, by: ctx.staff.name || ctx.staff.email });
+    if (!r.added && !r.skipped) throw bad('Aucun mot trouvé : le livre doit avoir des tableaux (lettres arabes, lettres latines, sens).');
+    await audit(ctx, 'pilot.vocab.import', null, { added: r.added, replace: i.replace });
+    return r;
+  }),
+  /** One word added or corrected by Pilotix: used at once by every shop. */
+  'p.vocab.save': pproc(
+    MANAGERS,
+    z.object({ id: Id.optional(), ar: z.string().max(200).default(''), lat: z.string().max(200).default(''), meaning: z.string().max(200).default(''), topic: z.string().max(200).default(''), avoid: z.string().max(200).default('') }),
+    async (ctx, i) => {
+      const r = await saveVocab(ctx.t.platform, { ...i, by: ctx.staff.name || ctx.staff.email });
+      if (!r.ok) throw r.error === 'not_found' ? notFound('Mot introuvable') : bad(r.error === 'same' ? 'Ce mot est déjà dans le livre.' : 'Écrivez le mot en lettres arabes ou en lettres latines.');
+      await audit(ctx, 'pilot.vocab.save', null, { id: r.id });
+      return { id: r.id! };
+    },
+  ),
+  'p.vocab.remove': pproc(MANAGERS, z.object({ id: Id }), async (ctx, i) => {
+    if (!(await removeVocab(ctx.t.platform, i.id))) throw notFound('Mot introuvable');
+    await audit(ctx, 'pilot.vocab.remove', null, { id: i.id });
+    return { ok: true };
+  }),
+  /** Try it: the words of the book a customer's message would bring into Dellal's instructions. */
+  'p.vocab.try': pproc(ALL, z.object({ text: z.string().max(2000) }), async (ctx, i) => {
+    const words = await vocabFor(ctx.t.platform, [i.text]);
+    return { words, block: vocabBlock(words) };
   }),
 
   // ---------------------------------------------------------------- Pilot AI › Test & lessons

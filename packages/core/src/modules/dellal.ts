@@ -16,6 +16,7 @@ import { anonymize, bookFor, BookRef, pickModel } from './pilotlearn';
 import { asWords, checkLahjaWords, LAHJA_NO_CHANGE, LAHJA_PERSONAL, lahjaAvoid, lahjaBlocks, lahjaDiff, lahjaErr, lahjaFor, LahjaWord } from './lahja';
 import { pilotConfig, pilotToday } from '../platform/pilotai';
 import { guideText, HAS_GUIDE, readGuide, toFill } from './guide';
+import { vocabBlock, vocabFor } from './vocab';
 
 // ---------------------------------------------------------------- settings and secrets
 export const DELLAL_CHANNELS = ['whatsapp', 'messenger', 'instagram', 'tiktok', 'test'] as const;
@@ -597,6 +598,9 @@ async function systemPrompt(
   // the orders of the WhatsApp number writing, or of this conversation (a number typed on Messenger proves nothing)
   const orders = conv.channel === 'test' ? '' : await ordersForDellal(ctx.db, conv.channel === 'whatsapp' ? conv.phone : null, conv.id);
   const today = new Date(ctx.now()).toISOString().slice(0, 10);
+  // the vocabulary book (Pilot AI › Leçons › Vocabulaire): only its words that touch what this customer wrote
+  const said = (await ctx.db.query(`SELECT body FROM conv_messages WHERE conversation_id = $1 AND role = 'customer' ORDER BY id DESC LIMIT 8`, [conv.id])).map((r: any) => String(r.body ?? ''));
+  const vocab = vocabBlock(await vocabFor(ctx.t?.platform ?? null, said));
   const shared = [
     DELLAL_PLAYBOOK.replace('${ORDER_NEXT}', s.ordersTo === 'new' ? 'après la commande, un conseiller l’appellera aussi pour confirmer.' : 'la commande part directement en préparation.'),
     // the Darija book in service (Pilot AI › Tester & leçons › Leçons › Darija; the guide of the code without the platform)
@@ -632,6 +636,7 @@ async function systemPrompt(
     cust ? `Client connu : ${cust.name}, ${cust.orders} commande(s), ${cust.delivered} livrée(s), ${cust.returned} retour(s)${cust.blacklisted ? ', SUR LISTE NOIRE : ne prends pas de commande, passe la main' : ''}.` : '',
     orders,
     followUp ? `Le client ne répond plus depuis un moment : envoie UNE relance courte et aimable, sans insister.` : '',
+    vocab,
   ];
   const blocks = [shared, own, chat].map((b) => b.filter(Boolean).join('\n')).filter(Boolean);
   return { text: blocks.join('\n'), blocks };

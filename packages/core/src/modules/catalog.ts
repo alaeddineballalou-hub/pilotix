@@ -14,7 +14,8 @@ import { atIn, confIn, dayIn, followIn, ScanLang, scanT } from './scantext';
 import { checkDispatch, dispatchOrders } from './dispatch';
 import { getPrefs } from './prefs';
 import { assignedProductIds } from './productscope';
-import { checkGuide, GuideInput, HAS_GUIDE, readGuide, saveGuide, TrInput } from './guide';
+import { checkGuide, GuideInput, HAS_GUIDE, readGuide, saveGuide, TrFix, TrInput } from './guide';
+import { lessonsFromGuide } from './lahja';
 
 // ---------------------------------------------------------------- types
 export interface CatalogVariant {
@@ -451,6 +452,7 @@ async function freeSku(db: Db, table: 'products' | 'product_variants', base: str
 
 export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Promise<CatalogProduct> {
   const guide = i.guide === undefined ? null : checkGuide(i.guide);
+  let fixes: TrFix[] = [];
   const pid = await ctx.db.tx(async (tx) => {
     const cur = i.id ? (await tx.query('SELECT * FROM products WHERE id = $1 FOR UPDATE', [i.id]))[0] : null;
     if (i.id && !cur) throw notFound('Produit introuvable');
@@ -569,11 +571,13 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
         [productId, i.alertQty],
       );
     // Guide de vente: what the agents read during a call, and what Dellal and CM AI answer with
-    if (i.guide !== undefined) await saveGuide(tx, productId, guide!, ctx.session.profile.id, null, i.guideTr);
+    if (i.guide !== undefined) fixes = (await saveGuide(tx, productId, guide!, ctx.session.profile.id, null, i.guideTr)).fixes;
     return productId;
   });
   // Landing pages › Réglages « a page for every new product »: made at once (the marketer completes it later)
   if (!i.id && i.active && !i.isService && (await landingSettings(ctx.db)).autoCreate) await quickCreatePage(ctx.db, pid, ctx.session.profile.id).catch(() => null);
+  // an Arabic translation of its guide corrected by the team: the words it changed teach Dellal (lahja.ts)
+  if (fixes.length) await lessonsFromGuide(ctx, fixes);
   ctx.emit({ type: 'stock' });
   return (await listProducts(ctx.db, { ids: [pid] }))[0];
 }

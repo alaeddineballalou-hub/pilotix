@@ -5,6 +5,7 @@ import { PILOT_PLATFORM_SQL } from '../modules/pilotlearn';
 import { AI_USAGE_SQL } from './aiusage';
 import { LAHJA_PLATFORM_SQL } from '../modules/lahja';
 import { DARIJA_BOOK_SQL } from '../modules/darijabook';
+import { VOCAB_PLATFORM_SQL } from '../modules/vocab';
 
 const P001 = `
 CREATE SCHEMA IF NOT EXISTS platform;
@@ -554,6 +555,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   // Darija (lahja) lessons: the shops' corrections and what Dellal learned, waiting for Pilotix; the ones every shop uses
   ['p014_lahja', LAHJA_PLATFORM_SQL],
   ['p015_darija_book', DARIJA_BOOK_SQL],
+  // the vocabulary book: the Darija words of every shop's AI agents, and what the corrections taught (modules/vocab.ts)
+  ['p016_vocab', VOCAB_PLATFORM_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

@@ -47,6 +47,8 @@ import {
 } from './guide';
 import { agencyOf } from './agencyscope';
 import { assignedProductIds, requireAssignedProducts } from './productscope';
+import { lahjaFor, lahjaLines, lessonsFromGuide } from './lahja';
+import { vocabBlock, vocabFor } from './vocab';
 
 const id = z.number().int().positive();
 /** the people who may write a guide (the procs check guideWriter): the depot side, and the agencies' people */
@@ -305,7 +307,7 @@ const FROM: Record<GuideLang, string> = { fr: 'du français', ar: 'de l’arabe'
 const TO: Record<ReadLang, string> = { fr: 'le français', ar: 'l’arabe', en: 'l’anglais' };
 
 /** Claude's instructions to translate a guide's lines (the same lines back, in the same order, nothing added). */
-export function translateSystem(from: GuideLang, to: ReadLang): string {
+export function translateSystem(from: GuideLang, to: ReadLang, words = ''): string {
   return [
     `Tu traduis le « guide de vente » d’un produit ${FROM[from]} vers ${TO[to]}, pour une boutique algérienne en ligne (paiement à la livraison). Les conseillers le lisent pendant leurs appels.`,
     '',
@@ -314,9 +316,23 @@ export function translateSystem(from: GuideLang, to: ReadLang): string {
     `- Garde les mêmes nombres, les mêmes prix (DA) et les mêmes unités (aucune conversion), les noms de produits et de marques tels quels, et le marqueur « ${TO_FILL} ».`,
     '- Les mots entre « » sont ce que dit le client (souvent en darija) : garde-les tels quels, et ajoute leur sens entre parenthèses.',
     `- Langue : ${LANG_TEXT[to]}.`,
+    words ? `- Les mots algériens ci-dessous sont ceux que Pilotix et la boutique ont choisis : quand une ligne parle de l’un d’eux, écris-le ainsi.\n\n${words}` : '',
     '',
     'Tu reçois {"lines": [...]}. Réponds UNIQUEMENT avec un objet JSON, sans texte autour : {"lines": ["…"]}, autant de lignes que reçues, dans le même ordre.',
-  ].join('\n');
+  ]
+    .filter((x, k, a) => x !== '' || a[k - 1] !== '')
+    .join('\n');
+}
+
+/**
+ * The words a translation into this language should use: those of the vocabulary book that touch its lines (Pilotix's
+ * book and what the corrections taught) and, into Arabic, the shop's Darija lessons and Pilotix's.
+ */
+async function translateWords(ctx: Ctx, lines: string[], to: ReadLang): Promise<string> {
+  const vocab = vocabBlock(await vocabFor(ctx.t?.platform ?? null, lines, 60));
+  const lahja = to === 'ar' ? await lahjaFor(ctx.db, ctx.t?.platform ?? null, ctx.shop?.id ?? null).catch(() => ({ all: [], own: [] })) : { all: [], own: [] };
+  const lessons = lahjaLines([...lahja.own, ...lahja.all]);
+  return [vocab, lessons ? `Leçons de darija (écris ces mots ainsi) :\n${lessons}` : ''].filter(Boolean).join('\n\n');
 }
 
 /** Claude's translated lines, by position (a missing or empty one: null). */
@@ -358,7 +374,7 @@ function batches(lines: string[], size = 2500): string[][] {
 async function translateLines(ctx: Ctx, lines: string[], from: GuideLang, to: ReadLang): Promise<{ out: (string | null)[]; error: string | null } | null> {
   const inPage = !ctx.server?.dellal && ctx.dellalAi ? ctx.dellalAi : null;
   if (!inPage && !(await aiKeyed(ctx))) return null;
-  const system = translateSystem(from, to);
+  const system = translateSystem(from, to, await translateWords(ctx, lines, to));
   const pilot = !inPage && (await pilotOn(ctx));
   let error: string | null = null;
   const parts = await Promise.all(
@@ -512,7 +528,9 @@ export const guideProcs = {
     const p = (await ctx.db.query('SELECT id FROM products WHERE id = $1', [i.id]))[0];
     if (!p) throw notFound('Produit introuvable');
     const g = checkGuide(i.guide);
-    await ctx.db.tx((tx) => saveGuide(tx, i.id, g, ctx.session.profile.id, allowed, i.tr));
+    const { fixes } = await ctx.db.tx((tx) => saveGuide(tx, i.id, g, ctx.session.profile.id, allowed, i.tr));
+    // an Arabic translation corrected by the team: the words it changed teach Dellal (lahja.ts, then the vocabulary book)
+    await lessonsFromGuide(ctx, fixes);
     const saved = await readGuide(ctx.db, i.id);
     return {
       id: i.id,

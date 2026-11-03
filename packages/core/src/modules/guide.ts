@@ -290,7 +290,7 @@ export function checkGuide(input: z.output<typeof GuideInput>): ProductGuide {
  * corrections of the translations (the lines it changed or emptied); the translations of lines no longer in the guide
  * leave with them.
  */
-export async function saveGuide(db: Db, productId: number, input: ProductGuide, userId: number | null, allowed: number[] | null = null, trEdits?: TrEdits): Promise<void> {
+export async function saveGuide(db: Db, productId: number, input: ProductGuide, userId: number | null, allowed: number[] | null = null, trEdits?: TrEdits): Promise<{ fixes: TrFix[] }> {
   let g = input;
   if (g.upsellIds.length) {
     const ok = new Set((await db.query('SELECT id FROM products WHERE id = ANY($1) AND id <> $2 AND archived_at IS NULL', [g.upsellIds, productId])).map((r) => num(r.id)));
@@ -298,28 +298,42 @@ export async function saveGuide(db: Db, productId: number, input: ProductGuide, 
   }
   if (guideEmpty(g)) {
     await db.query('DELETE FROM product_guides WHERE product_id = $1', [productId]);
-    return;
+    return { fixes: [] };
   }
   const cur = (await db.query('SELECT guide, tr FROM product_guides WHERE product_id = $1', [productId]))[0];
   const old: any = (cur && json(cur.tr)) || {};
   // the team's corrections over the translations there (a line emptied goes back to Pilot AI)
   const merged: Record<string, Record<string, string>> = {};
+  const src = new Set(guideSources(g));
+  const fixes: TrFix[] = [];
   for (const l of READ_LANGS) {
     const m: Record<string, string> = { ...(old[l] ?? {}) };
     for (const [k, v] of Object.entries(trEdits?.[l] ?? {})) {
       const val = String(v ?? '').trim();
+      const was = String(m[k.trim()] ?? '').trim();
+      // a translation the team corrected: what it taught (lahja.ts › lessonsFromGuide)
+      if (val && was && val !== was && src.has(k.trim()) && l !== g.lang) fixes.push({ lang: l, line: k.trim(), before: was, after: val });
       if (val) m[k.trim()] = val;
       else delete m[k.trim()];
     }
     merged[l] = m;
   }
   const tr = cleanTr(merged, g);
-  if (cur && JSON.stringify(cleanGuide(json(cur.guide))) === JSON.stringify(g) && JSON.stringify(cleanTr(old, g)) === JSON.stringify(tr)) return;
+  if (cur && JSON.stringify(cleanGuide(json(cur.guide))) === JSON.stringify(g) && JSON.stringify(cleanTr(old, g)) === JSON.stringify(tr)) return { fixes: [] };
   await db.query(
     `INSERT INTO product_guides (product_id, guide, tr, updated_by, updated_at) VALUES ($1, $2, $3, $4, now())
      ON CONFLICT (product_id) DO UPDATE SET guide = EXCLUDED.guide, tr = EXCLUDED.tr, updated_by = EXCLUDED.updated_by, updated_at = now()`,
     [productId, JSON.stringify(g), JSON.stringify(tr), userId],
   );
+  return { fixes };
+}
+/** A translation line the team corrected (the AI's words, the team's words). */
+export interface TrFix {
+  lang: ReadLang;
+  /** the guide's own line */
+  line: string;
+  before: string;
+  after: string;
 }
 
 /** Pilot AI's translations, added where a line has none yet (the team's corrections stay); nobody's name goes on it. */
