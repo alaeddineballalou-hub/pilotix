@@ -117,3 +117,24 @@ a.pxv-btn { display: flex; align-items: center; justify-content: center; gap: 8p
 .ms-tag.ex { background: #EEF2FF; color: #3F51B5; }
 .ms-tag.ret { background: var(--c-warn-tint); color: var(--c-warn-ink); }
 .ms-hint { margin: 6px 2px 0; font-size: 12px; color: var(--muted); }
+
+
+/* Issue 1: intentional delivery confirmation with a visible hold-to-submit progress state. */
+.pxt-confirm { display: flex; flex-direction: column; gap: 12px; }
+.pxt-confirm-order { display: flex; flex-direction: column; gap: 4px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.pxt-confirm-order b { font-size: 18px; }
+.pxt-confirm-order span, .pxt-confirm-order small { font-size: 13px; color: var(--muted); }
+.pxt-confirm-cod { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px; background: var(--c-ok-tint); border-radius: 12px; }
+.pxt-confirm-cod small { color: var(--c-ok-ink); font-weight: 700; }
+.pxt-confirm-cod strong { font-size: 26px; color: var(--c-ok-ink); }
+.pxt-confirm-question { margin: 0; font-weight: 800; text-align: center; }
+.pxt-hold { position: relative; overflow: hidden; width: 100%; min-height: 66px; padding: 12px; border: 0; border-radius: 14px; background: var(--c-ok-fill); color: #fff; cursor: pointer; font: inherit; font-size: 16px; font-weight: 800; touch-action: none; user-select: none; -webkit-user-select: none; }
+.pxt-hold:focus-visible { outline: 3px solid var(--c-accent-2); outline-offset: 3px; }
+.pxt-hold:disabled { opacity: .6; cursor: not-allowed; }
+.pxt-hold-progress { position: absolute; inset: 0; background: rgba(255,255,255,.28); transform: scaleX(0); transform-origin: left center; pointer-events: none; }
+.pxt-hold.is-holding .pxt-hold-progress { animation: pxt-hold-fill 1200ms linear forwards; }
+.pxt-hold-label { position: relative; z-index: 1; }
+@keyframes pxt-hold-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.pxt-confirm .pxv-help { margin: 0; text-align: center; line-height: 1.5; }
+.pxt-confirm-cancel { width: 100%; min-height: 44px; }
+@media (prefers-reduced-motion: reduce) { .pxt-hold.is-holding .pxt-hold-progress { animation: none; } }
