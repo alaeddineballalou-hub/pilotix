@@ -1,0 +1,5 @@
+# Search engines may read the product landing pages and their photos; the app and its API are private.
+User-agent: *
+Allow: /api/lp/
+Disallow: /api/
+Disallow: /live
