@@ -10,42 +10,18 @@ import { WILAYAS, SALES_CHANNELS } from '@pilotix/shared';
 import { wilaya } from '../lib/format';
 import { useRpcFor } from '../lib/query';
 import { useSession } from '../lib/session';
+import { allOnRaw, initAll, keptShops, pingAll, setAllOn, setShopFilter, subscribeAll } from '../lib/allMode';
 import { store } from '../lib/store';
 import { BoutiqueLogo, useBoutiques } from './Boutiques';
 
-// ---------------------------------------------------------------- on / off, and the boutiques kept (this browser, this person)
-let key = '';
-let on = false;
-let shops: number[] | null = null;
-const subs = new Set<() => void>();
-const ping = () => subs.forEach((f) => f());
-const sub = (cb: () => void) => (subs.add(cb), () => void subs.delete(cb));
-
-function init(email: string | undefined) {
-  const k = email ? `all-bq-${email.toLowerCase()}` : '';
-  if (k === key) return;
-  key = k;
-  on = !!k && store.get(k) === '1';
-  const f = k ? store.json<number[] | null>(`${k}-f`, null) : null;
-  shops = Array.isArray(f) && f.length ? f.filter((x) => Number.isSafeInteger(x)) : null;
-}
-export function setAllOn(v: boolean) {
-  if (v === on) return;
-  on = v;
-  if (key) store.set(key, v ? '1' : null);
-  ping();
-}
-export function setShopFilter(v: number[] | null) {
-  shops = v && v.length ? [...v] : null;
-  if (key) store.set(`${key}-f`, shops ? JSON.stringify(shops) : null);
-  ping();
-}
+// ---------------------------------------------------------------- on / off, and the boutiques kept (lib/allMode.ts)
+export { setAllOn, setShopFilter };
 
 /** The stores of the person (not a partner's space): two or more make « Toutes les boutiques » possible. */
 export function useAllMode(): { on: boolean; can: boolean; boutiques: Boutique[] } {
   const { session } = useSession();
-  init(session?.profile.email);
-  const v = useSyncExternalStore(sub, () => on);
+  initAll(session?.profile.email);
+  const v = useSyncExternalStore(subscribeAll, allOnRaw);
   const list = (useBoutiques().data ?? []).filter((b) => b.kind === 'store' && (!b.locked || b.current));
   const space = session?.shop?.kind;
   const can = list.length >= 2 && space !== 'agency' && space !== 'marketer';
@@ -54,7 +30,7 @@ export function useAllMode(): { on: boolean; can: boolean; boutiques: Boutique[]
 
 /** The « Boutique » filter: the boutiques kept (null: all of them). */
 export function useShopFilter(): number[] | null {
-  return useSyncExternalStore(sub, () => shops);
+  return useSyncExternalStore(subscribeAll, keptShops);
 }
 
 /** Several logos, one over the other: « Toutes les boutiques ». */
@@ -399,12 +375,12 @@ export const allCount = (f: AllF) => (Object.keys(NO_ALLF) as (keyof AllF)[]).fi
 /** The filters of one « Toutes les boutiques » list, kept in this browser. */
 export function useAllFilters(id: string): [AllF, (p: Partial<AllF>) => void, () => void] {
   const k = `all-f-${id}`;
-  const v = useSyncExternalStore(sub, () => store.get(k) ?? '');
+  const v = useSyncExternalStore(subscribeAll, () => store.get(k) ?? '');
   const f: AllF = { ...NO_ALLF, ...(v ? (JSON.parse(v) as Partial<AllF>) : {}) };
   const set = (p: Partial<AllF>) => {
     store.set(k, JSON.stringify({ ...f, ...p }));
-    ping();
+    pingAll();
   };
-  return [f, set, () => (store.set(k, null), ping())];
+  return [f, set, () => (store.set(k, null), pingAll())];
 }
 

@@ -2,6 +2,7 @@ import { Module, OnModuleInit } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { OnGatewayConnection, WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import * as core from '@pilotix/core';
 import { config } from './config';
 import { CoreService } from './core.service';
 
@@ -19,7 +20,8 @@ export class LiveGateway implements OnGatewayConnection, OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.core.onLive((shopId, e) => this.server?.to(`shop:${shopId}`).emit('event', e));
+    // each event says its boutique: a screen also listening to the person's other boutiques tells them apart
+    this.core.onLive((shopId, e) => this.server?.to(`shop:${shopId}`).emit('event', { ...e, shop: shopId }));
   }
 
   async handleConnection(socket: Socket) {
@@ -34,6 +36,17 @@ export class LiveGateway implements OnGatewayConnection, OnModuleInit {
       socket.data.userId = Number(c.sub);
       socket.data.shopId = ref.shop.id;
       socket.join(`shop:${ref.shop.id}`);
+      // a store: the person's other boutiques too (their own active account there), so a new order or a change in any
+      // of them reaches this screen (« Toutes les boutiques », the new-order toast with its boutique's name)
+      if (ref.shop.kind === 'store' && !ref.shop.demo) {
+        const email = String((await ref.db.query('SELECT email FROM profiles WHERE id = $1', [Number(c.sub)]))[0]?.email ?? '');
+        if (email)
+          for (const m of await core.membershipsOf(this.core.t, email).catch(() => []))
+            if (m.shopId !== ref.shop.id && !m.agencyId) {
+              const other = await this.core.shop({ id: m.shopId });
+              if (other && other.shop.kind === 'store' && !other.status.locked) socket.join(`shop:${m.shopId}`);
+            }
+      }
     } catch {
       socket.disconnect(true);
     }

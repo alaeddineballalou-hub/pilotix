@@ -20,7 +20,7 @@ import { Modal } from '../ui/modal';
 import { canSee, canSeeChild, NAV, NavItem } from './nav';
 import { useCanRules } from '../lib/pilot';
 import { AccountMenu } from './AccountMenu';
-import { BoutiqueSwitch } from './Boutiques';
+import { BoutiqueSwitch, useBoutiques } from './Boutiques';
 import { ShopBanner } from './ShopBanner';
 import { AllBanner, useAllMode } from './AllBoutiques';
 const DepotAlert = lazy(() => import('./DepotAlert').then((m) => ({ default: m.DepotAlert })));
@@ -130,19 +130,24 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
   /** an agency's person who calls customers (its chief and supervisors too) */
   const calls = agency && (isAdmin || roles.some((r) => r === 'confirmation' || r === 'agent_manager'));
 
-  // A new order from a landing page: a toast and a chime for the people who confirm orders (sound: once the page was touched).
+  // A new order that came by itself (a landing page, the shop's site, the Message AI agent): a toast and a chime for the
+  // people who confirm orders (sound: once the page was touched) — from any of their boutiques, with its name.
+  const boutiques = useBoutiques().data;
   useEffect(
     () =>
       backend.onEvent((e) => {
         const c = (e.data as { created?: { ref: string; channel: string; agency?: number | null } } | undefined)?.created;
         if (e.type !== 'orders' || !c || !(isAdmin || roles.includes('confirmation')) || store.get('lp-sound') === 'off') return;
+        const other = e.shop !== undefined && session!.shop?.id !== undefined && e.shop !== session!.shop.id;
         // a confirmation agency's agent hears only of its agency's orders; the store's own agents of theirs
         const agency = session!.profile.agencyId ?? null;
-        if (!isAdmin && (c.agency ?? null) !== agency && (agency !== null || !roles.includes('agent_manager'))) return;
-        toast(t('shell.newLandingOrder', { ref: c.ref }), 'ok', 6000);
+        if (!other && !isAdmin && (c.agency ?? null) !== agency && (agency !== null || !roles.includes('agent_manager'))) return;
+        if (other && (c.agency ?? null) !== null) return;
+        const name = other ? boutiques?.find((b) => b.id === e.shop)?.name : undefined;
+        toast(name ? t('shell.newOrderIn', { ref: c.ref, name }) : t(c.channel === 'landing' ? 'shell.newLandingOrder' : 'shell.newOrder', { ref: c.ref }), 'ok', 6000);
         chime();
       }),
-    [isAdmin, roles, t, session],
+    [isAdmin, roles, t, session, boutiques],
   );
 
   // Presence heartbeat, every minute (online / idle after 5 min without activity).

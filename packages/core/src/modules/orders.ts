@@ -738,7 +738,10 @@ export async function createOrder(
   });
   // made already confirmed (by an agent): a « Risqué » customer is kept like « Confirmer quand même »
   if (!order.isExchange && (order.confStatus === 'confirmed' || order.confStatus === 'no_stock')) await recordRiskConfirms(ctx, [order.id], me, db);
-  ctx.emit({ type: 'orders' });
+  // an order that came by itself (the shop's site, a conversation of the Message AI agent): the people who confirm
+  // hear of it, in this boutique and in their other ones (a landing page says it itself)
+  const came = !input.isExchange && !opts.landingId && (input.via === 'api' || !!opts.conversationId);
+  ctx.emit({ type: 'orders', ...(came ? { id: order.id, data: { created: { ref: order.ref, channel: order.channel, agency: order.confAgencyId ?? null } } } : {}) });
   // Affectation automatique: an order to call gets its agent at once (when the shop turned it on) — not inside the
   // caller's own transaction (a page left open, a restored order): the job every minute gives that one
   if (db === ctx.db && !input.isExchange && !order.agentId && (CONF_TODO as string[]).includes(order.confStatus)) {

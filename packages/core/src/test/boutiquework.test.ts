@@ -119,3 +119,59 @@ test('« Toutes les boutiques »: lists and numbers together, the Boutique filte
   const nx: any = await call('orders.next', samAll2, { skip: [], skipAll: [] });
   assert.ok(nx.id && [A.id, B.id].includes(nx.seller));
 });
+
+test('alerts from every boutique: a phone alert reaches the person’s devices of their other boutiques; a new order from the site says so', async () => {
+  const { PGlite } = await import('@electric-sql/pglite');
+  const t = pgliteTenancy(new PGlite() as any);
+  await migrate(t.shop('public'), (sql) => t.exec('public', sql));
+  await seedBase(t.shop('public'), { ...OWNER, name: 'Amine' });
+  await migrateAll(t);
+  const { staff } = await staffLogin(t, OWNER.email, OWNER.password);
+  const pctx: PCtx = { t, staff, now: () => Date.now() };
+  const p = (name: string, input: unknown = {}) => platformCall(name, pctx, input) as Promise<any>;
+  const biz = (await p('p.plans.list')).find((x: any) => x.code === 'business');
+  const ids: number[] = [];
+  for (const name of ['Bébé Shop', 'Maison Shop']) {
+    const made = await p('p.shops.create', { name, ownerName: 'Karim', ownerEmail: SELLER, planId: biz.id, trialDays: 14 });
+    if (made.mail?.token) await passwordFromLink(t, made.mail.token, PW);
+    ids.push(made.id);
+  }
+  const [A, B] = ids;
+  const sent: { endpoint: string; title: string; key: string }[] = [];
+  const server: any = {
+    hashPassword: async (x: string) => x,
+    pushKeys: () => ({ publicKey: `pub-${Math.random()}`, privateKey: 'priv' }),
+    push: async (k: any, subs: any[], payload: any) => {
+      for (const s of subs) sent.push({ endpoint: s.endpoint, title: payload.title, key: k.publicKey });
+      return subs.map((s) => ({ endpoint: s.endpoint, ok: true, gone: false }));
+    },
+  };
+  const inA = await as(t, A, SELLER, PW, { server });
+  const inB = await as(t, B, SELLER, PW, { server });
+  await setSettingName(inA, 'Bébé Shop');
+  // his phone turned on the notifications in Maison Shop only
+  await call('push.key', inB, {});
+  await call('push.subscribe', inB, { endpoint: 'https://push.example/phone-1', p256dh: 'p256dh-key-0123456789', auth: 'auth-key-01' });
+  const { sendPush } = await import('../modules/push');
+  const n = await sendPush(inA, [inA.session.profile.id], { title: 'Colis pris par Walid', body: 'x' });
+  assert.equal(n, 1);
+  assert.deepEqual(sent.map((s) => [s.endpoint, s.title]), [['https://push.example/phone-1', 'Bébé Shop · Colis pris par Walid']]);
+  const bKey = (await call('push.key', inB, {}) as any).key;
+  assert.equal(sent[0].key, bKey, 'signed with the keys of the boutique where the phone signed up');
+
+  // an order from the shop's site: the event says it was created (the new-order toast, in every boutique of the person)
+  const events: any[] = [];
+  const pid = Number((await inA.db.query(`INSERT INTO products (name, sku, price) VALUES ('Vélo', 'VELO', 9000) RETURNING id`))[0].id);
+  const site = { ...inA, emit: (e: any) => events.push(e) };
+  const o: any = await call('orders.create', site, { customerName: 'Client', phone: '0770000099', wilayaId: 16, commune: 'Kouba', address: 'Rue', via: 'api', items: [{ productId: pid, variantId: null, qty: 1 }] });
+  assert.ok(events.some((e) => e.type === 'orders' && e.data?.created?.ref === o.ref));
+  // typed in the app by someone: no toast
+  events.length = 0;
+  await call('orders.create', site, { customerName: 'Client', phone: '0770000098', wilayaId: 16, commune: 'Kouba', address: 'Rue', items: [{ productId: pid, variantId: null, qty: 1 }] });
+  assert.ok(!events.some((e) => e.data?.created));
+});
+
+async function setSettingName(c: Ctx, name: string) {
+  const { getSetting, setSetting } = await import('../settings');
+  await setSetting(c.db, 'shop', { ...(await getSetting(c.db, 'shop')), name });
+}

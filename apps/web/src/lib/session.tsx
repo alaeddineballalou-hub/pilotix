@@ -2,6 +2,7 @@ import type { Role, Session } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { backend, isPhone, isPick, LoginResult, loginServerDemo, PhoneInfo, PickInfo, rpc, server, setOnLocked, setOnUnauthorized } from './backend';
+import { allOnRaw } from './allMode';
 import { setShop } from './features';
 import { applyLanguage } from './i18n';
 import { store } from './store';
@@ -91,7 +92,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!session) return;
     let t: number | undefined;
-    const off = backend.onEvent(() => {
+    const here = session.shop?.id;
+    const off = backend.onEvent((e) => {
+      // another of the person's boutiques: its changes show only with « Toutes les boutiques »
+      if (e.shop !== undefined && here !== undefined && e.shop !== here && !allOnRaw()) return;
       window.clearTimeout(t);
       t = window.setTimeout(() => qc.invalidateQueries(), 250);
     });

@@ -20,6 +20,8 @@ export interface LiveEvent {
   type: 'order' | 'orders' | 'presence' | 'chat' | 'sav' | 'stock' | 'settings';
   id?: number;
   data?: unknown;
+  /** the boutique it happened in (set by the server: a person with several boutiques hears of all of them) */
+  shop?: number;
 }
 
 /** The shop a request works for, on a server that hosts several shops (missing = a single-shop install or the preview). */

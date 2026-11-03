@@ -17,5 +17,7 @@
   "fold": "Replier le menu",
   "unfold": "Déplier le menu",
   "account": "Compte de {{name}}",
-  "newLandingOrder": "🛒 Nouvelle commande {{ref}} (landing page)"
+  "newLandingOrder": "🛒 Nouvelle commande {{ref}} (landing page)",
+  "newOrder": "🛒 Nouvelle commande {{ref}}",
+  "newOrderIn": "🛒 Nouvelle commande {{ref}} · {{name}}"
 }

@@ -17,5 +17,7 @@
   "fold": "طيّ القائمة",
   "unfold": "توسيع القائمة",
   "account": "حساب {{name}}",
-  "newLandingOrder": "🛒 طلب جديد {{ref}} (صفحة الهبوط)"
+  "newLandingOrder": "🛒 طلب جديد {{ref}} (صفحة الهبوط)",
+  "newOrder": "🛒 طلب جديد {{ref}}",
+  "newOrderIn": "🛒 طلب جديد {{ref}} · {{name}}"
 }

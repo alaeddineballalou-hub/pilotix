@@ -16,6 +16,8 @@ export interface LiveEvent {
   type: string;
   id?: number;
   data?: unknown;
+  /** the boutique it happened in (a person with several boutiques hears of all of them) */
+  shop?: number;
 }
 
 export class ApiError extends Error {
