@@ -673,28 +673,56 @@ export function VerifyEmail({ token }: { token: string }) {
 }
 
 // ---------------------------------------------------------------- terms of use and privacy
+/** One part of the terms page: its title, its text, then its steps and its notes when it has some. */
+function LegalPart({ k, email }: { k: string; email: string }) {
+  const { t, i18n } = useTranslation();
+  const list = (x: 'steps' | 'notes') => (i18n.exists(`legal.${k}.${x}`) ? (t(`legal.${k}.${x}`, { returnObjects: true, email }) as string[]) : []);
+  return (
+    <section id={`legal-${k}`}>
+      <h2>{t(`legal.${k}.t`)}</h2>
+      <p>{t(`legal.${k}.p`, { email })}</p>
+      {list('steps').length > 0 && (
+        <ol className="px-legal-steps">
+          {list('steps').map((s) => (
+            <li key={s}>{s}</li>
+          ))}
+        </ol>
+      )}
+      {list('notes').map((s) => (
+        <p key={s}>{s}</p>
+      ))}
+    </section>
+  );
+}
+
 export function Legal() {
   const { t } = useTranslation();
   const [d, setD] = useState<{ text: string; company: string; email: string } | null>(null);
   useEffect(() => {
     legalText().then(setD);
   }, []);
-  const sections = ['s1', 's2', 's2ai', 's3', 's4', 's5', 's6', 's7'] as const;
+  const email = d?.email || 'contact@pilotix.online';
+  // the linked Facebook / Instagram / TikTok accounts: what Pilotix receives and how to erase it. Meta and TikTok ask
+  // for it, so it shows under Pilotix's own text too.
+  const social = ['sfb', 'sdel'] as const;
+  const sections = ['s1', 's2', 's2ai', 's3', ...social, 's4', 's5', 's6', 's7'] as const;
   return (
     <div className="px-legal">
       <article className="card">
         <BrandBig />
         <h1>{t('legal.title')}</h1>
         {d?.text.trim() ? (
-          <div className="px-legal-own">{d.text}</div>
+          <>
+            <div className="px-legal-own">{d.text}</div>
+            {social.map((k) => (
+              <LegalPart key={k} k={k} email={email} />
+            ))}
+          </>
         ) : (
           <>
             <p className="muted">{t('legal.intro', { company: d?.company || 'Pilotix' })}</p>
             {sections.map((k) => (
-              <section key={k}>
-                <h2>{t(`legal.${k}.t`)}</h2>
-                <p>{t(`legal.${k}.p`, { email: d?.email || 'contact@pilotix.online' })}</p>
-              </section>
+              <LegalPart key={k} k={k} email={email} />
             ))}
           </>
         )}

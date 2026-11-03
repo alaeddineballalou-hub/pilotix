@@ -424,7 +424,7 @@
     "coTax": "NIF",
     "coAddress": "Adresse",
     "legalTitle": "Conditions d’utilisation et confidentialité",
-    "legalHelp": "La page que chacun accepte en créant sa boutique. Vide = le texte standard de Pilotix.",
+    "legalHelp": "La page que chacun accepte en créant sa boutique. Vide = le texte standard de Pilotix. Les parties sur Facebook, Instagram et TikTok s’affichent toujours en plus : Meta et TikTok les demandent.",
     "legalText": "Votre texte",
     "legalHint": "Texte simple, les retours à la ligne sont gardés.",
     "legalPh": "Laissez vide pour garder le texte standard.",

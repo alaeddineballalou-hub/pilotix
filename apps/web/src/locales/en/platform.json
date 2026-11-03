@@ -424,7 +424,7 @@
     "coTax": "Tax ID (NIF)",
     "coAddress": "Address",
     "legalTitle": "Terms of use and privacy",
-    "legalHelp": "The page everyone accepts when creating a store. Empty = Pilotix’s standard text.",
+    "legalHelp": "The page everyone accepts when creating a store. Empty = Pilotix’s standard text. The Facebook, Instagram and TikTok parts are always shown too: Meta and TikTok ask for them.",
     "legalText": "Your text",
     "legalHint": "Plain text, line breaks are kept.",
     "legalPh": "Leave empty to keep the standard text.",

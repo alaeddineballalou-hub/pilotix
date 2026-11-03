@@ -33,5 +33,23 @@
   "s2ai": {
     "t": "Pilot AI: Dellal learns to sell better",
     "p": "When Pilotix turns on Pilot AI for your shop, the chats of Dellal (the sales assistant) are read every night to teach it to sell better. Names, numbers, addresses, products and prices are removed inside your shop before anything is read; the Pilotix team may read these anonymous chats to approve lessons. Your prices, products and customers are never shown to other shops. You can ask at any time for your shop to stop taking part: what was kept is then deleted."
+  },
+  "sfb": {
+    "t": "Your Facebook, Instagram and TikTok accounts",
+    "p": "In Pilot AI › Accounts, a store can link its Facebook account (with its Pages and Instagram accounts) or its TikTok account. Pilotix then receives the account’s name and picture, the Pages, Instagram accounts and ad accounts you choose, and access keys. These keys stay on Pilotix’s server and are never shown. They are used for three things only: answering Messenger and Instagram messages (Dellal), answering comments on your posts (CM AI) and reading your ad numbers. The messages and comments received are kept in your store, like your other conversations. Pilotix does not sell this data, does not show it to other stores and posts nothing on your Pages except your agents’ answers."
+  },
+  "sdel": {
+    "t": "Deleting your Facebook, Instagram or TikTok data",
+    "p": "At any time, you can cut Pilotix’s access and have what it kept erased:",
+    "steps": [
+      "In Pilotix: the store’s owner or an administrator opens Pilot AI › Accounts and clicks “Remove” next to the account. Its access keys and the list of its Pages and ad accounts are erased at once, and your agents stop answering on those Pages.",
+      "On Facebook: profile picture › Settings & privacy › Settings › Business integrations. Choose Pilotix, then “Remove” (direct link: facebook.com/settings?tab=business_tools). Pilotix then has no access at all to your account or your Pages.",
+      "By e-mail: write to {{email}} saying which account to erase. We erase what Pilotix keeps about that account within 30 days at most and confirm it by e-mail.",
+      "If the owner deletes the store (in Settings), the accounts linked to that store only, its messages and its comments are erased too."
+    ],
+    "notes": [
+      "Nightly backups keep a copy for 14 days at most, then it is erased.",
+      "Did you write to a store on Messenger, Instagram or TikTok? Your messages are kept in that store to answer you and follow your order. To have them erased, ask the store, or write to us at {{email}} with the store’s name and your profile name: we erase them within 30 days at most."
+    ]
   }
 }

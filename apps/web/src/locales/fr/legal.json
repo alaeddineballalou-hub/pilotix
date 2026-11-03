@@ -33,5 +33,23 @@
   "s2ai": {
     "t": "Pilot AI : Dellal apprend à mieux vendre",
     "p": "Quand Pilotix active Pilot AI pour votre boutique, les conversations de Dellal (l’assistant de vente) sont relues chaque nuit pour lui apprendre à mieux vendre. Les noms, numéros, adresses, produits et prix sont retirés dans votre boutique avant toute lecture ; l’équipe Pilotix peut lire ces conversations anonymes pour valider les leçons. Vos prix, produits et clients ne sont jamais montrés aux autres boutiques. Vous pouvez demander à tout moment que votre boutique n’y participe plus : ce qui avait été gardé est alors supprimé."
+  },
+  "sfb": {
+    "t": "Vos comptes Facebook, Instagram et TikTok",
+    "p": "Dans Pilot AI › Comptes, une boutique peut lier son compte Facebook (avec ses pages et ses comptes Instagram) ou son compte TikTok. Pilotix reçoit alors le nom et la photo du compte, les pages, comptes Instagram et comptes publicitaires que vous choisissez, et des clés d’accès. Ces clés restent sur le serveur de Pilotix et ne s’affichent jamais. Elles servent à trois choses seulement : répondre aux messages Messenger et Instagram (Dellal), répondre aux commentaires de vos publications (CM AI) et lire les chiffres de vos publicités. Les messages et commentaires reçus sont gardés dans votre boutique, comme vos autres conversations. Pilotix ne vend pas ces données, ne les montre pas aux autres boutiques et ne publie rien sur vos pages à part les réponses de vos agents."
+  },
+  "sdel": {
+    "t": "Supprimer vos données Facebook, Instagram ou TikTok",
+    "p": "Vous pouvez à tout moment couper l’accès de Pilotix et faire effacer ce qu’il a gardé :",
+    "steps": [
+      "Dans Pilotix : le propriétaire ou un administrateur de la boutique ouvre Pilot AI › Comptes et clique sur « Retirer » à côté du compte. Ses clés d’accès et la liste de ses pages et comptes publicitaires sont effacées tout de suite, et vos agents ne répondent plus sur ces pages.",
+      "Sur Facebook : photo de profil › Paramètres et confidentialité › Paramètres › Intégrations professionnelles. Choisissez Pilotix, puis « Supprimer » (lien direct : facebook.com/settings?tab=business_tools). Pilotix n’a alors plus aucun accès à votre compte ni à vos pages.",
+      "Par email : écrivez à {{email}} en indiquant le compte à effacer. Nous effaçons ce que Pilotix garde de ce compte sous 30 jours au plus, et nous vous le confirmons par email.",
+      "Si le propriétaire supprime la boutique (dans Réglages), les comptes liés à cette boutique seulement, ses messages et ses commentaires sont effacés aussi."
+    ],
+    "notes": [
+      "Les sauvegardes de nuit gardent une copie 14 jours au plus, puis elle est effacée.",
+      "Vous avez écrit à une boutique sur Messenger, Instagram ou TikTok ? Vos messages sont gardés dans cette boutique pour vous répondre et suivre votre commande. Pour les faire effacer, demandez-le à la boutique, ou écrivez-nous à {{email}} avec le nom de la boutique et le nom de votre profil : nous les effaçons sous 30 jours au plus."
+    ]
   }
 }

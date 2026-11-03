@@ -1593,6 +1593,10 @@ html body .px-qhead .btn.px-qnew:hover { border-color: #F7A823; color: #C97A0E; 
 .px-legal h2 { margin: 10px 0 2px; font-size: 17px; }
 .px-legal p { margin: 0; line-height: 1.6; }
 .px-legal-own { white-space: pre-wrap; line-height: 1.6; }
+.px-legal section > p + p, .px-legal-steps + p { margin-top: 8px; }
+.px-legal-steps { margin: 8px 0 0; padding-inline-start: 22px; line-height: 1.6; }
+.px-legal-steps li + li { margin-top: 6px; }
+.px-legal-steps li::marker { font-weight: 600; }
 @media (max-width: 640px) { .px-legal { padding: 12px; } .px-legal > .card { padding: 20px 16px; } }
 .px-aide { display: flex; flex-direction: column; gap: 16px; }
 .px-aide .pp-head .btn { display: inline-flex; align-items: center; gap: 6px; }
