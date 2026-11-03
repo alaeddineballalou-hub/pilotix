@@ -217,3 +217,75 @@ test('the team: a new person made in the boutiques ticked, the same roles; « Bo
   const none: any[] = (await call('users.addToBoutiques', rania, { shops: [B], user: { ...user, email: 'x@shops.dz', phone: '0661000079' } })) as any[];
   assert.equal(none.length, 0, 'Rania has no account in B');
 });
+
+test('« Toutes les boutiques » › Dépôt and Caisse: added up and boutique by boutique; a return received in its boutique', async () => {
+  const { PGlite } = await import('@electric-sql/pglite');
+  const t = pgliteTenancy(new PGlite() as any);
+  await migrate(t.shop('public'), (sql) => t.exec('public', sql));
+  await seedBase(t.shop('public'), { ...OWNER, name: 'Amine' });
+  await migrateAll(t);
+  const { staff } = await staffLogin(t, OWNER.email, OWNER.password);
+  const pctx: PCtx = { t, staff, now: () => Date.now() };
+  const p = (name: string, input: unknown = {}) => platformCall(name, pctx, input) as Promise<any>;
+  const biz = (await p('p.plans.list')).find((x: any) => x.code === 'business');
+  const shops: { id: number; db: any; product: number }[] = [];
+  for (const [name, prod] of [['Bébé Shop', 'Poussette'], ['Maison Shop', 'Lampe']]) {
+    const made = await p('p.shops.create', { name, ownerName: 'Karim', ownerEmail: SELLER, planId: biz.id, trialDays: 14 });
+    if (made.mail?.token) await passwordFromLink(t, made.mail.token, PW);
+    const s = (await loadShop(t, { id: made.id }))!;
+    const db = t.shop(s.schema);
+    const pid = Number((await db.query(`INSERT INTO products (name, sku, price) VALUES ($1, $2, 9000) RETURNING id`, [prod, prod.toUpperCase()]))[0].id);
+    shops.push({ id: s.id, db, product: pid });
+  }
+  const [A, B] = shops;
+  const inA = await as(t, A.id, SELLER, PW);
+  const inB = await as(t, B.id, SELLER, PW);
+  const mk = async (c: Ctx, pid: number, ph: string, follow: string) => {
+    const o: any = await call('orders.create', c, { customerName: 'Client', phone: ph, wilayaId: 16, commune: 'Kouba', address: 'Rue', items: [{ productId: pid, variantId: null, qty: 1 }] });
+    await c.db.query(`UPDATE orders SET conf_status = 'confirmed', follow_status = $2, shipped_at = CASE WHEN $2 = 'returning' THEN now() END WHERE id = $1`, [o.id, follow]);
+    return o;
+  };
+  await mk(inA, A.product, '0770000001', 'to_prepare');
+  await mk(inB, B.product, '0770000002', 'to_prepare');
+  await mk(inB, B.product, '0770000003', 'to_prepare');
+  const back = await mk(inB, B.product, '0770000004', 'returning');
+
+  // Dépôt: what waits at each stage, added up and boutique by boutique; the « Boutique » filter
+  const all = await as(t, A.id, SELLER, PW, { boutique: 'all' });
+  const dc: any = await call('depot.counts', all, {});
+  assert.deepEqual([dc.preparer, dc.retours], [3, 1]);
+  assert.deepEqual(dc.byBoutique.map((b: any) => [b.id, b.preparer, b.retours]).sort(), [[A.id, 1, 0], [B.id, 2, 1]].sort());
+  const dcB: any = await call('depot.counts', all, { shops: [B.id] });
+  assert.equal(dcB.preparer, 2);
+  // the stage's orders from both boutiques
+  const prep: any = await call('orders.list', all, { conf: ['confirmed'], follow: ['to_prepare'], pageSize: 50 });
+  assert.equal(prep.total, 3);
+  // a returned parcel scanned from A: found in B, received there (from A, inside B)
+  const found: any[] = (await call('depot.find', all, { code: back.ref })) as any[];
+  assert.deepEqual(found.map((o) => [o.id, o.seller.id]), [[back.id, B.id]]);
+  const oneB = await as(t, A.id, SELLER, PW, { boutique: B.id });
+  const got: any = await call('depot.receiveReturn', oneB, { id: back.id });
+  assert.equal(got.followStatus, 'returned');
+  assert.equal((await B.db.query('SELECT follow_status FROM orders WHERE id = $1', [back.id]))[0].follow_status, 'returned');
+  // the depot's own work (picking, scanning, sending) stays in B's Dépôt
+  await assert.rejects(call('depot.scan', oneB, { code: back.ref, mode: 'dispatch' }), /Ouvrez « Maison Shop »/);
+  await assert.rejects(call('depot.dispatch', oneB, { ids: [back.id] }), /Ouvrez « Maison Shop »/);
+
+  // Caisse: the main caisses added up, and boutique by boutique
+  await call('caisse.add', inA, { caisse: 'main', kind: 'income', amount: 5000 });
+  await call('caisse.add', inB, { caisse: 'main', kind: 'income', amount: 2000 });
+  const co: any = await call('caisse.overview', all, {});
+  assert.equal(co.main, 7000);
+  assert.equal(co.today, 7000);
+  assert.deepEqual(co.byBoutique.map((b: any) => [b.id, b.main]).sort(), [[A.id, 5000], [B.id, 2000]].sort());
+  const coA: any = await call('caisse.overview', all, { shops: [A.id] });
+  assert.deepEqual([coA.main, coA.byBoutique.length], [5000, 1]);
+  // its money moves in its own caisse only
+  await assert.rejects(call('caisse.add', oneB, { caisse: 'main', kind: 'income', amount: 1 }), /Ouvrez « Maison Shop »/);
+  // Samira (confirmation in both): no caisse anywhere, no depot
+  await call('users.create', inA, { name: 'Samira', email: AGENT, phone: '0661000001', roles: ['confirmation'], password: PW });
+  await call('users.create', inB, { name: 'Samira', email: AGENT, phone: '0661000002', roles: ['confirmation'], password: PW });
+  const sam = await as(t, A.id, AGENT, PW, { boutique: 'all' });
+  await assert.rejects(call('caisse.overview', sam, {}));
+  await assert.rejects(call('depot.counts', sam, {}));
+});

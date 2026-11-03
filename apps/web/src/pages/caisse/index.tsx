@@ -1,6 +1,7 @@
 // « Caisse » (admin): Vue d'ensemble (main caisse, bank, companies with ZR payments, livreurs, employees' caisses) ·
 // À recevoir (delivered, money not received yet, by company / livreur) · Déjà reçu (versements) · Livreurs · Journal.
-import { useState } from 'react';
+// With « Toutes les boutiques »: every boutique's money added up, then boutique by boutique (boutiques/all.tsx).
+import { lazy, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { downloadCsv } from '../../lib/files';
 import { pageIsOn } from '../../lib/features';
@@ -17,12 +18,22 @@ import { CaisseJournal, CaisseOverview } from './Overview';
 export { MaCaisse } from './PhoneCaisse';
 import { CopyCode } from '../../ui/CopyCode';
 import { ClearFilters, CompanyFilter, DateFilters, dayIso, LivreurFilter } from '../../ui/filters';
+import { useAllMode } from '../../layout/AllBoutiques';
 
-export function Caisse({ sub }: PageProps) {
+/** « Caisse »: this boutique's, or every boutique's money with « Toutes les boutiques ». */
+export function Caisse(p: PageProps) {
   const phone = useIsPhone();
-  if (phone) return <PhoneCaisse sub={sub} />;
-  return <CaisseWide sub={sub} />;
+  const all = useAllMode();
+  if (all.on)
+    return (
+      <Suspense fallback={<Loading />}>
+        <AllCaissePage {...p} />
+      </Suspense>
+    );
+  if (phone) return <PhoneCaisse sub={p.sub} />;
+  return <CaisseWide sub={p.sub} />;
 }
+const AllCaissePage = lazy(() => import('../boutiques/all').then((m) => ({ default: m.BoutiquesCaisse })));
 
 /** Computers: the phone's caisse laid out wide (the money outside at a glance, a tap opens it), or the tables. */
 function CaisseWide({ sub }: PageProps) {

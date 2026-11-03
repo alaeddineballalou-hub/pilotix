@@ -390,7 +390,7 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
 }
 
 /** The pages that show every boutique together with « Toutes les boutiques » (the others say which one they show). */
-const ALL_PAGES = new Set(['accueil', 'dashboard', 'commandes', 'confirmation', 'suivi', 'boutiques']);
+const ALL_PAGES = new Set(['accueil', 'dashboard', 'commandes', 'confirmation', 'suivi', 'depot', 'caisse', 'boutiques']);
 
 /** A partner's pages that show one seller or all of them (the picker shows there). */
 const SELLER_PAGES: Record<'store' | 'agency' | 'marketer', Set<string>> = {

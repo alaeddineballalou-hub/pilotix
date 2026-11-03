@@ -1,6 +1,6 @@
 import type { Order } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
 import { da, n } from '../../lib/format';
@@ -20,50 +20,32 @@ import { DispatchAlerts } from './DispatchAlerts';
 import { PhoneDispatch, PhoneReturns, PhoneRoad } from './PhoneStages';
 import { LabelAction, LabelsBar, PrintSelected } from './Labels';
 import { BagBulk, BagsCard } from './Bags';
+import { depotStage, DepotStageBar } from './StageNav';
+import { useAllMode } from '../../layout/AllBoutiques';
 
-// « En livraison » moved to Suivi (the parcels on the road are the suivi's work); an old link goes there
-const STAGES = ['preparer', 'prepares', 'dispatchees', 'retours'] as const;
-type Stage = (typeof STAGES)[number];
+/** « Dépôt »: this boutique's, or every boutique's with « Toutes les boutiques ». */
+export function Depot(p: PageProps) {
+  const all = useAllMode();
+  if (!all.on) return <DepotOne {...p} />;
+  return (
+    <Suspense fallback={<Loading />}>
+      <AllDepotPage {...p} />
+    </Suspense>
+  );
+}
+const AllDepotPage = lazy(() => import('../boutiques/all').then((m) => ({ default: m.BoutiquesDepot })));
 
-export function Depot({ sub }: PageProps) {
-  const { t } = useTranslation();
-  if (sub === 'enlivraison') location.replace('#/suivi/enlivraison');
-  const stage: Stage = (STAGES as readonly string[]).includes(sub ?? '') ? (sub as Stage) : 'preparer';
+function DepotOne({ sub }: PageProps) {
+  const stage = depotStage(sub);
   const counts = useRpc('depot.counts', {}, { refetchInterval: 60_000 });
-  const c = counts.data;
   // phones: the first stage is products first (pick), then the orders that have everything (pack, partner, dispatch)
   const phone = useIsPhone();
   // computers too: the phone's cards laid out wide (« Tableau » goes back to the big tables)
   const [mode, setMode] = useViewMode('depot');
   const cards = phone || mode === 'cards';
-  // a phone shows two or three stages at a time: the current one is brought into view
-  const bar = useRef<HTMLElement>(null);
-  useLayoutEffect(() => {
-    const el = bar.current;
-    const on = el?.querySelector<HTMLElement>('.bjm-p.on');
-    if (!el || !on || el.scrollWidth <= el.clientWidth + 1) return;
-    const r = el.getBoundingClientRect();
-    const b = on.getBoundingClientRect();
-    if (b.left >= r.left + 8 && b.right <= r.right - 8) return;
-    el.scrollBy({ left: b.left + b.width / 2 - (r.left + r.width / 2) });
-  }, [stage]);
   return (
     <>
-      <nav ref={bar} className="bjm-bar flow" aria-label={t('depot.title')} data-g="depot">
-        {STAGES.map((k, i) => (
-          <span key={k} style={{ display: 'contents' }}>
-            {i > 0 && (
-              <span className={`bjm-ar ${k === 'retours' ? 'bjm-ar2' : ''}`} aria-hidden="true">
-                {k === 'retours' ? '⟶' : '›'}
-              </span>
-            )}
-            <a className={`bjm-p ${stage === k ? 'on' : ''} ${k === 'retours' ? 'end' : ''}`} href={`#/depot/${k}`} aria-current={stage === k ? 'page' : undefined}>
-              <span className="bjm-l">{phone && k === 'preparer' ? t('depot.ph.stage') : t(`depot.stage.${k}`)}</span>
-              {c && <b className={`bjm-n ltr${k === 'prepares' && c.prepAlerts ? ' bad' : ''}`}>{c[k]}</b>}
-            </a>
-          </span>
-        ))}
-      </nav>
+      <DepotStageBar stage={stage} counts={counts.data} phone={phone} />
       {/* the first stage is always cards (picking by variant); the switch is for the other stages */}
       {!phone && stage !== 'preparer' && (
         <div className="px-vsw-row">
@@ -80,7 +62,6 @@ export function Depot({ sub }: PageProps) {
     </>
   );
 }
-// (The depot bar is drawn here rather than with <StageBar>: it needs the ⟶ arrow and the red "end" stage of the original.)
 
 // ---------------------------------------------------------------- En préparation
 /**

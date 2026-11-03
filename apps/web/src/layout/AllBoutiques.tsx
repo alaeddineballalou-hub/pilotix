@@ -1,6 +1,6 @@
 // « Toutes les boutiques »: someone with several boutiques (the owner, or an agent of two of them) sees them together on
-// the screens that can (Accueil, Dashboard, Commandes, Confirmation, Suivi); the other pages stay boutique by boutique
-// and say so. Chosen at the bottom of the menu, kept in this browser. The « Boutique » filter keeps some of them; a
+// the screens that can (Accueil, Dashboard, Commandes, Confirmation, Suivi, Dépôt, Caisse); the other pages stay
+// boutique by boutique and say so. Chosen at the bottom of the menu, kept in this browser. The « Boutique » filter keeps some of them; a
 // person, a product or a company is not the same thing in every boutique (each has its own ids), so the filters list
 // them boutique by boutique and the request carries each boutique's own ids (byShop; null: that boutique is left out).
 import type { Boutique } from '@pilotix/shared';

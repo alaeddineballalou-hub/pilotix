@@ -76,3 +76,12 @@ html[data-theme="dark"] .bq-logo:not(.bq-logo-none) { background: #fff; }
 .bq-by td.bq-warn { color: var(--warn); font-weight: 700; }
 .bq-by td.bq-bad { color: var(--coral); font-weight: 700; }
 .bq-where { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+/* « Toutes les boutiques » › Dépôt and Caisse: the stage shown, « Ouvrir », what needs a look, the change of the day */
+@media (min-width: 761px) { .bq-by th.bq-on, .bq-by td.bq-on { background: color-mix(in srgb, var(--sky-soft, #EEF3FA) 60%, transparent); } }
+.bq-by td.bq-go { text-align: end; white-space: nowrap; width: 1%; }
+.bq-by .bq-alert { display: inline-flex; align-items: center; gap: 3px; margin-inline-start: 6px; font-size: 11px; vertical-align: 1px; }
+.bq-by .bq-alert svg { width: 12px; height: 12px; }
+.bq-by .bq-today { display: block; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.bq-by .bq-today.up { color: var(--ok); }
+.bq-by .bq-today.down { color: var(--coral); }
+.bq-note { margin: -4px 4px 12px; }

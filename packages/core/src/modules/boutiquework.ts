@@ -50,9 +50,12 @@ async function boutiqueCtx(ctx: Ctx, b: MyBoutique): Promise<Ctx> {
   return { db, session: makeSession(p), shop: shopCtx(s, st), now: ctx.now, emit: () => {}, t };
 }
 
-/** What runs inside another of the person's boutiques from the open one: the work on an order of that boutique. */
+/**
+ * What runs inside another of the person's boutiques from the open one: the work on an order of that boutique (the
+ * depot's too: received back, taken off its company, sent again… — never its picking, stock or caisse).
+ */
 const OTHER_BOUTIQUE =
-  /^(orders|confirmation|suivi|sav|parcel|customers|filters|undo|delivery|stats)\.[a-zA-Z0-9.]+$|^(users\.list|pilot\.get|prefs\.get|catalog\.(search|guide|guides|guideFacts|assigned))$/;
+  /^(orders|confirmation|suivi|sav|parcel|customers|filters|undo|delivery|stats)\.[a-zA-Z0-9.]+$|^(users\.list|pilot\.get|prefs\.get|catalog\.(search|guide|guides|guideFacts|assigned)|depot\.(find|receiveReturn|unassign|resend|cancelDone|companies))$/;
 
 const ratio = (a: number, b: number) => (b > 0 ? a / b : null);
 /** each boutique's own answer next to the total (the « Par boutique » table) */
@@ -85,7 +88,47 @@ export const BOUTIQUE_FANOUT: Record<string, Fan> = {
   },
   // the lists of the filter bars, boutique by boutique
   'filters.options': { merge: (parts) => ({ boutiques: parts.map((p) => ({ id: p.seller.id, name: p.seller.name, options: p.out })) }) },
+  // Dépôt: what waits at each stage, added up, and boutique by boutique
+  'depot.counts': { merge: (parts, i) => ({ ...sum.merge(parts, i), byBoutique: byBoutique(parts) }) },
+  // Dépôt › a code scanned or typed: the orders of every boutique that have it, each with its boutique
+  'depot.find': { merge: (parts) => parts.flatMap((p) => ((p.out ?? []) as any[]).map((o) => ({ ...o, seller: { id: p.seller.id, name: p.seller.name } }))) },
+  // Caisse › Vue d'ensemble: the money of every boutique, added up, and boutique by boutique
+  'caisse.overview': { merge: (parts) => caisseAcross(parts) },
 };
+
+/** The caisses of several boutiques: each one's money in short (its caisses, what is outside), and the totals. */
+function caisseAcross(parts: Part[]) {
+  const total = (xs: any[] | undefined, k: string) => (xs ?? []).reduce((a, x) => a + (Number(x?.[k]) || 0), 0);
+  const rows = parts.map((p) => {
+    const o: any = p.out ?? {};
+    return {
+      id: p.seller.id,
+      name: p.seller.name,
+      main: Number(o.main?.balance) || 0,
+      today: Number(o.main?.today) || 0,
+      bank: o.bank ? Number(o.bank.balance) || 0 : null,
+      own: total(o.caisses, 'balance'),
+      companies: total(o.companies, 'net'),
+      livreurs: total(o.livreurs, 'net'),
+      employees: total(o.employees, 'balance'),
+      outside: Number(o.outside) || 0,
+      tickets: Number(o.tickets?.total) || 0,
+    };
+  });
+  const add = (k: keyof (typeof rows)[number]) => rows.reduce((a, r) => a + (Number(r[k]) || 0), 0);
+  return {
+    main: add('main'),
+    today: add('today'),
+    bank: rows.some((r) => r.bank !== null) ? add('bank') : null,
+    own: add('own'),
+    companies: add('companies'),
+    livreurs: add('livreurs'),
+    employees: add('employees'),
+    outside: add('outside'),
+    tickets: add('tickets'),
+    byBoutique: rows,
+  };
+}
 export const BOUTIQUE_FANOUT_PROCS = new Set([...Object.keys(BOUTIQUE_FANOUT), 'orders.next']);
 
 const Scope = z.object({

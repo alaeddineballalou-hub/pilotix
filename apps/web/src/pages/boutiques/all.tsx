@@ -1,24 +1,33 @@
 // « Toutes les boutiques » (layout/AllBoutiques.tsx): the screens that show every boutique of the person together.
 // - Accueil and Dashboard: what is waiting now and the period, added up, then boutique by boutique;
 // - Commandes: one list of every boutique's orders (each with its boutique), opened inside its boutique;
-// - Confirmation and Suivi: the lists of a partner's « Tous les vendeurs » (agency/work.tsx), with the boutiques' filters.
+// - Confirmation and Suivi: the lists of a partner's « Tous les vendeurs » (agency/work.tsx), with the boutiques' filters;
+// - Dépôt: what waits at each stage, boutique by boutique, the orders of the stage, and a return received wherever it is;
+// - Caisse: the money of every boutique added up, and boutique by boutique (its movements stay in its own caisse).
 // The « Boutique » filter keeps some of them; Agent, Équipe, Produit, Société and Livreur list each boutique's own.
 import { CONF_DONE_BAD, CONF_TODO, FOLLOW_STATUSES, FollowStatus, Order } from '@pilotix/shared';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { rpc } from '../../lib/backend';
 import { da, dayRange, n, pct } from '../../lib/format';
+import { trackOf } from '../../lib/items';
 import { openOrder } from '../../lib/modals';
 import { useRpcFor } from '../../lib/query';
 import { SellerScope } from '../../lib/seller';
 import { useSession } from '../../lib/session';
-import { Card, Empty, ErrorBox, Kpis, Loading, Tabs, Trend } from '../../ui/kit';
-import { allCount, AllF, AllFields, AllKey, allScope, BoutiqueChips, BoutiqueTag, StackLogo, useAllFilters, useAllMode, useAllOptions, useShopFilter } from '../../layout/AllBoutiques';
+import { useIsPhone } from '../../lib/useMedia';
+import { CopyCode } from '../../ui/CopyCode';
+import { Card, Empty, ErrorBox, Icon, Kpis, Loading, StatusBadge, Tabs, Trend } from '../../ui/kit';
+import { toast } from '../../ui/toast';
+import { allCount, AllF, AllFields, AllKey, allScope, BoutiqueChips, BoutiqueTag, setAllOn, StackLogo, useAllFilters, useAllMode, useAllOptions, useShopFilter } from '../../layout/AllBoutiques';
 import { BoutiqueLogo } from '../../layout/Boutiques';
 import { AllConfirmation, AllScope, AllSuivi } from '../agency/work';
 import { PeriodChips } from '../dashboard/board/parts';
 import { useBoardPeriod } from '../dashboard/board/Board';
 import { delivTone, KpiBox, prevRangeOf } from '../dashboard/util';
-import { useDebounced } from '../depot/OrderList';
+import { itemsLine, useDebounced } from '../depot/OrderList';
+import { DEPOT_STAGES, DepotStage, depotStage, DepotStageBar } from '../depot/StageNav';
 import { OrderTable, type OrderSort } from '../orders/OrderTable';
 import { ListFilter, toListInput } from '../orders/shared';
 import type { PageProps } from '../registry';
@@ -129,9 +138,9 @@ export function BoutiquesHome({ dash }: { dash?: boolean }) {
           <Kpis>
             <KpiBox icon="phone" label={t('home.toCall')} value={n(N.toCall)} sub={t('home.callbacksLater', { n: N.callbacksLater })} tone={N.toCall ? 'warn' : undefined} href={has('confirmation') ? '#/confirmation' : undefined} />
             <KpiBox icon="alert" label={t('home.noStock')} value={n(N.noStock)} sub={t('home.noStockSub')} tone={N.noStock ? 'bad' : undefined} href="#/commandes" />
-            <KpiBox icon="package" label={t('home.toPrepare')} value={n(N.toPrepare)} sub={t('home.prepared', { n: N.prepared })} />
+            <KpiBox icon="package" label={t('home.toPrepare')} value={n(N.toPrepare)} sub={t('home.prepared', { n: N.prepared })} href={has('depot') ? '#/depot' : undefined} />
             <KpiBox icon="truck" label={t('home.onRoad')} value={n(N.onRoad)} sub={t('home.failed', { n: N.failed })} tone={N.failed ? 'warn' : undefined} href={has('suivi') ? '#/suivi' : undefined} />
-            {N.moneyDue !== null && N.moneyDue !== undefined && <KpiBox icon="wallet" label={t('home.moneyDue')} value={da(N.moneyDue)} sub={t('home.moneyDueSub', { n: N.moneyDueCount ?? 0 })} tone={N.moneyDue ? 'info' : undefined} />}
+            {N.moneyDue !== null && N.moneyDue !== undefined && <KpiBox icon="wallet" label={t('home.moneyDue')} value={da(N.moneyDue)} sub={t('home.moneyDueSub', { n: N.moneyDueCount ?? 0 })} tone={N.moneyDue ? 'info' : undefined} href="#/caisse" />}
           </Kpis>
         )}
       </section>
@@ -274,7 +283,7 @@ function AllCounts({ on }: { on?: 'livrees' | 'annulees' }) {
 }
 
 /** One list of every boutique kept: its filters, its tabs, each order with its boutique (opened inside it). */
-function AllOrderList({ id, title, base, show, reasonOf, defaultSort = 'created_at', tabs }: { id: string; title: string; base?: Partial<ListFilter>; show: AllKey[]; reasonOf?: 'conf' | 'back'; defaultSort?: OrderSort; tabs?: boolean }) {
+function AllOrderList({ id, title, base, show, reasonOf, defaultSort = 'created_at', defaultDir = 'desc', tabs }: { id: string; title: string; base?: Partial<ListFilter>; show: AllKey[]; reasonOf?: 'conf' | 'back'; defaultSort?: OrderSort; defaultDir?: 'asc' | 'desc'; tabs?: boolean }) {
   const { t } = useTranslation();
   const kept = useShopFilter();
   const opts = useAllOptions();
@@ -285,7 +294,7 @@ function AllOrderList({ id, title, base, show, reasonOf, defaultSort = 'created_
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(50);
   const [sort, setSort] = useState<OrderSort>(defaultSort);
-  const [dir, setDir] = useState<'asc' | 'desc'>('desc');
+  const [dir, setDir] = useState<'asc' | 'desc'>(defaultDir);
   const counts = useRpcFor('all', 'orders.counts', keptInput(kept) as never, { refetchInterval: 60_000, enabled: !!tabs }).data as any;
   const F = (counts?.follow ?? {}) as Record<string, number>;
   const tabList = tabs
@@ -382,17 +391,41 @@ export function BoutiquesConfirmation(props: PageProps) {
   );
 }
 
-/** Réclamation, Swap and Bloqués work one boutique at a time. */
-function OneBoutique({ what }: { what: string }) {
+/**
+ * Opens one of the boutiques at an address (« Ouvrir »): « Toutes les boutiques » goes off, else the page would show them
+ * all again.
+ */
+function useOpenBoutique() {
   const { t } = useTranslation();
   const { switchStore } = useSession();
   const all = useAllMode();
+  const [busy, setBusy] = useState<number | null>(null);
+  const open = async (id: number, hash: string) => {
+    setBusy(id);
+    try {
+      if (!all.boutiques.find((b) => b.id === id)?.current) await switchStore(id);
+      setAllOn(false);
+      location.hash = hash;
+    } catch (e: any) {
+      toast(e?.message ?? t('common.error'), 'bad');
+    } finally {
+      setBusy(null);
+    }
+  };
+  return { open, busy };
+}
+
+/** What works one boutique at a time (Suivi › Réclamation, Swap, Bloqués; Caisse › À recevoir…): the boutique to open. */
+function OneBoutique({ what, hash }: { what: string; hash: string }) {
+  const { t } = useTranslation();
+  const all = useAllMode();
+  const ob = useOpenBoutique();
   return (
     <Empty>
-      <p>{t('boutiques.all.oneAtATime', { what: t(`suivi.tabs.${what}`) })}</p>
+      <p>{t('boutiques.all.oneAtATime', { what })}</p>
       <div className="row" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
         {all.boutiques.map((b) => (
-          <button key={b.id} type="button" className="btn" onClick={() => void switchStore(b.id).then(() => (location.hash = `#/suivi/${what}`))}>
+          <button key={b.id} type="button" className="btn" disabled={ob.busy !== null} onClick={() => void ob.open(b.id, hash)}>
             <BoutiqueLogo name={b.name} logo={b.logo} size={22} /> {b.name}
           </button>
         ))}
@@ -402,6 +435,7 @@ function OneBoutique({ what }: { what: string }) {
 }
 
 export function BoutiquesSuivi(props: PageProps) {
+  const { t } = useTranslation();
   const kept = useShopFilter();
   const opts = useAllOptions();
   const [f, set, clear] = useAllFilters('suivi');
@@ -418,10 +452,393 @@ export function BoutiquesSuivi(props: PageProps) {
     counts: keptInput(kept),
     tabs: ['enlivraison', 'alertes', 'traites', 'livres', 'annules'],
   };
-  if (props.sub === 'reclamation' || props.sub === 'swap' || props.sub === 'bloques') return <OneBoutique what={props.sub} />;
+  if (props.sub === 'reclamation' || props.sub === 'swap' || props.sub === 'bloques') return <OneBoutique what={t(`suivi.tabs.${props.sub}`)} hash={`#/suivi/${props.sub}`} />;
   return (
     <SellerScope seller="all" ambient={false}>
       <AllSuivi {...props} scope={scope} />
     </SellerScope>
+  );
+}
+
+// ---------------------------------------------------------------- what each boutique answers
+/** The boutiques kept that gave no answer (no access to that page there): named under the totals. */
+function useLeftOut(rows: { id: number }[] | undefined): string[] {
+  const all = useAllMode();
+  const kept = useShopFilter();
+  if (!rows) return [];
+  return all.boutiques.filter((b) => (!kept || kept.includes(b.id)) && !rows.some((r) => r.id === b.id)).map((b) => b.name);
+}
+
+/** A boutique's name and logo, first cell of a « Par boutique » row. */
+function ByName({ id, name }: { id: number; name: string }) {
+  const all = useAllMode();
+  const bq = all.boutiques.find((x) => x.id === id);
+  return (
+    <span className="bq-tag">
+      <BoutiqueLogo name={name} logo={bq?.logo ?? null} size={24} />
+      <span>{name}</span>
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------- Dépôt
+type DepotN = { preparer: number; prepares: number; dispatchees: number; retours: number; noStock: number; noStockLate: number; prepAlerts: number };
+type DepotAll = DepotN & { byBoutique?: (DepotN & { id: number; name: string })[] };
+type DepotCol = DepotStage | 'noStock';
+
+/** « Par boutique »: what waits at each stage in each boutique; « Ouvrir » goes to that boutique's Dépôt. */
+function DepotByBoutique({ c, error, retry, stage }: { c?: DepotAll; error: Error | null; retry: () => void; stage: DepotStage }) {
+  const { t } = useTranslation();
+  const ob = useOpenBoutique();
+  const rows = c?.byBoutique ?? [];
+  const left = useLeftOut(c ? rows : undefined);
+  const cols: { k: DepotCol; label: string }[] = [...DEPOT_STAGES.map((k) => ({ k: k as DepotCol, label: t(`depot.stage.${k}`) })), { k: 'noStock', label: t('depot.ns.tab') }];
+  const cls = (k: DepotCol) => `num${k === stage ? ' bq-on' : ''}`;
+  // « En dispatch »: refused by the company, to cancel by hand, waiting over 24 h; « Sans stock »: waiting too long
+  const cell = (r: DepotN, k: DepotCol) => {
+    const warn = k === 'prepares' ? r.prepAlerts : k === 'noStock' ? r.noStockLate : 0;
+    return (
+      <>
+        <span className="ltr">{n(r[k] ?? 0)}</span>
+        {warn > 0 && (
+          <span className="badge t-bad bq-alert ltr" title={t(k === 'prepares' ? 'boutiques.all.prepAlerts' : 'boutiques.all.noStockLate', { count: warn })}>
+            <Icon name="alert" /> {n(warn)}
+          </span>
+        )}
+      </>
+    );
+  };
+  return (
+    <Card title={t('boutiques.all.byBoutique')} actions={<AllChip />}>
+      <BoutiqueChips />
+      {error ? (
+        <ErrorBox error={error} onRetry={retry} />
+      ) : !c ? (
+        <Loading />
+      ) : !rows.length ? (
+        <Empty>{t('depot.empty')}</Empty>
+      ) : (
+        <div className="tbl-wrap">
+          <table className="tbl bq-by">
+            <thead>
+              <tr>
+                <th>{t('boutiques.all.col')}</th>
+                {cols.map((x) => (
+                  <th key={x.k} className={cls(x.k)}>
+                    {x.label}
+                  </th>
+                ))}
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id}>
+                  <td data-l={t('boutiques.all.col')}>
+                    <ByName id={r.id} name={r.name} />
+                  </td>
+                  {cols.map((x) => (
+                    <td key={x.k} className={cls(x.k)} data-l={x.label}>
+                      {cell(r, x.k)}
+                    </td>
+                  ))}
+                  <td className="bq-go" data-l="">
+                    <button type="button" className="btn small" disabled={ob.busy !== null} onClick={() => void ob.open(r.id, `#/depot/${stage}`)}>
+                      {t('boutiques.all.open')}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {rows.length > 1 && (
+                <tr className="bq-by-total">
+                  <td data-l="">
+                    <b>{t('boutiques.all.total')}</b>
+                  </td>
+                  {cols.map((x) => (
+                    <td key={x.k} className={cls(x.k)} data-l={x.label}>
+                      {cell(c, x.k)}
+                    </td>
+                  ))}
+                  <td data-l="" />
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {left.length > 0 && <p className="muted small">{t('boutiques.all.leftOutDepot', { names: left.join(', ') })}</p>}
+    </Card>
+  );
+}
+
+/** « Réceptionner un retour » over every boutique kept: the parcel is found in its boutique and received there. */
+function AllReceive() {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const kept = useShopFilter();
+  const [code, setCode] = useState('');
+  const [found, setFound] = useState<Row<Order>[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [doing, setDoing] = useState<string | null>(null);
+  const search = async () => {
+    const c = code.trim().replace(/[,()"*]/g, '');
+    if (!c) return;
+    setBusy(true);
+    try {
+      setFound((await rpc('depot.find', { code: c, ...keptInput(kept) } as never, 'all')) as unknown as Row<Order>[]);
+    } catch (e: any) {
+      toast(e.message, 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
+  // inside the order's own boutique: its stock comes back there
+  const receive = async (o: Row<Order>) => {
+    setDoing(`${o.seller.id}:${o.id}`);
+    try {
+      const r = await rpc('depot.receiveReturn', { id: o.id }, o.seller.id);
+      toast(t('depot.receive.done', { ref: r.ref }), 'ok');
+      setFound(null);
+      setCode('');
+    } catch (e: any) {
+      toast(e.message, 'bad');
+    } finally {
+      setDoing(null);
+      qc.invalidateQueries();
+    }
+  };
+  return (
+    <Card title={t('depot.receive.title')} actions={<AllChip />}>
+      <p className="muted">{t('boutiques.all.receiveHelp')}</p>
+      <div className="row">
+        <div className="grow">
+          <input
+            type="search"
+            autoComplete="off"
+            placeholder={t('depot.receive.ph')}
+            aria-label={t('depot.receive.ph')}
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void search();
+              }
+            }}
+          />
+        </div>
+        <button type="button" className="btn primary" onClick={() => void search()} disabled={busy}>
+          {t('depot.receive.search')}
+        </button>
+      </div>
+      {found &&
+        (found.length ? (
+          <div className="tbl-wrap" style={{ marginTop: 10 }}>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>{t('boutiques.all.col')}</th>
+                  <th>{t('depot.cols.order')}</th>
+                  <th>{t('depot.cols.client')}</th>
+                  <th className="wide">{t('depot.cols.products')}</th>
+                  <th>{t('depot.cols.status')}</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {found.map((o) => (
+                  <tr key={`${o.seller.id}:${o.id}`} className="clickable" onClick={() => openOrder(o.id, o.seller.id)}>
+                    <td data-l={t('boutiques.all.col')}>
+                      <BoutiqueTag id={o.seller.id} name={o.seller.name} />
+                    </td>
+                    <td data-l={t('depot.cols.order')}>
+                      <b className="ltr">{o.ref}</b>
+                      {trackOf(o) && <CopyCode code={trackOf(o)} small />}
+                    </td>
+                    <td data-l={t('depot.cols.client')}>
+                      {o.customerName}
+                      <small className="ltr">{o.phone}</small>
+                    </td>
+                    <td className="wide" data-l={t('depot.cols.products')}>
+                      {itemsLine(o)} <span className="muted ltr">· {da(o.total)}</span>
+                    </td>
+                    <td data-l={t('depot.cols.status')}>{o.followStatus ? <StatusBadge kind="follow" status={o.followStatus} /> : <StatusBadge kind="conf" status={o.confStatus} />}</td>
+                    <td data-l="" onClick={(e) => e.stopPropagation()}>
+                      {o.followStatus === 'returned' ? (
+                        <span className="badge t-ok">{t('depot.receive.already')}</span>
+                      ) : (
+                        <button type="button" className="btn small ok" disabled={!o.shippedAt || doing !== null} onClick={() => void receive(o)}>
+                          {t('depot.receive.button')}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="muted" style={{ marginTop: 10 }}>
+            {t('depot.receive.none')}
+          </p>
+        ))}
+    </Card>
+  );
+}
+
+/**
+ * « Dépôt » with « Toutes les boutiques »: what waits at each stage (added up, then boutique by boutique), the orders of
+ * the stage from every boutique (each opened inside its boutique), and a return received wherever it belongs. Picking,
+ * labels, bags and sending to the companies stay in each boutique's own Dépôt (« Ouvrir »).
+ */
+export function BoutiquesDepot({ sub }: PageProps) {
+  const { t } = useTranslation();
+  const stage = depotStage(sub);
+  const phone = useIsPhone();
+  const kept = useShopFilter();
+  const q = useRpcFor('all', 'depot.counts', keptInput(kept) as never, { refetchInterval: 60_000 });
+  const c = q.data as unknown as DepotAll | undefined;
+  const show: AllKey[] = ['product', 'company', 'livreur', 'wilaya', 'dates'];
+  return (
+    <>
+      <DepotStageBar stage={stage} counts={c} phone={phone} />
+      <DepotByBoutique c={c} error={q.error} retry={() => void q.refetch()} stage={stage} />
+      <p className="muted small bq-note">{t('boutiques.all.depotNote')}</p>
+      {stage === 'preparer' && <AllOrderList key="preparer" id="depot-preparer" title={t('depot.lists.preparer')} base={{ conf: ['confirmed'], follow: ['to_prepare'] }} show={show} defaultSort="confirmed_at" defaultDir="asc" />}
+      {stage === 'prepares' && <AllOrderList key="prepares" id="depot-prepares" title={t('depot.lists.prepares')} base={{ conf: ['confirmed'], follow: ['prepared'] }} show={show} defaultSort="updated_at" defaultDir="asc" />}
+      {stage === 'dispatchees' && <AllOrderList key="dispatchees" id="depot-dispatchees" title={t('depot.lists.dispatchees')} base={{ conf: ['confirmed'], follow: ['shipped'] }} show={show} defaultSort="shipped_at" defaultDir="asc" />}
+      {stage === 'retours' && (
+        <>
+          <AllReceive />
+          <AllOrderList key="returning" id="depot-returning" title={t('depot.lists.returning')} base={{ follow: ['returning'] }} show={[...show, 'reason']} reasonOf="back" defaultSort="updated_at" defaultDir="asc" />
+          <AllOrderList key="exchange" id="depot-exchange" title={t('depot.lists.exchange')} base={{ follow: ['in_exchange'] }} show={show} defaultSort="updated_at" defaultDir="asc" />
+        </>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- Caisse
+type CaisseN = { main: number; today: number; bank: number | null; own: number; companies: number; livreurs: number; employees: number; outside: number; tickets: number };
+type CaisseAll = CaisseN & { byBoutique: (CaisseN & { id: number; name: string })[] };
+const sgn = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${da(Math.abs(v))}`;
+/** Caisse's tabs that work on one boutique's own money (receive a payment, cancel one, its journal…). */
+const CAISSE_ONE: Record<string, string> = { due: 'caisse.tabs.due', done: 'caisse.tabs.done', livreurs: 'caisse.tabs.livreurs', journal: 'caisse.ph.journal' };
+
+/**
+ * « Caisse » with « Toutes les boutiques »: the money of every boutique added up (the main caisses, the bank, the other
+ * caisses, the money outside), then boutique by boutique. Each boutique's money stays its own: an expense, a transfer,
+ * « Argent reçu » are made in its caisse (« Ouvrir »).
+ */
+export function BoutiquesCaisse({ sub }: PageProps) {
+  const { t } = useTranslation();
+  const kept = useShopFilter();
+  const ob = useOpenBoutique();
+  const one = sub ? CAISSE_ONE[sub] : undefined;
+  const q = useRpcFor('all', 'caisse.overview', keptInput(kept) as never, { refetchInterval: 60_000, enabled: !one });
+  const d = q.data as unknown as CaisseAll | undefined;
+  const rows = d?.byBoutique ?? [];
+  const left = useLeftOut(d ? rows : undefined);
+  if (one) return <OneBoutique what={t(one)} hash={`#/caisse/${sub}`} />;
+  const bank = rows.some((r) => r.bank !== null);
+  const cols: { k: keyof CaisseN; label: string }[] = [
+    { k: 'main', label: t('caisse.ph.main') },
+    ...(bank ? [{ k: 'bank' as const, label: t('caisse.ph.bank') }] : []),
+    { k: 'own', label: t('caisse.set.mine') },
+    { k: 'companies', label: t('caisse.ph.companies') },
+    { k: 'livreurs', label: t('caisse.ph.livreurs') },
+    { k: 'employees', label: t('caisse.ph.employees') },
+    { k: 'outside', label: t('caisse.ph.outside') },
+  ];
+  const cell = (r: CaisseN, k: keyof CaisseN) => {
+    const v = r[k];
+    if (v === null) return <span className="muted">—</span>;
+    return (
+      <>
+        <span className="ltr">{da(v)}</span>
+        {k === 'main' && r.today !== 0 && <small className={`ltr bq-today ${r.today > 0 ? 'up' : 'down'}`}>{t('caisse.ph.today', { v: sgn(r.today) })}</small>}
+      </>
+    );
+  };
+  return (
+    <>
+      <div className="card">
+        <div className="card-head">
+          <h2>{t('caisse.title')}</h2>
+          <AllChip />
+        </div>
+        <BoutiqueChips />
+        {q.error ? (
+          <ErrorBox error={q.error} onRetry={() => void q.refetch()} />
+        ) : !d ? (
+          <Loading />
+        ) : (
+          <Kpis>
+            <KpiBox icon="wallet" label={t('caisse.ph.main')} value={da(d.main)} sub={d.today !== 0 ? t('caisse.ph.today', { v: sgn(d.today) }) : t('boutiques.all.mainSub')} />
+            {d.bank !== null && <KpiBox icon="building" label={t('caisse.ph.bank')} value={da(d.bank)} zero={!d.bank} />}
+            <KpiBox icon="coins" label={t('caisse.set.mine')} value={da(d.own)} sub={t('boutiques.all.ownSub')} zero={!d.own} />
+            <KpiBox icon="truck" label={t('caisse.ph.outside')} value={da(d.outside)} sub={t('caisse.dk.outsideSub')} tone={d.outside ? 'info' : undefined} zero={!d.outside} />
+            {d.tickets !== 0 && <KpiBox icon="headset" label={t('caisse.tickets.title')} value={da(d.tickets)} />}
+          </Kpis>
+        )}
+      </div>
+      <Card title={t('boutiques.all.byBoutique')}>
+        {!d ? (
+          q.error ? null : <Loading />
+        ) : !rows.length ? (
+          <Empty>{t('boutiques.all.noCaisse')}</Empty>
+        ) : (
+          <div className="tbl-wrap">
+            <table className="tbl bq-by">
+              <thead>
+                <tr>
+                  <th>{t('boutiques.all.col')}</th>
+                  {cols.map((x) => (
+                    <th key={x.k} className="num">
+                      {x.label}
+                    </th>
+                  ))}
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.id}>
+                    <td data-l={t('boutiques.all.col')}>
+                      <ByName id={r.id} name={r.name} />
+                    </td>
+                    {cols.map((x) => (
+                      <td key={x.k} className="num" data-l={x.label}>
+                        {cell(r, x.k)}
+                      </td>
+                    ))}
+                    <td className="bq-go" data-l="">
+                      <button type="button" className="btn small" disabled={ob.busy !== null} onClick={() => void ob.open(r.id, '#/caisse/overview')}>
+                        {t('boutiques.all.open')}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {rows.length > 1 && (
+                  <tr className="bq-by-total">
+                    <td data-l="">
+                      <b>{t('boutiques.all.total')}</b>
+                    </td>
+                    {cols.map((x) => (
+                      <td key={x.k} className="num" data-l={x.label}>
+                        {cell(d, x.k)}
+                      </td>
+                    ))}
+                    <td data-l="" />
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="muted small">{t('boutiques.all.caisseNote')}</p>
+        {left.length > 0 && <p className="muted small">{t('boutiques.all.leftOutCaisse', { names: left.join(', ') })}</p>}
+      </Card>
+    </>
   );
 }
