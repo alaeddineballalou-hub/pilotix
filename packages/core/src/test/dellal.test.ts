@@ -78,12 +78,12 @@ test('Version 001 (no AI): the number first — the order goes in at once, no re
   let bodies = r.messages.map((m: any) => `${m.role}: ${m.body}`).join('\n');
   assert.doesNotMatch(bodies, /Récap|Je confirme/);
   assert.match(bodies, /create_order → TEST/);
-  assert.match(bodies, /0661 23 45 18/, 'the number is read back digit by digit');
+  assert.match(bodies, /0661\s23\s45\s18/, 'the number is read back digit by digit');
   assert.match(bodies, /conseiller va t’appeler/);
   r = await call('dellal.test', conf, { body: 'smahli, numéro ta3i 0770112233' });
   bodies = r.messages.map((m: any) => `${m.role}: ${m.body}`).join('\n');
   assert.match(bodies, /update_order → TEST · numéro changé/);
-  assert.match(bodies, /0770 11 22 33/);
+  assert.match(bodies, /0770\s11\s22\s33/);
   assert.equal((bodies.match(/create_order → /g) ?? []).length, 1, 'a change never makes a second order');
   assert.equal(Number((await db.query('SELECT count(*)::int AS n FROM orders'))[0].n), before, 'a test never creates a real order');
   await call('dellal.test', conf, { reset: true });

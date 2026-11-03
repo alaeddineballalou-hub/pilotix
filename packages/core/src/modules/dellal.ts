@@ -1321,8 +1321,8 @@ function guideAnswer(g: { faq: { q: string; a: string }[]; doubts: { q: string; 
   return best?.a ?? null;
 }
 
-/** A phone number as it is read out: 0661 23 45 18. */
-const spaced = (p: string) => p.replace(/^(\d{4})(\d{2})(\d{2})(\d{2})$/, '$1 $2 $3 $4');
+/** A phone number as it is read out, kept on one line: 0661 23 45 18. */
+const spaced = (p: string) => p.replace(/^(\d{4})(\d{2})(\d{2})(\d{2})$/, '$1\u00a0$2\u00a0$3\u00a0$4');
 
 /** A small rule-based seller with the same tools, for the demo and for testing without an AI key. */
 async function demoBrain(ctx: Ctx, req: AiRequest, convId?: number): Promise<AiResponse> {
@@ -1351,12 +1351,12 @@ async function demoBrain(ctx: Ctx, req: AiRequest, convId?: number): Promise<AiR
     }
     if (tool.name === 'create_order' && v1) {
       const who = String(tool.input?.customer_name ?? '').split(/\s+/)[0];
-      return say(`C’est noté ✅ ${who ? `${who}, ` : ''}ton numéro : ${spaced(normalizePhone(String(tool.input?.phone ?? '')) ?? String(tool.input?.phone ?? ''))}. Un conseiller va t’appeler très vite pour confirmer, réponds-lui 🙏`);
+      return say(`C’est noté ✅ ${who ? `${who}, ` : ''}je garde ton numéro ${spaced(normalizePhone(String(tool.input?.phone ?? '')) ?? String(tool.input?.phone ?? ''))}. Un conseiller va t’appeler très vite pour confirmer, réponds-lui 🙏`);
     }
     if (tool.name === 'create_order') return say(`C'est noté ✅ Commande ${out.ref} : total ${out.total} DA (livraison ${out.delivery_fee} DA comprise), paiement à la livraison. ${out.next ?? out.note ?? ''}`.trim());
     if (tool.name === 'update_order') {
       const ph = tool.input?.phone ? normalizePhone(String(tool.input.phone)) : null;
-      return say(`C’est changé ✅${ph ? ` Nouveau numéro : ${spaced(ph)}.` : ''} Le conseiller aura la bonne version quand il t’appellera.`);
+      return say(`C’est changé ✅${ph ? ` Nouveau numéro ${spaced(ph)}.` : ''} Le conseiller aura la bonne version quand il t’appellera.`);
     }
     if (tool.name === 'delivery_fee') {
       if (out.home_delivery === null && out.stopdesk === null) return say(`Pour ${out.wilaya}, je vérifie avec l’équipe.`);
