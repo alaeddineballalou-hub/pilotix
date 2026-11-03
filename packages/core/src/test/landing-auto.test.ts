@@ -257,3 +257,30 @@ test('stock: a sold-out variant is marked on the page (when asked), and still or
   await call('landing.submit', admin, input);
   assert.ok(await orderOf(input.phone as string), 'a customer who opened the page before is not treated as a bot');
 });
+
+test('old pages: the update adds the product photos missing (main first, then each variant) and links each to its colour', async () => {
+  const { default: sql } = await import('../migrations/074_landing_variant_photos');
+  const pg = (await db.query(`SELECT id, product_id FROM landing_pages ORDER BY id LIMIT 1`))[0];
+  const pid = Number(pg.product_id);
+  await db.query(`UPDATE products SET photo = 'https://img.test/old-main.jpg' WHERE id = $1`, [pid]);
+  let vids = (await db.query(`SELECT id FROM product_variants WHERE product_id = $1 AND active AND title <> '' ORDER BY id LIMIT 2`, [pid])).map((x: any) => Number(x.id));
+  if (vids.length < 2) for (const t of ['A1', 'A2'].slice(vids.length)) vids.push(Number((await db.query(`INSERT INTO product_variants (product_id, title) VALUES ($1, $2) RETURNING id`, [pid, t]))[0].id));
+  vids = vids.slice(0, 2);
+  await db.query(`UPDATE product_variants SET photo = 'https://img.test/old-v' || id || '.jpg' WHERE id = ANY($1)`, [vids]);
+  // the page had one of its own pictures and the first variant's photo (not linked yet)
+  await db.query(`UPDATE landing_pages SET images = $2 WHERE id = $1`, [pg.id, JSON.stringify([{ url: 'https://img.test/own.jpg', w: 800, h: 1000 }, { url: `https://img.test/old-v${vids[0]}.jpg`, w: 800, h: 1000 }])]);
+  const run = async () => { for (const q of sql.split(/;\s*\n/).map((x: string) => x.trim()).filter(Boolean)) await db.query(q); };
+  await run();
+  const imgs = (await db.query(`SELECT images FROM landing_pages WHERE id = $1`, [pg.id]))[0].images;
+  const list = typeof imgs === 'string' ? JSON.parse(imgs) : imgs;
+  assert.deepEqual(list.map((x: any) => [x.url, x.v ?? null]), [
+    ['https://img.test/old-main.jpg', null],
+    ['https://img.test/own.jpg', null],
+    [`https://img.test/old-v${vids[0]}.jpg`, vids[0]],
+    [`https://img.test/old-v${vids[1]}.jpg`, vids[1]],
+  ]);
+  // run again: nothing changes
+  await run();
+  const again = (await db.query(`SELECT images FROM landing_pages WHERE id = $1`, [pg.id]))[0].images;
+  assert.equal(JSON.stringify(typeof again === 'string' ? JSON.parse(again) : again), JSON.stringify(list));
+});
