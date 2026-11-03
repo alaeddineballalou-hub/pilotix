@@ -36,6 +36,8 @@ jobs:
           for c in $(cat /tmp/js/*.js /tmp/index.html | grep -o 'assets/[A-Za-z0-9._-]*\.css' | sort -u); do curl -s -m 40 -A 'Mozilla/5.0' "https://direct.pilotix.online/$c" >> /tmp/all.css; done
           for m in cpt-link pl-sa-steps; do echo "::notice title=css $m::$(grep -c "$m" /tmp/all.css 2>/dev/null || true)"; done
           art=$(ls /tmp/js | grep -c '^art-ltr-' || true); echo "::notice title=Learning bench picture loaded by the page::$art"
+      - name: New server routes (linked accounts)
+        run: |
           # the new server routes: Pilotix's Meta webhook (a wrong verify token: 403) and the login return pages (200, « Connexion non faite »)
           v=$(curl -s -m 30 -o /dev/null -w '%{http_code}' 'https://direct.pilotix.online/api/hooks/meta-app?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=1' || echo failed); echo "::notice title=Meta app webhook (403 = there)::$v"
           for p in meta tiktok; do c=$(curl -s -m 30 -o /tmp/cb.html -w '%{http_code}' "https://direct.pilotix.online/api/oauth/$p/callback?state=not-a-real-state" || echo failed); echo "::notice title=$p login return page::$c $(grep -c 'Connexion non faite' /tmp/cb.html 2>/dev/null || true)"; done
