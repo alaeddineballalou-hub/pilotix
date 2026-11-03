@@ -1,6 +1,7 @@
 // Produits & stock › Guide de vente: every product on the left (search, and where its guide stands), its guide on the
 // right. The owner and the depot team write it there (« Modifier », with « Écrire avec l'IA »); the agents read it, for
-// their own products only. On a phone the guide rises from the bottom. The same guide as the product form's tab.
+// their own products only, in the app's language (Pilot AI translates it after each save). On a phone the guide rises
+// from the bottom. The same guide as the product form's tab.
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../lib/backend';
@@ -11,7 +12,7 @@ import { useIsPhone } from '../../lib/useMedia';
 import { Empty, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { Sheet } from '../../ui/Sheet';
 import { toast } from '../../ui/toast';
-import { DraftFacts, formToGuide, GuideEditor, GuideForm, guideProblem, guideToForm, GuideView, sizeValues } from './guide';
+import { DraftFacts, formToGuide, formTr, GuideEditor, GuideForm, guideProblem, guideToForm, GuideView, readLang, sizeValues, useGuideTranslate } from './guide';
 
 type Row = Out<'catalog.guides'>['rows'][number];
 type Filter = 'all' | 'with' | 'without' | 'todo';
@@ -106,26 +107,44 @@ export function Guides({ manager, initial }: { manager: boolean; initial?: numbe
 
 /** One product's guide: read it, or (the owner and the depot team) write it. */
 function GuideBox({ row, manager, products, phone, onEditing, onClose }: { row: Row; manager: boolean; products: { id: number; name: string }[]; phone: boolean; onEditing: (on: boolean) => void; onClose: () => void }) {
-  const { t } = useTranslation();
-  const read = useRpc('catalog.guide', { id: row.id }, { staleTime: 30_000 });
+  const { t, i18n } = useTranslation();
+  const lang = readLang(i18n.language);
+  const read = useRpc('catalog.guide', { id: row.id, lang }, { staleTime: 30_000 });
   const [form, setForm] = useState<GuideForm | null>(null);
   const editing = form !== null;
   const prod = useRpc('catalog.guideFacts', { id: row.id }, { enabled: manager && editing });
-  const save = useAction('catalog.saveGuide', { success: t('produits.guide.page.saved'), onDone: () => setForm(null) });
+  const translate = useGuideTranslate();
+  // saved: Pilot AI translates what changed into the other languages
+  const save = useAction('catalog.saveGuide', {
+    success: t('produits.guide.page.saved'),
+    onDone: (r) => {
+      setForm(null);
+      if (Object.keys(r.trMissing).length) void translate.run(row.id);
+    },
+  });
   useEffect(() => onEditing(editing), [editing]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onEditing(false), []); // eslint-disable-line react-hooks/exhaustive-deps
   const d = read.data;
   const id = `gd-${row.seller?.id ?? 0}-${row.id}`;
-  const meta = d?.updatedAt ? (d.updatedBy ? t('produits.guide.updated', { date: dateOnly(d.updatedAt), name: d.updatedBy }) : t('produits.guide.updatedNoName', { date: dateOnly(d.updatedAt) })) : t('produits.guide.none');
+  const meta = translate.busy === row.id ? t('produits.guide.tr.working') : d?.updatedAt ? (d.updatedBy ? t('produits.guide.updated', { date: dateOnly(d.updatedAt), name: d.updatedBy }) : t('produits.guide.updatedNoName', { date: dateOnly(d.updatedAt) })) : t('produits.guide.none');
   const facts = (): DraftFacts => prod.data ?? { productId: row.id, name: row.name, variants: [], packs: [], linked: [], services: [], options: [], linkedIds: [] };
   const submit = () => {
     if (!form) return;
     const g = formToGuide(form, prod.data ? sizeValues(prod.data.options) : undefined);
     const problem = guideProblem(g, t);
     if (problem) return toast(problem, 'bad');
-    save.mutate({ id: row.id, guide: g });
+    save.mutate({ id: row.id, guide: g, tr: formTr(form, g) });
   };
-  const write = () => setForm(guideToForm(d?.guide ?? null));
+  const write = () => setForm(guideToForm(d?.guide ?? null, null, lang));
+  // the translations to correct come with the product's facts (the editor waits for them): taken once per edit
+  const [trTaken, setTrTaken] = useState(false);
+  useEffect(() => {
+    if (!editing) return setTrTaken(false);
+    if (trTaken || !prod.data) return;
+    const tr = prod.data.guideTr;
+    setForm((f) => (f ? { ...f, tr: JSON.parse(JSON.stringify(tr)), trBase: JSON.parse(JSON.stringify(tr)) } : f));
+    setTrTaken(true);
+  }, [editing, prod.data, trTaken]);
   const actions = editing ? (
     <>
       <button type="button" className="btn" disabled={save.isPending} onClick={() => setForm(null)}>
@@ -146,9 +165,9 @@ function GuideBox({ row, manager, products, phone, onEditing, onClose }: { row: 
     <Loading />
   ) : editing ? (
     // the product's options say which size guide it gets (one line per size, or the small one): wait for them
-    prod.data || prod.error ? <GuideEditor value={form!} onChange={setForm} facts={facts} products={products} /> : <Loading />
+    trTaken || prod.error ? <GuideEditor value={form!} onChange={setForm} facts={facts} products={products} /> : <Loading />
   ) : d.guide ? (
-    <GuideView guide={d.guide} id={id} upsell={d.upsell} />
+    <GuideView guide={d.guide} id={id} upsell={d.upsell} tr={d.tr} trMissing={d.trMissing} onTranslate={manager ? () => void translate.run(row.id) : undefined} translating={translate.busy === row.id} />
   ) : (
     <div className="gd-none">
       <Icon name="book" />

@@ -204,7 +204,18 @@ export async function quickCreatePage(db: Db, productId: number, userId: number 
   if (!p) throw notFound('Produit introuvable');
   if (p.is_service) throw bad('Un service n’a pas de landing page');
   const slug = await freeLandingSlug(db, String(p.name), String(p.sku ?? ''));
-  const images = p.photo && /^(https?:|data:image\/)/.test(String(p.photo)) ? [{ url: String(p.photo), w: 960, h: 960 }] : [];
+  // the product's main photo first, then each variant's own photo (once each)
+  const vs = await db.query(`SELECT id, photo FROM product_variants WHERE product_id = $1 AND photo IS NOT NULL AND active AND title <> '' ORDER BY id`, [productId]);
+  const ok = (x: unknown) => /^(https?:|data:image\/)/.test(String(x ?? ''));
+  // each photo once; a variant's photo remembers its variant (picking that colour on the page shows it)
+  const images: { url: string; w: number; h: number; v?: number }[] = ok(p.photo) ? [{ url: String(p.photo), w: 960, h: 1200 }] : [];
+  for (const v of vs) {
+    if (!ok(v.photo)) continue;
+    const had = images.find((x) => x.url === String(v.photo));
+    if (had) had.v ??= num(v.id);
+    else images.push({ url: String(v.photo), w: 960, h: 1200, v: num(v.id) });
+  }
+  images.splice(12);
   const r = (
     await db.query(
       `INSERT INTO landing_pages (product_id, slug, title, color, description, images, created_by) VALUES ($1,$2,'',$3,$4,$5,$6) RETURNING id`,

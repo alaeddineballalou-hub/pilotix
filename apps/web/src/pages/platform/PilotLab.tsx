@@ -21,6 +21,7 @@ import { Bubbles, Composer, Msg, Typing } from '../messages/chat';
 import { LahjaWord, LahjaWords } from '../messages/lahja';
 import { CaseModal } from './pilotCase';
 import { DarijaBookCard } from './DarijaBook';
+import { VocabPane } from './Vocab';
 import { PilotDemo, usePilotAction, usePilotCall, usePilotRpc } from './pilotDemo';
 
 type State = POut<'p.pilot.state'>;
@@ -256,10 +257,10 @@ function TryCard({ d, book, onBook }: { d: State; book: Book; onBook: (b: Book) 
   );
 }
 
-// ---------------------------------------------------------------- Lessons: Sales | Darija
+// ---------------------------------------------------------------- Lessons: Sales | Darija | Vocabulary
 function LessonsCard({ d, onTry, manager }: { d: State; onTry: () => void; manager: boolean }) {
   const { t } = useTranslation();
-  const [kind, setKind] = useState<'sales' | 'darija'>('sales');
+  const [kind, setKind] = useState<'sales' | 'darija' | 'vocab'>('sales');
   const k = 'platform.pilot.lab.lessons.';
   return (
     <Card title={t(k + 'title')} help={t(k + 'help')} className="pl-lab-card">
@@ -270,10 +271,11 @@ function LessonsCard({ d, onTry, manager }: { d: State; onTry: () => void; manag
           items={[
             { value: 'sales', label: t(k + 'sales') },
             { value: 'darija', label: t(k + 'darija'), ...(d.lahjaWaiting ? { count: d.lahjaWaiting } : {}) },
+            { value: 'vocab', label: t(k + 'vocab') },
           ]}
         />
       </div>
-      {kind === 'sales' ? <TeachChat d={d} onTry={onTry} /> : <DarijaPane manager={manager} />}
+      {kind === 'sales' ? <TeachChat d={d} onTry={onTry} /> : kind === 'darija' ? <DarijaPane manager={manager} /> : <VocabPane manager={manager} />}
     </Card>
   );
 }

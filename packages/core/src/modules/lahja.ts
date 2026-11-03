@@ -6,9 +6,13 @@
 //    (« Dellal learned »): used at once in that shop, reviewed the same way; a refused one stops in its shop too.
 //  - Pilotix accepts (as is or modified) or refuses: an accepted lesson is used by every shop, and no shop can turn it off.
 //    Pilotix can also correct Dellal's Darija in the control room's test chat: for every shop at once.
+//  - A shop's team corrects a guide de vente's Arabic translation (Produits & stock › Guide de vente, its language tabs):
+//    the words they changed become a lesson the same way (lessonsFromGuide).
+//  An accepted lesson also writes its words in Pilotix's vocabulary book (modules/vocab.ts).
 // Only words travel between shops, never a whole message (it may carry one shop's prices, products or customers). Sales
 // lessons (how to sell) are something else: they are written in the control room only (pilotlearn.ts).
 import { Db, iso, isoOrNull, num } from '../db';
+import type { Ctx } from '../rpc';
 import { checkDarija } from './darija';
 
 /** « write `use` » (instead of `not`); `use` empty: never write `not` */
@@ -428,4 +432,34 @@ export async function learnLahja(pdb: Db, run: (reqs: LahjaReq[]) => Promise<(st
     }
   }
   return { asked: jobs.length, proposed };
+}
+
+// ---------------------------------------------------------------- what a guide's corrected translation teaches
+/**
+ * The Arabic translations of a guide de vente the team corrected (modules/guide.ts › saveGuide): the words they changed
+ * become this shop's lessons, used at once by its Dellal, its CM AI agent and its next translations, and sent to Pilotix
+ * for review (a guide's line carries no customer: it goes as it is). A change that is not a word lesson (a sentence
+ * written again, a number) teaches nothing; nothing here ever stops the guide's save.
+ */
+export async function lessonsFromGuide(ctx: Ctx, fixes: { lang: string; line: string; before: string; after: string }[]): Promise<number> {
+  let n = 0;
+  for (const f of fixes.filter((x) => x.lang === 'ar').slice(0, 20)) {
+    try {
+      const words = lahjaDiff(f.before, f.after);
+      if (!words.length || !checkLahjaWords(words).ok) continue;
+      const ins = await ctx.db.query(`INSERT INTO dellal_lahja (words, before, after, created_by) VALUES ($1::jsonb, $2, $3, $4) RETURNING id`, [JSON.stringify(words), f.before.slice(0, 2000), f.after.slice(0, 2000), ctx.session.profile.id]);
+      n++;
+      if (ctx.t && ctx.shop) {
+        await ctx.t.platform
+          .query(
+            `INSERT INTO platform.lahja (shop_id, shop_lesson_id, source, status, own, words, before, after, by_user, evidence) VALUES ($1, $2, 'seller', 'waiting', true, $3::jsonb, $4, $5, $6, $7::jsonb)`,
+            [ctx.shop.id, num(ins[0].id), JSON.stringify(words), f.before.slice(0, 2000), f.after.slice(0, 2000), ctx.session.profile.name, JSON.stringify({ via: 'guide', line: f.line.slice(0, 600) })],
+          )
+          .catch(() => null);
+      }
+    } catch {
+      /* the guide is saved all the same */
+    }
+  }
+  return n;
 }

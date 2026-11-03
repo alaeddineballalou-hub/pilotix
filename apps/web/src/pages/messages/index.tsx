@@ -507,16 +507,28 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'de
             <small>{t('messages.settings.enabledHint')}</small>
           </span>
         </label>
+        <div className="dl-vers" role="radiogroup" aria-label={t('messages.settings.version')}>
+          {(['001', 'full'] as const).map((v) => (
+            <label key={v} className={`dl-ver ${f.version === v ? 'on' : ''}`}>
+              <input type="radio" name="dl-version" checked={f.version === v} onChange={() => set('version', v)} />
+              <Icon name={v === '001' ? 'phone' : 'list'} />
+              <b>{t(`messages.settings.v.${v}`)}</b>
+              <small>{t(`messages.settings.v.${v}Hint`, { name: f.name })}</small>
+            </label>
+          ))}
+        </div>
         <div className="grid2">
           <Field label={t('messages.settings.name')} hint={t('messages.settings.nameHint')}>
             <input value={f.name} maxLength={40} onChange={(e) => set('name', e.target.value)} />
           </Field>
-          <Field label={t('messages.settings.ordersTo')}>
-            <select value={f.ordersTo} onChange={(e) => set('ordersTo', e.target.value as typeof f.ordersTo)}>
-              <option value="new">{t('messages.settings.ordersNew')}</option>
-              <option value="confirmed">{t('messages.settings.ordersConfirmed')}</option>
-            </select>
-          </Field>
+          {f.version === 'full' && (
+            <Field label={t('messages.settings.ordersTo')}>
+              <select value={f.ordersTo} onChange={(e) => set('ordersTo', e.target.value as typeof f.ordersTo)}>
+                <option value="new">{t('messages.settings.ordersNew')}</option>
+                <option value="confirmed">{t('messages.settings.ordersConfirmed')}</option>
+              </select>
+            </Field>
+          )}
           <Field label={t('messages.settings.tone')} wide>
             <input value={f.tone} maxLength={400} onChange={(e) => set('tone', e.target.value)} />
           </Field>

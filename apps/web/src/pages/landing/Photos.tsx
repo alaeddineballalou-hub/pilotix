@@ -10,7 +10,10 @@ import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { fetchImage, ImageInfo, make320, measure, optimize, Preset, PRESETS } from './webp';
 
-export type Img = { id: number | null; url: string | null; w: number; h: number; thumb: string; src: string; info?: ImageInfo | null };
+/** v: the variant (colour) the photo shows: picking that colour on the page brings it to the top */
+export type Img = { id: number | null; url: string | null; w: number; h: number; thumb: string; src: string; info?: ImageInfo | null; v?: number | null };
+/** the product's own photos (Produits & stock): its main photo and each variant's */
+export type ProductPhotos = { photo: string | null; variants: { id: number; title: string; photo: string | null }[] };
 
 const PRESET_KEYS = Object.keys(PRESETS) as Preset[];
 const presetOf = (): Preset => {
@@ -24,7 +27,7 @@ const pct = (x: number) => `${Math.round(x * 1000) / 10}`;
 /** a picture used from its address that the compressor would make lighter (a drawing in SVG is already light) */
 const heavyUrl = (x: Img) => !x.id && !!x.url && !/^data:image\/svg|\.svg(\?|#|$)/i.test(x.url);
 
-export function Photos({ images, onChange, onBusy }: { images: Img[]; onChange: (f: (a: Img[]) => Img[]) => void; onBusy: (n: number) => void }) {
+export function Photos({ images, onChange, onBusy, product }: { images: Img[]; onChange: (f: (a: Img[]) => Img[]) => void; onBusy: (n: number) => void; product?: ProductPhotos | null }) {
   const { t } = useTranslation();
   const [preset, setPreset] = useState<Preset>(presetOf);
   const [work, setWork] = useState<{ i: number; n: number; step: string } | null>(null);
@@ -120,7 +123,7 @@ export function Photos({ images, onChange, onBusy }: { images: Img[]; onChange: 
           return;
         }
         const row = await compress(blob, k + 1, todo.length);
-        if (row) onChange((a) => a.map((x) => (x.url === u && !x.id ? row : x)));
+        if (row) onChange((a) => a.map((x) => (x.url === u && !x.id ? { ...row, v: x.v ?? null } : x)));
       }),
     );
   };
@@ -166,6 +169,30 @@ export function Photos({ images, onChange, onBusy }: { images: Img[]; onChange: 
       return a;
     });
 
+  // « Reprendre les photos du produit »: its main photo (first when the page has none) and each variant's, those missing
+  const okUrl = (u: string | null) => !!u && /^(https?:|data:image\/)/.test(u);
+  const missing = (() => {
+    if (!product) return [] as { url: string; v: number | null }[];
+    const out: { url: string; v: number | null }[] = [];
+    const has = (u: string) => images.some((x) => x.url === u) || out.some((x) => x.url === u);
+    if (okUrl(product.photo) && !has(product.photo!)) out.push({ url: product.photo!, v: null });
+    for (const v of product.variants) if (okUrl(v.photo) && !has(v.photo!) && !images.some((x) => x.v === v.id)) out.push({ url: v.photo!, v: v.id });
+    return out;
+  })();
+  const takeProduct = async () => {
+    const room = 12 - images.length;
+    const add: Img[] = [];
+    for (const m of missing.slice(0, room)) {
+      const size = await measure(m.url).catch(() => ({ w: 960, h: 1200 }));
+      add.push({ id: null, url: m.url, w: size.w, h: size.h, thumb: m.url, src: m.url, v: m.v });
+    }
+    if (!add.length) return;
+    // the product's main photo goes first when it was not on the page
+    onChange((a) => (add[0].v === null && okUrl(product?.photo ?? null) && add[0].url === product?.photo ? [add[0], ...a, ...add.slice(1)] : [...a, ...add]));
+    toast(t('landing.ph.taken', { count: add.length }), 'ok');
+  };
+  const vars = product?.variants ?? [];
+
   const heavy = images.filter(heavyUrl).length;
   const open = cmp !== null ? images[cmp] : null;
   return (
@@ -209,6 +236,16 @@ export function Photos({ images, onChange, onBusy }: { images: Img[]; onChange: 
                 <Icon name="sparkles" /> {t('landing.ph.optimize')}
               </button>
             ) : null}
+            {vars.length > 0 && (
+              <select className="lp-img-v" value={im.v ?? ''} aria-label={t('landing.ph.colour')} title={t('landing.ph.colourHelp')} onChange={(e) => onChange((a) => a.map((x, k) => (k === i ? { ...x, v: e.target.value ? Number(e.target.value) : null } : x)))}>
+                <option value="">{t('landing.ph.colourNone')}</option>
+                {vars.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.title}
+                  </option>
+                ))}
+              </select>
+            )}
             <div className="lp-img-a">
               <button type="button" className="icon-btn" disabled={i === 0} onClick={() => move(i, -1)} aria-label={t('landing.ed.before')}>
                 <Icon name="chevl" />
@@ -232,6 +269,14 @@ export function Photos({ images, onChange, onBusy }: { images: Img[]; onChange: 
         )}
       </div>
       <p className="pd-note">{t('landing.ph.hint')}</p>
+      {product && (
+        <div className="lp-take">
+          <button type="button" className="btn small" disabled={!!work || !missing.length || images.length >= 12} onClick={takeProduct}>
+            <Icon name="image" /> {t('landing.ph.take')}
+          </button>
+          <small className="muted">{missing.length ? t('landing.ph.takeHelp', { count: missing.length }) : t('landing.ph.takeNone')}</small>
+        </div>
+      )}
       <div className="lp-url">
         <input className="ltr" placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)} />
         <button type="button" className="btn small" disabled={!!work} onClick={addUrl}>

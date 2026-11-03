@@ -379,7 +379,16 @@
     "tWeight": "Poids",
     "tSame": "Identique à",
     "lossless": "100 % (sans perte)",
-    "ssimHelp": "« Identique à » : similarité mesurée (MS-SSIM, plusieurs échelles comme l’œil) entre la photo compressée et l’originale à la même taille. Au-dessus de 99 %, l’œil ne voit pas de différence."
+    "ssimHelp": "« Identique à » : similarité mesurée (MS-SSIM, plusieurs échelles comme l’œil) entre la photo compressée et l’originale à la même taille. Au-dessus de 99 %, l’œil ne voit pas de différence.",
+    "take": "Reprendre les photos du produit",
+    "takeHelp_one": "{{count}} photo du produit n’est pas encore sur la page",
+    "takeHelp_other": "{{count}} photos du produit ne sont pas encore sur la page",
+    "takeNone": "Toutes les photos du produit sont déjà sur la page",
+    "taken_one": "{{count}} photo ajoutée",
+    "taken_other": "{{count}} photos ajoutées",
+    "colour": "Couleur de la photo",
+    "colourHelp": "Quand le client choisit cette couleur, cette photo passe en grand",
+    "colourNone": "— Toutes —"
   },
   "domain": {
     "title": "Votre propre domaine",

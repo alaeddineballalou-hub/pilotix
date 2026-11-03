@@ -1426,9 +1426,10 @@
       },
       "lessons": {
         "title": "Lessons",
-        "help": "Two kinds of lessons. Sales: how Dellal sells, written here only. Darija: how it speaks; shops make them (and Dellal learns some from their customers) for themselves, you decide if every shop keeps them.",
+        "help": "Three kinds of lessons. Sales: how Dellal sells, written here only. Darija: how it speaks; shops make them (and Dellal learns some from their customers) for themselves, you decide if every shop keeps them. Vocabulary: the Darija words it can use.",
         "sales": "Sales",
-        "darija": "Darija"
+        "darija": "Darija",
+        "vocab": "Vocabulary"
       },
       "darija": {
         "help": "A shop's Darija lesson works at once in that shop. Accepted here, it works in every shop, and no shop can turn it off.",
@@ -1533,6 +1534,73 @@
         "restored": "Done: v{{v}} is in service",
         "lessonsShort_one": "{{n}} lesson",
         "lessonsShort_other": "{{n}} lessons"
+      },
+      "vocab": {
+        "help": "The Darija words Dellal and CM AI may use, for every shop. For each reply they read only the words that touch the conversation (even spelled another way: wesh = wach, chhal = ch7al) and the prices said in centimes. An accepted Darija lesson corrects the word here.",
+        "count_one": "{{n}} word",
+        "count_other": "{{n}} words",
+        "learned_one": "{{n}} learned from corrections",
+        "learned_other": "{{n}} learned from corrections",
+        "coach_one": "{{n}} written by Pilotix",
+        "coach_other": "{{n}} written by Pilotix",
+        "listTitle": "The words",
+        "search": "Search a word or a meaning",
+        "topic": "Topic",
+        "allTopics": "All topics",
+        "noTopic": "No topic",
+        "source": "Where the word comes from",
+        "src": {
+          "all": "All",
+          "book": "From the book",
+          "learned": "Learned",
+          "coach": "Written here"
+        },
+        "add": "Add a word",
+        "emptySearch": "No word matches.",
+        "empty": "The book is empty. Put Pilotix’s book in with one click to start.",
+        "more": "Show more ({{shown}} of {{total}})",
+        "moreSearch": "{{shown}} of {{total}} words shown: search a word to find the others.",
+        "removed": "Word removed.",
+        "not": "not",
+        "changed": "Corrected",
+        "edit": "Edit",
+        "removeAsk": "Remove this word for every shop?",
+        "saved": "Word saved. Every shop already uses it.",
+        "col": {
+          "ar": "In Arabic letters",
+          "lat": "In Latin letters",
+          "meaning": "Meaning",
+          "topic": "Topic",
+          "avoid": "Never say"
+        },
+        "save": "Save",
+        "cancel": "Cancel",
+        "imported": "{{added}} words added, {{skipped}} already there, {{unsure}} unsure lines left out.",
+        "tooBig": "File too big (800 KB at most).",
+        "importTitle": "Put in the book",
+        "importHelp": "Choose your vocabulary book (.md or .txt) or paste it. Each table row becomes a word, and the heading above it becomes its topic. Rows marked ⚠️ are left out.",
+        "file": "Choose a file",
+        "pastePh": "Or paste the book here (its tables)",
+        "replace": "Replace the book's words (learned words and words written here stay)",
+        "import": "Put in the book",
+        "tryTitle": "Try a customer's message",
+        "tryPh": "E.g. ch7al la poussette?",
+        "try": "See the words",
+        "tryHelp_one": "For this message, Dellal reads {{n}} word:",
+        "tryHelp_other": "For this message, Dellal reads {{n}} words:",
+        "tryNone": "No word of the book touches this message.",
+        "download": "The full book",
+        "downloadHelp": "Download the whole Algiers Darija book (37 chapters: the words, the grammar, the regions, the dictionaries)",
+        "official": {
+          "title": "Pilotix’s Algiers Darija book",
+          "text": "{{n}} words in {{topics}} topics, in Arabic and Latin letters, with their meaning. Words still to check (⚠️) and words of other regions stay out.",
+          "put": "Put these words in",
+          "or": "Or another book:"
+        },
+        "tryExamples": "Try:",
+        "tryPrices": "Prices said in centimes, read for Dellal:",
+        "tryGuess": "« alf » left out: to check",
+        "tryCost": "Adds about {{tokens}} tokens to the reply · found in {{ms}} ms"
       }
     },
     "voice": {

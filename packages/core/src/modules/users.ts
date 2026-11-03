@@ -131,6 +131,15 @@ const NewUser = z.object({
     .optional(),
 });
 
+/**
+ * A seller never adds another seller: each seller opens his own Pilotix account, with his boutiques. The « Vendeur »
+ * role is never given to anyone new; the people who already have it keep it (and it can be taken away).
+ */
+function noNewSeller(roles: readonly string[] | undefined, had: readonly string[] = []) {
+  if (roles?.includes('vendeur') && !had.includes('vendeur'))
+    throw bad('Un vendeur ne peut pas ajouter un autre vendeur : chaque vendeur ouvre son propre compte Pilotix, avec ses boutiques');
+}
+
 /** The roles of a partner's people: an agency's chief, supervisors and agents; a marketer's chief and media buyers. */
 export const PARTNER_ROLES: Record<'agency' | 'marketer', string[]> = { agency: ['admin', 'agent_manager', 'confirmation', 'suivi'], marketer: ['admin', 'marketer'] };
 /** In a partner's space: only its own roles, and the sellers the person works for (checked against its contracts). */
@@ -357,6 +366,7 @@ export const usersProcs = {
   'users.create': proc(null, NewUser, async (ctx, b) => {
     needUserManager(ctx);
     needGrantable(ctx, b);
+    noNewSeller(b.roles);
     await needSeat(ctx);
     if (b.roles.includes('livreur')) await needDriverSeat(ctx);
     // an agency's person: every seller unless the chief chose some
@@ -384,6 +394,7 @@ export const usersProcs = {
     if (b.id === ctx.session.profile.id && (b.active === false || (b.roles && !b.roles.includes('admin')))) throw forbidden('Vous ne pouvez pas retirer votre propre accès administrateur');
     // an account closed earlier and opened again takes a place of the plan; so does a new livreur
     const before = (await ctx.db.query('SELECT active, roles, archived_at FROM profiles WHERE id = $1', [b.id]))[0];
+    noNewSeller(b.roles, (before?.roles as string[] | undefined) ?? []);
     if (before?.archived_at && b.active === true) throw bad('Ce compte est archivé : sortez-le d’abord des archives (Management › Archives)');
     if (b.active === true && !before?.active) await needSeat(ctx);
     // a new phone: required form, nobody else's (empty: unchanged)

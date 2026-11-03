@@ -20,6 +20,7 @@
   "spy": "AI Spy",
   "caisse": "Cash",
   "livraison": "Delivery companies",
+  "partenaires": "Partners",
   "utilisateurs": "Users",
   "agences": "Agencies",
   "management": "Management",
@@ -37,7 +38,11 @@
     "messages": "Message AI agent",
     "cm": "CM AI agent",
     "notify": "Delivery AI agent",
-    "reclamation": "Claims"
+    "reclamation": "Claims",
+    "livraison": "Delivery companies",
+    "livreurs": "Delivery drivers",
+    "agences": "Confirmation agencies",
+    "marketers": "Marketers"
   },
   "profil": "My profile",
   "marketer": "Marketer",

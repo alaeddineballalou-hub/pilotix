@@ -631,6 +631,51 @@ function wordsChanged(before: string, after: string) {
   return out.slice(0, 6);
 }
 
+// ---------------------------------------------------------------- the vocabulary book (an example)
+const VOCAB_DEMO: [string, string, string, string, string?, ('learned' | 'coach')?][] = [
+  ['كروسة', 'karrossa', 'poussette', 'Bébé et enfants', 'عربة أطفال', 'learned'],
+  ['الكورسي', 'korsi', 'chaise', 'La maison'],
+  ['الطابلة', 'tabla', 'table', 'La maison'],
+  ['الفراش', 'lefrach', 'lit, matelas', 'La maison'],
+  ['غالية', 'ghalya', 'chère (trop chère)', 'Acheter en ligne'],
+  ['رخيص', 'rkhis', 'pas cher', 'Acheter en ligne'],
+  ['شحال', 'ch7al', 'combien', 'Acheter en ligne'],
+  ['كاين', 'kayen', 'il y en a, disponible', 'Acheter en ligne'],
+  ['مليون', 'mlyoun', '10 000 DA (un million de centimes)', 'Acheter en ligne'],
+  ['نخمم', 'nkhamem', 'je réfléchis', 'Acheter en ligne'],
+  ['نشاور راجلي', 'nchawer rajli', 'je demande à mon mari', 'La famille'],
+  ['خويا', 'khouya', 'mon frère (à un client)', 'La famille', '', 'coach'],
+  ['ختي', 'khti', 'ma sœur (à une cliente)', 'La famille'],
+  ['', 'dispo', 'disponible', 'Les abréviations'],
+  ['', 'px', 'prix', 'Les abréviations'],
+  ['', 'mrc', 'merci', 'Les abréviations'],
+];
+const vocabDemoRows = () =>
+  VOCAB_DEMO.map(([ar, lat, meaning, topic, avoid, source], i) => ({ id: i + 1, ar, lat, meaning, topic, avoid: avoid ?? '', source: source ?? 'book', lahjaId: source === 'learned' ? 41 : null, by: 'Pilotix', updatedAt: '2026-11-03T10:00:00.000Z' }));
+function vocabList(i: { q?: string; topic?: string; source?: string; limit?: number }) {
+  const all = vocabDemoRows();
+  const q = (i.q ?? '').toLowerCase();
+  const rows = all.filter((w) => (!q || `${w.ar} ${w.lat} ${w.meaning} ${w.avoid}`.toLowerCase().includes(q)) && (i.topic === undefined || w.topic === i.topic) && (!i.source || w.source === i.source));
+  const topics = [...new Set(all.map((w) => w.topic))].map((topic) => ({ topic, n: all.filter((w) => w.topic === topic).length }));
+  const k = (s: string) => all.filter((w) => w.source === s).length;
+  return { rows: rows.slice(0, i.limit ?? 100), total: rows.length, counts: { total: all.length, book: k('book'), learned: k('learned'), coach: k('coach'), topics } };
+}
+// the preview reads a few prices said in centimes, as the server does (modules/vocab.ts › readCentimes)
+const DEMO_PRICES: [RegExp, string, number, boolean][] = [
+  [/mlyoun w nos|مليون ?و ?نص/i, 'mlyoun w nos', 15000, false],
+  [/nos mlyoun|نص مليون/i, 'nos mlyoun', 5000, false],
+  [/mlyoun w mitin/i, 'mlyoun w mitin', 12000, false],
+  [/mitin w khamsin/i, 'mitin w khamsin', 2500, true],
+];
+function vocabTry(text: string) {
+  const said = text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((x) => x.length >= 2);
+  const plain = (y: string) => y.toLowerCase().replace(/^ال/, '');
+  const words = vocabDemoRows().filter((w) => said.some((x) => [w.ar, w.lat, ...w.meaning.split(/[\s,()]+/)].some((y) => y && (y.toLowerCase() === x || (y.length > 2 && plain(y) === plain(x))))));
+  const hit = DEMO_PRICES.find(([re]) => re.test(text));
+  const prices = hit ? [{ said: hit[1], da: hit[2], guess: hit[3], dinars: false }] : [];
+  return { words, prices, block: '', ms: 1, tokens: words.length * 14 + prices.length * 20 + (words.length || prices.length ? 30 : 0) };
+}
+
 /** the example answer of one control-room call (the Pilot AI page's reads) */
 export function demoAnswer(name: string, input: any): unknown {
   switch (name) {
@@ -642,6 +687,10 @@ export function demoAnswer(name: string, input: any): unknown {
       return { ok: true, id: ++added, topic: input?.topic, text: input?.text };
     case 'p.lahja.state':
       return lahjaState();
+    case 'p.vocab.list':
+      return vocabList(input ?? {});
+    case 'p.vocab.try':
+      return vocabTry(String(input?.text ?? ''));
     case 'p.darija.book':
       return darijaBook();
     case 'p.pilot.voice':

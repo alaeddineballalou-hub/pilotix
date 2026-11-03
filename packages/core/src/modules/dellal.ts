@@ -1,8 +1,10 @@
 // Dellal (دلّال): the AI sales agent. It answers customers on WhatsApp, Messenger, Instagram and TikTok,
 // gives prices, variants, stock and delivery fees from Pilotix itself, takes the order (→ Confirmation) and hands the
-// conversation to a person when it should. The same rules run on the server (Claude through ctx.server.dellal) and in
+// conversation to a person when it should. Two versions: « Version 001 » (the default) gets the customer's name, number,
+// wilaya and product with a note of what he wants, so the team calls him, and keeps that order up to date when he changes
+// something; « Commande complète » takes the whole order in the chat. The same rules run on the server (Claude through ctx.server.dellal) and in
 // the browser preview (a small rule-based "demo brain" with the same tools, so the demo shows the whole flow).
-import { COMMUNES, normalizePhone, SalesChannel, WILAYAS } from '@pilotix/shared';
+import { COMMUNES, CONF_TODO, normalizePhone, SalesChannel, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { AppError, Ctx, notFound, proc } from '../rpc';
@@ -11,23 +13,31 @@ import { getRaw, setRaw } from './admin';
 import { checkDarija, DARIJA_FIXER_SYSTEM, darijaRewritePrompt, DarijaIssue, fixDarija, parseAvoid } from './darija';
 import { darijaGuide } from './darijabook';
 import { markReply, noticeForConversation, ordersForDellal, sendInPreview } from './notify';
-import { createOrder } from './orders';
+import { addEvent, createOrder, customerFee, updateOrder } from './orders';
 import { anonymize, bookFor, BookRef, pickModel } from './pilotlearn';
 import { asWords, checkLahjaWords, LAHJA_NO_CHANGE, LAHJA_PERSONAL, lahjaAvoid, lahjaBlocks, lahjaDiff, lahjaErr, lahjaFor, LahjaWord } from './lahja';
 import { pilotConfig, pilotToday } from '../platform/pilotai';
 import { guideText, HAS_GUIDE, readGuide, toFill } from './guide';
+import { vocabBlock, vocabFor } from './vocab';
 
 // ---------------------------------------------------------------- settings and secrets
 export const DELLAL_CHANNELS = ['whatsapp', 'messenger', 'instagram', 'tiktok', 'test'] as const;
 export type DellalChannel = (typeof DELLAL_CHANNELS)[number];
 export const DELLAL_MODELS = ['claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-opus-5-5'] as const;
+/** How Dellal sells: '001' the number first (the team calls; the order follows the customer's changes), 'full' the whole
+ *  order in the chat (commune, home or bureau, recap, maybe straight to the depot). */
+export const DELLAL_VERSIONS = ['001', 'full'] as const;
+export type DellalVersion = (typeof DELLAL_VERSIONS)[number];
 
 export interface DellalSettings {
   enabled: boolean;
+  /** Version 001 (the number first) or the whole order in the chat */
+  version: DellalVersion;
   name: string;
   tone: string;
   languages: string;
-  /** 'new' → Confirmation › Nouvelles (an agent still calls), 'confirmed' → straight to Dépôt */
+  /** 'new' → Confirmation › Nouvelles (an agent still calls), 'confirmed' → straight to Dépôt (whole order only: Version 001
+   *  always goes to Nouvelles) */
   ordersTo: 'new' | 'confirmed';
   model: (typeof DELLAL_MODELS)[number];
   /** may Dellal give a discount (never above the product's max discount) */
@@ -53,6 +63,7 @@ export interface DellalSettings {
 
 export const DEFAULT_DELLAL: DellalSettings = {
   enabled: false,
+  version: '001',
   name: 'Dellal',
   tone: 'Chaleureux et court, tutoie le client, un emoji de temps en temps.',
   languages: 'Darija algérienne, arabe, français (répond dans la langue du client)',
@@ -468,11 +479,200 @@ export const DELLAL_TOOLS = [
   },
 ] as const;
 
+const ITEMS_SCHEMA = {
+  type: 'array',
+  items: {
+    type: 'object',
+    properties: { product_id: { type: 'integer' }, variant_id: { type: 'integer' }, qty: { type: 'integer', description: 'une quantité égale à un pack applique le prix du pack' } },
+    required: ['product_id', 'qty'],
+  },
+} as const;
+
+/** Version 001: the order the team will call about, as soon as the name, the number, the wilaya and the product are known. */
+const CREATE_ORDER_001 = {
+  name: 'create_order',
+  description:
+    'Version 001 : enregistre la commande pour qu’un conseiller appelle le client et confirme, dès que tu as son prénom (ou nom), son numéro, sa wilaya et le produit (avec la variante s’il y en a plusieurs). Pas besoin de commune, d’adresse, de domicile ou bureau, ni de récapitulatif. Une seule commande par conversation : pour un changement ou un produit en plus, utilise update_order.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      customer_name: { type: 'string' },
+      phone: { type: 'string' },
+      wilaya: { type: 'string', description: 'nom ou numéro de la wilaya' },
+      commune: { type: 'string', description: 'seulement si le client l’a dite' },
+      items: ITEMS_SCHEMA,
+      note: { type: 'string', description: 'ce que le client veut, avec ses mots : son besoin, une préférence (couleur, créneau, date), une question pour le conseiller' },
+    },
+    required: ['customer_name', 'phone', 'wilaya', 'items'],
+  },
+} as const;
+
+/** Version 001: the customer changed something; the same order changes with him (until the team confirms it). */
+const UPDATE_ORDER = {
+  name: 'update_order',
+  description:
+    'Change la commande déjà enregistrée dans cette conversation quand le client change quelque chose : prénom, numéro, wilaya (et commune), produits (donne la liste complète), ou ce qu’il veut (donne la note complète, à jour). Mets seulement ce qui change. Si l’équipe a déjà confirmé la commande, l’outil le dit : passe alors la main (handoff) avec le changement demandé.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      customer_name: { type: 'string' },
+      phone: { type: 'string' },
+      wilaya: { type: 'string', description: 'nom ou numéro de la wilaya' },
+      commune: { type: 'string' },
+      items: ITEMS_SCHEMA,
+      note: { type: 'string', description: 'la note complète, à jour' },
+    },
+  },
+} as const;
+
+/** The tools of the shop's version (the least needed last: a page that takes fewer tools leaves the end out). */
+export function toolsFor(s: Pick<DellalSettings, 'version'>): readonly { name: string; description: string; input_schema: unknown }[] {
+  if (s.version !== '001') return DELLAL_TOOLS;
+  const by = (n: string) => DELLAL_TOOLS.find((t) => t.name === n)!;
+  return [by('search_products'), by('delivery_fee'), CREATE_ORDER_001, UPDATE_ORDER, by('handoff'), by('product_guide')];
+}
+
+/** Version 001: what Dellal tells the customer once his order is in (the team calls). */
+const V001_NEXT = 'Un conseiller va l’appeler très vite pour confirmer : dis-lui de répondre au téléphone, et répète son numéro chiffre par chiffre.';
+
 interface ToolCtx {
   ctx: Ctx;
   conv: Conversation;
   settings: DellalSettings;
   test: boolean;
+}
+
+type Line = { productId: number; variantId: number | null; qty: number; unitPrice?: number; isUpsell?: boolean };
+
+/**
+ * The customer's products, checked as the depot would: the variant (asked when there are several), the stock, the pack
+ * price; and the most discount these products allow.
+ */
+async function checkItems(db: Db, raw: unknown): Promise<{ items: Line[]; discountCap: number } | { error: string }> {
+  const items: Line[] = (Array.isArray(raw) ? raw : []).map((i: any) => ({
+    productId: Number(i.product_id),
+    variantId: i.variant_id ? Number(i.variant_id) : null,
+    qty: Math.max(1, Math.min(99, Number(i.qty) || 1)),
+    isUpsell: !!i.upsell,
+  }));
+  if (!items.length) return { error: 'Aucun produit dans la commande.' };
+  // never sell what the depot does not have
+  let discountCap = 0;
+  for (const it of items) {
+    const vars = await db.query('SELECT id, title FROM product_variants WHERE product_id = $1 AND active ORDER BY id', [it.productId]);
+    if (!vars.length) return { error: `Produit ${it.productId} introuvable.` };
+    if (!it.variantId) {
+      if (vars.length > 1) return { error: 'Plusieurs variantes : demande au client laquelle (couleur, taille…).' };
+      it.variantId = num(vars[0].id);
+    }
+    const p = (await searchProducts(db, null, 1000)).find((x) => x.product_id === it.productId);
+    const v = p?.variants.find((x) => x.variant_id === it.variantId);
+    if (!p || !v) return { error: 'Variante introuvable ou inactive.' };
+    if (v.available < it.qty) return { error: `Plus assez de stock pour ${p.name} ${v.title} (disponible : ${v.available}). Propose une autre variante.` };
+    // a quantity offer (pack) sets the unit price, otherwise the catalog price applies
+    const pack = p.packs.find((k) => k.qty === it.qty);
+    if (pack) it.unitPrice = Math.round(pack.price / pack.qty);
+    // a customer could talk the AI into any discount: it never goes above the product's maximum (none set = no discount)
+    discountCap += (p.max_discount ?? 0) * it.qty;
+  }
+  return { items, discountCap };
+}
+
+/**
+ * Version 001: the order of this conversation the team has not confirmed yet, which Dellal keeps up to date (in the test
+ * chat, the pretend one it made earlier in the chat).
+ */
+async function openOrder(db: Db, conv: Pick<Conversation, 'id' | 'orderId'>, test: boolean): Promise<{ id: number | null; ref: string } | null> {
+  if (test) {
+    const made = (await db.query(`SELECT 1 FROM conv_messages WHERE conversation_id = $1 AND role = 'tool' AND meta->>'tool' = 'create_order' AND meta->'result'->>'ok' = 'true' LIMIT 1`, [conv.id]))[0];
+    return made ? { id: null, ref: 'TEST' } : null;
+  }
+  if (!conv.orderId) return null;
+  const o = (await db.query('SELECT id, ref, conf_status, follow_status FROM orders WHERE id = $1', [conv.orderId]))[0];
+  return o && (CONF_TODO as string[]).includes(o.conf_status) && !o.follow_status ? { id: num(o.id), ref: o.ref } : null;
+}
+
+/**
+ * Version 001: the customer changed something in the chat (his number, his name, his wilaya, his products, what he wants):
+ * the order the team will call about changes with him, until the team confirms it. Each change goes in the order's
+ * history; the customer's own new choice is not an upsell (nobody from the team sold it).
+ */
+async function updateFromChat(t: ToolCtx, input: any): Promise<any> {
+  const { ctx, conv } = t;
+  const has = (k: string) => input?.[k] !== undefined && input?.[k] !== null && String(input[k]).trim() !== '';
+  const change: { customerName?: string; phone?: string; wilayaId?: number; commune?: string; customerNote?: string; deliveryFee?: number } = {};
+  if (has('customer_name')) {
+    const n = String(input.customer_name).trim().slice(0, 120);
+    if (n.length < 2) return { error: 'Prénom trop court : redemande-le au client.' };
+    change.customerName = n;
+  }
+  if (has('phone')) {
+    const p = normalizePhone(String(input.phone));
+    if (!p) return { error: 'Numéro invalide : demande un numéro algérien (05, 06 ou 07…).' };
+    change.phone = p;
+  }
+  if (has('wilaya') || has('commune')) {
+    const place = (has('wilaya') ? findPlace(String(input.wilaya)) : null) ?? (has('commune') ? findPlace(String(input.commune)) : null);
+    if (!place) return { error: 'Wilaya introuvable : redemande la wilaya.' };
+    change.wilayaId = place.wilayaId;
+    change.commune = String(has('commune') ? input.commune : place.commune ?? '').slice(0, 120);
+  }
+  let lines: Line[] | null = null;
+  if (Array.isArray(input?.items) && input.items.length) {
+    const c = await checkItems(ctx.db, input.items);
+    if ('error' in c) return c;
+    lines = c.items;
+  }
+  if (has('note')) change.customerNote = String(input.note).trim().slice(0, 1000);
+  const fields = [change.customerName && 'prénom', change.phone && 'numéro', change.wilayaId && 'wilaya', lines && 'produits', change.customerNote && 'note'].filter((x): x is string => !!x);
+  if (!fields.length) return { error: 'Rien à changer : redis au client ce que tu as compris et demande ce qu’il veut changer.' };
+
+  const open = await openOrder(ctx.db, conv, t.test);
+  if (!open) {
+    if (t.test || !conv.orderId) return { error: 'Pas encore de commande dans cette conversation : utilise create_order quand tu as le prénom, le numéro, la wilaya et le produit.' };
+    const ref = (await ctx.db.query('SELECT ref FROM orders WHERE id = $1', [conv.orderId]))[0]?.ref ?? '';
+    return { error: `La commande ${ref} est déjà confirmée par l’équipe : ne la change pas toi-même. Dis au client que tu transmets le changement à l’équipe, puis appelle handoff avec le changement demandé.` };
+  }
+  if (t.test || !open.id) return { ok: true, test: true, ref: open.ref, changed: fields, note: 'Mode test : rien n’est enregistré.' };
+
+  const cur = (await ctx.db.query('SELECT id, customer_name, phone, wilaya_id, customer_note, is_stopdesk, has_upsell FROM orders WHERE id = $1', [open.id]))[0];
+  try {
+    // the delivery price follows a new wilaya or new products (the shop's client price grid, as in the order form)
+    if (change.wilayaId || lines) {
+      const its = lines ?? (await ctx.db.query('SELECT product_id, qty FROM order_items WHERE order_id = $1', [open.id])).map((r: any) => ({ productId: num(r.product_id), qty: num(r.qty) }));
+      const q = await customerFee(ctx.db, change.wilayaId ?? numOrNull(cur.wilaya_id), !!cur.is_stopdesk, its.map((l) => ({ productId: l.productId, qty: l.qty })));
+      if (q.fee !== null) change.deliveryFee = q.fee;
+    }
+    const after = await updateOrder(ctx, {
+      id: open.id,
+      ...change,
+      ...(lines ? { items: lines.map(({ productId, variantId, qty, unitPrice }) => ({ productId, variantId, qty, ...(unitPrice ? { unitPrice } : {}) })) } : {}),
+    });
+    // what the customer chose himself is not an upsell, as long as no one from the team added one
+    if (lines && !cur.has_upsell) {
+      await ctx.db.query('UPDATE order_items SET is_upsell = false WHERE order_id = $1', [open.id]);
+      await ctx.db.query(
+        `UPDATE orders SET has_upsell = false, upsell_value = 0, orig_discount = discount,
+           orig_items = (SELECT jsonb_agg(jsonb_build_object('productId', product_id, 'variantId', variant_id, 'qty', qty, 'unitPrice', unit_price) ORDER BY id) FROM order_items WHERE order_id = $1)
+         WHERE id = $1`,
+        [open.id],
+      );
+    }
+    // the order's history says what the customer changed in the chat
+    const was = (a: unknown, b: unknown) => `${String(a ?? '').trim() || '—'} → ${String(b ?? '').trim() || '—'}`;
+    const what: string[] = [];
+    if (change.customerName && change.customerName !== cur.customer_name) what.push(`prénom ${was(cur.customer_name, change.customerName)}`);
+    if (change.phone && change.phone !== cur.phone) what.push(`numéro ${was(cur.phone, change.phone)}`);
+    if (change.wilayaId && change.wilayaId !== numOrNull(cur.wilaya_id)) what.push(`wilaya ${was(WILAYAS[num(cur.wilaya_id) - 1], WILAYAS[change.wilayaId - 1])}`);
+    if (lines) what.push(`produits : ${after.items.map((i) => `${i.qty} × ${i.name}${i.variantTitle ? ` ${i.variantTitle}` : ''}`).join(', ')}`);
+    if (change.customerNote && change.customerNote !== String(cur.customer_note ?? '').trim()) what.push(`note : ${change.customerNote}`);
+    if (what.length) await addEvent(ctx.db, open.id, null, 'note', null, null, `${t.settings.name} (Version 001) : le client a changé ${what.join(' ; ')}`.slice(0, 1000));
+    // a number typed on Messenger / Instagram / TikTok is the conversation's number (WhatsApp keeps the number writing)
+    if (change.phone && conv.channel !== 'whatsapp') await ctx.db.query('UPDATE conversations SET phone = $2, customer_id = (SELECT id FROM customers WHERE phone = $2) WHERE id = $1', [conv.id, change.phone]);
+    return { ok: true, ref: after.ref, total: after.total, delivery_fee: after.deliveryFee, changed: fields, next: 'Confirme le changement au client en une phrase (répète le numéro s’il a changé).' };
+  } catch (e: any) {
+    return { error: e?.message ?? 'Changement refusé' };
+  }
 }
 
 async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
@@ -490,7 +690,17 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
     if (!t.test) await ctx.db.query(`UPDATE conversations SET mode = 'handoff', handoff_reason = $2 WHERE id = $1`, [conv.id, reason]);
     return { ok: true, note: 'Une personne de l’équipe va reprendre. Dis-le au client en une phrase.' };
   }
+  if (name === 'update_order') {
+    if (settings.version !== '001') return { error: 'Outil inconnu : update_order' };
+    return updateFromChat(t, input ?? {});
+  }
   if (name === 'create_order') {
+    const v1 = settings.version === '001';
+    // Version 001: one order per conversation while the team has not confirmed it (a change goes through update_order)
+    if (v1) {
+      const open = await openOrder(ctx.db, conv, t.test);
+      if (open) return { error: `Ce client a déjà la commande ${open.ref}, que le conseiller va confirmer : pour un changement ou un produit en plus, utilise update_order.` };
+    }
     // a chatter cannot fill the shop with orders (for themselves or for other people's numbers)
     if (!t.test) {
       const recent = num((await ctx.db.query(`SELECT count(*)::int AS n FROM orders WHERE conversation_id = $1 AND created_at > $2`, [conv.id, new Date(ctx.now() - 86_400_000).toISOString()]))[0]?.n);
@@ -500,39 +710,16 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
     if (!phone) return { error: 'Numéro invalide : demande un numéro algérien (05, 06 ou 07…).' };
     const place = findPlace(String(input?.wilaya ?? '')) ?? findPlace(String(input?.commune ?? ''));
     if (!place) return { error: 'Wilaya introuvable : redemande la wilaya.' };
-    const items: { productId: number; variantId: number | null; qty: number; unitPrice?: number; isUpsell?: boolean }[] = (Array.isArray(input?.items) ? input.items : []).map((i: any) => ({
-      productId: Number(i.product_id),
-      variantId: i.variant_id ? Number(i.variant_id) : null,
-      qty: Math.max(1, Math.min(99, Number(i.qty) || 1)),
-      isUpsell: !!i.upsell,
-    }));
-    if (!items.length) return { error: 'Aucun produit dans la commande.' };
-    // never sell what the depot does not have
-    let discountCap = 0;
-    for (const it of items) {
-      const vars = await ctx.db.query('SELECT id, title FROM product_variants WHERE product_id = $1 AND active ORDER BY id', [it.productId]);
-      if (!vars.length) return { error: `Produit ${it.productId} introuvable.` };
-      if (!it.variantId) {
-        if (vars.length > 1) return { error: 'Plusieurs variantes : demande au client laquelle (couleur, taille…).' };
-        it.variantId = num(vars[0].id);
-      }
-      const p = (await searchProducts(ctx.db, null, 1000)).find((x) => x.product_id === it.productId);
-      const v = p?.variants.find((x) => x.variant_id === it.variantId);
-      if (!p || !v) return { error: 'Variante introuvable ou inactive.' };
-      if (v.available < it.qty) return { error: `Plus assez de stock pour ${p.name} ${v.title} (disponible : ${v.available}). Propose une autre variante.` };
-      // a quantity offer (pack) sets the unit price, otherwise the catalog price applies
-      const pack = p.packs.find((k) => k.qty === it.qty);
-      if (pack) it.unitPrice = Math.round(pack.price / pack.qty);
-      // a customer could talk the AI into any discount: it never goes above the product's maximum (none set = no discount)
-      discountCap += (p.max_discount ?? 0) * it.qty;
-    }
+    const checked = await checkItems(ctx.db, input?.items);
+    if ('error' in checked) return checked;
+    const { items, discountCap } = checked;
     const discount = settings.allowDiscount ? Math.min(discountCap, Math.max(0, Math.round(Number(input?.discount) || 0))) : 0;
     const name = String(input?.customer_name ?? '').trim().slice(0, 120) || conv.customerName || 'Client';
     if (t.test) {
       const ps = await searchProducts(ctx.db, null, 1000);
       const sub = items.reduce((s: number, i) => s + (i.unitPrice ?? ps.find((p) => p.product_id === i.productId)?.variants.find((v) => v.variant_id === i.variantId)?.price ?? 0) * i.qty, 0);
       const fee = (await clientFee(ctx.db, place.wilayaId, !!input?.stopdesk)) ?? 0;
-      return { ok: true, test: true, ref: 'TEST', total: sub - discount + fee, delivery_fee: fee, note: 'Mode test : aucune vraie commande créée.' };
+      return { ok: true, test: true, ref: 'TEST', total: sub - discount + fee, delivery_fee: fee, ...(v1 ? { next: V001_NEXT } : {}), note: 'Mode test : aucune vraie commande créée.' };
     }
     try {
       const o = await createOrder(ctx, {
@@ -547,8 +734,10 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
         items,
         discount,
         customerNote: input?.note ? String(input.note).slice(0, 1000) : null,
-        internalNote: `Commande prise par ${settings.name} (conversation #${conv.id})`,
-        confirm: settings.ordersTo === 'confirmed',
+        internalNote: v1
+          ? `Version 001 : ${settings.name} a pris le numéro et ce que veut le client (conversation #${conv.id}). À appeler pour confirmer, et compléter la commune, l’adresse, domicile ou bureau.`
+          : `Commande prise par ${settings.name} (conversation #${conv.id})`,
+        confirm: !v1 && settings.ordersTo === 'confirmed',
         isExchange: false,
       }, ctx.db, { conversationId: conv.id, untrusted: conv.channel !== 'whatsapp', guard: 'check' }); // linked from the start: no "we received your order" into this very chat
       await sendInPreview(ctx);
@@ -557,7 +746,7 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
            customer_id = COALESCE(customer_id, (SELECT id FROM customers WHERE phone = $3)) WHERE id = $1`,
         [conv.id, o.id, phone, name],
       );
-      return { ok: true, ref: o.ref, total: o.total, delivery_fee: o.deliveryFee, next: settings.ordersTo === 'new' ? 'Un conseiller va appeler pour confirmer.' : 'La commande part en préparation.' };
+      return { ok: true, ref: o.ref, total: o.total, delivery_fee: o.deliveryFee, next: v1 ? V001_NEXT : settings.ordersTo === 'new' ? 'Un conseiller va appeler pour confirmer.' : 'La commande part en préparation.' };
     } catch (e: any) {
       return { error: e?.message ?? 'Commande refusée' };
     }
@@ -597,8 +786,12 @@ async function systemPrompt(
   // the orders of the WhatsApp number writing, or of this conversation (a number typed on Messenger proves nothing)
   const orders = conv.channel === 'test' ? '' : await ordersForDellal(ctx.db, conv.channel === 'whatsapp' ? conv.phone : null, conv.id);
   const today = new Date(ctx.now()).toISOString().slice(0, 10);
+  // the vocabulary book (Pilot AI › Leçons › Vocabulaire): only its words that touch what this customer wrote
+  const said = (await ctx.db.query(`SELECT body FROM conv_messages WHERE conversation_id = $1 AND role = 'customer' ORDER BY id DESC LIMIT 8`, [conv.id])).map((r: any) => String(r.body ?? ''));
+  // with the prices this customer said in centimes, read for the AI (« mlyoun w nos » = 15 000 DA)
+  const vocab = vocabBlock(await vocabFor(ctx.t?.platform ?? null, said), said);
   const shared = [
-    DELLAL_PLAYBOOK.replace('${ORDER_NEXT}', s.ordersTo === 'new' ? 'après la commande, un conseiller l’appellera aussi pour confirmer.' : 'la commande part directement en préparation.'),
+    playbookFor(s),
     // the Darija book in service (Pilot AI › Tester & leçons › Leçons › Darija; the guide of the code without the platform)
     await darijaGuide(ctx.t?.platform ?? null),
     lahjaBlocks(lahja).shared,
@@ -632,6 +825,7 @@ async function systemPrompt(
     cust ? `Client connu : ${cust.name}, ${cust.orders} commande(s), ${cust.delivered} livrée(s), ${cust.returned} retour(s)${cust.blacklisted ? ', SUR LISTE NOIRE : ne prends pas de commande, passe la main' : ''}.` : '',
     orders,
     followUp ? `Le client ne répond plus depuis un moment : envoie UNE relance courte et aimable, sans insister.` : '',
+    vocab,
   ];
   const blocks = [shared, own, chat].map((b) => b.filter(Boolean).join('\n')).filter(Boolean);
   return { text: blocks.join('\n'), blocks };
@@ -775,6 +969,46 @@ export const DELLAL_PLAYBOOK = `MÉTHODE DE VENTE — marché algérien, paiemen
 - Pack quantité : montre l’économie réelle en DA (« 2 b 24 000, ya3ni 12 000 l wa7da, twaffar 1 800 DA »).
 - Produit lié : relie-le au besoin qu’il t’a dit (« puisque tu sors souvent avec le bébé… »), jamais au hasard.
 - Si le client a un budget serré, ne propose pas d’ajout : finalise.`;
+
+/** Version 001: the order part of the sales method — the number first, the team calls, the order follows the changes. */
+export const V001_ORDER = `5. VERSION 001 — le numéro d’abord : ton premier but
+- Ton premier but : avoir le numéro du client et noter ce qu’il veut, pour qu’un conseiller de l’équipe l’appelle et confirme. Pas de long récapitulatif, et ne demande ni la commune, ni l’adresse, ni domicile ou bureau : le conseiller verra tout ça au téléphone.
+- Il te faut seulement : le prénom (ou le nom), le numéro de téléphone, la wilaya et le produit (avec la couleur ou la taille s’il y en a plusieurs, et la quantité). Demande ce qui manque, une seule chose à la fois ; si le client a déjà tout donné, ne redemande rien.
+- Demande le numéro tôt, dès que le client montre de l’intérêt (prix, couleur, livraison, « kifach ncommandi ») : par exemple « 3tini smitek w numéro ta3ek w wilaya, w l’équipe t3aytlek bach tconfirmi » (en français : « Donne-moi ton prénom, ton numéro et ta wilaya : l’équipe t’appelle pour confirmer »).
+- Note ce que le client veut dans la note de create_order, avec ses mots : son besoin, une préférence (couleur, créneau, date), une question pour le conseiller.
+- Dès que tu as le prénom, le numéro, la wilaya et le produit : appelle create_order tout de suite, sans attendre un « oui » à un récapitulatif. Puis, dans ta réponse : répète le numéro chiffre par chiffre (« 0661 23 45 18 »), dis qu’un conseiller va l’appeler très vite pour confirmer et qu’il doit répondre.
+- Ensuite, continue à répondre à ses questions normalement.
+- S’il change quelque chose (numéro, prénom, wilaya, produit, couleur, quantité, ce qu’il veut) : appelle update_order tout de suite avec seulement ce qui change (pour les produits, la liste complète ; pour la note, la note complète), puis confirme en une phrase (« C bon, bdelt numéro : 0770 … »). Ne crée jamais une deuxième commande pour un changement.
+- Ne promets pas l’heure de l’appel : « très vite » suffit, sauf si les informations de la boutique donnent un délai.
+- Client sur liste noire ou qui a beaucoup de retours : ne prends pas la commande, passe la main.
+
+6. Pas de vente en plus dans le chat
+- Ne propose ni pack ni produit en plus : le conseiller le fera au téléphone. Si le client demande lui-même un autre produit, ajoute-le (create_order, ou update_order si sa commande existe déjà).`;
+
+/** Version 001's other small changes to the method: every step leads to the number, not to a recap. */
+const V001_SWAPS: [string, string][] = [
+  ['(couleur ? wilaya ? domicile ou bureau ? je te le réserve ?)', '(couleur ? ton numéro ? ta wilaya ?)'],
+  ['Propose de réserver maintenant puisqu’il ne paie qu’à la réception.', 'Propose qu’un conseiller l’appelle pour répondre à ses questions : il ne paie rien avant de recevoir.'],
+  ['arrête de découvrir, passe à la commande.', 'arrête de découvrir, demande son prénom, son numéro et sa wilaya.'],
+  ['- Pressé (« ch7al w win ») : prix, livraison, récapitulatif. Pas de découverte longue.', '- Pressé (« ch7al w win ») : prix, livraison, puis son prénom, son numéro et sa wilaya. Pas de découverte longue.'],
+  ['(la couleur → la wilaya → domicile ou bureau → le récapitulatif)', '(la couleur → le prénom et le numéro → la wilaya)'],
+  ['- Quand tout est choisi, propose de réserver : « nréservilek ? » puis le récapitulatif.', '- Quand le produit est choisi, demande le numéro : « 3tini smitek w numéro ta3ek, w l’équipe t3aytlek bach tconfirmi ».'],
+  ['« grise wela bleue ? », « domicile wela bureau ? »', '« grise wela bleue ? », « wa7da wela zouj ? »'],
+];
+
+/** The sales method of the shop's version: Version 001 has its own order part, and no basket raise in the chat. */
+export function playbookFor(s: Pick<DellalSettings, 'version' | 'ordersTo'>): string {
+  if (s.version !== '001')
+    return DELLAL_PLAYBOOK.replace('${ORDER_NEXT}', s.ordersTo === 'new' ? 'après la commande, un conseiller l’appellera aussi pour confirmer.' : 'la commande part directement en préparation.');
+  let p = DELLAL_PLAYBOOK;
+  const a = p.indexOf('5. Prendre la commande');
+  const b = p.indexOf('7. Après la commande');
+  if (a >= 0 && b > a) p = `${p.slice(0, a)}${V001_ORDER}\n\n${p.slice(b)}`;
+  const c = p.indexOf('13. Augmenter le panier');
+  if (c >= 0) p = p.slice(0, c).trimEnd();
+  for (const [from, to] of V001_SWAPS) p = p.replace(from, to);
+  return p;
+}
 
 type AiMsg = { role: 'user' | 'assistant'; content: any };
 
@@ -930,9 +1164,9 @@ export async function runAgent(
     return out;
   };
   const complete = (req: AiRequest): Promise<AiResponse> =>
-    inPage ? (inPage({ ...req, runTool }) as Promise<AiResponse>) : useAi ? (ctx.server!.dellal!('complete', { ...req, feature: opts.lab ? 'pilot' : 'dellal', pilot: pilotAi }, ctx) as Promise<AiResponse>) : demoBrain(ctx, req);
+    inPage ? (inPage({ ...req, runTool }) as Promise<AiResponse>) : useAi ? (ctx.server!.dellal!('complete', { ...req, feature: opts.lab ? 'pilot' : 'dellal', pilot: pilotAi }, ctx) as Promise<AiResponse>) : demoBrain(ctx, req, convId);
   for (let round = 0; round < 6; round++) {
-    const res = await complete({ model, system, systemBlocks: prompt.blocks, messages, tools: DELLAL_TOOLS, max_tokens: 1024 });
+    const res = await complete({ model, system, systemBlocks: prompt.blocks, messages, tools: toolsFor(s), max_tokens: 1024 });
     usage = { input_tokens: usage.input_tokens + num(res.usage?.input_tokens), output_tokens: usage.output_tokens + num(res.usage?.output_tokens) };
     const uses = res.content.filter((b): b is Extract<AiResponse['content'][number], { type: 'tool_use' }> => b.type === 'tool_use');
     for (const b of res.content) if (b.type === 'text' && b.text.trim()) texts.push(b.text.trim());
@@ -1052,6 +1286,7 @@ function toolLine(name: string, input: any, out: any): string {
   if (name === 'search_products') return `search_products "${input?.query ?? ''}" → ${(out?.products ?? []).length} produit(s)`;
   if (name === 'delivery_fee') return `delivery_fee ${out?.wilaya ?? ''} → domicile ${out?.home_delivery ?? '—'} DA · bureau ${out?.stopdesk ?? '—'} DA`;
   if (name === 'create_order') return `create_order → ${out?.ref} · ${out?.total} DA`;
+  if (name === 'update_order') return `update_order → ${out?.ref ?? ''} · ${(out?.changed ?? []).join(', ')} changé${(out?.changed ?? []).length > 1 ? 's' : ''}`;
   if (name === 'handoff') return `handoff → ${input?.reason ?? ''}`;
   if (name === 'product_guide') return `product_guide #${input?.product_id ?? '?'} → guide de vente lu`;
   return name;
@@ -1086,12 +1321,17 @@ function guideAnswer(g: { faq: { q: string; a: string }[]; doubts: { q: string; 
   return best?.a ?? null;
 }
 
+/** A phone number as it is read out, kept on one line: 0661 23 45 18. */
+const spaced = (p: string) => p.replace(/^(\d{4})(\d{2})(\d{2})(\d{2})$/, '$1\u00a0$2\u00a0$3\u00a0$4');
+
 /** A small rule-based seller with the same tools, for the demo and for testing without an AI key. */
-async function demoBrain(ctx: Ctx, req: AiRequest): Promise<AiResponse> {
+async function demoBrain(ctx: Ctx, req: AiRequest, convId?: number): Promise<AiResponse> {
   const msgs = req.messages;
   const last = msgs[msgs.length - 1];
   const say = (text: string): AiResponse => ({ content: [{ type: 'text', text }], stop_reason: 'end_turn', demo: true });
   const use = (name: string, input: any): AiResponse => ({ content: [{ type: 'tool_use', id: `demo_${Date.now()}_${name}`, name, input }], stop_reason: 'tool_use', demo: true });
+  // Version 001: the number first, the team calls (the demo follows the same version as the real seller)
+  const v1 = (await dellalSettings(ctx.db)).version === '001';
 
   // after a tool: turn its result into words
   if (Array.isArray(last.content) && last.content[0]?.type === 'tool_result') {
@@ -1109,10 +1349,18 @@ async function demoBrain(ctx: Ctx, req: AiRequest): Promise<AiResponse> {
       if (g?.guide.brief) return say(`${g.guide.brief} Tu es de quelle wilaya ? Je te donne le prix de la livraison.`);
       return say('Je vérifie avec l’équipe et je te réponds tout de suite 🙏');
     }
+    if (tool.name === 'create_order' && v1) {
+      const who = String(tool.input?.customer_name ?? '').split(/\s+/)[0];
+      return say(`C’est noté ✅ ${who ? `${who}, ` : ''}je garde ton numéro ${spaced(normalizePhone(String(tool.input?.phone ?? '')) ?? String(tool.input?.phone ?? ''))}. Un conseiller va t’appeler très vite pour confirmer, réponds-lui 🙏`);
+    }
     if (tool.name === 'create_order') return say(`C'est noté ✅ Commande ${out.ref} : total ${out.total} DA (livraison ${out.delivery_fee} DA comprise), paiement à la livraison. ${out.next ?? out.note ?? ''}`.trim());
+    if (tool.name === 'update_order') {
+      const ph = tool.input?.phone ? normalizePhone(String(tool.input.phone)) : null;
+      return say(`C’est changé ✅${ph ? ` Nouveau numéro ${spaced(ph)}.` : ''} Le conseiller aura la bonne version quand il t’appellera.`);
+    }
     if (tool.name === 'delivery_fee') {
       if (out.home_delivery === null && out.stopdesk === null) return say(`Pour ${out.wilaya}, je vérifie avec l’équipe.`);
-      return say(`Livraison à ${out.commune ? `${out.commune} (${out.wilaya})` : out.wilaya} : ${out.home_delivery ?? '—'} DA à domicile${out.stopdesk ? `, ${out.stopdesk} DA au bureau` : ''}. Paiement à la livraison. Pour réserver, envoie-moi ton nom, ton numéro et ta commune.`);
+      return say(`Livraison à ${out.commune ? `${out.commune} (${out.wilaya})` : out.wilaya} : ${out.home_delivery ?? '—'} DA à domicile${out.stopdesk ? `, ${out.stopdesk} DA au bureau` : ''}. Paiement à la livraison. ${v1 ? 'Envoie-moi ton prénom et ton numéro : un conseiller t’appelle pour confirmer.' : 'Pour réserver, envoie-moi ton nom, ton numéro et ta commune.'}`);
     }
     if (tool.name === 'search_products') {
       const p = out.products?.[0];
@@ -1141,7 +1389,37 @@ async function demoBrain(ctx: Ctx, req: AiRequest): Promise<AiResponse> {
   const place = findPlace(all.split('\n').reverse().find((l) => findPlace(l)) ?? '');
   const confirmed = YES_RE.test(strip(text));
 
-  if (product && variant && phone && place) {
+  // Version 001: the order goes in as soon as the name, the number, the wilaya and the product are known; then each change
+  // the customer writes (a new number, another wilaya, another colour) changes that same order
+  const here = v1 && convId ? (await ctx.db.query('SELECT order_id, channel FROM conversations WHERE id = $1', [convId]))[0] : null;
+  const open = here ? await openOrder(ctx.db, { id: convId!, orderId: numOrNull(here.order_id) }, here.channel === 'test') : null;
+  if (v1 && open) {
+    const change: any = {};
+    const newPhone = text.match(PHONE_RE)?.[0];
+    if (newPhone) change.phone = normalizePhone(newPhone);
+    const newPlace = findPlace(text);
+    if (newPlace) change.wilaya = String(newPlace.wilayaId);
+    const newVariant = product?.variants.find((v) => v.title && strip(text).includes(strip(v.title)));
+    if (product && newVariant) change.items = [{ product_id: product.product_id, variant_id: newVariant.variant_id, qty: 1 }];
+    if (Object.keys(change).length) return use('update_order', change);
+  } else if (v1 && product && variant && phone && place) {
+    const ph = normalizePhone(phone);
+    const before = all.slice(0, all.indexOf(phone)).split('\n').pop() ?? '';
+    const name = before.replace(/[^a-zA-Z؀-ۿ\s'-]/g, ' ').trim().split(/\s+/).slice(-2).join(' ') || 'Client';
+    const when = all.match(/\b(le matin|l'apr[eè]s-midi|le soir|sbah|l3chiya|samedi|dimanche|lundi|mardi|mercredi|jeudi|vendredi)\b/i)?.[0];
+    return use('create_order', {
+      customer_name: name,
+      phone: ph,
+      wilaya: String(place.wilayaId),
+      ...(place.commune ? { commune: place.commune } : {}),
+      items: [{ product_id: product.product_id, variant_id: variant.variant_id, qty: 1 }],
+      note: `Veut ${product.name}${variant.title ? ` ${variant.title}` : ''}${when ? `, préfère ${when}` : ''}.`,
+    });
+  } else if (v1 && product && variant && phone && !place) {
+    return say('Merci 🙏 Tu es de quelle wilaya ? Ensuite un conseiller t’appelle pour confirmer.');
+  }
+
+  if (!v1 && product && variant && phone && place) {
     const ph = normalizePhone(phone);
     const before = all.slice(0, all.indexOf(phone)).split('\n').pop() ?? '';
     const name = before.replace(/[^a-zA-Z؀-ۿ\s'-]/g, ' ').trim().split(/\s+/).slice(-2).join(' ') || 'Client';
@@ -1161,8 +1439,9 @@ async function demoBrain(ctx: Ctx, req: AiRequest): Promise<AiResponse> {
   // a question about the product itself (or a hesitation): its sales guide answers
   if (product?.guide && GUIDE_ASK_RE.test(strip(text)) && !PRICE_ASK_RE.test(strip(text))) return use('product_guide', { product_id: product.product_id });
   if (product && strip(text).split(/\s+/).some((w) => w.length >= 4 && strip(product!.name).includes(w))) return use('search_products', { query: product.name });
+  if (v1 && open) return say('Avec plaisir 😊 Le conseiller va t’appeler pour confirmer. Tu as une autre question ?');
   if (place && product) return use('delivery_fee', { wilaya: String(place.wilayaId), commune: place.commune ?? undefined });
-  if (product && variant && !phone) return say('Parfait 👍 Pour réserver, envoie-moi ton nom, ton numéro de téléphone et ta commune.');
+  if (product && variant && !phone) return say(v1 ? 'Parfait 👍 Envoie-moi ton prénom, ton numéro et ta wilaya : un conseiller t’appelle pour confirmer.' : 'Parfait 👍 Pour réserver, envoie-moi ton nom, ton numéro de téléphone et ta commune.');
   if (/^(salam|slm|bonjour|bonsoir|cc|coucou|hi|hello|السلام|سلام)/i.test(strip(text)))
     return say(`Wa alikoum salam 👋 Bienvenue ! Tu cherches quoi ? Par exemple : ${products.slice(0, 3).map((p) => p.name).join(', ')}.`);
   return say(`Je peux t’aider à choisir 😊 Nos produits : ${products.slice(0, 4).map((p) => `${p.name} (${p.price} DA)`).join(', ')}. Lequel t’intéresse ?`);
@@ -1207,6 +1486,7 @@ async function messagesOf(db: Db, convId: number): Promise<ConvMessage[]> {
 
 const SettingsInput = z.object({
   enabled: z.boolean(),
+  version: z.enum(DELLAL_VERSIONS).default('001'),
   name: z.string().trim().min(2).max(40),
   tone: z.string().max(400),
   languages: z.string().max(200),

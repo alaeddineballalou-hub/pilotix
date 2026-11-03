@@ -1426,9 +1426,10 @@
       },
       "lessons": {
         "title": "Leçons",
-        "help": "Deux sortes de leçons. Vente : comment Dellal vend, écrites ici seulement. Darija : comment il parle ; les boutiques en créent (et Dellal en apprend de leurs clients) pour elles-mêmes, vous décidez si toutes les boutiques les gardent.",
+        "help": "Trois sortes de leçons. Vente : comment Dellal vend, écrites ici seulement. Darija : comment il parle ; les boutiques en créent (et Dellal en apprend de leurs clients) pour elles-mêmes, vous décidez si toutes les boutiques les gardent. Vocabulaire : les mots de la darija qu'il peut utiliser.",
         "sales": "Vente",
-        "darija": "Darija"
+        "darija": "Darija",
+        "vocab": "Vocabulaire"
       },
       "darija": {
         "help": "Une leçon de darija d’une boutique sert tout de suite dans cette boutique. Acceptée ici, elle sert à toutes les boutiques, et aucune ne peut l’enlever.",
@@ -1533,6 +1534,73 @@
         "restored": "C’est fait : la v{{v}} est en service",
         "lessonsShort_one": "{{n}} leçon",
         "lessonsShort_other": "{{n}} leçons"
+      },
+      "vocab": {
+        "help": "Les mots de la darija que Dellal et CM AI peuvent utiliser, pour toutes les boutiques. Pour chaque réponse, ils lisent seulement les mots qui touchent la conversation (même écrits autrement : wesh = wach, chhal = ch7al) et les prix dits en centimes. Une leçon de darija acceptée corrige le mot ici.",
+        "count_one": "{{n}} mot",
+        "count_other": "{{n}} mots",
+        "learned_one": "{{n}} appris des corrections",
+        "learned_other": "{{n}} appris des corrections",
+        "coach_one": "{{n}} écrit par Pilotix",
+        "coach_other": "{{n}} écrits par Pilotix",
+        "listTitle": "Les mots",
+        "search": "Chercher un mot ou un sens",
+        "topic": "Thème",
+        "allTopics": "Tous les thèmes",
+        "noTopic": "Sans thème",
+        "source": "D'où vient le mot",
+        "src": {
+          "all": "Tous",
+          "book": "Du livre",
+          "learned": "Appris",
+          "coach": "Écrits ici"
+        },
+        "add": "Ajouter un mot",
+        "emptySearch": "Aucun mot ne correspond.",
+        "empty": "Le livre est vide. Mettez le livre de Pilotix en un clic pour commencer.",
+        "more": "Voir plus ({{shown}} sur {{total}})",
+        "moreSearch": "{{shown}} mots montrés sur {{total}} : cherchez un mot pour trouver les autres.",
+        "removed": "Mot supprimé.",
+        "not": "pas",
+        "changed": "Corrigé",
+        "edit": "Modifier",
+        "removeAsk": "Supprimer ce mot pour toutes les boutiques ?",
+        "saved": "Mot enregistré. Toutes les boutiques l'utilisent déjà.",
+        "col": {
+          "ar": "En lettres arabes",
+          "lat": "En lettres latines",
+          "meaning": "Sens",
+          "topic": "Thème",
+          "avoid": "À ne pas dire"
+        },
+        "save": "Enregistrer",
+        "cancel": "Annuler",
+        "imported": "{{added}} mots ajoutés, {{skipped}} déjà là, {{unsure}} lignes douteuses laissées de côté.",
+        "tooBig": "Fichier trop gros (800 Ko au plus).",
+        "importTitle": "Mettre le livre",
+        "importHelp": "Choisissez votre livre de vocabulaire (.md ou .txt) ou collez-le. Chaque ligne de tableau devient un mot, et le titre au-dessus devient son thème. Les lignes marquées ⚠️ sont laissées de côté.",
+        "file": "Choisir un fichier",
+        "pastePh": "Ou collez le livre ici (ses tableaux)",
+        "replace": "Remplacer les mots du livre (les mots appris et ceux écrits ici restent)",
+        "import": "Mettre le livre",
+        "tryTitle": "Essayer un message de client",
+        "tryPh": "Ex. : ch7al la poussette ?",
+        "try": "Voir les mots",
+        "tryHelp_one": "Pour ce message, Dellal lit {{n}} mot :",
+        "tryHelp_other": "Pour ce message, Dellal lit {{n}} mots :",
+        "tryNone": "Aucun mot du livre ne touche ce message.",
+        "download": "Le livre complet",
+        "downloadHelp": "Télécharger tout le livre de darija d’Alger (37 chapitres : les mots, la grammaire, les régions, les dictionnaires)",
+        "official": {
+          "title": "Le livre de darija d’Alger de Pilotix",
+          "text": "{{n}} mots en {{topics}} thèmes, en lettres arabes et latines, avec leur sens. Les mots encore à vérifier (⚠️) et ceux des autres régions restent dehors.",
+          "put": "Mettre ces mots",
+          "or": "Ou un autre livre :"
+        },
+        "tryExamples": "Essayez :",
+        "tryPrices": "Prix dits en centimes, lus pour Dellal :",
+        "tryGuess": "« alf » sous-entendu : à vérifier",
+        "tryCost": "Ajoute environ {{tokens}} tokens à la réponse · trouvé en {{ms}} ms"
       }
     },
     "voice": {

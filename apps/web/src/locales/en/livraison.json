@@ -209,7 +209,9 @@
     "company": "Company (own couriers)",
     "endWilaya": "End of round (wilaya)",
     "endCommune": "End of round (commune)",
-    "endHint": "Sorts the parcels: farthest first, coming back here."
+    "endHint": "Sorts the parcels: farthest first, coming back here.",
+    "prices": "Your drivers’ delivery prices",
+    "pricesHelp": "Prices per wilaya and the route sheet of all your drivers ({{name}})."
   },
   "sheet": {
     "stopdesk": "Stop desk",

@@ -105,6 +105,21 @@ test('roles: confirmation cannot create users, admin can', async () => {
   assert.equal(u.roles[0], 'confirmation');
 });
 
+test('a seller never adds another seller: « Vendeur » is never given, the ones who have it keep it', async () => {
+  const admin = await ctxFor('admin@demo.pilotix.dz');
+  await assert.rejects(call('users.create', admin, { phone: tph(), name: 'Autre Vendeur', email: 'autre.vendeur@demo.pilotix.dz', password: 'motdepasse1', roles: ['vendeur'] }), /ne peut pas ajouter un autre vendeur/);
+  await assert.rejects(call('users.create', admin, { phone: tph(), name: 'Autre Vendeur', email: 'autre.vendeur@demo.pilotix.dz', password: 'motdepasse1', roles: ['confirmation', 'vendeur'] }), /ne peut pas ajouter un autre vendeur/);
+  // an agent cannot be turned into a seller later either
+  const agent: any = await call('users.create', admin, { phone: tph(), name: 'Agent Simple', email: 'agent.simple@demo.pilotix.dz', password: 'motdepasse1', roles: ['confirmation'] });
+  await assert.rejects(call('users.update', admin, { id: agent.id, roles: ['confirmation', 'vendeur'] }), /ne peut pas ajouter un autre vendeur/);
+  // a seller made before this rule keeps his role: his account is still changed (name), and the role can be taken away
+  const old = (await db.query(`INSERT INTO profiles (name, email, phone, password_hash, roles) VALUES ('Ancien Vendeur', 'ancien.vendeur@demo.pilotix.dz', $1, 'x', '{vendeur}') RETURNING id`, [tph()]))[0];
+  const kept: any = await call('users.update', admin, { id: Number(old.id), name: 'Ancien Vendeur 2', roles: ['vendeur'] });
+  assert.deepEqual(kept.roles, ['vendeur']);
+  const gone: any = await call('users.update', admin, { id: Number(old.id), roles: ['agent_manager'] });
+  assert.deepEqual(gone.roles, ['agent_manager']);
+});
+
 test('counts for the menu', async () => {
   const admin = await ctxFor('admin@demo.pilotix.dz');
   const c: any = await call('orders.counts', admin, {});

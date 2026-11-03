@@ -101,6 +101,7 @@
     "lockedHint": "Seul l’administrateur peut modifier ce compte",
     "owner": "Propriétaire",
     "ownerHint": "Le propriétaire de la boutique : lui seul modifie son compte.",
+    "noNewSeller": "On n’ajoute plus de vendeur : chaque vendeur ouvre son propre compte Pilotix, avec ses boutiques.",
     "createdExisting": "Ajouté : cette personne a déjà un compte Pilotix, elle se connecte avec son mot de passe habituel.",
     "passwordAccount": "Si cette personne a déjà un compte Pilotix, elle garde son mot de passe.",
     "archives": "Archives",

@@ -379,7 +379,16 @@
     "tWeight": "Weight",
     "tSame": "Identical",
     "lossless": "100 % (lossless)",
-    "ssimHelp": "« Identical »: measured similarity (MS-SSIM, at several scales like the eye) between the compressed photo and the original at the same size. Above 99 %, the eye sees no difference."
+    "ssimHelp": "« Identical »: measured similarity (MS-SSIM, at several scales like the eye) between the compressed photo and the original at the same size. Above 99 %, the eye sees no difference.",
+    "take": "Take the product’s photos",
+    "takeHelp_one": "{{count}} product photo is not on the page yet",
+    "takeHelp_other": "{{count}} product photos are not on the page yet",
+    "takeNone": "All the product’s photos are already on the page",
+    "taken_one": "{{count}} photo added",
+    "taken_other": "{{count}} photos added",
+    "colour": "Photo colour",
+    "colourHelp": "When the customer picks this colour, this photo shows big",
+    "colourNone": "— All —"
   },
   "domain": {
     "title": "Your own domain",

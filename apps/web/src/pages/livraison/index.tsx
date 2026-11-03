@@ -42,7 +42,6 @@ function LivraisonAdmin({ sub }: PageProps) {
     { key: 'societes', label: t('livraison.tabs.societes'), href: '#/livraison/societes' },
     { key: 'pilot', label: t('livraison.tabs.pilot'), href: '#/livraison/pilot' },
     { key: 'api', label: t('livraison.tabs.api'), href: '#/livraison/api' },
-    { key: 'livreurs', label: t('livraison.tabs.livreurs'), href: '#/livraison/livreurs' },
     { key: 'preferences', label: t('livraison.tabs.preferences'), href: '#/livraison/preferences' },
   ];
 
@@ -85,7 +84,8 @@ function LivraisonAdmin({ sub }: PageProps) {
 
   return (
     <>
-      <StageBar items={items} current={current} flow={false} />
+      {/* Livreurs has its own line in Partenaires: no Sociétés de livraison tabs on it */}
+      {current !== 'livreurs' && <StageBar items={items} current={current} flow={false} />}
       {current === 'preferences' && <Preferences />}
       {current === 'pilot' && <Pilot />}
       {current === 'societes' && (
@@ -120,7 +120,7 @@ function LivraisonAdmin({ sub }: PageProps) {
           )}
         </>
       )}
-      {current === 'livreurs' && <LivreursTab companies={q.data ?? []} />}
+      {current === 'livreurs' && <LivreursTab companies={q.data ?? []} onEdit={edit} onFees={(company) => setDialog({ kind: 'fees', company })} />}
 
       {dialogs}
     </>
@@ -204,7 +204,8 @@ function CompaniesCard({
   };
   if (q.isLoading) return <Loading />;
   if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
-  const list = (q.data ?? []).filter((c) => (onlyApi ? !['own', 'manual'].includes(c.kind) : true));
+  // « Nos livreurs » (the store's own livreurs) is on Partenaires › Livreurs, with its prices and route sheet
+  const list = (q.data ?? []).filter((c) => (onlyApi ? !['own', 'manual'].includes(c.kind) : c.kind !== 'own'));
   const body = !list.length ? (
     <Empty>{onlyApi ? t('livraison.api.none') : t('livraison.societes.none')}</Empty>
   ) : (
@@ -322,7 +323,7 @@ function CompaniesCard({
   );
 }
 
-function LivreursTab({ companies }: { companies: Company[] }) {
+function LivreursTab({ companies, onEdit, onFees }: { companies: Company[]; onEdit: (c: Company) => void; onFees: (c: Company) => void }) {
   const { t } = useTranslation();
   const q = useRpc('delivery.livreurs', {});
   const [edit, setEdit] = useState<NonNullable<typeof q.data>[number] | null>(null);
@@ -333,9 +334,41 @@ function LivreursTab({ companies }: { companies: Company[] }) {
       toast(e.message, 'bad');
     }
   };
+  const sheetAll = async (companyId: number) => {
+    try {
+      printRouteSheet(await rpc('delivery.routeSheet', { companyId }));
+    } catch (e: any) {
+      toast(e.message, 'bad');
+    }
+  };
   return (
     <>
       <Card title={t('livraison.livreurs.title')} help={t('livraison.livreurs.help')} actions={<a className="btn" href="#/utilisateurs/agents">{t('livraison.livreurs.addAccount')}</a>} />
+      {/* the « company » of the store's own livreurs: its delivery prices, its route sheet (all livreurs), its name / state */}
+      {companies
+        .filter((c) => c.kind === 'own')
+        .map((c) => (
+          <div key={c.id} className="card">
+            <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <span>
+                <b>{t('livraison.livreurs.prices')}</b> <span className={`badge t-${c.active ? 'ok' : 'off'}`}>{c.active ? t('livraison.active') : t('livraison.inactive')}</span>
+                <br />
+                <small className="muted">{t('livraison.livreurs.pricesHelp', { name: c.name })}</small>
+              </span>
+              <span className="row">
+                <button className="btn small" onClick={() => onFees(c)}>
+                  {t('livraison.act.fees')}
+                </button>
+                <button className="btn small" onClick={() => sheetAll(c.id)}>
+                  {t('livraison.act.sheet')}
+                </button>
+                <button className="btn small" onClick={() => onEdit(c)}>
+                  {t('common.edit')}
+                </button>
+              </span>
+            </div>
+          </div>
+        ))}
       <div className="card">
         {q.isLoading ? (
           <Loading />

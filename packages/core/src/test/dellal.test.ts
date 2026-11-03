@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db, ServerHooks } from '../index';
 import { chunks, parseMetaWebhook } from '../dellal-server';
-import { findPlace } from '../modules/dellal';
+import { findPlace, playbookFor } from '../modules/dellal';
 import { checkDarija, fixDarija, parseAvoid } from '../modules/darija';
 import { EMAILS, setup } from './harness';
 
@@ -46,8 +46,12 @@ test('settings: admin only, secrets never returned, verify token created', async
   assert.equal(cleared.has.ai, true);
 });
 
-test('test chat (no AI): answers price, delivery fee, recap, then simulates the order', async () => {
+test('test chat (no AI), whole order: answers price, delivery fee, recap, then simulates the order', async () => {
   const conf = await as(EMAILS.conf);
+  const admin = await as(EMAILS.admin);
+  const g: any = await call('dellal.settings.get', admin, {});
+  assert.equal(g.settings.version, '001', 'Version 001 is the default');
+  await call('dellal.settings.save', admin, { ...g.settings, version: 'full', secrets: {} });
   const before = Number((await db.query('SELECT count(*)::int AS n FROM orders'))[0].n);
   let r: any;
   for (const m of ['salam', 'ch7al la poussette ?', 'gris', 'livraison l Sétif ch7al', 'Karim Boudiaf 0661234518 El Eulma', 'oui']) r = await call('dellal.test', conf, { body: m });
@@ -63,6 +67,117 @@ test('test chat (no AI): answers price, delivery fee, recap, then simulates the 
   assert.ok(inbox.rows.every((c: any) => c.channel !== 'test'));
   const reset: any = await call('dellal.test', conf, { reset: true });
   assert.equal(reset.messages.length, 0);
+  await call('dellal.settings.save', admin, { ...g.settings, version: '001', secrets: {} });
+});
+
+test('Version 001 (no AI): the number first — the order goes in at once, no recap; a new number changes that order', async () => {
+  const conf = await as(EMAILS.conf);
+  const before = Number((await db.query('SELECT count(*)::int AS n FROM orders'))[0].n);
+  let r: any = await call('dellal.test', conf, { reset: true });
+  for (const m of ['salam', 'ch7al la poussette ?', 'gris', 'Karim Boudiaf 0661234518 Sétif']) r = await call('dellal.test', conf, { body: m });
+  let bodies = r.messages.map((m: any) => `${m.role}: ${m.body}`).join('\n');
+  assert.doesNotMatch(bodies, /Récap|Je confirme/);
+  assert.match(bodies, /create_order → TEST/);
+  assert.match(bodies, /0661\s23\s45\s18/, 'the number is read back digit by digit');
+  assert.match(bodies, /conseiller va t’appeler/);
+  r = await call('dellal.test', conf, { body: 'smahli, numéro ta3i 0770112233' });
+  bodies = r.messages.map((m: any) => `${m.role}: ${m.body}`).join('\n');
+  assert.match(bodies, /update_order → TEST · numéro changé/);
+  assert.match(bodies, /0770\s11\s22\s33/);
+  assert.equal((bodies.match(/create_order → /g) ?? []).length, 1, 'a change never makes a second order');
+  assert.equal(Number((await db.query('SELECT count(*)::int AS n FROM orders'))[0].n), before, 'a test never creates a real order');
+  await call('dellal.test', conf, { reset: true });
+});
+
+test('Version 001: its sales method asks for the number, not for a recap', () => {
+  const p = playbookFor({ version: '001', ordersTo: 'new' });
+  assert.match(p, /VERSION 001 — le numéro d’abord/);
+  assert.match(p, /update_order/);
+  assert.doesNotMatch(p, /Avant create_order, fais le récapitulatif/);
+  assert.doesNotMatch(p, /13\. Augmenter le panier/);
+  assert.doesNotMatch(p, /je te le réserve \?|domicile wela bureau|nréservilek/);
+  assert.match(p, /7\. Après la commande/, 'the rest of the method stays');
+  const full = playbookFor({ version: 'full', ordersTo: 'new' });
+  assert.match(full, /Avant create_order, fais le récapitulatif/);
+  assert.doesNotMatch(full, /VERSION 001/);
+});
+
+test('Version 001 (AI): the order lands in Nouvelles with the note; a change in the chat changes the same order; once confirmed, Dellal hands over', async () => {
+  const sent: any[] = [];
+  const admin = await as(EMAILS.admin);
+  const g: any = await call('dellal.settings.get', admin, {});
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, nightReplies: true, version: '001', ordersTo: 'confirmed', secrets: {} });
+  const vs = await db.query(`SELECT v.id, v.product_id FROM product_variants v JOIN products p ON p.id = v.product_id WHERE p.active AND NOT p.is_service AND v.active ORDER BY v.id LIMIT 2`);
+  for (const v of vs) await db.query(`INSERT INTO stock (variant_id, warehouse_id, qty) VALUES ($1, (SELECT id FROM warehouses ORDER BY is_default DESC, id LIMIT 1), 50) ON CONFLICT (variant_id, warehouse_id) DO UPDATE SET qty = stock.qty + 50`, [v.id]);
+  const [a, b] = vs;
+  const lastResult = (req: any) => JSON.parse(req.messages[req.messages.length - 1].content[0].content);
+  let seen: any = null;
+  let refused: any = null;
+  let updated: any = null;
+  let late: any = null;
+  const first = { customer_name: 'Yasmine', phone: '0550 12 34 56', wilaya: 'Blida', items: [{ product_id: Number(a.product_id), variant_id: Number(a.id), qty: 1 }], note: 'Veut la livraison samedi matin' };
+  const server = fakeServer(
+    [
+      (req: any) => ((seen = req), { content: [{ type: 'tool_use', id: 'u1', name: 'create_order', input: first }], stop_reason: 'tool_use' }),
+      { content: [{ type: 'text', text: 'Sajjelt ✅ 0550 12 34 56, un conseiller va t’appeler.' }], stop_reason: 'end_turn' },
+      { content: [{ type: 'tool_use', id: 'u2', name: 'create_order', input: first }], stop_reason: 'tool_use' },
+      (req: any) => (
+        (refused = lastResult(req)),
+        { content: [{ type: 'tool_use', id: 'u3', name: 'update_order', input: { phone: '0661 98 76 54', wilaya: '19', items: [{ product_id: Number(b.product_id), variant_id: Number(b.id), qty: 2 }], note: 'Veut la livraison samedi matin, 2 pièces' } }], stop_reason: 'tool_use' }
+      ),
+      (req: any) => ((updated = lastResult(req)), { content: [{ type: 'text', text: 'C bon ✅' }], stop_reason: 'end_turn' }),
+      { content: [{ type: 'tool_use', id: 'u4', name: 'update_order', input: { phone: '0770 00 11 22' } }], stop_reason: 'tool_use' },
+      (req: any) => ((late = lastResult(req)), { content: [{ type: 'tool_use', id: 'u5', name: 'handoff', input: { reason: 'Nouveau numéro après la confirmation' } }], stop_reason: 'tool_use' }),
+      { content: [{ type: 'text', text: 'Je transmets à l’équipe.' }], stop_reason: 'end_turn' },
+    ],
+    sent,
+  );
+  const sys = await as(EMAILS.admin, server);
+  const r: any = await call('dellal.receive', sys, { channel: 'messenger', externalId: 'psid-v001', accountId: 'page-1', text: 'Salam, je veux ça. Yasmine 0550123456 Blida', messageId: 'v001_1' });
+  await call('dellal.answer', sys, { id: r.conversationId });
+  // Version 001's method and tools
+  assert.match(seen.system, /VERSION 001/);
+  assert.doesNotMatch(seen.system, /Avant create_order, fais le récapitulatif/);
+  assert.ok(seen.tools.some((t: any) => t.name === 'update_order'));
+  assert.deepEqual(seen.tools.find((t: any) => t.name === 'create_order').input_schema.required, ['customer_name', 'phone', 'wilaya', 'items']);
+  let o = (await db.query('SELECT * FROM orders WHERE conversation_id = $1', [r.conversationId]))[0];
+  assert.equal(o.conf_status, 'new', 'Version 001 always lets the team call, even when orders are set to go straight to the depot');
+  assert.equal(o.phone, '0550123456');
+  assert.equal(Number(o.wilaya_id), 9);
+  assert.equal(o.customer_note, 'Veut la livraison samedi matin');
+  assert.match(o.internal_note, /Version 001/);
+  const oldFee = Number(o.delivery_fee);
+
+  // the customer changes his number, his wilaya and his product
+  await call('dellal.receive', sys, { channel: 'messenger', externalId: 'psid-v001', text: 'smahli, numéro 0661987654, ana f Sétif, w nheb 2', messageId: 'v001_2' });
+  await call('dellal.answer', sys, { id: r.conversationId });
+  assert.match(refused.error, /update_order/, 'a second create_order is refused');
+  assert.equal(updated.ok, true);
+  const orders = await db.query('SELECT * FROM orders WHERE conversation_id = $1', [r.conversationId]);
+  assert.equal(orders.length, 1, 'a change never makes a second order');
+  o = orders[0];
+  assert.equal(o.phone, '0661987654');
+  assert.equal(Number(o.wilaya_id), 19);
+  assert.equal(o.customer_note, 'Veut la livraison samedi matin, 2 pièces');
+  const items = await db.query('SELECT product_id, variant_id, qty, is_upsell FROM order_items WHERE order_id = $1', [o.id]);
+  assert.deepEqual(items.map((i: any) => [Number(i.product_id), Number(i.variant_id), Number(i.qty), !!i.is_upsell]), [[Number(b.product_id), Number(b.id), 2, false]]);
+  assert.equal(!!o.has_upsell, false, 'what the customer chose himself is not an upsell');
+  const quote: any = await call('orders.quote', admin, { wilayaId: 19, isStopdesk: false, items: [{ productId: Number(b.product_id), qty: 2 }] });
+  assert.equal(Number(o.delivery_fee), quote.fee ?? oldFee, 'the delivery price follows the new wilaya and products');
+  const ev = await db.query(`SELECT note FROM order_events WHERE order_id = $1 AND kind = 'note'`, [o.id]);
+  assert.ok(ev.some((e: any) => /numéro 0550123456 → 0661987654/.test(e.note) && /wilaya/.test(e.note) && /produits/.test(e.note)), 'the history says what the customer changed');
+  const c: any = await call('dellal.conversation', admin, { id: r.conversationId });
+  assert.equal(c.conversation.phone, '0661987654');
+
+  // the team confirmed it: Dellal does not change it any more, it hands over
+  await db.query(`UPDATE orders SET conf_status = 'confirmed' WHERE id = $1`, [o.id]);
+  await call('dellal.receive', sys, { channel: 'messenger', externalId: 'psid-v001', text: 'bdelt numéro : 0770001122', messageId: 'v001_3' });
+  await call('dellal.answer', sys, { id: r.conversationId });
+  assert.match(late.error, /déjà confirmée/);
+  assert.equal((await db.query('SELECT phone FROM orders WHERE id = $1', [o.id]))[0].phone, '0661987654');
+  assert.equal(((await call('dellal.conversation', admin, { id: r.conversationId })) as any).conversation.mode, 'handoff');
+  await call('dellal.setMode', admin, { id: r.conversationId, mode: 'ai' });
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, version: '001', ordersTo: g.settings.ordersTo, secrets: {} });
 });
 
 test('a WhatsApp message: Dellal (AI) sells, the order lands in Confirmation › Nouvelles, linked to the conversation', async () => {
@@ -196,7 +311,8 @@ test('the sales playbook reaches the AI; a pack quantity gets the pack price, a 
   for (const v of [p.vid, other.vid]) await db.query(`INSERT INTO stock (variant_id, warehouse_id, qty) VALUES ($1,$2,50) ON CONFLICT (variant_id, warehouse_id) DO UPDATE SET qty = stock.qty + 50`, [v, wid]);
   const admin = await as(EMAILS.admin);
   const g: any = await call('dellal.settings.get', admin, {});
-  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, nightReplies: true, secrets: {} });
+  // the whole-order method (Version 001 has no basket raise in the chat)
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, nightReplies: true, version: 'full', secrets: {} });
   let system = '';
   const server = fakeServer(
     [
@@ -265,7 +381,7 @@ test('darija checker: other dialects and wrong phrases are caught; clean Algeria
 test('a reply in another dialect is rewritten in Algerian Darija before it is sent; the shop list is in the instructions', async () => {
   const admin = await as(EMAILS.admin);
   const g: any = await call('dellal.settings.get', admin, {});
-  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, nightReplies: true, darijaPrefer: 'Mar7ba bik / biki', darijaAvoid: 'frero → khouya', secrets: { ai: 'sk-ant-test-1234567890' } });
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, nightReplies: true, version: 'full', darijaPrefer: 'Mar7ba bik / biki', darijaAvoid: 'frero → khouya', secrets: { ai: 'sk-ant-test-1234567890' } });
   const sent: any[] = [];
   let system = '';
   let fixer: any = null;

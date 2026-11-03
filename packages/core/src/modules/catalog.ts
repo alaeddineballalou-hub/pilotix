@@ -14,7 +14,8 @@ import { atIn, confIn, dayIn, followIn, ScanLang, scanT } from './scantext';
 import { checkDispatch, dispatchOrders } from './dispatch';
 import { getPrefs } from './prefs';
 import { assignedProductIds } from './productscope';
-import { checkGuide, GuideInput, HAS_GUIDE, readGuide, saveGuide } from './guide';
+import { checkGuide, GuideInput, HAS_GUIDE, readGuide, saveGuide, TrFix, TrInput } from './guide';
+import { lessonsFromGuide } from './lahja';
 
 // ---------------------------------------------------------------- types
 export interface CatalogVariant {
@@ -513,6 +514,8 @@ export const ProductInput = z.object({
   variants: z.array(VariantInput).max(200).default([]),
   /** the sales guide (Guide de vente); missing: unchanged, empty: removed */
   guide: GuideInput.optional(),
+  /** the team's corrections of its translations (the editor's language tabs) */
+  guideTr: TrInput.optional(),
 });
 
 const slug = (s: string) =>
@@ -535,6 +538,7 @@ async function freeSku(db: Db, table: 'products' | 'product_variants', base: str
 
 export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Promise<CatalogProduct> {
   const guide = i.guide === undefined ? null : checkGuide(i.guide);
+  let fixes: TrFix[] = [];
   const pid = await ctx.db.tx(async (tx) => {
     const cur = i.id ? (await tx.query('SELECT * FROM products WHERE id = $1 FOR UPDATE', [i.id]))[0] : null;
     if (i.id && !cur) throw notFound('Produit introuvable');
@@ -653,11 +657,13 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
         [productId, i.alertQty],
       );
     // Guide de vente: what the agents read during a call, and what Dellal and CM AI answer with
-    if (i.guide !== undefined) await saveGuide(tx, productId, guide!, ctx.session.profile.id);
+    if (i.guide !== undefined) fixes = (await saveGuide(tx, productId, guide!, ctx.session.profile.id, null, i.guideTr)).fixes;
     return productId;
   });
   // Landing pages › Réglages « a page for every new product »: made at once (the marketer completes it later)
   if (!i.id && i.active && !i.isService && (await landingSettings(ctx.db)).autoCreate) await quickCreatePage(ctx.db, pid, ctx.session.profile.id).catch(() => null);
+  // an Arabic translation of its guide corrected by the team: the words it changed teach Dellal (lahja.ts)
+  if (fixes.length) await lessonsFromGuide(ctx, fixes);
   ctx.emit({ type: 'stock' });
   return (await listProducts(ctx.db, { ids: [pid] }))[0];
 }
@@ -1029,7 +1035,7 @@ export const catalogProcs = {
     if (!p) throw notFound('Produit introuvable');
     // the product form also edits its sales guide (tab « Guide de vente »)
     const g = await readGuide(ctx.db, id);
-    return { ...p, guide: g?.guide ?? null, guideAt: g?.updatedAt ?? null, guideBy: g?.updatedBy ?? null };
+    return { ...p, guide: g?.guide ?? null, guideTr: g?.tr ?? {}, guideAt: g?.updatedAt ?? null, guideBy: g?.updatedBy ?? null };
   }),
 
   /** Names of the delivery price grids (product form, "Grille de prix de livraison"). */

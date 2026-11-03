@@ -5,7 +5,7 @@ import { sha256Hex, zeroBits } from '@pilotix/shared';
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
-import { LANDING_POW_BITS, makeChallenge } from '../modules/landing';
+import { LANDING_POW_BITS, landingHtml, makeChallenge } from '../modules/landing';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -210,8 +210,21 @@ test('products without a page: counted for marketers, one-click page, set aside,
   assert.equal(((await call('orders.counts', await as(EMAILS.depot), {})) as any).landing, undefined, 'not for the depot');
   const missing: any[] = (await call('landing.missing', mk, {})) as any;
   const target = missing[0];
+  // its main photo, and two variants with their own photo (one the same as the main): main first, each once
+  await db.query(`UPDATE products SET photo = 'https://img.test/main.jpg' WHERE id = $1`, [target.id]);
+  const vids = (await db.query(`SELECT id FROM product_variants WHERE product_id = $1 ORDER BY id LIMIT 2`, [target.id])).map((x: any) => Number(x.id));
+  if (vids.length === 0) for (const t of ['Rouge', 'Bleu']) vids.push(Number((await db.query(`INSERT INTO product_variants (product_id, title) VALUES ($1, $2) RETURNING id`, [target.id, t]))[0].id));
+  await db.query(`UPDATE product_variants SET photo = 'https://img.test/v1.jpg' WHERE id = $1`, [vids[0]]);
+  if (vids[1]) await db.query(`UPDATE product_variants SET photo = 'https://img.test/main.jpg' WHERE id = $1`, [vids[1]]);
   const r: any = await call('landing.quickCreate', mk, { productId: target.id });
   assert.ok(r.created);
+  const imgs = (await db.query(`SELECT images FROM landing_pages WHERE id = $1`, [r.id]))[0].images;
+  assert.deepEqual((typeof imgs === 'string' ? JSON.parse(imgs) : imgs).map((x: any) => x.url), ['https://img.test/main.jpg', 'https://img.test/v1.jpg']);
+  // each variant photo knows its variant: picking that colour on the page shows it (« vi » in the page)
+  const list = typeof imgs === 'string' ? JSON.parse(imgs) : imgs;
+  assert.equal(list[1].v, vids[0]);
+  const html: string = await landingHtml(admin, r.page.slug, { mode: 'preview', post: '', geo: '', imgBase: null });
+  assert.match(html, new RegExp(`"vi":\\{[^}]*"${vids[0]}":1`));
   assert.match(r.page.slug, /^[a-z0-9-]+$/);
   const again: any = await call('landing.quickCreate', mk, { productId: target.id });
   assert.equal(again.id, r.id);
@@ -243,4 +256,31 @@ test('stock: a sold-out variant is marked on the page (when asked), and still or
   const input = await human({ variant: v });
   await call('landing.submit', admin, input);
   assert.ok(await orderOf(input.phone as string), 'a customer who opened the page before is not treated as a bot');
+});
+
+test('old pages: the update adds the product photos missing (main first, then each variant) and links each to its colour', async () => {
+  const { default: sql } = await import('../migrations/074_landing_variant_photos');
+  const pg = (await db.query(`SELECT id, product_id FROM landing_pages ORDER BY id LIMIT 1`))[0];
+  const pid = Number(pg.product_id);
+  await db.query(`UPDATE products SET photo = 'https://img.test/old-main.jpg' WHERE id = $1`, [pid]);
+  let vids = (await db.query(`SELECT id FROM product_variants WHERE product_id = $1 AND active AND title <> '' ORDER BY id LIMIT 2`, [pid])).map((x: any) => Number(x.id));
+  if (vids.length < 2) for (const t of ['A1', 'A2'].slice(vids.length)) vids.push(Number((await db.query(`INSERT INTO product_variants (product_id, title) VALUES ($1, $2) RETURNING id`, [pid, t]))[0].id));
+  vids = vids.slice(0, 2);
+  await db.query(`UPDATE product_variants SET photo = 'https://img.test/old-v' || id || '.jpg' WHERE id = ANY($1)`, [vids]);
+  // the page had one of its own pictures and the first variant's photo (not linked yet)
+  await db.query(`UPDATE landing_pages SET images = $2 WHERE id = $1`, [pg.id, JSON.stringify([{ url: 'https://img.test/own.jpg', w: 800, h: 1000 }, { url: `https://img.test/old-v${vids[0]}.jpg`, w: 800, h: 1000 }])]);
+  const run = async () => { for (const q of sql.split(/;\s*\n/).map((x: string) => x.trim()).filter(Boolean)) await db.query(q); };
+  await run();
+  const imgs = (await db.query(`SELECT images FROM landing_pages WHERE id = $1`, [pg.id]))[0].images;
+  const list = typeof imgs === 'string' ? JSON.parse(imgs) : imgs;
+  assert.deepEqual(list.map((x: any) => [x.url, x.v ?? null]), [
+    ['https://img.test/old-main.jpg', null],
+    ['https://img.test/own.jpg', null],
+    [`https://img.test/old-v${vids[0]}.jpg`, vids[0]],
+    [`https://img.test/old-v${vids[1]}.jpg`, vids[1]],
+  ]);
+  // run again: nothing changes
+  await run();
+  const again = (await db.query(`SELECT images FROM landing_pages WHERE id = $1`, [pg.id]))[0].images;
+  assert.equal(JSON.stringify(typeof again === 'string' ? JSON.parse(again) : again), JSON.stringify(list));
 });
