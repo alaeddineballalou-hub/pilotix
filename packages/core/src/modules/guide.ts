@@ -7,10 +7,18 @@
 // the age, the weight and the measures it fits, when it has none: customers ask it), Points forts, Questions & réponses
 // (picked from fixed questions or written), Hésitations (what the customer says → what to answer), Vente en plus
 // (products picked, and how to say it), À ne jamais promettre. A product without a guide has no row
-// (migrations/072_product_guides.ts).
+// (migrations/072_product_guides.ts). Everyone reads it in the app's language (French, Arabic or English): Pilot AI
+// translates each line after a save, the team corrects the translations in the editor's tabs, and the original words
+// stay one click away (migrations/073_guide_translations.ts). The AI agents read the original.
 import { z } from 'zod';
 import { Db, iso, num } from '../db';
 import { bad } from '../rpc';
+
+/** The languages a guide is written in (Darija: Algerian, in Latin letters), and the ones the app is read in. */
+export const GUIDE_LANGS = ['fr', 'ar', 'dz', 'en'] as const;
+export type GuideLang = (typeof GUIDE_LANGS)[number];
+export const READ_LANGS = ['fr', 'ar', 'en'] as const;
+export type ReadLang = (typeof READ_LANGS)[number];
 
 export interface GuidePair {
   q: string;
@@ -47,6 +55,8 @@ export interface ProductGuide {
   sizes: GuideSize[];
   /** the small size guide, when the product has no size option (empty texts: not written) */
   fit: GuideFit;
+  /** the language it is written in (the team's choice, unless its letters say otherwise) */
+  lang: GuideLang;
 }
 
 export const GUIDE_LIMITS = {
@@ -97,11 +107,12 @@ export const GuideInput = z.object({
   fit: z
     .object({ age: z.string().trim().max(L.fitText).default(''), weight: z.string().trim().max(L.fitText).default(''), measures: z.string().trim().max(L.fitText).default('') })
     .default({}),
+  lang: z.enum(GUIDE_LANGS).optional(),
 });
 export type GuideInputT = z.input<typeof GuideInput>;
 
 export const EMPTY_FIT: GuideFit = { age: '', weight: '', measures: '' };
-export const EMPTY_GUIDE: ProductGuide = { brief: '', strengths: [], faq: [], doubts: [], upsell: '', upsellIds: [], never: [], sizes: [], fit: EMPTY_FIT };
+export const EMPTY_GUIDE: ProductGuide = { brief: '', strengths: [], faq: [], doubts: [], upsell: '', upsellIds: [], never: [], sizes: [], fit: EMPTY_FIT, lang: 'fr' };
 /** Is something written in the small size guide. */
 export const fitFilled = (f: GuideFit | null | undefined) => !!f && !!(f.age || f.weight || f.measures);
 
@@ -118,7 +129,21 @@ export function cleanGuide(g: Partial<ProductGuide> | null | undefined): Product
     : [];
   const f: any = g?.fit && typeof g.fit === 'object' ? g.fit : {};
   const fit = { age: s(f.age), weight: s(f.weight), measures: s(f.measures) };
-  return { brief: s(g?.brief), strengths: lines(g?.strengths), faq: pairs(g?.faq), doubts: pairs(g?.doubts), upsell: s(g?.upsell), upsellIds: ids, never: lines(g?.never), sizes, fit };
+  const base = { brief: s(g?.brief), strengths: lines(g?.strengths), faq: pairs(g?.faq), doubts: pairs(g?.doubts), upsell: s(g?.upsell), upsellIds: ids, never: lines(g?.never), sizes, fit };
+  return { ...base, lang: langOf(g?.lang, guideSources(base)) };
+}
+
+const ARABIC_LETTER = /[\u0600-\u06FF\u0750-\u077F]/g;
+const ANY_LETTER = /\p{L}/gu;
+/** The guide's language: the one chosen, unless its letters say otherwise (mostly Arabic letters, or none at all). */
+function langOf(chosen: unknown, lines: string[]): GuideLang {
+  const text = lines.join(' ');
+  const letters = text.match(ANY_LETTER)?.length ?? 0;
+  const arabic = text.match(ARABIC_LETTER)?.length ?? 0;
+  const pick = (GUIDE_LANGS as readonly string[]).includes(chosen as string) ? (chosen as GuideLang) : null;
+  if (letters >= 12 && arabic / letters > 0.6) return 'ar';
+  if (pick === 'ar' && letters >= 12 && arabic / letters < 0.2) return 'fr';
+  return pick ?? 'fr';
 }
 
 export const guideEmpty = (g: ProductGuide) =>
@@ -137,6 +162,56 @@ export const guideSize = (g: ProductGuide) =>
 
 /** How many answers are still to write. */
 export const guideToFill = (g: ProductGuide) => [...g.faq, ...g.doubts].filter((p) => toFill(p.a)).length;
+
+// ---------------------------------------------------------------- the other reading languages
+/** The guide in each other reading language: each of its lines → the translation (Pilot AI's, or the team's). */
+export type GuideTr = Partial<Record<ReadLang, Record<string, string>>>;
+const TR_LINE = 1500;
+const trLines = z.record(z.string().max(800), z.string().max(TR_LINE)).optional();
+/** The team's corrections from the editor's tabs: a line → its translation (emptied: Pilot AI translates it again). */
+export const TrInput = z.object({ fr: trLines, ar: trLines, en: trLines });
+export type TrEdits = z.output<typeof TrInput>;
+
+/** The guide's lines to translate, each once and in order (an answer still to write is not one). */
+export function guideSources(g: Pick<ProductGuide, 'brief' | 'strengths' | 'faq' | 'doubts' | 'upsell' | 'never' | 'sizes' | 'fit'>): string[] {
+  const all = [
+    g.brief,
+    ...g.sizes.flatMap((x) => [x.age, x.weight]),
+    g.fit.age,
+    g.fit.weight,
+    g.fit.measures,
+    ...g.strengths,
+    ...g.faq.flatMap((p) => [p.q, p.a]),
+    ...g.doubts.flatMap((p) => [p.q, p.a]),
+    g.upsell,
+    ...g.never,
+  ];
+  return [...new Set(all.map((x) => x.trim()).filter((x) => x && !toFill(x)))];
+}
+
+/** The reading languages a guide is translated into: all but its own. */
+export const trTargets = (g: ProductGuide): ReadLang[] => READ_LANGS.filter((l) => l !== g.lang);
+
+/** Translations kept: the guide's current lines only, in the languages it is translated into. */
+export function cleanTr(raw: unknown, g: ProductGuide): GuideTr {
+  const src = new Set(guideSources(g));
+  const r: any = raw && typeof raw === 'object' ? raw : {};
+  const out: GuideTr = {};
+  for (const l of trTargets(g)) {
+    const m = r[l] && typeof r[l] === 'object' ? r[l] : {};
+    const kept = Object.entries(m)
+      .map(([k, v]) => [k.trim(), String(v ?? '').trim().slice(0, TR_LINE)] as const)
+      .filter(([k, v]) => src.has(k) && v);
+    if (kept.length) out[l] = Object.fromEntries(kept);
+  }
+  return out;
+}
+
+/** The lines still without a translation, per language. */
+export function trMissing(g: ProductGuide, tr: GuideTr): Partial<Record<ReadLang, string[]>> {
+  const src = guideSources(g);
+  return Object.fromEntries(trTargets(g).map((l) => [l, src.filter((x) => !tr[l]?.[x])]).filter(([, v]) => v.length));
+}
 
 /** A product offered on top (Vente en plus), as the agents and the AI agents see it. */
 export interface UpsellProduct {
@@ -180,22 +255,25 @@ export interface SavedGuide {
   guide: ProductGuide;
   /** the products of Vente en plus still on sale, with their name and price */
   upsell: UpsellProduct[];
+  /** the guide in the other reading languages */
+  tr: GuideTr;
   updatedAt: string;
   updatedBy: string | null;
 }
 
 export async function readGuide(db: Db, productId: number): Promise<SavedGuide | null> {
-  const r = (await db.query('SELECT g.guide, g.updated_at, u.name AS by_name FROM product_guides g LEFT JOIN profiles u ON u.id = g.updated_by WHERE g.product_id = $1', [productId]))[0];
+  const r = (await db.query('SELECT g.guide, g.tr, g.updated_at, u.name AS by_name FROM product_guides g LEFT JOIN profiles u ON u.id = g.updated_by WHERE g.product_id = $1', [productId]))[0];
   if (!r) return null;
-  const guide = cleanGuide(typeof r.guide === 'string' ? JSON.parse(r.guide) : r.guide);
+  const guide = cleanGuide(json(r.guide));
   if (guideEmpty(guide)) return null;
   const upsell = guide.upsellIds.length
     ? (await db.query('SELECT id, name, price, photo FROM products WHERE id = ANY($1) AND active AND archived_at IS NULL', [guide.upsellIds]))
         .map((p) => ({ id: num(p.id), name: String(p.name), price: num(p.price), photo: (p.photo as string | null) ?? null }))
         .sort((a, b) => guide.upsellIds.indexOf(a.id) - guide.upsellIds.indexOf(b.id))
     : [];
-  return { guide, upsell, updatedAt: iso(r.updated_at), updatedBy: (r.by_name as string | null) ?? null };
+  return { guide, upsell, tr: cleanTr(json(r.tr), guide), updatedAt: iso(r.updated_at), updatedBy: (r.by_name as string | null) ?? null };
 }
+const json = (v: unknown): any => (typeof v === 'string' ? JSON.parse(v) : v);
 
 /** A guide from a form (already the right sizes, GuideInput), cleaned, and not too long in all. */
 export function checkGuide(input: z.output<typeof GuideInput>): ProductGuide {
@@ -208,9 +286,11 @@ export function checkGuide(input: z.output<typeof GuideInput>): ProductGuide {
 /**
  * Saves a product's guide (inside the product's save, or from the Guide de vente tab): an empty guide removes it; the
  * same guide again changes nothing (not even who wrote it last). Vente en plus keeps real products only, never the
- * product itself (`allowed`: the products the writer's work gives them, null: every product).
+ * product itself (`allowed`: the products the writer's work gives them, null: every product). `trEdits`: the team's
+ * corrections of the translations (the lines it changed or emptied); the translations of lines no longer in the guide
+ * leave with them.
  */
-export async function saveGuide(db: Db, productId: number, input: ProductGuide, userId: number | null, allowed: number[] | null = null): Promise<void> {
+export async function saveGuide(db: Db, productId: number, input: ProductGuide, userId: number | null, allowed: number[] | null = null, trEdits?: TrEdits): Promise<void> {
   let g = input;
   if (g.upsellIds.length) {
     const ok = new Set((await db.query('SELECT id FROM products WHERE id = ANY($1) AND id <> $2 AND archived_at IS NULL', [g.upsellIds, productId])).map((r) => num(r.id)));
@@ -220,13 +300,38 @@ export async function saveGuide(db: Db, productId: number, input: ProductGuide, 
     await db.query('DELETE FROM product_guides WHERE product_id = $1', [productId]);
     return;
   }
-  const cur = (await db.query('SELECT guide FROM product_guides WHERE product_id = $1', [productId]))[0];
-  if (cur && JSON.stringify(cleanGuide(typeof cur.guide === 'string' ? JSON.parse(cur.guide) : cur.guide)) === JSON.stringify(g)) return;
+  const cur = (await db.query('SELECT guide, tr FROM product_guides WHERE product_id = $1', [productId]))[0];
+  const old: any = (cur && json(cur.tr)) || {};
+  // the team's corrections over the translations there (a line emptied goes back to Pilot AI)
+  const merged: Record<string, Record<string, string>> = {};
+  for (const l of READ_LANGS) {
+    const m: Record<string, string> = { ...(old[l] ?? {}) };
+    for (const [k, v] of Object.entries(trEdits?.[l] ?? {})) {
+      const val = String(v ?? '').trim();
+      if (val) m[k.trim()] = val;
+      else delete m[k.trim()];
+    }
+    merged[l] = m;
+  }
+  const tr = cleanTr(merged, g);
+  if (cur && JSON.stringify(cleanGuide(json(cur.guide))) === JSON.stringify(g) && JSON.stringify(cleanTr(old, g)) === JSON.stringify(tr)) return;
   await db.query(
-    `INSERT INTO product_guides (product_id, guide, updated_by, updated_at) VALUES ($1, $2, $3, now())
-     ON CONFLICT (product_id) DO UPDATE SET guide = EXCLUDED.guide, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-    [productId, JSON.stringify(g), userId],
+    `INSERT INTO product_guides (product_id, guide, tr, updated_by, updated_at) VALUES ($1, $2, $3, $4, now())
+     ON CONFLICT (product_id) DO UPDATE SET guide = EXCLUDED.guide, tr = EXCLUDED.tr, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+    [productId, JSON.stringify(g), JSON.stringify(tr), userId],
   );
+}
+
+/** Pilot AI's translations, added where a line has none yet (the team's corrections stay); nobody's name goes on it. */
+export async function addTranslations(db: Db, productId: number, add: GuideTr): Promise<void> {
+  await db.tx(async (tx) => {
+    const cur = (await tx.query('SELECT guide, tr FROM product_guides WHERE product_id = $1 FOR UPDATE', [productId]))[0];
+    if (!cur) return;
+    const g = cleanGuide(json(cur.guide));
+    const old: any = json(cur.tr) || {};
+    const merged = Object.fromEntries(READ_LANGS.map((l) => [l, { ...(add[l] ?? {}), ...(old[l] ?? {}) }]));
+    await tx.query('UPDATE product_guides SET tr = $2 WHERE product_id = $1', [productId, JSON.stringify(cleanTr(merged, g))]);
+  });
 }
 
 /** SQL: does this product (alias) have a guide. */

@@ -14,7 +14,7 @@ import { atIn, confIn, dayIn, followIn, ScanLang, scanT } from './scantext';
 import { checkDispatch, dispatchOrders } from './dispatch';
 import { getPrefs } from './prefs';
 import { assignedProductIds } from './productscope';
-import { checkGuide, GuideInput, HAS_GUIDE, readGuide, saveGuide } from './guide';
+import { checkGuide, GuideInput, HAS_GUIDE, readGuide, saveGuide, TrInput } from './guide';
 
 // ---------------------------------------------------------------- types
 export interface CatalogVariant {
@@ -427,6 +427,8 @@ export const ProductInput = z.object({
   variants: z.array(VariantInput).max(200).default([]),
   /** the sales guide (Guide de vente); missing: unchanged, empty: removed */
   guide: GuideInput.optional(),
+  /** the team's corrections of its translations (the editor's language tabs) */
+  guideTr: TrInput.optional(),
 });
 
 const slug = (s: string) =>
@@ -567,7 +569,7 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
         [productId, i.alertQty],
       );
     // Guide de vente: what the agents read during a call, and what Dellal and CM AI answer with
-    if (i.guide !== undefined) await saveGuide(tx, productId, guide!, ctx.session.profile.id);
+    if (i.guide !== undefined) await saveGuide(tx, productId, guide!, ctx.session.profile.id, null, i.guideTr);
     return productId;
   });
   // Landing pages › Réglages « a page for every new product »: made at once (the marketer completes it later)
@@ -937,7 +939,7 @@ export const catalogProcs = {
     if (!p) throw notFound('Produit introuvable');
     // the product form also edits its sales guide (tab « Guide de vente »)
     const g = await readGuide(ctx.db, id);
-    return { ...p, guide: g?.guide ?? null, guideAt: g?.updatedAt ?? null, guideBy: g?.updatedBy ?? null };
+    return { ...p, guide: g?.guide ?? null, guideTr: g?.tr ?? {}, guideAt: g?.updatedAt ?? null, guideBy: g?.updatedBy ?? null };
   }),
 
   /** Names of the delivery price grids (product form, "Grille de prix de livraison"). */

@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db, makeSession, ServerHooks } from '../index';
 import { getSetting, setSetting } from '../settings';
-import { EMPTY_FIT, guideText, TO_FILL } from '../modules/guide';
-import { draftSystem, fitFrom, readDraft, rulesDraft } from '../modules/guidedraft';
+import { cleanGuide, cleanTr, EMPTY_FIT, guideSources, guideText, TO_FILL } from '../modules/guide';
+import { draftSystem, fitFrom, readDraft, readLines, rulesDraft, translateSystem } from '../modules/guidedraft';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -97,7 +97,7 @@ test('agents read the guide of their products only, and the call screen knows wh
 });
 
 test('what the AI agents read: the guide in its own words, never an answer still to write', () => {
-  const text = guideText({ brief: 'B', strengths: ['S1', TO_FILL], faq: [{ q: 'Q1', a: 'A1' }, { q: 'Q2', a: TO_FILL }], doubts: [{ q: '« Ghali »', a: 'D1' }], upsell: '', upsellIds: [], never: ['N1'], sizes: [], fit: EMPTY_FIT });
+  const text = guideText({ brief: 'B', strengths: ['S1', TO_FILL], faq: [{ q: 'Q1', a: 'A1' }, { q: 'Q2', a: TO_FILL }], doubts: [{ q: '« Ghali »', a: 'D1' }], upsell: '', upsellIds: [], never: ['N1'], sizes: [], fit: EMPTY_FIT, lang: 'fr' });
   assert.match(text, /EN BREF : B/);
   assert.match(text, /- Q1 → A1/);
   assert.match(text, /- « Ghali » → D1/);
@@ -202,7 +202,7 @@ test('« Écrire avec l\'IA »: Claude drafts from the shop\'s facts, the unknow
 test('the draft helpers: JSON read leniently, Darija instructions only for darija, the rules draft keeps to the facts', () => {
   assert.equal(readDraft('pas de JSON'), null);
   assert.equal(readDraft('{"brief": ""}'), null);
-  assert.deepEqual(readDraft('```json\n{"brief":"B","strengths":"pas une liste","faq":[{"q":"Q","a":"A"}]}\n```'), { brief: 'B', strengths: [], faq: [{ q: 'Q', a: 'A' }], doubts: [], upsell: '', upsellIds: [], never: [], sizes: [], fit: EMPTY_FIT });
+  assert.deepEqual(readDraft('```json\n{"brief":"B","strengths":"pas une liste","faq":[{"q":"Q","a":"A"}]}\n```'), { brief: 'B', strengths: [], faq: [{ q: 'Q', a: 'A' }], doubts: [], upsell: '', upsellIds: [], never: [], sizes: [], fit: EMPTY_FIT, lang: 'fr' });
   assert.match(draftSystem('dz', 'GUIDE DARIJA'), /lettres latines[\s\S]*GUIDE DARIJA/);
   assert.doesNotMatch(draftSystem('fr'), /Pour écrire la darija/);
   const r = rulesDraft({ name: 'Biberon', variants: ['Rose', 'Bleu'], packs: [{ qty: 3, price: 3900 }], linked: ['Goupillon'], linkedIds: [7], services: [], page: null });
@@ -345,4 +345,84 @@ test('Dellal without AI (preview): the small size guide answers the measures', a
   const bodies = r.messages.map((m: any) => `${m.role}: ${m.body}`).join('\n');
   assert.match(bodies, /tool: product_guide #\d+ → guide de vente lu/);
   assert.match(r.messages.filter((m: any) => m.role === 'agent').pop().body, /Mesures : 260 ml/);
+});
+
+test('the other languages: Pilot AI translates after a save, the team corrects, each reader gets their language', async () => {
+  const asked: { system: string; lines: string[] }[] = [];
+  const page = async (req: any) => {
+    const { lines } = JSON.parse(req.messages[0].content);
+    asked.push({ system: req.system, lines });
+    const to = /vers l’arabe/.test(req.system) ? 'AR' : /vers l’anglais/.test(req.system) ? 'EN' : 'FR';
+    return { content: [{ type: 'text' as const, text: `Voici :\n${JSON.stringify({ lines: lines.map((x: string) => `${to}: ${x}`) })}` }], stop_reason: 'end_turn' };
+  };
+  const writer = { ...depot, dellalAi: page };
+  const guide = { brief: 'Thermomètre sans contact.', strengths: ['Mesure en 1 seconde'], faq: [{ q: 'Garantie ?', a: TO_FILL }, { q: 'Piles ?', a: '2 piles AAA fournies.' }], lang: 'fr' };
+  const saved: any = await call('catalog.saveGuide', writer, { id: thermo, guide });
+  assert.equal(saved.guide.lang, 'fr');
+  assert.deepEqual(saved.trMissing, { ar: 5, en: 5 }, 'every line but the answer still to write');
+  const t1: any = await call('catalog.translateGuide', writer, { id: thermo });
+  assert.deepEqual([t1.by, t1.missing], ['ai', {}]);
+  assert.equal(asked.length, 2);
+  assert.ok(asked.some((x) => /du français vers l’arabe/.test(x.system)) && asked.some((x) => /du français vers l’anglais/.test(x.system)));
+  assert.match(asked[0].system, /Garde les mêmes nombres, les mêmes prix \(DA\) et les mêmes unités/);
+  assert.deepEqual(asked[0].lines, ['Thermomètre sans contact.', 'Mesure en 1 seconde', 'Garantie ?', 'Piles ?', '2 piles AAA fournies.']);
+  // readers: their language (with what is still missing), or the original when it is theirs
+  const ar: any = await call('catalog.guide', depot, { id: thermo, lang: 'ar' });
+  assert.equal(ar.tr['Piles ?'], 'AR: Piles ?');
+  assert.equal(ar.trMissing, 0);
+  assert.equal((await call('catalog.guide', depot, { id: thermo, lang: 'fr' }) as any).tr, null);
+  assert.equal((await call('catalog.guide', depot, { id: thermo }) as any).tr, null);
+  // the team corrects a line and empties another: the correction stays, the emptied one goes back to Pilot AI
+  const fixed: any = await call('catalog.saveGuide', depot, { id: thermo, guide: saved.guide, tr: { ar: { 'Thermomètre sans contact.': 'ميزان حرارة بدون لمس.', 'Piles ?': '' } } });
+  assert.equal(fixed.tr.ar['Thermomètre sans contact.'], 'ميزان حرارة بدون لمس.');
+  assert.equal(fixed.tr.ar['Piles ?'], undefined);
+  assert.deepEqual(fixed.trMissing, { ar: 1 });
+  await call('catalog.translateGuide', writer, { id: thermo });
+  assert.equal(asked.length, 3, 'only the missing line, in one language');
+  assert.deepEqual(asked[2].lines, ['Piles ?']);
+  const after: any = await call('catalog.guide', depot, { id: thermo, lang: 'ar' });
+  assert.equal(after.tr['Thermomètre sans contact.'], 'ميزان حرارة بدون لمس.', 'the team’s correction stays');
+  assert.equal(after.tr['Piles ?'], 'AR: Piles ?');
+  assert.equal((await call('catalog.translateGuide', writer, { id: thermo }) as any).by, 'done', 'nothing missing: no AI asked');
+  assert.equal(asked.length, 3);
+  // a line changed in the original: its old translations leave with it; without the AI it waits
+  const s2: any = await call('catalog.saveGuide', depot, { id: thermo, guide: { ...saved.guide, brief: 'Thermomètre frontal sans contact.' } });
+  assert.equal(s2.tr.ar['Thermomètre sans contact.'], undefined);
+  assert.deepEqual(s2.trMissing, { ar: 1, en: 1 });
+  const t3: any = await call('catalog.translateGuide', depot, { id: thermo });
+  assert.deepEqual([t3.by, t3.missing], ['none', { ar: 1, en: 1 }]);
+  // written in Arabic letters: an Arabic guide, translated into French and English
+  const s3: any = await call('catalog.saveGuide', depot, { id: thermo, guide: { brief: 'ميزان حرارة بدون لمس، يقيس الحرارة في ثانية واحدة.', lang: 'fr' } });
+  assert.equal(s3.guide.lang, 'ar');
+  assert.deepEqual(Object.keys(s3.trMissing).sort(), ['en', 'fr']);
+  // the store's own agents read only
+  await assert.rejects(call('catalog.translateGuide', conf, { id: thermo }), /agences de confirmation/);
+  await call('catalog.saveGuide', depot, { id: thermo, guide: {} });
+});
+
+test('the translation helpers: lines read by position, the guide’s own language never a target', () => {
+  assert.deepEqual(readLines('ok {"lines": ["a", "", 3, " b "]}', 5), ['a', null, null, 'b', null]);
+  assert.deepEqual(readLines('pas de JSON', 2), [null, null]);
+  assert.match(translateSystem('dz', 'fr'), /de la darija algérienne vers le français/);
+  const g = cleanGuide({ brief: 'B', faq: [{ q: 'Q', a: TO_FILL }], lang: 'en' } as any);
+  assert.deepEqual(guideSources(g), ['B', 'Q']);
+  assert.deepEqual(cleanTr({ en: { B: 'x' }, fr: { B: 'b', Z: 'z' }, ar: { Q: ' ق ' } }, g), { fr: { B: 'b' }, ar: { Q: 'ق' } });
+});
+
+test('the demo guides: read in Arabic and English, the size guide included', async () => {
+  const lit = Number((await db.query(`SELECT id FROM products WHERE sku = 'PX-LIT'`))[0].id);
+  const ar: any = await call('catalog.guide', depot, { id: lit, lang: 'ar' });
+  assert.equal(ar.trMissing, 0);
+  assert.equal(ar.tr[ar.guide.brief], 'سرير سفر قابل للطي مع فرشته، من الولادة حتى 3 سنوات، يُحفظ في حقيبته.');
+  assert.equal(ar.tr[ar.guide.fit.measures], '120 × 60 سم مفتوحاً');
+  const en: any = await call('catalog.guide', depot, { id: chair, lang: 'en' });
+  assert.equal(en.trMissing, 0);
+  assert.equal(en.tr['Poids maximum ?'], 'Maximum weight?');
+  // (the bottle's guide was changed by the agency's test above)
+  for (const r of await db.query(`SELECT id, name FROM products WHERE sku IN ('PX-CHA', 'PX-POU', 'PX-LIT', 'PX-BOD')`)) {
+    for (const lang of ['ar', 'en']) {
+      const g: any = await call('catalog.guide', depot, { id: Number(r.id), lang });
+      assert.equal(g.trMissing, 0, `${r.name}: every line in ${lang}`);
+    }
+  }
 });

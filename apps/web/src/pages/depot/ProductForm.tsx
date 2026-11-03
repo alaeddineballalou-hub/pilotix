@@ -10,7 +10,7 @@ import { toast } from '../../ui/toast';
 import { ConfirmButton } from '../admin/bits';
 import { bidi } from './stockui';
 import { combosOf, MAX_COMBOS, Opt, skuOf, titleOf, VariantOptions, VRow } from './VariantOptions';
-import { DraftFacts, formToGuide, GuideEditor, GuideForm, guideProblem, guideToForm, sizeValues } from './guide';
+import { DraftFacts, formToGuide, formTr, GuideEditor, GuideForm, guideProblem, guideToForm, readLang, sizeValues, useGuideTranslate } from './guide';
 
 interface PackRow {
   qty: string;
@@ -100,7 +100,10 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
   const [relQ, setRelQ] = useState('');
   // the second tab: the product's sales guide (what the agents read during a call, what Dellal and CM AI answer with)
   const [tab, setTab] = useState<'product' | 'guide'>(firstTab ?? 'product');
-  const [guide, setGuide] = useState<GuideForm>(() => guideToForm(p?.guide ?? null));
+  const { i18n } = useTranslation();
+  const [guide, setGuide] = useState<GuideForm>(() => guideToForm(p?.guide ?? null, p?.guideTr, readLang(i18n.language)));
+  // saved: Pilot AI translates the guide's new lines into the other languages
+  const translate = useGuideTranslate();
   useEffect(() => {
     if (hasParts && !parts.length) setParts([{ name: '', max: '' }]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -110,6 +113,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
     onDone: (r) => {
       onClose();
       if (!p) onCreated?.(r);
+      if (r.hasGuide) void translate.run(r.id);
     },
   });
   // Archiver (administrators): out of the lists, kept for the orders; deleted later from Management › Archives
@@ -194,6 +198,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
       parts: hasParts ? parts.filter((x) => x.name.trim()).map((x) => ({ name: x.name.trim(), max: x.max === '' ? null : Math.round(Number(x.max)) || null })) : [],
       services: services.map((x) => ({ id: x.id, name: x.name.trim(), price: Math.round(Number(x.price)), cost: Math.round(Number(x.cost)) })),
       guide: sales,
+      guideTr: formTr(guide, sales),
     });
   };
   /** what « Écrire avec l'IA » knows of the product: this form as it is now (saved or not) */

@@ -623,7 +623,13 @@
       "upsellSearch": "Search a product to offer…",
       "upsellMax": "{{max}} products at most",
       "upsellPhrase": "+ Add a sentence (optional)",
-      "upsellPhrasePh": "How to offer it (optional)"
+      "upsellPhrasePh": "How to offer it (optional)",
+      "trTabs": "Guide languages",
+      "original": "original",
+      "trHint": "Pilot AI translates the guide each time you save. Fix what is wrong: your fixes stay.",
+      "trPh": "Translated by Pilot AI when you save",
+      "trRedo": "Redo all with Pilot AI",
+      "trEmpty": "Nothing to translate yet: write the guide in its own language first."
     },
     "page": {
       "list": "Products",
@@ -674,6 +680,26 @@
       "quality": "Is it good quality? Is it original?",
       "assembled": "Does it come assembled?",
       "use": "How do I use and clean it?"
+    },
+    "tr": {
+      "from_fr": "Translated from French",
+      "from_ar": "Translated from Arabic",
+      "from_en": "Translated from English",
+      "from_dz": "Translated from Darija",
+      "as_fr": "Original text, in French",
+      "as_ar": "Original text, in Arabic",
+      "as_en": "Original text, in English",
+      "as_dz": "Original text, in Darija",
+      "seeOriginal": "See the original",
+      "seeTr": "See the translation",
+      "missing_one": "{{count}} line not translated yet",
+      "missing_other": "{{count}} lines not translated yet",
+      "none": "Not translated yet: here is the original text.",
+      "now": "Translate now",
+      "working": "Translating…",
+      "done": "Guide translated into the other languages",
+      "noAi": "Translation waiting: Pilot AI is not available right now.",
+      "failed": "Part of it could not be translated: try again later."
     }
   }
 }

@@ -3,9 +3,11 @@
 // size) when the product has a size option, a small one (age, weight, measures) when it has one size only, fixed
 // questions to pick, and the products to offer picked in the catalog;
 // the confirmation agencies write it too for their products. The agents read it during a call (the « Guide » button on
-// each product of the order opens it beside the order, without hiding it) and in Produits & stock. Dellal and CM AI read
-// the same guide.
+// each product of the order opens it beside the order, without hiding it) and in Produits & stock, in the app's language:
+// Pilot AI translates each line after a save, the team corrects the translations in the editor's language tabs, and the
+// original words stay one click away. Dellal and CM AI read the original guide.
 import { ReactNode, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
@@ -41,6 +43,13 @@ export interface UpsellProduct {
   price: number;
   photo: string | null;
 }
+/** the languages a guide is written in (Darija: Algerian, in Latin letters), and the ones the app is read in */
+export type GuideLang = 'fr' | 'ar' | 'dz' | 'en';
+export type ReadLang = 'fr' | 'ar' | 'en';
+export const READ_LANGS: ReadLang[] = ['fr', 'ar', 'en'];
+export const readLang = (l: string | undefined): ReadLang => (l?.startsWith('ar') ? 'ar' : l?.startsWith('en') ? 'en' : 'fr');
+/** the guide in each other reading language: one of its lines → the translation (Pilot AI's, or the team's) */
+export type GuideTr = Partial<Record<ReadLang, Record<string, string>>>;
 export interface Guide {
   brief: string;
   strengths: string[];
@@ -51,8 +60,9 @@ export interface Guide {
   never: string[];
   sizes: GuideSize[];
   fit: GuideFit;
+  lang: GuideLang;
 }
-/** The form: the one-per-line parts as plain text. */
+/** The form: the one-per-line parts as plain text, the translations as the team corrects them (trBase: as loaded). */
 export interface GuideForm {
   brief: string;
   strengths: string;
@@ -63,6 +73,9 @@ export interface GuideForm {
   never: string;
   sizes: GuideSize[];
   fit: GuideFit;
+  lang: GuideLang;
+  tr: GuideTr;
+  trBase: GuideTr;
 }
 
 /** An answer the AI could not know: the team writes it (the AI agents never use it). */
@@ -84,7 +97,9 @@ export const fitFilled = (f: GuideFit | null | undefined) => !!f && !!(f.age || 
 
 const lines = (s: string) => s.split('\n').map((x) => x.replace(/^\s*[-•*]\s*/, '').trim()).filter(Boolean);
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
-export const guideToForm = (g: Guide | null | undefined): GuideForm => ({
+const copyTr = (tr: GuideTr | null | undefined): GuideTr => Object.fromEntries(Object.entries(tr ?? {}).map(([l, m]) => [l, { ...m }]));
+/** lang: the language of a new guide (the writer's) */
+export const guideToForm = (g: Guide | null | undefined, tr?: GuideTr | null, lang: GuideLang = 'fr'): GuideForm => ({
   brief: g?.brief ?? '',
   strengths: (g?.strengths ?? []).join('\n'),
   faq: (g?.faq ?? []).map((p) => ({ ...p })),
@@ -94,6 +109,9 @@ export const guideToForm = (g: Guide | null | undefined): GuideForm => ({
   never: (g?.never ?? []).join('\n'),
   sizes: (g?.sizes ?? []).map((x) => ({ ...x })),
   fit: { ...EMPTY_FIT, ...(g?.fit ?? {}) },
+  lang: g?.lang ?? lang,
+  tr: copyTr(tr),
+  trBase: copyTr(tr),
 });
 /**
  * sizes: the product's sizes now (a size it no longer has leaves the guide; a product with sizes has no small size
@@ -111,7 +129,52 @@ export const formToGuide = (f: GuideForm, sizes?: string[]): Guide => ({
     .map((x) => ({ size: x.size.trim(), age: x.age.trim(), weight: x.weight.trim() }))
     .filter((x) => x.size && (x.age || x.weight) && (!sizes || sizes.some((y) => same(y, x.size)))),
   fit: sizes?.length ? EMPTY_FIT : { age: f.fit.age.trim(), weight: f.fit.weight.trim(), measures: f.fit.measures.trim() },
+  lang: f.lang,
 });
+
+/** The guide's lines to translate, each once and in order (the same as the server's, modules/guide.ts). */
+export function guideSources(g: Guide): string[] {
+  const all = [
+    g.brief,
+    ...g.sizes.flatMap((x) => [x.age, x.weight]),
+    g.fit.age,
+    g.fit.weight,
+    g.fit.measures,
+    ...g.strengths,
+    ...g.faq.flatMap((p) => [p.q, p.a]),
+    ...g.doubts.flatMap((p) => [p.q, p.a]),
+    g.upsell,
+    ...g.never,
+  ];
+  return [...new Set(all.map((x) => x.trim()).filter((x) => x && !toFill(x)))];
+}
+/** The reading languages a guide is translated into: all but its own. */
+export const trTargets = (lang: GuideLang) => READ_LANGS.filter((l) => l !== lang);
+/** The team's corrections to save: the lines changed in the tabs (emptied: Pilot AI translates them again). */
+export function formTr(f: GuideForm, g: Guide): GuideTr {
+  const src = guideSources(g);
+  const out: GuideTr = {};
+  for (const l of trTargets(g.lang)) {
+    const changed = src.filter((x) => (f.tr[l]?.[x] ?? '').trim() !== (f.trBase[l]?.[x] ?? '').trim());
+    if (changed.length) out[l] = Object.fromEntries(changed.map((x) => [x, (f.tr[l]?.[x] ?? '').trim()]));
+  }
+  return out;
+}
+/** The guide in another language: each line through its translation (a line not translated yet stays as written). */
+export function inLang(g: Guide, tr: Record<string, string>): Guide {
+  const t = (x: string) => (x && !toFill(x) ? tr[x.trim()] ?? x : x);
+  return {
+    ...g,
+    brief: t(g.brief),
+    strengths: g.strengths.map(t),
+    faq: g.faq.map((p) => ({ q: t(p.q), a: t(p.a) })),
+    doubts: g.doubts.map((p) => ({ q: t(p.q), a: t(p.a) })),
+    upsell: t(g.upsell),
+    never: g.never.map(t),
+    sizes: g.sizes.map((x) => ({ ...x, age: t(x.age), weight: t(x.weight) })),
+    fit: { age: t(g.fit.age), weight: t(g.fit.weight), measures: t(g.fit.measures) },
+  };
+}
 const sizeOf = (g: Guide) =>
   g.brief.length +
   g.upsell.length +
@@ -136,10 +199,33 @@ export function guideProblem(g: Guide, t: (k: string, o?: any) => string): strin
 }
 
 // ---------------------------------------------------------------- reading (agents, during the call)
-/** The guide's parts, for reading fast during a call: the brief, the size guide, then each part with what it holds. */
-export function GuideView({ guide, id, upsell = [] }: { guide: Guide; id: string; upsell?: UpsellProduct[] }) {
+/**
+ * The guide's parts, for reading fast during a call: the brief, the size guide, then each part with what it holds. tr:
+ * its lines in the reader's language (null: written in it); the original words are one click away. onTranslate: a
+ * writer's « Traduire maintenant » when nothing is translated yet.
+ */
+export function GuideView({
+  guide: original,
+  id,
+  upsell = [],
+  tr = null,
+  trMissing = 0,
+  onTranslate,
+  translating = false,
+}: {
+  guide: Guide;
+  id: string;
+  upsell?: UpsellProduct[];
+  tr?: Record<string, string> | null;
+  trMissing?: number;
+  onTranslate?: () => void;
+  translating?: boolean;
+}) {
   const { t } = useTranslation();
   const box = useRef<HTMLDivElement>(null);
+  const [asWritten, setAsWritten] = useState(false);
+  const has = !!tr && Object.keys(tr).length > 0;
+  const guide = has && !asWritten ? inLang(original, tr!) : original;
   // one size only: its small size guide (the lines written)
   const fit = guide.sizes.length || !guide.fit ? [] : (['age', 'weight', 'measures'] as const).filter((k) => guide.fit[k] && !toFill(guide.fit[k]));
   const parts = [
@@ -168,6 +254,26 @@ export function GuideView({ guide, id, upsell = [] }: { guide: Guide; id: string
   );
   return (
     <div className="gd-view" ref={box}>
+      {tr && (
+        <p className="gd-lang" role="status">
+          <Icon name="languages" />
+          <span>
+            {!has ? t('produits.guide.tr.none') : asWritten ? t(`produits.guide.tr.as_${original.lang}`) : t(`produits.guide.tr.from_${original.lang}`)}
+            {has && !asWritten && trMissing > 0 && <> · {t('produits.guide.tr.missing', { count: trMissing })}</>}
+          </span>
+          {has ? (
+            <button type="button" className="linkish" aria-pressed={asWritten} onClick={() => setAsWritten(!asWritten)}>
+              {asWritten ? t('produits.guide.tr.seeTr') : t('produits.guide.tr.seeOriginal')}
+            </button>
+          ) : (
+            onTranslate && (
+              <button type="button" className="linkish" disabled={translating} onClick={onTranslate}>
+                {translating ? t('produits.guide.tr.working') : t('produits.guide.tr.now')}
+              </button>
+            )
+          )}
+        </p>
+      )}
       {guide.brief && !toFill(guide.brief) && <p className="gd-brief" dir="auto">{guide.brief}</p>}
       {parts.length > 2 && (
         <nav className="gd-jump" aria-label={t('produits.guide.jump')}>
@@ -331,13 +437,13 @@ export function GuideButton({ productId, className = '', label, icon = true }: {
 }
 
 function GuidePanel({ productId, onClose }: { productId: number; onClose: () => void }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const phone = useIsPhone();
   const id = useId().replace(/:/g, '');
-  const q = useRpc('catalog.guide', { id: productId }, { staleTime: 60_000 });
+  const q = useRpc('catalog.guide', { id: productId, lang: readLang(i18n.language) }, { staleTime: 60_000 });
   const d = q.data;
   const meta = d?.updatedAt ? (d.updatedBy ? t('produits.guide.updated', { date: dateOnly(d.updatedAt), name: d.updatedBy }) : t('produits.guide.updatedNoName', { date: dateOnly(d.updatedAt) })) : null;
-  const body = q.error ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> : !d ? <Loading /> : d.guide ? <GuideView guide={d.guide} id={id} upsell={d.upsell} /> : <Empty>{t('produits.guide.empty')}</Empty>;
+  const body = q.error ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> : !d ? <Loading /> : d.guide ? <GuideView guide={d.guide} id={id} upsell={d.upsell} tr={d.tr} trMissing={d.trMissing} /> : <Empty>{t('produits.guide.empty')}</Empty>;
   if (phone)
     return (
       <Sheet title={d?.name ?? t('produits.guide.title')} sub={[t('produits.guide.title'), meta].filter(Boolean).join(' · ')} onClose={onClose} tall className="gd-sheet">
@@ -421,8 +527,7 @@ export interface DraftFacts {
   /** Produits liés: the draft's Vente en plus picks them */
   linkedIds?: number[];
 }
-const LANGS = ['fr', 'ar', 'dz', 'en'] as const;
-type Lang = (typeof LANGS)[number];
+const LANGS: GuideLang[] = ['fr', 'ar', 'dz', 'en'];
 /** The questions every guide can pick (in this order), and the answers Pilotix knows for them. */
 const FIXED = ['pay', 'delivery', 'delay', 'colors', 'size', 'age', 'weight', 'measures', 'warranty', 'exchange', 'quality', 'assembled', 'use'] as const;
 type Fixed = (typeof FIXED)[number];
@@ -432,9 +537,11 @@ type Fixed = (typeof FIXED)[number];
  * Enregistrer). products: what Vente en plus can pick (this shop's, the writer's ones).
  */
 export function GuideEditor({ value, onChange, facts, products }: { value: GuideForm; onChange: (v: GuideForm) => void; facts: () => DraftFacts; products: { id: number; name: string }[] }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const seller = useScope();
-  const [lang, setLang] = useState<Lang>(() => (i18n.language === 'ar' ? 'ar' : i18n.language === 'en' ? 'en' : 'fr'));
+  const lang = value.lang;
+  // the guide as written (its own language), or its translation into one of the other reading languages
+  const [view, setView] = useState<'main' | ReadLang>('main');
   const [busy, setBusy] = useState(false);
   const [undo, setUndo] = useState<{ before: GuideForm; by: 'ai' | 'rules' } | null>(null);
   const [find, setFind] = useState('');
@@ -451,7 +558,7 @@ export function GuideEditor({ value, onChange, facts, products }: { value: Guide
     try {
       const r = await rpc('catalog.guideDraft', { ...f, lang }, seller);
       setUndo({ before: value, by: r.by });
-      onChange(guideToForm(r.guide));
+      onChange({ ...guideToForm(r.guide), tr: value.tr, trBase: value.trBase });
       if (r.guide.upsell) setPhrase(true);
     } catch (e) {
       toast((e as Error).message, 'bad');
@@ -544,12 +651,37 @@ export function GuideEditor({ value, onChange, facts, products }: { value: Guide
       {children}
     </section>
   );
+  const targets = trTargets(lang);
+  const sources = guideSources(g);
+  const langTabs = (
+    <div className="gd-ed-langs" role="tablist" aria-label={t('produits.guide.ed.trTabs')}>
+      <button type="button" role="tab" aria-selected={view === 'main'} className={`gd-filter ${view === 'main' ? 'on' : ''}`} onClick={() => setView('main')}>
+        {t(`produits.guide.langs.${lang}`)} <small>{t('produits.guide.ed.original')}</small>
+      </button>
+      {targets.map((l) => (
+        <button key={l} type="button" role="tab" aria-selected={view === l} className={`gd-filter ${view === l ? 'on' : ''}`} onClick={() => setView(l)}>
+          {t(`produits.guide.langs.${l}`)}{' '}
+          <span className="ltr">
+            {sources.filter((x) => (value.tr[l]?.[x] ?? '').trim()).length}/{sources.length}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+  if (view !== 'main' && targets.includes(view))
+    return (
+      <div className="gd-ed">
+        {langTabs}
+        <TrTab lang={view} g={g} value={value} onChange={onChange} />
+      </div>
+    );
   return (
     <div className="gd-ed">
+      {langTabs}
       <div className="gd-ed-top">
         <p>{t('produits.guide.ed.help')}</p>
         <div className="gd-ed-ai">
-          <select value={lang} aria-label={t('produits.guide.ed.lang')} onChange={(e) => setLang(e.target.value as Lang)}>
+          <select value={lang} aria-label={t('produits.guide.ed.lang')} onChange={(e) => set('lang', e.target.value as GuideLang)}>
             {LANGS.map((l) => (
               <option key={l} value={l}>
                 {t(`produits.guide.langs.${l}`)}
@@ -662,4 +794,89 @@ export function GuideEditor({ value, onChange, facts, products }: { value: Guide
       <p className={`gd-size ${size > GUIDE_MAX.total ? 'bad' : ''}`}>{t('produits.guide.ed.size', { n: n(size), max: n(GUIDE_MAX.total) })}</p>
     </div>
   );
+}
+
+/**
+ * One other reading language: each line of the guide (in its part) with its translation, to correct. A line emptied,
+ * or « Tout refaire par Pilot AI », is translated again when the guide is saved.
+ */
+function TrTab({ lang, g, value, onChange }: { lang: ReadLang; g: Guide; value: GuideForm; onChange: (v: GuideForm) => void }) {
+  const { t } = useTranslation();
+  const mem = value.tr[lang] ?? {};
+  const set = (src: string, v: string) => onChange({ ...value, tr: { ...value.tr, [lang]: { ...mem, [src]: v } } });
+  const groups = [
+    { k: 'brief', icon: 'info', lines: [g.brief] },
+    { k: 'sizes', icon: 'shirt', lines: [...g.sizes.flatMap((x) => [x.age, x.weight]), g.fit.age, g.fit.weight, g.fit.measures] },
+    { k: 'strengths', icon: 'check', lines: g.strengths },
+    { k: 'faq', icon: 'help', lines: g.faq.flatMap((p) => [p.q, p.a]) },
+    { k: 'doubts', icon: 'message', lines: g.doubts.flatMap((p) => [p.q, p.a]) },
+    { k: 'upsell', icon: 'gift', lines: [g.upsell] },
+    { k: 'never', icon: 'ban', lines: g.never },
+  ];
+  // each line once (in the first part that has it), the answers still to write left out: the same lines as the server's
+  const seen = new Set<string>();
+  const shown = groups
+    .map((x) => ({ ...x, lines: x.lines.map((l) => l.trim()).filter((l) => l && !toFill(l) && !seen.has(l) && !!seen.add(l)) }))
+    .filter((x) => x.lines.length);
+  if (!shown.length) return <p className="gd-ed-none">{t('produits.guide.ed.trEmpty')}</p>;
+  return (
+    <div className="gd-tr">
+      <div className="gd-tr-top">
+        <p>{t('produits.guide.ed.trHint')}</p>
+        <button type="button" className="btn small" onClick={() => onChange({ ...value, tr: { ...value.tr, [lang]: {} } })}>
+          <Icon name="refresh" /> {t('produits.guide.ed.trRedo')}
+        </button>
+      </div>
+      {shown.map((x) => (
+        <section key={x.k} className="pf-sec gd-ed-sec">
+          <h3 className="gd-h">
+            <Icon name={x.icon} />
+            {t(`produits.guide.${x.k}`)}
+          </h3>
+          {x.lines.map((src) => (
+            <label key={src} className="gd-tr-line">
+              <span dir="auto">{src}</span>
+              <textarea
+                dir={lang === 'ar' ? 'rtl' : 'ltr'}
+                lang={lang}
+                rows={Math.min(5, Math.max(1, Math.ceil(src.length / 64)))}
+                maxLength={1500}
+                value={mem[src] ?? ''}
+                placeholder={t('produits.guide.ed.trPh')}
+                onChange={(e) => set(src, e.target.value)}
+              />
+            </label>
+          ))}
+        </section>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * After a save (the Guide de vente tab, the product form): Pilot AI translates the lines still without a translation;
+ * then everything on screen is read again. quiet: say nothing when there was nothing to translate.
+ */
+export function useGuideTranslate() {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const seller = useScope();
+  const [busy, setBusy] = useState<number | null>(null);
+  const run = async (id: number) => {
+    setBusy(id);
+    try {
+      const r = await rpc('catalog.translateGuide', { id }, seller);
+      if (r.by === 'done') return;
+      qc.invalidateQueries();
+      if (r.by === 'none') toast(t('produits.guide.tr.noAi'), 'bad');
+      else if (r.error || Object.keys(r.missing).length) toast(t('produits.guide.tr.failed'), 'bad');
+      else toast(t('produits.guide.tr.done'), 'ok');
+    } catch (e) {
+      const m = (e as Error).message;
+      if (!/déjà en cours/.test(m)) toast(m, 'bad');
+    } finally {
+      setBusy(null);
+    }
+  };
+  return { run, busy };
 }

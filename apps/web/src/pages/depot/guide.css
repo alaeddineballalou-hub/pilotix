@@ -216,3 +216,18 @@
 .gd-ed-none { margin: 0; color: var(--muted); font-size: 13px; }
 .gd-phrase { justify-self: start; font-weight: 700; }
 @media (max-width: 640px) { .gd-ed-size { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .gd-ed-size b { grid-column: 1 / -1; } .gd-ed-size-head { display: none; } .gd-ed-fit-row { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+
+/* ---- the other reading languages: a line above the guide (translated from…, the original one click away), the
+   editor's language tabs, and each line with its translation to correct */
+.gd-lang { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0 0 12px; padding: 8px 12px; border-radius: 10px; background: var(--sky-soft); color: var(--ink); font-size: 12.5px; font-weight: 700; }
+.gd-lang .bji { width: 15px; height: 15px; flex: none; color: var(--muted); }
+.gd-lang .linkish { font-size: 12.5px; font-weight: 800; }
+.gd-ed-langs { display: flex; flex-wrap: wrap; gap: 6px; }
+.gd-ed-langs .gd-filter small { font-size: 11px; font-weight: 700; opacity: .75; }
+.gd-tr { display: grid; gap: 12px; }
+.gd-tr-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.gd-tr-top p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; flex: 1 1 280px; }
+.gd-tr-line { display: grid; gap: 5px; }
+.gd-tr-line + .gd-tr-line { margin-top: 4px; }
+.gd-tr-line > span { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+.gd-tr-line textarea { resize: vertical; min-height: 40px; }

@@ -10,14 +10,41 @@
 //   (the product, its variants, packs, linked products and services, its landing page, Dellal's shop notes) and never
 //   invents a fact: an answer it cannot know stays « [À compléter] » for the team. Pilotix's key pays (Pilot AI), counted
 //   with the shop's Dellal answers. Without the AI (Pilot AI off or today's limit reached, the preview): a simple draft
-//   made by rules from the same facts. The team reads and corrects it; nothing is saved before « Enregistrer ».
+//   made by rules from the same facts. The team reads and corrects it; nothing is saved before « Enregistrer »;
+// - catalog.translateGuide: after a save, Pilot AI translates the lines still without a translation into the other
+//   reading languages (French, Arabic, English); the team's corrections stay. Without the AI they wait for the next save.
 import { z } from 'zod';
 import { iso, num } from '../db';
-import { Ctx, forbidden, hasRole, notFound, proc } from '../rpc';
+import { Ctx, forbidden, hasRole, notFound, proc, withActionLock } from '../rpc';
 import { getSetting } from '../settings';
 import { darijaGuide } from './darijabook';
 import { aiKeyed, dellalSettings, pilotOn } from './dellal';
-import { checkGuide, cleanGuide, EMPTY_FIT, fitFilled, GUIDE_LIMITS as L, guideEmpty, GuideFit, GuideInput, guideToFill, ProductGuide, readGuide, saveGuide, sizeValues, TO_FILL, toFill } from './guide';
+import {
+  addTranslations,
+  checkGuide,
+  cleanGuide,
+  EMPTY_FIT,
+  fitFilled,
+  GUIDE_LANGS,
+  GUIDE_LIMITS as L,
+  guideEmpty,
+  GuideFit,
+  GuideInput,
+  GuideLang,
+  guideSources,
+  guideToFill,
+  GuideTr,
+  ProductGuide,
+  READ_LANGS,
+  ReadLang,
+  readGuide,
+  saveGuide,
+  sizeValues,
+  TO_FILL,
+  toFill,
+  TrInput,
+  trMissing,
+} from './guide';
 import { agencyOf } from './agencyscope';
 import { assignedProductIds, requireAssignedProducts } from './productscope';
 
@@ -40,8 +67,7 @@ async function writerOf(ctx: Ctx, productId?: number): Promise<number[] | null> 
   return allowed;
 }
 export const GUIDE_MODEL = 'claude-sonnet-5-5';
-export const GUIDE_LANGS = ['fr', 'ar', 'dz', 'en'] as const;
-export type GuideLang = (typeof GUIDE_LANGS)[number];
+export { GUIDE_LANGS, type GuideLang };
 
 export const DraftInput = z.object({
   /** the saved product (its landing page is read too); missing for a product not saved yet */
@@ -254,6 +280,8 @@ export async function draftGuide(ctx: Ctx, i: DraftIn): Promise<Draft> {
       upsellIds: g.guide.upsellIds.length ? g.guide.upsellIds : f.linkedIds.slice(0, L.upsellIds),
       sizes: g.guide.sizes.filter((x) => sizes.has(x.size.toLowerCase())),
       fit: sizes.size ? EMPTY_FIT : g.guide.fit,
+      // the language it was written in (the plain draft is French)
+      lang: g.by === 'ai' ? i.lang : 'fr',
     },
   };
 }
@@ -272,14 +300,143 @@ async function draftOf(ctx: Ctx, i: DraftIn, f: Facts): Promise<Draft> {
   return guide ? { guide, by: 'ai' } : { guide: rulesDraft(f), by: 'rules' };
 }
 
+// ---------------------------------------------------------------- the other reading languages
+const FROM: Record<GuideLang, string> = { fr: 'du français', ar: 'de l’arabe', dz: 'de la darija algérienne', en: 'de l’anglais' };
+const TO: Record<ReadLang, string> = { fr: 'le français', ar: 'l’arabe', en: 'l’anglais' };
+
+/** Claude's instructions to translate a guide's lines (the same lines back, in the same order, nothing added). */
+export function translateSystem(from: GuideLang, to: ReadLang): string {
+  return [
+    `Tu traduis le « guide de vente » d’un produit ${FROM[from]} vers ${TO[to]}, pour une boutique algérienne en ligne (paiement à la livraison). Les conseillers le lisent pendant leurs appels.`,
+    '',
+    'Règles :',
+    '- Traduis chaque ligne, dans le même ordre, sans rien ajouter ni enlever : pas de fait, de promesse ni d’explication en plus.',
+    `- Garde les mêmes nombres, les mêmes prix (DA) et les mêmes unités (aucune conversion), les noms de produits et de marques tels quels, et le marqueur « ${TO_FILL} ».`,
+    '- Les mots entre « » sont ce que dit le client (souvent en darija) : garde-les tels quels, et ajoute leur sens entre parenthèses.',
+    `- Langue : ${LANG_TEXT[to]}.`,
+    '',
+    'Tu reçois {"lines": [...]}. Réponds UNIQUEMENT avec un objet JSON, sans texte autour : {"lines": ["…"]}, autant de lignes que reçues, dans le même ordre.',
+  ].join('\n');
+}
+
+/** Claude's translated lines, by position (a missing or empty one: null). */
+export function readLines(text: string, n: number): (string | null)[] {
+  const a = text.indexOf('{');
+  const b = text.lastIndexOf('}');
+  let raw: any = null;
+  try {
+    raw = a >= 0 && b > a ? JSON.parse(text.slice(a, b + 1)) : null;
+  } catch {
+    raw = null;
+  }
+  const lines: unknown[] = Array.isArray(raw?.lines) ? raw.lines : [];
+  return Array.from({ length: n }, (_, k) => {
+    const v = typeof lines[k] === 'string' ? (lines[k] as string).trim() : '';
+    return v ? v.slice(0, 1500) : null;
+  });
+}
+
+/** Lines in batches small enough for one answer each. */
+function batches(lines: string[], size = 2500): string[][] {
+  const out: string[][] = [];
+  let cur: string[] = [];
+  let n = 0;
+  for (const x of lines) {
+    if (cur.length && n + x.length > size) {
+      out.push(cur);
+      cur = [];
+      n = 0;
+    }
+    cur.push(x);
+    n += x.length;
+  }
+  if (cur.length) out.push(cur);
+  return out;
+}
+
+/** Pilot AI translates these lines (null: no AI here). A batch that fails stays untranslated. */
+async function translateLines(ctx: Ctx, lines: string[], from: GuideLang, to: ReadLang): Promise<{ out: (string | null)[]; error: string | null } | null> {
+  const inPage = !ctx.server?.dellal && ctx.dellalAi ? ctx.dellalAi : null;
+  if (!inPage && !(await aiKeyed(ctx))) return null;
+  const system = translateSystem(from, to);
+  const pilot = !inPage && (await pilotOn(ctx));
+  let error: string | null = null;
+  const parts = await Promise.all(
+    batches(lines).map(async (part) => {
+      const messages = [{ role: 'user' as const, content: JSON.stringify({ lines: part }) }];
+      // Arabic takes more room than French: enough for the longest
+      const max_tokens = Math.min(8000, 400 + Math.ceil(part.join('').length * 1.5));
+      try {
+        const res: any = inPage
+          ? await inPage({ model: GUIDE_MODEL, system, messages, tools: [], max_tokens, runTool: async () => ({ error: 'Pas d’outil ici' }) })
+          : await ctx.server!.dellal!('complete', { model: GUIDE_MODEL, system, messages, tools: [], max_tokens, feature: 'dellal', pilot }, ctx);
+        const text = (res?.content ?? []).map((b: any) => (b?.type === 'text' ? String(b.text) : '')).join('');
+        return readLines(text, part.length);
+      } catch (e) {
+        error = (e as Error).message || 'Traduction impossible';
+        return part.map(() => null);
+      }
+    }),
+  );
+  return { out: parts.flat(), error };
+}
+
+export interface TrResult {
+  /** ai: Pilot AI translated what was missing; done: nothing was missing; none: no AI here (nothing changed) */
+  by: 'ai' | 'done' | 'none';
+  /** the lines still without a translation, per language */
+  missing: Partial<Record<ReadLang, number>>;
+  error: string | null;
+}
+const counts = (m: Partial<Record<ReadLang, string[]>>) => Object.fromEntries(Object.entries(m).map(([l, v]) => [l, v!.length])) as Partial<Record<ReadLang, number>>;
+
+/** After a save: Pilot AI translates the guide's lines still without a translation, in each other reading language. */
+export async function translateGuide(ctx: Ctx, productId: number): Promise<TrResult> {
+  const saved = await readGuide(ctx.db, productId);
+  if (!saved) return { by: 'done', missing: {}, error: null };
+  const todo = Object.entries(trMissing(saved.guide, saved.tr)) as [ReadLang, string[]][];
+  if (!todo.length) return { by: 'done', missing: {}, error: null };
+  return withActionLock(ctx.db, `guide-tr:${productId}`, ctx.session.profile.id, 'La traduction de ce guide est déjà en cours', async () => {
+    let error: string | null = null;
+    const add: GuideTr = {};
+    let none = false;
+    await Promise.all(
+      todo.map(async ([l, lines]) => {
+        const r = await translateLines(ctx, lines, saved.guide.lang, l);
+        if (!r) return void (none = true);
+        error ??= r.error;
+        add[l] = Object.fromEntries(lines.map((x, k) => [x, r.out[k]] as const).filter((p): p is readonly [string, string] => !!p[1]));
+      }),
+    );
+    if (none) return { by: 'none', missing: counts(trMissing(saved.guide, saved.tr)), error: null };
+    await addTranslations(ctx.db, productId, add);
+    const after = await readGuide(ctx.db, productId);
+    return { by: 'ai', missing: after ? counts(trMissing(after.guide, after.tr)) : {}, error };
+  });
+}
+
 export const guideProcs = {
-  /** One product's sales guide (read only), within the products this person's work gives them. */
-  'catalog.guide': proc(['confirmation', 'suivi', 'depot'], z.object({ id }), async (ctx, { id }) => {
+  /**
+   * One product's sales guide (read only), within the products this person's work gives them. lang: the reader's
+   * language; tr: the guide's lines in it (null: the guide is written in it), trMissing: the lines not translated yet.
+   */
+  'catalog.guide': proc(['confirmation', 'suivi', 'depot'], z.object({ id, lang: z.enum(READ_LANGS).optional() }), async (ctx, { id, lang }) => {
     await requireAssignedProducts(ctx, [id]);
     const p = (await ctx.db.query('SELECT id, name, photo FROM products WHERE id = $1', [id]))[0];
     if (!p) throw notFound('Produit introuvable');
     const g = await readGuide(ctx.db, id);
-    return { id: num(p.id), name: String(p.name), photo: (p.photo as string | null) ?? null, guide: g?.guide ?? null, upsell: g?.upsell ?? [], updatedAt: g?.updatedAt ?? null, updatedBy: g?.updatedBy ?? null };
+    const other = !!g && !!lang && lang !== g.guide.lang;
+    return {
+      id: num(p.id),
+      name: String(p.name),
+      photo: (p.photo as string | null) ?? null,
+      guide: g?.guide ?? null,
+      upsell: g?.upsell ?? [],
+      tr: other ? (g!.tr[lang!] ?? {}) : null,
+      trMissing: other ? (trMissing(g!.guide, g!.tr)[lang!]?.length ?? 0) : 0,
+      updatedAt: g?.updatedAt ?? null,
+      updatedBy: g?.updatedBy ?? null,
+    };
   }),
 
   /** « Écrire avec l'IA » (the product form, the Guide de vente tab): a first guide to correct (nothing saved). */
@@ -309,6 +466,8 @@ export const guideProcs = {
       linkedIds,
       services: (j(p.services) as any[]).map((x) => ({ name: String(x.name), price: num(x.price) })),
       options: (j(p.options) as any[]).map((o) => ({ name: String(o.name), values: (o.values ?? []).map(String) })),
+      /** the guide's translations, for the editor's language tabs */
+      guideTr: (await readGuide(ctx.db, id))?.tr ?? {},
     };
   }),
 
@@ -348,13 +507,28 @@ export const guideProcs = {
    * Produits & stock › Guide de vente › Modifier: only the guide (the rest of the product is the product form's). The
    * depot side on every product, an agency's people on the agency's products (and Vente en plus among them).
    */
-  'catalog.saveGuide': proc([...WRITERS], z.object({ id, guide: GuideInput }), async (ctx, i) => {
+  'catalog.saveGuide': proc([...WRITERS], z.object({ id, guide: GuideInput, tr: TrInput.optional() }), async (ctx, i) => {
     const allowed = await writerOf(ctx, i.id);
     const p = (await ctx.db.query('SELECT id FROM products WHERE id = $1', [i.id]))[0];
     if (!p) throw notFound('Produit introuvable');
     const g = checkGuide(i.guide);
-    await ctx.db.tx((tx) => saveGuide(tx, i.id, g, ctx.session.profile.id, allowed));
+    await ctx.db.tx((tx) => saveGuide(tx, i.id, g, ctx.session.profile.id, allowed, i.tr));
     const saved = await readGuide(ctx.db, i.id);
-    return { id: i.id, guide: saved?.guide ?? null, upsell: saved?.upsell ?? [], updatedAt: saved?.updatedAt ?? null, updatedBy: saved?.updatedBy ?? null };
+    return {
+      id: i.id,
+      guide: saved?.guide ?? null,
+      upsell: saved?.upsell ?? [],
+      tr: saved?.tr ?? {},
+      /** lines to translate now (the client asks catalog.translateGuide) */
+      trMissing: saved ? counts(trMissing(saved.guide, saved.tr)) : {},
+      updatedAt: saved?.updatedAt ?? null,
+      updatedBy: saved?.updatedBy ?? null,
+    };
+  }),
+
+  /** After a save (the tab, the product form): Pilot AI translates the lines still without a translation. */
+  'catalog.translateGuide': proc([...WRITERS], z.object({ id }), async (ctx, { id }) => {
+    await writerOf(ctx, id);
+    return translateGuide(ctx, id);
   }),
 };
