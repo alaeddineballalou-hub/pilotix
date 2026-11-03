@@ -234,8 +234,6 @@ test('resend never prepares an order with products not yet picked', async () => 
     ORDER BY id LIMIT 1`)).map((x: any) => Number(x.id));
   assert.ok(oid, 'needs a confirmed but unpicked parcel');
   await db.query('UPDATE orders SET company_id=$2 WHERE id=$1', [oid, yal]);
-  const result: any = await call('depot.resend', depot, { ids: [oid] });
-  assert.equal(result.moved, 0);
-  assert.equal(result.sent, 0);
+  await assert.rejects(call('depot.resend', depot, { ids: [oid] }), /Terminez la préparation/);
   assert.equal((await row(oid)).follow_status, 'to_prepare');
 });
