@@ -1,4 +1,4 @@
-# Temporary (for Claude): can Meta reach Pilotix through Cloudflare (check turned off)? Reads only.
+# Temporary (for Claude): can Meta reach Pilotix through Cloudflare (Let Meta through first, Algeria check on)? Reads only.
 name: Live now (temporary, for Claude)
 on:
   push:
