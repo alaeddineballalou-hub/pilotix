@@ -314,6 +314,9 @@ export interface ShopInfoExtra {
   ownerProfileId: number | null;
   stores: number;
   canAddStore: boolean;
+  /** the stores the person owns and their limit (« 2 boutiques sur 3 ») */
+  ownStores?: number;
+  maxStores?: number | null;
   /** « Créer mon agence »: the person has no confirmation agency yet */
   canAddAgency?: boolean;
   /** « Créer mon espace marketer »: the person has no marketer space yet */
@@ -354,6 +357,7 @@ export function shopInfo(s: Shop, st: ShopStatus, settings: PlatformSettings, no
     ownerProfileId: extra.ownerProfileId,
     stores: extra.stores,
     canAddStore: extra.canAddStore,
+    ...(extra.ownStores !== undefined ? { ownStores: extra.ownStores, maxStores: extra.maxStores ?? null } : {}),
     canAddAgency: !!extra.canAddAgency,
     canAddMarketer: !!extra.canAddMarketer,
     supportUnread: extra.supportUnread,

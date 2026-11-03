@@ -891,7 +891,20 @@ class ApiController {
   private async addFor(acc: core.Account, body: unknown) {
     const shop = await core.addStore(this.core.t, acc, body);
     this.core.invalidate();
-    return this.enter(shop.id, acc.email);
+    // « Commencer avec les réglages de … »: one of the person's own boutiques; a failed copy never stops the new one
+    // (the app says so: « Copier des réglages » in « Mes boutiques » does it again)
+    const from = Number((body as { copyFrom?: unknown } | null)?.copyFrom) || 0;
+    let copied: boolean | null = null;
+    if (from && shop.kind === 'store') {
+      try {
+        await core.copyIntoNewBoutique(this.core.t, acc, from, shop);
+        copied = true;
+      } catch (e: any) {
+        copied = false;
+        new Logger('Boutiques').warn(`[${shop.slug}] settings not copied from shop ${from}: ${e?.message ?? e}`);
+      }
+    }
+    return { ...(await this.enter(shop.id, acc.email)), copied };
   }
 
   /** Only the owner: the store and all its data are deleted (its password and the store's exact name asked). */

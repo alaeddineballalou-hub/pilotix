@@ -1,5 +1,7 @@
 {
   "title": "My boutiques",
+  "count": "{{n}} of {{max}} boutiques",
+  "countFull": "That’s the maximum: write to Pilotix to get more.",
   "switch": "Switch boutique",
   "switchTitle": "{{name}}: your boutiques",
   "openNow": "Boutique open now",
@@ -69,5 +71,41 @@
     "toPrepare": "To prepare",
     "onRoad": "On the road",
     "oneAtATime": "“{{what}}” is done one boutique at a time: pick the boutique."
+  },
+  "copy": {
+    "title": "Copy settings",
+    "sub": "Take what is already set up in another of your boutiques: no need to do it all again.",
+    "from": "From",
+    "to": "To",
+    "parts": {
+      "couriers": "Delivery companies",
+      "couriersText": "The companies, their prices, their offices, Pilot Auto Assign and the wilaya parcels leave from.",
+      "fees": "Customer delivery prices",
+      "feesText": "The price grids by wilaya, the after-sales price and overweight.",
+      "statuses": "Statuses and reasons",
+      "statusesText": "Renamed or added statuses, their order and the Suivi reasons.",
+      "work": "Work rules",
+      "workText": "Calls, automatic assignment, pay, the client score, Suivi’s deadlines and the columns.",
+      "messages": "Messages to customers",
+      "messagesText": "The SMS / WhatsApp sent to customers, the team’s WhatsApp message and the livreur’s ones.",
+      "pages": "Landing pages",
+      "pagesText": "When a purchase counts, the reminder to a customer who did not finish, the WhatsApp button.",
+      "ai": "AI agents",
+      "aiText": "How Message AI agent and CM AI agent talk and work. They stay on or off as they are here."
+    },
+    "keys": "The same API keys (the same account at each company)",
+    "keysOn": "API keys typed",
+    "nothing": "Nothing set up in {{name}}",
+    "there": "already here: updated",
+    "note": "What is ticked replaces these settings in {{name}}. The companies {{name}} already has stay. Never copied: orders, products, stock, customers, team, money, Facebook / WhatsApp accounts, pixels.",
+    "go": "Copy into {{name}}",
+    "askTitle": "Copy into {{name}}?",
+    "askText": "These settings of {{from}} will replace those of {{to}}:",
+    "ok": "Copy",
+    "done": "Settings copied into {{name}}",
+    "added": "Companies added: {{list}}",
+    "updated": "Companies updated: {{list}}",
+    "doneParts": "Copied: {{list}}",
+    "none": "Tick at least one part"
   }
 }

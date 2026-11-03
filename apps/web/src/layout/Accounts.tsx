@@ -6,6 +6,7 @@ import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, DEMO_ONLY, isPhone, legalText, phoneCheck, PhoneSent, server, signup, signupCode, SignupInfo, signupInfo, StoreChoice, storeNameCheck, verifyEmail } from '../lib/backend';
 import { usePhoneProblem } from '../lib/phoneCheck';
+import { useRpcFor } from '../lib/query';
 import { useSession } from '../lib/session';
 import { Icon } from '../ui/kit';
 import { Modal } from '../ui/modal';
@@ -328,12 +329,17 @@ export function AddStoreForm({ ticket, onDone, onCancel, kind = 'store' }: { tic
   const [error, setError] = useState('');
   const [verify, setVerify] = useState<'need' | 'sent' | null>(null);
   const [busy, setBusy] = useState(false);
+  // « Commencer avec les réglages de … » (a person already in one of their boutiques): 0 = nothing copied
+  const [copyFrom, setCopyFrom] = useState<{ id: number; name: string }>({ id: 0, name: '' });
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     setBusy(true);
     try {
-      onDone(await server.addStore(partner ? { name: name.trim(), kind } : { name: name.trim(), ...(touched && slug ? { slug } : {}) }, ticket));
+      const r = await server.addStore(partner ? { name: name.trim(), kind } : { name: name.trim(), ...(touched && slug ? { slug } : {}), ...(copyFrom.id ? { copyFrom: copyFrom.id } : {}) }, ticket);
+      if (r.copied === true) toast(t('shop.acc.copied', { name: copyFrom.name }), 'ok');
+      else if (r.copied === false) toast(t('shop.acc.copyFailed'), 'bad', 8000);
+      onDone(r.session);
       location.hash = '#/accueil';
     } catch (err: any) {
       if (err instanceof ApiError && err.message === 'VERIFY_EMAIL') setVerify('need');
@@ -372,7 +378,10 @@ export function AddStoreForm({ ticket, onDone, onCancel, kind = 'store' }: { tic
           <input required minLength={2} maxLength={80} value={name} onChange={(e) => setName(e.target.value)} placeholder={tk('namePh')} />
         </label>
       ) : (
-        <StoreNameFields name={name} setName={setName} slug={slug} setSlug={setSlug} touched={touched} setTouched={setTouched} />
+        <>
+          <StoreNameFields name={name} setName={setName} slug={slug} setSlug={setSlug} touched={touched} setTouched={setTouched} />
+          {!ticket && <CopyFromField value={copyFrom.id} onChange={setCopyFrom} />}
+        </>
       )}
       <p className="small muted">{partner ? tk('addText') : t('shop.acc.addText')}</p>
       {error && <p className="form-err">{error}</p>}
@@ -387,6 +396,45 @@ export function AddStoreForm({ ticket, onDone, onCancel, kind = 'store' }: { tic
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * « Commencer avec les réglages de … »: one of the person's own boutiques (the one open first) gives the new one its
+ * delivery companies (same keys), prices, statuses, messages and work rules; or nothing.
+ */
+function CopyFromField({ value, onChange }: { value: number; onChange: (v: { id: number; name: string }) => void }) {
+  const { t } = useTranslation();
+  const q = useRpcFor(null, 'boutiques.list', {}, { staleTime: 60_000 });
+  const mine = (q.data ?? []).filter((b) => b.owner && b.kind === 'store');
+  const chosen = useRef(false);
+  useEffect(() => {
+    if (chosen.current || !mine.length) return;
+    chosen.current = true;
+    const b = mine.find((x) => x.current) ?? mine[0];
+    onChange({ id: b.id, name: b.name });
+  }, [mine, onChange]);
+  if (!mine.length) return null;
+  return (
+    <label className="field">
+      <span className="lab">{t('shop.acc.copyFrom')}</span>
+      <select
+        value={value}
+        onChange={(e) => {
+          chosen.current = true;
+          const b = mine.find((x) => x.id === Number(e.target.value));
+          onChange({ id: b?.id ?? 0, name: b?.name ?? '' });
+        }}
+      >
+        {mine.map((b) => (
+          <option key={b.id} value={b.id}>
+            {b.current ? t('shop.acc.thisOne', { name: b.name }) : b.name}
+          </option>
+        ))}
+        <option value={0}>{t('shop.acc.copyNone')}</option>
+      </select>
+      <span className="hint">{t('shop.acc.copyHint')}</span>
+    </label>
   );
 }
 

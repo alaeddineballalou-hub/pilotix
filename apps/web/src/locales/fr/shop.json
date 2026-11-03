@@ -74,7 +74,13 @@
     "linkBad": "Ce lien ne marche plus",
     "verified": "Email confirmé",
     "verifiedText": "Merci ! Vous pouvez maintenant ajouter d’autres boutiques à votre compte.",
-    "continue": "Continuer"
+    "continue": "Continuer",
+    "copyFrom": "Commencer avec les réglages de",
+    "copyNone": "Ne rien copier",
+    "copyHint": "Sociétés de livraison (avec les mêmes clés), prix, statuts, messages et règles du travail. Jamais les commandes, les produits ni l’équipe.",
+    "copied": "Réglages de {{name}} copiés",
+    "copyFailed": "Boutique créée, mais ses réglages n’ont pas été copiés : faites-le dans « Mes boutiques ».",
+    "thisOne": "{{name}} (ouverte)"
   },
   "aide": {
     "title": "Contacter Pilotix",

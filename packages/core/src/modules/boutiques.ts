@@ -104,7 +104,7 @@ export async function myBoutiques(ctx: Ctx): Promise<Boutique[]> {
 }
 
 /** A boutique the person owns (on a platform: the account that created it), ready to change. */
-async function ownBoutique(ctx: Ctx, id: number): Promise<{ shop: Shop | null; db: Db }> {
+export async function ownBoutique(ctx: Ctx, id: number, notOwner = 'Seul le propriétaire de la boutique change son nom, son lien et son logo'): Promise<{ shop: Shop | null; db: Db }> {
   const t = ctx.t;
   if (!t || !ctx.shop) {
     if (id !== (ctx.shop?.id ?? 0)) throw notFound('Boutique introuvable');
@@ -115,7 +115,7 @@ async function ownBoutique(ctx: Ctx, id: number): Promise<{ shop: Shop | null; d
   if (!s || s.status === 'deleted' || s.status === 'archived') throw notFound('Boutique introuvable');
   if (s.kind !== 'store') throw bad('Seules les boutiques se changent ici');
   const acc = await accountByEmail(t, ctx.session.profile.email);
-  if (!acc || s.ownerAccountId !== acc.id) throw forbidden('Seul le propriétaire de la boutique change son nom, son lien et son logo');
+  if (!acc || s.ownerAccountId !== acc.id) throw forbidden(notOwner);
   return { shop: s, db: s.id === ctx.shop.id ? ctx.db : t.shop(s.schema) };
 }
 

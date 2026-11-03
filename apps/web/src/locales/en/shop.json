@@ -74,7 +74,13 @@
     "linkBad": "This link no longer works",
     "verified": "E-mail confirmed",
     "verifiedText": "Thank you! You can now add other stores to your account.",
-    "continue": "Continue"
+    "continue": "Continue",
+    "copyFrom": "Start with the settings of",
+    "copyNone": "Copy nothing",
+    "copyHint": "Delivery companies (with the same keys), prices, statuses, messages and work rules. Never the orders, products or team.",
+    "copied": "Settings of {{name}} copied",
+    "copyFailed": "Store created, but its settings were not copied: do it in « My boutiques ».",
+    "thisOne": "{{name}} (open)"
   },
   "aide": {
     "title": "Contact Pilotix",

@@ -187,6 +187,9 @@ export interface ShopInfo {
   stores: number;
   /** this person can add a store of their own (sign-ups open, under their limit) */
   canAddStore: boolean;
+  /** the stores this person owns, and how many they may own (« 2 boutiques sur 3 »; null: not known here) */
+  ownStores?: number;
+  maxStores?: number | null;
   /** « Créer mon agence » (the person has no confirmation agency yet) */
   canAddAgency?: boolean;
   /** « Créer mon espace marketer » (the person has no marketer space yet) */

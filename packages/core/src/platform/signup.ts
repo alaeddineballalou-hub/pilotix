@@ -390,11 +390,13 @@ export async function shopInfoExtra(t: Tenancy, s: Shop, email: string, set: Pla
   const acc = await accountByEmail(t, email);
   // the stores a partner's person works for are reached from the partner's space: not other stores of theirs
   const mem = acc ? (await membershipsOf(t, acc.email)).filter((m) => !m.agencyId) : [];
+  const own = acc ? await ownedStores(t, acc.id) : 0;
   return {
     owner: !!acc && s.ownerAccountId === acc.id,
     ownerProfileId: await ownerProfileId(t, s),
     stores: Math.max(0, mem.length - 1),
-    canAddStore: !!acc && set.signup.open && !s.demo && (await ownedStores(t, acc.id)) < storeLimit(acc, set),
+    canAddStore: !!acc && set.signup.open && !s.demo && own < storeLimit(acc, set),
+    ...(acc ? { ownStores: own, maxStores: storeLimit(acc, set) } : {}),
     canAddAgency: !!acc && set.signup.open && !s.demo && (await ownedAgencies(t, acc.id)) === 0,
     canAddMarketer: !!acc && set.signup.open && !s.demo && (await ownedMarketers(t, acc.id)) === 0,
     ordersMonth: shopMaxOrders(s) !== null ? await ordersThisMonth(t.shop(s.schema)) : null,

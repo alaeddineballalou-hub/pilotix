@@ -1,5 +1,7 @@
 {
   "title": "Mes boutiques",
+  "count": "{{n}} boutiques sur {{max}}",
+  "countFull": "C’est le maximum : écrivez à Pilotix pour en avoir plus.",
   "switch": "Changer de boutique",
   "switchTitle": "{{name}} : vos boutiques",
   "openNow": "Boutique ouverte",
@@ -69,5 +71,41 @@
     "toPrepare": "À préparer",
     "onRoad": "En route",
     "oneAtATime": "« {{what}} » se fait boutique par boutique : choisissez la boutique."
+  },
+  "copy": {
+    "title": "Copier des réglages",
+    "sub": "Prenez ce qui est déjà réglé dans une autre de vos boutiques : pas besoin de tout refaire.",
+    "from": "Depuis",
+    "to": "Vers",
+    "parts": {
+      "couriers": "Sociétés de livraison",
+      "couriersText": "Les sociétés, leurs tarifs, leurs bureaux, Pilot Auto Assign et la wilaya de départ des colis.",
+      "fees": "Prix de livraison du client",
+      "feesText": "Les grilles de prix par wilaya, le prix du SAV et le surpoids.",
+      "statuses": "Statuts et motifs",
+      "statusesText": "Les statuts renommés ou ajoutés, leur ordre et les motifs du Suivi.",
+      "work": "Règles du travail",
+      "workText": "Les appels, l’affectation automatique, la paie, le score client, les délais du Suivi et les colonnes.",
+      "messages": "Messages aux clients",
+      "messagesText": "Les SMS / WhatsApp envoyés aux clients, le message WhatsApp de l’équipe et ceux du livreur.",
+      "pages": "Landing pages",
+      "pagesText": "Quand un achat compte, la relance du client qui n’a pas fini, le bouton WhatsApp.",
+      "ai": "Agents IA",
+      "aiText": "Comment Message AI agent et CM AI agent parlent et travaillent. Ils restent allumés ou éteints comme ici."
+    },
+    "keys": "Les mêmes clés API (le même compte chez chaque société)",
+    "keysOn": "Clés API tapées",
+    "nothing": "Rien de réglé dans {{name}}",
+    "there": "déjà ici : mise à jour",
+    "note": "Ce qui est coché remplace ces réglages dans {{name}}. Les sociétés que {{name}} a déjà restent. Jamais copiés : commandes, produits, stock, clients, équipe, argent, comptes Facebook / WhatsApp, pixels.",
+    "go": "Copier dans {{name}}",
+    "askTitle": "Copier dans {{name}} ?",
+    "askText": "Ces réglages de {{from}} vont remplacer ceux de {{to}} :",
+    "ok": "Copier",
+    "done": "Réglages copiés dans {{name}}",
+    "added": "Sociétés ajoutées : {{list}}",
+    "updated": "Sociétés mises à jour : {{list}}",
+    "doneParts": "Copié : {{list}}",
+    "none": "Cochez au moins une partie"
   }
 }

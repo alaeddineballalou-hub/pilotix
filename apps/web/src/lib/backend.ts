@@ -286,9 +286,13 @@ class RemoteBackend implements Backend {
   stores() {
     return this.req<StoreChoice[]>('/auth/stores');
   }
-  /** « Ajouter une boutique »: made, then entered (from the picker: with its ticket). */
-  async addStore(input: { name: string; slug?: string; kind?: 'store' | 'agency' | 'marketer' }, ticket?: string) {
-    return this.enterWith(await this.req<{ token: string; session: Session }>(ticket ? '/auth/add-store/ticket' : '/auth/add-store', { ...input, ...(ticket ? { ticket } : {}) }));
+  /**
+   * « Ajouter une boutique »: made, then entered (from the picker: with its ticket). `copyFrom`: one of the person's own
+   * boutiques whose settings the new one starts with (`copied`: false when that copy failed, null when none was asked).
+   */
+  async addStore(input: { name: string; slug?: string; kind?: 'store' | 'agency' | 'marketer'; copyFrom?: number }, ticket?: string): Promise<{ session: Session; copied: boolean | null }> {
+    const r = await this.req<{ token: string; session: Session; copied?: boolean | null }>(ticket ? '/auth/add-store/ticket' : '/auth/add-store', { ...input, ...(ticket ? { ticket } : {}) });
+    return { session: this.enterWith(r), copied: r.copied ?? null };
   }
   /** The sign-up e-mail's link: the store is made and entered (or « you already have an account »). */
   /** The sign-up e-mail's link: the store is made and entered, or (account-only sign-up) the picker to create it, or « you already have an account ». */

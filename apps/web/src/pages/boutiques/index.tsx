@@ -10,6 +10,7 @@ import { useAction } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { AddStoreModal } from '../../layout/Accounts';
 import { BoutiqueLogo, useBoutiques } from '../../layout/Boutiques';
+import { CopyCard } from './CopyCard';
 import type { PageProps } from '../registry';
 import { Empty, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
@@ -75,24 +76,37 @@ export function Boutiques({ sub }: PageProps) {
     );
   const chosen = mine.find((b) => String(b.id) === sub) ?? mine.find((b) => b.current) ?? mine[0];
   const canAdd = backend.kind !== 'demo' && !!session?.shop?.canAddStore;
+  // « 2 boutiques sur 3 »: how many the seller has, and the most he may have (the control room sets it)
+  const own = session?.shop?.ownStores;
+  const max = session?.shop?.maxStores;
+  const full = own !== undefined && !!max && own >= max;
   return (
     <div className="bqp">
-      <nav className="bqp-tabs" aria-label={t('boutiques.title')}>
-        {mine.map((b) => (
-          <a key={b.id} href={`#/boutiques/${b.id}`} className={`bqp-tab${b.id === chosen.id ? ' on' : ''}`} aria-current={b.id === chosen.id ? 'page' : undefined}>
-            <BoutiqueLogo name={b.name} logo={b.logo} size={30} />
-            <span>{b.name}</span>
-            {b.current && <span className="bqp-here" title={t('boutiques.openNow')} />}
-          </a>
-        ))}
-        {canAdd && (
-          <button type="button" className="bqp-tab bqp-tab-add" onClick={() => setAdd(true)}>
-            <Icon name="plus" />
-            <span>{t('shop.acc.addStore')}</span>
-          </button>
+      <div className="bqp-head">
+        <nav className="bqp-tabs" aria-label={t('boutiques.title')}>
+          {mine.map((b) => (
+            <a key={b.id} href={`#/boutiques/${b.id}`} className={`bqp-tab${b.id === chosen.id ? ' on' : ''}`} aria-current={b.id === chosen.id ? 'page' : undefined}>
+              <BoutiqueLogo name={b.name} logo={b.logo} size={30} />
+              <span>{b.name}</span>
+              {b.current && <span className="bqp-here" title={t('boutiques.openNow')} />}
+            </a>
+          ))}
+          {canAdd && (
+            <button type="button" className="bqp-tab bqp-tab-add" onClick={() => setAdd(true)}>
+              <Icon name="plus" />
+              <span>{t('shop.acc.addStore')}</span>
+            </button>
+          )}
+        </nav>
+        {own !== undefined && !!max && (
+          <span className={`bqp-count${full ? ' full' : ''}`}>
+            <b>{t('boutiques.count', { n: own, max })}</b>
+            {full && <small>{t('boutiques.countFull')}</small>}
+          </span>
         )}
-      </nav>
+      </div>
       <Editor key={chosen.id} b={chosen} />
+      {mine.length > 1 && <CopyCard key={`copy-${chosen.id}`} to={chosen} others={mine.filter((b) => b.id !== chosen.id)} />}
       {add && <AddStoreModal onClose={() => setAdd(false)} />}
     </div>
   );
