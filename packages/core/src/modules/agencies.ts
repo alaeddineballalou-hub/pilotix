@@ -512,6 +512,28 @@ async function linkDetail(t: Tenancy, L: Link, month: string, now: number) {
   return { link: L.info, month, counts:saved?.counts??counts, bill, bills: await billsOf(t, L.info.id), planTerms:await contractTerms(t,L), bonusTerms: L.info.kind==='agency'?await sellerBonusTerms(t,L.agencySchema,L.info.id):[] };
 }
 
+/**
+ * What each seller owes the agency for each month asked (Analyse & statistiques): the bill the agency asked for (its
+ * amount and where it stands), else the contract's bill on the month's numbers — the same amounts as Facturation.
+ */
+export async function agencyEarnings(t: Tenancy, agencyId: number, months: string[], now: number, storeId?: number) {
+  const links = (await t.platform.query(`${LINK_SQL} WHERE l.agency_id = $1 AND l.started_at IS NOT NULL ORDER BY s.name, l.id`, [agencyId]))
+    .map(toLink)
+    .filter((L: Link) => L.info.kind === 'agency' && (!storeId || L.info.store.id === storeId));
+  const out: { storeId: number; store: string; month: string; total: number; status: AgencyBillInfo['status'] | null }[] = [];
+  for (const month of months) {
+    const { from, to } = monthBounds(month);
+    for (const L of links) {
+      if (!workedIn(L.info, from, to)) continue;
+      const b = (await t.platform.query('SELECT * FROM platform.agency_bills WHERE link_id = $1 AND month = $2', [L.info.id, month]))[0];
+      const saved = b ? toBill(b) : null;
+      const total = saved ? saved.amount : (await contractBill(t, L, month, await linkCounts(t, L, month, now), now)).total;
+      out.push({ storeId: L.info.store.id, store: L.info.store.name, month, total, status: saved?.status ?? null });
+    }
+  }
+  return out;
+}
+
 /** This month's numbers of each link that works (or worked) with someone. */
 async function monthCounts(t: Tenancy, links: Link[], now: number) {
   const month = monthNow(now);

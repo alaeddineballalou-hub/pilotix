@@ -6,6 +6,7 @@ import { bad, Ctx, hasRole, notFound, proc, withActionLock } from '../rpc';
 import { getSetting, setSetting } from '../settings';
 import { addWorkMinutes, workMinutes } from '@pilotix/shared';
 import { getPrefs } from './prefs';
+import { rotateTimes } from './assign';
 import { swapFees } from './delivery';
 import { addEvent, FollowInput, getOrder, listOrders, ListInput, setFollow, withClientScores } from './orders';
 import { agencyOf, agencyRowSql, andSql, queueSql } from './agencyscope';
@@ -141,14 +142,18 @@ export interface SuiviRowExtra {
   claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null;
   /** why the parcel is in alert (note of its last "alert" event), shown next to the tracking */
   alertReason: string | null;
+  /** when the alert goes to another agent if nobody acts (Affectation › rotation), ms; null: it will not move */
+  rotateAt: number | null;
 }
 
-async function extras(db: Db, orders: Order[], now = Date.now()): Promise<Record<number, SuiviRowExtra>> {
+async function extras(ctx: Ctx, orders: Order[], now = ctx.now()): Promise<Record<number, SuiviRowExtra>> {
   if (!orders.length) return {};
+  const db = ctx.db;
   const ids = orders.map((o) => o.id);
   const alertIds = orders.filter((o) => o.followStatus === 'alert').map((o) => o.id);
   const clocks = await alertClocks(db, alertIds, now);
   const tries = await alertTries(db, alertIds, now);
+  const rot = await rotateTimes(ctx, 'follow', alertIds);
   const rows = await db.query(
     `SELECT o.id, co.kind AS company_kind, lv.phone AS livreur_phone,
        (SELECT json_build_object('id', c.id, 'status', c.status, 'createdAt', c.created_at, 'sentAt', c.sent_at)
@@ -173,6 +178,7 @@ async function extras(db: Db, orders: Order[], now = Date.now()): Promise<Record
       livreurPhone: r.livreur_phone ?? null,
       claim: c ? { id: num(c.id), status: c.status, createdAt: iso(c.createdAt), sentAt: isoOrNull(c.sentAt) } : null,
       alertReason: r.alert_reason ?? null,
+      rotateAt: rot.get(num(r.id)) ?? null,
     };
   }
   return out;
@@ -764,7 +770,7 @@ export const suiviProcs = {
     const ids = stuck ? [...stuck.keys()].slice(0, 500) : splitIds ? splitIds.slice(0, 500) : null;
     const page = await listOrders(ctx, ListInput.parse({ ...tabFilter(i.tab, ctx.now(), agencyOf(ctx) !== null && hasRole(ctx.session, 'suivi')), ...(ids ? { ids } : {}), q: i.q, page: i.page, pageSize: i.pageSize }), { queue: readQueue(ctx) });
     if (stuck) {
-      const ex = await extras(ctx.db, page.rows, ctx.now());
+      const ex = await extras(ctx, page.rows, ctx.now());
       for (const o of page.rows) if (ex[o.id]) ex[o.id].stuck = stuck.get(o.id) ?? null;
       // the longest without news first
       const rows = await withClientScores(ctx, [...page.rows].sort((a, b) => (stuck.get(b.id)?.days ?? 0) - (stuck.get(a.id)?.days ?? 0)));
@@ -772,7 +778,7 @@ export const suiviProcs = {
     }
     // the swap list only shows parcels that really left (still with the courier or the livreur)
     const rows = await withClientScores(ctx, i.tab === 'swap' ? page.rows.filter((o) => o.shippedAt) : page.rows);
-    return { ...page, rows, extra: await extras(ctx.db, rows, ctx.now()) };
+    return { ...page, rows, extra: await extras(ctx, rows, ctx.now()) };
   }),
 
   /** "Traiter" an alert: what was done, new date, note → back on the road with sub-status alert_traitee. */
@@ -978,7 +984,7 @@ export const suiviProcs = {
     );
     if (r[0]) {
       const order = await getOrder(ctx, num(r[0].id));
-      return { id: order.id, kind: 'alert' as const, order, extra: (await extras(ctx.db, [order], ctx.now()))[order.id] ?? null };
+      return { id: order.id, kind: 'alert' as const, order, extra: (await extras(ctx, [order], ctx.now()))[order.id] ?? null };
     }
     // no alert left: the Bloqués nobody handled yet, the longest without news first
     const stuck = [...(await stuckParcels(ctx)).entries()].filter(([oid, x]) => !x.handled && !i.skip.includes(oid)).sort((a, b) => b[1].days - a[1].days);
@@ -994,7 +1000,7 @@ export const suiviProcs = {
       );
       if (!got[0]) continue;
       const order = await getOrder(ctx, oid);
-      const ex = (await extras(ctx.db, [order], ctx.now()))[oid] ?? null;
+      const ex = (await extras(ctx, [order], ctx.now()))[oid] ?? null;
       return { id: oid, kind: 'stuck' as const, order, extra: ex ? { ...ex, stuck: x } : null };
     }
     return { id: null, kind: null, order: null, extra: null };

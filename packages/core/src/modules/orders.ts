@@ -1759,8 +1759,9 @@ export const ordersProcs = {
       const cfg = await getAssign(ctx.db);
       const mine = o.agentId === me && cfg.conf.hideHistory ? 'conf' : o.followAgentId === me && cfg.follow.hideHistory ? 'follow' : null;
       if (mine) {
-        const since = (await ctx.db.query(`SELECT max(at) AS at FROM order_events WHERE order_id = $1 AND kind = 'assign' AND to_value = $2`, [id, String(me)]))[0]?.at;
-        const before = rows.some((r: any) => r.kind === 'assign' && r.to_value !== String(me) && since && Date.parse(new Date(r.at).toISOString()) < Date.parse(new Date(since).toISOString()));
+        // given by the split or by a rotation (Affectation › rotation)
+        const since = (await ctx.db.query(`SELECT max(at) AS at FROM order_events WHERE order_id = $1 AND kind IN ('assign', 'rotate') AND to_value = $2`, [id, String(me)]))[0]?.at;
+        const before = rows.some((r: any) => (r.kind === 'assign' || r.kind === 'rotate') && r.to_value !== String(me) && since && Date.parse(new Date(r.at).toISOString()) < Date.parse(new Date(since).toISOString()));
         if (since && before) rows = rows.filter((r: any) => r.kind === 'created' || (r.kind === 'note' && r.user_id === null) || Date.parse(new Date(r.at).toISOString()) >= Date.parse(new Date(since).toISOString()));
       }
     }

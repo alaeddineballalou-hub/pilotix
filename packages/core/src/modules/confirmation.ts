@@ -9,6 +9,7 @@ import { ConfInput, getOrder, holdOrder, ListInput, listOrders, setConf, withCli
 import { andSql, queueSql } from './agencyscope';
 import { HAS_GUIDE } from './guide';
 import { assignedProductIds } from './productscope';
+import { rotateTimes } from './assign';
 
 // ---------------------------------------------------------------- sub-pages
 export const CONF_SUBS = {
@@ -191,6 +192,8 @@ export interface QueueRow extends Order {
   stock: 'ok' | 'short' | null;
   /** confirmation statuses the order went through (oldest first, without repeats in a row) */
   passed: string[];
+  /** when it goes to another agent if nobody acts (Affectation › rotation), ms; null: it will not move */
+  rotateAt: number | null;
 }
 
 const QueueInput = z.object({
@@ -310,6 +313,7 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
       passedOf.set(num(r.order_id), v.filter((x, k) => k === 0 || v[k - 1] !== x));
     }
   const scored = scoredAll ? page.rows : await withClientScores(ctx, page.rows);
+  const rot = queue ? await rotateTimes(ctx, 'conf', oids) : new Map<number, number>();
   const rows: QueueRow[] = scored.map((o) => ({
     ...o,
     skus: [...new Set(o.items.map((it) => (it.variantId ? skuOf.get(it.variantId) : undefined)).filter((s): s is string => !!s))],
@@ -318,6 +322,7 @@ async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
     dueKind: due.get(o.id)?.kind ?? null,
     stock: o.items.some((it) => it.variantId) ? (o.items.every((it) => !it.variantId || (stockOf.get(it.variantId) ?? 0) >= it.qty) ? 'ok' : 'short') : null,
     passed: passedOf.get(o.id) ?? [],
+    rotateAt: rot.get(o.id) ?? null,
   }));
   return { ...page, rows };
 }

@@ -550,6 +550,8 @@ export function eventText(t: (k: string, o?: any) => string, e: OrderEvent, user
       return t('orders.card.ev.follow_status') + (e.fromValue ? `${fol(e.fromValue)} → ` : '') + fol(e.toValue);
     case 'assign':
       return `${t('orders.card.ev.assign')} : ${user(e.toValue)}`;
+    case 'rotate':
+      return `${t('orders.card.ev.rotate')} : ${user(e.fromValue)} → ${user(e.toValue)}`;
     case 'company':
       return `${t('orders.card.ev.company')} : ${e.fromValue ? `${company(e.fromValue)} → ` : ''}${company(e.toValue)}`;
     case 'sub_status':

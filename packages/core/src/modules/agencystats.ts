@@ -9,7 +9,7 @@ import { CONF_TODO, FOLLOW_ON_ROAD, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, num } from '../db';
 import { Ctx, forbidden, proc } from '../rpc';
-import { LINK_SQL, toLink } from './agencies';
+import { agencyEarnings, LINK_SQL, monthNow, toLink } from './agencies';
 import { ONLINE_MS } from './assign';
 import { prevOf, Range } from './stats';
 
@@ -286,6 +286,39 @@ function agentLine(f: Awaited<ReturnType<typeof figures>>, id: number) {
 
 const sortRows = <T extends { received: number; delivered: number }>(rows: T[]) => rows.sort((a, b) => b.received + b.delivered - (a.received + a.delivered));
 
+/** The months (YYYY-MM, Algeria) a period touches (13 at most). */
+function monthsOf(r: R): string[] {
+  const out: string[] = [];
+  let m = monthNow(Date.parse(r.from));
+  const last = monthNow(Date.parse(r.to) - 1);
+  while (out.length < 13) {
+    out.push(m);
+    if (m >= last) break;
+    const y = Number(m.slice(0, 4));
+    const mo = Number(m.slice(5, 7));
+    m = mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, '0')}`;
+  }
+  return out;
+}
+
+/** What each seller owes the agency for each month of the period (the chief only): the same amounts as Facturation. */
+async function earningsOf(ctx: Ctx, r: R) {
+  const months = monthsOf(r);
+  const rows = await agencyEarnings(ctx.t!, ctx.shop!.id, months, ctx.now(), typeof ctx.seller === 'number' ? ctx.seller : undefined);
+  const by = new Map<number, { key: string; name: string; months: Record<string, { total: number; status: string | null }>; total: number }>();
+  for (const x of rows) {
+    const s = by.get(x.storeId) ?? { key: String(x.storeId), name: x.store, months: {}, total: 0 };
+    const cur = s.months[x.month] ?? { total: 0, status: null };
+    // one seller with two contracts in a month (one ended, a new one): added up
+    s.months[x.month] = { total: cur.total + x.total, status: x.status ?? cur.status };
+    s.total += x.total;
+    by.set(x.storeId, s);
+  }
+  const sellers = [...by.values()].sort((a, b) => b.total - a.total);
+  const perMonth = Object.fromEntries(months.map((m) => [m, sellers.reduce((n, s) => n + (s.months[m]?.total ?? 0), 0)]));
+  return { months, sellers, perMonth, total: sellers.reduce((n, s) => n + s.total, 0), current: monthNow(ctx.now()) };
+}
+
 export const agencyStatsProcs = {
   /**
    * Dashboard (everyone in the agency): what waits now, the period's numbers next to the period before, the days, who is
@@ -300,15 +333,26 @@ export const agencyStatsProcs = {
     const prev = await totalsOnly(ctx, prevOf(r, ctx.now()), mine);
     const workers = f.people.filter((p) => p.roles.some((x) => x === 'confirmation' || x === 'suivi'));
     const rows = workers.map((p) => ({ ...agentLine(f, p.id), name: p.name, presence: p.presence, conf: p.roles.includes('confirmation'), suivi: p.roles.includes('suivi') }));
-    // an agent's rank among the confirmation agents, on the confirmation rate (counted on the whole team, names kept on the server)
+    // an agent: his rank and the team's ladder — the other agents' numbers without their names (his job: confirmation, else
+    // suivi), counted on the whole team on the server
     let rank: { rank: number; of: number } | null = null;
-    if (!lead && ctx.session.roles.includes('confirmation')) {
+    let ladder: { by: 'conf' | 'follow'; rows: { pos: number; me: boolean; name: string | null; a: number; b: number; rate: number | null; rate2: number | null }[] } | null = null;
+    const job = ctx.session.roles.includes('confirmation') ? 'conf' : ctx.session.roles.includes('suivi') ? 'follow' : null;
+    if (!lead && job) {
       const all = await figures(ctx, r, { detail: false });
-      const ranked = workers
-        .filter((p) => p.roles.includes('confirmation'))
-        .map((p) => ({ id: p.id, l: withRates(all.confBy.get(p.id) ?? line()) }))
-        .filter((x) => x.l.confRate !== null)
-        .sort((a, b) => (b.l.confRate ?? 0) - (a.l.confRate ?? 0));
+      const mates = workers.filter((p) => p.roles.includes(job === 'conf' ? 'confirmation' : 'suivi'));
+      const lines = mates.map((p) => {
+        if (job === 'conf') {
+          const l = withRates(all.confBy.get(p.id) ?? line());
+          // the rate's own numbers: confirmed out of the ones decided (confirmed + cancelled)
+          return { id: p.id, name: p.name, a: l.confirmed, b: l.confirmed + l.cancelled, rate: l.confRate, rate2: l.deliveryRate };
+        }
+        const l = all.followBy.get(p.id) ?? line();
+        return { id: p.id, name: p.name, a: l.delivered, b: l.delivered + l.returned, rate: ratio(l.delivered, l.delivered + l.returned), rate2: null };
+      });
+      lines.sort((x, y) => (y.rate ?? -1) - (x.rate ?? -1) || y.a - x.a || y.b - x.b);
+      ladder = { by: job, rows: lines.map((x, i) => ({ pos: i + 1, me: x.id === me, name: x.id === me ? x.name : null, a: x.a, b: x.b, rate: x.rate, rate2: x.rate2 })) };
+      const ranked = lines.filter((x) => x.rate !== null);
       const i = ranked.findIndex((x) => x.id === me);
       if (i >= 0 && ranked.length > 1) rank = { rank: i + 1, of: ranked.length };
     }
@@ -323,6 +367,7 @@ export const agencyStatsProcs = {
       online: workers.filter((p) => p.presence === 'online' || p.presence === 'call').length,
       agents: lead ? sortRows(rows) : rows.filter((x) => x.id === me),
       rank,
+      ladder,
       sellers: f.stores.length,
     };
   }),
@@ -345,6 +390,8 @@ export const agencyStatsProcs = {
       agents: sortRows([...f.confBy.keys()].map((id) => ({ ...agentLine(f, id), key: String(id), name: nameOf(id) }))),
       followers: sortRows([...f.followBy.entries()].map(([id, l]) => ({ key: String(id), ...withRates(l), name: nameOf(id) }))),
       sellerCount: f.stores.length,
+      // the money: what each seller owes the agency (the chief only, as Facturation)
+      earnings: ctx.session.isAdmin ? await earningsOf(ctx, r) : null,
     };
   }),
 };

@@ -641,5 +641,9 @@
   },
   "mineEmpty": "No order of yours here. Press « Next order » to take the most urgent one.",
   "autoCancelled": "{{ref}} cancelled automatically: {{n}} unanswered calls",
-  "autoCancelledN": "{{n}} orders cancelled automatically (too many unanswered calls)"
+  "autoCancelledN": "{{n}} orders cancelled automatically (too many unanswered calls)",
+  "rot": {
+    "title": "Goes to another agent in {{d}} if nobody acts",
+    "nowTitle": "Goes to another agent within a minute"
+  }
 }

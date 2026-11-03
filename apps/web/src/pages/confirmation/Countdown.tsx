@@ -41,6 +41,24 @@ export interface Deadline {
   e?: number;
 }
 
+/**
+ * The rotation clock (Affectation › rotation): when the order goes to another agent if nobody acts. Amber in the last
+ * 5 minutes; once due, the next run (every minute) moves it.
+ */
+export function RotateChip({ at }: { at: number | null | undefined }) {
+  const { t, i18n: lang } = useTranslation();
+  const now = useNow();
+  if (!at) return null;
+  const left = at - now;
+  const ltr = lang.language === 'ar' ? '' : 'ltr';
+  const txt = cdText(left);
+  return (
+    <span className={`bj-rot ${ltr} ${left <= 0 ? 'due' : left < 5 * 60_000 ? 'soon' : ''}`} title={left > 0 ? t('confirmation.rot.title', { d: txt }) : t('confirmation.rot.nowTitle')}>
+      <Icon name="refresh" /> {left > 0 ? txt : '00:00'}
+    </span>
+  );
+}
+
 /** The `.bj-cd` chip: ok (green), soon (< 5 min, blinking), late (coral, "+…"), wait (grey, next slot). */
 /** `short`: in the table, the waiting pill says "dans 2 h 43" (the title keeps the whole sentence). */
 export function Countdown({ d, short }: { d: Deadline; short?: boolean }) {

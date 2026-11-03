@@ -1,7 +1,7 @@
 // Management › Affectation automatique: who gets a new order (Confirmation) and a new alert (Suivi), without anyone
 // choosing — the way (Manuel, Tour de rôle, Moins chargé), the rules, and each agent's own settings (in or out of the
 // split, ×2, his hours, his channels and products). « Répartir maintenant » gives what is waiting at once.
-import { CONF_STATUSES, SALES_CHANNELS } from '@pilotix/shared';
+import { CONF_STATUSES, CONF_TODO, SALES_CHANNELS } from '@pilotix/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../lib/backend';
@@ -51,11 +51,10 @@ export function Affectation({ agency = false }: { agency?: boolean } = {}) {
     onDone: () => setDraft(null),
   });
   const run = useAction(P.run, {
-    success: (r) =>
-      t('admin.aa.ran', {
-        n: r.conf.assigned + r.follow.assigned,
-        b: r.conf.back + r.follow.back,
-      }),
+    success: (r) => {
+      const m = (r.conf.moved ?? 0) + (r.follow.moved ?? 0);
+      return t(m ? 'admin.aa.ranMoved' : 'admin.aa.ran', { n: r.conf.assigned + r.follow.assigned, b: r.conf.back + r.follow.back, m });
+    },
   });
   if (q.isLoading) return <Loading />;
   if (q.error || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
@@ -63,6 +62,7 @@ export function Affectation({ agency = false }: { agency?: boolean } = {}) {
   const v = draft ?? d.cfg;
   const dirty = !!draft && JSON.stringify(draft) !== JSON.stringify(d.cfg);
   const setArea = (k: 'conf' | 'follow', p: Partial<AreaCfg>) => setDraft({ ...v, [k]: { ...v[k], ...p } });
+  const setRot = (k: 'conf' | 'follow', p: Partial<AreaCfg['rotation']>) => setArea(k, { rotation: { ...v[k].rotation, ...p } });
   const agentOf = (id: number): AgentCfg => ({
     ...AGENT0,
     ...(v.agents[String(id)] ?? {}),
@@ -88,8 +88,9 @@ export function Affectation({ agency = false }: { agency?: boolean } = {}) {
     setDraft({ ...v, order: ids });
   };
 
-  const Area = ({ k }: { k: 'conf' | 'follow' }) => {
+  const area = (k: 'conf' | 'follow') => {
     const a = v[k];
+    const r = a.rotation;
     const list = k === 'conf' ? d.conf : d.follow;
     const on = list.filter((x) => x.online && !agentOf(x.id).out);
     return (
@@ -253,6 +254,130 @@ export function Affectation({ agency = false }: { agency?: boolean } = {}) {
             </div>
           </section>
         )}
+        {a.mode !== 'manual' && (
+          <section className="pf-group aa-rot">
+            <h3>{t('admin.aa.rot.title')}</h3>
+            <label className="pf-row">
+              <span className="pf-text">
+                <b>{t('admin.aa.rot.on')}</b>
+                <small>{t(k === 'conf' ? 'admin.aa.rot.onHint' : 'admin.aa.rot.onHintFollow')}</small>
+              </span>
+              <input type="checkbox" role="switch" className="pf-sw" checked={r.on} onChange={(e) => setRot(k, { on: e.target.checked })} />
+            </label>
+            {r.on && (
+              <>
+                <div className="pf-row">
+                  <span className="pf-text">
+                    <b>{t('admin.aa.rot.minutes')}</b>
+                    <small>{t(k === 'conf' ? 'admin.aa.rot.minutesHint' : 'admin.aa.rot.minutesHintFollow')}</small>
+                  </span>
+                  <label className="pf-num">
+                    <input
+                      type="number"
+                      min={5}
+                      max={10080}
+                      inputMode="numeric"
+                      aria-label={t('admin.aa.rot.minutes')}
+                      value={r.minutes}
+                      onChange={(e) => setRot(k, { minutes: Math.max(5, Math.min(10080, Math.round(Number(e.target.value) || 30))) })}
+                    />
+                    <span>{t('admin.aa.min')}</span>
+                  </label>
+                </div>
+                {k === 'conf' && (
+                  <div className="pf-row pf-col">
+                    <span className="pf-text">
+                      <b>{t('admin.aa.rot.statuses')}</b>
+                      <small>{t('admin.aa.rot.statusesHint')}</small>
+                    </span>
+                    <div className="pf-chips pf-chips-s">
+                      {CONF_TODO.map((s) => (
+                        <label key={s} className={`pf-chip ${r.statuses.includes(s) ? 'on' : ''}`}>
+                          <input type="checkbox" checked={r.statuses.includes(s)} onChange={() => setRot(k, { statuses: r.statuses.includes(s) ? r.statuses.filter((x) => x !== s) : [...r.statuses, s] })} />
+                          <Icon name="checkcircle" />
+                          {t(`status.conf.${s}`)}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <label className="pf-row">
+                  <span className="pf-text">
+                    <b>{t('admin.aa.rot.noCall')}</b>
+                    <small>{t('admin.aa.rot.noCallHint')}</small>
+                  </span>
+                  <input type="checkbox" role="switch" className="pf-sw" checked={r.noCall} onChange={(e) => setRot(k, { noCall: e.target.checked })} />
+                </label>
+                <div className="pf-row pf-col">
+                  <span className="pf-text">
+                    <b>{t('admin.aa.rot.to')}</b>
+                    <small>{t('admin.aa.rot.toHint')}</small>
+                  </span>
+                  <div className="pf-chips aa-rot-to">
+                    <label className={`pf-chip ${r.target === null ? 'on' : ''}`}>
+                      <input type="radio" name={`aa-rt-${k}`} checked={r.target === null} onChange={() => setRot(k, { target: null })} />
+                      <Icon name="checkcircle" />
+                      {t('admin.aa.rot.toMode', { m: t(`admin.aa.mode.${a.mode}`) })}
+                    </label>
+                    <label className={`pf-chip ${r.target !== null ? 'on' : ''}`}>
+                      <input type="radio" name={`aa-rt-${k}`} checked={r.target !== null} disabled={!list.length} onChange={() => setRot(k, { target: list[0]?.id ?? null })} />
+                      <Icon name="checkcircle" />
+                      {t('admin.aa.rot.toAgent')}
+                    </label>
+                    {r.target !== null && (
+                      <select aria-label={t('admin.aa.rot.toAgent')} value={r.target} onChange={(e) => setRot(k, { target: Number(e.target.value) })}>
+                        {!list.some((x) => x.id === r.target) && <option value={r.target}>—</option>}
+                        {list.map((x) => (
+                          <option key={x.id} value={x.id}>
+                            {x.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
+                <div className="pf-row">
+                  <span className="pf-text">
+                    <b>{t('admin.aa.rot.lead')}</b>
+                    <small>{t('admin.aa.rot.leadHint')}</small>
+                  </span>
+                  <label className="pf-num">
+                    <input
+                      type="number"
+                      min={0}
+                      max={10}
+                      inputMode="numeric"
+                      aria-label={t('admin.aa.rot.lead')}
+                      value={r.toLeadAfter}
+                      onChange={(e) => setRot(k, { toLeadAfter: Math.max(0, Math.min(10, Math.round(Number(e.target.value) || 0))) })}
+                    />
+                    <span>{t('admin.aa.rot.moves')}</span>
+                  </label>
+                </div>
+                {k === 'conf' && (
+                  <div className="pf-row">
+                    <span className="pf-text">
+                      <b>{t('admin.aa.rot.setStatus')}</b>
+                      <small>{t('admin.aa.rot.setStatusHint')}</small>
+                    </span>
+                    <select className="aa-rot-sel" aria-label={t('admin.aa.rot.setStatus')} value={r.setStatus} onChange={(e) => setRot(k, { setStatus: e.target.value as AreaCfg['rotation']['setStatus'] })}>
+                      <option value="">{t('admin.aa.rot.same')}</option>
+                      {CONF_TODO.map((s) => (
+                        <option key={s} value={s}>
+                          {t(`status.conf.${s}`)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <p className="aa-rot-note">
+                  <Icon name="refresh" />
+                  <span>{t('admin.aa.rot.note')}</span>
+                </p>
+              </>
+            )}
+          </section>
+        )}
 
         <section className="pf-group aa-live">
           <h3>{t('admin.aa.now')}</h3>
@@ -309,8 +434,9 @@ export function Affectation({ agency = false }: { agency?: boolean } = {}) {
         ))}
       </div>
 
-      {tab === 'conf' && <Area k="conf" />}
-      {tab === 'follow' && <Area k="follow" />}
+      {/* called, not mounted: a component made at each render would be re-created at each key typed (focus lost) */}
+      {tab === 'conf' && area('conf')}
+      {tab === 'follow' && area('follow')}
       {tab === 'agents' && (
         <section className="pf-group">
           <h3>{t('admin.aa.agentsT')}</h3>

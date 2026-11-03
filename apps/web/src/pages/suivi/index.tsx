@@ -19,6 +19,7 @@ import { SwapModal, SwapResult, SwapSheetModal } from './Swap';
 import './suivi.css';
 import { colDrag, ColumnMenu, DensitySwitch, useDensity, useResizable, useTableColumns } from '../../ui/ColumnMenu';
 import { HistoryButton, PhoneCell } from '../confirmation/History';
+import { RotateChip } from '../confirmation/Countdown';
 import { store } from '../../lib/store';
 import { CopyCode } from '../../ui/CopyCode';
 import { useIsPhone } from '../../lib/useMedia';
@@ -198,7 +199,7 @@ function Head({ tab }: { tab: ListTab }) {
   );
 }
 
-type Extra = { stuck?: StuckInfo | null; motif?: { outcome: 'resolved' | 'lost'; label: string } | null; clock?: AlertClock | null; tries?: AlertTries | null; companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
+type Extra = { rotateAt?: number | null; stuck?: StuckInfo | null; motif?: { outcome: 'resolved' | 'lost'; label: string } | null; clock?: AlertClock | null; tries?: AlertTries | null; companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
 
 /** What the courier or the livreur said: the alert note while in alert, else the courier's own status. */
 const reasonOf = (o: Order, x?: Extra) => (o.followStatus === 'alert' ? x?.alertReason || o.extStatus : o.extStatus);
@@ -281,6 +282,7 @@ export function ParcelTable({ rows, actions, empty, extra = {} }: { rows: Order[
             {d === null ? '—' : <span className={`badge ${d >= 10 ? 't-bad' : d >= 5 ? 't-warn' : 't-info'} ltr`}>{t('suivi.days', { n: d })}</span>}
             {extra[o.id]?.clock && <ClockChip c={extra[o.id]!.clock} />}
             {extra[o.id]?.tries && <TriesChip tr={extra[o.id]!.tries} />}
+            {o.followStatus === 'alert' && <RotateChip at={extra[o.id]?.rotateAt} />}
             {extra[o.id]?.stuck && <StuckChips s={extra[o.id]!.stuck} />}
           </>
         );

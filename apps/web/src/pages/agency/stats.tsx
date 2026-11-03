@@ -14,6 +14,7 @@ import { useBoardPeriod } from '../dashboard/board/Board';
 import { Avatar, DayChart, PeriodChips } from '../dashboard/board/parts';
 import { confTone, delivTone, KpiBox } from '../dashboard/util';
 import type { PageProps } from '../registry';
+import { monthLabel } from './parts';
 import '../dashboard/board/board.css';
 import './stats.css';
 
@@ -60,10 +61,11 @@ function Head({ title, per }: { title: string; per: ReturnType<typeof useBoardPe
 }
 
 /** The period's numbers next to the period before. */
-function PeriodKpis({ d, p, vs, mine }: { d: Totals; p: Totals; vs: string; mine?: boolean }) {
+function PeriodKpis({ d, p, vs, mine, earned }: { d: Totals; p: Totals; vs: string; mine?: boolean; earned?: { total: number; months: number } | null }) {
   const { t } = useTranslation();
   return (
     <Kpis>
+      {earned && <KpiBox icon="wallet" label={t('agency.st.earned')} value={da(earned.total)} sub={t('agency.st.earnedSub', { count: earned.months })} tone="ok" href="#/facturation" />}
       <KpiBox icon="list" label={t(mine ? 'agency.st.myReceived' : 'agency.st.received')} value={n(d.received)} trend={<Trend v={ch(d.received, p.received)} vs={vs} />} sub={t('agency.st.pending', { n: d.pending })} />
       <KpiBox icon="check" label={t('agency.st.confirmed')} value={n(d.confirmed)} trend={<Trend v={chPts(d.confRate, p.confRate)} pts vs={vs} />} sub={t('agency.st.confRate', { v: pct(d.confRate) })} rate={d.confRate} tone={confTone(d.confRate)} />
       <KpiBox icon="xcircle" label={t('agency.st.cancelled')} value={n(d.cancelled)} trend={<Trend v={ch(d.cancelled, p.cancelled)} goodDown vs={vs} />} sub={t('agency.st.invalid', { n: d.invalid })} tone={d.cancelled ? 'bad' : undefined} zero={!d.cancelled} />
@@ -145,14 +147,17 @@ function DashBody() {
               {d.agents.length ? <AgentTable rows={d.agents} live /> : <p className="tb-calm">{t('agency.st.noAgents')}</p>}
             </section>
           ) : (
-            d.agents[0] && (
-              <section className="card">
-                <div className="card-head">
-                  <h2>{t('agency.st.mine', { name: session!.profile.name })}</h2>
-                </div>
-                <AgentTable rows={d.agents} />
-              </section>
-            )
+            <>
+              {d.agents[0] && (
+                <section className="card">
+                  <div className="card-head">
+                    <h2>{t('agency.st.mine', { name: session!.profile.name })}</h2>
+                  </div>
+                  <AgentTable rows={d.agents} />
+                </section>
+              )}
+              {d.ladder && <Ladder l={d.ladder} />}
+            </>
           )}
         </>
       )}
@@ -245,11 +250,11 @@ function SortTable<T>({ rows, cols, first, name, keyOf }: { rows: T[]; cols: Col
 }
 
 // ---------------------------------------------------------------- Analyse & statistiques
-const TABS = ['sellers', 'products', 'wilayas', 'agents', 'followers'] as const;
+const TABS = ['sellers', 'products', 'wilayas', 'agents', 'followers', 'earnings'] as const;
 type Tab = (typeof TABS)[number];
 
 function AnalyseBody() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const per = useBoardPeriod('agx.ana', '30d');
   const q = useRpc('agency.analytics', per.range, { refetchInterval: 120_000 });
   const [tab, setTab] = useState<Tab>('sellers');
@@ -266,7 +271,7 @@ function AnalyseBody() {
     { k: 'upsells', l: t('agency.st.c.upsells'), v: (r) => r.upsells, f: (r) => n(r.upsells) },
     { k: 'revenue', l: t('agency.st.c.revenue'), v: (r) => r.revenue, f: (r) => da(r.revenue) },
   ];
-  const rowsOf: Record<Tab, Row[]> = d ? { sellers: d.sellers, products: d.products, wilayas: d.wilayas, agents: [], followers: d.followers } : { sellers: [], products: [], wilayas: [], agents: [], followers: [] };
+  const rowsOf: Record<Tab, Row[]> = d ? { sellers: d.sellers, products: d.products, wilayas: d.wilayas, agents: [], followers: d.followers, earnings: [] } : { sellers: [], products: [], wilayas: [], agents: [], followers: [], earnings: [] };
   return (
     <div className="tb hm agx-st">
       <Head title={t('agency.st.anaTitle')} per={per} />
@@ -282,20 +287,27 @@ function AnalyseBody() {
                 {t('agency.st.results')} <small className="px-vs">{vs}</small>
               </h2>
             </div>
-            <PeriodKpis d={d.team} p={d.prev} vs={vs} />
+            <PeriodKpis d={d.team} p={d.prev} vs={vs} earned={d.earnings ? { total: d.earnings.total, months: d.earnings.months.length } : null} />
           </section>
           <Days days={d.days} title={t('agency.st.days')} />
           <section className="card agx-st-break">
-            <div className="agx-st-tabs" role="tablist" aria-label={t('agency.st.byAria')}>
-              {TABS.map((k) => (
-                <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
-                  {t(`agency.st.by.${k}`)}
-                  <span className="agx-st-n ltr">{k === 'agents' ? d.agents.length : rowsOf[k].length}</span>
-                </button>
-              ))}
+            <div className="agx-st-bar">
+              <div className="agx-st-tabs" role="tablist" aria-label={t('agency.st.byAria')}>
+                {TABS.filter((k) => k !== 'earnings' || d.earnings).map((k) => (
+                  <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
+                    {t(`agency.st.by.${k}`)}
+                    <span className="agx-st-n ltr">{k === 'agents' ? d.agents.length : k === 'earnings' ? d.earnings?.sellers.length ?? 0 : rowsOf[k].length}</span>
+                  </button>
+                ))}
+              </div>
+              <button type="button" className="btn small" onClick={() => toExcel(d, t, i18n.language, per.range)}>
+                <Icon name="download" /> {t('agency.st.excel')}
+              </button>
             </div>
             <p className="muted small agx-st-hint">{t(`agency.st.hint.${tab}`)}</p>
-            {tab === 'agents' ? (
+            {tab === 'earnings' && d.earnings ? (
+              <Earnings e={d.earnings} />
+            ) : tab === 'agents' ? (
               d.agents.length ? <AgentTable rows={d.agents} /> : <p className="tb-calm">{t('agency.st.empty')}</p>
             ) : rowsOf[tab].length ? (
               <SortTable
@@ -318,5 +330,139 @@ function AnalyseBody() {
         </>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------- the money (the chief)
+type Earn = NonNullable<Ana['earnings']>;
+
+/** What each seller owes the agency, month by month (the same amounts as Facturation), and where each bill stands. */
+function Earnings({ e }: { e: Earn }) {
+  const { t, i18n } = useTranslation();
+  if (!e.sellers.length) return <p className="tb-calm">{t('agency.st.empty')}</p>;
+  return (
+    <div className="tbl-wrap">
+      <table className="tbl agx-st-tbl agx-st-earn">
+        <thead>
+          <tr>
+            <th>{t('agency.st.first.sellers')}</th>
+            {e.months.map((m) => (
+              <th key={m} className="num">
+                {monthLabel(m, i18n.language)}
+              </th>
+            ))}
+            {e.months.length > 1 && <th className="num">{t('agency.st.c.total')}</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {e.sellers.map((s) => (
+            <tr key={s.key}>
+              <td data-l={t('agency.st.first.sellers')}>
+                <b>{s.name}</b>
+              </td>
+              {e.months.map((m) => {
+                const c = s.months[m];
+                return (
+                  <td key={m} className="num" data-l={monthLabel(m, i18n.language)}>
+                    {c ? (
+                      <>
+                        <b className="ltr">{da(c.total)}</b>
+                        <small className={`agx-st-bill ${c.status ?? (m === e.current ? 'running' : 'estimate')}`}>{t(`agency.st.bill.${c.status ?? (m === e.current ? 'running' : 'estimate')}`)}</small>
+                      </>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                );
+              })}
+              {e.months.length > 1 && (
+                <td className="num" data-l={t('agency.st.c.total')}>
+                  <b className="ltr">{da(s.total)}</b>
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+        {e.sellers.length > 1 && (
+          <tfoot>
+            <tr>
+              <th>{t('agency.st.c.total')}</th>
+              {e.months.map((m) => (
+                <th key={m} className="num ltr">
+                  {da(e.perMonth[m] ?? 0)}
+                </th>
+              ))}
+              {e.months.length > 1 && <th className="num ltr">{da(e.total)}</th>}
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- Excel
+/** One workbook: the results, each table of the page, day by day (and the money for the chief). */
+async function toExcel(d: Ana, t: (k: string, o?: Record<string, unknown>) => string, lang: string, range: { from: string; to: string }) {
+  const XLSX = await import('xlsx');
+  const wb = XLSX.utils.book_new();
+  const pctv = (v: number | null) => (v === null ? '' : Math.round(v * 1000) / 10);
+  const head = [t('agency.st.c.received'), t('agency.st.c.confirmed'), t('agency.st.c.cancelled'), t('agency.st.xl.invalid'), t('agency.st.xl.pending'), `${t('agency.st.c.confRate')} %`, t('agency.st.c.delivered'), t('agency.st.c.returned'), `${t('agency.st.c.deliveryRate')} %`, t('agency.st.c.upsells'), `${t('agency.st.c.revenue')} (DA)`];
+  const vals = (r: Totals) => [r.received, r.confirmed, r.cancelled, r.invalid, r.pending, pctv(r.confRate), r.delivered, r.returned, pctv(r.deliveryRate), r.upsells, r.revenue];
+  const sheet = (name: string, aoa: (string | number)[][], widths: number[]) => {
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = widths.map((w) => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31));
+  };
+  const w = [28, ...head.map(() => 13)];
+  sheet(t('agency.st.results'), [[t('agency.st.xl.period'), dayRange(range.from, range.to)], [], ['', ...head], [t('agency.st.xl.now'), ...vals(d.team)], [t('agency.st.xl.before'), ...vals(d.prev)]], w);
+  const table = (key: 'sellers' | 'products' | 'wilayas' | 'followers', rows: Row[]) => sheet(t(`agency.st.by.${key}`), [[t(`agency.st.first.${key}`), ...(key === 'products' ? [t('agency.st.first.sellers')] : []), ...head], ...rows.map((r) => [r.name || t('agency.st.noName'), ...(key === 'products' ? [(r as Row & { seller?: string }).seller ?? ''] : []), ...vals(r)])], key === 'products' ? [28, 20, ...head.map(() => 13)] : w);
+  table('sellers', d.sellers);
+  table('products', d.products);
+  table('wilayas', d.wilayas);
+  sheet(t('agency.st.by.agents'), [[t('agency.st.c.agent'), t('agency.st.c.calls'), ...head], ...d.agents.map((r) => [r.name, r.calls, ...vals(r)])], [24, 10, ...head.map(() => 13)]);
+  table('followers', d.followers);
+  sheet(t('agency.st.days'), [[t('agency.st.xl.day'), t('agency.st.c.received'), t('agency.st.c.confirmed'), t('agency.st.c.delivered')], ...d.days.map((x) => [x.d, x.received, x.confirmed, x.delivered])], [14, 13, 13, 13]);
+  if (d.earnings) {
+    const e = d.earnings;
+    sheet(t('agency.st.by.earnings'), [[t('agency.st.first.sellers'), ...e.months.map((m) => monthLabel(m, lang)), t('agency.st.c.total')], ...e.sellers.map((s) => [s.name, ...e.months.map((m) => s.months[m]?.total ?? 0), s.total]), [t('agency.st.c.total'), ...e.months.map((m) => e.perMonth[m] ?? 0), e.total]], [28, ...e.months.map(() => 16), 16]);
+  }
+  const blob = new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  // the days in Algiers (UTC+1), the end excluded: « analyse-2026-10-05-2026-11-03 »
+  const day = (iso: string, end = false) => new Date(Date.parse(iso) + 3_600_000 - (end ? 1 : 0)).toISOString().slice(0, 10);
+  a.download = `analyse-${day(range.from)}-${day(range.to, true)}.xlsx`;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+// ---------------------------------------------------------------- an agent's ladder
+/** The team's ladder for an agent: places and numbers, only his own name. */
+function Ladder({ l }: { l: NonNullable<Dash['ladder']> }) {
+  const { t } = useTranslation();
+  if (l.rows.length < 2) return null;
+  return (
+    <section className="card agx-st-ladder">
+      <div className="card-head">
+        <h2>{t('agency.st.ladder')}</h2>
+        <small className="muted">{t(`agency.st.ladderBy.${l.by}`)}</small>
+      </div>
+      <ol className="agx-st-lad">
+        {l.rows.map((x) => (
+          <li key={x.pos} className={x.me ? 'me' : ''}>
+            <span className={`agx-st-pos p${x.pos <= 3 ? x.pos : 'n'}`}>{x.pos}</span>
+            <b className="agx-st-ln">{x.me ? t('agency.st.you', { name: x.name }) : t('agency.st.agentN', { n: x.pos })}</b>
+            <span className="agx-st-lv">
+              <Rate v={x.rate} tone={(l.by === 'conf' ? confTone : delivTone)(x.rate, true)} />
+              <small className="ltr">{t(`agency.st.ladderOf.${l.by}`, { a: x.a, b: x.b })}</small>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }

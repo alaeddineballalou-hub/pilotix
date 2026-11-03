@@ -7,11 +7,11 @@
 //    their agency's orders and products. A fresh item goes first to someone not already on a call.
 //  - A known customer goes back to the agent who has his other open order.
 //  - An agent not seen for « offlineMin » minutes gives back what he got automatically and never touched.
-import { algiersHour, CONF_TODO, isWomanName } from '@pilotix/shared';
+import { algiersHour, CONF_STATUSES, CONF_TODO, isWomanName } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, proc } from '../rpc';
-import { AssignAgent, AssignArea, DEFAULT_SETTINGS, getSetting, setSetting, SettingsMap } from '../settings';
+import { AssignAgent, AssignArea, AssignRotation, DEFAULT_SETTINGS, getSetting, setSetting, SettingsMap } from '../settings';
 import { addEvent } from './orders';
 import { loadShop } from '../platform/shops';
 
@@ -32,7 +32,9 @@ export async function getAssign(db: Db): Promise<Assign> {
   const d = DEFAULT_SETTINGS.autoAssign;
   const agents: Record<string, AssignAgent> = {};
   for (const [k, v] of Object.entries(s.agents ?? {})) agents[k] = { ...AGENT_DEFAULT, ...v };
-  return { conf: { ...d.conf, ...(s.conf ?? {}) }, follow: { ...d.follow, ...(s.follow ?? {}) }, agents, order: s.order ?? [], womenProducts: s.womenProducts ?? [] };
+  // the rotation is merged on its own (settings saved before it existed, or with some of its fields)
+  const area = (k: 'conf' | 'follow') => ({ ...d[k], ...(s[k] ?? {}), rotation: { ...d[k].rotation, ...((s[k] as Partial<AssignArea> | undefined)?.rotation ?? {}) } });
+  return { conf: area('conf'), follow: area('follow'), agents, order: s.order ?? [], womenProducts: s.womenProducts ?? [] };
 }
 
 export interface Agent {
@@ -66,7 +68,7 @@ export async function agentsOf(db: Db, area: Area, cfg: Assign, now: number): Pr
   const a = cfg[area];
   const rows = await db.query(
     `SELECT p.id, p.name, p.email, p.agency_id, p.agency_products, p.presence, p.last_seen_at, ${loadOf(area)} AS load,
-            (SELECT max(e.at) FROM order_events e WHERE e.kind = 'assign' AND e.user_id IS NULL AND e.to_value = p.id::text AND e.at > now() - interval '2 days') AS last_at
+            (SELECT max(e.at) FROM order_events e WHERE e.kind IN ('assign', 'rotate') AND e.user_id IS NULL AND e.to_value = p.id::text AND e.at > now() - interval '2 days') AS last_at
        FROM profiles p WHERE p.active AND $1 = ANY(p.roles) ORDER BY p.id`,
     [ROLE[area], a.excluded],
   );
@@ -381,7 +383,7 @@ async function agencyPlan(ctx: Ctx, area: Area, agencyId: number, now: number): 
   const byEmail = new Map<string, any>(team.map((r: any) => [String(r.email), r]));
   const rows = await ctx.db.query(
     `SELECT p.id, p.name, lower(p.email) AS email, p.agency_products, ${loadOf(area)} AS load,
-            (SELECT max(e.at) FROM order_events e WHERE e.kind = 'assign' AND e.user_id IS NULL AND e.to_value = p.id::text AND e.at > now() - interval '2 days') AS last_at
+            (SELECT max(e.at) FROM order_events e WHERE e.kind IN ('assign', 'rotate') AND e.user_id IS NULL AND e.to_value = p.id::text AND e.at > now() - interval '2 days') AS last_at
        FROM profiles p WHERE p.active AND p.agency_id = $1 ORDER BY p.id`,
     [agencyId, cfg[area].excluded],
   );
@@ -410,8 +412,10 @@ async function agencyPlan(ctx: Ctx, area: Area, agencyId: number, now: number): 
   }
   // the order of the turns: the agency's people, as their accounts here
   const ids = new Map(list.map((x) => [x.email, x.id]));
-  const order = cfg.order.map((aid) => ids.get(String(team.find((m: any) => num(m.id) === aid)?.email ?? ''))).filter((x): x is number => !!x);
-  return { cfg: { ...cfg, order }, list, adb };
+  const here = (aid: number | null) => (aid ? (ids.get(String(team.find((m: any) => num(m.id) === aid)?.email ?? '')) ?? null) : null);
+  const order = cfg.order.map(here).filter((x): x is number => !!x);
+  const a = cfg[area];
+  return { cfg: { ...cfg, order, [area]: { ...a, rotation: { ...a.rotation, target: here(a.rotation.target) } } }, list, adb };
 }
 
 /**
@@ -425,6 +429,7 @@ export async function runArea(ctx: Ctx, area: Area, ids?: number[], cfgIn?: Assi
   const items = (await waiting(ctx.db, area, ids)).filter((x) => !only || x.agencyId === only.agency);
   let assigned = 0;
   let back = 0;
+  let moved = 0;
   // the store's own orders
   const own = items.filter((x) => x.agencyId === null);
   if (a.mode !== 'manual' && !only) {
@@ -432,6 +437,7 @@ export async function runArea(ctx: Ctx, area: Area, ids?: number[], cfgIn?: Assi
     await withSisters(ctx, area, list, a);
     if (!ids) back += await giveBack(ctx.db, area, a, list, now);
     const turns = { ...(await getSetting(ctx.db, 'autoAssignTurn')) };
+    if (!ids) moved += await rotate(ctx, area, list, cfg, turns, now, null);
     assigned += await giveItems(ctx, area, own, list, cfg, turns, now);
     if (a.mode === 'turn') await setSetting(ctx.db, 'autoAssignTurn', turns);
   }
@@ -448,12 +454,219 @@ export async function runArea(ctx: Ctx, area: Area, ids?: number[], cfgIn?: Assi
     if (!plan) continue;
     if (!ids) back += await giveBack(ctx.db, area, plan.cfg[area], plan.list, now);
     const turns = { ...(await getSetting(plan.adb, 'autoAssignTurn')) };
+    if (!ids) moved += await rotate(ctx, area, plan.list, plan.cfg, turns, now, ag);
     const mine = items.filter((x) => x.agencyId === ag);
     if (mine.length) assigned += await giveItems(ctx, area, mine, plan.list, plan.cfg, turns, now);
     if (plan.cfg[area].mode === 'turn') await setSetting(plan.adb, 'autoAssignTurn', turns);
   }
-  if (assigned || back) ctx.emit({ type: 'orders' });
-  return { assigned, back, waiting: items.length - assigned };
+  if (assigned || back || moved) ctx.emit({ type: 'orders' });
+  return { assigned, back, moved, waiting: items.length - assigned };
+}
+
+// ---------------------------------------------------------------- rotation (piece B)
+/** What its agent did not act on in time, ready to move: the item, who has it and since when. */
+interface Overdue extends Item {
+  cur: number;
+  got: number;
+  status: string;
+}
+const ON_ROAD_ALERT = `o.follow_status = 'alert' AND COALESCE(o.sub_status, '') <> 'alert_traitee'`;
+/** what counts as acting on an item: a call, a status, a note, a Suivi outcome */
+const ACTED = `('call','conf_status','follow_status','note','sub_status','suivi_motif','edit')`;
+
+/** The items of a scope (the store's own, or one agency's) that waited too long with the same agent. */
+async function overdue(db: Db, area: Area, rot: AssignRotation, now: number, agencyId: number | null): Promise<Overdue[]> {
+  const cutoff = new Date(now - rot.minutes * 60_000).toISOString();
+  // built into SQL: only a whole positive number goes there
+  if (agencyId !== null && (!Number.isSafeInteger(agencyId) || agencyId <= 0)) return [];
+  const scope = agencyId === null ? `o.${AGENCY_COL[area]} IS NULL` : `o.${AGENCY_COL[area]} = ${agencyId}`;
+  const cols = `o.id, o.phone, o.customer_name, o.channel, o.${AGENCY_COL[area]} AS agency, o.route_product_id, o.total, o.wilaya_id, o.conf_status AS status,
+    ARRAY(SELECT DISTINCT i.product_id FROM order_items i WHERE i.order_id = o.id AND i.product_id IS NOT NULL) AS products`;
+  const rows =
+    area === 'conf'
+      ? await db.query(
+          `SELECT ${cols}, o.agent_id AS cur, o.assigned_at AS got FROM orders o
+            WHERE o.agent_id IS NOT NULL AND NOT o.is_exchange AND o.conf_status = ANY($1) AND o.assigned_at IS NOT NULL AND o.assigned_at < $2
+              AND o.created_at > now() - interval '30 days' AND (o.locked_until IS NULL OR o.locked_until < now()) AND ${scope}
+              AND ($3::boolean IS NOT TRUE OR NOT EXISTS (SELECT 1 FROM order_events x WHERE x.order_id = o.id AND x.user_id = o.agent_id AND x.at >= o.assigned_at AND x.kind IN ${ACTED}))
+            ORDER BY o.assigned_at LIMIT 200`,
+          [rot.statuses, cutoff, rot.noCall],
+        )
+      : await db.query(
+          `SELECT ${cols}, o.follow_agent_id AS cur, g.at AS got FROM orders o
+            CROSS JOIN LATERAL (SELECT GREATEST(
+              (SELECT max(e.at) FROM order_events e WHERE e.order_id = o.id AND e.kind IN ('assign', 'rotate') AND e.to_value = o.follow_agent_id::text),
+              (SELECT max(e.at) FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'alert')) AS at) g
+            WHERE o.follow_agent_id IS NOT NULL AND ${ON_ROAD_ALERT} AND g.at IS NOT NULL AND g.at < $1
+              AND (o.locked_until IS NULL OR o.locked_until < now()) AND ${scope}
+              AND ($2::boolean IS NOT TRUE OR NOT EXISTS (SELECT 1 FROM order_events x WHERE x.order_id = o.id AND x.user_id = o.follow_agent_id AND x.at > g.at AND x.kind IN ${ACTED}))
+            ORDER BY g.at LIMIT 200`,
+          [cutoff, rot.noCall],
+        );
+  return rows.map((r: any) => ({
+    id: num(r.id),
+    phone: String(r.phone ?? ''),
+    name: String(r.customer_name ?? ''),
+    channel: String(r.channel ?? ''),
+    agencyId: numOrNull(r.agency),
+    productIds: (r.products ?? []).map(num),
+    routeProduct: numOrNull(r.route_product_id),
+    total: num(r.total),
+    wilayaId: numOrNull(r.wilaya_id),
+    cur: num(r.cur),
+    got: Date.parse(new Date(r.got).toISOString()),
+    status: String(r.status ?? ''),
+  }));
+}
+
+/**
+ * The supervisors on line who may get an item after its moves: the agent's own team manager first, then the agent
+ * managers of the scope (an agency's: its people with the role, as their accounts in this store).
+ */
+async function leadsFor(ctx: Ctx, cur: number, agencyId: number | null, now: number): Promise<number[]> {
+  const since = new Date(now - ONLINE_MS).toISOString();
+  const seen = `p.last_seen_at > $1::timestamptz AND COALESCE(p.presence, '') <> 'idle'`;
+  if (agencyId === null) {
+    const rows = await ctx.db.query(`SELECT p.id FROM profiles p WHERE p.active AND p.agency_id IS NULL AND 'agent_manager' = ANY(p.roles) AND ${seen} ORDER BY p.id`, [since]);
+    const ids = rows.map((r: any) => num(r.id));
+    const team = (await getSetting(ctx.db, 'teams')).find((t) => t.agentIds.includes(cur));
+    const mgr = team?.managerId ?? null;
+    return mgr && ids.includes(mgr) ? [mgr, ...ids.filter((x) => x !== mgr)] : ids;
+  }
+  if (!ctx.t) return [];
+  const s = await loadShop(ctx.t, { id: agencyId }).catch(() => null);
+  if (!s) return [];
+  const leads = await ctx.t.shop(s.schema).query(`SELECT p.id, lower(p.email) AS email FROM profiles p WHERE p.active AND 'agent_manager' = ANY(p.roles) AND ${seen}`, [since]);
+  if (!leads.length) return [];
+  const rows = await ctx.db.query(`SELECT id FROM profiles WHERE active AND agency_id = $1 AND (agency_profile_id = ANY($2) OR lower(email) = ANY($3)) ORDER BY id`, [
+    agencyId,
+    leads.map((l: any) => num(l.id)),
+    leads.map((l: any) => String(l.email)),
+  ]);
+  return rows.map((r: any) => num(r.id));
+}
+
+/**
+ * Rotation of a scope: each item its agent did not act on in time goes to another one — never back to someone who had
+ * it, to a supervisor after `toLeadAfter` moves (then it stays with him), to the chosen agent or by the split; an item
+ * open on someone's screen (locked) waits; with nobody to take it, it stays where it is.
+ */
+async function rotate(ctx: Ctx, area: Area, list: Agent[], cfg: Assign, turns: SettingsMap['autoAssignTurn'], now: number, agencyId: number | null): Promise<number> {
+  const rot = cfg[area].rotation;
+  if (!rot?.on) return 0;
+  let moved = 0;
+  const late = await overdue(ctx.db, area, rot, now, agencyId);
+  if (!late.length) return 0;
+  const score = cfg[area].mode === 'smart' ? await smartScorer(ctx.db, area) : undefined;
+  const forWomen = new Set(cfg.womenProducts);
+  const setStatus = area === 'conf' && rot.setStatus && (CONF_TODO as string[]).includes(rot.setStatus) ? rot.setStatus : '';
+  for (const it of late) {
+    it.woman = isWomanName(it.name) || it.productIds.some((p) => forWomen.has(p));
+    const hist = await ctx.db.query(`SELECT from_value, to_value, data FROM order_events WHERE order_id = $1 AND kind = 'rotate' AND data->>'area' = $2`, [it.id, area]);
+    // with a supervisor already, or moved many times: it stays
+    if (hist.some((h: any) => h.data?.lead) || hist.length >= 10) continue;
+    const tried = new Set<number>([it.cur, ...hist.flatMap((h: any) => [num(h.from_value), num(h.to_value)])]);
+    let to: number | null = null;
+    let why = '';
+    let lead = false;
+    if (rot.toLeadAfter > 0 && hist.length >= rot.toLeadAfter) {
+      const l = (await leadsFor(ctx, it.cur, agencyId, now)).find((x) => x !== it.cur);
+      if (l) {
+        to = l;
+        lead = true;
+        why = 'superviseur';
+      }
+    }
+    if (to === null && rot.target && !tried.has(rot.target)) {
+      const a = list.find((x) => x.id === rot.target);
+      if (a && cannot(a, it, cfg[area], now) === null) {
+        to = a.id;
+        why = 'agent choisi';
+      }
+    }
+    if (to === null) {
+      const pick = pickAgent(list, it, area, cfg, turns, now, { skip: [...tried], score: score ? (x) => score(x, it) : undefined });
+      if (pick) {
+        to = pick.agent.id;
+        why = pick.why;
+      }
+    }
+    if (to === null) continue;
+    const r =
+      area === 'conf'
+        ? await ctx.db.query(
+            `UPDATE orders SET agent_id = $3, assigned_at = now(), conf_status = CASE WHEN $4 <> '' THEN $4 ELSE conf_status END, updated_at = now(), version = version + 1
+              WHERE id = $1 AND agent_id = $2 AND (locked_until IS NULL OR locked_until < now()) RETURNING id`,
+            [it.id, it.cur, to, setStatus],
+          )
+        : await ctx.db.query(
+            `UPDATE orders SET follow_agent_id = $3, updated_at = now(), version = version + 1
+              WHERE id = $1 AND follow_agent_id = $2 AND (locked_until IS NULL OR locked_until < now()) RETURNING id`,
+            [it.id, it.cur, to],
+          );
+    if (!r[0]) continue;
+    const how = rot.noCall ? 'sans action' : 'sans avancer';
+    await addEvent(ctx.db, it.id, null, 'rotate', String(it.cur), String(to), `Rotation (${area === 'conf' ? 'confirmation' : 'suivi'}) · ${rot.minutes} min ${how} · ${why}`, { area, lead });
+    if (setStatus && setStatus !== it.status) await addEvent(ctx.db, it.id, null, 'conf_status', it.status, setStatus, 'Rotation');
+    const from = list.find((x) => x.id === it.cur);
+    if (from) from.load = Math.max(0, from.load - 1);
+    const dest = list.find((x) => x.id === to);
+    if (dest) {
+      dest.load++;
+      dest.lastAt = now;
+    }
+    moved++;
+  }
+  return moved;
+}
+
+/**
+ * When each item will move if nobody acts (the countdown on the order): the store's own rotation, or its agency's.
+ * Items that will not move (rotation off, the status not in it, the agent already acted, with a supervisor) are absent.
+ */
+export async function rotateTimes(ctx: Ctx, area: Area, ids: number[]): Promise<Map<number, number>> {
+  const out = new Map<number, number>();
+  if (!ids.length) return out;
+  const rows =
+    area === 'conf'
+      ? await ctx.db.query(
+          `SELECT o.id, o.agent_id AS cur, o.assigned_at AS got, o.conf_status AS status, o.conf_agency_id AS agency,
+                  EXISTS (SELECT 1 FROM order_events x WHERE x.order_id = o.id AND x.user_id = o.agent_id AND x.at >= o.assigned_at AND x.kind IN ${ACTED}) AS acted,
+                  EXISTS (SELECT 1 FROM order_events x WHERE x.order_id = o.id AND x.kind = 'rotate' AND x.data->>'area' = 'conf' AND (x.data->>'lead')::boolean) AS with_lead
+             FROM orders o WHERE o.id = ANY($1) AND o.agent_id IS NOT NULL AND o.assigned_at IS NOT NULL`,
+          [ids],
+        )
+      : await ctx.db.query(
+          `SELECT o.id, o.follow_agent_id AS cur, g.at AS got, 'alert' AS status, o.follow_agency_id AS agency,
+                  EXISTS (SELECT 1 FROM order_events x WHERE x.order_id = o.id AND x.user_id = o.follow_agent_id AND x.at > g.at AND x.kind IN ${ACTED}) AS acted,
+                  EXISTS (SELECT 1 FROM order_events x WHERE x.order_id = o.id AND x.kind = 'rotate' AND x.data->>'area' = 'follow' AND (x.data->>'lead')::boolean) AS with_lead
+             FROM orders o CROSS JOIN LATERAL (SELECT GREATEST(
+              (SELECT max(e.at) FROM order_events e WHERE e.order_id = o.id AND e.kind IN ('assign', 'rotate') AND e.to_value = o.follow_agent_id::text),
+              (SELECT max(e.at) FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'alert')) AS at) g
+            WHERE o.id = ANY($1) AND o.follow_agent_id IS NOT NULL AND ${ON_ROAD_ALERT} AND g.at IS NOT NULL`,
+          [ids],
+        );
+  const cfgs = new Map<string, Assign | null>();
+  const cfgOf = async (agency: number | null) => {
+    const k = String(agency);
+    if (!cfgs.has(k)) {
+      if (agency === null) cfgs.set(k, await getAssign(ctx.db));
+      else {
+        const s = ctx.t ? await loadShop(ctx.t, { id: agency }).catch(() => null) : null;
+        cfgs.set(k, s ? await getAssign(ctx.t!.shop(s.schema)) : null);
+      }
+    }
+    return cfgs.get(k)!;
+  };
+  for (const r of rows as any[]) {
+    const cfg = await cfgOf(numOrNull(r.agency));
+    const rot = cfg?.[area].rotation;
+    if (!cfg || !rot?.on || cfg[area].mode === 'manual' || r.with_lead) continue;
+    if (area === 'conf' && !(rot.statuses as string[]).includes(String(r.status))) continue;
+    if (rot.noCall && r.acted) continue;
+    out.set(num(r.id), Date.parse(new Date(r.got).toISOString()) + rot.minutes * 60_000);
+  }
+  return out;
 }
 
 /** « Smart »: filled in by assignsmart.ts (piece C); until then the least busy. */
@@ -489,6 +702,12 @@ async function shareShops(ctx: Ctx, agents: Record<string, AssignAgent>) {
   }
 }
 
+/** Settings to save: a screen that did not send the rotation keeps the one already saved. */
+export async function withRotation<T extends { conf: { rotation?: unknown }; follow: { rotation?: unknown } }>(db: Db, i: T): Promise<Assign> {
+  const cur = await getAssign(db);
+  return { ...i, conf: { ...i.conf, rotation: i.conf.rotation ?? cur.conf.rotation }, follow: { ...i.follow, rotation: i.follow.rotation ?? cur.follow.rotation } } as unknown as Assign;
+}
+
 export const AreaIn = z.object({
   mode: z.enum(['manual', 'turn', 'load', 'smart']),
   by: z.enum(['all', 'channel', 'product']),
@@ -502,6 +721,21 @@ export const AreaIn = z.object({
   womenToWomen: z.boolean().default(false),
   when: z.enum(['alert', 'shipped']).default('alert'),
   toConfirmer: z.boolean().default(false),
+  rotation: z
+    .object({
+      on: z.boolean(),
+      // only « à traiter » statuses: a confirmed or cancelled order never moves, and a move never confirms or cancels
+      statuses: z
+        .array(z.enum(CONF_STATUSES))
+        .max(20)
+        .transform((a) => a.filter((x) => CONF_TODO.includes(x))),
+      minutes: z.number().int().min(5).max(7 * 24 * 60),
+      noCall: z.boolean(),
+      toLeadAfter: z.number().int().min(0).max(10),
+      setStatus: z.union([z.literal(''), z.enum(CONF_STATUSES)]).transform((x) => (x && CONF_TODO.includes(x) ? x : '')),
+      target: z.number().int().positive().nullable(),
+    })
+    .optional(),
 });
 export const AgentIn = z.object({
   out: z.boolean(),
@@ -547,7 +781,7 @@ export const assignProcs = {
     async (ctx, i) => {
       needAffect(ctx);
       for (const [k, v] of Object.entries(i.agents)) if (v.from !== null && v.to !== null && v.from === v.to) throw bad(`Agent ${k} : l’heure de début et de fin sont pareilles`);
-      await setSetting(ctx.db, 'autoAssign', i, ctx.session.profile.id);
+      await setSetting(ctx.db, 'autoAssign', await withRotation(ctx.db, i), ctx.session.profile.id);
       await shareShops(ctx, i.agents);
       return { ok: true };
     },

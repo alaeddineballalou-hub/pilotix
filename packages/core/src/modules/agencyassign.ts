@@ -9,7 +9,7 @@ import { bad, Ctx, forbidden, proc } from '../rpc';
 import { setSetting } from '../settings';
 import { loadShop, platformSettings, shopCtx, shopStatus } from '../platform/shops';
 import { LINK_SQL, toLink } from './agencies';
-import { AGENT_DEFAULT, AgentIn, AreaIn, getAssign, inHours, loadOf, ONLINE_MS, ROLE, runArea, type Area } from './assign';
+import { AGENT_DEFAULT, AgentIn, AreaIn, getAssign, inHours, loadOf, ONLINE_MS, ROLE, runArea, withRotation, type Area } from './assign';
 
 function needAgency(ctx: Ctx) {
   if (!ctx.t || ctx.shop?.kind !== 'agency') throw forbidden('Réservé aux agences de confirmation');
@@ -68,7 +68,7 @@ export const agencyAssignProcs = {
     async (ctx, i) => {
       needAgency(ctx);
       for (const [k, v] of Object.entries(i.agents)) if (v.from !== null && v.to !== null && v.from === v.to) throw bad(`Agent ${k} : l’heure de début et de fin sont pareilles`);
-      await setSetting(ctx.db, 'autoAssign', i, ctx.session.profile.id);
+      await setSetting(ctx.db, 'autoAssign', await withRotation(ctx.db, i), ctx.session.profile.id);
       return { ok: true };
     },
   ),
@@ -78,7 +78,7 @@ export const agencyAssignProcs = {
     needAgency(ctx);
     const t = ctx.t!;
     const grace = (await platformSettings(t)).trial.graceDays;
-    const out = { conf: { assigned: 0, back: 0, waiting: 0 }, follow: { assigned: 0, back: 0, waiting: 0 } };
+    const out = { conf: { assigned: 0, back: 0, moved: 0, waiting: 0 }, follow: { assigned: 0, back: 0, moved: 0, waiting: 0 } };
     for (const s of await stores(ctx)) {
       const shop = await loadShop(t, { id: s.id });
       if (!shop) continue;
@@ -87,7 +87,7 @@ export const agencyAssignProcs = {
       const sctx: Ctx = { db: t.shop(s.schema), session: ctx.session, shop: shopCtx(shop, st), now: ctx.now, emit: ctx.emit, t };
       for (const area of ['conf', 'follow'] as const) {
         const r = await runArea(sctx, area, undefined, undefined, { agency: ctx.shop!.id }).catch(() => null);
-        if (r) for (const k of ['assigned', 'back', 'waiting'] as const) out[area][k] += r[k];
+        if (r) for (const k of ['assigned', 'back', 'moved', 'waiting'] as const) out[area][k] += r[k];
       }
     }
     return out;

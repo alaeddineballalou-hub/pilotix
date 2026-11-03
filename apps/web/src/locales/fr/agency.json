@@ -221,7 +221,8 @@
       "returned": "Retours",
       "deliveryRate": "Taux livr.",
       "upsells": "Upsells",
-      "revenue": "Valeur livrée"
+      "revenue": "Valeur livrée",
+      "total": "Total"
     },
     "sortBy": "Trier par {{col}}",
     "byAria": "Résultats par",
@@ -232,7 +233,8 @@
       "products": "Produits",
       "wilayas": "Wilayas",
       "agents": "Agents confirmation",
-      "followers": "Agents suivi"
+      "followers": "Agents suivi",
+      "earnings": "Gains"
     },
     "first": {
       "sellers": "Vendeur",
@@ -246,8 +248,39 @@
       "products": "Les produits des commandes que les boutiques vous donnent.",
       "wilayas": "Où sont vos clients : confirmation et livraison par wilaya.",
       "agents": "Les commandes données à chaque agent, et ce qu’elles sont devenues.",
-      "followers": "Les colis suivis par chaque agent de suivi : livrés et revenus."
-    }
+      "followers": "Les colis suivis par chaque agent de suivi : livrés et revenus.",
+      "earnings": "Ce que chaque vendeur vous doit pour chaque mois de la période : les mêmes montants que dans Facturation."
+    },
+    "earned": "À recevoir des vendeurs",
+    "earnedSub_one": "Votre gain sur {{count}} mois · voir Facturation",
+    "earnedSub_other": "Votre gain sur {{count}} mois · voir Facturation",
+    "excel": "Excel",
+    "bill": {
+      "requested": "Demandé",
+      "paid": "Payé",
+      "received": "Reçu",
+      "running": "En cours",
+      "estimate": "Pas encore demandé"
+    },
+    "xl": {
+      "invalid": "Faux numéros / doublons",
+      "pending": "Encore à appeler",
+      "period": "Période",
+      "now": "Période choisie",
+      "before": "Période d’avant",
+      "day": "Jour"
+    },
+    "ladder": "Classement de l’équipe",
+    "ladderBy": {
+      "conf": "par taux de confirmation",
+      "follow": "par taux de livraison"
+    },
+    "ladderOf": {
+      "conf": "{{a}} confirmées sur {{b}} traitées",
+      "follow": "{{a}} livrés sur {{b}} finis"
+    },
+    "you": "Vous ({{name}})",
+    "agentN": "Agent n°{{n}}"
   },
   "endTitle": "Arrêter le contrat",
   "end": "Arrêter le contrat",

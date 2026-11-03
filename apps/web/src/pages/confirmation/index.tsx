@@ -17,7 +17,7 @@ import { colDrag, ColumnMenu, DensitySwitch, useDensity, useResizable, useTableC
 import { HistoryButton, PhoneCell } from './History';
 import { namesOf, variantsOf, trackOf } from '../../lib/items';
 import type { PageProps } from '../registry';
-import { Countdown, useNow } from './Countdown';
+import { Countdown, RotateChip, useNow } from './Countdown';
 import { Detail } from './Detail';
 import { Focus } from './Focus';
 import { HeldChip } from './hold';
@@ -287,7 +287,14 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
       case 'total':
         return <span className="ltr">{da(r.total)}</span>;
       case 'chrono':
-        return r.deadline ? <Countdown d={r.deadline} short /> : <span className="muted">—</span>;
+        return r.deadline || r.rotateAt ? (
+          <span className="bj-clocks">
+            {r.deadline && <Countdown d={r.deadline} short />}
+            <RotateChip at={r.rotateAt} />
+          </span>
+        ) : (
+          <span className="muted">—</span>
+        );
       case 'time':
         return <Spent iso={r.createdAt} />;
       case 'created':

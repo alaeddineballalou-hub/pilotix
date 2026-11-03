@@ -532,6 +532,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .bj-cd.late { background: var(--coral); color: #fff; } .bj-cd.wait { background: var(--line); color: var(--muted); }
 @keyframes bjblink { 50% { opacity: .55; } } @media (prefers-reduced-motion: reduce) { .bj-cd.soon { animation: none; } }
 td .bj-cd { display: inline-flex; }
+/* rotation (Affectation): when the order goes to another agent if nobody acts */
+.bj-rot { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; background: var(--sky-soft); color: var(--navy); }
+.bj-rot .bji { width: 12px; height: 12px; }
+.bj-rot.soon { background: var(--warn-soft); color: var(--warn); }
+.bj-rot.due { background: var(--coral-soft); color: var(--coral); }
+.bj-clocks { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.bj-clocks .bj-cd { margin-top: 0; }
 .bj-al-next { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; } .bj-al-next .bj-cd { font-size: 14px; padding: 3px 10px; margin: 0; }
 .bjt-fu h3 { margin: 10px 0 0; font-size: 15px; color: var(--navy); }
 .bjs-res { display: flex; flex-direction: column; gap: 4px; }

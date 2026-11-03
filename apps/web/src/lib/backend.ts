@@ -403,8 +403,18 @@ class DemoBackend implements Backend {
   }
   async login(email: string, password: string): Promise<LoginResult> {
     const { core, db, t } = await this.boot();
-    const { DEMO_PARTNER_ACCOUNTS } = await import('@pilotix/shared');
-    const partner = DEMO_PARTNER_ACCOUNTS.find((a) => a.email === email.trim().toLowerCase());
+    const { DEMO_ACCOUNTS, DEMO_PARTNER_ACCOUNTS } = await import('@pilotix/shared');
+    const mail = email.trim().toLowerCase();
+    let partner: { kind: string } | undefined = DEMO_PARTNER_ACCOUNTS.find((a) => a.email === mail);
+    // someone of a partner's team (an agency's agent, a marketer's teammate): in that partner's space
+    if (!partner && !DEMO_ACCOUNTS.some((a) => a.email === mail)) {
+      await this.withPartners();
+      for (const s of await core.loadShops(t))
+        if (s.kind !== 'store' && (await t.shop(s.schema).query('SELECT 1 FROM profiles WHERE lower(email) = $1 AND active', [mail]))[0]) {
+          partner = { kind: s.kind };
+          break;
+        }
+    }
     try {
       if (partner) {
         // the partner's own space: its shop, its rules, what the app shows of it

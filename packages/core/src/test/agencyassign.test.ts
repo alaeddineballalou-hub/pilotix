@@ -7,6 +7,7 @@ import { cleanCode } from '@pilotix/shared';
 import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
 import { confirmSignup, loadShop, membershipsOf, passwordFromLink, startSignup, storeChoices } from '../platform';
 import { computePayroll } from '../modules/admin';
+import { rotateTimes } from '../modules/assign';
 
 /** a new team member's phone (required, one per person) */
 let phoneN = 0;
@@ -101,4 +102,50 @@ test('the agency own Affectation: its orders in a store go to its own agents (on
   await call('agency.assign.set', chief, { ...g.cfg, conf: { ...g.cfg.conf, mode: 'turn', max: 0 }, agents: { [nora.id]: { out: true, weight: 1, channels: [], products: [], from: null, to: null, langs: [], senior: false, shops: [], woman: false } } });
   assert.equal((await order(admin, shop.products.VELO, '0661000103')).agentId, null);
   void linaS;
+});
+
+test('the agency own rotation: a late agency order goes to its chosen agent (her account in the store), the countdown from the agency settings', async () => {
+  const { t, p } = await server();
+  const shop = await store(t, p, 'Boutique Sétif', 'karim@setif.dz');
+  const ag = await agency(t, 'Agence Tour', 'samir@tour.dz');
+  const chief = await as(t, ag.id, 'samir@tour.dz', PW);
+  await call('agency.prices', chief, { prices: PRICES });
+  await p('p.agencies.verify', { id: ag.id, verified: true });
+  const admin = await as(t, shop.id, 'karim@setif.dz', PW);
+  const { id: linkId } = (await call('partners.request', admin, { agencyId: ag.id, tasks: ['confirmation'], products: [shop.products.VELO] })) as any;
+  await call('agency.answer', chief, { id: linkId, accept: true });
+  const nora: any = await call('users.create', chief, { phone: tph(), name: 'Nora', email: 'nora@tour.dz', password: PW, roles: ['confirmation'] });
+  const lina: any = await call('users.create', chief, { phone: tph(), name: 'Lina', email: 'lina@tour.dz', password: PW, roles: ['confirmation'] });
+  await call('agency.setAgents', chief, { id: linkId, people: [nora.id, lina.id] });
+  const inStore = async (email: string) => Number((await shop.db.query('SELECT id FROM profiles WHERE email = $1', [email]))[0].id);
+  const [noraS, linaS] = [await inStore('nora@tour.dz'), await inStore('lina@tour.dz')];
+  const adb = t.shop((await loadShop(t, { id: ag.id }))!.schema);
+  const agentOf = async (id: number) => Number((await shop.db.query('SELECT agent_id FROM orders WHERE id = $1', [id]))[0].agent_id);
+
+  // only Nora on line: she gets the order; the rotation of the agency: 20 minutes, always to Lina
+  await adb.query(`UPDATE profiles SET last_seen_at = now(), presence = 'online' WHERE email = 'nora@tour.dz'`);
+  const g: any = await call('agency.assign.get', chief, {});
+  const rotation = { on: true, statuses: ['new'], minutes: 20, noCall: true, toLeadAfter: 0, setStatus: '', target: lina.id };
+  await call('agency.assign.set', chief, { ...g.cfg, conf: { ...g.cfg.conf, mode: 'turn', max: 0, rotation } });
+  const o = await order(admin, shop.products.VELO, '0661000200');
+  assert.equal(o.agentId, noraS);
+  const at = (await rotateTimes(admin, 'conf', [o.id])).get(o.id);
+  assert.ok(at && Math.abs(at - (Date.now() + 20 * 60_000)) < 2 * 60_000, 'the agency settings: 20 minutes');
+
+  // on time: it stays; late, Lina on line: to Lina (her account in the store)
+  assert.equal(((await call('agency.assign.run', chief, {})) as any).conf.moved, 0);
+  await adb.query(`UPDATE profiles SET last_seen_at = now(), presence = 'online' WHERE email = 'lina@tour.dz'`);
+  await shop.db.query(`UPDATE orders SET assigned_at = now() - interval '21 minutes' WHERE id = $1`, [o.id]);
+  assert.equal(((await call('agency.assign.run', chief, {})) as any).conf.moved, 1);
+  assert.equal(await agentOf(o.id), linaS);
+  const ev = await shop.db.query(`SELECT from_value, to_value, data FROM order_events WHERE order_id = $1 AND kind = 'rotate'`, [o.id]);
+  assert.equal(ev.length, 1);
+  assert.equal(Number(ev[0].from_value), noraS);
+
+  // the store's own orders never move with the agency's rotation (the store is on Manuel)
+  const own = await order(admin, shop.products.POUS, '0661000201');
+  await shop.db.query(`UPDATE orders SET agent_id = $2, assigned_at = now() - interval '3 hours' WHERE id = $1`, [own.id, noraS]);
+  await call('agency.assign.run', chief, {});
+  assert.equal(await agentOf(own.id), noraS);
+  assert.equal((await rotateTimes(admin, 'conf', [own.id])).has(own.id), false);
 });

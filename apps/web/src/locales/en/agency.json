@@ -221,7 +221,8 @@
       "returned": "Returns",
       "deliveryRate": "Deliv. rate",
       "upsells": "Upsells",
-      "revenue": "Value delivered"
+      "revenue": "Value delivered",
+      "total": "Total"
     },
     "sortBy": "Sort by {{col}}",
     "byAria": "Results by",
@@ -232,7 +233,8 @@
       "products": "Products",
       "wilayas": "Wilayas",
       "agents": "Confirmation agents",
-      "followers": "Follow-up agents"
+      "followers": "Follow-up agents",
+      "earnings": "Earnings"
     },
     "first": {
       "sellers": "Seller",
@@ -246,8 +248,39 @@
       "products": "The products of the orders the shops give you.",
       "wilayas": "Where your customers are: confirmation and delivery per wilaya.",
       "agents": "The orders given to each agent, and what became of them.",
-      "followers": "The parcels each follow-up agent followed: delivered and back."
-    }
+      "followers": "The parcels each follow-up agent followed: delivered and back.",
+      "earnings": "What each seller owes you for each month of the period: the same amounts as in Billing."
+    },
+    "earned": "To receive from sellers",
+    "earnedSub_one": "Your earnings over {{count}} month · see Billing",
+    "earnedSub_other": "Your earnings over {{count}} months · see Billing",
+    "excel": "Excel",
+    "bill": {
+      "requested": "Requested",
+      "paid": "Paid",
+      "received": "Received",
+      "running": "Running",
+      "estimate": "Not requested yet"
+    },
+    "xl": {
+      "invalid": "Wrong numbers / duplicates",
+      "pending": "Still to call",
+      "period": "Period",
+      "now": "Chosen period",
+      "before": "Period before",
+      "day": "Day"
+    },
+    "ladder": "Team ranking",
+    "ladderBy": {
+      "conf": "by confirmation rate",
+      "follow": "by delivery rate"
+    },
+    "ladderOf": {
+      "conf": "{{a}} confirmed of {{b}} handled",
+      "follow": "{{a}} delivered of {{b}} finished"
+    },
+    "you": "You ({{name}})",
+    "agentN": "Agent #{{n}}"
   },
   "endTitle": "End the contract",
   "end": "End the contract",

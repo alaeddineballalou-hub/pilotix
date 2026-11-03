@@ -65,3 +65,15 @@
 .aa-fem input { width: 18px; height: 18px; accent-color: var(--px-orange); }
 .aa-women { border-top: 1px dashed var(--line); padding-top: 12px; }
 .aa-modes-2 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+/* rotation: when nobody acts, the order goes to another agent */
+.aa-rot select { width: auto; min-width: 180px; max-width: 100%; min-height: 40px; }
+.aa-rot-to { align-items: center; }
+.aa-rot-note { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--sky-soft); color: var(--navy); font-size: 13px; line-height: 1.45; }
+.aa-rot-note .bji { margin-top: 2px; }
+@media (max-width: 760px) {
+  /* a number or a list under its words (never words squeezed in a thin column) */
+  .aa-rot .pf-row:not(.pf-col) { flex-wrap: wrap; row-gap: 10px; }
+  .aa-rot .pf-row:has(.pf-num) > .pf-text,
+  .aa-rot .pf-row:has(select) > .pf-text { flex: 1 1 100%; }
+  .aa-rot-sel { width: 100% !important; }
+}

@@ -850,6 +850,31 @@
       "shipped": "Each parcel gets its agent as soon as it leaves: he follows it until delivery."
     },
     "toConfirmer": "To the agent who confirmed the order",
-    "toConfirmerHint": "If he also does Follow-up and can take it (online, not at his maximum). Otherwise to another agent by the split."
+    "toConfirmerHint": "If he also does Follow-up and can take it (online, not at his maximum). Otherwise to another agent by the split.",
+    "rot": {
+      "title": "Rotation — when nobody acts",
+      "on": "Move to another agent when nobody acts",
+      "onHint": "An order that waits too long with the same agent goes to another agent. It never goes back to someone who already had it.",
+      "onHintFollow": "An alert that waits too long with the same agent goes to another agent. It never goes back to someone who already had it.",
+      "minutes": "Time given to the agent",
+      "minutesHint": "Counted from when he got the order.",
+      "minutesHintFollow": "Counted from the alert (or from when he got it, if later).",
+      "statuses": "For these statuses",
+      "statusesHint": "Only orders still to handle can change agent.",
+      "noCall": "Only if he did nothing",
+      "noCallHint": "No call, status or note since he got it. Off: it moves even if he called, as long as it does not move forward.",
+      "to": "To whom?",
+      "toHint": "Nobody gets it twice. An agent offline, at his maximum or outside his hours is skipped.",
+      "toMode": "By the mode ({{m}})",
+      "toAgent": "A chosen agent",
+      "lead": "To a supervisor after",
+      "leadHint": "After this many moves, it goes to a supervisor on line (his team manager first) and stays with him. 0: never.",
+      "moves": "moves",
+      "setStatus": "Status after the move",
+      "setStatusHint": "The status the order takes when it changes agent.",
+      "same": "Unchanged",
+      "note": "The agent sees the time left on the order (↻). Every move is written in the order’s history."
+    },
+    "ranMoved": "{{n}} given · {{b}} taken back · {{m}} moved"
   }
 }

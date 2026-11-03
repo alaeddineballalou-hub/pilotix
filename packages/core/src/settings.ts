@@ -1,4 +1,4 @@
-import { CallSettings, DEFAULT_CALL_SETTINGS, DEFAULT_SCORE_RULES, PILOT_DEFAULT, type PilotConfig, type ScoreRules } from '@pilotix/shared';
+import { CallSettings, DEFAULT_CALL_SETTINGS, DEFAULT_SCORE_RULES, PILOT_DEFAULT, type ConfStatus, type PilotConfig, type ScoreRules } from '@pilotix/shared';
 import type { Db } from './db';
 
 export interface SuiviMotif {
@@ -34,6 +34,25 @@ export interface AssignArea {
   when: 'alert' | 'shipped';
   /** Suivi: the agent who confirmed the order gets it when he does Suivi and can take it (else the split) */
   toConfirmer: boolean;
+  /** Rotation: what nobody acted on in time moves to another agent */
+  rotation: AssignRotation;
+}
+
+/** Rotation (piece B): an order (Confirmation) or an alert (Suivi) its agent did not act on in time goes to another one. */
+export interface AssignRotation {
+  on: boolean;
+  /** Confirmation: the statuses whose orders may move (« à traiter » ones only); Suivi: alerts only (unused) */
+  statuses: ConfStatus[];
+  /** minutes the agent has, from when he got it */
+  minutes: number;
+  /** only when he did nothing on it since he got it (no call, no status, no note); off: whatever he did */
+  noCall: boolean;
+  /** after this many moves it goes to a supervisor (the agent's team manager, else an agent manager on line); 0: never */
+  toLeadAfter: number;
+  /** Confirmation: the status it takes when it moves ('': unchanged; « à traiter » ones only) */
+  setStatus: '' | ConfStatus;
+  /** always to this agent (if he can take it), else the split */
+  target: number | null;
 }
 
 export interface AssignAgent {
@@ -203,8 +222,8 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   pilot: PILOT_DEFAULT,
   coverageRefresh: { at: null, results: [] },
   autoAssign: {
-    conf: { mode: 'manual', by: 'all', excluded: ['confirmed', 'no_stock', 'cancelled', 'duplicate', 'wrong_number', 'fake'], max: 30, offlineMin: 15, sameClient: true, respectAccess: true, hideHistory: false, speedFirst: true, womenToWomen: false, when: 'alert', toConfirmer: false },
-    follow: { mode: 'manual', by: 'all', excluded: [], max: 15, offlineMin: 15, sameClient: true, respectAccess: true, hideHistory: false, speedFirst: true, womenToWomen: false, when: 'alert', toConfirmer: false },
+    conf: { mode: 'manual', by: 'all', excluded: ['confirmed', 'no_stock', 'cancelled', 'duplicate', 'wrong_number', 'fake'], max: 30, offlineMin: 15, sameClient: true, respectAccess: true, hideHistory: false, speedFirst: true, womenToWomen: false, when: 'alert', toConfirmer: false, rotation: { on: false, statuses: ['new', 'no_answer', 'busy'], minutes: 30, noCall: true, toLeadAfter: 2, setStatus: '', target: null } },
+    follow: { mode: 'manual', by: 'all', excluded: [], max: 15, offlineMin: 15, sameClient: true, respectAccess: true, hideHistory: false, speedFirst: true, womenToWomen: false, when: 'alert', toConfirmer: false, rotation: { on: false, statuses: [], minutes: 120, noCall: true, toLeadAfter: 2, setStatus: '', target: null } },
     agents: {},
     order: [],
     womenProducts: [],

@@ -641,5 +641,9 @@
   },
   "mineEmpty": "Aucune commande à vous ici. Appuyez sur « Commande suivante » pour prendre la plus urgente.",
   "autoCancelled": "{{ref}} annulée automatiquement : {{n}} appels sans réponse",
-  "autoCancelledN": "{{n}} commandes annulées automatiquement (trop d’appels sans réponse)"
+  "autoCancelledN": "{{n}} commandes annulées automatiquement (trop d’appels sans réponse)",
+  "rot": {
+    "title": "Passe à un autre agent dans {{d}} si personne n’agit",
+    "nowTitle": "Passe à un autre agent à la prochaine minute"
+  }
 }

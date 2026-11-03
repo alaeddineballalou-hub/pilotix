@@ -7,7 +7,7 @@ import { HeldChip } from './hold';
 import { da, when, wilayaName } from '../../lib/format';
 import { namesOf } from '../../lib/items';
 import { Icon } from '../../ui/kit';
-import { Countdown, Deadline } from './Countdown';
+import { Countdown, Deadline, RotateChip } from './Countdown';
 import { Detail } from './Detail';
 import { currentLabel } from './shared';
 import { AskCall, AskMsg } from './History';
@@ -17,7 +17,7 @@ import './phone.css';
 import { ScoreChip } from '../../ui/clientScore';
 
 /** a queue row: the order with its call countdown */
-type PRow = Order & { deadline?: Deadline | null };
+type PRow = Order & { deadline?: Deadline | null; rotateAt?: number | null };
 
 const variantsLine = (o: Order) =>
   o.items
@@ -72,6 +72,7 @@ export function PhoneCards({ rows, empty, onOpen }: { rows: PRow[]; empty: strin
                 <div className="pxp-st">
                   <span className={`badge t-${o.confStatus === 'no_answer' ? 'mid' : CONF_TONE[o.confStatus] ?? 'off'}`}>{currentLabel(t, o.confStatus, o.attempts)}</span>
                   {o.attempts > 0 && <small>{t('confirmation.focus.calls', { n: o.attempts })}</small>}
+                  <RotateChip at={o.rotateAt} />
                 </div>
               </div>
               <CallButton o={o} />

@@ -17,6 +17,7 @@ import { eventText } from '../orders/OrderCard';
 import { ClaimRow, RemindApiModal, SendModal, useTarget } from './Claims';
 import { daysSince } from './common';
 import { AskCall, AskMsg } from '../confirmation/History';
+import { RotateChip } from '../confirmation/Countdown';
 import '../confirmation/phone.css';
 import './phone.css';
 import { ChangeKind, ChangeSheet, CourierPanel, useParcelInfo } from './CourierPanel';
@@ -24,7 +25,7 @@ import { useBackLayer } from '../../lib/backLayer';
 import { ScoreChip } from '../../ui/clientScore';
 
 export type AlertClock = { kind: 'call' | 'solve'; dueAt: string; left: number; state: 'ok' | 'soon' | 'late' };
-export type PExtra = { stuck?: import('./Stuck').StuckInfo | null; motif?: { outcome: 'resolved' | 'lost'; label: string } | null; clock?: AlertClock | null; tries?: AlertTries | null; companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
+export type PExtra = { rotateAt?: number | null; stuck?: import('./Stuck').StuckInfo | null; motif?: { outcome: 'resolved' | 'lost'; label: string } | null; clock?: AlertClock | null; tries?: AlertTries | null; companyKind: string | null; livreurPhone: string | null; alertReason: string | null; claim: { id: number; status: string; createdAt: string; sentAt: string | null } | null };
 
 /** Where the parcel is: 0 shipped, 1 on the road, 2 stopped (alert, failed, return…), 3 delivered. */
 function stageOf(o: Order): { at: number; stop: boolean } {
@@ -123,6 +124,7 @@ export function ParcelCards({ rows, extra, reasonOf, empty, onOpen }: { rows: Or
                 <div className="pxs-clk">
                   <ClockChip c={x.clock} />
                   <TriesChip tr={x.tries} />
+                  <RotateChip at={x.rotateAt} />
                 </div>
               )}
             </div>
@@ -274,6 +276,7 @@ export function ParcelPage({ o, x, reason, actions, onClaim, onClose, onSkip }: 
           <StuckChips s={x.stuck} />
           <ClockChip c={x.clock} />
           <TriesChip tr={x.tries} />
+          {o.followStatus === 'alert' && <RotateChip at={x?.rotateAt} />}
         </div>
       )}
 

@@ -850,6 +850,31 @@
       "shipped": "Chaque colis a son agent dès qu’il part : il le suit jusqu’à la livraison."
     },
     "toConfirmer": "À celui qui a confirmé la commande",
-    "toConfirmerHint": "S’il fait aussi le Suivi et qu’il peut la prendre (en ligne, pas au maximum). Sinon, à un autre agent par la répartition."
+    "toConfirmerHint": "S’il fait aussi le Suivi et qu’il peut la prendre (en ligne, pas au maximum). Sinon, à un autre agent par la répartition.",
+    "rot": {
+      "title": "Rotation — si personne n’agit",
+      "on": "Changer d’agent si personne n’agit",
+      "onHint": "Une commande qui attend trop chez le même agent part chez un autre agent. Elle ne revient jamais chez quelqu’un qui l’a déjà eue.",
+      "onHintFollow": "Une alerte qui attend trop chez le même agent part chez un autre agent. Elle ne revient jamais chez quelqu’un qui l’a déjà eue.",
+      "minutes": "Temps donné à l’agent",
+      "minutesHint": "Compté depuis qu’il a reçu la commande.",
+      "minutesHintFollow": "Compté depuis l’alerte (ou depuis qu’il l’a reçue, si c’est plus tard).",
+      "statuses": "Pour ces statuts",
+      "statusesHint": "Seules les commandes encore à traiter peuvent changer d’agent.",
+      "noCall": "Seulement s’il n’a rien fait",
+      "noCallHint": "Aucun appel, statut ou note depuis qu’il l’a reçue. Éteint : elle part même s’il a appelé, tant qu’elle n’avance pas.",
+      "to": "À qui ?",
+      "toHint": "Personne ne la reçoit deux fois. Un agent hors ligne, au maximum ou hors de ses heures est sauté.",
+      "toMode": "Selon le mode ({{m}})",
+      "toAgent": "Un agent choisi",
+      "lead": "Au superviseur après",
+      "leadHint": "Après ce nombre de changements, elle va à un superviseur en ligne (le chef de son équipe d’abord) et reste chez lui. 0 : jamais.",
+      "moves": "changements",
+      "setStatus": "Statut après le changement",
+      "setStatusHint": "Le statut que prend la commande quand elle change d’agent.",
+      "same": "Inchangé",
+      "note": "L’agent voit le temps qui reste sur la commande (↻). Chaque changement est écrit dans l’historique de la commande."
+    },
+    "ranMoved": "{{n}} donnée(s) · {{b}} reprise(s) · {{m}} changée(s) d’agent"
   }
 }

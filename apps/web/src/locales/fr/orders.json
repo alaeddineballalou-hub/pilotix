@@ -362,7 +362,8 @@
       "chat": "Message",
       "motif_resolved": "Suivi : traité · Résolu · {{m}}",
       "motif_lost": "Suivi : traité · Perdu · {{m}}",
-      "suivi_stuck": "Suivi : colis bloqué traité"
+      "suivi_stuck": "Suivi : colis bloqué traité",
+      "rotate": "Passée à un autre agent"
     },
     "addNote": "Ajouter une note",
     "noteSaved": "Note ajoutée",

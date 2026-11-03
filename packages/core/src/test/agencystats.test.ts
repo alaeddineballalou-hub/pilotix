@@ -106,6 +106,12 @@ test('agency Dashboard and Analyse: its orders only, the team for the chief, an 
   assert.deepEqual(m.agents.map((a: any) => a.name), ['Nora']);
   assert.deepEqual([m.team.received, m.team.confirmed, m.team.cancelled], [1, 1, 0]);
   assert.deepEqual(m.rank, { rank: 1, of: 2 });
+  // the team's ladder: her own name only, the others' numbers without names
+  assert.equal(m.ladder.by, 'conf');
+  assert.deepEqual(m.ladder.rows.map((x: any) => [x.pos, x.me, x.name]), [[1, true, 'Nora'], [2, false, null]]);
+  // each line's numbers are the rate's own: confirmed out of confirmed + cancelled
+  for (const x of m.ladder.rows) if (x.b > 0) assert.equal(x.rate, x.a / x.b);
+  assert.ok(!JSON.stringify(m).includes('Lina'), 'no other agent named anywhere');
   assert.equal(m.now.toCall, 0);
   // Analyse is for the chief and the agent managers
   await assert.rejects(call('agency.analytics', noraCtx, today), /Accès refusé|refus/i);
@@ -118,6 +124,12 @@ test('agency Dashboard and Analyse: its orders only, the team for the chief, an 
   assert.deepEqual(a.products.map((x: any) => [x.name, x.received]), [['Vélo', 3]]);
   assert.equal(a.wilayas[0].name, '31 · Oran');
   assert.deepEqual(a.agents.map((x: any) => x.name).sort(), ['Lina', 'Nora']);
+  // the money (the chief): what each seller owes for each month of the period, as Facturation
+  assert.ok(a.earnings);
+  assert.deepEqual(a.earnings.sellers.map((x: any) => x.name), ['Boutique Oran']);
+  assert.ok(a.earnings.months.includes(a.earnings.current));
+  const bill: any = await call('agency.billing', chief, { month: a.earnings.current });
+  assert.equal(a.earnings.sellers[0].months[a.earnings.current].total, bill.rows[0].bill.total, 'the same amount as Facturation');
   // the seller chosen at the top of the page: another store → nothing
   const other: any = await call('agency.analytics', { ...chief, seller: shop.id + 999 }, today);
   assert.equal(other.team.received, 0);
