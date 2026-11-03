@@ -5,6 +5,7 @@
 // (ctx.dellalAi) and, without AI, with a small rule-based "demo brain", so the preview shows the whole flow.
 import { COMMUNES, normalizePhone, WILAYAS_AR } from '@pilotix/shared';
 import { z } from 'zod';
+import { guideText, readGuide } from './guide';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, hasRole, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
@@ -286,6 +287,8 @@ export interface CmFacts {
   isAd: boolean;
   caption: string | null;
   product: ProductInfo | null;
+  /** the product's sales guide as text (Guide de vente, modules/guide.ts), when the team wrote one */
+  productGuide?: string | null;
   /** when the post's product is unknown */
   catalog: ProductInfo[];
   place: { wilayaId: number; wilaya: string; commune: string | null; wilayaAr: string; communeAr: string | null; home: number | null; desk: number | null } | null;
@@ -355,6 +358,7 @@ async function gatherFacts(ctx: Ctx, c: CommentLike): Promise<CmFacts> {
     isAd: !!post?.is_ad,
     caption: post?.caption ?? null,
     product,
+    productGuide: product?.guide ? await readGuide(db, product.product_id).then((g) => (g ? guideText(g.guide) : null)) : null,
     catalog: product ? [] : all.slice(0, 12),
     place,
     phone: phoneIn(c.body),
@@ -639,6 +643,9 @@ export function cmSystem(f: CmFacts, s: CmSettings, lahja: { all: LahjaWord[]; o
     'Informations :',
     `- Publication : ${f.caption ? `« ${f.caption.slice(0, 600)} »` : '(texte inconnu)'}`,
     f.product ? `- Produit de la publication : ${productLine(f.product)}` : `- Produit de la publication : inconnu. Catalogue : ${f.catalog.map((p) => `${p.name} ${p.price} DA`).join(' · ')}`,
+    f.productGuide
+      ? `- Guide de vente de ce produit (écrit par l’équipe : ce sont les vraies informations de la boutique ; dis-les avec tes mots, court ; ne promets jamais ce que « À ne jamais promettre » interdit) :\n${f.productGuide}`
+      : '',
     f.place
       ? `- Livraison pour ${f.place.commune ?? f.place.wilaya} (${f.place.wilaya}) : ${f.place.home !== null ? `${f.place.home} DA à domicile` : 'pas à domicile'}, ${f.place.desk !== null ? `${f.place.desk} DA au bureau (stop desk)` : 'pas de bureau'}. Paiement à la livraison.`
       : '- Livraison : la wilaya n’est pas dans le commentaire (demande-la en privé). Paiement à la livraison partout.',
@@ -1074,7 +1081,7 @@ export const cmProcs = {
         by: run.by,
         model: run.model,
         darija: run.darija,
-        facts: { product: f.product?.name ?? null, place: f.place ? f.place.commune ?? f.place.wilaya : null, phone: f.phone, lang: f.lang, channel },
+        facts: { product: f.product?.name ?? null, guide: !!f.productGuide, place: f.place ? f.place.commune ?? f.place.wilaya : null, phone: f.phone, lang: f.lang, channel },
         platform: !!ctx.t,
       };
     },

@@ -171,6 +171,8 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'confirmation.list': free,
   'confirmation.catalog': free,
   'catalog.assigned': free,
+  // a product's sales guide during the call (the proc keeps to the agency's products)
+  'catalog.guide': free,
   'confirmation.deskOptions': free,
   'confirmation.mine': free,
   'confirmation.banner': free,
@@ -243,7 +245,7 @@ export const MARKETER_SELLER_PROCS = new Set(Object.keys(MARKETER_AGENT_PROCS).f
 /** The actions a partner's space runs inside its sellers' stores. */
 export const sellerProcsOf = (kind: 'agency' | 'marketer') => (kind === 'marketer' ? MARKETER_SELLER_PROCS : SELLER_PROCS);
 
-const MANAGEMENT_PROCS = new Set(['management.plans', 'management.planSave', 'management.planClone', 'management.planAssign', 'management.planArchive', 'management.planDelete', 'management.bonuses', 'management.bonusSave', 'management.bonusClone', 'management.bonusDelete', 'management.bonusAssign', 'management.bonusRespond', 'management.bonusOfferAgent', 'management.billingTargets', 'management.billingPropose', 'management.payroll', 'management.payrollClose']);
+const MANAGEMENT_PROCS = new Set(['management.plans', 'management.planSave', 'management.planClone', 'management.planAssign', 'management.planArchive', 'management.planDelete', 'management.bonuses', 'management.bonusSave', 'management.bonusClone', 'management.bonusDelete', 'management.bonusAssign', 'management.bonusRespond', 'management.bonusOfferAgent', 'management.billingTargets', 'management.billingPropose', 'management.payroll', 'management.payrollClose', 'management.agentScores']);
 
 /** What a partner's own space answers (its own team and account; the rest are the agency.* actions). */
 const AGENCY_SPACE = new Set(['me.get', 'me.language', 'me.password', 'me.ui', 'me.setUi', 'me.update', 'me.seen', 'me.delete', 'management.myBonuses', 'users.list', 'users.create', 'users.update', 'users.phoneCheck', 'admin.users.resetPassword']);

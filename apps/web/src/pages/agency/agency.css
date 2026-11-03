@@ -236,3 +236,13 @@ html[data-skin][data-theme] .card.agx-danger { border: 1.5px solid var(--c-bad-t
 
 .ppm-real-logo{width:124px;height:54px;object-fit:contain;flex:none}
 @media(max-width:600px){.ppm-real-logo{width:90px;height:42px}}
+
+/* a score out of 100: a short bar and the number */
+.agx-score { display: inline-flex; align-items: center; gap: 8px; min-width: 96px; }
+.agx-score-bar { flex: 1; height: 6px; border-radius: 3px; background: var(--line, #e5e7eb); overflow: hidden; min-width: 56px; }
+.agx-score-bar i { display: block; height: 100%; border-radius: 3px; background: currentColor; }
+.agx-score.t-ok { color: var(--ok, #15803d); }
+.agx-score.t-warn { color: var(--warn, #b45309); }
+.agx-score.t-bad { color: var(--bad, #b91c1c); }
+.agx-score b { font-variant-numeric: tabular-nums; min-width: 2ch; text-align: end; }
+.agx-pay-lines summary { cursor: pointer; margin-top: 2px; }

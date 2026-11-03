@@ -15,3 +15,6 @@
 .assigned-variant-name small { display: block; margin-top: 3px; }
 .assigned-variant img { width: 40px; height: 40px; object-fit: contain; border-radius: 8px; }
 @media (max-width: 600px) { .assigned-product { padding: 16px; } .assigned-grid { grid-template-columns: 1fr; } }
+
+/* the product's Guide de vente (pages/depot/guide.tsx) */
+.assigned-guide { display: flex; margin: -2px 0 2px; }
