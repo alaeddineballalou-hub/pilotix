@@ -95,7 +95,7 @@ test('Version 001: its sales method asks for the number, not for a recap', () =>
   assert.match(p, /update_order/);
   assert.doesNotMatch(p, /Avant create_order, fais le récapitulatif/);
   assert.doesNotMatch(p, /13\. Augmenter le panier/);
-  assert.doesNotMatch(p, /je te le réserve \?/);
+  assert.doesNotMatch(p, /je te le réserve \?|domicile wela bureau|nréservilek/);
   assert.match(p, /7\. Après la commande/, 'the rest of the method stays');
   const full = playbookFor({ version: 'full', ordersTo: 'new' });
   assert.match(full, /Avant create_order, fais le récapitulatif/);

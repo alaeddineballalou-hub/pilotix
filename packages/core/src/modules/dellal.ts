@@ -993,6 +993,7 @@ const V001_SWAPS: [string, string][] = [
   ['- Pressé (« ch7al w win ») : prix, livraison, récapitulatif. Pas de découverte longue.', '- Pressé (« ch7al w win ») : prix, livraison, puis son prénom, son numéro et sa wilaya. Pas de découverte longue.'],
   ['(la couleur → la wilaya → domicile ou bureau → le récapitulatif)', '(la couleur → le prénom et le numéro → la wilaya)'],
   ['- Quand tout est choisi, propose de réserver : « nréservilek ? » puis le récapitulatif.', '- Quand le produit est choisi, demande le numéro : « 3tini smitek w numéro ta3ek, w l’équipe t3aytlek bach tconfirmi ».'],
+  ['« grise wela bleue ? », « domicile wela bureau ? »', '« grise wela bleue ? », « wa7da wela zouj ? »'],
 ];
 
 /** The sales method of the shop's version: Version 001 has its own order part, and no basket raise in the chat. */
