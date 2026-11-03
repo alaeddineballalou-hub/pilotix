@@ -5,6 +5,7 @@ import { call, Ctx, Db, ServerHooks } from '../index';
 import { chunks, parseMetaWebhook } from '../dellal-server';
 import { findPlace, playbookFor } from '../modules/dellal';
 import { checkDarija, fixDarija, parseAvoid } from '../modules/darija';
+import { getSetting, setSetting } from '../settings';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -178,6 +179,145 @@ test('Version 001 (AI): the order lands in Nouvelles with the note; a change in 
   assert.equal(((await call('dellal.conversation', admin, { id: r.conversationId })) as any).conversation.mode, 'handoff');
   await call('dellal.setMode', admin, { id: r.conversationId, mode: 'ai' });
   await call('dellal.settings.save', admin, { ...g.settings, enabled: true, version: '001', ordersTo: g.settings.ordersTo, secrets: {} });
+});
+
+test('a question Dellal cannot answer (no AI): the number asked twice, then the service number; his number goes to the team', async () => {
+  const conf = await as(EMAILS.conf);
+  const admin = await as(EMAILS.admin);
+  const g: any = await call('dellal.settings.get', admin, {});
+  await call('dellal.settings.save', admin, { ...g.settings, servicePhone: '023 45 67 89', secrets: {} });
+  let r: any = await call('dellal.test', conf, { reset: true });
+  for (const m of ['salam', 'wach 3andkom magasin nrouh lih ?', 'w 3lach ?', 'la']) r = await call('dellal.test', conf, { body: m });
+  let bodies = r.messages.map((m: any) => `${m.role}: ${m.body}`).join('\n');
+  assert.match(bodies, /tool: callback → numéro demandé \(1\/2\)/);
+  assert.match(bodies, /agent: Je n’ai pas cette information.*Envoie-moi ton numéro/);
+  assert.match(bodies, /tool: callback → numéro demandé \(2\/2\)/);
+  assert.match(bodies, /tool: callback → numéro du service client donné : 023 45 67 89/);
+  assert.match(bodies, /agent: .*service client au 023\s45\s67\s89/, 'the number on one line');
+  // he sends his number after all: a conseiller calls him back
+  r = await call('dellal.test', conf, { body: 'ok voilà 0661 23 45 18' });
+  bodies = r.messages.map((m: any) => `${m.role}: ${m.body}`).join('\n');
+  assert.match(bodies, /tool: callback → à rappeler au 0661234518/);
+  assert.match(bodies, /agent: .*va t’appeler très vite au 0661\s23\s45\s18/);
+  // the colours, the price and a greeting are still answered by the demo itself
+  r = await call('dellal.test', conf, { reset: true });
+  for (const m of ['salam', 'ch7al la poussette ?', 'kayen gris ?']) r = await call('dellal.test', conf, { body: m });
+  assert.doesNotMatch(r.messages.map((m: any) => m.body).join('\n'), /callback/);
+  await call('dellal.test', conf, { reset: true });
+  await call('dellal.settings.save', admin, { ...g.settings, servicePhone: '', secrets: {} });
+});
+
+test('a question Dellal cannot answer (AI, both versions): never a guess; the number goes to the team, the question goes with an order, else the service number', async () => {
+  const admin = await as(EMAILS.admin);
+  const g: any = await call('dellal.settings.get', admin, {});
+  assert.equal(g.settings.servicePhone, '', 'no number of its own by default: the shop’s SAV number is used');
+  assert.equal(g.savPhone, '0550 11 22 33');
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, nightReplies: true, version: '001', servicePhone: '', secrets: {} });
+  const lastResult = (req: any) => JSON.parse(req.messages[req.messages.length - 1].content[0].content);
+  const res: any[] = [];
+  let n = 0;
+  let seen: any = null;
+  const use = (name: string, input: any) => ({ content: [{ type: 'tool_use', id: `cb${++n}`, name, input }], stop_reason: 'tool_use' });
+  const reply = (text: string) => (req: any) => (res.push(lastResult(req)), { content: [{ type: 'text', text }], stop_reason: 'end_turn' });
+  const conv = async (id: number) => ((await call('dellal.conversation', admin, { id })) as any).conversation;
+
+  // Messenger, Version 001: asked twice, then the service number (the shop's SAV), then his number goes to the team
+  const q = 'wach tetplia la poussette f la voiture ?';
+  const sys = await as(
+    EMAILS.admin,
+    fakeServer(
+      [
+        (req: any) => ((seen = req), use('callback', { question: q })),
+        reply('Je n’ai pas cette information : envoie-moi ton numéro, un conseiller t’appelle.'),
+        use('callback', { question: q }),
+        reply('Envoie-moi ton numéro, un conseiller t’appelle.'),
+        use('callback', { question: q, refused: true }),
+        reply('Appelle le service client au 0550 11 22 33.'),
+        use('callback', { question: q, phone: '0661 23 45 18' }),
+        reply('Merci, un conseiller t’appelle au 0661 23 45 18.'),
+      ],
+      [],
+    ),
+  );
+  const r: any = await call('dellal.receive', sys, { channel: 'messenger', externalId: 'psid-callback', accountId: 'page-1', text: q, messageId: 'cb_1' });
+  await call('dellal.answer', sys, { id: r.conversationId });
+  assert.ok(seen.tools.some((t: any) => t.name === 'callback'));
+  assert.match(seen.system, /Appelle callback avec sa question/);
+  assert.doesNotMatch(seen.system, /tu ne sais pas répondre ou le client est fâché|question que tu ne sais pas : passe la main/);
+  assert.doesNotMatch(seen.tools.find((t: any) => t.name === 'handoff').description, /pas sûr/);
+  assert.deepEqual([res[0].asked, res[0].ask], [true, 1]);
+  assert.equal((await conv(r.conversationId)).mode, 'ai', 'asking for the number keeps the chat with Dellal');
+  for (const [i, text] of ['3lach ?', 'la'].entries()) {
+    await call('dellal.receive', sys, { channel: 'messenger', externalId: 'psid-callback', text, messageId: `cb_${i + 2}` });
+    await call('dellal.answer', sys, { id: r.conversationId });
+  }
+  assert.deepEqual([res[1].asked, res[1].ask], [true, 2]);
+  assert.equal(res[2].service_phone, '0550 11 22 33', 'Dellal’s own number empty: the shop’s SAV number');
+  assert.equal(res[2].asked, undefined);
+  await call('dellal.receive', sys, { channel: 'messenger', externalId: 'psid-callback', text: 'ok 0661 23 45 18', messageId: 'cb_4' });
+  await call('dellal.answer', sys, { id: r.conversationId });
+  assert.deepEqual([res[3].callback, res[3].phone], [true, '0661234518']);
+  let c = await conv(r.conversationId);
+  assert.equal(c.mode, 'handoff', 'the team calls him back: the conversation waits in « À reprendre »');
+  assert.match(c.handoffReason, /^À rappeler au 0661\s23\s45\s18 — sa question : « wach tetplia la poussette f la voiture \? »$/);
+  assert.equal(c.phone, '0661234518');
+  const lines = ((await call('dellal.conversation', admin, { id: r.conversationId })) as any).messages.filter((m: any) => m.role === 'tool').map((m: any) => m.body);
+  assert.deepEqual(lines, ['callback → numéro demandé (1/2)', 'callback → numéro demandé (2/2)', 'callback → numéro du service client donné : 0550 11 22 33', 'callback → à rappeler au 0661234518']);
+
+  // WhatsApp, the whole order: the number writing is known, nothing to ask; Dellal’s own service number beats the SAV
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, nightReplies: true, version: 'full', servicePhone: '023 45 67 89', secrets: {} });
+  const sys2 = await as(EMAILS.admin, fakeServer([(req: any) => ((seen = req), use('callback', { question: 'kayen magasin f Oran ?' })), reply('Un conseiller t’appelle sur ce numéro.')], []));
+  const w: any = await call('dellal.receive', sys2, { channel: 'whatsapp', externalId: '213661909097', accountId: '1098', text: 'kayen magasin f Oran ?', messageId: 'wamid.cb1' });
+  await call('dellal.answer', sys2, { id: w.conversationId });
+  assert.ok(seen.tools.some((t: any) => t.name === 'callback'), 'the whole order has it too');
+  assert.match(seen.system, /Question dont tu n’as pas la réponse : ne devine jamais/);
+  assert.deepEqual([res[4].callback, res[4].phone], [true, '0661909097']);
+  assert.equal((await conv(w.conversationId)).mode, 'handoff');
+  const sys3 = await as(EMAILS.admin, fakeServer([use('callback', { question: 'wach ta3tiwni facture ?', refused: true }), reply('Appelle le 023 45 67 89.')], []));
+  const r3: any = await call('dellal.receive', sys3, { channel: 'instagram', externalId: 'ig-callback', accountId: 'ig-1', text: 'wach ta3tiwni facture ?', messageId: 'cb_ig1' });
+  await call('dellal.answer', sys3, { id: r3.conversationId });
+  assert.equal(res[5].service_phone, '023 45 67 89', 'he refuses: the service number at once');
+  assert.equal((await conv(r3.conversationId)).mode, 'ai');
+
+  // Version 001 with its order to call about: the question goes with the order, Dellal keeps answering
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, nightReplies: true, version: '001', servicePhone: '', secrets: {} });
+  const v = (await db.query(`SELECT v.id, v.product_id FROM product_variants v JOIN products p ON p.id = v.product_id WHERE p.active AND NOT p.is_service AND v.active ORDER BY v.id LIMIT 1`))[0];
+  await db.query(`INSERT INTO stock (variant_id, warehouse_id, qty) VALUES ($1, (SELECT id FROM warehouses ORDER BY is_default DESC, id LIMIT 1), 50) ON CONFLICT (variant_id, warehouse_id) DO UPDATE SET qty = stock.qty + 50`, [v.id]);
+  const sys4 = await as(
+    EMAILS.admin,
+    fakeServer(
+      [
+        use('create_order', { customer_name: 'Nadia', phone: '0770 55 66 77', wilaya: 'Oran', items: [{ product_id: Number(v.product_id), variant_id: Number(v.id), qty: 1 }], note: 'Veut la livrer vite' }),
+        reply('C’est noté, un conseiller t’appelle.'),
+        use('callback', { question: 'wach fiha garantie 2 ans ?' }),
+        reply('Le conseiller te répondra en t’appelant.'),
+      ],
+      [],
+    ),
+  );
+  const r4: any = await call('dellal.receive', sys4, { channel: 'messenger', externalId: 'psid-callback-2', accountId: 'page-1', text: 'Nadia 0770556677 Oran, je la veux', messageId: 'cb_o1' });
+  await call('dellal.answer', sys4, { id: r4.conversationId });
+  await call('dellal.receive', sys4, { channel: 'messenger', externalId: 'psid-callback-2', text: 'wach fiha garantie 2 ans ?', messageId: 'cb_o2' });
+  await call('dellal.answer', sys4, { id: r4.conversationId });
+  const o = (await db.query('SELECT * FROM orders WHERE conversation_id = $1', [r4.conversationId]))[0];
+  assert.deepEqual([res[7].with_order, res[7].ref], [true, o.ref]);
+  assert.equal(o.customer_note, 'Veut la livrer vite · Question : wach fiha garantie 2 ans ?');
+  const ev = await db.query(`SELECT note FROM order_events WHERE order_id = $1 AND kind = 'note'`, [o.id]);
+  assert.ok(ev.some((e: any) => /question du client sans réponse dans le chat.*« wach fiha garantie 2 ans \? »/.test(e.note)));
+  assert.equal((await conv(r4.conversationId)).mode, 'ai', 'the team calls about the order anyway: Dellal keeps answering');
+
+  // no service number anywhere: a person of the team answers in the chat
+  const shop = await getSetting(db, 'shop');
+  await setSetting(db, 'shop', { ...shop, savPhone: '' });
+  const sys5 = await as(EMAILS.admin, fakeServer([use('callback', { question: 'wach tbi3ou b la carte ?', refused: true }), reply('Quelqu’un de l’équipe te répond ici.')], []));
+  const r5: any = await call('dellal.receive', sys5, { channel: 'messenger', externalId: 'psid-callback-3', accountId: 'page-1', text: 'wach tbi3ou b la carte ?', messageId: 'cb_n1' });
+  await call('dellal.answer', sys5, { id: r5.conversationId });
+  assert.equal(res[8].handoff, true);
+  c = await conv(r5.conversationId);
+  assert.equal(c.mode, 'handoff');
+  assert.match(c.handoffReason, /^Question sans réponse, sans numéro du client : « wach tbi3ou b la carte \? »$/);
+  await setSetting(db, 'shop', shop);
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, version: '001', servicePhone: '', secrets: {} });
 });
 
 test('a WhatsApp message: Dellal (AI) sells, the order lands in Confirmation › Nouvelles, linked to the conversation', async () => {
@@ -436,7 +576,7 @@ test('a reply in another dialect is rewritten in Algerian Darija before it is se
   const r4: any = await call('dellal.test', inPage, { body: 'ch7al la poussette l Oran ?' });
   assert.equal(r4.demo, false);
   assert.equal(reqs.length, 2, 'one answer, one Darija rewrite');
-  assert.deepEqual(reqs[0].tools.map((x: any) => x.name), ['search_products', 'delivery_fee', 'create_order', 'product_guide', 'handoff']);
+  assert.deepEqual(reqs[0].tools.map((x: any) => x.name), ['search_products', 'delivery_fee', 'create_order', 'product_guide', 'callback', 'handoff']);
   assert.equal(typeof reqs[0].runTool, 'function');
   assert.match(reqs[0].system, /DARIJA ALGÉRIENNE/);
   assert.equal(reqs[1].tools.length, 0);

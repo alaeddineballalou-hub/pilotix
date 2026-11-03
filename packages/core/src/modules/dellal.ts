@@ -2,7 +2,9 @@
 // gives prices, variants, stock and delivery fees from Pilotix itself, takes the order (→ Confirmation) and hands the
 // conversation to a person when it should. Two versions: « Version 001 » (the default) gets the customer's name, number,
 // wilaya and product with a note of what he wants, so the team calls him, and keeps that order up to date when he changes
-// something; « Commande complète » takes the whole order in the chat. The same rules run on the server (Claude through ctx.server.dellal) and in
+// something; « Commande complète » takes the whole order in the chat. In both, a question Dellal cannot answer is never
+// guessed: it asks for the customer's number so the team calls him back, and after two asks gives the shop's customer-service
+// number. The same rules run on the server (Claude through ctx.server.dellal) and in
 // the browser preview (a small rule-based "demo brain" with the same tools, so the demo shows the whole flow).
 import { COMMUNES, CONF_TODO, normalizePhone, SalesChannel, WILAYAS } from '@pilotix/shared';
 import { z } from 'zod';
@@ -50,6 +52,9 @@ export interface DellalSettings {
   notes: string;
   /** extra reasons to hand over to a person, one per line */
   handoffTopics: string;
+  /** the number Dellal gives a customer who does not leave his own for a question it cannot answer ('' = the shop's SAV
+   *  number, Réglages › Boutique) */
+  servicePhone: string;
   /** the shop's own Darija: expressions to use, one per line */
   darijaPrefer: string;
   /** words and expressions never to write, one per line ("mot → à la place") */
@@ -74,6 +79,7 @@ export const DEFAULT_DELLAL: DellalSettings = {
   nightReplies: true,
   notes: '',
   handoffTopics: 'Réclamation ou colis en retard\nAchat en gros\nLe client demande à parler à une personne',
+  servicePhone: '',
   darijaPrefer: '',
   darijaAvoid: '',
   verifyToken: '',
@@ -473,8 +479,23 @@ export const DELLAL_TOOLS = [
     input_schema: { type: 'object', properties: { product_id: { type: 'integer' } }, required: ['product_id'] },
   },
   {
+    name: 'callback',
+    description:
+      'Une question du client dont tu n’as pas la réponse (ni dans le catalogue, ni dans un guide de vente, ni dans les informations de la boutique) : n’invente rien et appelle cet outil avec sa question. Un conseiller de l’équipe l’appellera pour lui répondre. Mets son numéro dans phone dès qu’il le donne, et refused: true s’il refuse de le donner. L’outil te dit quoi répondre : lui demander simplement son numéro, ou lui donner le numéro du service client.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        question: { type: 'string', description: 'sa question, avec ses mots' },
+        phone: { type: 'string', description: 'son numéro, s’il l’a donné' },
+        customer_name: { type: 'string', description: 'son prénom, s’il l’a dit' },
+        refused: { type: 'boolean', description: 'true s’il refuse de donner son numéro' },
+      },
+      required: ['question'],
+    },
+  },
+  {
     name: 'handoff',
-    description: 'Passe la conversation à une personne de l’équipe et arrête de répondre. Utilise-le pour les cas listés ou quand tu n’es pas sûr.',
+    description: 'Passe la conversation à une personne de l’équipe et arrête de répondre. Utilise-le pour les cas listés et quand le client est fâché. Pour une question dont tu n’as pas la réponse, utilise callback.',
     input_schema: { type: 'object', properties: { reason: { type: 'string' } }, required: ['reason'] },
   },
 ] as const;
@@ -529,11 +550,14 @@ const UPDATE_ORDER = {
 export function toolsFor(s: Pick<DellalSettings, 'version'>): readonly { name: string; description: string; input_schema: unknown }[] {
   if (s.version !== '001') return DELLAL_TOOLS;
   const by = (n: string) => DELLAL_TOOLS.find((t) => t.name === n)!;
-  return [by('search_products'), by('delivery_fee'), CREATE_ORDER_001, UPDATE_ORDER, by('handoff'), by('product_guide')];
+  return [by('search_products'), by('delivery_fee'), CREATE_ORDER_001, UPDATE_ORDER, by('callback'), by('handoff'), by('product_guide')];
 }
 
 /** Version 001: what Dellal tells the customer once his order is in (the team calls). */
 const V001_NEXT = 'Un conseiller va l’appeler très vite pour confirmer : dis-lui de répondre au téléphone, et répète son numéro chiffre par chiffre.';
+
+/** A question Dellal cannot answer: how many times it asks for the customer's number before giving the service number. */
+export const CALLBACK_ASKS = 2;
 
 interface ToolCtx {
   ctx: Ctx;
@@ -675,6 +699,81 @@ async function updateFromChat(t: ToolCtx, input: any): Promise<any> {
   }
 }
 
+/** The number the customer already gave in this chat: the conversation's own (WhatsApp, or typed for an order or a call
+ *  back), or, in the test chat, the one an earlier tool took. */
+async function numberInChat(db: Db, conv: Pick<Conversation, 'id' | 'phone'>): Promise<string | null> {
+  const own = conv.phone ? normalizePhone(conv.phone) : null;
+  if (own) return own;
+  const rows = await db.query(
+    `SELECT meta FROM conv_messages WHERE conversation_id = $1 AND role = 'tool' AND meta->>'tool' IN ('callback', 'create_order', 'update_order') ORDER BY id DESC LIMIT 20`,
+    [conv.id],
+  );
+  for (const r of rows) {
+    const m = r.meta ?? {};
+    if (!m.result || m.result.error) continue;
+    const p = normalizePhone(String(m.result.phone ?? m.input?.phone ?? ''));
+    if (p) return p;
+  }
+  return null;
+}
+
+/**
+ * A question Dellal cannot answer (both versions): never a guessed answer, the team calls the customer back. His number
+ * (given now, or already in this chat) goes to the team with the question: the conversation waits in « À reprendre »; with
+ * an order the team will call about anyway, the question goes with that order and Dellal keeps answering. Without a
+ * number Dellal asks for it simply, CALLBACK_ASKS times at most (less if he refuses), then gives the shop's
+ * customer-service number; with none set, a person of the team answers in the chat. The test chat writes nothing.
+ */
+async function callbackFromChat(t: ToolCtx, input: any): Promise<any> {
+  const { ctx, conv, settings, test } = t;
+  const question = String(input?.question ?? '').replace(/\s+/g, ' ').trim().slice(0, 300) || 'sa question';
+  const typed = String(input?.phone ?? '').trim();
+  const given = typed ? normalizePhone(typed) : null;
+  if (typed && !given) return { error: 'Numéro invalide : redemande-lui son numéro (par exemple 0661 23 45 18).' };
+  const mark = test ? { test: true, note: 'Mode test : rien n’est enregistré.' } : {};
+  // an order of this chat the team will call about: the conseiller answers the question on that call
+  const open = await openOrder(ctx.db, conv, test);
+  if (open) {
+    if (!test && open.id) {
+      await ctx.db.query(`UPDATE orders SET customer_note = left(concat_ws(' · ', NULLIF(trim(customer_note), ''), $2::text), 1000) WHERE id = $1`, [open.id, `Question : ${question}`]);
+      await addEvent(ctx.db, open.id, null, 'note', null, null, `${settings.name} : question du client sans réponse dans le chat, à lui répondre en l’appelant — « ${question} »`.slice(0, 1000));
+    }
+    return { ok: true, ...mark, with_order: true, ref: open.ref, next: 'Dis-lui que le conseiller qui va l’appeler pour confirmer sa commande répondra aussi à sa question.' };
+  }
+  const phone = given ?? (await numberInChat(ctx.db, conv));
+  if (phone) {
+    const said = spaced(phone);
+    if (!test) {
+      await ctx.db.query(`UPDATE conversations SET mode = 'handoff', handoff_reason = $2, customer_name = COALESCE(customer_name, NULLIF($3, '')) WHERE id = $1`, [
+        conv.id,
+        `À rappeler au ${said} — sa question : « ${question} »`.slice(0, 300),
+        String(input?.customer_name ?? '').trim().slice(0, 120),
+      ]);
+      // a number typed on Messenger / Instagram / TikTok becomes the conversation's (WhatsApp keeps the number writing)
+      if (given && conv.channel !== 'whatsapp') await ctx.db.query('UPDATE conversations SET phone = $2, customer_id = (SELECT id FROM customers WHERE phone = $2) WHERE id = $1', [conv.id, given]);
+    }
+    return { ok: true, ...mark, callback: true, phone, next: `Remercie-le et dis-lui qu’un conseiller va l’appeler très vite au ${said} pour répondre à sa question (répète le numéro chiffre par chiffre).` };
+  }
+  const asked = num((await ctx.db.query(`SELECT count(*)::int AS n FROM conv_messages WHERE conversation_id = $1 AND role = 'tool' AND meta->>'tool' = 'callback' AND meta->'result'->>'asked' = 'true'`, [conv.id]))[0]?.n);
+  if (!input?.refused && asked < CALLBACK_ASKS)
+    return {
+      ok: true,
+      ...mark,
+      asked: true,
+      ask: asked + 1,
+      next:
+        asked === 0
+          ? 'N’invente pas de réponse : dis-lui simplement que tu n’as pas cette information, et demande-lui son numéro pour qu’un conseiller de l’équipe l’appelle et lui réponde. Une ou deux phrases courtes.'
+          : 'Redemande-lui son numéro une dernière fois, gentiment et en une phrase, pour qu’un conseiller l’appelle et lui réponde.',
+    };
+  const service = (settings.servicePhone || (await getSetting(ctx.db, 'shop')).savPhone || '').trim();
+  if (service)
+    return { ok: true, ...mark, service_phone: service, next: `Ne lui redemande plus son numéro : donne-lui le numéro du service client, ${service.replace(/ /g, ' ')}, pour qu’il appelle et ait sa réponse. Gentiment, en une phrase, puis continue à l’aider.` };
+  // no service number anywhere: a person of the team answers in the chat
+  if (!test) await ctx.db.query(`UPDATE conversations SET mode = 'handoff', handoff_reason = $2 WHERE id = $1`, [conv.id, `Question sans réponse, sans numéro du client : « ${question} »`.slice(0, 300)]);
+  return { ok: true, ...mark, handoff: true, next: 'Dis-lui en une phrase qu’une personne de l’équipe va lui répondre ici.' };
+}
+
 async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
   const { ctx, conv, settings } = t;
   if (name === 'search_products') return { products: await searchProducts(ctx.db, input?.query) };
@@ -682,9 +781,10 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
   if (name === 'product_guide') {
     const pid = Number(input?.product_id);
     const g = Number.isSafeInteger(pid) && pid > 0 ? await readGuide(ctx.db, pid) : null;
-    if (!g) return { error: 'Pas de guide de vente pour ce produit : réponds avec le catalogue et les informations de la boutique, sans rien inventer.' };
+    if (!g) return { error: 'Pas de guide de vente pour ce produit : réponds avec le catalogue et les informations de la boutique, sans rien inventer (si la réponse n’y est pas : callback).' };
     return { product_id: pid, guide: guideText(g.guide, g.upsell) };
   }
+  if (name === 'callback') return callbackFromChat(t, input ?? {});
   if (name === 'handoff') {
     const reason = String(input?.reason ?? 'À reprendre').slice(0, 300);
     if (!t.test) await ctx.db.query(`UPDATE conversations SET mode = 'handoff', handoff_reason = $2 WHERE id = $1`, [conv.id, reason]);
@@ -810,9 +910,10 @@ async function systemPrompt(
       .map((x) => x.trim())
       .filter(Boolean)
       .map((x) => `  • ${x}`)
-      .join('\n')}\n  • tu ne sais pas répondre ou le client est fâché`,
+      .join('\n')}\n  • le client est fâché`,
+    `- Question dont tu n’as pas la réponse (ni dans le catalogue, ni dans un guide de vente, ni dans les informations de la boutique) : n’invente jamais. Appelle callback avec sa question et fais ce que l’outil répond : lui demander simplement son numéro pour qu’un conseiller l’appelle et lui réponde, ou lui donner le numéro du service client. S’il répond sans donner son numéro, ou revient sur cette question, rappelle callback (refused: true s’il refuse de le donner) : l’outil compte les demandes. S’il parle d’autre chose, réponds normalement. Dès qu’il envoie son numéro, rappelle callback avec sa question et phone.`,
     guided
-      ? `- Guides de vente : un produit marqué « guide » a un guide écrit par l’équipe. Avant de répondre à une question sur ce produit (utilisation, taille, âge, matière, qualité, garantie, échange…) ou à une hésitation du client (« ghali », « nkhamem »…), lis son guide avec product_guide, puis réponds avec tes mots, court, dans la langue du client. Ses réponses sont les vraies informations de la boutique : ne promets jamais ce que sa partie « À ne jamais promettre » interdit, et ne devine pas une réponse qu’il ne donne pas.`
+      ? `- Guides de vente : un produit marqué « guide » a un guide écrit par l’équipe. Avant de répondre à une question sur ce produit (utilisation, taille, âge, matière, qualité, garantie, échange…) ou à une hésitation du client (« ghali », « nkhamem »…), lis son guide avec product_guide, puis réponds avec tes mots, court, dans la langue du client. Ses réponses sont les vraies informations de la boutique : ne promets jamais ce que sa partie « À ne jamais promettre » interdit, et ne devine pas une réponse qu’il ne donne pas (sa question va alors à callback).`
       : '',
     s.notes.trim() ? `Informations de la boutique :\n${s.notes.trim()}` : '',
     s.darijaPrefer.trim() ? `Expressions de la boutique (écrites par l’équipe, à utiliser quand elles vont) :\n${s.darijaPrefer.trim()}` : '',
@@ -925,7 +1026,8 @@ export const DELLAL_PLAYBOOK = `MÉTHODE DE VENTE — marché algérien, paiemen
 
 7. Après la commande et le service
 - Donne la référence de commande et remercie simplement (« Saha 🙏 », « ya3tik saha », en français « Merci ! »), sans formule de page du type « merci pour votre confiance ».
-- Plainte, retard, colis abîmé, demande de gros, client fâché, ou question que tu ne sais pas : passe la main tout de suite (handoff), sans débattre. Produit abîmé ou cassé : excuse-toi, dis en une phrase la règle de la boutique si elle existe (par exemple un échange sous 3 jours), puis passe la main.
+- Plainte, retard, colis abîmé, demande de gros ou client fâché : passe la main tout de suite (handoff), sans débattre. Produit abîmé ou cassé : excuse-toi, dis en une phrase la règle de la boutique si elle existe (par exemple un échange sous 3 jours), puis passe la main.
+- Question dont tu n’as pas la réponse : ne devine jamais. Dis simplement que tu n’as pas l’information et demande son numéro pour qu’un conseiller l’appelle (« ma3andich had l’information, 3tini numéro ta3ek w wa7ed men l’équipe y3ayetlek »), avec l’outil callback. S’il ne le donne pas après deux demandes, donne-lui le numéro du service client, sans insister.
 - Pas de politique, de religion ni de sujets hors boutique : ramène poliment à la commande.
 - Retour, échange, remboursement, produit différent de la commande : dis d’abord ce que prévoient les informations de la boutique, sans rien promettre de plus ; ne refuse jamais les droits du client et ne discute pas, passe la main.
 - Saisons : en Ramadan, les clients écrivent surtout le soir après le ftour ; ton calme et familial, pas de pression. Le jour de l’Aïd, souhaite « Saha Aïdkoum » et ne pousse pas la vente. Rentrée scolaire, mariages de l’été, Aïd el-Adha : budgets serrés, propose l’option la plus utile, pas la plus chère. N’invente jamais d’offre de saison.
@@ -1157,7 +1259,7 @@ export async function runAgent(
   /** One tool call, the same on every path: run it, note handoff / order, and log it in the conversation. */
   const runTool = async (name: string, input: any) => {
     const out = await execTool({ ctx, conv, settings: s, test }, name, input);
-    if (name === 'handoff') handoff = true;
+    if (name === 'handoff' || (name === 'callback' && (out?.callback || out?.handoff))) handoff = true;
     if (name === 'create_order' && out?.ok) orderRef = out.ref;
     await addMessage(ctx.db, convId, { role: 'tool', body: toolLine(name, input, out), meta: { tool: name, input, result: out } });
     conv = await getConv(ctx.db, convId);
@@ -1288,6 +1390,13 @@ function toolLine(name: string, input: any, out: any): string {
   if (name === 'create_order') return `create_order → ${out?.ref} · ${out?.total} DA`;
   if (name === 'update_order') return `update_order → ${out?.ref ?? ''} · ${(out?.changed ?? []).join(', ')} changé${(out?.changed ?? []).length > 1 ? 's' : ''}`;
   if (name === 'handoff') return `handoff → ${input?.reason ?? ''}`;
+  if (name === 'callback') {
+    if (out?.with_order) return `callback → question ajoutée à la commande ${out.ref ?? ''}`;
+    if (out?.callback) return `callback → à rappeler au ${out.phone}`;
+    if (out?.asked) return `callback → numéro demandé (${out.ask}/${CALLBACK_ASKS})`;
+    if (out?.service_phone) return `callback → numéro du service client donné : ${out.service_phone}`;
+    return 'callback → passée à l’équipe (sans numéro du client)';
+  }
   if (name === 'product_guide') return `product_guide #${input?.product_id ?? '?'} → guide de vente lu`;
   return name;
 }
@@ -1299,6 +1408,25 @@ const YES_RE = /^(oui|wah|ih|ok|okey|d'accord|daccord|yes|نعم|واه|صح|c b
 
 const GUIDE_ASK_RE = /(garantie|matiere|qualite|original|taille|mesure|dimension|\bage\b|poids|\bkg\b|lavable|pliable|plie|securite|ghali|\bcher\b|nkhamem|n5amem|nfakar|damen|ضمان|غالي|نخمم|قياس|عمر)/i;
 const PRICE_ASK_RE = /(ch7al|chhal|combien|prix|bch7al|سعر|بشحال|livraison|tawsil|التوصيل)/i;
+const DOUBT_RE = /(ghali|\bcher\b|nkhamem|n5amem|nfakar|غالي|نخمم)/i;
+// a question the demo seller has no answer to (after a greeting): « wach… ? », « kifach… », « هل… »
+const GREET_RE = /^(salam|slm|bonjour|bonsoir|cc|coucou|hi|hello|السلام|سلام)(?:\s*(?:3likoum|3alaykoum|alikoum|aleykoum|alaykoum|alaikoum|عليكم))?[\s,!.]*/i;
+const QUESTION_RE = /^(wach|wech|wesh|est-ce|kayen|kayn|kayna|kifach|kifah|win|wa9tach|waqtach|chkoun|3lach|pourquoi|comment|quand|ou est|où|هل|واش|كاين|كاينة|كيفاش|وين|وقتاش|علاش)(?=[\s?؟,.!]|$)/i;
+const REFUSE_RE = /^(la|lla|non|no|nn|ma n3tikch|man3tikch|ma ne3tikch|ma nhebch|ma n7ebch|machi lazem|machi daruri|لا|ماشي)(?=[\s?؟,.!]|$)/i;
+// what the demo seller answers itself: the colours, the sizes, the stock
+const OWN_ANSWER_RE = /(couleur|color|alwan|\blon\b|taille|size|pointure|variante|mod[eè]le|dispo|stock|mazal|لون|ألوان|مقاس|متوفر)/i;
+const asksSomething = (text: string) => {
+  const s = strip(text).replace(GREET_RE, '').trim();
+  if (s.length < 4 || PRICE_ASK_RE.test(s) || OWN_ANSWER_RE.test(s)) return false;
+  const words = s.split(/[^a-z0-9؀-ۿ]+/).filter((w) => w.length >= 2);
+  return words.length >= 2 && (/[?؟]/.test(s) || QUESTION_RE.test(s));
+};
+/** The demo seller's question still waiting for the customer's number (its last tool asked for it, or gave the service number). */
+async function pendingCallback(db: Db, convId: number): Promise<{ question: string; asking: boolean } | null> {
+  const m = (await db.query(`SELECT meta FROM conv_messages WHERE conversation_id = $1 AND role = 'tool' AND COALESCE(meta->>'tool', '') <> 'darija' ORDER BY id DESC LIMIT 1`, [convId]))[0]?.meta;
+  if (m?.tool !== 'callback' || !m.result || m.result.error || (!m.result.asked && !m.result.service_phone)) return null;
+  return { question: String(m.input?.question ?? ''), asking: !!m.result.asked };
+}
 const GUIDE_STOP = new Set(['est', 'les', 'des', 'une', 'pour', 'avec', 'que', 'qui', 'dans', 'elle', 'il', 'wach', 'kayen', 'kayna', 'fiha', 'fih', 'had', 'hadi', 'hada', 'bien', 'tres', 'plus']);
 /**
  * The demo seller's pick in a guide: the answer whose question shares the most words with what the customer wrote (the
@@ -1340,14 +1468,23 @@ async function demoBrain(ctx: Ctx, req: AiRequest, convId?: number): Promise<AiR
     const out = JSON.parse(last.content[0].content);
     if (out.error) return say(String(out.error));
     if (tool.name === 'handoff') return say('Je passe ta demande à un conseiller de l’équipe, il te répond très vite 🙏');
+    if (tool.name === 'callback') {
+      if (out.with_order) return say('Bonne question 👍 Le conseiller qui va t’appeler pour confirmer ta commande te répondra aussi.');
+      if (out.callback) return say(`Merci 🙏 Un conseiller va t’appeler très vite au ${spaced(String(out.phone))} pour te répondre.`);
+      if (out.asked)
+        return say(out.ask > 1 ? 'Pour te donner la bonne réponse, un conseiller doit t’appeler : envoie-moi juste ton numéro 🙏' : 'Je n’ai pas cette information pour le moment 🙏 Envoie-moi ton numéro : un conseiller de l’équipe t’appelle et te répond.');
+      if (out.service_phone) return say(`Pas de souci 😊 Tu peux appeler notre service client au ${String(out.service_phone).replace(/ /g, ' ')} : ils te répondront. Je reste là si tu as une autre question.`);
+      return say('Je passe ta question à l’équipe : quelqu’un te répond ici très vite 🙏');
+    }
     if (tool.name === 'product_guide') {
       // the guide's answer to what the customer asked (the question or the hesitation with the most words in common)
       const g = await readGuide(ctx.db, Number(tool.input?.product_id));
       const asked = [...msgs].reverse().find((m) => m.role === 'user' && typeof m.content === 'string')?.content as string | undefined;
       const hit = g ? guideAnswer(g.guide, asked ?? '') : null;
       if (hit) return say(hit);
-      if (g?.guide.brief) return say(`${g.guide.brief} Tu es de quelle wilaya ? Je te donne le prix de la livraison.`);
-      return say('Je vérifie avec l’équipe et je te réponds tout de suite 🙏');
+      // a hesitation the guide does not answer: its summary; a question it does not answer: never a guess, the team calls back
+      if (g?.guide.brief && DOUBT_RE.test(strip(asked ?? ''))) return say(`${g.guide.brief} Tu es de quelle wilaya ? Je te donne le prix de la livraison.`);
+      return use('callback', { question: String(asked ?? '').slice(0, 300) });
     }
     if (tool.name === 'create_order' && v1) {
       const who = String(tool.input?.customer_name ?? '').split(/\s+/)[0];
@@ -1388,6 +1525,15 @@ async function demoBrain(ctx: Ctx, req: AiRequest, convId?: number): Promise<AiR
   const phone = all.match(PHONE_RE)?.[0] ?? null;
   const place = findPlace(all.split('\n').reverse().find((l) => findPlace(l)) ?? '');
   const confirmed = YES_RE.test(strip(text));
+  const mentions = !!product && strip(text).split(/\s+/).some((w) => w.length >= 4 && strip(product!.name).includes(w));
+  const variantNow = product?.variants.find((v) => v.title && strip(text).includes(strip(v.title)));
+
+  // a question it could not answer, still waiting for the customer's number: the number now goes to the team; another
+  // message without it is one more ask (a refusal: the service number at once)
+  const pend = convId ? await pendingCallback(ctx.db, convId) : null;
+  const numberNow = text.match(PHONE_RE)?.[0];
+  if (pend && numberNow) return use('callback', { question: pend.question, phone: normalizePhone(numberNow) ?? numberNow });
+  if (pend?.asking && !mentions && !variantNow && !PRICE_ASK_RE.test(strip(text))) return use('callback', { question: pend.question, ...(REFUSE_RE.test(strip(text)) ? { refused: true } : {}) });
 
   // Version 001: the order goes in as soon as the name, the number, the wilaya and the product are known; then each change
   // the customer writes (a new number, another wilaya, another colour) changes that same order
@@ -1431,6 +1577,10 @@ async function demoBrain(ctx: Ctx, req: AiRequest, convId?: number): Promise<AiR
     return use('create_order', { customer_name: name, phone: ph, wilaya: String(place.wilayaId), commune: place.commune ?? '', stopdesk: /bureau|stop ?desk/i.test(all), items: [{ product_id: product.product_id, variant_id: variant.variant_id, qty: 1 }] });
   }
   if (place && !msgs.some((m) => Array.isArray(m.content)) && /livraison|tawsil|ch7al|combien|prix|التوصيل/i.test(text)) return use('delivery_fee', { wilaya: String(place.wilayaId), commune: place.commune ?? undefined });
+  // a question the demo seller has no answer to (not about the product's price, colours or guide): never a guess, the
+  // team calls back
+  const guided = !!product?.guide && GUIDE_ASK_RE.test(strip(text));
+  if (asksSomething(text) && !mentions && !variantNow && !guided && !findPlace(text)) return use('callback', { question: text.trim().slice(0, 300) });
   if (product && !variant && product.variants.length > 1) {
     const avail = product.variants.filter((v) => v.available > 0).map((v) => v.title);
     if (strip(text).split(/\s+/).some((w) => w.length >= 4 && strip(product!.name).includes(w))) return use('search_products', { query: product.name });
@@ -1497,6 +1647,7 @@ const SettingsInput = z.object({
   nightReplies: z.boolean(),
   notes: z.string().max(6000),
   handoffTopics: z.string().max(2000),
+  servicePhone: z.string().trim().max(40).regex(/^[\d\s+().-]*$/, 'Numéro du service client (chiffres)').default(''),
   darijaPrefer: z.string().max(4000).default(''),
   darijaAvoid: z.string().max(4000).default(''),
   messengerPageId: z.string().trim().max(40).regex(/^\d*$/, 'ID de page (chiffres)'),
@@ -1510,7 +1661,8 @@ async function settingsView(db: Db) {
   const s = await dellalSettings(db);
   const has: Record<DellalSecret, boolean> = { ai: false, appSecret: false, pageToken: false, waToken: false, tiktokToken: false };
   for (const k of Object.keys(DELLAL_SECRETS) as DellalSecret[]) has[k] = !!(await dellalSecret(db, k));
-  return { settings: s, has, models: DELLAL_MODELS };
+  // the shop's SAV number (Réglages › Boutique): the customer-service number when Dellal's own is empty
+  return { settings: s, has, models: DELLAL_MODELS, savPhone: String((await getSetting(db, 'shop')).savPhone ?? '').trim() };
 }
 
 /**

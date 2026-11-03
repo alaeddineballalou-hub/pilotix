@@ -579,6 +579,14 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'de
         <Field label={t('messages.settings.handoff')} hint={t('messages.settings.handoffHint')} wide>
           <textarea rows={4} maxLength={2000} value={f.handoffTopics} onChange={(e) => set('handoffTopics', e.target.value)} />
         </Field>
+        <div className="grid2">
+          <Field
+            label={t('messages.settings.service')}
+            hint={`${t('messages.settings.serviceHint', { name: f.name })} ${data.savPhone ? t('messages.settings.serviceSav', { sav: data.savPhone.replace(/ /g, ' ') }) : t('messages.settings.serviceNone')}`}
+          >
+            <input className="ltr" type="tel" inputMode="tel" maxLength={40} value={f.servicePhone} placeholder={data.savPhone || '0550 11 22 33'} onChange={(e) => set('servicePhone', e.target.value.replace(/[^\d\s+().-]/g, ''))} />
+          </Field>
+        </div>
       </Card>
 
       <Card title={t('messages.settings.darija')} help={t('messages.settings.darijaHelp', { name: f.name })}>
