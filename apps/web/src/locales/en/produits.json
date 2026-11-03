@@ -4,6 +4,7 @@
     "stock": "Stock",
     "inventaire": "Stock count",
     "produits": "Products",
+    "guides": "Sales guide",
     "mouvements": "Movements",
     "alertes": "Alerts",
     "achats": "Purchases",
@@ -16,7 +17,9 @@
     "mouvements": "Every stock entry and exit: purchases, sales, returns, losses, counts and transfers.",
     "alertes": "Products to buy again: out of stock first, then under their alert level.",
     "achats": "Your purchases from suppliers: what came into stock, what is paid and what is left to pay.",
-    "depots": "Your depots, what each one holds, and stock transfers between them."
+    "depots": "Your depots, what each one holds, and stock transfers between them.",
+    "guides": "Each product’s sales guide: what the agents read during the call, and what Dellal and CM AI use to answer customers.",
+    "guidesAgent": "Your products’ sales guides: what to say, and the answers to customers’ questions and hesitations."
   },
   "ui": {
     "allDepots": "All depots",
@@ -564,6 +567,7 @@
     "upsell": "Sell more",
     "never": "Never promise",
     "toFill": "Answer to be written by the team",
+    "toFillPoint": "Point to be written by the team",
     "says": "The customer says",
     "jump": "Go to a part",
     "langs": {
@@ -604,6 +608,30 @@
       "tooMany": "{{part}}: {{max}} lines at most",
       "tooBig": "Sales guide too long: {{n}} characters ({{max}} at most)",
       "needName": "Write the product's name first (Product tab)"
+    },
+    "page": {
+      "list": "Products",
+      "search": "Search a product…",
+      "filter": "Show",
+      "f": {
+        "all": "All",
+        "with": "With guide",
+        "without": "No guide",
+        "todo": "To complete"
+      },
+      "hidden": "hidden",
+      "toFill_one": "{{count}} to complete",
+      "toFill_other": "{{count}} to complete",
+      "ready": "Guide ready",
+      "noMatch": "No product matches.",
+      "pick": "Pick a product on the left to see its sales guide.",
+      "finish": "Save or cancel the guide you are editing first.",
+      "saved": "Sales guide saved",
+      "edit": "Edit",
+      "write": "Write the guide",
+      "editing": "You are editing the guide: « Save » to keep it.",
+      "emptyManager": "No guide for this product yet. Write it, or let the AI make a first draft.",
+      "none": "No products yet."
     }
   }
 }

@@ -17,6 +17,7 @@ const SUB_LABEL: Record<string, string> = {
   'produits/stock': 'produits.tabs.stock',
   'produits/inventaire': 'produits.tabs.inventaire',
   'produits/produits': 'produits.tabs.produits',
+  'produits/guides': 'produits.tabs.guides',
   'produits/mouvements': 'produits.tabs.mouvements',
   'produits/alertes': 'produits.tabs.alertes',
   'produits/achats': 'produits.tabs.achats',

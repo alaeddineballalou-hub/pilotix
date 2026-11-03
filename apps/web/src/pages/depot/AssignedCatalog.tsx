@@ -10,6 +10,7 @@ import { SectionHeader } from '../ai/agent';
 import type { PageProps } from '../registry';
 import './assigned-catalog.css';
 import { GuideButton } from './guide';
+import { Guides } from './Guides';
 
 export function AgencyProducts(props: PageProps) {
   const seller = useSeller();
@@ -17,9 +18,9 @@ export function AgencyProducts(props: PageProps) {
 }
 
 /** Both tabs use the same minimal, server-scoped response. There are no inventory-management calls here. */
-export function AssignedCatalog({ sub }: PageProps) {
+export function AssignedCatalog({ sub, rest }: PageProps) {
   const { t } = useTranslation();
-  const tab = sub === 'produits' ? 'produits' : 'stock';
+  const tab = sub === 'produits' || sub === 'guides' ? sub : 'stock';
   const [search, setSearch] = useState('');
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
@@ -27,8 +28,13 @@ export function AssignedCatalog({ sub }: PageProps) {
     const timer = setTimeout(() => { setQ(search.trim()); setPage(1); }, 250);
     return () => clearTimeout(timer);
   }, [search]);
-  const query = useRpc('catalog.assigned', { q, page, pageSize: 50 }, { refetchInterval: 60_000, placeholderData: undefined });
-  const tabs = (['produits', 'stock'] as const).filter((key) => pageIsOn('produits', key)).map((key) => ({ key, label: t(`produits.tabs.${key}`), icon: key === 'stock' ? 'package' : 'tag', href: `#/produits/${key}` }));
+  const query = useRpc('catalog.assigned', { q, page, pageSize: 50 }, { refetchInterval: 60_000, placeholderData: undefined, enabled: tab !== 'guides' });
+  const tabs = (['produits', 'guides', 'stock'] as const).filter((key) => pageIsOn('produits', key)).map((key) => ({ key, label: t(`produits.tabs.${key}`), icon: key === 'stock' ? 'package' : key === 'guides' ? 'book' : 'tag', href: `#/produits/${key}` }));
+  // the products' sales guides, read only (Produits & stock › Guide de vente)
+  if (tab === 'guides') return <div className="pd assigned-catalog">
+    <SectionHeader icon="layers" title={t('produits.title')} about={t('produits.about.guidesAgent')} tabs={tabs} current={tab} />
+    <Guides manager={false} initial={rest?.[0] && /^\d+$/.test(rest[0]) ? Number(rest[0]) : undefined} />
+  </div>;
   return <div className="pd assigned-catalog">
     <SectionHeader icon="layers" title={t('produits.title')} about={t('produits.assigned.about')} tabs={tabs} current={tab} />
     <label className="assigned-search"><Icon name="search" /><input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('produits.assigned.search')} aria-label={t('produits.assigned.search')} /></label>

@@ -210,3 +210,35 @@ test('the draft helpers: JSON read leniently, Darija instructions only for darij
   assert.match(r.upsell, /3 pour 3 900 DA[\s\S]*Goupillon/);
   assert.match(r.doubts[0].a, /pack/);
 });
+
+test('Produits & stock › Guide de vente: every product and where its guide stands; the depot side saves only the guide', async () => {
+  const list: any = await call('catalog.guides', depot, {});
+  assert.equal(list.total, list.rows.length);
+  const row = list.rows.find((r: any) => r.id === chair);
+  assert.equal(row.hasGuide, true);
+  assert.equal(row.toFill, 1, 'the warranty answer is still to write');
+  assert.match(row.brief, /6 mois/);
+  assert.deepEqual(row.parts, { strengths: 4, faq: 5, doubts: 3, never: 3, upsell: 1 });
+  assert.ok(list.rows.every((r: any) => !('cost' in r) && typeof r.hasGuide === 'boolean'));
+  const plain = list.rows.find((r: any) => r.id === thermo);
+  assert.equal(plain.hasGuide, false);
+  assert.equal(plain.toFill, 0);
+  // saving the guide alone (the tab's « Modifier »), nothing else of the product
+  const before: any = await call('catalog.product', depot, { id: thermo });
+  const saved: any = await call('catalog.saveGuide', depot, { id: thermo, guide: { brief: 'Thermomètre sans contact.', strengths: ['Mesure en 1 seconde'], faq: [{ q: 'Garantie ?', a: TO_FILL }] } });
+  assert.equal(saved.guide.brief, 'Thermomètre sans contact.');
+  assert.ok(saved.updatedAt && saved.updatedBy);
+  const after: any = await call('catalog.product', depot, { id: thermo });
+  assert.deepEqual({ ...after, guide: null, guideAt: null, guideBy: null, hasGuide: false }, { ...before, guide: null, guideAt: null, guideBy: null, hasGuide: false });
+  assert.equal(((await call('catalog.guides', depot, {})) as any).rows.find((r: any) => r.id === thermo).toFill, 1);
+  await assert.rejects(call('catalog.saveGuide', depot, { id: 999999, guide: {} }), /introuvable/);
+  // agents read their own products only, and never write
+  const config = await getSetting(db, 'autoAssign');
+  config.agents[String(conf.session.profile.id)] = { ...config.agents[String(conf.session.profile.id)], products: [chair] } as any;
+  await setSetting(db, 'autoAssign', config);
+  assert.deepEqual(((await call('catalog.guides', conf, {})) as any).rows.map((r: any) => r.id), [chair]);
+  await assert.rejects(call('catalog.saveGuide', conf, { id: chair, guide: {} }), /Accès refusé/);
+  await assert.rejects(call('catalog.guides', await as(EMAILS.livreur), {}), /Accès refusé/);
+  await call('catalog.saveGuide', depot, { id: thermo, guide: {} });
+  assert.equal(((await call('catalog.guides', depot, {})) as any).rows.find((r: any) => r.id === thermo).hasGuide, false);
+});

@@ -1,19 +1,21 @@
-// The sales guide of a product, read and drafted (modules/guide.ts holds what it is):
+// The sales guide of a product, read, listed, saved and drafted (modules/guide.ts holds what it is):
 // - catalog.guide: one product's guide for the people who sell it (agents during a call, the depot, the owner), within
 //   the products their work gives them (productscope.ts);
+// - catalog.guides: Produits & stock › Guide de vente, every product with where its guide stands (none, written, answers
+//   still to write), the same products only; catalog.saveGuide: the depot side writes one there;
 // - catalog.guideDraft: « Écrire avec l'IA » in the product form. Claude writes a first guide from what the shop knows
 //   (the product, its variants, packs, linked products and services, its landing page, Dellal's shop notes) and never
 //   invents a fact: an answer it cannot know stays « [À compléter] » for the team. Pilotix's key pays (Pilot AI), counted
 //   with the shop's Dellal answers. Without the AI (Pilot AI off or today's limit reached, the preview): a simple draft
 //   made by rules from the same facts. The team reads and corrects it; nothing is saved before « Enregistrer ».
 import { z } from 'zod';
-import { num } from '../db';
+import { iso, num } from '../db';
 import { Ctx, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
 import { darijaGuide } from './darijabook';
 import { aiKeyed, dellalSettings, pilotOn } from './dellal';
-import { cleanGuide, GUIDE_LIMITS as L, ProductGuide, readGuide, TO_FILL } from './guide';
-import { requireAssignedProducts } from './productscope';
+import { checkGuide, cleanGuide, GUIDE_LIMITS as L, guideEmpty, GuideInput, guideToFill, ProductGuide, readGuide, saveGuide, TO_FILL, toFill } from './guide';
+import { assignedProductIds, requireAssignedProducts } from './productscope';
 
 const id = z.number().int().positive();
 const DEPOT = ['depot'] as const;
@@ -204,4 +206,46 @@ export const guideProcs = {
 
   /** « Écrire avec l'IA » in the product form: a first guide to correct (nothing saved). */
   'catalog.guideDraft': proc([...DEPOT], DraftInput, (ctx, i) => draftGuide(ctx, i)),
+
+  /** Produits & stock › Guide de vente: the products (not the services) and where each one's guide stands. */
+  'catalog.guides': proc(['confirmation', 'suivi', 'depot'], z.object({}), async (ctx) => {
+    const allowed = await assignedProductIds(ctx);
+    const rows = await ctx.db.query(
+      `SELECT p.id, p.name, p.sku, p.photo, p.active, g.guide, g.updated_at, u.name AS by_name
+       FROM products p LEFT JOIN product_guides g ON g.product_id = p.id LEFT JOIN profiles u ON u.id = g.updated_by
+       WHERE p.archived_at IS NULL AND NOT p.is_service${allowed ? ' AND p.id = ANY($1)' : ''}
+       ORDER BY p.active DESC, lower(p.name), p.id LIMIT 3000`,
+      allowed ? [allowed] : [],
+    );
+    const out = rows.map((r) => {
+      const g = r.guide ? cleanGuide(typeof r.guide === 'string' ? JSON.parse(r.guide) : r.guide) : null;
+      const has = !!g && !guideEmpty(g);
+      return {
+        id: num(r.id),
+        name: String(r.name),
+        sku: String(r.sku),
+        photo: (r.photo as string | null) ?? null,
+        active: !!r.active,
+        hasGuide: has,
+        /** answers still to write (and points still to fill) */
+        toFill: has ? guideToFill(g!) + g!.strengths.filter((x) => toFill(x)).length : 0,
+        brief: has ? g!.brief.slice(0, 160) : '',
+        parts: has ? { strengths: g!.strengths.length, faq: g!.faq.length, doubts: g!.doubts.length, never: g!.never.length, upsell: g!.upsell ? 1 : 0 } : null,
+        updatedAt: has && r.updated_at ? iso(r.updated_at) : null,
+        updatedBy: has ? ((r.by_name as string | null) ?? null) : null,
+        seller: null as { id: number; name: string } | null,
+      };
+    });
+    return { rows: out, total: out.length, page: 1, pageSize: out.length };
+  }),
+
+  /** Produits & stock › Guide de vente › Modifier: only the guide (the rest of the product is the product form's). */
+  'catalog.saveGuide': proc([...DEPOT], z.object({ id, guide: GuideInput }), async (ctx, i) => {
+    const p = (await ctx.db.query('SELECT id FROM products WHERE id = $1', [i.id]))[0];
+    if (!p) throw notFound('Produit introuvable');
+    const g = checkGuide(i.guide);
+    await ctx.db.tx((tx) => saveGuide(tx, i.id, g, ctx.session.profile.id));
+    const saved = await readGuide(ctx.db, i.id);
+    return { id: i.id, guide: saved?.guide ?? null, updatedAt: saved?.updatedAt ?? null, updatedBy: saved?.updatedBy ?? null };
+  }),
 };

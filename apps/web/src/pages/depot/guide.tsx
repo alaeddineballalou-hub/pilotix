@@ -90,7 +90,7 @@ export function GuideView({ guide, id }: { guide: Guide; id: string }) {
   // to a part, just under the parts bar that stays at the top
   const go = (k: string) => {
     const el = box.current?.querySelector<HTMLElement>(`[data-part="${k}"]`);
-    const sc = box.current?.closest<HTMLElement>('.gd-body, .pxk-body');
+    const sc = box.current?.closest<HTMLElement>('.gd-body, .gd-detail-body, .pxk-body');
     if (!el || !sc) return el?.scrollIntoView({ block: 'start' });
     const bar = box.current?.querySelector<HTMLElement>('.gd-jump')?.offsetHeight ?? 0;
     const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -122,7 +122,7 @@ export function GuideView({ guide, id }: { guide: Guide; id: string }) {
           <ul className="gd-points">
             {guide.strengths.map((x, k) => (
               <li key={k} className={toFill(x) ? 'gd-fill' : ''} dir="auto">
-                {toFill(x) ? t('produits.guide.toFill') : x}
+                {toFill(x) ? t('produits.guide.toFillPoint') : x}
               </li>
             ))}
           </ul>

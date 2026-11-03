@@ -22,10 +22,11 @@ import { AlertDialog, MoveDialog, TransferDialog } from './StockDialogs';
 import { bidi, Delta, DepotSelect, LevelBar, matches, nameOf, RowMenu, StockRowT, Toolbar, useDepots } from './stockui';
 import './produits.css';
 import { AssignedCatalog } from './AssignedCatalog';
+import { Guides } from './Guides';
 
-const TABS = ['stock', 'inventaire', 'produits', 'mouvements', 'alertes', 'achats', 'depots'] as const;
+const TABS = ['stock', 'inventaire', 'produits', 'guides', 'mouvements', 'alertes', 'achats', 'depots'] as const;
 type Tab = (typeof TABS)[number];
-const ICONS: Record<Tab, string> = { stock: 'package', inventaire: 'clipboard', produits: 'tag', mouvements: 'swap', alertes: 'alert', achats: 'receipt', depots: 'building' };
+const ICONS: Record<Tab, string> = { stock: 'package', inventaire: 'clipboard', produits: 'tag', guides: 'book', mouvements: 'swap', alertes: 'alert', achats: 'receipt', depots: 'building' };
 
 export function Produits(props: PageProps) {
   const { session, has } = useSession();
@@ -45,6 +46,7 @@ function DepotProduits({ sub, rest }: PageProps) {
       {tab === 'stock' && <StockTab />}
       {tab === 'inventaire' && <Inventaire />}
       {tab === 'produits' && <ProductsTab />}
+      {tab === 'guides' && <Guides manager initial={arg && /^\d+$/.test(arg) ? Number(arg) : undefined} />}
       {tab === 'mouvements' && <MovesTab key={arg ?? ''} initial={arg} />}
       {tab === 'alertes' && <Alertes />}
       {tab === 'achats' && <Achats open={arg && /^\d+$/.test(arg) ? Number(arg) : undefined} />}

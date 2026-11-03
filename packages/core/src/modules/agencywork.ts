@@ -153,6 +153,8 @@ const mkAll: Fan = {
 };
 
 const FANOUT: Record<string, Fan> = {
+  // Produits & stock › Guide de vente: every seller's products in one list, by name
+  'catalog.guides': { merge: (parts) => mergeRows(parts, (r) => String(r.name).toLowerCase(), 'asc', 1, 3000) },
   'catalog.assigned': {
     paged: { defaultSize: 50 },
     input: (i) => ({ ...i, page: 1, pageSize: Math.min(3000, (i?.page ?? 1) * (i?.pageSize ?? 50)) }),
