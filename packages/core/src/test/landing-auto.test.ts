@@ -210,8 +210,16 @@ test('products without a page: counted for marketers, one-click page, set aside,
   assert.equal(((await call('orders.counts', await as(EMAILS.depot), {})) as any).landing, undefined, 'not for the depot');
   const missing: any[] = (await call('landing.missing', mk, {})) as any;
   const target = missing[0];
+  // its main photo, and two variants with their own photo (one the same as the main): main first, each once
+  await db.query(`UPDATE products SET photo = 'https://img.test/main.jpg' WHERE id = $1`, [target.id]);
+  const vids = (await db.query(`SELECT id FROM product_variants WHERE product_id = $1 ORDER BY id LIMIT 2`, [target.id])).map((x: any) => Number(x.id));
+  if (vids.length === 0) for (const t of ['Rouge', 'Bleu']) vids.push(Number((await db.query(`INSERT INTO product_variants (product_id, title) VALUES ($1, $2) RETURNING id`, [target.id, t]))[0].id));
+  await db.query(`UPDATE product_variants SET photo = 'https://img.test/v1.jpg' WHERE id = $1`, [vids[0]]);
+  if (vids[1]) await db.query(`UPDATE product_variants SET photo = 'https://img.test/main.jpg' WHERE id = $1`, [vids[1]]);
   const r: any = await call('landing.quickCreate', mk, { productId: target.id });
   assert.ok(r.created);
+  const imgs = (await db.query(`SELECT images FROM landing_pages WHERE id = $1`, [r.id]))[0].images;
+  assert.deepEqual((typeof imgs === 'string' ? JSON.parse(imgs) : imgs).map((x: any) => x.url), ['https://img.test/main.jpg', 'https://img.test/v1.jpg']);
   assert.match(r.page.slug, /^[a-z0-9-]+$/);
   const again: any = await call('landing.quickCreate', mk, { productId: target.id });
   assert.equal(again.id, r.id);

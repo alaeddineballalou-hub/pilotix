@@ -161,7 +161,7 @@ const CSS = (c: string) => `:root{--c:${c};--cd:${shade(c, -0.25)};--cl:${shade(
 .card{background:#fff;border:1px solid var(--b);border-radius:14px;padding:14px}
 .main{display:block;width:100%;height:auto;aspect-ratio:var(--r,1);object-fit:cover;border-radius:10px;background:var(--cl) center/cover no-repeat}
 .th{display:flex;gap:8px;margin-top:8px;overflow-x:auto;padding-bottom:2px}.th button{flex:0 0 auto;padding:0;border:2px solid transparent;border-radius:8px;background:none;cursor:pointer;line-height:0}
-.th button.on{border-color:var(--c)}.th img{width:64px;height:64px;object-fit:cover;border-radius:6px;background:var(--cl)}
+.th button.on{border-color:var(--c)}.th img{width:64px;height:80px;object-fit:cover;border-radius:6px;background:var(--cl)}
 h1{font-size:22px;line-height:1.3;margin:0 0 4px}.pr{display:flex;align-items:baseline;gap:10px;margin:0 0 12px;flex-wrap:wrap}
 .pr b{color:var(--c);font-size:26px}.pr s{color:var(--m);font-size:16px}.pr.no s,.pr.no .off{display:none}.off{background:#fee2e2;color:#b91c1c;border-radius:99px;padding:1px 8px;font-size:13px;font-weight:700}
 label{display:block;font-size:14px;font-weight:600;margin:10px 0 4px}
@@ -285,13 +285,14 @@ export function landingMetaDescription(v: Pick<LandingView, 'title' | 'price' | 
 export function renderLanding(v: LandingView, r: LandingRender): string {
   const c = isHexColor(v.color) ? v.color : LANDING_DEFAULT_COLOR;
   const img = v.images[0];
-  const ratio = img ? `${img.w}/${img.h}` : '1';
+  // every page shows its photos at the same 4:5 (portrait), whatever their own size
+  const ratio = '4/5';
   const sizes = LANDING_SIZES;
   const gallery = img
     ? `<img id="mi" class="main" style="--r:${ratio}${img.lqip && /^data:image\/(webp|jpeg);base64,[A-Za-z0-9+/=]+$/.test(img.lqip) ? `;background-image:url(${img.lqip})` : ''}" src="${esc(img.src)}" srcset="${esc(img.srcset)}" sizes="${sizes}" width="${img.w}" height="${img.h}" alt="${esc(v.title)}" fetchpriority="high" decoding="async">` +
       (v.images.length > 1
         ? `<div class="th">${v.images
-            .map((x, k) => `<button type="button" class="${k ? '' : 'on'}" data-s="${esc(x.src)}" data-ss="${esc(x.srcset)}" aria-label="${k + 1}"><img data-src="${esc(x.thumb)}" width="64" height="64" alt="" decoding="async"></button>`)
+            .map((x, k) => `<button type="button" class="${k ? '' : 'on'}" data-s="${esc(x.src)}" data-ss="${esc(x.srcset)}" aria-label="${k + 1}"><img data-src="${esc(x.thumb)}" width="64" height="80" alt="" decoding="async"></button>`)
             .join('')}</div>`
         : '')
     : `<div class="main" style="--r:1"></div>`;

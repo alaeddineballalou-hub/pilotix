@@ -204,7 +204,10 @@ export async function quickCreatePage(db: Db, productId: number, userId: number 
   if (!p) throw notFound('Produit introuvable');
   if (p.is_service) throw bad('Un service n’a pas de landing page');
   const slug = await freeLandingSlug(db, String(p.name), String(p.sku ?? ''));
-  const images = p.photo && /^(https?:|data:image\/)/.test(String(p.photo)) ? [{ url: String(p.photo), w: 960, h: 960 }] : [];
+  // the product's main photo first, then each variant's own photo (once each)
+  const vs = await db.query('SELECT photo FROM product_variants WHERE product_id = $1 AND photo IS NOT NULL ORDER BY id', [productId]);
+  const urls = [p.photo, ...vs.map((v: any) => v.photo)].map((x) => String(x ?? '')).filter((x) => /^(https?:|data:image\/)/.test(x));
+  const images = [...new Set(urls)].slice(0, 12).map((url) => ({ url, w: 960, h: 1200 }));
   const r = (
     await db.query(
       `INSERT INTO landing_pages (product_id, slug, title, color, description, images, created_by) VALUES ($1,$2,'',$3,$4,$5,$6) RETURNING id`,
