@@ -112,5 +112,14 @@
     "goWaCall": "Ouvrir WhatsApp pour appeler",
     "goWa": "Envoyer sur WhatsApp",
     "goSms": "Envoyer par SMS"
+  },
+  "confirmDelivery": {
+    "title": "Confirmer la livraison",
+    "orderAmount": "Montant de la commande (COD)",
+    "question": "Le bon colis a-t-il été remis au client ?",
+    "hold": "Maintenez 1,2 s pour confirmer « Livrée »",
+    "saving": "Enregistrement…",
+    "release": "Relâchez pour annuler.",
+    "cashNote": "Ce statut ne valide pas le versement en caisse."
   }
 }
