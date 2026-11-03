@@ -9,6 +9,7 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
+    "jsxImportSource": "@pilotix/jsx",
     "strict": true,
     "noUnusedLocals": false,
     "skipLibCheck": true,
@@ -24,6 +25,9 @@
       ],
       "@pilotix/core": [
         "../../packages/core/src/index.ts"
+      ],
+      "@pilotix/jsx/*": [
+        "./src/lib/jsx/*"
       ]
     }
   },

@@ -45,6 +45,7 @@
     "storeLink": "Your store’s address",
     "linkHint": "Letters, numbers and dashes. It is unique.",
     "linkFree": "✓ This address is free",
+    "linkForever": "Choose carefully: this link can never be changed later.",
     "addText": "You will be its owner. It has its own team and its own data, separate from your other stores.",
     "create": "Create the store",
     "verifyNeed": "First confirm your e-mail: it is what protects your stores.",

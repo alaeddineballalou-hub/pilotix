@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { lazy, startTransition, StrictMode, Suspense, useEffect, useState } from 'react';
+import { lazy, StrictMode, Suspense, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Legal, PhoneStep, Signup, SignupConfirm, StorePicker, VerifyEmail } from './layout/Accounts';
 import { LockScreen } from './layout/LockScreen';
@@ -7,10 +7,11 @@ import { Login } from './layout/Login';
 import { ResetPassword } from './layout/ResetPassword';
 import { AGENCY_NAV, canSee, canSeeChild, homeFor, MARKETER_NAV, NAV, NavItem } from './layout/nav';
 import { applyTheme, Shell } from './layout/Shell';
-import { ApiError } from './lib/backend';
+import { ApiError, server } from './lib/backend';
 import { firstSubOn, hasPlanSubs, pageIsOn } from './lib/features';
 import './lib/i18n';
 import { ModalHost } from './lib/modals';
+import { addressShop, fixAddress, go, PATHS, useRoute } from './lib/route';
 import { RiskAskHost } from './ui/clientScore';
 import { initSeller } from './lib/seller';
 import { SessionProvider, useSession } from './lib/session';
@@ -46,20 +47,49 @@ const qc = new QueryClient({
   },
 });
 
-/** #/page/sub/rest… */
-function useHash() {
-  const read = () => location.hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
-  const [parts, setParts] = useState(read);
+/**
+ * The boutique named in the address (lib/route: pilotix.online/<boutique>/<page>) is the one open. Opened from a bookmark
+ * or a link that names another of the person's boutiques, that boutique opens by itself (once, when the site loads:
+ * meanwhile nothing of the other boutique is shown); otherwise, and after that, the address follows the boutique open
+ * now and the page shown. True while that boutique is being opened.
+ */
+function useAddressBoutique(slug: string | null | undefined, logged: boolean, route: string): boolean {
+  const { switchStore } = useSession();
+  const open = useRef(switchStore);
+  open.current = switchStore;
+  const first = useRef(true);
+  // while that boutique opens, the address keeps naming it
+  const busy = useRef(false);
+  const [opening, setOpening] = useState(false);
+  // decided at the first look with a session: another boutique's address waits for it
+  const named = PATHS && logged && first.current ? addressShop() : null;
+  const waiting = !!named && !!slug && named !== slug;
   useEffect(() => {
-    // the new page is rendered as a transition: the click shows at once and a big page no longer freezes the screen while it builds
-    const on = () => {
-      startTransition(() => setParts(read()));
-      window.scrollTo(0, 0);
-    };
-    window.addEventListener('hashchange', on);
-    return () => window.removeEventListener('hashchange', on);
-  }, []);
-  return parts;
+    if (!PATHS || !logged) return;
+    const other = addressShop();
+    if (first.current && other && slug && other !== slug) {
+      first.current = false;
+      busy.current = true;
+      setOpening(true);
+      server
+        .stores()
+        .then((list) => {
+          const s = list.find((x) => x.slug === other && !x.locked);
+          // still the page asked for (nothing was clicked meanwhile): its boutique opens
+          if (s && addressShop() === other) return open.current(s.id);
+        })
+        .catch(() => {})
+        .finally(() => {
+          busy.current = false;
+          fixAddress();
+          setOpening(false);
+        });
+      return;
+    }
+    first.current = false;
+    if (!busy.current) fixAddress();
+  }, [slug, logged, route]);
+  return waiting || opening;
 }
 
 const ALIASES: Record<string, [string, string?]> = { livreurs: ['dashboard', 'livreurs'], publicite: ['marketing', 'publicite'], marketer: ['marketing', 'marketer'], spy: ['marketing', 'spy'] };
@@ -77,8 +107,10 @@ const Support = lazy(() => import('./pages/aide').then((m) => ({ default: m.Supp
 
 function App() {
   const { session, ready, picker, phoneStep } = useSession();
-  const parts = useHash();
+  // #/page/sub/rest… — on the site: /<boutique>/page/sub/rest… (lib/route)
+  const parts = useRoute();
   const canRules = useCanRules();
+  const opening = useAddressBoutique(session?.shop?.slug, !!session && ready, parts.join('/'));
   if (parts[0] === 'platform')
     return (
       <Suspense fallback={<Loading />}>
@@ -105,9 +137,11 @@ function App() {
   if (parts[0] === 'inscription-agence') return <Signup kind="agency" />;
   if (parts[0] === 'inscription-marketer') return <Signup kind="marketer" />;
   // the link of the first sign-up e-mails (before accounts): every account counts as confirmed now, the app opens
-  if (parts[0] === 'confirmer') location.replace('#/accueil');
+  if (parts[0] === 'confirmer') go('#/accueil', { replace: true });
   // the account's own number first (« Vérifiez votre numéro »), then the store picker
   if (!session) return phoneStep ? <PhoneStep /> : picker ? <StorePicker /> : <Login />;
+  // the address names another of the person's boutiques: it opens first
+  if (opening) return <Loading />;
   // unpaid or suspended: the lock screen (how to pay), nothing else
   if (session.shop?.locked) return <LockScreen />;
 
@@ -132,18 +166,18 @@ function App() {
   const partnerAliases = space === 'agency' ? AGENCY_ALIASES : space === 'marketer' ? MARKETER_ALIASES : null;
   if (page && partnerAliases?.[page]) {
     [page, sub] = partnerAliases[page];
-    location.replace(`#/${page}${sub ? `/${sub}` : ''}`);
+    go(`#/${page}${sub ? `/${sub}` : ''}`, { replace: true });
   }
   // Confirmation › Livrées was removed: an old link opens Confirmation › Nouvelles
   if (page === 'confirmation' && sub === 'livrees') {
-    location.replace('#/confirmation/nouvelles');
+    go('#/confirmation/nouvelles', { replace: true });
     sub = 'nouvelles';
   }
   // a group without a page of its own (Pilot AI) opens its first child the user can see
   const group = nav.find((n) => n.id === page && n.children && !pages[n.id]);
   const first = group?.children!.find((c) => canSeeChild(c, session.roles, session.isAdmin));
   if (first) {
-    location.replace(first.href);
+    go(first.href, { replace: true });
     [page, sub] = first.href.replace(/^#\/?/, '').split('/');
   }
   const item = nav.find((n) => n.id === page);
@@ -151,7 +185,7 @@ function App() {
   const allowed = (item && canSee(item, session.roles, session.isAdmin, !!session.canManageUsers, canRules, !!session.profile.canAffect)) || (extra && (session.isAdmin || session.roles.some((r) => ['confirmation', 'suivi', 'depot'].includes(r))));
   if (!page || !allowed || !pages[page]) {
     const home = homeOf();
-    if (location.hash !== `#/${home}`) location.replace(`#/${home}`);
+    go(`#/${home}`, { replace: true });
     page = home;
     sub = undefined;
     rest = [];
@@ -161,11 +195,11 @@ function App() {
   if (page && sub && hasPlanSubs(page) && !pageIsOn(page, sub)) {
     const first = firstSubOn(page);
     if (first) {
-      location.replace(`#/${page}/${first}`);
+      go(`#/${page}/${first}`, { replace: true });
       sub = first;
     } else {
       const home = homeOf();
-      location.replace(`#/${home}`);
+      go(`#/${home}`, { replace: true });
       page = home;
       sub = undefined;
       rest = [];

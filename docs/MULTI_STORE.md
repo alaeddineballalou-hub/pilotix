@@ -26,17 +26,24 @@ Read `README.md` › "Several shops on one server" and `packages/core/src/platfo
   other session at once (in every store).
 - **The owner** is the account that created the store (`shops.owner_account_id`): nobody else changes their account,
   only they delete the store (password + the store's name; its schema is dropped, its row stays as « deleted »).
-- **Sign-up and « Ajouter une boutique » (step 3).** `#/inscription[/<referral>]`: name checked live (unique, reserved
+- **Sign-up and « Ajouter une boutique » (step 3).** `/inscription[/<referral>]`: name checked live (unique, reserved
   words refused), terms accepted, nothing made before the e-mail link (48 h) is opened; then the store is made on the
   trial plan and the person is in. « Ajouter une boutique » needs a confirmed e-mail; stores per person: the setting,
   or the owner's own number set in the control room. Limits: 10 sign-ups per 15 minutes per address, 3 an hour per e-mail.
 - **Privacy.** The control room has no « open as » and never sets or sees a store's password: a store it makes is an
   invitation e-mailed to its owner (or added to the account they already have). It sees numbers only (accounts, drivers,
   orders this month and last month, the owner's stores), and can suspend, archive and limit.
-- **Store names and links.** A shop's slug is its store name, unique, never a reserved word. Landing pages:
-  `site/<store>/<page>`; webhooks and the pages' calls: `/api/s/<store>/…` (shop #1 keeps `/api/…`).
+- **Store names and links.** A shop's slug is its link name: chosen once, when the shop (or the agency, the marketer's
+  space) is made, unique, never a reserved word, and it **never changes** (« Mes boutiques », Landing pages › Réglages
+  and the control room show it locked; links changed before 2026-11-03 still lead to the shop). The app's addresses have
+  no `#`: `pilotix.online/<store>/<page>/<sub>` (`apps/web/src/lib/route.ts`; old `#/…` links and e-mails still work,
+  opened from a bookmark the store named opens by itself); pages of no store: `/conditions`, `/inscription`,
+  `/reset/<secret>`, `/platform`… Landing pages: `site/<store>/<page>`; webhooks and the pages' calls:
+  `/api/s/<store>/…` (shop #1 keeps `/api/…`). The words after a store's name are `APP_PAGES`, the pages of no store
+  `PUBLIC_ROOTS` (`packages/shared/src/links.ts`): deploy/Caddyfile lists the same (a test checks it), and no store and
+  no landing page takes them.
 - **Per shop:** tokens carry the shop; live updates in room `shop:<id>`; background jobs loop over the shops.
-- **Control room** (`#/platform`): two-step login (a code by e-mail, a device remembered 30 days; emergency switch
+- **Control room** (`/platform`): two-step login (a code by e-mail, a device remembered 30 days; emergency switch
   `PLATFORM_TWO_STEP=off`), dashboard (sign-ups, conversion, messages, stores over their limits), stores (limits, owner,
   referrals, payments with receipts to print or e-mail), plans, sign-ups, messages from stores (« Contacter Pilotix »),
   backups (nightly backups in `/opt/pilotix-backups`, the database's and each store's size), Doctor (machine, database,

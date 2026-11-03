@@ -45,6 +45,7 @@
     "storeLink": "Adresse de votre boutique",
     "linkHint": "Des lettres, des chiffres et des tirets. Elle est unique.",
     "linkFree": "✓ Cette adresse est libre",
+    "linkForever": "Choisissez bien : ce lien ne pourra plus jamais être changé.",
     "addText": "Vous en serez le propriétaire. Elle a sa propre équipe et ses propres données, séparées de vos autres boutiques.",
     "create": "Créer la boutique",
     "verifyNeed": "Confirmez d’abord votre email : c’est lui qui protège vos boutiques.",

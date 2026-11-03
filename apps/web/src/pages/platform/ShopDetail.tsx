@@ -406,7 +406,7 @@ function Owner({ s, manager }: { s: Detail; manager: boolean }) {
 
 function Info({ s, manager }: { s: Detail; manager: boolean }) {
   const { t } = useTranslation();
-  const init = () => ({ name: s.name, slug: s.slug, ownerName: s.owner.name ?? '', ownerEmail: s.owner.email ?? '', ownerPhone: s.owner.phone ?? '', city: s.city ?? '' });
+  const init = () => ({ name: s.name, ownerName: s.owner.name ?? '', ownerEmail: s.owner.email ?? '', ownerPhone: s.owner.phone ?? '', city: s.city ?? '' });
   const [f, setF] = useState(init);
   const [notes, setNotes] = useState(s.notes);
   useEffect(() => {
@@ -417,7 +417,8 @@ function Info({ s, manager }: { s: Detail; manager: boolean }) {
   const save = usePAction('p.shops.update', { success: t('platform.saved') });
   const saveNotes = usePAction('p.shops.notes', { success: t('platform.saved') });
   const dirty = JSON.stringify(f) !== JSON.stringify(init());
-  // its landing pages' address (site/<store>/<page>); its webhooks: …/api/s/<store>/… (shop #1: its first links)
+  // its addresses (pilotix.online/<store>/…: the app and its landing pages), its webhooks (…/api/s/<store>/…): chosen
+  // when the shop was made, never changed
   const link = `${window.location.host}/${s.slug}/…`;
   return (
     <Card title={t('platform.info.title')}>
@@ -425,17 +426,8 @@ function Info({ s, manager }: { s: Detail; manager: boolean }) {
         <Field label={t('platform.f.name')}>
           <input disabled={!manager} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
         </Field>
-        <Field
-          label={t('platform.f.slug')}
-          hint={
-            f.slug !== s.slug ? (
-              <span className="pp-bad">{t('platform.info.slugWarn')}</span>
-            ) : (
-              <span className="ltr">{link}</span>
-            )
-          }
-        >
-          <input disabled={!manager} dir="ltr" value={f.slug} onChange={(e) => setF({ ...f, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })} />
+        <Field label={t('platform.f.slug')} hint={<span className="ltr">{link}</span>}>
+          <input readOnly dir="ltr" value={s.slug} title={t('platform.info.slugLocked')} />
         </Field>
         <Field label={t('platform.f.ownerName')}>
           <input disabled={!manager} value={f.ownerName} onChange={(e) => setF({ ...f, ownerName: e.target.value })} />

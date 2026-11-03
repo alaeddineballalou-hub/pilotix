@@ -22,10 +22,10 @@ export async function mailTo(to, after = 0, re) {
   throw new Error(`no e-mail to ${to}${re ? ` matching ${re}` : ''}`);
 }
 
-/** The token of a link in an e-mail: …/#/<kind>/<token> */
+/** The token of a link in an e-mail: <site>/<kind>/<token> (e-mails sent before: <site>/#/<kind>/<token>) */
 export function linkToken(m, kind) {
-  const x = `${m.text} ${m.html}`.match(new RegExp(`#/${kind}/([A-Za-z0-9_.-]+)`));
-  if (!x) throw new Error(`no #/${kind}/ link in « ${m.subject} »`);
+  const x = `${m.text} ${m.html}`.match(new RegExp(`(?://[^/\\s"'<>]+|#)/${kind}/([A-Za-z0-9_.-]+)`));
+  if (!x) throw new Error(`no /${kind}/ link in « ${m.subject} »`);
   return x[1];
 }
 

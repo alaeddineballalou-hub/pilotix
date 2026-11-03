@@ -178,34 +178,29 @@ test('store names: one per shop, unique, the first part of its links (site/<stor
   assert.equal(g2.storeFixed, true);
   await call('landing.settings.save', k, { ...g2.settings, storeSlug: 'autre-nom', capiToken: '' });
   assert.equal(await landingStore(db2), 'bebe-oran');
-  // shop #1 chooses its name: not one another shop has (the server tells the core), then the platform follows
-  const taken = async (x: string) => (await t.platform.query('SELECT 1 FROM platform.shops WHERE slug = $1 AND id <> $2', [x, s1.id])).length > 0;
-  const a1 = { ...(await shopUserCtx(t, 'public', OWNER.email, OWNER.password, shopCtx(s1, shopStatus(s1, Date.now(), 3)))), server: { storeTaken: taken } as any };
+  // shop #1 too: its link was chosen once and never changes (Landing pages › Réglages shows it fixed, the platform keeps it)
+  const a1 = await shopUserCtx(t, 'public', OWNER.email, OWNER.password, shopCtx(s1, shopStatus(s1, Date.now(), 3)));
   const g1: any = await call('landing.settings.get', a1, {});
-  assert.equal(g1.storeFixed, false);
-  await assert.rejects(call('landing.settings.save', a1, { ...g1.settings, storeSlug: 'bebe-oran', capiToken: '' }), /déjà pris/);
+  assert.equal(g1.storeFixed, true);
   await call('landing.settings.save', a1, { ...g1.settings, storeSlug: 'ma-boutique', capiToken: '' });
+  assert.equal(await landingStore(t.shop('public')), s1.slug);
   await syncPrimaryStore(t);
-  assert.equal((await loadShop(t, { primary: true }))!.slug, 'ma-boutique');
-  // the control room renames: shop 2's settings follow; shop #1's « Lien des pages » follows
-  await assert.rejects(p('p.shops.update', { id: s2.id, slug: 'ma-boutique' }), /déjà pris/);
-  await p('p.shops.update', { id: s2.id, slug: 'bebe-confort' });
-  assert.equal(await landingStore(db2), 'bebe-confort');
-  await p('p.shops.update', { id: s1.id, slug: 'boutique-amine' });
-  assert.equal(await landingStore(t.shop('public')), 'boutique-amine');
-  await syncPrimaryStore(t);
-  assert.equal((await loadShop(t, { primary: true }))!.slug, 'boutique-amine');
-  // shop #1 back to a name made from its shop name, which another shop has: it keeps the one it had
-  await call('landing.settings.save', a1, { ...g1.settings, storeSlug: '', capiToken: '' });
+  assert.equal((await loadShop(t, { primary: true }))!.slug, s1.slug);
+  // nor the control room: another link is refused, the same one is fine with the other changes
+  await assert.rejects(p('p.shops.update', { id: s2.id, slug: 'bebe-confort' }), /ne change jamais/);
+  await assert.rejects(p('p.shops.update', { id: s1.id, slug: 'boutique-amine' }), /ne change jamais/);
+  await p('p.shops.update', { id: s2.id, slug: 'bebe-oran', name: 'Bébé Oran 2' });
+  assert.equal((await loadShop(t, { id: s2.id }))!.name, 'Bébé Oran 2');
+  assert.equal(await landingStore(db2), 'bebe-oran');
+  // shop #1's new shop name does not move its links
   await setSetting(t.shop('public'), 'shop', { ...(await getSetting(t.shop('public'), 'shop')), name: 'Bébé Confort' });
-  assert.equal(await landingStore(t.shop('public'), { ...(await getSetting(t.shop('public'), 'landing')), storeSlug: '' }), 'bebe-confort');
   await syncPrimaryStore(t);
-  assert.equal((await loadShop(t, { primary: true }))!.slug, 'boutique-amine');
-  assert.equal(await landingStore(t.shop('public')), 'boutique-amine');
+  assert.equal((await loadShop(t, { primary: true }))!.slug, s1.slug);
+  assert.equal(await landingStore(t.shop('public')), s1.slug);
   // a later start puts every other shop's name back in its settings
   await db2.query(`UPDATE settings SET value = jsonb_set(value, '{storeSlug}', '"x-y"') WHERE key = 'landing'`);
   await migrateAll(t);
-  assert.equal(await landingStore(db2), 'bebe-confort');
+  assert.equal(await landingStore(db2), 'bebe-oran');
 });
 
 test('one e-mail, several stores: one account, one password, chosen by the person only', async () => {

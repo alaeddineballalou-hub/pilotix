@@ -50,6 +50,11 @@
 .bqp-slug:focus-within { outline: 2px solid var(--c-accent, #F7A823); outline-offset: 1px; }
 .bqp-slug-pre { display: flex; align-items: center; padding: 0 10px 0 14px; color: var(--muted, #5F6673); font-size: 15px; white-space: nowrap; background: var(--raise, #FBFAF8); border-inline-end: 1px solid var(--line); max-width: 55%; overflow: hidden; text-overflow: ellipsis; }
 .bqp-slug input { border: 0 !important; height: 44px !important; border-radius: 0 !important; outline: none !important; flex: 1; min-width: 60px; }
+/* the link: chosen when the boutique was made, never changed — shown locked */
+.bqp-slug-locked { background: var(--raise, #FBFAF8); }
+.bqp-slug-locked input { background: transparent !important; color: var(--ink, #1B2A47); font-weight: 600; cursor: default; }
+.bqp-slug-locked:focus-within { outline: none; }
+.bqp-slug-locked > .bji { width: 18px; height: 18px; align-self: center; margin: 0 14px; color: var(--muted, #5F6673); }
 .bqp-state { font-size: 13px; color: var(--muted, #5F6673); display: inline-flex; align-items: center; gap: 5px; min-height: 18px; }
 .bqp-state.free { color: var(--c-ok-ink, #137A3B); font-weight: 700; }
 .bqp-state.taken { color: var(--c-bad-ink, #B42318); font-weight: 700; }

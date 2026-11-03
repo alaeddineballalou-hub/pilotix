@@ -10,6 +10,7 @@ export * from './upsell';
 export * from './features';
 export * from './agency';
 export * from './couriers';
+export * from './links';
 import type { ShopInfo } from './features';
 import type { OrigLine } from './upsell';
 import type { AgencySellerWork } from './agency';

@@ -1,6 +1,6 @@
 // Shops of a multi-shop server: reading them, their subscription state, creating one (its own schema), the demo shop,
 // and the first start (the server owner's shop becomes shop #1, its first admin the platform owner).
-import { AgencyPrices, CODE_PREFIX, effectiveFeatures, isFeatureKey, isPartnerKind, PartnerKind, pricesOfKind, ShopInfo, ShopKind, ShopState } from '@pilotix/shared';
+import { AgencyPrices, APP_PAGES, CODE_PREFIX, effectiveFeatures, isFeatureKey, isPartnerKind, PartnerKind, pricesOfKind, PUBLIC_ROOTS, ShopInfo, ShopKind, ShopState } from '@pilotix/shared';
 import { Db, isoOrNull, migrate, num, numOrNull } from '../db';
 import type { ShopCtx } from '../rpc';
 import { landingSettings, landingStore, STORE_RESERVED } from '../modules/landingquery';
@@ -387,8 +387,14 @@ export function slugify(s: string): string {
 }
 
 export const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/;
-/** Names a new store cannot take: the app's own words (api, live…) and names that would pass for Pilotix itself. */
-export const NAME_RESERVED = [...STORE_RESERVED, 'pilotix', 'platform', 'plateforme', 'support', 'aide', 'help', 'contact', 'inscription', 'signup', 'login', 'connexion', 'conditions', 'legal', 'privacy', 'terms', 'compte', 'account'];
+/**
+ * Names a new store cannot take: the app's own words (api, live…), the first words of its addresses (a boutique's link
+ * name starts them: pilotix.online/<boutique>/<page>; pages open to everyone: /conditions, /inscription…) and names
+ * that would pass for Pilotix itself.
+ */
+export const NAME_RESERVED = [
+  ...new Set([...STORE_RESERVED, ...PUBLIC_ROOTS, ...APP_PAGES, 'pilotix', 'plateforme', 'support', 'help', 'contact', 'login', 'connexion', 'legal', 'privacy', 'terms', 'confidentialite', 'compte', 'account']),
+];
 /** a name a new shop can have (the format, and not a reserved word) */
 export const slugOk = (s: string): boolean => SLUG_RE.test(s) && !NAME_RESERVED.includes(s);
 
@@ -633,9 +639,11 @@ export async function bootstrapPlatform(t: Tenancy): Promise<void> {
     const sys = (await t.platform.query('SELECT id FROM platform.plans WHERE code = $1', [SYSTEM_PLAN]))[0];
     const named = (await t.shop('public').query(`SELECT value->>'name' AS name FROM settings WHERE key = 'shop'`).catch(() => []))[0]?.name;
     const name = String(named || 'Ma boutique').trim() || 'Ma boutique';
+    // its link name: the one its landing pages already use (their links do not move), else made from its name
+    const own = await landingStore(t.shop('public')).catch(() => '');
     await t.platform.query(
       `INSERT INTO platform.shops (slug, name, schema_name, plan_id, never_expires, primary_shop) VALUES ($1, $2, 'public', $3, true, true)`,
-      [await freeSlug(t, name), name, sys ? num(sys.id) : null],
+      [await freeSlug(t, own && slugOk(own) ? own : name), name, sys ? num(sys.id) : null],
     );
   }
   const primary = (await loadShop(t, { primary: true }))!;
@@ -679,19 +687,14 @@ async function numberOldPayments(t: Tenancy): Promise<void> {
 }
 
 /**
- * Any shop but #1: the store's part of its links (site/<store>/<page>) is its name on the platform. Kept in its own
- * settings, so its pages and its llms.txt name it; the shop cannot change it (its webhooks use the same name).
+ * A shop's part of its links (site/<store>/<page>, and the app's pilotix.online/<store>/…) is its name on the platform:
+ * chosen once when the shop is made, it never changes. Kept in its own settings, so its pages and its llms.txt name it.
  */
 export async function setShopStore(db: Db, slug: string): Promise<void> {
   const s = await landingSettings(db);
   if (s.storeSlug !== slug) await setSetting(db, 'landing', { ...s, storeSlug: slug });
 }
 
-/**
- * Shop #1 chooses the store's part of its links itself (Landing pages › Réglages; empty = made from the shop's name):
- * its name on the platform follows, so every shop has one name, unique. If another shop already has that name, shop #1
- * keeps the one it had (written in its settings, so its links do not move).
- */
 // ---------------------------------------------------------------- a shop's former links (« Mes boutiques »)
 /** The shop whose former link this is (null: none). */
 export async function shopIdByOldSlug(t: Tenancy, slug: string): Promise<number | null> {
@@ -713,19 +716,13 @@ export async function keepOldSlug(t: Tenancy, shopId: number, oldSlug: string, n
   await t.platform.query('INSERT INTO platform.shop_old_slugs (slug, shop_id) VALUES ($1, $2) ON CONFLICT (slug) DO NOTHING', [oldSlug, shopId]);
 }
 
+/**
+ * Shop #1's links: like every shop's, its name on the platform, never changed (neither « Mes boutiques », Landing pages ›
+ * Réglages nor the control room changes it). Written in its own settings too, so a new shop name no longer moves them.
+ */
 export async function syncPrimaryStore(t: Tenancy): Promise<void> {
   const p = await loadShop(t, { primary: true });
-  if (!p) return;
-  const db = t.shop('public');
-  const s = await landingSettings(db);
-  const want = await landingStore(db, s);
-  if (want === p.slug) return;
-  const taken = !slugOk(want) || (await slugTakenByOther(t, want, p.id));
-  if (!taken) {
-    // the former name keeps leading to shop #1 (and stays its own)
-    await keepOldSlug(t, p.id, p.slug, want);
-    await t.platform.query('UPDATE platform.shops SET slug = $1 WHERE primary_shop', [want]);
-  } else await setSetting(db, 'landing', { ...s, storeSlug: p.slug });
+  if (p) await setShopStore(t.shop('public'), p.slug);
 }
 
 /** No staff yet: the owner's shop's first administrator becomes the platform owner (same e-mail and password). */

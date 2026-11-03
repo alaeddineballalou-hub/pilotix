@@ -2,7 +2,7 @@
 // page (its address with ?g=<group>), which shows « رجوع إلى كل المنتجات » at the top, back to the group. Five looks
 // (GROUP_THEMES); in « best » the shop picks the product shown big at the top. The group's address is the same kind as
 // a landing page's (site/<store>/<slug>, the shop's own domain, /lp/<slug>): landingPage() falls back to the group.
-import { GROUP_THEMES, GroupItem, GroupTheme, isHexColor, LANDING_DEFAULT_COLOR, renderGroup } from '@pilotix/shared';
+import { GROUP_THEMES, GroupItem, GroupTheme, isAppPage, isHexColor, LANDING_DEFAULT_COLOR, renderGroup } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, iso, num, numOrNull } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
@@ -11,11 +11,18 @@ import { getSetting } from '../settings';
 import { b64, HtmlOpts, imageRows, ImgRef, productContext, readImgs, viewImages } from './landing';
 
 const WHO = ['marketer'] as const;
-import { landingSettings, landingStore } from './landingquery';
+import { APP_WORD, landingSettings, landingStore } from './landingquery';
 import { checkPixels, PixelList, pixelsJson, pixelsOf, readPixels } from './pixels';
 
 const id = z.number().int().positive();
-const SLUG = z.string().trim().min(2).max(60).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Adresse : lettres minuscules, chiffres et tirets');
+const SLUG = z
+  .string()
+  .trim()
+  .min(2)
+  .max(60)
+  .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Adresse : lettres minuscules, chiffres et tirets')
+  // site/<boutique>/<group>: a word of the app's own pages opens the app, not the group
+  .refine((v) => !isAppPage(v), APP_WORD);
 
 export const GroupInput = z.object({
   id: id.optional(),

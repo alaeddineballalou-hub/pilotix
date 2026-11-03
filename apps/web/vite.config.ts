@@ -10,11 +10,13 @@ const src = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 export default defineConfig(({ mode }) => ({
   base: mode === 'artifact' ? './' : process.env.VITE_BASE || './',
   define: mode === 'artifact' ? { 'import.meta.env.VITE_DEMO_ONLY': JSON.stringify('1'), 'import.meta.env.VITE_DEMO': JSON.stringify('1') } : {},
-  plugins: [react()],
+  // JSX drawn by lib/jsx: React's, with the app's « #/… » links turned into real addresses (lib/route.ts)
+  plugins: [react({ jsxImportSource: '@pilotix/jsx' })],
   resolve: {
     alias: [
       { find: /^@pilotix\/shared$/, replacement: src('../../packages/shared/src/index.ts') },
       { find: /^@pilotix\/core$/, replacement: src('../../packages/core/src/index.ts') },
+      { find: /^@pilotix\/jsx\/(jsx-runtime|jsx-dev-runtime)$/, replacement: src('./src/lib/jsx/$1.ts') },
     ],
   },
   optimizeDeps: { exclude: ['@electric-sql/pglite'] },

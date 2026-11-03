@@ -1,6 +1,6 @@
 // Landing pages, the parts other modules call (orders.ts for the menu counts and the Meta Purchase of a confirmed or
 // delivered order, catalog.ts for the page made with a new product). Imports no other module of ./modules: no cycle.
-import { CONF_DONE_BAD, LANDING_DEFAULT_COLOR, landingSlug } from '@pilotix/shared';
+import { CONF_DONE_BAD, isAppPage, LANDING_DEFAULT_COLOR, landingSlug } from '@pilotix/shared';
 import { Db, num } from '../db';
 import { bad, notFound } from '../rpc';
 import { getSetting, SettingsMap } from '../settings';
@@ -12,6 +12,8 @@ export const landingSettings = (db: Db): Promise<LandingSettings> => getSetting(
 /** A lead is abandoned when nothing moved on its form for this long and the number did not order since. */
 /** first parts of an address that belong to the app or its server: never a store's name */
 export const STORE_RESERVED = ['api', 'live', 'assets', 'lp', 's', 'app', 'admin', 'www', 'static', 'img'];
+/** A landing page or a group named like a page of the app (site/<boutique>/commandes is the app's « Commandes »). */
+export const APP_WORD = 'Ce nom est celui d’une page de Pilotix (commandes, produits, suivi…) : choisissez-en un autre';
 /** The store's part of the pages' public address (site/<store>/<page>): the one chosen in Réglages, else the shop's name. */
 export async function landingStore(db: Db, s?: LandingSettings): Promise<string> {
   const chosen = String((s ?? (await landingSettings(db))).storeSlug ?? '').trim();
@@ -180,6 +182,8 @@ export async function freeLandingSlug(db: Db, name: string, sku = '', selfId?: n
   if (base === 'produit' && sku) base = landingSlug(sku);
   for (let k = 0; k < 100; k++) {
     const s = k ? `${base}-${k + 1}` : base;
+    // a word of the app's own pages (site/<boutique>/commandes opens the app): the next one
+    if (isAppPage(s)) continue;
     const r = (await db.query('SELECT id FROM landing_pages WHERE slug = $1', [s]))[0];
     if ((!r || num(r.id) === selfId) && !(await db.query('SELECT 1 FROM landing_groups WHERE slug = $1', [s])).length) return s;
   }

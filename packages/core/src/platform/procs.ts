@@ -12,13 +12,13 @@ import { clearCourierTestKeys, courierTestState, saveCourierTestKeys } from './c
 import { addWatchItems, courierUsage, removeCourier, removedCouriers, removeWatchItem, restoreCourier, setWatchStatus, watchState } from './courierWatch';
 import { protectionStats } from './reputation';
 import { syncAgency } from '../modules/agencies';
+import { SLUG_LOCKED } from '../modules/boutiques';
 import { accountById, makeAccountToken, sha256Hex } from './accounts';
 import { rewardReferrer, ReferralReward } from './reminders';
 import { staffReply, staffSetStatus, staffThread, staffThreads, staffUnread } from './support';
 import {
   cleanFeatures,
   freeSlug,
-  keepOldSlug,
   loadPlans,
   loadShop,
   loadShops,
@@ -28,7 +28,6 @@ import {
   provisionShop,
   resetDemoShop,
   setPlatformSetting,
-  setShopStore,
   Shop,
   shopFeatures,
   shopMaxDrivers,
@@ -228,7 +227,7 @@ export type OwnerMail =
   | { kind: 'added'; to: string; name: string; language: string; store: string }
   | { kind: 'receipt'; to: string; name: string; language: string; paymentId: number }
   | { kind: 'reward'; to: string; name: string; language: string; reward: ReferralReward }
-  | { kind: 'answer'; to: string; name: string; language: string; shop: string; subject: string; body: string };
+  | { kind: 'answer'; to: string; name: string; language: string; shop: string; subject: string; body: string; slug?: string; thread?: number };
 const Id = z.number().int().positive();
 /** a dashboard of the AI agents: its period and, optionally, one shop */
 const BoardInput = z.object({ days: z.union([z.literal(7), z.literal(30), z.literal(90)]).default(30), shopId: Id.optional() });
@@ -574,10 +573,8 @@ export const PLATFORM_REGISTRY = {
         await ctx.t.platform.query('UPDATE platform.accounts SET max_stores = $2 WHERE id = $1', [s.ownerAccountId, i.ownerMaxStores]);
         await audit(ctx, 'shop.ownerStores', s.id, { maxStores: i.ownerMaxStores });
       }
-      if (i.slug !== undefined && i.slug !== s.slug) {
-        checkSlug(i.slug);
-        if ((await freeSlug(ctx.t, i.slug, s.id)) !== i.slug) throw bad('Ce nom est déjà pris par une autre boutique');
-      }
+      // its link (the store's part of its addresses) was chosen when the shop was made: it never changes
+      if (i.slug !== undefined && i.slug !== s.slug) throw bad(SLUG_LOCKED);
       if (i.planId !== undefined && !(await loadPlans(ctx.t)).some((p) => p.id === i.planId)) throw bad('Formule introuvable');
       const sets: string[] = [];
       const vals: unknown[] = [s.id];
@@ -589,7 +586,6 @@ export const PLATFORM_REGISTRY = {
         changes[label] = { from: old ?? null, to: v };
       };
       put('name', i.name, 'name', s.name);
-      put('slug', i.slug, 'slug', s.slug);
       put('owner_name', i.ownerName === undefined ? undefined : i.ownerName || null, 'ownerName', s.ownerName);
       put('owner_email', i.ownerEmail === undefined ? undefined : i.ownerEmail?.toLowerCase() || null, 'ownerEmail', s.ownerEmail);
       put('owner_phone', i.ownerPhone === undefined ? undefined : i.ownerPhone || null, 'ownerPhone', s.ownerPhone);
@@ -601,9 +597,6 @@ export const PLATFORM_REGISTRY = {
       put('max_drivers', i.maxDrivers, 'maxDrivers', s.maxDrivers);
       if (!sets.length) return { ok: true };
       await ctx.t.platform.query(`UPDATE platform.shops SET ${sets.join(', ')} WHERE id = $1`, vals);
-      // the new name is the store's part of its links (shop #1: its « Lien des pages » too); the former one still leads there
-      if (changes.slug) await keepOldSlug(ctx.t, s.id, s.slug, i.slug!);
-      if (changes.slug && s.status !== 'archived') await setShopStore(ctx.t.shop(s.schema), i.slug!);
       await audit(ctx, 'shop.update', s.id, changes);
       return { ok: true };
     },
@@ -990,7 +983,7 @@ export const PLATFORM_REGISTRY = {
   'p.support.reply': pproc(ALL, z.object({ id: Id, body: z.string().max(5000) }), async (ctx, i) => {
     const r = await staffReply(ctx.t, i.id, ctx.staff.name, { body: i.body });
     await audit(ctx, 'support.reply', r.shopId, { subject: r.subject });
-    const mail: OwnerMail = { kind: 'answer', to: r.to, name: r.name, language: 'fr', shop: r.shop, subject: r.subject, body: r.body };
+    const mail: OwnerMail = { kind: 'answer', to: r.to, name: r.name, language: 'fr', shop: r.shop, subject: r.subject, body: r.body, slug: r.slug, thread: i.id };
     return { ok: true, mail };
   }),
   'p.support.setStatus': pproc(ALL, z.object({ id: Id, status: z.enum(['open', 'closed']) }), async (ctx, i) => {

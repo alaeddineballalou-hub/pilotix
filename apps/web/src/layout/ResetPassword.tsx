@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { resetPasswordWithLink } from '../lib/backend';
+import { leaveAddress } from '../lib/route';
 import { AuthShell, AuthTitle, PasswordInput } from './AuthShell';
 
 /**
@@ -31,11 +32,8 @@ export function ResetPassword({ token, invite }: { token: string; invite?: boole
     }
   }
 
-  const toLogin = () => {
-    // the secret leaves the address bar and the history
-    history.replaceState(null, '', location.pathname + location.search);
-    window.dispatchEvent(new HashChangeEvent('hashchange'));
-  };
+  // the secret leaves the address bar and the history
+  const toLogin = () => leaveAddress();
 
   return (
     <AuthShell>

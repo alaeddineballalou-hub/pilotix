@@ -1,3 +1,4 @@
+import type { AppPage } from '@pilotix/shared';
 import { ComponentType, lazy } from 'react';
 
 /** Props every page receives: the sub-page from the address (#/page/sub). */
@@ -6,6 +7,12 @@ export interface PageProps {
   /** extra path parts after the sub-page (#/page/sub/x/y) */
   rest?: string[];
 }
+
+/**
+ * A space's pages, by the word in their address (pilotix.online/<boutique>/<word>/…): only the words of APP_PAGES
+ * (@pilotix/shared), which the web server sends to the app (deploy/Caddyfile) and no landing page or boutique can take.
+ */
+type Pages = Partial<Record<AppPage, ComponentType<PageProps>>>;
 
 // Each feature folder exports its pages by name.
 const P = <K extends string>(loader: () => Promise<Record<K, ComponentType<PageProps>>>, name: K) =>
@@ -41,7 +48,7 @@ export const PAGES: Record<string, ComponentType<PageProps>> = {
   marketers: P(() => import('./agences'), 'Marketers'),
   profil: P(() => import('./profil'), 'Profil'),
   boutiques: P(() => import('./boutiques'), 'Boutiques'),
-};
+} satisfies Pages;
 
 /**
  * A confirmation agency's space: like a store's (its sellers' confirmation and suivi, one seller or all of them, its
@@ -61,7 +68,7 @@ export const AGENCY_PAGES: Record<string, ComponentType<PageProps>> = {
   reglages: P(() => import('./agency'), 'AgencySettings'),
   profil: PAGES.profil,
   boutiques: PAGES.boutiques,
-};
+} satisfies Pages;
 
 /**
  * A marketer's space: like a store's Marketing (its sellers' ads: Publicité and its ad sets, one seller or all of them),
@@ -77,4 +84,4 @@ export const MARKETER_PAGES: Record<string, ComponentType<PageProps>> = {
   reglages: AGENCY_PAGES.reglages,
   profil: PAGES.profil,
   boutiques: PAGES.boutiques,
-};
+} satisfies Pages;

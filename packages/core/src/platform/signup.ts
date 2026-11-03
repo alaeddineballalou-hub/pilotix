@@ -143,8 +143,8 @@ export async function startSignup(t: Tenancy, raw: unknown, ip: string | null, n
   const accountOnly = !partner && !i.storeName;
   if (!accountOnly && i.storeName.length < 2) throw bad(partner ? 'Nom : au moins 2 lettres' : 'Nom de la boutique : au moins 2 lettres');
   if (!accountOnly) {
-    // a partner has no landing pages: the name in its links is made from its name
-    const name = await storeNameCheck(t, i.storeName, partner ? undefined : i.slug);
+    // the name in its links (pilotix.online/<link>/…): the one typed, else made from its name; it never changes
+    const name = await storeNameCheck(t, i.storeName, i.slug);
     if (!name.free) throw bad(name.reason ?? 'Nom indisponible');
   }
   if (!partner && i.referral && !(await t.platform.query(`SELECT 1 FROM platform.shops WHERE referral_code = $1 AND status <> 'deleted'`, [i.referral])).length)
@@ -177,7 +177,7 @@ export async function startSignup(t: Tenancy, raw: unknown, ip: string | null, n
       i.name,
       phone,
       i.storeName,
-      partner ? null : i.slug || null,
+      i.slug || null,
       await hashPassword(i.password),
       i.language,
       partner ? null : i.referral || null,
@@ -295,7 +295,8 @@ export async function addStore(t: Tenancy, account: Account, raw: unknown, now =
     const limit = storeLimit(account, set);
     if ((await ownedStores(t, account.id)) >= limit) throw bad(`Vous avez déjà ${limit} boutique${limit > 1 ? 's' : ''} : c’est le maximum. Écrivez à Pilotix pour en avoir plus.`);
   }
-  const name = await storeNameCheck(t, p.data.name, partner ? undefined : p.data.slug);
+  // its link, chosen now and never changed (a store's, an agency's, a marketer's: pilotix.online/<link>/…)
+  const name = await storeNameCheck(t, p.data.name, p.data.slug);
   if (!name.free) throw bad(name.reason ?? 'Nom indisponible');
   const plan = partner ? null : await startPlan(t, set);
   // the first store after an account-only sign-up: the phone and the referral code given at sign-up

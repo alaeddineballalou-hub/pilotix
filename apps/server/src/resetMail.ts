@@ -73,7 +73,7 @@ export function resetMail(r: PasswordResetLink, now = new Date()): Mail {
   const t = T[(r.language as keyof typeof T) in T ? (r.language as keyof typeof T) : 'fr'];
   const rtl = r.language === 'ar';
   const align = rtl ? 'right' : 'left';
-  const link = `${config.publicUrl}/#/reset/${r.token}`;
+  const link = `${config.publicUrl}/reset/${r.token}`;
   const logo = `${config.publicUrl}/email-logo.png`;
   const when = now.toLocaleString(t.locale, { timeZone: 'Africa/Algiers', dateStyle: 'long', timeStyle: 'short' });
   const text = [t.hello(r.name), '', t.why, '', `${t.button}${r.language === 'fr' ? ' :' : ':'}`, link, '', t.valid(RESET_MINUTES), t.notYou, '', t.footer].join('\n');

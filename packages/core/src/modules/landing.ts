@@ -15,6 +15,7 @@ import {
   CONF_TODO,
   communesOf,
   hmacSha256Hex,
+  isAppPage,
   isHexColor,
   LANDING_DEFAULT_COLOR,
   LandingImage,
@@ -40,7 +41,7 @@ import { lookAlikeOf, trustOf } from './trust';
 import { groupHtml, groupOf } from './landinggroups';
 import { runAttackTest } from './attacktest';
 import { checkPixels, PixelList, pixelsJson, pixelsOf, pixelTestCode, pixelToken, readPixels } from './pixels';
-import { ABANDONED, abandonCutoff, freeLandingSlug, landingCounts, landingSettings, LandingSettings, landingStore, queuePurchase, quickCreatePage, STORE_RESERVED } from './landingquery';
+import { ABANDONED, abandonCutoff, APP_WORD, freeLandingSlug, landingCounts, landingSettings, LandingSettings, landingStore, queuePurchase, quickCreatePage, STORE_RESERVED } from './landingquery';
 import { sendInPreview } from './notify';
 import { addEvent, createOrder, noOrderAccess } from './orders';
 import { shareBlacklist } from './sharedblacklist';
@@ -1418,7 +1419,14 @@ const PixelId = z.string().trim().max(20).regex(/^\d*$/, 'Pixel Meta : des chiff
 export const PageInput = z.object({
   id: id.optional(),
   productId: id,
-  slug: z.string().trim().min(2).max(60).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Adresse : lettres minuscules, chiffres et tirets'),
+  slug: z
+    .string()
+    .trim()
+    .min(2)
+    .max(60)
+    .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Adresse : lettres minuscules, chiffres et tirets')
+    // site/<boutique>/<page>: a word of the app's own pages (site/<boutique>/commandes) opens the app, not the landing page
+    .refine((v) => !isAppPage(v), APP_WORD),
   active: z.boolean().default(true),
   title: z.string().trim().max(200).default(''),
   color: z.string().refine(isHexColor, 'Couleur invalide').default(LANDING_DEFAULT_COLOR),
@@ -1669,8 +1677,8 @@ export const landingProcs = {
       turnstileAuto: !!(ctx.server?.publicUrl && (await ctx.server?.turnstileSite?.(hostOf(ctx.server.publicUrl)))),
       /** the store's part of the address in use (the chosen one, else made from the shop's name) */
       store: await landingStore(ctx.db, s),
-      /** a shop of a multi-shop server other than #1: its name is given by Pilotix (its webhooks use it too) */
-      storeFixed: !!ctx.shop && !ctx.shop.primary,
+      /** a shop of a multi-shop server: its link name was chosen when it was made and never changes (its webhooks use it too) */
+      storeFixed: !!ctx.shop,
       /** the token itself never leaves the server */
       capi: { own, ads },
       /** products set aside (« Pas de page »): they can get their alert back */
@@ -1688,9 +1696,9 @@ export const landingProcs = {
     if (capiToken !== '' && !ctx.session.isAdmin) throw forbidden('Seul l’administrateur modifie le jeton Meta');
     if (turnstileSecret !== '' && !ctx.session.isAdmin) throw forbidden('Seul l’administrateur modifie la clé secrète Cloudflare');
     const cur = await landingSettings(ctx.db);
-    // the store's part of the links: another shop of the platform keeps the name Pilotix gave it; shop #1 chooses its
-    // own, which no other shop may have (the server then gives shop #1 that name on the platform too)
-    if (ctx.shop && !ctx.shop.primary) rest.storeSlug = ctx.shop.slug;
+    // the store's part of the links: on the platform, the shop's name there, chosen once and never changed (shop #1's
+    // too); a server with a single shop chooses its own
+    if (ctx.shop) rest.storeSlug = ctx.shop.slug;
     else if (rest.storeSlug && rest.storeSlug !== cur.storeSlug && (await ctx.server?.storeTaken?.(rest.storeSlug)))
       throw bad('Ce nom est déjà pris par une autre boutique Pilotix, choisissez-en un autre');
     await setSetting(ctx.db, 'landing', { ...cur, ...rest }, ctx.session.profile.id);

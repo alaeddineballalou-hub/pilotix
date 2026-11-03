@@ -286,7 +286,7 @@
     "title": "Informations",
     "notesHint": "Visible seulement par l’équipe Pilotix.",
     "saveNotes": "Enregistrer les notes",
-    "slugWarn": "Attention : les liens déjà donnés (landing pages, webhooks) changent avec ce nom."
+    "slugLocked": "Choisi à la création de la boutique : il ne change jamais."
   },
   "log": {
     "shopCreate": "Boutique créée (formule {{plan}}, essai {{days}} j)",

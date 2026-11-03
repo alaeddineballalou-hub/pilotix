@@ -122,14 +122,14 @@ export async function staffThread(t: Tenancy, id: number): Promise<{ thread: Sup
 }
 
 /** Pilotix answers: the store sees it in « Contacter Pilotix » (and its author gets an e-mail). */
-export async function staffReply(t: Tenancy, id: number, staffName: string, raw: unknown): Promise<{ to: string; name: string; shop: string; subject: string; body: string; shopId: number }> {
+export async function staffReply(t: Tenancy, id: number, staffName: string, raw: unknown): Promise<{ to: string; name: string; shop: string; slug: string; subject: string; body: string; shopId: number }> {
   const p = SupportReply.safeParse(raw);
   if (!p.success) throw bad(p.error.issues[0]?.message ?? 'Message vide');
-  const th = (await t.platform.query('SELECT th.*, s.name AS shop_name FROM platform.support_threads th JOIN platform.shops s ON s.id = th.shop_id WHERE th.id = $1', [id]))[0];
+  const th = (await t.platform.query('SELECT th.*, s.name AS shop_name, s.slug AS shop_slug FROM platform.support_threads th JOIN platform.shops s ON s.id = th.shop_id WHERE th.id = $1', [id]))[0];
   if (!th) throw notFound('Conversation introuvable');
   await t.platform.query('INSERT INTO platform.support_messages (thread_id, from_staff, author, body) VALUES ($1, true, $2, $3)', [id, staffName, p.data.body]);
   await t.platform.query('UPDATE platform.support_threads SET unread_shop = true, unread_staff = false, updated_at = now() WHERE id = $1', [id]);
-  return { to: th.author_email, name: th.author_name, shop: th.shop_name, subject: th.subject, body: p.data.body, shopId: num(th.shop_id) };
+  return { to: th.author_email, name: th.author_name, shop: th.shop_name, slug: th.shop_slug, subject: th.subject, body: p.data.body, shopId: num(th.shop_id) };
 }
 
 export async function staffSetStatus(t: Tenancy, id: number, status: 'open' | 'closed'): Promise<void> {

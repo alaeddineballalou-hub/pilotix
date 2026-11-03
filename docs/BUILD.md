@@ -90,6 +90,9 @@ import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 ```
 - Pages are exported by name from `pages/<folder>/index.tsx` (see `pages/registry.tsx`) and receive `{ sub, rest }` from `#/page/sub/rest…`.
+  Links are written `#/page/sub` in the code; on the real site they are real addresses without `#`
+  (`pilotix.online/<store>/page/sub`, `lib/route.ts` + `lib/jsx`), in the preview they stay `#/…`. A new page's word goes
+  in `APP_PAGES` (`packages/shared/src/links.ts`) and in `deploy/Caddyfile`.
 - Stage bars: render `<StageBar items=[{key,label,href:'#/depot/preparer',count}] current={sub} />` at the top of the page, like the original.
 - Reuse the ORIGINAL markup/class names (see ref/dom/*.html): `.card .card-head`, `.kpis .kpi .l .v .s` (+ `t-ok/t-bad/t-warn`), `.tbl` with
   `td data-l="Label"` (mobile layout), `.badge t-…`, `.chip`, `.flag`, `.btn primary|small|ok|danger|ghost`, `.tabs .tab.on`, `.qtbl`, `.qo` (orange 36px

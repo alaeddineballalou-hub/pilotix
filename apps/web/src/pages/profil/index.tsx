@@ -7,6 +7,7 @@ import { backend, rpc } from '../../lib/backend';
 import { da, n } from '../../lib/format';
 import { applyLanguage } from '../../lib/i18n';
 import { useAction, useRpc } from '../../lib/query';
+import { linkHref, PATHS } from '../../lib/route';
 import { useSession } from '../../lib/session';
 import { store } from '../../lib/store';
 import { applyTheme } from '../../layout/Shell';
@@ -340,7 +341,9 @@ function Referral() {
   // on the Pilotix server: the store's own sign-up link, and Pilotix's programme (free months, no cash)
   const plat = d.platform;
   const off = plat && !d.rules.months;
-  const link = d.link ?? (plat ? `${location.origin}${location.pathname}#/inscription/${d.code}` : `${location.origin}${location.pathname}?ref=${d.code}`);
+  // the site's own address (on the site: pilotix.online/inscription/<code>; the preview: its page, #/inscription/<code>)
+  const site = `${location.origin}${PATHS ? '' : location.pathname}`;
+  const link = d.link ?? (plat ? `${site}${linkHref(`#/inscription/${d.code}`)}` : `${site}${PATHS ? '/' : ''}?ref=${d.code}`);
   const msg = t('profil.refMsg', { code: d.code, link });
   const copy = (v: string, k: string) =>
     navigator.clipboard

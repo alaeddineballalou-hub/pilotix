@@ -5,6 +5,7 @@ import { backend, isPhone, isPick, LoginResult, loginServerDemo, PhoneInfo, Pick
 import { allOnRaw } from './allMode';
 import { setShop } from './features';
 import { applyLanguage } from './i18n';
+import { setRouteShop } from './route';
 import { store } from './store';
 
 interface SessionState {
@@ -55,6 +56,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // the shop's menus are known before anything renders with the new session
   const setSession = useCallback((s: Session | null) => {
     setShop(s?.shop);
+    // the app's links and the address name this boutique (pilotix.online/<boutique>/…)
+    setRouteShop(s?.shop?.slug);
     setSessionState(s);
   }, []);
 

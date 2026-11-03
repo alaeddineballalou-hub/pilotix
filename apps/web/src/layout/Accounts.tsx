@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { ApiError, DEMO_ONLY, isPhone, legalText, phoneCheck, PhoneSent, server, signup, signupCode, SignupInfo, signupInfo, StoreChoice, storeNameCheck, verifyEmail } from '../lib/backend';
 import { usePhoneProblem } from '../lib/phoneCheck';
 import { useRpcFor } from '../lib/query';
+import { addressShop, go, leaveAddress } from '../lib/route';
 import { useSession } from '../lib/session';
 import { Icon } from '../ui/kit';
 import { Modal } from '../ui/modal';
@@ -16,10 +17,7 @@ import { SOCIAL_KIND, SocialButtons } from './SocialButtons';
 import { BrandBig } from './PxWordmark';
 
 /** Leaves a page opened from an e-mail (its secret leaves the address bar and the history). */
-function home(to = '') {
-  history.replaceState(null, '', `${location.pathname}${location.search}${to}`);
-  window.dispatchEvent(new HashChangeEvent('hashchange'));
-}
+const home = (to = '') => leaveAddress(to);
 
 /** What an account can be: a store (a seller), a confirmation agency, a marketer. */
 type Kind = 'store' | 'agency' | 'marketer';
@@ -198,7 +196,6 @@ export function StorePicker() {
     if (k === 'marketer' && picker?.canAddMarketer) return 'marketer';
     return 'store';
   });
-  if (!picker) return null;
   const go = async (id: number) => {
     setBusy(id);
     try {
@@ -208,6 +205,13 @@ export function StorePicker() {
       setBusy(null);
     }
   };
+  // the address names one of these boutiques (a bookmark, a link: pilotix.online/<boutique>/…): it opens by itself
+  const named = picker?.stores.find((s) => s.slug === addressShop() && !s.locked)?.id ?? null;
+  useEffect(() => {
+    // once per picker
+    if (named !== null) void go(named);
+  }, [named, picker?.ticket]);
+  if (!picker) return null;
   return (
     <Page
       title={first ? t('auth.firstStore1') : t('shop.acc.pickTitle')}
@@ -292,24 +296,39 @@ function useStoreName(name: string, slug: string, slugTouched: boolean) {
   return check;
 }
 
-function StoreNameFields({ name, setName, slug, setSlug, touched, setTouched }: { name: string; setName: (v: string) => void; slug: string; setSlug: (v: string) => void; touched: boolean; setTouched: (v: boolean) => void }) {
-  const { t } = useTranslation();
+/**
+ * The link of a new boutique, agency or marketer space (pilotix.online/<link>/…): made from its name until the person
+ * types their own, checked while typed. It is chosen once and never changes, so the form sends the one shown.
+ */
+function useNewLink(name: string) {
+  const [slug, setSlug] = useState('');
+  const [touched, setTouched] = useState(false);
   const check = useStoreName(name, slug, touched);
+  const shown = touched ? slug.replace(/^-+|-+$/g, '') : check?.slug ?? '';
+  return { slug, setSlug, touched, setTouched, check, shown, taken: !!check && !check.free };
+}
+type NewLink = ReturnType<typeof useNewLink>;
+
+function StoreNameFields({ name, setName, link, label, placeholder, linkLabel }: { name: string; setName: (v: string) => void; link: NewLink; label?: string; placeholder?: string; linkLabel?: string }) {
+  const { t } = useTranslation();
+  const { check, touched, slug } = link;
   const site = (location.host || 'pilotix.online').replace(/^www\./, '');
-  const shown = touched ? slug : check?.slug ?? '';
   return (
     <>
       <label className="field">
-        <span className="lab">{t('shop.acc.storeName')}</span>
-        <input required minLength={2} maxLength={80} value={name} onChange={(e) => setName(e.target.value)} placeholder={t('shop.acc.storeNamePh')} />
+        <span className="lab">{label ?? t('shop.acc.storeName')}</span>
+        <input required minLength={2} maxLength={80} value={name} onChange={(e) => setName(e.target.value)} placeholder={placeholder ?? t('shop.acc.storeNamePh')} />
       </label>
       <label className="field">
-        <span className="lab">{t('shop.acc.storeLink')}</span>
+        <span className="lab">{linkLabel ?? t('shop.acc.storeLink')}</span>
         <div className="px-slug" dir="ltr">
           <span className="ltr">{site}/</span>
-          <input className="ltr" maxLength={40} value={shown} onChange={(e) => (setTouched(true), setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-')))} />
+          <input className="ltr" maxLength={40} value={touched ? slug : link.shown} onChange={(e) => (link.setTouched(true), link.setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-')))} />
         </div>
         <span className={`hint ${check && !check.free ? 'px-bad' : ''}`}>{check ? (check.free ? t('shop.acc.linkFree') : check.reason) : t('shop.acc.linkHint')}</span>
+        <span className="hint px-slug-forever">
+          <Icon name="lock" /> {t('shop.acc.linkForever')}
+        </span>
       </label>
     </>
   );
@@ -322,10 +341,8 @@ function StoreNameFields({ name, setName, slug, setSlug, touched, setTouched }: 
 export function AddStoreForm({ ticket, onDone, onCancel, kind = 'store' }: { ticket?: string; onDone: (s: import('@pilotix/shared').Session) => void; onCancel?: () => void; kind?: Kind }) {
   const { t } = useTranslation();
   const tk = useKindT(kind);
-  const partner = kind !== 'store';
   const [name, setName] = useState('');
-  const [slug, setSlug] = useState('');
-  const [touched, setTouched] = useState(false);
+  const link = useNewLink(name);
   const [error, setError] = useState('');
   const [verify, setVerify] = useState<'need' | 'sent' | null>(null);
   const [busy, setBusy] = useState(false);
@@ -336,11 +353,12 @@ export function AddStoreForm({ ticket, onDone, onCancel, kind = 'store' }: { tic
     setError('');
     setBusy(true);
     try {
-      const r = await server.addStore(partner ? { name: name.trim(), kind } : { name: name.trim(), ...(touched && slug ? { slug } : {}), ...(copyFrom.id ? { copyFrom: copyFrom.id } : {}) }, ticket);
+      // its link: the one shown (chosen now, it never changes)
+      const r = await server.addStore({ name: name.trim(), ...(link.shown ? { slug: link.shown } : {}), ...(kind !== 'store' ? { kind } : copyFrom.id ? { copyFrom: copyFrom.id } : {}) }, ticket);
       if (r.copied === true) toast(t('shop.acc.copied', { name: copyFrom.name }), 'ok');
       else if (r.copied === false) toast(t('shop.acc.copyFailed'), 'bad', 8000);
       onDone(r.session);
-      location.hash = '#/accueil';
+      go('#/accueil');
     } catch (err: any) {
       if (err instanceof ApiError && err.message === 'VERIFY_EMAIL') setVerify('need');
       else setError(err?.message || t('common.error'));
@@ -372,18 +390,15 @@ export function AddStoreForm({ ticket, onDone, onCancel, kind = 'store' }: { tic
     );
   return (
     <form className="px-acc-form" onSubmit={submit}>
-      {partner ? (
-        <label className="field">
-          <span className="lab">{tk('name')}</span>
-          <input required minLength={2} maxLength={80} value={name} onChange={(e) => setName(e.target.value)} placeholder={tk('namePh')} />
-        </label>
+      {kind !== 'store' ? (
+        <StoreNameFields name={name} setName={setName} link={link} label={tk('name')} placeholder={tk('namePh')} linkLabel={tk('link')} />
       ) : (
         <>
-          <StoreNameFields name={name} setName={setName} slug={slug} setSlug={setSlug} touched={touched} setTouched={setTouched} />
+          <StoreNameFields name={name} setName={setName} link={link} />
           {!ticket && <CopyFromField value={copyFrom.id} onChange={setCopyFrom} />}
         </>
       )}
-      <p className="small muted">{partner ? tk('addText') : t('shop.acc.addText')}</p>
+      <p className="small muted">{kind !== 'store' ? tk('addText') : t('shop.acc.addText')}</p>
       {error && <p className="form-err">{error}</p>}
       <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
         {onCancel && (
@@ -391,7 +406,7 @@ export function AddStoreForm({ ticket, onDone, onCancel, kind = 'store' }: { tic
             {t('common.cancel')}
           </button>
         )}
-        <button className="btn primary" disabled={busy || name.trim().length < 2}>
+        <button className="btn primary" disabled={busy || name.trim().length < 2 || link.taken}>
           {busy ? '…' : t('shop.acc.create')}
         </button>
       </div>
@@ -487,6 +502,8 @@ export function Signup({ referral, kind: chosen }: { referral?: string; kind?: '
   // the referral code comes from the link (#/inscription/CODE): kept, not shown
   const [f, setF] = useState({ name: '', email: '', password: '', phone: '', referral: (referral ?? '').toUpperCase() });
   const [storeName, setStoreName] = useState('');
+  // a partner's link (pilotix.online/<link>/…), chosen now: it never changes
+  const link = useNewLink(partner ? storeName : '');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -511,6 +528,7 @@ export function Signup({ referral, kind: chosen }: { referral?: string; kind?: '
         ...(info?.phoneCode ? { phoneCode: code } : {}),
         // a store sign-up opens the account only: the first store is created right after, inside
         storeName: partner ? storeName.trim() : '',
+        ...(partner && link.shown ? { slug: link.shown } : {}),
         language: (['fr', 'en', 'ar'].includes(i18n.language) ? i18n.language : 'fr') as 'fr' | 'en' | 'ar',
         ...(!partner && f.referral.trim() ? { referral: f.referral.trim() } : {}),
         terms: true,
@@ -563,12 +581,7 @@ export function Signup({ referral, kind: chosen }: { referral?: string; kind?: '
           <span className="hint">{t(`agency.acct.${kind}.d`)}</span>
         </label>
         <SocialButtons mode="signup" kind={kind} onError={setError} />
-        {partner && (
-          <label className="field">
-            <span className="lab">{tk('name')}</span>
-            <input required minLength={2} maxLength={80} value={storeName} onChange={(e) => setStoreName(e.target.value)} placeholder={tk('namePh')} />
-          </label>
-        )}
+        {partner && <StoreNameFields name={storeName} setName={setStoreName} link={link} label={tk('name')} placeholder={tk('namePh')} linkLabel={tk('link')} />}
         <label className="field">
           <span className="lab">{t('auth.fullName')}</span>
           <input required minLength={2} maxLength={80} autoComplete="name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder={t('auth.fullNamePh')} />
@@ -630,7 +643,7 @@ export function Signup({ referral, kind: chosen }: { referral?: string; kind?: '
           </span>
         </label>
         {error && <p className="form-err">{error}</p>}
-        <button className="pxa-submit" disabled={busy || !!check.problem || (!!info?.phoneCode && (!codeSent || code.length !== 6))}>
+        <button className="pxa-submit" disabled={busy || !!check.problem || (partner && link.taken) || (!!info?.phoneCode && (!codeSent || code.length !== 6))}>
           {busy ? '…' : partner ? tk('signupSubmit') : t('auth.createAccount')}
         </button>
         <p className="pxa-legalnote">

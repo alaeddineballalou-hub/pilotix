@@ -1572,6 +1572,9 @@ html body .px-qhead .btn.px-qnew:hover { border-color: #F7A823; color: #C97A0E; 
 .px-slug > span { display: flex; align-items: center; padding: 0 10px; background: var(--raise); color: var(--muted); font-size: 13px; white-space: nowrap; max-width: 55%; overflow: hidden; text-overflow: ellipsis; border-inline-end: 1px solid var(--line); }
 .px-slug > input { flex: 1; min-width: 0; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
 .px-slug:focus-within { border-color: var(--px-orange); }
+/* a new boutique's (agency's, marketer's) link: chosen once, never changed */
+.px-slug-forever { display: flex; align-items: center; gap: 6px; color: var(--c-warn-ink, #8A5300) !important; font-weight: 600; }
+.px-slug-forever .bji { width: 14px; height: 14px; }
 .field .hint.px-bad, .px-bad { color: var(--coral); font-weight: 700; }
 .px-terms { display: flex; align-items: flex-start; gap: 8px; font-size: 13.5px; line-height: 1.4; cursor: pointer; }
 .px-terms input { margin-top: 2px; flex: none; }

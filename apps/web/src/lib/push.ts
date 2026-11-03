@@ -11,7 +11,8 @@ const b64 = (s: string) => {
 };
 
 async function registration() {
-  return navigator.serviceWorker.register(new URL('sw.js', document.baseURI).href);
+  // next to the site's index.html (/sw.js on the site, whatever page's address is open: /<boutique>/commandes/…)
+  return navigator.serviceWorker.register(new URL(`${import.meta.env.BASE_URL}sw.js`, document.baseURI).href);
 }
 
 /** Subscribes this device (asks the permission when `ask`, which must come from a tap). Returns the state after. */

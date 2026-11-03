@@ -286,7 +286,7 @@
     "title": "Details",
     "notesHint": "Seen only by the Pilotix team.",
     "saveNotes": "Save the notes",
-    "slugWarn": "Careful: links already given out (landing pages, webhooks) change with this name."
+    "slugLocked": "Chosen when the shop was created: it never changes."
   },
   "log": {
     "shopCreate": "Shop created ({{plan}} plan, {{days}}-day trial)",

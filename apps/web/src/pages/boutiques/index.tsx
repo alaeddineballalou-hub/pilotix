@@ -1,12 +1,14 @@
 // « Mes boutiques » (design 5, « Aperçu en direct »): the seller's boutiques as tabs; for the one chosen, its logo, its
 // name and its link on the left, and on the right what they look like where people see them (the top bar, the parcel
 // label, the landing page, the livreur's route sheet) — changing as they are typed. Only the boutique's owner changes
-// it (boutiques.save); a changed link keeps the old one working, which sends people to the new one.
+// its name and logo (boutiques.save). Its link (pilotix.online/<link>/…) was chosen when the boutique was made and never
+// changes: it is shown, locked.
 import type { Boutique } from '@pilotix/shared';
-import { DragEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { DragEvent, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { backend, rpc, serverUrl } from '../../lib/backend';
+import { backend, serverUrl } from '../../lib/backend';
 import { useAction } from '../../lib/query';
+import { go } from '../../lib/route';
 import { useSession } from '../../lib/session';
 import { AddStoreModal } from '../../layout/Accounts';
 import { BoutiqueLogo, useBoutiques } from '../../layout/Boutiques';
@@ -18,16 +20,6 @@ import './boutiques.css';
 
 /** The site's address as people read it: pilotix.online (the preview: its own made-up address) */
 const siteHost = () => (backend.kind === 'demo' ? 'demo.pilotix.local' : serverUrl() || window.location.origin).replace(/^https?:\/\//, '').replace(/\/+$/, '');
-/** What a link can hold while it is typed: small latin letters, digits and dashes. */
-const cleanSlug = (v: string) =>
-  v
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/-{2,}/g, '-')
-    .slice(0, 40);
-const trimSlug = (v: string) => v.replace(/^-+|-+$/g, '');
 
 /** A picture chosen by the seller, made a small square logo (256 px at most, WebP or PNG), as the server keeps it. */
 async function toLogo(file: File, t: (k: string) => string): Promise<string> {
@@ -112,49 +104,23 @@ export function Boutiques({ sub }: PageProps) {
   );
 }
 
-type Check = { state: 'idle' | 'checking' | 'free' | 'taken'; reason?: string | null };
-
 function Editor({ b }: { b: Boutique }) {
   const { t } = useTranslation();
   const { session, refresh, switchStore } = useSession();
   const [name, setName] = useState(b.name);
-  const [slug, setSlug] = useState(b.slug);
   const [logo, setLogo] = useState<string | null>(b.logo);
-  const [check, setCheck] = useState<Check>({ state: 'idle' });
   const [drag, setDrag] = useState(false);
   const [opening, setOpening] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const host = siteHost();
-  const wanted = trimSlug(slug);
-  const linkChanged = wanted !== b.slug;
-  const changed = name.trim() !== b.name || linkChanged || logo !== b.logo;
+  const changed = name.trim() !== b.name || logo !== b.logo;
   const save = useAction('boutiques.save', {
     success: t('boutiques.saved'),
     onDone: () => {
-      setCheck({ state: 'idle' });
       // the boutique open now: its name and logo at the top change at once
       if (b.current) void refresh().catch(() => {});
     },
   });
-
-  // « Ce lien est-il libre ? » while it is typed
-  useEffect(() => {
-    if (!linkChanged || wanted.length < 2) return setCheck({ state: 'idle' });
-    setCheck({ state: 'checking' });
-    let alive = true;
-    const id = window.setTimeout(async () => {
-      try {
-        const r = await rpc('boutiques.slugCheck', { id: b.id, slug: wanted });
-        if (alive) setCheck({ state: r.free ? 'free' : 'taken', reason: r.reason });
-      } catch (e: any) {
-        if (alive) setCheck({ state: 'taken', reason: e?.message ?? null });
-      }
-    }, 450);
-    return () => {
-      alive = false;
-      window.clearTimeout(id);
-    };
-  }, [wanted, linkChanged, b.id]);
 
   const pick = async (f: File | undefined | null) => {
     if (!f) return;
@@ -169,13 +135,14 @@ function Editor({ b }: { b: Boutique }) {
     setDrag(false);
     void pick(e.dataTransfer.files?.[0]);
   };
-  const blocked = name.trim().length < 2 || wanted.length < 2 || (linkChanged && check.state !== 'free');
-  const submit = () => save.mutate({ id: b.id, name: name.trim(), slug: wanted, ...(logo !== b.logo ? { logo } : {}) });
+  const blocked = name.trim().length < 2;
+  // its link is not sent: it never changes
+  const submit = () => save.mutate({ id: b.id, name: name.trim(), ...(logo !== b.logo ? { logo } : {}) });
   const open = async () => {
     setOpening(true);
     try {
       await switchStore(b.id);
-      location.hash = '#/accueil';
+      go('#/accueil');
     } catch (e: any) {
       toast(e?.message ?? t('common.error'), 'bad');
     } finally {
@@ -231,26 +198,14 @@ function Editor({ b }: { b: Boutique }) {
           <label className="lab" htmlFor="bqp-slug">
             {t('boutiques.link')}
           </label>
-          <span className="bqp-slug">
+          <span className="bqp-slug bqp-slug-locked">
             <span className="bqp-slug-pre ltr">{host}/</span>
-            <input id="bqp-slug" className="ltr" value={slug} onChange={(e) => setSlug(cleanSlug(e.target.value))} onBlur={() => setSlug(trimSlug(slug))} maxLength={40} autoComplete="off" spellCheck={false} aria-describedby="bqp-slug-state" />
+            <input id="bqp-slug" className="ltr" value={b.slug} readOnly aria-describedby="bqp-slug-state" />
+            <Icon name="lock" />
           </span>
-          <span id="bqp-slug-state" className={`bqp-state ${check.state}`} aria-live="polite">
-            {check.state === 'checking' && t('boutiques.checking')}
-            {check.state === 'free' && (
-              <>
-                <Icon name="check" /> {t('boutiques.free')}
-              </>
-            )}
-            {check.state === 'taken' && (check.reason || t('boutiques.taken'))}
-            {check.state === 'idle' && !linkChanged && t('boutiques.linkHint')}
+          <span id="bqp-slug-state" className="bqp-state idle">
+            {t('boutiques.linkLocked')}
           </span>
-          {linkChanged && check.state === 'free' && (
-            <p className="bqp-redirect">
-              <Icon name="link" />
-              <span>{t('boutiques.oldStays', { old: `…/${b.slug}` })}</span>
-            </p>
-          )}
           {b.oldSlugs.length > 0 && (
             <div className="bqp-olds">
               <span className="lab">{t('boutiques.oldLinks')}</span>
@@ -287,7 +242,7 @@ function Editor({ b }: { b: Boutique }) {
             <Icon name="eye" /> {t('boutiques.liveSub')}
           </span>
         </div>
-        <Preview name={shown} logo={logo} slug={wanted || b.slug} host={host} person={session?.profile.name ?? ''} role={role} />
+        <Preview name={shown} logo={logo} slug={b.slug} host={host} person={session?.profile.name ?? ''} role={role} />
         <p className="bqp-sample">{t('boutiques.sample')}</p>
       </section>
     </div>

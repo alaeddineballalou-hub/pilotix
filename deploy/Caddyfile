@@ -51,14 +51,18 @@
 		import server
 	}
 
-	# clean links for the terms and privacy page (Google and Facebook sign-in ask for them): the app's page #/conditions
-	@legal path /conditions /conditions/ /confidentialite /confidentialite/ /privacy /privacy/ /terms /terms/
-	redir @legal /#/conditions 302
+	# the terms and privacy page is the app's /conditions (Google and Facebook sign-in ask for it); its other names lead there
+	@legal path /confidentialite /confidentialite/ /privacy /privacy/ /terms /terms/
+	redir @legal /conditions 301
 
-	# a product's page as customers see it: site/<store>/<page> (the app's own files all have a dot: never matched)
+	# a product's page as customers see it: site/<store>/<page> (the app's own files all have a dot: never matched).
+	# Not the app's own addresses: pilotix.online/<store>/<app page> (a boutique's « Commandes », « Suivi »…) and the
+	# pages that belong to no boutique (/conditions, /reset/<secret>…). These two lists are APP_PAGES and PUBLIC_ROOTS
+	# in packages/shared/src/links.ts (a test checks they are the same); no store and no landing page takes these words.
 	@store {
 		path_regexp page ^/([a-z0-9-]{2,40})/([a-z0-9-]{2,60})/?$
 		not path /api/* /live*
+		not path_regexp ^/(?:conditions|pro|platform|reset|invite|signup|verify|inscription|inscription-agence|inscription-marketer|confirmer)/|^/[a-z0-9-]+/(?:accueil|dashboard|commandes|livrees|retournees|confirmation|depot|scanner|produits|suivi|sav|tournee|clients|messages|cm|notify|comptes|marketing|landing|caisse|macaisse|livraison|utilisateurs|management|reglages|agences|marketers|profil|boutiques|aide|analyse|vendeurs|facturation|affectation|comptepro|partenaires|pilotai|livreurs|publicite|marketer|spy|equipe|tarifs|adsets)/?$
 	}
 	handle @store {
 		rewrite * /api/s/{re.page.1}/{re.page.2}

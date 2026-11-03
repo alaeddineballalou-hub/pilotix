@@ -109,7 +109,7 @@ const mail = (to: string, subject: string, o: Layout): Mail => ({ to, subject, .
 // ---------------------------------------------------------------- sign-up
 export function signupConfirmMail(m: { token: string; email: string; name: string; language: string; store: string; agency?: boolean; marketer?: boolean }): Mail {
   const l = lang(m.language);
-  const link = `${site()}/#/signup/${m.token}`;
+  const link = `${site()}/signup/${m.token}`;
   const A = {
     fr: { s: 'Pilotix : confirmez votre inscription', t: 'Confirmez votre e-mail', a: `Merci ! Votre agence de confirmation « ${m.store} » est presque prête.`, b: 'Cliquez sur le bouton : votre agence est créée tout de suite. Pilotix la vérifie ensuite, avant qu’elle travaille avec des boutiques.', btn: 'Créer mon agence', v: 'Ce lien marche une fois, pendant 48 heures.' },
     en: { s: 'Pilotix: confirm your sign-up', t: 'Confirm your e-mail', a: `Thank you! Your confirmation agency “${m.store}” is almost ready.`, b: 'Click the button: your agency is created right away. Pilotix then checks it before it works with stores.', btn: 'Create my agency', v: 'This link works once, for 48 hours.' },
@@ -151,7 +151,7 @@ export function verifyMail(m: { token: string; email: string; name: string; lang
     en: { s: 'Pilotix: confirm your e-mail', t: 'Confirm your e-mail', a: 'To add a store to your account, first confirm this e-mail is yours.', btn: 'Confirm my e-mail', v: 'This link works once, for 3 days.' },
     ar: { s: 'Pilotix: أكّد بريدك الإلكتروني', t: 'أكّد بريدك الإلكتروني', a: 'لإضافة متجر إلى حسابك، أكّد أولًا أن هذا البريد لك.', btn: 'تأكيد بريدي', v: 'يعمل هذا الرابط مرة واحدة، لمدة 3 أيام.' },
   }[l];
-  return mail(m.email, T.s, { l, title: T.t, icon: '✅', hello: hello(l, m.name), lines: [T.a], button: { label: T.btn, link: `${site()}/#/verify/${m.token}` }, after: [`⏱️ ${T.v}`], note: NOT_YOU[l] });
+  return mail(m.email, T.s, { l, title: T.t, icon: '✅', hello: hello(l, m.name), lines: [T.a], button: { label: T.btn, link: `${site()}/verify/${m.token}` }, after: [`⏱️ ${T.v}`], note: NOT_YOU[l] });
 }
 
 // ---------------------------------------------------------------- stores made from the control room
@@ -162,7 +162,7 @@ function inviteMail(m: Extract<OwnerMail, { kind: 'invite' }>): Mail {
     en: { s: `Pilotix: your store “${m.store}” is ready`, t: 'Your store is ready', a: `Pilotix created your store “${m.store}”.`, b: 'Choose your password: only you know it, not even Pilotix sees it.', btn: 'Choose my password', v: 'This link works once, for 7 days.', acc: 'Your account' },
     ar: { s: `Pilotix: متجرك «${m.store}» جاهز`, t: 'متجرك جاهز', a: `أنشأ Pilotix متجرك «${m.store}».`, b: 'اختر كلمة المرور: أنت وحدك تعرفها، حتى Pilotix لا يراها.', btn: 'اختيار كلمة المرور', v: 'يعمل هذا الرابط مرة واحدة، لمدة 7 أيام.', acc: 'حسابك' },
   }[l];
-  return mail(m.to, T.s, { l, title: T.t, icon: '🎉', hello: hello(l, m.name), lines: [T.a, T.b], box: [[T.acc, m.to]], button: { label: T.btn, link: `${site()}/#/invite/${m.token}` }, after: [`⏱️ ${T.v}`], note: NOT_YOU[l] });
+  return mail(m.to, T.s, { l, title: T.t, icon: '🎉', hello: hello(l, m.name), lines: [T.a, T.b], box: [[T.acc, m.to]], button: { label: T.btn, link: `${site()}/invite/${m.token}` }, after: [`⏱️ ${T.v}`], note: NOT_YOU[l] });
 }
 
 function addedMail(m: Extract<OwnerMail, { kind: 'added' }>): Mail {
@@ -276,7 +276,7 @@ function answerMail(m: Extract<OwnerMail, { kind: 'answer' }>): Mail {
     en: { s: `Pilotix answered: ${m.subject}`, t: 'Pilotix answered you', a: `About “${m.subject}” (${m.shop}):`, btn: 'See the conversation' },
     ar: { s: `ردّ عليك Pilotix: ${m.subject}`, t: 'ردّ عليك Pilotix', a: `بخصوص «${m.subject}» (${m.shop}):`, btn: 'عرض المحادثة' },
   }[l];
-  return mail(m.to, T.s, { l, title: T.t, icon: '💬', hello: hello(l, m.name), lines: [T.a, m.body], button: { label: T.btn, link: `${site()}/#/aide` } });
+  return mail(m.to, T.s, { l, title: T.t, icon: '💬', hello: hello(l, m.name), lines: [T.a, m.body], button: { label: T.btn, link: `${site()}/${m.slug ? `${m.slug}/` : ''}aide${m.thread ? `/${m.thread}` : ''}` } });
 }
 
 function rewardMail(m: { to: string; name: string; language: string; reward: ReferralReward }): Mail {
@@ -318,7 +318,7 @@ export function courierWatchMail(m: { to: string; name: string; items: { company
       `${one ? 'Il est' : 'Ils sont'} dans Sociétés de livraison › « Changements API » : regardez, puis marquez « Résolu ».`,
     ],
     box: m.items.slice(0, 12).map((i) => [i.company, i.title] as [string, string]),
-    button: { label: 'Ouvrir la liste', link: `${site()}/#/platform/couriers` },
+    button: { label: 'Ouvrir la liste', link: `${site()}/platform/couriers` },
     after: n > 12 ? [`… et ${n - 12} de plus dans la liste.`] : [],
     note: 'Cet e-mail part au plus une fois par jour, seulement quand quelque chose a changé.',
   });
@@ -355,7 +355,7 @@ export function pilotRestMail(m: { to: string; name: string; usd: number; dayUsd
       'Jusqu’à minuit (heure d’Algérie), Dellal répond avec ses règles simples, le CM AI agent aussi, et AI Spy attend. Demain matin, tout repart seul.',
       'Pour continuer tout de suite, augmentez la limite dans Pilot AI › Réglages.',
     ],
-    button: { label: 'Ouvrir Pilot AI', link: `${site()}/#/platform/pilot` },
+    button: { label: 'Ouvrir Pilot AI', link: `${site()}/platform/pilot` },
     note: 'Cet e-mail part au plus une fois par jour, seulement quand la limite est atteinte.',
   });
 }
@@ -373,7 +373,7 @@ export function pilotCoachMail(m: { to: string; name: string; waiting: number; f
       `${one ? 'Elle attend' : `${m.waiting} leçons attendent`} votre accord dans Pilot AI › À valider : approuvez, corrigez ou rejetez. Rien n’entre dans Dellal sans vous.`,
     ],
     box: m.lessons.slice(0, 5).map((l) => [PILOT_TOPIC[l.topic] ?? l.topic, l.text.length > 160 ? `${l.text.slice(0, 157)}…` : l.text] as [string, string]),
-    button: { label: 'Valider les leçons', link: `${site()}/#/platform/pilot` },
+    button: { label: 'Valider les leçons', link: `${site()}/platform/pilot` },
     after: m.waiting > 5 ? [`… et ${m.waiting - 5} de plus dans Pilot AI.`] : [],
     note: 'Cet e-mail part après l’apprentissage de la nuit, seulement quand des leçons attendent.',
   });
@@ -394,7 +394,7 @@ export function qualityAlertMail(m: { to: string; name: string; alert: QualityAl
     hello: hello('fr', m.name),
     lines: [`Semaine du ${day(a.week.from, 'fr')} au ${day(a.week.to, 'fr')} (les 3 derniers jours ne comptent pas : les agents confirment encore).`, ...lines],
     box: a.stores.slice(0, 12).map((s) => [s.name, `${p(s.now)} (${pts(s)}, ${s.buyers} acheteurs)`] as [string, string]),
-    button: { label: 'Ouvrir Pilotix Protection System', link: `${site()}/#/platform/protection` },
+    button: { label: 'Ouvrir Pilotix Protection System', link: `${site()}/platform/protection` },
     after: a.stores.length > 12 ? [`… et ${a.stores.length - 12} de plus sur la page.`] : [],
     note: 'Vrais acheteurs : commandes confirmées par un agent ou livrées, sur 100 commandes reçues. Cet e-mail part au plus une fois par semaine.',
   });

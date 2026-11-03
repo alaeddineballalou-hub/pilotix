@@ -199,7 +199,7 @@ await section('A store for a person who ALREADY has an account: added to their s
   const r = await prpc('p.shops.create', { name: `Deuxième Owner ${run}`, ownerName: 'Owner Un', ownerEmail: ctx.owner1.email, planId: ess.id, trialDays: 7, language: 'fr' });
   assert.equal(r.invited, false);
   const m = await mailTo(ctx.owner1.email, n0);
-  assert.ok(!/#\/invite\//.test(m.text), 'no invitation link for an existing account');
+  assert.ok(!/\/invite\//.test(m.text), 'no invitation link for an existing account');
   ok(`store #${r.id} added to the account; the e-mail « ${m.subject} » has no link`);
   const l = await login(ctx.owner1.email, ctx.owner1.password);
   assert.equal(l.pick, true, 'two stores → the picker');
@@ -245,7 +245,8 @@ await section('« Créer ma boutique »: the e-mail link makes the store, on tri
   assert.equal(taken.slug, `${ctx.owner1.slug}-2`, 'a taken name gets the next free link');
   const takenSlug = await must(`/auth/store-name?name=x&slug=${ctx.owner1.slug}`);
   assert.equal(takenSlug.free, false);
-  for (const w of ['platform', 'pilotix', 'api', 'support']) assert.equal((await must(`/auth/store-name?name=x&slug=${w}`)).free, false, `${w} is reserved`);
+  // Pilotix's words, and the words of its addresses (pilotix.online/<store>/commandes, /reset/…)
+  for (const w of ['platform', 'pilotix', 'api', 'support', 'commandes', 'suivi', 'reset', 'conditions']) assert.equal((await must(`/auth/store-name?name=x&slug=${w}`)).free, false, `${w} is reserved`);
   assert.equal((await must('/auth/store-name?name=Pilotix')).slug, 'pilotix-boutique');
   ok(`store names: a taken one → ${taken.slug}; a taken link → « ${takenSlug.reason} »; Pilotix’s words refused`);
   const code = (await prpc('p.shops.get', { id: ctx.owner1.shopId })).referralCode;
@@ -278,7 +279,7 @@ await section('« Créer ma boutique »: the e-mail link makes the store, on tri
   const n1 = mailCount();
   await must('/auth/signup', { name: 'Owner Un', email: ctx.owner1.email, phone: newPhone(), password: 'Whatever-123', storeName: `Doublon ${run}`, language: 'fr', terms: true });
   const ex = await mailTo(ctx.owner1.email, n1);
-  assert.ok(!/#\/signup\//.test(ex.text));
+  assert.ok(!/\/signup\//.test(ex.text));
   ok(`an e-mail that has an account signs up → « ${ex.subject} » (log in instead), nothing made`);
 });
 
@@ -308,27 +309,23 @@ await section('« Ajouter une boutique »: stores per person, and an e-mail chec
   ctx.staff1 = { email: staff, password: 'Staff1-Password' };
 });
 
-await section('« Mes boutiques »: the owner renames a boutique and changes its link; the old link still leads to it', async () => {
+await section('« Mes boutiques »: the owner renames a boutique; its link never changes', async () => {
   const list = await rpc(ctx.signup1.token, 'boutiques.list');
   const four = list.find((b) => b.id === ctx.signup1.fourth);
   assert.ok(four?.owner, 'the 4th store is his own, in his list');
   assert.ok(list.filter((b) => b.owner).length >= 4, 'all his boutiques are listed');
-  const slug = `mes-boutiques-${run}`;
-  const saved = await rpc(ctx.signup1.token, 'boutiques.save', { id: four.id, name: `Renommée ${run}`, slug });
+  const saved = await rpc(ctx.signup1.token, 'boutiques.save', { id: four.id, name: `Renommée ${run}` });
   assert.equal(saved.name, `Renommée ${run}`);
-  assert.equal(saved.slug, slug);
-  assert.deepEqual(saved.oldSlugs, [four.slug]);
-  ok('from another of his boutiques: its name and its link changed');
-  // its pages moved: the old link sends people to the new one
-  const r = await fetch(`${API}/s/${four.slug}/une-page?utm_source=fb`, { redirect: 'manual' });
-  assert.equal(r.status, 301);
-  assert.match(r.headers.get('location') ?? '', new RegExp(`/${slug}/une-page\\?utm_source=fb$`));
-  ok('the old link of a page → 301 to the new one (the ad’s words kept)');
-  // nobody else takes the old link; nobody else changes his boutique
-  await fails(prpc('p.shops.update', { id: ctx.owner1.shopId, slug: four.slug }), 400, /déjà pris/);
+  assert.equal(saved.slug, four.slug);
+  ok('from another of his boutiques: its name changed, its link stayed');
+  // its link (pilotix.online/<link>/…) was chosen when it was made: nobody changes it
+  await fails(rpc(ctx.signup1.token, 'boutiques.save', { id: four.id, name: `Renommée ${run}`, slug: `mes-boutiques-${run}` }), 400, /ne change jamais/);
+  await fails(prpc('p.shops.update', { id: four.id, slug: `controle-${run}` }), 400, /ne change jamais/);
+  ok('its link never changes: not from « Mes boutiques », not from the control room');
+  // nobody else changes his boutique
   const o1 = await login(ctx.owner1.email, ctx.owner1.password, ctx.owner1.shopId);
-  await fails(rpc(o1.token, 'boutiques.save', { id: four.id, name: 'Volée', slug: `volee-${run}` }), 403, /propriétaire/);
-  ok('another store cannot take the old link, another seller cannot change the boutique');
+  await fails(rpc(o1.token, 'boutiques.save', { id: four.id, name: 'Volée' }), 403, /propriétaire/);
+  ok('another seller cannot change the boutique');
 });
 
 await section('The team: the owner is protected; an admin sets passwords only of people in this store alone', async () => {
@@ -529,7 +526,8 @@ await section('Payments: numbered receipts, receipt by e-mail, the referral rewa
   ok('cancelled → the receipt says so');
   const ref = await rpc(ctx.owner1.token, 'me.referrals');
   assert.equal(ref.platform, true);
-  assert.match(String(ref.link), /#\/inscription\/[A-Z0-9]+$/);
+  // the sign-up link without « # »: <site>/inscription/<code>
+  assert.match(String(ref.link), /^https?:\/\/[^/#]+\/inscription\/[A-Z0-9]+$/);
   assert.ok(ref.friends.some((f) => f.status === 'subscribed'));
   ok(`the store’s « Parrainage »: ${ref.link}, ${ref.friends.length} store(s) brought, ${ref.totals.months} month(s) earned`);
 });

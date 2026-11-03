@@ -1087,7 +1087,7 @@ class ApiController {
       friends,
       totals: { invited: friends.length, signedUp: friends.length, subscribed: sub.length, cashEarned: 0, cashPaid: 0, cashPending: 0, months: r.earned },
       platform: true,
-      link: r.code && config.publicUrl ? `${config.publicUrl}/#/inscription/${r.code}` : null,
+      link: r.code && config.publicUrl ? `${config.publicUrl}/inscription/${r.code}` : null,
     };
   }
 
