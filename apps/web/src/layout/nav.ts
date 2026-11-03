@@ -19,6 +19,10 @@ export interface NavChild {
   roles?: Role[];
   /** it is lit on these tabs of a page (an agency's « En livraison » / « Suivi » / « Livré » / « Annulé »: Suivi's tabs) */
   match?: { page: string; subs: string[] };
+  /** the plan's menu (and sub-menu) this child belongs to, when its id is not a page of its own (default: its id) */
+  plan?: [page: string, sub?: string];
+  /** only shown when this returns true */
+  onlyIf?: () => boolean;
 }
 
 export interface NavItem {
@@ -96,19 +100,34 @@ export const NAV: NavItem[] = [
   { id: 'caisse', icon: 'wallet', roles: [], subs: ['overview', 'due', 'done', 'livreurs', 'journal'] },
   // an employee's own caisse (money he received, his expenses, what he handed to the main caisse)
   { id: 'macaisse', icon: 'wallet', roles: ['confirmation', 'suivi', 'depot', 'agent_manager'], onlyIf: (_r, admin) => !admin },
-  { id: 'livraison', icon: 'truck', roles: [], subs: ['societes', 'pilot', 'api', 'livreurs', 'preferences'], rules: true },
+  // Partenaires: everyone the store works with, in one group — couriers, its own livreurs, confirmation agencies, marketers
+  {
+    id: 'partenaires',
+    icon: 'handshake',
+    roles: [],
+    rules: true,
+    pages: ['livraison', 'agences', 'marketers'],
+    children: [
+      { id: 'livraison', href: '#/livraison/societes', icon: 'truck', plan: ['livraison'], match: { page: 'livraison', subs: ['', 'societes', 'pilot', 'api', 'preferences'] } },
+      { id: 'livreurs', href: '#/livraison/livreurs', icon: 'navigation', plan: ['livraison', 'livreurs'], match: { page: 'livraison', subs: ['livreurs'] } },
+      { id: 'agences', href: '#/agences', icon: 'handshake', roles: [], onlyIf: partnersOn },
+      { id: 'marketers', href: '#/marketers', icon: 'trend', roles: [], onlyIf: partnersOn },
+    ],
+  },
+  { id: 'livraison', icon: 'truck', roles: [], subs: ['societes', 'pilot', 'api', 'livreurs', 'preferences'], rules: true, hidden: true },
   { id: 'utilisateurs', icon: 'usercog', roles: [], manageUsers: true, subs: ['roles', 'admins', 'vendeurs', 'agents', 'marketeurs', 'managers'] },
   // confirmation agencies working for the store (its code, requests both ways, contracts, numbers, payments)
-  { id: 'agences', icon: 'handshake', roles: [], onlyIf: partnersOn },
+  { id: 'agences', icon: 'handshake', roles: [], onlyIf: partnersOn, hidden: true },
   // marketers running the store's ads (the same, on their own: a marketer has nothing to do with the agencies)
-  { id: 'marketers', icon: 'trend', roles: [], onlyIf: partnersOn },
+  { id: 'marketers', icon: 'trend', roles: [], onlyIf: partnersOn, hidden: true },
   { id: 'management', icon: 'briefcase', roles: [], affect: true, subs: ['plans', 'statuts', 'affectation', 'paie', 'prix', 'canaux', 'alertes', 'livreur', 'archive'] },
   { id: 'reglages', icon: 'settings', roles: [] },
   { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'parrainage', 'securite'] },
 ];
 
 /** A group's child: its own roles, or everyone who sees the group — and in the shop's plan. */
-export const canSeeChild = (c: NavChild, roles: Role[], isAdmin: boolean) => (isAdmin || !c.roles || c.roles.some((r) => roles.includes(r))) && pageIsOn(c.id);
+export const canSeeChild = (c: NavChild, roles: Role[], isAdmin: boolean) =>
+  (isAdmin || !c.roles || c.roles.some((r) => roles.includes(r))) && (c.plan ? pageIsOn(...c.plan) : pageIsOn(c.id)) && (!c.onlyIf || c.onlyIf());
 
 export function canSee(item: NavItem, roles: Role[], isAdmin: boolean, canManageUsers = false, canRules = false, canAffect = false): boolean {
   // a menu the shop's plan does not include is not shown to anyone, administrators included

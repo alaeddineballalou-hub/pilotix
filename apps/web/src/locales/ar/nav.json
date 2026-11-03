@@ -20,6 +20,7 @@
   "spy": "AI Spy",
   "caisse": "الصندوق",
   "livraison": "شركات التوصيل",
+  "partenaires": "الشركاء",
   "utilisateurs": "المستخدمون",
   "agences": "الوكالات",
   "management": "الإدارة",
@@ -37,7 +38,11 @@
     "messages": "وكيل الرسائل الذكي",
     "cm": "وكيل التعليقات الذكي",
     "notify": "وكيل التوصيل الذكي",
-    "reclamation": "الشكاوى"
+    "reclamation": "الشكاوى",
+    "livraison": "شركات التوصيل",
+    "livreurs": "عمّال التوصيل",
+    "agences": "وكالات التأكيد",
+    "marketers": "المسوّقون"
   },
   "profil": "ملفي الشخصي",
   "marketer": "المسوّق",
