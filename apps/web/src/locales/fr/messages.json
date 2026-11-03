@@ -169,7 +169,16 @@
       "001Hint": "Prend le prénom, le numéro, la wilaya et le produit, note ce que veut le client et met la commande dans Confirmation › Nouvelles : l’équipe l’appelle pour confirmer. Si le client change quelque chose, {{name}} met la commande à jour.",
       "full": "Commande complète",
       "fullHint": "Prend toute la commande dans le chat : commune, domicile ou bureau, récapitulatif, vente en plus. Peut l’envoyer directement au dépôt."
-    }
+    },
+    "pageLinked": "Page « {{name}} »",
+    "pageLinkedIg": "Page « {{name}} » · Instagram @{{ig}}",
+    "pageVia": "Liée par le compte « {{account}} » dans Pilot AI › Comptes.",
+    "pageChange": "Changer",
+    "pageNone": "Aucune page Facebook liée",
+    "pageNoneHint": "Liez votre compte Facebook : vos agents répondent alors sur Messenger et Instagram.",
+    "pageOld": "Une ancienne clé de page collée à la main marche encore. Liez votre compte Facebook : elle sera remplacée.",
+    "pageLink": "Lier un compte Facebook",
+    "waHelp": "WhatsApp passe encore par votre propre app Meta : collez son adresse et son jeton de vérification dans Webhooks, puis sa clé secrète ci-dessous."
   },
   "lahja": {
     "fix": "Leçon de darija",

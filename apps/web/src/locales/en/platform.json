@@ -1614,6 +1614,43 @@
       "modelHint": "gemini-flash-latest always follows Google’s newest Flash.",
       "today_one": "Today: {{n}} voice note written · {{usd}}",
       "today_other": "Today: {{n}} voice notes written · {{usd}}"
+    },
+    "social": {
+      "title": "Boutiques’ Meta and TikTok accounts",
+      "text": "Boutiques link their Facebook and TikTok accounts in one click (Pilot AI › Accounts). For that, Pilotix needs its own Meta app and TikTok app. Their secret keys stay here, on the server.",
+      "counts": "{{meta}} Meta · {{tiktok}} TikTok · {{shops}} boutiques",
+      "ready": "Ready",
+      "todo": "To do",
+      "meta": "Meta app (Facebook and Instagram)",
+      "appId": "App ID",
+      "appSecret": "App secret",
+      "configId": "Configuration ID (Facebook Login for Business)",
+      "configHint": "Advised: with a “system user access token” configuration, linked accounts do not expire. Empty: tokens of about 60 days.",
+      "redirect": "Return address (Facebook Login › Settings)",
+      "webhook": "Webhook address",
+      "verify": "Verify token",
+      "verifyAfter": "made at the first save",
+      "tiktok": "TikTok for Business app",
+      "ttAppId": "App ID",
+      "ttSecret": "Secret",
+      "ttRedirect": "Advertiser redirect URL",
+      "secretSaved": "Saved.",
+      "secretRemove": "Remove",
+      "secretKeep": "Keep",
+      "how": "How to make the two apps",
+      "metaSteps": [
+        "On developers.facebook.com, create an app of the “Business” type.",
+        "Add the products Facebook Login for Business, Messenger, Instagram and Webhooks.",
+        "In Facebook Login › Settings, paste the return address.",
+        "In Webhooks, paste the webhook address and the verify token. Subscribe to “Page” (messages, feed) and “Instagram” (messages, comments).",
+        "Paste the app ID and its secret (Settings › Basic) here, then save.",
+        "Meta reviews the app (App Review) before other sellers’ Pages work. Your own Pages work at once."
+      ],
+      "tiktokSteps": [
+        "On business-api.tiktok.com, create an app and ask for Marketing API access.",
+        "Paste the return address in “Advertiser redirect URL”.",
+        "Paste the App ID and the Secret here, then save. TikTok approves the app in one to two weeks."
+      ]
     }
   }
 }

@@ -523,7 +523,11 @@
     "depotArchive": "Archive this warehouse",
     "depotArchiveConfirm": "Archive this warehouse? It goes to Management › Archives (it must be empty).",
     "depotArchived": "Warehouse archived",
-    "depotArchiveStock": "Empty this warehouse first (transfer), then archive it"
+    "depotArchiveStock": "Empty this warehouse first (transfer), then archive it",
+    "metaLinked": "Ad account “{{name}}”, linked by “{{account}}” (Pilot AI › Accounts).",
+    "metaChange": "Change",
+    "metaLinkHint": "Easiest: link your Facebook account in one click, no token to paste.",
+    "metaLinkBtn": "Pilot AI › Accounts"
   },
   "confirmYes": "Yes",
   "cancel": "Cancel",

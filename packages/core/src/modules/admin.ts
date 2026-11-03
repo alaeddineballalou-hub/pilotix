@@ -9,6 +9,7 @@ import { sendInPreview } from './notify';
 import { createOrder } from './orders';
 import { usersProcs } from './users';
 import { readSheet } from './sheets';
+import { linkedAds } from './social';
 
 // ---------------------------------------------------------------- small helpers
 /** A random key (webhooks, cron). Works in Node 22 and browsers. */
@@ -37,6 +38,11 @@ export const STATUS_ORDER_KEY = 'statusOrder';
 export const META_TOKEN_KEY = 'secret_meta_token';
 
 const me = (ctx: Ctx) => ctx.session.profile.id;
+/** The ad account set by hand replaces a linked account's (Pilot AI › Comptes, modules/social.ts): its mark goes. */
+async function dropLinkedAds(ctx: Ctx) {
+  await ctx.db.query(`DELETE FROM settings WHERE key = 'social_ads'`);
+  if (ctx.t && ctx.shop) await ctx.t.platform.query(`DELETE FROM platform.social_uses WHERE shop_id = $1 AND kind = 'ad_account'`, [ctx.shop.id]).catch(() => undefined);
+}
 
 // ---------------------------------------------------------------- statuses
 /** The five groups of Management → Statuts, as in the original (which base statuses each one shows). */
@@ -540,7 +546,7 @@ export const adminProcs = {
       webhook: await getSetting(ctx.db, 'webhook'),
       cron: await getSetting(ctx.db, 'cron'),
       // token is write-only: only "connected" is ever sent back
-      meta: { adAccountId: meta.adAccountId, connected: meta.hasToken && !!(await getRaw<string>(ctx.db, META_TOKEN_KEY, '')) },
+      meta: { adAccountId: meta.adAccountId, connected: meta.hasToken && !!(await getRaw<string>(ctx.db, META_TOKEN_KEY, '')), linked: await linkedAds(ctx.db) },
       lastSync: await getRaw<{ at: string; checked: number; changed: number } | null>(ctx.db, 'courier_last_sync', null),
     };
   }),
@@ -630,6 +636,8 @@ export const adminProcs = {
   'admin.meta.save': proc([], z.object({ adAccountId: z.string().trim().regex(/^(act_)?\d{5,25}$/, 'ID du compte pub (chiffres)'), token: z.string().trim().min(20).max(1000).optional() }), async (ctx, i) => {
     const adAccountId = i.adAccountId.replace(/^act_/, '');
     if (i.token) await setRaw(ctx.db, META_TOKEN_KEY, i.token, me(ctx));
+    // set by hand: a linked account's ad account (Pilot AI › Comptes) no longer counts here
+    await dropLinkedAds(ctx);
     const hasToken = !!(await getRaw<string>(ctx.db, META_TOKEN_KEY, ''));
     await setSetting(ctx.db, 'meta', { adAccountId, hasToken }, me(ctx));
     let test: { ok: boolean; name?: string; message?: string } | null = null;
@@ -645,6 +653,7 @@ export const adminProcs = {
   }),
   'admin.meta.disconnect': proc([], z.object({}), async (ctx) => {
     await ctx.db.query('DELETE FROM settings WHERE key = $1', [META_TOKEN_KEY]);
+    await dropLinkedAds(ctx);
     const meta = await getSetting(ctx.db, 'meta');
     await setSetting(ctx.db, 'meta', { ...meta, hasToken: false }, me(ctx));
     return { ok: true };

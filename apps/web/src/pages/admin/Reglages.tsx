@@ -329,7 +329,7 @@ function CronCard({ cronKey, last }: { cronKey: string; last: { at: string; chec
   );
 }
 
-function MetaCard({ meta }: { meta: { adAccountId: string; connected: boolean } }) {
+function MetaCard({ meta }: { meta: { adAccountId: string; connected: boolean; linked?: { adAccountId: string; name: string; account: string } | null } }) {
   const { t } = useTranslation();
   const [acc, setAcc] = useState(meta.adAccountId);
   const [token, setToken] = useState('');
@@ -343,25 +343,47 @@ function MetaCard({ meta }: { meta: { adAccountId: string; connected: boolean } 
   const disc = useAction('admin.meta.disconnect', { success: t('admin.settings.metaDisconnected') });
   return (
     <Card title={t('admin.settings.meta')} help={t('admin.settings.metaHelp')}>
-      {meta.connected ? <div className="okbox">{t('admin.settings.metaConnected')}</div> : <div className="warnbox">{t('admin.settings.metaNot')}</div>}
-      <Field label={t('admin.settings.metaAccount')}>
-        <input className="ltr" value={acc} inputMode="numeric" placeholder="act_1234567890" onChange={(e) => setAcc(e.target.value)} autoComplete="off" />
-      </Field>
-      <Field label={t('admin.settings.metaToken')}>
-        {/* write-only: the stored token is never sent back to the app */}
-        <input className="ltr" type="password" value={token} placeholder={meta.connected ? t('admin.settings.metaTokenKeep') : 'EAAG…'} onChange={(e) => setToken(e.target.value)} autoComplete="new-password" />
-      </Field>
-      {backend.kind === 'demo' && <p className="muted small">{t('admin.settings.metaDemo')}</p>}
-      <div className="row end" style={{ gap: 8 }}>
-        {meta.connected && (
-          <ConfirmButton className="btn ghost danger" question={t('admin.settings.metaDisconnectConfirm')} onConfirm={() => disc.mutate({})}>
-            {t('admin.settings.metaDisconnect')}
-          </ConfirmButton>
-        )}
-        <button className="btn primary" disabled={!acc.trim() || (!meta.connected && !token.trim()) || save.isPending} onClick={() => save.mutate({ adAccountId: acc.trim(), token: token.trim() || undefined })}>
-          {t('admin.settings.metaSave')}
-        </button>
-      </div>
+      {meta.linked ? (
+        // the ad account comes from a linked account (Pilot AI › Comptes): nothing to paste here
+        <div className="okbox row" style={{ gap: 10, justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <span>
+            <bdi>{t('admin.settings.metaLinked', { name: meta.linked.name, account: meta.linked.account })}</bdi>
+          </span>
+          <a className="btn ghost small" href="#/comptes">
+            {t('admin.settings.metaChange')}
+          </a>
+        </div>
+      ) : (
+        <>
+          {meta.connected ? <div className="okbox">{t('admin.settings.metaConnected')}</div> : <div className="warnbox">{t('admin.settings.metaNot')}</div>}
+          <p className="muted small">
+            {t('admin.settings.metaLinkHint')}{' '}
+            <a href="#/comptes">{t('admin.settings.metaLinkBtn')}</a>
+          </p>
+        </>
+      )}
+      {!meta.linked && (
+        <>
+          <Field label={t('admin.settings.metaAccount')}>
+            <input className="ltr" value={acc} inputMode="numeric" placeholder="act_1234567890" onChange={(e) => setAcc(e.target.value)} autoComplete="off" />
+          </Field>
+          <Field label={t('admin.settings.metaToken')}>
+            {/* write-only: the stored token is never sent back to the app */}
+            <input className="ltr" type="password" value={token} placeholder={meta.connected ? t('admin.settings.metaTokenKeep') : 'EAAG…'} onChange={(e) => setToken(e.target.value)} autoComplete="new-password" />
+          </Field>
+          {backend.kind === 'demo' && <p className="muted small">{t('admin.settings.metaDemo')}</p>}
+          <div className="row end" style={{ gap: 8 }}>
+            {meta.connected && (
+              <ConfirmButton className="btn ghost danger" question={t('admin.settings.metaDisconnectConfirm')} onConfirm={() => disc.mutate({})}>
+                {t('admin.settings.metaDisconnect')}
+              </ConfirmButton>
+            )}
+            <button className="btn primary" disabled={!acc.trim() || (!meta.connected && !token.trim()) || save.isPending} onClick={() => save.mutate({ adAccountId: acc.trim(), token: token.trim() || undefined })}>
+              {t('admin.settings.metaSave')}
+            </button>
+          </div>
+        </>
+      )}
     </Card>
   );
 }

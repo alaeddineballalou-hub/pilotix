@@ -523,7 +523,11 @@
     "depotArchive": "أرشفة هذا المستودع",
     "depotArchiveConfirm": "أرشفة هذا المستودع؟ سيُرتّب في الإدارة › الأرشيف (يجب أن يكون فارغًا).",
     "depotArchived": "تمت أرشفة المستودع",
-    "depotArchiveStock": "أفرغ هذا المستودع أولًا (تحويل) ثم أرشفه"
+    "depotArchiveStock": "أفرغ هذا المستودع أولًا (تحويل) ثم أرشفه",
+    "metaLinked": "حساب الإعلانات «{{name}}»، ربطه «{{account}}» (Pilot AI › الحسابات).",
+    "metaChange": "غيّر",
+    "metaLinkHint": "الأسهل: اربط حساب فيسبوك بنقرة واحدة، بدون مفتاح تلصقه.",
+    "metaLinkBtn": "Pilot AI › الحسابات"
   },
   "confirmYes": "نعم",
   "cancel": "إلغاء",

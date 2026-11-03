@@ -45,7 +45,10 @@ const ai = (j: Record<string, unknown>) => ({ content: [{ type: 'text', text: '`
 async function enableAi() {
   const admin = await as(EMAILS.admin);
   const g: any = await call('dellal.settings.get', admin, {});
-  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, messengerPageId: '1029384756', secrets: { ai: 'sk-ant-test-cm', pageToken: 'EAAB-page' } });
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, secrets: { ai: 'sk-ant-test-cm' } });
+  // the Page comes from a linked account (Pilot AI › Comptes, modules/social.ts): written where the agents read it
+  await db.query(`INSERT INTO settings (key, value) VALUES ('secret_dellal_page_token', '"EAAB-page"') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+  await db.query(`UPDATE settings SET value = jsonb_set(value, '{messengerPageId}', '"1029384756"') WHERE key = 'dellal'`);
 }
 async function cmSave(patch: Record<string, unknown>) {
   const admin = await as(EMAILS.admin);

@@ -3,7 +3,8 @@
 // how it learns, drawn; its instruction book to download, always the latest; last night, the coach's morning check of
 // each lesson, the lesson books and their test), Test & lessons (talk to Dellal as a customer with the book of your
 // choice; teach it a lesson in your own words: PilotLab.tsx), CM AI (the comments it handled), Spy AI (the competitors it
-// watches), and Settings & costs (the key, the daily limit, the night budget, what each shop's AI costs to bill it).
+// watches), and Settings & costs (the key, the daily limit, the night budget, what each shop's AI costs to bill it; Pilotix's
+// Meta and TikTok apps, which let the boutiques link their accounts: SocialApps.tsx).
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { dateOnly, dateTime, n, when } from '../../lib/format';
@@ -17,6 +18,7 @@ import { BoardDays, CmBoard, DellalBoard, SpyBoard } from './PilotBoards';
 import { BookCard, LearnCard } from './PilotLearn';
 import { LabTab } from './PilotLab';
 import { CaseModal } from './pilotCase';
+import { SocialAppsCard } from './SocialApps';
 
 type State = POut<'p.pilot.state'>;
 type Lesson = State['candidates'][number];
@@ -88,6 +90,7 @@ function PilotAiInner({ staff, tab, demo }: { staff: Staff; tab?: string; demo: 
             <SettingsCard d={d} manager={manager} />
             <VoiceCard manager={manager} />
           </div>
+          <SocialAppsCard manager={manager} />
           {manager ? <CostCard /> : <p className="muted small">{t('platform.pilot.costs.managers')}</p>}
         </>
       )}

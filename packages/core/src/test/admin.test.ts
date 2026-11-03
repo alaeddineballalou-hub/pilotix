@@ -99,7 +99,8 @@ test('Meta token is write-only: never returned by any procedure', async () => {
   const outputs = [r, await call('admin.settings.get', admin, {}), await call('admin.statuses.get', admin, {}), await call('admin.pay.get', admin, {})];
   for (const o of outputs) assert.ok(!JSON.stringify(o).includes('secret-token'), 'token leaked');
   const s: any = outputs[1];
-  assert.deepEqual(s.meta, { adAccountId: '1234567890', connected: true });
+  // set by hand: no linked account's ad account (Pilot AI › Comptes) counts any more
+  assert.deepEqual(s.meta, { adAccountId: '1234567890', connected: true, linked: null });
   // saving again without a token keeps it
   const again: any = await call('admin.meta.save', admin, { adAccountId: '1234567890' });
   assert.equal(again.connected, true);

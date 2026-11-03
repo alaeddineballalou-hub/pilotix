@@ -4,16 +4,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMenuCounts } from '../../layout/Shell';
-import { backend, Out, rpc, serverUrl, shopApi } from '../../lib/backend';
+import { backend, Out, rpc } from '../../lib/backend';
 import { da, n, shortWhen, when } from '../../lib/format';
 import { openOrderForm } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
-import { CopyCode } from '../../ui/CopyCode';
 import { Card, ErrorBox, Field, Icon, Kpi, Kpis, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { AgentHeader, Filters, initials, PeriodSwitch, SaveBar, SearchBox, useEdges } from '../ai/agent';
 import { CmLahjaFix } from '../messages/lahja';
+import { LinkedPage } from '../messages/linkedPage';
 import type { PageProps } from '../registry';
 import '../messages/messages.css';
 import './cm.css';
@@ -661,7 +661,6 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'cm
   const save = useAction('cm.settings.save', { success: t('cm.settings.saved') });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF({ ...f, [k]: v });
   const m = data.meta;
-  const base = serverUrl() || (backend.kind === 'demo' ? 'https://votre-serveur.dz' : window.location.origin);
   const dirty = JSON.stringify(f) !== JSON.stringify(data.settings);
   const sw = (k: 'enabled' | 'replyPublic' | 'showPrice' | 'sendPrivate' | 'hideSpam' | 'hidePhones' | 'nightReplies') => (
     <label className="dl-switch">
@@ -721,15 +720,8 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'cm
             </label>
           ))}
         </div>
+        <LinkedPage page={m.page} old={m.pageToken} />
         <dl className="dl-kv cm-conn">
-          <dt>{t('cm.settings.pageToken')}</dt>
-          <dd>{m.pageToken ? <span className="cm-okc">✓ {t('cm.settings.connected')}</span> : <a href="#/messages/reglages">{t('cm.settings.connect')}</a>}</dd>
-          <dt>{t('cm.settings.pageId')}</dt>
-          <dd className="ltr">{m.pageId || '—'}</dd>
-          <dt>{t('cm.settings.igId')}</dt>
-          <dd className="ltr">{m.instagramId || '—'}</dd>
-          <dt>{t('cm.settings.appSecret')}</dt>
-          <dd>{m.appSecret ? <span className="cm-okc">✓ {t('cm.settings.connected')}</span> : <a href="#/messages/reglages">{t('cm.settings.appSecretNone')}</a>}</dd>
           <dt>{t(m.platform ? 'cm.settings.aiPilot' : 'cm.settings.ai')}</dt>
           <dd>
             {m.ai ? (
@@ -741,15 +733,6 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'cm
             )}
           </dd>
         </dl>
-        <div className="dl-hook">
-          <Field label={t('cm.settings.webhook')}>
-            <CopyCode code={`${shopApi(base)}/hooks/meta`} />
-          </Field>
-          <Field label={t('cm.settings.verifyToken')}>
-            <CopyCode code={m.verifyToken || '—'} />
-          </Field>
-        </div>
-        <p className="muted small">{t('cm.settings.fields')}</p>
         {backend.kind === 'demo' && <p className="muted small">{t('cm.settings.demo')}</p>}
       </Card>
 

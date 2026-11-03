@@ -21,6 +21,7 @@ import { asWords, checkLahjaWords, LAHJA_NO_CHANGE, LAHJA_PERSONAL, lahjaAvoid, 
 import { pilotConfig, pilotToday } from '../platform/pilotai';
 import { guideText, HAS_GUIDE, readGuide, toFill } from './guide';
 import { vocabBlock, vocabFor } from './vocab';
+import { linkedPage } from './social';
 
 // ---------------------------------------------------------------- settings and secrets
 export const DELLAL_CHANNELS = ['whatsapp', 'messenger', 'instagram', 'tiktok', 'test'] as const;
@@ -1650,19 +1651,21 @@ const SettingsInput = z.object({
   servicePhone: z.string().trim().max(40).regex(/^[\d\s+().-]*$/, 'Numéro du service client (chiffres)').default(''),
   darijaPrefer: z.string().max(4000).default(''),
   darijaAvoid: z.string().max(4000).default(''),
-  messengerPageId: z.string().trim().max(40).regex(/^\d*$/, 'ID de page (chiffres)'),
-  instagramId: z.string().trim().max(40).regex(/^\d*$/, 'ID Instagram (chiffres)'),
   whatsappPhoneId: z.string().trim().max(40).regex(/^\d*$/, 'ID du numéro WhatsApp (chiffres)'),
-  /** secrets: a value replaces, '' keeps, null removes */
-  secrets: z.record(z.enum(['ai', 'appSecret', 'pageToken', 'waToken', 'tiktokToken']), z.string().max(2000).nullable()).default({}),
+  /**
+   * secrets: a value replaces, '' keeps, null removes. No Page token: the Facebook Page (and its Instagram account) comes
+   * only from a linked account (Pilot AI › Comptes, modules/social.ts), which writes it with its ids.
+   */
+  secrets: z.record(z.enum(['ai', 'appSecret', 'waToken', 'tiktokToken']), z.string().max(2000).nullable()).default({}),
 });
 
 async function settingsView(db: Db) {
   const s = await dellalSettings(db);
   const has: Record<DellalSecret, boolean> = { ai: false, appSecret: false, pageToken: false, waToken: false, tiktokToken: false };
   for (const k of Object.keys(DELLAL_SECRETS) as DellalSecret[]) has[k] = !!(await dellalSecret(db, k));
-  // the shop's SAV number (Réglages › Boutique): the customer-service number when Dellal's own is empty
-  return { settings: s, has, models: DELLAL_MODELS, savPhone: String((await getSetting(db, 'shop')).savPhone ?? '').trim() };
+  // the shop's SAV number (Réglages › Boutique): the customer-service number when Dellal's own is empty; the Page its
+  // messages come from: a linked account's (null: none, or an old token pasted by hand, still working)
+  return { settings: s, has, models: DELLAL_MODELS, savPhone: String((await getSetting(db, 'shop')).savPhone ?? '').trim(), page: await linkedPage(db) };
 }
 
 /**

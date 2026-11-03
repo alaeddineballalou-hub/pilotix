@@ -378,6 +378,8 @@ export class CoreService implements OnModuleDestroy {
       t: this.t,
       staff,
       now: () => Date.now(),
+      // the addresses Pilotix's Meta and TikTok apps are given (Pilot AI › Réglages & coûts)
+      publicUrl: config.publicUrl || undefined,
       // Pilot AI › Test & lessons: Dellal answers in a shop as for a customer (the shop's system), and Pilot AI's own
       // questions go to Claude on Pilotix's key
       shop: (id) => this.platformShop(id),

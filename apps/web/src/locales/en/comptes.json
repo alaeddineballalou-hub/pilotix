@@ -1,0 +1,82 @@
+{
+  "title": "Accounts",
+  "about": "Link your Facebook and TikTok accounts. Your AI agents use them to answer messages and comments, and for your ad numbers.",
+  "help": "One click opens Facebook (or TikTok) in a new tab. Log in, choose your Pages and accept: Pilotix does the rest and the account turns green. The keys stay on Pilotix’s server, never in a page.",
+  "here": {
+    "title": "Used in “{{name}}”",
+    "page": "Messages and comments",
+    "pageIg": "Page “{{name}}” · Instagram @{{ig}}",
+    "pageOnly": "Page “{{name}}”",
+    "noPage": "No Page: link a Facebook account.",
+    "ads": "Meta ads",
+    "adsName": "“{{name}}”",
+    "noAds": "No ad account",
+    "tiktok": "TikTok ads",
+    "noTiktok": "No TikTok account"
+  },
+  "add": "Link an account",
+  "for": "For",
+  "scopeHere": "This boutique",
+  "scopeAll": "All my boutiques ({{n}})",
+  "scopeHereHint": "Its Page and ad account work here at once.",
+  "scopeAllHint": "Each boutique then picks its Page in one click. A Page answers for one boutique only.",
+  "scopeHereOnly": "Only “{{name}}”",
+  "scopeAllShort": "All boutiques",
+  "scopeSaved": "Changed.",
+  "p": {
+    "meta": {
+      "name": "Facebook and Instagram",
+      "what": "Your Pages, their messages and comments, and your ad accounts.",
+      "link": "Link a Meta account",
+      "notReady": "Soon: Pilotix is getting the Facebook link ready."
+    },
+    "tiktok": {
+      "name": "TikTok",
+      "what": "Your TikTok ad accounts. Their numbers come to Ads soon.",
+      "link": "Link a TikTok account",
+      "notReady": "Soon: Pilotix is getting the TikTok link ready."
+    }
+  },
+  "waiting": "Linking…",
+  "waitingHelp": "Finish in the {{name}} tab that opened: log in, choose your Pages and accept.",
+  "waitingPreview": "Preview: the login is simulated and takes two seconds.",
+  "blocked": "Your browser blocked the new tab. Open it with the button.",
+  "open": "Open {{name}}",
+  "reopen": "Open the tab again",
+  "cancel": "Cancel",
+  "linked": "Account linked",
+  "linkedName": "“{{name}}” is ready.",
+  "expired": "Too late: start again.",
+  "closed": "The tab was closed before the end. Start again whenever you want.",
+  "yours": "Your accounts",
+  "none": "No account linked yet. Start with Facebook: that is where your customers write to you.",
+  "st": {
+    "ok": "Linked",
+    "soon": "Link again before {{date}}",
+    "expired": "Link again",
+    "error": "Error"
+  },
+  "relink": "Link again",
+  "relinkHint": "Reconnect this account: a new token, Pages up to date.",
+  "relinkNow": "Facebook no longer accepts this account: link it again.",
+  "remove": "Remove",
+  "removeAsk": "Remove this account? The boutiques that use it lose its Page and ad account.",
+  "removed": "Account removed.",
+  "kind": {
+    "page": "Pages",
+    "pageNone": "No Page shared with Pilotix. Link the account again and tick your Pages.",
+    "ad_account": "Meta ad accounts",
+    "ad_accountNone": "No ad account (or no right to read it).",
+    "advertiser": "TikTok ad accounts",
+    "advertiserNone": "No TikTok ad account shared with Pilotix."
+  },
+  "ig": "Instagram @{{ig}}",
+  "noHook": "Its messages do not arrive yet: link the account again.",
+  "usedHere": "In this boutique",
+  "usedThere": "In “{{name}}”",
+  "use": "Use here",
+  "used": "Done: your agents use it.",
+  "stop": "Stop using",
+  "unused": "Your agents no longer use it.",
+  "by": "Linked by {{by}} on {{date}}"
+}

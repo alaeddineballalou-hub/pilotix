@@ -39,6 +39,15 @@
 
 /* settings */
 .dl-hook { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+/* the Facebook Page the agents answer on, from a linked account (Pilot AI › Comptes) */
+.dl-linked { display: flex; align-items: center; gap: 12px; margin: 0 0 6px; padding: 12px 14px; border: 1px dashed var(--line); border-radius: 12px; }
+.dl-linked > .bji { flex: none; width: 22px; height: 22px; color: var(--muted); }
+.dl-linked p { flex: 1; display: grid; gap: 2px; min-width: 0; margin: 0; }
+.dl-linked b { font-size: 14px; overflow-wrap: anywhere; }
+.dl-linked small { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+.dl-linked.ok { border-style: solid; border-color: transparent; background: var(--ok-soft); }
+.dl-linked.ok > .bji { color: var(--ok); }
+@media (max-width: 560px) { .dl-linked { flex-wrap: wrap; } .dl-linked .btn { margin-inline-start: 34px; } }
 @media (max-width: 700px) { .dl-hook { grid-template-columns: minmax(0, 1fr); } }
 .dl-h3 { display: flex; align-items: center; gap: 8px; font-size: 15px; margin: 16px 0 6px; }
 .linkbtn { border: 0; background: none; padding: 0; color: var(--navy); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }

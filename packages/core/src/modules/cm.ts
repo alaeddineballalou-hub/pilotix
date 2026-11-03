@@ -13,6 +13,7 @@ import { getRaw, setRaw } from './admin';
 import { DELLAL_DARIJA, parseAvoid } from './darija';
 import { darijaGuide } from './darijabook';
 import { vocabBlock, vocabFor } from './vocab';
+import { linkedPage } from './social';
 import { lahjaAvoid, lahjaBlocks, lahjaFor, LahjaWord } from './lahja';
 import {
   AiResponse,
@@ -942,6 +943,8 @@ async function settingsView(ctx: Ctx) {
       verifyToken: ds.verifyToken,
       pageToken: !!(await dellalSecret(db, 'pageToken')),
       appSecret: !!(await dellalSecret(db, 'appSecret')),
+      // the Page and its Instagram account, from a linked account (Pilot AI › Comptes)
+      page: await linkedPage(db),
       // Pilot AI's key on Pilotix's server (shops bring none), or the shop's own key elsewhere
       ai: (await pilotOn(ctx)) || !!(await dellalSecret(db, 'ai')),
       platform: !!ctx.t,

@@ -52,6 +52,7 @@ import { addCoachLahja, decideLahja, decideManyLahja, LAHJA_NO_CHANGE, lahjaErr,
 import { forgetVocab, importVocab, learnVocab, readCentimes, removeVocab, saveVocab, vocabBlock, vocabCounts, vocabFor, vocabList, VOCAB } from '../modules/vocab';
 import { darijaBookFile, darijaBookLive, darijaErr, darijaVersions, restoreDarijaBook, saveDarijaBook, snapshotDarijaLessons } from '../modules/darijabook';
 import { cmBoard, dellalBoard, dellalBooks, dellalBookText, dellalMore, spyBoard } from './aiboard';
+import { appReady, saveSocialApps, socialApps, SocialAppsInput, socialCounts, socialUrls } from '../modules/social';
 
 export const STAFF_ROLES = ['owner', 'manager', 'support'] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
@@ -70,6 +71,8 @@ export interface PCtx {
   shop?: (shopId: number) => Promise<Ctx>;
   /** the server only: Pilot AI's own question to Claude, on Pilotix's key (the lessons chat) */
   ai?: pilot.TeachAsk;
+  /** the server's public address (PUBLIC_URL): the addresses Pilotix's Meta and TikTok apps are given */
+  publicUrl?: string;
 }
 
 export interface PProcedure<S extends ZodTypeAny = ZodTypeAny, R = unknown> {
@@ -1295,6 +1298,18 @@ export const PLATFORM_REGISTRY = {
     return { words, prices, block, ms: Date.now() - t0, tokens: Math.ceil(block.length / 3.5) };
   }),
 
+  // ---------------------------------------------------------------- linked accounts: Pilotix's Meta and TikTok apps
+  /**
+   * Pilotix's own Meta and TikTok apps, which let a boutique link its accounts in one login (Pilot AI › Comptes): their
+   * ids, whether their secrets are in (never the secrets), the addresses to give them, how many accounts are linked.
+   */
+  'p.social.apps': pproc(ALL, z.object({}), async (ctx) => socialAppsView(ctx)),
+  'p.social.apps.save': pproc(MANAGERS, SocialAppsInput, async (ctx, i) => {
+    await saveSocialApps(ctx.t, i);
+    await audit(ctx, 'social.apps', null, { meta: i.meta.appId || null, tiktok: i.tiktok.appId || null, secretChanged: !!(i.meta.secret || i.tiktok.secret), secretRemoved: i.meta.secret === null || i.tiktok.secret === null });
+    return socialAppsView(ctx);
+  }),
+
   // ---------------------------------------------------------------- Pilot AI › Test & lessons
   /**
    * Talk to Dellal as a customer of one shop, with the lesson book in service, in test, the next one (every approved
@@ -1535,3 +1550,9 @@ export async function platformCall(name: string, ctx: PCtx, raw: unknown): Promi
 }
 
 export { FEATURE_KEYS, toPlan };
+
+/** Pilotix's Meta and TikTok apps as the control room shows them (never their secrets). */
+async function socialAppsView(ctx: PCtx) {
+  const apps = await socialApps(ctx.t);
+  return { ...apps, ready: { meta: appReady(apps, 'meta'), tiktok: appReady(apps, 'tiktok') }, urls: ctx.publicUrl ? socialUrls(ctx.publicUrl) : null, counts: await socialCounts(ctx.t) };
+}

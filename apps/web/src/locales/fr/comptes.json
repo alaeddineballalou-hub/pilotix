@@ -1,0 +1,82 @@
+{
+  "title": "Comptes",
+  "about": "Liez vos comptes Facebook et TikTok. Vos agents IA s’en servent pour répondre aux messages et aux commentaires, et pour vos chiffres de publicité.",
+  "help": "Un clic ouvre Facebook (ou TikTok) dans un nouvel onglet. Connectez-vous, choisissez vos pages et acceptez : Pilotix fait le reste et le compte devient vert. Les clés restent sur le serveur de Pilotix, jamais dans une page.",
+  "here": {
+    "title": "Utilisé dans « {{name}} »",
+    "page": "Messages et commentaires",
+    "pageIg": "Page « {{name}} » · Instagram @{{ig}}",
+    "pageOnly": "Page « {{name}} »",
+    "noPage": "Aucune page : liez un compte Facebook.",
+    "ads": "Publicité Meta",
+    "adsName": "« {{name}} »",
+    "noAds": "Aucun compte pub",
+    "tiktok": "Publicité TikTok",
+    "noTiktok": "Aucun compte TikTok"
+  },
+  "add": "Lier un compte",
+  "for": "Pour",
+  "scopeHere": "Cette boutique",
+  "scopeAll": "Toutes mes boutiques ({{n}})",
+  "scopeHereHint": "Sa page et son compte pub servent ici tout de suite.",
+  "scopeAllHint": "Chaque boutique choisit ensuite sa page en un clic. Une page répond pour une seule boutique.",
+  "scopeHereOnly": "Seulement « {{name}} »",
+  "scopeAllShort": "Toutes les boutiques",
+  "scopeSaved": "C’est changé.",
+  "p": {
+    "meta": {
+      "name": "Facebook et Instagram",
+      "what": "Vos pages, leurs messages et leurs commentaires, et vos comptes pub.",
+      "link": "Lier un compte Meta",
+      "notReady": "Bientôt : Pilotix prépare la connexion Facebook."
+    },
+    "tiktok": {
+      "name": "TikTok",
+      "what": "Vos comptes publicitaires TikTok. Leurs chiffres arrivent bientôt dans Publicité.",
+      "link": "Lier un compte TikTok",
+      "notReady": "Bientôt : Pilotix prépare la connexion TikTok."
+    }
+  },
+  "waiting": "Connexion en cours…",
+  "waitingHelp": "Terminez dans l’onglet {{name}} qui s’est ouvert : connectez-vous, choisissez vos pages et acceptez.",
+  "waitingPreview": "Aperçu : la connexion est simulée, elle prend deux secondes.",
+  "blocked": "Votre navigateur a bloqué le nouvel onglet. Ouvrez-le avec le bouton.",
+  "open": "Ouvrir {{name}}",
+  "reopen": "Rouvrir l’onglet",
+  "cancel": "Annuler",
+  "linked": "Compte lié",
+  "linkedName": "« {{name}} » est prêt.",
+  "expired": "Le temps est passé : recommencez.",
+  "closed": "L’onglet a été fermé avant la fin. Recommencez quand vous voulez.",
+  "yours": "Vos comptes",
+  "none": "Aucun compte lié pour l’instant. Commencez par Facebook : c’est là que vos clients vous écrivent.",
+  "st": {
+    "ok": "Lié",
+    "soon": "À relier avant le {{date}}",
+    "expired": "À relier",
+    "error": "Erreur"
+  },
+  "relink": "Relier",
+  "relinkHint": "Reconnecter ce compte : nouveau jeton, pages à jour.",
+  "relinkNow": "Facebook n’accepte plus ce compte : reliez-le.",
+  "remove": "Retirer",
+  "removeAsk": "Retirer ce compte ? Les boutiques qui l’utilisent perdent sa page et son compte pub.",
+  "removed": "Compte retiré.",
+  "kind": {
+    "page": "Pages",
+    "pageNone": "Aucune page partagée avec Pilotix. Reliez le compte et cochez vos pages.",
+    "ad_account": "Comptes pub Meta",
+    "ad_accountNone": "Aucun compte pub (ou pas le droit de le lire).",
+    "advertiser": "Comptes pub TikTok",
+    "advertiserNone": "Aucun compte pub TikTok partagé avec Pilotix."
+  },
+  "ig": "Instagram @{{ig}}",
+  "noHook": "Ses messages n’arrivent pas encore : reliez le compte.",
+  "usedHere": "Dans cette boutique",
+  "usedThere": "Dans « {{name}} »",
+  "use": "Utiliser ici",
+  "used": "C’est fait : vos agents l’utilisent.",
+  "stop": "Ne plus utiliser",
+  "unused": "Vos agents ne l’utilisent plus.",
+  "by": "Lié par {{by}} le {{date}}"
+}

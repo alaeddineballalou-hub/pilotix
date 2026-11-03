@@ -6,6 +6,7 @@ import { AI_USAGE_SQL } from './aiusage';
 import { LAHJA_PLATFORM_SQL } from '../modules/lahja';
 import { DARIJA_BOOK_SQL } from '../modules/darijabook';
 import { VOCAB_PLATFORM_SQL } from '../modules/vocab';
+import { SOCIAL_PLATFORM_SQL } from '../modules/social';
 
 const P001 = `
 CREATE SCHEMA IF NOT EXISTS platform;
@@ -573,6 +574,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p016_vocab', VOCAB_PLATFORM_SQL],
   // « Mes boutiques »: a boutique's former links still lead to it (modules/boutiques.ts)
   ['p017_old_slugs', P017],
+  // linked Facebook / TikTok accounts (Pilot AI › Comptes): their tokens, their Pages and ad accounts, what each boutique uses
+  ['p018_social', SOCIAL_PLATFORM_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

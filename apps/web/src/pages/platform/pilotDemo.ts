@@ -679,6 +679,9 @@ function vocabTry(text: string) {
 /** the example answer of one control-room call (the Pilot AI page's reads) */
 export function demoAnswer(name: string, input: any): unknown {
   switch (name) {
+    // Pilotix's Meta and TikTok apps, not made yet (the preview shows what to do)
+    case 'p.social.apps':
+      return { meta: { appId: '', configId: '', hasSecret: false }, tiktok: { appId: '', hasSecret: false }, verifyToken: 'pilotix-verify-3f9c2a71', ready: { meta: false, tiktok: false }, urls: null, counts: { meta: 1, tiktok: 0, shops: 2 } };
     case 'p.pilot.try':
       return tryAnswer(input ?? {});
     case 'p.pilot.teach':

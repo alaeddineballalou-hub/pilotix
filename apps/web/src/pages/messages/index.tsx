@@ -17,6 +17,7 @@ import { AgentHeader, Filters, initials, PeriodSwitch, SaveBar, SearchBox, useEd
 import type { PageProps } from '../registry';
 import { Bubbles, Composer } from './chat';
 import { LahjaCard, LahjaFix } from './lahja';
+import { LinkedPage } from './linkedPage';
 import { VoiceRead } from './voice';
 import './messages.css';
 
@@ -454,7 +455,7 @@ function Results() {
 }
 
 // ---------------------------------------------------------------- settings (admin)
-type Secret = 'ai' | 'appSecret' | 'pageToken' | 'waToken' | 'tiktokToken';
+type Secret = 'ai' | 'appSecret' | 'waToken' | 'tiktokToken';
 
 function Settings() {
   const q = useRpc('dellal.settings.get', {});
@@ -609,7 +610,15 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'de
         </Card>
       )}
 
-      <Card title={t('messages.settings.channels')} help={t('messages.settings.channelsHelp')}>
+      <Card title={t('messages.settings.channels')}>
+        <h3 className="dl-h3">
+          <ChannelBadge ch="messenger" /> <ChannelBadge ch="instagram" /> {t('messages.settings.pageTitle')}
+        </h3>
+        <LinkedPage page={data.page} old={data.has.pageToken} />
+        <h3 className="dl-h3">
+          <ChannelBadge ch="whatsapp" /> {t('messages.ch.whatsapp')}
+        </h3>
+        <p className="muted small">{t('messages.settings.waHelp')}</p>
         <div className="dl-hook">
           <Field label={t('messages.settings.metaUrl')}>
             <CopyCode code={metaUrl} />
@@ -619,26 +628,11 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'de
           </Field>
         </div>
         {secret('appSecret', t('messages.settings.appSecret'), '32 caractères')}
-        <h3 className="dl-h3">
-          <ChannelBadge ch="whatsapp" /> {t('messages.ch.whatsapp')}
-        </h3>
         <div className="grid2">
           <Field label={t('messages.settings.waPhoneId')}>
             <input className="ltr" inputMode="numeric" value={f.whatsappPhoneId} onChange={(e) => set('whatsappPhoneId', e.target.value.replace(/\D/g, ''))} />
           </Field>
           {secret('waToken', t('messages.settings.waToken'), 'EAAG…')}
-        </div>
-        <h3 className="dl-h3">
-          <ChannelBadge ch="messenger" /> <ChannelBadge ch="instagram" /> {t('messages.settings.pageTitle')}
-        </h3>
-        <div className="grid2">
-          <Field label={t('messages.settings.pageId')}>
-            <input className="ltr" inputMode="numeric" value={f.messengerPageId} onChange={(e) => set('messengerPageId', e.target.value.replace(/\D/g, ''))} />
-          </Field>
-          <Field label={t('messages.settings.igId')}>
-            <input className="ltr" inputMode="numeric" value={f.instagramId} onChange={(e) => set('instagramId', e.target.value.replace(/\D/g, ''))} />
-          </Field>
-          {secret('pageToken', t('messages.settings.pageToken'), 'EAAG…')}
         </div>
         <h3 className="dl-h3">
           <ChannelBadge ch="tiktok" /> {t('messages.ch.tiktok')}

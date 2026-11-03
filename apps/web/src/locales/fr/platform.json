@@ -1614,6 +1614,43 @@
       "modelHint": "gemini-flash-latest suit toujours le Flash le plus récent de Google.",
       "today_one": "Aujourd’hui : {{n}} vocal écrit · {{usd}}",
       "today_other": "Aujourd’hui : {{n}} vocaux écrits · {{usd}}"
+    },
+    "social": {
+      "title": "Comptes Meta et TikTok des boutiques",
+      "text": "Les boutiques lient leurs comptes Facebook et TikTok en un clic (Pilot AI › Comptes). Pour ça, Pilotix a besoin de sa propre app Meta et de son app TikTok. Leurs clés secrètes restent ici, sur le serveur.",
+      "counts": "{{meta}} Meta · {{tiktok}} TikTok · {{shops}} boutiques",
+      "ready": "Prêt",
+      "todo": "À faire",
+      "meta": "App Meta (Facebook et Instagram)",
+      "appId": "ID de l’app",
+      "appSecret": "Clé secrète de l’app",
+      "configId": "ID de configuration (Facebook Login for Business)",
+      "configHint": "Conseillé : avec une configuration « jeton d’utilisateur système », les comptes liés n’expirent pas. Vide : jetons d’environ 60 jours.",
+      "redirect": "Adresse de retour (Facebook Login › Réglages)",
+      "webhook": "Adresse du webhook",
+      "verify": "Jeton de vérification",
+      "verifyAfter": "créé au premier enregistrement",
+      "tiktok": "App TikTok for Business",
+      "ttAppId": "App ID",
+      "ttSecret": "Secret",
+      "ttRedirect": "Advertiser redirect URL",
+      "secretSaved": "Enregistrée.",
+      "secretRemove": "Retirer",
+      "secretKeep": "Garder",
+      "how": "Comment faire les deux apps",
+      "metaSteps": [
+        "Sur developers.facebook.com, créez une app de type « Entreprise ».",
+        "Ajoutez les produits Facebook Login for Business, Messenger, Instagram et Webhooks.",
+        "Dans Facebook Login › Réglages, collez l’adresse de retour.",
+        "Dans Webhooks, collez l’adresse du webhook et le jeton de vérification. Abonnez « Page » (messages, feed) et « Instagram » (messages, comments).",
+        "Collez ici l’ID de l’app et sa clé secrète (Réglages › Général), puis enregistrez.",
+        "Meta vérifie l’app (App Review) avant que les pages des autres vendeurs marchent. Vos propres pages marchent tout de suite."
+      ],
+      "tiktokSteps": [
+        "Sur business-api.tiktok.com, créez une app et demandez l’accès Marketing API.",
+        "Collez l’adresse de retour dans « Advertiser redirect URL ».",
+        "Collez ici l’App ID et le Secret, puis enregistrez. TikTok valide l’app en une à deux semaines."
+      ]
     }
   }
 }

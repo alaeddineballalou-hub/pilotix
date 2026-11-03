@@ -108,6 +108,8 @@ const PAGE_PARENT: Record<string, [string, string | null]> = {
   messages: ['pilotai', 'messages'],
   cm: ['pilotai', 'cm'],
   notify: ['pilotai', 'notify'],
+  // Pilot AI › Comptes: the Facebook and TikTok accounts the agents use
+  comptes: ['pilotai', null],
 };
 
 /** The features a page of the app needs (with its sub-page, e.g. produits + achats). Pages not listed need none. */

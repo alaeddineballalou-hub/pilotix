@@ -169,7 +169,16 @@
       "001Hint": "Takes the first name, number, wilaya and product, notes what the customer wants and puts the order in Confirmation › New: the team calls to confirm. If the customer changes anything, {{name}} updates the order.",
       "full": "Full order",
       "fullHint": "Takes the whole order in the chat: commune, home or office delivery, recap, extra sale. Can send it straight to the depot."
-    }
+    },
+    "pageLinked": "Page “{{name}}”",
+    "pageLinkedIg": "Page “{{name}}” · Instagram @{{ig}}",
+    "pageVia": "Linked by the account “{{account}}” in Pilot AI › Accounts.",
+    "pageChange": "Change",
+    "pageNone": "No Facebook Page linked",
+    "pageNoneHint": "Link your Facebook account: your agents then answer on Messenger and Instagram.",
+    "pageOld": "An old Page key pasted by hand still works. Link your Facebook account: it will be replaced.",
+    "pageLink": "Link a Facebook account",
+    "waHelp": "WhatsApp still goes through your own Meta app: paste its address and verify token in Webhooks, then its secret key below."
   },
   "lahja": {
     "fix": "Darija lesson",

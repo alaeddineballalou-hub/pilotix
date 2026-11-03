@@ -37,14 +37,18 @@ test('settings: admin only, secrets never returned, verify token created', async
   const g: any = await call('dellal.settings.get', admin, {});
   assert.match(g.settings.verifyToken, /^dellal-/);
   assert.equal(g.has.ai, false);
-  const s: any = await call('dellal.settings.save', admin, { ...g.settings, enabled: true, secrets: { ai: 'sk-ant-test-1234567890', pageToken: 'EAAB-page' } });
+  const s: any = await call('dellal.settings.save', admin, { ...g.settings, enabled: true, secrets: { ai: 'sk-ant-test-1234567890', waToken: 'EAAB-wa' } });
   assert.equal(s.has.ai, true);
-  assert.equal(s.has.pageToken, true);
+  assert.equal(s.has.waToken, true);
   assert.ok(!JSON.stringify(s).includes('sk-ant-test'));
   assert.equal(s.settings.verifyToken, g.settings.verifyToken);
-  const cleared: any = await call('dellal.settings.save', admin, { ...s.settings, secrets: { pageToken: null } });
-  assert.equal(cleared.has.pageToken, false);
+  const cleared: any = await call('dellal.settings.save', admin, { ...s.settings, secrets: { waToken: null } });
+  assert.equal(cleared.has.waToken, false);
   assert.equal(cleared.has.ai, true);
+  // the Page token is no longer pasted by hand: it comes from a linked account (Pilot AI › Comptes)
+  await assert.rejects(call('dellal.settings.save', admin, { ...s.settings, secrets: { pageToken: 'EAAB-page' } }), /secrets\.pageToken/);
+  // the preview's Page comes from its sample linked account (seeds/dellal.ts)
+  assert.equal(cleared.page?.name, 'Bébé Confort DZ');
 });
 
 test('test chat (no AI), whole order: answers price, delivery fee, recap, then simulates the order', async () => {

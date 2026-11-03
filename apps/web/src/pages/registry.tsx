@@ -28,6 +28,7 @@ export const PAGES: Record<string, ComponentType<PageProps>> = {
   messages: P(() => import('./messages'), 'Messages'),
   cm: P(() => import('./cm'), 'Cm'),
   notify: P(() => import('./notify'), 'Notify'),
+  comptes: P(() => import('./comptes'), 'Comptes'),
   marketing: P(() => import('./ads'), 'Marketing'),
   landing: P(() => import('./landing'), 'Landing'),
   caisse: P(() => import('./caisse'), 'Caisse'),

@@ -37,6 +37,7 @@ import { landingGroupProcs } from './modules/landinggroups';
 import { pixelProcs } from './modules/pixels';
 import { marketersProcs } from './modules/marketers';
 import { notifyProcs } from './modules/notify';
+import { socialProcs } from './modules/social';
 import { pickingProcs } from './modules/picking';
 import { pickupProcs } from './modules/pickup';
 import { parcelsProcs } from './modules/parcels';
@@ -93,6 +94,7 @@ export const REGISTRY = {
   ...dellalProcs,
   ...cmProcs,
   ...notifyProcs,
+  ...socialProcs,
   ...marketersProcs,
   ...landingProcs,
   ...landingGroupProcs,

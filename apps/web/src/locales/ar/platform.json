@@ -1634,6 +1634,43 @@
       "model": "نموذج Gemini",
       "modelHint": "gemini-flash-latest يتبع دائمًا أحدث Flash من Google.",
       "today": "اليوم: {{n}} صوتيات مكتوبة · {{usd}}"
+    },
+    "social": {
+      "title": "حسابات ميتا وتيك توك للمتاجر",
+      "text": "المتاجر تربط حساباتها في فيسبوك وتيك توك بنقرة واحدة (Pilot AI › الحسابات). لذلك يحتاج Pilotix تطبيقه الخاص في ميتا وتطبيقه في تيك توك. مفاتيحهما السرية تبقى هنا، في الخادم.",
+      "counts": "{{meta}} ميتا · {{tiktok}} تيك توك · {{shops}} متاجر",
+      "ready": "جاهز",
+      "todo": "للإنجاز",
+      "meta": "تطبيق ميتا (فيسبوك وإنستغرام)",
+      "appId": "معرّف التطبيق",
+      "appSecret": "المفتاح السري للتطبيق",
+      "configId": "معرّف الإعداد (Facebook Login for Business)",
+      "configHint": "ننصح به: مع إعداد «رمز مستخدم النظام» لا تنتهي الحسابات المربوطة. فارغ: رموز لحوالي 60 يومًا.",
+      "redirect": "عنوان العودة (Facebook Login › الإعدادات)",
+      "webhook": "عنوان الويب هوك",
+      "verify": "رمز التحقق",
+      "verifyAfter": "يُنشأ عند أول حفظ",
+      "tiktok": "تطبيق TikTok for Business",
+      "ttAppId": "App ID",
+      "ttSecret": "Secret",
+      "ttRedirect": "Advertiser redirect URL",
+      "secretSaved": "محفوظ.",
+      "secretRemove": "احذف",
+      "secretKeep": "احتفظ",
+      "how": "كيف تنشئ التطبيقين",
+      "metaSteps": [
+        "في developers.facebook.com، أنشئ تطبيقًا من نوع «أعمال».",
+        "أضف المنتجات Facebook Login for Business وMessenger وInstagram وWebhooks.",
+        "في Facebook Login › الإعدادات، الصق عنوان العودة.",
+        "في Webhooks، الصق عنوان الويب هوك ورمز التحقق. اشترك في «Page» (messages، feed) و«Instagram» (messages، comments).",
+        "الصق هنا معرّف التطبيق ومفتاحه السري (الإعدادات › الأساسية)، ثم احفظ.",
+        "ميتا تراجع التطبيق (App Review) قبل أن تعمل صفحات البائعين الآخرين. صفحاتك أنت تعمل فورًا."
+      ],
+      "tiktokSteps": [
+        "في business-api.tiktok.com، أنشئ تطبيقًا واطلب الوصول إلى Marketing API.",
+        "الصق عنوان العودة في «Advertiser redirect URL».",
+        "الصق هنا App ID والـ Secret، ثم احفظ. تيك توك يوافق على التطبيق خلال أسبوع إلى أسبوعين."
+      ]
     }
   }
 }

@@ -523,7 +523,11 @@
     "depotArchive": "Archiver ce dépôt",
     "depotArchiveConfirm": "Archiver ce dépôt ? Il sera rangé dans Management › Archives (il doit être vide).",
     "depotArchived": "Dépôt archivé",
-    "depotArchiveStock": "Videz d’abord ce dépôt (transfert), puis archivez-le"
+    "depotArchiveStock": "Videz d’abord ce dépôt (transfert), puis archivez-le",
+    "metaLinked": "Compte pub « {{name}} », lié par « {{account}} » (Pilot AI › Comptes).",
+    "metaChange": "Changer",
+    "metaLinkHint": "Le plus simple : liez votre compte Facebook en un clic, sans jeton à coller.",
+    "metaLinkBtn": "Pilot AI › Comptes"
   },
   "confirmYes": "Oui",
   "cancel": "Annuler",

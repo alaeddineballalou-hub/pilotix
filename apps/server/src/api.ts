@@ -247,6 +247,21 @@ function optionalDellal(): any {
     return null;
   }
 }
+/** Linked accounts (Pilot AI › Comptes): the login tabs' end, server only. */
+function optionalSocial(): any {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require('@pilotix/core/dist/social-server');
+  } catch {
+    return null;
+  }
+}
+/** Meta signs its webhook calls with the app's secret: the body as it came, checked in constant time. */
+function metaSigned(req: RawBodyRequest<any>, body: unknown, sig: string | undefined, secret: string): boolean {
+  const raw: Buffer | undefined = req.rawBody;
+  const want = 'sha256=' + createHmac('sha256', secret).update(raw ?? Buffer.from(JSON.stringify(body ?? {}))).digest('hex');
+  return !!sig && sig.length === want.length && timingSafeEqual(Buffer.from(sig), Buffer.from(want));
+}
 
 /** The shop's public API address (links given to customers and to other services). */
 const apiOf = (ref: ShopRef) => `${config.publicUrl}/api${ref.shop.primary ? '' : `/s/${ref.shop.slug}`}`;
@@ -1338,22 +1353,78 @@ class ApiController {
       new Logger('Meta').warn(`[${ref.shop.slug}] webhook ignored: add the Meta app secret (Message AI agent › Réglages) so Pilotix can check it comes from Meta`);
       return { ok: false, received: 0, error: 'Meta app secret manquant' };
     }
-    {
-      const raw: Buffer | undefined = req.rawBody;
-      const want = 'sha256=' + createHmac('sha256', secret).update(raw ?? Buffer.from(JSON.stringify(body ?? {}))).digest('hex');
-      const ok = !!sig && sig.length === want.length && timingSafeEqual(Buffer.from(sig), Buffer.from(want));
-      if (!ok) throw new core.AppError('unauthorized', 'Signature Meta invalide');
-    }
+    if (!metaSigned(req, body, sig, secret)) throw new core.AppError('unauthorized', 'Signature Meta invalide');
     const m = optionalDellal();
-    const list: any[] = m?.parseMetaWebhook ? m.parseMetaWebhook(body) : [];
+    // a boutique whose Page comes from a linked account (Pilot AI › Comptes) gets its Page's messages and comments from
+    // Pilotix's own webhook (hooks/meta-app): here, only WhatsApp (its own Meta app), so nothing is answered twice
+    const linked = (await db.query(`SELECT 1 FROM settings WHERE key = 'social_page'`)).length > 0;
+    const all: any[] = m?.parseMetaWebhook ? m.parseMetaWebhook(body) : [];
+    const list = linked ? all.filter((x) => x?.channel === 'whatsapp') : all;
     // comments make the page act in public (reply, hide): only from a webhook signed with the Meta app secret
-    const comments: any[] = m?.parseMetaComments ? m.parseMetaComments(body) : [];
+    const comments: any[] = !linked && m?.parseMetaComments ? m.parseMetaComments(body) : [];
     // Delivery AI agent: what became of its WhatsApp messages (delivered, read, failed → SMS)
     const statuses: any[] = m?.parseWhatsAppStatuses ? m.parseWhatsAppStatuses(body) : [];
     void this.handleIncoming(ref, list);
     void this.handleComments(ref, comments);
     void this.handleStatuses(ref, statuses);
     return { ok: true, received: list.length + comments.length + statuses.length };
+  }
+
+  // ---------------------------------------------------------------- linked accounts (Pilot AI › Comptes)
+  /** The Facebook login tab comes back: its code becomes the account's token, the boutique's page turns green. */
+  @Public()
+  @Get('oauth/meta/callback')
+  async oauthMeta(@Query() q: Record<string, string>, @Res() res: any) {
+    return this.loginEnd('meta', q, res);
+  }
+
+  /** The TikTok for Business login tab comes back (?auth_code). */
+  @Public()
+  @Get('oauth/tiktok/callback')
+  async oauthTiktok(@Query() q: Record<string, string>, @Res() res: any) {
+    return this.loginEnd('tiktok', q, res);
+  }
+
+  private async loginEnd(provider: 'meta' | 'tiktok', q: Record<string, string>, res: any) {
+    const m = optionalSocial();
+    const r = m?.finishLogin ? await m.finishLogin(this.core.t, provider, q ?? {}, config.publicUrl).catch((e: any) => ({ ok: false, message: String(e?.message ?? 'Erreur') })) : { ok: false, message: 'Indisponible sur ce serveur.' };
+    if (!r.ok) new Logger('Comptes').warn(`${provider} login not finished: ${r.message}`);
+    const html = m?.loginPage ? m.loginPage(r) : `<!DOCTYPE html><meta charset="utf-8"><p>${r.ok ? 'OK' : 'Erreur'}</p>`;
+    return res.status(200).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'no-store').send(html);
+  }
+
+  /** Pilotix's own Meta app: Meta checks its webhook once with the verify token of Pilot AI › Réglages & coûts. */
+  @Public()
+  @Get('hooks/meta-app')
+  async metaAppVerify(@Query() q: Record<string, string>, @Res() res: any) {
+    const apps = await core.socialApps(this.core.t);
+    if (q['hub.mode'] === 'subscribe' && sameKey(q['hub.verify_token'], apps.verifyToken)) return res.status(200).header('Content-Type', 'text/plain').send(String(q['hub.challenge'] ?? ''));
+    return res.status(403).send({ message: 'Jeton de vérification invalide' });
+  }
+
+  /**
+   * The linked Pages' messages and comments (Messenger, Instagram, Facebook and Instagram comments), all through Pilotix's
+   * Meta app: each entry goes to the boutique that uses its Page; Dellal and the CM AI agent answer there as usual.
+   */
+  @Public()
+  @Post('hooks/meta-app')
+  async metaAppHook(@Req() req: RawBodyRequest<any>, @Headers('x-hub-signature-256') sig: string, @Body() body: any) {
+    const secret = await core.socialSecret(this.core.t, 'meta');
+    // 200 so Meta does not retry in a loop: nothing is taken before Pilotix's app secret is in
+    if (!secret) return { ok: false, received: 0, error: 'App Meta de Pilotix manquante' };
+    if (!metaSigned(req, body, sig, secret)) throw new core.AppError('unauthorized', 'Signature Meta invalide');
+    const m = optionalDellal();
+    let received = 0;
+    for (const r of await core.routeMeta(this.core.t, body)) {
+      const ref = await this.core.shop({ id: r.shopId });
+      if (!ref || ref.shop.status !== 'active') continue;
+      const list: any[] = m?.parseMetaWebhook ? m.parseMetaWebhook(r.body) : [];
+      const comments: any[] = m?.parseMetaComments ? m.parseMetaComments(r.body) : [];
+      void this.handleIncoming(ref, list);
+      void this.handleComments(ref, comments);
+      received += list.length + comments.length;
+    }
+    return { ok: true, received };
   }
 
   /** Delivery AI agent: the SMS gateway's reports (sent, delivered, failed) and the customers' SMS answers. Key in ?key=. */
