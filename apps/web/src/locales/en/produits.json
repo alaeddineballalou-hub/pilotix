@@ -420,7 +420,7 @@
     "maxDiscountHint": "Empty = no limit. Only the administrator changes it.",
     "feeGrid": "Delivery price grid",
     "feeGridHint": "Empty = default grid (Management → Delivery prices).",
-    "remove": "Remove",
+    "remove": "Delete product",
     "saved": "Product saved",
     "create": "Create",
     "basic": "Basic information",
@@ -483,7 +483,9 @@
     "archive": "Archive",
     "archiveAsk": "Archive this product? It leaves the lists (old orders keep it). It must have 0 in stock.",
     "archived": "Product archived (Management › Archives)",
-    "archiveStock": "There is stock left: take it out of stock first, then archive"
+    "archiveStock": "There is stock left: take it out of stock first, then archive",
+    "removeAsk": "Delete « {{name}} » for good? Only if the product was never used (no order, no stock).",
+    "removed": "Product deleted"
   },
   "landing": {
     "none": "No landing page",

@@ -420,7 +420,7 @@
     "maxDiscountHint": "Vide = pas de limite. Seul l’administrateur la modifie.",
     "feeGrid": "Grille de prix de livraison",
     "feeGridHint": "Vide = grille par défaut (Management → Prix de livraison).",
-    "remove": "Retirer",
+    "remove": "Supprimer le produit",
     "saved": "Produit enregistré",
     "create": "Créer",
     "basic": "Informations de base",
@@ -483,7 +483,9 @@
     "archive": "Archiver",
     "archiveAsk": "Archiver ce produit ? Il sort des listes (les anciennes commandes le gardent). Il doit avoir 0 en stock.",
     "archived": "Produit archivé (Management › Archives)",
-    "archiveStock": "Il reste du stock : faites une sortie de stock d’abord, puis archivez"
+    "archiveStock": "Il reste du stock : faites une sortie de stock d’abord, puis archivez",
+    "removeAsk": "Supprimer « {{name}} » pour toujours ? Seulement si le produit n’a jamais servi (aucune commande, aucun stock).",
+    "removed": "Produit supprimé"
   },
   "landing": {
     "none": "Sans landing page",

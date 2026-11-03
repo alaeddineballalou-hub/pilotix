@@ -115,7 +115,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
   // Archiver (administrators): out of the lists, kept for the orders; deleted later from Management › Archives
   const archive = useAction('archive.set', { success: (r) => (r.done ? t('produits.form.archived') : t('produits.form.archiveStock')), onDone: (r) => r.done && onClose() });
   const canArchive = !!p && admin && pageIsOn('management', 'archive');
-  const removeProduct = useAction('archive.removeProduct', { success: 'Produit supprimé', onDone: () => onClose() });
+  const removeProduct = useAction('archive.removeProduct', { success: t('produits.form.removed'), onDone: () => onClose() });
   const set = (k: keyof typeof f, v: string | boolean) => setF({ ...f, [k]: v });
   const brands = [...new Set((all.data ?? []).map((x) => x.brand).filter((x): x is string => !!x))].sort();
   const others = (all.data ?? []).filter((x) => !x.isService && x.id !== p?.id);
@@ -220,7 +220,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
       onClose={onClose}
       footer={
         <>
-          {!!p && admin && <ConfirmButton className="btn danger ghost" disabled={removeProduct.isPending} question={`Delete ${p.name} permanently? This is only allowed for unused products.`} onConfirm={() => removeProduct.mutate({ id: p.id })}><Icon name="trash" /> Delete product</ConfirmButton>}
+          {!!p && admin && <ConfirmButton className="btn danger ghost" disabled={removeProduct.isPending} question={t('produits.form.removeAsk', { name: p.name })} onConfirm={() => removeProduct.mutate({ id: p.id })}><Icon name="trash" /> {t('produits.form.remove')}</ConfirmButton>}
           {canArchive && (
             <ConfirmButton className="btn ghost" disabled={archive.isPending} question={t('produits.form.archiveAsk')} onConfirm={() => archive.mutate({ kind: 'products', ids: [p.id], archived: true })}>
               <Icon name="archive" /> {t('produits.form.archive')}
