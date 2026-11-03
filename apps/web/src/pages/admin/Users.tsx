@@ -15,6 +15,9 @@ import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { ConfirmButton } from './bits';
 import { usePartnerKind, useTp } from '../agency/parts';
+import { useAllMode } from '../../layout/AllBoutiques';
+import { BoutiqueLogo } from '../../layout/Boutiques';
+import { useQueryClient } from '@tanstack/react-query';
 
 // no « Vendeurs »: a seller never adds another seller (each seller has his own Pilotix account, with his boutiques)
 // no « Marketeurs » either: a marketer has his own Pilotix account (Partenaires › Marketers)
@@ -204,6 +207,10 @@ function RoleList({ role, onNew, onEdit, agency }: { role: Role | null; onNew: (
   const locked = (u: Profile) => (u.id === ownerId && u.id !== me) || (!session?.isAdmin && (u.roles.includes('admin') || !!u.canManageUsers || u.id === me));
   // archived accounts are in Management › Archives (users.list still names them, for the history)
   const rows = (q.data ?? []).filter((u) => !u.archived);
+  // « Boutiques »: where each person also works (an owner with several boutiques)
+  const all = useAllMode();
+  const showWhere = !agency && all.can && (!!session?.isAdmin || !!session?.canManageUsers);
+  const where = useRpc('users.boutiques', {}, { enabled: showWhere, staleTime: 60_000 }).data as Record<string, number[]> | undefined;
   const archives = !agency && !!session?.isAdmin && pageIsOn('management', 'archive');
   // users.list matches own roles; vendeurs also count as agents etc. only through their own roles (as in the original)
   return (
@@ -242,6 +249,7 @@ function RoleList({ role, onNew, onEdit, agency }: { role: Role | null; onNew: (
                   <th>{t('admin.users.colPhone')}</th>
                   <th>{t('admin.users.colRoles')}</th>
                   {agency && <th>{t('agency.users.colSellers')}</th>}
+                  {showWhere && <th>{t('admin.users.colBoutiques')}</th>}
                   <th>{t('admin.users.colLast')}</th>
                   <th>{t('admin.users.colState')}</th>
                 </tr>
@@ -309,6 +317,20 @@ function RoleList({ role, onNew, onEdit, agency }: { role: Role | null; onNew: (
                         )}
                       </td>
                     )}
+                    {showWhere && (
+                      <td data-l={t('admin.users.colBoutiques')}>
+                        <span className="bq-where">
+                          {(where?.[String(u.id)] ?? []).map((id) => {
+                            const b = all.boutiques.find((x) => x.id === id);
+                            return b ? (
+                              <span key={id} title={b.name}>
+                                <BoutiqueLogo name={b.name} logo={b.logo} size={22} />
+                              </span>
+                            ) : null;
+                          })}
+                        </span>
+                      </td>
+                    )}
                     <td data-l={t('admin.users.colLast')}>{u.lastSeenAt ? when(u.lastSeenAt) : t('admin.users.never')}</td>
                     <td data-l={t('admin.users.colState')}>
                       <span className={`badge t-${u.active ? 'ok' : 'off'}`}>{u.active ? t('admin.users.activeBadge') : t('admin.users.inactiveBadge')}</span>
@@ -346,6 +368,11 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
   const [company, setCompany] = useState<number | null>(user?.livreurCompanyId ?? null);
   const [err, setErr] = useState('');
   const [newPw, setNewPw] = useState<string | null>(null);
+  // a new person, for an owner with several boutiques: the other boutiques to add them to (the same roles)
+  const all = useAllMode();
+  const multi = !agency && !user && isAdmin && all.can;
+  const [others, setOthers] = useState<number[]>([]);
+  const qc = useQueryClient();
   const companies = useRpc('admin.companies', {}, { enabled: !agency });
   // a person who already has a Pilotix account (another store) keeps their own password: the one typed here does nothing
   const create = useAction('users.create', { success: (r) => ((r as { existingAccount?: boolean }).existingAccount ? t('admin.users.createdExisting') : t('admin.users.created')), onDone: onClose });
@@ -373,7 +400,18 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
       ...(agency ? { sellers } : {}),
     };
     if (user) update.mutate({ id: user.id, ...base, ...(password ? { password } : {}) });
-    else create.mutate({ ...base, password });
+    else
+      void create
+        .mutateAsync({ ...base, password })
+        .then(async () => {
+          if (!multi || !others.length) return;
+          const r = await rpc('users.addToBoutiques', { shops: others, user: { ...base, password } });
+          void qc.invalidateQueries();
+          const ok = r.filter((x) => x.ok).map((x) => x.name);
+          if (ok.length) toast(t('admin.users.addedIn', { name: base.name, list: ok.join(', ') }), 'ok', 6000);
+          for (const x of r.filter((y) => !y.ok)) toast(t('admin.users.notAddedIn', { shop: x.name, error: x.error ?? '' }), 'bad', 8000);
+        })
+        .catch(() => {});
   };
   const flip = (r: Role) => setRoles((cur) => (cur.includes(r) ? cur.filter((x) => x !== r) : [...cur, r]));
 
@@ -420,6 +458,24 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
           </div>
         </Field>
         {agency && <SellersField value={sellers} onChange={setSellers} />}
+        {multi && (
+          <Field label={t('admin.users.boutiques')} hint={t('admin.users.boutiquesHint')}>
+            <div className="row" style={{ flexWrap: 'wrap', gap: '8px 16px' }}>
+              {all.boutiques.map((b) => (
+                <label key={b.id} className="row nowrap" style={{ gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={b.current || others.includes(b.id)}
+                    disabled={b.current}
+                    onChange={() => setOthers((cur) => (cur.includes(b.id) ? cur.filter((x) => x !== b.id) : [...cur, b.id]))}
+                  />
+                  <BoutiqueLogo name={b.name} logo={b.logo} size={22} />
+                  {b.name}
+                </label>
+              ))}
+            </div>
+          </Field>
+        )}
         {isAdmin && !roles.includes('admin') && (
           <Field label={t('admin.users.manageUsers')} hint={t('admin.users.manageUsersHint')}>
             <label className="row nowrap" style={{ gap: 8 }}>

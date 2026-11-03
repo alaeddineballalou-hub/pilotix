@@ -175,3 +175,45 @@ async function setSettingName(c: Ctx, name: string) {
   const { getSetting, setSetting } = await import('../settings');
   await setSetting(c.db, 'shop', { ...(await getSetting(c.db, 'shop')), name });
 }
+
+test('the team: a new person made in the boutiques ticked, the same roles; « Boutiques » says where each person works', async () => {
+  const { PGlite } = await import('@electric-sql/pglite');
+  const t = pgliteTenancy(new PGlite() as any);
+  await migrate(t.shop('public'), (sql) => t.exec('public', sql));
+  await seedBase(t.shop('public'), { ...OWNER, name: 'Amine' });
+  await migrateAll(t);
+  const { staff } = await staffLogin(t, OWNER.email, OWNER.password);
+  const pctx: PCtx = { t, staff, now: () => Date.now() };
+  const p = (name: string, input: unknown = {}) => platformCall(name, pctx, input) as Promise<any>;
+  const biz = (await p('p.plans.list')).find((x: any) => x.code === 'business');
+  const ids: number[] = [];
+  for (const name of ['Bébé Shop', 'Maison Shop', 'Sport Shop']) {
+    const made = await p('p.shops.create', { name, ownerName: 'Karim', ownerEmail: SELLER, planId: biz.id, trialDays: 14 });
+    if (made.mail?.token) await passwordFromLink(t, made.mail.token, PW);
+    ids.push(made.id);
+  }
+  const [A, B, C] = ids;
+  const inA = await as(t, A, SELLER, PW);
+  const user = { name: 'Nadia', email: 'nadia@shops.dz', phone: '0661000077', roles: ['confirmation', 'suivi'], password: PW };
+  const made: any = await call('users.create', inA, user);
+  const r: any[] = (await call('users.addToBoutiques', inA, { shops: [B, C, A], user })) as any[];
+  assert.deepEqual(r.map((x) => [x.id, x.ok]).sort(), [[B, true], [C, true]].sort());
+  const inB = await as(t, B, SELLER, PW);
+  const nB = (await call('users.list', inB, {}) as any[]).find((u) => u.name === 'Nadia');
+  assert.deepEqual([...nB.roles].sort(), ['confirmation', 'suivi']);
+  // she logs in to B with the same password
+  const sB = (await loadShop(t, { id: B }))!;
+  assert.ok(await login(t.shop(sB.schema), 'nadia@shops.dz', PW));
+  // twice in B: refused there, said in the answer
+  const again: any[] = (await call('users.addToBoutiques', inA, { shops: [B], user })) as any[];
+  assert.equal(again[0].ok, false);
+  // « Boutiques »: Nadia works in the three, Karim too
+  const where: any = await call('users.boutiques', inA, {});
+  assert.deepEqual([...where[String(made.id)]].sort(), [A, B, C].sort());
+  // someone who may not add people: nothing made, and no list
+  await call('users.create', inA, { name: 'Rania', email: 'rania@shops.dz', phone: '0661000078', roles: ['confirmation'], password: PW });
+  const rania = await as(t, A, 'rania@shops.dz', PW);
+  assert.deepEqual(await call('users.boutiques', rania, {}), {});
+  const none: any[] = (await call('users.addToBoutiques', rania, { shops: [B], user: { ...user, email: 'x@shops.dz', phone: '0661000079' } })) as any[];
+  assert.equal(none.length, 0, 'Rania has no account in B');
+});

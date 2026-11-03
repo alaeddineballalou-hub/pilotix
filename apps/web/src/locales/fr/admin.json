@@ -122,7 +122,12 @@
     "canAffect": "Affectation automatique",
     "canAffectHint": "Peut ouvrir Management › Affectation et régler qui reçoit les commandes et les alertes. Les admins le peuvent toujours.",
     "canAffectLabel": "Peut régler l’affectation",
-    "canAffectChip": "🔀 Affectation"
+    "canAffectChip": "🔀 Affectation",
+    "boutiques": "Boutiques",
+    "boutiquesHint": "Le même compte est créé dans chaque boutique cochée, avec les mêmes rôles et le même mot de passe.",
+    "addedIn": "{{name}} ajouté(e) aussi dans : {{list}}",
+    "notAddedIn": "Pas ajouté(e) dans {{shop}} : {{error}}",
+    "colBoutiques": "Boutiques"
   },
   "status": {
     "groups": {

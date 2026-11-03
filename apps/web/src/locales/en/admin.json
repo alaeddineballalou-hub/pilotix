@@ -122,7 +122,12 @@
     "canAffect": "Automatic assignment",
     "canAffectHint": "Can open Management › Assignment and set who gets orders and alerts. Admins always can.",
     "canAffectLabel": "Can set the assignment",
-    "canAffectChip": "🔀 Assignment"
+    "canAffectChip": "🔀 Assignment",
+    "boutiques": "Boutiques",
+    "boutiquesHint": "The same account is created in every boutique ticked, with the same roles and password.",
+    "addedIn": "{{name}} also added to: {{list}}",
+    "notAddedIn": "Not added to {{shop}}: {{error}}",
+    "colBoutiques": "Boutiques"
   },
   "status": {
     "groups": {

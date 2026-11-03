@@ -75,3 +75,4 @@ html[data-theme="dark"] .bq-logo:not(.bq-logo-none) { background: #fff; }
 .bq-by td.bq-ok { color: var(--ok); font-weight: 700; }
 .bq-by td.bq-warn { color: var(--warn); font-weight: 700; }
 .bq-by td.bq-bad { color: var(--coral); font-weight: 700; }
+.bq-where { display: inline-flex; gap: 4px; flex-wrap: wrap; }

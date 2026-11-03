@@ -7,7 +7,8 @@
 // inside that boutique.
 import { z } from 'zod';
 import { num } from '../db';
-import { bad, Ctx, forbidden, makeSession, notFound } from '../rpc';
+import { bad, Ctx, forbidden, makeSession, notFound, proc } from '../rpc';
+import { attachProfile } from '../platform/accounts';
 import { loadShop, platformSettings, shopCtx, shopStatus } from '../platform/shops';
 import { FANOUT, Fan, fanOut, nextAcross, ORDERS_FAN, Part, Runner, sum, sumDeep, Target } from './fanout';
 import type { FilterOptions } from './filters';
@@ -168,3 +169,48 @@ export async function boutiqueCall(name: string, ctx: Ctx, input: unknown, run: 
   if (!targets.length) return nothing(await run({ ...ctx, boutique: undefined }, name, base));
   return fanOut(name, fan, base, targets, run);
 }
+
+// ---------------------------------------------------------------- the team, boutique by boutique
+const UserIn = z.record(z.string(), z.unknown());
+
+export const boutiqueWorkProcs = {
+  /**
+   * Utilisateurs › new person, « Boutiques » ticked: the same account (name, e-mail, phone, roles, password) made in
+   * these other boutiques of the person, each one checking its own rules (who may add people there, its seats).
+   */
+  'users.addToBoutiques': proc(null, z.object({ shops: z.array(z.number().int().positive()).min(1).max(50), user: UserIn }), async (ctx, i) => {
+    const mine = await boutiqueWork(ctx);
+    const { call } = await import('../index');
+    const out: { id: number; name: string; ok: boolean; error?: string }[] = [];
+    for (const id of [...new Set(i.shops)]) {
+      const b = mine.find((x) => x.id === id);
+      if (!b || b.id === ctx.shop?.id) continue;
+      try {
+        const c = await boutiqueCtx(ctx, b);
+        const made = (await call('users.create', c, i.user)) as { id: number };
+        // the person's Pilotix account (one password for all their boutiques)
+        const s = ctx.t ? await loadShop(ctx.t, { id: b.id }) : null;
+        if (ctx.t && s) await attachProfile(ctx.t, s.schema, made.id);
+        out.push({ id: b.id, name: b.name, ok: true });
+      } catch (e: any) {
+        out.push({ id: b.id, name: b.name, ok: false, error: String(e?.message ?? e) });
+      }
+    }
+    return out;
+  }),
+
+  /** Utilisateurs › « Boutiques »: for each person of this boutique, the person's boutiques where they also work. */
+  'users.boutiques': proc(null, z.object({}), async (ctx) => {
+    if (!ctx.session.isAdmin && !ctx.session.canManageUsers) return {} as Record<string, number[]>;
+    const mine = await boutiqueWork(ctx);
+    if (mine.length < 2) return {} as Record<string, number[]>;
+    const where = new Map<string, number[]>();
+    for (const b of mine) {
+      const c = await boutiqueCtx(ctx, b).catch(() => null);
+      if (!c) continue;
+      for (const r of (await c.db.query('SELECT lower(email) AS e FROM profiles WHERE active')) as any[]) where.set(String(r.e), [...(where.get(String(r.e)) ?? []), b.id]);
+    }
+    const here = await ctx.db.query('SELECT id, lower(email) AS e FROM profiles');
+    return Object.fromEntries(here.map((r: any) => [String(num(r.id)), where.get(String(r.e)) ?? []])) as Record<string, number[]>;
+  }),
+};
