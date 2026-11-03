@@ -275,7 +275,7 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
             Pilotix
           </a>
           <span id="page-title" className="page-title">
-            {partner ? label(page) : t(`nav.${page}`, { defaultValue: '' })}
+            {partner ? label(page) : page === 'livraison' && sub === 'livreurs' ? t('nav.sub.livreurs') : t(`nav.${page}`, { defaultValue: '' })}
           </span>
           {partner && SELLER_PAGES[space].has(page) && <SellerSwitch />}
           {calls && page === 'confirmation' && (!sub || sub === 'nouvelles' || sub === 'attente') && (

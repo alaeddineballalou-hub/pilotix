@@ -97,19 +97,22 @@ export function PhoneLivraison({
   const { t } = useTranslation();
   return (
     <div className="pxl">
-      <div className="pxv-own pxl-tabs" role="tablist">
-        {(['societes', 'pilot', 'api', 'livreurs', 'preferences'] as const).map((k) => (
-          <a key={k} role="tab" aria-selected={current === k} className={current === k ? 'on' : ''} href={`#/livraison/${k}`}>
-            {t(`livraison.ph.tab.${k}`)}
-          </a>
-        ))}
-      </div>
+      {/* Livreurs has its own line in Partenaires: no Sociétés de livraison tabs on it */}
+      {current !== 'livreurs' && (
+        <div className="pxv-own pxl-tabs" role="tablist">
+          {(['societes', 'pilot', 'api', 'preferences'] as const).map((k) => (
+            <a key={k} role="tab" aria-selected={current === k} className={current === k ? 'on' : ''} href={`#/livraison/${k}`}>
+              {t(`livraison.ph.tab.${k}`)}
+            </a>
+          ))}
+        </div>
+      )}
       {current === 'preferences' ? (
         <Preferences />
       ) : current === 'pilot' ? (
         <Pilot />
       ) : current === 'livreurs' ? (
-        <Livreurs companies={companies.data ?? []} onSheet={onSheet} />
+        <Livreurs companies={companies.data ?? []} onSheet={onSheet} onEdit={onEdit} onOpen={onOpen} />
       ) : companies.error ? (
         <ErrorBox error={companies.error} onRetry={() => companies.refetch()} />
       ) : !companies.data || !kinds.data ? (
@@ -117,7 +120,7 @@ export function PhoneLivraison({
       ) : current === 'api' ? (
         <Carriers list={companies.data} kinds={kinds.data} onAdd={onAdd} onOpen={(c) => onEdit(c)} />
       ) : (
-        <Companies list={companies.data} kinds={kinds.data} onEdit={onEdit} onOpen={onOpen} onAdd={onAdd} onSheet={onSheet} />
+        <Companies list={companies.data.filter((c) => c.kind !== 'own')} kinds={kinds.data} onEdit={onEdit} onOpen={onOpen} onAdd={onAdd} onSheet={onSheet} />
       )}
     </div>
   );
@@ -365,13 +368,33 @@ function Carriers({ list, kinds, onAdd, onOpen }: { list: Company[]; kinds: Kind
 }
 
 // ---------------------------------------------------------------- livreurs
-function Livreurs({ companies, onSheet }: { companies: Company[]; onSheet: (by: { livreurId?: number }) => void }) {
+function Livreurs({ companies, onSheet, onEdit, onOpen }: { companies: Company[]; onSheet: (by: { livreurId?: number; companyId?: number }) => void; onEdit: (c: Company) => void; onOpen: (k: Open, c: Company) => void }) {
   const { t } = useTranslation();
   const q = useRpc('delivery.livreurs', {});
   const [cur, setCur] = useState<number | null>(null);
   const l = q.data?.find((x) => x.id === cur) ?? null;
   return (
     <>
+      {/* the « company » of the store's own livreurs: its delivery prices, its route sheet (all livreurs), its name / state */}
+      {companies
+        .filter((c) => c.kind === 'own')
+        .map((c) => (
+          <div key={c.id} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 12, margin: '0 0 12px' }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>{t('livraison.livreurs.prices')}</div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{t('livraison.livreurs.pricesHelp', { name: c.name })}</div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <button type="button" className="btn small" style={{ flex: 1 }} onClick={() => onOpen('fees', c)}>
+                {t('livraison.act.fees')}
+              </button>
+              <button type="button" className="btn small" style={{ flex: 1 }} onClick={() => onSheet({ companyId: c.id })}>
+                {t('livraison.act.sheet')}
+              </button>
+              <button type="button" className="btn small" style={{ flex: 1 }} onClick={() => onEdit(c)}>
+                {t('common.edit')}
+              </button>
+            </div>
+          </div>
+        ))}
       {q.error ? (
         <ErrorBox error={q.error} onRetry={() => q.refetch()} />
       ) : !q.data ? (

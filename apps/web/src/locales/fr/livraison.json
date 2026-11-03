@@ -209,7 +209,9 @@
     "company": "Société (livreurs à moi)",
     "endWilaya": "Fin de tournée (wilaya)",
     "endCommune": "Fin de tournée (commune)",
-    "endHint": "Sert à trier ses colis : le plus loin d’abord, en revenant vers ici."
+    "endHint": "Sert à trier ses colis : le plus loin d’abord, en revenant vers ici.",
+    "prices": "Prix de livraison de vos livreurs",
+    "pricesHelp": "Les tarifs par wilaya et la feuille de route de tous vos livreurs ({{name}})."
   },
   "sheet": {
     "stopdesk": "Stop desk",
