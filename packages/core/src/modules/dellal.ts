@@ -483,7 +483,7 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
     const pid = Number(input?.product_id);
     const g = Number.isSafeInteger(pid) && pid > 0 ? await readGuide(ctx.db, pid) : null;
     if (!g) return { error: 'Pas de guide de vente pour ce produit : réponds avec le catalogue et les informations de la boutique, sans rien inventer.' };
-    return { product_id: pid, guide: guideText(g.guide) };
+    return { product_id: pid, guide: guideText(g.guide, g.upsell) };
   }
   if (name === 'handoff') {
     const reason = String(input?.reason ?? 'À reprendre').slice(0, 300);

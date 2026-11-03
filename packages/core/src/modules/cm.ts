@@ -358,7 +358,7 @@ async function gatherFacts(ctx: Ctx, c: CommentLike): Promise<CmFacts> {
     isAd: !!post?.is_ad,
     caption: post?.caption ?? null,
     product,
-    productGuide: product?.guide ? await readGuide(db, product.product_id).then((g) => (g ? guideText(g.guide) : null)) : null,
+    productGuide: product?.guide ? await readGuide(db, product.product_id).then((g) => (g ? guideText(g.guide, g.upsell) : null)) : null,
     catalog: product ? [] : all.slice(0, 12),
     place,
     phone: phoneIn(c.body),

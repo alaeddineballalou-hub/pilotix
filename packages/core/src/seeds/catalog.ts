@@ -54,7 +54,8 @@ const GUIDES: Record<string, object> = {
       { q: '« Nkhamem m3a rajli »', a: 'Bien sûr. Je vous la garde jusqu’à demain soir, sans engagement, et vous payez seulement à la livraison.' },
       { q: '« Kayna f l’hanout b rkhis »', a: 'Regardez si elle devient une table et si elle a le harnais 5 points : la nôtre a les deux.' },
     ],
-    upsell: 'Proposez le tapis d’éveil musical pour les moments de jeu, ou le sac à langer à dos pour les sorties.',
+    upsell: 'Le tapis pour les moments de jeu, le sac pour les sorties.',
+    upsellSkus: ['PX-TAP', 'PX-SAC'],
     never: ['Qu’elle est en bois : elle est en métal et plastique.', 'Une livraison en 24 h partout : le délai dépend de la wilaya.', 'Un cadeau ou une remise qui n’existe pas.'],
   },
   'PX-POU': {
@@ -70,7 +71,8 @@ const GUIDES: Record<string, object> = {
       { q: '« Ghali »', a: 'Elle sert jusqu’à 3 ans et se plie d’une main : c’est celle qu’on garde. Vous payez à la livraison.' },
       { q: '« Nkhaf ma tkounch solide »', a: 'Le châssis est en aluminium et elle porte jusqu’à 15 kg.' },
     ],
-    upsell: 'Proposez le sac à langer à dos : il s’accroche à la poignée de la poussette.',
+    upsell: 'Il s’accroche à la poignée de la poussette.',
+    upsellSkus: ['PX-SAC'],
     never: ['Qu’elle convient dès la naissance : c’est à partir de 6 mois.', 'Qu’elle est acceptée en cabine par toutes les compagnies.'],
   },
   'PX-LIT': {
@@ -86,6 +88,26 @@ const GUIDES: Record<string, object> = {
     upsell: '',
     never: ['Qu’il sert de parc pour un enfant qui grimpe : à 3 ans ou 15 kg, on arrête.'],
   },
+  // a product with sizes: customers give the baby's age and weight, the size guide says which size
+  'PX-BOD': {
+    brief: 'Lot de 6 bodies en coton doux, à pressions, pour tous les jours.',
+    strengths: ['100 % coton : doux sur la peau de bébé.', 'Pressions à l’entrejambe : on change la couche sans tout enlever.', '6 bodies : de quoi tenir la semaine.'],
+    faq: [
+      { q: 'Quelle taille choisir ?', a: 'Dites-moi l’âge et le poids de bébé : je vous donne la bonne taille (voir le guide des tailles).' },
+      { q: 'Ça passe en machine ?', a: 'Oui, à 40 °C.' },
+      { q: 'Quelles couleurs ?', a: 'Blanc, gris et bleu ciel dans le lot.' },
+    ],
+    doubts: [{ q: '« Ghali »', a: 'Le lot revient à environ 530 DA le body, en coton.' }],
+    upsell: 'Pour un cadeau de naissance complet.',
+    upsellSkus: ['PX-ENS'],
+    never: ['Que le coton est bio : ce n’est pas écrit.'],
+    sizes: [
+      { size: 'Naissance', age: '0 à 1 mois', weight: '2,5 à 4 kg' },
+      { size: '3 mois', age: '1 à 3 mois', weight: '4 à 6 kg' },
+      { size: '6 mois', age: '3 à 6 mois', weight: '6 à 8 kg' },
+      { size: '12 mois', age: '6 à 12 mois', weight: '8 à 10 kg' },
+    ],
+  },
   'PX-BIB': {
     brief: 'Biberon de 260 ml avec valve anti-colique, pour les bébés qui avalent de l’air en buvant.',
     strengths: ['La valve fait entrer l’air sans bulles dans le lait : moins de coliques.', 'Tétine souple en silicone, débit lent.', 'Sans BPA.'],
@@ -99,15 +121,21 @@ const GUIDES: Record<string, object> = {
   },
 };
 
+/** Two products made with a « Taille » option (their variants are its values), so their guide has a size guide. */
+const SIZE_OPTIONS: Record<string, string[]> = { 'PX-BOD': ['Naissance', '3 mois', '6 mois', '12 mois'], 'PX-ENS': ['0-3 mois', '3-6 mois', '6-12 mois'] };
+
 async function seedGuides(db: Db, users: Record<string, number>, now: number) {
   const by = users.admin ?? users.depot ?? null;
+  for (const [sku, values] of Object.entries(SIZE_OPTIONS)) await db.query('UPDATE products SET options = $2 WHERE sku = $1', [sku, JSON.stringify([{ name: 'Taille', values }])]);
+  const ids = new Map((await db.query('SELECT id, sku FROM products')).map((r: any) => [String(r.sku), num(r.id)] as const));
   let k = 0;
-  for (const [sku, guide] of Object.entries(GUIDES)) {
-    const p = (await db.query('SELECT id FROM products WHERE sku = $1', [sku]))[0];
-    if (!p) continue;
+  for (const [sku, { upsellSkus, ...guide }] of Object.entries(GUIDES) as [string, any][]) {
+    const id = ids.get(sku);
+    if (!id) continue;
+    const upsellIds = ((upsellSkus ?? []) as string[]).map((x) => ids.get(x)).filter((x): x is number => !!x);
     await db.query(
       `INSERT INTO product_guides (product_id, guide, updated_by, updated_at) VALUES ($1, $2, $3, $4) ON CONFLICT (product_id) DO NOTHING`,
-      [num(p.id), JSON.stringify(guide), by, new Date(now - (6 - k++) * 86_400_000).toISOString()],
+      [id, JSON.stringify({ upsellIds, sizes: [], ...guide }), by, new Date(now - (7 - k++) * 86_400_000).toISOString()],
     );
   }
 }

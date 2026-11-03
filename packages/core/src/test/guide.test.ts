@@ -3,7 +3,7 @@
 // and drafted by « Écrire avec l'IA » without inventing facts.
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
-import { call, Ctx, Db, ServerHooks } from '../index';
+import { call, Ctx, Db, makeSession, ServerHooks } from '../index';
 import { getSetting, setSetting } from '../settings';
 import { guideText, TO_FILL } from '../modules/guide';
 import { draftSystem, readDraft, rulesDraft } from '../modules/guidedraft';
@@ -32,9 +32,9 @@ const GUIDE = {
   never: ['Qu’il remplace le médecin.'],
 };
 
-test('the demo shop: four products have a guide, flagged in the lists, the form reads it', async () => {
+test('the demo shop: five products have a guide, flagged in the lists, the form reads it', async () => {
   const list: any[] = await call('catalog.products', depot, {});
-  assert.equal(list.filter((p) => p.hasGuide).length, 4);
+  assert.equal(list.filter((p) => p.hasGuide).length, 5);
   assert.equal(list.find((p) => p.id === chair).hasGuide, true);
   assert.equal(list.find((p) => p.id === thermo).hasGuide, false);
   const one: any = await call('catalog.product', depot, { id: chair });
@@ -97,7 +97,7 @@ test('agents read the guide of their products only, and the call screen knows wh
 });
 
 test('what the AI agents read: the guide in its own words, never an answer still to write', () => {
-  const text = guideText({ brief: 'B', strengths: ['S1', TO_FILL], faq: [{ q: 'Q1', a: 'A1' }, { q: 'Q2', a: TO_FILL }], doubts: [{ q: '« Ghali »', a: 'D1' }], upsell: '', never: ['N1'] });
+  const text = guideText({ brief: 'B', strengths: ['S1', TO_FILL], faq: [{ q: 'Q1', a: 'A1' }, { q: 'Q2', a: TO_FILL }], doubts: [{ q: '« Ghali »', a: 'D1' }], upsell: '', upsellIds: [], never: ['N1'], sizes: [] });
   assert.match(text, /EN BREF : B/);
   assert.match(text, /- Q1 → A1/);
   assert.match(text, /- « Ghali » → D1/);
@@ -195,19 +195,25 @@ test('« Écrire avec l\'IA »: Claude drafts from the shop\'s facts, the unknow
   assert.equal(plain.by, 'rules');
   assert.deepEqual(plain.guide.strengths, ['Écran rétroéclairé', 'Alarme de fièvre']);
   assert.ok(plain.guide.faq.some((p: any) => p.a === TO_FILL));
-  await assert.rejects(call('catalog.guideDraft', conf, { name: 'X' }), /Accès refusé/);
+  await assert.rejects(call('catalog.guideDraft', conf, { name: 'X' }), /agences de confirmation/);
   await call('dellal.settings.save', admin, { ...g0.settings, secrets: { ai: null } });
 });
 
 test('the draft helpers: JSON read leniently, Darija instructions only for darija, the rules draft keeps to the facts', () => {
   assert.equal(readDraft('pas de JSON'), null);
   assert.equal(readDraft('{"brief": ""}'), null);
-  assert.deepEqual(readDraft('```json\n{"brief":"B","strengths":"pas une liste","faq":[{"q":"Q","a":"A"}]}\n```'), { brief: 'B', strengths: [], faq: [{ q: 'Q', a: 'A' }], doubts: [], upsell: '', never: [] });
+  assert.deepEqual(readDraft('```json\n{"brief":"B","strengths":"pas une liste","faq":[{"q":"Q","a":"A"}]}\n```'), { brief: 'B', strengths: [], faq: [{ q: 'Q', a: 'A' }], doubts: [], upsell: '', upsellIds: [], never: [], sizes: [] });
   assert.match(draftSystem('dz', 'GUIDE DARIJA'), /lettres latines[\s\S]*GUIDE DARIJA/);
   assert.doesNotMatch(draftSystem('fr'), /Pour écrire la darija/);
-  const r = rulesDraft({ name: 'Biberon', variants: ['Rose', 'Bleu'], packs: [{ qty: 3, price: 3900 }], linked: ['Goupillon'], services: [], page: null });
+  const r = rulesDraft({ name: 'Biberon', variants: ['Rose', 'Bleu'], packs: [{ qty: 3, price: 3900 }], linked: ['Goupillon'], linkedIds: [7], services: [], page: null });
   assert.match(r.faq.find((p) => /couleurs/.test(p.q))!.a, /Rose, Bleu/);
-  assert.match(r.upsell, /3 pour 3 900 DA[\s\S]*Goupillon/);
+  assert.match(r.upsell, /3 pour 3 900 DA/);
+  assert.doesNotMatch(r.upsell, /Goupillon/, 'the products that go with it are picked, not written');
+  assert.deepEqual(r.upsellIds, [7]);
+  // sizes: a size that says its age gets it, the weights stay for the team
+  const b = rulesDraft({ name: 'Body', variants: [], packs: [], linked: [], services: [], page: null, options: [{ name: 'Taille', values: ['3-6 mois', 'XL'] }, { name: 'Couleur', values: ['Blanc'] }] });
+  assert.deepEqual(b.sizes, [{ size: '3-6 mois', age: '3-6 mois', weight: '' }]);
+  assert.ok(b.faq.some((p) => /taille/.test(p.q)));
   assert.match(r.doubts[0].a, /pack/);
 });
 
@@ -218,7 +224,7 @@ test('Produits & stock › Guide de vente: every product and where its guide sta
   assert.equal(row.hasGuide, true);
   assert.equal(row.toFill, 1, 'the warranty answer is still to write');
   assert.match(row.brief, /6 mois/);
-  assert.deepEqual(row.parts, { strengths: 4, faq: 5, doubts: 3, never: 3, upsell: 1 });
+  assert.deepEqual(row.parts, { strengths: 4, faq: 5, doubts: 3, never: 3, upsell: 1, sizes: 0 });
   assert.ok(list.rows.every((r: any) => !('cost' in r) && typeof r.hasGuide === 'boolean'));
   const plain = list.rows.find((r: any) => r.id === thermo);
   assert.equal(plain.hasGuide, false);
@@ -237,8 +243,60 @@ test('Produits & stock › Guide de vente: every product and where its guide sta
   config.agents[String(conf.session.profile.id)] = { ...config.agents[String(conf.session.profile.id)], products: [chair] } as any;
   await setSetting(db, 'autoAssign', config);
   assert.deepEqual(((await call('catalog.guides', conf, {})) as any).rows.map((r: any) => r.id), [chair]);
-  await assert.rejects(call('catalog.saveGuide', conf, { id: chair, guide: {} }), /Accès refusé/);
+  await assert.rejects(call('catalog.saveGuide', conf, { id: chair, guide: {} }), /agences de confirmation/);
   await assert.rejects(call('catalog.guides', await as(EMAILS.livreur), {}), /Accès refusé/);
   await call('catalog.saveGuide', depot, { id: thermo, guide: {} });
   assert.equal(((await call('catalog.guides', depot, {})) as any).rows.find((r: any) => r.id === thermo).hasGuide, false);
+});
+
+test('the size guide (a product with a « Taille » option) and Vente en plus (products picked): saved, read, said to the AI', async () => {
+  const bod = Number((await db.query(`SELECT id FROM products WHERE sku = 'PX-BOD'`))[0].id);
+  const ens = Number((await db.query(`SELECT id FROM products WHERE sku = 'PX-ENS'`))[0].id);
+  const facts: any = await call('catalog.guideFacts', depot, { id: bod });
+  assert.deepEqual(facts.options, [{ name: 'Taille', values: ['Naissance', '3 mois', '6 mois', '12 mois'] }]);
+  const r: any = await call('catalog.guide', depot, { id: bod });
+  assert.equal(r.guide.sizes.length, 4);
+  assert.deepEqual(r.guide.sizes[1], { size: '3 mois', age: '1 à 3 mois', weight: '4 à 6 kg' });
+  assert.deepEqual(r.upsell.map((p: any) => p.id), [ens]);
+  assert.ok(r.upsell[0].name && r.upsell[0].price > 0);
+  // saving: a size without age nor weight is dropped, the product itself and an unknown product leave Vente en plus
+  const g: any = await call('catalog.saveGuide', depot, { id: bod, guide: { ...r.guide, sizes: [...r.guide.sizes, { size: 'Vide' }], upsellIds: [ens, bod, 999999] } });
+  assert.equal(g.guide.sizes.length, 4);
+  assert.deepEqual(g.guide.upsellIds, [ens]);
+  // the AI agents: the size guide (ask age and weight) and the products to offer, with their price
+  const page = async (req: any) => {
+    if (!req.tools.length) return { content: [{ type: 'text' as const, text: String(req.messages[0].content).match(/«\n([\s\S]*?)\n»/)?.[1] ?? '' }], stop_reason: 'end_turn' };
+    const out = await req.runTool('product_guide', { product_id: bod });
+    assert.match(out.guide, /GUIDE DES TAILLES \(demande l’âge et le poids[^\n]*\n- Naissance : âge 0 à 1 mois, poids 2,5 à 4 kg/);
+    assert.match(out.guide, new RegExp(`VENTE EN PLUS : propose aussi #${ens} Ensemble bébé 3 pièces \\(\\d+ DA\\) — Pour un cadeau`));
+    return { content: [{ type: 'text' as const, text: 'Chhal 3omrou ?' }], stop_reason: 'end_turn' };
+  };
+  const inPage = { ...(await as(EMAILS.admin)), dellalAi: page };
+  await call('dellal.test', inPage, { reset: true });
+  await call('dellal.test', inPage, { body: 'lot de 6 bodies wach men taille ?' });
+  // a draft keeps the product's own sizes only, and picks its Produits liés for Vente en plus
+  const d: any = await call('catalog.guideDraft', depot, { productId: bod, name: 'Lot de 6 bodies coton', options: facts.options, linkedIds: [ens, bod] });
+  assert.equal(d.by, 'rules');
+  assert.deepEqual(d.guide.upsellIds, [ens]);
+  assert.ok(d.guide.sizes.every((x: any) => facts.options[0].values.includes(x.size)));
+});
+
+test('a confirmation agency writes the guides of the products it works on, and only those', async () => {
+  const bib = Number((await db.query(`SELECT id FROM products WHERE sku = 'PX-BIB'`))[0].id);
+  await db.query(`INSERT INTO agency_routes (agency_id, task, product_id) VALUES (900, 'confirmation', $1), (900, 'confirmation', $2)`, [chair, bib]);
+  const agency: Ctx = { ...conf, session: makeSession({ ...conf.session.profile, agencyId: 900, agencyProducts: null, roles: ['confirmation'] } as any) };
+  assert.deepEqual(((await call('catalog.guides', agency, {})) as any).rows.map((r: any) => r.id).sort((a: number, b: number) => a - b), [chair, bib].sort((a, b) => a - b));
+  const facts: any = await call('catalog.guideFacts', agency, { id: bib });
+  assert.equal(facts.name, 'Biberon anti-colique 260 ml');
+  assert.ok(!('cost' in facts));
+  const cur: any = await call('catalog.guide', agency, { id: bib });
+  const saved: any = await call('catalog.saveGuide', agency, { id: bib, guide: { ...cur.guide, brief: 'Biberon 260 ml anti-colique (écrit par l’agence).', upsellIds: [chair, thermo] } });
+  assert.match(saved.guide.brief, /agence/);
+  assert.deepEqual(saved.guide.upsellIds, [chair], 'Vente en plus among the agency’s products only');
+  await assert.rejects(call('catalog.saveGuide', agency, { id: thermo, guide: { brief: 'x' } }), /pas confié/);
+  await assert.rejects(call('catalog.guideFacts', agency, { id: thermo }), /pas confié/);
+  // the store's own agents still read only
+  await assert.rejects(call('catalog.saveGuide', conf, { id: chair, guide: { brief: 'x' } }), /agences de confirmation/);
+  await assert.rejects(call('catalog.guideFacts', conf, { id: chair }), /agences de confirmation/);
+  await db.query('DELETE FROM agency_routes WHERE agency_id = 900');
 });

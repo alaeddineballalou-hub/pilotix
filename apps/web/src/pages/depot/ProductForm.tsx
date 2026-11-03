@@ -10,7 +10,7 @@ import { toast } from '../../ui/toast';
 import { ConfirmButton } from '../admin/bits';
 import { bidi } from './stockui';
 import { combosOf, MAX_COMBOS, Opt, skuOf, titleOf, VariantOptions, VRow } from './VariantOptions';
-import { DraftFacts, formToGuide, GuideEditor, GuideForm, guideProblem, guideToForm } from './guide';
+import { DraftFacts, formToGuide, GuideEditor, GuideForm, guideProblem, guideToForm, sizeValues } from './guide';
 
 interface PackRow {
   qty: string;
@@ -160,7 +160,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
       return toast('Enter purchase and selling prices for every active variant.', 'bad');
     }
     if (services.some((s) => !s.name.trim() || s.price === '' || s.cost === '')) return toast('Enter a name, selling price and service cost for each additional service.', 'bad');
-    const sales = formToGuide(guide);
+    const sales = formToGuide(guide, sizeValues(optMode ? opts : []));
     const problem = guideProblem(sales, t);
     if (problem) {
       setTab('guide');
@@ -209,6 +209,8 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
       packs: packs.filter((x) => Number(x.qty) > 1 && Number(x.price) > 0).map((x) => ({ qty: Math.round(Number(x.qty)), price: Math.round(Number(x.price)) })),
       linked: [...linked].map((x) => names.get(x)).filter((x): x is string => !!x).slice(0, 50),
       services: services.filter((x) => x.name.trim()).map((x) => ({ name: x.name.trim(), price: Math.round(Number(x.price) || 0) })),
+      options: optMode ? opts.filter((o) => o.name.trim() && o.values.length).map((o) => ({ name: o.name.trim(), values: o.values })) : [],
+      linkedIds: [...linked],
     };
   };
 
@@ -240,7 +242,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
         <Tabs value={tab} onChange={setTab} items={[{ value: 'product', label: t('produits.guide.productTab') }, { value: 'guide', label: t('produits.guide.tab') }]} />
       </div>
       <div hidden={tab !== 'guide'}>
-        <GuideEditor value={guide} onChange={setGuide} facts={draftFacts} />
+        <GuideEditor value={guide} onChange={setGuide} facts={draftFacts} products={others.map((x) => ({ id: x.id, name: x.name }))} />
       </div>
       <form
         className="pf"

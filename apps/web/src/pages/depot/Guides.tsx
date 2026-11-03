@@ -11,7 +11,7 @@ import { useIsPhone } from '../../lib/useMedia';
 import { Empty, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { Sheet } from '../../ui/Sheet';
 import { toast } from '../../ui/toast';
-import { DraftFacts, formToGuide, GuideEditor, GuideForm, guideProblem, guideToForm, GuideView } from './guide';
+import { DraftFacts, formToGuide, GuideEditor, GuideForm, guideProblem, guideToForm, GuideView, sizeValues } from './guide';
 
 type Row = Out<'catalog.guides'>['rows'][number];
 type Filter = 'all' | 'with' | 'without' | 'todo';
@@ -20,7 +20,7 @@ const keyOf = (r: Row) => `${r.seller?.id ?? 0}:${r.id}`;
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const fits = (r: Row, f: Filter) => (f === 'all' ? true : f === 'with' ? r.hasGuide : f === 'without' ? !r.hasGuide : r.toFill > 0);
 
-/** manager: the owner and the depot team (they write); agents read. initial: a product id from the address. */
+/** manager: who writes here (the owner, the depot team, a confirmation agency's people); the others read. initial: a product id from the address. */
 export function Guides({ manager, initial }: { manager: boolean; initial?: number }) {
   const { t } = useTranslation();
   const phone = useIsPhone();
@@ -41,7 +41,6 @@ export function Guides({ manager, initial }: { manager: boolean; initial?: numbe
     const w = fold(search.trim());
     return rows.filter((r) => fits(r, filter) && (!w || fold(`${r.name} ${r.sku}`).includes(w)));
   }, [rows, filter, search]);
-  const names = useMemo(() => new Map(rows.map((r) => [r.id, r.name] as const)), [rows]);
   const row = rows.find((r) => keyOf(r) === sel) ?? null;
   const pick = (r: Row) => {
     if (editing) return toast(t('produits.guide.page.finish'), 'bad');
@@ -53,7 +52,7 @@ export function Guides({ manager, initial }: { manager: boolean; initial?: numbe
   if (!rows.length) return <Empty>{t('produits.guide.page.none')}</Empty>;
 
   const box = row && (
-    <GuideBox key={keyOf(row)} row={row} manager={manager} names={names} phone={phone} onEditing={setEditing} onClose={() => (setSel(null), setEditing(false))} />
+    <GuideBox key={keyOf(row)} row={row} manager={manager} products={rows.filter((r) => (r.seller?.id ?? 0) === (row.seller?.id ?? 0)).map((r) => ({ id: r.id, name: r.name }))} phone={phone} onEditing={setEditing} onClose={() => (setSel(null), setEditing(false))} />
   );
   return (
     <div className={`gd-page ${editing ? 'editing' : ''}`}>
@@ -106,35 +105,22 @@ export function Guides({ manager, initial }: { manager: boolean; initial?: numbe
 }
 
 /** One product's guide: read it, or (the owner and the depot team) write it. */
-function GuideBox({ row, manager, names, phone, onEditing, onClose }: { row: Row; manager: boolean; names: Map<number, string>; phone: boolean; onEditing: (on: boolean) => void; onClose: () => void }) {
+function GuideBox({ row, manager, products, phone, onEditing, onClose }: { row: Row; manager: boolean; products: { id: number; name: string }[]; phone: boolean; onEditing: (on: boolean) => void; onClose: () => void }) {
   const { t } = useTranslation();
   const read = useRpc('catalog.guide', { id: row.id }, { staleTime: 30_000 });
   const [form, setForm] = useState<GuideForm | null>(null);
   const editing = form !== null;
-  const prod = useRpc('catalog.product', { id: row.id }, { enabled: manager && editing });
+  const prod = useRpc('catalog.guideFacts', { id: row.id }, { enabled: manager && editing });
   const save = useAction('catalog.saveGuide', { success: t('produits.guide.page.saved'), onDone: () => setForm(null) });
   useEffect(() => onEditing(editing), [editing]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onEditing(false), []); // eslint-disable-line react-hooks/exhaustive-deps
   const d = read.data;
   const id = `gd-${row.seller?.id ?? 0}-${row.id}`;
   const meta = d?.updatedAt ? (d.updatedBy ? t('produits.guide.updated', { date: dateOnly(d.updatedAt), name: d.updatedBy }) : t('produits.guide.updatedNoName', { date: dateOnly(d.updatedAt) })) : t('produits.guide.none');
-  const facts = (): DraftFacts => {
-    const p = prod.data;
-    return {
-      productId: row.id,
-      name: p?.name ?? row.name,
-      brand: p?.brand ?? undefined,
-      description: p?.description ?? undefined,
-      price: p?.price || undefined,
-      variants: (p?.variants ?? []).map((v) => v.title).filter(Boolean).slice(0, 200),
-      packs: p?.packs ?? [],
-      linked: (p?.linked ?? []).map((x) => names.get(x)).filter((x): x is string => !!x).slice(0, 50),
-      services: (p?.services ?? []).map((s) => ({ name: s.name, price: s.price })),
-    };
-  };
+  const facts = (): DraftFacts => prod.data ?? { productId: row.id, name: row.name, variants: [], packs: [], linked: [], services: [], options: [], linkedIds: [] };
   const submit = () => {
     if (!form) return;
-    const g = formToGuide(form);
+    const g = formToGuide(form, prod.data ? sizeValues(prod.data.options) : undefined);
     const problem = guideProblem(g, t);
     if (problem) return toast(problem, 'bad');
     save.mutate({ id: row.id, guide: g });
@@ -159,9 +145,9 @@ function GuideBox({ row, manager, names, phone, onEditing, onClose }: { row: Row
   ) : !d ? (
     <Loading />
   ) : editing ? (
-    <GuideEditor value={form!} onChange={setForm} facts={facts} />
+    <GuideEditor value={form!} onChange={setForm} facts={facts} products={products} />
   ) : d.guide ? (
-    <GuideView guide={d.guide} id={id} />
+    <GuideView guide={d.guide} id={id} upsell={d.upsell} />
   ) : (
     <div className="gd-none">
       <Icon name="book" />

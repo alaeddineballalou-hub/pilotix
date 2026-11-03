@@ -14,11 +14,12 @@ import { Guides } from './Guides';
 
 export function AgencyProducts(props: PageProps) {
   const seller = useSeller();
-  return <SellerScope seller={seller}><AgentView><AssignedCatalog key={seller} {...props} /></AgentView></SellerScope>;
+  // a confirmation agency writes the guides of its sellers' products (Guide de vente)
+  return <SellerScope seller={seller}><AgentView><AssignedCatalog key={seller} {...props} canWrite /></AgentView></SellerScope>;
 }
 
 /** Both tabs use the same minimal, server-scoped response. There are no inventory-management calls here. */
-export function AssignedCatalog({ sub, rest }: PageProps) {
+export function AssignedCatalog({ sub, rest, canWrite = false }: PageProps & { canWrite?: boolean }) {
   const { t } = useTranslation();
   const tab = sub === 'produits' || sub === 'guides' ? sub : 'stock';
   const [search, setSearch] = useState('');
@@ -33,7 +34,7 @@ export function AssignedCatalog({ sub, rest }: PageProps) {
   // the products' sales guides, read only (Produits & stock › Guide de vente)
   if (tab === 'guides') return <div className="pd assigned-catalog">
     <SectionHeader icon="layers" title={t('produits.title')} about={t('produits.about.guidesAgent')} tabs={tabs} current={tab} />
-    <Guides manager={false} initial={rest?.[0] && /^\d+$/.test(rest[0]) ? Number(rest[0]) : undefined} />
+    <Guides manager={canWrite} initial={rest?.[0] && /^\d+$/.test(rest[0]) ? Number(rest[0]) : undefined} />
   </div>;
   return <div className="pd assigned-catalog">
     <SectionHeader icon="layers" title={t('produits.title')} about={t('produits.assigned.about')} tabs={tabs} current={tab} />

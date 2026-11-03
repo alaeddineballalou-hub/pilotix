@@ -173,8 +173,12 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'catalog.assigned': free,
   // a product's sales guide during the call (the proc keeps to the agency's products)
   'catalog.guide': free,
-  // Produits & stock › Guide de vente (read only: the list keeps to the agency's products)
+  // Produits & stock › Guide de vente: the agency's people read and write the guides of the agency's products (the procs
+  // keep to them)
   'catalog.guides': free,
+  'catalog.saveGuide': free,
+  'catalog.guideFacts': free,
+  'catalog.guideDraft': free,
   'confirmation.deskOptions': free,
   'confirmation.mine': free,
   'confirmation.banner': free,

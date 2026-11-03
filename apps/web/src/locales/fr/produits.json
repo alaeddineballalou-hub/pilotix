@@ -585,7 +585,7 @@
       "neverHint": "Une chose par ligne : ce que personne ne doit dire ni promettre.",
       "faqHint": "Les questions que les clients posent vraiment, avec la réponse de la boutique.",
       "doubtsHint": "Ce que le client dit pour ne pas commander, et quoi lui répondre.",
-      "upsellHint": "Quoi proposer en plus (un pack, un produit qui va avec) et comment le dire.",
+      "upsellHint": "Choisissez les produits à proposer en plus (10 au plus).",
       "q": "Question",
       "a": "Réponse",
       "qPh": "Ex. : À partir de quel âge ?",
@@ -609,7 +609,17 @@
       "tooLong": "{{part}} : une ligne dépasse {{max}} caractères",
       "tooMany": "{{part}} : {{max}} lignes au plus",
       "tooBig": "Guide de vente trop long : {{n}} caractères ({{max}} au plus)",
-      "needName": "Écrivez d’abord le nom du produit (onglet Produit)"
+      "needName": "Écrivez d’abord le nom du produit (onglet Produit)",
+      "sizesHint": "Pour chaque taille : l’âge et le poids qui vont. Les clients les demandent avant de choisir.",
+      "agePh": "Ex. : 3 à 6 mois",
+      "weightPh": "Ex. : 6 à 8 kg",
+      "pick": "Questions fréquentes : cliquez pour ajouter",
+      "upsellChosen": "Produits choisis",
+      "upsellNone": "Aucun produit choisi.",
+      "upsellSearch": "Chercher un produit à proposer…",
+      "upsellMax": "{{max}} produits au plus",
+      "upsellPhrase": "+ Ajouter une phrase (optionnel)",
+      "upsellPhrasePh": "Comment le proposer (optionnel)"
     },
     "page": {
       "list": "Les produits",
@@ -634,6 +644,29 @@
       "editing": "Vous modifiez le guide : « Enregistrer » pour le garder.",
       "emptyManager": "Pas encore de guide pour ce produit. Écrivez-le, ou laissez l’IA faire un premier brouillon.",
       "none": "Aucun produit pour le moment."
+    },
+    "sizes": "Guide des tailles",
+    "sizesAsk": "Demandez l’âge et le poids, puis proposez la taille qui va.",
+    "sizeCol": "Taille",
+    "ageCol": "Âge",
+    "weightCol": "Poids",
+    "qa": {
+      "pay": "Je paie comment ?",
+      "payAns": "À la livraison, en espèces, quand vous recevez le colis.",
+      "delivery": "Combien coûte la livraison ?",
+      "deliveryAns": "Selon votre wilaya, à domicile ou au bureau (stop desk) : on vous donne le prix exact avant de confirmer.",
+      "delay": "La livraison prend combien de temps ?",
+      "colors": "Quelles couleurs avez-vous ?",
+      "colorsAns": "Disponible en :",
+      "size": "Quelle taille choisir ?",
+      "sizeAns": "Dites-moi l’âge et le poids : je vous donne la bonne taille (voir le guide des tailles).",
+      "age": "Pour quel âge ?",
+      "weight": "Quel poids ?",
+      "warranty": "Il y a une garantie ?",
+      "exchange": "Je peux l’échanger ou le rendre ?",
+      "quality": "C’est de bonne qualité ? C’est original ?",
+      "assembled": "Il arrive monté ?",
+      "use": "Comment l’utiliser et le nettoyer ?"
     }
   }
 }
