@@ -32,6 +32,7 @@ export function PayInfo({ shop }: { shop: ShopInfo }) {
     <div className="px-pay">
       {shop.plan && shop.planPrice !== null && <p className="px-pay-plan">{t('shop.payPlan', { plan: shop.plan, price: shop.planPrice.toLocaleString('fr-DZ') })}</p>}
       {shop.plan && shop.planPriceYear ? <p className="px-pay-plan">{t('shop.payPlanYear', { price: shop.planPriceYear.toLocaleString('fr-DZ') })}</p> : null}
+      {(shop.sellerStores ?? 1) > 1 && <p className="small">{t('shop.payAll', { count: shop.sellerStores, main: shop.mainShop?.name ?? shop.name })}</p>}
       {p.text.trim() && (
         <>
           <h4>{t('shop.payHow')}</h4>
@@ -41,7 +42,7 @@ export function PayInfo({ shop }: { shop: ShopInfo }) {
       <p className="small muted">{t('shop.payThen')}</p>
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         {wa && (
-          <a className="btn primary" href={waLink(wa, t('shop.payWaText', { shop: shop.name, slug: shop.slug }))} target="_blank" rel="noreferrer">
+          <a className="btn primary" href={waLink(wa, t('shop.payWaText', { shop: shop.mainShop?.name ?? shop.name, slug: shop.slug }))} target="_blank" rel="noreferrer">
             <Icon name="chat" /> {t('shop.payWa')}
           </a>
         )}
@@ -109,7 +110,8 @@ export function ShopBanner({ session }: { session: Session }) {
         <div key="orders" className={`px-ban ${done >= max ? 'px-ban-bad' : 'px-ban-warn'}`} role="status">
           <Icon name="alert" />
           <span className="grow">
-            <b>{done >= max ? t('shop.ordersOver', { done, max }) : t('shop.ordersNear', { done, max })}</b> · {t('shop.ordersKeep')}
+            <b>{done >= max ? t('shop.ordersOver', { done, max }) : t('shop.ordersNear', { done, max })}</b>
+            {(shop.sellerStores ?? 1) > 1 ? ` (${t('shop.allStores')})` : ''} · {t('shop.ordersKeep')}
           </span>
           {shop.payment && (
             <button type="button" className="btn small primary" onClick={() => setPay(true)}>

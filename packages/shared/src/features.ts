@@ -190,6 +190,13 @@ export interface ShopInfo {
   /** the stores this person owns, and how many they may own (« 2 boutiques sur 3 »; null: not known here) */
   ownStores?: number;
   maxStores?: number | null;
+  /**
+   * One plan per seller: the seller's first boutique, when this one follows it (its plan, period, limits and payment
+   * are that one's: one payment for all the seller's boutiques). null: this boutique holds the plan itself.
+   */
+  mainShop?: { id: number; name: string } | null;
+  /** the boutiques billed together with this one (the seller's: 1 when alone) */
+  sellerStores?: number;
   /** « Créer mon agence » (the person has no confirmation agency yet) */
   canAddAgency?: boolean;
   /** « Créer mon espace marketer » (the person has no marketer space yet) */

@@ -2,6 +2,7 @@
   "title": "متاجري",
   "count": "{{n}} من {{max}} متاجر",
   "countFull": "هذا هو الحد الأقصى: راسل Pilotix للحصول على المزيد.",
+  "countPlan": "خطة {{plan}}",
   "switch": "تغيير المتجر",
   "switchTitle": "{{name}}: متاجرك",
   "openNow": "المتجر المفتوح",

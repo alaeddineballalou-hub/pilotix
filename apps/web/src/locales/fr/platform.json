@@ -76,19 +76,19 @@
     "autre": "Autre"
   },
   "k": {
-    "active": "Boutiques actives (payées)",
-    "activeSub_one": "sur {{count}} boutique",
-    "activeSub_other": "sur {{count}} boutiques",
+    "active": "Vendeurs actifs (payés)",
+    "activeSub_one": "sur {{count}} vendeur",
+    "activeSub_other": "sur {{count}} vendeurs",
     "trial": "En essai gratuit",
-    "newThisMonth_one": "{{count}} nouvelle ce mois",
-    "newThisMonth_other": "{{count}} nouvelles ce mois",
+    "newThisMonth_one": "{{count}} nouveau ce mois",
+    "newThisMonth_other": "{{count}} nouveaux ce mois",
     "late": "En retard de paiement",
     "lateSub": "{{grace}} en grâce · {{expired}} bloquées",
     "suspended": "Suspendues",
     "month": "Encaissé ce mois",
     "lastMonth": "mois dernier : {{amount}}",
     "mrr": "Revenu mensuel attendu",
-    "mrrHelp": "La somme du prix mensuel des formules de toutes les boutiques actives (payées).",
+    "mrrHelp": "La somme du prix mensuel des formules des vendeurs actifs (payés) : un seul abonnement par vendeur, même avec plusieurs boutiques.",
     "signups": "Inscriptions cette semaine",
     "signupsSub_one": "{{count}} ce mois",
     "signupsSub_other": "{{count}} ce mois",
@@ -96,10 +96,12 @@
     "pendingHelp": "Ils ont rempli « Créer ma boutique » mais n’ont pas encore cliqué le lien de l’email (il marche 48 heures).",
     "conversion": "Inscrits qui paient",
     "conversionSub": "{{paid}} sur {{made}} (90 jours)",
-    "conversionHelp": "Parmi les boutiques créées par inscription ces 90 derniers jours, combien ont fait au moins un paiement.",
+    "conversionHelp": "Parmi les vendeurs inscrits ces 90 derniers jours (leur première boutique), combien ont fait au moins un paiement.",
     "messages": "Messages à lire",
     "over": "Au-dessus des limites",
-    "overHelp": "Boutiques qui dépassent leur formule (comptes, livreurs ou commandes du mois) : proposez-leur la formule supérieure."
+    "overHelp": "Boutiques qui dépassent leur formule (comptes, livreurs ou commandes du mois) : proposez-leur la formule supérieure.",
+    "linked_one": "+ {{count}} boutique liée à un vendeur",
+    "linked_other": "+ {{count}} boutiques liées à un vendeur"
   },
   "d": {
     "trialsEnding": "Essais qui finissent (3 jours)",
@@ -341,8 +343,6 @@
     "usersAny": "Comptes illimités",
     "orders": "{{n}} commandes / mois",
     "ordersAny": "Commandes illimitées",
-    "shops_one": "{{count}} boutique",
-    "shops_other": "{{count}} boutiques",
     "everything": "Tout Pilotix",
     "name": "Nom",
     "priceMonth": "Prix par mois (DA)",
@@ -359,7 +359,14 @@
     "maxDrivers": "Livreurs max",
     "priceYear": "Prix pour un an (DA)",
     "priceYearHint": "Vide = pas de prix à l’année. 12 mois au prix du mois = {{price}}.",
-    "year": "/ an"
+    "year": "/ an",
+    "stores_one": "{{count}} boutique par vendeur",
+    "stores_other": "{{count}} boutiques par vendeur",
+    "storesAny": "Boutiques : le réglage général",
+    "maxStores": "Boutiques par vendeur",
+    "maxStoresHint": "Un seul abonnement pour toutes ses boutiques (comptes et commandes comptés ensemble). Vide : « Boutiques max par compte » (Réglages).",
+    "shops_one": "{{count}} vendeur sur cette formule",
+    "shops_other": "{{count}} vendeurs sur cette formule"
   },
   "staff": {
     "new": "Nouveau compte",
@@ -406,7 +413,7 @@
     "signupOpen": "Inscriptions ouvertes",
     "signupLink": "Voir la page « Créer ma boutique »",
     "maxStores": "Boutiques max par compte",
-    "maxStoresHint": "Combien de boutiques une même personne peut avoir. Vous pouvez changer ce nombre pour un propriétaire dans la fiche de sa boutique.",
+    "maxStoresHint": "Quand la formule du vendeur ne dit rien (chaque formule peut avoir son nombre, dans Formules). Vous pouvez aussi changer ce nombre pour un propriétaire dans la fiche de sa boutique.",
     "remindTitle": "Rappels par email",
     "remindHelp": "Chaque matin à 8 h, Pilotix écrit aux propriétaires : fin de l’essai, fin de l’abonnement, délai de grâce, boutique bloquée. Un seul email par étape.",
     "remindOn": "Envoyer les rappels",
@@ -506,7 +513,7 @@
     "resend": "Renvoyer l’invitation",
     "resent": "Invitation renvoyée à {{email}}",
     "maxStores": "Boutiques max pour ce propriétaire",
-    "maxStoresHint": "Il en a {{n}}. Vide = le réglage général ({{def}}).",
+    "maxStoresHint": "Il en a {{n}}. Vide = le nombre de sa formule ({{def}}).",
     "none": "Pas de compte propriétaire.",
     "privacy": "Par respect de sa vie privée, vous voyez seulement des chiffres : vous ne pouvez ni entrer dans sa boutique ni voir ses données. Vous pouvez la suspendre."
   },
@@ -1652,5 +1659,17 @@
         "Collez ici l’App ID et le Secret, puis enregistrez. TikTok valide l’app en une à deux semaines."
       ]
     }
+  },
+  "seller": {
+    "follows": "Suit l’abonnement de",
+    "more_one": "+ {{count}} boutique",
+    "more_other": "+ {{count}} boutiques",
+    "followsHint": "son abonnement, ses paiements et ses limites sont ceux de cette boutique principale.",
+    "title": "Boutiques du vendeur",
+    "text": "Un seul abonnement : la boutique principale porte la formule et les paiements ; comptes, livreurs et commandes de toutes ses boutiques comptent ensemble.",
+    "main": "Principale",
+    "together_one": "Ses {{count}} boutiques ensemble (une seule formule).",
+    "together_other": "Ses {{count}} boutiques ensemble (une seule formule).",
+    "ownNumbers": "Les chiffres de cette boutique seule : les limites se comptent avec toutes ses boutiques, sur « {{main}} »."
   }
 }

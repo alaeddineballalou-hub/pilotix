@@ -401,7 +401,7 @@ class ApiController {
   private async picker(acc: core.Account) {
     const set = await this.core.settings();
     const stores = await core.storeChoices(this.core.t, acc.email);
-    const canAddStore = set.signup.open && (await core.ownedStores(this.core.t, acc.id)) < core.storeLimit(acc, set);
+    const canAddStore = set.signup.open && (await core.ownedStores(this.core.t, acc.id)) < (await core.accountStoreLimit(this.core.t, acc, set));
     const canAddAgency = set.signup.open && (await core.ownedAgencies(this.core.t, acc.id)) === 0;
     const canAddMarketer = set.signup.open && (await core.ownedMarketers(this.core.t, acc.id)) === 0;
     return { pick: true as const, ticket: await this.pickTicket(acc), account: { name: acc.name, email: acc.email, verified: acc.verified }, stores, canAddStore, canAddAgency, canAddMarketer };

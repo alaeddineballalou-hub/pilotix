@@ -37,7 +37,13 @@ export function Dashboard({ staff }: { staff: Staff }) {
         )}
       </div>
       <Kpis>
-        <Kpi label={t('platform.k.active')} value={c.active} icon="checkcircle" href="#/platform/shops/f/active" sub={t('platform.k.activeSub', { count: c.total })} />
+        <Kpi
+          label={t('platform.k.active')}
+          value={c.active}
+          icon="checkcircle"
+          href="#/platform/shops/f/active"
+          sub={`${t('platform.k.activeSub', { count: c.total })}${c.linked ? ` · ${t('platform.k.linked', { count: c.linked })}` : ''}`}
+        />
         <Kpi label={t('platform.k.trial')} value={c.trial} icon="clock" href="#/platform/shops/f/trial" tone={c.trial ? 'info' : undefined} sub={t('platform.k.newThisMonth', { count: c.newThisMonth })} />
         <Kpi label={t('platform.k.late')} value={late} icon="alert" href="#/platform/shops/f/late" tone={late ? 'bad' : undefined} sub={t('platform.k.lateSub', { grace: c.grace, expired: c.expired })} />
         <Kpi label={t('platform.k.suspended')} value={c.suspended} icon="pause" href="#/platform/shops/f/suspended" />

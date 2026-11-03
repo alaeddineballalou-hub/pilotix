@@ -91,7 +91,7 @@ async function shopUserCtx(t: Tenancy, schema: string, email: string, password: 
 
 test('first start: the existing shop becomes shop #1, its admin the platform owner', async () => {
   const { t, applied, staff } = await server();
-  assert.deepEqual(applied.platform, ['p001_platform', 'p002_accounts_signup_domains', 'p003_accounts_privacy', 'p004_turnstile', 'p005_agencies', 'p006_marketers', 'p007_account_phone', 'p008_pro_marketers', 'p009_fraud_reputation', 'p010_protection_history', 'p011_buyer_quality', 'p012_pilot_ai', 'p013_ai_usage', 'p014_lahja', 'p015_darija_book', 'p016_vocab', 'p017_old_slugs', 'p018_social']);
+  assert.deepEqual(applied.platform, ['p001_platform', 'p002_accounts_signup_domains', 'p003_accounts_privacy', 'p004_turnstile', 'p005_agencies', 'p006_marketers', 'p007_account_phone', 'p008_pro_marketers', 'p009_fraud_reputation', 'p010_protection_history', 'p011_buyer_quality', 'p012_pilot_ai', 'p013_ai_usage', 'p014_lahja', 'p015_darija_book', 'p016_vocab', 'p017_old_slugs', 'p018_social', 'p019_seller_plan']);
   assert.deepEqual(applied.public, []);
   const s1 = (await loadShop(t, { primary: true }))!;
   assert.equal(s1.schema, 'public');
@@ -282,13 +282,17 @@ test('sign-up: confirmed by e-mail, the store on the trial plan, referral reward
   assert.equal((await startSignup(t, form, '1.2.3.4'))!.kind, 'exists');
   // a second store from the account menu, up to the limit
   await p('p.settings.save', { signup: { open: true, maxStores: 2 } });
+  // (a plan without its own number of boutiques: the platform's general number)
+  await t.platform.query('UPDATE platform.plans SET max_stores = NULL');
   const acc = (await accountByEmail(t, 'yasmine@shop.dz'))!;
   const b = await addStore(t, acc, { name: 'Yasmine Bébé' });
   assert.equal(b.ownerAccountId, acc.id);
   await assert.rejects(addStore(t, acc, { name: 'Trois' }), /maximum/);
   // the dashboard counts it; the referrer gets its month at the first payment
   const d = await p('p.dashboard');
-  assert.equal(d.signups.week, 2);
+  // one plan per seller: Yasmine's second boutique follows her first one (a seller signs up once)
+  assert.equal(d.signups.week, 1);
+  assert.equal(d.counts.linked, 1);
   const shopUntil = (await loadShop(t, { id: s1.id }))!.paidUntil;
   const pay = await p('p.payments.add', { shopId: done.shop.id, amount: 7900, method: 'baridimob', months: 1 });
   assert.match(pay.receiptNo, /^PX-\d{4}-0001$/);

@@ -92,7 +92,10 @@ export function Boutiques({ sub }: PageProps) {
         </nav>
         {own !== undefined && !!max && (
           <span className={`bqp-count${full ? ' full' : ''}`}>
-            <b>{t('boutiques.count', { n: own, max })}</b>
+            <b>
+            {t('boutiques.count', { n: own, max })}
+            {session?.shop?.plan ? ` · ${t('boutiques.countPlan', { plan: session.shop.plan })}` : ''}
+          </b>
             {full && <small>{t('boutiques.countFull')}</small>}
           </span>
         )}

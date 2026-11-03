@@ -2,6 +2,7 @@
   "title": "My boutiques",
   "count": "{{n}} of {{max}} boutiques",
   "countFull": "That’s the maximum: write to Pilotix to get more.",
+  "countPlan": "{{plan}} plan",
   "switch": "Switch boutique",
   "switchTitle": "{{name}}: your boutiques",
   "openNow": "Boutique open now",

@@ -81,7 +81,8 @@
     "copyHint": "Sociétés de livraison (avec les mêmes clés), prix, statuts, messages et règles du travail. Jamais les commandes, les produits ni l’équipe.",
     "copied": "Réglages de {{name}} copiés",
     "copyFailed": "Boutique créée, mais ses réglages n’ont pas été copiés : faites-le dans « Mes boutiques ».",
-    "thisOne": "{{name}} (ouverte)"
+    "thisOne": "{{name}} (ouverte)",
+    "followsPlan": "Elle suit votre abonnement : un seul paiement, comptes et commandes comptés avec vos autres boutiques, pas de nouvel essai."
   },
   "aide": {
     "title": "Contacter Pilotix",
@@ -103,5 +104,8 @@
   "ordersNear": "Bientôt la limite de commandes de votre formule ce mois : {{done}} / {{max}}",
   "ordersKeep": "Vos commandes continuent d’arriver, aucune n’est perdue. Passez à la formule supérieure.",
   "upgrade": "Changer de formule",
-  "payPlanYear": "Ou {{price}} DA pour un an"
+  "payPlanYear": "Ou {{price}} DA pour un an",
+  "payAll_one": "Un seul paiement pour vos {{count}} boutiques (boutique principale : {{main}}).",
+  "payAll_other": "Un seul paiement pour vos {{count}} boutiques (boutique principale : {{main}}).",
+  "allStores": "toutes vos boutiques"
 }

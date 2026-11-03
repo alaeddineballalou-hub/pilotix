@@ -44,14 +44,19 @@ export function ShopDetail({ id, staff }: { id: number; staff: Staff }) {
             {s.primary ? t('platform.ownShopLong') : s.demo ? t('platform.demoShopLong') : `${s.plan?.name ?? '—'} · ${t('platform.createdOn', { date: dateOnly(s.createdAt) })}`}
             {s.status !== 'active' && s.statusReason ? ` · ${s.statusReason}` : ''}
           </p>
+          {s.main && (
+            <p className="pp-follows">
+              <Icon name="link" /> {t('platform.seller.follows')} <a href={`#/platform/shops/${s.main.id}`}>{s.main.name}</a> · {t('platform.seller.followsHint')}
+            </p>
+          )}
         </div>
         <div className="row pp-head-acts" hidden={gone}>
-          {manager && !special && s.status !== 'archived' && (
+          {manager && !special && !s.main && s.status !== 'archived' && (
             <button type="button" className="btn primary" onClick={() => setPay(true)}>
               <Icon name="coins" /> {t('platform.paymentReceived')}
             </button>
           )}
-          {manager && !special && s.status === 'active' && (s.state === 'trial' || s.state === 'grace' || s.state === 'expired') && (
+          {manager && !special && !s.main && s.status === 'active' && (s.state === 'trial' || s.state === 'grace' || s.state === 'expired') && (
             <button type="button" className="btn" disabled={extend.isPending} onClick={() => extend.mutate({ id: s.id, days: 7 })}>
               <Icon name="clock" /> {t('platform.extend7')}
             </button>
@@ -74,12 +79,13 @@ export function ShopDetail({ id, staff }: { id: number; staff: Staff }) {
         </div>
       </div>
       <div className="pp-grid">
-        <Subscription s={s} plans={plans.data ?? []} manager={manager} />
+        {s.main ? <SellerShops s={s} /> : <Subscription s={s} plans={plans.data ?? []} manager={manager} />}
         <Usage s={s} />
       </div>
+      {!s.main && s.sellerShops.length > 1 && <SellerShops s={s} />}
       <Menus s={s} manager={manager} />
       <div className="pp-grid">
-        <Payments s={s} staff={staff} onAdd={manager && !special && s.status !== 'archived' && !gone ? () => setPay(true) : undefined} />
+        <Payments s={s} staff={staff} onAdd={manager && !special && !s.main && s.status !== 'archived' && !gone ? () => setPay(true) : undefined} />
         <Owner s={s} manager={manager} />
       </div>
       <div className="pp-grid">
@@ -88,6 +94,32 @@ export function ShopDetail({ id, staff }: { id: number; staff: Staff }) {
       </div>
       {pay && plans.data && <PaymentModal shop={s} plans={plans.data} onClose={() => setPay(false)} />}
       {status && <StatusModal s={s} status={status} onClose={() => setStatus(null)} />}
+    </div>
+  );
+}
+
+/**
+ * One plan per seller: the seller's boutiques — the first one holds the plan, the payments and the limits (counted over
+ * all of them); the others follow it.
+ */
+function SellerShops({ s }: { s: Detail }) {
+  const { t } = useTranslation();
+  return (
+    <div className="card pp-card">
+      <h2>{t('platform.seller.title')}</h2>
+      <p className="muted small">{t('platform.seller.text')}</p>
+      <ul className="pp-seller">
+        {s.sellerShops.map((x) => (
+          <li key={x.id} className={x.current ? 'on' : ''}>
+            <a href={`#/platform/shops/${x.id}`}>
+              <b>{x.name}</b>
+              <small className="muted ltr">{x.slug}</small>
+            </a>
+            {x.main && <span className="chip pp-chip-own">{t('platform.seller.main')}</span>}
+            <StateBadge state={x.state} daysLeft={null} />
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -175,12 +207,17 @@ function Usage({ s }: { s: Detail }) {
       <span>{label}</span>
     </div>
   );
+  // one plan per seller: the first boutique counts all of them against the plan; another one shows its own numbers
+  const own = !!s.main;
+  const many = !own && s.sellerShops.length > 1;
   return (
     <Card title={t('platform.use.title')} help={t('platform.use.help')}>
+      {many && <p className="muted small">{t('platform.seller.together', { count: s.sellerShops.length })}</p>}
+      {own && <p className="muted small">{t('platform.seller.ownNumbers', { main: s.main!.name })}</p>}
       <div className="pp-use">
-        {tile(u.users, s.limits.maxUsers, t('platform.use.users'), s.limits.over.users)}
-        {tile(u.drivers, s.limits.maxDrivers, t('platform.use.drivers'), s.limits.over.drivers)}
-        {tile(u.ordersMonth, s.limits.maxOrdersMonth, t('platform.use.ordersMonth'), s.limits.over.orders)}
+        {tile(u.users, own ? null : s.limits.maxUsers, t('platform.use.users'), s.limits.over.users)}
+        {tile(u.drivers, own ? null : s.limits.maxDrivers, t('platform.use.drivers'), s.limits.over.drivers)}
+        {tile(u.ordersMonth, own ? null : s.limits.maxOrdersMonth, t('platform.use.ordersMonth'), s.limits.over.orders)}
         {tile(u.ordersLastMonth, null, t('platform.use.ordersLastMonth'), false)}
         {tile(u.ownerStores, null, t('platform.use.ownerStores'), false)}
         <div className="txt">

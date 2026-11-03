@@ -18,6 +18,10 @@ import { rewardReferrer, ReferralReward } from './reminders';
 import { staffReply, staffSetStatus, staffThread, staffThreads, staffUnread } from './support';
 import {
   cleanFeatures,
+  keepSellerBilling,
+  mainShopOf,
+  sellerShops,
+  sellerUsage,
   freeSlug,
   loadPlans,
   loadShop,
@@ -163,7 +167,8 @@ async function usage(ctx: PCtx, s: Shop, fresh = false): Promise<ShopUsage> {
   if (!m) usageCache.set(ctx.t, (m = new Map()));
   const hit = m.get(s.id);
   if (!fresh && hit && ctx.now() - hit.at < 60_000) return hit.v;
-  const v = await shopUsage(ctx.t, s).catch(() => ({ users: 0, drivers: 0, ordersMonth: 0, ordersLastMonth: 0, ordersTotal: 0, ownerStores: 0 }));
+  // one plan per seller: the boutique that holds it counts all the seller's boutiques; another one, its own numbers
+  const v = await (s.mainShopId ? shopUsage(ctx.t, s) : sellerUsage(ctx.t, s)).catch(() => ({ users: 0, drivers: 0, ordersMonth: 0, ordersLastMonth: 0, ordersTotal: 0, ownerStores: 0 }));
   m.set(s.id, { at: ctx.now(), v });
   return v;
 }
@@ -173,14 +178,16 @@ function limitsOf(s: Shop, u: ShopUsage) {
   const maxUsers = shopMaxUsers(s);
   const maxDrivers = shopMaxDrivers(s);
   const maxOrders = shopMaxOrders(s);
+  // another boutique of a seller: its limits are counted with the seller's first boutique (over there, not here)
+  const own = !s.mainShopId;
   return {
     maxUsers,
     maxDrivers,
     maxOrdersMonth: maxOrders,
     over: {
-      users: maxUsers !== null && u.users > maxUsers,
-      drivers: maxDrivers !== null && u.drivers > maxDrivers,
-      orders: maxOrders !== null && u.ordersMonth > maxOrders,
+      users: own && maxUsers !== null && u.users > maxUsers,
+      drivers: own && maxDrivers !== null && u.drivers > maxDrivers,
+      orders: own && maxOrders !== null && u.ordersMonth > maxOrders,
     },
   };
 }
@@ -213,6 +220,8 @@ function shopRow(s: Shop, set: PlatformSettings, now: number) {
     deletedAt: s.deletedAt,
     /** its own domain for its landing pages */
     domain: s.domain ? { name: s.domain, status: s.domainStatus } : null,
+    /** one plan per seller: the seller's first boutique, when this one follows it (its plan, period and payments) */
+    main: s.mainShopId ? { id: s.mainShopId, name: s.mainShopName ?? '' } : null,
   };
 }
 
@@ -368,7 +377,9 @@ export const PLATFORM_REGISTRY = {
     const set = await platformSettings(ctx.t);
     // partners (confirmation agencies, marketers) are not stores (free, their own page)
     const shops = (await loadShops(ctx.t)).filter((s) => s.kind === 'store').map((s) => shopRow(s, set, now));
-    const real = shops.filter((s) => !s.primary && !s.demo);
+    // one plan per seller: a seller's other boutiques follow their first one (counted, paid and late once)
+    const all = shops.filter((s) => !s.primary && !s.demo);
+    const real = all.filter((s) => !s.main);
     const count = (st: string) => real.filter((s) => s.state === st).length;
     const pay = await ctx.t.platform.query(
       `SELECT to_char(date_trunc('month', paid_at), 'YYYY-MM') AS m, sum(amount)::bigint AS amount, count(*)::int AS n
@@ -408,13 +419,13 @@ export const PLATFORM_REGISTRY = {
       overLimit: await (async () => {
         let n = 0;
         for (const s of await loadShops(ctx.t)) {
-          if (s.primary || s.demo || s.kind !== 'store' || s.status === 'deleted' || s.status === 'archived') continue;
+          if (s.primary || s.demo || s.kind !== 'store' || s.status === 'deleted' || s.status === 'archived' || s.mainShopId) continue;
           const l = limitsOf(s, await usage(ctx, s));
           if (l.over.users || l.over.drivers || l.over.orders) n++;
         }
         return n;
       })(),
-      counts: { total: real.length, trial: count('trial'), active: count('active'), grace: count('grace'), expired: count('expired'), suspended: count('suspended'), archived: count('archived'), newThisMonth: createdThisMonth },
+      counts: { total: real.length, trial: count('trial'), active: count('active'), grace: count('grace'), expired: count('expired'), suspended: count('suspended'), archived: count('archived'), newThisMonth: createdThisMonth, linked: all.length - real.length },
       mrr: real.filter((s) => s.state === 'active').reduce((a, s) => a + (s.plan?.priceMonth ?? 0), 0),
       revenue: { thisMonth: byMonth.find((b) => b.month === month)?.amount ?? 0, lastMonth: byMonth.find((b) => b.month === prev)?.amount ?? 0, byMonth },
       trialsEnding: real.filter((s) => s.state === 'trial' && (s.daysLeft ?? 99) <= 3).sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0)),
@@ -460,8 +471,11 @@ export const PLATFORM_REGISTRY = {
     const acc = s.ownerAccountId ? await accountById(ctx.t, s.ownerAccountId) : null;
     const brought = await ctx.t.platform.query('SELECT r.*, s.name FROM platform.referrals r JOIN platform.shops s ON s.id = r.referred_shop_id WHERE r.referrer_shop_id = $1 ORDER BY r.id DESC', [s.id]);
     const by = s.referredBy ? await loadShop(ctx.t, { id: s.referredBy }) : null;
+    // one plan per seller: all their boutiques (the first one holds the plan and the payments)
+    const seller = s.kind === 'store' && s.ownerAccountId ? await sellerShops(ctx.t, s) : [s];
     return {
       ...shopRow(s, set, now),
+      sellerShops: seller.map((x) => ({ id: x.id, name: x.name, slug: x.slug, state: stateOf(x, set, now).state, main: !x.mainShopId, current: x.id === s.id })),
       notes: s.notes,
       featuresOn: s.featuresOn,
       featuresOff: s.featuresOff,
@@ -476,7 +490,7 @@ export const PLATFORM_REGISTRY = {
       usage: u,
       limits: limitsOf(s, u),
       ownerAccount: acc
-        ? { email: acc.email, name: acc.name, invited: !acc.hasPassword, verified: acc.verified, stores: u.ownerStores, maxStores: acc.maxStores, maxStoresDefault: set.signup.maxStores, lastLoginAt: acc.lastLoginAt }
+        ? { email: acc.email, name: acc.name, invited: !acc.hasPassword, verified: acc.verified, stores: u.ownerStores, maxStores: acc.maxStores, maxStoresDefault: s.plan?.maxStores ?? set.signup.maxStores, lastLoginAt: acc.lastLoginAt }
         : null,
       referralCode: s.referralCode,
       referredBy: by ? { id: by.id, name: by.name } : null,
@@ -569,6 +583,9 @@ export const PLATFORM_REGISTRY = {
       const s = await needShop(ctx, i.id);
       if (s.status === 'deleted') throw bad('Boutique supprimée par son propriétaire');
       if (s.primary && (i.planId !== undefined || i.trialEndsAt !== undefined || i.paidUntil !== undefined)) throw bad('Votre propre boutique n’a ni formule ni échéance : elle ne s’arrête jamais');
+      // one plan per seller: the formula, the period and the limits are changed on the seller's first boutique
+      if (s.mainShopId && [i.planId, i.trialEndsAt, i.paidUntil, i.maxUsers, i.maxDrivers].some((v) => v !== undefined))
+        throw bad(`« ${s.name} » suit l’abonnement de « ${s.mainShopName} » (sa boutique principale) : changez la formule et les dates là-bas`);
       if (i.ownerMaxStores !== undefined && s.ownerAccountId) {
         await ctx.t.platform.query('UPDATE platform.accounts SET max_stores = $2 WHERE id = $1', [s.ownerAccountId, i.ownerMaxStores]);
         await audit(ctx, 'shop.ownerStores', s.id, { maxStores: i.ownerMaxStores });
@@ -614,7 +631,10 @@ export const PLATFORM_REGISTRY = {
     if (s.status === 'deleted') throw bad('Boutique supprimée par son propriétaire');
     if (s.primary && i.status !== 'active') throw bad('Votre propre boutique ne peut pas être suspendue');
     if (s.status === i.status) return { ok: true };
+    const mainBefore = s.kind === 'store' && s.ownerAccountId ? await mainShopOf(ctx.t, s.ownerAccountId) : null;
     await ctx.t.platform.query('UPDATE platform.shops SET status = $2, status_reason = $3 WHERE id = $1', [s.id, i.status, i.status === 'active' ? null : i.reason || null]);
+    // the seller's first boutique closed (archived) or came back: the one that holds their plan takes it on
+    await keepSellerBilling(ctx.t, s.ownerAccountId, mainBefore);
     await audit(ctx, `shop.${i.status === 'active' ? 'reactivate' : i.status === 'suspended' ? 'suspend' : 'archive'}`, s.id, { from: s.status, reason: i.reason ?? null });
     // a suspended partner's people stop in every store at once (and start again when it is reactivated)
     if (s.kind !== 'store') await syncAgency(ctx.t, s.id);
@@ -727,7 +747,9 @@ export const PLATFORM_REGISTRY = {
   }),
 
   'p.shops.extendTrial': pproc(MANAGERS, z.object({ id: Id, days: z.number().int().min(1).max(90) }), async (ctx, i) => {
-    const s = await needShop(ctx, i.id);
+    // one plan per seller: the trial is the seller's first boutique's
+    const asked = await needShop(ctx, i.id);
+    const s = asked.mainShopId ? await needShop(ctx, asked.mainShopId) : asked;
     if (s.primary) throw bad('Votre propre boutique ne s’arrête jamais');
     const r = (await ctx.t.platform.query(`UPDATE platform.shops SET trial_ends_at = GREATEST(now(), COALESCE(trial_ends_at, now())) + make_interval(days => $2) WHERE id = $1 RETURNING trial_ends_at`, [s.id, i.days]))[0];
     await audit(ctx, 'shop.trial', s.id, { days: i.days, from: s.trialEndsAt, to: isoOrNull(r?.trial_ends_at) });
@@ -749,7 +771,9 @@ export const PLATFORM_REGISTRY = {
       planId: Id.optional(),
     }),
     async (ctx, i) => {
-      const s = await needShop(ctx, i.shopId);
+      // one plan per seller: one payment for all their boutiques, recorded on their first one
+      const asked = await needShop(ctx, i.shopId);
+      const s = asked.mainShopId ? await needShop(ctx, asked.mainShopId) : asked;
       if (s.primary || s.demo) throw bad('Pas de paiement pour cette boutique');
       if (i.planId !== undefined && !(await loadPlans(ctx.t)).some((p) => p.id === i.planId)) throw bad('Formule introuvable');
       const set = await platformSettings(ctx.t);
@@ -785,7 +809,16 @@ export const PLATFORM_REGISTRY = {
       if (out.reward) await audit(ctx, 'referral.reward', out.reward.referrerShopId, { months: out.reward.months, from: s.name, paidUntil: out.reward.paidUntil });
       const mails: OwnerMail[] = [];
       if (out.reward?.to) mails.push({ kind: 'reward', to: out.reward.to, name: out.reward.name, language: out.reward.language, reward: out.reward });
-      return { id: out.id, paidUntil: out.paidUntil, reactivated: out.reactivated, receiptNo: out.receiptNo, rewarded: out.reward ? { shop: out.reward.shop, months: out.reward.months } : null, mails };
+      return {
+        id: out.id,
+        paidUntil: out.paidUntil,
+        reactivated: out.reactivated,
+        receiptNo: out.receiptNo,
+        rewarded: out.reward ? { shop: out.reward.shop, months: out.reward.months } : null,
+        mails,
+        // asked on another boutique of the seller: recorded on their first one
+        ...(asked.id !== s.id ? { main: { id: s.id, name: s.name } } : {}),
+      };
     },
   ),
 
@@ -835,8 +868,10 @@ export const PLATFORM_REGISTRY = {
   // ---------------------------------------------------------------- plans
   'p.plans.list': pproc(ALL, z.object({}), async (ctx) => {
     const plans = await loadPlans(ctx.t);
-    const used = await ctx.t.platform.query(`SELECT plan_id, count(*)::int AS n FROM platform.shops WHERE NOT primary_shop AND NOT is_demo AND status <> 'archived' GROUP BY plan_id`);
-    const n = new Map(used.map((r: any) => [num(r.plan_id), num(r.n)]));
+    // sellers on each plan (one plan per seller: their other boutiques follow their first one)
+    const n = new Map<number, number>();
+    for (const x of await loadShops(ctx.t))
+      if (x.kind === 'store' && !x.primary && !x.demo && x.status !== 'archived' && x.status !== 'deleted' && !x.mainShopId && x.planId) n.set(x.planId, (n.get(x.planId) ?? 0) + 1);
     return plans.map((p) => ({ ...p, shops: n.get(p.id) ?? 0 }));
   }),
 
@@ -851,6 +886,8 @@ export const PLATFORM_REGISTRY = {
       maxUsers: z.number().int().min(1).max(10_000).nullable().optional(),
       maxDrivers: z.number().int().min(0).max(10_000).nullable().optional(),
       maxOrdersMonth: z.number().int().min(1).max(10_000_000).nullable().optional(),
+      /** boutiques a seller on this plan may have (null: the platform's general number) */
+      maxStores: z.number().int().min(1).max(100).nullable().optional(),
       description: z.string().max(400).optional(),
       public: z.boolean(),
       active: z.boolean(),
@@ -859,11 +896,11 @@ export const PLATFORM_REGISTRY = {
       const old = i.id ? (await loadPlans(ctx.t)).find((p) => p.id === i.id) : null;
       if (i.id && !old) throw notFound('Formule introuvable');
       const features = old?.system ? ['*'] : cleanFeatures(i.features, true);
-      const vals = [i.name, i.priceMonth, i.priceYear ?? null, JSON.stringify(features), i.maxUsers ?? null, i.maxOrdersMonth ?? null, i.description ?? '', old?.system ? false : i.public, old?.system ? true : i.active, i.maxDrivers ?? null];
+      const vals = [i.name, i.priceMonth, i.priceYear ?? null, JSON.stringify(features), i.maxUsers ?? null, i.maxOrdersMonth ?? null, i.description ?? '', old?.system ? false : i.public, old?.system ? true : i.active, i.maxDrivers ?? null, i.maxStores === undefined ? (old?.maxStores ?? null) : i.maxStores];
       let id = i.id ?? 0;
       if (old) {
         await ctx.t.platform.query(
-          `UPDATE platform.plans SET name=$2, price_month=$3, price_year=$4, features=$5, max_users=$6, max_orders_month=$7, description=$8, public=$9, active=$10, max_drivers=$11 WHERE id=$1`,
+          `UPDATE platform.plans SET name=$2, price_month=$3, price_year=$4, features=$5, max_users=$6, max_orders_month=$7, description=$8, public=$9, active=$10, max_drivers=$11, max_stores=$12 WHERE id=$1`,
           [old.id, ...vals],
         );
       } else {
@@ -873,7 +910,7 @@ export const PLATFORM_REGISTRY = {
         id = num(
           (
             await ctx.t.platform.query(
-              `INSERT INTO platform.plans (code, name, price_month, price_year, features, max_users, max_orders_month, description, public, active, max_drivers, sort) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+              `INSERT INTO platform.plans (code, name, price_month, price_year, features, max_users, max_orders_month, description, public, active, max_drivers, max_stores, sort) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
               [code, ...vals, sort],
             )
           )[0].id,

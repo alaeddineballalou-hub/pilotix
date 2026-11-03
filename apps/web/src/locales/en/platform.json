@@ -76,9 +76,9 @@
     "autre": "Other"
   },
   "k": {
-    "active": "Active shops (paid)",
-    "activeSub_one": "of {{count}} shop",
-    "activeSub_other": "of {{count}} shops",
+    "active": "Active sellers (paid)",
+    "activeSub_one": "of {{count}} seller",
+    "activeSub_other": "of {{count}} sellers",
     "trial": "On free trial",
     "newThisMonth_one": "{{count}} new this month",
     "newThisMonth_other": "{{count}} new this month",
@@ -88,7 +88,7 @@
     "month": "Received this month",
     "lastMonth": "last month: {{amount}}",
     "mrr": "Expected monthly revenue",
-    "mrrHelp": "The monthly price of the plans of every active (paid) shop, added up.",
+    "mrrHelp": "The monthly price of the plans of the active (paid) sellers, added up: one subscription per seller, even with several boutiques.",
     "signups": "Sign-ups this week",
     "signupsSub_one": "{{count}} this month",
     "signupsSub_other": "{{count}} this month",
@@ -96,10 +96,12 @@
     "pendingHelp": "They filled “Create my store” but haven’t clicked the e-mail link yet (it works for 48 hours).",
     "conversion": "Sign-ups who pay",
     "conversionSub": "{{paid}} of {{made}} (90 days)",
-    "conversionHelp": "Of the stores created by sign-up in the last 90 days, how many made at least one payment.",
+    "conversionHelp": "Of the sellers who signed up in the last 90 days (their first boutique), how many made at least one payment.",
     "messages": "Messages to read",
     "over": "Over their limits",
-    "overHelp": "Stores above their plan (accounts, drivers or orders this month): offer them the bigger plan."
+    "overHelp": "Stores above their plan (accounts, drivers or orders this month): offer them the bigger plan.",
+    "linked_one": "+ {{count}} boutique linked to a seller",
+    "linked_other": "+ {{count}} boutiques linked to a seller"
   },
   "d": {
     "trialsEnding": "Trials ending (3 days)",
@@ -341,8 +343,6 @@
     "usersAny": "Unlimited accounts",
     "orders": "{{n}} orders / month",
     "ordersAny": "Unlimited orders",
-    "shops_one": "{{count}} shop",
-    "shops_other": "{{count}} shops",
     "everything": "All of Pilotix",
     "name": "Name",
     "priceMonth": "Price per month (DA)",
@@ -359,7 +359,14 @@
     "maxDrivers": "Max drivers",
     "priceYear": "Price for a year (DA)",
     "priceYearHint": "Empty = no yearly price. 12 months at the monthly price = {{price}}.",
-    "year": "/ year"
+    "year": "/ year",
+    "stores_one": "{{count}} boutique per seller",
+    "stores_other": "{{count}} boutiques per seller",
+    "storesAny": "Boutiques: the general setting",
+    "maxStores": "Boutiques per seller",
+    "maxStoresHint": "One subscription for all their boutiques (accounts and orders counted together). Empty: « Max boutiques per account » (Settings).",
+    "shops_one": "{{count}} seller on this plan",
+    "shops_other": "{{count}} sellers on this plan"
   },
   "staff": {
     "new": "New account",
@@ -406,7 +413,7 @@
     "signupOpen": "Sign-ups open",
     "signupLink": "See the “Create my store” page",
     "maxStores": "Max stores per account",
-    "maxStoresHint": "How many stores one person can have. You can change it for one owner on their store’s page.",
+    "maxStoresHint": "When the seller’s plan says nothing (each plan can have its own number, in Plans). You can also change this number for one owner on their store’s page.",
     "remindTitle": "E-mail reminders",
     "remindHelp": "Every morning at 8, Pilotix writes to owners: trial ending, subscription ending, grace period, store locked. One e-mail per step.",
     "remindOn": "Send reminders",
@@ -506,7 +513,7 @@
     "resend": "Resend the invitation",
     "resent": "Invitation sent again to {{email}}",
     "maxStores": "Max stores for this owner",
-    "maxStoresHint": "They have {{n}}. Empty = the general setting ({{def}}).",
+    "maxStoresHint": "They have {{n}}. Empty = their plan’s number ({{def}}).",
     "none": "No owner account.",
     "privacy": "To respect their privacy, you only see numbers: you can’t enter their store or see their data. You can suspend it."
   },
@@ -1652,5 +1659,17 @@
         "Paste the App ID and the Secret here, then save. TikTok approves the app in one to two weeks."
       ]
     }
+  },
+  "seller": {
+    "follows": "Follows the subscription of",
+    "more_one": "+ {{count}} boutique",
+    "more_other": "+ {{count}} boutiques",
+    "followsHint": "its subscription, payments and limits are this main boutique’s.",
+    "title": "The seller’s boutiques",
+    "text": "One subscription: the main boutique holds the plan and the payments; accounts, livreurs and orders of all their boutiques count together.",
+    "main": "Main",
+    "together_one": "Their {{count}} boutique together (one plan).",
+    "together_other": "Their {{count}} boutiques together (one plan).",
+    "ownNumbers": "This boutique’s own numbers: the limits are counted with all their boutiques, on « {{main}} »."
   }
 }

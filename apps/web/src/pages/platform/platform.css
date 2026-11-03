@@ -48,6 +48,11 @@
 .pp-acts { white-space: nowrap; text-align: end !important; }
 .pp-acts .btn + .btn { margin-inline-start: 6px; }
 .pp-own td { background: color-mix(in srgb, var(--px-orange) 6%, transparent) !important; }
+/* one plan per seller: a seller's other boutiques under their first one (an arrow, a step in) */
+.pp-linked td:first-child { position: relative; padding-inline-start: 34px; }
+.pp-linked td:first-child::before { content: '↳'; position: absolute; inset-inline-start: 14px; top: 12px; color: var(--muted, #5F6673); font-weight: 700; }
+[dir="rtl"] .pp-linked td:first-child::before { transform: scaleX(-1); }
+@media (max-width: 760px) { .pp-linked td:first-child { padding-inline-start: 26px; } .pp-linked td:first-child::before { inset-inline-start: 8px; } }
 .pp-chip-own { background: var(--px-orange-soft) !important; color: var(--ink) !important; border-color: transparent !important; }
 .pp-void td, .pp-pays li.void { opacity: 0.55; }
 .pp-void td { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent); }
@@ -813,3 +818,11 @@ mark.pl-dj-gone { padding: 0 2px; border-radius: 4px; background: none; color: i
   .pl-sa > section { padding: 4px 0 8px; }
   .pl-sa > section + section { border-inline-start: 0; border-top: 1px solid var(--line); padding-top: 14px; }
 }
+
+/* one plan per seller: « Suit l'abonnement de … » and the seller's boutiques */
+.pp-follows { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 6px 0 0; font-size: 13.5px; }
+.pp-follows .bji svg { width: 15px; height: 15px; display: block; }
+.pp-seller { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pp-seller li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border-radius: 12px; background: var(--raise, #FBFAF8); }
+.pp-seller li.on { outline: 1.5px solid var(--px-orange, #F7A823); }
+.pp-seller li a { display: flex; flex-direction: column; gap: 1px; text-decoration: none; color: inherit; min-width: 0; flex: 1 1 160px; }

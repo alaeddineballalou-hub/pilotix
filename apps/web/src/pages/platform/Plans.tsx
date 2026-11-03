@@ -58,6 +58,7 @@ export function Plans({ staff }: { staff: Staff }) {
               </p>
               {p.description && <p className="muted small">{p.description}</p>}
               <ul className="pp-plan-lim">
+                <li>{p.maxStores === null ? t('platform.plan.storesAny') : t('platform.plan.stores', { count: p.maxStores })}</li>
                 <li>{p.maxUsers === null ? t('platform.plan.usersAny') : t('platform.plan.users', { n: n(p.maxUsers) })}</li>
                 <li>{p.maxDrivers === null ? t('platform.plan.driversAny') : t('platform.plan.drivers', { count: p.maxDrivers })}</li>
                 <li>{p.maxOrdersMonth === null ? t('platform.plan.ordersAny') : t('platform.plan.orders', { n: n(p.maxOrdersMonth) })}</li>
@@ -103,6 +104,7 @@ function PlanForm({ plan, onClose }: { plan: Plan | null; onClose: () => void })
     maxUsers: plan?.maxUsers ?? null,
     maxDrivers: plan?.maxDrivers ?? null,
     maxOrdersMonth: plan?.maxOrdersMonth ?? null,
+    maxStores: plan?.maxStores ?? null,
     description: plan?.description ?? '',
     public: plan?.public ?? true,
     active: plan?.active ?? true,
@@ -149,6 +151,7 @@ function PlanForm({ plan, onClose }: { plan: Plan | null; onClose: () => void })
                 maxUsers: f.maxUsers || null,
                 maxDrivers: f.maxDrivers ?? null,
                 maxOrdersMonth: f.maxOrdersMonth || null,
+                maxStores: f.maxStores || null,
                 description: f.description,
                 public: f.public,
                 active: f.active,
@@ -171,6 +174,9 @@ function PlanForm({ plan, onClose }: { plan: Plan | null; onClose: () => void })
           </Field>
           <Field label={t('platform.plan.priceYear')} hint={t('platform.plan.priceYearHint', { price: da(f.priceMonth * 12) })}>
             <input type="number" min={0} disabled={plan?.system} value={f.priceYear ?? ''} placeholder="—" onChange={(e) => setF({ ...f, priceYear: numOrNull(e.target.value) })} />
+          </Field>
+          <Field label={t('platform.plan.maxStores')} hint={t('platform.plan.maxStoresHint')}>
+            <input type="number" min={1} max={100} value={f.maxStores ?? ''} placeholder="—" onChange={(e) => setF({ ...f, maxStores: e.target.value === '' ? null : Math.min(100, Math.max(1, Math.round(Number(e.target.value) || 1))) })} />
           </Field>
           <Field label={t('platform.plan.maxDrivers')} hint={t('platform.plan.emptyAny')}>
             <input type="number" min={0} disabled={plan?.system} value={f.maxDrivers ?? ''} onChange={(e) => setF({ ...f, maxDrivers: e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0) })} />

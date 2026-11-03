@@ -32,7 +32,8 @@ export async function takeDueReminders(t: Tenancy, now = Date.now()): Promise<Du
   if (!set.reminders.on) return [];
   const out: DueReminder[] = [];
   for (const s of await loadShops(t)) {
-    if (s.primary || s.demo || s.status !== 'active') continue;
+    // one plan per seller: their other boutiques follow their first one, which gets the reminders
+    if (s.primary || s.demo || s.status !== 'active' || s.mainShopId) continue;
     const st = shopStatus(s, now, set.trial.graceDays);
     const days = Math.max(1, set.reminders.daysBefore);
     let kind: ReminderKind | null = null;
@@ -86,7 +87,16 @@ export async function rewardReferrer(db: Db, set: PlatformSettings, referredShop
   const r = (await db.query('SELECT * FROM platform.referrals WHERE referred_shop_id = $1 AND rewarded_at IS NULL FOR UPDATE', [referredShopId]))[0];
   if (!r) return null;
   const months = set.referral.on ? Math.max(0, set.referral.months) : 0;
-  const ref = (await db.query('SELECT s.*, a.email AS acc_email, a.name AS acc_name, a.language AS acc_lang FROM platform.shops s LEFT JOIN platform.accounts a ON a.id = s.owner_account_id WHERE s.id = $1', [r.referrer_shop_id]))[0];
+  // one plan per seller: the free months go to the referrer's first boutique (its plan and period are the seller's)
+  const ref = (
+    await db.query(
+      `SELECT s.*, a.email AS acc_email, a.name AS acc_name, a.language AS acc_lang FROM platform.shops s LEFT JOIN platform.accounts a ON a.id = s.owner_account_id
+        WHERE s.id = COALESCE((SELECT x.id FROM platform.shops me JOIN platform.shops x ON x.owner_account_id = me.owner_account_id
+                                WHERE me.id = $1 AND me.kind = 'store' AND NOT me.is_demo AND x.kind = 'store' AND x.status NOT IN ('deleted', 'archived') AND NOT x.is_demo
+                                ORDER BY x.primary_shop DESC, x.id LIMIT 1), $1)`,
+      [r.referrer_shop_id],
+    )
+  )[0];
   const referred = (await db.query('SELECT name FROM platform.shops WHERE id = $1', [referredShopId]))[0]?.name ?? '';
   const gets = months > 0 && ref && !ref.never_expires && !ref.is_demo && ref.status !== 'deleted' && ref.status !== 'archived';
   let paidUntil: string | null = null;

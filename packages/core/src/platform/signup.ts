@@ -27,7 +27,7 @@ import {
   sha256Hex,
   takeAccountToken,
 } from './accounts';
-import { dropShopData, freeSlug, NAME_RESERVED, loadPlans, loadShop, ordersThisMonth, platformSettings, PlatformSettings, provisionShop, Shop, ShopInfoExtra, shopMaxOrders, shopStatus, slugOk } from './shops';
+import { dropShopData, freeSlug, keepSellerBilling, mainShopOf, NAME_RESERVED, loadPlans, loadShop, platformSettings, PlatformSettings, provisionShop, sellerOrdersThisMonth, sellerShops, Shop, ShopInfoExtra, shopMaxOrders, shopStatus, slugOk } from './shops';
 import { accountPhoneOrBad, checkSignupCode, setAccountPhone } from './phone';
 import { shopUnread } from './support';
 import type { Tenancy } from './tenancy';
@@ -277,8 +277,18 @@ export const AddStoreInput = z.object({
   kind: z.enum(['store', 'agency', 'marketer']).default('store'),
 });
 
-/** How many stores this person may own. */
+/** How many stores this person may own, without their plan (the person's own number set by Pilotix, else the general one). */
 export const storeLimit = (a: Account, set: PlatformSettings) => a.maxStores ?? set.signup.maxStores;
+
+/**
+ * How many stores this person may own: the number Pilotix set for them, else their plan's (one plan per seller: their
+ * first boutique's), else the platform's general number.
+ */
+export async function accountStoreLimit(t: Tenancy, a: Account, set: PlatformSettings): Promise<number> {
+  if (a.maxStores !== null && a.maxStores !== undefined) return a.maxStores;
+  const main = await mainShopOf(t, a.id);
+  return main?.plan?.maxStores ?? set.signup.maxStores;
+}
 
 /** A new store for a logged-in person, who owns it (their e-mail must be proven; at most their limit of stores). */
 export async function addStore(t: Tenancy, account: Account, raw: unknown, now = Date.now()): Promise<Shop> {
@@ -292,24 +302,26 @@ export async function addStore(t: Tenancy, account: Account, raw: unknown, now =
   if (kind !== 'store') {
     if ((await ownedPartners(t, account.id, kind)) > 0) throw bad(kind === 'agency' ? 'Vous avez déjà une agence de confirmation' : 'Vous avez déjà un espace marketer');
   } else {
-    const limit = storeLimit(account, set);
-    if ((await ownedStores(t, account.id)) >= limit) throw bad(`Vous avez déjà ${limit} boutique${limit > 1 ? 's' : ''} : c’est le maximum. Écrivez à Pilotix pour en avoir plus.`);
+    const limit = await accountStoreLimit(t, account, set);
+    if ((await ownedStores(t, account.id)) >= limit) throw bad(`Vous avez déjà ${limit} boutique${limit > 1 ? 's' : ''} : c’est le maximum de votre formule. Écrivez à Pilotix pour en avoir plus.`);
   }
   // its link, chosen now and never changed (a store's, an agency's, a marketer's: pilotix.online/<link>/…)
   const name = await storeNameCheck(t, p.data.name, p.data.slug);
   if (!name.free) throw bad(name.reason ?? 'Nom indisponible');
-  const plan = partner ? null : await startPlan(t, set);
+  // one plan per seller: another boutique of theirs follows their first one (its plan and its period, no new trial)
+  const main = partner ? null : await mainShopOf(t, account.id);
+  const plan = partner || main ? null : await startPlan(t, set);
   // the first store after an account-only sign-up: the phone and the referral code given at sign-up
   const first = !partner && (await ownedStores(t, account.id)) === 0;
   const su = first
     ? (await t.platform.query(`SELECT phone, referral_code FROM platform.signup_requests WHERE email = $1 AND used_at IS NOT NULL AND password_hash <> '-' AND shop_id IS NULL ORDER BY created_at DESC LIMIT 1`, [account.email]))[0]
     : null;
   const referrer = su?.referral_code ? ((await t.platform.query(`SELECT id FROM platform.shops WHERE referral_code = $1 AND status <> 'deleted'`, [su.referral_code]))[0]?.id ?? null) : null;
-  const shop = await provisionShop(t, {
+  const created = await provisionShop(t, {
     name: p.data.name,
     slug: name.slug,
-    planId: plan?.id ?? null,
-    trialDays: set.trial.days,
+    planId: main ? main.planId : (plan?.id ?? null),
+    trialDays: main ? 0 : set.trial.days,
     owner: { name: account.name || account.email, email: account.email, phone: su?.phone ?? null, language: account.language },
     verified: true,
     selfSignup: true,
@@ -317,8 +329,12 @@ export async function addStore(t: Tenancy, account: Account, raw: unknown, now =
     kind,
     now,
   });
+  // its own row says the same as the first boutique's (what is shown and counted follows the first one anyway)
+  if (main)
+    await t.platform.query('UPDATE platform.shops SET plan_id = $2, trial_ends_at = $3, paid_until = $4, never_expires = $5 WHERE id = $1', [created.id, main.planId, main.trialEndsAt, main.paidUntil, main.neverExpires]);
+  const shop = main ? ((await loadShop(t, { id: created.id })) ?? created) : created;
   if (referrer) await t.platform.query('INSERT INTO platform.referrals (referrer_shop_id, referred_shop_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [referrer, shop.id]);
-  await journal(t, shop.id, partner ? `${kind}.added` : 'shop.added', account.email, { name: shop.name, plan: plan?.name ?? null, referredBy: referrer });
+  await journal(t, shop.id, partner ? `${kind}.added` : 'shop.added', account.email, { name: shop.name, plan: (main ? main.plan?.name : plan?.name) ?? null, referredBy: referrer, ...(main ? { follows: main.id } : {}) });
   return shop;
 }
 
@@ -331,11 +347,14 @@ export async function deleteStoreByOwner(t: Tenancy, account: Account, shopId: n
   if (s.ownerAccountId !== account.id) throw forbidden('Seul le propriétaire de la boutique peut la supprimer');
   if (!(await checkAccountPassword(t, account.email, password))) throw bad('Mot de passe incorrect');
   if (String(confirmName ?? '').trim().toLowerCase() !== s.name.trim().toLowerCase()) throw bad('Tapez exactement le nom de la boutique pour confirmer');
+  const mainBefore = await mainShopOf(t, account.id);
   await dropShopData(t, s.id, s.schema);
   await t.platform.query(
     `UPDATE platform.shops SET status = 'deleted', deleted_at = now(), slug = 'deleted-' || id, referral_code = NULL, status_reason = 'Supprimée par son propriétaire' WHERE id = $1`,
     [s.id],
   );
+  // it was the seller's first boutique: their next one takes their plan and period (their other boutiques go on)
+  await keepSellerBilling(t, account.id, mainBefore);
   await journal(t, s.id, 'shop.deleted', account.email, { name: s.name, slug: s.slug });
 }
 
@@ -392,15 +411,18 @@ export async function shopInfoExtra(t: Tenancy, s: Shop, email: string, set: Pla
   // the stores a partner's person works for are reached from the partner's space: not other stores of theirs
   const mem = acc ? (await membershipsOf(t, acc.email)).filter((m) => !m.agencyId) : [];
   const own = acc ? await ownedStores(t, acc.id) : 0;
+  const limit = acc ? await accountStoreLimit(t, acc, set) : 0;
   return {
     owner: !!acc && s.ownerAccountId === acc.id,
     ownerProfileId: await ownerProfileId(t, s),
     stores: Math.max(0, mem.length - 1),
-    canAddStore: !!acc && set.signup.open && !s.demo && own < storeLimit(acc, set),
-    ...(acc ? { ownStores: own, maxStores: storeLimit(acc, set) } : {}),
+    canAddStore: !!acc && set.signup.open && !s.demo && own < limit,
+    ...(acc ? { ownStores: own, maxStores: limit } : {}),
+    sellerStores: (await sellerShops(t, s)).length,
     canAddAgency: !!acc && set.signup.open && !s.demo && (await ownedAgencies(t, acc.id)) === 0,
     canAddMarketer: !!acc && set.signup.open && !s.demo && (await ownedMarketers(t, acc.id)) === 0,
-    ordersMonth: shopMaxOrders(s) !== null ? await ordersThisMonth(t.shop(s.schema)) : null,
+    // one plan per seller: the orders of all their boutiques count
+    ordersMonth: shopMaxOrders(s) !== null ? await sellerOrdersThisMonth(t, s) : null,
     supportUnread: await shopUnread(t, s.id),
   };
 }

@@ -551,6 +551,17 @@ CREATE TABLE IF NOT EXISTS platform.shop_old_slugs (
 CREATE INDEX IF NOT EXISTS shop_old_slugs_shop ON platform.shop_old_slugs (shop_id, created_at DESC);
 `;
 
+/**
+ * One plan per seller: a plan says how many boutiques its seller may have (null: the platform's general number). The
+ * seller's first boutique holds the plan and its payments; their other boutiques follow it (platform/shops.ts). The
+ * plans made at the start get their number once (a plan the owner changed keeps his).
+ */
+const P019 = `
+ALTER TABLE platform.plans ADD COLUMN IF NOT EXISTS max_stores integer;
+UPDATE platform.plans SET max_stores = CASE code WHEN 'essentiel' THEN 1 WHEN 'pro' THEN 3 WHEN 'business' THEN 10 WHEN 'interne' THEN 100 END
+ WHERE max_stores IS NULL AND code IN ('essentiel', 'pro', 'business', 'interne');
+`;
+
 export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p001_platform', P001],
   ['p002_accounts_signup_domains', P002],
@@ -576,6 +587,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p017_old_slugs', P017],
   // linked Facebook / TikTok accounts (Pilot AI › Comptes): their tokens, their Pages and ad accounts, what each boutique uses
   ['p018_social', SOCIAL_PLATFORM_SQL],
+  // one plan per seller: the boutiques a plan allows; the seller's other boutiques follow their first one
+  ['p019_seller_plan', P019],
 ];
 
 /** Creates or updates the platform's tables. */

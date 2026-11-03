@@ -26,6 +26,8 @@ export interface Plan {
   /** livreurs (drivers) the plan allows */
   maxDrivers: number | null;
   maxOrdersMonth: number | null;
+  /** boutiques a seller on this plan may have (null: the platform's general number) — one plan for all of them */
+  maxStores: number | null;
   description: string;
   /** offered to new shops (false: the internal plan) */
   public: boolean;
@@ -57,6 +59,13 @@ export interface Shop {
   maxDrivers: number | null;
   /** the account that created the store: only its owner sees everything and can delete it */
   ownerAccountId: number | null;
+  /**
+   * One plan per seller: the seller's first boutique (its « boutique principale ») when this one is another of theirs.
+   * Such a boutique follows it: its plan, trial, paid period, limits and suspension are the first one's (null: this
+   * boutique holds its own — the first one, a partner's space, a store without owner).
+   */
+  mainShopId: number | null;
+  mainShopName: string | null;
   /** made by its owner from the sign-up page (not from the control room) */
   selfSignup: boolean;
   /** a store made on the first sign-up page (before accounts): when its owner confirmed the e-mail */
@@ -119,6 +128,7 @@ export const toPlan = (r: any): Plan => ({
   maxUsers: numOrNull(r.max_users),
   maxDrivers: numOrNull(r.max_drivers),
   maxOrdersMonth: numOrNull(r.max_orders_month),
+  maxStores: numOrNull(r.max_stores),
   description: r.description ?? '',
   public: !!r.public,
   active: !!r.active,
@@ -126,27 +136,47 @@ export const toPlan = (r: any): Plan => ({
   system: r.code === SYSTEM_PLAN,
 });
 
-const SHOP_SELECT = `SELECT s.*, row_to_json(p.*) AS plan_row FROM platform.shops s LEFT JOIN platform.plans p ON p.id = s.plan_id`;
+/**
+ * A seller's « boutique principale »: their first store still open (their own shop first when they own the server's
+ * own one), not the demo's. Its plan and payments are the seller's: their other boutiques follow it.
+ */
+const MAIN_OF = (alias: string) =>
+  `SELECT x.* FROM platform.shops x WHERE x.owner_account_id = ${alias}.owner_account_id AND x.kind = 'store' AND x.status NOT IN ('deleted', 'archived') AND NOT x.is_demo ORDER BY x.primary_shop DESC, x.id LIMIT 1`;
 
-export const toShop = (r: any): Shop => ({
+const SHOP_SELECT = `SELECT s.*, row_to_json(p.*) AS plan_row,
+    m.id AS main_id, m.name AS main_name, m.plan_id AS main_plan_id, m.trial_ends_at AS main_trial_ends_at, m.paid_until AS main_paid_until,
+    m.never_expires AS main_never_expires, m.status AS main_status, m.status_reason AS main_status_reason, m.max_users AS main_max_users,
+    m.max_drivers AS main_max_drivers, row_to_json(mp.*) AS main_plan_row
+  FROM platform.shops s
+  LEFT JOIN LATERAL (${MAIN_OF('s')}) m ON s.kind = 'store' AND s.owner_account_id IS NOT NULL AND NOT s.is_demo AND s.status NOT IN ('deleted', 'archived') AND m.id <> s.id
+  LEFT JOIN platform.plans p ON p.id = s.plan_id
+  LEFT JOIN platform.plans mp ON mp.id = m.plan_id`;
+
+export const toShop = (r: any): Shop => {
+  // another boutique of a seller: the seller's plan, period and limits are their first boutique's
+  const linked = r.main_id !== null && r.main_id !== undefined;
+  const suspendedThere = linked && r.status === 'active' && r.main_status === 'suspended';
+  return {
   id: num(r.id),
   slug: r.slug,
   name: r.name,
   schema: r.schema_name,
-  planId: numOrNull(r.plan_id),
-  plan: r.plan_row ? toPlan(json(r.plan_row)) : null,
-  status: r.status,
-  statusReason: r.status_reason ?? null,
-  trialEndsAt: isoOrNull(r.trial_ends_at),
-  paidUntil: isoOrNull(r.paid_until),
-  neverExpires: !!r.never_expires,
+  planId: numOrNull(linked ? r.main_plan_id : r.plan_id),
+  plan: linked ? (r.main_plan_row ? toPlan(json(r.main_plan_row)) : null) : r.plan_row ? toPlan(json(r.plan_row)) : null,
+  status: suspendedThere ? 'suspended' : r.status,
+  statusReason: suspendedThere ? (r.main_status_reason ?? null) : (r.status_reason ?? null),
+  trialEndsAt: isoOrNull(linked ? r.main_trial_ends_at : r.trial_ends_at),
+  paidUntil: isoOrNull(linked ? r.main_paid_until : r.paid_until),
+  neverExpires: !!(linked ? r.main_never_expires : r.never_expires),
   demo: !!r.is_demo,
   primary: !!r.primary_shop,
   featuresOn: list(r.features_on),
   featuresOff: list(r.features_off),
-  maxUsers: numOrNull(r.max_users),
-  maxDrivers: numOrNull(r.max_drivers),
+  maxUsers: numOrNull(linked ? r.main_max_users : r.max_users),
+  maxDrivers: numOrNull(linked ? r.main_max_drivers : r.max_drivers),
   ownerAccountId: numOrNull(r.owner_account_id),
+  mainShopId: linked ? num(r.main_id) : null,
+  mainShopName: linked ? String(r.main_name ?? '') : null,
   selfSignup: !!r.self_signup,
   emailVerifiedAt: isoOrNull(r.email_verified_at),
   domain: r.domain ?? null,
@@ -166,7 +196,8 @@ export const toShop = (r: any): Shop => ({
   publicCode: r.public_code ?? null,
   agencyVerifiedAt: isoOrNull(r.agency_verified_at),
   agencyPrices: r.agency_prices ? cleanPrices(json(r.agency_prices), isPartnerKind(r.kind) ? r.kind : undefined) : null,
-});
+  };
+};
 
 export async function loadPlans(t: Tenancy): Promise<Plan[]> {
   return (await t.platform.query('SELECT * FROM platform.plans ORDER BY sort, id')).map(toPlan);
@@ -317,6 +348,8 @@ export interface ShopInfoExtra {
   /** the stores the person owns and their limit (« 2 boutiques sur 3 ») */
   ownStores?: number;
   maxStores?: number | null;
+  /** the boutiques billed together with this one (one plan per seller) */
+  sellerStores?: number;
   /** « Créer mon agence »: the person has no confirmation agency yet */
   canAddAgency?: boolean;
   /** « Créer mon espace marketer »: the person has no marketer space yet */
@@ -358,6 +391,8 @@ export function shopInfo(s: Shop, st: ShopStatus, settings: PlatformSettings, no
     stores: extra.stores,
     canAddStore: extra.canAddStore,
     ...(extra.ownStores !== undefined ? { ownStores: extra.ownStores, maxStores: extra.maxStores ?? null } : {}),
+    mainShop: s.mainShopId ? { id: s.mainShopId, name: s.mainShopName ?? '' } : null,
+    ...(extra.sellerStores !== undefined ? { sellerStores: extra.sellerStores } : {}),
     canAddAgency: !!extra.canAddAgency,
     canAddMarketer: !!extra.canAddMarketer,
     supportUnread: extra.supportUnread,
@@ -596,10 +631,92 @@ export async function ordersThisMonth(db: Db): Promise<number> {
   );
 }
 
+// ---------------------------------------------------------------- one plan per seller
+/** A seller's « boutique principale »: their first store still open — it holds their plan and their payments. */
+export async function mainShopOf(t: Tenancy, accountId: number): Promise<Shop | null> {
+  const row = (
+    await t.platform.query(
+      `${SHOP_SELECT} WHERE s.owner_account_id = $1 AND s.kind = 'store' AND s.status NOT IN ('deleted', 'archived') AND NOT s.is_demo ORDER BY s.primary_shop DESC, s.id LIMIT 1`,
+      [accountId],
+    )
+  )[0];
+  return row ? toShop(row) : null;
+}
+
+/**
+ * After one of a seller's boutiques closed (deleted, archived) or came back: when their first boutique is now another
+ * one, it takes the plan, the period and the limits of the one before, so the seller's subscription goes on unchanged.
+ */
+export async function keepSellerBilling(t: Tenancy, ownerAccountId: number | null, before: Shop | null): Promise<void> {
+  if (!ownerAccountId || !before) return;
+  const after = await mainShopOf(t, ownerAccountId);
+  if (!after || after.id === before.id) return;
+  const r = (await t.platform.query('SELECT plan_id, trial_ends_at, paid_until, never_expires, max_users, max_drivers FROM platform.shops WHERE id = $1', [before.id]))[0];
+  if (!r) return;
+  await t.platform.query('UPDATE platform.shops SET plan_id = $2, trial_ends_at = $3, paid_until = $4, never_expires = $5, max_users = $6, max_drivers = $7 WHERE id = $1', [
+    after.id,
+    r.plan_id,
+    r.trial_ends_at,
+    r.paid_until,
+    r.never_expires,
+    r.max_users,
+    r.max_drivers,
+  ]);
+}
+
+/** The boutiques billed together with this one: the seller's stores still open (just this one when it has no owner). */
+export async function sellerShops(t: Tenancy, s: Shop): Promise<Shop[]> {
+  if (s.kind !== 'store' || !s.ownerAccountId || s.demo) return [s];
+  const rows = await t.platform.query(`${SHOP_SELECT} WHERE s.owner_account_id = $1 AND s.kind = 'store' AND s.status NOT IN ('deleted', 'archived') AND NOT s.is_demo ORDER BY s.primary_shop DESC, s.id`, [s.ownerAccountId]);
+  const list = rows.map(toShop);
+  return list.some((x: Shop) => x.id === s.id) ? list : [s, ...list];
+}
+
+const SEAT_SQL = {
+  // a confirmation agency's agents take no place: the agency brings them
+  users: `SELECT lower(email) AS e FROM profiles WHERE active AND agency_id IS NULL AND email NOT LIKE '%@pilotix.invalid'`,
+  drivers: `SELECT lower(email) AS e FROM profiles WHERE active AND 'livreur' = ANY(roles) AND email NOT LIKE '%@pilotix.invalid'`,
+};
+
+/**
+ * The people who take a place in the seller's plan, over all their boutiques: each person once (the same e-mail in
+ * two boutiques is one place).
+ */
+export async function sellerSeats(t: Tenancy, shops: Shop[], kind: 'users' | 'drivers'): Promise<Set<string>> {
+  const out = new Set<string>();
+  for (const x of shops) {
+    if (x.status === 'archived' || x.status === 'deleted') continue;
+    for (const r of (await t.shop(x.schema).query(SEAT_SQL[kind]).catch(() => [])) as any[]) out.add(String(r.e));
+  }
+  return out;
+}
+
+/** Orders made this month over all the seller's boutiques (the plan's monthly number is the seller's). */
+export async function sellerOrdersThisMonth(t: Tenancy, s: Shop): Promise<number> {
+  let n = 0;
+  for (const x of await sellerShops(t, s)) n += await ordersThisMonth(t.shop(x.schema)).catch(() => 0);
+  return n;
+}
+
+/** What the plan counts for this boutique's seller: people (each once), livreurs, orders of all their boutiques. */
+export async function sellerUsage(t: Tenancy, s: Shop): Promise<ShopUsage> {
+  const shops = await sellerShops(t, s);
+  if (shops.length <= 1) return shopUsage(t, s);
+  const parts = await Promise.all(shops.map((x) => shopUsage(t, x)));
+  return {
+    users: (await sellerSeats(t, shops, 'users')).size,
+    drivers: (await sellerSeats(t, shops, 'drivers')).size,
+    ordersMonth: parts.reduce((a, p) => a + p.ordersMonth, 0),
+    ordersLastMonth: parts.reduce((a, p) => a + p.ordersLastMonth, 0),
+    ordersTotal: parts.reduce((a, p) => a + p.ordersTotal, 0),
+    ownerStores: parts[0]?.ownerStores ?? 0,
+  };
+}
+
 // ---------------------------------------------------------------- first start
 /** Plans offered at the start (prices are examples: the owner changes them in the control room). */
 const DEFAULT_PLANS = [
-  { code: SYSTEM_PLAN, name: 'Interne', price: 0, features: ['*'], users: null, orders: null, pub: false, desc: 'Votre propre boutique : tout est inclus, sans fin.' },
+  { code: SYSTEM_PLAN, name: 'Interne', price: 0, features: ['*'], users: null, orders: null, stores: 100, pub: false, desc: 'Votre propre boutique : tout est inclus, sans fin.' },
   {
     code: 'essentiel',
     name: 'Essentiel',
@@ -607,6 +724,7 @@ const DEFAULT_PLANS = [
     features: ['dashboard', 'commandes', 'scanner', 'sav', 'tournee', 'produits', 'clients', 'caisse', 'macaisse', 'livraison', 'management'],
     users: 5,
     orders: 1500,
+    stores: 1,
     pub: true,
     desc: 'Commandes, confirmation, dépôt, livraison, stock, caisse.',
   },
@@ -617,10 +735,11 @@ const DEFAULT_PLANS = [
     features: ['dashboard', 'commandes', 'scanner', 'sav', 'tournee', 'produits', 'pilotai', '-pilotai/cm', '-pilotai/messages', 'clients', 'marketing', '-marketing/spy', 'landing', 'caisse', 'macaisse', 'livraison', 'management'],
     users: 15,
     orders: 6000,
+    stores: 3,
     pub: true,
     desc: 'Essentiel + landing pages, publicité, marketeurs, Delivery AI agent.',
   },
-  { code: 'business', name: 'Business', price: 14900, features: ['*'], users: null, orders: null, pub: true, desc: 'Tout Pilotix : Message AI agent, CM AI agent, AI Spy…' },
+  { code: 'business', name: 'Business', price: 14900, features: ['*'], users: null, orders: null, stores: 10, pub: true, desc: 'Tout Pilotix : Message AI agent, CM AI agent, AI Spy…' },
 ];
 
 /**
@@ -632,8 +751,8 @@ export async function bootstrapPlatform(t: Tenancy): Promise<void> {
   if (!(await t.platform.query('SELECT 1 FROM platform.plans LIMIT 1')).length)
     for (const [i, p] of DEFAULT_PLANS.entries())
       await t.platform.query(
-        `INSERT INTO platform.plans (code, name, price_month, features, max_users, max_orders_month, description, public, sort) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (code) DO NOTHING`,
-        [p.code, p.name, p.price, JSON.stringify(p.features), p.users, p.orders, p.desc, p.pub, i],
+        `INSERT INTO platform.plans (code, name, price_month, features, max_users, max_orders_month, max_stores, description, public, sort) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (code) DO NOTHING`,
+        [p.code, p.name, p.price, JSON.stringify(p.features), p.users, p.orders, p.stores, p.desc, p.pub, i],
       );
   if (!(await loadShop(t, { primary: true }))) {
     const sys = (await t.platform.query('SELECT id FROM platform.plans WHERE code = $1', [SYSTEM_PLAN]))[0];

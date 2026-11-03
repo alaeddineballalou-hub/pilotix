@@ -40,8 +40,24 @@ export function Shops({ staff, creating, filter }: { staff: Staff; creating?: bo
     return c;
   }, [all.data]);
   const manager = can(staff, 'manager');
-  // "Toutes": the shops still open (the archived ones have their own tab)
-  const rows = (list.data ?? []).filter((s) => state === 'archived' || s.state !== 'archived');
+  // "Toutes": the shops still open (the archived ones have their own tab); one plan per seller: a seller's other
+  // boutiques right under their first one (which holds the plan, the payments and the numbers of all of them)
+  const rows = useMemo(() => {
+    const open = (list.data ?? []).filter((s) => state === 'archived' || s.state !== 'archived');
+    const under = new Map<number, typeof open>();
+    for (const r of open) if (r.main && open.some((x) => x.id === r.main!.id)) under.set(r.main.id, [...(under.get(r.main.id) ?? []), r]);
+    const out: typeof open = [];
+    for (const r of open) {
+      if (r.main && open.some((x) => x.id === r.main!.id)) continue;
+      out.push(r, ...(under.get(r.id) ?? []));
+    }
+    return out;
+  }, [list.data, state]);
+  const linkedOf = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const r of all.data ?? []) if (r.main) m.set(r.main.id, (m.get(r.main.id) ?? 0) + 1);
+    return m;
+  }, [all.data]);
   const lim = (v: number, max: number | null, over: boolean) => (
     <span className={over ? 'pp-over' : ''}>
       {n(v)}
@@ -100,7 +116,7 @@ export function Shops({ staff, creating, filter }: { staff: Staff; creating?: bo
               </thead>
               <tbody>
                 {rows.map((s) => (
-                  <tr key={s.id} className={s.primary ? 'pp-own' : ''}>
+                  <tr key={s.id} className={`${s.primary ? 'pp-own' : ''}${s.main ? ' pp-linked' : ''}`}>
                     <td data-l={t('platform.col.shop')}>
                       <a className="pp-shop" href={`#/platform/shops/${s.id}`}>
                         <b>{s.name}</b>
@@ -110,6 +126,7 @@ export function Shops({ staff, creating, filter }: { staff: Staff; creating?: bo
                         </small>
                       </a>
                       {s.primary && <span className="chip pp-chip-own">{t('platform.ownShop')}</span>}
+                      {!s.main && (linkedOf.get(s.id) ?? 0) > 0 && <span className="chip">{t('platform.seller.more', { count: linkedOf.get(s.id) })}</span>}
                       {s.demo && <span className="chip">{t('platform.demoShop')}</span>}
                       {s.selfSignup && <span className="chip">{t('platform.selfSignup')}</span>}
                       {s.domain && (
@@ -125,7 +142,14 @@ export function Shops({ staff, creating, filter }: { staff: Staff; creating?: bo
                       </span>
                     </td>
                     <td data-l={t('platform.col.plan')}>
-                      {s.plan && !s.plan.system ? (
+                      {s.main ? (
+                        <span className="pp-two">
+                          <span>{t('platform.seller.follows')}</span>
+                          <a className="small" href={`#/platform/shops/${s.main.id}`}>
+                            {s.main.name}
+                          </a>
+                        </span>
+                      ) : s.plan && !s.plan.system ? (
                         <span className="pp-two">
                           <span>{s.plan.name}</span>
                           <small className="muted">{t('platform.perMonth', { price: da(s.plan.priceMonth) })}</small>
@@ -142,20 +166,21 @@ export function Shops({ staff, creating, filter }: { staff: Staff; creating?: bo
                         )}
                       </span>
                     </td>
+                    {/* another boutique of a seller: its own numbers (the limits are counted on the first one, with all of them) */}
                     <td className="num ltr" data-l={t('platform.col.team')}>
-                      {lim(s.usage.users, s.limits.maxUsers, s.limits.over.users)}
+                      {lim(s.usage.users, s.main ? null : s.limits.maxUsers, s.limits.over.users)}
                     </td>
                     <td className="num ltr" data-l={t('platform.col.drivers')}>
-                      {lim(s.usage.drivers, s.limits.maxDrivers, s.limits.over.drivers)}
+                      {lim(s.usage.drivers, s.main ? null : s.limits.maxDrivers, s.limits.over.drivers)}
                     </td>
                     <td className="num ltr" data-l={t('platform.col.orders')}>
-                      {lim(s.usage.ordersMonth, s.limits.maxOrdersMonth, s.limits.over.orders)}
+                      {lim(s.usage.ordersMonth, s.main ? null : s.limits.maxOrdersMonth, s.limits.over.orders)}
                     </td>
                     <td data-l={t('platform.col.activity')}>
                       <small>{s.lastActiveAt ? when(s.lastActiveAt) : '—'}</small>
                     </td>
                     <td data-l="" className="pp-acts">
-                      {manager && !s.primary && !s.demo && s.status !== 'archived' && s.status !== 'deleted' && (
+                      {manager && !s.primary && !s.demo && !s.main && s.status !== 'archived' && s.status !== 'deleted' && (
                         <button type="button" className="btn small" onClick={() => setPay(s)}>
                           <Icon name="coins" /> {t('platform.payment')}
                         </button>

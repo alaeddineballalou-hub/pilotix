@@ -81,7 +81,8 @@
     "copyHint": "Delivery companies (with the same keys), prices, statuses, messages and work rules. Never the orders, products or team.",
     "copied": "Settings of {{name}} copied",
     "copyFailed": "Store created, but its settings were not copied: do it in « My boutiques ».",
-    "thisOne": "{{name}} (open)"
+    "thisOne": "{{name}} (open)",
+    "followsPlan": "It follows your subscription: one payment, accounts and orders counted with your other boutiques, no new trial."
   },
   "aide": {
     "title": "Contact Pilotix",
@@ -103,5 +104,8 @@
   "ordersNear": "Close to your plan’s order limit this month: {{done}} / {{max}}",
   "ordersKeep": "Your orders keep coming in, none is lost. Move to a bigger plan.",
   "upgrade": "Change plan",
-  "payPlanYear": "Or {{price}} DA for a year"
+  "payPlanYear": "Or {{price}} DA for a year",
+  "payAll_one": "One payment for your {{count}} boutique (main boutique: {{main}}).",
+  "payAll_other": "One payment for your {{count}} boutiques (main boutique: {{main}}).",
+  "allStores": "all your boutiques"
 }

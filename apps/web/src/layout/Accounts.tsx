@@ -449,6 +449,7 @@ function CopyFromField({ value, onChange }: { value: number; onChange: (v: { id:
         <option value={0}>{t('shop.acc.copyNone')}</option>
       </select>
       <span className="hint">{t('shop.acc.copyHint')}</span>
+      <span className="hint">{t('shop.acc.followsPlan')}</span>
     </label>
   );
 }

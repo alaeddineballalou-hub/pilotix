@@ -48,28 +48,55 @@ function needGrantable(ctx: Ctx, b: { roles?: string[]; canManageUsers?: boolean
   if (b.canManageUsers !== undefined || b.canAssign !== undefined || b.canAffect !== undefined) throw forbidden('Seul l’administrateur peut donner ce droit');
 }
 
+/**
+ * One plan per seller: when this boutique is one of several of its owner, the places of the plan are counted over all
+ * of them, each person once (the same e-mail in two boutiques is one place). null: this boutique alone.
+ */
+async function planSeats(ctx: Ctx, kind: 'users' | 'drivers'): Promise<Set<string> | null> {
+  if (!ctx.t || !ctx.shop || (ctx.shop.kind && ctx.shop.kind !== 'store')) return null;
+  const { loadShop, sellerSeats, sellerShops } = await import('../platform/shops');
+  const s = await loadShop(ctx.t, { id: ctx.shop.id });
+  if (!s) return null;
+  const shops = await sellerShops(ctx.t, s);
+  return shops.length > 1 ? sellerSeats(ctx.t, shops, kind) : null;
+}
+
 /** The shop's plan allows N active accounts (a multi-shop server): one more is refused beyond that. */
-async function needSeat(ctx: Ctx) {
+async function needSeat(ctx: Ctx, email: string | null = null) {
   const max = ctx.shop?.maxUsers;
   if (!max) return;
+  const all = await planSeats(ctx, 'users');
+  if (all) {
+    // already working in another of the seller's boutiques: no new place
+    if (email && all.has(email.trim().toLowerCase())) return;
+    if (all.size >= max) throw bad(`Votre formule Pilotix permet ${max} comptes actifs pour toutes vos boutiques. Désactivez un compte, ou demandez à Pilotix une formule plus grande.`);
+    return;
+  }
   // a confirmation agency's agents take no place: the agency brings them
   const n = num((await ctx.db.query(`SELECT count(*)::int AS n FROM profiles WHERE active AND agency_id IS NULL AND email NOT LIKE '%@pilotix.invalid'`))[0]?.n);
   if (n >= max) throw bad(`Votre formule Pilotix permet ${max} comptes actifs. Désactivez un compte, ou demandez à Pilotix une formule plus grande.`);
 }
 
 /** The shop's plan allows N active livreurs (a multi-shop server): one more is refused beyond that. */
-async function needDriverSeat(ctx: Ctx, exceptId: number | null = null) {
+async function needDriverSeat(ctx: Ctx, exceptId: number | null = null, email: string | null = null) {
   const max = ctx.shop?.maxDrivers;
   if (max === null || max === undefined) return;
+  const full = () =>
+    bad(
+      max === 0
+        ? 'Votre formule Pilotix ne comprend pas de livreurs. Demandez à Pilotix une formule plus grande.'
+        : `Votre formule Pilotix permet ${max} livreur${max > 1 ? 's' : ''} actif${max > 1 ? 's' : ''}${(all?.size ?? 0) > 0 ? ' pour toutes vos boutiques' : ''}. Désactivez un livreur, ou demandez à Pilotix une formule plus grande.`,
+    );
+  const all = await planSeats(ctx, 'drivers');
+  if (all) {
+    if (email && all.has(email.trim().toLowerCase())) return;
+    if (all.size >= max) throw full();
+    return;
+  }
   const n = num(
     (await ctx.db.query(`SELECT count(*)::int AS n FROM profiles WHERE active AND 'livreur' = ANY(roles) AND email NOT LIKE '%@pilotix.invalid' AND ($1::bigint IS NULL OR id <> $1)`, [exceptId]))[0]?.n,
   );
-  if (n >= max)
-    throw bad(
-      max === 0
-        ? 'Votre formule Pilotix ne comprend pas de livreurs. Demandez à Pilotix une formule plus grande.'
-        : `Votre formule Pilotix permet ${max} livreur${max > 1 ? 's' : ''} actif${max > 1 ? 's' : ''}. Désactivez un livreur, ou demandez à Pilotix une formule plus grande.`,
-    );
+  if (n >= max) throw full();
 }
 
 export async function profileById(db: Db, id: number): Promise<Profile | null> {
@@ -380,8 +407,8 @@ export const usersProcs = {
     needGrantable(ctx, b);
     noNewSeller(b.roles);
     noNewMarketer(ctx, b.roles);
-    await needSeat(ctx);
-    if (b.roles.includes('livreur')) await needDriverSeat(ctx);
+    await needSeat(ctx, b.email);
+    if (b.roles.includes('livreur')) await needDriverSeat(ctx, null, b.email);
     // an agency's person: every seller unless the chief chose some
     const sellers = await agencyFields(ctx, b);
     const phone = await teamPhone(ctx, b.phone, { id: null, email: b.email });
@@ -406,11 +433,11 @@ export const usersProcs = {
     const sellers = await agencyFields(ctx, b);
     if (b.id === ctx.session.profile.id && (b.active === false || (b.roles && !b.roles.includes('admin')))) throw forbidden('Vous ne pouvez pas retirer votre propre accès administrateur');
     // an account closed earlier and opened again takes a place of the plan; so does a new livreur
-    const before = (await ctx.db.query('SELECT active, roles, archived_at FROM profiles WHERE id = $1', [b.id]))[0];
+    const before = (await ctx.db.query('SELECT active, roles, archived_at, email FROM profiles WHERE id = $1', [b.id]))[0];
     noNewSeller(b.roles, (before?.roles as string[] | undefined) ?? []);
     noNewMarketer(ctx, b.roles, (before?.roles as string[] | undefined) ?? []);
     if (before?.archived_at && b.active === true) throw bad('Ce compte est archivé : sortez-le d’abord des archives (Management › Archives)');
-    if (b.active === true && !before?.active) await needSeat(ctx);
+    if (b.active === true && !before?.active) await needSeat(ctx, before?.email ?? null);
     // a new phone: required form, nobody else's (empty: unchanged)
     const phone = b.phone ? await teamPhone(ctx, b.phone, { id: b.id, email: b.email ?? String((await ctx.db.query('SELECT email FROM profiles WHERE id = $1', [b.id]))[0]?.email ?? '') }) : null;
     const willBeActive = b.active ?? !!before?.active;
@@ -429,7 +456,7 @@ export const usersProcs = {
       );
       if (left !== 0) throw bad(`Il reste ${left} DA dans la caisse de cette personne : transférez-les d’abord vers une autre caisse (Caisse › Transférer).`);
     }
-    if (willBeActive && (b.roles ?? (before?.roles as string[] | undefined) ?? []).includes('livreur') && !wasDriver) await needDriverSeat(ctx, b.id);
+    if (willBeActive && (b.roles ?? (before?.roles as string[] | undefined) ?? []).includes('livreur') && !wasDriver) await needDriverSeat(ctx, b.id, before?.email ?? null);
     let r: any;
     try {
       r = (
