@@ -9,6 +9,7 @@ import { Empty, ErrorBox, Icon, Loading, Pager } from '../../ui/kit';
 import { SectionHeader } from '../ai/agent';
 import type { PageProps } from '../registry';
 import './assigned-catalog.css';
+import { GuideButton } from './guide';
 
 export function AgencyProducts(props: PageProps) {
   const seller = useSeller();
@@ -38,6 +39,7 @@ export function AssignedCatalog({ sub }: PageProps) {
           <div>{p.seller && <span className="chip">{p.seller.name}</span>}<h3>{p.name}</h3><small className="muted ltr">{p.sku}</small></div>
           {!p.active && <span className="badge t-warn">{t('produits.assigned.off')}</span>}
         </div>
+        {p.hasGuide && <div className="assigned-guide">{p.seller ? <SellerScope seller={p.seller.id}><GuideButton productId={p.id} label={t('produits.guide.openFull')} /></SellerScope> : <GuideButton productId={p.id} label={t('produits.guide.openFull')} />}</div>}
         {tab === 'produits' && p.description && <p className="assigned-description">{p.description}</p>}
         <div className="assigned-variants">{p.variants.length ? p.variants.map((v) => <div className="assigned-variant" key={v.id}>
           <div className="assigned-variant-name">{v.photo && <img src={v.photo} alt="" loading="lazy" />}<span><b>{v.title || p.name}</b><small className="muted ltr">{v.sku}</small></span></div>

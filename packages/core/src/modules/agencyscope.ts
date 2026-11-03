@@ -171,6 +171,8 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'confirmation.list': free,
   'confirmation.catalog': free,
   'catalog.assigned': free,
+  // a product's sales guide during the call (the proc keeps to the agency's products)
+  'catalog.guide': free,
   'confirmation.deskOptions': free,
   'confirmation.mine': free,
   'confirmation.banner': free,

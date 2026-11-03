@@ -14,6 +14,7 @@ import { atIn, confIn, dayIn, followIn, ScanLang, scanT } from './scantext';
 import { checkDispatch, dispatchOrders } from './dispatch';
 import { getPrefs } from './prefs';
 import { assignedProductIds } from './productscope';
+import { checkGuide, GuideInput, HAS_GUIDE, readGuide, saveGuide } from './guide';
 
 // ---------------------------------------------------------------- types
 export interface CatalogVariant {
@@ -62,6 +63,8 @@ export interface CatalogProduct {
   options: ProductOption[];
   variants: CatalogVariant[];
   services: ProductService[];
+  /** the product has a sales guide (Guide de vente: modules/guide.ts) */
+  hasGuide: boolean;
 }
 export interface ProductService { id: number; name: string; price: number; cost: number; }
 export interface ProductOption {
@@ -152,6 +155,7 @@ function toProduct(p: any, vars: any[]): CatalogProduct {
     defaultCompanyId: numOrNull(p.default_company_id),
     options: j(p.options),
     services: j(p.services),
+    hasGuide: !!p.has_guide,
     variants: vars.map((v) => ({ id: num(v.id), productId: num(v.product_id), title: v.title, sku: v.sku, price: numOrNull(v.price), cost: numOrNull(v.cost), maxDiscount: numOrNull(v.max_discount), weightKg: numOrNull(v.weight_kg), alertQty: numOrNull(v.alert_qty), feeGrid: v.fee_grid ?? null, photo: v.photo ?? null, active: !!v.active })),
   };
 }
@@ -166,7 +170,7 @@ export async function listProducts(db: Db, opts: { ids?: number[]; q?: string; a
     const q = opts.q.trim();
     w.add(`(p.name ILIKE '%' || ? || '%' OR p.sku ILIKE ? || '%' OR EXISTS (SELECT 1 FROM product_variants x WHERE x.product_id = p.id AND (x.title ILIKE '%' || ? || '%' OR x.sku ILIKE ? || '%')))`, q, q, q, q);
   }
-  const rows = await db.query(`SELECT p.* FROM products p ${w.sql} ORDER BY p.active DESC, lower(p.name), p.id`, w.params);
+  const rows = await db.query(`SELECT p.*, ${HAS_GUIDE('p')} AS has_guide FROM products p ${w.sql} ORDER BY p.active DESC, lower(p.name), p.id`, w.params);
   if (!rows.length) return [];
   const vars = await db.query('SELECT * FROM product_variants WHERE product_id = ANY($1) ORDER BY id', [rows.map((r: any) => num(r.id))]);
   const by = new Map<number, any[]>();
@@ -421,6 +425,8 @@ export const ProductInput = z.object({
     .max(3, '3 options au maximum')
     .optional(),
   variants: z.array(VariantInput).max(200).default([]),
+  /** the sales guide (Guide de vente); missing: unchanged, empty: removed */
+  guide: GuideInput.optional(),
 });
 
 const slug = (s: string) =>
@@ -442,6 +448,7 @@ async function freeSku(db: Db, table: 'products' | 'product_variants', base: str
 }
 
 export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Promise<CatalogProduct> {
+  const guide = i.guide === undefined ? null : checkGuide(i.guide);
   const pid = await ctx.db.tx(async (tx) => {
     const cur = i.id ? (await tx.query('SELECT * FROM products WHERE id = $1 FOR UPDATE', [i.id]))[0] : null;
     if (i.id && !cur) throw notFound('Produit introuvable');
@@ -559,6 +566,8 @@ export async function saveProduct(ctx: Ctx, i: z.infer<typeof ProductInput>): Pr
          ON CONFLICT (variant_id, warehouse_id) DO UPDATE SET alert_qty = EXCLUDED.alert_qty`,
         [productId, i.alertQty],
       );
+    // Guide de vente: what the agents read during a call, and what Dellal and CM AI answer with
+    if (i.guide !== undefined) await saveGuide(tx, productId, guide!, ctx.session.profile.id);
     return productId;
   });
   // Landing pages › Réglages « a page for every new product »: made at once (the marketer completes it later)
@@ -905,7 +914,7 @@ export const catalogProcs = {
     if (i.q.trim()) w.add(`(p.name ILIKE '%' || ? || '%' OR p.sku ILIKE '%' || ? || '%' OR EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND (v.title ILIKE '%' || ? || '%' OR v.sku ILIKE '%' || ? || '%')))`, i.q.trim(), i.q.trim(), i.q.trim(), i.q.trim());
     const total = num((await ctx.db.query(`SELECT count(*)::int AS n FROM products p ${w.sql}`, w.params))[0]?.n);
     const limit = w.p(i.pageSize), offset = w.p((i.page - 1) * i.pageSize);
-    const products = await ctx.db.query(`SELECT p.id, p.name, p.sku, p.price, p.photo, p.description, p.active, p.is_service FROM products p ${w.sql} ORDER BY lower(p.name), p.id LIMIT ${limit} OFFSET ${offset}`, w.params);
+    const products = await ctx.db.query(`SELECT p.id, p.name, p.sku, p.price, p.photo, p.description, p.active, p.is_service, ${HAS_GUIDE('p')} AS has_guide FROM products p ${w.sql} ORDER BY lower(p.name), p.id LIMIT ${limit} OFFSET ${offset}`, w.params);
     const variants = products.length ? await ctx.db.query(
       `WITH r AS (${RESERVED}) SELECT v.id, v.product_id, v.title, v.sku, v.price, v.photo, v.active,
        GREATEST(0, COALESCE((SELECT sum(s.qty) FROM stock s JOIN warehouses wh ON wh.id=s.warehouse_id WHERE s.variant_id=v.id AND wh.active),0)
@@ -914,7 +923,7 @@ export const catalogProcs = {
     ) : [];
     return { total, page: i.page, pageSize: i.pageSize, rows: products.map((p) => ({
       id: num(p.id), name: String(p.name), sku: String(p.sku), price: num(p.price), photo: p.photo as string | null,
-      description: p.description as string | null, active: !!p.active, isService: !!p.is_service,
+      description: p.description as string | null, active: !!p.active, isService: !!p.is_service, hasGuide: !!p.has_guide,
       seller: null as { id: number; name: string } | null,
       variants: variants.filter((v) => num(v.product_id) === num(p.id)).map((v) => ({
         id: num(v.id), title: String(v.title), sku: String(v.sku), price: numOrNull(v.price) ?? num(p.price),
@@ -926,7 +935,9 @@ export const catalogProcs = {
   'catalog.product': proc([...DEPOT], z.object({ id }), async (ctx, { id }) => {
     const p = (await listProducts(ctx.db, { ids: [id] }))[0];
     if (!p) throw notFound('Produit introuvable');
-    return p;
+    // the product form also edits its sales guide (tab « Guide de vente »)
+    const g = await readGuide(ctx.db, id);
+    return { ...p, guide: g?.guide ?? null, guideAt: g?.updatedAt ?? null, guideBy: g?.updatedBy ?? null };
   }),
 
   /** Names of the delivery price grids (product form, "Grille de prix de livraison"). */

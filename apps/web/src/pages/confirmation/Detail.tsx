@@ -11,6 +11,7 @@ import { useAction, useRpc } from '../../lib/query';
 import { da, fromLocalInput, wilayaName } from '../../lib/format';
 import i18n from '../../lib/i18n';
 import { Icon, Loading, StatusBadge } from '../../ui/kit';
+import { GuideButton } from '../depot/guide';
 import { Float } from '../../ui/Float';
 import { mayChangeCompany, pilotLine } from '../../lib/pilot';
 import { useSession } from '../../lib/session';
@@ -414,6 +415,7 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
                       l.variantTitle && <span className="qd6-vt">{l.variantTitle}</span>
                     )}
                     {p && <span className="ltr">{p.variants.find((v) => v.id === l.variantId)?.sku ?? p.sku}</span>}
+                    {p?.hasGuide && <GuideButton productId={p.id} className="qd6-guide" />}
                   </div>
                 </div>
                 {lineState(i) === 'off' ? (

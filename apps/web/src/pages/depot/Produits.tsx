@@ -200,6 +200,8 @@ function ProductsTab() {
   const prods = useRpc('catalog.products', {});
   const st = useRpc('catalog.stock', { withHidden: true });
   const [edit, setEdit] = useState<number | 'new' | null>(null);
+  // the product form opens on its Guide de vente tab from the list's « Guide » chip
+  const [editTab, setEditTab] = useState<'product' | 'guide'>('product');
   const [importing, setImporting] = useState(false);
   // landing pages: which products have one (a product just created without one gets a banner)
   const { session } = useSession();
@@ -289,8 +291,8 @@ function ProductsTab() {
                 role="button"
                 tabIndex={0}
                 aria-label={t('produits.form.editTitle', { name: p.name })}
-                onClick={() => setEdit(p.id)}
-                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), setEdit(p.id))}
+                onClick={() => (setEditTab('product'), setEdit(p.id))}
+                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), setEditTab('product'), setEdit(p.id))}
               >
                 <span className="a-name pd-prod">
                   {detailed.length > 0 && <button type="button" className="btn small ghost" aria-label={openProduct.has(p.id) ? `Collapse ${p.name} variants` : `Expand ${p.name} variants`} aria-expanded={openProduct.has(p.id)} onClick={(e) => { e.stopPropagation(); toggleOpen(p.id); }}>{openProduct.has(p.id) ? '▾' : '▸'}</button>}
@@ -311,6 +313,18 @@ function ProductsTab() {
                         ) : (
                           <span className="chip lp-nolp">{t('produits.landing.none')}</span>
                         ))}
+                      {!p.isService && (
+                        <button
+                          type="button"
+                          className={`chip gd-chip ${p.hasGuide ? 'on' : 'off'}`}
+                          title={p.hasGuide ? t('produits.guide.hasHint') : t('produits.guide.noneHint')}
+                          onClick={(e) => (e.stopPropagation(), setEditTab('guide'), setEdit(p.id))}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          {p.hasGuide && <Icon name="book" />}
+                          {p.hasGuide ? t('produits.guide.has') : t('produits.guide.none')}
+                        </button>
+                      )}
                     </small>
                   </span>
                 </span>
@@ -378,7 +392,7 @@ function ProductsTab() {
         </div>
       )}
       {importing && <ImportDialog onClose={() => setImporting(false)} />}
-      {edit !== null && <ProductForm id={edit === 'new' ? null : edit} onClose={() => setEdit(null)} onCreated={(r) => r.active && !r.isService && setFresh({ id: r.id, name: r.name })} />}
+      {edit !== null && <ProductForm id={edit === 'new' ? null : edit} tab={edit === 'new' ? 'product' : editTab} onClose={() => setEdit(null)} onCreated={(r) => r.active && !r.isService && setFresh({ id: r.id, name: r.name })} />}
     </section>
   );
 }

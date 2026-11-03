@@ -15,6 +15,7 @@ import { createOrder } from './orders';
 import { anonymize, bookFor, BookRef, pickModel } from './pilotlearn';
 import { asWords, checkLahjaWords, LAHJA_NO_CHANGE, LAHJA_PERSONAL, lahjaAvoid, lahjaBlocks, lahjaDiff, lahjaErr, lahjaFor, LahjaWord } from './lahja';
 import { pilotConfig, pilotToday } from '../platform/pilotai';
+import { guideText, HAS_GUIDE, readGuide, toFill } from './guide';
 
 // ---------------------------------------------------------------- settings and secrets
 export const DELLAL_CHANNELS = ['whatsapp', 'messenger', 'instagram', 'tiktok', 'test'] as const;
@@ -349,6 +350,8 @@ export interface ProductInfo {
   packs: { qty: number; price: number }[];
   /** products that go with this one (upsell) */
   linked: { product_id: number; name: string; price: number }[];
+  /** the team wrote a sales guide for it (product_guide tool) */
+  guide: boolean;
 }
 
 /** Active products with their variants and what is really available (stock − promised to confirmed orders). */
@@ -356,7 +359,7 @@ export async function searchProducts(db: Db, query?: string | null, limit = 8): 
   const words = strip(query ?? '')
     .split(/[^a-z0-9؀-ۿ]+/)
     .filter((w) => w.length >= 3);
-  const prods = await db.query(`SELECT id, name, price, max_discount, photo, packs, linked FROM products WHERE active AND NOT is_service ORDER BY lower(name)`);
+  const prods = await db.query(`SELECT id, name, price, max_discount, photo, packs, linked, ${HAS_GUIDE('products')} AS has_guide FROM products WHERE active AND NOT is_service ORDER BY lower(name)`);
   const byId = new Map(prods.map((p: any) => [num(p.id), p]));
   const scored = prods
     .map((p: any) => {
@@ -390,6 +393,7 @@ export async function searchProducts(db: Db, query?: string | null, limit = 8): 
       .map((x: unknown) => byId.get(num(x)))
       .filter(Boolean)
       .map((l: any) => ({ product_id: num(l.id), name: l.name, price: num(l.price) })),
+    guide: !!p.has_guide,
     variants: vars
       .filter((v: any) => num(v.product_id) === num(p.id))
       .map((v: any) => ({ variant_id: num(v.id), title: v.title ?? '', price: v.price === null ? num(p.price) : num(v.price), available: Math.max(0, num(v.available)) })),
@@ -452,6 +456,12 @@ export const DELLAL_TOOLS = [
     },
   },
   {
+    name: 'product_guide',
+    description:
+      'Le guide de vente d’un produit, écrit par l’équipe : en bref, points forts, questions des clients avec les réponses de la boutique, hésitations (« ghali », « nkhamem »…) avec quoi répondre, vente en plus, et ce qu’il ne faut jamais promettre. Seulement pour un produit marqué guide.',
+    input_schema: { type: 'object', properties: { product_id: { type: 'integer' } }, required: ['product_id'] },
+  },
+  {
     name: 'handoff',
     description: 'Passe la conversation à une personne de l’équipe et arrête de répondre. Utilise-le pour les cas listés ou quand tu n’es pas sûr.',
     input_schema: { type: 'object', properties: { reason: { type: 'string' } }, required: ['reason'] },
@@ -469,6 +479,12 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
   const { ctx, conv, settings } = t;
   if (name === 'search_products') return { products: await searchProducts(ctx.db, input?.query) };
   if (name === 'delivery_fee') return deliveryFee(ctx.db, input ?? {});
+  if (name === 'product_guide') {
+    const pid = Number(input?.product_id);
+    const g = Number.isSafeInteger(pid) && pid > 0 ? await readGuide(ctx.db, pid) : null;
+    if (!g) return { error: 'Pas de guide de vente pour ce produit : réponds avec le catalogue et les informations de la boutique, sans rien inventer.' };
+    return { product_id: pid, guide: guideText(g.guide) };
+  }
   if (name === 'handoff') {
     const reason = String(input?.reason ?? 'À reprendre').slice(0, 300);
     if (!t.test) await ctx.db.query(`UPDATE conversations SET mode = 'handoff', handoff_reason = $2 WHERE id = $1`, [conv.id, reason]);
@@ -564,12 +580,15 @@ async function systemPrompt(
   lahja: { all: LahjaWord[]; own: LahjaWord[] } = { all: [], own: [] },
 ): Promise<{ text: string; blocks: string[] }> {
   const shop = await getSetting(ctx.db, 'shop');
-  const catalog = (await searchProducts(ctx.db, null, 40))
+  const prods = await searchProducts(ctx.db, null, 40);
+  const guided = prods.some((p) => p.guide);
+  const catalog = prods
     .map(
       (p) =>
         `- #${p.product_id} ${p.name} : ${p.price} DA${p.variants.length > 1 ? ` (${p.variants.map((v) => v.title).filter(Boolean).join(', ')})` : ''}` +
         (p.packs.length ? ` · packs : ${p.packs.map((k) => `${k.qty} pour ${k.price} DA`).join(', ')}` : '') +
-        (p.linked.length ? ` · va avec : ${p.linked.map((l) => `#${l.product_id} ${l.name}`).join(', ')}` : ''),
+        (p.linked.length ? ` · va avec : ${p.linked.map((l) => `#${l.product_id} ${l.name}`).join(', ')}` : '') +
+        (p.guide ? ' · guide' : ''),
     )
     .join('\n');
   // what the shop knows about a number only when the channel proves it (WhatsApp): on Messenger / Instagram / TikTok anyone
@@ -599,6 +618,9 @@ async function systemPrompt(
       .filter(Boolean)
       .map((x) => `  • ${x}`)
       .join('\n')}\n  • tu ne sais pas répondre ou le client est fâché`,
+    guided
+      ? `- Guides de vente : un produit marqué « guide » a un guide écrit par l’équipe. Avant de répondre à une question sur ce produit (utilisation, taille, âge, matière, qualité, garantie, échange…) ou à une hésitation du client (« ghali », « nkhamem »…), lis son guide avec product_guide, puis réponds avec tes mots, court, dans la langue du client. Ses réponses sont les vraies informations de la boutique : ne promets jamais ce que sa partie « À ne jamais promettre » interdit, et ne devine pas une réponse qu’il ne donne pas.`
+      : '',
     s.notes.trim() ? `Informations de la boutique :\n${s.notes.trim()}` : '',
     s.darijaPrefer.trim() ? `Expressions de la boutique (écrites par l’équipe, à utiliser quand elles vont) :\n${s.darijaPrefer.trim()}` : '',
     s.darijaAvoid.trim() ? `Mots et expressions que la boutique interdit (avec ce qu’il faut écrire à la place) :\n${s.darijaAvoid.trim()}` : '',
@@ -1031,6 +1053,7 @@ function toolLine(name: string, input: any, out: any): string {
   if (name === 'delivery_fee') return `delivery_fee ${out?.wilaya ?? ''} → domicile ${out?.home_delivery ?? '—'} DA · bureau ${out?.stopdesk ?? '—'} DA`;
   if (name === 'create_order') return `create_order → ${out?.ref} · ${out?.total} DA`;
   if (name === 'handoff') return `handoff → ${input?.reason ?? ''}`;
+  if (name === 'product_guide') return `product_guide #${input?.product_id ?? '?'} → guide de vente lu`;
   return name;
 }
 
@@ -1038,6 +1061,22 @@ function toolLine(name: string, input: any, out: any): string {
 const PHONE_RE = /(?:\+?213|0)\s?[5-7](?:[\s.-]?\d){8}/;
 const HANDOFF_RE = /(gros|grossiste|wholesale|r[ée]clamation|retard|arnaque|rembours|humain|conseill|responsable|parler [àa] quelqu|محتال|بالجملة)/i;
 const YES_RE = /^(oui|wah|ih|ok|okey|d'accord|daccord|yes|نعم|واه|صح|c bon|c'est bon|mriguel|sah)\b/i;
+
+const GUIDE_ASK_RE = /(garantie|matiere|qualite|original|taille|\bage\b|poids|\bkg\b|lavable|pliable|plie|securite|ghali|\bcher\b|nkhamem|n5amem|nfakar|damen|ضمان|غالي|نخمم)/i;
+const PRICE_ASK_RE = /(ch7al|chhal|combien|prix|bch7al|سعر|بشحال|livraison|tawsil|التوصيل)/i;
+const GUIDE_STOP = new Set(['est', 'les', 'des', 'une', 'pour', 'avec', 'que', 'qui', 'dans', 'elle', 'il', 'wach', 'kayen', 'kayna', 'fiha', 'fih', 'had', 'hadi', 'hada', 'bien', 'tres', 'plus']);
+/** The demo seller's pick in a guide: the answer whose question shares the most words with what the customer wrote. */
+function guideAnswer(g: { faq: { q: string; a: string }[]; doubts: { q: string; a: string }[] }, asked: string): string | null {
+  const words = (x: string) => new Set(strip(x).split(/[^a-z0-9؀-ۿ]+/).filter((w) => w.length >= 3 && !GUIDE_STOP.has(w)));
+  const want = words(asked);
+  let best: { a: string; n: number } | null = null;
+  for (const p of [...g.faq, ...g.doubts]) {
+    if (toFill(p.a)) continue;
+    const n = [...words(p.q)].filter((w) => [...want].some((x) => x === w || (x.length >= 5 && w.startsWith(x.slice(0, 5))))).length;
+    if (n && (!best || n > best.n)) best = { a: p.a, n };
+  }
+  return best?.a ?? null;
+}
 
 /** A small rule-based seller with the same tools, for the demo and for testing without an AI key. */
 async function demoBrain(ctx: Ctx, req: AiRequest): Promise<AiResponse> {
@@ -1053,6 +1092,15 @@ async function demoBrain(ctx: Ctx, req: AiRequest): Promise<AiResponse> {
     const out = JSON.parse(last.content[0].content);
     if (out.error) return say(String(out.error));
     if (tool.name === 'handoff') return say('Je passe ta demande à un conseiller de l’équipe, il te répond très vite 🙏');
+    if (tool.name === 'product_guide') {
+      // the guide's answer to what the customer asked (the question or the hesitation with the most words in common)
+      const g = await readGuide(ctx.db, Number(tool.input?.product_id));
+      const asked = [...msgs].reverse().find((m) => m.role === 'user' && typeof m.content === 'string')?.content as string | undefined;
+      const hit = g ? guideAnswer(g.guide, asked ?? '') : null;
+      if (hit) return say(hit);
+      if (g?.guide.brief) return say(`${g.guide.brief} Tu es de quelle wilaya ? Je te donne le prix de la livraison.`);
+      return say('Je vérifie avec l’équipe et je te réponds tout de suite 🙏');
+    }
     if (tool.name === 'create_order') return say(`C'est noté ✅ Commande ${out.ref} : total ${out.total} DA (livraison ${out.delivery_fee} DA comprise), paiement à la livraison. ${out.next ?? out.note ?? ''}`.trim());
     if (tool.name === 'delivery_fee') {
       if (out.home_delivery === null && out.stopdesk === null) return say(`Pour ${out.wilaya}, je vérifie avec l’équipe.`);
@@ -1102,6 +1150,8 @@ async function demoBrain(ctx: Ctx, req: AiRequest): Promise<AiResponse> {
     if (strip(text).split(/\s+/).some((w) => w.length >= 4 && strip(product!.name).includes(w))) return use('search_products', { query: product.name });
     return say(`Quelle variante tu veux ? ${avail.join(', ')}.`);
   }
+  // a question about the product itself (or a hesitation): its sales guide answers
+  if (product?.guide && GUIDE_ASK_RE.test(strip(text)) && !PRICE_ASK_RE.test(strip(text))) return use('product_guide', { product_id: product.product_id });
   if (product && strip(text).split(/\s+/).some((w) => w.length >= 4 && strip(product!.name).includes(w))) return use('search_products', { query: product.name });
   if (place && product) return use('delivery_fee', { wilaya: String(place.wilayaId), commune: place.commune ?? undefined });
   if (product && variant && !phone) return say('Parfait 👍 Pour réserver, envoie-moi ton nom, ton numéro de téléphone et ta commune.');

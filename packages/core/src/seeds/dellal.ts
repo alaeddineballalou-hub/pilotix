@@ -16,6 +16,8 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   const place = order ? `${order.commune || 'votre commune'}` : 'Kouba';
   await db.query(`INSERT INTO settings (key, value) VALUES ('dellal', $1) ON CONFLICT (key) DO NOTHING`, [JSON.stringify({ enabled: true, verifyToken: 'dellal-demo-verify-token' })]);
   const name = p ? `${p.name}${p.title ? ` ${p.title}` : ''}` : 'la poussette';
+  // the high chair's sales guide (seeds/catalog.ts): Dellal reads it before answering a question about the product
+  const chair = num((await db.query(`SELECT id FROM products WHERE sku = 'PX-CHA'`))[0]?.id);
   const price = p ? p.price : 12900;
   const convs: { channel: string; ext: string; name: string; phone?: string | null; mode: string; reason?: string; orderId?: number | null; source?: string; at: number; msgs: [string, string, number?, object?][] }[] = [
     {
@@ -68,6 +70,18 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
         ['agent', 'Wa 3likoum salam 😊 Ih, la chaise haute kayna f gris. La livraison l Blida 500 DA l dar wela 350 DA f l bureau, w tkhalass ki testalem. Nsajjelhalek ?'],
         ['customer', '[message vocal envoyé]', undefined, { voice: { status: 'failed', error: 'audio pas clair' } }],
         ['agent', 'Smahli, ma 9dertch nesma3 l vocal mlih 🙏 Tqder tktebli wach t7eb ?'],
+      ],
+    },
+    // the product's sales guide: the age, the harness and « ghali » answered with the team's own words
+    {
+      channel: 'messenger', ext: 'psid-demo-2', name: 'Lina R.', mode: 'ai', at: now - 3 * 60_000,
+      msgs: [
+        ['customer', 'Salam, la chaise haute évolutive tsla7 men 9eddach ? w fiha ceinture ?'],
+        ['tool', `product_guide #${chair} → guide de vente lu`],
+        ['agent', 'Wa 3likoum salam 😊 Tsla7 men 6 chhour, ki yweli bébé y9e3ed wa7dou, 7ta l 3 snin. Men ba3d tweli korsi w tabla 7ta 6 snin. W fiha harnais 5 points. Mnin nti ?'],
+        ['customer', 'ghalia chwiya 8900'],
+        ['tool', `product_guide #${chair} → guide de vente lu`],
+        ['agent', 'Nfahmek 🙏 Bessah hiya tkhdem fi blasset 3 : chaise haute, korsi sghir w tabla. W tkhalsi ghir ki testalmi. Nsajjelhalek ?'],
       ],
     },
     {

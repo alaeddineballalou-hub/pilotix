@@ -22,6 +22,7 @@ import { agencyAssignProcs } from './modules/agencyassign';
 import { coverageProcs } from './modules/coverage';
 import { pushProcs } from './modules/push';
 import { catalogProcs } from './modules/catalog';
+import { guideProcs } from './modules/guidedraft';
 import { productImportProcs } from './modules/productimport';
 import { cmProcs } from './modules/cm';
 import { confirmationProcs } from './modules/confirmation';
@@ -57,6 +58,7 @@ export const REGISTRY = {
   ...boardProcs,
   ...doctorProcs,
   ...catalogProcs,
+  ...guideProcs,
   ...productImportProcs,
   ...pickingProcs,
   ...pickupProcs,

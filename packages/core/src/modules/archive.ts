@@ -74,6 +74,7 @@ export const USER_REFS: readonly Ref[] = [
   ['landing_blocked', 'handled_by', 'pages'],
   ['products', 'seller_id', 'products'],
   ['product_changes', 'user_id', 'products'],
+  ['product_guides', 'updated_by', 'products'],
 ];
 
 /** Columns that point to a product (products.id). */
@@ -117,6 +118,8 @@ export const NOT_REFS: readonly string[] = [
   'referrals.referrer_id',
   'product_variants.product_id',
   'product_changes.product_id',
+  // a product's sales guide goes with it
+  'product_guides.product_id',
   'stock.variant_id',
   'stock.warehouse_id',
   'spy_watch.product_id',

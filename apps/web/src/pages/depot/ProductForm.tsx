@@ -4,12 +4,13 @@ import { pageIsOn } from '../../lib/features';
 import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { da, pct } from '../../lib/format';
-import { ErrorBox, Field, Icon, Loading } from '../../ui/kit';
+import { ErrorBox, Field, Icon, Loading, Tabs } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { ConfirmButton } from '../admin/bits';
 import { bidi } from './stockui';
 import { combosOf, MAX_COMBOS, Opt, skuOf, titleOf, VariantOptions, VRow } from './VariantOptions';
+import { DraftFacts, formToGuide, GuideEditor, GuideForm, guideProblem, guideToForm } from './guide';
 
 interface PackRow {
   qty: string;
@@ -45,15 +46,16 @@ const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCa
 /** Create / edit a product, in the sections of the « Nouveau produit » screen: basic information, prices & margin (with the
  *  maximum discount), stock & logistics, options (variants), images, then SAV parts, packs and linked products. */
 /** onCreated: a NEW product was saved (Produits proposes its landing page). */
-export function ProductForm({ id, onClose, onCreated }: { id: number | null; onClose: () => void; onCreated?: (p: { id: number; name: string; isService: boolean; active: boolean }) => void }) {
+/** tab: « guide » opens the product's Guide de vente (the product list's chip). */
+export function ProductForm({ id, onClose, onCreated, tab }: { id: number | null; onClose: () => void; onCreated?: (p: { id: number; name: string; isService: boolean; active: boolean }) => void; tab?: 'product' | 'guide' }) {
   const { t } = useTranslation();
   const cur = useRpc('catalog.product', { id: id ?? 0 }, { enabled: !!id });
   if (id && cur.isLoading) return <Modal title="…" onClose={onClose}><Loading /></Modal>;
   if (id && cur.error) return <Modal title="…" onClose={onClose}><ErrorBox error={cur.error} /></Modal>;
-  return <Form p={id ? cur.data ?? null : null} onClose={onClose} onCreated={onCreated} key={id ?? 'new'} t={t} />;
+  return <Form p={id ? cur.data ?? null : null} onClose={onClose} onCreated={onCreated} key={id ?? 'new'} t={t} tab={tab} />;
 }
 
-function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCreated?: (p: { id: number; name: string; isService: boolean; active: boolean }) => void; t: (k: string, o?: any) => string }) {
+function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: () => void; onCreated?: (p: { id: number; name: string; isService: boolean; active: boolean }) => void; t: (k: string, o?: any) => string; tab?: 'product' | 'guide' }) {
   const { session } = useSession();
   const admin = !!session?.isAdmin;
   const all = useRpc('catalog.products', {});
@@ -96,6 +98,9 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
   const [parts, setParts] = useState<PartRow[]>(() => (p?.parts ?? []).map((x: any) => ({ name: x.name, max: x.max === null ? '' : String(x.max) })));
   const [linked, setLinked] = useState<Set<number>>(() => new Set(p?.linked ?? []));
   const [relQ, setRelQ] = useState('');
+  // the second tab: the product's sales guide (what the agents read during a call, what Dellal and CM AI answer with)
+  const [tab, setTab] = useState<'product' | 'guide'>(firstTab ?? 'product');
+  const [guide, setGuide] = useState<GuideForm>(() => guideToForm(p?.guide ?? null));
   useEffect(() => {
     if (hasParts && !parts.length) setParts([{ name: '', max: '' }]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -155,6 +160,12 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
       return toast('Enter purchase and selling prices for every active variant.', 'bad');
     }
     if (services.some((s) => !s.name.trim() || s.price === '' || s.cost === '')) return toast('Enter a name, selling price and service cost for each additional service.', 'bad');
+    const sales = formToGuide(guide);
+    const problem = guideProblem(sales, t);
+    if (problem) {
+      setTab('guide');
+      return toast(problem, 'bad');
+    }
     save.mutate({
       id: p?.id,
       name: f.name.trim(),
@@ -182,7 +193,23 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
       linked: [...linked],
       parts: hasParts ? parts.filter((x) => x.name.trim()).map((x) => ({ name: x.name.trim(), max: x.max === '' ? null : Math.round(Number(x.max)) || null })) : [],
       services: services.map((x) => ({ id: x.id, name: x.name.trim(), price: Math.round(Number(x.price)), cost: Math.round(Number(x.cost)) })),
+      guide: sales,
     });
+  };
+  /** what « Écrire avec l'IA » knows of the product: this form as it is now (saved or not) */
+  const draftFacts = (): DraftFacts => {
+    const names = new Map((all.data ?? []).map((x) => [x.id, x.name] as const));
+    return {
+      productId: p?.id,
+      name: f.name.trim(),
+      brand: f.brand.trim() || undefined,
+      description: f.description.trim() || undefined,
+      price: Math.round(Number(f.price) || 0) || undefined,
+      variants: [...new Set((optMode ? combosOf(opts).map((c) => titleOf(c)) : vars.map((v) => v.title.trim())).filter(Boolean))].slice(0, 200),
+      packs: packs.filter((x) => Number(x.qty) > 1 && Number(x.price) > 0).map((x) => ({ qty: Math.round(Number(x.qty)), price: Math.round(Number(x.price)) })),
+      linked: [...linked].map((x) => names.get(x)).filter((x): x is string => !!x).slice(0, 50),
+      services: services.filter((x) => x.name.trim()).map((x) => ({ name: x.name.trim(), price: Math.round(Number(x.price) || 0) })),
+    };
   };
 
   return (
@@ -209,8 +236,15 @@ function Form({ p, onClose, onCreated, t }: { p: any; onClose: () => void; onCre
         </>
       }
     >
+      <div className="pf-tabs">
+        <Tabs value={tab} onChange={setTab} items={[{ value: 'product', label: t('produits.guide.productTab') }, { value: 'guide', label: t('produits.guide.tab') }]} />
+      </div>
+      <div hidden={tab !== 'guide'}>
+        <GuideEditor value={guide} onChange={setGuide} facts={draftFacts} />
+      </div>
       <form
         className="pf"
+        hidden={tab !== 'product'}
         onSubmit={(e) => {
           e.preventDefault();
           submit();
