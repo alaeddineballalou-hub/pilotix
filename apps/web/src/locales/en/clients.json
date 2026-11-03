@@ -77,5 +77,16 @@
       "no": "Don’t confirm",
       "yes": "Confirm anyway"
     }
+  },
+  "alsoIn": "Also in: {{list}}",
+  "shared": {
+    "text": "Blacklist shared with {{list}}: a number blocked here is blocked there too.",
+    "more": "Unblocked here, it is unblocked there too, unless the other boutique blocked it itself.",
+    "all": "Share the whole list ({{count}})",
+    "ask_one": "Send the number blocked here to {{list}}?",
+    "ask_other": "Send the {{count}} numbers blocked here to {{list}}?",
+    "yes": "Send",
+    "done_one": "{{count}} number sent to {{list}}",
+    "done_other": "{{count}} numbers sent to {{list}}"
   }
 }

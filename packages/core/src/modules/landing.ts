@@ -43,6 +43,7 @@ import { checkPixels, PixelList, pixelsJson, pixelsOf, pixelTestCode, pixelToken
 import { ABANDONED, abandonCutoff, freeLandingSlug, landingCounts, landingSettings, LandingSettings, landingStore, queuePurchase, quickCreatePage, STORE_RESERVED } from './landingquery';
 import { sendInPreview } from './notify';
 import { addEvent, createOrder, noOrderAccess } from './orders';
+import { shareBlacklist } from './sharedblacklist';
 import { ipPrefix } from '../net';
 import { sharedReputation } from '../platform/reputation';
 import { RESERVED } from './stockquery';
@@ -2106,15 +2107,19 @@ export const landingProcs = {
     const b = (await ctx.db.query(`UPDATE landing_blocked SET status = 'dismissed', handled_by = $2, handled_at = now() WHERE id = $1 AND status = 'blocked' RETURNING phone, customer_name, wilaya_id`, [i.id, ctx.session.profile.id]))[0];
     if (!b) throw notFound('Commande bloquée introuvable');
     const phone = normalizePhone(b.phone);
+    let shared: string[] = [];
     if (i.blacklist && phone) {
       await ctx.db.query(
         `INSERT INTO customers (phone, name, wilaya_id, blacklisted, blacklist_reason) VALUES ($1,$2,$3,true,'Fausse commande (landing page)')
-         ON CONFLICT (phone) DO UPDATE SET blacklisted = true, blacklist_reason = COALESCE(customers.blacklist_reason, 'Fausse commande (landing page)')`,
+         ON CONFLICT (phone) DO UPDATE SET blacklisted = true, blacklist_auto = false, blacklist_shop = NULL,
+           blacklist_reason = COALESCE(CASE WHEN customers.blacklisted AND NOT customers.blacklist_auto AND customers.blacklist_shop IS NULL THEN customers.blacklist_reason END, 'Fausse commande (landing page)')`,
         [phone, b.customer_name || 'Client', b.wilaya_id],
       );
+      // the owner's other boutiques follow (« Liste noire partagée »)
+      shared = await shareBlacklist(ctx, [{ phone, name: String(b.customer_name || 'Client'), wilayaId: b.wilaya_id === null || b.wilaya_id === undefined ? null : Number(b.wilaya_id) }], true, 'Fausse commande (landing page)');
     }
     ctx.emit({ type: 'orders' });
-    return { ok: true };
+    return { ok: true, shared };
   }),
 
   /** « Abandonnées »: the numbers that did not order (to call), the ones turned into orders, the ones set aside. */

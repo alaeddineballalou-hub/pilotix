@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { da, n, when, wilayaName } from '../../lib/format';
 import { openOrder } from '../../lib/modals';
 import { useAction, useRpc } from '../../lib/query';
-import { Card, Empty, ErrorBox, Field, Loading, Pager, StatusBadge } from '../../ui/kit';
+import { useSession } from '../../lib/session';
+import { Card, Empty, ErrorBox, Field, Icon, Loading, Pager, StatusBadge } from '../../ui/kit';
 import { LevelPicker, ScoreCard, ScoreChip } from '../../ui/clientScore';
 import { Modal } from '../../ui/modal';
 import type { PageProps } from '../registry';
@@ -45,6 +46,7 @@ export function Clients(_: PageProps) {
           </label>
         </div>
         <LevelPicker value={level} onChange={setLevel} className="cl-levels" />
+        <SharedNote />
         {list.error ? (
           <ErrorBox error={list.error} onRetry={() => list.refetch()} />
         ) : !rows ? (
@@ -115,6 +117,50 @@ export function Clients(_: PageProps) {
   );
 }
 
+/**
+ * « Liste noire partagée »: the owner's other boutiques block (and unblock) the numbers blocked here by a person; an
+ * administrator can also send the ones blocked before.
+ */
+function SharedNote() {
+  const { t } = useTranslation();
+  const { session } = useSession();
+  const agency = !!session?.profile.agencyId;
+  const info = useRpc('customers.shareInfo', {}, { enabled: !agency, retry: false });
+  const [asking, setAsking] = useState(false);
+  const all = useAction('customers.shareAll', { success: (r) => t('clients.shared.done', { count: r.numbers, list: r.shops.join(', ') }), onDone: () => setAsking(false) });
+  const d = info.data;
+  if (agency || !d || !d.shops.length) return null;
+  const list = d.shops.join(', ');
+  return (
+    <div className="cl-shared" role="note">
+      <Icon name="link" />
+      <div className="cl-shared-t">
+        <b>{t('clients.shared.text', { list })}</b>
+        <small>{t('clients.shared.more')}</small>
+      </div>
+      {session?.isAdmin && d.own > 0 && (
+        <div className="cl-shared-act">
+          {asking ? (
+            <>
+              <span>{t('clients.shared.ask', { count: d.own, list })}</span>
+              <button type="button" className="btn small" onClick={() => setAsking(false)}>
+                {t('common.cancel')}
+              </button>
+              <button type="button" className="btn small primary" disabled={all.isPending} onClick={() => all.mutate({})}>
+                {all.isPending ? '…' : t('clients.shared.yes')}
+              </button>
+            </>
+          ) : (
+            <button type="button" className="btn small" onClick={() => setAsking(true)}>
+              {t('clients.shared.all', { count: d.own })}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function History({ id, onClose }: { id: number; onClose: () => void }) {
   const { t } = useTranslation();
   const h = useRpc('customers.history', { id }, { placeholderData: undefined });
@@ -122,7 +168,7 @@ function History({ id, onClose }: { id: number; onClose: () => void }) {
   const [reason, setReason] = useState('');
   const c = h.data?.customer;
   const set = useAction('customers.setBlacklist', {
-    success: t('clients.updated'),
+    success: (r) => (r.shared?.length ? `${t('clients.updated')} · ${t('clients.alsoIn', { list: r.shared.join(', ') })}` : t('clients.updated')),
     onDone: () => {
       setAsking(false);
       setReason('');

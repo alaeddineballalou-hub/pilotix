@@ -23,7 +23,7 @@ export function Blocked() {
   const dq = useDebounced(q, 300);
   const list = useRpc('landing.blocked', { status, q: dq.trim() || undefined, page, pageSize: size });
   const restore = useAction('landing.restore', { success: (r) => t('landing.bl.restored', { ref: r.ref }) });
-  const dismiss = useAction('landing.dismiss', { success: t('landing.bl.dismissed') });
+  const dismiss = useAction('landing.dismiss', { success: (r) => (r.shared?.length ? `${t('landing.bl.dismissed')} · ${t('clients.alsoIn', { list: r.shared.join(', ') })}` : t('landing.bl.dismissed')) });
   const s = list.data?.stats;
   return (
     <>

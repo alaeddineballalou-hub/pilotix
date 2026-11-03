@@ -822,7 +822,7 @@ function Queue({ sub, focusId }: { sub: Sub; focusId: number | null }) {
                 onClick={async () => {
                   try {
                     const r = await rpc('confirmation.block', { ids: blockAsk.map((x) => x.id) });
-                    toast(t('confirmation.block.done', { n: r.customers }), 'ok');
+                    toast(r.shared?.length ? `${t('confirmation.block.done', { n: r.customers })} · ${t('clients.alsoIn', { list: r.shared.join(', ') })}` : t('confirmation.block.done', { n: r.customers }), 'ok');
                     setSel(new Set());
                     qc.invalidateQueries();
                   } catch (e: any) {

@@ -10,6 +10,7 @@ import { andSql, queueSql } from './agencyscope';
 import { HAS_GUIDE } from './guide';
 import { assignedProductIds } from './productscope';
 import { rotateTimes } from './assign';
+import { blackNumbers, shareBlacklist } from './sharedblacklist';
 
 // ---------------------------------------------------------------- sub-pages
 export const CONF_SUBS = {
@@ -777,11 +778,13 @@ export const confirmationProcs = {
 
   /** Blacklists the customers of these orders ("Bloquer le client"). */
   'confirmation.block': proc(['confirmation'], z.object({ ids, reason: z.string().max(200).nullable().optional() }), async (ctx, i) => {
-    const rows = await ctx.db.query('SELECT DISTINCT customer_id FROM sales WHERE id = ANY($1)', [i.ids]);
+    const rows = await ctx.db.query('SELECT DISTINCT customer_id FROM sales WHERE id = ANY($1) AND customer_id IS NOT NULL', [i.ids]);
     const cids = rows.map((r: any) => num(r.customer_id));
-    if (cids.length) await ctx.db.query('UPDATE customers SET blacklisted = true, blacklist_reason = COALESCE($2, blacklist_reason) WHERE id = ANY($1)', [cids, i.reason ?? null]);
+    // a person's decision: it stays (never lifted by itself), and the owner's other boutiques follow
+    if (cids.length) await ctx.db.query('UPDATE customers SET blacklisted = true, blacklist_reason = COALESCE($2, blacklist_reason), blacklist_auto = false, blacklist_shop = NULL WHERE id = ANY($1)', [cids, i.reason ?? null]);
+    const shared = cids.length ? await shareBlacklist(ctx, await blackNumbers(ctx.db, cids), true, i.reason ?? null) : [];
     ctx.emit({ type: 'orders' });
-    return { customers: cids.length };
+    return { customers: cids.length, shared };
   }),
 
   /** An order opened from a list: kept for this agent 10 minutes; held by another agent: who has it. */

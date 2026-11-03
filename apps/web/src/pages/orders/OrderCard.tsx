@@ -45,6 +45,11 @@ type Panel = null | { kind: 'conf'; status: ConfStatus } | { kind: 'follow'; sta
  * parcel coming back — and its weight fee for the weight it counted; « retenu au paiement » once it paid (exact). A
  * company without that API whose « Surpoids » is set: its price list + its weight fee on the weight declared.
  */
+/** The blacklist changed: said once, with the owner's other boutiques that followed (« Liste noire partagée »). */
+function blacklistToast(t: (k: string, o?: any) => string, r: { shared?: string[] }, msg: string) {
+  toast(r.shared?.length ? `${msg} · ${t('clients.alsoIn', { list: r.shared.join(', ') })}` : msg, 'ok');
+}
+
 function CourierFeesRow({ o }: { o: Order }) {
   const { t } = useTranslation();
   const f = o.courierFees!;
@@ -297,7 +302,7 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
         key="bl"
         className={`btn small ${o.blacklisted ? '' : 'warn'}`}
         disabled={busy}
-        onClick={() => (o.blacklisted ? run(() => rpc('customers.setBlacklist', { id: o.customerId, on: false }), t('orders.card.blOff')) : setPanel({ kind: 'blacklist' }))}
+        onClick={() => (o.blacklisted ? run(async () => blacklistToast(t, await rpc('customers.setBlacklist', { id: o.customerId, on: false }), t('orders.card.blOff'))) : setPanel({ kind: 'blacklist' }))}
       >
         {o.blacklisted ? t('orders.card.unblacklist') : t('orders.card.blacklist')}
       </button>,
@@ -823,7 +828,7 @@ function ActionPanel({ o, panel, busy, companies, onCancel, run, onSendAfter }: 
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('orders.card.blReasonPh')} autoFocus />
       </Field>
     );
-    submit = () => run(() => rpc('customers.setBlacklist', { id: o.customerId, on: true, reason: note.trim() || null }), t('orders.card.blOn'));
+    submit = () => run(async () => blacklistToast(t, await rpc('customers.setBlacklist', { id: o.customerId, on: true, reason: note.trim() || null }), t('orders.card.blOn')));
   } else if (panel.kind === 'cancelParcel') {
     const name = o.companyName ?? '';
     title = `${t('orders.card.cancelParcel')} ${o.tracking ?? ''} ?`;

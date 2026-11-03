@@ -49,6 +49,7 @@ import { statsProcs } from './modules/stats';
 import { boardProcs } from './modules/board';
 import { boutiqueProcs } from './modules/boutiques';
 import { boutiqueCopyProcs } from './modules/boutiquecopy';
+import { sharedBlacklistProcs } from './modules/sharedblacklist';
 import { filterProcs } from './modules/filters';
 import { boutiqueWorkProcs } from './modules/boutiquework';
 import { doctorProcs } from './modules/doctor';
@@ -113,4 +114,5 @@ export const REGISTRY = {
   ...agencyWorkProcs,
   ...boutiqueProcs,
   ...boutiqueCopyProcs,
+  ...sharedBlacklistProcs,
 };

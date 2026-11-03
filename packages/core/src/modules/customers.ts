@@ -5,6 +5,7 @@ import { iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, notFound, proc } from '../rpc';
 import { addEvent } from './orders';
 import { CLIENT_FACT_COLS, ClientScore, scoresAll, scoresOf } from './clientscore';
+import { shareBlacklist } from './sharedblacklist';
 
 const id = z.number().int().positive();
 
@@ -129,8 +130,8 @@ export const customersProcs = {
       if (!i.id && !phone) throw bad('Indiquez le client');
       const r = (
         await ctx.db.query(
-          `UPDATE customers SET blacklisted = $3, blacklist_reason = CASE WHEN $3 THEN $4 ELSE NULL END, blacklist_auto = false
-           WHERE ($1::bigint IS NOT NULL AND id = $1) OR ($1::bigint IS NULL AND phone = $2) RETURNING id, phone`,
+          `UPDATE customers SET blacklisted = $3, blacklist_reason = CASE WHEN $3 THEN $4 ELSE NULL END, blacklist_auto = false, blacklist_shop = NULL
+           WHERE ($1::bigint IS NOT NULL AND id = $1) OR ($1::bigint IS NULL AND phone = $2) RETURNING id, phone, name, wilaya_id`,
           [i.id ?? null, phone, i.on, i.reason || null],
         )
       )[0];
@@ -138,8 +139,10 @@ export const customersProcs = {
       // Leave a trace on their open orders (visible in the order history).
       const open = await ctx.db.query(`SELECT id FROM sales WHERE customer_id = $1 AND (follow_status IS NULL OR follow_status IN ('to_prepare','prepared')) AND conf_status <> ALL($2)`, [r.id, CONF_DONE_BAD]);
       for (const o of open) await addEvent(ctx.db, num(o.id), ctx.session.profile.id, 'note', null, 'event', i.on ? `Client mis en liste noire${i.reason ? ` : ${i.reason}` : ''}` : 'Client retiré de la liste noire');
+      // the owner's other boutiques follow (« Liste noire partagée »)
+      const shared = await shareBlacklist(ctx, [{ phone: String(r.phone), name: String(r.name ?? ''), wilayaId: numOrNull(r.wilaya_id) }], i.on, i.reason || null);
       ctx.emit({ type: 'orders' });
-      return { ok: true, id: num(r.id), blacklisted: i.on };
+      return { ok: true, id: num(r.id), blacklisted: i.on, shared };
     },
   ),
 };

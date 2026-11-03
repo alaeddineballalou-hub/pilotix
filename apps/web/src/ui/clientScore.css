@@ -58,3 +58,13 @@
 .cs-ask .modal-body { overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
 .cs-ask-lead { margin: 0; font-size: 14.5px; line-height: 1.45; color: var(--ink); }
 .cs-levels.cl-levels { margin: 12px 0 14px; }
+
+/* Clients: « Liste noire partagée avec … » (the owner's other boutiques) */
+.cl-shared { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; padding: 11px 14px; border-radius: 14px; background: var(--c-info-tint, #E8EEF8); color: var(--ink); font-size: 13px; line-height: 1.45; }
+.cl-shared > .bji { color: var(--c-info-ink, #2459D6); margin-top: 2px; flex: none; }
+.cl-shared > .bji svg { width: 16px; height: 16px; display: block; }
+.cl-shared-t { display: flex; flex-direction: column; gap: 2px; flex: 1 1 260px; min-width: 0; }
+.cl-shared-t b { font-weight: 700; }
+.cl-shared-t small { color: var(--muted, #5F6673); font-size: 12.5px; }
+.cl-shared-act { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cl-shared-act span { font-weight: 700; }

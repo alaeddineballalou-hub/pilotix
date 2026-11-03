@@ -77,5 +77,16 @@
       "no": "Ne pas confirmer",
       "yes": "Confirmer quand même"
     }
+  },
+  "alsoIn": "Aussi dans : {{list}}",
+  "shared": {
+    "text": "Liste noire partagée avec {{list}} : un numéro bloqué ici est aussi bloqué là-bas.",
+    "more": "Débloqué ici, il est débloqué là-bas aussi, sauf si l’autre boutique l’a bloqué elle-même.",
+    "all": "Partager toute la liste ({{count}})",
+    "ask_one": "Envoyer le numéro bloqué ici à {{list}} ?",
+    "ask_other": "Envoyer les {{count}} numéros bloqués ici à {{list}} ?",
+    "yes": "Envoyer",
+    "done_one": "{{count}} numéro envoyé à {{list}}",
+    "done_other": "{{count}} numéros envoyés à {{list}}"
   }
 }
