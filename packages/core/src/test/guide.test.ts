@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db, makeSession, ServerHooks } from '../index';
 import { getSetting, setSetting } from '../settings';
-import { guideText, TO_FILL } from '../modules/guide';
-import { draftSystem, readDraft, rulesDraft } from '../modules/guidedraft';
+import { EMPTY_FIT, guideText, TO_FILL } from '../modules/guide';
+import { draftSystem, fitFrom, readDraft, rulesDraft } from '../modules/guidedraft';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -97,7 +97,7 @@ test('agents read the guide of their products only, and the call screen knows wh
 });
 
 test('what the AI agents read: the guide in its own words, never an answer still to write', () => {
-  const text = guideText({ brief: 'B', strengths: ['S1', TO_FILL], faq: [{ q: 'Q1', a: 'A1' }, { q: 'Q2', a: TO_FILL }], doubts: [{ q: '« Ghali »', a: 'D1' }], upsell: '', upsellIds: [], never: ['N1'], sizes: [] });
+  const text = guideText({ brief: 'B', strengths: ['S1', TO_FILL], faq: [{ q: 'Q1', a: 'A1' }, { q: 'Q2', a: TO_FILL }], doubts: [{ q: '« Ghali »', a: 'D1' }], upsell: '', upsellIds: [], never: ['N1'], sizes: [], fit: EMPTY_FIT });
   assert.match(text, /EN BREF : B/);
   assert.match(text, /- Q1 → A1/);
   assert.match(text, /- « Ghali » → D1/);
@@ -202,7 +202,7 @@ test('« Écrire avec l\'IA »: Claude drafts from the shop\'s facts, the unknow
 test('the draft helpers: JSON read leniently, Darija instructions only for darija, the rules draft keeps to the facts', () => {
   assert.equal(readDraft('pas de JSON'), null);
   assert.equal(readDraft('{"brief": ""}'), null);
-  assert.deepEqual(readDraft('```json\n{"brief":"B","strengths":"pas une liste","faq":[{"q":"Q","a":"A"}]}\n```'), { brief: 'B', strengths: [], faq: [{ q: 'Q', a: 'A' }], doubts: [], upsell: '', upsellIds: [], never: [], sizes: [] });
+  assert.deepEqual(readDraft('```json\n{"brief":"B","strengths":"pas une liste","faq":[{"q":"Q","a":"A"}]}\n```'), { brief: 'B', strengths: [], faq: [{ q: 'Q', a: 'A' }], doubts: [], upsell: '', upsellIds: [], never: [], sizes: [], fit: EMPTY_FIT });
   assert.match(draftSystem('dz', 'GUIDE DARIJA'), /lettres latines[\s\S]*GUIDE DARIJA/);
   assert.doesNotMatch(draftSystem('fr'), /Pour écrire la darija/);
   const r = rulesDraft({ name: 'Biberon', variants: ['Rose', 'Bleu'], packs: [{ qty: 3, price: 3900 }], linked: ['Goupillon'], linkedIds: [7], services: [], page: null });
@@ -224,7 +224,7 @@ test('Produits & stock › Guide de vente: every product and where its guide sta
   assert.equal(row.hasGuide, true);
   assert.equal(row.toFill, 1, 'the warranty answer is still to write');
   assert.match(row.brief, /6 mois/);
-  assert.deepEqual(row.parts, { strengths: 4, faq: 5, doubts: 3, never: 3, upsell: 1, sizes: 0 });
+  assert.deepEqual(row.parts, { strengths: 4, faq: 5, doubts: 3, never: 3, upsell: 1, sizes: 1 }, 'its small size guide counts as the size guide');
   assert.ok(list.rows.every((r: any) => !('cost' in r) && typeof r.hasGuide === 'boolean'));
   const plain = list.rows.find((r: any) => r.id === thermo);
   assert.equal(plain.hasGuide, false);
@@ -299,4 +299,50 @@ test('a confirmation agency writes the guides of the products it works on, and o
   await assert.rejects(call('catalog.saveGuide', conf, { id: chair, guide: { brief: 'x' } }), /agences de confirmation/);
   await assert.rejects(call('catalog.guideFacts', conf, { id: chair }), /agences de confirmation/);
   await db.query('DELETE FROM agency_routes WHERE agency_id = 900');
+});
+
+test('one size only: the small size guide (age, weight, measures), saved, read, said to the AI, drafted from the facts', async () => {
+  const lit = Number((await db.query(`SELECT id FROM products WHERE sku = 'PX-LIT'`))[0].id);
+  const r: any = await call('catalog.guide', depot, { id: lit });
+  assert.deepEqual(r.guide.fit, { age: 'de la naissance à 3 ans', weight: 'jusqu’à 15 kg', measures: '120 × 60 cm ouvert' });
+  assert.deepEqual(r.guide.sizes, []);
+  // what the AI agents read: the small guide, only when the product has no sizes
+  const text = guideText(r.guide);
+  assert.match(text, /GUIDE DES TAILLES \(une seule taille[^\n]*\n- âge : de la naissance à 3 ans\n- poids : jusqu’à 15 kg\n- mesures : 120 × 60 cm ouvert/);
+  const both = guideText({ ...r.guide, sizes: [{ size: 'M', age: '1 an', weight: '' }] });
+  assert.doesNotMatch(both, /une seule taille/);
+  assert.match(guideText({ ...r.guide, fit: { age: '', weight: '', measures: '260 ml' } }), /une seule taille[^\n]*\n- mesures : 260 ml$/m);
+  // a guide with only its small size guide is a guide; emptied, it is removed
+  const saved: any = await call('catalog.saveGuide', depot, { id: thermo, guide: { fit: { measures: ' 15 × 4 cm ' } } });
+  assert.deepEqual(saved.guide.fit, { age: '', weight: '', measures: '15 × 4 cm' });
+  assert.equal(((await call('catalog.guides', depot, {})) as any).rows.find((x: any) => x.id === thermo).parts.sizes, 1);
+  await assert.rejects(call('catalog.saveGuide', depot, { id: thermo, guide: { fit: { measures: 'x'.repeat(121) } } }));
+  await call('catalog.saveGuide', depot, { id: thermo, guide: { fit: { age: '', weight: '', measures: '' } } });
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM product_guides WHERE product_id = $1', [thermo]))[0].n, 0);
+  // the plain draft takes them from the product's own words; a product with sizes gets none
+  const d: any = await call('catalog.guideDraft', depot, { name: 'Chaise pliante', description: 'Pour bébé de 6 mois à 3 ans, jusqu’à 15 kg.\nDimensions : 60 x 80 x 100 cm.\nPoids : 6 kg.' });
+  assert.equal(d.by, 'rules');
+  assert.deepEqual(d.guide.fit, { age: '6 mois à 3 ans', weight: 'jusqu’à 15 kg', measures: '60 x 80 x 100 cm' });
+  const sized: any = await call('catalog.guideDraft', depot, { name: 'Body', description: 'De 0 à 12 mois, jusqu’à 10 kg.', options: [{ name: 'Taille', values: ['3 mois', '6 mois'] }] });
+  assert.deepEqual(sized.guide.fit, EMPTY_FIT);
+  // the AI's draft: a line it could not know stays empty
+  assert.deepEqual(readDraft('{"brief":"B","fit":{"age":"[À compléter]","weight":"jusqu’à 20 kg","measures":3}}')!.fit, { age: '', weight: 'jusqu’à 20 kg', measures: '3' });
+  assert.match(draftSystem('fr'), /- fit : seulement si le produit n’a PAS de tailles/);
+});
+
+test('the small size guide from words: ranges, from, up to, capacities; never a delivery delay or the product’s own weight', () => {
+  assert.deepEqual(fitFrom('Lit parapluie de la naissance à 3 ans, 120x60 cm'), { age: 'de la naissance à 3 ans', weight: '', measures: '120x60 cm' });
+  assert.deepEqual(fitFrom('Biberon anti-colique 260 ml', 'Dès la naissance.'), { age: 'Dès la naissance', weight: '', measures: '260 ml' });
+  assert.deepEqual(fitFrom('Siège auto 0-3 ans, de 9 à 18 kg'), { age: '0-3 ans', weight: '9 à 18 kg', measures: '' });
+  assert.deepEqual(fitFrom('Trotteur à partir de 6 mois, 12 kg max'), { age: 'à partir de 6 mois', weight: '12 kg max', measures: '' });
+  assert.deepEqual(fitFrom('Livraison en 2 à 5 jours. Poids : 6 kg. Garantie 1 an.'), EMPTY_FIT);
+});
+
+test('Dellal without AI (preview): the small size guide answers the measures', async () => {
+  const conf3 = await as(EMAILS.conf2);
+  await call('dellal.test', conf3, { reset: true });
+  const r: any = await call('dellal.test', conf3, { body: 'Le biberon anti-colique, quelle mesure ?' });
+  const bodies = r.messages.map((m: any) => `${m.role}: ${m.body}`).join('\n');
+  assert.match(bodies, /tool: product_guide #\d+ → guide de vente lu/);
+  assert.match(r.messages.filter((m: any) => m.role === 'agent').pop().body, /Mesures : 260 ml/);
 });

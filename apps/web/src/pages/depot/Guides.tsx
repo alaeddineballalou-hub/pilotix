@@ -145,7 +145,8 @@ function GuideBox({ row, manager, products, phone, onEditing, onClose }: { row: 
   ) : !d ? (
     <Loading />
   ) : editing ? (
-    <GuideEditor value={form!} onChange={setForm} facts={facts} products={products} />
+    // the product's options say which size guide it gets (one line per size, or the small one): wait for them
+    prod.data || prod.error ? <GuideEditor value={form!} onChange={setForm} facts={facts} products={products} /> : <Loading />
   ) : d.guide ? (
     <GuideView guide={d.guide} id={id} upsell={d.upsell} />
   ) : (

@@ -3,8 +3,9 @@
 //   the products their work gives them (productscope.ts);
 // - catalog.guides: Produits & stock › Guide de vente, every product with where its guide stands (none, written, answers
 //   still to write), the same products only; catalog.saveGuide writes one there, catalog.guideFacts gives its writer what
-//   the shop knows of the product (the AI draft, the fixed questions' answers, the sizes). Who writes: the owner and the
-//   depot team, and a confirmation agency's people for the products the agency works on (guideWriter);
+//   the shop knows of the product (the AI draft, the fixed questions' answers, the sizes: one line per size, or the small
+//   size guide of a product with one size only). Who writes: the owner and the depot team, and a confirmation agency's
+//   people for the products the agency works on (guideWriter);
 // - catalog.guideDraft: « Écrire avec l'IA » in the product form. Claude writes a first guide from what the shop knows
 //   (the product, its variants, packs, linked products and services, its landing page, Dellal's shop notes) and never
 //   invents a fact: an answer it cannot know stays « [À compléter] » for the team. Pilotix's key pays (Pilot AI), counted
@@ -16,7 +17,7 @@ import { Ctx, forbidden, hasRole, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
 import { darijaGuide } from './darijabook';
 import { aiKeyed, dellalSettings, pilotOn } from './dellal';
-import { checkGuide, cleanGuide, GUIDE_LIMITS as L, guideEmpty, GuideInput, guideToFill, ProductGuide, readGuide, saveGuide, sizeValues, TO_FILL, toFill } from './guide';
+import { checkGuide, cleanGuide, EMPTY_FIT, fitFilled, GUIDE_LIMITS as L, guideEmpty, GuideFit, GuideInput, guideToFill, ProductGuide, readGuide, saveGuide, sizeValues, TO_FILL, toFill } from './guide';
 import { agencyOf } from './agencyscope';
 import { assignedProductIds, requireAssignedProducts } from './productscope';
 
@@ -83,7 +84,9 @@ function factsText(f: Facts): string {
     `Boutique : ${f.shop} (Algérie, vente en ligne, paiement à la livraison).`,
     `Produit : ${f.name}${f.brand ? ` (marque ${f.brand})` : ''}${f.price ? ` · prix ${da(f.price)}` : ''}`,
     f.options.length ? f.options.filter((o) => o.values.length).map((o) => `${o.name} : ${o.values.join(', ')}`).join('\n') : f.variants.length ? `Variantes : ${f.variants.join(', ')}` : '',
-    sizeValues(f.options).length ? `Tailles (pour le guide des tailles) : ${sizeValues(f.options).join(', ')}` : '',
+    sizeValues(f.options).length
+      ? `Tailles (pour le guide des tailles) : ${sizeValues(f.options).join(', ')}`
+      : 'Pas d’option de taille : une seule taille (le petit guide des tailles dit l’âge, le poids et les mesures, si les informations les donnent).',
     f.packs.length ? `Packs : ${f.packs.map((p) => `${p.qty} pour ${da(p.price)}`).join(', ')}` : '',
     f.linked.length ? `Produits qui vont avec : ${f.linked.join(', ')}` : '',
     f.services.length ? `Services en plus : ${f.services.map((s) => `${s.name} (${da(s.price)})`).join(', ')}` : '',
@@ -121,11 +124,12 @@ export function draftSystem(lang: GuideLang, darija = ''): string {
     '- doubts : 3 à 5 phrases que les clients disent pour ne pas commander (« ghali », « nkhamem », « ma nthiqch fi l’internet », « nchouf m3a rajli »…), chacune avec une réponse honnête et courte qui rassure sans mentir.',
     '- upsell : la phrase courte pour proposer en plus les produits qui vont avec, un pack ou un service (les produits eux-mêmes sont choisis dans le catalogue) ; vide s’il n’y a rien.',
     '- sizes : seulement si le produit a des tailles (listées) : pour chaque taille, l’âge (age) et le poids (weight) qui vont, SEULEMENT si l’information est donnée ou si le nom de la taille la dit (« 3-6 mois » → âge « 3 à 6 mois ») ; sinon laisse age et weight vides. Jamais une taille qui n’est pas listée.',
+    '- fit : seulement si le produit n’a PAS de tailles listées (une seule taille) : en quelques mots, l’âge pour lequel il va (age, ex. « 6 mois à 3 ans »), le poids qu’il supporte (weight, ex. « jusqu’à 15 kg ») et ses mesures (measures : dimensions ou contenance, ex. « 120 × 60 cm »), SEULEMENT si l’information est donnée ; sinon laisse le texte vide (jamais le marqueur ici).',
     '- never : 2 à 5 choses qu’on ne doit jamais dire ou promettre pour ce produit (ce qui n’est pas sûr).',
     '',
     darija ? `Pour écrire la darija :\n${darija}\n` : '',
     'Réponds UNIQUEMENT avec un objet JSON, sans texte autour :',
-    '{"brief": "", "strengths": [""], "faq": [{"q": "", "a": ""}], "doubts": [{"q": "", "a": ""}], "upsell": "", "never": [""], "sizes": [{"size": "", "age": "", "weight": ""}]}',
+    '{"brief": "", "strengths": [""], "faq": [{"q": "", "a": ""}], "doubts": [{"q": "", "a": ""}], "upsell": "", "never": [""], "sizes": [{"size": "", "age": "", "weight": ""}], "fit": {"age": "", "weight": "", "measures": ""}}',
   ]
     .filter((x, k, a) => x !== '' || a[k - 1] !== '')
     .join('\n');
@@ -145,6 +149,8 @@ export function readDraft(text: string): ProductGuide | null {
   const cut = (v: unknown, n: number) => String(v ?? '').trim().slice(0, n);
   const list = (v: unknown, max: number, n: number) => (Array.isArray(v) ? v.slice(0, max).map((x) => cut(x, n)) : []);
   const pairs = (v: unknown, max: number, q: number) => (Array.isArray(v) ? v.slice(0, max).map((p: any) => ({ q: cut(p?.q, q), a: cut(p?.a, L.answer) })) : []);
+  // a line of the small size guide the AI could not know stays empty (never the « to fill » marker there)
+  const fitLine = (k: keyof GuideFit) => ((v) => (toFill(v) ? '' : v))(cut(raw?.fit?.[k], L.fitText));
   const g = cleanGuide({
     brief: cut(raw?.brief, L.brief),
     strengths: list(raw?.strengths, L.strengths, L.strength),
@@ -153,8 +159,28 @@ export function readDraft(text: string): ProductGuide | null {
     upsell: cut(raw?.upsell, L.upsell),
     never: list(raw?.never, L.never, L.neverLine),
     sizes: Array.isArray(raw?.sizes) ? raw.sizes.slice(0, L.sizes).map((x: any) => ({ size: cut(x?.size, L.sizeText), age: cut(x?.age, L.sizeText), weight: cut(x?.weight, L.sizeText) })) : [],
+    fit: { age: fitLine('age'), weight: fitLine('weight'), measures: fitLine('measures') },
   });
   return g.brief || g.strengths.length || g.faq.length ? g : null;
+}
+
+// the small size guide from the shop's own words only: an age range, the weight it holds, its measures
+const UNIT_AGE = '(?:mois|ans?|months?|years?)';
+const NUM = '\\d+(?:[.,]\\d+)?';
+const AGE_RANGE = new RegExp(`(?:(?:dès|des|de|from)\\s+)?(?:la\\s+)?(?:naissance|${NUM}\\s*${UNIT_AGE}?)\\s*(?:à|a|-|–|au|jusqu['’]?(?:à|a)|to)\\s*${NUM}\\s*${UNIT_AGE}\\b`, 'i');
+const AGE_FROM = new RegExp(`(?:dès|à partir de|a partir de|from)\\s+(?:la\\s+)?(?:naissance|${NUM}\\s*${UNIT_AGE}\\b)`, 'i');
+const AGE_UPTO = new RegExp(`jusqu['’]?(?:à|a)\\s+${NUM}\\s*${UNIT_AGE}\\b`, 'i');
+const WEIGHT_MAX = new RegExp(`(?:jusqu['’]?(?:à|a)|max(?:imum)?\\.?\\s*:?|supporte|charge\\s+max(?:imale)?\\s*:?)\\s*${NUM}\\s*kg\\b|${NUM}\\s*kg\\s*max(?:imum)?\\b|${NUM}\\s*(?:à|-|–)\\s*${NUM}\\s*kg\\b`, 'i');
+const MEASURES = new RegExp(`${NUM}\\s*(?:cm|mm|m)?\\s*[x×*]\\s*${NUM}(?:\\s*(?:cm|mm|m)?\\s*[x×*]\\s*${NUM})?\\s*(?:cm|mm|m)\\b|\\b${NUM}\\s*(?:ml|cl|litres?)\\b`, 'i');
+export function fitFrom(...texts: (string | null | undefined)[]): GuideFit {
+  const all = texts.filter(Boolean).join('\n');
+  const hit = (re: RegExp) => (all.match(re)?.[0] ?? '').replace(/\s+/g, ' ').trim().slice(0, L.fitText);
+  return {
+    // « de 6 mois à 3 ans » → « 6 mois à 3 ans »; « de la naissance à 3 ans » stays
+    age: (hit(AGE_RANGE) || hit(AGE_FROM) || hit(AGE_UPTO)).replace(/^de\s+(?=\d)/i, ''),
+    weight: hit(WEIGHT_MAX),
+    measures: hit(MEASURES),
+  };
 }
 
 /** Without the AI: a plain first guide from the same facts (French), the unknown answers left to fill. */
@@ -196,6 +222,8 @@ export function rulesDraft(f: Pick<Facts, 'name' | 'brand' | 'description' | 'va
     never: ['Un délai de livraison précis : il dépend de la wilaya.', 'Une garantie, un échange ou un cadeau qui ne sont pas écrits dans ce guide.'],
     // a size that says its age (« 3-6 mois ») gets it; the weights are the team's
     sizes: sizes.filter((x) => AGE_IN_NAME.test(x)).map((x) => ({ size: x, age: x, weight: '' })),
+    // one size only: the age, the weight and the measures its own words give
+    fit: sizes.length ? EMPTY_FIT : fitFrom(f.name, f.description, f.page?.description),
   });
 }
 const AGE_IN_NAME = /\d\s*(?:mois|ans?|months?|years?|m\b|y\b)|naissance|newborn|شهر|أشهر|سنة|سنوات/i;
@@ -216,9 +244,18 @@ export async function draftGuide(ctx: Ctx, i: DraftIn): Promise<Draft> {
   if (allowed && !i.productId) throw forbidden('Ce produit ne vous est pas confié');
   const f = await factsOf(ctx, { ...i, linkedIds: i.linkedIds.filter((x) => x !== i.productId && (!allowed || allowed.includes(x))) });
   const g = await draftOf(ctx, i, f);
-  // Vente en plus: the products that go with it (Produits liés), the sizes: only the product's own
+  // Vente en plus: the products that go with it (Produits liés); the sizes: only the product's own, and the small size
+  // guide only for a product with one size
   const sizes = new Set(sizeValues(i.options).map((x) => x.toLowerCase()));
-  return { by: g.by, guide: { ...g.guide, upsellIds: g.guide.upsellIds.length ? g.guide.upsellIds : f.linkedIds.slice(0, L.upsellIds), sizes: g.guide.sizes.filter((x) => sizes.has(x.size.toLowerCase())) } };
+  return {
+    by: g.by,
+    guide: {
+      ...g.guide,
+      upsellIds: g.guide.upsellIds.length ? g.guide.upsellIds : f.linkedIds.slice(0, L.upsellIds),
+      sizes: g.guide.sizes.filter((x) => sizes.has(x.size.toLowerCase())),
+      fit: sizes.size ? EMPTY_FIT : g.guide.fit,
+    },
+  };
 }
 
 async function draftOf(ctx: Ctx, i: DraftIn, f: Facts): Promise<Draft> {
@@ -298,7 +335,7 @@ export const guideProcs = {
         /** answers still to write (and points still to fill) */
         toFill: has ? guideToFill(g!) + g!.strengths.filter((x) => toFill(x)).length : 0,
         brief: has ? g!.brief.slice(0, 160) : '',
-        parts: has ? { strengths: g!.strengths.length, faq: g!.faq.length, doubts: g!.doubts.length, never: g!.never.length, upsell: g!.upsell || g!.upsellIds.length ? 1 : 0, sizes: g!.sizes.length } : null,
+        parts: has ? { strengths: g!.strengths.length, faq: g!.faq.length, doubts: g!.doubts.length, never: g!.never.length, upsell: g!.upsell || g!.upsellIds.length ? 1 : 0, sizes: g!.sizes.length || (fitFilled(g!.fit) ? 1 : 0) } : null,
         updatedAt: has && r.updated_at ? iso(r.updated_at) : null,
         updatedBy: has ? ((r.by_name as string | null) ?? null) : null,
         seller: null as { id: number; name: string } | null,

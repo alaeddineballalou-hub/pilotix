@@ -3,10 +3,11 @@
 // so do the confirmation agencies for the products they work on; the agents read it during a call (a « Guide » button on
 // each product of the order, and in Produits & stock); Dellal reads it in chats (its product_guide tool) and CM AI under
 // the comments of the product's posts, so both answer with the shop's real facts.
-// Its parts: En bref, Guide des tailles (age and weight for each size, when the product has a size option: customers ask
-// it), Points forts, Questions & réponses (picked from fixed questions or written), Hésitations (what the customer says →
-// what to answer), Vente en plus (products picked, and how to say it), À ne jamais promettre. A product without a guide
-// has no row (migrations/072_product_guides.ts).
+// Its parts: En bref, Guide des tailles (age and weight for each size, when the product has a size option; a small one,
+// the age, the weight and the measures it fits, when it has none: customers ask it), Points forts, Questions & réponses
+// (picked from fixed questions or written), Hésitations (what the customer says → what to answer), Vente en plus
+// (products picked, and how to say it), À ne jamais promettre. A product without a guide has no row
+// (migrations/072_product_guides.ts).
 import { z } from 'zod';
 import { Db, iso, num } from '../db';
 import { bad } from '../rpc';
@@ -20,6 +21,12 @@ export interface GuideSize {
   size: string;
   age: string;
   weight: string;
+}
+/** the small size guide of a product without a size option: the age and the weight it fits, and how big it is */
+export interface GuideFit {
+  age: string;
+  weight: string;
+  measures: string;
 }
 export interface ProductGuide {
   /** the product in one or two sentences: what it is, for whom */
@@ -38,6 +45,8 @@ export interface ProductGuide {
   never: string[];
   /** the size guide: for each size, the age and the weight it fits */
   sizes: GuideSize[];
+  /** the small size guide, when the product has no size option (empty texts: not written) */
+  fit: GuideFit;
 }
 
 export const GUIDE_LIMITS = {
@@ -55,6 +64,8 @@ export const GUIDE_LIMITS = {
   neverLine: 200,
   sizes: 40,
   sizeText: 60,
+  /** each line of the small size guide (« 60 × 80 × 100 cm, 45 × 60 cm plié ») */
+  fitText: 120,
   /** the whole guide (what Dellal reads in one go) */
   total: 15_000,
 } as const;
@@ -83,10 +94,16 @@ export const GuideInput = z.object({
     .array(z.object({ size: z.string().trim().min(1).max(L.sizeText), age: z.string().trim().max(L.sizeText).default(''), weight: z.string().trim().max(L.sizeText).default('') }))
     .max(L.sizes)
     .default([]),
+  fit: z
+    .object({ age: z.string().trim().max(L.fitText).default(''), weight: z.string().trim().max(L.fitText).default(''), measures: z.string().trim().max(L.fitText).default('') })
+    .default({}),
 });
 export type GuideInputT = z.input<typeof GuideInput>;
 
-export const EMPTY_GUIDE: ProductGuide = { brief: '', strengths: [], faq: [], doubts: [], upsell: '', upsellIds: [], never: [], sizes: [] };
+export const EMPTY_FIT: GuideFit = { age: '', weight: '', measures: '' };
+export const EMPTY_GUIDE: ProductGuide = { brief: '', strengths: [], faq: [], doubts: [], upsell: '', upsellIds: [], never: [], sizes: [], fit: EMPTY_FIT };
+/** Is something written in the small size guide. */
+export const fitFilled = (f: GuideFit | null | undefined) => !!f && !!(f.age || f.weight || f.measures);
 
 /** Trimmed, without empty lines, questions or sizes (an answer may still be to fill). */
 export function cleanGuide(g: Partial<ProductGuide> | null | undefined): ProductGuide {
@@ -99,11 +116,13 @@ export function cleanGuide(g: Partial<ProductGuide> | null | undefined): Product
         .map((x: any) => ({ size: s(x?.size), age: s(x?.age), weight: s(x?.weight) }))
         .filter((x, k, a) => x.size && (x.age || x.weight) && a.findIndex((y) => y.size.toLowerCase() === x.size.toLowerCase()) === k)
     : [];
-  return { brief: s(g?.brief), strengths: lines(g?.strengths), faq: pairs(g?.faq), doubts: pairs(g?.doubts), upsell: s(g?.upsell), upsellIds: ids, never: lines(g?.never), sizes };
+  const f: any = g?.fit && typeof g.fit === 'object' ? g.fit : {};
+  const fit = { age: s(f.age), weight: s(f.weight), measures: s(f.measures) };
+  return { brief: s(g?.brief), strengths: lines(g?.strengths), faq: pairs(g?.faq), doubts: pairs(g?.doubts), upsell: s(g?.upsell), upsellIds: ids, never: lines(g?.never), sizes, fit };
 }
 
 export const guideEmpty = (g: ProductGuide) =>
-  !g.brief && !g.strengths.length && !g.faq.length && !g.doubts.length && !g.upsell && !g.upsellIds.length && !g.never.length && !g.sizes.length;
+  !g.brief && !g.strengths.length && !g.faq.length && !g.doubts.length && !g.upsell && !g.upsellIds.length && !g.never.length && !g.sizes.length && !fitFilled(g.fit);
 
 /** Characters of the whole guide (its limit keeps what Dellal reads at once small). */
 export const guideSize = (g: ProductGuide) =>
@@ -111,7 +130,10 @@ export const guideSize = (g: ProductGuide) =>
   g.upsell.length +
   [...g.strengths, ...g.never].reduce((a, x) => a + x.length, 0) +
   [...g.faq, ...g.doubts].reduce((a, p) => a + p.q.length + p.a.length, 0) +
-  g.sizes.reduce((a, x) => a + x.size.length + x.age.length + x.weight.length, 0);
+  g.sizes.reduce((a, x) => a + x.size.length + x.age.length + x.weight.length, 0) +
+  g.fit.age.length +
+  g.fit.weight.length +
+  g.fit.measures.length;
 
 /** How many answers are still to write. */
 export const guideToFill = (g: ProductGuide) => [...g.faq, ...g.doubts].filter((p) => toFill(p.a)).length;
@@ -136,11 +158,14 @@ export function guideText(g: ProductGuide, upsell: UpsellProduct[] = []): string
   const never = g.never.filter(real);
   const da = (n: number) => `${n} DA`;
   const offer = [upsell.length ? `propose aussi ${upsell.map((p) => `#${p.id} ${p.name} (${da(p.price)})`).join(', ')}` : '', real(g.upsell) ? g.upsell : ''].filter(Boolean).join(' — ');
+  // one size only: who it fits and how big it is
+  const fit = g.sizes.length ? [] : [real(g.fit.age) && `- âge : ${g.fit.age}`, real(g.fit.weight) && `- poids : ${g.fit.weight}`, real(g.fit.measures) && `- mesures : ${g.fit.measures}`].filter(Boolean);
   return [
     real(g.brief) ? `EN BREF : ${g.brief}` : '',
     g.sizes.length
       ? `GUIDE DES TAILLES (demande l’âge et le poids si le client ne les donne pas, puis propose la taille qui va) :\n${g.sizes.map((x) => `- ${x.size} : ${[x.age && `âge ${x.age}`, x.weight && `poids ${x.weight}`].filter(Boolean).join(', ')}`).join('\n')}`
       : '',
+    fit.length ? `GUIDE DES TAILLES (une seule taille ; réponds avec ceci quand le client demande l’âge, le poids ou les mesures, et dis-le honnêtement si le produit ne lui va pas) :\n${fit.join('\n')}` : '',
     strengths.length ? `POINTS FORTS :\n${strengths.map((x) => `- ${x}`).join('\n')}` : '',
     faq.length ? `QUESTIONS DES CLIENTS ET RÉPONSES DE LA BOUTIQUE :\n${faq.map((p) => `- ${p.q} → ${p.a}`).join('\n')}` : '',
     doubts.length ? `HÉSITATIONS (ce que le client dit → quoi répondre) :\n${doubts.map((p) => `- ${p.q} → ${p.a}`).join('\n')}` : '',
