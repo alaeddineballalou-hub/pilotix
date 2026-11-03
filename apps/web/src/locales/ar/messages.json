@@ -161,7 +161,14 @@
     "darijaPreferPh": "Mar7ba bik / biki\nSaha khouya / khti\nTkhalles ki testalem\nBla mziya",
     "darijaAvoid": "كلمات لا تُكتب أبدًا",
     "darijaAvoidHint": "كلمة في كل سطر. ضع الكلمة الصحيحة بعد سهم: « frero → khouya ».",
-    "darijaAvoidPh": "frero → khouya\nhabibti → khti"
+    "darijaAvoidPh": "frero → khouya\nhabibti → khti",
+    "version": "نسخة دلال",
+    "v": {
+      "001": "النسخة 001 — الرقم أولاً",
+      "001Hint": "يأخذ الاسم والرقم والولاية والمنتج، ويكتب ما يريده الزبون، ويضع الطلب في التأكيد › جديدة: الفريق يتصل به للتأكيد. إذا غيّر الزبون شيئًا، يحدّث {{name}} الطلب.",
+      "full": "طلب كامل",
+      "fullHint": "يأخذ الطلب كاملاً في الدردشة: البلدية، المنزل أو المكتب، الملخص، البيع الإضافي. يمكنه إرساله مباشرة إلى المستودع."
+    }
   },
   "lahja": {
     "fix": "درس دارجة",

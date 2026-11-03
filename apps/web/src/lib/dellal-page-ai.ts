@@ -50,6 +50,8 @@ async function connect(): Promise<DellalPageAi | null> {
   if (!sample) return null;
   const limits = await sample.limits?.().catch(() => null);
   if (!limits?.tools || limits.tools.maxCount < 4) return null;
+  // the tools come in order of need: a page that takes fewer leaves the last ones out
+  const maxTools = limits.tools.maxCount;
   const s = sample;
 
   const fail = (e: unknown): never => {
@@ -77,7 +79,7 @@ async function connect(): Promise<DellalPageAi | null> {
     // like on the server, only the text written after the last tool call is sent
     let latest = '';
     let cut = 0;
-    const tools = req.tools.map((t) => ({
+    const tools = req.tools.slice(0, maxTools).map((t) => ({
       name: t.name,
       description: t.description,
       inputSchema: t.input_schema,

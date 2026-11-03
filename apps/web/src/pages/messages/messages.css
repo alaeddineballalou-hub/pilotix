@@ -87,3 +87,14 @@
 .ai-voice-done .bji { color: var(--ai-dot-2, var(--ai-tint-ink)); }
 .ai-voice-failed, .ai-voice-off { color: var(--c-bad-ink, var(--coral)); }
 .ai-voice-read { margin-inline: 0; }
+
+/* Dellal's version (Version 001: the number first, or the whole order) */
+.dl-vers { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin: 14px 0 4px; }
+.dl-ver { position: relative; display: grid; grid-template-columns: 22px 1fr; gap: 3px 10px; align-items: center; padding: 14px; border: 1.5px solid var(--line); border-radius: 14px; background: var(--field); cursor: pointer; }
+.dl-ver input { position: absolute; opacity: 0; pointer-events: none; }
+.dl-ver .bji { width: 20px; height: 20px; color: var(--muted); }
+.dl-ver b { font-size: 14.5px; }
+.dl-ver small { grid-column: 2; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.dl-ver.on { border-color: var(--px-orange); background: var(--px-orange-soft); }
+.dl-ver.on .bji { color: var(--px-orange); }
+.dl-ver:has(input:focus-visible) { outline: 2px solid var(--px-orange); outline-offset: 2px; }

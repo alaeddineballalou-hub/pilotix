@@ -158,7 +158,14 @@
     "darijaPreferPh": "Mar7ba bik / biki\nSaha khouya / khti\nTkhalles ki testalem\nBla mziya",
     "darijaAvoid": "Words never to write",
     "darijaAvoidHint": "One per line. Put the right word after an arrow: “frero → khouya”.",
-    "darijaAvoidPh": "frero → khouya\nhabibti → khti"
+    "darijaAvoidPh": "frero → khouya\nhabibti → khti",
+    "version": "Dellal’s version",
+    "v": {
+      "001": "Version 001 — the number first",
+      "001Hint": "Takes the first name, number, wilaya and product, notes what the customer wants and puts the order in Confirmation › New: the team calls to confirm. If the customer changes anything, {{name}} updates the order.",
+      "full": "Full order",
+      "fullHint": "Takes the whole order in the chat: commune, home or office delivery, recap, extra sale. Can send it straight to the depot."
+    }
   },
   "lahja": {
     "fix": "Darija lesson",

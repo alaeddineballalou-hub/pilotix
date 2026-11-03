@@ -158,7 +158,14 @@
     "darijaPreferPh": "Mar7ba bik / biki\nSaha khouya / khti\nTkhalles ki testalem\nBla mziya",
     "darijaAvoid": "Mots à ne jamais écrire",
     "darijaAvoidHint": "Un par ligne. Mettez le bon mot après une flèche : « frero → khouya ».",
-    "darijaAvoidPh": "frero → khouya\nhabibti → khti"
+    "darijaAvoidPh": "frero → khouya\nhabibti → khti",
+    "version": "Version de Dellal",
+    "v": {
+      "001": "Version 001 — le numéro d’abord",
+      "001Hint": "Prend le prénom, le numéro, la wilaya et le produit, note ce que veut le client et met la commande dans Confirmation › Nouvelles : l’équipe l’appelle pour confirmer. Si le client change quelque chose, {{name}} met la commande à jour.",
+      "full": "Commande complète",
+      "fullHint": "Prend toute la commande dans le chat : commune, domicile ou bureau, récapitulatif, vente en plus. Peut l’envoyer directement au dépôt."
+    }
   },
   "lahja": {
     "fix": "Leçon de darija",

@@ -454,6 +454,45 @@ async function priceItems(db: Db, items: z.infer<typeof ItemInput>[], freePrice 
   return { lines, subtotal, maxDiscount: unlimited ? subtotal : maxDiscount, weight, grid, priceCut };
 }
 
+/**
+ * The delivery price the customer pays for these products (the highest client price grid among them, plus the weight
+ * above the limit), and the products' maximum discount. Used by « orders.quote » (the order form) and by Dellal when a
+ * customer changes his wilaya or his products in the chat.
+ */
+export async function customerFee(db: Db, wilayaId: number | null, isStopdesk: boolean, items: { productId: number; qty: number }[]) {
+  const pids = [...new Set(items.map((x) => x.productId))];
+  const prods = pids.length ? await db.query('SELECT id, fee_grid, weight_kg, max_discount FROM products WHERE id = ANY($1)', [pids]) : [];
+  const P = new Map(prods.map((p: any) => [num(p.id), p]));
+  let weight = 0;
+  let maxDiscount = 0;
+  let unlimited = false;
+  for (const it of items) {
+    const p: any = P.get(it.productId);
+    if (!p) continue;
+    weight += Number(p.weight_kg) * it.qty;
+    if (p.max_discount === null) unlimited = true;
+    else maxDiscount += num(p.max_discount) * it.qty;
+  }
+  let fee: number | null = null;
+  let grid: string | null = null;
+  if (wilayaId) {
+    const grids = [...new Set([...P.values()].map((p: any) => p.fee_grid as string | null))];
+    if (!grids.length) grids.push(null);
+    for (const g of grids) {
+      const f = await clientFee(db, wilayaId, isStopdesk, g);
+      if (f !== null && (fee === null || f > fee)) {
+        fee = f;
+        grid = g ?? (await getSetting(db, 'defaultFeeGrid'));
+      }
+    }
+    if (fee !== null) {
+      const wf = await getSetting(db, 'weightFees');
+      if (weight > wf.fromKg) fee += Math.ceil(weight - wf.fromKg) * wf.perKg;
+    }
+  }
+  return { fee, grid, weight, maxDiscount, unlimited };
+}
+
 async function deliveryFeeFor(db: Db, wilayaId: number, stopdesk: boolean, grid: string | null, weight: number): Promise<number> {
   const base = (await clientFee(db, wilayaId, stopdesk, grid)) ?? 0;
   const wf = await getSetting(db, 'weightFees');
@@ -1502,36 +1541,7 @@ function orderExtraProcs() {
       ['confirmation', 'suivi', 'depot'],
       z.object({ wilayaId: z.number().int().min(1).max(69).nullable(), isStopdesk: z.boolean().default(false), companyId: id.nullable().optional(), items: z.array(z.object({ productId: id, qty: z.number().int().min(1).max(999) })).max(50).default([]) }),
       async (ctx, i) => {
-        const pids = [...new Set(i.items.map((x) => x.productId))];
-        const prods = pids.length ? await ctx.db.query('SELECT id, fee_grid, weight_kg, max_discount FROM products WHERE id = ANY($1)', [pids]) : [];
-        const P = new Map(prods.map((p: any) => [num(p.id), p]));
-        let weight = 0;
-        let maxDiscount = 0;
-        let unlimited = false;
-        for (const it of i.items) {
-          const p: any = P.get(it.productId);
-          if (!p) continue;
-          weight += Number(p.weight_kg) * it.qty;
-          if (p.max_discount === null) unlimited = true;
-          else maxDiscount += num(p.max_discount) * it.qty;
-        }
-        let fee: number | null = null;
-        let grid: string | null = null;
-        if (i.wilayaId) {
-          const grids = [...new Set([...P.values()].map((p: any) => p.fee_grid as string | null))];
-          if (!grids.length) grids.push(null);
-          for (const g of grids) {
-            const f = await clientFee(ctx.db, i.wilayaId, i.isStopdesk, g);
-            if (f !== null && (fee === null || f > fee)) {
-              fee = f;
-              grid = g ?? (await getSetting(ctx.db, 'defaultFeeGrid'));
-            }
-          }
-          if (fee !== null) {
-            const wf = await getSetting(ctx.db, 'weightFees');
-            if (weight > wf.fromKg) fee += Math.ceil(weight - wf.fromKg) * wf.perKg;
-          }
-        }
+        const { fee, grid, weight, maxDiscount, unlimited } = await customerFee(ctx.db, i.wilayaId, i.isStopdesk, i.items);
         let served = true;
         const companyId = i.companyId ?? (await getSetting(ctx.db, 'shop')).defaultCompanyId ?? null;
         let companyName: string | null = null;
