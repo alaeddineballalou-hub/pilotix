@@ -139,7 +139,8 @@ test('Pro marketers: ask, staff turn it on, the list, the numbers across stores,
   await adset(oran.db, 'O-4', oran.products.MONT, inOran, 'run');
   // … a store's own ad set that never spent does not count, nor the store's own marketers' ad sets
   await oran.db.query(`INSERT INTO adsets (id, name, product_ids, marketer_id, status) VALUES ('O-5', 'jamais lancé', $1, $2, 'PAUSED')`, [[oran.products.ECOU], inOran]);
-  const ownMk: any = await call('users.create', admin, { phone: tph(), name: 'Interne', email: 'interne@oran.dz', password: PW, roles: ['marketer'] });
+  // (a store's own marketeur made before the store stopped adding them: users.create no longer gives that role)
+  const ownMk = { id: Number((await oran.db.query(`INSERT INTO profiles (name, email, password_hash, roles) VALUES ('Interne', 'interne@oran.dz', 'x', '{marketer}') RETURNING id`))[0].id) };
   await adset(oran.db, 'O-6', oran.products.ECOU, ownMk.id, 'ok');
   // … and Alger, where Nadir has an account of his own (his work before the space)
   const nadirAlger = { id: Number((await alger.db.query(`INSERT INTO profiles (name, email, password_hash, roles, active) VALUES ('Nadir', 'nadir@ads.dz', 'x', '{marketer}', false) RETURNING id`))[0].id) };

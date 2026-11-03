@@ -312,7 +312,7 @@ function Ask({ d, rows }: { d: Overview; rows: Row[] }) {
 function NewMarketerHint({ d }: { d: Overview }) {
   const { t } = useTranslation();
   return d.admin ? (
-    <a className="btn-mini" href="#/utilisateurs/marketeurs">
+    <a className="btn-mini" href="#/marketers">
       {t('marketer.newMarketer')}
     </a>
   ) : (

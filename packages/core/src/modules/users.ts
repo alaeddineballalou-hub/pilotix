@@ -140,6 +140,18 @@ function noNewSeller(roles: readonly string[] | undefined, had: readonly string[
     throw bad('Un vendeur ne peut pas ajouter un autre vendeur : chaque vendeur ouvre son propre compte Pilotix, avec ses boutiques');
 }
 
+/**
+ * A store never adds a marketer to its own team: a marketer opens his own Pilotix account and works with the store
+ * from Partenaires › Marketers. The « Marketeur » role is never given to anyone new in a store; the people who already
+ * have it keep it (and it can be taken away). A marketer's own space still gives it to its media buyers.
+ */
+function noNewMarketer(ctx: Ctx, roles: readonly string[] | undefined, had: readonly string[] = []) {
+  const kind = ctx.shop?.kind;
+  if (kind === 'agency' || kind === 'marketer') return;
+  if (roles?.includes('marketer') && !had.includes('marketer'))
+    throw bad('On n’ajoute plus de marketeur dans l’équipe : un marketer ouvre son propre compte Pilotix, puis vous travaillez ensemble dans Partenaires › Marketers');
+}
+
 /** The roles of a partner's people: an agency's chief, supervisors and agents; a marketer's chief and media buyers. */
 export const PARTNER_ROLES: Record<'agency' | 'marketer', string[]> = { agency: ['admin', 'agent_manager', 'confirmation', 'suivi'], marketer: ['admin', 'marketer'] };
 /** In a partner's space: only its own roles, and the sellers the person works for (checked against its contracts). */
@@ -367,6 +379,7 @@ export const usersProcs = {
     needUserManager(ctx);
     needGrantable(ctx, b);
     noNewSeller(b.roles);
+    noNewMarketer(ctx, b.roles);
     await needSeat(ctx);
     if (b.roles.includes('livreur')) await needDriverSeat(ctx);
     // an agency's person: every seller unless the chief chose some
@@ -395,6 +408,7 @@ export const usersProcs = {
     // an account closed earlier and opened again takes a place of the plan; so does a new livreur
     const before = (await ctx.db.query('SELECT active, roles, archived_at FROM profiles WHERE id = $1', [b.id]))[0];
     noNewSeller(b.roles, (before?.roles as string[] | undefined) ?? []);
+    noNewMarketer(ctx, b.roles, (before?.roles as string[] | undefined) ?? []);
     if (before?.archived_at && b.active === true) throw bad('Ce compte est archivé : sortez-le d’abord des archives (Management › Archives)');
     if (b.active === true && !before?.active) await needSeat(ctx);
     // a new phone: required form, nobody else's (empty: unchanged)
