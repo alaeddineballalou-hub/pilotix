@@ -102,6 +102,7 @@
     "owner": "Owner",
     "ownerHint": "The store’s owner: only they change their account.",
     "noNewSeller": "No new sellers are added: each seller opens his own Pilotix account, with his boutiques.",
+    "noNewMarketer": "Marketers are no longer added here: a marketer opens his own Pilotix account, then you work together in Partners › Marketers.",
     "createdExisting": "Added: this person already has a Pilotix account and logs in with their usual password.",
     "passwordAccount": "If this person already has a Pilotix account, they keep their password.",
     "archives": "Archives",

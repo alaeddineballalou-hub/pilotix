@@ -120,6 +120,19 @@ test('a seller never adds another seller: « Vendeur » is never given, the ones
   assert.deepEqual(gone.roles, ['agent_manager']);
 });
 
+test('a store never adds a marketer to its team: « Marketeur » is never given, the ones who have it keep it', async () => {
+  const admin = await ctxFor('admin@demo.pilotix.dz');
+  await assert.rejects(call('users.create', admin, { phone: tph(), name: 'Nouveau Marketeur', email: 'nouveau.marketeur@demo.pilotix.dz', password: 'motdepasse1', roles: ['marketer'] }), /plus de marketeur/);
+  const agent: any = await call('users.create', admin, { phone: tph(), name: 'Agent Deux', email: 'agent.deux@demo.pilotix.dz', password: 'motdepasse1', roles: ['confirmation'] });
+  await assert.rejects(call('users.update', admin, { id: agent.id, roles: ['confirmation', 'marketer'] }), /plus de marketeur/);
+  // a marketeur made before this rule keeps his role, and it can be taken away
+  const old = (await db.query(`INSERT INTO profiles (name, email, phone, password_hash, roles) VALUES ('Ancien Marketeur', 'ancien.marketeur@demo.pilotix.dz', $1, 'x', '{marketer}') RETURNING id`, [tph()]))[0];
+  const kept: any = await call('users.update', admin, { id: Number(old.id), name: 'Ancien Marketeur 2', roles: ['marketer'] });
+  assert.deepEqual(kept.roles, ['marketer']);
+  const gone: any = await call('users.update', admin, { id: Number(old.id), roles: ['confirmation'] });
+  assert.deepEqual(gone.roles, ['confirmation']);
+});
+
 test('counts for the menu', async () => {
   const admin = await ctxFor('admin@demo.pilotix.dz');
   const c: any = await call('orders.counts', admin, {});
