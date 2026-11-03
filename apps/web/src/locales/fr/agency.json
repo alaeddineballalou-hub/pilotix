@@ -314,7 +314,8 @@
       "agents": "Agents de confirmation",
       "suivi": "Agents de suivi",
       "managers": "Chefs d’équipe",
-      "admins": "Administrateurs"
+      "admins": "Administrateurs",
+      "affectations": "Affectations"
     },
     "title": {
       "all": "Votre équipe",
@@ -523,5 +524,35 @@
       "paymentsHelp": "Le marketer demande le paiement d’un mois. Vous payez en dehors de Pilotix, puis vous cliquez « Payé ».",
       "giveAdsets": "Donner des ad sets"
     }
+  },
+  "factTabs": {
+    "plans": "Plans",
+    "agents": "Agents",
+    "vendeurs": "Vendeurs",
+    "sellerPlans": "Voir le plan de chaque vendeur",
+    "backPlans": "Retour aux plans"
+  },
+  "agentsPay": {
+    "title": "Paie des agents · {{m}}",
+    "help": "Ce que l’agence paie à chaque agent ce mois, et sa note sur 100.",
+    "toPay": "À payer",
+    "isClosed": "Paie validée",
+    "open": "Pas encore validée",
+    "agents": "Agents",
+    "agentsSub": "avec un plan",
+    "deliveredSub": "commandes livrées",
+    "avg": "Note moyenne",
+    "avgSub": "sur 100",
+    "none": "Aucun agent ce mois.",
+    "agent": "Agent",
+    "followed": "Suivi",
+    "score": "Note",
+    "amount": "À payer",
+    "detail_one": "{{count}} opération",
+    "detail_other": "{{count}} opérations",
+    "scoreHow": "Note = confirmées × livrées (agent de confirmation) et livrées sur suivies (agent de suivi), sur 100.",
+    "close": "Valider la paie",
+    "closeAsk": "Valider la paie de ce mois ? Elle ne changera plus.",
+    "closed": "Paie validée"
   }
 }

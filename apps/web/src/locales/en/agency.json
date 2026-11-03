@@ -314,7 +314,8 @@
       "agents": "Confirmation agents",
       "suivi": "Follow-up agents",
       "managers": "Team leads",
-      "admins": "Administrators"
+      "admins": "Administrators",
+      "affectations": "Assignments"
     },
     "title": {
       "all": "Your team",
@@ -523,5 +524,35 @@
       "paymentsHelp": "The marketer asks for the payment of a month. You pay outside Pilotix, then click “Paid”.",
       "giveAdsets": "Give ad sets"
     }
+  },
+  "factTabs": {
+    "plans": "Plans",
+    "agents": "Agents",
+    "vendeurs": "Sellers",
+    "sellerPlans": "See each seller’s plan",
+    "backPlans": "Back to plans"
+  },
+  "agentsPay": {
+    "title": "Agents’ pay · {{m}}",
+    "help": "What the agency pays each agent this month, and their score out of 100.",
+    "toPay": "To pay",
+    "isClosed": "Pay approved",
+    "open": "Not approved yet",
+    "agents": "Agents",
+    "agentsSub": "with a plan",
+    "deliveredSub": "orders delivered",
+    "avg": "Average score",
+    "avgSub": "out of 100",
+    "none": "No agent this month.",
+    "agent": "Agent",
+    "followed": "Follow-up",
+    "score": "Score",
+    "amount": "To pay",
+    "detail_one": "{{count}} operation",
+    "detail_other": "{{count}} operations",
+    "scoreHow": "Score = confirmed × delivered (confirmation agent) and delivered out of followed (follow-up agent), out of 100.",
+    "close": "Approve pay",
+    "closeAsk": "Approve this month’s pay? It will not change after.",
+    "closed": "Pay approved"
   }
 }

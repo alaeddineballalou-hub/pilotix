@@ -14,11 +14,11 @@ import { SellerScope, useSeller } from '../../lib/seller';
 import { useSellers } from '../../lib/sellers';
 import { useSession } from '../../lib/session';
 import { CopyCode } from '../../ui/CopyCode';
-import { Card, Empty, ErrorBox, Field, Icon, Kpis, Loading } from '../../ui/kit';
+import { Card, Empty, ErrorBox, Field, Icon, Kpis, Loading, StageBar } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { UsersPage } from '../admin/Users';
-import { ManagementPlans } from '../admin/ManagementPlans';
+import { AgencyPaymentPlans } from '../admin/AgencyPaymentPlans';
 import { PlanSummary } from '../admin/PlanSummary';
 import { KpiBox } from '../dashboard/util';
 import type { PageProps } from '../registry';
@@ -649,7 +649,144 @@ function PricesModal({ l, onClose }: { l: AgencyLinkInfo; onClose: () => void })
 
 // ---------------------------------------------------------------- Facturation
 /** Each seller's month: its numbers, what they make, and the payment: asked → paid (the seller) → received (us). */
-export function Facturation(_: PageProps) {
+export function Facturation({ sub }: PageProps) {
+  const { session } = useSession();
+  const { t } = useTranslation();
+  const mk = usePartnerKind() === 'marketer';
+  // an agency's administrators: « Plans » (seller and agent plans, bonuses), « Agents » (their pay and score), « Vendeurs »
+  if (mk || !session?.isAdmin) return <SellerBills />;
+  const tab = sub === 'agents' || sub === 'vendeurs' ? sub : 'plans';
+  return (
+    <div className="agx-page">
+      <StageBar flow={false} current={tab} items={(['plans', 'agents', 'vendeurs'] as const).map((k) => ({ key: k, label: t(`agency.factTabs.${k}`), href: `#/facturation/${k}` }))} />
+      {tab === 'plans' ? <PlansTab /> : tab === 'agents' ? <AgentsPay /> : <SellerBills />}
+    </div>
+  );
+}
+
+/** Facturation › Plans: the plans (sellers', agents'), the bonuses and which plan each seller has. */
+function PlansTab() {
+  const [k, setK] = useState<'plans' | 'sellers'>('plans');
+  const { t } = useTranslation();
+  return (
+    <>
+      <AgencyPaymentPlans key={k} bare noPayroll initialKind={k === 'plans' ? 'billing' : 'assignment'} only={k === 'plans' ? ['billing', 'agent', 'bonus'] : ['assignment']} assign="seller" />
+      <p className="muted small">
+        <button type="button" className="btn small" onClick={() => setK(k === 'plans' ? 'sellers' : 'plans')}>
+          {k === 'plans' ? t('agency.factTabs.sellerPlans') : t('agency.factTabs.backPlans')}
+        </button>
+      </p>
+    </>
+  );
+}
+
+/** Facturation › Agents: what the agency pays each agent this month, and the agent's score out of 100. */
+function AgentsPay() {
+  const { t, i18n } = useTranslation();
+  const max = monthNow();
+  const [month, setMonth] = useState(max);
+  const pay = useRpc('management.payroll', { month });
+  const sc = useRpc('management.agentScores', { month });
+  const close = useAction('management.payrollClose', { success: t('agency.agentsPay.closed') });
+  const scores = new Map((sc.data ?? []).map((x) => [x.id, x]));
+  const rows = (pay.data?.rows ?? []).map((r) => ({ ...r, s: scores.get(r.id) }));
+  // agents with a score but nothing to pay yet still show
+  for (const x of sc.data ?? []) if (!rows.some((r) => r.id === x.id)) rows.push({ id: x.id, name: x.name, operations: 0, lines: [], total: 0, s: x });
+  rows.sort((a, b) => (b.s?.score ?? -1) - (a.s?.score ?? -1) || b.total - a.total);
+  const scored = rows.filter((r) => r.s?.score !== null && r.s?.score !== undefined);
+  const avg = scored.length ? Math.round(scored.reduce((s, r) => s + (r.s!.score as number), 0) / scored.length) : null;
+  const ym = month;
+  return (
+    <>
+      <Card title={t('agency.agentsPay.title', { m: monthLabel(month, i18n.language) })} help={t('agency.agentsPay.help')} actions={<MonthPicker value={month} max={max} onChange={setMonth} />}>
+        <Kpis>
+          <KpiBox icon="wallet" label={t('agency.agentsPay.toPay')} value={da(pay.data?.total ?? 0)} sub={pay.data?.closedAt ? t('agency.agentsPay.isClosed') : t('agency.agentsPay.open')} tone="warn" />
+          <KpiBox icon="users" label={t('agency.agentsPay.agents')} value={n(rows.length)} sub={t('agency.agentsPay.agentsSub')} />
+          <KpiBox icon="truck" label={t('agency.c.delivered')} value={n(rows.reduce((s, r) => s + (r.s?.delivered ?? 0) + (r.s?.followDelivered ?? 0), 0))} sub={t('agency.agentsPay.deliveredSub')} tone="ok" />
+          <KpiBox icon="chart" label={t('agency.agentsPay.avg')} value={avg === null ? '—' : `${avg} / 100`} sub={t('agency.agentsPay.avgSub')} />
+        </Kpis>
+      </Card>
+      <section className="card">
+        {pay.isLoading || sc.isLoading ? (
+          <Loading />
+        ) : pay.error || sc.error ? (
+          <ErrorBox error={(pay.error ?? sc.error)!} onRetry={() => (pay.refetch(), sc.refetch())} />
+        ) : !rows.length ? (
+          <Empty>{t('agency.agentsPay.none')}</Empty>
+        ) : (
+          <div className="tbl-wrap">
+            <table className="tbl agx-fact">
+              <thead>
+                <tr>
+                  <th>{t('agency.agentsPay.agent')}</th>
+                  <th className="num">{t('agency.c.confirmed')}</th>
+                  <th className="num">{t('agency.c.delivered')}</th>
+                  <th className="num">{t('agency.agentsPay.followed')}</th>
+                  <th>{t('agency.agentsPay.score')}</th>
+                  <th className="num">{t('agency.agentsPay.amount')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.id}>
+                    <td data-l={t('agency.agentsPay.agent')}>
+                      <b>{r.name}</b>
+                      {r.lines.length > 0 && (
+                        <details className="agx-pay-lines">
+                          <summary className="muted small">{t('agency.agentsPay.detail', { count: r.operations })}</summary>
+                          <BillLines lines={r.lines} total={r.total} />
+                        </details>
+                      )}
+                    </td>
+                    <td className="num ltr" data-l={t('agency.c.confirmed')}>{r.s ? `${n(r.s.confirmed)} / ${n(r.s.received)}` : '—'}</td>
+                    <td className="num ltr" data-l={t('agency.c.delivered')}>{r.s ? n(r.s.delivered) : '—'}</td>
+                    <td className="num ltr" data-l={t('agency.agentsPay.followed')}>{r.s && r.s.followed ? `${n(r.s.followDelivered)} / ${n(r.s.followed)}` : '—'}</td>
+                    <td data-l={t('agency.agentsPay.score')}>
+                      <ScoreBar v={r.s?.score ?? null} />
+                    </td>
+                    <td className="num" data-l={t('agency.agentsPay.amount')}>
+                      <b className="ltr">{da(r.total)}</b>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="muted small">{t('agency.agentsPay.scoreHow')}</p>
+        {pay.data && !pay.data.closedAt && (
+          <button type="button" className="btn primary" disabled={close.isPending || ym >= max} onClick={() => confirm(t('agency.agentsPay.closeAsk')) && close.mutate({ month })}>
+            {t('agency.agentsPay.close')}
+          </button>
+        )}
+      </section>
+    </>
+  );
+}
+
+/** A score out of 100, as a short bar (— before any finished order). */
+function ScoreBar({ v }: { v: number | null }) {
+  if (v === null) return <span className="muted">—</span>;
+  const tone = v >= 75 ? 'ok' : v >= 50 ? 'warn' : 'bad';
+  return (
+    <span className={`agx-score t-${tone}`}>
+      <span className="agx-score-bar" aria-hidden="true">
+        <i style={{ width: `${Math.max(4, v)}%` }} />
+      </span>
+      <b className="ltr">{v}</b>
+    </span>
+  );
+}
+
+/** A seller's score out of 100: its orders delivered (of the finished ones), and paying its bill (20 points). */
+function sellerScore(c: AgencyCounts, status: string | undefined): number | null {
+  const d = deliveryRate(c);
+  if (d === null) return null;
+  return Math.round(d * 0.8 + (status === 'requested' ? 0 : 20));
+}
+
+/** Facturation › Vendeurs (and a marketer's Facturation): each seller's month and the payment. */
+function SellerBills() {
   const { session } = useSession();
   const { t, i18n } = useTranslation();
   const tp = useTp();
@@ -665,7 +802,6 @@ export function Facturation(_: PageProps) {
   const total = rows.reduce((s, r) => s + r.bill.total, 0);
   return (
     <div className="agx-page">
-      {!mk && session?.isAdmin && <ManagementPlans agency initialKind="billing" />}
       <Card title={t('agency.fact.title', { m: monthLabel(month, i18n.language) })} help={tp('fact.help')} actions={<MonthPicker value={month} max={max} onChange={setMonth} />}>
         <Kpis>
           <KpiBox icon="coins" label={t('agency.fact.total')} value={da(total)} sub={t('agency.fact.totalSub', { count: rows.length })} />
@@ -700,6 +836,7 @@ export function Facturation(_: PageProps) {
                       <th className="num">{t('agency.c.confirmed')}</th>
                       <th className="num">{t('agency.c.delivered')}</th>
                       <th className="num">{t('agency.c.upsells')}</th>
+                      <th>{t('agency.agentsPay.score')}</th>
                     </>
                   )}
                   <th className="num">{t('agency.c.amount')}</th>
@@ -729,6 +866,9 @@ export function Facturation(_: PageProps) {
                         <td className="num ltr" data-l={t('agency.c.confirmed')}>{n(c.confirmed)}</td>
                         <td className="num ltr" data-l={t('agency.c.delivered')}>{n(c.delivered)}</td>
                         <td className="num ltr" data-l={t('agency.c.upsells')}>{n(c.upsells)}</td>
+                        <td data-l={t('agency.agentsPay.score')}>
+                          <ScoreBar v={sellerScore(c, b?.status)} />
+                        </td>
                       </>
                     )}
                     <td className="num" data-l={t('agency.c.amount')}>
@@ -772,7 +912,6 @@ export function Facturation(_: PageProps) {
 export function AgencyUsers({ sub, rest }: PageProps) {
   const { session } = useSession();
   return <div className="agx-page">
-    {session?.isAdmin && session.shop?.kind==='agency' && <ManagementPlans agency initialKind="agent" />}
     <UsersPage sub={sub} rest={rest} agency />
   </div>;
 }

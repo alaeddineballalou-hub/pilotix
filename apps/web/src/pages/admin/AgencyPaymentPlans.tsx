@@ -20,14 +20,19 @@ const blankPlan=(kind:Kind):ManagementPlanConfig=>({...copy(DEFAULT_MANAGEMENT_P
 const editable=(p:ManagementPlanConfig):ManagementPlanConfig=>({...copy(p),ranges:copy(planPriceBrackets(p)),bonus:{...p.bonus,enabled:false},upsell:{...p.upsell,method:p.upsell.method==='qty'?'qty':p.upsell.method,trigger:'delivered',ruleVersion:2}});
 const ym=()=>{const d=new Date(Date.now()+3600000);return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')};
 
-export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) {
+/**
+ * `only`: the tabs shown (Utilisateurs › Affectations: the agents' assignments; Facturation › Plans: the plans, the
+ * bonuses and the sellers' plans); `bare`: no big header (inside another page); `noPayroll`: the agents' pay is in
+ * Facturation › Agents; `assign`: which assignments (agents or sellers).
+ */
+export function AgencyPaymentPlans({initialKind='billing',only,bare=false,noPayroll=false,assign:assignOnly}:{initialKind?:Tab;only?:Tab[];bare?:boolean;noPayroll?:boolean;assign?:TargetKind}) {
   const [tab,setTab]=useState<Tab>(initialKind);
   const q=useRpc('management.plans',{});
   const bq=useRpc('management.bonuses',{});
   const contracts=useRpc('management.billingTargets',{});
   const users=useRpc('users.list',{activeOnly:true});
   const [month,setMonth]=useState(ym);
-  const payroll=useRpc('management.payroll',{month});
+  const payroll=useRpc('management.payroll',{month},{enabled:!noPayroll&&(!only||only.includes('agent'))});
   const save=useAction('management.planSave',{success:'Plan enregistré'});
   const clone=useAction('management.planClone',{success:'Plan dupliqué'});
   const remove=useAction('management.planDelete',{success:r=>r.archived?'Plan archivé pour conserver les historiques':'Plan supprimé'});
@@ -38,7 +43,7 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
   const offerBonus=useAction('management.bonusOfferAgent',{success:'Prime proposée à l’agent : visible dans Mes bonus'});
   const [editing,setEditing]=useState<{id:number|null;kind:Kind;name:string;configuration:ManagementPlanConfig}|null>(null);
   const [bonusOfferValues,setBonusOfferValues]=useState<Record<number,{agentId:string;amount:string}>>({});
-  const [assignmentKind,setAssignmentKind]=useState<TargetKind>('seller');
+  const [assignmentKind,setAssignmentKind]=useState<TargetKind>(assignOnly??'seller');
   const [error,setError]=useState('');
   const plans=(q.data?.plans??[]).filter(p=>p.active) as Plan[];
   const selectedPlan=editing?plans.find(p=>p.id===editing.id):undefined;
@@ -60,14 +65,14 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
   useEffect(()=>{setEditing(null);setError('')},[tab]);
   const agentRows=(users.data??[]).filter(u=>u.roles.some(r=>['confirmation','suivi','agent_manager'].includes(r)));
   return <div className="ppm agx-page">
-    <header className="ppm-head">
+    {!bare&&<header className="ppm-head">
       <div className="ppm-brand"><img src={pilotixLogo} alt="Pilotix" className="ppm-real-logo"/><div><b>Plans de paiement</b><small>Confirmation Agency · Management</small></div></div>
       <span className="ppm-live">Pilotix</span>
-    </header>
-    <nav className="ppm-tabs" aria-label="Plans de paiement">
-      {([['billing','Facturation Seller'],['agent','Agent Pay'],['bonus','Bonus'],['assignment','Affectations']] as const).map(([id,label])=>
+    </header>}
+    {(!only||only.length>1)&&<nav className="ppm-tabs" aria-label="Plans de paiement">
+      {([['billing','Facturation Seller'],['agent','Agent Pay'],['bonus','Bonus'],['assignment',assignOnly==='seller'?'Affectations vendeurs':'Affectations']] as const).filter(([id])=>!only||only.includes(id)).map(([id,label])=>
         <button key={id} type="button" className={'ppm-tab '+(tab===id?'on':'')} onClick={()=>setTab(id)}>{label}</button>)}
-    </nav>
+    </nav>}
     {(tab==='billing'||tab==='agent')&&<>
       <section className="card ppm-panel">
         <div className="ppm-row"><div><h2>{tab==='billing'?'Plans Facturation Seller':'Plans Agent Pay'}</h2><p className="muted">{tab==='billing'?'Tarifs facturés aux contrats vendeurs':'Salaire et primes de votre équipe'}</p></div>
@@ -142,7 +147,7 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
           <button type="button" className="btn" disabled={!editing.id||planLinked||remove.isPending} onClick={removeCurrent}>{planHistorical?'Archiver':'Supprimer'}</button>
         </div>
       </section>}
-      {tab==='agent'&&<section className="card ppm-panel">
+      {tab==='agent'&&!noPayroll&&<section className="card ppm-panel">
         <div className="ppm-row"><h2>Paie des agents</h2><label className="field"><span className="lab">Mois</span><input type="month" value={month} onChange={e=>setMonth(e.target.value)}/></label></div>
         <p className="muted">Chaque plan rémunère uniquement les commandes attribuées à l’agent pour la confirmation ou le suivi.</p>
         {payroll.isLoading?<p>Chargement…</p>:payroll.error?<p className="form-err">{payroll.error.message}</p>:payroll.data&&<>
@@ -201,12 +206,12 @@ export function AgencyPaymentPlans({initialKind='billing'}:{initialKind?:Kind}) 
     </>}
     {tab==='assignment'&&<>
       <section className="card ppm-panel">
-        <h2>Affectations</h2>
-        <p className="muted">Associez les plans et bonus aux vendeurs et aux agents. Une proposition tarifaire vendeur reste en attente d'acceptation.</p>
-        <div className="ppm-tabs sub">
+        <h2>{assignOnly==='agent'?'Affectations des agents':assignOnly==='seller'?'Affectations des vendeurs':'Affectations'}</h2>
+        <p className="muted">{assignOnly==='agent'?'Le plan de paie et les bonus de chaque agent.':assignOnly==='seller'?'Le plan de chaque vendeur et de ses produits : il reste en attente jusqu’à son acceptation.':'Associez les plans et bonus aux vendeurs et aux agents. Une proposition tarifaire vendeur reste en attente d\'acceptation.'}</p>
+        {!assignOnly&&<div className="ppm-tabs sub">
           <button className={'ppm-tab '+(assignmentKind==='seller'?'on':'')} onClick={()=>setAssignmentKind('seller')}>Vendeurs</button>
           <button className={'ppm-tab '+(assignmentKind==='agent'?'on':'')} onClick={()=>setAssignmentKind('agent')}>Agents</button>
-        </div>
+        </div>}
       </section>
       {assignmentKind==='seller'?<>
         {contracts.isLoading?<p>Chargement vendeurs…</p>:contracts.error?<p className="form-err">{contracts.error.message}</p>:

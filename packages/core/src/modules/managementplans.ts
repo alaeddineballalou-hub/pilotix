@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { proc, forbidden, bad, notFound } from '../rpc';
 import { agentPlanTask, expandRoles, simulateManagementPlan, validatePriceBrackets } from '@pilotix/shared';
 
-import { agencyAdmin, agencyPayroll, billingTargets, json, period, proposeBilling } from './planledger';
+import { agencyAdmin, agencyAgentScores, agencyPayroll, billingTargets, json, period, proposeBilling } from './planledger';
 
 const Amount = z.number().finite().min(0).max(10_000_000);
 const Pct = z.number().finite().min(0).max(100);
@@ -119,6 +119,8 @@ export const managementPlanProcs = {
   'management.billingTargets': proc([],z.object({}),billingTargets),
   'management.billingPropose': proc([],z.object({linkId:Id,productId:z.number().int().min(0).default(0),planId:Id.nullable()}),proposeBilling),
   'management.payroll': proc([],z.object({month:z.string()}),(ctx,i)=>agencyPayroll(ctx,i.month)),
+  /** Facturation › Agents: each agent's month and score out of 100 (confirmation × delivery, follow-up delivery). */
+  'management.agentScores': proc([],z.object({month:z.string()}),(ctx,i)=>agencyAgentScores(ctx,i.month)),
   'management.payrollClose': proc([],z.object({month:z.string()}),async(ctx,i)=>{
     agencyAdmin(ctx);
     const {to}=period(i.month);

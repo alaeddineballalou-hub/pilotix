@@ -10,6 +10,7 @@ import { useAction, useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { when } from '../../lib/format';
 import { Card, copyText, Empty, ErrorBox, Field, Icon, Loading, StageBar } from '../../ui/kit';
+import { AgencyPaymentPlans } from './AgencyPaymentPlans';
 import { Modal } from '../../ui/modal';
 import { toast } from '../../ui/toast';
 import { ConfirmButton } from './bits';
@@ -23,7 +24,8 @@ const waLink = (phone: string | null | undefined, text: string) => {
 };
 const SUB_ROLE: Record<string, Role> = { admins: 'admin', vendeurs: 'vendeur', agents: 'confirmation', marketeurs: 'marketer', managers: 'agent_manager' };
 /** A confirmation agency's Utilisateurs: everyone, then one list per role of an agency. */
-const AGENCY_SUBS = ['equipe', 'agents', 'suivi', 'managers', 'admins'] as const;
+// « affectations »: each agent's pay plan and bonuses (the agency's administrators)
+const AGENCY_SUBS = ['equipe', 'agents', 'suivi', 'managers', 'admins', 'affectations'] as const;
 const AGENCY_SUB_ROLE: Record<string, Role> = { agents: 'confirmation', suivi: 'suivi', managers: 'agent_manager', admins: 'admin' };
 /** The roles of an agency's people: its chief, its supervisors, its agents. */
 const AGENCY_ROLES: Role[] = ['admin', 'agent_manager', 'confirmation', 'suivi'];
@@ -68,11 +70,16 @@ export function UsersPage({ sub, rest, agency }: { sub?: string; rest?: string[]
     const all: readonly string[] = mk ? MARKETER_SUBS : AGENCY_SUBS;
     const k = all.includes(sub ?? '') ? sub! : 'equipe';
     const role = (mk ? MARKETER_SUB_ROLE : AGENCY_SUB_ROLE)[k] ?? null;
-    const subs = all.filter((x) => session?.isAdmin || x !== 'admins');
+    const subs = all.filter((x) => session?.isAdmin || (x !== 'admins' && x !== 'affectations'));
+    const kk = subs.includes(k) ? k : 'equipe';
     return (
       <>
-        <StageBar flow={false} current={k} items={subs.map((x) => ({ key: x, label: tp(`users.subs.${x}`), href: `#/utilisateurs/${x}` }))} />
-        <RoleList agency role={role} onNew={() => setForm({ user: null, role })} onEdit={(u) => setForm({ user: u, role })} />
+        <StageBar flow={false} current={kk} items={subs.map((x) => ({ key: x, label: tp(`users.subs.${x}`), href: `#/utilisateurs/${x}` }))} />
+        {kk === 'affectations' ? (
+          <AgencyPaymentPlans initialKind="assignment" only={['assignment']} assign="agent" bare />
+        ) : (
+          <RoleList agency role={role} onNew={() => setForm({ user: null, role })} onEdit={(u) => setForm({ user: u, role })} />
+        )}
         {form && <UserForm agency user={form.user} role={form.role} onClose={() => setForm(null)} />}
       </>
     );

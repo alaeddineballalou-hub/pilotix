@@ -289,3 +289,48 @@ export async function agencyPayroll(ctx:Ctx,month:string) {
   }
   return {month,rows,total:rows.reduce((n,r)=>n+r.total,0),closedAt:null as string|null};
 }
+
+/**
+ * Facturation › Agents: each of the agency's agents' month in its sellers' stores and a score out of 100.
+ * Confirmation: of the orders given to them (created in the month), how many they confirmed × how many of those were
+ * delivered (of the finished ones). Suivi: of the parcels they followed that ended in the month, how many were delivered.
+ * An agent doing both: the average of the two.
+ */
+export async function agencyAgentScores(ctx:Ctx,month:string) {
+  const t=agencyAdmin(ctx);const {from,to}=period(month);
+  const people=await ctx.db.query('SELECT id,name,email FROM profiles WHERE agency_id IS NULL ORDER BY name');
+  const byEmail=new Map(people.map(p=>[String(p.email).toLowerCase(),num(p.id)]));
+  const owned=new Set(people.map(p=>num(p.id)));
+  const shops=await t.platform.query(`SELECT DISTINCT s.schema_name FROM platform.agency_links l JOIN platform.shops s ON s.id=l.store_id
+    WHERE l.agency_id=$1 AND l.started_at IS NOT NULL AND s.status<>'deleted'`,[ctx.shop!.id]);
+  type A={received:number;decided:number;confirmed:number;delivered:number;returned:number;followed:number;followDelivered:number};
+  const acc=new Map<number,A>();
+  const get=(id:number)=>{let a=acc.get(id);if(!a){a={received:0,decided:0,confirmed:0,delivered:0,returned:0,followed:0,followDelivered:0};acc.set(id,a)}return a};
+  for(const s of shops){
+    const db=t.shop(String(s.schema_name));
+    try{
+      const profiles=await db.query('SELECT id,email,agency_profile_id FROM profiles WHERE agency_id=$1',[ctx.shop!.id]);
+      const idOf=new Map(profiles.map(p=>[num(p.id),p.agency_profile_id==null?byEmail.get(String(p.email).toLowerCase()):owned.has(num(p.agency_profile_id))?num(p.agency_profile_id):undefined]));
+      const conf=await db.query(`SELECT agent_id AS a, count(*)::int AS received,
+          count(*) FILTER (WHERE conf_status IN ('confirmed','cancelled','wrong_number','fake'))::int AS decided,
+          count(*) FILTER (WHERE conf_status='confirmed')::int AS confirmed,
+          count(*) FILTER (WHERE conf_status='confirmed' AND follow_status IN ('delivered','exchanged'))::int AS delivered,
+          count(*) FILTER (WHERE conf_status='confirmed' AND follow_status IN ('returned','returning','lost'))::int AS returned
+        FROM orders WHERE conf_agency_id=$1 AND agent_id IS NOT NULL AND created_at>=$2 AND created_at<$3 GROUP BY 1`,[ctx.shop!.id,from,to]);
+      for(const r of conf){const id=idOf.get(num(r.a));if(!id)continue;const a=get(id);a.received+=num(r.received);a.decided+=num(r.decided);a.confirmed+=num(r.confirmed);a.delivered+=num(r.delivered);a.returned+=num(r.returned)}
+      const fol=await db.query(`SELECT follow_agent_id AS a, count(*)::int AS ended,
+          count(*) FILTER (WHERE follow_status IN ('delivered','exchanged'))::int AS delivered
+        FROM orders WHERE follow_agency_id=$1 AND follow_agent_id IS NOT NULL AND follow_status IN ('delivered','exchanged','returned','returning','lost')
+          AND coalesce(delivered_at,returned_at,updated_at)>=$2 AND coalesce(delivered_at,returned_at,updated_at)<$3 GROUP BY 1`,[ctx.shop!.id,from,to]);
+      for(const r of fol){const id=idOf.get(num(r.a));if(!id)continue;const a=get(id);a.followed+=num(r.ended);a.followDelivered+=num(r.delivered)}
+    }catch{/* a store not ready */}
+  }
+  const pct=(x:number,n:number)=>n>0?x/n:null;
+  return people.filter(p=>acc.has(num(p.id))).map(p=>{
+    const a=acc.get(num(p.id))!;
+    const confRate=pct(a.confirmed,a.decided),delRate=pct(a.delivered,a.delivered+a.returned),folRate=pct(a.followDelivered,a.followed);
+    const conf=confRate===null?null:confRate*(delRate??1);
+    const parts=[conf,folRate].filter((x):x is number=>x!==null);
+    return {id:num(p.id),name:String(p.name),...a,score:parts.length?Math.round(100*parts.reduce((s,x)=>s+x,0)/parts.length):null};
+  });
+}
