@@ -16,6 +16,7 @@ import { useAction, useRpc } from '../../lib/query';
 import { Icon, TicketTag } from '../../ui/kit';
 import { Chat } from './Chat';
 import { CheckIn, TakeBox } from './Take';
+import { HoldToConfirm } from './HoldToConfirm';
 import '../confirmation/phone.css';
 import '../sav/phone.css';
 import './phone.css';
@@ -91,7 +92,7 @@ export function PhoneTournee({ d, livreurId, self, onPrint }: { d: Data; livreur
       {self && d.pickup.length > 0 && <TakeBox />}
 
       {next ? (
-        <Stop o={next} n={list.indexOf(next) + 1} shop={d.shop} livreur={d.livreur.name} messages={d.messages} />
+        <Stop key={next.id} o={next} n={list.indexOf(next) + 1} shop={d.shop} livreur={d.livreur.name} messages={d.messages} />
       ) : (
         <div className="pxt-free">
           <Icon name="checkcircle" />
@@ -191,10 +192,16 @@ export function PhoneTournee({ d, livreurId, self, onPrint }: { d: Data; livreur
 function Stop({ o, n, shop, livreur, messages }: { o: Order; n: number; shop: Data['shop']; livreur: string; messages: Data['messages'] }) {
   const { t } = useTranslation();
   const [ask, setAsk] = useState(false);
+  const [confirmDelivery, setConfirmDelivery] = useState(false);
   const [reach, setReach] = useState<'call' | 'message' | null>(null);
   const qc = useQueryClient();
   // « ↶ Annuler » in the message: a tap by mistake (« Livrée » too early) goes back
-  const set = useAction('orders.setFollow', { onDone: (r) => toastUndo(r.changed.length ? t('tournee.saved') : t('tournee.noChange'), r.changed, () => qc.invalidateQueries()) });
+  const set = useAction('orders.setFollow', {
+    onDone: (r) => {
+      setConfirmDelivery(false);
+      toastUndo(r.changed.length ? t('tournee.saved') : t('tournee.noChange'), r.changed, () => qc.invalidateQueries());
+    },
+  });
   const call = useAction('orders.logCall', { silent: true });
   const items = o.items.map((i) => `${i.qty} × ${i.name}${i.variantTitle ? ` ${i.variantTitle}` : ''}`).join(' + ');
   return (
@@ -234,7 +241,7 @@ function Stop({ o, n, shop, livreur, messages }: { o: Order; n: number; shop: Da
           type="button"
           className="ok"
           disabled={set.isPending}
-          onClick={() => set.mutate({ ids: [o.id], status: 'delivered', reason: null, note: null, clientId: `tr-${o.id}-delivered-${Date.now()}` })}
+          onClick={() => setConfirmDelivery(true)}
         >
           <Icon name="check" /> {t('tournee.delivered')}
         </button>
@@ -242,6 +249,14 @@ function Stop({ o, n, shop, livreur, messages }: { o: Order; n: number; shop: Da
           {t('tournee.ph.notDelivered')}
         </button>
       </div>
+      {confirmDelivery && (
+        <ConfirmDelivery
+          o={o}
+          busy={set.isPending}
+          onClose={() => setConfirmDelivery(false)}
+          onConfirm={() => set.mutate({ ids: [o.id], status: 'delivered', reason: null, note: null, clientId: `tr-${o.id}-delivered-${Date.now()}` })}
+        />
+      )}
       {ask && <NotDelivered o={o} onClose={() => setAsk(false)} />}
       {reach && (
         <Reach
@@ -253,6 +268,37 @@ function Stop({ o, n, shop, livreur, messages }: { o: Order; n: number; shop: Da
         />
       )}
     </section>
+  );
+}
+
+/** Confirmation keeps cash settlement separate from delivery status. */
+function ConfirmDelivery({ o, busy, onClose, onConfirm }: { o: Order; busy: boolean; onClose: () => void; onConfirm: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="pxv-sheet" role="dialog" aria-modal="true" aria-label={t('tournee.confirmDelivery.title')}
+      onKeyDown={(e) => { if (e.key === 'Escape' && !busy) { e.stopPropagation(); onClose(); } }}>
+      <button type="button" className="pxv-dim" disabled={busy} aria-label={t('common.close')} onClick={onClose} />
+      <div className="pxv-sh pxt-confirm">
+        <span className="pxv-grab" aria-hidden="true" />
+        <div className="pxv-shh">
+          <b>{t('tournee.confirmDelivery.title')}</b>
+          <button type="button" className="pxp-back" autoFocus disabled={busy} aria-label={t('common.close')} onClick={onClose}><Icon name="x" /></button>
+        </div>
+        <div className="pxt-confirm-order">
+          <b>{o.customerName}</b>
+          <span className="ltr">{o.ref}</span>
+          <small>{o.items.map((i) => `${i.qty} × ${i.name}${i.variantTitle ? ` ${i.variantTitle}` : ''}`).join(' + ')}</small>
+        </div>
+        <div className="pxt-confirm-cod">
+          <small>{t('tournee.confirmDelivery.orderAmount')}</small>
+          <strong className="ltr">{da(o.total)}</strong>
+        </div>
+        <p className="pxt-confirm-question">{t('tournee.confirmDelivery.question')}</p>
+        <HoldToConfirm busy={busy} label={busy ? t('tournee.confirmDelivery.saving') : t('tournee.confirmDelivery.hold')} onConfirm={onConfirm} />
+        <p className="pxv-help">{t('tournee.confirmDelivery.release')} {t('tournee.confirmDelivery.cashNote')}</p>
+        <button type="button" className="btn pxt-confirm-cancel" disabled={busy} onClick={onClose}>{t('common.cancel')}</button>
+      </div>
+    </div>
   );
 }
 
