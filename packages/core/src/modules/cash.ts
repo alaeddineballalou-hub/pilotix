@@ -125,9 +125,12 @@ export async function receive(ctx: Ctx, orderIds: number[], note: string | null,
   await checkCaisse(ctx.db, into);
   const pay = await payOf(ctx.db);
   const me = ctx.session.profile.id;
+  if (!orderIds.length) throw bad('Aucune commande à encaisser');
+  if (new Set(orderIds).size !== orderIds.length) throw bad('Une commande est sélectionnée plusieurs fois');
   const created: number[] = [];
   await ctx.db.tx(async (tx) => {
     const rows = (await tx.query(`SELECT ${COLS} ${FROM} WHERE o.id = ANY($1) FOR UPDATE OF o`, [orderIds])).map((r: any) => toCash(r, pay));
+    if (rows.length !== orderIds.length) throw bad('Une ou plusieurs commandes sont introuvables');
     const bad_ = rows.find((r) => r.cashed);
     if (bad_) throw bad(`${bad_.ref} est déjà encaissée`);
     const notDelivered = (await tx.query(`SELECT ref FROM orders WHERE id = ANY($1) AND follow_status <> 'delivered'`, [orderIds]))[0];
