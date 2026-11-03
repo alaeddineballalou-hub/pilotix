@@ -51,7 +51,12 @@ export async function dispatchOrders(ctx: Ctx, ids: number[], companyId?: number
   }
   const pick = async (sql: string, ...more: unknown[]) => (list.length ? (await ctx.db.query(sql, [list, ...more])).map((r: any) => num(r.id)) : []);
   // only confirmed orders leave the depot (one sent back to be called again never goes out)
-  const toMove = await pick(`SELECT id FROM orders WHERE id = ANY($1) AND follow_status = 'to_prepare' AND (conf_status = 'confirmed' OR is_exchange)`);
+  // Every entry point, including « Renvoyer », must enforce picking before preparing a parcel.
+  const toMove = await pick(`SELECT o.id FROM orders o WHERE o.id = ANY($1)
+    AND o.follow_status = 'to_prepare' AND (o.conf_status = 'confirmed' OR o.is_exchange)
+    AND EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id)
+    AND NOT EXISTS (SELECT 1 FROM order_items i JOIN products p ON p.id = i.product_id
+      WHERE i.order_id = o.id AND NOT p.is_service AND i.picked_qty < i.qty)`);
   const moved = toMove.length ? (await setFollow(ctx, { ids: toMove, status: 'prepared' })).changed.length : 0;
   // out of « À attribuer »: its waiting time starts again if it ever comes back
   if (toMove.length) await ctx.db.query('UPDATE orders SET assign_wait_since = NULL WHERE id = ANY($1) AND follow_status = \'prepared\'', [toMove]);
