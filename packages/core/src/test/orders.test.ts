@@ -186,3 +186,21 @@ test('changing only the discount is still capped by the products of the order', 
   const ok: any = await call('orders.update', ctx, { id: o.id, discount: p.maxDiscount });
   assert.equal(ok.discount, p.maxDiscount);
 });
+
+
+test('order deletion rejects missing IDs, duplicate IDs, and cancelled parcels with shipment history', async () => {
+  const admin = await as(EMAILS.admin);
+  const d: any = await call('orders.formData', admin, {});
+  const p = d.products.find((x: any) => x.variants?.length);
+  const create = (phone: string) => call('orders.create', admin, {
+    customerName: 'Deletion guard regression', phone, wilayaId: 16, commune: 'Hydra',
+    items: [{ productId: p.id, variantId: p.variants[0].id, qty: 1 }],
+  }) as Promise<any>;
+  const o = await create('0555100201');
+  await assert.rejects(call('orders.delete', admin, { ids: [o.id, 2_000_000_000] }), /introuvables/);
+  await assert.rejects(call('orders.delete', admin, { ids: [o.id, o.id] }), /plusieurs fois/);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM orders WHERE id=$1', [o.id]))[0].n, 1);
+  await db.query("UPDATE orders SET follow_status='cancelled', tracking='ZR-TEST-HIST', shipped_at=now() WHERE id=$1", [o.id]);
+  await assert.rejects(call('orders.delete', admin, { ids: [o.id] }), /historique de livraison/);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM orders WHERE id=$1', [o.id]))[0].n, 1);
+});
