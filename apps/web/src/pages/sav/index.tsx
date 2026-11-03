@@ -10,6 +10,7 @@ import type { PageProps } from '../registry';
 import { NewTicketModal } from './NewTicket';
 import { PhoneSav } from './PhoneSav';
 import { SavStats } from './Stats';
+import { useSavFilters } from './filters';
 import { TicketModal } from './Ticket';
 
 const VIEWS = ['tickets', 'nouveau', 'attente', 'depot', 'livraison', 'livres', 'annules', 'satisfaction', 'stats'] as const;
@@ -62,6 +63,9 @@ function SavDesktop({ sub }: PageProps) {
   });
   const [q, setQ] = useState('');
   const [deb, setDeb] = useState('');
+  // Responsable, Produit, Du / Au (kept in this browser)
+  const sfl = useSavFilters();
+  const [fOpen, setFOpen] = useState(false);
   const [open, setOpen] = useState<number | null>(null);
   const [creating, setCreating] = useState(view === 'nouveau');
   useEffect(() => {
@@ -82,7 +86,7 @@ function SavDesktop({ sub }: PageProps) {
   };
   const apiView = view === 'tickets' || view === 'nouveau' || view === 'stats' ? tab : view;
   const kp = useRpc('sav.kpis', {}, { refetchInterval: 60_000 });
-  const list = useRpc('sav.list', { view: apiView, q: deb || undefined });
+  const list = useRpc('sav.list', { view: apiView, q: deb || undefined, ...sfl.input });
   const k = kp.data;
   const stageCount = (v: View): number | undefined => (k && (v === 'attente' || v === 'depot' || v === 'livraison' || v === 'livres' || v === 'annules' || v === 'satisfaction') ? k[v] : undefined);
   const closeNew = () => {
@@ -142,13 +146,21 @@ function SavDesktop({ sub }: PageProps) {
               ))}
             </div>
           )}
-          <div className="row">
-            <div className="grow">
+          <div className={`filters${fOpen ? ' open' : ''}`}>
+            <label className="field search-f">
+              <span className="lab">{t('filters.search')}</span>
               <input type="search" value={q} placeholder={t('sav.searchPh')} aria-label={t('sav.search')} onChange={(e) => setQ(e.target.value)} />
-            </div>
-            <button type="button" className="btn small" onClick={() => (list.refetch(), kp.refetch())}>
-              <Icon name="refresh" /> {t('sav.refresh')}
+            </label>
+            <button type="button" className="btn filters-toggle" aria-expanded={fOpen} onClick={() => setFOpen(!fOpen)}>
+              {t('filters.toggle')}
+              {sfl.on > 0 && <b className="ltr"> · {sfl.on}</b>}
             </button>
+            {sfl.fields}
+            <div className="field more-f px-f-clear">
+              <button type="button" className="btn" onClick={() => (list.refetch(), kp.refetch())}>
+                <Icon name="refresh" /> {t('sav.refresh')}
+              </button>
+            </div>
           </div>
           {list.isLoading ? (
             <Loading />

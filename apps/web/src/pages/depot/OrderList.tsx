@@ -1,5 +1,5 @@
 import type { FollowStatus, Order } from '@pilotix/shared';
-import { API_COURIER_KINDS, WILAYAS } from '@pilotix/shared';
+import { API_COURIER_KINDS } from '@pilotix/shared';
 import { ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, wilaya, when } from '../../lib/format';
@@ -11,6 +11,7 @@ import { CopyCode } from '../../ui/CopyCode';
 import { Modal } from '../../ui/modal';
 import { stateOf, useCouriers } from './Labels';
 import './stages.css';
+import { useDepotFilters } from './filters';
 
 export interface ExtraCol {
   label: string;
@@ -97,27 +98,24 @@ export function DepotOrderList({
     return !s.ok && s.why === 'waiting';
   };
   const [q, setQ] = useState('');
-  const [company, setCompany] = useState('');
-  const [wil, setWil] = useState('');
+  const df = useDepotFilters();
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
   const [sel, setSel] = useState<Set<number>>(new Set());
   const dq = useDebounced(q);
   const pageSize = 50;
-  const companies = useRpc('depot.companies', {});
   const list = useRpc('orders.list', {
     follow,
     conf: confirmedOnly ? ['confirmed'] : undefined,
     q: dq || undefined,
-    companyId: company === 'none' ? 'none' : company ? Number(company) : undefined,
-    wilayaId: wil ? Number(wil) : undefined,
+    ...df.input,
     sort,
     dir: 'asc',
     page,
     pageSize,
     tickets: 'include',
   });
-  useEffect(() => setPage(1), [dq, company, wil]);
+  useEffect(() => setPage(1), [dq, df.key]);
   const rows = list.data?.rows ?? [];
   const total = list.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / pageSize));
@@ -143,29 +141,7 @@ export function DepotOrderList({
         <button type="button" className="btn filters-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
           {t('common.filters')}
         </button>
-        <label className="field more-f">
-          <span className="lab">{t('depot.filters.company')}</span>
-          <select value={company} onChange={(e) => setCompany(e.target.value)}>
-            <option value="">{t('depot.filters.all')}</option>
-            <option value="none">{t('depot.filters.noCompany')}</option>
-            {companies.data?.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field more-f">
-          <span className="lab">{t('depot.filters.wilaya')}</span>
-          <select value={wil} onChange={(e) => setWil(e.target.value)}>
-            <option value="">{t('depot.filters.all')}</option>
-            {WILAYAS.map((_, i) => (
-              <option key={i + 1} value={i + 1}>
-                {wilaya(i + 1)}
-              </option>
-            ))}
-          </select>
-        </label>
+        {df.fields}
       </div>
       {bulk && (
         <BulkBar count={sel.size} onClear={clear}>

@@ -645,9 +645,44 @@ const VIA_FR: Record<string, string> = { whatsapp: 'WhatsApp', email: 'e-mail', 
 const ListSuivi = z.object({
   tab: z.enum(SUIVI_TABS),
   q: z.string().max(100).optional(),
+  // the list's filters: the suivi agent, the product (its variant), the company, the livreur, the wilaya, the period
+  followAgentId: ListInput.shape.followAgentId,
+  productId: ListInput.shape.productId,
+  variantId: ListInput.shape.variantId,
+  companyId: ListInput.shape.companyId,
+  livreurId: ListInput.shape.livreurId,
+  wilayaId: ListInput.shape.wilayaId,
+  from: z.string().min(10).max(40).optional(),
+  to: z.string().min(10).max(40).optional(),
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(1).max(500).default(300),
 });
+
+/** The date « Du / Au » looks at in each list: when the parcel left, last changed, was delivered or came back. */
+const SUIVI_DATE: Record<SuiviTab, ListInput['dateField']> = {
+  enlivraison: 'shipped_at',
+  bloques: 'shipped_at',
+  alertes: 'updated_at',
+  alertes_new: 'updated_at',
+  alertes_encours: 'updated_at',
+  traites: 'updated_at',
+  livres: 'delivered_at',
+  annules: 'back_at',
+  swap: 'back_at',
+  swapped: 'updated_at',
+};
+
+/** The filters chosen on the list, as orders.list reads them (the tab's own period stays unless a date is chosen). */
+function suiviFilters(i: z.infer<typeof ListSuivi>, base: Partial<ListInput>): Partial<ListInput> {
+  const out: Partial<ListInput> = {};
+  for (const k of ['followAgentId', 'productId', 'variantId', 'companyId', 'livreurId', 'wilayaId'] as const) if (i[k] !== undefined) (out as any)[k] = i[k];
+  if (i.from || i.to) {
+    out.dateField = SUIVI_DATE[i.tab];
+    out.from = i.from ?? (base.dateField === out.dateField ? base.from : undefined);
+    out.to = i.to;
+  }
+  return out;
+}
 
 /** A new claim on an order (one open claim per reason: a second click or the same claim again is refused). */
 async function createClaim(ctx: Ctx, i: z.infer<typeof ClaimCreate>): Promise<Claim> {
@@ -787,7 +822,8 @@ export const suiviProcs = {
     const splitIds = split ? (i.tab === 'alertes_new' ? split.fresh : split.working) : null;
     if (splitIds && !splitIds.length) return { rows: [], total: 0, page: 1, pageSize: i.pageSize ?? 50, extra: {} };
     const ids = stuck ? [...stuck.keys()].slice(0, 500) : splitIds ? splitIds.slice(0, 500) : null;
-    const page = await listOrders(ctx, ListInput.parse({ ...tabFilter(i.tab, ctx.now(), agencyOf(ctx) !== null && hasRole(ctx.session, 'suivi')), ...(ids ? { ids } : {}), q: i.q, page: i.page, pageSize: i.pageSize }), { queue: readQueue(ctx) });
+    const tf = tabFilter(i.tab, ctx.now(), agencyOf(ctx) !== null && hasRole(ctx.session, 'suivi'));
+    const page = await listOrders(ctx, ListInput.parse({ ...tf, ...suiviFilters(i, tf), ...(ids ? { ids } : {}), q: i.q, page: i.page, pageSize: i.pageSize }), { queue: readQueue(ctx) });
     if (stuck) {
       const ex = await extras(ctx, page.rows, ctx.now());
       for (const o of page.rows) if (ex[o.id]) ex[o.id].stuck = stuck.get(o.id) ?? null;

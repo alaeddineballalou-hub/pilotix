@@ -145,6 +145,8 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'me.update': free,
   'me.seen': free,
   'users.list': free,
+  // the lists of the filter bars (the agency's own people and products only)
+  'filters.options': free,
   'orders.uiMeta': free,
   'orders.lookups': free,
   'orders.formData': free,

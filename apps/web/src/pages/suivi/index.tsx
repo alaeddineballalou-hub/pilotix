@@ -28,6 +28,9 @@ import { AlertClock, AlertTries, CancelSheet, ClockChip, TriesChip, ParcelAction
 import { Traiter } from './Traiter';
 import { StuckChips, StuckDialog, type StuckInfo } from './Stuck';
 import { ScoreChip } from '../../ui/clientScore';
+import { AgentFilter, ClearFilters, CompanyFilter, DateFilters, dayIso, LivreurFilter, ProductFilter, WilayaFilter } from '../../ui/filters';
+import { useDebounced } from '../depot/OrderList';
+import type { In } from '../../lib/backend';
 
 const LIST_TABS = ['enlivraison', 'alertes', 'alertes_new', 'alertes_encours', 'traites', 'bloques', 'livres', 'annules', 'swap'] as const;
 /** the alert lists: all of them, the new ones (nobody acted yet), the ones in progress */
@@ -372,13 +375,81 @@ type Dialog =
   | { kind: 'stuck'; o: Order }
   | null;
 
+/** The filters of the Suivi lists ('' = all), kept in this browser from one tab to another (the search apart). */
+interface SuiviF {
+  q: string;
+  fagent: string;
+  product: string;
+  variant: string;
+  company: string;
+  livreur: string;
+  wilaya: string;
+  from: string;
+  to: string;
+}
+const NO_SF: SuiviF = { q: '', fagent: '', product: '', variant: '', company: '', livreur: '', wilaya: '', from: '', to: '' };
+
+/** The filters as suivi.list reads them. */
+function suiviInput(f: SuiviF, q: string): Partial<In<'suivi.list'>> {
+  const x: Partial<In<'suivi.list'>> = {};
+  if (q.trim()) x.q = q.trim();
+  if (f.fagent) x.followAgentId = f.fagent === 'none' ? 'none' : Number(f.fagent);
+  if (f.product) x.productId = Number(f.product);
+  if (f.product && f.variant) x.variantId = Number(f.variant);
+  if (f.company) x.companyId = f.company === 'none' ? 'none' : Number(f.company);
+  if (f.livreur) x.livreurId = Number(f.livreur);
+  if (f.wilaya) x.wilayaId = Number(f.wilaya);
+  if (f.from) x.from = dayIso(f.from);
+  if (f.to) x.to = dayIso(f.to, true);
+  return x;
+}
+
+/** Recherche, Agent suivi (for the managers), Produit, Société, Livreur, Wilaya, Du / Au. */
+function SuiviFilters({ f, set }: { f: SuiviF; set: (patch: Partial<SuiviF>) => void }) {
+  const { t } = useTranslation();
+  const { session, has } = useSession();
+  const [open, setOpen] = useState(false);
+  const boss = !!session?.isAdmin || has('vendeur', 'agent_manager');
+  const on = (Object.keys(NO_SF) as (keyof SuiviF)[]).filter((k) => k !== 'q' && f[k]).length;
+  return (
+    <div className={`filters px-sv-f${open ? ' open' : ''}`}>
+      <label className="field search-f">
+        <span className="lab">{t('filters.search')}</span>
+        <input type="search" aria-label={t('filters.searchPh')} placeholder={t('filters.searchPh')} value={f.q} onChange={(e) => set({ q: e.target.value })} />
+      </label>
+      <button type="button" className="btn filters-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
+        {t('filters.toggle')}
+        {on > 0 && <b className="ltr"> · {on}</b>}
+      </button>
+      {boss && <AgentFilter kind="follow" value={f.fagent} onChange={(v) => set({ fagent: v })} />}
+      <ProductFilter product={f.product} variant={f.variant} onChange={(v) => set(v)} />
+      <CompanyFilter value={f.company} onChange={(v) => set({ company: v })} />
+      <LivreurFilter value={f.livreur} onChange={(v) => set({ livreur: v })} />
+      <WilayaFilter value={f.wilaya} onChange={(v) => set({ wilaya: v })} />
+      <DateFilters from={f.from} to={f.to} onChange={(v) => set(v)} />
+      <ClearFilters on={on > 0} onClear={() => set({ ...NO_SF, q: f.q })} />
+    </div>
+  );
+}
+
 function List({ tab }: { tab: ListTab }) {
   const { t } = useTranslation();
   const agency = useInAgency();
   const { has } = useSession();
   const canFollow = has('suivi');
   const [page, setPage] = useState(1);
-  const q = useRpc('suivi.list', { tab, page, pageSize: 100 });
+  const [f, setF] = useState<SuiviF>(() => ({ ...NO_SF, ...store.json<Partial<SuiviF>>('suivi-f', {}), q: '' }));
+  const setFilter = (patch: Partial<SuiviF>) => {
+    setF((x) => {
+      const nx = { ...x, ...patch };
+      const { q: _q, ...keep } = nx;
+      store.set('suivi-f', JSON.stringify(keep));
+      return nx;
+    });
+    setPage(1);
+  };
+  const dq = useDebounced(f.q);
+  const q = useRpc('suivi.list', { tab, page, pageSize: 100, ...suiviInput(f, dq) });
   const [dlg, setDlg] = useState<Dialog>(null);
   const act = useAction('suivi.act');
   // phones: journey cards; a tap opens the parcel full screen. Computers: the same cards, the parcel in a side panel
@@ -475,6 +546,7 @@ function List({ tab }: { tab: ListTab }) {
         )}
         {!phone && <ViewSwitch mode={mode} onChange={setMode} />}
       </div>
+      <SuiviFilters f={f} set={setFilter} />
       {q.isLoading ? (
         <Loading />
       ) : q.error ? (

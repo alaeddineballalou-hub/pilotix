@@ -153,6 +153,12 @@ const ListInput = z.object({
   pageSize: z.number().int().min(1).max(500).default(100),
   /** me: the tickets I am responsible for · none: nobody's yet */
   owner: z.enum(['all', 'me', 'none']).default('all'),
+  /** the filters: the person responsible, the product of the order (its variant), when the ticket was opened */
+  agentId: z.number().int().positive().optional(),
+  productId: z.number().int().positive().optional(),
+  variantId: z.number().int().positive().optional(),
+  from: z.string().min(10).max(40).optional(),
+  to: z.string().min(10).max(40).optional(),
 });
 
 async function listTickets(ctx: Ctx, f: z.infer<typeof ListInput>): Promise<Page<SavTicket> & { counts: { todo: number; all: number; mine: number; nobody: number; view: number } }> {
@@ -166,6 +172,11 @@ async function listTickets(ctx: Ctx, f: z.infer<typeof ListInput>): Promise<Page
     if (digits.length >= 4 && digits.length === q.replace(/[\s+.-]/g, '').length) w.add(`(c.phone LIKE '%' || ? || '%' OR c.ref ILIKE '%' || ? || '%')`, digits.slice(-9), digits);
     else w.add(`(c.ref ILIKE '%' || ? || '%' OR upper(o.ref) = upper(?) OR c.customer_name ILIKE '%' || ? || '%' OR o.tracking = ? OR upper(o.own_tracking) = upper(?))`, q, q, q, q, q);
   }
+  if (f.agentId) w.add('c.assigned_to = ?', f.agentId);
+  if (f.variantId) w.add('EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = c.order_id AND oi.variant_id = ?)', f.variantId);
+  else if (f.productId) w.add('EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = c.order_id AND oi.product_id = ?)', f.productId);
+  if (f.from) w.add('c.created_at >= ?', f.from);
+  if (f.to) w.add('c.created_at < ?', f.to);
   const from = `FROM complaints c LEFT JOIN orders o ON o.id = c.order_id LEFT JOIN orders ex ON ex.id = c.exchange_order_id`;
   // Moi / Personne / Tous, counted on the same view and search
   const oc = (await ctx.db.query(`SELECT count(*)::int AS n, count(*) FILTER (WHERE c.assigned_to = ${Number(me)})::int AS mine, count(*) FILTER (WHERE c.assigned_to IS NULL)::int AS nobody ${from} ${w.sql}`, w.params))[0];

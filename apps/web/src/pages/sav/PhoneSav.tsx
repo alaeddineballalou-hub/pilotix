@@ -26,6 +26,8 @@ import { useStaff } from './staff';
 import '../confirmation/phone.css';
 import '../suivi/phone.css';
 import './phone.css';
+import { FiltersPanel } from '../../ui/filters';
+import { useSavFilters } from './filters';
 
 type Stage = 'todo' | 'depot' | 'livraison' | 'satisfaction' | 'termines';
 type Owner = 'me' | 'none' | 'all';
@@ -136,7 +138,8 @@ export function PhoneSav({ sub }: { sub?: string }) {
     if (sub === 'nouveau') setCalling(true);
   }, [sub]);
   const kp = useRpc('sav.kpis', {}, { refetchInterval: 60_000 });
-  const list = useRpc('sav.list', { view: VIEW[stage], q: deb || undefined, owner, pageSize: 200 });
+  const sfl = useSavFilters();
+  const list = useRpc('sav.list', { view: VIEW[stage], q: deb || undefined, owner, pageSize: 200, ...sfl.input });
   const k = kp.data;
   const count: Record<Stage, number | undefined> = { todo: k?.attente, depot: k?.depot, livraison: k?.livraison, satisfaction: k?.satisfaction, termines: k?.termines };
   const pick = (s: Stage) => (setStage(s), store.set('px-savp-stage', s));
@@ -163,6 +166,7 @@ export function PhoneSav({ sub }: { sub?: string }) {
         </a>
       </div>
       <input className="pxv-search" type="search" value={q} placeholder={t('sav.ph.searchPh')} aria-label={t('sav.search')} enterKeyHint="search" onChange={(e) => setQ(e.target.value)} />
+      <FiltersPanel on={sfl.on}>{sfl.fields}</FiltersPanel>
       {active && (
         <div className="pxv-own" role="tablist">
           {(['me', 'none', 'all'] as const).map((o) => (

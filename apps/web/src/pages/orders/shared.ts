@@ -29,8 +29,28 @@ export function waHref(phone: string, template: string, vars: { nom: string; bou
 export type ConfFilter = '' | 'todo' | ConfStatus | 'try1' | 'try2';
 export type FollowFilter = '' | 'prep' | 'active' | 'back' | FollowStatus;
 
-/** Turns the original filter selects into orders.list input. */
-export function toListInput(f: { conf?: ConfFilter; follow?: FollowFilter; company?: string; wilaya?: string; channel?: string; agent?: string; from?: string; to?: string; q?: string }): Partial<ListFilter> {
+/** The filters of a list, as its selects hold them ('' = all). */
+export interface ListFilters {
+  conf?: ConfFilter;
+  follow?: FollowFilter;
+  company?: string;
+  wilaya?: string;
+  channel?: string;
+  agent?: string;
+  team?: string;
+  product?: string;
+  variant?: string;
+  livreur?: string;
+  cashed?: string;
+  /** the reason given ('__none': none given), read on `reasonOf` */
+  reason?: string;
+  from?: string;
+  to?: string;
+  q?: string;
+}
+
+/** Turns the filter selects into orders.list input. `reasonOf`: whose reason « Motif » is (cancelled at the confirmation / came back). */
+export function toListInput(f: ListFilters, reasonOf?: 'conf' | 'back'): Partial<ListFilter> {
   const out: Partial<ListFilter> = {};
   if (f.conf === 'todo') out.conf = CONF_TODO;
   else if (f.conf === 'try1' || f.conf === 'try2') out.conf = ['no_answer', 'busy'];
@@ -45,6 +65,13 @@ export function toListInput(f: { conf?: ConfFilter; follow?: FollowFilter; compa
   if (f.channel) out.channel = f.channel as ListFilter['channel'];
   if (f.agent === 'none') out.agentId = 'none';
   else if (f.agent) out.agentId = Number(f.agent);
+  if (f.team) out.teamId = f.team;
+  if (f.product) out.productId = Number(f.product);
+  if (f.product && f.variant) out.variantId = Number(f.variant);
+  if (f.livreur) out.livreurId = Number(f.livreur);
+  if (f.cashed === 'yes') out.cashed = true;
+  else if (f.cashed === 'no') out.cashed = false;
+  if (f.reason && reasonOf) out.reason = { of: reasonOf, text: f.reason === '__none' ? null : f.reason };
   if (f.from) out.from = new Date(`${f.from}T00:00:00+01:00`).toISOString();
   if (f.to) out.to = new Date(Date.parse(`${f.to}T00:00:00+01:00`) + 86_400_000).toISOString();
   if (f.q?.trim()) out.q = f.q.trim();

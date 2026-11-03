@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, hasRole, proc } from '../rpc';
 import { clientFee, getSetting, setSetting } from '../settings';
-import { ConfInput, dueNowSql, getOrder, holdOrder, ListInput, listOrders, setConf, triedSince, withClientScores } from './orders';
+import { ConfInput, dueNowSql, getOrder, holdOrder, ListInput, listOrders, setConf, teamMembers, triedSince, withClientScores } from './orders';
 import { andSql, queueSql } from './agencyscope';
 import { HAS_GUIDE } from './guide';
 import { assignedProductIds } from './productscope';
@@ -228,10 +228,7 @@ export const DEFAULT_SORT: Record<ConfSub, { sort: 'created_at' | 'confirmed_at'
 };
 
 /** The people of a team (its manager and agents); an unknown team matches nobody. */
-async function teamAgents(ctx: Ctx, teamId: string): Promise<number[]> {
-  const t = (await getSetting(ctx.db, 'teams')).find((x) => x.id === teamId);
-  return t ? [...new Set([...(t.managerId ? [t.managerId] : []), ...t.agentIds])] : [];
-}
+const teamAgents = (ctx: Ctx, teamId: string) => teamMembers(ctx.db, teamId);
 
 async function queueList(ctx: Ctx, i: z.infer<typeof QueueInput>) {
   const allowed = CONF_SUBS[i.sub] as readonly ConfStatus[];

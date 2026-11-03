@@ -654,6 +654,12 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--navy); }
 .form-err { color: var(--coral); font-weight: 700; min-height: 1em; margin: 0; }
 .filters { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; align-items: end; }
 .filters-toggle { display: none; }
+.px-f-clear .btn { height: 40px; white-space: nowrap; }
+.px-fbtn { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; height: 36px; padding: 0 12px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font-weight: 700; font-size: 13.5px; cursor: pointer; }
+.px-fbtn .icon, .px-fbtn svg { width: 16px; height: 16px; }
+.px-fbtn.on { border-color: var(--navy); color: var(--navy); background: var(--sky-soft); }
+.px-fbtn b { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--navy); color: var(--on-navy); font-size: 12px; }
+.px-fpanel { padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 @media (max-width: 760px) {
   .filters { grid-template-columns: minmax(0, 1fr) auto; }
   .filters .filters-toggle { display: inline-flex; height: 42px; }

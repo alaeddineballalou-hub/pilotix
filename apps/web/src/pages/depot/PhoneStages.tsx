@@ -27,15 +27,17 @@ import { BagsCard } from './Bags';
 import '../suivi/phone.css';
 import './phone.css';
 import './stages.css';
+import { FiltersPanel } from '../../ui/filters';
+import { useDepotFilters } from './filters';
 
 type Road = 'dispatchees' | 'enlivraison';
 type Level = 'ok' | 'warn' | 'bad';
 
 /** The parcels of a stage, the first 100 then 100 more at a time. */
-function useStage(follow: FollowStatus[], confirmedOnly: boolean, sort: 'shipped_at' | 'updated_at', q: string) {
+function useStage(follow: FollowStatus[], confirmedOnly: boolean, sort: 'shipped_at' | 'updated_at', q: string, filters: Partial<ReturnType<typeof useDepotFilters>['input']> = {}) {
   const [limit, setLimit] = useState(100);
   const dq = useDebounced(q.trim());
-  const list = useRpc('orders.list', { follow, conf: confirmedOnly ? ['confirmed'] : undefined, q: dq || undefined, sort, dir: 'asc', page: 1, pageSize: limit, tickets: 'include' });
+  const list = useRpc('orders.list', { follow, conf: confirmedOnly ? ['confirmed'] : undefined, q: dq || undefined, ...filters, sort, dir: 'asc', page: 1, pageSize: limit, tickets: 'include' });
   return { list, rows: list.data?.rows ?? [], total: list.data?.total ?? 0, more: () => setLimit((l) => l + 100) };
 }
 type Stage = ReturnType<typeof useStage>;
@@ -131,7 +133,8 @@ function Body({ s, empty, children }: { s: Stage; empty: string; children: React
 export function PhoneDispatch() {
   const { t } = useTranslation();
   const [q, setQ] = useState('');
-  const s = useStage(['prepared'], true, 'updated_at', q);
+  const df = useDepotFilters();
+  const s = useStage(['prepared'], true, 'updated_at', q, df.input);
   const couriers = useCouriers();
   const waits = (o: Order) => {
     if (!couriers) return false;
@@ -156,6 +159,7 @@ export function PhoneDispatch() {
       <div className="pxt-main">
       <Head title={t('depot.stg.waiting')} count={s.total} help={t('depot.stg.dispatchHelp')} />
       <SearchBox value={q} onChange={setQ} placeholder={t('depot.filters.searchPh')} />
+      <FiltersPanel on={df.on}>{df.fields}</FiltersPanel>
       <Body s={s} empty={t(q.trim() ? 'depot.empty' : 'depot.stg.empty_prepares')}>
         {groups.map(([name, list]) => (
           <section key={name || '-'} className="pxt-group">
@@ -186,7 +190,8 @@ export function PhoneRoad({ stage }: { stage: Road }) {
   const { t } = useTranslation();
   const [q, setQ] = useState('');
   const [f, setF] = useState<'all' | Level>('all');
-  const s = useStage([stage === 'dispatchees' ? 'shipped' : 'out_for_delivery'], true, 'shipped_at', q);
+  const df = useDepotFilters();
+  const s = useStage([stage === 'dispatchees' ? 'shipped' : 'out_for_delivery'], true, 'shipped_at', q, df.input);
   const lv = (o: Order) => levelOf(stage, o.shippedAt);
   const late = s.rows.filter((o) => lv(o) !== 'ok');
   const veryLate = s.rows.filter((o) => lv(o) === 'bad');
@@ -196,6 +201,7 @@ export function PhoneRoad({ stage }: { stage: Road }) {
       <Head title={t(`depot.stg.title_${stage}`)} count={s.total} help={t(`depot.help.${stage}`)} />
       {stage === 'dispatchees' && <BagsCard phone />}
       <SearchBox value={q} onChange={setQ} placeholder={t('depot.filters.searchPh')} />
+      <FiltersPanel on={df.on}>{df.fields}</FiltersPanel>
       <Filters<'all' | Level>
         value={f}
         onChange={setF}
@@ -307,8 +313,9 @@ export function PhoneReturns() {
   const { t } = useTranslation();
   const [tab, setTab] = useState<'returning' | 'exchange'>('returning');
   const [q, setQ] = useState('');
-  const ret = useStage(['returning'], false, 'updated_at', q);
-  const exc = useStage(['in_exchange'], false, 'updated_at', q);
+  const df = useDepotFilters();
+  const ret = useStage(['returning'], false, 'updated_at', q, df.input);
+  const exc = useStage(['in_exchange'], false, 'updated_at', q, df.input);
   const s = tab === 'returning' ? ret : exc;
   return (
     <div className="pxt">
@@ -326,6 +333,7 @@ export function PhoneReturns() {
       </div>
       <p className="muted small pxd-help">{t(`depot.stg.${tab}Help`)}</p>
       <SearchBox value={q} onChange={setQ} placeholder={t('depot.filters.searchPh')} />
+      <FiltersPanel on={df.on}>{df.fields}</FiltersPanel>
       <Body s={s} empty={t(q.trim() ? 'depot.empty' : `depot.stg.empty_${tab}`)}>
         <ul className="pxt-list">
           {s.rows.map((o) => (

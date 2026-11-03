@@ -16,6 +16,7 @@ import { PhoneCaisse } from './PhoneCaisse';
 import { CaisseJournal, CaisseOverview } from './Overview';
 export { MaCaisse } from './PhoneCaisse';
 import { CopyCode } from '../../ui/CopyCode';
+import { ClearFilters, CompanyFilter, DateFilters, dayIso, LivreurFilter } from '../../ui/filters';
 
 export function Caisse({ sub }: PageProps) {
   const phone = useIsPhone();
@@ -238,7 +239,29 @@ function GroupCard({ g, ticket }: { g: Group; ticket?: boolean }) {
 function Done() {
   const { t } = useTranslation();
   const [limit, setLimit] = useState(30);
-  const q = useRpc('cash.history', { limit });
+  // Du / Au, Société, Livreur
+  const [f, setF] = useState({ from: '', to: '', company: '', livreur: '' });
+  const [open, setOpen] = useState(false);
+  const set = (patch: Partial<typeof f>) => (setF((x) => ({ ...x, ...patch })), setLimit(30));
+  const on = !!(f.from || f.to || f.company || f.livreur);
+  const q = useRpc('cash.history', {
+    limit,
+    from: f.from ? dayIso(f.from) : undefined,
+    to: f.to ? dayIso(f.to, true) : undefined,
+    companyId: f.company && f.company !== 'none' ? Number(f.company) : undefined,
+    livreurId: f.livreur ? Number(f.livreur) : undefined,
+  });
+  const filters = (
+    <div className={`filters${open ? ' open' : ''}`}>
+      <button type="button" className="btn filters-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
+        {t('filters.toggle')}
+      </button>
+      <DateFilters from={f.from} to={f.to} onChange={(v) => set(v)} />
+      <CompanyFilter none={false} value={f.company} onChange={(v) => set({ company: v })} />
+      <LivreurFilter value={f.livreur} onChange={(v) => set({ livreur: v })} />
+      <ClearFilters on={on} onClear={() => set({ from: '', to: '', company: '', livreur: '' })} />
+    </div>
+  );
   const [ask, setAsk] = useState<number | null>(null);
   const cancel = useAction('cash.cancel', { success: t('caisse.done.cancelled'), onDone: () => setAsk(null) });
   if (q.isLoading) return <Loading />;
@@ -258,6 +281,7 @@ function Done() {
           {t('common.export')}
         </button>
       </div>
+      {filters}
       {!list.length ? (
         <Empty>{t('caisse.done.empty')}</Empty>
       ) : (

@@ -312,12 +312,15 @@ export const cashProcs = {
   'cash.receive': proc([], z.object({ ids, note: z.string().max(300).nullable().optional(), into: CaisseKey.default('main') }), async (ctx, i) => receive(ctx, i.ids, i.note ?? null, false, i.into)),
 
   /** "Déjà reçu": versements (not cancelled) with their orders. */
-  'cash.history': proc([], z.object({ from: dateStr.optional(), to: dateStr.optional(), limit: z.number().int().min(1).max(500).default(100) }), async (ctx, i) => {
+  'cash.history': proc([], z.object({ from: dateStr.optional(), to: dateStr.optional(), companyId: z.number().int().positive().optional(), livreurId: z.number().int().positive().optional(), limit: z.number().int().min(1).max(500).default(100) }), async (ctx, i) => {
     const pay = await payOf(ctx.db);
     const params: unknown[] = [i.limit];
     let w = 'h.cancelled_at IS NULL';
     if (i.from) w += ` AND h.created_at >= $${params.push(i.from)}`;
     if (i.to) w += ` AND h.created_at < $${params.push(i.to)}`;
+    // « Société » / « Livreur » filters of « Reçu »
+    if (i.companyId) w += ` AND h.company_id = $${params.push(i.companyId)}`;
+    if (i.livreurId) w += ` AND h.livreur_id = $${params.push(i.livreurId)}`;
     const hs = await ctx.db.query(
       `SELECT h.*, c.name AS company_name, lv.name AS livreur_name, u.name AS by_name FROM cash_handovers h
        LEFT JOIN delivery_companies c ON c.id = h.company_id LEFT JOIN profiles lv ON lv.id = h.livreur_id LEFT JOIN profiles u ON u.id = h.created_by

@@ -20,6 +20,7 @@ import './orders.css';
 import { useCounts } from './counts';
 import { useIsPhone } from '../../lib/useMedia';
 import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
+import { AgentFilter, CashedFilter, ClearFilters, DateFilters, LivreurFilter, ProductFilter, ReasonFilter, TeamFilter } from '../../ui/filters';
 import { PhoneAnnule, PhoneLivre } from './PhoneDone';
 
 export { OrderTable } from './OrderTable';
@@ -70,7 +71,7 @@ function BigSearch({ value, onChange }: { value: string; onChange: (v: string) =
 }
 
 // ---------------------------------------------------------------- the generic filtered list
-type FilterKey = 'search' | 'conf' | 'follow' | 'company' | 'wilaya' | 'channel' | 'agent' | 'dates';
+type FilterKey = 'search' | 'conf' | 'follow' | 'company' | 'wilaya' | 'channel' | 'agent' | 'team' | 'product' | 'livreur' | 'cashed' | 'reason' | 'dates';
 interface Filters {
   conf: ConfFilter;
   follow: FollowFilter;
@@ -78,11 +79,17 @@ interface Filters {
   wilaya: string;
   channel: string;
   agent: string;
+  team: string;
+  product: string;
+  variant: string;
+  livreur: string;
+  cashed: string;
+  reason: string;
   from: string;
   to: string;
   q: string;
 }
-const NO_FILTERS: Filters = { conf: '', follow: '', company: '', wilaya: '', channel: '', agent: '', from: '', to: '', q: '' };
+const NO_FILTERS: Filters = { conf: '', follow: '', company: '', wilaya: '', channel: '', agent: '', team: '', product: '', variant: '', livreur: '', cashed: '', reason: '', from: '', to: '', q: '' };
 
 interface ListProps {
   id: string;
@@ -91,6 +98,8 @@ interface ListProps {
   /** fixed part of the query (e.g. only delivered orders) */
   base?: Partial<ListFilter>;
   show?: FilterKey[];
+  /** whose reason the « Motif » filter is: cancelled at the confirmation, or sent back */
+  reasonOf?: 'conf' | 'back';
   /** search text coming from the big search above */
   q?: string;
   tabs?: { value: string; label: string; count?: number; filter: Partial<ListFilter> }[];
@@ -100,7 +109,7 @@ interface ListProps {
   pageSize?: number;
 }
 
-const ALL_FILTERS: FilterKey[] = ['search', 'conf', 'follow', 'company', 'wilaya', 'channel', 'agent', 'dates'];
+const ALL_FILTERS: FilterKey[] = ['search', 'conf', 'follow', 'company', 'wilaya', 'channel', 'agent', 'team', 'product', 'livreur', 'dates'];
 
 export function OrderList(p: ListProps) {
   const { t } = useTranslation();
@@ -127,11 +136,15 @@ export function OrderList(p: ListProps) {
   useEffect(() => setPage(1), [p.q, tab]);
 
   const look = useRpc('orders.lookups', {}, { staleTime: 5 * 60_000 });
-  const agents = useRpc('users.list', { role: 'confirmation' }, { staleTime: 5 * 60_000 });
   const companies = look.data?.companies ?? [];
   const tabFilter = p.tabs?.find((x) => x.value === tab)?.filter ?? {};
   const q = (p.q ?? '').trim() || f.q.trim();
-  const input: ListFilter = { ...toListInput({ ...f, q }), ...p.base, ...tabFilter, sort, dir, page, pageSize: size } as ListFilter;
+  // only the filters this list shows (one kept from another visit, now hidden, does not narrow it)
+  const shown: Partial<Filters> = Object.fromEntries(
+    (Object.keys(NO_FILTERS) as (keyof Filters)[]).filter((k) => k === 'q' || show.includes(k === 'variant' ? 'product' : k === 'from' || k === 'to' ? 'dates' : (k as FilterKey))).map((k) => [k, f[k]]),
+  );
+  const input: ListFilter = { ...toListInput({ ...shown, q }, p.reasonOf), ...p.base, ...tabFilter, sort, dir, page, pageSize: size } as ListFilter;
+  const anyOn = (Object.keys(shown) as (keyof Filters)[]).some((k) => k !== 'q' && !!shown[k]);
   // a search finds every order, whatever its status (like the original)
   if (q && p.q) {
     delete (input as any).conf;
@@ -276,19 +289,14 @@ export function OrderList(p: ListProps) {
         {show.includes('company') && sel('company', t('orders.f.company'), [['none', t('orders.f.noCompany')], ...companies.map((c): [string, string] => [String(c.id), c.name])])}
         {show.includes('wilaya') && sel('wilaya', t('orders.f.wilaya'), WILAYAS.map((w, i): [string, string] => [String(i + 1), `${String(i + 1).padStart(2, '0')} ${w}`]))}
         {show.includes('channel') && sel('channel', t('orders.f.source'), SALES_CHANNELS.map((c): [string, string] => [c, t(`status.channel.${c}`)]))}
-        {show.includes('agent') && sel('agent', t('orders.f.agent'), (agents.data ?? []).map((u): [string, string] => [String(u.id), u.name]), t('orders.f.allM'))}
-        {show.includes('dates') && (
-          <>
-            <label className="field more-f">
-              <span className="lab">{t('orders.f.from')}</span>
-              <input type="date" value={f.from} onChange={(e) => set({ from: e.target.value })} />
-            </label>
-            <label className="field more-f">
-              <span className="lab">{t('orders.f.to')}</span>
-              <input type="date" value={f.to} onChange={(e) => set({ to: e.target.value })} />
-            </label>
-          </>
-        )}
+        {show.includes('agent') && <AgentFilter kind="conf" value={f.agent} onChange={(v) => set({ agent: v })} />}
+        {show.includes('team') && <TeamFilter value={f.team} onChange={(v) => set({ team: v })} />}
+        {show.includes('product') && <ProductFilter product={f.product} variant={f.variant} onChange={(v) => set(v)} />}
+        {show.includes('livreur') && <LivreurFilter value={f.livreur} onChange={(v) => set({ livreur: v })} />}
+        {show.includes('cashed') && <CashedFilter value={f.cashed} onChange={(v) => set({ cashed: v })} />}
+        {show.includes('reason') && p.reasonOf && <ReasonFilter of={p.reasonOf} value={f.reason} onChange={(v) => set({ reason: v })} />}
+        {show.includes('dates') && <DateFilters from={f.from} to={f.to} onChange={(v) => set(v)} />}
+        <ClearFilters on={anyOn} onClear={() => set({ ...NO_FILTERS, q: f.q })} />
       </div>
       {list.error ? (
         <ErrorBox error={list.error} onRetry={() => list.refetch()} />
@@ -572,7 +580,7 @@ function CommandesDesk({ sub }: { sub?: string }) {
           id="livrees"
           title={t('orders.delivered')}
           base={{ follow: ['delivered'], dateField: 'delivered_at' }}
-          show={['search', 'conf', 'company', 'wilaya', 'channel', 'agent', 'dates']}
+          show={['search', 'conf', 'company', 'wilaya', 'channel', 'agent', 'team', 'product', 'livreur', 'cashed', 'dates']}
           extra={deliveredExtra}
           defaultSort="delivered_at"
         />
@@ -583,8 +591,8 @@ function CommandesDesk({ sub }: { sub?: string }) {
     return (
       <>
         <HeaderKpis on="annulees" />
-        <OrderList id="annulees-conf" title={t('orders.cancelledConf')} base={{ conf: CONF_DONE_BAD }} show={['search', 'follow', 'company', 'wilaya', 'channel', 'agent', 'dates']} />
-        <OrderList id="annulees-ret" title={t('orders.cancelledReturns')} base={{ follow: ['returning', 'returned'] }} show={['search', 'conf', 'company', 'wilaya', 'channel', 'agent', 'dates']} defaultSort="updated_at" />
+        <OrderList id="annulees-conf" title={t('orders.cancelledConf')} base={{ conf: CONF_DONE_BAD }} show={['search', 'follow', 'company', 'wilaya', 'channel', 'agent', 'team', 'product', 'reason', 'dates']} reasonOf="conf" />
+        <OrderList id="annulees-ret" title={t('orders.cancelledReturns')} base={{ follow: ['returning', 'returned'] }} show={['search', 'conf', 'company', 'wilaya', 'channel', 'agent', 'team', 'product', 'livreur', 'reason', 'dates']} reasonOf="back" defaultSort="updated_at" />
       </>
     );
 
@@ -651,7 +659,7 @@ export function Livrees(_: PageProps) {
   return (
     <>
       <DoneKpis />
-      <OrderList id="p-livrees" title={t('orders.delivered')} base={{ follow: ['delivered'], dateField: 'delivered_at' }} show={['search', 'company', 'wilaya', 'channel', 'agent', 'dates']} extra={extra} defaultSort="delivered_at" />
+      <OrderList id="p-livrees" title={t('orders.delivered')} base={{ follow: ['delivered'], dateField: 'delivered_at' }} show={['search', 'company', 'wilaya', 'channel', 'agent', 'team', 'product', 'livreur', 'cashed', 'dates']} extra={extra} defaultSort="delivered_at" />
     </>
   );
 }
@@ -661,7 +669,7 @@ export function Retournees(_: PageProps) {
   return (
     <>
       <DoneKpis />
-      <OrderList id="p-retournees" title={t('orders.returned')} base={{ follow: ['returning', 'returned'] }} show={['search', 'follow', 'company', 'wilaya', 'channel', 'agent', 'dates']} defaultSort="updated_at" />
+      <OrderList id="p-retournees" title={t('orders.returned')} base={{ follow: ['returning', 'returned'] }} show={['search', 'follow', 'company', 'wilaya', 'channel', 'agent', 'team', 'product', 'livreur', 'reason', 'dates']} reasonOf="back" defaultSort="updated_at" />
     </>
   );
 }

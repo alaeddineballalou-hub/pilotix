@@ -272,6 +272,10 @@ export const ListInput = z.object({
   agentId: z.union([id, z.literal('none')]).optional(),
   /** orders handled by any of these agents (a team) */
   agentIds: z.array(id).max(500).optional(),
+  /** orders of a team of Utilisateurs › Équipes (its manager and its agents) */
+  teamId: z.string().max(40).optional(),
+  /** the suivi agent of the order; none: nobody yet */
+  followAgentId: z.union([id, z.literal('none')]).optional(),
   /** orders that contain this product (and this variant of it) */
   productId: id.optional(),
   variantId: id.optional(),
@@ -303,6 +307,12 @@ export const ListInput = z.object({
 });
 export type ListInput = z.infer<typeof ListInput>;
 
+/** The people of a team of Utilisateurs › Équipes (its manager and its agents); an unknown team matches nobody. */
+export async function teamMembers(db: Db, teamId: string): Promise<number[]> {
+  const t = (await getSetting(db, 'teams')).find((x) => x.id === teamId);
+  return t ? [...new Set([...(t.managerId ? [t.managerId] : []), ...t.agentIds])] : [];
+}
+
 export async function listOrders(ctx: Ctx, f: ListInput, opts: { queue?: 'conf' | 'follow' } = {}): Promise<Page<Order>> {
   if (noOrderAccess(ctx)) return { rows: [], total: 0, page: f.page, pageSize: f.pageSize };
   const w = new Where();
@@ -325,6 +335,9 @@ export async function listOrders(ctx: Ctx, f: ListInput, opts: { queue?: 'conf' 
   if (f.agentId === 'none') w.add('o.agent_id IS NULL');
   else if (f.agentId) w.add('o.agent_id = ?', f.agentId);
   if (f.agentIds) w.add('o.agent_id = ANY(?)', f.agentIds);
+  if (f.teamId) w.add('o.agent_id = ANY(?)', await teamMembers(ctx.db, f.teamId));
+  if (f.followAgentId === 'none') w.add('o.follow_agent_id IS NULL');
+  else if (f.followAgentId) w.add('o.follow_agent_id = ?', f.followAgentId);
   if (f.variantId) w.add('EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.variant_id = ?)', f.variantId);
   else if (f.productId) w.add('EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.product_id = ?)', f.productId);
   if (f.companyId === 'none') w.add('o.company_id IS NULL');
