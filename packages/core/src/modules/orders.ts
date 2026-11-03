@@ -1874,8 +1874,9 @@ export const ordersProcs = {
       if (rows.length !== ids.length) throw bad('Une ou plusieurs commandes sont introuvables');
       for (const r of rows) {
         if (r.is_exchange) throw bad(`${r.ref} est un colis de ticket SAV : annulez le ticket`);
-        // Once a parcel was tracked, sent, delivered, returned or cashed, keep the order for stock and cash auditability.
-        if (r.tracking || r.own_tracking || r.shipped_at || r.delivered_at || r.returned_at || r.cashed || r.handover_id)
+        // own_tracking is assigned to every order at creation: it does NOT mean the parcel was sent.
+        // Once a courier tracking exists or the parcel was sent, delivered, returned or cashed, preserve audit history.
+        if (r.tracking || r.shipped_at || r.delivered_at || r.returned_at || r.cashed || r.handover_id)
           throw bad(`${r.ref} a un historique de livraison ou de paiement : archivez-la au lieu de la supprimer`);
         if (r.follow_status && !['to_prepare', 'cancelled'].includes(r.follow_status))
           throw bad(`${r.ref} est déjà au dépôt ou en livraison : elle ne peut plus être supprimée`);
