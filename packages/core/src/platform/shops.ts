@@ -393,8 +393,9 @@ export async function freeSlug(t: Tenancy, wanted: string, exceptId?: number): P
   if (NAME_RESERVED.includes(base)) base = `${base}-boutique`;
   for (let i = 1; i < 500; i++) {
     const s = i === 1 ? base : `${base.slice(0, 36)}-${i}`;
-    const r = await t.platform.query('SELECT id FROM platform.shops WHERE slug = $1', [s]);
-    if (!r.length || num(r[0].id) === exceptId) return s;
+    // a name another shop has, or had (its former links still lead to it), is not free
+    const r = await t.platform.query('SELECT id FROM platform.shops WHERE slug = $1 UNION ALL SELECT shop_id FROM platform.shop_old_slugs WHERE slug = $1', [s]);
+    if (r.every((x: any) => num(x.id) === exceptId)) return s;
   }
   throw new Error('No free slug');
 }
@@ -477,7 +478,7 @@ export async function provisionShop(t: Tenancy, n: NewShop): Promise<Shop> {
   const email = n.owner.email.trim().toLowerCase();
   const slug = n.slug ? n.slug : await freeSlug(t, n.name);
   if (!slugOk(slug)) throw new Error('BAD_SLUG');
-  if ((await t.platform.query('SELECT 1 FROM platform.shops WHERE slug = $1', [slug])).length) throw new Error('SLUG_TAKEN');
+  if ((await t.platform.query('SELECT 1 FROM platform.shops WHERE slug = $1 UNION ALL SELECT 1 FROM platform.shop_old_slugs WHERE slug = $1', [slug])).length) throw new Error('SLUG_TAKEN');
   const now = n.now ?? Date.now();
   const trialEnds = n.trialDays > 0 ? new Date(now + n.trialDays * DAY).toISOString() : null;
   const kind = n.kind ?? 'store';
@@ -687,6 +688,27 @@ export async function setShopStore(db: Db, slug: string): Promise<void> {
  * its name on the platform follows, so every shop has one name, unique. If another shop already has that name, shop #1
  * keeps the one it had (written in its settings, so its links do not move).
  */
+// ---------------------------------------------------------------- a shop's former links (« Mes boutiques »)
+/** The shop whose former link this is (null: none). */
+export async function shopIdByOldSlug(t: Tenancy, slug: string): Promise<number | null> {
+  const r = (await t.platform.query('SELECT shop_id FROM platform.shop_old_slugs WHERE slug = $1', [slug.trim().toLowerCase()]))[0];
+  return r ? num(r.shop_id) : null;
+}
+
+/** Is this link free for that shop (no other shop has it now, or had it)? A former link of its own is free for it. */
+export async function slugTakenByOther(t: Tenancy, slug: string, shopId: number | null): Promise<boolean> {
+  const now = await t.platform.query('SELECT 1 FROM platform.shops WHERE slug = $1 AND id IS DISTINCT FROM $2', [slug, shopId]);
+  if (now.length) return true;
+  return (await t.platform.query('SELECT 1 FROM platform.shop_old_slugs WHERE slug = $1 AND shop_id IS DISTINCT FROM $2', [slug, shopId])).length > 0;
+}
+
+/** Keeps a shop's former link (its pages and webhooks keep answering there): called whenever a shop's link changes. */
+export async function keepOldSlug(t: Tenancy, shopId: number, oldSlug: string, newSlug: string) {
+  if (!oldSlug || oldSlug === newSlug) return;
+  await t.platform.query('DELETE FROM platform.shop_old_slugs WHERE slug = $1 AND shop_id = $2', [newSlug, shopId]);
+  await t.platform.query('INSERT INTO platform.shop_old_slugs (slug, shop_id) VALUES ($1, $2) ON CONFLICT (slug) DO NOTHING', [oldSlug, shopId]);
+}
+
 export async function syncPrimaryStore(t: Tenancy): Promise<void> {
   const p = await loadShop(t, { primary: true });
   if (!p) return;
@@ -694,9 +716,12 @@ export async function syncPrimaryStore(t: Tenancy): Promise<void> {
   const s = await landingSettings(db);
   const want = await landingStore(db, s);
   if (want === p.slug) return;
-  const taken = !slugOk(want) || (await t.platform.query('SELECT 1 FROM platform.shops WHERE slug = $1 AND NOT primary_shop', [want])).length > 0;
-  if (!taken) await t.platform.query('UPDATE platform.shops SET slug = $1 WHERE primary_shop', [want]);
-  else await setSetting(db, 'landing', { ...s, storeSlug: p.slug });
+  const taken = !slugOk(want) || (await slugTakenByOther(t, want, p.id));
+  if (!taken) {
+    // the former name keeps leading to shop #1 (and stays its own)
+    await keepOldSlug(t, p.id, p.slug, want);
+    await t.platform.query('UPDATE platform.shops SET slug = $1 WHERE primary_shop', [want]);
+  } else await setSetting(db, 'landing', { ...s, storeSlug: p.slug });
 }
 
 /** No staff yet: the owner's shop's first administrator becomes the platform owner (same e-mail and password). */

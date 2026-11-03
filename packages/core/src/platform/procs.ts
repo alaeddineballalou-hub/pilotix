@@ -18,6 +18,7 @@ import { staffReply, staffSetStatus, staffThread, staffThreads, staffUnread } fr
 import {
   cleanFeatures,
   freeSlug,
+  keepOldSlug,
   loadPlans,
   loadShop,
   loadShops,
@@ -597,7 +598,8 @@ export const PLATFORM_REGISTRY = {
       put('max_drivers', i.maxDrivers, 'maxDrivers', s.maxDrivers);
       if (!sets.length) return { ok: true };
       await ctx.t.platform.query(`UPDATE platform.shops SET ${sets.join(', ')} WHERE id = $1`, vals);
-      // the new name is the store's part of its links (shop #1: its « Lien des pages » too)
+      // the new name is the store's part of its links (shop #1: its « Lien des pages » too); the former one still leads there
+      if (changes.slug) await keepOldSlug(ctx.t, s.id, s.slug, i.slug!);
       if (changes.slug && s.status !== 'archived') await setShopStore(ctx.t.shop(s.schema), i.slug!);
       await audit(ctx, 'shop.update', s.id, changes);
       return { ok: true };

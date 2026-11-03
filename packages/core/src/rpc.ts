@@ -109,6 +109,8 @@ export interface ServerHooks {
   publicApi?: string;
   /** another shop of the platform already has this name (the first part of its links) */
   storeTaken?: (store: string) => Promise<boolean>;
+  /** a shop's name, link or logo changed (« Mes boutiques »): the server forgets what it keeps of the shops */
+  platformChanged?: () => void;
 }
 
 /** Where links given to others (courier webhooks, landing pages) point: the shop's public API address ('' = unknown). */
@@ -139,7 +141,7 @@ export function makeSession(profile: Session['profile']): Session {
 }
 
 /** What an unpaid (locked) shop may still do: read and change the user's own account. */
-const WHEN_LOCKED = new Set(['me.get', 'me.language', 'me.ui', 'me.setUi', 'me.seen', 'me.password', 'me.update']);
+const WHEN_LOCKED = new Set(['me.get', 'me.language', 'me.ui', 'me.setUi', 'me.seen', 'me.password', 'me.update', 'boutiques.list']);
 export const FEATURE_OFF = 'Cette fonction n’est pas incluse dans votre formule Pilotix';
 export const SHOP_LOCKED = 'Votre abonnement Pilotix n’est pas actif';
 

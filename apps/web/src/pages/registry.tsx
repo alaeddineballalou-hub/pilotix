@@ -39,6 +39,7 @@ export const PAGES: Record<string, ComponentType<PageProps>> = {
   agences: P(() => import('./agences'), 'Agences'),
   marketers: P(() => import('./agences'), 'Marketers'),
   profil: P(() => import('./profil'), 'Profil'),
+  boutiques: P(() => import('./boutiques'), 'Boutiques'),
 };
 
 /**
@@ -58,6 +59,7 @@ export const AGENCY_PAGES: Record<string, ComponentType<PageProps>> = {
   utilisateurs: P(() => import('./agency'), 'AgencyUsers'),
   reglages: P(() => import('./agency'), 'AgencySettings'),
   profil: PAGES.profil,
+  boutiques: PAGES.boutiques,
 };
 
 /**
@@ -73,4 +75,5 @@ export const MARKETER_PAGES: Record<string, ComponentType<PageProps>> = {
   utilisateurs: AGENCY_PAGES.utilisateurs,
   reglages: AGENCY_PAGES.reglages,
   profil: PAGES.profil,
+  boutiques: PAGES.boutiques,
 };

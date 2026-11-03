@@ -536,6 +536,20 @@ ALTER TABLE platform.protection_stores ADD COLUMN IF NOT EXISTS good integer NOT
 ALTER TABLE platform.protection_stores ADD COLUMN IF NOT EXISTS bad integer NOT NULL DEFAULT 0;
 `;
 
+/**
+ * « Mes boutiques »: a boutique's former links (the first part of its pages' address before it changed). They keep
+ * leading to it — its pages send people to the new address, its webhooks answer as before — and no other boutique can
+ * take them.
+ */
+const P017 = `
+CREATE TABLE IF NOT EXISTS platform.shop_old_slugs (
+  slug       text        PRIMARY KEY,
+  shop_id    integer     NOT NULL REFERENCES platform.shops(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS shop_old_slugs_shop ON platform.shop_old_slugs (shop_id, created_at DESC);
+`;
+
 export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p001_platform', P001],
   ['p002_accounts_signup_domains', P002],
@@ -557,6 +571,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p015_darija_book', DARIJA_BOOK_SQL],
   // the vocabulary book: the Darija words of every shop's AI agents, and what the corrections taught (modules/vocab.ts)
   ['p016_vocab', VOCAB_PLATFORM_SQL],
+  // « Mes boutiques »: a boutique's former links still lead to it (modules/boutiques.ts)
+  ['p017_old_slugs', P017],
 ];
 
 /** Creates or updates the platform's tables. */

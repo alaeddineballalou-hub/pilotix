@@ -14,6 +14,8 @@ export { expandIp, ipNet } from './net';
 export { seedDemo, seedBase } from './seed';
 export { seedPilotDemo } from './seeds/pilot';
 export { seedDemoPartners } from './demoPartners';
+export { seedDemoBoutiques, DEMO_BOUTIQUES, DEMO_LOGO } from './demoBoutiques';
+export { myBoutiques, shopLogo, setShopLogo, LOGO_MAX } from './modules/boutiques';
 export { login, hashPassword, profileById } from './modules/users';
 export type { ArchiveBlock, ArchiveKind, ArchiveRow, UseKind } from './modules/archive';
 export { createPasswordReset, resetPassword, RESET_MINUTES, RESETS_PER_MONTH } from './passwordReset';

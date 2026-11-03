@@ -308,6 +308,29 @@ await section('« Ajouter une boutique »: stores per person, and an e-mail chec
   ctx.staff1 = { email: staff, password: 'Staff1-Password' };
 });
 
+await section('« Mes boutiques »: the owner renames a boutique and changes its link; the old link still leads to it', async () => {
+  const list = await rpc(ctx.signup1.token, 'boutiques.list');
+  const four = list.find((b) => b.id === ctx.signup1.fourth);
+  assert.ok(four?.owner, 'the 4th store is his own, in his list');
+  assert.ok(list.filter((b) => b.owner).length >= 4, 'all his boutiques are listed');
+  const slug = `mes-boutiques-${run}`;
+  const saved = await rpc(ctx.signup1.token, 'boutiques.save', { id: four.id, name: `Renommée ${run}`, slug });
+  assert.equal(saved.name, `Renommée ${run}`);
+  assert.equal(saved.slug, slug);
+  assert.deepEqual(saved.oldSlugs, [four.slug]);
+  ok('from another of his boutiques: its name and its link changed');
+  // its pages moved: the old link sends people to the new one
+  const r = await fetch(`${API}/s/${four.slug}/une-page?utm_source=fb`, { redirect: 'manual' });
+  assert.equal(r.status, 301);
+  assert.match(r.headers.get('location') ?? '', new RegExp(`/${slug}/une-page\\?utm_source=fb$`));
+  ok('the old link of a page → 301 to the new one (the ad’s words kept)');
+  // nobody else takes the old link; nobody else changes his boutique
+  await fails(prpc('p.shops.update', { id: ctx.owner1.shopId, slug: four.slug }), 400, /déjà pris/);
+  const o1 = await login(ctx.owner1.email, ctx.owner1.password, ctx.owner1.shopId);
+  await fails(rpc(o1.token, 'boutiques.save', { id: four.id, name: 'Volée', slug: `volee-${run}` }), 403, /propriétaire/);
+  ok('another store cannot take the old link, another seller cannot change the boutique');
+});
+
 await section('The team: the owner is protected; an admin sets passwords only of people in this store alone', async () => {
   const T = (await login(ctx.owner1.email, ctx.owner1.password, ctx.owner1.shopId)).token;
   const list = await rpc(T, 'users.list', {});

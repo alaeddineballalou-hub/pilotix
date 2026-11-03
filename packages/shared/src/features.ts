@@ -200,3 +200,27 @@ export interface ShopInfo {
   /** a partner (agency, marketer) checked by Pilotix (before that it cannot work with stores) */
   verified?: boolean;
 }
+
+/**
+ * One of the person's boutiques (« Mes boutiques », the boutique at the bottom of the menu): a store they can open, or a
+ * partner's space of theirs (a confirmation agency, a marketer). A seller never adds another seller: one account, many
+ * boutiques.
+ */
+export interface Boutique {
+  /** the shop's id on the platform (0: the only shop of a server with one shop, or the in-browser preview) */
+  id: number;
+  name: string;
+  /** the first part of its pages' links: <site>/<slug>/<page> */
+  slug: string;
+  /** its logo: a small picture (data URL), or null */
+  logo: string | null;
+  kind: 'store' | 'agency' | 'marketer';
+  /** the person created it: only they change its name, its link and its logo */
+  owner: boolean;
+  /** the boutique open now */
+  current: boolean;
+  /** unpaid or suspended by Pilotix */
+  locked: boolean;
+  /** its former links, which still lead to it (newest first) */
+  oldSlugs: string[];
+}

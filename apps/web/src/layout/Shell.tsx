@@ -20,6 +20,7 @@ import { Modal } from '../ui/modal';
 import { canSee, canSeeChild, NAV, NavItem } from './nav';
 import { useCanRules } from '../lib/pilot';
 import { AccountMenu } from './AccountMenu';
+import { BoutiqueSwitch } from './Boutiques';
 import { ShopBanner } from './ShopBanner';
 const DepotAlert = lazy(() => import('./DepotAlert').then((m) => ({ default: m.DepotAlert })));
 
@@ -264,6 +265,8 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
           ),
         )}
         </div>
+        {/* the boutique open now, at the bottom of the menu: the person's other boutiques, « Mes boutiques », « Ajouter » */}
+        <BoutiqueSwitch folded={folded} />
       </nav>
       <div className="scrim" onClick={() => setNavOpen(false)} />
       <div className="content">

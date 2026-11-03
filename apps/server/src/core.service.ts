@@ -162,6 +162,8 @@ export class CoreService implements OnModuleDestroy {
   readonly baseHooks: ServerHooks = {
     pushKeys,
     push,
+    // « Mes boutiques »: a shop's name, link or logo changed — every request sees it at once
+    platformChanged: () => this.invalidate(),
     courier: async (action, args, ctx) => {
       const m = optional('@pilotix/core/dist/couriers');
       if (!m?.runCourier) throw new core.AppError('bad_request', 'Intégration des sociétés de livraison indisponible sur ce serveur');
@@ -263,18 +265,25 @@ export class CoreService implements OnModuleDestroy {
     return r;
   }
 
-  /** The shop of a public link: /api/s/<slug>/… (none = the owner's shop, as all the old links). */
+  /** The shop of a public link: /api/s/<slug>/… (none = the owner's shop, as all the old links); a former link of a shop leads to it. */
   async fromParam(slug: string | undefined): Promise<ShopRef | null> {
     if (slug === undefined || slug === '') return this.primary();
     if (!core.SLUG_RE.test(slug)) return null;
-    return this.shop({ slug });
+    return (await this.shop({ slug })) ?? this.movedShop(slug);
+  }
+
+  /** The shop whose former link this is (« Mes boutiques »: its link changed), null: none. */
+  async movedShop(slug: string): Promise<ShopRef | null> {
+    if (!core.SLUG_RE.test(slug)) return null;
+    const id = await core.shopIdByOldSlug(this.t, slug);
+    return id ? this.shop({ id }) : null;
   }
 
   private hooksFor(s: Shop): ServerHooks | undefined {
     if (s.demo) return undefined; // the demo shop simulates couriers, messages and AI (nothing leaves the server)
     const publicApi = config.publicUrl ? `${config.publicUrl}/api${s.primary ? '' : `/s/${s.slug}`}` : undefined;
     // shop #1 choosing the store's part of its links: no other shop may have that name
-    const storeTaken = async (store: string) => (await this.t.platform.query('SELECT 1 FROM platform.shops WHERE slug = $1 AND id <> $2', [store, s.id])).length > 0;
+    const storeTaken = (store: string) => core.slugTakenByOther(this.t, store, s.id);
     return { ...this.baseHooks, publicApi, storeTaken };
   }
 

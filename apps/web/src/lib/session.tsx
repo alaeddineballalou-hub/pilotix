@@ -127,7 +127,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (!picker) return;
     enter(await server.pick(picker.ticket, shop));
   };
-  const switchStore = async (shop: number) => enter(await server.switchStore(shop));
+  // the server, or the in-browser demo (its owner's three boutiques)
+  const switchStore = async (shop: number) => enter(await backend.switchStore(shop));
   const loginDemo = async (key: string) => enter(await loginServerDemo(key));
 
   const has = (...roles: Role[]) => !!session && (session.isAdmin || roles.some((r) => session.roles.includes(r)));

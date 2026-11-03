@@ -80,6 +80,8 @@ export interface AssignAgent {
 export interface SettingsMap {
   /** savPhone: the shop's after-sales number, printed on the parcel labels */
   shop: { name: string; fromWilayaId: number; defaultCompanyId: number | null; whatsappTemplate: string; savPhone: string };
+  /** the boutique's logo (« Mes boutiques »): a small picture as a data URL, shown in the menu, the top bar, the printed papers and the landing pages */
+  logo: { url: string | null; updatedAt: string | null };
   calls: CallSettings;
   /** Client delivery price grids: name → wilaya → { home, desk } */
   clientFees: Record<string, Record<string, { home: number; desk: number }>>;
@@ -188,6 +190,7 @@ export interface SettingsMap {
 
 export const DEFAULT_SETTINGS: SettingsMap = {
   shop: { name: 'Pilotix', fromWilayaId: 16, defaultCompanyId: null, whatsappTemplate: 'Bonjour {nom}, ici {boutique} à propos de votre commande {ref}.', savPhone: '' },
+  logo: { url: null, updatedAt: null },
   calls: DEFAULT_CALL_SETTINGS,
   clientFees: {},
   defaultFeeGrid: 'Standard',

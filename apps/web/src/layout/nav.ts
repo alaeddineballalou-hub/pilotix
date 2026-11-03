@@ -124,6 +124,8 @@ export const NAV: NavItem[] = [
   { id: 'management', icon: 'briefcase', roles: [], affect: true, subs: ['plans', 'statuts', 'affectation', 'paie', 'prix', 'canaux', 'alertes', 'livreur', 'archive'] },
   { id: 'reglages', icon: 'settings', roles: [] },
   { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'parrainage', 'securite'] },
+  // « Mes boutiques »: opened from the boutique at the bottom of the menu (and the account menu)
+  { id: 'boutiques', icon: 'store', roles: null, hidden: true },
 ];
 
 /** A group's child: its own roles, or everyone who sees the group — and in the shop's plan. */
@@ -195,6 +197,7 @@ export const AGENCY_NAV: NavItem[] = [
   { id: 'utilisateurs', icon: 'usercog', roles: [], manageUsers: true },
   { id: 'reglages', icon: 'settings', roles: [] },
   { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'securite'] },
+  { id: 'boutiques', icon: 'store', roles: null, hidden: true },
 ];
 
 // ---------------------------------------------------------------- a marketer's own space
@@ -212,4 +215,5 @@ export const MARKETER_NAV: NavItem[] = [
   { id: 'utilisateurs', icon: 'usercog', roles: [], manageUsers: true },
   { id: 'reglages', icon: 'settings', roles: [] },
   { id: 'profil', icon: 'usercog', roles: null, hidden: true, subs: ['infos', 'parametres', 'securite'] },
+  { id: 'boutiques', icon: 'store', roles: null, hidden: true },
 ];

@@ -83,7 +83,7 @@ export async function storeNameCheck(t: Tenancy, name: string, slug?: string): P
   if (want) {
     if (NAME_RESERVED.includes(want)) return { slug: want, free: false, reason: 'Ce nom est réservé par Pilotix, choisissez-en un autre' };
     if (!slugOk(want)) return { slug: want, free: false, reason: 'Nom dans le lien : 2 à 40 lettres minuscules, chiffres et tirets (ex. ma-boutique)' };
-    const taken = (await t.platform.query('SELECT 1 FROM platform.shops WHERE slug = $1', [want])).length > 0;
+    const taken = (await t.platform.query('SELECT 1 FROM platform.shops WHERE slug = $1 UNION ALL SELECT 1 FROM platform.shop_old_slugs WHERE slug = $1', [want])).length > 0;
     return { slug: want, free: !taken, reason: taken ? 'Ce nom est déjà pris par une autre boutique' : null };
   }
   return { slug: await freeSlug(t, name || 'boutique'), free: true, reason: null };

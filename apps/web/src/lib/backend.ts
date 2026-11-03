@@ -87,6 +87,8 @@ export interface Backend {
   /** `seller`: in a confirmation agency's space, the seller (store) whose orders the action works on */
   call<N extends ProcName>(name: N, input: In<N>, seller?: Seller): Promise<Out<N>>;
   onEvent(fn: (e: LiveEvent) => void): () => void;
+  /** Another boutique of the same person (the boutique at the bottom of the menu), without the password again. */
+  switchStore(shop: number): Promise<Session>;
 }
 
 // ---------------------------------------------------------------- real server
@@ -367,6 +369,9 @@ class DemoBackend implements Backend {
   private listeners = new Set<(e: LiveEvent) => void>();
   private ready: Promise<{ core: Core; db: import('@pilotix/core').Db; t: import('@pilotix/core').Tenancy }> | null = null;
   private partners: Promise<void> | null = null;
+  /** the demo owner's two other boutiques (« Mes boutiques »), made once, a few seconds after the app opens */
+  private boutiques: Promise<void> | null = null;
+  private boutiquesSoon = false;
   progress: (msg: string) => void = () => {};
 
   private boot() {
@@ -400,6 +405,43 @@ class DemoBackend implements Backend {
         this.storeShop = core.shopCtx(s, core.shopStatus(s, Date.now(), (await core.platformSettings(t)).trial.graceDays));
       })();
     return this.partners;
+  }
+  /** The demo owner's other boutiques, with the platform's tables (as on a server); the lists on screen ask again. */
+  private withBoutiques() {
+    if (!this.boutiques)
+      this.boutiques = (async () => {
+        const { core, t } = await this.boot();
+        await core.seedDemoBoutiques(t);
+        const s = (await core.loadShop(t, { primary: true }))!;
+        this.storeShop = core.shopCtx(s, core.shopStatus(s, Date.now(), (await core.platformSettings(t)).trial.graceDays));
+        setTimeout(() => this.listeners.forEach((l) => l({ type: 'settings' })), 0);
+      })();
+    return this.boutiques;
+  }
+  /** Another of the demo owner's boutiques: the same account there (the demo password), its rules, what the app shows of it. */
+  async switchStore(id: number): Promise<Session> {
+    const { core, db, t } = await this.boot();
+    await this.withBoutiques();
+    const email = this.session?.profile.email;
+    if (!email) throw new ApiError(401, 'Session expirée');
+    const { DEMO_PASSWORD } = await import('@pilotix/shared');
+    const s = await core.loadShop(t, { id });
+    if (!s || s.kind !== 'store') throw new ApiError(404, 'Boutique introuvable');
+    try {
+      if (s.primary) {
+        this.session = await core.login(db, email, DEMO_PASSWORD);
+        this.space = null;
+      } else {
+        const set = await core.platformSettings(t);
+        const st = core.shopStatus(s, Date.now(), set.trial.graceDays);
+        const session = await core.login(t.shop(s.schema), email, DEMO_PASSWORD);
+        this.session = { ...session, shop: core.shopInfo(s, st, set, Date.now()) };
+        this.space = { schema: s.schema, shop: core.shopCtx(s, st) };
+      }
+    } catch (e: any) {
+      throw new ApiError(403, e?.message ?? 'Vous n’avez pas de compte dans cette boutique');
+    }
+    return this.session;
   }
   async login(email: string, password: string): Promise<LoginResult> {
     const { core, db, t } = await this.boot();
@@ -455,7 +497,16 @@ class DemoBackend implements Backend {
     const { core, db, t } = await this.boot();
     if (!this.session) throw new ApiError(401, 'Session expirée');
     const s = this.session;
-    if (this.space || NEEDS_PARTNERS.test(String(name))) await this.withPartners();
+    if ((this.space && this.space.shop.kind !== 'store') || NEEDS_PARTNERS.test(String(name))) await this.withPartners();
+    // « Mes boutiques »: the demo owner's other boutiques. The first list (the menu, as the app opens) shows this boutique
+    // alone and has them made a few seconds later, so the first page is not slowed down.
+    if (String(name).startsWith('boutiques.')) {
+      if (this.boutiques || name !== 'boutiques.list') await this.withBoutiques();
+      else if (!this.boutiquesSoon) {
+        this.boutiquesSoon = true;
+        window.setTimeout(() => void this.withBoutiques(), 4000);
+      }
+    }
     // Dellal, the CM AI agent and AI Spy answer with Claude when the preview is opened in Claude (see dellal-page-ai.ts)
     const dellalAi = /^(dellal|cm|spy)\./.test(String(name)) ? await pageAi() : null;
     const base = { session: s, now: () => Date.now(), emit: (e: LiveEvent) => setTimeout(() => this.listeners.forEach((l) => l(e)), 0), ...(dellalAi ? { dellalAi } : {}) };

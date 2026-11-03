@@ -46,6 +46,7 @@ import { sheetsProcs } from './modules/sheets';
 import { spyProcs } from './modules/spy';
 import { statsProcs } from './modules/stats';
 import { boardProcs } from './modules/board';
+import { boutiqueProcs } from './modules/boutiques';
 import { doctorProcs } from './modules/doctor';
 import { stockProcs } from './modules/stock';
 import { suiviProcs } from './modules/suivi';
@@ -103,4 +104,5 @@ export const REGISTRY = {
   ...bonusProcs,
   ...proProcs,
   ...agencyWorkProcs,
+  ...boutiqueProcs,
 };

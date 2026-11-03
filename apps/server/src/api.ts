@@ -1164,6 +1164,12 @@ class ApiController {
   @Public()
   @Get('s/:store/:slug')
   async storePage(@Param('store') store: string, @Param('slug') slug: string, @Req() req: { url?: string; headers: Record<string, string | undefined> }, @Res() res: any) {
+    // a boutique's former link (« Mes boutiques »: its link changed): its pages moved to the new one
+    const moved = core.SLUG_RE.test(store) && !(await this.core.shop({ slug: store }).catch(() => null)) ? await this.core.movedShop(store).catch(() => null) : null;
+    if (moved && moved.shop.status === 'active' && /^[a-z0-9-]{2,60}$/.test(slug)) {
+      const q = String(req.url ?? '').indexOf('?');
+      return res.status(301).header('Location', `${config.publicUrl}/${moved.shop.slug}/${slug}${q >= 0 ? String(req.url).slice(q) : ''}`).send();
+    }
     const ref = await this.core.fromParam(store).catch(() => null);
     if (ref) {
       // a suspended or closed shop: its pages are gone

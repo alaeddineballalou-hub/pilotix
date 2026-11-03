@@ -4,14 +4,19 @@ import { useTranslation } from 'react-i18next';
 import { Avatar } from '../pages/profil/Avatar';
 import { backend } from '../lib/backend';
 import { Icon } from '../ui/kit';
-import { AddStoreModal, SwitchStoreModal } from './Accounts';
+import { AddStoreModal } from './Accounts';
+import { BoutiqueLogo, useBoutiques } from './Boutiques';
 
 /** The signed-in account at the right of the header (moved from the sidebar): picture, name and role; the menu opens my profile pages and signs out. */
 /** On phones the header has no room for the language and theme buttons: they are in this menu instead (lang / onTheme). */
 export function AccountMenu({ session, onLogout, lang, onTheme }: { session: Session; onLogout: () => void; lang?: { value: string; options: string[]; onChange: (l: string) => void }; onTheme?: () => void }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const [modal, setModal] = useState<'switch' | 'add' | 'agency' | 'marketer' | null>(null);
+  const [modal, setModal] = useState<'add' | 'agency' | 'marketer' | null>(null);
+  // the boutique open now: its logo and its name at the top (its owner reaches « Mes boutiques » from here)
+  const bq = useBoutiques();
+  const cur = bq.data?.find((b) => b.current);
+  const owns = !!bq.data?.some((b) => b.owner && b.kind === 'store');
   const box = useRef<HTMLDivElement>(null);
   const shop = session.shop;
   useEffect(() => {
@@ -37,10 +42,10 @@ export function AccountMenu({ session, onLogout, lang, onTheme }: { session: Ses
   return (
     <div className="px-me" ref={box}>
       <button type="button" className="px-me-btn" aria-haspopup="menu" aria-expanded={open} aria-label={t('shell.account', { name: p.name })} onClick={() => setOpen((v) => !v)}>
-        <Avatar p={p} />
+        {cur?.logo ? <BoutiqueLogo name={cur.name} logo={cur.logo} size={34} /> : <Avatar p={p} />}
         <span className="px-me-t">
-          <b>{shop?.name || p.name}</b>
-          <small>{shop ? `${p.name} · ${role}` : role}</small>
+          <b>{cur?.name || shop?.name || p.name}</b>
+          <small>{shop || cur ? `${p.name} · ${role}` : role}</small>
         </span>
         {shop && shop.supportUnread > 0 && <span className="px-me-dot" aria-hidden="true" />}
         <Icon name="chevron" className="px-me-ch" />
@@ -58,10 +63,11 @@ export function AccountMenu({ session, onLogout, lang, onTheme }: { session: Ses
           {item('settings', t('profil.tSettings'), () => go('parametres'))}
           {(!shop?.kind || shop.kind === 'store') && !p.agencyId && item('gift', t('profil.tRef'), () => go('parrainage'))}
           {item('lock', t('profil.pwd'), () => go('securite'))}
-          {shop && !shop.demo && backend.kind !== 'demo' && (shop.stores > 0 || shop.canAddStore || shop.canAddAgency || shop.canAddMarketer || session.isAdmin) && (
+          {owns && item('store', t('boutiques.title'), () => (setOpen(false), (location.hash = '#/boutiques')))}
+          {shop && !shop.demo && backend.kind !== 'demo' && (shop.canAddStore || shop.canAddAgency || shop.canAddMarketer || session.isAdmin) && (
             <>
               <hr />
-              {shop.stores > 0 && item('swap', t('shop.acc.switch'), () => (setOpen(false), setModal('switch')))}
+              {/* going to another boutique: the boutique at the bottom of the menu */}
               {shop.canAddStore && item('plus', t('shop.acc.addStore'), () => (setOpen(false), setModal('add')))}
               {shop.canAddAgency && item('headset', t('agency.create'), () => (setOpen(false), setModal('agency')))}
               {shop.canAddMarketer && item('megaphone', t('agency.mk.create'), () => (setOpen(false), setModal('marketer')))}
@@ -103,7 +109,6 @@ export function AccountMenu({ session, onLogout, lang, onTheme }: { session: Ses
           {item('logout', t('shell.logout'), () => (setOpen(false), onLogout()), 'px-me-out')}
         </div>
       )}
-      {modal === 'switch' && <SwitchStoreModal onClose={() => setModal(null)} />}
       {modal === 'add' && <AddStoreModal onClose={() => setModal(null)} />}
       {modal === 'agency' && <AddStoreModal kind="agency" onClose={() => setModal(null)} />}
       {modal === 'marketer' && <AddStoreModal kind="marketer" onClose={() => setModal(null)} />}
