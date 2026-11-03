@@ -176,6 +176,9 @@
 .gd-sizes tbody tr:last-child th, .gd-sizes tbody tr:last-child td { border-bottom: 0; }
 .gd-sizes tbody tr:nth-child(even) th, .gd-sizes tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--raise) 60%, transparent); }
 .gd-sec .gd-hint { margin: -4px 0 10px; }
+/* one size only: the small size guide, a label and its value per line */
+.gd-fit tbody th { width: 1%; color: var(--muted); font-size: 12.5px; }
+.gd-fit tbody td { font-weight: 700; }
 .gd-offers { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 8px; }
 .gd-offers li { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--raise); }
 .gd-offers b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -188,6 +191,10 @@
 .gd-ed-size { display: grid; grid-template-columns: minmax(90px, 1fr) minmax(0, 1.4fr) minmax(0, 1.4fr); gap: 8px; align-items: center; }
 .gd-ed-size-head span { color: var(--muted); font-size: 12px; font-weight: 800; }
 .gd-ed-size b { font-size: 14px; }
+/* one size only: a line per thing, its label then the room to write it (as the guide shows it) */
+.gd-ed-fit { display: grid; gap: 8px; }
+.gd-ed-fit-row { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; align-items: center; }
+.gd-ed-fit-row > span { font-size: 14px; font-weight: 800; color: var(--ink); }
 .gd-fixed { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 12px; background: var(--raise); }
 .gd-fixed-l { width: 100%; color: var(--muted); font-size: 12.5px; font-weight: 700; }
 .gd-fixed-b { display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
@@ -208,4 +215,4 @@
 .gd-pick:hover { background: var(--butter); border-color: var(--butter-deep); }
 .gd-ed-none { margin: 0; color: var(--muted); font-size: 13px; }
 .gd-phrase { justify-self: start; font-weight: 700; }
-@media (max-width: 640px) { .gd-ed-size { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .gd-ed-size b { grid-column: 1 / -1; } .gd-ed-size-head { display: none; } }
+@media (max-width: 640px) { .gd-ed-size { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .gd-ed-size b { grid-column: 1 / -1; } .gd-ed-size-head { display: none; } .gd-ed-fit-row { grid-template-columns: minmax(0, 1fr); gap: 4px; } }

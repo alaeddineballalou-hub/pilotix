@@ -32,7 +32,7 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
 }
 
 const TO_FILL = '[À compléter]';
-/** Sales guides (Guide de vente) for four products; the others have none, as in a real shop starting. */
+/** Sales guides (Guide de vente) for five products (one size: the small size guide; the bodies: one line per size); the others have none, as in a real shop starting. */
 const GUIDES: Record<string, object> = {
   'PX-CHA': {
     brief: 'Chaise haute qui grandit avec l’enfant : chaise de repas de 6 mois à 3 ans, puis petite chaise et table jusqu’à 6 ans.',
@@ -57,6 +57,7 @@ const GUIDES: Record<string, object> = {
     upsell: 'Le tapis pour les moments de jeu, le sac pour les sorties.',
     upsellSkus: ['PX-TAP', 'PX-SAC'],
     never: ['Qu’elle est en bois : elle est en métal et plastique.', 'Une livraison en 24 h partout : le délai dépend de la wilaya.', 'Un cadeau ou une remise qui n’existe pas.'],
+    fit: { age: '6 mois à 3 ans (puis petite chaise jusqu’à 6 ans)', weight: 'jusqu’à 15 kg (25 kg en petite chaise)', measures: '' },
   },
   'PX-POU': {
     brief: 'Poussette légère qui se plie d’une main, pour les sorties et les voyages, de 6 mois à 3 ans.',
@@ -74,6 +75,7 @@ const GUIDES: Record<string, object> = {
     upsell: 'Il s’accroche à la poignée de la poussette.',
     upsellSkus: ['PX-SAC'],
     never: ['Qu’elle convient dès la naissance : c’est à partir de 6 mois.', 'Qu’elle est acceptée en cabine par toutes les compagnies.'],
+    fit: { age: '6 mois à 3 ans', weight: 'jusqu’à 15 kg', measures: '' },
   },
   'PX-LIT': {
     brief: 'Lit de voyage pliant avec son matelas, de la naissance à 3 ans, qui se range dans son sac.',
@@ -87,6 +89,7 @@ const GUIDES: Record<string, object> = {
     doubts: [{ q: '« Ghali »', a: 'Il sert chez les grands-parents et en vacances, jusqu’à 3 ans.' }],
     upsell: '',
     never: ['Qu’il sert de parc pour un enfant qui grimpe : à 3 ans ou 15 kg, on arrête.'],
+    fit: { age: 'de la naissance à 3 ans', weight: 'jusqu’à 15 kg', measures: '120 × 60 cm ouvert' },
   },
   // a product with sizes: customers give the baby's age and weight, the size guide says which size
   'PX-BOD': {
@@ -118,6 +121,7 @@ const GUIDES: Record<string, object> = {
     doubts: [{ q: '« Ghali »', a: 'Le pack de 3 revient à 1 300 DA le biberon (3 900 DA les trois).' }],
     upsell: 'Proposez le pack de 3 (3 900 DA) : un biberon pendant qu’un autre sèche.',
     never: ['Que les coliques disparaissent à coup sûr : le biberon aide, il ne guérit pas.'],
+    fit: { age: 'dès la naissance', weight: '', measures: '260 ml' },
   },
 };
 
@@ -135,7 +139,7 @@ async function seedGuides(db: Db, users: Record<string, number>, now: number) {
     const upsellIds = ((upsellSkus ?? []) as string[]).map((x) => ids.get(x)).filter((x): x is number => !!x);
     await db.query(
       `INSERT INTO product_guides (product_id, guide, updated_by, updated_at) VALUES ($1, $2, $3, $4) ON CONFLICT (product_id) DO NOTHING`,
-      [id, JSON.stringify({ upsellIds, sizes: [], ...guide }), by, new Date(now - (7 - k++) * 86_400_000).toISOString()],
+      [id, JSON.stringify({ upsellIds, sizes: [], fit: { age: '', weight: '', measures: '' }, ...guide }), by, new Date(now - (7 - k++) * 86_400_000).toISOString()],
     );
   }
 }

@@ -1062,15 +1062,23 @@ const PHONE_RE = /(?:\+?213|0)\s?[5-7](?:[\s.-]?\d){8}/;
 const HANDOFF_RE = /(gros|grossiste|wholesale|r[ée]clamation|retard|arnaque|rembours|humain|conseill|responsable|parler [àa] quelqu|محتال|بالجملة)/i;
 const YES_RE = /^(oui|wah|ih|ok|okey|d'accord|daccord|yes|نعم|واه|صح|c bon|c'est bon|mriguel|sah)\b/i;
 
-const GUIDE_ASK_RE = /(garantie|matiere|qualite|original|taille|\bage\b|poids|\bkg\b|lavable|pliable|plie|securite|ghali|\bcher\b|nkhamem|n5amem|nfakar|damen|ضمان|غالي|نخمم)/i;
+const GUIDE_ASK_RE = /(garantie|matiere|qualite|original|taille|mesure|dimension|\bage\b|poids|\bkg\b|lavable|pliable|plie|securite|ghali|\bcher\b|nkhamem|n5amem|nfakar|damen|ضمان|غالي|نخمم|قياس|عمر)/i;
 const PRICE_ASK_RE = /(ch7al|chhal|combien|prix|bch7al|سعر|بشحال|livraison|tawsil|التوصيل)/i;
 const GUIDE_STOP = new Set(['est', 'les', 'des', 'une', 'pour', 'avec', 'que', 'qui', 'dans', 'elle', 'il', 'wach', 'kayen', 'kayna', 'fiha', 'fih', 'had', 'hadi', 'hada', 'bien', 'tres', 'plus']);
-/** The demo seller's pick in a guide: the answer whose question shares the most words with what the customer wrote. */
-function guideAnswer(g: { faq: { q: string; a: string }[]; doubts: { q: string; a: string }[] }, asked: string): string | null {
+/**
+ * The demo seller's pick in a guide: the answer whose question shares the most words with what the customer wrote (the
+ * small size guide answers the age, the weight and the measures of a product with one size).
+ */
+function guideAnswer(g: { faq: { q: string; a: string }[]; doubts: { q: string; a: string }[]; fit?: { age: string; weight: string; measures: string } }, asked: string): string | null {
   const words = (x: string) => new Set(strip(x).split(/[^a-z0-9؀-ۿ]+/).filter((w) => w.length >= 3 && !GUIDE_STOP.has(w)));
   const want = words(asked);
+  const fit = [
+    g.fit?.age ? { q: 'Pour quel âge, à partir de quel âge, jusqu’à quel âge, عمر', a: `Âge : ${g.fit.age}.` } : null,
+    g.fit?.weight ? { q: 'Quel poids, poids maximum, وزن', a: `Poids : ${g.fit.weight}.` } : null,
+    g.fit?.measures ? { q: 'Quelles mesures, dimensions, quelle taille, قياس', a: `Mesures : ${g.fit.measures}.` } : null,
+  ].filter((p): p is { q: string; a: string } => !!p);
   let best: { a: string; n: number } | null = null;
-  for (const p of [...g.faq, ...g.doubts]) {
+  for (const p of [...g.faq, ...g.doubts, ...fit]) {
     if (toFill(p.a)) continue;
     const n = [...words(p.q)].filter((w) => [...want].some((x) => x === w || (x.length >= 5 && w.startsWith(x.slice(0, 5))))).length;
     if (n && (!best || n > best.n)) best = { a: p.a, n };

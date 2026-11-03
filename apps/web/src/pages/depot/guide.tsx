@@ -1,6 +1,7 @@
 // The sales guide of a product (Guide de vente): written by the team in the product form (tab « Guide de vente ») or in
 // Produits & stock › Guide de vente, with « Écrire avec l'IA » for a first draft, the size guide (age and weight for each
-// size) when the product has a size option, fixed questions to pick, and the products to offer picked in the catalog;
+// size) when the product has a size option, a small one (age, weight, measures) when it has one size only, fixed
+// questions to pick, and the products to offer picked in the catalog;
 // the confirmation agencies write it too for their products. The agents read it during a call (the « Guide » button on
 // each product of the order opens it beside the order, without hiding it) and in Produits & stock. Dellal and CM AI read
 // the same guide.
@@ -27,6 +28,12 @@ export interface GuideSize {
   age: string;
   weight: string;
 }
+/** the small size guide of a product with one size only: the age and the weight it fits, how big it is */
+export interface GuideFit {
+  age: string;
+  weight: string;
+  measures: string;
+}
 /** a product offered on top (Vente en plus), as the server gives it with the guide */
 export interface UpsellProduct {
   id: number;
@@ -43,6 +50,7 @@ export interface Guide {
   upsellIds: number[];
   never: string[];
   sizes: GuideSize[];
+  fit: GuideFit;
 }
 /** The form: the one-per-line parts as plain text. */
 export interface GuideForm {
@@ -54,6 +62,7 @@ export interface GuideForm {
   upsellIds: number[];
   never: string;
   sizes: GuideSize[];
+  fit: GuideFit;
 }
 
 /** An answer the AI could not know: the team writes it (the AI agents never use it). */
@@ -61,13 +70,17 @@ export const TO_FILL = '[À compléter]';
 const TO_FILL_RE = /\[\s*(?:à|a)\s+compl[ée]ter\s*\]/i;
 export const toFill = (s: string) => TO_FILL_RE.test(s) || !s.trim();
 /** The guide's sizes (the same as the server's, modules/guide.ts). */
-export const GUIDE_MAX = { brief: 400, strengths: 12, strength: 200, faq: 20, question: 200, answer: 600, doubts: 12, doubt: 160, upsell: 800, upsellIds: 10, never: 10, neverLine: 200, sizes: 40, sizeText: 60, total: 15_000 };
+export const GUIDE_MAX = { brief: 400, strengths: 12, strength: 200, faq: 20, question: 200, answer: 600, doubts: 12, doubt: 160, upsell: 800, upsellIds: 10, never: 10, neverLine: 200, sizes: 40, sizeText: 60, fitText: 120, total: 15_000 };
 /** The option that holds the sizes (the same as the server's): its values get an age and a weight. */
 const SIZE_OPTION = /taille|size|pointure|mesure|âge|\bage\b|مقاس|القياس|العمر/i;
 const COLOR_OPTION = /couleur|color|colour|لون|الألوان/i;
 type Option = { name: string; values: string[] };
 export const sizeValues = (options: Option[] | null | undefined): string[] =>
   [...new Set((options ?? []).filter((o) => SIZE_OPTION.test(o.name)).flatMap((o) => o.values.map((v) => v.trim()).filter(Boolean)))].slice(0, GUIDE_MAX.sizes);
+
+export const EMPTY_FIT: GuideFit = { age: '', weight: '', measures: '' };
+/** Is something written in the small size guide. */
+export const fitFilled = (f: GuideFit | null | undefined) => !!f && !!(f.age || f.weight || f.measures);
 
 const lines = (s: string) => s.split('\n').map((x) => x.replace(/^\s*[-•*]\s*/, '').trim()).filter(Boolean);
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -80,8 +93,12 @@ export const guideToForm = (g: Guide | null | undefined): GuideForm => ({
   upsellIds: [...(g?.upsellIds ?? [])],
   never: (g?.never ?? []).join('\n'),
   sizes: (g?.sizes ?? []).map((x) => ({ ...x })),
+  fit: { ...EMPTY_FIT, ...(g?.fit ?? {}) },
 });
-/** sizes: the product's sizes now (a size it no longer has leaves the guide); undefined: keep them all */
+/**
+ * sizes: the product's sizes now (a size it no longer has leaves the guide; a product with sizes has no small size
+ * guide, one without has no size lines); undefined: keep them all
+ */
 export const formToGuide = (f: GuideForm, sizes?: string[]): Guide => ({
   brief: f.brief.trim(),
   strengths: lines(f.strengths),
@@ -93,14 +110,18 @@ export const formToGuide = (f: GuideForm, sizes?: string[]): Guide => ({
   sizes: f.sizes
     .map((x) => ({ size: x.size.trim(), age: x.age.trim(), weight: x.weight.trim() }))
     .filter((x) => x.size && (x.age || x.weight) && (!sizes || sizes.some((y) => same(y, x.size)))),
+  fit: sizes?.length ? EMPTY_FIT : { age: f.fit.age.trim(), weight: f.fit.weight.trim(), measures: f.fit.measures.trim() },
 });
 const sizeOf = (g: Guide) =>
   g.brief.length +
   g.upsell.length +
   [...g.strengths, ...g.never].reduce((a, x) => a + x.length, 0) +
   [...g.faq, ...g.doubts].reduce((a, p) => a + p.q.length + p.a.length, 0) +
-  g.sizes.reduce((a, x) => a + x.size.length + x.age.length + x.weight.length, 0);
-export const guideIsEmpty = (g: Guide) => !g.brief && !g.strengths.length && !g.faq.length && !g.doubts.length && !g.upsell && !g.upsellIds.length && !g.never.length && !g.sizes.length;
+  g.sizes.reduce((a, x) => a + x.size.length + x.age.length + x.weight.length, 0) +
+  g.fit.age.length +
+  g.fit.weight.length +
+  g.fit.measures.length;
+export const guideIsEmpty = (g: Guide) => !g.brief && !g.strengths.length && !g.faq.length && !g.doubts.length && !g.upsell && !g.upsellIds.length && !g.never.length && !g.sizes.length && !fitFilled(g.fit);
 
 /** What would stop the save (the server says the same), in words, or null. */
 export function guideProblem(g: Guide, t: (k: string, o?: any) => string): string | null {
@@ -119,8 +140,10 @@ export function guideProblem(g: Guide, t: (k: string, o?: any) => string): strin
 export function GuideView({ guide, id, upsell = [] }: { guide: Guide; id: string; upsell?: UpsellProduct[] }) {
   const { t } = useTranslation();
   const box = useRef<HTMLDivElement>(null);
+  // one size only: its small size guide (the lines written)
+  const fit = guide.sizes.length || !guide.fit ? [] : (['age', 'weight', 'measures'] as const).filter((k) => guide.fit[k] && !toFill(guide.fit[k]));
   const parts = [
-    { k: 'sizes', icon: 'shirt', n: guide.sizes.length },
+    { k: 'sizes', icon: 'shirt', n: guide.sizes.length || (fit.length ? 1 : 0) },
     { k: 'strengths', icon: 'check', n: guide.strengths.length },
     { k: 'faq', icon: 'help', n: guide.faq.length },
     { k: 'doubts', icon: 'message', n: guide.doubts.length },
@@ -174,6 +197,24 @@ export function GuideView({ guide, id, upsell = [] }: { guide: Guide; id: string
                   <th scope="row" dir="auto">{x.size}</th>
                   <td dir="auto">{x.age || '—'}</td>
                   <td dir="auto">{x.weight || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+      {fit.length > 0 && (
+        <section className="gd-sec" data-part="sizes" id={`${id}-sizes`}>
+          {head('sizes', 'shirt')}
+          <p className="gd-hint">{t('produits.guide.fitAsk')}</p>
+          <table className="gd-sizes gd-fit">
+            <tbody>
+              {fit.map((k) => (
+                <tr key={k}>
+                  <th scope="row">{t(`produits.guide.${k}Col`)}</th>
+                  <td>
+                    <bdi>{guide.fit[k]}</bdi>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -383,7 +424,7 @@ export interface DraftFacts {
 const LANGS = ['fr', 'ar', 'dz', 'en'] as const;
 type Lang = (typeof LANGS)[number];
 /** The questions every guide can pick (in this order), and the answers Pilotix knows for them. */
-const FIXED = ['pay', 'delivery', 'delay', 'colors', 'size', 'age', 'weight', 'warranty', 'exchange', 'quality', 'assembled', 'use'] as const;
+const FIXED = ['pay', 'delivery', 'delay', 'colors', 'size', 'age', 'weight', 'measures', 'warranty', 'exchange', 'quality', 'assembled', 'use'] as const;
 type Fixed = (typeof FIXED)[number];
 
 /**
@@ -421,10 +462,12 @@ export function GuideEditor({ value, onChange, facts, products }: { value: Guide
   // the size guide: one line per size of the product, the age and the weight it fits
   const sizeRow = (s: string) => value.sizes.find((x) => same(x.size, s)) ?? { size: s, age: '', weight: '' };
   const setSize = (s: string, p: Partial<GuideSize>) => set('sizes', sizes.map((x) => (same(x, s) ? { ...sizeRow(x), ...p, size: x } : sizeRow(x))));
+  // one size only: the small size guide (the age, the weight, the measures)
+  const setFit = (k: keyof GuideFit, v: string) => set('fit', { ...value.fit, [k]: v });
   // the fixed questions: what Pilotix knows answers them; the rest is the team's
   const colors = [...new Set((f.options ?? []).filter((o) => COLOR_OPTION.test(o.name)).flatMap((o) => o.values))];
-  const ages = g.sizes.filter((x) => x.age).map((x) => `${x.size} : ${x.age}`);
-  const weights = g.sizes.filter((x) => x.weight).map((x) => `${x.size} : ${x.weight}`);
+  const ages = sizes.length ? g.sizes.filter((x) => x.age).map((x) => `${x.size} : ${x.age}`) : [g.fit.age].filter(Boolean);
+  const weights = sizes.length ? g.sizes.filter((x) => x.weight).map((x) => `${x.size} : ${x.weight}`) : [g.fit.weight].filter(Boolean);
   const known: Partial<Record<Fixed, string>> = {
     pay: t('produits.guide.qa.payAns'),
     delivery: t('produits.guide.qa.deliveryAns'),
@@ -432,9 +475,11 @@ export function GuideEditor({ value, onChange, facts, products }: { value: Guide
     size: sizes.length ? t('produits.guide.qa.sizeAns') : '',
     age: ages.join(' · '),
     weight: weights.join(' · '),
+    measures: sizes.length ? '' : g.fit.measures,
   };
   const has = (q: string) => value.faq.some((p) => same(p.q, q));
-  const fixed = FIXED.filter((k) => (k !== 'size' || sizes.length > 0) && !has(t(`produits.guide.qa.${k}`)));
+  // « Quelle taille choisir ? » for a product with sizes, « Quelles sont ses mesures ? » for one with one size
+  const fixed = FIXED.filter((k) => (k !== 'size' || sizes.length > 0) && (k !== 'measures' || !sizes.length) && !has(t(`produits.guide.qa.${k}`)));
   const pick = (k: Fixed) => value.faq.length < GUIDE_MAX.faq && set('faq', [...value.faq, { q: t(`produits.guide.qa.${k}`), a: known[k] ?? '' }]);
   // Vente en plus: products picked (not this one), the chosen ones first
   const others = products.filter((p) => p.id !== f.productId);
@@ -546,6 +591,20 @@ export function GuideEditor({ value, onChange, facts, products }: { value: Guide
                 <input dir="auto" role="cell" aria-label={`${x} · ${t('produits.guide.ageCol')}`} maxLength={GUIDE_MAX.sizeText} placeholder={t('produits.guide.ed.agePh')} value={sizeRow(x).age} onChange={(e) => setSize(x, { age: e.target.value })} />
                 <input dir="auto" role="cell" aria-label={`${x} · ${t('produits.guide.weightCol')}`} maxLength={GUIDE_MAX.sizeText} placeholder={t('produits.guide.ed.weightPh')} value={sizeRow(x).weight} onChange={(e) => setSize(x, { weight: e.target.value })} />
               </div>
+            ))}
+          </div>,
+        )}
+      {!sizes.length &&
+        part(
+          'sizes',
+          'shirt',
+          t('produits.guide.ed.fitHint'),
+          <div className="gd-ed-fit">
+            {(['age', 'weight', 'measures'] as const).map((k) => (
+              <label key={k} className="gd-ed-fit-row">
+                <span>{t(`produits.guide.${k}Col`)}</span>
+                <input dir="auto" maxLength={GUIDE_MAX.fitText} placeholder={t(`produits.guide.ed.fit${k[0].toUpperCase()}${k.slice(1)}Ph`)} value={value.fit[k]} onChange={(e) => setFit(k, e.target.value)} />
+              </label>
             ))}
           </div>,
         )}
