@@ -198,6 +198,32 @@ export const dispatchProcs = {
     return { canAct: canAssign(ctx), rows: await toAssignList(ctx) };
   }),
 
+  /** « Drop off » (managers and admins): the ticked orders go back to « À préparer »; their products go back on the shelf. */
+  'depot.dropOff': proc(['depot'], z.object({ ids: z.array(id).min(1).max(300) }), async (ctx, i) => {
+    if (!canAssign(ctx)) throw forbidden('Seuls les managers et les admins changent les commandes à attribuer');
+    const ready = (await ctx.db.query(`SELECT o.id FROM orders o WHERE o.id = ANY($1) AND ${READY_SQL}`, [i.ids])).map((r: any) => num(r.id));
+    if (!ready.length) throw bad('Ces commandes ne sont plus à attribuer');
+    await ctx.db.tx(async (tx) => {
+      await tx.query('UPDATE order_items SET picked_qty = 0 WHERE order_id = ANY($1)', [ready]);
+      await tx.query('UPDATE orders SET assign_wait_since = NULL WHERE id = ANY($1)', [ready]);
+      for (const oid of ready) await addEvent(tx, oid, ctx.session.profile.id, 'note', null, 'event', 'Remise à préparer (Drop off) : produits reposés en rayon');
+    });
+    ctx.emit({ type: 'orders' });
+    return { done: ready.length };
+  }),
+
+  /** « Annuler » (managers and admins): the ticked orders go to Annulé, with the reason; their products go back on the shelf. */
+  'depot.assignCancel': proc(['depot'], z.object({ ids: z.array(id).min(1).max(300), reason: z.string().trim().min(1).max(200) }), async (ctx, i) => {
+    if (!canAssign(ctx)) throw forbidden('Seuls les managers et les admins changent les commandes à attribuer');
+    const ready = (await ctx.db.query(`SELECT o.id FROM orders o WHERE o.id = ANY($1) AND ${READY_SQL}`, [i.ids])).map((r: any) => num(r.id));
+    if (!ready.length) throw bad('Ces commandes ne sont plus à attribuer');
+    // the people who choose here may cancel these (not yet with any company)
+    const c = ctx.session.roles.includes('suivi') ? ctx : { ...ctx, session: { ...ctx.session, roles: [...ctx.session.roles, 'suivi' as const] } };
+    await setFollow(c as Ctx, { ids: ready, status: 'cancelled', reason: i.reason });
+    ctx.emit({ type: 'orders' });
+    return { done: ready.length };
+  }),
+
   /** A manager or an admin gives these orders a company (or our own delivery and its livreur): to « En dispatch ». */
   'depot.assign': proc(['depot'], z.object({ ids: z.array(id).min(1).max(300), companyId: id, livreurId: id.nullable().optional() }), async (ctx, i) => {
     if (!canAssign(ctx)) throw forbidden('Seuls les managers et les admins attribuent les commandes');
