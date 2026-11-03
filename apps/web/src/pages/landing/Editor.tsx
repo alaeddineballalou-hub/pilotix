@@ -140,6 +140,7 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
       images: view.images.map((i) => ({ src: i.src, srcset: `${i.src} 480w`, thumb: i.thumb, w: i.w, h: i.h, ...(i.v ? { v: i.v } : {}) })),
       fees: c.fees,
       shopName: c.shopName,
+      shopLogo: c.shopLogo,
       whatsapp:
         view.waMode === 'own'
           ? { number: view.waNumber, label: view.waLabel || shopWa?.label || WHATSAPP_DEFAULT.label, message: view.waMessage || shopWa?.message || WHATSAPP_DEFAULT.message }

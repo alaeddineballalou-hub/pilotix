@@ -1175,17 +1175,18 @@ export const deliveryProcs = {
   /** Route sheet to print: a livreur's round, or the parcels to hand over to a company. */
   'delivery.routeSheet': proc(['livreur', 'suivi', 'depot'], z.object({ livreurId: id.optional(), companyId: id.optional() }), async (ctx, i) => {
     const shop = await getSetting(ctx.db, 'shop');
+    const logo = (await getSetting(ctx.db, 'logo')).url ?? null;
     if (i.companyId && !isLivreurOnly(ctx.session)) {
       const c = await companyOr404(ctx.db, i.companyId);
       const rows = (await listOrders(ctx, { companyId: c.id, follow: ['prepared', 'shipped', 'out_for_delivery', 'failed', 'alert'], pageSize: 1000, page: 1, sort: 'wilaya_id', dir: 'asc', dateField: 'created_at', tickets: 'include' })).rows;
       const own = c.kind === 'own';
       const list = own ? rows : rows.filter((o) => o.tracking || o.followStatus === 'prepared');
-      return { shop: shop.name, title: `Feuille de route · ${c.name}`, who: c.name, phone: c.phone, date: new Date(ctx.now()).toISOString(), orders: list, total: list.reduce((s, o) => s + o.total, 0) };
+      return { shop: shop.name, logo, title: `Feuille de route · ${c.name}`, who: c.name, phone: c.phone, date: new Date(ctx.now()).toISOString(), orders: list, total: list.reduce((s, o) => s + o.total, 0) };
     }
     const t = await tournee(ctx, livreurTarget(ctx, i.livreurId));
     const phone = (await ctx.db.query('SELECT phone FROM profiles WHERE id=$1', [t.livreur.id]))[0]?.phone ?? null;
     const orders = [...t.toDeliver, ...t.pickup];
-    return { shop: shop.name, title: `Feuille de route · ${t.livreur.name}`, who: t.livreur.name, phone, date: new Date(ctx.now()).toISOString(), orders, total: orders.reduce((s, o) => s + o.total, 0) };
+    return { shop: shop.name, logo, title: `Feuille de route · ${t.livreur.name}`, who: t.livreur.name, phone, date: new Date(ctx.now()).toISOString(), orders, total: orders.reduce((s, o) => s + o.total, 0) };
   }),
 };
 

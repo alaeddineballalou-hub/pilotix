@@ -319,7 +319,7 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
       ),
     );
   actions.push(
-    <button key="print" className="btn small" onClick={() => printOrder(t, o, look.data?.shopName ?? '')}>
+    <button key="print" className="btn small" onClick={() => printOrder(t, o, look.data?.shopName ?? '', look.data?.logo ?? null)}>
       {t('orders.card.print')}
     </button>,
   );

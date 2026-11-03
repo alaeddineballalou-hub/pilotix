@@ -36,6 +36,8 @@ export interface LandingView {
   /** home delivery price per wilaya code (missing: told at confirmation) */
   fees: Record<number, number>;
   shopName: string;
+  /** the boutique's logo (a small picture, « Mes boutiques »): at the top and the bottom of the page */
+  shopLogo?: string | null;
   /** Meta pixel (real pages only) and the product it reports */
   pixelId?: string;
   productId?: number;
@@ -181,7 +183,7 @@ input:focus,select:focus{outline:2px solid var(--c);outline-offset:-1px;border-c
 .ok h2{margin:12px 0 6px}.ok p{color:var(--m);margin:4px 0}.ok .sum{text-align:start}
 .trust{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;color:var(--m);font-size:13px;margin-top:10px}
 .so{margin-top:12px;padding:18px;border-radius:12px;background:#f3f4f6;text-align:center}.so b{display:block;font-size:19px;color:#b91c1c}.so p{margin:6px 0 0;color:var(--m)}
-footer{text-align:center;color:var(--m);font-size:12px;padding:18px}
+footer{text-align:center;color:var(--m);font-size:12px;padding:18px;display:flex;align-items:center;justify-content:center;gap:8px}footer img{border-radius:6px;object-fit:contain;background:#fff}.brand{display:flex;align-items:center;justify-content:center;gap:10px;padding:12px 12px 2px;color:var(--t);font-size:15px}.brand img{border-radius:10px;object-fit:contain;background:#fff;box-shadow:0 0 0 1px var(--b)}
 .wa{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;padding:13px;border-radius:12px;background:#25d366;color:#fff;font-weight:800;font-size:17px;text-decoration:none}.wa:active{background:#1da851}
 .bk{display:block;background:#fff;border-bottom:1px solid var(--b);padding:10px 14px;font-weight:700;color:var(--c);text-decoration:none;font-size:15px}`;
 
@@ -285,6 +287,18 @@ export function landingMetaDescription(v: Pick<LandingView, 'title' | 'price' | 
 }
 
 /** The whole public page. */
+/** The boutique at the top of its pages: its logo (when it has one) and its name. */
+function brandTop(name: string, logo: string | null | undefined): string {
+  const ok = !!logo && /^data:image\/(png|jpeg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/.test(logo);
+  if (!ok) return '';
+  return `<div class="brand"><img src="${logo}" width="36" height="36" alt=""><b>${esc(name)}</b></div>`;
+}
+/** The footer: the logo (small) and the name. */
+function brandFoot(name: string, logo: string | null | undefined): string {
+  const ok = !!logo && /^data:image\/(png|jpeg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/.test(logo);
+  return `<footer>${ok ? `<img src="${logo}" width="22" height="22" alt="">` : ''}${esc(name)}</footer>`;
+}
+
 export function renderLanding(v: LandingView, r: LandingRender): string {
   const c = isHexColor(v.color) ? v.color : LANDING_DEFAULT_COLOR;
   const img = v.images[0];
@@ -341,7 +355,7 @@ export function renderLanding(v: LandingView, r: LandingRender): string {
       : '<meta name="robots" content="noindex">');
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(v.title)}</title>
 ${head}<meta name="theme-color" content="${c}">${img ? `<link rel="preload" as="image" href="${esc(img.src)}" imagesrcset="${esc(img.srcset)}" imagesizes="${sizes}">` : ''}<style>${CSS(c)}</style></head><body>
-<div class="top">🚚 التوصيل لجميع الولايات · الدفع عند الاستلام</div>${r.group ? `<a class="bk" id="bk" href="${esc(r.group.slug)}">→ ${esc(GROUP_BACK)}</a>` : ''}<main class="w"><div class="g">
+<div class="top">🚚 التوصيل لجميع الولايات · الدفع عند الاستلام</div>${brandTop(v.shopName, v.shopLogo)}${r.group ? `<a class="bk" id="bk" href="${esc(r.group.slug)}">→ ${esc(GROUP_BACK)}</a>` : ''}<main class="w"><div class="g">
 <section class="gal card">${gallery}</section>
 <section class="card">${v.soldOut ? `<h1>${esc(v.title)}</h1><div class="so"><b>نفذت الكمية مؤقتاً</b><p>هذا المنتج غير متوفر حالياً، عودوا قريباً.</p></div>` : `<form id="f" novalidate autocomplete="on"><h1>${esc(v.title)}</h1><div class="pr"><b id="pp">${landingPrice(v.price)}</b>${off ? `<s>${landingPrice(v.oldPrice!)}</s><span class="off" dir="ltr">-${off}%</span>` : ''}</div>
 <label for="nm">الاسم الكامل</label><input id="nm" name="nm" autocomplete="name" maxlength="80" placeholder="الاسم واللقب"><div class="e" id="nme"></div>
@@ -358,7 +372,7 @@ ${variants}<label for="qt">الكمية</label><div class="q"><button type="butt
     ? `<a id="wa" class="wa" href="https://wa.me/${whatsappNumber(v.whatsapp.number)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 2.9 2.9 0 0 0-.9 2.2 5 5 0 0 0 1.1 2.7 11.5 11.5 0 0 0 4.4 3.9c1.6.7 2.3.8 3.1.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3Z"/></svg>${esc(v.whatsapp.label || WHATSAPP_DEFAULT.label)}</a>`
     : ''
 }</div>`}</section></div>
-${desc ? `<section class="card d"><h2>وصف المنتج</h2>${desc}</section>` : ''}</main><footer>${esc(v.shopName)}</footer>
+${desc ? `<section class="card d"><h2>وصف المنتج</h2>${desc}</section>` : ''}</main>${brandFoot(v.shopName, v.shopLogo)}
 <script>window.__LP=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script><script>${JS}</script></body></html>`;
 }
 
@@ -394,6 +408,7 @@ export interface GroupView {
   /** design « best »: the product shown big at the top (else the first one) */
   bestSlug?: string | null;
   shopName: string;
+  shopLogo?: string | null;
   pixelId?: string;
   tiktokId?: string;
 }
@@ -429,7 +444,7 @@ a.it:active{transform:scale(.985)}.it.out{opacity:.55}
 .tb{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:10px}.tb button{flex:0 0 auto;border:1px solid var(--b);background:#fff;border-radius:99px;padding:6px 14px;font:inherit;font-size:14px;font-weight:700;color:var(--t);cursor:pointer}
 .tb button.on{background:var(--c);color:#fff;border-color:var(--c)}.no{display:none!important}.em{text-align:center;color:var(--m);padding:20px}
 .trust{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;color:var(--m);font-size:13px;margin:14px 0 4px}
-footer{text-align:center;color:var(--m);font-size:12px;padding:18px}`;
+footer{text-align:center;color:var(--m);font-size:12px;padding:18px;display:flex;align-items:center;justify-content:center;gap:8px}footer img{border-radius:6px;object-fit:contain;background:#fff}.brand{display:flex;align-items:center;justify-content:center;gap:10px;padding:12px 12px 2px;color:var(--t);font-size:15px}.brand img{border-radius:10px;object-fit:contain;background:#fff;box-shadow:0 0 0 1px var(--b)}`;
 
 const GROUP_JS = `(function(){var C=window.__LG,d=document,a=d.querySelectorAll('a.it[data-s]');
 var q=location.search.replace(/([?&])g=[^&]*&?/,'$1').replace(/^\\?$/,'').replace(/&$/,'');
@@ -506,7 +521,7 @@ export function renderGroup(v: GroupView, r: GroupRender): string {
       : '<meta name="robots" content="noindex">');
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(v.title)}</title>
 ${head}<meta name="theme-color" content="${c}"><style>${GROUP_CSS(c)}</style></head><body>
-<div class="top">🚚 التوصيل لجميع الولايات · الدفع عند الاستلام</div><header class="hd"><h1>${esc(v.title)}</h1>${v.subtitle ? `<p>${esc(v.subtitle)}</p>` : ''}</header>
-<main class="w">${body}<div class="trust"><span>✔ الدفع عند الاستلام</span><span>✔ معاينة المنتج قبل الدفع</span></div></main><footer>${esc(v.shopName)}</footer>
+<div class="top">🚚 التوصيل لجميع الولايات · الدفع عند الاستلام</div>${brandTop(v.shopName, v.shopLogo)}<header class="hd"><h1>${esc(v.title)}</h1>${v.subtitle ? `<p>${esc(v.subtitle)}</p>` : ''}</header>
+<main class="w">${body}<div class="trust"><span>✔ الدفع عند الاستلام</span><span>✔ معاينة المنتج قبل الدفع</span></div></main>${brandFoot(v.shopName, v.shopLogo)}
 <script>window.__LG=${JSON.stringify(cfg).replace(/</g, '\\u003c')}</script><script>${GROUP_JS}</script></body></html>`;
 }

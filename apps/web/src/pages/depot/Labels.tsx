@@ -20,7 +20,7 @@ export function useCouriers() {
   const q = useRpc('orders.lookups', {}, { staleTime: 5 * 60_000 });
   if (!q.data) return null;
   const kinds = new Map(q.data.companies.map((c) => [c.id, c.kind]));
-  return { kindOf: (id: number) => kinds.get(id), shop: { name: q.data.shopName, sav: q.data.savPhone ?? '' } };
+  return { kindOf: (id: number) => kinds.get(id), shop: { name: q.data.shopName, sav: q.data.savPhone ?? '', logo: q.data.logo } };
 }
 type Couriers = NonNullable<ReturnType<typeof useCouriers>>;
 export const stateOf = (o: Order, c: Couriers) => labelState(o, o.companyId ? c.kindOf(o.companyId) : undefined);

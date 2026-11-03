@@ -93,6 +93,7 @@ async function renderRow(ctx: Ctx, g: GroupRowIn, o: Pick<HtmlOpts, 'mode' | 'im
   }
   const s = await landingSettings(ctx.db);
   if (!shopName) shopName = (await getSetting(ctx.db, 'shop')).name;
+  const logo = (await getSetting(ctx.db, 'logo')).url ?? null;
   const best = items.find((x) => x.pageId === g.best_page_id);
   const url = o.url ?? (o.site ? `${o.site}/${await landingStore(ctx.db, s)}/${g.slug}` : '');
   const px = await pixelsOf(ctx.db, g, s.pixelId);
@@ -106,6 +107,10 @@ async function renderRow(ctx: Ctx, g: GroupRowIn, o: Pick<HtmlOpts, 'mode' | 'im
       items,
       bestSlug: best?.slug ?? null,
       shopName,
+      shopLogo: (() => {
+        const u = logo;
+        return u && u.length <= 60_000 ? u : null;
+      })(),
       pixelId: o.mode === 'live' ? px.meta.join(',') : '',
       tiktokId: o.mode === 'live' ? px.tiktok.join(',') : '',
     },

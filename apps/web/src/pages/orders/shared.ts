@@ -5,6 +5,7 @@ import type { In } from '../../lib/backend';
 import { downloadCsv, escapeHtml, printHtml } from '../../lib/files';
 import { da, dateTime, when, wilaya, wilayaName } from '../../lib/format';
 import { trackOf } from '../../lib/items';
+import { logoImg } from '../depot/labelPrint';
 
 export type ListFilter = In<'orders.list'>;
 
@@ -116,12 +117,14 @@ function barcodeSvg(text: string): string {
 }
 
 /** "Imprimer les bons": one delivery slip per order. */
-export function printSlips(t: TFunction, rows: (Order & { companyKind?: string | null })[]) {
+export function printSlips(t: TFunction, rows: (Order & { companyKind?: string | null })[], shop?: { name: string; logo: string | null }) {
   const e = escapeHtml;
+  // the boutique at the top of each slip: its logo and its name
+  const brand = shop?.name ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-weight:800">${logoImg(shop.logo, 'slip-logo', 'width:30px;height:30px;object-fit:contain;border-radius:6px')}${e(shop.name)}</div>` : '';
   const html = rows
     .map((a) => {
       const code = trackOf(a) || a.ref;
-      return `<div style="border:2px solid #111;border-radius:8px;padding:10px;margin-bottom:10px;page-break-inside:avoid">
+      return `<div style="border:2px solid #111;border-radius:8px;padding:10px;margin-bottom:10px;page-break-inside:avoid">${brand}
 <div style="background:#111;color:#fff;padding:7px 12px;border-radius:5px;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:21px;font-weight:900;letter-spacing:.03em;-webkit-print-color-adjust:exact;print-color-adjust:exact">
 <span>${a.companyKind === 'own' ? e(t('orders.slip.livreur')) : ''}${e(String(a.companyName || t('orders.slip.noCompany')).toUpperCase())}</span><span style="font-size:17px">${e(a.ref)}</span></div>
 <div style="display:flex;align-items:center;gap:14px;margin-top:8px;flex-wrap:wrap">${barcodeSvg(code)}<b style="font-family:monospace;font-size:16px;letter-spacing:.04em">${e(code)}</b></div>
@@ -136,11 +139,11 @@ ${a.deliveryNote ? `<div><b>${e(t('orders.slip.note'))} : ${e(a.deliveryNote)}</
 }
 
 /** Printing one order from its card. */
-export function printOrder(t: TFunction, o: Order, shopName: string) {
+export function printOrder(t: TFunction, o: Order, shopName: string, logo?: string | null) {
   const e = escapeHtml;
   printHtml(
     `${o.ref}`,
-    `<h1>${e(shopName)} — ${e(o.ref)}</h1><p class="muted">${e(when(o.createdAt))}</p>
+    `<h1 style="display:flex;align-items:center;gap:10px">${logoImg(logo, 'ord-logo', 'width:40px;height:40px;object-fit:contain;border-radius:8px')}<span>${e(shopName)} — ${e(o.ref)}</span></h1><p class="muted">${e(when(o.createdAt))}</p>
 <h2>${e(t('orders.card.client'))}</h2><p><b>${e(o.customerName)}</b> · ${e(o.phone)}${o.phone2 ? ` / ${e(o.phone2)}` : ''}<br>${e([wilaya(o.wilayaId), o.commune, o.address].filter(Boolean).join(' · '))}${o.isStopdesk ? ` · <b>${e(t('orders.slip.desk'))}</b>` : ''}</p>
 <h2>${e(t('orders.card.products'))}</h2><table><tr><th>${e(t('orders.form.product'))}</th><th class="num">${e(t('orders.form.qty'))}</th><th class="num">${e(t('orders.form.price'))}</th><th class="num">${e(t('orders.form.total'))}</th></tr>
 ${o.items.map((i) => `<tr><td>${e(i.name)}${i.variantTitle ? ` — ${e(i.variantTitle)}` : ''}</td><td class="num">${i.qty}</td><td class="num">${e(da(i.unitPrice))}</td><td class="num">${e(da(i.qty * i.unitPrice))}</td></tr>`).join('')}

@@ -81,7 +81,13 @@ export interface LabelShop {
   name: string;
   /** after-sales number (Réglages), empty when not set */
   sav: string;
+  /** the boutique's logo (« Mes boutiques »), next to its name */
+  logo?: string | null;
 }
+
+/** The boutique's logo as an image of the printed page (a picture the app made: PNG, JPEG, WebP or the demo's SVG). */
+export const logoImg = (logo: string | null | undefined, cls: string, size?: string) =>
+  logo && /^data:image\/(png|jpeg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/.test(logo) ? `<img class="${cls}" src="${logo}" alt=""${size ? ` style="${size}"` : ''}>` : '';
 
 /** 0741932775 → 0741 93 27 75 (other formats as they are). */
 const phone = (p: string) => {
@@ -132,6 +138,8 @@ html,body{margin:0!important;padding:0;background:#fff}
 .lbl-bc svg{display:block;width:100%;height:16mm}
 .lbl-code{text-align:center;font:800 11pt/1 "Courier New",Courier,monospace;letter-spacing:.1em;direction:ltr}
 .lbl-f{display:flex;align-items:center;justify-content:space-between;gap:2mm;margin-top:2mm;padding-top:1.4mm;border-top:.3mm solid #000;font-size:8pt}
+.lbl-from{display:inline-flex;align-items:center;gap:1.4mm;min-width:0}
+.lbl-logo{width:7mm;height:7mm;object-fit:contain;flex:none}
 .lbl-f span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lbl-f b{font-size:9.5pt}
 .lbl-f .lbl-sav{flex:none}
@@ -169,7 +177,7 @@ ${o.deliveryNote ? `<div class="lbl-note">${e(t('depot.labels.note'))} : ${e(o.d
 <div class="lbl-cod"><span>${e(t('depot.labels.collect'))}</span><b>${e(da(o.total))}</b></div>
 <div class="lbl-bc">${code128Svg(code)}</div>
 <div class="lbl-code">${e(code)}</div>
-<div class="lbl-f"><span>${e(t('depot.labels.fromShort'))} <b>${e(shop.name)}</b></span>${shop.sav ? `<span class="lbl-sav">${e(t('depot.labels.savPhone'))} <b><bdi dir="ltr">${e(phone(shop.sav))}</bdi></b></span>` : ''}</div>
+<div class="lbl-f"><span class="lbl-from">${logoImg(shop.logo, 'lbl-logo')}<span>${e(t('depot.labels.fromShort'))} <b>${e(shop.name)}</b></span></span>${shop.sav ? `<span class="lbl-sav">${e(t('depot.labels.savPhone'))} <b><bdi dir="ltr">${e(phone(shop.sav))}</bdi></b></span>` : ''}</div>
 </section>`;
 }
 
@@ -181,7 +189,7 @@ function returnLabelHtml(t: TFunction, z: Zx, { o, code }: LabelItem, shop: Labe
   return `<section class="lbl ret" dir="${i18n.dir()}">
 <div class="lbl-retb">${e(t('depot.labels.retTitle'))}<small>${e(t('depot.labels.retSub'))}</small></div>
 <div class="lbl-top"><div class="lbl-id">
-<div class="lbl-co">${e(shop.name)}<small>${e(t('depot.labels.retTo'))}</small></div>
+<div class="lbl-co">${logoImg(shop.logo, 'lbl-logo', 'margin-inline-end:1.5mm;vertical-align:middle;background:#fff;border-radius:1mm')}${e(shop.name)}<small>${e(t('depot.labels.retTo'))}</small></div>
 <div class="lbl-k">${e(t('depot.labels.order'))}</div>
 <div class="lbl-trk">${e(o.ref)}</div>
 ${o.savRef ? `<div class="lbl-ref">${e(t('depot.labels.exchange', { ref: o.savRef }))}</div>` : ''}

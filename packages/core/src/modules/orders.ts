@@ -1655,7 +1655,9 @@ function orderExtraProcs() {
     'orders.lookups': proc(null, z.object({}), async (ctx) => {
       const companies = (await ctx.db.query('SELECT id, name, kind, active FROM delivery_companies ORDER BY name')).map((c: any) => ({ id: num(c.id), name: c.name as string, kind: c.kind as string, active: !!c.active }));
       const shop = await getSetting(ctx.db, 'shop');
-      return { companies, shopName: shop.name, whatsappTemplate: shop.whatsappTemplate, defaultCompanyId: shop.defaultCompanyId ?? null, savPhone: shop.savPhone };
+      // the boutique's logo (« Mes boutiques »): on the parcel labels, the slips and the printed order
+      const logo = (await getSetting(ctx.db, 'logo')).url ?? null;
+      return { companies, shopName: shop.name, whatsappTemplate: shop.whatsappTemplate, defaultCompanyId: shop.defaultCompanyId ?? null, savPhone: shop.savPhone, logo };
     }),
 
     /**

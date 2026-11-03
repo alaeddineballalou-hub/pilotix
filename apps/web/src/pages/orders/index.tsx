@@ -242,6 +242,7 @@ export function OrderList(p: ListProps) {
           printSlips(
             t,
             sel.map((o) => ({ ...o, companyKind: companies.find((c) => c.id === o.companyId)?.kind ?? null })),
+            look.data ? { name: look.data.shopName, logo: look.data.logo } : undefined,
           )
         }
       >

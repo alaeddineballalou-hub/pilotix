@@ -214,9 +214,13 @@ export async function productContext(db: Db, productId: number) {
     soldOut,
     fees,
     shopName: shop.name,
+    shopLogo: pageLogo((await getSetting(db, 'logo')).url ?? null),
   };
 }
 type ProductCtx = Awaited<ReturnType<typeof productContext>>;
+
+/** The boutique's logo on its pages: inside the page (no other request), when it is small enough. */
+const pageLogo = (url: string | null) => (url && url.length <= 60_000 ? url : null);
 
 /** The price of one piece: the page's own price (a promotion) first, then the variant's, then the product's. */
 const unitPriceOf = (pagePrice: number | null, pc: ProductCtx, variantId: number | null) => pagePrice ?? pc.variants.find((v) => v.id === variantId)?.price ?? pc.price;
@@ -331,6 +335,7 @@ export async function landingPage(ctx: Ctx, slug: string, o: HtmlOpts): Promise<
     images: viewImages(refs, await imageRows(ctx.db, refs, !o.imgBase), o.imgBase),
     fees: pc.fees,
     shopName: pc.shopName,
+    shopLogo: pc.shopLogo,
     // the pixel only on the real page: never in Pilotix (preview, demo), whose visits are not customers
     pixelId: o.mode === 'live' ? px.meta.join(',') : '',
     tiktokId: o.mode === 'live' ? px.tiktok.join(',') : '',
@@ -1500,7 +1505,7 @@ export const landingProcs = {
   /** price, variants (own price, stock), delivery prices and shop name of a product (the editor's preview) */
   'landing.context': proc([...WHO], z.object({ productId: id }), async (ctx, { productId }) => {
     const pc = await productContext(ctx.db, productId);
-    return { name: pc.name, price: pc.price, photo: pc.photo, fixedPrice: pc.fixedPrice, variants: pc.variants, soldOut: pc.soldOut, fees: pc.fees, shopName: pc.shopName, bits: LANDING_POW_BITS };
+    return { name: pc.name, price: pc.price, photo: pc.photo, fixedPrice: pc.fixedPrice, variants: pc.variants, soldOut: pc.soldOut, fees: pc.fees, shopName: pc.shopName, shopLogo: pc.shopLogo, bits: LANDING_POW_BITS };
   }),
 
   'landing.freeSlug': proc([...WHO], z.object({ name: z.string().max(200), sku: z.string().max(120).optional(), id: id.optional() }), async (ctx, i) => ({

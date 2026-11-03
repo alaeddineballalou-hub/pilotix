@@ -3,9 +3,12 @@ import i18n from '../../lib/i18n';
 import { escapeHtml, printHtml } from '../../lib/files';
 import { da, dateTime, wilaya } from '../../lib/format';
 import { trackOf } from '../../lib/items';
+import { logoImg } from '../depot/labelPrint';
 
 export interface RouteSheet {
   shop: string;
+  /** the boutique's logo (« Mes boutiques ») */
+  logo?: string | null;
   title: string;
   who: string;
   phone: string | null;
@@ -34,7 +37,7 @@ export function printRouteSheet(s: RouteSheet) {
     .join('');
   printHtml(
     s.title,
-    `<h1>${escapeHtml(s.title)}</h1>
+    `<h1 style="display:flex;align-items:center;gap:12px">${logoImg(s.logo, 'rs-logo', 'width:44px;height:44px;object-fit:contain;border-radius:9px')}<span>${escapeHtml(s.title)}</span></h1>
 <p class="muted">${escapeHtml(s.shop)} · ${escapeHtml(dateTime(s.date))}${s.phone ? ` · ${escapeHtml(s.phone)}` : ''}</p>
 <p><b>${escapeHtml(t('count', { count: s.orders.length }))}</b> · ${escapeHtml(t('total'))} <b>${escapeHtml(da(s.total))}</b></p>
 <table><thead><tr><th>#</th><th>${escapeHtml(t('order'))}</th><th>${escapeHtml(t('customer'))}</th><th>${escapeHtml(t('address'))}</th><th>${escapeHtml(t('products'))}</th><th class="num">${escapeHtml(t('amount'))}</th><th>${escapeHtml(t('sign'))}</th></tr></thead>

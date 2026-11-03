@@ -283,7 +283,6 @@ function Editor({ b }: { b: Boutique }) {
 /** Where the boutique's name and logo show (the orders are examples). */
 function Preview({ name, logo, slug, host, person, role }: { name: string; logo: string | null; slug: string; host: string; person: string; role: string }) {
   const { t } = useTranslation();
-  const soon = <span className="chip bqp-soon">{t('boutiques.soon')}</span>;
   return (
     <div className="bqp-stage">
       <div className="bqp-pv">
@@ -304,7 +303,7 @@ function Preview({ name, logo, slug, host, person, role }: { name: string; logo:
       <div className="bqp-two">
         <div className="bqp-pv">
           <span className="bqp-pv-cap">
-            {t('boutiques.pvLabel')} {soon}
+            {t('boutiques.pvLabel')}
           </span>
           <div className="bqp-lbl" aria-hidden="true">
             <div className="bqp-lbl-top">
@@ -334,7 +333,7 @@ function Preview({ name, logo, slug, host, person, role }: { name: string; logo:
         <div className="bqp-col">
           <div className="bqp-pv">
             <span className="bqp-pv-cap">
-              {t('boutiques.pvLanding')} {soon}
+              {t('boutiques.pvLanding')}
             </span>
             <div className="bqp-land" aria-hidden="true">
               <div className="bqp-land-url ltr">
@@ -353,7 +352,7 @@ function Preview({ name, logo, slug, host, person, role }: { name: string; logo:
           </div>
           <div className="bqp-pv">
             <span className="bqp-pv-cap">
-              {t('boutiques.pvRoute')} {soon}
+              {t('boutiques.pvRoute')}
             </span>
             <div className="bqp-rt" aria-hidden="true">
               <div className="bqp-rt-head">
