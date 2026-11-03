@@ -10,12 +10,10 @@ import { num } from '../db';
 import { bad, Ctx, forbidden, makeSession, proc } from '../rpc';
 import { loadShop, platformSettings, shopCtx, shopStatus } from '../platform/shops';
 import { LINK_SQL, Link, toLink } from './agencies';
-import { DEFAULT_SORT } from './confirmation';
-import { peekNext } from './orders';
+import { FANOUT, fanOut, nextAcross, Runner } from './fanout';
 import { profileById } from './users';
 
-/** Runs one action in a shop's ctx (index.ts: the registry, the gates). */
-export type Runner = (ctx: Ctx, name: string, input: unknown) => Promise<unknown>;
+export type { Runner } from './fanout';
 
 /** One seller the person works for now, and their account in that store. */
 interface Work {
@@ -68,126 +66,6 @@ async function storeCtx(ctx: Ctx, w: Work): Promise<Ctx> {
   return { db, session: makeSession(p), shop: shopCtx(s, st), now: ctx.now, emit: () => {}, t };
 }
 
-// ---------------------------------------------------------------- « Tous les vendeurs »: answers put together
-type Part = { seller: AgencySeller; out: any };
-
-/** Numbers add up, objects key by key (counts of every store). */
-function sumDeep(vals: any[]): any {
-  const first = vals.find((v) => v !== undefined && v !== null);
-  if (typeof first === 'number') return vals.reduce((s, v) => s + (typeof v === 'number' ? v : 0), 0);
-  if (first && typeof first === 'object' && !Array.isArray(first)) {
-    const keys = [...new Set(vals.flatMap((v) => (v && typeof v === 'object' ? Object.keys(v) : [])))];
-    return Object.fromEntries(keys.map((k) => [k, sumDeep(vals.map((v) => v?.[k]))]));
-  }
-  return first ?? null;
-}
-
-type Key = (r: any) => number | string | null;
-/** Merges the rows of every store in one order (nulls last), then cuts the page asked. */
-function mergeRows(parts: Part[], key: Key, dir: 'asc' | 'desc', page: number, pageSize: number, add: (r: any, p: Part) => any = (r) => r) {
-  const rows = parts.flatMap((p) => (p.out?.rows ?? []).map((r: any) => ({ ...add(r, p), seller: { id: p.seller.id, name: p.seller.name } })));
-  const s = dir === 'desc' ? -1 : 1;
-  rows.sort((a, b) => {
-    const x = key(a);
-    const y = key(b);
-    if (x === y) return String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')) || a.id - b.id;
-    if (x === null) return 1;
-    if (y === null) return -1;
-    return (typeof x === 'string' ? x.localeCompare(String(y)) : x - (y as number)) * s;
-  });
-  const total = parts.reduce((n, p) => n + num(p.out?.total), 0);
-  return { rows: rows.slice((page - 1) * pageSize, page * pageSize), total, page, pageSize };
-}
-
-const CONF_KEY: Record<string, Key> = {
-  deadline: (r) => {
-    const d = r.deadline;
-    return d ? (d.m === 'start' ? d.e ?? d.t : d.t) : null;
-  },
-  created_at: (r) => r.createdAt ?? null,
-  confirmed_at: (r) => r.confirmedAt ?? null,
-  next_call_at: (r) => r.nextCallAt ?? null,
-  total: (r) => r.total ?? null,
-  customer_name: (r) => (r.customerName ? String(r.customerName).toLowerCase() : null),
-};
-const SUIVI_SORT: Record<string, { key: Key; dir: 'asc' | 'desc' }> = {
-  enlivraison: { key: (r) => r.shippedAt ?? null, dir: 'asc' },
-  alertes: { key: (r) => r.updatedAt ?? null, dir: 'asc' },
-  alertes_new: { key: (r) => r.updatedAt ?? null, dir: 'asc' },
-  alertes_encours: { key: (r) => r.updatedAt ?? null, dir: 'asc' },
-  traites: { key: (r) => r.updatedAt ?? null, dir: 'desc' },
-  livres: { key: (r) => r.deliveredAt ?? null, dir: 'desc' },
-  annules: { key: (r) => r.updatedAt ?? null, dir: 'desc' },
-  swap: { key: (r) => r.updatedAt ?? null, dir: 'desc' },
-  swapped: { key: (r) => r.updatedAt ?? null, dir: 'desc' },
-};
-
-interface Fan {
-  /** what each store is asked (a list: its first rows, up to the page asked) */
-  input?: (i: any) => any;
-  /** Read enough pages from each seller for the requested merged page, even beyond its API page limit. */
-  paged?: { defaultSize: number };
-  merge: (parts: Part[], i: any) => any;
-}
-const sum: Fan = { merge: (parts) => sumDeep(parts.map((p) => p.out)) };
-
-/** A marketer's ad sets in every seller's store, in one list (the most spent first), each with its seller. */
-const mkAll: Fan = {
-  merge: (parts) => {
-    const rows = parts.flatMap((p) => (p.out?.rows ?? []).map((r: any) => ({ ...r, seller: { id: p.seller.id, name: p.seller.name } })));
-    rows.sort((a, b) => (b.sp ?? 0) - (a.sp ?? 0));
-    const first = parts[0]?.out ?? {};
-    return {
-      ...first,
-      owner: false,
-      admin: false,
-      from: parts.map((p) => p.out?.from).filter(Boolean).sort()[0] ?? first.from,
-      to: parts.map((p) => p.out?.to).filter(Boolean).sort().pop() ?? first.to,
-      fxMissing: [...new Set(parts.flatMap((p) => p.out?.fxMissing ?? []))].sort(),
-      marketers: parts.flatMap((p) => p.out?.marketers ?? []).filter((m: any, i: number, a: any[]) => a.findIndex((x) => x.id === m.id && x.name === m.name) === i),
-      rows,
-      // each seller's own rules (they judge the ad sets « réussi »)
-      sellers: parts.map((p) => ({ id: p.seller.id, name: p.seller.name, rules: p.out?.rules ?? null })),
-    };
-  },
-};
-
-const FANOUT: Record<string, Fan> = {
-  // Produits & stock › Guide de vente: every seller's products in one list, by name
-  'catalog.guides': { merge: (parts) => mergeRows(parts, (r) => String(r.name).toLowerCase(), 'asc', 1, 3000) },
-  'catalog.assigned': {
-    paged: { defaultSize: 50 },
-    input: (i) => ({ ...i, page: 1, pageSize: Math.min(3000, (i?.page ?? 1) * (i?.pageSize ?? 50)) }),
-    merge: (parts, i) => mergeRows(parts, (r) => String(r.name).toLowerCase(), 'asc', i?.page ?? 1, i?.pageSize ?? 50),
-  },
-  'orders.counts': sum,
-  'confirmation.counts': sum,
-  'confirmation.mine': sum,
-  'suivi.counts': sum,
-  'mk.overview': mkAll,
-  'confirmation.list': {
-    input: (i) => ({ ...i, page: 1, pageSize: Math.min(3000, (i?.page ?? 1) * (i?.pageSize ?? 50)) }),
-    merge: (parts, i) => {
-      const sub = (i?.sub ?? 'nouvelles') as keyof typeof DEFAULT_SORT;
-      const def = DEFAULT_SORT[sub] ?? DEFAULT_SORT.nouvelles;
-      let sort: string = i?.sort ?? def.sort;
-      if (sort === 'deadline' && sub !== 'nouvelles' && sub !== 'attente') sort = 'created_at';
-      const dir = i?.dir ?? (i?.sort ? (i.sort === 'total' ? 'desc' : 'asc') : def.dir);
-      return mergeRows(parts, CONF_KEY[sort] ?? CONF_KEY.created_at, dir, i?.page ?? 1, i?.pageSize ?? 50);
-    },
-  },
-  'suivi.list': {
-    paged: { defaultSize: 300 },
-    input: (i) => ({ ...i, page: 1, pageSize: Math.min(500, (i?.page ?? 1) * (i?.pageSize ?? 300)) }),
-    merge: (parts, i) => {
-      const o = SUIVI_SORT[i?.tab] ?? SUIVI_SORT.alertes;
-      // each row carries its store's extra details (ids repeat from one store to another)
-      const out = mergeRows(parts, o.key, o.dir, i?.page ?? 1, i?.pageSize ?? 300, (r, p) => ({ ...r, extra: p.out?.extra?.[r.id] ?? null }));
-      return { ...out, extra: {} };
-    },
-  },
-};
-
 /** The procedures of the seller picker's « Tous les vendeurs » (the others need one seller). */
 export const FANOUT_PROCS = new Set([...Object.keys(FANOUT), 'orders.next']);
 
@@ -203,57 +81,11 @@ export async function sellerCall(name: string, ctx: Ctx, input: unknown, run: Ru
     if (!w) throw forbidden('Vous ne travaillez pas pour ce vendeur');
     return run(await storeCtx(ctx, w), name, input);
   }
-  if (name === 'orders.next') return nextAll(ctx, input, run);
+  const targets = (await sellerWork(ctx)).map((w) => ({ source: { id: w.L.info.store.id, name: w.L.info.store.name }, ctx: () => storeCtx(ctx, w) }));
+  if (name === 'orders.next') return nextAcross(targets, input, run);
   const fan = FANOUT[name];
   if (!fan) throw bad('Choisissez un vendeur en haut de la page pour cette action');
-  if (fan.paged && !z.object({ page: z.number().int().positive().optional(), pageSize: z.number().int().positive().max(name === 'catalog.assigned' ? 3000 : 500).optional() }).safeParse(input ?? {}).success)
-    throw bad('Pagination invalide');
-  const work = await sellerWork(ctx);
-  const asked = fan.input ? fan.input(input) : input;
-  const done = await Promise.allSettled(work.map(async (w) => {
-    const sc = await storeCtx(ctx, w);
-    let out: any = await run(sc, name, asked);
-    if (fan.paged) {
-      const raw = input as any;
-      const wanted = (raw?.page ?? 1) * (raw?.pageSize ?? fan.paged.defaultSize);
-      let nextPage = 2;
-      while (out.rows.length < Math.min(wanted, out.total)) {
-        const more: any = await run(sc, name, { ...(asked as any), page: nextPage++ });
-        if (!more.rows.length) break;
-        out = { ...out, rows: [...out.rows, ...more.rows], extra: { ...out.extra, ...more.extra } };
-      }
-    }
-    return { seller: sellerOf(w.L), out };
-  }));
-  const parts = done.flatMap((d) => (d.status === 'fulfilled' ? [d.value] : []));
-  // a store that cannot answer (locked, a task it does not give) is left out; all of them: the first reason
-  if (!parts.length && done.length) throw (done[0] as PromiseRejectedResult).reason;
-  return fan.merge(parts, input);
-}
-
-/**
- * « Commande suivante » over every seller: the store whose customer waits the most gives its next order (callbacks
- * due first, then the oldest new orders), taken there as usual. `skipAll`: orders passed already, with their store.
- */
-async function nextAll(ctx: Ctx, input: any, run: Runner): Promise<{ id: number | null; seller: number | null }> {
-  const skipAll: { s: number; id: number }[] = Array.isArray(input?.skipAll)
-    ? input.skipAll.filter((k: any) => Number.isSafeInteger(k?.s) && Number.isSafeInteger(k?.id)).slice(-400)
-    : [];
-  const cands: { sc: Ctx; store: number; skip: number[]; due: boolean; at: string }[] = [];
-  for (const w of await sellerWork(ctx)) {
-    const sc = await storeCtx(ctx, w).catch(() => null);
-    if (!sc || !sc.session.roles.includes('confirmation')) continue;
-    const store = w.L.info.store.id;
-    const skip = skipAll.filter((k) => k.s === store).map((k) => k.id).slice(-200);
-    const c = await peekNext(sc, skip);
-    if (c) cands.push({ sc, store, skip, due: c.nextCallAt !== null, at: c.nextCallAt ?? c.createdAt });
-  }
-  cands.sort((a, b) => Number(b.due) - Number(a.due) || a.at.localeCompare(b.at));
-  for (const c of cands) {
-    const r = (await run(c.sc, 'orders.next', { skip: c.skip })) as { id: number | null };
-    if (r.id) return { id: r.id, seller: c.store };
-  }
-  return { id: null, seller: null };
+  return fanOut(name, fan, input, targets, run);
 }
 
 export const agencyWorkProcs = {

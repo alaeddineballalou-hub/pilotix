@@ -42,5 +42,32 @@
   "routeOf": "Feuille de route · {{who}}",
   "parcels_one": "{{count}} colis",
   "parcels_other": "{{count}} colis",
-  "switchHint": "Changer"
+  "switchHint": "Changer",
+  "all": {
+    "title": "Toutes les boutiques",
+    "every": "Toutes",
+    "count_one": "{{count}} boutique",
+    "count_other": "{{count}} boutiques",
+    "filter": "Boutique",
+    "col": "Boutique",
+    "pageOne": "Cette page est boutique par boutique : vous voyez « {{name}} ».",
+    "leave": "Revenir à une boutique",
+    "byBoutique": "Par boutique",
+    "total": "Total",
+    "now": "Maintenant",
+    "help": "Accueil, Dashboard, Commandes, Confirmation et Suivi montrent toutes vos boutiques ensemble. Les autres pages restent boutique par boutique.",
+    "dashNote": "Le détail par équipe, par agent et par livreur reste boutique par boutique : choisissez une boutique en bas du menu.",
+    "bulkOne": "Les actions groupées se font boutique par boutique",
+    "received": "Reçues",
+    "confirmed": "Confirmées",
+    "confRate": "Taux conf.",
+    "delivered": "Livrées",
+    "delivRate": "Taux livr.",
+    "returns": "Retours",
+    "cashed": "Encaissé",
+    "toCall": "À appeler",
+    "toPrepare": "À préparer",
+    "onRoad": "En route",
+    "oneAtATime": "« {{what}} » se fait boutique par boutique : choisissez la boutique."
+  }
 }

@@ -1,7 +1,7 @@
 // Confirmation: Nouvelles › En cours › Confirmées (+ Terminées). Same screens as the original app.
 import { CLIENT_LEVELS, SALES_CHANNELS, SalesChannel, WILAYAS, type ClientLevel } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { Fragment, ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, lazy, ReactNode, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
 import { downloadCsv } from '../../lib/files';
@@ -28,6 +28,7 @@ import { ConfirmedStatsPage, StatsSection } from './Stats';
 import { useStatusChange } from './StatusDialog';
 import { CopyCode } from '../../ui/CopyCode';
 import { ScoreChip } from '../../ui/clientScore';
+import { useAllMode } from '../../layout/AllBoutiques';
 
 type Row = NonNullable<ReturnType<typeof useList>['data']>['rows'][number];
 type SortKey = 'created_at' | 'confirmed_at' | 'next_call_at' | 'total' | 'customer_name' | 'deadline' | 'score';
@@ -87,7 +88,19 @@ function useList(sub: Sub, input: { q: string; f: Filters; sort: SortKey; dir: '
   );
 }
 
-export function Confirmation({ sub: rawSub, rest }: PageProps) {
+/** « Confirmation »: this boutique's, or every boutique's with « Toutes les boutiques ». */
+export function Confirmation(p: PageProps) {
+  const all = useAllMode();
+  if (!all.on) return <ConfirmationOne {...p} />;
+  return (
+    <Suspense fallback={<Loading />}>
+      <AllConf {...p} />
+    </Suspense>
+  );
+}
+const AllConf = lazy(() => import('../boutiques/all').then((m) => ({ default: m.BoutiquesConfirmation })));
+
+function ConfirmationOne({ sub: rawSub, rest }: PageProps) {
   const { t } = useTranslation();
   const sub: Sub = SUBS.includes(rawSub as Sub) ? (rawSub as Sub) : 'nouvelles';
   const { has } = useSession();

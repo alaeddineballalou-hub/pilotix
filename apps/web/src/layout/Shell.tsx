@@ -22,6 +22,7 @@ import { useCanRules } from '../lib/pilot';
 import { AccountMenu } from './AccountMenu';
 import { BoutiqueSwitch } from './Boutiques';
 import { ShopBanner } from './ShopBanner';
+import { AllBanner, useAllMode } from './AllBoutiques';
 const DepotAlert = lazy(() => import('./DepotAlert').then((m) => ({ default: m.DepotAlert })));
 
 const AgentBanner = lazy(() => import('../pages/confirmation/AgentBanner').then((m) => ({ default: m.AgentBanner })));
@@ -107,7 +108,9 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
   const seller = useSeller();
   const [navOpen, setNavOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
-  const counts = useMenuCounts(agency ? seller : null, space !== 'marketer');
+  // « Toutes les boutiques »: the menu counts every boutique
+  const all = useAllMode();
+  const counts = useMenuCounts(agency ? seller : all.on ? 'all' : null, space !== 'marketer');
   // a partner: the work its sellers give it (one seller chosen: that one's)
   const work = useSellers(partner);
   const [folded, setFolded] = useState(() => store.get('sidebar') === 'folded');
@@ -372,6 +375,7 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
               />
             </div>
           )}
+          {all.on && !ALL_PAGES.has(page) && <AllBanner />}
           {children}
         </main>
       </div>
@@ -379,6 +383,9 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
     </div>
   );
 }
+
+/** The pages that show every boutique together with « Toutes les boutiques » (the others say which one they show). */
+const ALL_PAGES = new Set(['accueil', 'dashboard', 'commandes', 'confirmation', 'suivi', 'boutiques']);
 
 /** A partner's pages that show one seller or all of them (the picker shows there). */
 const SELLER_PAGES: Record<'store' | 'agency' | 'marketer', Set<string>> = {

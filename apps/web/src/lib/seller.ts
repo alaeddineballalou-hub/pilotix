@@ -47,13 +47,19 @@ export const useScope = () => useContext(ScopeCtx);
 const open: Seller[] = [];
 export const ambientSeller = (): Seller | undefined => open[open.length - 1];
 
-export function SellerScope({ seller, children }: { seller: Seller; children: ReactNode }) {
+/**
+ * `ambient` false: only the hooks inside use this seller (useRpc, useAction), not the actions called outside React —
+ * a store's « Toutes les boutiques » screens ask every boutique for their lists, while the rest of the app (the top
+ * bar, the heartbeat, a new order) stays in the boutique open.
+ */
+export function SellerScope({ seller, children, ambient = true }: { seller: Seller; children: ReactNode; ambient?: boolean }) {
   useLayoutEffect(() => {
+    if (!ambient) return;
     open.push(seller);
     return () => {
       const i = open.lastIndexOf(seller);
       if (i >= 0) open.splice(i, 1);
     };
-  }, [seller]);
+  }, [seller, ambient]);
   return createElement(ScopeCtx.Provider, { value: seller }, children);
 }

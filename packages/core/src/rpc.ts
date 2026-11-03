@@ -64,6 +64,12 @@ export interface Ctx {
    * picker at the top of the page). The work on orders runs in that store (modules/agencywork.ts).
    */
   seller?: number | 'all';
+  /**
+   * In a store, for someone with several boutiques: « Toutes les boutiques » ('all', each one answering, put together) or
+   * one of their other boutiques, whose order is open on screen (its work runs there, as their account there):
+   * modules/boutiquework.ts.
+   */
+  boutique?: number | 'all';
   /** The server's way to act inside another shop (its live updates, its couriers): that shop's ctx for one of its accounts. */
   otherShop?: (shopId: number, profileId: number) => Promise<Ctx>;
   /**

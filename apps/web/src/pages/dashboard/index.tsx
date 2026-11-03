@@ -2,7 +2,7 @@
 import { ClaimsLateCard, SuiviMotifStats } from './SuiviMotifs';
 import { RiskConfirmStats } from './RiskConfirms';
 import { OverweightStats } from './Overweight';
-import { ReactNode, useEffect, useState } from 'react';
+import { lazy, ReactNode, Suspense, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../lib/backend';
 import { pageIsOn } from '../../lib/features';
@@ -16,6 +16,7 @@ import { Overview } from './Overview';
 import { MyDashboard } from './Mine';
 import { useSession } from '../../lib/session';
 import './dashboard.css';
+import { useAllMode } from '../../layout/AllBoutiques';
 
 const AREAS = ['overview', 'confirmation', 'depot', 'suivi', 'livreurs', 'sav'] as const;
 type Area = (typeof AREAS)[number];
@@ -27,8 +28,17 @@ type Meta = Out<'stats.dashMeta'>;
 /** Owners, administrators and agent managers: the teams' boards; everyone else: their own numbers (Mine.tsx). */
 export function Dashboard(p: PageProps) {
   const { has } = useSession();
+  const all = useAllMode();
+  // « Toutes les boutiques »: the numbers of every boutique, added up and boutique by boutique
+  if (all.on)
+    return (
+      <Suspense fallback={<Loading />}>
+        <AllDash />
+      </Suspense>
+    );
   return has('agent_manager', 'vendeur') ? <TeamDashboard {...p} /> : <MyDashboard />;
 }
+const AllDash = lazy(() => import('../boutiques/all').then((m) => ({ default: () => <m.BoutiquesHome dash /> })));
 
 function TeamDashboard({ sub }: PageProps) {
   const { t } = useTranslation();

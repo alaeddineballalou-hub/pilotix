@@ -98,6 +98,28 @@ function NotGiven({ task, children }: { task: 'confirmation' | 'suivi'; children
   );
 }
 
+// ---------------------------------------------------------------- what a seller's « Toutes les boutiques » changes
+/**
+ * A seller's « Toutes les boutiques » (pages/boutiques/all.tsx) uses these lists too: its words, its filters, each
+ * row's boutique. Missing: an agency's « Tous les vendeurs ».
+ */
+export interface AllScope {
+  /** the column of the shop, and the chip saying « all of them » */
+  label: string;
+  chip: ReactNode;
+  /** a row's shop */
+  tag: (s: { id: number; name: string }) => ReactNode;
+  /** the filters above the list, and what they add to its request */
+  bar?: ReactNode;
+  input?: Record<string, unknown>;
+  /** what the counts are asked (the boutiques kept) */
+  counts?: Record<string, unknown>;
+  /** a shop's name (« Commande suivante ») */
+  nameOf?: (id: number) => string;
+  /** Suivi: the tabs of the bar (default: the step of the agency's menu) */
+  tabs?: string[];
+}
+
 // ---------------------------------------------------------------- Confirmation, every seller
 type Sub = 'nouvelles' | 'attente' | 'confirmees';
 const SUBS: Sub[] = ['nouvelles', 'attente', 'confirmees'];
@@ -105,19 +127,19 @@ type ConfRow = Out<'confirmation.list'>['rows'][number] & { seller?: { id: numbe
 /** an order of « Tous les vendeurs »: the same number can belong to two stores */
 const keyOf = (r: { id: number; seller?: { id: number } }) => `${r.seller?.id ?? 0}:${r.id}`;
 
-function AllConfirmation({ sub: raw }: PageProps) {
+export function AllConfirmation({ sub: raw, scope }: PageProps & { scope?: AllScope }) {
   const { t } = useTranslation();
   const sub: Sub = SUBS.includes(raw as Sub) ? (raw as Sub) : 'nouvelles';
-  const c = useRpc('confirmation.counts', {}, { refetchInterval: 60_000 }).data;
+  const c = useRpc('confirmation.counts', (scope?.counts ?? {}) as never, { refetchInterval: 60_000 }).data;
   return (
     <>
       <StageBar items={SUBS.map((k) => ({ key: k, label: t(`confirmation.sub.${k}`), href: `#/confirmation/${k}`, count: c?.[k] }))} current={sub} />
-      <AllQueue key={sub} sub={sub} />
+      <AllQueue key={sub} sub={sub} scope={scope} />
     </>
   );
 }
 
-function AllQueue({ sub }: { sub: Sub }) {
+function AllQueue({ sub, scope }: { sub: Sub; scope?: AllScope }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const { has } = useSession();
@@ -132,7 +154,9 @@ function AllQueue({ sub }: { sub: Sub }) {
     const id = setTimeout(() => (setQd(q.trim()), setPage(1)), 350);
     return () => clearTimeout(id);
   }, [q]);
-  const list = useRpc('confirmation.list', { sub, q: qd || undefined, page, pageSize: size }, { refetchInterval: 60_000 });
+  const extra = JSON.stringify(scope?.input ?? {});
+  useEffect(() => setPage(1), [extra]);
+  const list = useRpc('confirmation.list', { sub, q: qd || undefined, page, pageSize: size, ...(scope?.input ?? {}) }, { refetchInterval: 60_000 });
   const rows = (list.data?.rows ?? []) as ConfRow[];
   const canNext = sub !== 'confirmees' && has('confirmation');
   // « Commande suivante » of the top header: one order after the other, every seller
@@ -149,7 +173,7 @@ function AllQueue({ sub }: { sub: Sub }) {
     setOpen(nx ? keyOf(nx) : null);
     qc.invalidateQueries();
   };
-  if (focus) return <FocusAll onClose={() => setFocus(false)} />;
+  if (focus) return <FocusAll onClose={() => setFocus(false)} scope={scope} />;
   const cur = rows.find((r) => keyOf(r) === open);
   const total = list.data?.total ?? 0;
   return (
@@ -159,9 +183,11 @@ function AllQueue({ sub }: { sub: Sub }) {
           {t(`confirmation.title.${sub}`)} <span className={`badge t-${SUB_TONE[sub]} ltr`}>{n(total)}</span>
         </h2>
         <div className="row">
-          <span className="chip agx-all-chip">
-            <Icon name="store" /> {t('agency.pick.allShort')}
-          </span>
+          {scope?.chip ?? (
+            <span className="chip agx-all-chip">
+              <Icon name="store" /> {t('agency.pick.allShort')}
+            </span>
+          )}
           {canNext && (
             <button type="button" className="btn primary px-qnext" onClick={() => setFocus(true)}>
               {t('confirmation.next').replace(/\s*[→←]\s*$/, '')}
@@ -170,6 +196,7 @@ function AllQueue({ sub }: { sub: Sub }) {
           )}
         </div>
       </div>
+      {scope?.bar}
       <div className="px-qtools">
         <label className="px-qsearch">
           <Icon name="search" />
@@ -194,7 +221,7 @@ function AllQueue({ sub }: { sub: Sub }) {
               <li key={keyOf(r)}>
                 <button type="button" className="agx-pcard" onClick={() => setOpen(keyOf(r))}>
                   <span className="agx-pcard-top">
-                    <span className="chip agx-seller-chip">{r.seller?.name}</span>
+                    {scope && r.seller ? scope.tag(r.seller) : <span className="chip agx-seller-chip">{r.seller?.name}</span>}
                     {r.deadline ? <Countdown d={r.deadline} short /> : <small className="muted">{when(r.createdAt)}</small>}
                   </span>
                   <b>{r.customerName}</b>
@@ -224,7 +251,7 @@ function AllQueue({ sub }: { sub: Sub }) {
                 <th className="ck">
                   <span className="sr-only">{t('confirmation.detail')}</span>
                 </th>
-                <th>{t('agency.seller')}</th>
+                <th>{scope?.label ?? t('agency.seller')}</th>
                 <th>{t('confirmation.col.order')}</th>
                 <th>{t('confirmation.col.name')}</th>
                 <th className="wide">{t('confirmation.col.product')}</th>
@@ -254,9 +281,7 @@ function AllQueue({ sub }: { sub: Sub }) {
                           <Icon name="chevron" />
                         </button>
                       </td>
-                      <td data-l={t('agency.seller')}>
-                        <span className="chip agx-seller-chip">{r.seller?.name}</span>
-                      </td>
+                      <td data-l={scope?.label ?? t('agency.seller')}>{scope && r.seller ? scope.tag(r.seller) : <span className="chip agx-seller-chip">{r.seller?.name}</span>}</td>
                       <td data-l={t('confirmation.col.order')}>
                         <b className="ltr">{r.ref}</b>
                         <small>{when(r.createdAt)}</small>
@@ -304,16 +329,16 @@ function AllQueue({ sub }: { sub: Sub }) {
 }
 
 /** « Commande suivante » over every seller: one order after the other, each inside its store. */
-function FocusAll({ onClose }: { onClose: () => void }) {
+function FocusAll({ onClose, scope }: { onClose: () => void; scope?: AllScope }) {
   const { t } = useTranslation();
   const [cur, setCur] = useState<{ seller: number; id: number } | null>(null);
   const [done, setDone] = useState(false);
   const skip = useRef<{ s: number; id: number }[]>([]);
-  const sellers = useRpc('agency.sellers', {}, { staleTime: 60_000 });
+  const sellers = useRpc('agency.sellers', {}, { staleTime: 60_000, enabled: !scope });
   const next = async () => {
     try {
       if (cur) await rpc('confirmation.release', { id: cur.id }, cur.seller).catch(() => {});
-      const r = (await rpc('orders.next', { skip: [], skipAll: skip.current.slice(-400) } as never, 'all')) as unknown as { id: number | null; seller: number | null };
+      const r = (await rpc('orders.next', { skip: [], skipAll: skip.current.slice(-400), ...(scope?.input ?? {}) } as never, 'all')) as unknown as { id: number | null; seller: number | null };
       if (r.id && r.seller) {
         skip.current.push({ s: r.seller, id: r.id });
         setCur({ seller: r.seller, id: r.id });
@@ -333,7 +358,7 @@ function FocusAll({ onClose }: { onClose: () => void }) {
     started.current = true;
     void next();
   }); // eslint-disable-line react-hooks/exhaustive-deps
-  const name = (sellers.data ?? []).find((s) => s.id === cur?.seller)?.name ?? '';
+  const name = (cur && scope?.nameOf?.(cur.seller)) || ((sellers.data ?? []).find((s) => s.id === cur?.seller)?.name ?? '');
   if (!cur)
     return (
       <div className="card">
@@ -363,18 +388,19 @@ const stepLinks = (tab: Tab): string[] => (stepTabs(tab).includes('traites') ? [
 const alertTab = (tab: Tab) => tab === 'alertes' || tab === 'alertes_new' || tab === 'alertes_encours';
 type SuiviRow = Out<'suivi.list'>['rows'][number] & { seller?: { id: number; name: string }; extra?: { alertReason: string | null } | null };
 
-function AllSuivi({ sub }: PageProps) {
+export function AllSuivi({ sub, scope }: PageProps & { scope?: AllScope }) {
   const { t } = useTranslation();
   const { has } = useSession();
-  const work = useSellers();
+  const work = useSellers(!scope);
   const canFollow = has('suivi');
   const asked: Tab = TABS.includes(sub as Tab) ? (sub as Tab) : 'enlivraison';
   // a confirmation agent (no suivi): En livraison, Livré, Annulé — no alerts
   const tab: Tab = !canFollow && !['enlivraison', 'livres', 'annules'].includes(asked) ? 'enlivraison' : asked;
   const [page, setPage] = useState(1);
-  useEffect(() => setPage(1), [tab]);
-  const c = useRpc('suivi.counts', {}, { refetchInterval: 60_000 }).data;
-  const q = useRpc('suivi.list', { tab, page, pageSize: 100 }, { refetchInterval: 60_000 });
+  const extra = JSON.stringify(scope?.input ?? {});
+  useEffect(() => setPage(1), [tab, extra]);
+  const c = useRpc('suivi.counts', (scope?.counts ?? {}) as never, { refetchInterval: 60_000 }).data;
+  const q = useRpc('suivi.list', { tab, page, pageSize: 100, ...(scope?.input ?? {}) }, { refetchInterval: 60_000 });
   const [treat, setTreat] = useState<SuiviRow | null>(null);
   const [cancel, setCancel] = useState<SuiviRow | null>(null);
   const [busy, setBusy] = useState(false);
@@ -383,17 +409,20 @@ function AllSuivi({ sub }: PageProps) {
   const reason = (o: SuiviRow) => (o.followStatus === 'alert' ? o.extra?.alertReason || o.extStatus : o.extStatus);
   return (
     <>
-      <StageBar flow={false} items={stepLinks(tab).map((k) => ({ key: k, label: t(k === 'traites' ? 'suivi.tabs.traitesAlert' : `suivi.tabs.${k}`), href: `#/suivi/${k}`, count: k === 'reclamation' ? undefined : c?.[k as Tab] }))} current={tab} />
+      <StageBar flow={false} items={(scope?.tabs ?? stepLinks(tab)).map((k) => ({ key: k, label: t(k === 'traites' && !scope ? 'suivi.tabs.traitesAlert' : `suivi.tabs.${k}`), href: `#/suivi/${k}`, count: k === 'reclamation' || k === 'swap' ? undefined : c?.[k as Tab] }))} current={tab} />
       <div className="card agx-all">
         <div className="card-head">
           <h2>
             {t(tab === 'traites' ? 'suivi.tabs.traitesAlert' : `suivi.tabs.${tab}`)} <span className="badge ltr">{n(q.data?.total ?? 0)}</span>
           </h2>
-          <span className="chip agx-all-chip">
-            <Icon name="store" /> {t('agency.pick.allShort')}
-          </span>
+          {scope?.chip ?? (
+            <span className="chip agx-all-chip">
+              <Icon name="store" /> {t('agency.pick.allShort')}
+            </span>
+          )}
         </div>
-        <p className="muted small">{t(tab === 'enlivraison' ? 'suivi.help.enlivraisonAgency' : `suivi.help.${tab}`)}</p>
+        <p className="muted small">{t(tab === 'enlivraison' && !scope ? 'suivi.help.enlivraisonAgency' : `suivi.help.${tab}`)}</p>
+        {scope?.bar}
         {q.error ? (
           <ErrorBox error={q.error} onRetry={() => q.refetch()} />
         ) : !q.data ? (
@@ -403,7 +432,7 @@ function AllSuivi({ sub }: PageProps) {
             <table className="tbl agx-all-tbl">
               <thead>
                 <tr>
-                  <th>{t('agency.seller')}</th>
+                  <th>{scope?.label ?? t('agency.seller')}</th>
                   <th>{t('confirmation.col.order')}</th>
                   <th>{t('confirmation.col.name')}</th>
                   <th className="wide">{t('confirmation.col.product')}</th>
@@ -423,9 +452,7 @@ function AllSuivi({ sub }: PageProps) {
                 )}
                 {rows.map((o) => (
                   <tr key={keyOf(o)} className="clickable" onClick={(e) => !(e.target as HTMLElement).closest('a,button') && o.seller && openOrder(o.id, o.seller.id)}>
-                    <td data-l={t('agency.seller')}>
-                      <span className="chip agx-seller-chip">{o.seller?.name}</span>
-                    </td>
+                    <td data-l={scope?.label ?? t('agency.seller')}>{scope && o.seller ? scope.tag(o.seller) : <span className="chip agx-seller-chip">{o.seller?.name}</span>}</td>
                     <td data-l={t('confirmation.col.order')}>
                       <b className="ltr">{o.ref}</b>
                       <small>{when(o.updatedAt)}</small>
@@ -455,7 +482,7 @@ function AllSuivi({ sub }: PageProps) {
                     </td>
                     {alertTab(tab) && canFollow && (
                       <td className="agx-row-act">
-                        {work.list.find((s) => s.id === o.seller?.id)?.tasks.includes('suivi') && <>
+                        {(scope ? canFollow : work.list.find((s) => s.id === o.seller?.id)?.tasks.includes('suivi')) && <>
                         <button type="button" className="btn small primary" onClick={() => setTreat(o)}>
                           {t('suivi.act.treat')}
                         </button>

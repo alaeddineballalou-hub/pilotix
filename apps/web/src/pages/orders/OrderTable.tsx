@@ -44,6 +44,8 @@ export interface OrderTableProps {
   columns?: OrderColumn[];
   /** extra columns added after the built-in ones */
   extra?: ExtraColumn[];
+  /** a column before the built-in ones (« Toutes les boutiques »: the order's boutique) */
+  lead?: ExtraColumn;
   sort?: OrderSort;
   dir?: 'asc' | 'desc';
   onSort?: (k: OrderSort, dir: 'asc' | 'desc') => void;
@@ -234,6 +236,7 @@ export function OrderTable(p: OrderTableProps) {
                     <input type="checkbox" aria-label={t('orders.selectAll')} checked={allOn} onChange={toggleAll} />
                   </th>
                 )}
+                {p.lead && <th key={p.lead.key}>{p.lead.label}</th>}
                 {cols.map(th)}
                 {p.extra?.map((x) =>
                   x.sort && p.onSort && p.sort ? (
@@ -252,10 +255,15 @@ export function OrderTable(p: OrderTableProps) {
               {rows.map((o) => {
                 const dim = CONF_DONE_BAD.includes(o.confStatus) || o.followStatus === 'cancelled';
                 return (
-                  <tr key={o.id} className={`clickable${sel.has(o.id) ? ' sel' : ''}${dim ? ' dim' : ''}`} onClick={() => (p.onRow ? p.onRow(o) : openOrder(o.id))}>
+                  <tr key={`${(o as { seller?: { id: number } }).seller?.id ?? ''}:${o.id}`} className={`clickable${sel.has(o.id) ? ' sel' : ''}${dim ? ' dim' : ''}`} onClick={() => (p.onRow ? p.onRow(o) : openOrder(o.id))}>
                     {p.selectable && (
                       <td className="ck" onClick={(e) => e.stopPropagation()}>
                         <input type="checkbox" aria-label={`${t('orders.select')} ${o.ref}`} checked={sel.has(o.id)} onChange={() => toggle(o)} />
+                      </td>
+                    )}
+                    {p.lead && (
+                      <td key={p.lead.key} data-l={p.lead.label}>
+                        {p.lead.cell(o)}
                       </td>
                     )}
                     {cols.map((c) => cell(c, o))}

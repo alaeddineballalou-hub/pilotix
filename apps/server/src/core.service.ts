@@ -297,16 +297,24 @@ export class CoreService implements OnModuleDestroy {
       emit: (e) => this.emitLive(ref.shop.id, e),
       server: ref.hooks,
       t: this.t,
-      ...(ref.shop.kind !== 'store' ? { seller, otherShop: (id: number, profileId: number) => this.otherShop(id, profileId) } : {}),
+      // a store: « Toutes les boutiques » of someone with several boutiques, or an order of another of their boutiques
+      ...(ref.shop.kind !== 'store'
+        ? { seller, otherShop: (id: number, profileId: number) => this.otherShop(id, profileId) }
+        : seller !== undefined
+          ? { boutique: seller, otherShop: (id: number, profileId: number) => this.otherShop(id, profileId) }
+          : {}),
     };
   }
 
-  /** A store a partner works for, as one of the partner's people's accounts there (its live updates, its couriers). */
+  /**
+   * Another shop, as one of the person's accounts there (its live updates, its couriers): a store a partner works for,
+   * or another of a seller's boutiques (« Toutes les boutiques »).
+   */
   private async otherShop(shopId: number, profileId: number): Promise<Ctx> {
     const ref = await this.shop({ id: shopId });
-    if (!ref || ref.shop.status === 'archived' || ref.shop.status === 'deleted') throw new core.AppError('not_found', 'Vendeur introuvable');
+    if (!ref || ref.shop.status === 'archived' || ref.shop.status === 'deleted') throw new core.AppError('not_found', 'Boutique introuvable');
     const p = await core.profileById(ref.db, profileId);
-    if (!p?.active) throw new core.AppError('forbidden', 'Vous ne travaillez plus pour ce vendeur');
+    if (!p?.active) throw new core.AppError('forbidden', 'Votre compte n’est plus actif là-bas');
     return this.ctx(ref, core.makeSession(p));
   }
 

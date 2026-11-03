@@ -1,7 +1,7 @@
 // Commandes (all orders, Livré, Annulé) and the hidden Livrées / Retournées pages — as in the original app.
 import { canSetFollow, CONF_DONE_BAD, CONF_STATUSES, CONF_TODO, FOLLOW_ON_ROAD, FOLLOW_STATUSES, FollowStatus, Order, SALES_CHANNELS, WILAYAS } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { lazy, ReactNode, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
 import { da, n, pct, syncProblems } from '../../lib/format';
@@ -22,6 +22,7 @@ import { useIsPhone } from '../../lib/useMedia';
 import { useViewMode, ViewSwitch } from '../../ui/ViewSwitch';
 import { AgentFilter, CashedFilter, ClearFilters, DateFilters, LivreurFilter, ProductFilter, ReasonFilter, TeamFilter } from '../../ui/filters';
 import { PhoneAnnule, PhoneLivre } from './PhoneDone';
+import { useAllMode } from '../../layout/AllBoutiques';
 
 export { OrderTable } from './OrderTable';
 export type { OrderColumn, ExtraColumn, OrderTableProps } from './OrderTable';
@@ -519,7 +520,19 @@ function useDeliveredExtra() {
 }
 
 // ---------------------------------------------------------------- pages
-export function Commandes({ sub }: PageProps) {
+/** « Commandes »: this boutique's, or every boutique's with « Toutes les boutiques ». */
+export function Commandes(p: PageProps) {
+  const all = useAllMode();
+  if (!all.on) return <CommandesOne {...p} />;
+  return (
+    <Suspense fallback={<Loading />}>
+      <AllOrdersPage {...p} />
+    </Suspense>
+  );
+}
+const AllOrdersPage = lazy(() => import('../boutiques/all').then((m) => ({ default: m.BoutiquesOrders })));
+
+function CommandesOne({ sub }: PageProps) {
   // Livré and Annulé: the stats you tap and the cards (phones; computers too, laid out wide), or the big table
   const phone = useIsPhone();
   const [mode, setMode] = useViewMode('orders-done');

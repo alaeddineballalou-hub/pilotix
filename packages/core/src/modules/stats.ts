@@ -561,6 +561,8 @@ export const statsProcs = {
       shippedOnRoad: num(r.shipped_road),
       delivered,
       deliveryRate: ratio(delivered, delivered + returned),
+      /** parcels back in the period (the rate's other half) */
+      returned,
       returns: num(r.returns),
       cashed: num(r.cash),
       cashedProducts: num(r.cash_products),

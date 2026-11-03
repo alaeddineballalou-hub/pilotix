@@ -512,10 +512,14 @@ class DemoBackend implements Backend {
     // Dellal, the CM AI agent and AI Spy answer with Claude when the preview is opened in Claude (see dellal-page-ai.ts)
     const dellalAi = /^(dellal|cm|spy)\./.test(String(name)) ? await pageAi() : null;
     const base = { session: s, now: () => Date.now(), emit: (e: LiveEvent) => setTimeout(() => this.listeners.forEach((l) => l(e)), 0), ...(dellalAi ? { dellalAi } : {}) };
-    // a partner's space: its own shop, and the seller chosen at the top of the page (its work runs in that store)
+    // a partner's space: its own shop, and the seller chosen at the top of the page (its work runs in that store); a
+    // store: « Toutes les boutiques », or an order of another of the owner's boutiques (boutiquework.ts)
+    const inStore = !this.space || this.space.shop.kind === 'store';
+    if (inStore && seller !== undefined) await this.withBoutiques();
+    const scope = seller === undefined ? {} : inStore ? { boutique: seller } : { seller };
     const ctx = this.space
-      ? { ...base, db: t.shop(this.space.schema), t, shop: this.space.shop, ...(seller !== undefined ? { seller } : {}) }
-      : { ...base, db, ...(this.storeShop ? { t, shop: this.storeShop } : {}) };
+      ? { ...base, db: t.shop(this.space.schema), t, shop: this.space.shop, ...scope }
+      : { ...base, db, ...(this.storeShop ? { t, shop: this.storeShop, ...scope } : {}) };
     try {
       const out = (await core.call(name as string, ctx as import('@pilotix/core').Ctx, input)) as Out<N>;
       if (DEMO_KEEP.has(name as string) && !this.space) await core.demoSnapshot(db).then((k) => store.set('demo-keep', JSON.stringify(k))).catch(() => {});

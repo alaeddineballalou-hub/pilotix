@@ -4,6 +4,7 @@ import { REGISTRY } from './registry';
 import { agencyGate, sellerProcsOf } from './modules/agencyscope';
 import { syncAgency } from './modules/agencies';
 import { sellerCall } from './modules/agencywork';
+import { boutiqueCall } from './modules/boutiquework';
 import { stopAgentPlan } from './modules/planledger';
 import { requireAssignedProducts, seesPurchaseCosts, withoutPurchaseCosts } from './modules/productscope';
 
@@ -38,6 +39,7 @@ export type { KindField } from './couriers/kinds';
 export { syncAgency, syncLink, agencyCounts, monthBounds, monthNow } from './modules/agencies';
 export { agencyGate, AGENCY_AGENT_PROCS, MARKETER_AGENT_PROCS, MARKETER_SELLER_PROCS, SELLER_PROCS, sellerProcsOf } from './modules/agencyscope';
 export { FANOUT_PROCS } from './modules/agencywork';
+export { BOUTIQUE_FANOUT_PROCS, boutiqueWork } from './modules/boutiquework';
 export { listPros, proByCode, computeProStats, STATS_HOURS } from './modules/pro';
 export * as pilotLearn from './modules/pilotlearn';
 export { pilotOn } from './modules/dellal';
@@ -61,6 +63,8 @@ export async function call(name: string, ctx: Ctx, input: unknown) {
   const kind = ctx.shop?.kind;
   const partner = kind === 'agency' || kind === 'marketer';
   if (partner && ctx.seller !== undefined && sellerProcsOf(kind).has(name)) return sellerCall(name, ctx, input, run);
+  // a store, for someone with several boutiques: « Toutes les boutiques », or an order of another of their boutiques
+  if (!partner && ctx.boutique !== undefined) return boutiqueCall(name, ctx, input, run);
   // Stamp existing seller profiles with their stable agency identity before an e-mail change.
   if(partner && kind==='agency' && ctx.t && ((name==='users.update' && (ctx.session.isAdmin||ctx.session.canManageUsers))||name==='me.delete')) await syncAgency(ctx.t,ctx.shop!.id);
   const out = await run(ctx, name, input);

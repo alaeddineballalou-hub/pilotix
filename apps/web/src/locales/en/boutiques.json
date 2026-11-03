@@ -42,5 +42,32 @@
   "routeOf": "Route sheet · {{who}}",
   "parcels_one": "{{count}} parcel",
   "parcels_other": "{{count}} parcels",
-  "switchHint": "Switch"
+  "switchHint": "Switch",
+  "all": {
+    "title": "All boutiques",
+    "every": "All",
+    "count_one": "{{count}} boutique",
+    "count_other": "{{count}} boutiques",
+    "filter": "Boutique",
+    "col": "Boutique",
+    "pageOne": "This page works one boutique at a time: you are seeing “{{name}}”.",
+    "leave": "Back to one boutique",
+    "byBoutique": "By boutique",
+    "total": "Total",
+    "now": "Right now",
+    "help": "Home, Dashboard, Orders, Confirmation and Follow-up show all your boutiques together. The other pages stay one boutique at a time.",
+    "dashNote": "Details by team, agent and driver stay one boutique at a time: pick a boutique at the bottom of the menu.",
+    "bulkOne": "Bulk actions are done one boutique at a time",
+    "received": "Received",
+    "confirmed": "Confirmed",
+    "confRate": "Conf. rate",
+    "delivered": "Delivered",
+    "delivRate": "Deliv. rate",
+    "returns": "Returns",
+    "cashed": "Cashed",
+    "toCall": "To call",
+    "toPrepare": "To prepare",
+    "onRoad": "On the road",
+    "oneAtATime": "“{{what}}” is done one boutique at a time: pick the boutique."
+  }
 }

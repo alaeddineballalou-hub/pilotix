@@ -3,6 +3,7 @@
 // - agent manager: their team (what is late, its numbers against the targets, each member with what to work on), their
 //   other teams, the shop over the period, who is online;
 // - agent: their own Co-Pilot, what is waiting now, their own numbers next to their team's (their priority and how to improve it), the shop.
+import { lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { da, dayRange, n, pct } from '../../lib/format';
 import { featureIsOn } from '../../lib/features';
@@ -21,12 +22,14 @@ import { PeriodChips } from '../dashboard/board/parts';
 import { delivTone, KpiBox, prevRangeOf } from '../dashboard/util';
 import { MyDay } from '../dashboard/Mine';
 import '../dashboard/board/board.css';
+import { useAllMode } from '../../layout/AllBoutiques';
 
 type R = { from: string; to: string };
 
 export function Home(_: PageProps) {
   const { t } = useTranslation();
   const { session, has } = useSession();
+  const all = useAllMode();
   const s = session!;
   if (!has('confirmation', 'suivi', 'depot')) {
     const livreur = s.roles.includes('livreur');
@@ -48,8 +51,15 @@ export function Home(_: PageProps) {
       </>
     );
   }
-  return <HomeStats />;
+  return all.on ? (
+    <Suspense fallback={<Loading />}>
+      <AllHome />
+    </Suspense>
+  ) : (
+    <HomeStats />
+  );
 }
+const AllHome = lazy(() => import('../boutiques/all').then((m) => ({ default: () => <m.BoutiquesHome /> })));
 
 function HomeStats() {
   const { t } = useTranslation();

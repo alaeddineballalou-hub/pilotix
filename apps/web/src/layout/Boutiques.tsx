@@ -1,5 +1,5 @@
 // The person's boutiques: their logo (or their initials), the list (boutiques.list), and the boutique at the bottom of
-// the menu — the one open now; a click lists the others to go into, « Toutes les boutiques » later, « Mes boutiques »
+// the menu — the one open now; a click lists the others to go into, « Toutes les boutiques », « Mes boutiques »
 // and « Ajouter une boutique ». A seller never adds another seller: one account, many boutiques.
 import type { Boutique } from '@pilotix/shared';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -12,6 +12,7 @@ import { useSession } from '../lib/session';
 import { Icon } from '../ui/kit';
 import { toast } from '../ui/toast';
 import { AddStoreModal } from './Accounts';
+import { setAllOn, StackLogo, useAllMode } from './AllBoutiques';
 import './boutiques.css';
 
 /** The person's boutiques (kept a minute; any change on screen asks again). */
@@ -54,6 +55,7 @@ export function BoutiqueSwitch({ folded: foldedMenu }: { folded: boolean }) {
   const { session, switchStore } = useSession();
   const q = useBoutiques();
   const list = q.data;
+  const all = useAllMode();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<number | null>(null);
   const [add, setAdd] = useState(false);
@@ -94,6 +96,8 @@ export function BoutiqueSwitch({ folded: foldedMenu }: { folded: boolean }) {
   const owns = list!.some((b) => b.owner && b.kind === 'store');
   const canAdd = backend.kind === 'demo' ? false : !!session.shop?.canAddStore;
   const go = async (b: Boutique) => {
+    // one boutique again (« Toutes les boutiques » off)
+    if (all.on) setAllOn(false);
     if (b.current) return setOpen(false);
     setBusy(b.id);
     try {
@@ -119,12 +123,12 @@ export function BoutiqueSwitch({ folded: foldedMenu }: { folded: boolean }) {
         title={t('boutiques.switchTitle', { name: cur.name })}
         onClick={() => setOpen((v) => !v)}
       >
-        <BoutiqueLogo name={cur.name} logo={cur.logo} size={folded ? 34 : 36} />
+        {all.on ? <StackLogo list={all.boutiques} size={folded ? 30 : 32} /> : <BoutiqueLogo name={cur.name} logo={cur.logo} size={folded ? 34 : 36} />}
         {!folded && (
           <>
             <span className="bq-switch-t">
-              <b>{cur.name}</b>
-              <small>{list!.length > 1 ? t('boutiques.switchHint') : t('boutiques.openNow')}</small>
+              <b>{all.on ? t('boutiques.all.title') : cur.name}</b>
+              <small>{all.on ? t('boutiques.all.count', { count: all.boutiques.length }) : list!.length > 1 ? t('boutiques.switchHint') : t('boutiques.openNow')}</small>
             </span>
             <svg className="bq-switch-ch" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="m7 15 5 5 5-5" />
@@ -138,16 +142,34 @@ export function BoutiqueSwitch({ folded: foldedMenu }: { folded: boolean }) {
         createPortal(
           <div ref={menu} className="bq-menu" role="menu" style={{ left: pos.left, bottom: pos.bottom, width: pos.width }}>
             {list!.length > 1 && <span className="bq-menu-cap">{t('boutiques.switch')}</span>}
+            {all.can && (
+              <button
+                type="button"
+                role="menuitem"
+                className={`bq-menu-item all${all.on ? ' here' : ''}`}
+                disabled={busy !== null}
+                aria-current={all.on ? 'true' : undefined}
+                title={t('boutiques.all.help')}
+                onClick={() => (setAllOn(true), setOpen(false))}
+              >
+                <StackLogo list={all.boutiques} size={26} />
+                <span className="bq-menu-name">{t('boutiques.all.title')}</span>
+                {all.on && <Icon name="check" className="bq-menu-here" />}
+              </button>
+            )}
             {list!.length > 1 &&
-              list!.map((b) => (
-                <button key={b.id} type="button" role="menuitem" className={`bq-menu-item${b.current ? ' here' : ''}`} disabled={busy !== null} onClick={() => void go(b)} aria-current={b.current ? 'true' : undefined}>
-                  <BoutiqueLogo name={b.name} logo={b.logo} size={26} />
-                  <span className="bq-menu-name">{b.name}</span>
-                  {kindChip(b) && <span className="chip bq-kind">{kindChip(b)}</span>}
-                  {b.locked && <span className="chip px-chip-bad">{t('shop.acc.locked')}</span>}
-                  {busy === b.id ? <span className="bq-menu-busy">…</span> : b.current ? <Icon name="check" className="bq-menu-here" /> : null}
-                </button>
-              ))}
+              list!.map((b) => {
+                const here = b.current && !all.on;
+                return (
+                  <button key={b.id} type="button" role="menuitem" className={`bq-menu-item${here ? ' here' : ''}`} disabled={busy !== null} onClick={() => void go(b)} aria-current={here ? 'true' : undefined}>
+                    <BoutiqueLogo name={b.name} logo={b.logo} size={26} />
+                    <span className="bq-menu-name">{b.name}</span>
+                    {kindChip(b) && <span className="chip bq-kind">{kindChip(b)}</span>}
+                    {b.locked && <span className="chip px-chip-bad">{t('shop.acc.locked')}</span>}
+                    {busy === b.id ? <span className="bq-menu-busy">…</span> : here ? <Icon name="check" className="bq-menu-here" /> : null}
+                  </button>
+                );
+              })}
             {list!.length > 1 && (owns || canAdd) && <hr />}
             {owns && (
               <a role="menuitem" className="bq-menu-item" href="#/boutiques" onClick={() => setOpen(false)}>

@@ -2,7 +2,7 @@ import { lazy, ReactNode, Suspense, useEffect, useState } from 'react';
 import { Loading } from '../ui/kit';
 import { useBackLayer } from './backLayer';
 import { ambientSeller, Seller, SellerScope } from './seller';
-import { AgentView } from './session';
+import { AgentView, useSession } from './session';
 import { useIsPhone } from './useMedia';
 
 /** Options for the order form (new order, edit, exchange). */
@@ -15,6 +15,8 @@ export interface OrderFormOpts {
   onSaved?: (orderId: number) => void;
 }
 
+/** An order belongs to one store: « all » (a list of every seller or boutique) is not one. */
+const one = (s: Seller | undefined): Seller | undefined => (s === 'all' ? undefined : s);
 /** seller: in a confirmation agency's space, the store the order belongs to */
 type Open = { kind: 'card'; id: number; seller?: Seller } | { kind: 'form'; opts: OrderFormOpts; seller?: Seller } | null;
 let current: Open = null;
@@ -28,9 +30,9 @@ const set = (o: Open) => {
  * Opens the order card (details, history, actions). `seller` (an agency's space): the order's store, by default the
  * seller of what is open on screen.
  */
-export const openOrder = (id: number, seller?: Seller) => set({ kind: 'card', id, seller: seller ?? ambientSeller() });
+export const openOrder = (id: number, seller?: Seller) => set({ kind: 'card', id, seller: seller ?? one(ambientSeller()) });
 /** Opens the order form: new order, edit (orderId) or exchange (exchangeOf). */
-export const openOrderForm = (opts: OrderFormOpts = {}) => set({ kind: 'form', opts, seller: ambientSeller() });
+export const openOrderForm = (opts: OrderFormOpts = {}) => set({ kind: 'form', opts, seller: one(ambientSeller()) });
 export const closeModal = () => set(null);
 
 const OrderCard = lazy(() => import('../pages/orders/OrderCard'));
@@ -60,12 +62,13 @@ export function ModalHost() {
   );
 }
 
-/** An order of one of an agency's sellers: shown inside that store, as the agency's agents see it there. */
+/**
+ * An order of one of an agency's sellers: shown inside that store, as the agency's agents see it there. In a store
+ * (« Toutes les boutiques »): an order of another of the person's boutiques, worked inside that boutique.
+ */
 function OfSeller({ seller, children }: { seller?: Seller; children: ReactNode }) {
+  const { session } = useSession();
   if (seller === undefined) return <>{children}</>;
-  return (
-    <SellerScope seller={seller}>
-      <AgentView>{children}</AgentView>
-    </SellerScope>
-  );
+  const partner = session?.shop?.kind === 'agency' || session?.shop?.kind === 'marketer';
+  return <SellerScope seller={seller}>{partner ? <AgentView>{children}</AgentView> : children}</SellerScope>;
 }

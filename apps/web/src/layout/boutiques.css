@@ -46,3 +46,32 @@ html[data-theme="dark"] .bq-logo:not(.bq-logo-none) { background: #fff; }
 
 /* the boutique's logo in the top bar (instead of the person's picture) */
 .px-me-btn .bq-logo { border-radius: 11px; }
+
+/* « Toutes les boutiques » (layout/AllBoutiques.tsx): logos one over the other, the « Boutique » filter, a row's boutique */
+.bq-stack { position: relative; display: inline-block; flex: none; }
+.bq-stack-i { position: absolute; display: block; border-radius: 28%; box-shadow: 0 0 0 2px var(--surface, #fff); }
+.bq-stack-i .bq-logo { display: grid; }
+.bq-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.bq-chip {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 5px 14px 5px 6px; cursor: pointer; font: inherit; font-size: 14px; font-weight: 700;
+  border: 1.5px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink);
+}
+.bq-chip:hover { background: var(--sk-side-hover, #F6F1EB); }
+.bq-chip.on { border-color: var(--navy); background: var(--sky-soft); color: var(--navy); }
+.bq-chip:focus-visible { outline: 2px solid var(--c-accent, #F7A823); outline-offset: 2px; }
+.bq-tag { display: inline-flex; align-items: center; gap: 6px; max-width: 170px; font-weight: 700; font-size: 13px; }
+.bq-tag > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bq-banner {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border-radius: 14px; font-size: 14px; font-weight: 600;
+  background: color-mix(in srgb, var(--sky-soft, #EEF3FA) 70%, transparent); border: 1px solid var(--line); color: var(--ink);
+}
+.bq-banner > span:not(.bq-stack) { flex: 1; min-width: 200px; }
+.bq-menu-item.all { font-weight: 700; }
+.bq-menu-item.all.here { background: color-mix(in srgb, var(--sk-side-on-bg, #FFE9CC) 60%, transparent); }
+.bq-allbar { display: flex; flex-direction: column; gap: 10px; }
+.bq-allchip { display: inline-flex; align-items: center; gap: 8px; }
+.bq-by td.num, .bq-by th.num { text-align: end; white-space: nowrap; }
+.bq-by .bq-by-total td { border-top: 2px solid var(--line); font-weight: 800; background: var(--raise, #FBFAF8); }
+.bq-by td.bq-ok { color: var(--ok); font-weight: 700; }
+.bq-by td.bq-warn { color: var(--warn); font-weight: 700; }
+.bq-by td.bq-bad { color: var(--coral); font-weight: 700; }

@@ -1,6 +1,6 @@
 import type { Order } from '@pilotix/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { ReactNode, useEffect, useRef, useState } from 'react';
+import { lazy, ReactNode, Suspense, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
 import { when, wilayaName, syncProblems } from '../../lib/format';
@@ -31,6 +31,7 @@ import { ScoreChip } from '../../ui/clientScore';
 import { AgentFilter, ClearFilters, CompanyFilter, DateFilters, dayIso, LivreurFilter, ProductFilter, WilayaFilter } from '../../ui/filters';
 import { useDebounced } from '../depot/OrderList';
 import type { In } from '../../lib/backend';
+import { useAllMode } from '../../layout/AllBoutiques';
 
 const LIST_TABS = ['enlivraison', 'alertes', 'alertes_new', 'alertes_encours', 'traites', 'bloques', 'livres', 'annules', 'swap'] as const;
 /** the alert lists: all of them, the new ones (nobody acted yet), the ones in progress */
@@ -43,7 +44,19 @@ const isAlertTab = (tab: string) => tab === 'alertes' || tab === 'alertes_new' |
 type ListTab = (typeof LIST_TABS)[number];
 type Sub = ListTab | 'reclamation';
 
-export function Suivi({ sub }: PageProps) {
+/** « Suivi »: this boutique's, or every boutique's with « Toutes les boutiques ». */
+export function Suivi(p: PageProps) {
+  const all = useAllMode();
+  if (!all.on) return <SuiviOne {...p} />;
+  return (
+    <Suspense fallback={<Loading />}>
+      <AllSuiviPage {...p} />
+    </Suspense>
+  );
+}
+const AllSuiviPage = lazy(() => import('../boutiques/all').then((m) => ({ default: m.BoutiquesSuivi })));
+
+function SuiviOne({ sub }: PageProps) {
   const agency = useInAgency();
   const { has } = useSession();
   // the claims with couriers and the swaps: the store's suivi agents and the agencies (on their own orders)
