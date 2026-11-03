@@ -1,4 +1,4 @@
-# Temporary (for Claude): does the live site serve the guide de vente sizes, ready questions and products to offer? Reads only.
+# Temporary (for Claude): does the live site serve the small size guide (one size: age, weight, measures)? Reads only.
 name: Live now (temporary, for Claude)
 on:
   push:
@@ -28,11 +28,11 @@ jobs:
             grep -o '"[A-Za-z0-9._-]*\.js"' "$f" | tr -d '"' | grep -E '^[A-Za-z0-9_-]+-[A-Za-z0-9_-]{8}\.js$' | sed 's#^#assets/#' | while read b; do grep -qx "$b" /tmp/seen || echo "$b" >> /tmp/todo; done
           done
           echo "::notice title=Scripts read::$n"
-          for m in upsellIds sizesAsk gd-ed-sizes gd-fixed-b gd-picked gd-offers; do
+          for m in gd-ed-fit-row fitAsk fitMeasuresPh measuresCol; do
             hit=$(grep -l "$m" /tmp/js/*.js 2>/dev/null | head -1)
             echo "::notice title=$m::$([ -n "$hit" ] && echo "live (in $(basename "$hit"))" || echo 'not found')"
           done
           css=$(grep -o 'assets/[A-Za-z0-9._-]*\.css' /tmp/index.html | head -1); echo "::notice title=Main css::$css"
           for c in $(cat /tmp/js/*.js /tmp/index.html | grep -o 'assets/[A-Za-z0-9._-]*\.css' | sort -u); do curl -s -m 40 -A 'Mozilla/5.0' "https://direct.pilotix.online/$c" >> /tmp/all.css; done
-          for m in gd-ed-sizes gd-fixed-b gd-picked gd-offers; do echo "::notice title=css $m::$(grep -c "$m" /tmp/all.css 2>/dev/null || true)"; done
+          for m in gd-ed-fit-row gd-fit; do echo "::notice title=css $m::$(grep -c "$m" /tmp/all.css 2>/dev/null || true)"; done
           art=$(ls /tmp/js | grep -c '^art-ltr-' || true); echo "::notice title=Learning bench picture loaded by the page::$art"
