@@ -420,7 +420,7 @@
     "maxDiscountHint": "Empty = no limit. Only the administrator changes it.",
     "feeGrid": "Delivery price grid",
     "feeGridHint": "Empty = default grid (Management → Delivery prices).",
-    "remove": "Remove",
+    "remove": "Delete product",
     "saved": "Product saved",
     "create": "Create",
     "basic": "Basic information",
@@ -483,7 +483,9 @@
     "archive": "Archive",
     "archiveAsk": "Archive this product? It leaves the lists (old orders keep it). It must have 0 in stock.",
     "archived": "Product archived (Management › Archives)",
-    "archiveStock": "There is stock left: take it out of stock first, then archive"
+    "archiveStock": "There is stock left: take it out of stock first, then archive",
+    "removeAsk": "Delete « {{name}} » for good? Only if the product was never used (no order, no stock).",
+    "removed": "Product deleted"
   },
   "landing": {
     "none": "No landing page",
@@ -583,7 +585,7 @@
       "neverHint": "One thing per line: what nobody may say or promise.",
       "faqHint": "The questions customers really ask, with the shop's answer.",
       "doubtsHint": "What customers say not to order, and what to answer.",
-      "upsellHint": "What to offer on top (a pack, a product that goes with it) and how to say it.",
+      "upsellHint": "Pick the products to offer on top (10 at most).",
       "q": "Question",
       "a": "Answer",
       "qPh": "E.g. From what age?",
@@ -607,7 +609,17 @@
       "tooLong": "{{part}}: a line is longer than {{max}} characters",
       "tooMany": "{{part}}: {{max}} lines at most",
       "tooBig": "Sales guide too long: {{n}} characters ({{max}} at most)",
-      "needName": "Write the product's name first (Product tab)"
+      "needName": "Write the product's name first (Product tab)",
+      "sizesHint": "For each size: the age and the weight it fits. Customers ask before they choose.",
+      "agePh": "E.g. 3 to 6 months",
+      "weightPh": "E.g. 6 to 8 kg",
+      "pick": "Common questions: click to add",
+      "upsellChosen": "Products picked",
+      "upsellNone": "No product picked.",
+      "upsellSearch": "Search a product to offer…",
+      "upsellMax": "{{max}} products at most",
+      "upsellPhrase": "+ Add a sentence (optional)",
+      "upsellPhrasePh": "How to offer it (optional)"
     },
     "page": {
       "list": "Products",
@@ -632,6 +644,29 @@
       "editing": "You are editing the guide: « Save » to keep it.",
       "emptyManager": "No guide for this product yet. Write it, or let the AI make a first draft.",
       "none": "No products yet."
+    },
+    "sizes": "Size guide",
+    "sizesAsk": "Ask the age and the weight, then offer the size that fits.",
+    "sizeCol": "Size",
+    "ageCol": "Age",
+    "weightCol": "Weight",
+    "qa": {
+      "pay": "How do I pay?",
+      "payAns": "On delivery, in cash, when you receive the parcel.",
+      "delivery": "How much is delivery?",
+      "deliveryAns": "It depends on your wilaya, at home or at the office (stop desk): we tell you the exact price before confirming.",
+      "delay": "How long does delivery take?",
+      "colors": "Which colours do you have?",
+      "colorsAns": "Available in:",
+      "size": "Which size should I take?",
+      "sizeAns": "Tell me the age and the weight: I give you the right size (see the size guide).",
+      "age": "For what age?",
+      "weight": "What weight?",
+      "warranty": "Is there a warranty?",
+      "exchange": "Can I exchange or return it?",
+      "quality": "Is it good quality? Is it original?",
+      "assembled": "Does it come assembled?",
+      "use": "How do I use and clean it?"
     }
   }
 }

@@ -1,9 +1,12 @@
 // The sales guide of a product (Produits & stock › a product › Guide de vente). The team writes it in the product form
-// (« Écrire avec l'IA » makes a first draft: modules/guidedraft.ts); the confirmation agents read it during a call (a
-// « Guide » button on each product of the order, and in Produits & stock); Dellal reads it in chats (its product_guide
-// tool) and CM AI under the comments of the product's posts, so both answer with the shop's real facts.
-// Six parts: En bref, Points forts, Questions & réponses, Hésitations (what the customer says → what to answer),
-// Vente en plus, À ne jamais promettre. A product without a guide has no row (migrations/072_product_guides.ts).
+// or in the tab Produits & stock › Guide de vente (« Écrire avec l'IA » makes a first draft: modules/guidedraft.ts), and
+// so do the confirmation agencies for the products they work on; the agents read it during a call (a « Guide » button on
+// each product of the order, and in Produits & stock); Dellal reads it in chats (its product_guide tool) and CM AI under
+// the comments of the product's posts, so both answer with the shop's real facts.
+// Its parts: En bref, Guide des tailles (age and weight for each size, when the product has a size option: customers ask
+// it), Points forts, Questions & réponses (picked from fixed questions or written), Hésitations (what the customer says →
+// what to answer), Vente en plus (products picked, and how to say it), À ne jamais promettre. A product without a guide
+// has no row (migrations/072_product_guides.ts).
 import { z } from 'zod';
 import { Db, iso, num } from '../db';
 import { bad } from '../rpc';
@@ -11,6 +14,12 @@ import { bad } from '../rpc';
 export interface GuidePair {
   q: string;
   a: string;
+}
+/** one size of the product (a value of its « Taille » option) with the age and the weight it fits */
+export interface GuideSize {
+  size: string;
+  age: string;
+  weight: string;
 }
 export interface ProductGuide {
   /** the product in one or two sentences: what it is, for whom */
@@ -21,10 +30,14 @@ export interface ProductGuide {
   faq: GuidePair[];
   /** what a customer says not to order (« ghali », « nkhamem »…) and what to answer */
   doubts: GuidePair[];
-  /** what to offer on top (a pack, a product that goes with it) and how to say it */
+  /** how to offer the products picked below (optional) */
   upsell: string;
+  /** the products to offer on top (picked in the shop's catalog) */
+  upsellIds: number[];
   /** what nobody may say or promise about this product */
   never: string[];
+  /** the size guide: for each size, the age and the weight it fits */
+  sizes: GuideSize[];
 }
 
 export const GUIDE_LIMITS = {
@@ -37,8 +50,11 @@ export const GUIDE_LIMITS = {
   doubts: 12,
   doubt: 160,
   upsell: 800,
+  upsellIds: 10,
   never: 10,
   neverLine: 200,
+  sizes: 40,
+  sizeText: 60,
   /** the whole guide (what Dellal reads in one go) */
   total: 15_000,
 } as const;
@@ -48,6 +64,11 @@ export const TO_FILL = '[À compléter]';
 const TO_FILL_RE = /\[\s*(?:à|a)\s+compl[ée]ter\s*\]/i;
 export const toFill = (s: string) => TO_FILL_RE.test(s) || !s.trim();
 
+/** The option that holds the sizes (Taille, Pointure, Âge, مقاس…): its values get an age and a weight in the guide. */
+export const SIZE_OPTION = /taille|size|pointure|mesure|âge|\bage\b|مقاس|القياس|العمر/i;
+export const sizeValues = (options: { name: string; values: string[] }[] | null | undefined): string[] =>
+  [...new Set((options ?? []).filter((o) => SIZE_OPTION.test(o.name)).flatMap((o) => o.values.map((v) => v.trim()).filter(Boolean)))].slice(0, GUIDE_LIMITS.sizes);
+
 const L = GUIDE_LIMITS;
 const pair = (q: number) => z.object({ q: z.string().trim().max(q), a: z.string().trim().max(L.answer) });
 export const GuideInput = z.object({
@@ -56,45 +77,74 @@ export const GuideInput = z.object({
   faq: z.array(pair(L.question)).max(L.faq).default([]),
   doubts: z.array(pair(L.doubt)).max(L.doubts).default([]),
   upsell: z.string().trim().max(L.upsell).default(''),
+  upsellIds: z.array(z.number().int().positive()).max(L.upsellIds).default([]),
   never: z.array(z.string().trim().max(L.neverLine)).max(L.never).default([]),
+  sizes: z
+    .array(z.object({ size: z.string().trim().min(1).max(L.sizeText), age: z.string().trim().max(L.sizeText).default(''), weight: z.string().trim().max(L.sizeText).default('') }))
+    .max(L.sizes)
+    .default([]),
 });
 export type GuideInputT = z.input<typeof GuideInput>;
 
-export const EMPTY_GUIDE: ProductGuide = { brief: '', strengths: [], faq: [], doubts: [], upsell: '', never: [] };
+export const EMPTY_GUIDE: ProductGuide = { brief: '', strengths: [], faq: [], doubts: [], upsell: '', upsellIds: [], never: [], sizes: [] };
 
-/** Trimmed, without empty lines or questions (an answer may still be to fill). */
+/** Trimmed, without empty lines, questions or sizes (an answer may still be to fill). */
 export function cleanGuide(g: Partial<ProductGuide> | null | undefined): ProductGuide {
   const s = (v: unknown) => String(v ?? '').trim();
   const lines = (v: unknown) => (Array.isArray(v) ? v.map(s).filter(Boolean) : []);
   const pairs = (v: unknown) => (Array.isArray(v) ? v.map((p: any) => ({ q: s(p?.q), a: s(p?.a) })).filter((p) => p.q) : []);
-  return { brief: s(g?.brief), strengths: lines(g?.strengths), faq: pairs(g?.faq), doubts: pairs(g?.doubts), upsell: s(g?.upsell), never: lines(g?.never) };
+  const ids = Array.isArray(g?.upsellIds) ? [...new Set(g!.upsellIds.map(Number).filter((x) => Number.isSafeInteger(x) && x > 0))] : [];
+  const sizes = Array.isArray(g?.sizes)
+    ? g!.sizes
+        .map((x: any) => ({ size: s(x?.size), age: s(x?.age), weight: s(x?.weight) }))
+        .filter((x, k, a) => x.size && (x.age || x.weight) && a.findIndex((y) => y.size.toLowerCase() === x.size.toLowerCase()) === k)
+    : [];
+  return { brief: s(g?.brief), strengths: lines(g?.strengths), faq: pairs(g?.faq), doubts: pairs(g?.doubts), upsell: s(g?.upsell), upsellIds: ids, never: lines(g?.never), sizes };
 }
 
-export const guideEmpty = (g: ProductGuide) => !g.brief && !g.strengths.length && !g.faq.length && !g.doubts.length && !g.upsell && !g.never.length;
+export const guideEmpty = (g: ProductGuide) =>
+  !g.brief && !g.strengths.length && !g.faq.length && !g.doubts.length && !g.upsell && !g.upsellIds.length && !g.never.length && !g.sizes.length;
 
 /** Characters of the whole guide (its limit keeps what Dellal reads at once small). */
 export const guideSize = (g: ProductGuide) =>
-  g.brief.length + g.upsell.length + [...g.strengths, ...g.never].reduce((a, x) => a + x.length, 0) + [...g.faq, ...g.doubts].reduce((a, p) => a + p.q.length + p.a.length, 0);
+  g.brief.length +
+  g.upsell.length +
+  [...g.strengths, ...g.never].reduce((a, x) => a + x.length, 0) +
+  [...g.faq, ...g.doubts].reduce((a, p) => a + p.q.length + p.a.length, 0) +
+  g.sizes.reduce((a, x) => a + x.size.length + x.age.length + x.weight.length, 0);
 
 /** How many answers are still to write. */
 export const guideToFill = (g: ProductGuide) => [...g.faq, ...g.doubts].filter((p) => toFill(p.a)).length;
+
+/** A product offered on top (Vente en plus), as the agents and the AI agents see it. */
+export interface UpsellProduct {
+  id: number;
+  name: string;
+  price: number;
+  photo: string | null;
+}
 
 /**
  * The guide as the AI agents read it: plain text in the guide's own words, without the answers still to write (an AI
  * never says « [À compléter] » nor guesses that answer).
  */
-export function guideText(g: ProductGuide): string {
+export function guideText(g: ProductGuide, upsell: UpsellProduct[] = []): string {
   const real = (x: string) => !toFill(x);
   const faq = g.faq.filter((p) => real(p.a));
   const doubts = g.doubts.filter((p) => real(p.a));
   const strengths = g.strengths.filter(real);
   const never = g.never.filter(real);
+  const da = (n: number) => `${n} DA`;
+  const offer = [upsell.length ? `propose aussi ${upsell.map((p) => `#${p.id} ${p.name} (${da(p.price)})`).join(', ')}` : '', real(g.upsell) ? g.upsell : ''].filter(Boolean).join(' — ');
   return [
     real(g.brief) ? `EN BREF : ${g.brief}` : '',
+    g.sizes.length
+      ? `GUIDE DES TAILLES (demande l’âge et le poids si le client ne les donne pas, puis propose la taille qui va) :\n${g.sizes.map((x) => `- ${x.size} : ${[x.age && `âge ${x.age}`, x.weight && `poids ${x.weight}`].filter(Boolean).join(', ')}`).join('\n')}`
+      : '',
     strengths.length ? `POINTS FORTS :\n${strengths.map((x) => `- ${x}`).join('\n')}` : '',
     faq.length ? `QUESTIONS DES CLIENTS ET RÉPONSES DE LA BOUTIQUE :\n${faq.map((p) => `- ${p.q} → ${p.a}`).join('\n')}` : '',
     doubts.length ? `HÉSITATIONS (ce que le client dit → quoi répondre) :\n${doubts.map((p) => `- ${p.q} → ${p.a}`).join('\n')}` : '',
-    real(g.upsell) ? `VENTE EN PLUS : ${g.upsell}` : '',
+    offer ? `VENTE EN PLUS : ${offer}` : '',
     never.length ? `À NE JAMAIS PROMETTRE NI DIRE :\n${never.map((x) => `- ${x}`).join('\n')}` : '',
   ]
     .filter(Boolean)
@@ -103,6 +153,8 @@ export function guideText(g: ProductGuide): string {
 
 export interface SavedGuide {
   guide: ProductGuide;
+  /** the products of Vente en plus still on sale, with their name and price */
+  upsell: UpsellProduct[];
   updatedAt: string;
   updatedBy: string | null;
 }
@@ -111,7 +163,13 @@ export async function readGuide(db: Db, productId: number): Promise<SavedGuide |
   const r = (await db.query('SELECT g.guide, g.updated_at, u.name AS by_name FROM product_guides g LEFT JOIN profiles u ON u.id = g.updated_by WHERE g.product_id = $1', [productId]))[0];
   if (!r) return null;
   const guide = cleanGuide(typeof r.guide === 'string' ? JSON.parse(r.guide) : r.guide);
-  return guideEmpty(guide) ? null : { guide, updatedAt: iso(r.updated_at), updatedBy: (r.by_name as string | null) ?? null };
+  if (guideEmpty(guide)) return null;
+  const upsell = guide.upsellIds.length
+    ? (await db.query('SELECT id, name, price, photo FROM products WHERE id = ANY($1) AND active AND archived_at IS NULL', [guide.upsellIds]))
+        .map((p) => ({ id: num(p.id), name: String(p.name), price: num(p.price), photo: (p.photo as string | null) ?? null }))
+        .sort((a, b) => guide.upsellIds.indexOf(a.id) - guide.upsellIds.indexOf(b.id))
+    : [];
+  return { guide, upsell, updatedAt: iso(r.updated_at), updatedBy: (r.by_name as string | null) ?? null };
 }
 
 /** A guide from a form (already the right sizes, GuideInput), cleaned, and not too long in all. */
@@ -123,10 +181,16 @@ export function checkGuide(input: z.output<typeof GuideInput>): ProductGuide {
 }
 
 /**
- * Saves a product's guide (inside the product's save): an empty guide removes it; the same guide again changes
- * nothing (not even who wrote it last).
+ * Saves a product's guide (inside the product's save, or from the Guide de vente tab): an empty guide removes it; the
+ * same guide again changes nothing (not even who wrote it last). Vente en plus keeps real products only, never the
+ * product itself (`allowed`: the products the writer's work gives them, null: every product).
  */
-export async function saveGuide(db: Db, productId: number, g: ProductGuide, userId: number | null): Promise<void> {
+export async function saveGuide(db: Db, productId: number, input: ProductGuide, userId: number | null, allowed: number[] | null = null): Promise<void> {
+  let g = input;
+  if (g.upsellIds.length) {
+    const ok = new Set((await db.query('SELECT id FROM products WHERE id = ANY($1) AND id <> $2 AND archived_at IS NULL', [g.upsellIds, productId])).map((r) => num(r.id)));
+    g = { ...g, upsellIds: g.upsellIds.filter((x) => ok.has(x) && (!allowed || allowed.includes(x))) };
+  }
   if (guideEmpty(g)) {
     await db.query('DELETE FROM product_guides WHERE product_id = $1', [productId]);
     return;

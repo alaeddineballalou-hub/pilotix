@@ -1,11 +1,14 @@
-// The sales guide of a product (Guide de vente): written by the team in the product form (tab « Guide de vente », with
-// « Écrire avec l'IA » for a first draft), read by the agents during a call (the « Guide » button on each product of the
-// order opens it beside the order, without hiding it) and in Produits & stock. Dellal and CM AI read the same guide.
-import { ReactNode, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+// The sales guide of a product (Guide de vente): written by the team in the product form (tab « Guide de vente ») or in
+// Produits & stock › Guide de vente, with « Écrire avec l'IA » for a first draft, the size guide (age and weight for each
+// size) when the product has a size option, fixed questions to pick, and the products to offer picked in the catalog;
+// the confirmation agencies write it too for their products. The agents read it during a call (the « Guide » button on
+// each product of the order opens it beside the order, without hiding it) and in Produits & stock. Dellal and CM AI read
+// the same guide.
+import { ReactNode, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { rpc } from '../../lib/backend';
-import { dateOnly, n } from '../../lib/format';
+import { da, dateOnly, n } from '../../lib/format';
 import { useRpc } from '../../lib/query';
 import { useScope } from '../../lib/seller';
 import { useIsPhone } from '../../lib/useMedia';
@@ -18,13 +21,28 @@ export interface GuidePair {
   q: string;
   a: string;
 }
+/** one size (a value of the product's « Taille » option) with the age and the weight it fits */
+export interface GuideSize {
+  size: string;
+  age: string;
+  weight: string;
+}
+/** a product offered on top (Vente en plus), as the server gives it with the guide */
+export interface UpsellProduct {
+  id: number;
+  name: string;
+  price: number;
+  photo: string | null;
+}
 export interface Guide {
   brief: string;
   strengths: string[];
   faq: GuidePair[];
   doubts: GuidePair[];
   upsell: string;
+  upsellIds: number[];
   never: string[];
+  sizes: GuideSize[];
 }
 /** The form: the one-per-line parts as plain text. */
 export interface GuideForm {
@@ -33,7 +51,9 @@ export interface GuideForm {
   faq: GuidePair[];
   doubts: GuidePair[];
   upsell: string;
+  upsellIds: number[];
   never: string;
+  sizes: GuideSize[];
 }
 
 /** An answer the AI could not know: the team writes it (the AI agents never use it). */
@@ -41,27 +61,46 @@ export const TO_FILL = '[À compléter]';
 const TO_FILL_RE = /\[\s*(?:à|a)\s+compl[ée]ter\s*\]/i;
 export const toFill = (s: string) => TO_FILL_RE.test(s) || !s.trim();
 /** The guide's sizes (the same as the server's, modules/guide.ts). */
-export const GUIDE_MAX = { brief: 400, strengths: 12, strength: 200, faq: 20, question: 200, answer: 600, doubts: 12, doubt: 160, upsell: 800, never: 10, neverLine: 200, total: 15_000 };
+export const GUIDE_MAX = { brief: 400, strengths: 12, strength: 200, faq: 20, question: 200, answer: 600, doubts: 12, doubt: 160, upsell: 800, upsellIds: 10, never: 10, neverLine: 200, sizes: 40, sizeText: 60, total: 15_000 };
+/** The option that holds the sizes (the same as the server's): its values get an age and a weight. */
+const SIZE_OPTION = /taille|size|pointure|mesure|âge|\bage\b|مقاس|القياس|العمر/i;
+const COLOR_OPTION = /couleur|color|colour|لون|الألوان/i;
+type Option = { name: string; values: string[] };
+export const sizeValues = (options: Option[] | null | undefined): string[] =>
+  [...new Set((options ?? []).filter((o) => SIZE_OPTION.test(o.name)).flatMap((o) => o.values.map((v) => v.trim()).filter(Boolean)))].slice(0, GUIDE_MAX.sizes);
 
 const lines = (s: string) => s.split('\n').map((x) => x.replace(/^\s*[-•*]\s*/, '').trim()).filter(Boolean);
+const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 export const guideToForm = (g: Guide | null | undefined): GuideForm => ({
   brief: g?.brief ?? '',
   strengths: (g?.strengths ?? []).join('\n'),
   faq: (g?.faq ?? []).map((p) => ({ ...p })),
   doubts: (g?.doubts ?? []).map((p) => ({ ...p })),
   upsell: g?.upsell ?? '',
+  upsellIds: [...(g?.upsellIds ?? [])],
   never: (g?.never ?? []).join('\n'),
+  sizes: (g?.sizes ?? []).map((x) => ({ ...x })),
 });
-export const formToGuide = (f: GuideForm): Guide => ({
+/** sizes: the product's sizes now (a size it no longer has leaves the guide); undefined: keep them all */
+export const formToGuide = (f: GuideForm, sizes?: string[]): Guide => ({
   brief: f.brief.trim(),
   strengths: lines(f.strengths),
   faq: f.faq.map((p) => ({ q: p.q.trim(), a: p.a.trim() })).filter((p) => p.q),
   doubts: f.doubts.map((p) => ({ q: p.q.trim(), a: p.a.trim() })).filter((p) => p.q),
   upsell: f.upsell.trim(),
+  upsellIds: [...new Set(f.upsellIds)].slice(0, GUIDE_MAX.upsellIds),
   never: lines(f.never),
+  sizes: f.sizes
+    .map((x) => ({ size: x.size.trim(), age: x.age.trim(), weight: x.weight.trim() }))
+    .filter((x) => x.size && (x.age || x.weight) && (!sizes || sizes.some((y) => same(y, x.size)))),
 });
-const sizeOf = (g: Guide) => g.brief.length + g.upsell.length + [...g.strengths, ...g.never].reduce((a, x) => a + x.length, 0) + [...g.faq, ...g.doubts].reduce((a, p) => a + p.q.length + p.a.length, 0);
-export const guideIsEmpty = (g: Guide) => !g.brief && !g.strengths.length && !g.faq.length && !g.doubts.length && !g.upsell && !g.never.length;
+const sizeOf = (g: Guide) =>
+  g.brief.length +
+  g.upsell.length +
+  [...g.strengths, ...g.never].reduce((a, x) => a + x.length, 0) +
+  [...g.faq, ...g.doubts].reduce((a, p) => a + p.q.length + p.a.length, 0) +
+  g.sizes.reduce((a, x) => a + x.size.length + x.age.length + x.weight.length, 0);
+export const guideIsEmpty = (g: Guide) => !g.brief && !g.strengths.length && !g.faq.length && !g.doubts.length && !g.upsell && !g.upsellIds.length && !g.never.length && !g.sizes.length;
 
 /** What would stop the save (the server says the same), in words, or null. */
 export function guideProblem(g: Guide, t: (k: string, o?: any) => string): string | null {
@@ -76,15 +115,16 @@ export function guideProblem(g: Guide, t: (k: string, o?: any) => string): strin
 }
 
 // ---------------------------------------------------------------- reading (agents, during the call)
-/** The guide's parts, for reading fast during a call: the brief, then each part with what it holds. */
-export function GuideView({ guide, id }: { guide: Guide; id: string }) {
+/** The guide's parts, for reading fast during a call: the brief, the size guide, then each part with what it holds. */
+export function GuideView({ guide, id, upsell = [] }: { guide: Guide; id: string; upsell?: UpsellProduct[] }) {
   const { t } = useTranslation();
   const box = useRef<HTMLDivElement>(null);
   const parts = [
+    { k: 'sizes', icon: 'shirt', n: guide.sizes.length },
     { k: 'strengths', icon: 'check', n: guide.strengths.length },
     { k: 'faq', icon: 'help', n: guide.faq.length },
     { k: 'doubts', icon: 'message', n: guide.doubts.length },
-    { k: 'upsell', icon: 'gift', n: guide.upsell ? 1 : 0 },
+    { k: 'upsell', icon: 'gift', n: guide.upsell || upsell.length ? 1 : 0 },
     { k: 'never', icon: 'ban', n: guide.never.length },
   ].filter((p) => p.n > 0);
   // to a part, just under the parts bar that stays at the top
@@ -115,6 +155,30 @@ export function GuideView({ guide, id }: { guide: Guide; id: string }) {
             </button>
           ))}
         </nav>
+      )}
+      {guide.sizes.length > 0 && (
+        <section className="gd-sec" data-part="sizes" id={`${id}-sizes`}>
+          {head('sizes', 'shirt')}
+          <p className="gd-hint">{t('produits.guide.sizesAsk')}</p>
+          <table className="gd-sizes">
+            <thead>
+              <tr>
+                <th scope="col">{t('produits.guide.sizeCol')}</th>
+                <th scope="col">{t('produits.guide.ageCol')}</th>
+                <th scope="col">{t('produits.guide.weightCol')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {guide.sizes.map((x) => (
+                <tr key={x.size}>
+                  <th scope="row" dir="auto">{x.size}</th>
+                  <td dir="auto">{x.age || '—'}</td>
+                  <td dir="auto">{x.weight || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
       )}
       {guide.strengths.length > 0 && (
         <section className="gd-sec" data-part="strengths" id={`${id}-strengths`}>
@@ -156,10 +220,23 @@ export function GuideView({ guide, id }: { guide: Guide; id: string }) {
           </dl>
         </section>
       )}
-      {guide.upsell && (
+      {(guide.upsell || upsell.length > 0) && (
         <section className="gd-sec" data-part="upsell" id={`${id}-upsell`}>
           {head('upsell', 'gift')}
-          <p className="gd-text" dir="auto">{guide.upsell}</p>
+          {upsell.length > 0 && (
+            <ul className="gd-offers">
+              {upsell.map((p) => (
+                <li key={p.id}>
+                  <span className="gd-offer-thumb" aria-hidden="true">
+                    {p.photo ? <img src={p.photo} alt="" loading="lazy" /> : <Icon name="package" />}
+                  </span>
+                  <b dir="auto">{p.name}</b>
+                  <span className="ltr">{da(p.price)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {guide.upsell && <p className="gd-text" dir="auto">{guide.upsell}</p>}
         </section>
       )}
       {guide.never.length > 0 && (
@@ -219,7 +296,7 @@ function GuidePanel({ productId, onClose }: { productId: number; onClose: () => 
   const q = useRpc('catalog.guide', { id: productId }, { staleTime: 60_000 });
   const d = q.data;
   const meta = d?.updatedAt ? (d.updatedBy ? t('produits.guide.updated', { date: dateOnly(d.updatedAt), name: d.updatedBy }) : t('produits.guide.updatedNoName', { date: dateOnly(d.updatedAt) })) : null;
-  const body = q.error ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> : !d ? <Loading /> : d.guide ? <GuideView guide={d.guide} id={id} /> : <Empty>{t('produits.guide.empty')}</Empty>;
+  const body = q.error ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> : !d ? <Loading /> : d.guide ? <GuideView guide={d.guide} id={id} upsell={d.upsell} /> : <Empty>{t('produits.guide.empty')}</Empty>;
   if (phone)
     return (
       <Sheet title={d?.name ?? t('produits.guide.title')} sub={[t('produits.guide.title'), meta].filter(Boolean).join(' · ')} onClose={onClose} tall className="gd-sheet">
@@ -298,35 +375,78 @@ export interface DraftFacts {
   packs: { qty: number; price: number }[];
   linked: string[];
   services: { name: string; price: number }[];
+  /** Taille, Couleur…: the sizes get a line in the size guide, the colours answer « Quelles couleurs ? » */
+  options?: Option[];
+  /** Produits liés: the draft's Vente en plus picks them */
+  linkedIds?: number[];
 }
 const LANGS = ['fr', 'ar', 'dz', 'en'] as const;
 type Lang = (typeof LANGS)[number];
+/** The questions every guide can pick (in this order), and the answers Pilotix knows for them. */
+const FIXED = ['pay', 'delivery', 'delay', 'colors', 'size', 'age', 'weight', 'warranty', 'exchange', 'quality', 'assembled', 'use'] as const;
+type Fixed = (typeof FIXED)[number];
 
-/** The six parts as a form, with « Écrire avec l'IA » (a first draft to correct; nothing is saved before Enregistrer). */
-export function GuideEditor({ value, onChange, facts }: { value: GuideForm; onChange: (v: GuideForm) => void; facts: () => DraftFacts }) {
+/**
+ * The guide's parts as a form, with « Écrire avec l'IA » (a first draft to correct; nothing is saved before
+ * Enregistrer). products: what Vente en plus can pick (this shop's, the writer's ones).
+ */
+export function GuideEditor({ value, onChange, facts, products }: { value: GuideForm; onChange: (v: GuideForm) => void; facts: () => DraftFacts; products: { id: number; name: string }[] }) {
   const { t, i18n } = useTranslation();
   const seller = useScope();
   const [lang, setLang] = useState<Lang>(() => (i18n.language === 'ar' ? 'ar' : i18n.language === 'en' ? 'en' : 'fr'));
   const [busy, setBusy] = useState(false);
   const [undo, setUndo] = useState<{ before: GuideForm; by: 'ai' | 'rules' } | null>(null);
+  const [find, setFind] = useState('');
+  const [phrase, setPhrase] = useState(!!value.upsell);
   const set = <K extends keyof GuideForm>(k: K, v: GuideForm[K]) => onChange({ ...value, [k]: v });
-  const g = formToGuide(value);
+  const f = facts();
+  const sizes = sizeValues(f.options);
+  const g = formToGuide(value, sizes);
   const missing = [...g.faq, ...g.doubts].filter((p) => toFill(p.a)).length + g.strengths.filter((x) => toFill(x)).length;
   const size = sizeOf(g);
   const draft = async () => {
-    const f = facts();
     if (!f.name) return toast(t('produits.guide.ed.needName'), 'bad');
     setBusy(true);
     try {
       const r = await rpc('catalog.guideDraft', { ...f, lang }, seller);
       setUndo({ before: value, by: r.by });
       onChange(guideToForm(r.guide));
+      if (r.guide.upsell) setPhrase(true);
     } catch (e) {
       toast((e as Error).message, 'bad');
     } finally {
       setBusy(false);
     }
   };
+  // the size guide: one line per size of the product, the age and the weight it fits
+  const sizeRow = (s: string) => value.sizes.find((x) => same(x.size, s)) ?? { size: s, age: '', weight: '' };
+  const setSize = (s: string, p: Partial<GuideSize>) => set('sizes', sizes.map((x) => (same(x, s) ? { ...sizeRow(x), ...p, size: x } : sizeRow(x))));
+  // the fixed questions: what Pilotix knows answers them; the rest is the team's
+  const colors = [...new Set((f.options ?? []).filter((o) => COLOR_OPTION.test(o.name)).flatMap((o) => o.values))];
+  const ages = g.sizes.filter((x) => x.age).map((x) => `${x.size} : ${x.age}`);
+  const weights = g.sizes.filter((x) => x.weight).map((x) => `${x.size} : ${x.weight}`);
+  const known: Partial<Record<Fixed, string>> = {
+    pay: t('produits.guide.qa.payAns'),
+    delivery: t('produits.guide.qa.deliveryAns'),
+    colors: colors.length ? `${t('produits.guide.qa.colorsAns')} ${colors.join(', ')}.` : '',
+    size: sizes.length ? t('produits.guide.qa.sizeAns') : '',
+    age: ages.join(' · '),
+    weight: weights.join(' · '),
+  };
+  const has = (q: string) => value.faq.some((p) => same(p.q, q));
+  const fixed = FIXED.filter((k) => (k !== 'size' || sizes.length > 0) && !has(t(`produits.guide.qa.${k}`)));
+  const pick = (k: Fixed) => value.faq.length < GUIDE_MAX.faq && set('faq', [...value.faq, { q: t(`produits.guide.qa.${k}`), a: known[k] ?? '' }]);
+  // Vente en plus: products picked (not this one), the chosen ones first
+  const others = products.filter((p) => p.id !== f.productId);
+  const chosen = value.upsellIds.map((x) => others.find((p) => p.id === x)).filter((p): p is { id: number; name: string } => !!p);
+  const fold = (x: string) => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const found = useMemo(() => {
+    const w = fold(find.trim());
+    return others.filter((p) => !value.upsellIds.includes(p.id) && (!w || fold(p.name).includes(w))).slice(0, w ? 12 : 6);
+  }, [others, find, value.upsellIds]); // eslint-disable-line react-hooks/exhaustive-deps
+  const toggle = (id: number) =>
+    set('upsellIds', value.upsellIds.includes(id) ? value.upsellIds.filter((x) => x !== id) : value.upsellIds.length >= GUIDE_MAX.upsellIds ? (toast(t('produits.guide.ed.upsellMax', { max: GUIDE_MAX.upsellIds }), 'bad'), value.upsellIds) : [...value.upsellIds, id]);
+
   const pairs = (k: 'faq' | 'doubts') => {
     const list = value[k];
     const max = k === 'faq' ? GUIDE_MAX.faq : GUIDE_MAX.doubts;
@@ -334,6 +454,16 @@ export function GuideEditor({ value, onChange, facts }: { value: GuideForm; onCh
     const upd = (i: number, p: Partial<GuidePair>) => set(k, list.map((x, j) => (j === i ? { ...x, ...p } : x)));
     return (
       <div className="gd-pairs">
+        {k === 'faq' && fixed.length > 0 && list.length < max && (
+          <div className="gd-fixed" role="group" aria-label={t('produits.guide.ed.pick')}>
+            <span className="gd-fixed-l">{t('produits.guide.ed.pick')}</span>
+            {fixed.map((q) => (
+              <button key={q} type="button" className="gd-fixed-b" onClick={() => pick(q)}>
+                <Icon name="plus" /> {t(`produits.guide.qa.${q}`)}
+              </button>
+            ))}
+          </div>
+        )}
         {list.map((p, i) => (
           <div key={i} className="gd-ed-pair">
             <label className="gd-ed-q">
@@ -359,7 +489,7 @@ export function GuideEditor({ value, onChange, facts }: { value: GuideForm; onCh
       </div>
     );
   };
-  const part = (k: keyof GuideForm, icon: string, hint: string, children: ReactNode) => (
+  const part = (k: string, icon: string, hint: string, children: ReactNode) => (
     <section className="pf-sec gd-ed-sec">
       <h3 className="gd-h">
         <Icon name={icon} />
@@ -399,13 +529,77 @@ export function GuideEditor({ value, onChange, facts }: { value: GuideForm; onCh
         </div>
       )}
       {part('brief', 'info', t('produits.guide.ed.briefHint'), <textarea dir="auto" rows={2} maxLength={GUIDE_MAX.brief} aria-label={t('produits.guide.brief')} value={value.brief} onChange={(e) => set('brief', e.target.value)} />)}
+      {sizes.length > 0 &&
+        part(
+          'sizes',
+          'shirt',
+          t('produits.guide.ed.sizesHint'),
+          <div className="gd-ed-sizes" role="table" aria-label={t('produits.guide.sizes')}>
+            <div className="gd-ed-size gd-ed-size-head" role="row">
+              <span role="columnheader">{t('produits.guide.sizeCol')}</span>
+              <span role="columnheader">{t('produits.guide.ageCol')}</span>
+              <span role="columnheader">{t('produits.guide.weightCol')}</span>
+            </div>
+            {sizes.map((x) => (
+              <div key={x} className="gd-ed-size" role="row">
+                <b role="rowheader" dir="auto">{x}</b>
+                <input dir="auto" role="cell" aria-label={`${x} · ${t('produits.guide.ageCol')}`} maxLength={GUIDE_MAX.sizeText} placeholder={t('produits.guide.ed.agePh')} value={sizeRow(x).age} onChange={(e) => setSize(x, { age: e.target.value })} />
+                <input dir="auto" role="cell" aria-label={`${x} · ${t('produits.guide.weightCol')}`} maxLength={GUIDE_MAX.sizeText} placeholder={t('produits.guide.ed.weightPh')} value={sizeRow(x).weight} onChange={(e) => setSize(x, { weight: e.target.value })} />
+              </div>
+            ))}
+          </div>,
+        )}
       <div className="pf-two">
         {part('strengths', 'check', t('produits.guide.ed.strengthsHint'), <textarea dir="auto" rows={5} aria-label={t('produits.guide.strengths')} className={lines(value.strengths).some((x) => toFill(x)) ? 'gd-fill' : ''} value={value.strengths} onChange={(e) => set('strengths', e.target.value)} />)}
         {part('never', 'ban', t('produits.guide.ed.neverHint'), <textarea dir="auto" rows={5} aria-label={t('produits.guide.never')} value={value.never} onChange={(e) => set('never', e.target.value)} />)}
       </div>
       {part('faq', 'help', t('produits.guide.ed.faqHint'), pairs('faq'))}
       {part('doubts', 'message', t('produits.guide.ed.doubtsHint'), pairs('doubts'))}
-      {part('upsell', 'gift', t('produits.guide.ed.upsellHint'), <textarea dir="auto" rows={3} maxLength={GUIDE_MAX.upsell} aria-label={t('produits.guide.upsell')} value={value.upsell} onChange={(e) => set('upsell', e.target.value)} />)}
+      {part(
+        'upsell',
+        'gift',
+        t('produits.guide.ed.upsellHint'),
+        <div className="gd-ed-upsell">
+          {chosen.length > 0 ? (
+            <ul className="gd-picked" aria-label={t('produits.guide.ed.upsellChosen')}>
+              {chosen.map((p) => (
+                <li key={p.id}>
+                  <span dir="auto">{p.name}</span>
+                  <button type="button" className="gd-picked-x" aria-label={`${t('produits.guide.ed.remove')} ${p.name}`} onClick={() => toggle(p.id)}>
+                    <Icon name="x" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="gd-ed-none">{t('produits.guide.ed.upsellNone')}</p>
+          )}
+          {others.length > 0 && (
+            <>
+              <label className="gd-search">
+                <Icon name="search" />
+                <input type="search" value={find} placeholder={t('produits.guide.ed.upsellSearch')} aria-label={t('produits.guide.ed.upsellSearch')} onChange={(e) => setFind(e.target.value)} />
+              </label>
+              <div className="gd-pick-list">
+                {found.map((p) => (
+                  <button key={p.id} type="button" className="gd-pick" onClick={() => toggle(p.id)}>
+                    <Icon name="plus" />
+                    <span dir="auto">{p.name}</span>
+                  </button>
+                ))}
+                {!found.length && <p className="gd-ed-none">{t('produits.guide.page.noMatch')}</p>}
+              </div>
+            </>
+          )}
+          {phrase ? (
+            <textarea dir="auto" rows={2} maxLength={GUIDE_MAX.upsell} aria-label={t('produits.guide.ed.upsellPhrasePh')} placeholder={t('produits.guide.ed.upsellPhrasePh')} value={value.upsell} onChange={(e) => set('upsell', e.target.value)} />
+          ) : (
+            <button type="button" className="linkish gd-phrase" onClick={() => setPhrase(true)}>
+              {t('produits.guide.ed.upsellPhrase')}
+            </button>
+          )}
+        </div>,
+      )}
       <p className={`gd-size ${size > GUIDE_MAX.total ? 'bad' : ''}`}>{t('produits.guide.ed.size', { n: n(size), max: n(GUIDE_MAX.total) })}</p>
     </div>
   );
