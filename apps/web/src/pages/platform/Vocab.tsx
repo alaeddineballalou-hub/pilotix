@@ -1,7 +1,9 @@
 // Pilot AI › Tester & leçons › Leçons › Vocabulaire: Pilotix's book of Algerian Darija words for the AI agents of every
 // shop (modules/vocab.ts). Put the book in (a Markdown file, or pasted: its tables), search it, add or correct a word, see
 // what the corrections taught (an accepted Darija lesson writes in it), and try which words a customer's message brings
-// to Dellal: for each reply it reads only the words that touch the conversation.
+// to Dellal: for each reply it reads only the words that touch the conversation (in any spelling), and the prices the
+// customer said in centimes. Pilotix's own book (the Algiers Darija Book, darija/) goes in with one click; its files are
+// loaded only when they are used, so they cost the app nothing.
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { n } from '../../lib/format';
@@ -42,11 +44,14 @@ export function VocabPane({ manager }: { manager: boolean }) {
             {c.learned > 0 && <span className="chip">{t(K + 'learned', { count: c.learned, n: n(c.learned) })}</span>}
             {c.coach > 0 && <span className="chip">{t(K + 'coach', { count: c.coach, n: n(c.coach) })}</span>}
           </p>
-          {manager && !showImport && (
-            <button type="button" className="btn small" onClick={() => setImporting(true)}>
-              <Icon name="upload" /> {t(K + 'importTitle')}
-            </button>
-          )}
+          <span className="pl-vc-head-do">
+            <DownloadBook />
+            {manager && !showImport && (
+              <button type="button" className="btn small" onClick={() => setImporting(true)}>
+                <Icon name="upload" /> {t(K + 'importTitle')}
+              </button>
+            )}
+          </span>
         </div>
       )}
       {showImport && <ImportBook canClose={!!c?.total} onClose={() => setImporting(false)} />}
@@ -216,7 +221,39 @@ function WordForm({ id, value, onDone }: { id?: number; value: Draft; onDone: ()
   );
 }
 
-/** Pilotix's book in: a Markdown file or pasted text (its tables). */
+/** Pilotix's own book (darija/livre-darija-pilotix.md, made from the Algiers Darija Book v6): what it holds. */
+const OFFICIAL = { words: 1821, topics: 85 };
+
+/** The whole Algiers Darija Book (37 chapters: the words, the grammar, the regions, the dictionaries), as a file. */
+function DownloadBook() {
+  const { t } = useTranslation();
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    setBusy(true);
+    try {
+      const text = (await import('./darija/algiers-darija-book-v6.md?raw')).default;
+      const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown;charset=utf-8' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Algiers_Darija_Book_v6.md';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (e) {
+      toast((e as Error).message, 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button type="button" className="btn ghost small" disabled={busy} title={t(K + 'downloadHelp')} onClick={() => void go()}>
+      <Icon name="download" /> {t(K + 'download')}
+    </button>
+  );
+}
+
+/** Pilotix's book in: its own book in one click, or a Markdown file or pasted text (its tables). */
 function ImportBook({ canClose, onClose }: { canClose: boolean; onClose: () => void }) {
   const { t } = useTranslation();
   const [text, setText] = useState('');
@@ -226,6 +263,7 @@ function ImportBook({ canClose, onClose }: { canClose: boolean; onClose: () => v
     success: (r) => t(K + 'imported', { added: n(r.added), skipped: n(r.skipped), unsure: n(r.unsure) }),
     onDone: () => (setText(''), setFile('')),
   });
+  const [loading, setLoading] = useState(false);
   const read = (fl: File | undefined) => {
     if (!fl) return;
     if (fl.size > 800_000) return toast(t(K + 'tooBig'), 'bad');
@@ -233,9 +271,37 @@ function ImportBook({ canClose, onClose }: { canClose: boolean; onClose: () => v
     r.onload = () => (setText(String(r.result ?? '')), setFile(fl.name));
     r.readAsText(fl);
   };
+  // Pilotix's own book: its file is loaded only now (a separate piece of the app)
+  const official = async () => {
+    setLoading(true);
+    try {
+      const book = (await import('./darija/livre-darija-pilotix.md?raw')).default;
+      imp.mutate({ text: book, replace });
+    } catch (e) {
+      toast((e as Error).message, 'bad');
+    } finally {
+      setLoading(false);
+    }
+  };
   return (
     <section className="pl-vc-import">
       <h3>{t(K + 'importTitle')}</h3>
+      <div className="pl-vc-official">
+        <span className="pl-vc-official-ic" aria-hidden>
+          <Icon name="languages" />
+        </span>
+        <div className="pl-vc-official-txt">
+          <b>{t(K + 'official.title')}</b>
+          <p className="small muted">{t(K + 'official.text', { n: n(OFFICIAL.words), topics: n(OFFICIAL.topics) })}</p>
+        </div>
+        <button type="button" className="btn primary small" disabled={imp.isPending || loading} onClick={() => void official()}>
+          <Icon name="sparkles" /> {t(K + 'official.put')}
+        </button>
+      </div>
+      <label className="pl-vc-check">
+        <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} /> {t(K + 'replace')}
+      </label>
+      <p className="small muted pl-vc-or">{t(K + 'official.or')}</p>
       <p className="small muted">{t(K + 'importHelp')}</p>
       <div className="pl-vc-import-row">
         <label className="btn small">
@@ -245,9 +311,6 @@ function ImportBook({ canClose, onClose }: { canClose: boolean; onClose: () => v
         {file && <span className="small">{file}</span>}
       </div>
       <textarea rows={6} dir="ltr" value={text} placeholder={t(K + 'pastePh')} aria-label={t(K + 'pastePh')} onChange={(e) => (setText(e.target.value), setFile(''))} />
-      <label className="pl-vc-check">
-        <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} /> {t(K + 'replace')}
-      </label>
       <div className="pl-dj-do">
         <button type="button" className="btn primary small" disabled={imp.isPending || !text.trim()} onClick={() => imp.mutate({ text, replace })}>
           {t(K + 'import')}
@@ -262,24 +325,30 @@ function ImportBook({ canClose, onClose }: { canClose: boolean; onClose: () => v
   );
 }
 
-/** Try it: the words of the book a customer's message brings to Dellal. */
+/** a few customers' messages to try in one click: another spelling, a price in centimes, Arabic letters */
+const TRY_EXAMPLES = ['slm, ch7al mlyoun w nos l stif ?', 'wesh rak khouya, mazal kayen ? n7ab ncommandi', 'السلام عليكم، شحال الكروسة؟ نخلص كي توصل؟'];
+type Tried = POut<'p.vocab.try'>;
+
+/** Try it: the words of the book a customer's message brings to Dellal, the prices it reads, and what it costs. */
 function TryWords() {
   const { t } = useTranslation();
   const call = usePilotCall();
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
-  const [words, setWords] = useState<Word[] | null>(null);
-  const go = async () => {
-    if (!text.trim()) return;
+  const [res, setRes] = useState<Tried | null>(null);
+  const go = async (said = text) => {
+    if (!said.trim()) return;
     setBusy(true);
     try {
-      setWords((await call('p.vocab.try', { text })).words);
+      setRes(await call('p.vocab.try', { text: said }));
     } catch (e) {
       toast((e as Error).message, 'bad');
     } finally {
       setBusy(false);
     }
   };
+  const words = res?.words ?? [];
+  const prices = res?.prices ?? [];
   return (
     <section className="pl-vc-try">
       <h3>{t(K + 'tryTitle')}</h3>
@@ -290,28 +359,57 @@ function TryWords() {
           void go();
         }}
       >
-        <input dir="auto" value={text} placeholder={t(K + 'tryPh')} aria-label={t(K + 'tryTitle')} onChange={(e) => (setText(e.target.value), setWords(null))} />
+        <input dir="auto" value={text} placeholder={t(K + 'tryPh')} aria-label={t(K + 'tryTitle')} onChange={(e) => (setText(e.target.value), setRes(null))} />
         <button type="submit" className="btn small" disabled={busy || !text.trim()}>
           {t(K + 'try')}
         </button>
       </form>
-      {words &&
-        (words.length ? (
+      <p className="pl-vc-examples small">
+        <span className="muted">{t(K + 'tryExamples')}</span>
+        {TRY_EXAMPLES.map((x) => (
+          <button key={x} type="button" className="pl-vc-pill" dir="auto" disabled={busy} onClick={() => (setText(x), void go(x))}>
+            {x}
+          </button>
+        ))}
+      </p>
+      {res &&
+        (words.length || prices.length ? (
           <>
-            <p className="small muted">{t(K + 'tryHelp', { count: words.length, n: n(words.length) })}</p>
-            <ul className="pl-vc-tried">
-              {words.map((w) => (
-                <li key={w.id}>
-                  {w.ar && (
-                    <b dir="rtl" lang="ar">
-                      {w.ar}
-                    </b>
-                  )}
-                  {w.lat && <b dir="ltr">{w.lat}</b>}
-                  {w.meaning && <span dir="auto">{w.meaning}</span>}
-                </li>
-              ))}
-            </ul>
+            {words.length > 0 && (
+              <>
+                <p className="small muted">{t(K + 'tryHelp', { count: words.length, n: n(words.length) })}</p>
+                <ul className="pl-vc-tried">
+                  {words.map((w) => (
+                    <li key={w.id}>
+                      {w.ar && (
+                        <b dir="rtl" lang="ar">
+                          {w.ar}
+                        </b>
+                      )}
+                      {w.lat && <b dir="ltr">{w.lat}</b>}
+                      {w.meaning && <span dir="auto">{w.meaning}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {prices.length > 0 && (
+              <>
+                <p className="small muted">{t(K + 'tryPrices')}</p>
+                <ul className="pl-vc-tried pl-vc-prices">
+                  {prices.map((p) => (
+                    <li key={p.said}>
+                      <b dir="auto">« {p.said} »</b>
+                      <span>= {n(p.da)} DA</span>
+                      {p.guess && <em className="small">{t(K + 'tryGuess')}</em>}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            <p className="pl-vc-cost small muted">
+              <Icon name="timer" /> {t(K + 'tryCost', { tokens: n(res.tokens ?? 0), ms: n(res.ms ?? 0) })}
+            </p>
           </>
         ) : (
           <p className="small muted">{t(K + 'tryNone')}</p>

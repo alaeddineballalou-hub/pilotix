@@ -7,7 +7,7 @@ import { call, Ctx, Db, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, 
 import { makeSession } from '../rpc';
 import { profileById } from '../modules/users';
 import { getRaw, setRaw } from '../modules/admin';
-import { parseVocab, vnorm, vocabBlock, vocabFor } from '../modules/vocab';
+import { parseVocab, readCentimes, sameWord, vnorm, vocabBlock, vocabFor, vskel } from '../modules/vocab';
 import { lahjaFor } from '../modules/lahja';
 import { savePilotConfig } from '../platform/pilotai';
 import { loadShops } from '../platform/shops';
@@ -94,6 +94,9 @@ test('a book in Markdown: its tables become words, under their chapter; a row ma
   );
   assert.equal(vnorm('الطَّابلة'), vnorm('الطابله'), 'vowel marks and ta marbuta do not count');
   assert.equal(vnorm('Très'), 'tres');
+  // a reverse dictionary (English → Darija) is not read twice
+  const rev = parseVocab('## Reverse\n\n| English | Darija |\n|---|---|\n| chair | korsi (الكورسي) |\n\n## Words\n\n| Arabic | Latin | Meaning |\n|---|---|---|\n| الكورسي | korsi | chair |');
+  assert.deepEqual(rev.words.map((w) => [w.ar, w.lat, w.meaning]), [['الكورسي', 'korsi', 'chair']]);
 });
 
 test('Pilotix puts its book in: added once, a second time changes nothing, « replace » keeps what the corrections taught', async () => {
@@ -180,4 +183,54 @@ test('a guide’s Arabic translation corrected by the team: a lesson in the shop
   const word = (await p<any>('p.vocab.list', { q: 'karrossa' })).rows[0];
   assert.deepEqual([word.ar, word.avoid, word.lahjaId], ['كروسة', 'عربة أطفال', Number(waiting.id)]);
   assert.match((await p<any>('p.vocab.try', { text: 'عندكم كروسة ؟' })).block, /- كروسة \/ karrossa : poussette \(pas « عربة أطفال »\)/);
+});
+
+test('one word, any spelling: wach / wesh / wech, ch7al / chhal, bezzaf / bzaf', () => {
+  assert.equal(vskel('wach'), vskel('wesh'));
+  assert.equal(vskel('wech'), vskel('wsh'));
+  assert.equal(vskel('ch7al'), vskel('chhal'));
+  assert.equal(vskel('sh7al'), vskel('ch7al'));
+  assert.equal(vskel('bezzaf'), vskel('bzaf'));
+  assert.equal(vskel('9oddam'), vskel('goddam'));
+  assert.equal(vskel('ya3tik'), vskel('yatik'));
+  assert.ok(sameWord('wesh', 'wach') && sameWord('chhal', 'ch7al') && sameWord('bzaf', 'bezzaf') && sameWord('karossa', 'karrossa'));
+  assert.ok(!sameWord('kursi', 'karrossa'), 'same bones (k-r-s), another word');
+  assert.equal(vskel('كروسة'), '', 'Arabic letters: no bones');
+  assert.equal(vskel('2026'), '');
+});
+
+test('prices said in centimes are read in dinars, never a phone number or a plain quantity', () => {
+  const da = (s: string) => readCentimes([s]).map((p) => [p.said, p.da, p.guess, p.dinars]);
+  assert.deepEqual(da('ch7al mlyoun w nos l stif?'), [['mlyoun w nos', 15000, false, false]]);
+  assert.deepEqual(da('nos mlyoun'), [['nos mlyoun', 5000, false, false]]);
+  assert.deepEqual(da('mlyoun w mitin'), [['mlyoun w mitin', 12000, false, false]]);
+  assert.deepEqual(da('zouj mlayen'), [['zouj mlayen', 20000, false, false]]);
+  assert.deepEqual(da('mitin alf'), [['mitin alf', 2000, false, false]]);
+  assert.deepEqual(da('mitin w khamsin ?'), [['mitin w khamsin', 2500, true, false]], '« alf » left out: a guess');
+  assert.deepEqual(da('tlatmya w tes3in alf'), [['tlatmya w tes3in alf', 3900, false, false]]);
+  assert.deepEqual(da('alf dinar'), [['alf dinar', 1000, false, true]], 'said in dinars: nothing to divide');
+  assert.deepEqual(da('شحال مليون ونص؟'), [['مليون و نص', 15000, false, false]]);
+  assert.deepEqual(da('15 alf'), [['15 alf', 150, false, false]]);
+  assert.deepEqual(da('0661234567 wa7ed b 3900 da'), [], 'a phone, a quantity, a price in DA: nothing to read');
+  // in the AI's instructions, after the words (or alone when no word of the book is touched)
+  assert.equal(vocabBlock([], ['salam']), '');
+  assert.match(vocabBlock([], ['ch7al mlyoun w nos']), /^Prix dits en mots[^\n]*\n- « mlyoun w nos » = 15 000 DA$/);
+  assert.match(vocabBlock([], ['mitin w khamsin']), /= 2 500 DA \(« alf » sous-entendu : vérifie avec le client\)/);
+});
+
+test('the test box: words found in another spelling, the prices read, the time and the size', async () => {
+  const tried: any = await p('p.vocab.try', { text: 'salam, 3andkom karossa ? ch7al nos mlyoun ?' });
+  assert.ok(tried.words.some((w: any) => w.lat === 'karrossa'), 'karossa (one r) still finds karrossa');
+  assert.deepEqual((await vocabFor(t.platform, ['kursi'])).map((w) => w.lat), ['korsi'], 'kursi finds korsi, not karrossa');
+  assert.deepEqual(tried.prices.map((x: any) => [x.said, x.da]), [['nos mlyoun', 5000]]);
+  assert.match(tried.block, /Vocabulaire algérien[\s\S]*\n\nPrix dits en mots[\s\S]*« nos mlyoun » = 5 000 DA/);
+  assert.equal(typeof tried.ms, 'number');
+  assert.ok(tried.tokens > 0 && tried.tokens < 400);
+  // Dellal reads the prices the customer said
+  reqs.length = 0;
+  const conv = (await db.query(`INSERT INTO conversations (channel, external_id) VALUES ('whatsapp', '213661234599') RETURNING id`))[0].id;
+  await db.query(`INSERT INTO conv_messages (conversation_id, role, body) VALUES ($1, 'customer', 'salam, karrossa b mlyoun w nos ?')`, [conv]);
+  await call('dellal.answer', shop, { id: Number(conv) });
+  const last = String(reqs[0].systemBlocks[reqs[0].systemBlocks.length - 1]);
+  assert.match(last, /« mlyoun w nos » = 15 000 DA/);
 });

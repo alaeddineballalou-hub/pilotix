@@ -689,7 +689,7 @@ export async function decide(ctx: Ctx, f: CmFacts, s: CmSettings): Promise<CmRun
   const lahja = await lahjaFor(ctx.db, ctx.t?.platform ?? null, ctx.shop?.id ?? null);
   const guide = await darijaGuide(ctx.t?.platform ?? null);
   // the vocabulary book: only its words that touch this comment, the post and its product
-  const vocab = vocabBlock(await vocabFor(ctx.t?.platform ?? null, [f.body, f.caption ?? '', f.product?.name ?? '']));
+  const vocab = vocabBlock(await vocabFor(ctx.t?.platform ?? null, [f.body, f.caption ?? '', f.product?.name ?? '']), [f.body]);
   const res = await complete({ model, system: cmSystem(f, s, lahja, guide, vocab), messages: [{ role: 'user', content: userLine }], tools: [], max_tokens: 800 });
   usage.input_tokens += num(res.usage?.input_tokens);
   usage.output_tokens += num(res.usage?.output_tokens);

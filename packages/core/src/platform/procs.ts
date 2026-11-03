@@ -48,7 +48,7 @@ import { pilotConfig, pilotToday, savePilotConfig, saveVoiceConfig, voiceConfig,
 import { AI_FEATURES, aiBill, aiLabOfMonth, aiUsageOfMonth, aiUsageSince, monthOf, saveAiBill } from './aiusage';
 import { pilotTry } from '../modules/dellal';
 import { addCoachLahja, decideLahja, decideManyLahja, LAHJA_NO_CHANGE, lahjaErr, lahjaState, lahjaWaiting, LahjaWord } from '../modules/lahja';
-import { forgetVocab, importVocab, learnVocab, removeVocab, saveVocab, vocabBlock, vocabCounts, vocabFor, vocabList, VOCAB } from '../modules/vocab';
+import { forgetVocab, importVocab, learnVocab, readCentimes, removeVocab, saveVocab, vocabBlock, vocabCounts, vocabFor, vocabList, VOCAB } from '../modules/vocab';
 import { darijaBookFile, darijaBookLive, darijaErr, darijaVersions, restoreDarijaBook, saveDarijaBook, snapshotDarijaLessons } from '../modules/darijabook';
 import { cmBoard, dellalBoard, dellalBooks, dellalBookText, dellalMore, spyBoard } from './aiboard';
 
@@ -1285,8 +1285,12 @@ export const PLATFORM_REGISTRY = {
   }),
   /** Try it: the words of the book a customer's message would bring into Dellal's instructions. */
   'p.vocab.try': pproc(ALL, z.object({ text: z.string().max(2000) }), async (ctx, i) => {
+    const t0 = Date.now();
     const words = await vocabFor(ctx.t.platform, [i.text]);
-    return { words, block: vocabBlock(words) };
+    const prices = readCentimes([i.text]);
+    const block = vocabBlock(words, [i.text]);
+    // what it costs Dellal: the time to find the words, and about how many tokens they add to its instructions
+    return { words, prices, block, ms: Date.now() - t0, tokens: Math.ceil(block.length / 3.5) };
   }),
 
   // ---------------------------------------------------------------- Pilot AI › Test & lessons

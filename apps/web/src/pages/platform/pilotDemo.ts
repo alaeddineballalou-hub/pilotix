@@ -660,10 +660,20 @@ function vocabList(i: { q?: string; topic?: string; source?: string; limit?: num
   const k = (s: string) => all.filter((w) => w.source === s).length;
   return { rows: rows.slice(0, i.limit ?? 100), total: rows.length, counts: { total: all.length, book: k('book'), learned: k('learned'), coach: k('coach'), topics } };
 }
+// the preview reads a few prices said in centimes, as the server does (modules/vocab.ts › readCentimes)
+const DEMO_PRICES: [RegExp, string, number, boolean][] = [
+  [/mlyoun w nos|مليون ?و ?نص/i, 'mlyoun w nos', 15000, false],
+  [/nos mlyoun|نص مليون/i, 'nos mlyoun', 5000, false],
+  [/mlyoun w mitin/i, 'mlyoun w mitin', 12000, false],
+  [/mitin w khamsin/i, 'mitin w khamsin', 2500, true],
+];
 function vocabTry(text: string) {
   const said = text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((x) => x.length >= 2);
-  const words = vocabDemoRows().filter((w) => said.some((x) => [w.ar, w.lat, ...w.meaning.split(/[\s,()]+/)].some((y) => y && y.toLowerCase() === x)));
-  return { words, block: '' };
+  const plain = (y: string) => y.toLowerCase().replace(/^ال/, '');
+  const words = vocabDemoRows().filter((w) => said.some((x) => [w.ar, w.lat, ...w.meaning.split(/[\s,()]+/)].some((y) => y && (y.toLowerCase() === x || (y.length > 2 && plain(y) === plain(x))))));
+  const hit = DEMO_PRICES.find(([re]) => re.test(text));
+  const prices = hit ? [{ said: hit[1], da: hit[2], guess: hit[3], dinars: false }] : [];
+  return { words, prices, block: '', ms: 1, tokens: words.length * 14 + prices.length * 20 + (words.length || prices.length ? 30 : 0) };
 }
 
 /** the example answer of one control-room call (the Pilot AI page's reads) */

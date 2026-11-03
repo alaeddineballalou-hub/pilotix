@@ -723,6 +723,24 @@ mark.pl-dj-gone { padding: 0 2px; border-radius: 4px; background: none; color: i
 /* ---- Pilot AI › Leçons › Vocabulaire: the book's words (Arabic letters, Latin letters, meaning), its import, a try */
 .pl-vc { container-type: inline-size; }
 .pl-vc-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-top: -6px; }
+.pl-vc-head-do { display: flex; flex-wrap: wrap; gap: 6px; }
+.pl-vc-official { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.pl-vc-official-ic { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: var(--navy); color: var(--on-navy); }
+.pl-vc-official-ic .bji { width: 19px; height: 19px; }
+.pl-vc-official-txt { display: grid; gap: 2px; min-width: 0; }
+.pl-vc-official-txt b { font-size: 14.5px; }
+.pl-vc-or { margin-top: 2px !important; font-weight: 700; }
+.pl-vc-examples { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 0; }
+.pl-vc-examples .pl-vc-pill { height: auto; min-height: 28px; padding: 4px 11px; font-weight: 600; max-width: 100%; text-align: start; }
+.pl-vc-prices li { border-color: var(--butter-deep); }
+.pl-vc-prices li span { color: var(--ink); font-weight: 700; }
+.pl-vc-prices em { color: var(--muted); font-style: normal; }
+.pl-vc-cost { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; }
+.pl-vc-cost .bji { width: 14px; height: 14px; }
+@container (max-width: 560px) {
+  .pl-vc-official { grid-template-columns: auto minmax(0, 1fr); }
+  .pl-vc-official > .btn { grid-column: 1 / -1; justify-self: start; }
+}
 .pl-vc-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0; font-size: 13.5px; }
 .pl-vc-try-row { display: flex; gap: 8px; }
 .pl-vc-try-row input { flex: 1; min-width: 0; }

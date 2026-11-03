@@ -84,6 +84,14 @@ delays, pressure or « I am human ». The coach approves, edits or rejects each 
 tried on a share of new chats and kept only if it gets at least as many parcels delivered (stopped by itself when worse).
 Code: `packages/core/src/modules/pilotlearn.ts` (the engine), `apps/server/src/jobs.ts` (the night), tests `pilotlearn*.test.ts`.
 
+**Darija words** (Pilot AI › Tester & leçons › Leçons › Vocabulaire): Pilotix's book of Algiers Darija words, one book for every
+shop — « Mettre ces mots » puts Pilotix's own book in with one click (1,821 words in 85 topics, from the Algiers Darija Book v6;
+« Le livre complet » downloads the whole 37-chapter book). For each reply Dellal and the CM AI agent read only the words that
+touch the conversation, found even in another spelling (wesh = wach, chhal = ch7al, karossa = karrossa, never korsi for
+karrossa), plus the prices the customer said in centimes read in dinars (« mlyoun w nos » = 15 000 DA). « Essayer un message
+de client » shows the words, the prices, the tokens added and the time. Code: `packages/core/src/modules/vocab.ts`
+(`vocabFor`, `vskel`, `sameWord`, `readCentimes`), the books in `apps/web/src/pages/platform/darija/` (loaded only when used).
+
 **Daily limit** (Pilot AI › Réglages, 3 $ by default, 0 = none): the most Pilotix's key spends on live answers in one
 day, every shop together (Algeria's day). Reached: the AI rests until midnight as if Pilot AI were off (Dellal and the CM
 AI agent answer with their simple rules, AI Spy waits; an answer already started finishes), and the owner and the managers

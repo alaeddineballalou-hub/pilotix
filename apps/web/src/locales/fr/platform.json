@@ -1536,7 +1536,7 @@
         "lessonsShort_other": "{{n}} leçons"
       },
       "vocab": {
-        "help": "Les mots de la darija que Dellal et CM AI peuvent utiliser, pour toutes les boutiques. Pour chaque réponse, ils lisent seulement les mots qui touchent la conversation. Une leçon de darija acceptée corrige le mot ici.",
+        "help": "Les mots de la darija que Dellal et CM AI peuvent utiliser, pour toutes les boutiques. Pour chaque réponse, ils lisent seulement les mots qui touchent la conversation (même écrits autrement : wesh = wach, chhal = ch7al) et les prix dits en centimes. Une leçon de darija acceptée corrige le mot ici.",
         "count_one": "{{n}} mot",
         "count_other": "{{n}} mots",
         "learned_one": "{{n}} appris des corrections",
@@ -1557,7 +1557,7 @@
         },
         "add": "Ajouter un mot",
         "emptySearch": "Aucun mot ne correspond.",
-        "empty": "Le livre est vide. Mettez votre livre de vocabulaire pour commencer.",
+        "empty": "Le livre est vide. Mettez le livre de Pilotix en un clic pour commencer.",
         "more": "Voir plus ({{shown}} sur {{total}})",
         "moreSearch": "{{shown}} mots montrés sur {{total}} : cherchez un mot pour trouver les autres.",
         "removed": "Mot supprimé.",
@@ -1588,7 +1588,19 @@
         "try": "Voir les mots",
         "tryHelp_one": "Pour ce message, Dellal lit {{n}} mot :",
         "tryHelp_other": "Pour ce message, Dellal lit {{n}} mots :",
-        "tryNone": "Aucun mot du livre ne touche ce message."
+        "tryNone": "Aucun mot du livre ne touche ce message.",
+        "download": "Le livre complet",
+        "downloadHelp": "Télécharger tout le livre de darija d’Alger (37 chapitres : les mots, la grammaire, les régions, les dictionnaires)",
+        "official": {
+          "title": "Le livre de darija d’Alger de Pilotix",
+          "text": "{{n}} mots en {{topics}} thèmes, en lettres arabes et latines, avec leur sens. Les mots encore à vérifier (⚠️) et ceux des autres régions restent dehors.",
+          "put": "Mettre ces mots",
+          "or": "Ou un autre livre :"
+        },
+        "tryExamples": "Essayez :",
+        "tryPrices": "Prix dits en centimes, lus pour Dellal :",
+        "tryGuess": "« alf » sous-entendu : à vérifier",
+        "tryCost": "Ajoute environ {{tokens}} tokens à la réponse · trouvé en {{ms}} ms"
       }
     },
     "voice": {

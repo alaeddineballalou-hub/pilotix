@@ -600,7 +600,8 @@ async function systemPrompt(
   const today = new Date(ctx.now()).toISOString().slice(0, 10);
   // the vocabulary book (Pilot AI › Leçons › Vocabulaire): only its words that touch what this customer wrote
   const said = (await ctx.db.query(`SELECT body FROM conv_messages WHERE conversation_id = $1 AND role = 'customer' ORDER BY id DESC LIMIT 8`, [conv.id])).map((r: any) => String(r.body ?? ''));
-  const vocab = vocabBlock(await vocabFor(ctx.t?.platform ?? null, said));
+  // with the prices this customer said in centimes, read for the AI (« mlyoun w nos » = 15 000 DA)
+  const vocab = vocabBlock(await vocabFor(ctx.t?.platform ?? null, said), said);
   const shared = [
     DELLAL_PLAYBOOK.replace('${ORDER_NEXT}', s.ordersTo === 'new' ? 'après la commande, un conseiller l’appellera aussi pour confirmer.' : 'la commande part directement en préparation.'),
     // the Darija book in service (Pilot AI › Tester & leçons › Leçons › Darija; the guide of the code without the platform)

@@ -75,7 +75,57 @@ const STOP = new Set(
 export function vwords(s: string): string[] {
   return [...vnorm(s).matchAll(/[\p{L}\p{N}']+/gu)].map((m) => m[0].replace(/^'+|'+$/g, '')).filter((w) => w.length >= 2 && !STOP.has(w));
 }
+/**
+ * The bones of a word in Latin letters, the same whatever the spelling: wach / wesh / wech → « wC », ch7al / chhal /
+ * sh7al → « Chl », bezzaf / bzaf → « bzf », 9oddam / goddam → « qdm ». Vowels go, 3 and 2 go, 7 = h, 9 = g = q, kh = 5,
+ * ch = sh, dj = j, a doubled letter counts once. Empty for Arabic letters and numbers.
+ */
+export function vskel(w: string): string {
+  const x = vnorm(w);
+  if (!x || ARABIC.test(x) || /^\d+$/.test(x)) return '';
+  return x
+    .replace(/sh/g, 'ch')
+    .replace(/dj/g, 'j')
+    .replace(/tch/g, 'C')
+    .replace(/ch/g, 'C')
+    .replace(/kh|5/g, 'X')
+    .replace(/gh/g, 'R')
+    .replace(/th/g, 't')
+    .replace(/dh/g, 'd')
+    .replace(/[78]/g, 'h')
+    .replace(/[9g]/g, 'q')
+    .replace(/[32'’]/g, '')
+    .replace(/[aeiou]/g, '')
+    .replace(/(.)\1+/g, '$1');
+}
 const clean = (s: unknown) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, VOCAB.maxLen);
+/** The word with its vowels kept as one mark: to tell karrossa (k-r-s with 3 vowels) from korsi (k-r-s with 2). */
+const vpat = (w: string) =>
+  vnorm(w)
+    .replace(/sh|ch/g, 'C')
+    .replace(/kh|5/g, 'X')
+    .replace(/gh/g, 'R')
+    .replace(/dj/g, 'j')
+    .replace(/[78]/g, 'h')
+    .replace(/[9g]/g, 'q')
+    .replace(/[32'’]/g, '')
+    .replace(/[aeiou]+/g, 'a')
+    .replace(/(.)\1+/g, '$1');
+function lev(a: string, b: string): number {
+  if (a === b) return 0;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+/** Another spelling of the same word (wesh for wach, karossa for karrossa), not another word with the same bones (korsi). */
+export function sameWord(said: string, word: string): boolean {
+  const k = vskel(said);
+  return !!k && k === vskel(word) && Math.abs(vnorm(said).length - vnorm(word).length) <= 2 && lev(vpat(said), vpat(word)) <= 1;
+}
 const keyOf = (w: Pick<VocabInput, 'ar' | 'lat'>) => `${vnorm(w.ar)}|${vnorm(w.lat)}`;
 
 const row = (r: Record<string, any>): VocabWord => ({
@@ -120,6 +170,7 @@ export function parseVocab(text: string): VocabImport {
   let unsure = 0;
   let topic = '';
   let cols: ('ar' | 'lat' | 'meaning' | null)[] | null = null;
+  let skipTable = false;
   const cells = (l: string) => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(cellText);
   const sep = (l: string | undefined) => !!l && /^\s*\|?\s*:?-{2,}/.test(l) && /^[\s|:-]+$/.test(l);
   for (let i = 0; i < lines.length; i++) {
@@ -128,10 +179,11 @@ export function parseVocab(text: string): VocabImport {
     if (h) {
       topic = cellText(h[1]).replace(/^(chapter|chapitre)\s+\d+\s*[—–:-]\s*/i, '').slice(0, 120);
       cols = null;
+      skipTable = false;
       continue;
     }
     if (!/^\s*\|.*\|/.test(l)) {
-      if (l.trim()) cols = null;
+      if (l.trim()) (cols = null), (skipTable = false);
       continue;
     }
     if (sep(l)) continue;
@@ -140,8 +192,12 @@ export function parseVocab(text: string): VocabImport {
     if (sep(lines[i + 1])) {
       cols = c.map((x) => HEAD.find(([re]) => re.test(x))?.[1] ?? null);
       if (!cols.some(Boolean)) cols = null;
+      // a reverse dictionary (« English | Darija », « Français | Darija »): the meaning first and no Arabic column —
+      // its words are already in the book's own tables, read the other way round
+      else if (cols[0] === 'meaning' && !cols.includes('ar')) skipTable = true;
       continue;
     }
+    if (skipTable) continue;
     if (c.length < 2) continue;
     if (c.some((x) => x.includes('⚠'))) {
       unsure++;
@@ -324,6 +380,9 @@ async function loaded(pdb: Db) {
     for (const x of vwords(`${w.ar} ${w.lat} ${w.avoid}`)) {
       add(`d:${x}`, i);
       add(`d:${prefix(x)}`, i);
+      // the same word in another spelling (wesh for wach, chhal for ch7al…)
+      const k = vskel(x);
+      if (k.length >= 3) add(`s:${k}`, i);
     }
     for (const x of vwords(w.meaning)) add(`m:${x}`, i);
   });
@@ -333,7 +392,8 @@ async function loaded(pdb: Db) {
 
 /**
  * The words of the book that touch these texts (what the customer wrote, the post, the product): a Darija word written
- * (or its first five letters) counts twice, a word of its meaning once; the best ones first, `limit` at most.
+ * counts twice, its first five letters, the same word in another spelling (wesh = wach) or a word of its meaning once;
+ * the best ones first, `limit` at most.
  */
 export async function vocabFor(pdb: Db | null, texts: string[], limit = VOCAB.promptWords): Promise<VocabWord[]> {
   if (!pdb) return [];
@@ -346,6 +406,12 @@ export async function vocabFor(pdb: Db | null, texts: string[], limit = VOCAB.pr
       hit(`d:${w}`, 2);
       if (prefix(w)) hit(`d:${prefix(w)}`, 1);
       hit(`m:${w}`, 1);
+      const k = vskel(w);
+      if (k.length >= 3 && !m.index.has(`d:${w}`))
+        m.index.get(`s:${k}`)?.forEach((i) => {
+          const v = m.words[i];
+          if (vwords(`${v.lat} ${v.avoid}`).some((x) => sameWord(w, x))) score.set(i, (score.get(i) ?? 0) + 1);
+        });
     }
     return [...score.entries()]
       .sort((a, b) => b[1] - a[1] || a[0] - b[0])
@@ -357,9 +423,114 @@ export async function vocabFor(pdb: Db | null, texts: string[], limit = VOCAB.pr
   }
 }
 
-/** The words for the AI's instructions. */
-export function vocabBlock(ws: VocabWord[]): string {
-  if (!ws.length) return '';
+// ---------------------------------------------------------------- prices said in centimes
+// Algerians often say prices in centimes (1 DA = 100 centimes): « mlyoun w nos » = 1 500 000 centimes = 15 000 DA,
+// « mitin w khamsin (alf) » = 2 500 DA. The numbers a customer writes in words are read here, so the AI never has to
+// compute them itself (and is told to check with the customer when unsure).
+const NUM: Record<string, number> = {
+  wa7ed: 1, wahed: 1, zouj: 2, zoudj: 2, jouj: 2, tlata: 3, tlatha: 3, rab3a: 4, arb3a: 4, khamsa: 5, setta: 6, sitta: 6, sab3a: 7, seb3a: 7,
+  tmenya: 8, tmanya: 8, tes3a: 9, tis3a: 9, '3achra': 10, achra: 10, '7dach': 11, hdach: 11, tnach: 12, tlettach: 13, rba3tach: 14,
+  khamstach: 15, settach: 16, sba3tach: 17, tmentach: 18, tsa3tach: 19, '3achrin': 20, achrin: 20, tlatin: 30, rb3in: 40, arb3in: 40,
+  khamsin: 50, settin: 60, sittin: 60, sab3in: 70, seb3in: 70, tmanin: 80, tmenin: 80, tes3in: 90, tis3in: 90, mya: 100, miya: 100,
+  mitin: 200, tlatmya: 300, rab3amya: 400, rb3mya: 400, khamsmya: 500, settmya: 600, sab3amya: 700, tmenmya: 800, tes3amya: 900,
+  alfin: 2000,
+  واحد: 1, زوج: 2, ثلاثه: 3, تلاته: 3, اربعه: 4, ربعه: 4, خمسه: 5, سته: 6, سبعه: 7, ثمنيه: 8, تمنيه: 8, تسعه: 9, عشره: 10, عشرين: 20,
+  ثلاثين: 30, تلاتين: 30, اربعين: 40, خمسين: 50, ستين: 60, سبعين: 70, ثمانين: 80, تمانين: 80, تسعين: 90, ميه: 100, مايه: 100, ميتين: 200, الفين: 2000,
+};
+const MULT: Record<string, number> = { alf: 1000, alef: 1000, alaf: 1000, mlyoun: 1e6, melyoun: 1e6, mlioun: 1e6, million: 1e6, millions: 1e6, mlayen: 1e6, mlayn: 1e6, الف: 1000, الاف: 1000, مليون: 1e6, ملاين: 1e6, ملايين: 1e6 };
+const FRACT: Record<string, number> = { nos: 0.5, noss: 0.5, demi: 0.5, نص: 0.5, rbe3: 0.25, rob3: 0.25, ربع: 0.25 };
+const JOIN = new Set(['w', 'ou', 'et', 'و']);
+const DINARS = new Set(['da', 'dzd', 'dinar', 'dinars', 'دج', 'دينار']);
+export interface SaidPrice {
+  /** the words as the customer wrote them (normalised) */
+  said: string;
+  /** what it is in dinars */
+  da: number;
+  /** « alf » left out (« mitin w khamsin » for 2 500 DA): a guess the AI should check */
+  guess: boolean;
+  /** said with « dinar » / DA: already dinars, nothing to divide */
+  dinars: boolean;
+}
+/** The prices written in words in these texts (centimes, unless « dinar » follows), in dinars. */
+export function readCentimes(texts: string[]): SaidPrice[] {
+  const out: SaidPrice[] = [];
+  for (const text of texts) {
+    const raw = vnorm(text).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+    // « ونص » → « و » « نص »: the Arabic « and » is written against the next word
+    const tk: string[] = [];
+    for (const t of raw) {
+      const rest = t.slice(1);
+      if (t.length > 2 && t[0] === 'و' && (rest in NUM || rest in MULT || rest in FRACT)) tk.push('و', rest);
+      else tk.push(t);
+    }
+    const isNum = (t: string | undefined) => !!t && (t in NUM || t in MULT || t in FRACT || /^\d{1,6}$/.test(t));
+    let i = 0;
+    while (i < tk.length) {
+      // a number in digits counts only before alf / mlyoun (« 15 alf », « 2 mlayen »): never a phone or a quantity
+      if (!isNum(tk[i]) || (/^\d+$/.test(tk[i]) && !(tk[i + 1] in MULT))) {
+        i++;
+        continue;
+      }
+      let j = i;
+      let total = 0;
+      let cur = 0;
+      let lastMult = 0;
+      let words = false;
+      const said: string[] = [];
+      while (j < tk.length) {
+        const t = tk[j];
+        if (JOIN.has(t) && said.length && isNum(tk[j + 1])) {
+          said.push(t);
+          j++;
+          continue;
+        }
+        if (/^\d{1,6}$/.test(t)) cur += Number(t);
+        else if (t in NUM) {
+          cur += NUM[t];
+          words = true;
+        } else if (t in FRACT) {
+          if (lastMult) total += FRACT[t] * lastMult;
+          else cur += FRACT[t];
+          words = true;
+        } else if (t in MULT) {
+          total += (cur || 1) * MULT[t];
+          cur = 0;
+          lastMult = MULT[t];
+          words = true;
+        } else break;
+        said.push(t);
+        j++;
+      }
+      const dinars = DINARS.has(tk[j] ?? '');
+      let centimes = 0;
+      let guess = false;
+      if (lastMult === 1e6 && cur > 0) centimes = total + cur * 1000; // « mlyoun w mitin » = 1 200 000
+      else if (!lastMult && cur >= 100) {
+        centimes = cur * 1000; // « mitin w khamsin » (alf left out)
+        guess = true;
+      } else centimes = total + cur;
+      if (words && said.length) {
+        const s = said.join(' ');
+        const da = dinars ? total + cur : centimes / 100;
+        if (da >= 1 && (dinars || centimes >= 100) && !out.some((p) => p.said === s)) out.push({ said: s + (dinars ? ` ${tk[j]}` : ''), da: Math.round(da), guess, dinars });
+      }
+      i = Math.max(j, i + 1);
+    }
+  }
+  return out.slice(0, 6);
+}
+const da = (x: number) => `${String(x).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} DA`;
+/** The prices a customer said in words, as a short note for the AI's instructions. */
+export function pricesBlock(ps: SaidPrice[]): string {
+  if (!ps.length) return '';
+  const line = (p: SaidPrice) => `- « ${p.said} » = ${da(p.da)}${p.dinars ? ' (dit en dinars)' : p.guess ? ' (« alf » sous-entendu : vérifie avec le client)' : ''}`;
+  return `Prix dits en mots dans ce message (centimes → dinars ; en cas de doute, demande « tqsed … DA ? ») :\n${ps.map(line).join('\n')}`;
+}
+
+/** The words for the AI's instructions (and, with the customer's texts, the prices he said in centimes). */
+export function vocabBlock(ws: VocabWord[], texts: string[] = []): string {
+  const prices = pricesBlock(readCentimes(texts));
+  if (!ws.length) return prices;
   const line = (w: VocabWord) => {
     const forms = [w.ar, w.lat].filter(Boolean).join(' / ');
     const avoid = w.avoid.split(',').map((x) => x.trim()).filter(Boolean);
@@ -367,5 +538,6 @@ export function vocabBlock(ws: VocabWord[]): string {
     if (!forms || avoid.some((x) => vnorm(x) === vnorm(w.ar) || vnorm(x) === vnorm(w.lat))) return `- jamais « ${forms || w.avoid} »${w.meaning ? ` (${w.meaning})` : ''}`;
     return `- ${forms}${w.meaning ? ` : ${w.meaning}` : ''}${avoid.length ? ` (pas « ${avoid.join(' », « ')} »)` : ''}`;
   };
-  return `Vocabulaire algérien (les mots du livre de Pilotix qui touchent ce message ; écris-les ainsi, jamais ce qui est marqué « pas ») :\n${ws.map(line).join('\n')}`;
+  const words = `Vocabulaire algérien (les mots du livre de Pilotix qui touchent ce message ; écris-les ainsi, jamais ce qui est marqué « pas ») :\n${ws.map(line).join('\n')}`;
+  return prices ? `${words}\n\n${prices}` : words;
 }

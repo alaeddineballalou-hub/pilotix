@@ -1536,7 +1536,7 @@
         "lessonsShort_other": "{{n}} lessons"
       },
       "vocab": {
-        "help": "The Darija words Dellal and CM AI can use, for every shop. For each reply they read only the words that touch the conversation. An accepted Darija lesson corrects the word here.",
+        "help": "The Darija words Dellal and CM AI may use, for every shop. For each reply they read only the words that touch the conversation (even spelled another way: wesh = wach, chhal = ch7al) and the prices said in centimes. An accepted Darija lesson corrects the word here.",
         "count_one": "{{n}} word",
         "count_other": "{{n}} words",
         "learned_one": "{{n}} learned from corrections",
@@ -1557,7 +1557,7 @@
         },
         "add": "Add a word",
         "emptySearch": "No word matches.",
-        "empty": "The book is empty. Put in your vocabulary book to start.",
+        "empty": "The book is empty. Put Pilotix’s book in with one click to start.",
         "more": "Show more ({{shown}} of {{total}})",
         "moreSearch": "{{shown}} of {{total}} words shown: search a word to find the others.",
         "removed": "Word removed.",
@@ -1588,7 +1588,19 @@
         "try": "See the words",
         "tryHelp_one": "For this message, Dellal reads {{n}} word:",
         "tryHelp_other": "For this message, Dellal reads {{n}} words:",
-        "tryNone": "No word of the book touches this message."
+        "tryNone": "No word of the book touches this message.",
+        "download": "The full book",
+        "downloadHelp": "Download the whole Algiers Darija book (37 chapters: the words, the grammar, the regions, the dictionaries)",
+        "official": {
+          "title": "Pilotix’s Algiers Darija book",
+          "text": "{{n}} words in {{topics}} topics, in Arabic and Latin letters, with their meaning. Words still to check (⚠️) and words of other regions stay out.",
+          "put": "Put these words in",
+          "or": "Or another book:"
+        },
+        "tryExamples": "Try:",
+        "tryPrices": "Prices said in centimes, read for Dellal:",
+        "tryGuess": "« alf » left out: to check",
+        "tryCost": "Adds about {{tokens}} tokens to the reply · found in {{ms}} ms"
       }
     },
     "voice": {
