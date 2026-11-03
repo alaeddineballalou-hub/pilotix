@@ -223,3 +223,19 @@ test('« À attribuer »: Drop off sends back to « À préparer », Annuler goe
   assert.equal(x.deleted, 1);
   assert.equal((await db.query('SELECT 1 FROM orders WHERE id = $1', [c])).length, 0);
 });
+
+
+test('resend never prepares an order with products not yet picked', async () => {
+  const depot = await as(EMAILS.depot);
+  const yal = await companyId('yalidine');
+  const [oid] = (await db.query(`SELECT id FROM orders WHERE conf_status='confirmed' AND follow_status='to_prepare'
+    AND tracking IS NULL AND NOT is_exchange AND EXISTS
+    (SELECT 1 FROM order_items i JOIN products p ON p.id=i.product_id WHERE i.order_id=orders.id AND NOT p.is_service AND i.picked_qty < i.qty)
+    ORDER BY id LIMIT 1`)).map((x: any) => Number(x.id));
+  assert.ok(oid, 'needs a confirmed but unpicked parcel');
+  await db.query('UPDATE orders SET company_id=$2 WHERE id=$1', [oid, yal]);
+  const result: any = await call('depot.resend', depot, { ids: [oid] });
+  assert.equal(result.moved, 0);
+  assert.equal(result.sent, 0);
+  assert.equal((await row(oid)).follow_status, 'to_prepare');
+});
