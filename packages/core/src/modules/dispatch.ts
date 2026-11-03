@@ -251,6 +251,10 @@ export const dispatchProcs = {
 
   /** « Renvoyer »: the refused parcels sent again to their company. */
   'depot.resend': proc(['depot'], z.object({ ids: z.array(id).min(1).max(300) }), async (ctx, i) => {
+    const rows = await ctx.db.query('SELECT id, ref, follow_status, tracking FROM orders WHERE id = ANY($1)', [i.ids]);
+    if (rows.length !== new Set(i.ids).size) throw bad('Une ou plusieurs commandes sont introuvables');
+    const invalid = rows.find((o: any) => o.follow_status !== 'prepared' || o.tracking);
+    if (invalid) throw bad(`${invalid.ref} : « Renvoyer » sert aux colis préparés sans numéro de suivi. Terminez la préparation ou vérifiez le suivi avant de réessayer.`);
     const r = await dispatchOrders(ctx, i.ids);
     ctx.emit({ type: 'orders' });
     return r;
