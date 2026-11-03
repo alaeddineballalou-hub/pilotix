@@ -16,13 +16,19 @@ import { toast } from '../../ui/toast';
 import { ConfirmButton } from './bits';
 import { usePartnerKind, useTp } from '../agency/parts';
 
-export const USER_SUBS = ['roles', 'admins', 'vendeurs', 'agents', 'marketeurs', 'managers'] as const;
+// no « Vendeurs »: a seller never adds another seller (each seller has his own Pilotix account, with his boutiques)
+export const USER_SUBS = ['roles', 'admins', 'agents', 'marketeurs', 'managers'] as const;
 /** WhatsApp with a ready message, to the person's number when it is known (0550… → 213550…). */
 const waLink = (phone: string | null | undefined, text: string) => {
   const d = String(phone ?? '').replace(/\D/g, '');
   return `https://wa.me/${d.startsWith('00') ? d.slice(2) : d.startsWith('0') ? `213${d.slice(1)}` : d}?text=${encodeURIComponent(text)}`;
 };
-const SUB_ROLE: Record<string, Role> = { admins: 'admin', vendeurs: 'vendeur', agents: 'confirmation', marketeurs: 'marketer', managers: 'agent_manager' };
+const SUB_ROLE: Record<string, Role> = { admins: 'admin', agents: 'confirmation', marketeurs: 'marketer', managers: 'agent_manager' };
+/**
+ * Never given to a new person: a seller does not add another seller. The people who already have it keep it (their
+ * list opens from the Rôles table) and it can be taken away from them.
+ */
+const NO_NEW: Role = 'vendeur';
 /** A confirmation agency's Utilisateurs: everyone, then one list per role of an agency. */
 // « affectations »: each agent's pay plan and bonuses (the agency's administrators)
 const AGENCY_SUBS = ['equipe', 'agents', 'suivi', 'managers', 'admins', 'affectations'] as const;
@@ -33,7 +39,7 @@ const AGENCY_ROLES: Role[] = ['admin', 'agent_manager', 'confirmation', 'suivi']
 const MARKETER_SUBS = ['equipe', 'marketeurs', 'admins'] as const;
 const MARKETER_SUB_ROLE: Record<string, Role> = { marketeurs: 'marketer', admins: 'admin' };
 const MARKETER_ROLES: Role[] = ['admin', 'marketer'];
-const ROLE_SUB: Partial<Record<Role, string>> = { admin: 'admins', vendeur: 'vendeurs', confirmation: 'agents', marketer: 'marketeurs', agent_manager: 'managers' };
+const ROLE_SUB: Partial<Record<Role, string>> = { admin: 'admins', confirmation: 'agents', marketer: 'marketeurs', agent_manager: 'managers' };
 /** Rôles table order, as in the original. */
 const ROLE_ORDER: Role[] = ['admin', 'vendeur', 'agent_manager', 'confirmation', 'suivi', 'depot', 'livreur', 'marketer'];
 /** Every page in menu order, with the hidden Livrées / Retournées pages of the original. */
@@ -135,7 +141,7 @@ function RolesTable({ onNew }: { onNew: () => void }) {
                 </tr>
               </thead>
               <tbody>
-                {ROLE_ORDER.filter((r) => session?.isAdmin || r !== 'admin').map((r) => {
+                {ROLE_ORDER.filter((r) => (session?.isAdmin || r !== 'admin') && (r !== NO_NEW || (q.data?.[r]?.total ?? 0) > 0)).map((r) => {
                   const c = q.data?.[r] ?? { active: 0, total: 0, names: [] };
                   const names = c.names.slice(0, 4).join(', ') + (c.names.length > 4 ? '…' : '');
                   const pages = pagesOf(r).map((p) => t(`nav.${p}`));
@@ -147,6 +153,7 @@ function RolesTable({ onNew }: { onNew: () => void }) {
                       </td>
                       <td className="wide px-cw" data-l={t('admin.users.colWhat')} title={t(`admin.users.desc.${r}`)}>
                         <div className="px-clamp">{t(`admin.users.desc.${r}`)}</div>
+                        {r === NO_NEW && <small className="muted">{t('admin.users.noNewSeller')}</small>}
                       </td>
                       <td className="wide px-cw" data-l={t('admin.users.colPages')} title={pages.join(' · ')}>
                         <div className="px-clamp">
@@ -200,7 +207,7 @@ function RoleList({ role, onNew, onEdit, agency }: { role: Role | null; onNew: (
     <>
       <Card
         title={agency ? tp(`users.title.${role ?? 'all'}`) : t(`admin.users.listTitle.${role}`)}
-        help={agency ? tp('users.help') : t('admin.users.listHelp')}
+        help={agency ? tp('users.help') : role === NO_NEW ? t('admin.users.noNewSeller') : t('admin.users.listHelp')}
         actions={
           <>
             {archives && (
@@ -208,9 +215,11 @@ function RoleList({ role, onNew, onEdit, agency }: { role: Role | null; onNew: (
                 <Icon name="archive" /> {t('admin.users.archives')}
               </a>
             )}
-            <button className="btn primary" onClick={onNew}>
-              {agency ? t('agency.users.new') : t(`admin.users.newBtn.${role}`)}
-            </button>
+            {(agency || role !== NO_NEW) && (
+              <button className="btn primary" onClick={onNew}>
+                {agency ? t('agency.users.new') : t(`admin.users.newBtn.${role}`)}
+              </button>
+            )}
           </>
         }
       />
@@ -398,7 +407,7 @@ function UserForm({ user, role, onClose, agency }: { user: Profile | null; role:
         <Field label={t('admin.users.roles')} hint={t('admin.users.rolesHint')}>
           <div className="row" style={{ flexWrap: 'wrap', gap: '6px 14px' }}>
             {(agency ? (mk ? MARKETER_ROLES : AGENCY_ROLES) : ROLE_ORDER)
-              .filter((r) => isAdmin || r !== 'admin')
+              .filter((r) => (isAdmin || r !== 'admin') && (r !== NO_NEW || !!user?.roles.includes(NO_NEW)))
               .map((r) => (
                 <label key={r} className="row nowrap" style={{ gap: 6 }}>
                   <input type="checkbox" checked={roles.includes(r)} onChange={() => flip(r)} disabled={user?.id === me && r === 'admin'} />

@@ -115,7 +115,8 @@ export const NAV: NavItem[] = [
     ],
   },
   { id: 'livraison', icon: 'truck', roles: [], subs: ['societes', 'pilot', 'api', 'livreurs', 'preferences'], rules: true, hidden: true },
-  { id: 'utilisateurs', icon: 'usercog', roles: [], manageUsers: true, subs: ['roles', 'admins', 'vendeurs', 'agents', 'marketeurs', 'managers'] },
+  // no « Vendeurs »: a seller never adds another seller
+  { id: 'utilisateurs', icon: 'usercog', roles: [], manageUsers: true, subs: ['roles', 'admins', 'agents', 'marketeurs', 'managers'] },
   // confirmation agencies working for the store (its code, requests both ways, contracts, numbers, payments)
   { id: 'agences', icon: 'handshake', roles: [], onlyIf: partnersOn, hidden: true },
   // marketers running the store's ads (the same, on their own: a marketer has nothing to do with the agencies)
