@@ -815,5 +815,15 @@
     "kg": "{{n}} kg",
     "kgRange": "{{a}} – {{b}} kg",
     "note": "Chaque colis compte sous son produit le plus lourd. Les frais sont exacts une fois la société payée ; avant, ils sont comptés depuis le poids qu’elle a trouvé."
+  },
+  "mine": {
+    "title": "Mon tableau de bord",
+    "nothing": "Rien à montrer pour votre rôle pour le moment.",
+    "livTitle": "Mes livraisons",
+    "late": "{{n}} en retard (plus de 2 jours)",
+    "toBring": "{{n}} à rapporter au dépôt",
+    "uncashedSub": "{{n}} colis livrés pas encore versés",
+    "pay": "Ma part",
+    "paySub": "{{light}} par colis, {{heavy}} par colis lourd"
   }
 }

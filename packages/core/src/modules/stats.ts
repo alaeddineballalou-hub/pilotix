@@ -854,6 +854,12 @@ export const statsProcs = {
     };
   }),
 
+  /** A livreur's own numbers (his Dashboard): his parcels, deliveries, returns, the money he holds and his pay. */
+  'stats.myLivreur': proc(['livreur'], Range, async (ctx, r) => {
+    const out = await livreursStats(ctx, { ...r, by: 'livreur', dateType: 'delivered', livreurId: ctx.session.profile.id });
+    return { pay: out.pay, me: out.all[0] ?? null };
+  }),
+
   /** Livreurs dashboard (same numbers as stats.livreurs, checked against the manager's areas). */
   'stats.dashLivreurs': proc(['agent_manager', 'vendeur'], LivInput, async (ctx, i) => {
     await needArea(ctx, 'livreurs');

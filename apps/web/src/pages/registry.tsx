@@ -47,6 +47,8 @@ export const PAGES: Record<string, ComponentType<PageProps>> = {
  */
 export const AGENCY_PAGES: Record<string, ComponentType<PageProps>> = {
   accueil: P(() => import('./agency'), 'AgencyHome'),
+  analyse: P(() => import('./agency/stats'), 'AgencyAnalyse'),
+  dashboard: P(() => import('./agency/stats'), 'AgencyDashboard'),
   confirmation: P(() => import('./agency/work'), 'AgencyConfirmation'),
   suivi: P(() => import('./agency/work'), 'AgencySuivi'),
   produits: P(() => import('./depot/AssignedCatalog'), 'AgencyProducts'),

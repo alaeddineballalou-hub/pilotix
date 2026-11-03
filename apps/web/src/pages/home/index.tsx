@@ -8,18 +8,18 @@ import { da, dayRange, n, pct } from '../../lib/format';
 import { featureIsOn } from '../../lib/features';
 import { useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
-import { useMedia } from '../../lib/useMedia';
-import { Card, ErrorBox, Icon, Kpis, Loading, Trend } from '../../ui/kit';
+import { Card, ErrorBox, Kpis, Loading, Trend } from '../../ui/kit';
 import type { PageProps } from '../registry';
 import { ShopDoctor } from '../dashboard/Doctor';
 import { ProBanner } from '../pro/banner';
 import { Presence } from '../dashboard/Presence';
 import { LivreursTable } from '../dashboard/Livreurs';
-import { Board, MemberDetail, useBoardPeriod } from '../dashboard/board/Board';
+import { Board, useBoardPeriod } from '../dashboard/board/Board';
 import { TeamHealth } from '../dashboard/board/Health';
-import { AreaKey, AREAS } from '../dashboard/board/defs';
+import { AreaKey } from '../dashboard/board/defs';
 import { PeriodChips } from '../dashboard/board/parts';
 import { delivTone, KpiBox, prevRangeOf } from '../dashboard/util';
+import { MyDay } from '../dashboard/Mine';
 import '../dashboard/board/board.css';
 
 type R = { from: string; to: string };
@@ -177,48 +177,6 @@ function Period({ range, vs }: { range: R; vs: string }) {
         </Kpis>
       )}
     </section>
-  );
-}
-
-/** An agent's own numbers in each area they work in, next to their team's, with their rank (no one else's name). */
-function MyDay({ range }: { range: R }) {
-  const { t } = useTranslation();
-  const wide = useMedia('(min-width: 1000px)');
-  const q = useRpc('stats.me', range, { refetchInterval: 60_000 });
-  if (q.error) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
-  if (!q.data) return <Loading />;
-  return (
-    <>
-      {q.data.map((x) => {
-        const area = x.area as AreaKey;
-        const def = AREAS[area];
-        // a count is compared with the average of those who worked, a rate with the team's
-        const refOf = (k: string) => (x.team[k] === null || x.team[k] === undefined ? null : def.metrics[k]?.fmt === 'n' ? x.avg[k] ?? null : x.team[k]);
-        return (
-          <section key={area} className={`tb-card tb-myc tb-${area}`}>
-            <div className="tb-ch tb-mych">
-              <h3>
-                <Icon name="chart" /> {t('dashboard.tb.myNumbers')}
-                {q.data.length > 1 && <small> · {t(`dashboard.areas.${area}`)}</small>}
-              </h3>
-              {x.rank !== null && x.size > 1 && (
-                <span className="tb-rank">
-                  <Icon name="medal" /> {t('dashboard.tb.rank', { rank: x.rank, of: x.size })}
-                  <small> · {t(`dashboard.tb.m.${area}.${x.rankOf}.l`)}</small>
-                </span>
-              )}
-            </div>
-            {x.me ? (
-              <div className="tb-my">
-                <MemberDetail area={area} v={x.me.v} p={x.me.p} days={x.me.days} reasons={x.me.reasons} team={x.team} teamDays={x.teamDays} refOf={refOf} mine wide={wide} />
-              </div>
-            ) : (
-              <p className="tb-calm">{t('dashboard.tb.noWorkLong')}</p>
-            )}
-          </section>
-        );
-      })}
-    </>
   );
 }
 

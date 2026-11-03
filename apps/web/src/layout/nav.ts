@@ -48,7 +48,8 @@ export interface NavItem {
 
 export const NAV: NavItem[] = [
   { id: 'accueil', icon: 'home', roles: null },
-  { id: 'dashboard', icon: 'chart', roles: ['agent_manager', 'vendeur'], subs: ['overview', 'confirmation', 'depot', 'suivi', 'livreurs', 'sav'] },
+  // everyone: owners and managers see the teams' boards, the others their own numbers (Mine.tsx)
+  { id: 'dashboard', icon: 'chart', roles: ['agent_manager', 'vendeur', 'confirmation', 'suivi', 'depot', 'livreur'], subs: ['overview', 'confirmation', 'depot', 'suivi', 'livreurs', 'sav'] },
   {
     id: 'commandes',
     icon: 'list',
@@ -144,6 +145,10 @@ function partnersOn(): boolean {
 
 export const AGENCY_NAV: NavItem[] = [
   { id: 'accueil', icon: 'home', roles: null },
+  // the results over a period per seller, product, wilaya and agent (the chief and the agent managers)
+  { id: 'analyse', icon: 'trend', roles: ['agent_manager'] },
+  // what waits now and the period's numbers: the team for the chief and the managers, an agent his own
+  { id: 'dashboard', icon: 'chart', roles: null },
   {
     id: 'commandes',
     icon: 'list',

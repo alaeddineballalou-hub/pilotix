@@ -1,0 +1,30 @@
+/* Agency › Dashboard and Analyse & statistiques */
+.agx-st .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.agx-st-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px; border-radius: 12px; background: var(--sky-soft); width: max-content; max-width: 100%; }
+.agx-st-tabs button { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; font: inherit; font-weight: 700; color: var(--muted); cursor: pointer; }
+.agx-st-tabs button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 4px rgba(0, 0, 0, .12); }
+.agx-st-n { font-size: 11.5px; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: var(--raise); color: var(--muted); }
+.agx-st-tabs button.on .agx-st-n { background: var(--px-orange-soft); color: var(--px-orange); }
+.agx-st-hint { margin: 10px 2px 6px; }
+.agx-st-sort { border: 0; background: none; padding: 0; font: inherit; font-weight: inherit; color: inherit; cursor: pointer; white-space: nowrap; }
+.agx-st-sort.on { color: var(--ink); }
+.agx-st-sort:focus-visible { outline: 2px solid var(--px-orange); outline-offset: 2px; border-radius: 4px; }
+.agx-st-tbl td { vertical-align: middle; }
+.agx-st-who { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.agx-st-who small { color: var(--muted); font-size: 12px; }
+.agx-st-pr.call { color: var(--px-orange); }
+.agx-st-pr.online { color: var(--ok); }
+.agx-st-rate { display: inline-block; min-width: 46px; padding: 2px 8px; border-radius: 999px; font-weight: 800; font-size: 12.5px; text-align: center; background: var(--raise); }
+.agx-st-rate.t-ok { background: var(--ok-soft); color: var(--ok); }
+.agx-st-rate.t-mid, .agx-st-rate.t-warn { background: var(--px-orange-soft); color: var(--px-orange); }
+.agx-st-rate.t-bad { background: var(--coral-soft, rgba(229, 72, 77, .12)); color: var(--coral, #e5484d); }
+@media (max-width: 760px) {
+  .agx-st-tabs { width: 100%; overflow-x: auto; flex-wrap: nowrap; }
+  .agx-st-tabs button { flex: none; }
+  /* a phone: the name across the card, the numbers three by three under it */
+  .agx-st-tbl tr { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 10px; padding: 12px 4px; }
+  .agx-st-tbl td:first-child { grid-column: 1 / -1; }
+  .agx-st-tbl td:first-child::before { display: none; }
+  .agx-st-tbl td.num { font-weight: 700; }
+}
+.agx-st .card-head > .tb-rank { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; background: var(--navy); color: var(--on-navy); font-size: 12.5px; font-weight: 800; white-space: nowrap; }

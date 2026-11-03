@@ -815,5 +815,15 @@
     "kg": "{{n}} kg",
     "kgRange": "{{a}} – {{b}} kg",
     "note": "Each parcel counts under its heaviest product. The fees are exact once the company has paid; before that, they are counted from the weight it found."
+  },
+  "mine": {
+    "title": "My dashboard",
+    "nothing": "Nothing to show for your role yet.",
+    "livTitle": "My deliveries",
+    "late": "{{n}} late (over 2 days)",
+    "toBring": "{{n}} to bring back to the depot",
+    "uncashedSub": "{{n}} delivered parcels not handed in yet",
+    "pay": "My share",
+    "paySub": "{{light}} per parcel, {{heavy}} per heavy parcel"
   }
 }

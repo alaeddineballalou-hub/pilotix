@@ -380,7 +380,7 @@ export function Shell({ page, sub, children, nav = NAV, space = 'store' }: { pag
 /** A partner's pages that show one seller or all of them (the picker shows there). */
 const SELLER_PAGES: Record<'store' | 'agency' | 'marketer', Set<string>> = {
   store: new Set(),
-  agency: new Set(['accueil', 'confirmation', 'suivi', 'produits', 'facturation']),
+  agency: new Set(['accueil', 'analyse', 'dashboard', 'confirmation', 'suivi', 'produits', 'facturation']),
   marketer: new Set(['accueil', 'marketing', 'facturation']),
 };
 

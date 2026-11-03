@@ -13,6 +13,8 @@ import { Board } from './board/Board';
 import { LivreursArea } from './Livreurs';
 import { TeamEditor } from './Teams';
 import { Overview } from './Overview';
+import { MyDashboard } from './Mine';
+import { useSession } from '../../lib/session';
 import './dashboard.css';
 
 const AREAS = ['overview', 'confirmation', 'depot', 'suivi', 'livreurs', 'sav'] as const;
@@ -22,7 +24,13 @@ const SCOPE_AREAS = AREAS.filter((a): a is Exclude<Area, 'overview'> => a !== 'o
 type ScopeArea = (typeof SCOPE_AREAS)[number];
 type Meta = Out<'stats.dashMeta'>;
 
-export function Dashboard({ sub }: PageProps) {
+/** Owners, administrators and agent managers: the teams' boards; everyone else: their own numbers (Mine.tsx). */
+export function Dashboard(p: PageProps) {
+  const { has } = useSession();
+  return has('agent_manager', 'vendeur') ? <TeamDashboard {...p} /> : <MyDashboard />;
+}
+
+function TeamDashboard({ sub }: PageProps) {
   const { t } = useTranslation();
   const meta = useRpc('stats.dashMeta', {});
   if (meta.isLoading) return <Loading />;
