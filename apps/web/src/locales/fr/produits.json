@@ -4,6 +4,7 @@
     "stock": "Stock",
     "inventaire": "Inventaire",
     "produits": "Produits",
+    "guides": "Guide de vente",
     "mouvements": "Mouvements",
     "alertes": "Alertes",
     "achats": "Achats",
@@ -16,7 +17,9 @@
     "mouvements": "Chaque entrée et sortie de stock : achats, ventes, retours, pertes, inventaires et transferts.",
     "alertes": "Les produits à racheter : en rupture d’abord, puis sous leur seuil d’alerte.",
     "achats": "Vos achats aux fournisseurs : ce qui est entré en stock, ce qui est payé et ce qui reste à payer.",
-    "depots": "Vos dépôts, ce que chacun contient, et les transferts de stock de l’un à l’autre."
+    "depots": "Vos dépôts, ce que chacun contient, et les transferts de stock de l’un à l’autre.",
+    "guides": "Le guide de vente de chaque produit : ce que les conseillers lisent pendant l’appel, et ce que Dellal et CM AI utilisent pour répondre aux clients.",
+    "guidesAgent": "Le guide de vente de vos produits : quoi dire, les réponses aux questions et aux hésitations des clients."
   },
   "ui": {
     "allDepots": "Tous les dépôts",
@@ -564,6 +567,7 @@
     "upsell": "Vente en plus",
     "never": "À ne jamais promettre",
     "toFill": "Réponse à compléter par l’équipe",
+    "toFillPoint": "Point à compléter par l’équipe",
     "says": "Le client dit",
     "jump": "Aller à une partie",
     "langs": {
@@ -604,6 +608,30 @@
       "tooMany": "{{part}} : {{max}} lignes au plus",
       "tooBig": "Guide de vente trop long : {{n}} caractères ({{max}} au plus)",
       "needName": "Écrivez d’abord le nom du produit (onglet Produit)"
+    },
+    "page": {
+      "list": "Les produits",
+      "search": "Chercher un produit…",
+      "filter": "Montrer",
+      "f": {
+        "all": "Tous",
+        "with": "Avec guide",
+        "without": "Sans guide",
+        "todo": "À compléter"
+      },
+      "hidden": "masqué",
+      "toFill_one": "{{count}} à compléter",
+      "toFill_other": "{{count}} à compléter",
+      "ready": "Guide prêt",
+      "noMatch": "Aucun produit ne correspond.",
+      "pick": "Choisissez un produit à gauche pour voir son guide de vente.",
+      "finish": "Enregistrez ou annulez d’abord le guide en cours.",
+      "saved": "Guide de vente enregistré",
+      "edit": "Modifier",
+      "write": "Écrire le guide",
+      "editing": "Vous modifiez le guide : « Enregistrer » pour le garder.",
+      "emptyManager": "Pas encore de guide pour ce produit. Écrivez-le, ou laissez l’IA faire un premier brouillon.",
+      "none": "Aucun produit pour le moment."
     }
   }
 }

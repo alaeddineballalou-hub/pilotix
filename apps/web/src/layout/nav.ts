@@ -71,7 +71,7 @@ export const NAV: NavItem[] = [
   { id: 'scanner', icon: 'scanbar', roles: ['depot'] },
   { id: 'sav', icon: 'headset', roles: ['confirmation', 'suivi', 'depot'], subs: ['tickets', 'nouveau', 'attente', 'depot', 'livraison', 'livres', 'annules', 'stats'] },
   { id: 'tournee', icon: 'navigation', roles: ['livreur'], onlyIf: (r) => r.includes('livreur') },
-  { id: 'produits', icon: 'layers', roles: ['depot', 'confirmation', 'suivi'], subs: ['stock', 'inventaire', 'produits', 'mouvements', 'alertes', 'achats', 'depots'] },
+  { id: 'produits', icon: 'layers', roles: ['depot', 'confirmation', 'suivi'], subs: ['stock', 'inventaire', 'produits', 'guides', 'mouvements', 'alertes', 'achats', 'depots'] },
   // Pilot AI: the AI agents. Message AI agent (Dellal) sells in the inbox, CM AI agent answers the comments,
   // Delivery AI agent tells each customer where their order is (WhatsApp, SMS).
   {
