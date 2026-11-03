@@ -1,6 +1,6 @@
 // Linked accounts — SERVER ONLY (loaded by the server as '@pilotix/core/dist/social-server'). The login tab comes back
-// here: its code becomes a token (Facebook: an hour's token turned into one of about 60 days, or, with a Facebook Login
-// for Business configuration, a token that does not expire; TikTok: an advertiser's token), then what the account may use
+// here: its code becomes a token (Facebook: a person's token turned into one of about 60 days, whose Pages' tokens do not
+// expire, or a configuration's « system user » token that does not expire; TikTok: an advertiser's token), then what the account may use
 // is read (Facebook Pages with their Instagram account and their own tokens, Meta ad accounts, TikTok ad accounts) and
 // each Page is subscribed to Pilotix's webhook (its messages and comments come to Pilotix). Tokens never leave the server.
 import { AppError } from './rpc';
@@ -72,12 +72,18 @@ async function metaAccount(t: Tenancy, code: string, publicUrl: string): Promise
   const tok = await graph('oauth/access_token', { client_id: apps.meta.appId, client_secret: secret, redirect_uri: socialUrls(publicUrl).metaRedirect, code });
   let token = String(tok.access_token ?? '');
   let expiresIn = Number(tok.expires_in) || 0;
-  const system = !!apps.meta.configId;
   if (!token) throw new AppError('bad_request', 'Facebook n’a pas donné de jeton. Recommencez.');
-  if (!system) {
-    // a classic login's token lasts about an hour: Facebook turns it into one of about 60 days
-    const ll = await graph('oauth/access_token', { grant_type: 'fb_exchange_token', client_id: apps.meta.appId, client_secret: secret, fb_exchange_token: token });
-    token = String(ll.access_token ?? token);
+  // A person's token (the classic login, or a configuration « User access token ») lasts an hour or two: Facebook turns
+  // it into one of about 60 days, and the Pages' tokens read with that one do not expire. A configuration « System-user
+  // access token » gives a token that does not expire already: Facebook refuses to turn it, and it is kept as it is.
+  const withConfig = !!apps.meta.configId;
+  const ll = await graph('oauth/access_token', { grant_type: 'fb_exchange_token', client_id: apps.meta.appId, client_secret: secret, fb_exchange_token: token }).catch((e) => {
+    if (!withConfig) throw e;
+    return null;
+  });
+  const system = withConfig && !ll?.access_token;
+  if (ll?.access_token) {
+    token = String(ll.access_token);
     expiresIn = Number(ll.expires_in) || 60 * 86_400;
   }
   const me = await graph('me', { fields: 'id,name,picture{url}', access_token: token });

@@ -1625,7 +1625,7 @@
       "appId": "ID de l’app",
       "appSecret": "Clé secrète de l’app",
       "configId": "ID de configuration (Facebook Login for Business)",
-      "configHint": "Conseillé : avec une configuration « jeton d’utilisateur système », les comptes liés n’expirent pas. Vide : jetons d’environ 60 jours.",
+      "configHint": "Conseillé : une configuration « User access token » (jeton d’accès utilisateur). Le vendeur se connecte avec son compte Facebook ; ses pages restent liées sans fin, les chiffres de pub demandent une nouvelle connexion environ tous les 60 jours. « System-user » demande un portefeuille business et le statut Tech Provider chez Meta.",
       "redirect": "Adresse de retour (Facebook Login › Réglages)",
       "webhook": "Adresse du webhook",
       "verify": "Jeton de vérification",

@@ -37,6 +37,8 @@ const setting = async (ctx: Ctx, key: string) => (await ctx.db.query('SELECT val
 const calls: { url: string; method: string; body: string }[] = [];
 let graph: { me: any; pages: any[]; ads: any[] } = { me: {}, pages: [], ads: [] };
 let tiktok: { token: string; ids: string[]; list: any[]; user: any } = { token: '', ids: [], list: [], user: {} };
+// a configuration « System-user access token »: Facebook will not turn its token into another one
+let refuseSwap = false;
 const realFetch = globalThis.fetch;
 const answer = (data: unknown) => new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
 before(async () => {
@@ -56,6 +58,8 @@ before(async () => {
     const u = new URL(url);
     if (u.host === 'graph.facebook.com') {
       const path = u.pathname.replace(/^\/v[\d.]+\//, '');
+      if (path === 'oauth/access_token' && u.searchParams.get('grant_type') === 'fb_exchange_token' && refuseSwap)
+        return new Response(JSON.stringify({ error: { message: 'Unsupported token type', code: 100 } }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       if (path === 'oauth/access_token') return answer(u.searchParams.get('grant_type') === 'fb_exchange_token' ? { access_token: 'LONG_USER_TOKEN', expires_in: 5_184_000 } : { access_token: 'SHORT_USER_TOKEN' });
       if (path === 'me') return answer(graph.me);
       if (path === 'me/accounts') return answer({ data: graph.pages });
@@ -289,4 +293,38 @@ test('the preview: a sample account, and a « login » that links a new one afte
   // a page used by the other sample boutique
   const oran = after.links[0].assets.find((x: any) => x.name === 'Bébé Confort Oran');
   await assert.rejects(() => call('social.use', demo, { assetId: oran.id }), /répond déjà/);
+});
+
+test('a Facebook Login for Business configuration: a person’s short token is turned into a long one too; a « system user » token Facebook will not turn is kept, without an end', async () => {
+  await p('p.social.apps.save', { meta: { ...APPS.meta, configId: '777000111', secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
+  const kept = async (extId: string) => (await t.platform.query(`SELECT token, token_kind, expires_at FROM platform.social_links WHERE provider = 'meta' AND ext_id = $1`, [extId]))[0];
+  // « User access token »: the login dialog uses the configuration, and the hour's token becomes one of about 60 days
+  const s: any = await call('social.start', b, { provider: 'meta', scope: 'here' });
+  const u = new URL(s.url);
+  assert.equal(u.searchParams.get('config_id'), '777000111');
+  assert.equal(u.searchParams.get('scope'), null, 'the configuration says what is asked');
+  graph = { me: { id: '5099', name: 'Nadia Oran' }, pages: [{ id: '9901', name: 'Bébé Oran Promo', access_token: 'PAGE_TOKEN_9' }], ads: [] };
+  calls.length = 0;
+  assert.equal((await finishLogin(t, 'meta', { code: 'CFG_CODE', state: s.state }, URL0)).ok, true);
+  assert.ok(calls.some((c) => /grant_type=fb_exchange_token/.test(c.url)), 'the short token is turned into a long one');
+  const user = await kept('5099');
+  assert.deepEqual([user.token, user.token_kind], ['LONG_USER_TOKEN', 'user']);
+  const days = (Date.parse(user.expires_at) - Date.now()) / 86_400_000;
+  assert.ok(days > 59 && days < 61, 'about 60 days');
+  // « System-user access token »: Facebook refuses to turn it; it is kept as it came, with no end date
+  refuseSwap = true;
+  try {
+    const s2: any = await call('social.start', b, { provider: 'meta', scope: 'here' });
+    graph = { me: { id: '5100', name: 'Pilotix (système)' }, pages: [{ id: '9902', name: 'Bébé Oran Pro', access_token: 'PAGE_TOKEN_10' }], ads: [] };
+    assert.equal((await finishLogin(t, 'meta', { code: 'SYS_CODE', state: s2.state }, URL0)).ok, true);
+    const sys = await kept('5100');
+    assert.deepEqual([sys.token, sys.token_kind, sys.expires_at], ['SHORT_USER_TOKEN', 'system', null]);
+    // without a configuration, a token Facebook will not turn is an error: nothing half-linked
+    await p('p.social.apps.save', { meta: { ...APPS.meta, secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
+    const s3: any = await call('social.start', b, { provider: 'meta', scope: 'here' });
+    const end3 = await finishLogin(t, 'meta', { code: 'NO_CFG', state: s3.state }, URL0);
+    assert.equal(end3.ok, false);
+  } finally {
+    refuseSwap = false;
+  }
 });

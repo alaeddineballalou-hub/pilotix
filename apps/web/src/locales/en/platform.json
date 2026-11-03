@@ -1625,7 +1625,7 @@
       "appId": "App ID",
       "appSecret": "App secret",
       "configId": "Configuration ID (Facebook Login for Business)",
-      "configHint": "Advised: with a “system user access token” configuration, linked accounts do not expire. Empty: tokens of about 60 days.",
+      "configHint": "Recommended: a « User access token » configuration. Sellers log in with their own Facebook account; their Pages stay linked with no end date, and ad numbers need a new login about every 60 days. « System-user » needs a business portfolio and Tech Provider status at Meta.",
       "redirect": "Return address (Facebook Login › Settings)",
       "webhook": "Webhook address",
       "verify": "Verify token",
