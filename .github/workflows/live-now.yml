@@ -50,11 +50,13 @@ jobs:
       - name: Through Cloudflare, from outside Algeria (like Meta's servers)
         run: |
           # 403 + « Just a moment » + cf-mitigated = Cloudflare stops it; any other answer = it reaches Pilotix
-          t() { c=$(curl -s -m 30 -A "$2" -D /tmp/h.txt -o /tmp/b.html -w '%{http_code}' "$1" || echo failed); m=$(grep -i '^cf-mitigated' /tmp/h.txt | tr -d '\r' | cut -d' ' -f2); j=$(grep -c 'Just a moment' /tmp/b.html || true); echo "::notice title=$3::$c, cf-mitigated=${m:-none}, challenge page=$j, answer: $(head -c 70 /tmp/b.html | tr -d '\n' | sed 's/<[^>]*>//g')"; }
+          t() { c=$(curl -s -m 30 -A "$2" -D /tmp/h.txt -o /tmp/b.html -w '%{http_code}' "$1" || echo failed); m=$(grep -i '^cf-mitigated' /tmp/h.txt | tr -d '\r' | cut -d' ' -f2); j=$(grep -c 'Just a moment' /tmp/b.html || true); k=$(grep -o "cType: *'[a-z-]*'" /tmp/b.html | head -1); echo "::notice title=$3::$c, cf-mitigated=${m:-none}, challenge page=$j, ${k:-no cType}, answer: $(head -c 70 /tmp/b.html | tr -d '\n' | sed 's/<[^>]*>//g')"; }
           t 'https://pilotix.online/api/hooks/meta-app?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=1' 'facebookexternalua' 'Pilotix Meta app messages'
           t 'https://pilotix.online/api/s/demo/hooks/meta?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=1' 'facebookexternalua' 'A boutique WhatsApp messages'
           t 'https://pilotix.online/api/hooks/courier/1' 'Mozilla/5.0' 'Delivery company news'
           t 'https://pilotix.online/api/oauth/meta/callback?state=not-a-real-state' 'Mozilla/5.0' 'Facebook login return'
           t 'https://pilotix.online/' 'Mozilla/5.0' 'Home page (the shield should still check it)'
+          t 'https://pilotix.online/api/hooks/meta-app' 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36' 'Meta app messages, a browser name'
+          t 'https://pilotix.online/' 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36' 'Home page, a browser name'
           t 'https://pilotix.online/cdn-cgi/trace' 'Mozilla/5.0' 'cdn-cgi trace'
           echo "::notice title=Runner seen by Cloudflare as::$(grep -E '^(loc|colo)=' /tmp/b.html | tr '\n' ' ')"
