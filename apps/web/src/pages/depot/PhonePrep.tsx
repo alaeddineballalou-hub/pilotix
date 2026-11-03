@@ -25,6 +25,7 @@ import '../suivi/phone.css';
 import './phone.css';
 import './dispatch.css';
 import { waitWhy } from '../../lib/pilot';
+import { useSession } from '../../lib/session';
 
 type Row = Out<'depot.pickList'>[number];
 type Restock = { productId: number; variantId: number | null; name: string; variant: string; qty: number };
@@ -467,6 +468,9 @@ function AssignTab({ data, error, retry }: { data?: Assign; error: Error | null;
   const [sel, setSel] = useState<Set<number>>(new Set());
   const [who, setWho] = useState('');
   const [busy, setBusy] = useState(false);
+  const [ask, setAsk] = useState<null | 'cancel' | 'delete'>(null);
+  const [why, setWhy] = useState('');
+  const { session } = useSession();
   const qc = useQueryClient();
   if (error) return <ErrorBox error={error} onRetry={retry} />;
   if (!data) return <Loading />;
@@ -501,6 +505,23 @@ function AssignTab({ data, error, retry }: { data?: Assign; error: Error | null;
     }
   };
   const privateTag = (o: Order) => o.companyId && own && o.companyId === own.id;
+  // « Drop off », « Annuler », « Supprimer » on the ticked orders
+  const act = async (kind: 'drop' | 'cancel' | 'delete') => {
+    setBusy(true);
+    try {
+      const r =
+        kind === 'drop' ? await rpc('depot.dropOff', { ids }) : kind === 'cancel' ? await rpc('depot.assignCancel', { ids, reason: why.trim() }) : { done: (await rpc('orders.delete', { ids })).deleted };
+      toast(t(`depot.as.${kind}Done`, { count: r.done }), 'ok');
+      setSel(new Set());
+      setAsk(null);
+      setWhy('');
+      qc.invalidateQueries();
+    } catch (e: any) {
+      toast(e.message, 'bad');
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <>
       <p className="muted small pxd-help">{t(canAct ? 'depot.as.help' : 'depot.as.helpRead')}</p>
@@ -611,7 +632,44 @@ function AssignTab({ data, error, retry }: { data?: Assign; error: Error | null;
           <button type="button" className="pxd-send" disabled={!who || busy} onClick={go}>
             <Icon name="truck" /> {t('depot.as.go', { count: ids.length })}
           </button>
+          <div className="as-more">
+            <button type="button" className="btn small" disabled={busy} onClick={() => window.confirm(t('depot.as.dropAsk', { count: ids.length })) && act('drop')}>
+              <Icon name="history" /> {t('depot.as.drop')}
+            </button>
+            <button type="button" className="btn small" disabled={busy} onClick={() => setAsk('cancel')}>
+              <Icon name="x" /> {t('depot.as.cancel')}
+            </button>
+            {session?.isAdmin && (
+              <button type="button" className="btn small danger ghost" disabled={busy} onClick={() => setAsk('delete')}>
+                <Icon name="trash" /> {t('depot.as.delete')}
+              </button>
+            )}
+          </div>
         </div>
+      )}
+      {ask && (
+        <Modal
+          title={t(ask === 'cancel' ? 'depot.as.cancelTitle' : 'depot.as.deleteTitle', { count: ids.length })}
+          onClose={() => setAsk(null)}
+          footer={
+            <>
+              <button type="button" className="btn" onClick={() => setAsk(null)}>
+                {t('common.cancel')}
+              </button>
+              <button type="button" className="btn danger" disabled={busy || (ask === 'cancel' && !why.trim())} onClick={() => act(ask)}>
+                {t(ask === 'cancel' ? 'depot.as.cancelOk' : 'depot.as.deleteOk', { count: ids.length })}
+              </button>
+            </>
+          }
+        >
+          <p>{t(ask === 'cancel' ? 'depot.as.cancelText' : 'depot.as.deleteText', { refs: rows.filter((o) => sel.has(o.id)).map((o) => o.ref).join(', ') })}</p>
+          {ask === 'cancel' && (
+            <label className="field">
+              <span>{t('depot.as.reason')}</span>
+              <input value={why} maxLength={200} autoFocus onChange={(e) => setWhy(e.target.value)} placeholder={t('depot.as.reasonPh')} />
+            </label>
+          )}
+        </Modal>
       )}
     </>
   );

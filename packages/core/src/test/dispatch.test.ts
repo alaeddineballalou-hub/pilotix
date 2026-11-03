@@ -201,3 +201,25 @@ test('the screens know which couriers give their own label: the others (Procolis
   }
   assert.ok(!LABEL_COURIER_KINDS.includes('zr_legacy'));
 });
+
+test('« À attribuer »: Drop off sends back to « À préparer », Annuler goes to Annulé with its reason, Supprimer (admin) deletes', async () => {
+  const depot = await as(EMAILS.depot);
+  // three fresh orders from Confirmation, confirmed and sent to the depot
+  const fresh = (await db.query(`SELECT o.id FROM orders o WHERE o.follow_status IS NULL AND NOT o.is_exchange AND EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id) AND NOT EXISTS (SELECT 1 FROM complaints x WHERE x.order_id = o.id) ORDER BY o.id LIMIT 3`)).map((r: any) => Number(r.id));
+  await db.query(`UPDATE orders SET conf_status = 'confirmed', follow_status = 'to_prepare', company_id = NULL, tracking = NULL WHERE id = ANY($1)`, [fresh]);
+  const [a, b, c] = await toPrepare(3);
+  assert.equal(c > 0, true);
+  const d: any = await call('depot.dropOff', depot, { ids: [a] });
+  assert.equal(d.done, 1);
+  assert.equal(Number((await db.query('SELECT sum(picked_qty) AS s FROM order_items WHERE order_id = $1', [a]))[0].s), 0);
+  assert.equal((await row(a)).follow_status, 'to_prepare');
+  const k: any = await call('depot.assignCancel', depot, { ids: [b], reason: 'Le client ne veut plus' });
+  assert.equal(k.done, 1);
+  assert.equal((await row(b)).follow_status, 'cancelled');
+  // only an administrator deletes
+  await assert.rejects(call('orders.delete', depot, { ids: [c] }));
+  const admin = await as(EMAILS.admin);
+  const x: any = await call('orders.delete', admin, { ids: [c] });
+  assert.equal(x.deleted, 1);
+  assert.equal((await db.query('SELECT 1 FROM orders WHERE id = $1', [c])).length, 0);
+});

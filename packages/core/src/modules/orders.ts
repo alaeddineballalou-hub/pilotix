@@ -1855,13 +1855,15 @@ export const ordersProcs = {
     return { id: num(r[0].id) };
   }),
 
-  /** "Supprimer" (admin): only orders still at the confirmation stage (not sent to the depot), not SAV parcels, without ticket or claim. */
+  /** "Supprimer" (admin): orders at the confirmation stage or still at the depot before any company (« À préparer », « À attribuer »), not SAV parcels, without ticket or claim. */
   'orders.delete': proc([], z.object({ ids: z.array(id).min(1).max(500) }), async (ctx, { ids }) => {
     if (!ctx.session.isAdmin) throw forbidden('Seul un administrateur peut supprimer une commande');
     await ctx.db.tx(async (tx) => {
-      const rows = await tx.query('SELECT id, ref, follow_status, is_exchange FROM orders WHERE id = ANY($1) FOR UPDATE', [ids]);
+      const rows = await tx.query('SELECT id, ref, follow_status, is_exchange, tracking FROM orders WHERE id = ANY($1) FOR UPDATE', [ids]);
       for (const r of rows) {
         if (r.is_exchange) throw bad(`${r.ref} est un colis de ticket SAV : annulez le ticket`);
+        // still at the depot, never given to a company (« À préparer », « À attribuer »): can go too
+        if (r.follow_status === 'to_prepare' && !r.tracking) continue;
         if (r.follow_status && r.follow_status !== 'cancelled') throw bad(`${r.ref} est déjà au dépôt ou en livraison : elle ne peut plus être supprimée`);
       }
       const linked = (await tx.query('SELECT o.ref FROM orders o WHERE o.id = ANY($1) AND (EXISTS (SELECT 1 FROM complaints c WHERE c.order_id = o.id) OR EXISTS (SELECT 1 FROM claims c WHERE c.order_id = o.id) OR EXISTS (SELECT 1 FROM orders x WHERE x.original_order_id = o.id)) LIMIT 1', [ids]))[0];
