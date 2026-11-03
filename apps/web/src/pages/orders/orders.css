@@ -25,7 +25,21 @@
 /* order card: the original drawer on the right */
 .oc-drawer .drawer-head .grow { min-width: 0; }
 .oc-drawer .statusbar select { width: 100%; }
-.oc-drawer .statusbar .oc-sel { flex: 1 1 100%; }
+.oc-drawer .statusbar .oc-sel { flex: 1 1 220px; min-height: 40px; }
+/* the actions: the dangerous one set apart, at the end */
+.oc-acts { align-items: center; }
+.oc-acts .oc-del { margin-inline-start: auto; }
+/* « ↶ Annuler » the last status change */
+.oc-undo { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--sky-soft); }
+.oc-undo > .bji { width: 18px; height: 18px; color: var(--navy); flex: none; }
+.oc-undo-t { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.oc-undo-t b { font-size: 14px; }
+.oc-undo-t small { color: var(--muted); font-size: 12.5px; }
+.oc-undo-t .oc-undo-why { color: var(--ink); }
+.oc-undo.off { background: var(--raise); }
+.oc-undo.off > .bji { color: var(--muted); }
+.oc-undo .btn { flex: none; }
+.oc-undo-fx { margin: 6px 0 0; padding-inline-start: 18px; display: grid; gap: 6px; }
 .oc-drawer section.card h3 { margin: 0 0 10px; }
 .oc-drawer .phone-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .oc-drawer .oc-items td { border-bottom: 1px solid var(--line); }

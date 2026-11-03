@@ -11,7 +11,9 @@ import { useRpc } from '../../lib/query';
 import { useSession } from '../../lib/session';
 import { ErrorBox, Field, Icon, Loading, StatusBadge, TicketTag } from '../../ui/kit';
 import { askRisk, ScoreCard } from '../../ui/clientScore';
-import { toast } from '../../ui/toast';
+import { dropActions, toast } from '../../ui/toast';
+import { Modal } from '../../ui/modal';
+import { toastUndo } from '../../lib/undo';
 import { confLabel, printOrder, telHref, waHref } from './shared';
 import './orders.css';
 import { trackOf } from '../../lib/items';
@@ -134,6 +136,7 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
   const [panel, setPanel] = useState<Panel>(null);
   const [showHist, setShowHist] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [askDelete, setAskDelete] = useState(false);
   // the company's own label (a parcel sent to it), opened in a new tab
   const printer = useLabelPrinter();
   const companies = look.data?.companies ?? [];
@@ -144,11 +147,13 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
   const roles = session!.roles;
 
   const refresh = () => qc.invalidateQueries();
-  const run = async (fn: () => Promise<unknown>, ok?: string) => {
+  /** `undoable`: a status change — its message carries « ↶ Annuler » */
+  const run = async (fn: () => Promise<unknown>, ok?: string, undoable = false) => {
     setBusy(true);
     try {
       await fn();
-      if (ok) toast(ok, 'ok');
+      if (ok && undoable) toastUndo(ok, [o.id], refresh);
+      else if (ok) toast(ok, 'ok');
       setPanel(null);
       refresh();
     } catch (e: any) {
@@ -211,9 +216,9 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
           }
           if (CONF_NEEDS_DATE.includes(s) || CONF_NEEDS_REASON.includes(s)) setPanel({ kind: 'conf', status: s });
           else if (s === 'confirmed' || s === 'no_stock') askRisk(o).then((ok) => {
-              if (ok) run(() => rpc('orders.setConf', { ids: [o.id], status: s }), t(`status.conf.${s}`));
+              if (ok) run(() => rpc('orders.setConf', { ids: [o.id], status: s }), t(`status.conf.${s}`), true);
             });
-          else run(() => rpc('orders.setConf', { ids: [o.id], status: s }), t(`status.conf.${s}`));
+          else run(() => rpc('orders.setConf', { ids: [o.id], status: s }), t(`status.conf.${s}`), true);
         }}
       >
         <option value="">{t('orders.card.changeConf')}</option>
@@ -270,7 +275,7 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
           // a finished order (livrée, retournée…) only changes with a reason: the panel asks for it
           const finished = !!o.followStatus && o.followStatus !== 'cancelled' && FOLLOW_FINAL.includes(o.followStatus);
           if (finished || ['failed', 'returning', 'alert', 'lost'].includes(s)) setPanel({ kind: 'follow', status: s });
-          else run(() => rpc('orders.setFollow', { ids: [o.id], status: s }), t(`status.follow.${s}`));
+          else run(() => rpc('orders.setFollow', { ids: [o.id], status: s }), t(`status.follow.${s}`), true);
         }}
       >
         <option value="">{t('orders.card.changeFollow')}</option>
@@ -313,19 +318,13 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
         </span>
       ),
     );
-  if (session?.isAdmin) actions.push(
-    <button key="delete" className="btn small danger ghost" disabled={busy} onClick={() => {
-      if (!window.confirm(`Delete order ${o.ref} permanently? Only unshipped orders without SAV history can be deleted.`)) return;
-      run(async () => { await rpc('orders.delete', { ids: [o.id] }); onClose(); }, 'Order deleted');
-    }}>
-      <Icon name="trash" /> Delete order
-    </button>,
-  );
   actions.push(
     <button key="print" className="btn small" onClick={() => printOrder(t, o, look.data?.shopName ?? '')}>
       {t('orders.card.print')}
     </button>,
   );
+  // the administrator deletes an order that never left (the server checks again: no SAV ticket, claim or exchange)
+  const deletable = !!session?.isAdmin && !o.isExchange && (!o.followStatus || o.followStatus === 'cancelled' || (o.followStatus === 'to_prepare' && !o.tracking));
 
   const tpl = look.data?.whatsappTemplate ?? '';
   const wa = waHref(o.phone, tpl, { nom: o.customerName, boutique: look.data?.shopName ?? '', ref: o.ref });
@@ -333,7 +332,44 @@ function Body({ o, events, onClose }: { o: Order; events?: OrderEvent[]; onClose
 
   return (
     <>
-      <div className="statusbar">{actions}</div>
+      <UndoBar o={o} refresh={refresh} />
+      <div className="statusbar oc-acts">
+        {actions}
+        {deletable && (
+          <button key="delete" type="button" className="btn small danger ghost oc-del" disabled={busy} onClick={() => setAskDelete(true)}>
+            <Icon name="trash" /> {t('orders.card.delete')}
+          </button>
+        )}
+      </div>
+      {askDelete && (
+        <Modal
+          title={t('orders.card.deleteT', { ref: o.ref })}
+          onClose={() => setAskDelete(false)}
+          footer={
+            <>
+              <button type="button" className="btn" onClick={() => setAskDelete(false)}>
+                {t('orders.undo.no')}
+              </button>
+              <button
+                type="button"
+                className="btn danger"
+                disabled={busy}
+                onClick={() => {
+                  setAskDelete(false);
+                  run(async () => {
+                    await rpc('orders.delete', { ids: [o.id] });
+                    onClose();
+                  }, t('orders.card.deleted'));
+                }}
+              >
+                <Icon name="trash" /> {t('orders.card.deleteOk')}
+              </button>
+            </>
+          }
+        >
+          <p>{t('orders.card.deleteAsk')}</p>
+        </Modal>
+      )}
       {panel && (
         <ActionPanel
           o={o}
@@ -550,6 +586,10 @@ export function eventText(t: (k: string, o?: any) => string, e: OrderEvent, user
       return t('orders.card.ev.follow_status') + (e.fromValue ? `${fol(e.fromValue)} → ` : '') + fol(e.toValue);
     case 'assign':
       return `${t('orders.card.ev.assign')} : ${user(e.toValue)}`;
+    case 'undo': {
+      const lab = e.undo?.area === 'follow' ? fol : conf;
+      return t('orders.card.ev.undo', { what: lab(e.fromValue), back: lab(e.toValue), by: e.undo?.by ?? t('orders.undo.system') });
+    }
     case 'rotate':
       return `${t('orders.card.ev.rotate')} : ${user(e.fromValue)} → ${user(e.toValue)}`;
     case 'company':
@@ -571,6 +611,79 @@ export function eventText(t: (k: string, o?: any) => string, e: OrderEvent, user
   }
 }
 
+/**
+ * « ↶ Annuler » the last status change (confirmation or delivery): who made it and when; what going back will do,
+ * said before it is done. Shown when this person may undo it, or — the last 24 h — why they cannot.
+ */
+function UndoBar({ o, refresh }: { o: Order; refresh: () => void }) {
+  const { t } = useTranslation();
+  const q = useRpc('orders.lastChange', { id: o.id }, { placeholderData: undefined });
+  const [ask, setAsk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const c = q.data;
+  if (!c || !c.to) return null;
+  const recent = Date.now() - Date.parse(c.at) < 24 * 3_600_000;
+  if (c.why && (!recent || c.why === 'nothing' || c.why === 'moved')) return null;
+  const lab = (s: string | null) => (s ? t(`status.${c.area === 'follow' ? 'follow' : 'conf'}.${s}`, { defaultValue: s }) : '—');
+  const what = lab(c.to);
+  const fx = (e: (typeof c.effects)[number]) =>
+    e.k === 'back' ? t('orders.undo.fx.back', { s: t(`status.${e.area === 'follow' ? 'follow' : 'conf'}.${e.s}`, { defaultValue: e.s }) }) : t(`orders.undo.fx.${e.k}`, { n: 'n' in e ? e.n : 0 });
+  const go = async () => {
+    setBusy(true);
+    try {
+      await rpc('orders.undo', { id: o.id, eventId: c.eventId });
+      dropActions();
+      toast(t('orders.undo.done'), 'ok');
+      setAsk(false);
+    } catch (e: any) {
+      toast(e?.message ?? String(e), 'bad', 6000);
+    } finally {
+      setBusy(false);
+      refresh();
+    }
+  };
+  return (
+    <div className={`oc-undo${c.why ? ' off' : ''}`}>
+      <Icon name="undo" />
+      <span className="oc-undo-t">
+        <b>{t('orders.undo.last', { what })}</b>
+        <small>
+          {c.by ?? t('orders.undo.system')} · {when(c.at)}
+        </small>
+        {c.why && <small className="oc-undo-why">{t(`orders.undo.why.${c.why}`, { by: c.by ?? t('orders.undo.system'), holder: c.holder ?? '' })}</small>}
+      </span>
+      {!c.why && (
+        <button type="button" className="btn small" disabled={busy} onClick={() => setAsk(true)}>
+          ↶ {t('orders.undo.do')}
+        </button>
+      )}
+      {ask && (
+        <Modal
+          title={t('orders.undo.askT', { what })}
+          onClose={() => setAsk(false)}
+          footer={
+            <>
+              <button type="button" className="btn" onClick={() => setAsk(false)}>
+                {t('orders.undo.no')}
+              </button>
+              <button type="button" className="btn primary" disabled={busy} onClick={go}>
+                ↶ {t('orders.undo.yes')}
+              </button>
+            </>
+          }
+        >
+          <p className="muted">{t('orders.undo.askBy', { by: c.by ?? t('orders.undo.system'), when: when(c.at) })}</p>
+          <ul className="oc-undo-fx">
+            {c.effects.map((e, k) => (
+              <li key={k}>{fx(e)}</li>
+            ))}
+          </ul>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 /** The small step shown under the action bar (date, reason, company, note…), instead of a browser prompt. */
 function ActionPanel({ o, panel, busy, companies, onCancel, run, onSendAfter }: {
   o: Order;
@@ -578,7 +691,7 @@ function ActionPanel({ o, panel, busy, companies, onCancel, run, onSendAfter }: 
   busy: boolean;
   companies: { id: number; name: string; kind: string; active: boolean }[];
   onCancel: () => void;
-  run: (fn: () => Promise<unknown>, ok?: string) => Promise<void>;
+  run: (fn: () => Promise<unknown>, ok?: string, undoable?: boolean) => Promise<void>;
   onSendAfter: () => Promise<void>;
 }) {
   const { t } = useTranslation();
@@ -634,7 +747,7 @@ function ActionPanel({ o, panel, busy, companies, onCancel, run, onSendAfter }: 
     submit = () => {
       if (reasons.length && !reason) return toast(t('orders.card.cancelReason'), 'bad');
       const r = reason || (CONF_NEEDS_REASON.includes(panel.status) ? note.trim() || t(`status.conf.${panel.status}`) : null);
-      run(() => rpc('orders.setConf', { ids: [o.id], status: panel.status, nextCallAt: needsDate ? fromLocalInput(date) : null, reason: r, note: reason ? note.trim() || null : null }), t(`status.conf.${panel.status}`));
+      run(() => rpc('orders.setConf', { ids: [o.id], status: panel.status, nextCallAt: needsDate ? fromLocalInput(date) : null, reason: r, note: reason ? note.trim() || null : null }), t(`status.conf.${panel.status}`), true);
     };
   } else if (panel.kind === 'follow') {
     title = `${t(`status.follow.${panel.status}`)} — ${o.ref}`;
@@ -658,7 +771,7 @@ function ActionPanel({ o, panel, busy, companies, onCancel, run, onSendAfter }: 
     submit = () => {
       const finished = !!o.followStatus && o.followStatus !== 'cancelled' && FOLLOW_FINAL.includes(o.followStatus);
       if (finished && !reason && !note.trim()) return toast(t('orders.card.finishedReason'), 'bad');
-      run(() => rpc('orders.setFollow', { ids: [o.id], status: panel.status, reason: reason || null, note: note.trim() || null }), t(`status.follow.${panel.status}`));
+      run(() => rpc('orders.setFollow', { ids: [o.id], status: panel.status, reason: reason || null, note: note.trim() || null }), t(`status.follow.${panel.status}`), true);
     };
   } else if (panel.kind === 'company') {
     title = t('orders.card.companyTitle');

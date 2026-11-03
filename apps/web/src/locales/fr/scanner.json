@@ -10,7 +10,7 @@
   "change": "← Changer",
   "modes": {
     "dispatch": { "title": "Scanner les colis à dispatcher", "help": "Scannez chaque colis au moment de le remettre au livreur ou à la société. S’il est bon, il passe « Expédiée » tout de suite.", "ok": "dispatchée" },
-    "back": { "title": "Retour / Échange", "help": "Scannez chaque colis revenu au dépôt. Un retour passe « Retournée » avec le stock remis ; un échange remet l’ancien produit en stock.", "ok": "reçu" }
+    "back": { "title": "Retour / Échange", "help": "Scannez chaque colis revenu au dépôt. Un retour passe « Retournée » avec le stock remis ; un échange remet l’ancien produit en stock (en stock cassé s’il était défectueux).", "ok": "reçu" }
   },
   "errors_one": "{{count}} erreur",
   "errors_other": "{{count}} erreurs",
@@ -47,5 +47,7 @@
     "code": "Code à scanner",
     "choose": "Choisir",
     "expected": "Résultat attendu"
-  }
+  },
+  "broken": "Produit cassé → stock cassé",
+  "brokenDone": "En stock cassé : {{n}} (pas vendu)"
 }

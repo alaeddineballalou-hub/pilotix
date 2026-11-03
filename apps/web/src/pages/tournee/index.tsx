@@ -3,6 +3,8 @@
 import { FAIL_REASONS, FOLLOW_TONE, Order, phoneIntl, RETURN_REASONS } from '@pilotix/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
+import { toastUndo } from '../../lib/undo';
 import { rpc } from '../../lib/backend';
 import { da } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
@@ -110,7 +112,9 @@ function ParcelCard({ o, shop, actions }: { o: Order; shop: { name: string; what
   const [ask, setAsk] = useState<null | 'failed' | 'returning'>(null);
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
-  const set = useAction('orders.setFollow', { success: (r) => (r.changed.length ? t('tournee.saved') : t('tournee.noChange')), onDone: () => setAsk(null) });
+  const qc = useQueryClient();
+  // « ↶ Annuler » in the message: a tap by mistake goes back
+  const set = useAction('orders.setFollow', { onDone: (r) => (toastUndo(r.changed.length ? t('tournee.saved') : t('tournee.noChange'), r.changed, () => qc.invalidateQueries()), setAsk(null)) });
   const call = useAction('orders.logCall', { silent: true });
   const items = o.items.map((i) => `${i.qty} × ${i.name}${i.variantTitle ? ` ${i.variantTitle}` : ''}`).join(' + ');
   const wa = `https://wa.me/${phoneIntl(o.phone)}?text=${encodeURIComponent((shop.whatsappTemplate || '').replace(/\{nom\}/g, o.customerName).replace(/\{boutique\}/g, shop.name).replace(/\{ref\}/g, o.ref))}`;

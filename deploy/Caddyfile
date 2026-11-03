@@ -5,6 +5,24 @@
 	on_demand_tls {
 		ask http://server:3000/api/domain-check
 	}
+	# the visitor's own address. A request that comes from Cloudflare (its addresses: https://www.cloudflare.com/ips/)
+	# carries it in CF-Connecting-IP, written by Cloudflare; any other caller (the backup door, a shop's domain without
+	# Cloudflare) is taken at the address that connected, so no visitor can choose the address the server sees
+	servers {
+		trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+		client_ip_headers CF-Connecting-IP
+	}
+}
+
+# The Pilotix server (API, webhooks, landing pages, live updates). It is told the visitor's address found above (the
+# login limit, the landing pages' checks and the ads' conversions use it), and the address and scheme as Caddy got
+# them: what a visitor writes in X-Forwarded-* never reaches it.
+(server) {
+	reverse_proxy server:3000 {
+		header_up X-Forwarded-For {client_ip}
+		header_up X-Forwarded-Host {hostport}
+		header_up X-Forwarded-Proto {scheme}
+	}
 }
 
 # The platform's site (the app, its server, the shops' pages): the same at its own address and at the backup door.
@@ -27,10 +45,10 @@
 
 	# the Pilotix server: API, webhooks, landing pages, live updates
 	handle /api/* {
-		reverse_proxy server:3000
+		import server
 	}
 	handle /live* {
-		reverse_proxy server:3000
+		import server
 	}
 
 	# clean links for the terms and privacy page (Google and Facebook sign-in ask for them): the app's page #/conditions
@@ -44,13 +62,13 @@
 	}
 	handle @store {
 		rewrite * /api/s/{re.page.1}/{re.page.2}
-		reverse_proxy server:3000
+		import server
 	}
 
 	# for AI assistants: the shop and its landing pages (made by the server); no ai-catalog.json (a 404, not the app's page)
 	handle /llms.txt {
 		rewrite * /api/llms.txt
-		reverse_proxy server:3000
+		import server
 	}
 	handle /ai-catalog.json {
 		respond 404
@@ -98,15 +116,15 @@ https:// {
 		-Server
 	}
 	handle /api/* {
-		reverse_proxy server:3000
+		import server
 	}
 	handle / {
 		rewrite * /api/domain
-		reverse_proxy server:3000
+		import server
 	}
 	handle {
 		rewrite * /api/domain{path}
-		reverse_proxy server:3000
+		import server
 	}
 }
 

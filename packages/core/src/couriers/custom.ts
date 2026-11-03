@@ -109,13 +109,13 @@ export const custom: CourierAdapter = {
   async test(c) {
     if (!c.settings.test_path) return { ok: true, message: 'Rien à tester automatiquement : envoyez une commande pour vérifier (ou ajoutez un « chemin pour tester »).' };
     const r = build(c, { method: 'GET', path: c.settings.test_path }, {});
-    await http(c.name, r.url, { method: 'GET', headers: r.headers });
+    await http(c.name, r.url, { method: 'GET', headers: r.headers, publicOnly: true });
     return { ok: true, message: `Connexion réussie à ${c.name}.` };
   },
   async create(c, p) {
     const step = c.settings.create ?? {};
     const r = build(c, step, values(c, p));
-    const res = await http(c.name, r.url, r);
+    const res = await http(c.name, r.url, { ...r, publicOnly: true });
     const tracking = getPath(res, step.tracking_path || 'tracking');
     if (tracking == null || tracking === '' || typeof tracking === 'object')
       throw new CourierError(`${c.name} a répondu sans numéro de suivi à l’endroit indiqué (« ${step.tracking_path || 'tracking'} ») : ${JSON.stringify(res).slice(0, 200)}`);
@@ -133,7 +133,7 @@ export const custom: CourierAdapter = {
       if (timeUp()) break;
       try {
         const r = build(c, step, { tracking: it.tracking, ext_id: it.extId ?? '', 'secret.token': c.secret.token ?? '' });
-        const res = await http(c.name, r.url, r);
+        const res = await http(c.name, r.url, { ...r, publicOnly: true });
         const st = getPath(res, step.status_path || 'status');
         if (st != null && typeof st !== 'object') out.push({ id: it.id, status: String(st), at: step.date_path ? getPath(res, step.date_path) ?? null : null });
       } catch (e: any) {
@@ -146,7 +146,7 @@ export const custom: CourierAdapter = {
     const step = c.settings.cancel ?? {};
     if (!step.method || !step.path) throw new CourierError(`Annulation non configurée pour ${c.name}`);
     const r = build(c, step, { tracking: it.tracking, ext_id: it.extId ?? '', 'secret.token': c.secret.token ?? '' });
-    await http(c.name, r.url, r);
+    await http(c.name, r.url, { ...r, publicOnly: true });
   },
   async preview(c, p): Promise<PreviewResult> {
     const r = build(c, c.settings.create ?? {}, values(c, p));

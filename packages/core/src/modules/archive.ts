@@ -6,6 +6,8 @@ import { z } from 'zod';
 import { Db, isoOrNull, num } from '../db';
 import { bad, forbidden, Ctx, proc } from '../rpc';
 import { getSetting, setSetting } from '../settings';
+import type { Role } from '@pilotix/shared';
+import { releaseWork } from './users';
 
 export const ARCHIVE_KINDS = ['users', 'products', 'warehouses'] as const;
 export type ArchiveKind = (typeof ARCHIVE_KINDS)[number];
@@ -199,7 +201,7 @@ async function withParcels(db: Db, ids: number[]): Promise<Set<number>> {
   if (!ids.length) return new Set();
   const rows = await db.query(
     `SELECT DISTINCT livreur_id AS id FROM orders
-      WHERE livreur_id = ANY($1) AND (follow_status = ANY($2) OR (follow_status = 'delivered' AND NOT cashed))`,
+      WHERE livreur_id = ANY($1) AND (follow_status = ANY($2) OR (follow_status IN ('delivered', 'exchanged') AND NOT cashed))`,
     [ids, ['shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange', 'returning']],
   );
   return new Set(rows.map((r: any) => num(r.id)));
@@ -318,7 +320,17 @@ export async function archiveSet(ctx: Ctx, kind: ArchiveKind, ids: number[], arc
       ok = ok.filter((id) => (def.has(id) ? (skip(id, 'default'), false) : stock.get(id) ? (skip(id, 'stock'), false) : true));
     }
     if (ok.length) {
-      if (kind === 'users') await ctx.db.query('UPDATE profiles SET archived_at = now(), active = false, token_version = token_version + 1 WHERE id = ANY($1)', [ok]);
+      if (kind === 'users') {
+        // (their work still to do goes back to the team first; their caisse must be empty)
+        const was = await ctx.db.query('SELECT id, active, roles FROM profiles WHERE id = ANY($1)', [ok]);
+        const money = await ctx.db.query(
+          `SELECT p.id, p.name FROM profiles p WHERE p.id = ANY($1) AND COALESCE((SELECT sum(net) FROM cash_handovers WHERE cancelled_at IS NULL AND received_into = 'u' || p.id), 0) + COALESCE((SELECT sum(amount) FROM cash_moves WHERE cancelled_at IS NULL AND caisse = 'u' || p.id), 0) <> 0`,
+          [ok],
+        );
+        if (money.length) throw bad(`Il reste de l’argent dans la caisse de ${money.map((m: any) => m.name).join(', ')} : transférez-le d’abord vers une autre caisse (Caisse › Transférer).`);
+        await ctx.db.query('UPDATE profiles SET archived_at = now(), active = false, token_version = token_version + 1 WHERE id = ANY($1)', [ok]);
+        for (const w of was) if (w.active) await releaseWork(ctx, num(w.id), false, [], (w.roles ?? []) as Role[]);
+      }
       else await ctx.db.query(`UPDATE ${TABLE[kind]} SET archived_at = now(), active = false WHERE id = ANY($1)`, [ok]);
     }
   } else {

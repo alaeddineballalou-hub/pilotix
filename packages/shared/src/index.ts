@@ -365,10 +365,12 @@ export interface OrderEvent {
   at: string;
   userId: number | null;
   userName: string | null;
-  kind: 'created' | 'conf_status' | 'follow_status' | 'note' | 'call' | 'edit' | 'assign' | 'rotate' | 'company' | 'cashed' | 'sub_status' | 'chat' | 'suivi_motif' | 'suivi_stuck';
+  kind: 'created' | 'conf_status' | 'follow_status' | 'note' | 'call' | 'edit' | 'assign' | 'rotate' | 'undo' | 'company' | 'cashed' | 'sub_status' | 'chat' | 'suivi_motif' | 'suivi_stuck';
   fromValue: string | null;
   toValue: string | null;
   note: string | null;
+  /** « undo »: which status (confirmation or delivery) went back, who had made the change and when */
+  undo?: { area: 'conf' | 'follow'; by: string | null; at: string } | null;
 }
 
 export interface Customer {
@@ -416,6 +418,8 @@ export interface StockRow {
   available: number;
   alertQty: number;
   cost: number;
+  /** pieces that came back broken, kept apart (never sold): repaired → back on sale, or thrown away */
+  broken: number;
 }
 
 export interface Complaint {

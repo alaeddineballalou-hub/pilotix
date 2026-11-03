@@ -7,8 +7,8 @@ import { getSetting, setSetting } from '../settings';
 import { addWorkMinutes, workMinutes } from '@pilotix/shared';
 import { getPrefs } from './prefs';
 import { rotateTimes } from './assign';
-import { swapFees } from './delivery';
-import { addEvent, FollowInput, getOrder, listOrders, ListInput, setFollow, withClientScores } from './orders';
+import { cancelParcel, swapFees } from './delivery';
+import { addEvent, FollowInput, getOrder, listOrders, ListInput, releasePicked, setFollow, withClientScores } from './orders';
 import { agencyOf, agencyRowSql, andSql, queueSql } from './agencyscope';
 import { findOrders } from './sav';
 import { applyTrust, DRIVER_CLAIMS } from './trust';
@@ -78,7 +78,9 @@ export async function alertClocks(db: Db, ids: number[], now: number): Promise<M
   const clock = (await getPrefs(db)).suiviClock;
   const rows = await db.query(
     `SELECT o.id, a.at AS alert_at,
-       (SELECT min(e.at) FROM order_events e WHERE e.order_id = o.id AND e.at > a.at AND e.user_id IS NOT NULL) AS acted_at
+       -- someone acted on the alert: a call, a note, a treatment, a status, an edit (not a chat message or a bot's line)
+       (SELECT min(e.at) FROM order_events e WHERE e.order_id = o.id AND e.at > a.at AND e.user_id IS NOT NULL
+           AND e.kind IN ('call', 'note', 'sub_status', 'suivi_motif', 'suivi_stuck', 'follow_status', 'edit')) AS acted_at
        FROM orders o
        JOIN LATERAL (SELECT max(e.at) AS at FROM order_events e WHERE e.order_id = o.id AND e.kind = 'follow_status' AND e.to_value = 'alert') a ON true
       WHERE o.id = ANY($1) AND o.follow_status = 'alert'`,
@@ -291,6 +293,19 @@ export async function swapParcel(ctx: Ctx, fromId: number, toId: number, note?: 
   const sameWilaya = !!a0 && !!b0 && num(a0.wilaya_id) === num(b0.wilaya_id);
   const sw = a0?.company_id ? await swapFees(ctx, num(a0.company_id)) : null;
   const swapFee = (sw ? (sameWilaya ? sw.same : sw.other) : null) ?? 0;
+  // B's own parcel already made at its company (packed, label printed): cancelled there first — else the company would
+  // still pick it up and bill it (two parcels for one customer); refused there: no swap, say why
+  const own = (await ctx.db.query('SELECT ref, tracking, shipped_at, conf_status, follow_status FROM orders WHERE id = $1', [toId]))[0];
+  const from = (await ctx.db.query('SELECT shipped_at, follow_status FROM orders WHERE id = $1', [fromId]))[0];
+  // (the swap's own checks first: nothing is cancelled at the company for a swap that cannot be made)
+  const canSwap = !!own && !!from?.shipped_at && (SWAP_FROM as readonly string[]).includes(from.follow_status ?? '') && own.conf_status === 'confirmed' && !own.shipped_at && (own.follow_status === null || ['to_prepare', 'prepared'].includes(own.follow_status));
+  if (canSwap && own.tracking) {
+    try {
+      await cancelParcel(ctx, toId);
+    } catch (e) {
+      throw bad(`${own.ref} : son propre colis chez la société n’a pas pu être annulé (${(e as Error)?.message ?? 'refusé'}). Annulez-le d’abord, puis refaites le swap.`);
+    }
+  }
   const res = await ctx.db.tx(async (tx) => {
     const A = (await tx.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [fromId]))[0];
     const B = (await tx.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [toId]))[0];
@@ -299,6 +314,8 @@ export async function swapParcel(ctx: Ctx, fromId: number, toId: number, note?: 
     if (B.conf_status !== 'confirmed') throw bad(`${B.ref} : la commande n’est pas confirmée`);
     if (B.shipped_at || !(B.follow_status === null || ['to_prepare', 'prepared'].includes(B.follow_status))) throw bad(`${B.ref} : déjà expédiée`);
     const nowIso = new Date(ctx.now()).toISOString();
+    // what the depot had already picked for B goes back on the shelf (B leaves with A's parcel)
+    if (B.follow_status === 'to_prepare') await releasePicked(tx, num(B.id));
     // The parcel (and its stock, already out of the depot) goes to B: no new stock out for B, no return for A.
     await tx.query(
       `UPDATE orders SET company_id=$2, delivery_cost=$3, tracking=$4, ext_id=$5, label_url=$6, ext_status=NULL, ext_status_at=NULL,
@@ -702,7 +719,8 @@ export async function stuckParcels(ctx: Ctx, ids?: number[]): Promise<Map<number
   const rows = await ctx.db.query(
     `SELECT o.id, ${LAST_MOVE} AS since, co.kind,
        (SELECT e.to_value FROM order_events e WHERE e.order_id = o.id AND e.kind = 'suivi_stuck' AND e.at >= ${LAST_MOVE} ORDER BY e.at DESC LIMIT 1) AS handled,
-       EXISTS (SELECT 1 FROM claims c WHERE c.order_id = o.id AND c.status NOT IN ${CLAIM_DONE} AND c.created_at >= ${LAST_MOVE}) AS claimed
+       EXISTS (SELECT 1 FROM claims c WHERE c.order_id = o.id AND c.status NOT IN ${CLAIM_DONE} AND c.created_at >= ${LAST_MOVE}) AS claimed,
+       EXISTS (SELECT 1 FROM claims c WHERE c.order_id = o.id AND c.reason = 'late' AND c.created_at >= ${LAST_MOVE}) AS late_claimed
        FROM orders o LEFT JOIN delivery_companies co ON co.id = o.company_id
       WHERE o.follow_status = ANY($1) AND o.shipped_at IS NOT NULL AND ${LAST_MOVE} < now() - make_interval(days => $2)
         ${ids ? 'AND o.id = ANY($3)' : ''}${andSql(queueSql(ctx, readQueue(ctx)))}`,
@@ -713,7 +731,8 @@ export async function stuckParcels(ctx: Ctx, ids?: number[]): Promise<Map<number
     const since = Date.parse(iso(r.since));
     const d = Math.floor((ctx.now() - since) / 86_400_000);
     const api = !!KINDS[r.kind as keyof typeof KINDS]?.claims;
-    out.set(num(r.id), { days: d, since: iso(r.since), handled: r.claimed ? (r.handled ?? 'claim') : (r.handled ?? null), autoClaimIn: !api || r.claimed ? null : Math.max(0, days + 2 - d) });
+    // (one automatic claim for the time it has been stuck: closed by the agent, it is not made again until it moves)
+    out.set(num(r.id), { days: d, since: iso(r.since), handled: r.claimed ? (r.handled ?? 'claim') : (r.handled ?? null), autoClaimIn: !api || r.claimed || r.late_claimed ? null : Math.max(0, days + 2 - d) });
   }
   return out;
 }
@@ -1092,7 +1111,9 @@ export const suiviProcs = {
 
   /** Dashboard › Suivi: per delivery company (and our livreurs), the open claims, those without an answer after 48 h, and those at the manager. */
   'suivi.claimsLate': proc(['suivi', 'agent_manager', 'vendeur'], z.object({}), async (ctx) => {
-    const rows = (await ctx.db.query(`${CLAIM_SELECT} WHERE c.status NOT IN ${CLAIM_DONE}`)).map((r: any) => toClaim(r, ctx.now()));
+    // a confirmation agency: only the claims on its own orders
+    const mine = agencyRowSql(ctx);
+    const rows = (await ctx.db.query(`${CLAIM_SELECT} WHERE c.status NOT IN ${CLAIM_DONE}${mine ? ` AND c.order_id IN (SELECT o.id FROM orders o WHERE ${mine})` : ''}`)).map((r: any) => toClaim(r, ctx.now()));
     const by = new Map<string, { name: string; open: number; late: number; manager: number; oldest: string | null }>();
     for (const c of rows) {
       const name = c.livreurId ? c.livreurName ?? '—' : c.companyName ?? '—';
@@ -1145,7 +1166,11 @@ export const suiviProcs = {
   }),
 
   /** Reads back from the courier the state of the claims sent through its API. */
-  'suivi.claimSync': proc(['suivi', 'confirmation', 'depot'], z.object({ id: id.optional() }), (ctx, i) => syncClaims(ctx, i.id)),
+  'suivi.claimSync': proc(['suivi', 'confirmation', 'depot'], z.object({ id: id.optional() }), (ctx, i) => {
+    // a confirmation agency asks one claim of its own (all the store's claims are not its business)
+    if (agencyOf(ctx) !== null && !i.id) throw bad('Choisissez la réclamation');
+    return syncClaims(ctx, i.id);
+  }),
 
   'suivi.claimUpdate': proc(['suivi', 'confirmation', 'depot'], ClaimUpdate, async (ctx, i) => {
     const cur = await getClaim(ctx.db, i.id);

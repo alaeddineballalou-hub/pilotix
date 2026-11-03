@@ -160,6 +160,10 @@ export const AGENCY_AGENT_PROCS: Record<string, Gate> = {
   'orders.setSub': order('id'),
   'orders.setConf': order('ids'),
   'orders.setFollow': order('ids'),
+  // « ↶ Annuler »: the last change of one of the agency's orders
+  'orders.lastChange': order('id'),
+  'orders.undo': order('id'),
+  'orders.undoMany': order('ids'),
   'orders.reasons': order('ids'),
   'orders.companyFees': order('ids'),
   'orders.sync': (ctx, i) => ownOrders(ctx, nums(Array.isArray(i?.actions) ? i.actions.map((a: any) => a?.id) : [])),

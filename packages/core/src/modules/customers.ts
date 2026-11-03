@@ -1,5 +1,6 @@
 import { CLIENT_LEVELS, CONF_DONE_BAD, normalizePhone } from '@pilotix/shared';
 import { z } from 'zod';
+import { agencyRowSql } from './agencyscope';
 import { iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, notFound, proc } from '../rpc';
 import { addEvent } from './orders';
@@ -102,11 +103,13 @@ export const customersProcs = {
       r = (await ctx.db.query(`SELECT ${COLS} FROM customers c WHERE c.phone = $1`, [p]))[0];
     } else throw bad('Indiquez le client');
     if (!r) throw notFound('Client introuvable');
+    // a confirmation agency's agent: only the agency's own orders of this customer (the store's others are not its business)
+    const scope = agencyRowSql(ctx);
     const orders = await ctx.db.query(
       `SELECT o.id, o.ref, o.created_at, o.total, o.conf_status, o.follow_status, o.attempts,
          (SELECT string_agg(CASE WHEN i.qty > 1 THEN i.qty || ' × ' ELSE '' END || i.name, ' · ' ORDER BY i.id) FROM order_items i WHERE i.order_id = o.id) AS items_text,
          (SELECT CASE WHEN bool_or(i.variant_title <> '') THEN string_agg(CASE WHEN i.variant_title <> '' THEN i.variant_title ELSE '—' END, ' · ' ORDER BY i.id) END FROM order_items i WHERE i.order_id = o.id) AS variants_text
-       FROM sales o WHERE o.customer_id = $1 OR o.phone = $2 ORDER BY o.created_at DESC LIMIT 100`,
+       FROM sales o WHERE (o.customer_id = $1 OR o.phone = $2)${scope ? ` AND ${scope}` : ''} ORDER BY o.created_at DESC LIMIT 100`,
       [r.id, r.phone],
     );
     return {

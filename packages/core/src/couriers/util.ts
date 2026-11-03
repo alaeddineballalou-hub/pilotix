@@ -86,6 +86,35 @@ export interface HttpOpts {
   form?: Record<string, unknown>;
   binary?: boolean;
   timeout?: number;
+  /** an address a shop typed itself (« API personnalisée »): only a public one, never a redirect */
+  publicOnly?: boolean;
+}
+
+// ---------------------------------------------------------------- addresses a shop types (never the server's own network)
+const privateV4 = (ip: string) => {
+  const [a, b] = ip.split('.').map(Number);
+  return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
+};
+const privateV6 = (ip: string) => {
+  const s = ip.toLowerCase();
+  return s === '::1' || s === '::' || s.startsWith('fc') || s.startsWith('fd') || s.startsWith('fe80') || s.startsWith('::ffff:127.') || s.startsWith('::ffff:10.') || s.startsWith('::ffff:192.168.') || s.startsWith('::ffff:169.254.') || s.startsWith('::ffff:172.');
+};
+/** Refuses an address that is not public http(s) (a shop's « API personnalisée » must never reach the server's network). */
+export async function assertPublicUrl(who: string, raw: string): Promise<void> {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    throw new CourierError(`${who} : adresse de l’API invalide`, 400);
+  }
+  if ((u.protocol !== 'https:' && u.protocol !== 'http:') || u.username || u.password) throw new CourierError(`${who} : adresse de l’API refusée`, 400);
+  const host = u.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.internal') || host.endsWith('.local')) throw new CourierError(`${who} : adresse de l’API refusée (réseau interne)`, 400);
+  const { isIP } = await import('node:net');
+  const { lookup } = await import('node:dns/promises');
+  const ips = isIP(host) ? [host] : (await lookup(host, { all: true }).catch(() => [])).map((r) => r.address);
+  if (!ips.length) throw new CourierError(`${who} : adresse de l’API introuvable`, 400);
+  if (ips.some((ip) => (isIP(ip) === 4 ? privateV4(ip) : privateV6(ip)))) throw new CourierError(`${who} : adresse de l’API refusée (réseau interne)`, 400);
 }
 
 /**
@@ -112,11 +141,12 @@ export async function http(who: string, url: string, o: HttpOpts = {}, retried =
     headers['Content-Type'] = 'application/x-www-form-urlencoded';
     body = f.toString();
   }
+  if (o.publicOnly) await assertPublicUrl(who, url);
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), o.timeout ?? 25_000);
   let res: Response;
   try {
-    res = await fetch(url, { method: o.method ?? (body ? 'POST' : 'GET'), headers, body, signal: ac.signal });
+    res = await fetch(url, { method: o.method ?? (body ? 'POST' : 'GET'), headers, body, signal: ac.signal, ...(o.publicOnly ? { redirect: 'error' as const } : {}) });
   } catch (e: any) {
     throw new CourierError(`${who} ne répond pas (${e?.name === 'AbortError' ? 'trop lent' : e?.message ?? 'erreur réseau'})`, 502);
   } finally {

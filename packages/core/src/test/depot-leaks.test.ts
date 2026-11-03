@@ -142,7 +142,7 @@ test('leak 5: the old product scanned back makes the first order « Échangée �
   const r: any = await call('depot.scan', await as(EMAILS.depot), { orderId: ex, code: '', mode: 'exchange' });
   assert.equal(r.kind, 'ok', r.why);
   assert.equal((await row(first)).follow_status, 'exchanged', 'delivered and paid, then exchanged — not a return');
-  const back = async () => Number((await db.query(`SELECT COALESCE(sum(delta),0)::int AS d FROM stock_movements WHERE order_id = $1 AND reason IN ('exchange_in','returned')`, [first]))[0].d);
+  const back = async () => Number((await db.query(`SELECT COALESCE(sum(delta + broken_delta),0)::int AS d FROM stock_movements WHERE order_id = $1 AND reason IN ('exchange_in','returned')`, [first]))[0].d);
   assert.equal(await back(), 1);
   await call('orders.setFollow', await as(EMAILS.admin), { ids: [first], status: 'returned', reason: 'test' });
   assert.equal((await row(first)).follow_status, 'returned');

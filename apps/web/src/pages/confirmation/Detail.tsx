@@ -17,6 +17,7 @@ import { mayChangeCompany, pilotLine } from '../../lib/pilot';
 import { useSession } from '../../lib/session';
 import { hasMouse } from '../../lib/useMedia';
 import { toast } from '../../ui/toast';
+import { toastUndo } from '../../lib/undo';
 import './check.css';
 import { askRisk } from '../../ui/clientScore';
 import { useHold } from './hold';
@@ -297,9 +298,11 @@ export function Detail({ order, onDone, phone }: { order: Order; onDone?: (id: n
       const res = (await fn()) as { autoCancelled?: { ref: string; attempts: number }[] } | undefined;
       // « Annuler après N appels sans réponse »: the order was cancelled, not just one more attempt
       const auto = res?.autoCancelled?.[0];
-      if (auto) toast(t('confirmation.autoCancelled', { ref: auto.ref, n: auto.attempts }), 'bad');
-      else toast(okMsg, tone);
-      qc.invalidateQueries();
+      const refresh = () => qc.invalidateQueries();
+      // a status change: « ↶ Annuler » in its message (8 s)
+      if (auto) toastUndo(t('confirmation.autoCancelled', { ref: auto.ref, n: auto.attempts }), [order.id], refresh, 'bad');
+      else toastUndo(okMsg, [order.id], refresh, tone);
+      refresh();
       onDone?.(order.id);
       return true;
     } catch (e: any) {

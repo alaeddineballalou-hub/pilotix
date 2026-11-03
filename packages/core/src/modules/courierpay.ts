@@ -205,9 +205,10 @@ async function importPaymentTx(ctx: Ctx, payId: number, into: string) {
   const already = lines.filter((l) => l.tracking && l.amount > 0 && cashedTracks.has(l.tracking)).reduce((s, l) => s + Math.round(num(l.amount)), 0);
   const net = Math.max(0, num(p.amount) - already);
   // ZR paid them: they were delivered, even if its status did not reach us yet
-  const late = unpaid.filter((o: any) => o.follow_status !== 'delivered' && ([...FOLLOW_ON_ROAD, 'failed', 'alert'] as string[]).includes(o.follow_status)).map((o: any) => num(o.id));
-  if (late.length) await setFollow(sys(ctx), { ids: late, status: 'delivered', note: `Payé par la société (paiement ${p.ref ?? p.ext_id})` } as any, { system: true });
-  const ids = unpaid.filter((o: any) => o.follow_status === 'delivered' || late.includes(num(o.id))).map((o: any) => num(o.id));
+  // (« En retour » too: marked so by the Suivi, the company delivered it after all and paid it)
+  const late = unpaid.filter((o: any) => o.follow_status !== 'delivered' && ([...FOLLOW_ON_ROAD, 'failed', 'alert', 'returning'] as string[]).includes(o.follow_status)).map((o: any) => num(o.id));
+  if (late.length) await setFollow(sys(ctx), { ids: late, status: 'delivered', note: `Payé par la société (paiement ${p.ref ?? p.ext_id})` } as any, { system: true, courier: true });
+  const ids = unpaid.filter((o: any) => o.follow_status === 'delivered' || o.follow_status === 'exchanged' || late.includes(num(o.id))).map((o: any) => num(o.id));
   const note = `Paiement ${p.ref ?? String(p.ext_id).slice(0, 8)}${already ? ` (dont ${already} DA déjà reçus à la main)` : ''}`;
   let handoverId: number | null = null;
   let moveId: number | null = null;

@@ -10,7 +10,7 @@
   "change": "← Change",
   "modes": {
     "dispatch": { "title": "Scan the parcels to dispatch", "help": "Scan each parcel when you hand it to the driver or the courier. If it is good, it becomes “Shipped” right away.", "ok": "dispatched" },
-    "back": { "title": "Return / Exchange", "help": "Scan each parcel back at the depot. A return becomes “Returned” and stock is put back; an exchange puts the old product back in stock.", "ok": "received" }
+    "back": { "title": "Return / Exchange", "help": "Scan each parcel back at the depot. A return becomes “Returned” and stock is put back; an exchange puts the old product back in stock (in broken stock if it was faulty).", "ok": "received" }
   },
   "errors_one": "{{count}} error",
   "errors_other": "{{count}} errors",
@@ -47,5 +47,7 @@
     "code": "Code to scan",
     "choose": "Choose",
     "expected": "Expected result"
-  }
+  },
+  "broken": "Broken product → broken stock",
+  "brokenDone": "In broken stock: {{n}} (not sold)"
 }

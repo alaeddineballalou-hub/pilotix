@@ -29,8 +29,9 @@ const ids = z.array(id).min(1).max(500);
 
 /** Statuses where a parcel is waiting to leave with this company. */
 export const TO_SHIP: FollowStatus[] = ['to_prepare', 'prepared'];
-/** Statuses the courier sync follows (parcels with a tracking number, not final). */
-const SYNCABLE: FollowStatus[] = ['prepared', ...FOLLOW_ON_ROAD];
+/** Statuses the courier sync follows (parcels with a tracking number, not final). « En retour » too: the Suivi may
+ *  have marked it so (Perdu, client annule) while the company still delivers it — only its delivered / lost is taken. */
+const SYNCABLE: FollowStatus[] = ['prepared', ...FOLLOW_ON_ROAD, 'returning'];
 /** Statuses set by hand by the suivi that the courier's ordinary on-the-road statuses must not overwrite. */
 const MANUAL_HOLD: FollowStatus[] = ['alert', 'in_exchange'];
 /** Courier statuses that still move a parcel held by the suivi. */
@@ -468,13 +469,21 @@ async function syncCompany(ctx: Ctx, c: CompanyRow, onlyIds?: number[]) {
     // Suivi's own work (an alert raised or handled, an exchange in progress) is not undone by the courier's
     // « en livraison » / « vers wilaya »: only an end (livré, retour, perdu…) moves such a parcel.
     if (MANUAL_HOLD.includes(p.follow_status) && to && !SYNC_ENDS.includes(to)) continue;
-    // a treated alert is not put back to « en route » by the courier, but a new failed attempt or alert still comes in
+    // a treated alert is not put back to « en route » by the courier, but a new failed attempt or alert still comes in —
+    // a new word from the company, not the same status read again (it would raise the treated alert again and again)
     if (p.sub_status === 'alert_traitee' && (to === 'shipped' || to === 'out_for_delivery')) continue;
+    if (p.sub_status === 'alert_traitee' && to && !SYNC_ENDS.includes(to) && a.status === p.ext_status) continue;
+    // marked « En retour » by the Suivi: only the company's delivered or lost moves it (the depot receives the returns)
+    if (p.follow_status === 'returning' && to !== 'delivered' && to !== 'lost') continue;
     if (to && to !== p.follow_status) byStatus.set(to, [...(byStatus.get(to) ?? []), a.id]);
   }
   const sys = asCourier(ctx);
+  // each parcel moves only from the status it had when the company was asked (an agent may have changed it meanwhile:
+  // an alert raised, a swap — never overwritten by an older answer)
+  const expect = new Map<number, string | null>(parcels.map((p: any) => [num(p.id), p.follow_status ?? null]));
   for (const [status, list] of byStatus) {
-    changed += (await setFollow(sys, { ids: list, status, note: `Statut ${c.name}` }, { system: true })).changed.length;
+    // a new alert from the company is a new one (« à traiter » again)
+    changed += (await setFollow(sys, { ids: list, status, note: `Statut ${c.name}`, ...(status === 'alert' ? { subStatus: null } : {}) }, { system: true, courier: true, expect })).changed.length;
   }
   return { company: c.name, checked: parcels.length, changed, fees: feesChanged, failed: errors.length, errors: errors.slice(0, 20) };
 }

@@ -363,7 +363,8 @@
       "motif_resolved": "Suivi: treated · Solved · {{m}}",
       "motif_lost": "Suivi: treated · Lost · {{m}}",
       "suivi_stuck": "Suivi: stuck parcel handled",
-      "rotate": "Moved to another agent"
+      "rotate": "Moved to another agent",
+      "undo": "↶ Undone: “{{what}}” (made by {{by}}) → back to “{{back}}”"
     },
     "addNote": "Add a note",
     "noteSaved": "Note added",
@@ -406,7 +407,12 @@
     "feesApi": "from {{name}}’s API",
     "feesPaid": "taken by {{name}} in its payment",
     "feesRule": "from your rates",
-    "feesHeavier": "Weighed {{kg}} kg by {{name}}: overweight counted"
+    "feesHeavier": "Weighed {{kg}} kg by {{name}}: overweight counted",
+    "delete": "Delete order",
+    "deleteT": "Delete {{ref}}?",
+    "deleteAsk": "It goes for good, with its history. Only an order that has not left, with no after-sales ticket or claim.",
+    "deleteOk": "Yes, delete",
+    "deleted": "Order deleted"
   },
   "ph": {
     "per": {
@@ -538,5 +544,43 @@
     "ready": "Paid by {{name}}: to pick up",
     "received": "Money received",
     "ref": "payment {{ref}}"
+  },
+  "undo": {
+    "do": "Undo",
+    "yes": "Yes, undo",
+    "no": "No, keep it",
+    "done": "Change undone",
+    "system": "Pilotix",
+    "last": "Last change: “{{what}}”",
+    "askT": "Undo “{{what}}”?",
+    "askBy": "Made by {{by}}, {{when}}. This is what will happen:",
+    "some": "{{done}} of {{count}} undone — {{why}}",
+    "why": {
+      "courier": "Status given by the delivery company: fix it with them.",
+      "sav": "After-sales ticket parcel: change it from the ticket.",
+      "swap": "Swapped parcel: change it from Follow-up.",
+      "left": "Already left the depot: change its delivery status instead.",
+      "cashed": "Money already in a cash box: cancel the payment first.",
+      "bag": "In a pickup bag: take it out of the bag first (Depot › Dispatched).",
+      "held": "{{holder}} is working on this order right now.",
+      "other": "Made by {{by}}: only them (24 h) or a manager can undo it.",
+      "old": "More than 24 h: ask a manager.",
+      "moved": "The order changed since.",
+      "nothing": "Nothing to put back."
+    },
+    "fx": {
+      "back": "The order goes back to “{{s}}”.",
+      "leavesDepot": "It leaves the depot: the depot is told, what was picked goes back on the shelf.",
+      "courierCancel": "The parcel created at the delivery company is cancelled.",
+      "toDepot": "It goes back to the depot, “To prepare”.",
+      "call": "This call is not counted any more.",
+      "stockBack": "The stock comes back to the depot (+{{n}}).",
+      "stockOut": "The stock goes out again (−{{n}}): the parcel had not come back.",
+      "notDelivered": "It is no longer counted as delivered (for the customer or the pay).",
+      "alertClosed": "The depot’s red alert is closed.",
+      "msgStopped": "The waiting message to the customer is not sent.",
+      "repick": "Its products are to pick again: what was already picked waits first at the depot.",
+      "resend": "Its parcel is created again at the delivery company (new number)."
+    }
   }
 }

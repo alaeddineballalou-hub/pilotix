@@ -577,6 +577,11 @@ export const adminProcs = {
           if (!cur) throw notFound('Dépôt introuvable');
           if (cur.archived_at && i.active) throw bad('Ce dépôt est archivé : sortez-le d’abord des archives (Management › Archives)');
           if (cur.is_default && !i.isDefault) throw bad('Choisissez un autre dépôt par défaut à la place');
+          // turned off while orders still go through it: their departures and returns would move a hidden stock
+          if (cur.active && !i.active) {
+            const busy = num((await tx.query(`SELECT count(*)::int AS n FROM orders WHERE warehouse_id = $1 AND conf_status IN ('confirmed', 'no_stock') AND (follow_status IS NULL OR follow_status NOT IN ('delivered', 'returned', 'exchanged', 'lost', 'cancelled'))`, [i.id]))[0]?.n);
+            if (busy) throw bad(`${busy} commande(s) en cours passent encore par ce dépôt : attendez qu’elles soient finies (ou changez leur dépôt) avant de le désactiver.`);
+          }
           r = (await tx.query('UPDATE warehouses SET name=$2, wilaya_id=$3, commune=$4, address=$5, is_default=$6, active=$7 WHERE id=$1 RETURNING *', [i.id, i.name, i.wilayaId, i.commune, i.address, i.isDefault, i.active]))[0];
         } else {
           const first = !(await tx.query('SELECT 1 FROM warehouses LIMIT 1')).length;

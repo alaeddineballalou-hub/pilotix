@@ -427,6 +427,30 @@ select.pd-sel.on, .pd-tools-a select.pd-sel { border-color: var(--ai-tint-line);
 .pd-reason.r-count { background: var(--warn-soft); color: var(--warn); }
 .pd-reason.r-shipped { background: var(--raise); color: var(--ink); border: 1px solid var(--line); }
 .pd-reason.r-returned, .pd-reason.r-exchange_in { background: var(--ok-soft); color: var(--ok); }
+/* a product of the stock list: one line (its totals), its colours and sizes under it once opened */
+.pd-group { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 16px; border: 0; border-top: 1px solid var(--line); background: var(--raise); font: inherit; color: var(--ink); text-align: start; cursor: pointer; }
+.pd-group:hover { background: var(--sky-soft); }
+.pd-group:focus-visible { outline: 2px solid var(--navy); outline-offset: -2px; }
+.pd-chev { flex: none; transition: transform .15s ease; }
+.pd-chev:not(.open) { transform: rotate(-90deg); }
+[dir="rtl"] .pd-chev:not(.open) { transform: rotate(90deg); }
+.pd-gname { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+.pd-gcount { flex: none; color: var(--muted); font-size: 12.5px; }
+.pd-gsum { margin-inline-start: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 18px; }
+.pd-gsum > span { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.pd-gsum small { color: var(--muted); font-size: 12px; }
+.pd-gsum b { font-variant-numeric: tabular-nums; }
+.pd-gsum .bk small, .pd-gsum .bk b { color: var(--coral); }
+@container (max-width: 819px) {
+  .pd-group { flex-wrap: wrap; }
+  .pd-gsum { width: 100%; justify-content: flex-start; gap: 4px 14px; }
+}
+/* « Stock cassé »: pieces that came back broken, kept apart (never sold) */
+.pd-reason.r-broken_return, .pd-reason.r-scrapped { background: var(--coral-soft); color: var(--coral); }
+.pd-reason.r-repaired { background: var(--ok-soft); color: var(--ok); }
+.chip.pd-broken { background: var(--coral-soft); color: var(--coral); border: 0; cursor: pointer; font-weight: 700; font: inherit; font-size: 12px; }
+.chip.pd-broken:hover { filter: brightness(0.97); text-decoration: underline; }
+.pd-bk { display: block; color: var(--coral); font-size: 11px; font-weight: 700; white-space: nowrap; }
 .pd-ref { display: inline-flex; align-items: center; height: 26px; padding: 0 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--navy); font: inherit; font-size: 12.5px; font-weight: 700; text-decoration: none; white-space: nowrap; cursor: pointer; }
 .pd-ref:hover { border-color: var(--ai-dot-2); }
 .pd-mnote { color: var(--muted); font-size: 13px; min-width: 0; overflow-wrap: anywhere; }

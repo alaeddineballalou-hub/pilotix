@@ -6,6 +6,7 @@ import { Db, num } from '../db';
 export const RESERVED = `SELECT i.variant_id, COALESCE(o.warehouse_id, (SELECT id FROM warehouses WHERE active ORDER BY is_default DESC, id LIMIT 1)) AS wid, sum(i.qty)::int AS n
   FROM order_items i JOIN orders o ON o.id = i.order_id
   WHERE i.variant_id IS NOT NULL AND o.conf_status IN ('confirmed','no_stock') AND (o.follow_status IS NULL OR o.follow_status IN ('to_prepare','prepared'))
+    AND NOT EXISTS (SELECT 1 FROM products sp WHERE sp.id = i.product_id AND sp.is_service)
   GROUP BY 1, 2`;
 
 /** Products to reorder: on sale (product and variant active), and what is left in a depot (stock − reserved) is at or

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, hasRole, proc } from '../rpc';
 import { clientFee, getSetting, setSetting } from '../settings';
-import { ConfInput, getOrder, holdOrder, ListInput, listOrders, setConf, withClientScores } from './orders';
+import { ConfInput, dueNowSql, getOrder, holdOrder, ListInput, listOrders, setConf, triedSince, withClientScores } from './orders';
 import { andSql, queueSql } from './agencyscope';
 import { HAS_GUIDE } from './guide';
 import { assignedProductIds } from './productscope';
@@ -803,11 +803,11 @@ export const confirmationProcs = {
     const r = (
       await ctx.db.query(
         `SELECT
-           count(*) FILTER (WHERE conf_status = ANY($1) AND (next_call_at IS NULL OR next_call_at <= now()))::int AS due,
-           count(*) FILTER (WHERE conf_status = ANY($1) AND next_call_at > now())::int AS later,
+           count(*) FILTER (WHERE conf_status = ANY($1) AND ${dueNowSql(4)})::int AS due,
+           count(*) FILTER (WHERE conf_status = ANY($1) AND NOT ${dueNowSql(4)})::int AS later,
            count(*) FILTER (WHERE conf_status = 'confirmed' AND agent_id = $2 AND confirmed_at >= $3)::int AS confirmed
          FROM sales o WHERE true${andSql(queueSql(ctx, 'conf'))}`,
-        [CONF_TODO, me, day],
+        [CONF_TODO, me, day, await triedSince(ctx)],
       )
     )[0];
     const canc = (

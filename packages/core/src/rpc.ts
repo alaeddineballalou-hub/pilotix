@@ -176,25 +176,54 @@ export async function dispatch(registry: Record<string, Procedure>, name: string
  * job at the same moment). A mark older than `staleSec` (a crashed run) is ignored.
  */
 export async function withActionLock<T>(db: Db, key: string, userId: number | null, busyMessage: string, fn: () => Promise<T>, staleSec = 120): Promise<T> {
-  await db.query(`DELETE FROM action_locks WHERE key = $1 AND created_at < now() - make_interval(secs => $2)`, [key, staleSec]);
-  const got = await db.query('INSERT INTO action_locks (key, user_id) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING RETURNING key', [key, userId]);
-  if (!got.length) throw new AppError('conflict', busyMessage);
+  const lock = await takeActionLocks(db, [key], userId, staleSec);
+  if (!lock.taken.size) throw new AppError('conflict', busyMessage);
   try {
     return await fn();
   } finally {
-    await db.query('DELETE FROM action_locks WHERE key = $1', [key]);
+    await lock.release();
   }
 }
 
-
-/** Takes the "in progress" marks it can among `keys` (see withActionLock); returns those taken and how to free them. */
+/**
+ * Takes the "in progress" marks it can among `keys` (see withActionLock); returns those taken and how to free them.
+ * The marks are this run's own: renewed while it works (a long send to a slow courier is never taken for a stuck
+ * one by a second run, which would send the same parcels again), and freed at the end only while still its own.
+ * A run that died (the server stopped) leaves marks that a next run takes over after `staleSec`.
+ */
 export async function takeActionLocks(db: Db, keys: string[], userId: number | null, staleSec = 120) {
   if (!keys.length) return { taken: new Set<string>(), release: async () => {} };
   await db.query(`DELETE FROM action_locks WHERE key = ANY($1) AND created_at < now() - make_interval(secs => $2)`, [keys, staleSec]);
-  const rows = await db.query<{ key: string }>(
-    'INSERT INTO action_locks (key, user_id) SELECT k, $2 FROM unnest($1::text[]) AS k ON CONFLICT (key) DO NOTHING RETURNING key',
+  const rows = await db.query<{ key: string; at: string }>(
+    'INSERT INTO action_locks (key, user_id) SELECT k, $2 FROM unnest($1::text[]) AS k ON CONFLICT (key) DO NOTHING RETURNING key, created_at::text AS at',
     [keys, userId],
   );
   const taken = new Set(rows.map((x) => x.key));
-  return { taken, release: async () => { if (taken.size) await db.query('DELETE FROM action_locks WHERE key = ANY($1)', [[...taken]]); } };
+  const mine = [...taken];
+  // every mark of one run has the same time (one statement): it says the mark is still this run's
+  let stamp: string | null = rows[0]?.at ?? null;
+  let beat: Promise<unknown> = Promise.resolve();
+  const timer =
+    mine.length && stamp
+      ? setInterval(() => {
+          beat = beat
+            .then(async () => {
+              const r = await db.query<{ at: string }>(
+                'UPDATE action_locks SET created_at = now() WHERE key = ANY($1) AND created_at = $2::timestamptz RETURNING created_at::text AS at',
+                [mine, stamp],
+              );
+              if (r[0]) stamp = r[0].at;
+            })
+            .catch(() => undefined);
+        }, Math.max(5, Math.floor(staleSec / 3)) * 1000)
+      : null;
+  (timer as { unref?: () => void } | null)?.unref?.();
+  return {
+    taken,
+    release: async () => {
+      if (timer) clearInterval(timer);
+      await beat;
+      if (mine.length && stamp) await db.query('DELETE FROM action_locks WHERE key = ANY($1) AND created_at = $2::timestamptz', [mine, stamp]);
+    },
+  };
 }

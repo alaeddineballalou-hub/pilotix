@@ -118,3 +118,26 @@ test('who sees which orders: an agent his own, an agent manager his team (not an
   assert.notEqual(n.id, x);
   await call('confirmation.release', rania, { id: n.id });
 });
+
+test('« pas de réponse »: « Commande suivante » gives it again in the next call slot, never in the same one', async () => {
+  const samira = await as(EMAILS.conf);
+  const id = Number(await freeNew());
+  await call('orders.setConf', samira, { ids: [id], status: 'no_answer' });
+  await call('confirmation.release', samira, { id });
+  // the oldest order of the queue (it would come first), and the callbacks due now set aside
+  await db.query(`UPDATE orders SET created_at = '2020-01-01T08:00:00Z' WHERE id = $1`, [id]);
+  const callbacks = (await db.query(`SELECT id FROM orders WHERE next_call_at IS NOT NULL AND next_call_at <= now() LIMIT 200`)).map((r: any) => Number(r.id));
+  const next = async () => {
+    const n: any = await call('orders.next', samira, { skip: callbacks });
+    if (n.id) await call('confirmation.release', samira, { id: n.id });
+    return n.id;
+  };
+  // just called (this slot): not given again now
+  assert.notEqual(await next(), id);
+  // called before this slot started: its next try is now
+  const { slotStartOf } = await import('@pilotix/shared');
+  const { getSetting } = await import('../settings');
+  const start = slotStartOf(Date.now(), await getSetting(db, 'calls'));
+  await db.query('UPDATE orders SET last_call_at = $2 WHERE id = $1', [id, new Date(start - 60_000).toISOString()]);
+  assert.equal(await next(), id);
+});

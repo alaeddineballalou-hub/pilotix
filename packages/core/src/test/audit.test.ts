@@ -313,7 +313,7 @@ test('an SAV exchange puts back only the exchanged item, and only once', async (
   assert.equal(made.filter((x) => x.status === 'fulfilled').length, 1);
   const ex = Number((await one('SELECT exchange_order_id FROM complaints WHERE id = $1', [t.id])).exchange_order_id);
   await db.query(`UPDATE orders SET follow_status = 'delivered', shipped_at = now(), delivered_at = now() WHERE id = $1`, [ex]);
-  const moved = async () => Number((await one(`SELECT COALESCE(sum(delta),0)::int AS d FROM stock_movements WHERE reason = 'exchange_in' AND order_id = $1`, [o.id])).d);
+  const moved = async () => Number((await one(`SELECT COALESCE(sum(delta + broken_delta),0)::int AS d FROM stock_movements WHERE reason = 'exchange_in' AND order_id = $1`, [o.id])).d);
   const r: any = await call('depot.scan', depot, { orderId: ex, code: '', mode: 'exchange' });
   assert.equal(r.kind, 'ok', r.why);
   assert.equal(await moved(), 1, 'one article back, not the whole order');

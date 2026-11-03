@@ -10,6 +10,7 @@ import { itemsLine } from './OrderList';
 import { cleanCode, decodePhoto, isPhone, ring, startCamera, unlockAudio } from './scan';
 import { trackOf } from '../../lib/items';
 import { useIsPhone } from '../../lib/useMedia';
+import { dropActions, toast } from '../../ui/toast';
 import './stages.css';
 
 /** The scanner answers in the worker's language. */
@@ -24,6 +25,8 @@ interface Shown {
   order?: Order | null;
   list?: Order[];
   at?: number;
+  /** what the scan did: a parcel out, a return or an exchange's old product back */
+  did?: string;
 }
 type Mode = 'dispatch' | 'back';
 
@@ -70,7 +73,7 @@ export function ScanCard({ mode, onBack, autoCamera }: { mode: Mode; onBack?: ()
       let v: Shown;
       try {
         const r = await rpc('depot.scan', { code: j.code, orderId: j.orderId, mode, lang: scanLang(i18n.language) });
-        v = { kind: r.kind as Shown['kind'], code: r.code || j.code, why: r.why, fix: r.fix, order: r.order ?? null, list: r.list };
+        v = { kind: r.kind as Shown['kind'], code: r.code || j.code, why: r.why, fix: r.fix, order: r.order ?? null, list: r.list, did: (r as { did?: string }).did };
       } catch (e: any) {
         v = { kind: 'bad', code: j.code, why: t('scanner.refused', { msg: e?.message ?? '' }), fix: t('scanner.refusedFix') };
       }
@@ -116,7 +119,34 @@ export function ScanCard({ mode, onBack, autoCamera }: { mode: Mode; onBack?: ()
 
   const M = (k: string) => t(`scanner.modes.${mode}.${k}`);
   const badgeOf = (k: Kind) => (k === 'ok' ? t('scanner.good') : k === 'bad' ? t('scanner.stop') : t('scanner.check'));
-  const result = <Result v={shown} badgeOf={badgeOf} onPick={(o) => add(trackOf(o) || o.ref, o.id)} onCancel={() => setShown({ kind: 'idle', code: '' })} />;
+  // scanned by mistake (the wrong parcel « Expédiée », a return that is not one): « ↶ Annuler » puts it back
+  const undo = async (o: Order) => {
+    try {
+      await rpc('orders.undo', { id: o.id });
+      dropActions();
+      toast(t('orders.undo.done'), 'ok');
+      setShown({ kind: 'idle', code: '' });
+      setN((c) => ({ ...c, ok: Math.max(0, c.ok - 1) }));
+      setLog((l) => l.filter((x) => x.order?.id !== o.id));
+      qc.invalidateQueries();
+    } catch (e: any) {
+      toast(e?.message ?? String(e), 'bad', 6000);
+    }
+    focus();
+  };
+  // a return (or an exchange's old product) that came back broken: to the broken stock, never sold
+  const broken = async (o: Order) => {
+    try {
+      const r = await rpc('stock.markBroken', { orderId: o.id });
+      toast(t('scanner.brokenDone', { n: r.moved }), 'ok');
+      setShown({ kind: 'idle', code: '' });
+      qc.invalidateQueries();
+    } catch (e: any) {
+      toast(e?.message ?? String(e), 'bad', 6000);
+    }
+    focus();
+  };
+  const result = <Result v={shown} badgeOf={badgeOf} onPick={(o) => add(trackOf(o) || o.ref, o.id)} onCancel={() => setShown({ kind: 'idle', code: '' })} onUndo={undo} onBroken={broken} />;
 
   return (
     <section className="card bjf bjsc" onClick={(e) => !(e.target as HTMLElement).closest('input,button,a,select,textarea,summary,li') && focus()}>
@@ -239,7 +269,7 @@ export function ScanCard({ mode, onBack, autoCamera }: { mode: Mode; onBack?: ()
   );
 }
 
-function Result({ v, badgeOf, onPick, onCancel }: { v: Shown; badgeOf: (k: Kind) => string; onPick: (o: Order) => void; onCancel: () => void }) {
+function Result({ v, badgeOf, onPick, onCancel, onUndo, onBroken }: { v: Shown; badgeOf: (k: Kind) => string; onPick: (o: Order) => void; onCancel: () => void; onUndo?: (o: Order) => void; onBroken?: (o: Order) => void }) {
   const { t } = useTranslation();
   if (v.kind === 'idle') return <div className="bjsc-v" />;
   if (v.kind === 'busy')
@@ -290,6 +320,20 @@ function Result({ v, badgeOf, onPick, onCancel }: { v: Shown; badgeOf: (k: Kind)
       </div>
       <p className="bjsc-why">{v.why}</p>
       {v.fix && <p className="bjsc-fix">{v.fix}</p>}
+      {v.kind === 'ok' && v.order && (onUndo || onBroken) && (
+        <div className="bjsc-acts">
+          {onBroken && (v.did === 'return' || v.did === 'exchange') && (
+            <button type="button" className="btn small warn bjsc-broken" onClick={() => onBroken(v.order!)}>
+              <Icon name="wrench" /> {t('scanner.broken')}
+            </button>
+          )}
+          {onUndo && (
+            <button type="button" className="btn small bjsc-undo" onClick={() => onUndo(v.order!)}>
+              ↶ {t('orders.undo.do')}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

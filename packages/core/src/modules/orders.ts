@@ -22,6 +22,7 @@ import {
   upsellOf,
   Page,
   SALES_CHANNELS,
+  slotStartOf,
 } from '@pilotix/shared';
 import { officialCommune } from './coverage';
 import { z } from 'zod';
@@ -163,14 +164,22 @@ export const noOrderAccess = (ctx: Ctx) => {
   return !s.isAdmin && !s.roles.some((r) => ['confirmation', 'suivi', 'depot', 'livreur', 'agent_manager', 'vendeur'].includes(r));
 };
 
-/** The orders an agent may take now with « Commande suivante », the most urgent first ($1 to-do statuses, $2 the agent, $3 skipped). */
+/** A to-do order to call now ($n: the start of the current call slot): a callback whose time came, or — not called back
+ *  at a time — one not tried yet in this slot (« pas de réponse », « occupé »: the next try is in the next slot). */
+export const dueNowSql = (n: number) =>
+  `(next_call_at IS NOT NULL AND next_call_at <= now() OR next_call_at IS NULL AND (attempts = 0 OR last_call_at IS NULL OR last_call_at < $${n}::timestamptz))`;
+/** The start of the current call slot (see dueNowSql). */
+export const triedSince = async (ctx: Ctx) => new Date(slotStartOf(ctx.now(), await getSetting(ctx.db, 'calls'))).toISOString();
+
+/** The orders an agent may take now with « Commande suivante », the most urgent first ($1 to-do statuses, $2 the agent,
+ *  $3 skipped, $4 the start of the current call slot). */
 const nextFrom = (ctx: Ctx) => `FROM orders o WHERE conf_status = ANY($1) AND (agent_id IS NULL OR agent_id = $2) AND NOT (id = ANY($3))
-  AND (next_call_at IS NULL OR next_call_at <= now()) AND (locked_until IS NULL OR locked_until < now() OR locked_by = $2)${andSql(queueSql(ctx, 'conf', 'o', { free: true }))}
+  AND ${dueNowSql(4)} AND (locked_until IS NULL OR locked_until < now() OR locked_by = $2)${andSql(queueSql(ctx, 'conf', 'o', { free: true }))}
   ORDER BY (next_call_at IS NOT NULL) DESC, next_call_at ASC, created_at ASC`;
 
 /** What « Commande suivante » would give this agent (nothing taken): to choose between several stores. */
 export async function peekNext(ctx: Ctx, skip: number[]): Promise<{ nextCallAt: string | null; createdAt: string } | null> {
-  const r = (await ctx.db.query(`SELECT next_call_at, created_at ${nextFrom(ctx)} LIMIT 1`, [CONF_TODO, ctx.session.profile.id, skip]))[0];
+  const r = (await ctx.db.query(`SELECT next_call_at, created_at ${nextFrom(ctx)} LIMIT 1`, [CONF_TODO, ctx.session.profile.id, skip, await triedSince(ctx)]))[0];
   return r ? { nextCallAt: isoOrNull(r.next_call_at), createdAt: iso(r.created_at) } : null;
 }
 
@@ -409,6 +418,8 @@ async function priceItems(db: Db, items: z.infer<typeof ItemInput>[], freePrice 
     const all = await db.query('SELECT id, product_id, title, active FROM product_variants WHERE product_id = ANY($1) ORDER BY id', [pids]);
     items = items.map((i) => {
       if (i.variantId) return i;
+      // the parts of an SAV « pièces » exchange: no piece of the article leaves (its stock never moves)
+      if ((i as { part?: boolean }).part) return i;
       const mine = all.filter((v: any) => num(v.product_id) === i.productId);
       const plain = mine.find((v: any) => v.title === '');
       const named = mine.filter((v: any) => v.title !== '' && v.active);
@@ -502,7 +513,7 @@ async function toPickPool(db: Db, units: { productId: number; variantId: number 
 }
 
 /** An order still « À préparer » leaves the depot's road (cancelled): what was already taken goes back to the pool. */
-async function releasePicked(db: Db, orderId: number) {
+export async function releasePicked(db: Db, orderId: number) {
   const taken = await db.query('SELECT product_id, variant_id, picked_qty FROM order_items WHERE order_id = $1 AND picked_qty > 0', [orderId]);
   if (!taken.length) return;
   await db.query('UPDATE order_items SET picked_qty = 0 WHERE order_id = $1', [orderId]);
@@ -709,8 +720,55 @@ export async function guardHands(ctx: Ctx, ids: number[], holderMay = false) {
 
 export const UpdateInput = OrderInput.partial().omit({ confirm: true }).extend({ id, version: z.number().int().min(1).optional() });
 
+/**
+ * The products and the remise of a change: the new lines, the subtotal, the remise — refused when the price cuts and
+ * the remise go over what the products allow. A cut is counted from what the customer first ordered (or the
+ * catalogue), never from a price an agent already lowered: saving again and again does not go lower.
+ */
+async function priceChange(db: Db, cur: any, input: z.infer<typeof UpdateInput>, isAdmin: boolean) {
+  let subtotal = num(cur.subtotal);
+  let maxDiscount = Infinity;
+  let priceCut = 0;
+  const recount = !!input.items || input.discount !== undefined;
+  const old = recount
+    ? (await db.query('SELECT id, product_id, variant_id, qty, unit_price, is_upsell FROM order_items WHERE order_id = $1 ORDER BY id', [input.id])).map((r: any) => ({ id: num(r.id), productId: num(r.product_id), variantId: numOrNull(r.variant_id), qty: num(r.qty), unitPrice: num(r.unit_price), isUpsell: !!r.is_upsell }))
+    : [];
+  const first = new Map((readOrig(cur.orig_items) ?? origOf(old)).map((l) => [`${l.productId}:${l.variantId ?? ''}`, l.unitPrice]));
+  let lines: OrderItem[] | null = null;
+  if (input.items) {
+    const priced = await priceItems(db, input.items, !!cur.is_exchange, first);
+    lines = priced.lines;
+    subtotal = priced.subtotal;
+    maxDiscount = priced.maxDiscount;
+    priceCut = priced.priceCut;
+  } else if (input.discount !== undefined && old.length) {
+    // only the discount changes: still capped by the products, the cuts already on their prices counted
+    const priced = await priceItems(db, old, !!cur.is_exchange, first, false);
+    maxDiscount = priced.maxDiscount;
+    priceCut = priced.priceCut;
+  }
+  const discount = input.discount ?? num(cur.discount);
+  if (discount > maxDiscount) throw bad(`Remise trop élevée (maximum ${maxDiscount} DA)`);
+  if (!isAdmin && priceCut + discount > maxDiscount) throw bad(`Prix trop bas : la baisse de prix et la remise dépassent la remise maximale (${maxDiscount} DA)`);
+  return { old, lines, subtotal, discount };
+}
+
+/**
+ * What a change would be refused for, checked before its parcel is cancelled at the courier (a parcel deleted for a
+ * change that then fails would leave with a dead label).
+ */
+async function precheckUpdate(ctx: Ctx, input: z.infer<typeof UpdateInput>) {
+  if (input.phone !== undefined && !normalizePhone(input.phone)) throw bad('Numéro de téléphone algérien invalide');
+  const cur = (await ctx.db.query('SELECT * FROM orders WHERE id = $1', [input.id]))[0];
+  if (!cur) throw notFound('Commande introuvable');
+  if (input.version && num(cur.version) !== input.version) throw bad('Cette commande a été modifiée par quelqu’un d’autre. Rechargez-la.');
+  if (input.isStopdesk === true && !(input.stopdeskId ?? (input.stopdeskId === undefined ? cur.stopdesk_id : null))) throw bad('Livraison au bureau : choisissez le bureau.');
+  await priceChange(ctx.db, cur, input, ctx.session.isAdmin);
+}
+
 export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>): Promise<Order> {
   await guardHands(ctx, [input.id]);
+  await precheckUpdate(ctx, input);
   const cancelled = await cancelBeforeMove(ctx, input);
   const order = await ctx.db.tx(async (tx) => {
     const cur = (await tx.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [input.id]))[0];
@@ -756,29 +814,8 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
     if (input.isStopdesk === true && !(input.stopdeskId ?? (input.stopdeskId === undefined ? cur.stopdesk_id : null))) throw bad('Livraison au bureau : choisissez le bureau.');
     if (input.isStopdesk === false && input.stopdeskId === undefined) input = { ...input, stopdeskId: null };
 
-    let subtotal = num(cur.subtotal);
-    let maxDiscount = Infinity;
-    let priceCut = 0;
-    // the products or the remise change: the upsell is worked out again
     const recount = !!input.items || input.discount !== undefined;
-    const old = recount
-      ? (await tx.query('SELECT id, product_id, variant_id, qty, unit_price, is_upsell FROM order_items WHERE order_id = $1 ORDER BY id', [input.id])).map((r: any) => ({ id: num(r.id), productId: num(r.product_id), variantId: numOrNull(r.variant_id), qty: num(r.qty), unitPrice: num(r.unit_price), isUpsell: !!r.is_upsell }))
-      : [];
-    let lines: OrderItem[] | null = null;
-    if (input.items) {
-      const priced = await priceItems(tx, input.items, !!cur.is_exchange, new Map(old.map((l) => [`${l.productId}:${l.variantId ?? ''}`, l.unitPrice])));
-      lines = priced.lines;
-      subtotal = priced.subtotal;
-      maxDiscount = priced.maxDiscount;
-      priceCut = priced.priceCut;
-    } else if (input.discount !== undefined) {
-      // only the discount changes: it is still capped by the products already in the order
-      if (old.length) maxDiscount = (await priceItems(tx, old, true, new Map(), false)).maxDiscount;
-    }
-    const discount = input.discount ?? num(cur.discount);
-    if (discount > maxDiscount) throw bad(`Remise trop élevée (maximum ${maxDiscount} DA)`);
-    if (!ctx.session.isAdmin && priceCut + discount > maxDiscount)
-      throw bad(`Prix trop bas : la baisse de prix et la remise dépassent la remise maximale (${maxDiscount} DA)`);
+    const { old, lines, subtotal, discount } = await priceChange(tx, cur, input, ctx.session.isAdmin);
     // against what the customer first ordered (an order made before it was kept: its lines not marked upsell, now kept)
     const kept = readOrig(cur.orig_items);
     const orig = kept ?? origOf(old);
@@ -840,6 +877,25 @@ export async function updateOrder(ctx: Ctx, input: z.infer<typeof UpdateInput>):
         v('customerNote', 'customer_note'), v('deliveryNote', 'delivery_note'), v('internalNote', 'internal_note'),
         up.value, JSON.stringify(orig), origDiscount],
     );
+    // a new number: the order belongs to that number's customer (its blacklist, its stop-desk rule, its refusals, its
+    // score) — a blacklisted number is checked by a person first, as when an order comes in
+    if (phone !== cur.phone) {
+      const c = (
+        await tx.query(
+          `INSERT INTO customers (phone, name, wilaya_id, orders, last_order_at) VALUES ($1, $2, $3, 1, now())
+           ON CONFLICT (phone) DO UPDATE SET orders = customers.orders + 1, last_order_at = now() RETURNING id, blacklisted`,
+          [phone, v('customerName', 'customer_name'), v('wilayaId', 'wilaya_id')],
+        )
+      )[0];
+      if (num(c.id) !== num(cur.customer_id)) {
+        await tx.query('UPDATE orders SET customer_id = $2 WHERE id = $1', [input.id, c.id]);
+        if (cur.customer_id) await tx.query('UPDATE customers SET orders = GREATEST(0, orders - 1) WHERE id = $1', [cur.customer_id]);
+        if (c.blacklisted && (CONF_TODO as string[]).includes(cur.conf_status) && cur.conf_status !== 'to_check') {
+          await tx.query(`UPDATE orders SET conf_status = 'to_check' WHERE id = $1`, [input.id]);
+          await addEvent(tx, input.id, ctx.session.profile.id, 'conf_status', cur.conf_status, 'to_check', 'Nouveau numéro : ce client est en liste noire, à vérifier');
+        }
+      } else await tx.query('UPDATE customers SET orders = GREATEST(0, orders - 1) WHERE id = $1', [c.id]);
+    }
     if (pick) {
       const moved = pick.companyId !== was;
       await tx.query(
@@ -989,10 +1045,30 @@ export async function holdOrder(ctx: Ctx, id: number): Promise<{ ok: boolean; by
   });
 }
 
-export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
+/**
+ * « ↶ Annuler » of a confirmation change (undo.ts): the order is put back as it was — the change leaves the history
+ * (one « undo » line says who undid what), no call is counted, no message goes to the customer. What leaving or
+ * coming back to the depot needs (the depot's alert, the picked pieces, the courier's parcel) is done as usual.
+ */
+export interface ConfUndo {
+  /** the events of the change undone */
+  eventIds: number[];
+  /** the call attempts the order had before that change */
+  attempts: number;
+  /** that change confirmed it: its confirmation time goes too */
+  clearConfirmedAt: boolean;
+  /** the delivery status it had before that change (undefined: as a person's change would set it) */
+  follow?: string | null;
+  /** the « undo » line: the status undone, by whom and when */
+  line: { what: string; by: string | null; at: string };
+}
+
+export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>, opts: { undo?: ConfUndo } = {}) {
+  const undo = opts.undo;
+  if (undo && input.ids.length !== 1) throw bad('Une seule commande à la fois');
   await guardHands(ctx, input.ids);
-  if (CONF_NEEDS_DATE.includes(input.status) && !input.nextCallAt) throw bad('Choisissez la date du prochain appel');
-  if (CONF_NEEDS_REASON.includes(input.status) && !input.reason) throw bad('Indiquez la raison');
+  if (!undo && CONF_NEEDS_DATE.includes(input.status) && !input.nextCallAt) throw bad('Choisissez la date du prochain appel');
+  if (!undo && CONF_NEEDS_REASON.includes(input.status) && !input.reason) throw bad('Indiquez la raison');
   const me = ctx.session.profile.id;
   const calls = await getSetting(ctx.db, 'calls');
   const changed: number[] = [];
@@ -1013,7 +1089,7 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
     const notify = await notifyContext(tx);
     const landing = await landingSettings(tx);
     for (const oid of input.ids) {
-      const cur = (await tx.query(`SELECT id, ref, customer_id, conf_status, follow_status, shipped_at, tracking, attempts, agent_id, phone, is_exchange, landing_id, commune, is_stopdesk, stopdesk_id,
+      const cur = (await tx.query(`SELECT id, ref, customer_id, conf_status, follow_status, shipped_at, tracking, attempts, next_call_at, agent_id, phone, is_exchange, landing_id, commune, is_stopdesk, stopdesk_id,
          CASE WHEN locked_until > now() AND locked_by <> $2 THEN (SELECT p.name FROM profiles p WHERE p.id = locked_by) END AS held_by
          FROM orders WHERE id = $1 FOR UPDATE`, [oid, me]))[0];
       if (!cur) continue;
@@ -1035,8 +1111,9 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
       if (cur.follow_status && !['to_prepare', 'prepared', 'cancelled'].includes(cur.follow_status) && input.status !== 'confirmed')
         throw bad('Commande déjà expédiée : changez plutôt le statut de livraison');
       let status = input.status;
-      const isCallFail = status === 'no_answer' || status === 'busy';
-      const attempts = isCallFail ? Math.max(num(cur.attempts) + 1, input.tryN ?? 0) : num(cur.attempts);
+      // (an undo never counts a call: the attempts go back to what they were)
+      const isCallFail = !undo && (status === 'no_answer' || status === 'busy');
+      const attempts = undo ? undo.attempts : isCallFail ? Math.max(num(cur.attempts) + 1, input.tryN ?? 0) : num(cur.attempts);
       let note = input.note ?? null;
       if (isCallFail && calls.cancelAfterNoAnswer > 0 && attempts >= calls.cancelAfterNoAnswer) {
         status = 'cancelled';
@@ -1066,39 +1143,61 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
       const confirmed = status === 'confirmed';
       // « sans stock » is confirmed too: the agent's call is done, the order only waits for stock before the depot
       const stamped = confirmed || status === 'no_stock';
-      if (stamped && cur.conf_status !== 'confirmed' && cur.conf_status !== 'no_stock') fresh.push(oid);
+      if (!undo && stamped && cur.conf_status !== 'confirmed' && cur.conf_status !== 'no_stock') fresh.push(oid);
       const nowIso = new Date(ctx.now()).toISOString();
       await tx.query(
         `UPDATE orders SET conf_status=$2, attempts=$3,
            last_call_at = CASE WHEN $4 THEN $5::timestamptz ELSE last_call_at END,
            next_call_at = $6,
            agent_id = COALESCE(agent_id, $7), assigned_at = COALESCE(assigned_at, $5::timestamptz),
-           confirmed_at = CASE WHEN $9 THEN COALESCE(confirmed_at, $5::timestamptz) ELSE confirmed_at END,
+           confirmed_at = CASE WHEN $9 THEN COALESCE(confirmed_at, $5::timestamptz) WHEN $11 THEN NULL ELSE confirmed_at END,
            follow_status = CASE WHEN $8 AND (follow_status IS NULL OR (follow_status = 'cancelled' AND shipped_at IS NULL)) THEN 'to_prepare'
                                 WHEN $2 IN ('cancelled','duplicate','wrong_number','fake') AND follow_status IN ('to_prepare','prepared') THEN 'cancelled'
                                 WHEN $2 = ANY($10) AND follow_status IN ('to_prepare','prepared') THEN NULL
+                                -- « sans stock »: out of the depot until stock comes (« Sans stock » lists it, then it goes back by itself)
+                                WHEN $2 = 'no_stock' AND shipped_at IS NULL AND follow_status IN ('to_prepare','prepared','cancelled') THEN NULL
                                 ELSE follow_status END,
            updated_at=now(), version=version+1
          WHERE id=$1`,
-        [oid, status, attempts, isCallFail || stamped || CONF_NEEDS_DATE.includes(status), nowIso, CONF_NEEDS_DATE.includes(status) ? input.nextCallAt : null, me, confirmed, stamped, CONF_TODO],
+        [
+          oid, status, attempts, !undo && (isCallFail || stamped || CONF_NEEDS_DATE.includes(status)), nowIso,
+          // (undone back to « à rappeler » / « reportée »: to call now)
+          CONF_NEEDS_DATE.includes(status) ? (input.nextCallAt ?? (undo ? nowIso : null)) : null,
+          me, confirmed, stamped, CONF_TODO, !!undo?.clearConfirmedAt,
+        ],
       );
-      await addEvent(tx, oid, me, 'conf_status', cur.conf_status, status, [input.reason, note].filter(Boolean).join(' — ') || null);
-      // it leaves the depot: cancelled, or back to be called again
-      const leavesDepot = ['cancelled', 'duplicate', 'wrong_number', 'fake'].includes(status) || ((CONF_TODO as string[]).includes(status) && ['to_prepare', 'prepared'].includes(cur.follow_status));
+      // (what « ↶ Annuler » puts back: the calls counted and the next call's time before this change)
+      if (!undo) await addEvent(tx, oid, me, 'conf_status', cur.conf_status, status, [input.reason, note].filter(Boolean).join(' — ') || null, { att: num(cur.attempts), nca: cur.next_call_at ? iso(cur.next_call_at) : null });
+      // it leaves the depot: cancelled, back to be called again, or « sans stock » (it waits for stock outside the depot)
+      const leavesDepot =
+        ['cancelled', 'duplicate', 'wrong_number', 'fake'].includes(status) || (((CONF_TODO as string[]).includes(status) || status === 'no_stock') && ['to_prepare', 'prepared'].includes(cur.follow_status));
       // left while the depot was picking it: what was already taken goes back to the depot (picking pool)
       if (leavesDepot && cur.follow_status === 'to_prepare') await releasePicked(tx, oid);
       // confirmed again after a cancel: back to the depot's « À préparer »
-      if (confirmed && (!cur.follow_status || (cur.follow_status === 'cancelled' && !cur.shipped_at))) await addEvent(tx, oid, me, 'follow_status', cur.follow_status, 'to_prepare');
+      if (!undo && confirmed && (!cur.follow_status || (cur.follow_status === 'cancelled' && !cur.shipped_at))) await addEvent(tx, oid, me, 'follow_status', cur.follow_status, 'to_prepare');
       // the depot was preparing it: red alert « annulée — ne l'envoyez pas » (also when it goes back to be called again:
       // it leaves the depot until it is confirmed again; and an order still « À préparer » whose parcel was already made at
       // a courier: its label may be printed)
       const earlyParcel = cur.follow_status === 'to_prepare' && !!cur.tracking && alertsDepot(ctx, 'prepared');
       if (leavesDepot && (alertsDepot(ctx, cur.follow_status) || earlyParcel)) await addDepotAlert(tx, ctx, oid, cur.follow_status, 'cancel', []);
-      if ((CONF_TODO as string[]).includes(status) && ['to_prepare', 'prepared'].includes(cur.follow_status))
+      if (!undo && ((CONF_TODO as string[]).includes(status) || status === 'no_stock') && ['to_prepare', 'prepared'].includes(cur.follow_status))
         await addEvent(tx, oid, me, 'follow_status', cur.follow_status, null);
-      await onConfChange(tx, notify, cur, cur.conf_status, status, ctx.now());
-      // Meta: an order from a landing page, confirmed by a person, is a real sale (never a blocked or fake one)
-      await onLandingConf(tx, landing, cur, cur.conf_status, status, ctx.now(), input.reason ?? null, me);
+      if (!undo) {
+        await onConfChange(tx, notify, cur, cur.conf_status, status, ctx.now());
+        // Meta: an order from a landing page, confirmed by a person, is a real sale (never a blocked or fake one)
+        await onLandingConf(tx, landing, cur, cur.conf_status, status, ctx.now(), input.reason ?? null, me);
+      } else {
+        // the delivery status it had before (the depot's own steps are not lost: À préparer stays as it was)
+        if (undo.follow !== undefined && status !== 'no_stock')
+          await tx.query(
+            `UPDATE orders SET follow_status = $2 WHERE id = $1 AND shipped_at IS NULL AND (follow_status IS NULL OR follow_status IN ('to_prepare', 'prepared', 'cancelled'))`,
+            [oid, undo.follow],
+          );
+        // the change leaves the history; its messages still waiting are not sent; one line says who undid it
+        await tx.query(`UPDATE notifications SET status = 'skipped', error = 'Changement annulé' WHERE order_id = $1 AND status = 'queued' AND created_at = $2::timestamptz`, [oid, undo.line.at]);
+        await tx.query('DELETE FROM order_events WHERE order_id = $1 AND id = ANY($2)', [oid, undo.eventIds]);
+        await addEvent(tx, oid, me, 'undo', undo.line.what, status, null, { area: 'conf', by: undo.line.by, at: undo.line.at });
+      }
       if (cur.conf_status === 'confirmed' && !confirmed && !cur.shipped_at) freed.push(oid);
       if (leavesDepot && ['to_prepare', 'prepared'].includes(cur.follow_status) && cur.tracking) ghosts.push(oid);
       changed.push(oid);
@@ -1108,7 +1207,7 @@ export async function setConf(ctx: Ctx, input: z.infer<typeof ConfInput>) {
   });
   // a cancelled order's parcel at a courier: cancelled there by itself (or put on « À annuler à la main »)
   if (ghosts.length) await (await import('./dispatch')).cancelGhosts(ctx, ghosts);
-  await recordRiskConfirms(ctx, fresh.filter((x) => changed.includes(x)), me);
+  if (!undo) await recordRiskConfirms(ctx, fresh.filter((x) => changed.includes(x)), me);
   await sendInPreview(ctx);
   ctx.emit({ type: 'orders' });
   return { changed, noStock, blocked, autoCancelled };
@@ -1212,7 +1311,7 @@ export async function assignCompanies(ctx: Ctx, i: { ids: number[]; companyId: n
   return { ok: true };
 }
 
-export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, opts: { system?: boolean } = {}) {
+export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, opts: { system?: boolean; courier?: boolean; expect?: Map<number, string | null> } = {}) {
   if (!canSetFollow(ctx.session.roles, input.status)) throw forbidden('Vous ne pouvez pas mettre ce statut de livraison');
   const me = ctx.session.profile.id;
   const own = onlyOwnDeliveries(ctx);
@@ -1231,6 +1330,8 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
     for (const oid of input.ids) {
       const cur = (await tx.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [oid]))[0];
       if (!cur) continue;
+      // (the courier's answer was for the status it had then: changed since by a person, it is not overwritten)
+      if (opts.expect?.has(oid) && opts.expect.get(oid) !== (cur.follow_status ?? null)) continue;
       if (own && num(cur.livreur_id) !== me) throw forbidden();
       if (!['confirmed', 'no_stock'].includes(cur.conf_status) && input.status !== 'cancelled') throw bad(`${cur.ref} n’est pas confirmée`);
       const from: FollowStatus | null = cur.follow_status;
@@ -1259,9 +1360,14 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
         if ((await tx.query('SELECT kind FROM delivery_companies WHERE id = $1', [cur.company_id]))[0]?.kind === 'own')
           throw bad(`${cur.ref} : seul le livreur met le colis « En livraison », en le scannant dans « Ma tournée ».`);
       if (livreurId && cur.cashed) throw bad(`${cur.ref} est déjà encaissée : le livreur ne peut plus changer`);
+      // a parcel that left the depot is never « Annulée » by a person: its stock would never come back — it is
+      // « En retour » until the depot receives it (then « Retournée », its stock back)
+      if (!opts.system && to === 'cancelled' && from !== 'cancelled' && cur.shipped_at && !cur.returned_at)
+        throw bad(`${cur.ref} est déjà partie du dépôt : mettez-la « En retour », le dépôt la recevra (son stock revient alors).`);
       // the depot receives back a parcel that is coming back (or failed): never one « en livraison » or « livrée », else a
       // delivered parcel's cash would stop being owed and its goods would come back into stock on paper only
-      if (!opts.system && to === 'returned' && from !== to && !ctx.session.isAdmin && !ctx.session.roles.includes('suivi') && !['shipped', 'returning', 'failed', 'alert', 'in_exchange'].includes(from ?? ''))
+      // (an « Annulée » parcel that had left — cancelled by the company — comes back too)
+      if (!opts.system && to === 'returned' && from !== to && !ctx.session.isAdmin && !ctx.session.roles.includes('suivi') && !['shipped', 'returning', 'failed', 'alert', 'in_exchange'].includes(from ?? '') && !(from === 'cancelled' && cur.shipped_at))
         throw bad(`${cur.ref} n’est pas en retour : le livreur ou le suivi doit d’abord la marquer « En retour » ou « Échec »`);
       // Stock leaves the depot on the first status that means the parcel left (not only « Expédiée »: the courier
       // can report « En livraison » or « Livrée » straight from « Préparée »), and comes back when returned.
@@ -1278,11 +1384,12 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
            sub_status = CASE WHEN $8 THEN sub_status ELSE $5 END, follow_agent_id = CASE WHEN $6 AND ($2 IS DISTINCT FROM follow_status OR follow_agent_id IS NULL) THEN $7 ELSE follow_agent_id END,
            delivery_attempts = delivery_attempts + CASE WHEN $2 = 'failed' THEN 1 ELSE 0 END,
            updated_at=now(), version=version+1 WHERE id=$1`,
-        [oid, to, input.tracking ?? null, livreurId, input.subStatus ?? null, ctx.session.roles.includes('suivi'), me,
+        [oid, to, input.tracking ?? null, livreurId, input.subStatus ?? null, !opts.system && ctx.session.roles.includes('suivi'), me,
           !!opts.system && input.subStatus === undefined, leaves],
       );
       if ((leaves || back) && cur.warehouse_id) {
-        const items = await tx.query('SELECT variant_id, qty FROM order_items WHERE order_id = $1 AND variant_id IS NOT NULL', [oid]);
+        // (a service — « Montage », « Garantie » — is no piece in the depot: never moved)
+        const items = await tx.query('SELECT i.variant_id, i.qty FROM order_items i JOIN products p ON p.id = i.product_id WHERE i.order_id = $1 AND i.variant_id IS NOT NULL AND NOT p.is_service', [oid]);
         for (const it of items) {
           const d = (leaves ? -1 : 1) * num(it.qty);
           const left = await tx.query(
@@ -1304,7 +1411,9 @@ export async function setFollow(ctx: Ctx, input: z.infer<typeof FollowInput>, op
       // counted once per order, even if the status goes back and forth
       if (to === 'delivered' && from !== 'delivered' && !cur.delivered_at) await tx.query('UPDATE customers SET delivered = delivered + 1 WHERE id = $1', [cur.customer_id]);
       if (to === 'returned' && from !== 'returned' && !cur.returned_at) await tx.query('UPDATE customers SET returned = returned + 1 WHERE id = $1', [cur.customer_id]);
-      await addEvent(tx, oid, me, 'follow_status', from, to, [input.reason, input.note].filter(Boolean).join(' — ') || null);
+      // what the step replaces (« ↶ Annuler » puts it back) and whether the delivery company gave it (never undone here)
+      const prev = { sub: cur.sub_status ?? null, fa: numOrNull(cur.follow_agent_id), lv: numOrNull(cur.livreur_id), tr: cur.tracking ?? null, cbh: !!cur.cancel_by_hand };
+      await addEvent(tx, oid, me, 'follow_status', from, to, [input.reason, input.note].filter(Boolean).join(' — ') || null, opts.courier ? { prev, courier: true } : { prev });
       if (to === 'cancelled' && from === 'to_prepare') await releasePicked(tx, oid);
       // cancelled while the depot holds it (packed, or a parcel already made at a courier): the depot's red alert
       if (to === 'cancelled' && from !== to && !opts.system && !cur.shipped_at && (from === 'prepared' || (from === 'to_prepare' && cur.tracking)) && alertsDepot(ctx, 'prepared'))
@@ -1766,7 +1875,13 @@ export const ordersProcs = {
       }
     }
     return rows.map(
-      (r: any): OrderEvent => ({ id: num(r.id), orderId: num(r.order_id), at: iso(r.at), userId: numOrNull(r.user_id), userName: r.user_name, kind: r.kind, fromValue: r.from_value, toValue: r.to_value, note: r.note }),
+      (r: any): OrderEvent => {
+        const d = r.kind === 'undo' ? (typeof r.data === 'string' ? JSON.parse(r.data) : r.data) : null;
+        return {
+          id: num(r.id), orderId: num(r.order_id), at: iso(r.at), userId: numOrNull(r.user_id), userName: r.user_name, kind: r.kind, fromValue: r.from_value, toValue: r.to_value, note: r.note,
+          ...(d ? { undo: { area: d.area === 'follow' ? 'follow' : 'conf', by: d.by ?? null, at: d.at ? iso(d.at) : iso(r.at) } } : {}),
+        };
+      },
     );
   }),
   // the upsell is always counted by Pilotix: a mark sent by a screen is not taken (only Dellal, inside, marks what it sold in addition)
@@ -1849,7 +1964,7 @@ export const ordersProcs = {
       `UPDATE orders SET locked_by = $2, locked_until = now() + interval '10 minutes'
         WHERE id = (SELECT id ${nextFrom(ctx)} LIMIT 1 FOR UPDATE SKIP LOCKED)
        RETURNING id`,
-      [CONF_TODO, me, skip],
+      [CONF_TODO, me, skip, await triedSince(ctx)],
     );
     if (!r[0]) return { id: null };
     return { id: num(r[0].id) };

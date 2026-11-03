@@ -21,10 +21,20 @@ const value = (L: Line[], pid?: number, vid?: number | null) =>
  * `flags`: for each line, whether it carries the upsell (a product not first ordered, or more of it than first ordered).
  */
 export function upsellOf(orig: OrigLine[], origDiscount: number, lines: Line[], discount: number): { value: number; flags: boolean[] } {
-  const gain = value(lines) - value(orig) - Math.max(0, discount - origDiscount);
+  // the same pieces (same product, same variants, same quantities) typed at a higher price are no upsell — nothing was
+  // sold in addition (a price raised by 1 DA, or the delivery moved into the price, earns no bonus)
+  const shape = (L: Line[], pid: number) =>
+    L.filter((l) => l.productId === pid)
+      .map((l) => `${l.variantId ?? ''}:${l.qty}`)
+      .sort()
+      .join(',');
+  const same = new Set([...new Set(lines.map((l) => l.productId))].filter((pid) => orig.some((o) => o.productId === pid) && shape(lines, pid) === shape(orig, pid)));
+  const bumps = [...same].reduce((s, pid) => s + Math.max(0, value(lines, pid) - value(orig, pid)), 0);
+  const gain = value(lines) - value(orig) - bumps - Math.max(0, discount - origDiscount);
   const v = Math.max(0, Math.round(gain));
   const flags = lines.map((l) => {
     if (v <= 0) return false;
+    if (same.has(l.productId)) return false;
     if (!orig.some((o) => o.productId === l.productId)) return true;
     // a product first ordered: only when it now costs more than it did, and only the lines that grew
     if (value(lines, l.productId) <= value(orig, l.productId)) return false;

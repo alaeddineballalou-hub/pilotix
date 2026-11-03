@@ -7,7 +7,7 @@
 //    their agency's orders and products. A fresh item goes first to someone not already on a call.
 //  - A known customer goes back to the agent who has his other open order.
 //  - An agent not seen for « offlineMin » minutes gives back what he got automatically and never touched.
-import { algiersHour, CONF_STATUSES, CONF_TODO, isWomanName } from '@pilotix/shared';
+import { addWorkMinutes, algiersHour, CONF_STATUSES, CONF_TODO, isWomanName } from '@pilotix/shared';
 import { z } from 'zod';
 import { Db, num, numOrNull } from '../db';
 import { bad, Ctx, forbidden, proc } from '../rpc';
@@ -205,10 +205,12 @@ async function waiting(db: Db, area: Area, ids?: number[]): Promise<Item[]> {
       ? `o.agent_id IS NULL AND o.conf_status = ANY($1) AND NOT o.is_exchange AND o.created_at > now() - interval '30 days'`
       : // every parcel on the road with no agent, alerts first (« Dès l'expédition » takes them all, « Sur alerte » the alerts)
         `o.follow_agent_id IS NULL AND o.follow_status = ANY('{shipped,out_for_delivery,failed,alert,in_exchange}'::text[]) AND $1::text[] IS NOT NULL`;
+  // (an order an agent has open right now — « Commande suivante », « Alerte suivante » — is his: never given to another)
+  const free = `(o.locked_until IS NULL OR o.locked_until < now())`;
   const rows = await db.query(
     `SELECT o.id, o.phone, o.customer_name, o.channel, o.${AGENCY_COL[area]} AS agency, o.route_product_id, o.total, o.wilaya_id, o.follow_status,
             ARRAY(SELECT DISTINCT i.product_id FROM order_items i WHERE i.order_id = o.id AND i.product_id IS NOT NULL) AS products
-       FROM orders o WHERE ${where} ${ids ? 'AND o.id = ANY($2)' : ''} ORDER BY ${area === 'follow' ? "(o.follow_status = 'alert') DESC, " : ''}o.created_at LIMIT 300`,
+       FROM orders o WHERE ${where} AND ${free} ${ids ? 'AND o.id = ANY($2)' : ''} ORDER BY ${area === 'follow' ? "(o.follow_status = 'alert') DESC, " : ''}o.created_at LIMIT 300`,
     ids ? [CONF_TODO, ids] : [CONF_TODO],
   );
   return rows.map((r: any) => ({
@@ -251,8 +253,8 @@ async function prevAgent(db: Db, area: Area, item: Item, a: AssignArea): Promise
 export async function giveTo(db: Db, area: Area, itemId: number, agentId: number, why: string): Promise<boolean> {
   const r = await db.query(
     area === 'conf'
-      ? `UPDATE orders SET agent_id = $2, assigned_at = now(), updated_at = now() WHERE id = $1 AND agent_id IS NULL RETURNING id`
-      : `UPDATE orders SET follow_agent_id = $2, updated_at = now() WHERE id = $1 AND follow_agent_id IS NULL RETURNING id`,
+      ? `UPDATE orders SET agent_id = $2, assigned_at = now(), updated_at = now() WHERE id = $1 AND agent_id IS NULL AND (locked_until IS NULL OR locked_until < now() OR locked_by = $2) RETURNING id`
+      : `UPDATE orders SET follow_agent_id = $2, updated_at = now() WHERE id = $1 AND follow_agent_id IS NULL AND (locked_until IS NULL OR locked_until < now() OR locked_by = $2) RETURNING id`,
     [itemId, agentId],
   );
   if (!r[0]) return false;
@@ -474,6 +476,11 @@ const ON_ROAD_ALERT = `o.follow_status = 'alert' AND COALESCE(o.sub_status, '') 
 /** what counts as acting on an item: a call, a status, a note, a Suivi outcome */
 const ACTED = `('call','conf_status','follow_status','note','sub_status','suivi_motif','edit')`;
 
+/** When an item given at `got` is due to move: `minutes` of the shop's call hours later (the night does not count). */
+async function dueAt(db: Db, got: number, minutes: number): Promise<number> {
+  return addWorkMinutes(got, minutes, await getSetting(db, 'calls'));
+}
+
 /** The items of a scope (the store's own, or one agency's) that waited too long with the same agent. */
 async function overdue(db: Db, area: Area, rot: AssignRotation, now: number, agencyId: number | null): Promise<Overdue[]> {
   const cutoff = new Date(now - rot.minutes * 60_000).toISOString();
@@ -503,20 +510,24 @@ async function overdue(db: Db, area: Area, rot: AssignRotation, now: number, age
             ORDER BY g.at LIMIT 200`,
           [cutoff, rot.noCall],
         );
-  return rows.map((r: any) => ({
-    id: num(r.id),
-    phone: String(r.phone ?? ''),
-    name: String(r.customer_name ?? ''),
-    channel: String(r.channel ?? ''),
-    agencyId: numOrNull(r.agency),
-    productIds: (r.products ?? []).map(num),
-    routeProduct: numOrNull(r.route_product_id),
-    total: num(r.total),
-    wilayaId: numOrNull(r.wilaya_id),
-    cur: num(r.cur),
-    got: Date.parse(new Date(r.got).toISOString()),
-    status: String(r.status ?? ''),
-  }));
+  const calls = await getSetting(db, 'calls');
+  return rows
+    .map((r: any) => ({
+      id: num(r.id),
+      phone: String(r.phone ?? ''),
+      name: String(r.customer_name ?? ''),
+      channel: String(r.channel ?? ''),
+      agencyId: numOrNull(r.agency),
+      productIds: (r.products ?? []).map(num),
+      routeProduct: numOrNull(r.route_product_id),
+      total: num(r.total),
+      wilayaId: numOrNull(r.wilaya_id),
+      cur: num(r.cur),
+      got: Date.parse(new Date(r.got).toISOString()),
+      status: String(r.status ?? ''),
+    }))
+    // (the clock time above is the first sieve; what counts is the time inside the call hours)
+    .filter((x: Overdue) => addWorkMinutes(x.got, rot.minutes, calls) <= now);
 }
 
 /**
@@ -664,7 +675,7 @@ export async function rotateTimes(ctx: Ctx, area: Area, ids: number[]): Promise<
     if (!cfg || !rot?.on || cfg[area].mode === 'manual' || r.with_lead) continue;
     if (area === 'conf' && !(rot.statuses as string[]).includes(String(r.status))) continue;
     if (rot.noCall && r.acted) continue;
-    out.set(num(r.id), Date.parse(new Date(r.got).toISOString()) + rot.minutes * 60_000);
+    out.set(num(r.id), await dueAt(ctx.db, Date.parse(new Date(r.got).toISOString()), rot.minutes));
   }
   return out;
 }

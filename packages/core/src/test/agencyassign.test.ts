@@ -121,6 +121,8 @@ test('the agency own rotation: a late agency order goes to its chosen agent (her
   const [noraS, linaS] = [await inStore('nora@tour.dz'), await inStore('lina@tour.dz')];
   const adb = t.shop((await loadShop(t, { id: ag.id }))!.schema);
   const agentOf = async (id: number) => Number((await shop.db.query('SELECT agent_id FROM orders WHERE id = $1', [id]))[0].agent_id);
+  // the agent's time counts in the store's call hours: all day here, so the test does not depend on the hour it runs
+  await shop.db.query(`INSERT INTO settings (key, value) VALUES ('calls', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [JSON.stringify({ slots: [{ key: 'all', from: 0, to: 24 }], tries: 3, firstMinutes: 15, paceMinutes: 5, cancelAfterNoAnswer: 0 })]);
 
   // only Nora on line: she gets the order; the rotation of the agency: 20 minutes, always to Lina
   await adb.query(`UPDATE profiles SET last_seen_at = now(), presence = 'online' WHERE email = 'nora@tour.dz'`);

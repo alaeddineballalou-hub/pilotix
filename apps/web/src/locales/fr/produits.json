@@ -11,8 +11,8 @@
     "depots": "Dépôts"
   },
   "about": {
-    "stock": "Ce qu’il y a dans chaque dépôt, ce qui est déjà promis aux commandes et ce qui reste à vendre.",
-    "inventaire": "Comptez un dépôt, téléphone en main, puis validez tout en une fois : le stock prend les quantités comptées.",
+    "stock": "Ce qu’il y a dans chaque dépôt, ce qui est déjà promis aux commandes et ce qui reste à vendre. Les produits revenus cassés sont à part (« Cassé »).",
+    "inventaire": "Comptez un dépôt, téléphone en main, puis validez tout en une fois : le stock prend les quantités comptées. Les produits cassés, mis à part, ne se comptent pas ici.",
     "produits": "Vos produits avec leurs prix, leur marge et leur remise maximale, leurs variantes (couleur, taille…) et leurs pièces SAV.",
     "mouvements": "Chaque entrée et sortie de stock : achats, ventes, retours, pertes, inventaires et transferts.",
     "alertes": "Les produits à racheter : en rupture d’abord, puis sous leur seuil d’alerte.",
@@ -88,7 +88,15 @@
     "invalidQty": "Quantité invalide",
     "entryCost": "Prix d’achat de cette entrée (DA / pièce)",
     "entryCostHint": "Le fournisseur a changé son prix ? Écrivez le nouveau : il devient le prix d’achat du produit.",
-    "entryCostChange": "Prix d’achat du produit : {{from}} → {{to}}"
+    "entryCostChange": "Prix d’achat du produit : {{from}} → {{to}}",
+    "fBroken": "Cassé",
+    "empty_broken": "Aucun produit en stock cassé.",
+    "brokenChip": "Cassé : {{n}}",
+    "brokenMenu": "Stock cassé ({{n}})…",
+    "entryCostNeeded": "Saisissez le prix d’achat de cette entrée de stock.",
+    "entryCostLast": "Obligatoire à chaque entrée. Dernier prix : {{cost}}.",
+    "groupVariants_one": "{{count}} variante",
+    "groupVariants_other": "{{count}} variantes"
   },
   "products": {
     "count_one": "{{count}} produit",
@@ -165,8 +173,12 @@
       "transfer_out": "Transfert envoyé",
       "shipped": "Vente expédiée",
       "returned": "Retour client",
-      "exchange_in": "Échange (ancien produit)"
-    }
+      "exchange_in": "Échange (ancien produit)",
+      "broken_return": "Cassé au retour",
+      "repaired": "Réparé (remis en vente)",
+      "scrapped": "Cassé, jeté"
+    },
+    "brokenDelta": "cassé {{n}}"
   },
   "inv": {
     "depot": "Dépôt compté",
@@ -675,5 +687,15 @@
       "assembled": "Il arrive monté ?",
       "use": "Comment l’utiliser et le nettoyer ?"
     }
+  },
+  "broken": {
+    "title": "Stock cassé · {{name}}",
+    "now_one": "{{n}} pièce cassée mise à part à {{depot}} : jamais vendue.",
+    "now_other": "{{n}} pièces cassées mises à part à {{depot}} : jamais vendues.",
+    "sell": "Réparé : remettre en vente",
+    "scrap": "Jeter",
+    "notePh": "ex. réparé, pièce changée",
+    "help": "Les produits cassés restent à part : pas vendus, pas comptés dans l’inventaire. « Réparé » les remet dans le stock vendu ; « Jeter » les sort du stock.",
+    "done": "Stock cassé mis à jour"
   }
 }

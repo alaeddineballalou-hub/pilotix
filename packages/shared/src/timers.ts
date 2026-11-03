@@ -88,6 +88,23 @@ export function nextDue(
   return { kind: at <= now ? 'now' : 'later', at };
 }
 
+/**
+ * The start of the call slot `t` is in (between two slots: of the last one). An order already called since then was
+ * tried in this slot: its next try is in the next slot (one try per slot, as nextDue says).
+ */
+export function slotStartOf(t: number, s: CallSettings): number {
+  const day = algiersDayStart(t);
+  for (let d = 0; d < 8; d++) {
+    let best = -Infinity;
+    for (const sl of s.slots) {
+      const from = day - d * 86_400_000 + sl.from * 3_600_000;
+      if (from <= t && from > best) best = from;
+    }
+    if (best > -Infinity) return best;
+  }
+  return t - 86_400_000;
+}
+
 // ---------------------------------------------------------------- working time (the shop's call slots)
 /** Working minutes between two moments: only the minutes inside the call slots count (nights and breaks do not). */
 export function workMinutes(from: number, to: number, s: CallSettings): number {

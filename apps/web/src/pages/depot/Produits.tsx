@@ -18,7 +18,7 @@ import { Inventaire } from './Inventaire';
 import { useDebounced } from './OrderList';
 import { ImportDialog } from './ImportDialog';
 import { ProductForm } from './ProductForm';
-import { AlertDialog, MoveDialog, TransferDialog } from './StockDialogs';
+import { AlertDialog, BrokenDialog, MoveDialog, TransferDialog } from './StockDialogs';
 import { bidi, Delta, DepotSelect, LevelBar, matches, nameOf, RowMenu, StockRowT, Toolbar, useDepots } from './stockui';
 import './produits.css';
 import { AssignedCatalog } from './AssignedCatalog';
@@ -56,13 +56,15 @@ function DepotProduits({ sub, rest }: PageProps) {
 }
 
 // ---------------------------------------------------------------- Stock
-type Dialog = { kind: 'entry' | 'count' | 'loss' | 'alert' | 'transfer'; row: StockRowT } | null;
-type StockFilter = 'all' | 'low' | 'out' | 'hidden';
+type Dialog = { kind: 'entry' | 'count' | 'loss' | 'alert' | 'transfer' | 'broken'; row: StockRowT } | null;
+type StockFilter = 'all' | 'low' | 'out' | 'hidden' | 'broken';
 const isHidden = (r: StockRowT) => !r.productActive || !r.variantActive;
 /** shown in « Tout »: on sale, or still physically in a depot, or promised to an order */
-const isListed = (r: StockRowT) => !isHidden(r) || r.qty !== 0 || r.reserved !== 0;
+const isListed = (r: StockRowT) => !isHidden(r) || r.qty !== 0 || r.reserved !== 0 || r.broken !== 0;
 const isLow = (r: StockRowT) => !isHidden(r) && r.available <= r.alertQty;
 const isOut = (r: StockRowT) => !isHidden(r) && r.available <= 0;
+/** pieces that came back broken, kept apart (never sold) */
+const isBroken = (r: StockRowT) => r.broken > 0;
 
 function StockTab() {
   const { t } = useTranslation();
@@ -75,7 +77,7 @@ function StockTab() {
   const st = useRpc('catalog.stock', { withHidden: true });
   const inDepot = (st.data ?? []).filter((r) => !wh || r.warehouseId === Number(wh));
   const found = inDepot.filter((r) => !q.trim() || matches(q, nameOf(r), r.sku));
-  const test: Record<StockFilter, (r: StockRowT) => boolean> = { all: isListed, low: isLow, out: isOut, hidden: isHidden };
+  const test: Record<StockFilter, (r: StockRowT) => boolean> = { all: isListed, low: isLow, out: isOut, hidden: isHidden, broken: isBroken };
   const list = found.filter(test[f]);
   const groups = [...new Map(list.map((r) => [r.productId, r.productName])).entries()].map(([productId, productName]) => ({ productId, productName, rows: list.filter((r) => r.productId === productId) }));
   const sum = (fn: (r: StockRowT) => number) => inDepot.reduce((s, r) => s + fn(r), 0);
@@ -103,6 +105,7 @@ function StockTab() {
               { value: 'low', label: t('produits.stock.fLow'), count: found.filter(isLow).length, alert: true },
               { value: 'out', label: t('produits.stock.fOut'), count: found.filter(isOut).length, alert: true },
               { value: 'hidden', label: t('produits.stock.fHidden'), count: found.filter(isHidden).length },
+              ...(found.some(isBroken) || f === 'broken' ? [{ value: 'broken' as const, label: t('produits.stock.fBroken'), count: found.filter(isBroken).length, alert: true }] : []),
             ]}
           />
         </Toolbar>
@@ -126,15 +129,45 @@ function StockTab() {
             <div className="pd-rows">
               {groups.map((group) => (
                 <div key={group.productId}>
-                  <div className="pd-row pd-stock" style={{ alignItems: 'center' }}>
-                    <button type="button" className="btn small ghost" aria-expanded={expanded.has(group.productId)} onClick={() => setExpanded((old) => { const next = new Set(old); next.has(group.productId) ? next.delete(group.productId) : next.add(group.productId); return next; })}>
-                      <Icon name={expanded.has(group.productId) ? 'chevron-down' : 'chevron-right'} /> {group.productName} ({group.rows.length})
-                    </button>
-                    <span className="num">{n(group.rows.reduce((v, r) => v + r.qty, 0))} in stock</span>
-                    <span className="num">{n(group.rows.reduce((v, r) => v + r.reserved, 0))} reserved</span>
-                    <span className="num">{n(group.rows.reduce((v, r) => v + r.available, 0))} available</span>
-
-                  </div>
+                  {(() => {
+                    const open = expanded.has(group.productId);
+                    const total = (fn: (r: StockRowT) => number) => group.rows.reduce((v, r) => v + fn(r), 0);
+                    const broken = total((r) => r.broken);
+                    return (
+                      <button
+                        type="button"
+                        className="pd-group"
+                        aria-expanded={open}
+                        onClick={() =>
+                          setExpanded((old) => {
+                            const next = new Set(old);
+                            next.has(group.productId) ? next.delete(group.productId) : next.add(group.productId);
+                            return next;
+                          })
+                        }
+                      >
+                        <Icon name="chevron" className={`pd-chev ${open ? 'open' : ''}`} />
+                        <b className="pd-gname">{group.productName}</b>
+                        <small className="pd-gcount">{t('produits.stock.groupVariants', { count: group.rows.length })}</small>
+                        <span className="pd-gsum">
+                          <span>
+                            <small>{t('produits.stock.inStock')}</small> <b className="ltr">{n(total((r) => r.qty))}</b>
+                          </span>
+                          <span>
+                            <small>{t('produits.stock.reserved')}</small> <b className="ltr">{n(total((r) => r.reserved))}</b>
+                          </span>
+                          <span>
+                            <small>{t('produits.stock.available')}</small> <b className="ltr">{n(total((r) => r.available))}</b>
+                          </span>
+                          {broken > 0 && (
+                            <span className="bk">
+                              <small>{t('produits.stock.fBroken')}</small> <b className="ltr">{n(broken)}</b>
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    );
+                  })()}
                   {expanded.has(group.productId) && group.rows.map((r) => (
                 <div key={`${r.variantId}-${r.warehouseId}`} className={`pd-row pd-stock ${many ? 'many' : ''} ${isHidden(r) ? 'dim' : ''}`}>
                   <span className="pd-name">
@@ -142,6 +175,11 @@ function StockTab() {
                     <small>
                       <span className="ltr">{r.sku}</span>
                       {isHidden(r) && <span className="chip">{t('produits.products.hidden')}</span>}
+                      {r.broken > 0 && (
+                        <button type="button" className="chip pd-broken" onClick={() => setDlg({ kind: 'broken', row: r })}>
+                          {t('produits.stock.brokenChip', { n: n(r.broken) })}
+                        </button>
+                      )}
                     </small>
                   </span>
                   {many && <span className="pd-depot">{r.warehouseName}</span>}
@@ -169,6 +207,7 @@ function StockTab() {
                       label={t('produits.ui.moreFor', { name: nameOf(r) })}
                       items={[
                         { label: t('produits.stock.loss'), icon: 'minus', onClick: () => setDlg({ kind: 'loss', row: r }) },
+                        ...(r.broken > 0 ? [{ label: t('produits.stock.brokenMenu', { n: n(r.broken) }), icon: 'wrench', onClick: () => setDlg({ kind: 'broken', row: r }) }] : []),
                         { label: t('produits.stock.count'), icon: 'clipboard', onClick: () => setDlg({ kind: 'count', row: r }) },
                         { label: t('produits.stock.alertTitle'), icon: 'alert', onClick: () => setDlg({ kind: 'alert', row: r }) },
                         ...(many ? [{ label: t('produits.stock.transfer'), icon: 'swap', onClick: () => setDlg({ kind: 'transfer', row: r }) }] : []),
@@ -185,7 +224,16 @@ function StockTab() {
         )}
         <p className="pd-note">{t('produits.stock.help')}</p>
       </section>
-      {dlg && (dlg.kind === 'alert' ? <AlertDialog row={dlg.row} onClose={() => setDlg(null)} /> : dlg.kind === 'transfer' ? <TransferDialog row={dlg.row} warehouses={depots} onClose={() => setDlg(null)} /> : <MoveDialog kind={dlg.kind} row={dlg.row} onClose={() => setDlg(null)} />)}
+      {dlg &&
+        (dlg.kind === 'alert' ? (
+          <AlertDialog row={dlg.row} onClose={() => setDlg(null)} />
+        ) : dlg.kind === 'transfer' ? (
+          <TransferDialog row={dlg.row} warehouses={depots} onClose={() => setDlg(null)} />
+        ) : dlg.kind === 'broken' ? (
+          <BrokenDialog row={dlg.row} onClose={() => setDlg(null)} />
+        ) : (
+          <MoveDialog kind={dlg.kind} row={dlg.row} onClose={() => setDlg(null)} />
+        ))}
     </>
   );
 }
@@ -400,7 +448,7 @@ function ProductsTab() {
 }
 
 // ---------------------------------------------------------------- Mouvements de stock
-const REASONS = ['purchase', 'entry', 'count', 'loss', 'transfer_in', 'transfer_out', 'shipped', 'returned', 'exchange_in'];
+const REASONS = ['purchase', 'entry', 'count', 'loss', 'transfer_in', 'transfer_out', 'shipped', 'returned', 'exchange_in', 'broken_return', 'repaired', 'scrapped'];
 
 function MovesTab({ initial }: { initial?: string }) {
   const { t } = useTranslation();
@@ -456,6 +504,7 @@ function MovesTab({ initial }: { initial?: string }) {
                 </span>
                 <span className="a-qty num">
                   <Delta v={m.delta} />
+                  {m.brokenDelta !== 0 && <small className="pd-bk ltr">{t('produits.moves.brokenDelta', { n: `${m.brokenDelta > 0 ? '+' : '−'}${n(Math.abs(m.brokenDelta))}` })}</small>}
                 </span>
                 <span className="pd-sub">
                   <span className="a-kind">

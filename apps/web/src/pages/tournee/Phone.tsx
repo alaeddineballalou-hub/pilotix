@@ -7,6 +7,8 @@
 import { FAIL_REASONS, Order, phoneIntl, RETURN_REASONS } from '@pilotix/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
+import { toastUndo } from '../../lib/undo';
 import type { Out } from '../../lib/backend';
 import { da, wilayaName } from '../../lib/format';
 import { useFullScreen } from '../../lib/fullScreen';
@@ -190,7 +192,9 @@ function Stop({ o, n, shop, livreur, messages }: { o: Order; n: number; shop: Da
   const { t } = useTranslation();
   const [ask, setAsk] = useState(false);
   const [reach, setReach] = useState<'call' | 'message' | null>(null);
-  const set = useAction('orders.setFollow', { success: (r) => (r.changed.length ? t('tournee.saved') : t('tournee.noChange')) });
+  const qc = useQueryClient();
+  // « ↶ Annuler » in the message: a tap by mistake (« Livrée » too early) goes back
+  const set = useAction('orders.setFollow', { onDone: (r) => toastUndo(r.changed.length ? t('tournee.saved') : t('tournee.noChange'), r.changed, () => qc.invalidateQueries()) });
   const call = useAction('orders.logCall', { silent: true });
   const items = o.items.map((i) => `${i.qty} × ${i.name}${i.variantTitle ? ` ${i.variantTitle}` : ''}`).join(' + ');
   return (
@@ -344,7 +348,8 @@ function NotDelivered({ o, onClose }: { o: Order; onClose: () => void }) {
   const [kind, setKind] = useState<'failed' | 'returning'>('failed');
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
-  const set = useAction('orders.setFollow', { success: t('tournee.saved'), onDone: onClose });
+  const qc = useQueryClient();
+  const set = useAction('orders.setFollow', { onDone: (r) => (toastUndo(t('tournee.saved'), r.changed, () => qc.invalidateQueries()), onClose()) });
   const reasons = kind === 'failed' ? FAIL_REASONS : RETURN_REASONS;
   const label = (r: string) => t(`status.${kind === 'failed' ? 'failReason' : 'returnReason'}.${r}`);
   return (

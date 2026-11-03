@@ -57,7 +57,7 @@ type Pay = { light: number; heavy: number; heavyFromKg: number };
 function toCash(r: any, pay: Pay): CashOrder {
   const own = r.company_kind === 'own' || !!r.livreur_id;
   const heavy = Number(r.max_kg) >= pay.heavyFromKg;
-  const share = own && r.follow_status === 'delivered' ? (heavy ? pay.heavy : pay.light) : 0;
+  const share = own && (r.follow_status === 'delivered' || r.follow_status === 'exchanged') ? (heavy ? pay.heavy : pay.light) : 0;
   const total = num(r.total);
   // our own livreurs hand over the whole amount (their share is paid separately); couriers keep their fee
   const cost = own ? 0 : num(r.delivery_cost);
@@ -130,7 +130,8 @@ export async function receive(ctx: Ctx, orderIds: number[], note: string | null,
     const rows = (await tx.query(`SELECT ${COLS} ${FROM} WHERE o.id = ANY($1) FOR UPDATE OF o`, [orderIds])).map((r: any) => toCash(r, pay));
     const bad_ = rows.find((r) => r.cashed);
     if (bad_) throw bad(`${bad_.ref} est déjà encaissée`);
-    const notDelivered = (await tx.query(`SELECT ref FROM orders WHERE id = ANY($1) AND follow_status <> 'delivered'`, [orderIds]))[0];
+    // (« Échangée »: delivered, then its old product came back with an SAV exchange — its money is owed as well)
+    const notDelivered = (await tx.query(`SELECT ref FROM orders WHERE id = ANY($1) AND follow_status NOT IN ('delivered', 'exchanged')`, [orderIds]))[0];
     if (notDelivered) throw bad(`${notDelivered.ref} n’est pas livrée`);
     const groups = new Map<string, CashOrder[]>();
     for (const r of rows) {
@@ -174,7 +175,7 @@ export async function livreursCash(ctx: Ctx, f: { livreurId?: number; from?: str
   const inHand = (await ctx.db.query(`SELECT ${COLS} ${FROM} WHERE o.livreur_id = ANY($1) AND o.follow_status = ANY($2) ORDER BY o.updated_at DESC`, [pIds, FOLLOW_ON_ROAD])).map((r: any) => toCash(r, pay));
   // not cashed: whatever the period (money still owed); cashed: in the period
   const delivered = (
-    await ctx.db.query(`SELECT ${COLS} ${FROM} WHERE o.livreur_id = ANY($1) AND o.follow_status = 'delivered' AND (NOT o.cashed OR (true ${period})) ORDER BY o.delivered_at DESC`, params)
+    await ctx.db.query(`SELECT ${COLS} ${FROM} WHERE o.livreur_id = ANY($1) AND o.follow_status IN ('delivered', 'exchanged') AND (NOT o.cashed OR (true ${period})) ORDER BY o.delivered_at DESC`, params)
   ).map((r: any) => toCash(r, pay));
   const returning = (await ctx.db.query(`SELECT ${COLS} ${FROM} WHERE o.livreur_id = ANY($1) AND o.follow_status = 'returning' ORDER BY o.updated_at DESC`, [pIds])).map((r: any) => toCash(r, pay));
   const handovers = await ctx.db.query(
@@ -276,7 +277,7 @@ export const cashProcs = {
   /** "À recevoir": delivered and not cashed, grouped by company (own livreurs by livreur). Net = paid by the customer − company fee. */
   'cash.due': proc([], z.object({}), async (ctx) => {
     const pay = await payOf(ctx.db);
-    const rows = (await ctx.db.query(`SELECT ${COLS} ${FROM} WHERE o.follow_status = 'delivered' AND NOT o.cashed ORDER BY o.delivered_at ASC NULLS FIRST, o.id`)).map((r: any) => toCash(r, pay));
+    const rows = (await ctx.db.query(`SELECT ${COLS} ${FROM} WHERE o.follow_status IN ('delivered', 'exchanged') AND NOT o.cashed ORDER BY o.delivered_at ASC NULLS FIRST, o.id`)).map((r: any) => toCash(r, pay));
     // orders and SAV tickets are counted apart: a ticket parcel with nothing to collect (free exchange) is not money to receive
     const build = (list: CashOrder[], prefix: string) => {
       const groups = new Map<string, { key: string; companyId: number | null; livreurId: number | null; name: string; kind: string | null; orders: CashOrder[] }>();
@@ -362,7 +363,7 @@ export const cashProcs = {
   /** "Encaisser la sélection" / "Tout encaisser" (allIds of one livreur): money received from a livreur, his share kept. */
   'cash.livreurCollect': proc([], z.object({ livreurId: id, ids: z.array(id).max(3000).optional(), all: z.boolean().optional(), into: CaisseKey.default('main') }), async (ctx, i) => {
     let list = i.ids ?? [];
-    if (i.all) list = (await ctx.db.query(`SELECT id FROM orders WHERE livreur_id=$1 AND follow_status='delivered' AND NOT cashed`, [i.livreurId])).map((r: any) => num(r.id));
+    if (i.all) list = (await ctx.db.query(`SELECT id FROM orders WHERE livreur_id=$1 AND follow_status IN ('delivered', 'exchanged') AND NOT cashed`, [i.livreurId])).map((r: any) => num(r.id));
     if (!list.length) throw bad('Rien à encaisser');
     const other = (await ctx.db.query('SELECT ref FROM orders WHERE id = ANY($1) AND (livreur_id IS NULL OR livreur_id <> $2) LIMIT 1', [list, i.livreurId]))[0];
     if (other) throw bad(`${other.ref} n’est pas un colis de ce livreur`);

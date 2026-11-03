@@ -711,6 +711,11 @@ dialog.modal::backdrop { background: rgba(10, 15, 20, .55); }
 .toast { background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-weight: 700; box-shadow: 0 6px 20px rgba(0,0,0,.25); transition: opacity .4s; max-width: 92vw; }
 .toast.ok { background: var(--ok); color: var(--surface); } .toast.bad { background: var(--coral); color: var(--surface); border-radius: 12px; }
 .toast.out { opacity: 0; }
+/* a message with a button (« ↶ Annuler » right after a change) */
+.toast.has-act { display: inline-flex; align-items: center; gap: 12px; padding: 6px 6px 6px 16px; }
+[dir='rtl'] .toast.has-act { padding: 6px 16px 6px 6px; }
+.toast-act { min-height: 34px; padding: 0 14px; border: 0; border-radius: 999px; background: rgb(255 255 255 / .22); color: inherit; font: inherit; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.toast-act:hover, .toast-act:focus-visible { background: rgb(255 255 255 / .34); outline: none; }
 
 /* ---------------------------------------------------------------- login */
 .center-box { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; gap: 10px; text-align: center; }
@@ -1347,6 +1352,9 @@ input.bjsav-q{width:76px!important}.bjsav-pp{display:flex;flex-direction:column;
 .bjsc-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 700; font-size: 15px; overflow-wrap: anywhere; }
 .bjsc-why { margin: 0; font-size: 17px; font-weight: 800; }
 .bjsc-fix { margin: 0; font-weight: 600; }
+/* after a good scan: « ↶ Annuler », and « Produit cassé » after a return */
+.bjsc-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.bjsc-acts .btn { flex: 1 1 160px; justify-content: center; }
 .bjsc-kv { margin-top: 4px; }
 .bjsc-ev { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: var(--muted); }
 .bjsc-spin { width: 20px; height: 20px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--navy); animation: spin .8s linear infinite; }

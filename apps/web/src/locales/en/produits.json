@@ -11,8 +11,8 @@
     "depots": "Depots"
   },
   "about": {
-    "stock": "What each depot holds, what is already promised to orders, and what is left to sell.",
-    "inventaire": "Count a depot, phone in hand, then validate everything at once: the stock takes the counted quantities.",
+    "stock": "What each depot holds, what is already promised to orders, and what is left to sell. Products that came back broken are kept apart (“Broken”).",
+    "inventaire": "Count a depot, phone in hand, then validate everything at once: the stock takes the counted quantities. Broken products, kept apart, are not counted here.",
     "produits": "Your products with their prices, margin and maximum discount, their variants (colour, size…) and their SAV parts.",
     "mouvements": "Every stock entry and exit: purchases, sales, returns, losses, counts and transfers.",
     "alertes": "Products to buy again: out of stock first, then under their alert level.",
@@ -88,7 +88,15 @@
     "invalidQty": "Invalid quantity",
     "entryCost": "Purchase price of this entry (DA / piece)",
     "entryCostHint": "Did the supplier change its price? Type the new one: it becomes the product's purchase price.",
-    "entryCostChange": "Product purchase price: {{from}} → {{to}}"
+    "entryCostChange": "Product purchase price: {{from}} → {{to}}",
+    "fBroken": "Broken",
+    "empty_broken": "No broken stock.",
+    "brokenChip": "Broken: {{n}}",
+    "brokenMenu": "Broken stock ({{n}})…",
+    "entryCostNeeded": "Type the purchase price of this stock entry.",
+    "entryCostLast": "Required for every entry. Last price: {{cost}}.",
+    "groupVariants_one": "{{count}} variant",
+    "groupVariants_other": "{{count}} variants"
   },
   "products": {
     "count_one": "{{count}} product",
@@ -165,8 +173,12 @@
       "transfer_out": "Transfer sent",
       "shipped": "Sale shipped",
       "returned": "Customer return",
-      "exchange_in": "Exchange (old product)"
-    }
+      "exchange_in": "Exchange (old product)",
+      "broken_return": "Broken on return",
+      "repaired": "Repaired (back on sale)",
+      "scrapped": "Broken, thrown away"
+    },
+    "brokenDelta": "broken {{n}}"
   },
   "inv": {
     "depot": "Depot counted",
@@ -675,5 +687,15 @@
       "assembled": "Does it come assembled?",
       "use": "How do I use and clean it?"
     }
+  },
+  "broken": {
+    "title": "Broken stock · {{name}}",
+    "now_one": "{{n}} broken piece kept apart at {{depot}}: never sold.",
+    "now_other": "{{n}} broken pieces kept apart at {{depot}}: never sold.",
+    "sell": "Repaired: back on sale",
+    "scrap": "Throw away",
+    "notePh": "e.g. repaired, part replaced",
+    "help": "Broken products stay apart: not sold, not counted in the stock count. “Repaired” puts them back in the stock you sell; “Throw away” takes them out of stock.",
+    "done": "Broken stock updated"
   }
 }

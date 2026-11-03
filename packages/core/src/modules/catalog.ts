@@ -5,7 +5,7 @@ import { Db, iso, num, numOrNull, Where } from '../db';
 import { bad, Ctx, forbidden, hasRole, notFound, proc, withActionLock } from '../rpc';
 import { getSetting } from '../settings';
 import { cancelParcel, sendOrders } from './delivery';
-import { assignCompanies, getOrder, setFollow } from './orders';
+import { addEvent, assignCompanies, getOrder, setFollow } from './orders';
 import { landingSettings, quickCreatePage } from './landingquery';
 import { RESERVED } from './stockquery';
 import { releaseNoStock } from './nostock';
@@ -86,6 +86,8 @@ export interface Movement {
   warehouseId: number;
   warehouseName: string;
   delta: number;
+  /** what it changed in the broken stock (« Stock cassé »): + came back broken, − repaired or thrown away */
+  brokenDelta: number;
   reason: string;
   orderId: number | null;
   orderRef: string | null;
@@ -203,8 +205,8 @@ export async function stockRows(db: Db, f: z.infer<typeof StockInput>): Promise<
   w.add('(s.variant_id IS NOT NULL OR wh.id = (SELECT id FROM warehouses WHERE active ORDER BY is_default DESC, id LIMIT 1) OR COALESCE(r.n, 0) <> 0)');
   if (f.warehouseId) w.add('wh.id = ?', f.warehouseId);
   if (f.variantIds) w.add('v.id = ANY(?)', f.variantIds);
-  if (!f.withHidden) w.add('((p.active AND v.active) OR COALESCE(s.qty, 0) <> 0 OR COALESCE(r.n, 0) <> 0)');
-  else w.add('(p.archived_at IS NULL OR COALESCE(s.qty, 0) <> 0 OR COALESCE(r.n, 0) <> 0)');
+  if (!f.withHidden) w.add('((p.active AND v.active) OR COALESCE(s.qty, 0) <> 0 OR COALESCE(s.broken, 0) <> 0 OR COALESCE(r.n, 0) <> 0)');
+  else w.add('(p.archived_at IS NULL OR COALESCE(s.qty, 0) <> 0 OR COALESCE(s.broken, 0) <> 0 OR COALESCE(r.n, 0) <> 0)');
   if (f.q?.trim()) {
     const q = f.q.trim();
     w.add(`((p.name || ' ' || v.title) ILIKE '%' || ? || '%' OR v.sku ILIKE '%' || ? || '%' OR p.sku ILIKE '%' || ? || '%')`, q, q, q);
@@ -213,7 +215,7 @@ export async function stockRows(db: Db, f: z.infer<typeof StockInput>): Promise<
   const rows = await db.query(
     `WITH r AS (${RESERVED})
      SELECT v.id AS variant_id, p.id AS product_id, p.name, v.title, v.sku, wh.id AS wid, wh.name AS wname,
-            COALESCE(s.qty, 0) AS qty, COALESCE(s.alert_qty, v.alert_qty, p.alert_qty, 0) AS alert_qty, COALESCE(r.n, 0) AS reserved, COALESCE(v.cost, p.cost) AS cost, p.active AS pactive, v.active AS vactive
+            COALESCE(s.qty, 0) AS qty, COALESCE(s.broken, 0) AS broken, COALESCE(s.alert_qty, v.alert_qty, p.alert_qty, 0) AS alert_qty, COALESCE(r.n, 0) AS reserved, COALESCE(v.cost, p.cost) AS cost, p.active AS pactive, v.active AS vactive
      FROM product_variants v JOIN products p ON p.id = v.product_id CROSS JOIN warehouses wh
      LEFT JOIN stock s ON s.variant_id = v.id AND s.warehouse_id = wh.id
      LEFT JOIN r ON r.variant_id = v.id AND r.wid = wh.id
@@ -237,6 +239,7 @@ export async function stockRows(db: Db, f: z.infer<typeof StockInput>): Promise<
       available: qty - reserved,
       alertQty: num(r.alert_qty),
       cost: num(r.cost),
+      broken: num(r.broken),
       productActive: !!r.pactive,
       variantActive: !!r.vactive,
     };
@@ -278,6 +281,87 @@ export async function moveStock(
   ]);
   // stock came in: the oldest « sans stock » orders it can now serve go to « À préparer »
   if (a.delta > 0) await releaseNoStock(db, a.userId, [a.variantId]);
+}
+
+/**
+ * A move of the broken stock (« Stock cassé », kept apart, never sold): `sellable` what changes in the stock that is
+ * sold, `broken` what changes in the broken stock — a return found broken (−n sold, +n broken), the old product of an
+ * exchange for a defect (+n broken), repaired (+n sold, −n broken), thrown away (−n broken).
+ */
+export async function brokenMove(
+  db: Db,
+  a: { variantId: number; warehouseId: number; sellable: number; broken: number; reason: string; orderId?: number | null; userId: number | null; note?: string | null },
+) {
+  if (!a.sellable && !a.broken) return;
+  await db.query(
+    `INSERT INTO stock (variant_id, warehouse_id, qty, broken) VALUES ($1,$2,$3,$4)
+     ON CONFLICT (variant_id, warehouse_id) DO UPDATE SET qty = stock.qty + EXCLUDED.qty, broken = stock.broken + EXCLUDED.broken`,
+    [a.variantId, a.warehouseId, a.sellable, a.broken],
+  );
+  await db.query('INSERT INTO stock_movements (variant_id, warehouse_id, delta, broken_delta, reason, order_id, user_id, note) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', [
+    a.variantId, a.warehouseId, a.sellable, a.broken, a.reason, a.orderId ?? null, a.userId, a.note ?? null,
+  ]);
+  // repaired: back on sale, the oldest « sans stock » orders it can serve go to « À préparer »
+  if (a.sellable > 0) await releaseNoStock(db, a.userId, [a.variantId]);
+}
+
+/**
+ * « Cassé » after the depot received a return (or the old product of an exchange): what came back to the stock that is
+ * sold with this parcel goes to the broken stock (never sold). Once: what is already there is not moved again.
+ */
+export async function markBroken(ctx: Ctx, orderId: number) {
+  const o = (await ctx.db.query('SELECT id, ref, is_exchange, original_order_id FROM orders WHERE id = $1', [orderId]))[0];
+  if (!o) throw notFound('Commande introuvable');
+  // an exchange parcel: its old product came back on the first order (« exchange_in »)
+  const ids = [num(o.id), ...(o.is_exchange && o.original_order_id ? [num(o.original_order_id)] : [])];
+  const moved = await withActionLock(ctx.db, `broken:${o.id}`, ctx.session.profile.id, 'Déjà en cours sur un autre poste', () =>
+    ctx.db.tx(async (tx) => {
+      const back = await tx.query(
+        `SELECT m.order_id, m.variant_id, m.warehouse_id,
+                sum(CASE WHEN m.reason = 'broken_return' THEN 0 ELSE m.delta END)::int AS came,
+                sum(CASE WHEN m.reason = 'broken_return' THEN m.broken_delta ELSE 0 END)::int AS done
+           FROM stock_movements m WHERE m.order_id = ANY($1) AND m.reason IN ('returned', 'exchange_in', 'broken_return')
+          GROUP BY 1, 2, 3`,
+        [ids],
+      );
+      let n = 0;
+      for (const b of back) {
+        const left = num(b.came) - num(b.done);
+        if (left <= 0) continue;
+        // (what is still in the stock that is sold: never more)
+        const have = num((await tx.query('SELECT qty FROM stock WHERE variant_id = $1 AND warehouse_id = $2 FOR UPDATE', [b.variant_id, b.warehouse_id]))[0]?.qty);
+        const take = Math.min(left, Math.max(0, have));
+        if (take <= 0) continue;
+        await brokenMove(tx, { variantId: num(b.variant_id), warehouseId: num(b.warehouse_id), sellable: -take, broken: take, reason: 'broken_return', orderId: num(b.order_id), userId: ctx.session.profile.id, note: `Cassé au retour (${o.ref})` });
+        n += take;
+      }
+      if (n) await addEvent(tx, num(o.id), ctx.session.profile.id, 'note', null, 'event', `Produit cassé au retour : ${n} pièce${n > 1 ? 's' : ''} en stock cassé`);
+      return n;
+    }),
+  );
+  if (!moved) throw bad('Rien à mettre en stock cassé : déjà fait, ou ce colis n’a rien remis en stock.');
+  ctx.emit({ type: 'stock' });
+  return { moved };
+}
+
+/** The broken stock of a product in a depot: repaired (back on sale) or thrown away. */
+export async function fixBroken(ctx: Ctx, i: { variantId: number; warehouseId: number; qty: number; to: 'sell' | 'scrap'; note?: string | null }) {
+  await ctx.db.tx(async (tx) => {
+    const s = (await tx.query('SELECT broken FROM stock WHERE variant_id = $1 AND warehouse_id = $2 FOR UPDATE', [i.variantId, i.warehouseId]))[0];
+    const have = num(s?.broken);
+    if (have < i.qty) throw bad(have ? `Seulement ${have} en stock cassé` : 'Rien en stock cassé pour ce produit');
+    await brokenMove(tx, {
+      variantId: i.variantId,
+      warehouseId: i.warehouseId,
+      sellable: i.to === 'sell' ? i.qty : 0,
+      broken: -i.qty,
+      reason: i.to === 'sell' ? 'repaired' : 'scrapped',
+      userId: ctx.session.profile.id,
+      note: i.note?.trim() || null,
+    });
+  });
+  ctx.emit({ type: 'stock' });
+  return { ok: true };
 }
 
 async function ensureVariantAndDepot(db: Db, variantId: number, warehouseId: number) {
@@ -360,7 +444,9 @@ export async function stockTransfer(ctx: Ctx, i: z.infer<typeof TransferInput>) 
   const r = await ctx.db.tx(async (tx) => {
     await ensureVariantAndDepot(tx, i.variantId, i.from);
     await ensureVariantAndDepot(tx, i.variantId, i.to);
-    const have = await currentQty(tx, i.variantId, i.from);
+    // locked like any stock change: two transfers at the same moment never both take the same pieces
+    await tx.query(`INSERT INTO stock (variant_id, warehouse_id, qty) VALUES ($1, $2, 0) ON CONFLICT (variant_id, warehouse_id) DO NOTHING`, [i.variantId, i.from]);
+    const have = num((await tx.query('SELECT qty FROM stock WHERE variant_id = $1 AND warehouse_id = $2 FOR UPDATE', [i.variantId, i.from]))[0]?.qty);
     if (have < i.qty) throw bad(`Stock insuffisant dans ce dépôt (${have})`);
     const me = ctx.session.profile.id;
     await moveStock(tx, { variantId: i.variantId, warehouseId: i.from, delta: -i.qty, reason: 'transfer_out', userId: me, note: i.note });
@@ -722,7 +808,8 @@ export async function scanRules(ctx: Ctx, o: Order, code: string, mode: ScanMode
     if (o.isExchange && f !== 'returning') return bad_(T('exchangeNotReturn'), T('exchangeNotReturnFix'));
     if (f === 'returned') return bad_(T('returnAlready', { at: atIn(lang, o.returnedAt) }), T('returnAlreadyFix'));
     if (f === 'delivered') return bad_(T('deliveredNotReturn'), T('deliveredNotReturnFix'));
-    if (f !== 'returning') return bad_(T('notReturning', { status: st(o) }), T('notReturningFix'));
+    // (a parcel that left and was cancelled — by the company or before this rule — comes back the same way)
+    if (f !== 'returning' && !(f === 'cancelled' && o.shippedAt && !o.returnedAt)) return bad_(T('notReturning', { status: st(o) }), T('notReturningFix'));
     await setFollow(ctx, { ids: [o.id], status: 'returned', note: 'reçu au dépôt (scan)' });
     return { kind: 'ok', code, order: await getOrder(ctx, o.id), why: T('okReturn', { items: itemsText(o) || T('products') }), did: 'return' };
   }
@@ -740,7 +827,10 @@ export async function scanRules(ctx: Ctx, o: Order, code: string, mode: ScanMode
     return { kind: 'bad', code, order: x, why: T('exNotDone', { ref: x.ref, status: st(x) }), fix: T('exNotDoneFix') };
   // what really comes back: the lines the SAV exchanged (kept on the ticket), not the whole original order;
   // a parts exchange brings nothing back (the article stays with the customer)
-  const tk = (await ctx.db.query('SELECT exchange_kind, exchange_back FROM complaints WHERE exchange_order_id = $1 ORDER BY id DESC LIMIT 1', [x.id]))[0];
+  const tk = (await ctx.db.query('SELECT exchange_kind, exchange_back, type FROM complaints WHERE exchange_order_id = $1 ORDER BY id DESC LIMIT 1', [x.id]))[0];
+  // « Produit défectueux »: the old product comes back broken — to the broken stock (never sold again; « Remettre en
+  // vente » if the depot finds it good)
+  const defect = tk?.type === 'defect';
   if (tk?.exchange_kind === 'parts') return { kind: 'bad', code, order: x, why: T('parts', { ref: x.ref }), fix: T('nothingBack') };
   const kept = tk?.exchange_back ? ((typeof tk.exchange_back === 'string' ? JSON.parse(tk.exchange_back) : tk.exchange_back) as { variantId: number; qty: number }[]) : null;
   const items = kept ? kept.map((b) => ({ variantId: num(b.variantId) as number | null, qty: num(b.qty) })) : orig.items.filter((i) => i.variantId).map((i) => ({ variantId: i.variantId, qty: i.qty }));
@@ -752,7 +842,9 @@ export async function scanRules(ctx: Ctx, o: Order, code: string, mode: ScanMode
     ctx.db.tx(async (tx) => {
       const mv = await tx.query('SELECT m.created_at, p.name FROM stock_movements m LEFT JOIN profiles p ON p.id = m.user_id WHERE m.note = $1 LIMIT 1', [tag]);
       if (mv[0]) return mv[0];
-      for (const i of items) await moveStock(tx, { variantId: i.variantId!, warehouseId: wh, delta: i.qty, reason: 'exchange_in', orderId: orig.id, userId: ctx.session.profile.id, note: tag });
+      for (const i of items)
+        if (defect) await brokenMove(tx, { variantId: i.variantId!, warehouseId: wh, sellable: 0, broken: i.qty, reason: 'exchange_in', orderId: orig.id, userId: ctx.session.profile.id, note: tag });
+        else await moveStock(tx, { variantId: i.variantId!, warehouseId: wh, delta: i.qty, reason: 'exchange_in', orderId: orig.id, userId: ctx.session.profile.id, note: tag });
       return null;
     }),
   );
@@ -763,7 +855,7 @@ export async function scanRules(ctx: Ctx, o: Order, code: string, mode: ScanMode
     // (a follow-up status: set for the depot as the suivi would)
     await setFollow({ ...ctx, session: { ...ctx.session, roles: [...ctx.session.roles, 'suivi'] } }, { ids: [orig.id], status: 'exchanged', note: `Ancien produit revenu avec l’échange ${x.ref}` }, { system: true });
   const backText = kept ? T('exchangedItems', { n: items.reduce((s, i) => s + i.qty, 0) }) : itemsText(orig);
-  return { kind: 'ok', code, order: x, why: T('okExchange', { items: backText }), fix: T('okExchangeFix', { ref: orig.ref }), did: 'exchange' };
+  return { kind: 'ok', code, order: x, why: T(defect ? 'okExchangeBroken' : 'okExchange', { items: backText }), fix: T('okExchangeFix', { ref: orig.ref }), did: 'exchange' };
 }
 
 export async function scan(ctx: Ctx, i: { code?: string; orderId?: number; mode: ScanMode; lang?: ScanLang }): Promise<ScanResult> {
@@ -988,6 +1080,14 @@ export const catalogProcs = {
 
   'catalog.stock': proc([...DEPOT], StockInput, (ctx, i) => stockRows(ctx.db, i)),
   'catalog.move': proc([...DEPOT], MoveInput, (ctx, i) => stockMove(ctx, i)),
+  /** « Cassé » after a return (or an exchange's old product) was received: what it put back goes to the broken stock. */
+  'stock.markBroken': proc([...DEPOT], z.object({ orderId: id }), (ctx, i) => markBroken(ctx, i.orderId)),
+  /** The broken stock of a product: repaired (back on sale) or thrown away. */
+  'stock.fixBroken': proc(
+    [...DEPOT],
+    z.object({ variantId: id, warehouseId: id, qty: z.number().int().min(1).max(1_000_000), to: z.enum(['sell', 'scrap']), note: z.string().max(300).nullable().optional() }),
+    (ctx, i) => fixBroken(ctx, i),
+  ),
   'catalog.transfer': proc([...DEPOT], TransferInput, (ctx, i) => stockTransfer(ctx, i)),
   'catalog.setAlert': proc([...DEPOT], z.object({ variantId: id, warehouseId: id, alertQty: z.number().int().min(0).max(1_000_000) }), async (ctx, i) => {
     await ensureVariantAndDepot(ctx.db, i.variantId, i.warehouseId);
@@ -1036,7 +1136,7 @@ export const catalogProcs = {
       return {
         rows: rows.map((r: any) => ({
           id: num(r.id), at: iso(r.created_at), variantId: num(r.variant_id), label: label(r.name, r.title), sku: r.sku, warehouseId: num(r.warehouse_id), warehouseName: r.wname,
-          delta: num(r.delta), reason: r.reason, orderId: numOrNull(r.order_id), orderRef: r.ref ?? null, userName: r.uname ?? null, note: r.note ?? null,
+          delta: num(r.delta), brokenDelta: num(r.broken_delta), reason: r.reason, orderId: numOrNull(r.order_id), orderRef: r.ref ?? null, userName: r.uname ?? null, note: r.note ?? null,
           purchaseId: numOrNull(r.purchase_id), purchaseRef: r.pref ?? null, inventoryRef: r.iref ?? null,
         })),
         total,

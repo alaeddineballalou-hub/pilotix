@@ -363,7 +363,8 @@
       "motif_resolved": "Suivi : traité · Résolu · {{m}}",
       "motif_lost": "Suivi : traité · Perdu · {{m}}",
       "suivi_stuck": "Suivi : colis bloqué traité",
-      "rotate": "Passée à un autre agent"
+      "rotate": "Passée à un autre agent",
+      "undo": "↶ Annulé : « {{what}} » (fait par {{by}}) → retour à « {{back}} »"
     },
     "addNote": "Ajouter une note",
     "noteSaved": "Note ajoutée",
@@ -406,7 +407,12 @@
     "feesApi": "d’après l’API {{name}}",
     "feesPaid": "retenu par {{name}} au paiement",
     "feesRule": "d’après vos tarifs",
-    "feesHeavier": "Pesé {{kg}} kg par {{name}} : surpoids compté"
+    "feesHeavier": "Pesé {{kg}} kg par {{name}} : surpoids compté",
+    "delete": "Supprimer la commande",
+    "deleteT": "Supprimer {{ref}} ?",
+    "deleteAsk": "Elle disparaît pour de bon, avec son historique. Seulement une commande qui n’est pas partie, sans ticket SAV ni réclamation.",
+    "deleteOk": "Oui, supprimer",
+    "deleted": "Commande supprimée"
   },
   "ph": {
     "per": {
@@ -538,5 +544,43 @@
     "ready": "Payé par {{name}} : à récupérer",
     "received": "Argent reçu",
     "ref": "paiement {{ref}}"
+  },
+  "undo": {
+    "do": "Annuler",
+    "yes": "Oui, annuler",
+    "no": "Non, garder",
+    "done": "Changement annulé",
+    "system": "Pilotix",
+    "last": "Dernier changement : « {{what}} »",
+    "askT": "Annuler « {{what}} » ?",
+    "askBy": "Fait par {{by}}, {{when}}. Voici ce qui va se passer :",
+    "some": "{{done}} sur {{count}} annulées — {{why}}",
+    "why": {
+      "courier": "Statut donné par la société de livraison : corrigez-le chez elle.",
+      "sav": "Colis d’un ticket SAV : changez-le depuis le ticket.",
+      "swap": "Colis swappé : changez-le depuis le Suivi.",
+      "left": "Déjà parti du dépôt : changez plutôt le statut de livraison.",
+      "cashed": "Argent déjà en caisse : annulez d’abord le versement.",
+      "bag": "Dans un sac de ramassage : retirez-le d’abord du sac (Dépôt › Dispatchées).",
+      "held": "{{holder}} est sur cette commande en ce moment.",
+      "other": "Fait par {{by}} : lui seul (24 h) ou un responsable peut l’annuler.",
+      "old": "Plus de 24 h : demandez à un responsable.",
+      "moved": "La commande a changé depuis.",
+      "nothing": "Rien à remettre."
+    },
+    "fx": {
+      "back": "La commande revient à « {{s}} ».",
+      "leavesDepot": "Elle sort du dépôt : le dépôt est prévenu, ce qui était pris retourne en rayon.",
+      "courierCancel": "Le colis créé chez la société de livraison est annulé.",
+      "toDepot": "Elle revient au dépôt, « À préparer ».",
+      "call": "Cet appel n’est plus compté.",
+      "stockBack": "Le stock revient au dépôt (+{{n}}).",
+      "stockOut": "Le stock ressort (−{{n}}) : le colis n’était pas revenu.",
+      "notDelivered": "Elle n’est plus comptée livrée (ni pour le client, ni pour la paie).",
+      "alertClosed": "L’alerte rouge du dépôt est fermée.",
+      "msgStopped": "Le message au client qui attendait n’est pas envoyé.",
+      "repick": "Ses produits sont à reprendre : ce qui était déjà pris attend en premier au dépôt.",
+      "resend": "Son colis est recréé chez la société de livraison (nouveau numéro)."
+    }
   }
 }

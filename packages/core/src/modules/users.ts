@@ -1,4 +1,4 @@
-import { LANGUAGES, normalizeAccountPhone, Profile, ROLES } from '@pilotix/shared';
+import { CONF_TODO, expandRoles, LANGUAGES, normalizeAccountPhone, Profile, ROLES, type Role } from '@pilotix/shared';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { Db, isoOrNull, num, numOrNull } from '../db';
@@ -390,6 +390,20 @@ export const usersProcs = {
     const phone = b.phone ? await teamPhone(ctx, b.phone, { id: b.id, email: b.email ?? String((await ctx.db.query('SELECT email FROM profiles WHERE id = $1', [b.id]))[0]?.email ?? '') }) : null;
     const willBeActive = b.active ?? !!before?.active;
     const wasDriver = !!before?.active && (before?.roles as string[] | undefined)?.includes('livreur');
+    // money still in his caisse: it would leave every caisse screen — moved to another caisse first
+    const staffRoles = ['confirmation', 'suivi', 'depot', 'agent_manager'];
+    const nextRoles = (b.roles ?? (before?.roles as string[] | undefined) ?? []) as string[];
+    const keepsCaisse = willBeActive && !nextRoles.includes('admin') && !nextRoles.includes('vendeur') && nextRoles.some((x) => staffRoles.includes(x));
+    if (before?.active && !keepsCaisse) {
+      const key = `u${b.id}`;
+      const left = num(
+        (await ctx.db.query(
+          `SELECT COALESCE((SELECT sum(net) FROM cash_handovers WHERE cancelled_at IS NULL AND received_into = $1), 0) + COALESCE((SELECT sum(amount) FROM cash_moves WHERE cancelled_at IS NULL AND caisse = $1), 0) AS v`,
+          [key],
+        ))[0]?.v,
+      );
+      if (left !== 0) throw bad(`Il reste ${left} DA dans la caisse de cette personne : transférez-les d’abord vers une autre caisse (Caisse › Transférer).`);
+    }
     if (willBeActive && (b.roles ?? (before?.roles as string[] | undefined) ?? []).includes('livreur') && !wasDriver) await needDriverSeat(ctx, b.id);
     let r: any;
     try {
@@ -410,6 +424,37 @@ export const usersProcs = {
     }
     if (!r) throw notFound();
     if (b.sellers !== undefined) r = (await ctx.db.query('UPDATE profiles SET agency_sellers = $2 WHERE id = $1 RETURNING *', [b.id, sellers ? JSON.stringify(sellers) : null]))[0];
+    // no longer working here (closed, or without the role): his work still to do goes back to the team
+    if (before?.active) await releaseWork(ctx, b.id, !!r.active, (r.roles ?? []) as Role[], (before.roles ?? []) as Role[]);
     return toProfile(r);
   }),
 };
+
+/**
+ * A person closed, or without the confirmation / Suivi role any more: the orders still to call and the parcels he
+ * followed go back to the queues (else nobody would ever see them — the others only see their own and the free ones).
+ */
+export async function releaseWork(ctx: Ctx, profileId: number, active: boolean, roles: Role[], had: Role[]) {
+  const r = expandRoles(roles);
+  const h = expandRoles(had);
+  const me = ctx.session.profile.id;
+  // (only what changed: a manager edited keeps the orders he holds)
+  if (h.includes('confirmation') && (!active || !r.includes('confirmation'))) {
+    const rows = await ctx.db.query(
+      `UPDATE orders SET agent_id = NULL, assigned_at = NULL, locked_by = NULL, locked_until = NULL, updated_at = now()
+        WHERE agent_id = $1 AND conf_status = ANY($2) AND shipped_at IS NULL RETURNING id`,
+      [profileId, CONF_TODO],
+    );
+    for (const o of rows) await ctx.db.query(`INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, note) VALUES ($1, $2, 'note', NULL, 'event', 'Rendue à la file : son agent ne travaille plus ici')`, [o.id, me]);
+  }
+  if (h.includes('suivi') && (!active || !r.includes('suivi'))) {
+    const rows = await ctx.db.query(
+      `UPDATE orders SET follow_agent_id = NULL, locked_by = CASE WHEN locked_by = $1 THEN NULL ELSE locked_by END,
+          locked_until = CASE WHEN locked_by = $1 THEN NULL ELSE locked_until END, updated_at = now()
+        WHERE follow_agent_id = $1 AND follow_status IN ('shipped', 'out_for_delivery', 'failed', 'alert', 'in_exchange') RETURNING id`,
+      [profileId],
+    );
+    for (const o of rows) await ctx.db.query(`INSERT INTO order_events (order_id, user_id, kind, from_value, to_value, note) VALUES ($1, $2, 'note', NULL, 'event', 'Rendue à la file : son agent de suivi ne travaille plus ici')`, [o.id, me]);
+  }
+  if (!active) await ctx.db.query('UPDATE orders SET locked_by = NULL, locked_until = NULL WHERE locked_by = $1', [profileId]);
+}

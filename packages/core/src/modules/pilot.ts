@@ -266,7 +266,8 @@ const wName = (id: number) => `${String(id).padStart(2, '0')} ${WILAYAS[id - 1] 
 
 export const pilotProcs = {
   /** The mode, the rules and their clashes, the companies (where each delivers at home), the products, the default. */
-  'pilot.get': proc(null, z.object({}), async (ctx) => {
+  // (the office's screens: a livreur or a marketer has no business with the routing rules and the whole catalogue)
+  'pilot.get': proc(['confirmation', 'suivi', 'depot'], z.object({}), async (ctx) => {
     const cfg = await pilotConfig(ctx.db);
     const companies = await ctx.db.query(`SELECT c.id, c.name, c.kind, c.active FROM delivery_companies c ORDER BY c.active DESC, c.id`);
     const served = await servedWilayas(ctx.db);

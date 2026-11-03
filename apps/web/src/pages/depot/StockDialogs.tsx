@@ -18,7 +18,7 @@ export function MoveDialog({ kind, row, onClose }: { kind: 'entry' | 'count' | '
   const submit = () => {
     if (qty === '' || qty < (kind === 'count' ? 0 : 1)) return toast(t('produits.stock.invalidQty'), 'bad');
     if (kind === 'count' && qty === row.qty) return onClose();
-    if (kind === 'entry' && (cost === '' || !Number.isInteger(cost) || cost < 0)) return toast('Saisissez le prix d’achat de cette entrée de stock.', 'bad');
+    if (kind === 'entry' && (cost === '' || !Number.isInteger(cost) || cost < 0)) return toast(t('produits.stock.entryCostNeeded'), 'bad');
     move.mutate({ variantId: row.variantId, warehouseId: row.warehouseId, kind, qty, note: note.trim() || null, ...(kind === 'entry' ? { unitCost: Number(cost) } : {}) });
   };
   const after = qty === '' ? null : kind === 'entry' ? row.qty + qty : kind === 'loss' ? row.qty - qty : qty;
@@ -57,7 +57,7 @@ export function MoveDialog({ kind, row, onClose }: { kind: 'entry' | 'count' | '
           )}
         </p>
         {kind === 'entry' && (
-          <Field label={<>{t('produits.stock.entryCost')} <b aria-label="required">*</b></>} hint={cost !== '' && cost !== row.cost ? t('produits.stock.entryCostChange', { from: bidi(da(row.cost)), to: bidi(da(cost)) }) : `Obligatoire à chaque entrée. Dernier prix : ${da(row.cost)}.`}>
+          <Field label={<>{t('produits.stock.entryCost')} <b aria-label="required">*</b></>} hint={cost !== '' && cost !== row.cost ? t('produits.stock.entryCostChange', { from: bidi(da(row.cost)), to: bidi(da(cost)) }) : t('produits.stock.entryCostLast', { cost: bidi(da(row.cost)) })}>
             <MoneyInput value={cost} changed={cost !== '' && cost !== row.cost} label={t('produits.stock.entryCost')} onChange={setCost} />
           </Field>
         )}
@@ -66,6 +66,48 @@ export function MoveDialog({ kind, row, onClose }: { kind: 'entry' | 'count' | '
         </Field>
         {kind === 'entry' && <p className="pd-note">{t('produits.stock.entryHint')}</p>}
       </form>
+    </Modal>
+  );
+}
+
+/** « Stock cassé » of a line (pieces that came back broken, kept apart, never sold): repaired → back on sale, or thrown away. */
+export function BrokenDialog({ row, onClose }: { row: StockRowT; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [qty, setQty] = useState<number | ''>(row.broken);
+  const [note, setNote] = useState('');
+  const fix = useAction('stock.fixBroken', { success: t('produits.broken.done'), onDone: onClose });
+  const go = (to: 'sell' | 'scrap') => {
+    if (qty === '' || qty < 1 || qty > row.broken) return toast(t('produits.stock.invalidQty'), 'bad');
+    fix.mutate({ variantId: row.variantId, warehouseId: row.warehouseId, qty, to, note: note.trim() || null });
+  };
+  return (
+    <Modal
+      title={t('produits.broken.title', { name: bidi(nameOf(row)) })}
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>
+            {t('common.cancel')}
+          </button>
+          <button className="btn danger ghost" disabled={fix.isPending || qty === ''} onClick={() => go('scrap')}>
+            <Icon name="trash" /> {t('produits.broken.scrap')}
+          </button>
+          <button className="btn primary" disabled={fix.isPending || qty === ''} onClick={() => go('sell')}>
+            <Icon name="wrench" /> {t('produits.broken.sell')}
+          </button>
+        </>
+      }
+    >
+      <div className="pd-form">
+        <p className="pd-after">{t('produits.broken.now', { count: row.broken, n: bidi(row.broken), depot: bidi(row.warehouseName) })}</p>
+        <Field label={t('produits.stock.qty')}>
+          <Stepper value={qty} onChange={setQty} min={1} max={row.broken} label={t('produits.stock.qty')} size="lg" />
+        </Field>
+        <Field label={t('produits.stock.note')}>
+          <input value={note} placeholder={t('produits.broken.notePh')} onChange={(e) => setNote(e.target.value)} />
+        </Field>
+        <p className="pd-note">{t('produits.broken.help')}</p>
+      </div>
     </Modal>
   );
 }

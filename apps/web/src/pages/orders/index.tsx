@@ -11,6 +11,7 @@ import { useSession } from '../../lib/session';
 import { store } from '../../lib/store';
 import { Card, ErrorBox, Icon, Kpi, Kpis, Loading, Tabs } from '../../ui/kit';
 import { toast } from '../../ui/toast';
+import { toastUndo } from '../../lib/undo';
 import type { PageProps } from '../registry';
 import { API_KINDS, callOptional } from './OrderCard';
 import { ExtraColumn, OrderColumn, OrderSort, OrderTable } from './OrderTable';
@@ -188,7 +189,7 @@ export function OrderList(p: ListProps) {
             if (!s) return;
             doAll(async () => {
               const r = await rpc('orders.setFollow', { ids, status: s });
-              toast(t('orders.bulk.changed', { count: r.changed.length }), 'ok');
+              toastUndo(t('orders.bulk.changed', { count: r.changed.length }), r.changed, () => qc.invalidateQueries());
             }, undefined, clear);
           }}
         >

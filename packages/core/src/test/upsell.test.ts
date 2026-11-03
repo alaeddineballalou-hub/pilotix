@@ -26,6 +26,9 @@ test('the rule: more pieces, a pack, an added or dearer product count; same pric
   assert.deepEqual(upsellOf(orig, 0, [L(1, 10, 1, 3000), L(2, 20, 1, 1800)], 0), { value: 1800, flags: [false, true] });
   // a dearer variant of the same product
   assert.deepEqual(upsellOf(orig, 0, [L(1, 11, 1, 3600)], 0), { value: 600, flags: [true] });
+  // the same piece typed at a higher price (even 1 DA): nothing sold in addition, no upsell
+  assert.deepEqual(upsellOf(orig, 0, [L(1, 10, 1, 3001)], 0), { value: 0, flags: [false] });
+  assert.deepEqual(upsellOf(orig, 0, [L(1, 10, 1, 3601), L(2, 20, 1, 1800)], 0), { value: 1800, flags: [false, true] });
   // another colour at the same price, a cheaper product: no upsell
   assert.deepEqual(upsellOf(orig, 0, [L(1, 11, 1, 3000)], 0), { value: 0, flags: [false] });
   assert.deepEqual(upsellOf(orig, 0, [L(3, 30, 1, 2500)], 0), { value: 0, flags: [false] });

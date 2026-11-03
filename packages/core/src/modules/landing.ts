@@ -713,14 +713,17 @@ async function closeLeads(db: Db, k: { phone: string; landingId: number; viewId:
  */
 async function replaceAutoOrder(db: Db, phone: string, productId: number, newOrderId: number, newRef: string, now: number) {
   const old = await db.query(
-    `SELECT o.id FROM orders o JOIN landing_leads a ON a.order_id = o.id AND a.auto_order
-     WHERE o.phone = $1 AND o.conf_status = 'new' AND o.follow_status IS NULL AND o.id <> $3 AND o.created_at > $4
+    // (still waiting to be called — new, or called without an answer yet — never one confirmed or cancelled)
+    `SELECT o.id, o.conf_status FROM orders o JOIN landing_leads a ON a.order_id = o.id AND a.auto_order
+     WHERE o.phone = $1 AND o.conf_status IN ('new', 'to_check', 'no_answer', 'busy', 'callback', 'postponed') AND o.follow_status IS NULL AND o.id <> $3 AND o.created_at > $4
        AND EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.product_id = $2)`,
     [phone, productId, newOrderId, isoAt(now - 86_400_000)],
   );
   for (const r of old) {
-    await db.query(`UPDATE orders SET conf_status = 'duplicate', updated_at = now(), version = version + 1 WHERE id = $1 AND conf_status = 'new'`, [r.id]);
-    await addEvent(db, num(r.id), null, 'conf_status', 'new', 'duplicate', `Le client a validé lui-même la commande ${newRef}`);
+    const was = String(r.conf_status);
+    const done = await db.query(`UPDATE orders SET conf_status = 'duplicate', locked_by = NULL, locked_until = NULL, updated_at = now(), version = version + 1 WHERE id = $1 AND conf_status = $2 RETURNING id`, [r.id, was]);
+    if (!done.length) continue;
+    await addEvent(db, num(r.id), null, 'conf_status', was, 'duplicate', `Le client a validé lui-même la commande ${newRef}`);
     await db.query(`UPDATE landing_leads SET order_id = $2 WHERE order_id = $1`, [r.id, newOrderId]);
   }
 }

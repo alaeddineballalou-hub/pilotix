@@ -4,7 +4,9 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
+import { DEFAULT_CALL_SETTINGS } from '@pilotix/shared';
 import { rotateTimes } from '../modules/assign';
+import { setSetting } from '../settings';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -27,6 +29,8 @@ before(async () => {
   // nothing from the demo waits or moves: only this test's orders
   await db.query(`UPDATE orders SET agent_id = (SELECT min(id) FROM profiles WHERE 'confirmation' = ANY(roles)) WHERE agent_id IS NULL`);
   await db.query(`UPDATE orders SET conf_status = 'confirmed' WHERE conf_status = ANY('{new,no_answer,busy,to_check,callback,postponed}'::text[])`);
+  // the agent's time counts in the call hours: all day here, so the tests do not depend on the hour they run
+  await setSetting(db, 'calls', { ...DEFAULT_CALL_SETTINGS, slots: [{ key: 'all', from: 0, to: 24 }] });
 });
 
 let n = 0;
@@ -179,4 +183,47 @@ test('Suivi: an alert nobody acted on goes to another Suivi agent; a treated ale
   const t1 = (await rotateTimes(admin, 'follow', [ps[0]])).get(ps[0]);
   assert.ok(t1 && t1 > Date.now() + 110 * 60_000);
   await call('assign.set', admin, base);
+});
+
+test('the night does not count: an order given at 20:50 is due the next morning, not at 21:20', async () => {
+  await setSetting(db, 'calls', DEFAULT_CALL_SETTINGS);
+  try {
+    await offline([...agents, lead]);
+    await online(agents.slice(0, 2));
+    await save({});
+    const o = await order();
+    // given at 20:50 Algiers (19:50 UTC) yesterday; the shop calls 9:00 → 21:00
+    const day = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    await db.query('UPDATE orders SET assigned_at = $2::timestamptz WHERE id = $1', [o.id, `${day}T19:50:00Z`]);
+    const at = (await rotateTimes(admin, 'conf', [o.id])).get(o.id)!;
+    // 10 minutes before 21:00, 20 more from 9:00 the next morning: 9:20 Algiers (8:20 UTC)
+    const next = new Date(Date.parse(`${day}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+    assert.equal(new Date(at).toISOString(), `${next}T08:20:00.000Z`);
+    // at 7:00 that morning nothing moves
+    const early = { ...admin, now: () => Date.parse(`${next}T06:00:00Z`) };
+    const r: any = await call('assign.run', early, {});
+    assert.equal(r.conf.moved, 0);
+    await save({ on: false });
+  } finally {
+    await setSetting(db, 'calls', { ...DEFAULT_CALL_SETTINGS, slots: [{ key: 'all', from: 0, to: 24 }] });
+  }
+});
+
+test('the call slot an order was tried in: one try per slot, as the « prochain appel » shown', async () => {
+  const { nextDue, slotStartOf, DEFAULT_CALL_SETTINGS: s } = await import('@pilotix/shared');
+  // Algiers = UTC+1: 9-12, 12-16, 16-21 → 08:00, 11:00, 15:00 UTC
+  const at = (h: string) => Date.parse(`2026-11-03T${h}:00.000Z`);
+  assert.equal(slotStartOf(at('10:30'), s), at('08:00'));
+  assert.equal(slotStartOf(at('11:00'), s), at('11:00'));
+  assert.equal(slotStartOf(at('21:00'), s), at('15:00'), 'at night: the evening slot');
+  assert.equal(slotStartOf(Date.parse('2026-11-04T06:00:00.000Z'), s), at('15:00'), 'before the morning: still yesterday evening');
+  // the same answer as nextDue for a « pas de réponse »: due once a new slot started after the call
+  for (const call of ['07:30', '08:10', '10:59', '11:00', '14:00', '19:59', '21:30']) {
+    for (const now of ['08:00', '09:00', '11:00', '12:00', '15:00', '16:30', '21:00', '23:00']) {
+      const lastCallAt = new Date(at(call)).toISOString();
+      if (at(now) < at(call)) continue;
+      const due = nextDue({ createdAt: lastCallAt, attempts: 1, nextCallAt: null, done: false, lastCallAt }, s, at(now)).kind === 'now';
+      assert.equal(at(call) < slotStartOf(at(now), s), due, `called ${call}, now ${now}`);
+    }
+  }
 });

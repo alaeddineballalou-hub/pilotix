@@ -316,9 +316,12 @@ async function createExchangeLocked(ctx: Ctx, input: z.infer<typeof ExchangeInpu
   if (t.status === 'resolved' || t.status === 'closed') throw bad('Ticket déjà clôturé');
   if (t.exchangeOrderId && t.exchangeFollow !== 'cancelled') throw bad(`Un échange existe déjà : ${t.exchangeRef}`);
   const o: Order = await getOrder(ctx, t.orderId);
+  // the customer has the article: delivered (or already exchanged once) — a parcel on the road, refused or returned is
+  // not exchanged (a claim or a new order instead)
+  if (!['delivered', 'exchanged'].includes(o.followStatus ?? '')) throw bad(`${o.ref} n’est pas livrée : un échange se fait sur une commande que le client a reçue.`);
   const me = ctx.session.profile.id;
   const byId = new Map(o.items.map((i) => [i.id, i]));
-  const items: { productId: number; variantId: number | null; qty: number; unitPrice: number }[] = [];
+  const items: { productId: number; variantId: number | null; qty: number; unitPrice: number; part?: boolean }[] = [];
   for (const l of input.lines) {
     const it = byId.get(l.itemId);
     if (!it) throw bad('Ligne introuvable dans la commande d’origine');
@@ -326,8 +329,8 @@ async function createExchangeLocked(ctx: Ctx, input: z.infer<typeof ExchangeInpu
     if (input.kind === 'same') {
       items.push({ productId: it.productId, variantId: it.variantId, qty: l.qty, unitPrice: 0 });
     } else if (input.kind === 'parts') {
-      // only parts leave: no variant, so the article's stock does not move
-      items.push({ productId: it.productId, variantId: null, qty: 1, unitPrice: 0 });
+      // only parts leave: no variant, so the article's stock does not move (never filled in for them)
+      items.push({ productId: it.productId, variantId: null, qty: 1, unitPrice: 0, part: true } as (typeof items)[number]);
     } else {
       const vid = l.variantId ?? null;
       let pid = input.kind === 'variant' ? it.productId : l.productId ?? null;
@@ -385,6 +388,8 @@ async function createExchangeLocked(ctx: Ctx, input: z.infer<typeof ExchangeInpu
       },
       tx,
     );
+    // the parts line says which parts leave (the depot packs them, not the article)
+    if (input.kind === 'parts') await tx.query(`UPDATE order_items SET variant_id = NULL, variant_title = $2 WHERE order_id = $1`, [ex.id, `Pièces : ${partsText}`.slice(0, 200)]);
     // SAV exchanges skip the call queue: straight to the depot, "À préparer".
     await tx.query(
       `UPDATE orders SET conf_status='confirmed', confirmed_at=$2::timestamptz, agent_id=COALESCE(agent_id,$3), assigned_at=COALESCE(assigned_at,$2::timestamptz),
@@ -597,6 +602,10 @@ export const savProcs = {
   'sav.update': proc([...SAV_ROLES], UpdateInput, async (ctx, i) => {
     const t = await getTicket(ctx.db, i.id);
     const me = ctx.session.profile.id;
+    // closed by hand (« Livré », « Annulé ») while its exchange parcel still goes: the parcel would leave anyway (stock,
+    // fees) — it is cancelled first, or the ticket closes by itself when it is delivered
+    if ((i.status === 'resolved' || i.status === 'closed') && i.status !== t.status && t.exchangeOrderId && t.exchangeFollow && !['delivered', 'exchanged', 'returned', 'cancelled', 'lost'].includes(t.exchangeFollow))
+      throw bad(`L’échange ${t.exchangeRef} est encore en cours : annulez-le d’abord (ou attendez sa livraison, le ticket se clôt alors tout seul).`);
     const parts: string[] = [];
     if (i.status && i.status !== t.status) parts.push(`Statut : ${SAV_STATUS_FR[i.status]}`);
     if (i.assignedTo !== undefined && (i.assignedTo ?? null) !== t.assignedTo) {

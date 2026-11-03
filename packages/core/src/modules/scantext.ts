@@ -163,6 +163,11 @@ const T: Record<string, Text> = {
   exAlreadyFix: { fr: 'Double scan : l’ancien produit est déjà en stock.', en: 'Double scan: the old product is already in stock.', ar: 'مسح مرتين: المنتج القديم في المخزون من قبل.' },
   okExchange: { fr: 'Échange reçu. Ancien produit remis en stock : {items}.', en: 'Exchange received. Old product back in stock: {items}.', ar: 'استُلم التبديل. عاد المنتج القديم إلى المخزون: {items}.' },
   okExchangeFix: { fr: 'Commande d’origine : {ref}.', en: 'First order: {ref}.', ar: 'الطلبية الأصلية: {ref}.' },
+  okExchangeBroken: {
+    fr: 'Échange reçu. Ancien produit défectueux : en stock cassé (pas vendu) : {items}.',
+    en: 'Exchange received. Old faulty product: in broken stock (not sold): {items}.',
+    ar: 'استُلم التبديل. المنتج القديم المعيب: في المخزون التالف (لا يُباع): {items}.',
+  },
   exchangedItems: { fr: '{n} article(s) échangé(s)', en: '{n} exchanged item(s)', ar: '{n} منتج(ات) مُبدّلة' },
   // the code itself
   notLabel: { fr: 'Ce n’est pas l’étiquette du colis (téléphone ou code incomplet).', en: 'This is not the parcel’s label (phone number or incomplete code).', ar: 'هذا ليس ملصق الطرد (رقم هاتف أو رمز ناقص).' },
