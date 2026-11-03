@@ -1,4 +1,4 @@
-# Temporary (for Claude): does the live site serve the Darija book and the voice notes? Reads only.
+# Temporary (for Claude): does the live site serve the products' sales guide (Guide de vente)? Reads only.
 name: Live now (temporary, for Claude)
 on:
   push:
@@ -28,11 +28,11 @@ jobs:
             grep -o '"[A-Za-z0-9._-]*\.js"' "$f" | tr -d '"' | grep -E '^[A-Za-z0-9_-]+-[A-Za-z0-9_-]{8}\.js$' | sed 's#^#assets/#' | while read b; do grep -qx "$b" /tmp/seen || echo "$b" >> /tmp/todo; done
           done
           echo "::notice title=Scripts read::$n"
-          for m in p.darija.book p.darija.save p.pilot.voiceSave dellal.voice.read pl-db-toc ai-voice-read; do
+          for m in catalog.guideDraft catalog.guide gd-panel gd-ed-pair gd-chip p.darija.book; do
             hit=$(grep -l "$m" /tmp/js/*.js 2>/dev/null | head -1)
             echo "::notice title=$m::$([ -n "$hit" ] && echo "live (in $(basename "$hit"))" || echo 'not found')"
           done
           css=$(grep -o 'assets/[A-Za-z0-9._-]*\.css' /tmp/index.html | head -1); echo "::notice title=Main css::$css"
           for c in $(cat /tmp/js/*.js /tmp/index.html | grep -o 'assets/[A-Za-z0-9._-]*\.css' | sort -u); do curl -s -m 40 -A 'Mozilla/5.0' "https://direct.pilotix.online/$c" >> /tmp/all.css; done
-          for m in pl-db-toc ai-voice-read; do echo "::notice title=css $m::$(grep -c "$m" /tmp/all.css 2>/dev/null || true)"; done
+          for m in gd-panel gd-jump-b gd-chip pl-db-toc; do echo "::notice title=css $m::$(grep -c "$m" /tmp/all.css 2>/dev/null || true)"; done
           art=$(ls /tmp/js | grep -c '^art-ltr-' || true); echo "::notice title=Learning bench picture loaded by the page::$art"
