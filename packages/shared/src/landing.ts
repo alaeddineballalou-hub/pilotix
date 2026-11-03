@@ -14,6 +14,8 @@ export interface LandingImage {
   h: number;
   /** a tiny blurred copy (data URL, a few hundred bytes), drawn at once behind the main picture until it arrives */
   lqip?: string;
+  /** the variant (colour) this photo shows: picking it brings the photo to the top */
+  v?: number;
 }
 
 export interface LandingView {
@@ -200,6 +202,7 @@ var tic=0;if(C.tt){${TT_STUB}var tl=0,tlx=function(){if(tl)return;tl=1;(C.tts&&C
 window.addEventListener('load',function(){setTimeout(tlx,2500)});['touchstart','scroll','keydown','mousemove'].forEach(function(e){window.addEventListener(e,tlx,{once:true,passive:true})})}
 var bk=$('bk');if(bk){if(C.mode=='live'){var bq=location.search.replace(/([?&])g=[^&]*&?/,'$1').replace(/[?&]$/,'');bk.href=bk.getAttribute('href')+bq}else bk.onclick=function(e){e.preventDefault();parent.postMessage({lp:'nav',slug:C.g},'*')}}
 var th=d.querySelectorAll('.th button'),mi=$('mi');for(var i=0;i<th.length;i++)th[i].onclick=function(){for(var j=0;j<th.length;j++)th[j].className='';this.className='on';mi.src=this.getAttribute('data-s');mi.srcset=this.getAttribute('data-ss')};
+var vr0=$('vr');if(vr0&&th.length)vr0.addEventListener('change',function(){var k=C.vi&&C.vi[this.value];if(k!=null&&th[k])th[k].click()});
 function tl(){var a=d.querySelectorAll('.th img[data-src]');for(var i=0;i<a.length;i++){a[i].src=a[i].getAttribute('data-src');a[i].removeAttribute('data-src')}}
 if(mi&&mi.tagName=='IMG'&&!mi.complete){mi.addEventListener('load',tl);mi.addEventListener('error',tl);setTimeout(tl,10000)}else tl();
 var f=$('f');if(!f)return;
@@ -310,8 +313,13 @@ export function renderLanding(v: LandingView, r: LandingRender): string {
   const cta = 'اطلب الآن';
   const vp: Record<number, number> = {};
   for (const x of v.variants) if (x.price != null) vp[x.id] = x.price;
+  // the photo of each variant (its place in the gallery): picking the colour shows it
+  const vi: Record<number, number> = {};
+  v.images.forEach((x, k) => {
+    if (x.v && vi[x.v] === undefined) vi[x.v] = k;
+  });
   const cfg = {
-    mode: r.mode, post: r.post, geo: r.geo, lead: r.lead ?? '', ch: r.challenge, bits: r.bits, slug: v.slug, price: v.price, vp, fees: v.fees, title: v.title, vl: v.variantLabel, cta,
+    mode: r.mode, post: r.post, geo: r.geo, lead: r.lead ?? '', ch: r.challenge, bits: r.bits, slug: v.slug, price: v.price, vp, vi, fees: v.fees, title: v.title, vl: v.variantLabel, cta,
     vid: r.viewId ?? '', px: r.mode === 'live' ? pixelIds(v.pixelId, META_PIXEL)[0] ?? '' : '', pxs: r.mode === 'live' ? pixelIds(v.pixelId, META_PIXEL) : [], pid: v.productId ?? 0, op: off ? v.oldPrice : 0,
     g: r.group?.slug ?? '',
     wa: v.whatsapp && whatsappNumber(v.whatsapp.number) ? { n: whatsappNumber(v.whatsapp.number), m: v.whatsapp.message || WHATSAPP_DEFAULT.message } : null,

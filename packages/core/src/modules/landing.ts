@@ -113,9 +113,12 @@ export interface LandingImageRow {
   thumb: string;
   src: string;
   info?: LandingImageInfo | null;
+  /** the variant (colour) it shows */
+  v?: number | null;
 }
 
-export type ImgRef = { id: number } | { url: string; w: number; h: number };
+/** a page's photo; v: the variant (colour) it shows, so picking that colour brings it to the top */
+export type ImgRef = ({ id: number } | { url: string; w: number; h: number }) & { v?: number | null };
 
 export const readImgs = (v: unknown): ImgRef[] => {
   const a = typeof v === 'string' ? JSON.parse(v) : v;
@@ -180,13 +183,13 @@ async function listPages(db: Db, now: number, ids?: number[]): Promise<LandingRo
  * shop name. Left = stock − what confirmed orders already promised (the same count as Produits › Stock).
  */
 export async function productContext(db: Db, productId: number) {
-  const p = (await db.query('SELECT id, name, price, active, fee_grid, is_service, fixed_price FROM products WHERE id = $1', [productId]))[0];
+  const p = (await db.query('SELECT id, name, price, active, fee_grid, is_service, fixed_price, photo FROM products WHERE id = $1', [productId]))[0];
   if (!p) throw notFound('Produit introuvable');
   const vars = await db.query(
     `WITH r AS (${RESERVED}),
        s AS (SELECT s.variant_id, sum(s.qty)::int AS qty FROM stock s JOIN warehouses wh ON wh.id = s.warehouse_id AND wh.active GROUP BY 1),
        rv AS (SELECT r.variant_id, sum(r.n)::int AS n FROM r JOIN warehouses wh ON wh.id = r.wid AND wh.active GROUP BY 1)
-     SELECT v.id, v.title, v.active, v.price, COALESCE(s.qty, 0) - COALESCE(rv.n, 0) AS available
+     SELECT v.id, v.title, v.active, v.price, v.photo, COALESCE(s.qty, 0) - COALESCE(rv.n, 0) AS available
      FROM product_variants v LEFT JOIN s ON s.variant_id = v.id LEFT JOIN rv ON rv.variant_id = v.id
      WHERE v.product_id = $1 ORDER BY v.id`,
     [productId],
@@ -194,7 +197,7 @@ export async function productContext(db: Db, productId: number) {
   const service = !!p.is_service;
   const variants = vars
     .filter((v: any) => v.active && v.title !== '')
-    .map((v: any) => ({ id: num(v.id), title: String(v.title), price: numOrNull(v.price), available: service ? null : num(v.available) }));
+    .map((v: any) => ({ id: num(v.id), title: String(v.title), price: numOrNull(v.price), available: service ? null : num(v.available), photo: (v.photo as string | null) || null }));
   const plain = vars.find((v: any) => v.title === '');
   const fees = await clientHomeFees(db, p.fee_grid);
   const shop = await getSetting(db, 'shop');
@@ -203,6 +206,7 @@ export async function productContext(db: Db, productId: number) {
   return {
     name: String(p.name),
     price: num(p.price),
+    photo: (p.photo as string | null) || null,
     active: !!p.active,
     fixedPrice: !!p.fixed_price,
     variants,
@@ -273,15 +277,16 @@ export interface HtmlOpts {
 export function viewImages(refs: ImgRef[], rows: Map<number, any>, imgBase: string | null): LandingImage[] {
   const out: LandingImage[] = [];
   for (const r of refs) {
-    if ('url' in r) out.push({ src: r.url, srcset: `${r.url} ${r.w || 960}w`, thumb: r.url, w: r.w || 960, h: r.h || 960 });
+    const v = r.v ? { v: r.v } : {};
+    if ('url' in r) out.push({ src: r.url, srcset: `${r.url} ${r.w || 960}w`, thumb: r.url, w: r.w || 960, h: r.h || 960, ...v });
     else {
       const x = rows.get(r.id);
       if (!x) continue;
       const at = (k: number) => `${imgBase}${r.id}/${k}.webp`;
       // phones (360 px at 2×) take the 720 width when the picture has one
       const srcset = [...(x.has320 ? [`${at(320)} 320w`] : []), `${at(480)} 480w`, ...(x.has720 ? [`${at(720)} 720w`] : []), `${at(960)} 960w`].join(', ');
-      if (imgBase) out.push({ src: at(480), srcset, thumb: at(160), w: num(x.w), h: num(x.h), lqip: x.lqip ? b64(x.lqip) : undefined });
-      else out.push({ src: b64(x.w480), srcset: `${b64(x.w480)} 480w`, thumb: b64(x.t160), w: num(x.w), h: num(x.h) });
+      if (imgBase) out.push({ src: at(480), srcset, thumb: at(160), w: num(x.w), h: num(x.h), lqip: x.lqip ? b64(x.lqip) : undefined, ...v });
+      else out.push({ src: b64(x.w480), srcset: `${b64(x.w480)} 480w`, thumb: b64(x.t160), w: num(x.w), h: num(x.h), ...v });
     }
   }
   return out;
@@ -1399,7 +1404,7 @@ async function afterChange(ctx: Ctx) {
 }
 
 // ---------------------------------------------------------------- editing
-const ImgInput = z.union([z.object({ id }), z.object({ url: z.string().trim().url().max(12_000), w: z.number().int().min(1).max(10000), h: z.number().int().min(1).max(10000) })]);
+const ImgInput = z.union([z.object({ id, v: id.nullable().optional() }), z.object({ url: z.string().trim().url().max(12_000), w: z.number().int().min(1).max(10000), h: z.number().int().min(1).max(10000), v: id.nullable().optional() })]);
 const PixelId = z.string().trim().max(20).regex(/^\d*$/, 'Pixel Meta : des chiffres (Events Manager › Sources de données)');
 export const PageInput = z.object({
   id: id.optional(),
@@ -1481,9 +1486,10 @@ export const landingProcs = {
     const refs = readImgs(l.images);
     const rows = await imageRows(ctx.db, refs, true);
     const images: LandingImageRow[] = refs.flatMap((r): LandingImageRow[] => {
-      if ('url' in r) return [{ id: null, url: r.url, w: r.w, h: r.h, thumb: r.url, src: r.url }];
+      const v = r.v ?? null;
+      if ('url' in r) return [{ id: null, url: r.url, w: r.w, h: r.h, thumb: r.url, src: r.url, v }];
       const x = rows.get(r.id);
-      return x ? [{ id: r.id, url: null, w: num(x.w), h: num(x.h), thumb: b64(x.t160), src: b64(x.w480), info: readJson<LandingImageInfo>(x.info) }] : [];
+      return x ? [{ id: r.id, url: null, w: num(x.w), h: num(x.h), thumb: b64(x.t160), src: b64(x.w480), info: readJson<LandingImageInfo>(x.info), v }] : [];
     });
     return { ...(await listPages(ctx.db, ctx.now(), [id]))[0], images };
   }),
@@ -1491,7 +1497,7 @@ export const landingProcs = {
   /** price, variants (own price, stock), delivery prices and shop name of a product (the editor's preview) */
   'landing.context': proc([...WHO], z.object({ productId: id }), async (ctx, { productId }) => {
     const pc = await productContext(ctx.db, productId);
-    return { name: pc.name, price: pc.price, fixedPrice: pc.fixedPrice, variants: pc.variants, soldOut: pc.soldOut, fees: pc.fees, shopName: pc.shopName, bits: LANDING_POW_BITS };
+    return { name: pc.name, price: pc.price, photo: pc.photo, fixedPrice: pc.fixedPrice, variants: pc.variants, soldOut: pc.soldOut, fees: pc.fees, shopName: pc.shopName, bits: LANDING_POW_BITS };
   }),
 
   'landing.freeSlug': proc([...WHO], z.object({ name: z.string().max(200), sku: z.string().max(120).optional(), id: id.optional() }), async (ctx, i) => ({

@@ -49,7 +49,7 @@ const draftOf = (p: Page | null, productId?: number) => ({
   images: (p?.images ?? []) as Img[],
 });
 type Draft = ReturnType<typeof draftOf>;
-const keyOf = (d: Draft) => JSON.stringify({ ...d, images: d.images.map((i) => i.id ?? i.url) });
+const keyOf = (d: Draft) => JSON.stringify({ ...d, images: d.images.map((i) => [i.id ?? i.url, i.v ?? null]) });
 
 function Form({ p, productId }: { p: Page | null; productId?: number }) {
   const { t } = useTranslation();
@@ -104,7 +104,7 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
       tiktokPixels: d.tiktokPixels,
       whatsapp: d.waMode === 'shop' ? null : d.waMode === 'off' ? { on: false, number: '', label: '', message: '' } : { on: true, number: d.waNumber.trim(), label: d.waLabel.trim(), message: d.waMessage.trim() },
       stockMode: d.stockMode,
-      images: d.images.map((i) => (i.id ? { id: i.id } : { url: i.url!, w: i.w, h: i.h })),
+      images: d.images.map((i) => (i.id ? { id: i.id, v: i.v ?? null } : { url: i.url!, w: i.w, h: i.h, v: i.v ?? null })),
     });
   };
   const remove = async () => {
@@ -137,7 +137,7 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
       variantLabel: view.variantLabel.trim() || 'اللون',
       variants,
       soldOut: hide && c.soldOut,
-      images: view.images.map((i) => ({ src: i.src, srcset: `${i.src} 480w`, thumb: i.thumb, w: i.w, h: i.h })),
+      images: view.images.map((i) => ({ src: i.src, srcset: `${i.src} 480w`, thumb: i.thumb, w: i.w, h: i.h, ...(i.v ? { v: i.v } : {}) })),
       fees: c.fees,
       shopName: c.shopName,
       whatsapp:
@@ -246,7 +246,7 @@ function Form({ p, productId }: { p: Page | null; productId?: number }) {
             {ctx.data?.fixedPrice && d.price !== '' && Number(d.price) !== ctx.data.price && <p className="lp-warn-note">{t('landing.ed.fixedPrice', { price: da(ctx.data.price) })}</p>}
           </section>
 
-          <Photos images={d.images} onChange={(f) => setD((x) => ({ ...x, images: f(x.images) }))} onBusy={(n) => setBusy((b) => b + n)} />
+          <Photos images={d.images} onChange={(f) => setD((x) => ({ ...x, images: f(x.images) }))} onBusy={(n) => setBusy((b) => b + n)} product={ctx.data ? { photo: ctx.data.photo, variants: ctx.data.variants } : null} />
 
           <section className="card">
             <h2>{t('landing.ed.sText')}</h2>

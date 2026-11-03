@@ -5,7 +5,7 @@ import { sha256Hex, zeroBits } from '@pilotix/shared';
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db } from '../index';
-import { LANDING_POW_BITS, makeChallenge } from '../modules/landing';
+import { LANDING_POW_BITS, landingHtml, makeChallenge } from '../modules/landing';
 import { EMAILS, setup } from './harness';
 
 let db: Db;
@@ -220,6 +220,11 @@ test('products without a page: counted for marketers, one-click page, set aside,
   assert.ok(r.created);
   const imgs = (await db.query(`SELECT images FROM landing_pages WHERE id = $1`, [r.id]))[0].images;
   assert.deepEqual((typeof imgs === 'string' ? JSON.parse(imgs) : imgs).map((x: any) => x.url), ['https://img.test/main.jpg', 'https://img.test/v1.jpg']);
+  // each variant photo knows its variant: picking that colour on the page shows it (« vi » in the page)
+  const list = typeof imgs === 'string' ? JSON.parse(imgs) : imgs;
+  assert.equal(list[1].v, vids[0]);
+  const html: string = await landingHtml(admin, r.page.slug, { mode: 'preview', post: '', geo: '', imgBase: null });
+  assert.match(html, new RegExp(`"vi":\\{[^}]*"${vids[0]}":1`));
   assert.match(r.page.slug, /^[a-z0-9-]+$/);
   const again: any = await call('landing.quickCreate', mk, { productId: target.id });
   assert.equal(again.id, r.id);
