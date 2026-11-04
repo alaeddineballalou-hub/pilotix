@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db, ServerHooks } from '../index';
-import { chunks, missedMessages, parseMetaWebhook } from '../dellal-server';
+import { catchUpMeta, chunks, missedMessages, parseMetaWebhook } from '../dellal-server';
 import { getRaw, setRaw } from '../modules/admin';
 import { findPlace, playbookFor } from '../modules/dellal';
 import { checkDarija, fixDarija, parseAvoid } from '../modules/darija';
@@ -837,4 +837,43 @@ test('« Équipe »: the chats a person handles have their own tab; « Rendre à
   inbox = await call('dellal.inbox', admin, { tab: 'team' });
   assert.ok(!inbox.rows.some((r: any) => r.id === id));
   assert.ok(((await call('dellal.inbox', admin, { tab: 'ai' })) as any).rows.some((r: any) => r.id === id));
+});
+
+test('safety net: first which chats changed (dates only), then each of them alone; Instagram too slow for one chat does not stop the others', async () => {
+  const now = Date.now();
+  const iso = (ago: number) => new Date(now - ago).toISOString().replace('.000Z', '+0000');
+  const asked: string[] = [];
+  const real = globalThis.fetch;
+  const reply = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  globalThis.fetch = (async (input: any) => {
+    const url = new URL(String(input));
+    const path = url.pathname.replace(/^\/v[\d.]+\//, '');
+    asked.push(`${path}?${url.searchParams.get('platform') ?? ''}|${url.searchParams.get('fields') ?? ''}`);
+    if (path === 'page-9/conversations' && url.searchParams.get('platform') === 'messenger')
+      return reply({ data: [{ id: 'c1', updated_time: iso(60_000) }, { id: 'c2', updated_time: iso(90_000) }, { id: 'c3', updated_time: iso(5 * 3_600_000) }] });
+    if (path === 'page-9/conversations') return reply({ data: [{ id: 'i1', updated_time: iso(30_000) }, { id: 'i2', updated_time: iso(40_000) }] });
+    if (path === 'c1') return reply({ id: 'c1', messages: { data: [{ id: 'm2', created_time: iso(60_000), from: { id: 'u1', name: 'Amina' }, to: { data: [{ id: 'page-9' }] }, message: 'ch7al ?' }, { id: 'm1', created_time: iso(120_000), from: { id: 'page-9' }, message: 'Salam' }] } });
+    if (path === 'c2') return reply({ id: 'c2', messages: { data: [{ id: 'n1', created_time: iso(90_000), from: { id: 'page-9' }, message: 'Wakha' }] } });
+    if (path === 'i1') throw Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' });
+    if (path === 'i2') return reply({ id: 'i2', messages: { data: [{ id: 'aWdf2', created_time: iso(40_000), from: { id: 'igsid-2', username: 'karim' }, to: { data: [{ id: 'ig-9' }] }, message: 'prix ?' }] } });
+    return reply({ error: { message: `unexpected ${path}` } });
+  }) as typeof fetch;
+  try {
+    const r = await catchUpMeta({ token: 'T', pageId: 'page-9', igId: 'ig-9', since: now - 30 * 60_000 }, { pauseMs: 0 });
+    assert.deepEqual(r.messages.map((m) => [m.channel, m.externalId, m.text]), [['messenger', 'u1', 'ch7al ?'], ['instagram', 'igsid-2', 'prix ?']]);
+    // the list asks only for the dates; the old chat is never opened
+    assert.deepEqual(asked.filter((x) => x.includes('/conversations')), ['page-9/conversations?messenger|updated_time', 'page-9/conversations?instagram|updated_time']);
+    assert.ok(!asked.some((x) => x.startsWith('c3')));
+    assert.equal(r.errors.length, 1);
+    assert.match(r.errors[0], /^Instagram ne répond pas à temps \(plus de 25 s\)/);
+    assert.match(r.errors[0], /1 discussion sur 2 pas lue/);
+    // no time left: nothing is opened, it is said, and it is read next time
+    asked.length = 0;
+    const late = await catchUpMeta({ token: 'T', pageId: 'page-9', igId: null, since: now - 30 * 60_000 }, { pauseMs: 0, budgetMs: 1_000 });
+    assert.deepEqual(late.messages, []);
+    assert.match(late.errors[0], /pas eu le temps de tout lire.*2 discussions sur 2 pas lues/);
+    assert.deepEqual(asked, ['page-9/conversations?messenger|updated_time']);
+  } finally {
+    globalThis.fetch = real;
+  }
 });

@@ -20,7 +20,9 @@ async function postJson(url: string, body: unknown, headers: Record<string, stri
   const signal = AbortSignal.timeout(timeoutMs);
   try {
     res = await fetch(url, method === 'GET' ? { headers: { Accept: 'application/json', ...headers }, signal } : { method, headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...headers }, body: JSON.stringify(body), signal });
-  } catch {
+  } catch (e: any) {
+    // waited too long is not the same as could not reach it (the « Tester » shows which one)
+    if (['TimeoutError', 'AbortError'].includes(e?.name) || ['TimeoutError', 'AbortError'].includes(e?.cause?.name)) throw new AppError('bad_request', `${who} ne répond pas à temps (plus de ${Math.round(timeoutMs / 1000)} s). Réessayez plus tard.`);
     throw new AppError('bad_request', `${who} injoignable. Réessayez plus tard.`);
   }
   const data: any = await res.json().catch(() => ({}));
@@ -300,25 +302,59 @@ type CatchUpArgs = { token: string; pageId: string; igId: string | null; since: 
 /** A customer's message found by reading the chats again: when it was written, too. */
 export type CaughtMessage = Incoming & { at: string };
 
+/** At most this many chats per app and per run (the newest first): a run never holds the jobs' worker for long. */
+export const CATCHUP_MAX_CHATS = 25;
+/** The whole run's time: what is not read by then is read next time (the run does not count as a good one). */
+const CATCHUP_BUDGET_MS = 60_000;
+
 /**
  * The linked Page's last chats on Messenger and on Instagram (the Conversations API, with the Page's key): the customers'
  * messages since `since` that nobody answered yet. Meta does not always send every message to the webhook; this finds
  * the ones it lost (the webhook ones are already in Pilotix: dellal.catchUp skips them).
+ *
+ * Two small questions instead of one big one (every chat with its messages: Instagram did not answer it in time): which
+ * chats changed since `since` (their dates only), then, one chat at a time, the last messages of each of them. A chat
+ * Meta does not answer is said in `errors` (it is read again next time); the others still come in.
  */
-async function catchUpMeta(a: CatchUpArgs): Promise<{ messages: CaughtMessage[]; errors: string[] }> {
+export async function catchUpMeta(a: CatchUpArgs, o: { pauseMs?: number; budgetMs?: number } = {}): Promise<{ messages: CaughtMessage[]; errors: string[] }> {
   const messages: CaughtMessage[] = [];
   const errors: string[] = [];
-  const fields = 'updated_time,messages.limit(8){id,created_time,from,to,message}';
   const own = [a.pageId, a.igId ?? ''].filter(Boolean);
+  const end = Date.now() + (o.budgetMs ?? CATCHUP_BUDGET_MS);
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
   // each app on its own: Instagram refusing does not stop Messenger
   for (const platform of ['messenger', ...(a.igId ? ['instagram' as const] : [])] as const) {
+    const who = platform === 'instagram' ? 'Instagram' : 'Messenger';
+    const accountId = platform === 'instagram' ? a.igId! : a.pageId;
+    let list: any[];
     try {
-      const url = `${GRAPH}/${encodeURIComponent(a.pageId)}/conversations?platform=${platform}&fields=${encodeURIComponent(fields)}&limit=20&access_token=${encodeURIComponent(a.token)}`;
-      const r = await postJson(url, null, {}, platform === 'instagram' ? 'Instagram' : 'Messenger', 'GET', 20_000);
-      messages.push(...missedMessages(Array.isArray(r?.data) ? r.data : [], { platform, own, accountId: platform === 'instagram' ? a.igId! : a.pageId, since: a.since }));
+      const r = await postJson(`${GRAPH}/${enc(a.pageId)}/conversations?platform=${platform}&fields=updated_time&limit=${CATCHUP_MAX_CHATS}&access_token=${enc(a.token)}`, null, {}, who, 'GET', 30_000);
+      list = Array.isArray(r?.data) ? r.data : [];
     } catch (e: any) {
       errors.push(String(e?.message ?? e));
+      continue;
     }
+    const changed = list.filter((c) => c?.id && Date.parse(String(c?.updated_time ?? '')) >= a.since);
+    let missed = 0;
+    let why = '';
+    for (const [i, c] of changed.entries()) {
+      const left = end - Date.now();
+      if (left < 3_000) {
+        missed += changed.length - i;
+        why ||= `${who} : pas eu le temps de tout lire.`;
+        break;
+      }
+      // Instagram takes a few questions a second for one account: one chat at a time, a little apart
+      if (i) await wait(o.pauseMs ?? (platform === 'instagram' ? 600 : 200));
+      try {
+        const r = await postJson(`${GRAPH}/${enc(String(c.id))}?fields=${enc('messages.limit(6){id,created_time,from,to,message}')}&access_token=${enc(a.token)}`, null, {}, who, 'GET', Math.min(25_000, left));
+        messages.push(...missedMessages([{ updated_time: c.updated_time, messages: r?.messages }], { platform, own, accountId, since: a.since }));
+      } catch (e: any) {
+        missed++;
+        why ||= String(e?.message ?? e);
+      }
+    }
+    if (missed) errors.push(`${why} (${missed} discussion${missed > 1 ? 's' : ''} sur ${changed.length} pas lue${missed > 1 ? 's' : ''} : relue${missed > 1 ? 's' : ''} au prochain passage)`);
   }
   return { messages, errors };
 }
