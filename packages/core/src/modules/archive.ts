@@ -58,6 +58,7 @@ export const USER_REFS: readonly Ref[] = [
   ['conv_messages', 'user_id', 'messages'],
   ['cm_comments', 'handled_by', 'messages'],
   ['dellal_lahja', 'created_by', 'messages'],
+  ['cm_tests', 'created_by', 'messages'],
   ['notifications', 'sent_by', 'messages'],
   ['push_subs', 'profile_id', 'messages'],
   ['livreur_checkins', 'profile_id', 'orders'],
