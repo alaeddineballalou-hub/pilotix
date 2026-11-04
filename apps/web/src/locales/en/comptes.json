@@ -145,6 +145,16 @@
       "ok": "@{{username}}’s Instagram inbox: Pilotix can read it.",
       "bad": "@{{username}}’s Instagram inbox: Meta refuses. The reason is just below."
     },
+    "fbComment": {
+      "ok": "Last customer comment from Facebook that Pilotix got: {{when}}.",
+      "warn": "Pilotix hasn’t got any Facebook comment for “{{name}}” yet. Comment on one of the Page’s posts from another account, then test again.",
+      "lost": "Facebook sent a comment {{when}}, but no shop took it."
+    },
+    "igComment": {
+      "ok": "Last customer comment from Instagram that Pilotix got: {{when}}.",
+      "warn": "Pilotix hasn’t got any Instagram comment for @{{username}} yet. Comment on one of @{{username}}’s posts from another account, then test again.",
+      "lost": "Instagram sent a comment {{when}}, but no shop took it."
+    },
     "igSeen": {
       "ok": "Last customer message from Instagram that Pilotix got: {{when}}.",
       "warn": "Pilotix hasn’t got anything from Instagram for @{{username}} yet. Send @{{username}} a message from another account, then test again.",

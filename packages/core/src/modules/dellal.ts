@@ -1879,7 +1879,7 @@ async function settingsView(db: Db) {
  */
 export async function saveShopLahja(
   ctx: Ctx,
-  o: { before: string; after: string; conversationId?: number | null; messageId?: number | null; commentId?: number | null },
+  o: { before: string; after: string; conversationId?: number | null; messageId?: number | null; commentId?: number | null; cmTestId?: number | null },
 ): Promise<{ id: number; words: LahjaWord[]; review: 'waiting' | 'local' }> {
   const words = lahjaDiff(o.before, o.after);
   if (!words.length) throw new AppError('bad_request', LAHJA_NO_CHANGE);
@@ -1888,8 +1888,8 @@ export async function saveShopLahja(
   // nothing personal becomes a lesson: a word the anonymizer would hide (a name, a phone, a price) is not Darija
   if (words.some((w) => /<(?:name|phone|email|link|handle|addr|price|n|product|id)>/.test(anonymize(`${w.use} ${w.not ?? ''}`)))) throw new AppError('bad_request', LAHJA_PERSONAL);
   const ins = await ctx.db.query(
-    `INSERT INTO dellal_lahja (words, before, after, conversation_id, message_id, comment_id, created_by) VALUES ($1::jsonb, $2, $3, $4, $5, $6, $7) RETURNING id`,
-    [JSON.stringify(words), o.before, o.after, o.conversationId ?? null, o.messageId ?? null, o.commentId ?? null, me(ctx)],
+    `INSERT INTO dellal_lahja (words, before, after, conversation_id, message_id, comment_id, cm_test_id, created_by) VALUES ($1::jsonb, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+    [JSON.stringify(words), o.before, o.after, o.conversationId ?? null, o.messageId ?? null, o.commentId ?? null, o.cmTestId ?? null, me(ctx)],
   );
   const lessonId = num(ins[0].id);
   let review: 'waiting' | 'local' = 'local';
@@ -1897,7 +1897,7 @@ export async function saveShopLahja(
     try {
       await ctx.t.platform.query(
         `INSERT INTO platform.lahja (shop_id, shop_lesson_id, source, status, own, words, before, after, by_user, evidence) VALUES ($1, $2, 'seller', 'waiting', true, $3::jsonb, $4, $5, $6, $7::jsonb)`,
-        [ctx.shop.id, lessonId, JSON.stringify(words), anonymize(o.before).slice(0, 2000), anonymize(o.after).slice(0, 2000), ctx.session.profile.name, JSON.stringify({ via: o.commentId ? 'cm' : 'messages' })],
+        [ctx.shop.id, lessonId, JSON.stringify(words), anonymize(o.before).slice(0, 2000), anonymize(o.after).slice(0, 2000), ctx.session.profile.name, JSON.stringify({ via: o.commentId || o.cmTestId ? 'cm' : 'messages' })],
       );
       review = 'waiting';
     } catch {
@@ -2019,7 +2019,7 @@ export const dellalProcs = {
   /** This shop's Darija lessons: its team's (with what Pilotix decided), what Dellal learned from its customers, and Pilotix's. */
   'dellal.lahja.list': proc([...SELLERS], z.object({}), async (ctx) => {
     const rows = await ctx.db.query(
-      `SELECT l.id, l.words, l.before, l.after, l.comment_id, l.created_at, p.name AS by_name FROM dellal_lahja l LEFT JOIN profiles p ON p.id = l.created_by
+      `SELECT l.id, l.words, l.before, l.after, l.comment_id, l.cm_test_id, l.created_at, p.name AS by_name FROM dellal_lahja l LEFT JOIN profiles p ON p.id = l.created_by
         WHERE l.active ORDER BY l.id DESC LIMIT 200`,
     );
     const status = new Map<number, string>();
@@ -2048,7 +2048,7 @@ export const dellalProcs = {
         words: asWords(r.words),
         before: String(r.before),
         after: String(r.after),
-        via: (r.comment_id ? 'cm' : 'messages') as 'cm' | 'messages',
+        via: (r.comment_id || r.cm_test_id ? 'cm' : 'messages') as 'cm' | 'messages',
         by: (r.by_name as string | null) ?? null,
         at: iso(r.created_at),
         review: status.get(num(r.id)) ?? 'local',

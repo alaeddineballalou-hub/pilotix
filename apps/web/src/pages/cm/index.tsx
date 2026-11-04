@@ -12,7 +12,7 @@ import { useSession } from '../../lib/session';
 import { Card, ErrorBox, Field, Icon, Kpi, Kpis, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { AgentHeader, Filters, initials, PeriodSwitch, SaveBar, SearchBox, useEdges } from '../ai/agent';
-import { CmLahjaFix } from '../messages/lahja';
+import { CmLahjaFix, CmTestLahjaFix } from '../messages/lahja';
 import { LinkedPage } from '../messages/linkedPage';
 import type { PageProps } from '../registry';
 import '../messages/messages.css';
@@ -555,6 +555,7 @@ function TestCard({ r }: { r: TestResult }) {
             <span>
               <small>{t('cm.tester.would.public')}</small>
               <span dir="auto">{d.publicReply}</span>
+              <CmTestLahjaFix testId={r.testId} which="public" sent={d.publicReply} />
             </span>
           </div>
         )}
@@ -564,6 +565,7 @@ function TestCard({ r }: { r: TestResult }) {
             <span>
               <small>{t('cm.tester.would.private')}</small>
               <span dir="auto">{d.privateReply}</span>
+              <CmTestLahjaFix testId={r.testId} which="private" sent={d.privateReply} />
             </span>
           </div>
         )}

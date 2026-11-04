@@ -145,6 +145,16 @@
       "ok": "Boîte Instagram de @{{username}} : Pilotix peut la lire.",
       "bad": "Boîte Instagram de @{{username}} : Meta refuse. La raison est juste en dessous."
     },
+    "fbComment": {
+      "ok": "Dernier commentaire d’un client sur Facebook reçu par Pilotix : {{when}}.",
+      "warn": "Pilotix n’a encore reçu aucun commentaire Facebook pour « {{name}} ». Commentez une publication de la Page depuis un autre compte, puis testez encore.",
+      "lost": "Facebook a envoyé un commentaire {{when}}, mais aucune boutique ne l’a pris."
+    },
+    "igComment": {
+      "ok": "Dernier commentaire d’un client sur Instagram reçu par Pilotix : {{when}}.",
+      "warn": "Pilotix n’a encore reçu aucun commentaire Instagram pour @{{username}}. Commentez une publication de @{{username}} depuis un autre compte, puis testez encore.",
+      "lost": "Instagram a envoyé un commentaire {{when}}, mais aucune boutique ne l’a pris."
+    },
     "igSeen": {
       "ok": "Dernier message d’un client sur Instagram reçu par Pilotix : {{when}}.",
       "warn": "Pilotix n’a encore rien reçu d’Instagram pour @{{username}}. Envoyez un message à @{{username}} depuis un autre compte, puis testez encore.",

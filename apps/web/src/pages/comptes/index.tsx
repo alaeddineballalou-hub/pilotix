@@ -457,7 +457,7 @@ function TestLines({ r, pending, provider }: { r: TestResult | null; pending: bo
               ? 'fixed'
               : c.key === 'reach' && c.params?.why === 'cloudflare'
                 ? 'cloudflare'
-                : c.key === 'igSeen' && c.params?.lost
+                : c.params?.lost
                   ? 'lost'
                   : c.key === 'igSeen' && c.params?.why
                     ? String(c.params.why)

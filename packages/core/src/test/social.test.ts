@@ -441,7 +441,7 @@ test('« Tester »: the key, the permissions, the Page (subscribed again), Insta
   calls.length = 0;
   const r: any = await call('social.test', a, { linkId: karim.id });
   const st = Object.fromEntries(r.checks.map((c: any) => [c.key, c.state]));
-  assert.deepEqual(st, { token: 'ok', perms: 'warn', page: 'ok', pageHook: 'ok', ig: 'ok', igInbox: 'ok', igSeen: 'warn', appHook: 'ok', appHookIg: 'warn', reach: 'ok', ads: 'ok' });
+  assert.deepEqual(st, { token: 'ok', perms: 'warn', page: 'ok', pageHook: 'ok', ig: 'ok', fbComment: 'warn', igInbox: 'ok', igSeen: 'warn', igComment: 'warn', appHook: 'ok', appHookIg: 'warn', reach: 'ok', ads: 'ok' });
   assert.equal(r.checks.find((c: any) => c.key === 'perms').params.list, 'instagram_manage_comments');
   assert.equal(r.checks.find((c: any) => c.key === 'pageHook').params.fixed, 1);
   assert.ok(calls.some((c) => /9002\/subscribed_apps/.test(c.url) && c.method === 'POST'), 'subscribed again');
@@ -501,6 +501,20 @@ test('« Tester »: the key, the permissions, the Page (subscribed again), Insta
   // taken by no boutique
   await t.platform.query(`UPDATE platform.social_hooks SET routed = false WHERE object = 'instagram' AND ext_id = '178002'`);
   assert.deepEqual(await seen(), ['warn', 'lost', 'string']);
+  // comments: a customer's on the Page's post, then on Instagram; the account's own replies do not count
+  const state = async (key: string) => {
+    const c = await line(key);
+    return [c.state, typeof c.params.at];
+  };
+  const fb = (from: string) => ({ object: 'page', entry: [{ id: '9002', changes: [{ field: 'feed', value: { item: 'comment', verb: 'add', from: { id: from }, comment_id: `c-${from}`, post_id: '9002_1', message: 'ch7al ?' } }] }] });
+  assert.deepEqual(await state('fbComment'), ['warn', 'undefined']);
+  await routeMeta(t, fb('9002'));
+  assert.deepEqual(await state('fbComment'), ['warn', 'undefined'], 'the Page answering is not a customer');
+  await routeMeta(t, fb('u-77'));
+  assert.deepEqual(await state('fbComment'), ['ok', 'string']);
+  assert.deepEqual(await state('igComment'), ['warn', 'undefined']);
+  await routeMeta(t, { object: 'instagram', entry: [{ id: '178002', changes: [{ field: 'comments', value: { from: { id: 'ig-u-1', username: 'amina' }, media: { id: 'm1' }, id: 'igc1', text: 'prix ?' } }] }] });
+  assert.deepEqual(await state('igComment'), ['ok', 'string']);
   // another boutique cannot test this boutique's account
   await assert.rejects(() => call('social.test', b, { linkId: karim.id }), /introuvable/);
 });

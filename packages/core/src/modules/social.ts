@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS platform.social_states (
 /** What Meta last sent Pilotix's webhook for each Page / Instagram account (routeMeta; « Tester » shows it). */
 export const SOCIAL_HOOKS_SQL = `
 -- routed: a boutique took it (its Page, or its Page's Instagram); what: the last thing (message, standby, echo, read…);
--- message_at: the last customer message
+-- message_at: the last customer message; comment_at (p022): the last customer comment
 CREATE TABLE IF NOT EXISTS platform.social_hooks (
   object     text        NOT NULL,
   ext_id     text        NOT NULL,
@@ -494,6 +494,17 @@ export async function linkedAds(db: Db): Promise<{ adAccountId: string; name: st
  * its Page (an Instagram entry: the boutique whose Page has this Instagram account). Entries of a Page nobody uses are
  * dropped.
  */
+/** A customer's new comment in a webhook entry: a Page post's comment (feed) or an Instagram comment, not the account's own. */
+function customerComment(obj: string, entry: any, id: string): boolean {
+  const ch: any[] = Array.isArray(entry?.changes) ? entry.changes : [];
+  return ch.some((c) => {
+    const v = c?.value ?? {};
+    const from = String(v.from?.id ?? '');
+    if (obj === 'page') return c?.field === 'feed' && v.item === 'comment' && v.verb === 'add' && from !== id;
+    return c?.field === 'comments' && from !== id;
+  });
+}
+
 /** What one webhook entry was: a customer's message, « standby » (another app has the conversation), an echo, a read… */
 function hookWhat(entry: any): string {
   const ms: any[] = Array.isArray(entry?.messaging) ? entry.messaging : [];
@@ -517,9 +528,11 @@ export async function routeMeta(t: Tenancy, body: any): Promise<{ shopId: number
     const what = hookWhat(entry);
     await t.platform
       .query(
-        `INSERT INTO platform.social_hooks (object, ext_id, at, routed, what, message_at) VALUES ($1, $2, now(), $3, $4, CASE WHEN $5::boolean THEN now() END)
-         ON CONFLICT (object, ext_id) DO UPDATE SET at = now(), routed = EXCLUDED.routed, what = EXCLUDED.what, message_at = coalesce(EXCLUDED.message_at, platform.social_hooks.message_at)`,
-        [obj, id, !!r, what, what === 'message'],
+        `INSERT INTO platform.social_hooks (object, ext_id, at, routed, what, message_at, comment_at)
+           VALUES ($1, $2, now(), $3, $4, CASE WHEN $5::boolean THEN now() END, CASE WHEN $6::boolean THEN now() END)
+         ON CONFLICT (object, ext_id) DO UPDATE SET at = now(), routed = EXCLUDED.routed, what = EXCLUDED.what,
+           message_at = coalesce(EXCLUDED.message_at, platform.social_hooks.message_at), comment_at = coalesce(EXCLUDED.comment_at, platform.social_hooks.comment_at)`,
+        [obj, id, !!r, what, what === 'message', customerComment(obj, entry, id)],
       )
       .catch(() => undefined);
     if (!r) continue;
@@ -995,12 +1008,14 @@ async function demoTest(ctx: Ctx, linkId: number): Promise<SocialTest> {
     checks.push({ key: 'perms', state: 'ok' });
     const page = l.assets.find((a) => a.kind === 'page' && a.usedBy.includes(me));
     if (page) {
-      checks.push({ key: 'page', state: 'ok', params: { name: page.name } }, { key: 'pageHook', state: 'ok' });
+      const ago = (min: number) => new Date(ctx.now() - min * 60_000).toISOString();
+      checks.push({ key: 'page', state: 'ok', params: { name: page.name } }, { key: 'pageHook', state: 'ok' }, { key: 'fbComment', state: 'ok', params: { name: page.name, at: ago(40) } });
       if (page.igUsername)
         checks.push(
           { key: 'ig', state: 'ok', params: { username: page.igUsername } },
           { key: 'igInbox', state: 'ok', params: { username: page.igUsername } },
-          { key: 'igSeen', state: 'ok', params: { username: page.igUsername, at: new Date(ctx.now() - 25 * 60_000).toISOString() } },
+          { key: 'igSeen', state: 'ok', params: { username: page.igUsername, at: ago(25) } },
+          { key: 'igComment', state: 'ok', params: { username: page.igUsername, at: ago(120) } },
         );
       else checks.push({ key: 'igNone', state: 'warn', params: { name: page.name } });
     } else if (l.assets.some((a) => a.kind === 'page')) checks.push({ key: 'pageNone', state: 'warn' });

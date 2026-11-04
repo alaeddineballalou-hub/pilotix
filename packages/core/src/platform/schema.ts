@@ -598,6 +598,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ],
   // when Meta last sent something for each Page / Instagram account (Pilot AI › Comptes › « Tester »)
   ['p021_social_hooks', SOCIAL_HOOKS_SQL],
+  // when Meta last sent a customer's comment for each Page / Instagram account (Pilot AI › Comptes › « Tester »)
+  ['p022_social_comments', `ALTER TABLE platform.social_hooks ADD COLUMN IF NOT EXISTS comment_at timestamptz;`],
 ];
 
 /** Creates or updates the platform's tables. */

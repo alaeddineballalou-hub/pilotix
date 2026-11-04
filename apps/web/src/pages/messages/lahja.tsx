@@ -114,6 +114,14 @@ export function CmLahjaFix({ id, which, sent }: { id: number; which: 'public' | 
   return <FixBox sent={sent} help={t('cm.lahja.fixHelp')} busy={add.isPending} done={done} onSave={(after) => add.mutate({ id, which, after })} />;
 }
 
+/** CM AI agent › Tester: the same lesson from what the agent would answer to a test comment. */
+export function CmTestLahjaFix({ testId, which, sent }: { testId: number; which: 'public' | 'private'; sent: string }) {
+  const { t } = useTranslation();
+  const [done, setDone] = useState<Saved | null>(null);
+  const add = useAction('cm.lahja.test', { onDone: (r) => (setDone(r), savedToast(t, r)) });
+  return <FixBox sent={sent} help={t('cm.lahja.fixHelp')} busy={add.isPending} done={done} onSave={(after) => add.mutate({ testId, which, after })} />;
+}
+
 /** Messages › Réglages: this shop's Darija lessons, what Dellal learned from its customers, Pilotix's for every shop. */
 export function LahjaCard({ name }: { name: string }) {
   const { t } = useTranslation();

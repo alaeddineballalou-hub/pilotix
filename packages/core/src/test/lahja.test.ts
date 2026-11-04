@@ -253,6 +253,16 @@ test('CM AI agent: « Leçon de darija » under one of its replies; the reply ne
   assert.match(sys, /LEÇONS DE DARIJA \(validées par Pilotix pour toutes les boutiques\) :\n- utilise « khouya »/);
   assert.match(sys, /LEÇONS DE DARIJA DE LA BOUTIQUE[^\n]*\n- écris « Saha » au lieu de « Wakha »/);
   assert.doesNotMatch(cmSystem(facts, DEFAULT_CM), /LEÇONS DE DARIJA/);
+  // CM AI agent › Tester: each test keeps what the agent would answer; the same lesson from there
+  const tried: any = await call('cm.test', shop, { body: 'ch7al ?' });
+  const kept = (await db.query(`SELECT body, public_reply, private_reply FROM cm_tests WHERE id = $1`, [tried.testId]))[0];
+  assert.deepEqual([kept.body, kept.public_reply ?? null, kept.private_reply ?? null], ['ch7al ?', tried.decision.publicReply || null, tried.decision.privateReply || null]);
+  const test = (await db.query(`INSERT INTO cm_tests (body, public_reply) VALUES ('ch7al ?', 'Wakha, nb3atlek f privé 👍') RETURNING id`))[0].id;
+  const fromTest: any = await call('cm.lahja.test', shop, { testId: test, which: 'public', after: 'Saha, nb3atlek f privé 👍' });
+  assert.deepEqual(fromTest.words, [{ use: 'Saha', not: 'Wakha' }]);
+  assert.equal(((await call('dellal.lahja.list', shop, {})) as any).own.find((x: any) => x.id === fromTest.id).via, 'cm');
+  // no private reply in that test: nothing to teach there
+  await assert.rejects(call('cm.lahja.test', shop, { testId: test, which: 'private', after: 'Saha' }), /introuvable/);
 });
 
 test('the review: several lessons accepted or refused at once; one that fails stays waiting and says why', async () => {

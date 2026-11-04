@@ -210,6 +210,12 @@ const why = (e: unknown) => String((e as any)?.message ?? e).slice(0, 240);
  * webhook's address answers from the Internet (Cloudflare can block it), the ad accounts this boutique counts. A key
  * Facebook refuses turns the account red; a key that works again turns it green.
  */
+/** When Meta last sent Pilotix a customer's comment for a Page / an Instagram account (routeMeta writes it down). */
+async function lastComment(t: Tenancy, object: 'page' | 'instagram', extId: string): Promise<{ at: string; routed: boolean } | null> {
+  const r = (await t.platform.query(`SELECT comment_at, routed FROM platform.social_hooks WHERE object = $1 AND ext_id = $2 AND comment_at IS NOT NULL`, [object, extId]).catch(() => []))[0];
+  return r ? { at: new Date(r.comment_at).toISOString(), routed: !!r.routed } : null;
+}
+
 export async function testLink(t: Tenancy, shopId: number, linkId: number, publicUrl: string): Promise<SocialTest> {
   const l = (await t.platform.query(`SELECT * FROM platform.social_links WHERE id = $1`, [linkId]))[0];
   if (!l) throw new AppError('not_found', 'Compte introuvable');
@@ -293,6 +299,9 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
         add('pageHook', 'bad', undefined, why(e));
       }
       if (extra.hook !== hook) await t.platform.query(`UPDATE platform.social_assets SET extra = $2 WHERE id = $1`, [num(page.id), JSON.stringify({ ...extra, hook })]);
+      // the Page's comments: when a customer's last came (the CM AI agent answers them)
+      const fbc = await lastComment(t, 'page', String(page.ext_id));
+      add('fbComment', fbc?.routed ? 'ok' : 'warn', { name, ...(fbc ? { at: fbc.at } : {}), ...(fbc && !fbc.routed ? { lost: 1 } : {}) });
       if (extra.ig?.id) {
         let username = String(extra.ig.username ?? '');
         try {
@@ -322,6 +331,9 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
           const stray = (await t.platform.query(`SELECT max(at) AS at FROM platform.social_hooks WHERE object = 'instagram' AND NOT routed AND at > now() - interval '1 day'`).catch(() => []))[0];
           add('igSeen', 'warn', { username, ...(stray?.at ? { at: iso(stray.at), why: 'unknown' } : {}) });
         }
+        // its comments: when a customer's last came
+        const igc = await lastComment(t, 'instagram', String(extra.ig.id));
+        add('igComment', igc?.routed ? 'ok' : 'warn', { username, ...(igc ? { at: igc.at } : {}), ...(igc && !igc.routed ? { lost: 1 } : {}) });
       } else add('igNone', 'warn', { name });
     }
   } else if (assets.some((a: any) => a.kind === 'page')) add('pageNone', 'warn');

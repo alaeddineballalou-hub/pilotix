@@ -1015,6 +1015,13 @@ export const cmProcs = {
     if (!c || !text.trim() || c.handled_by || !c.meta?.by) throw notFound('Réponse du CM AI introuvable');
     return saveShopLahja(ctx, { before: text, after: i.after, commentId: num(c.id), conversationId: i.which === 'private' ? numOrNull(c.conversation_id) : null });
   }),
+  /** CM AI agent › Tester: the same lesson from what the agent would answer to a test comment (public or private). */
+  'cm.lahja.test': proc([...CM_ROLES], z.object({ testId: id, which: z.enum(['public', 'private']), after: z.string().trim().min(1).max(2000) }), async (ctx, i) => {
+    const r = (await ctx.db.query(`SELECT id, public_reply, private_reply FROM cm_tests WHERE id = $1`, [i.testId]))[0];
+    const text = r ? String((i.which === 'public' ? r.public_reply : r.private_reply) ?? '') : '';
+    if (!r || !text.trim()) throw notFound('Réponse du test introuvable');
+    return saveShopLahja(ctx, { before: text, after: i.after, cmTestId: num(r.id) });
+  }),
   'cm.reply': proc([...CM_ROLES], z.object({ id, body: z.string().trim().min(1).max(1000) }), async (ctx, i) => {
     const row = await rawComment(ctx.db, i.id);
     let sendError: string | null = null;
@@ -1083,7 +1090,16 @@ export const cmProcs = {
       const channel = (post?.channel ?? i.channel ?? 'facebook') as CmChannel;
       const f = await gatherFacts(ctx, { channel, body: i.body, authorName: i.authorName || null, postId: post ? num(post.id) : null });
       const run = await decide(ctx, f, s);
+      // kept 30 days: a team member can teach the agent from what it would answer (« Leçon de darija », cm.lahja.test)
+      await ctx.db.query(`DELETE FROM cm_tests WHERE created_at < now() - interval '30 days'`);
+      const kept = await ctx.db.query(`INSERT INTO cm_tests (body, public_reply, private_reply, created_by) VALUES ($1, $2, $3, $4) RETURNING id`, [
+        i.body,
+        run.decision.publicReply || null,
+        run.decision.privateReply || null,
+        me(ctx),
+      ]);
       return {
+        testId: num(kept[0].id),
         decision: run.decision,
         by: run.by,
         model: run.model,
