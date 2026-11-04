@@ -1,8 +1,8 @@
-# Temporary (for Claude): is the new Pilot AI › Comptes card live, and can Meta still reach Pilotix through Cloudflare? Reads only.
-name: Live now (temporary, for Claude)
+# Temporary (for Claude): are the Instagram and dinar fixes live, and can Meta still reach Pilotix through Cloudflare? Reads only.
+name: Live now 2 (temporary, for Claude)
 on:
   push:
-    branches: ['check/live-now']
+    branches: ['check/live-claude']
 permissions:
   contents: read
 jobs:
@@ -28,7 +28,7 @@ jobs:
             grep -o '"[A-Za-z0-9._-]*\.js"' "$f" | tr -d '"' | grep -E '^[A-Za-z0-9_-]+-[A-Za-z0-9_-]{8}\.js$' | sed 's#^#assets/#' | while read b; do grep -qx "$b" /tmp/seen || echo "$b" >> /tmp/todo; done
           done
           echo "::notice title=Scripts read::$n"
-          for m in social.test social.ads cpt-fold cpt-test adsMany; do
+          for m in 'Comptes pub en dinars' 'Ad accounts in dinars' social.test cpt-fold verify/send/ticket; do
             hit=$(grep -l "$m" /tmp/js/*.js 2>/dev/null | head -1)
             echo "::notice title=js $m::$([ -n "$hit" ] && echo "live (in $(basename "$hit"))" || echo 'not found')"
           done
