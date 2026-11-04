@@ -47,9 +47,16 @@ test('payment plans V2: delivery-only QTY, Double, Percent and Fixed upsell, alw
   assert.equal(calc('double').upsell,100);
   assert.equal(calc('double').total,200);
   assert.equal(calc('double',0,20).total,200,'Double caps at one extra base commission');
+  const sevenToTwenty=simulateManagementPlan({...base,upsell:{enabled:true,method:'double',rate:0,trigger:'delivered',ruleVersion:2}}, {...simulation,originalQty:7,deliveredQty:20});
+  assert.equal(sevenToTwenty.total,200,'7 original -> 20 delivered is still exactly 2x normal confirmation fee');
+  const fiveToSeven=simulateManagementPlan({...base,upsell:{enabled:true,method:'qty',rate:0,trigger:'delivered',ruleVersion:2}}, {...simulation,originalQty:5,deliveredQty:7});
+  assert.equal(fiveToSeven.total,300,'5 original -> 7 delivered is exactly 3x normal confirmation fee');
   assert.equal(calc('qty').upsell,200,'5 original, 7 delivered -> 2 additional commission units');
   assert.equal(calc('qty').total,300,'base 100 + 2 extra units x 100');
   assert.equal(calc('percent',2).upsell,200,'2% of 10,000 DA unit price, not order total or incremental sales');
+  assert.equal(calc('percent',2).total,300,'unit-price commission is added only once for the eligible product line');
+  assert.equal(calc('percent',2,5).upsell,0,'same delivered quantity must not generate percent upsell');
+  assert.equal(calc('fixed',75,5).upsell,0,'same delivered quantity must not generate fixed upsell');
   assert.equal(calc('fixed',75).upsell,75);
   assert.equal(calc('qty',0,5).upsell,0,'no quantity increase, no upsell');
   assert.equal(calc('percent',2,4).upsell,0,'fewer delivered units, no upsell');
