@@ -267,9 +267,17 @@ test('« Toutes les boutiques » › Dépôt and Caisse: added up and boutique b
   const got: any = await call('depot.receiveReturn', oneB, { id: back.id });
   assert.equal(got.followStatus, 'returned');
   assert.equal((await B.db.query('SELECT follow_status FROM orders WHERE id = $1', [back.id]))[0].follow_status, 'returned');
-  // the depot's own work (picking, scanning, sending) stays in B's Dépôt
+  // the depot's own work (scanning, sending to a company) stays in B's Dépôt
   await assert.rejects(call('depot.scan', oneB, { code: back.ref, mode: 'dispatch' }), /Ouvrez « Maison Shop »/);
   await assert.rejects(call('depot.dispatch', oneB, { ids: [back.id] }), /Ouvrez « Maison Shop »/);
+  // À prendre: every boutique's products, each with its boutique; « J'ai pris » for B's orders, from A, runs in B
+  const pl: any[] = (await call('depot.pickList', all, {})) as any[];
+  assert.deepEqual(pl.map((r) => [r.seller.id, r.name, r.need]).sort(), [[A.id, 'Poussette', 1], [B.id, 'Lampe', 2]].sort());
+  const took: any = await call('depot.pick', oneB, { productId: B.product, variantId: null, qty: 2 });
+  assert.deepEqual([took.served, took.toAssign], [2, 2], 'both B orders picked whole, waiting for a company');
+  assert.equal((await B.db.query(`SELECT count(*)::int AS n FROM order_items WHERE picked_qty = qty`))[0].n, 2);
+  const pl2: any[] = (await call('depot.pickList', all, {})) as any[];
+  assert.deepEqual(pl2.map((r) => r.seller.id), [A.id]);
 
   // Caisse: the main caisses added up, and boutique by boutique
   await call('caisse.add', inA, { caisse: 'main', kind: 'income', amount: 5000 });
@@ -282,6 +290,20 @@ test('« Toutes les boutiques » › Dépôt and Caisse: added up and boutique b
   assert.deepEqual([coA.main, coA.byBoutique.length], [5000, 1]);
   // its money moves in its own caisse only
   await assert.rejects(call('caisse.add', oneB, { caisse: 'main', kind: 'income', amount: 1 }), /Ouvrez « Maison Shop »/);
+  // Walid delivers for both boutiques: one livreur, what he must hand over in each and in all
+  for (const [c, pid, ph] of [[inA, A.product, '0770000021'], [inB, B.product, '0770000022']] as const) {
+    const w: any = await call('users.create', c, { name: 'Walid', email: 'walid@shops.dz', phone: ph.replace('077', '066'), roles: ['livreur'], password: PW });
+    const o: any = await call('orders.create', c, { customerName: 'Client', phone: ph, wilayaId: 16, commune: 'Kouba', address: 'Rue', items: [{ productId: pid, variantId: null, qty: 1 }] });
+    await c.db.query(`UPDATE orders SET conf_status = 'confirmed', follow_status = 'delivered', delivered_at = now(), shipped_at = now(), livreur_id = $2, cashed = false WHERE id = $1`, [o.id, w.id]);
+  }
+  const co2: any = await call('caisse.overview', all, {});
+  const walid = co2.livreurs.filter((l: any) => l.name === 'Walid');
+  assert.equal(walid.length, 1, 'one Walid');
+  assert.deepEqual(walid[0].boutiques.map((b: any) => b.id).sort(), [A.id, B.id].sort());
+  assert.equal(walid[0].notCashed, 2);
+  assert.equal(walid[0].net, walid[0].boutiques.reduce((s: number, b: any) => s + b.net, 0));
+  assert.ok(walid[0].net > 0);
+  assert.ok(!JSON.stringify(co2).includes('walid@shops.dz'), 'no e-mail in the answer');
   // Samira (confirmation in both): no caisse anywhere, no depot
   await call('users.create', inA, { name: 'Samira', email: AGENT, phone: '0661000001', roles: ['confirmation'], password: PW });
   await call('users.create', inB, { name: 'Samira', email: AGENT, phone: '0661000002', roles: ['confirmation'], password: PW });

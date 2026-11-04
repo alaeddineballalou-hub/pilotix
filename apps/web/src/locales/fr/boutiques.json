@@ -73,14 +73,20 @@
     "prepAlerts_other": "{{count}} colis à vérifier en dispatch (refusés par la société, à annuler à la main ou là depuis plus de 24 h)",
     "noStockLate_one": "{{count}} commande attend du stock depuis trop longtemps",
     "noStockLate_other": "{{count}} commandes attendent du stock depuis trop longtemps",
-    "depotNote": "Préparer les produits, imprimer les étiquettes, faire les sacs et envoyer aux sociétés se fait dans le Dépôt de chaque boutique : « Ouvrir ».",
+    "depotNote": "Les étiquettes, les sacs, « À attribuer » et l’envoi aux sociétés se font dans le Dépôt de chaque boutique : « Ouvrir ».",
     "receiveHelp": "Le colis est cherché dans toutes vos boutiques. « Reçu au dépôt » remet le stock dans sa boutique.",
     "leftOutDepot": "Pas comptées ici : {{names}} (vous n’y avez pas le Dépôt).",
     "mainSub": "Vos caisses principales, ensemble",
     "ownSub": "Coffres, caisse du dépôt, BaridiMob…",
     "noCaisse": "Aucune caisse à montrer.",
     "caisseNote": "L’argent de chaque boutique reste le sien : dépenses, entrées, transferts et « Argent reçu » se font dans sa caisse (« Ouvrir »).",
-    "leftOutCaisse": "Pas comptées ici : {{names}} (seul l’administrateur y voit la caisse)."
+    "leftOutCaisse": "Pas comptées ici : {{names}} (seul l’administrateur y voit la caisse).",
+    "pickTitle": "À prendre au dépôt",
+    "pickHelp": "Les produits de toutes vos boutiques ensemble : prenez-les en une fois. « J’ai pris » les compte dans la boutique de chaque commande ; celles qui ont tout partent en dispatch (sans société : « À attribuer » dans leur boutique). Pris moins que prévu ? « Ouvrir » la boutique plus haut.",
+    "took": "J’ai pris {{n}}",
+    "tookAll": "J’ai tout pris · {{n}}",
+    "livreursHelp": "Chaque livreur une seule fois, même s’il livre pour plusieurs boutiques : l’argent qu’il doit verser dans chacune. Un clic sur une boutique ouvre ses livreurs pour encaisser.",
+    "noLivreur": "Aucun livreur n’a d’argent à verser."
   },
   "copy": {
     "title": "Copier des réglages",

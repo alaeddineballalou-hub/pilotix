@@ -52,10 +52,11 @@ async function boutiqueCtx(ctx: Ctx, b: MyBoutique): Promise<Ctx> {
 
 /**
  * What runs inside another of the person's boutiques from the open one: the work on an order of that boutique (the
- * depot's too: received back, taken off its company, sent again… — never its picking, stock or caisse).
+ * depot's too: « J'ai pris » for its orders, received back, taken off its company, sent again… — never its stock, its
+ * settings or its caisse).
  */
 const OTHER_BOUTIQUE =
-  /^(orders|confirmation|suivi|sav|parcel|customers|filters|undo|delivery|stats)\.[a-zA-Z0-9.]+$|^(users\.list|pilot\.get|prefs\.get|catalog\.(search|guide|guides|guideFacts|assigned)|depot\.(find|receiveReturn|unassign|resend|cancelDone|companies))$/;
+  /^(orders|confirmation|suivi|sav|parcel|customers|filters|undo|delivery|stats)\.[a-zA-Z0-9.]+$|^(users\.list|pilot\.get|prefs\.get|catalog\.(search|guide|guides|guideFacts|assigned)|depot\.(find|pick|receiveReturn|unassign|resend|cancelDone|companies))$/;
 
 const ratio = (a: number, b: number) => (b > 0 ? a / b : null);
 /** each boutique's own answer next to the total (the « Par boutique » table) */
@@ -91,10 +92,18 @@ export const BOUTIQUE_FANOUT: Record<string, Fan> = {
   // Dépôt: what waits at each stage, added up, and boutique by boutique
   'depot.counts': { merge: (parts, i) => ({ ...sum.merge(parts, i), byBoutique: byBoutique(parts) }) },
   // Dépôt › a code scanned or typed: the orders of every boutique that have it, each with its boutique
-  'depot.find': { merge: (parts) => parts.flatMap((p) => ((p.out ?? []) as any[]).map((o) => ({ ...o, seller: { id: p.seller.id, name: p.seller.name } }))) },
+  'depot.find': { merge: (parts) => withSeller(parts) },
+  // Dépôt › À prendre: the products every boutique's orders still need, each with its boutique (the screen puts the
+  // same product of several boutiques together: the depot takes them all at once)
+  'depot.pickList': { merge: (parts) => withSeller(parts) },
   // Caisse › Vue d'ensemble: the money of every boutique, added up, and boutique by boutique
   'caisse.overview': { merge: (parts) => caisseAcross(parts) },
 };
+
+/** Each boutique's list in one, every row with its boutique. */
+function withSeller(parts: Part[]) {
+  return parts.flatMap((p) => ((p.out ?? []) as any[]).map((o) => ({ ...o, seller: { id: p.seller.id, name: p.seller.name } })));
+}
 
 /** The caisses of several boutiques: each one's money in short (its caisses, what is outside), and the totals. */
 function caisseAcross(parts: Part[]) {
@@ -182,6 +191,61 @@ async function optionsAcross(targets: Target[], base: unknown, run: Runner) {
   };
 }
 
+/** One livreur over the boutiques: the money they must hand over in each, and in all of them. */
+interface LivreurAcross {
+  key: string;
+  name: string;
+  phone: string | null;
+  /** to hand over: what they collected minus their share */
+  net: number;
+  /** delivered parcels whose money is not handed over yet */
+  notCashed: number;
+  /** parcels on the road with them */
+  inHand: number;
+  /** their last handover, any boutique */
+  last: string | null;
+  boutiques: { id: number; name: string; livreurId: number; net: number; notCashed: number; inHand: number; last: string | null }[];
+}
+
+/**
+ * Caisse › Vue d'ensemble over the boutiques: the money of each and the totals (caisseAcross), and each livreur once —
+ * the same person in several boutiques (their e-mail, which stays here) with what they must hand over in each.
+ */
+async function caisseOverviewAcross(targets: Target[], base: unknown, run: Runner) {
+  const done = await Promise.allSettled(
+    targets.map(async (tg) => {
+      const sc = await tg.ctx();
+      const out = (await run(sc, 'caisse.overview', tg.input ?? base)) as any;
+      const ids = ((out?.livreurs ?? []) as any[]).map((l) => l.id);
+      const mails = ids.length ? await sc.db.query('SELECT id, lower(email) AS e FROM profiles WHERE id = ANY($1)', [ids]) : [];
+      return { seller: tg.source, out, mail: new Map(mails.map((r: any) => [num(r.id), String(r.e ?? '')])) };
+    }),
+  );
+  const parts = done.flatMap((d) => (d.status === 'fulfilled' ? [d.value] : []));
+  if (!parts.length && done.length) throw (done[0] as PromiseRejectedResult).reason;
+  const by = new Map<string, LivreurAcross>();
+  for (const p of parts) {
+    for (const l of (p.out?.livreurs ?? []) as any[]) {
+      const k = p.mail.get(l.id) || `#${p.seller.id}:${l.id}`;
+      const net = Number(l.net) || 0;
+      const notCashed = Number(l.notCashed) || 0;
+      const inHand = Number(l.inHand) || 0;
+      const last = (l.last as string | null) ?? null;
+      let x = by.get(k);
+      if (!x) by.set(k, (x = { key: `l${by.size + 1}`, name: String(l.name ?? ''), phone: l.phone ?? null, net: 0, notCashed: 0, inHand: 0, last: null, boutiques: [] }));
+      x.net += net;
+      x.notCashed += notCashed;
+      x.inHand += inHand;
+      if (last && (!x.last || last > x.last)) x.last = last;
+      if (!x.phone && l.phone) x.phone = l.phone;
+      x.boutiques.push({ id: p.seller.id, name: p.seller.name, livreurId: num(l.id), net, notCashed, inHand, last });
+    }
+  }
+  const livreurs = [...by.values()].filter((x) => x.net !== 0 || x.notCashed > 0 || x.inHand > 0 || x.boutiques.length > 1);
+  livreurs.sort((a, b) => b.net - a.net || a.name.localeCompare(b.name));
+  return { ...caisseAcross(parts.map((p) => ({ seller: p.seller, out: p.out }))), livreurs };
+}
+
 /** An action with the boutique scope of the screen (index.ts). */
 export async function boutiqueCall(name: string, ctx: Ctx, input: unknown, run: Runner): Promise<unknown> {
   const scope = ctx.boutique!;
@@ -206,6 +270,7 @@ export async function boutiqueCall(name: string, ctx: Ctx, input: unknown, run: 
     .map((b) => ({ source: { id: b.id, name: b.name }, ctx: () => boutiqueCtx(ctx, b), input: { ...base, ...(byShop?.[String(b.id)] ?? {}) } }));
   if (name === 'orders.next') return nextAcross(targets, base, run);
   if (name === 'filters.options') return optionsAcross(targets, base, run);
+  if (name === 'caisse.overview' && targets.length) return caisseOverviewAcross(targets, base, run);
   const fan = BOUTIQUE_FANOUT[name];
   if (!fan) throw bad('Choisissez une boutique pour cette action');
   // the filters leave no boutique: this one's answer, empty

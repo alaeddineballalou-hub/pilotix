@@ -73,14 +73,20 @@
     "prepAlerts_other": "{{count}} parcels to check in dispatch (refused by the company, to cancel by hand or waiting over 24 h)",
     "noStockLate_one": "{{count}} order has waited for stock too long",
     "noStockLate_other": "{{count}} orders have waited for stock too long",
-    "depotNote": "Picking, printing labels, making bags and sending to the companies are done in each boutique’s own Depot: “Open”.",
+    "depotNote": "Labels, bags, “To assign” and sending to the companies are done in each boutique’s own Depot: “Open”.",
     "receiveHelp": "The parcel is looked for in all your boutiques. “Received at the depot” puts the stock back in its boutique.",
     "leftOutDepot": "Not counted here: {{names}} (you don’t have the Depot there).",
     "mainSub": "Your main caisses, together",
     "ownSub": "Safes, depot cash box, BaridiMob…",
     "noCaisse": "No caisse to show.",
     "caisseNote": "Each boutique’s money stays its own: expenses, income, transfers and “Money received” are done in its caisse (“Open”).",
-    "leftOutCaisse": "Not counted here: {{names}} (only the administrator sees the caisse there)."
+    "leftOutCaisse": "Not counted here: {{names}} (only the administrator sees the caisse there).",
+    "pickTitle": "To take at the depot",
+    "pickHelp": "The products of all your boutiques together: take them in one go. “I took” counts them in each order’s boutique; the orders that have everything go to dispatch (no company: “To assign” in their boutique). Took fewer than needed? “Open” the boutique above.",
+    "took": "I took {{n}}",
+    "tookAll": "I took them all · {{n}}",
+    "livreursHelp": "Each livreur once, even when they deliver for several boutiques: the money they must hand in for each. A click on a boutique opens its livreurs to receive the money.",
+    "noLivreur": "No livreur has money to hand in."
   },
   "copy": {
     "title": "Copy settings",

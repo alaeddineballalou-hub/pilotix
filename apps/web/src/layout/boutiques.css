@@ -85,3 +85,29 @@ html[data-theme="dark"] .bq-logo:not(.bq-logo-none) { background: #fff; }
 .bq-by .bq-today.up { color: var(--ok); }
 .bq-by .bq-today.down { color: var(--coral); }
 .bq-note { margin: -4px 4px 12px; }
+/* « Toutes les boutiques » › Dépôt › À prendre: each boutique's part of a card, « J'ai pris » in each */
+.bq-pick-help { margin: -2px 0 10px; }
+.bq-pick { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 12px; }
+.bq-pick-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: var(--raise, #FBFAF8); }
+.bq-pick-row .bq-tag { flex: 1; min-width: 0; max-width: none; }
+.bq-pick-n { display: flex; flex-direction: column; align-items: flex-end; font-size: 13px; line-height: 1.25; white-space: nowrap; }
+.bq-pick-n b { font-size: 16px; }
+.bq-pick-n em { font-style: normal; font-size: 11.5px; color: var(--muted); }
+.bq-pick-n em.bad { color: var(--c-bad-ink); font-weight: 800; }
+.bq-pick-n em.warn { color: var(--c-warn-ink); font-weight: 800; }
+.bq-pick-all { justify-content: center; }
+.bq-pick-split { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0 0 8px; }
+.bq-pick-split > span { display: inline-flex; align-items: center; gap: 6px; }
+/* Caisse › Livreurs over the boutiques: what each owes in each boutique (a tap opens its Livreurs) */
+.bq-lv-bs { display: flex; flex-wrap: wrap; gap: 6px; }
+.bq-lv-b { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px 4px 5px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; }
+.bq-lv-b:hover { background: var(--sk-side-hover, #F6F1EB); }
+.bq-lv-b:focus-visible { outline: 2px solid var(--c-accent, #F7A823); outline-offset: 2px; }
+.bq-lv-b .bq-tag { max-width: 150px; }
+.bq-lv td small { display: block; }
+@media (max-width: 760px) {
+  .bq-pick-row { flex-wrap: wrap; }
+  .bq-pick-row .bq-tag { flex-basis: 100%; }
+  .bq-pick-n { align-items: flex-start; }
+  .bq-pick-row .btn { margin-inline-start: auto; }
+}
