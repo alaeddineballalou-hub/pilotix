@@ -1425,7 +1425,14 @@ class ApiController {
     const secret = await core.socialSecret(this.core.t, 'meta');
     // 200 so Meta does not retry in a loop: nothing is taken before Pilotix's app secret is in
     if (!secret) return { ok: false, received: 0, error: 'App Meta de Pilotix manquante' };
-    if (!metaSigned(req, body, sig, secret)) throw new core.AppError('unauthorized', 'Signature Meta invalide');
+    // Instagram's own login signs its webhooks with its own secret (the control room keeps it too)
+    if (!metaSigned(req, body, sig, secret)) {
+      const ig = await core.socialIgSecret(this.core.t);
+      if (!ig || !metaSigned(req, body, sig, ig)) {
+        await core.noteBadSignature(this.core.t, body?.object).catch(() => undefined);
+        throw new core.AppError('unauthorized', 'Signature Meta invalide');
+      }
+    }
     const m = optionalDellal();
     let received = 0;
     for (const r of await core.routeMeta(this.core.t, body)) {

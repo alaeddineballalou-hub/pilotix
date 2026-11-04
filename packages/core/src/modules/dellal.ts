@@ -22,7 +22,7 @@ import { asWords, checkLahjaWords, LAHJA_NO_CHANGE, LAHJA_PERSONAL, lahjaAvoid, 
 import { pilotConfig, pilotToday } from '../platform/pilotai';
 import { guideText, HAS_GUIDE, readGuide, toFill } from './guide';
 import { vocabBlock, vocabFor } from './vocab';
-import { linkedPage } from './social';
+import { linkedPage, noteIgLogin } from './social';
 
 // ---------------------------------------------------------------- settings and secrets
 export const DELLAL_CHANNELS = ['whatsapp', 'messenger', 'instagram', 'tiktok', 'test'] as const;
@@ -68,6 +68,10 @@ export interface DellalSettings {
   verifyToken: string;
   messengerPageId: string;
   instagramId: string;
+  /** Instagram's own login (its key in the secrets): the account's number in its webhooks, its name, when the key was last renewed */
+  instagramLoginId: string;
+  instagramLoginUser: string;
+  igTokenAt: string;
   whatsappPhoneId: string;
 }
 
@@ -91,6 +95,9 @@ export const DEFAULT_DELLAL: DellalSettings = {
   verifyToken: '',
   messengerPageId: '',
   instagramId: '',
+  instagramLoginId: '',
+  instagramLoginUser: '',
+  igTokenAt: '',
   whatsappPhoneId: '',
 };
 
@@ -101,6 +108,8 @@ export const DELLAL_SECRETS = {
   pageToken: 'secret_dellal_page_token',
   waToken: 'secret_dellal_wa_token',
   tiktokToken: 'secret_dellal_tiktok_token',
+  /** Instagram's own login (« Instagram API with Instagram Login »): the shop's own account, every customer answered */
+  igToken: 'secret_dellal_ig_token',
 } as const;
 export type DellalSecret = keyof typeof DELLAL_SECRETS;
 
@@ -1787,6 +1796,39 @@ async function autoOrderOf(ctx: Ctx, s: DellalSettings, row: any): Promise<{ ref
   }
 }
 
+/**
+ * Instagram's own login: the key the shop pasted (Meta app › Instagram › API setup with Instagram login › Generate access
+ * tokens) is read on the server: its account (number, name), and the account is subscribed to Pilotix's webhook. Pilotix
+ * then answers Instagram with it (dellal-server › send), and the boutique gets that login's webhooks (social › routeMeta).
+ */
+async function linkIgLogin(ctx: Ctx, token: string): Promise<{ ok: boolean; username?: string; message?: string }> {
+  if (!ctx.server?.dellal) return { ok: false, message: 'Aperçu : la clé est gardée, elle sera lue sur le serveur.' };
+  try {
+    const r = (await ctx.server.dellal('igLogin', { token }, ctx)) as { userId: string; username: string; subscribeError?: string | null };
+    const s = await dellalSettings(ctx.db);
+    await setRaw(ctx.db, 'dellal', { ...s, instagramLoginId: String(r.userId), instagramLoginUser: String(r.username ?? ''), igTokenAt: new Date(ctx.now()).toISOString() }, me(ctx));
+    if (ctx.t && ctx.shop) await noteIgLogin(ctx.t, ctx.shop.id, String(r.userId), String(r.username ?? ''));
+    return r.subscribeError ? { ok: false, username: r.username, message: r.subscribeError } : { ok: true, username: r.username };
+  } catch (e: any) {
+    return { ok: false, message: String(e?.message ?? e).slice(0, 300) };
+  }
+}
+
+/** Instagram's own login key lasts 60 days: renewed every few days (on the server), while it works. */
+const IG_RENEW_MS = 5 * 24 * 3_600_000;
+async function renewIgLogin(ctx: Ctx, s: DellalSettings, token: string): Promise<string> {
+  if (!ctx.server?.dellal || (s.igTokenAt && ctx.now() - Date.parse(s.igTokenAt) < IG_RENEW_MS)) return token;
+  try {
+    const r = (await ctx.server.dellal('igRefresh', { token }, ctx)) as { token?: string };
+    if (!r?.token) return token;
+    await setRaw(ctx.db, DELLAL_SECRETS.igToken, r.token);
+    await setRaw(ctx.db, 'dellal', { ...(await dellalSettings(ctx.db)), igTokenAt: new Date(ctx.now()).toISOString() });
+    return r.token;
+  } catch {
+    return token;
+  }
+}
+
 /** The safety net's last run (Pilot AI › Comptes › « Tester » shows it). */
 export const CATCHUP_KEY = 'dellal_catchup';
 /** `okAt`: the last run that read everything (the next one reads from there). */
@@ -1809,6 +1851,8 @@ export async function catchUpMessages(ctx: Ctx): Promise<CatchUpRun & { skipped?
   const s = await dellalSettings(ctx.db);
   const token = await dellalSecret(ctx.db, 'pageToken');
   if (!token || !s.messengerPageId) return { at, found: 0, error: null, okAt: null, skipped: 'Aucune page Facebook reliée' };
+  const ig = await dellalSecret(ctx.db, 'igToken');
+  const igToken = ig ? await renewIgLogin(ctx, s, ig) : null;
   const last = await getRaw<CatchUpRun | null>(ctx.db, CATCHUP_KEY, null);
   // from the last run that read everything (2 minutes before, for safety), at most one day back; the first time, 30 minutes
   const from = last?.okAt ? Date.parse(last.okAt) - 2 * 60_000 : ctx.now() - 30 * 60_000;
@@ -1817,7 +1861,10 @@ export async function catchUpMessages(ctx: Ctx): Promise<CatchUpRun & { skipped?
   let list: Caught[] = [];
   let error: string | null = null;
   try {
-    const r = (await ctx.server.dellal('catchUp', { token, pageId: s.messengerPageId, igId: s.instagramId || null, since }, ctx)) as { messages?: Caught[]; errors?: string[] } | null;
+    const r = (await ctx.server.dellal('catchUp', { token, pageId: s.messengerPageId, igId: s.instagramId || null, igToken, igLoginId: s.instagramLoginId || null, since }, ctx)) as {
+      messages?: Caught[];
+      errors?: string[];
+    } | null;
     list = Array.isArray(r?.messages) ? r.messages : [];
     if (r?.errors?.length) error = r.errors.join(' · ').slice(0, 300);
   } catch (e: any) {
@@ -1922,12 +1969,12 @@ const SettingsInput = z.object({
    * secrets: a value replaces, '' keeps, null removes. No Page token: the Facebook Page (and its Instagram account) comes
    * only from a linked account (Pilot AI › Comptes, modules/social.ts), which writes it with its ids.
    */
-  secrets: z.record(z.enum(['ai', 'appSecret', 'waToken', 'tiktokToken']), z.string().max(2000).nullable()).default({}),
+  secrets: z.record(z.enum(['ai', 'appSecret', 'waToken', 'tiktokToken', 'igToken']), z.string().max(2000).nullable()).default({}),
 });
 
 async function settingsView(db: Db) {
   const s = await dellalSettings(db);
-  const has: Record<DellalSecret, boolean> = { ai: false, appSecret: false, pageToken: false, waToken: false, tiktokToken: false };
+  const has: Record<DellalSecret, boolean> = { ai: false, appSecret: false, pageToken: false, waToken: false, tiktokToken: false, igToken: false };
   for (const k of Object.keys(DELLAL_SECRETS) as DellalSecret[]) has[k] = !!(await dellalSecret(db, k));
   // the shop's SAV number (Réglages › Boutique): the customer-service number when Dellal's own is empty; the Page its
   // messages come from: a linked account's (null: none, or an old token pasted by hand, still working)
@@ -2187,6 +2234,12 @@ export const dellalProcs = {
       if (v === null) await ctx.db.query('DELETE FROM settings WHERE key = $1', [DELLAL_SECRETS[k]]);
       else if (v.trim()) await setRaw(ctx.db, DELLAL_SECRETS[k], v.trim(), me(ctx));
     }
+    // Instagram's own login: the key is read at once (its account, its name) and the account subscribed to the webhook
+    let igTest: { ok: boolean; username?: string; message?: string } | null = null;
+    if (secrets.igToken === null) {
+      await setRaw(ctx.db, 'dellal', { ...next, instagramLoginId: '', instagramLoginUser: '', igTokenAt: '' }, me(ctx));
+      if (ctx.t && ctx.shop) await noteIgLogin(ctx.t, ctx.shop.id, '', '');
+    } else if (secrets.igToken?.trim()) igTest = await linkIgLogin(ctx, secrets.igToken.trim());
     let aiTest: { ok: boolean; message?: string } | null = null;
     if (secrets.ai && ctx.server?.dellal) {
       try {
@@ -2197,7 +2250,7 @@ export const dellalProcs = {
       }
     }
     ctx.emit({ type: 'settings' });
-    return { ...(await settingsView(ctx.db)), aiTest, pilotAi: await pilotOn(ctx), platform: !!ctx.t };
+    return { ...(await settingsView(ctx.db)), aiTest, igTest, pilotAi: await pilotOn(ctx), platform: !!ctx.t };
   }),
 
   /** Server: a message arrived on a channel (webhooks). Admin/system only. */

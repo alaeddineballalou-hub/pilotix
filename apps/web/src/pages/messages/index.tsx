@@ -467,7 +467,7 @@ function Results() {
 }
 
 // ---------------------------------------------------------------- settings (admin)
-type Secret = 'ai' | 'appSecret' | 'waToken' | 'tiktokToken';
+type Secret = 'ai' | 'appSecret' | 'waToken' | 'tiktokToken' | 'igToken';
 
 function Settings() {
   const q = useRpc('dellal.settings.get', {});
@@ -485,6 +485,7 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'de
     onDone: (r) => {
       setSec({});
       if (r.aiTest) toast(r.aiTest.ok ? t('messages.settings.aiOk') : r.aiTest.message ?? 'IA', r.aiTest.ok ? 'ok' : 'bad');
+      if (r.igTest) toast(r.igTest.ok ? t('messages.settings.igOk', { user: r.igTest.username ?? '' }) : r.igTest.message ?? 'Instagram', r.igTest.ok ? 'ok' : 'bad');
     },
   });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF({ ...f, [k]: v });
@@ -637,6 +638,31 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'de
           <ChannelBadge ch="messenger" /> <ChannelBadge ch="instagram" /> {t('messages.settings.pageTitle')}
         </h3>
         <LinkedPage page={data.page} old={data.has.pageToken} />
+        {/* Instagram's own login: the shop's own account, every customer answered (Meta's approval not needed for it) */}
+        <section className="dl-iglogin" aria-label={t('messages.settings.igLogin')}>
+          <h4>
+            <ChannelBadge ch="instagram" /> {t('messages.settings.igLogin')}
+          </h4>
+          <p className="muted small">{t('messages.settings.igLoginHelp', { name: f.name })}</p>
+          {/* Meta's own words (its App Dashboard), kept left-to-right in every language */}
+          <ol>
+            <li>
+              {t('messages.settings.igStep1')}{' '}
+              <bdi className="dl-path" dir="ltr">
+                Use cases › Instagram › API setup with Instagram login › Generate access tokens › Add account
+              </bdi>
+            </li>
+            <li>
+              {t('messages.settings.igStep2')}{' '}
+              <bdi className="dl-path" dir="ltr">
+                Webhook subscription: On › Generate token
+              </bdi>
+            </li>
+            <li>{t('messages.settings.igStep3')}</li>
+          </ol>
+          {secret('igToken', t('messages.settings.igToken'), 'IGAA…')}
+          {data.has.igToken && f.instagramLoginUser && <p className="dl-ok">✓ {t('messages.settings.igLinked', { user: f.instagramLoginUser })}</p>}
+        </section>
         <h3 className="dl-h3">
           <ChannelBadge ch="whatsapp" /> {t('messages.ch.whatsapp')}
         </h3>

@@ -1685,7 +1685,9 @@
         "في business-api.tiktok.com، أنشئ تطبيقًا واطلب الوصول إلى Marketing API.",
         "الصق عنوان العودة في «Advertiser redirect URL».",
         "الصق هنا App ID والـ Secret، ثم احفظ. تيك توك يوافق على التطبيق خلال أسبوع إلى أسبوعين."
-      ]
+      ],
+      "igSecret": "المفتاح السري لتطبيق Instagram (تسجيل الدخول عبر Instagram)",
+      "igSecretHint": "فقط إذا كان متجر يستعمل تسجيل الدخول عبر Instagram (Message AI agent › الإعدادات). توقّع Meta رسائل هذا الدخول به. في تطبيق Meta:"
     }
   },
   "seller": {

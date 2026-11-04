@@ -29,9 +29,11 @@ function SocialAppsForm({ d, manager }: { d: Apps; manager: boolean }) {
   const [metaId, setMetaId] = useState(d.meta.appId);
   const [config, setConfig] = useState(d.meta.configId);
   const [metaSecret, setMetaSecret] = useState<string | null>('');
+  // the secret of the app's Instagram login (Meta signs that login's webhooks with it)
+  const [igSecret, setIgSecret] = useState<string | null>('');
   const [ttId, setTtId] = useState(d.tiktok.appId);
   const [ttSecret, setTtSecret] = useState<string | null>('');
-  const save = usePilotAction('p.social.apps.save', { success: t('platform.saved'), onDone: () => (setMetaSecret(''), setTtSecret('')) });
+  const save = usePilotAction('p.social.apps.save', { success: t('platform.saved'), onDone: () => (setMetaSecret(''), setIgSecret(''), setTtSecret('')) });
   const base = typeof window !== 'undefined' ? window.location.origin : '';
   const urls = d.urls ?? { metaRedirect: `${base}/api/oauth/meta/callback`, tiktokRedirect: `${base}/api/oauth/tiktok/callback`, metaWebhook: `${base}/api/hooks/meta-app` };
   const digits = (v: string) => v.replace(/\D/g, '').slice(0, 40);
@@ -55,7 +57,7 @@ function SocialAppsForm({ d, manager }: { d: Apps; manager: boolean }) {
       <input type="password" className="ltr" autoComplete="new-password" disabled={!manager || v === null} value={v ?? ''} placeholder={has ? '••••••••' : ''} onChange={(e) => set(e.target.value)} />
     </Field>
   );
-  const dirty = metaId !== d.meta.appId || config !== d.meta.configId || ttId !== d.tiktok.appId || metaSecret !== '' || ttSecret !== '';
+  const dirty = metaId !== d.meta.appId || config !== d.meta.configId || ttId !== d.tiktok.appId || metaSecret !== '' || igSecret !== '' || ttSecret !== '';
   return (
     <Card title={t(K + 'title')} badge={<span className="chip">{t(K + 'counts', { meta: n(d.counts.meta), tiktok: n(d.counts.tiktok), shops: n(d.counts.shops) })}</span>}>
       <p className="small muted">{t(K + 'text')}</p>
@@ -76,6 +78,13 @@ function SocialAppsForm({ d, manager }: { d: Apps; manager: boolean }) {
           <Field label={t(K + 'configId')} hint={t(K + 'configHint')}>
             <input className="ltr" inputMode="numeric" disabled={!manager} value={config} onChange={(e) => setConfig(digits(e.target.value))} />
           </Field>
+          {secretField(t(K + 'igSecret'), d.meta.hasIgSecret, igSecret, setIgSecret)}
+          <p className="small muted">
+            {t(K + 'igSecretHint')}{' '}
+            <bdi className="dl-path" dir="ltr">
+              Use cases › Instagram › API setup with Instagram login › Instagram app secret
+            </bdi>
+          </p>
           <Field label={t(K + 'redirect')}>
             <CopyCode code={urls.metaRedirect} small />
           </Field>
@@ -133,7 +142,12 @@ function SocialAppsForm({ d, manager }: { d: Apps; manager: boolean }) {
             type="button"
             className="btn primary"
             disabled={!dirty || save.isPending}
-            onClick={() => save.mutate({ meta: { appId: metaId, configId: config, secret: metaSecret === null ? null : metaSecret.trim() }, tiktok: { appId: ttId, secret: ttSecret === null ? null : ttSecret.trim() } })}
+            onClick={() =>
+              save.mutate({
+                meta: { appId: metaId, configId: config, secret: metaSecret === null ? null : metaSecret.trim(), igSecret: igSecret === null ? null : igSecret.trim() },
+                tiktok: { appId: ttId, secret: ttSecret === null ? null : ttSecret.trim() },
+              })
+            }
           >
             <Icon name="check" /> {t('common.save')}
           </button>

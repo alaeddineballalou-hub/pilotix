@@ -162,7 +162,8 @@ CREATE TABLE IF NOT EXISTS platform.social_hooks (
 // ---------------------------------------------------------------- Pilotix's own apps (the control room)
 /** Pilotix's Meta and TikTok apps: what the control room shows (never the secrets). */
 export interface SocialApps {
-  meta: { appId: string; configId: string; hasSecret: boolean };
+  /** hasIgSecret: the secret of the app's Instagram login (Meta signs that login's webhooks with it) */
+  meta: { appId: string; configId: string; hasSecret: boolean; hasIgSecret: boolean };
   tiktok: { appId: string; hasSecret: boolean };
   /** the webhook's verify token (Meta asks for it once) */
   verifyToken: string;
@@ -193,7 +194,7 @@ export async function socialApps(t: Tenancy): Promise<SocialApps> {
   const a = await platformRow(t, APPS_ROW);
   const s = await platformRow(t, SECRETS_ROW);
   return {
-    meta: { appId: clean(a.meta?.appId, 40), configId: clean(a.meta?.configId, 40), hasSecret: !!clean(s.meta) },
+    meta: { appId: clean(a.meta?.appId, 40), configId: clean(a.meta?.configId, 40), hasSecret: !!clean(s.meta), hasIgSecret: !!clean(s.metaIg) },
     tiktok: { appId: clean(a.tiktok?.appId, 40), hasSecret: !!clean(s.tiktok) },
     verifyToken: clean(a.verifyToken, 100),
   };
@@ -201,6 +202,38 @@ export async function socialApps(t: Tenancy): Promise<SocialApps> {
 /** An app's secret, for the server's token calls only. */
 export async function socialSecret(t: Tenancy, p: SocialProvider): Promise<string> {
   return clean((await platformRow(t, SECRETS_ROW))[p], 300);
+}
+/** The secret of the Meta app's Instagram login (App Dashboard › Instagram › API setup with Instagram login). */
+export async function socialIgSecret(t: Tenancy): Promise<string> {
+  return clean((await platformRow(t, SECRETS_ROW)).metaIg, 300);
+}
+
+/** A webhook Pilotix refused (its signature matched no secret): when, and for what (« Tester » says it). */
+const BADSIG_ROW = 'meta_badsig';
+export async function noteBadSignature(t: Tenancy, object: unknown): Promise<void> {
+  const cur = await platformRow(t, BADSIG_ROW);
+  await savePlatformRow(t, BADSIG_ROW, { at: new Date().toISOString(), object: clean(object, 30), n: num(cur.n) + 1 });
+}
+export async function lastBadSignature(t: Tenancy): Promise<{ at: string; object: string; n: number } | null> {
+  const r = await platformRow(t, BADSIG_ROW);
+  return r.at ? { at: String(r.at), object: String(r.object ?? ''), n: num(r.n) } : null;
+}
+
+/**
+ * Instagram accounts a boutique linked with Instagram's own login (Message AI agent › Réglages): the number Meta gives
+ * them in that login's webhooks → the boutique (one account per boutique). Without Meta's approval (Advanced Access),
+ * that login is the way to answer every customer of the boutique's own account.
+ */
+const IG_LOGINS_ROW = 'ig_logins';
+export async function noteIgLogin(t: Tenancy, shopId: number, igId: string, username: string): Promise<void> {
+  const all = await platformRow(t, IG_LOGINS_ROW);
+  for (const [k, v] of Object.entries(all)) if (num((v as any)?.shopId) === shopId) delete all[k];
+  if (igId) all[igId] = { shopId, username, at: new Date().toISOString() };
+  await savePlatformRow(t, IG_LOGINS_ROW, all);
+}
+async function igLoginShop(t: Tenancy, igId: string): Promise<number | null> {
+  const v = (await platformRow(t, IG_LOGINS_ROW))[igId];
+  return v?.shopId ? num(v.shopId) : null;
 }
 export const appReady = (a: SocialApps, p: SocialProvider) => (p === 'meta' ? !!(a.meta.appId && a.meta.hasSecret) : !!(a.tiktok.appId && a.tiktok.hasSecret));
 /** Where the login tab comes back, and where Meta sends the Pages' messages and comments. */
@@ -216,6 +249,8 @@ export const SocialAppsInput = z.object({
     configId: z.string().trim().max(40).regex(/^\d*$/, 'ID de configuration (chiffres)').default(''),
     /** a value replaces, '' keeps, null removes */
     secret: z.string().trim().max(300).nullable().default(''),
+    /** the Instagram login's secret: the same (a value replaces, '' keeps, null removes) */
+    igSecret: z.string().trim().max(300).nullable().default(''),
   }),
   tiktok: z.object({
     appId: z.string().trim().max(40).regex(/^\d*$/, 'App ID TikTok (chiffres)'),
@@ -231,6 +266,8 @@ export async function saveSocialApps(t: Tenancy, i: z.output<typeof SocialAppsIn
     if (v === null) delete sec[p];
     else if (v) sec[p] = v;
   }
+  if (i.meta.igSecret === null) delete sec.metaIg;
+  else if (i.meta.igSecret) sec.metaIg = i.meta.igSecret;
   await savePlatformRow(t, SECRETS_ROW, sec);
   return socialApps(t);
 }
@@ -523,7 +560,12 @@ export async function routeMeta(t: Tenancy, body: any): Promise<{ shopId: number
   for (const entry of Array.isArray(body?.entry) ? body.entry : []) {
     const id = entry?.id ? String(entry.id) : '';
     if (!id) continue;
-    const r = (await t.platform.query(obj === 'page' ? `SELECT shop_id FROM platform.social_uses WHERE kind = 'page' AND ext_id = $1` : `SELECT shop_id FROM platform.social_uses WHERE kind = 'page' AND ig_id = $1`, [id]))[0];
+    let r = (await t.platform.query(obj === 'page' ? `SELECT shop_id FROM platform.social_uses WHERE kind = 'page' AND ext_id = $1` : `SELECT shop_id FROM platform.social_uses WHERE kind = 'page' AND ig_id = $1`, [id]))[0];
+    // an Instagram account linked with Instagram's own login (its webhooks may give it another number)
+    if (!r && obj === 'instagram') {
+      const shop = await igLoginShop(t, id);
+      if (shop) r = { shop_id: shop };
+    }
     // when Meta last sent something for this Page / Instagram account, what it was, and whether a boutique took it (« Tester »)
     const what = hookWhat(entry);
     await t.platform
@@ -1017,6 +1059,7 @@ async function demoTest(ctx: Ctx, linkId: number): Promise<SocialTest> {
           { key: 'igSeen', state: 'ok', params: { username: page.igUsername, at: ago(25) } },
           { key: 'igComment', state: 'ok', params: { username: page.igUsername, at: ago(120) } },
           { key: 'catchUp', state: 'ok', params: { at: ago(2), count: 1 } },
+          { key: 'igLogin', state: 'ok', params: { username: page.igUsername } },
         );
       else checks.push({ key: 'igNone', state: 'warn', params: { name: page.name } });
     } else if (l.assets.some((a) => a.kind === 'page')) checks.push({ key: 'pageNone', state: 'warn' });

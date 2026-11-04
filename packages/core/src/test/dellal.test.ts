@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db, ServerHooks } from '../index';
-import { catchUpMeta, chunks, missedMessages, parseMetaWebhook } from '../dellal-server';
+import { catchUpMeta, chunks, missedMessages, parseMetaWebhook, runDellal } from '../dellal-server';
 import { getRaw, setRaw } from '../modules/admin';
 import { findPlace, playbookFor } from '../modules/dellal';
 import { checkDarija, fixDarija, parseAvoid } from '../modules/darija';
@@ -910,6 +910,101 @@ test('safety net: when Meta says « reduce the amount of data », the same quest
     // a chat with 6 messages was too much: 3; the older chat is never opened
     assert.deepEqual(asked.filter((x) => x.startsWith('j1')), ['j1 limit(6)', 'j1 limit(3)']);
     assert.ok(!asked.some((x) => x.startsWith('j4')));
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
+test('Instagram’s own login: the key is read when saved (its account, its name), never shown again; removed, it is forgotten', async () => {
+  const seen: any[] = [];
+  const server = fakeServer([], []);
+  const base = server.dellal!;
+  let refuse = false;
+  server.dellal = async (action, args, ctx) => {
+    if (action !== 'igLogin') return base(action, args, ctx);
+    seen.push(args);
+    if (refuse) throw new Error('Instagram : clé ou jeton refusé (Invalid OAuth access token). Vérifiez les réglages.');
+    return { userId: '178555', username: 'babyjoy_dz', subscribeError: null };
+  };
+  const admin = await as(EMAILS.admin, server);
+  const g: any = await call('dellal.settings.get', admin, {});
+  let r: any = await call('dellal.settings.save', admin, { ...g.settings, secrets: { igToken: 'IGAA-SECRET-1' } });
+  assert.deepEqual(seen, [{ token: 'IGAA-SECRET-1' }]);
+  assert.deepEqual(r.igTest, { ok: true, username: 'babyjoy_dz' });
+  assert.deepEqual([r.has.igToken, r.settings.instagramLoginId, r.settings.instagramLoginUser], [true, '178555', 'babyjoy_dz']);
+  assert.ok(r.settings.igTokenAt);
+  assert.ok(!JSON.stringify(r).includes('IGAA-SECRET-1'), 'the key never comes back');
+  // saving other things keeps the key and its account
+  r = await call('dellal.settings.save', admin, { ...r.settings, secrets: {} });
+  assert.deepEqual([r.has.igToken, r.settings.instagramLoginUser], [true, 'babyjoy_dz']);
+  // a key Instagram refuses is said
+  refuse = true;
+  r = await call('dellal.settings.save', admin, { ...r.settings, secrets: { igToken: 'IGAA-BAD' } });
+  assert.equal(r.igTest.ok, false);
+  assert.match(r.igTest.message, /refusé/);
+  refuse = false;
+  // removed: forgotten
+  r = await call('dellal.settings.save', admin, { ...r.settings, secrets: { igToken: null } });
+  assert.deepEqual([r.has.igToken, r.settings.instagramLoginId, r.settings.instagramLoginUser], [false, '', '']);
+});
+
+test('Instagram’s own login: Dellal answers with it (graph.instagram.com); refused there, the Page tries; Messenger stays on the Page', async () => {
+  const ctx = await as(EMAILS.admin);
+  await setRaw(db, 'secret_dellal_ig_token', 'IGAA-SEND');
+  await setRaw(db, 'secret_dellal_page_token', 'PAGE-SEND');
+  const asked: { host: string; path: string; auth: string | null; body: any }[] = [];
+  let igDown = false;
+  const real = globalThis.fetch;
+  globalThis.fetch = (async (input: any, init?: any) => {
+    const u = new URL(String(input));
+    asked.push({ host: u.host, path: u.pathname.replace(/^\/v[\d.]+\//, ''), auth: init?.headers?.Authorization ?? null, body: init?.body ? JSON.parse(init.body) : null });
+    if (u.host === 'graph.instagram.com' && igDown)
+      return new Response(JSON.stringify({ error: { message: '(#10) Cette personne n’est pas joignable', code: 10 } }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ recipient_id: 'x', message_id: 'm' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }) as typeof fetch;
+  try {
+    const r: any = await runDellal('send', { channel: 'instagram', externalId: 'igsid-1', text: 'Salam ! 12 900 DA.' }, ctx);
+    assert.equal(r.via, 'instagram');
+    assert.deepEqual(asked.map((x) => [x.host, x.path, x.auth]), [['graph.instagram.com', 'me/messages', 'Bearer IGAA-SEND']]);
+    assert.deepEqual(asked[0].body, { recipient: { id: 'igsid-1' }, message: { text: 'Salam ! 12 900 DA.' } });
+    // Instagram's login refuses: the Page answers (someone with a role on the app)
+    asked.length = 0;
+    igDown = true;
+    await runDellal('send', { channel: 'instagram', externalId: 'igsid-1', text: 'Wakha' }, ctx);
+    assert.deepEqual(asked.map((x) => [x.host, x.path]), [['graph.instagram.com', 'me/messages'], ['graph.facebook.com', 'me/messages']]);
+    // Messenger: the Page only
+    asked.length = 0;
+    await runDellal('send', { channel: 'messenger', externalId: 'psid-1', text: 'Salam' }, ctx);
+    assert.deepEqual(asked.map((x) => x.host), ['graph.facebook.com']);
+    // no Page and the login refuses: the login's reason is said
+    await db.query(`DELETE FROM settings WHERE key = 'secret_dellal_page_token'`);
+    await assert.rejects(runDellal('send', { channel: 'instagram', externalId: 'igsid-1', text: 'Wakha' }, ctx), /joignable/);
+  } finally {
+    globalThis.fetch = real;
+    await db.query(`DELETE FROM settings WHERE key IN ('secret_dellal_ig_token', 'secret_dellal_page_token')`);
+  }
+});
+
+test('safety net with Instagram’s own login: Instagram’s chats are read at its own address, with its key', async () => {
+  const now = Date.now();
+  const iso = (ago: number) => new Date(now - ago).toISOString().replace('.000Z', '+0000');
+  const asked: string[] = [];
+  const real = globalThis.fetch;
+  const reply = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  globalThis.fetch = (async (input: any) => {
+    const u = new URL(String(input));
+    const path = u.pathname.replace(/^\/v[\d.]+\//, '');
+    asked.push(`${u.host} ${path} ${u.searchParams.get('access_token')}`);
+    if (path.endsWith('/conversations') && u.host === 'graph.facebook.com') return reply({ data: [] });
+    if (path === 'me/conversations') return reply({ data: [{ id: 'q1', updated_time: iso(20_000) }] });
+    if (path === 'q1') return reply({ messages: { data: [{ id: 'aWdf-q', created_time: iso(20_000), from: { id: 'igsid-q', username: 'meriem' }, to: { data: [{ id: '178555' }] }, message: 'ch7al ?' }] } });
+    return reply({ error: { message: `unexpected ${path}` } });
+  }) as typeof fetch;
+  try {
+    const r = await catchUpMeta({ token: 'PAGE', pageId: 'page-7', igId: '178000', igToken: 'IGAA-NET', igLoginId: '178555', since: now - 30 * 60_000 }, { pauseMs: 0 });
+    assert.deepEqual(r.errors, []);
+    assert.deepEqual(r.messages.map((m) => [m.channel, m.externalId, m.text]), [['instagram', 'igsid-q', 'ch7al ?']]);
+    assert.deepEqual(asked, ['graph.facebook.com page-7/conversations PAGE', 'graph.instagram.com me/conversations IGAA-NET', 'graph.instagram.com q1 IGAA-NET']);
   } finally {
     globalThis.fetch = real;
   }

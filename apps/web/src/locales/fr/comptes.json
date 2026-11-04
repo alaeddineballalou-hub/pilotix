@@ -188,6 +188,14 @@
     "adsCurrency": {
       "ok": "Comptes pub en dinars (DZD) : Publicité les compte en dinars, et en dollars avec votre taux du mois.",
       "warn": "Comptes pub en {{list}} : Publicité les compte comme des dollars."
+    },
+    "igLogin": {
+      "ok": "Connexion Instagram : la clé de @{{username}} marche. Dellal répond avec elle à tous vos clients Instagram.",
+      "warn": "Connexion Instagram : pas encore faite pour @{{username}}. Sans elle (ou sans l’accord de Meta), Dellal répond sur Instagram seulement aux comptes qui ont un rôle dans l’app. Ajoutez-la dans Message AI agent › Réglages.",
+      "bad": "Connexion Instagram : la clé ne marche plus. La raison est juste en dessous."
+    },
+    "badSig": {
+      "warn": "Pilotix a refusé des messages de Meta {{when}} ({{n}} fois) : leur signature ne correspond à aucune clé secrète. Avec la connexion Instagram, collez la clé secrète de l’app Instagram dans le Centre de contrôle › Pilot AI › Réglages & coûts › Comptes Meta et TikTok."
     }
   },
   "quoted": "« {{name}} »"

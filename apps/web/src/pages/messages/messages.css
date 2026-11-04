@@ -50,6 +50,14 @@
 @media (max-width: 560px) { .dl-linked { flex-wrap: wrap; } .dl-linked .btn { margin-inline-start: 34px; } }
 @media (max-width: 700px) { .dl-hook { grid-template-columns: minmax(0, 1fr); } }
 .dl-h3 { display: flex; align-items: center; gap: 8px; font-size: 15px; margin: 16px 0 6px; }
+/* Instagram's own login (every customer of the shop's own account answered) */
+.dl-iglogin { display: grid; gap: 8px; margin: 14px 0 4px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; }
+.dl-iglogin h4 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; }
+.dl-iglogin h4 .dl-ch { width: 24px; height: 24px; font-size: 10px; }
+.dl-iglogin p { margin: 0; }
+.dl-iglogin ol { display: grid; gap: 4px; margin: 0; padding-inline-start: 20px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.dl-iglogin .dl-ok { color: var(--ok); font-size: 13px; font-weight: 700; }
+.dl-path { display: inline; padding: 1px 6px; border-radius: 6px; background: var(--raise); color: var(--ink); font: 600 12px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .linkbtn { border: 0; background: none; padding: 0; color: var(--navy); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
 
 .ai-pad { padding: 24px 16px; text-align: center; }

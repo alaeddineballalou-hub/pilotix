@@ -12,6 +12,8 @@ import type { PilotAiReq } from './modules/pilotlearn';
 import type { Tenancy } from './platform/tenancy';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
+/** Instagram's own login (« Instagram API with Instagram Login »): its own address, its own keys */
+const IG_GRAPH = 'https://graph.instagram.com/v23.0';
 const ANTHROPIC = 'https://api.anthropic.com/v1/messages';
 
 async function postJson(url: string, body: unknown, headers: Record<string, string>, who: string, method: 'POST' | 'GET' = 'POST', timeoutMs = 30_000): Promise<any> {
@@ -102,14 +104,34 @@ async function send(ctx: Ctx, a: { channel: DellalChannel; externalId: string; a
       await postJson(`${GRAPH}/${phoneId}/messages`, { messaging_product: 'whatsapp', recipient_type: 'individual', to: a.externalId, type: 'text', text: { body: t, preview_url: false } }, { Authorization: `Bearer ${token}` }, 'WhatsApp');
     return { ok: true };
   }
-  if (a.channel === 'messenger' || a.channel === 'instagram') {
-    const token = await dellalSecret(ctx.db, 'pageToken');
-    if (!token) throw new AppError('bad_request', 'La page Facebook n’est pas connectée (jeton de page manquant).');
-    for (const t of chunks(a.text, 1900))
-      await postJson(`${GRAPH}/me/messages?access_token=${encodeURIComponent(token)}`, { recipient: { id: a.externalId }, messaging_type: 'RESPONSE', message: { text: t } }, {}, a.channel === 'instagram' ? 'Instagram' : 'Messenger');
-    return { ok: true };
+  if (a.channel === 'instagram') {
+    const ig = await dellalSecret(ctx.db, 'igToken');
+    if (ig) {
+      try {
+        for (const t of chunks(a.text, 1000)) await postJson(`${IG_GRAPH}/me/messages`, { recipient: { id: a.externalId }, message: { text: t } }, { Authorization: `Bearer ${ig}` }, 'Instagram');
+        return { ok: true, via: 'instagram' };
+      } catch (e) {
+        // the Page can still answer someone with a role on the app; otherwise the Instagram login's reason is the one that counts
+        if (!(await dellalSecret(ctx.db, 'pageToken'))) throw e;
+        try {
+          return await sendPage(ctx, a);
+        } catch {
+          throw e;
+        }
+      }
+    }
   }
+  if (a.channel === 'messenger' || a.channel === 'instagram') return sendPage(ctx, a);
   if (a.channel === 'tiktok') throw new AppError('bad_request', 'TikTok : l’envoi direct sera actif quand TikTok aura approuvé votre compte pour la messagerie.');
+  return { ok: true };
+}
+
+/** Messenger, and Instagram through the Facebook Page (Meta lets it answer only people with a role on the app until App Review). */
+async function sendPage(ctx: Ctx, a: { channel: DellalChannel; externalId: string; text: string }) {
+  const token = await dellalSecret(ctx.db, 'pageToken');
+  if (!token) throw new AppError('bad_request', 'La page Facebook n’est pas connectée (jeton de page manquant).');
+  for (const t of chunks(a.text, 1900))
+    await postJson(`${GRAPH}/me/messages?access_token=${encodeURIComponent(token)}`, { recipient: { id: a.externalId }, messaging_type: 'RESPONSE', message: { text: t } }, {}, a.channel === 'instagram' ? 'Instagram' : 'Messenger');
   return { ok: true };
 }
 
@@ -290,6 +312,8 @@ export async function runDellal(action: string, args: unknown, ctx: Ctx): Promis
   if (action === 'cmPost') return cmPost(ctx, args as CmArgs);
   if (action === 'transcribe') return transcribe(ctx, args as VoiceArgs);
   if (action === 'catchUp') return catchUpMeta(args as CatchUpArgs);
+  if (action === 'igLogin') return igLogin(String((args as any)?.token ?? ''));
+  if (action === 'igRefresh') return igRefresh(String((args as any)?.token ?? ''));
   if (action === 'ping') {
     await complete(ctx, { model: 'claude-haiku-5-5', system: 'Réponds OK.', messages: [{ role: 'user', content: 'ping' }], tools: [] as any, max_tokens: 5 });
     return { ok: true };
@@ -297,8 +321,37 @@ export async function runDellal(action: string, args: unknown, ctx: Ctx): Promis
   throw new AppError('bad_request', `Action Dellal inconnue : ${action}`);
 }
 
+// ---------------------------------------------------------------- Instagram's own login
+/**
+ * The key a shop pasted: its account (the number Meta gives it in this login's webhooks, its name), then the account is
+ * subscribed to the app's webhook (its messages come to Pilotix). A subscription Meta refuses is said, the key is kept.
+ */
+export async function igLogin(token: string): Promise<{ userId: string; username: string; subscribeError: string | null }> {
+  if (!token) throw new AppError('bad_request', 'Clé Instagram manquante.');
+  const me = await postJson(`${IG_GRAPH}/me?fields=user_id,username&access_token=${enc(token)}`, null, {}, 'Instagram', 'GET', 20_000);
+  const userId = String(me?.user_id ?? me?.id ?? '');
+  if (!userId) throw new AppError('bad_request', 'Instagram n’a pas donné le compte de cette clé.');
+  let subscribeError: string | null = null;
+  for (const fields of ['messages,messaging_postbacks,messaging_seen,comments', 'messages']) {
+    try {
+      await postJson(`${IG_GRAPH}/me/subscribed_apps?subscribed_fields=${fields}&access_token=${enc(token)}`, {}, {}, 'Instagram', 'POST', 20_000);
+      subscribeError = null;
+      break;
+    } catch (e: any) {
+      subscribeError = String(e?.message ?? e);
+    }
+  }
+  return { userId, username: String(me?.username ?? ''), subscribeError };
+}
+/** A new key for 60 more days (Meta renews a key at least a day old that still works). */
+export async function igRefresh(token: string): Promise<{ token: string | null; expiresIn: number | null }> {
+  const r = await postJson(`https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${enc(token)}`, null, {}, 'Instagram', 'GET', 20_000);
+  return { token: r?.access_token ? String(r.access_token) : null, expiresIn: Number(r?.expires_in) || null };
+}
+
 // ---------------------------------------------------------------- the safety net: the Page's chats read again
-type CatchUpArgs = { token: string; pageId: string; igId: string | null; since: number };
+/** igToken: Instagram's own login (its chats are read with it, at its own address); igLoginId: its account's number. */
+type CatchUpArgs = { token: string; pageId: string; igId: string | null; igToken?: string | null; igLoginId?: string | null; since: number };
 /** A customer's message found by reading the chats again: when it was written, too. */
 export type CaughtMessage = Incoming & { at: string };
 
@@ -335,14 +388,19 @@ async function askSmaller(url: (n: number) => string, n: number, who: string, ti
 export async function catchUpMeta(a: CatchUpArgs, o: { pauseMs?: number; budgetMs?: number } = {}): Promise<{ messages: CaughtMessage[]; errors: string[] }> {
   const messages: CaughtMessage[] = [];
   const errors: string[] = [];
-  const own = [a.pageId, a.igId ?? ''].filter(Boolean);
+  const own = [a.pageId, a.igId ?? '', a.igLoginId ?? ''].filter(Boolean);
   const end = Date.now() + (o.budgetMs ?? CATCHUP_BUDGET_MS);
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
   const newer = (c: any) => Date.parse(String(c?.updated_time ?? '')) >= a.since;
   // each app on its own: Instagram refusing does not stop Messenger
-  for (const platform of ['messenger', ...(a.igId ? ['instagram' as const] : [])] as const) {
+  for (const platform of ['messenger', ...(a.igId || a.igToken ? ['instagram' as const] : [])] as const) {
     const who = platform === 'instagram' ? 'Instagram' : 'Messenger';
-    const accountId = platform === 'instagram' ? a.igId! : a.pageId;
+    const accountId = platform === 'instagram' ? (a.igId || a.igLoginId)! : a.pageId;
+    // Instagram's own login reads every customer's chat; the Page only those Meta lets it see
+    const viaLogin = platform === 'instagram' && !!a.igToken;
+    const base = viaLogin ? IG_GRAPH : GRAPH;
+    const key = viaLogin ? a.igToken! : a.token;
+    const inbox = viaLogin ? 'me' : enc(a.pageId);
     // Instagram takes a few questions a second for one account: one at a time, a little apart
     const pause = o.pauseMs ?? (platform === 'instagram' ? 600 : 200);
     const list: any[] = [];
@@ -352,7 +410,7 @@ export async function catchUpMeta(a: CatchUpArgs, o: { pauseMs?: number; budgetM
       for (let page = 0; page < 6 && list.length < CATCHUP_MAX_CHATS; page++) {
         if (page) await wait(pause);
         const cursor: string | null = after;
-        const got = await askSmaller((n) => `${GRAPH}/${enc(a.pageId)}/conversations?platform=${platform}&fields=updated_time&limit=${n}${cursor ? `&after=${enc(cursor)}` : ''}&access_token=${enc(a.token)}`, size, who, 30_000);
+        const got = await askSmaller((n) => `${base}/${inbox}/conversations?platform=${platform}&fields=updated_time&limit=${n}${cursor ? `&after=${enc(cursor)}` : ''}&access_token=${enc(key)}`, size, who, 30_000);
         size = got.n;
         const rows: any[] = Array.isArray(got.data?.data) ? got.data.data : [];
         list.push(...rows);
@@ -376,7 +434,7 @@ export async function catchUpMeta(a: CatchUpArgs, o: { pauseMs?: number; budgetM
       }
       await wait(pause);
       try {
-        const got = await askSmaller((n) => `${GRAPH}/${enc(String(c.id))}?fields=${enc(`messages.limit(${n}){id,created_time,from,to,message}`)}&access_token=${enc(a.token)}`, 6, who, Math.min(25_000, left));
+        const got = await askSmaller((n) => `${base}/${enc(String(c.id))}?fields=${enc(`messages.limit(${n}){id,created_time,from,to,message}`)}&access_token=${enc(key)}`, 6, who, Math.min(25_000, left));
         messages.push(...missedMessages([{ updated_time: c.updated_time, messages: got.data?.messages }], { platform, own, accountId, since: a.since }));
       } catch (e: any) {
         missed++;

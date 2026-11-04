@@ -1657,7 +1657,9 @@
         "Sur business-api.tiktok.com, créez une app et demandez l’accès Marketing API.",
         "Collez l’adresse de retour dans « Advertiser redirect URL ».",
         "Collez ici l’App ID et le Secret, puis enregistrez. TikTok valide l’app en une à deux semaines."
-      ]
+      ],
+      "igSecret": "Clé secrète de l’app Instagram (connexion Instagram)",
+      "igSecretHint": "Seulement si une boutique utilise la connexion Instagram (Message AI agent › Réglages). Meta signe les messages de cette connexion avec elle. Dans l’app Meta :"
     }
   },
   "seller": {

@@ -6,7 +6,7 @@
 import { num } from './db';
 import { AppError, Ctx } from './rpc';
 import type { Tenancy } from './platform/tenancy';
-import { endState, FoundAccount, FoundAsset, saveLink, SOCIAL, SocialCheck, SocialProvider, socialApps, socialSecret, SocialTest, socialUrls, takeState } from './modules/social';
+import { endState, FoundAccount, FoundAsset, lastBadSignature, saveLink, SOCIAL, SocialCheck, SocialProvider, socialApps, socialSecret, SocialTest, socialUrls, takeState } from './modules/social';
 
 async function fetchJson(url: string, init: RequestInit, who: string): Promise<any> {
   let res: Response;
@@ -33,6 +33,16 @@ async function graph(path: string, params: Record<string, string>, method: 'GET'
     if (e?.code === 190) throw new AppError('bad_request', 'Facebook a refusé la connexion (jeton expiré ou retiré). Recommencez.');
     if (e?.code === 4 || e?.code === 17 || e?.code === 613 || res.status === 429) throw new AppError('conflict', 'Facebook limite les demandes pour l’instant. Réessayez dans quelques minutes.');
     throw new AppError('bad_request', `Facebook : ${e?.error_user_msg ?? e?.message ?? res.statusText}`);
+  }
+  return data;
+}
+/** Instagram's own login (graph.instagram.com, its own keys): the same, in Instagram's words. */
+async function igGraph(path: string, params: Record<string, string>): Promise<any> {
+  const { res, data } = await fetchJson(`https://graph.instagram.com/v23.0/${path}?${new URLSearchParams(params).toString()}`, {}, 'Instagram');
+  if (!res.ok || data?.error) {
+    const e = data?.error;
+    if (e?.code === 190) throw new AppError('bad_request', 'Instagram a refusé la clé (expirée ou retirée). Créez-en une nouvelle dans l’app Meta, puis collez-la dans Message AI agent › Réglages.');
+    throw new AppError('bad_request', `Instagram : ${e?.error_user_msg ?? e?.message ?? res.statusText}`);
   }
   return data;
 }
@@ -341,6 +351,16 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
       if (!run?.at) add('catchUp', 'warn');
       else if (run.error) add('catchUp', 'warn', { at: String(run.at), why: 'error' }, String(run.error).slice(0, 240));
       else add('catchUp', 'ok', { at: String(run.at), count: num(run.found) });
+      // Instagram's own login (Message AI agent › Réglages): with it, Dellal answers every customer of this account
+      const igKey = schema ? (await t.shop(String(schema)).query(`SELECT value FROM settings WHERE key = 'secret_dellal_ig_token'`).catch(() => []))[0]?.value : null;
+      if (igKey) {
+        try {
+          const me = await igGraph('me', { fields: 'user_id,username', access_token: String(igKey) });
+          add('igLogin', 'ok', { username: String(me?.username ?? '') });
+        } catch (e) {
+          add('igLogin', 'bad', undefined, why(e));
+        }
+      } else if (extra.ig?.id) add('igLogin', 'warn', { username: String(extra.ig.username ?? '') });
     }
   } else if (assets.some((a: any) => a.kind === 'page')) add('pageNone', 'warn');
 
@@ -365,6 +385,9 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
       add('appHook', 'warn', { list: 'messages, feed' }, why(e));
     }
   }
+  // a webhook Pilotix refused these 2 days: its signature matched no secret (Instagram's own login signs with its own)
+  const badSig = await lastBadSignature(t).catch(() => null);
+  if (badSig && Date.now() - Date.parse(badSig.at) < 2 * 24 * 3_600_000) add('badSig', 'warn', { at: badSig.at, count: badSig.n });
   // the webhook's address, called from the Internet as Meta does (through Cloudflare)
   if (publicUrl && apps.verifyToken) {
     const challenge = String(Date.now());

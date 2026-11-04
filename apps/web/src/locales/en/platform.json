@@ -1657,7 +1657,9 @@
         "On business-api.tiktok.com, create an app and ask for Marketing API access.",
         "Paste the return address in “Advertiser redirect URL”.",
         "Paste the App ID and the Secret here, then save. TikTok approves the app in one to two weeks."
-      ]
+      ],
+      "igSecret": "Instagram app secret (Instagram login)",
+      "igSecretHint": "Only if a boutique uses Instagram’s own login (Message AI agent › Settings). Meta signs that login’s messages with it. In the Meta app:"
     }
   },
   "seller": {

@@ -44,7 +44,7 @@ export { BOUTIQUE_FANOUT_PROCS, boutiqueWork } from './modules/boutiquework';
 export { listPros, proByCode, computeProStats, STATS_HOURS } from './modules/pro';
 export * as pilotLearn from './modules/pilotlearn';
 export { pilotOn } from './modules/dellal';
-export { routeMeta, seedSocialPreview, socialApps, socialSecret } from './modules/social';
+export { noteBadSignature, routeMeta, seedSocialPreview, socialApps, socialIgSecret, socialSecret } from './modules/social';
 
 /** A partner's team changed (a person closed, given other roles): its people's accounts in the stores follow. */
 const AGENCY_TEAM = new Set(['users.create', 'users.update', 'admin.users.resetPassword', 'me.delete']);

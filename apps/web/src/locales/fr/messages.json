@@ -183,7 +183,15 @@
     "pageNoneHint": "Liez votre compte Facebook : vos agents répondent alors sur Messenger et Instagram.",
     "pageOld": "Une ancienne clé de page collée à la main marche encore. Liez votre compte Facebook : elle sera remplacée.",
     "pageLink": "Lier un compte Facebook",
-    "waHelp": "WhatsApp passe encore par votre propre app Meta : collez son adresse et son jeton de vérification dans Webhooks, puis sa clé secrète ci-dessous."
+    "waHelp": "WhatsApp passe encore par votre propre app Meta : collez son adresse et son jeton de vérification dans Webhooks, puis sa clé secrète ci-dessous.",
+    "igLogin": "Instagram : répondre à tous vos clients",
+    "igLoginHelp": "Sans l’accord de Meta, Instagram laisse {{name}} répondre seulement aux comptes qui ont un rôle dans l’app Meta. Avec la connexion Instagram, votre propre compte Instagram est ajouté à l’app : {{name}} peut alors répondre à tous ses clients.",
+    "igStep1": "Dans l’app Meta, ouvrez ce chemin et connectez votre compte Instagram :",
+    "igStep2": "Sur la même page, allumez l’abonnement aux webhooks pour ce compte, créez la clé et copiez-la :",
+    "igStep3": "Collez la clé ici et enregistrez. Ne l’envoyez à personne, même pas dans un message.",
+    "igToken": "Clé Instagram (connexion Instagram)",
+    "igLinked": "Relié : @{{user}}",
+    "igOk": "Instagram relié : @{{user}}"
   },
   "lahja": {
     "fix": "Leçon de darija",

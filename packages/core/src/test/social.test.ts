@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, ServerHooks, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
 import { loadShop, passwordFromLink } from '../platform';
-import { resetSocialDemo, routeMeta } from '../modules/social';
+import { noteBadSignature, noteIgLogin, resetSocialDemo, routeMeta } from '../modules/social';
+import { setRaw } from '../modules/admin';
 import { finishLogin, loginPage, runSocial } from '../social-server';
 
 const OWNER = { email: 'owner@boutique.dz', password: 'Owner-Password-1' };
@@ -41,7 +42,7 @@ let tiktok: { token: string; ids: string[]; list: any[]; user: any } = { token: 
 let refuseSwap = false;
 // what « Tester » finds on Facebook's side
 const ALL_PERMS = ['pages_show_list', 'pages_messaging', 'pages_manage_metadata', 'pages_read_engagement', 'pages_manage_engagement', 'pages_read_user_content', 'instagram_basic', 'instagram_manage_messages', 'instagram_manage_comments', 'ads_read'];
-let probe: { perms: string[]; pageSubs: any[]; appSubs: any[]; unreadable: string[]; cloudflare: boolean; refuse: boolean; inbox?: string | null } = { perms: ALL_PERMS, pageSubs: [], appSubs: [], unreadable: [], cloudflare: false, refuse: false };
+let probe: { perms: string[]; pageSubs: any[]; appSubs: any[]; unreadable: string[]; cloudflare: boolean; refuse: boolean; inbox?: string | null; igRefuse?: boolean } = { perms: ALL_PERMS, pageSubs: [], appSubs: [], unreadable: [], cloudflare: false, refuse: false };
 const realFetch = globalThis.fetch;
 const answer = (data: unknown) => new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
 before(async () => {
@@ -85,6 +86,11 @@ before(async () => {
       if (/^\d+\/conversations$/.test(path)) return probe.inbox ? new Response(JSON.stringify({ error: { message: probe.inbox, code: 3 } }), { status: 400 }) : answer({ data: [] });
       if (/^act_\d+$/.test(path)) return probe.unreadable.includes(path) ? new Response(JSON.stringify({ error: { message: 'Pas d’accès', code: 200 } }), { status: 400 }) : answer({ id: path });
       if (/^\d+$/.test(path)) return answer({ id: path, name: 'Page', username: 'bebeconfort.dz' });
+    }
+    // Instagram's own login (graph.instagram.com): its key's account
+    if (u.host === 'graph.instagram.com') {
+      if (probe.igRefuse) return new Response(JSON.stringify({ error: { message: 'Invalid OAuth access token', code: 190 } }), { status: 400 });
+      if (/\/me$/.test(u.pathname)) return answer({ user_id: '178555', username: 'bebeconfort.dz', id: '2601' });
     }
     // the webhook's own address, called as Meta does: it answers the challenge (or Cloudflare stops it)
     if (u.host === 'pilotix.test' && u.pathname === '/api/hooks/meta-app')
@@ -441,12 +447,30 @@ test('« Tester »: the key, the permissions, the Page (subscribed again), Insta
   calls.length = 0;
   const r: any = await call('social.test', a, { linkId: karim.id });
   const st = Object.fromEntries(r.checks.map((c: any) => [c.key, c.state]));
-  assert.deepEqual(st, { token: 'ok', perms: 'warn', page: 'ok', pageHook: 'ok', ig: 'ok', fbComment: 'warn', igInbox: 'ok', igSeen: 'warn', igComment: 'warn', catchUp: 'warn', appHook: 'ok', appHookIg: 'warn', reach: 'ok', ads: 'ok' });
+  assert.deepEqual(st, { token: 'ok', perms: 'warn', page: 'ok', pageHook: 'ok', ig: 'ok', fbComment: 'warn', igInbox: 'ok', igSeen: 'warn', igComment: 'warn', catchUp: 'warn', igLogin: 'warn', appHook: 'ok', appHookIg: 'warn', reach: 'ok', ads: 'ok' });
   assert.equal(r.checks.find((c: any) => c.key === 'perms').params.list, 'instagram_manage_comments');
   assert.equal(r.checks.find((c: any) => c.key === 'pageHook').params.fixed, 1);
   assert.ok(calls.some((c) => /9002\/subscribed_apps/.test(c.url) && c.method === 'POST'), 'subscribed again');
   assert.equal(r.checks.find((c: any) => c.key === 'appHookIg').params.list, 'messages, comments');
   assert.ok(!/PAGE_TOKEN|LONG_USER_TOKEN|SHORT_USER_TOKEN|meta-app-secret/.test(JSON.stringify(r)), 'no token or secret reaches the page');
+  // Instagram's own login: not made yet (to look at); made: its account; a key Instagram refuses: red, with the reason
+  assert.deepEqual(r.checks.find((c: any) => c.key === 'igLogin').params, { username: 'bebeconfort.dz' });
+  await setRaw(a.db, 'secret_dellal_ig_token', 'IGAA-TEST-KEY');
+  const igl: any = await call('social.test', a, { linkId: karim.id });
+  assert.deepEqual(igl.checks.find((c: any) => c.key === 'igLogin'), { key: 'igLogin', state: 'ok', params: { username: 'bebeconfort.dz' }, detail: null });
+  assert.ok(!JSON.stringify(igl).includes('IGAA-TEST-KEY'), 'the Instagram key never reaches the page');
+  probe.igRefuse = true;
+  const igBad: any = (await call('social.test', a, { linkId: karim.id })) as any;
+  assert.equal(igBad.checks.find((c: any) => c.key === 'igLogin').state, 'bad');
+  assert.match(igBad.checks.find((c: any) => c.key === 'igLogin').detail, /refusé la clé/);
+  probe.igRefuse = false;
+  await a.db.query(`DELETE FROM settings WHERE key = 'secret_dellal_ig_token'`);
+  // a webhook Pilotix refused (its signature matched no secret): said for 2 days
+  await noteBadSignature(t, 'instagram');
+  const sig: any = await call('social.test', a, { linkId: karim.id });
+  assert.equal(sig.checks.find((c: any) => c.key === 'badSig').state, 'warn');
+  assert.equal(sig.checks.find((c: any) => c.key === 'badSig').params.count, 1);
+  await t.platform.query(`DELETE FROM platform.settings WHERE key = 'meta_badsig'`);
   // Cloudflare stops the webhook's address
   probe.cloudflare = true;
   const cf: any = await call('social.test', a, { linkId: karim.id });
@@ -533,4 +557,16 @@ test('the preview: « Tester » answers a sample, the ad accounts switch off and
   const on: any = await call('social.ads', demo, { linkId: first.links[0].id, on: true });
   assert.equal(on.here.ad_account.count, 4);
   resetSocialDemo();
+});
+
+test('Instagram’s own login: its webhooks (another number, maybe) go to the boutique that linked it; unlinked, to none', async () => {
+  assert.deepEqual(await routeMeta(t, { object: 'instagram', entry: [{ id: '178999' }] }), []);
+  await noteIgLogin(t, a.shop!.id, '178999', 'bebeconfort.dz');
+  assert.deepEqual((await routeMeta(t, { object: 'instagram', entry: [{ id: '178999', messaging: [] }] })).map((r) => r.shopId), [a.shop!.id]);
+  // one account per boutique: a new one replaces it
+  await noteIgLogin(t, a.shop!.id, '178888', 'bebeconfort.dz');
+  assert.deepEqual(await routeMeta(t, { object: 'instagram', entry: [{ id: '178999' }] }), []);
+  assert.deepEqual((await routeMeta(t, { object: 'instagram', entry: [{ id: '178888' }] })).map((r) => r.shopId), [a.shop!.id]);
+  await noteIgLogin(t, a.shop!.id, '', '');
+  assert.deepEqual(await routeMeta(t, { object: 'instagram', entry: [{ id: '178888' }] }), []);
 });
