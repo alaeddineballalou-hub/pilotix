@@ -11,7 +11,7 @@ import { Out, rpc } from '../../lib/backend';
 import { da, dateOnly, n, pct } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { SellerScope, useSeller } from '../../lib/seller';
-import { useSellers } from '../../lib/sellers';
+import { ownerGroups, ownerRows, useSellers } from '../../lib/sellers';
 import { useSession } from '../../lib/session';
 import { CopyCode } from '../../ui/CopyCode';
 import { Card, Empty, ErrorBox, Field, Icon, Kpis, Loading, StageBar } from '../../ui/kit';
@@ -201,19 +201,37 @@ function ChiefMonth() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({ l, c }) => (
-                  <tr key={l.id}>
-                    <td data-l={t('agency.seller')}>
-                      <a href={`#/vendeurs/${l.id}`}>
-                        <b>{l.store.name}</b>
-                      </a>
-                    </td>
-                    <td className="num ltr" data-l={t('agency.c.received')}>{n(c.received)}</td>
-                    <td className="num ltr" data-l={t('agency.c.confirmed')}>{n(c.confirmed)}</td>
-                    <td className="num ltr" data-l={t('agency.c.delivered')}>{n(c.delivered)}</td>
-                    <td className="num ltr" data-l={t('agency.c.amount')}>{da(c.total)}</td>
-                  </tr>
-                ))}
+                {/* a seller's boutiques together: the seller (their numbers added up), then each boutique */}
+                {ownerRows(rows, (r) => r.l.store.owner).map((e) => {
+                  if (e.head) {
+                    const g = sumCounts(e.items.map((x) => x.c));
+                    return (
+                      <tr key={`o${e.owner.id}`} className="agx-ohead" title={t('agency.sellerGroupHelp')}>
+                        <td data-l={t('agency.seller')}>
+                          <b>{t('agency.sellerGroup', { name: e.owner.name || e.items[0].l.store.name, count: e.items.length })}</b>
+                        </td>
+                        <td className="num ltr" data-l={t('agency.c.received')}>{n(g.received)}</td>
+                        <td className="num ltr" data-l={t('agency.c.confirmed')}>{n(g.confirmed)}</td>
+                        <td className="num ltr" data-l={t('agency.c.delivered')}>{n(g.delivered)}</td>
+                        <td className="num ltr" data-l={t('agency.c.amount')}>{da(e.items.reduce((s, x) => s + x.c.total, 0))}</td>
+                      </tr>
+                    );
+                  }
+                  const { l, c } = e.item;
+                  return (
+                    <tr key={l.id} className={e.sub ? 'agx-ochild' : undefined}>
+                      <td data-l={t('agency.seller')}>
+                        <a href={`#/vendeurs/${l.id}`}>
+                          <b>{l.store.name}</b>
+                        </a>
+                      </td>
+                      <td className="num ltr" data-l={t('agency.c.received')}>{n(c.received)}</td>
+                      <td className="num ltr" data-l={t('agency.c.confirmed')}>{n(c.confirmed)}</td>
+                      <td className="num ltr" data-l={t('agency.c.delivered')}>{n(c.delivered)}</td>
+                      <td className="num ltr" data-l={t('agency.c.amount')}>{da(c.total)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -255,11 +273,7 @@ function SellerList() {
       )}
       <Card title={tp('sellers')} help={tp('sellersHelp')}>
         {active.length ? (
-          <div className="agx-links">
-            {active.map((l) => (
-              <SellerCard key={l.id} l={l} c={h.counts[String(l.id)]} />
-            ))}
-          </div>
+          <SellerGroups links={active} h={h} />
         ) : (
           <Empty>{tp('home.noSeller')}</Empty>
         )}
@@ -289,6 +303,37 @@ function SellerList() {
         </details>
       )}
     </div>
+  );
+}
+
+/** The sellers working with the partner: a seller's boutiques together, under their seller; the others as they come. */
+function SellerGroups({ links, h }: { links: Home['links']; h: Home }) {
+  const { t } = useTranslation();
+  const groups = ownerGroups(links, (l) => l.store.owner);
+  const many = groups.filter((g) => g.owner && g.items.length > 1);
+  const single = groups.filter((g) => !(g.owner && g.items.length > 1)).flatMap((g) => g.items);
+  return (
+    <>
+      {many.map((g) => (
+        <section key={`o${g.owner!.id}`} className="agx-seller-grp" title={t('agency.sellerGroupHelp')}>
+          <h3 className="agx-seller-h">
+            <Icon name="store" /> {t('agency.sellerGroup', { name: g.owner!.name || g.items[0].store.name, count: g.items.length })}
+          </h3>
+          <div className="agx-links">
+            {g.items.map((l) => (
+              <SellerCard key={l.id} l={l} c={h.counts[String(l.id)]} />
+            ))}
+          </div>
+        </section>
+      ))}
+      {single.length > 0 && (
+        <div className="agx-links">
+          {single.map((l) => (
+            <SellerCard key={l.id} l={l} c={h.counts[String(l.id)]} />
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -845,13 +890,47 @@ function SellerBills() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({ link: l, counts: c, bill, request: b }) => (
-                  <tr key={l.id}>
+                {ownerRows(rows, (r) => r.link.store.owner).map((e) => {
+                  if (e.head) {
+                    const g = sumCounts(e.items.map((x) => x.counts));
+                    const amount = e.items.reduce((s, x) => s + (x.request && x.request.status !== 'requested' ? x.request.amount : x.bill.total), 0);
+                    return (
+                      <tr key={`o${e.owner.id}`} className="agx-ohead" title={t('agency.sellerGroupHelp')}>
+                        <td data-l={t('agency.seller')}>
+                          <b>{t('agency.sellerGroup', { name: e.owner.name || e.items[0].link.store.name, count: e.items.length })}</b>
+                        </td>
+                        {mk ? (
+                          <>
+                            <td className="num ltr" data-l={t('agency.c.adsets')}>{n(g.adsets)}</td>
+                            <td className="num ltr" data-l={t('agency.c.spend')}>{da(g.spend)}</td>
+                            <td className="num ltr" data-l={t('agency.c.delivered')}>{n(g.delivered)}</td>
+                            <td className={`num ltr ${g.net < 0 ? 'agx-bad' : ''}`} data-l={t('agency.c.net')}>{da(g.net)}</td>
+                            <td className="num ltr" data-l={t('agency.c.successes')}>{n(g.successes)}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="num ltr" data-l={t('agency.c.confirmed')}>{n(g.confirmed)}</td>
+                            <td className="num ltr" data-l={t('agency.c.delivered')}>{n(g.delivered)}</td>
+                            <td className="num ltr" data-l={t('agency.c.upsells')}>{n(g.upsells)}</td>
+                            <td data-l="" />
+                          </>
+                        )}
+                        <td className="num" data-l={t('agency.c.amount')}>
+                          <b className="ltr">{da(amount)}</b>
+                        </td>
+                        <td data-l="" />
+                        <td data-l="" />
+                      </tr>
+                    );
+                  }
+                  const { link: l, counts: c, bill, request: b } = e.item;
+                  return (
+                  <tr key={l.id} className={e.sub ? 'agx-ochild' : undefined}>
                     <td data-l={t('agency.seller')}>
                       <a href={`#/vendeurs/${l.id}`}>
                         <b>{l.store.name}</b>
                       </a>
-                      {l.status !== 'active' && <small className="muted">{t(`agency.st.${l.status}`)}</small>}
+                      {l.status !== 'active' && <small className="muted">{t(`agency.lst.${l.status}`)}</small>}
                     </td>
                     {mk ? (
                       <>
@@ -897,7 +976,8 @@ function SellerBills() {
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

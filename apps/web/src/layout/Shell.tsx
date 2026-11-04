@@ -8,7 +8,7 @@ import { applyLanguage } from '../lib/i18n';
 import { openOrder, openOrderForm } from '../lib/modals';
 import { useAction, useRpc, useRpcFor } from '../lib/query';
 import { Seller, setSeller, useSeller } from '../lib/seller';
-import { useSellers } from '../lib/sellers';
+import { ownerGroups, useSellers } from '../lib/sellers';
 import { useSession } from '../lib/session';
 import { PxLogo } from './PxLogo';
 import { PxMenuFace } from './PxMenuFace';
@@ -418,11 +418,24 @@ function SellerSwitch() {
       <span className="px-seller-l">{t('agency.pick.short')}</span>
       <select value={String(seller)} aria-label={t('agency.pick.label')} onChange={(e) => setSeller(e.target.value === 'all' ? 'all' : Number(e.target.value))}>
         <option value="all">{t('agency.pick.all', { count: list.length })}</option>
-        {list.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.name}
-          </option>
-        ))}
+        {/* a seller's boutiques together, under their seller */}
+        {ownerGroups(list, (x) => x.owner).map((g) =>
+          g.owner && g.items.length > 1 ? (
+            <optgroup key={`o${g.owner.id}`} label={t('agency.sellerGroup', { name: g.owner.name || g.items[0].name, count: g.items.length })}>
+              {g.items.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name}
+                </option>
+              ))}
+            </optgroup>
+          ) : (
+            g.items.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.name}
+              </option>
+            ))
+          ),
+        )}
       </select>
     </label>
   );

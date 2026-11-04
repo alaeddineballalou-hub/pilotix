@@ -433,3 +433,33 @@ test('an agency works on several sellers: one at a time or all together, its peo
   assert.equal(finalPage.rows[0].ref, 'PAGE501');
   await assert.rejects(call('suivi.list', { ...chief, seller: 'all' }, { tab: 'enlivraison', page: -1 }), /Pagination invalide/);
 });
+
+test('a seller with several boutiques: the agency sees them together, under their seller', async () => {
+  const { t, p } = await server();
+  const biz = (await p('p.plans.list')).find((x: any) => x.code === 'business');
+  const ids: number[] = [];
+  for (const name of ['Bébé Shop', 'Maison Shop']) {
+    const made = await p('p.shops.create', { name, ownerName: 'Karim', ownerEmail: 'karim@shops.dz', planId: biz.id, trialDays: 14 });
+    if (made.mail?.token) await passwordFromLink(t, made.mail.token, PW);
+    ids.push(made.id);
+  }
+  const other = await store(t, p, 'Boutique Oran', 'nadir@oran.dz');
+  const ag = await agency(t, 'Agence Rapide', 'samir@agence.dz');
+  await p('p.agencies.verify', { id: ag.id, verified: true });
+  const chief = await as(t, ag.id, 'samir@agence.dz', PW);
+  await call('agency.prices', chief, { prices: PRICES });
+  for (const [id, email] of [[ids[0], 'karim@shops.dz'], [ids[1], 'karim@shops.dz'], [other.id, 'nadir@oran.dz']] as const) {
+    const admin = await as(t, id, email, PW);
+    const { id: linkId } = (await call('partners.request', admin, { agencyId: ag.id, tasks: ['confirmation'], products: null })) as any;
+    await call('agency.answer', chief, { id: linkId, accept: true });
+  }
+  // the picker: Karim's two boutiques carry the same seller, the other boutique its own
+  const sellers: any[] = (await call('agency.sellers', chief, {})) as any[];
+  const karim = sellers.find((s) => s.id === ids[0]).owner;
+  assert.equal(karim.name, 'Karim');
+  assert.deepEqual(sellers.filter((s) => s.owner?.id === karim.id).map((s) => s.id).sort(), [...ids].sort());
+  assert.notEqual(sellers.find((s) => s.id === other.id).owner.id, karim.id);
+  // the home's links too
+  const home: any = await call('agency.home', chief, {});
+  assert.equal(home.links.filter((l: any) => l.store.owner?.id === karim.id).length, 2);
+});

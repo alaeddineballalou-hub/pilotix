@@ -606,7 +606,7 @@ function SellersField({ value, onChange }: { value: AgencySellerWork[] | null; o
                   <label className="agx-seller-row">
                     <input type="checkbox" checked={!!w} onChange={(e) => set(c.store.id, e.target.checked ? { store: c.store.id, products: null } : null)} />
                     <b>{c.store.name}</b>
-                    {c.status === 'pending' && <small className="muted">{t('agency.st.pending')}</small>}
+                    {c.status === 'pending' && <small className="muted">{t('agency.lst.pending')}</small>}
                   </label>
                   {w && (
                     <div className="agx-seller-prod">

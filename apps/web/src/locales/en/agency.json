@@ -633,6 +633,9 @@
       "monthText": "Counted by Pilotix for {{m}}: their ad sets of the month and what you owe them with their prices.",
       "paymentsHelp": "The marketer asks for the payment of a month. You pay outside Pilotix, then click “Paid”.",
       "giveAdsets": "Give ad sets"
+    },
+    "lst": {
+      "suspended": "Marketer suspended"
     }
   },
   "factTabs": {
@@ -664,5 +667,17 @@
     "close": "Approve pay",
     "closeAsk": "Approve this month’s pay? It will not change after.",
     "closed": "Pay approved"
+  },
+  "sellerGroup": "{{name}} · {{count}} boutiques",
+  "sellerGroupHelp": "The same seller: their boutiques are together.",
+  "lst": {
+    "sent": "Request sent",
+    "received": "Your answer is needed",
+    "active": "Under contract",
+    "suspended": "Agency suspended",
+    "refused": "Refused",
+    "cancelled": "Cancelled",
+    "ended": "Ended",
+    "pending": "Waiting"
   }
 }

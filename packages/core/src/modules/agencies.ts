@@ -124,8 +124,9 @@ const productsOf = (v: unknown): number[] | null => {
 };
 
 export const LINK_SQL = `SELECT l.*, a.kind AS a_kind, a.name AS a_name, a.public_code AS a_code, a.agency_verified_at AS a_verified, a.status AS a_status, a.schema_name AS a_schema,
-    s.name AS s_name, s.public_code AS s_code, s.status AS s_status, s.schema_name AS s_schema
-  FROM platform.agency_links l JOIN platform.shops a ON a.id = l.agency_id JOIN platform.shops s ON s.id = l.store_id`;
+    s.name AS s_name, s.public_code AS s_code, s.status AS s_status, s.schema_name AS s_schema, s.owner_account_id AS s_owner, so.name AS s_owner_name
+  FROM platform.agency_links l JOIN platform.shops a ON a.id = l.agency_id JOIN platform.shops s ON s.id = l.store_id
+  LEFT JOIN platform.accounts so ON so.id = s.owner_account_id`;
 
 export interface Link {
   info: AgencyLinkInfo;
@@ -146,7 +147,8 @@ export function toLink(r: any): Link {
       status: r.status,
       requestedBy: r.requested_by,
       agency: { id: num(r.agency_id), name: r.a_name, code: r.a_code ?? null, verified: !!r.a_verified, suspended: r.a_status !== 'active' },
-      store: { id: num(r.store_id), name: r.s_name, code: r.s_code ?? null },
+      // the seller: their boutiques go together on the partner's side (one link per boutique)
+      store: { id: num(r.store_id), name: r.s_name, code: r.s_code ?? null, owner: r.s_owner ? { id: num(r.s_owner), name: String(r.s_owner_name ?? '') } : null },
       tasks: kind === 'marketer' ? ['marketing'] : tasksOf(r.tasks).filter((k) => k !== 'marketing'),
       prices: cleanPrices(json(r.prices), kind),
       pricesNew: r.prices_new ? cleanPrices(json(r.prices_new), kind) : null,

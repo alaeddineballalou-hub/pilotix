@@ -21,7 +21,7 @@ interface Work {
   profileId: number;
 }
 
-const sellerOf = (L: Link): AgencySeller => ({ id: L.info.store.id, name: L.info.store.name, code: L.info.store.code, linkId: L.info.id, tasks: L.info.tasks });
+const sellerOf = (L: Link): AgencySeller => ({ id: L.info.store.id, name: L.info.store.name, code: L.info.store.code, linkId: L.info.id, tasks: L.info.tasks, owner: L.info.store.owner ?? null });
 
 /**
  * The sellers this person of the agency works for now: contracts in force (the agency checked by Pilotix, not

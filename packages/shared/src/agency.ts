@@ -140,7 +140,8 @@ export interface AgencyLinkInfo {
   /** who asked first (the other side accepts or refuses) */
   requestedBy: 'agency' | 'store';
   agency: { id: number; name: string; code: string | null; verified: boolean; suspended: boolean };
-  store: { id: number; name: string; code: string | null };
+  /** owner: the seller (their Pilotix account) — a seller with several boutiques has one link per boutique */
+  store: { id: number; name: string; code: string | null; owner?: { id: number; name: string } | null };
   /** what the partner does for the store (a marketer: its ads) */
   tasks: AgencyTask[];
   /** the prices in force (set by the agency) */
@@ -172,6 +173,8 @@ export interface AgencySeller {
   code: string | null;
   linkId: number;
   tasks: AgencyTask[];
+  /** the seller who owns the store: their boutiques go together in the picker */
+  owner?: { id: number; name: string } | null;
 }
 
 /** An agency's payment request for one month (its numbers kept as they were counted). */

@@ -99,9 +99,10 @@ export function TaskPicker({ value, onChange }: { value: AgencyTask[]; onChange:
 /** Where a link stands, seen from one side. */
 export function LinkStatus({ l, side }: { l: AgencyLinkInfo; side: 'agency' | 'store' }) {
   const tp = useTp(l.kind);
-  if (l.status === 'pending') return <span className="chip agx-st agx-st-wait">{l.requestedBy === side ? tp('st.sent') : tp('st.received')}</span>;
-  if (l.status === 'active') return l.agency.suspended ? <span className="chip agx-st agx-st-bad">{tp('st.suspended')}</span> : <span className="chip agx-st agx-st-ok">{tp('st.active')}</span>;
-  return <span className="chip agx-st">{tp(`st.${l.status}`)}</span>;
+  // « lst »: the link's state (« st » is the statistics' words)
+  if (l.status === 'pending') return <span className="chip agx-st agx-st-wait">{l.requestedBy === side ? tp('lst.sent') : tp('lst.received')}</span>;
+  if (l.status === 'active') return l.agency.suspended ? <span className="chip agx-st agx-st-bad">{tp('lst.suspended')}</span> : <span className="chip agx-st agx-st-ok">{tp('lst.active')}</span>;
+  return <span className="chip agx-st">{tp(`lst.${l.status}`)}</span>;
 }
 
 // ---------------------------------------------------------------- prices

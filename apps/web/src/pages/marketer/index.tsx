@@ -5,14 +5,14 @@
 //   ad sets only), with the seller picker at the top of the page. « Tous les vendeurs »: every ad set of every seller
 //   in one list (a click opens it in its seller), or the sellers to choose for Publicité.
 // Its Vendeurs, Facturation, Utilisateurs and Réglages are the agency's pages (../agency), with a marketer's words.
-import { hasPrice, NO_COUNTS } from '@pilotix/shared';
+import { hasPrice, NO_COUNTS, type AgencyCounts } from '@pilotix/shared';
 import { ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Out } from '../../lib/backend';
 import { da, n } from '../../lib/format';
 import { useRpc } from '../../lib/query';
 import { SellerScope, setSeller, useSeller } from '../../lib/seller';
-import { useSellers } from '../../lib/sellers';
+import { ownerRows, useSellers } from '../../lib/sellers';
 import { AgentView, useSession } from '../../lib/session';
 import { useIsPhone } from '../../lib/useMedia';
 import { Card, Empty, ErrorBox, Icon, Kpis, Loading, StageBar } from '../../ui/kit';
@@ -191,20 +191,35 @@ function OwnerMonth() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({ l, c }) => (
-                  <tr key={l.id}>
-                    <td data-l={t('agency.seller')}>
-                      <a href={`#/vendeurs/${l.id}`}>
-                        <b>{l.store.name}</b>
-                      </a>
-                    </td>
-                    <td className="num ltr" data-l={t('agency.c.adsets')}>{n(c.adsets)}</td>
-                    <td className="num ltr" data-l={t('agency.c.spend')}>{da(c.spend)}</td>
-                    <td className="num ltr" data-l={t('agency.c.delivered')}>{n(c.delivered)}</td>
-                    <td className={`num ltr ${c.net < 0 ? 'agx-bad' : ''}`} data-l={t('agency.c.net')}>{da(c.net)}</td>
-                    <td className="num ltr" data-l={t('agency.c.amount')}>{da(c.total)}</td>
-                  </tr>
-                ))}
+                {/* a seller's boutiques together: the seller (their numbers added up), then each boutique */}
+                {ownerRows(rows, (r) => r.l.store.owner).map((e) => {
+                  const one = (key: string | number, x: AgencyCounts & { total: number }, name: ReactNode, cls?: string) => (
+                    <tr key={key} className={cls}>
+                      <td data-l={t('agency.seller')}>{name}</td>
+                      <td className="num ltr" data-l={t('agency.c.adsets')}>{n(x.adsets)}</td>
+                      <td className="num ltr" data-l={t('agency.c.spend')}>{da(x.spend)}</td>
+                      <td className="num ltr" data-l={t('agency.c.delivered')}>{n(x.delivered)}</td>
+                      <td className={`num ltr ${x.net < 0 ? 'agx-bad' : ''}`} data-l={t('agency.c.net')}>{da(x.net)}</td>
+                      <td className="num ltr" data-l={t('agency.c.amount')}>{da(x.total)}</td>
+                    </tr>
+                  );
+                  if (e.head)
+                    return one(
+                      `o${e.owner.id}`,
+                      { ...sumCounts(e.items.map((x) => x.c)), total: e.items.reduce((s, x) => s + x.c.total, 0) },
+                      <b>{t('agency.sellerGroup', { name: e.owner.name || e.items[0].l.store.name, count: e.items.length })}</b>,
+                      'agx-ohead',
+                    );
+                  const { l, c } = e.item;
+                  return one(
+                    l.id,
+                    c,
+                    <a href={`#/vendeurs/${l.id}`}>
+                      <b>{l.store.name}</b>
+                    </a>,
+                    e.sub ? 'agx-ochild' : undefined,
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -633,6 +633,9 @@
       "monthText": "Compté par Pilotix pour {{m}} : ses ad sets du mois et ce que vous lui devez avec ses prix.",
       "paymentsHelp": "Le marketer demande le paiement d’un mois. Vous payez en dehors de Pilotix, puis vous cliquez « Payé ».",
       "giveAdsets": "Donner des ad sets"
+    },
+    "lst": {
+      "suspended": "Marketer suspendu"
     }
   },
   "factTabs": {
@@ -664,5 +667,17 @@
     "close": "Valider la paie",
     "closeAsk": "Valider la paie de ce mois ? Elle ne changera plus.",
     "closed": "Paie validée"
+  },
+  "sellerGroup": "{{name}} · {{count}} boutiques",
+  "sellerGroupHelp": "Le même vendeur : ses boutiques sont ensemble.",
+  "lst": {
+    "sent": "Demande envoyée",
+    "received": "À vous de répondre",
+    "active": "En contrat",
+    "suspended": "Agence suspendue",
+    "refused": "Refusée",
+    "cancelled": "Annulée",
+    "ended": "Terminé",
+    "pending": "En attente"
   }
 }
