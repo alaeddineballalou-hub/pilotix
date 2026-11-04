@@ -334,6 +334,7 @@ function demoReport(hidden: Record<string, 'solve' | 'ignore'> = {}): ServerDoct
       job('notify-run', 60_000, 'ok', 0),
       job('landing-run', 60_000, 'ok', 0),
       job('cm-sweep', 3 * 60_000, 'ok', 2),
+      job('dellal-catchup', 3 * 60_000, 'ok', 1),
       job('dellal-followups', 15 * 60_000, 'ok', 9),
       job('spy-scan', 60 * 60_000, 'ok', 31),
       job('meta-sync', 86_400_000, 'ok', 600),
