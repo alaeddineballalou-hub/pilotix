@@ -347,7 +347,10 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
         await graph(`act_${String(a.ext_id).replace(/^act_/, '')}`, { fields: 'id,account_status', access_token: token }).catch(() => unread.push(String(a.name ?? a.ext_id)));
     add('ads', !keyOk || unread.length ? 'warn' : 'ok', { count: ads.length, bad: keyOk ? unread.length : ads.length }, unread.length ? unread.join(', ').slice(0, 240) : null);
     const money = [...new Set(ads.map((a: any) => jsonOf(a.extra).currency).filter(Boolean).map(String))];
-    if (money.some((c) => c !== 'USD')) add('adsCurrency', 'warn', { list: money.join(', ') });
+    // Publicité counts a dinar account in dinars (and in dollars with the month's rate); any other money as dollars
+    const other = money.filter((c) => c !== 'USD' && c !== 'DZD');
+    if (other.length) add('adsCurrency', 'warn', { list: other.join(', ') });
+    else if (money.includes('DZD')) add('adsCurrency', 'ok');
   }
   return { at: new Date().toISOString(), checks };
 }

@@ -589,6 +589,13 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p018_social', SOCIAL_PLATFORM_SQL],
   // one plan per seller: the boutiques a plan allows; the seller's other boutiques follow their first one
   ['p019_seller_plan', P019],
+  // a Page taken by a boutique before Facebook showed its Instagram (a login without Instagram's permissions): the
+  // Instagram a later login brought, so Instagram's messages find the boutique (modules/social.ts › writeUse from now on)
+  [
+    'p020_social_ig',
+    `UPDATE platform.social_uses u SET ig_id = a.extra->'ig'->>'id' FROM platform.social_assets a
+      WHERE a.id = u.asset_id AND u.kind = 'page' AND u.ig_id IS DISTINCT FROM (a.extra->'ig'->>'id');`,
+  ],
 ];
 
 /** Creates or updates the platform's tables. */

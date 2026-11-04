@@ -9,8 +9,10 @@
 //    products splits its spend equally between them.
 //  - Admins / vendeurs see every ad set. A marketer only sees the ad sets assigned to him (adsets.marketer_id); his share of a
 //    product's orders is his share of that product's ad spend over the period.
-//  - Spend is in the ad account currency (USD cents); each day is converted with the rate of its month (fx_rates),
-//    or the latest earlier rate when the month has none.
+//  - Spend is stored in the ad account currency, in cents (adsets.currency; empty = USD). A dollar account's day is
+//    turned into dinars with the rate of its month (fx_rates), or the latest earlier rate when the month has none; a
+//    dinar account's day counts in dinars as it is, and in dollars with that same rate. Any other currency is taken as
+//    dollars (Pilot AI › Comptes › « Tester » says so).
 import { z } from 'zod';
 import { Db, isoOrNull, num } from '../db';
 import { bad, Ctx, forbidden, hasRole, notFound, proc } from '../rpc';
@@ -61,7 +63,7 @@ export async function syncMeta(ctx: Ctx, from: string, to: string, force = false
   const last = await getRaw<{ at: string; from: string; to: string } | null>(ctx.db, SYNC_KEY, null);
   if (!force && last && last.from <= from && last.to >= to && ctx.now() - Date.parse(last.at) < SYNC_EVERY_MS) return null;
   const r = (await ctx.server.meta('insights', { from, to }, ctx)) as {
-    adsets: { id: string; name: string; campaign: string; status: string | null }[];
+    adsets: { id: string; name: string; campaign: string; status: string | null; currency?: string }[];
     ads: { id: string; adsetId: string; name: string; status: string | null; isVideo: boolean }[];
     adsetDays: any[];
     adDays: any[];
@@ -69,9 +71,10 @@ export async function syncMeta(ctx: Ctx, from: string, to: string, force = false
   await ctx.db.tx(async (tx) => {
     for (const s of r.adsets)
       await tx.query(
-        `INSERT INTO adsets (id, name, campaign, status, updated_at) VALUES ($1,$2,$3,$4,now())
-         ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, campaign = EXCLUDED.campaign, status = EXCLUDED.status, updated_at = now()`,
-        [s.id, s.name, s.campaign, s.status],
+        `INSERT INTO adsets (id, name, campaign, status, currency, updated_at) VALUES ($1,$2,$3,$4,$5,now())
+         ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, campaign = EXCLUDED.campaign, status = EXCLUDED.status,
+           currency = coalesce(EXCLUDED.currency, adsets.currency), updated_at = now()`,
+        [s.id, s.name, s.campaign, s.status, s.currency ?? null],
       );
     for (const a of r.ads)
       await tx.query(
@@ -83,8 +86,8 @@ export async function syncMeta(ctx: Ctx, from: string, to: string, force = false
     await tx.query('DELETE FROM ad_daily WHERE day BETWEEN $1 AND $2', [from, to]);
     for (const d of r.adsetDays)
       await tx.query(
-        `INSERT INTO adsets (id, name, campaign) VALUES ($1,$2,$3) ON CONFLICT (id) DO NOTHING`,
-        [d.adsetId, d.adsetName || d.adsetId, d.campaign || null],
+        `INSERT INTO adsets (id, name, campaign, currency) VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO UPDATE SET currency = coalesce(EXCLUDED.currency, adsets.currency)`,
+        [d.adsetId, d.adsetName || d.adsetId, d.campaign || null, d.currency ?? null],
       );
     for (const d of r.adsetDays)
       await tx.query(
@@ -151,10 +154,27 @@ export async function fxTable(db: Db): Promise<(ym: string) => number | null> {
   };
 }
 
+/**
+ * A day's spend in dollar cents, from what is stored (cents in the ad account's own currency): a dinar account's spend
+ * is divided by the dollar rate of its month and kept in dinars as it is (dzdCents); no rate at all yet: its dollars are
+ * not known (0, noRate). Any other currency is taken as dollars.
+ */
+export function daySpend(fx: (ym: string) => number | null, day: string, cents: number, currency: string | null | undefined): { spendCents: number; dzdCents: number | null; noRate: boolean } {
+  if (String(currency ?? '').toUpperCase() !== 'DZD') return { spendCents: cents, dzdCents: null, noRate: false };
+  const rate = fx(day.slice(0, 7));
+  // not rounded: × the same rate gives the dinars back exactly (marketers' pay, month by month)
+  return { spendCents: rate ? cents / rate : 0, dzdCents: cents, noRate: !rate && cents > 0 };
+}
+
 export interface DayRow {
   day: string;
   adsetId: string;
+  /** dollar cents */
   spendCents: number;
+  /** a dinar ad account: the day's spend in dinar cents, as Meta gave it (a dollar account: null, it is × the month's rate) */
+  dzdCents?: number | null;
+  /** a dinar ad account's day with spend and no dollar rate at all yet */
+  noRate?: boolean;
   impressions: number;
   reach: number;
   clicks: number;
@@ -165,11 +185,15 @@ export interface DayRow {
 }
 export async function insights(db: Db, ids: string[], from: string, to: string): Promise<DayRow[]> {
   if (!ids.length) return [];
-  const rows = await db.query('SELECT *, day::text AS dtext FROM ad_insights WHERE adset_id = ANY($1) AND day BETWEEN $2 AND $3 ORDER BY day', [ids, from, to]);
+  const rows = await db.query(
+    'SELECT i.*, i.day::text AS dtext, s.currency FROM ad_insights i LEFT JOIN adsets s ON s.id = i.adset_id WHERE i.adset_id = ANY($1) AND i.day BETWEEN $2 AND $3 ORDER BY i.day',
+    [ids, from, to],
+  );
+  const fx = rows.some((r: any) => String(r.currency ?? '').toUpperCase() === 'DZD') ? await fxTable(db) : () => null;
   return rows.map((r: any) => ({
     day: dayStr(r.dtext),
     adsetId: String(r.adset_id),
-    spendCents: num(r.spend_cents),
+    ...daySpend(fx, dayStr(r.dtext), num(r.spend_cents), r.currency),
     impressions: num(r.impressions),
     reach: num(r.reach),
     clicks: num(r.clicks),
@@ -381,11 +405,13 @@ async function overview(ctx: Ctx, i: z.infer<typeof Period>) {
   const prevFrom = addDays(i.to, -13);
   const rows = await insights(ctx.db, all.map((s) => s.id), i.from < prevFrom ? i.from : prevFrom, i.to);
   const inPeriod = rows.filter((r) => r.day >= i.from && r.day <= i.to);
+  // in dinars: a dinar account's day as it is, a dollar account's day × the rate of its month
   const dzd = (r: DayRow) => {
+    if (r.dzdCents != null) return r.dzdCents / 100;
     const rate = fx(r.day.slice(0, 7));
     return rate === null ? null : (r.spendCents / 100) * rate;
   };
-  const fxMissing = inPeriod.some((r) => r.spendCents > 0 && fx(r.day.slice(0, 7)) === null);
+  const fxMissing = inPeriod.some((r) => (r.spendCents > 0 || !!r.noRate) && fx(r.day.slice(0, 7)) === null);
 
   const products = (await ctx.db.query('SELECT id, name, sku, price, active FROM products ORDER BY name')).map((p: any) => ({ id: num(p.id), name: p.name as string, sku: p.sku as string, price: num(p.price), active: !!p.active }));
   const P = new Map(products.map((p) => [p.id, p]));
@@ -572,7 +598,13 @@ export const adsProcs = {
     const ads = await ctx.db.query('SELECT * FROM ads WHERE adset_id = $1 ORDER BY name', [i.id]);
     const daily = await ctx.db.query('SELECT *, day::text AS dtext FROM ad_daily WHERE adset_id = $1 AND day <= $2 ORDER BY day', [i.id, i.to]);
     const wk = addDays(i.to, -6);
-    const toRow = (r: any): DayRow => ({ day: dayStr(r.dtext), adsetId: String(r.adset_id), spendCents: num(r.spend_cents), impressions: num(r.impressions), reach: num(r.reach), clicks: num(r.clicks), lpv: num(r.lpv), purchases: num(r.purchases), video3s: num(r.video_3s), thruplays: num(r.thruplays) });
+    // the ad set's account currency: a dinar account's ads are in dinars too
+    const currency = ((await ctx.db.query('SELECT currency FROM adsets WHERE id = $1', [i.id]))[0] as any)?.currency ?? null;
+    const fx = await fxTable(ctx.db);
+    const toRow = (r: any): DayRow => {
+      const day = dayStr(r.dtext);
+      return { day, adsetId: String(r.adset_id), ...daySpend(fx, day, num(r.spend_cents), currency), impressions: num(r.impressions), reach: num(r.reach), clicks: num(r.clicks), lpv: num(r.lpv), purchases: num(r.purchases), video3s: num(r.video_3s), thruplays: num(r.thruplays) };
+    };
     return {
       adset: s,
       days: days.map((d) => ({ day: d.day, spendUsd: d.spendCents / 100, impressions: d.impressions, clicks: d.clicks, purchases: d.purchases, hook: d.impressions && d.video3s ? d.video3s / d.impressions : null })),

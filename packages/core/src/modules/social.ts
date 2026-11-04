@@ -380,6 +380,12 @@ async function writeUse(t: Tenancy, shopId: number, assetId: number) {
   if (!schema) return;
   const a = (await t.platform.query(`SELECT a.*, l.name AS account, l.token AS link_token, l.provider FROM platform.social_assets a JOIN platform.social_links l ON l.id = a.link_id WHERE a.id = $1`, [assetId]))[0];
   if (!a) return;
+  // a Page's Instagram as Facebook shows it now (a new login with Instagram's permissions shows one that was hidden):
+  // Instagram's messages find the boutique by it (routeMeta)
+  if (a.kind === 'page') {
+    const ig = json(a.extra)?.ig?.id ? String(json(a.extra).ig.id) : null;
+    await t.platform.query(`UPDATE platform.social_uses SET ig_id = $3::text WHERE shop_id = $1 AND kind = 'page' AND asset_id = $2 AND ig_id IS DISTINCT FROM $3::text`, [shopId, assetId, ig]);
+  }
   // ad accounts: all of the account's, in the order they came
   const accounts = isAdKind(a.kind)
     ? (await t.platform.query(`SELECT ext_id, name, extra FROM platform.social_assets WHERE link_id = $1 AND kind = $2 ORDER BY id`, [num(a.link_id), a.kind])).map((x: any) => ({

@@ -136,6 +136,48 @@ test('ads: a marketer only sees his own ad sets; the owner sees all', async () =
   await call('ads.link', await as(EMAILS.marketer), { adsetId: '120200005', productIds: [mk.catalog[0].id] });
 });
 
+test('ads: a dinar ad account counts in dinars, and in dollars with the month rate', async () => {
+  const admin = await as(EMAILS.admin);
+  await call('admin.meta.save', admin, { adAccountId: 'act_1234567890', token: 'EAAG-test-token-' + 'y'.repeat(40) });
+  await call('ads.setFx', await as(EMAILS.vendeur), { ym: YM, rate: 250 });
+  const day = (d: number, adsetId: string, spendCents: number, currency: string) => ({
+    day: `${YM}-0${d}`, adsetId, adsetName: adsetId, campaign: 'C', spendCents, impressions: 1000, reach: 900, clicks: 10, lpv: 8, purchases: 1, video3s: 0, thruplays: 0, currency,
+  });
+  const server: Ctx['server'] = {
+    courier: async () => ({}),
+    hashPassword: async (p) => p,
+    meta: async () => ({
+      adsets: [
+        { id: 'dz-set', name: 'Dinars', campaign: 'C', status: 'ACTIVE', currency: 'DZD' },
+        { id: 'us-set', name: 'Dollars', campaign: 'C', status: 'ACTIVE', currency: 'USD' },
+      ],
+      ads: [{ id: 'dz-ad', adsetId: 'dz-set', name: 'Ad DZ', status: 'ACTIVE', isVideo: false }],
+      adsetDays: [day(1, 'dz-set', 500_000, 'DZD'), day(2, 'dz-set', 250_000, 'DZD'), day(1, 'us-set', 1_000, 'USD')],
+      adDays: [
+        { ...day(1, 'dz-set', 500_000, 'DZD'), adId: 'dz-ad', adName: 'Ad DZ' },
+        { ...day(2, 'dz-set', 250_000, 'DZD'), adId: 'dz-ad', adName: 'Ad DZ' },
+      ],
+    }),
+  };
+  const owner = await as(EMAILS.vendeur, server);
+  const period = { from: `${YM}-01`, to: `${YM}-05` };
+  const ov: any = await call('ads.overview', owner, period);
+  const dz = ov.adsets.find((s: any) => s.id === 'dz-set');
+  const us = ov.adsets.find((s: any) => s.id === 'us-set');
+  // 7 500 DA spent on the dinar account: 7 500 DA (not × 250), and 30 $ at 250 DA for 1 $
+  assert.equal(dz.spendDzd, 7500);
+  assert.ok(Math.abs(dz.spendUsd - 30) < 1e-9);
+  // the dollar account as before: 10 $ × 250
+  assert.equal(us.spendDzd, 2500);
+  assert.equal(us.spendUsd, 10);
+  assert.equal(ov.fx.missing, false);
+  // the ad set's own page: its days and its ads in dollars too
+  const one: any = await call('ads.adset', owner, { id: 'dz-set', ...period });
+  assert.ok(Math.abs(one.days.reduce((s: number, d: any) => s + d.spendUsd, 0) - 30) < 1e-9);
+  assert.ok(Math.abs(one.ads[0].spendUsd - 30) < 1e-9);
+  await call('admin.meta.disconnect', admin, {});
+});
+
 test('ads rules: advice and diagnostics', () => {
   const m = (n: number, d: number, avant: number, pub: number) => ({ n, d, r: 0, enRoute: 0, qty: d, rev: 0, achat: 0, liv: 0, conf: 0, ret: 0, avant, pub, net: avant - pub });
   assert.equal(productAdvice(m(10, 3, 10000, 1000), 3000).k, 'wait');

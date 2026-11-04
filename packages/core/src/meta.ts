@@ -82,10 +82,12 @@ export interface MetaDay {
   purchases: number;
   video3s: number;
   thruplays: number;
+  /** the ad account's currency (USD, DZD…), as Meta gives it */
+  currency?: string;
 }
 
 export interface MetaInsights {
-  adsets: { id: string; name: string; campaign: string; status: string | null }[];
+  adsets: { id: string; name: string; campaign: string; status: string | null; currency?: string }[];
   ads: { id: string; adsetId: string; name: string; status: string | null; isVideo: boolean }[];
   adsetDays: MetaDay[];
   adDays: MetaDay[];
@@ -132,7 +134,8 @@ async function all(path: string, params: Record<string, string>, token: string, 
   return out;
 }
 
-const toDay = (r: any, level: 'adset' | 'ad'): MetaDay => ({
+const toDay = (r: any, level: 'adset' | 'ad', currency: string): MetaDay => ({
+  currency,
   day: String(r.date_start),
   adsetId: String(r.adset_id),
   adsetName: String(r.adset_name ?? ''),
@@ -187,13 +190,16 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
     let firstError: unknown = null;
     for (const act of acts) {
       try {
-        const [adsetRows, adRows, adsets, ads] = await Promise.all([
+        const [account, adsetRows, adRows, adsets, ads] = await Promise.all([
+          graph(act, { fields: 'currency' }, token),
           all(`${act}/insights`, { ...base, level: 'adset' }, token),
           all(`${act}/insights`, { ...base, level: 'ad' }, token),
           all(`${act}/adsets`, { fields: 'id,name,effective_status,campaign{name}', limit: '200' }, token, 20),
           all(`${act}/ads`, { fields: 'id,name,adset_id,effective_status,creative{object_type,video_id}', limit: '200' }, token, 20),
         ]);
-        out.adsets.push(...adsets.map((s: any) => ({ id: String(s.id), name: String(s.name ?? ''), campaign: String(s.campaign?.name ?? ''), status: s.effective_status ?? null })));
+        // spend comes in the account's own money: Publicité counts a DZD account in dinars (see ../modules/ads.ts)
+        const currency = String(account?.currency || 'USD').toUpperCase();
+        out.adsets.push(...adsets.map((s: any) => ({ id: String(s.id), name: String(s.name ?? ''), campaign: String(s.campaign?.name ?? ''), status: s.effective_status ?? null, currency })));
         out.ads.push(
           ...ads.map((x: any) => ({
             id: String(x.id),
@@ -203,8 +209,8 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
             isVideo: !!x.creative?.video_id || x.creative?.object_type === 'VIDEO',
           })),
         );
-        out.adsetDays.push(...adsetRows.map((r) => toDay(r, 'adset')));
-        out.adDays.push(...adRows.map((r) => toDay(r, 'ad')));
+        out.adsetDays.push(...adsetRows.map((r) => toDay(r, 'adset', currency)));
+        out.adDays.push(...adRows.map((r) => toDay(r, 'ad', currency)));
         read++;
       } catch (e) {
         firstError ??= e;

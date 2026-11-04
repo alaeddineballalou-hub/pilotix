@@ -260,6 +260,24 @@ test('linked again: the new tokens reach the boutiques, a Page no longer shared 
   assert.deepEqual([(await setting(a, 'meta')).adAccountId, await setting(a, 'secret_meta_token')], ['', null]);
 });
 
+test('linked again with Instagram: a Page first seen without its Instagram gets it, and Instagram’s messages find the boutique', async () => {
+  const login = async (ig: boolean) => {
+    const s: any = await call('social.start', a, { provider: 'meta', scope: 'here' });
+    graph = {
+      me: { id: '5001', name: 'Karim Benali' },
+      pages: [{ id: '9002', name: 'Bébé Confort DZ', access_token: 'PAGE_TOKEN_2', ...(ig ? { instagram_business_account: { id: '178002', username: 'bebeconfort.dz' } } : {}) }],
+      ads: [],
+    };
+    assert.equal((await finishLogin(t, 'meta', { code: ig ? 'IG1' : 'IG0', state: s.state }, URL0)).ok, true);
+  };
+  // without Instagram's permissions Facebook does not show the Page's Instagram: its messages find no boutique
+  await login(false);
+  assert.deepEqual(await routeMeta(t, { object: 'instagram', entry: [{ id: '178002' }] }), []);
+  // a new login with them: boutique A gets its Instagram's messages, without taking the Page again
+  await login(true);
+  assert.deepEqual((await routeMeta(t, { object: 'instagram', entry: [{ id: '178002' }] })).map((x) => x.shopId), [a.shop!.id]);
+});
+
 test('a login cancelled, too old, or from another place: nothing is linked', async () => {
   const s: any = await call('social.start', a, { provider: 'meta', scope: 'here' });
   const no = await finishLogin(t, 'meta', { state: s.state, error: 'access_denied', error_reason: 'user_denied' }, URL0);
@@ -440,6 +458,16 @@ test('« Tester »: the key, the permissions, the Page (subscribed again), Insta
   probe.refuse = false;
   await call('social.test', a, { linkId: karim.id });
   assert.equal(((await call('social.list', a, {})) as any).links.find((x: any) => x.id === karim.id).status, 'ok');
+  // ad accounts in dinars: Publicité counts them in dinars (fine); in another money: as dollars (to look at)
+  const money = (c: string) =>
+    t.platform.query(`UPDATE platform.social_assets SET extra = jsonb_set(extra, '{currency}', to_jsonb($1::text)) WHERE link_id = $2 AND kind = 'ad_account'`, [c, karim.id]);
+  const currencyLine = async () => ((await call('social.test', a, { linkId: karim.id })) as any).checks.find((c: any) => c.key === 'adsCurrency');
+  await money('DZD');
+  assert.deepEqual(await currencyLine(), { key: 'adsCurrency', state: 'ok', detail: null });
+  await money('EUR');
+  assert.deepEqual(await currencyLine(), { key: 'adsCurrency', state: 'warn', params: { list: 'EUR' }, detail: null });
+  await money('USD');
+  assert.equal(await currencyLine(), undefined);
   // another boutique cannot test this boutique's account
   await assert.rejects(() => call('social.test', b, { linkId: karim.id }), /introuvable/);
 });

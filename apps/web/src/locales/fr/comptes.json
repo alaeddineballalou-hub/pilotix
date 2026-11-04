@@ -158,7 +158,8 @@
       "warn": "Comptes pub illisibles : {{bad}} sur {{n}}."
     },
     "adsCurrency": {
-      "warn": "Comptes pub pas tous en USD ({{list}}) : Publicité compte tout en dollars."
+      "ok": "Comptes pub en dinars (DZD) : Publicité les compte en dinars, et en dollars avec votre taux du mois.",
+      "warn": "Comptes pub en {{list}} : Publicité les compte comme des dollars."
     }
   },
   "quoted": "« {{name}} »"

@@ -6,6 +6,7 @@
 // Dellal's instruction book (its method, its Darija rules and the lesson book the coach approved) is put together at
 // each download, so a download is always the latest version.
 import type { Db } from '../db';
+import { daySpend, fxTable } from '../modules/ads';
 import { DELLAL_PLAYBOOK } from '../modules/dellal';
 import { PILOT } from '../modules/pilotlearn';
 import { loadShops } from './shops';
@@ -454,12 +455,24 @@ export async function dellalMore(t: Tenancy, i: DellalBoardInput) {
     if (adIds.size) {
       const ids = [...adIds];
       const named = await db.query('SELECT id, name FROM ads WHERE id = ANY($1::text[])', [ids]).catch(() => []);
+      // month by month in the ad account's money: a dinar account's spend is turned into dollars with the month's rate
       const spent = await db
-        .query('SELECT ad_id, coalesce(sum(spend_cents), 0)::bigint AS cents FROM ad_daily WHERE ad_id = ANY($1::text[]) AND day BETWEEN $2::date AND $3::date GROUP BY ad_id', [ids, p.from, p.to])
+        .query(
+          `SELECT d.ad_id, to_char(d.day, 'YYYY-MM') AS ym, s.currency, coalesce(sum(d.spend_cents), 0)::bigint AS cents
+             FROM ad_daily d LEFT JOIN adsets s ON s.id = d.adset_id
+            WHERE d.ad_id = ANY($1::text[]) AND d.day BETWEEN $2::date AND $3::date GROUP BY 1, 2, 3`,
+          [ids, p.from, p.to],
+        )
         .catch(() => []);
+      const fx = await fxTable(db).catch(() => (() => null) as (ym: string) => number | null);
       for (const id of ids) spendOf.set(`${s.id}|${id}`, { name: null, cents: -1 });
       for (const r of named as any[]) spendOf.set(`${s.id}|${r.id}`, { ...spendOf.get(`${s.id}|${r.id}`)!, name: String(r.name) });
-      for (const r of spent as any[]) spendOf.set(`${s.id}|${r.ad_id}`, { ...spendOf.get(`${s.id}|${r.ad_id}`)!, cents: n(r.cents) });
+      for (const r of spent as any[]) {
+        const k = `${s.id}|${r.ad_id}`;
+        const was = spendOf.get(k)!;
+        const usd = daySpend(fx, `${r.ym}-01`, n(r.cents), r.currency).spendCents;
+        spendOf.set(k, { ...was, cents: Math.max(was.cents, 0) + usd });
+      }
     }
   }
 

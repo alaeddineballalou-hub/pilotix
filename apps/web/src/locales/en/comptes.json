@@ -158,7 +158,8 @@
       "warn": "Unreadable ad accounts: {{bad}} of {{n}}."
     },
     "adsCurrency": {
-      "warn": "Ad accounts not all in USD ({{list}}): Publicité counts everything in dollars."
+      "ok": "Ad accounts in dinars (DZD): Publicité counts them in dinars, and in dollars with your monthly rate.",
+      "warn": "Ad accounts in {{list}}: Publicité counts them as dollars."
     }
   },
   "quoted": "“{{name}}”"
