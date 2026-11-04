@@ -205,7 +205,8 @@ const why = (e: unknown) => String((e as any)?.message ?? e).slice(0, 240);
 /**
  * Tries a linked account now, for this boutique, one line per thing (none stops the others): the account's key, its
  * permissions, the Page this boutique uses (its key; subscribed to Pilotix's webhook again when its messages would not
- * come), its Instagram account, Pilotix's Meta app webhook (Facebook and Instagram: its address and fields), that the
+ * come), its Instagram account (its inbox, and when Meta last sent its messages), Pilotix's Meta app webhook (Facebook
+ * and Instagram: its address and fields), that the
  * webhook's address answers from the Internet (Cloudflare can block it), the ad accounts this boutique counts. A key
  * Facebook refuses turns the account red; a key that works again turns it green.
  */
@@ -293,11 +294,33 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
       }
       if (extra.hook !== hook) await t.platform.query(`UPDATE platform.social_assets SET extra = $2 WHERE id = $1`, [num(page.id), JSON.stringify({ ...extra, hook })]);
       if (extra.ig?.id) {
+        let username = String(extra.ig.username ?? '');
         try {
           const r = await graph(String(extra.ig.id), { fields: 'id,username', access_token: ptoken });
-          add('ig', 'ok', { username: String(r.username ?? extra.ig.username ?? '') });
+          username = String(r.username ?? username);
+          add('ig', 'ok', { username });
         } catch (e) {
           add('ig', 'bad', undefined, why(e));
+        }
+        // its inbox through the Page: when Meta will not give Instagram's messages, it says why here (no role on the
+        // Instagram account, « Allow access to messages » off, the app's access…); a creator account's first read also
+        // starts its messages' webhook
+        try {
+          await graph(`${page.ext_id}/conversations`, { platform: 'instagram', fields: 'id', limit: '1', access_token: ptoken });
+          add('igInbox', 'ok', { username });
+        } catch (e) {
+          add('igInbox', 'bad', { username }, why(e));
+        }
+        // when Meta last sent Pilotix a customer's message from this Instagram account (routeMeta writes it down); only
+        // other things (« standby »: another app has the conversations; an echo, a read…); or nothing for it, but an
+        // Instagram message for an account no boutique uses (Meta gave it another number)
+        const iso = (v: unknown) => new Date(v as string).toISOString();
+        const seen = (await t.platform.query(`SELECT at, routed, what, message_at FROM platform.social_hooks WHERE object = 'instagram' AND ext_id = $1`, [String(extra.ig.id)]).catch(() => []))[0];
+        if (seen?.message_at) add('igSeen', seen.routed ? 'ok' : 'warn', { username, at: iso(seen.message_at), ...(seen.routed ? {} : { lost: 1 }) });
+        else if (seen) add('igSeen', 'warn', { username, at: iso(seen.at), why: seen.what === 'standby' ? 'standby' : 'other' });
+        else {
+          const stray = (await t.platform.query(`SELECT max(at) AS at FROM platform.social_hooks WHERE object = 'instagram' AND NOT routed AND at > now() - interval '1 day'`).catch(() => []))[0];
+          add('igSeen', 'warn', { username, ...(stray?.at ? { at: iso(stray.at), why: 'unknown' } : {}) });
         }
       } else add('igNone', 'warn', { name });
     }

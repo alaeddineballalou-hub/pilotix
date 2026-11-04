@@ -6,7 +6,7 @@ import { AI_USAGE_SQL } from './aiusage';
 import { LAHJA_PLATFORM_SQL } from '../modules/lahja';
 import { DARIJA_BOOK_SQL } from '../modules/darijabook';
 import { VOCAB_PLATFORM_SQL } from '../modules/vocab';
-import { SOCIAL_PLATFORM_SQL } from '../modules/social';
+import { SOCIAL_HOOKS_SQL, SOCIAL_PLATFORM_SQL } from '../modules/social';
 
 const P001 = `
 CREATE SCHEMA IF NOT EXISTS platform;
@@ -596,6 +596,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
     `UPDATE platform.social_uses u SET ig_id = a.extra->'ig'->>'id' FROM platform.social_assets a
       WHERE a.id = u.asset_id AND u.kind = 'page' AND u.ig_id IS DISTINCT FROM (a.extra->'ig'->>'id');`,
   ],
+  // when Meta last sent something for each Page / Instagram account (Pilot AI › Comptes › « Tester »)
+  ['p021_social_hooks', SOCIAL_HOOKS_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

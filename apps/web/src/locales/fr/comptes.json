@@ -107,7 +107,8 @@
   "adsUse": "Les compter dans « {{name}} »",
   "adsOther": "Cette boutique compte ceux de « {{account}} » : les activer ici les remplace.",
   "adsAlso": "Aussi comptés dans {{names}}.",
-  "adsMixed": "Pas tous en USD ({{list}}) : Publicité compte tout en dollars.",
+  "adsMixed": "En {{list}} : Publicité compte ces comptes comme des dollars.",
+  "adsDzd": "Les comptes en dinars (DZD) comptent en dinars dans Publicité.",
   "check": {
     "token": {
       "ok": "Clé Facebook : elle marche (« {{name}} »).",
@@ -139,6 +140,18 @@
     },
     "igNone": {
       "warn": "Pas de compte Instagram relié à « {{name}} »."
+    },
+    "igInbox": {
+      "ok": "Boîte Instagram de @{{username}} : Pilotix peut la lire.",
+      "bad": "Boîte Instagram de @{{username}} : Meta refuse. La raison est juste en dessous."
+    },
+    "igSeen": {
+      "ok": "Dernier message d’un client sur Instagram reçu par Pilotix : {{when}}.",
+      "warn": "Pilotix n’a encore rien reçu d’Instagram pour @{{username}}. Envoyez un message à @{{username}} depuis un autre compte, puis testez encore.",
+      "lost": "Instagram a envoyé un message {{when}}, mais aucune boutique ne l’a pris. Envoyez un nouveau message, puis testez encore.",
+      "standby": "Instagram envoie ses messages à une autre app d’abord ({{when}}). Dans Facebook › Page setup › Instagram conversation routing, choisissez Pilotix.",
+      "other": "Pilotix reçoit Instagram ({{when}}), mais pas encore de message d’un client. Envoyez un message à @{{username}} depuis un autre compte, puis testez encore.",
+      "unknown": "Pilotix n’a rien reçu pour @{{username}}, mais Meta a envoyé {{when}} un message Instagram pour un compte qu’aucune boutique n’utilise."
     },
     "appHook": {
       "ok": "App Meta : les messages et commentaires Facebook arrivent à Pilotix.",

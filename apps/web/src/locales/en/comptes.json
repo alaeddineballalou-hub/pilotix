@@ -107,7 +107,8 @@
   "adsUse": "Count them in “{{name}}”",
   "adsOther": "This store counts those of “{{account}}”: turning these on replaces them.",
   "adsAlso": "Also counted in {{names}}.",
-  "adsMixed": "Not all in USD ({{list}}): Publicité counts everything in dollars.",
+  "adsMixed": "In {{list}}: Publicité counts these accounts as dollars.",
+  "adsDzd": "Accounts in dinars (DZD) count in dinars in Publicité.",
   "check": {
     "token": {
       "ok": "Facebook key: it works (“{{name}}”).",
@@ -139,6 +140,18 @@
     },
     "igNone": {
       "warn": "No Instagram account linked to “{{name}}”."
+    },
+    "igInbox": {
+      "ok": "@{{username}}’s Instagram inbox: Pilotix can read it.",
+      "bad": "@{{username}}’s Instagram inbox: Meta refuses. The reason is just below."
+    },
+    "igSeen": {
+      "ok": "Last customer message from Instagram that Pilotix got: {{when}}.",
+      "warn": "Pilotix hasn’t got anything from Instagram for @{{username}} yet. Send @{{username}} a message from another account, then test again.",
+      "lost": "Instagram sent a message {{when}}, but no shop took it. Send a new message, then test again.",
+      "standby": "Instagram sends its messages to another app first ({{when}}). In Facebook › Page setup › Instagram conversation routing, choose Pilotix.",
+      "other": "Pilotix gets Instagram ({{when}}), but no customer message yet. Send @{{username}} a message from another account, then test again.",
+      "unknown": "Pilotix got nothing for @{{username}}, but Meta sent an Instagram message {{when}} for an account no shop uses."
     },
     "appHook": {
       "ok": "Meta app: Facebook messages and comments reach Pilotix.",

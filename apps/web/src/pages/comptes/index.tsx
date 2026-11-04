@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Out, rpc } from '../../lib/backend';
-import { clock, dateOnly } from '../../lib/format';
+import { clock, dateOnly, when } from '../../lib/format';
 import { useAction, useRpc } from '../../lib/query';
 import { Card, ErrorBox, Icon, Loading } from '../../ui/kit';
 import { toast } from '../../ui/toast';
@@ -292,6 +292,8 @@ function LinkCard({ l, d, fresh, open, onToggle, onRelink, busy }: { l: Link; d:
   // this boutique counts another account's ad accounts: switching these on replaces them
   const adsOther = !adsHere ? d.here[adKind === 'ad_account' ? 'ad_account' : 'advertiser'] : null;
   const money = [...new Set(adList.map((a) => a.currency).filter((c): c is string => !!c))];
+  // dinars count in dinars in Publicité; any other money is taken as dollars
+  const otherMoney = money.filter((c) => c !== 'USD' && c !== 'DZD');
   const summary = [page ? t(K + 'sumPage', { name: page.name }) : null, adsHere ? t(K + 'sumAds', { n: adList.length }) : null].filter(Boolean).join(' · ') || t(K + 'sumNone');
   const runTest = () => {
     if (!open) onToggle();
@@ -387,7 +389,11 @@ function LinkCard({ l, d, fresh, open, onToggle, onRelink, busy }: { l: Link; d:
                   </ul>
                   {adsOther && <p className="cpt-row-note">{t(K + 'adsOther', { account: adsOther.account })}</p>}
                   {adsAlso.length > 0 && <p className="cpt-row-note">{t(K + 'adsAlso', { names: adsAlso.map((x) => t(K + 'quoted', { name: x.name })).join(', ') })}</p>}
-                  {money.some((c) => c !== 'USD') && <p className="cpt-warn">{t(K + 'adsMixed', { list: money.join(', ') })}</p>}
+                  {otherMoney.length > 0 ? (
+                    <p className="cpt-warn">{t(K + 'adsMixed', { list: otherMoney.join(', ') })}</p>
+                  ) : (
+                    money.includes('DZD') && <p className="cpt-row-note">{t(K + 'adsDzd')}</p>
+                  )}
                 </>
               ) : (
                 <p className="cpt-row-note">{t(K + `kind.${adKind}None`)}</p>
@@ -446,13 +452,22 @@ function TestLines({ r, pending, provider }: { r: TestResult | null; pending: bo
       <ul>
         {r.checks.map((c, i) => {
           const key = c.key === 'token' && provider === 'tiktok' ? 'tokenTiktok' : c.key;
-          const v = c.key === 'pageHook' && c.params?.fixed ? 'fixed' : c.key === 'reach' && c.params?.why === 'cloudflare' ? 'cloudflare' : c.state;
-          const { count, ...rest } = c.params ?? {};
+          const v =
+            c.key === 'pageHook' && c.params?.fixed
+              ? 'fixed'
+              : c.key === 'reach' && c.params?.why === 'cloudflare'
+                ? 'cloudflare'
+                : c.key === 'igSeen' && c.params?.lost
+                  ? 'lost'
+                  : c.key === 'igSeen' && c.params?.why
+                    ? String(c.params.why)
+                    : c.state;
+          const { count, at, ...rest } = c.params ?? {};
           return (
             <li key={`${c.key}-${i}`} className={c.state}>
               <Icon name={c.state === 'ok' ? 'checkcircle' : c.state === 'warn' ? 'alert' : 'xcircle'} />
               <span>
-                <bdi>{t(K + `check.${key}.${v}`, { ...rest, n: count ?? '', defaultValue: c.key })}</bdi>
+                <bdi>{t(K + `check.${key}.${v}`, { ...rest, n: count ?? '', when: at ? when(String(at)) : '', defaultValue: c.key })}</bdi>
                 {c.detail && <small>{c.detail}</small>}
               </span>
             </li>

@@ -41,7 +41,7 @@ let tiktok: { token: string; ids: string[]; list: any[]; user: any } = { token: 
 let refuseSwap = false;
 // what « Tester » finds on Facebook's side
 const ALL_PERMS = ['pages_show_list', 'pages_messaging', 'pages_manage_metadata', 'pages_read_engagement', 'pages_manage_engagement', 'pages_read_user_content', 'instagram_basic', 'instagram_manage_messages', 'instagram_manage_comments', 'ads_read'];
-let probe: { perms: string[]; pageSubs: any[]; appSubs: any[]; unreadable: string[]; cloudflare: boolean; refuse: boolean } = { perms: ALL_PERMS, pageSubs: [], appSubs: [], unreadable: [], cloudflare: false, refuse: false };
+let probe: { perms: string[]; pageSubs: any[]; appSubs: any[]; unreadable: string[]; cloudflare: boolean; refuse: boolean; inbox?: string | null } = { perms: ALL_PERMS, pageSubs: [], appSubs: [], unreadable: [], cloudflare: false, refuse: false };
 const realFetch = globalThis.fetch;
 const answer = (data: unknown) => new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
 before(async () => {
@@ -81,6 +81,8 @@ before(async () => {
       if (path === 'me/permissions') return answer({ data: probe.perms.map((permission) => ({ permission, status: 'granted' })) });
       if (/\/subscribed_apps$/.test(path)) return method === 'GET' ? answer({ data: probe.pageSubs }) : answer({ success: true });
       if (path === `${APPS.meta.appId}/subscriptions`) return answer({ data: probe.appSubs });
+      // a Page's Instagram inbox (Meta can refuse it, and says why)
+      if (/^\d+\/conversations$/.test(path)) return probe.inbox ? new Response(JSON.stringify({ error: { message: probe.inbox, code: 3 } }), { status: 400 }) : answer({ data: [] });
       if (/^act_\d+$/.test(path)) return probe.unreadable.includes(path) ? new Response(JSON.stringify({ error: { message: 'Pas d’accès', code: 200 } }), { status: 400 }) : answer({ id: path });
       if (/^\d+$/.test(path)) return answer({ id: path, name: 'Page', username: 'bebeconfort.dz' });
     }
@@ -439,7 +441,7 @@ test('« Tester »: the key, the permissions, the Page (subscribed again), Insta
   calls.length = 0;
   const r: any = await call('social.test', a, { linkId: karim.id });
   const st = Object.fromEntries(r.checks.map((c: any) => [c.key, c.state]));
-  assert.deepEqual(st, { token: 'ok', perms: 'warn', page: 'ok', pageHook: 'ok', ig: 'ok', appHook: 'ok', appHookIg: 'warn', reach: 'ok', ads: 'ok' });
+  assert.deepEqual(st, { token: 'ok', perms: 'warn', page: 'ok', pageHook: 'ok', ig: 'ok', igInbox: 'ok', igSeen: 'warn', appHook: 'ok', appHookIg: 'warn', reach: 'ok', ads: 'ok' });
   assert.equal(r.checks.find((c: any) => c.key === 'perms').params.list, 'instagram_manage_comments');
   assert.equal(r.checks.find((c: any) => c.key === 'pageHook').params.fixed, 1);
   assert.ok(calls.some((c) => /9002\/subscribed_apps/.test(c.url) && c.method === 'POST'), 'subscribed again');
@@ -468,6 +470,37 @@ test('« Tester »: the key, the permissions, the Page (subscribed again), Insta
   assert.deepEqual(await currencyLine(), { key: 'adsCurrency', state: 'warn', params: { list: 'EUR' }, detail: null });
   await money('USD');
   assert.equal(await currencyLine(), undefined);
+  // Instagram: Meta refuses its inbox and says why; when Pilotix last got something from it, or never
+  const line = async (key: string) => ((await call('social.test', a, { linkId: karim.id })) as any).checks.find((c: any) => c.key === key);
+  probe.inbox = '(#3) Application does not have the capability to make this API call.';
+  const inbox = await line('igInbox');
+  assert.deepEqual([inbox.state, inbox.params.username], ['bad', 'bebeconfort.dz']);
+  assert.match(inbox.detail, /does not have the capability/);
+  probe.inbox = null;
+  const seen = async () => {
+    const c = await line('igSeen');
+    return [c.state, c.params.why ?? (c.params.lost ? 'lost' : null), typeof c.params.at];
+  };
+  const msg = (u: string) => ({ sender: { id: u }, recipient: { id: '178002' }, message: { mid: `m-${u}`, text: 'salam' } });
+  // nothing from Instagram yet; then only a message for an Instagram account no boutique uses
+  await t.platform.query(`DELETE FROM platform.social_hooks WHERE object = 'instagram'`);
+  assert.deepEqual(await seen(), ['warn', null, 'undefined']);
+  await routeMeta(t, { object: 'instagram', entry: [{ id: '178999', messaging: [msg('u0')] }] });
+  assert.deepEqual(await seen(), ['warn', 'unknown', 'string']);
+  // only « standby »: another app has Instagram's conversations
+  await routeMeta(t, { object: 'instagram', entry: [{ id: '178002', standby: [msg('u1')] }] });
+  assert.deepEqual(await seen(), ['warn', 'standby', 'string']);
+  // a read is not a customer's message
+  await routeMeta(t, { object: 'instagram', entry: [{ id: '178002', messaging: [{ sender: { id: 'u1' }, recipient: { id: '178002' }, read: { mid: 'm-0' } }] }] });
+  assert.deepEqual(await seen(), ['warn', 'other', 'string']);
+  // a customer's message: Pilotix writes it down, the boutique takes it; a read after it keeps it
+  await routeMeta(t, { object: 'instagram', entry: [{ id: '178002', messaging: [msg('u1')] }] });
+  assert.deepEqual(await seen(), ['ok', null, 'string']);
+  await routeMeta(t, { object: 'instagram', entry: [{ id: '178002', messaging: [{ sender: { id: 'u1' }, recipient: { id: '178002' }, read: { mid: 'm-u1' } }] }] });
+  assert.deepEqual(await seen(), ['ok', null, 'string']);
+  // taken by no boutique
+  await t.platform.query(`UPDATE platform.social_hooks SET routed = false WHERE object = 'instagram' AND ext_id = '178002'`);
+  assert.deepEqual(await seen(), ['warn', 'lost', 'string']);
   // another boutique cannot test this boutique's account
   await assert.rejects(() => call('social.test', b, { linkId: karim.id }), /introuvable/);
 });

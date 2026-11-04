@@ -144,6 +144,21 @@ CREATE TABLE IF NOT EXISTS platform.social_states (
 );
 `;
 
+/** What Meta last sent Pilotix's webhook for each Page / Instagram account (routeMeta; « Tester » shows it). */
+export const SOCIAL_HOOKS_SQL = `
+-- routed: a boutique took it (its Page, or its Page's Instagram); what: the last thing (message, standby, echo, read…);
+-- message_at: the last customer message
+CREATE TABLE IF NOT EXISTS platform.social_hooks (
+  object     text        NOT NULL,
+  ext_id     text        NOT NULL,
+  at         timestamptz NOT NULL DEFAULT now(),
+  routed     boolean     NOT NULL DEFAULT false,
+  what       text        NOT NULL DEFAULT '',
+  message_at timestamptz,
+  PRIMARY KEY (object, ext_id)
+);
+`;
+
 // ---------------------------------------------------------------- Pilotix's own apps (the control room)
 /** Pilotix's Meta and TikTok apps: what the control room shows (never the secrets). */
 export interface SocialApps {
@@ -479,6 +494,17 @@ export async function linkedAds(db: Db): Promise<{ adAccountId: string; name: st
  * its Page (an Instagram entry: the boutique whose Page has this Instagram account). Entries of a Page nobody uses are
  * dropped.
  */
+/** What one webhook entry was: a customer's message, « standby » (another app has the conversation), an echo, a read… */
+function hookWhat(entry: any): string {
+  const ms: any[] = Array.isArray(entry?.messaging) ? entry.messaging : [];
+  if (ms.some((m) => m?.message && !m.message.is_echo)) return 'message';
+  if (Array.isArray(entry?.standby) && entry.standby.length) return 'standby';
+  const m = ms[0];
+  if (m) return m.message?.is_echo ? 'echo' : m.read ? 'read' : m.reaction ? 'reaction' : m.postback ? 'postback' : 'event';
+  if (Array.isArray(entry?.changes) && entry.changes[0]) return `change:${String(entry.changes[0].field ?? '')}`.slice(0, 40);
+  return 'event';
+}
+
 export async function routeMeta(t: Tenancy, body: any): Promise<{ shopId: number; body: any }[]> {
   const obj = body?.object;
   if (obj !== 'page' && obj !== 'instagram') return [];
@@ -487,6 +513,15 @@ export async function routeMeta(t: Tenancy, body: any): Promise<{ shopId: number
     const id = entry?.id ? String(entry.id) : '';
     if (!id) continue;
     const r = (await t.platform.query(obj === 'page' ? `SELECT shop_id FROM platform.social_uses WHERE kind = 'page' AND ext_id = $1` : `SELECT shop_id FROM platform.social_uses WHERE kind = 'page' AND ig_id = $1`, [id]))[0];
+    // when Meta last sent something for this Page / Instagram account, what it was, and whether a boutique took it (« Tester »)
+    const what = hookWhat(entry);
+    await t.platform
+      .query(
+        `INSERT INTO platform.social_hooks (object, ext_id, at, routed, what, message_at) VALUES ($1, $2, now(), $3, $4, CASE WHEN $5::boolean THEN now() END)
+         ON CONFLICT (object, ext_id) DO UPDATE SET at = now(), routed = EXCLUDED.routed, what = EXCLUDED.what, message_at = coalesce(EXCLUDED.message_at, platform.social_hooks.message_at)`,
+        [obj, id, !!r, what, what === 'message'],
+      )
+      .catch(() => undefined);
     if (!r) continue;
     const s = num(r.shop_id);
     byShop.set(s, [...(byShop.get(s) ?? []), entry]);
@@ -961,7 +996,13 @@ async function demoTest(ctx: Ctx, linkId: number): Promise<SocialTest> {
     const page = l.assets.find((a) => a.kind === 'page' && a.usedBy.includes(me));
     if (page) {
       checks.push({ key: 'page', state: 'ok', params: { name: page.name } }, { key: 'pageHook', state: 'ok' });
-      checks.push(page.igUsername ? { key: 'ig', state: 'ok', params: { username: page.igUsername } } : { key: 'igNone', state: 'warn', params: { name: page.name } });
+      if (page.igUsername)
+        checks.push(
+          { key: 'ig', state: 'ok', params: { username: page.igUsername } },
+          { key: 'igInbox', state: 'ok', params: { username: page.igUsername } },
+          { key: 'igSeen', state: 'ok', params: { username: page.igUsername, at: new Date(ctx.now() - 25 * 60_000).toISOString() } },
+        );
+      else checks.push({ key: 'igNone', state: 'warn', params: { name: page.name } });
     } else if (l.assets.some((a) => a.kind === 'page')) checks.push({ key: 'pageNone', state: 'warn' });
     checks.push({ key: 'appHook', state: 'ok' }, { key: 'appHookIg', state: 'warn', params: { list: 'messages, comments' } }, { key: 'reach', state: 'ok' });
   }
