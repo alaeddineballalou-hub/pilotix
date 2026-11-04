@@ -287,11 +287,69 @@ export async function runDellal(action: string, args: unknown, ctx: Ctx): Promis
   if (action === 'cmHide') return cmHide(ctx, args as CmArgs);
   if (action === 'cmPost') return cmPost(ctx, args as CmArgs);
   if (action === 'transcribe') return transcribe(ctx, args as VoiceArgs);
+  if (action === 'catchUp') return catchUpMeta(args as CatchUpArgs);
   if (action === 'ping') {
     await complete(ctx, { model: 'claude-haiku-5-5', system: 'Réponds OK.', messages: [{ role: 'user', content: 'ping' }], tools: [] as any, max_tokens: 5 });
     return { ok: true };
   }
   throw new AppError('bad_request', `Action Dellal inconnue : ${action}`);
+}
+
+// ---------------------------------------------------------------- the safety net: the Page's chats read again
+type CatchUpArgs = { token: string; pageId: string; igId: string | null; since: number };
+/** A customer's message found by reading the chats again: when it was written, too. */
+export type CaughtMessage = Incoming & { at: string };
+
+/**
+ * The linked Page's last chats on Messenger and on Instagram (the Conversations API, with the Page's key): the customers'
+ * messages since `since` that nobody answered yet. Meta does not always send every message to the webhook; this finds
+ * the ones it lost (the webhook ones are already in Pilotix: dellal.catchUp skips them).
+ */
+async function catchUpMeta(a: CatchUpArgs): Promise<{ messages: CaughtMessage[]; errors: string[] }> {
+  const messages: CaughtMessage[] = [];
+  const errors: string[] = [];
+  const fields = 'updated_time,messages.limit(8){id,created_time,from,to,message}';
+  const own = [a.pageId, a.igId ?? ''].filter(Boolean);
+  // each app on its own: Instagram refusing does not stop Messenger
+  for (const platform of ['messenger', ...(a.igId ? ['instagram' as const] : [])] as const) {
+    try {
+      const url = `${GRAPH}/${encodeURIComponent(a.pageId)}/conversations?platform=${platform}&fields=${encodeURIComponent(fields)}&limit=20&access_token=${encodeURIComponent(a.token)}`;
+      const r = await postJson(url, null, {}, platform === 'instagram' ? 'Instagram' : 'Messenger', 'GET', 20_000);
+      messages.push(...missedMessages(Array.isArray(r?.data) ? r.data : [], { platform, own, accountId: platform === 'instagram' ? a.igId! : a.pageId, since: a.since }));
+    } catch (e: any) {
+      errors.push(String(e?.message ?? e));
+    }
+  }
+  return { messages, errors };
+}
+
+/**
+ * In one read of the chats (newest first, each with its newest messages first): per chat, the customer's messages written
+ * after the shop's last one and since `since`, oldest first. A chat the shop answered last has nothing waiting.
+ */
+export function missedMessages(convs: any[], o: { platform: 'messenger' | 'instagram'; own: string[]; accountId: string; since: number }): CaughtMessage[] {
+  const out: CaughtMessage[] = [];
+  for (const c of convs) {
+    if (!(Date.parse(String(c?.updated_time ?? '')) >= o.since)) continue;
+    const msgs: any[] = Array.isArray(c?.messages?.data) ? c.messages.data : [];
+    const waiting: CaughtMessage[] = [];
+    for (const m of msgs) {
+      const from = String(m?.from?.id ?? '');
+      const t = Date.parse(String(m?.created_time ?? ''));
+      // the shop wrote last (Dellal, the team, the Instagram app): what came before was answered
+      if (!from || o.own.includes(from) || !(t >= o.since)) break;
+      // written to someone else than the shop: Pilotix cannot tell who wrote it (a Page or an account changed): it stops
+      // there rather than take the shop's own words for a customer's
+      const to: string[] = Array.isArray(m?.to?.data) ? m.to.data.map((x: any) => String(x?.id ?? '')) : [];
+      if (to.length && !to.some((x) => o.own.includes(x))) break;
+      const text = String(m?.message ?? '').trim();
+      if (!text) continue;
+      const name = m?.from?.name ?? m?.from?.username ?? null;
+      waiting.push({ channel: o.platform, externalId: from, accountId: o.accountId, name: name ? String(name) : null, text: text.slice(0, 4000), messageId: m?.id ? String(m.id) : null, source: null, at: new Date(t).toISOString() });
+    }
+    out.push(...waiting.reverse());
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- voice notes: Google Gemini writes them as text

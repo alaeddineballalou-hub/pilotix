@@ -155,6 +155,11 @@
       "warn": "Pilotix hasn’t got any Instagram comment for @{{username}} yet. Comment on one of @{{username}}’s posts from another account, then test again.",
       "lost": "Instagram sent a comment {{when}}, but no shop took it."
     },
+    "catchUp": {
+      "ok": "Safety net: Pilotix read Messenger and Instagram again {{when}}. Messages caught: {{n}}.",
+      "warn": "Safety net: not run yet. It reads Messenger and Instagram again every 3 minutes.",
+      "error": "Safety net: Pilotix couldn’t read the messages {{when}}. The reason is just below."
+    },
     "igSeen": {
       "ok": "Last customer message from Instagram that Pilotix got: {{when}}.",
       "warn": "Pilotix hasn’t got anything from Instagram for @{{username}} yet. Send @{{username}} a message from another account, then test again.",

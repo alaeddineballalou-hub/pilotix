@@ -183,6 +183,20 @@ a.ai-state.off:hover { border-color: var(--ai-dot-2); color: var(--ink); }
 [dir="rtl"] .ai-conv.on { box-shadow: inset -3px 0 0 var(--ai-dot-2); }
 .ai-conv:focus-visible { outline: 2px solid var(--ai-dot-2); outline-offset: -2px; }
 .ai-conv-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ai-conv-row { border-bottom: 1px solid var(--line); }
+.ai-conv-row > .ai-conv { border-bottom: 0; }
+.ai-conv-row:hover { background: var(--raise); }
+.ai-conv-row > .ai-conv:hover { background: none; }
+.ai-conv-row.on { background: var(--ai-tint); box-shadow: inset 3px 0 0 var(--ai-dot-2); }
+[dir="rtl"] .ai-conv-row.on { box-shadow: inset -3px 0 0 var(--ai-dot-2); }
+.ai-conv-row > .ai-conv.on { background: none; box-shadow: none; }
+/* a chat the team took: « Rendre à Dellal » under it */
+.ai-conv-back-bar { display: flex; justify-content: flex-end; padding: 0 14px 10px; margin-top: -4px; }
+.ai-conv-back { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.ai-conv-back:hover { border-color: var(--ai-dot-2); }
+.ai-conv-back:focus-visible { outline: 2px solid var(--ai-dot-2); outline-offset: 2px; }
+.ai-conv-back:disabled { opacity: .6; cursor: default; }
+.ai-conv-back svg { width: 14px; height: 14px; color: var(--ai-dot-2); }
 .ai-conv-l1, .ai-conv-l2 { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .ai-conv-l1 b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14.5px; font-weight: 700; }
 .ai-conv-l1 time { flex: none; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }

@@ -226,8 +226,11 @@ export const IncomingInput = z.object({
     .optional(),
 });
 
-/** Stores one customer message (creating the conversation the first time). Returns null for a duplicate. */
-export async function receiveMessage(ctx: Ctx, m: z.infer<typeof IncomingInput>): Promise<{ conversationId: number; messageId: number } | null> {
+/**
+ * Stores one customer message (creating the conversation the first time). Returns null for a duplicate. `at`: when the
+ * customer wrote it, for a message found later (the safety net); otherwise now.
+ */
+export async function receiveMessage(ctx: Ctx, m: z.infer<typeof IncomingInput> & { at?: string | null }): Promise<{ conversationId: number; messageId: number } | null> {
   const phone = m.channel === 'whatsapp' ? normalizePhone(m.externalId) : null;
   const out = await ctx.db.tx(async (tx) => {
     const cust = phone ? (await tx.query('SELECT id FROM customers WHERE phone = $1', [phone]))[0] : null;
@@ -251,7 +254,7 @@ export async function receiveMessage(ctx: Ctx, m: z.infer<typeof IncomingInput>)
     const notice = phone ? await noticeForConversation(tx, phone, id) : null;
     if (notice) await addMessage(tx, id, { role: 'agent', body: notice.body, at: notice.sentAt, meta: { notify: notice.kind, notifyId: notice.id, ref: notice.ref, via: notice.channel }, quiet: true });
     const voice = m.media?.kind === 'audio' && (m.media.id || m.media.url) ? { voice: { status: 'pending', ...(m.media.id ? { id: m.media.id } : {}), ...(m.media.url ? { url: m.media.url } : {}), ...(m.media.mime ? { mime: m.media.mime } : {}) } } : undefined;
-    const mid = await addMessage(tx, id, { role: 'customer', body: m.text, externalId: m.messageId ?? null, ...(voice ? { meta: voice } : {}) });
+    const mid = await addMessage(tx, id, { role: 'customer', body: m.text, externalId: m.messageId ?? null, at: m.at ?? null, ...(voice ? { meta: voice } : {}) });
     // their first words after the message are their answer to it (later ones belong to the conversation)
     if (mid && phone && notice) await markReply(tx, phone, m.text, 'whatsapp');
     return mid ? { conversationId: id, messageId: mid } : null;
@@ -1784,6 +1787,65 @@ async function autoOrderOf(ctx: Ctx, s: DellalSettings, row: any): Promise<{ ref
   }
 }
 
+/** The safety net's last run (Pilot AI › Comptes › « Tester » shows it). */
+export const CATCHUP_KEY = 'dellal_catchup';
+/** `okAt`: the last run that read everything (the next one reads from there). */
+export interface CatchUpRun {
+  at: string;
+  found: number;
+  error: string | null;
+  okAt: string | null;
+}
+
+/**
+ * The safety net, every few minutes on the server: the linked Page's Messenger and Instagram chats are read again, and a
+ * customer's message Meta never sent to the webhook (Meta loses some) comes in like any other, then Dellal answers it as
+ * usual (only the chats it handles). A message already here (by its id, or the same words from the same customer within
+ * minutes) is not taken twice. It looks back to its last good run, never more than a day, and only 30 minutes the first time.
+ */
+export async function catchUpMessages(ctx: Ctx): Promise<CatchUpRun & { skipped?: string; prevError?: string | null }> {
+  const at = new Date(ctx.now()).toISOString();
+  if (!ctx.server?.dellal) return { at, found: 0, error: null, okAt: null, skipped: 'preview' };
+  const s = await dellalSettings(ctx.db);
+  const token = await dellalSecret(ctx.db, 'pageToken');
+  if (!token || !s.messengerPageId) return { at, found: 0, error: null, okAt: null, skipped: 'Aucune page Facebook reliée' };
+  const last = await getRaw<CatchUpRun | null>(ctx.db, CATCHUP_KEY, null);
+  // from the last run that read everything (2 minutes before, for safety), at most one day back; the first time, 30 minutes
+  const from = last?.okAt ? Date.parse(last.okAt) - 2 * 60_000 : ctx.now() - 30 * 60_000;
+  const since = Math.max(ctx.now() - 24 * 3_600_000, Number.isFinite(from) ? from : ctx.now() - 30 * 60_000);
+  type Caught = { channel: 'messenger' | 'instagram'; externalId: string; accountId: string | null; name: string | null; text: string; messageId: string | null; at: string };
+  let list: Caught[] = [];
+  let error: string | null = null;
+  try {
+    const r = (await ctx.server.dellal('catchUp', { token, pageId: s.messengerPageId, igId: s.instagramId || null, since }, ctx)) as { messages?: Caught[]; errors?: string[] } | null;
+    list = Array.isArray(r?.messages) ? r.messages : [];
+    if (r?.errors?.length) error = r.errors.join(' · ').slice(0, 300);
+  } catch (e: any) {
+    error = String(e?.message ?? e).slice(0, 300);
+  }
+  const convs = new Set<number>();
+  let found = 0;
+  for (const m of list) {
+    // the same words from the same customer within 3 minutes: the webhook brought it (Meta can write its id two ways)
+    const same = await ctx.db.query(
+      `SELECT 1 FROM conv_messages x JOIN conversations c ON c.id = x.conversation_id
+        WHERE c.channel = $1 AND c.external_id = $2 AND x.role = 'customer' AND x.body = $3 AND x.created_at BETWEEN $4::timestamptz - interval '3 minutes' AND $4::timestamptz + interval '3 minutes' LIMIT 1`,
+      [m.channel, m.externalId, m.text, m.at],
+    );
+    if (same.length) continue;
+    const r = await receiveMessage(ctx, { channel: m.channel, externalId: m.externalId, accountId: m.accountId, name: m.name, text: m.text, messageId: m.messageId, source: null, at: m.at });
+    if (!r) continue;
+    found++;
+    convs.add(r.conversationId);
+  }
+  // Dellal answers each chat once, after all its new messages are in (it decides: its chats only, its hours…)
+  for (const id of convs) await runAgent(ctx, id).catch(() => null);
+  const run: CatchUpRun = { at, found, error, okAt: error ? (last?.okAt ?? null) : at };
+  await setRaw(ctx.db, CATCHUP_KEY, run);
+  // the server's log says a reason once, not every 3 minutes
+  return { ...run, prevError: last?.error ?? null };
+}
+
 /**
  * Both versions: the customer gave his number (or writes on WhatsApp) and asked about a product, then went quiet for
  * `autoOrderMinutes` while Dellal waited for his answer, with no order yet (or Dellal took his number for a call back):
@@ -1911,22 +1973,22 @@ export const dellalProcs = {
   /** The inbox: conversations of every channel, newest first, with the counts of the tabs. */
   'dellal.inbox': proc(
     [...SELLERS],
-    z.object({ tab: z.enum(['all', 'handoff', 'ai', 'orders']).default('all'), channel: z.enum(DELLAL_CHANNELS).optional(), q: z.string().max(100).optional(), limit: z.number().int().min(1).max(200).default(80) }),
+    z.object({ tab: z.enum(['all', 'handoff', 'ai', 'team', 'orders']).default('all'), channel: z.enum(DELLAL_CHANNELS).optional(), q: z.string().max(100).optional(), limit: z.number().int().min(1).max(200).default(80) }),
     async (ctx, i) => {
       if (inPreview(ctx)) await runAutoOrders(ctx).catch(() => null);
       const w: string[] = [`c.channel <> 'test'`];
       const p: unknown[] = [];
       if (i.channel) w.push(`c.channel = $${p.push(i.channel)}`);
       if (i.q?.trim()) w.push(`(c.customer_name ILIKE '%' || $${p.push(i.q.trim())} || '%' OR c.phone LIKE '%' || $${p.length} || '%' OR c.last_preview ILIKE '%' || $${p.length} || '%')`);
-      const tabW = i.tab === 'handoff' ? `c.mode = 'handoff'` : i.tab === 'ai' ? `c.mode = 'ai'` : i.tab === 'orders' ? `c.order_id IS NOT NULL` : 'true';
+      const tabW = i.tab === 'handoff' ? `c.mode = 'handoff'` : i.tab === 'ai' ? `c.mode = 'ai'` : i.tab === 'team' ? `c.mode = 'human'` : i.tab === 'orders' ? `c.order_id IS NOT NULL` : 'true';
       const rows = await ctx.db.query(`SELECT ${CONV_COLS} ${CONV_FROM} WHERE ${[...w, tabW].join(' AND ')} ORDER BY c.last_message_at DESC LIMIT ${i.limit}`, p);
       const k = (await ctx.db.query(
-        `SELECT count(*)::int AS total, count(*) FILTER (WHERE mode = 'handoff')::int AS handoff, count(*) FILTER (WHERE mode = 'ai')::int AS ai,
+        `SELECT count(*)::int AS total, count(*) FILTER (WHERE mode = 'handoff')::int AS handoff, count(*) FILTER (WHERE mode = 'ai')::int AS ai, count(*) FILTER (WHERE mode = 'human')::int AS team,
                 count(*) FILTER (WHERE order_id IS NOT NULL)::int AS orders, COALESCE(sum(unread), 0)::int AS unread
          FROM conversations WHERE channel <> 'test'`,
       ))[0];
       const s = await dellalSettings(ctx.db);
-      return { rows: rows.map(toConv), counts: { all: num(k.total), handoff: num(k.handoff), ai: num(k.ai), orders: num(k.orders), unread: num(k.unread) }, enabled: s.enabled, name: s.name };
+      return { rows: rows.map(toConv), counts: { all: num(k.total), handoff: num(k.handoff), ai: num(k.ai), team: num(k.team), orders: num(k.orders), unread: num(k.unread) }, enabled: s.enabled, name: s.name };
     },
   ),
 
@@ -2146,6 +2208,8 @@ export const dellalProcs = {
   'dellal.followUps': proc([], z.object({}), (ctx) => runFollowUps(ctx)),
   /** Every minute on the server: the quiet chats with the customer's number become orders (runAutoOrders). */
   'dellal.autoOrders': proc([], z.object({}), (ctx) => runAutoOrders(ctx)),
+  /** Every 3 minutes on the server: the safety net (catchUpMessages) brings in the messages Meta did not send. */
+  'dellal.catchUp': proc([], z.object({}), (ctx) => catchUpMessages(ctx)),
   /** Server: the webhook verify token and which channel a page / number id belongs to. */
   'dellal.routing': proc([], z.object({}), async (ctx) => {
     const s = await dellalSettings(ctx.db);

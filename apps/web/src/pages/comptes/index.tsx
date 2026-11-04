@@ -452,16 +452,8 @@ function TestLines({ r, pending, provider }: { r: TestResult | null; pending: bo
       <ul>
         {r.checks.map((c, i) => {
           const key = c.key === 'token' && provider === 'tiktok' ? 'tokenTiktok' : c.key;
-          const v =
-            c.key === 'pageHook' && c.params?.fixed
-              ? 'fixed'
-              : c.key === 'reach' && c.params?.why === 'cloudflare'
-                ? 'cloudflare'
-                : c.params?.lost
-                  ? 'lost'
-                  : c.key === 'igSeen' && c.params?.why
-                    ? String(c.params.why)
-                    : c.state;
+          // a line's own text when it says more than its state: fixed, taken by no shop, why (Cloudflare, standby, an error…)
+          const v = c.key === 'pageHook' && c.params?.fixed ? 'fixed' : c.params?.lost ? 'lost' : c.params?.why ? String(c.params.why) : c.state;
           const { count, at, ...rest } = c.params ?? {};
           return (
             <li key={`${c.key}-${i}`} className={c.state}>

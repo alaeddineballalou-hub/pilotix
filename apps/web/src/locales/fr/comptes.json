@@ -155,6 +155,11 @@
       "warn": "Pilotix n’a encore reçu aucun commentaire Instagram pour @{{username}}. Commentez une publication de @{{username}} depuis un autre compte, puis testez encore.",
       "lost": "Instagram a envoyé un commentaire {{when}}, mais aucune boutique ne l’a pris."
     },
+    "catchUp": {
+      "ok": "Filet de sécurité : Pilotix a relu Messenger et Instagram {{when}}. Messages rattrapés : {{n}}.",
+      "warn": "Filet de sécurité : pas encore passé. Il relit Messenger et Instagram toutes les 3 minutes.",
+      "error": "Filet de sécurité : Pilotix n’a pas pu relire les messages {{when}}. La raison est juste en dessous."
+    },
     "igSeen": {
       "ok": "Dernier message d’un client sur Instagram reçu par Pilotix : {{when}}.",
       "warn": "Pilotix n’a encore rien reçu d’Instagram pour @{{username}}. Envoyez un message à @{{username}} depuis un autre compte, puis testez encore.",

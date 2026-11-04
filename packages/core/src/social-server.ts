@@ -335,6 +335,12 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
         const igc = await lastComment(t, 'instagram', String(extra.ig.id));
         add('igComment', igc?.routed ? 'ok' : 'warn', { username, ...(igc ? { at: igc.at } : {}), ...(igc && !igc.routed ? { lost: 1 } : {}) });
       } else add('igNone', 'warn', { name });
+      // the safety net (dellal.catchUp, every 3 minutes): when it last read this Page's chats again, and what it caught
+      const schema = (await t.platform.query(`SELECT schema_name FROM platform.shops WHERE id = $1`, [shopId]).catch(() => []))[0]?.schema_name;
+      const run = schema ? (await t.shop(String(schema)).query(`SELECT value FROM settings WHERE key = 'dellal_catchup'`).catch(() => []))[0]?.value : null;
+      if (!run?.at) add('catchUp', 'warn');
+      else if (run.error) add('catchUp', 'warn', { at: String(run.at), why: 'error' }, String(run.error).slice(0, 240));
+      else add('catchUp', 'ok', { at: String(run.at), count: num(run.found) });
     }
   } else if (assets.some((a: any) => a.kind === 'page')) add('pageNone', 'warn');
 

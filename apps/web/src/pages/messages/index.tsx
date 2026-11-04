@@ -68,7 +68,7 @@ export function Messages({ sub, rest }: PageProps) {
 }
 
 // ---------------------------------------------------------------- inbox
-type Tab = 'all' | 'handoff' | 'ai' | 'orders';
+type Tab = 'all' | 'handoff' | 'ai' | 'team' | 'orders';
 type Conv = NonNullable<ReturnType<typeof useRpc<'dellal.inbox'>>['data']>['rows'][number];
 
 function Inbox({ selected }: { selected: number | null }) {
@@ -120,6 +120,7 @@ function Inbox({ selected }: { selected: number | null }) {
                   { value: 'all', label: t('messages.inbox.all'), count: d?.counts.all },
                   { value: 'handoff', label: t('messages.inbox.handoff'), count: d?.counts.handoff, alert: true },
                   { value: 'ai', label: name, count: d?.counts.ai },
+                  { value: 'team', label: t('messages.inbox.team'), count: d?.counts.team },
                   { value: 'orders', label: t('messages.inbox.orders'), count: d?.counts.orders },
                 ]}
               />
@@ -157,35 +158,46 @@ function Inbox({ selected }: { selected: number | null }) {
 function ConvRow({ c, on, name, onClick }: { c: Conv; on: boolean; name: string; onClick: () => void }) {
   const { t } = useTranslation();
   const who = c.customerName || c.phone || t('messages.unknown');
+  // a chat the team took: back to the AI in one click (it answers a customer who is waiting)
+  const back = useAction('dellal.setMode', { success: (r) => (r.answered ? t('messages.thread.answered', { name }) : t('messages.thread.modeSaved')) });
   return (
-    <button type="button" className={`ai-conv ${on ? 'on' : ''} ${c.unread > 0 ? 'unread' : ''}`} aria-current={on ? 'true' : undefined} onClick={onClick}>
-      <Avatar name={who} ch={c.channel} />
-      <span className="ai-conv-main">
-        <span className="ai-conv-l1">
-          <b>
-            <bdi>{who}</bdi>
-          </b>
-          <time dateTime={c.lastMessageAt}>{shortWhen(c.lastMessageAt)}</time>
-        </span>
-        <span className="ai-conv-l2">
-          <span className="ai-prev" dir="auto">
-            {c.lastPreview}
+    <div className={`ai-conv-row ${on ? 'on' : ''}`}>
+      <button type="button" className={`ai-conv ${on ? 'on' : ''} ${c.unread > 0 ? 'unread' : ''}`} aria-current={on ? 'true' : undefined} onClick={onClick}>
+        <Avatar name={who} ch={c.channel} />
+        <span className="ai-conv-main">
+          <span className="ai-conv-l1">
+            <b>
+              <bdi>{who}</bdi>
+            </b>
+            <time dateTime={c.lastMessageAt}>{shortWhen(c.lastMessageAt)}</time>
           </span>
-          {c.mode === 'handoff' ? (
-            <span className="dl-pill dl-handoff">{t('messages.mode.handoff')}</span>
-          ) : c.orderRef ? (
-            <span className="dl-pill dl-order ltr">{c.orderRef}</span>
-          ) : c.mode === 'human' ? (
-            <span className="dl-pill dl-human">{t('messages.mode.human')}</span>
-          ) : (
-            <span className="dl-by-ai" title={name}>
-              <Icon name="sparkles" />
+          <span className="ai-conv-l2">
+            <span className="ai-prev" dir="auto">
+              {c.lastPreview}
             </span>
-          )}
-          {c.unread > 0 && <span className="ai-unread">{c.unread}</span>}
+            {c.mode === 'handoff' ? (
+              <span className="dl-pill dl-handoff">{t('messages.mode.handoff')}</span>
+            ) : c.orderRef ? (
+              <span className="dl-pill dl-order ltr">{c.orderRef}</span>
+            ) : c.mode === 'human' ? (
+              <span className="dl-pill dl-human">{t('messages.mode.human')}</span>
+            ) : (
+              <span className="dl-by-ai" title={name}>
+                <Icon name="sparkles" />
+              </span>
+            )}
+            {c.unread > 0 && <span className="ai-unread">{c.unread}</span>}
+          </span>
         </span>
-      </span>
-    </button>
+      </button>
+      {c.mode === 'human' && (
+        <div className="ai-conv-back-bar">
+          <button type="button" className="ai-conv-back" disabled={back.isPending} onClick={() => back.mutate({ id: c.id, mode: 'ai' })}>
+            <Icon name="sparkles" /> {t('messages.thread.giveBack', { name })}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

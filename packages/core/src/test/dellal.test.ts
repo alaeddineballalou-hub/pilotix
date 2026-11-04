@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db, ServerHooks } from '../index';
-import { chunks, parseMetaWebhook } from '../dellal-server';
+import { chunks, missedMessages, parseMetaWebhook } from '../dellal-server';
+import { getRaw, setRaw } from '../modules/admin';
 import { findPlace, playbookFor } from '../modules/dellal';
 import { checkDarija, fixDarija, parseAvoid } from '../modules/darija';
 import { getSetting, setSetting } from '../settings';
@@ -735,4 +736,105 @@ test('a reply in another dialect is rewritten in Algerian Darija before it is se
   const out3: any = await call('dellal.answer', sys3, { id: r3.conversationId });
   assert.equal(out3.reply, 'Ma tkhafich khti, t9dri tchoufi le colis 9oddam le livreur.');
   assert.equal(calls, 1);
+});
+
+test('safety net: in one read of the chats, the customer’s messages after the shop’s last one, since a time', () => {
+  const since = Date.parse('2026-11-04T10:00:00Z');
+  const m = (id: string, at: string, from: any, message: string) => ({ id, created_time: `2026-11-04T${at}+0000`, from, message });
+  const convs = [
+    { updated_time: '2026-11-04T10:05:00+0000', messages: { data: [m('m3', '10:05:00', { id: 'u1', name: 'Amina' }, 'w kayen livraison ?'), m('m2', '10:04:00', { id: 'u1', name: 'Amina' }, 'ch7al ?'), m('m1', '10:03:00', { id: 'page-1' }, 'Salam !'), m('m0', '10:02:00', { id: 'u1' }, 'salam')] } },
+    // the shop answered last: nothing waiting
+    { updated_time: '2026-11-04T10:06:00+0000', messages: { data: [m('n2', '10:06:00', { id: 'page-1' }, 'Wakha'), m('n1', '10:05:30', { id: 'u2' }, 'nheb wahda')] } },
+    // too old
+    { updated_time: '2026-11-04T09:00:00+0000', messages: { data: [m('o1', '09:00:00', { id: 'u3' }, 'allo')] } },
+    // a photo only (no words), then a line from before `since`
+    { updated_time: '2026-11-04T10:01:00+0000', messages: { data: [m('p2', '10:01:00', { id: 'u4' }, ''), m('p1', '09:59:00', { id: 'u4' }, 'old')] } },
+  ];
+  const r = missedMessages(convs, { platform: 'messenger', own: ['page-1'], accountId: 'page-1', since });
+  assert.deepEqual(r.map((x) => [x.externalId, x.text, x.messageId]), [['u1', 'ch7al ?', 'm2'], ['u1', 'w kayen livraison ?', 'm3']]);
+  assert.deepEqual([r[0].name, r[0].channel, r[0].accountId], ['Amina', 'messenger', 'page-1']);
+  // Instagram: the shop's own account is the shop too
+  const ig = missedMessages([{ updated_time: '2026-11-04T10:05:00+0000', messages: { data: [m('aWdf1', '10:05:00', { id: 'igsid-9', username: 'karim' }, 'prix ?'), m('aWdf0', '10:04:00', { id: 'ig-1' }, 'Salam')] } }], {
+    platform: 'instagram',
+    own: ['page-1', 'ig-1'],
+    accountId: 'ig-1',
+    since,
+  });
+  assert.deepEqual(ig.map((x) => [x.channel, x.externalId, x.name, x.accountId]), [['instagram', 'igsid-9', 'karim', 'ig-1']]);
+  // a message written to someone else than the shop (the account changed): Pilotix stops, it never takes the shop's words
+  const lost = missedMessages([{ updated_time: '2026-11-04T10:05:00+0000', messages: { data: [{ ...m('x1', '10:05:00', { id: 'ig-new' }, 'Salam !'), to: { data: [{ id: 'igsid-9' }] } }] } }], {
+    platform: 'instagram',
+    own: ['page-1', 'ig-1'],
+    accountId: 'ig-1',
+    since,
+  });
+  assert.deepEqual(lost, []);
+});
+
+test('safety net: a message Meta never sent comes in and Dellal answers it; one already here is not taken twice', async () => {
+  const sent: any[] = [];
+  const caught: any[] = [];
+  const server = fakeServer([{ content: [{ type: 'text', text: 'Salam ! 12 900 DA.' }], stop_reason: 'end_turn' }], sent);
+  const base = server.dellal!;
+  let refuse: false | 'ig' | 'down' = false;
+  server.dellal = async (action, args, ctx) => {
+    if (action !== 'catchUp') return base(action, args, ctx);
+    if (refuse === 'down') throw new Error('Pilotix injoignable');
+    return { messages: caught, errors: refuse ? ['Instagram : (#10) refusé'] : [] };
+  };
+  const admin = await as(EMAILS.admin);
+  const g: any = await call('dellal.settings.get', admin, {});
+  await call('dellal.settings.save', admin, { ...g.settings, enabled: true, nightReplies: true, secrets: {} });
+  const sys = await as(EMAILS.admin, server);
+  // no Page linked: nothing to read
+  assert.equal(((await call('dellal.catchUp', sys, {})) as any).found, 0);
+  await setRaw(db, 'dellal', { ...(await getRaw<any>(db, 'dellal', {})), messengerPageId: 'page-net', instagramId: 'ig-net' });
+  await setRaw(db, 'secret_dellal_page_token', 'PAGE-NET');
+  // the preview has no server: it does nothing
+  assert.equal(((await call('dellal.catchUp', admin, {})) as any).skipped, 'preview');
+  const at = new Date().toISOString();
+  caught.push({ channel: 'instagram', externalId: 'igsid-net', accountId: 'ig-net', name: 'Karim', text: 'ch7al la poussette ?', messageId: 'aWdf-net-1', source: null, at });
+  const r: any = await call('dellal.catchUp', sys, {});
+  assert.deepEqual([r.found, r.error], [1, null]);
+  const conv = (await db.query(`SELECT id FROM conversations WHERE channel = 'instagram' AND external_id = 'igsid-net'`))[0];
+  assert.ok(conv, 'in the inbox like any other');
+  assert.deepEqual(
+    sent.filter((x) => x.externalId === 'igsid-net').map((x) => x.text),
+    ['Salam ! 12 900 DA.'],
+    'Dellal answered it',
+  );
+  // read again: the same message is not taken (nor answered) twice
+  assert.equal(((await call('dellal.catchUp', sys, {})) as any).found, 0);
+  // the webhook brought the same words under another id: not taken twice either
+  caught.splice(0, 1, { ...caught[0], messageId: 'other-id-for-the-same' });
+  assert.equal(((await call('dellal.catchUp', sys, {})) as any).found, 0);
+  assert.equal(sent.filter((x) => x.externalId === 'igsid-net').length, 1);
+  // each run is written down (« Tester » shows it); Meta refusing is kept as the reason, nothing breaks
+  assert.deepEqual([((await getRaw<any>(db, 'dellal_catchup', null)) as any).found, ((await getRaw<any>(db, 'dellal_catchup', null)) as any).error], [0, null]);
+  const okAt = ((await getRaw<any>(db, 'dellal_catchup', null)) as any).okAt;
+  assert.ok(okAt, 'the last run that read everything');
+  refuse = 'ig';
+  const bad: any = await call('dellal.catchUp', sys, {});
+  assert.match(bad.error, /refusé/);
+  const kept: any = await getRaw<any>(db, 'dellal_catchup', null);
+  assert.match(kept.error, /refusé/);
+  assert.equal(kept.okAt, okAt, 'the next run reads again from the last good one');
+  refuse = 'down';
+  assert.match(((await call('dellal.catchUp', sys, {})) as any).error, /injoignable/);
+  // the message keeps the time the customer wrote it
+  const row = (await db.query(`SELECT m.created_at FROM conv_messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.external_id = 'igsid-net' AND m.role = 'customer'`))[0];
+  assert.equal(new Date(row.created_at).toISOString(), at);
+});
+
+test('« Équipe »: the chats a person handles have their own tab; « Rendre à Dellal » gives one back', async () => {
+  const admin = await as(EMAILS.admin);
+  const id = Number((await db.query(`INSERT INTO conversations (channel, external_id, customer_name, mode, last_message_at) VALUES ('messenger', 'team-tab-1', 'Sara', 'human', now()) RETURNING id`))[0].id);
+  let inbox: any = await call('dellal.inbox', admin, { tab: 'team' });
+  assert.ok(inbox.rows.some((r: any) => r.id === id));
+  assert.ok(inbox.rows.every((r: any) => r.mode === 'human'));
+  assert.equal(inbox.counts.team, inbox.rows.length);
+  await call('dellal.setMode', admin, { id, mode: 'ai' });
+  inbox = await call('dellal.inbox', admin, { tab: 'team' });
+  assert.ok(!inbox.rows.some((r: any) => r.id === id));
+  assert.ok(((await call('dellal.inbox', admin, { tab: 'ai' })) as any).rows.some((r: any) => r.id === id));
 });

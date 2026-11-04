@@ -24,6 +24,7 @@
   "inbox": {
     "all": "All",
     "handoff": "To take over",
+    "team": "Team",
     "orders": "Orders",
     "search": "Name, phone, message…",
     "channel": "Channel",

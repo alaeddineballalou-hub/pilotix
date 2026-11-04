@@ -1538,6 +1538,7 @@ class ApiController {
     bg('landing.run'); // landing pages: abandoned orders, Meta events (in the background)
     bg('notify.run'); // Delivery AI agent: messages due (in the background)
     bg('dellal.autoOrders'); // Message AI agent: quiet chats with the customer's number become orders (in the background)
+    bg('dellal.catchUp'); // Message AI agent: the safety net, messages Meta did not send (in the background)
     bg('depot.pushRun'); // dépôt alerts: ring the phones again (in the background)
     bg('pilot.run'); // Pilot Auto Assign: private orders waiting too long go to the backup company (in the background)
     bg('assign.run'); // Affectation automatique: the waiting orders and alerts get their agent (in the background)

@@ -24,6 +24,7 @@
   "inbox": {
     "all": "Tous",
     "handoff": "À reprendre",
+    "team": "Équipe",
     "orders": "Commandes",
     "search": "Nom, téléphone, message…",
     "channel": "Canal",

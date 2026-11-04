@@ -1016,6 +1016,7 @@ async function demoTest(ctx: Ctx, linkId: number): Promise<SocialTest> {
           { key: 'igInbox', state: 'ok', params: { username: page.igUsername } },
           { key: 'igSeen', state: 'ok', params: { username: page.igUsername, at: ago(25) } },
           { key: 'igComment', state: 'ok', params: { username: page.igUsername, at: ago(120) } },
+          { key: 'catchUp', state: 'ok', params: { at: ago(2), count: 1 } },
         );
       else checks.push({ key: 'igNone', state: 'warn', params: { name: page.name } });
     } else if (l.assets.some((a) => a.kind === 'page')) checks.push({ key: 'pageNone', state: 'warn' });
