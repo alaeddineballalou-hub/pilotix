@@ -1,4 +1,4 @@
-# Temporary (for Claude): are the Instagram and dinar fixes live, and can Meta still reach Pilotix through Cloudflare? Reads only.
+# Temporary (for Claude): is the safety net and the « Équipe » tab live? Reads only.
 name: Live now 2 (temporary, for Claude)
 on:
   push:
@@ -28,24 +28,10 @@ jobs:
             grep -o '"[A-Za-z0-9._-]*\.js"' "$f" | tr -d '"' | grep -E '^[A-Za-z0-9_-]+-[A-Za-z0-9_-]{8}\.js$' | sed 's#^#assets/#' | while read b; do grep -qx "$b" /tmp/seen || echo "$b" >> /tmp/todo; done
           done
           echo "::notice title=Scripts read::$n"
-          for m in 'Comptes pub en dinars' 'Ad accounts in dinars' social.test cpt-fold verify/send/ticket; do
+          for m in 'Filet de sécurité' 'Safety net' 'ai-conv-back' 'Rendre à'; do
             hit=$(grep -l "$m" /tmp/js/*.js 2>/dev/null | head -1)
             echo "::notice title=js $m::$([ -n "$hit" ] && echo "live (in $(basename "$hit"))" || echo 'not found')"
           done
           css=$(grep -o 'assets/[A-Za-z0-9._-]*\.css' /tmp/index.html | head -1); echo "::notice title=Main css::$css"
           for c in $(cat /tmp/js/*.js /tmp/index.html | grep -o 'assets/[A-Za-z0-9._-]*\.css' | sort -u); do curl -s -m 40 -A 'Mozilla/5.0' "https://direct.pilotix.online/$c" >> /tmp/all.css; done
-          for m in cpt-fold cpt-chips cpt-test 8b6fd6; do echo "::notice title=css $m::$(grep -oi "$m" /tmp/all.css 2>/dev/null | wc -l)"; done
-          art=$(ls /tmp/js | grep -c '^art-ltr-' || true); echo "::notice title=Learning bench picture loaded by the page::$art"
-      - name: Through Cloudflare, from outside Algeria (like Meta's servers)
-        run: |
-          # 403 + « Just a moment » + cf-mitigated = Cloudflare stops it; any other answer = it reaches Pilotix
-          t() { c=$(curl -s -m 30 -A "$2" -D /tmp/h.txt -o /tmp/b.html -w '%{http_code}' "$1" || echo failed); m=$(grep -i '^cf-mitigated' /tmp/h.txt | tr -d '\r' | cut -d' ' -f2); j=$(grep -c 'Just a moment' /tmp/b.html || true); k=$(grep -o "cType: *'[a-z-]*'" /tmp/b.html | head -1); echo "::notice title=$3::$c, cf-mitigated=${m:-none}, challenge page=$j, ${k:-no cType}, answer: $(head -c 70 /tmp/b.html | tr -d '\n' | sed 's/<[^>]*>//g')"; }
-          t 'https://pilotix.online/api/hooks/meta-app?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=1' 'facebookexternalua' 'Pilotix Meta app messages'
-          t 'https://pilotix.online/api/s/demo/hooks/meta?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=1' 'facebookexternalua' 'A boutique WhatsApp messages'
-          t 'https://pilotix.online/api/hooks/courier/1' 'Mozilla/5.0' 'Delivery company news'
-          t 'https://pilotix.online/api/oauth/meta/callback?state=not-a-real-state' 'Mozilla/5.0' 'Facebook login return'
-          t 'https://pilotix.online/' 'Mozilla/5.0' 'Home page (the shield should still check it)'
-          t 'https://pilotix.online/api/hooks/meta-app' 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36' 'Meta app messages, a browser name'
-          t 'https://pilotix.online/' 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36' 'Home page, a browser name'
-          t 'https://pilotix.online/cdn-cgi/trace' 'Mozilla/5.0' 'cdn-cgi trace'
-          echo "::notice title=Runner seen by Cloudflare as::$(grep -E '^(loc|colo)=' /tmp/b.html | tr '\n' ' ')"
+          for m in ai-conv-back ai-conv-row; do echo "::notice title=css $m::$(grep -oi "$m" /tmp/all.css 2>/dev/null | wc -l)"; done
