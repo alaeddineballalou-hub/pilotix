@@ -1,4 +1,4 @@
-# Temporary (for Claude): is the new Pilot AI › Comptes card live, and can Meta still reach Pilotix through Cloudflare? Reads only.
+# Temporary (for Claude): « Ce site est inaccessible » for some users — DNS, DNSSEC and connection tests from outside. Reads only.
 name: Live now (temporary, for Claude)
 on:
   push:
@@ -8,44 +8,40 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
-      - name: Pilot AI tabs on the live site
+      - name: DNS of pilotix.online from the big public resolvers
         run: |
-          code=$(curl -s -m 40 -A 'Mozilla/5.0' -o /tmp/index.html -w '%{http_code}' https://direct.pilotix.online/ || echo failed)
-          echo "::notice title=Site index::$code"
-          # every script of the app, followed from the page (the control room is a chunk loaded later)
-          mkdir -p /tmp/js; : > /tmp/seen
-          grep -o 'assets/[A-Za-z0-9._-]*\.js' /tmp/index.html | sort -u > /tmp/todo
-          n=0
-          while [ -s /tmp/todo ] && [ $n -lt 200 ]; do
-            a=$(head -1 /tmp/todo); sed -i 1d /tmp/todo
-            grep -qx "$a" /tmp/seen && continue
-            echo "$a" >> /tmp/seen; n=$((n+1))
-            f="/tmp/js/$(basename "$a")"
-            curl -s -m 60 -A 'Mozilla/5.0' "https://direct.pilotix.online/$a" -o "$f" || continue
-            grep -o 'assets/[A-Za-z0-9._-]*\.js' "$f" | sort -u | while read b; do grep -qx "$b" /tmp/seen || echo "$b" >> /tmp/todo; done
-            grep -o '"[A-Za-z0-9._-]*\.js"' "$f" | tr -d '"' | grep -E '^[A-Za-z0-9_-]+-[A-Za-z0-9_-]{8}\.js$' | sed 's#^#assets/#' | while read b; do grep -qx "$b" /tmp/seen || echo "$b" >> /tmp/todo; done
+          for r in 'Google 8.8.8.8' 'Cloudflare 1.1.1.1' 'Quad9 9.9.9.9' 'OpenDNS 208.67.222.222'; do
+            n=${r%% *}; ip=${r#* }
+            st=$(dig +time=5 +tries=2 pilotix.online A @$ip | grep -o 'status: [A-Z]*' | head -1)
+            fl=$(dig +time=5 +tries=2 pilotix.online A @$ip | grep -o 'flags: [a-z ]*' | head -1)
+            cnt=$(dig +short +time=5 +tries=2 pilotix.online A @$ip | grep -c '\.' || true)
+            cd=$(dig +cd +time=5 +tries=2 pilotix.online A @$ip | grep -o 'status: [A-Z]*' | head -1)
+            echo "::notice title=DNS via $n::$st, $fl, $cnt addresses, without DNSSEC check: $cd"
           done
-          echo "::notice title=Scripts read::$n"
-          for m in social.test social.ads cpt-fold cpt-test adsMany; do
-            hit=$(grep -l "$m" /tmp/js/*.js 2>/dev/null | head -1)
-            echo "::notice title=js $m::$([ -n "$hit" ] && echo "live (in $(basename "$hit"))" || echo 'not found')"
-          done
-          css=$(grep -o 'assets/[A-Za-z0-9._-]*\.css' /tmp/index.html | head -1); echo "::notice title=Main css::$css"
-          for c in $(cat /tmp/js/*.js /tmp/index.html | grep -o 'assets/[A-Za-z0-9._-]*\.css' | sort -u); do curl -s -m 40 -A 'Mozilla/5.0' "https://direct.pilotix.online/$c" >> /tmp/all.css; done
-          for m in cpt-fold cpt-chips cpt-test 8b6fd6; do echo "::notice title=css $m::$(grep -oi "$m" /tmp/all.css 2>/dev/null | wc -l)"; done
-          art=$(ls /tmp/js | grep -c '^art-ltr-' || true); echo "::notice title=Learning bench picture loaded by the page::$art"
-      - name: Through Cloudflare, from outside Algeria (like Meta's servers)
+          echo "::notice title=Name servers::$(dig +short NS pilotix.online @8.8.8.8 | tr '\n' ' ')"
+          echo "::notice title=DNSSEC at the registry (DS)::$(dig +short DS pilotix.online @8.8.8.8 | cut -d' ' -f1-3 | tr '\n' ';' )"
+          ns=$(dig +short NS pilotix.online @8.8.8.8 | head -1)
+          echo "::notice title=DNSSEC keys at the name server (DNSKEY)::$(dig +short DNSKEY pilotix.online @$ns | wc -l) keys"
+          echo "::notice title=www.pilotix.online::$(dig +short www.pilotix.online A @8.8.8.8 | grep -c '\.' || true) addresses, $(dig www.pilotix.online A @8.8.8.8 | grep -o 'status: [A-Z]*' | head -1)"
+          echo "::notice title=IPv6 (AAAA) of pilotix.online::$(dig +short pilotix.online AAAA @8.8.8.8 | grep -c ':' || true) addresses"
+          echo "::notice title=Dates (SOA serial)::$(dig +short SOA pilotix.online @8.8.8.8 | cut -d' ' -f1,3)"
+      - name: 30 new connections through Cloudflare, 30 straight to the server
         run: |
-          # 403 + « Just a moment » + cf-mitigated = Cloudflare stops it; any other answer = it reaches Pilotix
-          t() { c=$(curl -s -m 30 -A "$2" -D /tmp/h.txt -o /tmp/b.html -w '%{http_code}' "$1" || echo failed); m=$(grep -i '^cf-mitigated' /tmp/h.txt | tr -d '\r' | cut -d' ' -f2); j=$(grep -c 'Just a moment' /tmp/b.html || true); k=$(grep -o "cType: *'[a-z-]*'" /tmp/b.html | head -1); echo "::notice title=$3::$c, cf-mitigated=${m:-none}, challenge page=$j, ${k:-no cType}, answer: $(head -c 70 /tmp/b.html | tr -d '\n' | sed 's/<[^>]*>//g')"; }
-          t 'https://pilotix.online/api/hooks/meta-app?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=1' 'facebookexternalua' 'Pilotix Meta app messages'
-          t 'https://pilotix.online/api/s/demo/hooks/meta?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=1' 'facebookexternalua' 'A boutique WhatsApp messages'
-          t 'https://pilotix.online/api/hooks/courier/1' 'Mozilla/5.0' 'Delivery company news'
-          t 'https://pilotix.online/api/oauth/meta/callback?state=not-a-real-state' 'Mozilla/5.0' 'Facebook login return'
-          t 'https://pilotix.online/' 'Mozilla/5.0' 'Home page (the shield should still check it)'
-          t 'https://pilotix.online/api/hooks/meta-app' 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36' 'Meta app messages, a browser name'
-          t 'https://pilotix.online/' 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36' 'Home page, a browser name'
-          t 'https://pilotix.online/cdn-cgi/trace' 'Mozilla/5.0' 'cdn-cgi trace'
-          echo "::notice title=Runner seen by Cloudflare as::$(grep -E '^(loc|colo)=' /tmp/b.html | tr '\n' ' ')"
+          t() { ok=0; bad=0; slow=0; codes=''; max=0
+            for i in $(seq 1 30); do
+              o=$(curl -s -m 20 -A 'Mozilla/5.0' -o /dev/null -w '%{http_code} %{time_connect} %{time_total}' "$1" || echo "000 0 20")
+              c=${o%% *}; tt=${o##* }
+              codes="$codes $c"
+              [ "$c" = "000" ] && bad=$((bad+1)) || ok=$((ok+1))
+              awk -v x="$tt" 'BEGIN{exit !(x>5)}' && slow=$((slow+1))
+              max=$(awk -v a="$max" -v b="$tt" 'BEGIN{print (b>a)?b:a}')
+              sleep 1
+            done
+            echo "::notice title=$2::$ok answered, $bad no answer, $slow slower than 5 s, slowest ${max} s, codes:$(echo $codes | tr ' ' '\n' | sort | uniq -c | tr '\n' ' ')"; }
+          t 'https://pilotix.online/' 'Through Cloudflare (home page)'
+          t 'https://pilotix.online/api/hooks/courier/1' 'Through Cloudflare (an api address)'
+          t 'https://direct.pilotix.online/' 'Straight to the server (home page)'
+          echo "::notice title=HTTP/3 offered by Cloudflare::$(curl -sI -m 20 https://pilotix.online/api/hooks/courier/1 | grep -i '^alt-svc' | tr -d '\r' | cut -c1-80)"
+          echo "::notice title=Runner seen by Cloudflare as::$(curl -s -m 20 https://pilotix.online/cdn-cgi/trace | grep -E '^(loc|colo|http|tls)=' | tr '\n' ' ')"
