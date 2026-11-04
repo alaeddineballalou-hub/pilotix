@@ -307,14 +307,30 @@ export const CATCHUP_MAX_CHATS = 25;
 /** The whole run's time: what is not read by then is read next time (the run does not count as a good one). */
 const CATCHUP_BUDGET_MS = 60_000;
 
+/** Meta's « Please reduce the amount of data you're asking for, then retry your request » (code 1). */
+const tooMuch = (e: any) => e?.metaCode === 1 || /reduce the amount of data/i.test(String(e?.message ?? ''));
+
+/** One Graph question; when Meta says it is too much, the same question for half as many (down to 1). */
+async function askSmaller(url: (n: number) => string, n: number, who: string, timeoutMs: number): Promise<{ data: any; n: number }> {
+  for (;;) {
+    try {
+      return { data: await postJson(url(n), null, {}, who, 'GET', timeoutMs), n };
+    } catch (e) {
+      if (!tooMuch(e) || n <= 1) throw e;
+      n = Math.max(1, Math.floor(n / 2));
+    }
+  }
+}
+
 /**
  * The linked Page's last chats on Messenger and on Instagram (the Conversations API, with the Page's key): the customers'
  * messages since `since` that nobody answered yet. Meta does not always send every message to the webhook; this finds
  * the ones it lost (the webhook ones are already in Pilotix: dellal.catchUp skips them).
  *
- * Two small questions instead of one big one (every chat with its messages: Instagram did not answer it in time): which
- * chats changed since `since` (their dates only), then, one chat at a time, the last messages of each of them. A chat
- * Meta does not answer is said in `errors` (it is read again next time); the others still come in.
+ * Small questions instead of one big one (Instagram does not answer a big one: too slow, or « reduce the amount of
+ * data »): which chats changed since `since` (their dates only, a few at a time, newest first, until older ones), then,
+ * one chat at a time, the last messages of each of them. When Meta says a question is too big, it is asked again for
+ * fewer. A chat Meta does not answer is said in `errors` (it is read again next time); the others still come in.
  */
 export async function catchUpMeta(a: CatchUpArgs, o: { pauseMs?: number; budgetMs?: number } = {}): Promise<{ messages: CaughtMessage[]; errors: string[] }> {
   const messages: CaughtMessage[] = [];
@@ -322,19 +338,33 @@ export async function catchUpMeta(a: CatchUpArgs, o: { pauseMs?: number; budgetM
   const own = [a.pageId, a.igId ?? ''].filter(Boolean);
   const end = Date.now() + (o.budgetMs ?? CATCHUP_BUDGET_MS);
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const newer = (c: any) => Date.parse(String(c?.updated_time ?? '')) >= a.since;
   // each app on its own: Instagram refusing does not stop Messenger
   for (const platform of ['messenger', ...(a.igId ? ['instagram' as const] : [])] as const) {
     const who = platform === 'instagram' ? 'Instagram' : 'Messenger';
     const accountId = platform === 'instagram' ? a.igId! : a.pageId;
-    let list: any[];
+    // Instagram takes a few questions a second for one account: one at a time, a little apart
+    const pause = o.pauseMs ?? (platform === 'instagram' ? 600 : 200);
+    const list: any[] = [];
     try {
-      const r = await postJson(`${GRAPH}/${enc(a.pageId)}/conversations?platform=${platform}&fields=updated_time&limit=${CATCHUP_MAX_CHATS}&access_token=${enc(a.token)}`, null, {}, who, 'GET', 30_000);
-      list = Array.isArray(r?.data) ? r.data : [];
+      let size = platform === 'instagram' ? 10 : CATCHUP_MAX_CHATS;
+      let after: string | null = null;
+      for (let page = 0; page < 6 && list.length < CATCHUP_MAX_CHATS; page++) {
+        if (page) await wait(pause);
+        const cursor: string | null = after;
+        const got = await askSmaller((n) => `${GRAPH}/${enc(a.pageId)}/conversations?platform=${platform}&fields=updated_time&limit=${n}${cursor ? `&after=${enc(cursor)}` : ''}&access_token=${enc(a.token)}`, size, who, 30_000);
+        size = got.n;
+        const rows: any[] = Array.isArray(got.data?.data) ? got.data.data : [];
+        list.push(...rows);
+        after = got.data?.paging?.next ? (got.data?.paging?.cursors?.after ?? null) : null;
+        // newest first: once a page reaches chats older than `since`, the next pages are older still
+        if (!rows.length || !after || !rows.every(newer)) break;
+      }
     } catch (e: any) {
       errors.push(String(e?.message ?? e));
       continue;
     }
-    const changed = list.filter((c) => c?.id && Date.parse(String(c?.updated_time ?? '')) >= a.since);
+    const changed = list.filter((c) => c?.id && newer(c)).slice(0, CATCHUP_MAX_CHATS);
     let missed = 0;
     let why = '';
     for (const [i, c] of changed.entries()) {
@@ -344,11 +374,10 @@ export async function catchUpMeta(a: CatchUpArgs, o: { pauseMs?: number; budgetM
         why ||= `${who} : pas eu le temps de tout lire.`;
         break;
       }
-      // Instagram takes a few questions a second for one account: one chat at a time, a little apart
-      if (i) await wait(o.pauseMs ?? (platform === 'instagram' ? 600 : 200));
+      await wait(pause);
       try {
-        const r = await postJson(`${GRAPH}/${enc(String(c.id))}?fields=${enc('messages.limit(6){id,created_time,from,to,message}')}&access_token=${enc(a.token)}`, null, {}, who, 'GET', Math.min(25_000, left));
-        messages.push(...missedMessages([{ updated_time: c.updated_time, messages: r?.messages }], { platform, own, accountId, since: a.since }));
+        const got = await askSmaller((n) => `${GRAPH}/${enc(String(c.id))}?fields=${enc(`messages.limit(${n}){id,created_time,from,to,message}`)}&access_token=${enc(a.token)}`, 6, who, Math.min(25_000, left));
+        messages.push(...missedMessages([{ updated_time: c.updated_time, messages: got.data?.messages }], { platform, own, accountId, since: a.since }));
       } catch (e: any) {
         missed++;
         why ||= String(e?.message ?? e);

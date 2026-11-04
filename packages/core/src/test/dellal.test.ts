@@ -877,3 +877,40 @@ test('safety net: first which chats changed (dates only), then each of them alon
     globalThis.fetch = real;
   }
 });
+
+test('safety net: when Meta says « reduce the amount of data », the same question for fewer; the chats come page by page until older ones', async () => {
+  const now = Date.now();
+  const iso = (ago: number) => new Date(now - ago).toISOString().replace('.000Z', '+0000');
+  const asked: string[] = [];
+  const real = globalThis.fetch;
+  const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  const tooBig = () => reply({ error: { message: 'Please reduce the amount of data you’re asking for, then retry your request', code: 1 } }, 500);
+  globalThis.fetch = (async (input: any) => {
+    const url = new URL(String(input));
+    const path = url.pathname.replace(/^\/v[\d.]+\//, '');
+    const q = url.searchParams;
+    asked.push(path.endsWith('/conversations') ? `${q.get('platform')} limit=${q.get('limit')}${q.get('after') ? ` after=${q.get('after')}` : ''}` : `${path} ${q.get('fields')?.match(/limit\(\d+\)/)?.[0]}`);
+    if (path === 'page-8/conversations' && q.get('platform') === 'messenger') return reply({ data: [] });
+    if (path === 'page-8/conversations') {
+      if (Number(q.get('limit')) > 5) return tooBig();
+      if (!q.get('after')) return reply({ data: [{ id: 'j1', updated_time: iso(10_000) }, { id: 'j2', updated_time: iso(20_000) }], paging: { cursors: { after: 'CUR1' }, next: 'https://graph.facebook.com/next' } });
+      return reply({ data: [{ id: 'j3', updated_time: iso(30_000) }, { id: 'j4', updated_time: iso(2 * 3_600_000) }], paging: { cursors: { after: 'CUR2' }, next: 'https://graph.facebook.com/next' } });
+    }
+    if (path === 'j1') return q.get('fields')!.includes('limit(6)') ? tooBig() : reply({ messages: { data: [{ id: 'k1', created_time: iso(10_000), from: { id: 'igsid-7', username: 'sara' }, message: 'kayen rose ?' }] } });
+    if (path === 'j2') return reply({ messages: { data: [{ id: 'k2', created_time: iso(20_000), from: { id: 'ig-8' }, message: 'Ey kayen' }] } });
+    if (path === 'j3') return reply({ messages: { data: [{ id: 'k3', created_time: iso(30_000), from: { id: 'igsid-6', username: 'nadia' }, message: 'livraison Oran ?' }] } });
+    return reply({ error: { message: `unexpected ${path}` } }, 400);
+  }) as typeof fetch;
+  try {
+    const r = await catchUpMeta({ token: 'T', pageId: 'page-8', igId: 'ig-8', since: now - 30 * 60_000 }, { pauseMs: 0 });
+    assert.deepEqual(r.errors, []);
+    assert.deepEqual(r.messages.map((m) => [m.externalId, m.text]), [['igsid-7', 'kayen rose ?'], ['igsid-6', 'livraison Oran ?']]);
+    // 10 was too much, 5 was fine (and stays 5 for the next page); the page with an older chat is the last one
+    assert.deepEqual(asked.filter((x) => x.startsWith('instagram')), ['instagram limit=10', 'instagram limit=5', 'instagram limit=5 after=CUR1']);
+    // a chat with 6 messages was too much: 3; the older chat is never opened
+    assert.deepEqual(asked.filter((x) => x.startsWith('j1')), ['j1 limit(6)', 'j1 limit(3)']);
+    assert.ok(!asked.some((x) => x.startsWith('j4')));
+  } finally {
+    globalThis.fetch = real;
+  }
+});
