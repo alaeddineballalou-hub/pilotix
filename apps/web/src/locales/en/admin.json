@@ -532,7 +532,8 @@
     "metaLinked": "Ad account “{{name}}”, linked by “{{account}}” (Pilot AI › Accounts).",
     "metaChange": "Change",
     "metaLinkHint": "Easiest: link your Facebook account in one click, no token to paste.",
-    "metaLinkBtn": "Pilot AI › Accounts"
+    "metaLinkBtn": "Pilot AI › Accounts",
+    "metaLinkedMany": "{{count}} ad accounts of “{{account}}”, added up in Publicité (Pilot AI › Accounts)."
   },
   "confirmYes": "Yes",
   "cancel": "Cancel",

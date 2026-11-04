@@ -12,13 +12,14 @@
     "adsName": "« {{name}} »",
     "noAds": "Aucun compte pub",
     "tiktok": "Publicité TikTok",
-    "noTiktok": "Aucun compte TikTok"
+    "noTiktok": "Aucun compte TikTok",
+    "adsMany": "« {{account}} » · comptes pub : {{n}}"
   },
   "add": "Lier un compte",
   "for": "Pour",
   "scopeHere": "Cette boutique",
   "scopeAll": "Toutes mes boutiques ({{n}})",
-  "scopeHereHint": "Sa page et son compte pub servent ici tout de suite.",
+  "scopeHereHint": "Sa page et ses comptes pub servent ici tout de suite.",
   "scopeAllHint": "Chaque boutique choisit ensuite sa page en un clic. Une page répond pour une seule boutique.",
   "scopeHereOnly": "Seulement « {{name}} »",
   "scopeAllShort": "Toutes les boutiques",
@@ -60,7 +61,7 @@
   "relinkHint": "Reconnecter ce compte : nouveau jeton, pages à jour.",
   "relinkNow": "Facebook n’accepte plus ce compte : reliez-le.",
   "remove": "Retirer",
-  "removeAsk": "Retirer ce compte ? Les boutiques qui l’utilisent perdent sa page et son compte pub.",
+  "removeAsk": "Retirer ce compte ? Les boutiques qui l’utilisent perdent sa page et ses comptes pub.",
   "removed": "Compte retiré.",
   "kind": {
     "page": "Pages",
@@ -71,12 +72,94 @@
     "advertiserNone": "Aucun compte pub TikTok partagé avec Pilotix."
   },
   "ig": "Instagram @{{ig}}",
-  "noHook": "Ses messages n’arrivent pas encore : reliez le compte.",
+  "noHook": "Ses messages n’arrivent pas encore : cliquez sur « Tester ».",
   "usedHere": "Dans cette boutique",
   "usedThere": "Dans « {{name}} »",
   "use": "Utiliser ici",
   "used": "C’est fait : vos agents l’utilisent.",
   "stop": "Ne plus utiliser",
   "unused": "Vos agents ne l’utilisent plus.",
-  "by": "Lié par {{by}} le {{date}}"
+  "by": "Lié par {{by}} le {{date}}",
+  "pageSaved": "C’est fait : vos agents répondent sur cette page.",
+  "pageStopped": "Vos agents ne répondent plus sur cette page.",
+  "adsOn": "Publicité compte maintenant ces comptes pub.",
+  "adsOff": "Publicité ne compte plus ces comptes pub.",
+  "test": "Tester",
+  "testing": "Test en cours…",
+  "testTitle": "Test de {{time}}",
+  "testAll": "Tout marche",
+  "testTodo": "À regarder : {{n}}",
+  "sumPage": "Page « {{name}} »",
+  "sumAds": "Comptes pub : {{n}}",
+  "sumNone": "Rien d’utilisé dans cette boutique",
+  "pageLabel": "Page Facebook",
+  "pageHint": "Vos agents répondent aux messages et aux commentaires de cette page dans « {{name}} ».",
+  "pageNone": "Aucune page",
+  "pageEmpty": "Aucune page partagée",
+  "pageThere": "{{name}} — déjà dans « {{there}} »",
+  "pageCount": "Pages de ce compte : {{n}}",
+  "noIg": "Pas de compte Instagram sur cette page",
+  "adsLabel": {
+    "meta": "Comptes pub Meta ({{n}})",
+    "tiktok": "Comptes pub TikTok ({{n}})"
+  },
+  "adsHint": "Publicité additionne les chiffres de tous ces comptes.",
+  "adsUse": "Les compter dans « {{name}} »",
+  "adsOther": "Cette boutique compte ceux de « {{account}} » : les activer ici les remplace.",
+  "adsAlso": "Aussi comptés dans {{names}}.",
+  "adsMixed": "Pas tous en USD ({{list}}) : Publicité compte tout en dollars.",
+  "check": {
+    "token": {
+      "ok": "Clé Facebook : elle marche (« {{name}} »).",
+      "bad": "Facebook refuse la clé : cliquez sur « Relier »."
+    },
+    "tokenTiktok": {
+      "ok": "Clé TikTok : elle marche (comptes pub : {{n}}).",
+      "bad": "TikTok refuse la clé : cliquez sur « Relier »."
+    },
+    "perms": {
+      "ok": "Autorisations : toutes données.",
+      "warn": "Autorisations manquantes : {{list}}. Cliquez sur « Relier » et acceptez tout."
+    },
+    "page": {
+      "ok": "Page « {{name}} » : sa clé marche.",
+      "bad": "Page « {{name}} » : sa clé ne marche plus. Cliquez sur « Relier »."
+    },
+    "pageNone": {
+      "warn": "Aucune page choisie pour cette boutique : choisissez-la plus haut."
+    },
+    "pageHook": {
+      "ok": "Page abonnée : ses messages et commentaires arrivent à Pilotix.",
+      "fixed": "Page abonnée à nouveau : ses messages et commentaires arrivent à Pilotix.",
+      "bad": "Pilotix n’arrive pas à abonner la page à ses messages."
+    },
+    "ig": {
+      "ok": "Instagram @{{username}} : il marche.",
+      "bad": "Instagram : Pilotix ne peut pas le lire."
+    },
+    "igNone": {
+      "warn": "Pas de compte Instagram relié à « {{name}} »."
+    },
+    "appHook": {
+      "ok": "App Meta : les messages et commentaires Facebook arrivent à Pilotix.",
+      "warn": "App Meta, ligne « Page » des Webhooks : abonnez {{list}}."
+    },
+    "appHookIg": {
+      "ok": "App Meta : les messages et commentaires Instagram arrivent à Pilotix.",
+      "warn": "App Meta, ligne « Instagram » des Webhooks : abonnez {{list}}."
+    },
+    "reach": {
+      "ok": "Adresse du webhook : elle répond depuis Internet.",
+      "cloudflare": "Adresse du webhook : Cloudflare la bloque. Laissez passer « /hooks/ » dans Cloudflare.",
+      "bad": "Adresse du webhook : pas de réponse ({{status}})."
+    },
+    "ads": {
+      "ok": "Comptes pub ({{n}}) : Pilotix les lit.",
+      "warn": "Comptes pub illisibles : {{bad}} sur {{n}}."
+    },
+    "adsCurrency": {
+      "warn": "Comptes pub pas tous en USD ({{list}}) : Publicité compte tout en dollars."
+    }
+  },
+  "quoted": "« {{name}} »"
 }

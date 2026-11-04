@@ -12,13 +12,14 @@
     "adsName": "“{{name}}”",
     "noAds": "No ad account",
     "tiktok": "TikTok ads",
-    "noTiktok": "No TikTok account"
+    "noTiktok": "No TikTok account",
+    "adsMany": "“{{account}}” · ad accounts: {{n}}"
   },
   "add": "Link an account",
   "for": "For",
   "scopeHere": "This boutique",
   "scopeAll": "All my boutiques ({{n}})",
-  "scopeHereHint": "Its Page and ad account work here at once.",
+  "scopeHereHint": "Its Page and ad accounts work here at once.",
   "scopeAllHint": "Each boutique then picks its Page in one click. A Page answers for one boutique only.",
   "scopeHereOnly": "Only “{{name}}”",
   "scopeAllShort": "All boutiques",
@@ -60,7 +61,7 @@
   "relinkHint": "Reconnect this account: a new token, Pages up to date.",
   "relinkNow": "Facebook no longer accepts this account: link it again.",
   "remove": "Remove",
-  "removeAsk": "Remove this account? The boutiques that use it lose its Page and ad account.",
+  "removeAsk": "Remove this account? The boutiques that use it lose its Page and ad accounts.",
   "removed": "Account removed.",
   "kind": {
     "page": "Pages",
@@ -71,12 +72,94 @@
     "advertiserNone": "No TikTok ad account shared with Pilotix."
   },
   "ig": "Instagram @{{ig}}",
-  "noHook": "Its messages do not arrive yet: link the account again.",
+  "noHook": "Its messages do not arrive yet: click “Test”.",
   "usedHere": "In this boutique",
   "usedThere": "In “{{name}}”",
   "use": "Use here",
   "used": "Done: your agents use it.",
   "stop": "Stop using",
   "unused": "Your agents no longer use it.",
-  "by": "Linked by {{by}} on {{date}}"
+  "by": "Linked by {{by}} on {{date}}",
+  "pageSaved": "Done: your agents answer on this Page.",
+  "pageStopped": "Your agents no longer answer on this Page.",
+  "adsOn": "Publicité now counts these ad accounts.",
+  "adsOff": "Publicité no longer counts these ad accounts.",
+  "test": "Test",
+  "testing": "Testing…",
+  "testTitle": "Test at {{time}}",
+  "testAll": "Everything works",
+  "testTodo": "To check: {{n}}",
+  "sumPage": "Page “{{name}}”",
+  "sumAds": "Ad accounts: {{n}}",
+  "sumNone": "Nothing used in this store",
+  "pageLabel": "Facebook Page",
+  "pageHint": "Your agents answer this Page’s messages and comments in “{{name}}”.",
+  "pageNone": "No Page",
+  "pageEmpty": "No Page shared",
+  "pageThere": "{{name}} — already in “{{there}}”",
+  "pageCount": "Pages of this account: {{n}}",
+  "noIg": "No Instagram account on this Page",
+  "adsLabel": {
+    "meta": "Meta ad accounts ({{n}})",
+    "tiktok": "TikTok ad accounts ({{n}})"
+  },
+  "adsHint": "Publicité adds up the numbers of all these accounts.",
+  "adsUse": "Count them in “{{name}}”",
+  "adsOther": "This store counts those of “{{account}}”: turning these on replaces them.",
+  "adsAlso": "Also counted in {{names}}.",
+  "adsMixed": "Not all in USD ({{list}}): Publicité counts everything in dollars.",
+  "check": {
+    "token": {
+      "ok": "Facebook key: it works (“{{name}}”).",
+      "bad": "Facebook refuses the key: click “Link again”."
+    },
+    "tokenTiktok": {
+      "ok": "TikTok key: it works (ad accounts: {{n}}).",
+      "bad": "TikTok refuses the key: click “Link again”."
+    },
+    "perms": {
+      "ok": "Permissions: all given.",
+      "warn": "Missing permissions: {{list}}. Click “Link again” and accept everything."
+    },
+    "page": {
+      "ok": "Page “{{name}}”: its key works.",
+      "bad": "Page “{{name}}”: its key no longer works. Click “Link again”."
+    },
+    "pageNone": {
+      "warn": "No Page chosen for this store: choose it above."
+    },
+    "pageHook": {
+      "ok": "Page subscribed: its messages and comments reach Pilotix.",
+      "fixed": "Page subscribed again: its messages and comments reach Pilotix.",
+      "bad": "Pilotix cannot subscribe the Page to its messages."
+    },
+    "ig": {
+      "ok": "Instagram @{{username}}: it works.",
+      "bad": "Instagram: Pilotix cannot read it."
+    },
+    "igNone": {
+      "warn": "No Instagram account linked to “{{name}}”."
+    },
+    "appHook": {
+      "ok": "Meta app: Facebook messages and comments reach Pilotix.",
+      "warn": "Meta app, “Page” line of Webhooks: subscribe {{list}}."
+    },
+    "appHookIg": {
+      "ok": "Meta app: Instagram messages and comments reach Pilotix.",
+      "warn": "Meta app, “Instagram” line of Webhooks: subscribe {{list}}."
+    },
+    "reach": {
+      "ok": "Webhook address: it answers from the Internet.",
+      "cloudflare": "Webhook address: Cloudflare blocks it. Let “/hooks/” through in Cloudflare.",
+      "bad": "Webhook address: no answer ({{status}})."
+    },
+    "ads": {
+      "ok": "Ad accounts ({{n}}): Pilotix reads them.",
+      "warn": "Unreadable ad accounts: {{bad}} of {{n}}."
+    },
+    "adsCurrency": {
+      "warn": "Ad accounts not all in USD ({{list}}): Publicité counts everything in dollars."
+    }
+  },
+  "quoted": "“{{name}}”"
 }

@@ -161,10 +161,11 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
   const meta = await getSetting(ctx.db, 'meta');
   const token = await getRaw<string>(ctx.db, META_TOKEN_KEY, '');
   if (!meta.adAccountId || !token) throw new AppError('bad_request', 'Meta n’est pas connecté : ajoutez le compte pub et le jeton dans Réglages.');
-  const act = `act_${meta.adAccountId.replace(/^act_/, '')}`;
+  // a linked Facebook account: every one of its ad accounts, added up (Pilot AI › Comptes); pasted by hand: the one
+  const acts = [...new Set((meta.adAccountIds?.length ? meta.adAccountIds : [meta.adAccountId]).map((x) => `act_${String(x).replace(/^act_/, '')}`))];
 
   if (action === 'test') {
-    const r = await graph(act, { fields: 'name,currency,account_status' }, token);
+    const r = await graph(acts[0], { fields: 'name,currency,account_status' }, token);
     return { name: r.name as string, currency: r.currency as string };
   }
 
@@ -179,24 +180,37 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
       fields: 'date_start,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,reach,inline_link_clicks,actions,video_thruplay_watched_actions',
       action_breakdowns: 'action_type',
     };
-    const [adsetRows, adRows, adsets, ads] = await Promise.all([
-      all(`${act}/insights`, { ...base, level: 'adset' }, token),
-      all(`${act}/insights`, { ...base, level: 'ad' }, token),
-      all(`${act}/adsets`, { fields: 'id,name,effective_status,campaign{name}', limit: '200' }, token, 20),
-      all(`${act}/ads`, { fields: 'id,name,adset_id,effective_status,creative{object_type,video_id}', limit: '200' }, token, 20),
-    ]);
-    const out: MetaInsights = {
-      adsets: adsets.map((s: any) => ({ id: String(s.id), name: String(s.name ?? ''), campaign: String(s.campaign?.name ?? ''), status: s.effective_status ?? null })),
-      ads: ads.map((x: any) => ({
-        id: String(x.id),
-        adsetId: String(x.adset_id),
-        name: String(x.name ?? ''),
-        status: x.effective_status ?? null,
-        isVideo: !!x.creative?.video_id || x.creative?.object_type === 'VIDEO',
-      })),
-      adsetDays: adsetRows.map((r) => toDay(r, 'adset')),
-      adDays: adRows.map((r) => toDay(r, 'ad')),
-    };
+    const out: MetaInsights = { adsets: [], ads: [], adsetDays: [], adDays: [] };
+    // one ad account after the other (Meta counts the calls); one that cannot be read (closed, no access) is left out,
+    // all of them failing is an error
+    let read = 0;
+    let firstError: unknown = null;
+    for (const act of acts) {
+      try {
+        const [adsetRows, adRows, adsets, ads] = await Promise.all([
+          all(`${act}/insights`, { ...base, level: 'adset' }, token),
+          all(`${act}/insights`, { ...base, level: 'ad' }, token),
+          all(`${act}/adsets`, { fields: 'id,name,effective_status,campaign{name}', limit: '200' }, token, 20),
+          all(`${act}/ads`, { fields: 'id,name,adset_id,effective_status,creative{object_type,video_id}', limit: '200' }, token, 20),
+        ]);
+        out.adsets.push(...adsets.map((s: any) => ({ id: String(s.id), name: String(s.name ?? ''), campaign: String(s.campaign?.name ?? ''), status: s.effective_status ?? null })));
+        out.ads.push(
+          ...ads.map((x: any) => ({
+            id: String(x.id),
+            adsetId: String(x.adset_id),
+            name: String(x.name ?? ''),
+            status: x.effective_status ?? null,
+            isVideo: !!x.creative?.video_id || x.creative?.object_type === 'VIDEO',
+          })),
+        );
+        out.adsetDays.push(...adsetRows.map((r) => toDay(r, 'adset')));
+        out.adDays.push(...adRows.map((r) => toDay(r, 'ad')));
+        read++;
+      } catch (e) {
+        firstError ??= e;
+      }
+    }
+    if (!read && firstError) throw firstError;
     return out;
   }
 

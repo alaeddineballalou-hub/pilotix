@@ -532,7 +532,8 @@
     "metaLinked": "حساب الإعلانات «{{name}}»، ربطه «{{account}}» (Pilot AI › الحسابات).",
     "metaChange": "غيّر",
     "metaLinkHint": "الأسهل: اربط حساب فيسبوك بنقرة واحدة، بدون مفتاح تلصقه.",
-    "metaLinkBtn": "Pilot AI › الحسابات"
+    "metaLinkBtn": "Pilot AI › الحسابات",
+    "metaLinkedMany": "{{count}} حسابات إعلانات من «{{account}}»، تُجمع أرقامها في Publicité (Pilot AI › الحسابات)."
   },
   "confirmYes": "نعم",
   "cancel": "إلغاء",

@@ -7,7 +7,7 @@ import { after, before, test } from 'node:test';
 import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCall, seedBase, ServerHooks, shopCtx, shopStatus, staffLogin, Tenancy } from '../index';
 import { loadShop, passwordFromLink } from '../platform';
 import { resetSocialDemo, routeMeta } from '../modules/social';
-import { finishLogin, loginPage } from '../social-server';
+import { finishLogin, loginPage, runSocial } from '../social-server';
 
 const OWNER = { email: 'owner@boutique.dz', password: 'Owner-Password-1' };
 const SELLER = 'karim@bebe.dz';
@@ -18,7 +18,7 @@ let pctx: PCtx;
 let a: Ctx;
 let b: Ctx;
 const p = <T = any>(name: string, input: unknown = {}) => platformCall(name, pctx, input) as Promise<T>;
-const hooks: ServerHooks = { courier: async () => ({}), meta: async () => ({}), hashPassword: async (x) => x, publicUrl: URL0 };
+const hooks: ServerHooks = { courier: async () => ({}), meta: async () => ({}), social: (action, args, ctx) => runSocial(action, args, ctx), hashPassword: async (x) => x, publicUrl: URL0 };
 
 async function as(shopId: number): Promise<Ctx> {
   const s = (await loadShop(t, { id: shopId }))!;
@@ -39,6 +39,9 @@ let graph: { me: any; pages: any[]; ads: any[] } = { me: {}, pages: [], ads: [] 
 let tiktok: { token: string; ids: string[]; list: any[]; user: any } = { token: '', ids: [], list: [], user: {} };
 // a configuration « System-user access token »: Facebook will not turn its token into another one
 let refuseSwap = false;
+// what « Tester » finds on Facebook's side
+const ALL_PERMS = ['pages_show_list', 'pages_messaging', 'pages_manage_metadata', 'pages_read_engagement', 'pages_manage_engagement', 'pages_read_user_content', 'instagram_basic', 'instagram_manage_messages', 'instagram_manage_comments', 'ads_read'];
+let probe: { perms: string[]; pageSubs: any[]; appSubs: any[]; unreadable: string[]; cloudflare: boolean; refuse: boolean } = { perms: ALL_PERMS, pageSubs: [], appSubs: [], unreadable: [], cloudflare: false, refuse: false };
 const realFetch = globalThis.fetch;
 const answer = (data: unknown) => new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
 before(async () => {
@@ -61,11 +64,29 @@ before(async () => {
       if (path === 'oauth/access_token' && u.searchParams.get('grant_type') === 'fb_exchange_token' && refuseSwap)
         return new Response(JSON.stringify({ error: { message: 'Unsupported token type', code: 100 } }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       if (path === 'oauth/access_token') return answer(u.searchParams.get('grant_type') === 'fb_exchange_token' ? { access_token: 'LONG_USER_TOKEN', expires_in: 5_184_000 } : { access_token: 'SHORT_USER_TOKEN' });
+      if (path === 'me' && probe.refuse) return new Response(JSON.stringify({ error: { message: 'Error validating access token', code: 190 } }), { status: 400 });
       if (path === 'me') return answer(graph.me);
+      // Publicité: each ad account's ad sets, ads and days (one that cannot be read answers an error)
+      const ins = path.match(/^(act_\d+)\/(insights|adsets|ads)$/);
+      if (ins) {
+        if (probe.unreadable.includes(ins[1])) return new Response(JSON.stringify({ error: { message: 'Pas d’accès', code: 200 } }), { status: 400 });
+        const n = ins[1].slice(4);
+        if (ins[2] === 'adsets') return answer({ data: [{ id: `S${n}`, name: `Set ${n}`, effective_status: 'ACTIVE', campaign: { name: 'C' } }] });
+        if (ins[2] === 'ads') return answer({ data: [{ id: `A${n}`, adset_id: `S${n}`, name: `Ad ${n}`, effective_status: 'ACTIVE', creative: {} }] });
+        return answer({ data: [{ date_start: '2026-11-01', adset_id: `S${n}`, ad_id: `A${n}`, spend: '2.00', impressions: '100', actions: [] }] });
+      }
       if (path === 'me/accounts') return answer({ data: graph.pages });
       if (path === 'me/adaccounts') return answer({ data: graph.ads });
-      if (/\/subscribed_apps$/.test(path)) return answer({ success: true });
+      // « Tester »: what the account was allowed, the Page's subscription, Pilotix's app webhook, a Page, an ad account
+      if (path === 'me/permissions') return answer({ data: probe.perms.map((permission) => ({ permission, status: 'granted' })) });
+      if (/\/subscribed_apps$/.test(path)) return method === 'GET' ? answer({ data: probe.pageSubs }) : answer({ success: true });
+      if (path === `${APPS.meta.appId}/subscriptions`) return answer({ data: probe.appSubs });
+      if (/^act_\d+$/.test(path)) return probe.unreadable.includes(path) ? new Response(JSON.stringify({ error: { message: 'Pas d’accès', code: 200 } }), { status: 400 }) : answer({ id: path });
+      if (/^\d+$/.test(path)) return answer({ id: path, name: 'Page', username: 'bebeconfort.dz' });
     }
+    // the webhook's own address, called as Meta does: it answers the challenge (or Cloudflare stops it)
+    if (u.host === 'pilotix.test' && u.pathname === '/api/hooks/meta-app')
+      return probe.cloudflare ? new Response('<title>Just a moment...</title>', { status: 403, headers: { 'cf-mitigated': 'challenge' } }) : new Response(String(u.searchParams.get('hub.challenge')), { status: 200 });
     if (u.host === 'business-api.tiktok.com') {
       if (u.pathname.endsWith('/oauth2/access_token/')) return answer({ code: 0, data: { access_token: tiktok.token, advertiser_ids: tiktok.ids } });
       if (u.pathname.endsWith('/oauth2/advertiser/get/')) return answer({ code: 0, data: { list: tiktok.list } });
@@ -144,6 +165,7 @@ test('one boutique: the login tab comes back, the account is kept, its first Pag
   const d = await setting(a, 'dellal');
   assert.deepEqual([d.messengerPageId, d.instagramId], ['9002', '178002']);
   assert.deepEqual([(await setting(a, 'meta')).adAccountId, await setting(a, 'secret_meta_token')], ['3003', 'LONG_USER_TOKEN']);
+  assert.deepEqual((await setting(a, 'meta')).adAccountIds, ['3003']);
   const ds: any = await call('dellal.settings.get', a, {});
   assert.deepEqual(ds.page, { pageId: '9002', name: 'Bébé Confort DZ', igId: '178002', igUsername: 'bebeconfort.dz', account: 'Karim Benali' });
   // a state serves once
@@ -267,9 +289,11 @@ test('TikTok for Business: the advertiser’s token and its ad accounts; linked 
   assert.deepEqual(JSON.parse(tok.body), { app_id: APPS.tiktok.appId, secret: APPS.tiktok.secret, auth_code: 'TT_CODE' });
   const list: any = await call('social.list', a, {});
   const l = list.links.find((x: any) => x.provider === 'tiktok');
-  assert.deepEqual([l.name, l.assets.map((x: any) => [x.name, x.usedHere])], ['Karim Ads', [['Bébé TikTok', true], ['Bébé TikTok 2', false]]]);
-  assert.deepEqual(list.here.advertiser, { name: 'Bébé TikTok', account: 'Karim Ads' });
+  // its ad accounts are counted together
+  assert.deepEqual([l.name, l.assets.map((x: any) => [x.name, x.usedHere])], ['Karim Ads', [['Bébé TikTok', true], ['Bébé TikTok 2', true]]]);
+  assert.deepEqual(list.here.advertiser, { name: 'Bébé TikTok', account: 'Karim Ads', count: 2 });
   assert.equal(await setting(a, 'secret_tiktok_ads_token'), 'TT_ADV_TOKEN');
+  assert.deepEqual((await setting(a, 'social_tiktok_ads')).advertisers.map((x: any) => x.advertiserId), ['7001', '7002']);
   const apps: any = await p('p.social.apps');
   assert.deepEqual(apps.counts, { meta: 1, tiktok: 1, shops: 1 });
 });
@@ -327,4 +351,111 @@ test('a Facebook Login for Business configuration: a person’s short token is t
   } finally {
     refuseSwap = false;
   }
+});
+
+test('several ad accounts: a boutique counts them all, Publicité reads each one; a new login keeps the others; one switch stops and starts them', async () => {
+  const login = async (ads: any[]) => {
+    const s: any = await call('social.start', a, { provider: 'meta', scope: 'here' });
+    graph = { me: { id: '5001', name: 'Karim Benali' }, pages: [{ id: '9002', name: 'Bébé Confort DZ', access_token: 'PAGE_TOKEN_2', instagram_business_account: { id: '178002', username: 'bebeconfort.dz' } }], ads };
+    assert.equal((await finishLogin(t, 'meta', { code: `C${ads.length}`, state: s.state }, URL0)).ok, true);
+  };
+  const act = (id: string, name: string, currency = 'USD') => ({ id: `act_${id}`, account_id: id, name, currency, account_status: 1 });
+  await login([act('3003', 'Bébé pub'), act('3004', 'Bébé pub 2'), act('3005', 'Promo')]);
+  const karim = (l: any) => l.links.find((x: any) => x.name === 'Karim Benali');
+  let list: any = await call('social.list', a, {});
+  assert.deepEqual(
+    karim(list).assets.filter((x: any) => x.kind === 'ad_account').map((x: any) => [x.name, x.usedHere]),
+    [
+      ['Bébé pub', true],
+      ['Bébé pub 2', true],
+      ['Promo', true],
+    ],
+  );
+  assert.deepEqual(list.here.ad_account, { name: 'Bébé pub', account: 'Karim Benali', count: 3 });
+  assert.deepEqual((await setting(a, 'meta')).adAccountIds, ['3003', '3004', '3005']);
+  assert.equal((await setting(a, 'social_ads')).accounts.length, 3);
+  // a boutique set up before (one ad account written): opening Pilot AI › Comptes writes them all again
+  await a.db.query(`UPDATE settings SET value = $1 WHERE key = 'meta'`, [JSON.stringify({ adAccountId: '3003', hasToken: true })]);
+  await call('social.list', a, {});
+  assert.deepEqual((await setting(a, 'meta')).adAccountIds, ['3003', '3004', '3005']);
+  // Publicité reads every ad account and joins them; one that cannot be read is left out
+  const { runMeta } = await import('../meta');
+  probe.unreadable = ['act_3005'];
+  const ins: any = await runMeta('insights', { from: '2026-11-01', to: '2026-11-02' }, a);
+  assert.deepEqual(ins.adsets.map((x: any) => x.id), ['S3003', 'S3004']);
+  assert.equal(ins.adsetDays.length, 2);
+  probe.unreadable = ['act_3003', 'act_3004', 'act_3005'];
+  await assert.rejects(() => runMeta('insights', { from: '2026-11-01', to: '2026-11-02' }, a), /Pas d’accès/);
+  probe.unreadable = [];
+  // the switch: off, then on again
+  list = await call('social.ads', a, { linkId: karim(list).id, on: false });
+  assert.equal(list.here.ad_account, null);
+  assert.deepEqual([(await setting(a, 'meta')).adAccountIds, (await setting(a, 'meta')).hasToken], [[], false]);
+  list = await call('social.ads', a, { linkId: karim(list).id, on: true });
+  assert.equal(list.here.ad_account.count, 3);
+  // a new login without the first ad account: the boutique keeps counting the two others
+  await login([act('3004', 'Bébé pub 2'), act('3005', 'Promo')]);
+  assert.deepEqual((await setting(a, 'meta')).adAccountIds, ['3004', '3005']);
+  assert.equal(((await call('social.list', a, {})) as any).here.ad_account.count, 2);
+  // and without any: it stops
+  await login([]);
+  assert.equal(((await call('social.list', a, {})) as any).here.ad_account, null);
+  assert.equal((await setting(a, 'meta')).adAccountId, '');
+  await login([act('3004', 'Bébé pub 2')]);
+});
+
+test('« Tester »: the key, the permissions, the Page (subscribed again), Instagram, the app webhook, the address from the Internet, the ad accounts', async () => {
+  const list: any = await call('social.list', a, {});
+  const karim = list.links.find((x: any) => x.name === 'Karim Benali');
+  assert.equal(list.here.page.name, 'Bébé Confort DZ');
+  probe = {
+    perms: ALL_PERMS.filter((x) => x !== 'instagram_manage_comments'),
+    // the Page lost its subscription: the test subscribes it again
+    pageSubs: [],
+    // the app sends the Pages' messages and comments, not Instagram's yet
+    appSubs: [{ object: 'page', callback_url: `${URL0}/api/hooks/meta-app`, active: true, fields: [{ name: 'messages' }, { name: 'feed' }] }],
+    unreadable: [],
+    cloudflare: false,
+    refuse: false,
+  };
+  calls.length = 0;
+  const r: any = await call('social.test', a, { linkId: karim.id });
+  const st = Object.fromEntries(r.checks.map((c: any) => [c.key, c.state]));
+  assert.deepEqual(st, { token: 'ok', perms: 'warn', page: 'ok', pageHook: 'ok', ig: 'ok', appHook: 'ok', appHookIg: 'warn', reach: 'ok', ads: 'ok' });
+  assert.equal(r.checks.find((c: any) => c.key === 'perms').params.list, 'instagram_manage_comments');
+  assert.equal(r.checks.find((c: any) => c.key === 'pageHook').params.fixed, 1);
+  assert.ok(calls.some((c) => /9002\/subscribed_apps/.test(c.url) && c.method === 'POST'), 'subscribed again');
+  assert.equal(r.checks.find((c: any) => c.key === 'appHookIg').params.list, 'messages, comments');
+  assert.ok(!/PAGE_TOKEN|LONG_USER_TOKEN|SHORT_USER_TOKEN|meta-app-secret/.test(JSON.stringify(r)), 'no token or secret reaches the page');
+  // Cloudflare stops the webhook's address
+  probe.cloudflare = true;
+  const cf: any = await call('social.test', a, { linkId: karim.id });
+  assert.deepEqual(cf.checks.find((c: any) => c.key === 'reach'), { key: 'reach', state: 'bad', params: { why: 'cloudflare' }, detail: null });
+  probe.cloudflare = false;
+  // a key Facebook refuses turns the account red; working again, green
+  probe.refuse = true;
+  const bad: any = await call('social.test', a, { linkId: karim.id });
+  assert.equal(bad.checks[0].state, 'bad');
+  assert.equal(((await call('social.list', a, {})) as any).links.find((x: any) => x.id === karim.id).status, 'error');
+  probe.refuse = false;
+  await call('social.test', a, { linkId: karim.id });
+  assert.equal(((await call('social.list', a, {})) as any).links.find((x: any) => x.id === karim.id).status, 'ok');
+  // another boutique cannot test this boutique's account
+  await assert.rejects(() => call('social.test', b, { linkId: karim.id }), /introuvable/);
+});
+
+test('the preview: « Tester » answers a sample, the ad accounts switch off and on', async () => {
+  resetSocialDemo();
+  const demo: Ctx = { ...a, t: undefined, server: undefined };
+  const first: any = await call('social.list', demo, {});
+  assert.deepEqual(first.here.ad_account, { name: 'Bébé Confort — publicité', account: 'Alaeddine Benali', count: 4 });
+  assert.ok(first.links[0].assets.filter((x: any) => x.kind === 'page').length >= 10, 'many Pages: the boutique picks one');
+  const r: any = await call('social.test', demo, { linkId: first.links[0].id });
+  assert.equal(r.checks.find((c: any) => c.key === 'appHookIg').state, 'warn');
+  assert.ok(r.checks.filter((c: any) => c.key !== 'appHookIg').every((c: any) => c.state === 'ok'));
+  const off: any = await call('social.ads', demo, { linkId: first.links[0].id, on: false });
+  assert.equal(off.here.ad_account, null);
+  const on: any = await call('social.ads', demo, { linkId: first.links[0].id, on: true });
+  assert.equal(on.here.ad_account.count, 4);
+  resetSocialDemo();
 });

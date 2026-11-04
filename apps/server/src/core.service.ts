@@ -182,6 +182,11 @@ export class CoreService implements OnModuleDestroy {
       if (action === 'complete' && ctx.t) void this.pilotRestCheck(ctx.t);
       return out;
     },
+    social: async (action, args, ctx) => {
+      const m = optional('@pilotix/core/dist/social-server');
+      if (!m?.runSocial) throw new core.AppError('bad_request', 'Comptes liés indisponibles sur ce serveur');
+      return m.runSocial(action, args, ctx);
+    },
     spy: async (action, args, ctx) => {
       const m = optional('@pilotix/core/dist/spy-server');
       if (!m?.runSpy) throw new core.AppError('bad_request', 'AI Spy indisponible sur ce serveur');

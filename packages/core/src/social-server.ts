@@ -3,9 +3,10 @@
 // expire, or a configuration's « system user » token that does not expire; TikTok: an advertiser's token), then what the account may use
 // is read (Facebook Pages with their Instagram account and their own tokens, Meta ad accounts, TikTok ad accounts) and
 // each Page is subscribed to Pilotix's webhook (its messages and comments come to Pilotix). Tokens never leave the server.
-import { AppError } from './rpc';
+import { num } from './db';
+import { AppError, Ctx } from './rpc';
 import type { Tenancy } from './platform/tenancy';
-import { endState, FoundAccount, FoundAsset, saveLink, SOCIAL, SocialProvider, socialApps, socialSecret, socialUrls, takeState } from './modules/social';
+import { endState, FoundAccount, FoundAsset, saveLink, SOCIAL, SocialCheck, SocialProvider, socialApps, socialSecret, SocialTest, socialUrls, takeState } from './modules/social';
 
 async function fetchJson(url: string, init: RequestInit, who: string): Promise<any> {
   let res: Response;
@@ -176,6 +177,179 @@ export async function finishLogin(t: Tenancy, provider: SocialProvider, q: Recor
     await endState(t, st.state, { error: m });
     return { ok: false, message: m };
   }
+}
+
+// ---------------------------------------------------------------- « Tester » (Pilot AI › Comptes)
+/** The server's hook: 'test' (one linked account, for one boutique). */
+export async function runSocial(action: string, args: any, ctx: Ctx): Promise<unknown> {
+  if (action === 'test') return testLink(ctx.t!, num(args?.shopId), num(args?.linkId), ctx.server?.publicUrl ?? '');
+  throw new AppError('bad_request', `Action inconnue : ${action}`);
+}
+
+/** What the agents need, by what they do (a missing one is named on the test's line). */
+const NEEDED = [
+  'pages_show_list',
+  'pages_messaging',
+  'pages_manage_metadata',
+  'pages_read_engagement',
+  'pages_manage_engagement',
+  'pages_read_user_content',
+  'instagram_basic',
+  'instagram_manage_messages',
+  'instagram_manage_comments',
+  'ads_read',
+];
+const jsonOf = (v: unknown): any => (typeof v === 'string' ? JSON.parse(v) : v ?? {});
+const why = (e: unknown) => String((e as any)?.message ?? e).slice(0, 240);
+
+/**
+ * Tries a linked account now, for this boutique, one line per thing (none stops the others): the account's key, its
+ * permissions, the Page this boutique uses (its key; subscribed to Pilotix's webhook again when its messages would not
+ * come), its Instagram account, Pilotix's Meta app webhook (Facebook and Instagram: its address and fields), that the
+ * webhook's address answers from the Internet (Cloudflare can block it), the ad accounts this boutique counts. A key
+ * Facebook refuses turns the account red; a key that works again turns it green.
+ */
+export async function testLink(t: Tenancy, shopId: number, linkId: number, publicUrl: string): Promise<SocialTest> {
+  const l = (await t.platform.query(`SELECT * FROM platform.social_links WHERE id = $1`, [linkId]))[0];
+  if (!l) throw new AppError('not_found', 'Compte introuvable');
+  const checks: SocialCheck[] = [];
+  const add = (key: string, state: SocialCheck['state'], params?: SocialCheck['params'], detail?: string | null) => checks.push({ key, state, ...(params ? { params } : {}), detail: detail ?? null });
+  const assets = await t.platform.query(`SELECT * FROM platform.social_assets WHERE link_id = $1 ORDER BY kind, name, id`, [linkId]);
+  const uses = await t.platform.query(`SELECT u.kind, u.asset_id FROM platform.social_uses u JOIN platform.social_assets a ON a.id = u.asset_id WHERE u.shop_id = $1 AND a.link_id = $2`, [shopId, linkId]);
+  const counts = (kind: string) => uses.some((u: any) => u.kind === kind);
+  const token = String(l.token ?? '');
+  const setStatus = (ok: boolean, error?: string) =>
+    t.platform.query(`UPDATE platform.social_links SET status = $2, error = $3, updated_at = now() WHERE id = $1`, [linkId, ok ? 'ok' : 'error', ok ? null : (error ?? '').slice(0, 300)]);
+  // a key refused (expired, removed on Facebook): red until linked again; a limit or a network problem says nothing about it
+  const keyRefused = (e: unknown) => /refusé la connexion|jeton/i.test(why(e)) || /Access token|session has expired|Error validating/i.test(why(e));
+
+  if (l.provider === 'tiktok') {
+    const apps = await socialApps(t);
+    const secret = await socialSecret(t, 'tiktok');
+    try {
+      const r = await tiktok('oauth2/advertiser/get/', { token, query: { app_id: apps.tiktok.appId, secret } });
+      const n = Array.isArray(r?.list) ? r.list.length : 0;
+      add('token', 'ok', { name: String(l.name ?? 'TikTok'), count: n });
+      if (l.status === 'error') await setStatus(true);
+    } catch (e) {
+      add('token', 'bad', undefined, why(e));
+      if (keyRefused(e)) await setStatus(false, why(e));
+    }
+    if (counts('advertiser')) add('ads', 'ok', { count: assets.filter((a: any) => a.kind === 'advertiser').length, bad: 0 });
+    return { at: new Date().toISOString(), checks };
+  }
+
+  // the account's key, and what it was allowed
+  let keyOk = false;
+  try {
+    const me = await graph('me', { fields: 'id,name', access_token: token });
+    keyOk = true;
+    add('token', 'ok', { name: String(me.name ?? l.name ?? '') });
+    if (l.status === 'error') await setStatus(true);
+  } catch (e) {
+    add('token', 'bad', undefined, why(e));
+    if (keyRefused(e)) await setStatus(false, why(e));
+  }
+  if (keyOk) {
+    try {
+      const granted = new Set((await graphAll('me/permissions', { access_token: token })).filter((p) => p?.status === 'granted').map((p) => String(p.permission)));
+      const missing = NEEDED.filter((p) => !granted.has(p));
+      add('perms', missing.length ? 'warn' : 'ok', missing.length ? { list: missing.join(', ') } : undefined);
+    } catch (e) {
+      add('perms', 'warn', undefined, why(e));
+    }
+  }
+
+  // the Page this boutique answers on (from this account): its key, its webhook subscription, its Instagram account
+  const apps = await socialApps(t);
+  const pageUse = uses.find((u: any) => u.kind === 'page');
+  const page = pageUse ? assets.find((a: any) => num(a.id) === num(pageUse.asset_id)) : null;
+  if (page) {
+    const ptoken = String(page.token ?? '');
+    const name = String(page.name ?? '');
+    let pageOk = false;
+    try {
+      await graph(String(page.ext_id), { fields: 'id,name', access_token: ptoken });
+      pageOk = true;
+      add('page', 'ok', { name });
+    } catch (e) {
+      add('page', 'bad', { name }, why(e));
+    }
+    if (pageOk) {
+      const extra = jsonOf(page.extra);
+      let hook = false;
+      try {
+        const subs = await graphAll(`${page.ext_id}/subscribed_apps`, { access_token: ptoken });
+        const mine = subs.find((s) => String(s?.id) === apps.meta.appId);
+        const have = new Set<string>((mine?.subscribed_fields ?? []).map(String));
+        if (mine && SOCIAL.pageFields.split(',').every((f) => have.has(f))) add('pageHook', 'ok');
+        else {
+          await graph(`${page.ext_id}/subscribed_apps`, { subscribed_fields: SOCIAL.pageFields, access_token: ptoken }, 'POST');
+          add('pageHook', 'ok', { fixed: 1 });
+        }
+        hook = true;
+      } catch (e) {
+        add('pageHook', 'bad', undefined, why(e));
+      }
+      if (extra.hook !== hook) await t.platform.query(`UPDATE platform.social_assets SET extra = $2 WHERE id = $1`, [num(page.id), JSON.stringify({ ...extra, hook })]);
+      if (extra.ig?.id) {
+        try {
+          const r = await graph(String(extra.ig.id), { fields: 'id,username', access_token: ptoken });
+          add('ig', 'ok', { username: String(r.username ?? extra.ig.username ?? '') });
+        } catch (e) {
+          add('ig', 'bad', undefined, why(e));
+        }
+      } else add('igNone', 'warn', { name });
+    }
+  } else if (assets.some((a: any) => a.kind === 'page')) add('pageNone', 'warn');
+
+  // Pilotix's Meta app: where Meta sends the Pages' and Instagram's messages and comments
+  const secret = await socialSecret(t, 'meta');
+  const webhook = socialUrls(publicUrl).metaWebhook;
+  if (apps.meta.appId && secret) {
+    try {
+      const subs = await graphAll(`${apps.meta.appId}/subscriptions`, { access_token: `${apps.meta.appId}|${secret}` });
+      const one = (object: string, want: string[], key: string) => {
+        const s = subs.find((x) => x?.object === object);
+        const have = new Set<string>((s?.fields ?? []).map((f: any) => String(f?.name ?? f)));
+        const missing = want.filter((w) => !have.has(w));
+        if (!s || missing.length) return add(key, 'warn', { list: (s ? missing : want).join(', ') });
+        if (s.active === false) return add(key, 'warn', { list: want.join(', ') }, 'Abonnement en pause dans l’app Meta.');
+        if (publicUrl && String(s.callback_url ?? '') !== webhook) return add(key, 'warn', { list: want.join(', ') }, `Adresse dans l’app Meta : ${String(s.callback_url ?? '—').slice(0, 160)}`);
+        add(key, 'ok');
+      };
+      one('page', ['messages', 'feed'], 'appHook');
+      one('instagram', ['messages', 'comments'], 'appHookIg');
+    } catch (e) {
+      add('appHook', 'warn', { list: 'messages, feed' }, why(e));
+    }
+  }
+  // the webhook's address, called from the Internet as Meta does (through Cloudflare)
+  if (publicUrl && apps.verifyToken) {
+    const challenge = String(Date.now());
+    try {
+      const res = await fetch(`${webhook}?hub.mode=subscribe&hub.verify_token=${encodeURIComponent(apps.verifyToken)}&hub.challenge=${challenge}`, { signal: AbortSignal.timeout(10_000) });
+      const body = await res.text().catch(() => '');
+      if (res.ok && body.trim() === challenge) add('reach', 'ok');
+      else if (res.headers.get('cf-mitigated') || /Just a moment/i.test(body)) add('reach', 'bad', { why: 'cloudflare' });
+      else add('reach', 'bad', { status: res.status });
+    } catch (e) {
+      add('reach', 'bad', { status: 0 }, why(e));
+    }
+  }
+
+  // the ad accounts this boutique counts (all of this account's)
+  if (counts('ad_account')) {
+    const ads = assets.filter((a: any) => a.kind === 'ad_account');
+    const unread: string[] = [];
+    if (keyOk)
+      for (const a of ads)
+        await graph(`act_${String(a.ext_id).replace(/^act_/, '')}`, { fields: 'id,account_status', access_token: token }).catch(() => unread.push(String(a.name ?? a.ext_id)));
+    add('ads', !keyOk || unread.length ? 'warn' : 'ok', { count: ads.length, bad: keyOk ? unread.length : ads.length }, unread.length ? unread.join(', ').slice(0, 240) : null);
+    const money = [...new Set(ads.map((a: any) => jsonOf(a.extra).currency).filter(Boolean).map(String))];
+    if (money.some((c) => c !== 'USD')) add('adsCurrency', 'warn', { list: money.join(', ') });
+  }
+  return { at: new Date().toISOString(), checks };
 }
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);

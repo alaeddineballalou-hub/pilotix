@@ -532,7 +532,8 @@
     "metaLinked": "Compte pub « {{name}} », lié par « {{account}} » (Pilot AI › Comptes).",
     "metaChange": "Changer",
     "metaLinkHint": "Le plus simple : liez votre compte Facebook en un clic, sans jeton à coller.",
-    "metaLinkBtn": "Pilot AI › Comptes"
+    "metaLinkBtn": "Pilot AI › Comptes",
+    "metaLinkedMany": "{{count}} comptes pub de « {{account}} », additionnés dans Publicité (Pilot AI › Comptes)."
   },
   "confirmYes": "Oui",
   "cancel": "Annuler",

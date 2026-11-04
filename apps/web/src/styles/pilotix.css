@@ -1842,6 +1842,8 @@ html[data-theme="dark"] .pxk-reqln u { color: var(--c-accent-ink); }
 html[data-theme="dark"] .pxl-warn { color: var(--c-bad-ink); }
 html[data-theme="dark"] :is(.kpi-bar, .ov-bar-t) { background: rgba(255, 255, 255, .08); }
 html[data-theme="dark"] .bjp-switch span { background: #3A414D; }
+/* on stays visibly on in dark mode (the rule above was also greying a switch that is on) */
+html[data-theme="dark"] .bjp-switch input:checked + span { background: #8B6FD6; }
 /* brand-coloured names (Google Sheets green, WooCommerce/API purple…) were too dark on dark tiles */
 html[data-theme="dark"] .bjch-tile:not(.solid) b, html[data-theme="dark"] .bjch-type { color: color-mix(in srgb, var(--tc) 55%, #fff); }
 html[data-theme="dark"] .bjg-def { color: var(--c-ok-ink); }

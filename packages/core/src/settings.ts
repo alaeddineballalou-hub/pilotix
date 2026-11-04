@@ -104,7 +104,8 @@ export interface SettingsMap {
   };
   webhook: { key: string };
   cron: { key: string };
-  meta: { adAccountId: string; hasToken: boolean };
+  /** adAccountIds: every ad account Publicité adds up (a linked account's); none: adAccountId alone */
+  meta: { adAccountId: string; hasToken: boolean; adAccountIds?: string[] };
   /**
    * Landing pages: the shop's Meta pixel (each page may have its own), when a real order is reported as a Purchase,
    * after how long a customer who typed their number without ordering becomes an order in Commandes (« Nouvelle »),

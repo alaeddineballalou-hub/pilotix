@@ -329,7 +329,7 @@ function CronCard({ cronKey, last }: { cronKey: string; last: { at: string; chec
   );
 }
 
-function MetaCard({ meta }: { meta: { adAccountId: string; connected: boolean; linked?: { adAccountId: string; name: string; account: string } | null } }) {
+function MetaCard({ meta }: { meta: { adAccountId: string; connected: boolean; linked?: { adAccountId: string; name: string; account: string; count?: number } | null } }) {
   const { t } = useTranslation();
   const [acc, setAcc] = useState(meta.adAccountId);
   const [token, setToken] = useState('');
@@ -347,7 +347,7 @@ function MetaCard({ meta }: { meta: { adAccountId: string; connected: boolean; l
         // the ad account comes from a linked account (Pilot AI › Comptes): nothing to paste here
         <div className="okbox row" style={{ gap: 10, justifyContent: 'space-between', flexWrap: 'wrap' }}>
           <span>
-            <bdi>{t('admin.settings.metaLinked', { name: meta.linked.name, account: meta.linked.account })}</bdi>
+            <bdi>{(meta.linked.count ?? 1) > 1 ? t('admin.settings.metaLinkedMany', { count: meta.linked.count, account: meta.linked.account }) : t('admin.settings.metaLinked', { name: meta.linked.name, account: meta.linked.account })}</bdi>
           </span>
           <a className="btn ghost small" href="#/comptes">
             {t('admin.settings.metaChange')}
