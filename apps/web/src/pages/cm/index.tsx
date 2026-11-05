@@ -1,6 +1,7 @@
 // « CM AI agent »: the community manager. The comments under the shop's Facebook and Instagram posts and ads, and what
 // the agent did with each one (public reply, private message that opens a conversation in Message AI agent, hidden);
 // the posts and the product each one sells, a tester, the results and the settings (admin).
+import { webHref } from '../../lib/safeHref';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMenuCounts } from '../../layout/Shell';
@@ -381,8 +382,8 @@ function Posts() {
                   {p.todo > 0 && <b className="cm-todo">{t('cm.posts.todo', { count: p.todo })}</b>}
                   {p.lastAt && <time dateTime={p.lastAt}>{when(p.lastAt)}</time>}
                   <a href={`#/cm/commentaires/${p.id}`}>{t('cm.posts.see')}</a>
-                  {p.permalink && (
-                    <a href={p.permalink} target="_blank" rel="noreferrer">
+                  {webHref(p.permalink) && (
+                    <a href={webHref(p.permalink)!} target="_blank" rel="noreferrer">
                       {t('cm.posts.open', { ch: t(`cm.ch.${p.channel}`) })}
                     </a>
                   )}

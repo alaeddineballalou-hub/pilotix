@@ -1,6 +1,7 @@
 // AI Spy › one ad: the creative next to where it sends the customer (site: price, builder, order form; or a
 // conversation), its text, Claude's reading, why it has its score, and what to do with it (open it on Facebook, open
 // the site, follow the page, mark it « pas pertinente »).
+import { webHref } from '../../lib/safeHref';
 import type { SpyAd } from '@pilotix/core';
 import { useTranslation } from 'react-i18next';
 import { da, dateOnly, when } from '../../lib/format';
@@ -26,7 +27,7 @@ export function SpyDetail({ ad, v }: { ad: SpyAd | null; v: View }) {
   const dt = dayTone(ad.days);
   // demo ads have invented ids and addresses: no link out of Pilotix for them
   const real = ad.source !== 'demo';
-  const site = real && ad.linkType === 'site' && ad.linkUrl ? ad.linkUrl : null;
+  const site = real && ad.linkType === 'site' ? webHref(ad.linkUrl) : null;
   const text = [ad.title, ad.body].filter(Boolean).join('\n');
   const toggleFollow = () =>
     follow.mutate(

@@ -4,7 +4,10 @@
  */
 export function toCsv(rows: (string | number | null | undefined)[][]): string {
   const cell = (v: unknown) => {
-    const s = v === null || v === undefined ? '' : String(v);
+    let s = v === null || v === undefined ? '' : String(v);
+    // a text that starts like a formula (= + - @, a tab or a line break: « =HYPERLINK(…) » typed as a customer's
+    // name) stays text in Excel; numbers stay numbers
+    if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s) && !/^[+-]?\d+([.,]\d+)?$/.test(s)) s = `'${s}`;
     return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   return '﻿' + rows.map((r) => r.map(cell).join(';')).join('\r\n');

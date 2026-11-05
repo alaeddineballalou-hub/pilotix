@@ -7,6 +7,7 @@
 // its own tracking number first (it replaces the Pilotix one, so a Pilotix label would be refused by the scanner).
 // A parcel sent to a company with an API gets that company's own label (Labels.tsx asks the company for it); the
 // Pilotix label is for own livreurs, companies without an API, and couriers that give no label.
+import { webHref } from '../../lib/safeHref';
 import type { Order } from '@pilotix/shared';
 import { API_COURIER_KINDS, LABEL_COURIER_KINDS } from '@pilotix/shared';
 import type { TFunction } from 'i18next';
@@ -266,12 +267,16 @@ ${demo ? `<div class="bag-demo">${e(t('depot.bags.sheetDemo', { name: b.company 
   );
 }
 
-/** The company's own label as something to open: its link, or its PDF as a local file. */
+/** File types a company's label may open as (a page of any other type could run in Pilotix's own page). */
+const LABEL_TYPES = ['application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+
+/** The company's own label as something to open: its link (http(s) only), or its PDF / picture as a local file. */
 export function labelHref(l: { url?: string | null; pdf?: string; type?: string } | null | undefined): string | null {
-  if (l?.url) return l.url;
+  if (l?.url) return webHref(l.url);
   if (!l?.pdf) return null;
   const bin = atob(l.pdf);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return URL.createObjectURL(new Blob([bytes], { type: l.type || 'application/pdf' }));
+  const type = String(l.type || '').split(';')[0].trim().toLowerCase();
+  return URL.createObjectURL(new Blob([bytes], { type: LABEL_TYPES.includes(type) ? type : 'application/pdf' }));
 }
