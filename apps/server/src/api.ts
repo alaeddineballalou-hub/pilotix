@@ -479,7 +479,8 @@ class ApiController {
     if (!b.success) throw new core.AppError('bad_request', 'Email ou mot de passe manquant');
     const email = b.data.email.trim().toLowerCase();
     const mailKey = `email:${email}|${ipOf(req)}`;
-    checkLogin(mailKey, 5);
+    // this account's tries, counted the moment they arrive (many at once never pass together)
+    checkLogin(mailKey, 5, true);
     let acc: core.Account | null;
     try {
       acc = await core.checkAccountPassword(this.core.t, email, b.data.password);

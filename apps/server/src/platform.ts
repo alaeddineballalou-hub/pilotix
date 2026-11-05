@@ -112,7 +112,7 @@ export class PlatformController {
     const b = LoginBody.safeParse(body);
     if (!b.success) throw new core.AppError('bad_request', 'Email ou mot de passe manquant');
     const mailKey = `p-email:${b.data.email.trim().toLowerCase()}|${core.ipNet(req.ip || '') || 'unknown'}`;
-    checkLogin(mailKey, 5);
+    checkLogin(mailKey, 5, true);
     let r: Awaited<ReturnType<typeof core.staffLogin>>;
     try {
       r = await core.staffLogin(this.core.t, b.data.email, b.data.password);
