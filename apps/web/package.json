@@ -27,7 +27,7 @@
     "socket.io-client": "4.8.1",
     "@pilotix/core": "3.0.0",
     "@electric-sql/pglite": "0.2.17",
-    "bcryptjs": "2.4.3",
+    "bcryptjs": "3.0.3",
     "zod": "3.23.8",
     "@zxing/browser": "0.1.5",
     "@zxing/library": "0.21.3",
@@ -40,6 +40,6 @@
     "@vitejs/plugin-react": "4.3.3",
     "typescript": "5.6.3",
     "vite": "5.4.11",
-    "@types/bcryptjs": "2.4.6"
+    "@types/bcryptjs": "3.0.0"
   }
 }
