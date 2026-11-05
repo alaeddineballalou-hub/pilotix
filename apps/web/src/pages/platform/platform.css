@@ -614,6 +614,18 @@ html[data-theme="dark"] .pp-prot { --pp-c-q: #3B9BC0; }
 .pl-next-empty { margin: 0; padding: 12px 14px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); }
 .pl-next-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 14px; }
 .pl-next-foot p { margin: 0; }
+/* « Push » (PilotPush.tsx): every lesson waiting in service now, under the book card and the next book; the question says
+   what happens before the click, the answer says it is done (and opens the test chat) */
+.pl-push { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.pl-push-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.pl-push-ask { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--raise); border: 1px solid color-mix(in srgb, var(--px-orange) 40%, var(--line)); }
+.pl-push-ask ul { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; line-height: 1.5; }
+.pl-push-ask .check { align-items: flex-start; line-height: 1.45; }
+.pl-push-ask .check input { flex: none; margin-top: 3px; }
+.pl-push-do { display: flex; flex-wrap: wrap; gap: 8px; }
+.pl-push-done { margin: 0; padding: 8px 11px; border-radius: 10px; background: var(--ok-soft); color: var(--ok); font-weight: 700; line-height: 1.5; }
+.pl-push-done .bji { vertical-align: -2px; }
+.pl-push-done a { color: inherit; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
 @media (max-width: 1100px) {
   /* one chat at a time: the switch says which */
   .pl-lab-switch { display: block; }

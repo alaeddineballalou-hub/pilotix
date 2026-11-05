@@ -1,7 +1,8 @@
 // Pilot AI (control room): the shops' AI agents, all on Pilotix's own AI key (shops never bring one). Five tabs:
 // Dellal AI (its sales dashboard: conversion and real sales per shop, product and channel, why chats end without a sale;
-// how it learns, drawn; its instruction book to download, always the latest; last night, the coach's morning check of
-// each lesson, the lesson books and their test), Test & lessons (talk to Dellal as a customer with the book of your
+// how it learns, drawn; its instruction book to download, always the latest, with « Push »: every lesson waiting in
+// service now, PilotPush.tsx; last night, the coach's morning check of each lesson, the lesson books and their test),
+// Test & lessons (talk to Dellal as a customer with the book of your
 // choice; teach it a lesson in your own words: PilotLab.tsx), CM AI (the comments it handled), Spy AI (the competitors it
 // watches), and Settings & costs (the key, the daily limit, the night budget, what each shop's AI costs to bill it; Pilotix's
 // Meta and TikTok apps, which let the boutiques link their accounts: SocialApps.tsx).
@@ -70,7 +71,7 @@ function PilotAiInner({ staff, tab, demo }: { staff: Staff; tab?: string; demo: 
       </div>
       {cur === 'dellal' && (
         <>
-          <DellalBoard {...board} aside={<BookCard d={d} />} />
+          <DellalBoard {...board} aside={<BookCard d={d} manager={manager} />} />
           <LearnCard d={d} />
           <VersionsCard shopId={shopId} />
           <div className="pp-grid">

@@ -1197,6 +1197,45 @@ export const PLATFORM_REGISTRY = {
     await audit(ctx, 'pilot.publish', null, { book: (r as any).bookId ?? null });
     return r;
   }),
+  /**
+   * « Push »: every lesson waiting goes into service now, without a test — the nights' lessons approved by the person who
+   * pushes, a running test stopped, a new version in service for every chat (and the test chats) at once; with `darija`,
+   * the shops' Darija lessons waiting are accepted for every shop too. « Revenir en arrière » undoes the book.
+   */
+  'p.pilot.push': pproc(MANAGERS, z.object({ note: z.string().max(300).optional(), darija: z.boolean().default(false) }), async (ctx, i) => {
+    const by = ctx.staff.name || ctx.staff.email;
+    const now = new Date(ctx.now());
+    const pdb = ctx.t.platform;
+    const r = await pilot.pushBook(pdb, { by, note: i.note, now });
+    // nothing new for the sales book: with the Darija box ticked, the Darija lessons still go live (that is a push too)
+    const quiet = !r.ok && (r.error === 'no_change' || r.error === 'no_lessons');
+    if (!r.ok && !(quiet && i.darija)) throw bad(lessonErr(r));
+    let darija: { done: number; failed: number } | null = null;
+    if (i.darija) {
+      const ids = (await pdb.query(`SELECT id FROM platform.lahja WHERE status = 'waiting' ORDER BY id LIMIT 200`)).map((x: any) => num(x.id));
+      const d = ids.length ? await decideManyLahja(pdb, { ids, action: 'approve', by, now }) : { done: [] as number[], failed: [] as unknown[] };
+      for (const id of d.done) {
+        await learnVocab(pdb, { lahjaId: id, words: await lessonWords(ctx, id), source: 'learned', by });
+        await audit(ctx, 'pilot.lahja.approve', null, { id, push: true });
+      }
+      if (d.done.length) await bookAfter(ctx, `${d.done.length} leçon(s) acceptée(s) avec le push`);
+      darija = { done: d.done.length, failed: d.failed.length };
+    }
+    if (!r.ok && !darija?.done) throw bad(lessonErr(r));
+    await audit(ctx, 'pilot.push', null, { book: r.ok ? num(r.bookId) : null, darija: darija?.done ?? 0 });
+    return {
+      ok: true as const,
+      /** the version now in service (null: only Darija lessons went live) */
+      version: r.ok ? num(r.version) : null,
+      previous: r.ok ? numOrNull(r.previous) : null,
+      lessons: r.ok ? num(r.lessons) : 0,
+      /** the night lessons approved with the push; `skipped`: those that failed the checks (they still wait for the coach) */
+      approved: num(r.approved),
+      skipped: Array.isArray(r.skipped) ? r.skipped.length : 0,
+      stoppedTest: r.ok ? numOrNull(r.stoppedTest) : null,
+      darija,
+    };
+  }),
   'p.pilot.promote': pproc(MANAGERS, z.object({ testId: z.number().int().positive() }), async (ctx, i) => {
     const r = await pilot.promote(ctx.t.platform, i.testId, ctx.staff.name || ctx.staff.email, { now: new Date(ctx.now()) });
     if (!r.ok) throw bad(lessonErr(r));
@@ -1497,6 +1536,7 @@ const LESSON_ERR: Record<string, string> = {
   lint: 'Cette leçon n’est pas sûre',
   duplicate: 'Cette leçon existe déjà',
   no_change: 'Rien à changer : aucune leçon approuvée de plus que le livre actuel',
+  no_lessons: 'Aucune leçon approuvée à mettre en service',
   not_approved: 'Seules les leçons approuvées entrent dans un livre',
   test_running: 'Un test est déjà en cours : arrêtez-le ou attendez son résultat',
   not_running: 'Aucun test en cours',

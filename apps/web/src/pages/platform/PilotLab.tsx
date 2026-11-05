@@ -8,7 +8,8 @@
 //    · Darija (how Dellal speaks): the shops' lessons (their team's corrections, what Dellal learned from their customers),
 //      used at once in their own shop, wait here: accept (as is or modified), every shop uses it; refuse, the others never
 //      see it. Pilotix's own: « Darija lesson » under an answer of the test chat, or words typed here: every shop at once.
-// Under them, the next book: the sales lessons waiting for it, and « Publish ».
+// Under them, the next book: the sales lessons waiting for it, « Publish » (tried on a share of new chats) and « Push » (in
+// service now, without a test: the test chat starts again with the new version).
 import { useQueryClient } from '@tanstack/react-query';
 import { Fragment, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -20,6 +21,7 @@ import { toast } from '../../ui/toast';
 import { Bubbles, Composer, Msg, Typing } from '../messages/chat';
 import { LahjaWord, LahjaWords } from '../messages/lahja';
 import { CaseModal } from './pilotCase';
+import { PushPanel, takeFreshPush } from './PilotPush';
 import { DarijaBookCard } from './DarijaBook';
 import { VocabPane } from './Vocab';
 import { PilotDemo, usePilotAction, usePilotCall, usePilotRpc } from './pilotDemo';
@@ -64,6 +66,15 @@ export function LabTab({ d, manager }: { d: State; manager: boolean }) {
     setPane('try');
     requestAnimationFrame(() => tryBox.current?.scrollIntoView({ behavior: still() ? 'auto' : 'smooth', block: 'start' }));
   };
+  // « Push » done (here, or « Test it now » on the Dellal tab): the test chat starts again with the new version in service
+  const [fresh, setFresh] = useState(() => (takeFreshPush() ? 1 : 0));
+  const pushed = (v: number | null) => {
+    if (!v) return;
+    setBook('live');
+    setFresh((x) => x + 1);
+    setPane('try');
+    requestAnimationFrame(() => tryBox.current?.scrollIntoView({ behavior: still() ? 'auto' : 'smooth', block: 'start' }));
+  };
   return (
     <>
       <div className="pl-lab-switch">
@@ -78,19 +89,19 @@ export function LabTab({ d, manager }: { d: State; manager: boolean }) {
       </div>
       <div className="pl-lab" data-pane={pane}>
         <div ref={tryBox} className="pl-lab-pane pl-lab-try">
-          <TryCard d={d} book={book} onBook={setBook} />
+          <TryCard d={d} book={book} onBook={setBook} fresh={fresh} />
         </div>
         <div className="pl-lab-pane pl-lab-teach">
           <LessonsCard d={d} onTry={tryNext} manager={manager} />
         </div>
       </div>
-      <NextCard d={d} manager={manager} />
+      <NextCard d={d} manager={manager} onPushed={pushed} />
     </>
   );
 }
 
 // ---------------------------------------------------------------- Test Dellal
-function TryCard({ d, book, onBook }: { d: State; book: Book; onBook: (b: Book) => void }) {
+function TryCard({ d, book, onBook, fresh = 0 }: { d: State; book: Book; onBook: (b: Book) => void; fresh?: number }) {
   const { t } = useTranslation();
   const call = usePilotCall();
   const shops = d.shops;
@@ -120,13 +131,17 @@ function TryCard({ d, book, onBook }: { d: State; book: Book; onBook: (b: Book) 
     if (!have.split(',').includes(book)) onBook('live');
   }, [have, book]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // the chat of this shop (a call with no message only reads it)
+  // the chat of this shop (a call with no message only reads it; right after a « Push », a new chat)
+  const seen = useRef(fresh);
+  const startFresh = useRef(fresh > 0);
   useEffect(() => {
     if (!shopId) return;
     let live = true;
     setLoading(true);
     setErr(null);
-    call('p.pilot.try', { shopId, book: 'live' })
+    const again = startFresh.current;
+    startFresh.current = false;
+    call('p.pilot.try', { shopId, book: 'live', reset: again })
       .then((r) => live && setMsgs(r.messages as Msg[]))
       .catch((e: Error) => live && setErr(e.message))
       .finally(() => live && setLoading(false));
@@ -153,11 +168,11 @@ function TryCard({ d, book, onBook }: { d: State; book: Book; onBook: (b: Book) 
       setPending(null);
     }
   };
-  const reset = async () => {
+  const reset = async (with_: Book = book) => {
     if (!shopId || busy) return;
     setBusy(true);
     try {
-      const r = await call('p.pilot.try', { shopId, book, reset: true });
+      const r = await call('p.pilot.try', { shopId, book: with_, reset: true });
       setMsgs(r.messages as Msg[]);
       setErr(null);
     } catch (e: any) {
@@ -166,6 +181,12 @@ function TryCard({ d, book, onBook }: { d: State; book: Book; onBook: (b: Book) 
       setBusy(false);
     }
   };
+  // a « Push » from the lab itself: a new chat, answered by the new version in service
+  useEffect(() => {
+    if (fresh === seen.current) return;
+    seen.current = fresh;
+    void reset('live');
+  }, [fresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** under each answer: the book it used and the model (Haiku for simple messages, Sonnet for the hard moments) */
   const foot = (m: Msg) => {
@@ -223,7 +244,7 @@ function TryCard({ d, book, onBook }: { d: State; book: Book; onBook: (b: Book) 
               </span>
               <b>Dellal</b>
               <span className="ai-tag">{t('platform.pilot.lab.try.tag')}</span>
-              <button type="button" className="btn small ghost" title={t('platform.pilot.lab.try.reset')} aria-label={t('platform.pilot.lab.try.reset')} disabled={busy || !msgs.length} onClick={reset}>
+              <button type="button" className="btn small ghost" title={t('platform.pilot.lab.try.reset')} aria-label={t('platform.pilot.lab.try.reset')} disabled={busy || !msgs.length} onClick={() => reset()}>
                 <Icon name="refresh" />
                 <span className="ai-hide-s">{t('platform.pilot.lab.try.reset')}</span>
               </button>
@@ -857,7 +878,7 @@ function CoachFix({ m }: { m: Msg }) {
 }
 
 // ---------------------------------------------------------------- the next book
-function NextCard({ d, manager }: { d: State; manager: boolean }) {
+function NextCard({ d, manager, onPushed }: { d: State; manager: boolean; onPushed?: (version: number | null) => void }) {
   const { t } = useTranslation();
   const remove = usePilotAction('p.pilot.lesson', { success: t('platform.saved') });
   const publish = usePilotAction('p.pilot.publish', { success: t('platform.pilot.published') });
@@ -913,6 +934,7 @@ function NextCard({ d, manager }: { d: State; manager: boolean }) {
           <p className="small muted">{t(k + 'managers')}</p>
         )}
       </div>
+      {manager && <PushPanel d={d} onPushed={onPushed} />}
     </Card>
   );
 }

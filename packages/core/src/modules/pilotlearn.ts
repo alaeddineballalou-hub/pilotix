@@ -1610,6 +1610,47 @@ export async function publishBook(pdb: Db, o: { by: string; share?: number; less
     return { ok: false, error: 'test_running' };
   }
 }
+/**
+ * « Push »: everything waiting goes into service now, without a test — the coach's choice, to try the lessons in real chats
+ * (and in the test chats) at once. Every lesson the nights found that passes the checks again is approved by the person who
+ * pushes; a running test is stopped; a new version made of every approved lesson becomes the book in service for every chat
+ * at its next reply. « Revenir en arrière » (rollback) brings the book before it back.
+ */
+export async function pushBook(pdb: Db, o: { by: string; note?: string; now?: Date }): Promise<Ack> {
+  if (noWho(o.by)) return { ok: false, error: 'who' };
+  const now = o.now ?? new Date();
+  const at = now.toISOString();
+  const approved: number[] = [];
+  const skipped: number[] = [];
+  for (const c of await pdb.query(`SELECT id FROM platform.pilot_lessons WHERE status = 'candidate' ORDER BY prio DESC, id`)) {
+    const r = await approveLesson(pdb, num(c.id), o.by);
+    (r.ok ? approved : skipped).push(num(c.id));
+  }
+  const rows: Row[] = await pdb.query(`SELECT id, topic, text, prio FROM platform.pilot_lessons WHERE status = 'approved'`);
+  const ver = await nextVersion(pdb);
+  const c = compileBook(ver, asBookLessons(rows));
+  if (!c.used.length) return { ok: false, error: 'no_lessons', approved: approved.length, skipped };
+  const champ: Row | undefined = (await pdb.query(`SELECT id, version, lesson_ids FROM platform.pilot_books WHERE status = 'champion' ORDER BY promoted_at DESC NULLS LAST, id DESC LIMIT 1`))[0];
+  const asc = (a: number, b: number) => a - b;
+  const have = champ ? (champ.lesson_ids as unknown[]).map((x) => num(x)).sort(asc).join() : '';
+  if (have === c.used.slice().sort(asc).join()) return { ok: false, error: 'no_change', approved: approved.length, skipped };
+  const out = await pdb.tx(async (d) => {
+    const run: Row | undefined = (await d.query(`SELECT id, challenger_id FROM platform.pilot_tests WHERE status = 'running'`))[0];
+    if (run) {
+      await d.query(`UPDATE platform.pilot_tests SET status = 'stopped', verdict = 'manual', why = 'push', ended_at = $2::timestamptz WHERE id = $1`, [num(run.id), at]);
+      await d.query(`UPDATE platform.pilot_books SET status = 'stopped', ended_at = $2::timestamptz WHERE id = $1`, [num(run.challenger_id), at]);
+    }
+    await d.query(`UPDATE platform.pilot_books SET status = 'retired', ended_at = $1::timestamptz WHERE status = 'champion'`, [at]);
+    const b = await d.query(
+      `INSERT INTO platform.pilot_books (version, status, lesson_ids, text, tokens, note, by_user, created_at, promoted_at)
+       VALUES ($1, 'champion', $2::jsonb, $3, $4, $5, $6, $7::timestamptz, $7::timestamptz) RETURNING id`,
+      [ver, JSON.stringify(c.used), c.text, c.tokens, o.note || 'Push', o.by, at],
+    );
+    return { bookId: num(b[0].id), stoppedTest: run ? num(run.id) : null };
+  });
+  await logAct(pdb, o.by, 'push', String(out.bookId), `v${ver}: ${c.used.length} lessons${approved.length ? `, ${approved.length} approved with it` : ''}${out.stoppedTest ? `, test ${out.stoppedTest} stopped` : ''}`, now);
+  return { ok: true, ...out, version: ver, previous: champ ? num(champ.version) : null, lessons: c.used.length, tokens: c.tokens, dropped: c.dropped, approved: approved.length, skipped };
+}
 /** Keeps the challenger: it becomes the champion for everyone. Only a test that the nights proved not worse can be kept. */
 export async function promote(pdb: Db, testId: number, by: string, o: { now?: Date } = {}): Promise<Ack> {
   if (noWho(by)) return { ok: false, error: 'who' };
