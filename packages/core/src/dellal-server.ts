@@ -3,7 +3,7 @@
 // for Delivery AI agent, WhatsApp templates and SMS (SMS Gateway for Android, or any HTTP SMS service).
 // Keys are read from the settings table (written by dellal.settings.save / notify.settings.save) and never leave the server.
 import { AppError, Ctx } from './rpc';
-import { AiRequest, AiResponse, DellalChannel, dellalSecret } from './modules/dellal';
+import { AiRequest, AiResponse, DellalChannel, dellalSecret, dellalSettings } from './modules/dellal';
 import { NOTIFY_SMS_SECRET, notifySettings } from './modules/notify';
 
 import { pilotKey, pilotLiveKey, voiceKey } from './platform/pilotai';
@@ -12,8 +12,10 @@ import type { PilotAiReq } from './modules/pilotlearn';
 import type { Tenancy } from './platform/tenancy';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
-/** Instagram's own login (« Instagram API with Instagram Login »): its own address, its own keys */
+/** Instagram's own login (« Instagram API with Instagram Login », older apps: IGAA… keys): its own address */
 const IG_GRAPH = 'https://graph.instagram.com/v23.0';
+/** Meta's « Unified login » (newer apps: EAA… keys, often a system user's that never ends): Facebook's address, a recent version */
+const UNI_GRAPH = 'https://graph.facebook.com/v23.0';
 const ANTHROPIC = 'https://api.anthropic.com/v1/messages';
 
 async function postJson(url: string, body: unknown, headers: Record<string, string>, who: string, method: 'POST' | 'GET' = 'POST', timeoutMs = 30_000): Promise<any> {
@@ -108,8 +110,11 @@ async function send(ctx: Ctx, a: { channel: DellalChannel; externalId: string; a
     const ig = await dellalSecret(ctx.db, 'igToken');
     if (ig) {
       try {
-        for (const t of chunks(a.text, 1000)) await postJson(`${IG_GRAPH}/me/messages`, { recipient: { id: a.externalId }, message: { text: t } }, { Authorization: `Bearer ${ig}` }, 'Instagram');
-        return { ok: true, via: 'instagram' };
+        // Instagram's own login answers as « me »; a Unified login key (a system user's) answers as the account itself
+        const s = await dellalSettings(ctx.db);
+        const url = s.igLoginKind === 'unified' && s.instagramLoginId ? `${UNI_GRAPH}/${enc(s.instagramLoginId)}/messages` : `${IG_GRAPH}/me/messages`;
+        for (const t of chunks(a.text, 1000)) await postJson(url, { recipient: { id: a.externalId }, message: { text: t } }, { Authorization: `Bearer ${ig}` }, 'Instagram');
+        return { ok: true, via: s.igLoginKind === 'unified' ? 'unified' : 'instagram' };
       } catch (e) {
         // the Page can still answer someone with a role on the app; otherwise the Instagram login's reason is the one that counts
         if (!(await dellalSecret(ctx.db, 'pageToken'))) throw e;
@@ -312,7 +317,7 @@ export async function runDellal(action: string, args: unknown, ctx: Ctx): Promis
   if (action === 'cmPost') return cmPost(ctx, args as CmArgs);
   if (action === 'transcribe') return transcribe(ctx, args as VoiceArgs);
   if (action === 'catchUp') return catchUpMeta(args as CatchUpArgs);
-  if (action === 'igLogin') return igLogin(String((args as any)?.token ?? ''));
+  if (action === 'igLogin') return igLogin(String((args as any)?.token ?? ''), (args as any)?.igId ? String((args as any).igId) : null);
   if (action === 'igRefresh') return igRefresh(String((args as any)?.token ?? ''));
   if (action === 'ping') {
     await complete(ctx, { model: 'claude-haiku-5-5', system: 'Réponds OK.', messages: [{ role: 'user', content: 'ping' }], tools: [] as any, max_tokens: 5 });
@@ -322,12 +327,27 @@ export async function runDellal(action: string, args: unknown, ctx: Ctx): Promis
 }
 
 // ---------------------------------------------------------------- Instagram's own login
+export type IgLoginKind = 'ig' | 'unified';
 /**
- * The key a shop pasted: its account (the number Meta gives it in this login's webhooks, its name), then the account is
- * subscribed to the app's webhook (its messages come to Pilotix). A subscription Meta refuses is said, the key is kept.
+ * The key a shop pasted, of either kind: Instagram's own login (older apps, IGAA…: graph.instagram.com, its /me is the
+ * account) or Meta's « Unified login » (newer apps, EAA…: graph.facebook.com, often a system user's key whose /me is the
+ * system user: its accounts are the Instagram accounts it was given). The other kind is tried when the first refuses.
+ * Then the account is subscribed to the app's webhook; a subscription Meta refuses is said, the key is kept.
  */
-export async function igLogin(token: string): Promise<{ userId: string; username: string; subscribeError: string | null }> {
+export async function igLogin(token: string, igId?: string | null): Promise<{ kind: IgLoginKind; userId: string; username: string; subscribeError: string | null }> {
   if (!token) throw new AppError('bad_request', 'Clé Instagram manquante.');
+  const order: IgLoginKind[] = token.startsWith('IG') ? ['ig', 'unified'] : ['unified', 'ig'];
+  let first: unknown = null;
+  for (const kind of order) {
+    try {
+      return kind === 'ig' ? await igLoginInstagram(token) : await igLoginUnified(token, igId ?? null);
+    } catch (e) {
+      first ??= e;
+    }
+  }
+  throw first;
+}
+async function igLoginInstagram(token: string) {
   const me = await postJson(`${IG_GRAPH}/me?fields=user_id,username&access_token=${enc(token)}`, null, {}, 'Instagram', 'GET', 20_000);
   const userId = String(me?.user_id ?? me?.id ?? '');
   if (!userId) throw new AppError('bad_request', 'Instagram n’a pas donné le compte de cette clé.');
@@ -341,7 +361,17 @@ export async function igLogin(token: string): Promise<{ userId: string; username
       subscribeError = String(e?.message ?? e);
     }
   }
-  return { userId, username: String(me?.username ?? ''), subscribeError };
+  return { kind: 'ig' as const, userId, username: String(me?.username ?? ''), subscribeError };
+}
+async function igLoginUnified(token: string, igId: string | null) {
+  const r = await postJson(`${UNI_GRAPH}/me/assigned_instagram_accounts?fields=id,username&limit=50&access_token=${enc(token)}`, null, {}, 'Instagram', 'GET', 20_000);
+  const list: any[] = Array.isArray(r?.data) ? r.data : [];
+  // the boutique's own Instagram account when the key has several
+  const acc = list.find((x) => igId && String(x?.id) === igId) ?? list[0];
+  if (!acc?.id) throw new AppError('bad_request', 'Cette clé n’a accès à aucun compte Instagram. Dans l’app Meta, donnez votre compte Instagram à cette clé (« Instagram account »), puis recommencez.');
+  // its messages' webhook (through the Page it already comes for people with a role; Meta may refuse this one: not a failure)
+  await postJson(`${UNI_GRAPH}/${enc(String(acc.id))}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,comments&access_token=${enc(token)}`, {}, {}, 'Instagram', 'POST', 20_000).catch(() => null);
+  return { kind: 'unified' as const, userId: String(acc.id), username: String(acc.username ?? ''), subscribeError: null };
 }
 /** A new key for 60 more days (Meta renews a key at least a day old that still works). */
 export async function igRefresh(token: string): Promise<{ token: string | null; expiresIn: number | null }> {
@@ -350,8 +380,8 @@ export async function igRefresh(token: string): Promise<{ token: string | null; 
 }
 
 // ---------------------------------------------------------------- the safety net: the Page's chats read again
-/** igToken: Instagram's own login (its chats are read with it, at its own address); igLoginId: its account's number. */
-type CatchUpArgs = { token: string; pageId: string; igId: string | null; igToken?: string | null; igLoginId?: string | null; since: number };
+/** igToken: Instagram's login key (its chats are read with it); igKind: which login; igLoginId: its account's number. */
+type CatchUpArgs = { token: string; pageId: string; igId: string | null; igToken?: string | null; igKind?: IgLoginKind | null; igLoginId?: string | null; since: number };
 /** A customer's message found by reading the chats again: when it was written, too. */
 export type CaughtMessage = Incoming & { at: string };
 
@@ -398,9 +428,10 @@ export async function catchUpMeta(a: CatchUpArgs, o: { pauseMs?: number; budgetM
     const accountId = platform === 'instagram' ? (a.igId || a.igLoginId)! : a.pageId;
     // Instagram's own login reads every customer's chat; the Page only those Meta lets it see
     const viaLogin = platform === 'instagram' && !!a.igToken;
-    const base = viaLogin ? IG_GRAPH : GRAPH;
+    const unified = viaLogin && a.igKind === 'unified' && !!a.igLoginId;
+    const base = unified ? UNI_GRAPH : viaLogin ? IG_GRAPH : GRAPH;
     const key = viaLogin ? a.igToken! : a.token;
-    const inbox = viaLogin ? 'me' : enc(a.pageId);
+    const inbox = unified ? enc(a.igLoginId!) : viaLogin ? 'me' : enc(a.pageId);
     // Instagram takes a few questions a second for one account: one at a time, a little apart
     const pause = o.pauseMs ?? (platform === 'instagram' ? 600 : 200);
     const list: any[] = [];

@@ -644,23 +644,29 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'de
             <ChannelBadge ch="instagram" /> {t('messages.settings.igLogin')}
           </h4>
           <p className="muted small">{t('messages.settings.igLoginHelp', { name: f.name })}</p>
-          {/* Meta's own words (its App Dashboard), kept left-to-right in every language */}
+          {/* Meta's own words (its App Dashboard), kept left-to-right in every language. Newer apps: « Unified login »;
+              older ones: « Instagram login » (Pilotix takes both keys) */}
           <ol>
             <li>
               {t('messages.settings.igStep1')}{' '}
               <bdi className="dl-path" dir="ltr">
-                Use cases › Instagram › API setup with Instagram login › Generate access tokens › Add account
+                App roles › Roles › Add people › Instagram Tester
+              </bdi>{' '}
+              {t('messages.settings.igStep1b')}{' '}
+              <bdi className="dl-path" dir="ltr">
+                instagram.com/accounts/manage_access › Tester invites › Accept
               </bdi>
             </li>
             <li>
               {t('messages.settings.igStep2')}{' '}
               <bdi className="dl-path" dir="ltr">
-                Webhook subscription: On › Generate token
+                Use cases › Instagram API › API setup with Unified login › Generate access tokens › Add account
               </bdi>
             </li>
             <li>{t('messages.settings.igStep3')}</li>
           </ol>
-          {secret('igToken', t('messages.settings.igToken'), 'IGAA…')}
+          <p className="muted small">{t('messages.settings.igStepNote')}</p>
+          {secret('igToken', t('messages.settings.igToken'), 'EAA… / IGAA…')}
           {data.has.igToken && f.instagramLoginUser && <p className="dl-ok">✓ {t('messages.settings.igLinked', { user: f.instagramLoginUser })}</p>}
         </section>
         <h3 className="dl-h3">

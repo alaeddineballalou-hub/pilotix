@@ -72,6 +72,8 @@ export interface DellalSettings {
   instagramLoginId: string;
   instagramLoginUser: string;
   igTokenAt: string;
+  /** 'ig': Instagram's own login (older apps, a 60-day key, renewed); 'unified': Meta's Unified login (newer apps, EAA…) */
+  igLoginKind: string;
   whatsappPhoneId: string;
 }
 
@@ -98,6 +100,7 @@ export const DEFAULT_DELLAL: DellalSettings = {
   instagramLoginId: '',
   instagramLoginUser: '',
   igTokenAt: '',
+  igLoginKind: '',
   whatsappPhoneId: '',
 };
 
@@ -1804,9 +1807,14 @@ async function autoOrderOf(ctx: Ctx, s: DellalSettings, row: any): Promise<{ ref
 async function linkIgLogin(ctx: Ctx, token: string): Promise<{ ok: boolean; username?: string; message?: string }> {
   if (!ctx.server?.dellal) return { ok: false, message: 'Aperçu : la clé est gardée, elle sera lue sur le serveur.' };
   try {
-    const r = (await ctx.server.dellal('igLogin', { token }, ctx)) as { userId: string; username: string; subscribeError?: string | null };
     const s = await dellalSettings(ctx.db);
-    await setRaw(ctx.db, 'dellal', { ...s, instagramLoginId: String(r.userId), instagramLoginUser: String(r.username ?? ''), igTokenAt: new Date(ctx.now()).toISOString() }, me(ctx));
+    const r = (await ctx.server.dellal('igLogin', { token, igId: s.instagramId || null }, ctx)) as { kind?: string; userId: string; username: string; subscribeError?: string | null };
+    await setRaw(
+      ctx.db,
+      'dellal',
+      { ...s, instagramLoginId: String(r.userId), instagramLoginUser: String(r.username ?? ''), igTokenAt: new Date(ctx.now()).toISOString(), igLoginKind: r.kind === 'unified' ? 'unified' : 'ig' },
+      me(ctx),
+    );
     if (ctx.t && ctx.shop) await noteIgLogin(ctx.t, ctx.shop.id, String(r.userId), String(r.username ?? ''));
     return r.subscribeError ? { ok: false, username: r.username, message: r.subscribeError } : { ok: true, username: r.username };
   } catch (e: any) {
@@ -1817,6 +1825,8 @@ async function linkIgLogin(ctx: Ctx, token: string): Promise<{ ok: boolean; user
 /** Instagram's own login key lasts 60 days: renewed every few days (on the server), while it works. */
 const IG_RENEW_MS = 5 * 24 * 3_600_000;
 async function renewIgLogin(ctx: Ctx, s: DellalSettings, token: string): Promise<string> {
+  // a Unified login key (a system user's) does not end: nothing to renew
+  if (s.igLoginKind === 'unified') return token;
   if (!ctx.server?.dellal || (s.igTokenAt && ctx.now() - Date.parse(s.igTokenAt) < IG_RENEW_MS)) return token;
   try {
     const r = (await ctx.server.dellal('igRefresh', { token }, ctx)) as { token?: string };
@@ -1861,7 +1871,7 @@ export async function catchUpMessages(ctx: Ctx): Promise<CatchUpRun & { skipped?
   let list: Caught[] = [];
   let error: string | null = null;
   try {
-    const r = (await ctx.server.dellal('catchUp', { token, pageId: s.messengerPageId, igId: s.instagramId || null, igToken, igLoginId: s.instagramLoginId || null, since }, ctx)) as {
+    const r = (await ctx.server.dellal('catchUp', { token, pageId: s.messengerPageId, igId: s.instagramId || null, igToken, igKind: s.igLoginKind || null, igLoginId: s.instagramLoginId || null, since }, ctx)) as {
       messages?: Caught[];
       errors?: string[];
     } | null;
@@ -2237,7 +2247,7 @@ export const dellalProcs = {
     // Instagram's own login: the key is read at once (its account, its name) and the account subscribed to the webhook
     let igTest: { ok: boolean; username?: string; message?: string } | null = null;
     if (secrets.igToken === null) {
-      await setRaw(ctx.db, 'dellal', { ...next, instagramLoginId: '', instagramLoginUser: '', igTokenAt: '' }, me(ctx));
+      await setRaw(ctx.db, 'dellal', { ...next, instagramLoginId: '', instagramLoginUser: '', igTokenAt: '', igLoginKind: '' }, me(ctx));
       if (ctx.t && ctx.shop) await noteIgLogin(ctx.t, ctx.shop.id, '', '');
     } else if (secrets.igToken?.trim()) igTest = await linkIgLogin(ctx, secrets.igToken.trim());
     let aiTest: { ok: boolean; message?: string } | null = null;

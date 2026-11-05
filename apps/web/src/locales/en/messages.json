@@ -186,12 +186,14 @@
     "waHelp": "WhatsApp still goes through your own Meta app: paste its address and verify token in Webhooks, then its secret key below.",
     "igLogin": "Instagram: answer all your customers",
     "igLoginHelp": "Without Meta’s approval, Instagram lets {{name}} answer only accounts that have a role on the Meta app. With Instagram’s own login, your own Instagram account is added to the app: {{name}} can then answer all its customers.",
-    "igStep1": "In the Meta app, open this path and log in with your Instagram account:",
-    "igStep2": "On the same page, turn on the webhook subscription for this account, create the key and copy it:",
+    "igStep1": "In the Meta app, give your Instagram account the Instagram Tester role:",
+    "igStep2": "Make your account’s key (log in with your Instagram account) and copy it:",
     "igStep3": "Paste the key here and save. Never send it to anyone, not even in a chat.",
     "igToken": "Instagram key (Instagram login)",
     "igLinked": "Linked: @{{user}}",
-    "igOk": "Instagram linked: @{{user}}"
+    "igOk": "Instagram linked: @{{user}}",
+    "igStep1b": "then accept the invite in Instagram:",
+    "igStepNote": "A system user’s key (Business settings › System users, with your Instagram account and the instagram_manage_messages permission) works too, and never ends."
   },
   "lahja": {
     "fix": "Darija lesson",

@@ -67,6 +67,8 @@ before(async () => {
       if (path === 'oauth/access_token') return answer(u.searchParams.get('grant_type') === 'fb_exchange_token' ? { access_token: 'LONG_USER_TOKEN', expires_in: 5_184_000 } : { access_token: 'SHORT_USER_TOKEN' });
       if (path === 'me' && probe.refuse) return new Response(JSON.stringify({ error: { message: 'Error validating access token', code: 190 } }), { status: 400 });
       if (path === 'me') return answer(graph.me);
+      // Meta's Unified login: the Instagram accounts a key was given
+      if (path === 'me/assigned_instagram_accounts') return answer({ data: [{ id: '178555', username: 'bebeconfort.dz' }] });
       // Publicité: each ad account's ad sets, ads and days (one that cannot be read answers an error)
       const ins = path.match(/^(act_\d+)\/(insights|adsets|ads)$/);
       if (ins) {
@@ -464,6 +466,14 @@ test('« Tester »: the key, the permissions, the Page (subscribed again), Insta
   assert.equal(igBad.checks.find((c: any) => c.key === 'igLogin').state, 'bad');
   assert.match(igBad.checks.find((c: any) => c.key === 'igLogin').detail, /refusé la clé/);
   probe.igRefuse = false;
+  // a Unified login key (newer Meta apps): read on Facebook's side
+  const dset = (await a.db.query(`SELECT value FROM settings WHERE key = 'dellal'`))[0]?.value ?? {};
+  await setRaw(a.db, 'dellal', { ...dset, igLoginKind: 'unified', instagramLoginId: '178555' });
+  calls.length = 0;
+  const uni: any = await call('social.test', a, { linkId: karim.id });
+  assert.deepEqual(uni.checks.find((c: any) => c.key === 'igLogin'), { key: 'igLogin', state: 'ok', params: { username: 'bebeconfort.dz' }, detail: null });
+  assert.ok(calls.some((c) => /graph\.facebook\.com\/v23\.0\/me\/assigned_instagram_accounts/.test(c.url)));
+  await setRaw(a.db, 'dellal', dset);
   await a.db.query(`DELETE FROM settings WHERE key = 'secret_dellal_ig_token'`);
   // a webhook Pilotix refused (its signature matched no secret): said for 2 days
   await noteBadSignature(t, 'instagram');

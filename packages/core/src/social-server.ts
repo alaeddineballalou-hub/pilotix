@@ -353,10 +353,20 @@ export async function testLink(t: Tenancy, shopId: number, linkId: number, publi
       else add('catchUp', 'ok', { at: String(run.at), count: num(run.found) });
       // Instagram's own login (Message AI agent › Réglages): with it, Dellal answers every customer of this account
       const igKey = schema ? (await t.shop(String(schema)).query(`SELECT value FROM settings WHERE key = 'secret_dellal_ig_token'`).catch(() => []))[0]?.value : null;
+      const dset = schema ? (await t.shop(String(schema)).query(`SELECT value FROM settings WHERE key = 'dellal'`).catch(() => []))[0]?.value : null;
       if (igKey) {
         try {
-          const me = await igGraph('me', { fields: 'user_id,username', access_token: String(igKey) });
-          add('igLogin', 'ok', { username: String(me?.username ?? '') });
+          if (dset?.igLoginKind === 'unified') {
+            // Meta's Unified login (newer apps): the key's Instagram accounts (a system user's /me is not the account)
+            const r = await graph('https://graph.facebook.com/v23.0/me/assigned_instagram_accounts', { fields: 'id,username', limit: '50', access_token: String(igKey) });
+            const list: any[] = Array.isArray(r?.data) ? r.data : [];
+            const acc = list.find((x) => String(x?.id) === String(dset?.instagramLoginId ?? '')) ?? list[0];
+            if (!acc) throw new AppError('bad_request', 'Cette clé n’a plus accès au compte Instagram. Dans l’app Meta, donnez-lui le compte à nouveau.');
+            add('igLogin', 'ok', { username: String(acc.username ?? dset?.instagramLoginUser ?? '') });
+          } else {
+            const me = await igGraph('me', { fields: 'user_id,username', access_token: String(igKey) });
+            add('igLogin', 'ok', { username: String(me?.username ?? '') });
+          }
         } catch (e) {
           add('igLogin', 'bad', undefined, why(e));
         }

@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db, ServerHooks } from '../index';
-import { catchUpMeta, chunks, missedMessages, parseMetaWebhook, runDellal } from '../dellal-server';
+import { catchUpMeta, chunks, igLogin, missedMessages, parseMetaWebhook, runDellal } from '../dellal-server';
 import { getRaw, setRaw } from '../modules/admin';
 import { findPlace, playbookFor } from '../modules/dellal';
 import { checkDarija, fixDarija, parseAvoid } from '../modules/darija';
@@ -920,16 +920,17 @@ test('Instagram’s own login: the key is read when saved (its account, its name
   const server = fakeServer([], []);
   const base = server.dellal!;
   let refuse = false;
+  let kind = 'ig';
   server.dellal = async (action, args, ctx) => {
     if (action !== 'igLogin') return base(action, args, ctx);
     seen.push(args);
     if (refuse) throw new Error('Instagram : clé ou jeton refusé (Invalid OAuth access token). Vérifiez les réglages.');
-    return { userId: '178555', username: 'babyjoy_dz', subscribeError: null };
+    return { kind, userId: '178555', username: 'babyjoy_dz', subscribeError: null };
   };
   const admin = await as(EMAILS.admin, server);
   const g: any = await call('dellal.settings.get', admin, {});
   let r: any = await call('dellal.settings.save', admin, { ...g.settings, secrets: { igToken: 'IGAA-SECRET-1' } });
-  assert.deepEqual(seen, [{ token: 'IGAA-SECRET-1' }]);
+  assert.equal(seen[0].token, 'IGAA-SECRET-1');
   assert.deepEqual(r.igTest, { ok: true, username: 'babyjoy_dz' });
   assert.deepEqual([r.has.igToken, r.settings.instagramLoginId, r.settings.instagramLoginUser], [true, '178555', 'babyjoy_dz']);
   assert.ok(r.settings.igTokenAt);
@@ -943,9 +944,14 @@ test('Instagram’s own login: the key is read when saved (its account, its name
   assert.equal(r.igTest.ok, false);
   assert.match(r.igTest.message, /refusé/);
   refuse = false;
+  // a Unified login key (newer Meta apps): its kind is kept (the server answers through it)
+  kind = 'unified';
+  r = await call('dellal.settings.save', admin, { ...r.settings, secrets: { igToken: 'EAA-SYSTEM-USER' } });
+  assert.deepEqual([r.igTest.ok, r.settings.igLoginKind], [true, 'unified']);
+  assert.ok('igId' in seen.at(-1), 'the boutique’s Instagram account goes with the key (a key with several accounts)');
   // removed: forgotten
   r = await call('dellal.settings.save', admin, { ...r.settings, secrets: { igToken: null } });
-  assert.deepEqual([r.has.igToken, r.settings.instagramLoginId, r.settings.instagramLoginUser], [false, '', '']);
+  assert.deepEqual([r.has.igToken, r.settings.instagramLoginId, r.settings.instagramLoginUser, r.settings.igLoginKind], [false, '', '', '']);
 });
 
 test('Instagram’s own login: Dellal answers with it (graph.instagram.com); refused there, the Page tries; Messenger stays on the Page', async () => {
@@ -979,9 +985,46 @@ test('Instagram’s own login: Dellal answers with it (graph.instagram.com); ref
     // no Page and the login refuses: the login's reason is said
     await db.query(`DELETE FROM settings WHERE key = 'secret_dellal_page_token'`);
     await assert.rejects(runDellal('send', { channel: 'instagram', externalId: 'igsid-1', text: 'Wakha' }, ctx), /joignable/);
+    // a Unified login key (newer Meta apps): Facebook's address, as the Instagram account itself
+    igDown = false;
+    asked.length = 0;
+    await setRaw(db, 'dellal', { ...(await getRaw<any>(db, 'dellal', {})), igLoginKind: 'unified', instagramLoginId: '178555' });
+    const u: any = await runDellal('send', { channel: 'instagram', externalId: 'igsid-2', text: 'Salam' }, ctx);
+    assert.equal(u.via, 'unified');
+    assert.deepEqual(asked.map((x) => [x.host, x.path, x.auth]), [['graph.facebook.com', '178555/messages', 'Bearer IGAA-SEND']]);
   } finally {
     globalThis.fetch = real;
     await db.query(`DELETE FROM settings WHERE key IN ('secret_dellal_ig_token', 'secret_dellal_page_token')`);
+    await setRaw(db, 'dellal', { ...(await getRaw<any>(db, 'dellal', {})), igLoginKind: '', instagramLoginId: '' });
+  }
+});
+
+test('a pasted Instagram key: its kind is found (IGAA… Instagram’s login, EAA… Meta’s Unified login), the other is tried when the first refuses', async () => {
+  const real = globalThis.fetch;
+  const asked: string[] = [];
+  const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  globalThis.fetch = (async (input: any) => {
+    const u = new URL(String(input));
+    const path = u.pathname.replace(/^\/v[\d.]+\//, '');
+    const key = u.searchParams.get('access_token');
+    asked.push(`${u.host} ${path}`);
+    if (u.host === 'graph.instagram.com' && path === 'me') return key === 'EAA-OLD-IG' || key?.startsWith('IG') ? reply({ user_id: '178111', username: 'old_ig' }) : reply({ error: { message: 'Cannot parse access token', code: 190 } }, 400);
+    if (u.host === 'graph.facebook.com' && path === 'me/assigned_instagram_accounts')
+      return key === 'EAA-SUAT' ? reply({ data: [{ id: '178001', username: 'other' }, { id: '178555', username: 'babyjoy_dz' }] }) : reply({ error: { message: 'Invalid OAuth access token', code: 190 } }, 400);
+    return reply({ success: true });
+  }) as typeof fetch;
+  try {
+    const uni = await igLogin('EAA-SUAT', '178555');
+    assert.deepEqual([uni.kind, uni.userId, uni.username], ['unified', '178555', 'babyjoy_dz'], 'the boutique’s own account among the key’s');
+    assert.equal(asked[0], 'graph.facebook.com me/assigned_instagram_accounts');
+    const ig = await igLogin('IGAA-123', null);
+    assert.deepEqual([ig.kind, ig.userId], ['ig', '178111']);
+    // an EAA… key Unified login does not take, Instagram's login does
+    const back = await igLogin('EAA-OLD-IG', null);
+    assert.equal(back.kind, 'ig');
+    await assert.rejects(igLogin('EAA-NOTHING', null), /Invalid OAuth|refusé/);
+  } finally {
+    globalThis.fetch = real;
   }
 });
 
@@ -995,16 +1038,21 @@ test('safety net with Instagram’s own login: Instagram’s chats are read at i
     const u = new URL(String(input));
     const path = u.pathname.replace(/^\/v[\d.]+\//, '');
     asked.push(`${u.host} ${path} ${u.searchParams.get('access_token')}`);
-    if (path.endsWith('/conversations') && u.host === 'graph.facebook.com') return reply({ data: [] });
-    if (path === 'me/conversations') return reply({ data: [{ id: 'q1', updated_time: iso(20_000) }] });
+    if (path === 'page-7/conversations') return reply({ data: [] });
+    if (path === 'me/conversations' || path === '178555/conversations') return reply({ data: [{ id: 'q1', updated_time: iso(20_000) }] });
     if (path === 'q1') return reply({ messages: { data: [{ id: 'aWdf-q', created_time: iso(20_000), from: { id: 'igsid-q', username: 'meriem' }, to: { data: [{ id: '178555' }] }, message: 'ch7al ?' }] } });
     return reply({ error: { message: `unexpected ${path}` } });
   }) as typeof fetch;
   try {
-    const r = await catchUpMeta({ token: 'PAGE', pageId: 'page-7', igId: '178000', igToken: 'IGAA-NET', igLoginId: '178555', since: now - 30 * 60_000 }, { pauseMs: 0 });
+    const r = await catchUpMeta({ token: 'PAGE', pageId: 'page-7', igId: '178000', igToken: 'IGAA-NET', igKind: 'ig', igLoginId: '178555', since: now - 30 * 60_000 }, { pauseMs: 0 });
     assert.deepEqual(r.errors, []);
     assert.deepEqual(r.messages.map((m) => [m.channel, m.externalId, m.text]), [['instagram', 'igsid-q', 'ch7al ?']]);
     assert.deepEqual(asked, ['graph.facebook.com page-7/conversations PAGE', 'graph.instagram.com me/conversations IGAA-NET', 'graph.instagram.com q1 IGAA-NET']);
+    // a Unified login key: Facebook's address, the Instagram account's own inbox
+    asked.length = 0;
+    const u = await catchUpMeta({ token: 'PAGE', pageId: 'page-7', igId: '178000', igToken: 'EAA-NET', igKind: 'unified', igLoginId: '178555', since: now - 30 * 60_000 }, { pauseMs: 0 });
+    assert.deepEqual(u.errors, []);
+    assert.deepEqual(asked, ['graph.facebook.com page-7/conversations PAGE', 'graph.facebook.com 178555/conversations EAA-NET', 'graph.facebook.com q1 EAA-NET']);
   } finally {
     globalThis.fetch = real;
   }
