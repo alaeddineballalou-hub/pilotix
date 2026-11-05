@@ -25,14 +25,16 @@ function VoiceLine({ v }: { v: { status?: string; seconds?: number | null } }) {
 }
 
 /** « Photo · lue par l’IA » above a customer's photo (or: reading, not read, reading off), with its small copy */
-function PhotoLine({ p }: { p: { status?: string; thumb?: string | null; productName?: string | null; sure?: boolean } }) {
+function PhotoLine({ p }: { p: { status?: string; thumb?: string | null; productName?: string | null; sure?: boolean; model?: string | null } }) {
   const { t } = useTranslation();
   const st = ['done', 'pending', 'failed', 'off'].includes(String(p.status)) ? String(p.status) : 'pending';
+  // the preview (no AI): only the catalogue's own photos are recognised
+  const said = st === 'done' && !p.model ? 'preview' : st;
   return (
     <>
       {p.thumb && <img className="ai-photo" src={p.thumb} alt={t('messages.photo.label')} loading="lazy" />}
       <span className={`ai-voice ai-voice-${st}`}>
-        <Icon name="image" /> {t('messages.photo.label')} · {t(`messages.photo.${st}`)}
+        <Icon name="image" /> {t('messages.photo.label')} · {t(`messages.photo.${said}`)}
         {st === 'done' && p.productName ? <> · <bdi>{p.productName}</bdi></> : null}
       </span>
     </>

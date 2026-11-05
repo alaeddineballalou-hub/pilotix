@@ -269,6 +269,7 @@
     "sentN_two": "صورتان مرسلتان",
     "sentN_few": "{{count}} صور مرسلة",
     "sentN_many": "{{count}} صورة مرسلة",
-    "sentN_other": "{{count}} صورة مرسلة"
+    "sentN_other": "{{count}} صورة مرسلة",
+    "preview": "معاينة، بلا ذكاء اصطناعي"
   }
 }

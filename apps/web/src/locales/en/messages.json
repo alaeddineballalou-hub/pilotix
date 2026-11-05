@@ -259,6 +259,7 @@
     "notImage": "This file is not a photo.",
     "sent": "Photo sent",
     "sentN_one": "{{count}} photo sent",
-    "sentN_other": "{{count}} photos sent"
+    "sentN_other": "{{count}} photos sent",
+    "preview": "preview, no AI"
   }
 }

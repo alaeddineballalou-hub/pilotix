@@ -53,7 +53,7 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
   if (!pou || !sac) return;
   const pouId = num(pou.id);
   const vars = await db.query(`SELECT id, title FROM product_variants WHERE product_id = $1 AND title <> '' ORDER BY id`, [pouId]);
-  const img = (url: string) => ({ url, w: 600, h: 600 });
+  const img = (url: string, v: number | null = null) => ({ url, w: 600, h: 600, ...(v ? { v } : {}) });
   const page = async (productId: number, slug: string, title: string, color: string, price: number, oldPrice: number | null, text: string, images: object[], views: number, ago: number) =>
     num(
       (
@@ -71,7 +71,8 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     9950,
     12900,
     STROLLER_TEXT,
-    [img(stroller('#9ca3af', '#f3f4f6')), img(stroller('#1e3a8a', '#e0e7ff')), img(stroller('#f472b6', '#fce7f3')), img(folded('#6b7280', '#f3f4f6'))],
+    // each colour's picture says which colour it is (picking it brings it first; Dellal sends that colour's photos)
+    [img(stroller('#9ca3af', '#f3f4f6'), v0(vars, 0)), img(stroller('#1e3a8a', '#e0e7ff'), v0(vars, 1)), img(stroller('#f472b6', '#fce7f3'), v0(vars, 2)), img(folded('#6b7280', '#f3f4f6'), v0(vars, 0))],
     1843,
     2 * 3600_000,
   );
