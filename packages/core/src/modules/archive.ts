@@ -59,6 +59,10 @@ export const USER_REFS: readonly Ref[] = [
   ['cm_comments', 'handled_by', 'messages'],
   ['dellal_lahja', 'created_by', 'messages'],
   ['cm_tests', 'created_by', 'messages'],
+  ['cm_planned', 'created_by', 'marketing'],
+  ['cm_planned', 'updated_by', 'marketing'],
+  ['cm_planned', 'approved_by', 'marketing'],
+  ['cm_media', 'created_by', 'marketing'],
   ['notifications', 'sent_by', 'messages'],
   ['push_subs', 'profile_id', 'messages'],
   ['livreur_checkins', 'profile_id', 'orders'],
@@ -90,6 +94,7 @@ export const PRODUCT_REFS: readonly Ref[] = [
   ['landing_submits', 'product_id', 'pages'],
   ['landing_blocked', 'product_id', 'pages'],
   ['cm_posts', 'product_id', 'messages'],
+  ['cm_planned', 'product_id', 'marketing'],
   ['depot_pick_pool', 'product_id', 'stock'],
   ['depot_restock', 'product_id', 'stock'],
 ];

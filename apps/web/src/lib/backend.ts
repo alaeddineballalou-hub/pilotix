@@ -94,6 +94,8 @@ export interface Backend {
   onEvent(fn: (e: LiveEvent) => void): () => void;
   /** Another boutique of the same person (the boutique at the bottom of the menu), without the password again. */
   switchStore(shop: number): Promise<Session>;
+  /** Bytes to the server (a planned post's video, piece by piece: PUT /api/cm/video/…). Missing in the preview. */
+  upload?(path: string, body: Blob): Promise<unknown>;
 }
 
 // ---------------------------------------------------------------- real server
@@ -255,6 +257,22 @@ class RemoteBackend implements Backend {
     if (res.status === 402 && this.token && this.token === sent) this.onLocked();
     if (!res.ok) throw new ApiError(res.status, (data as any)?.message || res.statusText, data);
     return data as T;
+  }
+
+  async upload(path: string, body: Blob): Promise<unknown> {
+    const base = apiUrl();
+    if (!base) throw new ApiError(0, 'Adresse du serveur manquante');
+    const sent = this.token;
+    let res: Response;
+    try {
+      res = await fetch(`${base}/api${path}`, { method: 'PUT', headers: { 'Content-Type': 'application/octet-stream', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}) }, body });
+    } catch {
+      throw new ApiError(0, 'Serveur injoignable. Vérifiez votre connexion.');
+    }
+    const data = await res.json().catch(() => undefined);
+    if (res.status === 401 && this.token && this.token === sent) this.onUnauthorized();
+    if (!res.ok) throw new ApiError(res.status, (data as any)?.message || res.statusText, data);
+    return data;
   }
 
   /** A token and a session from the server: kept, live updates connected. */

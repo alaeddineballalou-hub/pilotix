@@ -1,3 +1,4 @@
+import { resolve } from 'path';
 const prod = process.env.NODE_ENV === 'production';
 
 function need(name: string, devDefault?: string): string {
@@ -48,6 +49,8 @@ export const config = {
   twoStepOff: (process.env.PLATFORM_TWO_STEP || '').trim().toLowerCase() === 'off',
   /** Public address of this server (used to show webhook URLs). */
   publicUrl: (process.env.PUBLIC_URL || '').replace(/\/+$/, ''),
+  /** where the shops' videos wait for their post (CM AI agent › Planner): a volume that survives updates (deploy/docker-compose.yml) */
+  mediaDir: process.env.MEDIA_DIR || (prod ? '/data/media' : resolve('media')),
   /**
    * The landing pages' own address (LANDING_URL, https://go.<domain>): customers' pages never run on the app's address
    * (their scripts could reach a logged-in person's session there). Used once it answers (CoreService.checkLanding).

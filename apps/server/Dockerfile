@@ -17,6 +17,8 @@ FROM node:22-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app /app
+# the planned posts' videos (a volume in deploy/docker-compose.yml): the server's own folder
+RUN mkdir -p /data/media && chown node:node /data/media
 USER node
 EXPOSE 3000
 CMD ["sh", "-c", "node apps/server/dist/migrate.js && node apps/server/dist/main.js"]

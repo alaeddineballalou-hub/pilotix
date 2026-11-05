@@ -571,6 +571,15 @@ UPDATE platform.accounts a SET password_by = 'admin', password_owner = (
  WHERE a.password_by IS NULL AND a.password_hash IS NOT NULL AND a.email_verified_at IS NULL;
 `;
 
+const P029 = `
+UPDATE platform.plans SET features = features || '["-pilotai/social"]'::jsonb
+ WHERE features @> '["-pilotai/cm"]'::jsonb AND NOT features @> '["-pilotai/social"]'::jsonb;
+UPDATE platform.shops SET features_off = features_off || '["pilotai/social"]'::jsonb
+ WHERE features_off @> '["pilotai/cm"]'::jsonb AND NOT features_off @> '["pilotai/social"]'::jsonb;
+UPDATE platform.shops SET features_on = features_on || '["pilotai/social"]'::jsonb
+ WHERE features_on @> '["pilotai/cm"]'::jsonb AND NOT features_on @> '["pilotai/social"]'::jsonb;
+`;
+
 export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p001_platform', P001],
   ['p002_accounts_signup_domains', P002],
@@ -632,6 +641,9 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   // Pilot AI's two pushes: nothing Pilotix changes reaches the shops before « Push sur le serveur » — the vocabulary's
   // working copy and the copy in test, the draft of the Darija rules, the versions of « Push en test » (pilotlearn.ts)
   ['p028_pilot_release', VOCAB_COPIES_SQL + DARIJA_DRAFT_SQL + RELEASE_SQL],
+  // « AI social media manager » (Pilot AI › social): its own switch, out of CM AI agent where its calendar began. The plans
+  // and boutiques that had CM AI agent off (or on, on top of their plan) get the same for it, so nobody gains or loses it
+  ['p029_social_manager', P029],
 ];
 
 /** Creates or updates the platform's tables. */

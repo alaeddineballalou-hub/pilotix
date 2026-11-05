@@ -734,7 +734,7 @@ const DEFAULT_PLANS = [
     code: 'pro',
     name: 'Pro',
     price: 7900,
-    features: ['dashboard', 'commandes', 'scanner', 'sav', 'tournee', 'produits', 'pilotai', '-pilotai/cm', '-pilotai/messages', 'clients', 'marketing', '-marketing/spy', 'landing', 'caisse', 'macaisse', 'livraison', 'management'],
+    features: ['dashboard', 'commandes', 'scanner', 'sav', 'tournee', 'produits', 'pilotai', '-pilotai/cm', '-pilotai/messages', '-pilotai/social', 'clients', 'marketing', '-marketing/spy', 'landing', 'caisse', 'macaisse', 'livraison', 'management'],
     users: 15,
     orders: 6000,
     stores: 3,

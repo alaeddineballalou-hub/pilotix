@@ -51,8 +51,8 @@ function centerOn(el: HTMLElement | null) {
   el.scrollBy({ left: b.left + b.width / 2 - (r.left + r.width / 2) });
 }
 
-export type AgentKind = 'messages' | 'cm' | 'notify';
-const FACE: Record<AgentKind, string> = { messages: 'chat', cm: 'comments', notify: 'truck' };
+export type AgentKind = 'messages' | 'cm' | 'social' | 'notify';
+const FACE: Record<AgentKind, string> = { messages: 'chat', cm: 'comments', social: 'calendar', notify: 'truck' };
 /** A section of a page; `alert` draws its count in red (something waits). */
 export type AgentTab = { key: string; label: string; icon: string; href: string; count?: number; alert?: boolean };
 

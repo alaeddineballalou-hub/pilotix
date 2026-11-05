@@ -44,6 +44,7 @@ export const APP_PAGES = [
   'clients',
   'messages',
   'cm',
+  'social',
   'notify',
   'comptes',
   'marketing',

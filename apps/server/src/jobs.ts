@@ -22,6 +22,7 @@ import { sendOffsite } from './offsite';
  *  - Dellal: a quiet chat with the customer's number becomes an order (Confirmation › Nouvelles), every minute
  *  - Dellal's safety net: the linked Pages' Messenger and Instagram chats read again (messages Meta did not send), every 3 minutes
  *  - CM AI agent: comments still waiting (missed after a restart, or held during the night) every 3 minutes
+ *  - AI social media manager: the planned posts whose time has come go out on Facebook and Instagram, every minute
  *  - Delivery AI agent: the customers' order messages that are due (WhatsApp, SMS) every minute
  *  - Landing pages: abandoned orders (list, Commandes, reminder) and Meta Conversions API events, every minute
  *  - Google Sheets sales channels: new lines become orders, every 2 minutes
@@ -45,6 +46,7 @@ const FEATURE: Record<string, string | null> = {
   'dellal-autoorders': 'pilotai/messages',
   'dellal-catchup': 'pilotai/messages',
   'cm-sweep': 'pilotai/cm',
+  'cm-plan': 'pilotai/social',
   'notify-run': 'pilotai/notify',
   'depot-push': null,
   'pilot-run': null,
@@ -92,6 +94,11 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       return r;
     }
     if (name === 'cm-sweep') return call('cm.sweep');
+    if (name === 'cm-plan') {
+      const r: any = await call('cm.plan.run');
+      if (r?.failed) new Logger('Planner').warn(`${tag} ${r.failed} post(s) did not go out (CM AI agent › Planner shows why)`);
+      return r;
+    }
     if (name === 'notify-run') return call('notify.run');
     if (name === 'depot-push') return call('depot.pushRun');
     if (name === 'pilot-run') return call('pilot.run');
@@ -208,6 +215,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.queue.add('dellal-autoorders', {}, { repeat: { every: 60_000 }, jobId: 'dellal-autoorders', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('dellal-catchup', {}, { repeat: { every: 3 * 60_000 }, jobId: 'dellal-catchup', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('cm-sweep', {}, { repeat: { every: 3 * 60_000 }, jobId: 'cm-sweep', removeOnComplete: 20, removeOnFail: 50 });
+    await this.queue.add('cm-plan', {}, { repeat: { every: 60_000 }, jobId: 'cm-plan', removeOnComplete: 20, removeOnFail: 50 });
     await this.queue.add('notify-run', {}, { repeat: { every: 60_000 }, jobId: 'notify-run', removeOnComplete: 20, removeOnFail: 50 });
     // dépôt alerts: the phones of the people who get them ring again until they open the app
     await this.queue.add('depot-push', {}, { repeat: { every: 30_000 }, jobId: 'depot-push', removeOnComplete: 20, removeOnFail: 50 });

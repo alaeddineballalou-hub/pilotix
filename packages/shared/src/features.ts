@@ -25,7 +25,7 @@ export const FEATURES: readonly FeatureNode[] = [
   { key: 'sav' },
   { key: 'tournee' },
   { key: 'produits', subs: ['stock', 'inventaire', 'produits', 'guides', 'mouvements', 'alertes', 'achats', 'depots'] },
-  { key: 'pilotai', subs: ['messages', 'cm', 'notify'] },
+  { key: 'pilotai', subs: ['messages', 'cm', 'social', 'notify'] },
   { key: 'clients' },
   { key: 'marketing', subs: ['publicite', 'formulaires', 'marketer', 'spy'] },
   { key: 'landing' },
@@ -107,6 +107,8 @@ const PAGE_PARENT: Record<string, [string, string | null]> = {
   retournees: ['commandes', null],
   messages: ['pilotai', 'messages'],
   cm: ['pilotai', 'cm'],
+  // AI social media manager: the posts planned on a calendar
+  social: ['pilotai', 'social'],
   notify: ['pilotai', 'notify'],
   // Pilot AI › Comptes: the Facebook and TikTok accounts the agents use
   comptes: ['pilotai', null],
@@ -129,6 +131,8 @@ export const routeAllowed = (features: readonly string[] | null | undefined, pag
  */
 export const PROC_FEATURES: readonly (readonly [prefix: string, feature: string])[] = [
   ['dellal.', 'pilotai/messages'],
+  // the AI social media manager's actions (before the CM AI agent's: same first letters)
+  ['cm.plan.', 'pilotai/social'],
   ['cm.', 'pilotai/cm'],
   ['notify.', 'pilotai/notify'],
   ['spy.', 'marketing/spy'],

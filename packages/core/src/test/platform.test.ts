@@ -2,7 +2,7 @@
 // by plan, the control room's rules, the demo shop.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { effectiveFeatures, featureOn, routeAllowed } from '@pilotix/shared';
+import { effectiveFeatures, featureOn, procFeature, routeAllowed } from '@pilotix/shared';
 import {
   call,
   Ctx,
@@ -23,6 +23,7 @@ import {
   Tenancy,
 } from '../index';
 import { landingStore } from '../modules/landingquery';
+import { PLATFORM_MIGRATIONS } from '../platform/schema';
 import {
   accountByEmail,
   accountResetRequest,
@@ -91,7 +92,7 @@ async function shopUserCtx(t: Tenancy, schema: string, email: string, password: 
 
 test('first start: the existing shop becomes shop #1, its admin the platform owner', async () => {
   const { t, applied, staff } = await server();
-  assert.deepEqual(applied.platform, ['p001_platform', 'p002_accounts_signup_domains', 'p003_accounts_privacy', 'p004_turnstile', 'p005_agencies', 'p006_marketers', 'p007_account_phone', 'p008_pro_marketers', 'p009_fraud_reputation', 'p010_protection_history', 'p011_buyer_quality', 'p012_pilot_ai', 'p013_ai_usage', 'p014_lahja', 'p015_darija_book', 'p016_vocab', 'p017_old_slugs', 'p018_social', 'p019_seller_plan', 'p020_social_ig', 'p021_social_hooks', 'p022_social_comments', 'p023_password_by', 'p024_revoked_tokens', 'p025_social_deletions', 'p026_social_confirm', 'p027_staff_totp', 'p028_pilot_release']);
+  assert.deepEqual(applied.platform, ['p001_platform', 'p002_accounts_signup_domains', 'p003_accounts_privacy', 'p004_turnstile', 'p005_agencies', 'p006_marketers', 'p007_account_phone', 'p008_pro_marketers', 'p009_fraud_reputation', 'p010_protection_history', 'p011_buyer_quality', 'p012_pilot_ai', 'p013_ai_usage', 'p014_lahja', 'p015_darija_book', 'p016_vocab', 'p017_old_slugs', 'p018_social', 'p019_seller_plan', 'p020_social_ig', 'p021_social_hooks', 'p022_social_comments', 'p023_password_by', 'p024_revoked_tokens', 'p025_social_deletions', 'p026_social_confirm', 'p027_staff_totp', 'p028_pilot_release', 'p029_social_manager']);
   assert.deepEqual(applied.public, []);
   const s1 = (await loadShop(t, { primary: true }))!;
   assert.equal(s1.schema, 'public');
@@ -454,6 +455,31 @@ test('trial, grace, lock, payment', async () => {
     log.map((l) => l.action).reverse(),
     ['shop.create', 'payment.add', 'payment.add', 'payment.void', 'shop.suspend', 'payment.add', 'payment.add'],
   );
+});
+
+test('AI social media manager: its own switch, the same as CM AI agent had (p029)', async () => {
+  const { t, p } = await server();
+  const plan = (await p<any[]>('p.plans.list')).find((x) => x.code === 'business');
+  const off = await invite(t, p, { name: 'Sans CM', ownerName: 'Sami', ownerEmail: 's@sanscm.dz', planId: plan.id, trialDays: 14 }, 'Sans-Cm-Password-1');
+  const on = await invite(t, p, { name: 'Avec CM', ownerName: 'Lina', ownerEmail: 'l@aveccm.dz', planId: plan.id, trialDays: 14 }, 'Avec-Cm-Password-1');
+  // as before the AI social media manager had its own switch: a plan and a boutique without CM AI agent, one with it on top
+  await t.platform.query(`UPDATE platform.plans SET features = '["dashboard", "pilotai", "-pilotai/cm"]'::jsonb WHERE code = 'pro'`);
+  await t.platform.query(`UPDATE platform.shops SET features_off = '["pilotai/cm"]'::jsonb WHERE id = $1`, [off.id]);
+  await t.platform.query(`UPDATE platform.shops SET features_on = '["pilotai/cm"]'::jsonb WHERE id = $1`, [on.id]);
+  const sql = PLATFORM_MIGRATIONS.find(([n]) => n === 'p029_social_manager')![1];
+  for (let i = 0; i < 2; i++) await t.exec('public', sql); // twice: nothing more the second time
+  const pro = (await t.platform.query<{ features: string[] }>(`SELECT features FROM platform.plans WHERE code = 'pro'`))[0].features;
+  assert.deepEqual(pro, ['dashboard', 'pilotai', '-pilotai/cm', '-pilotai/social']);
+  assert.ok(featureOn(effectiveFeatures(pro), 'pilotai/notify') && !featureOn(effectiveFeatures(pro), 'pilotai/social'));
+  const a = (await loadShop(t, { id: off.id }))!;
+  const b = (await loadShop(t, { id: on.id }))!;
+  assert.deepEqual(a.featuresOff, ['pilotai/cm', 'pilotai/social']);
+  assert.deepEqual(b.featuresOn, ['pilotai/cm', 'pilotai/social']);
+  assert.ok(!featureOn(effectiveFeatures(['*'], a.featuresOn, a.featuresOff), 'pilotai/social'));
+  assert.ok(featureOn(effectiveFeatures(pro, b.featuresOn, b.featuresOff), 'pilotai/social'));
+  // the page and its actions follow the switch (the calendar's actions are not CM AI agent's any more)
+  assert.ok(routeAllowed(effectiveFeatures(['pilotai', '-pilotai/cm']), 'social') && !routeAllowed(pro, 'social') && !routeAllowed(pro, 'cm'));
+  assert.deepEqual(['cm.plan.save', 'cm.plan.run', 'cm.feed'].map(procFeature), ['pilotai/social', 'pilotai/social', 'pilotai/cm']);
 });
 
 test('menus by plan, own changes per shop, enforced by the server', async () => {

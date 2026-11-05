@@ -15,6 +15,7 @@ import {
   Module,
   Param,
   Post,
+  Put,
   Query,
   RawBodyRequest,
   Req,
@@ -41,6 +42,7 @@ import { signupConfirmMail, signupExistsMail, verifyMail } from './mails';
 import type { Mail } from './mail';
 import { syncTurnstile } from './turnstile';
 import { robotGate } from './robot';
+import { sendVideo, writePart } from './media';
 import { otpOn, sendOtp } from './otp';
 
 // ---------------------------------------------------------------- errors → HTTP
@@ -652,7 +654,7 @@ class ApiController {
     const missing = () => res.status(404).header('Content-Type', 'text/plain; charset=utf-8').send('Page introuvable');
     if (!ref || ref.shop.status !== 'active') return missing();
     const site = `https://${host.replace(/:\d+$/, '')}`;
-    if (page === 'robots.txt') return res.status(200).header('Content-Type', 'text/plain; charset=utf-8').send('User-agent: *\nAllow: /\nDisallow: /api/\n');
+    if (page === 'robots.txt') return res.status(200).header('Content-Type', 'text/plain; charset=utf-8').send('User-agent: *\nAllow: /\nAllow: /api/lp/pic/\nAllow: /api/lp/vid/\nDisallow: /api/\n');
     const shop = intake(ref);
     if (!page || page === 'llms.txt') {
       const r: any = await this.core.call(shop, 'landing.llms', await this.core.systemSession(shop), { site, pagesBase: `${site}/` });
@@ -1039,6 +1041,23 @@ class ApiController {
     return c;
   }
 
+  /**
+   * A piece of a planned post's video (CM AI agent › Planner): the original file's bytes, 8 MB at a time
+   * (application/octet-stream), after cm.plan.videoStart and before cm.plan.videoDone.
+   */
+  @Put('cm/video/:id/:key')
+  async videoPart(@Param('id') idp: string, @Param('key') key: string, @Query('part') part: string, @Body() body: unknown, @Req() req: ShopRequest) {
+    if (!/^\d+$/.test(idp) || !/^[a-f0-9]{24}$/.test(key) || !/^\d{1,4}$/.test(String(part ?? ''))) throw new core.AppError('not_found', 'Vidéo inconnue');
+    if (!Buffer.isBuffer(body) || !body.length) throw new core.AppError('bad_request', 'Morceau de vidéo vide');
+    if (req.shop.shop.demo) throw new core.AppError('forbidden', 'Pas dans la boutique démo');
+    const allowed = core.shopAllows(req.shop.rules, 'cm.plan.videoStart');
+    if (!allowed.ok) throw allowed.error;
+    if (!core.hasRole(req.session, 'marketer')) throw new core.AppError('forbidden', 'Accès refusé');
+    const v: any = await this.core.call(req.shop, 'cm.plan.videoFile', await this.core.systemSession(req.shop), { id: Number(idp), key });
+    if (v.ready) return { received: v.size };
+    return writePart(req.shop.shop.schema, { id: Number(idp), key, ext: v.ext, size: v.size, chunk: v.chunk }, Number(part), body);
+  }
+
   // ---------------------------------------------------------------- the shops' actions
   @Post('rpc/:name')
   async rpc(@Param('name') name: string, @Body() body: unknown, @Req() req: ShopRequest) {
@@ -1365,6 +1384,43 @@ class ApiController {
       const buf = Buffer.from(r.base64, 'base64');
       const type = buf[0] === 0xff && buf[1] === 0xd8 ? 'image/jpeg' : 'image/webp'; // browsers that cannot write WebP gave JPEG
       return res.status(200).header('Content-Type', type).header('Cache-Control', 'public, max-age=31536000, immutable').send(buf);
+    } catch {
+      return res.status(404).send();
+    }
+  }
+
+  /**
+   * A planned post's video (CM AI agent › Planner), downloaded by Meta when the post goes out and played in the editor:
+   * /lp/vid/<id>/<key>.mp4 (or .mov), the original file, with byte ranges. The random key keeps it unguessable.
+   */
+  @Public()
+  @Get(['lp/vid/:id/:file', 's/:shop/lp/vid/:id/:file'])
+  async planVideo(@Param('shop') shop: string | undefined, @Param('id') idp: string, @Param('file') file: string, @Req() req: { headers: Record<string, string | undefined> }, @Res() res: any) {
+    const m = file.match(/^([a-f0-9]{24})\.(mp4|mov)$/);
+    if (!/^\d+$/.test(idp) || !m) return res.status(404).send();
+    try {
+      const ref = intake(await this.publicShop(shop));
+      const v: any = await this.core.call(ref, 'cm.plan.videoFile', await this.core.systemSession(ref), { id: Number(idp), key: m[1] });
+      if (!v.ready || v.ext !== m[2]) return res.status(404).send();
+      return await sendVideo(ref.shop.schema, { id: Number(idp), key: m[1], ext: v.ext, mime: v.mime }, req.headers.range, res);
+    } catch {
+      return res.status(404).send();
+    }
+  }
+
+  /**
+   * A planned post's photo (CM AI agent › Planner), downloaded by Meta when the post goes out: /lp/pic/<id>/<key>.jpg, and
+   * /lp/pic/<id>/<key>-s.jpg its small copy (the calendar). The random key keeps it unguessable; it never changes.
+   */
+  @Public()
+  @Get(['lp/pic/:id/:file', 's/:shop/lp/pic/:id/:file'])
+  async planPhoto(@Param('shop') shop: string | undefined, @Param('id') idp: string, @Param('file') file: string, @Res() res: any) {
+    const m = file.match(/^([a-f0-9]{24})(-s)?\.jpg$/);
+    if (!/^\d+$/.test(idp) || !m) return res.status(404).send();
+    try {
+      const ref = intake(await this.publicShop(shop));
+      const r: any = await this.core.call(ref, 'cm.plan.image', await this.core.systemSession(ref), { id: Number(idp), key: m[1], small: !!m[2] });
+      return res.status(200).header('Content-Type', 'image/jpeg').header('Cache-Control', 'public, max-age=31536000, immutable').send(Buffer.from(r.base64, 'base64'));
     } catch {
       return res.status(404).send();
     }
@@ -1710,6 +1766,7 @@ class ApiController {
     const session = await this.core.systemSession(ref);
     const bg = (name: string) => void this.core.call(ref, name, session, {}).catch(() => null);
     bg('cm.sweep'); // comments the CM AI agent has not answered yet (in the background)
+    bg('cm.plan.run'); // CM AI agent › Planner: the posts whose time has come go out (in the background)
     bg('landing.run'); // landing pages: abandoned orders, Meta events (in the background)
     bg('notify.run'); // Delivery AI agent: messages due (in the background)
     bg('dellal.autoOrders'); // Message AI agent: quiet chats with the customer's number become orders (in the background)

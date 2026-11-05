@@ -22,11 +22,16 @@ const UNI_GRAPH = 'https://graph.facebook.com/v23.0';
 const ANTHROPIC = 'https://api.anthropic.com/v1/messages';
 
 /** `typed`: an address the shop typed (its SMS service): public internet only (publicfetch.ts). */
-async function postJson(url: string, body: unknown, headers: Record<string, string>, who: string, method: 'POST' | 'GET' = 'POST', timeoutMs = 30_000, typed = false): Promise<any> {
+async function postJson(url: string, body: unknown, headers: Record<string, string>, who: string, method: 'POST' | 'GET' | 'DELETE' = 'POST', timeoutMs = 30_000, typed = false): Promise<any> {
   let res: Response;
   // a service that hangs must not hold the sending job (or the courier sync that shares its worker)
   const signal = AbortSignal.timeout(timeoutMs);
-  const init = method === 'GET' ? { headers: { Accept: 'application/json', ...headers } } : { method, headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...headers }, body: JSON.stringify(body) };
+  const init =
+    method === 'GET'
+      ? { headers: { Accept: 'application/json', ...headers } }
+      : method === 'DELETE'
+        ? { method, headers: { Accept: 'application/json', ...headers } }
+        : { method, headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...headers }, body: JSON.stringify(body) };
   try {
     res = typed ? await publicFetch(url, { ...init, timeoutMs }, who) : await fetch(url, { ...init, signal });
   } catch (e: any) {
@@ -298,6 +303,292 @@ async function formLeads(ctx: Ctx, a: { formId: string; since: number }): Promis
   return rows.map(toMetaLead);
 }
 
+// ---------------------------------------------------------------- CM AI agent › Planner: posts on the Page and Instagram
+/** a recent version for the posts (Pages API, Instagram content publishing) */
+const PLAN_GRAPH = 'https://graph.facebook.com/v25.0';
+interface PlanArgs {
+  channel: 'facebook' | 'instagram';
+  pageId?: string;
+  igId?: string;
+  caption?: string;
+  /** the photos' public addresses (Pilotix's /lp/pic/…), in order */
+  images?: string[];
+  /** or one video (Pilotix's /lp/vid/…: the original file): a Reel on Instagram, a video on Facebook */
+  video?: { url: string; mime?: string; duration?: number | null };
+  /** planCheck: the container Instagram is preparing */
+  container?: string;
+  /** planDelete / planEdit / planComment: the post on that network */
+  postId?: string;
+  /** a story (one photo or one video, 24 hours) instead of a feed post */
+  story?: boolean;
+  /** planComment: the first comment's text */
+  text?: string;
+}
+
+/** Instagram's state of a container (FINISHED, IN_PROGRESS, ERROR, EXPIRED, PUBLISHED) and its reason when it failed. */
+async function igStatus(container: string, tk: string): Promise<{ code: string; why: string }> {
+  const s = await postJson(`${PLAN_GRAPH}/${enc(container)}?fields=status_code,status&${tk}`, null, {}, 'Instagram', 'GET').catch(() => null);
+  return { code: String(s?.status_code ?? ''), why: String(s?.status ?? '') };
+}
+
+/** Waits until Instagram has downloaded a container's photo (about 30 s at most); a refused photo stops here. */
+async function igReady(container: string, tk: string): Promise<void> {
+  for (let i = 0; i < 15; i++) {
+    const { code, why } = await igStatus(container, tk);
+    if (code === 'FINISHED' || code === 'PUBLISHED') return;
+    if (code === 'ERROR' || code === 'EXPIRED') throw new AppError('bad_request', `Instagram n’a pas pu lire la photo (format ou taille). Essayez une autre photo.${why ? ` (${why})` : ''}`);
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  // still working on it: the publish below says so clearly if it is not ready
+}
+
+/** A prepared container goes out on Instagram: its post id and address. */
+async function igPublish(igId: string, creation: string, tk: string): Promise<{ id: string; url: string | null }> {
+  const mediaId = String((await postJson(`${PLAN_GRAPH}/${enc(igId)}/media_publish?${tk}`, { creation_id: creation }, {}, 'Instagram', 'POST', 90_000))?.id ?? '');
+  if (!mediaId) throw new AppError('bad_request', 'Instagram n’a pas donné le numéro du post.');
+  const link = await postJson(`${PLAN_GRAPH}/${enc(mediaId)}?fields=permalink&${tk}`, null, {}, 'Instagram', 'GET').catch(() => null);
+  return { id: mediaId, url: link?.permalink ? String(link.permalink) : null };
+}
+
+/**
+ * One post goes out. Facebook: one photo (/photos), several (each photo unpublished, then one /feed post that holds them),
+ * a video (/videos, the original file) or text only (/feed). Instagram: a container per photo (a carousel holds up to
+ * 10), or a Reel for a video, Meta downloads them, then media_publish. Returns the post's id on that network and its
+ * address; a video Instagram is still preparing returns its container (Pilotix looks again every minute: planCheck).
+ */
+async function planPublish(ctx: Ctx, a: PlanArgs): Promise<{ id: string; url: string | null } | { pending: true; container: string }> {
+  if (a.story) return planStory(ctx, a);
+  const tk = `access_token=${enc(await pageToken(ctx))}`;
+  const images = (a.images ?? []).filter(Boolean).slice(0, 10);
+  const caption = String(a.caption ?? '');
+  if (a.channel === 'facebook') {
+    if (!a.pageId) throw new AppError('bad_request', 'Facebook : aucune Page liée à cette boutique (Pilot AI › Comptes).');
+    const page = enc(a.pageId);
+    if (a.video?.url) {
+      // Facebook downloads the original file from Pilotix and prepares it itself (publish_video)
+      const r = await postJson(`https://graph-video.facebook.com/v25.0/${page}/videos?${tk}`, { file_url: a.video.url, description: caption, published: true }, {}, 'Facebook', 'POST', 120_000);
+      const vid = String(r?.id ?? '');
+      if (!vid) throw new AppError('bad_request', 'Facebook n’a pas donné le numéro de la vidéo.');
+      const link = await postJson(`${PLAN_GRAPH}/${enc(vid)}?fields=permalink_url&${tk}`, null, {}, 'Facebook', 'GET').catch(() => null);
+      const rel = link?.permalink_url ? String(link.permalink_url) : '';
+      // the Page's post for this video (its comments come with this id)
+      return { id: `${a.pageId}_${vid}`, url: rel ? (rel.startsWith('http') ? rel : `https://www.facebook.com${rel}`) : `https://www.facebook.com/${vid}` };
+    }
+    let postId: string;
+    if (images.length === 1) {
+      const r = await postJson(`${PLAN_GRAPH}/${page}/photos?${tk}`, { url: images[0], message: caption, published: true }, {}, 'Facebook', 'POST', 90_000);
+      postId = String(r?.post_id ?? r?.id ?? '');
+    } else if (images.length > 1) {
+      const ids: string[] = [];
+      for (const url of images) ids.push(String((await postJson(`${PLAN_GRAPH}/${page}/photos?${tk}`, { url, published: false }, {}, 'Facebook', 'POST', 90_000))?.id ?? ''));
+      const r = await postJson(`${PLAN_GRAPH}/${page}/feed?${tk}`, { message: caption, attached_media: ids.filter(Boolean).map((media_fbid) => ({ media_fbid })) }, {}, 'Facebook', 'POST', 60_000);
+      postId = String(r?.id ?? '');
+    } else {
+      postId = String((await postJson(`${PLAN_GRAPH}/${page}/feed?${tk}`, { message: caption }, {}, 'Facebook', 'POST', 60_000))?.id ?? '');
+    }
+    if (!postId) throw new AppError('bad_request', 'Facebook n’a pas donné le numéro du post.');
+    const link = await postJson(`${PLAN_GRAPH}/${enc(postId)}?fields=permalink_url&${tk}`, null, {}, 'Facebook', 'GET').catch(() => null);
+    return { id: postId, url: link?.permalink_url ? String(link.permalink_url) : `https://www.facebook.com/${postId}` };
+  }
+  if (!a.igId) throw new AppError('bad_request', 'Instagram : aucun compte Instagram lié à la Page (Pilot AI › Comptes).');
+  const ig = enc(a.igId);
+  if (a.video?.url) {
+    // a Reel, shown in the feed too: Instagram downloads the original file and prepares it (from 30 seconds to minutes)
+    const reel = String((await postJson(`${PLAN_GRAPH}/${ig}/media?${tk}`, { media_type: 'REELS', video_url: a.video.url, caption, share_to_feed: true }, {}, 'Instagram', 'POST', 120_000))?.id ?? '');
+    if (!reel) throw new AppError('bad_request', 'Instagram n’a pas pris la vidéo.');
+    for (let i = 0; i < 6; i++) {
+      await new Promise((r) => setTimeout(r, 4000));
+      const { code, why } = await igStatus(reel, tk);
+      if (code === 'FINISHED') return igPublish(a.igId, reel, tk);
+      if (code === 'ERROR' || code === 'EXPIRED') throw new AppError('bad_request', `Instagram : la vidéo n’a pas pu être préparée.${why ? ` (${why})` : ''}`);
+    }
+    // still being prepared: Pilotix looks again every minute (CM AI agent › Planner shows « Part en ce moment »)
+    return { pending: true, container: reel };
+  }
+  if (!images.length) throw new AppError('bad_request', 'Instagram : ajoutez au moins une photo.');
+  let creation: string;
+  if (images.length === 1) {
+    creation = String((await postJson(`${PLAN_GRAPH}/${ig}/media?${tk}`, { image_url: images[0], caption }, {}, 'Instagram', 'POST', 90_000))?.id ?? '');
+  } else {
+    const kids: string[] = [];
+    for (const url of images) kids.push(String((await postJson(`${PLAN_GRAPH}/${ig}/media?${tk}`, { image_url: url, is_carousel_item: true }, {}, 'Instagram', 'POST', 90_000))?.id ?? ''));
+    for (const k of kids) await igReady(k, tk);
+    creation = String((await postJson(`${PLAN_GRAPH}/${ig}/media?${tk}`, { media_type: 'CAROUSEL', children: kids.join(','), caption }, {}, 'Instagram', 'POST', 90_000))?.id ?? '');
+  }
+  if (!creation) throw new AppError('bad_request', 'Instagram n’a pas pris la photo.');
+  await igReady(creation, tk);
+  return igPublish(a.igId, creation, tk);
+}
+
+/**
+ * Facebook's upload host fetches a video from its address (file_url) for a story. Only Meta's own upload host is
+ * called, with the page token in the header as Meta asks.
+ */
+async function rupload(uploadUrl: string, token: string, fileUrl: string): Promise<void> {
+  let host = '';
+  try {
+    host = new URL(uploadUrl).hostname;
+  } catch {
+    // checked below
+  }
+  if (host !== 'rupload.facebook.com') throw new AppError('bad_request', 'Facebook a donné une adresse d’envoi inattendue.');
+  let res: Response;
+  try {
+    res = await fetch(uploadUrl, { method: 'POST', headers: { Authorization: `OAuth ${token}`, file_url: fileUrl }, signal: AbortSignal.timeout(180_000) });
+  } catch {
+    throw new AppError('bad_request', 'Facebook injoignable. Réessayez plus tard.');
+  }
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok || data?.error || data?.success === false)
+    throw Object.assign(new AppError('bad_request', `Facebook : la vidéo n’a pas pu être envoyée (${String(data?.error?.message ?? data?.debug_info?.message ?? res.statusText).slice(0, 200)}).`), { metaCode: typeof data?.error?.code === 'number' ? data.error.code : null });
+}
+
+/**
+ * A story. Facebook: a photo uploaded unpublished then /photo_stories, or a video in three steps (/video_stories start,
+ * Meta's upload host fetches the file, finish). Instagram: a STORIES container (a video is prepared like a Reel's).
+ */
+async function planStory(ctx: Ctx, a: PlanArgs): Promise<{ id: string; url: string | null } | { pending: true; container: string }> {
+  const token = await pageToken(ctx);
+  const tk = `access_token=${enc(token)}`;
+  const image = (a.images ?? []).filter(Boolean)[0];
+  if (a.channel === 'facebook') {
+    if (!a.pageId) throw new AppError('bad_request', 'Facebook : aucune Page liée à cette boutique (Pilot AI › Comptes).');
+    const page = enc(a.pageId);
+    if (a.video?.url) {
+      const start = await postJson(`${PLAN_GRAPH}/${page}/video_stories?${tk}`, { upload_phase: 'start' }, {}, 'Facebook', 'POST', 60_000);
+      const vid = String(start?.video_id ?? '');
+      if (!vid || !start?.upload_url) throw new AppError('bad_request', 'Facebook n’a pas ouvert l’envoi de la story.');
+      await rupload(String(start.upload_url), token, a.video.url);
+      const done = await postJson(`${PLAN_GRAPH}/${page}/video_stories?${tk}`, { video_id: vid, upload_phase: 'finish' }, {}, 'Facebook', 'POST', 120_000);
+      const id = String(done?.post_id ?? '');
+      if (!id) throw new AppError('bad_request', 'Facebook n’a pas donné le numéro de la story.');
+      return { id, url: null };
+    }
+    if (!image) throw new AppError('bad_request', 'Facebook : une story a une photo ou une vidéo.');
+    const photo = String((await postJson(`${PLAN_GRAPH}/${page}/photos?${tk}`, { url: image, published: false }, {}, 'Facebook', 'POST', 90_000))?.id ?? '');
+    if (!photo) throw new AppError('bad_request', 'Facebook n’a pas pris la photo.');
+    const r = await postJson(`${PLAN_GRAPH}/${page}/photo_stories?${tk}`, { photo_id: photo }, {}, 'Facebook', 'POST', 60_000);
+    const id = String(r?.post_id ?? '');
+    if (!id) throw new AppError('bad_request', 'Facebook n’a pas donné le numéro de la story.');
+    return { id, url: null };
+  }
+  if (!a.igId) throw new AppError('bad_request', 'Instagram : aucun compte Instagram lié à la Page (Pilot AI › Comptes).');
+  const ig = enc(a.igId);
+  if (a.video?.url) {
+    const c = String((await postJson(`${PLAN_GRAPH}/${ig}/media?${tk}`, { media_type: 'STORIES', video_url: a.video.url }, {}, 'Instagram', 'POST', 120_000))?.id ?? '');
+    if (!c) throw new AppError('bad_request', 'Instagram n’a pas pris la vidéo.');
+    for (let i = 0; i < 6; i++) {
+      await new Promise((r) => setTimeout(r, 4000));
+      const { code, why } = await igStatus(c, tk);
+      if (code === 'FINISHED') return igPublish(a.igId, c, tk);
+      if (code === 'ERROR' || code === 'EXPIRED') throw new AppError('bad_request', `Instagram : la vidéo n’a pas pu être préparée.${why ? ` (${why})` : ''}`);
+    }
+    return { pending: true, container: c };
+  }
+  if (!image) throw new AppError('bad_request', 'Instagram : une story a une photo ou une vidéo.');
+  const c = String((await postJson(`${PLAN_GRAPH}/${ig}/media?${tk}`, { media_type: 'STORIES', image_url: image }, {}, 'Instagram', 'POST', 90_000))?.id ?? '');
+  if (!c) throw new AppError('bad_request', 'Instagram n’a pas pris la photo.');
+  await igReady(c, tk);
+  return igPublish(a.igId, c, tk);
+}
+
+/** The first comment under a post (Facebook: pages_manage_engagement; Instagram: instagram_manage_comments). */
+async function planComment(ctx: Ctx, a: PlanArgs): Promise<{ id: string }> {
+  if (!a.postId || !String(a.text ?? '').trim()) throw new AppError('bad_request', 'Commentaire vide.');
+  const r = await postJson(`${PLAN_GRAPH}/${enc(a.postId)}/comments?access_token=${enc(await pageToken(ctx))}`, { message: String(a.text).slice(0, 2000) }, {}, a.channel === 'instagram' ? 'Instagram' : 'Facebook', 'POST', 30_000);
+  return { id: String(r?.id ?? '') };
+}
+
+type StatItem = { channel: 'facebook' | 'instagram'; id: string; kind?: 'post' | 'story' };
+type StatOut = { channel: string; id: string; views: number | null; reach: number | null; likes: number | null; comments: number | null; shares: number | null; saves: number | null; insights: boolean; error: string | null };
+
+/** One metric's value in Meta's answer ({ data: [{ name, values: [{ value }] }] }, or total_value). */
+const metric = (r: any, name: string): number | null => {
+  const d = Array.isArray(r?.data) ? r.data.find((x: any) => x?.name === name) : null;
+  const v = d?.values?.[0]?.value ?? d?.total_value?.value;
+  return typeof v === 'number' ? v : null;
+};
+const count = (v: unknown): number | null => (typeof v === 'number' ? v : typeof v === 'string' && /^\d+$/.test(v) ? Number(v) : null);
+
+/**
+ * Each post's numbers, and the followers. Instagram: views, reach, likes, comments, shares, saves (a story: views,
+ * reach, shares, 24 hours only), instagram_manage_insights. Facebook: views (post_media_view) and reach
+ * (post_total_media_view_unique), read_insights; reactions, comments and shares from the post itself. Without the
+ * insights permission the likes and comments still come (insights: false).
+ */
+async function planStats(ctx: Ctx, a: { pageId?: string; igId?: string; items?: StatItem[]; followers?: boolean }): Promise<{ items: StatOut[]; followers: { facebook?: number | null; instagram?: number | null } }> {
+  const tk = `access_token=${enc(await pageToken(ctx))}`;
+  const items: StatOut[] = [];
+  for (const it of (a.items ?? []).slice(0, 25)) {
+    const row: StatOut = { channel: it.channel, id: it.id, views: null, reach: null, likes: null, comments: null, shares: null, saves: null, insights: false, error: null };
+    const who = it.channel === 'instagram' ? 'Instagram' : 'Facebook';
+    try {
+      if (it.channel === 'instagram') {
+        const story = it.kind === 'story';
+        try {
+          const r = await postJson(`${PLAN_GRAPH}/${enc(it.id)}/insights?metric=${story ? 'views,reach,shares' : 'views,reach,likes,comments,shares,saved'}&${tk}`, null, {}, who, 'GET');
+          Object.assign(row, { views: metric(r, 'views'), reach: metric(r, 'reach'), likes: metric(r, 'likes'), comments: metric(r, 'comments'), shares: metric(r, 'shares'), saves: metric(r, 'saved'), insights: true });
+        } catch (e: any) {
+          // a story seen by fewer than 5 people has no numbers (Meta's #10 « Not enough viewers »)
+          if (/not enough viewers/i.test(String(e?.message))) row.insights = true;
+          else row.error = String(e?.message ?? e).slice(0, 200);
+        }
+        if (!row.insights && !story) {
+          const f = await postJson(`${PLAN_GRAPH}/${enc(it.id)}?fields=like_count,comments_count&${tk}`, null, {}, who, 'GET').catch(() => null);
+          row.likes = count(f?.like_count);
+          row.comments = count(f?.comments_count);
+        }
+      } else {
+        const f = await postJson(`${PLAN_GRAPH}/${enc(it.id)}?fields=shares,reactions.summary(total_count).limit(0),comments.summary(total_count).limit(0)&${tk}`, null, {}, who, 'GET').catch(() => null);
+        row.likes = count(f?.reactions?.summary?.total_count);
+        row.comments = count(f?.comments?.summary?.total_count);
+        row.shares = count(f?.shares?.count) ?? (f ? 0 : null);
+        try {
+          const r = await postJson(`${PLAN_GRAPH}/${enc(it.id)}/insights?metric=post_media_view,post_total_media_view_unique&${tk}`, null, {}, who, 'GET');
+          row.views = metric(r, 'post_media_view');
+          row.reach = metric(r, 'post_total_media_view_unique');
+          row.insights = true;
+        } catch (e: any) {
+          row.error = String(e?.message ?? e).slice(0, 200);
+        }
+      }
+    } catch (e: any) {
+      row.error = String(e?.message ?? e).slice(0, 200);
+    }
+    items.push(row);
+  }
+  const followers: { facebook?: number | null; instagram?: number | null } = {};
+  if (a.followers) {
+    if (a.pageId) followers.facebook = count((await postJson(`${PLAN_GRAPH}/${enc(a.pageId)}?fields=followers_count&${tk}`, null, {}, 'Facebook', 'GET').catch(() => null))?.followers_count);
+    if (a.igId) followers.instagram = count((await postJson(`${PLAN_GRAPH}/${enc(a.igId)}?fields=followers_count&${tk}`, null, {}, 'Instagram', 'GET').catch(() => null))?.followers_count);
+  }
+  return { items, followers };
+}
+
+/** A video Instagram was preparing: { done: false } while it still is, its post once it is ready (then posted). */
+async function planCheck(ctx: Ctx, a: PlanArgs): Promise<{ done: boolean; id?: string; url?: string | null }> {
+  if (!a.igId || !a.container) throw new AppError('bad_request', 'Vidéo Instagram inconnue.');
+  const tk = `access_token=${enc(await pageToken(ctx))}`;
+  const { code, why } = await igStatus(a.container, tk);
+  if (code === 'FINISHED') return { done: true, ...(await igPublish(a.igId, a.container, tk)) };
+  if (code === 'ERROR' || code === 'EXPIRED') throw new AppError('bad_request', `Instagram : la vidéo n’a pas pu être préparée.${why ? ` (${why})` : ''}`);
+  return { done: false };
+}
+
+/** Deletes a post on its network (Facebook: pages_manage_posts; Instagram: instagram_manage_contents). */
+async function planDelete(ctx: Ctx, a: PlanArgs): Promise<{ ok: true }> {
+  if (!a.postId) throw new AppError('bad_request', 'Post inconnu.');
+  await postJson(`${PLAN_GRAPH}/${enc(a.postId)}?access_token=${enc(await pageToken(ctx))}`, null, {}, a.channel === 'instagram' ? 'Instagram' : 'Facebook', 'DELETE');
+  return { ok: true };
+}
+
+/** A Facebook post's new text (Instagram lets no app change a posted caption). */
+async function planEdit(ctx: Ctx, a: PlanArgs): Promise<{ ok: true }> {
+  if (a.channel !== 'facebook' || !a.postId) throw new AppError('bad_request', 'Instagram ne permet pas de changer le texte d’un post sorti.');
+  await postJson(`${PLAN_GRAPH}/${enc(a.postId)}?access_token=${enc(await pageToken(ctx))}`, { message: String(a.caption ?? '') }, {}, 'Facebook');
+  return { ok: true };
+}
+
 // ---------------------------------------------------------------- Delivery AI agent: WhatsApp templates, SMS
 async function waNumber(ctx: Ctx): Promise<{ token: string; phoneId: string }> {
   const token = await dellalSecret(ctx.db, 'waToken');
@@ -386,6 +677,8 @@ async function smsHooks(ctx: Ctx, a: { url: string }) {
  *  - 'ping'     → checks the AI key
  *  - 'cmReply' / 'cmPrivate' / 'cmHide' / 'cmPost' → the CM AI agent's actions on comments
  *  - 'lead' / 'leadForms' / 'leadForm' / 'formLeads' → Marketing › Formulaires (the ads' lead forms)
+ *  - 'planPublish' / 'planCheck' / 'planDelete' / 'planEdit' / 'planComment' / 'planStats' → AI social media manager: its
+ *    posts and stories on the Page and Instagram, their first comment, their numbers and the followers
  *  - 'waTemplate' / 'waTemplates' / 'waCreateTemplate' / 'sms' / 'smsHooks' → Delivery AI agent
  */
 export async function runDellal(action: string, args: unknown, ctx: Ctx): Promise<unknown> {
@@ -404,6 +697,12 @@ export async function runDellal(action: string, args: unknown, ctx: Ctx): Promis
   if (action === 'leadForms') return leadForms(ctx, (args ?? {}) as { pageId?: string | null });
   if (action === 'leadForm') return leadForm(ctx, args as { formId: string });
   if (action === 'formLeads') return formLeads(ctx, args as { formId: string; since: number });
+  if (action === 'planPublish') return planPublish(ctx, args as PlanArgs);
+  if (action === 'planDelete') return planDelete(ctx, args as PlanArgs);
+  if (action === 'planEdit') return planEdit(ctx, args as PlanArgs);
+  if (action === 'planCheck') return planCheck(ctx, args as PlanArgs);
+  if (action === 'planComment') return planComment(ctx, args as PlanArgs);
+  if (action === 'planStats') return planStats(ctx, args as any);
   if (action === 'transcribe') return transcribe(ctx, args as VoiceArgs);
   if (action === 'catchUp') return catchUpMeta(args as CatchUpArgs);
   if (action === 'igLogin') return igLogin(String((args as any)?.token ?? ''), (args as any)?.igId ? String((args as any).igId) : null);

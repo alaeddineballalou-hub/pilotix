@@ -60,6 +60,8 @@ async function bootstrap() {
       if (/^\/api\/(auth|platform\/auth)\//.test(url)) route.bodyLimit = 64 * 1024;
       else if (/^\/api\/(s\/[^/]+\/)?lp\//.test(url)) route.bodyLimit = 64 * 1024;
       else if (/^\/api\/(s\/[^/]+\/)?hooks\//.test(url)) route.bodyLimit = 1024 * 1024;
+      // a planned post's video comes in pieces of 8 MB (CM AI agent › Planner)
+      else if (/^\/api\/(s\/[^/]+\/)?cm\/video\//.test(url)) route.bodyLimit = 9 * 1024 * 1024;
     })
     // and what a request carries is counted before anything checks it: a list of millions of tiny items fits in 5 MB,
     // and checking each of them one by one would fill the memory (core.inputTooBig)
@@ -68,6 +70,11 @@ async function bootstrap() {
       const big = core.inputTooBig(req.body);
       if (big) return reply.code(413).send({ statusCode: 413, error: 'Payload Too Large', message: big });
     });
+  // the pieces of a planned post's video arrive as they are (bytes, not JSON): PUT /api/cm/video/…
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .addContentTypeParser('application/octet-stream', { parseAs: 'buffer', bodyLimit: 9 * 1024 * 1024 }, (_req: unknown, body: Buffer, done: (e: Error | null, b?: Buffer) => void) => done(null, body));
   app.setGlobalPrefix('api');
   app.enableCors({ origin: config.corsOrigins, credentials: true });
   app.enableShutdownHooks();

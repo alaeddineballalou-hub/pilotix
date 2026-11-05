@@ -27,6 +27,8 @@ import { catalogProcs } from './modules/catalog';
 import { guideProcs } from './modules/guidedraft';
 import { productImportProcs } from './modules/productimport';
 import { cmProcs } from './modules/cm';
+import { cmPlanProcs } from './modules/cmplan';
+import { cmSocialProcs } from './modules/cmsocial';
 import { confirmationProcs } from './modules/confirmation';
 import { customersProcs } from './modules/customers';
 import { clientScoreProcs } from './modules/clientscore';
@@ -100,6 +102,8 @@ export const REGISTRY = {
   ...adsProcs,
   ...dellalProcs,
   ...cmProcs,
+  ...cmPlanProcs,
+  ...cmSocialProcs,
   ...notifyProcs,
   ...socialProcs,
   ...marketersProcs,

@@ -99,6 +99,11 @@ export interface ServerHooks {
   dellal?: (action: string, args: unknown, ctx: Ctx) => Promise<unknown>;
   /** Linked accounts (Pilot AI › Comptes): 'test' (tries a linked Facebook / TikTok account now, line by line). */
   social?: (action: string, args: unknown, ctx: Ctx) => Promise<unknown>;
+  /**
+   * The shop's files on the server's disk (CM AI agent › Planner's videos): 'finish' (a video sent in pieces is complete:
+   * { id, key, ext, size }), 'remove' ({ id, key, ext }). Missing in the browser preview.
+   */
+  media?: (action: 'finish' | 'remove', args: { id: number; key: string; ext: string; size?: number }) => Promise<unknown>;
   /** AI Spy: 'search' (ScrapeCreators / SearchAPI.io), 'media' (a competitor's picture), 'site' (a competitor's page). */
   spy?: (action: string, args: unknown, ctx: Ctx) => Promise<unknown>;
   /** Cloudflare Turnstile: is this page token real (true / false), null when Cloudflare cannot be reached. */

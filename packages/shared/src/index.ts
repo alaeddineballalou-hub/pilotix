@@ -13,6 +13,8 @@ export * from './couriers';
 export * from './links';
 export * from './passwords';
 export * from './metawindow';
+export * from './mp4';
+export * from './social';
 import type { ShopInfo } from './features';
 import type { OrigLine } from './upsell';
 import type { AgencySellerWork } from './agency';

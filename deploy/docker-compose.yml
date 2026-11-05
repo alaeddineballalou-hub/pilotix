@@ -62,8 +62,10 @@ services:
       MAIL_FROM: ${MAIL_FROM:-}
       # emergency only (the login code e-mails cannot leave): PLATFORM_TWO_STEP=off in deploy/.env
       PLATFORM_TWO_STEP: ${PLATFORM_TWO_STEP:-}
-    # the nightly backups (read only): the control room shows the last one and the disk space left
-    volumes: ["/opt/pilotix-backups:/backups:ro"]
+      MEDIA_DIR: /data/media
+    # the nightly backups (read only): the control room shows the last one and the disk space left; the planned posts'
+    # videos (CM AI agent › Planner), kept until they are posted (and a week more), whatever the updates
+    volumes: ["/opt/pilotix-backups:/backups:ro", "media:/data/media"]
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_started }
@@ -87,3 +89,4 @@ volumes:
   redisdata:
   caddydata:
   caddyconfig:
+  media:
