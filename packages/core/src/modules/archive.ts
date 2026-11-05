@@ -143,6 +143,9 @@ export const NOT_REFS: readonly string[] = [
   'product_changes.product_id',
   // a product's sales guide goes with it
   'product_guides.product_id',
+  // its HD photos for Dellal too (deleted with it; their files then leave the photo bucket)
+  'product_photos.product_id',
+  'product_photos.variant_id',
   // Marketing › Catalogue: what Meta's catalog holds (a mirror, not a link: a product that leaves goes out of it)
   'meta_catalog_items.product_id',
   'meta_catalog_items.variant_id',

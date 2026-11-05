@@ -88,7 +88,7 @@ export async function productPhotos(
   if (!prod) return [];
   // the HD photos the shop added for Dellal (Produits › Photos HD): first, before the pages' and the product's own
   const hd = await db
-    .query(`SELECT id, variant_id, store, key, data, thumb FROM product_photos WHERE product_id = $1 AND kind = $2 ORDER BY position, id`, [productId, o.kind ?? 'photo'])
+    .query(`SELECT id, variant_id, store, key, data, thumb, mini FROM product_photos WHERE product_id = $1 AND kind = $2 ORDER BY position, id`, [productId, o.kind ?? 'photo'])
     .catch(() => []);
   // the size chart: only its own photos
   if (o.kind === 'sizes') return hd.slice(0, Math.max(1, o.max)).map((r: any) => hdPhoto(r, o.size, null)).filter((p): p is PhotoSrc => !!p);
@@ -165,8 +165,10 @@ export async function productPhotos(
 function hdPhoto(r: any, size: 'look' | 'send' | 'match', variantId: number | null): PhotoSrc | null {
   const thumb = r.thumb ? String(r.thumb) : null;
   if (size === 'send') {
-    if (r.store === 'r2' && r.key) return { src: `hd:${num(r.id)}`, mime: 'image/jpeg', data: null, url: null, key: String(r.key), thumb, variantId };
-    if (r.store === 'local' && r.data) return { src: `hd:${num(r.id)}`, mime: 'image/jpeg', data: String(r.data), url: null, thumb, variantId };
+    // the chat that sends it keeps the smaller copy
+    const small = r.mini ? String(r.mini) : thumb;
+    if (r.store === 'r2' && r.key) return { src: `hd:${num(r.id)}`, mime: 'image/jpeg', data: null, url: null, key: String(r.key), thumb: small, variantId };
+    if (r.store === 'local' && r.data) return { src: `hd:${num(r.id)}`, mime: 'image/jpeg', data: String(r.data), url: null, thumb: small, variantId };
     // the demo's drawn size chart: sent as a drawing (the server draws it as a JPEG)
     const drawn = r.store === 'local' ? svgUrl(thumb) : null;
     if (drawn) return { src: `hd:${num(r.id)}`, mime: 'image/svg+xml', data: null, url: drawn, thumb, variantId };

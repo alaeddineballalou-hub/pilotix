@@ -17,6 +17,7 @@ import type { Tenancy } from '../platform/tenancy';
 const OWNER = { email: 'owner@boutique.dz', password: 'Owner-Password-1' };
 const JPEG = (tag: string) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from(`JFIF-${tag}-`.padEnd(160, 'x'))]).toString('base64');
 const THUMB = (tag: string) => `data:image/jpeg;base64,${JPEG(`thumb-${tag}`)}`;
+const MINI = (tag: string) => `data:image/jpeg;base64,${JPEG(`mini-${tag}`)}`;
 const R2 = { account: 'a1b2c3d4e5f60718293a4b5c6d7e8f90', bucket: 'pilotix-photos', keyId: 'f3a1c2b4d5e6f708192a3b4c5d6e7f80', secret: 'Zm9vYmFyYmF6cXV4cXV1eGZvb2JhcmJhenF1eHF1dXg' };
 
 let t: Tenancy;
@@ -78,7 +79,7 @@ before(async () => {
 });
 
 const add = (ctx: Ctx, o: { variantId?: number | null; kind?: 'photo' | 'sizes'; tag: string }) =>
-  call('photos.add', ctx, { productId: pid, variantId: o.variantId ?? null, kind: o.kind ?? 'photo', data: JPEG(o.tag), w: 2048, h: 1536, thumb: THUMB(o.tag) }) as Promise<any>;
+  call('photos.add', ctx, { productId: pid, variantId: o.variantId ?? null, kind: o.kind ?? 'photo', data: JPEG(o.tag), w: 2048, h: 1536, thumb: THUMB(o.tag), mini: MINI(o.tag) }) as Promise<any>;
 
 test('R2 links: the AWS example signs the same; a link names the account, the bucket and the photo; the settings check their fields', async () => {
   // the example of AWS's documentation (Signature V4, query string): the same signature
@@ -112,6 +113,7 @@ test('the preview keeps its HD photos; Dellal sends the colour asked first, and 
     [JPEG('red-1'), JPEG('red-2')],
   );
   assert.ok(ph.every((p) => p.src.startsWith('hd:') && !p.key));
+  assert.equal(ph[0].thumb, MINI('red-1'), 'the chat that sends it keeps the 160 px copy');
   // no colour asked: the product's photos (the colours' come after)
   ph = await productPhotos(db, pid, { size: 'send', max: 2 });
   assert.equal(ph[0].data, JPEG('all-1'));
@@ -152,6 +154,8 @@ test('the preview keeps its HD photos; Dellal sends the colour asked first, and 
   assert.equal(sent.photos[0].data, JPEG('chart'));
   const m = (await db.query(`SELECT body FROM conv_messages WHERE conversation_id = $1 AND role = 'agent' AND meta ? 'photos'`, [c]))[0];
   assert.equal(m.body, '📷 Robe Lina — guide des tailles (1)');
+  const kept = (await db.query(`SELECT meta FROM conv_messages WHERE conversation_id = $1 AND role = 'agent' AND meta ? 'photos'`, [c]))[0].meta.photos[0];
+  assert.equal(kept.thumb, MINI('chart'));
 
   // the limits: 8 photos for one colour
   for (let i = 3; i <= 8; i++) await add(preview, { variantId: red, tag: `red-${i}` });

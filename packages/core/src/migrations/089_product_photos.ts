@@ -1,6 +1,6 @@
 // HD product photos for Dellal: one or more for each colour or size (variant), or for the whole product, and the size
 // chart (kind 'sizes'). The photo itself is in Pilotix's Cloudflare R2 bucket (key); the shop keeps its small copy
-// (thumb, 320 px) for the screens and for the AI. In the browser preview (no server) the photo stays here (data).
+// (thumb, 320 px) for the screens and for the AI, and a smaller one (mini, 160 px) for the chats that sent it. In the browser preview (no server) the photo stays here (data).
 // A photo removed, or its product deleted: its file's name waits in product_photo_trash until the server removes it
 // from the bucket.
 export default `
@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS product_photos (
   h          integer NOT NULL DEFAULT 0,
   bytes      integer NOT NULL DEFAULT 0,
   thumb      text NOT NULL,
+  -- a smaller copy (160 px, a few KB) kept with each message that sent it, so the chats stay light
+  mini       text,
   position   integer NOT NULL DEFAULT 0,
   created_at timestamptz NOT NULL DEFAULT now()
 );

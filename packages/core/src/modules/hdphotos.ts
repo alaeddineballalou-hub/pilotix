@@ -14,7 +14,7 @@ const DEPOT = ['depot'] as const;
 const Id = z.number().int().positive();
 
 /** how many photos, and how big: a photo of 2048 px weighs 0.3 to 1.5 MB; its small copy 15 to 40 KB */
-export const HD = { perProduct: 40, perVariant: 8, sizeCharts: 2, maxBytes: 3_400_000, maxSide: 4096, thumbMax: 120_000 } as const;
+export const HD = { perProduct: 40, perVariant: 8, sizeCharts: 2, maxBytes: 3_400_000, maxSide: 4096, thumbMax: 120_000, miniMax: 30_000 } as const;
 
 type Store = { kind: 'r2'; conf: StoreConf } | { kind: 'local' } | { kind: 'off' };
 
@@ -88,6 +88,8 @@ const AddInput = z.object({
   h: z.number().int().min(1).max(HD.maxSide),
   /** its small copy: a JPEG data URL, 320 px */
   thumb: z.string().min(40).max(HD.thumbMax),
+  /** a smaller one for the chats that send it: 160 px, a few KB */
+  mini: z.string().min(40).max(HD.miniMax).optional(),
 });
 
 export const hdPhotoProcs = {
@@ -107,6 +109,8 @@ export const hdPhotoProcs = {
     if (bytes > HD.maxBytes) throw bad('Photo trop lourde (3,4 Mo au plus).');
     const t = fromDataUrl(i.thumb);
     if (!t || t.mime !== 'image/jpeg') throw bad('Petite copie invalide.');
+    const mini = i.mini ? fromDataUrl(i.mini) : null;
+    if (i.mini && (!mini || mini.mime !== 'image/jpeg')) throw bad('Petite copie invalide.');
     const n = (await ctx.db.query(
       `SELECT count(*)::int AS total, count(*) FILTER (WHERE kind = $2 AND variant_id IS NOT DISTINCT FROM $3::bigint)::int AS here FROM product_photos WHERE product_id = $1`,
       [i.productId, i.kind, variantId],
@@ -128,8 +132,8 @@ export const hdPhotoProcs = {
     }
     const pos = num((await ctx.db.query(`SELECT coalesce(max(position), -1) + 1 AS p FROM product_photos WHERE product_id = $1`, [i.productId]))[0]?.p);
     await ctx.db.query(
-      `INSERT INTO product_photos (product_id, variant_id, kind, store, key, data, w, h, bytes, thumb, position) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-      [i.productId, variantId, i.kind, s.kind, key, s.kind === 'local' ? data : null, i.w, i.h, bytes, `data:image/jpeg;base64,${t.data}`, pos],
+      `INSERT INTO product_photos (product_id, variant_id, kind, store, key, data, w, h, bytes, thumb, mini, position) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      [i.productId, variantId, i.kind, s.kind, key, s.kind === 'local' ? data : null, i.w, i.h, bytes, `data:image/jpeg;base64,${t.data}`, mini ? `data:image/jpeg;base64,${mini.data}` : null, pos],
     );
     await purgeTrash(ctx.db, s).catch(() => undefined);
     return view(ctx, i.productId, s);
