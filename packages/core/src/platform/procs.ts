@@ -13,7 +13,7 @@ import { addWatchItems, courierUsage, removeCourier, removedCouriers, removeWatc
 import { protectionStats } from './reputation';
 import { syncAgency } from '../modules/agencies';
 import { SLUG_LOCKED } from '../modules/boutiques';
-import { accountById, makeAccountToken, sha256Hex } from './accounts';
+import { accountByEmail, accountById, dropForeignPassword, foreignPassword, makeAccountToken, sha256Hex } from './accounts';
 import { rewardReferrer, ReferralReward } from './reminders';
 import { staffReply, staffSetStatus, staffThread, staffThreads, staffUnread } from './support';
 import {
@@ -525,6 +525,10 @@ export const PLATFORM_REGISTRY = {
       if (i.slug) checkSlug(i.slug);
       const email = i.ownerEmail.trim().toLowerCase();
       if (/@(pilotix\.invalid|demo\.pilotix\.dz)$/.test(email)) throw bad('E-mail invalide');
+      // an account whose password someone else may know (a store's admin chose it, the e-mail never proven): it goes,
+      // and the owner chooses their own from the invitation
+      const known = await accountByEmail(ctx.t, email);
+      if (known && foreignPassword(known)) await dropForeignPassword(ctx.t, known.id);
       let shop: Shop;
       try {
         shop = await provisionShop(ctx.t, {

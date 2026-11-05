@@ -548,7 +548,8 @@ export async function provisionShop(t: Tenancy, n: NewShop): Promise<Shop> {
     else {
       // the owner's account first: an e-mail already known keeps its own password
       const hash = n.passwordHash !== undefined ? n.passwordHash : n.password ? await hashPassword(n.password) : null;
-      const { account } = await ensureAccount(t, { email, name: n.owner.name, language: n.owner.language, passwordHash: hash, verified: n.verified });
+      // a password chosen by the person who proved the e-mail (a sign-up) is their own
+      const { account } = await ensureAccount(t, { email, name: n.owner.name, language: n.owner.language, passwordHash: hash, verified: n.verified, passwordBy: n.verified && hash ? 'self' : null });
       await seedBase(db, { email, password: `${makePassword()}-${makePassword()}`, name: n.owner.name.trim() || undefined });
       const own = (await t.platform.query('SELECT password_hash FROM platform.accounts WHERE id = $1', [account.id]))[0]?.password_hash as string | null;
       if (own) await db.query('UPDATE profiles SET password_hash = $2 WHERE email = $1', [email, own]);

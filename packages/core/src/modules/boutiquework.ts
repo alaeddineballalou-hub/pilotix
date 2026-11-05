@@ -26,8 +26,15 @@ export async function boutiqueWork(ctx: Ctx): Promise<MyBoutique[]> {
   const t = ctx.t;
   if (!t || !ctx.shop || (ctx.shop.kind ?? 'store') !== 'store') return [];
   const { storeChoices } = await import('../platform/signup');
+  const { accountByEmail, passwordOpens } = await import('../platform/accounts');
   const list = await storeChoices(t, ctx.session.profile.email, ctx.now());
-  return list.filter((s) => (s.kind ?? 'store') === 'store' && (!s.locked || s.id === ctx.shop!.id)).map((s) => ({ id: s.id, name: s.name, profileId: s.profileId }));
+  // a password a store's admin chose opens that seller's stores only (platform/accounts.ts)
+  const acc = await accountByEmail(t, ctx.session.profile.email);
+  const out: MyBoutique[] = [];
+  for (const s of list)
+    if ((s.kind ?? 'store') === 'store' && (!s.locked || s.id === ctx.shop!.id) && (!acc || s.id === ctx.shop!.id || (await passwordOpens(t, acc, s.id))))
+      out.push({ id: s.id, name: s.name, profileId: s.profileId });
+  return out;
 }
 
 /** The person's ctx in one of their boutiques (the server's own, else made here). A locked boutique waits. */

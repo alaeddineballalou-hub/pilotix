@@ -374,6 +374,9 @@ class ApiController {
     // every account has its own number (proven by the WhatsApp code when it is on) before entering any store
     const acc = await core.accountByEmail(this.core.t, email);
     if (acc && (await core.phoneStep(this.core.t, acc, await otpOn(this.core)))) throw new core.AppError('forbidden', 'Votre numéro de téléphone doit d’abord être vérifié : déconnectez-vous puis reconnectez-vous');
+    // a password a store's admin chose opens that seller's stores only: another one needs the person's own password
+    if (acc && !(await core.passwordOpens(this.core.t, acc, shopId)))
+      throw new core.AppError('forbidden', 'Votre mot de passe a été choisi par l’administrateur d’une autre boutique : pour ouvrir celle-ci, choisissez le vôtre avec « Mot de passe oublié » (un lien arrive par e-mail).');
     // a partner's person (agency, marketer) works for this store from the partner's space, never inside the store
     if (m.agencyId) throw new core.AppError('forbidden', 'Ouvrez l’espace de votre agence (ou votre espace marketer) : vous y travaillez pour ce vendeur');
     const p = await core.profileById(ref.db, m.profileId);
@@ -723,7 +726,8 @@ class ApiController {
         if (!ref || ref.shop.demo || ref.shop.status === 'archived' || ref.shop.status === 'deleted') throw new core.AppError('bad_request', 'Ce lien n’est plus valable. Demandez un nouveau lien.');
         const r = await core.resetPassword(ref.db, m ? m[2] : b.data.token, b.data.password);
         const p = (await ref.db.query('SELECT id FROM profiles WHERE email = $1', [r.email]))[0];
-        if (p) await core.propagateProfilePassword(this.core.t, ref.shop.schema, Number(p.id));
+        // a link sent to the e-mail: the person's own password
+        if (p) await core.propagateProfilePassword(this.core.t, ref.shop.schema, Number(p.id), 'self');
       }
     } catch (e) {
       failedLogin(ipKey);
@@ -1003,7 +1007,8 @@ class ApiController {
     if (name === 'me.get') return this.core.withShop(out as Session, req.shop);
     // a new password logs out the other sessions (in every store of the person): this one gets a fresh token
     if (name === 'me.password') {
-      await core.propagateProfilePassword(this.core.t, req.shop.shop.schema, req.session.profile.id);
+      // chosen in Mon profil: whoever chose the old one decides (only a link sent to the e-mail makes it the person's own)
+      await core.propagateProfilePassword(this.core.t, req.shop.shop.schema, req.session.profile.id, 'keep');
       return { ...out, token: await this.signShop(req.shop, req.session.profile.id) };
     }
     return out;
@@ -1026,9 +1031,12 @@ class ApiController {
     if (ownerId === target) throw new core.AppError('forbidden', 'Seul le propriétaire modifie son propre compte');
     const setsPassword = name === 'admin.users.resetPassword' || (name === 'users.update' && typeof body?.password === 'string' && body.password !== '');
     if (setsPassword) {
-      const email = (await req.shop.db.query('SELECT email FROM profiles WHERE id = $1', [target]))[0]?.email as string | undefined;
-      if (email && !(await core.adminMaySetPassword(this.core.t, req.shop.shop.id, email)))
-        throw new core.AppError('forbidden', 'Cette personne utilise Pilotix dans une autre boutique : elle change son mot de passe elle-même (Mon profil, ou « Mot de passe oublié »).');
+      // the e-mail it has now, and the one it gets (an e-mail changed in the same request)
+      const old = (await req.shop.db.query('SELECT email FROM profiles WHERE id = $1', [target]))[0]?.email as string | undefined;
+      const next = typeof body?.email === 'string' && body.email.trim() ? body.email.trim().toLowerCase() : undefined;
+      for (const email of [old, next])
+        if (email && !(await core.adminMaySetPassword(this.core.t, req.shop.shop.id, email)))
+          throw new core.AppError('forbidden', 'Cette personne utilise Pilotix dans une autre boutique : elle change son mot de passe elle-même (Mon profil, ou « Mot de passe oublié »).');
     }
   }
 
@@ -1057,11 +1065,12 @@ class ApiController {
       const a = await core.attachProfile(t, schema, Number(out.id));
       if (a?.existing) return { ...out, existingAccount: true };
     }
+    // a password the store's admin chose: it opens this seller's stores only
     if (name === 'users.update' && body?.id) {
       if (body.email) await core.attachProfile(t, schema, Number(body.id));
-      if (body.password) await core.propagateProfilePassword(t, schema, Number(body.id));
+      if (body.password) await core.propagateProfilePassword(t, schema, Number(body.id), 'admin');
     }
-    if (name === 'admin.users.resetPassword' && body?.id) await core.propagateProfilePassword(t, schema, Number(body.id));
+    if (name === 'admin.users.resetPassword' && body?.id) await core.propagateProfilePassword(t, schema, Number(body.id), 'admin');
     return out;
   }
 

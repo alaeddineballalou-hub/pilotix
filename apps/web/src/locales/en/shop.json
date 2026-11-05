@@ -82,7 +82,10 @@
     "copied": "Settings of {{name}} copied",
     "copyFailed": "Store created, but its settings were not copied: do it in « My boutiques ».",
     "thisOne": "{{name}} (open)",
-    "followsPlan": "It follows your subscription: one payment, accounts and orders counted with your other boutiques, no new trial."
+    "followsPlan": "It follows your subscription: one payment, accounts and orders counted with your other boutiques, no new trial.",
+    "ownNeed": "Your password was chosen by a shop's administrator. Before creating your own shop, choose your own password: we send you a link by e-mail.",
+    "ownSend": "Send me the link",
+    "ownSent": "Sent: open the e-mail, choose your password, then come back here."
   },
   "aide": {
     "title": "Contact Pilotix",

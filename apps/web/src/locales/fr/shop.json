@@ -82,7 +82,10 @@
     "copied": "Réglages de {{name}} copiés",
     "copyFailed": "Boutique créée, mais ses réglages n’ont pas été copiés : faites-le dans « Mes boutiques ».",
     "thisOne": "{{name}} (ouverte)",
-    "followsPlan": "Elle suit votre abonnement : un seul paiement, comptes et commandes comptés avec vos autres boutiques, pas de nouvel essai."
+    "followsPlan": "Elle suit votre abonnement : un seul paiement, comptes et commandes comptés avec vos autres boutiques, pas de nouvel essai.",
+    "ownNeed": "Votre mot de passe a été choisi par l’administrateur d’une boutique. Avant de créer la vôtre, choisissez votre propre mot de passe : nous vous envoyons un lien par e-mail.",
+    "ownSend": "M’envoyer le lien",
+    "ownSent": "C’est envoyé : ouvrez l’e-mail, choisissez votre mot de passe, puis revenez ici."
   },
   "aide": {
     "title": "Contacter Pilotix",

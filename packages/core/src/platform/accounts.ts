@@ -3,6 +3,9 @@
 // The account's password is copied into each of the person's profiles, so every store checks the same password.
 // Who may set a password: the person (Mon profil, « Mot de passe oublié », an invitation link); a store's admin only for
 // someone who works in that store alone and is not its owner.
+// A password a store's admin chose (a new team member, a password given by the admin) is not the person's own: it opens
+// the stores of that seller only (password_by 'admin', password_owner), never a store the person creates, and it goes
+// when the person proves their e-mail with Google. Only a link sent to the e-mail makes a password the person's own.
 import bcrypt from 'bcryptjs';
 import { isoOrNull, num, numOrNull } from '../db';
 import { hashPassword } from '../modules/users';
@@ -26,6 +29,13 @@ export interface Account {
   phone: string | null;
   /** the phone was proven with a code sent to it */
   phoneVerified: boolean;
+  /**
+   * who chose the password: the person ('self': through a link sent to the e-mail, or at sign-up), a store's admin
+   * ('admin': it opens the stores of `passwordOwner` only), or not known (null: before this was kept; no password)
+   */
+  passwordBy: 'self' | 'admin' | null;
+  /** with 'admin': the seller (their account) whose store's admin chose it */
+  passwordOwner: number | null;
   createdAt: string;
   lastLoginAt: string | null;
 }
@@ -41,6 +51,8 @@ const toAccount = (r: any): Account => ({
   maxStores: numOrNull(r.max_stores),
   phone: r.phone ?? null,
   phoneVerified: !!r.phone_verified_at,
+  passwordBy: r.password_by === 'self' || r.password_by === 'admin' ? r.password_by : null,
+  passwordOwner: numOrNull(r.password_owner),
   createdAt: new Date(r.created_at).toISOString(),
   lastLoginAt: isoOrNull(r.last_login_at),
 });
@@ -59,9 +71,48 @@ export async function accountById(t: Tenancy, id: number): Promise<Account | nul
   return r ? toAccount(r) : null;
 }
 
-async function accountHash(t: Tenancy, id: number): Promise<string | null> {
+export async function accountHash(t: Tenancy, id: number): Promise<string | null> {
   return ((await t.platform.query('SELECT password_hash FROM platform.accounts WHERE id = $1', [id]))[0]?.password_hash as string | null) ?? null;
 }
+
+/**
+ * A password nobody knows, for a store's copy of an account that has none yet (Google, an invitation not opened): never
+ * a bcrypt hash (every check of it fails), and recognisable (« ! »).
+ */
+export const unusableHash = () => `!${randomToken()}`;
+export const isUnusableHash = (h: unknown) => typeof h === 'string' && h.startsWith('!');
+
+/** The seller (their account) who owns the store with this schema. */
+async function ownerOfSchema(t: Tenancy, schema: string): Promise<number | null> {
+  return numOrNull((await t.platform.query('SELECT owner_account_id FROM platform.shops WHERE schema_name = $1', [schema]))[0]?.owner_account_id);
+}
+
+/**
+ * May this account's password open this store? A password a store's admin chose opens the stores of that seller only
+ * (their own stores too, if the person has some): a former admin who knows it never opens anything else.
+ */
+export async function passwordOpens(t: Tenancy, acc: Account, shopId: number): Promise<boolean> {
+  if (acc.passwordBy !== 'admin') return true;
+  const owner = numOrNull((await t.platform.query('SELECT owner_account_id FROM platform.shops WHERE id = $1', [shopId]))[0]?.owner_account_id);
+  return owner !== null && (owner === acc.passwordOwner || owner === acc.id);
+}
+
+/**
+ * A password someone else may know (a store's admin chose it, or it was set before the e-mail was ever proven) goes:
+ * the account has none (Google, or a link to choose one), every session of the person ends, and their stores' copies
+ * never open anything.
+ */
+export async function dropForeignPassword(t: Tenancy, accountId: number): Promise<Account | null> {
+  const r = (
+    await t.platform.query(`UPDATE platform.accounts SET password_hash = NULL, password_by = NULL, password_owner = NULL, token_version = token_version + 1 WHERE id = $1 RETURNING *`, [accountId])
+  )[0];
+  if (!r) return null;
+  for (const schema of await schemasOf(t, r.email)) await t.shop(schema).query('UPDATE profiles SET password_hash = $2, token_version = token_version + 1 WHERE email = $1', [r.email, unusableHash()]);
+  return toAccount(r);
+}
+
+/** Its password may be known by someone else than the person (see dropForeignPassword). */
+export const foreignPassword = (a: Account) => a.hasPassword && (a.passwordBy === 'admin' || !a.verified);
 
 let dummy: Promise<string> | null = null;
 const dummyHash = () => (dummy ??= bcrypt.hash('not-a-real-password', 12));
@@ -123,14 +174,16 @@ export async function schemasOf(t: Tenancy, email: string): Promise<string[]> {
  */
 export async function ensureAccount(
   t: Tenancy,
-  a: { email: string; name: string; language?: string; passwordHash: string | null; verified?: boolean },
+  a: { email: string; name: string; language?: string; passwordHash: string | null; verified?: boolean; passwordBy?: 'self' | 'admin' | null; passwordOwner?: number | null },
 ): Promise<{ account: Account; created: boolean }> {
   const email = normEmail(a.email);
+  // a store's copy that never opens anything is no password for the account
+  const hash = isUnusableHash(a.passwordHash) ? null : a.passwordHash;
   const made = (
     await t.platform.query(
-      `INSERT INTO platform.accounts (email, name, language, password_hash, email_verified_at) VALUES ($1, $2, $3, $4, CASE WHEN $5 THEN now() END)
+      `INSERT INTO platform.accounts (email, name, language, password_hash, email_verified_at, password_by, password_owner) VALUES ($1, $2, $3, $4, CASE WHEN $5 THEN now() END, $6, $7)
        ON CONFLICT (email) DO NOTHING RETURNING *`,
-      [email, a.name.trim().slice(0, 120), a.language ?? 'fr', a.passwordHash, !!a.verified],
+      [email, a.name.trim().slice(0, 120), a.language ?? 'fr', hash, !!a.verified, hash ? (a.passwordBy ?? null) : null, hash && a.passwordBy === 'admin' ? (a.passwordOwner ?? null) : null],
     )
   )[0];
   if (made) return { account: toAccount(made), created: true };
@@ -139,17 +192,22 @@ export async function ensureAccount(
 
 /**
  * A store's profile just made, or given another e-mail: it is linked to the person's account. Someone who already has
- * an account keeps their own password (a store's admin never sets it); a new person gets an account with the password
- * the admin chose. Returns whether the account existed before (null: an e-mail that never gets an account).
+ * an account keeps their own password (a store's admin never sets it): with none yet (Google, an invitation not
+ * opened), the password the admin typed never opens anything. A new person gets an account with the password the admin
+ * chose, which opens that seller's stores only. Returns whether the account existed before (null: an e-mail that never
+ * gets an account).
  */
 export async function attachProfile(t: Tenancy, schema: string, profileId: number, opts: { verified?: boolean } = {}): Promise<{ existing: boolean; account: Account } | null> {
   const db = t.shop(schema);
   const p = (await db.query('SELECT id, email, name, language, password_hash FROM profiles WHERE id = $1', [profileId]))[0];
   if (!p || NO_ACCOUNT.test(p.email)) return null;
-  const { account, created } = await ensureAccount(t, { email: p.email, name: p.name, language: p.language, passwordHash: p.password_hash, verified: opts.verified });
+  const owner = await ownerOfSchema(t, schema);
+  const { account, created } = await ensureAccount(t, { email: p.email, name: p.name, language: p.language, passwordHash: p.password_hash, verified: opts.verified, passwordBy: owner ? 'admin' : null, passwordOwner: owner });
   if (!created) {
     const h = await accountHash(t, account.id);
-    if (h && h !== p.password_hash) await db.query('UPDATE profiles SET password_hash = $2, token_version = token_version + 1 WHERE id = $1', [profileId, h]);
+    if (h) {
+      if (h !== p.password_hash) await db.query('UPDATE profiles SET password_hash = $2, token_version = token_version + 1 WHERE id = $1', [profileId, h]);
+    } else if (!isUnusableHash(p.password_hash)) await db.query('UPDATE profiles SET password_hash = $2, token_version = token_version + 1 WHERE id = $1', [profileId, unusableHash()]);
   }
   return { existing: !created, account };
 }
@@ -159,9 +217,10 @@ export async function attachProfile(t: Tenancy, schema: string, profileId: numbe
  * proved the e-mail is theirs (a link opened).
  */
 export async function setAccountPassword(t: Tenancy, accountId: number, hash: string, opts: { verify?: boolean } = {}): Promise<Account | null> {
+  // chosen through a link sent to the e-mail (or at sign-up): the person's own, it opens every store of theirs
   const r = (
     await t.platform.query(
-      `UPDATE platform.accounts SET password_hash = $2, token_version = token_version + 1,
+      `UPDATE platform.accounts SET password_hash = $2, token_version = token_version + 1, password_by = 'self', password_owner = NULL,
          email_verified_at = CASE WHEN $3 THEN COALESCE(email_verified_at, now()) ELSE email_verified_at END
        WHERE id = $1 RETURNING *`,
       [accountId, hash, !!opts.verify],
@@ -174,14 +233,23 @@ export async function setAccountPassword(t: Tenancy, accountId: number, hash: st
 
 /**
  * The person's password changed in one store (Mon profil, or set by the admin of their only store): the account and
- * every other store follow.
+ * every other store follow. `by`: 'admin' — the store's admin chose it (it opens that seller's stores only); 'self' —
+ * the person through a link sent to their e-mail; 'keep' — the person in Mon profil (whoever chose the old one: a
+ * password chosen there never becomes « their own » without the e-mail, the old one may be known by an admin).
  */
-export async function propagateProfilePassword(t: Tenancy, schema: string, profileId: number): Promise<void> {
+export async function propagateProfilePassword(t: Tenancy, schema: string, profileId: number, by: 'admin' | 'self' | 'keep' = 'keep'): Promise<void> {
   const p = (await t.shop(schema).query('SELECT email, name, language, password_hash FROM profiles WHERE id = $1', [profileId]))[0];
-  if (!p || NO_ACCOUNT.test(p.email)) return;
-  const { account, created } = await ensureAccount(t, { email: p.email, name: p.name, language: p.language, passwordHash: p.password_hash });
+  if (!p || NO_ACCOUNT.test(p.email) || isUnusableHash(p.password_hash)) return;
+  const owner = by === 'admin' ? await ownerOfSchema(t, schema) : null;
+  // a store without a known owner: nothing to limit the password to
+  const who = by === 'admin' && owner === null ? 'keep' : by;
+  const { account, created } = await ensureAccount(t, { email: p.email, name: p.name, language: p.language, passwordHash: p.password_hash, passwordBy: who === 'keep' ? null : who, passwordOwner: owner });
   if (created) return;
-  await t.platform.query('UPDATE platform.accounts SET password_hash = $2, token_version = token_version + 1 WHERE id = $1', [account.id, p.password_hash]);
+  await t.platform.query(
+    `UPDATE platform.accounts SET password_hash = $2, token_version = token_version + 1,
+       password_by = CASE $3::text WHEN 'keep' THEN password_by ELSE $3::text END, password_owner = CASE $3::text WHEN 'keep' THEN password_owner ELSE $4::int END WHERE id = $1`,
+    [account.id, p.password_hash, who, owner],
+  );
   for (const s of await schemasOf(t, p.email)) {
     if (s === schema) continue;
     await t.shop(s).query('UPDATE profiles SET password_hash = $2, token_version = token_version + 1 WHERE email = $1 AND password_hash IS DISTINCT FROM $2', [p.email, p.password_hash]);

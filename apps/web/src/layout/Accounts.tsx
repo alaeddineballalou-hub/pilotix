@@ -4,7 +4,7 @@
 // e-mail check link, and the terms of use and privacy page.
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ApiError, DEMO_ONLY, isPhone, legalText, phoneCheck, PhoneSent, server, signup, signupCode, SignupInfo, signupInfo, StoreChoice, storeNameCheck, verifyEmail } from '../lib/backend';
+import { ApiError, DEMO_ONLY, isPhone, legalText, phoneCheck, PhoneSent, requestPasswordReset, server, signup, signupCode, SignupInfo, signupInfo, StoreChoice, storeNameCheck, verifyEmail } from '../lib/backend';
 import { usePhoneProblem } from '../lib/phoneCheck';
 import { useRpcFor } from '../lib/query';
 import { addressShop, go, leaveAddress } from '../lib/route';
@@ -221,7 +221,7 @@ export function StorePicker() {
       {!first && <p className="pxa-note">{picker.stores.length ? t('shop.acc.pickText', { name: picker.account.name || picker.account.email }) : t('shop.acc.noStore')}</p>}
       <StoreList stores={picker.stores} onPick={go} busy={busy} />
       {adding ? (
-        <AddStoreForm ticket={picker.ticket} kind={adding} onDone={enter} onCancel={first && adding === 'store' ? undefined : () => setAdding(null)} />
+        <AddStoreForm ticket={picker.ticket} email={picker.account.email} kind={adding} onDone={enter} onCancel={first && adding === 'store' ? undefined : () => setAdding(null)} />
       ) : (
         <>
           {picker.canAddStore && (
@@ -338,13 +338,15 @@ function StoreNameFields({ name, setName, link, label, placeholder, linkLabel }:
  * « Ajouter une boutique » (its name and link), « Créer mon agence » or « Créer mon espace marketer » (its name): the
  * person owns it and enters it.
  */
-export function AddStoreForm({ ticket, onDone, onCancel, kind = 'store' }: { ticket?: string; onDone: (s: import('@pilotix/shared').Session) => void; onCancel?: () => void; kind?: Kind }) {
+export function AddStoreForm({ ticket, email, onDone, onCancel, kind = 'store' }: { ticket?: string; email?: string; onDone: (s: import('@pilotix/shared').Session) => void; onCancel?: () => void; kind?: Kind }) {
   const { t } = useTranslation();
   const tk = useKindT(kind);
+  const me = useSession().session?.profile.email;
   const [name, setName] = useState('');
   const link = useNewLink(name);
   const [error, setError] = useState('');
-  const [verify, setVerify] = useState<'need' | 'sent' | null>(null);
+  // the e-mail to confirm first; or the person's own password first (theirs was chosen by a store's admin)
+  const [verify, setVerify] = useState<'need' | 'sent' | 'own' | 'ownSent' | null>(null);
   const [busy, setBusy] = useState(false);
   // « Commencer avec les réglages de … » (a person already in one of their boutiques): 0 = nothing copied
   const [copyFrom, setCopyFrom] = useState<{ id: number; name: string }>({ id: 0, name: '' });
@@ -361,11 +363,36 @@ export function AddStoreForm({ ticket, onDone, onCancel, kind = 'store' }: { tic
       go('#/accueil');
     } catch (err: any) {
       if (err instanceof ApiError && err.message === 'VERIFY_EMAIL') setVerify('need');
+      else if (err instanceof ApiError && err.message === 'OWN_PASSWORD') setVerify('own');
       else setError(err?.message || t('common.error'));
     } finally {
       setBusy(false);
     }
   };
+  if (verify === 'own' || verify === 'ownSent') {
+    const to = email ?? me;
+    return (
+      <div className="px-acc-box">
+        <p>{verify === 'ownSent' ? t('shop.acc.ownSent') : t('shop.acc.ownNeed')}</p>
+        {verify === 'own' && to && (
+          <button
+            type="button"
+            className="btn primary"
+            onClick={async () => {
+              try {
+                await requestPasswordReset(to);
+                setVerify('ownSent');
+              } catch (e: any) {
+                toast(e?.message ?? t('common.error'), 'bad');
+              }
+            }}
+          >
+            <Icon name="mail" /> {t('shop.acc.ownSend')}
+          </button>
+        )}
+      </div>
+    );
+  }
   if (verify)
     return (
       <div className="px-acc-box">

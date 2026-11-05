@@ -10,7 +10,9 @@ import {
   accountByEmail,
   checkAccountPassword,
   completedResets,
+  dropForeignPassword,
   ensureAccount,
+  foreignPassword,
   isAdminSomewhere,
   makeAccountToken,
   membershipsOf,
@@ -209,7 +211,8 @@ export async function confirmSignup(t: Tenancy, token: string, now = Date.now())
   const partner = kind !== 'store';
   // a store sign-up without a store name: only the account, proven; the person adds their first store from the picker
   if (!partner && !String(row.store_name ?? '').trim()) {
-    const { account } = await ensureAccount(t, { email: row.email, name: row.name, language: row.language, passwordHash: row.password_hash, verified: true });
+    // chosen by the person at sign-up, the e-mail proven by the link: their own
+    const { account } = await ensureAccount(t, { email: row.email, name: row.name, language: row.language, passwordHash: row.password_hash, verified: true, passwordBy: 'self' });
     return { shop: null, account: await signupPhone(t, account, row.phone, !!row.phone_verified) };
   }
   const set = await platformSettings(t);
@@ -255,6 +258,9 @@ export async function socialAccount(t: Tenancy, p: { email: string; name: string
   if (!email || NO_ACCOUNT.test(email)) throw bad('Cet e-mail ne peut pas ouvrir de compte');
   let acc = await accountByEmail(t, email);
   let created = false;
+  // a password someone else may know (a store's admin chose it, or it was set before the e-mail was ever proven): it
+  // goes now that the person proves the e-mail is theirs (« Mot de passe oublié » gives them their own)
+  if (acc && foreignPassword(acc)) acc = (await dropForeignPassword(t, acc.id)) ?? acc;
   if (!acc) {
     const set = await platformSettings(t);
     if (!set.signup.open) throw bad('Les inscriptions sont fermées pour le moment. Écrivez à Pilotix.');
@@ -297,6 +303,8 @@ export async function addStore(t: Tenancy, account: Account, raw: unknown, now =
   const p = AddStoreInput.safeParse(raw);
   if (!p.success) throw bad(firstError(p.error));
   if (!account.verified) throw new AppError('forbidden', 'VERIFY_EMAIL');
+  // a password a store's admin chose never opens a store the person owns: their own first (a link sent to the e-mail)
+  if (account.passwordBy === 'admin') throw new AppError('forbidden', 'OWN_PASSWORD');
   const kind = p.data.kind;
   const partner = kind !== 'store';
   if (kind !== 'store') {

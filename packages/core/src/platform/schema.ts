@@ -562,6 +562,15 @@ UPDATE platform.plans SET max_stores = CASE code WHEN 'essentiel' THEN 1 WHEN 'p
  WHERE max_stores IS NULL AND code IN ('essentiel', 'pro', 'business', 'interne');
 `;
 
+const P023 = `
+ALTER TABLE platform.accounts ADD COLUMN IF NOT EXISTS password_by text;
+ALTER TABLE platform.accounts ADD COLUMN IF NOT EXISTS password_owner integer;
+UPDATE platform.accounts a SET password_by = 'admin', password_owner = (
+    SELECT s.owner_account_id FROM platform.logins l JOIN platform.shops s ON s.id = l.shop_id
+     WHERE l.email = a.email AND s.owner_account_id IS NOT NULL AND s.owner_account_id <> a.id ORDER BY s.id LIMIT 1)
+ WHERE a.password_by IS NULL AND a.password_hash IS NOT NULL AND a.email_verified_at IS NULL;
+`;
+
 export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p001_platform', P001],
   ['p002_accounts_signup_domains', P002],
@@ -600,6 +609,9 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p021_social_hooks', SOCIAL_HOOKS_SQL],
   // when Meta last sent a customer's comment for each Page / Instagram account (Pilot AI › Comptes › « Tester »)
   ['p022_social_comments', `ALTER TABLE platform.social_hooks ADD COLUMN IF NOT EXISTS comment_at timestamptz;`],
+  // who chose the account's password: the person ('self'), or a store's admin ('admin': it only opens the stores of
+  // that seller, password_owner); accounts made by a store's admin and never proven by their e-mail were such
+  ['p023_password_by', P023],
 ];
 
 /** Creates or updates the platform's tables. */

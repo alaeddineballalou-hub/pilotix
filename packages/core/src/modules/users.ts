@@ -137,6 +137,27 @@ async function teamPhone(ctx: Ctx, raw: unknown, who: { id: number | null; email
   return p;
 }
 
+/**
+ * The password kept for a new team member: the one the admin typed for a new person; someone who already has a Pilotix
+ * account keeps their own (and with none yet — Google, an invitation not opened — nothing the admin typed opens it).
+ */
+async function teamPasswordHash(ctx: Ctx, email: string, password: string): Promise<string> {
+  if (ctx.t) {
+    const { accountByEmail, accountHash, unusableHash } = await import('../platform/accounts');
+    const acc = await accountByEmail(ctx.t, email);
+    if (acc) return (await accountHash(ctx.t, acc.id)) ?? unusableHash();
+  }
+  return hashPassword(password);
+}
+
+/** A team member's new e-mail must be nobody's Pilotix account yet. */
+async function freshEmail(ctx: Ctx, email: string): Promise<void> {
+  if (!ctx.t) return;
+  const { accountByEmail } = await import('../platform/accounts');
+  if (await accountByEmail(ctx.t, email))
+    throw bad('Cette adresse e-mail a déjà un compte Pilotix : ajoutez cette personne avec « Ajouter une personne » (elle garde son propre mot de passe).');
+}
+
 const NewUser = z.object({
   name: z.string().trim().min(2).max(120),
   email: z.string().email().max(200),
@@ -412,11 +433,12 @@ export const usersProcs = {
     // an agency's person: every seller unless the chief chose some
     const sellers = await agencyFields(ctx, b);
     const phone = await teamPhone(ctx, b.phone, { id: null, email: b.email });
+    const hash = await teamPasswordHash(ctx, b.email, b.password);
     try {
       const r = (
         await ctx.db.query(
           'INSERT INTO profiles (name, email, phone, password_hash, roles, language, livreur_company_id, can_manage_users, agency_sellers, can_assign, can_affect) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *',
-          [b.name, b.email.toLowerCase(), phone, await hashPassword(b.password), b.roles, b.language, b.livreurCompanyId ?? null, !!b.canManageUsers && !b.roles.includes('admin'), sellers ? JSON.stringify(sellers) : null, !!b.canAssign && !b.roles.includes('admin'), !!b.canAffect && !b.roles.includes('admin')],
+          [b.name, b.email.toLowerCase(), phone, hash, b.roles, b.language, b.livreurCompanyId ?? null, !!b.canManageUsers && !b.roles.includes('admin'), sellers ? JSON.stringify(sellers) : null, !!b.canAssign && !b.roles.includes('admin'), !!b.canAffect && !b.roles.includes('admin')],
         )
       )[0];
       return toProfile(r);
@@ -438,6 +460,9 @@ export const usersProcs = {
     noNewMarketer(ctx, b.roles, (before?.roles as string[] | undefined) ?? []);
     if (before?.archived_at && b.active === true) throw bad('Ce compte est archivé : sortez-le d’abord des archives (Management › Archives)');
     if (b.active === true && !before?.active) await needSeat(ctx, before?.email ?? null);
+    // another e-mail: never one that already has a Pilotix account (it would take that person's place, and with it their
+    // stores): such a person is added with « Ajouter une personne », keeping their own password
+    if (b.email && b.email.trim().toLowerCase() !== String(before?.email ?? '').toLowerCase()) await freshEmail(ctx, b.email);
     // a new phone: required form, nobody else's (empty: unchanged)
     const phone = b.phone ? await teamPhone(ctx, b.phone, { id: b.id, email: b.email ?? String((await ctx.db.query('SELECT email FROM profiles WHERE id = $1', [b.id]))[0]?.email ?? '') }) : null;
     const willBeActive = b.active ?? !!before?.active;

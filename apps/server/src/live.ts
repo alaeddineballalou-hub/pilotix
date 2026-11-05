@@ -40,9 +40,11 @@ export class LiveGateway implements OnGatewayConnection, OnModuleInit {
       // of them reaches this screen (« Toutes les boutiques », the new-order toast with its boutique's name)
       if (ref.shop.kind === 'store' && !ref.shop.demo) {
         const email = String((await ref.db.query('SELECT email FROM profiles WHERE id = $1', [Number(c.sub)]))[0]?.email ?? '');
+        const acc = email ? await core.accountByEmail(this.core.t, email).catch(() => null) : null;
         if (email)
           for (const m of await core.membershipsOf(this.core.t, email).catch(() => []))
-            if (m.shopId !== ref.shop.id && !m.agencyId) {
+            // a password a store's admin chose opens that seller's stores only (core: passwordOpens)
+            if (m.shopId !== ref.shop.id && !m.agencyId && (!acc || (await core.passwordOpens(this.core.t, acc, m.shopId)))) {
               const other = await this.core.shop({ id: m.shopId });
               if (other && other.shop.kind === 'store' && !other.status.locked) socket.join(`shop:${m.shopId}`);
             }
