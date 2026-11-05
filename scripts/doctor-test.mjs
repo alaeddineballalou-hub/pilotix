@@ -218,7 +218,7 @@ check((await req('/platform/doctor/dismiss', { id: 'config', kind: 'ignore' }, S
 // ---------------------------------------------------------------- 4. Pilotix Doctor of a shop over HTTP
 step('Pilotix Doctor of a shop');
 r = await req('/rpc/stats.doctor', {}, SHOP_ADMIN);
-check(r.status === 201 && Array.isArray(r.data.items) && r.data.items.length === 14 && r.data.score >= 5, 'the shop admin gets the report', r.data);
+check(r.status === 201 && Array.isArray(r.data.items) && r.data.items.length === 15 && r.data.score >= 5, 'the shop admin gets the report', r.data);
 const SHOP = r.data;
 const agent = (await req('/auth/login', { email: 'samira@demo.pilotix.dz', password: 'demo-pilotix' })).data.token;
 r = await req('/rpc/stats.doctor', {}, agent);
@@ -226,7 +226,7 @@ check(r.status === 201 && r.data.scope?.mine === true && r.data.items.every((i) 
 
 // ---------------------------------------------------------------- 5. the sentences
 step('every sentence exists in French, English and Arabic');
-const SHOP_IDS = ['stockOut', 'stockSoon', 'notCalled', 'lateCallbacks', 'confRate', 'confRateDrop', 'fakeOrders', 'weakAgents', 'meVsTeam', 'notShipped', 'stuckParcels', 'openAlerts', 'returns', 'returnsUp', 'badWilayas', 'ordersDrop', 'ordersOk', 'cashLate'];
+const SHOP_IDS = ['stockOut', 'stockSoon', 'notCalled', 'lateCallbacks', 'confRate', 'confRateDrop', 'fakeOrders', 'weakAgents', 'meVsTeam', 'notShipped', 'stuckParcels', 'openAlerts', 'returns', 'returnsUp', 'badWilayas', 'ordersDrop', 'ordersOk', 'adIssues', 'cashLate'];
 const SERVER_IDS = ['cpu', 'memory', 'disk', 'restarted', 'dbPing', 'dbConnections', 'dbSlow', 'dbDown', 'dbPoolFull', 'redisOff', 'redisDown', 'redis', 'jobs', 'errors', 'courierSync', 'silentShops', 'config', 'turnstile', 'turnstileOff'];
 // the ids the code can give (read from its source): none may be missing from the lists above
 const src = readFileSync(join(ROOT, 'packages/core/src/modules/doctor.ts'), 'utf8') + readFileSync(join(ROOT, 'apps/server/src/doctor.ts'), 'utf8');
@@ -244,7 +244,7 @@ for (const lang of ['fr', 'en', 'ar']) {
     if (!['confRate', 'returns', 'ordersOk'].includes(id)) for (const k of ['why', 'fix']) if (!hasText(L, `c.${id}.${k}`)) miss.push(`c.${id}.${k}`);
   }
   for (const id of seen) if (!hasText(L, `c.${id}.title`)) miss.push(`seen ${id}`);
-  for (const a of ['stock', 'confirmation', 'team', 'depot', 'delivery', 'sales', 'cash', 'server', 'database', 'jobs', 'code', 'shops', 'config']) if (!has(L, `area.${a}`)) miss.push(`area.${a}`);
+  for (const a of ['stock', 'confirmation', 'team', 'depot', 'delivery', 'sales', 'ads', 'cash', 'server', 'database', 'jobs', 'code', 'shops', 'config']) if (!has(L, `area.${a}`)) miss.push(`area.${a}`);
   for (const j of R.jobs) if (!has(L, `job.${j.name}`)) miss.push(`job.${j.name}`);
   for (const st of ['ok', 'late', 'failing', 'waiting', 'off']) if (!has(L, `jobs.st.${st}`)) miss.push(`jobs.st.${st}`);
   for (const lv of ['bad', 'warn', 'ok', 'info']) if (!has(L, `tag.${lv}`)) miss.push(`tag.${lv}`);
