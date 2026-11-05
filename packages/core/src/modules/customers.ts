@@ -1,6 +1,6 @@
 import { CLIENT_LEVELS, CONF_DONE_BAD, normalizePhone } from '@pilotix/shared';
 import { z } from 'zod';
-import { agencyRowSql } from './agencyscope';
+import { ownRowSql, rowScopeSql } from './agencyscope';
 import { iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, notFound, proc } from '../rpc';
 import { addEvent } from './orders';
@@ -76,6 +76,9 @@ export const customersProcs = {
         else w.add("c.name ILIKE '%' || ? || '%'", q);
       }
       if (f.blacklisted) w.add('c.blacklisted');
+      // the store's own confirmation agent: the customers of his own orders only
+      const own = ownRowSql(ctx);
+      if (own) w.add(`EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id AND ${own})`);
       if (f.level) {
         // the score is not in the database: every matching customer is scored (their facts counted once per table),
         // the level kept, then the page cut in the same order as the list
@@ -104,8 +107,9 @@ export const customersProcs = {
       r = (await ctx.db.query(`SELECT ${COLS} FROM customers c WHERE c.phone = $1`, [p]))[0];
     } else throw bad('Indiquez le client');
     if (!r) throw notFound('Client introuvable');
-    // a confirmation agency's agent: only the agency's own orders of this customer (the store's others are not its business)
-    const scope = agencyRowSql(ctx);
+    // a confirmation agency's agent: only the agency's own orders of this customer (the store's others are not its
+    // business); the store's own confirmation agent: his own orders of this customer
+    const scope = rowScopeSql(ctx);
     const orders = await ctx.db.query(
       `SELECT o.id, o.ref, o.created_at, o.total, o.conf_status, o.follow_status, o.attempts,
          (SELECT string_agg(CASE WHEN i.qty > 1 THEN i.qty || ' × ' ELSE '' END || i.name, ' · ' ORDER BY i.id) FROM order_items i WHERE i.order_id = o.id) AS items_text,

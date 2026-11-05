@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull } from '../db';
 import { bad, Ctx, notFound, proc } from '../rpc';
 import { getSetting } from '../settings';
+import { ownRowSql } from './agencyscope';
 
 // ---------------------------------------------------------------- the cases and their texts
 export const NOTIFY_KINDS = ['created', 'confirmed', 'shipped', 'out_for_delivery', 'stopdesk', 'failed', 'returning', 'delivered'] as const;
@@ -916,13 +917,16 @@ export const notifyProcs = {
         replies: `n.replied_at IS NOT NULL`,
       };
       w.push(tab[i.tab]);
+      // the store's own confirmation agent: the messages of his own orders
+      const own = ownRowSql(ctx);
+      if (own) w.push(own);
       const rows = await ctx.db.query(`SELECT ${COLS} ${FROM} WHERE ${w.join(' AND ')} ORDER BY n.created_at DESC, n.id DESC LIMIT ${i.limit}`, p);
       const k = (
         await ctx.db.query(
           `SELECT count(*)::int AS total, count(*) FILTER (WHERE status = 'manual')::int AS todo, count(*) FILTER (WHERE status IN ('queued','sending'))::int AS waiting,
                   count(*) FILTER (WHERE channel = 'whatsapp')::int AS whatsapp, count(*) FILTER (WHERE channel = 'sms')::int AS sms,
                   count(*) FILTER (WHERE status = 'failed')::int AS problems, count(*) FILTER (WHERE replied_at IS NOT NULL)::int AS replies
-           FROM notifications`,
+           FROM notifications n${own ? ` WHERE n.order_id IN (SELECT o.id FROM orders o WHERE ${own})` : ''}`,
         )
       )[0];
       const s = await notifySettings(ctx.db);

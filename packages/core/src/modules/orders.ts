@@ -36,7 +36,7 @@ import { assignNow, getAssign } from './assign';
 import { notifyContext, onConfChange, onFollowChange, onOrderCreated, sendInPreview } from './notify';
 import { landingCounts, landingSettings, onLandingConf, onLandingFollow } from './landingquery';
 import { lowStockCount } from './stockquery';
-import { agencyOf, agencyRowSql, andSql, queueSql } from './agencyscope';
+import { agencyOf, agencyRowSql, andSql, ownRowSql, queueSql, rowScopeSql } from './agencyscope';
 import { settleTickets } from './tickets';
 import { addDepotAlert, alertsDepot, DepotChange, itemsText } from './depotalerts';
 import { blockerText, checkLines, checkOrder, deliverCheck } from './confirmcheck';
@@ -229,6 +229,9 @@ export async function getOrder(ctx: Ctx, id: number, db: Db = ctx.db): Promise<O
   if (!r) throw notFound('Commande introuvable');
   const o = toOrder(r);
   if (onlyOwnDeliveries(ctx) && o.livreurId !== ctx.session.profile.id) throw forbidden();
+  // the store's own confirmation agent: only his own orders (given to him, handled or typed by him, held now)
+  const own = ownRowSql(ctx);
+  if (own && !(await db.query(`SELECT 1 FROM orders o WHERE o.id = $1 AND ${own}`, [id])).length) throw forbidden('Cette commande est donnée à un autre agent');
   // a confirmation agency's agent: only the orders the store gives the agency, for their tasks
   const ag = agencyOf(ctx);
   if (ag !== null) {
@@ -319,7 +322,8 @@ export async function listOrders(ctx: Ctx, f: ListInput, opts: { queue?: 'conf' 
   if (onlyOwnDeliveries(ctx)) w.add('o.livreur_id = ?', ctx.session.profile.id);
   // confirmation agencies: an agency's agent sees its agency's orders; a work list (confirmation, suivi) shows each
   // person the orders they work on (the store's own agents: those no agency handles)
-  const scope = agencyRowSql(ctx);
+  // the store's own confirmation agents: their own orders only (ownRowSql)
+  const scope = rowScopeSql(ctx);
   if (scope) w.add(scope);
   const queue = opts.queue ? queueSql(ctx, opts.queue) : '';
   if (queue) w.add(queue);

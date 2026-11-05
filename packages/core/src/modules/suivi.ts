@@ -9,7 +9,7 @@ import { getPrefs } from './prefs';
 import { rotateTimes } from './assign';
 import { cancelParcel, swapFees } from './delivery';
 import { addEvent, FollowInput, getOrder, listOrders, ListInput, releasePicked, setFollow, withClientScores } from './orders';
-import { agencyOf, agencyRowSql, andSql, queueSql } from './agencyscope';
+import { agencyOf, andSql, queueSql, rowScopeSql } from './agencyscope';
 import { findOrders } from './sav';
 import { applyTrust, DRIVER_CLAIMS } from './trust';
 import { KINDS } from '../couriers/kinds';
@@ -204,7 +204,7 @@ export async function suiviCounts(ctx: Ctx) {
     )
   )[0];
   // an agency's agents: the open claims on the agency's orders
-  const ownClaims = agencyRowSql(ctx);
+  const ownClaims = rowScopeSql(ctx);
   const claims = !hasRole(ctx.session, 'suivi') && agencyOf(ctx) === null ? 0 : num((await ctx.db.query(`SELECT count(*)::int AS n FROM claims c WHERE c.status NOT IN ${CLAIM_DONE}${ownClaims ? ` AND c.order_id IN (SELECT o.id FROM orders o WHERE ${ownClaims})` : ''}`))[0]?.n);
   // the manager's red number: alerts nobody called in time
   const alertIds = (await ctx.db.query(`SELECT o.id FROM orders o WHERE o.follow_status = 'alert'${andSql(queueSql(ctx, readQueue(ctx)))}`)).map((x: any) => num(x.id));
@@ -239,13 +239,13 @@ async function swapCandidates(ctx: Ctx, fromId: number, q?: string) {
   let rows: Order[];
   if (q?.trim()) {
     // an agency's agent: only the agency's own orders get its parcels
-    rows = await findOrders(ctx, q.trim(), 15, (w) => w.add(`o.conf_status = 'confirmed' AND (o.follow_status IS NULL OR o.follow_status IN ('to_prepare','prepared')) AND o.shipped_at IS NULL${andSql(agencyRowSql(ctx))}`));
+    rows = await findOrders(ctx, q.trim(), 15, (w) => w.add(`o.conf_status = 'confirmed' AND (o.follow_status IS NULL OR o.follow_status IN ('to_prepare','prepared')) AND o.shipped_at IS NULL${andSql(rowScopeSql(ctx))}`));
   } else {
     // confirmed orders still at the depot that ask for one of the parcel's products
     const ids = await ctx.db.query(
       `SELECT DISTINCT o.id FROM sales o JOIN order_items i ON i.order_id = o.id
        WHERE o.conf_status = 'confirmed' AND (o.follow_status IS NULL OR o.follow_status IN ('to_prepare','prepared')) AND o.shipped_at IS NULL
-         AND o.id <> $1 AND i.product_id = ANY($2)${andSql(agencyRowSql(ctx))} LIMIT 150`,
+         AND o.id <> $1 AND i.product_id = ANY($2)${andSql(rowScopeSql(ctx))} LIMIT 150`,
       [fromId, [...products]],
     );
     rows = [];
@@ -587,7 +587,7 @@ async function listClaims(ctx: Ctx, f: z.infer<typeof ClaimsInput>): Promise<Pag
   if (f.target === 'livreur') w.add('c.livreur_id IS NOT NULL');
   if (f.orderId) w.add('c.order_id = ?', f.orderId);
   // an agency's agent: the claims on the agency's orders only
-  const own = agencyRowSql(ctx);
+  const own = rowScopeSql(ctx);
   if (own) w.add(`c.order_id IN (SELECT o.id FROM orders o WHERE ${own})`);
   const base = w.sql;
   const cnt = await ctx.db.query(`SELECT c.status AS k, count(*)::int AS n FROM claims c ${base} GROUP BY 1`, w.params);
@@ -1142,13 +1142,13 @@ export const suiviProcs = {
 
   /** Orders that can get a claim: sent to a courier or given to a livreur. */
   'suivi.findOrders': proc(['suivi', 'confirmation', 'depot'], z.object({ q: z.string().min(2).max(100) }), (ctx, { q }) =>
-    findOrders(ctx, q, 8, (w) => w.add(`(o.company_id IS NOT NULL AND (o.tracking IS NOT NULL OR o.livreur_id IS NOT NULL))${andSql(agencyRowSql(ctx))}`)),
+    findOrders(ctx, q, 8, (w) => w.add(`(o.company_id IS NOT NULL AND (o.tracking IS NOT NULL OR o.livreur_id IS NOT NULL))${andSql(rowScopeSql(ctx))}`)),
   ),
 
   /** Dashboard › Suivi: per delivery company (and our livreurs), the open claims, those without an answer after 48 h, and those at the manager. */
   'suivi.claimsLate': proc(['suivi', 'agent_manager', 'vendeur'], z.object({}), async (ctx) => {
     // a confirmation agency: only the claims on its own orders
-    const mine = agencyRowSql(ctx);
+    const mine = rowScopeSql(ctx);
     const rows = (await ctx.db.query(`${CLAIM_SELECT} WHERE c.status NOT IN ${CLAIM_DONE}${mine ? ` AND c.order_id IN (SELECT o.id FROM orders o WHERE ${mine})` : ''}`)).map((r: any) => toClaim(r, ctx.now()));
     const by = new Map<string, { name: string; open: number; late: number; manager: number; oldest: string | null }>();
     for (const c of rows) {

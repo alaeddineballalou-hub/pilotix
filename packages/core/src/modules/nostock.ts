@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { Db, iso, num } from '../db';
 import { proc } from '../rpc';
 import { getPrefs } from './prefs';
+import { ownRowSql } from './agencyscope';
 
 const WAITING = `o.conf_status = 'no_stock' AND o.follow_status IS NULL`;
 
@@ -79,11 +80,12 @@ export async function releaseNoStock(db: Db, userId: number | null, variantIds?:
 }
 
 /** The « Sans stock » list: oldest first, how long each waits, which product is missing. */
-export async function noStockList(db: Db, now: number) {
+/** `scope`: SQL on the orders row `o` of the orders this person may see ('' : all). */
+export async function noStockList(db: Db, now: number, scope = '') {
   const days = (await getPrefs(db)).noStockDays;
   const rows = await db.query(
     `SELECT o.id, o.ref, o.customer_name, o.wilaya_id, o.total, COALESCE(o.confirmed_at, o.created_at) AS since
-       FROM orders o WHERE ${WAITING} ORDER BY o.confirmed_at NULLS LAST, o.created_at, o.id LIMIT 300`,
+       FROM orders o WHERE ${WAITING}${scope ? ` AND ${scope}` : ''} ORDER BY o.confirmed_at NULLS LAST, o.created_at, o.id LIMIT 300`,
   );
   const ids = rows.map((r: any) => num(r.id));
   const items = ids.length
@@ -122,6 +124,7 @@ export const noStockProcs = {
   /** The « Sans stock » list (the depot and the confirmation team). Sends first the orders the stock can now serve. */
   'depot.noStock': proc(['depot', 'confirmation'], z.object({}), async (ctx) => {
     await releaseNoStock(ctx.db, null);
-    return noStockList(ctx.db, ctx.now());
+    // the store's own confirmation agent: his own orders
+    return noStockList(ctx.db, ctx.now(), ownRowSql(ctx));
   }),
 };

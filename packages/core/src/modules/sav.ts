@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { Db, iso, isoOrNull, num, numOrNull, Where } from '../db';
 import { bad, Ctx, notFound, proc, withActionLock } from '../rpc';
 import { addEvent, createOrder, deliveredReport, getOrder } from './orders';
+import { ownRowSql, ownTicketSql } from './agencyscope';
 import { savFee } from '../settings';
 import { settleTickets } from './tickets';
 
@@ -177,6 +178,9 @@ async function listTickets(ctx: Ctx, f: z.infer<typeof ListInput>): Promise<Page
   else if (f.productId) w.add('EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = c.order_id AND oi.product_id = ?)', f.productId);
   if (f.from) w.add('c.created_at >= ?', f.from);
   if (f.to) w.add('c.created_at < ?', f.to);
+  // the store's own confirmation agent: the tickets of his orders, given to him or made by him
+  const mineOnly = ownTicketSql(ctx);
+  if (mineOnly) w.add(mineOnly);
   const from = `FROM complaints c LEFT JOIN orders o ON o.id = c.order_id LEFT JOIN orders ex ON ex.id = c.exchange_order_id`;
   // Moi / Personne / Tous, counted on the same view and search
   const oc = (await ctx.db.query(`SELECT count(*)::int AS n, count(*) FILTER (WHERE c.assigned_to = ${Number(me)})::int AS mine, count(*) FILTER (WHERE c.assigned_to IS NULL)::int AS nobody ${from} ${w.sql}`, w.params))[0];
@@ -187,7 +191,7 @@ async function listTickets(ctx: Ctx, f: z.infer<typeof ListInput>): Promise<Page
   const off = w.p((f.page - 1) * f.pageSize);
   const order = f.view === 'livres' || f.view === 'annules' || f.view === 'termines' ? 'c.updated_at DESC' : f.view === 'satisfaction' ? 'c.resolved_at ASC NULLS LAST' : 'c.created_at DESC';
   const rows = await ctx.db.query(`${SELECT} ${w.sql} ORDER BY ${order}, c.id DESC LIMIT ${lim} OFFSET ${off}`, w.params);
-  const c = (await ctx.db.query(`SELECT count(*) FILTER (WHERE ${ACTIVE})::int AS todo, count(*)::int AS all FROM complaints c`))[0];
+  const c = (await ctx.db.query(`SELECT count(*) FILTER (WHERE ${ACTIVE})::int AS todo, count(*)::int AS all FROM complaints c${mineOnly ? ` WHERE ${mineOnly}` : ''}`))[0];
   return { rows: rows.map(toTicket), total, page: f.page, pageSize: f.pageSize, counts: { todo: num(c.todo), all: num(c.all), mine: num(oc.mine), nobody: num(oc.nobody), view: num(oc.n) } };
 }
 
@@ -426,6 +430,9 @@ export async function findOrders(ctx: Ctx, q: string, limit = 8, extra?: (w: Whe
   if (digits.length >= 4 && digits.length === q.replace(/[\s+.-]/g, '').length) w.add(`(o.phone LIKE '%' || ? || '%' OR o.phone2 LIKE '%' || ? || '%' OR o.tracking ILIKE '%' || ? || '%')`, digits.slice(-9), digits.slice(-9), digits);
   else w.add(`(upper(o.ref) LIKE upper(?) || '%' OR o.tracking ILIKE ? || '%' OR o.customer_name ILIKE '%' || ? || '%')`, q.trim(), q.trim(), q.trim());
   extra?.(w);
+  // the store's own confirmation agent finds only his own orders
+  const own = ownRowSql(ctx);
+  if (own) w.add(own);
   const rows = await ctx.db.query(`SELECT o.id FROM sales o ${w.sql} ORDER BY ${orderBy} LIMIT ${w.p(limit)}`, w.params);
   const out: Order[] = [];
   for (const r of rows) out.push(await getOrder(ctx, num(r.id)));
