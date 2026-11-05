@@ -47,6 +47,12 @@
 @keyframes cpt-spin { to { transform: rotate(360deg); } }
 .cpt-do { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .cpt-do small { font-size: 12.5px; }
+/* « Continue with Facebook »: Meta's colours (white on Facebook blue #1877F2), the same in light and dark */
+.btn.fb-btn { gap: 8px; background: #1877f2; border-color: #1877f2; color: #fff; }
+.btn.fb-btn:hover:not(:disabled) { background: #166fe5; border-color: #166fe5; }
+.btn.fb-btn:focus-visible { outline: 2px solid #1877f2; outline-offset: 2px; }
+.fb-btn-logo { flex: none; width: 20px; height: 20px; }
+.cpt-do .cpt-fb-allow { flex-basis: 100%; line-height: 1.45; }
 
 /* the accounts: each one folds (closed: who, its state, what this boutique uses from it, « Tester ») */
 .cpt-list { display: flex; flex-direction: column; gap: 12px; }

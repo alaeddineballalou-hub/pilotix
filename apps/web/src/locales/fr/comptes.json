@@ -28,7 +28,8 @@
     "meta": {
       "name": "Facebook et Instagram",
       "what": "Vos pages, leurs messages et leurs commentaires, et vos comptes pub.",
-      "link": "Lier un compte Meta",
+      "link": "Continuer avec Facebook",
+      "allow": "Facebook vous demande de choisir vos pages, vos comptes Instagram et vos comptes pub, puis d’autoriser Pilotix à les gérer. Autorisez tout, sinon les agents ne peuvent pas répondre.",
       "notReady": "Bientôt : Pilotix prépare la connexion Facebook."
     },
     "tiktok": {

@@ -28,7 +28,8 @@
     "meta": {
       "name": "Facebook and Instagram",
       "what": "Your Pages, their messages and comments, and your ad accounts.",
-      "link": "Link a Meta account",
+      "link": "Continue with Facebook",
+      "allow": "Facebook asks you to choose your Pages, Instagram accounts and ad accounts, then to allow Pilotix to manage them. Allow everything, or the agents cannot answer.",
       "notReady": "Soon: Pilotix is getting the Facebook link ready."
     },
     "tiktok": {
@@ -186,8 +187,8 @@
       "warn": "Unreadable ad accounts: {{bad}} of {{n}}."
     },
     "adsCurrency": {
-      "ok": "Ad accounts in dinars (DZD): Publicité counts them in dinars, and in dollars with your monthly rate.",
-      "warn": "Ad accounts in {{list}}: Publicité counts them as dollars."
+      "ok": "Ad accounts in dinars (DZD): Advertising counts them in dinars, and in dollars with your monthly rate.",
+      "warn": "Ad accounts in {{list}}: Advertising counts them as dollars."
     },
     "igLogin": {
       "ok": "Instagram login: @{{username}}’s key works. Dellal uses it to answer all your Instagram customers.",

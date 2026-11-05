@@ -27,6 +27,9 @@ const PROVIDERS: Provider[] = ['meta', 'tiktok'];
 /** each provider's ad accounts (a boutique counts all of a linked account's together) */
 const AD_KIND: Record<Provider, Kind> = { meta: 'ad_account', tiktok: 'advertiser' };
 const K = 'comptes.';
+/** Meta's own « f » logo for « Continue with Facebook »: the file from Meta's brand centre (facebookbrand.com), dropped as
+ * it is in assets/brand/ — never redrawn or recoloured (Meta's rule). Until it is there, the button shows its words only. */
+const FB_LOGO = Object.values(import.meta.glob('../../assets/brand/facebook-f-logo.{svg,png}', { eager: true, import: 'default' }))[0] as string | undefined;
 
 /** A login in its tab: started here, asked about every two seconds until it is back. */
 interface Pending {
@@ -249,9 +252,19 @@ function ProviderSlot({ p, ready, preview, pending, busy, done, onStart, onReope
         </div>
       ) : (
         <div className="cpt-do">
-          <button type="button" className="btn primary" disabled={!ready || busy} onClick={onStart}>
-            <Icon name="link" /> {t(K + `p.${p}.link`)}
-          </button>
+          {/* read before pressing (Meta asks to tell the Page admin to allow the business assets); above, so the two buttons line up */}
+          {p === 'meta' && ready && <small className="cpt-muted cpt-fb-allow">{t(K + 'p.meta.allow')}</small>}
+          {p === 'meta' ? (
+            // Meta's login button rules: « Continue with Facebook » inside the button, white on Facebook blue, its logo first
+            <button type="button" className="btn fb-btn" disabled={!ready || busy} onClick={onStart}>
+              {FB_LOGO && <img src={FB_LOGO} alt="" className="fb-btn-logo" />}
+              {t(K + 'p.meta.link')}
+            </button>
+          ) : (
+            <button type="button" className="btn primary" disabled={!ready || busy} onClick={onStart}>
+              <Icon name="link" /> {t(K + `p.${p}.link`)}
+            </button>
+          )}
           {!ready && <small className="cpt-muted">{t(K + `p.${p}.notReady`)}</small>}
         </div>
       )}
