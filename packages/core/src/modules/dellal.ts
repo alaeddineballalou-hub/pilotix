@@ -23,7 +23,7 @@ import { pilotConfig, pilotToday } from '../platform/pilotai';
 import { guideText, HAS_GUIDE, readGuide, toFill } from './guide';
 import { vocabBlock, vocabFor } from './vocab';
 import { linkedPage, noteIgLogin } from './social';
-import { catalogueThumbs, imageBlock, PHOTO_MODEL, PHOTO_SYSTEM, photoBody, PhotoReading, photoRequest, PhotoSrc, productPhotos, productsWithPhotos, readPhotoAnswer } from './dellalphotos';
+import { catalogueThumbs, imageBlock, PHOTO_MODEL, PHOTO_SYSTEM, photoBody, PhotoReading, photoRequest, PhotoSrc, productPhotos, productsWithPhotos, productsWithSizeChart, readPhotoAnswer } from './dellalphotos';
 
 // ---------------------------------------------------------------- settings and secrets
 export const DELLAL_CHANNELS = ['whatsapp', 'messenger', 'instagram', 'tiktok', 'test'] as const;
@@ -594,6 +594,7 @@ export const DELLAL_TOOLS = [
         product_id: { type: 'integer' },
         variant_id: { type: 'integer', description: 'la couleur / taille qu’il veut voir, si tu la connais' },
         count: { type: 'integer', description: 'combien de photos, de 1 à 3 (2 par défaut)' },
+        sizes: { type: 'boolean', description: 'true : le guide des tailles du produit (marqué « guide des tailles »), quand il demande quelle taille prendre' },
       },
       required: ['product_id'],
     },
@@ -898,7 +899,7 @@ async function photoTool(t: ToolCtx, name: 'product_photos' | 'send_photos', inp
   if (!prod) return { error: 'Produit introuvable : cherche-le d’abord avec search_products.' };
   const vid = Number(input?.variant_id);
   const variant = Number.isSafeInteger(vid) && vid > 0 ? ((await ctx.db.query('SELECT id, title FROM product_variants WHERE id = $1 AND product_id = $2', [vid, pid]))[0] ?? null) : null;
-  const label = `${prod.name}${variant?.title ? ` — ${variant.title}` : ''}`;
+  let label = `${prod.name}${variant?.title ? ` — ${variant.title}` : ''}`;
   const variantId = variant ? num(variant.id) : null;
   if (name === 'product_photos') {
     const ph = await productPhotos(ctx.db, pid, { variantId, size: 'look', max: 4 });
@@ -906,9 +907,12 @@ async function photoTool(t: ToolCtx, name: 'product_photos' | 'send_photos', inp
     return { product_id: pid, of: label, photos: ph.length, note: 'Ses photos sont ci-dessous. Ne dis que ce que tu vois.', _images: ph };
   }
   if (!settings.photos) return { error: 'La boutique n’envoie pas de photos dans le chat : dis-le simplement, sans promettre, et décris le produit avec le catalogue.' };
+  const sizes = input?.sizes === true;
   const want = Math.min(3, Math.max(1, Math.round(Number(input?.count) || 2)));
-  const ph = await productPhotos(ctx.db, pid, { variantId, size: 'send', max: want });
+  const ph = await productPhotos(ctx.db, pid, sizes ? { size: 'send', max: 2, kind: 'sizes' } : { variantId, size: 'send', max: want });
+  if (!ph.length && sizes) return { error: 'Ce produit n’a pas de guide des tailles en photo : demande au client sa taille habituelle (ou sa taille et son poids) et réponds avec le catalogue et son guide.' };
   if (!ph.length) return { error: 'Pas de photo pour ce produit : dis-le simplement au client, sans promettre de l’envoyer plus tard, et décris-le avec le catalogue.' };
+  if (sizes) label = `${prod.name} — guide des tailles`;
   // the same photos already went in this conversation today: a reminder, not the same pictures again
   const sent = new Set<string>();
   for (const r of await ctx.db.query(`SELECT meta->'photos' AS ph FROM conv_messages WHERE conversation_id = $1 AND role = 'agent' AND meta ? 'photos' AND created_at > $2`, [conv.id, new Date(ctx.now() - 86_400_000).toISOString()]))
@@ -1055,6 +1059,7 @@ async function systemPrompt(
   const guided = prods.some((p) => p.guide);
   // the products with real photos: Dellal sends them (send_photos) and looks at them (product_photos)
   const pics = await productsWithPhotos(ctx.db);
+  const charts = await productsWithSizeChart(ctx.db);
   const catalog = prods
     .map(
       (p) =>
@@ -1062,7 +1067,8 @@ async function systemPrompt(
         (p.packs.length ? ` · packs : ${p.packs.map((k) => `${k.qty} pour ${k.price} DA`).join(', ')}` : '') +
         (p.linked.length ? ` · va avec : ${p.linked.map((l) => `#${l.product_id} ${l.name}`).join(', ')}` : '') +
         (p.guide ? ' · guide' : '') +
-        (pics.has(p.product_id) ? ' · photos' : ''),
+        (pics.has(p.product_id) ? ' · photos' : '') +
+        (charts.has(p.product_id) ? ' · guide des tailles' : ''),
     )
     .join('\n');
   // what the shop knows about a number only when the channel proves it (WhatsApp): on Messenger / Instagram / TikTok anyone
@@ -1101,9 +1107,9 @@ async function systemPrompt(
     guided
       ? `- Guides de vente : un produit marqué « guide » a un guide écrit par l’équipe. Avant de répondre à une question sur ce produit (utilisation, taille, âge, matière, qualité, garantie, échange…) ou à une hésitation du client (« ghali », « nkhamem »…), lis son guide avec product_guide, puis réponds avec tes mots, court, dans la langue du client. Ses réponses sont les vraies informations de la boutique : ne promets jamais ce que sa partie « À ne jamais promettre » interdit, et ne devine pas une réponse qu’il ne donne pas (sa question va alors à callback).`
       : '',
-    pics.size
+    pics.size || charts.size
       ? s.photos
-        ? `- Photos : un produit marqué « photos » a de vraies photos. Quand le client demande une photo, une autre couleur ou à voir le produit, envoie-les tout de suite avec send_photos (la couleur ou la taille qu’il veut), au lieu de promettre de les envoyer. Un produit sans photo : dis-le simplement, sans promettre une photo ou une vidéo plus tard.\n- Question sur l’aspect d’un produit (couleur exacte, forme, détail) que le catalogue et son guide ne disent pas : regarde ses photos avec product_photos, puis ne dis que ce que tu vois.`
+        ? `- Photos : un produit marqué « photos » a de vraies photos. Quand le client demande une photo, une autre couleur ou à voir le produit, envoie-les tout de suite avec send_photos (la couleur ou la taille qu’il veut), au lieu de promettre de les envoyer. Un produit sans photo : dis-le simplement, sans promettre une photo ou une vidéo plus tard.\n- Question sur l’aspect d’un produit (couleur exacte, forme, détail) que le catalogue et son guide ne disent pas : regarde ses photos avec product_photos, puis ne dis que ce que tu vois.${charts.size ? `\n- Taille : un produit marqué « guide des tailles » a la photo de son guide. Quand le client demande quelle taille prendre, envoie-la avec send_photos (sizes: true), puis demande-lui sa taille habituelle (ou sa taille et son poids).` : ''}`
         : `- La boutique n’envoie pas de photos dans le chat : si le client en demande une, dis-le gentiment et décris le produit avec le catalogue (product_photos te montre ses photos), sans rien promettre.`
       : '',
     `- Photo envoyée par le client : elle t’arrive décrite entre crochets, avec le produit du catalogue qu’elle montre s’il est reconnu. Produit sûr : réponds directement sur lui (nomme-le, puis ce qu’il demande). Pas sûr, ou aucun produit : demande-lui gentiment lequel (propose les plus proches), sans deviner. Ne lui dis jamais que tu ne vois pas sa photo quand elle est décrite.`,
@@ -1622,7 +1628,7 @@ export async function runAgent(
     let sendError: string | null = null;
     if (!test && ctx.server?.dellal) {
       try {
-        const r: any = await ctx.server.dellal('photos', { conversationId: convId, channel: conv.channel, externalId: conv.externalId, accountId: (await rawConv(ctx.db, convId)).account_id, photos: outbox.map(({ src, mime, data, url }) => ({ src, mime, data, url })) }, ctx);
+        const r: any = await ctx.server.dellal('photos', { conversationId: convId, channel: conv.channel, externalId: conv.externalId, accountId: (await rawConv(ctx.db, convId)).account_id, photos: outbox.map(({ src, mime, data, url, key }) => ({ src, mime, data, url, key: key ?? null })) }, ctx);
         if (r?.errors?.length) sendError = String(r.errors[0]).slice(0, 300);
       } catch (e: any) {
         sendError = e?.message ?? 'Envoi impossible';

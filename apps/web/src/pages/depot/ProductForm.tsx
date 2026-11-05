@@ -11,6 +11,7 @@ import { ConfirmButton } from '../admin/bits';
 import { bidi } from './stockui';
 import { combosOf, MAX_COMBOS, Opt, skuOf, titleOf, VariantOptions, VRow } from './VariantOptions';
 import { DraftFacts, formToGuide, formTr, GuideEditor, GuideForm, guideProblem, guideToForm, readLang, sizeValues, useGuideTranslate } from './guide';
+import { HdPhotos } from './HdPhotos';
 
 interface PackRow {
   qty: string;
@@ -467,6 +468,7 @@ function Form({ p, onClose, onCreated, t, tab: firstTab }: { p: any; onClose: ()
               )}
             </div>
           </div>
+          <HdPhotos productId={p?.id ?? null} variants={(p?.variants ?? []).filter((v: any) => v.title && v.active).map((v: any) => ({ id: Number(v.id), title: String(v.title) }))} />
         </section>
 
         <section className="pf-sec">

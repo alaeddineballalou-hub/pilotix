@@ -723,5 +723,28 @@
     "notePh": "e.g. repaired, part replaced",
     "help": "Broken products stay apart: not sold, not counted in the stock count. “Repaired” puts them back in the stock you sell; “Throw away” takes them out of stock.",
     "done": "Broken stock updated"
+  },
+  "hd": {
+    "title": "HD photos for Dellal",
+    "count_one": "{{count}} photo · {{size}}",
+    "count_other": "{{count}} photos · {{size}}",
+    "help": "Dellal sends them when a customer asks for a photo: the colour or size asked for first. Each photo is prepared on your device at 2048 px (HD) before it is sent.",
+    "off": "HD photo storage is not turned on yet: Pilotix turns it on for every shop (Cloudflare R2).",
+    "saveFirst": "Save the product to add its HD photos.",
+    "for": "Colour / size",
+    "all": "Whole product",
+    "gone": "Deleted variant",
+    "add": "Add photos",
+    "sending": "Sending {{done}}/{{total}}…",
+    "added_one": "{{count}} photo added",
+    "added_other": "{{count}} photos added",
+    "notImage": "This file is not a photo.",
+    "tooBig": "This photo is too heavy even at 2048 px: choose another one.",
+    "failed": "The photo could not be saved. Try again.",
+    "first": "Put first",
+    "remove": "Delete",
+    "chart": "Size chart",
+    "chartHelp": "A photo of the size table: Dellal sends it when a customer asks which size to take.",
+    "chartAdd": "Add the size chart"
   }
 }

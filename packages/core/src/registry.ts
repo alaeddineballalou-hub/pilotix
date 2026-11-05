@@ -26,6 +26,7 @@ import { undoProcs } from './modules/undo';
 import { coverageProcs } from './modules/coverage';
 import { pushProcs } from './modules/push';
 import { catalogProcs } from './modules/catalog';
+import { hdPhotoProcs } from './modules/hdphotos';
 import { guideProcs } from './modules/guidedraft';
 import { productImportProcs } from './modules/productimport';
 import { cmProcs } from './modules/cm';
@@ -75,6 +76,7 @@ export const REGISTRY = {
   ...boardProcs,
   ...doctorProcs,
   ...catalogProcs,
+  ...hdPhotoProcs,
   ...guideProcs,
   ...productImportProcs,
   ...pickingProcs,

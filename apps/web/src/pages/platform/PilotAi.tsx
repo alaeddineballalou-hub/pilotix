@@ -21,6 +21,7 @@ import { LabTab } from './PilotLab';
 import { ReleaseCard } from './PilotRelease';
 import { CaseModal } from './pilotCase';
 import { SocialAppsCard } from './SocialApps';
+import { PhotoStoreCard } from './PhotoStore';
 
 type State = POut<'p.pilot.state'>;
 type Lesson = State['candidates'][number];
@@ -94,6 +95,7 @@ function PilotAiInner({ staff, tab, demo }: { staff: Staff; tab?: string; demo: 
             <VoiceCard manager={manager} />
           </div>
           <SocialAppsCard manager={manager} />
+          <PhotoStoreCard manager={manager} />
           {manager ? <CostCard /> : <p className="muted small">{t('platform.pilot.costs.managers')}</p>}
         </>
       )}

@@ -723,5 +723,28 @@
     "notePh": "ex. réparé, pièce changée",
     "help": "Les produits cassés restent à part : pas vendus, pas comptés dans l’inventaire. « Réparé » les remet dans le stock vendu ; « Jeter » les sort du stock.",
     "done": "Stock cassé mis à jour"
+  },
+  "hd": {
+    "title": "Photos HD pour Dellal",
+    "count_one": "{{count}} photo · {{size}}",
+    "count_other": "{{count}} photos · {{size}}",
+    "help": "Dellal les envoie quand un client demande une photo : celles de la couleur ou de la taille demandée d’abord. Chaque photo est préparée sur votre appareil en 2048 px (qualité HD) avant l’envoi.",
+    "off": "Le stockage des photos HD n’est pas encore activé : Pilotix l’active pour toutes les boutiques (Cloudflare R2).",
+    "saveFirst": "Enregistrez le produit pour ajouter ses photos HD.",
+    "for": "Couleur / taille",
+    "all": "Tout le produit",
+    "gone": "Variante supprimée",
+    "add": "Ajouter des photos",
+    "sending": "Envoi {{done}}/{{total}}…",
+    "added_one": "{{count}} photo ajoutée",
+    "added_other": "{{count}} photos ajoutées",
+    "notImage": "Ce fichier n’est pas une photo.",
+    "tooBig": "Photo trop lourde même en 2048 px : choisissez-en une autre.",
+    "failed": "La photo n’a pas pu être enregistrée. Réessayez.",
+    "first": "Mettre en premier",
+    "remove": "Supprimer",
+    "chart": "Guide des tailles",
+    "chartHelp": "Une photo du tableau des tailles : Dellal l’envoie quand un client demande quelle taille prendre.",
+    "chartAdd": "Ajouter le guide des tailles"
   }
 }

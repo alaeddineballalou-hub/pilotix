@@ -19,6 +19,8 @@ export interface PhotoSrc {
   thumb: string | null;
   /** the colour / size it shows (null: the product) */
   variantId: number | null;
+  /** an HD photo in Pilotix's R2 bucket: its name there (the server sends it by a link valid for an hour) */
+  key?: string | null;
 }
 
 /** what the bytes really are (a browser that cannot write WebP gave JPEG) */
@@ -76,10 +78,20 @@ const SIZES: Record<'look' | 'send' | 'match', string[]> = {
  * A product's photos, best first: the colour asked first (its pages' photos of that colour, then the colour's own photo),
  * then the product's (its pages' photos, then its photo). `send`: only the colour's photos when it has some.
  */
-export async function productPhotos(db: Db, productId: number, o: { variantId?: number | null; size: 'look' | 'send' | 'match'; max: number; svg?: boolean }): Promise<PhotoSrc[]> {
+export async function productPhotos(
+  db: Db,
+  productId: number,
+  o: { variantId?: number | null; size: 'look' | 'send' | 'match'; max: number; svg?: boolean; kind?: 'photo' | 'sizes' },
+): Promise<PhotoSrc[]> {
   const variantId = o.variantId && o.variantId > 0 ? o.variantId : null;
   const prod = (await db.query('SELECT id, photo FROM products WHERE id = $1', [productId]))[0];
   if (!prod) return [];
+  // the HD photos the shop added for Dellal (Produits › Photos HD): first, before the pages' and the product's own
+  const hd = await db
+    .query(`SELECT id, variant_id, store, key, data, thumb FROM product_photos WHERE product_id = $1 AND kind = $2 ORDER BY position, id`, [productId, o.kind ?? 'photo'])
+    .catch(() => []);
+  // the size chart: only its own photos
+  if (o.kind === 'sizes') return hd.slice(0, Math.max(1, o.max)).map((r: any) => hdPhoto(r, o.size, null)).filter((p): p is PhotoSrc => !!p);
   const pages = await db.query('SELECT images FROM landing_pages WHERE product_id = $1 ORDER BY active DESC, updated_at DESC LIMIT 3', [productId]).catch(() => []);
   const refs: Ref[] = [];
   const seenRef = new Set<string>();
@@ -96,10 +108,15 @@ export async function productPhotos(db: Db, productId: number, o: { variantId?: 
   const byId = new Map<number, any>(imgs.map((r: any) => [num(r.id), r]));
   const vars = await db.query('SELECT id, photo FROM product_variants WHERE product_id = $1 AND active ORDER BY id', [productId]).catch(() => []);
 
-  type Cand = PhotoSrc & { rank: number; order: number };
+  type Cand = PhotoSrc & { rank: number; order: number; hd?: boolean };
   const out: Cand[] = [];
   let order = 0;
   const rank = (v: number | null | undefined) => (variantId && v === variantId ? 0 : v == null ? 1 : 3);
+  for (const r of hd) {
+    const v = r.variant_id == null ? null : num(r.variant_id);
+    const p = hdPhoto(r, o.size, v);
+    if (p) out.push({ ...p, rank: rank(v), order: order++, hd: true });
+  }
   for (const r of refs) {
     const v = r.v == null ? null : Number(r.v);
     if (r.id) {
@@ -129,16 +146,31 @@ export async function productPhotos(db: Db, productId: number, o: { variantId?: 
   // the same picture once (a page's photo is often the product's too)
   const seen = new Set<string>();
   const uniq = out
-    .sort((a, b) => a.rank - b.rank || a.order - b.order)
+    .sort((a, b) => a.rank - b.rank || Number(!!b.hd) - Number(!!a.hd) || a.order - b.order)
     .filter((p) => {
-      const k = p.data ? `${p.data.length}:${p.data.slice(0, 64)}:${p.data.slice(-64)}` : String(p.url);
+      const k = p.data ? `${p.data.length}:${p.data.slice(0, 64)}:${p.data.slice(-64)}` : p.key ? `r2:${p.key}` : String(p.url);
       if (seen.has(k)) return false;
       seen.add(k);
       return true;
     });
   // a customer who asked for one colour gets that colour's photos (the product's only when the colour has none)
   const pick = o.size === 'send' && variantId && uniq.some((p) => p.rank === 0) ? uniq.filter((p) => p.rank === 0) : o.size === 'send' && variantId ? uniq.filter((p) => p.rank < 3) : uniq;
-  return pick.slice(0, Math.max(1, o.max)).map(({ rank: _r, order: _o, ...p }) => p);
+  return pick.slice(0, Math.max(1, o.max)).map(({ rank: _r, order: _o, hd: _h, ...p }) => p);
+}
+
+/**
+ * One HD photo, for its use: sending, the photo itself (in the bucket: its name, the server makes the link; in the
+ * preview: its bytes); looking at it or comparing a customer's photo with it, its small copy (320 px).
+ */
+function hdPhoto(r: any, size: 'look' | 'send' | 'match', variantId: number | null): PhotoSrc | null {
+  const thumb = r.thumb ? String(r.thumb) : null;
+  if (size === 'send') {
+    if (r.store === 'r2' && r.key) return { src: `hd:${num(r.id)}`, mime: 'image/jpeg', data: null, url: null, key: String(r.key), thumb, variantId };
+    if (r.store === 'local' && r.data) return { src: `hd:${num(r.id)}`, mime: 'image/jpeg', data: String(r.data), url: null, thumb, variantId };
+    return null;
+  }
+  const d = fromDataUrl(thumb);
+  return d ? { src: `hd:${num(r.id)}:t`, mime: d.mime, data: d.data, url: null, thumb, variantId } : null;
 }
 
 /** Which active products have at least one photo (the catalogue Dellal reads marks them « photos »). */
@@ -151,7 +183,14 @@ export async function productsWithPhotos(db: Db): Promise<Set<number>> {
          OR EXISTS (SELECT 1 FROM landing_pages l WHERE l.product_id = p.id AND jsonb_array_length(l.images) > 0))`,
     )
     .catch(() => []);
-  return new Set(rows.map((r: any) => num(r.id)));
+  const hd = await db.query(`SELECT DISTINCT product_id FROM product_photos WHERE kind = 'photo'`).catch(() => []);
+  return new Set([...rows.map((r: any) => num(r.id)), ...hd.map((r: any) => num(r.product_id))]);
+}
+
+/** Which products have their size chart as a photo (the catalogue Dellal reads marks them « guide des tailles »). */
+export async function productsWithSizeChart(db: Db): Promise<Set<number>> {
+  const rows = await db.query(`SELECT DISTINCT product_id FROM product_photos WHERE kind = 'sizes'`).catch(() => []);
+  return new Set(rows.map((r: any) => num(r.product_id)));
 }
 
 /** The catalogue's photos a customer's photo is compared with: one per product, the products named in the chat first. */

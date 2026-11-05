@@ -58,6 +58,7 @@ export const PLATFORM_SECRETS: Readonly<Record<string, readonly string[] | 'all'
   cloudflare_turnstile: ['token'],
   whatsapp_otp: ['token'],
   backup_offsite: ['keyId', 'key', 'passphrase'],
+  photo_store: ['secret'],
 };
 
 /** A control-room setting as it is kept: its secret fields sealed. */

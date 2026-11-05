@@ -5,6 +5,7 @@
 import { randomBytes } from 'crypto';
 import { AppError, Ctx, publicApi } from './rpc';
 import { publicFetch } from './publicfetch';
+import { presign, readStore } from './photostore';
 import { AiRequest, AiResponse, DellalChannel, dellalSecret, dellalSettings } from './modules/dellal';
 import { NOTIFY_SMS_SECRET, notifySettings } from './modules/notify';
 import type { MetaForm, MetaLead } from './modules/leads';
@@ -1043,7 +1044,14 @@ async function transcribe(ctx: Ctx, a: VoiceArgs): Promise<VoiceResult> {
 
 // ---------------------------------------------------------------- photos: the customers' (read) and the products' (sent)
 type MediaArgs = { channel: DellalChannel; media: { id?: string; url?: string; mime?: string } };
-type PhotosArgs = { conversationId: number; channel: DellalChannel; externalId: string; accountId?: string | null; photos: { src: string; mime: string; data: string | null; url: string | null }[] };
+type PhotosArgs = {
+  conversationId: number;
+  channel: DellalChannel;
+  externalId: string;
+  accountId?: string | null;
+  /** key: an HD photo in Pilotix's R2 bucket (already a JPEG of 2048 px: it goes by a link to the bucket, never copied here) */
+  photos: { src: string; mime: string; data: string | null; url: string | null; key?: string | null }[];
+};
 /** what a customer's photo may weigh when it is fetched; the AI reads up to 5 MB (a bigger one gets a smaller copy) */
 const PHOTO_FETCH_MAX = 15 * 1024 * 1024;
 const PHOTO_AI_MAX = 4.5 * 1024 * 1024;
@@ -1224,10 +1232,20 @@ async function sendPhotos(ctx: Ctx, a: PhotosArgs): Promise<{ ok: boolean; sent:
   if (!base) return { ok: false, sent: 0, errors: ['Adresse publique du serveur manquante (PUBLIC_URL) : les photos ne peuvent pas partir.'] };
   let sent = 0;
   const errors: string[] = [];
-  for (const p of (Array.isArray(a.photos) ? a.photos : []).slice(0, 6)) {
+  // HD photos: Meta downloads them from the bucket itself, by a link valid for an hour
+  const photos = Array.isArray(a.photos) ? a.photos.slice(0, 6) : [];
+  const bucket = photos.some((p) => p.key) && ctx.t ? await readStore(ctx.t.platform).catch(() => null) : null;
+  for (const p of photos) {
     try {
-      const f = await jpegFile(ctx, p);
-      await sendImage(ctx, { channel: a.channel, externalId: a.externalId, accountId: a.accountId, url: `${base}/lp/dp/${f.id}/${f.key}.jpg` });
+      let url: string;
+      if (p.key) {
+        if (!bucket) throw new AppError('bad_request', 'Photo HD : le stockage des photos n’est plus configuré sur ce serveur.');
+        url = await presign(bucket, 'GET', String(p.key), 3600);
+      } else {
+        const f = await jpegFile(ctx, p);
+        url = `${base}/lp/dp/${f.id}/${f.key}.jpg`;
+      }
+      await sendImage(ctx, { channel: a.channel, externalId: a.externalId, accountId: a.accountId, url });
       sent++;
     } catch (e: any) {
       errors.push(String(e?.message ?? e).slice(0, 300));

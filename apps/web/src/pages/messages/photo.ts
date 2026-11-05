@@ -31,3 +31,27 @@ export async function chatPhoto(file: File): Promise<ChatPhoto> {
     img.close?.();
   }
 }
+
+/**
+ * A product photo for Dellal to send (Produits › Photos HD): 2048 px on its long side, a JPEG of at most 2.5 MB (its
+ * quality steps down when needed; WhatsApp takes 5 MB), and its 320 px copy for the screens and the AI. Done here: the
+ * phone's original file (often 5 to 12 MB) never leaves it.
+ */
+export async function hdPhoto(file: File): Promise<{ data: string; w: number; h: number; thumb: string }> {
+  if (!/^image\//.test(file.type)) throw new Error('not_image');
+  const img = await createImageBitmap(file);
+  try {
+    const k = Math.min(1, 2048 / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width * k));
+    const h = Math.max(1, Math.round(img.height * k));
+    let big = draw(img, 2048, 0.86);
+    for (const q of [0.8, 0.72, 0.64]) {
+      if (big.length * 0.75 <= 2_500_000) break;
+      big = draw(img, 2048, q);
+    }
+    if (big.length * 0.75 > 3_300_000) throw new Error('too_big');
+    return { data: big.slice(big.indexOf(',') + 1), w, h, thumb: draw(img, 320, 0.78) };
+  } finally {
+    img.close?.();
+  }
+}

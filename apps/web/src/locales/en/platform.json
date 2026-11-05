@@ -1794,6 +1794,23 @@
       "noneFor": "No exam yet for v{{v}}.",
       "noneYet": "No exam yet for this version.",
       "lineFor": "Exam of v{{v}}: {{score}}/10"
+    },
+    "photos": {
+      "title": "HD photo storage (Cloudflare R2)",
+      "text": "The HD photos the shops add for Dellal go to your Cloudflare R2 bucket, not to this server: it keeps only their name and a small copy. WhatsApp, Messenger and Instagram download them straight from R2, with no download fees. 10 GB free each month, then $0.015 per GB per month.",
+      "s1": "On dash.cloudflare.com › R2 Object Storage: create a bucket (for example pilotix-photos), with no public access.",
+      "s2": "R2 › Manage R2 API tokens › Create a token: « Object Read & Write » permission, limited to that bucket.",
+      "s3": "Paste here the account ID (shown on the R2 page), the bucket name, the Access Key ID and the Secret Access Key, save, then Test.",
+      "account": "Cloudflare account ID",
+      "bucket": "Bucket",
+      "kept": "Kept: {{v}}",
+      "secretKept": "Kept (type a new one to change it)",
+      "secretHint": "Cloudflare shows it only once",
+      "test": "Test",
+      "tested": "R2 answers: the HD photos can go.",
+      "testOk": "Tested on {{when}}: everything works.",
+      "testBad": "Tested on {{when}}: {{error}}",
+      "managers": "For the owner and managers only."
     }
   },
   "seller": {

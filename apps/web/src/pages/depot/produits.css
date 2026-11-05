@@ -668,3 +668,18 @@ a.chip.lp-nolp:hover { text-decoration: underline; }
 .pd-variant-line:nth-child(even) { background:var(--raise); }
 .pd-variant-line .ltr { white-space:nowrap; }
 .pd-variant-line b { font-size:12.5px; }
+
+/* Produits › Photos HD pour Dellal: the photos sent for a colour / size, and the size chart */
+.hd { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.hd-h { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 14px; }
+.hd-note { margin: 6px 0 0; }
+.hd-add { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.hd-for { display: flex; flex-direction: column; gap: 4px; min-width: 180px; }
+.hd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.hd-card { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); min-width: 0; }
+.hd-card img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; background: var(--raise); }
+.hd-card select { width: 100%; min-width: 0; font-size: 13px; }
+.hd-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hd-do { display: flex; justify-content: space-between; }
+.hd-chart { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.hd-chart p { margin: 2px 0 0; }

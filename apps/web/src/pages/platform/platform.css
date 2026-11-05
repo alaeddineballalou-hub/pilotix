@@ -919,3 +919,8 @@ mark.pl-dj-gone { padding: 0 2px; border-radius: 4px; background: none; color: i
 .pl-pilotix p { margin: 0; }
 .pl-pilotix .pl-rel-h .bji { color: var(--ai-dot-2, var(--navy)); vertical-align: -2px; }
 .pl-pilotix-list { margin: 4px 0; padding-inline-start: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.5; }
+
+/* Pilot AI › Settings › Stockage des photos HD (Cloudflare R2) */
+.pp-store { display: flex; flex-direction: column; gap: 10px; }
+.pp-steps { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 3px; }
+.pp-ok { color: var(--ok); }

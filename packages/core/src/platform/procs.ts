@@ -52,6 +52,7 @@ import * as pilot from '../modules/pilotlearn';
 import * as exam from '../modules/pilotexam';
 import { pilotixLessons } from '../modules/pilotexamdata';
 import { pilotConfig, pilotToday, savePilotConfig, saveVoiceConfig, voiceConfig, voiceToday, VOICE_MODEL } from './pilotai';
+import { saveStore, storeStatus, testStore } from '../photostore';
 import { AI_FEATURES, aiBill, aiLabOfMonth, aiUsageOfMonth, aiUsageSince, monthOf, saveAiBill } from './aiusage';
 import { pilotTry, TestPhoto } from '../modules/dellal';
 import { addCoachLahja, decideLahja, decideManyLahja, LAHJA_NO_CHANGE, lahjaAccepted, lahjaErr, lahjaState, lahjaWaiting, LahjaWord } from '../modules/lahja';
@@ -1166,6 +1167,38 @@ export const PLATFORM_REGISTRY = {
       return { ...(await voiceConfig(ctx.t)), today: await voiceToday(ctx.t) };
     },
   ),
+  /**
+   * Where the shops' HD product photos live (Dellal sends them): Pilotix's Cloudflare R2 bucket. The secret is typed once
+   * and never shown again; « Tester » puts a small file in the bucket, reads it back and removes it.
+   */
+  'p.photos.store': pproc(ALL, z.object({}), async (ctx) => storeStatus(ctx.t.platform)),
+  'p.photos.storeSave': pproc(
+    MANAGERS,
+    z.object({
+      account: z.string().trim().max(64).optional(),
+      bucket: z.string().trim().max(64).optional(),
+      keyId: z.string().trim().max(128).optional(),
+      secret: z.string().trim().max(256).optional(),
+      clear: z.boolean().optional(),
+    }),
+    async (ctx, i) => {
+      let r;
+      try {
+        r = await saveStore(ctx.t.platform, i);
+      } catch (e: any) {
+        throw bad(String(e?.message ?? e));
+      }
+      await audit(ctx, 'photos.store', null, { bucket: r.bucket, on: r.configured, keyId: i.keyId ? 'new' : 'kept', secret: i.secret ? 'new' : 'kept', clear: !!i.clear });
+      return r;
+    },
+  ),
+  'p.photos.storeTest': pproc(MANAGERS, z.object({}), async (ctx) => {
+    try {
+      return await testStore(ctx.t.platform);
+    } catch (e: any) {
+      throw bad(String(e?.message ?? e));
+    }
+  }),
   /** Which shops teach Dellal: chosen here only. Turning a shop off deletes what Pilot AI kept of its chats at once. */
   'p.pilot.share': pproc(MANAGERS, z.object({ shopId: z.number().int().positive(), share: z.boolean() }), async (ctx, i) => {
     const c = await pilotConfig(ctx.t);

@@ -802,6 +802,9 @@ function examV2() {
 /** the example answer of one control-room call (the Pilot AI page's reads) */
 export function demoAnswer(name: string, input: any): unknown {
   switch (name) {
+    // Pilotix's photo storage (Cloudflare R2): connected and tested, in the example
+    case 'p.photos.store':
+      return { configured: true, account: 'a1b2c3d4e5f60718293a4b5c6d7e8f90', bucket: 'pilotix-photos', keyId: '3f9c2a71b0d84e6f9a1c5b7d2e4f6a8c', secretSet: true, lastTest: { at: new Date(Date.parse(`${today()}T08:00:00Z`)).toISOString(), ok: true, error: null } };
     case 'p.pilot.exam.get':
       return examDemo(Number(input?.id) || 13);
     case 'p.pilot.exam.start':
