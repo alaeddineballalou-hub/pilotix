@@ -8,6 +8,7 @@ import {
   ExecutionContext,
   Get,
   Headers,
+  HttpCode,
   HttpException,
   Injectable,
   Logger,
@@ -1478,6 +1479,31 @@ class ApiController {
       received += list.length + comments.length;
     }
     return { ok: true, received };
+  }
+
+  /**
+   * Meta's data deletion request (Facebook Login for Business › Settings › Data Deletion Request URL): a person removed
+   * Pilotix from Facebook and asked for their data to go. The signed_request is checked with Pilotix's Meta app secret;
+   * the person's linked accounts go, and Meta gets the code and the page of the request (only those two).
+   */
+  @Public()
+  @Post('hooks/meta-deletion')
+  @HttpCode(200)
+  async metaDeletion(@Body() body: any) {
+    const m = optionalSocial();
+    if (!m?.metaDeletion) throw new core.AppError('bad_request', 'Indisponible sur ce serveur.');
+    const r = await m.metaDeletion(this.core.t, String(body?.signed_request ?? ''), config.publicUrl);
+    new Logger('Comptes').log(`Meta data deletion request ${r.confirmation_code}: ${r.removed} linked account(s) removed`);
+    return { url: r.url, confirmation_code: r.confirmation_code };
+  }
+
+  /** The page of a deletion request, by its code: done, when, how many accounts went. Nothing about who asked. */
+  @Public()
+  @Get('hooks/meta-deletion/:code')
+  async metaDeletionPage(@Param('code') code: string, @Res() res: any) {
+    const m = optionalSocial();
+    const r = m?.deletionPage ? await m.deletionPage(this.core.t, code) : { found: false, html: '<!DOCTYPE html><meta charset="utf-8"><p>Pilotix</p>' };
+    return res.status(r.found ? 200 : 404).header('Content-Type', 'text/html; charset=utf-8').header('Cache-Control', 'no-store').send(r.html);
   }
 
   /** Delivery AI agent: the SMS gateway's reports (sent, delivered, failed) and the customers' SMS answers. Key in ?key=. */

@@ -1634,6 +1634,7 @@
       "configId": "ID de configuration (Facebook Login for Business)",
       "configHint": "Conseillé : une configuration « User access token » (jeton d’accès utilisateur). Le vendeur se connecte avec son compte Facebook ; ses pages restent liées sans fin, les chiffres de pub demandent une nouvelle connexion environ tous les 60 jours. « System-user » demande un portefeuille business et le statut Tech Provider chez Meta.",
       "redirect": "Adresse de retour (Facebook Login › Réglages)",
+      "deletion": "Adresse de suppression des données",
       "webhook": "Adresse du webhook",
       "verify": "Jeton de vérification",
       "verifyAfter": "créé au premier enregistrement",

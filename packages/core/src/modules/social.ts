@@ -159,6 +159,19 @@ CREATE TABLE IF NOT EXISTS platform.social_hooks (
 );
 `;
 
+/**
+ * Meta's data deletion requests (p025): the code Meta gives the person, how many linked accounts went, when. Never who
+ * asked: the person's Facebook id is only used to find their accounts, then forgotten with them.
+ */
+export const SOCIAL_DELETIONS_SQL = `
+CREATE TABLE IF NOT EXISTS platform.social_deletions (
+  code     text        PRIMARY KEY,
+  provider text        NOT NULL DEFAULT 'meta',
+  removed  integer     NOT NULL DEFAULT 0,
+  at       timestamptz NOT NULL DEFAULT now()
+);
+`;
+
 // ---------------------------------------------------------------- Pilotix's own apps (the control room)
 /** Pilotix's Meta and TikTok apps: what the control room shows (never the secrets). */
 export interface SocialApps {
@@ -236,11 +249,12 @@ async function igLoginShop(t: Tenancy, igId: string): Promise<number | null> {
   return v?.shopId ? num(v.shopId) : null;
 }
 export const appReady = (a: SocialApps, p: SocialProvider) => (p === 'meta' ? !!(a.meta.appId && a.meta.hasSecret) : !!(a.tiktok.appId && a.tiktok.hasSecret));
-/** Where the login tab comes back, and where Meta sends the Pages' messages and comments. */
+/** Where the login tab comes back, where Meta sends the Pages' messages and comments, and its data deletion requests. */
 export const socialUrls = (publicUrl: string) => ({
   metaRedirect: `${publicUrl}/api/oauth/meta/callback`,
   tiktokRedirect: `${publicUrl}/api/oauth/tiktok/callback`,
   metaWebhook: `${publicUrl}/api/hooks/meta-app`,
+  metaDeletion: `${publicUrl}/api/hooks/meta-deletion`,
 });
 
 export const SocialAppsInput = z.object({
@@ -424,6 +438,20 @@ export async function stopUse(t: Tenancy, shopId: number, kind: AssetKind) {
   await t.platform.query(`DELETE FROM platform.social_uses WHERE shop_id = $1 AND kind = $2`, [shopId, kind]);
   const schema = await schemaOfShop(t, shopId);
   if (schema) await clearShop(t.shop(schema), kind);
+}
+
+/** A linked account goes: every boutique that used its Pages or ad accounts stops, its tokens and assets go with it. */
+export async function removeLink(t: Tenancy, linkId: number) {
+  for (const u of await t.platform.query(`SELECT u.shop_id, u.kind FROM platform.social_uses u JOIN platform.social_assets a ON a.id = u.asset_id WHERE a.link_id = $1`, [linkId]))
+    await stopUse(t, num(u.shop_id), u.kind);
+  await t.platform.query(`DELETE FROM platform.social_links WHERE id = $1`, [linkId]);
+}
+
+/** A data deletion request Meta sent, by its code: when, and how many linked accounts went (nothing about who). */
+export async function deletionStatus(t: Tenancy, code: string): Promise<{ code: string; at: string; removed: number } | null> {
+  if (!/^[A-Z0-9]{8,40}$/.test(String(code ?? ''))) return null;
+  const r = (await t.platform.query(`SELECT code, removed, at FROM platform.social_deletions WHERE code = $1`, [code]))[0];
+  return r ? { code: String(r.code), at: iso(r.at), removed: num(r.removed) } : null;
 }
 
 /** Writes what a boutique uses where its agents read it (its schema's settings). */
@@ -867,9 +895,7 @@ export const socialProcs = {
     const w = await who(ctx);
     const l = await visibleLink(w, i.linkId);
     if (l.shop_id === null && !w.isOwner) throw new AppError('forbidden', 'Ce compte sert à toutes les boutiques : seul leur propriétaire le retire.');
-    for (const u of await w.t.platform.query(`SELECT u.shop_id, u.kind FROM platform.social_uses u JOIN platform.social_assets a ON a.id = u.asset_id WHERE a.link_id = $1`, [i.linkId]))
-      await stopUse(w.t, num(u.shop_id), u.kind);
-    await w.t.platform.query(`DELETE FROM platform.social_links WHERE id = $1`, [i.linkId]);
+    await removeLink(w.t, i.linkId);
     ctx.emit({ type: 'settings' });
     return listFor(ctx);
   }),

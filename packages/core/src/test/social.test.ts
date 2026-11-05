@@ -8,7 +8,8 @@ import { call, Ctx, login, migrate, migrateAll, PCtx, pgliteTenancy, platformCal
 import { loadShop, passwordFromLink } from '../platform';
 import { noteBadSignature, noteIgLogin, resetSocialDemo, routeMeta } from '../modules/social';
 import { setRaw } from '../modules/admin';
-import { finishLogin, loginPage, runSocial } from '../social-server';
+import { deletionPage, finishLogin, loginPage, metaDeletion, parseSignedRequest, runSocial } from '../social-server';
+import { createHmac } from 'node:crypto';
 
 const OWNER = { email: 'owner@boutique.dz', password: 'Owner-Password-1' };
 const SELLER = 'karim@bebe.dz';
@@ -120,7 +121,7 @@ test('Pilotix puts in its Meta and TikTok apps: their secrets are kept but never
   assert.equal(r.tiktok.hasSecret, true);
   assert.deepEqual(r.ready, { meta: true, tiktok: true });
   assert.ok(r.verifyToken.length > 20, 'a verify token for the webhook');
-  assert.deepEqual(r.urls, { metaRedirect: `${URL0}/api/oauth/meta/callback`, tiktokRedirect: `${URL0}/api/oauth/tiktok/callback`, metaWebhook: `${URL0}/api/hooks/meta-app` });
+  assert.deepEqual(r.urls, { metaRedirect: `${URL0}/api/oauth/meta/callback`, tiktokRedirect: `${URL0}/api/oauth/tiktok/callback`, metaWebhook: `${URL0}/api/hooks/meta-app`, metaDeletion: `${URL0}/api/hooks/meta-deletion` });
   assert.ok(!JSON.stringify(r).includes('meta-app-secret-123') && !JSON.stringify(r).includes('tiktok-secret-456'), 'no secret goes back');
   // '' keeps a secret
   const kept: any = await p('p.social.apps.save', { meta: { ...APPS.meta, secret: '' }, tiktok: { ...APPS.tiktok, secret: '' } });
@@ -579,4 +580,58 @@ test('Instagram’s own login: its webhooks (another number, maybe) go to the bo
   assert.deepEqual((await routeMeta(t, { object: 'instagram', entry: [{ id: '178888' }] })).map((r) => r.shopId), [a.shop!.id]);
   await noteIgLogin(t, a.shop!.id, '', '');
   assert.deepEqual(await routeMeta(t, { object: 'instagram', entry: [{ id: '178888' }] }), []);
+});
+
+// ---------------------------------------------------------------- Meta's data deletion request
+/** A signed_request as Meta sends it: « signature.payload », both base64url, HMAC-SHA256 with the app secret. */
+const signed = (payload: object, secret = APPS.meta.secret) => {
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  return `${createHmac('sha256', secret).update(body).digest('base64url')}.${body}`;
+};
+test('Meta’s data deletion request: signed with the app secret, the person’s linked accounts go, Meta gets a code and a page', async () => {
+  refuseSwap = false;
+  probe.refuse = false;
+  const c = await as(await store('Bébé Annaba', SELLER));
+  const s: any = await call('social.start', c, { provider: 'meta', scope: 'here' });
+  graph = { me: { id: '7007', name: 'Sara Meziane' }, pages: [{ id: '9100', name: 'Bébé Annaba DZ', access_token: 'PAGE_TOKEN_9' }], ads: [] };
+  assert.equal((await finishLogin(t, 'meta', { code: 'C9', state: s.state }, URL0)).ok, true);
+  assert.equal(await setting(c, 'secret_dellal_page_token'), 'PAGE_TOKEN_9');
+
+  // not signed with Pilotix's secret, changed on the way, another algorithm, or no signature: nothing goes
+  const ok = { algorithm: 'HMAC-SHA256', issued_at: 1790000000, user_id: '7007' };
+  await assert.rejects(() => metaDeletion(t, signed(ok, 'another-secret'), URL0), /Signature Meta invalide/);
+  const [sig, body] = signed(ok).split('.');
+  assert.equal(parseSignedRequest(`${sig}.${Buffer.from(JSON.stringify({ ...ok, user_id: '5001' })).toString('base64url')}`, APPS.meta.secret), null);
+  assert.equal(parseSignedRequest(signed({ ...ok, algorithm: 'HMAC-SHA1' }), APPS.meta.secret), null);
+  assert.equal(parseSignedRequest(body, APPS.meta.secret), null);
+  assert.equal(parseSignedRequest(signed(ok), ''), null);
+  assert.equal(parseSignedRequest(signed(ok), APPS.meta.secret)?.user_id, '7007');
+  assert.equal((await call('social.list', c, {})).links.length, 1);
+
+  // the right one: the person's account, its token and its Page go, the boutique stops using them
+  const r = await metaDeletion(t, signed(ok), URL0);
+  assert.match(r.confirmation_code, /^[A-F0-9]{20}$/);
+  assert.equal(r.url, `${URL0}/api/hooks/meta-deletion/${r.confirmation_code}`);
+  assert.equal(r.removed, 1);
+  assert.equal((await call('social.list', c, {})).links.length, 0);
+  assert.equal(await setting(c, 'secret_dellal_page_token'), null);
+  assert.equal((await t.platform.query(`SELECT count(*)::int AS n FROM platform.social_links WHERE ext_id = '7007'`))[0].n, 0);
+  // the other people's accounts stay
+  assert.ok((await call('social.list', a, {})).links.length > 0);
+
+  // the page Meta gives the person: done, when, how many; nothing about who
+  const page = await deletionPage(t, r.confirmation_code.toLowerCase());
+  assert.equal(page.found, true);
+  assert.match(page.html, new RegExp(`${r.confirmation_code}</bdi>: done on <bdi>\\d{4}-\\d{2}-\\d{2}</bdi>`));
+  assert.match(page.html, /deleted the Facebook accounts you had linked \(1\)/);
+  assert.ok(!page.html.includes('7007') && !page.html.includes('Sara'));
+  assert.equal((await deletionPage(t, 'NOPE1234')).found, false);
+  assert.equal((await deletionPage(t, '<script>')).found, false);
+  // a person with nothing linked still gets a code, and the page says nothing was kept
+  const none = await metaDeletion(t, signed({ ...ok, user_id: '8008' }), URL0);
+  assert.equal(none.removed, 0);
+  assert.match((await deletionPage(t, none.confirmation_code)).html, /there was nothing to delete/);
+  // only the code is kept, never the person's id
+  const row = (await t.platform.query(`SELECT * FROM platform.social_deletions WHERE code = $1`, [r.confirmation_code]))[0];
+  assert.deepEqual(Object.keys(row).sort(), ['at', 'code', 'provider', 'removed']);
 });

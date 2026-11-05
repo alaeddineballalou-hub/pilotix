@@ -1634,6 +1634,7 @@
       "configId": "Configuration ID (Facebook Login for Business)",
       "configHint": "Recommended: a « User access token » configuration. Sellers log in with their own Facebook account; their Pages stay linked with no end date, and ad numbers need a new login about every 60 days. « System-user » needs a business portfolio and Tech Provider status at Meta.",
       "redirect": "Return address (Facebook Login › Settings)",
+      "deletion": "Data deletion address",
       "webhook": "Webhook address",
       "verify": "Verify token",
       "verifyAfter": "made at the first save",

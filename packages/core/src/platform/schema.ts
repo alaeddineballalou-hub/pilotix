@@ -6,7 +6,7 @@ import { AI_USAGE_SQL } from './aiusage';
 import { LAHJA_PLATFORM_SQL } from '../modules/lahja';
 import { DARIJA_BOOK_SQL } from '../modules/darijabook';
 import { VOCAB_PLATFORM_SQL } from '../modules/vocab';
-import { SOCIAL_HOOKS_SQL, SOCIAL_PLATFORM_SQL } from '../modules/social';
+import { SOCIAL_DELETIONS_SQL, SOCIAL_HOOKS_SQL, SOCIAL_PLATFORM_SQL } from '../modules/social';
 
 const P001 = `
 CREATE SCHEMA IF NOT EXISTS platform;
@@ -618,6 +618,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
     `CREATE TABLE IF NOT EXISTS platform.revoked_tokens (jti text PRIMARY KEY, exp timestamptz NOT NULL, at timestamptz NOT NULL DEFAULT now());
      CREATE INDEX IF NOT EXISTS revoked_tokens_at ON platform.revoked_tokens (at);`,
   ],
+  // Meta's data deletion requests: their codes (Facebook Login for Business › Data Deletion Request URL)
+  ['p025_social_deletions', SOCIAL_DELETIONS_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

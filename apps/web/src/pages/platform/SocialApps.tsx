@@ -35,7 +35,7 @@ function SocialAppsForm({ d, manager }: { d: Apps; manager: boolean }) {
   const [ttSecret, setTtSecret] = useState<string | null>('');
   const save = usePilotAction('p.social.apps.save', { success: t('platform.saved'), onDone: () => (setMetaSecret(''), setIgSecret(''), setTtSecret('')) });
   const base = typeof window !== 'undefined' ? window.location.origin : '';
-  const urls = d.urls ?? { metaRedirect: `${base}/api/oauth/meta/callback`, tiktokRedirect: `${base}/api/oauth/tiktok/callback`, metaWebhook: `${base}/api/hooks/meta-app` };
+  const urls = d.urls ?? { metaRedirect: `${base}/api/oauth/meta/callback`, tiktokRedirect: `${base}/api/oauth/tiktok/callback`, metaWebhook: `${base}/api/hooks/meta-app`, metaDeletion: `${base}/api/hooks/meta-deletion` };
   const digits = (v: string) => v.replace(/\D/g, '').slice(0, 40);
   const chip = (ok: boolean) => <span className={`chip ${ok ? 'pp-chip-ok' : 'pp-chip-warn'}`}>{ok ? t(K + 'ready') : t(K + 'todo')}</span>;
   const secretField = (label: string, has: boolean, v: string | null, set: (x: string | null) => void) => (
@@ -96,6 +96,17 @@ function SocialAppsForm({ d, manager }: { d: Apps; manager: boolean }) {
               <CopyCode code={d.verifyToken || t(K + 'verifyAfter')} small />
             </Field>
           </div>
+          {/* Meta calls it when a person asks Facebook to delete their data: their linked accounts go, Meta gets a code */}
+          <Field
+            label={t(K + 'deletion')}
+            hint={
+              <bdi className="dl-path" dir="ltr">
+                Facebook Login for Business › Settings › Data Deletion Request URL
+              </bdi>
+            }
+          >
+            <CopyCode code={urls.metaDeletion} small />
+          </Field>
         </section>
         <section aria-labelledby="pl-sa-tt">
           <h3 id="pl-sa-tt">

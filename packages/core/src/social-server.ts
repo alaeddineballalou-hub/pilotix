@@ -3,10 +3,11 @@
 // expire, or a configuration's « system user » token that does not expire; TikTok: an advertiser's token), then what the account may use
 // is read (Facebook Pages with their Instagram account and their own tokens, Meta ad accounts, TikTok ad accounts) and
 // each Page is subscribed to Pilotix's webhook (its messages and comments come to Pilotix). Tokens never leave the server.
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { num } from './db';
 import { AppError, Ctx } from './rpc';
 import type { Tenancy } from './platform/tenancy';
-import { endState, FoundAccount, FoundAsset, lastBadSignature, saveLink, SOCIAL, SocialCheck, SocialProvider, socialApps, socialSecret, SocialTest, socialUrls, takeState } from './modules/social';
+import { deletionStatus, endState, FoundAccount, FoundAsset, lastBadSignature, removeLink, saveLink, SOCIAL, SocialCheck, SocialProvider, socialApps, socialSecret, SocialTest, socialUrls, takeState } from './modules/social';
 
 async function fetchJson(url: string, init: RequestInit, who: string): Promise<any> {
   let res: Response;
@@ -439,4 +440,67 @@ export function loginPage(r: LoginEnd): string {
 main{max-width:420px;margin:24px;padding:28px;border-radius:16px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.08)}h1{margin:0 0 8px;font-size:22px}
 .dot{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:50%;margin-bottom:14px;color:#fff;font-size:24px;background:${r.ok ? '#1f9d55' : '#c2410c'}}p{margin:0;color:#4b5563}</style></head>
 <body><main><div class="dot">${r.ok ? '✓' : '!'}</div><h1>${title}</h1><p>${line}</p></main>${r.ok ? '<script>setTimeout(function(){window.close()},1500)</script>' : ''}</body></html>`;
+}
+
+// ---------------------------------------------------------------- Meta's data deletion requests
+/** A signed_request from Meta (« signature.payload », both base64url, HMAC-SHA256 with the app secret): its payload, or null. */
+export function parseSignedRequest(signed: string, secret: string): Record<string, any> | null {
+  const s = String(signed ?? '');
+  const dot = s.indexOf('.');
+  if (dot < 1 || !secret) return null;
+  const sig = Buffer.from(s.slice(0, dot), 'base64url');
+  const payload = s.slice(dot + 1);
+  const want = createHmac('sha256', secret).update(payload).digest();
+  if (sig.length !== want.length || !timingSafeEqual(sig, want)) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    return data && typeof data === 'object' && String(data.algorithm ?? '').toUpperCase() === 'HMAC-SHA256' ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Meta's « data deletion request » (Facebook Login for Business › Settings › Data Deletion Request URL): a person removed
+ * Pilotix from Facebook and asked for their data to go. Every Meta account they linked goes, like « Retirer » (its tokens,
+ * Pages and ad accounts: the boutiques stop using them); Meta gets a code and the page that tells the request's state.
+ */
+export async function metaDeletion(t: Tenancy, signedRequest: string, publicUrl: string): Promise<{ url: string; confirmation_code: string; removed: number }> {
+  const secret = await socialSecret(t, 'meta');
+  if (!secret) throw new AppError('bad_request', 'App Meta de Pilotix manquante');
+  const data = parseSignedRequest(signedRequest, secret);
+  const userId = data?.user_id ? String(data.user_id) : '';
+  if (!userId) throw new AppError('unauthorized', 'Signature Meta invalide');
+  const links = await t.platform.query(`SELECT id FROM platform.social_links WHERE provider = 'meta' AND ext_id = $1`, [userId]);
+  for (const l of links) await removeLink(t, num(l.id));
+  const code = randomBytes(10).toString('hex').toUpperCase();
+  await t.platform.query(`INSERT INTO platform.social_deletions (code, provider, removed) VALUES ($1, 'meta', $2)`, [code, links.length]);
+  return { url: `${socialUrls(publicUrl).metaDeletion}/${code}`, confirmation_code: code, removed: links.length };
+}
+
+/** The page Meta gives the person for their request: its code, its state and its day, in English, French and Arabic. */
+export async function deletionPage(t: Tenancy, code: string): Promise<{ found: boolean; html: string }> {
+  const r = await deletionStatus(t, String(code ?? '').trim().toUpperCase());
+  const c = r ? `<bdi>${esc(r.code)}</bdi>` : '';
+  const day = r ? `<bdi>${r.at.slice(0, 10)}</bdi>` : '';
+  const n = r?.removed ?? 0;
+  const lines: [string, string, string, string][] = !r
+    ? [
+        ['en', 'ltr', 'Unknown request code.', 'Check the link Facebook gave you.'],
+        ['fr', 'ltr', 'Code de demande inconnu.', 'Vérifiez le lien donné par Facebook.'],
+        ['ar', 'rtl', 'رمز طلب غير معروف.', 'تحقّق من الرابط الذي أعطاك إياه فيسبوك.'],
+      ]
+    : [
+        ['en', 'ltr', `Request ${c}: done on ${day}.`, n ? `Pilotix deleted the Facebook accounts you had linked (${n}), with their keys, Pages and ad accounts.` : 'Pilotix kept no Facebook data about you: there was nothing to delete.'],
+        ['fr', 'ltr', `Demande ${c} : faite le ${day}.`, n ? `Pilotix a supprimé les comptes Facebook que vous aviez liés (${n}), avec leurs clés, leurs pages et leurs comptes pub.` : 'Pilotix ne gardait aucune donnée Facebook sur vous : il n’y avait rien à supprimer.'],
+        ['ar', 'rtl', `الطلب ${c}: تمّ في ${day}.`, n ? `حذف Pilotix حسابات فيسبوك التي ربطتها (${n})، مع مفاتيحها وصفحاتها وحسابات إعلاناتها.` : 'لم يحتفظ Pilotix بأي بيانات فيسبوك عنك: لم يكن هناك ما يُحذف.'],
+      ];
+  const body = lines.map(([lang, dir, h, p]) => `<section lang="${lang}" dir="${dir}"><h2>${h}</h2><p>${p}</p></section>`).join('');
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Data deletion · Pilotix</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f4f5f8;color:#16202e}
+main{max-width:480px;margin:24px;padding:28px;border-radius:16px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.08)}h1{margin:0 0 4px;font-size:22px}
+h2{margin:18px 0 4px;font-size:17px}p{margin:0;color:#4b5563}section+section{border-top:1px solid #eceef2;margin-top:18px}
+.dot{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:50%;margin-bottom:14px;color:#fff;font-size:24px;background:${r ? '#1f9d55' : '#6b7280'}}</style></head>
+<body><main><div class="dot">${r ? '✓' : '?'}</div><h1>Pilotix</h1>${body}</main></body></html>`;
+  return { found: !!r, html };
 }
