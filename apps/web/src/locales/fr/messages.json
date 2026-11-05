@@ -198,7 +198,9 @@
     "igLinked": "Relié : @{{user}}",
     "igOk": "Instagram relié : @{{user}}",
     "igStep1b": "puis acceptez l’invitation dans Instagram :",
-    "igStepNote": "Une clé d’utilisateur système (Paramètres de l’entreprise › Utilisateurs système, avec votre compte Instagram et la permission instagram_manage_messages) marche aussi, et ne finit jamais."
+    "igStepNote": "Une clé d’utilisateur système (Paramètres de l’entreprise › Utilisateurs système, avec votre compte Instagram et la permission instagram_manage_messages) marche aussi, et ne finit jamais.",
+    "photos": "Envoyer les photos des produits",
+    "photosHint": "Quand un client demande une photo, {{name}} envoie les vraies photos du produit (la couleur demandée d’abord). Il regarde aussi les photos que les clients envoient."
   },
   "lahja": {
     "fix": "Leçon de darija",
@@ -246,5 +248,17 @@
     "read": "Écrire ce vocal en texte",
     "reading": "Lecture…",
     "readDone": "Vocal écrit en texte"
+  },
+  "photo": {
+    "label": "Photo",
+    "done": "regardée par l’IA",
+    "pending": "lecture…",
+    "failed": "pas lue",
+    "off": "lecture des photos éteinte",
+    "send": "Envoyer une photo (comme le client)",
+    "notImage": "Ce fichier n’est pas une photo.",
+    "sent": "Photo envoyée",
+    "sentN_one": "{{count}} photo envoyée",
+    "sentN_other": "{{count}} photos envoyées"
   }
 }

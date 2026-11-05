@@ -1628,6 +1628,17 @@
         "reset": "Annuler les changements",
         "resetAsk": "Revenir au vocabulaire en service ? Les changements pas encore poussés sont perdus.",
         "resetDone": "Vocabulaire revenu à celui en service"
+      },
+      "pilotix": {
+        "title_one": "{{count}} leçon écrite par Pilotix",
+        "title_other": "{{count}} leçons écrites par Pilotix",
+        "lead": "Pour aucune faute et une conversation bien en ordre (et les nouvelles photos). Ajoutées, elles attendent le prochain « Push en test ».",
+        "add_one": "Ajouter la leçon",
+        "add_other": "Ajouter les {{count}} leçons",
+        "show": "Voir les leçons",
+        "hide": "Cacher",
+        "addedToast_one": "{{count}} leçon ajoutée : elle part avec le prochain « Push en test »",
+        "addedToast_other": "{{count}} leçons ajoutées : elles partent avec le prochain « Push en test »"
       }
     },
     "voice": {
@@ -1732,6 +1743,54 @@
       "inService": "En service : v{{v}}, depuis le {{date}}.",
       "inServiceNone": "En service : la méthode de base (pas encore de version).",
       "managers": "Un manager fait les push."
+    },
+    "exam": {
+      "title": "Examen : 10 questions",
+      "help": "Dix clients simulés de la boutique parlent à Dellal sur la version choisie, comme dans « Tester Dellal » (rien n’est envoyé). Pilot AI note chaque conversation sur 10 et propose la leçon qui corrige la faute principale. La note de chaque version s’affiche aussi avant « Push sur le serveur ».",
+      "start": "Lancer l’examen",
+      "lead": "Le prix, les centimes, la livraison, une photo demandée, la photo du client, l’arnaque, « c’est cher », la famille, une commande complète, une question sans réponse. Quelques minutes.",
+      "progress": "Question {{done}} sur {{total}} notée",
+      "failed": "L’examen n’a pas pu commencer.",
+      "failedAt": "Examen arrêté : {{reason}}",
+      "noProduct": "la boutique n’a aucun produit actif",
+      "stopped": "le serveur a redémarré pendant l’examen, relancez-le",
+      "verdictTop": "Parfait : prêt pour toutes les boutiques",
+      "verdictGood": "Très bien : quelques détails à corriger",
+      "verdictWork": "Correct, mais des fautes à corriger avant le push",
+      "verdictBad": "Pas prêt : corrigez les fautes avant le push",
+      "book": {
+        "live": "v{{v}} en service",
+        "trial": "v{{v}} en test",
+        "test": "v{{v}} en test A/B",
+        "none": "sans leçons"
+      },
+      "q": {
+        "price": "Le prix",
+        "centimes": "Un prix en centimes",
+        "fee": "La livraison et le total",
+        "photo_ask": "Une photo demandée",
+        "photo_client": "La photo du client",
+        "trust": "La peur de l’arnaque",
+        "expensive": "« C’est cher »",
+        "family": "« Je demande à ma famille »",
+        "order": "Une commande complète",
+        "unknown": "Une question sans réponse"
+      },
+      "notMarked": "Pas notée (compte 0)",
+      "perfect": "Parfait",
+      "who": {
+        "customer": "Client :",
+        "tool": "Outil :",
+        "team": "Équipe :"
+      },
+      "lessonTitle": "La leçon qui corrigerait la faute",
+      "lessonAdd": "Ajouter cette leçon",
+      "lessonDone": "Leçon ajoutée",
+      "lessonAdded": "Leçon ajoutée : elle part avec le prochain « Push en test »",
+      "lessonIdea": "Une idée seulement : elle ne passe pas les contrôles des leçons (écrivez-la dans Leçons › Vente).",
+      "pass": "Passer l’examen",
+      "noneFor": "Pas encore d’examen pour la v{{v}}.",
+      "lineFor": "Examen de la v{{v}} : {{score}}/10"
     }
   },
   "seller": {

@@ -23,6 +23,7 @@ import { pilotConfig, pilotToday } from '../platform/pilotai';
 import { guideText, HAS_GUIDE, readGuide, toFill } from './guide';
 import { vocabBlock, vocabFor } from './vocab';
 import { linkedPage, noteIgLogin } from './social';
+import { catalogueThumbs, imageBlock, PHOTO_MODEL, PHOTO_SYSTEM, photoBody, PhotoReading, photoRequest, PhotoSrc, productPhotos, productsWithPhotos, readPhotoAnswer } from './dellalphotos';
 
 // ---------------------------------------------------------------- settings and secrets
 export const DELLAL_CHANNELS = ['whatsapp', 'messenger', 'instagram', 'tiktok', 'test'] as const;
@@ -53,6 +54,8 @@ export interface DellalSettings {
   autoOrderMinutes: number;
   /** answer between 23:00 and 08:00 (Algeria) */
   nightReplies: boolean;
+  /** send the products' real photos when a customer asks for one (Dellal reads the customers' photos either way) */
+  photos: boolean;
   /** shop knowledge: warranty, sizes, FAQ… */
   notes: string;
   /** extra reasons to hand over to a person, one per line */
@@ -89,6 +92,7 @@ export const DEFAULT_DELLAL: DellalSettings = {
   followUpHours: 3,
   autoOrderMinutes: 20,
   nightReplies: true,
+  photos: true,
   notes: '',
   handoffTopics: 'Réclamation ou colis en retard\nAchat en gros\nLe client demande à parler à une personne',
   servicePhone: '',
@@ -242,9 +246,10 @@ export const IncomingInput = z.object({
   text: z.string().min(1).max(4000),
   messageId: z.string().max(200).nullable().optional(),
   source: z.string().max(200).nullable().optional(),
-  /** a voice note: where the server fetches it to write it as text (dellal-server › transcribe) */
+  /** a voice note (written as text: dellal-server › transcribe) or a photo (read by Pilot AI before Dellal answers): where
+   *  the server fetches it */
   media: z
-    .object({ kind: z.literal('audio'), id: z.string().max(200).optional(), url: z.string().max(2000).optional(), mime: z.string().max(100).optional() })
+    .object({ kind: z.enum(['audio', 'image']), id: z.string().max(200).optional(), url: z.string().max(2000).optional(), mime: z.string().max(100).optional() })
     .nullable()
     .optional(),
 });
@@ -276,8 +281,9 @@ export async function receiveMessage(ctx: Ctx, m: z.infer<typeof IncomingInput> 
     // conversation just before their answer, so the team and Dellal see what they answer.
     const notice = phone ? await noticeForConversation(tx, phone, id) : null;
     if (notice) await addMessage(tx, id, { role: 'agent', body: notice.body, at: notice.sentAt, meta: { notify: notice.kind, notifyId: notice.id, ref: notice.ref, via: notice.channel }, quiet: true });
-    const voice = m.media?.kind === 'audio' && (m.media.id || m.media.url) ? { voice: { status: 'pending', ...(m.media.id ? { id: m.media.id } : {}), ...(m.media.url ? { url: m.media.url } : {}), ...(m.media.mime ? { mime: m.media.mime } : {}) } } : undefined;
-    const mid = await addMessage(tx, id, { role: 'customer', body: m.text, externalId: m.messageId ?? null, at: m.at ?? null, ...(voice ? { meta: voice } : {}) });
+    const where = m.media && (m.media.id || m.media.url) ? { status: 'pending', ...(m.media.id ? { id: m.media.id } : {}), ...(m.media.url ? { url: m.media.url } : {}), ...(m.media.mime ? { mime: m.media.mime } : {}) } : null;
+    const media = where ? (m.media!.kind === 'image' ? { photo: where } : { voice: where }) : undefined;
+    const mid = await addMessage(tx, id, { role: 'customer', body: m.text, externalId: m.messageId ?? null, at: m.at ?? null, ...(media ? { meta: media } : {}) });
     // their first words after the message are their answer to it (later ones belong to the conversation)
     if (mid && phone && notice) await markReply(tx, phone, m.text, 'whatsapp');
     return mid ? { conversationId: id, messageId: mid } : null;
@@ -578,6 +584,26 @@ export const DELLAL_TOOLS = [
     description: 'Passe la conversation à une personne de l’équipe et arrête de répondre. Utilise-le pour les cas listés et quand le client est fâché. Pour une question dont tu n’as pas la réponse, utilise callback.',
     input_schema: { type: 'object', properties: { reason: { type: 'string' } }, required: ['reason'] },
   },
+  {
+    name: 'send_photos',
+    description:
+      'Envoie au client les vraies photos d’un produit marqué « photos » (celles de la couleur ou de la taille qu’il veut d’abord), quand il demande une photo (« tswira », « sawerli », « photo », « صورة »…) ou une autre couleur. Les photos partent juste avant ton message : ne dis pas « je vais l’envoyer », dis simplement que la voilà, puis pose UNE question.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        product_id: { type: 'integer' },
+        variant_id: { type: 'integer', description: 'la couleur / taille qu’il veut voir, si tu la connais' },
+        count: { type: 'integer', description: 'combien de photos, de 1 à 3 (2 par défaut)' },
+      },
+      required: ['product_id'],
+    },
+  },
+  {
+    name: 'product_photos',
+    description:
+      'Regarde toi-même les photos d’un produit marqué « photos » (sans les envoyer) pour répondre à une question sur son aspect : la couleur exacte, la forme, un détail, comment il est fait. Ne dis que ce que tu vois : jamais une matière, une marque ou une mesure que la photo ne montre pas.',
+    input_schema: { type: 'object', properties: { product_id: { type: 'integer' }, variant_id: { type: 'integer', description: 'la couleur / taille dont il parle' } }, required: ['product_id'] },
+  },
 ] as const;
 
 const ITEMS_SCHEMA = {
@@ -630,7 +656,7 @@ const UPDATE_ORDER = {
 export function toolsFor(s: Pick<DellalSettings, 'version'>): readonly { name: string; description: string; input_schema: unknown }[] {
   if (s.version !== '001') return DELLAL_TOOLS;
   const by = (n: string) => DELLAL_TOOLS.find((t) => t.name === n)!;
-  return [by('search_products'), by('delivery_fee'), CREATE_ORDER_001, UPDATE_ORDER, by('callback'), by('handoff'), by('product_guide')];
+  return [by('search_products'), by('delivery_fee'), CREATE_ORDER_001, UPDATE_ORDER, by('callback'), by('handoff'), by('send_photos'), by('product_guide'), by('product_photos')];
 }
 
 /** Version 001: what Dellal tells the customer once his order is in (the team calls). */
@@ -644,7 +670,11 @@ interface ToolCtx {
   conv: Conversation;
   settings: DellalSettings;
   test: boolean;
+  /** the photos send_photos picked: they go to the customer just before the answer */
+  outbox?: OutPhoto[];
 }
+/** A photo Dellal sends, and what the screens show of it. */
+export type OutPhoto = PhotoSrc & { productId: number; label: string };
 
 type Line = { productId: number; variantId: number | null; qty: number; unitPrice?: number; isUpsell?: boolean };
 
@@ -856,6 +886,42 @@ async function callbackFromChat(t: ToolCtx, input: any): Promise<any> {
   return { ok: true, ...mark, handoff: true, next: 'Dis-lui en une phrase qu’une personne de l’équipe va lui répondre ici.' };
 }
 
+/**
+ * product_photos: Dellal looks at a product's photos itself (they come back to it as pictures: `_images`, never stored in
+ * the chat); send_photos: they go to the customer just before the answer (the colour asked first), at most 6 in a message,
+ * never the same ones twice in a day.
+ */
+async function photoTool(t: ToolCtx, name: 'product_photos' | 'send_photos', input: any): Promise<any> {
+  const { ctx, conv, settings } = t;
+  const pid = Number(input?.product_id);
+  const prod = Number.isSafeInteger(pid) && pid > 0 ? (await ctx.db.query('SELECT id, name FROM products WHERE id = $1 AND active', [pid]))[0] : null;
+  if (!prod) return { error: 'Produit introuvable : cherche-le d’abord avec search_products.' };
+  const vid = Number(input?.variant_id);
+  const variant = Number.isSafeInteger(vid) && vid > 0 ? ((await ctx.db.query('SELECT id, title FROM product_variants WHERE id = $1 AND product_id = $2', [vid, pid]))[0] ?? null) : null;
+  const label = `${prod.name}${variant?.title ? ` — ${variant.title}` : ''}`;
+  const variantId = variant ? num(variant.id) : null;
+  if (name === 'product_photos') {
+    const ph = await productPhotos(ctx.db, pid, { variantId, size: 'look', max: 4 });
+    if (!ph.length) return { error: 'Pas de photo pour ce produit : réponds avec le catalogue et son guide, sans rien inventer (si la réponse n’y est pas : callback).' };
+    return { product_id: pid, of: label, photos: ph.length, note: 'Ses photos sont ci-dessous. Ne dis que ce que tu vois.', _images: ph };
+  }
+  if (!settings.photos) return { error: 'La boutique n’envoie pas de photos dans le chat : dis-le simplement, sans promettre, et décris le produit avec le catalogue.' };
+  const want = Math.min(3, Math.max(1, Math.round(Number(input?.count) || 2)));
+  const ph = await productPhotos(ctx.db, pid, { variantId, size: 'send', max: want });
+  if (!ph.length) return { error: 'Pas de photo pour ce produit : dis-le simplement au client, sans promettre de l’envoyer plus tard, et décris-le avec le catalogue.' };
+  // the same photos already went in this conversation today: a reminder, not the same pictures again
+  const sent = new Set<string>();
+  for (const r of await ctx.db.query(`SELECT meta->'photos' AS ph FROM conv_messages WHERE conversation_id = $1 AND role = 'agent' AND meta ? 'photos' AND created_at > $2`, [conv.id, new Date(ctx.now() - 86_400_000).toISOString()]))
+    for (const p of Array.isArray(r.ph) ? r.ph : typeof r.ph === 'string' ? JSON.parse(r.ph) : []) sent.add(String(p?.src ?? ''));
+  const fresh = ph.filter((p) => !sent.has(p.src));
+  if (!fresh.length) return { ok: true, already: true, of: label, note: 'Tu as déjà envoyé ces photos aujourd’hui dans cette conversation : rappelle-le simplement (elles sont plus haut), sans les renvoyer.' };
+  t.outbox ??= [];
+  const room = 6 - t.outbox.length;
+  if (room <= 0) return { error: 'Assez de photos pour ce message.' };
+  for (const p of fresh.slice(0, room)) t.outbox.push({ ...p, productId: pid, label });
+  return { ok: true, sent: Math.min(fresh.length, room), of: label, note: 'Les photos partent juste avant ton message : dis simplement que la voilà, puis pose UNE question (la couleur, la taille, la wilaya…). Ne les décris pas en détail.' };
+}
+
 async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
   const { ctx, conv, settings } = t;
   if (name === 'search_products') return { products: await searchProducts(ctx.db, input?.query) };
@@ -866,6 +932,7 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
     if (!g) return { error: 'Pas de guide de vente pour ce produit : réponds avec le catalogue et les informations de la boutique, sans rien inventer (si la réponse n’y est pas : callback).' };
     return { product_id: pid, guide: guideText(g.guide, g.upsell) };
   }
+  if (name === 'product_photos' || name === 'send_photos') return photoTool(t, name, input ?? {});
   if (name === 'callback') return callbackFromChat(t, input ?? {});
   if (name === 'handoff') {
     const reason = String(input?.reason ?? 'À reprendre').slice(0, 300);
@@ -986,13 +1053,16 @@ async function systemPrompt(
   const shop = await getSetting(ctx.db, 'shop');
   const prods = await searchProducts(ctx.db, null, 40);
   const guided = prods.some((p) => p.guide);
+  // the products with real photos: Dellal sends them (send_photos) and looks at them (product_photos)
+  const pics = await productsWithPhotos(ctx.db);
   const catalog = prods
     .map(
       (p) =>
         `- #${p.product_id} ${p.name} : ${p.price} DA${p.variants.length > 1 ? ` (${p.variants.map((v) => v.title).filter(Boolean).join(', ')})` : ''}` +
         (p.packs.length ? ` · packs : ${p.packs.map((k) => `${k.qty} pour ${k.price} DA`).join(', ')}` : '') +
         (p.linked.length ? ` · va avec : ${p.linked.map((l) => `#${l.product_id} ${l.name}`).join(', ')}` : '') +
-        (p.guide ? ' · guide' : ''),
+        (p.guide ? ' · guide' : '') +
+        (pics.has(p.product_id) ? ' · photos' : ''),
     )
     .join('\n');
   // what the shop knows about a number only when the channel proves it (WhatsApp): on Messenger / Instagram / TikTok anyone
@@ -1031,6 +1101,12 @@ async function systemPrompt(
     guided
       ? `- Guides de vente : un produit marqué « guide » a un guide écrit par l’équipe. Avant de répondre à une question sur ce produit (utilisation, taille, âge, matière, qualité, garantie, échange…) ou à une hésitation du client (« ghali », « nkhamem »…), lis son guide avec product_guide, puis réponds avec tes mots, court, dans la langue du client. Ses réponses sont les vraies informations de la boutique : ne promets jamais ce que sa partie « À ne jamais promettre » interdit, et ne devine pas une réponse qu’il ne donne pas (sa question va alors à callback).`
       : '',
+    pics.size
+      ? s.photos
+        ? `- Photos : un produit marqué « photos » a de vraies photos. Quand le client demande une photo, une autre couleur ou à voir le produit, envoie-les tout de suite avec send_photos (la couleur ou la taille qu’il veut), au lieu de promettre de les envoyer. Un produit sans photo : dis-le simplement, sans promettre une photo ou une vidéo plus tard.\n- Question sur l’aspect d’un produit (couleur exacte, forme, détail) que le catalogue et son guide ne disent pas : regarde ses photos avec product_photos, puis ne dis que ce que tu vois.`
+        : `- La boutique n’envoie pas de photos dans le chat : si le client en demande une, dis-le gentiment et décris le produit avec le catalogue (product_photos te montre ses photos), sans rien promettre.`
+      : '',
+    `- Photo envoyée par le client : elle t’arrive décrite entre crochets, avec le produit du catalogue qu’elle montre s’il est reconnu. Produit sûr : réponds directement sur lui (nomme-le, puis ce qu’il demande). Pas sûr, ou aucun produit : demande-lui gentiment lequel (propose les plus proches), sans deviner. Ne lui dis jamais que tu ne vois pas sa photo quand elle est décrite.`,
     s.notes.trim() ? `Informations de la boutique :\n${s.notes.trim()}` : '',
     s.darijaPrefer.trim() ? `Expressions de la boutique (écrites par l’équipe, à utiliser quand elles vont) :\n${s.darijaPrefer.trim()}` : '',
     s.darijaAvoid.trim() ? `Mots et expressions que la boutique interdit (avec ce qu’il faut écrire à la place) :\n${s.darijaAvoid.trim()}` : '',
@@ -1101,7 +1177,7 @@ export const DELLAL_PLAYBOOK = `MÉTHODE DE VENTE — marché algérien, paiemen
 - Écris les montants en chiffres avec un espace (13 300 DA).
 - Les wilayas arrivent souvent en numéro (16, 31, 19…) : utilise delivery_fee. Ne donne jamais un nombre de wilayas (« 58 wilayas » est dépassé) : dis « toutes les wilayas » ou vérifie avec delivery_fee.
 - Si le client vient d’une publicité (source de la conversation), il parle presque toujours du produit de la pub : commence par celui-là.
-- Message vocal, photo ou sticker : tu ne peux pas l’écouter ou la voir. Demande gentiment de l’écrire (« ma n9derch nesma3 le vocal, ktebli ghir 🙏 »).
+- Message vocal ou photo que tu n’as pas pu lire (c’est écrit entre crochets), ou sticker : demande gentiment de l’écrire (« ma n9derch nesma3 le vocal, ktebli ghir 🙏 »).
 
 3. Conduire la vente, une étape à la fois
 - Découvre le besoin avant de recommander (voir la partie 8). Recommande UNE option claire qui correspond, pas tout le catalogue : c’est l’indécision qui bloque la vente, pas le concurrent.
@@ -1231,6 +1307,16 @@ export function playbookFor(s: Pick<DellalSettings, 'version' | 'ordersTo'>): st
 type AiMsg = { role: 'user' | 'assistant'; content: any };
 
 /** The conversation as the AI sees it: customer = user, Dellal and staff = assistant (merged, starting with the user). */
+/** A customer's photo as Dellal reads it: what Pilot AI saw and the catalogue's product, or that it could not be read. */
+function photoLine(p: any, body: string): string {
+  if (p?.status !== 'done') return '[photo que tu n’as pas pu voir : demande gentiment au client ce qu’elle montre (quel produit, quelle couleur), ou qu’il l’écrive]';
+  const seen = body.replace(/^\[photo\]\s*/, '');
+  const prod = p.productId
+    ? ` → produit du catalogue #${p.productId}${p.productName ? ` ${p.productName}` : ''}${p.variant ? ` (${p.variant})` : ''}${p.sure ? '' : ' — pas sûr : fais-lui confirmer'}`
+    : ' → aucun produit du catalogue reconnu';
+  return `[photo envoyée par le client, regardée par l’IA : ${seen}${prod}]`;
+}
+
 async function history(db: Db, convId: number): Promise<AiMsg[]> {
   const rows = (await db.query(`SELECT role, body, meta FROM conv_messages WHERE conversation_id = $1 AND role <> 'tool' ORDER BY id DESC LIMIT 40`, [convId])).reverse();
   const out: AiMsg[] = [];
@@ -1239,10 +1325,16 @@ async function history(db: Db, convId: number): Promise<AiMsg[]> {
     // a conversation opened from a comment starts with the public comment, then the private message of the CM AI agent
     const post = r.meta?.comment ? String(r.meta.comment.post ?? '').slice(0, 120) : '';
     const voice = r.role === 'customer' ? r.meta?.voice : null;
+    const photo = r.role === 'customer' ? r.meta?.photo : null;
+    const sent = r.role === 'agent' && Array.isArray(r.meta?.photos) ? (r.meta.photos as any[]) : null;
     const text =
       r.role === 'staff'
         ? `[équipe] ${r.body}`
-        : voice
+        : photo
+          ? photoLine(photo, String(r.body))
+          : sent
+            ? `[tu as envoyé ${sent.length} photo(s) au client : ${Array.from(new Set(sent.map((p) => String(p?.label ?? '')).filter(Boolean))).join(', ')}]`
+            : voice
           ? voice.status === 'done'
             ? `[message vocal, écrit en texte par l’IA : un mot peut être mal entendu] ${r.body}`
             : '[message vocal que tu ne peux pas écouter : dis-le simplement et demande au client de l’écrire, ou de répondre par écrit à ta question]'
@@ -1329,6 +1421,98 @@ export async function hearVoices(ctx: Ctx, convId: number, ids?: number[]): Prom
   return heard;
 }
 
+// ---------------------------------------------------------------- customers' photos
+export type PhotoMeta = {
+  status: 'pending' | 'done' | 'failed' | 'off';
+  /** where the server fetches it (WhatsApp: its media id; Messenger / Instagram: Meta's link) */
+  id?: string;
+  url?: string;
+  mime?: string;
+  /** the control room's test chat: the photo itself, until it is read */
+  data?: string;
+  /** a small copy (data URL) the screens show */
+  thumb?: string | null;
+  what?: string;
+  productId?: number | null;
+  productName?: string | null;
+  sure?: boolean;
+  variant?: string | null;
+  kind?: string;
+  model?: string | null;
+  error?: string;
+  at?: string;
+};
+export type PhotoAsk = (req: AiRequest) => Promise<AiResponse>;
+
+/** The preview (no AI): a customer's photo that is one of the catalogue's is that product; any other is not read. */
+function demoReading(data: string, cat: { id: number; name: string; photo: PhotoSrc }[]): PhotoReading {
+  const hit = cat.find((c) => c.photo.data && (c.photo.data === data || c.photo.data.slice(0, 400) === data.slice(0, 400))) ?? null;
+  return hit
+    ? { what: `Photo du produit « ${hit.name} »`, text: '', productId: hit.id, sure: true, variant: null, kind: 'product' }
+    : { what: 'Photo d’un client (dans l’aperçu, Pilot AI ne regarde que les photos du catalogue)', text: '', productId: null, sure: false, variant: null, kind: 'other' };
+}
+
+/**
+ * Looks at a conversation's waiting photos before Dellal answers (the newest 3): Pilot AI says in a sentence what each one
+ * shows, the words written on it, and which product of the catalogue it is (compared with the catalogue's own photos, the
+ * products named in the chat first). The message's text becomes that, so Dellal and the team read it; the photo itself is
+ * not kept (only a small copy for the screens). Without the AI (the preview): the catalogue's own photos only.
+ */
+export async function seePhotos(ctx: Ctx, convId: number, ask: PhotoAsk | null): Promise<number> {
+  const rows: any[] = (
+    await ctx.db.query(`SELECT id, body, meta FROM conv_messages WHERE conversation_id = $1 AND role = 'customer' AND meta->'photo'->>'status' = 'pending' ORDER BY id DESC LIMIT 3`, [convId])
+  ).reverse();
+  if (!rows.length) return 0;
+  const conv = (await ctx.db.query('SELECT channel FROM conversations WHERE id = $1', [convId]))[0];
+  const said = strip((await ctx.db.query(`SELECT body FROM conv_messages WHERE conversation_id = $1 AND role IN ('customer', 'agent') ORDER BY id DESC LIMIT 12`, [convId])).map((r: any) => String(r.body ?? '')).join('\n'));
+  const all = await searchProducts(ctx.db, null, 1000);
+  const names = new Map(all.map((p) => [p.product_id, p.name]));
+  const cat = await catalogueThumbs(ctx.db, { first: all.filter((p) => said.includes(strip(p.name))).map((p) => p.product_id), max: 12 });
+  let seen = 0;
+  for (const r of rows) {
+    const p: PhotoMeta = r.meta?.photo && typeof r.meta.photo === 'object' ? r.meta.photo : { status: 'pending' };
+    const caption = String(r.body ?? '')
+      .replace(/^\[photo envoyée\]\s*/, '')
+      .trim();
+    const at = new Date(ctx.now()).toISOString();
+    let img: { mime: string; data: string; thumb: string | null } | null = null;
+    let error: string | null = null;
+    if (p.data) img = { mime: p.mime ?? 'image/jpeg', data: p.data, thumb: p.thumb ?? null };
+    else if (ctx.server?.dellal && (p.id || p.url)) {
+      const media = { ...(p.id ? { id: p.id } : {}), ...(p.url ? { url: p.url } : {}), ...(p.mime ? { mime: p.mime } : {}) };
+      const got: any = await ctx.server.dellal('media', { channel: conv?.channel, media }, ctx).catch((e: any) => ({ ok: false, error: String(e?.message ?? e) }));
+      if (got?.ok && got.data) img = { mime: String(got.mime), data: String(got.data), thumb: got.thumb ? String(got.thumb) : null };
+      else error = String(got?.error ?? 'media');
+    } else error = 'no_media';
+    let reading: PhotoReading | null = null;
+    let model: string | null = null;
+    if (img && ask) {
+      try {
+        const res = await ask({ model: PHOTO_MODEL, system: PHOTO_SYSTEM, messages: [{ role: 'user', content: photoRequest(img, caption, cat) }], tools: [], max_tokens: 400 });
+        reading = readPhotoAnswer(res.content.map((b) => (b.type === 'text' ? b.text : '')).join(''), cat.map((c) => c.id));
+        model = PHOTO_MODEL;
+        if (!reading) error = 'unreadable';
+      } catch (e: any) {
+        error = String(e?.message ?? e);
+      }
+    } else if (img) reading = demoReading(img.data, cat);
+    const keep: PhotoMeta = { ...p };
+    delete keep.data;
+    const thumb = img?.thumb ?? keep.thumb ?? null;
+    if (reading) {
+      const next: PhotoMeta = { ...keep, status: 'done', what: reading.what, productId: reading.productId, productName: reading.productId ? names.get(reading.productId) ?? null : null, sure: reading.sure, variant: reading.variant, kind: reading.kind, thumb, model, at };
+      delete next.error;
+      await ctx.db.query(`UPDATE conv_messages SET body = $2, meta = jsonb_set(COALESCE(meta, '{}'::jsonb), '{photo}', $3::jsonb) WHERE id = $1`, [r.id, photoBody(reading, caption), JSON.stringify(next)]);
+      seen++;
+    } else {
+      const off = error === 'off' || error === 'no_platform';
+      await ctx.db.query(`UPDATE conv_messages SET meta = jsonb_set(COALESCE(meta, '{}'::jsonb), '{photo}', $2::jsonb) WHERE id = $1`, [r.id, JSON.stringify({ ...keep, status: off ? 'off' : 'failed', error: String(error ?? 'error').slice(0, 200), thumb, at })]);
+    }
+  }
+  ctx.emit({ type: 'chat', data: { dellal: convId } });
+  return seen;
+}
+
 /** Runs Dellal on a conversation: reads it, uses its tools, writes (and sends) its answer. */
 /**
  * `book` / `lab`: the control room's test chat (Pilot AI › Test & lessons) brings the lesson book it chose (in service, in
@@ -1347,14 +1531,17 @@ export async function runAgent(
   if (ctx.server?.dellal) await hearVoices(ctx, convId).catch(() => undefined);
   let conv = await getConv(ctx.db, convId);
   const test = conv.channel === 'test';
-  const messages = await history(ctx.db, convId);
-  if (opts.followUp) messages.push({ role: 'user', content: '(Note système : le client n’a pas répondu. Envoie une seule relance courte.)' });
-  if (!messages.length) return { reply: null, handoff: false, orderRef: null, demo: false, skipped: 'Aucun message' };
   // in the Pilotix preview opened in Claude, the page's Claude answers (no key); on the server, Claude through Pilotix's
   // key (Pilot AI) or, on an install without it, the shop's own key
   const inPage = !ctx.server?.dellal && ctx.dellalAi ? ctx.dellalAi : null;
   const pilotAi = !inPage && (await pilotOn(ctx));
   const useAi = !!inPage || pilotAi || (!!ctx.server?.dellal && !!(await dellalSecret(ctx.db, 'ai')));
+  // the customer's photos, looked at first (Pilot AI, on the server) so Dellal knows what they show and which product it is
+  const look: PhotoAsk | null = useAi && !inPage ? (req) => ctx.server!.dellal!('complete', { ...req, feature: opts.lab ? 'pilot' : 'dellal', pilot: pilotAi }, ctx) as Promise<AiResponse> : null;
+  await seePhotos(ctx, convId, look).catch(() => 0);
+  const messages = await history(ctx.db, convId);
+  if (opts.followUp) messages.push({ role: 'user', content: '(Note système : le client n’a pas répondu. Envoie une seule relance courte.)' });
+  if (!messages.length) return { reply: null, handoff: false, orderRef: null, demo: false, skipped: 'Aucun message' };
   // Pilot AI: the lesson book this chat uses (the same all chat long, recorded so its sales are measured), and the model:
   // Haiku for the simple messages, Sonnet for the hard moments (price fight, trust, anger, big order, asking for a person)
   let book: BookRef | null = null;
@@ -1375,12 +1562,16 @@ export async function runAgent(
   let handoff = false;
   let orderRef: string | null = null;
   let usage = { input_tokens: 0, output_tokens: 0 };
-  /** One tool call, the same on every path: run it, note handoff / order, and log it in the conversation. */
+  /** the photos send_photos picked, sent just before the answer */
+  const outbox: OutPhoto[] = [];
+  /** One tool call, the same on every path: run it, note handoff / order, and log it in the conversation (never a photo's
+   *  bytes: product_photos gives them back to the AI only, as pictures). */
   const runTool = async (name: string, input: any) => {
-    const out = await execTool({ ctx, conv, settings: s, test }, name, input);
+    const out = await execTool({ ctx, conv, settings: s, test, outbox }, name, input);
     if (name === 'handoff' || (name === 'callback' && (out?.callback || out?.handoff))) handoff = true;
     if (name === 'create_order' && out?.ok) orderRef = out.ref;
-    await addMessage(ctx.db, convId, { role: 'tool', body: toolLine(name, input, out), meta: { tool: name, input, result: out } });
+    const { _images: _pics, ...kept } = out ?? {};
+    await addMessage(ctx.db, convId, { role: 'tool', body: toolLine(name, input, out), meta: { tool: name, input, result: kept } });
     conv = await getConv(ctx.db, convId);
     return out;
   };
@@ -1396,7 +1587,11 @@ export async function runAgent(
     const results: any[] = [];
     for (const u of uses) {
       const out = await runTool(u.name, u.input);
-      results.push({ type: 'tool_result', tool_use_id: u.id, content: JSON.stringify(out).slice(0, 12_000), is_error: !!out?.error });
+      const { _images: pics, ...said } = out ?? {};
+      const text = JSON.stringify(said).slice(0, 12_000);
+      // product_photos: the product's photos come back to the AI as pictures, after what the tool says
+      const content = Array.isArray(pics) && pics.length ? [{ type: 'text', text }, ...pics.map((p: PhotoSrc) => imageBlock(p))] : text;
+      results.push({ type: 'tool_result', tool_use_id: u.id, content, is_error: !!out?.error });
     }
     messages.push({ role: 'user', content: results });
     texts.length = 0; // only the text after the last tool round is sent
@@ -1415,6 +1610,26 @@ export async function runAgent(
       await addMessage(ctx.db, convId, { role: 'tool', body: `darija → ${p.darija.issues.map((i) => i.found).join(', ')} corrigé`, meta: { tool: 'darija', ...darija } });
     }
   }
+  const pilotMeta = book ? { pilot: { bookId: book.bookId, version: book.version, arm: book.arm, testId: book.testId, ...(opts.lab ? { lab: opts.lab } : {}) } } : {};
+  // the photos go first (« ha tswira »), then the words that go with them
+  if (outbox.length) {
+    let sendError: string | null = null;
+    if (!test && ctx.server?.dellal) {
+      try {
+        const r: any = await ctx.server.dellal('photos', { conversationId: convId, channel: conv.channel, externalId: conv.externalId, accountId: (await rawConv(ctx.db, convId)).account_id, photos: outbox.map(({ src, mime, data, url }) => ({ src, mime, data, url })) }, ctx);
+        if (r?.errors?.length) sendError = String(r.errors[0]).slice(0, 300);
+      } catch (e: any) {
+        sendError = e?.message ?? 'Envoi impossible';
+      }
+    }
+    const labels = Array.from(new Set(outbox.map((p) => p.label)));
+    await addMessage(ctx.db, convId, {
+      role: 'agent',
+      body: `📷 ${labels.join(', ')} (${outbox.length})`,
+      meta: { photos: outbox.map((p) => ({ src: p.src, productId: p.productId, variantId: p.variantId, label: p.label, thumb: p.thumb && p.thumb.length < 60_000 ? p.thumb : null })), demo: !useAi, ...pilotMeta },
+      sendError,
+    });
+  }
   if (reply) {
     let sendError: string | null = null;
     let sentId: string | null = null;
@@ -1425,7 +1640,7 @@ export async function runAgent(
         sendError = e?.message ?? 'Envoi impossible';
       }
     }
-    await addMessage(ctx.db, convId, { role: 'agent', body: reply, externalId: sentId, meta: { usage, demo: !useAi, model: inPage ? 'claude (page)' : useAi ? model : null, ...(darija ? { darija } : {}), ...(book ? { pilot: { bookId: book.bookId, version: book.version, arm: book.arm, testId: book.testId, ...(opts.lab ? { lab: opts.lab } : {}) } } : {}) }, sendError });
+    await addMessage(ctx.db, convId, { role: 'agent', body: reply, externalId: sentId, meta: { usage, demo: !useAi, model: inPage ? 'claude (page)' : useAi ? model : null, ...(darija ? { darija } : {}), ...pilotMeta }, sendError });
   }
   if (opts.followUp) await ctx.db.query('UPDATE conversations SET followed_up = true WHERE id = $1', [convId]);
   ctx.emit({ type: 'chat', data: { dellal: convId } });
@@ -1439,15 +1654,20 @@ const rawConv = async (db: Db, id: number) => (await db.query('SELECT * FROM con
  * book they chose. Their own test chat in the shop (channel test: never sent to anyone, never counted, never in the shop's
  * lists, orders only pretend); always on Pilotix's key (Pilot AI), never on a key of the shop.
  */
-export async function pilotTry(ctx: Ctx, i: { staffId: number; name: string; body: string; reset: boolean; book: BookRef | null; lab: string; trial?: Trial | null }) {
-  const ext = `pilot-${i.staffId}`;
+export async function pilotTry(
+  ctx: Ctx,
+  i: { staffId: number; name: string; body: string; reset: boolean; book: BookRef | null; lab: string; trial?: Trial | null; photo?: { data: string; mime: string; thumb?: string | null } | null; ext?: string },
+) {
+  const ext = i.ext ?? `pilot-${i.staffId}`;
   let c = (await ctx.db.query(`SELECT id FROM conversations WHERE channel = 'test' AND external_id = $1`, [ext]))[0];
   if (!c) c = (await ctx.db.query(`INSERT INTO conversations (channel, external_id, customer_name, created_by) VALUES ('test',$1,$2,$3) RETURNING id`, [ext, i.name, me(ctx)]))[0];
   const cid = num(c.id);
   if (i.reset) await ctx.db.query('DELETE FROM conv_messages WHERE conversation_id = $1', [cid]);
-  if (i.body) {
+  if (i.body || i.photo) {
     if (!(await pilotOn(ctx))) throw new AppError('bad_request', 'Pilot AI est éteint ou se repose (limite du jour atteinte) : ce test répond avec la clé de Pilotix.');
-    await addMessage(ctx.db, cid, { role: 'customer', body: i.body });
+    // a photo as the customer: read by Pilot AI like a real one (then only its small copy stays)
+    if (i.photo) await addMessage(ctx.db, cid, { role: 'customer', body: i.body ? `[photo envoyée] ${i.body}` : '[photo envoyée]', meta: { photo: { status: 'pending', mime: i.photo.mime, data: i.photo.data, thumb: i.photo.thumb ?? null } } });
+    else await addMessage(ctx.db, cid, { role: 'customer', body: i.body });
     await runAgent(ctx, cid, { book: i.book, lab: i.lab, trial: i.trial ?? null });
   }
   return { conversationId: cid, messages: await messagesOf(ctx.db, cid) };
@@ -1518,6 +1738,8 @@ function toolLine(name: string, input: any, out: any): string {
     return 'callback → passée à l’équipe (sans numéro du client)';
   }
   if (name === 'product_guide') return `product_guide #${input?.product_id ?? '?'} → guide de vente lu`;
+  if (name === 'product_photos') return `product_photos #${input?.product_id ?? '?'} → ${out?.photos ?? 0} photo(s) regardée(s)`;
+  if (name === 'send_photos') return out?.already ? `send_photos #${input?.product_id ?? '?'} → déjà envoyées aujourd’hui` : `send_photos #${input?.product_id ?? '?'} → ${out?.sent ?? 0} photo(s) envoyée(s)`;
   return name;
 }
 
@@ -1528,6 +1750,8 @@ const YES_RE = /^(oui|wah|ih|ok|okey|d'accord|daccord|yes|نعم|واه|صح|c b
 
 const GUIDE_ASK_RE = /(garantie|matiere|qualite|original|taille|mesure|dimension|\bage\b|poids|\bkg\b|lavable|pliable|plie|securite|ghali|\bcher\b|nkhamem|n5amem|nfakar|damen|ضمان|غالي|نخمم|قياس|عمر)/i;
 const PRICE_ASK_RE = /(ch7al|chhal|combien|prix|bch7al|سعر|بشحال|livraison|tawsil|التوصيل)/i;
+/** « ab3athli tswira », « une photo stp », « صورة » : the customer wants to see the product */
+export const PHOTO_ASK_RE = /(\b(tswira|tsawer|tsawr|swira|swiret|sora|soura|sowar|photos?|foto|pics?|images?|sawerli|sawarli|swerli|swarli|sawarhali|nchouf|nchoufha|nchoufou)\b|صور|تصويرة|نشوف)/i;
 const DOUBT_RE = /(ghali|\bcher\b|nkhamem|n5amem|nfakar|غالي|نخمم)/i;
 // a question the demo seller has no answer to (after a greeting): « wach… ? », « kifach… », « هل… »
 const GREET_RE = /^(salam|slm|bonjour|bonsoir|cc|coucou|hi|hello|السلام|سلام)(?:\s*(?:3likoum|3alaykoum|alikoum|aleykoum|alaykoum|alaikoum|عليكم))?[\s,!.]*/i;
@@ -1619,6 +1843,8 @@ async function demoBrain(ctx: Ctx, req: AiRequest, convId?: number): Promise<AiR
       if (out.home_delivery === null && out.stopdesk === null) return say(`Pour ${out.wilaya}, je vérifie avec l’équipe.`);
       return say(`Livraison à ${out.commune ? `${out.commune} (${out.wilaya})` : out.wilaya} : ${out.home_delivery ?? '—'} DA à domicile${out.stopdesk ? `, ${out.stopdesk} DA au bureau` : ''}. Paiement à la livraison. ${v1 ? 'Envoie-moi ton prénom et ton numéro : un conseiller t’appelle pour confirmer.' : 'Pour réserver, envoie-moi ton nom, ton numéro et ta commune.'}`);
     }
+    if (tool.name === 'send_photos') return say(out.already ? 'Je te les ai envoyées juste au-dessus 👆 Laquelle te plaît ?' : `Voilà ${out.of ?? 'le produit'} 👆 Tu le veux dans quelle couleur ?`);
+    if (tool.name === 'product_photos') return say(`D’après ses photos, voilà comment il est 👆 Tu veux que je t’envoie les photos ?`);
     if (tool.name === 'search_products') {
       const p = out.products?.[0];
       if (!p) return say('Je n’ai pas trouvé ce produit. Tu cherches quoi exactement ?');
@@ -1647,6 +1873,17 @@ async function demoBrain(ctx: Ctx, req: AiRequest, convId?: number): Promise<AiR
   const confirmed = YES_RE.test(strip(text));
   const mentions = !!product && strip(text).split(/\s+/).some((w) => w.length >= 4 && strip(product!.name).includes(w));
   const variantNow = product?.variants.find((v) => v.title && strip(text).includes(strip(v.title)));
+
+  // a customer's photo: the catalogue's product it shows (its price), or « which one is it? »
+  const shown = text.match(/\[photo envoyée par le client[^\]]*produit du catalogue #(\d+)/);
+  const shownProduct = shown ? products.find((p) => p.product_id === Number(shown[1])) : null;
+  if (shownProduct) return say(`C’est bien ${shownProduct.name} 👍 Il est à ${shownProduct.price} DA, paiement à la livraison. Tu es de quelle wilaya ?`);
+  if (/\[photo que tu n’as pas pu voir|aucun produit du catalogue reconnu\]/.test(text)) return say('Merci pour la photo 🙏 C’est quel produit exactement ? Dis-moi son nom ou sa couleur.');
+  // « ab3athli tswira »: the real photos of the product (and of the colour asked)
+  if (PHOTO_ASK_RE.test(strip(text))) {
+    if (product) return use('send_photos', { product_id: product.product_id, ...((variantNow ?? variant) ? { variant_id: (variantNow ?? variant)!.variant_id } : {}) });
+    return say('Avec plaisir 😊 Tu veux la photo de quel produit ?');
+  }
 
   // a question it could not answer, still waiting for the customer's number: the number now goes to the team; another
   // message without it is one more ask (a refusal: the service number at once)
@@ -2028,6 +2265,13 @@ async function messagesOf(db: Db, convId: number): Promise<ConvMessage[]> {
   return rows.reverse().map((r: any) => ({ id: num(r.id), role: r.role, body: r.body, userName: r.user_name ?? null, meta: r.meta ?? null, sendError: r.send_error ?? null, at: iso(r.created_at) }));
 }
 
+/** a photo sent as the customer in a test chat: a JPEG the browser made (at most 1280 px) and its small copy */
+export const TestPhoto = z.object({
+  data: z.string().max(3_000_000).regex(/^[A-Za-z0-9+/=]+$/),
+  mime: z.literal('image/jpeg'),
+  thumb: z.string().max(120_000).regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/).nullable().optional(),
+});
+
 const SettingsInput = z.object({
   enabled: z.boolean(),
   version: z.enum(DELLAL_VERSIONS).default('001'),
@@ -2040,6 +2284,7 @@ const SettingsInput = z.object({
   followUpHours: z.number().int().min(0).max(22),
   autoOrderMinutes: z.number().int().min(0).max(240).default(20),
   nightReplies: z.boolean(),
+  photos: z.boolean().default(true),
   notes: z.string().max(6000),
   handoffTopics: z.string().max(2000),
   servicePhone: z.string().trim().max(40).regex(/^[\d\s+().-]*$/, 'Numéro du service client (chiffres)').default(''),
@@ -2176,15 +2421,17 @@ export const dellalProcs = {
   }),
 
   /** "Tester Dellal": talk to Dellal as a customer. Orders are only simulated. */
-  'dellal.test': proc([...SELLERS], z.object({ body: z.string().trim().max(2000).default(''), reset: z.boolean().default(false) }), async (ctx, i) => {
+  'dellal.test': proc([...SELLERS], z.object({ body: z.string().trim().max(2000).default(''), reset: z.boolean().default(false), photo: TestPhoto.nullable().optional() }), async (ctx, i) => {
     const ext = `test-${me(ctx)}`;
     let c = (await ctx.db.query(`SELECT id FROM conversations WHERE channel = 'test' AND external_id = $1`, [ext]))[0];
     if (!c) c = (await ctx.db.query(`INSERT INTO conversations (channel, external_id, customer_name, created_by) VALUES ('test',$1,$2,$3) RETURNING id`, [ext, ctx.session.profile.name, me(ctx)]))[0];
     const cid = num(c.id);
     if (i.reset) await ctx.db.query('DELETE FROM conv_messages WHERE conversation_id = $1', [cid]);
     let out: Awaited<ReturnType<typeof runAgent>> | null = null;
-    if (i.body) {
-      await addMessage(ctx.db, cid, { role: 'customer', body: i.body });
+    if (i.body || i.photo) {
+      // a photo as the customer: read like a real one (then only its small copy stays)
+      if (i.photo) await addMessage(ctx.db, cid, { role: 'customer', body: i.body ? `[photo envoyée] ${i.body}` : '[photo envoyée]', meta: { photo: { status: 'pending', mime: i.photo.mime, data: i.photo.data, thumb: i.photo.thumb ?? null } } });
+      else await addMessage(ctx.db, cid, { role: 'customer', body: i.body });
       out = await runAgent(ctx, cid);
     }
     return { conversationId: cid, messages: await messagesOf(ctx.db, cid), demo: out ? out.demo : !((!ctx.server?.dellal && ctx.dellalAi) || (await aiKeyed(ctx))), platform: !!ctx.t };
@@ -2200,6 +2447,13 @@ export const dellalProcs = {
     const m = (await ctx.db.query(`SELECT id, conversation_id, role, body FROM conv_messages WHERE id = $1`, [i.messageId]))[0];
     if (!m || m.role !== 'agent') throw notFound('Message de Dellal introuvable');
     return saveShopLahja(ctx, { before: String(m.body), after: i.after, conversationId: num(m.conversation_id), messageId: num(m.id) });
+  }),
+
+  /** A product photo Dellal sent, as Meta downloads it (/lp/dp/<id>/<key>.jpg on the server: its system session only). */
+  'dellal.photoFile': proc([], z.object({ id, key: z.string().regex(/^[a-f0-9]{24}$/) }), async (ctx, i) => {
+    const r = (await ctx.db.query('SELECT mime, jpeg FROM dellal_photos WHERE id = $1 AND key = $2', [i.id, i.key]))[0];
+    if (!r) throw notFound('Photo introuvable');
+    return { mime: String(r.mime), base64: String(r.jpeg) };
   }),
 
   /** Messages: « Écrire ce vocal » — a voice note Dellal did not read (paused, a person answers, or it failed): written now. */

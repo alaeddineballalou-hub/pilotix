@@ -11,6 +11,7 @@ import { dateTime, n } from '../../lib/format';
 import type { POut } from '../../lib/platform';
 import { Card, Icon } from '../../ui/kit';
 import { usePilotAction } from './pilotDemo';
+import { ExamLine } from './PilotExam';
 
 type State = POut<'p.pilot.state'>;
 type Release = State['release'];
@@ -55,7 +56,24 @@ export function ReleaseCard({ d, manager }: { d: State; manager: boolean }) {
   );
 }
 
-export function ReleasePanel({ d, manager, onStaged, onReleased, onTry, tryHref }: { d: State; manager: boolean; onStaged?: (v: number) => void; onReleased?: (v: number) => void; onTry?: (kind: 'trial' | 'live') => void; tryHref?: string }) {
+export function ReleasePanel({
+  d,
+  manager,
+  onStaged,
+  onReleased,
+  onTry,
+  onExam,
+  tryHref,
+}: {
+  d: State;
+  manager: boolean;
+  onStaged?: (v: number) => void;
+  onReleased?: (v: number) => void;
+  onTry?: (kind: 'trial' | 'live') => void;
+  /** « Passer l'examen »: to the lab's exam (the Dellal tab goes there by tryHref) */
+  onExam?: () => void;
+  tryHref?: string;
+}) {
   const { t } = useTranslation();
   const r = d.release;
   const tr = r.trial;
@@ -147,6 +165,8 @@ export function ReleasePanel({ d, manager, onStaged, onReleased, onTry, tryHref 
                     {t(K + 'stale', { v: tr.version, n: n(stale) })}
                   </p>
                 )}
+                {/* the 10-question exam of this version: its mark before it goes out */}
+                <ExamLine score={d.exams?.trial?.score ?? null} at={d.exams?.trial?.at ?? null} v={tr.version} tryHref={tryHref} onExam={onExam} />
                 {ask ? (
                   <div className="pl-push-ask" role="group" aria-label={t(K + 'askTitle', { v: tr.version })}>
                     <b>{t(K + 'askTitle', { v: tr.version })}</b>

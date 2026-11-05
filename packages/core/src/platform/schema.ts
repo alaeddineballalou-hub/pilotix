@@ -2,6 +2,7 @@
 // index used at login, settings and the journal. Applied before every shop's own migrations.
 import type { Tenancy } from './tenancy';
 import { PILOT_PLATFORM_SQL, RELEASE_SQL } from '../modules/pilotlearn';
+import { EXAM_SQL } from '../modules/pilotexamdata';
 import { AI_USAGE_SQL } from './aiusage';
 import { LAHJA_PLATFORM_SQL } from '../modules/lahja';
 import { DARIJA_BOOK_SQL, DARIJA_DRAFT_SQL } from '../modules/darijabook';
@@ -644,6 +645,8 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   // « AI social media manager » (Pilot AI › social): its own switch, out of CM AI agent where its calendar began. The plans
   // and boutiques that had CM AI agent off (or on, on top of their plan) get the same for it, so nobody gains or loses it
   ['p029_social_manager', P029],
+  // Pilot AI › the 10-question exam: each exam of a version, its ten chats and their marks (pilotexam.ts)
+  ['p030_pilot_exams', EXAM_SQL],
 ];
 
 /** Creates or updates the platform's tables. */

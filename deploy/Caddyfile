@@ -142,13 +142,14 @@ go.{$DOMAIN} {
 		rewrite * /api/llms.txt
 		import server
 	}
-	# the planned posts' photos and videos stay open to robots: Meta fetches them from there (a story's video is refused
-	# from a site whose robots.txt closes it)
+	# the planned posts' photos and videos, and the product photos Dellal sends, stay open to robots: Meta fetches them
+	# from there (a story's video is refused from a site whose robots.txt closes it)
 	handle /robots.txt {
 		respond "User-agent: *
 Allow: /
 Allow: /api/lp/pic/
 Allow: /api/lp/vid/
+Allow: /api/lp/dp/
 Disallow: /api/
 " 200
 	}

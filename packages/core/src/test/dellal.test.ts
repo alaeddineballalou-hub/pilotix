@@ -717,7 +717,7 @@ test('a reply in another dialect is rewritten in Algerian Darija before it is se
   const r4: any = await call('dellal.test', inPage, { body: 'ch7al la poussette l Oran ?' });
   assert.equal(r4.demo, false);
   assert.equal(reqs.length, 2, 'one answer, one Darija rewrite');
-  assert.deepEqual(reqs[0].tools.map((x: any) => x.name), ['search_products', 'delivery_fee', 'create_order', 'product_guide', 'callback', 'handoff']);
+  assert.deepEqual(reqs[0].tools.map((x: any) => x.name), ['search_products', 'delivery_fee', 'create_order', 'product_guide', 'callback', 'handoff', 'send_photos', 'product_photos']);
   assert.equal(typeof reqs[0].runTool, 'function');
   assert.match(reqs[0].system, /DARIJA ALGÉRIENNE/);
   assert.equal(reqs[1].tools.length, 0);

@@ -49,9 +49,11 @@ import {
 } from './shops';
 import type { Tenancy } from './tenancy';
 import * as pilot from '../modules/pilotlearn';
+import * as exam from '../modules/pilotexam';
+import { pilotixLessons } from '../modules/pilotexamdata';
 import { pilotConfig, pilotToday, savePilotConfig, saveVoiceConfig, voiceConfig, voiceToday, VOICE_MODEL } from './pilotai';
 import { AI_FEATURES, aiBill, aiLabOfMonth, aiUsageOfMonth, aiUsageSince, monthOf, saveAiBill } from './aiusage';
-import { pilotTry } from '../modules/dellal';
+import { pilotTry, TestPhoto } from '../modules/dellal';
 import { addCoachLahja, decideLahja, decideManyLahja, LAHJA_NO_CHANGE, lahjaAccepted, lahjaErr, lahjaState, lahjaWaiting, LahjaWord } from '../modules/lahja';
 import { copyVocab, forgetVocab, importVocab, learnVocab, readCentimes, removeVocab, saveVocab, vocabBlock, vocabChanges, vocabCounts, vocabFor, vocabList, VOCAB } from '../modules/vocab';
 import { darijaBookFile, darijaBookLive, darijaDraft, darijaErr, darijaVersions, discardDarijaDraft, restoreDarijaBook, saveDarijaBook, snapshotDarijaLessons } from '../modules/darijabook';
@@ -1124,7 +1126,13 @@ export const PLATFORM_REGISTRY = {
     // the learning's rules, for the page that explains them in simple words (always the engine's own numbers)
     const rules = { score: pilot.SCORE, gold: pilot.GOLD_WEIGHT, minPass: pilot.PILOT.minPass, matureDays: pilot.PILOT.matureDays, maxTestDays: pilot.PILOT.maxTestDays, maxOpen: pilot.PILOT.maxOpen };
     const release = await pilot.releaseState(pdb, new Date(ctx.now()));
-    return { config, today, night, candidates, approved, books, next, release, lahjaWaiting: lahja, sharing: { shops: num(sharing[0]?.shops), cases: num(sharing[0]?.cases) }, shops: stores, rules };
+    // the 10-question exam: the latest mark of each version (the push card shows the one in test and the one in service)
+    const marks = await exam.examsByBook(pdb).catch(() => []);
+    const mark = (book: string, version: number | undefined) => (version === undefined ? null : marks.find((m) => m.book === book && m.version === version) ?? null);
+    const exams = { trial: mark('trial', release.trial?.version), live: mark('live', release.live?.version ?? 0), running: await exam.runningExam(pdb).catch(() => null) };
+    // Pilotix's own lessons (no mistakes, a chat in order, the photos): the ones not added yet, one click in Leçons › Vente
+    const pilotix = (await pilotixLessons(pdb).catch(() => [])).filter((l) => !l.added).map(({ topic, text, meaning }) => ({ topic, text, meaning }));
+    return { config, today, night, candidates, approved, books, next, release, exams, pilotix, lahjaWaiting: lahja, sharing: { shops: num(sharing[0]?.shops), cases: num(sharing[0]?.cases) }, shops: stores, rules };
   }),
   'p.pilot.save': pproc(
     MANAGERS,
@@ -1446,7 +1454,14 @@ export const PLATFORM_REGISTRY = {
    */
   'p.pilot.try': pproc(
     ALL,
-    z.object({ shopId: Id, book: z.enum(pilot.BOOK_CHOICES).default('live'), body: z.string().trim().max(2000).default(''), reset: z.boolean().default(false) }),
+    z.object({
+      shopId: Id,
+      book: z.enum(pilot.BOOK_CHOICES).default('live'),
+      body: z.string().trim().max(2000).default(''),
+      reset: z.boolean().default(false),
+      /** a photo as the customer (a JPEG the browser made, at most 1280 px) and its small copy */
+      photo: TestPhoto.nullable().optional(),
+    }),
     async (ctx, i) => {
       if (!ctx.shop) throw bad('Le test de Dellal n’est disponible que sur le serveur');
       const s = (await loadShops(ctx.t)).find((x) => x.id === i.shopId);
@@ -1455,10 +1470,47 @@ export const PLATFORM_REGISTRY = {
       const trial = i.book === 'trial' ? await pilot.trialFor(ctx.t.platform) : null;
       const book = trial ? trial.book : i.book === 'trial' ? null : await pilot.bookChoice(ctx.t.platform, i.book);
       if (!book) throw bad(i.book === 'trial' ? 'Aucune version en test : cliquez d’abord sur « Push en test »' : 'Aucun livre en test en ce moment');
-      const r = await pilotTry(await ctx.shop(i.shopId), { staffId: ctx.staff.id, name: ctx.staff.name || 'Pilotix', body: i.body, reset: i.reset, book, lab: i.book, trial: trial ? { darija: trial.darija, lahja: trial.lahja } : null });
+      const r = await pilotTry(await ctx.shop(i.shopId), { staffId: ctx.staff.id, name: ctx.staff.name || 'Pilotix', body: i.body, reset: i.reset, book, lab: i.book, trial: trial ? { darija: trial.darija, lahja: trial.lahja } : null, photo: i.photo ?? null });
       return { ...r, book: { kind: i.book, version: book.version, empty: !book.text } };
     },
   ),
+  /**
+   * The 10-question exam: ten simulated customers of this shop on the version chosen, each chat marked out of 10 by Pilot
+   * AI. It runs in the background (a few minutes): the page asks how it goes (p.pilot.exam.get). One at a time.
+   */
+  'p.pilot.exam.start': pproc(ALL, z.object({ shopId: Id, book: z.enum(pilot.BOOK_CHOICES).default('live') }), async (ctx, i) => {
+    if (!ctx.shop || !ctx.ai) throw bad('L’examen de Dellal n’est disponible que sur le serveur');
+    const s = (await loadShops(ctx.t)).find((x) => x.id === i.shopId);
+    if (!s || s.kind !== 'store' || s.status === 'archived' || s.status === 'deleted') throw notFound('Boutique introuvable');
+    if (await exam.runningExam(ctx.t.platform)) throw bad('Un examen est déjà en cours : attendez qu’il finisse.');
+    const trial = i.book === 'trial' ? await pilot.trialFor(ctx.t.platform) : null;
+    const book = trial ? trial.book : i.book === 'trial' ? null : await pilot.bookChoice(ctx.t.platform, i.book);
+    if (!book) throw bad(i.book === 'trial' ? 'Aucune version en test : cliquez d’abord sur « Push en test »' : 'Aucun livre en test en ce moment');
+    const shop = await ctx.shop(i.shopId);
+    if (!(await exam.examFacts(shop.db))) throw bad('Cette boutique n’a aucun produit actif : l’examen parle d’un de ses produits.');
+    const id = await exam.startExam(ctx.t.platform, { shopId: s.id, shopName: s.name, book: i.book, version: book.version, by: ctx.staff.name || ctx.staff.email });
+    await audit(ctx, 'pilot.exam.start', null, { id, shopId: s.id, book: i.book, version: book.version });
+    const ask = ctx.ai;
+    // the exam goes on after this answer; a failure is written on it (never lost)
+    void exam
+      .runExam({ pdb: ctx.t.platform, shop, ask, examId: id, book, lab: i.book, trial: trial ? { darija: trial.darija, lahja: trial.lahja } : null })
+      .catch((e) => ctx.t.platform.query(`UPDATE platform.pilot_exams SET status = 'failed', error = $2, finished_at = now() WHERE id = $1`, [id, String(e?.message ?? e).slice(0, 300)]).catch(() => undefined));
+    return { id };
+  }),
+  'p.pilot.exam.get': pproc(ALL, z.object({ id: Id }), async (ctx, i) => {
+    const r = (await ctx.t.platform.query('SELECT * FROM platform.pilot_exams WHERE id = $1', [i.id]))[0];
+    if (!r) throw notFound('Examen introuvable');
+    return exam.examView(r);
+  }),
+  /** The latest exams (their marks, without the chats). */
+  'p.pilot.exam.list': pproc(ALL, z.object({}), async (ctx) => {
+    const rows = await ctx.t.platform.query(`SELECT * FROM platform.pilot_exams ORDER BY id DESC LIMIT 12`);
+    return rows.map((r: any) => {
+      const v = exam.examView(r);
+      return { ...v, items: v.items.map(({ transcript: _t, ...x }) => x) };
+    });
+  }),
+
   /** The lessons chat: Pilot AI turns the coach's own words into one lesson and checks it (nothing is saved here). */
   'p.pilot.teach': pproc(
     ALL,
@@ -1471,6 +1523,20 @@ export const PLATFORM_REGISTRY = {
       return pilot.teachTurn(ctx.ai, ctx.t.platform, i);
     },
   ),
+  /** « Ajouter les leçons de Pilotix »: each one checked and approved like the coach's own, for the next « Push en test ». */
+  'p.pilot.addPilotixLessons': pproc(ALL, z.object({}), async (ctx) => {
+    const by = ctx.staff.name || ctx.staff.email;
+    let added = 0;
+    let skipped = 0;
+    for (const l of await pilotixLessons(ctx.t.platform)) {
+      if (l.added) continue;
+      const r = await pilot.addCoachLesson(ctx.t.platform, { by, topic: l.topic, text: l.text, meaning: l.meaning, now: new Date(ctx.now()) });
+      if (r.ok) added++;
+      else skipped++;
+    }
+    if (added) await audit(ctx, 'pilot.lesson.pilotix', null, { added });
+    return { added, skipped };
+  }),
   /** « Add »: the coach's lesson, checked again, approved by its author; it goes into the next book (tested like any book). */
   'p.pilot.addLesson': pproc(
     ALL,

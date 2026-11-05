@@ -24,6 +24,41 @@ function VoiceLine({ v }: { v: { status?: string; seconds?: number | null } }) {
   );
 }
 
+/** « Photo · lue par l’IA » above a customer's photo (or: reading, not read, reading off), with its small copy */
+function PhotoLine({ p }: { p: { status?: string; thumb?: string | null; productName?: string | null; sure?: boolean } }) {
+  const { t } = useTranslation();
+  const st = ['done', 'pending', 'failed', 'off'].includes(String(p.status)) ? String(p.status) : 'pending';
+  return (
+    <>
+      {p.thumb && <img className="ai-photo" src={p.thumb} alt={t('messages.photo.label')} loading="lazy" />}
+      <span className={`ai-voice ai-voice-${st}`}>
+        <Icon name="image" /> {t('messages.photo.label')} · {t(`messages.photo.${st}`)}
+        {st === 'done' && p.productName ? <> · <bdi>{p.productName}</bdi></> : null}
+      </span>
+    </>
+  );
+}
+
+/** The product photos Dellal sent: their small copies in a row (the words with them come in the next message). */
+function SentPhotos({ photos }: { photos: { thumb?: string | null; label?: string }[] }) {
+  const { t } = useTranslation();
+  const shown = photos.filter((p) => p.thumb);
+  return (
+    <>
+      {shown.length > 0 && (
+        <span className="ai-photos">
+          {shown.map((p, i) => (
+            <img key={i} className="ai-photo" src={p.thumb!} alt={p.label ?? t('messages.photo.sent')} loading="lazy" />
+          ))}
+        </span>
+      )}
+      <span className="ai-voice ai-voice-done">
+        <Icon name="image" /> {t('messages.photo.sentN', { count: photos.length })}
+      </span>
+    </>
+  );
+}
+
 /** The messages of a conversation, grouped by author, with the day between them; `foot`: a quiet line under a message. */
 export function Bubbles({
   messages,
@@ -83,8 +118,11 @@ export function Bubbles({
         <div className="ai-bub">
           {/* a voice note: Gemini wrote it as text (or could not) before Dellal read it */}
           {m.role === 'customer' && m.meta?.voice && <VoiceLine v={m.meta.voice} />}
+          {/* a photo: Pilot AI looked at it (what it shows, the product) before Dellal read it */}
+          {m.role === 'customer' && m.meta?.photo && <PhotoLine p={m.meta.photo} />}
+          {m.role === 'agent' && Array.isArray(m.meta?.photos) && <SentPhotos photos={m.meta.photos} />}
           <span className="ai-txt" dir="auto">
-            {m.body}
+            {m.role === 'customer' && m.meta?.photo ? String(m.body).replace(/^\[photo(?: envoyée)?\]\s*/, '') : m.role === 'agent' && Array.isArray(m.meta?.photos) ? String(m.body).replace(/^📷\s*/, '') : m.body}
           </span>
           {/* the customer changed this message (Messenger): the first text stays readable for the team */}
           {m.meta?.edited && (
@@ -156,10 +194,30 @@ export function Typing({ name }: { name: string }) {
   );
 }
 
-/** The message box: grows with the text; Enter sends, Shift + Enter goes to the line. */
-export function Composer({ value, onChange, onSend, placeholder, busy, disabled, children }: { value: string; onChange: (v: string) => void; onSend: () => void; placeholder: string; busy: boolean; disabled?: boolean; children?: ReactNode }) {
+/** The message box: grows with the text; Enter sends, Shift + Enter goes to the line; `onPhoto`: a photo button too. */
+export function Composer({
+  value,
+  onChange,
+  onSend,
+  placeholder,
+  busy,
+  disabled,
+  children,
+  onPhoto,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onSend: () => void;
+  placeholder: string;
+  busy: boolean;
+  disabled?: boolean;
+  children?: ReactNode;
+  /** a photo picked (as the customer): its words are what the box holds */
+  onPhoto?: (file: File) => void;
+}) {
   const { t } = useTranslation();
   const ref = useRef<HTMLTextAreaElement>(null);
+  const pick = useRef<HTMLInputElement>(null);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -170,6 +228,24 @@ export function Composer({ value, onChange, onSend, placeholder, busy, disabled,
     <div className="ai-cmp">
       {children}
       <div className="ai-cmp-r">
+        {onPhoto && (
+          <>
+            <input
+              ref={pick}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = '';
+                if (f) onPhoto(f);
+              }}
+            />
+            <button type="button" className="btn ghost ai-pic" title={t('messages.photo.send')} aria-label={t('messages.photo.send')} disabled={busy || disabled} onClick={() => pick.current?.click()}>
+              <Icon name="image" />
+            </button>
+          </>
+        )}
         <textarea
           ref={ref}
           rows={1}

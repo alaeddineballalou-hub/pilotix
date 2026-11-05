@@ -18,6 +18,7 @@ import { AgentHeader, Filters, initials, PeriodSwitch, SaveBar, SearchBox, useEd
 import type { PageProps } from '../registry';
 import { Bubbles, Composer } from './chat';
 import { LahjaCard, LahjaFix } from './lahja';
+import { chatPhoto } from './photo';
 import { LinkedPage } from './linkedPage';
 import { VoiceRead } from './voice';
 import './messages.css';
@@ -392,6 +393,19 @@ function Tester() {
     setBody('');
     send.mutate({ body: v });
   };
+  /** a photo as the customer (with the words in the box): Dellal reads it like a real customer's */
+  const submitPhoto = async (file: File) => {
+    if (send.isPending) return;
+    const v = body.trim();
+    try {
+      const photo = await chatPhoto(file);
+      setPending(v ? `📷 ${v}` : '📷');
+      setBody('');
+      send.mutate({ body: v, photo });
+    } catch {
+      toast(t('messages.photo.notImage'), 'bad');
+    }
+  };
   return (
     <Card title={t('messages.tester.title', { name })}>
       <div className="ai-try">
@@ -428,7 +442,7 @@ function Tester() {
               </button>
             </div>
             {init.isLoading ? <Loading /> : <Bubbles messages={shown?.messages ?? []} name={name} pending={pending} foot={(m) => <LahjaFix m={m} name={name} />} />}
-            <Composer value={body} onChange={setBody} onSend={() => submit()} placeholder={t('messages.tester.write')} busy={send.isPending}>
+            <Composer value={body} onChange={setBody} onSend={() => submit()} placeholder={t('messages.tester.write')} busy={send.isPending} onPhoto={(f) => void submitPhoto(f)}>
               <div className="ai-quick" ref={row}>
                 {quick.map((x) => (
                   <button key={x} type="button" dir="auto" disabled={send.isPending} onClick={() => submit(x)}>
@@ -594,6 +608,13 @@ function SettingsForm({ data }: { data: NonNullable<ReturnType<typeof useRpc<'de
           <span>
             <b>{t('messages.settings.night')}</b>
             <small>{t('messages.settings.nightHint')}</small>
+          </span>
+        </label>
+        <label className="dl-switch">
+          <input type="checkbox" checked={f.photos !== false} onChange={(e) => set('photos', e.target.checked)} />
+          <span>
+            <b>{t('messages.settings.photos')}</b>
+            <small>{t('messages.settings.photosHint', { name: f.name })}</small>
           </span>
         </label>
         <label className="dl-switch">

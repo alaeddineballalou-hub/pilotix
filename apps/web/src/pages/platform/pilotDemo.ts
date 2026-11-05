@@ -398,6 +398,10 @@ function state() {
     },
     // the sales lessons not in service yet: a lesson found at night and one the coach wrote in « Teach a lesson »
     lahjaWaiting: 3,
+    // the 10-question exam: v4 (in test) marked this morning, v2 (in service) two days ago
+    exams: { trial: { id: 13, book: 'trial', version: 4, score: 9.3, at: at(0, 7) }, live: { id: 9, book: 'live', version: 2, score: 7.6, at: at(2) }, running: null },
+    // the lessons Pilotix wrote, not added yet (Leçons › Vente)
+    pilotix: PILOTIX_DEMO,
     next: {
       version: 5,
       lessons: 11,
@@ -706,9 +710,63 @@ function vocabTry(text: string) {
   return { words, prices, block: '', ms: 1, tokens: words.length * 14 + prices.length * 20 + (words.length || prices.length ? 30 : 0) };
 }
 
+/** Pilotix's own lessons, as the server offers them (pilotexamdata.ts) */
+const PILOTIX_DEMO = [
+  ['closing', "Keep the chat in order: answer the customer's question first, add one useful benefit, then ask one single question to move forward. Never skip a step and never ask several questions at once.", 'Garder la conversation en ordre : répondre d’abord à sa question, un seul avantage utile, puis une seule question pour avancer. Ne jamais sauter une étape ni poser plusieurs questions à la fois.'],
+  ['product', 'When the customer asks for a photo or another colour, send the real photos with the photo tool instead of talking about them, then ask which colour they like.', 'Le client demande une photo ou une autre couleur : envoyer les vraies photos avec l’outil des photos plutôt que d’en parler, puis demander quelle couleur lui plaît.'],
+  ['product', 'When the customer sends a photo of a product, first name the product it shows; when you are unsure, offer the closest products and ask which one they mean.', 'Le client envoie la photo d’un produit : nommer d’abord le produit qu’elle montre ; si ce n’est pas sûr, proposer les produits les plus proches et demander lequel.'],
+  ['price', 'Before giving a price, a fee or a total, check it with the tool, then say clearly the total to hand to the delivery man, so there is no surprise at the door.', 'Avant un prix, des frais ou un total : le vérifier avec l’outil, puis redire clairement le total à donner au livreur, pour aucune surprise à la porte.'],
+  ['address', 'To take the order, ask for one piece of information at a time, in this order: first name, phone number, wilaya, then commune. Read the number back in small groups so the customer can check it.', 'Pour la commande : une seule information à la fois, dans l’ordre prénom, numéro, wilaya, commune. Relire le numéro par petits groupes pour que le client le vérifie.'],
+  ['trust', 'If the customer fears a scam, reassure them with simple facts: they settle only when the parcel arrives, they never give a deposit, and you stay here to answer their questions.', 'Peur d’une arnaque : rassurer avec des faits simples (il règle seulement à la réception, jamais d’acompte) et rester là pour répondre à ses questions.'],
+  ['closing', "Before saving the order, give a short clear recap (product, colour, wilaya, total checked with the tool) and wait for the customer's yes.", 'Avant d’enregistrer la commande : un récapitulatif court et clair (produit, couleur, wilaya, total vérifié avec l’outil), puis attendre le oui du client.'],
+  ['followup', 'When the customer wants to think or to ask their family, respect that moment: offer a short recap they can show, say you are here when they come back, and let them decide.', 'Le client veut réfléchir ou demander à sa famille : respecter ce moment, proposer un petit récapitulatif à montrer, dire qu’on est là s’il revient, et le laisser décider.'],
+  ['language', "Write short, like a seller on their phone, in the customer's language and script, with Algerian Darija words and not words from another country.", 'Écrire court, comme un vendeur sur son téléphone, dans la langue et l’écriture du client, avec les mots de la darija algérienne et pas ceux d’un autre pays.'],
+  ['product', 'When you do not know a piece of information about the product, say so simply and offer that someone from the team calls the customer back to answer.', 'Une information sur le produit qu’on ne connaît pas : le dire simplement et proposer qu’un conseiller de l’équipe rappelle le client pour lui répondre.'],
+  ['anger', 'When the customer is unhappy, apologise in one sentence, repeat their problem in your own words to show you understood, then hand the chat to the team without arguing.', 'Client mécontent : s’excuser en une phrase, redire son problème avec ses propres mots pour montrer qu’on a compris, puis passer la main à l’équipe sans discuter.'],
+].map(([topic, text, meaning]) => ({ topic, text, meaning }));
+
+/** v4's exam this morning: ten chats with the demo shop's watch, each marked */
+function examDemo() {
+  const at = new Date(Date.parse(`${today()}T07:00:00Z`)).toISOString();
+  const C = (body: string) => ({ role: 'customer', body });
+  const D = (body: string) => ({ role: 'agent', body });
+  const T = (body: string) => ({ role: 'tool', body });
+  const q = (id: string, title: string, score: number, transcript: { role: string; body: string }[], good: string[], faults: string[], lesson: string | null = null, meaning: string | null = null, topic = 'other') => ({
+    id,
+    title,
+    score,
+    good,
+    faults,
+    lesson,
+    meaning,
+    topic,
+    lessonOk: !!lesson,
+    transcript,
+  });
+  const items = [
+    q('price', 'Le prix', 10, [C('salam, ch7al Montre Atlas ?'), T('search_products "Montre Atlas" → 1 produit(s)'), D('Wa 3likoum salam 😊 Montre Atlas b 3 500 DA, w tkhalass ghir ki tesselmha. Men ayya wilaya nta ?')], ['Le prix exact du catalogue, tout de suite', 'Le paiement à la livraison dit tôt', 'Une seule question pour avancer'], []),
+    q('centimes', 'Un prix en centimes', 9, [C('Montre Atlas rahi b 35 alf ?'), D('Ih khouya, 35 alf ya3ni 3 500 DA 👍 Tkhalass ki tesselmha. Men ayya wilaya ?')], ['A compris les centimes et confirmé en DA'], ['N’a pas dit qu’on règle seulement à la réception avec le total livré'], 'Before giving a price, a fee or a total, check it with the tool, then say clearly the total to hand to the delivery man, so there is no surprise at the door.', 'Avant un prix, des frais ou un total : le vérifier avec l’outil, puis redire le total à donner au livreur.', 'price'),
+    q('fee', 'La livraison et le total', 10, [C('salam, n7ab Montre Atlas'), D('Mar7ba 😊 Montre Atlas b 3 500 DA. Men ayya wilaya ?'), C('ana men Oran, ch7al la livraison ?'), T('delivery_fee Oran → domicile 600 DA · bureau 400 DA'), D('L Oran : 600 DA l dar wela 400 DA f l bureau. Ya3ni 4 100 DA l dar wela 3 900 DA f l bureau, tkhalashom l livreur. Wach yasselhek ?')], ['Les frais pris avec l’outil', 'Le total livré clair, sans date promise'], []),
+    q('photo_ask', 'Une photo demandée', 10, [C('ab3athli tswira ta3 Montre Atlas noire stp'), T('send_photos #12 → 2 photo(s) envoyée(s)'), D('Ha hiya la noire 👆 T7abha l dar wela f l bureau ?')], ['Les vraies photos envoyées tout de suite, la couleur demandée', 'Un texte court, une question'], []),
+    q('photo_client', 'La photo du client', 9, [C('[photo] Capture d’écran d’une publicité : une montre noire · Message : 3andkom hadi ? ch7al ?'), D('Ih 3andna, hadi Montre Atlas 😊 b 3 500 DA. Men ayya wilaya ?')], ['A reconnu le produit et l’a nommé', 'Le prix tout de suite'], ['N’a pas confirmé la couleur qu’il voit sur la photo']),
+    q('trust', 'La peur de l’arnaque', 10, [C('nkhalas 9bel wela ki yjini ? ma nthi9ch bezzaf f les pages'), D('Ma tkhalass walou 9bel 🙏 Tkhalass ghir ki yjik l colis 3and l livreur, w 7atta acompte ma ntalbouhch. Men ayya wilaya bach n9ollek l livraison ?')], ['Des faits simples : rien avant la réception, jamais d’acompte', 'Calme, et la vente continue'], []),
+    q('expensive', '« C’est cher »', 8, [C('ch7al Montre Atlas ?'), D('Montre Atlas b 3 500 DA 😊 Men ayya wilaya ?'), C('ghali bezzaf, ta9der tna9es chwiya ?'), D('Les prix ta3na fixes, smahli 🙏 Bessah f l bureau tkhalass la livraison ghir 400 DA.')], ['Pas de remise inventée', 'Une vraie option : le bureau'], ['N’a pas rappelé ce que vaut la montre avant de parler du bureau', 'Pas de question à la fin'], 'Keep the chat in order: answer the customer\'s question first, add one useful benefit, then ask one single question to move forward. Never skip a step and never ask several questions at once.', 'Répondre, un seul avantage utile, puis une seule question pour avancer.', 'closing'),
+    q('family', '« Je demande à ma famille »', 9, [C('ch7al Montre Atlas ?'), D('Montre Atlas b 3 500 DA, tkhalass ki tesselmha 😊'), C('mli7, nchawer rajli w nwelli'), D('Saha, chawer 3la rahtek 😊 Ha l mlakhess : Montre Atlas, 3 500 DA + livraison selon la wilaya. Ana hna ki twelli.')], ['A respecté ce moment, petit récapitulatif à montrer'], ['Le récapitulatif n’a pas le total livré']),
+    q('order', 'Une commande complète', 9, [C('n7ab nkoumandi Montre Atlas noire'), D('Mlih 👍 3tini smiytek stp.'), C('Karim, 0661 23 45 18'), D('Merci Karim. Ra9mek 0661 23 45 18, s7i7 ? Men ayya wilaya ?'), C('Oran'), T('create_order → CMD-0412 · 4 100 DA'), D('C’est noté ✅ Conseiller ghadi y3aytlek 3la 0661 23 45 18 bach ykonfirmi, jawbou 🙏')], ['Une chose à la fois, le numéro relu', 'La commande enregistrée dès que tout est là'], ['N’a pas demandé la commune']),
+    q('unknown', 'Une question sans réponse', 9, [C('wach fih garantie 2 ans ? w wach houwa original ?'), T('callback → numéro demandé (1/2)'), D('Had l ma3louma ma 3andich dorka 🙏 3tini ra9mek w conseiller y3aytlek yjawbek.')], ['Rien d’inventé', 'Un rappel par un conseiller'], ['Aurait pu rassurer avec le paiement à la livraison']),
+  ];
+  return { id: 13, shopId: 1, shopName: 'Boutique Alaeddine', book: 'trial', version: 4, status: 'done', score: 9.3, done: 10, total: 10, items, error: null, by: 'Alaeddine', at, finishedAt: at };
+}
+
 /** the example answer of one control-room call (the Pilot AI page's reads) */
 export function demoAnswer(name: string, input: any): unknown {
   switch (name) {
+    case 'p.pilot.exam.get':
+      return examDemo();
+    case 'p.pilot.exam.start':
+      return { id: 13 };
+    case 'p.pilot.exam.list':
+      return [examDemo()];
     // Pilotix's Meta and TikTok apps, not made yet (the preview shows what to do)
     case 'p.social.apps':
       return { meta: { appId: '', configId: '', hasSecret: false, hasIgSecret: false }, tiktok: { appId: '', hasSecret: false }, verifyToken: 'pilotix-verify-3f9c2a71', ready: { meta: false, tiktok: false }, urls: null, counts: { meta: 1, tiktok: 0, shops: 2 } };

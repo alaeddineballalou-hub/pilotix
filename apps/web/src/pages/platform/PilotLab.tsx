@@ -22,8 +22,10 @@ import { Card, Icon, Tabs } from '../../ui/kit';
 import { toast } from '../../ui/toast';
 import { Bubbles, Composer, Msg, Typing } from '../messages/chat';
 import { LahjaWord, LahjaWords } from '../messages/lahja';
+import { chatPhoto } from '../messages/photo';
 import { CaseModal } from './pilotCase';
 import { ReleasePanel, takeFreshPush } from './PilotRelease';
+import { ExamCard, PilotixLessons } from './PilotExam';
 import { DarijaBookCard } from './DarijaBook';
 import { VocabPane } from './Vocab';
 import { PilotDemo, usePilotAction, usePilotCall, usePilotRpc } from './pilotDemo';
@@ -66,6 +68,7 @@ export function LabTab({ d, manager }: { d: State; manager: boolean }) {
   const [fresh, setFresh] = useState(start ? 1 : 0);
   const tryBox = useRef<HTMLDivElement>(null);
   const relBox = useRef<HTMLDivElement>(null);
+  const examBox = useRef<HTMLDivElement>(null);
   const scroll = (el: HTMLElement | null) => requestAnimationFrame(() => el?.scrollIntoView({ behavior: still() ? 'auto' : 'smooth', block: 'start' }));
   const pushed = (kind: 'trial' | 'live') => {
     setBook(kind);
@@ -95,8 +98,11 @@ export function LabTab({ d, manager }: { d: State; manager: boolean }) {
           <LessonsCard d={d} onTry={toPush} manager={manager} />
         </div>
       </div>
+      <div ref={examBox}>
+        <ExamCard d={d} book={book} />
+      </div>
       <div ref={relBox}>
-        <NextCard d={d} manager={manager} onPushed={pushed} />
+        <NextCard d={d} manager={manager} onPushed={pushed} onExam={() => scroll(examBox.current)} />
       </div>
     </>
   );
@@ -170,6 +176,26 @@ function TryCard({ d, book, onBook, fresh = 0 }: { d: State; book: Book; onBook:
     } catch (e: any) {
       setBody(v); // the message comes back to the box, to send again
       setErr(e?.message || t('platform.pilot.lab.try.failed'));
+    } finally {
+      setBusy(false);
+      setPending(null);
+    }
+  };
+  /** a photo as the customer (with the words in the box): read by Pilot AI like a real customer's */
+  const sendPhoto = async (file: File) => {
+    if (busy || !shopId) return;
+    const words = body.trim();
+    setBusy(true);
+    setErr(null);
+    setPending(words ? `📷 ${words}` : '📷');
+    setBody('');
+    try {
+      const p = await chatPhoto(file);
+      const r = await call('p.pilot.try', { shopId, book, body: words, photo: p });
+      setMsgs(r.messages as Msg[]);
+    } catch (e: any) {
+      setBody(words);
+      setErr(e?.message === 'not_image' ? t('messages.photo.notImage') : e?.message || t('platform.pilot.lab.try.failed'));
     } finally {
       setBusy(false);
       setPending(null);
@@ -268,7 +294,7 @@ function TryCard({ d, book, onBook, fresh = 0 }: { d: State; book: Book; onBook:
                 <Icon name="alert" /> {err}
               </p>
             )}
-            <Composer value={body} onChange={setBody} onSend={() => send()} placeholder={t('platform.pilot.lab.try.write')} busy={busy || loading}>
+            <Composer value={body} onChange={setBody} onSend={() => send()} placeholder={t('platform.pilot.lab.try.write')} busy={busy || loading} onPhoto={(f) => void sendPhoto(f)}>
               <div className="ai-quick">
                 {quick.map((x) => (
                   <button key={x} type="button" dir="auto" disabled={busy || loading} onClick={() => send(x)}>
@@ -303,7 +329,16 @@ function LessonsCard({ d, onTry, manager }: { d: State; onTry: () => void; manag
           ]}
         />
       </div>
-      {kind === 'sales' ? <TeachChat d={d} onTry={onTry} /> : kind === 'darija' ? <DarijaPane manager={manager} /> : <VocabPane manager={manager} />}
+      {kind === 'sales' ? (
+        <>
+          <PilotixLessons d={d} onAdded={onTry} />
+          <TeachChat d={d} onTry={onTry} />
+        </>
+      ) : kind === 'darija' ? (
+        <DarijaPane manager={manager} />
+      ) : (
+        <VocabPane manager={manager} />
+      )}
     </Card>
   );
 }
@@ -917,7 +952,7 @@ function CoachFix({ m }: { m: Msg }) {
 }
 
 // ---------------------------------------------------------------- the next book
-function NextCard({ d, manager, onPushed }: { d: State; manager: boolean; onPushed?: (kind: 'trial' | 'live') => void }) {
+function NextCard({ d, manager, onPushed, onExam }: { d: State; manager: boolean; onPushed?: (kind: 'trial' | 'live') => void; onExam?: () => void }) {
   const { t } = useTranslation();
   const remove = usePilotAction('p.pilot.lesson', { success: t('platform.saved') });
   const nb = d.next;
@@ -957,7 +992,7 @@ function NextCard({ d, manager, onPushed }: { d: State; manager: boolean; onPush
           ))}
         </ul>
       )}
-      <ReleasePanel d={d} manager={manager} onStaged={() => onPushed?.('trial')} onReleased={() => onPushed?.('live')} onTry={(kind) => onPushed?.(kind)} />
+      <ReleasePanel d={d} manager={manager} onStaged={() => onPushed?.('trial')} onReleased={() => onPushed?.('live')} onTry={(kind) => onPushed?.(kind)} onExam={onExam} />
     </Card>
   );
 }

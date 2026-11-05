@@ -198,7 +198,9 @@
     "igLinked": "Linked: @{{user}}",
     "igOk": "Instagram linked: @{{user}}",
     "igStep1b": "then accept the invite in Instagram:",
-    "igStepNote": "A system user’s key (Business settings › System users, with your Instagram account and the instagram_manage_messages permission) works too, and never ends."
+    "igStepNote": "A system user’s key (Business settings › System users, with your Instagram account and the instagram_manage_messages permission) works too, and never ends.",
+    "photos": "Send product photos",
+    "photosHint": "When a customer asks for a photo, {{name}} sends the product’s real photos (the colour asked first). It also looks at the photos customers send."
   },
   "lahja": {
     "fix": "Darija lesson",
@@ -246,5 +248,17 @@
     "read": "Write this voice note as text",
     "reading": "Reading…",
     "readDone": "Voice note written as text"
+  },
+  "photo": {
+    "label": "Photo",
+    "done": "looked at by the AI",
+    "pending": "reading…",
+    "failed": "not read",
+    "off": "photo reading is off",
+    "send": "Send a photo (as the customer)",
+    "notImage": "This file is not a photo.",
+    "sent": "Photo sent",
+    "sentN_one": "{{count}} photo sent",
+    "sentN_other": "{{count}} photos sent"
   }
 }

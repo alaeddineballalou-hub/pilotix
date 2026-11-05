@@ -2,7 +2,8 @@
 // Calls the AI (Anthropic Messages API) and sends messages to WhatsApp (Cloud API), Messenger and Instagram (Graph API);
 // for Delivery AI agent, WhatsApp templates and SMS (SMS Gateway for Android, or any HTTP SMS service).
 // Keys are read from the settings table (written by dellal.settings.save / notify.settings.save) and never leave the server.
-import { AppError, Ctx } from './rpc';
+import { randomBytes } from 'crypto';
+import { AppError, Ctx, publicApi } from './rpc';
 import { publicFetch } from './publicfetch';
 import { AiRequest, AiResponse, DellalChannel, dellalSecret, dellalSettings } from './modules/dellal';
 import { NOTIFY_SMS_SECRET, notifySettings } from './modules/notify';
@@ -691,6 +692,8 @@ async function smsHooks(ctx: Ctx, a: { url: string }) {
  *  - 'planPublish' / 'planCheck' / 'planDelete' / 'planEdit' / 'planComment' / 'planStats' → AI social media manager: its
  *    posts and stories on the Page and Instagram, their first comment, their numbers and the followers
  *  - 'waTemplate' / 'waTemplates' / 'waCreateTemplate' / 'sms' / 'smsHooks' → Delivery AI agent
+ *  - 'media' → a customer's photo (WhatsApp media id or Meta's link): its bytes for Pilot AI, and a small copy
+ *  - 'photos' → { channel, externalId, accountId, photos }: the product photos Dellal picked, sent as JPEG
  */
 export async function runDellal(action: string, args: unknown, ctx: Ctx): Promise<unknown> {
   if (action === 'complete') return complete(ctx, args as AiRequest);
@@ -715,6 +718,8 @@ export async function runDellal(action: string, args: unknown, ctx: Ctx): Promis
   if (action === 'planComment') return planComment(ctx, args as PlanArgs);
   if (action === 'planStats') return planStats(ctx, args as any);
   if (action === 'transcribe') return transcribe(ctx, args as VoiceArgs);
+  if (action === 'media') return readMedia(ctx, args as MediaArgs);
+  if (action === 'photos') return sendPhotos(ctx, args as PhotosArgs);
   if (action === 'catchUp') return catchUpMeta(args as CatchUpArgs);
   if (action === 'igLogin') return igLogin(String((args as any)?.token ?? ''), (args as any)?.igId ? String((args as any).igId) : null);
   if (action === 'igRefresh') return igRefresh(String((args as any)?.token ?? ''));
@@ -1036,6 +1041,199 @@ async function transcribe(ctx: Ctx, a: VoiceArgs): Promise<VoiceResult> {
   return { ok: true, text: r.text, lang: r.lang, seconds: r.seconds, model: v.model };
 }
 
+// ---------------------------------------------------------------- photos: the customers' (read) and the products' (sent)
+type MediaArgs = { channel: DellalChannel; media: { id?: string; url?: string; mime?: string } };
+type PhotosArgs = { conversationId: number; channel: DellalChannel; externalId: string; accountId?: string | null; photos: { src: string; mime: string; data: string | null; url: string | null }[] };
+/** what a customer's photo may weigh when it is fetched; the AI reads up to 5 MB (a bigger one gets a smaller copy) */
+const PHOTO_FETCH_MAX = 15 * 1024 * 1024;
+const PHOTO_AI_MAX = 4.5 * 1024 * 1024;
+
+/** The image's real type from its first bytes (a link's content-type is not trusted). */
+export function sniffImage(b: Buffer): string | null {
+  if (b.length < 12) return null;
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png';
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return 'image/gif';
+  if (b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP') return 'image/webp';
+  if (b.toString('latin1', 4, 8) === 'ftyp' && /^(heic|heix|hevc|mif1|msf1|avif)/.test(b.toString('latin1', 8, 12))) return 'image/heic';
+  return null;
+}
+
+/** sharp (on the server only; absent in a test without it): null when it cannot be loaded */
+let sharpLib: any = undefined;
+function sharp(): any {
+  if (sharpLib === undefined) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      sharpLib = require('sharp');
+    } catch {
+      sharpLib = null;
+    }
+  }
+  return sharpLib;
+}
+/** A JPEG copy, at most `max` px on its longest side, turned the right way up, on white (null: sharp is missing or the image is unreadable). */
+export async function toJpeg(bytes: Buffer, max: number, quality = 84): Promise<Buffer | null> {
+  const s = sharp();
+  if (!s) return null;
+  try {
+    return await s(bytes, { failOn: 'none', limitInputPixels: 80_000_000 })
+      .rotate()
+      .resize({ width: max, height: max, fit: 'inside', withoutEnlargement: true })
+      .flatten({ background: '#ffffff' })
+      .jpeg({ quality, mozjpeg: true })
+      .toBuffer();
+  } catch {
+    return null;
+  }
+}
+
+async function fetchBytes(url: string, headers: Record<string, string>, max: number): Promise<{ bytes: Buffer; mime: string | null } | { error: string }> {
+  let res: Response;
+  try {
+    res = await fetch(url, { headers, signal: AbortSignal.timeout(25_000), redirect: 'follow' });
+  } catch {
+    return { error: 'download' };
+  }
+  if (!res.ok) return { error: `download ${res.status}` };
+  if (Number(res.headers.get('content-length') || 0) > max) return { error: 'too_big' };
+  const bytes = Buffer.from(await res.arrayBuffer());
+  if (bytes.length > max) return { error: 'too_big' };
+  if (!bytes.length) return { error: 'empty' };
+  return { bytes, mime: res.headers.get('content-type') };
+}
+
+/**
+ * A customer's photo for Pilot AI: from WhatsApp (its media id, with the shop's WhatsApp token) or from Messenger /
+ * Instagram (Meta's link only). Its bytes (a JPEG copy when it is too big or of a type the AI does not read, like HEIC)
+ * and a small copy for the screens. Never throws: { ok: false, error } and Dellal asks what it shows.
+ */
+async function readMedia(ctx: Ctx, a: MediaArgs): Promise<{ ok: true; mime: string; data: string; thumb: string | null } | { ok: false; error: string }> {
+  let got: { bytes: Buffer; mime: string | null } | { error: string };
+  if (a.media?.id) {
+    const token = await dellalSecret(ctx.db, 'waToken');
+    if (!token) return { ok: false, error: 'no_whatsapp_token' };
+    const info = await postJson(`${GRAPH}/${enc(a.media.id)}`, null, { Authorization: `Bearer ${token}` }, 'WhatsApp', 'GET', 20_000).catch((e) => ({ error: String(e?.message ?? e) }));
+    if (!info?.url) return { ok: false, error: String(info?.error ?? 'no_media').slice(0, 200) };
+    got = await fetchBytes(String(info.url), { Authorization: `Bearer ${token}` }, PHOTO_FETCH_MAX);
+  } else if (a.media?.url) {
+    if (!META_MEDIA.test(a.media.url)) return { ok: false, error: 'bad_url' };
+    got = await fetchBytes(a.media.url, {}, PHOTO_FETCH_MAX);
+  } else return { ok: false, error: 'no_media' };
+  if ('error' in got) return { ok: false, error: got.error };
+  const type = sniffImage(got.bytes);
+  if (!type) return { ok: false, error: 'not_image' };
+  let bytes = got.bytes;
+  let mime = type;
+  if (bytes.length > PHOTO_AI_MAX || !/^image\/(jpeg|png|gif|webp)$/.test(type)) {
+    const j = await toJpeg(got.bytes, 1568, 85);
+    if (!j) return { ok: false, error: type === 'image/heic' ? 'heic' : 'too_big' };
+    bytes = j;
+    mime = 'image/jpeg';
+  }
+  const small = await toJpeg(got.bytes, 320, 70);
+  return { ok: true, mime, data: bytes.toString('base64'), thumb: small ? `data:image/jpeg;base64,${small.toString('base64')}` : null };
+}
+
+/**
+ * A product photo as a JPEG at a public address (Meta downloads it to send it): made once per picture (sharp, up to
+ * 1080 px), kept in dellal_photos with a random key (unguessable), copies nobody used for a month removed.
+ */
+async function jpegFile(ctx: Ctx, p: PhotosArgs['photos'][number]): Promise<{ id: number; key: string }> {
+  const src = String(p.src ?? '').slice(0, 200);
+  const have = (await ctx.db.query('SELECT id, key FROM dellal_photos WHERE src = $1', [src]))[0];
+  if (have) {
+    await ctx.db.query('UPDATE dellal_photos SET used_at = now() WHERE id = $1', [have.id]);
+    return { id: Number(have.id), key: String(have.key) };
+  }
+  let bytes: Buffer;
+  const svg = /^data:image\/svg\+xml(;base64)?,/i.exec(String(p.url ?? ''));
+  if (p.data) bytes = Buffer.from(String(p.data), 'base64');
+  else if (svg) {
+    // a drawing kept as a data: link (the demo's pictures): sharp draws it as a JPEG
+    const body = String(p.url).slice(svg[0].length);
+    bytes = svg[1] ? Buffer.from(body, 'base64') : Buffer.from(decodeURIComponent(body), 'utf8');
+  } else if (p.url) {
+    const res = await publicFetch(String(p.url), { timeoutMs: 20_000, maxBytes: PHOTO_FETCH_MAX }, 'Photo du produit');
+    if (!res.ok) throw new AppError('bad_request', `Photo du produit introuvable (${res.status})`);
+    bytes = Buffer.from(await res.arrayBuffer());
+  } else throw new AppError('bad_request', 'Photo vide');
+  const type = svg ? 'image/svg+xml' : sniffImage(bytes);
+  if (!type) throw new AppError('bad_request', 'Ce fichier n’est pas une photo');
+  let out = await toJpeg(bytes, 1080, 85);
+  let mime = 'image/jpeg';
+  if (!out) {
+    // without sharp: a JPEG or a PNG goes as it is (WhatsApp, Messenger and Instagram take both), a WebP cannot
+    if (type !== 'image/jpeg' && type !== 'image/png') throw new AppError('bad_request', `Photo en ${type.replace('image/', '').toUpperCase()} : le serveur ne peut pas la convertir en JPEG.`);
+    out = bytes;
+    mime = type;
+  }
+  await ctx.db.query(`DELETE FROM dellal_photos WHERE used_at < now() - interval '30 days'`);
+  const r = (
+    await ctx.db.query(`INSERT INTO dellal_photos (src, key, mime, jpeg) VALUES ($1, $2, $3, $4) ON CONFLICT (src) DO UPDATE SET used_at = now() RETURNING id, key`, [src, randomBytes(12).toString('hex'), mime, out.toString('base64')])
+  )[0];
+  return { id: Number(r.id), key: String(r.key) };
+}
+
+/** One photo to the customer, by its public address, on the conversation's channel. */
+async function sendImage(ctx: Ctx, a: { channel: DellalChannel; externalId: string; accountId?: string | null; url: string }) {
+  if (a.channel === 'whatsapp') {
+    const token = await dellalSecret(ctx.db, 'waToken');
+    const phoneId = a.accountId || (await ctx.db.query(`SELECT value->>'whatsappPhoneId' AS v FROM settings WHERE key = 'dellal'`))[0]?.v;
+    if (!token || !phoneId) throw new AppError('bad_request', 'WhatsApp n’est pas connecté (jeton ou ID du numéro manquant).');
+    await postJson(`${GRAPH}/${phoneId}/messages`, { messaging_product: 'whatsapp', recipient_type: 'individual', to: a.externalId, type: 'image', image: { link: a.url } }, { Authorization: `Bearer ${token}` }, 'WhatsApp');
+    return;
+  }
+  const page = async () => {
+    const token = await dellalSecret(ctx.db, 'pageToken');
+    if (!token) throw new AppError('bad_request', 'La page Facebook n’est pas connectée (jeton de page manquant).');
+    await postJson(
+      `${GRAPH}/me/messages?access_token=${encodeURIComponent(token)}`,
+      { recipient: { id: a.externalId }, messaging_type: 'RESPONSE', message: { attachment: { type: 'image', payload: a.channel === 'instagram' ? { url: a.url } : { url: a.url, is_reusable: true } } } },
+      {},
+      a.channel === 'instagram' ? 'Instagram' : 'Messenger',
+    );
+  };
+  if (a.channel === 'instagram') {
+    const ig = await dellalSecret(ctx.db, 'igToken');
+    if (ig) {
+      try {
+        const s = await dellalSettings(ctx.db);
+        const url = s.igLoginKind === 'unified' && s.instagramLoginId ? `${UNI_GRAPH}/${enc(s.instagramLoginId)}/messages` : `${IG_GRAPH}/me/messages`;
+        await postJson(url, { recipient: { id: a.externalId }, message: { attachment: { type: 'image', payload: { url: a.url } } } }, { Authorization: `Bearer ${ig}` }, 'Instagram');
+        return;
+      } catch (e) {
+        if (!(await dellalSecret(ctx.db, 'pageToken'))) throw e;
+        try {
+          return await page();
+        } catch {
+          throw e;
+        }
+      }
+    }
+  }
+  if (a.channel === 'messenger' || a.channel === 'instagram') return page();
+  if (a.channel === 'tiktok') throw new AppError('bad_request', 'TikTok : l’envoi de photos sera actif quand TikTok aura approuvé votre compte pour la messagerie.');
+}
+
+/** The product photos Dellal picked, one by one (a failed one does not stop the others). */
+async function sendPhotos(ctx: Ctx, a: PhotosArgs): Promise<{ ok: boolean; sent: number; errors: string[] }> {
+  const base = publicApi(ctx);
+  if (!base) return { ok: false, sent: 0, errors: ['Adresse publique du serveur manquante (PUBLIC_URL) : les photos ne peuvent pas partir.'] };
+  let sent = 0;
+  const errors: string[] = [];
+  for (const p of (Array.isArray(a.photos) ? a.photos : []).slice(0, 6)) {
+    try {
+      const f = await jpegFile(ctx, p);
+      await sendImage(ctx, { channel: a.channel, externalId: a.externalId, accountId: a.accountId, url: `${base}/lp/dp/${f.id}/${f.key}.jpg` });
+      sent++;
+    } catch (e: any) {
+      errors.push(String(e?.message ?? e).slice(0, 300));
+    }
+  }
+  return { ok: !errors.length, sent, errors };
+}
+
 // ---------------------------------------------------------------- incoming webhooks
 export interface Incoming {
   channel: DellalChannel;
@@ -1045,8 +1243,8 @@ export interface Incoming {
   text: string;
   messageId: string | null;
   source: string | null;
-  /** a voice note: where to fetch it (WhatsApp: its media id; Messenger / Instagram: its link) */
-  media?: { kind: 'audio'; id?: string; url?: string; mime?: string } | null;
+  /** a voice note or a photo: where to fetch it (WhatsApp: its media id; Messenger / Instagram: its link) */
+  media?: { kind: 'audio' | 'image'; id?: string; url?: string; mime?: string } | null;
   /** WhatsApp: the hidden value of the template button the customer tapped (a campaign's « Je commande » / « Stop ») */
   payload?: string;
 }
@@ -1070,19 +1268,33 @@ export function parseMetaWebhook(body: any): Incoming[] {
       for (const ev of Array.isArray(entry?.messaging) ? entry.messaging : []) {
         const m = ev?.message;
         if (!m || m.is_echo || !ev?.sender?.id) continue;
-        const att = Array.isArray(m.attachments) ? m.attachments[0] : null;
-        const text = String(m.text ?? (att ? MEDIA[att.type] ?? '[pièce jointe]' : '')).trim();
+        const atts: any[] = Array.isArray(m.attachments) ? m.attachments : [];
+        const att = atts[0] ?? null;
+        // Messenger's stickers (the thumbs up) come as an image with a sticker id: a sticker, not a photo
+        const sticker = (a: any) => a?.type === 'image' && !!a?.payload?.sticker_id;
+        const text = String(m.text ?? (att ? (sticker(att) ? MEDIA.sticker : MEDIA[att.type] ?? '[pièce jointe]') : '')).trim();
         if (!text) continue;
         const ref = m.referral ?? ev.referral;
         const audio = !m.text && att?.type === 'audio' && att?.payload?.url ? String(att.payload.url) : null;
-        out.push({
-          channel: obj === 'page' ? 'messenger' : 'instagram',
+        const base = {
+          channel: (obj === 'page' ? 'messenger' : 'instagram') as DellalChannel,
           externalId: String(ev.sender.id),
           accountId: ev?.recipient?.id ? String(ev.recipient.id) : null,
           name: null,
+          source: ref?.ad_id ? `pub ${ref.ad_id}` : ref?.source ? String(ref.source).toLowerCase() : null,
+        };
+        // photos (up to 3 in one message): each one its own message, read by Pilot AI before Dellal answers
+        const photos = m.text ? [] : atts.filter((a) => a?.type === 'image' && a?.payload?.url && !sticker(a)).slice(0, 3);
+        if (photos.length) {
+          photos.forEach((a, i) =>
+            out.push({ ...base, text: MEDIA.image, messageId: m.mid ? (i ? `${String(m.mid).slice(0, 190)}#${i + 1}` : String(m.mid)) : null, media: { kind: 'image' as const, url: String(a.payload.url).slice(0, 2000) } }),
+          );
+          continue;
+        }
+        out.push({
+          ...base,
           text: text.slice(0, 4000),
           messageId: m.mid ? String(m.mid) : null,
-          source: ref?.ad_id ? `pub ${ref.ad_id}` : ref?.source ? String(ref.source).toLowerCase() : null,
           ...(audio ? { media: { kind: 'audio' as const, url: audio.slice(0, 2000) } } : {}),
         });
       }
@@ -1115,6 +1327,7 @@ export function parseMetaWebhook(body: any): Incoming[] {
             // a template's quick reply (a campaign's « Je commande » / « Stop »): what Pilotix put behind the button
             ...(m.type === 'button' && m.button?.payload ? { payload: String(m.button.payload).slice(0, 200) } : {}),
             ...(m.type === 'audio' && m.audio?.id ? { media: { kind: 'audio' as const, id: String(m.audio.id).slice(0, 200), ...(m.audio.mime_type ? { mime: String(m.audio.mime_type).slice(0, 100) } : {}) } } : {}),
+            ...(m.type === 'image' && m.image?.id ? { media: { kind: 'image' as const, id: String(m.image.id).slice(0, 200), ...(m.image.mime_type ? { mime: String(m.image.mime_type).slice(0, 100) } : {}) } } : {}),
             // the ad's id (to find what it cost) and its title (what Dellal and the team read)
             source: m.referral?.source_id
               ? `pub ${m.referral.source_id}${m.referral?.headline ? ` « ${String(m.referral.headline).slice(0, 80)} »` : ''}`

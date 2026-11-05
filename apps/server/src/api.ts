@@ -1456,6 +1456,25 @@ class ApiController {
   }
 
   /**
+   * A product photo Dellal sends to a customer, downloaded by Meta (WhatsApp, Messenger, Instagram): /lp/dp/<id>/<key>.jpg.
+   * The random key keeps it unguessable; a picture's JPEG never changes (cached a year).
+   */
+  @Public()
+  @Get(['lp/dp/:id/:file', 's/:shop/lp/dp/:id/:file'])
+  async dellalPhoto(@Param('shop') shop: string | undefined, @Param('id') idp: string, @Param('file') file: string, @Res() res: any) {
+    const m = file.match(/^([a-f0-9]{24})\.jpg$/);
+    if (!/^\d+$/.test(idp) || !m) return res.status(404).send();
+    try {
+      const ref = intake(await this.publicShop(shop));
+      const r: any = await this.core.call(ref, 'dellal.photoFile', await this.core.systemSession(ref), { id: Number(idp), key: m[1] });
+      const type = /^image\/(jpeg|png)$/.test(String(r.mime)) ? String(r.mime) : 'image/jpeg';
+      return res.status(200).header('Content-Type', type).header('Cache-Control', 'public, max-age=31536000, immutable').send(Buffer.from(r.base64, 'base64'));
+    } catch {
+      return res.status(404).send();
+    }
+  }
+
+  /**
    * An order from a page. The answer is the same whether the order passed or was blocked as fake (the customer must not
    * be able to tell); only a page that does not exist (404) or a server failure (500, the page asks to try again) differ.
    */

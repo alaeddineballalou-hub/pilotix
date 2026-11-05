@@ -18,7 +18,7 @@ import { seed as seed_zr } from './seeds/zr';
 import { seed as seed_cash } from './seeds/cash';
 import { seed as seed_admin } from './seeds/admin';
 import { seed as seed_ads } from './seeds/ads';
-import { seed as seed_dellal } from './seeds/dellal';
+import { seed as seed_dellal, seedPhotoChat } from './seeds/dellal';
 import { seed as seed_cm } from './seeds/cm';
 import { seed as seed_leads } from './seeds/leads';
 import { seed as seed_campaigns } from './seeds/campaigns';
@@ -382,6 +382,8 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number } =
   await seed_landing(db, users, now);
   // after the landing pages (the catalog sends products that have one)
   await seed_metacatalog(db, users, now);
+  // Dellal and photos: shows the stroller's drawn pictures (made by the landing pages above)
+  await seedPhotoChat(db, now);
   await seed_spy(db, users, now);
   // Pilot Ads last: it reads the orders (and the ads each one came from) that the other seeds made
   await seed_pilotads(db, users, now);

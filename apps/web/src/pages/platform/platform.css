@@ -863,3 +863,59 @@ mark.pl-dj-gone { padding: 0 2px; border-radius: 4px; background: none; color: i
 .pp-seller li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border-radius: 12px; background: var(--raise, #FBFAF8); }
 .pp-seller li.on { outline: 1.5px solid var(--px-orange, #F7A823); }
 .pp-seller li a { display: flex; flex-direction: column; gap: 1px; text-decoration: none; color: inherit; min-width: 0; flex: 1 1 160px; }
+
+/* ---- Pilot AI › Test & lessons › the 10-question exam: the mark, the questions as they come, each one's chat and lesson */
+.pl-exam { margin-top: 16px; }
+.pl-exam-go { align-self: flex-end; }
+.pl-exam-lead { margin: -4px 0 0; line-height: 1.5; }
+.pl-exam-run { display: flex; flex-direction: column; gap: 8px; }
+.pl-exam-run p { margin: 0; }
+.pl-exam-bar { height: 8px; border-radius: 99px; background: var(--raise); overflow: hidden; }
+.pl-exam-bar > i { display: block; height: 100%; border-radius: inherit; background: var(--ai-dot-2, var(--navy)); transition: width .4s ease; }
+@media (prefers-reduced-motion: reduce) { .pl-exam-bar > i { transition: none; } }
+.pl-exam-res { display: flex; align-items: center; gap: 16px; padding: 12px 14px; border-radius: 14px; background: var(--raise); }
+.pl-exam-score { display: flex; align-items: baseline; gap: 2px; flex: none; font-variant-numeric: tabular-nums; }
+.pl-exam-score b { font-size: 44px; line-height: 1; font-weight: 800; letter-spacing: -0.02em; }
+.pl-exam-score span { font-size: 17px; font-weight: 700; color: var(--muted); }
+.pl-exam-score.ok b { color: var(--ok); } .pl-exam-score.warn b { color: var(--warn); } .pl-exam-score.bad b { color: var(--coral); }
+.pl-exam-sum { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pl-exam-sum p { margin: 0; }
+.pl-exam-qs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--line, rgba(0,0,0,.08)); border-radius: 14px; overflow: hidden; }
+.pl-exam-q + .pl-exam-q { border-top: 1px solid var(--line, rgba(0,0,0,.08)); }
+.pl-exam-q summary { display: flex; align-items: center; gap: 12px; padding: 10px 12px; cursor: pointer; list-style: none; }
+.pl-exam-q summary::-webkit-details-marker { display: none; }
+.pl-exam-q summary > .bji { flex: none; margin-inline-start: auto; color: var(--muted); transition: transform .15s ease; }
+.pl-exam-q details[open] summary > .bji { transform: rotate(180deg); }
+.pl-exam-q summary:focus-visible { outline: 2px solid var(--ai-dot-2, var(--navy)); outline-offset: -2px; }
+.pl-exam-mark { flex: none; display: grid; place-items: center; min-width: 38px; height: 30px; padding: 0 6px; border-radius: 9px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pl-exam-mark.ok { background: var(--ok-soft); color: var(--ok); }
+.pl-exam-mark.warn { background: var(--warn-soft); color: var(--warn); }
+.pl-exam-mark.bad { background: var(--coral-soft); color: var(--coral); }
+.pl-exam-qt { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pl-exam-qt small { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.4; }
+.pl-exam-body { display: flex; flex-direction: column; gap: 10px; padding: 0 12px 12px 62px; }
+[dir="rtl"] .pl-exam-body { padding: 0 62px 12px 12px; }
+.pl-exam-chat { list-style: none; margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--raise); display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.5; }
+.pl-exam-l.tool { color: var(--muted); font-size: 12px; }
+.pl-exam-l b { font-weight: 700; }
+.pl-exam-pts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.45; }
+.pl-exam-pts li { display: flex; gap: 6px; align-items: flex-start; }
+.pl-exam-pts .bji { flex: none; width: 15px; height: 15px; margin-top: 2px; }
+.pl-exam-pts.good .bji { color: var(--ok); } .pl-exam-pts.bad .bji { color: var(--coral); }
+.pl-exam-lesson { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--line, rgba(0,0,0,.15)); }
+.pl-exam-lesson p { margin: 0; line-height: 1.5; }
+.pl-exam-line { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; line-height: 1.5; }
+.pl-exam-line .bji { width: 15px; height: 15px; }
+.pl-exam-line.ok > .bji { color: var(--ok); } .pl-exam-line.warn > .bji { color: var(--warn); } .pl-exam-line.bad > .bji { color: var(--coral); }
+.pl-exam-line a, .pl-exam-line .linkish { font-weight: 700; }
+@media (max-width: 560px) {
+  .pl-exam-go { width: 100%; }
+  .pl-exam-body, [dir="rtl"] .pl-exam-body { padding: 0 12px 12px; }
+  .pl-exam-score b { font-size: 38px; }
+}
+
+/* ---- Leçons › Vente: the lessons Pilotix wrote, added in one click */
+.pl-pilotix { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 14px; background: var(--raise); }
+.pl-pilotix p { margin: 0; }
+.pl-pilotix .pl-rel-h .bji { color: var(--ai-dot-2, var(--navy)); vertical-align: -2px; }
+.pl-pilotix-list { margin: 4px 0; padding-inline-start: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.5; }

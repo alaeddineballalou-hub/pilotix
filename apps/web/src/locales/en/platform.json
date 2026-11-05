@@ -1628,6 +1628,17 @@
         "reset": "Undo the changes",
         "resetAsk": "Go back to the live vocabulary? Changes not pushed yet are lost.",
         "resetDone": "Vocabulary back to the live one"
+      },
+      "pilotix": {
+        "title_one": "{{count}} lesson written by Pilotix",
+        "title_other": "{{count}} lessons written by Pilotix",
+        "lead": "For no mistakes and a chat kept in order (and the new photos). Once added, they wait for the next « Push to test ».",
+        "add_one": "Add the lesson",
+        "add_other": "Add the {{count}} lessons",
+        "show": "See the lessons",
+        "hide": "Hide",
+        "addedToast_one": "{{count}} lesson added: it goes out with the next « Push to test »",
+        "addedToast_other": "{{count}} lessons added: they go out with the next « Push to test »"
       }
     },
     "voice": {
@@ -1732,6 +1743,54 @@
       "inService": "Live: v{{v}}, since {{date}}.",
       "inServiceNone": "Live: the base method (no version yet).",
       "managers": "A manager does the pushes."
+    },
+    "exam": {
+      "title": "Exam: 10 questions",
+      "help": "Ten simulated customers of the shop talk to Dellal on the version chosen, like in « Test Dellal » (nothing is sent). Pilot AI marks each chat out of 10 and suggests the lesson that fixes the main fault. Each version’s mark also shows before « Push to the server ».",
+      "start": "Start the exam",
+      "lead": "The price, centimes, delivery, a photo asked for, the customer’s photo, a scam fear, « it’s expensive », the family, a whole order, a question with no answer. A few minutes.",
+      "progress": "Question {{done}} of {{total}} marked",
+      "failed": "The exam could not start.",
+      "failedAt": "Exam stopped: {{reason}}",
+      "noProduct": "the shop has no active product",
+      "stopped": "the server restarted during the exam, start it again",
+      "verdictTop": "Perfect: ready for every shop",
+      "verdictGood": "Very good: a few details to fix",
+      "verdictWork": "Fair, but faults to fix before the push",
+      "verdictBad": "Not ready: fix the faults before the push",
+      "book": {
+        "live": "v{{v}} live",
+        "trial": "v{{v}} in test",
+        "test": "v{{v}} in A/B test",
+        "none": "no lessons"
+      },
+      "q": {
+        "price": "The price",
+        "centimes": "A price in centimes",
+        "fee": "Delivery and the total",
+        "photo_ask": "A photo asked for",
+        "photo_client": "The customer’s photo",
+        "trust": "Fear of a scam",
+        "expensive": "« It’s expensive »",
+        "family": "« I’ll ask my family »",
+        "order": "A whole order",
+        "unknown": "A question with no answer"
+      },
+      "notMarked": "Not marked (counts 0)",
+      "perfect": "Perfect",
+      "who": {
+        "customer": "Customer:",
+        "tool": "Tool:",
+        "team": "Team:"
+      },
+      "lessonTitle": "The lesson that would fix the fault",
+      "lessonAdd": "Add this lesson",
+      "lessonDone": "Lesson added",
+      "lessonAdded": "Lesson added: it goes out with the next « Push to test »",
+      "lessonIdea": "An idea only: it does not pass the lesson checks (write it in Lessons › Sales).",
+      "pass": "Take the exam",
+      "noneFor": "No exam yet for v{{v}}.",
+      "lineFor": "Exam of v{{v}}: {{score}}/10"
     }
   },
   "seller": {

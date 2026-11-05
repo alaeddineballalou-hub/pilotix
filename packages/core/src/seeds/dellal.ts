@@ -103,3 +103,37 @@ export async function seed(db: Db, users: Record<string, number>, now: number): 
     if (c.orderId) await db.query('UPDATE orders SET conversation_id = $2 WHERE id = $1', [c.orderId, cid]);
   }
 }
+
+/**
+ * Photos (after the landing pages, whose drawn pictures it shows): a customer sends a screenshot of the stroller's ad,
+ * Pilot AI reads it (the product, the colour), Dellal answers about it, then sends the grey one's real photos when asked.
+ */
+export async function seedPhotoChat(db: Db, now: number): Promise<void> {
+  const pou = (await db.query(`SELECT id, name FROM products WHERE sku = 'PX-POU'`))[0];
+  if (!pou) return;
+  const page = (await db.query(`SELECT images, price FROM landing_pages WHERE product_id = $1 ORDER BY id LIMIT 1`, [pou.id]))[0];
+  const pics: string[] = (typeof page?.images === 'string' ? JSON.parse(page.images) : page?.images ?? []).map((x: any) => String(x?.url ?? '')).filter((u: string) => u.startsWith('data:image/svg+xml'));
+  if (pics.length < 4) return;
+  const vars = await db.query(`SELECT id, title FROM product_variants WHERE product_id = $1 AND title <> '' ORDER BY id`, [pou.id]);
+  const grey = vars[0] ? { id: num(vars[0].id), title: String(vars[0].title) } : null;
+  const price = num(page.price) || 9950;
+  const name = String(pou.name);
+  const label = `${name}${grey ? ` — ${grey.title}` : ''}`;
+  const at = now - 2 * 60_000;
+  const msgs: [string, string, object?][] = [
+    ['customer', '[photo] Capture d’écran d’une publicité : une poussette bleue pliable · Message : 3andkom hadi ?', { photo: { status: 'done', thumb: pics[1], what: 'Capture d’écran d’une publicité : une poussette bleue pliable', productId: num(pou.id), productName: name, sure: true, variant: 'bleu', kind: 'ad', model: 'claude-haiku-5-5' } }],
+    ['agent', `Ih 3andna 😊 Hadi ${name}, b ${price} DA w tkhalssi ghir ki testalmi. Kayna f ${vars.map((v: any) => String(v.title).toLowerCase()).join(', ') || 'plusieurs couleurs'}. Men ayya wilaya ?`, { model: 'claude-haiku-5-5' }],
+    ['customer', `ab3athli tswira ta3 ${grey ? grey.title.toLowerCase() : 'lokhra'} stp`],
+    ['tool', `send_photos #${num(pou.id)} → 2 photo(s) envoyée(s)`, { tool: 'send_photos', input: { product_id: num(pou.id), ...(grey ? { variant_id: grey.id } : {}) }, result: { ok: true, sent: 2, of: label } }],
+    ['agent', `📷 ${label} (2)`, { photos: [pics[0], pics[3]].map((thumb, i) => ({ src: `svg:demo${i}`, productId: num(pou.id), variantId: grey?.id ?? null, label, thumb })) }],
+    ['agent', `Ha hiya ${grey ? `la ${grey.title.toLowerCase()}` : ''} 👆 Tetwa fi thania w tet7mel fel bus. T7ebbiha l dar wela f l bureau ?`, { model: 'claude-haiku-5-5' }],
+  ];
+  const r = await db.query(
+    `INSERT INTO conversations (channel, external_id, customer_name, mode, source, last_message_at, last_customer_at, last_preview, unread, created_at)
+     VALUES ('instagram', 'ig-demo-photo', '@meriem.dz', 'ai', 'pub « Poussette pliable »', $1, $2, $3, 0, $4) RETURNING id`,
+    [iso(at), iso(at - 90_000), msgs[msgs.length - 1][1].slice(0, 140), iso(at - 10 * 60_000)],
+  );
+  const cid = num(r[0].id);
+  for (const [k, [role, body, meta]] of msgs.entries())
+    await db.query('INSERT INTO conv_messages (conversation_id, role, body, meta, created_at) VALUES ($1,$2,$3,$4,$5)', [cid, role, body, meta ? JSON.stringify(meta) : null, iso(at - (msgs.length - k) * 40_000)]);
+}
