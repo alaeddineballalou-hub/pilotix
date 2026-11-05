@@ -286,6 +286,59 @@ test('the preview (no AI): a customer’s photo that is the catalogue’s is tha
   assert.equal(photos.body, '📷 Poussette Luxe — Rouge (1)');
 });
 
+test('the preview opened in Claude: the page’s Claude looks at the photo, with the catalogue’s drawings; without pictures, as before', async () => {
+  // a product whose only pictures are drawings (the demo's): never for the API, but the page draws them for its Claude
+  const drawing = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600"><rect width="600" height="600" fill="#0f766e"/></svg>')}`;
+  const bag = Number((await db.query(`INSERT INTO products (name, sku, price) VALUES ('Sac à dos vert', 'SV-1', 4500) RETURNING id`))[0].id);
+  await db.query(`INSERT INTO landing_pages (product_id, slug, images) VALUES ($1, 'sac-vert', $2::jsonb)`, [bag, JSON.stringify([{ url: drawing }])]);
+  assert.equal((await productPhotos(db, bag, { size: 'match', max: 1 })).length, 0, 'the server never reads a drawing');
+  assert.equal((await productPhotos(db, bag, { size: 'match', max: 1, svg: true }))[0]?.url, drawing);
+
+  const looked: any[] = [];
+  const pageAi = (sees: boolean) =>
+    Object.assign(
+      async (req: any) => {
+        if (!req.tools.length) {
+          looked.push(req);
+          return { content: [{ type: 'text' as const, text: `{"what":"Un sac à dos vert","text":"","product_id":${bag},"sure":true,"variant":null,"kind":"product"}` }], stop_reason: 'end_turn' };
+        }
+        return { content: [{ type: 'text' as const, text: 'Ih 3andna Sac à dos vert b 4 500 DA 😊 Men ayya wilaya ?' }], stop_reason: 'end_turn' };
+      },
+      { sees },
+    );
+  const chat = async (ext: string) => {
+    const c = Number((await db.query(`INSERT INTO conversations (channel, external_id) VALUES ('test', $1) RETURNING id`, [ext]))[0].id);
+    await db.query(`INSERT INTO conv_messages (conversation_id, role, body, meta) VALUES ($1, 'customer', '[photo envoyée] 3andkom hada ?', $2::jsonb)`, [c, JSON.stringify({ photo: { status: 'pending', mime: 'image/jpeg', data: JPEG('bag') } })]);
+    return c;
+  };
+
+  const c = await chat('page-photo');
+  const inClaude: Ctx = { ...shop, server: undefined, t: undefined, shop: undefined, dellalAi: pageAi(true) } as any;
+  const out = await runAgent(inClaude, c);
+  assert.equal(looked.length, 1, 'the page’s Claude looked at the photo first');
+  const pics = looked[0].messages[0].content.filter((b: any) => b.type === 'image');
+  assert.equal(pics[0].source.data, JPEG('bag'), 'the customer’s photo');
+  assert.ok(
+    pics.some((b: any) => b.source.url === drawing),
+    'the catalogue’s drawing goes with it',
+  );
+  const m = (await db.query(`SELECT body, meta FROM conv_messages WHERE conversation_id = $1 AND role = 'customer'`, [c]))[0];
+  assert.equal(m.meta.photo.status, 'done');
+  assert.equal(m.meta.photo.productId, bag);
+  assert.equal(m.meta.photo.model, 'claude (page)');
+  assert.equal(m.body, '[photo] Un sac à dos vert · Message : 3andkom hada ?');
+  assert.match(String(out.reply), /Sac à dos vert/);
+
+  // a page that may not send pictures: the preview's own reading, as before (its Claude never asked about the photo)
+  looked.length = 0;
+  const c2 = await chat('page-photo-blind');
+  await runAgent({ ...inClaude, dellalAi: pageAi(false) } as any, c2);
+  assert.equal(looked.length, 0);
+  const m2 = (await db.query(`SELECT meta FROM conv_messages WHERE conversation_id = $1 AND role = 'customer'`, [c2]))[0];
+  assert.equal(m2.meta.photo.status, 'done');
+  assert.equal(m2.meta.photo.model, null);
+});
+
 test('the server: a WhatsApp photo with the shop’s token; Meta’s links only; a product photo becomes a JPEG at a public address', async () => {
   const s1 = (await loadShop(t, { primary: true }))!;
   const ctx: any = { db, t, shop: { id: s1.id }, session: shop.session, now: () => Date.now(), emit: () => {}, server: { ...hooks, publicApi: 'https://pilotix.online/api' } };

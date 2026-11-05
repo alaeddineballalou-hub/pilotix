@@ -83,14 +83,17 @@ export interface Ctx {
 }
 
 /** One answer from the page's Claude. Tools run inside the call through `runTool`, so the answer is the final text. */
-export type DellalPageAi = (req: {
+export type DellalPageAi = ((req: {
   model: string;
   system: string;
   messages: { role: 'user' | 'assistant'; content: any }[];
   tools: readonly { name: string; description: string; input_schema: unknown }[];
   max_tokens: number;
   runTool: (name: string, input: any) => Promise<any>;
-}) => Promise<{ content: { type: 'text'; text: string }[]; stop_reason: string; usage?: { input_tokens: number; output_tokens: number } }>;
+}) => Promise<{ content: { type: 'text'; text: string }[]; stop_reason: string; usage?: { input_tokens: number; output_tokens: number } }>) & {
+  /** this page's Claude can look at pictures (a customer's photo, compared with the catalogue's, before Dellal answers) */
+  sees?: boolean;
+};
 
 export interface ServerHooks {
   courier: (action: string, args: unknown, ctx: Ctx) => Promise<unknown>;

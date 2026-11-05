@@ -1458,7 +1458,7 @@ function demoReading(data: string, cat: { id: number; name: string; photo: Photo
  * products named in the chat first). The message's text becomes that, so Dellal and the team read it; the photo itself is
  * not kept (only a small copy for the screens). Without the AI (the preview): the catalogue's own photos only.
  */
-export async function seePhotos(ctx: Ctx, convId: number, ask: PhotoAsk | null): Promise<number> {
+export async function seePhotos(ctx: Ctx, convId: number, ask: PhotoAsk | null, o: { model?: string; svg?: boolean } = {}): Promise<number> {
   const rows: any[] = (
     await ctx.db.query(`SELECT id, body, meta FROM conv_messages WHERE conversation_id = $1 AND role = 'customer' AND meta->'photo'->>'status' = 'pending' ORDER BY id DESC LIMIT 3`, [convId])
   ).reverse();
@@ -1467,7 +1467,7 @@ export async function seePhotos(ctx: Ctx, convId: number, ask: PhotoAsk | null):
   const said = strip((await ctx.db.query(`SELECT body FROM conv_messages WHERE conversation_id = $1 AND role IN ('customer', 'agent') ORDER BY id DESC LIMIT 12`, [convId])).map((r: any) => String(r.body ?? '')).join('\n'));
   const all = await searchProducts(ctx.db, null, 1000);
   const names = new Map(all.map((p) => [p.product_id, p.name]));
-  const cat = await catalogueThumbs(ctx.db, { first: all.filter((p) => said.includes(strip(p.name))).map((p) => p.product_id), max: 12 });
+  const cat = await catalogueThumbs(ctx.db, { first: all.filter((p) => said.includes(strip(p.name))).map((p) => p.product_id), max: 12, svg: o.svg });
   let seen = 0;
   for (const r of rows) {
     const p: PhotoMeta = r.meta?.photo && typeof r.meta.photo === 'object' ? r.meta.photo : { status: 'pending' };
@@ -1490,7 +1490,7 @@ export async function seePhotos(ctx: Ctx, convId: number, ask: PhotoAsk | null):
       try {
         const res = await ask({ model: PHOTO_MODEL, system: PHOTO_SYSTEM, messages: [{ role: 'user', content: photoRequest(img, caption, cat) }], tools: [], max_tokens: 400 });
         reading = readPhotoAnswer(res.content.map((b) => (b.type === 'text' ? b.text : '')).join(''), cat.map((c) => c.id));
-        model = PHOTO_MODEL;
+        model = o.model ?? PHOTO_MODEL;
         if (!reading) error = 'unreadable';
       } catch (e: any) {
         error = String(e?.message ?? e);
@@ -1536,9 +1536,15 @@ export async function runAgent(
   const inPage = !ctx.server?.dellal && ctx.dellalAi ? ctx.dellalAi : null;
   const pilotAi = !inPage && (await pilotOn(ctx));
   const useAi = !!inPage || pilotAi || (!!ctx.server?.dellal && !!(await dellalSecret(ctx.db, 'ai')));
-  // the customer's photos, looked at first (Pilot AI, on the server) so Dellal knows what they show and which product it is
-  const look: PhotoAsk | null = useAi && !inPage ? (req) => ctx.server!.dellal!('complete', { ...req, feature: opts.lab ? 'pilot' : 'dellal', pilot: pilotAi }, ctx) as Promise<AiResponse> : null;
-  await seePhotos(ctx, convId, look).catch(() => 0);
+  // the customer's photos, looked at first (Pilot AI on the server; in the preview, the page's Claude when it can see
+  // pictures: the demo's drawings are drawn as pictures for it) so Dellal knows what they show and which product it is
+  const eyes = inPage?.sees ? inPage : null;
+  const look: PhotoAsk | null = eyes
+    ? (req) => eyes({ ...req, runTool: async () => ({}) }) as Promise<AiResponse>
+    : useAi && !inPage
+      ? (req) => ctx.server!.dellal!('complete', { ...req, feature: opts.lab ? 'pilot' : 'dellal', pilot: pilotAi }, ctx) as Promise<AiResponse>
+      : null;
+  await seePhotos(ctx, convId, look, eyes ? { model: 'claude (page)', svg: true } : {}).catch(() => 0);
   const messages = await history(ctx.db, convId);
   if (opts.followUp) messages.push({ role: 'user', content: '(Note système : le client n’a pas répondu. Envoie une seule relance courte.)' });
   if (!messages.length) return { reply: null, handoff: false, orderRef: null, demo: false, skipped: 'Aucun message' };

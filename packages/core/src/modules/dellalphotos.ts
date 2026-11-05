@@ -42,7 +42,8 @@ const httpsUrl = (s: unknown): string | null => {
   const v = String(s ?? '').trim();
   return /^https:\/\/[^\s"'<>]{8,1900}$/i.test(v) ? v : null;
 };
-/** a drawing kept as a data: link (the demo's pictures): sent as a JPEG the server draws, never read by the AI */
+/** a drawing kept as a data: link (the demo's pictures): sent as a JPEG the server draws; read only by the preview's Claude,
+ *  which draws it as a picture first (the API reads no SVG) */
 const svgUrl = (s: unknown): string | null => {
   const v = String(s ?? '').trim();
   return /^data:image\/svg\+xml[,;]/i.test(v) && v.length < 200_000 ? v : null;
@@ -75,7 +76,7 @@ const SIZES: Record<'look' | 'send' | 'match', string[]> = {
  * A product's photos, best first: the colour asked first (its pages' photos of that colour, then the colour's own photo),
  * then the product's (its pages' photos, then its photo). `send`: only the colour's photos when it has some.
  */
-export async function productPhotos(db: Db, productId: number, o: { variantId?: number | null; size: 'look' | 'send' | 'match'; max: number }): Promise<PhotoSrc[]> {
+export async function productPhotos(db: Db, productId: number, o: { variantId?: number | null; size: 'look' | 'send' | 'match'; max: number; svg?: boolean }): Promise<PhotoSrc[]> {
   const variantId = o.variantId && o.variantId > 0 ? o.variantId : null;
   const prod = (await db.query('SELECT id, photo FROM products WHERE id = $1', [productId]))[0];
   if (!prod) return [];
@@ -110,7 +111,7 @@ export async function productPhotos(db: Db, productId: number, o: { variantId?: 
       out.push({ src: `li:${r.id}:${col}`, mime: mimeOf(data) ?? 'image/webp', data, url: null, thumb: row.thumb ? `data:${mimeOf(String(row.thumb)) ?? 'image/webp'};base64,${row.thumb}` : null, variantId: v, rank: rank(v), order: order++ });
     } else if (r.url) {
       const url = httpsUrl(r.url);
-      const svg = o.size === 'send' ? svgUrl(r.url) : null;
+      const svg = o.size === 'send' || o.svg ? svgUrl(r.url) : null;
       if (url) out.push({ src: `url:${shortHash(url)}`, mime: 'image/jpeg', data: null, url, thumb: url, variantId: v, rank: rank(v) + 0.5, order: order++ });
       else if (svg) out.push({ src: `svg:${shortHash(svg)}`, mime: 'image/svg+xml', data: null, url: svg, thumb: svg, variantId: v, rank: rank(v) + 0.5, order: order++ });
     }
@@ -154,7 +155,7 @@ export async function productsWithPhotos(db: Db): Promise<Set<number>> {
 }
 
 /** The catalogue's photos a customer's photo is compared with: one per product, the products named in the chat first. */
-export async function catalogueThumbs(db: Db, o: { first?: number[]; max?: number } = {}): Promise<{ id: number; name: string; photo: PhotoSrc }[]> {
+export async function catalogueThumbs(db: Db, o: { first?: number[]; max?: number; svg?: boolean } = {}): Promise<{ id: number; name: string; photo: PhotoSrc }[]> {
   const max = o.max ?? 12;
   const prods = await db.query('SELECT id, name FROM products WHERE active AND NOT is_service ORDER BY lower(name)');
   const first = new Set(o.first ?? []);
@@ -162,7 +163,7 @@ export async function catalogueThumbs(db: Db, o: { first?: number[]; max?: numbe
   const out: { id: number; name: string; photo: PhotoSrc }[] = [];
   for (const p of ordered) {
     if (out.length >= max) break;
-    const ph = (await productPhotos(db, num(p.id), { size: 'match', max: 1 }))[0];
+    const ph = (await productPhotos(db, num(p.id), { size: 'match', max: 1, svg: o.svg }))[0];
     if (ph) out.push({ id: num(p.id), name: String(p.name), photo: ph });
   }
   return out;
