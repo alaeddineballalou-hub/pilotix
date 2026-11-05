@@ -604,10 +604,11 @@ export async function runPlanned(ctx: Ctx): Promise<{ published: number; failed:
   );
   for (const d of due) count(await publishOne(ctx, num(d.id)));
   // photos and videos nobody kept (an editor closed without saving) after 2 days
-  await dropMedia(ctx, `m.created_at < $1::timestamptz - interval '2 days' AND NOT EXISTS (SELECT 1 FROM cm_planned p WHERE m.id = ANY(p.media))`, [now]);
+  // (Pilot Ads' photos and videos are kept: the shop's ads use them)
+  await dropMedia(ctx, `m.created_at < $1::timestamptz - interval '2 days' AND NOT m.for_ads AND NOT EXISTS (SELECT 1 FROM cm_planned p WHERE m.id = ANY(p.media))`, [now]);
   // a week after a post went out: the big copies (Meta has its own); the small one stays for the calendar
   // (a post still to go out may use the same photos: « Post again », « Fill my week »)
-  const old = `m.id IN (SELECT unnest(media) FROM cm_planned WHERE status = 'published' AND published_at < $1::timestamptz - interval '7 days') AND NOT EXISTS (SELECT 1 FROM cm_planned q WHERE m.id = ANY(q.media) AND q.status <> 'published')`;
+  const old = `NOT m.for_ads AND m.id IN (SELECT unnest(media) FROM cm_planned WHERE status = 'published' AND published_at < $1::timestamptz - interval '7 days') AND NOT EXISTS (SELECT 1 FROM cm_planned q WHERE m.id = ANY(q.media) AND q.status <> 'published')`;
   await ctx.db.query(`UPDATE cm_media m SET jpeg = NULL WHERE jpeg IS NOT NULL AND ${old}`, [now]);
   for (const m of await ctx.db.query(`SELECT id, key, mime FROM cm_media m WHERE kind = 'video' AND ready AND ${old}`, [now])) {
     await ctx.server?.media?.('remove', { id: num(m.id), key: String(m.key), ext: extOf(m.mime) }).catch(() => null);

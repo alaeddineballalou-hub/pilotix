@@ -17,6 +17,7 @@ import { Formulaires } from './Formulaires';
 import { Campagnes } from './Campagnes';
 import { Catalogue } from './Catalogue';
 import { featureIsOn } from '../../lib/features';
+import { PubHub } from './pilot/Hub';
 import '../confirmation/phone.css';
 import '../suivi/phone.css';
 import '../sav/phone.css';
@@ -95,7 +96,7 @@ export function PhoneMarketing({ sub, rest, noSpy, mkLabel }: { sub?: string; re
         )}
       </div>
       {/* AI Spy: the same page as on a computer, in one column */}
-      {tab === 'pub' ? <Pub /> : tab === 'spy' ? <Spy rest={rest} /> : tab === 'forms' ? <Formulaires /> : tab === 'camps' ? <Campagnes /> : tab === 'cat' ? <Catalogue /> : <Marketeurs />}
+      {tab === 'pub' ? noSpy ? <Pub /> : <PubHub rest={rest} pro={<Pub />} /> : tab === 'spy' ? <Spy rest={rest} /> : tab === 'forms' ? <Formulaires /> : tab === 'camps' ? <Campagnes /> : tab === 'cat' ? <Catalogue /> : <Marketeurs />}
     </div>
   );
 }

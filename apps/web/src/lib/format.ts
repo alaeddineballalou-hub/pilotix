@@ -14,6 +14,8 @@ const nf = (opts: Intl.NumberFormatOptions = {}) => {
 /** 12 900 DA / 12 900 د.ج */
 export const da = (v: number | null | undefined) => (v === null || v === undefined ? '—' : `${nf().format(v)} ${i18n.language === 'ar' ? 'د.ج' : 'DA'}`);
 export const n = (v: number | null | undefined) => (v === null || v === undefined ? '—' : nf().format(v));
+/** 1.25 → 1,3 (one decimal, for small averages) */
+export const dec1 = (v: number | null | undefined) => (v === null || v === undefined || !isFinite(v) ? '—' : nf({ maximumFractionDigits: 1 }).format(v));
 /** 0.724 → 72 % */
 export const pct = (v: number | null | undefined, digits = 0) => (v === null || v === undefined || !isFinite(v) ? '—' : `${nf({ maximumFractionDigits: digits }).format(v * 100)} %`);
 /** 1234 → 1,2k (menu counts) */

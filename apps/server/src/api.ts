@@ -1042,6 +1042,24 @@ class ApiController {
   }
 
   /**
+   * A photo or video of the shop's library: the Planner's (CM AI agent), else Pilot Ads' own (its ads' photos and
+   * videos, for a plan with Publicité and no Planner). The first the shop's plan allows that knows it answers.
+   */
+  private async mediaFile(ref: ShopRef, kind: 'video' | 'image', input: Record<string, unknown>): Promise<unknown> {
+    const session = await this.core.systemSession(ref);
+    let last: unknown = new core.AppError('not_found', 'Introuvable');
+    for (const name of kind === 'video' ? ['cm.plan.videoFile', 'ads.media.videoFile'] : ['cm.plan.image', 'ads.media.image']) {
+      if (!core.shopAllows(ref.rules, name).ok) continue;
+      try {
+        return await this.core.call(ref, name, session, input);
+      } catch (e) {
+        last = e;
+      }
+    }
+    throw last;
+  }
+
+  /**
    * A piece of a planned post's video (CM AI agent › Planner): the original file's bytes, 8 MB at a time
    * (application/octet-stream), after cm.plan.videoStart and before cm.plan.videoDone.
    */
@@ -1050,10 +1068,11 @@ class ApiController {
     if (!/^\d+$/.test(idp) || !/^[a-f0-9]{24}$/.test(key) || !/^\d{1,4}$/.test(String(part ?? ''))) throw new core.AppError('not_found', 'Vidéo inconnue');
     if (!Buffer.isBuffer(body) || !body.length) throw new core.AppError('bad_request', 'Morceau de vidéo vide');
     if (req.shop.shop.demo) throw new core.AppError('forbidden', 'Pas dans la boutique démo');
+    // the Planner's videos, or Pilot Ads' (a plan with Publicité and no Planner)
     const allowed = core.shopAllows(req.shop.rules, 'cm.plan.videoStart');
-    if (!allowed.ok) throw allowed.error;
+    if (!allowed.ok && !core.shopAllows(req.shop.rules, 'ads.media.videoStart').ok) throw allowed.error;
     if (!core.hasRole(req.session, 'marketer')) throw new core.AppError('forbidden', 'Accès refusé');
-    const v: any = await this.core.call(req.shop, 'cm.plan.videoFile', await this.core.systemSession(req.shop), { id: Number(idp), key });
+    const v: any = await this.mediaFile(req.shop, 'video', { id: Number(idp), key });
     if (v.ready) return { received: v.size };
     return writePart(req.shop.shop.schema, { id: Number(idp), key, ext: v.ext, size: v.size, chunk: v.chunk }, Number(part), body);
   }
@@ -1410,7 +1429,7 @@ class ApiController {
     if (!/^\d+$/.test(idp) || !m) return res.status(404).send();
     try {
       const ref = intake(await this.publicShop(shop));
-      const v: any = await this.core.call(ref, 'cm.plan.videoFile', await this.core.systemSession(ref), { id: Number(idp), key: m[1] });
+      const v: any = await this.mediaFile(ref, 'video', { id: Number(idp), key: m[1] });
       if (!v.ready || v.ext !== m[2]) return res.status(404).send();
       return await sendVideo(ref.shop.schema, { id: Number(idp), key: m[1], ext: v.ext, mime: v.mime }, req.headers.range, res);
     } catch {
@@ -1429,7 +1448,7 @@ class ApiController {
     if (!/^\d+$/.test(idp) || !m) return res.status(404).send();
     try {
       const ref = intake(await this.publicShop(shop));
-      const r: any = await this.core.call(ref, 'cm.plan.image', await this.core.systemSession(ref), { id: Number(idp), key: m[1], small: !!m[2] });
+      const r: any = await this.mediaFile(ref, 'image', { id: Number(idp), key: m[1], small: !!m[2] });
       return res.status(200).header('Content-Type', 'image/jpeg').header('Cache-Control', 'public, max-age=31536000, immutable').send(Buffer.from(r.base64, 'base64'));
     } catch {
       return res.status(404).send();

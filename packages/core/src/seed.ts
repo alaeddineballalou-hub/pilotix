@@ -27,6 +27,7 @@ import { seed as seed_cmplan } from './seeds/cmplan';
 import { seed as seed_notify } from './seeds/notify';
 import { seed as seed_landing } from './seeds/landing';
 import { seed as seed_spy } from './seeds/spy';
+import { seed as seed_pilotads } from './seeds/pilotads';
 
 /** First admin + one warehouse. Used by the real server on first start. */
 export async function seedBase(db: Db, admin: { email: string; password: string; name?: string }) {
@@ -382,6 +383,8 @@ export async function seedDemo(db: Db, opts: { orders?: number; now?: number } =
   // after the landing pages (the catalog sends products that have one)
   await seed_metacatalog(db, users, now);
   await seed_spy(db, users, now);
+  // Pilot Ads last: it reads the orders (and the ads each one came from) that the other seeds made
+  await seed_pilotads(db, users, now);
 
   return { users, orders: N, todo: CONF_TODO.length };
 }

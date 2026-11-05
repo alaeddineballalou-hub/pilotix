@@ -1,6 +1,8 @@
 // Every action the app can call, by name. Each feature has its own module file.
 import { adminProcs } from './modules/admin';
 import { adsProcs } from './modules/ads';
+import { adsMgrProcs } from './modules/adsmgr';
+import { adsLaunchProcs } from './modules/adslaunch';
 import { agencyProcs } from './modules/agencies';
 import { managementPlanProcs } from './modules/managementplans';
 import { bonusProcs } from './modules/bonusrules';
@@ -102,6 +104,8 @@ export const REGISTRY = {
   ...pushProcs,
   ...adminProcs,
   ...adsProcs,
+  ...adsMgrProcs,
+  ...adsLaunchProcs,
   ...dellalProcs,
   ...cmProcs,
   ...cmPlanProcs,

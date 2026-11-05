@@ -17,6 +17,7 @@ import { Campagnes } from './Campagnes';
 import { Catalogue } from './Catalogue';
 import { featureIsOn } from '../../lib/features';
 import { useIsPhone } from '../../lib/useMedia';
+import { AdsetButtons, PubHub, useControls } from './pilot/Hub';
 import './ads.css';
 
 /** Marketing: Publicité (Meta spend face to the real orders), Formulaires (the ads' lead forms become orders,
@@ -42,7 +43,7 @@ function MarketingDesktop({ sub, rest, t }: { sub?: string; rest?: string[]; t: 
         current={cur}
         items={(['publicite', 'formulaires', 'campagnes', 'catalogue', 'marketer', 'spy'] as const).map((k) => ({ key: k, label: t(`nav.${k}`), href: `#/marketing/${k}`, ...(k === 'formulaires' && todo ? { count: todo } : {}) }))}
       />
-      {cur === 'marketer' ? <Marketer rest={rest} /> : cur === 'spy' ? <Spy rest={rest} /> : cur === 'formulaires' ? <Formulaires /> : cur === 'campagnes' ? <Campagnes /> : cur === 'catalogue' ? <Catalogue /> : <Publicite />}
+      {cur === 'marketer' ? <Marketer rest={rest} /> : cur === 'spy' ? <Spy rest={rest} /> : cur === 'formulaires' ? <Formulaires /> : cur === 'campagnes' ? <Campagnes /> : cur === 'catalogue' ? <Catalogue /> : <PubHub rest={rest} pro={<Publicite />} />}
     </>
   );
 }
@@ -413,6 +414,8 @@ function ProfitLines({ d, owner }: { d: Overview; owner: boolean }) {
 function AdsetsCard({ d, owner, onPick, onOpen }: { d: Overview; owner: boolean; onPick: (a: { id: string; name: string; productIds: number[] }) => void; onOpen: (a: { id: string; name: string }) => void }) {
   const { t } = useTranslation();
   const setOwner = useAction('ads.setMarketer', { success: t('ads.ownerSaved') });
+  // Pilot Ads: pause, start again, a new budget, a copy, right on the row (none in the demo's old ad sets without a state)
+  const { ctl, byId } = useControls();
   const P = useMemo(() => new Map(d.catalog.map((p) => [p.id, p.name])), [d.catalog]);
   return (
     <section className="card">
@@ -430,8 +433,9 @@ function AdsetsCard({ d, owner, onPick, onOpen }: { d: Overview; owner: boolean;
           <table>
             <thead>
               <tr>
-                <th>{t('ads.colAdset')}</th>
+                <th style={{ minWidth: 190 }}>{t('ads.colAdset')}</th>
                 <th>{t('ads.colStatus')}</th>
+                {!!byId.size && <th>{t('pilotads.btn.col')}</th>}
                 <th className="num">{t('ads.colSpend')}</th>
                 <th className="num">{t('ads.colPurchases')}</th>
                 <th className="num">{t('ads.colCpa')}</th>
@@ -455,6 +459,11 @@ function AdsetsCard({ d, owner, onPick, onOpen }: { d: Overview; owner: boolean;
                   <td data-l={t('ads.colStatus')}>
                     <span className={`badge t-${a.status === 'ACTIVE' ? 'ok' : 'off'}`}>{a.status ?? '—'}</span>
                   </td>
+                  {!!byId.size && (
+                    <td data-l={t('pilotads.btn.col')} onClick={(e) => e.stopPropagation()}>
+                      {byId.get(a.id) ? <AdsetButtons o={byId.get(a.id)!} ctl={ctl} /> : null}
+                    </td>
+                  )}
                   <td className="num" data-l={t('ads.colSpend')}>
                     {usd(a.spendUsd)}
                   </td>

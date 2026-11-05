@@ -126,6 +126,17 @@ export async function dellalSecret(db: Db, k: DellalSecret): Promise<string> {
 /** Order channel for a conversation channel. */
 const ORDER_CHANNEL: Record<DellalChannel, SalesChannel> = { whatsapp: 'whatsapp', messenger: 'facebook', instagram: 'instagram', tiktok: 'tiktok', test: 'autre' };
 
+/**
+ * The ad a chat came from (Messenger, Instagram and WhatsApp name it in the first message: « pub <id> »): kept on the
+ * order (its utm, and its ad set when Pilotix knows the ad), so Publicité and Pilot Ads count the order for that ad.
+ */
+export async function chatAdOf(db: Db, source: string | null | undefined): Promise<{ utm: Record<string, string> | null; adsetId: string | null }> {
+  const adId = String(source ?? '').match(/^pub (\d{6,30})\b/)?.[1];
+  if (!adId) return { utm: null, adsetId: null };
+  const adsetId = (await db.query('SELECT adset_id FROM ads WHERE id = $1', [adId]))[0]?.adset_id ?? null;
+  return { utm: { utm_source: 'facebook', utm_medium: 'chat', ad_id: adId, ...(adsetId ? { adset_id: String(adsetId) } : {}) }, adsetId: adsetId ? String(adsetId) : null };
+}
+
 // ---------------------------------------------------------------- types for the app
 export interface Conversation {
   id: number;
@@ -921,6 +932,7 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
       }
     }
     try {
+      const ad = t.test ? { utm: null, adsetId: null } : await chatAdOf(ctx.db, conv.source);
       const o = await createOrder(ctx, {
         customerName: name,
         phone,
@@ -930,6 +942,7 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
         isStopdesk: !!input?.stopdesk,
         channel: ORDER_CHANNEL[conv.channel],
         source: `${settings.name} · ${conv.channel}${conv.source ? ` · ${conv.source}` : ''}`.slice(0, 120),
+        ...(ad.utm ? { utm: ad.utm } : {}),
         items,
         discount,
         customerNote: input?.note ? String(input.note).slice(0, 1000) : null,
@@ -938,7 +951,7 @@ async function execTool(t: ToolCtx, name: string, input: any): Promise<any> {
           : `Commande prise par ${settings.name} (conversation #${conv.id})`,
         confirm: !v1 && settings.ordersTo === 'confirmed',
         isExchange: false,
-      }, ctx.db, { conversationId: conv.id, untrusted: conv.channel !== 'whatsapp', guard: 'check' }); // linked from the start: no "we received your order" into this very chat
+      }, ctx.db, { conversationId: conv.id, untrusted: conv.channel !== 'whatsapp', guard: 'check', adsetId: ad.adsetId }); // linked from the start: no "we received your order" into this very chat
       await sendInPreview(ctx);
       await ctx.db.query(
         `UPDATE conversations SET order_id = $2, orders_count = orders_count + 1, phone = COALESCE(phone, $3), customer_name = COALESCE(customer_name, $4),
@@ -1816,6 +1829,7 @@ async function autoOrderOf(ctx: Ctx, s: DellalSettings, row: any): Promise<{ ref
     (!place ? `⚠️ Wilaya inconnue : ${WILAYAS[wilayaId - 1]} mise en attendant, à corriger avant de confirmer. ` : '') +
     `Commande auto (${s.name}) : le client a donné son numéro puis ne répond plus depuis ${s.autoOrderMinutes} min (conversation #${row.id}). À appeler pour compléter : ${todo.join(', ')}.`;
   try {
+    const ad = await chatAdOf(db, row.source);
     const o = await createOrder(
       ctx,
       {
@@ -1827,6 +1841,7 @@ async function autoOrderOf(ctx: Ctx, s: DellalSettings, row: any): Promise<{ ref
         isStopdesk: false,
         channel: ORDER_CHANNEL[row.channel as DellalChannel] ?? 'autre',
         source: `${s.name} · ${row.channel} · commande auto`.slice(0, 120),
+        ...(ad.utm ? { utm: ad.utm } : {}),
         items: [{ productId: product.product_id, variantId: variant.variant_id, qty: 1 }],
         discount: 0,
         customerNote: customerNote.slice(0, 1000),
@@ -1836,7 +1851,7 @@ async function autoOrderOf(ctx: Ctx, s: DellalSettings, row: any): Promise<{ ref
       },
       db,
       // the customer did not send it: no « we received your order » message
-      { conversationId: num(row.id), untrusted: row.channel !== 'whatsapp', guard: 'check', silent: true },
+      { conversationId: num(row.id), untrusted: row.channel !== 'whatsapp', guard: 'check', silent: true, adsetId: ad.adsetId },
     );
     // the shop's wilaya is only there for now: the order is not confirmed until someone asks him (confirmcheck.ts)
     if (!place) await db.query('UPDATE orders SET wilaya_guess = $2 WHERE id = $1', [o.id, wilayaId]);

@@ -1,0 +1,512 @@
+{
+  "tabsLabel": "Pilot Ads",
+  "tab": {
+    "pubs": "My ads",
+    "lancer": "Launch an ad",
+    "pilote": "Autopilot",
+    "audiences": "Audiences"
+  },
+  "mode": {
+    "label": "View",
+    "simple": "Simple",
+    "pro": "Pro",
+    "simpleTip": "Three numbers and what to do, per product",
+    "proTip": "Every table and every setting"
+  },
+  "stop": {
+    "button": "Stop everything",
+    "isOn": "Everything is stopped",
+    "isOnSub": "Every ad is paused. Nothing starts again until « Restart everything ».",
+    "isOnLaunch": "The owner stopped everything: no ad can be launched now.",
+    "resume": "Restart everything",
+    "askTitle": "Stop everything?",
+    "askText": "Every running ad is paused right away. Nothing starts again, by hand or by Autopilot, until you click « Restart everything ».",
+    "confirm": "Yes, stop everything",
+    "paused": "{{n}} ad(s) paused",
+    "resumed": "{{n}} ad(s) restarted"
+  },
+  "guard": {
+    "summary": "Limit: {{max}} $ a day · running: {{now}} $",
+    "title": "The owner’s limits",
+    "maxDaily": "Most the shop may spend a day",
+    "maxRaise": "Raise allowed without your yes (marketer)",
+    "yesAbove": "Your yes above (a day)",
+    "launchYes": "Every launch by a marketer waits for my yes",
+    "launchYesTip": "The marketer prepares the ad; it goes to Meta when you say yes.",
+    "saved": "Limits saved",
+    "note": "Pausing is always allowed. A marketer’s raise that is too big waits for you in « Waiting for your yes »."
+  },
+  "account": {
+    "st2": "Ad account « {{name}} » is disabled by Meta: the ads do not run.",
+    "st3": "Ad account « {{name}} » has a payment due: Meta stopped the ads.",
+    "st7": "Ad account « {{name}} » is under review at Meta.",
+    "st9": "Ad account « {{name}} » is in its grace period: pay the balance.",
+    "st101": "Ad account « {{name}} » is closed.",
+    "stx": "Ad account « {{name}} » has a problem at Meta."
+  },
+  "wait": {
+    "title": "Waiting for your yes",
+    "titleMine": "Waiting for the owner’s yes",
+    "yes": "Yes",
+    "no": "No",
+    "done": "Done",
+    "refused": "Refused",
+    "raise": "raise of {{pct}} %"
+  },
+  "act": {
+    "pause": "« {{name}} » paused",
+    "resume": "« {{name}} » restarted",
+    "budget": "« {{name}} »: budget {{from}} → {{to}} a day",
+    "copy": "« {{name}} » copied (paused)",
+    "launch": "« {{name}} » launched at {{usd}} $ a day",
+    "undo": "« {{name}} »: undone"
+  },
+  "simple": {
+    "title": "My ads",
+    "sub": "For each product: what you spent, the delivered orders, and what one delivered order costs.",
+    "days": "Period",
+    "lastDays": "Last {{n}} days",
+    "noneTitle": "No ad yet",
+    "noneText": "Launch an ad in 4 steps: the product, what you want, the photo or video, the budget.",
+    "launchFirst": "Launch my first ad",
+    "loose": "{{n}} ad(s) have no product yet: link them in the Pro view.",
+    "spent": "Spent",
+    "delivered": "Delivered",
+    "ofOrders": "of {{n}} orders",
+    "costPer": "Cost / delivered",
+    "limit": "limit {{v}}",
+    "noLimit": "no limit yet",
+    "raise": "Raise by 20 %",
+    "pauseAll": "Pause ({{n}})",
+    "da": "DA"
+  },
+  "say": {
+    "scale": "It works: a delivered order costs well under your limit. You can raise the budget slowly (+20 %).",
+    "keep": "It is fine: keep the ad as it is and look again in 2 or 3 days.",
+    "price": "The ad costs a bit too much: raise the price by {{rise}} or change the video.",
+    "cutdel": "Too many parcels come back: the ad loses money. Pause it and check the delivery.",
+    "cut": "A delivered order costs more than it brings: pause the ad.",
+    "loss": "This product loses money even without ads: pause and check its price.",
+    "wait": "Not enough orders yet to judge: wait 2 or 3 days."
+  },
+  "perDay": "{{v}} / day",
+  "doneToast": "Done",
+  "sentToOwner": "Sent to the owner: they must say yes",
+  "waitingYes": "Waiting for the owner’s yes",
+  "btn": {
+    "col": "Actions",
+    "pause": "Pause",
+    "resume": "Restart",
+    "budget": "Change the budget",
+    "noBudget": "The budget is set in Meta",
+    "copy": "Make a copy (paused)"
+  },
+  "budget": {
+    "title": "Budget of « {{name}} »",
+    "perDay": "Budget a day",
+    "save": "Save",
+    "ask": "Ask the owner",
+    "campaign": "This is the budget of campaign « {{name}} » (Advantage+): it changes for all its ads.",
+    "over": "The shop would spend {{total}} $ a day: the owner’s limit is {{max}} $.",
+    "overOwner": "Above your daily limit ({{max}} $): you can still do it.",
+    "needsYes": "Raise of more than {{pct}} %: the owner must say yes.",
+    "note": "Meta learns again after a big change: raise 20 % at a time, 4 times an hour at most.",
+    "own": "Or your amount"
+  },
+  "log": {
+    "title": "Change log",
+    "empty": "No change yet.",
+    "undo": "Undo",
+    "undone": "Change undone",
+    "yesBy": "yes from {{name}}"
+  },
+  "src": {
+    "person": "A person",
+    "rule": "Autopilot",
+    "pilot": "Autopilot suggestion",
+    "stop_all": "Stop everything",
+    "launch": "Launch an ad"
+  },
+  "st": {
+    "done": "Done",
+    "queued": "Running",
+    "waiting_yes": "Waiting for a yes",
+    "failed": "Failed",
+    "refused": "Refused",
+    "undone": "Undone"
+  },
+  "where": {
+    "title": "Where the ads’ orders come from",
+    "period": "Period",
+    "empty": "No order linked to an ad in this period.",
+    "wilaya": "Wilaya",
+    "orders": "Orders",
+    "delivered": "Delivered",
+    "rate": "Delivered %",
+    "hours": "Time of the orders",
+    "hoursLabel": "Orders by hour of the day",
+    "goals": "By goal",
+    "goalOrders": "{{n}} orders · {{d}} delivered",
+    "note": "Only the orders that keep their ad’s id (sales page, Dellal, form) are counted here."
+  },
+  "launch": {
+    "title": "Launch an ad",
+    "sub": "Everything is created paused at Meta, then turned on in one go when it is all ready.",
+    "stepsLabel": "The steps",
+    "next": "Next",
+    "noAccount": "First link the shop’s Meta ad account (Pilot AI › Accounts).",
+    "noProducts": "No active product: add a product first.",
+    "pickProduct": "Choose a product",
+    "search": "Search a product",
+    "makeLanding": "Make the sales page",
+    "ownerYes": "The owner must say yes: the ad goes to Meta after their yes.",
+    "safety": "Autopilot watches the ad: if it spends too much with no order, it is paused. You can stop everything at any time.",
+    "go": "Launch at {{v}} / day",
+    "toOwner": "Send to the owner",
+    "sending": "Sending to Meta…",
+    "keep": "Keep as a draft",
+    "saved": "Draft kept",
+    "removed": "Deleted"
+  },
+  "step": {
+    "product": "Product",
+    "goal": "Goal",
+    "ad": "The ad",
+    "budget": "Budget"
+  },
+  "ask": {
+    "product": "Which product do you want to sell?",
+    "goal": "What do you want people to do?",
+    "ad": "The photos or videos, and the words",
+    "budget": "How much a day?"
+  },
+  "limit": {
+    "line": "A delivered order may cost up to {{max}}",
+    "estimated": "estimated",
+    "none": "This product leaves no margin: check its price.",
+    "maxLabel": "Limit per delivered order",
+    "targetLabel": "Target (70 %)",
+    "explain": "From your real orders: {{delivered}} delivered, {{share}} % of parcels arrive. Above the limit, the ad loses money."
+  },
+  "goal": {
+    "sales": {
+      "name": "Sales on the page",
+      "short": "sales",
+      "text": "People order on your sales page.",
+      "tip": "Meta looks for people who buy. It needs the product’s sales page and a pixel."
+    },
+    "messages": {
+      "name": "Messages",
+      "short": "messages",
+      "text": "People write to you; Dellal answers and takes the order.",
+      "tip": "The easiest in Algeria: people ask their questions, Dellal (the AI) answers and creates the order."
+    },
+    "calls": {
+      "name": "Calls",
+      "short": "calls",
+      "text": "People call you directly.",
+      "tip": "A « Call » button: someone must answer the phone."
+    },
+    "form": {
+      "name": "Form",
+      "short": "form",
+      "text": "Name, number and wilaya without leaving Facebook.",
+      "tip": "Each form becomes an order in Confirmation (Marketing › Forms)."
+    },
+    "awareness": {
+      "name": "Get known",
+      "short": "awareness",
+      "text": "Many people see your brand, for little money.",
+      "tip": "To get known before selling: Meta shows the ad to as many people as it can.",
+      "more": "Meta shows the ad to as many people as it can, for the lowest price."
+    },
+    "traffic": {
+      "name": "Visits",
+      "short": "visits",
+      "text": "Bring people to your page.",
+      "tip": "Meta looks for people who open the page (not always buyers)."
+    },
+    "engagement": {
+      "name": "Boost a post",
+      "short": "boost",
+      "text": "More people see a post of your Page.",
+      "tip": "Choose a post that already works."
+    }
+  },
+  "check": {
+    "title": "Before launching",
+    "product": "Product: {{name}}",
+    "noProduct": "Choose a product",
+    "page": "Facebook Page: {{name}}",
+    "noPage": "Link the Facebook Page (Pilot AI › Accounts)",
+    "landing": "Sales page ready",
+    "noLanding": "This product has no sales page",
+    "pixel": "Meta pixel ready",
+    "noPixel": "Add a Meta pixel (Landing pages › Pixels)",
+    "phone": "Number to call: {{v}}",
+    "noPhone": "Give an Algerian number (05, 06 or 07)",
+    "channels": "Messages on {{v}}",
+    "noChannels": "Choose Messenger, Instagram or WhatsApp",
+    "form": "Form ready",
+    "noForm": "Choose a form or give the privacy link",
+    "media": "{{n}} photo(s) or video(s)",
+    "noMedia": "Choose at least one photo or video",
+    "text": "Ad text written",
+    "noText": "Write the ad text",
+    "post": "Post chosen",
+    "noPost": "Choose the post to boost",
+    "budget": "Budget: {{v}} a day"
+  },
+  "msg": {
+    "where": "Where customers write to you",
+    "dellal": "Dellal (the AI) answers at once on Messenger, Instagram and WhatsApp, and the order keeps the ad’s id.",
+    "welcome": "Welcome message (Messenger)",
+    "welcomePh": "Salam 👋 want to know more?",
+    "question": "Question {{n}}"
+  },
+  "ch": {
+    "messenger": "Messenger",
+    "instagram": "Instagram",
+    "whatsapp": "WhatsApp"
+  },
+  "call": {
+    "phone": "Number to call",
+    "note": "A number that answers from 9 am to 9 pm. Format: +213 6… or 06…"
+  },
+  "form": {
+    "which": "Form",
+    "new": "New form",
+    "name": "Form name",
+    "asks": "It always asks: name, number, wilaya.",
+    "commune": "Also ask the commune",
+    "variant": "Ask the colour or size",
+    "privacy": "Link to your privacy policy",
+    "privacyNote": "Meta needs it for every form.",
+    "lang": "Form language",
+    "toOrders": "The answers become orders in Confirmation (Marketing › Forms)."
+  },
+  "post": {
+    "which": "Post to boost",
+    "pick": "Choose a post",
+    "paste": "or paste its id",
+    "noAd": "The post keeps its photo and its words."
+  },
+  "ad": {
+    "words": "The words",
+    "lang": "Language",
+    "ideaPh": "Your idea (e.g. 2 for 1, free delivery in Algiers)",
+    "rewrite": "Write with AI",
+    "writing": "The AI is writing 3 versions…",
+    "version": "Version {{n}}",
+    "ready": "Ready sentences (no AI): change them as you like.",
+    "primary": "Main text",
+    "headline": "Headline (short)",
+    "more": "Other versions"
+  },
+  "lang": {
+    "darija": "Darija",
+    "fr": "French",
+    "ar": "Arabic"
+  },
+  "media": {
+    "title": "Photos and videos ({{n}}/10)",
+    "tip": "A vertical video of 15 to 30 s works best.",
+    "add": "Add",
+    "sending": "Sending…",
+    "useProduct": "Product photo",
+    "photoBad": "This photo cannot be used.",
+    "videoType": "Send an MP4 or MOV video.",
+    "videoBad": "This video cannot be read.",
+    "videoLost": "The video could not be sent."
+  },
+  "pack": {
+    "test": "Small test",
+    "best": "Advised",
+    "fast": "Fast",
+    "delivered": "≈ {{n}} delivered / week",
+    "noData": "no numbers yet"
+  },
+  "pro": {
+    "what": "Product and goal",
+    "ad": "The ad",
+    "who": "Who sees the ad",
+    "money": "Budget and bids",
+    "level": "Where the budget is",
+    "levelCampaign": "Campaign budget (Advantage+, advised)",
+    "levelAdset": "One budget per ad set",
+    "split": "Creative test",
+    "splitOne": "All creatives together",
+    "splitTest": "One ad set per photo or video (test)",
+    "bid": "Bid",
+    "bidLowest": "Lowest cost (advised)",
+    "bidCost": "Cost goal (cost cap)",
+    "bidCap": "Bid cap",
+    "bidAmount": "Goal amount",
+    "start": "Start (empty: right away)"
+  },
+  "who": {
+    "wilayas": "Wilayas",
+    "weak": "Weak delivery: {{list}}",
+    "leaveOut": "Leave them out",
+    "allDz": "All of Algeria",
+    "putBack": "Put {{w}} back",
+    "add": "Leave out a wilaya…",
+    "newWilayas": "Meta does not split the new wilayas yet: they cannot be left out.",
+    "age": "Age",
+    "gender": "Who",
+    "everyone": "Everyone",
+    "women": "Women",
+    "men": "Men",
+    "advantage": "Advantage+ audience",
+    "advantageTip": "Meta may go beyond your choices if it finds better buyers (advised).",
+    "audiences": "Use my audiences",
+    "noAudiences": "No audience on (Audiences tab)",
+    "pixel": "Pixel",
+    "pixelAuto": "The sales page’s"
+  },
+  "test": {
+    "title": "Test plan (3 days)",
+    "budget": "Budget",
+    "days3": "Test cost",
+    "delivered": "Delivered expected",
+    "note": "Let it run 3 days before judging: Meta learns during that time.",
+    "perMedia": "Each photo or video has its own ad set: {{n}} × the budget. Keep the best one after 3 days."
+  },
+  "preview": {
+    "title": "Preview",
+    "page": "Your Page",
+    "sponsored": "Sponsored",
+    "textPh": "The ad text shows here.",
+    "headlinePh": "The headline"
+  },
+  "cta": {
+    "shop": "Shop now",
+    "message": "Send message",
+    "call": "Call now",
+    "signup": "Sign up",
+    "learn": "Learn more"
+  },
+  "done": {
+    "live": "Your ad is live ✓",
+    "liveText": "« {{name}} » is on at Meta. The first numbers come in a few hours.",
+    "waiting": "Sent to the owner",
+    "waitingText": "The owner must say yes. The ad goes to Meta right after.",
+    "see": "See my ads",
+    "again": "Launch another ad",
+    "next": "Autopilot watches it from now on."
+  },
+  "launches": {
+    "title": "My launches",
+    "open": "Open"
+  },
+  "lst": {
+    "draft": "Draft",
+    "waiting_yes": "Waiting for a yes",
+    "launching": "Sending",
+    "live": "Live",
+    "failed": "Failed",
+    "refused": "Refused"
+  },
+  "pilot": {
+    "title": "Autopilot",
+    "sub": "It looks at your ads every 15 minutes, with your real delivered orders.",
+    "last": "Last check {{when}}.",
+    "autoToday": "automatic changes today",
+    "check": "Check now",
+    "checked": "{{n}} ad(s) checked · {{open}} suggestion(s)",
+    "now": "What Autopilot advises now",
+    "none": "Nothing to do for now: your ads are fine.",
+    "ignore": "Ignore",
+    "ignored": "Suggestion ignored",
+    "apply_pause": "Pause",
+    "apply_budget": "Go to {{to}}",
+    "apply_copy": "Make a copy",
+    "newCrea": "Add a new video",
+    "rules": "The rules",
+    "ownerOnly": "Only the owner changes these settings.",
+    "askOnly": "This rule always asks before acting.",
+    "m_off": "Off",
+    "m_suggest": "Suggest",
+    "m_auto": "Auto",
+    "rulesNote": "On « Auto », Autopilot acts alone within your limits: 5 changes a day at most, and no new budget change before 72 h.",
+    "saved": "Rule saved",
+    "history": "What Autopilot did"
+  },
+  "rule": {
+    "stop": {
+      "name": "Stop the losses",
+      "text": "Pause when the ad spends 2 × your limit in 3 days with no order."
+    },
+    "trim": {
+      "name": "Lower the budget",
+      "text": "−20 % when an order costs more than your limit (7 days)."
+    },
+    "deliver": {
+      "name": "Weak delivery",
+      "text": "Warns when fewer than 55 % of parcels arrive."
+    },
+    "confirm": {
+      "name": "Weak confirmation",
+      "text": "Warns when fewer than 35 % of customers confirm on the phone."
+    },
+    "tired": {
+      "name": "Tired creative",
+      "text": "Warns when the video no longer hooks or the audience is worn out."
+    },
+    "scale": {
+      "name": "Raise",
+      "text": "+20 % when an order costs half your limit or less, with 10 orders in 7 days."
+    },
+    "cap": {
+      "name": "Daily cap",
+      "text": "Pauses everything at your daily maximum, restarts the next morning."
+    }
+  },
+  "why": {
+    "stop": "{{spend}} spent in {{days}} days with no order (limit {{limit}}).",
+    "deliver": "Only {{rate}} % of parcels arrive ({{delivered}} of {{settled}}). Check the delivery, price or page before spending more.",
+    "confirm": "Only {{rate}} % of customers confirm ({{yes}} of {{received}}). Check the price and what the ad promises.",
+    "trim": "An order costs {{cost}}, the limit is {{limit}}. Budget {{from}} → {{to}} a day.",
+    "tired_fatigue": "Fewer people watch the video than before: add a new video.",
+    "tired_hook": "The first 3 seconds do not hook: change the start of the video.",
+    "tired_audience": "Always the same people see the ad: make a copy for a new audience.",
+    "scale": "An order costs {{cost}} (limit {{limit}}) with {{orders}} orders in 7 days. Budget {{from}} → {{to}} a day."
+  },
+  "aud": {
+    "title": "Your customers’ audiences",
+    "sub": "Your own customers become Meta audiences: leave out people who return parcels or give fake numbers, and find people like your buyers.",
+    "sync": "Send to Meta now",
+    "synced": "Audiences sent",
+    "saved": "Saved",
+    "exclude": "Left out of ads",
+    "include": "Targeted",
+    "recommended": "Advised",
+    "people": "people",
+    "syncedAt": "updated {{when}}",
+    "privacy": "Only your shop’s customers. Numbers are hashed (SHA-256) on the server before going to Meta, never in clear.",
+    "returners": {
+      "name": "People who return parcels",
+      "text": "Customers who refused or returned a parcel this year no longer see your ads."
+    },
+    "fake": {
+      "name": "Fake numbers and fake orders",
+      "text": "Numbers marked fake or wrong number no longer see your ads."
+    },
+    "buyers": {
+      "name": "Delivered customers",
+      "text": "Your delivered buyers: leave them out so you do not pay twice, and the base of the lookalike."
+    },
+    "lookalike": {
+      "name": "Like my delivered customers",
+      "text": "People in Algeria who look like your delivered buyers (1 %). Needs at least 100 delivered customers."
+    },
+    "st": {
+      "ready": "Ready",
+      "off": "Off",
+      "waiting": "Waiting",
+      "small": "Too small",
+      "failed": "Error"
+    }
+  },
+  "ago": "{{d}} ago"
+}

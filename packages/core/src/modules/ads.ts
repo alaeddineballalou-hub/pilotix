@@ -121,7 +121,7 @@ export interface AdsetRow {
   marketerName: string | null;
 }
 
-async function visibleAdsets(ctx: Ctx, marketerId?: number | null): Promise<AdsetRow[]> {
+export async function visibleAdsets(ctx: Ctx, marketerId?: number | null): Promise<AdsetRow[]> {
   const mine = !isOwner(ctx);
   // a marketer partner's chief: every ad set of the partner's people
   const lead = mine ? partnerLead(ctx) : null;

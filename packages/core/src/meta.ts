@@ -1,11 +1,14 @@
-// Meta Ads (Graph API v21.0) — SERVER ONLY. Loaded by the server as '@pilotix/core/dist/meta' and called through
+// Meta Ads (Marketing API v26.0) — SERVER ONLY. Loaded by the server as '@pilotix/core/dist/meta' and called through
 // ctx.server.meta(action, args, ctx). Never imported by the app: the browser demo uses the seeded tables instead.
 // The access token is read from the settings table (written by admin.meta.save) and never leaves the server.
+import { createHash } from 'node:crypto';
 import { getSetting } from './settings';
 import { getRaw, META_TOKEN_KEY } from './modules/admin';
+import type { LaunchPlan } from './modules/pilotads';
 import { AppError, Ctx } from './rpc';
 
-const GRAPH = 'https://graph.facebook.com/v21.0';
+/** Meta's current Marketing API (v21.0 ended for ads on 9 Sep 2025; v26.0 came out on 29 Jul 2026). */
+const GRAPH = 'https://graph.facebook.com/v26.0';
 /** The Conversions API (landing pages' events): a recent version, supported until mid-2028. */
 const GRAPH_CAPI = 'https://graph.facebook.com/v25.0';
 
@@ -132,6 +135,36 @@ async function all(path: string, params: Record<string, string>, token: string, 
     page = await graph(next, {}, token);
   }
   return out;
+}
+
+/** A change on Meta (creating or editing): the token goes in the body, never in a URL; 30 s at most. */
+async function post(path: string, body: Record<string, unknown>, token: string): Promise<any> {
+  const form = new URLSearchParams();
+  for (const [k, v] of Object.entries(body)) if (v !== undefined && v !== null) form.set(k, typeof v === 'string' ? v : JSON.stringify(v));
+  form.set('access_token', token);
+  let res: Response;
+  try {
+    res = await fetch(`${GRAPH}/${path}`, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, body: form, signal: AbortSignal.timeout(30_000) });
+  } catch {
+    throw new AppError('bad_request', 'Meta injoignable. Réessayez plus tard.');
+  }
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok || data?.error) {
+    const e = data?.error;
+    if (e?.code === 190) throw new AppError('bad_request', 'Le jeton Meta a expiré ou a été révoqué : reconnectez Meta (Pilot AI › Comptes).');
+    if ([4, 17, 613, 80000, 80004].includes(Number(e?.code))) throw new AppError('conflict', 'Meta limite les demandes pour l’instant : réessayez dans quelques minutes.');
+    throw new AppError('bad_request', `Meta : ${e?.error_user_msg ?? e?.message ?? res.statusText}`);
+  }
+  return data;
+}
+const cents = (v: unknown): number | null => (v === undefined || v === null || v === '' ? null : Math.round(Number(v)) || 0);
+const actOf = (x: string) => `act_${String(x).replace(/^act_/, '')}`;
+/** fills `{campaign}`, `{adset:k}`, `{creative:k}`, `{video:k}`, `{image:k}`, `{form}` with the ids Meta gave */
+function fill(v: unknown, ids: Record<string, string>): unknown {
+  if (typeof v === 'string') return v.replace(/\{(campaign|form|adset:\w+|creative:\w+|video:\w+|image:\w+)\}/g, (m, k) => ids[k] ?? m);
+  if (Array.isArray(v)) return v.map((x) => fill(x, ids));
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fill(x, ids)]));
+  return v;
 }
 
 const toDay = (r: any, level: 'adset' | 'ad', currency: string): MetaDay => ({
@@ -312,6 +345,148 @@ export async function runMeta(action: string, args: unknown, ctx: Ctx): Promise<
     }
     if (!read && firstError) throw firstError;
     return out;
+  }
+
+  // ---- Pilot Ads (./modules/adsmgr.ts, ./modules/adslaunch.ts) ----
+  /** campaigns and ad sets with their budget and state, and each ad account's health (paid, limit, spent) */
+  if (action === 'structure') {
+    const out = { accounts: [] as any[], campaigns: [] as any[], adsets: [] as any[] };
+    for (const act of acts) {
+      try {
+        const [account, campaigns, adsets] = await Promise.all([
+          graph(act, { fields: 'name,currency,account_status,disable_reason,spend_cap,amount_spent,balance,min_daily_budget' }, token),
+          all(`${act}/campaigns`, { fields: 'id,name,objective,effective_status,daily_budget,bid_strategy', limit: '200' }, token, 10),
+          all(`${act}/adsets`, { fields: 'id,name,campaign_id,effective_status,daily_budget', limit: '200' }, token, 20),
+        ]);
+        const id = act.replace(/^act_/, '');
+        out.accounts.push({ id, name: String(account?.name ?? ''), currency: String(account?.currency ?? 'USD').toUpperCase(), status: Number(account?.account_status ?? 0), disableReason: Number(account?.disable_reason ?? 0), spendCap: cents(account?.spend_cap), spent: cents(account?.amount_spent), balance: cents(account?.balance), minDaily: cents(account?.min_daily_budget) });
+        out.campaigns.push(...campaigns.map((c: any) => ({ id: String(c.id), accountId: id, name: String(c.name ?? ''), objective: c.objective ?? null, status: c.effective_status ?? null, dailyBudgetCents: cents(c.daily_budget), bidStrategy: c.bid_strategy ?? null })));
+        out.adsets.push(...adsets.map((x: any) => ({ id: String(x.id), accountId: id, campaignId: String(x.campaign_id ?? ''), name: String(x.name ?? ''), status: x.effective_status ?? null, dailyBudgetCents: cents(x.daily_budget) })));
+      } catch {
+        // an account that cannot be read is left out (the others still count)
+      }
+    }
+    return out;
+  }
+
+  /** pause, start again, or a new daily budget (cents, the account's money); Meta's answer is read back */
+  if (action === 'update') {
+    const a = (args ?? {}) as { id?: string; status?: 'ACTIVE' | 'PAUSED'; dailyBudgetCents?: number };
+    if (!a.id || !/^\d{6,25}$/.test(a.id)) throw new AppError('bad_request', 'Objet Meta invalide');
+    const body: Record<string, unknown> = {};
+    if (a.status) body.status = a.status;
+    if (a.dailyBudgetCents) body.daily_budget = Math.round(a.dailyBudgetCents);
+    if (!Object.keys(body).length) throw new AppError('bad_request', 'Rien à changer');
+    await post(a.id, body, token);
+    const r = await graph(a.id, { fields: 'effective_status,daily_budget' }, token);
+    return { status: r.effective_status ?? null, dailyBudgetCents: cents(r.daily_budget) };
+  }
+
+  /** a copy of an ad set or a campaign with all its ads, PAUSED (Meta's copies) */
+  if (action === 'copy') {
+    const a = (args ?? {}) as { id?: string; level?: 'adset' | 'campaign' };
+    if (!a.id || !/^\d{6,25}$/.test(a.id)) throw new AppError('bad_request', 'Objet Meta invalide');
+    const r = await post(`${a.id}/copies`, { deep_copy: true, status_option: 'PAUSED', rename_options: { rename_suffix: ' · copie' } }, token);
+    return { id: String(r.copied_adset_id ?? r.copied_campaign_id ?? r.ad_object_ids?.[0]?.copied_id ?? '') };
+  }
+
+  /**
+   * A launch: the photos first (their bytes, from the shop's library), the videos (Meta downloads them from Pilotix),
+   * then the campaign, its ad sets, the créas and the ads, all PAUSED. `done` holds the ids of an earlier try: a retry
+   * goes on where it stopped and creates nothing twice. Never throws halfway: it answers with the ids made and the error.
+   */
+  if (action === 'launch') {
+    const a = (args ?? {}) as { plan: LaunchPlan; accountId?: string; done?: Record<string, string> };
+    const act = a.accountId ? actOf(a.accountId) : acts[0];
+    if (!acts.includes(act)) throw new AppError('bad_request', 'Ce compte pub n’est pas relié à la boutique.');
+    const ids: Record<string, string> = { ...(a.done ?? {}) };
+    let step = 'images';
+    try {
+      for (const im of a.plan.images ?? []) {
+        if (ids[`image:${im.key}`]) continue;
+        const row = (await ctx.db.query(`SELECT ${im.col === 'thumb' ? 'thumb' : 'jpeg'} AS b FROM cm_media WHERE id = $1`, [im.mediaId]))[0];
+        if (!row?.b) throw new AppError('bad_request', 'Une photo n’est plus dans la bibliothèque : choisissez-la à nouveau.');
+        const r = await post(`${act}/adimages`, { bytes: String(row.b) }, token);
+        const hash = (Object.values(r?.images ?? {})[0] as { hash?: string } | undefined)?.hash;
+        if (!hash) throw new AppError('bad_request', 'Meta n’a pas pris la photo.');
+        ids[`image:${im.key}`] = String(hash);
+      }
+      step = 'videos';
+      for (const c of a.plan.creatives) {
+        if (!c.video || ids[`video:${c.video.key}`]) continue;
+        const v = await post(`${act}/advideos`, { file_url: c.video.url, name: String(c.body.name ?? 'video') }, token);
+        ids[`video:${c.video.key}`] = String(v.id);
+      }
+      // a video is ready a little after: wait up to 90 s for each one
+      for (const k of Object.keys(ids).filter((x) => x.startsWith('video:'))) {
+        for (let t = 0; t < 18; t++) {
+          const st = await graph(ids[k], { fields: 'status' }, token);
+          if (st?.status?.video_status === 'ready') break;
+          if (st?.status?.video_status === 'error') throw new AppError('bad_request', 'Meta n’a pas pu lire la vidéo.');
+          await new Promise((r) => setTimeout(r, 5_000));
+        }
+      }
+      step = 'campaign';
+      if (!ids.campaign) ids.campaign = String((await post(`${act}/campaigns`, fill(a.plan.campaign, ids) as Record<string, unknown>, token)).id);
+      step = 'adsets';
+      for (const x of a.plan.adsets) if (!ids[`adset:${x.key}`]) ids[`adset:${x.key}`] = String((await post(`${act}/adsets`, fill(x.body, ids) as Record<string, unknown>, token)).id);
+      step = 'creatives';
+      for (const x of a.plan.creatives) if (!ids[`creative:${x.key}`]) ids[`creative:${x.key}`] = String((await post(`${act}/adcreatives`, fill(x.body, ids) as Record<string, unknown>, token)).id);
+      step = 'ads';
+      for (const x of a.plan.ads)
+        if (!ids[`ad:${x.key}`]) ids[`ad:${x.key}`] = String((await post(`${act}/ads`, { ...(fill(x.body, ids) as Record<string, unknown>), adset_id: ids[`adset:${x.adset}`], creative: { creative_id: ids[`creative:${x.creative}`] } }, token)).id);
+      return { ids, error: null, step: 'done' };
+    } catch (e: any) {
+      return { ids, error: String(e?.message ?? e), step };
+    }
+  }
+
+  /** turns on what a launch made: the campaign, then its ad sets, then the ads */
+  if (action === 'activate') {
+    const a = (args ?? {}) as { ids?: string[] };
+    for (const id of a.ids ?? []) if (/^\d{6,25}$/.test(id)) await post(id, { status: 'ACTIVE' }, token);
+    return { ok: true };
+  }
+
+  /** an instant form on the Page (lead ads): with the Page's own token, read from the person's token */
+  if (action === 'leadform') {
+    const a = (args ?? {}) as { pageId?: string; body?: Record<string, unknown> };
+    if (!a.pageId || !/^\d{5,25}$/.test(a.pageId) || !a.body) throw new AppError('bad_request', 'Page invalide');
+    const page = await graph(a.pageId, { fields: 'access_token' }, token);
+    if (!page?.access_token) throw new AppError('bad_request', 'Pilotix ne peut pas gérer cette Page : reliez-la à nouveau (Pilot AI › Comptes).');
+    const r = await post(`${a.pageId}/leadgen_forms`, a.body, String(page.access_token));
+    return { id: String(r.id) };
+  }
+
+  /** Algeria's regions as Meta names them (their keys are kept, not their names) */
+  if (action === 'geo') {
+    const r = await graph('search', { type: 'adgeolocation', location_types: JSON.stringify(['region']), country_code: 'DZ', limit: '100', q: String((args as any)?.q ?? '') }, token);
+    return { regions: (r.data ?? []).filter((x: any) => x.type === 'region').map((x: any) => ({ key: String(x.key), name: String(x.name) })) };
+  }
+
+  /**
+   * An audience from the shop's own customers: phones hashed here (SHA-256 of 213XXXXXXXXX), never sent in clear.
+   * Made the first time, then refilled (Meta adds; Pilotix sends the whole list each night).
+   */
+  if (action === 'audience') {
+    const a = (args ?? {}) as { name?: string; metaId?: string | null; phones?: string[] };
+    let id = a.metaId ?? null;
+    if (!id) id = String((await post(`${acts[0]}/customaudiences`, { name: String(a.name ?? 'Pilotix').slice(0, 100), subtype: 'CUSTOM', customer_file_source: 'USER_PROVIDED_ONLY', description: 'Pilotix' }, token)).id);
+    const hashed = (a.phones ?? []).map((p) => [createHash('sha256').update(p).digest('hex')]);
+    let received = 0;
+    for (let k = 0; k < hashed.length; k += 10_000) {
+      const r = await post(`${id}/users`, { payload: { schema: ['PHONE'], data: hashed.slice(k, k + 10_000) } }, token);
+      received += Number(r.num_received ?? 0);
+    }
+    return { id, received };
+  }
+
+  /** people who look like the shop's delivered customers (1 % of Algeria by default) */
+  if (action === 'lookalike') {
+    const a = (args ?? {}) as { seedId?: string; ratio?: number };
+    if (!a.seedId) throw new AppError('bad_request', 'Audience de départ manquante');
+    const r = await post(`${acts[0]}/customaudiences`, { name: 'Pilotix · comme mes clients livrés', subtype: 'LOOKALIKE', origin_audience_id: a.seedId, lookalike_spec: { country: 'DZ', ratio: Math.min(0.2, Math.max(0.01, a.ratio ?? 0.01)) } }, token);
+    return { id: String(r.id) };
   }
 
   throw new AppError('bad_request', `Action Meta inconnue : ${action}`);

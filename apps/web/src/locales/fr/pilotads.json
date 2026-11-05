@@ -1,0 +1,512 @@
+{
+  "tabsLabel": "Pilot Ads",
+  "tab": {
+    "pubs": "Mes pubs",
+    "lancer": "Lancer une pub",
+    "pilote": "Pilote auto",
+    "audiences": "Audiences"
+  },
+  "mode": {
+    "label": "Affichage",
+    "simple": "Simple",
+    "pro": "Pro",
+    "simpleTip": "Trois chiffres et quoi faire, par produit",
+    "proTip": "Tous les tableaux et tous les réglages"
+  },
+  "stop": {
+    "button": "Tout arrêter",
+    "isOn": "Tout est arrêté",
+    "isOnSub": "Toutes les pubs sont en pause. Rien ne redémarre avant « Tout relancer ».",
+    "isOnLaunch": "Tout est arrêté par le propriétaire : aucune pub ne peut être lancée maintenant.",
+    "resume": "Tout relancer",
+    "askTitle": "Tout arrêter ?",
+    "askText": "Toutes les pubs en cours passent en pause tout de suite. Rien ne redémarre, ni à la main ni par Pilote auto, tant que vous ne cliquez pas « Tout relancer ».",
+    "confirm": "Oui, tout arrêter",
+    "paused": "{{n}} pub(s) mise(s) en pause",
+    "resumed": "{{n}} pub(s) relancée(s)"
+  },
+  "guard": {
+    "summary": "Limite : {{max}} $ par jour · en cours : {{now}} $",
+    "title": "Les limites du propriétaire",
+    "maxDaily": "Dépense maximum de la boutique par jour",
+    "maxRaise": "Hausse permise sans votre oui (marketeur)",
+    "yesAbove": "Votre oui au-dessus de (par jour)",
+    "launchYes": "Chaque lancement d’un marketeur attend mon oui",
+    "launchYesTip": "Le marketeur prépare la pub ; elle part chez Meta quand vous dites oui.",
+    "saved": "Limites enregistrées",
+    "note": "Mettre en pause est toujours permis. Une hausse trop grande d’un marketeur vous attend dans « En attente de votre oui »."
+  },
+  "account": {
+    "st2": "Le compte pub « {{name}} » est désactivé par Meta : les pubs ne tournent pas.",
+    "st3": "Le compte pub « {{name}} » a un paiement à régler : Meta a arrêté les pubs.",
+    "st7": "Le compte pub « {{name}} » est en vérification chez Meta.",
+    "st9": "Le compte pub « {{name}} » est en période de grâce : réglez le paiement.",
+    "st101": "Le compte pub « {{name}} » est fermé.",
+    "stx": "Le compte pub « {{name}} » a un problème chez Meta."
+  },
+  "wait": {
+    "title": "En attente de votre oui",
+    "titleMine": "En attente du oui du propriétaire",
+    "yes": "Oui",
+    "no": "Non",
+    "done": "C’est fait",
+    "refused": "Refusé",
+    "raise": "hausse de {{pct}} %"
+  },
+  "act": {
+    "pause": "« {{name}} » en pause",
+    "resume": "« {{name}} » relancée",
+    "budget": "« {{name}} » : budget {{from}} → {{to}} par jour",
+    "copy": "« {{name}} » copiée (en pause)",
+    "launch": "« {{name}} » lancée à {{usd}} $ par jour",
+    "undo": "« {{name}} » : retour en arrière"
+  },
+  "simple": {
+    "title": "Mes pubs",
+    "sub": "Pour chaque produit : ce que vous avez dépensé, les commandes livrées, et ce que coûte une commande livrée.",
+    "days": "Période",
+    "lastDays": "{{n}} derniers jours",
+    "noneTitle": "Pas encore de pub",
+    "noneText": "Lancez une pub en 4 étapes : le produit, ce que vous voulez, la photo ou la vidéo, le budget.",
+    "launchFirst": "Lancer ma première pub",
+    "loose": "{{n}} pub(s) n’ont pas encore de produit : reliez-les dans l’affichage Pro.",
+    "spent": "Dépensé",
+    "delivered": "Livrées",
+    "ofOrders": "sur {{n}} commandes",
+    "costPer": "Coût / livrée",
+    "limit": "limite {{v}}",
+    "noLimit": "pas encore de limite",
+    "raise": "Augmenter de 20 %",
+    "pauseAll": "Mettre en pause ({{n}})",
+    "da": "DA"
+  },
+  "say": {
+    "scale": "Ça marche : une commande livrée coûte bien moins que votre limite. Vous pouvez monter le budget doucement (+20 %).",
+    "keep": "Ça va : gardez la pub comme elle est et regardez encore dans 2 ou 3 jours.",
+    "price": "La pub coûte un peu trop : montez le prix de {{rise}} ou changez la vidéo.",
+    "cutdel": "Trop de colis reviennent : la pub fait perdre de l’argent. Mettez-la en pause et vérifiez la livraison.",
+    "cut": "Une commande livrée coûte plus que ce qu’elle rapporte : mettez la pub en pause.",
+    "loss": "Ce produit perd de l’argent même sans pub : mettez en pause et revoyez le prix.",
+    "wait": "Pas encore assez de commandes pour juger : attendez 2 ou 3 jours."
+  },
+  "perDay": "{{v}} / jour",
+  "doneToast": "C’est fait",
+  "sentToOwner": "Envoyé au propriétaire : il doit dire oui",
+  "waitingYes": "Attend le oui du propriétaire",
+  "btn": {
+    "col": "Actions",
+    "pause": "Mettre en pause",
+    "resume": "Relancer",
+    "budget": "Changer le budget",
+    "noBudget": "Le budget se règle dans Meta",
+    "copy": "Faire une copie (en pause)"
+  },
+  "budget": {
+    "title": "Budget de « {{name}} »",
+    "perDay": "Budget par jour",
+    "save": "Enregistrer",
+    "ask": "Demander au propriétaire",
+    "campaign": "C’est le budget de la campagne « {{name}} » (Advantage+) : il change pour toutes ses pubs.",
+    "over": "La boutique dépenserait {{total}} $ par jour : la limite du propriétaire est {{max}} $.",
+    "overOwner": "Au-dessus de votre limite du jour ({{max}} $) : vous pouvez quand même.",
+    "needsYes": "Hausse de plus de {{pct}} % : le propriétaire doit dire oui.",
+    "note": "Meta réapprend après un gros changement : montez de 20 % à la fois, 4 fois par heure au plus.",
+    "own": "Ou votre montant"
+  },
+  "log": {
+    "title": "Journal des changements",
+    "empty": "Aucun changement pour l’instant.",
+    "undo": "Annuler",
+    "undone": "Changement annulé",
+    "yesBy": "oui de {{name}}"
+  },
+  "src": {
+    "person": "Une personne",
+    "rule": "Pilote auto",
+    "pilot": "Suggestion de Pilote auto",
+    "stop_all": "Tout arrêter",
+    "launch": "Lancer une pub"
+  },
+  "st": {
+    "done": "Fait",
+    "queued": "En cours",
+    "waiting_yes": "Attend un oui",
+    "failed": "Échec",
+    "refused": "Refusé",
+    "undone": "Annulé"
+  },
+  "where": {
+    "title": "D’où viennent les commandes des pubs",
+    "period": "Période",
+    "empty": "Aucune commande liée à une pub sur cette période.",
+    "wilaya": "Wilaya",
+    "orders": "Commandes",
+    "delivered": "Livrées",
+    "rate": "Livrées %",
+    "hours": "Heure des commandes",
+    "hoursLabel": "Commandes par heure de la journée",
+    "goals": "Par but",
+    "goalOrders": "{{n}} cmd · {{d}} livrées",
+    "note": "Seules les commandes qui gardent l’id de leur pub (page de vente, Dellal, formulaire) sont comptées ici."
+  },
+  "launch": {
+    "title": "Lancer une pub",
+    "sub": "Tout est créé en pause chez Meta, puis allumé d’un coup quand tout est prêt.",
+    "stepsLabel": "Les étapes",
+    "next": "Suivant",
+    "noAccount": "Reliez d’abord le compte pub Meta de la boutique (Pilot AI › Comptes).",
+    "noProducts": "Aucun produit actif : ajoutez d’abord un produit.",
+    "pickProduct": "Choisissez un produit",
+    "search": "Chercher un produit",
+    "makeLanding": "Créer la page de vente",
+    "ownerYes": "Le propriétaire doit dire oui : la pub part chez Meta après son oui.",
+    "safety": "Pilote auto surveille la pub : si elle dépense trop sans commande, elle passe en pause. Vous pouvez tout arrêter à tout moment.",
+    "go": "Lancer à {{v}} / jour",
+    "toOwner": "Envoyer au propriétaire",
+    "sending": "Envoi chez Meta…",
+    "keep": "Garder en brouillon",
+    "saved": "Brouillon gardé",
+    "removed": "Supprimé"
+  },
+  "step": {
+    "product": "Produit",
+    "goal": "But",
+    "ad": "La pub",
+    "budget": "Budget"
+  },
+  "ask": {
+    "product": "Quel produit voulez-vous vendre ?",
+    "goal": "Que voulez-vous que les gens fassent ?",
+    "ad": "Les photos ou vidéos, et le texte",
+    "budget": "Combien par jour ?"
+  },
+  "limit": {
+    "line": "Une livrée peut coûter jusqu’à {{max}}",
+    "estimated": "estimé",
+    "none": "Ce produit ne laisse pas de marge : revoyez son prix.",
+    "maxLabel": "Limite par commande livrée",
+    "targetLabel": "Objectif (70 %)",
+    "explain": "Calculé sur vos vraies commandes : {{delivered}} livrées, {{share}} % des colis arrivent. Au-dessus de la limite, la pub fait perdre de l’argent."
+  },
+  "goal": {
+    "sales": {
+      "name": "Ventes sur la page",
+      "short": "ventes",
+      "text": "Les gens commandent sur votre page de vente.",
+      "tip": "Meta cherche les gens qui achètent. Il faut la page de vente du produit et un pixel."
+    },
+    "messages": {
+      "name": "Messages",
+      "short": "messages",
+      "text": "Les gens vous écrivent ; Dellal répond et prend la commande.",
+      "tip": "Le plus simple en Algérie : les gens posent leurs questions, Dellal (l’IA) répond et crée la commande."
+    },
+    "calls": {
+      "name": "Appels",
+      "short": "appels",
+      "text": "Les gens vous appellent directement.",
+      "tip": "Un bouton « Appeler » : il faut quelqu’un pour répondre au téléphone."
+    },
+    "form": {
+      "name": "Formulaire",
+      "short": "formulaire",
+      "text": "Nom, numéro et wilaya sans quitter Facebook.",
+      "tip": "Chaque formulaire devient une commande dans Confirmation (Marketing › Formulaires)."
+    },
+    "awareness": {
+      "name": "Faire connaître",
+      "short": "notoriété",
+      "text": "Beaucoup de gens voient votre marque, pour pas cher.",
+      "tip": "Pour vous faire connaître avant de vendre : Meta montre la pub au plus de gens possible.",
+      "more": "Meta montre la pub au plus de gens possible, pour le prix le plus bas."
+    },
+    "traffic": {
+      "name": "Visites",
+      "short": "visites",
+      "text": "Amener des gens sur votre page.",
+      "tip": "Meta cherche des gens qui ouvrent la page (pas forcément des acheteurs)."
+    },
+    "engagement": {
+      "name": "Booster une publication",
+      "short": "boost",
+      "text": "Plus de gens voient une publication de votre Page.",
+      "tip": "Choisissez une publication qui marche déjà."
+    }
+  },
+  "check": {
+    "title": "Avant de lancer",
+    "product": "Produit : {{name}}",
+    "noProduct": "Choisissez un produit",
+    "page": "Page Facebook : {{name}}",
+    "noPage": "Reliez la Page Facebook (Pilot AI › Comptes)",
+    "landing": "Page de vente prête",
+    "noLanding": "Ce produit n’a pas de page de vente",
+    "pixel": "Pixel Meta prêt",
+    "noPixel": "Ajoutez un pixel Meta (Landing pages › Pixels)",
+    "phone": "Numéro à appeler : {{v}}",
+    "noPhone": "Donnez un numéro algérien (05, 06 ou 07)",
+    "channels": "Messages sur {{v}}",
+    "noChannels": "Choisissez Messenger, Instagram ou WhatsApp",
+    "form": "Formulaire prêt",
+    "noForm": "Choisissez un formulaire ou donnez le lien de confidentialité",
+    "media": "{{n}} photo(s) ou vidéo(s)",
+    "noMedia": "Choisissez au moins une photo ou une vidéo",
+    "text": "Texte de la pub écrit",
+    "noText": "Écrivez le texte de la pub",
+    "post": "Publication choisie",
+    "noPost": "Choisissez la publication à booster",
+    "budget": "Budget : {{v}} par jour"
+  },
+  "msg": {
+    "where": "Où les clients vous écrivent",
+    "dellal": "Dellal (l’IA) répond tout de suite sur Messenger, Instagram et WhatsApp, et la commande garde l’id de la pub.",
+    "welcome": "Message de bienvenue (Messenger)",
+    "welcomePh": "Salam 👋 vous voulez en savoir plus ?",
+    "question": "Question {{n}}"
+  },
+  "ch": {
+    "messenger": "Messenger",
+    "instagram": "Instagram",
+    "whatsapp": "WhatsApp"
+  },
+  "call": {
+    "phone": "Numéro à appeler",
+    "note": "Un numéro qui répond de 9 h à 21 h. Format : +213 6… ou 06…"
+  },
+  "form": {
+    "which": "Formulaire",
+    "new": "Nouveau formulaire",
+    "name": "Nom du formulaire",
+    "asks": "Il demande toujours : nom, numéro, wilaya.",
+    "commune": "Demander aussi la commune",
+    "variant": "Demander la couleur ou la taille",
+    "privacy": "Lien de votre politique de confidentialité",
+    "privacyNote": "Meta l’exige pour tout formulaire.",
+    "lang": "Langue du formulaire",
+    "toOrders": "Les réponses deviennent des commandes dans Confirmation (Marketing › Formulaires)."
+  },
+  "post": {
+    "which": "Publication à booster",
+    "pick": "Choisir une publication",
+    "paste": "ou collez son id",
+    "noAd": "La publication garde sa photo et son texte."
+  },
+  "ad": {
+    "words": "Le texte",
+    "lang": "Langue",
+    "ideaPh": "Votre idée (ex. : 2 pour 1, livraison gratuite à Alger)",
+    "rewrite": "Écrire avec l’IA",
+    "writing": "L’IA écrit 3 versions…",
+    "version": "Version {{n}}",
+    "ready": "Phrases toutes prêtes (sans IA) : changez-les à votre goût.",
+    "primary": "Texte principal",
+    "headline": "Titre (court)",
+    "more": "Autres versions"
+  },
+  "lang": {
+    "darija": "Darija",
+    "fr": "Français",
+    "ar": "Arabe"
+  },
+  "media": {
+    "title": "Photos et vidéos ({{n}}/10)",
+    "tip": "Une vidéo verticale de 15 à 30 s marche le mieux.",
+    "add": "Ajouter",
+    "sending": "Envoi…",
+    "useProduct": "Photo du produit",
+    "photoBad": "Cette photo ne peut pas être utilisée.",
+    "videoType": "Envoyez une vidéo MP4 ou MOV.",
+    "videoBad": "Cette vidéo ne peut pas être lue.",
+    "videoLost": "L’envoi de la vidéo a échoué."
+  },
+  "pack": {
+    "test": "Petit test",
+    "best": "Conseillé",
+    "fast": "Rapide",
+    "delivered": "≈ {{n}} livrée(s) / semaine",
+    "noData": "pas encore de chiffres"
+  },
+  "pro": {
+    "what": "Produit et but",
+    "ad": "La pub",
+    "who": "Qui voit la pub",
+    "money": "Budget et enchères",
+    "level": "Où est le budget",
+    "levelCampaign": "Budget de campagne (Advantage+, conseillé)",
+    "levelAdset": "Un budget par ensemble de pubs",
+    "split": "Test des créas",
+    "splitOne": "Toutes les créas ensemble",
+    "splitTest": "Un ensemble par photo ou vidéo (test)",
+    "bid": "Enchère",
+    "bidLowest": "Coût le plus bas (conseillé)",
+    "bidCost": "Coût visé (cost cap)",
+    "bidCap": "Enchère maximum",
+    "bidAmount": "Montant visé",
+    "start": "Début (vide : tout de suite)"
+  },
+  "who": {
+    "wilayas": "Wilayas",
+    "weak": "Livraison faible : {{list}}",
+    "leaveOut": "Les enlever",
+    "allDz": "Toute l’Algérie",
+    "putBack": "Remettre {{w}}",
+    "add": "Enlever une wilaya…",
+    "newWilayas": "Meta ne sépare pas encore les nouvelles wilayas : elles ne peuvent pas être enlevées.",
+    "age": "Âge",
+    "gender": "Qui",
+    "everyone": "Tout le monde",
+    "women": "Femmes",
+    "men": "Hommes",
+    "advantage": "Audience Advantage+",
+    "advantageTip": "Meta peut aller au-delà de vos choix s’il trouve de meilleurs acheteurs (conseillé).",
+    "audiences": "Utiliser mes audiences",
+    "noAudiences": "Aucune audience active (onglet Audiences)",
+    "pixel": "Pixel",
+    "pixelAuto": "Celui de la page de vente"
+  },
+  "test": {
+    "title": "Plan de test (3 jours)",
+    "budget": "Budget",
+    "days3": "Coût du test",
+    "delivered": "Livrées attendues",
+    "note": "Laissez tourner 3 jours avant de juger : Meta apprend pendant ce temps.",
+    "perMedia": "Chaque photo ou vidéo a son ensemble : {{n}} × le budget. Gardez la meilleure après 3 jours."
+  },
+  "preview": {
+    "title": "Aperçu",
+    "page": "Votre Page",
+    "sponsored": "Sponsorisé",
+    "textPh": "Le texte de la pub apparaît ici.",
+    "headlinePh": "Le titre"
+  },
+  "cta": {
+    "shop": "Acheter",
+    "message": "Envoyer un message",
+    "call": "Appeler",
+    "signup": "S’inscrire",
+    "learn": "En savoir plus"
+  },
+  "done": {
+    "live": "Votre pub est en ligne ✓",
+    "liveText": "« {{name}} » est allumée chez Meta. Les premiers chiffres arrivent dans quelques heures.",
+    "waiting": "Envoyée au propriétaire",
+    "waitingText": "Le propriétaire doit dire oui. La pub part chez Meta juste après.",
+    "see": "Voir mes pubs",
+    "again": "Lancer une autre pub",
+    "next": "Pilote auto la surveille dès maintenant."
+  },
+  "launches": {
+    "title": "Mes lancements",
+    "open": "Ouvrir"
+  },
+  "lst": {
+    "draft": "Brouillon",
+    "waiting_yes": "Attend un oui",
+    "launching": "En envoi",
+    "live": "En ligne",
+    "failed": "Échec",
+    "refused": "Refusé"
+  },
+  "pilot": {
+    "title": "Pilote auto",
+    "sub": "Il regarde vos pubs toutes les 15 minutes, avec vos vraies commandes livrées.",
+    "last": "Dernier passage {{when}}.",
+    "autoToday": "changements auto aujourd’hui",
+    "check": "Vérifier maintenant",
+    "checked": "{{n}} pub(s) vérifiée(s) · {{open}} suggestion(s)",
+    "now": "Ce que Pilote auto conseille maintenant",
+    "none": "Rien à faire pour l’instant : vos pubs vont bien.",
+    "ignore": "Ignorer",
+    "ignored": "Suggestion ignorée",
+    "apply_pause": "Mettre en pause",
+    "apply_budget": "Passer à {{to}}",
+    "apply_copy": "Faire une copie",
+    "newCrea": "Ajouter une nouvelle vidéo",
+    "rules": "Les règles",
+    "ownerOnly": "Seul le propriétaire change ces réglages.",
+    "askOnly": "Cette règle demande toujours avant d’agir.",
+    "m_off": "Arrêt",
+    "m_suggest": "Suggérer",
+    "m_auto": "Auto",
+    "rulesNote": "En « Auto », Pilote auto agit seul dans vos limites : 5 changements par jour au plus, et pas de nouveau changement de budget avant 72 h.",
+    "saved": "Règle enregistrée",
+    "history": "Ce que Pilote auto a fait"
+  },
+  "rule": {
+    "stop": {
+      "name": "Arrêter les pertes",
+      "text": "Pause si la pub dépense 2 × votre limite en 3 jours sans commande."
+    },
+    "trim": {
+      "name": "Baisser le budget",
+      "text": "−20 % si une commande coûte plus que votre limite (7 jours)."
+    },
+    "deliver": {
+      "name": "Livraison faible",
+      "text": "Prévient si moins de 55 % des colis arrivent."
+    },
+    "confirm": {
+      "name": "Confirmation faible",
+      "text": "Prévient si moins de 35 % des clients confirment au téléphone."
+    },
+    "tired": {
+      "name": "Créa fatiguée",
+      "text": "Prévient quand la vidéo n’accroche plus ou que le public est usé."
+    },
+    "scale": {
+      "name": "Augmenter",
+      "text": "+20 % si une commande coûte la moitié de votre limite ou moins, avec 10 commandes en 7 jours."
+    },
+    "cap": {
+      "name": "Plafond du jour",
+      "text": "Tout en pause à votre dépense maximum du jour, relance le lendemain matin."
+    }
+  },
+  "why": {
+    "stop": "{{spend}} dépensés en {{days}} jours sans commande (limite {{limit}}).",
+    "deliver": "Seulement {{rate}} % des colis arrivent ({{delivered}} sur {{settled}}). Vérifiez la livraison, le prix ou la page avant de dépenser plus.",
+    "confirm": "Seulement {{rate}} % des clients confirment ({{yes}} sur {{received}}). Vérifiez le prix et ce que la pub promet.",
+    "trim": "Une commande coûte {{cost}}, la limite est {{limit}}. Budget {{from}} → {{to}} par jour.",
+    "tired_fatigue": "Moins de gens regardent la vidéo qu’avant : ajoutez une nouvelle vidéo.",
+    "tired_hook": "Les 3 premières secondes n’accrochent pas : changez le début de la vidéo.",
+    "tired_audience": "Toujours les mêmes personnes voient la pub : faites une copie pour un nouveau public.",
+    "scale": "Une commande coûte {{cost}} (limite {{limit}}) avec {{orders}} commandes en 7 jours. Budget {{from}} → {{to}} par jour."
+  },
+  "aud": {
+    "title": "Audiences de vos clients",
+    "sub": "Vos propres clients deviennent des audiences Meta : enlevez des pubs ceux qui renvoient les colis ou donnent de faux numéros, et trouvez des gens qui ressemblent à vos acheteurs.",
+    "sync": "Envoyer à Meta maintenant",
+    "synced": "Audiences envoyées",
+    "saved": "Enregistré",
+    "exclude": "Enlevés des pubs",
+    "include": "Ciblés",
+    "recommended": "Conseillé",
+    "people": "personnes",
+    "syncedAt": "mis à jour {{when}}",
+    "privacy": "Seulement les clients de votre boutique. Les numéros sont chiffrés (SHA-256) sur le serveur avant d’aller chez Meta, jamais en clair.",
+    "returners": {
+      "name": "Ceux qui renvoient les colis",
+      "text": "Les clients qui ont refusé ou renvoyé un colis cette année ne voient plus vos pubs."
+    },
+    "fake": {
+      "name": "Faux numéros et fausses commandes",
+      "text": "Les numéros marqués faux ou mauvais numéro ne voient plus vos pubs."
+    },
+    "buyers": {
+      "name": "Clients livrés",
+      "text": "Vos acheteurs livrés : à enlever pour ne pas payer deux fois, et la base de la ressemblance."
+    },
+    "lookalike": {
+      "name": "Comme mes clients livrés",
+      "text": "Des gens d’Algérie qui ressemblent à vos acheteurs livrés (1 %). Il faut au moins 100 clients livrés."
+    },
+    "st": {
+      "ready": "Prêt",
+      "off": "Éteint",
+      "waiting": "En attente",
+      "small": "Trop petit",
+      "failed": "Erreur"
+    }
+  },
+  "ago": "il y a {{d}}"
+}
