@@ -678,6 +678,7 @@ a.chip.lp-nolp:hover { text-decoration: underline; }
 .hd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
 .hd-card { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); min-width: 0; }
 .hd-card img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; background: var(--raise); }
+.hd-card-chart img { object-fit: contain; background: #fff; }
 .hd-card select { width: 100%; min-width: 0; font-size: 13px; }
 .hd-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hd-do { display: flex; justify-content: space-between; }

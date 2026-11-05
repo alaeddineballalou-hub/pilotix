@@ -108,6 +108,8 @@
 .ai-photo { display: block; width: auto; max-width: min(220px, 100%); max-height: 220px; margin-bottom: 6px; border-radius: 12px; object-fit: cover; background: var(--raise); }
 .ai-photos { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 2px; }
 .ai-photos .ai-photo { width: 104px; height: 104px; max-width: 104px; }
+/* one photo alone (a size chart, one colour): shown whole */
+.ai-photos .ai-photo:only-child { width: auto; height: auto; max-width: min(240px, 100%); max-height: 240px; object-fit: contain; background: #fff; }
 .ai-pic { flex: none; width: 44px; height: 44px; padding: 0 !important; border-radius: 50% !important; }
 .ai-pic .bji { width: 19px; height: 19px; }
 

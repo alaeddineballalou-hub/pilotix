@@ -151,7 +151,7 @@ export function HdPhotos({ productId, variants }: { productId: number | null; va
       {charts.length > 0 && (
         <ul className="hd-grid">
           {charts.map((p) => (
-            <li key={p.id} className="hd-card">
+            <li key={p.id} className="hd-card hd-card-chart">
               <img src={p.thumb} alt={t(K + 'chart')} loading="lazy" />
               <span className="hd-meta small muted">
                 <bdi className="ltr">
