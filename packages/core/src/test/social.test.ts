@@ -477,7 +477,10 @@ test('« Tester »: the key, the permissions, the Page (subscribed again), Insta
   calls.length = 0;
   const r: any = await call('social.test', a, { linkId: karim.id });
   const st = Object.fromEntries(r.checks.map((c: any) => [c.key, c.state]));
-  assert.deepEqual(st, { token: 'ok', perms: 'warn', page: 'ok', pageHook: 'ok', ig: 'ok', fbComment: 'warn', igInbox: 'ok', igSeen: 'warn', igComment: 'warn', catchUp: 'warn', igLogin: 'warn', appHook: 'ok', appHookIg: 'warn', reach: 'ok', ads: 'ok' });
+  assert.deepEqual(st, { token: 'ok', perms: 'warn', page: 'ok', pageHook: 'ok', leadHook: 'ok', ig: 'ok', fbComment: 'warn', igInbox: 'ok', igSeen: 'warn', igComment: 'warn', catchUp: 'warn', igLogin: 'warn', appHook: 'ok', appHookLeads: 'warn', appHookIg: 'warn', reach: 'ok', ads: 'ok' });
+  // Marketing › Formulaires: the Page subscribed to its ads' lead forms too; the app's webhook does not send them yet
+  assert.ok(calls.some((c) => /9002\/subscribed_apps/.test(c.url) && c.method === 'POST' && /leadgen/.test(String(c.body ?? ''))), 'the lead forms asked');
+  assert.equal(r.checks.find((c: any) => c.key === 'appHookLeads').params.list, 'leadgen');
   assert.equal(r.checks.find((c: any) => c.key === 'perms').params.list, 'instagram_manage_comments');
   assert.equal(r.checks.find((c: any) => c.key === 'pageHook').params.fixed, 1);
   assert.ok(calls.some((c) => /9002\/subscribed_apps/.test(c.url) && c.method === 'POST'), 'subscribed again');
