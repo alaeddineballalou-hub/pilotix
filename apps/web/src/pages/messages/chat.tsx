@@ -34,8 +34,11 @@ function PhotoLine({ p }: { p: { status?: string; thumb?: string | null; product
     <>
       {p.thumb && <img className="ai-photo" src={p.thumb} alt={t('messages.photo.label')} loading="lazy" />}
       <span className={`ai-voice ai-voice-${st}`}>
-        <Icon name="image" /> {t('messages.photo.label')} · {t(`messages.photo.${said}`)}
-        {st === 'done' && p.productName ? <> · <bdi>{p.productName}</bdi></> : null}
+        <Icon name="image" />
+        <span>
+          {t('messages.photo.label')} · {t(`messages.photo.${said}`)}
+          {st === 'done' && p.productName ? <> · <bdi>{p.productName}</bdi></> : null}
+        </span>
       </span>
     </>
   );
