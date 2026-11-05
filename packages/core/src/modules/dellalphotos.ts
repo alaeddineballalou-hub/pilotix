@@ -167,6 +167,9 @@ function hdPhoto(r: any, size: 'look' | 'send' | 'match', variantId: number | nu
   if (size === 'send') {
     if (r.store === 'r2' && r.key) return { src: `hd:${num(r.id)}`, mime: 'image/jpeg', data: null, url: null, key: String(r.key), thumb, variantId };
     if (r.store === 'local' && r.data) return { src: `hd:${num(r.id)}`, mime: 'image/jpeg', data: String(r.data), url: null, thumb, variantId };
+    // the demo's drawn size chart: sent as a drawing (the server draws it as a JPEG)
+    const drawn = r.store === 'local' ? svgUrl(thumb) : null;
+    if (drawn) return { src: `hd:${num(r.id)}`, mime: 'image/svg+xml', data: null, url: drawn, thumb, variantId };
     return null;
   }
   const d = fromDataUrl(thumb);

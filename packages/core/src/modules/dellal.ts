@@ -1764,6 +1764,8 @@ const GUIDE_ASK_RE = /(garantie|matiere|qualite|original|taille|mesure|dimension
 const PRICE_ASK_RE = /(ch7al|chhal|combien|prix|bch7al|سعر|بشحال|livraison|tawsil|التوصيل)/i;
 /** « ab3athli tswira », « une photo stp », « صورة » : the customer wants to see the product */
 export const PHOTO_ASK_RE = /(\b(tswira|tsawer|tsawr|swira|swiret|sora|soura|sowar|photos?|foto|pics?|images?|sawerli|sawarli|swerli|swarli|sawarhali|nchouf|nchoufha|nchoufou)\b|صور|تصويرة|نشوف)/i;
+/** « chhal men taille nakhod ? »: which size to take (the size chart, when the product has one) */
+export const SIZE_ASK_RE = /(\b(taille|tailles|ta9as|t9as|9yas|qyas|pointure|mesure|size)\b|مقاس|المقاس|قياس)/i;
 const DOUBT_RE = /(ghali|\bcher\b|nkhamem|n5amem|nfakar|غالي|نخمم)/i;
 // a question the demo seller has no answer to (after a greeting): « wach… ? », « kifach… », « هل… »
 const GREET_RE = /^(salam|slm|bonjour|bonsoir|cc|coucou|hi|hello|السلام|سلام)(?:\s*(?:3likoum|3alaykoum|alikoum|aleykoum|alaykoum|alaikoum|عليكم))?[\s,!.]*/i;
@@ -1855,6 +1857,7 @@ async function demoBrain(ctx: Ctx, req: AiRequest, convId?: number): Promise<AiR
       if (out.home_delivery === null && out.stopdesk === null) return say(`Pour ${out.wilaya}, je vérifie avec l’équipe.`);
       return say(`Livraison à ${out.commune ? `${out.commune} (${out.wilaya})` : out.wilaya} : ${out.home_delivery ?? '—'} DA à domicile${out.stopdesk ? `, ${out.stopdesk} DA au bureau` : ''}. Paiement à la livraison. ${v1 ? 'Envoie-moi ton prénom et ton numéro : un conseiller t’appelle pour confirmer.' : 'Pour réserver, envoie-moi ton nom, ton numéro et ta commune.'}`);
     }
+    if (tool.name === 'send_photos' && tool.input?.sizes && !out.error && !out.already) return say('Voilà le guide des tailles 👆 Tu portes quelle taille d’habitude ? Dis-moi aussi ta taille et ton poids si tu hésites.');
     if (tool.name === 'send_photos') return say(out.already ? 'Je te les ai envoyées juste au-dessus 👆 Laquelle te plaît ?' : `Voilà ${out.of ?? 'le produit'} 👆 Tu es de quelle wilaya ? Je te donne le prix de la livraison.`);
     if (tool.name === 'product_photos') return say(`D’après ses photos, voilà comment il est 👆 Tu veux que je t’envoie les photos ?`);
     if (tool.name === 'search_products') {
@@ -1891,6 +1894,8 @@ async function demoBrain(ctx: Ctx, req: AiRequest, convId?: number): Promise<AiR
   const shownProduct = shown ? products.find((p) => p.product_id === Number(shown[1])) : null;
   if (shownProduct) return say(`C’est bien ${shownProduct.name} 👍 Il est à ${shownProduct.price} DA, paiement à la livraison. Tu es de quelle wilaya ?`);
   if (/\[photo que tu n’as pas pu voir|aucun produit du catalogue reconnu\]/.test(text)) return say('Merci pour la photo 🙏 C’est quel produit exactement ? Dis-moi son nom ou sa couleur.');
+  // « chhal men taille ? »: the size chart, when the product has one
+  if (product && SIZE_ASK_RE.test(strip(text)) && (await productsWithSizeChart(ctx.db)).has(product.product_id)) return use('send_photos', { product_id: product.product_id, sizes: true });
   // « ab3athli tswira »: the real photos of the product (and of the colour asked)
   if (PHOTO_ASK_RE.test(strip(text))) {
     if (product) return use('send_photos', { product_id: product.product_id, ...((variantNow ?? variant) ? { variant_id: (variantNow ?? variant)!.variant_id } : {}) });

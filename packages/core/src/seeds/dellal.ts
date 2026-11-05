@@ -137,3 +137,35 @@ export async function seedPhotoChat(db: Db, now: number): Promise<void> {
   for (const [k, [role, body, meta]] of msgs.entries())
     await db.query('INSERT INTO conv_messages (conversation_id, role, body, meta, created_at) VALUES ($1,$2,$3,$4,$5)', [cid, role, body, meta ? JSON.stringify(meta) : null, iso(at - (msgs.length - k) * 40_000)]);
 }
+
+/**
+ * HD photos (Produits › Photos HD pour Dellal): the baby bodysuit's size chart, drawn, so the preview shows Dellal
+ * sending it when a customer asks which size to take (« chhal men taille ? »). A real shop adds a photo of its own.
+ */
+export async function seedSizeChart(db: Db): Promise<void> {
+  const bod = (await db.query(`SELECT id FROM products WHERE sku = 'PX-BOD'`))[0];
+  if (!bod) return;
+  const rows: [string, string, string][] = [
+    ['Naissance', '50 – 56 cm', '2,5 – 4 kg'],
+    ['3 mois', '56 – 62 cm', '4 – 6 kg'],
+    ['6 mois', '62 – 68 cm', '6 – 8 kg'],
+    ['12 mois', '74 – 80 cm', '9 – 11 kg'],
+  ];
+  const line = (r: [string, string, string], k: number) => {
+    const y = 210 + k * 120;
+    return (
+      `<rect x="60" y="${y - 70}" width="1080" height="110" rx="18" fill="${k % 2 ? '#f8fafc' : '#eef2ff'}"/>` +
+      `<text x="110" y="${y}" font-size="46" font-weight="700" fill="#1e293b">${r[0]}</text>` +
+      `<text x="520" y="${y}" font-size="44" fill="#334155">${r[1]}</text>` +
+      `<text x="860" y="${y}" font-size="44" fill="#334155">${r[2]}</text>`
+    );
+  };
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" font-family="Arial, sans-serif"><rect width="1200" height="760" fill="#ffffff"/>` +
+    `<text x="60" y="90" font-size="56" font-weight="700" fill="#0f172a">Guide des tailles · Body bébé</text>` +
+    `<text x="520" y="150" font-size="30" fill="#64748b">Taille du bébé</text><text x="860" y="150" font-size="30" fill="#64748b">Poids</text>` +
+    rows.map(line).join('') +
+    `</svg>`;
+  const url = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+  await db.query(`INSERT INTO product_photos (product_id, kind, store, w, h, bytes, thumb, position) VALUES ($1, 'sizes', 'local', 1200, 760, $2, $3, 0)`, [bod.id, url.length, url]);
+}
