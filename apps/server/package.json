@@ -19,7 +19,7 @@
     "@nestjs/platform-socket.io": "11.2.8",
     "@nestjs/websockets": "11.2.8",
     "@pilotix/shared": "2.0.0",
-    "bullmq": "5.81.5",
+    "bullmq": "6.5.3",
     "ioredis": "5.11.1",
     "pg": "8.13.1",
     "reflect-metadata": "0.2.2",
