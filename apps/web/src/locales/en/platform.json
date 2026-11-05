@@ -1759,10 +1759,11 @@
       "verdictWork": "Fair, but faults to fix before the push",
       "verdictBad": "Not ready: fix the faults before the push",
       "book": {
-        "live": "v{{v}} live",
-        "trial": "v{{v}} in test",
-        "test": "v{{v}} in A/B test",
-        "none": "no lessons"
+        "live": "in use v{{v}}",
+        "trial": "test version v{{v}}",
+        "test": "in test v{{v}}",
+        "none": "no lessons",
+        "base": "base method"
       },
       "q": {
         "price": "The price",
@@ -1791,6 +1792,7 @@
       "lessonIdea": "An idea only: it does not pass the lesson checks (write it in Lessons › Sales).",
       "pass": "Take the exam",
       "noneFor": "No exam yet for v{{v}}.",
+      "noneYet": "No exam yet for this version.",
       "lineFor": "Exam of v{{v}}: {{score}}/10"
     }
   },

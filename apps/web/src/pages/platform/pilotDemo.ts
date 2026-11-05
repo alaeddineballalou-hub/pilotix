@@ -726,8 +726,9 @@ const PILOTIX_DEMO = [
   ['anger', 'When the customer is unhappy, apologise in one sentence, repeat their problem in your own words to show you understood, then hand the chat to the team without arguing.', 'Client mécontent : s’excuser en une phrase, redire son problème avec ses propres mots pour montrer qu’on a compris, puis passer la main à l’équipe sans discuter.'],
 ].map(([topic, text, meaning]) => ({ topic, text, meaning }));
 
-/** v4's exam this morning: ten chats with the demo shop's watch, each marked */
-function examDemo() {
+/** v4's exam this morning (id 13), or v2's two days ago (id 9): ten chats with the demo shop's watch, each marked */
+function examDemo(id = 13) {
+  if (id === 9) return examV2();
   const at = new Date(Date.parse(`${today()}T07:00:00Z`)).toISOString();
   const C = (body: string) => ({ role: 'customer', body });
   const D = (body: string) => ({ role: 'agent', body });
@@ -759,15 +760,54 @@ function examDemo() {
   return { id: 13, shopId: 1, shopName: 'Boutique Alaeddine', book: 'trial', version: 4, status: 'done', score: 9.3, done: 10, total: 10, items, error: null, by: 'Alaeddine', at, finishedAt: at };
 }
 
+/** v2 (in service): the same ten chats two days ago, before Pilotix's lessons: more faults, 7,6/10 */
+function examV2() {
+  const at = new Date(Date.parse(`${add(today(), -2)}T09:00:00Z`)).toISOString();
+  const C = (body: string) => ({ role: 'customer', body });
+  const D = (body: string) => ({ role: 'agent', body });
+  const T = (body: string) => ({ role: 'tool', body });
+  const L = (k: number) => PILOTIX_DEMO[k] ?? null;
+  const q = (id: string, title: string, score: number, transcript: { role: string; body: string }[], good: string[], faults: string[], lesson: { topic: string; text: string; meaning: string } | null = null) => ({
+    id,
+    title,
+    score,
+    good,
+    faults,
+    lesson: lesson?.text ?? null,
+    meaning: lesson?.meaning ?? null,
+    topic: lesson?.topic ?? 'other',
+    lessonOk: !!lesson,
+    transcript,
+  });
+  const centimes = {
+    topic: 'price',
+    text: 'When the customer says a price in centimes, as many Algerians do, confirm it is the same price in dinars instead of saying no.',
+    meaning: 'Un prix dit en centimes : confirmer que c’est le même prix en dinars, au lieu de dire non.',
+  };
+  const items = [
+    q('price', 'Le prix', 8, [C('salam, ch7al Montre Atlas ?'), T('search_products "Montre Atlas" → 1 produit(s)'), D('Salam 😊 Montre Atlas b 3 500 DA. Men ayya wilaya nta ? W t7abha l dar wela f l bureau ?')], ['Le prix exact du catalogue'], ['Deux questions à la fois', 'Le paiement à la livraison n’est pas dit'], L(0)),
+    q('centimes', 'Un prix en centimes', 6, [C('Montre Atlas rahi b 35 alf ?'), D('Lala khouya, Montre Atlas b 3 500 DA 😊')], ['Le bon prix en DA'], ['A dit « non » : 35 alf en centimes, c’est bien 3 500 DA', 'Pas de question pour avancer'], centimes),
+    q('fee', 'La livraison et le total', 9, [C('salam, n7ab Montre Atlas'), D('Mar7ba 😊 Montre Atlas b 3 500 DA. Men ayya wilaya ?'), C('ana men Oran, ch7al la livraison ?'), T('delivery_fee Oran → domicile 600 DA · bureau 400 DA'), D('L Oran : 600 DA l dar wela 400 DA f l bureau. Wach yasselhek ?')], ['Les frais pris avec l’outil'], ['N’a pas redit le total à donner au livreur'], L(3)),
+    q('photo_ask', 'Une photo demandée', 8, [C('ab3athli tswira ta3 Montre Atlas noire stp'), T('send_photos #12 → 4 photo(s) envoyée(s)'), D('Ha les photos 👆 3andna noire w argentée. Ch7al men wa7da t7ab ? W men ayya wilaya ?')], ['Les vraies photos envoyées tout de suite'], ['A envoyé aussi l’autre couleur : le client voulait la noire', 'Deux questions à la fois'], L(1)),
+    q('photo_client', 'La photo du client', 7, [C('[photo] Capture d’écran d’une publicité : une montre noire · Message : 3andkom hadi ? ch7al ?'), D('Ih 3andna 😊 b 3 500 DA.')], ['Le prix tout de suite'], ['N’a pas nommé le produit vu sur la photo', 'Pas de question pour avancer'], L(2)),
+    q('trust', 'La peur de l’arnaque', 9, [C('nkhalas 9bel wela ki yjini ? ma nthi9ch bezzaf f les pages'), D('Tkhalass ghir ki yjik l colis 🙏 Men ayya wilaya ?')], ['Rien avant la réception', 'La vente continue'], ['N’a pas dit qu’on ne demande jamais d’acompte'], L(5)),
+    q('expensive', '« C’est cher »', 6, [C('ch7al Montre Atlas ?'), D('Montre Atlas b 3 500 DA 😊'), C('ghali bezzaf, ta9der tna9es chwiya ?'), D('Smahli, les prix fixes.')], ['Pas de remise inventée'], ['Aucune vraie option (le bureau, moins cher)', 'Rien sur ce que vaut la montre', 'La vente s’arrête là'], L(0)),
+    q('family', '« Je demande à ma famille »', 7, [C('ch7al Montre Atlas ?'), D('Montre Atlas b 3 500 DA 😊'), C('mli7, nchawer rajli w nwelli'), D('Saha 😊')], ['Sans pression'], ['Pas de récapitulatif à montrer à la famille', 'N’a pas dit qu’il reste là pour répondre'], L(7)),
+    q('order', 'Une commande complète', 8, [C('n7ab nkoumandi Montre Atlas noire'), D('Mlih 👍 3tini smiytek, ra9mek, l wilaya w l commune stp.'), C('Karim, 0661 23 45 18, Oran, Bir El Djir'), T('create_order → CMD-0398 · 4 100 DA'), D('C’est noté ✅ Conseiller y3aytlek bach ykonfirmi 🙏')], ['La commande enregistrée avec la commune'], ['Tout demandé d’un coup', 'Le numéro pas relu au client'], L(4)),
+    q('unknown', 'Une question sans réponse', 8, [C('wach fih garantie 2 ans ? w wach houwa original ?'), D('Ma n3arafch had l ma3louma 🙏')], ['Rien d’inventé'], ['N’a pas proposé qu’un conseiller rappelle le client'], L(9)),
+  ];
+  return { id: 9, shopId: 1, shopName: 'Boutique Alaeddine', book: 'live', version: 2, status: 'done', score: 7.6, done: 10, total: 10, items, error: null, by: 'Alaeddine', at, finishedAt: at };
+}
+
 /** the example answer of one control-room call (the Pilot AI page's reads) */
 export function demoAnswer(name: string, input: any): unknown {
   switch (name) {
     case 'p.pilot.exam.get':
-      return examDemo();
+      return examDemo(Number(input?.id) || 13);
     case 'p.pilot.exam.start':
-      return { id: 13 };
+      return { id: input?.book === 'live' ? 9 : 13 };
     case 'p.pilot.exam.list':
-      return [examDemo()];
+      return [examDemo(13), examDemo(9)];
     // Pilotix's Meta and TikTok apps, not made yet (the preview shows what to do)
     case 'p.social.apps':
       return { meta: { appId: '', configId: '', hasSecret: false, hasIgSecret: false }, tiktok: { appId: '', hasSecret: false }, verifyToken: 'pilotix-verify-3f9c2a71', ready: { meta: false, tiktok: false }, urls: null, counts: { meta: 1, tiktok: 0, shops: 2 } };

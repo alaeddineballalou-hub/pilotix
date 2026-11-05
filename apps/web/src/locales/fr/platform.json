@@ -1759,10 +1759,11 @@
       "verdictWork": "Correct, mais des fautes à corriger avant le push",
       "verdictBad": "Pas prêt : corrigez les fautes avant le push",
       "book": {
-        "live": "v{{v}} en service",
-        "trial": "v{{v}} en test",
-        "test": "v{{v}} en test A/B",
-        "none": "sans leçons"
+        "live": "en service v{{v}}",
+        "trial": "version d’essai v{{v}}",
+        "test": "en test v{{v}}",
+        "none": "sans leçons",
+        "base": "méthode de base"
       },
       "q": {
         "price": "Le prix",
@@ -1791,6 +1792,7 @@
       "lessonIdea": "Une idée seulement : elle ne passe pas les contrôles des leçons (écrivez-la dans Leçons › Vente).",
       "pass": "Passer l’examen",
       "noneFor": "Pas encore d’examen pour la v{{v}}.",
+      "noneYet": "Pas encore d’examen pour cette version.",
       "lineFor": "Examen de la v{{v}} : {{score}}/10"
     }
   },

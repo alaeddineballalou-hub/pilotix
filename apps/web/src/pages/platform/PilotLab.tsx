@@ -25,7 +25,7 @@ import { LahjaWord, LahjaWords } from '../messages/lahja';
 import { chatPhoto } from '../messages/photo';
 import { CaseModal } from './pilotCase';
 import { ReleasePanel, takeFreshPush } from './PilotRelease';
-import { ExamCard, PilotixLessons } from './PilotExam';
+import { ExamCard, PilotixLessons, takeExamJump } from './PilotExam';
 import { DarijaBookCard } from './DarijaBook';
 import { VocabPane } from './Vocab';
 import { PilotDemo, usePilotAction, usePilotCall, usePilotRpc } from './pilotDemo';
@@ -66,10 +66,22 @@ export function LabTab({ d, manager }: { d: State; manager: boolean }) {
   const [start] = useState(() => takeFreshPush());
   const [book, setBook] = useState<Book>(start ?? 'live');
   const [fresh, setFresh] = useState(start ? 1 : 0);
+  // the exam's version: the test chat's, until another one is picked on the exam card (« Passer l'examen »: the one in test)
+  const [jump] = useState(() => takeExamJump());
+  const [examBook, setExamBook] = useState<Book>(jump ?? start ?? 'live');
+  const seenBook = useRef(book);
+  useEffect(() => {
+    if (seenBook.current === book) return;
+    seenBook.current = book;
+    setExamBook(book);
+  }, [book]);
   const tryBox = useRef<HTMLDivElement>(null);
   const relBox = useRef<HTMLDivElement>(null);
   const examBox = useRef<HTMLDivElement>(null);
   const scroll = (el: HTMLElement | null) => requestAnimationFrame(() => el?.scrollIntoView({ behavior: still() ? 'auto' : 'smooth', block: 'start' }));
+  useEffect(() => {
+    if (jump) scroll(examBox.current);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const pushed = (kind: 'trial' | 'live') => {
     setBook(kind);
     setFresh((x) => x + 1);
@@ -99,10 +111,18 @@ export function LabTab({ d, manager }: { d: State; manager: boolean }) {
         </div>
       </div>
       <div ref={examBox}>
-        <ExamCard d={d} book={book} />
+        <ExamCard d={d} book={examBook} onBook={setExamBook} />
       </div>
       <div ref={relBox}>
-        <NextCard d={d} manager={manager} onPushed={pushed} onExam={() => scroll(examBox.current)} />
+        <NextCard
+          d={d}
+          manager={manager}
+          onPushed={pushed}
+          onExam={() => {
+            setExamBook('trial');
+            scroll(examBox.current);
+          }}
+        />
       </div>
     </>
   );

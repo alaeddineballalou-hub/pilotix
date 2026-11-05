@@ -4,7 +4,7 @@
 // and the lesson that would fix the main fault (one click: it waits for the next « Push en test »). The mark of each
 // version also shows on the push card. Pilotix's own lessons: added in one click, from the lessons' Sales tab.
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { dateTime, n } from '../../lib/format';
 import type { POut } from '../../lib/platform';
@@ -24,7 +24,7 @@ export const mark = (v: number, lang: string) => (lang === 'en' ? v.toFixed(1) :
 /** good ≥ 9, to work on ≥ 7, a real problem below */
 export const tone = (v: number) => (v >= 9 ? 'ok' : v >= 7 ? 'warn' : 'bad');
 
-export function ExamCard({ d, book: picked }: { d: State; book: Book }) {
+export function ExamCard({ d, book: picked, onBook }: { d: State; book: Book; onBook: (b: Book) => void }) {
   const { t, i18n } = useTranslation();
   const call = usePilotCall();
   const qc = useQueryClient();
@@ -46,50 +46,51 @@ export function ExamCard({ d, book: picked }: { d: State; book: Book }) {
     ...(trial ? [{ value: 'trial' as const, label: t('platform.pilot.lab.try.trial', { v: trial.version }) }] : []),
     ...(testing ? [{ value: 'test' as const, label: t('platform.pilot.lab.try.test', { v: testing.version }) }] : []),
   ];
-  const [book, setBook] = useState<Book>(options.some((o) => o.value === picked) ? picked : 'live');
-  useEffect(() => {
-    if (options.some((o) => o.value === picked)) setBook(picked);
-  }, [picked]); // eslint-disable-line react-hooks/exhaustive-deps
+  const valid = (b: string): b is Book => options.some((o) => o.value === b);
+  const chosen: Book = valid(picked) ? picked : 'live';
 
-  // the exam shown: the one running, else the last one this page started or opened
+  // the exam shown: the one running, else the one started here on this version, else this version's last mark
   const [exam, setExam] = useState<Exam | null>(null);
+  const [mine, setMine] = useState<{ id: number; book: Book } | null>(null);
   const [busy, setBusy] = useState(false);
   const runningId = d.exams.running?.id ?? null;
-  const want = useRef<number | null>(runningId ?? d.exams.trial?.id ?? d.exams.live?.id ?? null);
-  useEffect(() => {
-    if (runningId) want.current = runningId;
-  }, [runningId]);
+  const last = chosen === 'trial' ? d.exams.trial : chosen === 'live' ? d.exams.live : null;
+  const wantId = runningId ?? (mine && mine.book === chosen ? mine.id : null) ?? last?.id ?? null;
   // follow it while it runs (every 2,5 s); the push card gets its mark when it ends
   useEffect(() => {
-    let live = true;
+    let on = true;
     let timer = 0;
+    let ran = false;
+    setExam((e) => (e && e.id === wantId ? e : null));
+    if (!wantId) return;
     const tick = async () => {
-      const id = want.current;
-      if (!id) return;
       try {
-        const v = await call('p.pilot.exam.get', { id });
-        if (!live) return;
+        const v = await call('p.pilot.exam.get', { id: wantId });
+        if (!on) return;
         setExam(v);
-        if (v.status === 'running') timer = window.setTimeout(tick, 2500);
-        else void qc.invalidateQueries({ queryKey: ['p.pilot.state'] });
+        if (v.status === 'running') {
+          ran = true;
+          timer = window.setTimeout(tick, 2500);
+        } else if (ran || v.id === runningId) void qc.invalidateQueries({ queryKey: ['p.pilot.state'] });
       } catch {
         /* gone: nothing to show */
       }
     };
     void tick();
     return () => {
-      live = false;
+      on = false;
       window.clearTimeout(timer);
     };
-  }, [runningId, exam?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [wantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const start = async () => {
     if (!shopId || busy) return;
     setBusy(true);
     try {
-      const r = await call('p.pilot.exam.start', { shopId, book });
-      want.current = r.id;
+      const r = await call('p.pilot.exam.start', { shopId, book: chosen });
+      setMine({ id: r.id, book: chosen });
       setExam(await call('p.pilot.exam.get', { id: r.id }));
+      void qc.invalidateQueries({ queryKey: ['p.pilot.state'] });
     } catch (e: any) {
       toast(e?.message || t(K + 'failed'), 'bad');
     } finally {
@@ -98,6 +99,12 @@ export function ExamCard({ d, book: picked }: { d: State; book: Book }) {
   };
 
   const running = exam?.status === 'running';
+  // one exam at a time: while it runs, the tabs stay on its version
+  const runBook: string | null = running ? exam!.book : null;
+  const book: Book = runBook && valid(runBook) ? runBook : chosen;
+  const pick = (b: Book) => {
+    if (!running) onBook(b);
+  };
   const now = exam && running ? exam.items : null;
   const nextQ = running ? EXAM_IDS[exam!.done] : null;
   return (
@@ -119,13 +126,14 @@ export function ExamCard({ d, book: picked }: { d: State; book: Book }) {
             </label>
             <div className="pl-lab-field" role="group" aria-label={t('platform.pilot.lab.try.book')}>
               <span>{t('platform.pilot.lab.try.book')}</span>
-              <Tabs value={book} onChange={setBook} items={options} />
+              <Tabs value={book} onChange={pick} items={options} />
             </div>
             <button type="button" className="btn primary pl-exam-go" disabled={busy || running || !shopId} onClick={() => void start()}>
               <Icon name="checkcircle" /> {t(K + 'start')}
             </button>
           </div>
           <p className="small muted pl-exam-lead">{t(K + 'lead')}</p>
+          {!wantId && !exam && <p className="small muted pl-exam-none">{t(K + 'noneYet')}</p>}
 
           {exam && running && (
             <div className="pl-exam-run" role="status">
@@ -157,7 +165,7 @@ export function ExamCard({ d, book: picked }: { d: State; book: Book }) {
                   <b>{t(K + (exam.score >= 9.5 ? 'verdictTop' : exam.score >= 9 ? 'verdictGood' : exam.score >= 7 ? 'verdictWork' : 'verdictBad'))}</b>
                 </p>
                 <p className="small muted">
-                  <bdi>{exam.shopName ?? ''}</bdi> · {t(K + `book.${exam.book}`, { v: exam.version })} · <bdi>{dateTime(exam.finishedAt ?? exam.at)}</bdi>
+                  <bdi>{exam.shopName ?? ''}</bdi> · {t(K + (exam.book === 'live' && !exam.version ? 'book.base' : `book.${exam.book}`), { v: exam.version })} · <bdi>{dateTime(exam.finishedAt ?? exam.at)}</bdi>
                 </p>
               </div>
             </div>
@@ -254,12 +262,22 @@ function Question({ q }: { q: Item }) {
   );
 }
 
+// « Passer l'examen » on the Dellal tab: the lab opens on the exam, on the version in test
+let examJump: Book | null = null;
+export const takeExamJump = (): Book | null => {
+  const v = examJump;
+  examJump = null;
+  return v;
+};
+
 /** « Examen de la v4 : 9,2/10 » on the push card (or: no exam yet for it, with the way to the lab) */
 export function ExamLine({ score, at, v, tryHref, onExam }: { score: number | null; at?: string | null; v: number; tryHref?: string; onExam?: () => void }) {
   const { t, i18n } = useTranslation();
   const go =
     tryHref ? (
-      <a href={tryHref}>{t(K + 'pass')}</a>
+      <a href={tryHref} onClick={() => (examJump = 'trial')}>
+        {t(K + 'pass')}
+      </a>
     ) : onExam ? (
       <button type="button" className="linkish" onClick={onExam}>
         {t(K + 'pass')}
