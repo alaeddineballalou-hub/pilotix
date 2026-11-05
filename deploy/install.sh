@@ -101,10 +101,10 @@ if [ "${ADMINS:-0}" = 0 ]; then
   $C exec -T -e SEED_ADMIN_EMAIL="$EMAIL" -e SEED_ADMIN_PASSWORD="$PASS" server node apps/server/dist/migrate.js seed
 fi
 
-echo "==> Daily database backup (03:15, 14 days kept in /opt/pilotix-backups)"
+echo "==> Daily database backup (03:15, 14 days kept in /opt/pilotix-backups; an encrypted copy to Backblaze B2 once set up: deploy/backup.sh)"
 mkdir -p /opt/pilotix-backups
 cat > /etc/cron.d/pilotix-backup <<CRON
-15 3 * * * root cd $DIR && $C exec -T postgres pg_dump -U pilotix pilotix | gzip > /opt/pilotix-backups/pilotix-\$(date +\%F).sql.gz && find /opt/pilotix-backups -name '*.sql.gz' -mtime +14 -delete
+15 3 * * * root bash $DIR/deploy/backup.sh >> /var/log/pilotix-backup.log 2>&1
 CRON
 
 echo "==> E-mails (the control room's login code, password links, invitations, sign-ups)"
