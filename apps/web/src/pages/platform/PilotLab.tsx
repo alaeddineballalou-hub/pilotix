@@ -223,7 +223,7 @@ function TryCard({ d, book, onBook, fresh = 0 }: { d: State; book: Book; onBook:
 
   /** under each answer: the book it used and the model (Haiku for simple messages, Sonnet for the hard moments) */
   const foot = (m: Msg) => {
-    if (m.role !== 'agent' || !m.meta?.pilot) return null;
+    if (m.role !== 'agent' || !m.meta?.pilot || Array.isArray(m.meta?.photos)) return null;
     const p = m.meta.pilot as { version: number; lab?: Book };
     const k = 'platform.pilot.lab.try.used.';
     const used = p.lab === 'none' ? t(k + 'none') : p.lab === 'test' ? t(k + 'test', { v: p.version }) : p.lab === 'trial' ? t(k + 'trial', { v: p.version }) : p.version ? t(k + 'live', { v: p.version }) : t(k + 'base');

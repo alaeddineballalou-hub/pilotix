@@ -1,7 +1,7 @@
 // The exam's table and Pilotix's own sales lessons, apart from the exam itself (pilotexam.ts): the platform's migration
 // list reads them, and must not load Dellal to do it.
 import { Db } from '../db';
-import { lessonFp, similar } from './pilotlearn';
+import { COACH_PRIO, lessonFp, similar } from './pilotlearn';
 
 export const EXAM_SQL = `
 CREATE TABLE IF NOT EXISTS platform.pilot_exams (
@@ -24,8 +24,10 @@ CREATE INDEX IF NOT EXISTS pilot_exams_recent ON platform.pilot_exams (started_a
 
 // ---------------------------------------------------------------- Pilotix's own lessons (with the photos and the exam)
 /**
- * Lessons written by Pilotix for no mistakes and a chat kept in order (and the new photo abilities). The coach adds them
- * in one click (Leçons › Vente); like any coach lesson they are checked, then wait for the next « Push en test ».
+ * Lessons written by Pilotix for no mistakes and a chat kept in order (and the new photo abilities). Added once by the
+ * platform's migration, approved in Pilotix's name, they wait for the next « Push en test » like any coach lesson (each one
+ * passes the lesson checks); one the coach refuses or removes is never added again. Leçons › Vente offers in one click
+ * the ones still missing.
  */
 export const PILOTIX_LESSONS: { topic: string; text: string; meaning: string }[] = [
   {
@@ -94,4 +96,15 @@ export async function pilotixLessons(pdb: Db): Promise<{ topic: string; text: st
   const fps = new Set(rows.map((r: any) => String(r.fp)));
   const open = rows.filter((r: any) => r.status === 'candidate' || r.status === 'approved').map((r: any) => String(r.text));
   return PILOTIX_LESSONS.map((l) => ({ ...l, added: fps.has(lessonFp(l.text)) || open.some((t) => similar(t, l.text) >= 0.6) }));
+}
+
+const sqlText = (s: string) => `'${s.replace(/'/g, "''")}'`;
+/** The platform migration that adds them (once; a lesson already there, even refused, is left as it is). */
+export function pilotixLessonsSql(): string {
+  return PILOTIX_LESSONS.map(
+    (l) =>
+      `INSERT INTO platform.pilot_lessons (topic, text, status, source, prio, evidence, fp, by_user, created_at, decided_at)
+       VALUES (${sqlText(l.topic)}, ${sqlText(l.text)}, 'approved', 'coach', ${COACH_PRIO}, ${sqlText(JSON.stringify({ coach: true, pilotix: true, meaning: l.meaning }))}::jsonb, ${sqlText(lessonFp(l.text))}, 'Pilotix', now(), now())
+       ON CONFLICT (fp) DO NOTHING;`,
+  ).join('\n');
 }

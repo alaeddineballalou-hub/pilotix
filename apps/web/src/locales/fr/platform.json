@@ -1781,7 +1781,8 @@
       "who": {
         "customer": "Client :",
         "tool": "Outil :",
-        "team": "Équipe :"
+        "team": "Équipe :",
+        "dellal": "Dellal :"
       },
       "lessonTitle": "La leçon qui corrigerait la faute",
       "lessonAdd": "Ajouter cette leçon",

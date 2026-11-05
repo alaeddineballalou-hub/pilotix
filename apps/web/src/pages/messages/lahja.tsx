@@ -102,7 +102,8 @@ export function LahjaFix({ m, name = 'Dellal' }: { m: Msg; name?: string }) {
   const { t } = useTranslation();
   const [done, setDone] = useState<Saved | null>(null);
   const add = useAction('dellal.lahja.add', { onDone: (r) => (setDone(r), savedToast(t, r)) });
-  if (m.role !== 'agent' || m.meta?.demo) return null;
+  // the product photos Dellal sent are not words to fix
+  if (m.role !== 'agent' || m.meta?.demo || Array.isArray(m.meta?.photos)) return null;
   return <FixBox sent={m.body} help={t('messages.lahja.fixHelp', { name })} busy={add.isPending} done={done} onSave={(after) => add.mutate({ messageId: m.id, after })} />;
 }
 

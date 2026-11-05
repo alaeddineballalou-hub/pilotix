@@ -74,6 +74,8 @@ before(async () => {
   await migrate(t.shop('public'), (sql) => t.exec('public', sql));
   await seedBase(t.shop('public'), { ...OWNER, name: 'Amine' });
   await migrateAll(t);
+  // Pilotix's own lessons (added by the platform's migration) are out of these tests: they start with no lesson
+  await t.platform.query(`DELETE FROM platform.pilot_lessons WHERE by_user = 'Pilotix'`);
   const { staff } = await staffLogin(t, OWNER.email, OWNER.password);
   me = staff.name || staff.email;
   shopId = (await loadShops(t)).find((s) => s.kind === 'store')!.id;

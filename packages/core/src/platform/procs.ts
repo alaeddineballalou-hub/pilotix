@@ -1478,7 +1478,7 @@ export const PLATFORM_REGISTRY = {
    * The 10-question exam: ten simulated customers of this shop on the version chosen, each chat marked out of 10 by Pilot
    * AI. It runs in the background (a few minutes): the page asks how it goes (p.pilot.exam.get). One at a time.
    */
-  'p.pilot.exam.start': pproc(ALL, z.object({ shopId: Id, book: z.enum(pilot.BOOK_CHOICES).default('live') }), async (ctx, i) => {
+  'p.pilot.exam.start': pproc(MANAGERS, z.object({ shopId: Id, book: z.enum(pilot.BOOK_CHOICES).default('live') }), async (ctx, i) => {
     if (!ctx.shop || !ctx.ai) throw bad('L’examen de Dellal n’est disponible que sur le serveur');
     const s = (await loadShops(ctx.t)).find((x) => x.id === i.shopId);
     if (!s || s.kind !== 'store' || s.status === 'archived' || s.status === 'deleted') throw notFound('Boutique introuvable');

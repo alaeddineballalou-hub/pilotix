@@ -206,7 +206,7 @@ function Question({ q }: { q: Item }) {
           <ul className="pl-exam-chat">
             {q.transcript.map((m, i) => (
               <li key={i} className={`pl-exam-l ${m.role}`} dir="auto">
-                <b>{m.role === 'customer' ? t(K + 'who.customer') : m.role === 'agent' ? 'Dellal' : m.role === 'tool' ? t(K + 'who.tool') : t(K + 'who.team')}</b> {m.body}
+                <b>{m.role === 'customer' ? t(K + 'who.customer') : m.role === 'agent' ? t(K + 'who.dellal') : m.role === 'tool' ? t(K + 'who.tool') : t(K + 'who.team')}</b> {m.body}
               </li>
             ))}
           </ul>

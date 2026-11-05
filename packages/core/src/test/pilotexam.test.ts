@@ -151,14 +151,19 @@ test('from the control room: one exam at a time, in the background; its mark on 
   assert.equal((await p('p.pilot.state')).exams.running, null);
 });
 
-test('Pilotix’s lessons: one click adds them (checked like the coach’s), they wait for « Push en test », never twice', async () => {
+test('Pilotix’s lessons: already added by the migration, waiting for « Push en test »; the missing ones in one click', async () => {
   const st = await p('p.pilot.state');
-  assert.equal(st.pilotix.length, PILOTIX_LESSONS.length);
-  const before = st.release.pending.sales;
-  const r = await p('p.pilot.addPilotixLessons');
-  assert.deepEqual(r, { added: PILOTIX_LESSONS.length, skipped: 0 });
-  const after = await p('p.pilot.state');
-  assert.deepEqual(after.pilotix, [], 'nothing left to add');
-  assert.equal(after.release.pending.sales, before + PILOTIX_LESSONS.length, 'they wait for the next « Push en test »');
+  assert.deepEqual(st.pilotix, [], 'all added');
+  const ours = await t.platform.query(`SELECT text, status, source, by_user, evidence FROM platform.pilot_lessons WHERE by_user = 'Pilotix' ORDER BY id`);
+  assert.equal(ours.length, PILOTIX_LESSONS.length);
+  assert.ok(ours.every((l: any) => l.status === 'approved' && l.source === 'coach'));
+  assert.equal(ours[0].evidence.meaning, PILOTIX_LESSONS[0].meaning, 'with their meaning in French');
+  assert.ok(st.release.pending.sales >= PILOTIX_LESSONS.length, 'they wait for the next « Push en test »');
+  assert.deepEqual(await p('p.pilot.addPilotixLessons'), { added: 0, skipped: 0 });
+  // an install where they are missing: one click adds them (checked like the coach's), never twice
+  await t.platform.query(`DELETE FROM platform.pilot_lessons WHERE by_user = 'Pilotix'`);
+  assert.equal((await p('p.pilot.state')).pilotix.length, PILOTIX_LESSONS.length);
+  assert.deepEqual(await p('p.pilot.addPilotixLessons'), { added: PILOTIX_LESSONS.length, skipped: 0 });
+  assert.deepEqual((await p('p.pilot.state')).pilotix, []);
   assert.deepEqual(await p('p.pilot.addPilotixLessons'), { added: 0, skipped: 0 });
 });

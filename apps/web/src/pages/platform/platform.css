@@ -874,7 +874,7 @@ mark.pl-dj-gone { padding: 0 2px; border-radius: 4px; background: none; color: i
 .pl-exam-bar > i { display: block; height: 100%; border-radius: inherit; background: var(--ai-dot-2, var(--navy)); transition: width .4s ease; }
 @media (prefers-reduced-motion: reduce) { .pl-exam-bar > i { transition: none; } }
 .pl-exam-res { display: flex; align-items: center; gap: 16px; padding: 12px 14px; border-radius: 14px; background: var(--raise); }
-.pl-exam-score { display: flex; align-items: baseline; gap: 2px; flex: none; font-variant-numeric: tabular-nums; }
+.pl-exam-score { display: flex; align-items: baseline; gap: 2px; flex: none; direction: ltr; font-variant-numeric: tabular-nums; }
 .pl-exam-score b { font-size: 44px; line-height: 1; font-weight: 800; letter-spacing: -0.02em; }
 .pl-exam-score span { font-size: 17px; font-weight: 700; color: var(--muted); }
 .pl-exam-score.ok b { color: var(--ok); } .pl-exam-score.warn b { color: var(--warn); } .pl-exam-score.bad b { color: var(--coral); }
@@ -903,7 +903,7 @@ mark.pl-dj-gone { padding: 0 2px; border-radius: 4px; background: none; color: i
 .pl-exam-pts .bji { flex: none; width: 15px; height: 15px; margin-top: 2px; }
 .pl-exam-pts.good .bji { color: var(--ok); } .pl-exam-pts.bad .bji { color: var(--coral); }
 .pl-exam-lesson { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--line, rgba(0,0,0,.15)); }
-.pl-exam-lesson p { margin: 0; line-height: 1.5; }
+.pl-exam-lesson p { margin: 0; font-size: 14px; line-height: 1.5; }
 .pl-exam-line { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; line-height: 1.5; }
 .pl-exam-line .bji { width: 15px; height: 15px; }
 .pl-exam-line.ok > .bji { color: var(--ok); } .pl-exam-line.warn > .bji { color: var(--warn); } .pl-exam-line.bad > .bji { color: var(--coral); }

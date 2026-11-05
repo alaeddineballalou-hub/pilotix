@@ -1150,9 +1150,11 @@ async function jpegFile(ctx: Ctx, p: PhotosArgs['photos'][number]): Promise<{ id
   const svg = /^data:image\/svg\+xml(;base64)?,/i.exec(String(p.url ?? ''));
   if (p.data) bytes = Buffer.from(String(p.data), 'base64');
   else if (svg) {
-    // a drawing kept as a data: link (the demo's pictures): sharp draws it as a JPEG
+    // a drawing kept as a data: link (the demo's pictures): sharp draws it as a JPEG; one that would load anything else
+    // (a picture, a file, a script) is refused
     const body = String(p.url).slice(svg[0].length);
     bytes = svg[1] ? Buffer.from(body, 'base64') : Buffer.from(decodeURIComponent(body), 'utf8');
+    if (/<(?:image|use|foreignObject|script|iframe|feImage)\b|(?:xlink:)?href\s*=\s*["'](?!#)|url\(\s*["']?(?!#)/i.test(bytes.toString('utf8'))) throw new AppError('bad_request', 'Ce dessin ne peut pas être envoyé.');
   } else if (p.url) {
     const res = await publicFetch(String(p.url), { timeoutMs: 20_000, maxBytes: PHOTO_FETCH_MAX }, 'Photo du produit');
     if (!res.ok) throw new AppError('bad_request', `Photo du produit introuvable (${res.status})`);
@@ -1231,8 +1233,13 @@ async function sendPhotos(ctx: Ctx, a: PhotosArgs): Promise<{ ok: boolean; sent:
       errors.push(String(e?.message ?? e).slice(0, 300));
     }
   }
+  // Meta downloads a photo before it delivers it: the words that go with it wait a moment, so they arrive after it
+  if (sent) await new Promise((r) => setTimeout(r, PHOTOS_PAUSE_MS));
   return { ok: !errors.length, sent, errors };
 }
+/** the moment the words wait after the photos (0 in the tests) */
+export let PHOTOS_PAUSE_MS = 1500;
+export const setPhotosPause = (ms: number) => (PHOTOS_PAUSE_MS = ms);
 
 // ---------------------------------------------------------------- incoming webhooks
 export interface Incoming {

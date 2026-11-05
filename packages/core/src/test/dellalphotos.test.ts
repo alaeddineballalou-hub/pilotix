@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { call, Ctx, Db, login, migrate, migrateAll, pgliteTenancy, seedBase, ServerHooks, staffLogin } from '../index';
-import { parseMetaWebhook, runDellal, sniffImage } from '../dellal-server';
+import { parseMetaWebhook, runDellal, setPhotosPause, sniffImage } from '../dellal-server';
 import { getRaw, setRaw } from '../modules/admin';
 import { pilotTry, runAgent, seePhotos } from '../modules/dellal';
 import { catalogueThumbs, fromDataUrl, mimeOf, productPhotos, readPhotoAnswer } from '../modules/dellalphotos';
@@ -43,6 +43,7 @@ const hooks: ServerHooks = {
 const said = (req: any) => JSON.stringify(req.messages);
 
 before(async () => {
+  setPhotosPause(0);
   const { PGlite } = await import('@electric-sql/pglite');
   t = pgliteTenancy(new PGlite() as any);
   await migrate(t.shop('public'), (sql) => t.exec('public', sql));

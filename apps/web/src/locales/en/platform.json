@@ -1781,7 +1781,8 @@
       "who": {
         "customer": "Customer:",
         "tool": "Tool:",
-        "team": "Team:"
+        "team": "Team:",
+        "dellal": "Dellal:"
       },
       "lessonTitle": "The lesson that would fix the fault",
       "lessonAdd": "Add this lesson",

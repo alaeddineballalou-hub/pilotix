@@ -394,20 +394,21 @@ function state() {
         vocab: { added: 14, changed: 3, removed: 1, total: 18 },
         stale: { sales: 0, darija: 0 },
       },
-      pending: { candidates: 3, sales: 1, waiting: 3, darija: 1, rules: false, vocab: { added: 2, changed: 0, removed: 0, total: 2 } },
+      pending: { candidates: 3, sales: 1 + PILOTIX_DEMO.length, waiting: 3, darija: 1, rules: false, vocab: { added: 2, changed: 0, removed: 0, total: 2 } },
     },
     // the sales lessons not in service yet: a lesson found at night and one the coach wrote in « Teach a lesson »
     lahjaWaiting: 3,
     // the 10-question exam: v4 (in test) marked this morning, v2 (in service) two days ago
     exams: { trial: { id: 13, book: 'trial', version: 4, score: 9.3, at: at(0, 7) }, live: { id: 9, book: 'live', version: 2, score: 7.6, at: at(2) }, running: null },
-    // the lessons Pilotix wrote, not added yet (Leçons › Vente)
-    pilotix: PILOTIX_DEMO,
+    // the lessons Pilotix wrote: already added (the platform's migration), they wait in the next book below
+    pilotix: [] as typeof PILOTIX_DEMO,
     next: {
       version: 5,
-      lessons: 11,
+      lessons: 22,
       dropped: 0,
       changed: true,
       fresh: [
+        ...PILOTIX_DEMO.map((l, k) => ({ id: 100 + k, topic: l.topic, text: l.text, source: 'coach', meaning: l.meaning, by: 'Pilotix', at: at(0, 8), fits: true })),
         { id: 8, topic: 'address', text: 'Before confirming, read the full address back to the customer in one line and wait for a clear yes.', source: 'coach', meaning: 'Avant de confirmer, relire l’adresse complète au client en une ligne et attendre un oui clair.', by: 'Alaeddine', at: at(0, 8), fits: true },
         { id: 1, topic: 'trust', text: 'Quand le client a peur d’une arnaque, rappelle tôt qu’il ne paie rien avant de recevoir le colis.', source: 'ai', meaning: null, by: 'Sara', at: at(3), fits: true },
       ],

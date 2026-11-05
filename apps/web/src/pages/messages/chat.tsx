@@ -122,7 +122,7 @@ export function Bubbles({
           {m.role === 'customer' && m.meta?.photo && <PhotoLine p={m.meta.photo} />}
           {m.role === 'agent' && Array.isArray(m.meta?.photos) && <SentPhotos photos={m.meta.photos} />}
           <span className="ai-txt" dir="auto">
-            {m.role === 'customer' && m.meta?.photo ? String(m.body).replace(/^\[photo(?: envoyée)?\]\s*/, '') : m.role === 'agent' && Array.isArray(m.meta?.photos) ? String(m.body).replace(/^📷\s*/, '') : m.body}
+            {m.role === 'customer' && m.meta?.photo ? String(m.body).replace(/^\[photo(?: envoyée)?\]\s*/, '') : m.role === 'agent' && Array.isArray(m.meta?.photos) ? String(m.body).replace(/^📷\s*/, '').replace(/\s*\(\d+\)$/, '') : m.body}
           </span>
           {/* the customer changed this message (Messenger): the first text stays readable for the team */}
           {m.meta?.edited && (
