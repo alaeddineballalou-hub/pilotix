@@ -83,7 +83,7 @@ test('an open alert rings on the phones of the people away from the app, not mor
   const admin = await (as as any)(EMAILS.admin, server);
   const karim = await (as as any)(EMAILS.depot, server);
   assert.equal(((await call('push.key', karim, {})) as any).key, 'BPUBLIC');
-  await call('push.subscribe', karim, { endpoint: 'https://push.example.com/abc', p256dh: 'BKEY-1234567890', auth: 'AUTH-1234' });
+  await call('push.subscribe', karim, { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', p256dh: 'BKEY-1234567890', auth: 'AUTH-1234' });
   assert.equal(((await call('depot.alertMine', karim, {})) as any).mine, true);
   const o = (await db.query(`SELECT id FROM orders WHERE follow_status = 'prepared' AND tracking IS NULL ORDER BY id DESC LIMIT 1`))[0];
   await call('orders.update', admin, { id: Number(o.id), address: 'Rue des Frères, 12' });
@@ -91,7 +91,7 @@ test('an open alert rings on the phones of the people away from the app, not mor
   const r: any = await call('depot.pushRun', admin, {});
   assert.ok(r.sent >= 1);
   assert.match(sent[0].payload.title, /MODIFIÉE/);
-  assert.equal(sent[0].subs[0].endpoint, 'https://push.example.com/abc');
+  assert.equal(sent[0].subs[0].endpoint, 'https://fcm.googleapis.com/fcm/send/abc');
   const again: any = await call('depot.pushRun', admin, {});
   assert.equal(again.sent, 0, 'not twice in the same minute');
   // in the app right now: the alarm rings there, no notification

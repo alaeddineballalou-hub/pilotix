@@ -5,9 +5,8 @@
 //  - 'media'  → { url }: a competitor's picture as a data URL (Facebook's picture links expire after a few days)
 //  - 'site'   → { url }: a competitor's page read once: shop builder, price, crossed price, order form (58 or 69 wilayas)
 // Addresses come from ads (other people's data): only public http(s) hosts are fetched, never the server's own network.
-import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
 import { AppError, Ctx } from './rpc';
+import { publicFetch } from './publicfetch';
 import { builderOf, fromLibrary, pricesIn, RawAd, SpySearchResult, SpySite } from './modules/spy';
 
 const UA = 'Mozilla/5.0 (Linux; Android 13; SM-A536B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36';
@@ -73,63 +72,15 @@ async function search(a: { source: 'scrapecreators' | 'searchapi'; key: string; 
 }
 
 // ---------------------------------------------------------------- fetching other people's addresses safely
-const privateV4 = (ip: string) => {
-  const [a, b] = ip.split('.').map(Number);
-  return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
-};
-const privateV6 = (ip: string) => {
-  const s = ip.toLowerCase();
-  return s === '::1' || s === '::' || s.startsWith('fc') || s.startsWith('fd') || s.startsWith('fe80') || s.startsWith('::ffff:127.') || s.startsWith('::ffff:10.') || s.startsWith('::ffff:192.168.');
-};
-/** Only public http(s) addresses (the links come from ads: never let one reach the server's own network). */
-async function publicUrl(raw: string): Promise<URL> {
-  let u: URL;
-  try {
-    u = new URL(raw);
-  } catch {
-    throw new AppError('bad_request', 'Adresse invalide');
-  }
-  if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new AppError('bad_request', 'Adresse refusée');
-  if (u.username || u.password) throw new AppError('bad_request', 'Adresse refusée');
-  const host = u.hostname.replace(/^\[|\]$/g, '');
-  const ips = isIP(host) ? [host] : (await lookup(host, { all: true }).catch(() => [])).map((r) => r.address);
-  if (!ips.length || ips.some((ip) => (isIP(ip) === 4 ? privateV4(ip) : privateV6(ip)))) throw new AppError('bad_request', 'Adresse refusée');
-  return u;
-}
-
-/** GET with at most 4 redirects, each one checked, and a size limit. */
+/**
+ * GET with at most 4 redirects and a size limit (a longer page is cut): only public http(s) addresses, checked on the
+ * IPs really connected to (the links come from ads: never let one reach the server's own network).
+ */
 async function fetchPublic(raw: string, accept: string, maxBytes: number): Promise<{ res: Response; body: Uint8Array; url: URL }> {
-  let url = await publicUrl(raw);
-  for (let hop = 0; hop < 5; hop++) {
-    const res = await fetch(url, { headers: { 'User-Agent': UA, Accept: accept, 'Accept-Language': 'fr-DZ,fr;q=0.9,ar;q=0.8' }, redirect: 'manual', signal: AbortSignal.timeout(15_000) });
-    if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
-      url = await publicUrl(new URL(res.headers.get('location') as string, url).toString());
-      continue;
-    }
-    if (!res.ok || !res.body) throw new AppError('bad_request', `Page indisponible (${res.status})`);
-    const reader = res.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let size = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > maxBytes) {
-        await reader.cancel().catch(() => {});
-        break;
-      }
-      chunks.push(value);
-    }
-    const body = new Uint8Array(Math.min(size, maxBytes));
-    let at = 0;
-    for (const c of chunks) {
-      body.set(c.subarray(0, Math.max(0, body.length - at)), at);
-      at += c.byteLength;
-      if (at >= body.length) break;
-    }
-    return { res, body, url };
-  }
-  throw new AppError('bad_request', 'Trop de redirections');
+  const res = await publicFetch(raw, { headers: { 'User-Agent': UA, Accept: accept, 'Accept-Language': 'fr-DZ,fr;q=0.9,ar;q=0.8' }, timeoutMs: 15_000, maxBytes, maxRedirects: 4, truncate: true });
+  if (!res.ok || !res.body) throw new AppError('bad_request', `Page indisponible (${res.status})`);
+  const body = new Uint8Array(await res.arrayBuffer()).slice(0, maxBytes);
+  return { res, body, url: new URL(res.url || raw) };
 }
 
 async function media(a: { url: string }): Promise<string | null> {

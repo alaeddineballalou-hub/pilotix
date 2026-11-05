@@ -3,6 +3,7 @@
 // for Delivery AI agent, WhatsApp templates and SMS (SMS Gateway for Android, or any HTTP SMS service).
 // Keys are read from the settings table (written by dellal.settings.save / notify.settings.save) and never leave the server.
 import { AppError, Ctx } from './rpc';
+import { publicFetch } from './publicfetch';
 import { AiRequest, AiResponse, DellalChannel, dellalSecret, dellalSettings } from './modules/dellal';
 import { NOTIFY_SMS_SECRET, notifySettings } from './modules/notify';
 
@@ -18,13 +19,16 @@ const IG_GRAPH = 'https://graph.instagram.com/v23.0';
 const UNI_GRAPH = 'https://graph.facebook.com/v23.0';
 const ANTHROPIC = 'https://api.anthropic.com/v1/messages';
 
-async function postJson(url: string, body: unknown, headers: Record<string, string>, who: string, method: 'POST' | 'GET' = 'POST', timeoutMs = 30_000): Promise<any> {
+/** `typed`: an address the shop typed (its SMS service): public internet only (publicfetch.ts). */
+async function postJson(url: string, body: unknown, headers: Record<string, string>, who: string, method: 'POST' | 'GET' = 'POST', timeoutMs = 30_000, typed = false): Promise<any> {
   let res: Response;
   // a service that hangs must not hold the sending job (or the courier sync that shares its worker)
   const signal = AbortSignal.timeout(timeoutMs);
+  const init = method === 'GET' ? { headers: { Accept: 'application/json', ...headers } } : { method, headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...headers }, body: JSON.stringify(body) };
   try {
-    res = await fetch(url, method === 'GET' ? { headers: { Accept: 'application/json', ...headers }, signal } : { method, headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...headers }, body: JSON.stringify(body), signal });
+    res = typed ? await publicFetch(url, { ...init, timeoutMs }, who) : await fetch(url, { ...init, signal });
   } catch (e: any) {
+    if (e instanceof AppError) throw e;
     // waited too long is not the same as could not reach it (the « Tester » shows which one)
     if (['TimeoutError', 'AbortError'].includes(e?.name) || ['TimeoutError', 'AbortError'].includes(e?.cause?.name)) throw new AppError('bad_request', `${who} ne répond pas à temps (plus de ${Math.round(timeoutMs / 1000)} s). Réessayez plus tard.`);
     throw new AppError('bad_request', `${who} injoignable. Réessayez plus tard.`);
@@ -273,12 +277,12 @@ async function sms(ctx: Ctx, a: { to: string; text: string; validUntil?: string 
     const auth = `Basic ${Buffer.from(`${s.smsUser}:${secret}`).toString('base64')}`;
     // an SMS the phone could not send in time (offline) expires instead of leaving in the night
     const body = { textMessage: { text: a.text }, phoneNumbers: [plus213(a.to)], ...(a.validUntil ? { validUntil: a.validUntil.replace(/\.\d{3}Z$/, 'Z') } : {}) };
-    const r = await postJson(`${base}${local ? '/message' : '/3rdparty/v1/messages'}`, body, { Authorization: auth }, 'SMS Gateway');
+    const r = await postJson(`${base}${local ? '/message' : '/3rdparty/v1/messages'}`, body, { Authorization: auth }, 'SMS Gateway', 'POST', 30_000, true);
     return { id: r?.id ? String(r.id) : null, status: r?.state ? String(r.state) : null };
   }
   // any HTTP SMS service: POST { to, text } (and the token as Bearer)
   if (!s.smsUrl) throw new AppError('bad_request', 'SMS : adresse du service manquante (Delivery AI agent › Réglages).');
-  const r = await postJson(s.smsUrl, { to: plus213(a.to), text: a.text }, secret ? { Authorization: `Bearer ${secret}` } : {}, 'Service SMS');
+  const r = await postJson(s.smsUrl, { to: plus213(a.to), text: a.text }, secret ? { Authorization: `Bearer ${secret}` } : {}, 'Service SMS', 'POST', 30_000, true);
   const id = r?.id ?? r?.messageId ?? r?.message_id ?? null;
   return { id: id === null ? null : String(id), status: null };
 }
@@ -289,10 +293,10 @@ async function smsHooks(ctx: Ctx, a: { url: string }) {
   if (!s.smsUser || !secret) throw new AppError('bad_request', 'SMS : identifiant ou mot de passe de SMS Gateway manquant (Delivery AI agent › Réglages).');
   const auth = { Authorization: `Basic ${Buffer.from(`${s.smsUser}:${secret}`).toString('base64')}` };
   const path = `${base}${local ? '/webhooks' : '/3rdparty/v1/webhooks'}`;
-  const have: any[] = await postJson(path, null, auth, 'SMS Gateway', 'GET').catch(() => []);
+  const have: any[] = await postJson(path, null, auth, 'SMS Gateway', 'GET', 30_000, true).catch(() => []);
   const events = ['sms:sent', 'sms:delivered', 'sms:failed', 'sms:received'];
   for (const event of events)
-    if (!(Array.isArray(have) ? have : []).some((h) => h?.url === a.url && h?.event === event)) await postJson(path, { url: a.url, event }, auth, 'SMS Gateway');
+    if (!(Array.isArray(have) ? have : []).some((h) => h?.url === a.url && h?.event === event)) await postJson(path, { url: a.url, event }, auth, 'SMS Gateway', 'POST', 30_000, true);
   return { ok: true, events };
 }
 

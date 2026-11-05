@@ -151,11 +151,11 @@ test('alerts from every boutique: a phone alert reaches the person’s devices o
   await setSettingName(inA, 'Bébé Shop');
   // his phone turned on the notifications in Maison Shop only
   await call('push.key', inB, {});
-  await call('push.subscribe', inB, { endpoint: 'https://push.example/phone-1', p256dh: 'p256dh-key-0123456789', auth: 'auth-key-01' });
+  await call('push.subscribe', inB, { endpoint: 'https://fcm.googleapis.com/fcm/send/phone-1', p256dh: 'p256dh-key-0123456789', auth: 'auth-key-01' });
   const { sendPush } = await import('../modules/push');
   const n = await sendPush(inA, [inA.session.profile.id], { title: 'Colis pris par Walid', body: 'x' });
   assert.equal(n, 1);
-  assert.deepEqual(sent.map((s) => [s.endpoint, s.title]), [['https://push.example/phone-1', 'Bébé Shop · Colis pris par Walid']]);
+  assert.deepEqual(sent.map((s) => [s.endpoint, s.title]), [['https://fcm.googleapis.com/fcm/send/phone-1', 'Bébé Shop · Colis pris par Walid']]);
   const bKey = (await call('push.key', inB, {}) as any).key;
   assert.equal(sent[0].key, bKey, 'signed with the keys of the boutique where the phone signed up');
 

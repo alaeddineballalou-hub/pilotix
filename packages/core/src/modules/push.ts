@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { Db, num } from '../db';
 import { membershipsOf } from '../platform/accounts';
-import { Ctx, proc, ServerHooks } from '../rpc';
+import { bad, Ctx, proc, ServerHooks } from '../rpc';
 import { getSetting } from '../settings';
 
 /** A shop's key pair (made once, when the server can). */
@@ -21,7 +21,8 @@ const keys = (ctx: Ctx) => keysOf(ctx.db, ctx.server);
 type Sub = { endpoint: string; p256dh: string; auth: string };
 /** Sends to these devices of one shop (signed with its keys); forgets the ones that unsubscribed. `seen`: sent already. */
 async function deliver(db: Db, server: ServerHooks, k: { publicKey: string; privateKey: string }, subs: Sub[], payload: Record<string, unknown>, seen: Set<string>) {
-  const fresh = subs.filter((x) => !seen.has(x.endpoint));
+  // only a browser's push service (a device saved before that rule with another address is skipped)
+  const fresh = subs.filter((x) => !seen.has(x.endpoint) && pushServiceUrl(x.endpoint));
   if (!fresh.length || !server.push) return 0;
   fresh.forEach((x) => seen.add(x.endpoint));
   const r = await server.push(k, fresh.map((x) => ({ endpoint: x.endpoint, p256dh: x.p256dh, auth: x.auth })), payload);
@@ -70,6 +71,17 @@ export async function sendPush(ctx: Ctx, profileIds: number[], payload: Record<s
   return sent;
 }
 
+/** The push services of the browsers (Chrome, Edge, Firefox, Safari, Samsung, Opera…): https on their own hosts. */
+const PUSH_HOSTS = /^(fcm\.googleapis\.com|android\.googleapis\.com|updates\.push\.services\.mozilla\.com|[a-z0-9-]+\.push\.services\.mozilla\.com|web\.push\.apple\.com|[a-z0-9-]+\.push\.apple\.com|[a-z0-9-]+\.notify\.windows\.com)$/;
+export function pushServiceUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    return u.protocol === 'https:' && !u.username && !u.password && !u.port && PUSH_HOSTS.test(u.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
 export const pushProcs = {
   /** The shop's public key (null: no notifications here — the browser preview). And whether this account has a device. */
   'push.key': proc(null, z.object({}), async (ctx) => {
@@ -81,6 +93,8 @@ export const pushProcs = {
     null,
     z.object({ endpoint: z.string().url().max(1000), p256dh: z.string().min(10).max(300), auth: z.string().min(8).max(100), ua: z.string().max(300).nullable().optional() }),
     async (ctx, i) => {
+      // the server sends to this address: only a browser's push service (never an address of its own network)
+      if (!pushServiceUrl(i.endpoint)) throw bad('Adresse de notification refusée');
       await ctx.db.query(
         `INSERT INTO push_subs (profile_id, endpoint, p256dh, auth, ua) VALUES ($1,$2,$3,$4,$5)
          ON CONFLICT (endpoint) DO UPDATE SET profile_id = $1, p256dh = $3, auth = $4, ua = $5`,
