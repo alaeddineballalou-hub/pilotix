@@ -1674,5 +1674,21 @@
     "together_one": "Ses {{count}} boutiques ensemble (une seule formule).",
     "together_other": "Ses {{count}} boutiques ensemble (une seule formule).",
     "ownNumbers": "Les chiffres de cette boutique seule : les limites se comptent avec toutes ses boutiques, sur « {{main}} »."
+  },
+  "totp": {
+    "menu": "Application d’authentification",
+    "title": "Application d’authentification",
+    "loginText": "Tapez le code à 6 chiffres que montre votre application d’authentification.",
+    "loginLabel": "Code de l’application",
+    "offText": "Avec une application d’authentification (Google Authenticator, Microsoft Authenticator, 2FAS…), la connexion demande le code de votre téléphone au lieu du code envoyé par e-mail : quelqu’un qui prendrait votre boîte e-mail n’entrerait pas.",
+    "add": "Ajouter l’application",
+    "scan": "Scannez ce code avec l’application, puis tapez le code à 6 chiffres qu’elle montre.",
+    "manual": "Sans appareil photo : ajoutez un compte avec cette clé",
+    "code": "Code à 6 chiffres",
+    "confirm": "Activer",
+    "onText": "Active : la connexion demande le code de votre application (plus d’e-mail). Pour la retirer, tapez un code qu’elle montre.",
+    "remove": "Retirer l’application",
+    "added": "Application d’authentification active",
+    "removed": "Application d’authentification retirée"
   }
 }

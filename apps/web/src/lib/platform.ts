@@ -1,5 +1,6 @@
 // The control room's link to the server (Pilotix staff, not a shop account): its own login and token.
 import type { PlatformRegistry, StaffSession } from '@pilotix/core';
+import { withRobotCheck } from './robot';
 import type { ServerDoctorReport } from '@pilotix/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient, UseQueryOptions } from '@tanstack/react-query';
 import type { z } from 'zod';
@@ -35,7 +36,7 @@ async function req<T>(path: string, body?: unknown, method: 'GET' | 'POST' = 'PO
     staffLogout();
     onLogout();
   }
-  if (!res.ok) throw new ApiError(res.status, (data as any)?.message || res.statusText);
+  if (!res.ok) throw new ApiError(res.status, (data as any)?.message || res.statusText, data);
   return data as T;
 }
 
@@ -49,10 +50,17 @@ function keep(r: { token: string; staff: Staff; device?: string }) {
   return r.staff;
 }
 
-/** The password; then, with the two-step login, the code e-mailed to the staff member (`step: 'code'`). */
-export async function staffLogin(email: string, password: string): Promise<Staff | { step: 'code'; ticket: string; email: string }> {
-  const r = await req<{ token: string; staff: Staff } | { step: 'code'; ticket: string; email: string }>('/auth/login', { email, password, device: store.get('pdevice') || undefined });
+/** The password; then the code of the person's authenticator app (`step: 'totp'`), or the code e-mailed (`step: 'code'`). */
+export async function staffLogin(email: string, password: string): Promise<Staff | { step: 'code'; ticket: string; email: string } | { step: 'totp'; ticket: string }> {
+  // after a few wrong passwords the server asks Cloudflare's robot check too (lib/robot.ts)
+  const r = await withRobotCheck((turnstile) =>
+    req<{ token: string; staff: Staff } | { step: 'code'; ticket: string; email: string } | { step: 'totp'; ticket: string }>('/auth/login', { email, password, device: store.get('pdevice') || undefined, ...(turnstile ? { turnstile } : {}) }),
+  );
   return 'step' in r ? r : keep(r);
+}
+/** The authenticator app's code (« remember this device »: 30 days without it on this browser). */
+export async function staffTotp(ticket: string, code: string, remember: boolean): Promise<Staff> {
+  return keep(await req<{ token: string; staff: Staff; device?: string }>('/auth/totp', { ticket, code, remember }));
 }
 /** The code of the two-step login (« remember this device »: 30 days without it on this browser). */
 export async function staffCode(ticket: string, code: string, remember: boolean): Promise<Staff> {

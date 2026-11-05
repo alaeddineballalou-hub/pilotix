@@ -16,6 +16,7 @@ import { config } from './config';
 import { CoreService } from './core.service';
 import { dismissDoctor, serverDoctor } from './doctor';
 import { saveTurnstileConfig, syncTurnstile, turnstileStatus } from './turnstile';
+import { robotGate } from './robot';
 import { otpStatus, saveOtp, testOtp } from './otp';
 import { checkLogin, clearLogin, failedLogin } from './limits';
 import { couriers, runCheck, runCheckAll, testable, watchNow, watchRunning } from './courierWatch';
@@ -68,7 +69,7 @@ export class PlatformGuard implements CanActivate {
   }
 }
 
-const LoginBody = z.object({ email: z.string().email().max(200), password: z.string().min(1).max(200), device: z.string().max(4000).optional() });
+const LoginBody = z.object({ email: z.string().email().max(200), password: z.string().min(1).max(200), device: z.string().max(4000).optional(), turnstile: z.string().max(4000).optional() });
 const CodeBody = z.object({ ticket: z.string().max(4000), code: z.string().trim().regex(/^\d{6}$/, 'Code à 6 chiffres'), remember: z.boolean().default(false) });
 /**
  * Actions that only read (or only touch what no shop's request keeps: Pilot AI's test chat, lessons chat, Darija lessons): everything
@@ -106,12 +107,14 @@ export class PlatformController {
 
   @Public()
   @Post('auth/login')
-  async login(@Body() body: unknown, @Req() req: { ip?: string }) {
+  async login(@Body() body: unknown, @Req() req: { ip?: string; headers?: Record<string, unknown> }) {
     const ipKey = `p-ip:${core.ipNet(req.ip || '') || 'unknown'}`;
     checkLogin(ipKey, 10);
     const b = LoginBody.safeParse(body);
     if (!b.success) throw new core.AppError('bad_request', 'Email ou mot de passe manquant');
     const mailKey = `p-email:${b.data.email.trim().toLowerCase()}|${core.ipNet(req.ip || '') || 'unknown'}`;
+    // after 3 failures: Cloudflare's robot check too (robot.ts)
+    await robotGate(this.core, req, [ipKey, mailKey], b.data.turnstile);
     checkLogin(mailKey, 5, true);
     let r: Awaited<ReturnType<typeof core.staffLogin>>;
     try {
@@ -122,6 +125,12 @@ export class PlatformController {
       throw e;
     }
     clearLogin(mailKey);
+    // the authenticator app (when this person turned it on): its code instead of the e-mailed one (a device remembered
+    // 30 days is let in, as with the e-mailed code)
+    if ((await core.staffTotpOn(this.core.t, r.staff.id)) && !(await this.deviceOk(b.data.device, r.staff.id, r.tv))) {
+      const ticket = await this.jwt.signAsync({ st: r.staff.id, tv: r.tv, typ: 'staff-totp' }, { secret: staffSecret(), expiresIn: '10m' });
+      return { step: 'totp' as const, ticket };
+    }
     const set = await this.core.settings();
     // two-step login: a code by e-mail (not on a device remembered for 30 days). Never off by itself: with no e-mail
     // the control room stays closed (only PLATFORM_TWO_STEP=off in deploy/.env lets the password alone in)
@@ -142,6 +151,35 @@ export class PlatformController {
       return { step: 'code' as const, ticket, email: mask(r.staff.email) };
     }
     return { token: await this.sign(r.staff, r.tv), staff: r.staff };
+  }
+
+  /** The authenticator app's code (after the password): 10 wrong codes per 15 minutes per address, 5 per account. */
+  @Public()
+  @Post('auth/totp')
+  async totp(@Body() body: unknown, @Req() req: { ip?: string }) {
+    const ipKey = `p-totp:${core.ipNet(req.ip || '') || 'unknown'}`;
+    checkLogin(ipKey, 10);
+    const b = CodeBody.safeParse(body);
+    if (!b.success) throw new core.AppError('bad_request', 'Code à 6 chiffres');
+    let c: { st: number; tv: number; typ: string };
+    try {
+      c = await this.jwt.verifyAsync(b.data.ticket, { secret: staffSecret() });
+    } catch {
+      throw new core.AppError('unauthorized', 'Code expiré : reconnectez-vous');
+    }
+    if (c.typ !== 'staff-totp') throw new core.AppError('unauthorized', 'Code expiré : reconnectez-vous');
+    const accKey = `p-totp-st:${Number(c.st)}`;
+    checkLogin(accKey, 5);
+    if (!(await core.totpCheck(this.core.t, Number(c.st), b.data.code))) {
+      failedLogin(ipKey);
+      failedLogin(accKey);
+      throw new core.AppError('unauthorized', 'Code incorrect : tapez le code que montre l’application maintenant');
+    }
+    clearLogin(accKey);
+    const staff = await core.staffById(this.core.t, Number(c.st), Number(c.tv));
+    if (!staff) throw new core.AppError('unauthorized', 'Compte désactivé ou mot de passe changé');
+    const device = b.data.remember ? await this.jwt.signAsync({ st: staff.id, tv: Number(c.tv), typ: 'device' }, { secret: staffSecret(), expiresIn: '30d' }) : undefined;
+    return { token: await this.sign(staff, Number(c.tv)), staff, ...(device ? { device } : {}) };
   }
 
   /** The code of the two-step login. */

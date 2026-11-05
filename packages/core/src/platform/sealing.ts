@@ -26,6 +26,7 @@ export async function sealStoredSecrets(t: Tenancy): Promise<{ sealed: number; s
     ['platform.social_links', 'token', 'id'],
     ['platform.social_assets', 'token', 'id'],
     ['platform.turnstile_widgets', 'secret', 'sitekey'],
+    ['platform.staff', 'totp_secret', 'id'],
   ] as const) {
     const rows = await t.platform.query<{ id: string; v: string }>(`SELECT ${idCol}::text AS id, ${col} AS v FROM ${table} WHERE ${col} IS NOT NULL AND ${col} <> '' AND left(${col}, ${SEALED.length}) <> $1`, [SEALED]);
     for (const r of rows) sealed += (await t.platform.query(`UPDATE ${table} SET ${col} = $2 WHERE ${idCol}::text = $1 AND ${col} = $3 RETURNING 1`, [r.id, sealString(r.v), r.v])).length;

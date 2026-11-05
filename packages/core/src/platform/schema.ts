@@ -622,6 +622,13 @@ export const PLATFORM_MIGRATIONS: [string, string][] = [
   ['p025_social_deletions', SOCIAL_DELETIONS_SQL],
   // « Oui, c'est ma boutique »: a linked Facebook / TikTok account waits for its tab's yes before a boutique gets it
   ['p026_social_confirm', SOCIAL_CONFIRM_SQL],
+  // the control room's authenticator app (platform/totp.ts): its secret (sealed), on or not, the last step used
+  [
+    'p027_staff_totp',
+    `ALTER TABLE platform.staff ADD COLUMN IF NOT EXISTS totp_secret text;
+     ALTER TABLE platform.staff ADD COLUMN IF NOT EXISTS totp_on boolean NOT NULL DEFAULT false;
+     ALTER TABLE platform.staff ADD COLUMN IF NOT EXISTS totp_step bigint;`,
+  ],
 ];
 
 /** Creates or updates the platform's tables. */

@@ -40,6 +40,7 @@ import { promises as dns } from 'node:dns';
 import { signupConfirmMail, signupExistsMail, verifyMail } from './mails';
 import type { Mail } from './mail';
 import { syncTurnstile } from './turnstile';
+import { robotGate } from './robot';
 import { otpOn, sendOtp } from './otp';
 
 // ---------------------------------------------------------------- errors → HTTP
@@ -52,6 +53,8 @@ class ErrorFilter implements ExceptionFilter {
     const res = host.switchToHttp().getResponse();
     let status = 500;
     let message = 'Erreur du serveur';
+    // a login's robot check (robot.ts): the site key goes with the answer, for the page to do it
+    let challenge: string | undefined;
     if (e instanceof core.AppError) {
       status = STATUS[e.code] ?? 400;
       message = e.message;
@@ -59,10 +62,11 @@ class ErrorFilter implements ExceptionFilter {
       status = e.getStatus();
       const r = e.getResponse() as any;
       message = typeof r === 'string' ? r : r?.message ?? e.message;
+      if (typeof r?.challenge === 'string') challenge = r.challenge;
     } else {
       this.log.error(e?.stack || e);
     }
-    res.status(status).send({ message });
+    res.status(status).send(challenge ? { message, challenge } : { message });
   }
 }
 
@@ -287,7 +291,7 @@ const queryOf = (req: { url?: string }) => {
  */
 const intake = (ref: ShopRef): ShopRef => (ref.status.state === 'expired' ? { ...ref, rules: { ...ref.rules, locked: false } } : ref);
 
-const LoginBody = z.object({ email: z.string().email().max(200), password: z.string().min(1).max(200), shop: z.number().int().positive().optional() });
+const LoginBody = z.object({ email: z.string().email().max(200), password: z.string().min(1).max(200), shop: z.number().int().positive().optional(), turnstile: z.string().max(4000).optional() });
 const PickBody = z.object({ ticket: z.string().max(4000), shop: z.number().int().positive() });
 /** « Vérifiez votre numéro »: the number (and the WhatsApp code when it is asked), with the login's ticket */
 const PhoneBody = z.object({ ticket: z.string().max(4000), phone: z.string().trim().min(1).max(30), code: z.string().trim().max(12).optional(), shop: z.number().int().positive().optional() });
@@ -492,6 +496,8 @@ class ApiController {
     if (!b.success) throw new core.AppError('bad_request', 'Email ou mot de passe manquant');
     const email = b.data.email.trim().toLowerCase();
     const mailKey = `email:${email}|${ipOf(req)}`;
+    // after 3 failures: Cloudflare's robot check too (robot.ts)
+    await robotGate(this.core, req, [ipKey, mailKey], b.data.turnstile);
     // this account's tries, counted the moment they arrive (many at once never pass together)
     checkLogin(mailKey, 5, true);
     let acc: core.Account | null;

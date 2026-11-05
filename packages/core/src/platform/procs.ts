@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import { z, ZodTypeAny } from 'zod';
 import { isoOrNull, num, numOrNull } from '../db';
 import { AppError, bad, Ctx, forbidden, inputTooBig, notFound } from '../rpc';
+import { staffTotpOn, totpConfirm, totpOff, totpStart } from './totp';
 import { hashPassword } from '../modules/users';
 import { courierCatalog } from '../couriers/catalog';
 import { clearCourierTestKeys, courierTestState, saveCourierTestKeys } from './courierTests';
@@ -371,6 +372,20 @@ export const PLATFORM_REGISTRY = {
     await ctx.t.platform.query('UPDATE platform.staff SET password_hash = $2, token_version = token_version + 1 WHERE id = $1', [ctx.staff.id, await hashPassword(i.next)]);
     await audit(ctx, 'staff.password', null, {});
     return { ok: true };
+  }),
+
+  /** « Application d'authentification » (platform/totp.ts): on or not; add it (its QR code, then its first code); remove it (with a code). */
+  'p.me.totp': pproc(ALL, z.object({}), async (ctx) => ({ on: await staffTotpOn(ctx.t, ctx.staff.id) })),
+  'p.me.totp.start': pproc(ALL, z.object({}), async (ctx) => totpStart(ctx.t, ctx.staff.id)),
+  'p.me.totp.confirm': pproc(ALL, z.object({ code: z.string().trim().max(12) }), async (ctx, i) => {
+    await totpConfirm(ctx.t, ctx.staff.id, i.code, ctx.now());
+    await audit(ctx, 'staff.totpOn', null, {});
+    return { on: true };
+  }),
+  'p.me.totp.off': pproc(ALL, z.object({ code: z.string().trim().max(12) }), async (ctx, i) => {
+    await totpOff(ctx.t, ctx.staff.id, i.code, ctx.now());
+    await audit(ctx, 'staff.totpOff', null, {});
+    return { on: false };
   }),
 
   /** The control room's first page: shops by state, who needs attention, money in. */

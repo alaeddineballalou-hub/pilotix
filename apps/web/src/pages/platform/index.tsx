@@ -7,7 +7,8 @@ import { FormEvent, ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DEMO_ONLY } from '../../lib/backend';
 import { applyLanguage } from '../../lib/i18n';
-import { savedStaff, setOnStaffLogout, Staff, staffCode, staffLogin, staffLogout, usePAction, usePRpc } from '../../lib/platform';
+import { savedStaff, setOnStaffLogout, Staff, staffCode, staffLogin, staffLogout, staffTotp, usePAction, usePRpc } from '../../lib/platform';
+import { TotpModal } from './Totp';
 import { Field, Icon } from '../../ui/kit';
 import { Modal } from '../../ui/modal';
 import { can } from './bits';
@@ -109,8 +110,8 @@ function PlatformLogin({ onDone }: { onDone: (s: Staff) => void }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  // two-step login: the code e-mailed after the password
-  const [step, setStep] = useState<{ ticket: string; email: string } | null>(null);
+  // two-step login: the code of the person's authenticator app, or the code e-mailed, after the password
+  const [step, setStep] = useState<{ kind: 'code'; ticket: string; email: string } | { kind: 'totp'; ticket: string } | null>(null);
   const [code, setCode] = useState('');
   const [remember, setRemember] = useState(true);
   const submit = async (e: FormEvent) => {
@@ -118,10 +119,10 @@ function PlatformLogin({ onDone }: { onDone: (s: Staff) => void }) {
     setError('');
     setBusy(true);
     try {
-      if (step) onDone(await staffCode(step.ticket, code.trim(), remember));
+      if (step) onDone(step.kind === 'totp' ? await staffTotp(step.ticket, code.trim(), remember) : await staffCode(step.ticket, code.trim(), remember));
       else {
         const r = await staffLogin(email.trim(), password);
-        if ('step' in r) setStep({ ticket: r.ticket, email: r.email });
+        if ('step' in r) setStep(r.step === 'totp' ? { kind: 'totp', ticket: r.ticket } : { kind: 'code', ticket: r.ticket, email: r.email });
         else onDone(r);
       }
     } catch (err: any) {
@@ -139,9 +140,9 @@ function PlatformLogin({ onDone }: { onDone: (s: Staff) => void }) {
         </h2>
         {step ? (
           <>
-            <p className="login-note">{t('platform.code.text', { email: step.email })}</p>
+            <p className="login-note">{step.kind === 'totp' ? t('platform.totp.loginText') : t('platform.code.text', { email: step.email })}</p>
             <label className="field">
-              <span className="lab">{t('platform.code.label')}</span>
+              <span className="lab">{step.kind === 'totp' ? t('platform.totp.loginLabel') : t('platform.code.label')}</span>
               <input autoFocus inputMode="numeric" autoComplete="one-time-code" dir="ltr" maxLength={6} pattern="\d{6}" required value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} className="pp-code" />
             </label>
             <label className="pp-remember">
@@ -191,6 +192,7 @@ function PlatformShell({ staff, parts, onLogout, demo }: { staff: Staff; parts: 
   const { t, i18n } = useTranslation();
   const [menu, setMenu] = useState(false);
   const [pw, setPw] = useState(false);
+  const [totp, setTotp] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const sections = SECTIONS.filter((s) => !s.roles || can(staff, ...s.roles));
   const dash = usePRpc('p.dashboard', {}, { refetchInterval: 60_000, enabled: !demo });
@@ -278,6 +280,10 @@ function PlatformShell({ staff, parts, onLogout, demo }: { staff: Staff; parts: 
                   <Icon name="lock" />
                   {t('platform.changePassword')}
                 </button>
+                <button type="button" role="menuitem" onClick={() => (setMenu(false), setTotp(true))}>
+                  <Icon name="shield" />
+                  {t('platform.totp.menu')}
+                </button>
                 <button type="button" role="menuitem" onClick={() => (location.hash = '#/accueil')}>
                   <Icon name="store" />
                   {t('platform.myShop')}
@@ -294,6 +300,7 @@ function PlatformShell({ staff, parts, onLogout, demo }: { staff: Staff; parts: 
         <main className="page pp-page">{page}</main>
       </div>
       {pw && <PasswordModal onClose={() => setPw(false)} />}
+      {totp && <TotpModal onClose={() => setTotp(false)} />}
     </div>
   );
 }

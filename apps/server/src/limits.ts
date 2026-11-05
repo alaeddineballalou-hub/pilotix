@@ -54,6 +54,12 @@ export function clearLogin(raw: string) {
   attempts.delete(fp(raw));
 }
 
+/** The failures counted now for this key (0 once its 15 minutes are over). */
+export function failuresOf(raw: string): number {
+  const a = attempts.get(fp(raw));
+  return a && a.until >= Date.now() ? a.n : 0;
+}
+
 // ---------------------------------------------------------------- kept across restarts
 // An update restarts the server: without this, every counter would start again from zero after each update. The
 // failures counted (their fingerprints, their end) are written to Redis every 30 seconds and when the server stops,

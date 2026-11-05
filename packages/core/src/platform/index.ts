@@ -17,3 +17,4 @@ export * from './aiusage';
 export * from './aiboard';
 export * from './sessions';
 export * from './sealing';
+export * from './totp';

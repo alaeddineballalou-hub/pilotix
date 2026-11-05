@@ -1,4 +1,5 @@
 import type { REGISTRY } from '@pilotix/core';
+import { withRobotCheck } from './robot';
 import type { Session } from '@pilotix/shared';
 import type { z } from 'zod';
 import { pageAi } from './dellal-page-ai';
@@ -24,6 +25,8 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    /** the server's whole answer (a login's robot check: { challenge: site key }) */
+    public data?: unknown,
   ) {
     super(message);
   }
@@ -143,7 +146,7 @@ async function authRequest<T>(path: string, body?: unknown): Promise<T> {
     throw new ApiError(0, 'Serveur injoignable. Vérifiez votre connexion.');
   }
   const data = await res.json().catch(() => undefined);
-  if (!res.ok) throw new ApiError(res.status, (data as any)?.message || res.statusText);
+  if (!res.ok) throw new ApiError(res.status, (data as any)?.message || res.statusText, data);
   return data as T;
 }
 /** Does this server send reset e-mails? (false when unknown: the link is then not shown) */
@@ -250,7 +253,7 @@ class RemoteBackend implements Backend {
     if (res.ok && path === '/rpc/me.password' && typeof (data as any)?.token === 'string') this.keep((data as any).token);
     if (res.status === 401 && this.token && this.token === sent) this.onUnauthorized();
     if (res.status === 402 && this.token && this.token === sent) this.onLocked();
-    if (!res.ok) throw new ApiError(res.status, (data as any)?.message || res.statusText);
+    if (!res.ok) throw new ApiError(res.status, (data as any)?.message || res.statusText, data);
     return data as T;
   }
 
@@ -261,7 +264,8 @@ class RemoteBackend implements Backend {
     return r.session;
   }
   async login(email: string, password: string): Promise<LoginResult> {
-    const r = await this.req<{ token: string; session: Session } | PickInfo | PhoneInfo>('/auth/login', { email, password });
+    // after a few wrong passwords the server asks Cloudflare's robot check too: done here, then the same login again
+    const r = await withRobotCheck((turnstile) => this.req<{ token: string; session: Session } | PickInfo | PhoneInfo>('/auth/login', { email, password, ...(turnstile ? { turnstile } : {}) }));
     return 'pick' in r || 'phone' in r ? r : this.enterWith(r);
   }
   /** « Vérifiez votre numéro »: the number (code off: saved, then on), or the WhatsApp code asked / checked. */

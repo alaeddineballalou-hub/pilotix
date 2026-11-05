@@ -1674,5 +1674,21 @@
     "together_one": "Their {{count}} boutique together (one plan).",
     "together_other": "Their {{count}} boutiques together (one plan).",
     "ownNumbers": "This boutique’s own numbers: the limits are counted with all their boutiques, on « {{main}} »."
+  },
+  "totp": {
+    "menu": "Authenticator app",
+    "title": "Authenticator app",
+    "loginText": "Type the 6-digit code shown in your authenticator app.",
+    "loginLabel": "App code",
+    "offText": "With an authenticator app (Google Authenticator, Microsoft Authenticator, 2FAS…), logging in asks for the code on your phone instead of the e-mailed code: someone who took over your mailbox could not get in.",
+    "add": "Add the app",
+    "scan": "Scan this code with the app, then type the 6-digit code it shows.",
+    "manual": "No camera: add an account with this key",
+    "code": "6-digit code",
+    "confirm": "Turn on",
+    "onText": "On: logging in asks for your app's code (no more e-mail). To remove it, type a code it shows.",
+    "remove": "Remove the app",
+    "added": "Authenticator app on",
+    "removed": "Authenticator app removed"
   }
 }
